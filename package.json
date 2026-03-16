@@ -1,0 +1,90 @@
+{
+  "name": "agentfootprint",
+  "version": "0.1.0",
+  "description": "The explainable agent framework — build AI agents you can explain, audit, and trust. Built on footprintjs.",
+  "license": "MIT",
+  "author": "Sanjay Krishna Anbalagan",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/footprintjs/agentfootprint.git"
+  },
+  "homepage": "https://github.com/footprintjs/agentfootprint",
+  "bugs": {
+    "url": "https://github.com/footprintjs/agentfootprint/issues"
+  },
+  "keywords": [
+    "agent",
+    "ai-agent",
+    "llm",
+    "rag",
+    "tool-use",
+    "multi-agent",
+    "flowchart",
+    "explainable-ai",
+    "causal-trace",
+    "narrative",
+    "observability",
+    "typescript",
+    "react-pattern",
+    "swarm",
+    "orchestration",
+    "footprintjs"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "clean": "rm -rf dist coverage node_modules package-lock.json",
+    "build": "tsc && tsc -p tsconfig.esm.json",
+    "watch": "tsc -w",
+    "test": "vitest run",
+    "test:watch": "vitest --watch",
+    "lint": "eslint 'src/**/*.ts' 'test/**/*.ts' --ext .ts",
+    "lint:fix": "eslint 'src/**/*.ts' 'test/**/*.ts' --ext .ts --fix",
+    "format": "prettier --config .prettierrc.js --list-different 'src/**/*.ts' 'test/**/*.ts'",
+    "format:fix": "prettier --config .prettierrc.js --write 'src/**/*.ts' 'test/**/*.ts'"
+  },
+  "files": [
+    "dist/**/*",
+    "!dist/test",
+    "ai-instructions/**/*",
+    "CLAUDE.md",
+    "AGENTS.md"
+  ],
+  "bin": {
+    "agentfootprint-setup": "ai-instructions/setup.sh"
+  },
+  "main": "dist/index.js",
+  "module": "dist/esm/index.js",
+  "types": "dist/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/types/index.d.ts",
+      "import": "./dist/esm/index.js",
+      "require": "./dist/index.js"
+    }
+  },
+  "sideEffects": false,
+  "peerDependencies": {
+    "footprintjs": ">=0.10.0",
+    "@anthropic-ai/sdk": ">=0.30.0",
+    "openai": ">=4.0.0",
+    "@aws-sdk/client-bedrock-runtime": ">=3.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@anthropic-ai/sdk": { "optional": true },
+    "openai": { "optional": true },
+    "@aws-sdk/client-bedrock-runtime": { "optional": true }
+  },
+  "devDependencies": {
+    "@typescript-eslint/eslint-plugin": "^5.61.0",
+    "@typescript-eslint/parser": "^5.61.0",
+    "eslint": "^8.44.0",
+    "eslint-config-prettier": "^6.15.0",
+    "footprintjs": "file:../footPrint",
+    "prettier": "^2.8.1",
+    "typescript": "~5.4.5",
+    "vitest": "^4.0.18",
+    "zod": "^3.25.76"
+  }
+}

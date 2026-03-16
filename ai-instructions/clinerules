@@ -1,0 +1,85 @@
+# agentfootprint — Cline Rules
+
+The explainable agent framework. Every agent is a footprintjs flowchart with auto-generated causal traces.
+
+## Core Principle
+
+**Every concept is a flowchart. Collect during traversal, never post-process.**
+
+## 5 Concepts
+
+```typescript
+// 1. LLMCall — single call, no tools, no loop
+LLMCall.create({ provider }).system('...').recorder(rec).build()
+
+// 2. Agent — ReAct agent with tools + loop
+Agent.create({ provider, name? }).system('...').tool(t).maxIterations(n).recorder(rec).build()
+
+// 3. RAG — retrieve-augment-generate
+RAG.create({ provider, retriever }).system('...').topK(5).recorder(rec).build()
+
+// 4. FlowChart — sequential multi-agent
+FlowChart.create().agent('id', 'name', runner).recorder(rec).build()
+
+// 5. Swarm — LLM-routed multi-agent
+Swarm.create({ provider }).specialist('id', 'desc', runner).recorder(rec).build()
+```
+
+## Tools
+
+```typescript
+import { defineTool } from 'agentfootprint';
+defineTool({ id, description, inputSchema, handler })
+```
+
+## Recorders
+
+```typescript
+import { TokenRecorder, CostRecorder, TurnRecorder, ToolUsageRecorder,
+         QualityRecorder, GuardrailRecorder, CompositeRecorder } from 'agentfootprint';
+// Attach via .recorder(rec) on any builder
+```
+
+## Providers
+
+```typescript
+import { mock, mockRetriever, createProvider, anthropic, openai } from 'agentfootprint';
+
+// Testing
+mock([{ content: 'Hi' }])
+mockRetriever([{ chunks: [{ content: '...', score: 0.9, metadata: {} }] }])
+
+// Production
+createProvider(anthropic({ modelId: 'claude-sonnet-4-20250514', apiKey: '...' }))
+```
+
+## Prompt & Tool Providers
+
+```typescript
+import { staticPrompt, templatePrompt, skillBasedPrompt, compositePrompt } from 'agentfootprint';
+import { agentAsTool, compositeTools, mcpToolProvider, a2aRunner } from 'agentfootprint';
+```
+
+## Compositions
+
+```typescript
+import { withRetry, withFallback, withCircuitBreaker } from 'agentfootprint';
+```
+
+## Runner API (all concepts)
+
+```typescript
+runner.run(message, { signal?, timeoutMs? })
+runner.getNarrative()        // causal trace
+runner.getSnapshot()         // memory state
+runner.getSpec()             // flowchart spec
+runner.toFlowChart()         // for subflow composition
+```
+
+## Rules
+
+- Use `CostRecorder` (not `CostRecorderV2`)
+- Never post-process — use recorders
+- Use `mock([...])` in tests
+- Use concept builders, not raw stages
+- Use `FlowChart`/`Swarm` for multi-agent
