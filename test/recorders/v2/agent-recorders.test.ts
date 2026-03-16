@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { TokenRecorder } from '../../../src/recorders/v2/TokenRecorder';
-import { CostRecorderV2 as CostRecorder } from '../../../src/recorders/v2';
+import { CostRecorder } from '../../../src/recorders/v2';
 import { ToolUsageRecorder } from '../../../src/recorders/v2/ToolUsageRecorder';
 import { TurnRecorder } from '../../../src/recorders/v2/TurnRecorder';
 import type { LLMCallEvent, ToolCallEvent } from '../../../src/core';

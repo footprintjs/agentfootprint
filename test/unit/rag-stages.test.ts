@@ -5,7 +5,6 @@ import {
   mockRetriever,
   AgentScope,
   RAG_PATHS,
-  RAGRecorder,
 } from '../../src';
 import type { ScopeFacade } from 'footprintjs';
 
@@ -142,83 +141,6 @@ describe('augmentPromptStage', () => {
     });
     augmentPromptStage(scope);
     expect(scope.setValue).not.toHaveBeenCalled();
-  });
-});
-
-describe('RAGRecorder', () => {
-  it('records retrieval entry on write to RETRIEVAL_RESULT', () => {
-    const recorder = new RAGRecorder();
-    recorder.onStageStart();
-
-    recorder.onWrite({
-      key: RAG_PATHS.RETRIEVAL_RESULT,
-      value: {
-        query: 'test query',
-        chunks: [
-          { content: 'A', score: 0.9 },
-          { content: 'B', score: 0.7 },
-        ],
-      },
-    });
-
-    recorder.onStageEnd();
-
-    const stats = recorder.getStats();
-    expect(stats.totalRetrievals).toBe(1);
-    expect(stats.totalChunks).toBe(2);
-    expect(stats.entries[0].query).toBe('test query');
-    expect(stats.entries[0].averageScore).toBeCloseTo(0.8);
-  });
-
-  it('ignores writes to non-RAG keys', () => {
-    const recorder = new RAGRecorder();
-    recorder.onWrite({ key: 'messages', value: [] });
-    recorder.onWrite({ key: 'adapterResult', value: {} });
-    expect(recorder.getTotalRetrievals()).toBe(0);
-  });
-
-  it('tracks multiple retrievals', () => {
-    const recorder = new RAGRecorder();
-
-    recorder.onWrite({
-      key: RAG_PATHS.RETRIEVAL_RESULT,
-      value: { query: 'q1', chunks: [{ content: 'A', score: 0.9 }] },
-    });
-
-    recorder.onWrite({
-      key: RAG_PATHS.RETRIEVAL_RESULT,
-      value: { query: 'q2', chunks: [{ content: 'B' }, { content: 'C' }] },
-    });
-
-    expect(recorder.getTotalRetrievals()).toBe(2);
-    expect(recorder.getTotalChunks()).toBe(3);
-  });
-
-  it('clear resets state', () => {
-    const recorder = new RAGRecorder();
-    recorder.onWrite({
-      key: RAG_PATHS.RETRIEVAL_RESULT,
-      value: { query: 'q', chunks: [{ content: 'A' }] },
-    });
-    recorder.clear();
-    expect(recorder.getTotalRetrievals()).toBe(0);
-    expect(recorder.getTotalChunks()).toBe(0);
-  });
-
-  it('handles chunks with no scores', () => {
-    const recorder = new RAGRecorder();
-    recorder.onWrite({
-      key: RAG_PATHS.RETRIEVAL_RESULT,
-      value: { query: 'q', chunks: [{ content: 'A' }, { content: 'B' }] },
-    });
-
-    const stats = recorder.getStats();
-    expect(stats.entries[0].averageScore).toBe(0);
-  });
-
-  it('uses custom id', () => {
-    const recorder = new RAGRecorder('my-rag');
-    expect(recorder.id).toBe('my-rag');
   });
 });
 

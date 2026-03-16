@@ -164,20 +164,7 @@ export {
   SwarmRunner,
 } from './concepts';
 
-// ── Recorders (scope-level — footprintjs Recorder interface) ─
-export { LLMRecorder, ScopeCostRecorder, RAGRecorder, MultiAgentRecorder } from './recorders';
-export type {
-  LLMCallEntry,
-  LLMStats,
-  ScopeCostEntry,
-  ScopeCostRecorderOptions,
-  RetrievalEntry,
-  RAGStats,
-  MultiAgentEntry,
-  MultiAgentStats,
-} from './recorders';
-
-// ── Recorders (AgentRecorder interface — primary) ───────────
+// ── Recorders (AgentRecorder interface) ─────────────────────
 export {
   TokenRecorder,
   CostRecorder,
@@ -186,9 +173,10 @@ export {
   QualityRecorder,
   GuardrailRecorder,
   CompositeRecorder,
-} from './recorders/v2';
+} from './recorders';
 export type {
   TokenStats,
+  LLMCallEntry,
   CostEntry,
   CostRecorderOptions,
   TurnEntry,
@@ -198,9 +186,7 @@ export type {
   QualityJudge,
   Violation,
   GuardrailCheck,
-} from './recorders/v2';
-/** @deprecated Use CostRecorder instead. */
-export { CostRecorderV2 } from './recorders/v2';
+} from './recorders';
 
 // ── Providers ────────────────────────────────────────────────
 export { staticPrompt, templatePrompt, skillBasedPrompt, compositePrompt } from './providers';

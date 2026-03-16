@@ -3,7 +3,6 @@ import {
   runnerAsStage,
   AgentScope,
   MULTI_AGENT_PATHS,
-  MultiAgentRecorder,
   FlowChart,
 } from '../../src';
 import type { ScopeFacade } from 'footprintjs';
@@ -193,79 +192,6 @@ describe('AgentScope multi-agent accessors', () => {
     const entries = [{ id: 'a1', name: 'A1', content: 'x', latencyMs: 5 }];
     AgentScope.setAgentResults(scope, entries as AgentResultEntry[]);
     expect(scope.setValue).toHaveBeenCalledWith('agentResults', entries);
-  });
-});
-
-// ── MultiAgentRecorder ───────────────────────────────────────
-
-describe('MultiAgentRecorder', () => {
-  it('records agent entries from agentResults writes', () => {
-    const recorder = new MultiAgentRecorder();
-
-    recorder.onWrite({
-      key: MULTI_AGENT_PATHS.AGENT_RESULTS,
-      value: [{ id: 'a1', name: 'Agent1', content: 'Hello', latencyMs: 50, narrative: ['step1'] }],
-    });
-
-    const stats = recorder.getStats();
-    expect(stats.totalAgents).toBe(1);
-    expect(stats.entries[0].id).toBe('a1');
-    expect(stats.entries[0].contentLength).toBe(5);
-    expect(stats.entries[0].hasNarrative).toBe(true);
-  });
-
-  it('only records new entries on append', () => {
-    const recorder = new MultiAgentRecorder();
-
-    recorder.onWrite({
-      key: MULTI_AGENT_PATHS.AGENT_RESULTS,
-      value: [{ id: 'a1', name: 'A1', content: 'x', latencyMs: 10 }],
-    });
-    recorder.onWrite({
-      key: MULTI_AGENT_PATHS.AGENT_RESULTS,
-      value: [
-        { id: 'a1', name: 'A1', content: 'x', latencyMs: 10 },
-        { id: 'a2', name: 'A2', content: 'yy', latencyMs: 20 },
-      ],
-    });
-
-    expect(recorder.getTotalAgents()).toBe(2);
-    expect(recorder.getStats().entries[1].id).toBe('a2');
-  });
-
-  it('ignores writes to non-agent keys', () => {
-    const recorder = new MultiAgentRecorder();
-    recorder.onWrite({ key: 'messages', value: [] });
-    recorder.onWrite({ key: 'result', value: 'something' });
-    expect(recorder.getTotalAgents()).toBe(0);
-  });
-
-  it('calculates averageLatencyMs', () => {
-    const recorder = new MultiAgentRecorder();
-    recorder.onWrite({
-      key: MULTI_AGENT_PATHS.AGENT_RESULTS,
-      value: [
-        { id: 'a1', name: 'A1', content: 'x', latencyMs: 100 },
-        { id: 'a2', name: 'A2', content: 'y', latencyMs: 200 },
-      ],
-    });
-    expect(recorder.getStats().averageLatencyMs).toBe(150);
-    expect(recorder.getStats().totalLatencyMs).toBe(300);
-  });
-
-  it('clear resets state', () => {
-    const recorder = new MultiAgentRecorder();
-    recorder.onWrite({
-      key: MULTI_AGENT_PATHS.AGENT_RESULTS,
-      value: [{ id: 'a1', name: 'A1', content: 'x', latencyMs: 10 }],
-    });
-    recorder.clear();
-    expect(recorder.getTotalAgents()).toBe(0);
-  });
-
-  it('uses custom id', () => {
-    const recorder = new MultiAgentRecorder('my-recorder');
-    expect(recorder.id).toBe('my-recorder');
   });
 });
 

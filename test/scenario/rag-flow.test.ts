@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { RAG, mock, mockRetriever, RAGRecorder, RAG_PATHS } from '../../src';
+import { RAG, mock, mockRetriever } from '../../src';
 
 describe('Scenario: RAG end-to-end', () => {
   it('retrieves context and generates answer', async () => {
@@ -104,28 +104,3 @@ describe('Scenario: RAG end-to-end', () => {
   });
 });
 
-describe('Scenario: RAG with recorder integration', () => {
-  it('RAGRecorder captures retrieval during traversal', () => {
-    const recorder = new RAGRecorder();
-
-    // Simulate what happens during RAG flowchart traversal
-    recorder.onStageStart();
-    recorder.onWrite({
-      key: RAG_PATHS.RETRIEVAL_RESULT,
-      value: {
-        query: 'test query',
-        chunks: [
-          { content: 'A', score: 0.95 },
-          { content: 'B', score: 0.85 },
-        ],
-      },
-    });
-    recorder.onStageEnd();
-
-    const stats = recorder.getStats();
-    expect(stats.totalRetrievals).toBe(1);
-    expect(stats.totalChunks).toBe(2);
-    expect(stats.averageScore).toBeCloseTo(0.9);
-    expect(stats.entries[0].query).toBe('test query');
-  });
-});
