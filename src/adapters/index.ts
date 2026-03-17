@@ -27,5 +27,11 @@ export type { OpenAIAdapterOptions } from './openai/OpenAIAdapter';
 export { BedrockAdapter } from './bedrock/BedrockAdapter';
 export type { BedrockAdapterOptions } from './bedrock/BedrockAdapter';
 
+// ── Browser LLM Adapters (fetch-based, zero deps) ──────────
+export { BrowserAnthropicAdapter } from './browser/BrowserAnthropicAdapter';
+export type { BrowserAnthropicAdapterOptions } from './browser/BrowserAnthropicAdapter';
+export { BrowserOpenAIAdapter } from './browser/BrowserOpenAIAdapter';
+export type { BrowserOpenAIAdapterOptions } from './browser/BrowserOpenAIAdapter';
+
 // ── Provider Bridge ─────────────────────────────────────────
 export { createProvider } from './createProvider';
