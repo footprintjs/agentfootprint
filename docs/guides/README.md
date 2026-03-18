@@ -10,6 +10,7 @@ Comprehensive guides for using agentfootprint — the explainable agent framewor
 | **[Recorders](recorders.md)** | All 7 recorders (Token, Cost, Turn, ToolUsage, Quality, Guardrail, Composite) + `.recorder()` API |
 | **[Adapters](adapters.md)** | LLM adapters (Anthropic, OpenAI, Bedrock, Ollama, Mock) + protocol adapters (MCP, A2A) |
 | **[Orchestration](orchestration.md)** | `withRetry`, `withFallback`, `withCircuitBreaker` — reliability wrappers |
+| **[Security](security.md)** | Tool gating, permission policy, provider fallback, resilient providers, audit trail |
 
 ---
 

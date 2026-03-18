@@ -31,12 +31,15 @@ npm install agentfootprint
 | **Composition** | Concept ladder: simple → complex | Graphs from day 1 | Flat, no composition |
 | **Provider lock-in** | None — Anthropic, OpenAI, Bedrock, Ollama | OpenAI-biased | Bedrock-biased |
 | **Learning curve** | Start with LLMCall, compose up | Learn graph DSL upfront | Simple but limited |
+| **Tool gating** | Agent-level permission filtering (LLM never sees blocked tools) | Manual filtering | IAM only (infra, not agent) |
+| **Provider fallback** | `resilientProvider` — cross-family failover with circuit breakers | Via LangChain fallback | Bedrock cross-region only |
 
-**Three things no one else has:**
+**Four things no one else has:**
 
 1. **Adapter-swap testing** — Write tests with `mock()`, deploy with `anthropic()`. Same code. Zero changes. Full coverage at $0.
 2. **Concept ladder** — Start simple, compose up: `LLMCall → Agent → RAG → FlowChart → Swarm`. No upfront graph DSL.
 3. **Built-in explainability** — Causal traces, narrative, time-travel, flowchart visualization. Not a paid add-on. Built into the library.
+4. **Agent-level security** — `gatedTools` hides tools from the LLM (not just the API). Defense-in-depth: resolve filtering + execute rejection + audit recorder. No other framework does this at the agent level.
 
 ---
 
@@ -268,6 +271,7 @@ console.log(turns.getCompletedCount()); // 1
 | `ToolUsageRecorder` | Tool call counts, latency, errors |
 | `QualityRecorder` | Score each response via custom judge function |
 | `GuardrailRecorder` | Flag policy violations via custom check function |
+| `PermissionRecorder` | Blocked, denied, and allowed tool events for audit |
 | `CompositeRecorder` | Fan-out to multiple recorders at once |
 
 ---
@@ -295,6 +299,88 @@ const production = withCircuitBreaker(
   { failureThreshold: 3 },
 );
 ```
+
+---
+
+## Security — Tool Gating
+
+The LLM sees every tool description you give it. If a user shouldn't access a tool, the LLM shouldn't know it exists — otherwise it wastes tokens reasoning about it and may hallucinate calls to it.
+
+`gatedTools` wraps any `ToolProvider` with two layers of enforcement:
+
+```typescript
+import { gatedTools, staticTools, PermissionPolicy } from 'agentfootprint';
+
+// Centralized policy — share across agents
+const policy = new PermissionPolicy(['search', 'calc']);
+
+const gated = gatedTools(
+  staticTools([searchTool, calcTool, adminTool]),
+  policy.checker(),
+);
+
+const agent = Agent.create({ provider })
+  .toolProvider(gated)
+  .build();
+
+// Layer 1: adminTool hidden from LLM (filtered from resolve)
+// Layer 2: if LLM hallucinates 'admin', execute returns Permission denied
+// Both layers run every turn — policy.grant('admin') takes effect immediately
+```
+
+Role-based access:
+
+```typescript
+const policy = PermissionPolicy.fromRoles({
+  user: ['search', 'calc'],
+  admin: ['search', 'calc', 'delete-user', 'run-code'],
+}, 'user');
+
+// Upgrade mid-conversation
+policy.setRole('admin');
+```
+
+Audit trail via `PermissionRecorder`:
+
+```typescript
+import { PermissionRecorder } from 'agentfootprint';
+
+const recorder = new PermissionRecorder();
+const gated = gatedTools(tools, policy.checker(), { onBlocked: recorder.onBlocked });
+
+// After execution:
+recorder.getSummary();
+// { allowed: ['search'], blocked: ['delete-user'], denied: [] }
+```
+
+See [docs/guides/security.md](docs/guides/security.md) for full API reference.
+
+---
+
+## Provider Resilience
+
+Switch between model families when a provider goes down. Infrastructure load balancers can't do this — they're bound to one API.
+
+```typescript
+import { resilientProvider, AnthropicAdapter, OpenAIAdapter } from 'agentfootprint';
+
+// Try Claude → GPT-4o → local Ollama
+// Per-provider circuit breakers: tripped providers are skipped in O(1)
+const provider = resilientProvider([
+  new AnthropicAdapter({ model: 'claude-sonnet-4-20250514' }),
+  new OpenAIAdapter({ model: 'gpt-4o' }),
+  new OpenAIAdapter({ model: 'llama3', baseURL: 'http://localhost:11434/v1' }),
+], {
+  circuitBreaker: { threshold: 3, resetAfterMs: 30_000 },
+});
+
+const agent = Agent.create({ provider }).system('You are helpful.').build();
+// response.model tells recorders which provider answered
+```
+
+Also available: `fallbackProvider` (fallback without circuit breakers) for simpler use cases.
+
+See [docs/guides/security.md](docs/guides/security.md) for full API reference.
 
 ---
 
@@ -408,14 +494,14 @@ The `test/samples/` directory contains 16 runnable examples:
 src/
 ├── types/        → Content blocks, messages, LLM interfaces, errors
 ├── models/       → Provider config factories (anthropic, openai, ollama, bedrock)
-├── adapters/     → LLM adapters (Anthropic, OpenAI, Bedrock, Mock) + protocol (MCP, A2A)
+├── adapters/     → LLM adapters (Anthropic, OpenAI, Bedrock, Browser, Mock) + protocol (MCP, A2A) + resilience (fallback, resilient)
 ├── tools/        → ToolRegistry, defineTool
 ├── memory/       → Message history (sliding window, truncation)
 ├── scope/        → AgentScope + parsed response handling
-├── providers/    → Prompt/tool/message providers (static, template, skill-based, composite)
+├── providers/    → Prompt/tool/message providers (static, template, skill-based, composite, gated) + PermissionPolicy
 ├── stages/       → Pipeline stages (seed, prompt, LLM call, parse, handle, finalize)
 ├── concepts/     → High-level patterns (LLMCall, Agent, RAG, FlowChart, Swarm)
-├── recorders/    → Scope recorders (V1) + AgentRecorders (V2: Token, Cost, Turn, Tool, Quality, Guardrail)
+├── recorders/    → AgentRecorders (Token, Cost, Turn, Tool, Quality, Guardrail, Permission, Composite)
 ├── compositions/ → withRetry, withFallback, CircuitBreaker
 ├── streaming/    → StreamEmitter, SSEFormatter
 ├── executor/     → agentLoop — low-level agent execution
