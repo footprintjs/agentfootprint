@@ -36,6 +36,8 @@ export type { BrowserOpenAIAdapterOptions } from './browser/BrowserOpenAIAdapter
 // ── Provider Composition ───────────────────────────────────
 export { fallbackProvider } from './fallbackProvider';
 export type { FallbackProviderOptions } from './fallbackProvider';
+export { resilientProvider } from './resilientProvider';
+export type { ResilientProviderOptions } from './resilientProvider';
 
 // ── Provider Bridge ─────────────────────────────────────────
 export { createProvider } from './createProvider';

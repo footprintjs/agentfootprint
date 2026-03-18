@@ -11,3 +11,5 @@ export type { AgentAsToolConfig } from './agentAsTool';
 export { compositeTools } from './compositeTools';
 export { gatedTools } from './gatedTools';
 export type { PermissionChecker, GatedToolsOptions } from './gatedTools';
+export { PermissionPolicy } from './PermissionPolicy';
+export type { PermissionPolicyOptions, PermissionChangeEvent } from './PermissionPolicy';

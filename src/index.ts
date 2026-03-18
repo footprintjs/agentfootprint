@@ -101,6 +101,7 @@ export {
   BrowserOpenAIAdapter,
   createProvider,
   fallbackProvider,
+  resilientProvider,
   mcpToolProvider,
   a2aRunner,
 } from './adapters';
@@ -121,6 +122,7 @@ export type {
   A2AResponse,
   A2ARunnerOptions,
   FallbackProviderOptions,
+  ResilientProviderOptions,
 } from './adapters';
 
 // ── Tools ────────────────────────────────────────────────────
@@ -179,6 +181,7 @@ export {
   QualityRecorder,
   GuardrailRecorder,
   CompositeRecorder,
+  PermissionRecorder,
 } from './recorders';
 export type {
   TokenStats,
@@ -192,13 +195,14 @@ export type {
   QualityJudge,
   Violation,
   GuardrailCheck,
+  PermissionEvent,
 } from './recorders';
 
 // ── Providers ────────────────────────────────────────────────
 export { staticPrompt, templatePrompt, skillBasedPrompt, compositePrompt } from './providers';
 export type { Skill, SkillBasedPromptOptions, CompositePromptOptions } from './providers';
-export { agentAsTool, compositeTools, gatedTools } from './providers';
-export type { AgentAsToolConfig, PermissionChecker, GatedToolsOptions } from './providers';
+export { agentAsTool, compositeTools, gatedTools, PermissionPolicy } from './providers';
+export type { AgentAsToolConfig, PermissionChecker, GatedToolsOptions, PermissionPolicyOptions, PermissionChangeEvent } from './providers';
 export type {
   PromptProvider,
   PromptContext,

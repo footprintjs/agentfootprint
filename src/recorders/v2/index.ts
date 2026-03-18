@@ -19,3 +19,5 @@ export type { QualityScore, QualityJudge } from './QualityRecorder';
 export { GuardrailRecorder } from './GuardrailRecorder';
 export type { Violation, GuardrailCheck } from './GuardrailRecorder';
 export { CompositeRecorder } from './CompositeRecorder';
+export { PermissionRecorder } from './PermissionRecorder';
+export type { PermissionEvent } from './PermissionRecorder';

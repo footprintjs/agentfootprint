@@ -9,6 +9,7 @@ export {
   QualityRecorder,
   GuardrailRecorder,
   CompositeRecorder,
+  PermissionRecorder,
 } from './v2';
 export type {
   TokenStats,
@@ -22,4 +23,5 @@ export type {
   QualityJudge,
   Violation,
   GuardrailCheck,
+  PermissionEvent,
 } from './v2';
