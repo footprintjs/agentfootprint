@@ -9,3 +9,5 @@ export { noTools } from './noTools';
 export { agentAsTool } from './agentAsTool';
 export type { AgentAsToolConfig } from './agentAsTool';
 export { compositeTools } from './compositeTools';
+export { gatedTools } from './gatedTools';
+export type { PermissionChecker, GatedToolsOptions } from './gatedTools';

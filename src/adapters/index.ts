@@ -33,5 +33,9 @@ export type { BrowserAnthropicAdapterOptions } from './browser/BrowserAnthropicA
 export { BrowserOpenAIAdapter } from './browser/BrowserOpenAIAdapter';
 export type { BrowserOpenAIAdapterOptions } from './browser/BrowserOpenAIAdapter';
 
+// ── Provider Composition ───────────────────────────────────
+export { fallbackProvider } from './fallbackProvider';
+export type { FallbackProviderOptions } from './fallbackProvider';
+
 // ── Provider Bridge ─────────────────────────────────────────
 export { createProvider } from './createProvider';

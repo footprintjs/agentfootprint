@@ -100,6 +100,7 @@ export {
   BrowserAnthropicAdapter,
   BrowserOpenAIAdapter,
   createProvider,
+  fallbackProvider,
   mcpToolProvider,
   a2aRunner,
 } from './adapters';
@@ -119,6 +120,7 @@ export type {
   A2AClient,
   A2AResponse,
   A2ARunnerOptions,
+  FallbackProviderOptions,
 } from './adapters';
 
 // ── Tools ────────────────────────────────────────────────────
@@ -195,8 +197,8 @@ export type {
 // ── Providers ────────────────────────────────────────────────
 export { staticPrompt, templatePrompt, skillBasedPrompt, compositePrompt } from './providers';
 export type { Skill, SkillBasedPromptOptions, CompositePromptOptions } from './providers';
-export { agentAsTool, compositeTools } from './providers';
-export type { AgentAsToolConfig } from './providers';
+export { agentAsTool, compositeTools, gatedTools } from './providers';
+export type { AgentAsToolConfig, PermissionChecker, GatedToolsOptions } from './providers';
 export type {
   PromptProvider,
   PromptContext,
