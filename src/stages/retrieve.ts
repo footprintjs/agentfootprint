@@ -2,7 +2,7 @@
  * Retrieve stage — calls retriever provider, writes RetrievalResult to scope.
  */
 
-import type { ScopeFacade } from 'footprintjs';
+import type { ScopeFacade } from 'footprintjs/advanced';
 import type { RetrieverProvider, RetrieveOptions } from '../types';
 import { getTextContent } from '../types/content';
 import { AgentScope } from '../scope';

@@ -2,7 +2,7 @@
  * AugmentPrompt stage — injects retrieved context into messages before LLM call.
  */
 
-import type { ScopeFacade } from 'footprintjs';
+import type { ScopeFacade } from 'footprintjs/advanced';
 import { systemMessage } from '../types';
 import { AgentScope } from '../scope';
 

@@ -5,7 +5,7 @@
  * All paths come from AGENT_PATHS constants (single source of truth).
  */
 
-import type { ScopeFacade } from 'footprintjs';
+import type { ScopeFacade } from 'footprintjs/advanced';
 import type {
   Message,
   AdapterResult,

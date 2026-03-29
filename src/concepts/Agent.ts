@@ -14,7 +14,9 @@
  */
 
 import { flowChart, FlowChartExecutor } from 'footprintjs';
-import type { FlowChart as FlowChartType, ScopeFacade } from 'footprintjs';
+import type { FlowChart as FlowChartType } from 'footprintjs';
+import type { ScopeFacade } from 'footprintjs/advanced';
+import { agentScopeFactory } from '../executor/scopeFactory';
 import { annotateSpecIcons } from './specIcons';
 
 import type {
@@ -180,7 +182,8 @@ export class AgentRunner {
 
     bridge?.dispatchTurnStart(message);
 
-    const executor = new FlowChartExecutor(chart);
+    const executor = new FlowChartExecutor(chart, { scopeFactory: agentScopeFactory });
+    executor.enableNarrative();
     const startMs = Date.now();
 
     try {
@@ -252,8 +255,7 @@ export class AgentRunner {
       .addFunction('CallLLM', callLLM, 'call-llm')
       .addFunction('ParseResponse', parseResponseStage, 'parse-response')
       .addFunction('HandleResponse', handleResponse, 'handle-response')
-      .loopTo('call-llm')
-      .setEnableNarrative();
+      .loopTo('call-llm');
 
     this.lastSpec = annotateSpecIcons(builder.toSpec());
     return builder.build();

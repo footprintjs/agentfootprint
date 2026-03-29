@@ -5,7 +5,7 @@
  * If no tool calls (or max iterations reached): extract result and breakPipeline.
  */
 
-import type { ScopeFacade } from 'footprintjs';
+import type { ScopeFacade } from 'footprintjs/advanced';
 import type { ToolRegistry } from '../tools';
 import { getTextContent } from '../types/content';
 import { AgentScope } from '../scope';

@@ -3,7 +3,7 @@
  * Also appends assistant message to conversation history.
  */
 
-import type { ScopeFacade } from 'footprintjs';
+import type { ScopeFacade } from 'footprintjs/advanced';
 import { assistantMessage } from '../types';
 import { AgentScope } from '../scope';
 import { appendMessage } from '../memory';

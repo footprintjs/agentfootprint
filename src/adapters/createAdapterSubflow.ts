@@ -6,7 +6,8 @@
  * The rest of the agent flowchart runs identically.
  */
 
-import { flowChart, type ScopeFacade } from 'footprintjs';
+import { flowChart } from 'footprintjs';
+import type { ScopeFacade } from 'footprintjs/advanced';
 
 import type { LLMProvider, LLMToolDescription, Message } from '../types';
 import { ADAPTER_PATHS } from '../types';

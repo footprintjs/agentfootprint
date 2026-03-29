@@ -13,6 +13,7 @@
 import { flowChart, FlowChartExecutor } from 'footprintjs';
 import type { FlowChart as FlowChartType } from 'footprintjs';
 import { annotateSpecIcons } from './specIcons';
+import { agentScopeFactory } from '../executor/scopeFactory';
 
 import type { LLMProvider, LLMResponse, Message } from '../types';
 import { getTextContent } from '../types/content';
@@ -22,7 +23,7 @@ import { createCallLLMStage } from '../stages/callLLM';
 import { parseResponseStage } from '../stages/parseResponse';
 import { finalizeStage } from '../stages/finalize';
 import { lastAssistantMessage } from '../memory';
-import type { ScopeFacade } from 'footprintjs';
+import type { ScopeFacade } from 'footprintjs/advanced';
 import type { AgentRecorder } from '../core';
 import { RecorderBridge } from '../recorders/v2/RecorderBridge';
 
@@ -86,7 +87,8 @@ export class LLMCallRunner {
 
     bridge?.dispatchTurnStart(message);
 
-    const executor = new FlowChartExecutor(chart);
+    const executor = new FlowChartExecutor(chart, { scopeFactory: agentScopeFactory });
+    executor.enableNarrative();
     const startMs = Date.now();
 
     try {
@@ -134,8 +136,7 @@ export class LLMCallRunner {
     const builder = flowChart('SeedScope', seedStage, 'seed')
       .addFunction('CallLLM', callLLM, 'call-llm')
       .addFunction('ParseResponse', parseResponseStage, 'parse')
-      .addFunction('Finalize', finalizeStage, 'finalize')
-      .setEnableNarrative();
+      .addFunction('Finalize', finalizeStage, 'finalize');
 
     this.lastSpec = annotateSpecIcons(builder.toSpec());
     return builder.build();

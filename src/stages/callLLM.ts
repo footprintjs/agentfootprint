@@ -2,7 +2,7 @@
  * CallLLM stage — sends messages to LLM via adapter, writes AdapterResult to scope.
  */
 
-import type { ScopeFacade } from 'footprintjs';
+import type { ScopeFacade } from 'footprintjs/advanced';
 import type { LLMProvider } from '../types';
 import { AgentScope } from '../scope';
 import { ADAPTER_PATHS } from '../types';

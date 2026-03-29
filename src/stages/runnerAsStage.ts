@@ -5,7 +5,7 @@
  * (Agent, RAG, LLMCall, or user-built) can become a stage in a pipeline.
  */
 
-import type { ScopeFacade } from 'footprintjs';
+import type { ScopeFacade } from 'footprintjs/advanced';
 import type { AgentStageConfig } from '../types';
 import { AgentScope } from '../scope';
 import { MULTI_AGENT_PATHS } from '../scope/AgentScope';

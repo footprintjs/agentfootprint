@@ -2,7 +2,7 @@
  * Finalize stage — extract the final response from conversation.
  */
 
-import type { ScopeFacade } from 'footprintjs';
+import type { ScopeFacade } from 'footprintjs/advanced';
 import { getTextContent } from '../types/content';
 import { AgentScope } from '../scope';
 import { lastAssistantMessage } from '../memory';

@@ -2,7 +2,7 @@
  * SeedScope stage — initialize agent state from config + user message.
  */
 
-import type { ScopeFacade } from 'footprintjs';
+import type { ScopeFacade } from 'footprintjs/advanced';
 import type { AgentConfig, LLMToolDescription } from '../types';
 import { userMessage } from '../types';
 import { AgentScope } from '../scope';

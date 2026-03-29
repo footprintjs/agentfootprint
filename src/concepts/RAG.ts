@@ -35,7 +35,8 @@ import { createCallLLMStage } from '../stages/callLLM';
 import { parseResponseStage } from '../stages/parseResponse';
 import { finalizeStage } from '../stages/finalize';
 import { lastAssistantMessage } from '../memory';
-import type { ScopeFacade } from 'footprintjs';
+import type { ScopeFacade } from 'footprintjs/advanced';
+import { agentScopeFactory } from '../executor/scopeFactory';
 
 export interface RAGOptions {
   readonly provider: LLMProvider;
@@ -125,7 +126,8 @@ export class RAGRunner {
 
     bridge?.dispatchTurnStart(message);
 
-    const executor = new FlowChartExecutor(chart);
+    const executor = new FlowChartExecutor(chart, { scopeFactory: agentScopeFactory });
+    executor.enableNarrative();
     const startMs = Date.now();
 
     try {
@@ -182,8 +184,7 @@ export class RAGRunner {
       .addFunction('AugmentPrompt', augmentPromptStage, 'augment-prompt')
       .addFunction('CallLLM', callLLM, 'call-llm')
       .addFunction('ParseResponse', parseResponseStage, 'parse-response')
-      .addFunction('Finalize', finalizeStage, 'finalize')
-      .setEnableNarrative();
+      .addFunction('Finalize', finalizeStage, 'finalize');
 
     this.lastSpec = annotateSpecIcons(builder.toSpec());
     return builder.build();

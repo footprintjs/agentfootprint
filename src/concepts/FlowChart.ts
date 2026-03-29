@@ -14,7 +14,8 @@
  */
 
 import { flowChart as buildFlowChart, FlowChartExecutor } from 'footprintjs';
-import type { FlowChart as FlowChartDef, ScopeFacade } from 'footprintjs';
+import type { FlowChart as FlowChartDef } from 'footprintjs';
+import type { ScopeFacade } from 'footprintjs/advanced';
 import { annotateSpecIcons } from './specIcons';
 
 import type { AgentStageConfig, AgentResultEntry, TraversalResult } from '../types';
@@ -22,6 +23,7 @@ import { runnerAsStage } from '../stages/runnerAsStage';
 import { MULTI_AGENT_PATHS } from '../scope/AgentScope';
 import type { RunnerLike } from '../types';
 import type { AgentRecorder } from '../core';
+import { agentScopeFactory } from '../executor/scopeFactory';
 import { RecorderBridge } from '../recorders/v2/RecorderBridge';
 
 /**
@@ -143,11 +145,12 @@ export class FlowChartRunner {
       }
     }
 
-    const finalBuilder = builder.setEnableNarrative();
-    this.lastSpec = annotateSpecIcons(finalBuilder.toSpec());
-    const chart = finalBuilder.build();
+    this.lastSpec = annotateSpecIcons(builder.toSpec());
+    const chart = builder.build();
 
-    const executor = new FlowChartExecutor(chart);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const executor = new FlowChartExecutor(chart, { scopeFactory: agentScopeFactory as any });
+    executor.enableNarrative();
 
     try {
       await executor.run({
@@ -239,7 +242,7 @@ export class FlowChartRunner {
           builder = builder.addFunction(agentConfig.name, stage, agentConfig.id);
         }
       }
-      this.lastSpec = annotateSpecIcons(builder.setEnableNarrative().toSpec());
+      this.lastSpec = annotateSpecIcons(builder.toSpec());
     }
     return this.lastSpec;
   }

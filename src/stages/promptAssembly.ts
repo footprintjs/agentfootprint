@@ -3,7 +3,7 @@
  * Prepends system message if not already present.
  */
 
-import type { ScopeFacade } from 'footprintjs';
+import type { ScopeFacade } from 'footprintjs/advanced';
 import { systemMessage } from '../types';
 import { AgentScope } from '../scope';
 
