@@ -56,7 +56,14 @@ export const SUBFLOW_MESSAGE_KEY = 'message';
  * await executor.run();
  * ```
  */
-export function buildAgentLoop(config: AgentLoopConfig, seed?: AgentLoopSeedOptions): FlowChart {
+export interface AgentLoopResult {
+  chart: FlowChart;
+  spec: unknown;
+}
+
+export function buildAgentLoop(config: AgentLoopConfig, seed?: AgentLoopSeedOptions): FlowChart;
+export function buildAgentLoop(config: AgentLoopConfig, seed: AgentLoopSeedOptions | undefined, options: { captureSpec: true }): AgentLoopResult;
+export function buildAgentLoop(config: AgentLoopConfig, seed?: AgentLoopSeedOptions, options?: { captureSpec: boolean }): FlowChart | AgentLoopResult {
   validateConfig(config);
 
   const maxIterations = config.maxIterations ?? 10;
@@ -192,6 +199,10 @@ export function buildAgentLoop(config: AgentLoopConfig, seed?: AgentLoopSeedOpti
 
   builder = builder.loopTo('call-llm');
 
+  if (options?.captureSpec) {
+    const spec = builder.toSpec();
+    return { chart: builder.build(), spec };
+  }
   return builder.build();
 }
 

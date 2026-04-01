@@ -19,6 +19,7 @@ import type { FlowChart as FlowChartType } from 'footprintjs';
 import { agentScopeFactory } from '../../executor/scopeFactory';
 import { buildAgentLoop } from '../loop';
 import type { AgentLoopConfig } from '../loop';
+import { annotateSpecIcons } from '../../concepts/specIcons';
 import { staticPrompt } from '../../providers/prompt/static';
 import { slidingWindow } from '../../providers/messages/slidingWindow';
 import { noTools } from '../../providers/tools/noTools';
@@ -136,6 +137,7 @@ export class AgentRunner {
   private readonly memoryConfig?: MemoryConfig;
   private conversationHistory: Message[] = [];
   private lastExecutor?: FlowChartExecutor;
+  private lastSpec?: unknown;
 
   constructor(
     provider: LLMProvider,
@@ -170,10 +172,12 @@ export class AgentRunner {
    * ```
    */
   toFlowChart(): FlowChartType {
-    return buildAgentLoop(this.buildConfig(), {
+    const { chart, spec } = buildAgentLoop(this.buildConfig(), {
       messages: [],
       subflowMode: true,
-    });
+    }, { captureSpec: true });
+    this.lastSpec = annotateSpecIcons(spec as any);
+    return chart;
   }
 
   /** Run the agent with a user message. Returns the agent's response. */
@@ -185,10 +189,11 @@ export class AgentRunner {
     // the Messages slot's LoadHistory stage loads from store directly.
     const existingMessages = this.memoryConfig?.store ? [] : this.conversationHistory;
 
-    const chart = buildAgentLoop(this.buildConfig(), {
+    const { chart, spec } = buildAgentLoop(this.buildConfig(), {
       messages: message ? [userMessage(message)] : [],
       existingMessages,
-    });
+    }, { captureSpec: true });
+    this.lastSpec = annotateSpecIcons(spec as any);
     const bridge = this.recorders.length > 0 ? new RecorderBridge(this.recorders) : null;
 
     bridge?.dispatchTurnStart(message);
@@ -247,6 +252,19 @@ export class AgentRunner {
   /** Get the full execution snapshot from the last run. */
   getSnapshot() {
     return this.lastExecutor?.getSnapshot();
+  }
+
+  /** Get the flowchart spec (stage graph metadata). */
+  getSpec(): unknown {
+    if (!this.lastSpec) {
+      // Build a dummy chart to capture spec
+      const { spec } = buildAgentLoop(this.buildConfig(), {
+        messages: [],
+        subflowMode: true,
+      }, { captureSpec: true });
+      this.lastSpec = annotateSpecIcons(spec as any);
+    }
+    return this.lastSpec;
   }
 
   /** Get conversation history. */

@@ -215,4 +215,9 @@ export class SwarmRunner {
   getSnapshot() {
     return this.lastAgentRunner?.getSnapshot();
   }
+
+  /** Get the flowchart spec (stage graph metadata). */
+  getSpec(): unknown {
+    return this.lastAgentRunner?.getSpec();
+  }
 }

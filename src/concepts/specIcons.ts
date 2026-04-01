@@ -18,6 +18,11 @@ const ICON_MAP: Record<string, string> = {
   'finalize': 'end',
   'handle-response': 'tool',
 
+  // Agent loop stages
+  'assemble-prompt': 'process',
+  'apply-prepared-messages': 'memory',
+  'commit-memory': 'memory',
+
   // RAG-specific
   'retrieve': 'rag',
   'augment-prompt': 'process',
