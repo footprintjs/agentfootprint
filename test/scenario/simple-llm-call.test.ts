@@ -20,7 +20,7 @@ describe('Scenario: Simple LLM Call', () => {
 
     const narrative = caller.getNarrative();
     expect(narrative.length).toBeGreaterThan(0);
-    expect(narrative.some((s) => s.includes('Seed'))).toBe(true);
+    expect(narrative.some((s) => s.includes('SystemPrompt'))).toBe(true);
   });
 
   it('works without system prompt', async () => {

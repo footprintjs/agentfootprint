@@ -169,9 +169,18 @@ export class RAGRunner {
   private buildChart(message: string): FlowChartType {
     const sysPrompt = this.sysPrompt;
 
-    const seedStage = (scope: ScopeFacade) => {
+    // API slot: SystemPrompt — set the system instruction
+    const systemPromptStage = (scope: ScopeFacade) => {
+      if (sysPrompt) {
+        AgentScope.setSystemPrompt(scope, sysPrompt);
+      }
+    };
+
+    // API slot: Messages — prepare the conversation messages
+    const messagesStage = (scope: ScopeFacade) => {
       const msgs: Message[] = [];
-      if (sysPrompt) msgs.push(systemMessage(sysPrompt));
+      const sp = AgentScope.getSystemPrompt(scope);
+      if (sp) msgs.push(systemMessage(sp));
       msgs.push(userMessage(message));
       AgentScope.setMessages(scope, msgs);
     };
@@ -179,7 +188,8 @@ export class RAGRunner {
     const retrieve = createRetrieveStage(this.retriever, this.retrieveOptions);
     const callLLM = createCallLLMStage(this.provider);
 
-    const builder = flowChart('Seed', seedStage, 'seed')
+    const builder = flowChart('SystemPrompt', systemPromptStage, 'system-prompt')
+      .addFunction('Messages', messagesStage, 'messages')
       .addFunction('Retrieve', retrieve, 'retrieve')
       .addFunction('AugmentPrompt', augmentPromptStage, 'augment-prompt')
       .addFunction('CallLLM', callLLM, 'call-llm')

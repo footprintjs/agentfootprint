@@ -1,7 +1,7 @@
 /**
  * LLMCall — simplest concept: single LLM call, no tools, no loop.
  *
- * Flowchart: Seed → CallLLM → ParseResponse → Finalize
+ * Flowchart: SystemPrompt → Messages → CallLLM → ParseResponse → Finalize
  *
  * Usage:
  *   const caller = LLMCall.create({ provider: mock([{ content: 'Hi!' }]) })
@@ -124,16 +124,26 @@ export class LLMCallRunner {
   private buildChart(message: string): FlowChartType {
     const sysPrompt = this.sysPrompt;
 
-    const seedStage = (scope: ScopeFacade) => {
+    // API slot: SystemPrompt — set the system instruction
+    const systemPromptStage = (scope: ScopeFacade) => {
+      if (sysPrompt) {
+        AgentScope.setSystemPrompt(scope, sysPrompt);
+      }
+    };
+
+    // API slot: Messages — prepare the conversation messages
+    const messagesStage = (scope: ScopeFacade) => {
       const msgs: Message[] = [];
-      if (sysPrompt) msgs.push(systemMessage(sysPrompt));
+      const sp = AgentScope.getSystemPrompt(scope);
+      if (sp) msgs.push(systemMessage(sp));
       msgs.push(userMessage(message));
       AgentScope.setMessages(scope, msgs);
     };
 
     const callLLM = createCallLLMStage(this.provider);
 
-    const builder = flowChart('Seed', seedStage, 'seed')
+    const builder = flowChart('SystemPrompt', systemPromptStage, 'system-prompt')
+      .addFunction('Messages', messagesStage, 'messages')
       .addFunction('CallLLM', callLLM, 'call-llm')
       .addFunction('ParseResponse', parseResponseStage, 'parse')
       .addFunction('Finalize', finalizeStage, 'finalize');

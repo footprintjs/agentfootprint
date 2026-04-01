@@ -6,16 +6,16 @@
 
 /** Well-known stage ID → icon mapping for agent concepts. */
 const ICON_MAP: Record<string, string> = {
-  // Common stages
+  // API slot stages
+  'system-prompt': 'start',
+  'messages': 'memory',
   'seed': 'start',
-  'seed-scope': 'start',
+
+  // Call stages
   'call-llm': 'llm',
   'parse': 'parse',
   'parse-response': 'parse',
   'finalize': 'end',
-
-  // Agent-specific
-  'prompt-assembly': 'memory',
   'handle-response': 'tool',
 
   // RAG-specific

@@ -73,7 +73,8 @@ describe('LLMCallRunner.toFlowChart()', () => {
     const runner = LLMCall.create({ provider: simpleMock() }).build();
     const chart = runner.toFlowChart();
     const stageIds = Array.from(chart.stageMap.keys());
-    expect(stageIds).toContain('seed');
+    expect(stageIds).toContain('system-prompt');
+    expect(stageIds).toContain('messages');
     expect(stageIds).toContain('call-llm');
     expect(stageIds).toContain('parse');
     expect(stageIds).toContain('finalize');
