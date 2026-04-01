@@ -1,7 +1,7 @@
 /**
  * LLMCall — simplest concept: single LLM call, no tools, no loop.
  *
- * Flowchart: SeedScope → PromptAssembly → CallLLM → Finalize
+ * Flowchart: Seed → CallLLM → ParseResponse → Finalize
  *
  * Usage:
  *   const caller = LLMCall.create({ provider: mock([{ content: 'Hi!' }]) })
@@ -133,7 +133,7 @@ export class LLMCallRunner {
 
     const callLLM = createCallLLMStage(this.provider);
 
-    const builder = flowChart('SeedScope', seedStage, 'seed')
+    const builder = flowChart('Seed', seedStage, 'seed')
       .addFunction('CallLLM', callLLM, 'call-llm')
       .addFunction('ParseResponse', parseResponseStage, 'parse')
       .addFunction('Finalize', finalizeStage, 'finalize');

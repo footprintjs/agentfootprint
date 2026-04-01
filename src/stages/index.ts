@@ -1,9 +1,7 @@
-export { createSeedScopeStage } from './seedScope';
-export type { SeedScopeConfig } from './seedScope';
-export { promptAssemblyStage } from './promptAssembly';
+export { createCommitMemoryStage } from './commitMemory';
+export type { CommitMemoryConfig } from './commitMemory';
 export { createCallLLMStage } from './callLLM';
 export { parseResponseStage } from './parseResponse';
-export { createHandleResponseStage } from './handleResponse';
 export { finalizeStage } from './finalize';
 export { normalizeAdapterResponse, executeToolCalls } from './helpers';
 export { createRetrieveStage } from './retrieve';

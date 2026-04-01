@@ -1,5 +1,6 @@
-export { Agent, AgentRunner } from './Agent';
-export type { AgentOptions } from './Agent';
+// Agent rebuilt on library-of-libraries architecture (src/lib/)
+export { Agent, AgentRunner } from '../lib/concepts';
+export type { AgentOptions } from '../lib/concepts';
 export { LLMCall, LLMCallRunner } from './LLMCall';
 export type { LLMCallOptions } from './LLMCall';
 export { RAG, RAGRunner } from './RAG';

@@ -15,6 +15,23 @@ import type {
   AgentResultEntry,
 } from '../types';
 
+/**
+ * Well-known scope paths for memory subflow state.
+ * These keys are internal to PrepareMemory/CommitMemory and are prefixed
+ * with `memory_` to avoid collision with agent state keys.
+ */
+export const MEMORY_PATHS = {
+  /** Raw history loaded from ConversationStore (PrepareMemory internal). */
+  STORED_HISTORY: 'memory_storedHistory',
+  /** Prepared messages after strategy applied (PrepareMemory output). */
+  PREPARED_MESSAGES: 'memory_preparedMessages',
+  /**
+   * Set to `true` by HandleResponse when the turn is finalizing (no more tool calls).
+   * CommitMemory reads this to know when to save + break the pipeline.
+   */
+  SHOULD_COMMIT: 'memory_shouldCommit',
+} as const;
+
 /** Well-known scope paths for agent state. */
 export const AGENT_PATHS = {
   MESSAGES: 'messages',
@@ -169,5 +186,25 @@ export const AgentScope = {
 
   setAgentResults(scope: ScopeFacade, results: AgentResultEntry[]): void {
     scope.setValue(MULTI_AGENT_PATHS.AGENT_RESULTS, results);
+  },
+
+  // ── Memory Reads ───────────────────────────────────────────
+
+  getShouldCommit(scope: ScopeFacade): boolean {
+    return (scope.getValue(MEMORY_PATHS.SHOULD_COMMIT) as boolean) === true;
+  },
+
+  getStoredHistory(scope: ScopeFacade): Message[] {
+    return (scope.getValue(MEMORY_PATHS.STORED_HISTORY) as Message[]) ?? [];
+  },
+
+  getPreparedMessages(scope: ScopeFacade): Message[] {
+    return (scope.getValue(MEMORY_PATHS.PREPARED_MESSAGES) as Message[]) ?? [];
+  },
+
+  // ── Memory Writes ──────────────────────────────────────────
+
+  setShouldCommit(scope: ScopeFacade, value: boolean): void {
+    scope.setValue(MEMORY_PATHS.SHOULD_COMMIT, value);
   },
 } as const;

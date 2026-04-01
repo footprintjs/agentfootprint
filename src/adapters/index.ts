@@ -1,3 +1,7 @@
+// ── Memory Adapters ─────────────────────────────────────────
+export type { ConversationStore, MemoryConfig } from './memory/types';
+export { InMemoryStore } from './memory/inMemory';
+
 // ── Mock Adapters ────────────────────────────────────────────
 export { MockAdapter, mock } from './mock/MockAdapter';
 export type { MockResponse } from './mock/MockAdapter';

@@ -4,7 +4,6 @@ import {
   LLMCall,
   mock,
   defineTool,
-  createHandleResponseStage,
   createCallLLMStage,
   parseResponseStage,
   normalizeAdapterResponse,
@@ -88,20 +87,6 @@ describe('Boundary: executeToolCalls edge cases', () => {
     const parsed = JSON.parse(result[0].content);
     expect(parsed.error).toBe(true);
     expect(parsed.message).toBe('string-error');
-  });
-});
-
-describe('Boundary: handleResponse with missing parsed response', () => {
-  it('calls breakPipeline when parsedResponse is undefined', async () => {
-    const stage = createHandleResponseStage(new ToolRegistry());
-    const breakPipeline = vi.fn();
-    const scope = mockScope({
-      loopCount: 0,
-      maxIterations: 10,
-      messages: [{ role: 'user', content: 'Hi' }],
-    });
-    await stage(scope, breakPipeline);
-    expect(breakPipeline).toHaveBeenCalled();
   });
 });
 

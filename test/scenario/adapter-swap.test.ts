@@ -44,8 +44,8 @@ describe('Scenario: Adapter Swap ($0 testing)', () => {
 
     const narrative = agent.getNarrative();
     // Verify the narrative has the expected structure
-    expect(narrative.some((s) => s.includes('SeedScope'))).toBe(true);
-    expect(narrative.some((s) => s.includes('AgentLoop') || s.includes('SeedScope'))).toBe(true);
+    expect(narrative.some((s) => s.includes('Initialize agent loop state'))).toBe(true);
+    expect(narrative.some((s) => s.includes('SystemPrompt subflow'))).toBe(true);
   });
 
   it('two mock adapters with same responses produce identical results', async () => {

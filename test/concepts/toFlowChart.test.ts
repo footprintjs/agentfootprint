@@ -28,7 +28,7 @@ describe('AgentRunner.toFlowChart()', () => {
     const chart = runner.toFlowChart();
     expect(chart).toBeDefined();
     expect(chart.root).toBeDefined();
-    expect(chart.root.name).toBe('SeedScope');
+    expect(chart.root.name).toBe('Seed');
     expect(chart.stageMap).toBeInstanceOf(Map);
   });
 
@@ -36,12 +36,12 @@ describe('AgentRunner.toFlowChart()', () => {
     const runner = Agent.create({ provider: simpleMock() }).tool(searchTool).build();
 
     const chart = runner.toFlowChart();
-    const stageNames = Array.from(chart.stageMap.keys());
-    expect(stageNames).toContain('SeedScope');
-    expect(stageNames).toContain('PromptAssembly');
-    expect(stageNames).toContain('CallLLM');
-    expect(stageNames).toContain('ParseResponse');
-    expect(stageNames).toContain('HandleResponse');
+    const stageIds = Array.from(chart.stageMap.keys());
+    expect(stageIds).toContain('seed');
+    expect(stageIds).toContain('assemble-prompt');
+    expect(stageIds).toContain('call-llm');
+    expect(stageIds).toContain('parse-response');
+    expect(stageIds).toContain('handle-response');
   });
 
   it('run() still works after toFlowChart() is called', async () => {
@@ -72,11 +72,11 @@ describe('LLMCallRunner.toFlowChart()', () => {
   it('chart contains expected stages (no loop)', () => {
     const runner = LLMCall.create({ provider: simpleMock() }).build();
     const chart = runner.toFlowChart();
-    const stageNames = Array.from(chart.stageMap.keys());
-    expect(stageNames).toContain('SeedScope');
-    expect(stageNames).toContain('CallLLM');
-    expect(stageNames).toContain('ParseResponse');
-    expect(stageNames).toContain('Finalize');
+    const stageIds = Array.from(chart.stageMap.keys());
+    expect(stageIds).toContain('seed');
+    expect(stageIds).toContain('call-llm');
+    expect(stageIds).toContain('parse');
+    expect(stageIds).toContain('finalize');
   });
 });
 
@@ -91,10 +91,10 @@ describe('RAGRunner.toFlowChart()', () => {
 
     const chart = runner.toFlowChart();
     expect(chart).toBeDefined();
-    const stageNames = Array.from(chart.stageMap.keys());
-    expect(stageNames).toContain('Retrieve');
-    expect(stageNames).toContain('AugmentPrompt');
-    expect(stageNames).toContain('CallLLM');
+    const stageIds = Array.from(chart.stageMap.keys());
+    expect(stageIds).toContain('retrieve');
+    expect(stageIds).toContain('augment-prompt');
+    expect(stageIds).toContain('call-llm');
   });
 });
 

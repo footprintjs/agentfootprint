@@ -139,17 +139,23 @@ export {
   createToolResults,
 } from './memory';
 
+// ── Memory Adapters ──────────────────────────────────────────
+export { InMemoryStore } from './adapters/memory/inMemory';
+export type { ConversationStore, MemoryConfig } from './adapters/memory/types';
+
+// ── Subflows ─────────────────────────────────────────────────
+export { createPrepareMemorySubflow } from './subflows';
+export type { PrepareMemoryConfig } from './subflows';
+
 // ── Scope ────────────────────────────────────────────────────
-export { AgentScope, AGENT_PATHS, RAG_PATHS, MULTI_AGENT_PATHS } from './scope';
+export { AgentScope, AGENT_PATHS, RAG_PATHS, MULTI_AGENT_PATHS, MEMORY_PATHS } from './scope';
 export type { ParsedResponse } from './scope';
 
 // ── Stages ───────────────────────────────────────────────────
 export {
-  createSeedScopeStage,
-  promptAssemblyStage,
   createCallLLMStage,
   parseResponseStage,
-  createHandleResponseStage,
+  createCommitMemoryStage,
   finalizeStage,
   normalizeAdapterResponse,
   executeToolCalls,
@@ -157,6 +163,7 @@ export {
   augmentPromptStage,
   runnerAsStage,
 } from './stages';
+export type { CommitMemoryConfig } from './stages';
 
 // ── Concepts ─────────────────────────────────────────────────
 export {
@@ -228,3 +235,17 @@ export type {
 // ── Streaming ────────────────────────────────────────────────
 export { StreamEmitter, SSEFormatter } from './streaming';
 export type { StreamEvent, StreamEventHandler } from './streaming';
+
+// ── Library-of-Libraries (slot subflow internals) ────────────
+export { buildAgentLoop, SUBFLOW_MESSAGE_KEY } from './lib/loop';
+export type { AgentLoopSeedOptions } from './lib/loop';
+export {
+  buildSystemPromptSubflow,
+  buildMessagesSubflow,
+  buildToolsSubflow,
+} from './lib/slots';
+export type {
+  SystemPromptSlotConfig,
+  MessagesSlotConfig,
+  ToolsSlotConfig,
+} from './lib/slots';

@@ -1,7 +1,7 @@
 /**
  * RAG — Retrieve-Augment-Generate concept.
  *
- * Flowchart: SeedScope → Retrieve → AugmentPrompt → CallLLM → ParseResponse → Finalize
+ * Flowchart: Seed → Retrieve → AugmentPrompt → CallLLM → ParseResponse → Finalize
  *
  * Usage:
  *   const rag = RAG.create({ provider: mock([...]), retriever: mockRetriever([...]) })
@@ -179,7 +179,7 @@ export class RAGRunner {
     const retrieve = createRetrieveStage(this.retriever, this.retrieveOptions);
     const callLLM = createCallLLMStage(this.provider);
 
-    const builder = flowChart('SeedScope', seedStage, 'seed-scope')
+    const builder = flowChart('Seed', seedStage, 'seed')
       .addFunction('Retrieve', retrieve, 'retrieve')
       .addFunction('AugmentPrompt', augmentPromptStage, 'augment-prompt')
       .addFunction('CallLLM', callLLM, 'call-llm')

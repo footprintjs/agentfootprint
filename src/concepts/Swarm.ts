@@ -21,7 +21,7 @@ import type { ToolDefinition } from '../types/tools';
 import type { RunnerLike, AgentResultEntry, TraversalResult } from '../types/multiAgent';
 import type { AgentResult } from '../types/agent';
 import type { AgentRecorder } from '../core';
-import { Agent, AgentRunner } from './Agent';
+import { Agent, AgentRunner } from '.';
 import { agentAsTool } from '../providers/tools/agentAsTool';
 import type { AgentAsToolConfig } from '../providers/tools/agentAsTool';
 
@@ -130,7 +130,6 @@ export class SwarmRunner {
   private readonly recorders: AgentRecorder[];
   private lastAgentRunner?: AgentRunner;
   private lastSpecialistResults: AgentResultEntry[] = [];
-  private lastSpec?: unknown;
 
   constructor(
     provider: LLMProvider,
@@ -184,7 +183,6 @@ export class SwarmRunner {
     const result: AgentResult = await orchestrator.run(message, options);
 
     this.lastAgentRunner = orchestrator;
-    this.lastSpec = orchestrator.getSpec();
 
     // Build specialist results from tool calls
     const narrative = orchestrator.getNarrative();
@@ -206,32 +204,6 @@ export class SwarmRunner {
       agents: this.lastSpecialistResults,
       totalLatencyMs: Date.now() - startTime,
     };
-  }
-
-  /** Get the flowchart spec (stage graph metadata). */
-  getSpec(): unknown {
-    if (!this.lastSpec) {
-      // Build orchestrator to capture spec without executing
-      const builder = Agent.create({
-        provider: this.provider,
-        name: this.name,
-      });
-      if (this.systemPrompt) builder.system(this.systemPrompt);
-      // Register specialist tools (with dummy signal/timeout since we only need the spec)
-      const specialistTools = this.specialists.map((spec) =>
-        agentAsTool({
-          id: spec.id,
-          description: spec.description,
-          runner: spec.runner,
-          inputMapper: spec.inputMapper,
-        }),
-      );
-      builder.tools([...specialistTools, ...this.extraTools]);
-      builder.maxIterations(this.maxIter);
-      const orchestrator = builder.build();
-      this.lastSpec = orchestrator.getSpec();
-    }
-    return this.lastSpec;
   }
 
   /** Get the narrative from the last run. */
