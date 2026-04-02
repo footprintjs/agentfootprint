@@ -55,6 +55,8 @@ export interface ToolExecutionSubflowState {
 export interface ToolExecutionSubflowConfig {
   readonly registry: ToolRegistry;
   readonly toolProvider?: ToolProvider;
+  /** Instruction processing config — when provided, instructions are evaluated after each tool call. */
+  readonly instructionConfig?: import('./helpers').InstructionConfig;
 }
 
 // ── Builder ──────────────────────────────────────────────────
@@ -69,7 +71,7 @@ export interface ToolExecutionSubflowConfig {
 export function buildToolExecutionSubflow(
   config: ToolExecutionSubflowConfig,
 ): FlowChart {
-  const { registry, toolProvider } = config;
+  const { registry, toolProvider, instructionConfig } = config;
 
   return flowChart<ToolExecutionSubflowState>(
     'ExecuteToolCalls',
@@ -97,6 +99,7 @@ export function buildToolExecutionSubflow(
         messages,
         toolProvider,
         signal,
+        instructionConfig,
       );
 
       // Output DELTA only — footprintjs applyOutputMapping concatenates arrays,

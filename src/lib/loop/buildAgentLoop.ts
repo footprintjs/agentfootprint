@@ -88,11 +88,24 @@ export function buildAgentLoop(config: AgentLoopConfig, seed?: AgentLoopSeedOpti
   const messagesSubflow = buildMessagesSubflow(config.messages);
   const toolsSubflow = buildToolsSubflow(config.tools);
 
+  // Build instruction config from registry — collect tools that have instructions
+  const instructionsByToolId = new Map<string, readonly import('../instructions').LLMInstruction[]>();
+  for (const tool of config.registry.all()) {
+    const instructed = tool as import('../instructions').InstructedToolDefinition;
+    if (instructed.instructions?.length) {
+      instructionsByToolId.set(tool.id, instructed.instructions);
+    }
+  }
+  const hasInstructions = instructionsByToolId.size > 0;
+
   // Build call stages
   const callLLM = createCallLLMStage(config.provider);
   const toolExecutionSubflow = buildToolExecutionSubflow({
     registry: config.registry,
     toolProvider: config.toolProvider,
+    // Always pass instruction config — even without build-time instructions,
+    // tool handlers can return runtime instructions/followUps.
+    instructionConfig: { instructionsByToolId },
   });
 
   // Seed stage: initialize all required scope state.
