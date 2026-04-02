@@ -96,8 +96,6 @@ export function buildAgentLoop(config: AgentLoopConfig, seed?: AgentLoopSeedOpti
       instructionsByToolId.set(tool.id, instructed.instructions);
     }
   }
-  const hasInstructions = instructionsByToolId.size > 0;
-
   // Build call stages
   const callLLM = createCallLLMStage(config.provider);
   const toolExecutionSubflow = buildToolExecutionSubflow({

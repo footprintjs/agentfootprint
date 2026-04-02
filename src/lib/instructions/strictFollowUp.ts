@@ -53,16 +53,16 @@ export function defaultConditionMatcher(condition: string, userMessage: string):
 
   const messageLower = userMessage.toLowerCase();
 
-  const messageWords = messageLower
-    .replace(/[^a-z0-9\s]/g, '')
-    .split(/\s+/)
-    .filter((w) => w.length > 2);
-
-  // Check if any condition keyword matches any message word.
-  // Uses prefix matching (stem approximation): "explain" matches "explanation" and vice versa.
-  return conditionWords.some((cw) =>
-    messageWords.some((mw) => cw.startsWith(mw) || mw.startsWith(cw)),
+  const messageWords = new Set(
+    messageLower
+      .replace(/[^a-z0-9\s]/g, '')
+      .split(/\s+/)
+      .filter((w) => w.length > 2),
   );
+
+  // Check if any condition keyword appears as an exact word in the message.
+  // For fuzzy/stem matching, use a custom matcher function.
+  return conditionWords.some((word) => messageWords.has(word));
 }
 
 // ── Pending Follow-Up Manager ───────────────────────────────────────────
@@ -135,10 +135,15 @@ export class PendingFollowUpManager {
     this.pending = undefined; // Always consume — one-shot
 
     // Use custom matcher if provided, otherwise default keyword matcher
-    const matcher = pending.matcher;
-    const matched = matcher
-      ? matcher(userMessage)
-      : defaultConditionMatcher(pending.followUp.condition, userMessage);
+    let matched: boolean;
+    try {
+      matched = pending.matcher
+        ? pending.matcher(userMessage)
+        : defaultConditionMatcher(pending.followUp.condition, userMessage);
+    } catch {
+      // Broken matcher should not crash the agent — fail-safe: skip the follow-up
+      return undefined;
+    }
 
     return matched ? pending : undefined;
   }

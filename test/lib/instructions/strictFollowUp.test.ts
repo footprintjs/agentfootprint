@@ -236,7 +236,7 @@ describe('strictFollowUp — security', () => {
     expect(matched!.followUp.params.traceId).toBe('tr_8f3a_exact_resolved');
   });
 
-  it('custom matcher throwing returns undefined (fail-safe)', () => {
+  it('custom matcher throwing returns undefined (fail-safe, no crash)', () => {
     const mgr = new PendingFollowUpManager();
     mgr.setPending({
       followUp: makeFollowUp(),
@@ -244,15 +244,10 @@ describe('strictFollowUp — security', () => {
       matcher: () => { throw new Error('matcher bug'); },
     });
 
-    // Should not throw — fail-safe returns undefined
-    // Note: current implementation WILL throw. This documents desired behavior.
-    // We'll fix this if the test fails.
-    try {
-      const result = mgr.checkAndConsume('test');
-      expect(result).toBeUndefined();
-    } catch {
-      // If it throws, that's a known gap — matcher errors should be caught
-      expect(true).toBe(true); // pass for now, fix in review
-    }
+    // Must NOT throw — broken matcher is caught internally
+    const result = mgr.checkAndConsume('test');
+    expect(result).toBeUndefined();
+    // Pending is consumed even on error
+    expect(mgr.hasPending()).toBe(false);
   });
 });
