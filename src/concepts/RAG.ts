@@ -126,7 +126,7 @@ export class RAGRunner {
 
     const executor = new FlowChartExecutor(chart, { enrichSnapshots: true });
     executor.enableNarrative();
-    executor.attachRecorder(new MetricRecorder('__timing'));
+    executor.attachRecorder(new MetricRecorder('metrics'));
     const startMs = Date.now();
 
     try {
