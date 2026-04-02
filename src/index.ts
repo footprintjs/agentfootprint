@@ -128,6 +128,17 @@ export type {
 // ── Tools ────────────────────────────────────────────────────
 export { ToolRegistry, defineTool } from './tools';
 
+// ── Instructions (LLM guidance co-located with tools) ───────
+export { quickBind } from './lib/instructions';
+export type {
+  LLMInstruction,
+  FollowUpBinding,
+  InstructionContext,
+  RuntimeFollowUp,
+  InstructedToolResult,
+  InstructedToolDefinition,
+} from './lib/instructions';
+
 // ── Memory ───────────────────────────────────────────────────
 export {
   appendMessage,
