@@ -19,3 +19,6 @@ export type { InstructionInjectionResult } from './inject';
 
 export { InstructionRecorder } from './InstructionRecorder';
 export type { InstructionSummary, ToolInstructionStats, InstructionFiring, FollowUpOffering } from './InstructionRecorder';
+
+export { defaultConditionMatcher, PendingFollowUpManager } from './strictFollowUp';
+export type { PendingStrictFollowUp } from './strictFollowUp';
