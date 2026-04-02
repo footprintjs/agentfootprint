@@ -236,6 +236,9 @@ export type {
 export { StreamEmitter, SSEFormatter } from './streaming';
 export type { StreamEvent, StreamEventHandler } from './streaming';
 
+// ── Narrative ───────────────────────────────────────────────
+export { createAgentRenderer } from './lib/narrative';
+
 // ── Library-of-Libraries (slot subflow internals) ────────────
 export { buildAgentLoop, SUBFLOW_MESSAGE_KEY } from './lib/loop';
 export type { AgentLoopSeedOptions } from './lib/loop';

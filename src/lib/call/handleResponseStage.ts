@@ -1,8 +1,10 @@
 /**
- * HandleResponse stage — execute tool calls or finalize the turn.
+ * HandleResponse stage — finalize the turn when no tool calls remain.
  *
- * If the LLM returned tool calls: execute them and let the loop continue.
- * If no tool calls (or max iterations reached): extract result and breakPipeline.
+ * @deprecated Use the RouteResponse decider pattern in buildAgentLoop instead.
+ * The loop now uses addDeciderFunction('RouteResponse') with 'tool-calls' and
+ * 'final' branches. The Finalize branch (createFinalizeStage) replaces this stage.
+ * Kept for backward compatibility with custom chart builders.
  *
  * Reads from scope:
  *   - parsedResponse (set by ParseResponse)
@@ -10,66 +12,51 @@
  *   - messages
  *
  * Writes to scope:
- *   - messages (appends tool results)
- *   - loopCount (increments)
  *   - result (final answer text)
+ *   - memory_shouldCommit (when useCommitFlag)
  */
 
-import type { ScopeFacade } from 'footprintjs/advanced';
-import type { ToolRegistry } from '../../tools';
-import type { ToolProvider } from '../../core';
+import type { TypedScope } from 'footprintjs';
+import type { AgentLoopState } from '../../scope/types';
 import { getTextContent } from '../../types/content';
-import { AgentScope } from '../../scope';
 import { lastAssistantMessage } from '../../memory';
-import { executeToolCalls } from './helpers';
 
 export interface HandleResponseOptions {
-  /** Tool registry for executing tool calls. */
-  readonly registry: ToolRegistry;
-  /** Optional ToolProvider for providers with their own execute() method. */
-  readonly toolProvider?: ToolProvider;
   /**
-   * When true, set `memory_shouldCommit=true` instead of calling breakPipeline() directly.
-   * Use when CommitMemory stage is present — it will call breakPipeline after saving.
+   * When true, set `memory_shouldCommit=true` instead of calling $break() directly.
+   * Use when CommitMemory stage is present — it will call $break() after saving.
    */
   readonly useCommitFlag?: boolean;
 }
 
 /**
  * Create the HandleResponse stage function.
+ *
+ * Tool execution is handled by the upstream sf-execute-tools subflow.
+ * HandleResponse only finalizes: if no tool calls remain, extract result + break.
+ * If tools were executed (loopCount incremented by subflow), loop continues.
  */
 export function createHandleResponseStage(options: HandleResponseOptions) {
-  const { registry, toolProvider, useCommitFlag } = options;
-  return async (scope: ScopeFacade, breakPipeline: () => void) => {
-    const parsed = AgentScope.getParsedResponse(scope);
-    const loopCount = AgentScope.getLoopCount(scope);
-    const maxIterations = AgentScope.getMaxIterations(scope);
+  const { useCommitFlag } = options;
+  return (scope: TypedScope<AgentLoopState>) => {
+    const parsed = scope.parsedResponse;
+    const loopCount = scope.loopCount ?? 0;
+    const maxIterations = scope.maxIterations ?? 10;
 
-    // Finalize: no tool calls, or max iterations reached
-    if (!parsed || !parsed.hasToolCalls || loopCount >= maxIterations) {
-      const messages = AgentScope.getMessages(scope);
-      const lastAsst = lastAssistantMessage(messages);
-      AgentScope.setResult(scope, lastAsst ? getTextContent(lastAsst.content) : '');
-      if (useCommitFlag) {
-        AgentScope.setShouldCommit(scope, true);
-      } else {
-        breakPipeline();
-      }
+    // If tools were executed by sf-execute-tools, loop continues
+    if (parsed?.hasToolCalls && loopCount < maxIterations) {
       return;
     }
 
-    // Execute tools
-    const messages = AgentScope.getMessages(scope);
-    const signal = scope.getEnv()?.signal;
-    const updatedMessages = await executeToolCalls(
-      parsed.toolCalls,
-      registry,
-      messages,
-      toolProvider,
-      signal,
-    );
-    AgentScope.setMessages(scope, updatedMessages);
-    AgentScope.setLoopCount(scope, loopCount + 1);
-    // Don't call breakPipeline — the loop continues back to CallLLM
+    // Finalize: no tool calls, or max iterations reached
+    const messages = scope.messages ?? [];
+    const lastAsst = lastAssistantMessage(messages);
+    scope.result = lastAsst ? getTextContent(lastAsst.content) : '';
+
+    if (useCommitFlag) {
+      scope.memory_shouldCommit = true;
+    } else {
+      scope.$break();
+    }
   };
 }

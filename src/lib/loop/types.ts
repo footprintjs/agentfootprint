@@ -3,7 +3,8 @@
  *
  * The loop assembler wires the three API slots + call stages into a
  * looping flowchart: SystemPrompt → Messages → Tools → CallLLM →
- * ParseResponse → HandleResponse → loopTo('call-llm').
+ * ParseResponse → RouteResponse(decider) → {tool-calls | final}
+ * → loopTo('call-llm').
  */
 
 import type { LLMProvider } from '../../types';
@@ -31,12 +32,12 @@ export interface AgentLoopConfig {
   /** Tools slot configuration. */
   readonly tools: ToolsSlotConfig;
 
-  /** Tool registry for executing tool calls in HandleResponse. */
+  /** Tool registry for executing tool calls in the tool-calls branch. */
   readonly registry: ToolRegistry;
 
   /**
    * Optional ToolProvider for remote tool execution (MCP, A2A).
-   * When present, HandleResponse tries provider.execute() before registry fallback.
+   * When present, tool execution tries provider.execute() before registry fallback.
    */
   readonly toolProvider?: ToolProvider;
 
@@ -44,9 +45,9 @@ export interface AgentLoopConfig {
   readonly maxIterations?: number;
 
   /**
-   * When true, HandleResponse sets `memory_shouldCommit` flag instead of
-   * calling breakPipeline() directly. Only use when a CommitMemory stage
-   * is mounted after HandleResponse — without it, the loop will not terminate
+   * When true, the Finalize branch sets `memory_shouldCommit` flag instead of
+   * calling $break() directly. Only use when a CommitMemory stage is mounted
+   * after the RouteResponse decider — without it, the loop will not terminate
    * until maxIterations is reached.
    *
    * Auto-enabled when `commitMemory` is provided.
@@ -54,7 +55,7 @@ export interface AgentLoopConfig {
   readonly useCommitFlag?: boolean;
 
   /**
-   * When provided, mounts a CommitMemory stage after HandleResponse.
+   * When provided, mounts a CommitMemory stage after the RouteResponse decider.
    * Automatically enables `useCommitFlag`.
    */
   readonly commitMemory?: CommitMemoryConfig;

@@ -234,7 +234,7 @@ describe('Agent — scenario', () => {
     // Chart has all expected stages
     expect(stageIds).toContain('seed');
     expect(stageIds).toContain('call-llm');
-    expect(stageIds).toContain('handle-response');
+    expect(stageIds).toContain('route-response');
 
     // Same structure as the chart built via run() — subflowMode doesn't
     // change the stage graph, only the Seed stage behavior

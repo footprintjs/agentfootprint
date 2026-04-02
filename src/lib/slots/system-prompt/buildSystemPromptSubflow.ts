@@ -6,7 +6,7 @@
  *   - Config determines internal stages (1 for static, 3+ for RAG-augmented)
  *   - Parent chart never changes when strategy complexity grows
  *
- * The subflow writes the resolved prompt to scope via AgentScope.setSystemPrompt().
+ * The subflow writes the resolved prompt to scope.systemPrompt.
  * Providers are trusted — they receive raw message history and their output is
  * stored as-is. Sanitization is the provider's responsibility.
  *
@@ -15,19 +15,18 @@
  */
 
 import { flowChart } from 'footprintjs';
-import type { FlowChart } from 'footprintjs';
-import type { ScopeFacade } from 'footprintjs/advanced';
+import type { FlowChart, TypedScope } from 'footprintjs';
 import type { PromptContext } from '../../../core';
-import { AgentScope } from '../../../scope';
+import type { SystemPromptSubflowState } from '../../../scope/types';
 import { findLastUserMessage, extractTextContent } from '../helpers';
 import type { SystemPromptSlotConfig } from './types';
 
 /**
  * Build a PromptContext from the current scope state.
  */
-function buildPromptContext(scope: ScopeFacade): PromptContext {
-  const messages = AgentScope.getMessages(scope);
-  const loopCount = AgentScope.getLoopCount(scope);
+function buildPromptContext(scope: TypedScope<SystemPromptSubflowState>): PromptContext {
+  const messages = scope.messages ?? [];
+  const loopCount = scope.loopCount ?? 0;
 
   const lastUserMsg = findLastUserMessage(messages);
   const message = lastUserMsg ? extractTextContent(lastUserMsg) : '';
@@ -36,7 +35,7 @@ function buildPromptContext(scope: ScopeFacade): PromptContext {
     message,
     turnNumber: loopCount,
     history: messages,
-    signal: scope.getEnv()?.signal,
+    signal: scope.$getEnv()?.signal,
   };
 }
 
@@ -53,12 +52,16 @@ export function buildSystemPromptSubflow(config: SystemPromptSlotConfig): FlowCh
     throw new Error('SystemPromptSlotConfig: provider is required');
   }
 
-  return flowChart(
+  return flowChart<SystemPromptSubflowState>(
     'ResolvePrompt',
-    async (scope: ScopeFacade) => {
+    async (scope) => {
       const ctx = buildPromptContext(scope);
       const prompt = await config.provider.resolve(ctx);
-      AgentScope.setSystemPrompt(scope, prompt);
+      scope.systemPrompt = prompt;
+
+      // Narrative enrichment — summarize the resolved prompt for BTS visibility
+      const preview = prompt.length > 60 ? prompt.slice(0, 60) + '...' : prompt;
+      scope.promptSummary = `${prompt.length} chars: "${preview}"`;
     },
     'resolve-prompt',
     undefined,

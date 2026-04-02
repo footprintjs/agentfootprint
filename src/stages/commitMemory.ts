@@ -4,7 +4,7 @@
  * Behavior:
  *   - Reads `memory_shouldCommit` flag set by HandleResponse when the turn finalizes.
  *   - If true: fires `store.save(conversationId, messages)` as a non-blocking Promise
- *     (fire-and-forget), then calls breakPipeline so the loop ends.
+ *     (fire-and-forget), then calls scope.$break() so the loop ends.
  *   - If false (tool-call turn still in progress): no-op — loop continues normally.
  *
  * Fire-and-forget rationale:
@@ -25,9 +25,9 @@
  *   SeedScope → PrepareMemory → ... → HandleResponse → CommitMemory → loopTo(CallLLM)
  */
 
-import type { ScopeFacade } from 'footprintjs/advanced';
+import type { TypedScope } from 'footprintjs';
 import type { ConversationStore } from '../adapters/memory/types';
-import { AgentScope, MEMORY_PATHS } from '../scope/AgentScope';
+import type { AgentLoopState } from '../scope/types';
 
 export interface CommitMemoryConfig {
   readonly store: ConversationStore;
@@ -53,8 +53,8 @@ const isDevMode = () => process.env['NODE_ENV'] !== 'production';
  * ```
  */
 export function createCommitMemoryStage(config: CommitMemoryConfig) {
-  return async (scope: ScopeFacade, breakPipeline: () => void) => {
-    const shouldCommit = AgentScope.getShouldCommit(scope);
+  return async (scope: TypedScope<AgentLoopState>) => {
+    const shouldCommit = scope.memory_shouldCommit === true;
 
     if (!shouldCommit) {
       // Tool-call turn — loop continues, nothing to save yet
@@ -73,9 +73,9 @@ export function createCommitMemoryStage(config: CommitMemoryConfig) {
     //
     // PromptAssembly may inject a system message at position 0 when the windowed
     // prepared context doesn't start with one. We account for that 1-message offset.
-    const messages = AgentScope.getMessages(scope);
-    const storedHistory = AgentScope.getStoredHistory(scope);
-    const prepared = AgentScope.getPreparedMessages(scope);
+    const messages = scope.messages ?? [];
+    const storedHistory = scope.memory_storedHistory ?? [];
+    const prepared = scope.memory_preparedMessages ?? [];
 
     let toSave: typeof messages;
     if (storedHistory.length > 0 && prepared.length < storedHistory.length) {
@@ -110,10 +110,10 @@ export function createCommitMemoryStage(config: CommitMemoryConfig) {
     }
 
     // Break the loop first — this is the real termination signal.
-    breakPipeline();
+    scope.$break();
 
     // Reset the flag after breaking so CommitMemory is a no-op on any future loop
-    // passes (defensive — breakPipeline already ends the loop).
-    scope.setValue(MEMORY_PATHS.SHOULD_COMMIT, false);
+    // passes (defensive — $break() already ends the loop).
+    scope.memory_shouldCommit = false;
   };
 }

@@ -13,8 +13,6 @@ import { describe, it, expect, vi } from 'vitest';
 import { FlowChartExecutor } from 'footprintjs';
 import { buildAgentLoop } from '../../../src/lib/loop/buildAgentLoop';
 import type { AgentLoopConfig } from '../../../src/lib/loop/types';
-import { agentScopeFactory } from '../../../src/executor/scopeFactory';
-import { AGENT_PATHS, MEMORY_PATHS } from '../../../src/scope/AgentScope';
 import { ToolRegistry, defineTool } from '../../../src/tools/ToolRegistry';
 import { staticPrompt } from '../../../src/providers/prompt/static';
 import { slidingWindow } from '../../../src/providers/messages/slidingWindow';
@@ -59,7 +57,7 @@ async function runLoop(
     messages: [userMessage(userMsg)],
   });
 
-  const executor = new FlowChartExecutor(chart, { scopeFactory: agentScopeFactory });
+  const executor = new FlowChartExecutor(chart);
   await executor.run();
   return executor.getSnapshot()?.sharedState ?? {};
 }
@@ -80,7 +78,7 @@ describe('buildAgentLoop — unit', () => {
     });
 
     const state = await runLoop(config);
-    expect(state[AGENT_PATHS.RESULT]).toBe('The answer is 42.');
+    expect(state.result).toBe('The answer is 42.');
   });
 
   it('provider.chat() is called with resolved messages', async () => {
@@ -137,8 +135,8 @@ describe('buildAgentLoop — boundary', () => {
     });
 
     const state = await runLoop(config);
-    expect(state[AGENT_PATHS.RESULT]).toBeDefined();
-    expect(state[AGENT_PATHS.LOOP_COUNT]).toBeLessThanOrEqual(1);
+    expect(state.result).toBeDefined();
+    expect(state.loopCount).toBeLessThanOrEqual(1);
   });
 
   it('works with empty system prompt', async () => {
@@ -148,7 +146,7 @@ describe('buildAgentLoop — boundary', () => {
     });
 
     const state = await runLoop(config);
-    expect(state[AGENT_PATHS.RESULT]).toBe('ok');
+    expect(state.result).toBe('ok');
   });
 
   it('prepends existing messages when provided', async () => {
@@ -165,7 +163,7 @@ describe('buildAgentLoop — boundary', () => {
       existingMessages: existing,
     });
 
-    const executor = new FlowChartExecutor(chart, { scopeFactory: agentScopeFactory });
+    const executor = new FlowChartExecutor(chart);
     await executor.run();
     const state = executor.getSnapshot()?.sharedState ?? {};
 
@@ -189,7 +187,7 @@ describe('buildAgentLoop — subflowMode', () => {
     // Run standalone (not as subflow) but with message pre-set in scope
     // via existingMessages to verify the Seed code path
     const chart = buildAgentLoop(config, { messages: [], subflowMode: true });
-    const executor = new FlowChartExecutor(chart, { scopeFactory: agentScopeFactory });
+    const executor = new FlowChartExecutor(chart);
     executor.enableNarrative();
 
     // In standalone mode, 'message' is not set in scope → defaults to ''
@@ -209,7 +207,7 @@ describe('buildAgentLoop — subflowMode', () => {
       messages: [userMessage('baked in')],
       subflowMode: false,
     });
-    const executor = new FlowChartExecutor(chart, { scopeFactory: agentScopeFactory });
+    const executor = new FlowChartExecutor(chart);
     await executor.run();
 
     const calledMsgs = (provider.chat as ReturnType<typeof vi.fn>).mock.calls[0][0] as Message[];
@@ -223,7 +221,7 @@ describe('buildAgentLoop — subflowMode', () => {
     const stageIds = Array.from(chart.stageMap.keys());
     expect(stageIds).toContain('seed');
     expect(stageIds).toContain('call-llm');
-    expect(stageIds).toContain('handle-response');
+    expect(stageIds).toContain('route-response');
   });
 
   it('subflowMode=true and subflowMode=false produce same stage structure', () => {
@@ -270,14 +268,14 @@ describe('buildAgentLoop — commitMemory', () => {
     });
 
     const chart = buildAgentLoop(config, { messages: [userMessage('hi')] });
-    const executor = new FlowChartExecutor(chart, { scopeFactory: agentScopeFactory });
+    const executor = new FlowChartExecutor(chart);
     await executor.run();
     const state = executor.getSnapshot()?.sharedState ?? {};
 
     // CommitMemory should have run and saved
     expect(store.save).toHaveBeenCalledOnce();
     expect(store.save).toHaveBeenCalledWith('conv-1', expect.any(Array));
-    expect(state[AGENT_PATHS.RESULT]).toBe('done');
+    expect(state.result).toBe('done');
   });
 
   it('commitMemory with persistent Messages slot loads from store', async () => {
@@ -302,7 +300,7 @@ describe('buildAgentLoop — commitMemory', () => {
     };
 
     const chart = buildAgentLoop(config, { messages: [userMessage('new question')] });
-    const executor = new FlowChartExecutor(chart, { scopeFactory: agentScopeFactory });
+    const executor = new FlowChartExecutor(chart);
     await executor.run();
 
     // Store.load should have been called
@@ -345,8 +343,8 @@ describe('buildAgentLoop — scenario', () => {
     });
 
     const state = await runLoop(config, 'What is the weather?');
-    expect(state[AGENT_PATHS.RESULT]).toBe('The weather is sunny.');
-    expect(state[AGENT_PATHS.LOOP_COUNT]).toBe(1);
+    expect(state.result).toBe('The weather is sunny.');
+    expect(state.loopCount).toBe(1);
   });
 
   it('second LLM call receives tool result in messages (message threading)', async () => {
@@ -381,7 +379,7 @@ describe('buildAgentLoop — scenario', () => {
   });
 
   it('useCommitFlag sets shouldCommit — verified via mock CommitMemory', async () => {
-    // useCommitFlag makes HandleResponse set shouldCommit instead of breakPipeline.
+    // useCommitFlag makes Finalize set shouldCommit instead of $break().
     // A real CommitMemory stage reads it and breaks. We simulate that here by
     // building the chart manually and adding a CommitMemory-like break stage.
     const provider = mockProvider([{ content: 'done' }]);
@@ -390,16 +388,13 @@ describe('buildAgentLoop — scenario', () => {
       useCommitFlag: true,
     });
 
-    // Build loop but we can't add stages after loopTo.
-    // Instead: test the flag via handleResponseStage directly (call module tests
-    // already verified this). Here we verify the config wiring is correct.
+    // Build loop and verify the decider architecture is in place.
     const chart = buildAgentLoop(config, { messages: [userMessage('hi')] });
     const stageIds = Array.from(chart.stageMap.keys());
-    expect(stageIds).toContain('handle-response');
+    expect(stageIds).toContain('route-response');
 
-    // Config passes through — verified by call/ module tests (handleResponseStage
-    // sets SHOULD_COMMIT when useCommitFlag=true and breaks via CommitMemory).
-    // We verify the assembler accepts useCommitFlag without error.
+    // Config passes through — Finalize branch sets memory_shouldCommit
+    // when useCommitFlag=true. We verify the assembler accepts it without error.
     expect(config.useCommitFlag).toBe(true);
   });
 
@@ -427,7 +422,7 @@ describe('buildAgentLoop — scenario', () => {
 
     const state = await runLoop(config);
     expect(toolProvider.execute).toHaveBeenCalledOnce();
-    expect(state[AGENT_PATHS.RESULT]).toBe('Got it: remote-result');
+    expect(state.result).toBe('Got it: remote-result');
   });
 
   it('multiple tool calls in one turn', async () => {
@@ -460,9 +455,9 @@ describe('buildAgentLoop — scenario', () => {
     });
 
     const state = await runLoop(config);
-    expect(state[AGENT_PATHS.RESULT]).toBe('Combined result');
+    expect(state.result).toBe('Combined result');
 
-    const messages = state[AGENT_PATHS.MESSAGES] as Message[];
+    const messages = state.messages as Message[];
     const toolMsgs = messages.filter((m) => m.role === 'tool');
     expect(toolMsgs).toHaveLength(2);
   });
@@ -478,7 +473,7 @@ describe('buildAgentLoop — property', () => {
 
     expect(stageIds).toContain('call-llm');
     expect(stageIds).toContain('parse-response');
-    expect(stageIds).toContain('handle-response');
+    expect(stageIds).toContain('route-response');
     expect(stageIds).toContain('seed');
     expect(stageIds).toContain('assemble-prompt');
     expect(stageIds).toContain('apply-prepared-messages');
@@ -490,7 +485,7 @@ describe('buildAgentLoop — property', () => {
     });
 
     const state = await runLoop(config);
-    expect(state[AGENT_PATHS.MAX_ITERATIONS]).toBe(10);
+    expect(state.maxIterations).toBe(10);
   });
 
   it('custom maxIterations is respected', async () => {
@@ -500,7 +495,7 @@ describe('buildAgentLoop — property', () => {
     });
 
     const state = await runLoop(config);
-    expect(state[AGENT_PATHS.MAX_ITERATIONS]).toBe(5);
+    expect(state.maxIterations).toBe(5);
   });
 
   it('result is always a string after finalization', async () => {
@@ -509,7 +504,7 @@ describe('buildAgentLoop — property', () => {
     });
 
     const state = await runLoop(config);
-    expect(typeof state[AGENT_PATHS.RESULT]).toBe('string');
+    expect(typeof state.result).toBe('string');
   });
 });
 
@@ -582,6 +577,6 @@ describe('buildAgentLoop — security', () => {
     });
 
     const state = await runLoop(config);
-    expect(state[AGENT_PATHS.RESULT]).toBe('Ok I got an error');
+    expect(state.result).toBe('Ok I got an error');
   });
 });

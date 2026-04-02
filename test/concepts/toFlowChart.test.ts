@@ -41,7 +41,7 @@ describe('AgentRunner.toFlowChart()', () => {
     expect(stageIds).toContain('assemble-prompt');
     expect(stageIds).toContain('call-llm');
     expect(stageIds).toContain('parse-response');
-    expect(stageIds).toContain('handle-response');
+    expect(stageIds).toContain('route-response');
   });
 
   it('run() still works after toFlowChart() is called', async () => {

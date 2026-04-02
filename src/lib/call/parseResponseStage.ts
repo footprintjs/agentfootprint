@@ -9,19 +9,20 @@
  * Writes to scope:
  *   - parsedResponse (hasToolCalls, toolCalls[], content)
  *   - messages (appends assistant message)
+ *   - responseType (narrative summary of the response)
  */
 
-import type { ScopeFacade } from 'footprintjs/advanced';
+import type { TypedScope } from 'footprintjs';
+import type { AgentLoopState } from '../../scope/types';
 import { assistantMessage } from '../../types';
-import { AgentScope } from '../../scope';
 import { appendMessage } from '../../memory';
 
 /**
  * ParseResponse stage function.
  * Stateless — no factory needed.
  */
-export function parseResponseStage(scope: ScopeFacade): void {
-  const result = AgentScope.getAdapterResult(scope);
+export function parseResponseStage(scope: TypedScope<AgentLoopState>): void {
+  const result = scope.adapterResult;
 
   if (!result) {
     throw new Error('ParseResponse: no adapter result in scope');
@@ -37,13 +38,22 @@ export function parseResponseStage(scope: ScopeFacade): void {
     content: result.content,
   };
 
-  AgentScope.setParsedResponse(scope, parsed);
+  scope.parsedResponse = parsed;
 
   // Append assistant message to conversation
-  const messages = AgentScope.getMessages(scope);
+  const messages = scope.messages ?? [];
   const asstMsg = assistantMessage(
     result.content,
     result.type === 'tools' ? result.toolCalls : undefined,
   );
-  AgentScope.setMessages(scope, appendMessage(messages, asstMsg));
+  scope.messages = appendMessage(messages, asstMsg);
+
+  // Write summary for narrative visibility
+  if (parsed.hasToolCalls) {
+    const toolNames = parsed.toolCalls.map((tc) => tc.name).join(', ');
+    scope.responseType = `tool_calls: [${toolNames}]`;
+  } else {
+    const preview = result.content.length > 80 ? result.content.slice(0, 80) + '...' : result.content;
+    scope.responseType = `final: "${preview}"`;
+  }
 }

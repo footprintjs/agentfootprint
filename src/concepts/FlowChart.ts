@@ -14,17 +14,15 @@
  */
 
 import { flowChart as buildFlowChart, FlowChartExecutor } from 'footprintjs';
-import type { FlowChart as FlowChartDef } from 'footprintjs';
-import type { ScopeFacade } from 'footprintjs/advanced';
+import type { FlowChart as FlowChartDef, TypedScope } from 'footprintjs';
 import { annotateSpecIcons } from './specIcons';
 
 import type { AgentStageConfig, AgentResultEntry, TraversalResult } from '../types';
 import { runnerAsStage } from '../stages/runnerAsStage';
-import { MULTI_AGENT_PATHS } from '../scope/AgentScope';
 import type { RunnerLike } from '../types';
 import type { AgentRecorder } from '../core';
-import { agentScopeFactory } from '../executor/scopeFactory';
 import { RecorderBridge } from '../recorders/v2/RecorderBridge';
+import type { MultiAgentState } from '../scope/types';
 
 /**
  * Check if a runner exposes its internal flowChart for subflow composition.
@@ -102,22 +100,18 @@ export class FlowChartRunner {
 
     bridge?.dispatchTurnStart(message);
 
-    // Seed stage: set input and initialize agent results
-    const seedStage = (scope: ScopeFacade) => {
-      scope.setValue(MULTI_AGENT_PATHS.PIPELINE_INPUT, message);
-      scope.setValue(MULTI_AGENT_PATHS.AGENT_RESULTS, []);
-      if (options?.signal) {
-        scope.setValue(MULTI_AGENT_PATHS.SIGNAL, options.signal);
-      }
-      if (options?.timeoutMs) {
-        scope.setValue(MULTI_AGENT_PATHS.TIMEOUT_MS, options.timeoutMs);
-      }
+    // Seed stage: set input and initialize agent results.
+    // Signal/timeout are passed via executor.run({ signal, timeoutMs }) and
+    // available to stages via scope.$getEnv() — no need to duplicate in scope state.
+    const seedStage = (scope: TypedScope<MultiAgentState>) => {
+      scope.pipelineInput = message;
+      scope.agentResults = [];
     };
 
     // Build flowchart: Seed → Runner1 → Runner2 → ... → RunnerN
     // Runners with toFlowChart() are mounted as subflows (UI drill-down).
     // Runners without it fall back to addFunction + runnerAsStage.
-    let builder = buildFlowChart('Seed', seedStage, 'seed');
+    let builder = buildFlowChart<MultiAgentState>('Seed', seedStage, 'seed');
 
     for (const agentConfig of this.agents) {
       if (hasToFlowChart(agentConfig.runner)) {
@@ -131,8 +125,8 @@ export class FlowChartRunner {
             inputMapper: (parentState: Record<string, unknown>) => {
               const input = agentConfig.inputMapper
                 ? agentConfig.inputMapper(parentState)
-                : (parentState[MULTI_AGENT_PATHS.RESULT] as string) ??
-                  (parentState[MULTI_AGENT_PATHS.PIPELINE_INPUT] as string) ??
+                : (parentState.result as string) ??
+                  (parentState.pipelineInput as string) ??
                   '';
               return { message: input };
             },
@@ -148,8 +142,7 @@ export class FlowChartRunner {
     this.lastSpec = annotateSpecIcons(builder.toSpec());
     const chart = builder.build();
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const executor = new FlowChartExecutor(chart, { scopeFactory: agentScopeFactory as any });
+    const executor = new FlowChartExecutor(chart);
     executor.enableNarrative();
 
     try {
@@ -172,7 +165,7 @@ export class FlowChartRunner {
     const state = snapshot?.sharedState ?? {};
     const subflowResults = snapshot?.subflowResults ?? {};
 
-    const flatAgentResults = (state[MULTI_AGENT_PATHS.AGENT_RESULTS] as AgentResultEntry[]) ?? [];
+    const flatAgentResults = (state.agentResults as AgentResultEntry[]) ?? [];
     const subflowAgentResults: AgentResultEntry[] = [];
 
     for (const agentConfig of this.agents) {
@@ -198,7 +191,7 @@ export class FlowChartRunner {
         : undefined;
 
     const content =
-      (state[MULTI_AGENT_PATHS.RESULT] as string) ??
+      (state.result as string) ??
       lastSubflowContent ??
       (flatAgentResults.length > 0 ? flatAgentResults[flatAgentResults.length - 1].content : '');
 
@@ -215,11 +208,11 @@ export class FlowChartRunner {
   getSpec(): unknown {
     if (!this.lastSpec) {
       // Build chart structure to capture spec without executing
-      const seedStage = (scope: ScopeFacade) => {
-        scope.setValue(MULTI_AGENT_PATHS.PIPELINE_INPUT, '');
-        scope.setValue(MULTI_AGENT_PATHS.AGENT_RESULTS, []);
+      const seedStage = (scope: TypedScope<MultiAgentState>) => {
+        scope.pipelineInput = '';
+        scope.agentResults = [];
       };
-      let builder = buildFlowChart('Seed', seedStage, 'seed');
+      let builder = buildFlowChart<MultiAgentState>('Seed', seedStage, 'seed');
       for (const agentConfig of this.agents) {
         if (hasToFlowChart(agentConfig.runner)) {
           builder = builder.addSubFlowChartNext(
@@ -230,8 +223,8 @@ export class FlowChartRunner {
               inputMapper: (parentState: Record<string, unknown>) => {
                 const input = agentConfig.inputMapper
                   ? agentConfig.inputMapper(parentState)
-                  : (parentState[MULTI_AGENT_PATHS.RESULT] as string) ??
-                    (parentState[MULTI_AGENT_PATHS.PIPELINE_INPUT] as string) ??
+                  : (parentState.result as string) ??
+                    (parentState.pipelineInput as string) ??
                     '';
                 return { message: input };
               },

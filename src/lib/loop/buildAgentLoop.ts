@@ -2,12 +2,15 @@
  * Loop assembler — builds the full agent ReAct loop flowchart.
  *
  * Mounts the three API slots as subflows, then wires CallLLM → ParseResponse →
- * HandleResponse with a loopTo back to CallLLM.
+ * RouteResponse (decider) with branches for tool execution and finalization.
  *
  * Flowchart:
  *   Seed → [sf-system-prompt] → [sf-messages] → ApplyPreparedMessages
  *     → [sf-tools] → AssemblePrompt → CallLLM → ParseResponse
- *     → HandleResponse → loopTo('call-llm')
+ *     → RouteResponse(decider)
+ *         ├─ 'tool-calls' → [sf-execute-tools]
+ *         └─ 'final'      → Finalize ($break)
+ *     → [CommitMemory?] → loopTo('call-llm')
  *
  * Slot subflows run ONCE before the loop (same as Agent.ts pattern).
  * The loopTo sends execution back to CallLLM, not the slots.
@@ -18,28 +21,31 @@
  *   - Messages subflow uses internal keys (inputMapper/outputMapper), then
  *     ApplyPreparedMessages copies to the real 'messages' key
  *   - Each slot is ALWAYS a subflow — zero overhead, free drill-down + narrative
+ *   - RouteResponse is a proper decider — visible in flowchart as diamond with branches
+ *   - Tool execution is a subflow — enables drill-down in BTS
  *   - Chart is self-contained — no wrapping needed
  */
 
 import { flowChart } from 'footprintjs';
 import type { FlowChart } from 'footprintjs';
-import type { ScopeFacade } from 'footprintjs/advanced';
-import { AgentScope, AGENT_PATHS, MEMORY_PATHS } from '../../scope/AgentScope';
-import type { Message } from '../../types/messages';
+import type { AgentLoopState } from '../../scope/types';
 import { systemMessage, userMessage } from '../../types/messages';
 import { buildSystemPromptSubflow } from '../slots/system-prompt';
 import { buildMessagesSubflow } from '../slots/messages';
 import { buildToolsSubflow } from '../slots/tools';
+import type { TypedScope } from 'footprintjs';
 import { createCallLLMStage } from '../call/callLLMStage';
 import { parseResponseStage } from '../call/parseResponseStage';
-import { createHandleResponseStage } from '../call/handleResponseStage';
+import { buildToolExecutionSubflow } from '../call/toolExecutionSubflow';
 import { createCommitMemoryStage } from '../../stages/commitMemory';
+import { getTextContent } from '../../types/content';
+import { lastAssistantMessage } from '../../memory';
 import type { AgentLoopConfig, AgentLoopSeedOptions } from './types';
 
 /**
  * Well-known scope key for the user message in subflow mode.
  * Parent charts must set this key in their inputMapper:
- * `inputMapper: (p) => ({ [SUBFLOW_MESSAGE_KEY]: p.userMessage })`
+ * `inputMapper: (p) => ({ message: p.userMessage })`
  */
 export const SUBFLOW_MESSAGE_KEY = 'message';
 
@@ -52,7 +58,7 @@ export const SUBFLOW_MESSAGE_KEY = 'message';
  * Usage:
  * ```typescript
  * const chart = buildAgentLoop(config, { messages: [userMessage('hello')] });
- * const executor = new FlowChartExecutor(chart, { scopeFactory: agentScopeFactory });
+ * const executor = new FlowChartExecutor(chart);
  * await executor.run();
  * ```
  */
@@ -81,27 +87,25 @@ export function buildAgentLoop(config: AgentLoopConfig, seed?: AgentLoopSeedOpti
 
   // Build call stages
   const callLLM = createCallLLMStage(config.provider);
-  const handleResponse = createHandleResponseStage({
+  const toolExecutionSubflow = buildToolExecutionSubflow({
     registry: config.registry,
     toolProvider: config.toolProvider,
-    useCommitFlag,
   });
 
   // Seed stage: initialize all required scope state.
   // In subflowMode, reads `message` from scope (set by parent's inputMapper).
   // In normal mode, uses baked-in seed/existing messages.
-  let builder = flowChart(
+  let builder = flowChart<AgentLoopState>(
     'Seed',
-    (scope: ScopeFacade) => {
+    (scope) => {
       if (subflowMode) {
-        const raw = scope.getValue(SUBFLOW_MESSAGE_KEY);
-        const msg = typeof raw === 'string' ? raw : '';
-        AgentScope.setMessages(scope, msg ? [userMessage(msg)] : []);
+        const msg = scope.message ?? '';
+        scope.messages = msg ? [userMessage(msg)] : [];
       } else {
-        AgentScope.setMessages(scope, [...existingMessages, ...seedMessages]);
+        scope.messages = [...existingMessages, ...seedMessages];
       }
-      AgentScope.setLoopCount(scope, 0);
-      AgentScope.setMaxIterations(scope, maxIterations);
+      scope.loopCount = 0;
+      scope.maxIterations = maxIterations;
     },
     'seed',
     undefined,
@@ -115,11 +119,11 @@ export function buildAgentLoop(config: AgentLoopConfig, seed?: AgentLoopSeedOpti
     'SystemPrompt',
     {
       inputMapper: (parent: Record<string, unknown>) => ({
-        [AGENT_PATHS.MESSAGES]: parent[AGENT_PATHS.MESSAGES],
-        [AGENT_PATHS.LOOP_COUNT]: parent[AGENT_PATHS.LOOP_COUNT],
+        messages: parent.messages,
+        loopCount: parent.loopCount,
       }),
       outputMapper: (sfOutput: Record<string, unknown>) => ({
-        [AGENT_PATHS.SYSTEM_PROMPT]: sfOutput[AGENT_PATHS.SYSTEM_PROMPT],
+        systemPrompt: sfOutput.systemPrompt,
       }),
     },
   );
@@ -131,12 +135,12 @@ export function buildAgentLoop(config: AgentLoopConfig, seed?: AgentLoopSeedOpti
     'Messages',
     {
       inputMapper: (parent: Record<string, unknown>) => ({
-        currentMessages: parent[AGENT_PATHS.MESSAGES] ?? [],
-        loopCount: parent[AGENT_PATHS.LOOP_COUNT] ?? 0,
+        currentMessages: parent.messages ?? [],
+        loopCount: parent.loopCount ?? 0,
       }),
       outputMapper: (sfOutput: Record<string, unknown>) => ({
-        [MEMORY_PATHS.PREPARED_MESSAGES]: sfOutput[MEMORY_PATHS.PREPARED_MESSAGES],
-        [MEMORY_PATHS.STORED_HISTORY]: sfOutput[MEMORY_PATHS.STORED_HISTORY],
+        memory_preparedMessages: sfOutput.memory_preparedMessages,
+        memory_storedHistory: sfOutput.memory_storedHistory,
       }),
     },
   );
@@ -144,10 +148,10 @@ export function buildAgentLoop(config: AgentLoopConfig, seed?: AgentLoopSeedOpti
   // ApplyPreparedMessages — copy prepared messages from temp key to 'messages'
   builder = builder.addFunction(
     'ApplyPreparedMessages',
-    (scope: ScopeFacade) => {
-      const prepared = scope.getValue(MEMORY_PATHS.PREPARED_MESSAGES) as Message[] | undefined;
+    (scope) => {
+      const prepared = scope.memory_preparedMessages;
       if (prepared) {
-        AgentScope.setMessages(scope, prepared);
+        scope.messages = prepared;
       }
     },
     'apply-prepared-messages',
@@ -161,11 +165,11 @@ export function buildAgentLoop(config: AgentLoopConfig, seed?: AgentLoopSeedOpti
     'Tools',
     {
       inputMapper: (parent: Record<string, unknown>) => ({
-        [AGENT_PATHS.MESSAGES]: parent[AGENT_PATHS.MESSAGES],
-        [AGENT_PATHS.LOOP_COUNT]: parent[AGENT_PATHS.LOOP_COUNT],
+        messages: parent.messages,
+        loopCount: parent.loopCount,
       }),
       outputMapper: (sfOutput: Record<string, unknown>) => ({
-        [AGENT_PATHS.TOOL_DESCRIPTIONS]: sfOutput[AGENT_PATHS.TOOL_DESCRIPTIONS],
+        toolDescriptions: sfOutput.toolDescriptions,
       }),
     },
   );
@@ -173,25 +177,74 @@ export function buildAgentLoop(config: AgentLoopConfig, seed?: AgentLoopSeedOpti
   // AssemblePrompt: prepend system message if not already present
   builder = builder.addFunction(
     'AssemblePrompt',
-    (scope: ScopeFacade) => {
-      const messages = AgentScope.getMessages(scope);
-      const sysPrompt = AgentScope.getSystemPrompt(scope);
+    (scope) => {
+      const messages = scope.messages ?? [];
+      const sysPrompt = scope.systemPrompt;
       if (sysPrompt && (messages.length === 0 || messages[0].role !== 'system')) {
-        AgentScope.setMessages(scope, [systemMessage(sysPrompt), ...messages]);
+        scope.messages = [systemMessage(sysPrompt), ...messages];
       }
     },
     'assemble-prompt',
     'Prepend system prompt to messages before LLM call',
   );
 
-  // CallLLM → ParseResponse → HandleResponse [→ CommitMemory] → loopTo('call-llm')
+  // CallLLM → ParseResponse → RouteResponse(decider)
+  //   ├─ 'tool-calls' → [sf-execute-tools]   (loop continues)
+  //   └─ 'final'      → Finalize ($break)
+  // → [CommitMemory?] → loopTo('call-llm')
+  //
+  // RouteResponse is a decider: visible as a diamond in the flowchart.
+  // 'tool-calls' branch executes tools via subflow, then falls through to loopTo.
+  // 'final' branch extracts result + breaks (or sets shouldCommit flag).
   builder = builder
     .addFunction('CallLLM', callLLM, 'call-llm', 'Send messages + tools to LLM provider')
     .addFunction('ParseResponse', parseResponseStage, 'parse-response', 'Parse LLM response into structured result')
-    .addFunction('HandleResponse', handleResponse, 'handle-response', 'Execute tool calls or finalize turn');
+    .addDeciderFunction(
+      'RouteResponse',
+      (scope) => {
+        const parsed = scope.parsedResponse;
+        const loopCount = scope.loopCount ?? 0;
+        const maxIter = scope.maxIterations ?? 10;
+
+        if (parsed?.hasToolCalls && loopCount < maxIter) {
+          return 'tool-calls';
+        }
+        return 'final';
+      },
+      'route-response',
+      'Route to tool execution or finalization based on LLM response',
+    )
+    .addSubFlowChartBranch(
+      'tool-calls',
+      toolExecutionSubflow,
+      'ExecuteTools',
+      {
+        inputMapper: (parent: Record<string, unknown>) => ({
+          parsedResponse: parent.parsedResponse,
+          currentMessages: parent.messages,
+          currentLoopCount: parent.loopCount,
+          maxIterations: parent.maxIterations,
+        }),
+        outputMapper: (sfOutput: Record<string, unknown>) => ({
+          // toolResultMessages is a DELTA (new tool results only).
+          // applyOutputMapping concatenates arrays, so mapping delta → messages
+          // correctly appends tool results to the existing conversation.
+          messages: sfOutput.toolResultMessages,
+          loopCount: sfOutput.updatedLoopCount,
+        }),
+      },
+    )
+    .addFunctionBranch(
+      'final',
+      'Finalize',
+      createFinalizeStage({ useCommitFlag }),
+      'Extract final answer and stop the loop',
+    )
+    .setDefault('final')
+    .end();
 
   // Mount CommitMemory when persistent memory is configured.
-  // CommitMemory saves full history to store (fire-and-forget) and calls breakPipeline.
+  // CommitMemory saves full history to store (fire-and-forget) and calls $break().
   if (config.commitMemory) {
     const commitMemory = createCommitMemoryStage(config.commitMemory);
     builder = builder.addFunction('CommitMemory', commitMemory, 'commit-memory', 'Persist conversation history to store');
@@ -204,6 +257,28 @@ export function buildAgentLoop(config: AgentLoopConfig, seed?: AgentLoopSeedOpti
     return { chart: builder.build(), spec };
   }
   return builder.build();
+}
+
+/**
+ * Create the Finalize stage function (decider 'final' branch).
+ *
+ * Extracts the final answer text from the last assistant message and stops
+ * the loop. When useCommitFlag is set, writes memory_shouldCommit instead
+ * of calling $break() directly — the downstream CommitMemory stage will break.
+ */
+function createFinalizeStage(options: { useCommitFlag: boolean }) {
+  const { useCommitFlag } = options;
+  return (scope: TypedScope<AgentLoopState>) => {
+    const messages = scope.messages ?? [];
+    const lastAsst = lastAssistantMessage(messages);
+    scope.result = lastAsst ? getTextContent(lastAsst.content) : '';
+
+    if (useCommitFlag) {
+      scope.memory_shouldCommit = true;
+    } else {
+      scope.$break();
+    }
+  };
 }
 
 /**

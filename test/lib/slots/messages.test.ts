@@ -11,14 +11,12 @@
 
 import { describe, it, expect, vi } from 'vitest';
 import { flowChart, FlowChartExecutor } from 'footprintjs';
-import type { ScopeFacade } from 'footprintjs/advanced';
 import { buildMessagesSubflow } from '../../../src/lib/slots/messages';
-import { agentScopeFactory } from '../../../src/executor/scopeFactory';
-import { AgentScope, AGENT_PATHS, MEMORY_PATHS } from '../../../src/scope/AgentScope';
 import { slidingWindow } from '../../../src/providers/messages/slidingWindow';
 import type { MessageStrategy } from '../../../src/core/providers';
 import type { Message } from '../../../src/types/messages';
 import type { MessagesSlotConfig } from '../../../src/lib/slots/messages/types';
+import type { MessagesSubflowState } from '../../../src/scope/types';
 
 // ── Helpers ──────────────────────────────────────────────────
 
@@ -43,7 +41,7 @@ function createTestStore(initial: Message[] = []) {
  * Run the Messages subflow inside a wrapper chart.
  *
  * Follows the same pattern as Agent.ts:
- *   outputMapper writes to PREPARED_MESSAGES (temp key),
+ *   outputMapper writes to memory_preparedMessages (temp key),
  *   then ApplyPreparedMessages stage copies to messages (avoids array append).
  */
 async function runSubflow(
@@ -52,38 +50,38 @@ async function runSubflow(
 ): Promise<Record<string, unknown>> {
   const subflow = buildMessagesSubflow(config);
 
-  const wrapper = flowChart(
+  const wrapper = flowChart<MessagesSubflowState>(
     'Seed',
-    (scope: ScopeFacade) => {
-      AgentScope.setMessages(scope, currentMessages);
-      AgentScope.setLoopCount(scope, 0);
+    (scope) => {
+      scope.currentMessages = currentMessages;
+      scope.loopCount = 0;
     },
     'test-seed',
   )
     .addSubFlowChartNext('sf-messages', subflow, 'Messages', {
       inputMapper: (parent: Record<string, unknown>) => ({
-        currentMessages: (parent[AGENT_PATHS.MESSAGES] as Message[]) ?? [],
-        loopCount: (parent[AGENT_PATHS.LOOP_COUNT] as number) ?? 0,
+        currentMessages: (parent.currentMessages as Message[]) ?? [],
+        loopCount: (parent.loopCount as number) ?? 0,
       }),
       outputMapper: (sfOutput: Record<string, unknown>) => ({
-        [MEMORY_PATHS.PREPARED_MESSAGES]: sfOutput[MEMORY_PATHS.PREPARED_MESSAGES],
-        [MEMORY_PATHS.STORED_HISTORY]: sfOutput[MEMORY_PATHS.STORED_HISTORY],
+        memory_preparedMessages: sfOutput.memory_preparedMessages,
+        memory_storedHistory: sfOutput.memory_storedHistory,
       }),
     })
     // Apply prepared messages to the main messages key (same pattern as Agent.ts)
     .addFunction(
       'ApplyPreparedMessages',
-      (scope: ScopeFacade) => {
-        const prepared = scope.getValue(MEMORY_PATHS.PREPARED_MESSAGES) as Message[] | undefined;
+      (scope) => {
+        const prepared = scope.memory_preparedMessages;
         if (prepared) {
-          AgentScope.setMessages(scope, prepared);
+          scope.currentMessages = prepared;
         }
       },
       'apply-prepared-messages',
     )
     .build();
 
-  const executor = new FlowChartExecutor(wrapper, { scopeFactory: agentScopeFactory });
+  const executor = new FlowChartExecutor(wrapper);
   await executor.run();
   return executor.getSnapshot()?.sharedState ?? {};
 }
@@ -96,7 +94,7 @@ describe('Messages slot — unit', () => {
       { strategy: slidingWindow({ maxMessages: 2 }) },
       [user('a'), assistant('b'), user('c'), assistant('d'), user('e')],
     );
-    const messages = state[AGENT_PATHS.MESSAGES] as Message[];
+    const messages = state.currentMessages as Message[];
     expect(messages).toHaveLength(2);
     expect(messages[0].content).toBe('d');
     expect(messages[1].content).toBe('e');
@@ -108,7 +106,7 @@ describe('Messages slot — unit', () => {
       { strategy: fullHistory, store, conversationId: 'test-conv' },
       [user('new')],
     );
-    const messages = state[AGENT_PATHS.MESSAGES] as Message[];
+    const messages = state.currentMessages as Message[];
     expect(messages).toHaveLength(3);
     expect(store.load).toHaveBeenCalledWith('test-conv');
   });
@@ -119,7 +117,7 @@ describe('Messages slot — unit', () => {
 describe('Messages slot — boundary', () => {
   it('handles empty message history', async () => {
     const state = await runSubflow({ strategy: fullHistory }, []);
-    const messages = state[AGENT_PATHS.MESSAGES] as Message[];
+    const messages = state.currentMessages as Message[];
     expect(messages).toHaveLength(0);
   });
 
@@ -129,7 +127,7 @@ describe('Messages slot — boundary', () => {
       { strategy: fullHistory, store, conversationId: 'empty' },
       [user('hello')],
     );
-    const messages = state[AGENT_PATHS.MESSAGES] as Message[];
+    const messages = state.currentMessages as Message[];
     expect(messages).toHaveLength(1);
     expect(messages[0].content).toBe('hello');
   });
@@ -144,7 +142,7 @@ describe('Messages slot — boundary', () => {
       { strategy: fullHistory, store, conversationId: 'missing' },
       [user('hello')],
     );
-    const messages = state[AGENT_PATHS.MESSAGES] as Message[];
+    const messages = state.currentMessages as Message[];
     expect(messages).toHaveLength(1);
   });
 });
@@ -166,7 +164,7 @@ describe('Messages slot — scenario', () => {
       },
       [user('turn4')],
     );
-    const messages = state[AGENT_PATHS.MESSAGES] as Message[];
+    const messages = state.currentMessages as Message[];
     // 6 stored + 1 new = 7 total → window keeps 3 most recent non-system
     expect(messages).toHaveLength(3);
     expect(messages[0].content).toBe('turn3');
@@ -184,9 +182,9 @@ describe('Messages slot — scenario', () => {
       },
       [user('new')],
     );
-    const stored = state[MEMORY_PATHS.STORED_HISTORY] as Message[];
+    const stored = state.memory_storedHistory as Message[];
     expect(stored).toHaveLength(3);
-    const prepared = state[MEMORY_PATHS.PREPARED_MESSAGES] as Message[];
+    const prepared = state.memory_preparedMessages as Message[];
     expect(prepared).toHaveLength(2);
   });
 
@@ -195,7 +193,7 @@ describe('Messages slot — scenario', () => {
       { strategy: slidingWindow({ maxMessages: 2 }) },
       [system('sys'), user('a'), assistant('b'), user('c'), assistant('d'), user('e')],
     );
-    const messages = state[AGENT_PATHS.MESSAGES] as Message[];
+    const messages = state.currentMessages as Message[];
     expect(messages[0].role).toBe('system');
     expect(messages).toHaveLength(3); // system + 2 most recent
   });
@@ -206,7 +204,7 @@ describe('Messages slot — scenario', () => {
 describe('Messages slot — property', () => {
   it('output messages is always an array', async () => {
     const state = await runSubflow({ strategy: fullHistory }, []);
-    expect(Array.isArray(state[AGENT_PATHS.MESSAGES])).toBe(true);
+    expect(Array.isArray(state.currentMessages)).toBe(true);
   });
 
   it('strategy receives full history before trimming', async () => {

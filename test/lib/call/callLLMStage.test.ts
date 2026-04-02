@@ -11,11 +11,8 @@
 
 import { describe, it, expect, vi } from 'vitest';
 import { flowChart, FlowChartExecutor } from 'footprintjs';
-import type { ScopeFacade } from 'footprintjs/advanced';
 import { createCallLLMStage } from '../../../src/lib/call/callLLMStage';
-import { agentScopeFactory } from '../../../src/executor/scopeFactory';
-import { AgentScope, AGENT_PATHS } from '../../../src/scope/AgentScope';
-import { ADAPTER_PATHS } from '../../../src/types/adapter';
+import type { AgentLoopState } from '../../../src/scope/types';
 import type { LLMProvider, LLMResponse, Message, LLMToolDescription } from '../../../src/types';
 
 // ── Helpers ──────────────────────────────────────────────────
@@ -37,18 +34,18 @@ async function runCallLLM(
 ): Promise<{ state: Record<string, unknown>; provider: LLMProvider }> {
   const callLLM = createCallLLMStage(provider);
 
-  const chart = flowChart(
+  const chart = flowChart<AgentLoopState>(
     'Seed',
-    (scope: ScopeFacade) => {
-      AgentScope.setMessages(scope, messages);
-      AgentScope.setToolDescriptions(scope, tools);
+    (scope) => {
+      scope.messages = messages;
+      scope.toolDescriptions = tools;
     },
     'seed',
   )
     .addFunction('CallLLM', callLLM, 'call-llm')
     .build();
 
-  const executor = new FlowChartExecutor(chart, { scopeFactory: agentScopeFactory });
+  const executor = new FlowChartExecutor(chart);
   await executor.run();
   return {
     state: executor.getSnapshot()?.sharedState ?? {},
@@ -89,17 +86,17 @@ describe('callLLMStage — unit', () => {
     const provider = mockProvider({ content: 'result' });
 
     const { state } = await runCallLLM(provider);
-    const result = state[AGENT_PATHS.ADAPTER_RESULT] as { type: string; content: string };
+    const result = state.adapterResult as { type: string; content: string };
     expect(result.type).toBe('final');
     expect(result.content).toBe('result');
   });
 
-  it('writes raw response to ADAPTER_PATHS.RESPONSE', async () => {
+  it('writes raw response to adapterRawResponse', async () => {
     const rawResponse: LLMResponse = { content: 'raw', model: 'test-model' };
     const provider = mockProvider(rawResponse);
 
     const { state } = await runCallLLM(provider);
-    const raw = state[ADAPTER_PATHS.RESPONSE] as LLMResponse;
+    const raw = state.adapterRawResponse as LLMResponse;
     expect(raw.content).toBe('raw');
     expect(raw.model).toBe('test-model');
   });
@@ -112,7 +109,7 @@ describe('callLLMStage — boundary', () => {
     const provider = mockProvider({ content: 'ok' });
 
     const { state } = await runCallLLM(provider, []);
-    expect(state[AGENT_PATHS.ADAPTER_RESULT]).toBeDefined();
+    expect(state.adapterResult).toBeDefined();
   });
 
   it('passes no options when tool descriptions are empty', async () => {
@@ -127,7 +124,7 @@ describe('callLLMStage — boundary', () => {
     const provider = mockProvider({ content: '' });
 
     const { state } = await runCallLLM(provider);
-    const result = state[AGENT_PATHS.ADAPTER_RESULT] as { type: string; content: string };
+    const result = state.adapterResult as { type: string; content: string };
     expect(result.type).toBe('final');
     expect(result.content).toBe('');
   });
@@ -143,7 +140,7 @@ describe('callLLMStage — scenario', () => {
     });
 
     const { state } = await runCallLLM(provider, [user('find it')]);
-    const result = state[AGENT_PATHS.ADAPTER_RESULT] as { type: string; toolCalls: unknown[] };
+    const result = state.adapterResult as { type: string; toolCalls: unknown[] };
     expect(result.type).toBe('tools');
     expect(result.toolCalls).toHaveLength(1);
   });
@@ -152,7 +149,7 @@ describe('callLLMStage — scenario', () => {
     const provider = mockProvider({ content: 'Done!' });
 
     const { state } = await runCallLLM(provider);
-    const result = state[AGENT_PATHS.ADAPTER_RESULT] as { type: string };
+    const result = state.adapterResult as { type: string };
     expect(result.type).toBe('final');
   });
 });
@@ -163,14 +160,14 @@ describe('callLLMStage — property', () => {
   it('adapterResult is always set after stage completes', async () => {
     const provider = mockProvider({ content: 'something' });
     const { state } = await runCallLLM(provider);
-    expect(AGENT_PATHS.ADAPTER_RESULT in state).toBe(true);
-    expect(state[AGENT_PATHS.ADAPTER_RESULT]).toBeDefined();
+    expect('adapterResult' in state).toBe(true);
+    expect(state.adapterResult).toBeDefined();
   });
 
   it('raw response path is always set after stage completes', async () => {
     const provider = mockProvider({ content: 'something' });
     const { state } = await runCallLLM(provider);
-    expect(ADAPTER_PATHS.RESPONSE in state).toBe(true);
+    expect('adapterRawResponse' in state).toBe(true);
   });
 });
 
@@ -182,18 +179,18 @@ describe('callLLMStage — cloud (AbortSignal)', () => {
     const provider = mockProvider({ content: 'ok' });
 
     const callLLM = createCallLLMStage(provider);
-    const chart = flowChart(
+    const chart = flowChart<AgentLoopState>(
       'Seed',
-      (scope: ScopeFacade) => {
-        AgentScope.setMessages(scope, [user('hello')]);
-        AgentScope.setToolDescriptions(scope, []);
+      (scope) => {
+        scope.messages = [user('hello')];
+        scope.toolDescriptions = [];
       },
       'seed',
     )
       .addFunction('CallLLM', callLLM, 'call-llm')
       .build();
 
-    const executor = new FlowChartExecutor(chart, { scopeFactory: agentScopeFactory });
+    const executor = new FlowChartExecutor(chart);
     await executor.run({ env: { signal: controller.signal } });
 
     const calledOptions = provider.chat.mock.calls[0][1];
@@ -209,18 +206,18 @@ describe('callLLMStage — cloud (AbortSignal)', () => {
     const provider = mockProvider({ content: 'ok' });
 
     const callLLM = createCallLLMStage(provider);
-    const chart = flowChart(
+    const chart = flowChart<AgentLoopState>(
       'Seed',
-      (scope: ScopeFacade) => {
-        AgentScope.setMessages(scope, [user('hi')]);
-        AgentScope.setToolDescriptions(scope, tools);
+      (scope) => {
+        scope.messages = [user('hi')];
+        scope.toolDescriptions = tools;
       },
       'seed',
     )
       .addFunction('CallLLM', callLLM, 'call-llm')
       .build();
 
-    const executor = new FlowChartExecutor(chart, { scopeFactory: agentScopeFactory });
+    const executor = new FlowChartExecutor(chart);
     await executor.run({ env: { signal: controller.signal } });
 
     const calledOptions = provider.chat.mock.calls[0][1];

@@ -11,13 +11,11 @@
 
 import { describe, it, expect, vi } from 'vitest';
 import { flowChart, FlowChartExecutor } from 'footprintjs';
-import type { ScopeFacade } from 'footprintjs/advanced';
 import { createCommitMemoryStage } from '../../src/stages/commitMemory';
 import { InMemoryStore } from '../../src/adapters/memory/inMemory';
-import { agentScopeFactory } from '../../src/executor/scopeFactory';
-import { AgentScope, MEMORY_PATHS } from '../../src/scope/AgentScope';
 import type { Message } from '../../src/types/messages';
 import type { CommitMemoryConfig } from '../../src/stages/commitMemory';
+import type { AgentLoopState } from '../../src/scope/types';
 
 // ── Helpers ──────────────────────────────────────────────────
 
@@ -31,39 +29,32 @@ const flush = () => new Promise<void>(resolve => setTimeout(resolve, 0));
  * Run a chart that:
  *  1. Seeds scope with `messages` and `shouldCommit` flag
  *  2. Runs CommitMemory stage
+ *  3. Runs a Canary stage to detect whether CommitMemory broke the pipeline
  */
 async function runCommitStage(
   config: CommitMemoryConfig,
   messages: Message[],
   shouldCommit: boolean,
 ): Promise<{ state: Record<string, unknown>; brokeEarly: boolean }> {
-  let brokeEarly = false;
+  let postCommitRan = false;
 
   const stage = createCommitMemoryStage(config);
 
-  const chart = flowChart(
+  const chart = flowChart<AgentLoopState>(
     'Seed',
-    (scope: ScopeFacade) => {
-      AgentScope.setMessages(scope, messages);
-      AgentScope.setShouldCommit(scope, shouldCommit);
+    (scope) => {
+      scope.messages = messages;
+      scope.memory_shouldCommit = shouldCommit;
     },
     'test-seed',
   )
-    .addFunction(
-      'CommitMemory',
-      async (scope: ScopeFacade, breakPipeline: () => void) => {
-        await stage(scope, () => {
-          brokeEarly = true;
-          breakPipeline();
-        });
-      },
-      'commit-memory',
-    )
+    .addFunction('CommitMemory', stage, 'commit-memory')
+    .addFunction('Canary', () => { postCommitRan = true; }, 'canary')
     .build();
 
-  const executor = new FlowChartExecutor(chart, { scopeFactory: agentScopeFactory });
+  const executor = new FlowChartExecutor(chart);
   await executor.run({});
-  return { state: executor.getSnapshot().sharedState, brokeEarly };
+  return { state: executor.getSnapshot().sharedState, brokeEarly: !postCommitRan };
 }
 
 // ── Unit ─────────────────────────────────────────────────────
@@ -109,7 +100,7 @@ describe('CommitMemory — unit', () => {
       true,
     );
 
-    expect(state[MEMORY_PATHS.SHOULD_COMMIT]).toBe(false);
+    expect(state.memory_shouldCommit).toBe(false);
   });
 });
 
@@ -290,7 +281,7 @@ describe('CommitMemory — security', () => {
       true,
     );
 
-    expect(state[MEMORY_PATHS.SHOULD_COMMIT]).toBe(false);
+    expect(state.memory_shouldCommit).toBe(false);
   });
 
   it('async save() throws and no onSaveError: emits console.warn in dev mode', async () => {

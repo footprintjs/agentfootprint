@@ -7,10 +7,9 @@
  */
 
 import { flowChart } from 'footprintjs';
-import type { ScopeFacade } from 'footprintjs/advanced';
+import type { TypedScope } from 'footprintjs';
 
-import type { LLMProvider, LLMToolDescription, Message } from '../types';
-import { ADAPTER_PATHS } from '../types';
+import type { LLMProvider, LLMToolDescription, LLMResponse, Message, AdapterResult } from '../types';
 import { normalizeAdapterResponse } from '../stages/helpers';
 
 export interface AdapterSubflowConfig {
@@ -18,6 +17,15 @@ export interface AdapterSubflowConfig {
   readonly provider: LLMProvider;
   /** Adapter ID for narrative. */
   readonly id?: string;
+}
+
+/** Internal state shape for the adapter subflow. */
+interface AdapterSubflowState {
+  messages: Message[];
+  toolDescriptions: LLMToolDescription[];
+  adapterRequest: { messages: Message[]; tools: LLMToolDescription[] };
+  adapterRawResponse: LLMResponse;
+  adapterResult: AdapterResult;
 }
 
 /**
@@ -30,44 +38,32 @@ export interface AdapterSubflowConfig {
 export function createAdapterSubflow(config: AdapterSubflowConfig) {
   const adapterId = config.id ?? 'llm-adapter';
 
-  const formatRequest = (scope: ScopeFacade) => {
-    const messages = scope.getValue('messages') as Message[] | undefined;
-    const tools = scope.getValue('toolDescriptions') as LLMToolDescription[] | undefined;
+  const formatRequest = (scope: TypedScope<AdapterSubflowState>) => {
+    const messages = scope.messages;
+    const tools = scope.toolDescriptions ?? [];
 
     if (!messages || messages.length === 0) {
       throw new Error('AdapterSubflow: no messages in scope');
     }
 
-    scope.setValue(ADAPTER_PATHS.REQUEST, {
-      messages,
-      tools: tools ?? [],
-    });
+    scope.adapterRequest = { messages, tools };
   };
 
-  const executeCall = async (scope: ScopeFacade) => {
-    const request = scope.getValue(ADAPTER_PATHS.REQUEST) as {
-      messages: Message[];
-      tools: LLMToolDescription[];
-    };
+  const executeCall = async (scope: TypedScope<AdapterSubflowState>) => {
+    const request = scope.adapterRequest;
 
     const options = request.tools.length > 0 ? { tools: request.tools } : undefined;
     const response = await config.provider.chat(request.messages, options);
 
-    scope.setValue(ADAPTER_PATHS.RESPONSE, response);
+    scope.adapterRawResponse = response;
   };
 
-  const mapResponse = (scope: ScopeFacade) => {
-    const response = scope.getValue(ADAPTER_PATHS.RESPONSE) as {
-      content: string;
-      toolCalls?: Array<{ id: string; name: string; arguments: Record<string, unknown> }>;
-      usage?: { inputTokens: number; outputTokens: number };
-      model?: string;
-    };
-
-    scope.setValue(ADAPTER_PATHS.RESULT, normalizeAdapterResponse(response));
+  const mapResponse = (scope: TypedScope<AdapterSubflowState>) => {
+    const response = scope.adapterRawResponse;
+    scope.adapterResult = normalizeAdapterResponse(response);
   };
 
-  return flowChart('FormatRequest', formatRequest, `${adapterId}-format`)
+  return flowChart<AdapterSubflowState>('FormatRequest', formatRequest, `${adapterId}-format`)
     .addFunction('ExecuteCall', executeCall, `${adapterId}-call`)
     .addFunction('MapResponse', mapResponse, `${adapterId}-map`)
     .build();

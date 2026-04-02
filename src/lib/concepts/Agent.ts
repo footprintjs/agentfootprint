@@ -16,19 +16,18 @@
 
 import { FlowChartExecutor } from 'footprintjs';
 import type { FlowChart as FlowChartType } from 'footprintjs';
-import { agentScopeFactory } from '../../executor/scopeFactory';
 import { buildAgentLoop } from '../loop';
 import type { AgentLoopConfig } from '../loop';
+import { createAgentRenderer } from '../narrative';
 import { annotateSpecIcons } from '../../concepts/specIcons';
 import { staticPrompt } from '../../providers/prompt/static';
 import { slidingWindow } from '../../providers/messages/slidingWindow';
 import { noTools } from '../../providers/tools/noTools';
 import { staticTools } from '../../providers/tools/staticTools';
 import { ToolRegistry } from '../../tools';
-import { AGENT_PATHS } from '../../scope/AgentScope';
 import { lastAssistantMessage } from '../../memory';
 import { getTextContent } from '../../types/content';
-import { userMessage, ADAPTER_PATHS } from '../../types';
+import { userMessage } from '../../types';
 import type {
   LLMProvider,
   LLMResponse,
@@ -138,6 +137,7 @@ export class AgentRunner {
   private conversationHistory: Message[] = [];
   private lastExecutor?: FlowChartExecutor;
   private lastSpec?: unknown;
+  private readonly narrativeRenderer = createAgentRenderer();
 
   constructor(
     provider: LLMProvider,
@@ -198,8 +198,8 @@ export class AgentRunner {
 
     bridge?.dispatchTurnStart(message);
 
-    const executor = new FlowChartExecutor(chart, { scopeFactory: agentScopeFactory });
-    executor.enableNarrative();
+    const executor = new FlowChartExecutor(chart);
+    executor.enableNarrative({ renderer: this.narrativeRenderer });
     const startMs = Date.now();
 
     try {
@@ -219,14 +219,14 @@ export class AgentRunner {
     // Extract result from snapshot
     const snapshot = executor.getSnapshot();
     const state = snapshot?.sharedState ?? {};
-    const messages = (state[AGENT_PATHS.MESSAGES] as Message[]) ?? [];
+    const messages = (state.messages as Message[]) ?? [];
     const lastAsst = lastAssistantMessage(messages);
-    const result = (state[AGENT_PATHS.RESULT] as string) ?? (lastAsst ? getTextContent(lastAsst.content) : '');
-    const iterations = (state[AGENT_PATHS.LOOP_COUNT] as number) ?? 0;
+    const result = (state.result as string) ?? (lastAsst ? getTextContent(lastAsst.content) : '');
+    const iterations = (state.loopCount as number) ?? 0;
 
     // Dispatch recorder events
     if (bridge) {
-      const response = state[ADAPTER_PATHS.RESPONSE] as LLMResponse | undefined;
+      const response = state.adapterRawResponse as LLMResponse | undefined;
       if (response) {
         bridge.dispatchLLMCall(response, Date.now() - startMs);
       }

@@ -5,10 +5,9 @@
  * (Agent, RAG, LLMCall, or user-built) can become a stage in a pipeline.
  */
 
-import type { ScopeFacade } from 'footprintjs/advanced';
-import type { AgentStageConfig } from '../types';
-import { AgentScope } from '../scope';
-import { MULTI_AGENT_PATHS } from '../scope/AgentScope';
+import type { TypedScope } from 'footprintjs';
+import type { AgentStageConfig, AgentResultEntry } from '../types';
+import type { MultiAgentState } from '../scope/types';
 
 /**
  * Creates a stage function that executes a runner and writes its result to scope.
@@ -18,19 +17,18 @@ import { MULTI_AGENT_PATHS } from '../scope/AgentScope';
  * - Output: writes to 'result' and records agent entry in agentResults
  */
 export function runnerAsStage(config: AgentStageConfig) {
-  return async (scope: ScopeFacade): Promise<void> => {
+  return async (scope: TypedScope<MultiAgentState>): Promise<void> => {
     const state = buildStateSnapshot(scope);
     // Default: prefer previous agent's result, fall back to pipeline input
     const input = config.inputMapper
       ? config.inputMapper(state)
-      : (state[MULTI_AGENT_PATHS.RESULT] as string) ??
-        (state[MULTI_AGENT_PATHS.PIPELINE_INPUT] as string) ??
-        '';
+      : (state.result as string) ?? (state.pipelineInput as string) ?? '';
 
     const startTime = Date.now();
 
-    const signal = scope.getValue(MULTI_AGENT_PATHS.SIGNAL) as AbortSignal | undefined;
-    const timeoutMs = scope.getValue(MULTI_AGENT_PATHS.TIMEOUT_MS) as number | undefined;
+    const env = scope.$getEnv();
+    const signal = env?.signal;
+    const timeoutMs = env?.timeoutMs;
 
     const output = await config.runner.run(input, { signal, timeoutMs });
     const latencyMs = Date.now() - startTime;
@@ -39,14 +37,14 @@ export function runnerAsStage(config: AgentStageConfig) {
     if (config.outputMapper) {
       const mapped = config.outputMapper(output, state);
       for (const [key, value] of Object.entries(mapped)) {
-        scope.setValue(key, value);
+        scope.$setValue(key, value);
       }
     } else {
-      AgentScope.setResult(scope, output.content);
+      scope.result = output.content;
     }
 
     // Record agent result entry
-    const entry = {
+    const entry: AgentResultEntry = {
       id: config.id,
       name: config.name,
       content: output.content,
@@ -54,23 +52,23 @@ export function runnerAsStage(config: AgentStageConfig) {
       narrative: config.runner.getNarrative?.() ?? undefined,
     };
 
-    const existing = (scope.getValue(MULTI_AGENT_PATHS.AGENT_RESULTS) as unknown[]) ?? [];
-    scope.setValue(MULTI_AGENT_PATHS.AGENT_RESULTS, [...existing, entry]);
+    const existing = scope.agentResults ?? [];
+    scope.agentResults = [...existing, entry];
   };
 }
 
 /** Build a plain object snapshot of scope state for mappers. */
-function buildStateSnapshot(scope: ScopeFacade): Record<string, unknown> {
+function buildStateSnapshot(scope: TypedScope<MultiAgentState>): Record<string, unknown> {
   const result: Record<string, unknown> = {};
   // Read well-known keys that mappers might need
   for (const key of [
-    MULTI_AGENT_PATHS.PIPELINE_INPUT,
-    MULTI_AGENT_PATHS.RESULT,
-    MULTI_AGENT_PATHS.AGENT_RESULTS,
+    'pipelineInput',
+    'result',
+    'agentResults',
     'messages',
     'systemPrompt',
-  ]) {
-    const val = scope.getValue(key);
+  ] as const) {
+    const val = scope.$getValue(key);
     if (val !== undefined) result[key] = val;
   }
   return result;

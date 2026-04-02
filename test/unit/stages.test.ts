@@ -3,26 +3,21 @@ import {
   parseResponseStage,
   createCallLLMStage,
   finalizeStage,
-  AgentScope,
   ToolRegistry,
   defineTool,
   mock,
 } from '../../src';
-import type { ScopeFacade } from 'footprintjs';
+import type { TypedScope } from 'footprintjs';
 import type { Message, AdapterResult } from '../../src';
+import type { RAGState } from '../../src/scope/types';
 
-function mockScope(initial: Record<string, unknown> = {}): ScopeFacade {
-  const store: Record<string, unknown> = { ...initial };
-  return {
-    getValue: vi.fn((key: string) => store[key]),
-    setValue: vi.fn((key: string, value: unknown) => {
-      store[key] = value;
-    }),
-    updateValue: vi.fn(),
-    deleteValue: vi.fn(),
-    getArgs: vi.fn(() => ({})),
-    attachRecorder: vi.fn(),
-  } as unknown as ScopeFacade;
+function mockScope(initial: Partial<RAGState> = {}): TypedScope<RAGState> {
+  const obj: any = { ...initial };
+  obj.$getValue = vi.fn((key: string) => obj[key]);
+  obj.$setValue = vi.fn((key: string, value: unknown) => {
+    obj[key] = value;
+  });
+  return obj as TypedScope<RAGState>;
 }
 
 describe('parseResponseStage', () => {
@@ -49,11 +44,8 @@ describe('parseResponseStage', () => {
       messages: [],
     });
     parseResponseStage(scope);
-    const parsedCall = (scope.setValue as any).mock.calls.find(
-      (c: any) => c[0] === 'parsedResponse',
-    );
-    expect(parsedCall[1].hasToolCalls).toBe(false);
-    expect(parsedCall[1].content).toBe('Hello!');
+    expect(scope.parsedResponse.hasToolCalls).toBe(false);
+    expect(scope.parsedResponse.content).toBe('Hello!');
   });
 
   it('parses tools result correctly', () => {
@@ -63,11 +55,8 @@ describe('parseResponseStage', () => {
       messages: [],
     });
     parseResponseStage(scope);
-    const parsedCall = (scope.setValue as any).mock.calls.find(
-      (c: any) => c[0] === 'parsedResponse',
-    );
-    expect(parsedCall[1].hasToolCalls).toBe(true);
-    expect(parsedCall[1].toolCalls).toEqual(toolCalls);
+    expect(scope.parsedResponse.hasToolCalls).toBe(true);
+    expect(scope.parsedResponse.toolCalls).toEqual(toolCalls);
   });
 
   it('appends assistant message to conversation', () => {
@@ -76,9 +65,8 @@ describe('parseResponseStage', () => {
       messages: [{ role: 'user', content: 'Question' }],
     });
     parseResponseStage(scope);
-    const msgCall = (scope.setValue as any).mock.calls.find((c: any) => c[0] === 'messages');
-    expect(msgCall[1]).toHaveLength(2);
-    expect(msgCall[1][1].role).toBe('assistant');
+    expect(scope.messages).toHaveLength(2);
+    expect(scope.messages[1].role).toBe('assistant');
   });
 });
 
@@ -91,15 +79,13 @@ describe('finalizeStage', () => {
       ],
     });
     finalizeStage(scope);
-    const resultCall = (scope.setValue as any).mock.calls.find((c: any) => c[0] === 'result');
-    expect(resultCall[1]).toBe('Final answer');
+    expect(scope.result).toBe('Final answer');
   });
 
   it('sets empty string when no assistant message', () => {
     const scope = mockScope({ messages: [{ role: 'user', content: 'Hi' }] });
     finalizeStage(scope);
-    const resultCall = (scope.setValue as any).mock.calls.find((c: any) => c[0] === 'result');
-    expect(resultCall[1]).toBe('');
+    expect(scope.result).toBe('');
   });
 });
 
@@ -110,16 +96,11 @@ describe('createCallLLMStage', () => {
 
     const scope = mockScope({
       messages: [{ role: 'user', content: 'Hi' }],
-      toolDescriptions: [],
     });
 
     await stage(scope);
 
-    const resultCall = (scope.setValue as any).mock.calls.find(
-      (c: any) => c[0] === 'adapterResult',
-    );
-    expect(resultCall[1].type).toBe('final');
-    expect(resultCall[1].content).toBe('Response');
+    expect(scope.adapterResult.type).toBe('final');
+    expect((scope.adapterResult as any).content).toBe('Response');
   });
 });
-

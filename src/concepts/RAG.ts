@@ -12,7 +12,7 @@
  */
 
 import { flowChart, FlowChartExecutor } from 'footprintjs';
-import type { FlowChart as FlowChartType } from 'footprintjs';
+import type { FlowChart as FlowChartType, TypedScope } from 'footprintjs';
 import { annotateSpecIcons } from './specIcons';
 
 import type {
@@ -25,18 +25,16 @@ import type {
   RAGResult,
 } from '../types';
 import { getTextContent } from '../types/content';
-import { userMessage, systemMessage, ADAPTER_PATHS } from '../types';
+import { userMessage, systemMessage } from '../types';
 import type { AgentRecorder } from '../core';
 import { RecorderBridge } from '../recorders/v2/RecorderBridge';
-import { AgentScope } from '../scope';
+import type { RAGState } from '../scope/types';
 import { createRetrieveStage } from '../stages/retrieve';
 import { augmentPromptStage } from '../stages/augmentPrompt';
 import { createCallLLMStage } from '../stages/callLLM';
 import { parseResponseStage } from '../stages/parseResponse';
 import { finalizeStage } from '../stages/finalize';
 import { lastAssistantMessage } from '../memory';
-import type { ScopeFacade } from 'footprintjs/advanced';
-import { agentScopeFactory } from '../executor/scopeFactory';
 
 export interface RAGOptions {
   readonly provider: LLMProvider;
@@ -126,7 +124,7 @@ export class RAGRunner {
 
     bridge?.dispatchTurnStart(message);
 
-    const executor = new FlowChartExecutor(chart, { scopeFactory: agentScopeFactory });
+    const executor = new FlowChartExecutor(chart);
     executor.enableNarrative();
     const startMs = Date.now();
 
@@ -151,7 +149,7 @@ export class RAGRunner {
     const retrievalResult = state.retrievalResult as RetrievalResult | undefined;
 
     if (bridge) {
-      const response = state[ADAPTER_PATHS.RESPONSE] as LLMResponse | undefined;
+      const response = state.adapterRawResponse as LLMResponse | undefined;
       if (response) {
         bridge.dispatchLLMCall(response, Date.now() - startMs);
       }
@@ -170,25 +168,25 @@ export class RAGRunner {
     const sysPrompt = this.sysPrompt;
 
     // API slot: SystemPrompt — set the system instruction
-    const systemPromptStage = (scope: ScopeFacade) => {
+    const systemPromptStage = (scope: TypedScope<RAGState>) => {
       if (sysPrompt) {
-        AgentScope.setSystemPrompt(scope, sysPrompt);
+        scope.systemPrompt = sysPrompt;
       }
     };
 
     // API slot: Messages — prepare the conversation messages
-    const messagesStage = (scope: ScopeFacade) => {
+    const messagesStage = (scope: TypedScope<RAGState>) => {
       const msgs: Message[] = [];
-      const sp = AgentScope.getSystemPrompt(scope);
+      const sp = scope.systemPrompt;
       if (sp) msgs.push(systemMessage(sp));
       msgs.push(userMessage(message));
-      AgentScope.setMessages(scope, msgs);
+      scope.messages = msgs;
     };
 
     const retrieve = createRetrieveStage(this.retriever, this.retrieveOptions);
     const callLLM = createCallLLMStage(this.provider);
 
-    const builder = flowChart('SystemPrompt', systemPromptStage, 'system-prompt')
+    const builder = flowChart<RAGState>('SystemPrompt', systemPromptStage, 'system-prompt')
       .addFunction('Messages', messagesStage, 'messages')
       .addFunction('Retrieve', retrieve, 'retrieve')
       .addFunction('AugmentPrompt', augmentPromptStage, 'augment-prompt')

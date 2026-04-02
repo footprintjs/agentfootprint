@@ -2,24 +2,24 @@
  * Retrieve stage — calls retriever provider, writes RetrievalResult to scope.
  */
 
-import type { ScopeFacade } from 'footprintjs/advanced';
+import type { TypedScope } from 'footprintjs';
 import type { RetrieverProvider, RetrieveOptions } from '../types';
 import { getTextContent } from '../types/content';
-import { AgentScope } from '../scope';
+import type { RAGState } from '../scope/types';
 
 export function createRetrieveStage(retriever: RetrieverProvider, options?: RetrieveOptions) {
-  return async (scope: ScopeFacade) => {
+  return async (scope: TypedScope<RAGState>) => {
     // Use explicit retrieval query if set, otherwise last user message
-    const lastUserContent = AgentScope.getMessages(scope)
+    const lastUserContent = (scope.messages ?? [])
       .filter((m) => m.role === 'user')
       .pop()?.content;
     const query =
-      AgentScope.getRetrievalQuery(scope) ??
+      scope.retrievalQuery ??
       (lastUserContent ? getTextContent(lastUserContent) : '');
 
     const result = await retriever.retrieve(query, options);
 
     // Write to scope — recorders observe this
-    AgentScope.setRetrievalResult(scope, result);
+    scope.retrievalResult = result;
   };
 }

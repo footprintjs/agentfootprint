@@ -14,19 +14,18 @@
  */
 
 import { flowChart } from 'footprintjs';
-import type { FlowChart } from 'footprintjs';
-import type { ScopeFacade } from 'footprintjs/advanced';
+import type { FlowChart, TypedScope } from 'footprintjs';
 import type { ToolContext } from '../../../core';
-import { AgentScope } from '../../../scope';
+import type { ToolsSubflowState } from '../../../scope/types';
 import { findLastUserMessage, extractTextContent } from '../helpers';
 import type { ToolsSlotConfig } from './types';
 
 /**
  * Build a ToolContext from the current scope state.
  */
-function buildToolContext(scope: ScopeFacade): ToolContext {
-  const messages = AgentScope.getMessages(scope);
-  const loopCount = AgentScope.getLoopCount(scope);
+function buildToolContext(scope: TypedScope<ToolsSubflowState>): ToolContext {
+  const messages = scope.messages ?? [];
+  const loopCount = scope.loopCount ?? 0;
 
   const lastUserMsg = findLastUserMessage(messages);
   const message = lastUserMsg ? extractTextContent(lastUserMsg) : '';
@@ -36,7 +35,7 @@ function buildToolContext(scope: ScopeFacade): ToolContext {
     turnNumber: loopCount,
     loopIteration: loopCount,
     messages,
-    signal: scope.getEnv()?.signal,
+    signal: scope.$getEnv()?.signal,
   };
 }
 
@@ -50,12 +49,16 @@ export function buildToolsSubflow(config: ToolsSlotConfig): FlowChart {
     throw new Error('ToolsSlotConfig: provider is required');
   }
 
-  return flowChart(
+  return flowChart<ToolsSubflowState>(
     'ResolveTools',
-    async (scope: ScopeFacade) => {
+    async (scope) => {
       const ctx = buildToolContext(scope);
       const tools = await config.provider.resolve(ctx);
-      AgentScope.setToolDescriptions(scope, tools);
+      scope.toolDescriptions = tools;
+
+      // Narrative enrichment — summarize resolved tools for BTS visibility
+      const names = tools.map((t) => t.name ?? '?');
+      scope.resolvedTools = `${tools.length} tools: ${names.join(', ')}`;
     },
     'resolve-tools',
     undefined,

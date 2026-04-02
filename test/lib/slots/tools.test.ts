@@ -11,10 +11,7 @@
 
 import { describe, it, expect, vi } from 'vitest';
 import { flowChart, FlowChartExecutor } from 'footprintjs';
-import type { ScopeFacade } from 'footprintjs/advanced';
 import { buildToolsSubflow } from '../../../src/lib/slots/tools';
-import { agentScopeFactory } from '../../../src/executor/scopeFactory';
-import { AgentScope, AGENT_PATHS } from '../../../src/scope/AgentScope';
 import { staticTools } from '../../../src/providers/tools/staticTools';
 import { gatedTools } from '../../../src/providers/tools/gatedTools';
 import { compositeTools } from '../../../src/providers/tools/compositeTools';
@@ -23,6 +20,7 @@ import type { ToolProvider } from '../../../src/core/providers';
 import type { ToolDefinition } from '../../../src/types/tools';
 import type { LLMToolDescription } from '../../../src/types/llm';
 import type { Message } from '../../../src/types/messages';
+import type { ToolsSubflowState } from '../../../src/scope/types';
 
 // ── Helpers ──────────────────────────────────────────────────
 
@@ -60,26 +58,26 @@ async function runSubflow(
 ): Promise<Record<string, unknown>> {
   const subflow = buildToolsSubflow({ provider });
 
-  const wrapper = flowChart(
+  const wrapper = flowChart<ToolsSubflowState>(
     'Seed',
-    (scope: ScopeFacade) => {
-      AgentScope.setMessages(scope, messages);
-      AgentScope.setLoopCount(scope, 0);
+    (scope) => {
+      scope.messages = messages;
+      scope.loopCount = 0;
     },
     'test-seed',
   )
     .addSubFlowChartNext('sf-tools', subflow, 'Tools', {
       inputMapper: (parent: Record<string, unknown>) => ({
-        [AGENT_PATHS.MESSAGES]: parent[AGENT_PATHS.MESSAGES],
-        [AGENT_PATHS.LOOP_COUNT]: parent[AGENT_PATHS.LOOP_COUNT],
+        messages: parent.messages,
+        loopCount: parent.loopCount,
       }),
       outputMapper: (sfOutput: Record<string, unknown>) => ({
-        [AGENT_PATHS.TOOL_DESCRIPTIONS]: sfOutput[AGENT_PATHS.TOOL_DESCRIPTIONS],
+        toolDescriptions: sfOutput.toolDescriptions,
       }),
     })
     .build();
 
-  const executor = new FlowChartExecutor(wrapper, { scopeFactory: agentScopeFactory });
+  const executor = new FlowChartExecutor(wrapper);
   await executor.run();
   return executor.getSnapshot()?.sharedState ?? {};
 }
@@ -89,7 +87,7 @@ async function runSubflow(
 describe('Tools slot — unit', () => {
   it('static tools resolve and write descriptions to scope', async () => {
     const state = await runSubflow(staticTools([searchTool, calcTool]));
-    const tools = state[AGENT_PATHS.TOOL_DESCRIPTIONS] as LLMToolDescription[];
+    const tools = state.toolDescriptions as LLMToolDescription[];
     expect(tools).toHaveLength(2);
     expect(tools[0].name).toBe('search');
     expect(tools[1].name).toBe('calculator');
@@ -97,7 +95,7 @@ describe('Tools slot — unit', () => {
 
   it('noTools() provider resolves to empty array', async () => {
     const state = await runSubflow(noTools());
-    const tools = state[AGENT_PATHS.TOOL_DESCRIPTIONS] as LLMToolDescription[];
+    const tools = state.toolDescriptions as LLMToolDescription[];
     expect(tools).toHaveLength(0);
   });
 });
@@ -107,13 +105,13 @@ describe('Tools slot — unit', () => {
 describe('Tools slot — boundary', () => {
   it('handles provider returning empty array', async () => {
     const state = await runSubflow(staticTools([]));
-    const tools = state[AGENT_PATHS.TOOL_DESCRIPTIONS] as LLMToolDescription[];
+    const tools = state.toolDescriptions as LLMToolDescription[];
     expect(tools).toHaveLength(0);
   });
 
   it('works with empty message history', async () => {
     const state = await runSubflow(staticTools([searchTool]), []);
-    const tools = state[AGENT_PATHS.TOOL_DESCRIPTIONS] as LLMToolDescription[];
+    const tools = state.toolDescriptions as LLMToolDescription[];
     expect(tools).toHaveLength(1);
   });
 
@@ -125,7 +123,7 @@ describe('Tools slot — boundary', () => {
       },
     };
     const state = await runSubflow(asyncProvider);
-    const tools = state[AGENT_PATHS.TOOL_DESCRIPTIONS] as LLMToolDescription[];
+    const tools = state.toolDescriptions as LLMToolDescription[];
     expect(tools).toHaveLength(1);
     expect(tools[0].name).toBe('async_tool');
   });
@@ -141,7 +139,7 @@ describe('Tools slot — scenario', () => {
       (toolId) => allowed.has(toolId),
     );
     const state = await runSubflow(gated);
-    const tools = state[AGENT_PATHS.TOOL_DESCRIPTIONS] as LLMToolDescription[];
+    const tools = state.toolDescriptions as LLMToolDescription[];
     expect(tools).toHaveLength(2);
     expect(tools.map((t) => t.name)).toEqual(['search', 'calculator']);
   });
@@ -152,7 +150,7 @@ describe('Tools slot — scenario', () => {
       staticTools([calcTool]),
     ]);
     const state = await runSubflow(combined);
-    const tools = state[AGENT_PATHS.TOOL_DESCRIPTIONS] as LLMToolDescription[];
+    const tools = state.toolDescriptions as LLMToolDescription[];
     expect(tools).toHaveLength(2);
   });
 
@@ -176,12 +174,12 @@ describe('Tools slot — scenario', () => {
 describe('Tools slot — property', () => {
   it('output is always an array', async () => {
     const state = await runSubflow(noTools());
-    expect(Array.isArray(state[AGENT_PATHS.TOOL_DESCRIPTIONS])).toBe(true);
+    expect(Array.isArray(state.toolDescriptions)).toBe(true);
   });
 
   it('tool descriptions contain name, description, inputSchema', async () => {
     const state = await runSubflow(staticTools([searchTool]));
-    const tools = state[AGENT_PATHS.TOOL_DESCRIPTIONS] as LLMToolDescription[];
+    const tools = state.toolDescriptions as LLMToolDescription[];
     const tool = tools[0];
     expect(tool).toHaveProperty('name');
     expect(tool).toHaveProperty('description');
@@ -189,7 +187,7 @@ describe('Tools slot — property', () => {
   });
 });
 
-// ── Security Tests ─────────────────────────────────────��─────
+// ── Security Tests ───────────────────────────────────────────
 
 describe('Tools slot — security', () => {
   it('throws at build time when provider is missing', () => {
@@ -220,7 +218,7 @@ describe('Tools slot — security', () => {
       handler: async () => ({ content: 'ok' }),
     };
     const state = await runSubflow(staticTools([complexTool]));
-    const tools = state[AGENT_PATHS.TOOL_DESCRIPTIONS] as LLMToolDescription[];
+    const tools = state.toolDescriptions as LLMToolDescription[];
     expect(tools[0].inputSchema).toEqual(complexTool.inputSchema);
   });
 });

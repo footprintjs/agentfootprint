@@ -11,12 +11,9 @@
 
 import { describe, it, expect } from 'vitest';
 import { flowChart, FlowChartExecutor } from 'footprintjs';
-import type { ScopeFacade } from 'footprintjs/advanced';
 import { parseResponseStage } from '../../../src/lib/call/parseResponseStage';
-import { agentScopeFactory } from '../../../src/executor/scopeFactory';
-import { AgentScope, AGENT_PATHS } from '../../../src/scope/AgentScope';
+import type { AgentLoopState, ParsedResponse } from '../../../src/scope/types';
 import type { AdapterResult, Message, ToolCall } from '../../../src/types';
-import type { ParsedResponse } from '../../../src/scope/AgentScope';
 
 // ── Helpers ──────────────────────────────────────────────────
 
@@ -34,12 +31,12 @@ async function runParseResponse(
   adapterResult: AdapterResult | undefined,
   messages: Message[] = [user('hello')],
 ): Promise<Record<string, unknown>> {
-  const chart = flowChart(
+  const chart = flowChart<AgentLoopState>(
     'Seed',
-    (scope: ScopeFacade) => {
-      AgentScope.setMessages(scope, messages);
+    (scope) => {
+      scope.messages = messages;
       if (adapterResult) {
-        AgentScope.setAdapterResult(scope, adapterResult);
+        scope.adapterResult = adapterResult;
       }
     },
     'seed',
@@ -47,7 +44,7 @@ async function runParseResponse(
     .addFunction('ParseResponse', parseResponseStage, 'parse-response')
     .build();
 
-  const executor = new FlowChartExecutor(chart, { scopeFactory: agentScopeFactory });
+  const executor = new FlowChartExecutor(chart);
   await executor.run();
   return executor.getSnapshot()?.sharedState ?? {};
 }
@@ -61,7 +58,7 @@ describe('parseResponseStage — unit', () => {
       content: 'The answer is 42.',
     });
 
-    const parsed = state[AGENT_PATHS.PARSED_RESPONSE] as ParsedResponse;
+    const parsed = state.parsedResponse as ParsedResponse;
     expect(parsed.hasToolCalls).toBe(false);
     expect(parsed.toolCalls).toEqual([]);
     expect(parsed.content).toBe('The answer is 42.');
@@ -75,7 +72,7 @@ describe('parseResponseStage — unit', () => {
       toolCalls: [tc],
     });
 
-    const parsed = state[AGENT_PATHS.PARSED_RESPONSE] as ParsedResponse;
+    const parsed = state.parsedResponse as ParsedResponse;
     expect(parsed.hasToolCalls).toBe(true);
     expect(parsed.toolCalls).toEqual([tc]);
     expect(parsed.content).toBe('Let me search');
@@ -102,7 +99,7 @@ describe('parseResponseStage — boundary', () => {
 
   it('handles empty content in final result', async () => {
     const state = await runParseResponse({ type: 'final', content: '' });
-    const parsed = state[AGENT_PATHS.PARSED_RESPONSE] as ParsedResponse;
+    const parsed = state.parsedResponse as ParsedResponse;
     expect(parsed.content).toBe('');
     expect(parsed.hasToolCalls).toBe(false);
   });
@@ -117,7 +114,7 @@ describe('parseResponseStage — scenario', () => {
       [user('hi')],
     );
 
-    const messages = state[AGENT_PATHS.MESSAGES] as Message[];
+    const messages = state.messages as Message[];
     expect(messages).toHaveLength(2);
     expect(messages[1].role).toBe('assistant');
     expect(messages[1].content).toBe('Hello!');
@@ -130,7 +127,7 @@ describe('parseResponseStage — scenario', () => {
       [user('search for X')],
     );
 
-    const messages = state[AGENT_PATHS.MESSAGES] as Message[];
+    const messages = state.messages as Message[];
     expect(messages).toHaveLength(2);
     const asstMsg = messages[1];
     expect(asstMsg.role).toBe('assistant');
@@ -150,7 +147,7 @@ describe('parseResponseStage — scenario', () => {
       existing,
     );
 
-    const messages = state[AGENT_PATHS.MESSAGES] as Message[];
+    const messages = state.messages as Message[];
     expect(messages).toHaveLength(4);
     expect(messages[0]).toEqual(existing[0]);
     expect(messages[1]).toEqual(existing[1]);
@@ -164,7 +161,7 @@ describe('parseResponseStage — scenario', () => {
 describe('parseResponseStage — property', () => {
   it('parsedResponse always has boolean hasToolCalls', async () => {
     const finalState = await runParseResponse({ type: 'final', content: 'ok' });
-    const finalParsed = finalState[AGENT_PATHS.PARSED_RESPONSE] as ParsedResponse;
+    const finalParsed = finalState.parsedResponse as ParsedResponse;
     expect(typeof finalParsed.hasToolCalls).toBe('boolean');
 
     const tc = makeToolCall('x');
@@ -173,13 +170,13 @@ describe('parseResponseStage — property', () => {
       content: '',
       toolCalls: [tc],
     });
-    const toolsParsed = toolsState[AGENT_PATHS.PARSED_RESPONSE] as ParsedResponse;
+    const toolsParsed = toolsState.parsedResponse as ParsedResponse;
     expect(typeof toolsParsed.hasToolCalls).toBe('boolean');
   });
 
   it('parsedResponse.toolCalls is always an array', async () => {
     const state = await runParseResponse({ type: 'final', content: 'no tools' });
-    const parsed = state[AGENT_PATHS.PARSED_RESPONSE] as ParsedResponse;
+    const parsed = state.parsedResponse as ParsedResponse;
     expect(Array.isArray(parsed.toolCalls)).toBe(true);
     expect(parsed.toolCalls).toEqual([]);
   });

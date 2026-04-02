@@ -11,15 +11,13 @@
 
 import { describe, it, expect, vi } from 'vitest';
 import { flowChart, FlowChartExecutor } from 'footprintjs';
-import type { ScopeFacade } from 'footprintjs/advanced';
 import { buildSystemPromptSubflow } from '../../../src/lib/slots/system-prompt';
-import { agentScopeFactory } from '../../../src/executor/scopeFactory';
-import { AgentScope, AGENT_PATHS } from '../../../src/scope/AgentScope';
 import { staticPrompt } from '../../../src/providers/prompt/static';
 import { templatePrompt } from '../../../src/providers/prompt/template';
 import { compositePrompt } from '../../../src/providers/prompt/compositePrompt';
 import type { PromptProvider } from '../../../src/core/providers';
 import type { Message } from '../../../src/types/messages';
+import type { SystemPromptSubflowState } from '../../../src/scope/types';
 
 // ── Helpers ──────────────────────────────────────────────────
 
@@ -37,26 +35,26 @@ async function runSubflow(
 ): Promise<Record<string, unknown>> {
   const subflow = buildSystemPromptSubflow({ provider });
 
-  const wrapper = flowChart(
+  const wrapper = flowChart<SystemPromptSubflowState>(
     'Seed',
-    (scope: ScopeFacade) => {
-      AgentScope.setMessages(scope, messages);
-      AgentScope.setLoopCount(scope, loopCount);
+    (scope) => {
+      scope.messages = messages;
+      scope.loopCount = loopCount;
     },
     'test-seed',
   )
     .addSubFlowChartNext('sf-system-prompt', subflow, 'SystemPrompt', {
       inputMapper: (parent: Record<string, unknown>) => ({
-        [AGENT_PATHS.MESSAGES]: parent[AGENT_PATHS.MESSAGES],
-        [AGENT_PATHS.LOOP_COUNT]: parent[AGENT_PATHS.LOOP_COUNT],
+        messages: parent.messages,
+        loopCount: parent.loopCount,
       }),
       outputMapper: (sfOutput: Record<string, unknown>) => ({
-        [AGENT_PATHS.SYSTEM_PROMPT]: sfOutput[AGENT_PATHS.SYSTEM_PROMPT],
+        systemPrompt: sfOutput.systemPrompt,
       }),
     })
     .build();
 
-  const executor = new FlowChartExecutor(wrapper, { scopeFactory: agentScopeFactory });
+  const executor = new FlowChartExecutor(wrapper);
   await executor.run();
   return executor.getSnapshot()?.sharedState ?? {};
 }
@@ -66,7 +64,7 @@ async function runSubflow(
 describe('SystemPrompt slot — unit', () => {
   it('resolves a static prompt and writes to scope', async () => {
     const state = await runSubflow(staticPrompt('You are a helpful assistant.'));
-    expect(state[AGENT_PATHS.SYSTEM_PROMPT]).toBe('You are a helpful assistant.');
+    expect(state.systemPrompt).toBe('You are a helpful assistant.');
   });
 
   it('resolves a template prompt with variables', async () => {
@@ -75,7 +73,7 @@ describe('SystemPrompt slot — unit', () => {
       [user('review this')],
       3,
     );
-    expect(state[AGENT_PATHS.SYSTEM_PROMPT]).toBe('You are a code reviewer. Turn: 3.');
+    expect(state.systemPrompt).toBe('You are a code reviewer. Turn: 3.');
   });
 });
 
@@ -84,7 +82,7 @@ describe('SystemPrompt slot — unit', () => {
 describe('SystemPrompt slot — boundary', () => {
   it('handles empty prompt string', async () => {
     const state = await runSubflow(staticPrompt(''));
-    expect(state[AGENT_PATHS.SYSTEM_PROMPT]).toBe('');
+    expect(state.systemPrompt).toBe('');
   });
 
   it('handles async provider', async () => {
@@ -95,12 +93,12 @@ describe('SystemPrompt slot — boundary', () => {
       },
     };
     const state = await runSubflow(asyncProvider);
-    expect(state[AGENT_PATHS.SYSTEM_PROMPT]).toBe('async resolved');
+    expect(state.systemPrompt).toBe('async resolved');
   });
 
   it('works with empty message history', async () => {
     const state = await runSubflow(staticPrompt('test'), []);
-    expect(state[AGENT_PATHS.SYSTEM_PROMPT]).toBe('test');
+    expect(state.systemPrompt).toBe('test');
   });
 });
 
@@ -113,7 +111,7 @@ describe('SystemPrompt slot — scenario', () => {
       staticPrompt('Extra context.'),
     ]);
     const state = await runSubflow(combined);
-    expect(state[AGENT_PATHS.SYSTEM_PROMPT]).toBe('Base instructions.\n\nExtra context.');
+    expect(state.systemPrompt).toBe('Base instructions.\n\nExtra context.');
   });
 
   it('provider receives correct context (message, turnNumber, history)', async () => {
@@ -136,13 +134,13 @@ describe('SystemPrompt slot — scenario', () => {
 describe('SystemPrompt slot — property', () => {
   it('always writes systemPrompt key (even when empty)', async () => {
     const state = await runSubflow(staticPrompt(''));
-    expect(AGENT_PATHS.SYSTEM_PROMPT in state).toBe(true);
+    expect('systemPrompt' in state).toBe(true);
   });
 
   it('subflow output overwrites any previous systemPrompt', async () => {
     // Provider returns different value than what seed might have set
     const state = await runSubflow(staticPrompt('new value'));
-    expect(state[AGENT_PATHS.SYSTEM_PROMPT]).toBe('new value');
+    expect(state.systemPrompt).toBe('new value');
   });
 });
 
@@ -161,7 +159,7 @@ describe('SystemPrompt slot — security', () => {
     const state = await runSubflow(staticPrompt(injection));
     // The slot preserves whatever the provider returns — no sanitization.
     // Sanitization is the provider's responsibility.
-    expect(state[AGENT_PATHS.SYSTEM_PROMPT]).toBe(injection);
+    expect(state.systemPrompt).toBe(injection);
   });
 
   it('throws at build time when provider is missing', () => {

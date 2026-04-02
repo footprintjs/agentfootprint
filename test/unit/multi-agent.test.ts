@@ -1,27 +1,25 @@
 import { describe, it, expect, vi } from 'vitest';
 import {
   runnerAsStage,
-  AgentScope,
-  MULTI_AGENT_PATHS,
   FlowChart,
 } from '../../src';
-import type { ScopeFacade } from 'footprintjs';
+import type { TypedScope } from 'footprintjs';
 import type { RunnerLike, AgentResultEntry } from '../../src';
+import type { MultiAgentState } from '../../src/scope/types';
 
 // ── Helpers ──────────────────────────────────────────────────
 
-function mockScope(initial: Record<string, unknown> = {}): ScopeFacade {
-  const store: Record<string, unknown> = { ...initial };
-  return {
-    getValue: vi.fn((key: string) => store[key]),
-    setValue: vi.fn((key: string, value: unknown) => {
-      store[key] = value;
-    }),
-    updateValue: vi.fn(),
-    deleteValue: vi.fn(),
-    getArgs: vi.fn(() => ({})),
-    attachRecorder: vi.fn(),
-  } as unknown as ScopeFacade;
+function mockScope(
+  initial: Record<string, unknown> = {},
+  env?: { signal?: AbortSignal; timeoutMs?: number },
+): TypedScope<MultiAgentState> {
+  const obj: any = { ...initial };
+  obj.$getValue = vi.fn((key: string) => obj[key]);
+  obj.$setValue = vi.fn((key: string, value: unknown) => {
+    obj[key] = value;
+  });
+  obj.$getEnv = vi.fn(() => env);
+  return obj as TypedScope<MultiAgentState>;
 }
 
 function fakeRunner(content: string, narrative?: string[]): RunnerLike {
@@ -86,10 +84,7 @@ describe('runnerAsStage', () => {
     const scope = mockScope({ pipelineInput: 'hi', agentResults: [] });
     await stage(scope);
 
-    const resultCall = (scope.setValue as any).mock.calls.find(
-      (c: any) => c[0] === MULTI_AGENT_PATHS.RESULT,
-    );
-    expect(resultCall[1]).toBe('the result');
+    expect(scope.result).toBe('the result');
   });
 
   it('uses custom outputMapper', async () => {
@@ -104,8 +99,8 @@ describe('runnerAsStage', () => {
     const scope = mockScope({ pipelineInput: 'hi', agentResults: [] });
     await stage(scope);
 
-    const customCall = (scope.setValue as any).mock.calls.find((c: any) => c[0] === 'customKey');
-    expect(customCall[1]).toBe('RAW OUTPUT');
+    // outputMapper uses $setValue for dynamic keys
+    expect(scope.$setValue).toHaveBeenCalledWith('customKey', 'RAW OUTPUT');
   });
 
   it('appends agent result entry', async () => {
@@ -115,10 +110,7 @@ describe('runnerAsStage', () => {
     const scope = mockScope({ pipelineInput: 'hi', agentResults: [] });
     await stage(scope);
 
-    const resultsCall = (scope.setValue as any).mock.calls.find(
-      (c: any) => c[0] === MULTI_AGENT_PATHS.AGENT_RESULTS,
-    );
-    const entries = resultsCall[1] as AgentResultEntry[];
+    const entries = scope.agentResults as AgentResultEntry[];
     expect(entries).toHaveLength(1);
     expect(entries[0].id).toBe('a1');
     expect(entries[0].name).toBe('Agent1');
@@ -135,63 +127,26 @@ describe('runnerAsStage', () => {
     const scope = mockScope({ result: 'first', agentResults: existing });
     await stage(scope);
 
-    const resultsCall = (scope.setValue as any).mock.calls.find(
-      (c: any) => c[0] === MULTI_AGENT_PATHS.AGENT_RESULTS,
-    );
-    expect(resultsCall[1]).toHaveLength(2);
-    expect(resultsCall[1][1].id).toBe('a2');
+    const entries = scope.agentResults as AgentResultEntry[];
+    expect(entries).toHaveLength(2);
+    expect(entries[1].id).toBe('a2');
   });
 
-  it('passes signal and timeoutMs from scope to runner', async () => {
+  it('passes signal and timeoutMs from env to runner', async () => {
     const runner = fakeRunner('output');
     const controller = new AbortController();
     const stage = runnerAsStage({ id: 'a1', name: 'Agent1', runner });
 
-    const scope = mockScope({
-      pipelineInput: 'hi',
-      _signal: controller.signal,
-      _timeoutMs: 5000,
-    });
+    const scope = mockScope(
+      { pipelineInput: 'hi' },
+      { signal: controller.signal, timeoutMs: 5000 },
+    );
     await stage(scope);
 
     expect(runner.run).toHaveBeenCalledWith('hi', {
       signal: controller.signal,
       timeoutMs: 5000,
     });
-  });
-});
-
-// ── MULTI_AGENT_PATHS ────────────────────────────────────────
-
-describe('MULTI_AGENT_PATHS', () => {
-  it('has correct path values', () => {
-    expect(MULTI_AGENT_PATHS.PIPELINE_INPUT).toBe('pipelineInput');
-    expect(MULTI_AGENT_PATHS.AGENT_RESULTS).toBe('agentResults');
-    expect(MULTI_AGENT_PATHS.RESULT).toBe('result');
-    expect(MULTI_AGENT_PATHS.SIGNAL).toBe('_signal');
-    expect(MULTI_AGENT_PATHS.TIMEOUT_MS).toBe('_timeoutMs');
-  });
-});
-
-// ── AgentScope multi-agent accessors ─────────────────────────
-
-describe('AgentScope multi-agent accessors', () => {
-  it('getPipelineInput / setPipelineInput', () => {
-    const scope = mockScope({});
-    AgentScope.setPipelineInput(scope, 'test input');
-    expect(scope.setValue).toHaveBeenCalledWith('pipelineInput', 'test input');
-  });
-
-  it('getAgentResults returns empty array when not set', () => {
-    const scope = mockScope({});
-    expect(AgentScope.getAgentResults(scope)).toEqual([]);
-  });
-
-  it('setAgentResults writes to scope', () => {
-    const scope = mockScope({});
-    const entries = [{ id: 'a1', name: 'A1', content: 'x', latencyMs: 5 }];
-    AgentScope.setAgentResults(scope, entries as AgentResultEntry[]);
-    expect(scope.setValue).toHaveBeenCalledWith('agentResults', entries);
   });
 });
 

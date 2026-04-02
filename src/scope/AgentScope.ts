@@ -9,11 +9,11 @@ import type { ScopeFacade } from 'footprintjs/advanced';
 import type {
   Message,
   AdapterResult,
-  ToolCall,
   LLMToolDescription,
   RetrievalResult,
   AgentResultEntry,
 } from '../types';
+import type { ParsedResponse } from './types';
 
 /**
  * Well-known scope paths for memory subflow state.
@@ -59,12 +59,6 @@ export const RAG_PATHS = {
   RETRIEVAL_RESULT: 'retrievalResult',
   CONTEXT_WINDOW: 'contextWindow',
 } as const;
-
-export interface ParsedResponse {
-  readonly hasToolCalls: boolean;
-  readonly toolCalls: ToolCall[];
-  readonly content: string;
-}
 
 /**
  * Typed accessors for agent state in scope.

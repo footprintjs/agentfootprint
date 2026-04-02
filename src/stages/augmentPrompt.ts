@@ -2,12 +2,12 @@
  * AugmentPrompt stage — injects retrieved context into messages before LLM call.
  */
 
-import type { ScopeFacade } from 'footprintjs/advanced';
+import type { TypedScope } from 'footprintjs';
 import { systemMessage } from '../types';
-import { AgentScope } from '../scope';
+import type { RAGState } from '../scope/types';
 
-export function augmentPromptStage(scope: ScopeFacade): void {
-  const result = AgentScope.getRetrievalResult(scope);
+export function augmentPromptStage(scope: TypedScope<RAGState>): void {
+  const result = scope.retrievalResult;
   // Graceful degradation: if retrieval returned nothing, skip context injection.
   // LLM proceeds with user query only — useful in hybrid pipelines where retrieval is optional.
   if (!result || result.chunks.length === 0) return;
@@ -15,10 +15,10 @@ export function augmentPromptStage(scope: ScopeFacade): void {
   // Format chunks into numbered context block
   const context = result.chunks.map((c, i) => `[${i + 1}] ${c.content}`).join('\n\n');
 
-  AgentScope.setContextWindow(scope, context);
+  scope.contextWindow = context;
 
   // Inject context into messages
-  const messages = AgentScope.getMessages(scope);
+  const messages = scope.messages ?? [];
   const contextMsg = systemMessage(
     `Use the following context to answer the user's question:\n\n${context}`,
   );
@@ -28,8 +28,8 @@ export function augmentPromptStage(scope: ScopeFacade): void {
   if (sysIdx >= 0) {
     const updated = [...messages];
     updated.splice(sysIdx + 1, 0, contextMsg);
-    AgentScope.setMessages(scope, updated);
+    scope.messages = updated;
   } else {
-    AgentScope.setMessages(scope, [contextMsg, ...messages]);
+    scope.messages = [contextMsg, ...messages];
   }
 }

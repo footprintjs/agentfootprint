@@ -1,11 +1,11 @@
 /**
  * BehindTheScenes Narrative Integration Tests
  *
- * Verifies that the new lib/ architecture produces rich, meaningful
- * narratives through footprintjs's CombinedNarrativeRecorder.
+ * Verifies that the agent renderer produces rich, LLM-optimized narratives
+ * through footprintjs's CombinedNarrativeRecorder + NarrativeRenderer.
  *
  * Tiers:
- * - unit:     single-turn narrative structure, stage names, descriptions
+ * - unit:     single-turn narrative structure, stage names, promoted keys
  * - boundary: no tools, no system prompt, empty message
  * - scenario: full ReAct loop narrative, memory narrative, subflow drill-down
  * - property: narrative always array, entries always have required fields
@@ -41,7 +41,7 @@ const searchTool = defineTool({
 // ── Unit Tests ──────────────────────────────────────────────
 
 describe('Narrative — unit', () => {
-  it('single-turn produces narrative with all slot subflows', async () => {
+  it('single-turn produces narrative with agent-styled stages and subflows', async () => {
     const agent = Agent.create({
       provider: mockProvider([{ content: 'Hello!' }]),
     })
@@ -52,17 +52,17 @@ describe('Narrative — unit', () => {
     await agent.run('hi');
     const narrative = agent.getNarrative();
 
-    // Seed stage
-    expect(narrative.some((s) => s.includes('Initialize agent loop state'))).toBe(true);
-    // Slot subflows
-    expect(narrative.some((s) => s.includes('SystemPrompt subflow'))).toBe(true);
-    expect(narrative.some((s) => s.includes('Messages subflow'))).toBe(true);
-    expect(narrative.some((s) => s.includes('Tools subflow'))).toBe(true);
+    // Seed stage (agent renderer format)
+    expect(narrative.some((s) => s.includes('[Seed]'))).toBe(true);
+    // Slot subflows (agent renderer labels)
+    expect(narrative.some((s) => s.includes('Preparing system prompt'))).toBe(true);
+    expect(narrative.some((s) => s.includes('Preparing conversation history'))).toBe(true);
+    expect(narrative.some((s) => s.includes('Resolving available tools'))).toBe(true);
     // Core stages
-    expect(narrative.some((s) => s.includes('Prepend system prompt'))).toBe(true);
-    expect(narrative.some((s) => s.includes('Send messages + tools to LLM provider'))).toBe(true);
-    expect(narrative.some((s) => s.includes('Parse LLM response'))).toBe(true);
-    expect(narrative.some((s) => s.includes('Execute tool calls or finalize'))).toBe(true);
+    expect(narrative.some((s) => s.includes('[AssemblePrompt]'))).toBe(true);
+    expect(narrative.some((s) => s.includes('[CallLLM]'))).toBe(true);
+    expect(narrative.some((s) => s.includes('[ParseResponse]'))).toBe(true);
+    expect(narrative.some((s) => s.includes('[RouteResponse]') || s.includes('[Finalize]'))).toBe(true);
   });
 
   it('narrative entries have structured fields', async () => {
@@ -83,7 +83,7 @@ describe('Narrative — unit', () => {
     }
   });
 
-  it('narrative captures scope writes with summarized values', async () => {
+  it('actual values shown for key scope variables', async () => {
     const agent = Agent.create({
       provider: mockProvider([{ content: 'ok' }]),
     })
@@ -93,29 +93,48 @@ describe('Narrative — unit', () => {
     await agent.run('hello');
     const narrative = agent.getNarrative();
 
-    // System prompt value appears in narrative
-    expect(narrative.some((s) => s.includes('systemPrompt') && s.includes('You are a test bot.'))).toBe(true);
-    // Messages tracked
-    expect(narrative.some((s) => s.includes('Write messages'))).toBe(true);
+    // System prompt shows actual text
+    expect(narrative.some((s) => s.includes('System prompt:') && s.includes('You are a test bot.'))).toBe(true);
+    // Parsed response shows type
+    expect(narrative.some((s) => s.includes('Parsed:') && s.includes('final'))).toBe(true);
   });
-});
 
-// ── Boundary Tests ──────────────────────────────────────────
-
-describe('Narrative — boundary', () => {
-  it('agent without system prompt skips system prompt in AssemblePrompt', async () => {
+  it('messages shown with count and role breakdown', async () => {
     const agent = Agent.create({
       provider: mockProvider([{ content: 'ok' }]),
-    }).build();
+    })
+      .system('test')
+      .build();
 
-    await agent.run('hi');
+    await agent.run('hello');
     const narrative = agent.getNarrative();
 
-    // SystemPrompt subflow still runs (always a subflow), but value is empty
-    expect(narrative.some((s) => s.includes('SystemPrompt subflow'))).toBe(true);
+    // Messages formatted with count
+    expect(narrative.some((s) => s.includes('Messages:') && s.includes('user'))).toBe(true);
   });
 
-  it('agent without tools produces empty tool descriptions', async () => {
+  it('internal keys (memory_*, loopCount, adapter internals) suppressed', async () => {
+    const agent = Agent.create({
+      provider: mockProvider([{ content: 'ok' }]),
+    })
+      .system('test')
+      .build();
+
+    await agent.run('hello');
+    const narrative = agent.getNarrative();
+
+    // Internal plumbing keys should NOT appear
+    expect(narrative.some((s) => s.includes('loopCount'))).toBe(false);
+    expect(narrative.some((s) => s.includes('maxIterations'))).toBe(false);
+    expect(narrative.some((s) => s.includes('adapterResult'))).toBe(false);
+    expect(narrative.some((s) => s.includes('adapterRawResponse'))).toBe(false);
+    expect(narrative.some((s) => s.includes('memory_'))).toBe(false);
+    // Enrichment summaries suppressed (actual values shown instead)
+    expect(narrative.some((s) => s.includes('llmCall'))).toBe(false);
+    expect(narrative.some((s) => s.includes('promptSummary'))).toBe(false);
+  });
+
+  it('all reads suppressed (only writes in narrative)', async () => {
     const agent = Agent.create({
       provider: mockProvider([{ content: 'ok' }]),
     }).build();
@@ -123,8 +142,37 @@ describe('Narrative — boundary', () => {
     await agent.run('hi');
     const entries = agent.getNarrativeEntries();
 
-    // Tools subflow should still appear
-    const toolsEntry = entries.find((e) => e.text.includes('Tools subflow'));
+    // No step entries should contain "Read"
+    const stepEntries = entries.filter((e) => e.type === 'step');
+    expect(stepEntries.every((e) => !e.text.includes('Read '))).toBe(true);
+  });
+});
+
+// ── Boundary Tests ──────────────────────────────────────────
+
+describe('Narrative — boundary', () => {
+  it('agent without system prompt still has subflow entry', async () => {
+    const agent = Agent.create({
+      provider: mockProvider([{ content: 'ok' }]),
+    }).build();
+
+    await agent.run('hi');
+    const narrative = agent.getNarrative();
+
+    // SystemPrompt subflow still runs (agent renderer label)
+    expect(narrative.some((s) => s.includes('Preparing system prompt'))).toBe(true);
+  });
+
+  it('agent without tools still has subflow entry', async () => {
+    const agent = Agent.create({
+      provider: mockProvider([{ content: 'ok' }]),
+    }).build();
+
+    await agent.run('hi');
+    const entries = agent.getNarrativeEntries();
+
+    // Tools subflow should still appear (agent renderer label)
+    const toolsEntry = entries.find((e) => e.text.includes('Resolving available tools'));
     expect(toolsEntry).toBeDefined();
   });
 
@@ -142,7 +190,7 @@ describe('Narrative — boundary', () => {
 // ── Scenario Tests ──────────────────────────────────────────
 
 describe('Narrative — scenario', () => {
-  it('ReAct loop narrative shows tool execution and loop iteration', async () => {
+  it('ReAct loop narrative shows tool loop and result', async () => {
     const tc: ToolCall = { id: 'tc-1', name: 'search', arguments: { q: 'weather' } };
     const agent = Agent.create({
       provider: mockProvider([
@@ -157,14 +205,14 @@ describe('Narrative — scenario', () => {
     await agent.run('weather?');
     const narrative = agent.getNarrative();
 
-    // Loop iteration visible
-    expect(narrative.some((s) => s.includes('pass 1'))).toBe(true);
-    // Tool call results in loopCount increment
-    expect(narrative.some((s) => s.includes('loopCount') && s.includes('1'))).toBe(true);
-    // Final answer stored
-    expect(narrative.some((s) => s.includes('result') && s.includes('sunny'))).toBe(true);
-    // Break condition
-    expect(narrative.some((s) => s.includes('Execution stopped'))).toBe(true);
+    // Loop iteration (agent renderer format)
+    expect(narrative.some((s) => s.includes('Tool loop iteration 1'))).toBe(true);
+    // Tool call visible via parsedResponse (actual value, not enrichment summary)
+    expect(narrative.some((s) => s.includes('Parsed:') && s.includes('tool_calls'))).toBe(true);
+    // Final result
+    expect(narrative.some((s) => s.includes('Result:') && s.includes('sunny'))).toBe(true);
+    // Agent completed (agent renderer format)
+    expect(narrative.some((s) => s.includes('Agent completed'))).toBe(true);
   });
 
   it('narrative entries distinguish subflow vs root level stages', async () => {
@@ -202,8 +250,8 @@ describe('Narrative — scenario', () => {
     await agent.run('remember this');
     const narrative = agent.getNarrative();
 
-    // CommitMemory stage should be in narrative
-    expect(narrative.some((s) => s.includes('Persist conversation history'))).toBe(true);
+    // CommitMemory stage (agent renderer format)
+    expect(narrative.some((s) => s.includes('[CommitMemory]'))).toBe(true);
   });
 
   it('multi-turn narrative is independent per run', async () => {
@@ -220,8 +268,38 @@ describe('Narrative — scenario', () => {
     // Each run produces fresh narrative
     expect(narrative1.length).toBeGreaterThan(0);
     expect(narrative2.length).toBeGreaterThan(0);
-    // They should not be identical (different message counts)
     expect(narrative1).not.toEqual(narrative2);
+  });
+
+  it('actual scope values provide LLM-actionable context', async () => {
+    const tc: ToolCall = { id: 'tc-1', name: 'search', arguments: { q: 'test' } };
+    const agent = Agent.create({
+      provider: mockProvider([
+        { content: 'searching', toolCalls: [tc] },
+        { content: 'found it' },
+      ]),
+    })
+      .system('You are a search agent.')
+      .tool(searchTool)
+      .build();
+
+    await agent.run('find something');
+    const narrative = agent.getNarrative();
+
+    // System prompt shows actual text
+    expect(narrative.some((s) => s.includes('System prompt:') && s.includes('You are a search agent.'))).toBe(true);
+    // Tool descriptions show tool names
+    expect(narrative.some((s) => s.includes('Tools:') && s.includes('search'))).toBe(true);
+    // Parsed response for first call (tool_calls with tool name)
+    expect(narrative.some((s) => s.includes('Parsed:') && s.includes('tool_calls'))).toBe(true);
+    // Parsed response for second call (final with content preview)
+    expect(narrative.some((s) => s.includes('Parsed:') && s.includes('final'))).toBe(true);
+    // Result shows final content
+    expect(narrative.some((s) => s.includes('Result:') && s.includes('found it'))).toBe(true);
+    // Enrichment summaries are suppressed (actual values shown instead)
+    expect(narrative.some((s) => s.includes('LLM:'))).toBe(false);
+    expect(narrative.some((s) => s.includes('Prompt:'))).toBe(false);
+    expect(narrative.some((s) => s.includes('Response:'))).toBe(false);
   });
 });
 
@@ -289,6 +367,23 @@ describe('Narrative — property', () => {
       expect(entry.depth).toBeGreaterThan(0);
     }
   });
+
+  it('stageId present on stage entries for time-travel sync', async () => {
+    const agent = Agent.create({
+      provider: mockProvider([{ content: 'ok' }]),
+    })
+      .system('test')
+      .build();
+
+    await agent.run('hi');
+    const entries = agent.getNarrativeEntries();
+
+    const stageEntries = entries.filter((e) => e.type === 'stage');
+    for (const entry of stageEntries) {
+      expect(entry.stageId).toBeDefined();
+      expect(typeof entry.stageId).toBe('string');
+    }
+  });
 });
 
 // ── Security Tests ──────────────────────────────────────────
@@ -304,8 +399,8 @@ describe('Narrative — security', () => {
     // Narrative should exist up to the point of failure
     const narrative = agent.getNarrative();
     expect(narrative.length).toBeGreaterThan(0);
-    // Should include stages up to CallLLM
-    expect(narrative.some((s) => s.includes('Initialize agent loop state'))).toBe(true);
+    // Should include [Seed] stage
+    expect(narrative.some((s) => s.includes('[Seed]'))).toBe(true);
   });
 
   it('maxIterations=0 produces narrative without loop', async () => {
@@ -325,7 +420,7 @@ describe('Narrative — security', () => {
 
     // Should have narrative entries
     expect(narrative.length).toBeGreaterThan(0);
-    // With maxIterations=0, should finalize immediately (no tool execution)
+    // With maxIterations=0, should finalize immediately
     expect(result.iterations).toBe(0);
   });
 });

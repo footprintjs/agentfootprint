@@ -23,11 +23,10 @@
  */
 
 import { flowChart } from 'footprintjs';
-import type { ScopeFacade } from 'footprintjs/advanced';
+import type { TypedScope } from 'footprintjs';
 import type { ConversationStore } from '../adapters/memory/types';
 import type { MessageStrategy, MessageContext } from '../core/providers';
-import type { Message } from '../types/messages';
-import { MEMORY_PATHS } from '../scope/AgentScope';
+import type { MessagesSubflowState } from '../scope/types';
 
 // ── Config ───────────────────────────────────────────────────
 
@@ -55,13 +54,12 @@ export interface PrepareMemoryConfig {
  * ```typescript
  * .addSubFlowChartNext('sf-prepare-memory', createPrepareMemorySubflow(config), 'PrepareMemory', {
  *   inputMapper: (parent) => ({
- *     currentMessages: AgentScope.getMessages(parent),
+ *     currentMessages: parent.messages ?? [],
+ *     loopCount: parent.loopCount ?? 0,
  *   }),
- *   // outputMapper: (sfOutput, _parent) => ({...sfOutput}) returns values to write to parent.
- *   // sfOutput is the subflow's final sharedState (plain Record), NOT a ScopeFacade.
  *   outputMapper: (sfOutput) => ({
- *     [MEMORY_PATHS.PREPARED_MESSAGES]: sfOutput[MEMORY_PATHS.PREPARED_MESSAGES],
- *     [MEMORY_PATHS.STORED_HISTORY]: sfOutput[MEMORY_PATHS.STORED_HISTORY],
+ *     memory_preparedMessages: sfOutput.memory_preparedMessages,
+ *     memory_storedHistory: sfOutput.memory_storedHistory,
  *   }),
  * })
  * ```
@@ -69,12 +67,12 @@ export interface PrepareMemoryConfig {
 export function createPrepareMemorySubflow(config: PrepareMemoryConfig) {
   // ── Stage 1: LoadHistory ─────────────────────────────────
 
-  const loadHistory = async (scope: ScopeFacade) => {
-    const current = (scope.getValue('currentMessages') as Message[]) ?? [];
+  const loadHistory = async (scope: TypedScope<MessagesSubflowState>) => {
+    const current = scope.currentMessages ?? [];
 
     if (!config.store || !config.conversationId) {
       // No store configured — pass current messages through unchanged
-      scope.setValue(MEMORY_PATHS.STORED_HISTORY, current);
+      scope.memory_storedHistory = current;
       return;
     }
 
@@ -86,17 +84,17 @@ export function createPrepareMemorySubflow(config: PrepareMemoryConfig) {
     // Append unconditionally — the store holds all prior turns.
     const merged = stored.length > 0 ? [...stored, ...current] : current;
 
-    scope.setValue(MEMORY_PATHS.STORED_HISTORY, merged);
+    scope.memory_storedHistory = merged;
   };
 
   // ── Stage 2: ApplyStrategy ───────────────────────────────
 
-  const applyStrategy = async (scope: ScopeFacade) => {
-    const merged = (scope.getValue(MEMORY_PATHS.STORED_HISTORY) as Message[]) ?? [];
+  const applyStrategy = async (scope: TypedScope<MessagesSubflowState>) => {
+    const merged = scope.memory_storedHistory ?? [];
 
     if (!config.strategy) {
       // No strategy — pass through as-is
-      scope.setValue(MEMORY_PATHS.PREPARED_MESSAGES, merged);
+      scope.memory_preparedMessages = merged;
       return;
     }
 
@@ -110,10 +108,10 @@ export function createPrepareMemorySubflow(config: PrepareMemoryConfig) {
     };
 
     const prepared = await config.strategy.prepare(merged, ctx);
-    scope.setValue(MEMORY_PATHS.PREPARED_MESSAGES, prepared);
+    scope.memory_preparedMessages = prepared;
   };
 
-  return flowChart('LoadHistory', loadHistory, 'load-history')
+  return flowChart<MessagesSubflowState>('LoadHistory', loadHistory, 'load-history')
     .addFunction('ApplyStrategy', applyStrategy, 'apply-strategy')
     .build();
 }

@@ -10,20 +10,17 @@ import {
   executeToolCalls,
   ToolRegistry,
 } from '../../src';
-import type { ScopeFacade, LLMResponse } from '../../src';
+import type { LLMResponse } from '../../src';
+import type { TypedScope } from 'footprintjs';
+import type { RAGState } from '../../src/scope/types';
 
-function mockScope(initial: Record<string, unknown> = {}): ScopeFacade {
-  const store: Record<string, unknown> = { ...initial };
-  return {
-    getValue: vi.fn((key: string) => store[key]),
-    setValue: vi.fn((key: string, value: unknown) => {
-      store[key] = value;
-    }),
-    updateValue: vi.fn(),
-    deleteValue: vi.fn(),
-    getArgs: vi.fn(() => ({})),
-    attachRecorder: vi.fn(),
-  } as unknown as ScopeFacade;
+function mockScope(initial: Partial<RAGState> = {}): TypedScope<RAGState> {
+  const obj: any = { ...initial };
+  obj.$getValue = vi.fn((key: string) => obj[key]);
+  obj.$setValue = vi.fn((key: string, value: unknown) => {
+    obj[key] = value;
+  });
+  return obj as TypedScope<RAGState>;
 }
 
 describe('Boundary: normalizeAdapterResponse edge cases', () => {
