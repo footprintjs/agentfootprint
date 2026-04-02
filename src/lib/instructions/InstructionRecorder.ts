@@ -156,6 +156,11 @@ export class InstructionRecorder implements AgentRecorder {
     return toolFirings ? [...toolFirings.keys()] : [];
   }
 
+  /** Serialize for inclusion in executor.getSnapshot().recorders. */
+  toSnapshot(): { name: string; data: unknown } {
+    return { name: 'Instructions', data: this.getSummary() };
+  }
+
   clear(): void {
     this.firings.clear();
     this.followUps.clear();
