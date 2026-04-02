@@ -148,13 +148,16 @@ export function buildAgentLoop(config: AgentLoopConfig, seed?: AgentLoopSeedOpti
     },
   );
 
-  // ApplyPreparedMessages — copy prepared messages from temp key to 'messages'
+  // ApplyPreparedMessages — copy prepared messages from temp key to 'messages'.
+  // Clears memory_preparedMessages after reading to prevent applyOutputMapping
+  // array concat from accumulating stale messages on Dynamic ReAct loop iterations.
   builder = builder.addFunction(
     'ApplyPreparedMessages',
     (scope) => {
       const prepared = scope.memory_preparedMessages;
       if (prepared) {
         scope.messages = prepared;
+        scope.memory_preparedMessages = undefined as any;
       }
     },
     'apply-prepared-messages',

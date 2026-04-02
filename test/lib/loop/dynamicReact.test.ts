@@ -206,7 +206,7 @@ describe('Dynamic ReAct — security', () => {
     expect(result.iterations).toBeLessThanOrEqual(3);
   });
 
-  it('no runaway message growth in Dynamic pattern', async () => {
+  it('no message duplication in Dynamic pattern', async () => {
     const agent = Agent.create({
       provider: mock([
         { content: 'calling', toolCalls: [{ id: '1', name: 'noop', arguments: {} }] },
@@ -220,11 +220,16 @@ describe('Dynamic ReAct — security', () => {
       .build();
 
     const result = await agent.run('test');
-    // Messages should grow linearly, not exponentially.
-    // Dynamic pattern may re-evaluate Messages slot (adding messages from strategy).
-    // With 2 tool loops, expect at most ~15 messages (linear growth).
-    expect(result.messages.length).toBeLessThanOrEqual(15);
-    // Content is correct regardless
     expect(result.content).toBe('done');
+
+    // Exactly 1 user message — no duplication from dynamic loop
+    const userCount = result.messages.filter((m: any) => m.role === 'user').length;
+    expect(userCount).toBe(1);
+    // 2 tool loops + 1 final = 3 assistant messages
+    const assistantCount = result.messages.filter((m: any) => m.role === 'assistant').length;
+    expect(assistantCount).toBe(3);
+    // 2 tool results
+    const toolCount = result.messages.filter((m: any) => m.role === 'tool').length;
+    expect(toolCount).toBe(2);
   });
 });
