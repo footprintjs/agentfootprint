@@ -7,3 +7,6 @@ export type {
   InstructedToolResult,
   InstructedToolDefinition,
 } from './types';
+
+export { evaluateInstructions, mergeRuntimeInstructions } from './evaluator';
+export type { ResolvedInstruction, ResolvedFollowUp } from './evaluator';

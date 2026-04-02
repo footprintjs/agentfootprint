@@ -11,7 +11,7 @@
  *   Tier 3: Composite — both in one instruction
  */
 
-// Types are self-contained — no runtime dependency on tools module.
+import type { ToolDefinition } from '../../types/tools';
 
 // ── Tool Result Context ─────────────────────────────────────────────────
 
@@ -363,10 +363,11 @@ export function quickBind(
  * });
  * ```
  */
-export interface InstructedToolDefinition {
-  readonly id: string;
-  readonly description: string;
-  readonly inputSchema: Record<string, unknown>;
-  readonly handler: (input: Record<string, unknown>) => Promise<InstructedToolResult | { content: string; error?: boolean }>;
+/**
+ * Tool definition with LLM instructions.
+ * Extends base ToolDefinition — handler can return InstructedToolResult
+ * with runtime instructions and follow-ups.
+ */
+export interface InstructedToolDefinition extends ToolDefinition {
   readonly instructions?: readonly LLMInstruction[];
 }
