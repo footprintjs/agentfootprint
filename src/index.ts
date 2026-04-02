@@ -189,6 +189,7 @@ export {
   GuardrailRecorder,
   CompositeRecorder,
   PermissionRecorder,
+  agentObservability,
 } from './recorders';
 export type {
   TokenStats,
@@ -203,6 +204,8 @@ export type {
   Violation,
   GuardrailCheck,
   PermissionEvent,
+  AgentObservabilityOptions,
+  AgentObservabilityRecorder,
 } from './recorders';
 
 // ── Providers ────────────────────────────────────────────────

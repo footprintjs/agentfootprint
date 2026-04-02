@@ -21,3 +21,5 @@ export type { Violation, GuardrailCheck } from './GuardrailRecorder';
 export { CompositeRecorder } from './CompositeRecorder';
 export { PermissionRecorder } from './PermissionRecorder';
 export type { PermissionEvent } from './PermissionRecorder';
+export { agentObservability } from './agentObservability';
+export type { AgentObservabilityOptions, AgentObservabilityRecorder } from './agentObservability';
