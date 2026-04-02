@@ -87,7 +87,7 @@ export class LLMCallRunner {
 
     const executor = new FlowChartExecutor(chart, { enrichSnapshots: true });
     executor.enableNarrative();
-    executor.attachRecorder(new MetricRecorder('metrics'));
+    executor.attachRecorder(new MetricRecorder());
     const startMs = Date.now();
 
     try {

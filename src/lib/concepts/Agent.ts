@@ -200,7 +200,7 @@ export class AgentRunner {
 
     const executor = new FlowChartExecutor(chart, { enrichSnapshots: true });
     executor.enableNarrative({ renderer: this.narrativeRenderer });
-    executor.attachRecorder(new MetricRecorder('metrics'));
+    executor.attachRecorder(new MetricRecorder());
     const startMs = Date.now();
 
     try {

@@ -144,7 +144,7 @@ export class FlowChartRunner {
 
     const executor = new FlowChartExecutor(chart, { enrichSnapshots: true });
     executor.enableNarrative();
-    executor.attachRecorder(new MetricRecorder('metrics'));
+    executor.attachRecorder(new MetricRecorder());
 
     try {
       await executor.run({
