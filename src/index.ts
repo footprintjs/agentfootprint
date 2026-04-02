@@ -129,7 +129,7 @@ export type {
 export { ToolRegistry, defineTool } from './tools';
 
 // ── Instructions (LLM guidance co-located with tools) ───────
-export { quickBind } from './lib/instructions';
+export { quickBind, processInstructions, InstructionRecorder } from './lib/instructions';
 export type {
   LLMInstruction,
   FollowUpBinding,
@@ -137,6 +137,10 @@ export type {
   RuntimeFollowUp,
   InstructedToolResult,
   InstructedToolDefinition,
+  InstructionTemplate,
+  ResolvedInstruction,
+  InstructionInjectionResult,
+  InstructionSummary,
 } from './lib/instructions';
 
 // ── Memory ───────────────────────────────────────────────────

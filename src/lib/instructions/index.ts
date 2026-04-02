@@ -16,3 +16,6 @@ export type { InstructionTemplate } from './template';
 
 export { processInstructions } from './inject';
 export type { InstructionInjectionResult } from './inject';
+
+export { InstructionRecorder } from './InstructionRecorder';
+export type { InstructionSummary, ToolInstructionStats, InstructionFiring, FollowUpOffering } from './InstructionRecorder';
