@@ -14,7 +14,7 @@
  *   const result = await agent.run('hello');
  */
 
-import { FlowChartExecutor } from 'footprintjs';
+import { FlowChartExecutor, MetricRecorder } from 'footprintjs';
 import type { FlowChart as FlowChartType } from 'footprintjs';
 import { buildAgentLoop } from '../loop';
 import type { AgentLoopConfig } from '../loop';
@@ -198,8 +198,9 @@ export class AgentRunner {
 
     bridge?.dispatchTurnStart(message);
 
-    const executor = new FlowChartExecutor(chart);
+    const executor = new FlowChartExecutor(chart, { enrichSnapshots: true });
     executor.enableNarrative({ renderer: this.narrativeRenderer });
+    executor.attachRecorder(new MetricRecorder('__timing'));
     const startMs = Date.now();
 
     try {

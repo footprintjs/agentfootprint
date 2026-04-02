@@ -13,7 +13,7 @@
  *   const result = await composed.run('Write about AI');
  */
 
-import { flowChart as buildFlowChart, FlowChartExecutor } from 'footprintjs';
+import { flowChart as buildFlowChart, FlowChartExecutor, MetricRecorder } from 'footprintjs';
 import type { FlowChart as FlowChartDef, TypedScope } from 'footprintjs';
 import { annotateSpecIcons } from './specIcons';
 
@@ -142,8 +142,9 @@ export class FlowChartRunner {
     this.lastSpec = annotateSpecIcons(builder.toSpec());
     const chart = builder.build();
 
-    const executor = new FlowChartExecutor(chart);
+    const executor = new FlowChartExecutor(chart, { enrichSnapshots: true });
     executor.enableNarrative();
+    executor.attachRecorder(new MetricRecorder('__timing'));
 
     try {
       await executor.run({

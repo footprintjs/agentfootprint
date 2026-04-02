@@ -10,7 +10,7 @@
  *   const result = await caller.run('Hello');
  */
 
-import { flowChart, FlowChartExecutor } from 'footprintjs';
+import { flowChart, FlowChartExecutor, MetricRecorder } from 'footprintjs';
 import type { FlowChart as FlowChartType, TypedScope } from 'footprintjs';
 import { annotateSpecIcons } from './specIcons';
 
@@ -85,8 +85,9 @@ export class LLMCallRunner {
 
     bridge?.dispatchTurnStart(message);
 
-    const executor = new FlowChartExecutor(chart);
+    const executor = new FlowChartExecutor(chart, { enrichSnapshots: true });
     executor.enableNarrative();
+    executor.attachRecorder(new MetricRecorder('__timing'));
     const startMs = Date.now();
 
     try {

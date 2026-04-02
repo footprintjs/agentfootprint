@@ -11,7 +11,7 @@
  *   const result = await rag.run('What is X?');
  */
 
-import { flowChart, FlowChartExecutor } from 'footprintjs';
+import { flowChart, FlowChartExecutor, MetricRecorder } from 'footprintjs';
 import type { FlowChart as FlowChartType, TypedScope } from 'footprintjs';
 import { annotateSpecIcons } from './specIcons';
 
@@ -124,8 +124,9 @@ export class RAGRunner {
 
     bridge?.dispatchTurnStart(message);
 
-    const executor = new FlowChartExecutor(chart);
+    const executor = new FlowChartExecutor(chart, { enrichSnapshots: true });
     executor.enableNarrative();
+    executor.attachRecorder(new MetricRecorder('__timing'));
     const startMs = Date.now();
 
     try {
