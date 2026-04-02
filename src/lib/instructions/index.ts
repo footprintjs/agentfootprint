@@ -10,3 +10,9 @@ export type {
 
 export { evaluateInstructions, mergeRuntimeInstructions } from './evaluator';
 export type { ResolvedInstruction, ResolvedFollowUp } from './evaluator';
+
+export { renderInstructions } from './template';
+export type { InstructionTemplate } from './template';
+
+export { processInstructions } from './inject';
+export type { InstructionInjectionResult } from './inject';
