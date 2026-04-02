@@ -17,6 +17,69 @@ import type { MessagesSlotConfig } from '../slots/messages';
 import type { ToolsSlotConfig } from '../slots/tools';
 
 /**
+ * Agent loop patterns — determines which stages re-evaluate between iterations.
+ *
+ * The pattern controls WHERE the loop jumps back to after tool execution:
+ * - `Regular`: loops to CallLLM — slots resolve once before the loop
+ * - `Dynamic`: loops to SystemPrompt — all three API slots re-evaluate each iteration
+ *
+ * @example
+ * ```typescript
+ * import { Agent, AgentPattern } from 'agentfootprint';
+ *
+ * // Standard ReAct — fixed prompt, tools, memory (default)
+ * Agent.create({ provider }).build();
+ *
+ * // Dynamic ReAct — re-evaluate all slots each iteration
+ * Agent.create({ provider })
+ *   .pattern(AgentPattern.Dynamic)
+ *   .build();
+ * ```
+ *
+ * @example
+ * ```typescript
+ * // Dynamic ReAct use case: progressive tool authorization
+ * // Turn 1: agent calls verify_identity → user is admin
+ * // Turn 2: Tools subflow re-evaluates → admin tools now available
+ * // Turn 3: agent can use admin tools that were hidden before
+ * ```
+ */
+export enum AgentPattern {
+  /**
+   * Standard ReAct loop — loops back to CallLLM.
+   *
+   * SystemPrompt, Messages, and Tools subflows resolve ONCE before the loop starts.
+   * Each iteration only re-runs: CallLLM → ParseResponse → RouteResponse → tools.
+   * Best for: most agent use cases with fixed prompt/tools/memory.
+   *
+   * ```
+   * [SystemPrompt] → [Messages] → [Tools] → AssemblePrompt
+   *   → CallLLM → Parse → Route → ExecuteTools → loopTo(CallLLM)
+   *         ↑                                         |
+   *         └─────────────────────────────────────────┘
+   * ```
+   */
+  Regular = 'regular',
+
+  /**
+   * Dynamic ReAct loop — loops back to SystemPrompt.
+   *
+   * All three API slots (SystemPrompt, Messages, Tools) re-evaluate each iteration.
+   * Strategies receive updated context (messages now include tool results, loopCount
+   * incremented) and can return different prompt/tools/memory based on what happened.
+   * Best for: progressive authorization, adaptive prompts, context-dependent tool sets.
+   *
+   * ```
+   * [SystemPrompt] → [Messages] → [Tools] → AssemblePrompt
+   *   → CallLLM → Parse → Route → ExecuteTools → loopTo(SystemPrompt)
+   *  ↑                                                  |
+   *  └──────────────────────────────────────────────────┘
+   * ```
+   */
+  Dynamic = 'dynamic',
+}
+
+/**
  * Full configuration for building an agent loop.
  */
 export interface AgentLoopConfig {
@@ -43,6 +106,16 @@ export interface AgentLoopConfig {
 
   /** Max loop iterations before force-finalize. Default: 10. */
   readonly maxIterations?: number;
+
+  /**
+   * Loop pattern — controls where the loop jumps back to after tool execution.
+   *
+   * - `AgentPattern.Regular` (default): loops to CallLLM — slots resolve once
+   * - `AgentPattern.Dynamic`: loops to SystemPrompt — all slots re-evaluate each iteration
+   *
+   * @default AgentPattern.Regular
+   */
+  readonly pattern?: AgentPattern;
 
   /**
    * When true, the Finalize branch sets `memory_shouldCommit` flag instead of

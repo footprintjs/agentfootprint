@@ -16,7 +16,7 @@
 
 import { FlowChartExecutor, MetricRecorder } from 'footprintjs';
 import type { FlowChart as FlowChartType } from 'footprintjs';
-import { buildAgentLoop } from '../loop';
+import { buildAgentLoop, AgentPattern } from '../loop';
 import type { AgentLoopConfig } from '../loop';
 import { createAgentRenderer } from '../narrative';
 import { annotateSpecIcons } from '../../concepts/specIcons';
@@ -52,6 +52,7 @@ export class Agent {
   private maxIter = 10;
   private readonly recorders: AgentRecorder[] = [];
   private memoryConfig?: MemoryConfig;
+  private agentPattern: AgentPattern = AgentPattern.Regular;
 
   private constructor(options: AgentOptions) {
     this.provider = options.provider;
@@ -83,6 +84,33 @@ export class Agent {
   /** Set max ReAct loop iterations. */
   maxIterations(n: number): this {
     this.maxIter = n;
+    return this;
+  }
+
+  /**
+   * Set the agent loop pattern.
+   *
+   * - `AgentPattern.Regular` (default): loops to CallLLM — system prompt, tools,
+   *   and memory resolve once before the loop starts.
+   * - `AgentPattern.Dynamic`: loops to SystemPrompt — all three API slots
+   *   re-evaluate each iteration based on tool results. Use for progressive
+   *   authorization, adaptive prompts, or context-dependent tool sets.
+   *
+   * @example
+   * ```typescript
+   * // Standard agent — fixed prompt and tools
+   * Agent.create({ provider }).pattern(AgentPattern.Regular).build();
+   *
+   * // Dynamic agent — tools/prompt/memory adapt between iterations
+   * Agent.create({ provider })
+   *   .pattern(AgentPattern.Dynamic)
+   *   .tool(verifyIdentityTool)   // always available
+   *   .tool(adminTool)            // only resolves after identity verified
+   *   .build();
+   * ```
+   */
+  pattern(p: AgentPattern): this {
+    this.agentPattern = p;
     return this;
   }
 
@@ -121,6 +149,7 @@ export class Agent {
       this.maxIter,
       [...this.recorders],
       this.memoryConfig,
+      this.agentPattern,
     );
   }
 }
@@ -134,6 +163,7 @@ export class AgentRunner {
   private readonly maxIter: number;
   private readonly recorders: AgentRecorder[];
   private readonly memoryConfig?: MemoryConfig;
+  private readonly agentPattern: AgentPattern;
   private conversationHistory: Message[] = [];
   private lastExecutor?: FlowChartExecutor;
   private lastSpec?: unknown;
@@ -147,6 +177,7 @@ export class AgentRunner {
     maxIter: number,
     recorders: AgentRecorder[] = [],
     memoryConfig?: MemoryConfig,
+    pattern: AgentPattern = AgentPattern.Regular,
   ) {
     this.provider = provider;
     this.name = name;
@@ -155,6 +186,7 @@ export class AgentRunner {
     this.maxIter = maxIter;
     this.recorders = recorders;
     this.memoryConfig = memoryConfig;
+    this.agentPattern = pattern;
   }
 
   /**
@@ -304,6 +336,7 @@ export class AgentRunner {
         store: this.memoryConfig.store,
         conversationId: this.memoryConfig.conversationId,
       } : undefined,
+      pattern: this.agentPattern,
     };
   }
 }

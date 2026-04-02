@@ -4,17 +4,19 @@
  * Mounts the three API slots as subflows, then wires CallLLM → ParseResponse →
  * RouteResponse (decider) with branches for tool execution and finalization.
  *
- * Flowchart:
+ * Supports two loop patterns (AgentPattern enum):
+ *
+ * Regular ReAct (default): loopTo('call-llm')
  *   Seed → [sf-system-prompt] → [sf-messages] → ApplyPreparedMessages
  *     → [sf-tools] → AssemblePrompt → CallLLM → ParseResponse
- *     → RouteResponse(decider)
- *         ├─ 'tool-calls' → [sf-execute-tools]
- *         └─ 'final'      → Finalize ($break)
- *     → [CommitMemory?] → loopTo('call-llm')
+ *     → RouteResponse(decider) → [CommitMemory?] → loopTo('call-llm')
+ *   Slots resolve ONCE before the loop.
  *
- * Slot subflows run ONCE before the loop (same as Agent.ts pattern).
- * The loopTo sends execution back to CallLLM, not the slots.
- * This is the standard ReAct pattern: resolve context once, loop the LLM calls.
+ * Dynamic ReAct: loopTo('sf-system-prompt')
+ *   Same flowchart, but loop jumps back to SystemPrompt subflow.
+ *   All three API slots (prompt, tools, messages) re-evaluate each iteration.
+ *   Strategies receive updated context (tool results, incremented loopCount)
+ *   and can return different configurations based on what happened.
  *
  * Design choices:
  *   - Seed stage initializes loopCount + maxIterations + messages
@@ -40,6 +42,7 @@ import { buildToolExecutionSubflow } from '../call/toolExecutionSubflow';
 import { createCommitMemoryStage } from '../../stages/commitMemory';
 import { getTextContent } from '../../types/content';
 import { lastAssistantMessage } from '../../memory';
+import { AgentPattern } from './types';
 import type { AgentLoopConfig, AgentLoopSeedOptions } from './types';
 
 /**
@@ -250,7 +253,13 @@ export function buildAgentLoop(config: AgentLoopConfig, seed?: AgentLoopSeedOpti
     builder = builder.addFunction('CommitMemory', commitMemory, 'commit-memory', 'Persist conversation history to store');
   }
 
-  builder = builder.loopTo('call-llm');
+  // Loop target depends on pattern:
+  //   Regular (default): loop to CallLLM — slots resolve once
+  //   Dynamic: loop to SystemPrompt — all slots re-evaluate each iteration
+  const loopTarget = config.pattern === AgentPattern.Dynamic
+    ? 'sf-system-prompt'
+    : 'call-llm';
+  builder = builder.loopTo(loopTarget);
 
   if (options?.captureSpec) {
     const spec = builder.toSpec();

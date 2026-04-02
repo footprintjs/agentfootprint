@@ -225,6 +225,7 @@ export type {
 export { agentLoop } from './executor';
 export type { AgentLoopOptions, AgentLoopResult } from './executor';
 export type { AgentLoopConfig, AgentRecorder } from './core';
+export { AgentPattern } from './lib/loop';
 
 // ── Compositions ─────────────────────────────────────────────
 export { withRetry, withFallback, withCircuitBreaker, CircuitBreaker } from './compositions';
