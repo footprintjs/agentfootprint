@@ -49,6 +49,10 @@ const STAGE_LABELS: Record<string, string> = {
   ExecuteToolCalls: 'Executed tool calls',
   HandleResponse: 'Processed response',
   CommitMemory: 'Committed conversation history',
+  // Swarm-specific stages
+  RouteSpecialist: 'Route to specialist',
+  ExecuteExtraTool: 'Executed extra tool',
+  Finalize: 'Extract final answer and stop the loop',
 };
 
 // ── Subflow name → agent-specific entry label ────────────────────────────────

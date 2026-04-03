@@ -21,9 +21,10 @@
 import { flowChart } from 'footprintjs';
 import type { FlowChart, TypedScope } from 'footprintjs';
 import type { LLMProvider, LLMToolDescription, Message, ToolCall } from '../../types';
-import { systemMessage, userMessage, assistantMessage, toolResultMessage } from '../../types';
+import { systemMessage, userMessage, toolResultMessage } from '../../types';
 import { createCallLLMStage } from '../../stages/callLLM';
 import type { RunnerLike } from '../../types/multiAgent';
+import { parseResponseStage } from '../../stages/parseResponse';
 
 // ── State ───────────────────────────────────────────────────
 
@@ -131,31 +132,7 @@ export function buildSwarmLoop(
 
   builder = builder
     .addFunction('CallLLM', callLLM as any, 'call-llm', 'Send messages + specialist tools to LLM')
-    .addFunction(
-      'ParseResponse',
-      (scope: TypedScope<SwarmLoopState>) => {
-        const result = scope.adapterResult as any;
-        if (!result) throw new Error('ParseResponse: no adapter result');
-        if (result.type === 'error') throw new Error(`LLM error: [${result.code}] ${result.message}`);
-
-        const parsed = {
-          hasToolCalls: result.type === 'tools',
-          toolCalls: result.type === 'tools' ? result.toolCalls : [],
-          content: result.content ?? '',
-        };
-        scope.parsedResponse = parsed;
-
-        // Append assistant message to conversation
-        const messages = scope.messages ?? [];
-        const asstMsg = assistantMessage(
-          result.content ?? '',
-          result.type === 'tools' ? result.toolCalls : undefined,
-        );
-        scope.messages = [...messages, asstMsg];
-      },
-      'parse-response',
-      'Parse LLM response and extract specialist selection',
-    );
+    .addFunction('ParseResponse', parseResponseStage as any, 'parse-response', 'Parse LLM response and extract specialist selection');
 
   // ── RouteSpecialist decider ───────────────────────────────
   //
