@@ -56,6 +56,7 @@ export class Agent {
   private maxIter = 10;
   private readonly recorders: AgentRecorder[] = [];
   private memoryConfig?: MemoryConfig;
+  private enableStreaming = false;
   private agentPattern: AgentPattern = AgentPattern.Regular;
   private readonly overrides = new Map<string, InstructionOverride>();
 
@@ -140,6 +141,29 @@ export class Agent {
   /** Set max ReAct loop iterations. */
   maxIterations(n: number): this {
     this.maxIter = n;
+    return this;
+  }
+
+  /**
+   * Enable streaming — tokens are emitted incrementally during LLM calls.
+   *
+   * When enabled, the CallLLM stage uses `provider.chatStream()` and emits
+   * tokens via footprintjs StreamCallback. Consumers receive tokens through
+   * StreamHandlers on the executor's run() options.
+   *
+   * @example
+   * ```typescript
+   * const agent = Agent.create({ provider })
+   *   .streaming(true)
+   *   .build();
+   *
+   * const result = await agent.run('hello', {
+   *   onToken: (token) => process.stdout.write(token),
+   * });
+   * ```
+   */
+  streaming(enabled = true): this {
+    this.enableStreaming = enabled;
     return this;
   }
 
@@ -234,6 +258,7 @@ export class Agent {
       this.customPromptProvider,
       this.customToolProvider,
       this.overrides.size > 0 ? new Map(this.overrides) : undefined,
+      this.enableStreaming,
     );
   }
 }
@@ -252,6 +277,7 @@ export class AgentRunner {
   private readonly customPromptProvider?: PromptProvider;
   private readonly customToolProvider?: ToolProvider;
   private readonly instructionOverrides?: ReadonlyMap<string, InstructionOverride>;
+  private readonly streamingEnabled: boolean;
   private conversationHistory: Message[] = [];
   private lastExecutor?: FlowChartExecutor;
   private lastSpec?: unknown;
@@ -270,6 +296,7 @@ export class AgentRunner {
     customPromptProvider?: PromptProvider,
     customToolProvider?: ToolProvider,
     instructionOverrides?: ReadonlyMap<string, InstructionOverride>,
+    streaming = false,
   ) {
     this.provider = provider;
     this.name = name;
@@ -282,6 +309,7 @@ export class AgentRunner {
     this.customPromptProvider = customPromptProvider;
     this.customToolProvider = customToolProvider;
     this.instructionOverrides = instructionOverrides;
+    this.streamingEnabled = streaming;
   }
 
   /**
@@ -310,7 +338,12 @@ export class AgentRunner {
   /** Run the agent with a user message. Returns the agent's response. */
   async run(
     message: string,
-    options?: { signal?: AbortSignal; timeoutMs?: number },
+    options?: {
+      signal?: AbortSignal;
+      timeoutMs?: number;
+      /** Callback for streaming tokens — only called when .streaming(true) is enabled. */
+      onToken?: (token: string) => void;
+    },
   ): Promise<AgentResult> {
     // Check for pending strict follow-up from previous turn
     const pendingMatch = this.pendingFollowUps.checkAndConsume(message);
@@ -344,7 +377,15 @@ export class AgentRunner {
 
     bridge?.dispatchTurnStart(message);
 
-    const executor = new FlowChartExecutor(chart, { enrichSnapshots: true });
+    const executorOpts: any = { enrichSnapshots: true };
+    if (options?.onToken && this.streamingEnabled) {
+      executorOpts.streamHandlers = {
+        onToken: (_streamId: string, token: string) => options.onToken!(token),
+        onStart: () => {},
+        onEnd: () => {},
+      };
+    }
+    const executor = new FlowChartExecutor(chart, executorOpts);
     executor.enableNarrative({ renderer: this.narrativeRenderer });
     executor.attachRecorder(new MetricRecorder('metrics'));
     const startMs = Date.now();
@@ -469,6 +510,7 @@ export class AgentRunner {
       } : undefined,
       pattern: this.agentPattern,
       instructionOverrides: this.instructionOverrides,
+      streaming: this.streamingEnabled,
       onInstructionsFired: (toolId, fired) => {
         // Forward to any InstructionRecorder in the recorders list
         for (const rec of this.recorders) {

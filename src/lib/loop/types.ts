@@ -141,6 +141,9 @@ export interface AgentLoopConfig {
 
   /** Agent-level instruction overrides keyed by tool ID. */
   readonly instructionOverrides?: ReadonlyMap<string, import('../instructions').InstructionOverride>;
+
+  /** When true, CallLLM uses addStreamingFunction for token-by-token output. */
+  readonly streaming?: boolean;
 }
 
 /**

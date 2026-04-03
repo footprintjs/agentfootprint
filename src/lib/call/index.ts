@@ -1,4 +1,5 @@
 export { createCallLLMStage } from './callLLMStage';
+export { createStreamingCallLLMStage } from './streamingCallLLMStage';
 export { parseResponseStage } from './parseResponseStage';
 export { createHandleResponseStage } from './handleResponseStage';
 export type { HandleResponseOptions } from './handleResponseStage';

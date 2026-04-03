@@ -37,6 +37,7 @@ import { buildMessagesSubflow } from '../slots/messages';
 import { buildToolsSubflow } from '../slots/tools';
 import type { TypedScope } from 'footprintjs';
 import { createCallLLMStage } from '../call/callLLMStage';
+import { createStreamingCallLLMStage } from '../call/streamingCallLLMStage';
 import { parseResponseStage } from '../call/parseResponseStage';
 import { buildToolExecutionSubflow } from '../call/toolExecutionSubflow';
 import { createCommitMemoryStage } from '../../stages/commitMemory';
@@ -134,7 +135,9 @@ export function buildAgentLoop(config: AgentLoopConfig, seed?: AgentLoopSeedOpti
   };
 
   // Build call stages
-  const callLLM = createCallLLMStage(config.provider);
+  const callLLM = config.streaming
+    ? createStreamingCallLLMStage(config.provider)
+    : createCallLLMStage(config.provider);
   const toolExecutionSubflow = buildToolExecutionSubflow({
     registry: config.registry,
     toolProvider: config.toolProvider,
@@ -250,8 +253,13 @@ export function buildAgentLoop(config: AgentLoopConfig, seed?: AgentLoopSeedOpti
   // RouteResponse is a decider: visible as a diamond in the flowchart.
   // 'tool-calls' branch executes tools via subflow, then falls through to loopTo.
   // 'final' branch extracts result + breaks (or sets shouldCommit flag).
+  // Add CallLLM — streaming or non-streaming
+  if (config.streaming) {
+    builder = builder.addStreamingFunction('CallLLM', callLLM, 'call-llm', 'llm-stream', 'Send messages + tools to LLM provider (streaming)');
+  } else {
+    builder = builder.addFunction('CallLLM', callLLM, 'call-llm', 'Send messages + tools to LLM provider');
+  }
   builder = builder
-    .addFunction('CallLLM', callLLM, 'call-llm', 'Send messages + tools to LLM provider')
     .addFunction('ParseResponse', parseResponseStage, 'parse-response', 'Parse LLM response into structured result')
     .addDeciderFunction(
       'RouteResponse',
