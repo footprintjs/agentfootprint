@@ -37,7 +37,7 @@ import type {
   Message,
 } from '../../types';
 import type { MemoryConfig } from '../../adapters/memory/types';
-import type { AgentRecorder } from '../../core';
+import type { AgentRecorder, PromptProvider, ToolProvider } from '../../core';
 import { RecorderBridge } from '../../recorders/v2/RecorderBridge';
 
 export interface AgentOptions {
@@ -49,7 +49,9 @@ export class Agent {
   private readonly provider: LLMProvider;
   private readonly agentName: string;
   private systemPromptText?: string;
+  private customPromptProvider?: PromptProvider;
   private readonly registry = new ToolRegistry();
+  private customToolProvider?: ToolProvider;
   private maxIter = 10;
   private readonly recorders: AgentRecorder[] = [];
   private memoryConfig?: MemoryConfig;
@@ -64,9 +66,34 @@ export class Agent {
     return new Agent(options);
   }
 
-  /** Set system prompt. */
+  /** Set system prompt (static — same every iteration). */
   system(prompt: string): this {
     this.systemPromptText = prompt;
+    return this;
+  }
+
+  /**
+   * Set a custom prompt provider (dynamic — can change each iteration).
+   *
+   * Overrides `.system()`. Use with `AgentPattern.Dynamic` to change the
+   * system prompt based on conversation state.
+   *
+   * @example
+   * ```typescript
+   * Agent.create({ provider })
+   *   .pattern(AgentPattern.Dynamic)
+   *   .promptProvider({
+   *     resolve: (ctx) => {
+   *       const flagged = ctx.history.some(m => m.content?.includes('flagged'));
+   *       if (flagged) return { value: escalationPrompt, chosen: 'escalation', rationale: 'flagged order' };
+   *       return { value: basicPrompt, chosen: 'standard' };
+   *     },
+   *   })
+   *   .build();
+   * ```
+   */
+  promptProvider(provider: PromptProvider): this {
+    this.customPromptProvider = provider;
     return this;
   }
 
@@ -79,6 +106,32 @@ export class Agent {
   /** Register multiple tools. */
   tools(toolDefs: ToolDefinition[]): this {
     for (const t of toolDefs) this.registry.register(t);
+    return this;
+  }
+
+  /**
+   * Set a custom tool provider (dynamic — can change each iteration).
+   *
+   * Overrides `.tool()` / `.tools()`. Use with `AgentPattern.Dynamic` to
+   * change available tools based on conversation state.
+   *
+   * @example
+   * ```typescript
+   * Agent.create({ provider })
+   *   .pattern(AgentPattern.Dynamic)
+   *   .toolProvider({
+   *     resolve: (ctx) => {
+   *       const verified = ctx.messages.some(m => m.content?.includes('verified'));
+   *       if (verified) return { value: [...basic, ...admin], chosen: 'elevated', rationale: 'identity verified' };
+   *       return { value: basic, chosen: 'basic' };
+   *     },
+   *     execute: async (call) => { /* ... *\/ },
+   *   })
+   *   .build();
+   * ```
+   */
+  toolProvider(provider: ToolProvider): this {
+    this.customToolProvider = provider;
     return this;
   }
 
@@ -151,6 +204,8 @@ export class Agent {
       [...this.recorders],
       this.memoryConfig,
       this.agentPattern,
+      this.customPromptProvider,
+      this.customToolProvider,
     );
   }
 }
@@ -166,6 +221,8 @@ export class AgentRunner {
   private readonly recorders: AgentRecorder[];
   private readonly memoryConfig?: MemoryConfig;
   private readonly agentPattern: AgentPattern;
+  private readonly customPromptProvider?: PromptProvider;
+  private readonly customToolProvider?: ToolProvider;
   private conversationHistory: Message[] = [];
   private lastExecutor?: FlowChartExecutor;
   private lastSpec?: unknown;
@@ -181,6 +238,8 @@ export class AgentRunner {
     recorders: AgentRecorder[] = [],
     memoryConfig?: MemoryConfig,
     pattern: AgentPattern = AgentPattern.Regular,
+    customPromptProvider?: PromptProvider,
+    customToolProvider?: ToolProvider,
   ) {
     this.provider = provider;
     this.name = name;
@@ -190,6 +249,8 @@ export class AgentRunner {
     this.recorders = recorders;
     this.memoryConfig = memoryConfig;
     this.agentPattern = pattern;
+    this.customPromptProvider = customPromptProvider;
+    this.customToolProvider = customToolProvider;
   }
 
   /**
@@ -348,10 +409,18 @@ export class AgentRunner {
   private buildConfig(): AgentLoopConfig {
     const hasTools = this.registry.size > 0;
 
+    // Prompt: custom provider > static text
+    const promptProvider = this.customPromptProvider
+      ?? staticPrompt(this.systemPromptText ?? '');
+
+    // Tools: custom provider > static registry > no tools
+    const toolsProvider = this.customToolProvider
+      ?? (hasTools ? staticTools(this.registry.all()) : noTools());
+
     return {
       provider: this.provider,
       systemPrompt: {
-        provider: staticPrompt(this.systemPromptText ?? ''),
+        provider: promptProvider,
       },
       messages: {
         strategy: this.memoryConfig?.strategy ?? slidingWindow({ maxMessages: 100 }),
@@ -359,7 +428,7 @@ export class AgentRunner {
         conversationId: this.memoryConfig?.conversationId,
       },
       tools: {
-        provider: hasTools ? staticTools(this.registry.all()) : noTools(),
+        provider: toolsProvider,
       },
       registry: this.registry,
       maxIterations: this.maxIter,
