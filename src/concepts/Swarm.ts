@@ -1,53 +1,43 @@
 /**
- * Swarm — multi-agent delegation pattern.
+ * Swarm — multi-agent delegation with specialist subflows.
  *
- * An orchestrator LLM selects which specialist agent to invoke.
- * Each specialist is mounted as a **subflow** — visible in BTS with drill-down.
+ * An orchestrator LLM selects which specialist to invoke. Each specialist
+ * is mounted as a **lazy subflow** — visible in BTS with drill-down.
  *
  * Flowchart:
- *   Seed → SystemPrompt → Messages → AssemblePrompt → CallLLM → ParseResponse
- *     → RouteSpecialist(decider) → { specialist-A(subflow) | specialist-B(subflow) }
- *     → Finalize
+ *   Seed → CallLLM → ParseResponse → RouteSpecialist(decider)
+ *       ├── 'coding'  → lazy subflow (coding agent's flowchart)
+ *       ├── 'writing' → lazy subflow (writing agent's flowchart)
+ *       └── 'final'   → Finalize (direct response)
+ *     → loopTo('call-llm')
  *
- * The orchestrator LLM decides routing by returning the specialist ID as its response.
- * The decider parses the response and routes to the matching specialist subflow.
- *
- * Unlike the tool-based approach (agentAsTool), specialists as subflows give:
- *   - BTS drill-down into each specialist's internal flowchart
- *   - Narrative showing "Entering specialist-coding subflow"
- *   - Per-specialist timing in the Gantt chart
+ * After a specialist runs, its result appears as a tool result message.
+ * The loop continues — the orchestrator sees the specialist's result and
+ * can call another specialist or generate a final answer.
  *
  * Usage:
  *   const swarm = Swarm.create({ provider })
- *     .system('Route to the best specialist: coding or writing.')
+ *     .system('Route to the best specialist.')
  *     .specialist('coding', 'Code specialist', codingAgent)
  *     .specialist('writing', 'Writing specialist', writingAgent)
  *     .build();
  *   const result = await swarm.run('Write a haiku');
  */
 
-import type { LLMProvider } from '../types';
+import type { LLMProvider } from '../types/llm';
 import type { ToolDefinition } from '../types/tools';
 import type { RunnerLike, AgentResultEntry, TraversalResult } from '../types/multiAgent';
 import type { AgentRecorder } from '../core';
-import type { AgentAsToolConfig } from '../providers/tools/agentAsTool';
-import { Agent, AgentRunner } from '.';
-import { agentAsTool } from '../providers/tools/agentAsTool';
+import { FlowChartExecutor, MetricRecorder } from 'footprintjs';
+import { buildSwarmLoop } from '../lib/swarm';
+import type { SwarmSpecialist } from '../lib/swarm';
+import { createAgentRenderer } from '../lib/narrative';
 
 // ── Types ────────────────────────────────────────────────────
 
 export interface SwarmOptions {
-  /** LLM provider for the orchestrator agent. */
   readonly provider: LLMProvider;
-  /** Name for the orchestrator. Default: 'swarm'. */
   readonly name?: string;
-}
-
-interface SpecialistConfig {
-  readonly id: string;
-  readonly description: string;
-  readonly runner: RunnerLike;
-  readonly inputMapper?: AgentAsToolConfig['inputMapper'];
 }
 
 // ── Builder ──────────────────────────────────────────────────
@@ -56,7 +46,7 @@ export class Swarm {
   private readonly provider: LLMProvider;
   private readonly swarmName: string;
   private systemPrompt?: string;
-  private readonly specialists: SpecialistConfig[] = [];
+  private readonly specialists: SwarmSpecialist[] = [];
   private readonly extraTools: ToolDefinition[] = [];
   private readonly recorders: AgentRecorder[] = [];
   private maxIter = 10;
@@ -70,65 +60,38 @@ export class Swarm {
     return new Swarm(options);
   }
 
-  /** Set orchestrator system prompt. */
   system(prompt: string): this {
     this.systemPrompt = prompt;
     return this;
   }
 
   /**
-   * Register a specialist agent that the orchestrator can delegate to.
+   * Register a specialist agent.
    *
-   * Each specialist is mounted as a **subflow** — visible in BTS with drill-down.
-   * The orchestrator LLM calls the specialist as a tool; internally the framework
-   * executes the specialist's flowchart as a subflow for full traceability.
-   *
-   * @param id - Unique specialist identifier (used as tool name for the LLM)
-   * @param description - Description shown to the LLM for routing decisions
-   * @param runner - The specialist agent (AgentRunner, LLMCallRunner, or any RunnerLike)
-   *
-   * @example
-   * ```typescript
-   * const swarm = Swarm.create({ provider })
-   *   .specialist('coding', 'Write and review code', codingAgent)
-   *   .specialist('writing', 'Creative writing and editing', writingAgent)
-   *   .build();
-   * ```
+   * Each specialist is mounted as a **lazy subflow** — only built when the
+   * orchestrator LLM selects it. Visible in BTS with drill-down into the
+   * specialist's internal flowchart.
    */
-  specialist(
-    id: string,
-    description: string,
-    runner: RunnerLike,
-    options?: { inputMapper?: AgentAsToolConfig['inputMapper'] },
-  ): this {
-    this.specialists.push({
-      id,
-      description,
-      runner,
-      inputMapper: options?.inputMapper,
-    });
+  specialist(id: string, description: string, runner: RunnerLike): this {
+    this.specialists.push({ id, description, runner });
     return this;
   }
 
-  /** Register an additional non-agent tool for the orchestrator. */
   tool(toolDef: ToolDefinition): this {
     this.extraTools.push(toolDef);
     return this;
   }
 
-  /** Set max ReAct loop iterations for the orchestrator. */
   maxIterations(n: number): this {
     this.maxIter = n;
     return this;
   }
 
-  /** Attach an AgentRecorder to observe execution events. */
   recorder(rec: AgentRecorder): this {
     this.recorders.push(rec);
     return this;
   }
 
-  /** Build and return a SwarmRunner. */
   build(): SwarmRunner {
     if (this.specialists.length === 0) {
       throw new Error('Swarm requires at least one specialist');
@@ -151,18 +114,19 @@ export class SwarmRunner {
   private readonly provider: LLMProvider;
   readonly name: string;
   private readonly systemPrompt?: string;
-  private readonly specialists: readonly SpecialistConfig[];
+  private readonly specialists: readonly SwarmSpecialist[];
   private readonly extraTools: readonly ToolDefinition[];
   private readonly maxIter: number;
   private readonly recorders: AgentRecorder[];
-  private lastAgentRunner?: AgentRunner;
-  private lastSpecialistResults: AgentResultEntry[] = [];
+  private lastExecutor?: FlowChartExecutor;
+  private lastSpec?: unknown;
+  private readonly narrativeRenderer = createAgentRenderer();
 
   constructor(
     provider: LLMProvider,
     name: string,
     systemPrompt: string | undefined,
-    specialists: readonly SpecialistConfig[],
+    specialists: readonly SwarmSpecialist[],
     extraTools: readonly ToolDefinition[],
     maxIter: number,
     recorders: AgentRecorder[] = [],
@@ -174,6 +138,7 @@ export class SwarmRunner {
     this.extraTools = extraTools;
     this.maxIter = maxIter;
     this.recorders = recorders;
+    void this.recorders; // Reserved for future: recorder attachment on executor
   }
 
   async run(
@@ -181,99 +146,81 @@ export class SwarmRunner {
     options?: { signal?: AbortSignal; timeoutMs?: number },
   ): Promise<TraversalResult> {
     const startTime = Date.now();
-    this.lastSpecialistResults = [];
 
-    // Mount specialists as tools that internally run the specialist's flowchart.
-    // The specialist's execution is captured via runner.run() which uses
-    // FlowChartExecutor internally — full BTS data is available.
-    const specialistTools = this.specialists.map((spec) =>
-      agentAsTool({
-        id: spec.id,
-        description: spec.description,
-        runner: spec.runner,
-        inputMapper: spec.inputMapper,
-        signal: options?.signal,
-        timeoutMs: options?.timeoutMs,
-      }),
+    const { chart, spec } = buildSwarmLoop(
+      {
+        provider: this.provider,
+        systemPrompt: this.systemPrompt,
+        specialists: this.specialists,
+        extraTools: this.extraTools.length > 0 ? this.extraTools : undefined,
+        maxIterations: this.maxIter,
+      },
+      { message },
+      { captureSpec: true },
     );
+    this.lastSpec = spec;
 
-    // Build orchestrator agent with specialist tools
-    const builder = Agent.create({
-      provider: this.provider,
-      name: this.name,
+    const executor = new FlowChartExecutor(chart, { enrichSnapshots: true });
+    executor.enableNarrative({ renderer: this.narrativeRenderer });
+    executor.attachRecorder(new MetricRecorder('metrics'));
+
+    await executor.run({
+      signal: options?.signal,
+      timeoutMs: options?.timeoutMs,
     });
 
-    if (this.systemPrompt) builder.system(this.systemPrompt);
-    builder.tools([...specialistTools, ...this.extraTools]);
-    builder.maxIterations(this.maxIter);
-    for (const rec of this.recorders) builder.recorder(rec);
+    this.lastExecutor = executor;
 
-    const orchestrator = builder.build();
-    const result = await orchestrator.run(message, options);
+    const snapshot = executor.getSnapshot();
+    const state = snapshot?.sharedState ?? {};
+    const result = (state.result as string) ?? '';
 
-    this.lastAgentRunner = orchestrator;
-
-    // Track which specialists were called
-    const narrative = orchestrator.getNarrative();
-    for (const spec of this.specialists) {
-      const wasCalled = narrative.some((line) => line.includes(spec.id));
-      if (wasCalled) {
-        this.lastSpecialistResults.push({
-          id: spec.id,
-          name: spec.id,
-          content: '',
-          latencyMs: 0,
-        });
-      }
-    }
+    // Determine which specialists were called from narrative
+    const narrative = this.getNarrative();
+    const agents: AgentResultEntry[] = this.specialists
+      .filter((s) => narrative.some((line) => line.includes(s.id)))
+      .map((s) => ({ id: s.id, name: s.id, content: '', latencyMs: 0 }));
 
     return {
-      content: result.content,
-      agents: this.lastSpecialistResults,
+      content: result,
+      agents,
       totalLatencyMs: Date.now() - startTime,
     };
   }
 
-  /** Get the narrative from the last run. */
   getNarrative(): string[] {
-    return this.lastAgentRunner?.getNarrative() ?? [];
+    return this.lastExecutor?.getNarrative() ?? [];
   }
 
-  /** Get structured narrative entries from the last run. */
   getNarrativeEntries() {
-    return this.lastAgentRunner?.getNarrativeEntries() ?? [];
+    return this.lastExecutor?.getNarrativeEntries() ?? [];
   }
 
-  /** Get the full execution snapshot from the last run. */
   getSnapshot() {
-    return this.lastAgentRunner?.getSnapshot();
+    return this.lastExecutor?.getSnapshot();
   }
 
   /**
    * Get the flowchart spec for BTS visualization.
    *
-   * The Swarm's flowchart is the orchestrator Agent's flowchart.
-   * Specialist subflows are visible when the agent calls specialist tools
-   * — the tool execution stage shows the specialist's execution in the narrative.
+   * Shows the Swarm's own flowchart: Seed → CallLLM → ParseResponse →
+   * RouteSpecialist(decider) with specialist lazy subflow branches.
+   * Works before run() — builds a dummy chart to capture spec.
    */
   getSpec(): unknown {
-    if (!this.lastAgentRunner) {
-      // Build a dummy orchestrator to get the spec without running
-      const builder = Agent.create({ provider: this.provider, name: this.name });
-      if (this.systemPrompt) builder.system(this.systemPrompt);
-      // Register specialist IDs as dummy tools for spec visualization
-      for (const spec of this.specialists) {
-        builder.tool({
-          id: spec.id,
-          description: spec.description,
-          inputSchema: { type: 'object', properties: { message: { type: 'string' } } },
-          handler: async () => ({ content: '' }),
-        });
-      }
-      for (const t of this.extraTools) builder.tool(t);
-      const dummy = builder.build();
-      return dummy.getSpec();
+    if (!this.lastSpec) {
+      const { spec } = buildSwarmLoop(
+        {
+          provider: this.provider,
+          systemPrompt: this.systemPrompt,
+          specialists: this.specialists,
+          maxIterations: this.maxIter,
+        },
+        { message: '' },
+        { captureSpec: true },
+      );
+      this.lastSpec = spec;
     }
-    return this.lastAgentRunner.getSpec();
+    return this.lastSpec;
   }
 }

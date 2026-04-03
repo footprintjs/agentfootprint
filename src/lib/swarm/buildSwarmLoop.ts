@@ -58,6 +58,8 @@ export interface SwarmLoopConfig {
   readonly provider: LLMProvider;
   readonly systemPrompt?: string;
   readonly specialists: readonly SwarmSpecialist[];
+  /** Additional non-agent tools available to the orchestrator (calculator, search, etc). */
+  readonly extraTools?: readonly { id: string; description: string; inputSchema: Record<string, unknown>; handler: (input: Record<string, unknown>) => Promise<{ content: string }> | { content: string } }[];
   readonly maxIterations?: number;
 }
 
@@ -72,21 +74,29 @@ export function buildSwarmLoop(
   seed: SwarmLoopSeed,
   options?: { captureSpec: true },
 ): { chart: FlowChart; spec?: unknown } {
-  const { provider, systemPrompt, specialists } = config;
+  const { provider, systemPrompt, specialists, extraTools } = config;
   const maxIterations = config.maxIterations ?? 10;
+  const specialistIds = new Set(specialists.map((s) => s.id));
 
-  // Build tool descriptions for the LLM — each specialist appears as a callable tool
-  const toolDescs: LLMToolDescription[] = specialists.map((s) => ({
-    name: s.id,
-    description: s.description,
-    inputSchema: {
-      type: 'object',
-      properties: {
-        message: { type: 'string', description: 'The task or question to delegate to this specialist.' },
+  // Build tool descriptions — specialists + extra tools
+  const toolDescs: LLMToolDescription[] = [
+    ...specialists.map((s) => ({
+      name: s.id,
+      description: s.description,
+      inputSchema: {
+        type: 'object',
+        properties: {
+          message: { type: 'string', description: 'The task or question to delegate to this specialist.' },
+        },
+        required: ['message'],
       },
-      required: ['message'],
-    },
-  }));
+    })),
+    ...(extraTools ?? []).map((t) => ({
+      name: t.id,
+      description: t.description,
+      inputSchema: t.inputSchema,
+    })),
+  ];
 
   const callLLM = createCallLLMStage(provider);
 
@@ -163,14 +173,21 @@ export function buildSwarmLoop(
         if (parsed?.hasToolCalls && parsed.toolCalls?.length > 0 && loopCount < maxIter) {
           const toolCall = parsed.toolCalls[0];
           const toolName = toolCall.name;
-          const isSpecialist = specialists.some((s) => s.id === toolName);
 
-          if (isSpecialist) {
-            // Extract message from tool call arguments
+          if (specialistIds.has(toolName)) {
+            // Route to specialist subflow
             const args = toolCall.arguments as Record<string, unknown>;
             scope.specialistMessage = (args?.message as string) ?? seed.message;
             scope.specialistToolCallId = toolCall.id;
             return toolName;
+          }
+
+          // Check if it's an extra tool — execute inline
+          const extraTool = extraTools?.find((t) => t.id === toolName);
+          if (extraTool) {
+            scope.specialistToolCallId = toolCall.id;
+            scope.specialistMessage = toolName; // reuse for tool ID tracking
+            return 'extra-tool';
           }
         }
         return 'final';
@@ -217,6 +234,37 @@ export function buildSwarmLoop(
           };
         },
       },
+    );
+  }
+
+  // ── Extra tool branch (non-specialist tools like calculator) ──
+
+  if (extraTools && extraTools.length > 0) {
+    const toolMap = new Map(extraTools.map((t) => [t.id, t]));
+    decider = decider.addFunctionBranch(
+      'extra-tool',
+      'ExecuteExtraTool',
+      async (scope: TypedScope<SwarmLoopState>) => {
+        const parsed = scope.parsedResponse;
+        const toolCall = parsed?.toolCalls?.[0];
+        if (!toolCall) return;
+
+        const tool = toolMap.get(toolCall.name);
+        if (!tool) return;
+
+        try {
+          const result = await tool.handler(toolCall.arguments as Record<string, unknown>);
+          // Append tool result as message (delta — only new message)
+          const messages = scope.messages ?? [];
+          scope.messages = [...messages, toolResultMessage(result.content, toolCall.id)];
+        } catch (err) {
+          const messages = scope.messages ?? [];
+          const errMsg = err instanceof Error ? err.message : String(err);
+          scope.messages = [...messages, toolResultMessage(`Error: ${errMsg}`, toolCall.id)];
+        }
+        scope.loopCount = (scope.loopCount ?? 0) + 1;
+      },
+      'Execute a non-specialist tool (calculator, search, etc)',
     );
   }
 
