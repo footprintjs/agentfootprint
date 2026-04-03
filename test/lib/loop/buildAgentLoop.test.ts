@@ -53,7 +53,7 @@ async function runLoop(
   config: AgentLoopConfig,
   userMsg = 'hello',
 ): Promise<Record<string, unknown>> {
-  const chart = buildAgentLoop(config, {
+  const { chart } = buildAgentLoop(config, {
     messages: [userMessage(userMsg)],
   });
 
@@ -67,7 +67,7 @@ async function runLoop(
 describe('buildAgentLoop — unit', () => {
   it('builds a valid FlowChart', () => {
     const config = minimalConfig();
-    const chart = buildAgentLoop(config, { messages: [userMessage('hi')] });
+    const { chart } = buildAgentLoop(config, { messages: [userMessage('hi')] });
     expect(chart).toBeDefined();
     expect(chart.stageMap).toBeDefined();
   });
@@ -158,7 +158,7 @@ describe('buildAgentLoop — boundary', () => {
       { role: 'assistant', content: 'response 1' },
     ];
 
-    const chart = buildAgentLoop(config, {
+    const { chart } = buildAgentLoop(config, {
       messages: [userMessage('turn 2')],
       existingMessages: existing,
     });
@@ -186,7 +186,7 @@ describe('buildAgentLoop — subflowMode', () => {
 
     // Run standalone (not as subflow) but with message pre-set in scope
     // via existingMessages to verify the Seed code path
-    const chart = buildAgentLoop(config, { messages: [], subflowMode: true });
+    const { chart } = buildAgentLoop(config, { messages: [], subflowMode: true });
     const executor = new FlowChartExecutor(chart);
     executor.enableNarrative();
 
@@ -203,7 +203,7 @@ describe('buildAgentLoop — subflowMode', () => {
     const provider = mockProvider([{ content: 'response' }]);
     const config = minimalConfig({ provider });
 
-    const chart = buildAgentLoop(config, {
+    const { chart } = buildAgentLoop(config, {
       messages: [userMessage('baked in')],
       subflowMode: false,
     });
@@ -217,7 +217,7 @@ describe('buildAgentLoop — subflowMode', () => {
 
   it('chart built with subflowMode contains all expected stages', () => {
     const config = minimalConfig();
-    const chart = buildAgentLoop(config, { messages: [], subflowMode: true });
+    const { chart } = buildAgentLoop(config, { messages: [], subflowMode: true });
     const stageIds = Array.from(chart.stageMap.keys());
     expect(stageIds).toContain('seed');
     expect(stageIds).toContain('call-llm');
@@ -226,8 +226,8 @@ describe('buildAgentLoop — subflowMode', () => {
 
   it('subflowMode=true and subflowMode=false produce same stage structure', () => {
     const config = minimalConfig();
-    const chartA = buildAgentLoop(config, { messages: [], subflowMode: true });
-    const chartB = buildAgentLoop(config, { messages: [userMessage('hi')], subflowMode: false });
+    const { chart: chartA } = buildAgentLoop(config, { messages: [], subflowMode: true });
+    const { chart: chartB } = buildAgentLoop(config, { messages: [userMessage('hi')], subflowMode: false });
 
     const stagesA = Array.from(chartA.stageMap.keys()).sort();
     const stagesB = Array.from(chartB.stageMap.keys()).sort();
@@ -246,14 +246,14 @@ describe('buildAgentLoop — commitMemory', () => {
       },
     });
 
-    const chart = buildAgentLoop(config, { messages: [userMessage('hi')] });
+    const { chart } = buildAgentLoop(config, { messages: [userMessage('hi')] });
     const stageIds = Array.from(chart.stageMap.keys());
     expect(stageIds).toContain('commit-memory');
   });
 
   it('no commitMemory config means no commit-memory stage', () => {
     const config = minimalConfig();
-    const chart = buildAgentLoop(config, { messages: [userMessage('hi')] });
+    const { chart } = buildAgentLoop(config, { messages: [userMessage('hi')] });
     const stageIds = Array.from(chart.stageMap.keys());
     expect(stageIds).not.toContain('commit-memory');
   });
@@ -267,7 +267,7 @@ describe('buildAgentLoop — commitMemory', () => {
       commitMemory: { store, conversationId: 'conv-1' },
     });
 
-    const chart = buildAgentLoop(config, { messages: [userMessage('hi')] });
+    const { chart } = buildAgentLoop(config, { messages: [userMessage('hi')] });
     const executor = new FlowChartExecutor(chart);
     await executor.run();
     const state = executor.getSnapshot()?.sharedState ?? {};
@@ -299,7 +299,7 @@ describe('buildAgentLoop — commitMemory', () => {
       commitMemory: { store, conversationId: 'conv-1' },
     };
 
-    const chart = buildAgentLoop(config, { messages: [userMessage('new question')] });
+    const { chart } = buildAgentLoop(config, { messages: [userMessage('new question')] });
     const executor = new FlowChartExecutor(chart);
     await executor.run();
 
@@ -389,7 +389,7 @@ describe('buildAgentLoop — scenario', () => {
     });
 
     // Build loop and verify the decider architecture is in place.
-    const chart = buildAgentLoop(config, { messages: [userMessage('hi')] });
+    const { chart } = buildAgentLoop(config, { messages: [userMessage('hi')] });
     const stageIds = Array.from(chart.stageMap.keys());
     expect(stageIds).toContain('route-response');
 
@@ -468,7 +468,7 @@ describe('buildAgentLoop — scenario', () => {
 describe('buildAgentLoop — property', () => {
   it('chart contains all expected stage IDs', () => {
     const config = minimalConfig();
-    const chart = buildAgentLoop(config, { messages: [userMessage('hi')] });
+    const { chart } = buildAgentLoop(config, { messages: [userMessage('hi')] });
     const stageIds = Array.from(chart.stageMap.keys());
 
     expect(stageIds).toContain('call-llm');

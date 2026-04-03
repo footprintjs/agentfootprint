@@ -43,7 +43,7 @@ function buildLoop(
       pattern: options.pattern,
     },
     { messages: [userMessage('go')] },
-  );
+  ).chart;
 }
 
 // ── Unit ────────────────────────────────────────────────────────

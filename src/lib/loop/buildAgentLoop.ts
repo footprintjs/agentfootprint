@@ -65,14 +65,24 @@ export const SUBFLOW_MESSAGE_KEY = 'message';
  * await executor.run();
  * ```
  */
-export interface AgentLoopResult {
+export interface StrictFollowUpResult {
+  followUp: import('../instructions').ResolvedFollowUp;
+  sourceToolId: string;
+}
+
+export interface AgentLoopBuild {
   chart: FlowChart;
+  /** Get strict follow-up that fired during the last execution (if any). */
+  getStrictFollowUp: () => StrictFollowUpResult | undefined;
+}
+
+export interface AgentLoopResult extends AgentLoopBuild {
   spec: unknown;
 }
 
-export function buildAgentLoop(config: AgentLoopConfig, seed?: AgentLoopSeedOptions): FlowChart;
+export function buildAgentLoop(config: AgentLoopConfig, seed?: AgentLoopSeedOptions): AgentLoopBuild;
 export function buildAgentLoop(config: AgentLoopConfig, seed: AgentLoopSeedOptions | undefined, options: { captureSpec: true }): AgentLoopResult;
-export function buildAgentLoop(config: AgentLoopConfig, seed?: AgentLoopSeedOptions, options?: { captureSpec: boolean }): FlowChart | AgentLoopResult {
+export function buildAgentLoop(config: AgentLoopConfig, seed?: AgentLoopSeedOptions, options?: { captureSpec: boolean }): AgentLoopBuild | AgentLoopResult {
   validateConfig(config);
 
   const maxIterations = config.maxIterations ?? 10;
@@ -96,6 +106,21 @@ export function buildAgentLoop(config: AgentLoopConfig, seed?: AgentLoopSeedOpti
       instructionsByToolId.set(tool.id, instructed.instructions);
     }
   }
+  // Capture strict follow-ups that fire during tool execution.
+  // Stored in a closure variable — AgentRunner reads it after run() completes.
+  let lastStrictFollowUp: import('../instructions').ResolvedFollowUp | undefined;
+  let lastStrictSourceToolId: string | undefined;
+
+  const onInstructionsFired = (toolId: string, fired: import('../instructions').ResolvedInstruction[]) => {
+    // Find the last strict follow-up that fired
+    for (const instr of fired) {
+      if (instr.resolvedFollowUp?.strict) {
+        lastStrictFollowUp = instr.resolvedFollowUp;
+        lastStrictSourceToolId = toolId;
+      }
+    }
+  };
+
   // Build call stages
   const callLLM = createCallLLMStage(config.provider);
   const toolExecutionSubflow = buildToolExecutionSubflow({
@@ -103,7 +128,7 @@ export function buildAgentLoop(config: AgentLoopConfig, seed?: AgentLoopSeedOpti
     toolProvider: config.toolProvider,
     // Always pass instruction config — even without build-time instructions,
     // tool handlers can return runtime instructions/followUps.
-    instructionConfig: { instructionsByToolId },
+    instructionConfig: { instructionsByToolId, onInstructionsFired },
   });
 
   // Seed stage: initialize all required scope state.
@@ -275,11 +300,16 @@ export function buildAgentLoop(config: AgentLoopConfig, seed?: AgentLoopSeedOpti
     : 'call-llm';
   builder = builder.loopTo(loopTarget);
 
+  /** Get strict follow-up that fired during the last execution (if any). */
+  const getStrictFollowUp = () => lastStrictFollowUp
+    ? { followUp: lastStrictFollowUp, sourceToolId: lastStrictSourceToolId! }
+    : undefined;
+
   if (options?.captureSpec) {
     const spec = builder.toSpec();
-    return { chart: builder.build(), spec };
+    return { chart: builder.build(), spec, getStrictFollowUp };
   }
-  return builder.build();
+  return { chart: builder.build(), getStrictFollowUp };
 }
 
 /**

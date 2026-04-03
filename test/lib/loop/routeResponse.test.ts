@@ -53,7 +53,7 @@ async function runLoop(
   config: AgentLoopConfig,
   userMsg = 'hello',
 ): Promise<{ state: Record<string, unknown>; executor: FlowChartExecutor }> {
-  const chart = buildAgentLoop(config, {
+  const { chart } = buildAgentLoop(config, {
     messages: [userMessage(userMsg)],
   });
 

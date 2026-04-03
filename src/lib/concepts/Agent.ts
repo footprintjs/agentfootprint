@@ -17,6 +17,7 @@
 import { FlowChartExecutor, MetricRecorder } from 'footprintjs';
 import type { FlowChart as FlowChartType } from 'footprintjs';
 import { buildAgentLoop, AgentPattern } from '../loop';
+import { PendingFollowUpManager } from '../instructions';
 import type { AgentLoopConfig } from '../loop';
 import { createAgentRenderer } from '../narrative';
 import { annotateSpecIcons } from '../../concepts/specIcons';
@@ -27,7 +28,7 @@ import { staticTools } from '../../providers/tools/staticTools';
 import { ToolRegistry } from '../../tools';
 import { lastAssistantMessage } from '../../memory';
 import { getTextContent } from '../../types/content';
-import { userMessage } from '../../types';
+import { userMessage, toolResultMessage } from '../../types';
 import type {
   LLMProvider,
   LLMResponse,
@@ -168,6 +169,7 @@ export class AgentRunner {
   private lastExecutor?: FlowChartExecutor;
   private lastSpec?: unknown;
   private readonly narrativeRenderer = createAgentRenderer();
+  private readonly pendingFollowUps = new PendingFollowUpManager();
 
   constructor(
     provider: LLMProvider,
@@ -217,11 +219,30 @@ export class AgentRunner {
     message: string,
     options?: { signal?: AbortSignal; timeoutMs?: number },
   ): Promise<AgentResult> {
+    // Check for pending strict follow-up from previous turn
+    const pendingMatch = this.pendingFollowUps.checkAndConsume(message);
+    if (pendingMatch) {
+      // Auto-execute: call the tool with pre-resolved params, then run LLM to interpret result
+      const tool = this.registry.get(pendingMatch.followUp.toolId);
+      if (tool) {
+        const toolResult = await tool.handler(pendingMatch.followUp.params);
+        // Prepend the auto-executed tool result to conversation as if the LLM called it
+        const autoMessages: Message[] = [
+          ...this.conversationHistory,
+          userMessage(message),
+          { role: 'assistant' as const, content: `Using ${pendingMatch.followUp.description}.`, toolCalls: [{ id: `auto-${Date.now()}`, name: pendingMatch.followUp.toolId, arguments: pendingMatch.followUp.params }] } as any,
+          toolResultMessage(toolResult.content, `auto-${Date.now()}`),
+        ];
+        this.conversationHistory = autoMessages;
+        // Fall through to run the LLM to interpret the auto-executed result
+      }
+    }
+
     // When memory store is configured, don't pass existingMessages —
     // the Messages slot's LoadHistory stage loads from store directly.
     const existingMessages = this.memoryConfig?.store ? [] : this.conversationHistory;
 
-    const { chart, spec } = buildAgentLoop(this.buildConfig(), {
+    const { chart, spec, getStrictFollowUp } = buildAgentLoop(this.buildConfig(), {
       messages: message ? [userMessage(message)] : [],
       existingMessages,
     }, { captureSpec: true });
@@ -268,6 +289,15 @@ export class AgentRunner {
 
     // Persist conversation history for multi-turn
     this.conversationHistory = messages;
+
+    // Check for strict follow-ups that fired during this turn
+    const strictFU = getStrictFollowUp();
+    if (strictFU) {
+      this.pendingFollowUps.setPending({
+        followUp: strictFU.followUp,
+        sourceToolId: strictFU.sourceToolId,
+      });
+    }
 
     return { content: result, messages, iterations };
   }
