@@ -156,6 +156,7 @@ export class Agent {
 }
 
 export class AgentRunner {
+  private static _autoExecCounter = 0;
   private readonly provider: LLMProvider;
   /** Agent name — used for spec annotations and narrative labeling. */
   readonly name: string;
@@ -230,8 +231,8 @@ export class AgentRunner {
         const autoMessages: Message[] = [
           ...this.conversationHistory,
           userMessage(message),
-          { role: 'assistant' as const, content: `Using ${pendingMatch.followUp.description}.`, toolCalls: [{ id: `auto-${Date.now()}`, name: pendingMatch.followUp.toolId, arguments: pendingMatch.followUp.params }] } as any,
-          toolResultMessage(toolResult.content, `auto-${Date.now()}`),
+          { role: 'assistant' as const, content: `Using ${pendingMatch.followUp.description}.`, toolCalls: [{ id: `auto-strict-${++AgentRunner._autoExecCounter}`, name: pendingMatch.followUp.toolId, arguments: pendingMatch.followUp.params }] } as any,
+          toolResultMessage(toolResult.content, `auto-strict-${AgentRunner._autoExecCounter}`),
         ];
         this.conversationHistory = autoMessages;
         // Fall through to run the LLM to interpret the auto-executed result

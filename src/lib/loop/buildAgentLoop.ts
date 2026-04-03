@@ -112,11 +112,13 @@ export function buildAgentLoop(config: AgentLoopConfig, seed?: AgentLoopSeedOpti
   let lastStrictSourceToolId: string | undefined;
 
   const onInstructionsFired = (toolId: string, fired: import('../instructions').ResolvedInstruction[]) => {
-    // Find the last strict follow-up that fired
+    // Find the first strict follow-up that fired (highest priority wins)
+    if (lastStrictFollowUp) return; // already have one from a previous tool call
     for (const instr of fired) {
       if (instr.resolvedFollowUp?.strict) {
         lastStrictFollowUp = instr.resolvedFollowUp;
         lastStrictSourceToolId = toolId;
+        return; // first match wins
       }
     }
   };
