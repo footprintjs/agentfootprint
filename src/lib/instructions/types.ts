@@ -371,3 +371,41 @@ export function quickBind(
 export interface InstructedToolDefinition extends ToolDefinition {
   readonly instructions?: readonly LLMInstruction[];
 }
+
+// ── Instruction Overrides ───────────────────────────────────────────────
+
+/**
+ * Agent-level instruction override for a shared tool.
+ *
+ * Tools are shared across agents, npm packages, and teams. The tool author's
+ * instructions are the baseline. Agent builders can suppress, add, or replace
+ * instructions without modifying the tool definition.
+ *
+ * @example
+ * ```typescript
+ * Agent.create({ provider })
+ *   .tool(sharedInventoryTool)
+ *   .instructionOverride('check_inventory', {
+ *     suppress: ['low-stock'],        // hide this instruction
+ *     add: [{                          // add agent-specific instruction
+ *       id: 'premium-oos',
+ *       when: (ctx) => ctx.content.quantity === 0 && ctx.content.isPremium,
+ *       inject: 'Premium item. Offer to notify when back in stock.',
+ *     }],
+ *     replace: {                       // change an existing instruction's inject text
+ *       'out-of-stock': {
+ *         inject: 'Unavailable. Suggest the B2B bulk channel instead.',
+ *       },
+ *     },
+ *   })
+ *   .build();
+ * ```
+ */
+export interface InstructionOverride {
+  /** Instruction IDs to suppress (remove from evaluation). */
+  readonly suppress?: readonly string[];
+  /** New instructions to add (evaluated after tool's own instructions). */
+  readonly add?: readonly LLMInstruction[];
+  /** Partial overrides for existing instructions (merge by ID). */
+  readonly replace?: Readonly<Record<string, Partial<LLMInstruction>>>;
+}

@@ -137,6 +137,7 @@ export type {
   RuntimeFollowUp,
   InstructedToolResult,
   InstructedToolDefinition,
+  InstructionOverride,
   InstructionTemplate,
   ResolvedInstruction,
   InstructionInjectionResult,

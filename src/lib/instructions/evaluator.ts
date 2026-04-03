@@ -12,7 +12,7 @@
  * fail-closed (fire when in doubt).
  */
 
-import type { LLMInstruction, InstructionContext, RuntimeFollowUp } from './types';
+import type { LLMInstruction, InstructionContext, RuntimeFollowUp, InstructionOverride } from './types';
 
 // ── Evaluation Result ───────────────────────────────────────────────────
 
@@ -189,4 +189,54 @@ export function mergeRuntimeInstructions(
   const nonSafety = buildTime.filter((r) => !r.safety);
   const safety = buildTime.filter((r) => r.safety);
   return [...nonSafety, ...runtimeResolved, ...safety];
+}
+
+/**
+ * Apply agent-level overrides to a tool's instructions.
+ *
+ * Returns a new instruction array with overrides applied:
+ * 1. Suppress: remove instructions by ID
+ * 2. Replace: merge partial overrides into existing instructions by ID
+ * 3. Add: append new instructions at the end
+ *
+ * @example
+ * ```typescript
+ * const original = tool.instructions;
+ * const overridden = applyInstructionOverrides(original, {
+ *   suppress: ['low-stock'],
+ *   add: [{ id: 'premium-oos', when: ..., inject: '...' }],
+ *   replace: { 'out-of-stock': { inject: 'Suggest B2B channel.' } },
+ * });
+ * ```
+ */
+export function applyInstructionOverrides(
+  instructions: readonly LLMInstruction[] | undefined,
+  override: InstructionOverride,
+): LLMInstruction[] {
+  if (!instructions || instructions.length === 0) {
+    return [...(override.add ?? [])];
+  }
+
+  const suppressSet = new Set(override.suppress ?? []);
+  const replaceMap = override.replace ?? {};
+
+  // 1. Filter suppressed, then apply replacements
+  const result: LLMInstruction[] = [];
+  for (const instr of instructions) {
+    if (suppressSet.has(instr.id)) continue; // suppressed
+
+    const replacement = replaceMap[instr.id];
+    if (replacement) {
+      result.push({ ...instr, ...replacement, id: instr.id }); // merge, preserve ID
+    } else {
+      result.push(instr);
+    }
+  }
+
+  // 2. Add new instructions
+  if (override.add) {
+    result.push(...override.add);
+  }
+
+  return result;
 }

@@ -138,6 +138,9 @@ export interface AgentLoopConfig {
    * Used to connect InstructionRecorder to the instruction pipeline.
    */
   readonly onInstructionsFired?: (toolId: string, fired: import('../instructions').ResolvedInstruction[]) => void;
+
+  /** Agent-level instruction overrides keyed by tool ID. */
+  readonly instructionOverrides?: ReadonlyMap<string, import('../instructions').InstructionOverride>;
 }
 
 /**

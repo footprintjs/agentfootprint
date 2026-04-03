@@ -6,9 +6,10 @@ export type {
   RuntimeFollowUp,
   InstructedToolResult,
   InstructedToolDefinition,
+  InstructionOverride,
 } from './types';
 
-export { evaluateInstructions, mergeRuntimeInstructions } from './evaluator';
+export { evaluateInstructions, mergeRuntimeInstructions, applyInstructionOverrides } from './evaluator';
 export type { ResolvedInstruction, ResolvedFollowUp } from './evaluator';
 
 export { renderInstructions } from './template';

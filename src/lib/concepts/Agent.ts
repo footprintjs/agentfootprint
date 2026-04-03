@@ -18,6 +18,7 @@ import { FlowChartExecutor, MetricRecorder } from 'footprintjs';
 import type { FlowChart as FlowChartType } from 'footprintjs';
 import { buildAgentLoop, AgentPattern } from '../loop';
 import { PendingFollowUpManager, InstructionRecorder } from '../instructions';
+import type { InstructionOverride } from '../instructions';
 import type { AgentLoopConfig } from '../loop';
 import { createAgentRenderer } from '../narrative';
 import { annotateSpecIcons } from '../../concepts/specIcons';
@@ -56,6 +57,7 @@ export class Agent {
   private readonly recorders: AgentRecorder[] = [];
   private memoryConfig?: MemoryConfig;
   private agentPattern: AgentPattern = AgentPattern.Regular;
+  private readonly overrides = new Map<string, InstructionOverride>();
 
   private constructor(options: AgentOptions) {
     this.provider = options.provider;
@@ -169,6 +171,31 @@ export class Agent {
   }
 
   /**
+   * Override instructions on a shared tool without modifying the tool definition.
+   *
+   * @param toolId - The tool whose instructions to override
+   * @param override - Suppress, add, or replace instructions
+   *
+   * @example
+   * ```typescript
+   * import { sharedInventoryTool } from '@company/tools';
+   *
+   * Agent.create({ provider })
+   *   .tool(sharedInventoryTool)
+   *   .instructionOverride('check_inventory', {
+   *     suppress: ['low-stock'],
+   *     add: [{ id: 'premium-oos', when: ctx => ctx.content.isPremium, inject: 'Premium item.' }],
+   *     replace: { 'out-of-stock': { inject: 'Suggest B2B channel.' } },
+   *   })
+   *   .build();
+   * ```
+   */
+  instructionOverride(toolId: string, override: InstructionOverride): this {
+    this.overrides.set(toolId, override);
+    return this;
+  }
+
+  /**
    * Enable persistent conversation memory.
    *
    * Adds LoadHistory + CommitMemory to the agent chart:
@@ -206,6 +233,7 @@ export class Agent {
       this.agentPattern,
       this.customPromptProvider,
       this.customToolProvider,
+      this.overrides.size > 0 ? new Map(this.overrides) : undefined,
     );
   }
 }
@@ -223,6 +251,7 @@ export class AgentRunner {
   private readonly agentPattern: AgentPattern;
   private readonly customPromptProvider?: PromptProvider;
   private readonly customToolProvider?: ToolProvider;
+  private readonly instructionOverrides?: ReadonlyMap<string, InstructionOverride>;
   private conversationHistory: Message[] = [];
   private lastExecutor?: FlowChartExecutor;
   private lastSpec?: unknown;
@@ -240,6 +269,7 @@ export class AgentRunner {
     pattern: AgentPattern = AgentPattern.Regular,
     customPromptProvider?: PromptProvider,
     customToolProvider?: ToolProvider,
+    instructionOverrides?: ReadonlyMap<string, InstructionOverride>,
   ) {
     this.provider = provider;
     this.name = name;
@@ -251,6 +281,7 @@ export class AgentRunner {
     this.agentPattern = pattern;
     this.customPromptProvider = customPromptProvider;
     this.customToolProvider = customToolProvider;
+    this.instructionOverrides = instructionOverrides;
   }
 
   /**
@@ -437,6 +468,7 @@ export class AgentRunner {
         conversationId: this.memoryConfig.conversationId,
       } : undefined,
       pattern: this.agentPattern,
+      instructionOverrides: this.instructionOverrides,
       onInstructionsFired: (toolId, fired) => {
         // Forward to any InstructionRecorder in the recorders list
         for (const rec of this.recorders) {

@@ -44,6 +44,7 @@ import { getTextContent } from '../../types/content';
 import { lastAssistantMessage } from '../../memory';
 import { AgentPattern } from './types';
 import type { AgentLoopConfig, AgentLoopSeedOptions } from './types';
+import { applyInstructionOverrides } from '../instructions';
 
 /**
  * Well-known scope key for the user message in subflow mode.
@@ -99,11 +100,17 @@ export function buildAgentLoop(config: AgentLoopConfig, seed?: AgentLoopSeedOpti
   const toolsSubflow = buildToolsSubflow(config.tools);
 
   // Build instruction config from registry — collect tools that have instructions
+  // Apply agent-level overrides if provided
   const instructionsByToolId = new Map<string, readonly import('../instructions').LLMInstruction[]>();
   for (const tool of config.registry.all()) {
     const instructed = tool as import('../instructions').InstructedToolDefinition;
     if (instructed.instructions?.length) {
-      instructionsByToolId.set(tool.id, instructed.instructions);
+      const override = config.instructionOverrides?.get(tool.id);
+      if (override) {
+        instructionsByToolId.set(tool.id, applyInstructionOverrides(instructed.instructions, override));
+      } else {
+        instructionsByToolId.set(tool.id, instructed.instructions);
+      }
     }
   }
   // Capture strict follow-ups that fire during tool execution.
