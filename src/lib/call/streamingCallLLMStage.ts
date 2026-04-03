@@ -59,7 +59,7 @@ export function createStreamingCallLLMStage(provider: LLMProvider) {
 
     // If streaming is available and callback is injected, use chatStream
     if (streamCallback && provider.chatStream) {
-      let content = '';
+      const contentParts: string[] = [];
       const toolCalls: ToolCall[] = [];
       let usage: { inputTokens: number; outputTokens: number } | undefined;
 
@@ -67,7 +67,7 @@ export function createStreamingCallLLMStage(provider: LLMProvider) {
         switch (chunk.type) {
           case 'token':
             if (chunk.content) {
-              content += chunk.content;
+              contentParts.push(chunk.content);
               streamCallback(chunk.content);
             }
             break;
@@ -86,7 +86,8 @@ export function createStreamingCallLLMStage(provider: LLMProvider) {
         }
       }
 
-      // Build LLMResponse from accumulated stream
+      // Build LLMResponse from accumulated stream — O(n) join instead of O(n²) concat
+      const content = contentParts.join('');
       const response: LLMResponse = {
         content,
         toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
