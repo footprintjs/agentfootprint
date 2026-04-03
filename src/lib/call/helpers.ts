@@ -5,6 +5,7 @@
 import type { LLMResponse, AdapterResult, ToolCall, Message } from '../../types';
 import { toolResultMessage } from '../../types';
 import type { ToolRegistry } from '../../tools';
+import { isAskHumanResult } from '../../tools/askHuman';
 import type { ToolProvider } from '../../core';
 import type { LLMInstruction, InstructionContext, RuntimeFollowUp, InstructionTemplate } from '../instructions';
 import type { ResolvedInstruction } from '../instructions';
@@ -55,6 +56,13 @@ export interface InstructionConfig {
  * each tool call and appends matched instruction text to the tool result
  * message — landing in the LLM's recency window.
  */
+/** Result of executeToolCalls — messages + optional ask_human pause info. */
+export interface ToolCallsResult {
+  messages: Message[];
+  /** When set, one of the tools was ask_human — pause with this data. */
+  askHumanPause?: { question: string; toolCallId: string };
+}
+
 export async function executeToolCalls(
   toolCalls: ToolCall[],
   registry: ToolRegistry,
@@ -62,9 +70,10 @@ export async function executeToolCalls(
   toolProvider?: ToolProvider,
   signal?: AbortSignal,
   instructionConfig?: InstructionConfig,
-): Promise<Message[]> {
+): Promise<ToolCallsResult> {
   // Single copy upfront — O(M+N) instead of O(M*N) from repeated spreads
   const result = [...messages];
+  let askHumanPause: ToolCallsResult['askHumanPause'];
 
   for (const toolCall of toolCalls) {
     let resultContent: string;
@@ -74,7 +83,8 @@ export async function executeToolCalls(
     const startMs = Date.now();
 
     // Try ToolProvider.execute() first (handles remote tools, gated tools, etc.)
-    if (toolProvider?.execute) {
+    // Skip ToolProvider for ask_human — it must run locally (uses Symbol marker for pause detection).
+    if (toolProvider?.execute && toolCall.name !== 'ask_human') {
       try {
         const execResult = await toolProvider.execute(toolCall, signal);
         resultContent = execResult.content;
@@ -95,6 +105,10 @@ export async function executeToolCalls(
         try {
           const execResult = await tool.handler(toolCall.arguments);
           resultContent = execResult.content;
+          // Check for ask_human pause marker
+          if (isAskHumanResult(execResult)) {
+            askHumanPause = { question: execResult.question, toolCallId: toolCall.id };
+          }
           // Check for InstructedToolResult (runtime instructions/followUps)
           const instructed = execResult as { instructions?: readonly string[]; followUps?: readonly RuntimeFollowUp[] };
           runtimeInstructions = instructed.instructions;
@@ -154,5 +168,5 @@ export async function executeToolCalls(
     result.push(toolResultMessage(resultContent, toolCall.id));
   }
 
-  return result;
+  return { messages: result, askHumanPause };
 }

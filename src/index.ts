@@ -126,7 +126,7 @@ export type {
 } from './adapters';
 
 // ── Tools ────────────────────────────────────────────────────
-export { ToolRegistry, defineTool } from './tools';
+export { ToolRegistry, defineTool, askHuman } from './tools';
 
 // ── Instructions (LLM guidance co-located with tools) ───────
 export { quickBind, processInstructions, InstructionRecorder, previewInstructions } from './lib/instructions';

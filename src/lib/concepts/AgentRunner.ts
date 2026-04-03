@@ -146,20 +146,19 @@ export class AgentRunner {
 
     this.lastExecutor = executor;
 
-    const snapshot = executor.getSnapshot();
-    const state = snapshot?.sharedState ?? {};
-    const messages = (state.messages as Message[]) ?? [];
-    const lastAsst = lastAssistantMessage(messages);
-    const result = (state.result as string) ?? (lastAsst ? getTextContent(lastAsst.content) : '');
-    const iterations = (state.loopCount as number) ?? 0;
-
-    if (bridge) {
-      const response = state.adapterRawResponse as LLMResponse | undefined;
-      if (response) bridge.dispatchLLMCall(response, Date.now() - startMs);
-      bridge.dispatchTurnComplete(result, messages.length, iterations);
+    // Check for pause (ask_human tool) — return early, no recorder dispatch
+    if (executor.isPaused()) {
+      return this.buildResult(executor);
     }
 
-    this.conversationHistory = messages;
+    const agentResult = this.buildResult(executor);
+
+    if (bridge) {
+      const state = executor.getSnapshot()?.sharedState ?? {};
+      const response = state.adapterRawResponse as LLMResponse | undefined;
+      if (response) bridge.dispatchLLMCall(response, Date.now() - startMs);
+      bridge.dispatchTurnComplete(agentResult.content, agentResult.messages.length, agentResult.iterations);
+    }
 
     const strictFU = getStrictFollowUp();
     if (strictFU) {
@@ -168,6 +167,63 @@ export class AgentRunner {
         sourceToolId: strictFU.sourceToolId,
       });
     }
+
+    return agentResult;
+  }
+
+  /**
+   * Resume a paused agent (after ask_human tool).
+   *
+   * Provides the human's response, which becomes the tool result for ask_human.
+   * The agent loop continues from where it paused.
+   *
+   * @example
+   * ```typescript
+   * const result = await agent.run('Process my refund');
+   * if (result.paused) {
+   *   const final = await agent.resume('Yes, order ORD-123');
+   * }
+   * ```
+   */
+  async resume(humanResponse: string): Promise<AgentResult> {
+    const executor = this.lastExecutor;
+    if (!executor || !executor.isPaused()) {
+      throw new Error('Cannot resume: agent is not paused. Call run() first.');
+    }
+
+    const checkpoint = executor.getCheckpoint();
+    if (!checkpoint) {
+      throw new Error('Cannot resume: no checkpoint available.');
+    }
+
+    await executor.resume(checkpoint, humanResponse);
+
+    return this.buildResult(executor);
+  }
+
+  /** Extract AgentResult from executor state — shared by run() and resume(). */
+  private buildResult(executor: FlowChartExecutor): AgentResult {
+    if (executor.isPaused()) {
+      const cp = executor.getCheckpoint();
+      const pausedMessages = (executor.getSnapshot()?.sharedState?.messages as Message[]) ?? [];
+      this.conversationHistory = pausedMessages;
+      return {
+        content: '',
+        messages: pausedMessages,
+        iterations: (executor.getSnapshot()?.sharedState?.loopCount as number) ?? 0,
+        paused: true,
+        pauseData: cp?.pauseData as { question: string; toolCallId: string } | undefined,
+      };
+    }
+
+    const snapshot = executor.getSnapshot();
+    const state = snapshot?.sharedState ?? {};
+    const messages = (state.messages as Message[]) ?? [];
+    const lastAsst = lastAssistantMessage(messages);
+    const result = (state.result as string) ?? (lastAsst ? getTextContent(lastAsst.content) : '');
+    const iterations = (state.loopCount as number) ?? 0;
+
+    this.conversationHistory = messages;
 
     return { content: result, messages, iterations };
   }

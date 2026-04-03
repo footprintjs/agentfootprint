@@ -22,6 +22,10 @@ export interface AgentResult {
   readonly content: string;
   readonly messages: Message[];
   readonly iterations: number;
+  /** True when the agent paused (ask_human tool). Call agent.resume() to continue. */
+  readonly paused?: boolean;
+  /** Pause data from ask_human (question + toolCallId). */
+  readonly pauseData?: { question: string; toolCallId: string };
 }
 
 export interface AgentRunOptions {

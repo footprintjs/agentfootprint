@@ -15,7 +15,7 @@
  */
 
 import { flowChart } from 'footprintjs';
-import type { FlowChart } from 'footprintjs';
+import type { ExecutionEnv, FlowChart } from 'footprintjs';
 import type { Message } from '../../types';
 import type { ToolRegistry } from '../../tools';
 import type { ToolProvider } from '../../core';
@@ -49,6 +49,10 @@ export interface ToolExecutionSubflowState {
   toolResultMessages: Message[];
   /** Output: incremented loop count. */
   updatedLoopCount: number;
+  /** @internal Set when ask_human tool fires — used for pause detection. */
+  askHumanPause?: { question: string; toolCallId: string };
+  /** TypedScope escape hatch — available at runtime via proxy. */
+  $getEnv?: () => ExecutionEnv | undefined;
 }
 
 // ── Config ───────────────────────────────────────────────────
@@ -74,42 +78,70 @@ export function buildToolExecutionSubflow(
 ): FlowChart {
   const { registry, toolProvider, instructionConfig } = config;
 
-  return flowChart<ToolExecutionSubflowState>(
-    'ExecuteToolCalls',
-    async (scope) => {
-      const parsed = scope.parsedResponse;
+  const executeStageFn = async (scope: ToolExecutionSubflowState): Promise<unknown | void> => {
+    const parsed = scope.parsedResponse;
+    const loopCount = scope.currentLoopCount ?? 0;
+    const maxIter = scope.maxIterations ?? 10;
 
-      const loopCount = scope.currentLoopCount ?? 0;
-      const maxIter = scope.maxIterations ?? 10;
+    // Defense-in-depth: the RouteResponse decider already routes to 'final'
+    // when loopCount >= maxIter, but this guard protects against standalone
+    // subflow usage without a preceding decider.
+    if (!parsed?.toolCalls?.length || loopCount >= maxIter) {
+      scope.toolResultMessages = [];
+      scope.updatedLoopCount = loopCount;
+      return;
+    }
 
-      // Defense-in-depth: the RouteResponse decider already routes to 'final'
-      // when loopCount >= maxIter, but this guard protects against standalone
-      // subflow usage without a preceding decider.
-      if (!parsed?.toolCalls?.length || loopCount >= maxIter) {
-        scope.toolResultMessages = [];
-        scope.updatedLoopCount = loopCount;
-        return;
-      }
+    const messages = scope.currentMessages ?? [];
+    const signal = scope.$getEnv?.()?.signal;
 
-      const messages = scope.currentMessages ?? [];
-      const signal = scope.$getEnv()?.signal;
+    const { messages: resultMessages, askHumanPause } = await executeToolCalls(
+      parsed.toolCalls,
+      registry,
+      messages,
+      toolProvider,
+      signal,
+      instructionConfig,
+    );
 
-      const result = await executeToolCalls(
-        parsed.toolCalls,
-        registry,
-        messages,
-        toolProvider,
-        signal,
-        instructionConfig,
+    // Output DELTA only — footprintjs applyOutputMapping concatenates arrays,
+    // so the parent's outputMapper maps this to `messages` and concat appends correctly.
+    scope.toolResultMessages = resultMessages.slice(messages.length);
+    scope.updatedLoopCount = (scope.currentLoopCount ?? 0) + 1;
+
+    // If ask_human was called, store pause data on scope and return it.
+    // Engine: non-void return from isPausable stage → PauseSignal with this as pauseData.
+    if (askHumanPause) {
+      scope.askHumanPause = askHumanPause;
+      return askHumanPause;
+    }
+    return undefined;
+  };
+
+  const resumeStageFn = (scope: ToolExecutionSubflowState, humanResponse: unknown): void => {
+    const pauseInfo = scope.askHumanPause;
+    if (pauseInfo && humanResponse !== undefined) {
+      const toolCallId = pauseInfo.toolCallId;
+      scope.toolResultMessages = (scope.toolResultMessages ?? []).map((msg: Message) =>
+        msg.role === 'tool' && msg.toolCallId === toolCallId
+          ? { ...msg, content: String(humanResponse) }
+          : msg,
       );
+    }
+  };
 
-      // Output DELTA only — footprintjs applyOutputMapping concatenates arrays,
-      // so the parent's outputMapper maps this to `messages` and concat appends correctly.
-      scope.toolResultMessages = result.slice(messages.length);
-      scope.updatedLoopCount = (scope.currentLoopCount ?? 0) + 1;
-    },
+  // Build as a typed subflow, then set pausable flags on the root node.
+  // The execute function returns `unknown` (pause data) which is wider than
+  // StageFunction's TOut — the engine only checks `result !== undefined` for isPausable nodes.
+  const chart = flowChart<ToolExecutionSubflowState>(
+    'ExecuteToolCalls',
+    executeStageFn as any, // Wider return (unknown) than StageFunction (TOut | void)
     'execute-tool-calls',
     undefined,
     'Execute tool calls and append results to conversation',
   ).build();
+
+  chart.root.isPausable = true;
+  chart.root.resumeFn = resumeStageFn;
+  return chart;
 }
