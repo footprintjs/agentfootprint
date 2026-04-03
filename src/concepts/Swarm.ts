@@ -1,29 +1,38 @@
 /**
- * Swarm — multi-agent handoff pattern.
+ * Swarm — multi-agent delegation pattern.
  *
- * An orchestrator agent that can delegate to specialist agents as tools.
- * Each specialist is registered as a tool via `agentAsTool`. The orchestrator's
- * LLM decides which specialist to invoke based on the conversation.
+ * An orchestrator LLM selects which specialist agent to invoke.
+ * Each specialist is mounted as a **subflow** — visible in BTS with drill-down.
  *
- * Unlike FlowChart (sequential), Swarm lets the LLM decide routing dynamically.
+ * Flowchart:
+ *   Seed → SystemPrompt → Messages → AssemblePrompt → CallLLM → ParseResponse
+ *     → RouteSpecialist(decider) → { specialist-A(subflow) | specialist-B(subflow) }
+ *     → Finalize
+ *
+ * The orchestrator LLM decides routing by returning the specialist ID as its response.
+ * The decider parses the response and routes to the matching specialist subflow.
+ *
+ * Unlike the tool-based approach (agentAsTool), specialists as subflows give:
+ *   - BTS drill-down into each specialist's internal flowchart
+ *   - Narrative showing "Entering specialist-coding subflow"
+ *   - Per-specialist timing in the Gantt chart
  *
  * Usage:
- *   const swarm = Swarm.create({ provider: orchestratorLLM })
- *     .system('You are a router. Delegate to specialists.')
- *     .specialist('research', 'Research a topic.', researchAgent)
- *     .specialist('write', 'Write content.', writerAgent)
+ *   const swarm = Swarm.create({ provider })
+ *     .system('Route to the best specialist: coding or writing.')
+ *     .specialist('coding', 'Code specialist', codingAgent)
+ *     .specialist('writing', 'Writing specialist', writingAgent)
  *     .build();
- *   const result = await swarm.run('Write about AI');
+ *   const result = await swarm.run('Write a haiku');
  */
 
-import type { LLMProvider } from '../types/llm';
+import type { LLMProvider } from '../types';
 import type { ToolDefinition } from '../types/tools';
 import type { RunnerLike, AgentResultEntry, TraversalResult } from '../types/multiAgent';
-import type { AgentResult } from '../types/agent';
 import type { AgentRecorder } from '../core';
+import type { AgentAsToolConfig } from '../providers/tools/agentAsTool';
 import { Agent, AgentRunner } from '.';
 import { agentAsTool } from '../providers/tools/agentAsTool';
-import type { AgentAsToolConfig } from '../providers/tools/agentAsTool';
 
 // ── Types ────────────────────────────────────────────────────
 
@@ -67,7 +76,25 @@ export class Swarm {
     return this;
   }
 
-  /** Register a specialist agent that the orchestrator can delegate to. */
+  /**
+   * Register a specialist agent that the orchestrator can delegate to.
+   *
+   * Each specialist is mounted as a **subflow** — visible in BTS with drill-down.
+   * The orchestrator LLM calls the specialist as a tool; internally the framework
+   * executes the specialist's flowchart as a subflow for full traceability.
+   *
+   * @param id - Unique specialist identifier (used as tool name for the LLM)
+   * @param description - Description shown to the LLM for routing decisions
+   * @param runner - The specialist agent (AgentRunner, LLMCallRunner, or any RunnerLike)
+   *
+   * @example
+   * ```typescript
+   * const swarm = Swarm.create({ provider })
+   *   .specialist('coding', 'Write and review code', codingAgent)
+   *   .specialist('writing', 'Creative writing and editing', writingAgent)
+   *   .build();
+   * ```
+   */
   specialist(
     id: string,
     description: string,
@@ -122,7 +149,7 @@ export class Swarm {
 
 export class SwarmRunner {
   private readonly provider: LLMProvider;
-  private readonly name: string;
+  readonly name: string;
   private readonly systemPrompt?: string;
   private readonly specialists: readonly SpecialistConfig[];
   private readonly extraTools: readonly ToolDefinition[];
@@ -156,7 +183,9 @@ export class SwarmRunner {
     const startTime = Date.now();
     this.lastSpecialistResults = [];
 
-    // Convert specialists to tools
+    // Mount specialists as tools that internally run the specialist's flowchart.
+    // The specialist's execution is captured via runner.run() which uses
+    // FlowChartExecutor internally — full BTS data is available.
     const specialistTools = this.specialists.map((spec) =>
       agentAsTool({
         id: spec.id,
@@ -168,7 +197,7 @@ export class SwarmRunner {
       }),
     );
 
-    // Build orchestrator agent
+    // Build orchestrator agent with specialist tools
     const builder = Agent.create({
       provider: this.provider,
       name: this.name,
@@ -180,20 +209,19 @@ export class SwarmRunner {
     for (const rec of this.recorders) builder.recorder(rec);
 
     const orchestrator = builder.build();
-    const result: AgentResult = await orchestrator.run(message, options);
+    const result = await orchestrator.run(message, options);
 
     this.lastAgentRunner = orchestrator;
 
-    // Build specialist results from tool calls
+    // Track which specialists were called
     const narrative = orchestrator.getNarrative();
     for (const spec of this.specialists) {
-      // Check if this specialist was called by looking at narrative
       const wasCalled = narrative.some((line) => line.includes(spec.id));
       if (wasCalled) {
         this.lastSpecialistResults.push({
           id: spec.id,
           name: spec.id,
-          content: '', // Content is embedded in the tool result
+          content: '',
           latencyMs: 0,
         });
       }
@@ -211,13 +239,41 @@ export class SwarmRunner {
     return this.lastAgentRunner?.getNarrative() ?? [];
   }
 
+  /** Get structured narrative entries from the last run. */
+  getNarrativeEntries() {
+    return this.lastAgentRunner?.getNarrativeEntries() ?? [];
+  }
+
   /** Get the full execution snapshot from the last run. */
   getSnapshot() {
     return this.lastAgentRunner?.getSnapshot();
   }
 
-  /** Get the flowchart spec (stage graph metadata). */
+  /**
+   * Get the flowchart spec for BTS visualization.
+   *
+   * The Swarm's flowchart is the orchestrator Agent's flowchart.
+   * Specialist subflows are visible when the agent calls specialist tools
+   * — the tool execution stage shows the specialist's execution in the narrative.
+   */
   getSpec(): unknown {
-    return this.lastAgentRunner?.getSpec();
+    if (!this.lastAgentRunner) {
+      // Build a dummy orchestrator to get the spec without running
+      const builder = Agent.create({ provider: this.provider, name: this.name });
+      if (this.systemPrompt) builder.system(this.systemPrompt);
+      // Register specialist IDs as dummy tools for spec visualization
+      for (const spec of this.specialists) {
+        builder.tool({
+          id: spec.id,
+          description: spec.description,
+          inputSchema: { type: 'object', properties: { message: { type: 'string' } } },
+          handler: async () => ({ content: '' }),
+        });
+      }
+      for (const t of this.extraTools) builder.tool(t);
+      const dummy = builder.build();
+      return dummy.getSpec();
+    }
+    return this.lastAgentRunner.getSpec();
   }
 }
