@@ -114,7 +114,7 @@ describe('Dynamic ReAct — scenario', () => {
     const trackingProvider: ToolProvider = {
       resolve: async () => {
         resolveCount++;
-        return [noopTool];
+        return { value: [noopTool], chosen: 'test' };
       },
       execute: async () => ({ content: 'ok' }),
     };
@@ -139,7 +139,7 @@ describe('Dynamic ReAct — scenario', () => {
     const trackingProvider: ToolProvider = {
       resolve: async () => {
         resolveCount++;
-        return [noopTool];
+        return { value: [noopTool], chosen: 'test' };
       },
       execute: async () => ({ content: 'ok' }),
     };

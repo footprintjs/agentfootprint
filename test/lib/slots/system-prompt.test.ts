@@ -89,7 +89,7 @@ describe('SystemPrompt slot — boundary', () => {
     const asyncProvider: PromptProvider = {
       resolve: async () => {
         await new Promise((r) => setTimeout(r, 1));
-        return 'async resolved';
+        return { value: 'async resolved', chosen: 'test' };
       },
     };
     const state = await runSubflow(asyncProvider);
@@ -115,7 +115,7 @@ describe('SystemPrompt slot — scenario', () => {
   });
 
   it('provider receives correct context (message, turnNumber, history)', async () => {
-    const spy = vi.fn().mockReturnValue('spied');
+    const spy = vi.fn().mockReturnValue({ value: 'spied', chosen: 'test' });
     const provider: PromptProvider = { resolve: spy };
     const msgs = [user('hello'), user('world')];
 
@@ -150,7 +150,7 @@ describe('SystemPrompt slot — security', () => {
   it('provider.resolve() throwing propagates as error', async () => {
     const failProvider: PromptProvider = {
       resolve: () => { throw new Error('provider crashed'); },
-    };
+    } as any;
     await expect(runSubflow(failProvider)).rejects.toThrow('provider crashed');
   });
 

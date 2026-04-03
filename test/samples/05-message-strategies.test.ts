@@ -38,7 +38,7 @@ describe('Sample 05: Message Strategies', () => {
       userMessage('msg 3'),
     ];
 
-    const result = strategy.prepare(history, msgCtx);
+    const result = strategy.prepare(history, msgCtx).value;
     expect(result).toHaveLength(3);
     expect(result[0].content).toBe('msg 2'); // oldest kept
   });
@@ -52,7 +52,7 @@ describe('Sample 05: Message Strategies', () => {
       userMessage('new'),
     ];
 
-    const result = strategy.prepare(history, msgCtx);
+    const result = strategy.prepare(history, msgCtx).value;
     expect(result[0].role).toBe('system'); // always kept
     expect(result).toHaveLength(3); // system + 2 recent
   });
@@ -72,7 +72,8 @@ describe('Sample 05: Message Strategies', () => {
       assistantMessage('AI is...'),
     ];
 
-    const result = await strategy.prepare(history, msgCtx);
+    const decision = await strategy.prepare(history, msgCtx);
+    const result = decision.value;
 
     // Summary + last 2 messages
     expect(result[0].role).toBe('system');
@@ -90,13 +91,13 @@ describe('Sample 05: Message Strategies', () => {
 
     // Session 2 — picks up where session 1 left off
     const s2 = persistentHistory({ conversationId: 'chat-1', store });
-    const result = await s2.prepare(
+    const decision = await s2.prepare(
       [userMessage('Hello'), assistantMessage('Hi!'), userMessage('Follow up')],
       msgCtx,
     );
 
-    expect(result).toHaveLength(3);
-    expect(result[2].content).toBe('Follow up');
+    expect(decision.value).toHaveLength(3);
+    expect(decision.value[2].content).toBe('Follow up');
   });
 
   it('compositeMessages — chains strategies', async () => {
@@ -116,8 +117,8 @@ describe('Sample 05: Message Strategies', () => {
       ),
     ];
 
-    const result = await strategy.prepare(history, msgCtx);
+    const decision = await strategy.prepare(history, msgCtx);
     // System messages preserved, everything else trimmed by both strategies
-    expect(result.length).toBeLessThanOrEqual(6);
+    expect(decision.value.length).toBeLessThanOrEqual(6);
   });
 });

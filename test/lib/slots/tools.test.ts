@@ -119,7 +119,7 @@ describe('Tools slot — boundary', () => {
     const asyncProvider: ToolProvider = {
       resolve: async () => {
         await new Promise((r) => setTimeout(r, 1));
-        return [{ name: 'async_tool', description: 'async', inputSchema: {} }];
+        return { value: [{ name: 'async_tool', description: 'async', inputSchema: {} }], chosen: 'test' };
       },
     };
     const state = await runSubflow(asyncProvider);
@@ -155,7 +155,7 @@ describe('Tools slot — scenario', () => {
   });
 
   it('provider receives correct context (message, messages, turnNumber)', async () => {
-    const spy = vi.fn().mockReturnValue([]);
+    const spy = vi.fn().mockReturnValue({ value: [], chosen: 'test' });
     const provider: ToolProvider = { resolve: spy };
     const msgs = [user('hello'), user('world')];
 
@@ -198,7 +198,7 @@ describe('Tools slot — security', () => {
   it('provider.resolve() throwing propagates as error', async () => {
     const failProvider: ToolProvider = {
       resolve: () => { throw new Error('provider crashed'); },
-    };
+    } as any;
     await expect(runSubflow(failProvider)).rejects.toThrow('provider crashed');
   });
 

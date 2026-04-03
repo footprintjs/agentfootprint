@@ -24,16 +24,17 @@ const calcTool: ToolDefinition = {
 describe('staticTools', () => {
   it('resolves all registered tools', () => {
     const provider = staticTools([searchTool, calcTool]);
-    const tools = provider.resolve(baseCtx);
-    expect(tools).toHaveLength(2);
-    expect((tools as any)[0].name).toBe('search');
-    expect((tools as any)[1].name).toBe('calc');
+    const decision = provider.resolve(baseCtx);
+    expect(decision.value).toHaveLength(2);
+    expect(decision.value[0].name).toBe('search');
+    expect(decision.value[1].name).toBe('calc');
+    expect(decision.chosen).toBe('static');
   });
 
   it('formats tool descriptions for LLM', () => {
     const provider = staticTools([searchTool]);
-    const tools = provider.resolve(baseCtx) as any[];
-    expect(tools[0]).toEqual({
+    const decision = provider.resolve(baseCtx);
+    expect(decision.value[0]).toEqual({
       name: 'search',
       description: 'Search the web',
       inputSchema: searchTool.inputSchema,
@@ -60,16 +61,18 @@ describe('staticTools', () => {
 
   it('handles empty tool list', () => {
     const provider = staticTools([]);
-    expect(provider.resolve(baseCtx)).toEqual([]);
+    const decision = provider.resolve(baseCtx);
+    expect(decision.value).toEqual([]);
+    expect(decision.chosen).toBe('static');
   });
 
   it('returns same tools regardless of context', () => {
     const provider = staticTools([searchTool]);
     const ctx1: ToolContext = { message: 'code', turnNumber: 0, loopIteration: 0, messages: [] };
     const ctx2: ToolContext = { message: 'search', turnNumber: 5, loopIteration: 3, messages: [] };
-    const tools1 = provider.resolve(ctx1) as any[];
-    const tools2 = provider.resolve(ctx2) as any[];
-    expect(tools1).toEqual(tools2);
+    const d1 = provider.resolve(ctx1);
+    const d2 = provider.resolve(ctx2);
+    expect(d1.value).toEqual(d2.value);
   });
 
   it('provides execute method (self-contained)', () => {
@@ -87,26 +90,16 @@ describe('dynamicTools', () => {
       return [searchTool];
     });
 
-    const codeCtx: ToolContext = {
-      message: 'write code',
-      turnNumber: 0,
-      loopIteration: 0,
-      messages: [],
-    };
-    const searchCtx: ToolContext = {
-      message: 'find info',
-      turnNumber: 0,
-      loopIteration: 0,
-      messages: [],
-    };
+    const codeCtx: ToolContext = { message: 'write code', turnNumber: 0, loopIteration: 0, messages: [] };
+    const searchCtx: ToolContext = { message: 'find info', turnNumber: 0, loopIteration: 0, messages: [] };
 
-    const codeTools = await provider.resolve(codeCtx);
-    expect(codeTools).toHaveLength(1);
-    expect(codeTools[0].name).toBe('calc');
+    const codeDecision = await provider.resolve(codeCtx);
+    expect(codeDecision.value).toHaveLength(1);
+    expect(codeDecision.value[0].name).toBe('calc');
 
-    const searchTools = await provider.resolve(searchCtx);
-    expect(searchTools).toHaveLength(1);
-    expect(searchTools[0].name).toBe('search');
+    const searchDecision = await provider.resolve(searchCtx);
+    expect(searchDecision.value).toHaveLength(1);
+    expect(searchDecision.value[0].name).toBe('search');
   });
 
   it('is resolver-only — no execute method', () => {
@@ -118,27 +111,26 @@ describe('dynamicTools', () => {
     const provider = dynamicTools(async () => {
       return [searchTool, calcTool];
     });
-    const tools = await provider.resolve(baseCtx);
-    expect(tools).toHaveLength(2);
+    const decision = await provider.resolve(baseCtx);
+    expect(decision.value).toHaveLength(2);
+    expect(decision.chosen).toBe('dynamic');
   });
 
   it('can return different tools on different turns', async () => {
     const provider = dynamicTools((ctx) => {
-      if (ctx.loopIteration > 0) return []; // no tools on retries
-      return [searchTool];
+      return ctx.turnNumber > 3 ? [searchTool, calcTool] : [searchTool];
     });
 
-    const first = await provider.resolve({ ...baseCtx, loopIteration: 0 });
-    expect(first).toHaveLength(1);
-
-    const retry = await provider.resolve({ ...baseCtx, loopIteration: 1 });
-    expect(retry).toHaveLength(0);
+    const turn0 = await provider.resolve({ ...baseCtx, turnNumber: 0 });
+    const turn5 = await provider.resolve({ ...baseCtx, turnNumber: 5 });
+    expect(turn0.value).toHaveLength(1);
+    expect(turn5.value).toHaveLength(2);
   });
 
   it('formats LLMToolDescription correctly', async () => {
     const provider = dynamicTools(() => [searchTool]);
-    const tools = await provider.resolve(baseCtx);
-    expect(tools[0]).toEqual({
+    const decision = await provider.resolve(baseCtx);
+    expect(decision.value[0]).toEqual({
       name: 'search',
       description: 'Search the web',
       inputSchema: searchTool.inputSchema,
@@ -151,22 +143,21 @@ describe('dynamicTools', () => {
 describe('noTools', () => {
   it('resolves empty tool list', () => {
     const provider = noTools();
-    expect(provider.resolve(baseCtx)).toEqual([]);
+    const decision = provider.resolve(baseCtx);
+    expect(decision.value).toEqual([]);
+    expect(decision.chosen).toBe('none');
+  });
+
+  it('returns empty on every context', () => {
+    const provider = noTools();
+    const d1 = provider.resolve({ ...baseCtx, turnNumber: 0 });
+    const d2 = provider.resolve({ ...baseCtx, turnNumber: 10 });
+    expect(d1.value).toEqual([]);
+    expect(d2.value).toEqual([]);
   });
 
   it('has no execute method', () => {
     const provider = noTools();
     expect(provider.execute).toBeUndefined();
-  });
-
-  it('returns empty on every context', () => {
-    const provider = noTools();
-    const ctx1: ToolContext = {
-      message: 'anything',
-      turnNumber: 99,
-      loopIteration: 5,
-      messages: [],
-    };
-    expect(provider.resolve(ctx1)).toEqual([]);
   });
 });

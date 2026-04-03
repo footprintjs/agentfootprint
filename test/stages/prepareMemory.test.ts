@@ -93,7 +93,7 @@ describe('PrepareMemory — unit: LoadHistory', () => {
 
 describe('PrepareMemory — unit: ApplyStrategy', () => {
   it('with strategy: calls strategy.prepare() with merged history', async () => {
-    const prepareSpy = vi.fn(async (msgs: Message[]) => msgs.slice(-1));
+    const prepareSpy = vi.fn(async (msgs: Message[]) => ({ value: msgs.slice(-1), chosen: 'test' }));
     const strategy: MessageStrategy = { prepare: prepareSpy };
 
     const state = await runSubflow(
@@ -150,7 +150,7 @@ describe('PrepareMemory — boundary', () => {
   });
 
   it('strategy receiving empty array returns empty array', async () => {
-    const strategy: MessageStrategy = { prepare: async (msgs) => msgs };
+    const strategy: MessageStrategy = { prepare: async (msgs) => ({ value: msgs, chosen: 'test' }) };
     const state = await runSubflow({ strategy }, []);
     expect(state.memory_preparedMessages).toEqual([]);
   });
@@ -185,7 +185,7 @@ describe('PrepareMemory — scenario', () => {
     );
     store.save('conv-1', history);
 
-    const strategy: MessageStrategy = { prepare: async (msgs) => msgs.slice(-3) };
+    const strategy: MessageStrategy = { prepare: async (msgs) => ({ value: msgs.slice(-3), chosen: 'test' }) };
     const state = await runSubflow(
       { store, conversationId: 'conv-1', strategy },
       [user('new question')],
@@ -220,7 +220,7 @@ describe('PrepareMemory — property', () => {
 
   it('strategy output is exactly what strategy.prepare returns', async () => {
     const fixed: Message[] = [user('fixed output')];
-    const strategy: MessageStrategy = { prepare: async () => fixed };
+    const strategy: MessageStrategy = { prepare: async () => ({ value: fixed, chosen: 'test' }) };
     const state = await runSubflow({ strategy }, [user('anything')]);
     expect(state.memory_preparedMessages).toEqual(fixed);
   });
@@ -243,7 +243,7 @@ describe('PrepareMemory — security', () => {
   it('strategy.prepare() throwing propagates the error', async () => {
     const badStrategy: MessageStrategy = {
       prepare: async () => { throw new Error('strategy failed'); },
-    };
+    } as any;
 
     await expect(
       runSubflow({ strategy: badStrategy }, [user('test')]),

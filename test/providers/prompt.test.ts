@@ -23,7 +23,7 @@ describe('skillBasedPrompt', () => {
     ]);
 
     const result = provider.resolve(ctx({ message: 'help me with code' }));
-    expect(result).toBe('You write clean code.');
+    expect(result.value).toBe('You write clean code.');
   });
 
   it('selects multiple matching skills', () => {
@@ -33,7 +33,7 @@ describe('skillBasedPrompt', () => {
     ]);
 
     const result = provider.resolve(ctx({ message: 'review my code' }));
-    expect(result).toBe('You write clean code.\n\nYou review PRs.');
+    expect(result.value).toBe('You write clean code.\n\nYou review PRs.');
   });
 
   it('prepends base prompt before skills', () => {
@@ -43,7 +43,7 @@ describe('skillBasedPrompt', () => {
     );
 
     const result = provider.resolve(ctx());
-    expect(result).toBe('You are helpful.\n\nYou write clean code.');
+    expect(result.value).toBe('You are helpful.\n\nYou write clean code.');
   });
 
   it('returns fallback when no skills match and no base', () => {
@@ -53,7 +53,7 @@ describe('skillBasedPrompt', () => {
     );
 
     const result = provider.resolve(ctx());
-    expect(result).toBe('You are a general assistant.');
+    expect(result.value).toBe('You are a general assistant.');
   });
 
   it('returns base alone when no skills match', () => {
@@ -63,7 +63,7 @@ describe('skillBasedPrompt', () => {
     );
 
     const result = provider.resolve(ctx());
-    expect(result).toBe('You are helpful.');
+    expect(result.value).toBe('You are helpful.');
   });
 
   it('uses custom separator', () => {
@@ -76,7 +76,7 @@ describe('skillBasedPrompt', () => {
     );
 
     const result = provider.resolve(ctx());
-    expect(result).toBe('Base\n---\nA\n---\nB');
+    expect(result.value).toBe('Base\n---\nA\n---\nB');
   });
 
   it('passes full PromptContext to match function', () => {
@@ -88,14 +88,14 @@ describe('skillBasedPrompt', () => {
       },
     ]);
 
-    expect(provider.resolve(ctx({ turnNumber: 2 }))).toBe('');
-    expect(provider.resolve(ctx({ turnNumber: 10 }))).toBe('Wrap up.');
+    expect(provider.resolve(ctx({ turnNumber: 2 })).value).toBe('');
+    expect(provider.resolve(ctx({ turnNumber: 10 })).value).toBe('Wrap up.');
   });
 
   it('returns empty string when no match and no fallback', () => {
     const provider = skillBasedPrompt([{ id: 'x', content: 'X', match: () => false }]);
 
-    expect(provider.resolve(ctx())).toBe('');
+    expect(provider.resolve(ctx()).value).toBe('');
   });
 });
 
@@ -109,18 +109,18 @@ describe('compositePrompt', () => {
     ]);
 
     const result = await provider.resolve(ctx());
-    expect(result).toBe('You are helpful.\n\nBe concise.');
+    expect(result.value).toBe('You are helpful.\n\nBe concise.');
   });
 
   it('uses custom separator', async () => {
     const provider = compositePrompt([staticPrompt('A'), staticPrompt('B')], { separator: ' | ' });
 
     const result = await provider.resolve(ctx());
-    expect(result).toBe('A | B');
+    expect(result.value).toBe('A | B');
   });
 
   it('filters out empty results', async () => {
-    const emptyProvider = { resolve: () => '' };
+    const emptyProvider = { resolve: () => ({ value: '', chosen: 'test' }) };
     const provider = compositePrompt([
       staticPrompt('First.'),
       emptyProvider,
@@ -128,7 +128,7 @@ describe('compositePrompt', () => {
     ]);
 
     const result = await provider.resolve(ctx());
-    expect(result).toBe('First.\n\nThird.');
+    expect(result.value).toBe('First.\n\nThird.');
   });
 
   it('composes with skillBasedPrompt', async () => {
@@ -139,7 +139,7 @@ describe('compositePrompt', () => {
     const provider = compositePrompt([staticPrompt('You are an AI assistant.'), skills]);
 
     const result = await provider.resolve(ctx({ message: 'help with code' }));
-    expect(result).toBe('You are an AI assistant.\n\nYou write code.');
+    expect(result.value).toBe('You are an AI assistant.\n\nYou write code.');
   });
 
   it('composes with templatePrompt', async () => {
@@ -149,24 +149,24 @@ describe('compositePrompt', () => {
     ]);
 
     const result = await provider.resolve(ctx({ turnNumber: 3 }));
-    expect(result).toBe('Base.\n\nTurn 3.');
+    expect(result.value).toBe('Base.\n\nTurn 3.');
   });
 
   it('handles async providers', async () => {
     const asyncProvider = {
-      resolve: async () => 'async result',
+      resolve: async () => ({ value: 'async result', chosen: 'test' }),
     };
 
     const provider = compositePrompt([staticPrompt('sync'), asyncProvider]);
 
     const result = await provider.resolve(ctx());
-    expect(result).toBe('sync\n\nasync result');
+    expect(result.value).toBe('sync\n\nasync result');
   });
 
   it('returns empty string when all providers return empty', async () => {
-    const provider = compositePrompt([{ resolve: () => '' }, { resolve: () => '' }]);
+    const provider = compositePrompt([{ resolve: () => ({ value: '', chosen: 'test' }) }, { resolve: () => ({ value: '', chosen: 'test' }) }]);
 
     const result = await provider.resolve(ctx());
-    expect(result).toBe('');
+    expect(result.value).toBe('');
   });
 });

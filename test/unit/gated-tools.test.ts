@@ -36,7 +36,7 @@ describe('gatedTools: resolve filtering', () => {
 
     const resolved = await gated.resolve(defaultCtx);
 
-    expect(resolved.map((t) => t.name)).toEqual(['search', 'code']);
+    expect(resolved.value.map((t) => t.name)).toEqual(['search', 'code']);
   });
 
   it('returns empty array when no tools are allowed', async () => {
@@ -45,7 +45,7 @@ describe('gatedTools: resolve filtering', () => {
 
     const resolved = await gated.resolve(defaultCtx);
 
-    expect(resolved).toEqual([]);
+    expect(resolved.value).toEqual([]);
   });
 
   it('returns all tools when all are allowed', async () => {
@@ -54,7 +54,7 @@ describe('gatedTools: resolve filtering', () => {
 
     const resolved = await gated.resolve(defaultCtx);
 
-    expect(resolved).toHaveLength(2);
+    expect(resolved.value).toHaveLength(2);
   });
 
   it('supports async permission checker', async () => {
@@ -66,7 +66,7 @@ describe('gatedTools: resolve filtering', () => {
 
     const resolved = await gated.resolve(defaultCtx);
 
-    expect(resolved.map((t) => t.name)).toEqual(['search']);
+    expect(resolved.value.map((t) => t.name)).toEqual(['search']);
   });
 
   it('receives ToolContext for per-turn decisions', async () => {
@@ -76,11 +76,11 @@ describe('gatedTools: resolve filtering', () => {
 
     // Turn 1: blocked
     const turn1 = await gated.resolve({ ...defaultCtx, turnNumber: 1 });
-    expect(turn1).toHaveLength(0);
+    expect(turn1.value).toHaveLength(0);
 
     // Turn 3: allowed
     const turn3 = await gated.resolve({ ...defaultCtx, turnNumber: 3 });
-    expect(turn3).toHaveLength(1);
+    expect(turn3.value).toHaveLength(1);
     expect(checker).toHaveBeenCalledTimes(2);
   });
 });
@@ -116,7 +116,7 @@ describe('gatedTools: execute defense-in-depth', () => {
 
   it('preserves execute as undefined when inner has no execute', async () => {
     // dynamicTools-style provider with no execute
-    const inner = { resolve: async () => [] };
+    const inner = { resolve: async () => ({ value: [] as any[], chosen: 'test' }) };
     const gated = gatedTools(inner, () => true);
 
     expect(gated.execute).toBeUndefined();
@@ -163,12 +163,12 @@ describe('gatedTools: security invariants', () => {
     const inner = staticTools([makeTool('search'), secretTool]);
     const gated = gatedTools(inner, (id) => id !== 'delete-database');
 
-    const descriptions = await gated.resolve(defaultCtx);
-    const names = descriptions.map((d) => d.name);
+    const decision = await gated.resolve(defaultCtx);
+    const names = decision.value.map((d) => d.name);
 
     expect(names).not.toContain('delete-database');
     // Also check descriptions don't leak
-    const allText = descriptions.map((d) => d.description).join(' ');
+    const allText = decision.value.map((d) => d.description).join(' ');
     expect(allText).not.toContain('delete-database');
   });
 
@@ -205,14 +205,14 @@ describe('gatedTools: security invariants', () => {
 
     // Turn 1: no access
     const turn1 = await gated.resolve(defaultCtx);
-    expect(turn1).toHaveLength(0);
+    expect(turn1.value).toHaveLength(0);
 
     // User grants access
     canAccess = true;
 
     // Turn 2: access granted
     const turn2 = await gated.resolve(defaultCtx);
-    expect(turn2).toHaveLength(1);
-    expect(turn2[0].name).toBe('upgrade');
+    expect(turn2.value).toHaveLength(1);
+    expect(turn2.value[0].name).toBe('upgrade');
   });
 });

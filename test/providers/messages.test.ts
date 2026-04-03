@@ -41,7 +41,8 @@ describe('summaryStrategy', () => {
 
     const history = [systemMessage('System.'), ...conversation(6)];
 
-    const result = await strategy.prepare(history, msgCtx());
+    const decision = await strategy.prepare(history, msgCtx());
+    const result = decision.value;
 
     // System + summary + last 2
     expect(result.length).toBe(4);
@@ -57,9 +58,9 @@ describe('summaryStrategy', () => {
     const strategy = summaryStrategy({ keepLast: 10, summarize });
 
     const history = conversation(4);
-    const result = await strategy.prepare(history, msgCtx());
+    const decision = await strategy.prepare(history, msgCtx());
 
-    expect(result).toEqual(history);
+    expect(decision.value).toEqual(history);
     expect(summarize).not.toHaveBeenCalled();
   });
 
@@ -69,8 +70,8 @@ describe('summaryStrategy', () => {
       summarize: async (msgs) => `Async summary of ${msgs.length}`,
     });
 
-    const result = await strategy.prepare(conversation(6), msgCtx());
-    expect(result[0].content).toBe('Async summary of 4');
+    const decision = await strategy.prepare(conversation(6), msgCtx());
+    expect(decision.value[0].content).toBe('Async summary of 4');
   });
 
   it('skips summary when summarizer returns empty string', async () => {
@@ -79,9 +80,9 @@ describe('summaryStrategy', () => {
       summarize: () => '',
     });
 
-    const result = await strategy.prepare(conversation(6), msgCtx());
+    const decision = await strategy.prepare(conversation(6), msgCtx());
     // Just the last 2, no summary message
-    expect(result.length).toBe(2);
+    expect(decision.value.length).toBe(2);
   });
 });
 
@@ -100,7 +101,8 @@ describe('compositeMessages', () => {
 
     const history = [systemMessage('System.'), ...conversation(8)];
 
-    const result = await strategy.prepare(history, msgCtx());
+    const decision = await strategy.prepare(history, msgCtx());
+    const result = decision.value;
 
     // After summary: system + summary_system + 4 kept = 6 messages
     // After sliding window (maxMessages: 3 non-system): system + summary + last 3
@@ -112,16 +114,16 @@ describe('compositeMessages', () => {
   it('empty chain returns history unchanged', async () => {
     const strategy = compositeMessages([]);
     const history = conversation(4);
-    const result = await strategy.prepare(history, msgCtx());
-    expect(result).toEqual(history);
+    const decision = await strategy.prepare(history, msgCtx());
+    expect(decision.value).toEqual(history);
   });
 
   it('single strategy works like calling it directly', async () => {
     const strategy = compositeMessages([slidingWindow({ maxMessages: 2 })]);
 
     const history = conversation(6);
-    const result = await strategy.prepare(history, msgCtx());
-    expect(result.length).toBe(2);
+    const decision = await strategy.prepare(history, msgCtx());
+    expect(decision.value.length).toBe(2);
   });
 });
 
@@ -134,14 +136,14 @@ describe('persistentHistory', () => {
 
     // First call — no stored history
     const history1 = [userMessage('Hello'), assistantMessage('Hi!')];
-    const result1 = await strategy.prepare(history1, msgCtx());
-    expect(result1).toEqual(history1);
+    const decision1 = await strategy.prepare(history1, msgCtx());
+    expect(decision1.value).toEqual(history1);
 
     // Second call — stored history is merged with new messages
     const history2 = [userMessage('Hello'), assistantMessage('Hi!'), userMessage('How are you?')];
-    const result2 = await strategy.prepare(history2, msgCtx());
-    expect(result2.length).toBe(3);
-    expect(result2[2].content).toBe('How are you?');
+    const decision2 = await strategy.prepare(history2, msgCtx());
+    expect(decision2.value.length).toBe(3);
+    expect(decision2.value[2].content).toBe('How are you?');
   });
 
   it('separate conversations are isolated', async () => {
@@ -171,8 +173,8 @@ describe('persistentHistory', () => {
     const strategy = persistentHistory({ conversationId: 'new', store });
 
     const history = [userMessage('Fresh start')];
-    const result = await strategy.prepare(history, msgCtx());
-    expect(result).toEqual(history);
+    const decision = await strategy.prepare(history, msgCtx());
+    expect(decision.value).toEqual(history);
   });
 
   it('composes with other strategies via compositeMessages', async () => {
@@ -183,7 +185,7 @@ describe('persistentHistory', () => {
     ]);
 
     const history = conversation(6);
-    const result = await strategy.prepare(history, msgCtx());
-    expect(result.length).toBe(3); // sliding window keeps 3
+    const decision = await strategy.prepare(history, msgCtx());
+    expect(decision.value.length).toBe(3); // sliding window keeps 3
   });
 });

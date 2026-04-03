@@ -401,9 +401,10 @@ describe('buildAgentLoop — scenario', () => {
   it('ToolProvider.execute() used when provided', async () => {
     const registry = new ToolRegistry();
     const toolProvider: ToolProvider = {
-      resolve: vi.fn().mockReturnValue([
-        { name: 'remote', description: 'Remote tool', inputSchema: { type: 'object' } },
-      ]),
+      resolve: vi.fn().mockReturnValue({
+        value: [{ name: 'remote', description: 'Remote tool', inputSchema: { type: 'object' } }],
+        chosen: 'test',
+      }),
       execute: vi.fn().mockResolvedValue({ content: 'remote-result' }),
     };
 

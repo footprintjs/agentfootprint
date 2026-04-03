@@ -20,8 +20,8 @@ function ctx(msg: string, turn = 0): PromptContext {
 describe('Sample 04: Prompt Strategies', () => {
   it('staticPrompt — same prompt every time', () => {
     const prompt = staticPrompt('You are a helpful assistant.');
-    expect(prompt.resolve(ctx('hi'))).toBe('You are a helpful assistant.');
-    expect(prompt.resolve(ctx('bye'))).toBe('You are a helpful assistant.');
+    expect(prompt.resolve(ctx('hi')).value).toBe('You are a helpful assistant.');
+    expect(prompt.resolve(ctx('bye')).value).toBe('You are a helpful assistant.');
   });
 
   it('templatePrompt — interpolates variables', () => {
@@ -29,7 +29,7 @@ describe('Sample 04: Prompt Strategies', () => {
       role: 'a code reviewer',
     });
 
-    expect(prompt.resolve(ctx('hi', 3))).toBe('You are a code reviewer. This is turn 3.');
+    expect(prompt.resolve(ctx('hi', 3)).value).toBe('You are a code reviewer. This is turn 3.');
   });
 
   it('skillBasedPrompt — selects fragments by context', () => {
@@ -55,13 +55,13 @@ describe('Sample 04: Prompt Strategies', () => {
     );
 
     // Only matching skills are included
-    const codePrompt = prompt.resolve(ctx('write some code'));
+    const codePrompt = prompt.resolve(ctx('write some code')).value;
     expect(codePrompt).toContain('senior engineer');
     expect(codePrompt).toContain('well-tested code');
     expect(codePrompt).not.toContain('SQL');
 
     // Multiple skills can match
-    const bothPrompt = prompt.resolve(ctx('explain the database code'));
+    const bothPrompt = prompt.resolve(ctx('explain the database code')).value;
     expect(bothPrompt).toContain('SQL');
     expect(bothPrompt).toContain('explain concepts');
   });
@@ -76,6 +76,6 @@ describe('Sample 04: Prompt Strategies', () => {
     ]);
 
     const result = await prompt.resolve(ctx('help me with code', 5));
-    expect(result).toBe('You are an AI assistant.\n\nYou write code.\n\nCurrent turn: 5.');
+    expect(result.value).toBe('You are an AI assistant.\n\nYou write code.\n\nCurrent turn: 5.');
   });
 });

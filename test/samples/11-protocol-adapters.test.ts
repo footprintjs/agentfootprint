@@ -31,13 +31,13 @@ describe('Sample 11: Protocol Adapters', () => {
       const provider = mcpToolProvider({ client });
 
       // Resolve: see what tools are available
-      const tools = await provider.resolve({
+      const decision = await provider.resolve({
         message: '',
         turnNumber: 0,
         loopIteration: 0,
         messages: [],
       });
-      expect(tools.map((t) => t.name)).toEqual(['file_read', 'file_write']);
+      expect(decision.value.map((t) => t.name)).toEqual(['file_read', 'file_write']);
 
       // Execute: call a tool
       const result = await provider.execute!({
@@ -57,13 +57,13 @@ describe('Sample 11: Protocol Adapters', () => {
       // Prefix prevents collision with your own 'search' tool
       const provider = mcpToolProvider({ client, prefix: 'github_' });
 
-      const tools = await provider.resolve({
+      const decision = await provider.resolve({
         message: '',
         turnNumber: 0,
         loopIteration: 0,
         messages: [],
       });
-      expect(tools[0].name).toBe('github_search');
+      expect(decision.value[0].name).toBe('github_search');
 
       // Execute strips the prefix before calling MCP
       await provider.execute!({ id: 'tc1', name: 'github_search', arguments: { q: 'test' } });

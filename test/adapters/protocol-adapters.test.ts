@@ -39,17 +39,17 @@ describe('mcpToolProvider', () => {
     const client = mockMCPClient();
     const provider = mcpToolProvider({ client });
 
-    const tools = await provider.resolve({
+    const decision = await provider.resolve({
       message: 'test',
       turnNumber: 0,
       loopIteration: 0,
       messages: [],
     });
 
-    expect(tools).toHaveLength(2);
-    expect(tools[0].name).toBe('search');
-    expect(tools[0].description).toBe('Search the web');
-    expect(tools[1].name).toBe('calc');
+    expect(decision.value).toHaveLength(2);
+    expect(decision.value[0].name).toBe('search');
+    expect(decision.value[0].description).toBe('Search the web');
+    expect(decision.value[1].name).toBe('calc');
   });
 
   it('executes tool calls on MCP server', async () => {
@@ -82,15 +82,15 @@ describe('mcpToolProvider', () => {
     const client = mockMCPClient();
     const provider = mcpToolProvider({ client, prefix: 'mcp_' });
 
-    const tools = await provider.resolve({
+    const decision = await provider.resolve({
       message: 'test',
       turnNumber: 0,
       loopIteration: 0,
       messages: [],
     });
 
-    expect(tools[0].name).toBe('mcp_search');
-    expect(tools[1].name).toBe('mcp_calc');
+    expect(decision.value[0].name).toBe('mcp_search');
+    expect(decision.value[1].name).toBe('mcp_calc');
 
     // Execute should strip prefix
     await provider.execute!({ id: 'tc1', name: 'mcp_search', arguments: { q: 'test' } });
@@ -101,14 +101,14 @@ describe('mcpToolProvider', () => {
     const client = mockMCPClient({ listTools: async () => [] });
     const provider = mcpToolProvider({ client });
 
-    const tools = await provider.resolve({
+    const decision = await provider.resolve({
       message: 'test',
       turnNumber: 0,
       loopIteration: 0,
       messages: [],
     });
 
-    expect(tools).toEqual([]);
+    expect(decision.value).toEqual([]);
   });
 });
 

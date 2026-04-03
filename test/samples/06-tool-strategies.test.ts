@@ -32,8 +32,8 @@ const toolCtx = { message: '', turnNumber: 0, loopIteration: 0, messages: [] };
 describe('Sample 06: Tool Strategies', () => {
   it('staticTools — same tools every turn', async () => {
     const provider = staticTools([searchTool, submitTool]);
-    const tools = await provider.resolve(toolCtx);
-    expect(tools.map((t) => t.name)).toEqual(['search', 'submit']);
+    const decision = await provider.resolve(toolCtx);
+    expect(decision.value.map((t) => t.name)).toEqual(['search', 'submit']);
 
     // Execute a tool call
     const result = await provider.execute!({ id: 'tc1', name: 'search', arguments: { q: 'AI' } });
@@ -47,10 +47,10 @@ describe('Sample 06: Tool Strategies', () => {
     );
 
     const early = await provider.resolve({ ...toolCtx, turnNumber: 1 });
-    expect(early.map((t) => t.name)).toEqual(['search']);
+    expect(early.value.map((t) => t.name)).toEqual(['search']);
 
     const late = await provider.resolve({ ...toolCtx, turnNumber: 5 });
-    expect(late.map((t) => t.name)).toEqual(['search', 'submit']);
+    expect(late.value.map((t) => t.name)).toEqual(['search', 'submit']);
   });
 
   it('agentAsTool — wrap an agent as a tool', async () => {
@@ -78,9 +78,9 @@ describe('Sample 06: Tool Strategies', () => {
     ]);
 
     const early = await provider.resolve({ ...toolCtx, turnNumber: 1 });
-    expect(early).toHaveLength(1); // just search
+    expect(early.value).toHaveLength(1); // just search
 
     const late = await provider.resolve({ ...toolCtx, turnNumber: 3 });
-    expect(late).toHaveLength(2); // search + submit
+    expect(late.value).toHaveLength(2); // search + submit
   });
 });

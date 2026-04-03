@@ -24,7 +24,7 @@ const user = (text: string): Message => ({ role: 'user', content: text });
 const assistant = (text: string): Message => ({ role: 'assistant', content: text });
 const system = (text: string): Message => ({ role: 'system', content: text });
 
-const fullHistory: MessageStrategy = { prepare: (history) => history };
+const fullHistory: MessageStrategy = { prepare: (history) => ({ value: history, chosen: 'test' }) };
 
 function createTestStore(initial: Message[] = []) {
   const data = new Map<string, Message[]>();
@@ -208,7 +208,7 @@ describe('Messages slot — property', () => {
   });
 
   it('strategy receives full history before trimming', async () => {
-    const spy = vi.fn((history: Message[]) => history);
+    const spy = vi.fn((history: Message[]) => ({ value: history, chosen: 'test' }));
     const strategy: MessageStrategy = { prepare: spy };
     const msgs = [user('a'), user('b'), user('c')];
 
@@ -247,7 +247,7 @@ describe('Messages slot — security', () => {
   it('strategy.prepare() throwing propagates as error', async () => {
     const failStrategy: MessageStrategy = {
       prepare: () => { throw new Error('strategy crashed'); },
-    };
+    } as any;
     await expect(
       runSubflow({ strategy: failStrategy }, [user('hi')]),
     ).rejects.toThrow('strategy crashed');

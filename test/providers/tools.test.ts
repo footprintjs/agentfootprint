@@ -144,8 +144,8 @@ describe('compositeTools', () => {
   it('merges tools from multiple providers', async () => {
     const provider = compositeTools([staticTools([searchTool]), staticTools([calcTool])]);
 
-    const tools = await provider.resolve(toolCtx());
-    const names = tools.map((t) => t.name);
+    const decision = await provider.resolve(toolCtx());
+    const names = decision.value.map((t) => t.name);
     expect(names).toContain('search');
     expect(names).toContain('calc');
   });
@@ -166,9 +166,9 @@ describe('compositeTools', () => {
 
     const provider = compositeTools([staticTools([searchV1]), staticTools([searchV2])]);
 
-    const tools = await provider.resolve(toolCtx());
-    expect(tools.length).toBe(1);
-    expect(tools[0].description).toBe('Search v2');
+    const decision = await provider.resolve(toolCtx());
+    expect(decision.value.length).toBe(1);
+    expect(decision.value[0].description).toBe('Search v2');
   });
 
   it('delegates execute to provider with execute method', async () => {
@@ -201,12 +201,12 @@ describe('compositeTools', () => {
       dynamicTools((ctx) => (ctx.turnNumber > 2 ? [calcTool] : [])),
     ]);
 
-    const earlyTools = await provider.resolve(toolCtx({ turnNumber: 1 }));
-    expect(earlyTools.map((t) => t.name)).toEqual(['search']);
+    const earlyDecision = await provider.resolve(toolCtx({ turnNumber: 1 }));
+    expect(earlyDecision.value.map((t) => t.name)).toEqual(['search']);
 
-    const lateTools = await provider.resolve(toolCtx({ turnNumber: 3 }));
-    expect(lateTools.map((t) => t.name)).toContain('search');
-    expect(lateTools.map((t) => t.name)).toContain('calc');
+    const lateDecision = await provider.resolve(toolCtx({ turnNumber: 3 }));
+    expect(lateDecision.value.map((t) => t.name)).toContain('search');
+    expect(lateDecision.value.map((t) => t.name)).toContain('calc');
   });
 
   it('composes with agentAsTool', async () => {
@@ -222,8 +222,8 @@ describe('compositeTools', () => {
 
     const provider = compositeTools([staticTools([searchTool, delegateTool])]);
 
-    const tools = await provider.resolve(toolCtx());
-    expect(tools.map((t) => t.name)).toContain('delegate');
+    const decision = await provider.resolve(toolCtx());
+    expect(decision.value.map((t) => t.name)).toContain('delegate');
 
     const result = await provider.execute!({
       id: 'tc1',
@@ -235,7 +235,7 @@ describe('compositeTools', () => {
 
   it('empty composite returns no tools', async () => {
     const provider = compositeTools([]);
-    const tools = await provider.resolve(toolCtx());
-    expect(tools).toEqual([]);
+    const decision = await provider.resolve(toolCtx());
+    expect(decision.value).toEqual([]);
   });
 });
