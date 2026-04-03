@@ -132,6 +132,12 @@ export interface AgentLoopConfig {
    * Automatically enables `useCommitFlag`.
    */
   readonly commitMemory?: CommitMemoryConfig;
+
+  /**
+   * Callback when LLM instructions fire during tool execution.
+   * Used to connect InstructionRecorder to the instruction pipeline.
+   */
+  readonly onInstructionsFired?: (toolId: string, fired: import('../instructions').ResolvedInstruction[]) => void;
 }
 
 /**

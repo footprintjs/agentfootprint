@@ -17,7 +17,7 @@
 import { FlowChartExecutor, MetricRecorder } from 'footprintjs';
 import type { FlowChart as FlowChartType } from 'footprintjs';
 import { buildAgentLoop, AgentPattern } from '../loop';
-import { PendingFollowUpManager } from '../instructions';
+import { PendingFollowUpManager, InstructionRecorder } from '../instructions';
 import type { AgentLoopConfig } from '../loop';
 import { createAgentRenderer } from '../narrative';
 import { annotateSpecIcons } from '../../concepts/specIcons';
@@ -437,6 +437,14 @@ export class AgentRunner {
         conversationId: this.memoryConfig.conversationId,
       } : undefined,
       pattern: this.agentPattern,
+      onInstructionsFired: (toolId, fired) => {
+        // Forward to any InstructionRecorder in the recorders list
+        for (const rec of this.recorders) {
+          if (rec instanceof InstructionRecorder) {
+            rec.recordFirings(toolId, fired);
+          }
+        }
+      },
     };
   }
 }

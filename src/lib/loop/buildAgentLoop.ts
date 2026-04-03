@@ -113,14 +113,17 @@ export function buildAgentLoop(config: AgentLoopConfig, seed?: AgentLoopSeedOpti
 
   const onInstructionsFired = (toolId: string, fired: import('../instructions').ResolvedInstruction[]) => {
     // Find the first strict follow-up that fired (highest priority wins)
-    if (lastStrictFollowUp) return; // already have one from a previous tool call
-    for (const instr of fired) {
-      if (instr.resolvedFollowUp?.strict) {
-        lastStrictFollowUp = instr.resolvedFollowUp;
-        lastStrictSourceToolId = toolId;
-        return; // first match wins
+    if (!lastStrictFollowUp) {
+      for (const instr of fired) {
+        if (instr.resolvedFollowUp?.strict) {
+          lastStrictFollowUp = instr.resolvedFollowUp;
+          lastStrictSourceToolId = toolId;
+          break;
+        }
       }
     }
+    // Forward to external callback (InstructionRecorder)
+    config.onInstructionsFired?.(toolId, fired);
   };
 
   // Build call stages
