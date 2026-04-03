@@ -53,8 +53,13 @@ export function skillBasedPrompt(
         parts.push(skill.content);
       }
 
-      if (parts.length === 0) return fallback;
-      return parts.join(separator);
+      const value = parts.length === 0 ? fallback : parts.join(separator);
+      const matchedIds = matched.map((s) => s.id);
+      return {
+        value,
+        chosen: matchedIds.length > 0 ? `skills: ${matchedIds.join(', ')}` : 'fallback',
+        rationale: matchedIds.length > 0 ? `${matchedIds.length} skills matched` : 'no skills matched',
+      };
     },
   };
 }

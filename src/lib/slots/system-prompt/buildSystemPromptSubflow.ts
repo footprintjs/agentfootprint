@@ -56,12 +56,15 @@ export function buildSystemPromptSubflow(config: SystemPromptSlotConfig): FlowCh
     'ResolvePrompt',
     async (scope) => {
       const ctx = buildPromptContext(scope);
-      const prompt = await config.provider.resolve(ctx);
-      scope.systemPrompt = prompt;
+      const decision = await config.provider.resolve(ctx);
+      scope.systemPrompt = decision.value;
 
-      // Narrative enrichment — summarize the resolved prompt for BTS visibility
-      const preview = prompt.length > 60 ? prompt.slice(0, 60) + '...' : prompt;
-      scope.promptSummary = `${prompt.length} chars: "${preview}"`;
+      // Narrative enrichment — decision + prompt preview for BTS visibility
+      scope.promptDecision = decision.chosen !== 'static'
+        ? `${decision.chosen}${decision.rationale ? ` (${decision.rationale})` : ''}`
+        : undefined;
+      const preview = decision.value.length > 60 ? decision.value.slice(0, 60) + '...' : decision.value;
+      scope.promptSummary = `${decision.value.length} chars: "${preview}"`;
     },
     'resolve-prompt',
     undefined,

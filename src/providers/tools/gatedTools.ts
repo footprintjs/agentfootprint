@@ -63,21 +63,29 @@ export function gatedTools(
   let lastContext: ToolContext | undefined;
 
   return {
-    resolve: async (context: ToolContext): Promise<LLMToolDescription[]> => {
+    resolve: async (context: ToolContext) => {
       lastContext = context;
-      const all = await inner.resolve(context);
+      const innerDecision = await inner.resolve(context);
 
       // Filter: only return tools the user has permission for
       const allowed: LLMToolDescription[] = [];
-      for (const tool of all) {
+      const blocked: string[] = [];
+      for (const tool of innerDecision.value) {
         const permitted = await isAllowed(tool.name, context);
         if (permitted) {
           allowed.push(tool);
         } else {
+          blocked.push(tool.name);
           options?.onBlocked?.(tool.name, 'resolve', context);
         }
       }
-      return allowed;
+      return {
+        value: allowed,
+        chosen: blocked.length > 0 ? 'gated' : innerDecision.chosen,
+        rationale: blocked.length > 0
+          ? `${allowed.length} allowed, ${blocked.length} blocked: ${blocked.join(', ')}`
+          : innerDecision.rationale,
+      };
     },
 
     execute: inner.execute

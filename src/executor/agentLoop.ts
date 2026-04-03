@@ -83,16 +83,18 @@ export async function agentLoop(
 
       // 2. Prepare messages
       const messageCtx = { message, turnNumber, loopIteration, signal };
-      const preparedMessages = await messageStrategy.prepare(history, messageCtx);
+      const messageDecision = await messageStrategy.prepare(history, messageCtx);
+      const preparedMessages = messageDecision.value;
 
       // 3. Call LLM
-      const toolDescriptions = await toolProvider.resolve({
+      const toolDecision = await toolProvider.resolve({
         message,
         turnNumber,
         loopIteration,
         messages: preparedMessages,
         signal,
       });
+      const toolDescriptions = toolDecision.value;
 
       const llmStart = Date.now();
       const llmResponse = await llmProvider.chat(preparedMessages, {

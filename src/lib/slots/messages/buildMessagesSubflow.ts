@@ -85,8 +85,8 @@ function buildInMemorySubflow(strategy: MessageStrategy): FlowChart {
     async (scope) => {
       const messages = scope.currentMessages ?? [];
       const ctx = buildMessageContext(scope, messages);
-      const prepared = await strategy.prepare(messages, ctx);
-      scope.memory_preparedMessages = prepared;
+      const decision = await strategy.prepare(messages, ctx);
+      scope.memory_preparedMessages = decision.value;
     },
     'apply-strategy',
     undefined,
@@ -127,8 +127,8 @@ function buildPersistentSubflow(
         // Stage 2: Apply the message strategy (window, trim, summarize)
         const merged = scope.memory_storedHistory ?? [];
         const ctx = buildMessageContext(scope, merged);
-        const prepared = await strategy.prepare(merged, ctx);
-        scope.memory_preparedMessages = prepared;
+        const decision = await strategy.prepare(merged, ctx);
+        scope.memory_preparedMessages = decision.value;
       },
       'apply-strategy',
       'Apply message strategy to history',

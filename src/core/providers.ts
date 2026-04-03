@@ -1,10 +1,64 @@
 /**
  * Provider interfaces — active strategies that shape what the LLM sees.
- * Like ScopeFactory in footprintjs — consumers swap implementations.
+ *
+ * Every provider resolves a value AND explains its decision via SlotDecision<T>.
+ * The decision (chosen + rationale) appears in the narrative — making every
+ * strategy choice explainable.
+ *
+ * @example
+ * ```typescript
+ * // Static provider — always returns the same value
+ * { value: 'You are helpful.', chosen: 'static' }
+ *
+ * // Dynamic provider — changes based on conversation state
+ * { value: [...adminTools], chosen: 'elevated', rationale: 'identity verified' }
+ * ```
  */
 
 import type { Message, ToolCall } from '../types/messages';
 import type { LLMToolDescription } from '../types/llm';
+
+// ── SlotDecision ───────────────────────────────────────────
+// Unified return type for all slot resolvers.
+// Same vocabulary as footprintjs FlowDecisionEvent (chosen + rationale).
+
+/**
+ * Every slot resolver returns a value AND a decision explanation.
+ *
+ * - `value`: the resolved output (tools, prompt, messages)
+ * - `chosen`: label for what was selected — shown in narrative
+ * - `rationale`: why this choice was made — shown in narrative
+ *
+ * The narrative renders: `"Chose {chosen} ({rationale})"`
+ *
+ * @example
+ * ```typescript
+ * // Simple static decision
+ * { value: 'You are helpful.', chosen: 'static' }
+ *
+ * // Dynamic decision based on conversation state
+ * {
+ *   value: [...basicTools, ...adminTools],
+ *   chosen: 'elevated',
+ *   rationale: 'identity verified in previous turn',
+ * }
+ *
+ * // Message strategy decision
+ * {
+ *   value: keptMessages,
+ *   chosen: 'sliding-window',
+ *   rationale: 'kept 12 of 45 messages',
+ * }
+ * ```
+ */
+export interface SlotDecision<T> {
+  /** The resolved value. */
+  readonly value: T;
+  /** What was chosen — shown as decision label in narrative. */
+  readonly chosen: string;
+  /** Why this was chosen — shown as rationale in narrative. Optional for static providers. */
+  readonly rationale?: string;
+}
 
 // ── Context Types ───────────────────────────────────────────
 // Read-only snapshots passed to providers so they can make decisions.
@@ -48,41 +102,71 @@ export interface ToolContext {
 
 /**
  * Resolves the system prompt for a given turn.
- * Static strings, templates, skill-based, or adaptive — all implement this.
+ *
+ * Returns `SlotDecision<string>` — the prompt text + why this prompt was chosen.
+ * Static providers return `chosen: 'static'`. Dynamic providers explain the reason.
+ *
+ * @example
+ * ```typescript
+ * const dynamicPrompt: PromptProvider = {
+ *   resolve: (ctx) => {
+ *     const hasFlaggedOrder = ctx.history.some(m => m.content?.includes('flagged'));
+ *     if (hasFlaggedOrder) {
+ *       return { value: escalationPrompt, chosen: 'escalation', rationale: 'flagged order detected' };
+ *     }
+ *     return { value: basicPrompt, chosen: 'standard' };
+ *   },
+ * };
+ * ```
  */
 export interface PromptProvider {
-  resolve(context: PromptContext): string | Promise<string>;
+  resolve(context: PromptContext): SlotDecision<string> | Promise<SlotDecision<string>>;
 }
 
 /**
  * Prepares the message array sent to the LLM each turn.
- * Full history, sliding window, smart summarize — all implement this.
  *
- * May return synchronously (simple strategies) or asynchronously
- * (strategies that call an LLM to summarize old messages).
+ * Returns `SlotDecision<Message[]>` — the prepared messages + strategy label.
+ *
+ * @example
+ * ```typescript
+ * const strategy: MessageStrategy = {
+ *   prepare: (history, ctx) => {
+ *     if (history.length > 50) {
+ *       const kept = history.slice(-20);
+ *       return { value: kept, chosen: 'truncated', rationale: `kept 20 of ${history.length}` };
+ *     }
+ *     return { value: history, chosen: 'full', rationale: `${history.length} messages` };
+ *   },
+ * };
+ * ```
  */
 export interface MessageStrategy {
-  prepare(history: Message[], context: MessageContext): Message[] | Promise<Message[]>;
+  prepare(history: Message[], context: MessageContext): SlotDecision<Message[]> | Promise<SlotDecision<Message[]>>;
 }
 
 /**
  * Resolves available tools and optionally executes tool calls.
  *
- * Two usage patterns:
- * - **Self-contained** (resolve + execute): provide both methods. The provider
- *   owns the full tool lifecycle. Use for simple static tools.
- * - **Resolver-only** (resolve only): omit `execute`. The core loop uses
- *   `ToolDefinition.handler` from the resolved set directly, or delegates
- *   to a separate executor (retry wrapper, circuit breaker).
- *   Use when resolution and execution are different concerns.
+ * Returns `SlotDecision<LLMToolDescription[]>` — the tool set + decision.
  *
- * Built-in providers (`staticTools`, `dynamicTools`, `noTools`) handle the
- * common cases. Implement `ToolProvider` directly for remote execution
- * (MCP servers, A2A agents, OpenAPI endpoints).
+ * @example
+ * ```typescript
+ * const dynamicTools: ToolProvider = {
+ *   resolve: (ctx) => {
+ *     const verified = ctx.messages.some(m =>
+ *       m.role === 'tool' && m.content.includes('"verified":true'));
+ *     if (verified) {
+ *       return { value: [...basic, ...admin], chosen: 'elevated', rationale: 'identity verified' };
+ *     }
+ *     return { value: basic, chosen: 'basic', rationale: 'standard access' };
+ *   },
+ * };
+ * ```
  */
 export interface ToolProvider {
   /** Which tools to offer the LLM this turn. */
-  resolve(context: ToolContext): LLMToolDescription[] | Promise<LLMToolDescription[]>;
+  resolve(context: ToolContext): SlotDecision<LLMToolDescription[]> | Promise<SlotDecision<LLMToolDescription[]>>;
   /** Execute a tool call. Optional — if omitted, core loop uses ToolDefinition.handler directly. */
   execute?(call: ToolCall, signal?: AbortSignal): Promise<ToolExecutionResult>;
 }

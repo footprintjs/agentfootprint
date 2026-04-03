@@ -20,18 +20,24 @@ import type { LLMToolDescription } from '../../types/llm';
 
 export function compositeTools(providers: readonly ToolProvider[]): ToolProvider {
   return {
-    resolve: async (context: ToolContext): Promise<LLMToolDescription[]> => {
-      const allResults = await Promise.all(providers.map((p) => p.resolve(context)));
+    resolve: async (context: ToolContext) => {
+      const allDecisions = await Promise.all(providers.map((p) => p.resolve(context)));
 
       // Merge with last-write-wins by tool name
       const toolMap = new Map<string, LLMToolDescription>();
-      for (const tools of allResults) {
-        for (const tool of tools) {
+      for (const decision of allDecisions) {
+        for (const tool of decision.value) {
           toolMap.set(tool.name, tool);
         }
       }
 
-      return Array.from(toolMap.values());
+      const merged = Array.from(toolMap.values());
+      const labels = allDecisions.map((d) => d.chosen).filter((c) => c !== 'static');
+      return {
+        value: merged,
+        chosen: labels.length > 0 ? `composite: ${labels.join(' + ')}` : 'composite',
+        rationale: `${merged.length} tools from ${providers.length} providers`,
+      };
     },
 
     execute: async (call: ToolCall, signal?: AbortSignal): Promise<ToolExecutionResult> => {

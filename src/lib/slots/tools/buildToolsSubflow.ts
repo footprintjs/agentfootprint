@@ -53,12 +53,15 @@ export function buildToolsSubflow(config: ToolsSlotConfig): FlowChart {
     'ResolveTools',
     async (scope) => {
       const ctx = buildToolContext(scope);
-      const tools = await config.provider.resolve(ctx);
-      scope.toolDescriptions = tools;
+      const decision = await config.provider.resolve(ctx);
+      scope.toolDescriptions = decision.value;
 
-      // Narrative enrichment — summarize resolved tools for BTS visibility
-      const names = tools.map((t) => t.name ?? '?');
-      scope.resolvedTools = `${tools.length} tools: ${names.join(', ')}`;
+      // Narrative enrichment — decision + tool summary for BTS visibility
+      scope.toolDecision = decision.chosen !== 'static'
+        ? `${decision.chosen}${decision.rationale ? ` (${decision.rationale})` : ''}`
+        : undefined;
+      const names = decision.value.map((t) => t.name ?? '?');
+      scope.resolvedTools = `${decision.value.length} tools: ${names.join(', ')}`;
     },
     'resolve-tools',
     undefined,

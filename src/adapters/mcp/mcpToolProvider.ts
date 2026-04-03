@@ -17,7 +17,6 @@
 
 import type { ToolCall } from '../../types/messages';
 import type { ToolProvider, ToolExecutionResult } from '../../core';
-import type { LLMToolDescription } from '../../types/llm';
 
 // ── MCP Client Interface ─────────────────────────────────────
 
@@ -53,13 +52,14 @@ export function mcpToolProvider(options: MCPToolProviderOptions): ToolProvider {
   const { client, prefix = '' } = options;
 
   return {
-    resolve: async (): Promise<LLMToolDescription[]> => {
+    resolve: async () => {
       const tools = await client.listTools();
-      return tools.map((t) => ({
+      const value = tools.map((t) => ({
         name: prefix + t.name,
         description: t.description ?? '',
         inputSchema: t.inputSchema ?? {},
       }));
+      return { value, chosen: 'mcp', rationale: `${value.length} tools from MCP server` };
     },
 
     execute: async (call: ToolCall, _signal?: AbortSignal): Promise<ToolExecutionResult> => {

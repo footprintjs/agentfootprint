@@ -37,15 +37,20 @@ export function summaryStrategy(options: SummaryStrategyOptions): MessageStrateg
       const system = history.filter((m) => m.role === 'system');
       const rest = history.filter((m) => m.role !== 'system');
 
-      if (rest.length <= keepLast) return history;
+      if (rest.length <= keepLast) {
+        return { value: history, chosen: 'summary', rationale: `${history.length} messages (within limit)` };
+      }
 
       const old = rest.slice(0, rest.length - keepLast);
       const kept = rest.slice(-keepLast);
 
       const summary = await summarize(old);
-      if (!summary) return [...system, ...kept];
+      if (!summary) {
+        return { value: [...system, ...kept], chosen: 'summary', rationale: `summarized ${old.length} old messages (summary empty)` };
+      }
 
-      return [...system, systemMessage(summary), ...kept];
+      const result = [...system, systemMessage(summary), ...kept];
+      return { value: result, chosen: 'summary', rationale: `summarized ${old.length} old, kept ${kept.length} recent` };
     },
   };
 }

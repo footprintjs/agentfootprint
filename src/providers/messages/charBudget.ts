@@ -39,7 +39,12 @@ export function charBudget(options: CharBudgetOptions): MessageStrategy {
         kept.unshift(rest[i]);
       }
 
-      return [...system, ...kept];
+      const result = [...system, ...kept];
+      return {
+        value: result,
+        chosen: 'char-budget',
+        rationale: `kept ${result.length} of ${history.length} (${totalChars} chars)`,
+      };
     },
   };
 }

@@ -21,12 +21,30 @@ import type { MessageStrategy, MessageContext } from '../../core';
 export function withToolPairSafety(inner: MessageStrategy): MessageStrategy {
   return {
     prepare: (history: Message[], context: MessageContext) => {
-      const result = inner.prepare(history, context);
+      const decision = inner.prepare(history, context);
       // Handle both sync and async strategies
-      if (result instanceof Promise) {
-        return result.then(sanitize);
+      if (decision instanceof Promise) {
+        return decision.then((d) => {
+          const sanitized = sanitize(d.value);
+          const dropped = d.value.length - sanitized.length;
+          return {
+            value: sanitized,
+            chosen: d.chosen,
+            rationale: dropped > 0
+              ? `${d.rationale ?? ''}; dropped ${dropped} orphaned tool messages`
+              : d.rationale,
+          };
+        });
       }
-      return sanitize(result);
+      const sanitized = sanitize(decision.value);
+      const dropped = decision.value.length - sanitized.length;
+      return {
+        value: sanitized,
+        chosen: decision.chosen,
+        rationale: dropped > 0
+          ? `${decision.rationale ?? ''}; dropped ${dropped} orphaned tool messages`
+          : decision.rationale,
+      };
     },
   };
 }

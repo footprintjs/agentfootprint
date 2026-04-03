@@ -1,12 +1,5 @@
 /**
  * staticTools — ToolProvider with a fixed list of tools.
- *
- * The simplest tool provider. Same tools available every turn.
- * Resolves from a flat list of ToolDefinition objects and executes
- * by calling the handler directly.
- *
- * Usage:
- *   agentLoop().toolProvider(staticTools([searchTool, calcTool]))
  */
 
 import type { ToolCall } from '../../types/messages';
@@ -17,12 +10,15 @@ export function staticTools(tools: ToolDefinition[]): ToolProvider {
   const toolMap = new Map(tools.map((t) => [t.id, t]));
 
   return {
-    resolve: () =>
-      tools.map((t) => ({
+    resolve: () => ({
+      value: tools.map((t) => ({
         name: t.id,
         description: t.description,
         inputSchema: t.inputSchema,
       })),
+      chosen: 'static',
+      rationale: `${tools.length} tool${tools.length !== 1 ? 's' : ''}`,
+    }),
 
     execute: async (call: ToolCall): Promise<ToolExecutionResult> => {
       const tool = toolMap.get(call.name);

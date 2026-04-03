@@ -27,8 +27,13 @@ export function compositePrompt(
 
   return {
     resolve: async (ctx: PromptContext) => {
-      const results = await Promise.all(providers.map((p) => p.resolve(ctx)));
-      return results.filter((r) => r.length > 0).join(separator);
+      const decisions = await Promise.all(providers.map((p) => p.resolve(ctx)));
+      const values = decisions.map((d) => d.value).filter((v) => v.length > 0);
+      const labels = decisions.map((d) => d.chosen).filter((c) => c !== 'static');
+      return {
+        value: values.join(separator),
+        chosen: labels.length > 0 ? `composite: ${labels.join(' + ')}` : 'composite',
+      };
     },
   };
 }

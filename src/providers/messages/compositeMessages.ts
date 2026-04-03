@@ -19,10 +19,17 @@ export function compositeMessages(strategies: readonly MessageStrategy[]): Messa
   return {
     prepare: async (history: Message[], context: MessageContext) => {
       let messages = history;
+      const labels: string[] = [];
       for (const strategy of strategies) {
-        messages = await strategy.prepare(messages, context);
+        const decision = await strategy.prepare(messages, context);
+        messages = decision.value;
+        if (decision.chosen !== 'static') labels.push(decision.chosen);
       }
-      return messages;
+      return {
+        value: messages,
+        chosen: labels.length > 0 ? `composite: ${labels.join(' → ')}` : 'composite',
+        rationale: `${messages.length} messages after ${strategies.length} strategies`,
+      };
     },
   };
 }

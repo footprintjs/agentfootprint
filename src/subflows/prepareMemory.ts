@@ -107,8 +107,8 @@ export function createPrepareMemorySubflow(config: PrepareMemoryConfig) {
       loopIteration: 0,
     };
 
-    const prepared = await config.strategy.prepare(merged, ctx);
-    scope.memory_preparedMessages = prepared;
+    const decision = await config.strategy.prepare(merged, ctx);
+    scope.memory_preparedMessages = decision.value;
   };
 
   return flowChart<MessagesSubflowState>('LoadHistory', loadHistory, 'load-history')

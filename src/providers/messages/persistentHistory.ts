@@ -47,7 +47,11 @@ export function persistentHistory(options: PersistentHistoryOptions): MessageStr
       const merged = stored.length > 0 ? [...stored, ...history.slice(stored.length)] : history;
 
       await store.save(conversationId, merged);
-      return merged;
+      return {
+        value: merged,
+        chosen: 'persistent',
+        rationale: stored.length > 0 ? `loaded ${stored.length} stored + ${history.length - stored.length} new` : `${history.length} messages (first turn)`,
+      };
     },
   };
 }

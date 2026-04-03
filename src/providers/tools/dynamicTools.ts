@@ -30,11 +30,15 @@ export function dynamicTools(resolver: ToolResolver): ToolProvider {
   return {
     resolve: async (context: ToolContext) => {
       const tools = await resolver(context);
-      return tools.map((t) => ({
-        name: t.id,
-        description: t.description,
-        inputSchema: t.inputSchema,
-      }));
+      return {
+        value: tools.map((t) => ({
+          name: t.id,
+          description: t.description,
+          inputSchema: t.inputSchema,
+        })),
+        chosen: 'dynamic',
+        rationale: `${tools.length} tool${tools.length !== 1 ? 's' : ''} resolved`,
+      };
     },
     // No execute — core loop uses ToolDefinition.handler from resolved set.
     // This avoids cache staleness. For remote execution, implement ToolProvider directly.

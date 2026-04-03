@@ -83,6 +83,7 @@ export interface SystemPromptSubflowState {
   loopCount: number;
   systemPrompt: string;
   promptSummary: string;
+  promptDecision?: string;
 }
 
 /** State for the Tools slot subflow. */
@@ -91,6 +92,7 @@ export interface ToolsSubflowState {
   loopCount: number;
   toolDescriptions: LLMToolDescription[];
   resolvedTools: string;
+  toolDecision?: string;
 }
 
 /** State for the Messages slot subflow (in-memory path). */

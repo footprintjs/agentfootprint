@@ -12,6 +12,7 @@
 
 // Provider interfaces + context types
 export type {
+  SlotDecision,
   PromptProvider,
   MessageStrategy,
   ToolProvider,
