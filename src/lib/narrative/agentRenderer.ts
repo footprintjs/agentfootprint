@@ -72,6 +72,9 @@ const PROMOTED_LABELS: Record<string, string> = {
   responseType: 'Response',
   resolvedTools: 'Tools',
   promptSummary: 'Prompt',
+  // SlotDecision labels — shown when non-static (dynamic providers explain their choice)
+  promptDecision: 'Chose',
+  toolDecision: 'Chose',
 };
 
 // ── Suppressed keys: true internals that add noise, not insight ──────────────
@@ -86,6 +89,8 @@ const SUPPRESSED_KEYS = new Set([
   'memory_preparedMessages', 'memory_storedHistory', 'memory_shouldCommit',
   // Raw adapter response (redundant — parsedResponse is the useful form)
   'adapterResult', 'adapterRawResponse',
+  // Swarm internals (the decision is shown by RouteSpecialist, not these keys)
+  'specialistMessage', 'specialistToolCallId',
   // Subflow intermediate state (replaced by ApplyPreparedMessages write)
   'currentMessages',
   // Enrichment summaries (avoid double-reporting — the promoted labels above show these)
@@ -210,6 +215,8 @@ export function createAgentRenderer(): NarrativeRenderer {
 
       // Promoted keys: their value IS the narrative
       if (PROMOTED_LABELS[key]) {
+        // Suppress when value is undefined/null (e.g., static providers don't set decision keys)
+        if (rawValue == null) return null;
         return `${PROMOTED_LABELS[key]}: ${String(rawValue)}`;
       }
 
