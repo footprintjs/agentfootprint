@@ -75,6 +75,7 @@ const PROMOTED_LABELS: Record<string, string> = {
   // SlotDecision labels — shown when non-static (dynamic providers explain their choice)
   promptDecision: 'Chose',
   toolDecision: 'Chose',
+  specialistResult: 'Specialist returned',
 };
 
 // ── Suppressed keys: true internals that add noise, not insight ──────────────
@@ -203,12 +204,9 @@ export function createAgentRenderer(): NarrativeRenderer {
     renderOp(ctx: OpRenderContext): string | null {
       const { key, type, rawValue, operation } = ctx;
 
-      // Suppress most reads — writes tell the story.
-      // Exception: parsedResponse reads in tool execution show tool names + args.
-      if (type === 'read') {
-        if (key === 'parsedResponse') return formatParsedResponse(rawValue);
-        return null;
-      }
+      // Suppress all reads — writes tell the story.
+      // parsedResponse is already shown at the ParseResponse write stage.
+      if (type === 'read') return null;
 
       // Suppress internal keys
       if (SUPPRESSED_KEYS.has(key)) return null;

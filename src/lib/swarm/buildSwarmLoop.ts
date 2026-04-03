@@ -205,9 +205,12 @@ export function buildSwarmLoop(
           // applyOutputMapping concatenates arrays — return ONLY the new tool result message.
           const resultContent = (sfOutput.result as string) ?? (sfOutput.content as string) ?? '';
           const toolCallId = (parentScope.specialistToolCallId as string) ?? `specialist-${Date.now()}`;
+          // Narrative enrichment: show specialist result at root level
+          const preview = resultContent.length > 120 ? resultContent.slice(0, 120) + '...' : resultContent;
           return {
             messages: [toolResultMessage(resultContent, toolCallId)],
             loopCount: ((parentScope.loopCount as number) ?? 0) + 1,
+            specialistResult: preview,
           };
         },
       },
