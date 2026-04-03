@@ -149,21 +149,20 @@ export function buildAgentLoop(config: AgentLoopConfig, seed?: AgentLoopSeedOpti
   // Seed stage: initialize all required scope state.
   // In subflowMode, reads `message` from scope (set by parent's inputMapper).
   // In normal mode, uses baked-in seed/existing messages.
+  // Named stage functions for readability and AI-agent understanding
+  const seedStage = (scope: import('footprintjs').TypedScope<AgentLoopState>) => {
+    if (subflowMode) {
+      const msg = scope.message ?? '';
+      scope.messages = msg ? [userMessage(msg)] : [];
+    } else {
+      scope.messages = [...existingMessages, ...seedMessages];
+    }
+    scope.loopCount = 0;
+    scope.maxIterations = maxIterations;
+  };
+
   let builder = flowChart<AgentLoopState>(
-    'Seed',
-    (scope) => {
-      if (subflowMode) {
-        const msg = scope.message ?? '';
-        scope.messages = msg ? [userMessage(msg)] : [];
-      } else {
-        scope.messages = [...existingMessages, ...seedMessages];
-      }
-      scope.loopCount = 0;
-      scope.maxIterations = maxIterations;
-    },
-    'seed',
-    undefined,
-    'Initialize agent loop state',
+    'Seed', seedStage, 'seed', undefined, 'Initialize agent loop state',
   );
 
   // Mount SystemPrompt subflow
@@ -202,17 +201,17 @@ export function buildAgentLoop(config: AgentLoopConfig, seed?: AgentLoopSeedOpti
   // ApplyPreparedMessages — copy prepared messages from temp key to 'messages'.
   // Clears memory_preparedMessages after reading to prevent applyOutputMapping
   // array concat from accumulating stale messages on Dynamic ReAct loop iterations.
+  const applyPreparedMessagesStage = (scope: import('footprintjs').TypedScope<AgentLoopState>) => {
+    const prepared = scope.memory_preparedMessages;
+    if (prepared) {
+      scope.messages = prepared;
+      scope.memory_preparedMessages = undefined as any;
+    }
+  };
+
   builder = builder.addFunction(
-    'ApplyPreparedMessages',
-    (scope) => {
-      const prepared = scope.memory_preparedMessages;
-      if (prepared) {
-        scope.messages = prepared;
-        scope.memory_preparedMessages = undefined as any;
-      }
-    },
-    'apply-prepared-messages',
-    'Copy prepared messages from Messages slot output to scope',
+    'ApplyPreparedMessages', applyPreparedMessagesStage,
+    'apply-prepared-messages', 'Copy prepared messages from Messages slot output to scope',
   );
 
   // Mount Tools subflow
@@ -231,18 +230,18 @@ export function buildAgentLoop(config: AgentLoopConfig, seed?: AgentLoopSeedOpti
     },
   );
 
+  const assemblePromptStage = (scope: import('footprintjs').TypedScope<AgentLoopState>) => {
+    const messages = scope.messages ?? [];
+    const sysPrompt = scope.systemPrompt;
+    if (sysPrompt && (messages.length === 0 || messages[0].role !== 'system')) {
+      scope.messages = [systemMessage(sysPrompt), ...messages];
+    }
+  };
+
   // AssemblePrompt: prepend system message if not already present
   builder = builder.addFunction(
-    'AssemblePrompt',
-    (scope) => {
-      const messages = scope.messages ?? [];
-      const sysPrompt = scope.systemPrompt;
-      if (sysPrompt && (messages.length === 0 || messages[0].role !== 'system')) {
-        scope.messages = [systemMessage(sysPrompt), ...messages];
-      }
-    },
-    'assemble-prompt',
-    'Prepend system prompt to messages before LLM call',
+    'AssemblePrompt', assemblePromptStage,
+    'assemble-prompt', 'Prepend system prompt to messages before LLM call',
   );
 
   // CallLLM → ParseResponse → RouteResponse(decider)
