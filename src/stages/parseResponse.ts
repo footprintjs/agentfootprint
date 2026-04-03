@@ -5,11 +5,12 @@
 
 import type { TypedScope } from 'footprintjs';
 import { assistantMessage } from '../types';
-import type { RAGState } from '../scope/types';
+import type { AdapterResult } from '../types/adapter';
+import type { BaseLLMState } from '../scope/types';
 import { appendMessage } from '../memory';
 
-export function parseResponseStage(scope: TypedScope<RAGState>): void {
-  const result = scope.adapterResult;
+export function parseResponseStage(scope: TypedScope<BaseLLMState>): void {
+  const result = scope.adapterResult as AdapterResult | undefined;
 
   if (!result) {
     throw new Error('ParseResponse: no adapter result in scope');
@@ -27,7 +28,6 @@ export function parseResponseStage(scope: TypedScope<RAGState>): void {
 
   scope.parsedResponse = parsed;
 
-  // Append assistant message to conversation
   const messages = scope.messages ?? [];
   const asstMsg = assistantMessage(
     result.content,

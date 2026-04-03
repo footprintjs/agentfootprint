@@ -29,6 +29,21 @@ export interface ParsedResponse {
   readonly content: string;
 }
 
+// ── Base LLM State (shared by all patterns) ─────────────────
+// Stages like CallLLM, ParseResponse are typed against this base —
+// no 'as any' needed when used in Agent, RAG, or Swarm patterns.
+
+/** Minimal state shared by all patterns that call an LLM. */
+export interface BaseLLMState {
+  messages: Message[];
+  toolDescriptions?: LLMToolDescription[];
+  adapterResult?: AdapterResult;
+  adapterRawResponse?: LLMResponse;
+  parsedResponse?: ParsedResponse;
+  result?: string;
+  [key: string]: unknown;
+}
+
 // ── Agent Loop State ─────────────────────────────────────────
 
 /** Full state for the agent loop flowchart (buildAgentLoop). */
@@ -107,15 +122,11 @@ export interface MessagesSubflowState {
 // ── RAG State ────────────────────────────────────────────────
 
 /** State for RAG pattern flowcharts. */
-export interface RAGState {
-  messages: Message[];
+export interface RAGState extends BaseLLMState {
   systemPrompt: string;
   retrievalQuery: string;
   retrievalResult: RetrievalResult;
   contextWindow: string;
-  adapterResult: AdapterResult;
-  adapterRawResponse: LLMResponse;
-  parsedResponse: ParsedResponse;
   result: string;
 }
 

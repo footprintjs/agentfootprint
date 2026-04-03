@@ -206,7 +206,8 @@ export function buildAgentLoop(config: AgentLoopConfig, seed?: AgentLoopSeedOpti
     const prepared = scope.memory_preparedMessages;
     if (prepared) {
       scope.messages = prepared;
-      scope.memory_preparedMessages = undefined as any;
+      // Clear to prevent applyOutputMapping concat on next Dynamic ReAct iteration
+      scope.$setValue('memory_preparedMessages', undefined);
     }
   };
 

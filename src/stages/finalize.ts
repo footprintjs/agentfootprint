@@ -4,10 +4,10 @@
 
 import type { TypedScope } from 'footprintjs';
 import { getTextContent } from '../types/content';
-import type { RAGState } from '../scope/types';
+import type { BaseLLMState } from '../scope/types';
 import { lastAssistantMessage } from '../memory';
 
-export function finalizeStage(scope: TypedScope<RAGState>): void {
+export function finalizeStage(scope: TypedScope<BaseLLMState>): void {
   const messages = scope.messages ?? [];
   const lastAsst = lastAssistantMessage(messages);
 

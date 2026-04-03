@@ -3,23 +3,19 @@
  */
 
 import type { TypedScope } from 'footprintjs';
-import type { LLMProvider, LLMToolDescription } from '../types';
-import type { RAGState } from '../scope/types';
+import type { LLMProvider } from '../types';
+import type { BaseLLMState } from '../scope/types';
 import { normalizeAdapterResponse } from './helpers';
 
 export function createCallLLMStage(provider: LLMProvider) {
-  return async (scope: TypedScope<RAGState>) => {
+  return async (scope: TypedScope<BaseLLMState>) => {
     const messages = scope.messages ?? [];
-    const tools =
-      (scope.$getValue('toolDescriptions') as LLMToolDescription[] | undefined) ?? [];
+    const tools = scope.toolDescriptions ?? [];
 
     const options = tools.length > 0 ? { tools } : undefined;
     const response = await provider.chat(messages, options);
 
-    // Write raw response for recorders to observe
     scope.adapterRawResponse = response;
-
-    // Normalize to AdapterResult
     scope.adapterResult = normalizeAdapterResponse(response);
   };
 }

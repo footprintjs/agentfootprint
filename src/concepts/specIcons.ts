@@ -28,7 +28,7 @@ const ICON_MAP: Record<string, string> = {
   'augment-prompt': 'process',
 };
 
-interface SpecLike {
+export interface SpecLike {
   id?: string;
   icon?: string;
   next?: SpecLike;

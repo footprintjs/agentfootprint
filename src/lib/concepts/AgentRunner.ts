@@ -12,6 +12,7 @@ import type { InstructionOverride } from '../instructions';
 import type { AgentLoopConfig } from '../loop';
 import { createAgentRenderer } from '../narrative';
 import { annotateSpecIcons } from '../../concepts/specIcons';
+import type { SpecLike } from '../../concepts/specIcons';
 import { staticPrompt } from '../../providers/prompt/static';
 import { slidingWindow } from '../../providers/messages/slidingWindow';
 import { noTools } from '../../providers/tools/noTools';
@@ -19,7 +20,7 @@ import { staticTools } from '../../providers/tools/staticTools';
 import { ToolRegistry } from '../../tools';
 import { lastAssistantMessage } from '../../memory';
 import { getTextContent } from '../../types/content';
-import { userMessage, toolResultMessage } from '../../types';
+import { userMessage, toolResultMessage, assistantMessage } from '../../types';
 import type { LLMProvider, LLMResponse, AgentResult, Message } from '../../types';
 import type { MemoryConfig } from '../../adapters/memory/types';
 import type { AgentRecorder, PromptProvider, ToolProvider } from '../../core';
@@ -79,7 +80,7 @@ export class AgentRunner {
       messages: [],
       subflowMode: true,
     }, { captureSpec: true });
-    this.lastSpec = annotateSpecIcons(spec as any);
+    this.lastSpec = annotateSpecIcons(spec as SpecLike);
     return chart;
   }
 
@@ -101,7 +102,7 @@ export class AgentRunner {
         const autoMessages: Message[] = [
           ...this.conversationHistory,
           userMessage(message),
-          { role: 'assistant' as const, content: `Using ${pendingMatch.followUp.description}.`, toolCalls: [{ id: `auto-strict-${++AgentRunner._autoExecCounter}`, name: pendingMatch.followUp.toolId, arguments: pendingMatch.followUp.params }] } as any,
+          assistantMessage(`Using ${pendingMatch.followUp.description}.`, [{ id: `auto-strict-${++AgentRunner._autoExecCounter}`, name: pendingMatch.followUp.toolId, arguments: pendingMatch.followUp.params }]),
           toolResultMessage(toolResult.content, `auto-strict-${AgentRunner._autoExecCounter}`),
         ];
         this.conversationHistory = autoMessages;
@@ -114,7 +115,7 @@ export class AgentRunner {
       messages: message ? [userMessage(message)] : [],
       existingMessages,
     }, { captureSpec: true });
-    this.lastSpec = annotateSpecIcons(spec as any);
+    this.lastSpec = annotateSpecIcons(spec as SpecLike);
     const bridge = this.recorders.length > 0 ? new RecorderBridge(this.recorders) : null;
 
     bridge?.dispatchTurnStart(message);
@@ -178,7 +179,7 @@ export class AgentRunner {
   getSpec(): unknown {
     if (!this.lastSpec) {
       const { spec } = buildAgentLoop(this.buildConfig(), { messages: [], subflowMode: true }, { captureSpec: true });
-      this.lastSpec = annotateSpecIcons(spec as any);
+      this.lastSpec = annotateSpecIcons(spec as SpecLike);
     }
     return this.lastSpec;
   }

@@ -131,8 +131,8 @@ export function buildSwarmLoop(
   // ── CallLLM → ParseResponse ───────────────────────────────
 
   builder = builder
-    .addFunction('CallLLM', callLLM as any, 'call-llm', 'Send messages + specialist tools to LLM')
-    .addFunction('ParseResponse', parseResponseStage as any, 'parse-response', 'Parse LLM response and extract specialist selection');
+    .addFunction('CallLLM', callLLM, 'call-llm', 'Send messages + specialist tools to LLM')
+    .addFunction('ParseResponse', parseResponseStage, 'parse-response', 'Parse LLM response and extract specialist selection');
 
   // ── RouteSpecialist decider ───────────────────────────────
   //
@@ -180,8 +180,9 @@ export function buildSwarmLoop(
       specialist.id,
       () => {
         // Use specialist's own flowchart if available (for BTS drill-down)
-        if ('toFlowChart' in specialist.runner && typeof specialist.runner.toFlowChart === 'function') {
-          return (specialist.runner as any).toFlowChart();
+        const runner = specialist.runner as RunnerLike & { toFlowChart?: () => FlowChart };
+        if (runner.toFlowChart) {
+          return runner.toFlowChart();
         }
         // Fallback: wrap runner.run() in a single-stage flowchart
         return flowChart(

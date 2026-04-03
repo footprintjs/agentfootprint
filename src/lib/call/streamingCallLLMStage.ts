@@ -92,7 +92,7 @@ export function createStreamingCallLLMStage(provider: LLMProvider) {
         content,
         toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
         usage,
-        model: (provider as any).model,
+        model: 'model' in provider ? (provider.model as string) : undefined,
       };
 
       scope.adapterRawResponse = response;
