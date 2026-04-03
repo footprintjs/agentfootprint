@@ -15,6 +15,7 @@ import type { CommitMemoryConfig } from '../../stages/commitMemory';
 import type { SystemPromptSlotConfig } from '../slots/system-prompt';
 import type { MessagesSlotConfig } from '../slots/messages';
 import type { ToolsSlotConfig } from '../slots/tools';
+import type { ResolvedInstruction, InstructionOverride } from '../instructions';
 
 /**
  * Agent loop patterns — determines which stages re-evaluate between iterations.
@@ -137,10 +138,10 @@ export interface AgentLoopConfig {
    * Callback when LLM instructions fire during tool execution.
    * Used to connect InstructionRecorder to the instruction pipeline.
    */
-  readonly onInstructionsFired?: (toolId: string, fired: import('../instructions').ResolvedInstruction[]) => void;
+  readonly onInstructionsFired?: (toolId: string, fired: ResolvedInstruction[]) => void;
 
   /** Agent-level instruction overrides keyed by tool ID. */
-  readonly instructionOverrides?: ReadonlyMap<string, import('../instructions').InstructionOverride>;
+  readonly instructionOverrides?: ReadonlyMap<string, InstructionOverride>;
 
   /** When true, CallLLM uses addStreamingFunction for token-by-token output. */
   readonly streaming?: boolean;

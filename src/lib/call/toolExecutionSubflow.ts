@@ -19,6 +19,7 @@ import type { FlowChart } from 'footprintjs';
 import type { Message } from '../../types';
 import type { ToolRegistry } from '../../tools';
 import type { ToolProvider } from '../../core';
+import type { InstructionConfig } from './helpers';
 import type { ParsedResponse } from '../../scope/types';
 import { executeToolCalls } from './helpers';
 
@@ -56,7 +57,7 @@ export interface ToolExecutionSubflowConfig {
   readonly registry: ToolRegistry;
   readonly toolProvider?: ToolProvider;
   /** Instruction processing config — when provided, instructions are evaluated after each tool call. */
-  readonly instructionConfig?: import('./helpers').InstructionConfig;
+  readonly instructionConfig?: InstructionConfig;
 }
 
 // ── Builder ──────────────────────────────────────────────────

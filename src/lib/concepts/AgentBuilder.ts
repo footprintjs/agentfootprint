@@ -8,7 +8,7 @@
  *     .build();
  */
 
-import type { ToolDefinition } from '../../types';
+import type { ToolDefinition, LLMProvider } from '../../types';
 import type { MemoryConfig } from '../../adapters/memory/types';
 import type { AgentRecorder, PromptProvider, ToolProvider } from '../../core';
 import type { InstructionOverride } from '../instructions';
@@ -17,12 +17,12 @@ import { AgentPattern } from '../loop';
 import { AgentRunner } from './AgentRunner';
 
 export interface AgentOptions {
-  readonly provider: import('../../types').LLMProvider;
+  readonly provider: LLMProvider;
   readonly name?: string;
 }
 
 export class Agent {
-  private readonly provider: import('../../types').LLMProvider;
+  private readonly provider: LLMProvider;
   private readonly agentName: string;
   private systemPromptText?: string;
   private customPromptProvider?: PromptProvider;

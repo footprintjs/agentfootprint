@@ -46,6 +46,7 @@ import { lastAssistantMessage } from '../../memory';
 import { AgentPattern } from './types';
 import type { AgentLoopConfig, AgentLoopSeedOptions } from './types';
 import { applyInstructionOverrides } from '../instructions';
+import type { ResolvedFollowUp, ResolvedInstruction, LLMInstruction, InstructedToolDefinition } from '../instructions';
 
 /**
  * Well-known scope key for the user message in subflow mode.
@@ -68,7 +69,7 @@ export const SUBFLOW_MESSAGE_KEY = 'message';
  * ```
  */
 export interface StrictFollowUpResult {
-  followUp: import('../instructions').ResolvedFollowUp;
+  followUp: ResolvedFollowUp;
   sourceToolId: string;
 }
 
@@ -102,9 +103,9 @@ export function buildAgentLoop(config: AgentLoopConfig, seed?: AgentLoopSeedOpti
 
   // Build instruction config from registry — collect tools that have instructions
   // Apply agent-level overrides if provided
-  const instructionsByToolId = new Map<string, readonly import('../instructions').LLMInstruction[]>();
+  const instructionsByToolId = new Map<string, readonly LLMInstruction[]>();
   for (const tool of config.registry.all()) {
-    const instructed = tool as import('../instructions').InstructedToolDefinition;
+    const instructed = tool as InstructedToolDefinition;
     if (instructed.instructions?.length) {
       const override = config.instructionOverrides?.get(tool.id);
       if (override) {
@@ -116,10 +117,10 @@ export function buildAgentLoop(config: AgentLoopConfig, seed?: AgentLoopSeedOpti
   }
   // Capture strict follow-ups that fire during tool execution.
   // Stored in a closure variable — AgentRunner reads it after run() completes.
-  let lastStrictFollowUp: import('../instructions').ResolvedFollowUp | undefined;
+  let lastStrictFollowUp: ResolvedFollowUp | undefined;
   let lastStrictSourceToolId: string | undefined;
 
-  const onInstructionsFired = (toolId: string, fired: import('../instructions').ResolvedInstruction[]) => {
+  const onInstructionsFired = (toolId: string, fired: ResolvedInstruction[]) => {
     // Find the first strict follow-up that fired (highest priority wins)
     if (!lastStrictFollowUp) {
       for (const instr of fired) {
