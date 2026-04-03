@@ -150,7 +150,7 @@ export function buildAgentLoop(config: AgentLoopConfig, seed?: AgentLoopSeedOpti
   // In subflowMode, reads `message` from scope (set by parent's inputMapper).
   // In normal mode, uses baked-in seed/existing messages.
   // Named stage functions for readability and AI-agent understanding
-  const seedStage = (scope: import('footprintjs').TypedScope<AgentLoopState>) => {
+  const seedStage = (scope: TypedScope<AgentLoopState>) => {
     if (subflowMode) {
       const msg = scope.message ?? '';
       scope.messages = msg ? [userMessage(msg)] : [];
@@ -201,7 +201,7 @@ export function buildAgentLoop(config: AgentLoopConfig, seed?: AgentLoopSeedOpti
   // ApplyPreparedMessages — copy prepared messages from temp key to 'messages'.
   // Clears memory_preparedMessages after reading to prevent applyOutputMapping
   // array concat from accumulating stale messages on Dynamic ReAct loop iterations.
-  const applyPreparedMessagesStage = (scope: import('footprintjs').TypedScope<AgentLoopState>) => {
+  const applyPreparedMessagesStage = (scope: TypedScope<AgentLoopState>) => {
     const prepared = scope.memory_preparedMessages;
     if (prepared) {
       scope.messages = prepared;
@@ -230,7 +230,7 @@ export function buildAgentLoop(config: AgentLoopConfig, seed?: AgentLoopSeedOpti
     },
   );
 
-  const assemblePromptStage = (scope: import('footprintjs').TypedScope<AgentLoopState>) => {
+  const assemblePromptStage = (scope: TypedScope<AgentLoopState>) => {
     const messages = scope.messages ?? [];
     const sysPrompt = scope.systemPrompt;
     if (sysPrompt && (messages.length === 0 || messages[0].role !== 'system')) {
