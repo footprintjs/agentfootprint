@@ -11,9 +11,9 @@ import type { LLMInstruction, InstructedToolDefinition } from '../../../src';
 
 // ── Helpers ─────────────────────────────────────────────────
 
-const makeInstr = (id: string, inject: string, opts?: Partial<LLMInstruction>): LLMInstruction => ({
+const makeInstr = (id: string, text: string, opts?: Partial<LLMInstruction>): LLMInstruction => ({
   id,
-  inject,
+  text,
   ...opts,
 });
 
@@ -23,9 +23,9 @@ const orderTool = defineTool({
   inputSchema: { type: 'object' },
   handler: async () => ({ content: JSON.stringify({ status: 'cancelled' }) }),
   instructions: [
-    { id: 'empathy', when: () => true, inject: 'Be empathetic.' },
-    { id: 'suggest', when: () => true, inject: 'Suggest alternatives.' },
-    { id: 'pii', when: () => true, inject: 'No PII.', safety: true },
+    { id: 'empathy', when: () => true, text: 'Be empathetic.' },
+    { id: 'suggest', when: () => true, text: 'Suggest alternatives.' },
+    { id: 'pii', when: () => true, text: 'No PII.', safety: true },
   ],
 } as InstructedToolDefinition) as any;
 
@@ -44,16 +44,16 @@ describe('applyInstructionOverrides — unit', () => {
       add: [makeInstr('new', 'New instruction')],
     });
     expect(result.map(i => i.id)).toEqual(['a', 'new']);
-    expect(result[1].inject).toBe('New instruction');
+    expect(result[1].text).toBe('New instruction');
   });
 
   it('replace merges partial override into existing instruction', () => {
     const original = [makeInstr('a', 'Original text', { priority: 1 })];
     const result = applyInstructionOverrides(original, {
-      replace: { a: { inject: 'Replaced text' } },
+      replace: { a: { text: 'Replaced text' } },
     });
     expect(result[0].id).toBe('a');
-    expect(result[0].inject).toBe('Replaced text');
+    expect(result[0].text).toBe('Replaced text');
     expect(result[0].priority).toBe(1); // preserved from original
   });
 
@@ -65,11 +65,11 @@ describe('applyInstructionOverrides — unit', () => {
     ];
     const result = applyInstructionOverrides(original, {
       suppress: ['suppress-me'],
-      replace: { 'replace-me': { inject: 'New text' } },
+      replace: { 'replace-me': { text: 'New text' } },
       add: [makeInstr('added', 'Added instruction')],
     });
     expect(result.map(i => i.id)).toEqual(['keep', 'replace-me', 'added']);
-    expect(result[1].inject).toBe('New text');
+    expect(result[1].text).toBe('New text');
   });
 
   it('empty instructions + add returns only added', () => {
@@ -92,14 +92,14 @@ describe('Instruction overrides — boundary', () => {
 
   it('replace non-existent ID is a no-op', () => {
     const original = [makeInstr('a', 'A')];
-    const result = applyInstructionOverrides(original, { replace: { nonexistent: { inject: 'X' } } });
-    expect(result[0].inject).toBe('A'); // unchanged
+    const result = applyInstructionOverrides(original, { replace: { nonexistent: { text: 'X' } } });
+    expect(result[0].text).toBe('A'); // unchanged
   });
 
   it('replace preserves original ID even if override tries to change it', () => {
     const original = [makeInstr('a', 'A')];
     const result = applyInstructionOverrides(original, {
-      replace: { a: { id: 'changed', inject: 'X' } as any },
+      replace: { a: { id: 'changed', text: 'X' } as any },
     });
     expect(result[0].id).toBe('a'); // ID preserved
   });
@@ -120,7 +120,7 @@ describe('Instruction overrides — scenario', () => {
       .tool(orderTool)
       .instructionOverride('check_order', {
         suppress: ['suggest'],
-        replace: { empathy: { inject: 'Be VERY empathetic. Offer full refund.' } },
+        replace: { empathy: { text: 'Be VERY empathetic. Offer full refund.' } },
       })
       .recorder(recorder)
       .build();

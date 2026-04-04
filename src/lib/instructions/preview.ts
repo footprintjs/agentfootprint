@@ -13,7 +13,7 @@
  *
  * console.log(preview);
  * // {
- * //   fired: [{ id: 'empathy', inject: '...', safety: false }, ...],
+ * //   fired: [{ id: 'empathy', text: '...', safety: false }, ...],
  * //   injectedText: '[INSTRUCTION] Be empathetic...\n\n[AVAILABLE ACTION]...',
  * //   estimatedTokens: 47,
  * //   followUps: [{ toolId: 'track_package', params: { trackingId: 'TRK-1' } }],

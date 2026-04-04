@@ -29,7 +29,7 @@ import type { ResolvedInstruction, ResolvedFollowUp } from './evaluator';
  */
 export interface InstructionTemplate {
   /** Format a behavioral instruction. Default: inject text as-is. */
-  formatInject?(text: string): string;
+  formatText?(text: string): string;
   /** Format a follow-up binding. Default: structured block. */
   formatFollowUp?(followUp: ResolvedFollowUp): string;
   /** Format the full injection block (all instructions combined). */
@@ -96,7 +96,7 @@ export function renderInstructions(
 ): string | undefined {
   if (instructions.length === 0) return undefined;
 
-  const formatInject = template?.formatInject ?? defaultFormatInject;
+  const formatText = template?.formatText ?? defaultFormatInject;
   const formatFollowUp = template?.formatFollowUp ?? defaultFormatFollowUp;
   const formatBlock = template?.formatBlock ?? defaultFormatBlock;
 
@@ -110,7 +110,7 @@ export function renderInstructions(
       parts.push(formatFollowUp(instr.resolvedFollowUp));
     }
     if (instr.text) {
-      parts.push(formatInject(instr.text));
+      parts.push(formatText(instr.text));
     }
   }
 

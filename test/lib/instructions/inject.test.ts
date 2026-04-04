@@ -61,7 +61,7 @@ describe('renderInstructions — unit', () => {
 
   it('uses custom template when provided', () => {
     const custom: InstructionTemplate = {
-      formatInject: (text) => `<guidance>${text}</guidance>`,
+      formatText: (text) => `<guidance>${text}</guidance>`,
       formatFollowUp: (fu) => `<action tool="${fu.toolId}" />`,
       formatBlock: (parts) => parts.join('\n'),
     };
@@ -146,7 +146,7 @@ describe('injection — boundary', () => {
 
   it('custom template with partial overrides falls back to default', () => {
     const partial: InstructionTemplate = {
-      formatInject: (text) => `CUSTOM: ${text}`,
+      formatText: (text) => `CUSTOM: ${text}`,
       // no formatFollowUp — falls back to default
     };
     const fired = evaluateInstructions(

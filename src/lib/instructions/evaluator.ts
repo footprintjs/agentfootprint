@@ -61,7 +61,7 @@ export interface ResolvedFollowUp {
  *   toolId: 'evaluate_loan',
  * });
  *
- * // fired: [{ id: 'denial-empathy', inject: '...', resolvedFollowUp: {...} }]
+ * // fired: [{ id: 'denial-empathy', text: '...', resolvedFollowUp: {...} }]
  * ```
  */
 export function evaluateInstructions(
@@ -204,8 +204,8 @@ export function mergeRuntimeInstructions(
  * const original = tool.instructions;
  * const overridden = applyInstructionOverrides(original, {
  *   suppress: ['low-stock'],
- *   add: [{ id: 'premium-oos', when: ..., inject: '...' }],
- *   replace: { 'out-of-stock': { inject: 'Suggest B2B channel.' } },
+ *   add: [{ id: 'premium-oos', when: ..., text: '...' }],
+ *   replace: { 'out-of-stock': { text: 'Suggest B2B channel.' } },
  * });
  * ```
  */

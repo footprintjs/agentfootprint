@@ -141,11 +141,11 @@ export interface FollowUpBinding<T = unknown> {
  *
  * // Error handling
  * { id: 'timeout', when: ctx => ctx.error?.code === 'TIMEOUT',
- *   inject: 'Service timed out. Apologize and suggest retry.' }
+ *   text: 'Service timed out. Apologize and suggest retry.' }
  *
  * // Safety — always position last in recency window (highest attention)
  * { id: 'pii', when: ctx => ctx.content.hasPII, safety: true,
- *   inject: 'Contains PII. Do NOT repeat raw values.' }
+ *   text: 'Contains PII. Do NOT repeat raw values.' }
  * ```
  */
 export interface LLMInstruction<T = unknown> {
@@ -410,11 +410,11 @@ export interface InstructedToolDefinition extends ToolDefinition {
  *     add: [{                          // add agent-specific instruction
  *       id: 'premium-oos',
  *       when: (ctx) => ctx.content.quantity === 0 && ctx.content.isPremium,
- *       inject: 'Premium item. Offer to notify when back in stock.',
+ *       text: 'Premium item. Offer to notify when back in stock.',
  *     }],
  *     replace: {                       // change an existing instruction's inject text
  *       'out-of-stock': {
- *         inject: 'Unavailable. Suggest the B2B bulk channel instead.',
+ *         text: 'Unavailable. Suggest the B2B bulk channel instead.',
  *       },
  *     },
  *   })

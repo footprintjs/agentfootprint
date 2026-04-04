@@ -19,7 +19,7 @@ const orderTool = defineTool({
     {
       id: 'cancelled-empathy',
       when: (ctx) => (ctx.content as any)?.status === 'cancelled',
-      inject: 'Be empathetic about the cancellation.',
+      text: 'Be empathetic about the cancellation.',
     },
     {
       id: 'tracking-followup',
@@ -40,7 +40,7 @@ const activeTool = defineTool({
     {
       id: 'cancelled-empathy',
       when: (ctx) => (ctx.content as any)?.status === 'cancelled',
-      inject: 'Be empathetic.',
+      text: 'Be empathetic.',
     },
   ],
 } as InstructedToolDefinition) as any;
@@ -160,7 +160,7 @@ describe('InstructionRecorder wiring — property', () => {
       inputSchema: { type: 'object' },
       handler: async () => ({ content: JSON.stringify({ hasPII: true }) }),
       instructions: [
-        { id: 'pii-guard', when: () => true, inject: 'Contains PII.', safety: true },
+        { id: 'pii-guard', when: () => true, text: 'Contains PII.', safety: true },
       ],
     } as InstructedToolDefinition) as any;
 

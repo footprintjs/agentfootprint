@@ -10,10 +10,10 @@ import type { ResolvedInstruction } from '../../../src/lib/instructions/evaluato
 
 // ── Helpers ─────────────────────────────────────────────────────
 
-function firing(id: string, opts?: { inject?: string; safety?: boolean; followUpToolId?: string }): ResolvedInstruction {
+function firing(id: string, opts?: { text?: string; safety?: boolean; followUpToolId?: string }): ResolvedInstruction {
   return {
     id,
-    inject: opts?.inject,
+    text: opts?.text,
     safety: opts?.safety ?? false,
     priority: 0,
     resolvedFollowUp: opts?.followUpToolId ? {
@@ -113,18 +113,18 @@ describe('InstructionRecorder — scenario', () => {
 
     // First loan evaluation — denied
     rec.recordFirings('evaluate_loan', [
-      firing('denial-empathy', { inject: 'Be empathetic', followUpToolId: 'get_trace' }),
-      firing('pii-guard', { inject: 'No PII', safety: true }),
+      firing('denial-empathy', { text: 'Be empathetic', followUpToolId: 'get_trace' }),
+      firing('pii-guard', { text: 'No PII', safety: true }),
     ]);
 
     // Second loan evaluation — also denied
     rec.recordFirings('evaluate_loan', [
-      firing('denial-empathy', { inject: 'Be empathetic', followUpToolId: 'get_trace' }),
+      firing('denial-empathy', { text: 'Be empathetic', followUpToolId: 'get_trace' }),
     ]);
 
     // Different tool
     rec.recordFirings('check_credit', [
-      firing('low-score', { inject: 'Low credit score' }),
+      firing('low-score', { text: 'Low credit score' }),
     ]);
 
     const summary = rec.getSummary();
@@ -198,7 +198,7 @@ describe('InstructionRecorder — security', () => {
 
   it('recorder does not expose raw instruction content (no inject text stored)', () => {
     const rec = new InstructionRecorder();
-    rec.recordFirings('tool', [firing('a', { inject: 'secret instruction text' })]);
+    rec.recordFirings('tool', [firing('a', { text: 'secret instruction text' })]);
 
     const summary = rec.getSummary();
     // Summary only stores firing counts and safety flags — not the inject text
