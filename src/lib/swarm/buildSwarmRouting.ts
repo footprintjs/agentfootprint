@@ -23,6 +23,11 @@ import type { RoutingConfig, RoutingBranch } from '../loop/types';
 import type { RunnerLike } from '../../types/multiAgent';
 import type { ToolDefinition } from '../../types/tools';
 
+/** Type guard: does the runner expose toFlowChart() for subflow composition? */
+function hasFlowChart(runner: RunnerLike): runner is RunnerLike & { toFlowChart(): FlowChart } {
+  return typeof (runner as unknown as Record<string, unknown>).toFlowChart === 'function';
+}
+
 // ── Swarm Scope State ────────────────────────────────────────
 
 /**
@@ -138,8 +143,8 @@ export function buildSwarmRouting(config: SwarmRoutingConfig): RoutingConfig {
         if (cachedChart) return cachedChart;
 
         // Use specialist's own flowchart if available (for BTS drill-down)
-        if (typeof (specialist.runner as any).toFlowChart === 'function') {
-          cachedChart = (specialist.runner as RunnerLike & { toFlowChart: () => FlowChart }).toFlowChart();
+        if (hasFlowChart(specialist.runner)) {
+          cachedChart = specialist.runner.toFlowChart();
           return cachedChart;
         }
 

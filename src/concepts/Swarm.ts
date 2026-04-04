@@ -274,6 +274,10 @@ export class SwarmRunner {
       });
     } catch (err) {
       this.lastExecutor = executor;
+      // Update conversation history with whatever partial state exists
+      const partialState = executor.getSnapshot()?.sharedState ?? {};
+      const partialMessages = partialState.messages as Message[] | undefined;
+      if (partialMessages) this.conversationHistory = partialMessages;
       bridge?.dispatchError('llm', err);
       throw err;
     }
