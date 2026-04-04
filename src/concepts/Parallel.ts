@@ -211,12 +211,11 @@ export class ParallelRunner {
           inputMapper: (parent: Record<string, unknown>) => ({
             message: parent.message ?? '',
           }),
-          outputMapper: (sfOutput: Record<string, unknown>, parentScope: Record<string, unknown>) => {
+          // applyOutputMapping merges nested keys — return only the new branch delta
+          outputMapper: (sfOutput: Record<string, unknown>) => {
             const content = String(sfOutput.result ?? sfOutput.content ?? '');
-            const existing = (parentScope.branchResults ?? {}) as Record<string, BranchResult>;
             return {
               branchResults: {
-                ...existing,
                 [branch.id]: { id: branch.id, status: 'fulfilled' as const, content },
               },
             };
@@ -236,8 +235,10 @@ export class ParallelRunner {
           (scope) => {
             const results = scope.branchResults ?? {};
             // Format branch results as XML-tagged sections for the LLM
+            // Escape XML special chars to prevent prompt injection via branch content
+            const escapeXml = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
             const sections = Object.values(results)
-              .map((r: BranchResult) => `<branch id="${r.id}">\n${r.content}\n</branch>`)
+              .map((r: BranchResult) => `<branch id="${escapeXml(r.id)}">\n${escapeXml(r.content)}\n</branch>`)
               .join('\n\n');
 
             scope.messages = [
@@ -284,12 +285,17 @@ export class ParallelRunner {
       return runner.toFlowChart();
     }
 
-    // Fallback: wrap runner.run() in a single-stage flowchart
+    // Fallback: wrap runner.run() in a single-stage flowchart with error capture
     return flowChart(
       branch.id,
-      async (scope: TypedScope<{ message: string; result: string }>) => {
-        const res = await branch.runner.run(scope.message ?? '');
-        scope.result = res.content;
+      async (scope: TypedScope<{ message: string; result: string; branchError?: string }>) => {
+        try {
+          const res = await branch.runner.run(scope.message ?? '');
+          scope.result = res.content;
+        } catch (err: unknown) {
+          scope.branchError = err instanceof Error ? err.message : String(err);
+          scope.result = `[Error: ${scope.branchError}]`;
+        }
       },
       `${branch.id}-run`,
       undefined,
