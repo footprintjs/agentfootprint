@@ -6,6 +6,7 @@ import type { LLMResponse, AdapterResult, ToolCall, Message } from '../../types'
 import { toolResultMessage } from '../../types';
 import type { ToolRegistry } from '../../tools';
 import { isAskHumanResult } from '../../tools/askHuman';
+import { validateToolInput, formatValidationErrors } from '../../tools/validateInput';
 import type { ToolProvider } from '../../core';
 import type { LLMInstruction, InstructionContext, RuntimeFollowUp, InstructionTemplate } from '../instructions';
 import type { ResolvedInstruction } from '../instructions';
@@ -102,8 +103,20 @@ export async function executeToolCalls(
         errorInfo = { code: 'NOT_FOUND', message: `Tool '${safeName}' not found` };
         resultContent = JSON.stringify({ error: true, message: errorInfo.message });
       } else {
+        // Validate input against tool's inputSchema before calling handler
+        const toolArgs = (toolCall.arguments ?? {}) as Record<string, unknown>;
+        if (tool.inputSchema && Object.keys(tool.inputSchema).length > 0) {
+          const validation = validateToolInput(toolArgs, tool.inputSchema);
+          if (!validation.valid) {
+            errorInfo = { code: 'INVALID_INPUT', message: `Invalid arguments for '${tool.id}': ${formatValidationErrors(validation.errors)}` };
+            resultContent = JSON.stringify({ error: true, message: errorInfo.message });
+            result.push(toolResultMessage(resultContent, toolCall.id));
+            continue;
+          }
+        }
+
         try {
-          const execResult = await tool.handler(toolCall.arguments);
+          const execResult = await tool.handler(toolArgs);
           resultContent = execResult.content;
           // Check for ask_human pause marker
           if (isAskHumanResult(execResult)) {
