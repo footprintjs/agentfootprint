@@ -44,9 +44,58 @@ import { createCommitMemoryStage } from '../../stages/commitMemory';
 import { getTextContent } from '../../types/content';
 import { lastAssistantMessage } from '../../memory';
 import { AgentPattern } from './types';
-import type { AgentLoopConfig, AgentLoopSeedOptions } from './types';
+import type { AgentLoopConfig, AgentLoopSeedOptions, RoutingConfig } from './types';
 import { applyInstructionOverrides } from '../instructions';
 import type { ResolvedFollowUp, ResolvedInstruction, LLMInstruction, InstructedToolDefinition } from '../instructions';
+
+// ── Default Agent Routing ─────────────────────────────────────────────────────
+
+/**
+ * Default routing for the Agent loop: tool-calls | final.
+ *
+ * Expressed as a RoutingConfig so buildAgentLoop has ONE code path
+ * for both Agent and Swarm routing.
+ */
+function defaultAgentRouting(toolExecutionSubflow: FlowChart, useCommitFlag: boolean): RoutingConfig {
+  return {
+    deciderName: 'RouteResponse',
+    deciderId: 'route-response',
+    deciderDescription: 'Route to tool execution or finalization based on LLM response',
+    decider: (scope: any) => {
+      const parsed = scope.parsedResponse;
+      if (parsed?.hasToolCalls) return 'tool-calls';
+      return 'final';
+    },
+    branches: [
+      {
+        id: 'tool-calls',
+        kind: 'subflow',
+        chart: toolExecutionSubflow,
+        name: 'ExecuteTools',
+        mount: {
+          inputMapper: (parent: Record<string, unknown>) => ({
+            parsedResponse: parent.parsedResponse,
+            currentMessages: parent.messages,
+            currentLoopCount: parent.loopCount,
+            maxIterations: parent.maxIterations,
+          }),
+          outputMapper: (sfOutput: Record<string, unknown>) => ({
+            messages: sfOutput.toolResultMessages,
+            loopCount: sfOutput.updatedLoopCount,
+          }),
+        },
+      },
+      {
+        id: 'final',
+        kind: 'fn',
+        fn: createFinalizeStage({ useCommitFlag }),
+        description: 'Extract final answer and stop the loop',
+        name: 'Finalize',
+      },
+    ],
+    defaultBranch: 'final',
+  };
+}
 
 /**
  * Well-known scope key for the user message in subflow mode.
@@ -246,14 +295,11 @@ export function buildAgentLoop(config: AgentLoopConfig, seed?: AgentLoopSeedOpti
     'assemble-prompt', 'Prepend system prompt to messages before LLM call',
   );
 
-  // CallLLM → ParseResponse → RouteResponse(decider)
-  //   ├─ 'tool-calls' → [sf-execute-tools]   (loop continues)
-  //   └─ 'final'      → Finalize ($break)
-  // → [CommitMemory?] → loopTo('call-llm')
+  // CallLLM → ParseResponse → Routing(decider)
+  //   Routing is pluggable via config.routing (RoutingConfig).
+  //   Default: RouteResponse → {tool-calls | final}
+  //   Swarm:   RouteSpecialist → {specialist-A | ... | swarm-tools | final}
   //
-  // RouteResponse is a decider: visible as a diamond in the flowchart.
-  // 'tool-calls' branch executes tools via subflow, then falls through to loopTo.
-  // 'final' branch extracts result + breaks (or sets shouldCommit flag).
   // Add CallLLM — streaming or non-streaming
   if (config.streaming) {
     builder = builder.addStreamingFunction('CallLLM', callLLM, 'call-llm', 'llm-stream', 'Send messages + tools to LLM provider (streaming)');
@@ -261,50 +307,56 @@ export function buildAgentLoop(config: AgentLoopConfig, seed?: AgentLoopSeedOpti
     builder = builder.addFunction('CallLLM', callLLM, 'call-llm', 'Send messages + tools to LLM provider');
   }
   builder = builder
-    .addFunction('ParseResponse', parseResponseStage, 'parse-response', 'Parse LLM response into structured result')
-    .addDeciderFunction(
-      'RouteResponse',
-      (scope) => {
-        const parsed = scope.parsedResponse;
-        const loopCount = scope.loopCount ?? 0;
-        const maxIter = scope.maxIterations ?? 10;
+    .addFunction('ParseResponse', parseResponseStage, 'parse-response', 'Parse LLM response into structured result');
 
-        if (parsed?.hasToolCalls && loopCount < maxIter) {
-          return 'tool-calls';
-        }
-        return 'final';
-      },
-      'route-response',
-      'Route to tool execution or finalization based on LLM response',
-    )
-    .addSubFlowChartBranch(
-      'tool-calls',
-      toolExecutionSubflow,
-      'ExecuteTools',
-      {
-        inputMapper: (parent: Record<string, unknown>) => ({
-          parsedResponse: parent.parsedResponse,
-          currentMessages: parent.messages,
-          currentLoopCount: parent.loopCount,
-          maxIterations: parent.maxIterations,
-        }),
-        outputMapper: (sfOutput: Record<string, unknown>) => ({
-          // toolResultMessages is a DELTA (new tool results only).
-          // applyOutputMapping concatenates arrays, so mapping delta → messages
-          // correctly appends tool results to the existing conversation.
-          messages: sfOutput.toolResultMessages,
-          loopCount: sfOutput.updatedLoopCount,
-        }),
-      },
-    )
-    .addFunctionBranch(
-      'final',
-      'Finalize',
-      createFinalizeStage({ useCommitFlag }),
-      'Extract final answer and stop the loop',
-    )
-    .setDefault('final')
-    .end();
+  // ── Routing — one code path for both Agent and Swarm ──
+  const routing: RoutingConfig = config.routing ?? defaultAgentRouting(toolExecutionSubflow, useCommitFlag);
+
+  // Validate branches
+  if (routing.branches.length === 0) {
+    throw new Error('RoutingConfig must have at least one branch.');
+  }
+  const branchIds = new Set(routing.branches.map((b) => b.id));
+  if (branchIds.size !== routing.branches.length) {
+    throw new Error('RoutingConfig has duplicate branch IDs.');
+  }
+  if (!branchIds.has(routing.defaultBranch)) {
+    throw new Error(`RoutingConfig.defaultBranch '${routing.defaultBranch}' does not match any branch ID: [${[...branchIds].join(', ')}]`);
+  }
+
+  // Wrap decider with structural maxIterations guard — no custom routing can bypass this.
+  // If loopCount >= maxIterations, force-route to defaultBranch (typically 'final').
+  const safeDecider: RoutingConfig['decider'] = (scope: any, breakFn, streamCb) => {
+    const loopCount = scope.loopCount ?? 0;
+    const maxIter = scope.maxIterations ?? 10;
+    if (loopCount >= maxIter) return routing.defaultBranch;
+    return routing.decider(scope, breakFn, streamCb);
+  };
+
+  let decider = builder.addDeciderFunction(
+    routing.deciderName,
+    // SAFETY: addDeciderFunction expects StageFunction (returns TOut | void) but deciders
+    // return string (branch key). footprintjs uses the return value to select the branch.
+    safeDecider as any,
+    routing.deciderId,
+    routing.deciderDescription,
+  );
+
+  for (const branch of routing.branches) {
+    switch (branch.kind) {
+      case 'subflow':
+        decider = decider.addSubFlowChartBranch(branch.id, branch.chart, branch.name ?? branch.id, branch.mount);
+        break;
+      case 'lazy-subflow':
+        decider = decider.addLazySubFlowChartBranch(branch.id, branch.factory, branch.name ?? branch.id, branch.mount);
+        break;
+      case 'fn':
+        decider = decider.addFunctionBranch(branch.id, branch.name ?? branch.id, branch.fn, branch.description);
+        break;
+    }
+  }
+
+  builder = decider.setDefault(routing.defaultBranch).end();
 
   // Mount CommitMemory when persistent memory is configured.
   // CommitMemory saves full history to store (fire-and-forget) and calls $break().

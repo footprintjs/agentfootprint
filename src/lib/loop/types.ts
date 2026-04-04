@@ -7,6 +7,8 @@
  * → loopTo('call-llm').
  */
 
+import type { FlowChart } from 'footprintjs';
+import type { StageFunction, SubflowMountOptions } from 'footprintjs/advanced';
 import type { LLMProvider } from '../../types';
 import type { ToolProvider } from '../../core';
 import type { ToolRegistry } from '../../tools';
@@ -16,6 +18,54 @@ import type { SystemPromptSlotConfig } from '../slots/system-prompt';
 import type { MessagesSlotConfig } from '../slots/messages';
 import type { ToolsSlotConfig } from '../slots/tools';
 import type { ResolvedInstruction, InstructionOverride } from '../instructions';
+
+// ── RoutingConfig — pluggable post-ParseResponse routing ─────────────────────
+
+/**
+ * A single branch in a RoutingConfig — what happens for a given decider return value.
+ *
+ * Discriminated union ensures every branch has exactly one handler.
+ */
+export type RoutingBranch =
+  | { readonly id: string; readonly kind: 'subflow'; readonly chart: FlowChart; readonly name?: string; readonly mount?: SubflowMountOptions }
+  | { readonly id: string; readonly kind: 'lazy-subflow'; readonly factory: () => FlowChart; readonly name?: string; readonly mount?: SubflowMountOptions }
+  | { readonly id: string; readonly kind: 'fn'; readonly fn: StageFunction; readonly name?: string; readonly description?: string };
+
+/**
+ * RoutingConfig — controls what happens after ParseResponse in the agent loop.
+ *
+ * The default agent loop uses `tool-calls | final` routing. Swarm uses
+ * `specialist-A | specialist-B | swarm-tools | final`. Both are expressed
+ * as RoutingConfig — one code path, zero forks in buildAgentLoop.
+ *
+ * **Ordering invariant:** The decider runs AFTER ParseResponse commits.
+ * Scope contains `parsedResponse` with tool calls and response content.
+ *
+ * @internal Not exported from the public API. Consumer-facing builders
+ * (Agent, Swarm) construct RoutingConfig internally.
+ */
+export interface RoutingConfig {
+  /** Name for the decider stage (e.g., 'RouteResponse', 'RouteSpecialist'). */
+  readonly deciderName: string;
+  /** Stable ID for the decider node. */
+  readonly deciderId: string;
+  /** Description shown in narrative. */
+  readonly deciderDescription?: string;
+  /**
+   * Decider function — called after ParseResponse commits.
+   * Returns a branch ID string that matches one of the branches.
+   *
+   * Receives the scope (with parsedResponse, loopCount, etc.) and must return
+   * a string matching one of the branch IDs. maxIterations enforcement is
+   * handled structurally by buildAgentLoop — the decider does not need to check it.
+   */
+  readonly decider: (scope: any, breakFn: () => void, streamCb?: unknown) => string | Promise<string>;
+  /** Branch definitions — each maps to a subflow or inline function.
+   *  Order matters: branches are added to the decider in array order. */
+  readonly branches: readonly RoutingBranch[];
+  /** Default branch when decider returns an unknown key. */
+  readonly defaultBranch: string;
+}
 
 /**
  * Agent loop patterns — determines which stages re-evaluate between iterations.
@@ -145,6 +195,19 @@ export interface AgentLoopConfig {
 
   /** When true, CallLLM uses addStreamingFunction for token-by-token output. */
   readonly streaming?: boolean;
+
+  /**
+   * Custom routing strategy — replaces the default RouteResponse decider.
+   *
+   * When provided, buildAgentLoop uses this RoutingConfig instead of the
+   * default `tool-calls | final` routing. Used by Swarm to route to
+   * specialist subflows.
+   *
+   * When omitted, the default agent routing is used automatically.
+   *
+   * @internal Consumers use Agent/Swarm builders, not this field directly.
+   */
+  readonly routing?: RoutingConfig;
 }
 
 /**
