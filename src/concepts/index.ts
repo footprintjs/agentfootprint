@@ -8,3 +8,5 @@ export type { RAGOptions } from './RAG';
 export { FlowChart, FlowChartRunner } from './FlowChart';
 export { Swarm, SwarmRunner } from './Swarm';
 export type { SwarmOptions } from './Swarm';
+export { Parallel, ParallelRunner } from './Parallel';
+export type { ParallelOptions, ParallelResult, BranchResult } from './Parallel';

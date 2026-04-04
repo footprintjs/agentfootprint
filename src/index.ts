@@ -195,6 +195,8 @@ export {
   FlowChartRunner,
   Swarm,
   SwarmRunner,
+  Parallel,
+  ParallelRunner,
 } from './concepts';
 
 // ── Recorders (AgentRecorder interface) ─────────────────────
