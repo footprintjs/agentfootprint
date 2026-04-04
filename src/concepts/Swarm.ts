@@ -28,7 +28,9 @@ import type { RoutingConfig } from '../lib/loop/types';
 import { staticPrompt } from '../providers/prompt/static';
 import { slidingWindow } from '../providers/messages/slidingWindow';
 import { ToolRegistry } from '../tools';
+import type { Message } from '../types/messages';
 import { createAgentRenderer } from '../lib/narrative';
+import { RecorderBridge } from '../recorders/v2/RecorderBridge';
 import { annotateSpecIcons } from './specIcons';
 import type { SpecLike } from './specIcons';
 import { userMessage } from '../types';
@@ -131,7 +133,8 @@ export class SwarmRunner {
   private readonly extraTools: readonly ToolDefinition[];
   private readonly maxIter: number;
   private readonly streamingEnabled: boolean;
-  readonly recorders: AgentRecorder[]; // Task 4: wire to executor
+  readonly recorders: AgentRecorder[];
+  private conversationHistory: Message[] = [];
   private lastExecutor?: FlowChartExecutor;
   private lastSpec?: unknown;
   private readonly narrativeRenderer = createAgentRenderer();
@@ -257,6 +260,10 @@ export class SwarmRunner {
     executor.enableNarrative({ renderer: this.narrativeRenderer });
     executor.attachRecorder(new MetricRecorder('metrics'));
 
+    // Wire AgentRecorders via RecorderBridge
+    const bridge = this.recorders.length > 0 ? new RecorderBridge(this.recorders) : null;
+    bridge?.dispatchTurnStart(message);
+
     await executor.run({
       signal: options?.signal,
       timeoutMs: options?.timeoutMs,
@@ -267,18 +274,38 @@ export class SwarmRunner {
     const snapshot = executor.getSnapshot();
     const state = snapshot?.sharedState ?? {};
     const result = (state.result as string) ?? '';
+    const messages = (state.messages as Message[]) ?? [];
 
-    // TODO(task-4): replace narrative string matching with scope-tracked invoked specialists set
-    const narrative = this.getNarrative();
-    const agents: AgentResultEntry[] = this.specialists
-      .filter((s) => narrative.some((line) => line.includes(s.id)))
-      .map((s) => ({ id: s.id, name: s.id, content: '', latencyMs: 0 }));
+    // Structural specialist tracking — read from scope, not narrative
+    const invokedIds = (state.invokedSpecialists as string[]) ?? [];
+    const agents: AgentResultEntry[] = invokedIds.map((id) => ({
+      id,
+      name: id,
+      content: '',
+      latencyMs: 0,
+    }));
+
+    // Update conversation history for multi-turn
+    this.conversationHistory = messages;
+
+    // Dispatch recorder events
+    bridge?.dispatchTurnComplete(result, messages.length, (state.loopCount as number) ?? 0);
 
     return {
       content: result,
       agents,
       totalLatencyMs: Date.now() - startTime,
     };
+  }
+
+  /** Get conversation history (for multi-turn). */
+  getMessages(): Message[] {
+    return [...this.conversationHistory];
+  }
+
+  /** Reset conversation state for a fresh conversation. */
+  resetConversation(): void {
+    this.conversationHistory = [];
   }
 
   getNarrative(): string[] {

@@ -45,6 +45,8 @@ interface SwarmRoutingScope {
   specialistToolCallId?: string;
   /** Narrative: truncated preview of specialist result. */
   specialistResult?: string;
+  /** Structural tracking: IDs of specialists invoked during this run. */
+  invokedSpecialists?: string[];
   /** Debug: set when multiple tool calls are dropped. */
   routingWarning?: string;
   [key: string]: unknown;
@@ -162,10 +164,12 @@ export function buildSwarmRouting(config: SwarmRoutingConfig): RoutingConfig {
           const resultContent = String(sfOutput.result ?? sfOutput.content ?? '');
           const toolCallId = String(parentScope.specialistToolCallId ?? `specialist-${++_fallbackIdCounter}`);
           const preview = resultContent.length > 120 ? resultContent.slice(0, 120) + '...' : resultContent;
+          // Track which specialists were invoked — delta only (applyOutputMapping concatenates arrays)
           return {
             messages: [toolResultMessage(resultContent, toolCallId)],
             loopCount: ((parentScope.loopCount as number) ?? 0) + 1,
             specialistResult: preview,
+            invokedSpecialists: [specialist.id],
           };
         },
       },
