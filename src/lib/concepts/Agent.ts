@@ -5,3 +5,4 @@
 export { Agent } from './AgentBuilder';
 export type { AgentOptions } from './AgentBuilder';
 export { AgentRunner } from './AgentRunner';
+export type { AgentRunnerOptions } from './AgentRunner';

@@ -5,7 +5,7 @@
  */
 
 import { FlowChartExecutor, MetricRecorder } from 'footprintjs';
-import type { FlowChart as FlowChartType } from 'footprintjs';
+import type { FlowChart as FlowChartType, FlowChartExecutorOptions } from 'footprintjs';
 import { buildAgentLoop, AgentPattern } from '../loop';
 import { PendingFollowUpManager, InstructionRecorder } from '../instructions';
 import type { InstructionOverride } from '../instructions';
@@ -25,6 +25,22 @@ import type { LLMProvider, LLMResponse, AgentResult, Message } from '../../types
 import type { MemoryConfig } from '../../adapters/memory/types';
 import type { AgentRecorder, PromptProvider, ToolProvider } from '../../core';
 import { RecorderBridge } from '../../recorders/v2/RecorderBridge';
+
+/** Options for constructing an AgentRunner. Created by Agent.build(). */
+export interface AgentRunnerOptions {
+  readonly provider: LLMProvider;
+  readonly name: string;
+  readonly systemPromptText?: string;
+  readonly registry: ToolRegistry;
+  readonly maxIterations?: number;
+  readonly recorders?: AgentRecorder[];
+  readonly memoryConfig?: MemoryConfig;
+  readonly pattern?: AgentPattern;
+  readonly promptProvider?: PromptProvider;
+  readonly toolProvider?: ToolProvider;
+  readonly instructionOverrides?: ReadonlyMap<string, InstructionOverride>;
+  readonly streaming?: boolean;
+}
 
 export class AgentRunner {
   private static _autoExecCounter = 0;
@@ -46,32 +62,19 @@ export class AgentRunner {
   private readonly narrativeRenderer = createAgentRenderer();
   private readonly pendingFollowUps = new PendingFollowUpManager();
 
-  constructor(
-    provider: LLMProvider,
-    name: string,
-    systemPromptText: string | undefined,
-    registry: ToolRegistry,
-    maxIter: number,
-    recorders: AgentRecorder[] = [],
-    memoryConfig?: MemoryConfig,
-    pattern: AgentPattern = AgentPattern.Regular,
-    customPromptProvider?: PromptProvider,
-    customToolProvider?: ToolProvider,
-    instructionOverrides?: ReadonlyMap<string, InstructionOverride>,
-    streaming = false,
-  ) {
-    this.provider = provider;
-    this.name = name;
-    this.systemPromptText = systemPromptText;
-    this.registry = registry;
-    this.maxIter = maxIter;
-    this.recorders = recorders;
-    this.memoryConfig = memoryConfig;
-    this.agentPattern = pattern;
-    this.customPromptProvider = customPromptProvider;
-    this.customToolProvider = customToolProvider;
-    this.instructionOverrides = instructionOverrides;
-    this.streamingEnabled = streaming;
+  constructor(options: AgentRunnerOptions) {
+    this.provider = options.provider;
+    this.name = options.name;
+    this.systemPromptText = options.systemPromptText;
+    this.registry = options.registry;
+    this.maxIter = options.maxIterations ?? 10;
+    this.recorders = options.recorders ?? [];
+    this.memoryConfig = options.memoryConfig;
+    this.agentPattern = options.pattern ?? AgentPattern.Regular;
+    this.customPromptProvider = options.promptProvider;
+    this.customToolProvider = options.toolProvider;
+    this.instructionOverrides = options.instructionOverrides;
+    this.streamingEnabled = options.streaming ?? false;
   }
 
   /** Expose the agent's internal flowChart for subflow composition. */
@@ -120,7 +123,7 @@ export class AgentRunner {
 
     bridge?.dispatchTurnStart(message);
 
-    const executorOpts: any = { enrichSnapshots: true };
+    const executorOpts: FlowChartExecutorOptions = { enrichSnapshots: true };
     if (options?.onToken && this.streamingEnabled) {
       executorOpts.streamHandlers = {
         onToken: (_streamId: string, token: string) => options.onToken!(token),

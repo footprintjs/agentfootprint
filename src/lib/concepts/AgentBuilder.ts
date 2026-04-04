@@ -124,19 +124,19 @@ export class Agent {
 
   /** Build the agent and return a runner. */
   build(): AgentRunner {
-    return new AgentRunner(
-      this.provider,
-      this.agentName,
-      this.systemPromptText,
-      this.registry,
-      this.maxIter,
-      [...this.recorders],
-      this.memoryConfig,
-      this.agentPattern,
-      this.customPromptProvider,
-      this.customToolProvider,
-      this.overrides.size > 0 ? new Map(this.overrides) : undefined,
-      this.enableStreaming,
-    );
+    return new AgentRunner({
+      provider: this.provider,
+      name: this.agentName,
+      systemPromptText: this.systemPromptText,
+      registry: this.registry,
+      maxIterations: this.maxIter,
+      recorders: [...this.recorders],
+      memoryConfig: this.memoryConfig,
+      pattern: this.agentPattern,
+      promptProvider: this.customPromptProvider,
+      toolProvider: this.customToolProvider,
+      instructionOverrides: this.overrides.size > 0 ? new Map(this.overrides) : undefined,
+      streaming: this.enableStreaming,
+    });
   }
 }
