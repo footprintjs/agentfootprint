@@ -12,14 +12,6 @@
  * CallLLM, ParseResponse) is the same Agent loop infrastructure.
  *
  * > "Every feature you add to Agent automatically works in Swarm."
- *
- * Usage:
- *   const swarm = Swarm.create({ provider })
- *     .system('Route to the best specialist.')
- *     .specialist('coding', 'Code specialist', codingAgent)
- *     .specialist('writing', 'Writing specialist', writingAgent)
- *     .build();
- *   const result = await swarm.run('Write a haiku');
  */
 
 import type { LLMProvider, LLMToolDescription } from '../types/llm';
@@ -27,11 +19,12 @@ import type { ToolDefinition } from '../types/tools';
 import type { RunnerLike, AgentResultEntry, TraversalResult } from '../types/multiAgent';
 import type { AgentRecorder } from '../core';
 import { FlowChartExecutor, MetricRecorder } from 'footprintjs';
-import type { FlowChart as FlowChartType } from 'footprintjs';
+import type { FlowChart as FlowChartType, FlowChartExecutorOptions } from 'footprintjs';
 import { buildAgentLoop } from '../lib/loop';
 import type { AgentLoopConfig } from '../lib/loop';
 import { buildSwarmRouting } from '../lib/swarm/buildSwarmRouting';
 import type { SwarmSpecialist } from '../lib/swarm/buildSwarmRouting';
+import type { RoutingConfig } from '../lib/loop/types';
 import { staticPrompt } from '../providers/prompt/static';
 import { slidingWindow } from '../providers/messages/slidingWindow';
 import { ToolRegistry } from '../tools';
@@ -39,6 +32,9 @@ import { createAgentRenderer } from '../lib/narrative';
 import { annotateSpecIcons } from './specIcons';
 import type { SpecLike } from './specIcons';
 import { userMessage } from '../types';
+
+// Specialist ID validation — alphanumeric + hyphens, max 64 chars
+const VALID_SPECIALIST_ID = /^[a-zA-Z][a-zA-Z0-9_-]{0,63}$/;
 
 // ── Types ────────────────────────────────────────────────────
 
@@ -80,10 +76,14 @@ export class Swarm {
    * orchestrator LLM selects it. Visible in BTS with drill-down.
    */
   specialist(id: string, description: string, runner: RunnerLike): this {
+    if (!VALID_SPECIALIST_ID.test(id)) {
+      throw new Error(`Invalid specialist ID '${id}'. Must match ${VALID_SPECIALIST_ID}.`);
+    }
     this.specialists.push({ id, description, runner });
     return this;
   }
 
+  /** Register a non-specialist tool (calculator, search, etc.) available to the orchestrator. */
   tool(toolDef: ToolDefinition): this {
     this.extraTools.push(toolDef);
     return this;
@@ -136,6 +136,13 @@ export class SwarmRunner {
   private lastSpec?: unknown;
   private readonly narrativeRenderer = createAgentRenderer();
 
+  /** Cached routing config — constructed once, reused across runs. */
+  private readonly routingConfig: RoutingConfig;
+  /** Cached tool descriptions — constructed once, reused across runs. */
+  private readonly toolDescs: LLMToolDescription[];
+  /** Cached system prompt — constructed once, reused across runs. */
+  private readonly fullSystemPrompt: string;
+
   constructor(
     provider: LLMProvider,
     name: string,
@@ -154,6 +161,14 @@ export class SwarmRunner {
     this.maxIter = maxIter;
     this.streamingEnabled = streaming;
     this.recorders = recorders;
+
+    // Cache at construction time — these don't change between runs
+    this.fullSystemPrompt = this.buildSystemPrompt();
+    this.toolDescs = this.buildToolDescriptions();
+    this.routingConfig = buildSwarmRouting({
+      specialists: this.specialists,
+      extraTools: this.extraTools.length > 0 ? this.extraTools : undefined,
+    });
   }
 
   /** Build the system prompt with specialist descriptions appended. */
@@ -187,27 +202,20 @@ export class SwarmRunner {
 
   /** Build AgentLoopConfig — Swarm uses the same loop as Agent with custom routing. */
   private buildConfig(): AgentLoopConfig {
-    const routing = buildSwarmRouting({
-      specialists: this.specialists,
-      extraTools: this.extraTools.length > 0 ? this.extraTools : undefined,
-    });
-
-    // Tools slot: the tool descriptions go to the LLM so it knows about specialists.
-    // We use a custom ToolProvider that returns SlotDecision with the descriptions.
-    const toolDescs = this.buildToolDescriptions();
-    const toolProvider = {
-      resolve: () => ({ value: toolDescs, chosen: 'swarm-specialists' }),
-    };
-
+    const toolDescs = this.toolDescs;
     return {
       provider: this.provider,
-      systemPrompt: { provider: staticPrompt(this.buildSystemPrompt()) },
+      systemPrompt: { provider: staticPrompt(this.fullSystemPrompt) },
       messages: { strategy: slidingWindow({ maxMessages: 50 }) },
-      tools: { provider: toolProvider },
-      registry: new ToolRegistry(), // No local tools — specialists are subflows via routing
+      tools: {
+        provider: {
+          resolve: (_context: unknown) => ({ value: toolDescs, chosen: 'swarm-specialists' }),
+        },
+      },
+      registry: new ToolRegistry(),
       maxIterations: this.maxIter,
       streaming: this.streamingEnabled,
-      routing,
+      routing: this.routingConfig,
     };
   }
 
@@ -236,7 +244,7 @@ export class SwarmRunner {
     const { chart, spec } = this.buildLoop(message);
     this.lastSpec = annotateSpecIcons(spec as SpecLike);
 
-    const executorOpts: Record<string, unknown> = { enrichSnapshots: true };
+    const executorOpts: FlowChartExecutorOptions = { enrichSnapshots: true };
     if (options?.onToken && this.streamingEnabled) {
       executorOpts.streamHandlers = {
         onToken: (_streamId: string, token: string) => options.onToken!(token),
@@ -260,18 +268,11 @@ export class SwarmRunner {
     const state = snapshot?.sharedState ?? {};
     const result = (state.result as string) ?? '';
 
-    // Track which specialists were invoked via scope state
-    const invokedSpecialists = (state.specialistResult as string) ? this.specialists.filter((s) => {
-      const narrative = this.getNarrative();
-      return narrative.some((line) => line.includes(s.id));
-    }) : [];
-
-    const agents: AgentResultEntry[] = invokedSpecialists.map((s) => ({
-      id: s.id,
-      name: s.id,
-      content: '',
-      latencyMs: 0,
-    }));
+    // TODO(task-4): replace narrative string matching with scope-tracked invoked specialists set
+    const narrative = this.getNarrative();
+    const agents: AgentResultEntry[] = this.specialists
+      .filter((s) => narrative.some((line) => line.includes(s.id)))
+      .map((s) => ({ id: s.id, name: s.id, content: '', latencyMs: 0 }));
 
     return {
       content: result,

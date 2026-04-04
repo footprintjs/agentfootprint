@@ -89,7 +89,7 @@ export function buildSwarmRouting(config: SwarmRoutingConfig): RoutingConfig {
 
   // ── Decider ──────────────────────────────────────────────
 
-  const decider = (scope: SwarmRoutingScope): string => {
+  const decider = (scope: SwarmRoutingScope, _breakFn: () => void, _streamCb?: unknown): string => {
     const parsed = scope.parsedResponse;
     if (!parsed?.hasToolCalls || !parsed.toolCalls?.length) return 'final';
 
@@ -220,7 +220,7 @@ export function buildSwarmRouting(config: SwarmRoutingConfig): RoutingConfig {
     deciderName: 'RouteSpecialist',
     deciderId: 'route-specialist',
     deciderDescription: 'Route to the specialist the LLM selected, or finalize',
-    decider: decider as any, // SAFETY: RoutingConfig.decider accepts (scope: any) => string
+    decider,
     branches,
     defaultBranch: 'final',
   };
