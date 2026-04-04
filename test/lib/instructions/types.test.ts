@@ -30,14 +30,14 @@ function makeCtx(content: Record<string, unknown>, overrides?: Partial<Instructi
 // ── Unit ────────────────────────────────────────────────────────
 
 describe('LLMInstruction types — unit', () => {
-  it('LLMInstruction with inject only (Tier 1)', () => {
+  it('LLMInstruction with inject only (text only)', () => {
     const instr: LLMInstruction = {
       id: 'oos',
       when: (ctx) => (ctx.content as any).quantity === 0,
-      inject: 'Item out of stock. Suggest alternatives.',
+      text: 'Item out of stock. Suggest alternatives.',
     };
     expect(instr.id).toBe('oos');
-    expect(instr.inject).toBeTruthy();
+    expect(instr.text).toBeTruthy();
     expect(instr.followUp).toBeUndefined();
   });
 
@@ -53,16 +53,16 @@ describe('LLMInstruction types — unit', () => {
       },
     };
     expect(instr.followUp?.toolId).toBe('get_trace');
-    expect(instr.inject).toBeUndefined();
+    expect(instr.text).toBeUndefined();
   });
 
   it('LLMInstruction composite (Tier 3)', () => {
     const instr: LLMInstruction = {
       id: 'flagged',
-      inject: 'Flagged. Do NOT confirm.',
+      text: 'Flagged. Do NOT confirm.',
       followUp: quickBind('get_fraud_report', 'orderId'),
     };
-    expect(instr.inject).toBeTruthy();
+    expect(instr.text).toBeTruthy();
     expect(instr.followUp?.toolId).toBe('get_fraud_report');
   });
 
@@ -120,7 +120,7 @@ describe('LLMInstruction types — boundary', () => {
     const instr: LLMInstruction = {
       id: 'success',
       when: (ctx) => !ctx.error,
-      inject: 'Operation succeeded.',
+      text: 'Operation succeeded.',
     };
     const ctx = makeCtx({ status: 'ok' });
     expect(instr.when!(ctx)).toBe(true);
@@ -130,7 +130,7 @@ describe('LLMInstruction types — boundary', () => {
     const instr: LLMInstruction = {
       id: 'timeout',
       when: (ctx) => ctx.error?.code === 'TIMEOUT',
-      inject: 'Service timed out.',
+      text: 'Service timed out.',
     };
     const ctx = makeCtx({}, { error: { code: 'TIMEOUT', message: 'timed out' } });
     expect(instr.when!(ctx)).toBe(true);
@@ -140,7 +140,7 @@ describe('LLMInstruction types — boundary', () => {
     const instr: LLMInstruction = {
       id: 'slow',
       when: (ctx) => ctx.latencyMs > 5000,
-      inject: 'Response was slow. Apologize for the delay.',
+      text: 'Response was slow. Apologize for the delay.',
     };
     expect(instr.when!(makeCtx({}, { latencyMs: 6000 }))).toBe(true);
     expect(instr.when!(makeCtx({}, { latencyMs: 100 }))).toBe(false);
@@ -149,7 +149,7 @@ describe('LLMInstruction types — boundary', () => {
   it('instruction without when fires unconditionally', () => {
     const instr: LLMInstruction = {
       id: 'always',
-      inject: 'Always include this guidance.',
+      text: 'Always include this guidance.',
     };
     expect(instr.when).toBeUndefined(); // no predicate = always fires
   });
@@ -171,7 +171,7 @@ describe('LLMInstruction types — scenario', () => {
         id: 'denial-empathy',
         description: 'Guide LLM to be empathetic when loan denied',
         when: (ctx) => (ctx.content as any).status === 'denied',
-        inject: 'Loan denied. Be empathetic. Do NOT promise reversal.',
+        text: 'Loan denied. Be empathetic. Do NOT promise reversal.',
         followUp: quickBind('get_execution_trace', 'traceId', {
           description: 'Retrieve detailed denial reasoning',
           condition: 'User asks why their loan was denied',
@@ -182,7 +182,7 @@ describe('LLMInstruction types — scenario', () => {
         id: 'pii-guard',
         description: 'Prevent PII leakage from loan result',
         when: (ctx) => !!(ctx.content as any).ssn,
-        inject: 'Result contains PII. Do NOT repeat SSN or DOB.',
+        text: 'Result contains PII. Do NOT repeat SSN or DOB.',
         safety: true,
       },
     ];
@@ -239,12 +239,12 @@ describe('LLMInstruction types — property', () => {
   });
 
   it('priority defaults to 0 when not specified', () => {
-    const instr: LLMInstruction = { id: 'test', inject: 'test' };
+    const instr: LLMInstruction = { id: 'test', text: 'test' };
     expect(instr.priority ?? 0).toBe(0);
   });
 
   it('safety defaults to false when not specified', () => {
-    const instr: LLMInstruction = { id: 'test', inject: 'test' };
+    const instr: LLMInstruction = { id: 'test', text: 'test' };
     expect(instr.safety ?? false).toBe(false);
   });
 });
@@ -256,7 +256,7 @@ describe('LLMInstruction types — security', () => {
     const instr: LLMInstruction = {
       id: 'pii',
       when: (ctx) => !!(ctx.content as any).hasPII,
-      inject: 'Do NOT repeat raw PII values.',
+      text: 'Do NOT repeat raw PII values.',
       safety: true,
     };
     expect(instr.safety).toBe(true);

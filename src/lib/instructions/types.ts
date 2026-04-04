@@ -5,10 +5,9 @@
  * the instruction text into the LLM's recency window — right next to the tool result,
  * where the model pays the most attention.
  *
- * Three tiers:
- *   Tier 1: Behavioral — free text guidance (`inject`)
- *   Tier 2: Follow-up — structured next-action binding (`followUp`)
- *   Tier 3: Composite — both in one instruction
+ * Two optional fields — fill in what you need:
+ *   `text`: guidance appended to tool result (LLM reads this literally)
+ *   `followUp`: structured next-action binding (framework formats as string)
  */
 
 import type { ToolDefinition } from '../../types/tools';
@@ -123,25 +122,22 @@ export interface FollowUpBinding<T = unknown> {
  * the instruction is injected into the LLM's recency window — right next to the
  * tool result, where the model pays the most attention.
  *
- * Instructions come in three tiers:
- *   - **Behavioral** (`inject` only): free text guidance on how to respond
- *   - **Follow-up** (`followUp` only): structured next-action with exact parameters
- *   - **Composite** (both): behavioral guidance + structured follow-up
+ * `text` and `followUp` are optional — fill in what you need:
  *
  * @example
  * ```typescript
- * // Tier 1: Behavioral — steer LLM response style
+ * // Text guidance
  * { id: 'empathy', when: ctx => ctx.content.denied,
- *   inject: 'Be empathetic. Do NOT promise reversal.' }
+ *   text: 'Be empathetic. Do NOT promise reversal.' }
  *
- * // Tier 2: Follow-up — pre-resolve next tool call
+ * // Structured follow-up
  * { id: 'details', when: ctx => ctx.content.denied,
- *   followUp: quickBind('get_denial_trace', 'traceId') }
+ *   followUp: follow('get_denial_trace', ctx => ({ traceId: ctx.content.traceId }), 'Get details') }
  *
- * // Tier 3: Composite — both
+ * // Both text + follow-up
  * { id: 'flagged', when: ctx => ctx.content.flagged,
- *   inject: 'Order flagged. Do NOT confirm shipment.',
- *   followUp: quickBind('get_fraud_report', 'orderId') }
+ *   text: 'Order flagged. Do NOT confirm shipment.',
+ *   followUp: follow('get_fraud_report', ctx => ({ orderId: ctx.content.orderId }), 'View report') }
  *
  * // Error handling
  * { id: 'timeout', when: ctx => ctx.error?.code === 'TIMEOUT',
@@ -159,7 +155,7 @@ export interface LLMInstruction<T = unknown> {
   /**
    * Human-readable description of this instruction.
    * Used for: narrative, API docs, `previewInstructions()`, `generateToolGuide()`.
-   * NOT injected into LLM — the `inject` text is what the LLM sees.
+   * NOT injected into LLM — the `text` field is what the LLM sees.
    *
    * @example 'Guide LLM to be empathetic when loan is denied'
    */
@@ -175,14 +171,14 @@ export interface LLMInstruction<T = unknown> {
   readonly when?: (ctx: InstructionContext<T>) => boolean;
 
   /**
-   * Text injected into the LLM's recency window when this instruction fires.
-   * Write actionable, specific guidance — not vague instructions.
+   * Text appended to the tool result in the LLM's recency window.
+   * Write actionable, specific guidance — the LLM reads this literally.
    *
    * Good: "Item out of stock. Suggest alternatives from the same category.
    *        Do NOT promise availability or restock dates."
    * Bad:  "Handle this appropriately."
    */
-  readonly inject?: string;
+  readonly text?: string;
 
   /** Structured follow-up action the LLM can take. */
   readonly followUp?: FollowUpBinding<T>;
@@ -334,6 +330,30 @@ export function quickBind(
   };
 }
 
+/**
+ * Create a FollowUp binding with explicit params function.
+ *
+ * Preferred over `quickBind` for computed parameters.
+ *
+ * @example
+ * ```typescript
+ * followUp: follow('get_trace', ctx => ({ traceId: ctx.content.traceId }), 'Get denial details')
+ * ```
+ */
+export function follow<T = unknown>(
+  toolId: string,
+  params: (ctx: InstructionContext<T>) => Record<string, unknown>,
+  description: string,
+  condition?: string,
+): FollowUpBinding<T> {
+  return {
+    toolId,
+    params,
+    description,
+    condition: condition ?? 'User asks for more details',
+  };
+}
+
 // ── Extended ToolDefinition ─────────────────────────────────────────────
 
 /**
@@ -354,11 +374,11 @@ export function quickBind(
  *   },
  *   instructions: [
  *     { id: 'cancelled', when: ctx => ctx.content.status === 'cancelled',
- *       inject: 'Order cancelled. Be empathetic. Offer alternatives.' },
+ *       text: 'Order cancelled. Be empathetic. Offer alternatives.' },
  *     { id: 'shipped', when: ctx => ctx.content.status === 'shipped',
- *       followUp: quickBind('track_package', 'trackingId') },
+ *       followUp: follow('track_package', ctx => ({ trackingId: ctx.content.trackingId }), 'Track package') },
  *     { id: 'pii', when: ctx => ctx.content.hasPII, safety: true,
- *       inject: 'Contains PII. Do NOT repeat raw values to user.' },
+ *       text: 'Contains PII. Do NOT repeat raw values to user.' },
  *   ],
  * });
  * ```

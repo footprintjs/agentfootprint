@@ -109,8 +109,8 @@ export function renderInstructions(
     if (instr.resolvedFollowUp) {
       parts.push(formatFollowUp(instr.resolvedFollowUp));
     }
-    if (instr.inject) {
-      parts.push(formatInject(instr.inject));
+    if (instr.text) {
+      parts.push(formatInject(instr.text));
     }
   }
 

@@ -25,7 +25,7 @@ describe('renderInstructions — unit', () => {
 
   it('renders behavioral inject with [INSTRUCTION] prefix', () => {
     const fired = evaluateInstructions(
-      [{ id: 'a', inject: 'Be empathetic.' }],
+      [{ id: 'a', text: 'Be empathetic.' }],
       ctx({}),
     );
     const text = renderInstructions(fired)!;
@@ -48,7 +48,7 @@ describe('renderInstructions — unit', () => {
     const fired = evaluateInstructions(
       [{
         id: 'a',
-        inject: 'Order flagged.',
+        text: 'Order flagged.',
         followUp: quickBind('get_fraud', 'orderId'),
       }],
       ctx({ orderId: 'ord_1' }),
@@ -68,7 +68,7 @@ describe('renderInstructions — unit', () => {
     const fired = evaluateInstructions(
       [{
         id: 'a',
-        inject: 'Be kind.',
+        text: 'Be kind.',
         followUp: quickBind('get_trace', 'traceId'),
       }],
       ctx({ traceId: 'tr_1' }),
@@ -86,7 +86,7 @@ describe('processInstructions — unit', () => {
   it('returns original content when no instructions match', () => {
     const result = processInstructions(
       'tool output here',
-      [{ id: 'a', when: () => false, inject: 'never' }],
+      [{ id: 'a', when: () => false, text: 'never' }],
       ctx({}),
     );
     expect(result.content).toBe('tool output here');
@@ -97,7 +97,7 @@ describe('processInstructions — unit', () => {
   it('appends instruction text to original content', () => {
     const result = processInstructions(
       '{"status":"denied"}',
-      [{ id: 'a', inject: 'Be empathetic.' }],
+      [{ id: 'a', text: 'Be empathetic.' }],
       ctx({}),
     );
     expect(result.content).toContain('{"status":"denied"}');
@@ -138,7 +138,7 @@ describe('injection — boundary', () => {
   });
 
   it('empty inject string is not rendered', () => {
-    const fired = evaluateInstructions([{ id: 'a', inject: '' }], ctx({}));
+    const fired = evaluateInstructions([{ id: 'a', text: '' }], ctx({}));
     // Empty string is falsy — renderInstructions skips it
     const text = renderInstructions(fired);
     expect(text).toBeUndefined();
@@ -150,7 +150,7 @@ describe('injection — boundary', () => {
       // no formatFollowUp — falls back to default
     };
     const fired = evaluateInstructions(
-      [{ id: 'a', inject: 'Hello', followUp: quickBind('tool', 'id') }],
+      [{ id: 'a', text: 'Hello', followUp: quickBind('tool', 'id') }],
       ctx({ id: '1' }),
     );
     const text = renderInstructions(fired, partial)!;
@@ -167,7 +167,7 @@ describe('injection — scenario', () => {
       {
         id: 'empathy',
         when: (c) => (c.content as any).status === 'denied',
-        inject: 'Loan denied. Be empathetic. Do NOT promise reversal.',
+        text: 'Loan denied. Be empathetic. Do NOT promise reversal.',
         followUp: quickBind('get_trace', 'traceId', {
           description: 'Retrieve denial reasoning',
           condition: 'User asks why',
@@ -177,7 +177,7 @@ describe('injection — scenario', () => {
       {
         id: 'pii',
         when: (c) => !!(c.content as any).ssn,
-        inject: 'Contains PII. Do NOT repeat SSN to user.',
+        text: 'Contains PII. Do NOT repeat SSN to user.',
         safety: true,
       },
     ];
@@ -212,7 +212,7 @@ describe('injection — scenario', () => {
   it('build-time + runtime combined', () => {
     const result = processInstructions(
       '{"delayed": true}',
-      [{ id: 'empathy', inject: 'Apologize for the delay.' }],
+      [{ id: 'empathy', text: 'Apologize for the delay.' }],
       ctx({ delayed: true }),
       {
         instructions: ['ETA is approximately 2 hours.'],
@@ -239,7 +239,7 @@ describe('injection — property', () => {
     const original = 'original content';
     const result = processInstructions(
       original,
-      [{ id: 'a', inject: 'Appended.' }],
+      [{ id: 'a', text: 'Appended.' }],
       ctx({}),
     );
     // Original string is unchanged (strings are immutable in JS, but verify intent)
@@ -252,7 +252,7 @@ describe('injection — property', () => {
   it('injection text is separated from content by double newline', () => {
     const result = processInstructions(
       'content',
-      [{ id: 'a', inject: 'Guidance.' }],
+      [{ id: 'a', text: 'Guidance.' }],
       ctx({}),
     );
     expect(result.content).toBe('content\n\n[INSTRUCTION] Guidance.');
@@ -264,9 +264,9 @@ describe('injection — property', () => {
 describe('injection — security', () => {
   it('safety instruction is always last in injected text', () => {
     const instructions: LLMInstruction[] = [
-      { id: 'safety', inject: 'SAFETY: Do NOT leak PII.', safety: true, priority: -1 },
-      { id: 'normal1', inject: 'Normal instruction 1.', priority: 0 },
-      { id: 'normal2', inject: 'Normal instruction 2.', priority: 0 },
+      { id: 'safety', text: 'SAFETY: Do NOT leak PII.', safety: true, priority: -1 },
+      { id: 'normal1', text: 'Normal instruction 1.', priority: 0 },
+      { id: 'normal2', text: 'Normal instruction 2.', priority: 0 },
     ];
     const result = processInstructions('result', instructions, ctx({}));
 

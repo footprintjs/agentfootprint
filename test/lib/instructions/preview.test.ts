@@ -11,10 +11,10 @@ import type { LLMInstruction, PreviewContext } from '../../../src';
 // ── Helpers ─────────────────────────────────────────────────
 
 const instructions: LLMInstruction[] = [
-  { id: 'empathy', when: (ctx) => (ctx.content as any)?.status === 'denied', inject: 'Be empathetic.' },
+  { id: 'empathy', when: (ctx) => (ctx.content as any)?.status === 'denied', text: 'Be empathetic.' },
   { id: 'trace', when: (ctx) => !!(ctx.content as any)?.traceId, followUp: quickBind('get_trace', 'traceId') },
-  { id: 'pii', when: (ctx) => !!(ctx.content as any)?.ssn, inject: 'No PII.', safety: true },
-  { id: 'low-stock', when: (ctx) => (ctx.content as any)?.stock < 5, inject: 'Low stock warning.' },
+  { id: 'pii', when: (ctx) => !!(ctx.content as any)?.ssn, text: 'No PII.', safety: true },
+  { id: 'low-stock', when: (ctx) => (ctx.content as any)?.stock < 5, text: 'Low stock warning.' },
 ];
 
 const deniedCtx: PreviewContext = {
@@ -86,7 +86,7 @@ describe('previewInstructions — boundary', () => {
       error: { code: 'TIMEOUT', message: 'timed out' },
     };
     const errInstr: LLMInstruction[] = [
-      { id: 'timeout', when: (ctx) => ctx.error?.code === 'TIMEOUT', inject: 'Service timed out.' },
+      { id: 'timeout', when: (ctx) => ctx.error?.code === 'TIMEOUT', text: 'Service timed out.' },
     ];
     const preview = previewInstructions(errInstr, errCtx);
     expect(preview.firedIds).toEqual(['timeout']);
@@ -100,7 +100,7 @@ describe('previewInstructions — scenario', () => {
     const preview = previewInstructions(instructions, deniedCtx, {
       overrides: {
         suppress: ['empathy'],
-        replace: { pii: { inject: 'REDACTED — do not repeat any values.' } },
+        replace: { pii: { text: 'REDACTED — do not repeat any values.' } },
       },
     });
 

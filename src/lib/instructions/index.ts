@@ -1,4 +1,4 @@
-export { quickBind } from './types';
+export { quickBind, follow } from './types';
 export type {
   LLMInstruction,
   FollowUpBinding,

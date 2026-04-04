@@ -28,24 +28,24 @@ describe('evaluateInstructions — unit', () => {
 
   it('fires instruction when predicate matches', () => {
     const instructions: LLMInstruction[] = [
-      { id: 'oos', when: (c) => (c.content as any).qty === 0, inject: 'Out of stock.' },
+      { id: 'oos', when: (c) => (c.content as any).qty === 0, text: 'Out of stock.' },
     ];
     const result = evaluateInstructions(instructions, ctx({ qty: 0 }));
     expect(result).toHaveLength(1);
     expect(result[0].id).toBe('oos');
-    expect(result[0].inject).toBe('Out of stock.');
+    expect(result[0].text).toBe('Out of stock.');
   });
 
   it('skips instruction when predicate returns false', () => {
     const instructions: LLMInstruction[] = [
-      { id: 'oos', when: (c) => (c.content as any).qty === 0, inject: 'Out of stock.' },
+      { id: 'oos', when: (c) => (c.content as any).qty === 0, text: 'Out of stock.' },
     ];
     expect(evaluateInstructions(instructions, ctx({ qty: 5 }))).toEqual([]);
   });
 
   it('fires unconditional instruction (no when)', () => {
     const instructions: LLMInstruction[] = [
-      { id: 'always', inject: 'Always include this.' },
+      { id: 'always', text: 'Always include this.' },
     ];
     const result = evaluateInstructions(instructions, ctx({}));
     expect(result).toHaveLength(1);
@@ -72,8 +72,8 @@ describe('evaluateInstructions — unit', () => {
 describe('evaluateInstructions — boundary', () => {
   it('predicate throws: behavioral instruction skipped (fail-open)', () => {
     const instructions: LLMInstruction[] = [
-      { id: 'broken', when: () => { throw new Error('bug'); }, inject: 'Never see this.' },
-      { id: 'ok', inject: 'This fires.' },
+      { id: 'broken', when: () => { throw new Error('bug'); }, text: 'Never see this.' },
+      { id: 'ok', text: 'This fires.' },
     ];
     const result = evaluateInstructions(instructions, ctx({}));
     expect(result).toHaveLength(1);
@@ -82,7 +82,7 @@ describe('evaluateInstructions — boundary', () => {
 
   it('predicate throws: safety instruction fires (fail-closed)', () => {
     const instructions: LLMInstruction[] = [
-      { id: 'safety', when: () => { throw new Error('bug'); }, inject: 'PII guard.', safety: true },
+      { id: 'safety', when: () => { throw new Error('bug'); }, text: 'PII guard.', safety: true },
     ];
     const result = evaluateInstructions(instructions, ctx({}));
     expect(result).toHaveLength(1);
@@ -90,11 +90,11 @@ describe('evaluateInstructions — boundary', () => {
     expect(result[0].safety).toBe(true);
   });
 
-  it('follow-up params throws: inject preserved, follow-up dropped', () => {
+  it('follow-up params throws: text preserved, follow-up dropped', () => {
     const instructions: LLMInstruction[] = [
       {
         id: 'bad-params',
-        inject: 'Be empathetic.',
+        text: 'Be empathetic.',
         followUp: {
           toolId: 'get_trace',
           params: () => { throw new Error('no traceId'); },
@@ -105,15 +105,15 @@ describe('evaluateInstructions — boundary', () => {
     ];
     const result = evaluateInstructions(instructions, ctx({}));
     expect(result).toHaveLength(1);
-    expect(result[0].inject).toBe('Be empathetic.');
+    expect(result[0].text).toBe('Be empathetic.');
     expect(result[0].resolvedFollowUp).toBeUndefined();
   });
 
   it('multiple instructions fire — all returned', () => {
     const instructions: LLMInstruction[] = [
-      { id: 'a', inject: 'A' },
-      { id: 'b', inject: 'B' },
-      { id: 'c', inject: 'C' },
+      { id: 'a', text: 'A' },
+      { id: 'b', text: 'B' },
+      { id: 'c', text: 'C' },
     ];
     expect(evaluateInstructions(instructions, ctx({}))).toHaveLength(3);
   });
@@ -127,21 +127,21 @@ describe('evaluateInstructions — scenario', () => {
       {
         id: 'empathy',
         when: (c) => (c.content as any).status === 'denied',
-        inject: 'Be empathetic.',
+        text: 'Be empathetic.',
         followUp: quickBind('get_trace', 'traceId'),
         priority: 1,
       },
       {
         id: 'pii',
         when: (c) => !!(c.content as any).ssn,
-        inject: 'Do NOT repeat SSN.',
+        text: 'Do NOT repeat SSN.',
         safety: true,
         priority: 0,
       },
       {
         id: 'vip',
         when: (c) => (c.content as any).tier === 'vip',
-        inject: 'VIP customer.',
+        text: 'VIP customer.',
         priority: 0,
       },
     ];
@@ -161,8 +161,8 @@ describe('evaluateInstructions — scenario', () => {
   it('merge runtime instructions between build-time and safety', () => {
     const buildTime = evaluateInstructions(
       [
-        { id: 'empathy', inject: 'Be empathetic.', priority: 0 },
-        { id: 'pii', inject: 'No PII.', safety: true },
+        { id: 'empathy', text: 'Be empathetic.', priority: 0 },
+        { id: 'pii', text: 'No PII.', safety: true },
       ],
       ctx({}),
     );
@@ -180,7 +180,7 @@ describe('evaluateInstructions — scenario', () => {
     // Order: build-time non-safety → runtime → build-time safety
     expect(merged[0].id).toBe('empathy');                    // build-time non-safety
     expect(merged[1].id).toBe('runtime-followup-status_page'); // runtime follow-up
-    expect(merged[2].id).toBe('runtime-inject-0');           // runtime inject
+    expect(merged[2].id).toBe('runtime-text-0');           // runtime text
     expect(merged[3].id).toBe('pii');                        // safety LAST
   });
 });
@@ -190,8 +190,8 @@ describe('evaluateInstructions — scenario', () => {
 describe('evaluateInstructions — property', () => {
   it('safety instructions always come after non-safety regardless of priority', () => {
     const instructions: LLMInstruction[] = [
-      { id: 'safety-high', inject: 'S', safety: true, priority: -100 }, // lowest priority number
-      { id: 'normal', inject: 'N', priority: 999 },                     // highest priority number
+      { id: 'safety-high', text: 'S', safety: true, priority: -100 }, // lowest priority number
+      { id: 'normal', text: 'N', priority: 999 },                     // highest priority number
     ];
     const result = evaluateInstructions(instructions, ctx({}));
     expect(result[0].id).toBe('normal');      // non-safety first
@@ -200,9 +200,9 @@ describe('evaluateInstructions — property', () => {
 
   it('stable sort: same priority preserves array order', () => {
     const instructions: LLMInstruction[] = [
-      { id: 'first', inject: 'A', priority: 0 },
-      { id: 'second', inject: 'B', priority: 0 },
-      { id: 'third', inject: 'C', priority: 0 },
+      { id: 'first', text: 'A', priority: 0 },
+      { id: 'second', text: 'B', priority: 0 },
+      { id: 'third', text: 'C', priority: 0 },
     ];
     const result = evaluateInstructions(instructions, ctx({}));
     expect(result.map((r) => r.id)).toEqual(['first', 'second', 'third']);
@@ -210,8 +210,8 @@ describe('evaluateInstructions — property', () => {
 
   it('evaluateInstructions is pure — same input produces same output', () => {
     const instructions: LLMInstruction[] = [
-      { id: 'a', when: (c) => (c.content as any).x > 0, inject: 'A' },
-      { id: 'b', inject: 'B' },
+      { id: 'a', when: (c) => (c.content as any).x > 0, text: 'A' },
+      { id: 'b', text: 'B' },
     ];
     const c = ctx({ x: 1 });
     const r1 = evaluateInstructions(instructions, c);
@@ -225,8 +225,8 @@ describe('evaluateInstructions — property', () => {
 describe('evaluateInstructions — security', () => {
   it('safety instructions fire even when all behavioral predicates fail', () => {
     const instructions: LLMInstruction[] = [
-      { id: 'behavioral', when: () => false, inject: 'Never fires.' },
-      { id: 'safety', inject: 'Always guard PII.', safety: true },
+      { id: 'behavioral', when: () => false, text: 'Never fires.' },
+      { id: 'safety', text: 'Always guard PII.', safety: true },
     ];
     const result = evaluateInstructions(instructions, ctx({}));
     expect(result).toHaveLength(1);

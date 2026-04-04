@@ -20,8 +20,8 @@ import type { LLMInstruction, InstructionContext, RuntimeFollowUp, InstructionOv
 export interface ResolvedInstruction {
   /** Instruction ID (for recording/tracking). */
   readonly id: string;
-  /** Behavioral text to inject (if any). */
-  readonly inject?: string;
+  /** Text appended to tool result (if any). */
+  readonly text?: string;
   /** Resolved follow-up with concrete params (if any). */
   readonly resolvedFollowUp?: ResolvedFollowUp;
   /** Whether this is a safety instruction. */
@@ -109,7 +109,7 @@ export function evaluateInstructions(
 
     matched.push({
       id: instr.id,
-      inject: instr.inject,
+      text: instr.text,
       resolvedFollowUp,
       safety: instr.safety ?? false,
       priority: instr.priority ?? 0,
@@ -177,8 +177,8 @@ export function mergeRuntimeInstructions(
   if (runtime.instructions) {
     for (let i = 0; i < runtime.instructions.length; i++) {
       runtimeResolved.push({
-        id: `runtime-inject-${i}`,
-        inject: runtime.instructions[i],
+        id: `runtime-text-${i}`,
+        text: runtime.instructions[i],
         safety: false,
         priority: 0,
       });

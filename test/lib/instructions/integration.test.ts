@@ -27,12 +27,12 @@ const orderTool = defineTool({
     {
       id: 'cancelled',
       when: (ctx) => (ctx.content as any)?.status === 'cancelled',
-      inject: 'Order is cancelled. Be empathetic. Offer alternatives.',
+      text: 'Order is cancelled. Be empathetic. Offer alternatives.',
     },
     {
       id: 'shipped',
       when: (ctx) => (ctx.content as any)?.status === 'shipped',
-      inject: 'Order shipped.',
+      text: 'Order shipped.',
       followUp: quickBind('track_package', 'trackingId', {
         description: 'Track package delivery',
         condition: 'User asks about delivery status',
