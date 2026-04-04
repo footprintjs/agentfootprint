@@ -252,7 +252,7 @@ describe('buildSwarmRouting — security', () => {
     })).toThrow('collides with specialist ID');
   });
 
-  it('sets routingWarning when multiple tool calls are dropped', () => {
+  it('multiple specialist calls: routes to first, loop handles rest', () => {
     const routing = buildSwarmRouting({
       specialists: [makeSpecialist('coding', 'Code')],
     });
@@ -267,8 +267,11 @@ describe('buildSwarmRouting — security', () => {
       },
     };
 
-    routing.decider(scope, () => {});
-    expect(scope.routingWarning).toContain('1 additional call(s) dropped');
+    // Routes to first specialist — the loop re-calls LLM for the rest
+    const result = routing.decider(scope, () => {});
+    expect(result).toBe('coding');
+    expect(scope.specialistMessage).toBe('first');
+    expect(scope.specialistToolCallId).toBe('tc1');
   });
 
   it('sets routingWarning when unknown tool name is used', () => {

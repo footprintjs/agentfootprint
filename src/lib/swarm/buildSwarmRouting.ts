@@ -94,36 +94,34 @@ export function buildSwarmRouting(config: SwarmRoutingConfig): RoutingConfig {
 
   // ── Decider ──────────────────────────────────────────────
 
+  const MAX_MESSAGE_LEN = 100_000; // 100KB — prevents LLM-controlled DoS
+
   const decider = (scope: SwarmRoutingScope, _breakFn: () => void, _streamCb?: unknown): string => {
     const parsed = scope.parsedResponse;
     if (!parsed?.hasToolCalls || !parsed.toolCalls?.length) return 'final';
 
-    // Single-dispatch: only toolCalls[0] is processed per iteration
-    if (parsed.toolCalls.length > 1) {
-      scope.routingWarning = `Swarm processes one tool call per iteration. ${parsed.toolCalls.length - 1} additional call(s) dropped.`;
+    // Find the first specialist or extra tool call
+    for (const toolCall of parsed.toolCalls) {
+      const toolName = toolCall.name;
+
+      if (specialistIds.has(toolName)) {
+        const args = toolCall.arguments as Record<string, unknown> | undefined;
+        const rawMsg = args?.message;
+        const msg = typeof rawMsg === 'string' ? rawMsg : '';
+        scope.specialistMessage = msg.length > MAX_MESSAGE_LEN ? msg.slice(0, MAX_MESSAGE_LEN) : msg;
+        scope.specialistToolCallId = toolCall.id;
+        return toolName;
+      }
+
+      if (extraToolIds.has(toolName)) {
+        scope.specialistToolCallId = toolCall.id;
+        return 'swarm-tools';
+      }
     }
 
-    const toolCall = parsed.toolCalls[0];
-    const toolName = toolCall.name;
-
-    if (specialistIds.has(toolName)) {
-      // Extract specialist message — validate it's a string (LLM-controlled, untrusted)
-      const args = toolCall.arguments as Record<string, unknown> | undefined;
-      const rawMsg = args?.message;
-      const MAX_MESSAGE_LEN = 100_000; // 100KB — prevents LLM-controlled DoS
-      const msg = typeof rawMsg === 'string' ? rawMsg : '';
-      scope.specialistMessage = msg.length > MAX_MESSAGE_LEN ? msg.slice(0, MAX_MESSAGE_LEN) : msg;
-      scope.specialistToolCallId = toolCall.id;
-      return toolName;
-    }
-
-    if (extraToolIds.has(toolName)) {
-      scope.specialistToolCallId = toolCall.id;
-      return 'swarm-tools';
-    }
-
-    // Unknown tool name — route to final with warning
-    scope.routingWarning = `Unknown tool '${String(toolName).slice(0, 100)}' — routing to final.`;
+    // All tool calls are unknown — route to final with warning
+    const unknownNames = parsed.toolCalls.map((tc) => String(tc.name).slice(0, 50)).join(', ');
+    scope.routingWarning = `Unknown tool(s): ${unknownNames}`;
     return 'final';
   };
 
@@ -181,54 +179,62 @@ export function buildSwarmRouting(config: SwarmRoutingConfig): RoutingConfig {
     });
   }
 
-  // Swarm-tools branch — subflow with proper outputMapper (delta pattern).
-  // Uses a subflow so narrative/recorders see the tool execution as a structured event.
+  // Swarm-tools branch — executes ALL extra tool calls from the response.
+  // Uses a subflow so narrative/recorders see tool execution as structured events.
   if (extraTools && extraTools.length > 0) {
     const toolMap = new Map(extraTools.map((t) => [t.id, t]));
-    const swarmToolSubflow = flowChart(
-      'ExecuteSwarmTool',
-      async (scope: TypedScope<{ parsedResponse: any; toolResult: string; toolCallId: string }>) => {
+
+    interface SwarmToolState {
+      parsedResponse: any;
+      toolResults: Array<{ content: string; toolCallId: string }>;
+      [key: string]: unknown;
+    }
+
+    const swarmToolSubflow = flowChart<SwarmToolState>(
+      'ExecuteSwarmTools',
+      async (scope) => {
         const parsed = scope.parsedResponse;
-        const toolCall = parsed?.toolCalls?.[0];
-        if (!toolCall) return;
+        const toolCalls = parsed?.toolCalls ?? [];
+        const results: Array<{ content: string; toolCallId: string }> = [];
 
-        const tool = toolMap.get(toolCall.name);
-        if (!tool) {
-          scope.toolResult = JSON.stringify({ error: true, message: `Unknown tool: ${toolCall.name}` });
-          scope.toolCallId = toolCall.id;
-          return;
+        // Execute ALL extra tool calls sequentially
+        for (const toolCall of toolCalls) {
+          const tool = toolMap.get(toolCall.name);
+          if (!tool) continue; // skip specialist calls and unknowns
+
+          try {
+            const result = await tool.handler(toolCall.arguments as Record<string, unknown>);
+            results.push({ content: result.content, toolCallId: toolCall.id });
+          } catch (err: unknown) {
+            const errMsg = err instanceof Error ? err.message : String(err);
+            results.push({ content: `Error: ${errMsg}`, toolCallId: toolCall.id });
+          }
         }
 
-        try {
-          const result = await tool.handler(toolCall.arguments as Record<string, unknown>);
-          scope.toolResult = result.content;
-        } catch (err: unknown) {
-          const errMsg = err instanceof Error ? err.message : String(err);
-          scope.toolResult = `Error: ${errMsg}`;
-        }
-        scope.toolCallId = toolCall.id;
+        scope.toolResults = results;
       },
-      'execute-swarm-tool',
+      'execute-swarm-tools',
       undefined,
-      'Execute non-specialist tool',
+      'Execute all non-specialist tool calls',
     ).build();
 
     branches.push({
       id: 'swarm-tools',
       kind: 'subflow',
-      name: 'ExecuteSwarmTool',
+      name: 'ExecuteSwarmTools',
       chart: swarmToolSubflow,
       mount: {
         inputMapper: (parent: Record<string, unknown>) => ({
           parsedResponse: parent.parsedResponse,
         }),
-        outputMapper: (sfOutput: Record<string, unknown>, parentScope: Record<string, unknown>) => ({
-          messages: [toolResultMessage(
-            String(sfOutput.toolResult ?? ''),
-            String(sfOutput.toolCallId ?? parentScope.specialistToolCallId ?? `tool-${++fallbackIdCounter}`),
-          )],
-          loopCount: ((parentScope.loopCount as number) ?? 0) + 1,
-        }),
+        outputMapper: (sfOutput: Record<string, unknown>, parentScope: Record<string, unknown>) => {
+          const results = (sfOutput.toolResults ?? []) as Array<{ content: string; toolCallId: string }>;
+          // Delta: return all tool result messages for array concat
+          return {
+            messages: results.map((r) => toolResultMessage(r.content, r.toolCallId)),
+            loopCount: ((parentScope.loopCount as number) ?? 0) + 1,
+          };
+        },
       },
     });
   }
