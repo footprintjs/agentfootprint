@@ -68,9 +68,6 @@ export interface SwarmRoutingConfig {
 
 // ── Builder ──────────────────────────────────────────────────
 
-/** Counter for unique fallback IDs (avoids Date.now collision). */
-let _fallbackIdCounter = 0;
-
 /**
  * Build a RoutingConfig for Swarm specialist routing.
  *
@@ -79,6 +76,7 @@ let _fallbackIdCounter = 0;
  */
 export function buildSwarmRouting(config: SwarmRoutingConfig): RoutingConfig {
   const { specialists, extraTools } = config;
+  let fallbackIdCounter = 0; // Per-routing instance, not module-level
   const specialistIds = new Set(specialists.map((s) => s.id));
   const extraToolIds = new Set((extraTools ?? []).map((t) => t.id));
 
@@ -107,7 +105,9 @@ export function buildSwarmRouting(config: SwarmRoutingConfig): RoutingConfig {
       // Extract specialist message — validate it's a string (LLM-controlled, untrusted)
       const args = toolCall.arguments as Record<string, unknown> | undefined;
       const rawMsg = args?.message;
-      scope.specialistMessage = typeof rawMsg === 'string' ? rawMsg : '';
+      const MAX_MESSAGE_LEN = 100_000; // 100KB — prevents LLM-controlled DoS
+      const msg = typeof rawMsg === 'string' ? rawMsg : '';
+      scope.specialistMessage = msg.length > MAX_MESSAGE_LEN ? msg.slice(0, MAX_MESSAGE_LEN) : msg;
       scope.specialistToolCallId = toolCall.id;
       return toolName;
     }
@@ -162,7 +162,7 @@ export function buildSwarmRouting(config: SwarmRoutingConfig): RoutingConfig {
         }),
         outputMapper: (sfOutput: Record<string, unknown>, parentScope: Record<string, unknown>) => {
           const resultContent = String(sfOutput.result ?? sfOutput.content ?? '');
-          const toolCallId = String(parentScope.specialistToolCallId ?? `specialist-${++_fallbackIdCounter}`);
+          const toolCallId = String(parentScope.specialistToolCallId ?? `specialist-${++fallbackIdCounter}`);
           const preview = resultContent.length > 120 ? resultContent.slice(0, 120) + '...' : resultContent;
           // Track which specialists were invoked — delta only (applyOutputMapping concatenates arrays)
           return {
@@ -176,33 +176,55 @@ export function buildSwarmRouting(config: SwarmRoutingConfig): RoutingConfig {
     });
   }
 
-  // Swarm-tools branch — inline execution for non-specialist tools
+  // Swarm-tools branch — subflow with proper outputMapper (delta pattern).
+  // Uses a subflow so narrative/recorders see the tool execution as a structured event.
   if (extraTools && extraTools.length > 0) {
     const toolMap = new Map(extraTools.map((t) => [t.id, t]));
-    branches.push({
-      id: 'swarm-tools',
-      kind: 'fn',
-      name: 'ExecuteSwarmTool',
-      fn: async (scope: SwarmRoutingScope) => {
+    const swarmToolSubflow = flowChart(
+      'ExecuteSwarmTool',
+      async (scope: TypedScope<{ parsedResponse: any; toolResult: string; toolCallId: string }>) => {
         const parsed = scope.parsedResponse;
         const toolCall = parsed?.toolCalls?.[0];
         if (!toolCall) return;
 
         const tool = toolMap.get(toolCall.name);
-        if (!tool) return;
+        if (!tool) {
+          scope.toolResult = JSON.stringify({ error: true, message: `Unknown tool: ${toolCall.name}` });
+          scope.toolCallId = toolCall.id;
+          return;
+        }
 
         try {
           const result = await tool.handler(toolCall.arguments as Record<string, unknown>);
-          const messages = scope.messages ?? [];
-          scope.messages = [...messages, toolResultMessage(result.content, toolCall.id)];
+          scope.toolResult = result.content;
         } catch (err: unknown) {
-          const messages = scope.messages ?? [];
           const errMsg = err instanceof Error ? err.message : String(err);
-          scope.messages = [...messages, toolResultMessage(`Error: ${errMsg}`, toolCall.id)];
+          scope.toolResult = `Error: ${errMsg}`;
         }
-        scope.loopCount = (scope.loopCount ?? 0) + 1;
+        scope.toolCallId = toolCall.id;
       },
-      description: 'Execute non-specialist tool and append result',
+      'execute-swarm-tool',
+      undefined,
+      'Execute non-specialist tool',
+    ).build();
+
+    branches.push({
+      id: 'swarm-tools',
+      kind: 'subflow',
+      name: 'ExecuteSwarmTool',
+      chart: swarmToolSubflow,
+      mount: {
+        inputMapper: (parent: Record<string, unknown>) => ({
+          parsedResponse: parent.parsedResponse,
+        }),
+        outputMapper: (sfOutput: Record<string, unknown>, parentScope: Record<string, unknown>) => ({
+          messages: [toolResultMessage(
+            String(sfOutput.toolResult ?? ''),
+            String(sfOutput.toolCallId ?? parentScope.specialistToolCallId ?? `tool-${++fallbackIdCounter}`),
+          )],
+          loopCount: ((parentScope.loopCount as number) ?? 0) + 1,
+        }),
+      },
     });
   }
 

@@ -63,7 +63,8 @@ export interface RoutingConfig {
   /** Branch definitions — each maps to a subflow or inline function.
    *  Order matters: branches are added to the decider in array order. */
   readonly branches: readonly RoutingBranch[];
-  /** Default branch when decider returns an unknown key. */
+  /** Default branch when decider returns an unknown key or maxIterations is reached.
+   *  This branch MUST call $break() or breakFn() to terminate the loop. */
   readonly defaultBranch: string;
 }
 

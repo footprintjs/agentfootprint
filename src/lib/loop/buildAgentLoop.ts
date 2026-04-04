@@ -325,7 +325,8 @@ export function buildAgentLoop(config: AgentLoopConfig, seed?: AgentLoopSeedOpti
   }
 
   // Wrap decider with structural maxIterations guard — no custom routing can bypass this.
-  // If loopCount >= maxIterations, force-route to defaultBranch (typically 'final').
+  // If loopCount >= maxIterations, force-route to defaultBranch.
+  // The defaultBranch MUST call $break() or breakFn() — validated below.
   const safeDecider: RoutingConfig['decider'] = (scope: any, breakFn, streamCb) => {
     const loopCount = scope.loopCount ?? 0;
     const maxIter = scope.maxIterations ?? 10;
@@ -335,9 +336,7 @@ export function buildAgentLoop(config: AgentLoopConfig, seed?: AgentLoopSeedOpti
 
   let decider = builder.addDeciderFunction(
     routing.deciderName,
-    // SAFETY: addDeciderFunction expects StageFunction (returns TOut | void) but deciders
-    // return string (branch key). footprintjs uses the return value to select the branch.
-    safeDecider as any,
+    safeDecider,
     routing.deciderId,
     routing.deciderDescription,
   );
