@@ -68,7 +68,7 @@ export class AgentRunner {
     this.systemPromptText = options.systemPromptText;
     this.registry = options.registry;
     this.maxIter = options.maxIterations ?? 10;
-    this.recorders = options.recorders ?? [];
+    this.recorders = [...(options.recorders ?? [])];
     this.memoryConfig = options.memoryConfig;
     this.agentPattern = options.pattern ?? AgentPattern.Regular;
     this.customPromptProvider = options.promptProvider;
