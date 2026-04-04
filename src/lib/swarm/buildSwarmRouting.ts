@@ -8,9 +8,10 @@
  * Each specialist is mounted as a lazy subflow branch — only built when selected.
  * Extra tools (non-specialist) get an inline function branch.
  *
- * **Single-dispatch:** Only `toolCalls[0]` is processed per iteration.
- * If the LLM returns multiple tool calls, only the first is routed;
- * remaining calls are dropped with a debug warning on scope.
+ * **First-match dispatch:** Iterates toolCalls to find the first specialist or
+ * extra tool match. That branch runs; remaining specialist calls get synthetic
+ * "deferred" tool-results so the LLM sees a response for every tool_call ID.
+ * Extra tools are all executed in one pass by the swarm-tools subflow.
  */
 
 import { flowChart } from 'footprintjs';
@@ -52,7 +53,9 @@ interface SwarmRoutingScope {
   specialistResult?: string;
   /** Structural tracking: IDs of specialists invoked during this run. */
   invokedSpecialists?: string[];
-  /** Debug: set when multiple tool calls are dropped. */
+  /** Synthetic tool-results for non-dispatched tool calls (LLMs expect every tool_call to have a result). */
+  skippedToolResults?: Array<{ content: string; toolCallId: string }>;
+  /** Debug: set for unknown tool names or routing anomalies. */
   routingWarning?: string;
   [key: string]: unknown;
 }
@@ -100,8 +103,12 @@ export function buildSwarmRouting(config: SwarmRoutingConfig): RoutingConfig {
     const parsed = scope.parsedResponse;
     if (!parsed?.hasToolCalls || !parsed.toolCalls?.length) return 'final';
 
-    // Find the first specialist or extra tool call
-    for (const toolCall of parsed.toolCalls) {
+    // Find the first specialist or extra tool call (first-match semantics)
+    let matchedIndex = -1;
+    let matchedBranch = 'final';
+
+    for (let i = 0; i < parsed.toolCalls.length; i++) {
+      const toolCall = parsed.toolCalls[i];
       const toolName = toolCall.name;
 
       if (specialistIds.has(toolName)) {
@@ -110,19 +117,43 @@ export function buildSwarmRouting(config: SwarmRoutingConfig): RoutingConfig {
         const msg = typeof rawMsg === 'string' ? rawMsg : '';
         scope.specialistMessage = msg.length > MAX_MESSAGE_LEN ? msg.slice(0, MAX_MESSAGE_LEN) : msg;
         scope.specialistToolCallId = toolCall.id;
-        return toolName;
+        matchedIndex = i;
+        matchedBranch = toolName;
+        break;
       }
 
       if (extraToolIds.has(toolName)) {
         scope.specialistToolCallId = toolCall.id;
-        return 'swarm-tools';
+        matchedIndex = i;
+        matchedBranch = 'swarm-tools';
+        break;
       }
     }
 
-    // All tool calls are unknown — route to final with warning
-    const unknownNames = parsed.toolCalls.map((tc) => String(tc.name).slice(0, 50)).join(', ');
-    scope.routingWarning = `Unknown tool(s): ${unknownNames}`;
-    return 'final';
+    // Inject synthetic tool-results for non-dispatched tool calls.
+    // LLMs expect every tool_call ID to have a matching tool_result.
+    const skipped: Array<{ content: string; toolCallId: string }> = [];
+    for (let i = 0; i < parsed.toolCalls.length; i++) {
+      if (i === matchedIndex) continue;
+      const tc = parsed.toolCalls[i];
+      if (specialistIds.has(tc.name)) {
+        skipped.push({ content: 'Deferred — will be handled in next iteration.', toolCallId: tc.id });
+      } else if (!extraToolIds.has(tc.name)) {
+        skipped.push({ content: `Unknown tool: ${String(tc.name).slice(0, 100)}`, toolCallId: tc.id });
+      }
+      // Extra tools in swarm-tools branch are handled by the subflow
+    }
+    if (skipped.length > 0) {
+      scope.skippedToolResults = skipped;
+    }
+
+    if (matchedIndex === -1) {
+      const unknownNames = parsed.toolCalls.map((tc) => String(tc.name).slice(0, 50)).join(', ');
+      scope.routingWarning = `Unknown tool(s): ${unknownNames}`;
+      return 'final';
+    }
+
+    return matchedBranch;
   };
 
   // ── Branches ─────────────────────────────────────────────
@@ -167,9 +198,11 @@ export function buildSwarmRouting(config: SwarmRoutingConfig): RoutingConfig {
           const resultContent = String(sfOutput.result ?? sfOutput.content ?? '');
           const toolCallId = String(parentScope.specialistToolCallId ?? `specialist-${++fallbackIdCounter}`);
           const preview = resultContent.length > 120 ? resultContent.slice(0, 120) + '...' : resultContent;
-          // Track which specialists were invoked — delta only (applyOutputMapping concatenates arrays)
+          // Include synthetic results for skipped tool calls (LLMs expect every call to have a result)
+          const skipped = (parentScope.skippedToolResults ?? []) as Array<{ content: string; toolCallId: string }>;
+          const skippedMessages = skipped.map((s) => toolResultMessage(s.content, s.toolCallId));
           return {
-            messages: [toolResultMessage(resultContent, toolCallId)],
+            messages: [toolResultMessage(resultContent, toolCallId), ...skippedMessages],
             loopCount: ((parentScope.loopCount as number) ?? 0) + 1,
             specialistResult: preview,
             invokedSpecialists: [specialist.id],
@@ -185,7 +218,7 @@ export function buildSwarmRouting(config: SwarmRoutingConfig): RoutingConfig {
     const toolMap = new Map(extraTools.map((t) => [t.id, t]));
 
     interface SwarmToolState {
-      parsedResponse: any;
+      parsedResponse: SwarmRoutingScope['parsedResponse'];
       toolResults: Array<{ content: string; toolCallId: string }>;
       [key: string]: unknown;
     }
