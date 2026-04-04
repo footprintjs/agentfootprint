@@ -51,7 +51,6 @@ describe('buildSwarmRouting — unit', () => {
   it('produces a RoutingConfig with specialist branches + final', () => {
     const routing = buildSwarmRouting({
       specialists: [makeSpecialist('coding', 'Code specialist')],
-      seedMessage: 'hi',
     });
 
     expect(routing.deciderName).toBe('RouteSpecialist');
@@ -68,7 +67,6 @@ describe('buildSwarmRouting — unit', () => {
     const routing = buildSwarmRouting({
       specialists: [makeSpecialist('coding', 'Code')],
       extraTools: [defineTool({ id: 'calc', description: 'Calculator', inputSchema: {}, handler: async () => ({ content: '42' }) })],
-      seedMessage: 'hi',
     });
 
     expect(routing.branches).toHaveLength(3); // coding + swarm-tools + final
@@ -78,7 +76,6 @@ describe('buildSwarmRouting — unit', () => {
   it('decider routes to specialist ID when LLM calls specialist tool', () => {
     const routing = buildSwarmRouting({
       specialists: [makeSpecialist('coding', 'Code'), makeSpecialist('writing', 'Write')],
-      seedMessage: 'hi',
     });
 
     const scope: any = {
@@ -97,7 +94,6 @@ describe('buildSwarmRouting — unit', () => {
   it('decider routes to final when no tool calls', () => {
     const routing = buildSwarmRouting({
       specialists: [makeSpecialist('coding', 'Code')],
-      seedMessage: 'hi',
     });
 
     const scope: any = {
@@ -114,7 +110,6 @@ describe('buildSwarmRouting — boundary', () => {
   it('single specialist produces 2 branches', () => {
     const routing = buildSwarmRouting({
       specialists: [makeSpecialist('only', 'The only one')],
-      seedMessage: 'hi',
     });
     expect(routing.branches).toHaveLength(2); // only + final
   });
@@ -122,7 +117,6 @@ describe('buildSwarmRouting — boundary', () => {
   it('no extraTools — no swarm-tools branch', () => {
     const routing = buildSwarmRouting({
       specialists: [makeSpecialist('a', 'A')],
-      seedMessage: 'hi',
     });
     expect(routing.branches.find((b) => b.id === 'swarm-tools')).toBeUndefined();
   });
@@ -131,7 +125,6 @@ describe('buildSwarmRouting — boundary', () => {
     const routing = buildSwarmRouting({
       specialists: [makeSpecialist('coding', 'Code')],
       extraTools: [defineTool({ id: 'calc', description: 'Calc', inputSchema: {}, handler: async () => ({ content: '42' }) })],
-      seedMessage: 'hi',
     });
 
     const scope: any = {
@@ -169,7 +162,7 @@ describe('buildSwarmRouting — scenario', () => {
       inputSchema: { type: 'object', properties: { message: { type: 'string' } }, required: ['message'] },
     }));
 
-    const routing = buildSwarmRouting({ specialists, seedMessage: 'write fizzbuzz' });
+    const routing = buildSwarmRouting({ specialists });
 
     const config: AgentLoopConfig = {
       provider,
@@ -196,7 +189,6 @@ describe('buildSwarmRouting — property', () => {
   it('specialist lazy-subflow factories produce valid FlowCharts', () => {
     const routing = buildSwarmRouting({
       specialists: [makeSpecialist('coding', 'Code')],
-      seedMessage: 'hi',
     });
 
     const lazyBranch = routing.branches.find((b) => b.kind === 'lazy-subflow');
@@ -212,7 +204,6 @@ describe('buildSwarmRouting — property', () => {
     const routing = buildSwarmRouting({
       specialists: [makeSpecialist('a', 'A'), makeSpecialist('b', 'B')],
       extraTools: [defineTool({ id: 'calc', description: 'Calc', inputSchema: {}, handler: async () => ({ content: '42' }) })],
-      seedMessage: 'hi',
     });
 
     const ids = routing.branches.map((b) => b.id);
@@ -226,7 +217,6 @@ describe('buildSwarmRouting — security', () => {
   it('unknown tool name routes to final (not specialist)', () => {
     const routing = buildSwarmRouting({
       specialists: [makeSpecialist('coding', 'Code')],
-      seedMessage: 'hi',
     });
 
     const scope: any = {
@@ -239,10 +229,9 @@ describe('buildSwarmRouting — security', () => {
     expect(routing.decider(scope, () => {})).toBe('final');
   });
 
-  it('specialist message falls back to seedMessage when args missing', () => {
+  it('specialist message falls back to empty string when args.message missing', () => {
     const routing = buildSwarmRouting({
       specialists: [makeSpecialist('coding', 'Code')],
-      seedMessage: 'fallback-msg',
     });
 
     const scope: any = {
@@ -253,6 +242,64 @@ describe('buildSwarmRouting — security', () => {
     };
 
     routing.decider(scope, () => {});
-    expect(scope.specialistMessage).toBe('fallback-msg');
+    expect(scope.specialistMessage).toBe('');
+  });
+
+  it('throws when extra tool ID collides with specialist ID', () => {
+    expect(() => buildSwarmRouting({
+      specialists: [makeSpecialist('calc', 'Calculator specialist')],
+      extraTools: [defineTool({ id: 'calc', description: 'Calc', inputSchema: {}, handler: async () => ({ content: '42' }) })],
+    })).toThrow('collides with specialist ID');
+  });
+
+  it('sets routingWarning when multiple tool calls are dropped', () => {
+    const routing = buildSwarmRouting({
+      specialists: [makeSpecialist('coding', 'Code')],
+    });
+
+    const scope: any = {
+      parsedResponse: {
+        hasToolCalls: true,
+        toolCalls: [
+          { id: 'tc1', name: 'coding', arguments: { message: 'first' } },
+          { id: 'tc2', name: 'coding', arguments: { message: 'second' } },
+        ],
+      },
+    };
+
+    routing.decider(scope, () => {});
+    expect(scope.routingWarning).toContain('1 additional call(s) dropped');
+  });
+
+  it('sets routingWarning when unknown tool name is used', () => {
+    const routing = buildSwarmRouting({
+      specialists: [makeSpecialist('coding', 'Code')],
+    });
+
+    const scope: any = {
+      parsedResponse: {
+        hasToolCalls: true,
+        toolCalls: [{ id: 'tc1', name: 'hallucinated-tool', arguments: {} }],
+      },
+    };
+
+    expect(routing.decider(scope, () => {})).toBe('final');
+    expect(scope.routingWarning).toContain('hallucinated-tool');
+  });
+
+  it('specialist message coerces non-string to empty (LLM injection guard)', () => {
+    const routing = buildSwarmRouting({
+      specialists: [makeSpecialist('coding', 'Code')],
+    });
+
+    const scope: any = {
+      parsedResponse: {
+        hasToolCalls: true,
+        toolCalls: [{ id: 'tc1', name: 'coding', arguments: { message: { nested: true } } }],
+      },
+    };
+
+    routing.decider(scope, () => {});
+    expect(scope.specialistMessage).toBe('');
   });
 });
