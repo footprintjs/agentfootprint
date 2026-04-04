@@ -1,19 +1,17 @@
 /**
- * Swarm — multi-agent delegation with specialist subflows.
+ * Swarm — multi-agent delegation via buildAgentLoop + buildSwarmRouting.
  *
  * An orchestrator LLM selects which specialist to invoke. Each specialist
  * is mounted as a **lazy subflow** — visible in BTS with drill-down.
  *
- * Flowchart:
- *   Seed → CallLLM → ParseResponse → RouteSpecialist(decider)
- *       ├── 'coding'  → lazy subflow (coding agent's flowchart)
- *       ├── 'writing' → lazy subflow (writing agent's flowchart)
- *       └── 'final'   → Finalize (direct response)
- *     → loopTo('call-llm')
+ * Swarm IS an Agent with a different routing strategy:
+ *   Agent:  ... → RouteResponse{tool-calls | final}
+ *   Swarm:  ... → RouteSpecialist{specialist-A | specialist-B | swarm-tools | final}
  *
- * After a specialist runs, its result appears as a tool result message.
- * The loop continues — the orchestrator sees the specialist's result and
- * can call another specialist or generate a final answer.
+ * Everything upstream (SystemPrompt, Messages, Tools, AssemblePrompt,
+ * CallLLM, ParseResponse) is the same Agent loop infrastructure.
+ *
+ * > "Every feature you add to Agent automatically works in Swarm."
  *
  * Usage:
  *   const swarm = Swarm.create({ provider })
@@ -24,14 +22,23 @@
  *   const result = await swarm.run('Write a haiku');
  */
 
-import type { LLMProvider } from '../types/llm';
+import type { LLMProvider, LLMToolDescription } from '../types/llm';
 import type { ToolDefinition } from '../types/tools';
 import type { RunnerLike, AgentResultEntry, TraversalResult } from '../types/multiAgent';
 import type { AgentRecorder } from '../core';
 import { FlowChartExecutor, MetricRecorder } from 'footprintjs';
-import { buildSwarmLoop } from '../lib/swarm';
-import type { SwarmSpecialist } from '../lib/swarm';
+import type { FlowChart as FlowChartType } from 'footprintjs';
+import { buildAgentLoop } from '../lib/loop';
+import type { AgentLoopConfig } from '../lib/loop';
+import { buildSwarmRouting } from '../lib/swarm/buildSwarmRouting';
+import type { SwarmSpecialist } from '../lib/swarm/buildSwarmRouting';
+import { staticPrompt } from '../providers/prompt/static';
+import { slidingWindow } from '../providers/messages/slidingWindow';
+import { ToolRegistry } from '../tools';
 import { createAgentRenderer } from '../lib/narrative';
+import { annotateSpecIcons } from './specIcons';
+import type { SpecLike } from './specIcons';
+import { userMessage } from '../types';
 
 // ── Types ────────────────────────────────────────────────────
 
@@ -45,11 +52,12 @@ export interface SwarmOptions {
 export class Swarm {
   private readonly provider: LLMProvider;
   private readonly swarmName: string;
-  private systemPrompt?: string;
+  private systemPromptText?: string;
   private readonly specialists: SwarmSpecialist[] = [];
   private readonly extraTools: ToolDefinition[] = [];
   private readonly recorders: AgentRecorder[] = [];
   private maxIter = 10;
+  private streamingEnabled = false;
 
   private constructor(options: SwarmOptions) {
     this.provider = options.provider;
@@ -61,7 +69,7 @@ export class Swarm {
   }
 
   system(prompt: string): this {
-    this.systemPrompt = prompt;
+    this.systemPromptText = prompt;
     return this;
   }
 
@@ -69,8 +77,7 @@ export class Swarm {
    * Register a specialist agent.
    *
    * Each specialist is mounted as a **lazy subflow** — only built when the
-   * orchestrator LLM selects it. Visible in BTS with drill-down into the
-   * specialist's internal flowchart.
+   * orchestrator LLM selects it. Visible in BTS with drill-down.
    */
   specialist(id: string, description: string, runner: RunnerLike): this {
     this.specialists.push({ id, description, runner });
@@ -87,6 +94,11 @@ export class Swarm {
     return this;
   }
 
+  streaming(enabled: boolean): this {
+    this.streamingEnabled = enabled;
+    return this;
+  }
+
   recorder(rec: AgentRecorder): this {
     this.recorders.push(rec);
     return this;
@@ -99,10 +111,11 @@ export class Swarm {
     return new SwarmRunner(
       this.provider,
       this.swarmName,
-      this.systemPrompt,
+      this.systemPromptText,
       [...this.specialists],
       [...this.extraTools],
       this.maxIter,
+      this.streamingEnabled,
       [...this.recorders],
     );
   }
@@ -113,11 +126,12 @@ export class Swarm {
 export class SwarmRunner {
   private readonly provider: LLMProvider;
   readonly name: string;
-  private readonly systemPrompt?: string;
+  private readonly systemPromptText?: string;
   private readonly specialists: readonly SwarmSpecialist[];
   private readonly extraTools: readonly ToolDefinition[];
   private readonly maxIter: number;
-  private readonly recorders: AgentRecorder[];
+  private readonly streamingEnabled: boolean;
+  readonly recorders: AgentRecorder[]; // Task 4: wire to executor
   private lastExecutor?: FlowChartExecutor;
   private lastSpec?: unknown;
   private readonly narrativeRenderer = createAgentRenderer();
@@ -125,42 +139,113 @@ export class SwarmRunner {
   constructor(
     provider: LLMProvider,
     name: string,
-    systemPrompt: string | undefined,
+    systemPromptText: string | undefined,
     specialists: readonly SwarmSpecialist[],
     extraTools: readonly ToolDefinition[],
     maxIter: number,
+    streaming: boolean,
     recorders: AgentRecorder[] = [],
   ) {
     this.provider = provider;
     this.name = name;
-    this.systemPrompt = systemPrompt;
+    this.systemPromptText = systemPromptText;
     this.specialists = specialists;
     this.extraTools = extraTools;
     this.maxIter = maxIter;
+    this.streamingEnabled = streaming;
     this.recorders = recorders;
-    void this.recorders; // Reserved for future: recorder attachment on executor
+  }
+
+  /** Build the system prompt with specialist descriptions appended. */
+  private buildSystemPrompt(): string {
+    const base = this.systemPromptText ?? 'You are an orchestrator. Route to the best specialist.';
+    const specialistList = this.specialists
+      .map((s) => `- ${s.id}: ${s.description}`)
+      .join('\n');
+    return `${base}\n\nYou have access to these specialist agents:\n${specialistList}\n\nCall the most appropriate specialist to handle the user's request. When done, respond directly without calling any specialist.`;
+  }
+
+  /** Build tool descriptions for specialist + extra tools. */
+  private buildToolDescriptions(): LLMToolDescription[] {
+    return [
+      ...this.specialists.map((s) => ({
+        name: s.id,
+        description: s.description,
+        inputSchema: {
+          type: 'object' as const,
+          properties: { message: { type: 'string', description: 'The task or question to delegate.' } },
+          required: ['message'],
+        },
+      })),
+      ...this.extraTools.map((t) => ({
+        name: t.id,
+        description: t.description,
+        inputSchema: t.inputSchema,
+      })),
+    ];
+  }
+
+  /** Build AgentLoopConfig — Swarm uses the same loop as Agent with custom routing. */
+  private buildConfig(): AgentLoopConfig {
+    const routing = buildSwarmRouting({
+      specialists: this.specialists,
+      extraTools: this.extraTools.length > 0 ? this.extraTools : undefined,
+    });
+
+    // Tools slot: the tool descriptions go to the LLM so it knows about specialists.
+    // We use a custom ToolProvider that returns SlotDecision with the descriptions.
+    const toolDescs = this.buildToolDescriptions();
+    const toolProvider = {
+      resolve: () => ({ value: toolDescs, chosen: 'swarm-specialists' }),
+    };
+
+    return {
+      provider: this.provider,
+      systemPrompt: { provider: staticPrompt(this.buildSystemPrompt()) },
+      messages: { strategy: slidingWindow({ maxMessages: 50 }) },
+      tools: { provider: toolProvider },
+      registry: new ToolRegistry(), // No local tools — specialists are subflows via routing
+      maxIterations: this.maxIter,
+      streaming: this.streamingEnabled,
+      routing,
+    };
+  }
+
+  /** Expose the swarm's internal flowChart for subflow composition. */
+  toFlowChart(): FlowChartType {
+    const { chart, spec } = this.buildLoop('');
+    this.lastSpec = annotateSpecIcons(spec as SpecLike);
+    return chart;
+  }
+
+  private buildLoop(message: string) {
+    const config = this.buildConfig();
+    return buildAgentLoop(
+      config,
+      { messages: message ? [userMessage(message)] : [] },
+      { captureSpec: true },
+    );
   }
 
   async run(
     message: string,
-    options?: { signal?: AbortSignal; timeoutMs?: number },
+    options?: { signal?: AbortSignal; timeoutMs?: number; onToken?: (token: string) => void },
   ): Promise<TraversalResult> {
     const startTime = Date.now();
 
-    const { chart, spec } = buildSwarmLoop(
-      {
-        provider: this.provider,
-        systemPrompt: this.systemPrompt,
-        specialists: this.specialists,
-        extraTools: this.extraTools.length > 0 ? this.extraTools : undefined,
-        maxIterations: this.maxIter,
-      },
-      { message },
-      { captureSpec: true },
-    );
-    this.lastSpec = spec;
+    const { chart, spec } = this.buildLoop(message);
+    this.lastSpec = annotateSpecIcons(spec as SpecLike);
 
-    const executor = new FlowChartExecutor(chart, { enrichSnapshots: true });
+    const executorOpts: Record<string, unknown> = { enrichSnapshots: true };
+    if (options?.onToken && this.streamingEnabled) {
+      executorOpts.streamHandlers = {
+        onToken: (_streamId: string, token: string) => options.onToken!(token),
+        onStart: () => {},
+        onEnd: () => {},
+      };
+    }
+
+    const executor = new FlowChartExecutor(chart, executorOpts);
     executor.enableNarrative({ renderer: this.narrativeRenderer });
     executor.attachRecorder(new MetricRecorder('metrics'));
 
@@ -175,11 +260,18 @@ export class SwarmRunner {
     const state = snapshot?.sharedState ?? {};
     const result = (state.result as string) ?? '';
 
-    // Determine which specialists were called from narrative
-    const narrative = this.getNarrative();
-    const agents: AgentResultEntry[] = this.specialists
-      .filter((s) => narrative.some((line) => line.includes(s.id)))
-      .map((s) => ({ id: s.id, name: s.id, content: '', latencyMs: 0 }));
+    // Track which specialists were invoked via scope state
+    const invokedSpecialists = (state.specialistResult as string) ? this.specialists.filter((s) => {
+      const narrative = this.getNarrative();
+      return narrative.some((line) => line.includes(s.id));
+    }) : [];
+
+    const agents: AgentResultEntry[] = invokedSpecialists.map((s) => ({
+      id: s.id,
+      name: s.id,
+      content: '',
+      latencyMs: 0,
+    }));
 
     return {
       content: result,
@@ -200,26 +292,10 @@ export class SwarmRunner {
     return this.lastExecutor?.getSnapshot();
   }
 
-  /**
-   * Get the flowchart spec for BTS visualization.
-   *
-   * Shows the Swarm's own flowchart: Seed → CallLLM → ParseResponse →
-   * RouteSpecialist(decider) with specialist lazy subflow branches.
-   * Works before run() — builds a dummy chart to capture spec.
-   */
   getSpec(): unknown {
     if (!this.lastSpec) {
-      const { spec } = buildSwarmLoop(
-        {
-          provider: this.provider,
-          systemPrompt: this.systemPrompt,
-          specialists: this.specialists,
-          maxIterations: this.maxIter,
-        },
-        { message: '' },
-        { captureSpec: true },
-      );
-      this.lastSpec = spec;
+      const { spec } = this.buildLoop('');
+      this.lastSpec = annotateSpecIcons(spec as SpecLike);
     }
     return this.lastSpec;
   }
