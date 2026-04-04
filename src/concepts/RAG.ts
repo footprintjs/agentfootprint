@@ -12,7 +12,7 @@
  */
 
 import { flowChart, FlowChartExecutor, MetricRecorder } from 'footprintjs';
-import type { FlowChart as FlowChartType, TypedScope } from 'footprintjs';
+import type { FlowChart as FlowChartType, FlowChartExecutorOptions, TypedScope } from 'footprintjs';
 import { annotateSpecIcons } from './specIcons';
 
 import type {
@@ -47,6 +47,7 @@ export class RAG {
   private sysPrompt?: string;
   private retrieveOptions: RetrieveOptions = {};
   private readonly recorders: AgentRecorder[] = [];
+  private enableStreaming = false;
 
   private constructor(options: RAGOptions) {
     this.provider = options.provider;
@@ -75,6 +76,12 @@ export class RAG {
     return this;
   }
 
+  /** Enable token-by-token streaming for the LLM call. */
+  streaming(enabled: boolean): this {
+    this.enableStreaming = enabled;
+    return this;
+  }
+
   /** Attach an AgentRecorder to observe execution events. */
   recorder(rec: AgentRecorder): this {
     this.recorders.push(rec);
@@ -83,7 +90,7 @@ export class RAG {
 
   /** Build the RAG pipeline and return a runner. */
   build(): RAGRunner {
-    return new RAGRunner(this.provider, this.retriever, this.sysPrompt, this.retrieveOptions, [...this.recorders]);
+    return new RAGRunner(this.provider, this.retriever, this.sysPrompt, this.retrieveOptions, [...this.recorders], this.enableStreaming);
   }
 }
 
@@ -96,18 +103,22 @@ export class RAGRunner {
   private lastExecutor?: FlowChartExecutor;
   private lastSpec?: unknown;
 
+  private readonly streamingEnabled: boolean;
+
   constructor(
     provider: LLMProvider,
     retriever: RetrieverProvider,
     sysPrompt: string | undefined,
     retrieveOptions: RetrieveOptions,
     recorders: AgentRecorder[] = [],
+    streaming = false,
   ) {
     this.provider = provider;
     this.retriever = retriever;
     this.sysPrompt = sysPrompt;
     this.retrieveOptions = retrieveOptions;
     this.recorders = recorders;
+    this.streamingEnabled = streaming;
   }
 
   /** Expose the internal flowChart for subflow composition. */
@@ -117,14 +128,22 @@ export class RAGRunner {
 
   async run(
     message: string,
-    options?: { signal?: AbortSignal; timeoutMs?: number },
+    options?: { signal?: AbortSignal; timeoutMs?: number; onToken?: (token: string) => void },
   ): Promise<RAGResult> {
     const chart = this.buildChart(message);
     const bridge = this.recorders.length > 0 ? new RecorderBridge(this.recorders) : null;
 
     bridge?.dispatchTurnStart(message);
 
-    const executor = new FlowChartExecutor(chart, { enrichSnapshots: true });
+    const executorOpts: FlowChartExecutorOptions = { enrichSnapshots: true };
+    if (options?.onToken && this.streamingEnabled) {
+      executorOpts.streamHandlers = {
+        onToken: (_streamId: string, token: string) => options.onToken!(token),
+        onStart: () => {},
+        onEnd: () => {},
+      };
+    }
+    const executor = new FlowChartExecutor(chart, executorOpts);
     executor.enableNarrative();
     executor.attachRecorder(new MetricRecorder('metrics'));
     const startMs = Date.now();
@@ -187,11 +206,18 @@ export class RAGRunner {
     const retrieve = createRetrieveStage(this.retriever, this.retrieveOptions);
     const callLLM = createCallLLMStage(this.provider);
 
-    const builder = flowChart<RAGState>('SystemPrompt', systemPromptStage, 'system-prompt')
+    let builder = flowChart<RAGState>('SystemPrompt', systemPromptStage, 'system-prompt')
       .addFunction('Messages', messagesStage, 'messages')
       .addFunction('Retrieve', retrieve, 'retrieve')
-      .addFunction('AugmentPrompt', augmentPromptStage, 'augment-prompt')
-      .addFunction('CallLLM', callLLM, 'call-llm')
+      .addFunction('AugmentPrompt', augmentPromptStage, 'augment-prompt');
+
+    if (this.streamingEnabled) {
+      builder = builder.addStreamingFunction('CallLLM', callLLM, 'call-llm', 'llm-stream');
+    } else {
+      builder = builder.addFunction('CallLLM', callLLM, 'call-llm');
+    }
+
+    builder = builder
       .addFunction('ParseResponse', parseResponseStage, 'parse-response')
       .addFunction('Finalize', finalizeStage, 'finalize');
 
