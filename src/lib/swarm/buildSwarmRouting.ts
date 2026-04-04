@@ -211,11 +211,11 @@ export function buildSwarmRouting(config: SwarmRoutingConfig): RoutingConfig {
     id: 'final',
     kind: 'fn',
     name: 'Finalize',
-    fn: (scope: SwarmRoutingScope) => {
+    fn: (scope: SwarmRoutingScope, breakFn: () => void) => {
       const messages = scope.messages ?? [];
       const lastAsst = lastAssistantMessage(messages);
       scope.result = (lastAsst ? getTextContent(lastAsst.content) : scope.parsedResponse?.content) ?? '';
-      (scope as any).$break();
+      breakFn();
     },
     description: 'Extract final answer and stop the swarm loop',
   });

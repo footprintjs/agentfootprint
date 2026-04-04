@@ -233,7 +233,10 @@ export class SwarmRunner {
     const config = this.buildConfig();
     return buildAgentLoop(
       config,
-      { messages: message ? [userMessage(message)] : [] },
+      {
+        messages: message ? [userMessage(message)] : [],
+        existingMessages: this.conversationHistory,
+      },
       { captureSpec: true },
     );
   }
@@ -264,10 +267,16 @@ export class SwarmRunner {
     const bridge = this.recorders.length > 0 ? new RecorderBridge(this.recorders) : null;
     bridge?.dispatchTurnStart(message);
 
-    await executor.run({
-      signal: options?.signal,
-      timeoutMs: options?.timeoutMs,
-    });
+    try {
+      await executor.run({
+        signal: options?.signal,
+        timeoutMs: options?.timeoutMs,
+      });
+    } catch (err) {
+      this.lastExecutor = executor;
+      bridge?.dispatchError('llm', err);
+      throw err;
+    }
 
     this.lastExecutor = executor;
 
@@ -276,8 +285,9 @@ export class SwarmRunner {
     const result = (state.result as string) ?? '';
     const messages = (state.messages as Message[]) ?? [];
 
-    // Structural specialist tracking — read from scope, not narrative
-    const invokedIds = (state.invokedSpecialists as string[]) ?? [];
+    // Structural specialist tracking — read from scope with runtime validation
+    const rawInvoked = state.invokedSpecialists;
+    const invokedIds = Array.isArray(rawInvoked) ? rawInvoked.filter((x): x is string => typeof x === 'string') : [];
     const agents: AgentResultEntry[] = invokedIds.map((id) => ({
       id,
       name: id,
