@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-04-05
+
+### Added
+
+- **Instruction Architecture** — `AgentInstruction`, `defineInstruction()`, `InstructionsToLLM` subflow
+  - 3-position injection: system prompt, tools, tool-result recency window
+  - `activeWhen(decision)` — state-driven conditional instruction activation
+  - `decide()` field on `LLMInstruction` — tool results update Decision Scope
+  - `AgentScopeKey` enum — type-safe scope key references
+- **Agent builder API** — `.instruction()`, `.instructions()`, `.decision()`, `.verbose()`
+- **Grounding helpers** — `getGroundingSources()`, `getLLMClaims()`, `getFullLLMContext()`
+- **Verbose narrative** — `createAgentRenderer({ verbose: true })` shows full values
+- **Dynamic ReAct + Instructions** — `AgentPattern.Dynamic` loops back to `InstructionsToLLM`
+
+### Fixed
+
+- Tool names duplication in Dynamic mode (uses `ArrayMergeMode.Replace`)
+- `toolProvider` wired through `buildConfig` for execution
+- AssemblePrompt replaces system message in Dynamic mode
+- Browser compat (`process.env` guarded)
+- Registry mutation moved to constructor (runs once)
+- Pausable root stage (no post-build graph mutation)
+- Streaming stage typed as `TypedScope<AgentLoopState>`
+
+### Changed
+
+- Peer dependency: `footprintjs >= 4.4.1` (was `>= 4.0.0`)
+- Eliminated `ApplyPreparedMessages` and `ApplyResolvedTools` copy stages
+
 ## [0.3.0] - 2026-03-29
 
 ### Fixed

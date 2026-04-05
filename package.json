@@ -1,6 +1,6 @@
 {
   "name": "agentfootprint",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "The explainable agent framework — build AI agents you can explain, audit, and trust. Built on footprintjs.",
   "license": "MIT",
   "author": "Sanjay Krishna Anbalagan",
@@ -66,7 +66,7 @@
   },
   "sideEffects": false,
   "peerDependencies": {
-    "footprintjs": ">=4.0.0",
+    "footprintjs": ">=4.4.1",
     "@anthropic-ai/sdk": ">=0.30.0",
     "openai": ">=4.0.0",
     "@aws-sdk/client-bedrock-runtime": ">=3.0.0"

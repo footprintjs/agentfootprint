@@ -41,7 +41,6 @@ const STAGE_LABELS: Record<string, string> = {
   LoadHistory: 'Loaded conversation history',
   ApplyStrategy: 'Applied message strategy',
   TrackPrepared: 'Tracked prepared messages',
-  ApplyPreparedMessages: 'Applied prepared messages',
   ResolveTools: 'Resolved available tools',
   AssemblePrompt: 'Assembled final prompt',
   CallLLM: 'Called LLM',
@@ -92,7 +91,7 @@ const SUPPRESSED_KEYS = new Set([
   'adapterResult', 'adapterRawResponse',
   // Swarm internals (the decision is shown by RouteSpecialist, not these keys)
   'specialistMessage', 'specialistToolCallId',
-  // Subflow intermediate state (replaced by ApplyPreparedMessages write)
+  // Subflow intermediate state
   'currentMessages',
   // Enrichment summaries (avoid double-reporting — the promoted labels above show these)
   'llmCall', 'responseType', 'resolvedTools', 'promptSummary',

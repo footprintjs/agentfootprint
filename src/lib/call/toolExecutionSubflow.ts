@@ -150,10 +150,17 @@ export function buildToolExecutionSubflow(
   };
 
   // Pausable root stage — flowChart() accepts PausableHandler directly (footprintjs v4.4.1+).
-  // No post-build graph mutation needed.
+  // Cast needed: executeStageFn has wider return type (includes pause data object)
+  // than PausableHandler.execute's generic — this is the standard pattern for stages
+  // that conditionally return pause data.
+  const handler = {
+    execute: executeStageFn as (scope: TypedScope<ToolExecutionSubflowState>) => Promise<void>,
+    resume: resumeStageFn,
+  };
+
   return flowChart<ToolExecutionSubflowState>(
     'ExecuteToolCalls',
-    { execute: executeStageFn, resume: resumeStageFn } as any,
+    handler,
     'execute-tool-calls',
     undefined,
     'Execute tool calls and append results to conversation',

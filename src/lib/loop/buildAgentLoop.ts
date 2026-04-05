@@ -7,21 +7,20 @@
  * Supports two loop patterns (AgentPattern enum):
  *
  * Regular ReAct (default): loopTo('call-llm')
- *   Seed → [sf-system-prompt] → [sf-messages] → ApplyPreparedMessages
- *     → [sf-tools] → AssemblePrompt → CallLLM → ParseResponse
+ *   Seed → [sf-system-prompt] → [sf-messages] → [sf-tools]
+ *     → AssemblePrompt → CallLLM → ParseResponse
  *     → RouteResponse(decider) → [CommitMemory?] → loopTo('call-llm')
  *   Slots resolve ONCE before the loop.
  *
- * Dynamic ReAct: loopTo('sf-system-prompt')
- *   Same flowchart, but loop jumps back to SystemPrompt subflow.
- *   All three API slots (prompt, tools, messages) re-evaluate each iteration.
- *   Strategies receive updated context (tool results, incremented loopCount)
- *   and can return different configurations based on what happened.
+ * Dynamic ReAct: loopTo('sf-instructions-to-llm' or 'sf-system-prompt')
+ *   Same flowchart, but loop jumps back to InstructionsToLLM (when configured)
+ *   or SystemPrompt. All slots re-evaluate each iteration.
+ *   Uses arrayMerge: ArrayMergeMode.Replace on Messages/Tools outputMappers
+ *   so arrays are overwritten (not concatenated) on each iteration.
  *
  * Design choices:
  *   - Seed stage initializes loopCount + maxIterations + messages
- *   - Messages subflow uses internal keys (inputMapper/outputMapper), then
- *     ApplyPreparedMessages copies to the real 'messages' key
+ *   - Slot subflows use arrayMerge: Replace to avoid stale array accumulation
  *   - Each slot is ALWAYS a subflow — zero overhead, free drill-down + narrative
  *   - RouteResponse is a proper decider — visible in flowchart as diamond with branches
  *   - Tool execution is a subflow — enables drill-down in BTS
