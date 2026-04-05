@@ -11,7 +11,7 @@
 import type { ToolDefinition, LLMProvider } from '../../types';
 import type { MemoryConfig } from '../../adapters/memory/types';
 import type { AgentRecorder, PromptProvider, ToolProvider } from '../../core';
-import type { InstructionOverride } from '../instructions';
+import type { InstructionOverride, AgentInstruction } from '../instructions';
 import { ToolRegistry } from '../../tools';
 import { AgentPattern } from '../loop';
 import { AgentRunner } from './AgentRunner';
@@ -33,7 +33,10 @@ export class Agent {
   private memoryConfig?: MemoryConfig;
   private agentPattern: AgentPattern = AgentPattern.Regular;
   private readonly overrides = new Map<string, InstructionOverride>();
+  private readonly agentInstructions: AgentInstruction[] = [];
+  private initialDecisionScope?: Readonly<Record<string, unknown>>;
   private enableStreaming = false;
+  private enableVerboseNarrative = false;
 
   private constructor(options: AgentOptions) {
     this.provider = options.provider;
@@ -93,6 +96,16 @@ export class Agent {
   }
 
   /**
+   * Enable verbose narrative — full values, no truncation.
+   * Shows complete system prompts, tool results, and LLM outputs in the narrative.
+   * Enables grounding analysis via getGroundingSources() / getLLMClaims().
+   */
+  verbose(enabled = true): this {
+    this.enableVerboseNarrative = enabled;
+    return this;
+  }
+
+  /**
    * Set the agent loop pattern.
    * - `AgentPattern.Regular` (default): slots resolve once
    * - `AgentPattern.Dynamic`: all slots re-evaluate each iteration
@@ -107,6 +120,51 @@ export class Agent {
    */
   instructionOverride(toolId: string, override: InstructionOverride): this {
     this.overrides.set(toolId, override);
+    return this;
+  }
+
+  /**
+   * Register an agent-level instruction.
+   * Instructions inject into system prompt, tools, and tool-result processing
+   * based on the Decision Scope state.
+   *
+   * @example
+   * ```typescript
+   * Agent.create({ provider })
+   *   .instruction(defineInstruction({
+   *     id: 'refund',
+   *     activeWhen: (d) => d.orderStatus === 'denied',
+   *     prompt: 'Be empathetic.',
+   *   }))
+   *   .build();
+   * ```
+   */
+  instruction(instr: AgentInstruction<any>): this {
+    this.agentInstructions.push(instr);
+    return this;
+  }
+
+  /** Register multiple agent-level instructions. */
+  instructions(instrs: AgentInstruction<any>[]): this {
+    for (const i of instrs) this.agentInstructions.push(i);
+    return this;
+  }
+
+  /**
+   * Set the initial Decision Scope values.
+   * Tool handlers update these values; InstructionsToLLM reads them
+   * to evaluate `activeWhen` predicates.
+   *
+   * @example
+   * ```typescript
+   * Agent.create({ provider })
+   *   .decision<MyDecision>({ orderStatus: null, riskLevel: 'unknown' })
+   *   .instruction(refundInstruction)
+   *   .build();
+   * ```
+   */
+  decision<T extends Record<string, unknown> = Record<string, unknown>>(scope: T): this {
+    this.initialDecisionScope = scope;
     return this;
   }
 
@@ -136,7 +194,10 @@ export class Agent {
       promptProvider: this.customPromptProvider,
       toolProvider: this.customToolProvider,
       instructionOverrides: this.overrides.size > 0 ? new Map(this.overrides) : undefined,
+      agentInstructions: this.agentInstructions.length > 0 ? [...this.agentInstructions] : undefined,
+      initialDecision: this.agentInstructions.length > 0 ? this.initialDecisionScope : undefined,
       streaming: this.enableStreaming,
+      verboseNarrative: this.enableVerboseNarrative,
     });
   }
 }

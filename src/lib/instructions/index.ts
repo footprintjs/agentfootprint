@@ -26,3 +26,8 @@ export type { InstructionSummary, ToolInstructionStats, InstructionFiring, Follo
 
 export { defaultConditionMatcher, PendingFollowUpManager } from './strictFollowUp';
 export type { PendingStrictFollowUp } from './strictFollowUp';
+
+export { evaluateAgentInstructions, defineInstruction } from './agentInstruction';
+export type { AgentInstruction, InstructionEvaluationResult } from './agentInstruction';
+
+export { buildInstructionsToLLMSubflow } from './buildInstructionsToLLMSubflow';

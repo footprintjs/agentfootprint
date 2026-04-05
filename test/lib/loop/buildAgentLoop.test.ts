@@ -477,7 +477,7 @@ describe('buildAgentLoop — property', () => {
     expect(stageIds).toContain('route-response');
     expect(stageIds).toContain('seed');
     expect(stageIds).toContain('assemble-prompt');
-    expect(stageIds).toContain('apply-prepared-messages');
+    // apply-prepared-messages removed — arrayMerge: 'replace' eliminates the copy stage
   });
 
   it('default maxIterations is 10', async () => {

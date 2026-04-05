@@ -8,7 +8,8 @@ import { FlowChartExecutor, MetricRecorder } from 'footprintjs';
 import type { FlowChart as FlowChartType, FlowChartExecutorOptions } from 'footprintjs';
 import { buildAgentLoop, AgentPattern } from '../loop';
 import { PendingFollowUpManager, InstructionRecorder } from '../instructions';
-import type { InstructionOverride } from '../instructions';
+import type { InstructionOverride, AgentInstruction } from '../instructions';
+import type { DecideFn } from '../call/helpers';
 import type { AgentLoopConfig } from '../loop';
 import { createAgentRenderer } from '../narrative';
 import { annotateSpecIcons } from '../../concepts/specIcons';
@@ -39,7 +40,11 @@ export interface AgentRunnerOptions {
   readonly promptProvider?: PromptProvider;
   readonly toolProvider?: ToolProvider;
   readonly instructionOverrides?: ReadonlyMap<string, InstructionOverride>;
+  readonly agentInstructions?: readonly AgentInstruction[];
+  readonly initialDecision?: Readonly<Record<string, unknown>>;
   readonly streaming?: boolean;
+  /** When true, narrative shows full values (no truncation). */
+  readonly verboseNarrative?: boolean;
 }
 
 export class AgentRunner {
@@ -55,11 +60,15 @@ export class AgentRunner {
   private readonly customPromptProvider?: PromptProvider;
   private readonly customToolProvider?: ToolProvider;
   private readonly instructionOverrides?: ReadonlyMap<string, InstructionOverride>;
+  private readonly agentInstructions?: readonly AgentInstruction[];
+  private readonly initialDecision?: Readonly<Record<string, unknown>>;
   private readonly streamingEnabled: boolean;
+  private readonly cachedDecideFunctions?: ReadonlyMap<string, DecideFn>;
   private conversationHistory: Message[] = [];
   private lastExecutor?: FlowChartExecutor;
   private lastSpec?: unknown;
-  private readonly narrativeRenderer = createAgentRenderer();
+  private readonly verboseNarrative: boolean;
+  private narrativeRenderer = createAgentRenderer();
   private readonly pendingFollowUps = new PendingFollowUpManager();
 
   constructor(options: AgentRunnerOptions) {
@@ -74,7 +83,44 @@ export class AgentRunner {
     this.customPromptProvider = options.promptProvider;
     this.customToolProvider = options.toolProvider;
     this.instructionOverrides = options.instructionOverrides;
+    this.agentInstructions = options.agentInstructions;
+    this.initialDecision = options.initialDecision;
     this.streamingEnabled = options.streaming ?? false;
+    this.verboseNarrative = options.verboseNarrative ?? false;
+    if (this.verboseNarrative) {
+      this.narrativeRenderer = createAgentRenderer({ verbose: true });
+    }
+
+    // Register instruction tools in the registry ONCE at construction time.
+    // Previously done inside buildAgentLoop on every run() — now runs exactly once.
+    if (this.agentInstructions?.length) {
+      for (const instr of this.agentInstructions) {
+        if (instr.tools) {
+          for (const tool of instr.tools) {
+            if (!this.registry.get(tool.id)) {
+              this.registry.register(tool);
+            }
+          }
+        }
+      }
+    }
+
+    // Pre-compute decideFunctions map from agent-level instruction rules.
+    // Functions can't travel through scope (stripped on write), so captured here.
+    // Per-tool decide() functions are still collected by buildAgentLoop (they're on the registry).
+    if (this.agentInstructions?.length) {
+      const decideFns = new Map<string, DecideFn>();
+      for (const instr of this.agentInstructions) {
+        if (instr.onToolResult) {
+          for (const rule of instr.onToolResult) {
+            if (rule.decide) decideFns.set(rule.id, rule.decide);
+          }
+        }
+      }
+      if (decideFns.size > 0) {
+        this.cachedDecideFunctions = decideFns;
+      }
+    }
   }
 
   /** Expose the agent's internal flowChart for subflow composition. */
@@ -260,6 +306,7 @@ export class AgentRunner {
         conversationId: this.memoryConfig?.conversationId,
       },
       tools: { provider: toolsProvider },
+      toolProvider: this.customToolProvider,
       registry: this.registry,
       maxIterations: this.maxIter,
       commitMemory: this.memoryConfig ? {
@@ -268,6 +315,9 @@ export class AgentRunner {
       } : undefined,
       pattern: this.agentPattern,
       instructionOverrides: this.instructionOverrides,
+      agentInstructions: this.agentInstructions,
+      initialDecision: this.initialDecision,
+      decideFunctions: this.cachedDecideFunctions,
       streaming: this.streamingEnabled,
       onInstructionsFired: (toolId, fired) => {
         for (const rec of this.recorders) {

@@ -54,14 +54,29 @@ export function buildToolsSubflow(config: ToolsSlotConfig): FlowChart {
     async (scope) => {
       const ctx = buildToolContext(scope);
       const decision = await config.provider.resolve(ctx);
-      scope.toolDescriptions = decision.value;
+
+      // Merge tool injections from InstructionsToLLM (if any)
+      // Deduplicate by name — base tools take precedence over injected.
+      // Note: dedup compares injected `name` (converted from ToolDefinition.id)
+      // against base tool `name`. Works when base ToolProvider uses id as name.
+      const injections = scope.toolInjections;
+      const baseNames = new Set(decision.value.map((t) => t.name));
+      const newTools = injections?.length
+        ? injections.filter((t) => !baseNames.has(t.name))
+        : [];
+      const allTools = newTools.length
+        ? [...decision.value, ...newTools]
+        : decision.value;
+
+      scope.toolDescriptions = allTools;
 
       // Narrative enrichment — decision + tool summary for BTS visibility
       scope.toolDecision = decision.chosen !== 'static'
         ? `${decision.chosen}${decision.rationale ? ` (${decision.rationale})` : ''}`
         : undefined;
-      const names = decision.value.map((t) => t.name ?? '?');
-      scope.resolvedTools = `${decision.value.length} tools: ${names.join(', ')}`;
+      const injectionNote = newTools.length > 0 ? ` (+${newTools.length} from instructions)` : '';
+      const names = allTools.map((t) => t.name ?? '?');
+      scope.resolvedTools = `${allTools.length} tools: ${names.join(', ')}${injectionNote}`;
     },
     'resolve-tools',
     undefined,

@@ -17,7 +17,8 @@ import type { CommitMemoryConfig } from '../../stages/commitMemory';
 import type { SystemPromptSlotConfig } from '../slots/system-prompt';
 import type { MessagesSlotConfig } from '../slots/messages';
 import type { ToolsSlotConfig } from '../slots/tools';
-import type { ResolvedInstruction, InstructionOverride } from '../instructions';
+import type { ResolvedInstruction, InstructionOverride, AgentInstruction } from '../instructions';
+import type { DecideFn } from '../call/helpers';
 
 // ── RoutingConfig — pluggable post-ParseResponse routing ─────────────────────
 
@@ -193,6 +194,29 @@ export interface AgentLoopConfig {
 
   /** Agent-level instruction overrides keyed by tool ID. */
   readonly instructionOverrides?: ReadonlyMap<string, InstructionOverride>;
+
+  /**
+   * Agent-level instructions evaluated by the InstructionsToLLM subflow.
+   * When provided, the subflow is mounted BEFORE the 3 API slots.
+   * Instructions inject into system prompt, tools, and tool-result processing
+   * based on the current Decision Scope state.
+   */
+  readonly agentInstructions?: readonly AgentInstruction[];
+
+  /**
+   * Initial Decision Scope values. Written to `scope.decision` in the Seed stage.
+   * Tool handlers update these values; InstructionsToLLM reads them to evaluate
+   * `activeWhen` predicates.
+   */
+  readonly initialDecision?: Readonly<Record<string, unknown>>;
+
+  /**
+   * Pre-computed decide() functions keyed by instruction rule ID.
+   * Built once in AgentRunner constructor, passed through to avoid
+   * recomputing on every run(). Functions can't travel through scope
+   * (stripped on write), so they're captured as a closure map.
+   */
+  readonly decideFunctions?: ReadonlyMap<string, DecideFn>;
 
   /** When true, CallLLM uses addStreamingFunction for token-by-token output. */
   readonly streaming?: boolean;

@@ -15,7 +15,7 @@
  */
 
 import { flowChart } from 'footprintjs';
-import type { ExecutionEnv, FlowChart } from 'footprintjs';
+import type { FlowChart, TypedScope } from 'footprintjs';
 import type { Message } from '../../types';
 import type { ToolRegistry } from '../../tools';
 import type { ToolProvider } from '../../core';
@@ -49,10 +49,13 @@ export interface ToolExecutionSubflowState {
   toolResultMessages: Message[];
   /** Output: incremented loop count. */
   updatedLoopCount: number;
+  // agentResponseRules removed — functions stripped by scope, now in InstructionConfig closure
+  /** Input: current Decision Scope (read-only from inputMapper). */
+  currentDecision?: Record<string, unknown>;
+  /** Output: updated Decision Scope after decide() mutations. */
+  updatedDecision?: Record<string, unknown>;
   /** @internal Set when ask_human tool fires — used for pause detection. */
   askHumanPause?: { question: string; toolCallId: string };
-  /** TypedScope escape hatch — available at runtime via proxy. */
-  $getEnv?: () => ExecutionEnv | undefined;
 }
 
 // ── Config ───────────────────────────────────────────────────
@@ -78,7 +81,7 @@ export function buildToolExecutionSubflow(
 ): FlowChart {
   const { registry, toolProvider, instructionConfig } = config;
 
-  const executeStageFn = async (scope: ToolExecutionSubflowState): Promise<unknown | void> => {
+  const executeStageFn = async (scope: TypedScope<ToolExecutionSubflowState>) => {
     const parsed = scope.parsedResponse;
     const loopCount = scope.currentLoopCount ?? 0;
     const maxIter = scope.maxIterations ?? 10;
@@ -93,7 +96,15 @@ export function buildToolExecutionSubflow(
     }
 
     const messages = scope.currentMessages ?? [];
-    const signal = scope.$getEnv?.()?.signal;
+    // $getEnv() is a TypedScope proxy method — always available, not in state interface
+    const signal = scope.$getEnv()?.signal;
+
+    // Copy decision scope for `decide` field mutations.
+    // decide() functions mutate the copy in-place; we write it back as updatedDecision.
+    // currentDecision may be undefined when initial decision is {} (empty objects
+    // are dropped by footprintjs inputMapper). Use {} as fallback when instructions are configured.
+    const rawDecision = scope.currentDecision;
+    const decisionRef = rawDecision ? { ...rawDecision } : (instructionConfig?.decideFunctions?.size ? {} : undefined);
 
     const { messages: resultMessages, askHumanPause } = await executeToolCalls(
       parsed.toolCalls,
@@ -102,12 +113,20 @@ export function buildToolExecutionSubflow(
       toolProvider,
       signal,
       instructionConfig,
+      decisionRef,
     );
 
     // Output DELTA only — footprintjs applyOutputMapping concatenates arrays,
     // so the parent's outputMapper maps this to `messages` and concat appends correctly.
     scope.toolResultMessages = resultMessages.slice(messages.length);
     scope.updatedLoopCount = (scope.currentLoopCount ?? 0) + 1;
+
+    // Write mutated decision as output so it flows through outputMapper.
+    // Always write when decisionRef exists — even if no decide() ran, the
+    // decision may need to propagate for the next iteration's InstructionsToLLM.
+    if (decisionRef) {
+      scope.updatedDecision = decisionRef;
+    }
 
     // If ask_human was called, store pause data on scope and return it.
     // Engine: non-void return from isPausable stage → PauseSignal with this as pauseData.
@@ -118,7 +137,7 @@ export function buildToolExecutionSubflow(
     return undefined;
   };
 
-  const resumeStageFn = (scope: ToolExecutionSubflowState, humanResponse: unknown): void => {
+  const resumeStageFn = (scope: TypedScope<ToolExecutionSubflowState>, humanResponse: unknown): void => {
     const pauseInfo = scope.askHumanPause;
     if (pauseInfo && humanResponse !== undefined) {
       const toolCallId = pauseInfo.toolCallId;
@@ -130,18 +149,13 @@ export function buildToolExecutionSubflow(
     }
   };
 
-  // Build as a typed subflow, then set pausable flags on the root node.
-  // The execute function returns `unknown` (pause data) which is wider than
-  // StageFunction's TOut — the engine only checks `result !== undefined` for isPausable nodes.
-  const chart = flowChart<ToolExecutionSubflowState>(
+  // Pausable root stage — flowChart() accepts PausableHandler directly (footprintjs v4.4.1+).
+  // No post-build graph mutation needed.
+  return flowChart<ToolExecutionSubflowState>(
     'ExecuteToolCalls',
-    executeStageFn as any, // Wider return (unknown) than StageFunction (TOut | void)
+    { execute: executeStageFn, resume: resumeStageFn } as any,
     'execute-tool-calls',
     undefined,
     'Execute tool calls and append results to conversation',
   ).build();
-
-  chart.root.isPausable = true;
-  chart.root.resumeFn = resumeStageFn;
-  return chart;
 }

@@ -13,7 +13,8 @@
  */
 
 import type { TypedScope } from 'footprintjs';
-import type { LLMProvider, LLMToolDescription, LLMResponse, ToolCall } from '../../types';
+import type { AgentLoopState } from '../../scope/types';
+import type { LLMProvider, LLMResponse, ToolCall } from '../../types';
 import { normalizeAdapterResponse } from './helpers';
 
 /**
@@ -48,13 +49,12 @@ import { normalizeAdapterResponse } from './helpers';
  */
 export function createStreamingCallLLMStage(provider: LLMProvider) {
   return async (
-    scope: TypedScope<any>,
+    scope: TypedScope<AgentLoopState>,
     _breakFn: () => void,
     streamCallback?: (token: string) => void,
   ) => {
     const messages = scope.messages ?? [];
-    const tools =
-      (scope.$getValue('toolDescriptions') as LLMToolDescription[] | undefined) ?? [];
+    const tools = scope.toolDescriptions ?? [];
     const options = tools.length > 0 ? { tools } : undefined;
 
     // If streaming is available and callback is injected, use chatStream

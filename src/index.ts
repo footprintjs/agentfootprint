@@ -129,7 +129,15 @@ export type {
 export { ToolRegistry, defineTool, askHuman } from './tools';
 
 // ── Instructions (LLM guidance co-located with tools) ───────
-export { quickBind, processInstructions, InstructionRecorder, previewInstructions } from './lib/instructions';
+export {
+  quickBind,
+  processInstructions,
+  InstructionRecorder,
+  previewInstructions,
+  evaluateAgentInstructions,
+  buildInstructionsToLLMSubflow,
+  defineInstruction,
+} from './lib/instructions';
 export type {
   LLMInstruction,
   FollowUpBinding,
@@ -144,6 +152,8 @@ export type {
   InstructionSummary,
   InstructionPreview,
   PreviewContext,
+  AgentInstruction,
+  InstructionEvaluationResult,
 } from './lib/instructions';
 
 // ── Memory ───────────────────────────────────────────────────
@@ -261,7 +271,9 @@ export { StreamEmitter, SSEFormatter } from './streaming';
 export type { StreamEvent, StreamEventHandler } from './streaming';
 
 // ── Narrative ───────────────────────────────────────────────
-export { createAgentRenderer } from './lib/narrative';
+export { createAgentRenderer, getGroundingSources, getLLMClaims, getFullLLMContext } from './lib/narrative';
+export type { AgentRendererOptions, GroundingSource, LLMClaim, LLMContextSnapshot } from './lib/narrative';
+export { AgentScopeKey } from './scope/types';
 
 // ── Library-of-Libraries (slot subflow internals) ────────────
 export { buildAgentLoop, SUBFLOW_MESSAGE_KEY } from './lib/loop';

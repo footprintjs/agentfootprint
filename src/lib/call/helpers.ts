@@ -38,6 +38,9 @@ export function normalizeAdapterResponse(response: LLMResponse): AdapterResult {
  * When provided, instructions are evaluated after each tool call
  * and injected into the tool result message content.
  */
+/** Function that mutates the Decision Scope after a tool result. */
+export type DecideFn = (decision: Record<string, unknown>, ctx: InstructionContext) => void;
+
 export interface InstructionConfig {
   /** Build-time instructions keyed by tool ID. */
   readonly instructionsByToolId: Map<string, readonly LLMInstruction[]>;
@@ -45,6 +48,19 @@ export interface InstructionConfig {
   readonly template?: InstructionTemplate;
   /** Callback when instructions fire (for InstructionRecorder). */
   readonly onInstructionsFired?: (toolId: string, fired: ResolvedInstruction[]) => void;
+  /**
+   * decide() functions keyed by instruction rule ID.
+   * Built at loop construction time from AgentInstruction.onToolResult rules + per-tool instructions.
+   * Functions can't travel through scope (stripped on write), so they're captured by closure.
+   */
+  readonly decideFunctions?: ReadonlyMap<string, DecideFn>;
+  /**
+   * Agent-level response rules captured at build time.
+   * These are the onToolResult rules from matched AgentInstructions.
+   * Captured by closure because functions (`when`, `decide`, `followUp.params`)
+   * are stripped when values pass through footprintjs scope.
+   */
+  readonly agentResponseRules?: readonly LLMInstruction[];
 }
 
 /**
@@ -71,6 +87,7 @@ export async function executeToolCalls(
   toolProvider?: ToolProvider,
   signal?: AbortSignal,
   instructionConfig?: InstructionConfig,
+  decision?: Record<string, unknown>,
 ): Promise<ToolCallsResult> {
   // Single copy upfront — O(M+N) instead of O(M*N) from repeated spreads
   const result = [...messages];
@@ -136,9 +153,14 @@ export async function executeToolCalls(
 
     const latencyMs = Date.now() - startMs;
 
-    // Process instructions if config provided
+    // Process instructions if config provided (build-time, agent-level, or runtime)
     if (instructionConfig) {
-      const buildTimeInstructions = instructionConfig.instructionsByToolId.get(toolCall.name);
+      const perToolInstructions = instructionConfig.instructionsByToolId.get(toolCall.name);
+      const agentRules = instructionConfig.agentResponseRules;
+      // Merge agent-level response rules (captured by closure) with per-tool instructions
+      const buildTimeInstructions = agentRules?.length
+        ? [...agentRules, ...(perToolInstructions ?? [])]
+        : perToolInstructions;
       const hasInstructions = buildTimeInstructions?.length || runtimeInstructions?.length || runtimeFollowUps?.length;
 
       if (hasInstructions) {
@@ -165,15 +187,30 @@ export async function executeToolCalls(
           (runtimeInstructions || runtimeFollowUps)
             ? { instructions: runtimeInstructions, followUps: runtimeFollowUps }
             : undefined,
-          instructionConfig.template,
+          instructionConfig?.template,
         );
 
         if (injectionResult.injected) {
           resultContent = injectionResult.content;
         }
 
-        if (injectionResult.fired.length > 0 && instructionConfig.onInstructionsFired) {
+        if (injectionResult.fired.length > 0 && instructionConfig?.onInstructionsFired) {
           instructionConfig.onInstructionsFired(toolCall.name, injectionResult.fired);
+        }
+
+        // Run decide() functions for matched instructions — updates Decision Scope.
+        // decide functions are in the closure map (not in scope — functions stripped on scope write).
+        if (decision && instructionConfig?.decideFunctions?.size) {
+          for (const fired of injectionResult.fired) {
+            const decideFn = instructionConfig.decideFunctions.get(fired.id);
+            if (decideFn) {
+              try {
+                decideFn(decision, ctx);
+              } catch {
+                // decide errors are fail-open — don't crash tool execution
+              }
+            }
+          }
         }
       }
     }

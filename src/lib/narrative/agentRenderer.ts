@@ -98,6 +98,52 @@ const SUPPRESSED_KEYS = new Set([
   'llmCall', 'responseType', 'resolvedTools', 'promptSummary',
 ]);
 
+// ── Options ──────────────────────────────────────────────────────────────────
+
+export interface AgentRendererOptions {
+  /**
+   * When true, shows full values instead of truncated previews.
+   * System prompts, tool results, LLM outputs, and parsed responses
+   * are shown in full for debugging and grounding analysis.
+   * @default false
+   */
+  verbose?: boolean;
+}
+
+// ── Truncation config ────────────────────────────────────────────────────────
+
+interface TruncationLimits {
+  result: number;
+  systemPrompt: number;
+  parsedContent: number;
+  toolResult: number;
+  toolArgs: number;
+  message: number;
+}
+
+const DEFAULT_LIMITS: TruncationLimits = {
+  result: 100,
+  systemPrompt: 200,
+  parsedContent: 100,
+  toolResult: 80,
+  toolArgs: 60,
+  message: 100,
+};
+
+const VERBOSE_LIMITS: TruncationLimits = {
+  result: Infinity,
+  systemPrompt: Infinity,
+  parsedContent: Infinity,
+  toolResult: Infinity,
+  toolArgs: Infinity,
+  message: Infinity,
+};
+
+function truncate(value: string, max: number): string {
+  if (max === Infinity || value.length <= max) return value;
+  return value.slice(0, max) + '...';
+}
+
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 function formatMessages(rawValue: unknown): string {
@@ -115,17 +161,15 @@ function formatMessages(rawValue: unknown): string {
   return `Messages: ${count} (${breakdown})`;
 }
 
-function formatResult(rawValue: unknown): string {
+function formatResult(rawValue: unknown, limits: TruncationLimits): string {
   if (typeof rawValue !== 'string') return 'Result: (non-string)';
   if (rawValue.length === 0) return 'Result: (empty)';
-  const preview = rawValue.length > 100 ? rawValue.slice(0, 100) + '...' : rawValue;
-  return `Result: "${preview}"`;
+  return `Result: "${truncate(rawValue, limits.result)}"`;
 }
 
-function formatSystemPrompt(rawValue: unknown): string {
+function formatSystemPrompt(rawValue: unknown, limits: TruncationLimits): string {
   if (typeof rawValue !== 'string' || rawValue.length === 0) return 'System prompt: (none)';
-  const preview = rawValue.length > 200 ? rawValue.slice(0, 200) + '...' : rawValue;
-  return `System prompt: "${preview}"`;
+  return `System prompt: "${truncate(rawValue, limits.systemPrompt)}"`;
 }
 
 function formatToolDescriptions(rawValue: unknown): string {
@@ -134,7 +178,7 @@ function formatToolDescriptions(rawValue: unknown): string {
   return `Tools: [${names}]`;
 }
 
-function formatParsedResponse(rawValue: unknown): string {
+function formatParsedResponse(rawValue: unknown, limits: TruncationLimits): string {
   if (!rawValue || typeof rawValue !== 'object') return 'Parsed: (unknown)';
   const r = rawValue as {
     hasToolCalls?: boolean;
@@ -146,27 +190,24 @@ function formatParsedResponse(rawValue: unknown): string {
       const name = tc.name ?? '?';
       if (tc.arguments && Object.keys(tc.arguments).length > 0) {
         const argsStr = JSON.stringify(tc.arguments);
-        const preview = argsStr.length > 60 ? argsStr.slice(0, 60) + '...' : argsStr;
-        return `${name}(${preview})`;
+        return `${name}(${truncate(argsStr, limits.toolArgs)})`;
       }
       return name;
     });
     return `Parsed: tool_calls → [${toolSummaries.join(', ')}]`;
   }
   if (typeof r.content === 'string') {
-    const preview = r.content.length > 100 ? r.content.slice(0, 100) + '...' : r.content;
-    return `Parsed: final → "${preview}"`;
+    return `Parsed: final → "${truncate(r.content, limits.parsedContent)}"`;
   }
   return 'Parsed: (unknown)';
 }
 
-function formatToolResultMessages(rawValue: unknown): string {
+function formatToolResultMessages(rawValue: unknown, limits: TruncationLimits): string {
   if (!Array.isArray(rawValue) || rawValue.length === 0) return 'Tool results: (none)';
   const results = rawValue as Array<{ content?: string; role?: string }>;
   const summaries = results.map((msg) => {
     const content = typeof msg.content === 'string' ? msg.content : '';
-    const preview = content.length > 80 ? content.slice(0, 80) + '...' : content;
-    return `"${preview}"`;
+    return `"${truncate(content, limits.toolResult)}"`;
   });
   return `Tool results: ${summaries.join('; ')}`;
 }
@@ -191,7 +232,9 @@ function formatToolResultMessages(rawValue: unknown): string {
  * const rec = narrative({ renderer: createAgentRenderer() });
  * ```
  */
-export function createAgentRenderer(): NarrativeRenderer {
+export function createAgentRenderer(options?: AgentRendererOptions): NarrativeRenderer {
+  const limits = options?.verbose ? VERBOSE_LIMITS : DEFAULT_LIMITS;
+
   return {
     renderStage(ctx: StageRenderContext): string {
       const label = STAGE_LABELS[ctx.stageName];
@@ -223,16 +266,15 @@ export function createAgentRenderer(): NarrativeRenderer {
 
       // ── Key-specific formatters (actual values for LLM context) ──
       if (key === 'messages') return formatMessages(rawValue);
-      if (key === 'result') return formatResult(rawValue);
-      if (key === 'systemPrompt') return formatSystemPrompt(rawValue);
+      if (key === 'result') return formatResult(rawValue, limits);
+      if (key === 'systemPrompt') return formatSystemPrompt(rawValue, limits);
       if (key === 'toolDescriptions') return formatToolDescriptions(rawValue);
-      if (key === 'parsedResponse') return formatParsedResponse(rawValue);
-      if (key === 'toolResultMessages') return formatToolResultMessages(rawValue);
+      if (key === 'parsedResponse') return formatParsedResponse(rawValue, limits);
+      if (key === 'toolResultMessages') return formatToolResultMessages(rawValue, limits);
 
       // message (singular): user input in subflow mode
       if (key === 'message' && typeof rawValue === 'string') {
-        const preview = rawValue.length > 100 ? rawValue.slice(0, 100) + '...' : rawValue;
-        return `User: "${preview}"`;
+        return `User: "${truncate(rawValue, limits.message)}"`;
       }
 
       // Default: simple write summary

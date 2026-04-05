@@ -200,6 +200,29 @@ export interface LLMInstruction<T = unknown> {
    * @default false
    */
   readonly safety?: boolean;
+
+  /**
+   * Set Decision Scope variables based on the tool result.
+   * Controls FUTURE instruction activation — the updated decision drives
+   * InstructionsToLLM on the next loop iteration.
+   *
+   * Tool handlers stay pure (input → content). Decision mutations are
+   * co-located with the tool's instructions — declarative, not imperative.
+   *
+   * Runs after `when` matches. Receives a mutable decision object + the tool context.
+   *
+   * @example
+   * ```typescript
+   * { id: 'classify',
+   *   decide: (decision, ctx) => {
+   *     decision.orderStatus = ctx.content.status;
+   *     decision.riskLevel = ctx.content.amount > 1000 ? 'high' : 'low';
+   *   },
+   *   text: 'Order classified.',
+   * }
+   * ```
+   */
+  readonly decide?: (decision: Record<string, unknown>, ctx: InstructionContext<T>) => void;
 }
 
 // ── Runtime Instructions ────────────────────────────────────────────────

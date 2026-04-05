@@ -20,6 +20,7 @@ import type {
   RetrievalResult,
   AgentResultEntry,
 } from '../types';
+import type { LLMInstruction } from '../lib/instructions/types';
 
 // ── Parsed Response ──────────────────────────────────────────
 
@@ -45,6 +46,31 @@ export interface BaseLLMState {
 }
 
 // ── Agent Loop State ─────────────────────────────────────────
+
+/**
+ * Well-known scope keys for the agent loop.
+ * Used by grounding helpers, narrative renderer, and suppression lists.
+ * Single source of truth — no magic strings.
+ */
+export enum AgentScopeKey {
+  // Core state
+  Messages = 'messages',
+  SystemPrompt = 'systemPrompt',
+  ToolDescriptions = 'toolDescriptions',
+  ParsedResponse = 'parsedResponse',
+  Result = 'result',
+  LoopCount = 'loopCount',
+
+  // Tool execution
+  ToolResultMessages = 'toolResultMessages',
+
+  // Decision / Instructions
+  Decision = 'decision',
+  MatchedInstructions = 'matchedInstructions',
+  PromptInjections = 'promptInjections',
+  ToolInjections = 'toolInjections',
+  ResponseRules = 'responseRules',
+}
 
 /** Full state for the agent loop flowchart (buildAgentLoop). */
 export interface AgentLoopState {
@@ -85,6 +111,18 @@ export interface AgentLoopState {
   /** Response type summary (e.g. "tool_calls: [calculator]" or "final: ..."). */
   responseType: string;
 
+  // ── InstructionsToLLM outputs (only present when agentInstructions configured) ──
+  /** Decision scope — developer-defined state driving instruction activation. */
+  decision?: Record<string, unknown>;
+  /** Prompt injections from matched instructions (Position 1). */
+  promptInjections?: string[];
+  /** Tool description injections from matched instructions (Position 2). */
+  toolInjections?: LLMToolDescription[];
+  /** Tool-result rules from matched instructions (Position 3). */
+  responseRules?: LLMInstruction[];
+  /** Narrative: which instructions matched this iteration. */
+  matchedInstructions?: string;
+
   // ── Subflow message key ───────────────────────────────────
   /** User message injected by parent in subflow mode. */
   message: string;
@@ -99,6 +137,8 @@ export interface SystemPromptSubflowState {
   systemPrompt: string;
   promptSummary: string;
   promptDecision?: string;
+  /** Prompt injections from InstructionsToLLM (merged after base prompt). */
+  promptInjections?: string[];
 }
 
 /** State for the Tools slot subflow. */
@@ -108,6 +148,8 @@ export interface ToolsSubflowState {
   toolDescriptions: LLMToolDescription[];
   resolvedTools: string;
   toolDecision?: string;
+  /** Tool description injections from InstructionsToLLM (merged after base tools). */
+  toolInjections?: LLMToolDescription[];
 }
 
 /** State for the Messages slot subflow (in-memory path). */
@@ -117,6 +159,20 @@ export interface MessagesSubflowState {
   loopCount: number;
   memory_preparedMessages: Message[];
   memory_storedHistory: Message[];
+}
+
+/** State for the InstructionsToLLM subflow. */
+export interface InstructionsToLLMState {
+  /** Current decision scope values (from parent via inputMapper). */
+  decision: Record<string, unknown>;
+  /** Output: prompt text fragments to merge into system prompt. */
+  promptInjections: string[];
+  /** Output: tool descriptions to merge into tools list (handler stripped). */
+  toolInjections: LLMToolDescription[];
+  /** Output: tool-result rules for tool execution. */
+  responseRules: LLMInstruction[];
+  /** Output: IDs of instructions that matched (narrative enrichment). */
+  matchedInstructions: string;
 }
 
 // ── RAG State ────────────────────────────────────────────────
