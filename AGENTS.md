@@ -7,33 +7,32 @@ This is the agentfootprint library — the explainable agent framework. Build AI
 - **Adapter-swap testing.** Every concept uses `LLMProvider` — swap `mock([...])` for `createProvider(anthropic(...))` with zero code changes. $0 test runs, deterministic assertions.
 - **Concept ladder.** Five concepts, each a flowchart: LLMCall < RAG < Agent < FlowChart < Swarm. Each adds exactly one capability.
 - **Built-in recorders.** Observe tokens, cost, tool usage, quality, guardrails — all via `.recorder()` on the builder. Never shape behavior, only observe.
-- **Collect during traversal.** All data collection happens as side effects of the single DFS traversal pass. Never post-process.
+- **Collect during traversal.** Inherited from footprintjs — all data collection happens as side effects of the single DFS traversal pass. Never post-process.
 
-## Architecture
+## Architecture — Library of Libraries
 
 ```
 src/
-├── core/        → AgentLoopConfig, AgentRecorder interface, Provider interfaces
+├── core/        → AgentLoopConfig, AgentRecorder interface, PromptProvider/ToolProvider interfaces
 ├── concepts/    → 5 builders + runners (LLMCall, Agent, RAG, FlowChart, Swarm)
 ├── adapters/    → LLMProvider implementations (mock, anthropic, openai, bedrock, mcp, a2a)
 ├── models/      → ModelConfig factories (anthropic(), openai(), ollama(), bedrock())
 ├── providers/   → Strategy implementations (prompt/, messages/, tools/)
-├── recorders/   → Scope-level recorders + v2 AgentRecorder implementations
+├── recorders/   → Scope-level (LLMRecorder, RAGRecorder) + v2 AgentRecorder impls
 ├── tools/       → ToolRegistry + defineTool
 ├── stages/      → Reusable flowchart stages (seedScope, callLLM, parseResponse, etc.)
 ├── scope/       → AgentScope paths + helpers
 ├── memory/      → Message utilities (appendMessage, slidingWindow, truncateToCharBudget)
 ├── executor/    → agentLoop (core ReAct loop)
 ├── compositions/→ withRetry, withFallback, withCircuitBreaker
-├── streaming/   → StreamEmitter, SSEFormatter
+├── streaming/   → StreamEmitter, SSEFormatter, AgentStreamEvent
+├── lib/         → Instructions (agentInstruction, InstructionsToLLM subflow), narrative (grounding helpers), loop (buildAgentLoop), slots, call stages
 └── types/       → All type definitions (messages, llm, tools, content blocks)
 ```
 
 Single entry point: `import { ... } from 'agentfootprint'`
 
-## Five Concepts — Builder API
-
-All concepts use the builder pattern: `Concept.create(options).configure().build()` returns a runner with `.run()`.
+## Five Concepts (Builder API)
 
 ### LLMCall — Single LLM call, no tools, no loop
 
@@ -139,33 +138,15 @@ const tool = defineTool({
 });
 ```
 
-Fields: `id` (unique identifier), `description` (sent to LLM), `inputSchema` (JSON Schema), `handler` (returns `{ content: string, error?: boolean }`).
-
 ## Provider System
 
 Three provider interfaces — active strategies that shape what the LLM sees:
 
-**PromptProvider** — resolves system prompt per turn:
-- `staticPrompt(str)` — fixed string
-- `templatePrompt(template, vars)` — variable substitution
-- `skillBasedPrompt(options)` — skill-based routing
-- `compositePrompt(providers)` — combine multiple
+- **PromptProvider** — resolves system prompt per turn: `staticPrompt()`, `templatePrompt()`, `skillBasedPrompt()`, `compositePrompt()`
+- **MessageStrategy** — prepares message array: `fullHistory()`, `slidingWindow()`, `charBudget()`, `summaryStrategy()`, `persistentHistory()`
+- **ToolProvider** — resolves available tools: `staticTools()`, `dynamicTools()`, `noTools()`, `agentAsTool()`, `compositeTools()`
 
-**MessageStrategy** — prepares message array for LLM:
-- `fullHistory()` — send all messages
-- `slidingWindow(options)` — last N messages
-- `charBudget(options)` — fit within character limit
-- `summaryStrategy(options)` — summarize old messages
-- `persistentHistory(store)` — persist across sessions
-
-**ToolProvider** — resolves available tools:
-- `staticTools(tools)` — fixed tool set
-- `dynamicTools(resolver)` — context-dependent
-- `noTools()` — no tools available
-- `agentAsTool(config)` — mount agent as a tool
-- `compositeTools(providers)` — combine multiple
-
-## Adapters
+## Adapters (LLMProvider implementations)
 
 ```typescript
 import { mock, createProvider, anthropic, openai, ollama, bedrock } from 'agentfootprint';
@@ -178,34 +159,27 @@ const provider = createProvider(anthropic('claude-sonnet-4-20250514'));
 const provider = createProvider(openai('gpt-4o'));
 const provider = createProvider(ollama('llama3'));
 const provider = createProvider(bedrock('anthropic.claude-3-sonnet'));
-
-// Retrieval (testing):
-const retriever = mockRetriever([{ chunks: [{ content: 'doc', score: 0.9 }] }]);
 ```
 
 ## Recorder System
 
-Attach via `.recorder(rec)` on any concept builder. All implement `AgentRecorder` interface with optional hooks: `onTurnStart`, `onLLMCall`, `onToolCall`, `onTurnComplete`, `onError`.
-
-Available recorders:
-
-| Recorder | Tracks | Key method |
-|---|---|---|
-| `TokenRecorder` | Token usage per LLM call | `getStats()` |
-| `CostRecorder` | USD cost per LLM call | `getTotalCost()`, `getEntries()` |
-| `TurnRecorder` | Turn-level events | `getEntries()` |
-| `ToolUsageRecorder` | Tool call frequency/latency | `getStats()` |
-| `QualityRecorder` | Response quality scores | Requires `QualityJudge` |
-| `GuardrailRecorder` | Safety/policy violations | Requires `GuardrailCheck` |
-| `CompositeRecorder` | Bundles multiple recorders | Delegates to children |
+Attach via `.recorder(rec)` on any builder. All implement `AgentRecorder` interface.
 
 ```typescript
-import { TokenRecorder, CostRecorder, CompositeRecorder } from 'agentfootprint';
+import {
+  TokenRecorder,
+  CostRecorder,
+  TurnRecorder,
+  ToolUsageRecorder,
+  QualityRecorder,
+  GuardrailRecorder,
+  CompositeRecorder,
+} from 'agentfootprint';
 
 const tokens = new TokenRecorder();
-const costs = new CostRecorder({
-  pricingTable: { 'claude-sonnet': { input: 3, output: 15 } },
-});
+const costs = new CostRecorder({ pricingTable: { 'claude-sonnet': { input: 3, output: 15 } } });
+const turns = new TurnRecorder();
+const toolUsage = new ToolUsageRecorder();
 
 const agent = Agent.create({ provider })
   .system('...')
@@ -217,9 +191,19 @@ await agent.run('Hello');
 
 tokens.getStats();       // { totalCalls, totalInputTokens, totalOutputTokens, ... }
 costs.getTotalCost();    // number (USD)
+costs.getEntries();      // CostEntry[]
+turns.getEntries();      // TurnEntry[]
+toolUsage.getStats();    // ToolUsageStats
 ```
 
-## Compositions (Resilience)
+Use `CompositeRecorder` to bundle multiple recorders:
+
+```typescript
+const composite = new CompositeRecorder([tokens, costs, turns]);
+agent.recorder(composite);
+```
+
+## Compositions (Resilience Wrappers)
 
 ```typescript
 import { withRetry, withFallback, withCircuitBreaker } from 'agentfootprint';
@@ -229,24 +213,85 @@ const fallback = withFallback([primaryProvider, backupProvider]);
 const breaker = withCircuitBreaker(provider, { failureThreshold: 5 });
 ```
 
+## Instructions — Conditional Context Injection
+
+```typescript
+import { defineInstruction, Agent, AgentPattern } from 'agentfootprint';
+
+const refund = defineInstruction<MyDecision>({
+  id: 'refund-handling',
+  activeWhen: (d) => d.orderStatus === 'denied',
+  prompt: 'Handle denied orders with empathy.',
+  tools: [processRefund],
+  onToolResult: [{ id: 'empathy', text: 'Do NOT promise reversal.' }],
+});
+
+const agent = Agent.create({ provider })
+  .tool(lookupOrder)
+  .instruction(refund)
+  .decision<MyDecision>({ orderStatus: null })
+  .pattern(AgentPattern.Dynamic)
+  .build();
+```
+
+Builder methods: `.instruction(instr)`, `.instructions([...])`, `.decision<T>({...})`, `.verbose()`
+
+Three naming conventions:
+- `activeWhen(decision)` — agent-level, reads Decision Scope
+- `when(ctx)` — tool-level, reads tool result context
+- `decide(decision, ctx)` — bridges tool results to Decision Scope
+
+## Streaming — AgentStreamEvent
+
+```typescript
+const result = await agent.run('hello', {
+  onEvent: (event) => {
+    switch (event.type) {
+      case 'token': process.stdout.write(event.content); break;
+      case 'tool_start': console.log(`Running ${event.toolName}...`); break;
+      case 'tool_end': console.log(`Done (${event.latencyMs}ms)`); break;
+      case 'llm_end': console.log(`[${event.model}, ${event.latencyMs}ms]`); break;
+    }
+  },
+});
+```
+
+9 events: `turn_start`, `llm_start`, `thinking`, `token`, `llm_end`, `tool_start`, `tool_end`, `turn_end`, `error`.
+Tool lifecycle fires without `.streaming(true)`. Only `token`/`thinking` require streaming.
+`onToken` is deprecated — use `onEvent`.
+
+## Grounding Analysis
+
+```typescript
+import { getGroundingSources, getLLMClaims, getFullLLMContext } from 'agentfootprint';
+
+const entries = agent.getNarrativeEntries();
+const sources = getGroundingSources(entries);  // tool results (sources of truth)
+const claims = getLLMClaims(entries);           // LLM output (to verify)
+const context = getFullLLMContext(entries);     // { systemPrompt, toolDescriptions, sources, claims, decision }
+```
+
+Uses `CombinedNarrativeEntry.key` + `AgentScopeKey` enum — renderer-independent.
+
 ## Anti-Patterns
 
-These are CRITICAL — using the wrong API will cause errors or produce incorrect results:
-
-- **Never use the old functional API** (`LLMCall({...})`, `Agent({...})`) — always use `LLMCall.create({...})` builder pattern
-- **Never use `CostRecorderV2`** — use `CostRecorder` (V2 is a deprecated alias)
-- **Never pass recorders via constructor options** — use `.recorder()` builder method
-- **Don't use `name`/`parameters` on `defineTool`** — use `id`/`inputSchema`
-- **Don't use `tokens.stats()`** — use `tokens.getStats()`
-- **Don't use `costs.totalCost()`** — use `costs.getTotalCost()`
-- **Don't post-process the execution tree** — use recorders to collect data during traversal
-- **Don't put infrastructure concerns in input** — use footprintjs `getEnv()` for signal/traceId
+- Never use the old functional API (`LLMCall({...})`, `Agent({...})`) — always use `LLMCall.create({...})` builder pattern
+- Never use `CostRecorderV2` — use `CostRecorder` (V2 is a deprecated alias)
+- Never pass recorders via constructor options — use `.recorder()` builder method
+- Don't use `name`/`parameters` on `defineTool` — use `id`/`inputSchema`
+- Don't use `tokens.stats()` — use `tokens.getStats()`
+- Don't use `costs.totalCost()` — use `costs.getTotalCost()`
+- Don't post-process the execution tree — use recorders
+- Don't put infrastructure concerns in input — use footprintjs `getEnv()` for signal/traceId
+- Don't pass functions through scope — they get stripped. Use closure captures (InstructionConfig pattern)
+- Don't use `onToken` — use `onEvent` (onToken is deprecated, ignored when onEvent is set)
+- Don't match grounding helpers on `entry.text` — use `entry.key` with `AgentScopeKey` enum
 
 ## Build & Test
 
 ```bash
 npm run build    # tsc (CJS) + tsc -p tsconfig.esm.json (ESM)
-npm test         # vitest — 610+ tests
+npm test         # vitest — 1295+ tests
 ```
 
 Dual output: CommonJS (`dist/`) + ESM (`dist/esm/`) + types (`dist/types/`)

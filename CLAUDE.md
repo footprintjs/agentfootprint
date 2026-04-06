@@ -25,7 +25,8 @@ src/
 ├── memory/      → Message utilities (appendMessage, slidingWindow, truncateToCharBudget)
 ├── executor/    → agentLoop (core ReAct loop)
 ├── compositions/→ withRetry, withFallback, withCircuitBreaker
-├── streaming/   → StreamEmitter, SSEFormatter
+├── streaming/   → StreamEmitter, SSEFormatter, AgentStreamEvent
+├── lib/         → Instructions (agentInstruction, InstructionsToLLM subflow), narrative (grounding helpers), loop (buildAgentLoop), slots, call stages
 └── types/       → All type definitions (messages, llm, tools, content blocks)
 ```
 
@@ -212,6 +213,66 @@ const fallback = withFallback([primaryProvider, backupProvider]);
 const breaker = withCircuitBreaker(provider, { failureThreshold: 5 });
 ```
 
+## Instructions — Conditional Context Injection
+
+```typescript
+import { defineInstruction, Agent, AgentPattern } from 'agentfootprint';
+
+const refund = defineInstruction<MyDecision>({
+  id: 'refund-handling',
+  activeWhen: (d) => d.orderStatus === 'denied',
+  prompt: 'Handle denied orders with empathy.',
+  tools: [processRefund],
+  onToolResult: [{ id: 'empathy', text: 'Do NOT promise reversal.' }],
+});
+
+const agent = Agent.create({ provider })
+  .tool(lookupOrder)
+  .instruction(refund)
+  .decision<MyDecision>({ orderStatus: null })
+  .pattern(AgentPattern.Dynamic)
+  .build();
+```
+
+Builder methods: `.instruction(instr)`, `.instructions([...])`, `.decision<T>({...})`, `.verbose()`
+
+Three naming conventions:
+- `activeWhen(decision)` — agent-level, reads Decision Scope
+- `when(ctx)` — tool-level, reads tool result context
+- `decide(decision, ctx)` — bridges tool results to Decision Scope
+
+## Streaming — AgentStreamEvent
+
+```typescript
+const result = await agent.run('hello', {
+  onEvent: (event) => {
+    switch (event.type) {
+      case 'token': process.stdout.write(event.content); break;
+      case 'tool_start': console.log(`Running ${event.toolName}...`); break;
+      case 'tool_end': console.log(`Done (${event.latencyMs}ms)`); break;
+      case 'llm_end': console.log(`[${event.model}, ${event.latencyMs}ms]`); break;
+    }
+  },
+});
+```
+
+9 events: `turn_start`, `llm_start`, `thinking`, `token`, `llm_end`, `tool_start`, `tool_end`, `turn_end`, `error`.
+Tool lifecycle fires without `.streaming(true)`. Only `token`/`thinking` require streaming.
+`onToken` is deprecated — use `onEvent`.
+
+## Grounding Analysis
+
+```typescript
+import { getGroundingSources, getLLMClaims, getFullLLMContext } from 'agentfootprint';
+
+const entries = agent.getNarrativeEntries();
+const sources = getGroundingSources(entries);  // tool results (sources of truth)
+const claims = getLLMClaims(entries);           // LLM output (to verify)
+const context = getFullLLMContext(entries);     // { systemPrompt, toolDescriptions, sources, claims, decision }
+```
+
+Uses `CombinedNarrativeEntry.key` + `AgentScopeKey` enum — renderer-independent.
+
 ## Anti-Patterns
 
 - Never use the old functional API (`LLMCall({...})`, `Agent({...})`) — always use `LLMCall.create({...})` builder pattern
@@ -222,12 +283,15 @@ const breaker = withCircuitBreaker(provider, { failureThreshold: 5 });
 - Don't use `costs.totalCost()` — use `costs.getTotalCost()`
 - Don't post-process the execution tree — use recorders
 - Don't put infrastructure concerns in input — use footprintjs `getEnv()` for signal/traceId
+- Don't pass functions through scope — they get stripped. Use closure captures (InstructionConfig pattern)
+- Don't use `onToken` — use `onEvent` (onToken is deprecated, ignored when onEvent is set)
+- Don't match grounding helpers on `entry.text` — use `entry.key` with `AgentScopeKey` enum
 
 ## Build & Test
 
 ```bash
 npm run build    # tsc (CJS) + tsc -p tsconfig.esm.json (ESM)
-npm test         # vitest — 610+ tests
+npm test         # vitest — 1295+ tests
 ```
 
 Dual output: CommonJS (`dist/`) + ESM (`dist/esm/`) + types (`dist/types/`)
