@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { RAG, mock, mockRetriever } from '../../src';
-import type { RetrievalChunk } from '../../src';
+import { RAG, mock, mockRetriever } from '../../src/test-barrel';
+import type { RetrievalChunk } from '../../src/test-barrel';
 
 describe('Property: RAG invariants', () => {
   it('RAGResult.chunks always matches what retriever returned (0..N chunks)', async () => {

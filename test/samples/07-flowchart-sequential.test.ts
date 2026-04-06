@@ -10,7 +10,7 @@
  * Agents with toFlowChart() are mounted as subflows (drill-down in UI).
  */
 import { describe, it, expect } from 'vitest';
-import { FlowChart, Agent, LLMCall, mock } from '../../src';
+import { FlowChart, Agent, LLMCall, mock } from '../../src/test-barrel';
 import { listSubflowPaths, getSubtreeSnapshot } from 'footprintjs';
 
 describe('Sample 07: FlowChart Sequential', () => {

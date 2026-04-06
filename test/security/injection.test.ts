@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { Agent, LLMCall, mock, defineTool, ToolRegistry } from '../../src';
+import { Agent, LLMCall, mock, defineTool, ToolRegistry } from '../../src/test-barrel';
 
 describe('Security: Prompt injection via tool results', () => {
   it('tool result containing system prompt injection is treated as data', async () => {

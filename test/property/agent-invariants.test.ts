@@ -6,8 +6,8 @@ import {
   normalizeAdapterResponse,
   executeToolCalls,
   ToolRegistry,
-} from '../../src';
-import type { LLMResponse, Message } from '../../src';
+} from '../../src/test-barrel';
+import type { LLMResponse, Message } from '../../src/test-barrel';
 
 describe('Property: Agent state isolation across runs', () => {
   it('each run starts with fresh loop count', async () => {

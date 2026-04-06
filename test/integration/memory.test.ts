@@ -15,8 +15,8 @@ import {
   mock,
   userMessage,
   assistantMessage,
-} from '../../src';
-import type { Message } from '../../src';
+} from '../../src/test-barrel';
+import type { Message } from '../../src/test-barrel';
 
 // Flush fire-and-forget Promises to complete
 const flush = () => new Promise<void>(resolve => setTimeout(resolve, 0));

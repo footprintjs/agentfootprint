@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { Swarm, mock, defineTool } from '../../src';
-import type { RunnerLike } from '../../src';
+import { Swarm, mock, defineTool } from '../../src/test-barrel';
+import type { RunnerLike } from '../../src/test-barrel';
 
 // ── Helpers ─────────────────────────────────────────────────
 

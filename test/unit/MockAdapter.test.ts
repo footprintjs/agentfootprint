@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { mock, userMessage } from '../../src';
+import { mock, userMessage } from '../../src/test-barrel';
 
 describe('MockAdapter', () => {
   it('returns scripted responses in order', async () => {

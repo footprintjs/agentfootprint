@@ -14,8 +14,8 @@ import {
   templatePrompt,
   skillBasedPrompt,
   defineTool,
-} from '../../src';
-import type { AgentLoopConfig } from '../../src';
+} from '../../src/test-barrel';
+import type { AgentLoopConfig } from '../../src/test-barrel';
 import {
   fullHistory,
   slidingWindow,

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { ToolRegistry, defineTool } from '../../src';
+import { ToolRegistry, defineTool } from '../../src/test-barrel';
 
 const searchTool = defineTool({
   id: 'search',

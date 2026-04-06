@@ -5,7 +5,7 @@
  * subflows unwrap them, narrative shows chosen/rationale.
  */
 import { describe, it, expect } from 'vitest';
-import { Agent, AgentPattern, mock, defineTool } from '../../../src';
+import { Agent, AgentPattern, mock, defineTool } from '../../../src/test-barrel';
 import type { ToolProvider, PromptProvider, SlotDecision } from '../../../src/core';
 import type { LLMToolDescription } from '../../../src/types';
 

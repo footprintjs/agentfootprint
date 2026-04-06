@@ -11,7 +11,7 @@
  */
 import { describe, it, expect, vi } from 'vitest';
 import { mcpToolProvider, a2aRunner } from '../../src/adapters';
-import { agentAsTool, FlowChart, mock } from '../../src';
+import { agentAsTool, FlowChart, mock } from '../../src/test-barrel';
 import type { MCPClient, A2AClient } from '../../src/adapters';
 
 describe('Sample 11: Protocol Adapters', () => {

@@ -5,7 +5,7 @@
  * so all three API slots (prompt, tools, messages) re-evaluate each iteration.
  */
 import { describe, it, expect } from 'vitest';
-import { Agent, AgentPattern, mock, defineTool } from '../../../src';
+import { Agent, AgentPattern, mock, defineTool } from '../../../src/test-barrel';
 import { buildAgentLoop } from '../../../src/lib/loop';
 import { staticPrompt, staticTools, noTools } from '../../../src/providers';
 import { slidingWindow } from '../../../src/providers/messages';

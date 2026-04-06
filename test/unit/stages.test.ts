@@ -6,9 +6,9 @@ import {
   ToolRegistry,
   defineTool,
   mock,
-} from '../../src';
+} from '../../src/test-barrel';
 import type { TypedScope } from 'footprintjs';
-import type { Message, AdapterResult } from '../../src';
+import type { Message, AdapterResult } from '../../src/test-barrel';
 import type { RAGState } from '../../src/scope/types';
 
 function mockScope(initial: Partial<RAGState> = {}): TypedScope<RAGState> {

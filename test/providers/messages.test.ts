@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
-import { systemMessage, userMessage, assistantMessage } from '../../src';
-import type { Message, MessageContext } from '../../src';
+import { systemMessage, userMessage, assistantMessage } from '../../src/test-barrel';
+import type { Message, MessageContext } from '../../src/test-barrel';
 import {
   summaryStrategy,
   compositeMessages,

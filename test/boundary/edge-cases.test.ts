@@ -7,8 +7,8 @@ import {
   ToolRegistry,
   slidingWindow,
   userMessage,
-} from '../../src';
-import type { Message } from '../../src';
+} from '../../src/test-barrel';
+import type { Message } from '../../src/test-barrel';
 
 describe('Boundary: Empty inputs', () => {
   it('Agent handles empty message', async () => {

@@ -3,7 +3,7 @@ import {
   createRetrieveStage,
   augmentPromptStage,
   mockRetriever,
-} from '../../src';
+} from '../../src/test-barrel';
 import type { TypedScope } from 'footprintjs';
 import type { RAGState } from '../../src/scope/types';
 

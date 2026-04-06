@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { anthropic, openai, ollama, bedrock, lookupPricing } from '../../src';
+import { anthropic, openai, ollama, bedrock, lookupPricing } from '../../src/test-barrel';
 
 describe('Model providers', () => {
   it('anthropic returns correct config', () => {

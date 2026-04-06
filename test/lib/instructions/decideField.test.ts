@@ -19,8 +19,8 @@ import {
   defineInstruction,
   defineTool,
   AgentPattern,
-} from '../../../src';
-import type { LLMInstruction } from '../../../src';
+} from '../../../src/test-barrel';
+import type { LLMInstruction } from '../../../src/test-barrel';
 import type { LLMResponse, Message, ToolCall } from '../../../src/types';
 
 // ── Helpers ──────────────────────────────────────────────────

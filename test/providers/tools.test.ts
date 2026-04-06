@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
-import { agentAsTool, compositeTools, defineTool } from '../../src';
-import type { ToolContext, RunnerLike } from '../../src';
+import { agentAsTool, compositeTools, defineTool } from '../../src/test-barrel';
+import type { ToolContext, RunnerLike } from '../../src/test-barrel';
 import { staticTools, dynamicTools } from '../../src/providers';
 
 // ── Helpers ─────────────────────────────────────────────────

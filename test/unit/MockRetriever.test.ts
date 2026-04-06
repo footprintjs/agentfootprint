@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { MockRetriever, mockRetriever } from '../../src';
+import { MockRetriever, mockRetriever } from '../../src/test-barrel';
 
 describe('MockRetriever', () => {
   it('returns scripted responses in order', async () => {

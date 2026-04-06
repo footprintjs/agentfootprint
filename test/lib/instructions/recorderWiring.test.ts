@@ -5,8 +5,8 @@
  * on the Agent builder, through the onInstructionsFired callback chain.
  */
 import { describe, it, expect } from 'vitest';
-import { Agent, mock, defineTool, InstructionRecorder, quickBind } from '../../../src';
-import type { InstructedToolDefinition } from '../../../src';
+import { Agent, mock, defineTool, InstructionRecorder, quickBind } from '../../../src/test-barrel';
+import type { InstructedToolDefinition } from '../../../src/test-barrel';
 
 const orderTool = defineTool({
   id: 'check_order',

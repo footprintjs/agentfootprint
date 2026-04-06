@@ -9,8 +9,8 @@ import {
   normalizeAdapterResponse,
   executeToolCalls,
   ToolRegistry,
-} from '../../src';
-import type { LLMResponse } from '../../src';
+} from '../../src/test-barrel';
+import type { LLMResponse } from '../../src/test-barrel';
 import type { TypedScope } from 'footprintjs';
 import type { RAGState } from '../../src/scope/types';
 

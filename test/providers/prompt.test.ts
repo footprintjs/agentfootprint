@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { staticPrompt, templatePrompt, skillBasedPrompt, compositePrompt } from '../../src';
-import type { PromptContext } from '../../src';
+import { staticPrompt, templatePrompt, skillBasedPrompt, compositePrompt } from '../../src/test-barrel';
+import type { PromptContext } from '../../src/test-barrel';
 
 // ── Helpers ─────────────────────────────────────────────────
 

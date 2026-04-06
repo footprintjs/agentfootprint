@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { AgentScope, AGENT_PATHS } from '../../src';
+import { AgentScope, AGENT_PATHS } from '../../src/test-barrel';
 import type { ScopeFacade } from 'footprintjs';
 
 function mockScope(): ScopeFacade {

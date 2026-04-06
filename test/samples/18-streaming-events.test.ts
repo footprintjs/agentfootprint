@@ -8,8 +8,8 @@
  * Only `token` and `thinking` events require streaming mode.
  */
 import { describe, it, expect, vi } from 'vitest';
-import { Agent, defineTool } from '../../src';
-import type { AgentStreamEvent, LLMResponse, ToolCall } from '../../src';
+import { Agent, defineTool } from '../../src/test-barrel';
+import type { AgentStreamEvent, LLMResponse, ToolCall } from '../../src/test-barrel';
 
 // ── Mock provider ────────────────────────────────────────────
 
@@ -113,7 +113,7 @@ describe('Sample 18: Streaming Events', () => {
   });
 
   it('SSEFormatter formats events correctly', async () => {
-    const { SSEFormatter } = await import('../../src');
+    const { SSEFormatter } = await import('../../src/stream.barrel');
     const event: AgentStreamEvent = { type: 'token', content: 'Hello' };
     const sse = SSEFormatter.format(event);
     expect(sse).toBe('event: token\ndata: {"type":"token","content":"Hello"}\n\n');

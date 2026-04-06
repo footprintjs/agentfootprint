@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { Agent, mock, defineTool } from '../../src';
+import { Agent, mock, defineTool } from '../../src/test-barrel';
 
 const searchTool = defineTool({
   id: 'search',

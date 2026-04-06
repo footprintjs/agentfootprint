@@ -17,7 +17,7 @@ import {
   agentAsTool,
   withRetry,
   withFallback,
-} from '../../src';
+} from '../../src/test-barrel';
 import {
   QualityRecorder,
   GuardrailRecorder,

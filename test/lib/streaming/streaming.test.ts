@@ -5,7 +5,7 @@
  * and onToken callback.
  */
 import { describe, it, expect, vi } from 'vitest';
-import { Agent, mock, defineTool } from '../../../src';
+import { Agent, mock, defineTool } from '../../../src/test-barrel';
 import { createStreamingCallLLMStage } from '../../../src/lib/call/streamingCallLLMStage';
 
 const noopTool = defineTool({

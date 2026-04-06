@@ -7,8 +7,8 @@ import {
   systemMessage,
   ToolRegistry,
   defineTool,
-} from '../../src';
-import type { Message } from '../../src';
+} from '../../src/test-barrel';
+import type { Message } from '../../src/test-barrel';
 
 /**
  * Property-based tests: invariants that must hold for any input.

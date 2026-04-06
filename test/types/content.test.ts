@@ -18,7 +18,7 @@ import {
   toolResultMessage,
   systemMessage,
   hasToolCalls,
-} from '../../src';
+} from '../../src/test-barrel';
 
 import type {
   ContentBlock,
@@ -32,7 +32,7 @@ import type {
   UserMessage,
   AssistantMessage,
   LLMCallOptions,
-} from '../../src';
+} from '../../src/test-barrel';
 
 // ── ContentBlock Factories ──────────────────────────────────
 

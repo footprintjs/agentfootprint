@@ -5,8 +5,8 @@
  * for a given mock tool result, without running the agent.
  */
 import { describe, it, expect } from 'vitest';
-import { previewInstructions, quickBind } from '../../../src';
-import type { LLMInstruction, PreviewContext } from '../../../src';
+import { previewInstructions, quickBind } from '../../../src/test-barrel';
+import type { LLMInstruction, PreviewContext } from '../../../src/test-barrel';
 
 // ── Helpers ─────────────────────────────────────────────────
 

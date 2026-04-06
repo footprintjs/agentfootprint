@@ -6,8 +6,8 @@
  */
 import { describe, it, expect } from 'vitest';
 import { applyInstructionOverrides } from '../../../src/lib/instructions/evaluator';
-import { Agent, mock, defineTool, InstructionRecorder } from '../../../src';
-import type { LLMInstruction, InstructedToolDefinition } from '../../../src';
+import { Agent, mock, defineTool, InstructionRecorder } from '../../../src/test-barrel';
+import type { LLMInstruction, InstructedToolDefinition } from '../../../src/test-barrel';
 
 // ── Helpers ─────────────────────────────────────────────────
 

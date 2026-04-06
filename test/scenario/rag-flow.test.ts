@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { RAG, mock, mockRetriever } from '../../src';
+import { RAG, mock, mockRetriever } from '../../src/test-barrel';
 
 describe('Scenario: RAG end-to-end', () => {
   it('retrieves context and generates answer', async () => {

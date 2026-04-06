@@ -11,8 +11,8 @@
  *   CompositeRecorder → fan-out to multiple recorders
  */
 import { describe, it, expect } from 'vitest';
-import { agentLoop, mock, staticPrompt, defineTool, Agent, LLMCall } from '../../src';
-import type { AgentLoopConfig } from '../../src';
+import { agentLoop, mock, staticPrompt, defineTool, Agent, LLMCall } from '../../src/test-barrel';
+import type { AgentLoopConfig } from '../../src/test-barrel';
 import { fullHistory, staticTools, noTools } from '../../src/providers';
 import {
   TokenRecorder,

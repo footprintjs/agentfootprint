@@ -8,8 +8,8 @@
  * which activate/deactivate instructions on the next iteration.
  */
 import { describe, it, expect, vi } from 'vitest';
-import { Agent, defineInstruction, defineTool, AgentPattern } from '../../src';
-import type { AgentInstruction, LLMResponse, ToolCall, Message } from '../../src';
+import { Agent, defineInstruction, defineTool, AgentPattern } from '../../src/test-barrel';
+import type { AgentInstruction, LLMResponse, ToolCall, Message } from '../../src/test-barrel';
 
 // ── Mock provider ────────────────────────────────────────────
 

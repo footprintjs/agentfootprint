@@ -18,8 +18,8 @@ import {
   defineTool,
   mock,
   AgentPattern,
-} from '../../../src';
-import type { AgentInstruction, LLMInstruction } from '../../../src';
+} from '../../../src/test-barrel';
+import type { AgentInstruction, LLMInstruction } from '../../../src/test-barrel';
 import type { LLMResponse, Message, ToolCall } from '../../../src/types';
 
 // ── Helpers ──────────────────────────────────────────────────

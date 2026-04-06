@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { StreamEmitter, SSEFormatter } from '../../src';
-import type { AgentStreamEvent } from '../../src';
+import { StreamEmitter, SSEFormatter } from '../../src/test-barrel';
+import type { AgentStreamEvent } from '../../src/test-barrel';
 
 describe('StreamEmitter', () => {
   it('emits events to subscribers', () => {

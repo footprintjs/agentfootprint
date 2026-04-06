@@ -7,7 +7,7 @@
  * Flow: User → LLM → (tool call → tool result → LLM)* → final response
  */
 import { describe, it, expect } from 'vitest';
-import { Agent, mock, defineTool } from '../../src';
+import { Agent, mock, defineTool } from '../../src/test-barrel';
 
 describe('Sample 02: Agent with Tools', () => {
   // Define tools with id, description, schema, and handler

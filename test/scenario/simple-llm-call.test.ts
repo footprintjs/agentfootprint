@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { LLMCall, mock } from '../../src';
+import { LLMCall, mock } from '../../src/test-barrel';
 
 describe('Scenario: Simple LLM Call', () => {
   it('sends a message and gets a response', async () => {

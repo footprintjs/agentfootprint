@@ -5,8 +5,8 @@
  * appear in tool result messages → LLM sees guidance in recency window.
  */
 import { describe, it, expect } from 'vitest';
-import { Agent, mock, defineTool, quickBind } from '../../../src';
-import type { LLMInstruction, InstructedToolDefinition } from '../../../src';
+import { Agent, mock, defineTool, quickBind } from '../../../src/test-barrel';
+import type { LLMInstruction, InstructedToolDefinition } from '../../../src/test-barrel';
 
 // ── Tools with instructions ─────────────────────────────────────
 

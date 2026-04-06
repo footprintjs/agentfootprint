@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { RAG, mock, mockRetriever } from '../../src';
-import type { RetrieverProvider } from '../../src';
+import { RAG, mock, mockRetriever } from '../../src/test-barrel';
+import type { RetrieverProvider } from '../../src/test-barrel';
 
 describe('Boundary: RAG edge cases', () => {
   it('handles very large chunks (100KB each)', async () => {

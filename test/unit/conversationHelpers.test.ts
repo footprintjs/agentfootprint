@@ -9,8 +9,8 @@ import {
   userMessage,
   assistantMessage,
   systemMessage,
-} from '../../src';
-import type { Message } from '../../src';
+} from '../../src/test-barrel';
+import type { Message } from '../../src/test-barrel';
 
 describe('conversationHelpers', () => {
   describe('appendMessage', () => {

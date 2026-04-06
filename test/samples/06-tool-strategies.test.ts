@@ -9,8 +9,8 @@
  *   compositeTools → merge multiple tool providers
  */
 import { describe, it, expect } from 'vitest';
-import { defineTool, agentAsTool } from '../../src';
-import type { RunnerLike } from '../../src';
+import { defineTool, agentAsTool } from '../../src/test-barrel';
+import type { RunnerLike } from '../../src/test-barrel';
 import { staticTools, dynamicTools, compositeTools } from '../../src/providers';
 
 const searchTool = defineTool({

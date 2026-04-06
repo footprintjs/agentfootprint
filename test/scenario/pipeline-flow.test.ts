@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
-import { FlowChart, mock, LLMCall } from '../../src';
-import type { RunnerLike } from '../../src';
+import { FlowChart, mock, LLMCall } from '../../src/test-barrel';
+import type { RunnerLike } from '../../src/test-barrel';
 
 function fakeRunner(content: string, narrative?: string[]): RunnerLike {
   return {

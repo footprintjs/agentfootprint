@@ -11,8 +11,8 @@
  * - security: onEvent handler errors don't crash agent
  */
 import { describe, it, expect, vi } from 'vitest';
-import { Agent, defineTool } from '../../../src';
-import type { AgentStreamEvent, LLMResponse, Message, ToolCall } from '../../../src';
+import { Agent, defineTool } from '../../../src/test-barrel';
+import type { AgentStreamEvent, LLMResponse, Message, ToolCall } from '../../../src/test-barrel';
 
 // ── Helpers ────────────────────────────���─────────────────────
 

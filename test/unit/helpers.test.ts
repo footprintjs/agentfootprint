@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
-import { normalizeAdapterResponse, executeToolCalls, ToolRegistry, defineTool } from '../../src';
-import type { LLMResponse } from '../../src';
+import { normalizeAdapterResponse, executeToolCalls, ToolRegistry, defineTool } from '../../src/test-barrel';
+import type { LLMResponse } from '../../src/test-barrel';
 
 describe('normalizeAdapterResponse', () => {
   it('returns "final" result when no tool calls', () => {

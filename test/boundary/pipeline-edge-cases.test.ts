@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { FlowChart } from '../../src';
-import type { RunnerLike } from '../../src';
+import { FlowChart } from '../../src/test-barrel';
+import type { RunnerLike } from '../../src/test-barrel';
 
 describe('FlowChart edge cases', () => {
   it('single agent pipeline works', async () => {

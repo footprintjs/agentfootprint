@@ -6,7 +6,7 @@
  * search APIs, or mock for testing.
  */
 import { describe, it, expect } from 'vitest';
-import { RAG, mock, mockRetriever } from '../../src';
+import { RAG, mock, mockRetriever } from '../../src/test-barrel';
 
 describe('Sample 03: RAG Retrieval', () => {
   it('retrieves context and generates an answer', async () => {

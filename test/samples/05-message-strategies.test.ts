@@ -13,7 +13,7 @@
  *   compositeMessages  → chain strategies
  */
 import { describe, it, expect } from 'vitest';
-import { userMessage, assistantMessage, systemMessage } from '../../src';
+import { userMessage, assistantMessage, systemMessage } from '../../src/test-barrel';
 import {
   fullHistory,
   slidingWindow,

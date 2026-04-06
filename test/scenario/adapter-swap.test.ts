@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { Agent, mock, defineTool } from '../../src';
+import { Agent, mock, defineTool } from '../../src/test-barrel';
 
 /**
  * Scenario: Adapter Swap — same flowchart, different adapters, identical behavior.

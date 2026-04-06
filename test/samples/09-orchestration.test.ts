@@ -9,8 +9,8 @@
  *   withCircuitBreaker → fast-fail after repeated failures
  */
 import { describe, it, expect } from 'vitest';
-import { withRetry, withFallback, withCircuitBreaker } from '../../src';
-import type { RunnerLike } from '../../src';
+import { withRetry, withFallback, withCircuitBreaker } from '../../src/test-barrel';
+import type { RunnerLike } from '../../src/test-barrel';
 
 describe('Sample 09: Orchestration', () => {
   it('withRetry — retries a flaky runner', async () => {

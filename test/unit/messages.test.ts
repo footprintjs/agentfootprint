@@ -5,7 +5,7 @@ import {
   assistantMessage,
   toolResultMessage,
   hasToolCalls,
-} from '../../src';
+} from '../../src/test-barrel';
 
 describe('Message helpers', () => {
   it('creates system message', () => {

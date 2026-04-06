@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { Agent, mock, defineTool, executeToolCalls, ToolRegistry } from '../../src';
+import { Agent, mock, defineTool, executeToolCalls, ToolRegistry } from '../../src/test-barrel';
 
 describe('Security: Tool argument safety', () => {
   it('tool receives exact arguments from LLM, not modified', async () => {

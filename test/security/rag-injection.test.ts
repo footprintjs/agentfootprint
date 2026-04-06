@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { RAG, mock, mockRetriever } from '../../src';
+import { RAG, mock, mockRetriever } from '../../src/test-barrel';
 
 describe('Security: RAG prompt injection via retrieved chunks', () => {
   it('injection attempt in chunk is sandboxed in context block', async () => {

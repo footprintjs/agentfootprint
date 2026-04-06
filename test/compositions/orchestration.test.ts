@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
-import { withRetry, withFallback, withCircuitBreaker } from '../../src';
-import type { RunnerLike } from '../../src';
+import { withRetry, withFallback, withCircuitBreaker } from '../../src/test-barrel';
+import type { RunnerLike } from '../../src/test-barrel';
 
 // ── Helpers ─────────────────────────────────────────────────
 
