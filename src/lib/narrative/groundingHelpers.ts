@@ -64,6 +64,13 @@ export interface LLMContextSnapshot {
  *
  * Matches on `entry.key === 'toolResultMessages'` — the scope key written
  * by the ExecuteToolCalls stage. Renderer-independent and topology-independent.
+ *
+ * @example
+ * ```typescript
+ * const entries = agent.getNarrativeEntries();
+ * const sources = getGroundingSources(entries);
+ * // [{ stageName: 'ExecuteToolCalls', content: '{"orderId":"ORD-1003",...}', parsed: {...} }]
+ * ```
  */
 export function getGroundingSources(entries: CombinedNarrativeEntry[]): GroundingSource[] {
   const sources: GroundingSource[] = [];
@@ -97,6 +104,12 @@ export function getGroundingSources(entries: CombinedNarrativeEntry[]): Groundin
  *
  * Final claims from `entry.key === AgentScopeKey.Result`.
  * Intermediate claims from `entry.key === AgentScopeKey.ParsedResponse` where content is final (not tool_calls).
+ *
+ * @example
+ * ```typescript
+ * const claims = getLLMClaims(agent.getNarrativeEntries());
+ * // [{ content: 'Your order was denied...', type: 'final' }]
+ * ```
  */
 export function getLLMClaims(entries: CombinedNarrativeEntry[]): LLMClaim[] {
   const claims: LLMClaim[] = [];

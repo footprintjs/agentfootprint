@@ -11,6 +11,8 @@ Comprehensive guides for using agentfootprint — the explainable agent framewor
 | **[Adapters](adapters.md)** | LLM adapters (Anthropic, OpenAI, Bedrock, Ollama, Mock) + protocol adapters (MCP, A2A) |
 | **[Orchestration](orchestration.md)** | `withRetry`, `withFallback`, `withCircuitBreaker` — reliability wrappers |
 | **[Security](security.md)** | Tool gating, permission policy, provider fallback, resilient providers, audit trail |
+| **[Instructions](instructions.md)** | Conditional context injection — 3-position injection, Decision Scope, `decide()` field |
+| **[Streaming](streaming.md)** | Real-time lifecycle events (AgentStreamEvent), SSE, onEvent callback |
 
 ---
 

@@ -435,15 +435,69 @@ const msg = userMessage([
 
 ---
 
-## Streaming
+## Instructions — Conditional Context Injection
+
+Inject the right context at the right position at the right time. A single instruction can inject into system prompt, tools, AND tool-result recency window — driven by accumulated state.
 
 ```typescript
-import { StreamEmitter, SSEFormatter } from 'agentfootprint';
+import { defineInstruction, Agent, AgentPattern } from 'agentfootprint';
 
-const emitter = new StreamEmitter();
-emitter.on('token', (text) => process.stdout.write(text));
-emitter.on('done', () => console.log('\n--- done ---'));
+const refund = defineInstruction({
+  id: 'refund-handling',
+  activeWhen: (d) => d.orderStatus === 'denied',
+  prompt: 'Handle denied orders with empathy.',
+  tools: [processRefund],
+  onToolResult: [{ id: 'empathy', text: 'Do NOT promise reversal.' }],
+});
+
+const agent = Agent.create({ provider })
+  .tool(lookupOrder)
+  .instruction(refund)
+  .decision({ orderStatus: null })
+  .pattern(AgentPattern.Dynamic)
+  .build();
 ```
+
+See [Instructions Guide](docs/guides/instructions.md) for Decision Scope, `decide()` field, and safety instructions.
+
+---
+
+## Streaming — Real-Time Lifecycle Events
+
+9-event discriminated union for CLI/web/mobile consumers:
+
+```typescript
+const result = await agent.run('Check order ORD-1003', {
+  onEvent: (event) => {
+    switch (event.type) {
+      case 'token': process.stdout.write(event.content); break;
+      case 'tool_start': console.log(`Running ${event.toolName}...`); break;
+      case 'tool_end': console.log(`Done (${event.latencyMs}ms)`); break;
+      case 'llm_end': console.log(`[${event.model}, ${event.latencyMs}ms]`); break;
+    }
+  },
+});
+```
+
+Events: `turn_start`, `llm_start`, `thinking`, `token`, `llm_end`, `tool_start`, `tool_end`, `turn_end`, `error`. Tool lifecycle events fire even without `.streaming(true)`.
+
+See [Streaming Guide](docs/guides/streaming.md) for SSE integration and event timeline.
+
+---
+
+## Grounding Analysis
+
+Extract sources (tool results) and claims (LLM output) from narrative entries for hallucination detection:
+
+```typescript
+import { getGroundingSources, getLLMClaims } from 'agentfootprint';
+
+const entries = agent.getNarrativeEntries();
+const sources = getGroundingSources(entries);  // what tools returned
+const claims = getLLMClaims(entries);           // what the LLM said
+```
+
+Uses `CombinedNarrativeEntry.key` — renderer-independent, topology-independent.
 
 ---
 
