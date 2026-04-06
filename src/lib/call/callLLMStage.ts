@@ -9,17 +9,25 @@
  *   - adapterResult (discriminated union: 'final' | 'tools' | 'error')
  *   - adapterRawResponse (raw LLM response for recorders)
  *   - llmCall (narrative summary of the LLM call)
+ *
+ * Emits AgentStreamEvents:
+ *   - llm_start { iteration }
+ *   - llm_end { iteration, toolCallCount, content, model, latencyMs }
  */
 
 import type { TypedScope } from 'footprintjs';
 import type { AgentLoopState } from '../../scope/types';
 import type { LLMProvider, LLMCallOptions } from '../../types';
+import type { AgentStreamEventHandler } from '../../streaming';
 import { normalizeAdapterResponse } from './helpers';
 
 /**
  * Create the CallLLM stage function.
  */
-export function createCallLLMStage(provider: LLMProvider) {
+export function createCallLLMStage(
+  provider: LLMProvider,
+  onStreamEvent?: AgentStreamEventHandler,
+) {
   if (!provider) {
     throw new Error('createCallLLMStage: provider is required');
   }
@@ -28,6 +36,10 @@ export function createCallLLMStage(provider: LLMProvider) {
     const messages = scope.messages ?? [];
     const tools = scope.toolDescriptions ?? [];
     const signal = scope.$getEnv()?.signal;
+    const iteration = (scope.loopCount ?? 0) + 1;
+    const startMs = Date.now();
+
+    onStreamEvent?.({ type: 'llm_start', iteration });
 
     const options: LLMCallOptions | undefined =
       tools.length > 0 || signal ? { ...(tools.length > 0 && { tools }), signal } : undefined;
@@ -46,5 +58,14 @@ export function createCallLLMStage(provider: LLMProvider) {
       ? `${usage.inputTokens ?? '?'}in / ${usage.outputTokens ?? '?'}out`
       : 'no usage data';
     scope.llmCall = `${model} (${usageSummary})`;
+
+    onStreamEvent?.({
+      type: 'llm_end',
+      iteration,
+      toolCallCount: response.toolCalls?.length ?? 0,
+      content: response.content,
+      model: response.model,
+      latencyMs: Date.now() - startMs,
+    });
   };
 }

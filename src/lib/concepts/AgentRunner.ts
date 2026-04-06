@@ -10,6 +10,7 @@ import { buildAgentLoop, AgentPattern } from '../loop';
 import { PendingFollowUpManager, InstructionRecorder } from '../instructions';
 import type { InstructionOverride, AgentInstruction } from '../instructions';
 import type { DecideFn } from '../call/helpers';
+import type { AgentStreamEvent, AgentStreamEventHandler } from '../../streaming';
 import type { AgentLoopConfig } from '../loop';
 import { createAgentRenderer } from '../narrative';
 import { annotateSpecIcons } from '../../concepts/specIcons';
@@ -139,9 +140,26 @@ export class AgentRunner {
     options?: {
       signal?: AbortSignal;
       timeoutMs?: number;
+      /** Full event stream — tool lifecycle, LLM lifecycle, tokens. */
+      onEvent?: AgentStreamEventHandler;
+      /** @deprecated Use onEvent instead. Ignored if onEvent is also provided. */
       onToken?: (token: string) => void;
     },
   ): Promise<AgentResult> {
+    // Resolve stream event handler: onEvent takes precedence over onToken.
+    const isDevMode = typeof process !== 'undefined' && process.env?.['NODE_ENV'] !== 'production';
+    if (options?.onEvent && options?.onToken && isDevMode) {
+      console.warn('[agentfootprint] Both onEvent and onToken provided. onToken is ignored when onEvent is set.');
+    }
+    // Wrap consumer callback with error isolation — handler errors never crash the agent.
+    const rawHandler = options?.onEvent
+      ?? (options?.onToken ? (e: AgentStreamEvent) => { if (e.type === 'token') options.onToken!(e.content); } : undefined);
+    const onStreamEvent: AgentStreamEventHandler | undefined = rawHandler
+      ? (event: AgentStreamEvent) => { try { rawHandler(event); } catch { /* swallow */ } }
+      : undefined;
+
+    onStreamEvent?.({ type: 'turn_start', userMessage: message });
+
     // Check for pending strict follow-up from previous turn
     const pendingMatch = this.pendingFollowUps.checkAndConsume(message);
     if (pendingMatch) {
@@ -160,19 +178,20 @@ export class AgentRunner {
 
     const existingMessages = this.memoryConfig?.store ? [] : this.conversationHistory;
 
-    const { chart, spec, getStrictFollowUp } = buildAgentLoop(this.buildConfig(), {
-      messages: message ? [userMessage(message)] : [],
-      existingMessages,
-    }, { captureSpec: true });
+    const { chart, spec, getStrictFollowUp } = buildAgentLoop(
+      this.buildConfig(onStreamEvent),
+      { messages: message ? [userMessage(message)] : [], existingMessages },
+      { captureSpec: true },
+    );
     this.lastSpec = annotateSpecIcons(spec as SpecLike);
     const bridge = this.recorders.length > 0 ? new RecorderBridge(this.recorders) : null;
 
     bridge?.dispatchTurnStart(message);
 
     const executorOpts: FlowChartExecutorOptions = { enrichSnapshots: true };
-    if (options?.onToken && this.streamingEnabled) {
+    if (onStreamEvent && this.streamingEnabled) {
       executorOpts.streamHandlers = {
-        onToken: (_streamId: string, token: string) => options.onToken!(token),
+        onToken: (_streamId: string, token: string) => onStreamEvent({ type: 'token', content: token }),
         onStart: () => {},
         onEnd: () => {},
       };
@@ -195,12 +214,16 @@ export class AgentRunner {
 
     this.lastExecutor = executor;
 
-    // Check for pause (ask_human tool) — return early, no recorder dispatch
+    // Check for pause (ask_human tool) — emit turn_end with paused flag, return early
     if (executor.isPaused()) {
-      return this.buildResult(executor);
+      const pauseResult = this.buildResult(executor);
+      onStreamEvent?.({ type: 'turn_end', content: '', iterations: pauseResult.iterations, paused: true });
+      return pauseResult;
     }
 
     const agentResult = this.buildResult(executor);
+
+    onStreamEvent?.({ type: 'turn_end', content: agentResult.content, iterations: agentResult.iterations });
 
     if (bridge) {
       const state = executor.getSnapshot()?.sharedState ?? {};
@@ -233,7 +256,12 @@ export class AgentRunner {
    *   const final = await agent.resume('Yes, order ORD-123');
    * }
    * ```
+   *
+   * Note: `onEvent` streaming is not yet supported on `resume()`.
+   * The resumed turn completes without emitting AgentStreamEvents.
+   * Use `result.content` and `agent.getNarrative()` for post-resume data.
    */
+  // TODO: Add onEvent parameter to resume() for streaming event support
   async resume(humanResponse: string): Promise<AgentResult> {
     const executor = this.lastExecutor;
     if (!executor || !executor.isPaused()) {
@@ -292,7 +320,7 @@ export class AgentRunner {
   getMessages(): Message[] { return [...this.conversationHistory]; }
   resetConversation(): void { this.conversationHistory = []; }
 
-  private buildConfig(): AgentLoopConfig {
+  private buildConfig(onStreamEvent?: AgentStreamEventHandler): AgentLoopConfig {
     const hasTools = this.registry.size > 0;
     const promptProvider = this.customPromptProvider ?? staticPrompt(this.systemPromptText ?? '');
     const toolsProvider = this.customToolProvider ?? (hasTools ? staticTools(this.registry.all()) : noTools());
@@ -319,6 +347,7 @@ export class AgentRunner {
       initialDecision: this.initialDecision,
       decideFunctions: this.cachedDecideFunctions,
       streaming: this.streamingEnabled,
+      onStreamEvent,
       onInstructionsFired: (toolId, fired) => {
         for (const rec of this.recorders) {
           if (rec instanceof InstructionRecorder) rec.recordFirings(toolId, fired);

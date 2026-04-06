@@ -1,53 +1,30 @@
 /**
- * Streaming CallLLM stage — bridges LLMProvider.chatStream() with footprintjs StreamCallback.
+ * Streaming CallLLM stage — bridges LLMProvider.chatStream() with footprintjs StreamCallback
+ * and emits AgentStreamEvents for consumer visibility.
  *
- * When the provider supports chatStream(), tokens are emitted incrementally
- * via the footprintjs StreamCallback (3rd parameter to stage functions).
- * The full response is accumulated and written to scope as adapterResult.
- *
- * Falls back to non-streaming chat() if chatStream is not available or
- * if no StreamCallback is injected (non-streaming stage context).
- *
- * Use with `addStreamingFunction` on the flowchart builder:
- *   builder.addStreamingFunction('CallLLM', createStreamingCallLLMStage(provider), 'call-llm')
+ * Events emitted:
+ *   - llm_start { iteration } — before the LLM call
+ *   - token { content } — each text chunk from the LLM
+ *   - thinking { content } — extended thinking blocks (Anthropic)
+ *   - llm_end { iteration, toolCallCount, content, model, latencyMs } — after LLM completes
  */
 
 import type { TypedScope } from 'footprintjs';
 import type { AgentLoopState } from '../../scope/types';
 import type { LLMProvider, LLMResponse, ToolCall } from '../../types';
+import type { AgentStreamEventHandler } from '../../streaming';
 import { normalizeAdapterResponse } from './helpers';
 
 /**
  * Create a streaming-capable CallLLM stage function.
  *
- * The stage function signature matches footprintjs's StageFunction:
- *   (scope, breakFn, streamCallback?) => Promise<void>
- *
- * When streamCallback is provided (streaming stage), uses chatStream().
- * When not provided (regular stage fallback), uses chat().
- *
- * @example
- * ```typescript
- * // In buildAgentLoop — streaming mode
- * builder.addStreamingFunction(
- *   'CallLLM',
- *   createStreamingCallLLMStage(provider),
- *   'call-llm',
- *   'llm-stream',
- *   'Send messages + tools to LLM (streaming)',
- * );
- *
- * // Consumer receives tokens via StreamHandlers on executor:
- * executor.run({
- *   streamHandlers: {
- *     onToken: (streamId, token) => process.stdout.write(token),
- *     onStart: (streamId) => console.log('Streaming started...'),
- *     onEnd: (streamId) => console.log('\\nDone.'),
- *   },
- * });
- * ```
+ * @param provider — LLM provider with chat() and optional chatStream()
+ * @param onStreamEvent — optional event handler for AgentStreamEvents
  */
-export function createStreamingCallLLMStage(provider: LLMProvider) {
+export function createStreamingCallLLMStage(
+  provider: LLMProvider,
+  onStreamEvent?: AgentStreamEventHandler,
+) {
   return async (
     scope: TypedScope<AgentLoopState>,
     _breakFn: () => void,
@@ -55,7 +32,14 @@ export function createStreamingCallLLMStage(provider: LLMProvider) {
   ) => {
     const messages = scope.messages ?? [];
     const tools = scope.toolDescriptions ?? [];
-    const options = tools.length > 0 ? { tools } : undefined;
+    const signal = scope.$getEnv?.()?.signal;
+    const options = tools.length > 0 || signal
+      ? { ...(tools.length > 0 && { tools }), signal }
+      : undefined;
+    const iteration = (scope.loopCount ?? 0) + 1;
+    const startMs = Date.now();
+
+    onStreamEvent?.({ type: 'llm_start', iteration });
 
     // If streaming is available and callback is injected, use chatStream
     if (streamCallback && provider.chatStream) {
@@ -69,6 +53,8 @@ export function createStreamingCallLLMStage(provider: LLMProvider) {
             if (chunk.content) {
               contentParts.push(chunk.content);
               streamCallback(chunk.content);
+              // Token events are forwarded to consumer via footprintjs streamHandlers.onToken
+              // in AgentRunner — don't emit here to avoid double delivery.
             }
             break;
           case 'tool_call':
@@ -86,7 +72,6 @@ export function createStreamingCallLLMStage(provider: LLMProvider) {
         }
       }
 
-      // Build LLMResponse from accumulated stream — O(n) join instead of O(n²) concat
       const content = contentParts.join('');
       const response: LLMResponse = {
         content,
@@ -97,6 +82,15 @@ export function createStreamingCallLLMStage(provider: LLMProvider) {
 
       scope.adapterRawResponse = response;
       scope.adapterResult = normalizeAdapterResponse(response);
+
+      onStreamEvent?.({
+        type: 'llm_end',
+        iteration,
+        toolCallCount: toolCalls.length,
+        content,
+        model: response.model,
+        latencyMs: Date.now() - startMs,
+      });
       return;
     }
 
@@ -104,5 +98,14 @@ export function createStreamingCallLLMStage(provider: LLMProvider) {
     const response = await provider.chat(messages, options);
     scope.adapterRawResponse = response;
     scope.adapterResult = normalizeAdapterResponse(response);
+
+    onStreamEvent?.({
+      type: 'llm_end',
+      iteration,
+      toolCallCount: response.toolCalls?.length ?? 0,
+      content: response.content,
+      model: response.model,
+      latencyMs: Date.now() - startMs,
+    });
   };
 }

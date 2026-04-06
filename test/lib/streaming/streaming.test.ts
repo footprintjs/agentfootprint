@@ -127,7 +127,7 @@ describe('Streaming — property', () => {
 // ── Security ────────────────────────────────────────────────
 
 describe('Streaming — security', () => {
-  it('onToken callback errors propagate as stage errors', async () => {
+  it('onToken callback errors are swallowed (error isolation)', async () => {
     const mockProvider = {
       chat: async () => ({ content: 'fallback' }),
       chatStream: async function* () {
@@ -140,9 +140,10 @@ describe('Streaming — security', () => {
       .streaming(true)
       .build();
 
-    // onToken throws — error propagates (broken callback is a real error)
-    await expect(
-      agent.run('test', { onToken: () => { throw new Error('callback error'); } }),
-    ).rejects.toThrow('callback error');
+    // onToken throws — error is swallowed, agent still completes
+    const result = await agent.run('test', {
+      onToken: () => { throw new Error('callback error'); },
+    });
+    expect(result.content).toBeDefined();
   });
 });

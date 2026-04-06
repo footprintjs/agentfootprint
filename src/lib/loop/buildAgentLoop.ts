@@ -202,10 +202,10 @@ export function buildAgentLoop(config: AgentLoopConfig, seed?: AgentLoopSeedOpti
     config.onInstructionsFired?.(toolId, fired);
   };
 
-  // Build call stages
+  // Build call stages — pass onStreamEvent for llm_start/llm_end events
   const callLLM = config.streaming
-    ? createStreamingCallLLMStage(config.provider)
-    : createCallLLMStage(config.provider);
+    ? createStreamingCallLLMStage(config.provider, config.onStreamEvent)
+    : createCallLLMStage(config.provider, config.onStreamEvent);
   const toolExecutionSubflow = buildToolExecutionSubflow({
     registry: config.registry,
     toolProvider: config.toolProvider,
@@ -215,10 +215,10 @@ export function buildAgentLoop(config: AgentLoopConfig, seed?: AgentLoopSeedOpti
       instructionsByToolId,
       onInstructionsFired,
       decideFunctions: decideFunctions.size > 0 ? decideFunctions : undefined,
-      // Capture all onToolResult rules at build time (functions can't travel through scope).
       agentResponseRules: hasAgentInstructions
         ? config.agentInstructions!.flatMap((i) => i.onToolResult ?? [])
         : undefined,
+      onStreamEvent: config.onStreamEvent,
     },
   });
 

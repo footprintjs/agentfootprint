@@ -268,7 +268,7 @@ export type {
 
 // ── Streaming ────────────────────────────────────────────────
 export { StreamEmitter, SSEFormatter } from './streaming';
-export type { StreamEvent, StreamEventHandler } from './streaming';
+export type { AgentStreamEvent, AgentStreamEventHandler, StreamEvent, StreamEventHandler } from './streaming';
 
 // ── Narrative ───────────────────────────────────────────────
 export { createAgentRenderer, getGroundingSources, getLLMClaims, getFullLLMContext } from './lib/narrative';

@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-04-05
+
+### Added
+
+- **AgentStreamEvent** — 9-event discriminated union for real-time agent lifecycle
+  - `turn_start`, `llm_start`, `thinking`, `token`, `llm_end`, `tool_start`, `tool_end`, `turn_end`, `error`
+  - `onEvent` callback on `agent.run()` — full lifecycle visibility for CLI/web/mobile consumers
+  - Works in both streaming and non-streaming mode (only `token` requires `.streaming(true)`)
+  - `turn_end` emits `paused: true` on ask_human pause
+- **Backward compat** — `onToken` still works (deprecated, sugar for `onEvent` token filter)
+- **Collision guard** — `onEvent` + `onToken` together: `onToken` ignored + dev-mode warn
+- **Error isolation** — `onEvent` handler errors swallowed (never crash agent pipeline)
+
+### Fixed
+
+- `streamingCallLLMStage` fallback path now passes `signal` for cancellation
+- `tool_end.latencyMs` excludes instruction processing overhead
+
 ## [0.6.0] - 2026-04-05
 
 ### Added

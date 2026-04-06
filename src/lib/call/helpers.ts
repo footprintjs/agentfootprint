@@ -11,6 +11,7 @@ import type { ToolProvider } from '../../core';
 import type { LLMInstruction, InstructionContext, RuntimeFollowUp, InstructionTemplate } from '../instructions';
 import type { ResolvedInstruction } from '../instructions';
 import { processInstructions } from '../instructions';
+import type { AgentStreamEventHandler } from '../../streaming';
 
 /**
  * Normalize an LLMResponse into an AdapterResult discriminated union.
@@ -61,6 +62,8 @@ export interface InstructionConfig {
    * are stripped when values pass through footprintjs scope.
    */
   readonly agentResponseRules?: readonly LLMInstruction[];
+  /** Stream event handler for tool lifecycle events (tool_start, tool_end). */
+  readonly onStreamEvent?: AgentStreamEventHandler;
 }
 
 /**
@@ -93,12 +96,21 @@ export async function executeToolCalls(
   const result = [...messages];
   let askHumanPause: ToolCallsResult['askHumanPause'];
 
+  const onStreamEvent = instructionConfig?.onStreamEvent;
+
   for (const toolCall of toolCalls) {
     let resultContent: string;
     let runtimeInstructions: readonly string[] | undefined;
     let runtimeFollowUps: readonly RuntimeFollowUp[] | undefined;
     let errorInfo: { code?: string; message: string } | undefined;
     const startMs = Date.now();
+
+    onStreamEvent?.({
+      type: 'tool_start',
+      toolName: toolCall.name,
+      toolCallId: toolCall.id,
+      args: (toolCall.arguments ?? {}) as Record<string, unknown>,
+    });
 
     // Try ToolProvider.execute() first (handles remote tools, gated tools, etc.)
     // Skip ToolProvider for ask_human — it must run locally (uses Symbol marker for pause detection).
@@ -151,7 +163,9 @@ export async function executeToolCalls(
       }
     }
 
-    const latencyMs = Date.now() - startMs;
+    // Capture tool execution latency BEFORE instruction processing overhead
+    const toolExecLatencyMs = Date.now() - startMs;
+    const latencyMs = toolExecLatencyMs;
 
     // Process instructions if config provided (build-time, agent-level, or runtime)
     if (instructionConfig) {
@@ -214,6 +228,15 @@ export async function executeToolCalls(
         }
       }
     }
+
+    onStreamEvent?.({
+      type: 'tool_end',
+      toolName: toolCall.name,
+      toolCallId: toolCall.id,
+      result: resultContent,
+      error: !!errorInfo,
+      latencyMs: toolExecLatencyMs,
+    });
 
     result.push(toolResultMessage(resultContent, toolCall.id));
   }

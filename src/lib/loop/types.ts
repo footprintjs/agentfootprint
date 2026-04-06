@@ -19,6 +19,7 @@ import type { MessagesSlotConfig } from '../slots/messages';
 import type { ToolsSlotConfig } from '../slots/tools';
 import type { ResolvedInstruction, InstructionOverride, AgentInstruction } from '../instructions';
 import type { DecideFn } from '../call/helpers';
+import type { AgentStreamEventHandler } from '../../streaming';
 
 // ── RoutingConfig — pluggable post-ParseResponse routing ─────────────────────
 
@@ -217,6 +218,9 @@ export interface AgentLoopConfig {
    * (stripped on write), so they're captured as a closure map.
    */
   readonly decideFunctions?: ReadonlyMap<string, DecideFn>;
+
+  /** Stream event handler for consumer-facing lifecycle events. */
+  readonly onStreamEvent?: AgentStreamEventHandler;
 
   /** When true, CallLLM uses addStreamingFunction for token-by-token output. */
   readonly streaming?: boolean;
