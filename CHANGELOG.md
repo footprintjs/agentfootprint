@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-04-06
+
+### Added
+
+- **Capability-based subpath exports** — 7 focused import paths, tree-shakeable:
+  - `agentfootprint/providers` — LLM providers, adapters, prompt/tool strategies
+  - `agentfootprint/instructions` — defineInstruction, AgentPattern, InstructionRecorder
+  - `agentfootprint/observe` — all 9 recorders + agentObservability preset
+  - `agentfootprint/resilience` — withRetry, withFallback, resilientProvider
+  - `agentfootprint/security` — gatedTools, PermissionPolicy
+  - `agentfootprint/explain` — grounding helpers, narrative renderer
+  - `agentfootprint/stream` — AgentStreamEvent, SSEFormatter
+- **Full backward compatibility** — `import { everything } from 'agentfootprint'` still works
+- **`typesVersions`** in package.json for older TypeScript resolution
+
+### Changed
+
+- `index.ts` reorganized with comments pointing to capability subpaths
+- PermissionRecorder canonical home is `agentfootprint/observe` (removed from security barrel)
+
 ## [0.6.2] - 2026-04-05
 
 ### Added

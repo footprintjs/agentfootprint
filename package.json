@@ -1,6 +1,6 @@
 {
   "name": "agentfootprint",
-  "version": "0.6.2",
+  "version": "1.0.0",
   "description": "The explainable agent framework — build AI agents you can explain, audit, and trust. Built on footprintjs.",
   "license": "MIT",
   "author": "Sanjay Krishna Anbalagan",
@@ -62,6 +62,52 @@
       "types": "./dist/types/index.d.ts",
       "import": "./dist/esm/index.js",
       "require": "./dist/index.js"
+    },
+    "./providers": {
+      "types": "./dist/types/providers.barrel.d.ts",
+      "import": "./dist/esm/providers.barrel.js",
+      "require": "./dist/providers.barrel.js"
+    },
+    "./instructions": {
+      "types": "./dist/types/instructions.barrel.d.ts",
+      "import": "./dist/esm/instructions.barrel.js",
+      "require": "./dist/instructions.barrel.js"
+    },
+    "./observe": {
+      "types": "./dist/types/observe.barrel.d.ts",
+      "import": "./dist/esm/observe.barrel.js",
+      "require": "./dist/observe.barrel.js"
+    },
+    "./resilience": {
+      "types": "./dist/types/resilience.barrel.d.ts",
+      "import": "./dist/esm/resilience.barrel.js",
+      "require": "./dist/resilience.barrel.js"
+    },
+    "./security": {
+      "types": "./dist/types/security.barrel.d.ts",
+      "import": "./dist/esm/security.barrel.js",
+      "require": "./dist/security.barrel.js"
+    },
+    "./explain": {
+      "types": "./dist/types/explain.barrel.d.ts",
+      "import": "./dist/esm/explain.barrel.js",
+      "require": "./dist/explain.barrel.js"
+    },
+    "./stream": {
+      "types": "./dist/types/stream.barrel.d.ts",
+      "import": "./dist/esm/stream.barrel.js",
+      "require": "./dist/stream.barrel.js"
+    }
+  },
+  "typesVersions": {
+    "*": {
+      "providers": ["dist/types/providers.barrel.d.ts"],
+      "instructions": ["dist/types/instructions.barrel.d.ts"],
+      "observe": ["dist/types/observe.barrel.d.ts"],
+      "resilience": ["dist/types/resilience.barrel.d.ts"],
+      "security": ["dist/types/security.barrel.d.ts"],
+      "explain": ["dist/types/explain.barrel.d.ts"],
+      "stream": ["dist/types/stream.barrel.d.ts"]
     }
   },
   "sideEffects": false,

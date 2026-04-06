@@ -19,6 +19,19 @@ Most agent frameworks give you execution. agentfootprint gives you **connected e
 npm install agentfootprint
 ```
 
+Import what you need — each capability is a subpath:
+
+```typescript
+import { Agent, defineTool } from 'agentfootprint';              // Build agents
+import { mock, anthropic } from 'agentfootprint/providers';      // Connect providers
+import { defineInstruction } from 'agentfootprint/instructions'; // Smart behavior
+import { agentObservability } from 'agentfootprint/observe';     // Monitor execution
+import { withRetry } from 'agentfootprint/resilience';           // Reliability
+import { gatedTools } from 'agentfootprint/security';            // Tool safety
+import { getGroundingSources } from 'agentfootprint/explain';    // Grounding analysis
+import { SSEFormatter } from 'agentfootprint/stream';            // Real-time events
+```
+
 ---
 
 ## Start Simple, Compose Up
