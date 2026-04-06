@@ -11,6 +11,8 @@ export {
   CompositeRecorder,
   PermissionRecorder,
   agentObservability,
+  TagRecorder,
+  agentTagRules,
 } from './v2';
 export type {
   TokenStats,
@@ -27,4 +29,7 @@ export type {
   PermissionEvent,
   AgentObservabilityOptions,
   AgentObservabilityRecorder,
+  TagRule,
+  TagEvent,
+  Tag,
 } from './v2';

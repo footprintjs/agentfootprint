@@ -23,3 +23,5 @@ export { PermissionRecorder } from './PermissionRecorder';
 export type { PermissionEvent } from './PermissionRecorder';
 export { agentObservability } from './agentObservability';
 export type { AgentObservabilityOptions, AgentObservabilityRecorder } from './agentObservability';
+export { TagRecorder, agentTagRules } from './TagRecorder';
+export type { TagRule, TagEvent, Tag } from './TagRecorder';
