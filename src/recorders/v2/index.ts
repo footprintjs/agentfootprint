@@ -1,5 +1,5 @@
 /**
- * recorders/v2/ — AgentRecorder implementations.
+ * recorders/ — AgentRecorder implementations.
  */
 
 export { TokenRecorder } from './TokenRecorder';
@@ -23,5 +23,3 @@ export { PermissionRecorder } from './PermissionRecorder';
 export type { PermissionEvent } from './PermissionRecorder';
 export { agentObservability } from './agentObservability';
 export type { AgentObservabilityOptions, AgentObservabilityRecorder } from './agentObservability';
-export { TagRecorder, agentTagRules } from './TagRecorder';
-export type { TagRule, TagEvent, Tag } from './TagRecorder';

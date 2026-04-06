@@ -127,7 +127,7 @@ describe('Narrative — unit', () => {
     expect(narrative.some((s) => s.includes('loopCount'))).toBe(false);
     expect(narrative.some((s) => s.includes('maxIterations'))).toBe(false);
     expect(narrative.some((s) => s.includes('adapterResult'))).toBe(false);
-    expect(narrative.some((s) => s.includes('adapterRawResponse'))).toBe(false);
+    // adapterRawResponse is now shown (contains LLM reasoning + token usage)
     expect(narrative.some((s) => s.includes('memory_'))).toBe(false);
     // Enrichment summaries suppressed (actual values shown instead)
     expect(narrative.some((s) => s.includes('llmCall'))).toBe(false);

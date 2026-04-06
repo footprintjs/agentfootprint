@@ -87,8 +87,9 @@ const SUPPRESSED_KEYS = new Set([
   'loopCount', 'maxIterations', 'updatedLoopCount',
   // Memory internals (memory subflow stages already narrate this)
   'memory_preparedMessages', 'memory_storedHistory', 'memory_shouldCommit',
-  // Raw adapter response (redundant — parsedResponse is the useful form)
-  'adapterResult', 'adapterRawResponse',
+  // adapterResult is redundant with parsedResponse
+  'adapterResult',
+  // adapterRawResponse is now shown — contains LLM reasoning + token usage
   // Swarm internals (the decision is shown by RouteSpecialist, not these keys)
   'specialistMessage', 'specialistToolCallId',
   // Subflow intermediate state

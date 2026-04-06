@@ -24,8 +24,6 @@ export {
   PermissionRecorder,
   CompositeRecorder,
   agentObservability,
-  TagRecorder,
-  agentTagRules,
 } from './recorders';
 
 export type {
@@ -46,4 +44,3 @@ export type {
 } from './recorders';
 
 export type { AgentRecorder } from './core';
-export type { TagRule, TagEvent, Tag } from './recorders';
