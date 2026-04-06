@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.2] - 2026-04-05
+
+### Added
+
+- **Instructions guide** — `docs/guides/instructions.md` (Decision Scope, 3-position injection, decide())
+- **Streaming guide** — `docs/guides/streaming.md` (AgentStreamEvent, onEvent, SSE, event timeline)
+- **Sample 17** — Instructions (defineInstruction, decide, conditional activation, tool injection)
+- **Sample 18** — Streaming events (lifecycle, tool events, ordering, backward compat, SSE)
+- **Module READMEs** — `src/lib/instructions/`, `src/streaming/`, `src/lib/narrative/`
+- **CLAUDE.md + AGENTS.md** — Instructions, Streaming, Grounding sections + anti-patterns
+- **README.md** — Instructions, Streaming, Grounding Analysis sections
+- **JSDoc** — `@example` on `getGroundingSources()`, `getLLMClaims()`
+
 ## [0.6.1] - 2026-04-05
 
 ### Added
