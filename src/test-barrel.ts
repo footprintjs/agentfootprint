@@ -86,6 +86,9 @@ export type {
 export type { PrepareMemoryConfig } from './subflows';
 export type { SystemPromptSlotConfig, MessagesSlotConfig, ToolsSlotConfig } from './lib/slots';
 
+// Tool provider strategies (needed by security sample)
+export { staticTools } from './providers/tools/staticTools';
+
 // Re-exports that might have name conflicts — explicit
 export { processInstructions, evaluateAgentInstructions, buildInstructionsToLLMSubflow, previewInstructions, quickBind } from './lib/instructions';
 export { InstructionRecorder } from './lib/instructions';
