@@ -1,7 +1,7 @@
 <p align="center">
   <h1 align="center">agentfootprint</h1>
   <p align="center">
-    <strong>The explainable agent framework &mdash; build AI agents you can explain, audit, and trust.</strong>
+    <strong>The explainable agent framework</strong>
   </p>
 </p>
 
@@ -13,7 +13,7 @@
 
 <br>
 
-Most agent frameworks are black boxes. You wire up an LLM, add tools, hit run — and get a result with no visibility into what happened or why. **agentfootprint makes every decision traceable.**
+Most agent frameworks give you execution. agentfootprint gives you **connected evidence** — grounded, auditable, LLM-readable. The LLM can explain its own decisions. You can verify it wasn't hallucinating.
 
 ```bash
 npm install agentfootprint
@@ -21,423 +21,57 @@ npm install agentfootprint
 
 ---
 
-## Why agentfootprint?
+## Start Simple, Compose Up
 
-| Feature | agentfootprint | LangGraph | Strands (AWS) |
-|---------|---------------|-----------|---------------|
-| **Testing story** | `mock()` → `anthropic()`, $0 deterministic tests | LangSmith (paid SaaS) | None |
-| **Observability** | Built-in recorders (tokens, cost, quality, guardrails) | Requires LangSmith | CloudWatch |
-| **Visualization** | Flowchart UI + time-travel debugging | LangGraph Studio (separate app) | None |
-| **Composition** | Concept ladder: simple → complex | Graphs from day 1 | Flat, no composition |
-| **Provider lock-in** | None — Anthropic, OpenAI, Bedrock, Ollama | OpenAI-biased | Bedrock-biased |
-| **Learning curve** | Start with LLMCall, compose up | Learn graph DSL upfront | Simple but limited |
-| **Tool gating** | Agent-level permission filtering (LLM never sees blocked tools) | Manual filtering | IAM only (infra, not agent) |
-| **Provider fallback** | `resilientProvider` — cross-family failover with circuit breakers | Via LangChain fallback | Bedrock cross-region only |
-
-**Four things no one else has:**
-
-1. **Adapter-swap testing** — Write tests with `mock()`, deploy with `anthropic()`. Same code. Zero changes. Full coverage at $0.
-2. **Concept ladder** — Start simple, compose up: `LLMCall → Agent → RAG → FlowChart → Swarm`. No upfront graph DSL.
-3. **Built-in explainability** — Causal traces, narrative, time-travel, flowchart visualization. Not a paid add-on. Built into the library.
-4. **Agent-level security** — `gatedTools` hides tools from the LLM (not just the API). Defense-in-depth: resolve filtering + execute rejection + audit recorder. No other framework does this at the agent level.
-
----
-
-## Quick Start
-
-### Simple LLM Call
+Five concepts. Each adds one capability. No upfront graph DSL — start with a function call and grow.
 
 ```typescript
-import { LLMCall, mock } from 'agentfootprint';
+import { Agent, defineTool, mock } from 'agentfootprint';
 
-const call = LLMCall.create({ provider: mock([{ content: 'Paris.' }]) })
-  .system('You are a geography expert.')
-  .build();
-
-const result = await call.run('What is the capital of France?');
-console.log(result.content); // "Paris."
-
-// Every run produces a human-readable trace
-console.log(call.getNarrative());
-```
-
-### Agent with Tools
-
-```typescript
-import { Agent, mock, defineTool } from 'agentfootprint';
-
-const searchTool = defineTool({
-  id: 'web_search',
-  description: 'Search the web for information.',
-  inputSchema: {
-    type: 'object',
-    properties: { query: { type: 'string' } },
-    required: ['query'],
-  },
-  handler: async (input) => ({
-    content: `Results for "${input.query}": AI is transforming industries.`,
-  }),
-});
-
-const agent = Agent.create({
-  provider: mock([
-    {
-      content: 'Let me search.',
-      toolCalls: [{ id: 'tc1', name: 'web_search', arguments: { query: 'AI trends' } }],
-    },
-    { content: 'Based on my research, AI is transforming multiple industries.' },
-  ]),
-})
+const agent = Agent.create({ provider: mock([...]) })
   .system('You are a research assistant.')
   .tool(searchTool)
   .build();
 
-const result = await agent.run('What are the AI trends?');
+const result = await agent.run('Find AI trends');
+console.log(result.content);
+console.log(agent.getNarrative());  // connected execution trace
 ```
-
-### RAG (Retrieval-Augmented Generation)
-
-```typescript
-import { RAG, mock, mockRetriever } from 'agentfootprint';
-
-const rag = RAG.create({
-  provider: mock([{ content: 'You get 20 days PTO and can work remotely 3 days/week.' }]),
-  retriever: mockRetriever([{
-    query: 'company policy',
-    chunks: [
-      { content: 'Employees get 20 days PTO per year.', score: 0.95 },
-      { content: 'Remote work is allowed 3 days per week.', score: 0.88 },
-    ],
-  }]),
-})
-  .system('Answer based on retrieved context.')
-  .build();
-
-const result = await rag.run('What is our PTO policy?');
-```
-
-### FlowChart — Sequential Pipeline
-
-```typescript
-import { FlowChart, Agent, LLMCall, mock } from 'agentfootprint';
-
-const researcher = Agent.create({
-  provider: mock([{ content: 'AI is growing in healthcare.' }]),
-  name: 'researcher',
-})
-  .system('Research the given topic.')
-  .build();
-
-const writer = LLMCall.create({
-  provider: mock([{ content: 'Article: AI in Healthcare.' }]),
-})
-  .system('Write an article based on the research.')
-  .build();
-
-const pipeline = FlowChart.create()
-  .agent('research', 'Research', researcher)
-  .agent('write', 'Write', writer)
-  .build();
-
-const result = await pipeline.run('AI trends 2025');
-// Pipeline supports narrative, snapshot, subflow drill-down
-console.log(pipeline.getNarrative());
-```
-
-### Swarm — LLM-Driven Delegation
-
-```typescript
-import { Swarm, mock } from 'agentfootprint';
-import type { RunnerLike } from 'agentfootprint';
-
-const researcher: RunnerLike = {
-  run: async (msg) => ({ content: `Research: ${msg}` }),
-};
-const coder: RunnerLike = {
-  run: async (msg) => ({ content: `Code: ${msg}` }),
-};
-
-const swarm = Swarm.create({
-  provider: mock([
-    {
-      content: 'This needs research.',
-      toolCalls: [{ id: 'tc1', name: 'research', arguments: { message: 'quantum computing' } }],
-    },
-    { content: 'Here are the findings on quantum computing.' },
-  ]),
-})
-  .system('You are a project manager. Delegate to specialists.')
-  .specialist('research', 'Deep research on any topic.', researcher)
-  .specialist('code', 'Write code to solve problems.', coder)
-  .build();
-
-const result = await swarm.run('Explain quantum computing');
-```
-
----
-
-## Concept Ladder
-
-Each concept builds on the previous, adding one capability:
 
 | Concept | What it adds | Use case |
 |---------|-------------|----------|
 | **LLMCall** | Single LLM invocation | Summarization, classification |
 | **Agent** | + Tool use loop (ReAct) | Research, code generation |
 | **RAG** | + Retrieval | Q&A over documents |
-| **FlowChart** | + Sequential/branching pipeline | Approval flows, ETL, content pipelines |
-| **Swarm** | + Dynamic LLM-driven routing | Customer support, triage |
+| **FlowChart** | + Sequential pipeline | Approval flows, ETL |
+| **Swarm** | + LLM-driven routing | Customer support, triage |
 
-All five share the same interface: `.build()` → runner with `.run()`, `.getNarrative()`, `.getSnapshot()`, `.getSpec()`.
-
----
-
-## Real LLM Providers
-
-```typescript
-import { LLMCall, createProvider, anthropic, openai, ollama, bedrock } from 'agentfootprint';
-
-// Anthropic Claude
-const claude = createProvider(anthropic('claude-sonnet-4-20250514'));
-
-// OpenAI GPT-4o
-const gpt = createProvider(openai('gpt-4o'));
-
-// Ollama (local, OpenAI-compatible)
-const llama = createProvider(ollama('llama3'));
-
-// AWS Bedrock
-const bedrockClaude = createProvider(bedrock('anthropic.claude-3-sonnet-20240229-v1:0'));
-
-// Same code — only the provider changes
-const call = LLMCall.create({ provider: claude })
-  .system('You are helpful.')
-  .build();
-
-const result = await call.run('Hello!');
-```
+All five share one interface: `.build()` → `.run()`, `.getNarrative()`, `.getSnapshot()`.
 
 ---
 
 ## Adapter-Swap Testing
 
-The killer feature: write tests with `mock()`, deploy with real providers. Zero code changes.
+Write tests with `mock()`. Deploy with `anthropic()`. Same code. $0 test runs.
 
 ```typescript
-// test.ts — $0, instant, deterministic
-const provider = mock([{ content: 'Paris is the capital of France.' }]);
+// test — deterministic, free, instant
+const provider = mock([{ content: 'Paris.' }]);
 
-// production.ts — swap one line
+// production — swap one line
 const provider = createProvider(anthropic('claude-sonnet-4-20250514'));
 
-// Same agent code, same tools, same flowchart. Only the provider changes.
-const agent = Agent.create({ provider })
-  .system('You are a geography expert.')
-  .tool(searchTool)
-  .build();
+// Same agent. Same tools. Same flowchart.
+const agent = Agent.create({ provider }).system('Geography expert.').tool(searchTool).build();
 ```
 
----
-
-## Observability — Recorders
-
-Plug recorders into any concept via `.recorder()`:
-
-```typescript
-import { Agent, mock, TokenRecorder, CostRecorder, TurnRecorder, CompositeRecorder } from 'agentfootprint';
-
-const tokens = new TokenRecorder();
-const cost = new CostRecorder();
-const turns = new TurnRecorder();
-const all = new CompositeRecorder([tokens, cost, turns]);
-
-const agent = Agent.create({ provider: mock([{ content: 'Hello!' }]) })
-  .system('Be helpful.')
-  .recorder(all)          // ← attach via builder
-  .build();
-
-await agent.run('Hi');
-
-console.log(tokens.getStats());        // { totalCalls: 1, totalInput: 10, totalOutput: 5, ... }
-console.log(cost.getTotalCost());      // 0.00045
-console.log(turns.getCompletedCount()); // 1
-```
-
-| Recorder | What it tracks |
-|----------|---------------|
-| `TokenRecorder` | Input/output tokens per LLM call |
-| `CostRecorder` | USD cost per model (configurable pricing) |
-| `TurnRecorder` | Turn lifecycle (start → complete/error) |
-| `ToolUsageRecorder` | Tool call counts, latency, errors |
-| `QualityRecorder` | Score each response via custom judge function |
-| `GuardrailRecorder` | Flag policy violations via custom check function |
-| `PermissionRecorder` | Blocked, denied, and allowed tool events for audit |
-| `CompositeRecorder` | Fan-out to multiple recorders at once |
-
----
-
-## Orchestration — Reliability
-
-```typescript
-import { withRetry, withFallback, withCircuitBreaker } from 'agentfootprint';
-
-// Retry on failure with backoff
-const reliable = withRetry(agent, { maxRetries: 3, backoffMs: 1000 });
-
-// Fall back to a cheaper model
-const resilient = withFallback(expensiveAgent, cheapAgent);
-
-// Fast-fail after repeated failures
-const guarded = withCircuitBreaker(agent, {
-  failureThreshold: 5,
-  resetTimeoutMs: 30_000,
-});
-
-// Stack them — compose naturally
-const production = withCircuitBreaker(
-  withRetry(withFallback(primaryAgent, fallbackAgent), { maxRetries: 2 }),
-  { failureThreshold: 3 },
-);
-```
-
----
-
-## Security — Tool Gating
-
-The LLM sees every tool description you give it. If a user shouldn't access a tool, the LLM shouldn't know it exists — otherwise it wastes tokens reasoning about it and may hallucinate calls to it.
-
-`gatedTools` wraps any `ToolProvider` with two layers of enforcement:
-
-```typescript
-import { gatedTools, staticTools, PermissionPolicy } from 'agentfootprint';
-
-// Centralized policy — share across agents
-const policy = new PermissionPolicy(['search', 'calc']);
-
-const gated = gatedTools(
-  staticTools([searchTool, calcTool, adminTool]),
-  policy.checker(),
-);
-
-const agent = Agent.create({ provider })
-  .toolProvider(gated)
-  .build();
-
-// Layer 1: adminTool hidden from LLM (filtered from resolve)
-// Layer 2: if LLM hallucinates 'admin', execute returns Permission denied
-// Both layers run every turn — policy.grant('admin') takes effect immediately
-```
-
-Role-based access:
-
-```typescript
-const policy = PermissionPolicy.fromRoles({
-  user: ['search', 'calc'],
-  admin: ['search', 'calc', 'delete-user', 'run-code'],
-}, 'user');
-
-// Upgrade mid-conversation
-policy.setRole('admin');
-```
-
-Audit trail via `PermissionRecorder`:
-
-```typescript
-import { PermissionRecorder } from 'agentfootprint';
-
-const recorder = new PermissionRecorder();
-const gated = gatedTools(tools, policy.checker(), { onBlocked: recorder.onBlocked });
-
-// After execution:
-recorder.getSummary();
-// { allowed: ['search'], blocked: ['delete-user'], denied: [] }
-```
-
-See [docs/guides/security.md](docs/guides/security.md) for full API reference.
-
----
-
-## Provider Resilience
-
-Switch between model families when a provider goes down. Infrastructure load balancers can't do this — they're bound to one API.
-
-```typescript
-import { resilientProvider, AnthropicAdapter, OpenAIAdapter } from 'agentfootprint';
-
-// Try Claude → GPT-4o → local Ollama
-// Per-provider circuit breakers: tripped providers are skipped in O(1)
-const provider = resilientProvider([
-  new AnthropicAdapter({ model: 'claude-sonnet-4-20250514' }),
-  new OpenAIAdapter({ model: 'gpt-4o' }),
-  new OpenAIAdapter({ model: 'llama3', baseURL: 'http://localhost:11434/v1' }),
-], {
-  circuitBreaker: { threshold: 3, resetAfterMs: 30_000 },
-});
-
-const agent = Agent.create({ provider }).system('You are helpful.').build();
-// response.model tells recorders which provider answered
-```
-
-Also available: `fallbackProvider` (fallback without circuit breakers) for simpler use cases.
-
-See [docs/guides/security.md](docs/guides/security.md) for full API reference.
-
----
-
-## Error Handling
-
-Normalized errors across all providers:
-
-```typescript
-import { LLMError } from 'agentfootprint';
-
-// All provider errors become LLMError with uniform codes
-// Codes: auth, rate_limit, context_length, invalid_request, server, timeout, aborted, network, unknown
-
-const error = new LLMError({ message: 'rate limited', code: 'rate_limit', provider: 'openai' });
-error.retryable; // true — rate_limit, server, timeout, network are retryable
-```
-
----
-
-## Protocol Adapters
-
-### MCP (Model Context Protocol)
-
-```typescript
-import { mcpToolProvider } from 'agentfootprint';
-
-// MCP server tools become agent tools automatically
-const tools = mcpToolProvider({ client: myMCPClient });
-```
-
-### A2A (Agent-to-Agent)
-
-```typescript
-import { a2aRunner } from 'agentfootprint';
-
-// External agents become RunnerLike — composable in flowcharts
-const remote = a2aRunner({ client: myA2AClient, agentId: 'translator-es' });
-```
-
----
-
-## Multi-Modal Content
-
-```typescript
-import { userMessage, textBlock, base64Image, urlImage } from 'agentfootprint';
-
-const msg = userMessage([
-  textBlock('What is in this image?'),
-  base64Image('image/png', base64Data),
-]);
-```
+Works with Anthropic, OpenAI, Bedrock, Ollama. No lock-in.
 
 ---
 
 ## Instructions — Conditional Context Injection
 
-Inject the right context at the right position at the right time. A single instruction can inject into system prompt, tools, AND tool-result recency window — driven by accumulated state.
+One concept. Three LLM API positions. Define a rule once — it injects into system prompt, tools, AND tool-result recency window. Driven by accumulated state.
 
 ```typescript
 import { defineInstruction, Agent, AgentPattern } from 'agentfootprint';
@@ -445,7 +79,7 @@ import { defineInstruction, Agent, AgentPattern } from 'agentfootprint';
 const refund = defineInstruction({
   id: 'refund-handling',
   activeWhen: (d) => d.orderStatus === 'denied',
-  prompt: 'Handle denied orders with empathy.',
+  prompt: 'Handle denied orders with empathy. Follow refund policy.',
   tools: [processRefund],
   onToolResult: [{ id: 'empathy', text: 'Do NOT promise reversal.' }],
 });
@@ -454,91 +88,206 @@ const agent = Agent.create({ provider })
   .tool(lookupOrder)
   .instruction(refund)
   .decision({ orderStatus: null })
-  .pattern(AgentPattern.Dynamic)
+  .pattern(AgentPattern.Dynamic)   // re-evaluate each iteration
   .build();
 ```
 
-See [Instructions Guide](docs/guides/instructions.md) for Decision Scope, `decide()` field, and safety instructions.
+Tool results update the decision scope via `decide()`. Next iteration, different instructions activate. Progressive tool authorization, context-aware prompts, state-driven behavior — all declarative.
+
+See [Instructions Guide](docs/guides/instructions.md).
 
 ---
 
-## Streaming — Real-Time Lifecycle Events
+## LLM Narrative — Connected Evidence
 
-9-event discriminated union for CLI/web/mobile consumers:
+Not disconnected spans. Not logs. **Connected entries** with key, value, stageId — collected during the single traversal pass. The LLM can read its own trace and answer follow-up questions.
 
 ```typescript
-const result = await agent.run('Check order ORD-1003', {
-  onEvent: (event) => {
-    switch (event.type) {
-      case 'token': process.stdout.write(event.content); break;
-      case 'tool_start': console.log(`Running ${event.toolName}...`); break;
-      case 'tool_end': console.log(`Done (${event.latencyMs}ms)`); break;
-      case 'llm_end': console.log(`[${event.model}, ${event.latencyMs}ms]`); break;
-    }
-  },
-});
+const result = await agent.run('Check order ORD-1003');
+
+// Human-readable narrative
+agent.getNarrative();
+// [
+//   "[Seed] Initialized agent state",
+//   "[CallLLM] claude-sonnet-4 (127in / 45out)",
+//   "[ExecuteToolCalls] lookup_order({orderId: 'ORD-1003'})",
+//   "  Tool results: {status: 'denied', amount: 5000}",
+//   "[CallLLM] claude-sonnet-4 (312in / 89out)",
+//   "[Finalize] Your order was denied..."
+// ]
+
+// Structured entries for programmatic access
+agent.getNarrativeEntries();
+// Each entry: { type, text, key, rawValue, stageId, subflowId }
 ```
 
-Events: `turn_start`, `llm_start`, `thinking`, `token`, `llm_end`, `tool_start`, `tool_end`, `turn_end`, `error`. Tool lifecycle events fire even without `.streaming(true)`.
+### Grounding Analysis
 
-See [Streaming Guide](docs/guides/streaming.md) for SSE integration and event timeline.
-
----
-
-## Grounding Analysis
-
-Extract sources (tool results) and claims (LLM output) from narrative entries for hallucination detection:
+Compare what tools returned vs what the LLM said. Hallucination detection without a separate eval pipeline.
 
 ```typescript
 import { getGroundingSources, getLLMClaims } from 'agentfootprint';
 
 const entries = agent.getNarrativeEntries();
-const sources = getGroundingSources(entries);  // what tools returned
-const claims = getLLMClaims(entries);           // what the LLM said
-```
-
-Uses `CombinedNarrativeEntry.key` — renderer-independent, topology-independent.
-
----
-
-## Installation
-
-```bash
-npm install agentfootprint
-```
-
-Install provider SDKs as needed (all optional):
-
-```bash
-npm install @anthropic-ai/sdk   # Anthropic Claude
-npm install openai               # OpenAI / Ollama
-npm install @aws-sdk/client-bedrock-runtime  # AWS Bedrock
+const sources = getGroundingSources(entries);  // tool results (sources of truth)
+const claims = getLLMClaims(entries);           // LLM output (to verify)
+// Compare sources against claims — was the LLM grounded?
 ```
 
 ---
 
-## Samples
+## Dynamic ReAct
 
-The `test/samples/` directory contains 16 runnable examples:
+All three slots (system prompt, tools, messages) re-evaluate each iteration. Instructions re-evaluate against updated decision scope. Progressive tool authorization:
+
+```
+Turn 1: basic tools → LLM calls verify_identity → decision.verified = true
+Turn 2: InstructionsToLLM re-evaluates → admin tools unlocked → refund tools available
+Turn 3: LLM sees admin tools → can process refund
+```
+
+The LLM's capabilities change based on what happened — not what you hardcoded.
+
+---
+
+## Pausable — Human-in-the-Loop
+
+Long-running agent pauses, serializes state to JSON, resumes hours later on a different server.
+
+```typescript
+import { Agent, askHuman } from 'agentfootprint';
+
+const agent = Agent.create({ provider })
+  .tool(askHuman())   // special tool that pauses execution
+  .build();
+
+const result = await agent.run('Process my refund');
+if (result.paused) {
+  // Store checkpoint in Redis/Postgres/anywhere
+  const checkpoint = result.pauseData;
+  // ... hours later, different server ...
+  const final = await agent.resume(humanResponse);
+}
+```
+
+---
+
+## Streaming Lifecycle Events
+
+9-event discriminated union. Build any UX — CLI, web, mobile. Tool lifecycle fires even without streaming mode.
+
+```typescript
+await agent.run('Check order', {
+  onEvent: (event) => {
+    switch (event.type) {
+      case 'token':      process.stdout.write(event.content); break;
+      case 'tool_start': console.log(`Running ${event.toolName}...`); break;
+      case 'tool_end':   console.log(`Done (${event.latencyMs}ms)`); break;
+      case 'llm_end':    console.log(`[${event.model}, ${event.latencyMs}ms]`); break;
+    }
+  },
+});
+```
+
+Events: `turn_start` · `llm_start` · `thinking` · `token` · `llm_end` · `tool_start` · `tool_end` · `turn_end` · `error`
+
+SSE for web backends: `res.write(SSEFormatter.format(event))`
+
+---
+
+## Recorders — Passive Observation
+
+Observe without shaping behavior. Collect during traversal.
+
+```typescript
+import { TokenRecorder, CostRecorder, QualityRecorder, GuardrailRecorder } from 'agentfootprint';
+
+const tokens = new TokenRecorder();
+const cost = new CostRecorder({ pricingTable: { 'claude-sonnet': { input: 3, output: 15 } } });
+
+const agent = Agent.create({ provider })
+  .recorder(tokens)
+  .recorder(cost)
+  .build();
+
+await agent.run('Hello');
+tokens.getStats();       // { totalCalls, totalInputTokens, totalOutputTokens, ... }
+cost.getTotalCost();     // USD amount
+```
+
+| Recorder | What it tracks |
+|----------|---------------|
+| `TokenRecorder` | Input/output tokens per LLM call |
+| `CostRecorder` | USD cost per model |
+| `ToolUsageRecorder` | Tool call counts, latency, errors |
+| `QualityRecorder` | Score each response via custom judge |
+| `GuardrailRecorder` | Flag policy violations via custom check |
+| `PermissionRecorder` | Blocked/denied/allowed tool events |
+
+---
+
+## Tool Gating — Defense-in-Depth
+
+The LLM never sees tools it can't use. Can't hallucinate a tool it never saw.
+
+```typescript
+import { gatedTools, PermissionPolicy } from 'agentfootprint';
+
+const policy = PermissionPolicy.fromRoles({
+  user: ['search', 'calc'],
+  admin: ['search', 'calc', 'delete-user'],
+}, 'user');
+
+const agent = Agent.create({ provider })
+  .toolProvider(gatedTools(allTools, policy.checker()))
+  .build();
+
+// Upgrade mid-conversation
+policy.setRole('admin');
+```
+
+Two layers: resolve-time filtering (hidden from LLM) + execute-time rejection (hallucinated names caught).
+
+---
+
+## Safety Instructions
+
+```typescript
+defineInstruction({
+  id: 'compliance',
+  safety: true,   // fail-closed: fires even when predicate throws
+  prompt: 'GDPR compliance required.',
+});
+```
+
+Safety instructions: unsuppressable, fail-closed, sorted last (highest LLM attention position).
+
+---
+
+## Orchestration
+
+```typescript
+import { withRetry, withFallback, withCircuitBreaker, resilientProvider } from 'agentfootprint';
+
+const reliable = withRetry(agent, { maxRetries: 3 });
+const resilient = withFallback(primaryAgent, cheapAgent);
+const guarded = withCircuitBreaker(agent, { failureThreshold: 5 });
+
+// Cross-family provider failover: Claude → GPT-4o → local Ollama
+const provider = resilientProvider([anthropicAdapter, openaiAdapter, ollamaAdapter]);
+```
+
+---
+
+## 18 Samples
+
+`test/samples/` — runnable with `vitest`:
 
 | # | Sample | What it demonstrates |
 |---|--------|---------------------|
-| 01 | Simple LLM Call | `LLMCall.create().system().build()` |
-| 02 | Agent with Tools | Tool use loop with `defineTool` |
-| 03 | RAG Retrieval | Retriever + augmented generation |
-| 04 | Prompt Strategies | Static, template, skill-based, composite prompts |
-| 05 | Message Strategies | Sliding window, truncation, memory management |
-| 06 | Tool Strategies | `agentAsTool`, `compositeTools`, `ToolRegistry` |
-| 07 | FlowChart Sequential | Sequential pipeline with subflow drill-down |
-| 08 | Swarm Delegation | Dynamic routing across specialists |
-| 09 | Orchestration | `withRetry`, `withFallback`, `CircuitBreaker` |
-| 10 | Recorders | `TokenRecorder`, `CostRecorder`, `.recorder()` API |
-| 11 | Protocol Adapters | MCP tool provider, A2A runner |
-| 12 | Agent Loop | Low-level `agentLoop()` control |
-| 13 | Full Integration | End-to-end: RAG + tools + flowchart + recorders |
-| 14 | Real Adapters | `AnthropicAdapter`, `OpenAIAdapter`, `BedrockAdapter` |
-| 15 | Error Handling | `LLMError`, `wrapSDKError`, retry + error classification |
-| 16 | Multi-modal | Image content with Anthropic and OpenAI |
+| 01-16 | Core patterns | LLMCall, Agent, RAG, FlowChart, Swarm, recorders, tools, security, errors, multi-modal |
+| 17 | **Instructions** | defineInstruction, decide(), conditional activation, Decision Scope |
+| 18 | **Streaming Events** | AgentStreamEvent lifecycle, tool events, SSE |
 
 ---
 
@@ -546,43 +295,18 @@ The `test/samples/` directory contains 16 runnable examples:
 
 ```
 src/
-├── types/        → Content blocks, messages, LLM interfaces, errors
-├── models/       → Provider config factories (anthropic, openai, ollama, bedrock)
-├── adapters/     → LLM adapters (Anthropic, OpenAI, Bedrock, Browser, Mock) + protocol (MCP, A2A) + resilience (fallback, resilient)
+├── concepts/     → LLMCall, Agent, RAG, FlowChart, Swarm (builders + runners)
+├── lib/          → Instructions, narrative (grounding helpers), loop (buildAgentLoop), slots, call stages
+├── adapters/     → LLM adapters (Anthropic, OpenAI, Bedrock, Mock) + protocol (MCP, A2A)
+├── providers/    → Prompt/tool/message strategies
+├── recorders/    → AgentRecorders (Token, Cost, Quality, Guardrail, Permission)
+├── streaming/    → AgentStreamEvent, StreamEmitter, SSEFormatter
 ├── tools/        → ToolRegistry, defineTool
-├── memory/       → Message history (sliding window, truncation)
-├── scope/        → AgentScope + parsed response handling
-├── providers/    → Prompt/tool/message providers (static, template, skill-based, composite, gated) + PermissionPolicy
-├── stages/       → Pipeline stages (seed, prompt, LLM call, parse, handle, finalize)
-├── concepts/     → High-level patterns (LLMCall, Agent, RAG, FlowChart, Swarm)
-├── recorders/    → AgentRecorders (Token, Cost, Turn, Tool, Quality, Guardrail, Permission, Composite)
-├── compositions/ → withRetry, withFallback, CircuitBreaker
-├── streaming/    → StreamEmitter, SSEFormatter
-├── executor/     → agentLoop — low-level agent execution
-└── core/         → Shared interfaces (AgentLoopConfig, AgentRecorder, providers)
+├── compositions/ → withRetry, withFallback, withCircuitBreaker
+└── types/        → All type definitions
 ```
 
 Built on [footprintjs](https://github.com/footprintjs/footPrint) — the flowchart pattern for backend code.
-
----
-
-## AI Coding Tool Support
-
-agentfootprint ships with built-in instructions for every major AI coding assistant:
-
-```bash
-npx agentfootprint-setup
-```
-
-| Tool | What gets installed |
-|------|-------------------|
-| **Claude Code** | `.claude/skills/agentfootprint/SKILL.md` + `CLAUDE.md` |
-| **OpenAI Codex** | `AGENTS.md` |
-| **GitHub Copilot** | `.github/copilot-instructions.md` |
-| **Cursor** | `.cursor/rules/agentfootprint.md` |
-| **Windsurf** | `.windsurfrules` |
-| **Cline** | `.clinerules` |
-| **Kiro** | `.kiro/rules/agentfootprint.md` |
 
 ---
 
