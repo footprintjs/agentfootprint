@@ -1,0 +1,144 @@
+---
+title: Providers
+description: API reference for LLM provider adapters.
+---
+
+## Available providers
+
+```ts
+import {
+  AnthropicAdapter, OpenAIAdapter, BedrockAdapter,
+  BrowserAnthropicAdapter, BrowserOpenAIAdapter,
+  mock,
+} from 'agentfootprint';
+
+// Shorthand factories
+import { anthropic, openai, ollama, bedrock } from 'agentfootprint';
+```
+
+## anthropic(model)
+
+```ts
+import { anthropic } from 'agentfootprint';
+
+const provider = anthropic('claude-sonnet-4-20250514');
+```
+
+Uses the `@anthropic-ai/sdk`. Supports streaming, tool use, and extended thinking.
+
+## openai(model)
+
+```ts
+import { openai } from 'agentfootprint';
+
+const provider = openai('gpt-4o');
+```
+
+Uses the `openai` SDK. Supports streaming and tool use.
+
+## bedrock(model)
+
+```ts
+import { bedrock } from 'agentfootprint';
+
+const provider = bedrock('anthropic.claude-sonnet-4-20250514-v1:0');
+```
+
+Uses AWS SDK. Supports Claude on AWS Bedrock. Requires AWS credentials configured via environment or SDK config.
+
+```ts
+// With explicit credentials
+import { BedrockAdapter } from 'agentfootprint';
+
+const provider = new BedrockAdapter({
+  model: 'anthropic.claude-sonnet-4-20250514-v1:0',
+  region: 'us-east-1',
+});
+```
+
+## ollama(model)
+
+```ts
+import { ollama } from 'agentfootprint';
+
+const provider = ollama('llama3');
+```
+
+Connects to local Ollama instance. OpenAI-compatible API.
+
+## mock(responses)
+
+```ts
+const provider = mock([
+  { content: 'First response' },
+  { content: '', toolCalls: [{ id: 'tc1', name: 'search', arguments: { q: 'test' } }] },
+  { content: 'Final answer based on tool results' },
+]);
+```
+
+Deterministic responses for testing. $0 cost. Each `run()` consumes the next response.
+
+## Browser adapters
+
+For browser environments (no Node.js SDK dependency):
+
+```ts
+const provider = new BrowserAnthropicAdapter({
+  apiKey: 'sk-ant-...',
+  model: 'claude-sonnet-4-20250514',
+});
+
+const provider = new BrowserOpenAIAdapter({
+  apiKey: 'sk-...',
+  model: 'gpt-4o',
+});
+```
+
+## Extended thinking (Claude)
+
+Claude models support extended thinking — the model reasons through complex problems before responding. agentfootprint captures thinking blocks as `thinking` stream events:
+
+```ts
+const provider = anthropic('claude-sonnet-4-20250514');
+
+const agent = Agent.create({ provider })
+  .system('You are a reasoning assistant.')
+  .streaming(true)
+  .build();
+
+await agent.run('Solve this step by step: if x² + 3x - 10 = 0, find x', {
+  onEvent: (event) => {
+    if (event.type === 'thinking') {
+      console.log('[thinking]', event.content);
+    }
+    if (event.type === 'token') {
+      process.stdout.write(event.content);
+    }
+  },
+});
+```
+
+## Provider failover
+
+Automatic cross-family failover:
+
+```ts
+import { anthropic, openai } from 'agentfootprint';
+import { fallbackProvider } from 'agentfootprint/resilience';
+
+const provider = fallbackProvider([
+  anthropic('claude-sonnet-4-20250514'),  // try Claude first
+  openai('gpt-4o'),                        // fall back to GPT-4o
+]);
+```
+
+## LLMProvider interface
+
+```ts
+interface LLMProvider {
+  chat(messages: Message[], options?: LLMCallOptions): Promise<LLMResponse>;
+  chatStream?(messages: Message[], options?: LLMCallOptions): AsyncIterable<LLMStreamChunk>;
+}
+```
+
+Implement this interface to connect any LLM.

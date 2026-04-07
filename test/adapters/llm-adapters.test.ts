@@ -730,7 +730,7 @@ describe('createProvider', () => {
 
   it('creates OpenAIAdapter from ollama() config with baseURL', () => {
     expect(() => createProvider(ollama('llama3'))).toThrow(
-      'OpenAIAdapter requires the openai package',
+      'Ollama adapter requires the "openai" package',
     );
   });
 

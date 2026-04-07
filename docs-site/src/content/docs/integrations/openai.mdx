@@ -1,0 +1,136 @@
+---
+title: OpenAI
+description: Integrate agentfootprint with the OpenAI SDK and GPT models.
+---
+
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
+## Install
+
+```bash
+npm install agentfootprint openai
+```
+
+## Server-side (Node.js)
+
+```ts
+import { Agent, openai, defineTool } from 'agentfootprint';
+
+const provider = openai('gpt-4o', {
+  apiKey: process.env.OPENAI_API_KEY,
+});
+
+const agent = Agent.create({ provider })
+  .system('You are a helpful assistant.')
+  .tool(myTool)
+  .streaming(true)
+  .build();
+
+const result = await agent.run('Hello');
+```
+
+## Browser
+
+No SDK dependency — calls the OpenAI REST API directly:
+
+```ts
+import { Agent, BrowserOpenAIAdapter } from 'agentfootprint';
+
+const provider = new BrowserOpenAIAdapter({
+  apiKey: userApiKey,
+  model: 'gpt-4o',
+});
+
+const agent = Agent.create({ provider }).build();
+```
+
+## Available models
+
+| Model | ID | Best for |
+|-------|-----|----------|
+| GPT-4o | `gpt-4o` | General purpose |
+| GPT-4o Mini | `gpt-4o-mini` | Fast, low cost |
+| GPT-4.1 | `gpt-4.1` | Coding, instruction following |
+| GPT-4.1 Mini | `gpt-4.1-mini` | Budget coding |
+| GPT-4.1 Nano | `gpt-4.1-nano` | Fastest, cheapest |
+| o3 | `o3` | Complex reasoning |
+| o3 Mini | `o3-mini` | Fast reasoning |
+| o4 Mini | `o4-mini` | Latest reasoning |
+
+## Switching from the OpenAI SDK
+
+<Tabs>
+  <TabItem label="Before (raw SDK)">
+    ```ts
+    import OpenAI from 'openai';
+
+    const client = new OpenAI();
+    const response = await client.chat.completions.create({
+      model: 'gpt-4o',
+      messages: [{ role: 'user', content: 'Hello' }],
+    });
+    console.log(response.choices[0].message.content);
+    ```
+  </TabItem>
+  <TabItem label="After (agentfootprint)">
+    ```ts
+    import { Agent, openai } from 'agentfootprint';
+
+    const agent = Agent.create({
+      provider: openai('gpt-4o'),
+    })
+      .system('You are helpful.')
+      .build();
+
+    const result = await agent.run('Hello');
+    console.log(result.content);
+    console.log(agent.getNarrative());  // full trace
+    ```
+  </TabItem>
+</Tabs>
+
+## Observability
+
+Track tokens, cost, and tool usage:
+
+```ts
+import { Agent, openai } from 'agentfootprint';
+import { agentObservability } from 'agentfootprint/observe';
+
+const obs = agentObservability();
+
+const agent = Agent.create({
+  provider: openai('gpt-4o'),
+})
+  .system('You are helpful.')
+  .recorder(obs)
+  .build();
+
+await agent.run('Hello');
+
+console.log(obs.tokens());  // { totalCalls: 1, totalInputTokens: 18, ... }
+console.log(obs.cost());    // USD estimate
+```
+
+## Provider failover
+
+Cross-provider resilience — the order is configurable:
+
+```ts
+import { anthropic, openai } from 'agentfootprint';
+import { fallbackProvider } from 'agentfootprint/resilience';
+
+// OpenAI primary, Claude fallback
+const provider = fallbackProvider([
+  openai('gpt-4o'),
+  anthropic('claude-sonnet-4-20250514'),
+]);
+
+// Or Claude primary, OpenAI fallback — swap the order
+const provider = fallbackProvider([
+  anthropic('claude-sonnet-4-20250514'),
+  openai('gpt-4o'),
+]);
+```
+
+**What you gain:** Same agent code works across providers. Swap one line to switch. Add fallback for resilience.

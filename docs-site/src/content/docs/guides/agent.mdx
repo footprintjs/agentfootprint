@@ -1,0 +1,171 @@
+---
+title: Agent Pattern
+description: Build ReAct agents with tool use, memory, and streaming.
+---
+
+The Agent is the core pattern — an LLM that can call tools in a loop until it has an answer. This is called the **ReAct pattern** (Reasoning + Acting): the LLM reasons about what to do, acts by calling a tool, observes the result, and repeats until it can answer.
+
+## Basic agent
+
+```ts
+import { Agent, defineTool, anthropic } from 'agentfootprint';
+
+const provider = anthropic('claude-sonnet-4-20250514');
+
+const searchTool = defineTool({
+  id: 'search',
+  description: 'Search the web for information',
+  inputSchema: {
+    type: 'object',
+    properties: { query: { type: 'string' } },
+    required: ['query'],
+  },
+  handler: async ({ query }) => {
+    const results = await fetch(`https://api.search.com?q=${query}`);
+    return { content: JSON.stringify(await results.json()) };
+  },
+});
+
+const agent = Agent.create({ provider })
+  .system('You are a research assistant. Use search to find information.')
+  .tool(searchTool)
+  .maxIterations(10)
+  .build();
+
+const result = await agent.run('What are the latest AI trends?');
+```
+
+## How the loop works
+
+```
+Seed → SystemPrompt → Messages → Tools → AssemblePrompt → CallLLM → ParseResponse → RouteResponse
+                                                                                         ↓
+                                                            ┌──── tool-calls ──── ExecuteTools ──┐
+                                                            └──── final ──── Finalize ───────────┘
+                                                                                         ↑ loop
+```
+
+1. **CallLLM** sends the assembled prompt to the LLM
+2. **ParseResponse** extracts the LLM's response (text or tool calls)
+3. **RouteResponse** decides: tool calls → execute and loop, or final → done
+4. Each iteration rebuilds the prompt with tool results in the message history
+
+## Memory
+
+Persist conversations across turns:
+
+```ts
+import { InMemoryStore } from 'agentfootprint';
+
+const agent = Agent.create({ provider })
+  .system('You are helpful.')
+  .memory({
+    store: new InMemoryStore(),
+    conversationId: 'user-123',
+  })
+  .build();
+
+await agent.run('My name is Alice');
+await agent.run('What is my name?');  // "Your name is Alice"
+```
+
+## Streaming
+
+```ts
+const agent = Agent.create({ provider })
+  .system('You are helpful.')
+  .streaming(true)
+  .build();
+
+await agent.run('Tell me a story', {
+  onEvent: (event) => {
+    if (event.type === 'token') process.stdout.write(event.content);
+    if (event.type === 'tool_start') console.log(`\nRunning ${event.toolName}...`);
+  },
+});
+```
+
+## Human-in-the-loop
+
+```ts
+import { askHuman } from 'agentfootprint';
+
+const agent = Agent.create({ provider })
+  .tool(askHuman())
+  .build();
+
+const result = await agent.run('Process refund for ORD-123');
+if (result.paused) {
+  // Agent asked a question — get human response
+  const final = await agent.resume('Yes, approved');
+}
+```
+
+## Memory stores (production)
+
+For production, use a persistent store — Redis, DynamoDB, or PostgreSQL:
+
+```ts
+import { Agent, anthropic, redisStore } from 'agentfootprint';
+import Redis from 'ioredis';
+
+const agent = Agent.create({ provider: anthropic('claude-sonnet-4-20250514') })
+  .system('You are a support agent.')
+  .memory({
+    store: redisStore(new Redis(), { ttlSeconds: 3600 }),
+    conversationId: 'session-abc',
+  })
+  .build();
+```
+
+Available adapters — consumer brings their own client:
+
+| Adapter | Client | Install |
+|---------|--------|---------|
+| `redisStore(client)` | ioredis / node-redis | `npm install ioredis` |
+| `postgresStore(client)` | pg | `npm install pg` |
+| `dynamoStore(client)` | @aws-sdk/lib-dynamodb | `npm install @aws-sdk/lib-dynamodb` |
+
+## Structured output
+
+Request JSON output matching a schema:
+
+```ts
+import { z } from 'zod';
+
+const agent = Agent.create({ provider: anthropic('claude-sonnet-4-20250514') })
+  .system('Extract city and temperature from the text.')
+  .outputSchema(z.object({
+    city: z.string(),
+    temperature: z.number(),
+    unit: z.enum(['celsius', 'fahrenheit']),
+  }))
+  .build();
+
+const result = await agent.run('It is 72°F in Paris today.');
+const data = JSON.parse(result.content);
+// { city: 'Paris', temperature: 72, unit: 'fahrenheit' }
+```
+
+For Anthropic: schema is injected into the prompt (system or user message). For OpenAI: uses native `response_format`.
+
+```ts
+// Inject in user message (recency window) for better compliance
+agent.outputSchema(schema, { injection: 'user' });
+```
+
+## Dynamic ReAct
+
+In Dynamic mode, all three **slots** (the system prompt, available tools, and message history) re-evaluate each iteration. This means the agent's behavior can change based on what happened — tools unlock after verification, prompts change after classification:
+
+```ts
+import { AgentPattern } from 'agentfootprint/instructions';
+
+const agent = Agent.create({ provider })
+  .pattern(AgentPattern.Dynamic)
+  .toolProvider(dynamicTools)
+  .promptProvider(dynamicPrompt)
+  .build();
+```
+
+See [Instructions guide](/agentfootprint/guides/instructions/) for conditional context injection.

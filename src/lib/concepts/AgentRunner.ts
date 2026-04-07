@@ -5,7 +5,7 @@
  */
 
 import { FlowChartExecutor, MetricRecorder } from 'footprintjs';
-import type { FlowChart as FlowChartType, FlowChartExecutorOptions } from 'footprintjs';
+import type { FlowChart as FlowChartType, FlowChartExecutorOptions, Recorder, WriteEvent } from 'footprintjs';
 import { buildAgentLoop, AgentPattern } from '../loop';
 import { PendingFollowUpManager, InstructionRecorder } from '../instructions';
 import type { InstructionOverride, AgentInstruction } from '../instructions';
@@ -23,7 +23,7 @@ import { ToolRegistry } from '../../tools';
 import { lastAssistantMessage } from '../../memory';
 import { getTextContent } from '../../types/content';
 import { userMessage, toolResultMessage, assistantMessage } from '../../types';
-import type { LLMProvider, LLMResponse, AgentResult, Message } from '../../types';
+import type { LLMProvider, LLMResponse, AgentResult, Message, ResponseFormat } from '../../types';
 import type { MemoryConfig } from '../../adapters/memory/types';
 import type { AgentRecorder, PromptProvider, ToolProvider } from '../../core';
 import { RecorderBridge } from '../../recorders/v2/RecorderBridge';
@@ -46,6 +46,8 @@ export interface AgentRunnerOptions {
   readonly streaming?: boolean;
   /** When true, narrative shows full values (no truncation). */
   readonly verboseNarrative?: boolean;
+  /** Structured output format — passed through to LLM provider. */
+  readonly responseFormat?: ResponseFormat;
 }
 
 export class AgentRunner {
@@ -64,6 +66,7 @@ export class AgentRunner {
   private readonly agentInstructions?: readonly AgentInstruction[];
   private readonly initialDecision?: Readonly<Record<string, unknown>>;
   private readonly streamingEnabled: boolean;
+  private readonly responseFormat?: ResponseFormat;
   private readonly cachedDecideFunctions?: ReadonlyMap<string, DecideFn>;
   private conversationHistory: Message[] = [];
   private lastExecutor?: FlowChartExecutor;
@@ -87,6 +90,7 @@ export class AgentRunner {
     this.agentInstructions = options.agentInstructions;
     this.initialDecision = options.initialDecision;
     this.streamingEnabled = options.streaming ?? false;
+    this.responseFormat = options.responseFormat;
     this.verboseNarrative = options.verboseNarrative ?? false;
     if (this.verboseNarrative) {
       this.narrativeRenderer = createAgentRenderer({ verbose: true });
@@ -178,20 +182,27 @@ export class AgentRunner {
 
     const existingMessages = this.memoryConfig?.store ? [] : this.conversationHistory;
 
+    // Create bridge for recorder dispatch (before buildAgentLoop so mergedStreamEvent is available)
+    const bridge = this.recorders.length > 0 ? new RecorderBridge(this.recorders) : null;
+    const bridgeHandler = bridge?.createStreamEventBridge();
+    const mergedStreamEvent: AgentStreamEventHandler | undefined =
+      bridgeHandler && onStreamEvent
+        ? (event) => { bridgeHandler(event); onStreamEvent(event); }
+        : bridgeHandler ?? onStreamEvent;
+
     const { chart, spec, getStrictFollowUp } = buildAgentLoop(
-      this.buildConfig(onStreamEvent),
+      this.buildConfig(mergedStreamEvent),
       { messages: message ? [userMessage(message)] : [], existingMessages },
       { captureSpec: true },
     );
     this.lastSpec = annotateSpecIcons(spec as SpecLike);
-    const bridge = this.recorders.length > 0 ? new RecorderBridge(this.recorders) : null;
 
     bridge?.dispatchTurnStart(message);
 
     const executorOpts: FlowChartExecutorOptions = { enrichSnapshots: true };
-    if (onStreamEvent && this.streamingEnabled) {
+    if (mergedStreamEvent && this.streamingEnabled) {
       executorOpts.streamHandlers = {
-        onToken: (_streamId: string, token: string) => onStreamEvent({ type: 'token', content: token }),
+        onToken: (_streamId: string, token: string) => mergedStreamEvent({ type: 'token', content: token }),
         onStart: () => {},
         onEnd: () => {},
       };
@@ -199,6 +210,22 @@ export class AgentRunner {
     const executor = new FlowChartExecutor(chart, executorOpts);
     executor.enableNarrative({ renderer: this.narrativeRenderer });
     executor.attachRecorder(new MetricRecorder('metrics'));
+
+    // Capture every adapterRawResponse write — fires per LLM iteration,
+    // not just once at the end. This gives accurate LLM call counts + token totals.
+    const llmResponses: LLMResponse[] = [];
+    if (bridge) {
+      const llmCapture: Recorder = {
+        id: '__llm-capture',
+        onWrite(event: WriteEvent) {
+          if (event.key === 'adapterRawResponse' && event.value) {
+            llmResponses.push(event.value as LLMResponse);
+          }
+        },
+      };
+      executor.attachRecorder(llmCapture);
+    }
+
     const startMs = Date.now();
 
     try {
@@ -226,9 +253,13 @@ export class AgentRunner {
     onStreamEvent?.({ type: 'turn_end', content: agentResult.content, iterations: agentResult.iterations });
 
     if (bridge) {
-      const state = executor.getSnapshot()?.sharedState ?? {};
-      const response = state.adapterRawResponse as LLMResponse | undefined;
-      if (response) bridge.dispatchLLMCall(response, Date.now() - startMs);
+      // Dispatch per-iteration LLM calls (captured by scope recorder above)
+      const perCallMs = llmResponses.length > 0
+        ? Math.round((Date.now() - startMs) / llmResponses.length)
+        : 0;
+      for (const resp of llmResponses) {
+        bridge.dispatchLLMCall(resp, perCallMs);
+      }
       bridge.dispatchTurnComplete(agentResult.content, agentResult.messages.length, agentResult.iterations);
     }
 
@@ -273,7 +304,32 @@ export class AgentRunner {
       throw new Error('Cannot resume: no checkpoint available.');
     }
 
+    // Capture LLM calls during resume (same pattern as run())
+    const bridge = this.recorders.length > 0 ? new RecorderBridge(this.recorders) : null;
+    const llmResponses: LLMResponse[] = [];
+    if (bridge) {
+      const llmCapture: Recorder = {
+        id: '__llm-capture-resume',
+        onWrite(event: WriteEvent) {
+          if (event.key === 'adapterRawResponse' && event.value) {
+            llmResponses.push(event.value as LLMResponse);
+          }
+        },
+      };
+      executor.attachRecorder(llmCapture);
+    }
+
+    const startMs = Date.now();
     await executor.resume(checkpoint, humanResponse);
+
+    if (bridge) {
+      const perCallMs = llmResponses.length > 0
+        ? Math.round((Date.now() - startMs) / llmResponses.length)
+        : 0;
+      for (const resp of llmResponses) {
+        bridge.dispatchLLMCall(resp, perCallMs);
+      }
+    }
 
     return this.buildResult(executor);
   }
@@ -347,6 +403,7 @@ export class AgentRunner {
       initialDecision: this.initialDecision,
       decideFunctions: this.cachedDecideFunctions,
       streaming: this.streamingEnabled,
+      responseFormat: this.responseFormat,
       onStreamEvent,
       onInstructionsFired: (toolId, fired) => {
         for (const rec of this.recorders) {

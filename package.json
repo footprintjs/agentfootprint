@@ -8,27 +8,41 @@
     "type": "git",
     "url": "https://github.com/footprintjs/agentfootprint.git"
   },
-  "homepage": "https://github.com/footprintjs/agentfootprint",
+  "homepage": "https://footprintjs.github.io/agentfootprint/",
   "bugs": {
     "url": "https://github.com/footprintjs/agentfootprint/issues"
   },
   "keywords": [
     "agent",
     "ai-agent",
+    "agentic",
     "llm",
     "rag",
     "tool-use",
+    "tool-calling",
     "multi-agent",
     "flowchart",
     "explainable-ai",
+    "xai",
     "causal-trace",
     "narrative",
     "observability",
+    "opentelemetry",
     "typescript",
     "react-pattern",
     "swarm",
     "orchestration",
-    "footprintjs"
+    "footprintjs",
+    "anthropic",
+    "claude",
+    "openai",
+    "bedrock",
+    "mcp",
+    "a2a",
+    "human-in-the-loop",
+    "grounding",
+    "hallucination-detection",
+    "audit-trail"
   ],
   "engines": {
     "node": ">=20"
@@ -42,11 +56,16 @@
     "lint": "eslint 'src/**/*.ts' 'test/**/*.ts' --ext .ts",
     "lint:fix": "eslint 'src/**/*.ts' 'test/**/*.ts' --ext .ts --fix",
     "format": "prettier --config .prettierrc.js --list-different 'src/**/*.ts' 'test/**/*.ts'",
-    "format:fix": "prettier --config .prettierrc.js --write 'src/**/*.ts' 'test/**/*.ts'"
+    "format:fix": "prettier --config .prettierrc.js --write 'src/**/*.ts' 'test/**/*.ts'",
+    "release:patch": "bash scripts/release.sh patch",
+    "release:minor": "bash scripts/release.sh minor",
+    "release:major": "bash scripts/release.sh major"
   },
   "files": [
     "dist/**/*",
     "!dist/test",
+    "!dist/**/test-barrel*",
+    "!dist/esm/**/test-barrel*",
     "ai-instructions/**/*",
     "CLAUDE.md",
     "AGENTS.md"

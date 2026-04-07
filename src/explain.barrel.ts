@@ -16,3 +16,7 @@
 
 export { getGroundingSources, getLLMClaims, getFullLLMContext, createAgentRenderer } from './lib/narrative';
 export type { GroundingSource, LLMClaim, LLMContextSnapshot, AgentRendererOptions } from './lib/narrative';
+
+// ExplainRecorder — collect grounding data during traversal (no post-processing)
+export { ExplainRecorder } from './recorders/v2/ExplainRecorder';
+export type { ToolSource, AgentDecision, Explanation } from './recorders/v2/ExplainRecorder';

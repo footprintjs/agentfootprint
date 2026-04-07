@@ -25,6 +25,7 @@ export type {
 // Recorder interface + event types
 export type {
   AgentRecorder,
+  AgentPhase,
   TurnStartEvent,
   LLMCallEvent,
   ToolCallEvent,

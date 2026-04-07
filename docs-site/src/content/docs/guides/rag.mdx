@@ -1,0 +1,60 @@
+---
+title: RAG Pattern
+description: Retrieval-augmented generation — answer questions from your documents.
+---
+
+## Basic RAG
+
+```ts
+import { RAG, mockRetriever } from 'agentfootprint';
+
+const retriever = mockRetriever([{
+  chunks: [
+    { content: 'Return policy: 14 days for full refund.', metadata: { source: 'policy' } },
+    { content: 'AppleCare+: 3 years, $199/year.', metadata: { source: 'applecare' } },
+  ],
+}]);
+
+const rag = RAG.create({ provider, retriever })
+  .system('Answer based on retrieved documents only. Cite your source.')
+  .topK(5)
+  .build();
+
+const result = await rag.run('What is the return policy?');
+```
+
+## How it works
+
+```
+Query → Retrieve (topK chunks) → Inject into context → CallLLM → Response
+```
+
+The RAG pattern is a single-pass pipeline: retrieve relevant chunks, inject them into the LLM context, and generate an answer. No tool loop — one LLM call per query.
+
+## Custom retrievers
+
+Implement the `Retriever` interface to connect any vector database:
+
+```ts
+const retriever = {
+  retrieve: async (query, options) => {
+    const results = await vectorDB.search(query, { limit: options?.topK ?? 5 });
+    return {
+      chunks: results.map(r => ({
+        content: r.text,
+        metadata: { source: r.source, score: r.score },
+      })),
+      query,
+    };
+  },
+};
+```
+
+## Observability
+
+```ts
+const result = await rag.run('What is the return policy?');
+
+// Narrative shows: retrieved chunks, injected context, LLM response
+rag.getNarrative();
+```

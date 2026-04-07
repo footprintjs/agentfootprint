@@ -8,16 +8,20 @@
  *     .build();
  */
 
-import type { ToolDefinition, LLMProvider } from '../../types';
+import type { ToolDefinition, LLMProvider, ResponseFormat } from '../../types';
+import type { ModelConfig } from '../../models';
 import type { MemoryConfig } from '../../adapters/memory/types';
 import type { AgentRecorder, PromptProvider, ToolProvider } from '../../core';
 import type { InstructionOverride, AgentInstruction } from '../instructions';
+import { resolveProvider } from '../../adapters/createProvider';
+import { zodToJsonSchema, isZodSchema } from '../../tools/zodToJsonSchema';
 import { ToolRegistry } from '../../tools';
 import { AgentPattern } from '../loop';
 import { AgentRunner } from './AgentRunner';
 
 export interface AgentOptions {
-  readonly provider: LLMProvider;
+  /** LLMProvider instance or ModelConfig from anthropic()/openai()/bedrock()/ollama(). */
+  readonly provider: LLMProvider | ModelConfig;
   readonly name?: string;
 }
 
@@ -37,12 +41,25 @@ export class Agent {
   private initialDecisionScope?: Readonly<Record<string, unknown>>;
   private enableStreaming = false;
   private enableVerboseNarrative = false;
+  private outputResponseFormat?: ResponseFormat;
 
   private constructor(options: AgentOptions) {
-    this.provider = options.provider;
+    this.provider = resolveProvider(options.provider);
     this.agentName = options.name ?? 'agent';
   }
 
+  /**
+   * Create an agent builder.
+   *
+   * Accepts either an LLMProvider or a ModelConfig from factory functions:
+   * ```ts
+   * // With ModelConfig (auto-resolved)
+   * Agent.create({ provider: anthropic('claude-sonnet-4-20250514') })
+   *
+   * // With LLMProvider (direct)
+   * Agent.create({ provider: new AnthropicAdapter({ model: '...' }) })
+   * ```
+   */
   static create(options: AgentOptions): Agent {
     return new Agent(options);
   }
@@ -102,6 +119,38 @@ export class Agent {
    */
   verbose(enabled = true): this {
     this.enableVerboseNarrative = enabled;
+    return this;
+  }
+
+  /**
+   * Request structured JSON output matching a schema.
+   * Accepts JSON Schema or Zod schema (auto-converted).
+   *
+   * @param schema - JSON Schema object or Zod schema
+   * @param options - Optional: name for the schema, injection position for non-native providers
+   *
+   * @example
+   * ```ts
+   * // JSON Schema
+   * agent.outputSchema({ type: 'object', properties: { city: { type: 'string' } } })
+   *
+   * // Zod schema
+   * agent.outputSchema(z.object({ city: z.string() }))
+   *
+   * // Inject in user message (recency window) instead of system prompt
+   * agent.outputSchema(z.object({ city: z.string() }), { injection: 'user' })
+   * ```
+   */
+  outputSchema(schema: Record<string, unknown>, options?: { name?: string; injection?: 'system' | 'user' }): this {
+    if (isZodSchema(schema)) {
+      schema = zodToJsonSchema(schema as any);
+    }
+    this.outputResponseFormat = {
+      type: 'json_schema',
+      schema,
+      name: options?.name,
+      injection: options?.injection,
+    };
     return this;
   }
 
@@ -198,6 +247,7 @@ export class Agent {
       initialDecision: this.agentInstructions.length > 0 ? this.initialDecisionScope : undefined,
       streaming: this.enableStreaming,
       verboseNarrative: this.enableVerboseNarrative,
+      responseFormat: this.outputResponseFormat,
     });
   }
 }

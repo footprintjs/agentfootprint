@@ -1,0 +1,55 @@
+---
+title: Multi-Agent (Swarm)
+description: Orchestrate multiple specialist agents with LLM-driven routing.
+---
+
+## Specialist routing
+
+The Swarm pattern routes requests to specialist agents. The orchestrator LLM decides which specialist handles each request.
+
+```ts
+import { Swarm, Agent, anthropic } from 'agentfootprint';
+
+const provider = anthropic('claude-sonnet-4-20250514');
+
+const researcher = Agent.create({ provider, name: 'researcher' })
+  .system('You are a research specialist. Be thorough and factual.')
+  .maxIterations(3)
+  .build();
+
+const writer = Agent.create({ provider, name: 'writer' })
+  .system('You are a writing specialist. Be creative and engaging.')
+  .maxIterations(3)
+  .build();
+
+const swarm = Swarm.create({ provider, name: 'orchestrator' })
+  .system('Route research questions to the researcher, writing tasks to the writer.')
+  .specialist('researcher', 'Research topics and provide factual information', researcher)
+  .specialist('writer', 'Write or rewrite content in a specific style', writer)
+  .streaming(true)
+  .maxIterations(5)
+  .build();
+
+const result = await swarm.run('Write a haiku about debugging');
+```
+
+## How it works
+
+The orchestrator sees each specialist as a tool. When it calls the `researcher` tool, the researcher agent runs as a subflow. The narrative captures the full execution path — orchestrator decision, specialist execution, and result.
+
+```
+Orchestrator → route to "writer" → Writer Agent runs → result returned → Orchestrator responds
+```
+
+## Observability
+
+```ts
+swarm.getNarrative();
+// [Seed] Initialized agent state
+// [CallLLM] Orchestrator decided to route to writer
+// [Subflow: writer] Writer specialist executed
+//   [CallLLM] Writer generated haiku
+// [Finalize] Final response assembled
+```
+
+Each specialist's execution appears as a subflow — drill into it for full detail.

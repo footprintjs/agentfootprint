@@ -1,0 +1,147 @@
+---
+title: Recorders
+description: API reference for AgentRecorder implementations.
+---
+
+## agentObservability(options?)
+
+<div class="api-sig">agentObservability(options?: AgentObservabilityOptions): AgentObservabilityRecorder</div>
+
+Bundles TokenRecorder + ToolUsageRecorder + CostRecorder:
+
+```ts
+import { agentObservability } from 'agentfootprint/observe';
+
+const obs = agentObservability({
+  pricing: { 'claude-sonnet-4-20250514': { input: 3, output: 15 } },
+});
+
+const agent = Agent.create({ provider })
+  .recorder(obs)
+  .build();
+
+await agent.run('hello');
+
+obs.tokens();       // TokenStats
+obs.tools();        // ToolUsageStats
+obs.cost();         // number (USD)
+obs.costEntries();  // CostEntry[]
+```
+
+## TokenRecorder
+
+```ts
+const rec = new TokenRecorder();
+rec.getStats();  // TokenStats
+```
+
+### TokenStats
+
+| Field | Type |
+|-------|------|
+| `totalCalls` | `number` |
+| `totalInputTokens` | `number` |
+| `totalOutputTokens` | `number` |
+| `totalLatencyMs` | `number` |
+| `averageLatencyMs` | `number` |
+| `totalCost` | `number` (USD, 0 if no pricing) |
+| `calls` | `LLMCallEntry[]` (each has `cost`) |
+
+With pricing:
+```ts
+const rec = new TokenRecorder({
+  pricing: { 'claude-sonnet-4-20250514': { input: 3, output: 15 } },
+});
+```
+
+## CostRecorder
+
+```ts
+const rec = new CostRecorder({
+  pricingTable: { 'claude-sonnet-4-20250514': { input: 3, output: 15 } },
+});
+rec.getTotalCost();   // number (USD)
+rec.getEntries();     // CostEntry[]
+```
+
+## ToolUsageRecorder
+
+```ts
+const rec = new ToolUsageRecorder();
+rec.getStats();  // ToolUsageStats
+```
+
+### ToolUsageStats
+
+| Field | Type |
+|-------|------|
+| `totalCalls` | `number` |
+| `byTool` | `Record<string, ToolStats>` |
+
+## QualityRecorder
+
+Score each response with a custom judge function:
+
+```ts
+const rec = new QualityRecorder({
+  judge: async (response) => ({ score: 0.9, reason: 'Good' }),
+});
+```
+
+## GuardrailRecorder
+
+Flag policy violations:
+
+```ts
+const rec = new GuardrailRecorder({
+  check: async (response) => ({ passed: true }),
+});
+```
+
+## PermissionRecorder
+
+Track tool permission decisions:
+
+```ts
+const rec = new PermissionRecorder();
+rec.getEvents();  // PermissionEvent[]
+```
+
+## TurnRecorder
+
+Track per-turn metadata (timing, message count):
+
+```ts
+const rec = new TurnRecorder();
+rec.getTurns();  // TurnEntry[]
+```
+
+## OTelRecorder
+
+Export events as OpenTelemetry spans. Zero `@opentelemetry` dependency — bring your own tracer:
+
+```ts
+import { trace } from '@opentelemetry/api';
+import { OTelRecorder } from 'agentfootprint/observe';
+
+const rec = new OTelRecorder(trace.getTracer('agentfootprint'));
+// Spans: agent.turn, gen_ai.chat, tool.*, agent.error
+// Attributes follow OpenTelemetry GenAI semantic conventions
+```
+
+## ExplainRecorder
+
+Collect grounding evidence during traversal (no post-processing):
+
+```ts
+import { ExplainRecorder } from 'agentfootprint/explain';
+
+const rec = new ExplainRecorder();
+agent.recorder(rec);
+await agent.run('...');
+
+rec.getSources();    // tool results (ground truth)
+rec.getClaims();     // LLM responses (to verify)
+rec.getDecisions();  // tool call decisions
+rec.explain();       // structured summary
+```

@@ -212,6 +212,40 @@ function formatToolResultMessages(rawValue: unknown, limits: TruncationLimits): 
   return `Tool results: ${summaries.join('; ')}`;
 }
 
+function formatAdapterRawResponse(rawValue: unknown, limits: TruncationLimits): string {
+  if (!rawValue || typeof rawValue !== 'object') return 'LLM response: (unknown)';
+  const r = rawValue as {
+    content?: string;
+    toolCalls?: Array<{ name?: string }>;
+    usage?: { inputTokens?: number; outputTokens?: number };
+    model?: string;
+  };
+
+  const parts: string[] = [];
+
+  // Model + tokens
+  if (r.model || r.usage) {
+    const model = r.model ?? 'unknown';
+    const usage = r.usage
+      ? `${r.usage.inputTokens ?? '?'}in / ${r.usage.outputTokens ?? '?'}out`
+      : '';
+    parts.push(`LLM: ${model}${usage ? ` (${usage})` : ''}`);
+  }
+
+  // LLM reasoning text (the key insight — why it chose to call tools)
+  if (r.content && r.content.length > 0) {
+    parts.push(`Reasoning: "${truncate(r.content, limits.parsedContent)}"`);
+  }
+
+  // Tool calls summary
+  if (r.toolCalls && r.toolCalls.length > 0) {
+    const names = r.toolCalls.map((tc) => tc.name ?? '?').join(', ');
+    parts.push(`→ tool_calls: [${names}]`);
+  }
+
+  return parts.join('\n  ');
+}
+
 // ── Renderer factory ─────────────────────────────────────────────────────────
 
 /**
@@ -271,6 +305,7 @@ export function createAgentRenderer(options?: AgentRendererOptions): NarrativeRe
       if (key === 'toolDescriptions') return formatToolDescriptions(rawValue);
       if (key === 'parsedResponse') return formatParsedResponse(rawValue, limits);
       if (key === 'toolResultMessages') return formatToolResultMessages(rawValue, limits);
+      if (key === 'adapterRawResponse') return formatAdapterRawResponse(rawValue, limits);
 
       // message (singular): user input in subflow mode
       if (key === 'message' && typeof rawValue === 'string') {

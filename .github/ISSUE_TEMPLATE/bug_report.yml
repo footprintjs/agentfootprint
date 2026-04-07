@@ -1,0 +1,53 @@
+name: Bug Report
+description: Report a bug in agentfootprint
+labels: [bug]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: agentfootprint version
+      placeholder: "1.0.0"
+    validations:
+      required: true
+  - type: dropdown
+    id: provider
+    attributes:
+      label: LLM Provider
+      options:
+        - Anthropic (Claude)
+        - OpenAI (GPT)
+        - AWS Bedrock
+        - Ollama
+        - Mock
+        - Custom
+    validations:
+      required: true
+  - type: dropdown
+    id: concept
+    attributes:
+      label: Concept
+      options:
+        - LLMCall
+        - Agent
+        - RAG
+        - FlowChart
+        - Swarm
+        - Parallel
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: What happened? What did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction
+      description: Minimal code to reproduce the issue
+      render: typescript
+    validations:
+      required: true

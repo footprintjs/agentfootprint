@@ -1,0 +1,94 @@
+---
+title: Security & Tool Gating
+description: Control which tools the LLM can see and use — defense in depth.
+---
+
+## The problem
+
+An LLM can only call tools it knows about. If it sees a `delete_user` tool, it might call it. Tool gating ensures the LLM **never sees tools it shouldn't use** — can't hallucinate what it can't see.
+
+## gatedTools
+
+Two layers of defense:
+1. **Resolve-time filtering** — unauthorized tools are removed before the LLM sees them
+2. **Execute-time rejection** — if the LLM hallucinates a tool name, execution is blocked
+
+```ts
+import { Agent } from 'agentfootprint';
+import { staticTools } from 'agentfootprint/providers';
+import { gatedTools, PermissionPolicy } from 'agentfootprint/security';
+
+const allTools = [searchTool, calculatorTool, deleteUserTool];
+
+// Role-based policy
+const policy = PermissionPolicy.fromRoles({
+  user: ['search', 'calculator'],
+  admin: ['search', 'calculator', 'delete_user'],
+}, 'user');  // start as 'user'
+
+const agent = Agent.create({ provider })
+  .toolProvider(gatedTools(staticTools(allTools), policy.checker()))
+  .build();
+
+// User role: LLM sees only [search, calculator]
+await agent.run('Delete user 123');
+// LLM cannot call delete_user — it doesn't even know it exists
+
+// Upgrade mid-conversation
+policy.setRole('admin');
+// Now LLM sees [search, calculator, delete_user]
+```
+
+## PermissionPolicy
+
+Centralized role management — one policy, multiple agents:
+
+```ts
+const policy = PermissionPolicy.fromRoles({
+  viewer: ['search', 'read_data'],
+  editor: ['search', 'read_data', 'write_data'],
+  admin: ['search', 'read_data', 'write_data', 'delete_data', 'manage_users'],
+}, 'viewer');
+
+// Same policy across agents
+const searchAgent = Agent.create({ provider })
+  .toolProvider(gatedTools(staticTools(searchTools), policy.checker()))
+  .build();
+
+const dataAgent = Agent.create({ provider })
+  .toolProvider(gatedTools(staticTools(dataTools), policy.checker()))
+  .build();
+
+// Upgrade once — affects all agents
+policy.setRole('admin');
+```
+
+## PermissionRecorder
+
+Track what was blocked and allowed:
+
+```ts
+import { PermissionRecorder } from 'agentfootprint/observe';
+
+const permRec = new PermissionRecorder();
+// Wire to gatedTools via onBlocked callback
+```
+
+## Safety instructions
+
+Instructions marked `safety: true` are fail-closed — they fire even if the predicate throws:
+
+```ts
+import { defineInstruction } from 'agentfootprint/instructions';
+
+const compliance = defineInstruction({
+  id: 'gdpr-compliance',
+  safety: true,
+  prompt: 'You must comply with GDPR. Never share personal data without consent.',
+});
+```
+
+Safety instructions are:
+- **Unsuppressable** — always active
+- **Fail-closed** — if `activeWhen` throws, the instruction still fires
+- **Last position** — sorted to highest LLM attention (end of prompt)

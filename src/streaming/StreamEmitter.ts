@@ -1,3 +1,5 @@
+import type { AgentPhase } from '../core';
+
 /**
  * AgentStreamEvent — real-time events emitted during agent execution.
  *
@@ -29,7 +31,7 @@ export type AgentStreamEvent =
       /** Raw tool result — may contain PII. Apply your own redaction before logging/displaying. */
       result: string; error?: boolean; latencyMs: number }
   | { type: 'turn_end'; content: string; iterations: number; paused?: boolean }
-  | { type: 'error'; phase: 'prompt' | 'llm' | 'tool' | 'message'; message: string };
+  | { type: 'error'; phase: AgentPhase; message: string };
 
 export type AgentStreamEventHandler = (event: AgentStreamEvent) => void;
 

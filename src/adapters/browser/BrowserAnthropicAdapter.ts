@@ -48,8 +48,9 @@ interface AnthropicMessageParam {
 }
 
 interface AnthropicContentBlock {
-  type: 'text' | 'image' | 'tool_use' | 'tool_result';
+  type: 'text' | 'image' | 'tool_use' | 'tool_result' | 'thinking';
   text?: string;
+  thinking?: string;
   id?: string;
   name?: string;
   input?: Record<string, unknown>;
@@ -122,6 +123,8 @@ export class BrowserAnthropicAdapter implements LLMProvider {
     const decoder = new TextDecoder();
     let buffer = '';
     let finalUsage: TokenUsage | undefined;
+    let inputTokens = 0;
+    let outputTokens = 0;
     let finalContent = '';
     const toolInputBuffers: Map<number, { id: string; name: string; json: string }> = new Map();
     let blockIndex = 0;
@@ -144,8 +147,8 @@ export class BrowserAnthropicAdapter implements LLMProvider {
             type: string;
             index?: number;
             content_block?: AnthropicContentBlock;
-            delta?: { type: string; text?: string; partial_json?: string };
-            message?: AnthropicMessage;
+            delta?: { type: string; text?: string; thinking?: string; partial_json?: string };
+            message?: AnthropicMessage & { usage?: { input_tokens?: number; output_tokens?: number } };
             usage?: { output_tokens: number };
           };
           try {
@@ -154,7 +157,10 @@ export class BrowserAnthropicAdapter implements LLMProvider {
             continue;
           }
 
-          if (event.type === 'content_block_start' && event.content_block) {
+          if (event.type === 'message_start' && event.message?.usage) {
+            // Anthropic sends input_tokens in message_start
+            inputTokens = event.message.usage.input_tokens ?? 0;
+          } else if (event.type === 'content_block_start' && event.content_block) {
             if (event.content_block.type === 'tool_use') {
               toolInputBuffers.set(event.index ?? blockIndex, {
                 id: event.content_block.id!,
@@ -172,7 +178,9 @@ export class BrowserAnthropicAdapter implements LLMProvider {
             }
             blockIndex = (event.index ?? blockIndex) + 1;
           } else if (event.type === 'content_block_delta' && event.delta) {
-            if (event.delta.type === 'text_delta' && event.delta.text) {
+            if (event.delta.type === 'thinking_delta' && event.delta.thinking) {
+              yield { type: 'thinking', content: event.delta.thinking };
+            } else if (event.delta.type === 'text_delta' && event.delta.text) {
               finalContent += event.delta.text;
               yield { type: 'token', content: event.delta.text };
             } else if (event.delta.type === 'input_json_delta' && event.delta.partial_json) {
@@ -180,15 +188,29 @@ export class BrowserAnthropicAdapter implements LLMProvider {
               if (buf) buf.json += event.delta.partial_json;
             }
           } else if (event.type === 'message_delta' && event.usage) {
-            // Will get full usage from message_stop
-          } else if (event.type === 'message_stop' && event.message) {
-            const resp = convertResponse(event.message);
-            finalUsage = resp.usage;
+            // Anthropic sends output_tokens in message_delta
+            outputTokens = event.usage.output_tokens ?? 0;
+          } else if (event.type === 'message_stop') {
+            // Prefer accumulated values from message_start + message_delta.
+            // Fall back to message_stop.message.usage if present (older API format).
+            if (inputTokens === 0 && outputTokens === 0 && event.message) {
+              const resp = convertResponse(event.message);
+              if (resp.usage) finalUsage = resp.usage;
+            }
           }
         }
       }
     } finally {
       reader.releaseLock();
+    }
+
+    // Build usage from accumulated message_start + message_delta values
+    if (inputTokens > 0 || outputTokens > 0) {
+      finalUsage = {
+        inputTokens,
+        outputTokens,
+        totalTokens: inputTokens + outputTokens,
+      };
     }
 
     if (finalUsage) {
@@ -200,12 +222,31 @@ export class BrowserAnthropicAdapter implements LLMProvider {
 
   private buildBody(messages: Message[], options?: LLMCallOptions): AnthropicRequestBody {
     const systemMessages = messages.filter((m) => m.role === 'system');
-    const systemPrompt =
+    let systemPrompt =
       systemMessages.length > 0
         ? systemMessages.map((m) => (typeof m.content === 'string' ? m.content : '')).join('\n')
         : undefined;
 
-    const anthropicMessages = convertMessages(messages.filter((m) => m.role !== 'system'));
+    // Structured output: inject JSON Schema (Anthropic has no native response_format)
+    const schemaInstruction = options?.responseFormat?.type === 'json_schema'
+      ? `You MUST respond with valid JSON matching this schema:\n<json_schema>\n${JSON.stringify(options.responseFormat.schema, null, 2)}\n</json_schema>\nRespond ONLY with the JSON object, no other text.`
+      : undefined;
+
+    const injection = options?.responseFormat?.injection ?? 'system';
+
+    if (schemaInstruction && injection === 'system') {
+      systemPrompt = (systemPrompt ?? '') + '\n\n' + schemaInstruction;
+    }
+
+    let anthropicMessages = convertMessages(messages.filter((m) => m.role !== 'system'));
+
+    if (schemaInstruction && injection === 'user') {
+      anthropicMessages = [
+        ...anthropicMessages,
+        { role: 'user' as const, content: schemaInstruction },
+      ];
+    }
+
     const tools = options?.tools?.map(convertTool);
 
     return {
@@ -358,12 +399,15 @@ function convertTool(tool: LLMToolDescription): AnthropicTool {
 }
 
 function convertResponse(response: AnthropicMessage): LLMResponse {
-  let textContent = '';
+  const textParts: string[] = [];
+  const thinkingParts: string[] = [];
   const toolCalls: ToolCall[] = [];
 
   for (const block of response.content) {
-    if (block.type === 'text' && block.text) {
-      textContent += block.text;
+    if (block.type === 'thinking' && block.thinking) {
+      thinkingParts.push(block.thinking);
+    } else if (block.type === 'text' && block.text) {
+      textParts.push(block.text);
     } else if (block.type === 'tool_use') {
       toolCalls.push({
         id: block.id!,
@@ -387,10 +431,11 @@ function convertResponse(response: AnthropicMessage): LLMResponse {
   };
 
   return {
-    content: textContent,
+    content: textParts.join(''),
     toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
     usage,
     model: response.model,
     finishReason: finishReason as LLMResponse['finishReason'],
+    thinking: thinkingParts.length > 0 ? thinkingParts.join('') : undefined,
   };
 }

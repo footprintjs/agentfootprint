@@ -1,0 +1,58 @@
+/* agentfootprint — Starlight theme overrides
+ *
+ * Brand accent: Yellow (#facc15 dark / #ca8a04 light).
+ * Body font: Inter. Code font: JetBrains Mono.
+ */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+/* ── Fonts ──────────────────────────────────────────────────────────────── */
+:root {
+  --sl-font: 'Inter', system-ui, -apple-system, sans-serif;
+  --sl-font-mono: 'JetBrains Mono', ui-monospace, monospace;
+}
+
+/* ── Dark mode accent (default) — Yellow ───────────────────────────────── */
+:root {
+  --sl-color-accent-low: #1a1800;
+  --sl-color-accent: #facc15;
+  --sl-color-accent-high: #fde68a;
+}
+
+/* ── Light mode accent — Yellow ────────────────────────────────────────── */
+:root[data-theme='light'] {
+  --sl-color-accent-low: #fefce8;
+  --sl-color-accent: #ca8a04;
+  --sl-color-accent-high: #854d0e;
+}
+
+/* ── Sidebar category labels ────────────────────────────────────────────── */
+.sidebar-content summary span {
+  font-weight: 600;
+}
+
+/* ── Code blocks ────────────────────────────────────────────────────────── */
+.expressive-code .frame {
+  border-color: var(--sl-color-gray-5);
+}
+
+/* ── Hero badge pill ────────────────────────────────────────────────────── */
+.hero .badge {
+  background: var(--sl-color-accent);
+  color: #1a1a00;
+  font-size: 0.75rem;
+  border-radius: 9999px;
+  padding: 0.2rem 0.6rem;
+}
+
+/* ── API signature blocks ───────────────────────────────────────────────── */
+.api-sig {
+  background: var(--sl-color-bg-inline-code);
+  border-left: 3px solid var(--sl-color-accent);
+  border-radius: 0 6px 6px 0;
+  padding: 0.75rem 1rem;
+  margin: 1rem 0;
+  font-family: var(--sl-font-mono);
+  font-size: 0.875rem;
+  overflow-x: auto;
+}

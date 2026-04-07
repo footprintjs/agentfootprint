@@ -1,0 +1,115 @@
+---
+title: Instructions & Decisions
+description: Conditional context injection driven by accumulated state.
+---
+
+## The problem
+
+You want different behavior based on what happened during execution. A refund instruction should only activate when the order is cancelled. An admin prompt should only appear after identity verification.
+
+## Level 1: Always-active instructions
+
+The simplest instruction — no conditions, just extra prompt text and tools:
+
+```ts
+import { Agent, defineTool } from 'agentfootprint';
+import { defineInstruction } from 'agentfootprint/instructions';
+
+// Always-active: adds prompt + tools regardless of state
+const politeness = defineInstruction({
+  id: 'politeness',
+  prompt: 'Always be polite and professional. Use the customer name when known.',
+});
+
+const escalation = defineInstruction({
+  id: 'escalation-tools',
+  tools: [escalateToManagerTool],  // always available
+});
+
+const agent = Agent.create({ provider })
+  .system('You are a support agent.')
+  .instruction(politeness)
+  .instruction(escalation)
+  .build();
+```
+
+No `activeWhen` = always active. Good for baseline behavior.
+
+## Level 2: Conditional instructions
+
+Add `activeWhen` to activate based on accumulated state:
+
+```ts
+import { defineInstruction } from 'agentfootprint/instructions';
+
+const refundHandling = defineInstruction({
+  id: 'refund-handling',
+  activeWhen: (decision) => decision.orderStatus === 'cancelled',
+  prompt: 'Handle with empathy. Offer refund. Timeline: 3-5 business days.',
+  tools: [processRefundTool],
+  onToolResult: [{ id: 'empathy', text: 'Do NOT promise reversal.' }],
+});
+```
+
+This instruction only activates when `orderStatus === 'cancelled'` in the Decision Scope.
+
+## Level 3: Decision Scope
+
+The **Decision Scope** is a simple object that accumulates state from tool results during execution. Think of it as "what the agent has learned so far." Instructions check the Decision Scope to decide whether to activate.
+
+Instructions activate based on a **Decision Scope** — a simple object that accumulates state from tool results:
+
+```ts
+const classify = defineInstruction({
+  id: 'classify-order',
+  onToolResult: [{
+    id: 'classify',
+    decide: (decision, ctx) => {
+      if (ctx.content.status) decision.orderStatus = ctx.content.status;
+      if (ctx.content.amount > 500) decision.highValue = true;
+    },
+  }],
+});
+
+const agent = Agent.create({ provider })
+  .tool(lookupOrder)
+  .instruction(classify)
+  .instruction(refundHandling)
+  .decision({ orderStatus: null, highValue: false })  // initial state
+  .pattern(AgentPattern.Dynamic)
+  .build();
+```
+
+## How it works
+
+```
+Turn 1: CallLLM → lookup_order({orderId: 'ORD-1003'})
+        → tool returns {status: 'cancelled', amount: 5000}
+        → decide() sets orderStatus = 'cancelled', highValue = true
+
+Turn 2: InstructionsToLLM re-evaluates
+        → refundHandling activates (orderStatus === 'cancelled')
+        → empathy prompt injected into system message
+        → processRefund tool now available
+        → recency text added to message history
+```
+
+## Safety instructions
+
+```ts
+defineInstruction({
+  id: 'compliance',
+  safety: true,   // fail-closed: fires even when predicate throws
+  prompt: 'GDPR compliance required. Never share PII.',
+});
+```
+
+Safety instructions are unsuppressable, fail-closed, and sorted to the highest LLM attention position (last in the prompt).
+
+## Three injection positions
+
+| Position | Field | When it appears |
+|----------|-------|----------------|
+| System prompt | `prompt` | Prepended to system message |
+| Tools | `tools` | Added to available tool list |
+| Recency window | `onToolResult` | Injected after tool results in message history |

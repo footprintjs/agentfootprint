@@ -31,6 +31,7 @@ export { anthropic, openai, ollama, bedrock } from './models';
 export { AnthropicAdapter, OpenAIAdapter, BedrockAdapter } from './adapters';
 export { BrowserAnthropicAdapter, BrowserOpenAIAdapter } from './adapters';
 export { InMemoryStore } from './adapters/memory/inMemory';
+export { redisStore, dynamoStore, postgresStore } from './adapters/memory/stores';
 export type { ModelConfig } from './models';
 
 // ── Provider Interfaces ─────────────────────────────────────
@@ -40,6 +41,8 @@ export type {
   AgentRecorder,
 } from './core';
 export type { ConversationStore, MemoryConfig } from './adapters/memory/types';
+export type { RedisLike, RedisStoreOptions, DynamoLike, DynamoStoreOptions, PostgresLike, PostgresStoreOptions } from './adapters/memory/stores';
+export type { ResponseFormat, LLMStreamChunk } from './types';
 
 // ── Messages + Content ──────────────────────────────────────
 export {

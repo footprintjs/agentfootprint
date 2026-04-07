@@ -24,10 +24,12 @@ import type {
   Message,
   RAGResult,
 } from '../types';
+import type { ModelConfig } from '../models';
 import { getTextContent } from '../types/content';
 import { userMessage, systemMessage } from '../types';
 import type { AgentRecorder } from '../core';
 import { RecorderBridge } from '../recorders/v2/RecorderBridge';
+import { resolveProvider } from '../adapters/createProvider';
 import type { RAGState } from '../scope/types';
 import { createRetrieveStage } from '../stages/retrieve';
 import { augmentPromptStage } from '../stages/augmentPrompt';
@@ -37,7 +39,8 @@ import { finalizeStage } from '../stages/finalize';
 import { lastAssistantMessage } from '../memory';
 
 export interface RAGOptions {
-  readonly provider: LLMProvider;
+  /** LLMProvider instance or ModelConfig from anthropic()/openai()/bedrock()/ollama(). */
+  readonly provider: LLMProvider | ModelConfig;
   readonly retriever: RetrieverProvider;
 }
 
@@ -50,7 +53,7 @@ export class RAG {
   private enableStreaming = false;
 
   private constructor(options: RAGOptions) {
-    this.provider = options.provider;
+    this.provider = resolveProvider(options.provider);
     this.retriever = options.retriever;
   }
 

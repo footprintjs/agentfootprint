@@ -17,20 +17,32 @@
 
 import type { TypedScope } from 'footprintjs';
 import type { AgentLoopState } from '../../scope/types';
-import type { LLMProvider, LLMCallOptions } from '../../types';
+import type { LLMProvider, LLMCallOptions, ResponseFormat } from '../../types';
 import type { AgentStreamEventHandler } from '../../streaming';
 import { normalizeAdapterResponse } from './helpers';
+
+export interface CallLLMStageOptions {
+  onStreamEvent?: AgentStreamEventHandler;
+  responseFormat?: ResponseFormat;
+}
 
 /**
  * Create the CallLLM stage function.
  */
 export function createCallLLMStage(
   provider: LLMProvider,
-  onStreamEvent?: AgentStreamEventHandler,
+  optionsOrHandler?: CallLLMStageOptions | AgentStreamEventHandler,
 ) {
   if (!provider) {
     throw new Error('createCallLLMStage: provider is required');
   }
+
+  // Backward compat: accept bare handler or options object
+  const stageOpts: CallLLMStageOptions = typeof optionsOrHandler === 'function'
+    ? { onStreamEvent: optionsOrHandler }
+    : optionsOrHandler ?? {};
+
+  const { onStreamEvent, responseFormat } = stageOpts;
 
   return async (scope: TypedScope<AgentLoopState>) => {
     const messages = scope.messages ?? [];
@@ -41,9 +53,12 @@ export function createCallLLMStage(
 
     onStreamEvent?.({ type: 'llm_start', iteration });
 
-    const options: LLMCallOptions | undefined =
-      tools.length > 0 || signal ? { ...(tools.length > 0 && { tools }), signal } : undefined;
-    const response = await provider.chat(messages, options);
+    const options: LLMCallOptions = {
+      ...(tools.length > 0 ? { tools } : {}),
+      ...(signal ? { signal } : {}),
+      ...(responseFormat ? { responseFormat } : {}),
+    };
+    const response = await provider.chat(messages, Object.keys(options).length > 0 ? options : undefined);
 
     // Write raw response for recorders to observe
     scope.adapterRawResponse = response;

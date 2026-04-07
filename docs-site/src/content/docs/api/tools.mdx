@@ -1,0 +1,79 @@
+---
+title: Tools
+description: API reference for defineTool, ToolRegistry, and tool providers.
+---
+
+## defineTool(options)
+
+<div class="api-sig">defineTool(options: ToolDefinitionOptions): ToolDefinition</div>
+
+```ts
+import { defineTool } from 'agentfootprint';
+
+const tool = defineTool({
+  id: 'search',
+  description: 'Search the web',
+  inputSchema: {
+    type: 'object',
+    properties: { query: { type: 'string' } },
+    required: ['query'],
+  },
+  handler: async (args) => {
+    return { content: 'Search results...' };
+  },
+});
+```
+
+### ToolDefinitionOptions
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | `string` | Unique tool identifier |
+| `description` | `string` | What the tool does (shown to LLM) |
+| `inputSchema` | `object` | JSON Schema for arguments |
+| `handler` | `(args) => Promise<ToolResult>` | Execution function |
+
+### ToolResult
+
+```ts
+interface ToolResult {
+  content: string;    // Result text returned to LLM
+  error?: boolean;    // true if the tool failed
+}
+```
+
+## askHuman()
+
+Special tool that pauses the agent for human input:
+
+```ts
+import { askHuman } from 'agentfootprint';
+
+const agent = Agent.create({ provider })
+  .tool(askHuman())
+  .build();
+```
+
+## ToolProvider interface
+
+```ts
+interface ToolProvider {
+  resolve(ctx: ToolContext): {
+    value: LLMToolDescription[];
+    chosen: string;
+    rationale?: string;
+  };
+  execute?(call: ToolCall, signal?: AbortSignal): Promise<ToolExecutionResult>;
+}
+```
+
+## gatedTools
+
+```ts
+import { staticTools } from 'agentfootprint/providers';
+import { gatedTools, PermissionPolicy } from 'agentfootprint/security';
+
+// gatedTools wraps a ToolProvider (not an array)
+const gated = gatedTools(staticTools(allTools), policy.checker());
+agent.toolProvider(gated);
+```

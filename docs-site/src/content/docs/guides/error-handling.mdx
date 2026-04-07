@@ -1,0 +1,115 @@
+---
+title: Error Handling
+description: Handle LLM errors, tool failures, and build resilient agents.
+---
+
+## Error types
+
+agentfootprint throws typed errors so you can catch and handle them:
+
+```ts
+import { LLMError } from 'agentfootprint';
+
+try {
+  await agent.run('Hello');
+} catch (err) {
+  if (err instanceof LLMError) {
+    console.log(err.code);      // 'auth' | 'rate_limit' | 'context_length' | 'invalid_request' | 'server' | 'timeout' | 'aborted' | 'network' | 'unknown'
+    console.log(err.provider);  // 'anthropic' | 'openai' | ...
+    console.log(err.message);   // Human-readable message
+    console.log(err.statusCode); // HTTP status (429, 401, 500, etc.)
+    console.log(err.retryable);  // true for rate_limit, server, timeout, network
+  }
+}
+```
+
+## Tool errors
+
+When a tool handler throws, the error is caught and returned to the LLM as a tool result. The agent can decide how to proceed:
+
+```ts
+const riskyTool = defineTool({
+  id: 'fetch_data',
+  description: 'Fetch data from API',
+  inputSchema: { type: 'object', properties: { url: { type: 'string' } } },
+  handler: async ({ url }) => {
+    const res = await fetch(url);
+    if (!res.ok) {
+      // Return error content — the LLM sees this and can retry or explain
+      return { content: `Error: HTTP ${res.status}`, error: true };
+    }
+    return { content: await res.text() };
+  },
+});
+```
+
+The `error: true` flag in the tool result tells the LLM that the tool failed. The narrative captures this too.
+
+## Retry and fallback
+
+For transient LLM errors (rate limits, timeouts), use the resilience utilities:
+
+```ts
+import { withRetry, withFallback } from 'agentfootprint/resilience';
+
+// Retry up to 3 times with exponential backoff
+const reliable = withRetry(agent, { maxRetries: 3, backoffMs: 1000 });
+
+// Fall back to a cheaper model if the primary fails
+const resilient = withFallback(primaryAgent, fallbackAgent);
+
+// Chain them: retry primary, then fall back
+const production = withFallback(
+  withRetry(primaryAgent, { maxRetries: 2 }),
+  fallbackAgent,
+);
+```
+
+## Provider failover
+
+Automatic failover across provider families:
+
+```ts
+import { Agent, anthropic, openai } from 'agentfootprint';
+import { fallbackProvider } from 'agentfootprint/resilience';
+
+const provider = fallbackProvider([
+  anthropic('claude-sonnet-4-20250514'),
+  openai('gpt-4o'),
+]);
+
+// If Anthropic is down, automatically tries OpenAI
+const agent = Agent.create({ provider }).build();
+```
+
+## Circuit breaker
+
+Stop calling a failing provider after consecutive failures:
+
+```ts
+import { withCircuitBreaker } from 'agentfootprint/resilience';
+
+const guarded = withCircuitBreaker(agent, {
+  threshold: 5,         // open after 5 consecutive failures
+  resetAfterMs: 30000,  // try a probe call after 30 seconds
+});
+```
+
+## Streaming error events
+
+Errors during streaming are emitted as events, not thrown:
+
+```ts
+await agent.run('Hello', {
+  onEvent: (event) => {
+    if (event.type === 'error') {
+      console.error(`Error in ${event.phase}: ${event.message}`);
+    }
+  },
+});
+```
+
+## Next steps
+
+- [Resilience guide](/agentfootprint/guides/resilience/) — retry, fallback, circuit breaker details
+- [Testing guide](/agentfootprint/guides/testing/) — test error scenarios with mock()

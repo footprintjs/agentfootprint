@@ -9,7 +9,7 @@
 
 import type { FlowChart } from 'footprintjs';
 import type { StageFunction, SubflowMountOptions } from 'footprintjs/advanced';
-import type { LLMProvider } from '../../types';
+import type { LLMProvider, ResponseFormat } from '../../types';
 import type { ToolProvider } from '../../core';
 import type { ToolRegistry } from '../../tools';
 import type { Message } from '../../types/messages';
@@ -224,6 +224,9 @@ export interface AgentLoopConfig {
 
   /** When true, CallLLM uses addStreamingFunction for token-by-token output. */
   readonly streaming?: boolean;
+
+  /** Structured output format — passed to LLM provider as responseFormat option. */
+  readonly responseFormat?: ResponseFormat;
 
   /**
    * Custom routing strategy — replaces the default RouteResponse decider.

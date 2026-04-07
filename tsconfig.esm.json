@@ -3,6 +3,8 @@
   "compilerOptions": {
     "module": "ES2022",
     "outDir": "./dist/esm",
-    "declarationDir": "./dist/esm/types"
+    "declaration": false,
+    "declarationMap": false,
+    "declarationDir": null
   }
 }

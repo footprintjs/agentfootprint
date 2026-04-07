@@ -1,0 +1,166 @@
+---
+title: Custom Provider
+description: Implement LLMProvider to connect any LLM to agentfootprint.
+---
+
+## The LLMProvider interface
+
+Implement two methods to connect any LLM:
+
+```ts
+interface LLMProvider {
+  /** Single request-response call. */
+  chat(messages: Message[], options?: LLMCallOptions): Promise<LLMResponse>;
+
+  /** Streaming call (optional — enables token-by-token output). */
+  chatStream?(messages: Message[], options?: LLMCallOptions): AsyncIterable<LLMStreamChunk>;
+}
+```
+
+## Minimal implementation
+
+```ts
+import type { LLMProvider, Message, LLMResponse, LLMCallOptions } from 'agentfootprint';
+
+class MyProvider implements LLMProvider {
+  async chat(messages: Message[], options?: LLMCallOptions): Promise<LLMResponse> {
+    const response = await fetch('https://my-llm-api.com/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        messages: messages.map(m => ({ role: m.role, content: m.content })),
+        tools: options?.tools,
+      }),
+      signal: options?.signal,
+    });
+
+    const data = await response.json();
+
+    return {
+      content: data.text,
+      toolCalls: data.tool_calls?.map(tc => ({
+        id: tc.id,
+        name: tc.name,
+        arguments: tc.arguments,
+      })),
+      usage: {
+        inputTokens: data.usage?.input_tokens ?? 0,
+        outputTokens: data.usage?.output_tokens ?? 0,
+        totalTokens: data.usage?.total_tokens ?? 0,
+      },
+      model: 'my-model',
+    };
+  }
+}
+```
+
+## Use it
+
+```ts
+import { Agent } from 'agentfootprint';
+
+const agent = Agent.create({ provider: new MyProvider() })
+  .system('You are helpful.')
+  .build();
+```
+
+## Adding streaming
+
+```ts
+class MyProvider implements LLMProvider {
+  async chat(messages, options) { /* ... */ }
+
+  async *chatStream(messages: Message[], options?: LLMCallOptions): AsyncIterable<LLMStreamChunk> {
+    const response = await fetch('https://my-llm-api.com/stream', {
+      method: 'POST',
+      body: JSON.stringify({ messages, stream: true }),
+    });
+
+    const reader = response.body!.getReader();
+    const decoder = new TextDecoder();
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      const text = decoder.decode(value);
+      yield { type: 'token', content: text };
+    }
+
+    yield { type: 'done', content: '' };
+  }
+}
+```
+
+## Key types
+
+### Message
+
+A discriminated union — each role has its own shape:
+
+```ts
+interface SystemMessage  { role: 'system';    content: string }
+interface UserMessage     { role: 'user';      content: string | ContentBlock[] }
+interface AssistantMessage { role: 'assistant'; content: string | ContentBlock[]; toolCalls?: ToolCall[] }
+interface ToolResultMessage { role: 'tool';     content: string | ContentBlock[]; toolCallId: string }
+
+type Message = SystemMessage | UserMessage | AssistantMessage | ToolResultMessage;
+
+interface ToolCall { id: string; name: string; arguments: Record<string, unknown> }
+```
+
+### LLMResponse
+
+```ts
+interface LLMResponse {
+  content: string;
+  toolCalls?: ToolCall[];
+  usage?: TokenUsage;
+  model?: string;
+  finishReason?: 'stop' | 'tool_calls' | 'length' | 'error';
+}
+```
+
+### LLMStreamChunk
+
+A flat interface — all optional fields except `type`:
+
+```ts
+interface LLMStreamChunk {
+  type: 'token' | 'tool_call' | 'usage' | 'done';
+  content?: string;     // present on 'token' and optionally on 'done'
+  toolCall?: ToolCall;   // present on 'tool_call'
+  usage?: TokenUsage;    // present on 'usage'
+}
+```
+
+## Error handling
+
+For best compatibility with `fallbackProvider` and error classification, throw `LLMError` from your provider:
+
+```ts
+import { LLMError, classifyStatusCode } from 'agentfootprint';
+
+class MyProvider implements LLMProvider {
+  async chat(messages: Message[], options?: LLMCallOptions): Promise<LLMResponse> {
+    const response = await fetch('https://my-llm-api.com/chat', { ... });
+
+    if (!response.ok) {
+      throw new LLMError({
+        message: `API error: ${response.statusText}`,
+        code: classifyStatusCode(response.status),  // 'rate_limit', 'auth', 'server', etc.
+        provider: 'my-provider',
+        statusCode: response.status,
+      });
+    }
+
+    // ... parse response
+  }
+}
+```
+
+This ensures `withRetry`, `withFallback`, and `fallbackProvider` correctly classify your errors as retryable or not.
+
+> All interface fields are `readonly` in the actual TypeScript types. The examples above omit `readonly` for brevity.
+
+All agentfootprint features (tools, streaming, recorders, narrative, instructions) work with any custom provider.

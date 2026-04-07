@@ -8,6 +8,8 @@ export interface ModelConfig {
   readonly modelId: string;
   readonly apiKey?: string;
   readonly baseUrl?: string;
+  /** AWS region for Bedrock. Defaults to AWS_REGION env var. */
+  readonly region?: string;
   readonly options?: ModelOptions;
 }
 

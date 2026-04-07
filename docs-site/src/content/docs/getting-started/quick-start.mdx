@@ -1,0 +1,191 @@
+---
+title: Quick Start
+description: Build your first explainable agent in 5 minutes.
+---
+
+import { Tabs, TabItem, Aside } from '@astrojs/starlight/components';
+
+## What is an AI agent?
+
+An AI agent is an LLM (like Claude or GPT) that can **take actions** — not just generate text. It calls tools (APIs, databases, functions), reads the results, and decides what to do next. This loop continues until the agent has enough information to answer.
+
+```
+User question → LLM thinks → calls a tool → reads result → thinks again → responds
+```
+
+agentfootprint builds agents that **show their work** — every tool call, every decision, every LLM response is captured in a structured trace you can inspect, test, and audit.
+
+## Install
+
+<Tabs>
+  <TabItem label="npm">
+    ```bash
+    npm install agentfootprint
+    ```
+  </TabItem>
+  <TabItem label="pnpm">
+    ```bash
+    pnpm add agentfootprint
+    ```
+  </TabItem>
+  <TabItem label="yarn">
+    ```bash
+    yarn add agentfootprint
+    ```
+  </TabItem>
+</Tabs>
+
+## Your first agent
+
+```ts
+import { Agent, defineTool, mock } from 'agentfootprint';
+
+// 1. Define a tool
+const getWeather = defineTool({
+  id: 'get_weather',
+  description: 'Get current weather for a city',
+  inputSchema: {
+    type: 'object',
+    properties: { city: { type: 'string' } },
+    required: ['city'],
+  },
+  handler: async ({ city }) => ({
+    content: JSON.stringify({ city, temp: 72, condition: 'sunny' }),
+  }),
+});
+
+// 2. Build the agent (mock provider for testing — $0 cost)
+const agent = Agent.create({
+  provider: mock([
+    // Call 1: LLM decides to use the tool
+    { content: '', toolCalls: [{ id: 'tc1', name: 'get_weather', arguments: { city: 'Paris' } }] },
+    // Call 2: LLM responds with the tool result
+    { content: 'The weather in Paris is 72°F and sunny.' },
+  ]),
+})
+  .system('You are a weather assistant. Use get_weather to answer.')
+  .tool(getWeather)
+  .build();
+
+// 3. Run it
+const result = await agent.run('What is the weather in Paris?');
+console.log(result.content);
+// → "The weather in Paris is 72°F and sunny."
+
+// 4. See what happened
+console.log(agent.getNarrative());
+// → [
+//   "[Seed] Initialized agent state",
+//   "[CallLLM] Called LLM",
+//   "[ParseResponse] Parsed: tool_calls → [get_weather({city: "Paris"})]",
+//   "[ExecuteToolCalls] Tool results: {city: "Paris", temp: 72, condition: "sunny"}",
+//   "[CallLLM] Called LLM",
+//   "[Finalize] The weather in Paris is 72°F and sunny."
+// ]
+```
+
+## Switch to Claude
+
+Replace `mock()` with a real provider — same agent, same tools, same code:
+
+<Tabs>
+  <TabItem label="Anthropic (Claude)">
+    ```ts
+    import { Agent, anthropic } from 'agentfootprint';
+
+    const agent = Agent.create({
+      provider: anthropic('claude-sonnet-4-20250514'),
+    })
+      .system('You are a weather assistant.')
+      .tool(getWeather)
+      .build();
+    ```
+  </TabItem>
+  <TabItem label="OpenAI">
+    ```ts
+    import { Agent, openai } from 'agentfootprint';
+
+    const agent = Agent.create({
+      provider: openai('gpt-4o'),
+    })
+      .system('You are a weather assistant.')
+      .tool(getWeather)
+      .build();
+    ```
+  </TabItem>
+  <TabItem label="AWS Bedrock">
+    ```ts
+    import { Agent, bedrock } from 'agentfootprint';
+
+    const agent = Agent.create({
+      provider: bedrock('anthropic.claude-sonnet-4-20250514-v1:0'),
+    })
+      .system('You are a weather assistant.')
+      .tool(getWeather)
+      .build();
+    ```
+  </TabItem>
+</Tabs>
+
+## Add observability
+
+One line — tokens, tools, and cost tracking:
+
+```ts
+import { Agent, anthropic } from 'agentfootprint';
+import { agentObservability } from 'agentfootprint/observe';
+
+const obs = agentObservability();
+const agent = Agent.create({ provider: anthropic('claude-sonnet-4-20250514') })
+  .system('You are a weather assistant.')
+  .tool(getWeather)
+  .recorder(obs)    // ← one line
+  .build();
+
+await agent.run('What is the weather in Paris?');
+
+console.log(obs.tokens());
+// → { totalCalls: 2, totalInputTokens: 243, totalOutputTokens: 31, calls: [...] }
+
+console.log(obs.tools());
+// → { totalCalls: 1, byTool: { get_weather: { calls: 1, errors: 0, averageLatencyMs: 2 } } }
+```
+
+## Write a test
+
+The same mock provider makes tests deterministic and free:
+
+```ts
+import { describe, it, expect } from 'vitest';
+import { Agent, mock, defineTool } from 'agentfootprint';
+
+describe('weather agent', () => {
+  it('calls get_weather and responds with results', async () => {
+    const provider = mock([
+      { content: '', toolCalls: [{ id: 'tc1', name: 'get_weather', arguments: { city: 'Paris' } }] },
+      { content: 'Paris is 72°F and sunny.' },
+    ]);
+
+    const agent = Agent.create({ provider })
+      .system('You are a weather assistant.')
+      .tool(getWeather)
+      .build();
+
+    const result = await agent.run('Weather in Paris?');
+
+    expect(result.content).toContain('72°F');
+    expect(result.iterations).toBe(2);  // 2 LLM calls: tool call + response
+  });
+});
+```
+
+## Recommended learning path
+
+Follow this order for the smoothest experience:
+
+1. **[Key Concepts](/agentfootprint/getting-started/key-concepts/)** — understand the 6 building blocks
+2. **[Agent guide](/agentfootprint/guides/agent/)** — memory, streaming, human-in-the-loop
+3. **[Tool use guide](/agentfootprint/guides/tools/)** — define tools, dynamic tool providers
+4. **[Testing guide](/agentfootprint/guides/testing/)** — write tests with mock()
+5. **[Observability guide](/agentfootprint/guides/observability/)** — track tokens, cost, tool usage
+6. **[Instructions guide](/agentfootprint/guides/instructions/)** — conditional behavior (advanced)

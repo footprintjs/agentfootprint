@@ -1,0 +1,87 @@
+---
+/**
+ * Custom SiteTitle override — branded AGENT(white)FOOTPRINT(yellow) + nav links.
+ */
+---
+
+<a href="/agentfootprint/" class="brand-link">
+  <svg class="brand-icon" viewBox="0 0 64 64" fill="currentColor" xmlns="http://www.w3.org/2000/svg" width="20" height="20">
+    <rect x="18" y="24" width="28" height="34" rx="10" ry="10" />
+    <rect x="22" y="32" width="20" height="3" rx="1.5" fill="#1a1a0a" opacity="0.35" />
+    <rect x="22" y="39" width="20" height="3" rx="1.5" fill="#1a1a0a" opacity="0.35" />
+    <rect x="22" y="46" width="20" height="3" rx="1.5" fill="#1a1a0a" opacity="0.35" />
+    <rect x="18" y="10" width="8" height="10" rx="4" />
+    <rect x="28" y="8" width="8" height="10" rx="4" />
+    <rect x="38" y="10" width="8" height="10" rx="4" />
+  </svg>
+  <span class="brand-agent">AGENT</span><span class="brand-foot">FOOTPRINT</span>
+</a>
+<nav class="header-links">
+  <a href="/agentfootprint/getting-started/quick-start/">Docs</a>
+  <a href="https://footprintjs.github.io/agent-playground/" target="_blank" rel="noopener">Playground</a>
+</nav>
+
+<style>
+  .brand-link {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    text-decoration: none;
+    font-size: 1rem;
+    font-weight: 800;
+    letter-spacing: 0.5px;
+  }
+  .brand-icon {
+    color: #facc15;
+    flex-shrink: 0;
+  }
+  .brand-agent {
+    color: var(--sl-color-white);
+  }
+  .brand-foot {
+    color: #facc15;
+  }
+  :root[data-theme='light'] .brand-agent {
+    color: var(--sl-color-text);
+  }
+  :root[data-theme='light'] .brand-foot {
+    color: #ca8a04;
+  }
+  :root[data-theme='light'] .brand-icon {
+    color: #ca8a04;
+  }
+
+  .header-links {
+    display: none;
+    gap: 0.15rem;
+    margin-left: 0.75rem;
+    padding-left: 0.75rem;
+    border-left: 1px solid var(--sl-color-gray-5);
+    align-items: center;
+  }
+  @media (min-width: 50rem) {
+    .header-links {
+      display: flex;
+    }
+  }
+  .header-links a {
+    color: var(--sl-color-gray-2);
+    text-decoration: none;
+    font-size: 0.875rem;
+    font-weight: 500;
+    padding: 0.3rem 0.65rem;
+    border-radius: 6px;
+    transition: color 0.15s, background 0.15s;
+  }
+  .header-links a:hover {
+    color: var(--sl-color-white);
+    background: var(--sl-color-gray-6);
+  }
+  :root[data-theme='light'] .header-links a {
+    color: var(--sl-color-gray-3);
+  }
+  :root[data-theme='light'] .header-links a:hover {
+    color: var(--sl-color-text);
+    background: var(--sl-color-gray-6);
+  }
+</style>

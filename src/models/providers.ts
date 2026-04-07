@@ -46,10 +46,14 @@ export function ollama(
   };
 }
 
-export function bedrock(modelId: string, options?: ModelOptions): ModelConfig {
+export function bedrock(
+  modelId: string,
+  options?: ModelOptions & { region?: string },
+): ModelConfig {
   return {
     provider: 'bedrock',
     modelId,
+    region: options?.region,
     options,
   };
 }

@@ -15,6 +15,7 @@
  */
 
 import type { LLMProvider, LLMToolDescription } from '../types/llm';
+import type { ModelConfig } from '../models';
 import type { ToolDefinition } from '../types/tools';
 import type { RunnerLike, AgentResultEntry, TraversalResult } from '../types/multiAgent';
 import type { AgentRecorder } from '../core';
@@ -34,6 +35,7 @@ import { RecorderBridge } from '../recorders/v2/RecorderBridge';
 import { annotateSpecIcons } from './specIcons';
 import type { SpecLike } from './specIcons';
 import { userMessage } from '../types';
+import { resolveProvider } from '../adapters/createProvider';
 
 // Specialist ID validation — alphanumeric + hyphens, max 64 chars
 const VALID_SPECIALIST_ID = /^[a-zA-Z][a-zA-Z0-9_-]{0,63}$/;
@@ -41,7 +43,8 @@ const VALID_SPECIALIST_ID = /^[a-zA-Z][a-zA-Z0-9_-]{0,63}$/;
 // ── Types ────────────────────────────────────────────────────
 
 export interface SwarmOptions {
-  readonly provider: LLMProvider;
+  /** LLMProvider instance or ModelConfig from anthropic()/openai()/bedrock()/ollama(). */
+  readonly provider: LLMProvider | ModelConfig;
   readonly name?: string;
 }
 
@@ -58,7 +61,7 @@ export class Swarm {
   private streamingEnabled = false;
 
   private constructor(options: SwarmOptions) {
-    this.provider = options.provider;
+    this.provider = resolveProvider(options.provider);
     this.swarmName = options.name ?? 'swarm';
   }
 

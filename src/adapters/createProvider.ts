@@ -15,6 +15,9 @@
  *
  *   // Ollama (auto-configured):
  *   const provider = createProvider(ollama('llama3'));
+ *
+ *   // Bedrock with region:
+ *   const provider = createProvider(bedrock('anthropic.claude-sonnet-4-20250514-v1:0', { region: 'us-east-1' }));
  */
 
 import type { LLMProvider } from '../types';
@@ -23,6 +26,27 @@ import { AnthropicAdapter } from './anthropic/AnthropicAdapter';
 import { OpenAIAdapter } from './openai/OpenAIAdapter';
 import { BedrockAdapter } from './bedrock/BedrockAdapter';
 import { MockAdapter } from './mock/MockAdapter';
+
+/**
+ * Check if the value is already an LLMProvider (has a `.chat` method).
+ * Used for auto-detection in Agent.create(), LLMCall.create(), etc.
+ */
+export function isLLMProvider(value: unknown): value is LLMProvider {
+  return typeof value === 'object' && value !== null && typeof (value as LLMProvider).chat === 'function';
+}
+
+/**
+ * Resolve a provider-or-config to an LLMProvider.
+ *
+ * Accepts either an LLMProvider directly or a ModelConfig (from anthropic(), openai(), etc.).
+ * This enables:
+ *   Agent.create({ provider: anthropic('claude-sonnet-4-20250514') })
+ * without wrapping in createProvider().
+ */
+export function resolveProvider(providerOrConfig: LLMProvider | ModelConfig): LLMProvider {
+  if (isLLMProvider(providerOrConfig)) return providerOrConfig;
+  return createProvider(providerOrConfig as ModelConfig & { _client?: unknown });
+}
 
 /**
  * Create an LLMProvider from a ModelConfig.
@@ -52,16 +76,29 @@ export function createProvider(
       });
 
     case 'ollama':
-      return new OpenAIAdapter({
-        model: config.modelId,
-        baseURL: config.baseUrl ?? 'http://localhost:11434/v1',
-        maxTokens: config.options?.maxTokens,
-        _client: config._client,
-      });
+      try {
+        return new OpenAIAdapter({
+          model: config.modelId,
+          baseURL: config.baseUrl ?? 'http://localhost:11434/v1',
+          maxTokens: config.options?.maxTokens,
+          _client: config._client,
+        });
+      } catch (err) {
+        // OpenAIAdapter throws its own clear message if 'openai' package is missing.
+        // Re-wrap to mention Ollama specifically so the user knows which adapter failed.
+        if (err instanceof Error && err.message.includes('openai')) {
+          throw new Error(
+            'Ollama adapter requires the "openai" package (OpenAI-compatible API).\n' +
+            'Install it: npm install openai',
+          );
+        }
+        throw err;
+      }
 
     case 'bedrock':
       return new BedrockAdapter({
         model: config.modelId,
+        region: config.region,
         maxTokens: config.options?.maxTokens,
         _client: config._client,
       });

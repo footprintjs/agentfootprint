@@ -1,0 +1,191 @@
+---
+title: Grounding Analysis
+description: Detect hallucinations by comparing tool results against LLM claims.
+---
+
+## The problem
+
+An LLM calls `lookup_order` and gets `{status: 'shipped', amount: 299}`. Then it tells the user "Your order of $399 is being processed." The amount is wrong and the status is different. This is a hallucination — and most frameworks have no way to detect it without a separate eval pipeline.
+
+## How agentfootprint solves it
+
+Every tool result and every LLM response is captured as a structured narrative entry during execution. You can compare them after the run:
+
+```ts
+import { Agent, mock, defineTool } from 'agentfootprint';
+import { getGroundingSources, getLLMClaims } from 'agentfootprint/explain';
+
+// Build and run the agent
+const lookupOrder = defineTool({
+  id: 'lookup_order',
+  description: 'Look up an order',
+  inputSchema: { type: 'object', properties: { orderId: { type: 'string' } }, required: ['orderId'] },
+  handler: async ({ orderId }) => ({
+    content: JSON.stringify({ orderId, status: 'shipped', amount: 299 }),
+  }),
+});
+
+const agent = Agent.create({
+  provider: mock([
+    { content: '', toolCalls: [{ id: 'tc1', name: 'lookup_order', arguments: { orderId: 'ORD-1003' } }] },
+    { content: 'Your order ORD-1003 is shipped. Total: $299.' },
+  ]),
+})
+  .tool(lookupOrder)
+  .build();
+
+await agent.run('Check order ORD-1003');
+
+// Extract grounding data
+const entries = agent.getNarrativeEntries();
+const sources = getGroundingSources(entries);
+const claims = getLLMClaims(entries);
+
+console.log(sources);
+// → Tool results: the data the LLM had available (truth)
+// [{ orderId: 'ORD-1003', status: 'shipped', amount: 299 }]
+
+console.log(claims);
+// → LLM output: what it actually said (to verify)
+// ['Your order ORD-1003 is shipped. Total: $299.']
+```
+
+## Comparing sources to claims
+
+Use the extracted data to check for hallucinations:
+
+```ts
+function checkGrounding(sources: unknown[], claims: string[]): string[] {
+  const issues: string[] = [];
+  const sourceText = JSON.stringify(sources);
+
+  for (const claim of claims) {
+    // Check for amounts mentioned in claims that aren't in sources
+    const amounts = claim.match(/\$(\d+)/g);
+    if (amounts) {
+      for (const amount of amounts) {
+        if (!sourceText.includes(amount.replace('$', ''))) {
+          issues.push(`Claim mentions ${amount} but source data doesn't contain this amount`);
+        }
+      }
+    }
+  }
+
+  return issues;
+}
+
+const issues = checkGrounding(sources, claims);
+if (issues.length > 0) {
+  console.warn('Potential hallucinations:', issues);
+}
+```
+
+## Full LLM context
+
+Get the complete context the LLM had when generating its response:
+
+```ts
+import { getFullLLMContext } from 'agentfootprint/explain';
+
+const context = getFullLLMContext(entries);
+// → System prompt + tool results + message history
+// Everything the LLM saw — useful for debugging unexpected responses
+```
+
+## Using in tests
+
+```ts
+import { describe, it, expect } from 'vitest';
+
+it('agent response is grounded in tool results', async () => {
+  await agent.run('Check order ORD-1003');
+
+  const entries = agent.getNarrativeEntries();
+  const sources = getGroundingSources(entries);
+  const claims = getLLMClaims(entries);
+
+  // Sources should exist (tools were called)
+  expect(sources.length).toBeGreaterThan(0);
+
+  // Claims should reference data actually in the sources
+  const sourceText = JSON.stringify(sources);
+  for (const claim of claims) {
+    // Every dollar amount in the claim should appear in sources
+    const amounts = claim.match(/\d{3,}/g) ?? [];
+    for (const amount of amounts) {
+      expect(sourceText).toContain(amount);
+    }
+  }
+});
+```
+
+## Using in production
+
+Run grounding checks as a post-processing step:
+
+```ts
+const result = await agent.run(userMessage);
+
+const entries = agent.getNarrativeEntries();
+const sources = getGroundingSources(entries);
+const claims = getLLMClaims(entries);
+
+const issues = checkGrounding(sources, claims);
+if (issues.length > 0) {
+  // Log for monitoring, flag for review, or re-run with stricter prompt
+  logger.warn('Grounding issues detected', { issues, sources, claims });
+}
+
+return result.content;
+```
+
+## ExplainRecorder (recommended)
+
+Instead of post-processing narrative entries, use `ExplainRecorder` — it collects sources, claims, and decisions **during traversal**:
+
+```ts
+import { Agent, mock, defineTool } from 'agentfootprint';
+import { ExplainRecorder } from 'agentfootprint/explain';
+
+const explain = new ExplainRecorder();
+const agent = Agent.create({ provider: mock([...]) })
+  .tool(lookupOrder)
+  .recorder(explain)
+  .build();
+
+await agent.run('Check order ORD-1003');
+
+// Collected during execution — no post-processing
+console.log(explain.getSources());   // tool results (ground truth)
+console.log(explain.getClaims());    // LLM responses (to verify)
+console.log(explain.getDecisions()); // tool calls the LLM made
+
+// One-call structured summary
+console.log(explain.explain());
+// {
+//   sources: [{ toolName: 'lookup_order', args: { orderId: 'ORD-1003' }, result: '...' }],
+//   claims: [{ content: 'Your order is shipped...', model: 'claude-sonnet-4-20250514' }],
+//   decisions: [{ toolName: 'lookup_order', args: { orderId: 'ORD-1003' }, latencyMs: 2 }],
+//   summary: 'Agent called lookup_order (1 call), then responded based on the results.'
+// }
+```
+
+**When to use which:**
+- `ExplainRecorder` — preferred for new code. Collects during traversal (core principle).
+- `getGroundingSources()` / `getLLMClaims()` — works on any narrative entries, useful for post-hoc analysis of existing runs.
+
+## How it works under the hood
+
+agentfootprint collects data during traversal (never post-processes):
+
+1. When a tool result is written to scope, it's captured as a narrative entry with `key: 'toolResultMessages'`
+2. When the LLM responds, it's captured with `key: 'result'` and `key: 'adapterRawResponse'`
+3. `getGroundingSources()` filters entries by tool result keys
+4. `getLLMClaims()` filters entries by LLM output keys
+
+Both use the `entry.key` field — stable identifiers, not text matching.
+
+## Next steps
+
+- [Observability guide](/agentfootprint/guides/observability/) — recorders and narrative
+- [Testing guide](/agentfootprint/guides/testing/) — test grounding in CI

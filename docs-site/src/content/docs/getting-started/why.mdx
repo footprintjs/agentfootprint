@@ -1,0 +1,135 @@
+---
+title: Why agentfootprint?
+description: What makes agentfootprint different from other agent frameworks.
+---
+
+## The problem
+
+Most agent frameworks give you execution. You get an answer, but you can't explain how the agent got there. Logs are disconnected. Traces are spans without meaning. When the LLM hallucinates, you find out from your users.
+
+## Connected evidence
+
+agentfootprint gives you **connected evidence** — grounded, auditable, LLM-readable. Every decision is traced. Every tool call is documented with its input and output. The LLM can read its own trace.
+
+```ts
+import { Agent, mock, defineTool } from 'agentfootprint';
+
+const lookupOrder = defineTool({
+  id: 'lookup_order',
+  description: 'Look up an order by ID',
+  inputSchema: { type: 'object', properties: { orderId: { type: 'string' } }, required: ['orderId'] },
+  handler: async ({ orderId }) => ({
+    content: JSON.stringify({ orderId, status: 'shipped', amount: 299 }),
+  }),
+});
+
+const agent = Agent.create({
+  provider: mock([
+    { content: '', toolCalls: [{ id: 'tc1', name: 'lookup_order', arguments: { orderId: 'ORD-1003' } }] },
+    { content: 'Your order ORD-1003 is shipped. Total: $299.' },
+  ]),
+})
+  .system('You are a support agent.')
+  .tool(lookupOrder)
+  .build();
+
+const result = await agent.run('Check order ORD-1003');
+
+// Structured entries — not log lines. Each has type, key, stageId, subflowId.
+const entries = agent.getNarrativeEntries();
+// Use these for grounding analysis, audit trails, or feeding to another LLM.
+```
+
+## Grounding analysis
+
+Compare what tools returned vs what the LLM said. Hallucination detection without a separate eval pipeline:
+
+```ts
+import { getGroundingSources, getLLMClaims } from 'agentfootprint/explain';
+
+const entries = agent.getNarrativeEntries();
+const sources = getGroundingSources(entries);  // tool results (truth)
+const claims = getLLMClaims(entries);           // LLM output (to verify)
+
+// sources: [{ orderId: 'ORD-1003', status: 'shipped', amount: 299 }]
+// claims: ['Your order ORD-1003 is shipped. Total: $299.']
+// The LLM's claim matches the source data — grounded.
+```
+
+## $0 test runs
+
+Write tests with `mock()`. Deploy with `anthropic()`. Same agent, same tools. Swap one line.
+
+```ts
+// test — deterministic, free, instant
+const provider = mock([{ content: 'Paris is the capital of France.' }]);
+
+// production — swap one line
+import { anthropic } from 'agentfootprint';
+const provider = anthropic('claude-sonnet-4-20250514');
+
+// Same agent. Same tools. Same assertions.
+const agent = Agent.create({ provider })
+  .system('Geography expert.')
+  .tool(searchTool)
+  .build();
+```
+
+## No graph DSL required
+
+Start with a function call. Add capabilities as your needs grow:
+
+```ts
+import { LLMCall, Agent, anthropic } from 'agentfootprint';
+import { defineInstruction, AgentPattern } from 'agentfootprint/instructions';
+
+// Level 1: Single LLM call
+const provider = anthropic('claude-sonnet-4-20250514');
+
+const call = LLMCall.create({ provider })
+  .system('Summarize in one sentence.')
+  .build();
+
+// Level 2: Add tools
+const agent = Agent.create({ provider })
+  .system('You are a support agent.')
+  .tool(lookupOrder)
+  .build();
+
+// Level 3: Add conditional instructions
+const refundHandling = defineInstruction({
+  id: 'refund-handling',
+  activeWhen: (d) => d.orderStatus === 'cancelled',
+  prompt: 'Be empathetic. Offer refund. Timeline: 3-5 days.',
+});
+
+const smartAgent = Agent.create({ provider })
+  .system('You are a support agent.')
+  .tool(lookupOrder)
+  .instruction(refundHandling)
+  .decision({ orderStatus: null })
+  .pattern(AgentPattern.Dynamic)
+  .build();
+```
+
+## Built on footprintjs
+
+agentfootprint is built on [footprintjs](https://footprintjs.github.io/footPrint/) — a library for building self-documenting pipelines. You don't need to learn footprintjs to use agentfootprint — it's a dependency that works under the hood.
+
+**What footprintjs provides (you get for free):**
+- The execution engine that runs the agent loop as a flowchart
+- The narrative/recorder system that captures what happened during execution
+- Time-travel debugging and snapshot inspection
+- The flowchart visualization in the [playground](https://footprintjs.github.io/agent-playground/)
+
+**What agentfootprint adds on top:**
+- The 6 agent concepts (LLMCall, Agent, RAG, FlowChart, Swarm, Parallel)
+- LLM provider adapters (Anthropic, OpenAI, Bedrock, Ollama)
+- Tools, instructions, Decision Scope
+- Grounding analysis, streaming events, resilience
+- Agent-specific recorders (TokenRecorder, CostRecorder, etc.)
+
+## Next steps
+
+- [Quick Start](/agentfootprint/getting-started/quick-start/) — build your first agent
+- [Key Concepts](/agentfootprint/getting-started/key-concepts/) — the 6 building blocks

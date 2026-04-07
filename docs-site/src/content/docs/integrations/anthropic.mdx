@@ -1,0 +1,144 @@
+---
+title: Anthropic (Claude)
+description: Integrate agentfootprint with the Anthropic SDK and Claude models.
+---
+
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
+## Install
+
+```bash
+npm install agentfootprint @anthropic-ai/sdk
+```
+
+The `@anthropic-ai/sdk` is a peer dependency — agentfootprint's `AnthropicAdapter` wraps it. Default `max_tokens` is 4096 — override with `maxTokens` in the provider options.
+
+## Server-side (Node.js)
+
+```ts
+import { Agent, anthropic, defineTool } from 'agentfootprint';
+
+const provider = anthropic('claude-sonnet-4-20250514', {
+  apiKey: process.env.ANTHROPIC_API_KEY,  // or set ANTHROPIC_API_KEY env var
+});
+
+const agent = Agent.create({ provider })
+  .system('You are a helpful assistant.')
+  .tool(myTool)
+  .streaming(true)
+  .build();
+
+const result = await agent.run('Hello');
+```
+
+## Browser / Edge
+
+No SDK dependency — calls the Anthropic REST API directly:
+
+```ts
+import { Agent, BrowserAnthropicAdapter } from 'agentfootprint';
+
+const provider = new BrowserAnthropicAdapter({
+  apiKey: userApiKey,  // from your settings UI
+  model: 'claude-sonnet-4-20250514',
+});
+
+const agent = Agent.create({ provider })
+  .system('You are a helpful assistant.')
+  .streaming(true)
+  .build();
+```
+
+> The browser adapter sends `anthropic-dangerous-direct-browser-access` header. This is for **prototyping and playground use only**. For production, proxy API calls through your backend to protect your API key.
+
+## Available models
+
+| Model | ID | Best for |
+|-------|-----|----------|
+| Claude Sonnet 4 | `claude-sonnet-4-20250514` | Best balance of speed and quality |
+| Claude Opus 4 | `claude-opus-4-20250514` | Complex reasoning, coding |
+| Claude Haiku 3.5 | `claude-haiku-3-5-20241022` | Fast, low cost |
+
+## Extended thinking
+
+Claude models support extended reasoning. When enabled via the Anthropic API, the model's thinking is included in the streamed response as tokens. The full reasoning appears in the narrative trace:
+
+```ts
+const agent = Agent.create({ provider })
+  .system('You are a math tutor. Show your reasoning step by step.')
+  .streaming(true)
+  .build();
+
+await agent.run('If x² + 3x - 10 = 0, find x', {
+  onEvent: (event) => {
+    if (event.type === 'token') {
+      process.stdout.write(event.content);
+    }
+  },
+});
+
+// The narrative captures the full LLM response including reasoning
+console.log(agent.getNarrative());
+```
+
+> Extended thinking content appears as part of the LLM response text in the narrative. The `thinking` event type in `AgentStreamEvent` is reserved for future dedicated support.
+
+## Observability
+
+Track token usage and cost with Anthropic pricing:
+
+```ts
+import { agentObservability } from 'agentfootprint/observe';
+
+const obs = agentObservability();
+
+const agent = Agent.create({ provider })
+  .recorder(obs)
+  .build();
+
+await agent.run('Hello');
+
+console.log(obs.tokens());
+// { totalCalls: 1, totalInputTokens: 24, totalOutputTokens: 15, calls: [...] }
+
+// Cost is auto-calculated from model pricing
+console.log(obs.cost());
+// 0.000297 (USD)
+```
+
+## Switching from the Anthropic SDK
+
+If you're currently using `@anthropic-ai/sdk` directly:
+
+<Tabs>
+  <TabItem label="Before (raw SDK)">
+    ```ts
+    import Anthropic from '@anthropic-ai/sdk';
+
+    const client = new Anthropic();
+    const response = await client.messages.create({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 1024,
+      messages: [{ role: 'user', content: 'Hello' }],
+    });
+    console.log(response.content[0].text);
+    ```
+  </TabItem>
+  <TabItem label="After (agentfootprint)">
+    ```ts
+    import { Agent, anthropic } from 'agentfootprint';
+
+    const agent = Agent.create({
+      provider: anthropic('claude-sonnet-4-20250514'),
+    })
+      .system('You are helpful.')
+      .build();
+
+    const result = await agent.run('Hello');
+    console.log(result.content);
+    console.log(agent.getNarrative());  // bonus: full execution trace
+    ```
+  </TabItem>
+</Tabs>
+
+**What you gain:** tool use loop, narrative trace, grounding analysis, `mock()` testing, streaming events, memory, instructions — all with the same Claude models.

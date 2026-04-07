@@ -1,0 +1,158 @@
+---
+title: Pausable — Human-in-the-Loop
+description: Agent pauses for human input, serializes state to JSON, resumes on any server.
+---
+
+## The pattern
+
+Some decisions need a human. A refund approval, a deployment confirmation, a content review. The agent pauses, asks the human, and resumes with their answer.
+
+```
+Agent runs → calls ask_human tool → PAUSES → checkpoint saved (JSON)
+                                                    ↓
+                              ... hours later, different server ...
+                                                    ↓
+                            Human responds → agent.resume(answer) → continues
+```
+
+## askHuman tool
+
+Add `askHuman()` to your agent — it's a special tool that pauses execution:
+
+```ts
+import { Agent, mock, askHuman } from 'agentfootprint';
+
+const agent = Agent.create({
+  provider: mock([
+    // LLM decides to ask the human
+    { content: '', toolCalls: [{
+      id: 'tc1',
+      name: 'ask_human',
+      arguments: { question: 'Approve refund of $299 for ORD-1003?' },
+    }] },
+    // After resume: LLM responds with the human's answer
+    { content: 'The refund has been approved and processed.' },
+  ]),
+})
+  .system('You are a support agent. Use ask_human for manager approval before refunds.')
+  .tool(askHuman())
+  .build();
+
+const result = await agent.run('I want a refund for order ORD-1003');
+
+if (result.paused) {
+  console.log(result.pauseData?.question);
+  // "Approve refund of $299 for ORD-1003?"
+
+  // Later — could be hours, different server:
+  const final = await agent.resume('Yes, approved');
+  console.log(final.content);
+  // "The refund has been approved and processed."
+}
+```
+
+## How it works
+
+1. The LLM calls the `ask_human` tool with a `question`
+2. The agent **pauses** — execution stops, state is serialized
+3. `result.paused === true` and `result.pauseData` contains the question
+4. You store the checkpoint (Redis, database, anywhere)
+5. When the human responds, call `agent.resume(answer)`
+6. The agent continues from where it paused — the answer becomes the tool result
+
+## Conditional pause
+
+The LLM decides whether to pause. If it doesn't call `ask_human`, the agent completes normally:
+
+```ts
+const agent = Agent.create({ provider })
+  .system(`You are a support agent.
+    For refunds under $50, process automatically.
+    For refunds over $50, use ask_human for manager approval.`)
+  .tool(lookupOrder)
+  .tool(processRefund)
+  .tool(askHuman())
+  .build();
+
+// Small refund — no pause
+await agent.run('Refund order ORD-100 ($25)');
+// result.paused === false
+
+// Large refund — pauses
+await agent.run('Refund order ORD-200 ($500)');
+// result.paused === true
+```
+
+## Storing checkpoints
+
+The pause data is JSON-serializable — store it anywhere:
+
+```ts
+const result = await agent.run(message);
+
+if (result.paused) {
+  // Store in your database
+  await db.save({
+    sessionId: 'session-123',
+    question: result.pauseData?.question,
+    agentState: 'paused',
+  });
+
+  // Return to the UI
+  return { paused: true, question: result.pauseData?.question };
+}
+```
+
+## Resuming on a different server
+
+The resume doesn't need to be on the same server. As long as you have the same agent configuration:
+
+```ts
+// Server B — hours later
+const agent = Agent.create({ provider })
+  .system('Same system prompt')
+  .tool(lookupOrder)
+  .tool(askHuman())
+  .build();
+
+// Load the stored state
+const stored = await db.load('session-123');
+
+// Resume with the human's response
+const final = await agent.resume(stored.humanResponse);
+```
+
+## With streaming
+
+Pause works with streaming — tool events still fire:
+
+```ts
+await agent.run('Process refund', {
+  onEvent: (event) => {
+    if (event.type === 'tool_start' && event.toolName === 'ask_human') {
+      console.log('Agent is asking for human input...');
+    }
+  },
+});
+```
+
+## Narrative
+
+The narrative captures the full lifecycle — before pause, the question, and after resume:
+
+```ts
+agent.getNarrative();
+// [
+//   "[CallLLM] Called LLM",
+//   "[ParseResponse] Parsed: tool_calls → [ask_human({question: "Approve?"})]",
+//   "[Pause] Agent paused — waiting for human input",
+//   "--- resume ---",
+//   "[CallLLM] Called LLM",
+//   "[Finalize] Refund approved and processed."
+// ]
+```
+
+## Next steps
+
+- [Agent guide](/agentfootprint/guides/agent/) — memory, streaming, Dynamic ReAct
+- [Testing guide](/agentfootprint/guides/testing/) — test pause/resume with mock()

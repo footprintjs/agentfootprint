@@ -1,0 +1,93 @@
+---
+title: Tool Use
+description: Define tools, register them, and use dynamic tool providers.
+---
+
+## Defining tools
+
+```ts
+import { defineTool } from 'agentfootprint';
+
+const weatherTool = defineTool({
+  id: 'get_weather',
+  description: 'Get current weather for a city',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      city: { type: 'string', description: 'City name' },
+    },
+    required: ['city'],
+  },
+  handler: async ({ city }) => {
+    const data = await fetchWeather(city);
+    return { content: JSON.stringify(data) };
+  },
+});
+```
+
+## Registering tools
+
+```ts
+const agent = Agent.create({ provider })
+  .tool(weatherTool)                    // single tool
+  .tools([searchTool, calculatorTool])  // multiple tools
+  .build();
+```
+
+## Dynamic tool providers
+
+Tools that change based on conversation state:
+
+```ts
+import type { ToolProvider } from 'agentfootprint';
+
+const dynamicTools: ToolProvider = {
+  resolve: (ctx) => {
+    const verified = ctx.messages.some(m =>
+      m.content.includes('"verified":true'));
+
+    const tools = verified
+      ? [...basicTools, ...adminTools]
+      : basicTools;
+
+    return {
+      value: tools.map(t => ({ name: t.id, description: t.description, inputSchema: t.inputSchema })),
+      chosen: verified ? 'elevated' : 'basic',
+    };
+  },
+  execute: async (call) => {
+    const tool = allTools.find(t => t.id === call.name);
+    if (!tool) return { content: `Unknown tool: ${call.name}`, error: true };
+    return tool.handler(call.arguments);
+  },
+};
+
+import { AgentPattern } from 'agentfootprint/instructions';
+
+const agent = Agent.create({ provider })
+  .pattern(AgentPattern.Dynamic)
+  .toolProvider(dynamicTools)
+  .build();
+```
+
+## Tool gating
+
+The LLM never sees tools it can't use:
+
+```ts
+import { Agent } from 'agentfootprint';
+import { gatedTools, PermissionPolicy } from 'agentfootprint/security';
+import { staticTools } from 'agentfootprint/providers';
+
+const policy = PermissionPolicy.fromRoles({
+  user: ['search', 'calc'],
+  admin: ['search', 'calc', 'delete-user'],
+}, 'user');
+
+const agent = Agent.create({ provider })
+  .toolProvider(gatedTools(staticTools(allTools), policy.checker()))
+  .build();
+
+// Upgrade mid-conversation
+policy.setRole('admin');
+```

@@ -1,0 +1,80 @@
+---
+title: Agent / LLMCall
+description: API reference for Agent and LLMCall builders.
+---
+
+## Agent.create(options)
+
+<div class="api-sig">Agent.create(options: \{ provider: LLMProvider; name?: string \}): AgentBuilder</div>
+
+Creates an agent builder. Chain methods to configure, then `.build()` to get a runner.
+
+### Builder methods
+
+| Method | Description |
+|--------|-------------|
+| `.system(prompt)` | Set system prompt |
+| `.tool(tool)` | Add a single tool |
+| `.tools(tools)` | Add multiple tools |
+| `.toolProvider(provider)` | Dynamic tool provider |
+| `.promptProvider(provider)` | Dynamic prompt provider |
+| `.instruction(inst)` | Add conditional instruction |
+| `.decision(initial)` | Set initial Decision Scope |
+| `.pattern(pattern)` | `AgentPattern.Regular` or `AgentPattern.Dynamic` |
+| `.maxIterations(n)` | Max tool loop iterations (default: 10) |
+| `.streaming(bool)` | Enable token streaming |
+| `.memory(config)` | Conversation persistence |
+| `.recorder(rec)` | Attach an AgentRecorder |
+| `.verbose(bool)` | Verbose narrative output |
+| `.build()` | Returns `AgentRunner` |
+
+### AgentRunner
+
+| Method | Returns | Description |
+|--------|---------|-------------|
+| `run(message, options?)` | `AgentResult` | Execute the agent |
+| `resume(response)` | `AgentResult` | Resume after pause |
+| `getNarrative()` | `string[]` | Human-readable trace |
+| `getNarrativeEntries()` | `CombinedNarrativeEntry[]` | Structured entries |
+| `getSnapshot()` | `RuntimeSnapshot` | Full execution state |
+| `getSpec()` | `object` | Flowchart specification |
+| `getMessages()` | `Message[]` | Conversation history |
+| `resetConversation()` | `void` | Clear history |
+
+### AgentResult
+
+```ts
+interface AgentResult {
+  content: string;          // LLM's final response
+  messages: Message[];      // Full conversation
+  iterations: number;       // Tool loop iterations
+  paused?: boolean;         // true if agent paused (ask_human)
+  pauseData?: { question: string; toolCallId: string };
+}
+```
+
+---
+
+## LLMCall.create(options)
+
+<div class="api-sig">LLMCall.create(options: \{ provider: LLMProvider \}): LLMCallBuilder</div>
+
+Simpler than Agent — single LLM invocation, no tool loop.
+
+### Builder methods
+
+| Method | Description |
+|--------|-------------|
+| `.system(prompt)` | Set system prompt |
+| `.streaming(bool)` | Enable token streaming |
+| `.recorder(rec)` | Attach an AgentRecorder |
+| `.build()` | Returns `LLMCallRunner` |
+
+### LLMCallRunner
+
+| Method | Returns | Description |
+|--------|---------|-------------|
+| `run(message, options?)` | `{ content, messages }` | Execute the call |
+| `getNarrative()` | `string[]` | Execution trace |
+| `getSnapshot()` | `unknown` | Full state |
+| `getSpec()` | `unknown` | Flowchart spec |

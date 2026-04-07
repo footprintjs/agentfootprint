@@ -1,0 +1,68 @@
+---
+title: Streaming
+description: Real-time lifecycle events for any UX — CLI, web, mobile.
+---
+
+## 9-event lifecycle
+
+agentfootprint emits a discriminated union of 9 event types. Build any UX.
+
+```ts
+await agent.run('Check order', {
+  onEvent: (event) => {
+    switch (event.type) {
+      case 'turn_start':  console.log('--- Turn started ---'); break;
+      case 'llm_start':   console.log(`LLM call #${event.iteration}...`); break;
+      case 'thinking':     console.log(`[thinking] ${event.content}`); break;
+      case 'token':        process.stdout.write(event.content); break;
+      case 'llm_end':      console.log(`\n[${event.toolCallCount} tools, ${event.latencyMs}ms]`); break;
+      case 'tool_start':   console.log(`Running ${event.toolName}...`); break;
+      case 'tool_end':     console.log(`Done (${event.latencyMs}ms)`); break;
+      case 'turn_end':     console.log(`--- Done (${event.iterations} iterations) ---`); break;
+      case 'error':        console.error(`[${event.phase}] ${event.message}`); break;
+    }
+  },
+});
+```
+
+## Events
+
+| Event | When | Key fields |
+|-------|------|-----------|
+| `turn_start` | Agent begins processing | `userMessage` |
+| `llm_start` | LLM API call begins | `iteration` |
+| `thinking` | Extended thinking content | `content` |
+| `token` | Token streamed from LLM | `content` |
+| `llm_end` | LLM API call completes | `toolCallCount`, `content`, `model`, `latencyMs` |
+| `tool_start` | Tool execution begins | `toolName`, `toolCallId`, `args` |
+| `tool_end` | Tool execution completes | `toolName`, `toolCallId`, `result`, `latencyMs` |
+| `turn_end` | Agent done | `content`, `iterations`, `paused` |
+| `error` | Error occurred | `phase`, `message` |
+
+## SSE for web backends
+
+```ts
+import { SSEFormatter } from 'agentfootprint/stream';
+
+app.get('/chat', async (req, res) => {
+  res.setHeader('Content-Type', 'text/event-stream');
+
+  await agent.run(req.query.message, {
+    onEvent: (event) => {
+      res.write(SSEFormatter.format(event));
+    },
+  });
+
+  res.end();
+});
+```
+
+## Enable streaming
+
+```ts
+const agent = Agent.create({ provider })
+  .streaming(true)   // enables token-by-token streaming
+  .build();
+```
+
+Tool lifecycle events (`tool_start`, `tool_end`) fire even without `.streaming(true)` — only `token` events require streaming mode.

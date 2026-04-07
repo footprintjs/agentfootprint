@@ -8,7 +8,12 @@
 <p align="center">
   <a href="https://github.com/footprintjs/agentfootprint/actions"><img src="https://github.com/footprintjs/agentfootprint/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="https://www.npmjs.com/package/agentfootprint"><img src="https://img.shields.io/npm/v/agentfootprint.svg?style=flat" alt="npm version"></a>
+  <a href="https://img.shields.io/npm/dm/agentfootprint.svg"><img src="https://img.shields.io/npm/dm/agentfootprint.svg" alt="Downloads"></a>
   <a href="https://github.com/footprintjs/agentfootprint/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT License"></a>
+  <br>
+  <a href="https://footprintjs.github.io/agentfootprint/"><img src="https://img.shields.io/badge/Docs-agentfootprint-facc15?style=flat&logo=typescript&logoColor=white" alt="Docs"></a>
+  <a href="https://footprintjs.github.io/agent-playground/"><img src="https://img.shields.io/badge/Playground-Live_Demo-facc15?style=flat" alt="Playground"></a>
+  <a href="https://footprintjs.github.io/footPrint/"><img src="https://img.shields.io/badge/Built_on-footprintjs-ca8a04?style=flat" alt="Built on footprintjs"></a>
 </p>
 
 <br>
@@ -292,7 +297,7 @@ const provider = resilientProvider([anthropicAdapter, openaiAdapter, ollamaAdapt
 
 ---
 
-## 18 Samples
+## 26 Samples
 
 `test/samples/` — runnable with `vitest`:
 
@@ -301,6 +306,14 @@ const provider = resilientProvider([anthropicAdapter, openaiAdapter, ollamaAdapt
 | 01-16 | Core patterns | LLMCall, Agent, RAG, FlowChart, Swarm, recorders, tools, security, errors, multi-modal |
 | 17 | **Instructions** | defineInstruction, decide(), conditional activation, Decision Scope |
 | 18 | **Streaming Events** | AgentStreamEvent lifecycle, tool events, SSE |
+| 19 | **Security** | gatedTools, PermissionPolicy, role-based tool access |
+| 20 | **Grounding** | getGroundingSources, getLLMClaims, hallucination detection |
+| 21 | **SSE Server** | Express SSE endpoint with SSEFormatter |
+| 22 | **Resilience** | withRetry, withFallback, provider failover |
+| 23 | **Memory Stores** | redisStore, postgresStore, dynamoStore adapters |
+| 24 | **Structured Output** | outputSchema, Zod auto-convert, zodToJsonSchema |
+| 25 | **OTel Recorder** | OpenTelemetry spans with mock tracer |
+| 26 | **Explain Recorder** | ExplainRecorder: sources, claims, decisions during traversal |
 
 ---
 

@@ -15,6 +15,7 @@ import type { FlowChart as FlowChartType, FlowChartExecutorOptions, TypedScope }
 import { annotateSpecIcons } from './specIcons';
 
 import type { LLMProvider, LLMResponse, Message } from '../types';
+import type { ModelConfig } from '../models';
 import { getTextContent } from '../types/content';
 import { userMessage, systemMessage } from '../types';
 import type { RAGState } from '../scope/types';
@@ -24,9 +25,11 @@ import { finalizeStage } from '../stages/finalize';
 import { lastAssistantMessage } from '../memory';
 import type { AgentRecorder } from '../core';
 import { RecorderBridge } from '../recorders/v2/RecorderBridge';
+import { resolveProvider } from '../adapters/createProvider';
 
 export interface LLMCallOptions {
-  readonly provider: LLMProvider;
+  /** LLMProvider instance or ModelConfig from anthropic()/openai()/bedrock()/ollama(). */
+  readonly provider: LLMProvider | ModelConfig;
 }
 
 export class LLMCall {
@@ -36,7 +39,7 @@ export class LLMCall {
   private enableStreaming = false;
 
   private constructor(options: LLMCallOptions) {
-    this.provider = options.provider;
+    this.provider = resolveProvider(options.provider);
   }
 
   static create(options: LLMCallOptions): LLMCall {

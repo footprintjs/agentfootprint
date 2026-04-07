@@ -3,3 +3,28 @@ dist/
 coverage/
 *.tgz
 .DS_Store
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Environment
+.env
+.env.*
+
+# Build artifacts
+*.log
+npm-debug.log*
+
+# Docs build output
+docs-site/dist/
+docs-site/.astro/
+api-docs/
+
+# Claude Code
+.claude/
+
+# Playwright
+.playwright-mcp/

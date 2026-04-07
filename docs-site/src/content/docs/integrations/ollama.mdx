@@ -1,0 +1,70 @@
+---
+title: Ollama (Local)
+description: Run agents locally with Ollama — no API keys, no cost.
+---
+
+## Install
+
+```bash
+npm install agentfootprint openai
+```
+
+The `openai` package is required — agentfootprint's Ollama adapter uses the OpenAI-compatible API under the hood.
+
+Ollama must be running locally. [Install Ollama](https://ollama.com) and pull a model:
+
+```bash
+ollama pull llama3
+```
+
+## Usage
+
+```ts
+import { Agent, ollama, defineTool } from 'agentfootprint';
+
+const provider = ollama('llama3');
+
+const agent = Agent.create({ provider })
+  .system('You are a helpful assistant.')
+  .build();
+
+const result = await agent.run('Hello');
+```
+
+## Custom endpoint
+
+```ts
+const provider = ollama('llama3', {
+  baseUrl: 'http://192.168.1.100:11434',  // remote Ollama instance
+});
+```
+
+## Development workflow
+
+Use Ollama for local development, switch to Claude for production:
+
+```ts
+const provider = process.env.NODE_ENV === 'production'
+  ? anthropic('claude-sonnet-4-20250514')
+  : ollama('llama3');
+
+// Same agent, same tools — just different provider
+const agent = Agent.create({ provider })
+  .system('You are a support agent.')
+  .tool(lookupOrder)
+  .build();
+```
+
+## Supported models
+
+Any model available in your local Ollama installation. Common choices:
+
+| Model | Best for |
+|-------|----------|
+| `llama3.3` | General purpose |
+| `llama4` | Latest, multimodal |
+| `qwen3` | Reasoning, multilingual |
+| `deepseek-r1` | Deep reasoning |
+| `gemma3` | Fast, lightweight |
+
+Ollama uses the OpenAI-compatible API. For tool use, choose models with reliable function calling support (`llama3.1+`, `qwen2.5`, `mistral-nemo`). Smaller models may produce unreliable tool calls.

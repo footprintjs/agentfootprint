@@ -1,0 +1,202 @@
+---
+title: Key Concepts
+description: The 6 building blocks of agentfootprint — each adds one capability.
+---
+
+## Key terms
+
+Before diving in, here are the terms you'll see throughout the docs:
+
+| Term | Meaning |
+|------|---------|
+| **Agent** | An LLM that can call tools in a loop until it has an answer |
+| **ReAct** | "Reasoning + Acting" — the pattern where an LLM thinks, acts (calls a tool), observes the result, and repeats |
+| **Narrative** | A structured execution trace — what happened, in what order, with what data. Not logs — connected entries with provenance |
+| **Recorder** | A passive observer that collects data (tokens, cost, tool usage) during execution without affecting behavior |
+| **Grounding** | Whether the LLM's response is based on actual data (tool results) vs made up (hallucination) |
+| **Provider** | The LLM backend — Claude, GPT, Ollama, or your own. Swap with one line |
+
+## Six concepts, one interface
+
+Every concept shares the same pattern: **create → configure → build → run → observe**.
+
+```ts
+const runner = Concept.create({ provider }).build();
+const result = await runner.run(input);
+runner.getNarrative();   // what happened
+runner.getSnapshot();    // full state
+runner.getSpec();        // flowchart spec for visualization
+```
+
+## LLMCall
+
+The simplest concept. One LLM invocation, no tools, no loop.
+
+```ts
+import { LLMCall, anthropic } from 'agentfootprint';
+
+const provider = anthropic('claude-sonnet-4-20250514');
+
+const call = LLMCall.create({ provider })
+  .system('Summarize in one sentence.')
+  .build();
+
+const result = await call.run('Long article text...');
+console.log(result.content);  // "The article discusses..."
+```
+
+**Use for:** summarization, classification, translation, extraction.
+
+## Agent
+
+Adds the ReAct tool loop. The LLM calls tools, gets results, and loops until it has an answer.
+
+```ts
+import { Agent, defineTool, anthropic } from 'agentfootprint';
+
+const provider = anthropic('claude-sonnet-4-20250514');
+
+const searchTool = defineTool({
+  id: 'search',
+  description: 'Search the web',
+  inputSchema: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] },
+  handler: async ({ query }) => ({ content: `Results for "${query}": ...` }),
+});
+
+const agent = Agent.create({ provider })
+  .system('You are a research assistant.')
+  .tool(searchTool)
+  .maxIterations(10)
+  .build();
+
+const result = await agent.run('What are the latest AI trends?');
+```
+
+**Use for:** research, code generation, customer support, data analysis.
+
+## RAG
+
+Adds retrieval. Query a knowledge base, inject relevant chunks, then answer.
+
+```ts
+import { RAG, mockRetriever, anthropic } from 'agentfootprint';
+
+const retriever = mockRetriever([{
+  chunks: [
+    { content: 'Return policy: 14 days for full refund.', metadata: { source: 'policy' } },
+  ],
+}]);
+
+const provider = anthropic('claude-sonnet-4-20250514');
+
+const rag = RAG.create({ provider, retriever })
+  .system('Answer from the product docs only.')
+  .topK(5)
+  .build();
+
+const result = await rag.run('What is the return policy?');
+```
+
+**Use for:** Q&A over documents, product knowledge bases, policy lookup.
+
+## FlowChart
+
+Chains multiple agent runners into a sequential pipeline. Each agent is a stage.
+
+```ts
+import { FlowChart, Agent, anthropic } from 'agentfootprint';
+
+const provider = anthropic('claude-sonnet-4-20250514');
+
+const researcher = Agent.create({ provider, name: 'researcher' })
+  .system('Research the topic thoroughly.')
+  .build();
+
+const writer = Agent.create({ provider, name: 'writer' })
+  .system('Write a clear summary from the research.')
+  .build();
+
+const pipeline = FlowChart.create()
+  .agent('research', 'Research phase', researcher)
+  .agent('write', 'Writing phase', writer)
+  .build();
+
+const result = await pipeline.run('Explain quantum computing');
+```
+
+**Use for:** multi-step workflows, approval flows, ETL pipelines.
+
+## Swarm
+
+LLM-driven routing to specialist agents. The orchestrator decides which specialist handles each request.
+
+```ts
+import { Swarm, Agent, anthropic } from 'agentfootprint';
+
+const provider = anthropic('claude-sonnet-4-20250514');
+
+const coder = Agent.create({ provider, name: 'coder' })
+  .system('You are a coding specialist.')
+  .build();
+
+const writer = Agent.create({ provider, name: 'writer' })
+  .system('You are a writing specialist.')
+  .build();
+
+const swarm = Swarm.create({ provider, name: 'orchestrator' })
+  .system('Route coding questions to coder, writing tasks to writer.')
+  .specialist('coder', 'Handle programming tasks', coder)
+  .specialist('writer', 'Handle creative writing', writer)
+  .build();
+
+const result = await swarm.run('Write a haiku about debugging');
+```
+
+**Use for:** customer support triage, multi-domain assistants, expert routing.
+
+## Parallel
+
+Run multiple agents simultaneously and merge their results.
+
+```ts
+import { Parallel, Agent, anthropic } from 'agentfootprint';
+
+const provider = anthropic('claude-sonnet-4-20250514');
+
+const optimist = Agent.create({ provider, name: 'optimist' })
+  .system('Analyze the positive aspects.')
+  .build();
+
+const critic = Agent.create({ provider, name: 'critic' })
+  .system('Analyze the risks and downsides.')
+  .build();
+
+const analysis = Parallel.create({ provider, name: 'balanced-analysis' })
+  .agent('optimist', optimist, 'Positive analysis')
+  .agent('critic', critic, 'Critical analysis')
+  .mergeWithLLM('Synthesize both perspectives into a balanced summary.')
+  .build();
+
+const result = await analysis.run('Should we adopt microservices?');
+```
+
+**Use for:** multi-perspective analysis, A/B comparison, ensemble approaches.
+
+## Common patterns
+
+All six concepts support:
+
+| Feature | Method | Description |
+|---------|--------|-------------|
+| Streaming | `.streaming(true)` | Token-by-token output |
+| Recorders | `.recorder(obs)` | Passive observation (tokens, cost, tools) |
+| Narrative | `.getNarrative()` | Human-readable execution trace |
+| Snapshot | `.getSnapshot()` | Full execution state for debugging |
+| Spec | `.getSpec()` | Flowchart spec for visualization |
+
+## Next steps
+
+- [Agent guide](/agentfootprint/guides/agent/) — deep dive into ReAct agents with tools and memory
+- [Instructions guide](/agentfootprint/guides/instructions/) — conditional context injection
+- [Observability guide](/agentfootprint/guides/observability/) — recorders, narrative, grounding analysis
+- [API reference](/agentfootprint/api/agent/) — complete method signatures

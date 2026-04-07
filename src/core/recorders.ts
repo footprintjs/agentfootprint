@@ -55,8 +55,11 @@ export interface TurnCompleteEvent {
   readonly content: string;
 }
 
+/** Phase of agent execution where an event occurred. */
+export type AgentPhase = 'prompt' | 'llm' | 'tool' | 'message';
+
 export interface AgentErrorEvent {
-  readonly phase: 'prompt' | 'llm' | 'tool' | 'message';
+  readonly phase: AgentPhase;
   readonly error: unknown;
   readonly turnNumber: number;
 }

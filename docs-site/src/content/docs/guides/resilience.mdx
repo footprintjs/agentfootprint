@@ -1,0 +1,60 @@
+---
+title: Resilience
+description: Retry, fallback, circuit breaker, and provider failover.
+---
+
+## withRetry
+
+Retry failed agent runs with exponential backoff:
+
+```ts
+import { withRetry } from 'agentfootprint/resilience';
+
+const reliable = withRetry(agent, {
+  maxRetries: 3,
+  backoffMs: 1000,
+});
+
+await reliable.run('Hello');
+```
+
+## withFallback
+
+Fall back to a cheaper/faster agent when the primary fails:
+
+```ts
+import { withFallback } from 'agentfootprint/resilience';
+
+const resilient = withFallback(primaryAgent, cheapAgent);
+await resilient.run('Hello');
+```
+
+## Circuit breaker
+
+Stop calling a failing provider after N consecutive failures:
+
+```ts
+import { withCircuitBreaker } from 'agentfootprint/resilience';
+
+const guarded = withCircuitBreaker(agent, {
+  threshold: 5,         // open after 5 failures
+  resetAfterMs: 30000,  // probe after 30s
+});
+```
+
+## Provider failover
+
+Cross-family failover: Claude, GPT-4o, local Ollama:
+
+```ts
+import { anthropic, openai, ollama } from 'agentfootprint';
+import { fallbackProvider } from 'agentfootprint/resilience';
+
+const provider = fallbackProvider([
+  anthropic('claude-sonnet-4-20250514'),
+  openai('gpt-4o'),
+  ollama('llama3'),
+]);
+
+const agent = Agent.create({ provider }).build();
+```

@@ -3,6 +3,7 @@
  */
 
 import type { ToolDefinition, LLMToolDescription } from '../types';
+import { zodToJsonSchema, isZodSchema } from './zodToJsonSchema';
 
 export class ToolRegistry {
   private readonly tools = new Map<string, ToolDefinition>();
@@ -60,15 +61,36 @@ export class ToolRegistry {
 }
 
 /**
- * Convenience: define a tool inline.
+ * Define a tool inline. Accepts JSON Schema or Zod schema for `inputSchema`.
  *
- *   const searchTool = defineTool({
- *     id: 'search',
- *     description: 'Search the web',
- *     inputSchema: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] },
- *     handler: async ({ query }) => ({ content: `Results for: ${query}` }),
- *   });
+ * @example JSON Schema
+ * ```typescript
+ * defineTool({
+ *   id: 'search',
+ *   description: 'Search the web',
+ *   inputSchema: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] },
+ *   handler: async ({ query }) => ({ content: `Results for: ${query}` }),
+ * });
+ * ```
+ *
+ * @example Zod schema (auto-converted, no zod dependency in core)
+ * ```typescript
+ * import { z } from 'zod';
+ * defineTool({
+ *   id: 'search',
+ *   description: 'Search the web',
+ *   inputSchema: z.object({ query: z.string().describe('Search query') }),
+ *   handler: async ({ query }) => ({ content: `Results for: ${query}` }),
+ * });
+ * ```
  */
 export function defineTool(tool: ToolDefinition): ToolDefinition {
+  const schema = tool.inputSchema;
+
+  // Duck-type Zod detection: Zod schemas have ._def and .safeParse
+  if (isZodSchema(schema)) {
+    return { ...tool, inputSchema: zodToJsonSchema(schema as any) };
+  }
+
   return tool;
 }

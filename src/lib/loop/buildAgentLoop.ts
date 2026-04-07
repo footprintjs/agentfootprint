@@ -202,10 +202,16 @@ export function buildAgentLoop(config: AgentLoopConfig, seed?: AgentLoopSeedOpti
     config.onInstructionsFired?.(toolId, fired);
   };
 
-  // Build call stages — pass onStreamEvent for llm_start/llm_end events
+  // Build call stages — pass onStreamEvent + responseFormat for llm_start/llm_end events
   const callLLM = config.streaming
-    ? createStreamingCallLLMStage(config.provider, config.onStreamEvent)
-    : createCallLLMStage(config.provider, config.onStreamEvent);
+    ? createStreamingCallLLMStage(config.provider, {
+        onStreamEvent: config.onStreamEvent,
+        responseFormat: config.responseFormat,
+      })
+    : createCallLLMStage(config.provider, {
+        onStreamEvent: config.onStreamEvent,
+        responseFormat: config.responseFormat,
+      });
   const toolExecutionSubflow = buildToolExecutionSubflow({
     registry: config.registry,
     toolProvider: config.toolProvider,

@@ -27,18 +27,48 @@ export interface LLMCallOptions {
   readonly signal?: AbortSignal;
   /** Callback for streaming tokens incrementally. When provided, the LLM provider should emit chunks as they arrive. */
   readonly streamCallback?: StreamCallback;
+  /**
+   * Request structured JSON output matching a schema.
+   * Each adapter handles this differently:
+   * - OpenAI: passes as native `response_format`
+   * - Anthropic: injects schema into system prompt + validates
+   * - Custom: adapter decides the strategy
+   */
+  readonly responseFormat?: ResponseFormat;
 }
+
+/** Structured output format request. */
+export interface ResponseFormat {
+  readonly type: 'json_schema';
+  /** JSON Schema the response must conform to. */
+  readonly schema: Record<string, unknown>;
+  /** Optional name for the schema (used by OpenAI's API). */
+  readonly name?: string;
+  /**
+   * Where to inject the schema instruction for providers without native support (e.g., Anthropic).
+   * - `'system'` — append to system prompt (default)
+   * - `'user'` — inject as the last user message (recency window — higher LLM attention)
+   *
+   * OpenAI ignores this — it uses native `response_format`.
+   */
+  readonly injection?: 'system' | 'user';
+}
+
+/** Normalized finish reason across all providers. */
+export type FinishReason = 'stop' | 'tool_calls' | 'length' | 'error';
 
 export interface LLMResponse {
   readonly content: string;
   readonly toolCalls?: ToolCall[];
   readonly usage?: TokenUsage;
   readonly model?: string;
-  readonly finishReason?: 'stop' | 'tool_calls' | 'length' | 'error';
+  readonly finishReason?: FinishReason;
+  /** Extended thinking text. Present when the model uses extended thinking (e.g., Anthropic with thinking enabled). Requires provider-specific configuration. */
+  readonly thinking?: string;
 }
 
 export interface LLMStreamChunk {
-  readonly type: 'token' | 'tool_call' | 'usage' | 'done';
+  readonly type: 'token' | 'thinking' | 'tool_call' | 'usage' | 'done';
   readonly content?: string;
   readonly toolCall?: ToolCall;
   readonly usage?: TokenUsage;

@@ -51,6 +51,8 @@ export type {
   LLMStreamChunk,
   TokenUsage,
   LLMToolDescription,
+  ResponseFormat,
+  FinishReason,
 } from './llm';
 
 export type { ToolDefinition, ToolHandler, ToolResult } from './tools';

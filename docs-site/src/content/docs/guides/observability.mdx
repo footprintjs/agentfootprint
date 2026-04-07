@@ -1,0 +1,105 @@
+---
+title: Observability
+description: Passive recorders that observe without shaping behavior.
+---
+
+## agentObservability() — one call
+
+```ts
+import { Agent, mock } from 'agentfootprint';
+import { agentObservability } from 'agentfootprint/observe';
+
+const provider = mock([{ content: 'Hello!' }]);
+
+const obs = agentObservability();
+const agent = Agent.create({ provider })
+  .recorder(obs)
+  .build();
+
+await agent.run('hello');
+
+obs.tokens();  // { totalCalls: 2, totalInputTokens: 150, calls: [...] }
+obs.tools();   // { totalCalls: 1, byTool: { search: { calls: 1, errors: 0 } } }
+obs.cost();    // 0.0042
+```
+
+## Individual recorders
+
+For fine-grained control, attach individual recorders:
+
+```ts
+import {
+  TokenRecorder, CostRecorder, ToolUsageRecorder,
+  QualityRecorder, GuardrailRecorder, PermissionRecorder,
+} from 'agentfootprint/observe';
+
+const tokens = new TokenRecorder();
+const cost = new CostRecorder({
+  pricingTable: { 'claude-sonnet-4-20250514': { input: 3, output: 15 } },
+});
+
+const agent = Agent.create({ provider })
+  .recorder(tokens)
+  .recorder(cost)
+  .build();
+```
+
+## Recorder reference
+
+| Recorder | What it tracks | Key method |
+|----------|---------------|------------|
+| `TokenRecorder` | Input/output tokens per LLM call | `getStats()` |
+| `CostRecorder` | USD cost per model | `getTotalCost()` |
+| `ToolUsageRecorder` | Calls, latency, errors per tool | `getStats()` |
+| `QualityRecorder` | Custom quality score per response | `getScores()` |
+| `GuardrailRecorder` | Policy violations per response | `getViolations()` |
+| `PermissionRecorder` | Blocked/allowed tool events | `getEvents()` |
+
+## Narrative
+
+Every agent produces a connected narrative — not logs, structured entries:
+
+```ts
+agent.getNarrative();
+// [
+//   "[Seed] Initialized agent state",
+//   "[CallLLM] claude-sonnet-4 (127in / 45out)",
+//   "[ExecuteToolCalls] lookup_order({orderId: 'ORD-1003'})",
+//   "[CallLLM] claude-sonnet-4 (312in / 89out)",
+//   "[Finalize] Your order was denied..."
+// ]
+
+// Structured entries for programmatic access
+agent.getNarrativeEntries();
+// Each: { type, text, key, stageId, subflowId }
+```
+
+## OpenTelemetry (OTelRecorder)
+
+Export agent events as OpenTelemetry spans — no `@opentelemetry` dependency in core. Bring your own tracer:
+
+```ts
+import { trace } from '@opentelemetry/api';
+import { OTelRecorder } from 'agentfootprint/observe';
+
+const recorder = new OTelRecorder(trace.getTracer('agentfootprint'));
+const agent = Agent.create({ provider })
+  .recorder(recorder)
+  .build();
+
+await agent.run('Hello');
+// Spans: agent.turn → gen_ai.chat (per LLM call) → tool.* (per tool call)
+// Attributes follow OpenTelemetry GenAI semantic conventions
+```
+
+Works with Datadog, New Relic, Grafana, Jaeger, or any OTel-compatible backend.
+
+## Grounding analysis
+
+```ts
+import { getGroundingSources, getLLMClaims } from 'agentfootprint/explain';
+
+const entries = agent.getNarrativeEntries();
+const sources = getGroundingSources(entries);  // tool results (truth)
+const claims = getLLMClaims(entries);           // LLM output (verify)
+```

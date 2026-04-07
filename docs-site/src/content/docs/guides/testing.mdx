@@ -1,0 +1,167 @@
+---
+title: Testing Agents
+description: Deterministic, free, instant testing with mock() — patterns for vitest and jest.
+---
+
+## The mock() story
+
+`mock()` returns responses in order. Same agent, same tools, $0 cost, deterministic results.
+
+```ts
+import { mock } from 'agentfootprint';
+
+const provider = mock([
+  // Response 1: LLM decides to call a tool
+  { content: '', toolCalls: [{ id: 'tc1', name: 'search', arguments: { query: 'AI trends' } }] },
+  // Response 2: LLM generates final answer using tool results
+  { content: 'The latest AI trends include...' },
+]);
+```
+
+## Testing tool calls
+
+Verify the agent calls the right tools and uses the results:
+
+```ts
+import { describe, it, expect } from 'vitest';
+import { Agent, mock, defineTool } from 'agentfootprint';
+import { agentObservability } from 'agentfootprint/observe';
+
+const lookupOrder = defineTool({
+  id: 'lookup_order',
+  description: 'Look up an order',
+  inputSchema: { type: 'object', properties: { orderId: { type: 'string' } }, required: ['orderId'] },
+  handler: async ({ orderId }) => ({
+    content: JSON.stringify({ orderId, status: 'shipped', amount: 299 }),
+  }),
+});
+
+describe('support agent', () => {
+  it('looks up the order and responds with status', async () => {
+    const obs = agentObservability();
+    const agent = Agent.create({
+      provider: mock([
+        { content: '', toolCalls: [{ id: 'tc1', name: 'lookup_order', arguments: { orderId: 'ORD-1003' } }] },
+        { content: 'Your order ORD-1003 has shipped!' },
+      ]),
+    })
+      .system('You are a support agent.')
+      .tool(lookupOrder)
+      .recorder(obs)
+      .build();
+
+    const result = await agent.run('Check order ORD-1003');
+
+    // Assert on content
+    expect(result.content).toContain('shipped');
+
+    // Assert on iterations (2 = tool call + final response)
+    expect(result.iterations).toBe(2);
+
+    // Assert on recorder data
+    expect(obs.tokens().totalCalls).toBe(2);
+    expect(obs.tools().byTool['lookup_order'].calls).toBe(1);
+  });
+});
+```
+
+## Testing narrative
+
+Verify the execution trace contains expected entries:
+
+```ts
+it('narrative includes tool call details', async () => {
+  const agent = Agent.create({ provider: mock([...]) })
+    .tool(lookupOrder)
+    .build();
+
+  await agent.run('Check order ORD-1003');
+
+  const narrative = agent.getNarrative();
+  expect(narrative.some(line => line.includes('lookup_order'))).toBe(true);
+  expect(narrative.some(line => line.includes('shipped'))).toBe(true);
+});
+```
+
+## Testing instructions
+
+Verify conditional instructions activate based on decision scope:
+
+```ts
+import { defineInstruction, AgentPattern } from 'agentfootprint/instructions';
+
+it('refund instruction activates for cancelled orders', async () => {
+  const refund = defineInstruction({
+    id: 'refund-handling',
+    activeWhen: (d) => d.orderStatus === 'cancelled',
+    prompt: 'Offer refund. Timeline: 3-5 days.',
+  });
+
+  const agent = Agent.create({
+    provider: mock([
+      // Call 1: tool call
+      { content: '', toolCalls: [{ id: 'tc1', name: 'lookup_order', arguments: { orderId: 'ORD-1003' } }] },
+      // Call 2: response (should mention refund since instruction activated)
+      { content: 'Your order was cancelled. I can process a refund in 3-5 days.' },
+    ]),
+  })
+    .tool(lookupOrder)
+    .instruction(refund)
+    .decision({ orderStatus: null })
+    .pattern(AgentPattern.Dynamic)
+    .build();
+
+  const result = await agent.run('Check order ORD-1003');
+  expect(result.content).toContain('refund');
+});
+```
+
+## Testing streaming events
+
+```ts
+import type { AgentStreamEvent } from 'agentfootprint';
+
+it('emits tool_start and tool_end events', async () => {
+  const events: AgentStreamEvent[] = [];
+
+  const agent = Agent.create({ provider: mock([...]) })
+    .tool(lookupOrder)
+    .build();
+
+  await agent.run('Check order', {
+    onEvent: (event) => events.push(event),
+  });
+
+  const toolStarts = events.filter(e => e.type === 'tool_start');
+  const toolEnds = events.filter(e => e.type === 'tool_end');
+  expect(toolStarts).toHaveLength(1);
+  expect(toolEnds).toHaveLength(1);
+  expect(toolStarts[0].toolName).toBe('lookup_order');
+});
+```
+
+## Testing grounding
+
+```ts
+import { getGroundingSources, getLLMClaims } from 'agentfootprint/explain';
+
+it('LLM response is grounded in tool results', async () => {
+  await agent.run('Check order ORD-1003');
+
+  const entries = agent.getNarrativeEntries();
+  const sources = getGroundingSources(entries);
+  const claims = getLLMClaims(entries);
+
+  // Sources should contain the order data
+  expect(sources.length).toBeGreaterThan(0);
+  // Claims should reference data from sources
+  expect(claims.length).toBeGreaterThan(0);
+});
+```
+
+## Tips
+
+- **One mock response per LLM call.** If the agent makes 2 LLM calls (tool + response), provide 2 mock responses.
+- **Tool handlers still execute.** `mock()` replaces the LLM, not your tools. Tool handlers run normally.
+- **Use `agentObservability()`** to assert on token counts, tool usage, and cost.
+- **Use `.getNarrativeEntries()`** for structured assertions instead of string matching on `.getNarrative()`.

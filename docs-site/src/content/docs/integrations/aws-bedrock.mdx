@@ -1,0 +1,215 @@
+---
+title: AWS Bedrock
+description: Use Claude on AWS Bedrock with agentfootprint — keep your AWS infrastructure, get explainable agents.
+---
+
+## Use Claude on Bedrock
+
+Keep your AWS infrastructure. Get explainable agents.
+
+```bash
+npm install agentfootprint @aws-sdk/client-bedrock-runtime
+```
+
+```ts
+import { Agent, bedrock, defineTool } from 'agentfootprint';
+
+const provider = bedrock('anthropic.claude-sonnet-4-20250514-v1:0');
+
+const agent = Agent.create({ provider })
+  .system('You are a helpful assistant.')
+  .tool(myTool)
+  .build();
+
+const result = await agent.run('Hello');
+console.log(result.content);
+console.log(agent.getNarrative());  // full execution trace
+```
+
+## Configuration
+
+```ts
+import { BedrockAdapter } from 'agentfootprint';
+
+// Explicit region and credentials
+const provider = new BedrockAdapter({
+  model: 'anthropic.claude-sonnet-4-20250514-v1:0',
+  region: 'us-east-1',
+});
+
+// Cross-region inference
+const provider = new BedrockAdapter({
+  model: 'us.anthropic.claude-sonnet-4-20250514-v1:0',
+  region: 'us-east-1',
+});
+```
+
+Authentication uses the standard AWS credential chain (environment variables, IAM roles, SSO profiles).
+
+> Region defaults to the `AWS_REGION` environment variable. Override with:
+> ```ts
+> const provider = bedrock('anthropic.claude-sonnet-4-20250514-v1:0', { region: 'us-east-1' });
+> ```
+
+## Available Bedrock models
+
+| Model | Bedrock Model ID |
+|-------|-----------------|
+| Claude Sonnet 4 | `anthropic.claude-sonnet-4-20250514-v1:0` |
+| Claude Opus 4 | `anthropic.claude-opus-4-20250514-v1:0` |
+| Claude Haiku 3.5 | `anthropic.claude-3-5-haiku-20241022-v1:0` |
+
+---
+
+## Agent with tools on Bedrock
+
+```ts
+import { Agent, bedrock, defineTool } from 'agentfootprint';
+
+const provider = bedrock('anthropic.claude-sonnet-4-20250514-v1:0');
+
+const lookupOrder = defineTool({
+  id: 'lookup_order',
+  description: 'Look up an order by ID',
+  inputSchema: {
+    type: 'object',
+    properties: { orderId: { type: 'string' } },
+    required: ['orderId'],
+  },
+  handler: async ({ orderId }) => {
+    const order = await db.orders.find(orderId);
+    return { content: JSON.stringify(order) };
+  },
+});
+
+const agent = Agent.create({ provider })
+  .system('You are a customer support agent.')
+  .tool(lookupOrder)
+  .build();
+
+const result = await agent.run('Check order ORD-1003');
+
+// Connected execution trace
+agent.getNarrative();
+// [
+//   "[Seed] Initialized agent state",
+//   "[CallLLM] Called LLM",
+//   "[ParseResponse] Parsed: tool_calls → [lookup_order({orderId: "ORD-1003"})]",
+//   "[ExecuteToolCalls] Tool results: {"orderId":"ORD-1003","status":"shipped"}",
+//   "[CallLLM] Called LLM",
+//   "[Finalize] Your order ORD-1003 has shipped."
+// ]
+```
+
+## Memory (conversation persistence)
+
+```ts
+import { Agent, InMemoryStore, bedrock } from 'agentfootprint';
+
+const provider = bedrock('anthropic.claude-sonnet-4-20250514-v1:0');
+
+// Development: in-memory
+const agent = Agent.create({ provider })
+  .system('You are a support agent.')
+  .memory({
+    store: new InMemoryStore(),
+    conversationId: 'session-abc',
+  })
+  .build();
+
+await agent.run('My name is Alice');
+await agent.run('What is my name?');  // "Your name is Alice"
+```
+
+For production, implement the `MemoryStore` interface backed by DynamoDB, Redis, or any datastore.
+
+## Observability
+
+Track tokens, cost, and tool usage — export to CloudWatch:
+
+```ts
+import { Agent, bedrock } from 'agentfootprint';
+import { agentObservability } from 'agentfootprint/observe';
+import { CloudWatch } from '@aws-sdk/client-cloudwatch';
+
+const cw = new CloudWatch({ region: 'us-east-1' });
+const obs = agentObservability();
+const provider = bedrock('anthropic.claude-sonnet-4-20250514-v1:0');
+
+const agent = Agent.create({ provider })
+  .system('You are a support agent.')
+  .recorder(obs)
+  .build();
+
+await agent.run(userMessage);
+
+// Structured data — tokens, tools, cost
+console.log(obs.tokens());  // { totalCalls: 2, totalInputTokens: 243, calls: [...] }
+console.log(obs.tools());   // { totalCalls: 1, byTool: { lookup_order: { calls: 1 } } }
+console.log(obs.cost());    // 0.0042 (USD)
+
+// Push to CloudWatch
+const tokens = obs.tokens();
+await cw.putMetricData({
+  Namespace: 'AgentFootprint',
+  MetricData: [
+    { MetricName: 'LLMCalls', Value: tokens.totalCalls, Unit: 'Count' },
+    { MetricName: 'InputTokens', Value: tokens.totalInputTokens, Unit: 'Count' },
+    { MetricName: 'OutputTokens', Value: tokens.totalOutputTokens, Unit: 'Count' },
+    { MetricName: 'EstimatedCost', Value: obs.cost(), Unit: 'None' },
+  ],
+});
+```
+
+## Streaming
+
+```ts
+const agent = Agent.create({ provider })
+  .system('You are a support agent.')
+  .streaming(true)
+  .build();
+
+await agent.run('Check order ORD-1003', {
+  onEvent: (event) => {
+    switch (event.type) {
+      case 'llm_start':   console.log(`LLM call #${event.iteration}`); break;
+      case 'llm_end':     console.log(`${event.model} (${event.latencyMs}ms)`); break;
+      case 'tool_start':  console.log(`Running ${event.toolName}`); break;
+      case 'tool_end':    console.log(`Done (${event.latencyMs}ms)`); break;
+      case 'token':       process.stdout.write(event.content); break;
+    }
+  },
+});
+```
+
+## Grounding analysis
+
+Compare tool results vs LLM claims — hallucination detection without a separate eval pipeline:
+
+```ts
+import { getGroundingSources, getLLMClaims } from 'agentfootprint/explain';
+
+await agent.run('Check order ORD-1003');
+
+const entries = agent.getNarrativeEntries();
+const sources = getGroundingSources(entries);  // what tools returned (truth)
+const claims = getLLMClaims(entries);           // what the LLM said (to verify)
+```
+
+## Resilience
+
+Provider failover across regions or families:
+
+```ts
+import { bedrock } from 'agentfootprint';
+import { fallbackProvider } from 'agentfootprint/resilience';
+
+const provider = fallbackProvider([
+  bedrock('anthropic.claude-sonnet-4-20250514-v1:0'),      // us-east-1
+  bedrock('us.anthropic.claude-sonnet-4-20250514-v1:0'),   // cross-region
+]);
+```
+
+## Deploy on AgentCore
+
+For serverless deployment with VM isolation, see the [Bedrock AgentCore integration](/agentfootprint/integrations/agentcore/).

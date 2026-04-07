@@ -55,8 +55,9 @@ interface AnthropicMessageParam {
 }
 
 interface AnthropicContentBlock {
-  type: 'text' | 'image' | 'tool_use' | 'tool_result';
+  type: 'text' | 'image' | 'tool_use' | 'tool_result' | 'thinking';
   text?: string;
+  thinking?: string;
   id?: string;
   name?: string;
   input?: Record<string, unknown>;
@@ -94,7 +95,7 @@ interface AnthropicStreamEvent {
   type: string;
   index?: number;
   content_block?: AnthropicContentBlock;
-  delta?: { type: string; text?: string; partial_json?: string };
+  delta?: { type: string; text?: string; thinking?: string; partial_json?: string };
   message?: AnthropicMessage;
   usage?: { output_tokens: number };
 }
@@ -163,7 +164,9 @@ export class AnthropicAdapter implements LLMProvider {
     try {
       for await (const event of stream) {
         if (event.type === 'content_block_delta' && event.delta) {
-          if (event.delta.type === 'text_delta' && event.delta.text) {
+          if (event.delta.type === 'thinking_delta' && event.delta.thinking) {
+            yield { type: 'thinking', content: event.delta.thinking };
+          } else if (event.delta.type === 'text_delta' && event.delta.text) {
             yield { type: 'token', content: event.delta.text };
           } else if (event.delta.type === 'input_json_delta' && event.delta.partial_json) {
             // Tool input streaming — accumulate but don't yield as token
@@ -202,13 +205,32 @@ export class AnthropicAdapter implements LLMProvider {
   private buildParams(messages: Message[], options?: LLMCallOptions): AnthropicCreateParams {
     // Extract system prompt from messages
     const systemMessages = messages.filter((m) => m.role === 'system');
-    const systemPrompt =
+    let systemPrompt =
       systemMessages.length > 0
         ? systemMessages.map((m) => (typeof m.content === 'string' ? m.content : '')).join('\n')
         : undefined;
 
+    // Structured output: inject JSON Schema for providers without native response_format
+    const schemaInstruction = options?.responseFormat?.type === 'json_schema'
+      ? `You MUST respond with valid JSON matching this schema:\n<json_schema>\n${JSON.stringify(options.responseFormat.schema, null, 2)}\n</json_schema>\nRespond ONLY with the JSON object, no other text.`
+      : undefined;
+
+    const injection = options?.responseFormat?.injection ?? 'system';
+
+    if (schemaInstruction && injection === 'system') {
+      systemPrompt = (systemPrompt ?? '') + '\n\n' + schemaInstruction;
+    }
+
     // Convert messages (Anthropic only supports user/assistant roles)
-    const anthropicMessages = convertMessages(messages.filter((m) => m.role !== 'system'));
+    let anthropicMessages = convertMessages(messages.filter((m) => m.role !== 'system'));
+
+    // User-message injection: append schema as last user message (recency window)
+    if (schemaInstruction && injection === 'user') {
+      anthropicMessages = [
+        ...anthropicMessages,
+        { role: 'user' as const, content: schemaInstruction },
+      ];
+    }
 
     // Convert tools
     const tools = options?.tools?.map(convertTool);
@@ -349,12 +371,15 @@ function convertTool(tool: LLMToolDescription): AnthropicTool {
 }
 
 function convertResponse(response: AnthropicMessage): LLMResponse {
-  let textContent = '';
+  const textParts: string[] = [];
+  const thinkingParts: string[] = [];
   const toolCalls: ToolCall[] = [];
 
   for (const block of response.content) {
-    if (block.type === 'text' && block.text) {
-      textContent += block.text;
+    if (block.type === 'thinking' && block.thinking) {
+      thinkingParts.push(block.thinking);
+    } else if (block.type === 'text' && block.text) {
+      textParts.push(block.text);
     } else if (block.type === 'tool_use') {
       toolCalls.push({
         id: block.id!,
@@ -378,10 +403,11 @@ function convertResponse(response: AnthropicMessage): LLMResponse {
   };
 
   return {
-    content: textContent,
+    content: textParts.join(''),
     toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
     usage,
     model: response.model,
     finishReason: finishReason as LLMResponse['finishReason'],
+    thinking: thinkingParts.length > 0 ? thinkingParts.join('') : undefined,
   };
 }

@@ -26,10 +26,12 @@
 import { flowChart, FlowChartExecutor, MetricRecorder } from 'footprintjs';
 import type { FlowChart as FlowChartType, FlowChartExecutorOptions, TypedScope } from 'footprintjs';
 import type { LLMProvider, Message } from '../types';
+import type { ModelConfig } from '../models';
 import { userMessage, systemMessage } from '../types';
 import type { RunnerLike } from '../types/multiAgent';
 import type { AgentRecorder } from '../core';
 import { RecorderBridge } from '../recorders/v2/RecorderBridge';
+import { resolveProvider } from '../adapters/createProvider';
 import { createAgentRenderer } from '../lib/narrative';
 import { annotateSpecIcons } from './specIcons';
 import type { SpecLike } from './specIcons';
@@ -38,7 +40,8 @@ import { createCallLLMStage } from '../stages/callLLM';
 // ── Types ────────────────────────────────────────────────────
 
 export interface ParallelOptions {
-  readonly provider: LLMProvider;
+  /** LLMProvider instance or ModelConfig from anthropic()/openai()/bedrock()/ollama(). */
+  readonly provider: LLMProvider | ModelConfig;
   readonly name?: string;
 }
 
@@ -79,7 +82,7 @@ export class Parallel {
   private streamingEnabled = false;
 
   private constructor(options: ParallelOptions) {
-    this.provider = options.provider;
+    this.provider = resolveProvider(options.provider);
     this.parallelName = options.name ?? 'parallel';
   }
 
