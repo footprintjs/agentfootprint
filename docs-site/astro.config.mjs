@@ -94,6 +94,7 @@ export default defineConfig({
             { label: 'AWS Bedrock', slug: 'integrations/aws-bedrock' },
             { label: 'Bedrock AgentCore', slug: 'integrations/agentcore' },
             { label: 'Ollama (Local)', slug: 'integrations/ollama' },
+            { label: 'Memory Stores', slug: 'integrations/memory-stores' },
             { label: 'Custom Provider', slug: 'integrations/custom-provider' },
           ],
         },

@@ -31,6 +31,39 @@ const agent = Agent.create({ provider })
 const result = await agent.run('Hello');
 ```
 
+## Switching from raw Ollama API
+
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
+<Tabs>
+  <TabItem label="Before (raw fetch)">
+    ```ts
+    const response = await fetch('http://localhost:11434/api/chat', {
+      method: 'POST',
+      body: JSON.stringify({
+        model: 'llama3.3',
+        messages: [{ role: 'user', content: 'Hello' }],
+      }),
+    });
+    const data = await response.json();
+    console.log(data.message.content);
+    ```
+  </TabItem>
+  <TabItem label="After (agentfootprint)">
+    ```ts
+    import { Agent, ollama } from 'agentfootprint';
+
+    const agent = Agent.create({ provider: ollama('llama3.3') })
+      .system('You are helpful.')
+      .build();
+
+    const result = await agent.run('Hello');
+    console.log(result.content);
+    console.log(agent.getNarrative());  // full trace, $0 cost
+    ```
+  </TabItem>
+</Tabs>
+
 ## Custom endpoint
 
 ```ts

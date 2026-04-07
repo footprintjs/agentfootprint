@@ -1,0 +1,177 @@
+---
+title: Memory Stores
+description: Persist conversations with Redis, PostgreSQL, or DynamoDB — bring your own client, zero new dependencies.
+---
+
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
+## How memory works
+
+agentfootprint has a 2-layer memory system:
+
+1. **ConversationStore** — WHERE messages are stored (Redis, Postgres, DynamoDB, in-memory)
+2. **MessageStrategy** — HOW history is trimmed before each LLM call (sliding window, char budget)
+
+You configure both via `.memory()` on the agent builder:
+
+```ts
+const agent = Agent.create({ provider })
+  .system('You are a support agent.')
+  .memory({
+    store: myStore,                    // WHERE
+    conversationId: 'session-123',     // unique key
+    strategy: slidingWindow({ maxMessages: 20 }),  // HOW (optional)
+  })
+  .build();
+
+await agent.run('My name is Alice');
+await agent.run('What is my name?');  // "Your name is Alice"
+```
+
+## InMemoryStore (development)
+
+Built-in, no dependencies. Data lost on restart.
+
+```ts
+import { Agent, InMemoryStore } from 'agentfootprint';
+
+const store = new InMemoryStore();
+const agent = Agent.create({ provider })
+  .memory({ store, conversationId: 'dev-session' })
+  .build();
+```
+
+## Redis
+
+<Tabs>
+  <TabItem label="ioredis">
+    ```ts
+    import Redis from 'ioredis';
+    import { Agent, redisStore } from 'agentfootprint';
+
+    const store = redisStore(new Redis(), {
+      prefix: 'myapp:conv:',   // key prefix (default: 'agentfp:conv:')
+      ttlSeconds: 3600,         // auto-expire after 1 hour
+    });
+
+    const agent = Agent.create({ provider })
+      .memory({ store, conversationId: 'user-123' })
+      .build();
+    ```
+  </TabItem>
+  <TabItem label="node-redis">
+    ```ts
+    import { createClient } from 'redis';
+    import { Agent, redisStore } from 'agentfootprint';
+
+    const client = createClient();
+    await client.connect();
+
+    const store = redisStore(client, { ttlSeconds: 7200 });
+    const agent = Agent.create({ provider })
+      .memory({ store, conversationId: 'user-123' })
+      .build();
+    ```
+  </TabItem>
+</Tabs>
+
+**Install:** `npm install ioredis` or `npm install redis`
+
+## PostgreSQL
+
+```ts
+import { Pool } from 'pg';
+import { Agent, postgresStore } from 'agentfootprint';
+
+const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+
+const store = postgresStore(pool, {
+  tableName: 'conversations',  // default
+});
+
+const agent = Agent.create({ provider })
+  .memory({ store, conversationId: 'user-123' })
+  .build();
+```
+
+**Install:** `npm install pg`
+
+**Required table:**
+```sql
+CREATE TABLE conversations (
+  id TEXT PRIMARY KEY,
+  messages JSONB,
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+```
+
+## DynamoDB
+
+```ts
+import { DynamoDBDocumentClient, GetCommand, PutCommand } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
+import { Agent, dynamoStore } from 'agentfootprint';
+
+const docClient = DynamoDBDocumentClient.from(new DynamoDBClient({}));
+
+const store = dynamoStore({
+  get: async (table, key) => {
+    const result = await docClient.send(new GetCommand({ TableName: table, Key: key }));
+    return result.Item ?? null;
+  },
+  put: async (table, item) => {
+    await docClient.send(new PutCommand({ TableName: table, Item: item }));
+  },
+}, { tableName: 'conversations', partitionKey: 'id' });
+
+const agent = Agent.create({ provider })
+  .memory({ store, conversationId: 'user-123' })
+  .build();
+```
+
+**Install:** `npm install @aws-sdk/client-dynamodb @aws-sdk/lib-dynamodb`
+
+## Custom store
+
+Implement 2 methods — `load()` and `save()`:
+
+```ts
+import type { ConversationStore } from 'agentfootprint';
+
+const myStore: ConversationStore = {
+  async load(conversationId) {
+    // Return messages array or null
+    const data = await myDB.get(conversationId);
+    return data ? JSON.parse(data) : null;
+  },
+  async save(conversationId, messages) {
+    // Persist messages (fire-and-forget — errors are swallowed)
+    await myDB.set(conversationId, JSON.stringify(messages));
+  },
+};
+```
+
+## Switching stores
+
+Same agent code, different store — swap one line:
+
+<Tabs>
+  <TabItem label="Development">
+    ```ts
+    import { InMemoryStore } from 'agentfootprint';
+    const store = new InMemoryStore();
+    ```
+  </TabItem>
+  <TabItem label="Production (Redis)">
+    ```ts
+    import { redisStore } from 'agentfootprint';
+    const store = redisStore(new Redis(process.env.REDIS_URL));
+    ```
+  </TabItem>
+  <TabItem label="Production (Postgres)">
+    ```ts
+    import { postgresStore } from 'agentfootprint';
+    const store = postgresStore(pool);
+    ```
+  </TabItem>
+</Tabs>

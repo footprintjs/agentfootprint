@@ -61,6 +61,40 @@ Authentication uses the standard AWS credential chain (environment variables, IA
 
 ---
 
+## Switching from raw AWS SDK
+
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
+<Tabs>
+  <TabItem label="Before (raw AWS SDK)">
+    ```ts
+    import { BedrockRuntimeClient, ConverseCommand } from '@aws-sdk/client-bedrock-runtime';
+
+    const client = new BedrockRuntimeClient({ region: 'us-east-1' });
+    const response = await client.send(new ConverseCommand({
+      modelId: 'anthropic.claude-sonnet-4-20250514-v1:0',
+      messages: [{ role: 'user', content: [{ text: 'Hello' }] }],
+    }));
+    console.log(response.output?.message?.content?.[0]?.text);
+    ```
+  </TabItem>
+  <TabItem label="After (agentfootprint)">
+    ```ts
+    import { Agent, bedrock } from 'agentfootprint';
+
+    const agent = Agent.create({
+      provider: bedrock('anthropic.claude-sonnet-4-20250514-v1:0', { region: 'us-east-1' }),
+    })
+      .system('You are helpful.')
+      .build();
+
+    const result = await agent.run('Hello');
+    console.log(result.content);
+    console.log(agent.getNarrative());  // bonus: full execution trace
+    ```
+  </TabItem>
+</Tabs>
+
 ## Agent with tools on Bedrock
 
 ```ts
