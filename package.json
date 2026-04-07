@@ -120,13 +120,27 @@
   },
   "typesVersions": {
     "*": {
-      "providers": ["dist/types/providers.barrel.d.ts"],
-      "instructions": ["dist/types/instructions.barrel.d.ts"],
-      "observe": ["dist/types/observe.barrel.d.ts"],
-      "resilience": ["dist/types/resilience.barrel.d.ts"],
-      "security": ["dist/types/security.barrel.d.ts"],
-      "explain": ["dist/types/explain.barrel.d.ts"],
-      "stream": ["dist/types/stream.barrel.d.ts"]
+      "providers": [
+        "dist/types/providers.barrel.d.ts"
+      ],
+      "instructions": [
+        "dist/types/instructions.barrel.d.ts"
+      ],
+      "observe": [
+        "dist/types/observe.barrel.d.ts"
+      ],
+      "resilience": [
+        "dist/types/resilience.barrel.d.ts"
+      ],
+      "security": [
+        "dist/types/security.barrel.d.ts"
+      ],
+      "explain": [
+        "dist/types/explain.barrel.d.ts"
+      ],
+      "stream": [
+        "dist/types/stream.barrel.d.ts"
+      ]
     }
   },
   "sideEffects": false,
@@ -135,8 +149,8 @@
   },
   "peerDependencies": {
     "@anthropic-ai/sdk": ">=0.30.0",
-    "openai": ">=4.0.0",
-    "@aws-sdk/client-bedrock-runtime": ">=3.0.0"
+    "@aws-sdk/client-bedrock-runtime": ">=3.0.0",
+    "openai": ">=4.0.0"
   },
   "peerDependenciesMeta": {
     "@anthropic-ai/sdk": {
@@ -150,6 +164,7 @@
     }
   },
   "devDependencies": {
+    "@types/node": "^25.5.2",
     "@typescript-eslint/eslint-plugin": "^5.61.0",
     "@typescript-eslint/parser": "^5.61.0",
     "eslint": "^8.44.0",
