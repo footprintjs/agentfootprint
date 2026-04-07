@@ -45,7 +45,7 @@ describe('Agent with memory — integration', () => {
     expect(stored.some(m => m.role === 'assistant')).toBe(true);
 
     // Turn 2: new agent instance with same store (simulates server restart)
-    let capturedMessages: Message[] = [];
+    const capturedMessages: Message[] = [];
     const agent2 = Agent.create({
       provider: mock([
         { content: 'Yes, I remember — you asked about France in our previous conversation.' },
