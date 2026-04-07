@@ -118,6 +118,7 @@ interface LLMResponse {
   usage?: TokenUsage;
   model?: string;
   finishReason?: 'stop' | 'tool_calls' | 'length' | 'error';
+  thinking?: string;  // extended thinking (Anthropic)
 }
 ```
 
@@ -127,7 +128,7 @@ A flat interface — all optional fields except `type`:
 
 ```ts
 interface LLMStreamChunk {
-  type: 'token' | 'tool_call' | 'usage' | 'done';
+  type: 'token' | 'thinking' | 'tool_call' | 'usage' | 'done';
   content?: string;     // present on 'token' and optionally on 'done'
   toolCall?: ToolCall;   // present on 'tool_call'
   usage?: TokenUsage;    // present on 'usage'
