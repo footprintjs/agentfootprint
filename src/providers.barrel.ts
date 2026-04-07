@@ -56,6 +56,23 @@ export type { AgentAsToolConfig } from './providers';
 export { staticPrompt, templatePrompt, skillBasedPrompt, compositePrompt } from './providers';
 export type { Skill, SkillBasedPromptOptions, CompositePromptOptions } from './providers';
 
+// Message strategies
+export {
+  fullHistory,
+  slidingWindow,
+  charBudget,
+  withToolPairSafety,
+  summaryStrategy,
+  compositeMessages,
+  persistentHistory,
+} from './providers';
+export type {
+  SlidingWindowOptions,
+  CharBudgetOptions,
+  SummaryStrategyOptions,
+  PersistentHistoryOptions,
+} from './providers';
+
 // Memory strategies
 export { InMemoryStore } from './adapters/memory/inMemory';
 export type { ConversationStore, MemoryConfig } from './adapters/memory/types';

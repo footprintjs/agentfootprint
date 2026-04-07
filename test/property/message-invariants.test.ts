@@ -1,13 +1,13 @@
 import { describe, it, expect } from 'vitest';
 import {
   appendMessage,
-  slidingWindow,
   userMessage,
   assistantMessage,
   systemMessage,
   ToolRegistry,
   defineTool,
 } from '../../src/test-barrel';
+import { slidingWindow } from '../../src/providers/messages';
 import type { Message } from '../../src/test-barrel';
 
 /**
@@ -37,8 +37,8 @@ describe('Property: Message invariants', () => {
         systemMessage('System'),
         ...Array.from({ length: 20 }, (_, i) => userMessage(`msg-${i}`)),
       ];
-      const result = slidingWindow(msgs, windowSize);
-      expect(result[0].role).toBe('system');
+      const result = slidingWindow({ maxMessages: windowSize }).prepare(msgs);
+      expect(result.value[0].role).toBe('system');
     }
   });
 
@@ -50,17 +50,17 @@ describe('Property: Message invariants', () => {
           i % 2 === 0 ? userMessage(`u-${i}`) : assistantMessage(`a-${i}`),
         ),
       ];
-      const result = slidingWindow(msgs, windowSize);
+      const result = slidingWindow({ maxMessages: windowSize }).prepare(msgs);
       // Result should be at most: system messages + windowSize
-      expect(result.length).toBeLessThanOrEqual(windowSize + 1);
+      expect(result.value.length).toBeLessThanOrEqual(windowSize + 1);
     }
   });
 
   it('slidingWindow is identity when messages fit within window', () => {
     const msgs: Message[] = [userMessage('A'), assistantMessage('B')];
     for (let windowSize = 2; windowSize <= 10; windowSize++) {
-      const result = slidingWindow(msgs, windowSize);
-      expect(result).toEqual(msgs);
+      const result = slidingWindow({ maxMessages: windowSize }).prepare(msgs);
+      expect(result.value).toEqual(msgs);
     }
   });
 });

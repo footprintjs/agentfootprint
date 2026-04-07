@@ -1,32 +1,27 @@
 /**
  * agentfootprint/explain — Understand agent decisions.
  *
- * Extract grounding sources (tool results) and LLM claims for hallucination detection.
- * Verbose narrative mode for full values. AgentScopeKey enum for type-safe queries.
+ * ExplainRecorder collects grounding data during traversal — sources (tool results),
+ * claims (LLM outputs), and decisions (tool calls). No post-processing.
  *
  * @example
  * ```typescript
- * import { getGroundingSources, getLLMClaims } from 'agentfootprint/explain';
+ * import { ExplainRecorder } from 'agentfootprint/explain';
  *
- * const entries = agent.getNarrativeEntries();
- * const sources = getGroundingSources(entries);  // what tools returned
- * const claims = getLLMClaims(entries);           // what the LLM said
+ * const explain = new ExplainRecorder();
+ * agent.recorder(explain);
+ * await agent.run('Check order');
+ *
+ * const report = explain.explain();
+ * console.log(report.sources);   // what tools returned
+ * console.log(report.claims);    // what the LLM said
+ * console.log(report.decisions); // what the LLM chose to do
  * ```
  */
 
-export {
-  getGroundingSources,
-  getLLMClaims,
-  getFullLLMContext,
-  createAgentRenderer,
-} from './lib/narrative';
-export type {
-  GroundingSource,
-  LLMClaim,
-  LLMContextSnapshot,
-  AgentRendererOptions,
-} from './lib/narrative';
+export { createAgentRenderer } from './lib/narrative';
+export type { AgentRendererOptions } from './lib/narrative';
 
 // ExplainRecorder — collect grounding data during traversal (no post-processing)
 export { ExplainRecorder } from './recorders/v2/ExplainRecorder';
-export type { ToolSource, AgentDecision, Explanation } from './recorders/v2/ExplainRecorder';
+export type { ToolSource, LLMClaim, AgentDecision, Explanation } from './recorders/v2/ExplainRecorder';

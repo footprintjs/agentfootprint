@@ -97,9 +97,12 @@ Works with Datadog, New Relic, Grafana, Jaeger, or any OTel-compatible backend.
 ## Grounding analysis
 
 ```ts
-import { getGroundingSources, getLLMClaims } from 'agentfootprint/explain';
+import { ExplainRecorder } from 'agentfootprint/explain';
 
-const entries = agent.getNarrativeEntries();
-const sources = getGroundingSources(entries);  // tool results (truth)
-const claims = getLLMClaims(entries);           // LLM output (verify)
+const explain = new ExplainRecorder();
+// attach via .recorder(explain) before .build()
+await agent.run(...);
+const report = explain.explain();
+report.sources;   // tool results (ground truth)
+report.claims;    // LLM output (to verify)
 ```

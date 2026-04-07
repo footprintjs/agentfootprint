@@ -4,7 +4,7 @@
  */
 
 import type { Message, AssistantMessage, ToolResultMessage } from '../types';
-import { contentLength, hasToolCalls, toolResultMessage } from '../types';
+import { hasToolCalls, toolResultMessage } from '../types';
 
 /** Append a message to the conversation. Returns new array. */
 export function appendMessage(messages: Message[], message: Message): Message[] {
@@ -28,36 +28,6 @@ export function lastAssistantMessage(messages: Message[]): AssistantMessage | un
 export function lastMessageHasToolCalls(messages: Message[]): boolean {
   const last = lastAssistantMessage(messages);
   return last ? hasToolCalls(last) : false;
-}
-
-/** Sliding window: keep last N messages (always keep system message). */
-export function slidingWindow(messages: Message[], windowSize: number): Message[] {
-  if (messages.length <= windowSize) return messages;
-
-  const system = messages.filter((m) => m.role === 'system');
-  const rest = messages.filter((m) => m.role !== 'system');
-  const kept = rest.slice(-windowSize);
-
-  return [...system, ...kept];
-}
-
-/** Truncate messages to fit within a character budget (rough token proxy). */
-export function truncateToCharBudget(messages: Message[], maxChars: number): Message[] {
-  const system = messages.filter((m) => m.role === 'system');
-  const rest = messages.filter((m) => m.role !== 'system');
-
-  let totalChars = system.reduce((sum, m) => sum + contentLength(m.content), 0);
-  const kept: Message[] = [];
-
-  // Walk backwards, keep most recent messages first
-  for (let i = rest.length - 1; i >= 0; i--) {
-    const msgChars = contentLength(rest[i].content);
-    if (totalChars + msgChars > maxChars) break;
-    totalChars += msgChars;
-    kept.unshift(rest[i]);
-  }
-
-  return [...system, ...kept];
 }
 
 /** Create tool result messages from a map of tool call ID → result. */

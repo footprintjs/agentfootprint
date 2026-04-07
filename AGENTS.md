@@ -263,15 +263,20 @@ Tool lifecycle fires without `.streaming(true)`. Only `token`/`thinking` require
 ## Grounding Analysis
 
 ```typescript
-import { getGroundingSources, getLLMClaims, getFullLLMContext } from 'agentfootprint';
+import { ExplainRecorder } from 'agentfootprint/explain';
 
-const entries = agent.getNarrativeEntries();
-const sources = getGroundingSources(entries);  // tool results (sources of truth)
-const claims = getLLMClaims(entries);           // LLM output (to verify)
-const context = getFullLLMContext(entries);     // { systemPrompt, toolDescriptions, sources, claims, decision }
+const explain = new ExplainRecorder();
+const agent = Agent.create({ provider }).recorder(explain).build();
+await agent.run('Check order');
+
+const report = explain.explain();
+report.sources;   // tool results (sources of truth)
+report.claims;    // LLM output (to verify)
+report.decisions; // tool calls the LLM chose to make
+report.summary;   // human-readable summary
 ```
 
-Uses `CombinedNarrativeEntry.key` + `AgentScopeKey` enum — renderer-independent.
+Collects during traversal via recorder hooks — no post-processing of narrative entries.
 
 ## Anti-Patterns
 

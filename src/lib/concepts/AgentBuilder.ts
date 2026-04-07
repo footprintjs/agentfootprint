@@ -115,7 +115,7 @@ export class Agent {
   /**
    * Enable verbose narrative — full values, no truncation.
    * Shows complete system prompts, tool results, and LLM outputs in the narrative.
-   * Enables grounding analysis via getGroundingSources() / getLLMClaims().
+   * Enables grounding analysis via ExplainRecorder.
    */
   verbose(enabled = true): this {
     this.enableVerboseNarrative = enabled;

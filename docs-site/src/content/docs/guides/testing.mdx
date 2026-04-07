@@ -143,19 +143,22 @@ it('emits tool_start and tool_end events', async () => {
 ## Testing grounding
 
 ```ts
-import { getGroundingSources, getLLMClaims } from 'agentfootprint/explain';
+import { ExplainRecorder } from 'agentfootprint/explain';
 
 it('LLM response is grounded in tool results', async () => {
-  await agent.run('Check order ORD-1003');
+  const explain = new ExplainRecorder();
+  const agent = Agent.create({ provider: mock([...]) })
+    .tool(lookupOrder)
+    .recorder(explain)
+    .build();
 
-  const entries = agent.getNarrativeEntries();
-  const sources = getGroundingSources(entries);
-  const claims = getLLMClaims(entries);
+  await agent.run('Check order ORD-1003');
+  const report = explain.explain();
 
   // Sources should contain the order data
-  expect(sources.length).toBeGreaterThan(0);
+  expect(report.sources.length).toBeGreaterThan(0);
   // Claims should reference data from sources
-  expect(claims.length).toBeGreaterThan(0);
+  expect(report.claims.length).toBeGreaterThan(0);
 });
 ```
 

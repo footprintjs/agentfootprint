@@ -53,8 +53,6 @@ export {
   lastMessage,
   lastAssistantMessage,
   lastMessageHasToolCalls,
-  slidingWindow,
-  truncateToCharBudget,
   createToolResults,
 } from './memory';
 export { InMemoryStore } from './adapters/memory/inMemory';

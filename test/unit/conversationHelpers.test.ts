@@ -4,12 +4,11 @@ import {
   lastMessage,
   lastAssistantMessage,
   lastMessageHasToolCalls,
-  slidingWindow,
-  truncateToCharBudget,
   userMessage,
   assistantMessage,
   systemMessage,
 } from '../../src/test-barrel';
+import { slidingWindow, charBudget } from '../../src/providers/messages';
 import type { Message } from '../../src/test-barrel';
 
 describe('conversationHelpers', () => {
@@ -65,10 +64,11 @@ describe('conversationHelpers', () => {
     });
   });
 
-  describe('slidingWindow', () => {
+  describe('slidingWindow (MessageStrategy)', () => {
     it('keeps all messages when under window size', () => {
       const msgs: Message[] = [userMessage('A'), assistantMessage('B')];
-      expect(slidingWindow(msgs, 5)).toEqual(msgs);
+      const result = slidingWindow({ maxMessages: 5 }).prepare(msgs);
+      expect(result.value).toEqual(msgs);
     });
 
     it('preserves system message and keeps last N', () => {
@@ -79,18 +79,19 @@ describe('conversationHelpers', () => {
         userMessage('C'),
         assistantMessage('D'),
       ];
-      const result = slidingWindow(msgs, 2);
-      expect(result).toHaveLength(3); // system + 2 recent
-      expect(result[0].role).toBe('system');
-      expect(result[1].content).toBe('C');
-      expect(result[2].content).toBe('D');
+      const result = slidingWindow({ maxMessages: 2 }).prepare(msgs);
+      expect(result.value).toHaveLength(3); // system + 2 recent
+      expect(result.value[0].role).toBe('system');
+      expect(result.value[1].content).toBe('C');
+      expect(result.value[2].content).toBe('D');
     });
   });
 
-  describe('truncateToCharBudget', () => {
+  describe('charBudget (MessageStrategy)', () => {
     it('keeps all messages when under budget', () => {
       const msgs: Message[] = [userMessage('Hi'), assistantMessage('Hey')];
-      expect(truncateToCharBudget(msgs, 1000)).toEqual(msgs);
+      const result = charBudget({ maxChars: 1000 }).prepare(msgs);
+      expect(result.value).toEqual(msgs);
     });
 
     it('keeps most recent messages within budget', () => {
@@ -100,11 +101,10 @@ describe('conversationHelpers', () => {
         assistantMessage('B'.repeat(100)),
         userMessage('C'.repeat(50)),
       ];
-      // System (1 char) + last msg (50 chars) = 51
-      const result = truncateToCharBudget(msgs, 55);
-      expect(result).toHaveLength(2); // system + last
-      expect(result[0].role).toBe('system');
-      expect(result[1].content).toBe('C'.repeat(50));
+      const result = charBudget({ maxChars: 55 }).prepare(msgs);
+      expect(result.value).toHaveLength(2); // system + last
+      expect(result.value[0].role).toBe('system');
+      expect(result.value[1].content).toBe('C'.repeat(50));
     });
   });
 });

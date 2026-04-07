@@ -33,7 +33,7 @@ import { defineInstruction } from 'agentfootprint/instructions'; // Smart behavi
 import { agentObservability } from 'agentfootprint/observe';     // Monitor execution
 import { withRetry } from 'agentfootprint/resilience';           // Reliability
 import { gatedTools } from 'agentfootprint/security';            // Tool safety
-import { getGroundingSources } from 'agentfootprint/explain';    // Grounding analysis
+import { ExplainRecorder } from 'agentfootprint/explain';        // Grounding analysis
 import { SSEFormatter } from 'agentfootprint/stream';            // Real-time events
 ```
 
@@ -144,12 +144,16 @@ agent.getNarrativeEntries();
 Compare what tools returned vs what the LLM said. Hallucination detection without a separate eval pipeline.
 
 ```typescript
-import { getGroundingSources, getLLMClaims } from 'agentfootprint';
+import { ExplainRecorder } from 'agentfootprint/explain';
 
-const entries = agent.getNarrativeEntries();
-const sources = getGroundingSources(entries);  // tool results (sources of truth)
-const claims = getLLMClaims(entries);           // LLM output (to verify)
-// Compare sources against claims — was the LLM grounded?
+const explain = new ExplainRecorder();
+const agent = Agent.create({ provider }).tool(orderTool).recorder(explain).build();
+await agent.run('Check order status');
+
+const report = explain.explain();
+report.sources;   // what tools returned (ground truth)
+report.claims;    // what the LLM said (to verify)
+report.decisions; // what tool calls the LLM made
 ```
 
 ---
@@ -307,7 +311,7 @@ const provider = resilientProvider([anthropicAdapter, openaiAdapter, ollamaAdapt
 | 17 | **Instructions** | defineInstruction, decide(), conditional activation, Decision Scope |
 | 18 | **Streaming Events** | AgentStreamEvent lifecycle, tool events, SSE |
 | 19 | **Security** | gatedTools, PermissionPolicy, role-based tool access |
-| 20 | **Grounding** | getGroundingSources, getLLMClaims, hallucination detection |
+| 20 | **Grounding** | ExplainRecorder — sources, claims, decisions |
 | 21 | **SSE Server** | Express SSE endpoint with SSEFormatter |
 | 22 | **Resilience** | withRetry, withFallback, provider failover |
 | 23 | **Memory Stores** | redisStore, postgresStore, dynamoStore adapters |

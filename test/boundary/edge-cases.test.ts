@@ -5,9 +5,9 @@ import {
   mock,
   defineTool,
   ToolRegistry,
-  slidingWindow,
   userMessage,
 } from '../../src/test-barrel';
+import { slidingWindow } from '../../src/providers/messages';
 import type { Message } from '../../src/test-barrel';
 
 describe('Boundary: Empty inputs', () => {
@@ -29,7 +29,8 @@ describe('Boundary: Empty inputs', () => {
   });
 
   it('slidingWindow with empty messages', () => {
-    expect(slidingWindow([], 5)).toEqual([]);
+    const result = slidingWindow({ maxMessages: 5 }).prepare([]);
+    expect(result.value).toEqual([]);
   });
 });
 
@@ -59,9 +60,9 @@ describe('Boundary: Large inputs', () => {
 
   it('slidingWindow with 1000 messages keeps only window', () => {
     const msgs: Message[] = Array.from({ length: 1000 }, (_, i) => userMessage(`msg-${i}`));
-    const result = slidingWindow(msgs, 5);
-    expect(result).toHaveLength(5);
-    expect(result[4].content).toBe('msg-999');
+    const result = slidingWindow({ maxMessages: 5 }).prepare(msgs);
+    expect(result.value).toHaveLength(5);
+    expect(result.value[4].content).toBe('msg-999');
   });
 });
 

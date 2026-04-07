@@ -21,3 +21,4 @@ export type {
 } from './compositions';
 export { resilientProvider, fallbackProvider } from './adapters';
 export type { ResilientProviderOptions, FallbackProviderOptions } from './adapters';
+export { classifyStatusCode, wrapSDKError } from './types';

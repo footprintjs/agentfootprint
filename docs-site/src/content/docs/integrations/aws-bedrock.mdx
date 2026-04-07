@@ -221,13 +221,14 @@ await agent.run('Check order ORD-1003', {
 Compare tool results vs LLM claims — hallucination detection without a separate eval pipeline:
 
 ```ts
-import { getGroundingSources, getLLMClaims } from 'agentfootprint/explain';
+import { ExplainRecorder } from 'agentfootprint/explain';
 
+const explain = new ExplainRecorder();
+// attach via .recorder(explain) before .build()
 await agent.run('Check order ORD-1003');
-
-const entries = agent.getNarrativeEntries();
-const sources = getGroundingSources(entries);  // what tools returned (truth)
-const claims = getLLMClaims(entries);           // what the LLM said (to verify)
+const report = explain.explain();
+report.sources;   // what tools returned (ground truth)
+report.claims;    // what the LLM said (to verify)
 ```
 
 ## Resilience

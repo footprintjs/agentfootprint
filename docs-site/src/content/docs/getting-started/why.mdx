@@ -45,14 +45,20 @@ const entries = agent.getNarrativeEntries();
 Compare what tools returned vs what the LLM said. Hallucination detection without a separate eval pipeline:
 
 ```ts
-import { getGroundingSources, getLLMClaims } from 'agentfootprint/explain';
+import { ExplainRecorder } from 'agentfootprint/explain';
 
-const entries = agent.getNarrativeEntries();
-const sources = getGroundingSources(entries);  // tool results (truth)
-const claims = getLLMClaims(entries);           // LLM output (to verify)
+const explain = new ExplainRecorder();
+const agent = Agent.create({ provider })
+  .system('You are a support agent.')
+  .tool(lookupOrder)
+  .recorder(explain)
+  .build();
 
-// sources: [{ orderId: 'ORD-1003', status: 'shipped', amount: 299 }]
-// claims: ['Your order ORD-1003 is shipped. Total: $299.']
+await agent.run('Check order ORD-1003');
+const report = explain.explain();
+
+// report.sources: [{ orderId: 'ORD-1003', status: 'shipped', amount: 299 }]
+// report.claims: ['Your order ORD-1003 is shipped. Total: $299.']
 // The LLM's claim matches the source data — grounded.
 ```
 
