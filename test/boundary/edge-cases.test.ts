@@ -1,12 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import {
-  Agent,
-  LLMCall,
-  mock,
-  defineTool,
-  ToolRegistry,
-  userMessage,
-} from '../../src/test-barrel';
+import { Agent, LLMCall, mock, defineTool, ToolRegistry, userMessage } from '../../src/test-barrel';
 import { slidingWindow } from '../../src/providers/messages';
 import type { Message } from '../../src/test-barrel';
 

@@ -48,6 +48,11 @@ node scripts/check-dup-types.mjs
 
 echo "[2.5/8] Duplicate type check ✓"
 
+# ── Gate 2.75: Format check ────────────────────────────────────────────
+echo "==> Checking code formatting..."
+npm run format
+echo "[2.75/8] Format check ✓"
+
 # ── Gate 3: Build ───────────────────────────────────────────────────────
 echo "==> Building (CJS + ESM)..."
 npm run build

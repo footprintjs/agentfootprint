@@ -24,4 +24,9 @@ export type { AgentRendererOptions } from './lib/narrative';
 
 // ExplainRecorder — collect grounding data during traversal (no post-processing)
 export { ExplainRecorder } from './recorders/v2/ExplainRecorder';
-export type { ToolSource, LLMClaim, AgentDecision, Explanation } from './recorders/v2/ExplainRecorder';
+export type {
+  ToolSource,
+  LLMClaim,
+  AgentDecision,
+  Explanation,
+} from './recorders/v2/ExplainRecorder';
