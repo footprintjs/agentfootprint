@@ -1,9 +1,9 @@
 /**
  * agentObservability() — one-call preset for full agent observability.
  *
- * Bundles TokenRecorder, ToolUsageRecorder, and CostRecorder into a single
- * CompositeRecorder. The consumer attaches one recorder and gets token tracking,
- * tool usage stats, and cost estimation without knowing the individual types.
+ * Bundles TokenRecorder, ToolUsageRecorder, CostRecorder, and ExplainRecorder
+ * into a single CompositeRecorder. One `.recorder()` call gives you token tracking,
+ * tool usage, cost estimation, and grounding analysis (sources vs claims).
  *
  * Stage-level timing is auto-attached by the runners (MetricRecorder on the
  * executor) — this preset covers the agent-level concerns only.
@@ -12,7 +12,6 @@
  * ```typescript
  * import { Agent, agentObservability } from 'agentfootprint';
  *
- * // One call — tokens, tools, and cost tracking
  * const obs = agentObservability();
  * const agent = Agent.create({ provider })
  *   .recorder(obs)
@@ -20,29 +19,20 @@
  *
  * await agent.run('hello');
  *
- * // Access stats
- * console.log(obs.tokens());     // { totalCalls: 2, totalInputTokens: 150, ... }
- * console.log(obs.tools());      // { totalCalls: 1, byTool: { search: { calls: 1, ... } } }
- * console.log(obs.cost());       // 0.0042
- * ```
- *
- * @example
- * ```typescript
- * // With cost estimation
- * const obs = agentObservability({
- *   pricing: {
- *     'claude-sonnet-4-20250514': { input: 3, output: 15 },
- *     'gpt-4o': { input: 2.5, output: 10 },
- *   },
- * });
+ * obs.tokens();   // { totalCalls: 2, totalInputTokens: 150, ... }
+ * obs.tools();    // { totalCalls: 1, byTool: { search: { calls: 1, ... } } }
+ * obs.cost();     // 0.0042
+ * obs.explain();  // { sources, claims, decisions, summary }
  * ```
  */
 
 import type { ModelPricing, CostEntry } from './CostRecorder';
 import type { TokenStats } from './TokenRecorder';
 import type { ToolUsageStats } from './ToolUsageRecorder';
+import type { Explanation } from './ExplainRecorder';
 import { CompositeRecorder } from './CompositeRecorder';
 import { CostRecorder } from './CostRecorder';
+import { ExplainRecorder } from './ExplainRecorder';
 import { TokenRecorder } from './TokenRecorder';
 import { ToolUsageRecorder } from './ToolUsageRecorder';
 
@@ -63,12 +53,14 @@ export interface AgentObservabilityRecorder extends CompositeRecorder {
   cost(): number;
   /** Per-call cost breakdown. */
   costEntries(): CostEntry[];
+  /** Grounding analysis — sources (tool results) vs claims (LLM output). */
+  explain(): Explanation;
 }
 
 /**
  * Create a bundled agent observability recorder.
  *
- * Tracks tokens, tool usage, and cost in a single `.recorder()` call.
+ * Tracks tokens, tool usage, cost, and grounding in a single `.recorder()` call.
  * Stage timing is handled separately by MetricRecorder (auto-attached by runners).
  */
 export function agentObservability(
@@ -79,9 +71,10 @@ export function agentObservability(
   const costRec = new CostRecorder(
     options?.pricing ? { pricingTable: options.pricing } : undefined,
   );
+  const explainRec = new ExplainRecorder();
 
   const composite = new CompositeRecorder(
-    [tokenRec, toolRec, costRec],
+    [tokenRec, toolRec, costRec, explainRec],
     options?.id ?? 'agent-observability',
   ) as AgentObservabilityRecorder;
 
@@ -90,6 +83,7 @@ export function agentObservability(
   composite.tools = () => toolRec.getStats();
   composite.cost = () => costRec.getTotalCost();
   composite.costEntries = () => costRec.getEntries();
+  composite.explain = () => explainRec.explain();
 
   return composite;
 }
