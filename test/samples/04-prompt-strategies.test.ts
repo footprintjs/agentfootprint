@@ -10,7 +10,12 @@
  *   compositePrompt  → chain multiple providers
  */
 import { describe, it, expect } from 'vitest';
-import { staticPrompt, templatePrompt, skillBasedPrompt, compositePrompt } from '../../src/test-barrel';
+import {
+  staticPrompt,
+  templatePrompt,
+  skillBasedPrompt,
+  compositePrompt,
+} from '../../src/test-barrel';
 import type { PromptContext } from '../../src/test-barrel';
 
 function ctx(msg: string, turn = 0): PromptContext {

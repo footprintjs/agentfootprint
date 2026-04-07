@@ -66,7 +66,14 @@ describe('buildSwarmRouting — unit', () => {
   it('includes swarm-tools branch when extraTools provided', () => {
     const routing = buildSwarmRouting({
       specialists: [makeSpecialist('coding', 'Code')],
-      extraTools: [defineTool({ id: 'calc', description: 'Calculator', inputSchema: {}, handler: async () => ({ content: '42' }) })],
+      extraTools: [
+        defineTool({
+          id: 'calc',
+          description: 'Calculator',
+          inputSchema: {},
+          handler: async () => ({ content: '42' }),
+        }),
+      ],
     });
 
     expect(routing.branches).toHaveLength(3); // coding + swarm-tools + final
@@ -124,7 +131,14 @@ describe('buildSwarmRouting — boundary', () => {
   it('decider routes to swarm-tools for extra tool calls', () => {
     const routing = buildSwarmRouting({
       specialists: [makeSpecialist('coding', 'Code')],
-      extraTools: [defineTool({ id: 'calc', description: 'Calc', inputSchema: {}, handler: async () => ({ content: '42' }) })],
+      extraTools: [
+        defineTool({
+          id: 'calc',
+          description: 'Calc',
+          inputSchema: {},
+          handler: async () => ({ content: '42' }),
+        }),
+      ],
     });
 
     const scope: any = {
@@ -159,7 +173,11 @@ describe('buildSwarmRouting — scenario', () => {
     const toolDescs: LLMToolDescription[] = specialists.map((s) => ({
       name: s.id,
       description: s.description,
-      inputSchema: { type: 'object', properties: { message: { type: 'string' } }, required: ['message'] },
+      inputSchema: {
+        type: 'object',
+        properties: { message: { type: 'string' } },
+        required: ['message'],
+      },
     }));
 
     const routing = buildSwarmRouting({ specialists });
@@ -203,7 +221,14 @@ describe('buildSwarmRouting — property', () => {
   it('every branch has a unique ID', () => {
     const routing = buildSwarmRouting({
       specialists: [makeSpecialist('a', 'A'), makeSpecialist('b', 'B')],
-      extraTools: [defineTool({ id: 'calc', description: 'Calc', inputSchema: {}, handler: async () => ({ content: '42' }) })],
+      extraTools: [
+        defineTool({
+          id: 'calc',
+          description: 'Calc',
+          inputSchema: {},
+          handler: async () => ({ content: '42' }),
+        }),
+      ],
     });
 
     const ids = routing.branches.map((b) => b.id);
@@ -246,10 +271,19 @@ describe('buildSwarmRouting — security', () => {
   });
 
   it('throws when extra tool ID collides with specialist ID', () => {
-    expect(() => buildSwarmRouting({
-      specialists: [makeSpecialist('calc', 'Calculator specialist')],
-      extraTools: [defineTool({ id: 'calc', description: 'Calc', inputSchema: {}, handler: async () => ({ content: '42' }) })],
-    })).toThrow('collides with specialist ID');
+    expect(() =>
+      buildSwarmRouting({
+        specialists: [makeSpecialist('calc', 'Calculator specialist')],
+        extraTools: [
+          defineTool({
+            id: 'calc',
+            description: 'Calc',
+            inputSchema: {},
+            handler: async () => ({ content: '42' }),
+          }),
+        ],
+      }),
+    ).toThrow('collides with specialist ID');
   });
 
   it('multiple specialist calls: routes to first, loop handles rest', () => {

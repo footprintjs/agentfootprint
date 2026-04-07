@@ -8,11 +8,19 @@ import { describe, it, expect } from 'vitest';
 import { renderInstructions } from '../../../src/lib/instructions/template';
 import { processInstructions } from '../../../src/lib/instructions/inject';
 import { evaluateInstructions } from '../../../src/lib/instructions/evaluator';
-import { quickBind, type LLMInstruction, type InstructionContext, type InstructionTemplate } from '../../../src/lib/instructions';
+import {
+  quickBind,
+  type LLMInstruction,
+  type InstructionContext,
+  type InstructionTemplate,
+} from '../../../src/lib/instructions';
 
 // ── Helper ──────────────────────────────────────────────────────
 
-function ctx(content: Record<string, unknown>, overrides?: Partial<InstructionContext>): InstructionContext {
+function ctx(
+  content: Record<string, unknown>,
+  overrides?: Partial<InstructionContext>,
+): InstructionContext {
   return { content, latencyMs: 10, input: {}, toolId: 'test', ...overrides };
 }
 
@@ -24,10 +32,7 @@ describe('renderInstructions — unit', () => {
   });
 
   it('renders behavioral inject with [INSTRUCTION] prefix', () => {
-    const fired = evaluateInstructions(
-      [{ id: 'a', text: 'Be empathetic.' }],
-      ctx({}),
-    );
+    const fired = evaluateInstructions([{ id: 'a', text: 'Be empathetic.' }], ctx({}));
     const text = renderInstructions(fired)!;
     expect(text).toContain('[INSTRUCTION] Be empathetic.');
   });
@@ -46,11 +51,13 @@ describe('renderInstructions — unit', () => {
 
   it('renders composite (inject + followUp) in one block', () => {
     const fired = evaluateInstructions(
-      [{
-        id: 'a',
-        text: 'Order flagged.',
-        followUp: quickBind('get_fraud', 'orderId'),
-      }],
+      [
+        {
+          id: 'a',
+          text: 'Order flagged.',
+          followUp: quickBind('get_fraud', 'orderId'),
+        },
+      ],
       ctx({ orderId: 'ord_1' }),
     );
     const text = renderInstructions(fired)!;
@@ -66,11 +73,13 @@ describe('renderInstructions — unit', () => {
       formatBlock: (parts) => parts.join('\n'),
     };
     const fired = evaluateInstructions(
-      [{
-        id: 'a',
-        text: 'Be kind.',
-        followUp: quickBind('get_trace', 'traceId'),
-      }],
+      [
+        {
+          id: 'a',
+          text: 'Be kind.',
+          followUp: quickBind('get_trace', 'traceId'),
+        },
+      ],
       ctx({ traceId: 'tr_1' }),
     );
     const text = renderInstructions(fired, custom)!;
@@ -216,12 +225,14 @@ describe('injection — scenario', () => {
       ctx({ delayed: true }),
       {
         instructions: ['ETA is approximately 2 hours.'],
-        followUps: [{
-          toolId: 'track_package',
-          params: { trackingId: 'PKG_1' },
-          description: 'Track package',
-          condition: 'User asks where it is',
-        }],
+        followUps: [
+          {
+            toolId: 'track_package',
+            params: { trackingId: 'PKG_1' },
+            description: 'Track package',
+            condition: 'User asks where it is',
+          },
+        ],
       },
     );
 
@@ -237,11 +248,7 @@ describe('injection — scenario', () => {
 describe('injection — property', () => {
   it('processInstructions is pure — does not modify original content string', () => {
     const original = 'original content';
-    const result = processInstructions(
-      original,
-      [{ id: 'a', text: 'Appended.' }],
-      ctx({}),
-    );
+    const result = processInstructions(original, [{ id: 'a', text: 'Appended.' }], ctx({}));
     // Original string is unchanged (strings are immutable in JS, but verify intent)
     expect(original).toBe('original content');
     // Result has new content
@@ -250,11 +257,7 @@ describe('injection — property', () => {
   });
 
   it('injection text is separated from content by double newline', () => {
-    const result = processInstructions(
-      'content',
-      [{ id: 'a', text: 'Guidance.' }],
-      ctx({}),
-    );
+    const result = processInstructions('content', [{ id: 'a', text: 'Guidance.' }], ctx({}));
     expect(result.content).toBe('content\n\n[INSTRUCTION] Guidance.');
   });
 });
@@ -278,10 +281,12 @@ describe('injection — security', () => {
   it('follow-up params do not include fields not specified', () => {
     const result = processInstructions(
       'result',
-      [{
-        id: 'a',
-        followUp: quickBind('get_trace', 'traceId'),
-      }],
+      [
+        {
+          id: 'a',
+          followUp: quickBind('get_trace', 'traceId'),
+        },
+      ],
       ctx({ traceId: 'tr_1', secretKey: 'sk_secret', ssn: '123' }),
     );
     // Only traceId in the injected text — no secretKey or ssn

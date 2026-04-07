@@ -58,9 +58,7 @@ describe('Agent — unit', () => {
 
   it('system prompt is sent to the LLM', async () => {
     const provider = mockProvider([{ content: 'ok' }]);
-    const agent = Agent.create({ provider })
-      .system('You are a code reviewer.')
-      .build();
+    const agent = Agent.create({ provider }).system('You are a code reviewer.').build();
 
     await agent.run('review this');
 
@@ -71,9 +69,7 @@ describe('Agent — unit', () => {
 
   it('tools are registered and available to LLM', async () => {
     const provider = mockProvider([{ content: 'no tools needed' }]);
-    const agent = Agent.create({ provider })
-      .tool(searchTool)
-      .build();
+    const agent = Agent.create({ provider }).tool(searchTool).build();
 
     await agent.run('search for weather');
 
@@ -86,9 +82,7 @@ describe('Agent — unit', () => {
 
   it('multiple tools can be registered', async () => {
     const provider = mockProvider([{ content: 'ok' }]);
-    const agent = Agent.create({ provider })
-      .tools([searchTool, calcTool])
-      .build();
+    const agent = Agent.create({ provider }).tools([searchTool, calcTool]).build();
 
     await agent.run('do things');
 
@@ -125,10 +119,7 @@ describe('Agent — boundary', () => {
       { content: 'More searching', toolCalls: [tc] },
     ]);
 
-    const agent = Agent.create({ provider })
-      .tool(searchTool)
-      .maxIterations(1)
-      .build();
+    const agent = Agent.create({ provider }).tool(searchTool).maxIterations(1).build();
 
     const result = await agent.run('find something');
     expect(result.iterations).toBeLessThanOrEqual(1);
@@ -162,7 +153,9 @@ describe('Agent — scenario', () => {
         callCount++;
         if (callCount === 1) return { content: 'My name is Bot.' };
         // Second turn — should have history from first turn
-        const hasFirstTurn = msgs.some((m) => m.role === 'assistant' && m.content === 'My name is Bot.');
+        const hasFirstTurn = msgs.some(
+          (m) => m.role === 'assistant' && m.content === 'My name is Bot.',
+        );
         return { content: hasFirstTurn ? 'I remember!' : 'I forgot.' };
       }),
     };
@@ -245,8 +238,9 @@ describe('Agent — scenario', () => {
       .build()
       .toFlowChart();
 
-    expect(Array.from(chart.stageMap.keys()).sort())
-      .toEqual(Array.from(runChart.stageMap.keys()).sort());
+    expect(Array.from(chart.stageMap.keys()).sort()).toEqual(
+      Array.from(runChart.stageMap.keys()).sort(),
+    );
   });
 });
 
@@ -313,22 +307,20 @@ describe('Agent — memory', () => {
       chat: vi.fn(async (msgs: Message[]) => {
         callCount++;
         if (callCount === 1) return { content: 'First response.' };
-        const hasHistory = msgs.some((m) => m.role === 'assistant' && m.content === 'First response.');
+        const hasHistory = msgs.some(
+          (m) => m.role === 'assistant' && m.content === 'First response.',
+        );
         return { content: hasHistory ? 'I remember!' : 'No history.' };
       }),
     };
 
     // First agent instance — run turn 1
-    const agent1 = Agent.create({ provider })
-      .memory({ store, conversationId: 'conv-1' })
-      .build();
+    const agent1 = Agent.create({ provider }).memory({ store, conversationId: 'conv-1' }).build();
 
     await agent1.run('hello');
 
     // Second agent instance — new agent, same store + conversationId
-    const agent2 = Agent.create({ provider })
-      .memory({ store, conversationId: 'conv-1' })
-      .build();
+    const agent2 = Agent.create({ provider }).memory({ store, conversationId: 'conv-1' }).build();
 
     const result = await agent2.run('do you remember?');
     expect(result.content).toBe('I remember!');
@@ -416,7 +408,9 @@ describe('Agent — security', () => {
       id: 'fail',
       description: 'Always fails',
       inputSchema: { type: 'object' },
-      handler: async () => { throw new Error('tool crashed'); },
+      handler: async () => {
+        throw new Error('tool crashed');
+      },
     });
 
     const tc: ToolCall = { id: 'tc-1', name: 'fail', arguments: {} };
@@ -425,9 +419,7 @@ describe('Agent — security', () => {
       { content: 'Got error, moving on' },
     ]);
 
-    const agent = Agent.create({ provider })
-      .tool(failTool)
-      .build();
+    const agent = Agent.create({ provider }).tool(failTool).build();
 
     const result = await agent.run('do it');
     expect(result.content).toBe('Got error, moving on');

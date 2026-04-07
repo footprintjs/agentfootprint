@@ -93,14 +93,16 @@ describe('buildInstructionsToLLMSubflow — unit', () => {
         onToolResult: [{ id: 'empathy', text: 'Do NOT promise reversal.' }],
       },
     ];
-    const state = await runSubflow(
-      instructions as AgentInstruction[],
-      { orderStatus: 'denied', riskLevel: 'unknown' },
-    );
+    const state = await runSubflow(instructions as AgentInstruction[], {
+      orderStatus: 'denied',
+      riskLevel: 'unknown',
+    });
 
     expect(state.promptInjections).toEqual(['Be empathetic.']);
     // ToolDefinition converted to LLMToolDescription (id → name)
-    expect((state.toolInjections as LLMToolDescription[]).map((t) => t.name)).toEqual(['process_refund']);
+    expect((state.toolInjections as LLMToolDescription[]).map((t) => t.name)).toEqual([
+      'process_refund',
+    ]);
     expect((state.responseRules as any[]).map((r) => r.id)).toEqual(['empathy']);
     expect(state.matchedInstructions).toBe('1 matched: refund');
   });
@@ -121,7 +123,11 @@ describe('buildInstructionsToLLMSubflow — narrative', () => {
   it('subflow appears in narrative with stage name', async () => {
     const subflow = buildInstructionsToLLMSubflow([{ id: 'a', prompt: 'P' }]);
     const wrapper = flowChart<InstructionsToLLMState>(
-      'Seed', (scope) => { scope.decision = {}; }, 'test-seed',
+      'Seed',
+      (scope) => {
+        scope.decision = {};
+      },
+      'test-seed',
     )
       .addSubFlowChartNext('sf-instructions-to-llm', subflow, 'InstructionsToLLM', {
         inputMapper: (p: Record<string, unknown>) => ({ decision: p.decision }),
@@ -139,9 +145,11 @@ describe('buildInstructionsToLLMSubflow — narrative', () => {
     await executor.run();
     const narrative = executor.getNarrative();
     // Subflow shows in narrative — either as entry or as a stage path
-    expect(narrative.some((s: string) =>
-      s.includes('InstructionsToLLM') || s.includes('EvaluateInstructions'),
-    )).toBe(true);
+    expect(
+      narrative.some(
+        (s: string) => s.includes('InstructionsToLLM') || s.includes('EvaluateInstructions'),
+      ),
+    ).toBe(true);
   });
 });
 
@@ -151,7 +159,11 @@ describe('buildInstructionsToLLMSubflow — decision-driven', () => {
   it('different decision values activate different instructions', async () => {
     const instructions: AgentInstruction[] = [
       { id: 'refund', activeWhen: (d: any) => d.orderStatus === 'denied', prompt: 'Refund flow.' },
-      { id: 'high-risk', activeWhen: (d: any) => d.riskLevel === 'high', prompt: 'High risk alert.' },
+      {
+        id: 'high-risk',
+        activeWhen: (d: any) => d.riskLevel === 'high',
+        prompt: 'High risk alert.',
+      },
     ];
 
     // Only refund matches
@@ -181,7 +193,16 @@ describe('buildInstructionsToLLMSubflow — decision-driven', () => {
 describe('buildInstructionsToLLMSubflow — safety', () => {
   it('safety instruction fires even when predicate throws', async () => {
     const state = await runSubflow(
-      [{ id: 'compliance', safety: true, activeWhen: () => { throw new Error('bug'); }, prompt: 'GDPR required.' }],
+      [
+        {
+          id: 'compliance',
+          safety: true,
+          activeWhen: () => {
+            throw new Error('bug');
+          },
+          prompt: 'GDPR required.',
+        },
+      ],
       {},
     );
     expect(state.promptInjections).toEqual(['GDPR required.']);
@@ -200,7 +221,11 @@ describe('buildInstructionsToLLMSubflow — missing decision', () => {
     // Don't set decision in seed — scope.decision will be undefined
     const subflow = buildInstructionsToLLMSubflow(instructions);
     const wrapper = flowChart<InstructionsToLLMState>(
-      'Seed', () => { /* no decision set */ }, 'test-seed',
+      'Seed',
+      () => {
+        /* no decision set */
+      },
+      'test-seed',
     )
       .addSubFlowChartNext('sf-instructions-to-llm', subflow, 'InstructionsToLLM', {
         inputMapper: (p: Record<string, unknown>) => ({ decision: p.decision }),
@@ -232,7 +257,11 @@ describe('buildInstructionsToLLMSubflow — immutability', () => {
 
     // Subflow should only see the original instruction
     const wrapper = flowChart<InstructionsToLLMState>(
-      'Seed', (scope) => { scope.decision = {}; }, 'test-seed',
+      'Seed',
+      (scope) => {
+        scope.decision = {};
+      },
+      'test-seed',
     )
       .addSubFlowChartNext('sf-instructions-to-llm', subflow, 'InstructionsToLLM', {
         inputMapper: (p: Record<string, unknown>) => ({ decision: p.decision }),

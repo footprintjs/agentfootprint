@@ -211,7 +211,10 @@ describe('withToolPairSafety', () => {
   it('removes assistant toolCall messages whose results were dropped', () => {
     // Custom strategy that drops tool messages
     const dropTools: import('../../../src/core').MessageStrategy = {
-      prepare: (history) => ({ value: history.filter((m) => m.role !== 'tool'), chosen: 'drop-tools' }),
+      prepare: (history) => ({
+        value: history.filter((m) => m.role !== 'tool'),
+        chosen: 'drop-tools',
+      }),
     };
     const strategy = withToolPairSafety(dropTools);
     const input: Message[] = [

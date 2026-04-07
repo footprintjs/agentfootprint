@@ -15,7 +15,8 @@
 import type { ToolDefinition } from '../../types/tools';
 import type { LLMInstruction } from './types';
 
-const isDevMode = () => typeof process !== 'undefined' && process.env?.['NODE_ENV'] !== 'production';
+const isDevMode = () =>
+  typeof process !== 'undefined' && process.env?.['NODE_ENV'] !== 'production';
 
 // ── Agent Instruction ──────────────────────────────────────────────────
 
@@ -124,7 +125,11 @@ export interface InstructionEvaluationResult {
  * Check if an instruction has at least one output (prompt, tools, or onToolResult).
  */
 function hasOutputs<T>(instr: AgentInstruction<T>): boolean {
-  return !!(instr.prompt || (instr.tools && instr.tools.length > 0) || (instr.onToolResult && instr.onToolResult.length > 0));
+  return !!(
+    instr.prompt ||
+    (instr.tools && instr.tools.length > 0) ||
+    (instr.onToolResult && instr.onToolResult.length > 0)
+  );
 }
 
 /**
@@ -195,7 +200,7 @@ export function evaluateAgentInstructions<TDecision>(
       if (isDevMode()) {
         console.warn(
           `[agentfootprint] Safety instruction '${instr.id}' matched but has no outputs (prompt, tools, or onToolResult). ` +
-          `It will appear in matchedIds but inject nothing.`,
+            `It will appear in matchedIds but inject nothing.`,
         );
       }
     }

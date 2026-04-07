@@ -22,14 +22,22 @@ export function slidingWindow(options: SlidingWindowOptions): MessageStrategy {
   return {
     prepare: (history: Message[]) => {
       if (history.length <= maxMessages) {
-        return { value: history, chosen: 'sliding-window', rationale: `${history.length} messages (within limit)` };
+        return {
+          value: history,
+          chosen: 'sliding-window',
+          rationale: `${history.length} messages (within limit)`,
+        };
       }
 
       const system = history.filter((m) => m.role === 'system');
       const rest = history.filter((m) => m.role !== 'system');
       const kept = rest.slice(-maxMessages);
 
-      return { value: [...system, ...kept], chosen: 'sliding-window', rationale: `kept ${kept.length + system.length} of ${history.length}` };
+      return {
+        value: [...system, ...kept],
+        chosen: 'sliding-window',
+        rationale: `kept ${kept.length + system.length} of ${history.length}`,
+      };
     },
   };
 }

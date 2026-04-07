@@ -40,7 +40,9 @@ export function resilientProvider(
   }
 
   const { onFallback, shouldFallback = () => true, circuitBreaker: cbOpts } = options ?? {};
-  const breakers = providers.map(() => new CircuitBreaker(cbOpts ?? { threshold: 3, resetAfterMs: 30_000 }));
+  const breakers = providers.map(
+    () => new CircuitBreaker(cbOpts ?? { threshold: 3, resetAfterMs: 30_000 }),
+  );
 
   return {
     breakers,
@@ -76,7 +78,10 @@ export function resilientProvider(
     },
 
     chatStream: providers.some((p) => p.chatStream)
-      ? async function* (messages: Message[], callOptions?: LLMCallOptions): AsyncIterable<LLMStreamChunk> {
+      ? async function* (
+          messages: Message[],
+          callOptions?: LLMCallOptions,
+        ): AsyncIterable<LLMStreamChunk> {
           let lastError: unknown;
 
           for (let i = 0; i < providers.length; i++) {

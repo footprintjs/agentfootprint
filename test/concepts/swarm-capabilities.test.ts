@@ -46,7 +46,10 @@ function mockRecorder(): AgentRecorder & { events: string[] } {
 describe('Swarm capabilities — unit', () => {
   it('invokedSpecialists tracked structurally (not narrative matching)', async () => {
     const provider = mockProvider([
-      { content: '', toolCalls: [{ id: 'tc1', name: 'coding', arguments: { message: 'fizzbuzz' } }] },
+      {
+        content: '',
+        toolCalls: [{ id: 'tc1', name: 'coding', arguments: { message: 'fizzbuzz' } }],
+      },
       { content: 'Done.' },
     ]);
 

@@ -8,14 +8,14 @@
 const ICON_MAP: Record<string, string> = {
   // API slot stages
   'system-prompt': 'start',
-  'messages': 'memory',
-  'seed': 'start',
+  messages: 'memory',
+  seed: 'start',
 
   // Call stages
   'call-llm': 'llm',
-  'parse': 'parse',
+  parse: 'parse',
   'parse-response': 'parse',
-  'finalize': 'end',
+  finalize: 'end',
   'handle-response': 'tool',
 
   // Agent loop stages
@@ -24,7 +24,7 @@ const ICON_MAP: Record<string, string> = {
   'commit-memory': 'memory',
 
   // RAG-specific
-  'retrieve': 'rag',
+  retrieve: 'rag',
   'augment-prompt': 'process',
 };
 

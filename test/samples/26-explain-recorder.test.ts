@@ -13,7 +13,11 @@ import { ExplainRecorder } from '../../src/recorders/v2/ExplainRecorder';
 const lookupOrder = defineTool({
   id: 'lookup_order',
   description: 'Look up an order',
-  inputSchema: { type: 'object', properties: { orderId: { type: 'string' } }, required: ['orderId'] },
+  inputSchema: {
+    type: 'object',
+    properties: { orderId: { type: 'string' } },
+    required: ['orderId'],
+  },
   handler: async ({ orderId }: { orderId: string }) => ({
     content: JSON.stringify({ orderId, status: 'shipped', amount: 299 }),
   }),
@@ -25,7 +29,10 @@ describe('Sample 26: ExplainRecorder', () => {
 
     const agent = Agent.create({
       provider: mock([
-        { content: '', toolCalls: [{ id: 'tc1', name: 'lookup_order', arguments: { orderId: 'ORD-1003' } }] },
+        {
+          content: '',
+          toolCalls: [{ id: 'tc1', name: 'lookup_order', arguments: { orderId: 'ORD-1003' } }],
+        },
         { content: 'Your order ORD-1003 has shipped. Total: $299.' },
       ]),
     })
@@ -59,7 +66,10 @@ describe('Sample 26: ExplainRecorder', () => {
 
     const agent = Agent.create({
       provider: mock([
-        { content: '', toolCalls: [{ id: 'tc1', name: 'lookup_order', arguments: { orderId: 'ORD-1' } }] },
+        {
+          content: '',
+          toolCalls: [{ id: 'tc1', name: 'lookup_order', arguments: { orderId: 'ORD-1' } }],
+        },
         { content: 'Shipped!' },
       ]),
     })
@@ -98,7 +108,10 @@ describe('Sample 26: ExplainRecorder', () => {
 
     const agent = Agent.create({
       provider: mock([
-        { content: '', toolCalls: [{ id: 'tc1', name: 'lookup_order', arguments: { orderId: 'ORD-1' } }] },
+        {
+          content: '',
+          toolCalls: [{ id: 'tc1', name: 'lookup_order', arguments: { orderId: 'ORD-1' } }],
+        },
         { content: 'Done' },
       ]),
     })
@@ -120,7 +133,10 @@ describe('Sample 26: ExplainRecorder', () => {
 
     const agent = Agent.create({
       provider: mock([
-        { content: '', toolCalls: [{ id: 'tc1', name: 'lookup_order', arguments: { orderId: 'ORD-1' } }] },
+        {
+          content: '',
+          toolCalls: [{ id: 'tc1', name: 'lookup_order', arguments: { orderId: 'ORD-1' } }],
+        },
         { content: 'Done' },
       ]),
     })

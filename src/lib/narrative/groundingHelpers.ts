@@ -84,7 +84,11 @@ export function getGroundingSources(entries: CombinedNarrativeEntry[]): Groundin
     for (const msg of messages) {
       if (msg.role === 'tool' && typeof msg.content === 'string') {
         let parsed: unknown;
-        try { parsed = JSON.parse(msg.content); } catch { parsed = msg.content; }
+        try {
+          parsed = JSON.parse(msg.content);
+        } catch {
+          parsed = msg.content;
+        }
         sources.push({
           stageName: entry.stageName ?? 'unknown',
           stageId: entry.stageId,
@@ -131,7 +135,12 @@ export function getLLMClaims(entries: CombinedNarrativeEntry[]): LLMClaim[] {
 
     if (entry.key === AgentScopeKey.ParsedResponse) {
       const parsed = entry.rawValue as { hasToolCalls?: boolean; content?: string };
-      if (parsed && !parsed.hasToolCalls && typeof parsed.content === 'string' && parsed.content.length > 0) {
+      if (
+        parsed &&
+        !parsed.hasToolCalls &&
+        typeof parsed.content === 'string' &&
+        parsed.content.length > 0
+      ) {
         claims.push({
           stageName: entry.stageName ?? 'unknown',
           stageId: entry.stageId,
@@ -157,7 +166,9 @@ export function getLLMClaims(entries: CombinedNarrativeEntry[]): LLMClaim[] {
  */
 export function getFullLLMContext(entries: CombinedNarrativeEntry[]): LLMContextSnapshot {
   let systemPrompt: string | undefined;
-  let toolDescriptions: Array<{ name: string; description: string; inputSchema: unknown }> | undefined;
+  let toolDescriptions:
+    | Array<{ name: string; description: string; inputSchema: unknown }>
+    | undefined;
   let decision: Record<string, unknown> | undefined;
 
   for (const entry of entries) {
@@ -168,10 +179,19 @@ export function getFullLLMContext(entries: CombinedNarrativeEntry[]): LLMContext
     }
 
     if (entry.key === AgentScopeKey.ToolDescriptions && Array.isArray(entry.rawValue)) {
-      toolDescriptions = entry.rawValue as Array<{ name: string; description: string; inputSchema: unknown }>;
+      toolDescriptions = entry.rawValue as Array<{
+        name: string;
+        description: string;
+        inputSchema: unknown;
+      }>;
     }
 
-    if (entry.key === AgentScopeKey.Decision && entry.rawValue && typeof entry.rawValue === 'object' && !Array.isArray(entry.rawValue)) {
+    if (
+      entry.key === AgentScopeKey.Decision &&
+      entry.rawValue &&
+      typeof entry.rawValue === 'object' &&
+      !Array.isArray(entry.rawValue)
+    ) {
       decision = entry.rawValue as Record<string, unknown>;
     }
   }

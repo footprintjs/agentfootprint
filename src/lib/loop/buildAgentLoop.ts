@@ -46,7 +46,12 @@ import { lastAssistantMessage } from '../../memory';
 import { AgentPattern } from './types';
 import type { AgentLoopConfig, AgentLoopSeedOptions, RoutingConfig } from './types';
 import { applyInstructionOverrides, buildInstructionsToLLMSubflow } from '../instructions';
-import type { ResolvedFollowUp, ResolvedInstruction, LLMInstruction, InstructedToolDefinition } from '../instructions';
+import type {
+  ResolvedFollowUp,
+  ResolvedInstruction,
+  LLMInstruction,
+  InstructedToolDefinition,
+} from '../instructions';
 
 // ── Default Agent Routing ─────────────────────────────────────────────────────
 
@@ -56,7 +61,10 @@ import type { ResolvedFollowUp, ResolvedInstruction, LLMInstruction, InstructedT
  * Expressed as a RoutingConfig so buildAgentLoop has ONE code path
  * for both Agent and Swarm routing.
  */
-function defaultAgentRouting(toolExecutionSubflow: FlowChart, useCommitFlag: boolean): RoutingConfig {
+function defaultAgentRouting(
+  toolExecutionSubflow: FlowChart,
+  useCommitFlag: boolean,
+): RoutingConfig {
   return {
     deciderName: 'RouteResponse',
     deciderId: 'route-response',
@@ -134,9 +142,20 @@ export interface AgentLoopResult extends AgentLoopBuild {
   spec: unknown;
 }
 
-export function buildAgentLoop(config: AgentLoopConfig, seed?: AgentLoopSeedOptions): AgentLoopBuild;
-export function buildAgentLoop(config: AgentLoopConfig, seed: AgentLoopSeedOptions | undefined, options: { captureSpec: true }): AgentLoopResult;
-export function buildAgentLoop(config: AgentLoopConfig, seed?: AgentLoopSeedOptions, options?: { captureSpec: boolean }): AgentLoopBuild | AgentLoopResult {
+export function buildAgentLoop(
+  config: AgentLoopConfig,
+  seed?: AgentLoopSeedOptions,
+): AgentLoopBuild;
+export function buildAgentLoop(
+  config: AgentLoopConfig,
+  seed: AgentLoopSeedOptions | undefined,
+  options: { captureSpec: true },
+): AgentLoopResult;
+export function buildAgentLoop(
+  config: AgentLoopConfig,
+  seed?: AgentLoopSeedOptions,
+  options?: { captureSpec: boolean },
+): AgentLoopBuild | AgentLoopResult {
   validateConfig(config);
 
   const maxIterations = config.maxIterations ?? 10;
@@ -160,7 +179,10 @@ export function buildAgentLoop(config: AgentLoopConfig, seed?: AgentLoopSeedOpti
     if (instructed.instructions?.length) {
       const override = config.instructionOverrides?.get(tool.id);
       if (override) {
-        instructionsByToolId.set(tool.id, applyInstructionOverrides(instructed.instructions, override));
+        instructionsByToolId.set(
+          tool.id,
+          applyInstructionOverrides(instructed.instructions, override),
+        );
       } else {
         instructionsByToolId.set(tool.id, instructed.instructions);
       }
@@ -173,7 +195,9 @@ export function buildAgentLoop(config: AgentLoopConfig, seed?: AgentLoopSeedOpti
 
   // Build a fresh local map: start from pre-computed agent-level functions, add per-tool ones.
   // Uses a local copy — never mutates the cached config.decideFunctions.
-  const decideFunctions = new Map<string, import('../call/helpers').DecideFn>(config.decideFunctions ?? []);
+  const decideFunctions = new Map<string, import('../call/helpers').DecideFn>(
+    config.decideFunctions ?? [],
+  );
   for (const [, instructions] of instructionsByToolId) {
     for (const instr of instructions) {
       if (instr.decide && !decideFunctions.has(instr.id)) {
@@ -254,7 +278,11 @@ export function buildAgentLoop(config: AgentLoopConfig, seed?: AgentLoopSeedOpti
   const seedStage = subflowMode ? seedSubflow : seedStandalone;
 
   let builder = flowChart<AgentLoopState>(
-    'Seed', seedStage, 'seed', undefined, 'Initialize agent loop state',
+    'Seed',
+    seedStage,
+    'seed',
+    undefined,
+    'Initialize agent loop state',
   );
 
   // Mount InstructionsToLLM subflow BEFORE the 3 API slots (only when instructions registered)
@@ -279,61 +307,46 @@ export function buildAgentLoop(config: AgentLoopConfig, seed?: AgentLoopSeedOpti
   }
 
   // Mount SystemPrompt subflow
-  builder = builder.addSubFlowChartNext(
-    'sf-system-prompt',
-    systemPromptSubflow,
-    'SystemPrompt',
-    {
-      inputMapper: (parent: Record<string, unknown>) => ({
-        messages: parent.messages,
-        loopCount: parent.loopCount,
-        ...(parent.promptInjections ? { promptInjections: parent.promptInjections } : {}),
-      }),
-      outputMapper: (sfOutput: Record<string, unknown>) => ({
-        systemPrompt: sfOutput.systemPrompt,
-      }),
-    },
-  );
+  builder = builder.addSubFlowChartNext('sf-system-prompt', systemPromptSubflow, 'SystemPrompt', {
+    inputMapper: (parent: Record<string, unknown>) => ({
+      messages: parent.messages,
+      loopCount: parent.loopCount,
+      ...(parent.promptInjections ? { promptInjections: parent.promptInjections } : {}),
+    }),
+    outputMapper: (sfOutput: Record<string, unknown>) => ({
+      systemPrompt: sfOutput.systemPrompt,
+    }),
+  });
 
   // Mount Messages subflow
   // Mount Messages subflow — arrayMerge: 'replace' so messages are overwritten
   // (not concatenated) on each Dynamic ReAct iteration.
-  builder = builder.addSubFlowChartNext(
-    'sf-messages',
-    messagesSubflow,
-    'Messages',
-    {
-      inputMapper: (parent: Record<string, unknown>) => ({
-        currentMessages: parent.messages ?? [],
-        loopCount: parent.loopCount ?? 0,
-      }),
-      outputMapper: (sfOutput: Record<string, unknown>) => ({
-        messages: sfOutput.memory_preparedMessages,
-        memory_preparedMessages: sfOutput.memory_preparedMessages,
-        memory_storedHistory: sfOutput.memory_storedHistory,
-      }),
-      arrayMerge: ArrayMergeMode.Replace,
-    },
-  );
+  builder = builder.addSubFlowChartNext('sf-messages', messagesSubflow, 'Messages', {
+    inputMapper: (parent: Record<string, unknown>) => ({
+      currentMessages: parent.messages ?? [],
+      loopCount: parent.loopCount ?? 0,
+    }),
+    outputMapper: (sfOutput: Record<string, unknown>) => ({
+      messages: sfOutput.memory_preparedMessages,
+      memory_preparedMessages: sfOutput.memory_preparedMessages,
+      memory_storedHistory: sfOutput.memory_storedHistory,
+    }),
+    arrayMerge: ArrayMergeMode.Replace,
+  });
 
   // Mount Tools subflow — arrayMerge: 'replace' so toolDescriptions is overwritten
   // each iteration (not concatenated). Essential for Dynamic mode where tools change.
-  builder = builder.addSubFlowChartNext(
-    'sf-tools',
-    toolsSubflow,
-    'Tools',
-    {
-      inputMapper: (parent: Record<string, unknown>) => ({
-        messages: parent.messages,
-        loopCount: parent.loopCount,
-        ...(parent.toolInjections ? { toolInjections: parent.toolInjections } : {}),
-      }),
-      outputMapper: (sfOutput: Record<string, unknown>) => ({
-        toolDescriptions: sfOutput.toolDescriptions,
-      }),
-      arrayMerge: ArrayMergeMode.Replace,
-    },
-  );
+  builder = builder.addSubFlowChartNext('sf-tools', toolsSubflow, 'Tools', {
+    inputMapper: (parent: Record<string, unknown>) => ({
+      messages: parent.messages,
+      loopCount: parent.loopCount,
+      ...(parent.toolInjections ? { toolInjections: parent.toolInjections } : {}),
+    }),
+    outputMapper: (sfOutput: Record<string, unknown>) => ({
+      toolDescriptions: sfOutput.toolDescriptions,
+    }),
+    arrayMerge: ArrayMergeMode.Replace,
+  });
 
   const assemblePromptStage = (scope: TypedScope<AgentLoopState>) => {
     const messages = scope.messages ?? [];
@@ -348,8 +361,10 @@ export function buildAgentLoop(config: AgentLoopConfig, seed?: AgentLoopSeedOpti
 
   // AssemblePrompt: prepend system message if not already present
   builder = builder.addFunction(
-    'AssemblePrompt', assemblePromptStage,
-    'assemble-prompt', 'Prepend system prompt to messages before LLM call',
+    'AssemblePrompt',
+    assemblePromptStage,
+    'assemble-prompt',
+    'Prepend system prompt to messages before LLM call',
   );
 
   // CallLLM → ParseResponse → Routing(decider)
@@ -359,15 +374,31 @@ export function buildAgentLoop(config: AgentLoopConfig, seed?: AgentLoopSeedOpti
   //
   // Add CallLLM — streaming or non-streaming
   if (config.streaming) {
-    builder = builder.addStreamingFunction('CallLLM', callLLM, 'call-llm', 'llm-stream', 'Send messages + tools to LLM provider (streaming)');
+    builder = builder.addStreamingFunction(
+      'CallLLM',
+      callLLM,
+      'call-llm',
+      'llm-stream',
+      'Send messages + tools to LLM provider (streaming)',
+    );
   } else {
-    builder = builder.addFunction('CallLLM', callLLM, 'call-llm', 'Send messages + tools to LLM provider');
+    builder = builder.addFunction(
+      'CallLLM',
+      callLLM,
+      'call-llm',
+      'Send messages + tools to LLM provider',
+    );
   }
-  builder = builder
-    .addFunction('ParseResponse', parseResponseStage, 'parse-response', 'Parse LLM response into structured result');
+  builder = builder.addFunction(
+    'ParseResponse',
+    parseResponseStage,
+    'parse-response',
+    'Parse LLM response into structured result',
+  );
 
   // ── Routing — one code path for both Agent and Swarm ──
-  const routing: RoutingConfig = config.routing ?? defaultAgentRouting(toolExecutionSubflow, useCommitFlag);
+  const routing: RoutingConfig =
+    config.routing ?? defaultAgentRouting(toolExecutionSubflow, useCommitFlag);
 
   // Validate branches
   if (routing.branches.length === 0) {
@@ -378,7 +409,11 @@ export function buildAgentLoop(config: AgentLoopConfig, seed?: AgentLoopSeedOpti
     throw new Error('RoutingConfig has duplicate branch IDs.');
   }
   if (!branchIds.has(routing.defaultBranch)) {
-    throw new Error(`RoutingConfig.defaultBranch '${routing.defaultBranch}' does not match any branch ID: [${[...branchIds].join(', ')}]`);
+    throw new Error(
+      `RoutingConfig.defaultBranch '${routing.defaultBranch}' does not match any branch ID: [${[
+        ...branchIds,
+      ].join(', ')}]`,
+    );
   }
 
   // Wrap decider with structural maxIterations guard — no custom routing can bypass this.
@@ -401,13 +436,28 @@ export function buildAgentLoop(config: AgentLoopConfig, seed?: AgentLoopSeedOpti
   for (const branch of routing.branches) {
     switch (branch.kind) {
       case 'subflow':
-        decider = decider.addSubFlowChartBranch(branch.id, branch.chart, branch.name ?? branch.id, branch.mount);
+        decider = decider.addSubFlowChartBranch(
+          branch.id,
+          branch.chart,
+          branch.name ?? branch.id,
+          branch.mount,
+        );
         break;
       case 'lazy-subflow':
-        decider = decider.addLazySubFlowChartBranch(branch.id, branch.factory, branch.name ?? branch.id, branch.mount);
+        decider = decider.addLazySubFlowChartBranch(
+          branch.id,
+          branch.factory,
+          branch.name ?? branch.id,
+          branch.mount,
+        );
         break;
       case 'fn':
-        decider = decider.addFunctionBranch(branch.id, branch.name ?? branch.id, branch.fn, branch.description);
+        decider = decider.addFunctionBranch(
+          branch.id,
+          branch.name ?? branch.id,
+          branch.fn,
+          branch.description,
+        );
         break;
     }
   }
@@ -418,7 +468,12 @@ export function buildAgentLoop(config: AgentLoopConfig, seed?: AgentLoopSeedOpti
   // CommitMemory saves full history to store (fire-and-forget) and calls $break().
   if (config.commitMemory) {
     const commitMemory = createCommitMemoryStage(config.commitMemory);
-    builder = builder.addFunction('CommitMemory', commitMemory, 'commit-memory', 'Persist conversation history to store');
+    builder = builder.addFunction(
+      'CommitMemory',
+      commitMemory,
+      'commit-memory',
+      'Persist conversation history to store',
+    );
   }
 
   // Loop target depends on pattern:
@@ -426,15 +481,14 @@ export function buildAgentLoop(config: AgentLoopConfig, seed?: AgentLoopSeedOpti
   //   Dynamic: loop to InstructionsToLLM (if mounted) or SystemPrompt
   //     — instructions + all slots re-evaluate each iteration
   const dynamicTarget = hasAgentInstructions ? 'sf-instructions-to-llm' : 'sf-system-prompt';
-  const loopTarget = config.pattern === AgentPattern.Dynamic
-    ? dynamicTarget
-    : 'call-llm';
+  const loopTarget = config.pattern === AgentPattern.Dynamic ? dynamicTarget : 'call-llm';
   builder = builder.loopTo(loopTarget);
 
   /** Get strict follow-up that fired during the last execution (if any). */
-  const getStrictFollowUp = () => lastStrictFollowUp
-    ? { followUp: lastStrictFollowUp, sourceToolId: lastStrictSourceToolId! }
-    : undefined;
+  const getStrictFollowUp = () =>
+    lastStrictFollowUp
+      ? { followUp: lastStrictFollowUp, sourceToolId: lastStrictSourceToolId! }
+      : undefined;
 
   if (options?.captureSpec) {
     const spec = builder.toSpec();
@@ -468,7 +522,8 @@ function createFinalizeStage(options: { useCommitFlag: boolean }) {
 /**
  * Validate the AgentLoopConfig at build time.
  */
-const isDevMode = () => typeof process !== 'undefined' && process.env?.['NODE_ENV'] !== 'production';
+const isDevMode = () =>
+  typeof process !== 'undefined' && process.env?.['NODE_ENV'] !== 'production';
 
 function validateConfig(config: AgentLoopConfig): void {
   if (!config.provider) {
@@ -495,7 +550,7 @@ function validateConfig(config: AgentLoopConfig): void {
     if (hasConditional) {
       console.warn(
         '[agentfootprint] agentInstructions with activeWhen predicates provided but no initialDecision. ' +
-        'Decision scope will be {}, so conditional instructions may never fire.',
+          'Decision scope will be {}, so conditional instructions may never fire.',
       );
     }
   }

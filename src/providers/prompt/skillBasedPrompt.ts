@@ -58,7 +58,8 @@ export function skillBasedPrompt(
       return {
         value,
         chosen: matchedIds.length > 0 ? `skills: ${matchedIds.join(', ')}` : 'fallback',
-        rationale: matchedIds.length > 0 ? `${matchedIds.length} skills matched` : 'no skills matched',
+        rationale:
+          matchedIds.length > 0 ? `${matchedIds.length} skills matched` : 'no skills matched',
       };
     },
   };

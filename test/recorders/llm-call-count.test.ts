@@ -32,15 +32,10 @@ describe('LLM call count via agentObservability', () => {
   });
 
   it('counts 1 LLM call when agent answers directly (no tools)', async () => {
-    const provider = mock([
-      { content: 'Hello!', usage: { inputTokens: 10, outputTokens: 5 } },
-    ]);
+    const provider = mock([{ content: 'Hello!', usage: { inputTokens: 10, outputTokens: 5 } }]);
 
     const obs = agentObservability();
-    const agent = Agent.create({ provider })
-      .system('You are helpful')
-      .recorder(obs)
-      .build();
+    const agent = Agent.create({ provider }).system('You are helpful').recorder(obs).build();
 
     await agent.run('Hi');
 

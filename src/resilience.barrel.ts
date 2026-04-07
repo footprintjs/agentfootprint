@@ -13,6 +13,11 @@
  */
 
 export { withRetry, withFallback, withCircuitBreaker, CircuitBreaker } from './compositions';
-export type { RetryOptions, FallbackOptions, CircuitBreakerOptions, CircuitState } from './compositions';
+export type {
+  RetryOptions,
+  FallbackOptions,
+  CircuitBreakerOptions,
+  CircuitState,
+} from './compositions';
 export { resilientProvider, fallbackProvider } from './adapters';
 export type { ResilientProviderOptions, FallbackProviderOptions } from './adapters';

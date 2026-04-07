@@ -56,12 +56,14 @@ const runtimeTool = defineTool({
   handler: async () => ({
     content: JSON.stringify({ status: 'degraded' }),
     instructions: ['Service is degraded. Set user expectations.'],
-    followUps: [{
-      toolId: 'status_page',
-      params: { region: 'us' },
-      description: 'Check service status page',
-      condition: 'User asks for more details about the outage',
-    }],
+    followUps: [
+      {
+        toolId: 'status_page',
+        params: { region: 'us' },
+        description: 'Check service status page',
+        condition: 'User asks for more details about the outage',
+      },
+    ],
   }),
 });
 
@@ -211,7 +213,10 @@ describe('Instruction integration — property', () => {
   it('agent still produces correct final answer with instructions active', async () => {
     const agent = Agent.create({
       provider: mock([
-        { content: 'checking', toolCalls: [{ id: '1', name: 'check_order', arguments: { orderId: 'cancelled' } }] },
+        {
+          content: 'checking',
+          toolCalls: [{ id: '1', name: 'check_order', arguments: { orderId: 'cancelled' } }],
+        },
         { content: 'The order was cancelled. I can suggest alternatives.' },
       ]),
     })
@@ -232,7 +237,10 @@ describe('Instruction integration — security', () => {
   it('instructions only fire for matching tool — not cross-tool leakage', async () => {
     const agent = Agent.create({
       provider: mock([
-        { content: 'tracking', toolCalls: [{ id: '1', name: 'track_package', arguments: { trackingId: 'PKG' } }] },
+        {
+          content: 'tracking',
+          toolCalls: [{ id: '1', name: 'track_package', arguments: { trackingId: 'PKG' } }],
+        },
         { content: 'Package is in transit.' },
       ]),
     })

@@ -25,11 +25,24 @@ export type AgentStreamEvent =
   | { type: 'llm_start'; iteration: number }
   | { type: 'thinking'; content: string }
   | { type: 'token'; content: string }
-  | { type: 'llm_end'; iteration: number; toolCallCount: number; content: string; model?: string; latencyMs: number }
+  | {
+      type: 'llm_end';
+      iteration: number;
+      toolCallCount: number;
+      content: string;
+      model?: string;
+      latencyMs: number;
+    }
   | { type: 'tool_start'; toolName: string; toolCallId: string; args: Record<string, unknown> }
-  | { type: 'tool_end'; toolName: string; toolCallId: string;
+  | {
+      type: 'tool_end';
+      toolName: string;
+      toolCallId: string;
       /** Raw tool result — may contain PII. Apply your own redaction before logging/displaying. */
-      result: string; error?: boolean; latencyMs: number }
+      result: string;
+      error?: boolean;
+      latencyMs: number;
+    }
   | { type: 'turn_end'; content: string; iterations: number; paused?: boolean }
   | { type: 'error'; phase: AgentPhase; message: string };
 

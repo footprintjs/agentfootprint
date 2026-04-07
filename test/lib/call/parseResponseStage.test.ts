@@ -109,10 +109,7 @@ describe('parseResponseStage — boundary', () => {
 
 describe('parseResponseStage — scenario', () => {
   it('appends assistant message to conversation history (final)', async () => {
-    const state = await runParseResponse(
-      { type: 'final', content: 'Hello!' },
-      [user('hi')],
-    );
+    const state = await runParseResponse({ type: 'final', content: 'Hello!' }, [user('hi')]);
 
     const messages = state.messages as Message[];
     expect(messages).toHaveLength(2);
@@ -122,10 +119,9 @@ describe('parseResponseStage — scenario', () => {
 
   it('appends assistant message with toolCalls when tools present', async () => {
     const tc = makeToolCall('search');
-    const state = await runParseResponse(
-      { type: 'tools', content: 'Searching', toolCalls: [tc] },
-      [user('search for X')],
-    );
+    const state = await runParseResponse({ type: 'tools', content: 'Searching', toolCalls: [tc] }, [
+      user('search for X'),
+    ]);
 
     const messages = state.messages as Message[];
     expect(messages).toHaveLength(2);
@@ -142,10 +138,7 @@ describe('parseResponseStage — scenario', () => {
       { role: 'assistant', content: 'response 1' },
       user('turn 2'),
     ];
-    const state = await runParseResponse(
-      { type: 'final', content: 'response 2' },
-      existing,
-    );
+    const state = await runParseResponse({ type: 'final', content: 'response 2' }, existing);
 
     const messages = state.messages as Message[];
     expect(messages).toHaveLength(4);

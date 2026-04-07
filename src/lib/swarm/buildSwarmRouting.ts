@@ -115,7 +115,8 @@ export function buildSwarmRouting(config: SwarmRoutingConfig): RoutingConfig {
         const args = toolCall.arguments as Record<string, unknown> | undefined;
         const rawMsg = args?.message;
         const msg = typeof rawMsg === 'string' ? rawMsg : '';
-        scope.specialistMessage = msg.length > MAX_MESSAGE_LEN ? msg.slice(0, MAX_MESSAGE_LEN) : msg;
+        scope.specialistMessage =
+          msg.length > MAX_MESSAGE_LEN ? msg.slice(0, MAX_MESSAGE_LEN) : msg;
         scope.specialistToolCallId = toolCall.id;
         matchedIndex = i;
         matchedBranch = toolName;
@@ -137,9 +138,15 @@ export function buildSwarmRouting(config: SwarmRoutingConfig): RoutingConfig {
       if (i === matchedIndex) continue;
       const tc = parsed.toolCalls[i];
       if (specialistIds.has(tc.name)) {
-        skipped.push({ content: 'Deferred — will be handled in next iteration.', toolCallId: tc.id });
+        skipped.push({
+          content: 'Deferred — will be handled in next iteration.',
+          toolCallId: tc.id,
+        });
       } else if (!extraToolIds.has(tc.name)) {
-        skipped.push({ content: `Unknown tool: ${String(tc.name).slice(0, 100)}`, toolCallId: tc.id });
+        skipped.push({
+          content: `Unknown tool: ${String(tc.name).slice(0, 100)}`,
+          toolCallId: tc.id,
+        });
       }
       // Extra tools in swarm-tools branch are handled by the subflow
     }
@@ -196,10 +203,16 @@ export function buildSwarmRouting(config: SwarmRoutingConfig): RoutingConfig {
         }),
         outputMapper: (sfOutput: Record<string, unknown>, parentScope: Record<string, unknown>) => {
           const resultContent = String(sfOutput.result ?? sfOutput.content ?? '');
-          const toolCallId = String(parentScope.specialistToolCallId ?? `specialist-${++fallbackIdCounter}`);
-          const preview = resultContent.length > 120 ? resultContent.slice(0, 120) + '...' : resultContent;
+          const toolCallId = String(
+            parentScope.specialistToolCallId ?? `specialist-${++fallbackIdCounter}`,
+          );
+          const preview =
+            resultContent.length > 120 ? resultContent.slice(0, 120) + '...' : resultContent;
           // Include synthetic results for skipped tool calls (LLMs expect every call to have a result)
-          const skipped = (parentScope.skippedToolResults ?? []) as Array<{ content: string; toolCallId: string }>;
+          const skipped = (parentScope.skippedToolResults ?? []) as Array<{
+            content: string;
+            toolCallId: string;
+          }>;
           const skippedMessages = skipped.map((s) => toolResultMessage(s.content, s.toolCallId));
           return {
             messages: [toolResultMessage(resultContent, toolCallId), ...skippedMessages],
@@ -261,7 +274,10 @@ export function buildSwarmRouting(config: SwarmRoutingConfig): RoutingConfig {
           parsedResponse: parent.parsedResponse,
         }),
         outputMapper: (sfOutput: Record<string, unknown>, parentScope: Record<string, unknown>) => {
-          const results = (sfOutput.toolResults ?? []) as Array<{ content: string; toolCallId: string }>;
+          const results = (sfOutput.toolResults ?? []) as Array<{
+            content: string;
+            toolCallId: string;
+          }>;
           // Delta: return all tool result messages for array concat
           return {
             messages: results.map((r) => toolResultMessage(r.content, r.toolCallId)),
@@ -280,7 +296,8 @@ export function buildSwarmRouting(config: SwarmRoutingConfig): RoutingConfig {
     fn: (scope: SwarmRoutingScope, breakFn: () => void) => {
       const messages = scope.messages ?? [];
       const lastAsst = lastAssistantMessage(messages);
-      scope.result = (lastAsst ? getTextContent(lastAsst.content) : scope.parsedResponse?.content) ?? '';
+      scope.result =
+        (lastAsst ? getTextContent(lastAsst.content) : scope.parsedResponse?.content) ?? '';
       breakFn();
     },
     description: 'Extract final answer and stop the swarm loop',

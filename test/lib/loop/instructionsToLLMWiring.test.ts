@@ -82,9 +82,7 @@ describe('InstructionsToLLM wiring — unit', () => {
 
   it('instructions inject prompt into system prompt', async () => {
     const provider = mockProvider([{ content: 'response' }]);
-    const instructions: AgentInstruction[] = [
-      { id: 'always', prompt: 'Extra guidance here.' },
-    ];
+    const instructions: AgentInstruction[] = [{ id: 'always', prompt: 'Extra guidance here.' }];
     const config = minimalConfig({
       provider,
       agentInstructions: instructions,
@@ -129,9 +127,7 @@ describe('InstructionsToLLM wiring — unit', () => {
       handler: async () => ({ content: 'refunded' }),
     });
     const provider = mockProvider([{ content: 'ok' }]);
-    const instructions: AgentInstruction[] = [
-      { id: 'refund', tools: [refundTool] },
-    ];
+    const instructions: AgentInstruction[] = [{ id: 'refund', tools: [refundTool] }];
     const config = minimalConfig({
       provider,
       agentInstructions: instructions,
@@ -157,9 +153,7 @@ describe('InstructionsToLLM wiring — boundary', () => {
   });
 
   it('decision scope initialized from initialDecision', async () => {
-    const instructions: AgentInstruction[] = [
-      { id: 'always', prompt: 'P' },
-    ];
+    const instructions: AgentInstruction[] = [{ id: 'always', prompt: 'P' }];
     const config = minimalConfig({
       agentInstructions: instructions,
       initialDecision: { orderStatus: 'denied', riskLevel: 'high' },
@@ -187,10 +181,7 @@ describe('InstructionsToLLM wiring — tool registration', () => {
 
     // Tool should be callable — run the agent with a tool call
     const tc = { id: 'tc-1', name: 'process_refund', arguments: {} };
-    const provider2 = mockProvider([
-      { content: '', toolCalls: [tc] },
-      { content: 'Done.' },
-    ]);
+    const provider2 = mockProvider([{ content: '', toolCalls: [tc] }, { content: 'Done.' }]);
     const agent2 = Agent.create({ provider: provider2 })
       .system('Help.')
       .instruction({ id: 'refund', tools: [refundTool] })
@@ -217,10 +208,7 @@ describe('InstructionsToLLM wiring — tool registration', () => {
 
     // Register existing tool first, then build agent with instruction tool of same ID
     const tc = { id: 'tc-1', name: 'shared_tool', arguments: {} };
-    const provider = mockProvider([
-      { content: '', toolCalls: [tc] },
-      { content: 'Done.' },
-    ]);
+    const provider = mockProvider([{ content: '', toolCalls: [tc] }, { content: 'Done.' }]);
     const agent = Agent.create({ provider })
       .system('Help.')
       .tool(existingTool)
@@ -251,7 +239,10 @@ describe('InstructionsToLLM wiring — multi-run stability', () => {
         callCount++;
         // Odd calls: tool call, even calls: final
         if (callCount % 2 === 1) {
-          return { content: '', toolCalls: [{ id: `tc-${callCount}`, name: 'process_refund', arguments: {} }] };
+          return {
+            content: '',
+            toolCalls: [{ id: `tc-${callCount}`, name: 'process_refund', arguments: {} }],
+          };
         }
         return { content: `Done ${callCount / 2}` };
       }),
@@ -315,9 +306,7 @@ describe('InstructionsToLLM wiring — tool deduplication', () => {
       inputSchema: { type: 'object' },
       handler: async () => ({ content: 'instr search' }),
     });
-    const instructions: AgentInstruction[] = [
-      { id: 'extra-search', tools: [instrTool] },
-    ];
+    const instructions: AgentInstruction[] = [{ id: 'extra-search', tools: [instrTool] }];
     const config = minimalConfig({
       provider,
       tools: { provider: staticTools([baseTool]) },
@@ -339,16 +328,16 @@ describe('InstructionsToLLM wiring — tool deduplication', () => {
 
 describe('InstructionsToLLM wiring — narrative', () => {
   it('InstructionsToLLM subflow appears in narrative', async () => {
-    const instructions: AgentInstruction[] = [
-      { id: 'always', prompt: 'P' },
-    ];
+    const instructions: AgentInstruction[] = [{ id: 'always', prompt: 'P' }];
     const config = minimalConfig({ agentInstructions: instructions });
     const { executor } = await runLoop(config);
 
     const narrative = executor.getNarrative();
-    expect(narrative.some((s: string) =>
-      s.includes('InstructionsToLLM') || s.includes('EvaluateInstructions'),
-    )).toBe(true);
+    expect(
+      narrative.some(
+        (s: string) => s.includes('InstructionsToLLM') || s.includes('EvaluateInstructions'),
+      ),
+    ).toBe(true);
   });
 
   it('narrative shows matched instruction IDs', async () => {
@@ -371,24 +360,21 @@ describe('InstructionsToLLM wiring — responseRules', () => {
     registry.register(searchTool);
 
     const tc: ToolCall = { id: 'tc-1', name: 'search', arguments: { q: 'test' } };
-    const provider = mockProvider([
-      { content: '', toolCalls: [tc] },
-      { content: 'Final answer.' },
-    ]);
+    const provider = mockProvider([{ content: '', toolCalls: [tc] }, { content: 'Final answer.' }]);
 
     const instructions: AgentInstruction[] = [
       {
         id: 'always-guide',
-        onToolResult: [
-          { id: 'be-concise', text: 'Be concise in your response.' },
-        ],
+        onToolResult: [{ id: 'be-concise', text: 'Be concise in your response.' }],
       },
     ];
 
     const config = minimalConfig({
       provider,
       registry,
-      tools: { provider: staticTools([{ name: 'search', description: 'Search', inputSchema: {} }]) },
+      tools: {
+        provider: staticTools([{ name: 'search', description: 'Search', inputSchema: {} }]),
+      },
       agentInstructions: instructions,
     });
 
@@ -410,19 +396,16 @@ describe('InstructionsToLLM wiring — Dynamic pattern', () => {
     registry.register(searchTool);
 
     const tc: ToolCall = { id: 'tc-1', name: 'search', arguments: {} };
-    const provider = mockProvider([
-      { content: '', toolCalls: [tc] },
-      { content: 'Done.' },
-    ]);
+    const provider = mockProvider([{ content: '', toolCalls: [tc] }, { content: 'Done.' }]);
 
-    const instructions: AgentInstruction[] = [
-      { id: 'always', prompt: 'Always active.' },
-    ];
+    const instructions: AgentInstruction[] = [{ id: 'always', prompt: 'Always active.' }];
 
     const config = minimalConfig({
       provider,
       registry,
-      tools: { provider: staticTools([{ name: 'search', description: 'Search', inputSchema: {} }]) },
+      tools: {
+        provider: staticTools([{ name: 'search', description: 'Search', inputSchema: {} }]),
+      },
       agentInstructions: instructions,
       pattern: AgentPattern.Dynamic,
     });
@@ -432,8 +415,8 @@ describe('InstructionsToLLM wiring — Dynamic pattern', () => {
 
     // Narrative should show InstructionsToLLM appearing (re-evaluated on 2nd iteration)
     const narrative = executor.getNarrative();
-    const instrEntries = narrative.filter((s: string) =>
-      s.includes('InstructionsToLLM') || s.includes('EvaluateInstructions'),
+    const instrEntries = narrative.filter(
+      (s: string) => s.includes('InstructionsToLLM') || s.includes('EvaluateInstructions'),
     );
     // Should appear at least twice (once per iteration in Dynamic mode)
     expect(instrEntries.length).toBeGreaterThanOrEqual(2);

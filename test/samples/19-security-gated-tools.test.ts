@@ -11,8 +11,13 @@
  */
 import { describe, it, expect, vi } from 'vitest';
 import {
-  Agent, defineTool, mock, gatedTools, PermissionPolicy,
-  PermissionRecorder, staticTools,
+  Agent,
+  defineTool,
+  mock,
+  gatedTools,
+  PermissionPolicy,
+  PermissionRecorder,
+  staticTools,
 } from '../../src/test-barrel';
 import type { ToolCall, Message } from '../../src/test-barrel';
 
@@ -47,13 +52,15 @@ describe('Sample 19: Security — Gated Tools', () => {
   it('gatedTools hides blocked tools from the LLM', async () => {
     const policy = new PermissionPolicy(['search']); // only search allowed
 
-    const gated = gatedTools(
-      staticTools(allTools),
-      policy.checker(),
-    );
+    const gated = gatedTools(staticTools(allTools), policy.checker());
 
     // Resolve directly to verify filtering
-    const resolved = await gated.resolve({ message: '', turnNumber: 0, loopIteration: 0, messages: [] });
+    const resolved = await gated.resolve({
+      message: '',
+      turnNumber: 0,
+      loopIteration: 0,
+      messages: [],
+    });
     const toolNames = resolved.value.map((t) => t.name);
 
     // Only 'search' visible — delete_user and run_code are hidden
@@ -63,22 +70,35 @@ describe('Sample 19: Security — Gated Tools', () => {
   });
 
   it('PermissionPolicy.fromRoles enables role-based access', async () => {
-    const policy = PermissionPolicy.fromRoles({
-      user: ['search'],
-      admin: ['search', 'delete_user', 'run_code'],
-    }, 'user'); // start as user
+    const policy = PermissionPolicy.fromRoles(
+      {
+        user: ['search'],
+        admin: ['search', 'delete_user', 'run_code'],
+      },
+      'user',
+    ); // start as user
 
     const gated = gatedTools(staticTools(allTools), policy.checker());
 
     // Resolve as user — only search visible
-    const userTools = await gated.resolve({ message: '', turnNumber: 0, loopIteration: 0, messages: [] });
+    const userTools = await gated.resolve({
+      message: '',
+      turnNumber: 0,
+      loopIteration: 0,
+      messages: [],
+    });
     expect(userTools.value.map((t) => t.name)).toEqual(['search']);
 
     // Upgrade to admin mid-conversation
     policy.setRole('admin');
 
     // Resolve as admin — all tools visible
-    const adminTools = await gated.resolve({ message: '', turnNumber: 0, loopIteration: 0, messages: [] });
+    const adminTools = await gated.resolve({
+      message: '',
+      turnNumber: 0,
+      loopIteration: 0,
+      messages: [],
+    });
     expect(adminTools.value.map((t) => t.name)).toEqual(['search', 'delete_user', 'run_code']);
   });
 
@@ -86,11 +106,9 @@ describe('Sample 19: Security — Gated Tools', () => {
     const policy = new PermissionPolicy(['search']);
     const recorder = new PermissionRecorder();
 
-    const gated = gatedTools(
-      staticTools(allTools),
-      policy.checker(),
-      { onBlocked: (toolId) => recorder.onBlocked(toolId, 'resolve') },
-    );
+    const gated = gatedTools(staticTools(allTools), policy.checker(), {
+      onBlocked: (toolId) => recorder.onBlocked(toolId, 'resolve'),
+    });
 
     // Resolve — triggers blocked events for hidden tools
     await gated.resolve({ message: '', turnNumber: 0, loopIteration: 0, messages: [] });

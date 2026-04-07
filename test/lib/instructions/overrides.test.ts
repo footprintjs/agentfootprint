@@ -35,7 +35,7 @@ describe('applyInstructionOverrides — unit', () => {
   it('suppress removes instructions by ID', () => {
     const original = [makeInstr('a', 'A'), makeInstr('b', 'B'), makeInstr('c', 'C')];
     const result = applyInstructionOverrides(original, { suppress: ['b'] });
-    expect(result.map(i => i.id)).toEqual(['a', 'c']);
+    expect(result.map((i) => i.id)).toEqual(['a', 'c']);
   });
 
   it('add appends new instructions', () => {
@@ -43,7 +43,7 @@ describe('applyInstructionOverrides — unit', () => {
     const result = applyInstructionOverrides(original, {
       add: [makeInstr('new', 'New instruction')],
     });
-    expect(result.map(i => i.id)).toEqual(['a', 'new']);
+    expect(result.map((i) => i.id)).toEqual(['a', 'new']);
     expect(result[1].text).toBe('New instruction');
   });
 
@@ -68,7 +68,7 @@ describe('applyInstructionOverrides — unit', () => {
       replace: { 'replace-me': { text: 'New text' } },
       add: [makeInstr('added', 'Added instruction')],
     });
-    expect(result.map(i => i.id)).toEqual(['keep', 'replace-me', 'added']);
+    expect(result.map((i) => i.id)).toEqual(['keep', 'replace-me', 'added']);
     expect(result[1].text).toBe('New text');
   });
 

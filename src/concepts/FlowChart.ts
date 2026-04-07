@@ -125,9 +125,7 @@ export class FlowChartRunner {
             inputMapper: (parentState: Record<string, unknown>) => {
               const input = agentConfig.inputMapper
                 ? agentConfig.inputMapper(parentState)
-                : (parentState.result as string) ??
-                  (parentState.pipelineInput as string) ??
-                  '';
+                : (parentState.result as string) ?? (parentState.pipelineInput as string) ?? '';
               return { message: input };
             },
           },
@@ -224,9 +222,7 @@ export class FlowChartRunner {
               inputMapper: (parentState: Record<string, unknown>) => {
                 const input = agentConfig.inputMapper
                   ? agentConfig.inputMapper(parentState)
-                  : (parentState.result as string) ??
-                    (parentState.pipelineInput as string) ??
-                    '';
+                  : (parentState.result as string) ?? (parentState.pipelineInput as string) ?? '';
                 return { message: input };
               },
             },

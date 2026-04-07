@@ -63,7 +63,12 @@ export class LLMCall {
   }
 
   build(): LLMCallRunner {
-    return new LLMCallRunner(this.provider, this.sysPrompt, [...this.recorders], this.enableStreaming);
+    return new LLMCallRunner(
+      this.provider,
+      this.sysPrompt,
+      [...this.recorders],
+      this.enableStreaming,
+    );
   }
 }
 
@@ -75,7 +80,12 @@ export class LLMCallRunner {
   private lastExecutor?: FlowChartExecutor;
   private lastSpec?: unknown;
 
-  constructor(provider: LLMProvider, sysPrompt?: string, recorders: AgentRecorder[] = [], streaming = false) {
+  constructor(
+    provider: LLMProvider,
+    sysPrompt?: string,
+    recorders: AgentRecorder[] = [],
+    streaming = false,
+  ) {
     this.provider = provider;
     this.sysPrompt = sysPrompt;
     this.recorders = recorders;
@@ -160,8 +170,11 @@ export class LLMCallRunner {
 
     const callLLM = createCallLLMStage(this.provider);
 
-    let builder = flowChart<RAGState>('SystemPrompt', systemPromptStage, 'system-prompt')
-      .addFunction('Messages', messagesStage, 'messages');
+    let builder = flowChart<RAGState>(
+      'SystemPrompt',
+      systemPromptStage,
+      'system-prompt',
+    ).addFunction('Messages', messagesStage, 'messages');
 
     if (this.streamingEnabled) {
       builder = builder.addStreamingFunction('CallLLM', callLLM, 'call-llm', 'llm-stream');

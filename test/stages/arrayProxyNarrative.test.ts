@@ -91,12 +91,7 @@ describe('array proxy narrative — agentfootprint regression', () => {
     const chart = flowChart<AgentLoopState>(
       'Seed',
       (scope) => {
-        scope.messages = [
-          user('hello'),
-          assistant('hi'),
-          user('tools?'),
-          assistant('sure'),
-        ];
+        scope.messages = [user('hello'), assistant('hi'), user('tools?'), assistant('sure')];
       },
       'seed',
     )

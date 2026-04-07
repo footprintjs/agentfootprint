@@ -2,7 +2,14 @@
 export type { ConversationStore, MemoryConfig } from './memory/types';
 export { InMemoryStore } from './memory/inMemory';
 export { redisStore, dynamoStore, postgresStore } from './memory/stores';
-export type { RedisLike, RedisStoreOptions, DynamoLike, DynamoStoreOptions, PostgresLike, PostgresStoreOptions } from './memory/stores';
+export type {
+  RedisLike,
+  RedisStoreOptions,
+  DynamoLike,
+  DynamoStoreOptions,
+  PostgresLike,
+  PostgresStoreOptions,
+} from './memory/stores';
 
 // ── Mock Adapters ────────────────────────────────────────────
 export { MockAdapter, mock } from './mock/MockAdapter';

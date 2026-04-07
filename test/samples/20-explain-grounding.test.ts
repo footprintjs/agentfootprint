@@ -41,7 +41,7 @@ describe('Sample 20: Explain — Grounding Analysis', () => {
     const agent = Agent.create({ provider })
       .system('You are a product expert.')
       .tool(lookupProduct)
-      .verbose()  // full values in narrative
+      .verbose() // full values in narrative
       .build();
 
     await agent.run('Tell me about the MacBook');
@@ -63,10 +63,7 @@ describe('Sample 20: Explain — Grounding Analysis', () => {
       { content: 'The MacBook Pro costs $2,499 with 23 in stock.' },
     ]);
 
-    const agent = Agent.create({ provider })
-      .system('Product expert.')
-      .tool(lookupProduct)
-      .build();
+    const agent = Agent.create({ provider }).system('Product expert.').tool(lookupProduct).build();
 
     await agent.run('MacBook info');
     const claims = getLLMClaims(agent.getNarrativeEntries());
@@ -83,10 +80,7 @@ describe('Sample 20: Explain — Grounding Analysis', () => {
       { content: 'The MacBook Pro costs $2,499 with free shipping and a 5-year warranty.' },
     ]);
 
-    const agent = Agent.create({ provider })
-      .system('Product expert.')
-      .tool(lookupProduct)
-      .build();
+    const agent = Agent.create({ provider }).system('Product expert.').tool(lookupProduct).build();
 
     await agent.run('MacBook details');
     const entries = agent.getNarrativeEntries();
@@ -105,15 +99,9 @@ describe('Sample 20: Explain — Grounding Analysis', () => {
 
   it('getFullLLMContext provides complete snapshot', async () => {
     const tc: ToolCall = { id: 'tc-1', name: 'lookup_product', arguments: { name: 'MacBook' } };
-    const provider = mock([
-      { content: '', toolCalls: [tc] },
-      { content: 'Great product!' },
-    ]);
+    const provider = mock([{ content: '', toolCalls: [tc] }, { content: 'Great product!' }]);
 
-    const agent = Agent.create({ provider })
-      .system('Expert.')
-      .tool(lookupProduct)
-      .build();
+    const agent = Agent.create({ provider }).system('Expert.').tool(lookupProduct).build();
 
     await agent.run('Tell me');
     const context = getFullLLMContext(agent.getNarrativeEntries());

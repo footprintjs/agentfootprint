@@ -59,7 +59,10 @@ export function zodToJsonSchema(zodSchema: any): Record<string, unknown> {
 
 /** Duck-type check: is this a Zod schema? */
 export function isZodSchema(value: unknown): boolean {
-  return typeof value === 'object' && value !== null
-    && typeof (value as any).safeParse === 'function'
-    && (value as any)._def !== undefined;
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    typeof (value as any).safeParse === 'function' &&
+    (value as any)._def !== undefined
+  );
 }

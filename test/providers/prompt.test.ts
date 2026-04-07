@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { staticPrompt, templatePrompt, skillBasedPrompt, compositePrompt } from '../../src/test-barrel';
+import {
+  staticPrompt,
+  templatePrompt,
+  skillBasedPrompt,
+  compositePrompt,
+} from '../../src/test-barrel';
 import type { PromptContext } from '../../src/test-barrel';
 
 // ── Helpers ─────────────────────────────────────────────────
@@ -164,7 +169,10 @@ describe('compositePrompt', () => {
   });
 
   it('returns empty string when all providers return empty', async () => {
-    const provider = compositePrompt([{ resolve: () => ({ value: '', chosen: 'test' }) }, { resolve: () => ({ value: '', chosen: 'test' }) }]);
+    const provider = compositePrompt([
+      { resolve: () => ({ value: '', chosen: 'test' }) },
+      { resolve: () => ({ value: '', chosen: 'test' }) },
+    ]);
 
     const result = await provider.resolve(ctx());
     expect(result.value).toBe('');

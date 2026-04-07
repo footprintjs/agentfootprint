@@ -61,9 +61,7 @@ describe('AgentStreamEvent — backward compat', () => {
     const provider = {
       chat: vi.fn(async () => ({ content: 'Hello world' })),
     };
-    const agent = Agent.create({ provider })
-      .system('Help.')
-      .build();
+    const agent = Agent.create({ provider }).system('Help.').build();
 
     await agent.run('hi', { onToken: (t) => tokens.push(t) });
     // Non-streaming mode — no tokens emitted (onToken only fires in streaming mode)
@@ -92,9 +90,7 @@ describe('AgentStreamEvent — backward compat', () => {
       expect(events.some((e) => e.type === 'turn_start')).toBe(true);
       // onToken should be ignored (no tokens in non-streaming anyway)
       // Dev warning should fire
-      expect(warnSpy).toHaveBeenCalledWith(
-        expect.stringContaining('onToken is ignored'),
-      );
+      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('onToken is ignored'));
     } finally {
       process.env['NODE_ENV'] = prevEnv;
       warnSpy.mockRestore();
@@ -108,15 +104,9 @@ describe('AgentStreamEvent — tool lifecycle', () => {
   it('emits tool_start and tool_end for tool calls', async () => {
     const events: AgentStreamEvent[] = [];
     const tc: ToolCall = { id: 'tc-1', name: 'search', arguments: { q: 'test' } };
-    const provider = mockProvider([
-      { content: '', toolCalls: [tc] },
-      { content: 'Done.' },
-    ]);
+    const provider = mockProvider([{ content: '', toolCalls: [tc] }, { content: 'Done.' }]);
 
-    const agent = Agent.create({ provider })
-      .system('Help.')
-      .tool(searchTool)
-      .build();
+    const agent = Agent.create({ provider }).system('Help.').tool(searchTool).build();
 
     await agent.run('search for test', { onEvent: (e) => events.push(e) });
 
@@ -137,7 +127,9 @@ describe('AgentStreamEvent — tool lifecycle', () => {
       id: 'fail_tool',
       description: 'Always fails',
       inputSchema: { type: 'object' },
-      handler: async () => { throw new Error('Tool broke'); },
+      handler: async () => {
+        throw new Error('Tool broke');
+      },
     });
 
     const events: AgentStreamEvent[] = [];
@@ -147,10 +139,7 @@ describe('AgentStreamEvent — tool lifecycle', () => {
       { content: 'Error handled.' },
     ]);
 
-    const agent = Agent.create({ provider })
-      .system('Help.')
-      .tool(failTool)
-      .build();
+    const agent = Agent.create({ provider }).system('Help.').tool(failTool).build();
 
     await agent.run('try', { onEvent: (e) => events.push(e) });
 
@@ -166,15 +155,9 @@ describe('AgentStreamEvent — ordering', () => {
   it('turn_start is first, turn_end is last', async () => {
     const events: AgentStreamEvent[] = [];
     const tc: ToolCall = { id: 'tc-1', name: 'search', arguments: { q: 'x' } };
-    const provider = mockProvider([
-      { content: '', toolCalls: [tc] },
-      { content: 'Final.' },
-    ]);
+    const provider = mockProvider([{ content: '', toolCalls: [tc] }, { content: 'Final.' }]);
 
-    const agent = Agent.create({ provider })
-      .system('Help.')
-      .tool(searchTool)
-      .build();
+    const agent = Agent.create({ provider }).system('Help.').tool(searchTool).build();
 
     await agent.run('go', { onEvent: (e) => events.push(e) });
 
@@ -193,7 +176,9 @@ describe('AgentStreamEvent — ordering', () => {
 describe('AgentStreamEvent — llm lifecycle', () => {
   it('emits llm_start and llm_end in non-streaming mode', async () => {
     const events: AgentStreamEvent[] = [];
-    const agent = Agent.create({ provider: mockProvider([{ content: 'Answer', model: 'test-model' }]) })
+    const agent = Agent.create({
+      provider: mockProvider([{ content: 'Answer', model: 'test-model' }]),
+    })
       .system('Help.')
       .build();
 
@@ -222,7 +207,9 @@ describe('AgentStreamEvent — error isolation', () => {
 
     // onEvent throws — but agent should still complete
     const result = await agent.run('hi', {
-      onEvent: () => { throw new Error('Consumer broke'); },
+      onEvent: () => {
+        throw new Error('Consumer broke');
+      },
     });
 
     expect(result.content).toBe('ok');

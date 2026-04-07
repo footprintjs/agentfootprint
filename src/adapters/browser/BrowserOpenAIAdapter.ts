@@ -143,7 +143,12 @@ export class BrowserOpenAIAdapter implements LLMProvider {
 
     const response = await this.fetchAPI(body, options?.signal);
     const reader = response.body?.getReader();
-    if (!reader) throw new LLMError({ message: 'No response body for streaming', code: 'unknown', provider: 'openai-browser' });
+    if (!reader)
+      throw new LLMError({
+        message: 'No response body for streaming',
+        code: 'unknown',
+        provider: 'openai-browser',
+      });
 
     const decoder = new TextDecoder();
     let buffer = '';
@@ -267,7 +272,7 @@ export class BrowserOpenAIAdapter implements LLMProvider {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.apiKey}`,
+          Authorization: `Bearer ${this.apiKey}`,
         },
         body: JSON.stringify(body),
         signal,
@@ -275,15 +280,25 @@ export class BrowserOpenAIAdapter implements LLMProvider {
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));
       if (error.name === 'AbortError') {
-        throw new LLMError({ message: 'Request aborted', code: 'aborted', provider: 'openai-browser', cause: error });
+        throw new LLMError({
+          message: 'Request aborted',
+          code: 'aborted',
+          provider: 'openai-browser',
+          cause: error,
+        });
       }
-      throw new LLMError({ message: error.message, code: 'network', provider: 'openai-browser', cause: error });
+      throw new LLMError({
+        message: error.message,
+        code: 'network',
+        provider: 'openai-browser',
+        cause: error,
+      });
     }
 
     if (!response.ok) {
       let errorMessage = `OpenAI API error: ${response.status}`;
       try {
-        const errorBody = await response.json() as { error?: { message?: string } };
+        const errorBody = (await response.json()) as { error?: { message?: string } };
         if (errorBody.error?.message) {
           errorMessage = errorBody.error.message;
         }

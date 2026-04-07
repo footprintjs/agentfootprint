@@ -61,17 +61,18 @@ export function buildSystemPromptSubflow(config: SystemPromptSlotConfig): FlowCh
       // Merge prompt injections from InstructionsToLLM (if any)
       const injections = scope.promptInjections;
       const basePrompt = decision.value;
-      const fullPrompt = injections?.length
-        ? [basePrompt, ...injections].join('\n\n')
-        : basePrompt;
+      const fullPrompt = injections?.length ? [basePrompt, ...injections].join('\n\n') : basePrompt;
 
       scope.systemPrompt = fullPrompt;
 
       // Narrative enrichment — decision + prompt preview for BTS visibility
-      scope.promptDecision = decision.chosen !== 'static'
-        ? `${decision.chosen}${decision.rationale ? ` (${decision.rationale})` : ''}`
-        : undefined;
-      const injectionNote = injections?.length ? ` (+${injections.length} instruction injections)` : '';
+      scope.promptDecision =
+        decision.chosen !== 'static'
+          ? `${decision.chosen}${decision.rationale ? ` (${decision.rationale})` : ''}`
+          : undefined;
+      const injectionNote = injections?.length
+        ? ` (+${injections.length} instruction injections)`
+        : '';
       const preview = fullPrompt.length > 60 ? fullPrompt.slice(0, 60) + '...' : fullPrompt;
       scope.promptSummary = `${fullPrompt.length} chars: "${preview}"${injectionNote}`;
     },

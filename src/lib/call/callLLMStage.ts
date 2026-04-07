@@ -38,9 +38,10 @@ export function createCallLLMStage(
   }
 
   // Backward compat: accept bare handler or options object
-  const stageOpts: CallLLMStageOptions = typeof optionsOrHandler === 'function'
-    ? { onStreamEvent: optionsOrHandler }
-    : optionsOrHandler ?? {};
+  const stageOpts: CallLLMStageOptions =
+    typeof optionsOrHandler === 'function'
+      ? { onStreamEvent: optionsOrHandler }
+      : optionsOrHandler ?? {};
 
   const { onStreamEvent, responseFormat } = stageOpts;
 
@@ -58,7 +59,10 @@ export function createCallLLMStage(
       ...(signal ? { signal } : {}),
       ...(responseFormat ? { responseFormat } : {}),
     };
-    const response = await provider.chat(messages, Object.keys(options).length > 0 ? options : undefined);
+    const response = await provider.chat(
+      messages,
+      Object.keys(options).length > 0 ? options : undefined,
+    );
 
     // Write raw response for recorders to observe
     scope.adapterRawResponse = response;

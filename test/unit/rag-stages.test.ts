@@ -1,9 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import {
-  createRetrieveStage,
-  augmentPromptStage,
-  mockRetriever,
-} from '../../src/test-barrel';
+import { createRetrieveStage, augmentPromptStage, mockRetriever } from '../../src/test-barrel';
 import type { TypedScope } from 'footprintjs';
 import type { RAGState } from '../../src/scope/types';
 
@@ -94,7 +90,7 @@ describe('augmentPromptStage', () => {
     expect(scope.messages).toHaveLength(3); // system + context + user
     expect(scope.messages[0].role).toBe('system');
     expect(scope.messages[1].role).toBe('system'); // context is a system message
-    expect((scope.messages[1].content as string)).toContain('Doc A');
+    expect(scope.messages[1].content as string).toContain('Doc A');
     expect(scope.messages[2].role).toBe('user');
   });
 
@@ -110,7 +106,7 @@ describe('augmentPromptStage', () => {
     augmentPromptStage(scope);
 
     expect(scope.messages[0].role).toBe('system'); // context first
-    expect((scope.messages[0].content as string)).toContain('Doc X');
+    expect(scope.messages[0].content as string).toContain('Doc X');
     expect(scope.messages[1].role).toBe('user');
   });
 

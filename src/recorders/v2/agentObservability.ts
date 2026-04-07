@@ -71,7 +71,9 @@ export interface AgentObservabilityRecorder extends CompositeRecorder {
  * Tracks tokens, tool usage, and cost in a single `.recorder()` call.
  * Stage timing is handled separately by MetricRecorder (auto-attached by runners).
  */
-export function agentObservability(options?: AgentObservabilityOptions): AgentObservabilityRecorder {
+export function agentObservability(
+  options?: AgentObservabilityOptions,
+): AgentObservabilityRecorder {
   const tokenRec = new TokenRecorder();
   const toolRec = new ToolUsageRecorder();
   const costRec = new CostRecorder(

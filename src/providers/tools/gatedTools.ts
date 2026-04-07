@@ -47,7 +47,10 @@ import type { LLMToolDescription } from '../../types/llm';
  * Permission checker — called for each tool on each turn.
  * Return true to allow, false to block.
  */
-export type PermissionChecker = (toolId: string, context: ToolContext) => boolean | Promise<boolean>;
+export type PermissionChecker = (
+  toolId: string,
+  context: ToolContext,
+) => boolean | Promise<boolean>;
 
 export interface GatedToolsOptions {
   /** Called when a tool is blocked (at resolve or execute phase). For logging/metrics. */
@@ -82,9 +85,10 @@ export function gatedTools(
       return {
         value: allowed,
         chosen: blocked.length > 0 ? 'gated' : innerDecision.chosen,
-        rationale: blocked.length > 0
-          ? `${allowed.length} allowed, ${blocked.length} blocked: ${blocked.join(', ')}`
-          : innerDecision.rationale,
+        rationale:
+          blocked.length > 0
+            ? `${allowed.length} allowed, ${blocked.length} blocked: ${blocked.join(', ')}`
+            : innerDecision.rationale,
       };
     },
 
@@ -92,7 +96,9 @@ export function gatedTools(
       ? async (call: ToolCall, signal?: AbortSignal): Promise<ToolExecutionResult> => {
           // Defense in depth: check permission even at execute time
           // (in case LLM hallucinates a tool name that was filtered from resolve)
-          const ctx = lastContext ?? ({ message: '', turnNumber: 0, loopIteration: 0, messages: [] } as ToolContext);
+          const ctx =
+            lastContext ??
+            ({ message: '', turnNumber: 0, loopIteration: 0, messages: [] } as ToolContext);
           const permitted = await isAllowed(call.name, ctx);
 
           if (!permitted) {
@@ -100,7 +106,8 @@ export function gatedTools(
             // This error flows into conversation history — LLM sees it
             // and recorders capture it via onToolCall
             return {
-              content: `Permission denied: tool "${call.name}" is not available. ` +
+              content:
+                `Permission denied: tool "${call.name}" is not available. ` +
                 `Available tools are listed in the system prompt.`,
               error: true,
             };

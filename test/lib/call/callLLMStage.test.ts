@@ -230,10 +230,12 @@ describe('callLLMStage — cloud (AbortSignal)', () => {
 
 describe('callLLMStage — security', () => {
   it('throws at build time when provider is null/undefined', () => {
-    expect(() => createCallLLMStage(null as unknown as LLMProvider))
-      .toThrow('provider is required');
-    expect(() => createCallLLMStage(undefined as unknown as LLMProvider))
-      .toThrow('provider is required');
+    expect(() => createCallLLMStage(null as unknown as LLMProvider)).toThrow(
+      'provider is required',
+    );
+    expect(() => createCallLLMStage(undefined as unknown as LLMProvider)).toThrow(
+      'provider is required',
+    );
   });
 
   it('provider.chat() throwing propagates as error', async () => {

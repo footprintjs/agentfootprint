@@ -115,9 +115,7 @@ export function previewInstructions(
   const injectedText = renderInstructions(fired, options?.template);
 
   // Extract follow-ups
-  const followUps = fired
-    .filter((f) => f.resolvedFollowUp)
-    .map((f) => f.resolvedFollowUp!);
+  const followUps = fired.filter((f) => f.resolvedFollowUp).map((f) => f.resolvedFollowUp!);
 
   // Compute skipped IDs
   const firedIds = fired.map((f) => f.id);

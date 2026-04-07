@@ -82,7 +82,10 @@ export function fallbackProvider(
 
     // Stream falls back the same way
     chatStream: providers.some((p) => p.chatStream)
-      ? async function* (messages: Message[], callOptions?: LLMCallOptions): AsyncIterable<LLMStreamChunk> {
+      ? async function* (
+          messages: Message[],
+          callOptions?: LLMCallOptions,
+        ): AsyncIterable<LLMStreamChunk> {
           let lastError: unknown;
 
           for (let i = 0; i < providers.length; i++) {

@@ -336,7 +336,9 @@ describe('ToolExecution — security', () => {
       id: 'fail',
       description: 'fails',
       inputSchema: { type: 'object' },
-      handler: async () => { throw new Error('tool crashed'); },
+      handler: async () => {
+        throw new Error('tool crashed');
+      },
     });
     const tc = makeToolCall('fail');
 

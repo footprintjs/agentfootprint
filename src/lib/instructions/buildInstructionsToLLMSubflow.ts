@@ -77,16 +77,20 @@ export function buildInstructionsToLLMSubflow(
 
       scope.promptInjections = [...result.promptInjections];
       // Convert ToolDefinition → LLMToolDescription (strip handler for LLM consumption)
-      scope.toolInjections = result.toolInjections.map((t): LLMToolDescription => ({
-        name: t.id,
-        description: t.description,
-        inputSchema: t.inputSchema,
-      }));
+      scope.toolInjections = result.toolInjections.map(
+        (t): LLMToolDescription => ({
+          name: t.id,
+          description: t.description,
+          inputSchema: t.inputSchema,
+        }),
+      );
       scope.responseRules = [...result.responseRules];
 
       // Narrative enrichment — which instructions fired and why
       if (result.matchedIds.length > 0) {
-        scope.matchedInstructions = `${result.matchedIds.length} matched: ${result.matchedIds.join(', ')}`;
+        scope.matchedInstructions = `${result.matchedIds.length} matched: ${result.matchedIds.join(
+          ', ',
+        )}`;
       } else {
         scope.matchedInstructions = 'none matched';
       }

@@ -32,8 +32,12 @@ function createTestStore(initial: Message[] = []) {
 
   return {
     load: vi.fn(async (id: string) => data.get(id) ?? null),
-    save: vi.fn(async (id: string, messages: Message[]) => { data.set(id, messages); }),
-    clear: vi.fn(async () => { data.clear(); }),
+    save: vi.fn(async (id: string, messages: Message[]) => {
+      data.set(id, messages);
+    }),
+    clear: vi.fn(async () => {
+      data.clear();
+    }),
   };
 }
 
@@ -90,10 +94,13 @@ async function runSubflow(
 
 describe('Messages slot — unit', () => {
   it('in-memory mode applies strategy to messages', async () => {
-    const state = await runSubflow(
-      { strategy: slidingWindow({ maxMessages: 2 }) },
-      [user('a'), assistant('b'), user('c'), assistant('d'), user('e')],
-    );
+    const state = await runSubflow({ strategy: slidingWindow({ maxMessages: 2 }) }, [
+      user('a'),
+      assistant('b'),
+      user('c'),
+      assistant('d'),
+      user('e'),
+    ]);
     const messages = state.currentMessages as Message[];
     expect(messages).toHaveLength(2);
     expect(messages[0].content).toBe('d');
@@ -102,10 +109,9 @@ describe('Messages slot — unit', () => {
 
   it('persistent mode loads from store + applies strategy', async () => {
     const store = createTestStore([user('old1'), assistant('old2')]);
-    const state = await runSubflow(
-      { strategy: fullHistory, store, conversationId: 'test-conv' },
-      [user('new')],
-    );
+    const state = await runSubflow({ strategy: fullHistory, store, conversationId: 'test-conv' }, [
+      user('new'),
+    ]);
     const messages = state.currentMessages as Message[];
     expect(messages).toHaveLength(3);
     expect(store.load).toHaveBeenCalledWith('test-conv');
@@ -123,10 +129,9 @@ describe('Messages slot — boundary', () => {
 
   it('persistent mode with empty store returns current messages', async () => {
     const store = createTestStore([]);
-    const state = await runSubflow(
-      { strategy: fullHistory, store, conversationId: 'empty' },
-      [user('hello')],
-    );
+    const state = await runSubflow({ strategy: fullHistory, store, conversationId: 'empty' }, [
+      user('hello'),
+    ]);
     const messages = state.currentMessages as Message[];
     expect(messages).toHaveLength(1);
     expect(messages[0].content).toBe('hello');
@@ -138,10 +143,9 @@ describe('Messages slot — boundary', () => {
       save: vi.fn(),
       clear: vi.fn(),
     };
-    const state = await runSubflow(
-      { strategy: fullHistory, store, conversationId: 'missing' },
-      [user('hello')],
-    );
+    const state = await runSubflow({ strategy: fullHistory, store, conversationId: 'missing' }, [
+      user('hello'),
+    ]);
     const messages = state.currentMessages as Message[];
     expect(messages).toHaveLength(1);
   });
@@ -152,9 +156,12 @@ describe('Messages slot — boundary', () => {
 describe('Messages slot — scenario', () => {
   it('sliding window trims old messages from persistent history', async () => {
     const store = createTestStore([
-      user('turn1'), assistant('resp1'),
-      user('turn2'), assistant('resp2'),
-      user('turn3'), assistant('resp3'),
+      user('turn1'),
+      assistant('resp1'),
+      user('turn2'),
+      assistant('resp2'),
+      user('turn3'),
+      assistant('resp3'),
     ]);
     const state = await runSubflow(
       {
@@ -189,10 +196,14 @@ describe('Messages slot — scenario', () => {
   });
 
   it('preserves system messages through sliding window', async () => {
-    const state = await runSubflow(
-      { strategy: slidingWindow({ maxMessages: 2 }) },
-      [system('sys'), user('a'), assistant('b'), user('c'), assistant('d'), user('e')],
-    );
+    const state = await runSubflow({ strategy: slidingWindow({ maxMessages: 2 }) }, [
+      system('sys'),
+      user('a'),
+      assistant('b'),
+      user('c'),
+      assistant('d'),
+      user('e'),
+    ]);
     const messages = state.currentMessages as Message[];
     expect(messages[0].role).toBe('system');
     expect(messages).toHaveLength(3); // system + 2 most recent
@@ -223,19 +234,23 @@ describe('Messages slot — property', () => {
 
 describe('Messages slot — security', () => {
   it('throws at build time when strategy is missing', () => {
-    expect(() => buildMessagesSubflow({ strategy: undefined as any }))
-      .toThrow('strategy is required');
+    expect(() => buildMessagesSubflow({ strategy: undefined as any })).toThrow(
+      'strategy is required',
+    );
   });
 
   it('throws at build time when store provided without conversationId', () => {
     const store = createTestStore();
-    expect(() => buildMessagesSubflow({ strategy: fullHistory, store }))
-      .toThrow('conversationId is required when store is provided');
+    expect(() => buildMessagesSubflow({ strategy: fullHistory, store })).toThrow(
+      'conversationId is required when store is provided',
+    );
   });
 
   it('store.load() throwing propagates as error', async () => {
     const store = {
-      load: vi.fn(async () => { throw new Error('DB connection failed'); }),
+      load: vi.fn(async () => {
+        throw new Error('DB connection failed');
+      }),
       save: vi.fn(),
       clear: vi.fn(),
     };
@@ -246,10 +261,12 @@ describe('Messages slot — security', () => {
 
   it('strategy.prepare() throwing propagates as error', async () => {
     const failStrategy: MessageStrategy = {
-      prepare: () => { throw new Error('strategy crashed'); },
+      prepare: () => {
+        throw new Error('strategy crashed');
+      },
     } as any;
-    await expect(
-      runSubflow({ strategy: failStrategy }, [user('hi')]),
-    ).rejects.toThrow('strategy crashed');
+    await expect(runSubflow({ strategy: failStrategy }, [user('hi')])).rejects.toThrow(
+      'strategy crashed',
+    );
   });
 });

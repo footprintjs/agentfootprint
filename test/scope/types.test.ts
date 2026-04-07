@@ -56,7 +56,6 @@ describe('AgentLoopState', () => {
     const _response: string = state.responseType;
     expect(true).toBe(true);
   });
-
 });
 
 // ── 2. Boundary — Edge values ────────────────────────────────
@@ -112,11 +111,23 @@ describe('scenario', () => {
     // Every key in MessagesSubflowState should exist in AgentLoopState
     // (except 'currentMessages' which is the subflow's internal input key)
     const agentKeys = new Set<string>([
-      'messages', 'systemPrompt', 'toolDescriptions', 'adapterResult',
-      'adapterRawResponse', 'parsedResponse', 'loopCount', 'maxIterations',
-      'result', 'memory_preparedMessages', 'memory_storedHistory',
-      'memory_shouldCommit', 'resolvedTools', 'promptSummary', 'llmCall',
-      'responseType', 'message',
+      'messages',
+      'systemPrompt',
+      'toolDescriptions',
+      'adapterResult',
+      'adapterRawResponse',
+      'parsedResponse',
+      'loopCount',
+      'maxIterations',
+      'result',
+      'memory_preparedMessages',
+      'memory_storedHistory',
+      'memory_shouldCommit',
+      'resolvedTools',
+      'promptSummary',
+      'llmCall',
+      'responseType',
+      'message',
     ]);
     const msgKeys = ['loopCount', 'memory_preparedMessages', 'memory_storedHistory'];
     for (const key of msgKeys) {
@@ -131,8 +142,14 @@ describe('property', () => {
   it('AgentLoopState covers all AGENT_PATHS values', () => {
     const agentPathValues = Object.values(AGENT_PATHS);
     const stateKeys: (keyof AgentLoopState)[] = [
-      'messages', 'systemPrompt', 'toolDescriptions', 'adapterResult',
-      'parsedResponse', 'loopCount', 'maxIterations', 'result',
+      'messages',
+      'systemPrompt',
+      'toolDescriptions',
+      'adapterResult',
+      'parsedResponse',
+      'loopCount',
+      'maxIterations',
+      'result',
     ];
     for (const path of agentPathValues) {
       expect(stateKeys).toContain(path);
@@ -142,7 +159,9 @@ describe('property', () => {
   it('AgentLoopState covers all MEMORY_PATHS values', () => {
     const memoryPathValues = Object.values(MEMORY_PATHS);
     const stateKeys: (keyof AgentLoopState)[] = [
-      'memory_preparedMessages', 'memory_storedHistory', 'memory_shouldCommit',
+      'memory_preparedMessages',
+      'memory_storedHistory',
+      'memory_shouldCommit',
     ];
     for (const path of memoryPathValues) {
       expect(stateKeys).toContain(path);
@@ -151,9 +170,7 @@ describe('property', () => {
 
   it('RAGState covers all RAG_PATHS values', () => {
     const ragPathValues = Object.values(RAG_PATHS);
-    const stateKeys: (keyof RAGState)[] = [
-      'retrievalQuery', 'retrievalResult', 'contextWindow',
-    ];
+    const stateKeys: (keyof RAGState)[] = ['retrievalQuery', 'retrievalResult', 'contextWindow'];
     for (const path of ragPathValues) {
       expect(stateKeys).toContain(path);
     }
@@ -165,9 +182,7 @@ describe('property', () => {
       MULTI_AGENT_PATHS.AGENT_RESULTS,
       MULTI_AGENT_PATHS.RESULT,
     ];
-    const stateKeys: (keyof MultiAgentState)[] = [
-      'pipelineInput', 'agentResults', 'result',
-    ];
+    const stateKeys: (keyof MultiAgentState)[] = ['pipelineInput', 'agentResults', 'result'];
     for (const path of relevantPaths) {
       expect(stateKeys).toContain(path);
     }

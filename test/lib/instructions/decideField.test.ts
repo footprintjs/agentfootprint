@@ -14,12 +14,7 @@
  */
 
 import { describe, it, expect, vi } from 'vitest';
-import {
-  Agent,
-  defineInstruction,
-  defineTool,
-  AgentPattern,
-} from '../../../src/test-barrel';
+import { Agent, defineInstruction, defineTool, AgentPattern } from '../../../src/test-barrel';
 import type { LLMInstruction } from '../../../src/test-barrel';
 import type { LLMResponse, Message, ToolCall } from '../../../src/types';
 
@@ -59,10 +54,7 @@ describe('decide field — unit', () => {
     };
 
     const tc: ToolCall = { id: 'tc-1', name: 'lookup_order', arguments: { orderId: 'O-1' } };
-    const provider = mockProvider([
-      { content: '', toolCalls: [tc] },
-      { content: 'Done.' },
-    ]);
+    const provider = mockProvider([{ content: '', toolCalls: [tc] }, { content: 'Done.' }]);
 
     const instr = defineInstruction({
       id: 'classifier',
@@ -95,10 +87,7 @@ describe('decide field — unit', () => {
     };
 
     const tc: ToolCall = { id: 'tc-1', name: 'lookup_order', arguments: { orderId: 'O-1' } };
-    const provider = mockProvider([
-      { content: '', toolCalls: [tc] },
-      { content: 'Done.' },
-    ]);
+    const provider = mockProvider([{ content: '', toolCalls: [tc] }, { content: 'Done.' }]);
 
     const agent = Agent.create({ provider })
       .system('Help.')
@@ -118,14 +107,13 @@ describe('decide field — boundary', () => {
   it('decide throws → fail-open, tool execution continues', async () => {
     const rule: LLMInstruction = {
       id: 'broken-decide',
-      decide: () => { throw new Error('decide bug'); },
+      decide: () => {
+        throw new Error('decide bug');
+      },
     };
 
     const tc: ToolCall = { id: 'tc-1', name: 'lookup_order', arguments: { orderId: 'O-1' } };
-    const provider = mockProvider([
-      { content: '', toolCalls: [tc] },
-      { content: 'Still works.' },
-    ]);
+    const provider = mockProvider([{ content: '', toolCalls: [tc] }, { content: 'Still works.' }]);
 
     const agent = Agent.create({ provider })
       .system('Help.')
@@ -146,10 +134,7 @@ describe('decide field — boundary', () => {
 
     const rule: LLMInstruction = { id: 'decide-only', decide: decideSpy };
     const tc: ToolCall = { id: 'tc-1', name: 'lookup_order', arguments: {} };
-    const provider = mockProvider([
-      { content: '', toolCalls: [tc] },
-      { content: 'ok' },
-    ]);
+    const provider = mockProvider([{ content: '', toolCalls: [tc] }, { content: 'ok' }]);
 
     const agent = Agent.create({ provider })
       .system('Help.')
@@ -191,7 +176,7 @@ describe('decide field — multi-turn scenario', () => {
 
     const tc: ToolCall = { id: 'tc-1', name: 'lookup_order', arguments: { orderId: 'O-1' } };
     const provider = mockProvider([
-      { content: '', toolCalls: [tc] },     // Turn 1: call lookup_order
+      { content: '', toolCalls: [tc] }, // Turn 1: call lookup_order
       { content: 'I see your order was denied. Let me help with a refund.' }, // Turn 2: final
     ]);
 
@@ -243,10 +228,7 @@ describe('decide field — per-tool instructions', () => {
     } as any);
 
     const tc: ToolCall = { id: 'tc-1', name: 'check_inventory', arguments: {} };
-    const provider = mockProvider([
-      { content: '', toolCalls: [tc] },
-      { content: 'Out of stock.' },
-    ]);
+    const provider = mockProvider([{ content: '', toolCalls: [tc] }, { content: 'Out of stock.' }]);
 
     const agent = Agent.create({ provider })
       .system('Help.')

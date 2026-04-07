@@ -116,7 +116,9 @@ describe('Streaming — property', () => {
     const responses = [{ content: 'same answer' }];
 
     const nonStreaming = Agent.create({ provider: mock([...responses]) }).build();
-    const streaming = Agent.create({ provider: mock([...responses]) }).streaming(true).build();
+    const streaming = Agent.create({ provider: mock([...responses]) })
+      .streaming(true)
+      .build();
 
     const r1 = await nonStreaming.run('test');
     const r2 = await streaming.run('test');
@@ -142,7 +144,9 @@ describe('Streaming — security', () => {
 
     // onToken throws — error is swallowed, agent still completes
     const result = await agent.run('test', {
-      onToken: () => { throw new Error('callback error'); },
+      onToken: () => {
+        throw new Error('callback error');
+      },
     });
     expect(result.content).toBeDefined();
   });

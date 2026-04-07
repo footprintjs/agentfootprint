@@ -9,17 +9,11 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import {
-  Agent,
-  InMemoryStore,
-  mock,
-  userMessage,
-  assistantMessage,
-} from '../../src/test-barrel';
+import { Agent, InMemoryStore, mock, userMessage, assistantMessage } from '../../src/test-barrel';
 import type { Message } from '../../src/test-barrel';
 
 // Flush fire-and-forget Promises to complete
-const flush = () => new Promise<void>(resolve => setTimeout(resolve, 0));
+const flush = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
 
 describe('Agent with memory — integration', () => {
   it('multi-turn: second turn receives stored history from first turn', async () => {
@@ -41,8 +35,8 @@ describe('Agent with memory — integration', () => {
     // Store should now have turn 1 messages
     const stored = store.load('conv-1') as Message[];
     expect(stored.length).toBeGreaterThan(0);
-    expect(stored.some(m => m.role === 'user')).toBe(true);
-    expect(stored.some(m => m.role === 'assistant')).toBe(true);
+    expect(stored.some((m) => m.role === 'user')).toBe(true);
+    expect(stored.some((m) => m.role === 'assistant')).toBe(true);
 
     // Turn 2: new agent instance with same store (simulates server restart)
     const capturedMessages: Message[] = [];

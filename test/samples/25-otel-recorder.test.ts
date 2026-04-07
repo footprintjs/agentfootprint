@@ -32,9 +32,15 @@ function mockTracer(): OTelTracer & { spans: MockSpan[] } {
       };
       spans.push(span);
       return {
-        setAttribute(key: string, value: string | number | boolean) { span.attributes[key] = value; },
-        setStatus(status: { code: number; message?: string }) { span.status = status; },
-        end() { span.ended = true; },
+        setAttribute(key: string, value: string | number | boolean) {
+          span.attributes[key] = value;
+        },
+        setStatus(status: { code: number; message?: string }) {
+          span.status = status;
+        },
+        end() {
+          span.ended = true;
+        },
       };
     },
   };
@@ -67,7 +73,7 @@ describe('Sample 25: OTelRecorder', () => {
       loopIteration: 1,
     });
 
-    const span = tracer.spans.find(s => s.name === 'gen_ai.chat');
+    const span = tracer.spans.find((s) => s.name === 'gen_ai.chat');
     expect(span).toBeDefined();
     expect(span!.attributes['gen_ai.request.model']).toBe('claude-sonnet-4-20250514');
     expect(span!.attributes['gen_ai.usage.input_tokens']).toBe(100);
@@ -87,7 +93,7 @@ describe('Sample 25: OTelRecorder', () => {
       latencyMs: 5,
     });
 
-    const span = tracer.spans.find(s => s.name === 'tool.lookup_order');
+    const span = tracer.spans.find((s) => s.name === 'tool.lookup_order');
     expect(span).toBeDefined();
     expect(span!.attributes['tool.error']).toBe(true);
     expect(span!.ended).toBe(true);
@@ -103,7 +109,7 @@ describe('Sample 25: OTelRecorder', () => {
       turnNumber: 1,
     });
 
-    const span = tracer.spans.find(s => s.name === 'agent.error');
+    const span = tracer.spans.find((s) => s.name === 'agent.error');
     expect(span).toBeDefined();
     expect(span!.status?.code).toBe(2); // OTel ERROR
     expect(span!.status?.message).toBe('Rate limit exceeded');

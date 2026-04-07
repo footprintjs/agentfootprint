@@ -52,15 +52,17 @@ interface OrderDecision {
 
 const classifyInstruction = defineInstruction<OrderDecision>({
   id: 'classify-order',
-  onToolResult: [{
-    id: 'classify',
-    decide: (decision, ctx) => {
-      const content = ctx.content as { status?: string };
-      if (content?.status) {
-        decision.orderStatus = content.status as 'denied';
-      }
+  onToolResult: [
+    {
+      id: 'classify',
+      decide: (decision, ctx) => {
+        const content = ctx.content as { status?: string };
+        if (content?.status) {
+          decision.orderStatus = content.status as 'denied';
+        }
+      },
     },
-  }],
+  ],
 });
 
 const refundInstruction = defineInstruction<OrderDecision>({
@@ -78,10 +80,7 @@ describe('Sample 17: Instructions', () => {
     const provider = mockProvider([{ content: 'ok' }]);
     const always = defineInstruction({ id: 'always', prompt: 'Be professional.' });
 
-    const agent = Agent.create({ provider })
-      .system('Base prompt.')
-      .instruction(always)
-      .build();
+    const agent = Agent.create({ provider }).system('Base prompt.').instruction(always).build();
 
     await agent.run('hello');
     const msgs = (provider.chat as ReturnType<typeof vi.fn>).mock.calls[0][0] as Message[];

@@ -23,7 +23,10 @@ describe('Sample 24: Structured Output', () => {
       shape: {
         city: { _def: { typeName: 'ZodString', description: 'City name' }, safeParse: () => {} },
         temp: { _def: { typeName: 'ZodNumber' }, safeParse: () => {} },
-        unit: { _def: { typeName: 'ZodEnum', values: ['celsius', 'fahrenheit'] }, safeParse: () => {} },
+        unit: {
+          _def: { typeName: 'ZodEnum', values: ['celsius', 'fahrenheit'] },
+          safeParse: () => {},
+        },
       },
     };
 
@@ -46,7 +49,10 @@ describe('Sample 24: Structured Output', () => {
       shape: {
         name: { _def: { typeName: 'ZodString' }, safeParse: () => {} },
         nickname: {
-          _def: { typeName: 'ZodOptional', innerType: { _def: { typeName: 'ZodString' }, safeParse: () => {} } },
+          _def: {
+            typeName: 'ZodOptional',
+            innerType: { _def: { typeName: 'ZodString' }, safeParse: () => {} },
+          },
           safeParse: () => {},
         },
       },
@@ -110,7 +116,10 @@ describe('Sample 24: Structured Output', () => {
       provider: mock([{ content: '{"city":"Paris","temp":72}' }]),
     })
       .system('Extract city and temp.')
-      .outputSchema({ type: 'object', properties: { city: { type: 'string' }, temp: { type: 'number' } } })
+      .outputSchema({
+        type: 'object',
+        properties: { city: { type: 'string' }, temp: { type: 'number' } },
+      })
       .build();
 
     const result = await agent.run('It is 72°F in Paris.');

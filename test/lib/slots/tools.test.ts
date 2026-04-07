@@ -119,7 +119,10 @@ describe('Tools slot — boundary', () => {
     const asyncProvider: ToolProvider = {
       resolve: async () => {
         await new Promise((r) => setTimeout(r, 1));
-        return { value: [{ name: 'async_tool', description: 'async', inputSchema: {} }], chosen: 'test' };
+        return {
+          value: [{ name: 'async_tool', description: 'async', inputSchema: {} }],
+          chosen: 'test',
+        };
       },
     };
     const state = await runSubflow(asyncProvider);
@@ -134,9 +137,8 @@ describe('Tools slot — boundary', () => {
 describe('Tools slot — scenario', () => {
   it('gated tools filter by permission', async () => {
     const allowed = new Set(['search', 'calculator']);
-    const gated = gatedTools(
-      staticTools([searchTool, calcTool, adminTool]),
-      (toolId) => allowed.has(toolId),
+    const gated = gatedTools(staticTools([searchTool, calcTool, adminTool]), (toolId) =>
+      allowed.has(toolId),
     );
     const state = await runSubflow(gated);
     const tools = state.toolDescriptions as LLMToolDescription[];
@@ -145,10 +147,7 @@ describe('Tools slot — scenario', () => {
   });
 
   it('composite tools merge multiple providers', async () => {
-    const combined = compositeTools([
-      staticTools([searchTool]),
-      staticTools([calcTool]),
-    ]);
+    const combined = compositeTools([staticTools([searchTool]), staticTools([calcTool])]);
     const state = await runSubflow(combined);
     const tools = state.toolDescriptions as LLMToolDescription[];
     expect(tools).toHaveLength(2);
@@ -191,13 +190,14 @@ describe('Tools slot — property', () => {
 
 describe('Tools slot — security', () => {
   it('throws at build time when provider is missing', () => {
-    expect(() => buildToolsSubflow({ provider: undefined as any }))
-      .toThrow('provider is required');
+    expect(() => buildToolsSubflow({ provider: undefined as any })).toThrow('provider is required');
   });
 
   it('provider.resolve() throwing propagates as error', async () => {
     const failProvider: ToolProvider = {
-      resolve: () => { throw new Error('provider crashed'); },
+      resolve: () => {
+        throw new Error('provider crashed');
+      },
     } as any;
     await expect(runSubflow(failProvider)).rejects.toThrow('provider crashed');
   });

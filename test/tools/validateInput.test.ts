@@ -15,7 +15,11 @@ describe('validateToolInput — unit', () => {
   it('valid input passes', () => {
     const result = validateToolInput(
       { name: 'Alice', age: 30 },
-      { type: 'object', properties: { name: { type: 'string' }, age: { type: 'number' } }, required: ['name'] },
+      {
+        type: 'object',
+        properties: { name: { type: 'string' }, age: { type: 'number' } },
+        required: ['name'],
+      },
     );
     expect(result.valid).toBe(true);
     expect(result.errors).toHaveLength(0);
@@ -63,7 +67,9 @@ describe('validateToolInput — boundary', () => {
   });
 
   it('empty args with no required fields passes', () => {
-    expect(validateToolInput({}, { type: 'object', properties: { x: { type: 'string' } } }).valid).toBe(true);
+    expect(
+      validateToolInput({}, { type: 'object', properties: { x: { type: 'string' } } }).valid,
+    ).toBe(true);
   });
 
   it('null required field fails', () => {
@@ -88,12 +94,18 @@ describe('validateToolInput — boundary', () => {
 describe('Tool input validation — scenario (integration)', () => {
   it('executeToolCalls rejects invalid input with error message', async () => {
     const registry = new ToolRegistry();
-    registry.register(defineTool({
-      id: 'greet',
-      description: 'Greet someone',
-      inputSchema: { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] },
-      handler: async ({ name }) => ({ content: `Hello ${name}!` }),
-    }));
+    registry.register(
+      defineTool({
+        id: 'greet',
+        description: 'Greet someone',
+        inputSchema: {
+          type: 'object',
+          properties: { name: { type: 'string' } },
+          required: ['name'],
+        },
+        handler: async ({ name }) => ({ content: `Hello ${name}!` }),
+      }),
+    );
 
     const result = await executeToolCalls(
       [{ id: 'tc1', name: 'greet', arguments: {} }], // missing required 'name'
@@ -111,18 +123,22 @@ describe('Tool input validation — scenario (integration)', () => {
   it('valid input passes through to handler', async () => {
     const handler = vi.fn(async () => ({ content: 'Hello Alice!' }));
     const registry = new ToolRegistry();
-    registry.register(defineTool({
-      id: 'greet',
-      description: 'Greet',
-      inputSchema: { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] },
-      handler,
-    }));
-
-    await executeToolCalls(
-      [{ id: 'tc1', name: 'greet', arguments: { name: 'Alice' } }],
-      registry,
-      [userMessage('hi')],
+    registry.register(
+      defineTool({
+        id: 'greet',
+        description: 'Greet',
+        inputSchema: {
+          type: 'object',
+          properties: { name: { type: 'string' } },
+          required: ['name'],
+        },
+        handler,
+      }),
     );
+
+    await executeToolCalls([{ id: 'tc1', name: 'greet', arguments: { name: 'Alice' } }], registry, [
+      userMessage('hi'),
+    ]);
 
     expect(handler).toHaveBeenCalledWith({ name: 'Alice' });
   });
@@ -134,7 +150,11 @@ describe('validateToolInput — property', () => {
   it('multiple errors are collected', () => {
     const result = validateToolInput(
       { age: 'not-a-number' },
-      { type: 'object', properties: { name: { type: 'string' }, age: { type: 'number' } }, required: ['name', 'age'] },
+      {
+        type: 'object',
+        properties: { name: { type: 'string' }, age: { type: 'number' } },
+        required: ['name', 'age'],
+      },
     );
     expect(result.errors.length).toBeGreaterThanOrEqual(2); // missing name + wrong type age
   });

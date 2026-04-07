@@ -48,7 +48,11 @@ export class PermissionRecorder implements AgentRecorder {
    * Wire this to gatedTools({ onBlocked: recorder.onBlocked }).
    * Arrow function — safe to pass as callback directly.
    */
-  readonly onBlocked = (toolId: string, phase: 'resolve' | 'execute', _context?: ToolContext): void => {
+  readonly onBlocked = (
+    toolId: string,
+    phase: 'resolve' | 'execute',
+    _context?: ToolContext,
+  ): void => {
     this.events.push({
       type: phase === 'resolve' ? 'blocked' : 'denied',
       toolId,

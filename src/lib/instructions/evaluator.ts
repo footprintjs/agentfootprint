@@ -12,7 +12,12 @@
  * fail-closed (fire when in doubt).
  */
 
-import type { LLMInstruction, InstructionContext, RuntimeFollowUp, InstructionOverride } from './types';
+import type {
+  LLMInstruction,
+  InstructionContext,
+  RuntimeFollowUp,
+  InstructionOverride,
+} from './types';
 
 // ── Evaluation Result ───────────────────────────────────────────────────
 

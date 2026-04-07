@@ -13,7 +13,11 @@ function makeProvider(name: string): LLMProvider {
 }
 
 function makeFailingProvider(name: string): LLMProvider {
-  return { chat: async () => { throw new Error(`${name} failed`); } };
+  return {
+    chat: async () => {
+      throw new Error(`${name} failed`);
+    },
+  };
 }
 
 describe('resilientProvider: basic fallback', () => {
@@ -32,10 +36,9 @@ describe('resilientProvider: basic fallback', () => {
 
 describe('resilientProvider: circuit breaker integration', () => {
   it('trips breaker after threshold failures', async () => {
-    const p = resilientProvider(
-      [makeFailingProvider('p1'), makeProvider('p2')],
-      { circuitBreaker: { threshold: 2, resetAfterMs: 60_000 } },
-    );
+    const p = resilientProvider([makeFailingProvider('p1'), makeProvider('p2')], {
+      circuitBreaker: { threshold: 2, resetAfterMs: 60_000 },
+    });
 
     // First 2 calls: p1 fails, falls back to p2
     await p.chat([]);
@@ -61,10 +64,9 @@ describe('resilientProvider: circuit breaker integration', () => {
       },
     };
 
-    const p = resilientProvider(
-      [slowFailingP1, p2],
-      { circuitBreaker: { threshold: 1, resetAfterMs: 60_000 } },
-    );
+    const p = resilientProvider([slowFailingP1, p2], {
+      circuitBreaker: { threshold: 1, resetAfterMs: 60_000 },
+    });
 
     // First call: p1 fails → falls back to p2 → breaker trips
     await p.chat([]);
@@ -77,9 +79,7 @@ describe('resilientProvider: circuit breaker integration', () => {
   });
 
   it('exposes breaker state for each provider', () => {
-    const p = resilientProvider(
-      [makeProvider('p1'), makeProvider('p2'), makeProvider('p3')],
-    );
+    const p = resilientProvider([makeProvider('p1'), makeProvider('p2'), makeProvider('p3')]);
 
     expect(p.breakers).toHaveLength(3);
     expect(p.breakers[0].getState()).toBe('closed');
@@ -97,10 +97,9 @@ describe('resilientProvider: circuit breaker integration', () => {
       },
     };
 
-    const p = resilientProvider(
-      [flakyP1, makeProvider('p2')],
-      { circuitBreaker: { threshold: 3, resetAfterMs: 60_000 } },
-    );
+    const p = resilientProvider([flakyP1, makeProvider('p2')], {
+      circuitBreaker: { threshold: 3, resetAfterMs: 60_000 },
+    });
 
     // Fail twice, then manual reset + succeed
     await p.chat([]); // p1 fails → p2
@@ -118,13 +117,10 @@ describe('resilientProvider: onFallback callback', () => {
   it('fires for circuit breaker skips too', async () => {
     const events: number[] = [];
 
-    const p = resilientProvider(
-      [makeFailingProvider('p1'), makeProvider('p2')],
-      {
-        circuitBreaker: { threshold: 1, resetAfterMs: 60_000 },
-        onFallback: (from, to) => events.push(to),
-      },
-    );
+    const p = resilientProvider([makeFailingProvider('p1'), makeProvider('p2')], {
+      circuitBreaker: { threshold: 1, resetAfterMs: 60_000 },
+      onFallback: (from, to) => events.push(to),
+    });
 
     // First call: real failure
     await p.chat([]);
@@ -144,10 +140,9 @@ describe('resilientProvider: all providers down', () => {
   });
 
   it('throws when all breakers are open', async () => {
-    const p = resilientProvider(
-      [makeFailingProvider('p1'), makeFailingProvider('p2')],
-      { circuitBreaker: { threshold: 1, resetAfterMs: 60_000 } },
-    );
+    const p = resilientProvider([makeFailingProvider('p1'), makeFailingProvider('p2')], {
+      circuitBreaker: { threshold: 1, resetAfterMs: 60_000 },
+    });
 
     // Trip both breakers
     await expect(p.chat([])).rejects.toThrow(); // p1 fails → p2 fails

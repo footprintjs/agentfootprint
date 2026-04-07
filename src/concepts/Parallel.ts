@@ -93,7 +93,9 @@ export class Parallel {
   /** Add an agent branch to run in parallel. */
   agent(id: string, runner: RunnerLike, description: string): this {
     if (this.branches.length >= MAX_BRANCHES) {
-      throw new Error(`Parallel: maximum ${MAX_BRANCHES} branches. Got ${this.branches.length + 1}.`);
+      throw new Error(
+        `Parallel: maximum ${MAX_BRANCHES} branches. Got ${this.branches.length + 1}.`,
+      );
     }
     if (this.branches.some((b) => b.id === id)) {
       throw new Error(`Parallel: duplicate branch ID '${id}'.`);
@@ -136,7 +138,9 @@ export class Parallel {
       throw new Error('Parallel requires at least 2 branches.');
     }
     if (!this.mergePrompt && !this.mergeFn) {
-      throw new Error('Parallel requires a merge strategy. Call .mergeWithLLM(prompt) or .merge(fn).');
+      throw new Error(
+        'Parallel requires a merge strategy. Call .mergeWithLLM(prompt) or .merge(fn).',
+      );
     }
     return new ParallelRunner({
       provider: this.provider,
@@ -206,25 +210,20 @@ export class ParallelRunner {
     // Mount each branch as a parallel subflow (fork children with isolated ExecutionRuntime)
     for (const branch of branches) {
       const branchChart = this.buildBranchChart(branch);
-      builder = builder.addSubFlowChart(
-        branch.id,
-        branchChart,
-        branch.description,
-        {
-          inputMapper: (parent: Record<string, unknown>) => ({
-            message: parent.message ?? '',
-          }),
-          // applyOutputMapping merges nested keys — return only the new branch delta
-          outputMapper: (sfOutput: Record<string, unknown>) => {
-            const content = String(sfOutput.result ?? sfOutput.content ?? '');
-            return {
-              branchResults: {
-                [branch.id]: { id: branch.id, status: 'fulfilled' as const, content },
-              },
-            };
-          },
+      builder = builder.addSubFlowChart(branch.id, branchChart, branch.description, {
+        inputMapper: (parent: Record<string, unknown>) => ({
+          message: parent.message ?? '',
+        }),
+        // applyOutputMapping merges nested keys — return only the new branch delta
+        outputMapper: (sfOutput: Record<string, unknown>) => {
+          const content = String(sfOutput.result ?? sfOutput.content ?? '');
+          return {
+            branchResults: {
+              [branch.id]: { id: branch.id, status: 'fulfilled' as const, content },
+            },
+          };
         },
-      );
+      });
     }
 
     // Merge stage — after all branches complete
@@ -239,13 +238,19 @@ export class ParallelRunner {
             const results = scope.branchResults ?? {};
             // Format branch results as XML-tagged sections for the LLM
             // Escape XML special chars to prevent prompt injection via branch content
-            const escapeXml = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            const escapeXml = (s: string) =>
+              s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
             const sections = Object.values(results)
-              .map((r: BranchResult) => `<branch id="${escapeXml(r.id)}">\n${escapeXml(r.content)}\n</branch>`)
+              .map(
+                (r: BranchResult) =>
+                  `<branch id="${escapeXml(r.id)}">\n${escapeXml(r.content)}\n</branch>`,
+              )
               .join('\n\n');
 
             scope.messages = [
-              systemMessage(`${mergePrompt}\n\nMerge the following parallel results into a coherent response:`),
+              systemMessage(
+                `${mergePrompt}\n\nMerge the following parallel results into a coherent response:`,
+              ),
               userMessage(sections),
             ];
           },

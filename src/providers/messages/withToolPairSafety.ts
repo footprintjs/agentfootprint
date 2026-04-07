@@ -30,9 +30,10 @@ export function withToolPairSafety(inner: MessageStrategy): MessageStrategy {
           return {
             value: sanitized,
             chosen: d.chosen,
-            rationale: dropped > 0
-              ? `${d.rationale ?? ''}; dropped ${dropped} orphaned tool messages`
-              : d.rationale,
+            rationale:
+              dropped > 0
+                ? `${d.rationale ?? ''}; dropped ${dropped} orphaned tool messages`
+                : d.rationale,
           };
         });
       }
@@ -41,9 +42,10 @@ export function withToolPairSafety(inner: MessageStrategy): MessageStrategy {
       return {
         value: sanitized,
         chosen: decision.chosen,
-        rationale: dropped > 0
-          ? `${decision.rationale ?? ''}; dropped ${dropped} orphaned tool messages`
-          : decision.rationale,
+        rationale:
+          dropped > 0
+            ? `${decision.rationale ?? ''}; dropped ${dropped} orphaned tool messages`
+            : decision.rationale,
       };
     },
   };

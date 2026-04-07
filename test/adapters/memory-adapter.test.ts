@@ -137,7 +137,7 @@ describe('InMemoryStore — scenario', () => {
 
     const history = store.load(id);
     expect(history).toHaveLength(4);
-    expect((history[3].content as string)).toBe('Great!');
+    expect(history[3].content as string).toBe('Great!');
   });
 
   it('clear + restart produces fresh conversation', () => {
@@ -197,7 +197,7 @@ describe('InMemoryStore — security', () => {
     const msgs: Message[] = [user('test')];
     store.save('__proto__', msgs);
     // Prototype pollution would make ({} as any).__proto__ === msgs
-    expect((({}) as any).__proto__).not.toEqual(msgs);
+    expect(({} as any).__proto__).not.toEqual(msgs);
     // But load/size still work correctly
     expect(store.load('__proto__')).toEqual(msgs);
   });
@@ -220,7 +220,7 @@ describe('InMemoryStore — security', () => {
     const largeContent = 'word '.repeat(10_000);
     store.save('conv-1', [user(largeContent)]);
     const loaded = store.load('conv-1');
-    expect((loaded[0].content as string)).toHaveLength(largeContent.length);
+    expect(loaded[0].content as string).toHaveLength(largeContent.length);
   });
 
   it('ConversationStore is structurally typed — any compliant object works', () => {

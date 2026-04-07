@@ -227,7 +227,10 @@ describe('buildAgentLoop — subflowMode', () => {
   it('subflowMode=true and subflowMode=false produce same stage structure', () => {
     const config = minimalConfig();
     const { chart: chartA } = buildAgentLoop(config, { messages: [], subflowMode: true });
-    const { chart: chartB } = buildAgentLoop(config, { messages: [userMessage('hi')], subflowMode: false });
+    const { chart: chartB } = buildAgentLoop(config, {
+      messages: [userMessage('hi')],
+      subflowMode: false,
+    });
 
     const stagesA = Array.from(chartA.stageMap.keys()).sort();
     const stagesB = Array.from(chartB.stageMap.keys()).sort();
@@ -372,7 +375,8 @@ describe('buildAgentLoop — scenario', () => {
     await runLoop(config);
 
     // Verify the second call to provider.chat includes the tool result
-    const secondCallMsgs = (provider.chat as ReturnType<typeof vi.fn>).mock.calls[1][0] as Message[];
+    const secondCallMsgs = (provider.chat as ReturnType<typeof vi.fn>).mock
+      .calls[1][0] as Message[];
     const toolResultMsg = secondCallMsgs.find((m) => m.role === 'tool');
     expect(toolResultMsg).toBeDefined();
     expect(toolResultMsg!.content).toBe('search-result-xyz');
@@ -428,18 +432,22 @@ describe('buildAgentLoop — scenario', () => {
 
   it('multiple tool calls in one turn', async () => {
     const registry = new ToolRegistry();
-    registry.register(defineTool({
-      id: 'search',
-      description: 'Search',
-      inputSchema: { type: 'object' },
-      handler: async () => ({ content: 'search-result' }),
-    }));
-    registry.register(defineTool({
-      id: 'calc',
-      description: 'Calculate',
-      inputSchema: { type: 'object' },
-      handler: async () => ({ content: '42' }),
-    }));
+    registry.register(
+      defineTool({
+        id: 'search',
+        description: 'Search',
+        inputSchema: { type: 'object' },
+        handler: async () => ({ content: 'search-result' }),
+      }),
+    );
+    registry.register(
+      defineTool({
+        id: 'calc',
+        description: 'Calculate',
+        inputSchema: { type: 'object' },
+        handler: async () => ({ content: '42' }),
+      }),
+    );
 
     const tc1: ToolCall = { id: 'tc-1', name: 'search', arguments: {} };
     const tc2: ToolCall = { id: 'tc-2', name: 'calc', arguments: {} };
@@ -513,43 +521,54 @@ describe('buildAgentLoop — property', () => {
 
 describe('buildAgentLoop — security', () => {
   it('throws when provider is missing', () => {
-    expect(() => buildAgentLoop({
-      ...minimalConfig(),
-      provider: undefined as unknown as LLMProvider,
-    })).toThrow('provider is required');
+    expect(() =>
+      buildAgentLoop({
+        ...minimalConfig(),
+        provider: undefined as unknown as LLMProvider,
+      }),
+    ).toThrow('provider is required');
   });
 
   it('throws when systemPrompt config is missing', () => {
-    expect(() => buildAgentLoop({
-      ...minimalConfig(),
-      systemPrompt: undefined as any,
-    })).toThrow('systemPrompt config is required');
+    expect(() =>
+      buildAgentLoop({
+        ...minimalConfig(),
+        systemPrompt: undefined as any,
+      }),
+    ).toThrow('systemPrompt config is required');
   });
 
   it('throws when messages config is missing', () => {
-    expect(() => buildAgentLoop({
-      ...minimalConfig(),
-      messages: undefined as any,
-    })).toThrow('messages config is required');
+    expect(() =>
+      buildAgentLoop({
+        ...minimalConfig(),
+        messages: undefined as any,
+      }),
+    ).toThrow('messages config is required');
   });
 
   it('throws when tools config is missing', () => {
-    expect(() => buildAgentLoop({
-      ...minimalConfig(),
-      tools: undefined as any,
-    })).toThrow('tools config is required');
+    expect(() =>
+      buildAgentLoop({
+        ...minimalConfig(),
+        tools: undefined as any,
+      }),
+    ).toThrow('tools config is required');
   });
 
   it('throws when registry is missing', () => {
-    expect(() => buildAgentLoop({
-      ...minimalConfig(),
-      registry: undefined as any,
-    })).toThrow('registry is required');
+    expect(() =>
+      buildAgentLoop({
+        ...minimalConfig(),
+        registry: undefined as any,
+      }),
+    ).toThrow('registry is required');
   });
 
   it('throws when maxIterations is negative', () => {
-    expect(() => buildAgentLoop(minimalConfig({ maxIterations: -1 })))
-      .toThrow('maxIterations must be non-negative');
+    expect(() => buildAgentLoop(minimalConfig({ maxIterations: -1 }))).toThrow(
+      'maxIterations must be non-negative',
+    );
   });
 
   it('allows maxIterations=0 (no tool execution)', () => {
@@ -558,12 +577,16 @@ describe('buildAgentLoop — security', () => {
 
   it('tool execution error does not crash the loop', async () => {
     const registry = new ToolRegistry();
-    registry.register(defineTool({
-      id: 'fail',
-      description: 'Fails',
-      inputSchema: { type: 'object' },
-      handler: async () => { throw new Error('tool crashed'); },
-    }));
+    registry.register(
+      defineTool({
+        id: 'fail',
+        description: 'Fails',
+        inputSchema: { type: 'object' },
+        handler: async () => {
+          throw new Error('tool crashed');
+        },
+      }),
+    );
 
     const tc: ToolCall = { id: 'tc-1', name: 'fail', arguments: {} };
     const provider = mockProvider([

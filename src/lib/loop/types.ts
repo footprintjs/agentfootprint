@@ -29,9 +29,27 @@ import type { AgentStreamEventHandler } from '../../streaming';
  * Discriminated union ensures every branch has exactly one handler.
  */
 export type RoutingBranch =
-  | { readonly id: string; readonly kind: 'subflow'; readonly chart: FlowChart; readonly name?: string; readonly mount?: SubflowMountOptions }
-  | { readonly id: string; readonly kind: 'lazy-subflow'; readonly factory: () => FlowChart; readonly name?: string; readonly mount?: SubflowMountOptions }
-  | { readonly id: string; readonly kind: 'fn'; readonly fn: StageFunction; readonly name?: string; readonly description?: string };
+  | {
+      readonly id: string;
+      readonly kind: 'subflow';
+      readonly chart: FlowChart;
+      readonly name?: string;
+      readonly mount?: SubflowMountOptions;
+    }
+  | {
+      readonly id: string;
+      readonly kind: 'lazy-subflow';
+      readonly factory: () => FlowChart;
+      readonly name?: string;
+      readonly mount?: SubflowMountOptions;
+    }
+  | {
+      readonly id: string;
+      readonly kind: 'fn';
+      readonly fn: StageFunction;
+      readonly name?: string;
+      readonly description?: string;
+    };
 
 /**
  * RoutingConfig — controls what happens after ParseResponse in the agent loop.
@@ -61,7 +79,11 @@ export interface RoutingConfig {
    * a string matching one of the branch IDs. maxIterations enforcement is
    * handled structurally by buildAgentLoop — the decider does not need to check it.
    */
-  readonly decider: (scope: any, breakFn: () => void, streamCb?: unknown) => string | Promise<string>;
+  readonly decider: (
+    scope: any,
+    breakFn: () => void,
+    streamCb?: unknown,
+  ) => string | Promise<string>;
   /** Branch definitions — each maps to a subflow or inline function.
    *  Order matters: branches are added to the decider in array order. */
   readonly branches: readonly RoutingBranch[];

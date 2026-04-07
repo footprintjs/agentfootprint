@@ -14,7 +14,10 @@ import type { ResolvedFollowUp } from '../../../src/lib/instructions/evaluator';
 
 // ── Helpers ─────────────────────────────────────────────────────
 
-function makeFollowUp(toolId = 'get_trace', condition = 'User asks why or wants details'): ResolvedFollowUp {
+function makeFollowUp(
+  toolId = 'get_trace',
+  condition = 'User asks why or wants details',
+): ResolvedFollowUp {
   return {
     toolId,
     params: { traceId: 'tr_8f3a' },
@@ -36,38 +39,31 @@ function makePending(opts?: Partial<PendingStrictFollowUp>): PendingStrictFollow
 
 describe('defaultConditionMatcher — unit', () => {
   it('matches when user message contains condition keyword', () => {
-    expect(defaultConditionMatcher(
-      'User asks why or wants details',
-      'Why was I denied?',
-    )).toBe(true);
+    expect(defaultConditionMatcher('User asks why or wants details', 'Why was I denied?')).toBe(
+      true,
+    );
   });
 
   it('matches case-insensitively', () => {
-    expect(defaultConditionMatcher(
-      'User asks why',
-      'WHY WAS THIS DENIED?',
-    )).toBe(true);
+    expect(defaultConditionMatcher('User asks why', 'WHY WAS THIS DENIED?')).toBe(true);
   });
 
   it('returns false when no keywords match', () => {
-    expect(defaultConditionMatcher(
-      'User asks why or wants details',
-      'What is the weather today?',
-    )).toBe(false);
+    expect(
+      defaultConditionMatcher('User asks why or wants details', 'What is the weather today?'),
+    ).toBe(false);
   });
 
   it('matches "details" keyword', () => {
-    expect(defaultConditionMatcher(
-      'User asks why or wants details',
-      'Can I see the details?',
-    )).toBe(true);
+    expect(
+      defaultConditionMatcher('User asks why or wants details', 'Can I see the details?'),
+    ).toBe(true);
   });
 
   it('matches when condition word appears in message as substring', () => {
-    expect(defaultConditionMatcher(
-      'User wants denial reasons',
-      'What are the reasons for denial?',
-    )).toBe(true);
+    expect(
+      defaultConditionMatcher('User wants denial reasons', 'What are the reasons for denial?'),
+    ).toBe(true);
   });
 });
 
@@ -123,10 +119,7 @@ describe('PendingFollowUpManager — unit', () => {
 
 describe('strictFollowUp — boundary', () => {
   it('condition with only stop words returns false', () => {
-    expect(defaultConditionMatcher(
-      'the or and but if',
-      'Why was I denied?',
-    )).toBe(false);
+    expect(defaultConditionMatcher('the or and but if', 'Why was I denied?')).toBe(false);
   });
 
   it('empty condition returns false', () => {
@@ -241,7 +234,9 @@ describe('strictFollowUp — security', () => {
     mgr.setPending({
       followUp: makeFollowUp(),
       sourceToolId: 'tool',
-      matcher: () => { throw new Error('matcher bug'); },
+      matcher: () => {
+        throw new Error('matcher bug');
+      },
     });
 
     // Must NOT throw — broken matcher is caught internally

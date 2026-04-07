@@ -79,7 +79,9 @@ export function redisStore(client: RedisLike, options?: RedisStoreOptions): Conv
         } else {
           await client.set(key, value);
         }
-      } catch { /* fire-and-forget — ConversationStore contract */ }
+      } catch {
+        /* fire-and-forget — ConversationStore contract */
+      }
     },
   };
 }
@@ -147,7 +149,9 @@ export function dynamoStore(client: DynamoLike, options: DynamoStoreOptions): Co
           messages: JSON.stringify(messages),
           updatedAt: Date.now(),
         });
-      } catch { /* fire-and-forget — ConversationStore contract */ }
+      } catch {
+        /* fire-and-forget — ConversationStore contract */
+      }
     },
   };
 }
@@ -172,7 +176,10 @@ export interface PostgresStoreOptions {
  */
 const SAFE_TABLE_NAME = /^[a-zA-Z_][a-zA-Z0-9_]{0,63}$/;
 
-export function postgresStore(client: PostgresLike, options?: PostgresStoreOptions): ConversationStore {
+export function postgresStore(
+  client: PostgresLike,
+  options?: PostgresStoreOptions,
+): ConversationStore {
   const table = options?.tableName ?? 'conversations';
   if (!SAFE_TABLE_NAME.test(table)) {
     throw new Error(`Invalid table name "${table}". Use alphanumeric + underscore only.`);
@@ -180,10 +187,9 @@ export function postgresStore(client: PostgresLike, options?: PostgresStoreOptio
 
   return {
     async load(conversationId: string): Promise<Message[] | null> {
-      const result = await client.query(
-        `SELECT messages FROM ${table} WHERE id = $1`,
-        [conversationId],
-      );
+      const result = await client.query(`SELECT messages FROM ${table} WHERE id = $1`, [
+        conversationId,
+      ]);
       if (result.rows.length === 0) return null;
       const row = result.rows[0] as { messages: Message[] };
       return row.messages;
@@ -196,7 +202,9 @@ export function postgresStore(client: PostgresLike, options?: PostgresStoreOptio
            ON CONFLICT (id) DO UPDATE SET messages = $2, updated_at = NOW()`,
           [conversationId, JSON.stringify(messages)],
         );
-      } catch { /* fire-and-forget — ConversationStore contract */ }
+      } catch {
+        /* fire-and-forget — ConversationStore contract */
+      }
     },
   };
 }

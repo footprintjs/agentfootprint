@@ -1,6 +1,14 @@
 import { describe, it, expect } from 'vitest';
 import { getSubtreeSnapshot, listSubflowPaths } from 'footprintjs';
-import { Agent, LLMCall, RAG, FlowChart, mock, defineTool, mockRetriever } from '../../src/test-barrel';
+import {
+  Agent,
+  LLMCall,
+  RAG,
+  FlowChart,
+  mock,
+  defineTool,
+  mockRetriever,
+} from '../../src/test-barrel';
 
 // ── Helpers ─────────────────────────────────────────────────
 

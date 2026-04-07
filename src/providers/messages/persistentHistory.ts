@@ -50,7 +50,10 @@ export function persistentHistory(options: PersistentHistoryOptions): MessageStr
       return {
         value: merged,
         chosen: 'persistent',
-        rationale: stored.length > 0 ? `loaded ${stored.length} stored + ${history.length - stored.length} new` : `${history.length} messages (first turn)`,
+        rationale:
+          stored.length > 0
+            ? `loaded ${stored.length} stored + ${history.length - stored.length} new`
+            : `${history.length} messages (first turn)`,
       };
     },
   };

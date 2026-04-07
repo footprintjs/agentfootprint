@@ -47,10 +47,7 @@ function baseConfig(provider: LLMProvider): AgentLoopConfig {
 describe('RoutingConfig — unit', () => {
   it('default agent routing routes to final when no tool calls', async () => {
     const provider = mockProvider([{ content: 'Hello!' }]);
-    const { chart } = buildAgentLoop(
-      baseConfig(provider),
-      { messages: [userMessage('hi')] },
-    );
+    const { chart } = buildAgentLoop(baseConfig(provider), { messages: [userMessage('hi')] });
 
     const executor = new FlowChartExecutor(chart);
     executor.enableNarrative();
@@ -155,10 +152,12 @@ describe('RoutingConfig — boundary', () => {
       defaultBranch: 'x',
     };
 
-    expect(() => buildAgentLoop(
-      { ...baseConfig(provider), routing: badRouting },
-      { messages: [userMessage('hi')] },
-    )).toThrow('at least one branch');
+    expect(() =>
+      buildAgentLoop(
+        { ...baseConfig(provider), routing: badRouting },
+        { messages: [userMessage('hi')] },
+      ),
+    ).toThrow('at least one branch');
   });
 
   it('throws on duplicate branch IDs', () => {
@@ -174,10 +173,12 @@ describe('RoutingConfig — boundary', () => {
       defaultBranch: 'a',
     };
 
-    expect(() => buildAgentLoop(
-      { ...baseConfig(provider), routing: badRouting },
-      { messages: [userMessage('hi')] },
-    )).toThrow('duplicate branch IDs');
+    expect(() =>
+      buildAgentLoop(
+        { ...baseConfig(provider), routing: badRouting },
+        { messages: [userMessage('hi')] },
+      ),
+    ).toThrow('duplicate branch IDs');
   });
 
   it('throws on defaultBranch not matching any branch', () => {
@@ -190,10 +191,12 @@ describe('RoutingConfig — boundary', () => {
       defaultBranch: 'nonexistent',
     };
 
-    expect(() => buildAgentLoop(
-      { ...baseConfig(provider), routing: badRouting },
-      { messages: [userMessage('hi')] },
-    )).toThrow("does not match any branch ID");
+    expect(() =>
+      buildAgentLoop(
+        { ...baseConfig(provider), routing: badRouting },
+        { messages: [userMessage('hi')] },
+      ),
+    ).toThrow('does not match any branch ID');
   });
 });
 
@@ -252,10 +255,7 @@ describe('RoutingConfig — scenario', () => {
 describe('RoutingConfig — property', () => {
   it('default routing produces same narrative as pre-refactor', async () => {
     const provider = mockProvider([{ content: 'Final answer' }]);
-    const { chart } = buildAgentLoop(
-      baseConfig(provider),
-      { messages: [userMessage('hi')] },
-    );
+    const { chart } = buildAgentLoop(baseConfig(provider), { messages: [userMessage('hi')] });
 
     const executor = new FlowChartExecutor(chart);
     executor.enableNarrative();
@@ -263,7 +263,9 @@ describe('RoutingConfig — property', () => {
 
     const narrative = executor.getNarrative();
     // Should still have RouteResponse and Finalize in narrative
-    expect(narrative.some((s: string) => s.includes('RouteResponse') || s.includes('Finalize'))).toBe(true);
+    expect(
+      narrative.some((s: string) => s.includes('RouteResponse') || s.includes('Finalize')),
+    ).toBe(true);
   });
 
   it('decider name and description appear in spec', async () => {
@@ -273,7 +275,16 @@ describe('RoutingConfig — property', () => {
       deciderId: 'my-decider',
       deciderDescription: 'My custom routing logic',
       decider: () => 'done',
-      branches: [{ id: 'done', kind: 'fn', fn: (scope: any) => { scope.result = 'x'; scope.$break(); } }],
+      branches: [
+        {
+          id: 'done',
+          kind: 'fn',
+          fn: (scope: any) => {
+            scope.result = 'x';
+            scope.$break();
+          },
+        },
+      ],
       defaultBranch: 'done',
     };
 

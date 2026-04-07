@@ -155,10 +155,7 @@ describe('fallbackProvider: shouldFallback predicate', () => {
     }
 
     const provider = fallbackProvider(
-      [
-        makeFailingProvider('p1', new RateLimitError('rate limited')),
-        makeProvider('p2'),
-      ],
+      [makeFailingProvider('p1', new RateLimitError('rate limited')), makeProvider('p2')],
       {
         shouldFallback: (err) => err instanceof RateLimitError,
       },
@@ -170,10 +167,7 @@ describe('fallbackProvider: shouldFallback predicate', () => {
 
     // Auth error → does NOT fall back
     const provider2 = fallbackProvider(
-      [
-        makeFailingProvider('p1', new AuthError('unauthorized')),
-        makeProvider('p2'),
-      ],
+      [makeFailingProvider('p1', new AuthError('unauthorized')), makeProvider('p2')],
       {
         shouldFallback: (err) => err instanceof RateLimitError,
       },
@@ -254,7 +248,11 @@ describe('fallbackProvider: resilience edge cases', () => {
   });
 
   it('handles chatStream fallback when provider lacks it', async () => {
-    const p1: LLMProvider = { chat: async () => { throw new Error('fail'); } };
+    const p1: LLMProvider = {
+      chat: async () => {
+        throw new Error('fail');
+      },
+    };
     const p2 = makeProvider('backup');
 
     const provider = fallbackProvider([p1, p2]);

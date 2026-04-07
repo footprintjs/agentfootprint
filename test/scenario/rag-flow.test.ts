@@ -103,4 +103,3 @@ describe('Scenario: RAG end-to-end', () => {
     expect(result.chunks[4].id).toBe('chunk-4');
   });
 });
-

@@ -16,7 +16,9 @@ describe('Sample 22: Resilience', () => {
   it('withFallback tries backup when primary fails', async () => {
     // Primary always throws
     const primary: any = {
-      run: async () => { throw new LLMError({ message: 'Down', code: 'server', provider: 'test' }); },
+      run: async () => {
+        throw new LLMError({ message: 'Down', code: 'server', provider: 'test' });
+      },
     };
     // Backup succeeds
     const backup = LLMCall.create({ provider: mock([{ content: 'Backup saved the day!' }]) })
@@ -33,7 +35,8 @@ describe('Sample 22: Resilience', () => {
     const flaky: any = {
       run: async (msg: string) => {
         attempts++;
-        if (attempts <= 2) throw new LLMError({ message: 'Retry', code: 'server', provider: 'test' });
+        if (attempts <= 2)
+          throw new LLMError({ message: 'Retry', code: 'server', provider: 'test' });
         return { content: `Success on attempt ${attempts}` };
       },
     };

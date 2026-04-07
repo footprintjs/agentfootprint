@@ -93,7 +93,14 @@ export class RAG {
 
   /** Build the RAG pipeline and return a runner. */
   build(): RAGRunner {
-    return new RAGRunner(this.provider, this.retriever, this.sysPrompt, this.retrieveOptions, [...this.recorders], this.enableStreaming);
+    return new RAGRunner(
+      this.provider,
+      this.retriever,
+      this.sysPrompt,
+      this.retrieveOptions,
+      [...this.recorders],
+      this.enableStreaming,
+    );
   }
 }
 

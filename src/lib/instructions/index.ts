@@ -9,7 +9,11 @@ export type {
   InstructionOverride,
 } from './types';
 
-export { evaluateInstructions, mergeRuntimeInstructions, applyInstructionOverrides } from './evaluator';
+export {
+  evaluateInstructions,
+  mergeRuntimeInstructions,
+  applyInstructionOverrides,
+} from './evaluator';
 export type { ResolvedInstruction, ResolvedFollowUp } from './evaluator';
 
 export { renderInstructions } from './template';
@@ -22,7 +26,12 @@ export { previewInstructions } from './preview';
 export type { InstructionPreview, PreviewContext } from './preview';
 
 export { InstructionRecorder } from './InstructionRecorder';
-export type { InstructionSummary, ToolInstructionStats, InstructionFiring, FollowUpOffering } from './InstructionRecorder';
+export type {
+  InstructionSummary,
+  ToolInstructionStats,
+  InstructionFiring,
+  FollowUpOffering,
+} from './InstructionRecorder';
 
 export { defaultConditionMatcher, PendingFollowUpManager } from './strictFollowUp';
 export type { PendingStrictFollowUp } from './strictFollowUp';

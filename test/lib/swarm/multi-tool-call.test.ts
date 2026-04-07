@@ -36,12 +36,16 @@ function makeSpecialist(id: string): SwarmSpecialist {
 }
 
 const calcTool = defineTool({
-  id: 'calculator', description: 'Calculate', inputSchema: {},
+  id: 'calculator',
+  description: 'Calculate',
+  inputSchema: {},
   handler: async () => ({ content: '42' }),
 });
 
 const searchTool = defineTool({
-  id: 'search', description: 'Search', inputSchema: {},
+  id: 'search',
+  description: 'Search',
+  inputSchema: {},
   handler: async () => ({ content: 'Found results' }),
 });
 
@@ -51,10 +55,25 @@ function buildSwarmWithConfig(
   provider: LLMProvider,
 ) {
   const toolDescs: LLMToolDescription[] = [
-    ...specialists.map((s) => ({ name: s.id, description: s.description, inputSchema: { type: 'object' as const, properties: { message: { type: 'string' } }, required: ['message'] } })),
-    ...extraTools.map((t: any) => ({ name: t.id, description: t.description, inputSchema: t.inputSchema })),
+    ...specialists.map((s) => ({
+      name: s.id,
+      description: s.description,
+      inputSchema: {
+        type: 'object' as const,
+        properties: { message: { type: 'string' } },
+        required: ['message'],
+      },
+    })),
+    ...extraTools.map((t: any) => ({
+      name: t.id,
+      description: t.description,
+      inputSchema: t.inputSchema,
+    })),
   ];
-  const routing = buildSwarmRouting({ specialists, extraTools: extraTools.length > 0 ? extraTools : undefined });
+  const routing = buildSwarmRouting({
+    specialists,
+    extraTools: extraTools.length > 0 ? extraTools : undefined,
+  });
   const config: AgentLoopConfig = {
     provider,
     systemPrompt: { provider: staticPrompt('Orchestrator') },

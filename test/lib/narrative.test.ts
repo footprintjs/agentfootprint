@@ -62,7 +62,9 @@ describe('Narrative — unit', () => {
     expect(narrative.some((s) => s.includes('[AssemblePrompt]'))).toBe(true);
     expect(narrative.some((s) => s.includes('[CallLLM]'))).toBe(true);
     expect(narrative.some((s) => s.includes('[ParseResponse]'))).toBe(true);
-    expect(narrative.some((s) => s.includes('[RouteResponse]') || s.includes('[Finalize]'))).toBe(true);
+    expect(narrative.some((s) => s.includes('[RouteResponse]') || s.includes('[Finalize]'))).toBe(
+      true,
+    );
   });
 
   it('narrative entries have structured fields', async () => {
@@ -94,7 +96,9 @@ describe('Narrative — unit', () => {
     const narrative = agent.getNarrative();
 
     // System prompt shows actual text
-    expect(narrative.some((s) => s.includes('System prompt:') && s.includes('You are a test bot.'))).toBe(true);
+    expect(
+      narrative.some((s) => s.includes('System prompt:') && s.includes('You are a test bot.')),
+    ).toBe(true);
     // Parsed response shows type
     expect(narrative.some((s) => s.includes('Parsed:') && s.includes('final'))).toBe(true);
   });
@@ -230,9 +234,7 @@ describe('Narrative — scenario', () => {
     expect(subflowEntries.length).toBeGreaterThanOrEqual(6); // 3 enter + 3 exit
 
     // Stage entries inside subflows have path-style names
-    const subflowStages = entries.filter(
-      (e) => e.type === 'stage' && e.stageName?.includes('/'),
-    );
+    const subflowStages = entries.filter((e) => e.type === 'stage' && e.stageName?.includes('/'));
     expect(subflowStages.length).toBeGreaterThan(0);
     expect(subflowStages.some((e) => e.stageName?.includes('sf-system-prompt/'))).toBe(true);
     expect(subflowStages.some((e) => e.stageName?.includes('sf-messages/'))).toBe(true);
@@ -274,10 +276,7 @@ describe('Narrative — scenario', () => {
   it('actual scope values provide LLM-actionable context', async () => {
     const tc: ToolCall = { id: 'tc-1', name: 'search', arguments: { q: 'test' } };
     const agent = Agent.create({
-      provider: mockProvider([
-        { content: 'searching', toolCalls: [tc] },
-        { content: 'found it' },
-      ]),
+      provider: mockProvider([{ content: 'searching', toolCalls: [tc] }, { content: 'found it' }]),
     })
       .system('You are a search agent.')
       .tool(searchTool)
@@ -287,7 +286,9 @@ describe('Narrative — scenario', () => {
     const narrative = agent.getNarrative();
 
     // System prompt shows actual text
-    expect(narrative.some((s) => s.includes('System prompt:') && s.includes('You are a search agent.'))).toBe(true);
+    expect(
+      narrative.some((s) => s.includes('System prompt:') && s.includes('You are a search agent.')),
+    ).toBe(true);
     // Tool descriptions show tool names
     expect(narrative.some((s) => s.includes('Tools:') && s.includes('search'))).toBe(true);
     // Parsed response for first call (tool_calls with tool name)
@@ -330,7 +331,17 @@ describe('Narrative — property', () => {
     await agent.run('hi');
     const entries = agent.getNarrativeEntries();
 
-    const validTypes = new Set(['stage', 'step', 'condition', 'fork', 'selector', 'subflow', 'loop', 'break', 'error']);
+    const validTypes = new Set([
+      'stage',
+      'step',
+      'condition',
+      'fork',
+      'selector',
+      'subflow',
+      'loop',
+      'break',
+      'error',
+    ]);
     for (const entry of entries) {
       expect(validTypes.has(entry.type)).toBe(true);
     }
@@ -406,10 +417,7 @@ describe('Narrative — security', () => {
   it('maxIterations=0 produces narrative without loop', async () => {
     const tc: ToolCall = { id: 'tc-1', name: 'search', arguments: {} };
     const agent = Agent.create({
-      provider: mockProvider([
-        { content: 'searching', toolCalls: [tc] },
-        { content: 'done' },
-      ]),
+      provider: mockProvider([{ content: 'searching', toolCalls: [tc] }, { content: 'done' }]),
     })
       .tool(searchTool)
       .maxIterations(0)

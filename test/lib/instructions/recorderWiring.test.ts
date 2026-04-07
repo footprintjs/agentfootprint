@@ -60,7 +60,10 @@ describe('InstructionRecorder wiring — unit', () => {
 
     const agent = Agent.create({
       provider: mock([
-        { content: 'checking', toolCalls: [{ id: '1', name: 'check_order', arguments: { orderId: 'ORD-1' } }] },
+        {
+          content: 'checking',
+          toolCalls: [{ id: '1', name: 'check_order', arguments: { orderId: 'ORD-1' } }],
+        },
         { content: 'The order was cancelled.' },
       ]),
     })
@@ -129,7 +132,10 @@ describe('InstructionRecorder wiring — scenario', () => {
       provider: mock([
         // LLM calls two tools in sequence
         { content: 'checking order', toolCalls: [{ id: '1', name: 'check_order', arguments: {} }] },
-        { content: 'checking active', toolCalls: [{ id: '2', name: 'check_active', arguments: {} }] },
+        {
+          content: 'checking active',
+          toolCalls: [{ id: '2', name: 'check_active', arguments: {} }],
+        },
         { content: 'done' },
       ]),
     })
@@ -159,9 +165,7 @@ describe('InstructionRecorder wiring — property', () => {
       description: 'Check for PII',
       inputSchema: { type: 'object' },
       handler: async () => ({ content: JSON.stringify({ hasPII: true }) }),
-      instructions: [
-        { id: 'pii-guard', when: () => true, text: 'Contains PII.', safety: true },
-      ],
+      instructions: [{ id: 'pii-guard', when: () => true, text: 'Contains PII.', safety: true }],
     } as InstructedToolDefinition) as any;
 
     const recorder = new InstructionRecorder();

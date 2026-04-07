@@ -149,7 +149,9 @@ describe('SystemPrompt slot — property', () => {
 describe('SystemPrompt slot — security', () => {
   it('provider.resolve() throwing propagates as error', async () => {
     const failProvider: PromptProvider = {
-      resolve: () => { throw new Error('provider crashed'); },
+      resolve: () => {
+        throw new Error('provider crashed');
+      },
     } as any;
     await expect(runSubflow(failProvider)).rejects.toThrow('provider crashed');
   });
@@ -163,7 +165,8 @@ describe('SystemPrompt slot — security', () => {
   });
 
   it('throws at build time when provider is missing', () => {
-    expect(() => buildSystemPromptSubflow({ provider: undefined as any }))
-      .toThrow('provider is required');
+    expect(() => buildSystemPromptSubflow({ provider: undefined as any })).toThrow(
+      'provider is required',
+    );
   });
 });

@@ -115,15 +115,18 @@ export class ExplainRecorder implements AgentRecorder {
 
   /** Tool call decisions — what the LLM chose to do. Returns snapshot-safe copies. */
   getDecisions(): readonly AgentDecision[] {
-    return this.decisions.map(d => ({ ...d, args: { ...d.args } }));
+    return this.decisions.map((d) => ({ ...d, args: { ...d.args } }));
   }
 
   /** Structured explanation of the agent's execution. */
   explain(): Explanation {
-    const toolNames = [...new Set(this.decisions.map(d => d.toolName))];
-    const summary = this.sources.length === 0
-      ? `Agent responded directly without calling tools.`
-      : `Agent called ${toolNames.join(', ')} (${this.sources.length} call${this.sources.length > 1 ? 's' : ''}), then responded based on the results.`;
+    const toolNames = [...new Set(this.decisions.map((d) => d.toolName))];
+    const summary =
+      this.sources.length === 0
+        ? `Agent responded directly without calling tools.`
+        : `Agent called ${toolNames.join(', ')} (${this.sources.length} call${
+            this.sources.length > 1 ? 's' : ''
+          }), then responded based on the results.`;
 
     return {
       sources: this.getSources(),

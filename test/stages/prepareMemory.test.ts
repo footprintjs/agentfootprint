@@ -64,10 +64,7 @@ describe('PrepareMemory — unit: LoadHistory', () => {
     const store = new InMemoryStore();
     store.save('conv-1', [user('turn 1'), assistant('reply 1')]);
 
-    const state = await runSubflow(
-      { store, conversationId: 'conv-1' },
-      [user('turn 2')],
-    );
+    const state = await runSubflow({ store, conversationId: 'conv-1' }, [user('turn 2')]);
 
     const stored = state.memory_storedHistory as Message[];
     expect(stored).toHaveLength(3);
@@ -77,10 +74,7 @@ describe('PrepareMemory — unit: LoadHistory', () => {
 
   it('with store: fresh conversation — stored history is just current messages', async () => {
     const store = new InMemoryStore();
-    const state = await runSubflow(
-      { store, conversationId: 'conv-new' },
-      [user('first message')],
-    );
+    const state = await runSubflow({ store, conversationId: 'conv-new' }, [user('first message')]);
     expect(state.memory_storedHistory).toEqual([user('first message')]);
   });
 
@@ -93,13 +87,17 @@ describe('PrepareMemory — unit: LoadHistory', () => {
 
 describe('PrepareMemory — unit: ApplyStrategy', () => {
   it('with strategy: calls strategy.prepare() with merged history', async () => {
-    const prepareSpy = vi.fn(async (msgs: Message[]) => ({ value: msgs.slice(-1), chosen: 'test' }));
+    const prepareSpy = vi.fn(async (msgs: Message[]) => ({
+      value: msgs.slice(-1),
+      chosen: 'test',
+    }));
     const strategy: MessageStrategy = { prepare: prepareSpy };
 
-    const state = await runSubflow(
-      { strategy },
-      [user('hello'), assistant('hi'), user('question')],
-    );
+    const state = await runSubflow({ strategy }, [
+      user('hello'),
+      assistant('hi'),
+      user('question'),
+    ]);
 
     expect(prepareSpy).toHaveBeenCalledOnce();
     // Verify the MessageContext shape passed to prepare() — all zeros (subflow has no turn context)
@@ -150,7 +148,9 @@ describe('PrepareMemory — boundary', () => {
   });
 
   it('strategy receiving empty array returns empty array', async () => {
-    const strategy: MessageStrategy = { prepare: async (msgs) => ({ value: msgs, chosen: 'test' }) };
+    const strategy: MessageStrategy = {
+      prepare: async (msgs) => ({ value: msgs, chosen: 'test' }),
+    };
     const state = await runSubflow({ strategy }, []);
     expect(state.memory_preparedMessages).toEqual([]);
   });
@@ -168,10 +168,9 @@ describe('PrepareMemory — scenario', () => {
       assistant('session 1 follow-up answer'),
     ]);
 
-    const state = await runSubflow(
-      { store, conversationId: 'user-abc' },
-      [user('session 2 question')],
-    );
+    const state = await runSubflow({ store, conversationId: 'user-abc' }, [
+      user('session 2 question'),
+    ]);
 
     const prepared = state.memory_preparedMessages as Message[];
     expect(prepared).toHaveLength(5);
@@ -185,11 +184,12 @@ describe('PrepareMemory — scenario', () => {
     );
     store.save('conv-1', history);
 
-    const strategy: MessageStrategy = { prepare: async (msgs) => ({ value: msgs.slice(-3), chosen: 'test' }) };
-    const state = await runSubflow(
-      { store, conversationId: 'conv-1', strategy },
-      [user('new question')],
-    );
+    const strategy: MessageStrategy = {
+      prepare: async (msgs) => ({ value: msgs.slice(-3), chosen: 'test' }),
+    };
+    const state = await runSubflow({ store, conversationId: 'conv-1', strategy }, [
+      user('new question'),
+    ]);
 
     const prepared = state.memory_preparedMessages as Message[];
     expect(prepared).toHaveLength(3);
@@ -231,7 +231,9 @@ describe('PrepareMemory — property', () => {
 describe('PrepareMemory — security', () => {
   it('store.load() throwing propagates the error', async () => {
     const badStore: import('../../src/adapters/memory/types').ConversationStore = {
-      load: async () => { throw new Error('DB connection failed'); },
+      load: async () => {
+        throw new Error('DB connection failed');
+      },
       save: async () => {},
     };
 
@@ -242,12 +244,14 @@ describe('PrepareMemory — security', () => {
 
   it('strategy.prepare() throwing propagates the error', async () => {
     const badStrategy: MessageStrategy = {
-      prepare: async () => { throw new Error('strategy failed'); },
+      prepare: async () => {
+        throw new Error('strategy failed');
+      },
     } as any;
 
-    await expect(
-      runSubflow({ strategy: badStrategy }, [user('test')]),
-    ).rejects.toThrow('strategy failed');
+    await expect(runSubflow({ strategy: badStrategy }, [user('test')])).rejects.toThrow(
+      'strategy failed',
+    );
   });
 
   it('store.load() returning null treated as empty — does not crash', async () => {
@@ -256,10 +260,7 @@ describe('PrepareMemory — security', () => {
       save: async () => {},
     };
 
-    const state = await runSubflow(
-      { store: nullStore, conversationId: 'c' },
-      [user('current')],
-    );
+    const state = await runSubflow({ store: nullStore, conversationId: 'c' }, [user('current')]);
     // null treated as empty history — prepared messages == current messages
     expect(state.memory_preparedMessages).toEqual([user('current')]);
   });

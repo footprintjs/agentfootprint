@@ -14,5 +14,10 @@
  */
 
 export { gatedTools, PermissionPolicy } from './providers';
-export type { PermissionChecker, GatedToolsOptions, PermissionPolicyOptions, PermissionChangeEvent } from './providers';
+export type {
+  PermissionChecker,
+  GatedToolsOptions,
+  PermissionPolicyOptions,
+  PermissionChangeEvent,
+} from './providers';
 // PermissionRecorder lives in agentfootprint/observe (it's a recorder, not a security primitive)

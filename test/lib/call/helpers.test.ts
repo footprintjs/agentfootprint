@@ -41,7 +41,10 @@ function makeRegistry(...tools: Array<{ id: string; result: string }>): ToolRegi
 
 describe('normalizeAdapterResponse — unit', () => {
   it('returns "final" when no toolCalls', () => {
-    const response: LLMResponse = { content: 'Hello!', usage: { inputTokens: 10, outputTokens: 5 } };
+    const response: LLMResponse = {
+      content: 'Hello!',
+      usage: { inputTokens: 10, outputTokens: 5 },
+    };
     const result = normalizeAdapterResponse(response);
     expect(result.type).toBe('final');
     expect(result).toEqual({
@@ -273,7 +276,9 @@ describe('executeToolCalls — security', () => {
       id: 'fail',
       description: 'fails',
       inputSchema: { type: 'object' },
-      handler: async () => { throw new Error('disk full'); },
+      handler: async () => {
+        throw new Error('disk full');
+      },
     });
     const tc = makeToolCall('fail');
 
@@ -290,7 +295,9 @@ describe('executeToolCalls — security', () => {
       id: 'fail',
       description: 'fails',
       inputSchema: { type: 'object' },
-      handler: async () => { throw 'string error'; },
+      handler: async () => {
+        throw 'string error';
+      },
     });
     const tc = makeToolCall('fail');
 
@@ -343,7 +350,9 @@ describe('executeToolCalls — security', () => {
       id: 'fail',
       description: 'fails',
       inputSchema: { type: 'object' },
-      handler: async () => { throw new Error('secret error'); },
+      handler: async () => {
+        throw new Error('secret error');
+      },
     });
     const tc = makeToolCall('fail');
 

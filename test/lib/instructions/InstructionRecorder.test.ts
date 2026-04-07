@@ -10,19 +10,24 @@ import type { ResolvedInstruction } from '../../../src/lib/instructions/evaluato
 
 // ── Helpers ─────────────────────────────────────────────────────
 
-function firing(id: string, opts?: { text?: string; safety?: boolean; followUpToolId?: string }): ResolvedInstruction {
+function firing(
+  id: string,
+  opts?: { text?: string; safety?: boolean; followUpToolId?: string },
+): ResolvedInstruction {
   return {
     id,
     text: opts?.text,
     safety: opts?.safety ?? false,
     priority: 0,
-    resolvedFollowUp: opts?.followUpToolId ? {
-      toolId: opts.followUpToolId,
-      params: { id: '123' },
-      description: 'test',
-      condition: 'user asks',
-      strict: false,
-    } : undefined,
+    resolvedFollowUp: opts?.followUpToolId
+      ? {
+          toolId: opts.followUpToolId,
+          params: { id: '123' },
+          description: 'test',
+          condition: 'user asks',
+          strict: false,
+        }
+      : undefined,
   };
 }
 
@@ -123,9 +128,7 @@ describe('InstructionRecorder — scenario', () => {
     ]);
 
     // Different tool
-    rec.recordFirings('check_credit', [
-      firing('low-score', { text: 'Low credit score' }),
-    ]);
+    rec.recordFirings('check_credit', [firing('low-score', { text: 'Low credit score' })]);
 
     const summary = rec.getSummary();
     expect(summary.totalFired).toBe(4);

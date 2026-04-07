@@ -30,7 +30,10 @@ import type { MessagesSlotConfig } from './types';
 /**
  * Build a MessageContext from scope state.
  */
-function buildMessageContext(scope: TypedScope<MessagesSubflowState>, messages: Message[]): MessageContext {
+function buildMessageContext(
+  scope: TypedScope<MessagesSubflowState>,
+  messages: Message[],
+): MessageContext {
   const loopCount = scope.loopCount ?? 0;
 
   const lastUserMsg = findLastUserMessage(messages);
@@ -110,9 +113,7 @@ function buildPersistentSubflow(
       const currentMessages = scope.currentMessages ?? [];
 
       const stored = (await store.load(conversationId)) ?? [];
-      const merged = stored.length > 0
-        ? [...stored, ...currentMessages]
-        : currentMessages;
+      const merged = stored.length > 0 ? [...stored, ...currentMessages] : currentMessages;
 
       // Track full merged history for CommitMemory reconstruction
       scope.memory_storedHistory = merged;

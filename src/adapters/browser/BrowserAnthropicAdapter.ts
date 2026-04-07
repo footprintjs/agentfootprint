@@ -118,7 +118,12 @@ export class BrowserAnthropicAdapter implements LLMProvider {
 
     const response = await this.fetchAPI(body, options?.signal);
     const reader = response.body?.getReader();
-    if (!reader) throw new LLMError({ message: 'No response body for streaming', code: 'unknown', provider: 'anthropic-browser' });
+    if (!reader)
+      throw new LLMError({
+        message: 'No response body for streaming',
+        code: 'unknown',
+        provider: 'anthropic-browser',
+      });
 
     const decoder = new TextDecoder();
     let buffer = '';
@@ -148,7 +153,9 @@ export class BrowserAnthropicAdapter implements LLMProvider {
             index?: number;
             content_block?: AnthropicContentBlock;
             delta?: { type: string; text?: string; thinking?: string; partial_json?: string };
-            message?: AnthropicMessage & { usage?: { input_tokens?: number; output_tokens?: number } };
+            message?: AnthropicMessage & {
+              usage?: { input_tokens?: number; output_tokens?: number };
+            };
             usage?: { output_tokens: number };
           };
           try {
@@ -228,9 +235,14 @@ export class BrowserAnthropicAdapter implements LLMProvider {
         : undefined;
 
     // Structured output: inject JSON Schema (Anthropic has no native response_format)
-    const schemaInstruction = options?.responseFormat?.type === 'json_schema'
-      ? `You MUST respond with valid JSON matching this schema:\n<json_schema>\n${JSON.stringify(options.responseFormat.schema, null, 2)}\n</json_schema>\nRespond ONLY with the JSON object, no other text.`
-      : undefined;
+    const schemaInstruction =
+      options?.responseFormat?.type === 'json_schema'
+        ? `You MUST respond with valid JSON matching this schema:\n<json_schema>\n${JSON.stringify(
+            options.responseFormat.schema,
+            null,
+            2,
+          )}\n</json_schema>\nRespond ONLY with the JSON object, no other text.`
+        : undefined;
 
     const injection = options?.responseFormat?.injection ?? 'system';
 
@@ -277,15 +289,25 @@ export class BrowserAnthropicAdapter implements LLMProvider {
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));
       if (error.name === 'AbortError') {
-        throw new LLMError({ message: 'Request aborted', code: 'aborted', provider: 'anthropic-browser', cause: error });
+        throw new LLMError({
+          message: 'Request aborted',
+          code: 'aborted',
+          provider: 'anthropic-browser',
+          cause: error,
+        });
       }
-      throw new LLMError({ message: error.message, code: 'network', provider: 'anthropic-browser', cause: error });
+      throw new LLMError({
+        message: error.message,
+        code: 'network',
+        provider: 'anthropic-browser',
+        cause: error,
+      });
     }
 
     if (!response.ok) {
       let errorMessage = `Anthropic API error: ${response.status}`;
       try {
-        const errorBody = await response.json() as { error?: { message?: string } };
+        const errorBody = (await response.json()) as { error?: { message?: string } };
         if (errorBody.error?.message) {
           errorMessage = errorBody.error.message;
         }
@@ -339,7 +361,8 @@ function convertContent(content: MessageContent): string | AnthropicContentBlock
         return {
           type: 'tool_result',
           tool_use_id: block.toolUseId,
-          content: typeof block.content === 'string' ? block.content : JSON.stringify(block.content),
+          content:
+            typeof block.content === 'string' ? block.content : JSON.stringify(block.content),
           is_error: block.isError,
         };
     }
@@ -371,7 +394,8 @@ function convertMessages(messages: Message[]): AnthropicMessageParam[] {
       const text = typeof msg.content === 'string' ? msg.content : '';
       result.push({ role: 'assistant', content: blocks.length > 0 ? blocks : text });
     } else if (msg.role === 'tool') {
-      const toolResultContent = typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content);
+      const toolResultContent =
+        typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content);
       const toolResult: AnthropicContentBlock = {
         type: 'tool_result',
         tool_use_id: msg.toolCallId,

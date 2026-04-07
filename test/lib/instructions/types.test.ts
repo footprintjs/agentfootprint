@@ -17,7 +17,10 @@ import {
 
 // ── Helper ──────────────────────────────────────────────────────
 
-function makeCtx(content: Record<string, unknown>, overrides?: Partial<InstructionContext>): InstructionContext {
+function makeCtx(
+  content: Record<string, unknown>,
+  overrides?: Partial<InstructionContext>,
+): InstructionContext {
   return {
     content,
     latencyMs: 42,
@@ -67,10 +70,13 @@ describe('LLMInstruction types — unit', () => {
   });
 
   it('InstructionContext provides full execution context', () => {
-    const ctx = makeCtx({ status: 'denied', traceId: 'tr_123' }, {
-      error: { code: 'TIMEOUT', message: 'timed out' },
-      latencyMs: 5000,
-    });
+    const ctx = makeCtx(
+      { status: 'denied', traceId: 'tr_123' },
+      {
+        error: { code: 'TIMEOUT', message: 'timed out' },
+        latencyMs: 5000,
+      },
+    );
     expect(ctx.content).toEqual({ status: 'denied', traceId: 'tr_123' });
     expect(ctx.error?.code).toBe('TIMEOUT');
     expect(ctx.latencyMs).toBe(5000);
@@ -205,12 +211,14 @@ describe('LLMInstruction types — scenario', () => {
     const result: InstructedToolResult = {
       content: '{"status":"delayed"}',
       instructions: ['Delivery delayed. Apologize and offer tracking.'],
-      followUps: [{
-        toolId: 'track_package',
-        params: { trackingId: 'PKG_123' },
-        description: 'Track package location',
-        condition: 'User asks where their package is',
-      }],
+      followUps: [
+        {
+          toolId: 'track_package',
+          params: { trackingId: 'PKG_123' },
+          description: 'Track package location',
+          condition: 'User asks where their package is',
+        },
+      ],
     };
 
     expect(result.instructions).toHaveLength(1);

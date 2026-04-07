@@ -211,9 +211,14 @@ export class AnthropicAdapter implements LLMProvider {
         : undefined;
 
     // Structured output: inject JSON Schema for providers without native response_format
-    const schemaInstruction = options?.responseFormat?.type === 'json_schema'
-      ? `You MUST respond with valid JSON matching this schema:\n<json_schema>\n${JSON.stringify(options.responseFormat.schema, null, 2)}\n</json_schema>\nRespond ONLY with the JSON object, no other text.`
-      : undefined;
+    const schemaInstruction =
+      options?.responseFormat?.type === 'json_schema'
+        ? `You MUST respond with valid JSON matching this schema:\n<json_schema>\n${JSON.stringify(
+            options.responseFormat.schema,
+            null,
+            2,
+          )}\n</json_schema>\nRespond ONLY with the JSON object, no other text.`
+        : undefined;
 
     const injection = options?.responseFormat?.injection ?? 'system';
 

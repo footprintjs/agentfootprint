@@ -11,8 +11,16 @@ import type { LLMInstruction, PreviewContext } from '../../../src/test-barrel';
 // ── Helpers ─────────────────────────────────────────────────
 
 const instructions: LLMInstruction[] = [
-  { id: 'empathy', when: (ctx) => (ctx.content as any)?.status === 'denied', text: 'Be empathetic.' },
-  { id: 'trace', when: (ctx) => !!(ctx.content as any)?.traceId, followUp: quickBind('get_trace', 'traceId') },
+  {
+    id: 'empathy',
+    when: (ctx) => (ctx.content as any)?.status === 'denied',
+    text: 'Be empathetic.',
+  },
+  {
+    id: 'trace',
+    when: (ctx) => !!(ctx.content as any)?.traceId,
+    followUp: quickBind('get_trace', 'traceId'),
+  },
   { id: 'pii', when: (ctx) => !!(ctx.content as any)?.ssn, text: 'No PII.', safety: true },
   { id: 'low-stock', when: (ctx) => (ctx.content as any)?.stock < 5, text: 'Low stock warning.' },
 ];
@@ -119,7 +127,7 @@ describe('previewInstructions — scenario', () => {
 describe('previewInstructions — property', () => {
   it('firedIds + skippedIds = all instruction IDs', () => {
     const preview = previewInstructions(instructions, deniedCtx);
-    const allIds = instructions.map(i => i.id);
+    const allIds = instructions.map((i) => i.id);
     const combined = [...preview.firedIds, ...preview.skippedIds].sort();
     expect(combined).toEqual(allIds.sort());
   });
@@ -138,7 +146,7 @@ describe('previewInstructions — property', () => {
 describe('previewInstructions — security', () => {
   it('safety instructions appear last in fired list', () => {
     const preview = previewInstructions(instructions, deniedCtx);
-    const safetyIndex = preview.fired.findIndex(f => f.safety);
+    const safetyIndex = preview.fired.findIndex((f) => f.safety);
     // Safety should be the last entry
     expect(safetyIndex).toBe(preview.fired.length - 1);
   });

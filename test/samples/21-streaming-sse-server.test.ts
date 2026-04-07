@@ -17,7 +17,9 @@ import type { ToolCall, LLMResponse } from '../../src/test-barrel';
 
 class MockSSEResponse {
   chunks: string[] = [];
-  write(chunk: string) { this.chunks.push(chunk); }
+  write(chunk: string) {
+    this.chunks.push(chunk);
+  }
 }
 
 // ── Tests ────────────────────────────────────────────────────
@@ -41,15 +43,9 @@ describe('Sample 21: Streaming SSE Server', () => {
     });
 
     const tc: ToolCall = { id: 'tc-1', name: 'search', arguments: { q: 'test' } };
-    const provider = mock([
-      { content: '', toolCalls: [tc] },
-      { content: 'Here are the results.' },
-    ]);
+    const provider = mock([{ content: '', toolCalls: [tc] }, { content: 'Here are the results.' }]);
 
-    const agent = Agent.create({ provider })
-      .system('Search assistant.')
-      .tool(searchTool)
-      .build();
+    const agent = Agent.create({ provider }).system('Search assistant.').tool(searchTool).build();
 
     await agent.run('Search for test', {
       onEvent: (event) => res.write(SSEFormatter.format(event)),

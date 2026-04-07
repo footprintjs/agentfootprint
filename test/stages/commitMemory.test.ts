@@ -23,7 +23,7 @@ const user = (text: string): Message => ({ role: 'user', content: text });
 const assistant = (text: string): Message => ({ role: 'assistant', content: text });
 
 /** Flush macrotasks — necessary for fire-and-forget Promises to settle. */
-const flush = () => new Promise<void>(resolve => setTimeout(resolve, 0));
+const flush = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
 
 /**
  * Run a chart that:
@@ -49,7 +49,13 @@ async function runCommitStage(
     'test-seed',
   )
     .addFunction('CommitMemory', stage, 'commit-memory')
-    .addFunction('Canary', () => { postCommitRan = true; }, 'canary')
+    .addFunction(
+      'Canary',
+      () => {
+        postCommitRan = true;
+      },
+      'canary',
+    )
     .build();
 
   const executor = new FlowChartExecutor(chart);
@@ -111,11 +117,7 @@ describe('CommitMemory — boundary', () => {
     const store = new InMemoryStore();
     const saveSpy = vi.spyOn(store, 'save');
 
-    const { brokeEarly } = await runCommitStage(
-      { store, conversationId: 'conv-empty' },
-      [],
-      true,
-    );
+    const { brokeEarly } = await runCommitStage({ store, conversationId: 'conv-empty' }, [], true);
 
     await flush();
     expect(brokeEarly).toBe(true);
@@ -175,11 +177,7 @@ describe('CommitMemory — scenario', () => {
     const onSaveError = vi.fn();
     const store = new InMemoryStore();
 
-    await runCommitStage(
-      { store, conversationId: 'c', onSaveError },
-      [user('ok')],
-      true,
-    );
+    await runCommitStage({ store, conversationId: 'c', onSaveError }, [user('ok')], true);
 
     await flush();
     expect(onSaveError).not.toHaveBeenCalled();
@@ -204,11 +202,7 @@ describe('CommitMemory — property', () => {
     const saveSpy = vi.fn<[string, Message[]], void | Promise<void>>();
     const fakeStore = { load: async () => [], save: saveSpy };
 
-    await runCommitStage(
-      { store: fakeStore, conversationId: 'user-abc-123' },
-      [user('x')],
-      true,
-    );
+    await runCommitStage({ store: fakeStore, conversationId: 'user-abc-123' }, [user('x')], true);
 
     await flush();
     expect(saveSpy.mock.calls[0][0]).toBe('user-abc-123');
@@ -239,7 +233,9 @@ describe('CommitMemory — security', () => {
     const err = new Error('Redis connection refused');
     const badStore = {
       load: async () => [],
-      save: async () => { throw err; },
+      save: async () => {
+        throw err;
+      },
     };
 
     await runCommitStage(
@@ -255,7 +251,9 @@ describe('CommitMemory — security', () => {
   it('async store.save() throwing without onSaveError: pipeline still breaks', async () => {
     const badStore = {
       load: async () => [],
-      save: async () => { throw new Error('DB failed'); },
+      save: async () => {
+        throw new Error('DB failed');
+      },
     };
 
     // runCommitStage must resolve and brokeEarly must be true even when save() fails
@@ -272,7 +270,9 @@ describe('CommitMemory — security', () => {
   it('save() throwing: SHOULD_COMMIT flag is reset to false regardless of save outcome', async () => {
     const badStore = {
       load: async () => [],
-      save: async () => { throw new Error('timeout'); },
+      save: async () => {
+        throw new Error('timeout');
+      },
     };
 
     const { state } = await runCommitStage(
@@ -291,7 +291,9 @@ describe('CommitMemory — security', () => {
 
     const badStore = {
       load: async () => [],
-      save: async () => { throw new Error('storage error'); },
+      save: async () => {
+        throw new Error('storage error');
+      },
     };
 
     try {

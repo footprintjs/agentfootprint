@@ -141,7 +141,10 @@ export class Agent {
    * agent.outputSchema(z.object({ city: z.string() }), { injection: 'user' })
    * ```
    */
-  outputSchema(schema: Record<string, unknown>, options?: { name?: string; injection?: 'system' | 'user' }): this {
+  outputSchema(
+    schema: Record<string, unknown>,
+    options?: { name?: string; injection?: 'system' | 'user' },
+  ): this {
     if (isZodSchema(schema)) {
       schema = zodToJsonSchema(schema as any);
     }
@@ -243,7 +246,8 @@ export class Agent {
       promptProvider: this.customPromptProvider,
       toolProvider: this.customToolProvider,
       instructionOverrides: this.overrides.size > 0 ? new Map(this.overrides) : undefined,
-      agentInstructions: this.agentInstructions.length > 0 ? [...this.agentInstructions] : undefined,
+      agentInstructions:
+        this.agentInstructions.length > 0 ? [...this.agentInstructions] : undefined,
       initialDecision: this.agentInstructions.length > 0 ? this.initialDecisionScope : undefined,
       streaming: this.enableStreaming,
       verboseNarrative: this.enableVerboseNarrative,

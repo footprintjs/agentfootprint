@@ -64,15 +64,9 @@ describe('Sample 18: Streaming Events', () => {
   it('onEvent receives tool lifecycle for tool calls', async () => {
     const events: AgentStreamEvent[] = [];
     const tc: ToolCall = { id: 'tc-1', name: 'search', arguments: { q: 'test' } };
-    const provider = mockProvider([
-      { content: '', toolCalls: [tc] },
-      { content: 'Done.' },
-    ]);
+    const provider = mockProvider([{ content: '', toolCalls: [tc] }, { content: 'Done.' }]);
 
-    const agent = Agent.create({ provider })
-      .system('Help.')
-      .tool(searchTool)
-      .build();
+    const agent = Agent.create({ provider }).system('Help.').tool(searchTool).build();
 
     await agent.run('search', { onEvent: (e) => events.push(e) });
 

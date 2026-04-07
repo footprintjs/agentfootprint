@@ -101,7 +101,10 @@ describe('Parallel — boundary', () => {
   it('throws with fewer than 2 branches', () => {
     const provider = mockProvider([{ content: 'x' }]);
     expect(() =>
-      Parallel.create({ provider }).agent('only', mockRunner('x'), 'Only').merge(() => 'x').build()
+      Parallel.create({ provider })
+        .agent('only', mockRunner('x'), 'Only')
+        .merge(() => 'x')
+        .build(),
     ).toThrow('at least 2');
   });
 
@@ -110,7 +113,7 @@ describe('Parallel — boundary', () => {
     expect(() =>
       Parallel.create({ provider })
         .agent('same', mockRunner('x'), 'A')
-        .agent('same', mockRunner('y'), 'B')
+        .agent('same', mockRunner('y'), 'B'),
     ).toThrow('duplicate');
   });
 
@@ -120,7 +123,7 @@ describe('Parallel — boundary', () => {
       Parallel.create({ provider })
         .agent('a', mockRunner('x'), 'A')
         .agent('b', mockRunner('y'), 'B')
-        .build()
+        .build(),
     ).toThrow('merge strategy');
   });
 
@@ -170,7 +173,9 @@ describe('Parallel — scenario', () => {
       .agent('b', mockRunner('result-b'), 'Agent B')
       .agent('c', mockRunner('result-c'), 'Agent C')
       .merge((results) => {
-        return Object.values(results).map((r) => r.content).join(' | ');
+        return Object.values(results)
+          .map((r) => r.content)
+          .join(' | ');
       })
       .build();
 
@@ -230,8 +235,12 @@ describe('Parallel — security', () => {
   it('branches have isolated scope (one cannot read another)', async () => {
     // Each runner writes to scope.result — if scope is shared, last-write-wins
     // With isolated subflows, each branch has its own scope
-    const runner1 = { run: vi.fn(async () => ({ content: 'isolated-1', messages: [], iterations: 1 })) };
-    const runner2 = { run: vi.fn(async () => ({ content: 'isolated-2', messages: [], iterations: 1 })) };
+    const runner1 = {
+      run: vi.fn(async () => ({ content: 'isolated-1', messages: [], iterations: 1 })),
+    };
+    const runner2 = {
+      run: vi.fn(async () => ({ content: 'isolated-2', messages: [], iterations: 1 })),
+    };
 
     const parallel = Parallel.create({ provider: mockProvider([]) })
       .agent('a', runner1, 'A')

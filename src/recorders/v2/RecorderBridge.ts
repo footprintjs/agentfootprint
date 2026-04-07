@@ -52,7 +52,12 @@ export class RecorderBridge {
   }
 
   /** Dispatch tool call event from stream events. */
-  dispatchToolCall(toolName: string, args: Record<string, unknown>, result: { content: string; error?: boolean }, latencyMs: number): void {
+  dispatchToolCall(
+    toolName: string,
+    args: Record<string, unknown>,
+    result: { content: string; error?: boolean },
+    latencyMs: number,
+  ): void {
     this.dispatch('onToolCall', { toolName, args, result, latencyMs });
   }
 
@@ -61,15 +66,27 @@ export class RecorderBridge {
    * Attach this alongside the consumer's onEvent handler in AgentRunner.
    */
   createStreamEventBridge(): (event: AgentStreamEvent) => void {
-    const pendingTools = new Map<string, { name: string; args: Record<string, unknown>; startMs: number }>();
+    const pendingTools = new Map<
+      string,
+      { name: string; args: Record<string, unknown>; startMs: number }
+    >();
 
     return (event: AgentStreamEvent) => {
       if (event.type === 'tool_start') {
-        pendingTools.set(event.toolCallId, { name: event.toolName, args: event.args, startMs: Date.now() });
+        pendingTools.set(event.toolCallId, {
+          name: event.toolName,
+          args: event.args,
+          startMs: Date.now(),
+        });
       } else if (event.type === 'tool_end') {
         const pending = pendingTools.get(event.toolCallId);
         if (pending) {
-          this.dispatchToolCall(pending.name, pending.args, { content: event.result, error: event.error }, event.latencyMs);
+          this.dispatchToolCall(
+            pending.name,
+            pending.args,
+            { content: event.result, error: event.error },
+            event.latencyMs,
+          );
           pendingTools.delete(event.toolCallId);
         }
       }

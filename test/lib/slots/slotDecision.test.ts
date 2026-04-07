@@ -40,7 +40,11 @@ describe('SlotDecision — unit', () => {
 
   it('.promptProvider() overrides .system()', async () => {
     const customPrompt: PromptProvider = {
-      resolve: () => ({ value: 'Custom prompt here', chosen: 'custom', rationale: 'test override' }),
+      resolve: () => ({
+        value: 'Custom prompt here',
+        chosen: 'custom',
+        rationale: 'test override',
+      }),
     };
 
     const agent = Agent.create({ provider: mock([{ content: 'hi' }]) })
@@ -52,7 +56,7 @@ describe('SlotDecision — unit', () => {
     expect(result.content).toBe('hi');
     // Custom prompt was used — verify via narrative
     const narrative = agent.getNarrative();
-    expect(narrative.some(l => l.includes('Custom prompt here'))).toBe(true);
+    expect(narrative.some((l) => l.includes('Custom prompt here'))).toBe(true);
   });
 
   it('.toolProvider() overrides .tool()', async () => {
@@ -82,10 +86,17 @@ describe('SlotDecision — boundary', () => {
     const dynamicTools: ToolProvider = {
       resolve: (ctx) => {
         resolveCount++;
-        const hasAuth = ctx.messages.some((m: any) =>
-          m.role === 'tool' && typeof m.content === 'string' && m.content.includes('authenticated'));
+        const hasAuth = ctx.messages.some(
+          (m: any) =>
+            m.role === 'tool' &&
+            typeof m.content === 'string' &&
+            m.content.includes('authenticated'),
+        );
         const tools: LLMToolDescription[] = hasAuth
-          ? [{ name: 'noop', description: 'Noop', inputSchema: {} }, { name: 'admin', description: 'Admin', inputSchema: {} }]
+          ? [
+              { name: 'noop', description: 'Noop', inputSchema: {} },
+              { name: 'admin', description: 'Admin', inputSchema: {} },
+            ]
           : [{ name: 'noop', description: 'Noop', inputSchema: {} }];
         return {
           value: tools,
@@ -119,8 +130,9 @@ describe('SlotDecision — boundary', () => {
     const dynamicPrompt: PromptProvider = {
       resolve: (ctx) => {
         resolveCount++;
-        const hasFlagged = ctx.history.some((m: any) =>
-          typeof m.content === 'string' && m.content.includes('flagged'));
+        const hasFlagged = ctx.history.some(
+          (m: any) => typeof m.content === 'string' && m.content.includes('flagged'),
+        );
         return {
           value: hasFlagged ? 'ESCALATION MODE' : 'Normal support',
           chosen: hasFlagged ? 'escalation' : 'standard',
@@ -164,7 +176,7 @@ describe('SlotDecision — scenario', () => {
     await agent.run('test');
     const narrative = agent.getNarrative();
     // Decision should appear in narrative
-    expect(narrative.some(l => l.includes('elevated'))).toBe(true);
+    expect(narrative.some((l) => l.includes('elevated'))).toBe(true);
   });
 });
 
@@ -178,7 +190,11 @@ describe('SlotDecision — property', () => {
     expect(decision.chosen).toBe('test');
     expect(decision.rationale).toBeUndefined();
 
-    const withRationale: SlotDecision<number[]> = { value: [1, 2], chosen: 'custom', rationale: 'because' };
+    const withRationale: SlotDecision<number[]> = {
+      value: [1, 2],
+      chosen: 'custom',
+      rationale: 'because',
+    };
     expect(withRationale.rationale).toBe('because');
   });
 });

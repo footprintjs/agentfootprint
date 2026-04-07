@@ -90,8 +90,18 @@ describe('dynamicTools', () => {
       return [searchTool];
     });
 
-    const codeCtx: ToolContext = { message: 'write code', turnNumber: 0, loopIteration: 0, messages: [] };
-    const searchCtx: ToolContext = { message: 'find info', turnNumber: 0, loopIteration: 0, messages: [] };
+    const codeCtx: ToolContext = {
+      message: 'write code',
+      turnNumber: 0,
+      loopIteration: 0,
+      messages: [],
+    };
+    const searchCtx: ToolContext = {
+      message: 'find info',
+      turnNumber: 0,
+      loopIteration: 0,
+      messages: [],
+    };
 
     const codeDecision = await provider.resolve(codeCtx);
     expect(codeDecision.value).toHaveLength(1);

@@ -280,16 +280,18 @@ export class OpenAIAdapter implements LLMProvider {
       ...(options?.temperature !== undefined ? { temperature: options.temperature } : {}),
       ...(options?.stop ? { stop: options.stop } : {}),
       ...(options?.signal ? { signal: options.signal } : {}),
-      ...(options?.responseFormat ? {
-        response_format: {
-          type: 'json_schema' as const,
-          json_schema: {
-            name: options.responseFormat.name ?? 'response',
-            schema: options.responseFormat.schema,
-            strict: true,
-          },
-        },
-      } : {}),
+      ...(options?.responseFormat
+        ? {
+            response_format: {
+              type: 'json_schema' as const,
+              json_schema: {
+                name: options.responseFormat.name ?? 'response',
+                schema: options.responseFormat.schema,
+                strict: true,
+              },
+            },
+          }
+        : {}),
     };
   }
 }

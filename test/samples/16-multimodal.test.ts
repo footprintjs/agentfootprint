@@ -180,10 +180,7 @@ describe('Sample 16: Multi-modal Content', () => {
       const adapter = new OpenAIAdapter({ model: 'gpt-4o', _client: client });
 
       const result = await adapter.chat([
-        userMessage([
-          textBlock('Look at this chart'),
-          base64Image('image/png', TINY_PNG_BASE64),
-        ]),
+        userMessage([textBlock('Look at this chart'), base64Image('image/png', TINY_PNG_BASE64)]),
         userMessage('What trend do you see?'),
       ]);
 

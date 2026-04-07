@@ -35,7 +35,10 @@ function mockRunner(content: string): RunnerLike {
 describe('Swarm unified — unit', () => {
   it('builds and runs with specialist routing', async () => {
     const provider = mockProvider([
-      { content: '', toolCalls: [{ id: 'tc1', name: 'coding', arguments: { message: 'fizzbuzz' } }] },
+      {
+        content: '',
+        toolCalls: [{ id: 'tc1', name: 'coding', arguments: { message: 'fizzbuzz' } }],
+      },
       { content: 'Here is the code.' },
     ]);
 
@@ -84,8 +87,12 @@ describe('Swarm unified — unit', () => {
     const narrative = swarm.getNarrative();
 
     // 3-slot stages should appear in narrative
-    expect(narrative.some((s: string) => s.includes('SystemPrompt') || s.includes('system prompt'))).toBe(true);
-    expect(narrative.some((s: string) => s.includes('CallLLM') || s.includes('Called LLM'))).toBe(true);
+    expect(
+      narrative.some((s: string) => s.includes('SystemPrompt') || s.includes('system prompt')),
+    ).toBe(true);
+    expect(narrative.some((s: string) => s.includes('CallLLM') || s.includes('Called LLM'))).toBe(
+      true,
+    );
   });
 });
 
@@ -116,7 +123,14 @@ describe('Swarm unified — boundary', () => {
 
     const swarm = Swarm.create({ provider })
       .specialist('coding', 'Code', mockRunner('code'))
-      .tool(defineTool({ id: 'calculator', description: 'Calculate', inputSchema: {}, handler: calcHandler }))
+      .tool(
+        defineTool({
+          id: 'calculator',
+          description: 'Calculate',
+          inputSchema: {},
+          handler: calcHandler,
+        }),
+      )
       .build();
 
     const result = await swarm.run('What is 6*7?');
@@ -132,8 +146,14 @@ describe('Swarm unified — scenario', () => {
     const codingRunner = mockRunner('def fizzbuzz(): pass');
     const writingRunner = mockRunner('A haiku about code');
     const provider = mockProvider([
-      { content: '', toolCalls: [{ id: 'tc1', name: 'coding', arguments: { message: 'fizzbuzz' } }] },
-      { content: '', toolCalls: [{ id: 'tc2', name: 'writing', arguments: { message: 'haiku about the code' } }] },
+      {
+        content: '',
+        toolCalls: [{ id: 'tc1', name: 'coding', arguments: { message: 'fizzbuzz' } }],
+      },
+      {
+        content: '',
+        toolCalls: [{ id: 'tc2', name: 'writing', arguments: { message: 'haiku about the code' } }],
+      },
       { content: 'Here is the code and a haiku about it.' },
     ]);
 
@@ -205,7 +225,10 @@ describe('Swarm unified — property', () => {
 describe('Swarm unified — security', () => {
   it('unknown specialist name routes to final (no crash)', async () => {
     const provider = mockProvider([
-      { content: '', toolCalls: [{ id: 'tc1', name: 'nonexistent', arguments: { message: 'test' } }] },
+      {
+        content: '',
+        toolCalls: [{ id: 'tc1', name: 'nonexistent', arguments: { message: 'test' } }],
+      },
       { content: 'Fallback response.' },
     ]);
 
@@ -221,13 +244,14 @@ describe('Swarm unified — security', () => {
   it('specialist message is string-validated (no object injection)', async () => {
     const codingRunner = mockRunner('result');
     const provider = mockProvider([
-      { content: '', toolCalls: [{ id: 'tc1', name: 'coding', arguments: { message: { injected: true } } }] },
+      {
+        content: '',
+        toolCalls: [{ id: 'tc1', name: 'coding', arguments: { message: { injected: true } } }],
+      },
       { content: 'Done.' },
     ]);
 
-    const swarm = Swarm.create({ provider })
-      .specialist('coding', 'Code', codingRunner)
-      .build();
+    const swarm = Swarm.create({ provider }).specialist('coding', 'Code', codingRunner).build();
 
     await swarm.run('test');
     // The specialist should receive empty string (non-string coerced), not the object

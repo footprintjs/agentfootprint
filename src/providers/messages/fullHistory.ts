@@ -13,6 +13,10 @@ import type { MessageStrategy } from '../../core';
 
 export function fullHistory(): MessageStrategy {
   return {
-    prepare: (history: Message[]) => ({ value: history, chosen: 'full-history', rationale: `${history.length} messages` }),
+    prepare: (history: Message[]) => ({
+      value: history,
+      chosen: 'full-history',
+      rationale: `${history.length} messages`,
+    }),
   };
 }

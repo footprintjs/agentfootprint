@@ -1,8 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import {
-  runnerAsStage,
-  FlowChart,
-} from '../../src/test-barrel';
+import { runnerAsStage, FlowChart } from '../../src/test-barrel';
 import type { TypedScope } from 'footprintjs';
 import type { RunnerLike, AgentResultEntry } from '../../src/test-barrel';
 import type { MultiAgentState } from '../../src/scope/types';

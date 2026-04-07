@@ -8,7 +8,12 @@ import type { ToolRegistry } from '../../tools';
 import { isAskHumanResult } from '../../tools/askHuman';
 import { validateToolInput, formatValidationErrors } from '../../tools/validateInput';
 import type { ToolProvider } from '../../core';
-import type { LLMInstruction, InstructionContext, RuntimeFollowUp, InstructionTemplate } from '../instructions';
+import type {
+  LLMInstruction,
+  InstructionContext,
+  RuntimeFollowUp,
+  InstructionTemplate,
+} from '../instructions';
 import type { ResolvedInstruction } from '../instructions';
 import { processInstructions } from '../instructions';
 import type { AgentStreamEventHandler } from '../../streaming';
@@ -128,7 +133,9 @@ export async function executeToolCalls(
       const tool = registry.get(toolCall.name);
       if (!tool) {
         // Sanitize tool name to prevent injection into error messages fed back to LLM
-        const safeName = String(toolCall.name).slice(0, 100).replace(/[\n\r]/g, '');
+        const safeName = String(toolCall.name)
+          .slice(0, 100)
+          .replace(/[\n\r]/g, '');
         errorInfo = { code: 'NOT_FOUND', message: `Tool '${safeName}' not found` };
         resultContent = JSON.stringify({ error: true, message: errorInfo.message });
       } else {
@@ -137,7 +144,12 @@ export async function executeToolCalls(
         if (tool.inputSchema && Object.keys(tool.inputSchema).length > 0) {
           const validation = validateToolInput(toolArgs, tool.inputSchema);
           if (!validation.valid) {
-            errorInfo = { code: 'INVALID_INPUT', message: `Invalid arguments for '${tool.id}': ${formatValidationErrors(validation.errors)}` };
+            errorInfo = {
+              code: 'INVALID_INPUT',
+              message: `Invalid arguments for '${tool.id}': ${formatValidationErrors(
+                validation.errors,
+              )}`,
+            };
             resultContent = JSON.stringify({ error: true, message: errorInfo.message });
             result.push(toolResultMessage(resultContent, toolCall.id));
             continue;
@@ -152,7 +164,10 @@ export async function executeToolCalls(
             askHumanPause = { question: execResult.question, toolCallId: toolCall.id };
           }
           // Check for InstructedToolResult (runtime instructions/followUps)
-          const instructed = execResult as { instructions?: readonly string[]; followUps?: readonly RuntimeFollowUp[] };
+          const instructed = execResult as {
+            instructions?: readonly string[];
+            followUps?: readonly RuntimeFollowUp[];
+          };
           runtimeInstructions = instructed.instructions;
           runtimeFollowUps = instructed.followUps;
         } catch (err) {
@@ -175,7 +190,8 @@ export async function executeToolCalls(
       const buildTimeInstructions = agentRules?.length
         ? [...agentRules, ...(perToolInstructions ?? [])]
         : perToolInstructions;
-      const hasInstructions = buildTimeInstructions?.length || runtimeInstructions?.length || runtimeFollowUps?.length;
+      const hasInstructions =
+        buildTimeInstructions?.length || runtimeInstructions?.length || runtimeFollowUps?.length;
 
       if (hasInstructions) {
         // Parse content for InstructionContext — try JSON, fall back to raw string
@@ -198,7 +214,7 @@ export async function executeToolCalls(
           resultContent,
           buildTimeInstructions,
           ctx,
-          (runtimeInstructions || runtimeFollowUps)
+          runtimeInstructions || runtimeFollowUps
             ? { instructions: runtimeInstructions, followUps: runtimeFollowUps }
             : undefined,
           instructionConfig?.template,

@@ -36,7 +36,9 @@ function buildLoop(
       systemPrompt: { provider: staticPrompt('test') },
       messages: { strategy: slidingWindow({ maxMessages: 100 }) },
       tools: {
-        provider: options.toolProvider ?? (options.tools !== false ? staticTools(registry.all()) : noTools()),
+        provider:
+          options.toolProvider ??
+          (options.tools !== false ? staticTools(registry.all()) : noTools()),
       },
       registry,
       maxIterations: 5,

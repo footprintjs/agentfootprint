@@ -9,7 +9,13 @@
 import { flowChart } from 'footprintjs';
 import type { TypedScope } from 'footprintjs';
 
-import type { LLMProvider, LLMToolDescription, LLMResponse, Message, AdapterResult } from '../types';
+import type {
+  LLMProvider,
+  LLMToolDescription,
+  LLMResponse,
+  Message,
+  AdapterResult,
+} from '../types';
 import { normalizeAdapterResponse } from '../stages/helpers';
 
 export interface AdapterSubflowConfig {

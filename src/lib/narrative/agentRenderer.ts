@@ -84,18 +84,26 @@ const PROMOTED_LABELS: Record<string, string> = {
 
 const SUPPRESSED_KEYS = new Set([
   // Loop control (the loop entry itself shows iteration count)
-  'loopCount', 'maxIterations', 'updatedLoopCount',
+  'loopCount',
+  'maxIterations',
+  'updatedLoopCount',
   // Memory internals (memory subflow stages already narrate this)
-  'memory_preparedMessages', 'memory_storedHistory', 'memory_shouldCommit',
+  'memory_preparedMessages',
+  'memory_storedHistory',
+  'memory_shouldCommit',
   // adapterResult is redundant with parsedResponse
   'adapterResult',
   // adapterRawResponse is now shown — contains LLM reasoning + token usage
   // Swarm internals (the decision is shown by RouteSpecialist, not these keys)
-  'specialistMessage', 'specialistToolCallId',
+  'specialistMessage',
+  'specialistToolCallId',
   // Subflow intermediate state
   'currentMessages',
   // Enrichment summaries (avoid double-reporting — the promoted labels above show these)
-  'llmCall', 'responseType', 'resolvedTools', 'promptSummary',
+  'llmCall',
+  'responseType',
+  'resolvedTools',
+  'promptSummary',
 ]);
 
 // ── Options ──────────────────────────────────────────────────────────────────

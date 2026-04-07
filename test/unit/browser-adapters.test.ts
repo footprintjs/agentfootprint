@@ -266,7 +266,11 @@ describe('BrowserAnthropicAdapter', () => {
 
     const toolMessages: Message[] = [
       { role: 'user', content: 'Search for weather' },
-      { role: 'assistant', content: '', toolCalls: [{ id: 'tc_1', name: 'search', arguments: { q: 'weather' } }] },
+      {
+        role: 'assistant',
+        content: '',
+        toolCalls: [{ id: 'tc_1', name: 'search', arguments: { q: 'weather' } }],
+      },
       { role: 'tool', content: 'Sunny, 72F', toolCallId: 'tc_1' },
     ];
 
@@ -297,11 +301,13 @@ describe('BrowserOpenAIAdapter', () => {
     const fetchMock = mockFetch({
       id: 'chatcmpl-1',
       model: 'gpt-4o',
-      choices: [{
-        index: 0,
-        message: { role: 'assistant', content: 'Hi!' },
-        finish_reason: 'stop',
-      }],
+      choices: [
+        {
+          index: 0,
+          message: { role: 'assistant', content: 'Hi!' },
+          finish_reason: 'stop',
+        },
+      ],
       usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 },
     });
     globalThis.fetch = fetchMock;
@@ -322,11 +328,13 @@ describe('BrowserOpenAIAdapter', () => {
     globalThis.fetch = mockFetch({
       id: 'chatcmpl-1',
       model: 'gpt-4o',
-      choices: [{
-        index: 0,
-        message: { role: 'assistant', content: 'Hello there!' },
-        finish_reason: 'stop',
-      }],
+      choices: [
+        {
+          index: 0,
+          message: { role: 'assistant', content: 'Hello there!' },
+          finish_reason: 'stop',
+        },
+      ],
       usage: { prompt_tokens: 15, completion_tokens: 8, total_tokens: 23 },
     });
 
@@ -350,19 +358,23 @@ describe('BrowserOpenAIAdapter', () => {
     globalThis.fetch = mockFetch({
       id: 'chatcmpl-2',
       model: 'gpt-4o',
-      choices: [{
-        index: 0,
-        message: {
-          role: 'assistant',
-          content: null,
-          tool_calls: [{
-            id: 'call_1',
-            type: 'function',
-            function: { name: 'search', arguments: '{"query":"weather"}' },
-          }],
+      choices: [
+        {
+          index: 0,
+          message: {
+            role: 'assistant',
+            content: null,
+            tool_calls: [
+              {
+                id: 'call_1',
+                type: 'function',
+                function: { name: 'search', arguments: '{"query":"weather"}' },
+              },
+            ],
+          },
+          finish_reason: 'tool_calls',
         },
-        finish_reason: 'tool_calls',
-      }],
+      ],
       usage: { prompt_tokens: 20, completion_tokens: 15, total_tokens: 35 },
     });
 
@@ -386,11 +398,13 @@ describe('BrowserOpenAIAdapter', () => {
     const fetchMock = mockFetch({
       id: 'chatcmpl-1',
       model: 'gpt-4o',
-      choices: [{
-        index: 0,
-        message: { role: 'assistant', content: 'Hi' },
-        finish_reason: 'stop',
-      }],
+      choices: [
+        {
+          index: 0,
+          message: { role: 'assistant', content: 'Hi' },
+          finish_reason: 'stop',
+        },
+      ],
     });
     globalThis.fetch = fetchMock;
 
@@ -430,11 +444,13 @@ describe('BrowserOpenAIAdapter', () => {
     const fetchMock = mockFetch({
       id: 'chatcmpl-1',
       model: 'llama3',
-      choices: [{
-        index: 0,
-        message: { role: 'assistant', content: 'Hi' },
-        finish_reason: 'stop',
-      }],
+      choices: [
+        {
+          index: 0,
+          message: { role: 'assistant', content: 'Hi' },
+          finish_reason: 'stop',
+        },
+      ],
     });
     globalThis.fetch = fetchMock;
 
@@ -508,11 +524,13 @@ describe('BrowserOpenAIAdapter', () => {
     const fetchMock = mockFetch({
       id: 'chatcmpl-1',
       model: 'gpt-4o',
-      choices: [{
-        index: 0,
-        message: { role: 'assistant', content: 'I can help.' },
-        finish_reason: 'stop',
-      }],
+      choices: [
+        {
+          index: 0,
+          message: { role: 'assistant', content: 'I can help.' },
+          finish_reason: 'stop',
+        },
+      ],
     });
     globalThis.fetch = fetchMock;
 
@@ -522,11 +540,13 @@ describe('BrowserOpenAIAdapter', () => {
     });
 
     await adapter.chat(messages, {
-      tools: [{
-        name: 'search',
-        description: 'Search the web',
-        inputSchema: { type: 'object', properties: { q: { type: 'string' } } },
-      }],
+      tools: [
+        {
+          name: 'search',
+          description: 'Search the web',
+          inputSchema: { type: 'object', properties: { q: { type: 'string' } } },
+        },
+      ],
     });
 
     const body = JSON.parse(fetchMock.mock.calls[0][1].body);

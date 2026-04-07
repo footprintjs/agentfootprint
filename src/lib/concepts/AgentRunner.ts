@@ -5,7 +5,12 @@
  */
 
 import { FlowChartExecutor, MetricRecorder } from 'footprintjs';
-import type { FlowChart as FlowChartType, FlowChartExecutorOptions, Recorder, WriteEvent } from 'footprintjs';
+import type {
+  FlowChart as FlowChartType,
+  FlowChartExecutorOptions,
+  Recorder,
+  WriteEvent,
+} from 'footprintjs';
 import { buildAgentLoop, AgentPattern } from '../loop';
 import { PendingFollowUpManager, InstructionRecorder } from '../instructions';
 import type { InstructionOverride, AgentInstruction } from '../instructions';
@@ -130,10 +135,14 @@ export class AgentRunner {
 
   /** Expose the agent's internal flowChart for subflow composition. */
   toFlowChart(): FlowChartType {
-    const { chart, spec } = buildAgentLoop(this.buildConfig(), {
-      messages: [],
-      subflowMode: true,
-    }, { captureSpec: true });
+    const { chart, spec } = buildAgentLoop(
+      this.buildConfig(),
+      {
+        messages: [],
+        subflowMode: true,
+      },
+      { captureSpec: true },
+    );
     this.lastSpec = annotateSpecIcons(spec as SpecLike);
     return chart;
   }
@@ -153,13 +162,26 @@ export class AgentRunner {
     // Resolve stream event handler: onEvent takes precedence over onToken.
     const isDevMode = typeof process !== 'undefined' && process.env?.['NODE_ENV'] !== 'production';
     if (options?.onEvent && options?.onToken && isDevMode) {
-      console.warn('[agentfootprint] Both onEvent and onToken provided. onToken is ignored when onEvent is set.');
+      console.warn(
+        '[agentfootprint] Both onEvent and onToken provided. onToken is ignored when onEvent is set.',
+      );
     }
     // Wrap consumer callback with error isolation — handler errors never crash the agent.
-    const rawHandler = options?.onEvent
-      ?? (options?.onToken ? (e: AgentStreamEvent) => { if (e.type === 'token') options.onToken!(e.content); } : undefined);
+    const rawHandler =
+      options?.onEvent ??
+      (options?.onToken
+        ? (e: AgentStreamEvent) => {
+            if (e.type === 'token') options.onToken!(e.content);
+          }
+        : undefined);
     const onStreamEvent: AgentStreamEventHandler | undefined = rawHandler
-      ? (event: AgentStreamEvent) => { try { rawHandler(event); } catch { /* swallow */ } }
+      ? (event: AgentStreamEvent) => {
+          try {
+            rawHandler(event);
+          } catch {
+            /* swallow */
+          }
+        }
       : undefined;
 
     onStreamEvent?.({ type: 'turn_start', userMessage: message });
@@ -173,7 +195,13 @@ export class AgentRunner {
         const autoMessages: Message[] = [
           ...this.conversationHistory,
           userMessage(message),
-          assistantMessage(`Using ${pendingMatch.followUp.description}.`, [{ id: `auto-strict-${++AgentRunner._autoExecCounter}`, name: pendingMatch.followUp.toolId, arguments: pendingMatch.followUp.params }]),
+          assistantMessage(`Using ${pendingMatch.followUp.description}.`, [
+            {
+              id: `auto-strict-${++AgentRunner._autoExecCounter}`,
+              name: pendingMatch.followUp.toolId,
+              arguments: pendingMatch.followUp.params,
+            },
+          ]),
           toolResultMessage(toolResult.content, `auto-strict-${AgentRunner._autoExecCounter}`),
         ];
         this.conversationHistory = autoMessages;
@@ -187,7 +215,10 @@ export class AgentRunner {
     const bridgeHandler = bridge?.createStreamEventBridge();
     const mergedStreamEvent: AgentStreamEventHandler | undefined =
       bridgeHandler && onStreamEvent
-        ? (event) => { bridgeHandler(event); onStreamEvent(event); }
+        ? (event) => {
+            bridgeHandler(event);
+            onStreamEvent(event);
+          }
         : bridgeHandler ?? onStreamEvent;
 
     const { chart, spec, getStrictFollowUp } = buildAgentLoop(
@@ -202,7 +233,8 @@ export class AgentRunner {
     const executorOpts: FlowChartExecutorOptions = { enrichSnapshots: true };
     if (mergedStreamEvent && this.streamingEnabled) {
       executorOpts.streamHandlers = {
-        onToken: (_streamId: string, token: string) => mergedStreamEvent({ type: 'token', content: token }),
+        onToken: (_streamId: string, token: string) =>
+          mergedStreamEvent({ type: 'token', content: token }),
         onStart: () => {},
         onEnd: () => {},
       };
@@ -244,23 +276,35 @@ export class AgentRunner {
     // Check for pause (ask_human tool) — emit turn_end with paused flag, return early
     if (executor.isPaused()) {
       const pauseResult = this.buildResult(executor);
-      onStreamEvent?.({ type: 'turn_end', content: '', iterations: pauseResult.iterations, paused: true });
+      onStreamEvent?.({
+        type: 'turn_end',
+        content: '',
+        iterations: pauseResult.iterations,
+        paused: true,
+      });
       return pauseResult;
     }
 
     const agentResult = this.buildResult(executor);
 
-    onStreamEvent?.({ type: 'turn_end', content: agentResult.content, iterations: agentResult.iterations });
+    onStreamEvent?.({
+      type: 'turn_end',
+      content: agentResult.content,
+      iterations: agentResult.iterations,
+    });
 
     if (bridge) {
       // Dispatch per-iteration LLM calls (captured by scope recorder above)
-      const perCallMs = llmResponses.length > 0
-        ? Math.round((Date.now() - startMs) / llmResponses.length)
-        : 0;
+      const perCallMs =
+        llmResponses.length > 0 ? Math.round((Date.now() - startMs) / llmResponses.length) : 0;
       for (const resp of llmResponses) {
         bridge.dispatchLLMCall(resp, perCallMs);
       }
-      bridge.dispatchTurnComplete(agentResult.content, agentResult.messages.length, agentResult.iterations);
+      bridge.dispatchTurnComplete(
+        agentResult.content,
+        agentResult.messages.length,
+        agentResult.iterations,
+      );
     }
 
     const strictFU = getStrictFollowUp();
@@ -323,9 +367,8 @@ export class AgentRunner {
     await executor.resume(checkpoint, humanResponse);
 
     if (bridge) {
-      const perCallMs = llmResponses.length > 0
-        ? Math.round((Date.now() - startMs) / llmResponses.length)
-        : 0;
+      const perCallMs =
+        llmResponses.length > 0 ? Math.round((Date.now() - startMs) / llmResponses.length) : 0;
       for (const resp of llmResponses) {
         bridge.dispatchLLMCall(resp, perCallMs);
       }
@@ -361,25 +404,40 @@ export class AgentRunner {
     return { content: result, messages, iterations };
   }
 
-  getNarrative(): string[] { return this.lastExecutor?.getNarrative() ?? []; }
-  getNarrativeEntries() { return this.lastExecutor?.getNarrativeEntries() ?? []; }
-  getSnapshot() { return this.lastExecutor?.getSnapshot(); }
+  getNarrative(): string[] {
+    return this.lastExecutor?.getNarrative() ?? [];
+  }
+  getNarrativeEntries() {
+    return this.lastExecutor?.getNarrativeEntries() ?? [];
+  }
+  getSnapshot() {
+    return this.lastExecutor?.getSnapshot();
+  }
 
   getSpec(): unknown {
     if (!this.lastSpec) {
-      const { spec } = buildAgentLoop(this.buildConfig(), { messages: [], subflowMode: true }, { captureSpec: true });
+      const { spec } = buildAgentLoop(
+        this.buildConfig(),
+        { messages: [], subflowMode: true },
+        { captureSpec: true },
+      );
       this.lastSpec = annotateSpecIcons(spec as SpecLike);
     }
     return this.lastSpec;
   }
 
-  getMessages(): Message[] { return [...this.conversationHistory]; }
-  resetConversation(): void { this.conversationHistory = []; }
+  getMessages(): Message[] {
+    return [...this.conversationHistory];
+  }
+  resetConversation(): void {
+    this.conversationHistory = [];
+  }
 
   private buildConfig(onStreamEvent?: AgentStreamEventHandler): AgentLoopConfig {
     const hasTools = this.registry.size > 0;
     const promptProvider = this.customPromptProvider ?? staticPrompt(this.systemPromptText ?? '');
-    const toolsProvider = this.customToolProvider ?? (hasTools ? staticTools(this.registry.all()) : noTools());
+    const toolsProvider =
+      this.customToolProvider ?? (hasTools ? staticTools(this.registry.all()) : noTools());
 
     return {
       provider: this.provider,
@@ -393,10 +451,12 @@ export class AgentRunner {
       toolProvider: this.customToolProvider,
       registry: this.registry,
       maxIterations: this.maxIter,
-      commitMemory: this.memoryConfig ? {
-        store: this.memoryConfig.store,
-        conversationId: this.memoryConfig.conversationId,
-      } : undefined,
+      commitMemory: this.memoryConfig
+        ? {
+            store: this.memoryConfig.store,
+            conversationId: this.memoryConfig.conversationId,
+          }
+        : undefined,
       pattern: this.agentPattern,
       instructionOverrides: this.instructionOverrides,
       agentInstructions: this.agentInstructions,

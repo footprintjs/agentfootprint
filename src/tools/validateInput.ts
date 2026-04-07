@@ -53,10 +53,16 @@ export function validateToolInput(
 
         if (expectedType === 'integer') {
           if (typeof value !== 'number' || !Number.isInteger(value)) {
-            errors.push({ path: key, message: `Expected integer for '${key}', got ${actualType}.` });
+            errors.push({
+              path: key,
+              message: `Expected integer for '${key}', got ${actualType}.`,
+            });
           }
         } else if (expectedType !== actualType) {
-          errors.push({ path: key, message: `Expected ${expectedType} for '${key}', got ${actualType}.` });
+          errors.push({
+            path: key,
+            message: `Expected ${expectedType} for '${key}', got ${actualType}.`,
+          });
         }
       }
     }

@@ -61,19 +61,16 @@ export function buildToolsSubflow(config: ToolsSlotConfig): FlowChart {
       // against base tool `name`. Works when base ToolProvider uses id as name.
       const injections = scope.toolInjections;
       const baseNames = new Set(decision.value.map((t) => t.name));
-      const newTools = injections?.length
-        ? injections.filter((t) => !baseNames.has(t.name))
-        : [];
-      const allTools = newTools.length
-        ? [...decision.value, ...newTools]
-        : decision.value;
+      const newTools = injections?.length ? injections.filter((t) => !baseNames.has(t.name)) : [];
+      const allTools = newTools.length ? [...decision.value, ...newTools] : decision.value;
 
       scope.toolDescriptions = allTools;
 
       // Narrative enrichment — decision + tool summary for BTS visibility
-      scope.toolDecision = decision.chosen !== 'static'
-        ? `${decision.chosen}${decision.rationale ? ` (${decision.rationale})` : ''}`
-        : undefined;
+      scope.toolDecision =
+        decision.chosen !== 'static'
+          ? `${decision.chosen}${decision.rationale ? ` (${decision.rationale})` : ''}`
+          : undefined;
       const injectionNote = newTools.length > 0 ? ` (+${newTools.length} from instructions)` : '';
       const names = allTools.map((t) => t.name ?? '?');
       scope.resolvedTools = `${allTools.length} tools: ${names.join(', ')}${injectionNote}`;

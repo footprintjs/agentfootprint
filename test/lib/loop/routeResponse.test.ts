@@ -73,12 +73,14 @@ const searchTool = defineTool({
 function makeRegistry(...tools: Array<{ id: string; result: string }>): ToolRegistry {
   const registry = new ToolRegistry();
   for (const t of tools) {
-    registry.register(defineTool({
-      id: t.id,
-      description: `Tool ${t.id}`,
-      inputSchema: { type: 'object' },
-      handler: async () => ({ content: t.result }),
-    }));
+    registry.register(
+      defineTool({
+        id: t.id,
+        description: `Tool ${t.id}`,
+        inputSchema: { type: 'object' },
+        handler: async () => ({ content: t.result }),
+      }),
+    );
   }
   return registry;
 }
@@ -183,7 +185,11 @@ describe('RouteResponse decider — default branch', () => {
       provider: mockProvider([{ content: 'ok' }]),
     });
 
-    const { chart } = buildAgentLoop(config, { messages: [userMessage('hi')] }, { captureSpec: true });
+    const { chart } = buildAgentLoop(
+      config,
+      { messages: [userMessage('hi')] },
+      { captureSpec: true },
+    );
     // Verify the chart was built with a default branch
     const specStr = JSON.stringify(chart);
     // The chart should contain 'final' as a branch and it's the default
@@ -200,9 +206,7 @@ describe('RouteResponse decider — boundary', () => {
   it('maxIterations=0 routes to final even with tool calls', async () => {
     const registry = makeRegistry({ id: 'search', result: 'found' });
     const tc: ToolCall = { id: 'tc-1', name: 'search', arguments: {} };
-    const provider = mockProvider([
-      { content: 'Searching', toolCalls: [tc] },
-    ]);
+    const provider = mockProvider([{ content: 'Searching', toolCalls: [tc] }]);
 
     const config = minimalConfig({
       provider,
@@ -353,7 +357,11 @@ describe('RouteResponse decider — property', () => {
       registry,
     });
 
-    const { chart, spec } = buildAgentLoop(config, { messages: [userMessage('hi')] }, { captureSpec: true });
+    const { chart, spec } = buildAgentLoop(
+      config,
+      { messages: [userMessage('hi')] },
+      { captureSpec: true },
+    );
     expect(chart).toBeDefined();
     expect(spec).toBeDefined();
 
@@ -412,7 +420,9 @@ describe('RouteResponse decider — security', () => {
       id: 'fail',
       description: 'Fails',
       inputSchema: {},
-      handler: async () => { throw new Error('tool crashed'); },
+      handler: async () => {
+        throw new Error('tool crashed');
+      },
     });
     const registry = new ToolRegistry();
     registry.register(failingTool);

@@ -21,8 +21,19 @@ describe('StreamEmitter', () => {
     const events: AgentStreamEvent[] = [];
     emitter.on((e) => events.push(e));
 
-    emitter.emit({ type: 'tool_start', toolName: 'search', toolCallId: 'tc-1', args: { q: 'test' } });
-    emitter.emit({ type: 'tool_end', toolName: 'search', toolCallId: 'tc-1', result: 'Found 5', latencyMs: 42 });
+    emitter.emit({
+      type: 'tool_start',
+      toolName: 'search',
+      toolCallId: 'tc-1',
+      args: { q: 'test' },
+    });
+    emitter.emit({
+      type: 'tool_end',
+      toolName: 'search',
+      toolCallId: 'tc-1',
+      result: 'Found 5',
+      latencyMs: 42,
+    });
 
     expect(events).toHaveLength(2);
     expect(events[0].type).toBe('tool_start');
@@ -55,7 +66,9 @@ describe('StreamEmitter', () => {
 
   it('swallows handler errors', () => {
     const emitter = new StreamEmitter();
-    emitter.on(() => { throw new Error('Handler crash'); });
+    emitter.on(() => {
+      throw new Error('Handler crash');
+    });
     const events: AgentStreamEvent[] = [];
     emitter.on((e) => events.push(e));
 

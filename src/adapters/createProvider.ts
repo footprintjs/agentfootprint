@@ -32,7 +32,9 @@ import { MockAdapter } from './mock/MockAdapter';
  * Used for auto-detection in Agent.create(), LLMCall.create(), etc.
  */
 export function isLLMProvider(value: unknown): value is LLMProvider {
-  return typeof value === 'object' && value !== null && typeof (value as LLMProvider).chat === 'function';
+  return (
+    typeof value === 'object' && value !== null && typeof (value as LLMProvider).chat === 'function'
+  );
 }
 
 /**
@@ -54,9 +56,7 @@ export function resolveProvider(providerOrConfig: LLMProvider | ModelConfig): LL
  * Maps provider factories (anthropic(), openai(), ollama(), bedrock())
  * to their real adapter implementations.
  */
-export function createProvider(
-  config: ModelConfig & { _client?: unknown },
-): LLMProvider {
+export function createProvider(config: ModelConfig & { _client?: unknown }): LLMProvider {
   switch (config.provider) {
     case 'anthropic':
       return new AnthropicAdapter({
@@ -89,7 +89,7 @@ export function createProvider(
         if (err instanceof Error && err.message.includes('openai')) {
           throw new Error(
             'Ollama adapter requires the "openai" package (OpenAI-compatible API).\n' +
-            'Install it: npm install openai',
+              'Install it: npm install openai',
           );
         }
         throw err;

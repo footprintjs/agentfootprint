@@ -11,7 +11,13 @@
 
 import type { TypedScope } from 'footprintjs';
 import type { AgentLoopState } from '../../scope/types';
-import type { LLMProvider, LLMResponse, LLMCallOptions, ResponseFormat, ToolCall } from '../../types';
+import type {
+  LLMProvider,
+  LLMResponse,
+  LLMCallOptions,
+  ResponseFormat,
+  ToolCall,
+} from '../../types';
 import type { AgentStreamEventHandler } from '../../streaming';
 import { normalizeAdapterResponse } from './helpers';
 
@@ -28,9 +34,10 @@ export function createStreamingCallLLMStage(
   optionsOrHandler?: StreamingCallLLMStageOptions | AgentStreamEventHandler,
 ) {
   // Backward compat: accept bare handler or options object
-  const stageOpts: StreamingCallLLMStageOptions = typeof optionsOrHandler === 'function'
-    ? { onStreamEvent: optionsOrHandler }
-    : optionsOrHandler ?? {};
+  const stageOpts: StreamingCallLLMStageOptions =
+    typeof optionsOrHandler === 'function'
+      ? { onStreamEvent: optionsOrHandler }
+      : optionsOrHandler ?? {};
 
   const { onStreamEvent, responseFormat } = stageOpts;
 
@@ -59,7 +66,10 @@ export function createStreamingCallLLMStage(
       const toolCalls: ToolCall[] = [];
       let usage: { inputTokens: number; outputTokens: number } | undefined;
 
-      for await (const chunk of provider.chatStream(messages, Object.keys(options).length > 0 ? options : undefined)) {
+      for await (const chunk of provider.chatStream(
+        messages,
+        Object.keys(options).length > 0 ? options : undefined,
+      )) {
         switch (chunk.type) {
           case 'thinking':
             if (chunk.content) {

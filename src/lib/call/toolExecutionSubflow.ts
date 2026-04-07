@@ -76,9 +76,7 @@ export interface ToolExecutionSubflowConfig {
  * through inputMapper. Only scope state (parsedResponse, messages,
  * loopCount) is mapped.
  */
-export function buildToolExecutionSubflow(
-  config: ToolExecutionSubflowConfig,
-): FlowChart {
+export function buildToolExecutionSubflow(config: ToolExecutionSubflowConfig): FlowChart {
   const { registry, toolProvider, instructionConfig } = config;
 
   const executeStageFn = async (scope: TypedScope<ToolExecutionSubflowState>) => {
@@ -104,7 +102,11 @@ export function buildToolExecutionSubflow(
     // currentDecision may be undefined when initial decision is {} (empty objects
     // are dropped by footprintjs inputMapper). Use {} as fallback when instructions are configured.
     const rawDecision = scope.currentDecision;
-    const decisionRef = rawDecision ? { ...rawDecision } : (instructionConfig?.decideFunctions?.size ? {} : undefined);
+    const decisionRef = rawDecision
+      ? { ...rawDecision }
+      : instructionConfig?.decideFunctions?.size
+      ? {}
+      : undefined;
 
     const { messages: resultMessages, askHumanPause } = await executeToolCalls(
       parsed.toolCalls,
@@ -137,7 +139,10 @@ export function buildToolExecutionSubflow(
     return undefined;
   };
 
-  const resumeStageFn = (scope: TypedScope<ToolExecutionSubflowState>, humanResponse: unknown): void => {
+  const resumeStageFn = (
+    scope: TypedScope<ToolExecutionSubflowState>,
+    humanResponse: unknown,
+  ): void => {
     const pauseInfo = scope.askHumanPause;
     if (pauseInfo && humanResponse !== undefined) {
       const toolCallId = pauseInfo.toolCallId;

@@ -53,7 +53,8 @@ export function parseResponseStage(scope: TypedScope<AgentLoopState>): void {
     const toolNames = parsed.toolCalls.map((tc) => tc.name).join(', ');
     scope.responseType = `tool_calls: [${toolNames}]`;
   } else {
-    const preview = result.content.length > 80 ? result.content.slice(0, 80) + '...' : result.content;
+    const preview =
+      result.content.length > 80 ? result.content.slice(0, 80) + '...' : result.content;
     scope.responseType = `final: "${preview}"`;
   }
 }

@@ -142,7 +142,10 @@ export interface PromptProvider {
  * ```
  */
 export interface MessageStrategy {
-  prepare(history: Message[], context: MessageContext): SlotDecision<Message[]> | Promise<SlotDecision<Message[]>>;
+  prepare(
+    history: Message[],
+    context: MessageContext,
+  ): SlotDecision<Message[]> | Promise<SlotDecision<Message[]>>;
 }
 
 /**
@@ -166,7 +169,9 @@ export interface MessageStrategy {
  */
 export interface ToolProvider {
   /** Which tools to offer the LLM this turn. */
-  resolve(context: ToolContext): SlotDecision<LLMToolDescription[]> | Promise<SlotDecision<LLMToolDescription[]>>;
+  resolve(
+    context: ToolContext,
+  ): SlotDecision<LLMToolDescription[]> | Promise<SlotDecision<LLMToolDescription[]>>;
   /** Execute a tool call. Optional — if omitted, core loop uses ToolDefinition.handler directly. */
   execute?(call: ToolCall, signal?: AbortSignal): Promise<ToolExecutionResult>;
 }

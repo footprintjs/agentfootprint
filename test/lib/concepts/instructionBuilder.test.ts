@@ -12,13 +12,7 @@
  */
 
 import { describe, it, expect, vi } from 'vitest';
-import {
-  Agent,
-  defineInstruction,
-  defineTool,
-  mock,
-  AgentPattern,
-} from '../../../src/test-barrel';
+import { Agent, defineInstruction, defineTool, mock, AgentPattern } from '../../../src/test-barrel';
 import type { AgentInstruction, LLMInstruction } from '../../../src/test-barrel';
 import type { LLMResponse, Message, ToolCall } from '../../../src/types';
 
@@ -48,7 +42,9 @@ describe('defineInstruction — unit', () => {
   });
 
   it('preserves generic TDecision type', () => {
-    interface MyDecision { status: 'active' | 'denied' }
+    interface MyDecision {
+      status: 'active' | 'denied';
+    }
     const instr = defineInstruction<MyDecision>({
       id: 'typed',
       activeWhen: (d) => d.status === 'denied',
@@ -118,7 +114,9 @@ describe('Agent builder — instruction methods', () => {
 
 describe('Agent builder — conditional instruction', () => {
   it('instruction fires when decision matches', async () => {
-    interface MyDecision { orderStatus: 'pending' | 'denied' | null }
+    interface MyDecision {
+      orderStatus: 'pending' | 'denied' | null;
+    }
 
     const instr = defineInstruction<MyDecision>({
       id: 'refund',
@@ -182,10 +180,7 @@ describe('Agent builder — instruction tool injection', () => {
       { content: 'Refund processed.' },
     ]);
 
-    const agent = Agent.create({ provider })
-      .system('You are helpful.')
-      .instruction(instr)
-      .build();
+    const agent = Agent.create({ provider }).system('You are helpful.').instruction(instr).build();
 
     const result = await agent.run('refund my order');
     expect(result.content).toBe('Refund processed.');
@@ -202,14 +197,14 @@ describe('Agent builder — instruction narrative', () => {
   it('narrative shows InstructionsToLLM subflow + matched IDs', async () => {
     const instr = defineInstruction({ id: 'always-on', prompt: 'P' });
     const provider = mockProvider([{ content: 'ok' }]);
-    const agent = Agent.create({ provider })
-      .instruction(instr)
-      .build();
+    const agent = Agent.create({ provider }).instruction(instr).build();
 
     await agent.run('hi');
     const narrative = agent.getNarrative();
-    expect(narrative.some((s: string) =>
-      s.includes('InstructionsToLLM') || s.includes('EvaluateInstructions'),
-    )).toBe(true);
+    expect(
+      narrative.some(
+        (s: string) => s.includes('InstructionsToLLM') || s.includes('EvaluateInstructions'),
+      ),
+    ).toBe(true);
   });
 });

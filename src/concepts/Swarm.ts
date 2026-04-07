@@ -180,9 +180,7 @@ export class SwarmRunner {
   /** Build the system prompt with specialist descriptions appended. */
   private buildSystemPrompt(): string {
     const base = this.systemPromptText ?? 'You are an orchestrator. Route to the best specialist.';
-    const specialistList = this.specialists
-      .map((s) => `- ${s.id}: ${s.description}`)
-      .join('\n');
+    const specialistList = this.specialists.map((s) => `- ${s.id}: ${s.description}`).join('\n');
     return `${base}\n\nYou have access to these specialist agents:\n${specialistList}\n\nCall the most appropriate specialist to handle the user's request. When done, respond directly without calling any specialist.`;
   }
 
@@ -194,7 +192,9 @@ export class SwarmRunner {
         description: s.description,
         inputSchema: {
           type: 'object' as const,
-          properties: { message: { type: 'string', description: 'The task or question to delegate.' } },
+          properties: {
+            message: { type: 'string', description: 'The task or question to delegate.' },
+          },
           required: ['message'],
         },
       })),
@@ -294,7 +294,9 @@ export class SwarmRunner {
 
     // Structural specialist tracking — read from scope with runtime validation
     const rawInvoked = state.invokedSpecialists;
-    const invokedIds = Array.isArray(rawInvoked) ? rawInvoked.filter((x): x is string => typeof x === 'string') : [];
+    const invokedIds = Array.isArray(rawInvoked)
+      ? rawInvoked.filter((x): x is string => typeof x === 'string')
+      : [];
     const agents: AgentResultEntry[] = invokedIds.map((id) => ({
       id,
       name: id,

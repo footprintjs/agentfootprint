@@ -30,7 +30,10 @@ interface OTelSpan {
 
 /** Duck-typed OpenTelemetry Tracer — consumer provides their own. */
 export interface OTelTracer {
-  startSpan(name: string, options?: { attributes?: Record<string, string | number | boolean> }): OTelSpan;
+  startSpan(
+    name: string,
+    options?: { attributes?: Record<string, string | number | boolean> },
+  ): OTelSpan;
 }
 
 export interface OTelRecorderOptions {
@@ -104,7 +107,10 @@ export class OTelRecorder implements AgentRecorder {
       },
     });
     // OTel StatusCode.ERROR = 2
-    span.setStatus?.({ code: 2, message: event.error instanceof Error ? event.error.message : String(event.error) });
+    span.setStatus?.({
+      code: 2,
+      message: event.error instanceof Error ? event.error.message : String(event.error),
+    });
     span.end();
   }
 

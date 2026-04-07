@@ -26,5 +26,20 @@ export type {
   ConversationStore,
   PersistentHistoryOptions,
 } from './messages';
-export { staticTools, dynamicTools, noTools, agentAsTool, compositeTools, gatedTools, PermissionPolicy } from './tools';
-export type { ToolResolver, AgentAsToolConfig, PermissionChecker, GatedToolsOptions, PermissionPolicyOptions, PermissionChangeEvent } from './tools';
+export {
+  staticTools,
+  dynamicTools,
+  noTools,
+  agentAsTool,
+  compositeTools,
+  gatedTools,
+  PermissionPolicy,
+} from './tools';
+export type {
+  ToolResolver,
+  AgentAsToolConfig,
+  PermissionChecker,
+  GatedToolsOptions,
+  PermissionPolicyOptions,
+  PermissionChangeEvent,
+} from './tools';

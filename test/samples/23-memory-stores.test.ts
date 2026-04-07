@@ -63,10 +63,7 @@ function mockDynamo(): { get: any; put: any; items: Map<string, Record<string, u
   };
 }
 
-const testMessages: Message[] = [
-  userMessage('Hello'),
-  assistantMessage('Hi there!'),
-];
+const testMessages: Message[] = [userMessage('Hello'), assistantMessage('Hi there!')];
 
 describe('Sample 23: Memory Store Adapters', () => {
   // ── Redis ──────────────────────────────────────────────────
@@ -122,7 +119,9 @@ describe('Sample 23: Memory Store Adapters', () => {
 
   it('postgresStore — rejects unsafe table name', () => {
     const client = mockPostgres();
-    expect(() => postgresStore(client, { tableName: 'DROP TABLE; --' })).toThrow('Invalid table name');
+    expect(() => postgresStore(client, { tableName: 'DROP TABLE; --' })).toThrow(
+      'Invalid table name',
+    );
   });
 
   it('postgresStore — load returns null for missing', async () => {

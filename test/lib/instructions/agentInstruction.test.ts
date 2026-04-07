@@ -146,11 +146,7 @@ describe('evaluateAgentInstructions — priority ordering', () => {
     ];
     const result = evaluateAgentInstructions(instructions, defaultDecision);
     expect(result.matchedIds).toEqual(['high', 'mid', 'low']);
-    expect(result.promptInjections).toEqual([
-      'High priority.',
-      'Mid priority.',
-      'Low priority.',
-    ]);
+    expect(result.promptInjections).toEqual(['High priority.', 'Mid priority.', 'Low priority.']);
   });
 
   it('preserves registration order for same priority', () => {
@@ -185,7 +181,9 @@ describe('evaluateAgentInstructions — error handling', () => {
     const instructions: AgentInstruction<TestDecision>[] = [
       {
         id: 'broken',
-        activeWhen: () => { throw new Error('bug'); },
+        activeWhen: () => {
+          throw new Error('bug');
+        },
         prompt: 'Should not fire.',
       },
       { id: 'ok', prompt: 'This fires.' },
@@ -199,7 +197,9 @@ describe('evaluateAgentInstructions — error handling', () => {
       {
         id: 'safety-broken',
         safety: true,
-        activeWhen: () => { throw new Error('bug'); },
+        activeWhen: () => {
+          throw new Error('bug');
+        },
         prompt: 'Must fire for safety.',
       },
     ];
@@ -271,9 +271,7 @@ describe('evaluateAgentInstructions — dev-mode warnings', () => {
     process.env['NODE_ENV'] = 'development';
 
     try {
-      const instructions: AgentInstruction<TestDecision>[] = [
-        { id: 'empty-safety', safety: true },
-      ];
+      const instructions: AgentInstruction<TestDecision>[] = [{ id: 'empty-safety', safety: true }];
       const result = evaluateAgentInstructions(instructions, defaultDecision);
       expect(result.matchedIds).toEqual(['empty-safety']);
       expect(warnSpy).toHaveBeenCalledWith(
@@ -291,9 +289,7 @@ describe('evaluateAgentInstructions — dev-mode warnings', () => {
     process.env['NODE_ENV'] = 'production';
 
     try {
-      const instructions: AgentInstruction<TestDecision>[] = [
-        { id: 'empty-safety', safety: true },
-      ];
+      const instructions: AgentInstruction<TestDecision>[] = [{ id: 'empty-safety', safety: true }];
       evaluateAgentInstructions(instructions, defaultDecision);
       expect(warnSpy).not.toHaveBeenCalled();
     } finally {
