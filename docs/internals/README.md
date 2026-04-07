@@ -113,7 +113,6 @@ Message history helpers. Stateless functions that operate on `Message[]`.
 
 - `appendMessage()`, `lastMessage()`, `lastAssistantMessage()`
 - `lastMessageHasToolCalls()` — check if the last message contains tool calls
-- `slidingWindow()`, `truncateToCharBudget()` — memory management
 - `createToolResults()` — build tool result messages from execution results
 
 ### scope/

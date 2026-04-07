@@ -22,11 +22,11 @@ src/
 ├── tools/       → ToolRegistry + defineTool
 ├── stages/      → Reusable flowchart stages (seedScope, callLLM, parseResponse, etc.)
 ├── scope/       → AgentScope paths + helpers
-├── memory/      → Message utilities (appendMessage, slidingWindow, truncateToCharBudget)
+├── memory/      → Message utilities (appendMessage, lastMessage, lastAssistantMessage)
 ├── executor/    → agentLoop (core ReAct loop)
 ├── compositions/→ withRetry, withFallback, withCircuitBreaker
 ├── streaming/   → StreamEmitter, SSEFormatter, AgentStreamEvent
-├── lib/         → Instructions (agentInstruction, InstructionsToLLM subflow), narrative (grounding helpers), loop (buildAgentLoop), slots, call stages
+├── lib/         → Instructions (agentInstruction, InstructionsToLLM subflow), narrative (agentRenderer), loop (buildAgentLoop), slots, call stages
 └── types/       → All type definitions (messages, llm, tools, content blocks)
 ```
 
@@ -281,7 +281,6 @@ Collects during traversal via recorder hooks — no post-processing of narrative
 ## Anti-Patterns
 
 - Never use the old functional API (`LLMCall({...})`, `Agent({...})`) — always use `LLMCall.create({...})` builder pattern
-- Never use `CostRecorderV2` — use `CostRecorder` (V2 is a deprecated alias)
 - Never pass recorders via constructor options — use `.recorder()` builder method
 - Don't use `name`/`parameters` on `defineTool` — use `id`/`inputSchema`
 - Don't use `tokens.stats()` — use `tokens.getStats()`

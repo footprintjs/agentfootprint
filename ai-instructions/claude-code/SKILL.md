@@ -511,7 +511,7 @@ src/
 ├── models/       → Model configs (anthropic, openai, ollama, bedrock)
 ├── adapters/     → Mock, Anthropic, OpenAI, Bedrock, MCP, A2A, createProvider
 ├── tools/        → ToolRegistry, defineTool
-├── memory/       → Message helpers (appendMessage, slidingWindow, truncate)
+├── memory/       → Message helpers (appendMessage, lastMessage, lastAssistantMessage)
 ├── scope/        → AgentScope (typed paths into footprintjs ScopeFacade)
 ├── stages/       → Reusable stage functions (seedScope, callLLM, parseResponse, etc.)
 ├── core/         → AgentRecorder, PromptProvider, ToolProvider, AgentLoopConfig
@@ -530,8 +530,7 @@ Single entry point: `import { ... } from 'agentfootprint'`
 
 ## Anti-Patterns to Avoid
 
-1. **Never use `CostRecorderV2`** — it's deprecated. Use `CostRecorder`.
-2. **Never post-process the flowchart** — use recorders to collect data during traversal.
+1. **Never post-process the flowchart** — use recorders to collect data during traversal.
 3. **Never build agents without `mock()`** in tests — no API keys in test suites.
 4. **Don't skip `.recorder(rec)`** — always attach recorders to observe execution.
 5. **Don't use raw footprintjs stages** for agent logic — use concept builders (`Agent.create()`, `LLMCall.create()`, etc.).

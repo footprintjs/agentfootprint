@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-04-07
+
+### Added
+
+- **`obs.explain()`** — ExplainRecorder bundled into `agentObservability()` preset. Grounding analysis (sources vs claims) out of the box — the differentiator.
+- **8-gate release script** — mirrors footprintjs: doc check, dup type check, build, tests, sample projects, CHANGELOG validation
+- **`scripts/check-docs.sh`** — blocks release if docs reference removed APIs
+- **`scripts/check-dup-types.mjs`** — blocks release if duplicate type definitions found across src/
+
+### Fixed
+
+- **ModelPricing duplicate** — CostRecorder now imports from `models/types` instead of redefining
+
 ## [1.1.0] - 2026-04-07
 
 ### Added

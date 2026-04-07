@@ -12,13 +12,8 @@
  */
 
 import type { AgentRecorder, LLMCallEvent } from '../../core';
-
-export interface ModelPricing {
-  /** Cost per 1M input tokens in USD. */
-  readonly input: number;
-  /** Cost per 1M output tokens in USD. */
-  readonly output: number;
-}
+import type { ModelPricing } from '../../models/types';
+export type { ModelPricing } from '../../models/types';
 
 export interface CostEntry {
   readonly model: string;

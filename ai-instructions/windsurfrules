@@ -78,7 +78,6 @@ runner.toFlowChart()         // for subflow composition
 
 ## Rules
 
-- Use `CostRecorder` (not `CostRecorderV2`)
 - Never post-process — use recorders
 - Use `mock([...])` in tests
 - Use concept builders, not raw stages

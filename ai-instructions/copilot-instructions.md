@@ -101,7 +101,6 @@ runner.toFlowChart()            // for subflow composition
 
 ## Rules
 
-- Never use `CostRecorderV2` — use `CostRecorder`
 - Never post-process — use recorders to collect data during traversal
 - Always use `mock([...])` in tests — no API keys in test suites
 - Use concept builders (`Agent.create()`, etc.) not raw stages
