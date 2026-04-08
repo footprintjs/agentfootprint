@@ -154,7 +154,8 @@ export class ExplainRecorder implements AgentRecorder {
   }
 
   onTurnComplete(event: TurnCompleteEvent): void {
-    // Final iteration has a claim
+    // Guard: if no onLLMCall fired (e.g., cached response), use iteration 0
+    if (this.currentIteration < 0) this.currentIteration = 0;
     const claim: LLMClaim = {
       content: event.content,
       model: this.currentContext.model,

@@ -243,10 +243,19 @@ export class AgentRunner {
     executor.enableNarrative({ renderer: this.narrativeRenderer });
     executor.attachRecorder(new MetricRecorder('metrics'));
 
-    // Capture LLM responses + context during traversal via scope recorder.
-    // adapterRawResponse fires per LLM iteration (accurate call counts + token totals).
-    // systemPrompt, toolDescriptions, messages fire before the LLM call (evaluation context).
-    const llmResponses: LLMResponse[] = [];
+    // Capture LLM responses + per-call context during traversal via scope recorder.
+    // Scope writes fire in order: systemPrompt → messages → toolDescriptions → adapterRawResponse.
+    // When adapterRawResponse fires, the current last* vars = context for THAT call.
+    // We snapshot context alongside each response for per-iteration evaluation.
+    interface LLMCallCapture {
+      response: LLMResponse;
+      context: {
+        systemPrompt?: string;
+        toolDescriptions?: Array<{ name: string; description: string }>;
+        messages?: Array<{ role: string; content: unknown }>;
+      };
+    }
+    const llmCaptures: LLMCallCapture[] = [];
     let lastSystemPrompt: string | undefined;
     let lastToolDescriptions: Array<{ name: string; description: string }> | undefined;
     let lastMessages: Array<{ role: string; content: unknown }> | undefined;
@@ -254,9 +263,6 @@ export class AgentRunner {
       const llmCapture: Recorder = {
         id: '__llm-capture',
         onWrite(event: WriteEvent) {
-          if (event.key === 'adapterRawResponse' && event.value) {
-            llmResponses.push(event.value as LLMResponse);
-          }
           if (event.key === 'systemPrompt' && typeof event.value === 'string') {
             lastSystemPrompt = event.value;
           }
@@ -265,6 +271,17 @@ export class AgentRunner {
           }
           if (event.key === 'messages' && Array.isArray(event.value)) {
             lastMessages = event.value as Array<{ role: string; content: unknown }>;
+          }
+          // adapterRawResponse fires AFTER context writes — snapshot context per call
+          if (event.key === 'adapterRawResponse' && event.value) {
+            llmCaptures.push({
+              response: event.value as LLMResponse,
+              context: {
+                systemPrompt: lastSystemPrompt,
+                toolDescriptions: lastToolDescriptions ? [...lastToolDescriptions] : undefined,
+                messages: lastMessages ? [...lastMessages] : undefined,
+              },
+            });
           }
         },
       };
@@ -307,16 +324,11 @@ export class AgentRunner {
     });
 
     if (bridge) {
-      // Dispatch per-iteration LLM calls with evaluation context
+      // Dispatch per-iteration LLM calls — each with its own context snapshot
       const perCallMs =
-        llmResponses.length > 0 ? Math.round((Date.now() - startMs) / llmResponses.length) : 0;
-      const llmContext = {
-        systemPrompt: lastSystemPrompt,
-        toolDescriptions: lastToolDescriptions,
-        messages: lastMessages,
-      };
-      for (const resp of llmResponses) {
-        bridge.dispatchLLMCall(resp, perCallMs, llmContext);
+        llmCaptures.length > 0 ? Math.round((Date.now() - startMs) / llmCaptures.length) : 0;
+      for (const capture of llmCaptures) {
+        bridge.dispatchLLMCall(capture.response, perCallMs, capture.context);
       }
       bridge.dispatchTurnComplete(
         agentResult.content,
@@ -366,15 +378,42 @@ export class AgentRunner {
       throw new Error('Cannot resume: no checkpoint available.');
     }
 
-    // Capture LLM calls during resume (same pattern as run())
+    // Capture LLM calls + context during resume (same pattern as run())
     const bridge = this.recorders.length > 0 ? new RecorderBridge(this.recorders) : null;
-    const llmResponses: LLMResponse[] = [];
+    interface LLMCallCapture {
+      response: LLMResponse;
+      context: {
+        systemPrompt?: string;
+        toolDescriptions?: Array<{ name: string; description: string }>;
+        messages?: Array<{ role: string; content: unknown }>;
+      };
+    }
+    const llmCaptures: LLMCallCapture[] = [];
+    let lastSystemPrompt: string | undefined;
+    let lastToolDescriptions: Array<{ name: string; description: string }> | undefined;
+    let lastMessages: Array<{ role: string; content: unknown }> | undefined;
     if (bridge) {
       const llmCapture: Recorder = {
         id: '__llm-capture-resume',
         onWrite(event: WriteEvent) {
+          if (event.key === 'systemPrompt' && typeof event.value === 'string') {
+            lastSystemPrompt = event.value;
+          }
+          if (event.key === 'toolDescriptions' && Array.isArray(event.value)) {
+            lastToolDescriptions = event.value as Array<{ name: string; description: string }>;
+          }
+          if (event.key === 'messages' && Array.isArray(event.value)) {
+            lastMessages = event.value as Array<{ role: string; content: unknown }>;
+          }
           if (event.key === 'adapterRawResponse' && event.value) {
-            llmResponses.push(event.value as LLMResponse);
+            llmCaptures.push({
+              response: event.value as LLMResponse,
+              context: {
+                systemPrompt: lastSystemPrompt,
+                toolDescriptions: lastToolDescriptions ? [...lastToolDescriptions] : undefined,
+                messages: lastMessages ? [...lastMessages] : undefined,
+              },
+            });
           }
         },
       };
@@ -386,9 +425,9 @@ export class AgentRunner {
 
     if (bridge) {
       const perCallMs =
-        llmResponses.length > 0 ? Math.round((Date.now() - startMs) / llmResponses.length) : 0;
-      for (const resp of llmResponses) {
-        bridge.dispatchLLMCall(resp, perCallMs);
+        llmCaptures.length > 0 ? Math.round((Date.now() - startMs) / llmCaptures.length) : 0;
+      for (const capture of llmCaptures) {
+        bridge.dispatchLLMCall(capture.response, perCallMs, capture.context);
       }
     }
 

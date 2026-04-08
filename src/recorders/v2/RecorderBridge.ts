@@ -48,6 +48,7 @@ export class RecorderBridge {
       messages: context?.messages,
     };
     this.dispatch('onLLMCall', event);
+    this.loopIteration++;
   }
 
   /** Dispatch turn complete event. */

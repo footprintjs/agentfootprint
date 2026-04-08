@@ -50,7 +50,10 @@ echo "[2.5/8] Duplicate type check ✓"
 
 # ── Gate 2.75: Format check ────────────────────────────────────────────
 echo "==> Checking code formatting..."
-npm run format
+if ! npm run format; then
+  echo "Error: Unformatted files found. Run 'npm run format:fix' to fix."
+  exit 1
+fi
 echo "[2.75/8] Format check ✓"
 
 # ── Gate 3: Build ───────────────────────────────────────────────────────
