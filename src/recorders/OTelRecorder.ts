@@ -19,7 +19,7 @@ import type {
   ToolCallEvent,
   TurnCompleteEvent,
   AgentErrorEvent,
-} from '../../core';
+} from '../core';
 
 /** Duck-typed OpenTelemetry Span — no @opentelemetry/api dependency. */
 interface OTelSpan {

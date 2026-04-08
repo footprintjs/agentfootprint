@@ -21,7 +21,7 @@ import type { AgentStageConfig, AgentResultEntry, TraversalResult } from '../typ
 import { runnerAsStage } from '../stages/runnerAsStage';
 import type { RunnerLike } from '../types';
 import type { AgentRecorder } from '../core';
-import { RecorderBridge } from '../recorders/v2/RecorderBridge';
+import { RecorderBridge } from '../recorders/RecorderBridge';
 import type { MultiAgentState } from '../scope/types';
 
 /**

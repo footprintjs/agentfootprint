@@ -11,7 +11,7 @@
  *   console.log(toolUsage.getStats());
  */
 
-import type { AgentRecorder, ToolCallEvent } from '../../core';
+import type { AgentRecorder, ToolCallEvent } from '../core';
 
 export interface ToolUsageStats {
   readonly totalCalls: number;

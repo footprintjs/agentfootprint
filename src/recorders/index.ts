@@ -1,30 +1,21 @@
 /**
  * recorders/ — AgentRecorder implementations.
  */
-export {
-  TokenRecorder,
-  CostRecorder,
-  TurnRecorder,
-  ToolUsageRecorder,
-  QualityRecorder,
-  GuardrailRecorder,
-  CompositeRecorder,
-  PermissionRecorder,
-  agentObservability,
-} from './v2';
-export type {
-  TokenStats,
-  LLMCallEntry,
-  CostEntry,
-  CostRecorderOptions,
-  TurnEntry,
-  ToolUsageStats,
-  ToolStats,
-  QualityScore,
-  QualityJudge,
-  Violation,
-  GuardrailCheck,
-  PermissionEvent,
-  AgentObservabilityOptions,
-  AgentObservabilityRecorder,
-} from './v2';
+
+export { TokenRecorder } from './TokenRecorder';
+export type { TokenStats, LLMCallEntry } from './TokenRecorder';
+export { CostRecorder } from './CostRecorder';
+export type { CostEntry, CostRecorderOptions, ModelPricing } from './CostRecorder';
+export { ToolUsageRecorder } from './ToolUsageRecorder';
+export type { ToolUsageStats, ToolStats } from './ToolUsageRecorder';
+export { TurnRecorder } from './TurnRecorder';
+export type { TurnEntry } from './TurnRecorder';
+export { QualityRecorder } from './QualityRecorder';
+export type { QualityScore, QualityJudge } from './QualityRecorder';
+export { GuardrailRecorder } from './GuardrailRecorder';
+export type { Violation, GuardrailCheck } from './GuardrailRecorder';
+export { CompositeRecorder } from './CompositeRecorder';
+export { PermissionRecorder } from './PermissionRecorder';
+export type { PermissionEvent } from './PermissionRecorder';
+export { agentObservability } from './agentObservability';
+export type { AgentObservabilityOptions, AgentObservabilityRecorder } from './agentObservability';

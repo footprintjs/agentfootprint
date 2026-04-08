@@ -14,8 +14,8 @@
  *   const tokens = new TokenRecorder({ pricing: { 'claude-sonnet-4-20250514': { input: 3, output: 15 } } });
  */
 
-import type { AgentRecorder, LLMCallEvent } from '../../core';
-import type { ModelPricing } from '../../models/types';
+import type { AgentRecorder, LLMCallEvent } from '../core';
+import type { ModelPricing } from '../models/types';
 
 export interface TokenRecorderOptions {
   /** Recorder ID. Default: 'token-recorder'. */

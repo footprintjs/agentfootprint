@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { agentLoop, mock, staticPrompt, defineTool } from '../../src/test-barrel';
 import type { AgentLoopConfig, AgentRecorder } from '../../src/test-barrel';
 import { fullHistory, staticTools, noTools } from '../../src/providers';
-import { TurnRecorder, TokenRecorder } from '../../src/recorders/v2';
+import { TurnRecorder, TokenRecorder } from '../../src/recorders';
 
 // ── Helpers ─────────────────────────────────────────────────
 

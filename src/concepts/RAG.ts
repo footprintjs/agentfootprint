@@ -28,7 +28,7 @@ import type { ModelConfig } from '../models';
 import { getTextContent } from '../types/content';
 import { userMessage, systemMessage } from '../types';
 import type { AgentRecorder } from '../core';
-import { RecorderBridge } from '../recorders/v2/RecorderBridge';
+import { RecorderBridge } from '../recorders/RecorderBridge';
 import { resolveProvider } from '../adapters/createProvider';
 import type { RAGState } from '../scope/types';
 import { createRetrieveStage } from '../stages/retrieve';

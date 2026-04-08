@@ -5,7 +5,7 @@ import {
   CompositeRecorder,
   TokenRecorder,
   TurnRecorder,
-} from '../../src/recorders/v2';
+} from '../../src/recorders';
 import type { TurnCompleteEvent, TurnStartEvent, LLMCallEvent } from '../../src/core';
 
 // ── Helpers ─────────────────────────────────────────────────

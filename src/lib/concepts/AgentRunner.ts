@@ -31,7 +31,7 @@ import { userMessage, toolResultMessage, assistantMessage } from '../../types';
 import type { LLMProvider, LLMResponse, AgentResult, Message, ResponseFormat } from '../../types';
 import type { MemoryConfig } from '../../adapters/memory/types';
 import type { AgentRecorder, PromptProvider, ToolProvider } from '../../core';
-import { RecorderBridge } from '../../recorders/v2/RecorderBridge';
+import { RecorderBridge } from '../../recorders/RecorderBridge';
 
 /** Options for constructing an AgentRunner. Created by Agent.build(). */
 export interface AgentRunnerOptions {

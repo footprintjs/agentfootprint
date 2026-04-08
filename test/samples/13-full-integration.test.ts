@@ -23,7 +23,7 @@ import {
   GuardrailRecorder,
   CompositeRecorder,
   TurnRecorder,
-} from '../../src/recorders/v2';
+} from '../../src/recorders';
 import { a2aRunner } from '../../src/adapters';
 
 describe('Sample 13: Full Integration', () => {

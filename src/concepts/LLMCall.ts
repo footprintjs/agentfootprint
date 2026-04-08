@@ -24,7 +24,7 @@ import { parseResponseStage } from '../stages/parseResponse';
 import { finalizeStage } from '../stages/finalize';
 import { lastAssistantMessage } from '../memory';
 import type { AgentRecorder } from '../core';
-import { RecorderBridge } from '../recorders/v2/RecorderBridge';
+import { RecorderBridge } from '../recorders/RecorderBridge';
 import { resolveProvider } from '../adapters/createProvider';
 
 export interface LLMCallOptions {

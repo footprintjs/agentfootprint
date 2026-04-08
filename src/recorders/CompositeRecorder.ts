@@ -20,7 +20,7 @@ import type {
   ToolCallEvent,
   TurnCompleteEvent,
   AgentErrorEvent,
-} from '../../core';
+} from '../core';
 
 export class CompositeRecorder implements AgentRecorder {
   readonly id: string;

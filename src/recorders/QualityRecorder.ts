@@ -15,7 +15,7 @@
  *   console.log(quality.getScores());
  */
 
-import type { AgentRecorder, TurnCompleteEvent } from '../../core';
+import type { AgentRecorder, TurnCompleteEvent } from '../core';
 
 // ── Types ────────────────────────────────────────────────────
 

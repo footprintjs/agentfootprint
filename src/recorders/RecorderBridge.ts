@@ -8,9 +8,9 @@
  *   - dispatchError() on failure
  */
 
-import type { AgentRecorder, LLMCallEvent } from '../../core';
-import type { LLMResponse } from '../../types';
-import type { AgentStreamEvent } from '../../streaming';
+import type { AgentRecorder, LLMCallEvent } from '../core';
+import type { LLMResponse } from '../types';
+import type { AgentStreamEvent } from '../streaming';
 
 export class RecorderBridge {
   private readonly recorders: AgentRecorder[];

@@ -9,8 +9,8 @@
  *   - tool.name, tool.latency_ms
  */
 import { describe, it, expect } from 'vitest';
-import { OTelRecorder } from '../../src/recorders/v2/OTelRecorder';
-import type { OTelTracer } from '../../src/recorders/v2/OTelRecorder';
+import { OTelRecorder } from '../../src/recorders/OTelRecorder';
+import type { OTelTracer } from '../../src/recorders/OTelRecorder';
 
 // Mock tracer that captures spans
 interface MockSpan {

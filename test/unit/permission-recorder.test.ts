@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { PermissionRecorder } from '../../src/recorders/v2/PermissionRecorder';
+import { PermissionRecorder } from '../../src/recorders/PermissionRecorder';
 import type { ToolCallEvent } from '../../src/core/recorders';
 
 describe('PermissionRecorder: onBlocked events', () => {

@@ -11,9 +11,9 @@
  *   console.log(`$${cost.getTotalCost().toFixed(4)}`);
  */
 
-import type { AgentRecorder, LLMCallEvent } from '../../core';
-import type { ModelPricing } from '../../models/types';
-export type { ModelPricing } from '../../models/types';
+import type { AgentRecorder, LLMCallEvent } from '../core';
+import type { ModelPricing } from '../models/types';
+export type { ModelPricing } from '../models/types';
 
 export interface CostEntry {
   readonly model: string;

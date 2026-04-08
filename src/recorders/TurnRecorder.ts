@@ -12,7 +12,7 @@
  *   console.log(turns.getTurns());
  */
 
-import type { AgentRecorder, TurnStartEvent, TurnCompleteEvent, AgentErrorEvent } from '../../core';
+import type { AgentRecorder, TurnStartEvent, TurnCompleteEvent, AgentErrorEvent } from '../core';
 
 export interface TurnEntry {
   readonly turnNumber: number;

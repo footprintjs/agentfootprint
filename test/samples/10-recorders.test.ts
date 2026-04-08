@@ -20,7 +20,7 @@ import {
   QualityRecorder,
   GuardrailRecorder,
   CompositeRecorder,
-} from '../../src/recorders/v2';
+} from '../../src/recorders';
 
 function config(overrides: Partial<AgentLoopConfig> = {}): AgentLoopConfig {
   return {

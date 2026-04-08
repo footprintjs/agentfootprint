@@ -8,7 +8,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import { Agent, mock, defineTool } from '../../src/test-barrel';
-import { ExplainRecorder } from '../../src/recorders/v2/ExplainRecorder';
+import { ExplainRecorder } from '../../src/recorders/ExplainRecorder';
 
 const lookupOrder = defineTool({
   id: 'lookup_order',

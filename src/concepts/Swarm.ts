@@ -31,7 +31,7 @@ import { slidingWindow } from '../providers/messages/slidingWindow';
 import { ToolRegistry } from '../tools';
 import type { Message } from '../types/messages';
 import { createAgentRenderer } from '../lib/narrative';
-import { RecorderBridge } from '../recorders/v2/RecorderBridge';
+import { RecorderBridge } from '../recorders/RecorderBridge';
 import { annotateSpecIcons } from './specIcons';
 import type { SpecLike } from './specIcons';
 import { userMessage } from '../types';

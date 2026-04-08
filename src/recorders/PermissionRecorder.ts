@@ -30,8 +30,8 @@
  *   permRecorder.getSummary();    // { allowed: [...], blocked: [...], denied: [...] }
  */
 
-import type { AgentRecorder, ToolCallEvent } from '../../core/recorders';
-import type { ToolContext } from '../../core';
+import type { AgentRecorder, ToolCallEvent } from '../core/recorders';
+import type { ToolContext } from '../core';
 
 export interface PermissionEvent {
   readonly type: 'blocked' | 'denied' | 'allowed';

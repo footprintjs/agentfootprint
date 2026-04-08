@@ -26,7 +26,7 @@ import type {
   ToolCallEvent,
   TurnStartEvent,
   TurnCompleteEvent,
-} from '../../core';
+} from '../core';
 
 /** A source of truth — data returned by a tool. */
 export interface ToolSource {

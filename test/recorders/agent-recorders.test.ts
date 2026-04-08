@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { TokenRecorder } from '../../../src/recorders/v2/TokenRecorder';
-import { CostRecorder } from '../../../src/recorders/v2';
-import { ToolUsageRecorder } from '../../../src/recorders/v2/ToolUsageRecorder';
-import { TurnRecorder } from '../../../src/recorders/v2/TurnRecorder';
+import { TokenRecorder } from '../../src/recorders/TokenRecorder';
+import { CostRecorder } from '../../src/recorders';
+import { ToolUsageRecorder } from '../../src/recorders/ToolUsageRecorder';
+import { TurnRecorder } from '../../src/recorders/TurnRecorder';
 import type { LLMCallEvent, ToolCallEvent } from '../../../src/core';
 
 // ── TokenRecorder ───────────────────────────────────────────

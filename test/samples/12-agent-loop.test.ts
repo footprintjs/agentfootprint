@@ -23,7 +23,7 @@ import {
   noTools,
   withToolPairSafety,
 } from '../../src/providers';
-import { TurnRecorder, TokenRecorder } from '../../src/recorders/v2';
+import { TurnRecorder, TokenRecorder } from '../../src/recorders';
 
 describe('Sample 12: agentLoop', () => {
   it('basic: prompt + messages + LLM', async () => {

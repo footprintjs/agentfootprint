@@ -30,7 +30,7 @@ import type { ModelConfig } from '../models';
 import { userMessage, systemMessage } from '../types';
 import type { RunnerLike } from '../types/multiAgent';
 import type { AgentRecorder } from '../core';
-import { RecorderBridge } from '../recorders/v2/RecorderBridge';
+import { RecorderBridge } from '../recorders/RecorderBridge';
 import { resolveProvider } from '../adapters/createProvider';
 import { createAgentRenderer } from '../lib/narrative';
 import { annotateSpecIcons } from './specIcons';

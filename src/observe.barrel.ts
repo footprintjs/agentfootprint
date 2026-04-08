@@ -26,8 +26,8 @@ export {
   agentObservability,
 } from './recorders';
 
-export { OTelRecorder } from './recorders/v2/OTelRecorder';
-export type { OTelTracer, OTelRecorderOptions } from './recorders/v2/OTelRecorder';
+export { OTelRecorder } from './recorders/OTelRecorder';
+export type { OTelTracer, OTelRecorderOptions } from './recorders/OTelRecorder';
 
 export type {
   TokenStats,

@@ -20,7 +20,7 @@
  *   if (guardrail.hasViolations()) { ... }
  */
 
-import type { AgentRecorder, TurnCompleteEvent } from '../../core';
+import type { AgentRecorder, TurnCompleteEvent } from '../core';
 
 // ── Types ────────────────────────────────────────────────────
 
