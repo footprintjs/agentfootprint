@@ -1,18 +1,20 @@
 /**
- * ExplainRecorder — collects grounding evidence during traversal.
+ * ExplainRecorder — collects grounding evidence + evaluation context during traversal.
  *
- * Captures sources (tool results), claims (LLM output), and decisions
- * as they happen — no post-processing of narrative entries.
+ * Captures:
+ *   - Sources (tool results — ground truth)
+ *   - Claims (LLM output — to verify)
+ *   - Decisions (tool calls — what the LLM chose to do)
+ *   - Context (system prompt, tool descriptions, messages — what the LLM had)
+ *
+ * Everything for evaluation in one recorder: "what did it have?" + "what did it produce?"
  *
  * Usage:
  *   const explain = new ExplainRecorder();
  *   agent.recorder(explain);
  *   await agent.run('Check order');
  *
- *   explain.getSources();    // tool results (ground truth)
- *   explain.getClaims();     // LLM responses (to verify)
- *   explain.getDecisions();  // tool call decisions (what the LLM chose to do)
- *   explain.explain();       // structured summary
+ *   explain.explain();  // { sources, claims, decisions, context, summary }
  */
 
 import type {
@@ -45,11 +47,27 @@ export interface AgentDecision {
   readonly latencyMs: number;
 }
 
-/** Structured explanation of an agent's execution. */
+/** The context the LLM had when making decisions — for evaluation. */
+export interface LLMContext {
+  /** The user's original question/input. */
+  readonly input?: string;
+  /** System prompt the LLM received. */
+  readonly systemPrompt?: string;
+  /** Tool descriptions sent to the LLM (what tools were available). */
+  readonly availableTools?: ReadonlyArray<{ name: string; description: string }>;
+  /** Messages sent to the LLM (conversation context). */
+  readonly messages?: ReadonlyArray<{ role: string; content: unknown }>;
+  /** Model used. */
+  readonly model?: string;
+}
+
+/** Structured explanation of an agent's execution — everything needed for evaluation. */
 export interface Explanation {
   readonly sources: readonly ToolSource[];
   readonly claims: readonly LLMClaim[];
   readonly decisions: readonly AgentDecision[];
+  /** What the LLM had when it made decisions. */
+  readonly context: LLMContext;
   readonly summary: string;
 }
 
@@ -59,6 +77,12 @@ export class ExplainRecorder implements AgentRecorder {
   private claims: LLMClaim[] = [];
   private decisions: AgentDecision[] = [];
   private currentTurn = 0;
+  private input?: string;
+  private lastModel?: string;
+  private lastIteration = 0;
+  private lastSystemPrompt?: string;
+  private lastToolDescriptions?: ReadonlyArray<{ name: string; description: string }>;
+  private lastMessages?: ReadonlyArray<{ role: string; content: unknown }>;
 
   constructor(id = 'explain-recorder') {
     this.id = id;
@@ -66,19 +90,19 @@ export class ExplainRecorder implements AgentRecorder {
 
   onTurnStart(event: TurnStartEvent): void {
     this.currentTurn = event.turnNumber;
+    this.input = event.message;
   }
 
-  private lastModel?: string;
-  private lastIteration = 0;
-
   onLLMCall(event: LLMCallEvent): void {
-    // Track model/iteration for claim attribution
     this.lastModel = event.model;
     this.lastIteration = event.loopIteration;
+    // Capture evaluation context from the LLM call event
+    if (event.systemPrompt) this.lastSystemPrompt = event.systemPrompt;
+    if (event.toolDescriptions) this.lastToolDescriptions = event.toolDescriptions;
+    if (event.messages) this.lastMessages = event.messages;
   }
 
   onToolCall(event: ToolCallEvent): void {
-    // Tool result = source of truth (shallow clone args to prevent mutation)
     this.sources.push({
       toolName: event.toolName,
       args: { ...event.args },
@@ -86,7 +110,6 @@ export class ExplainRecorder implements AgentRecorder {
       turnNumber: this.currentTurn,
     });
 
-    // Tool call = decision the LLM made
     this.decisions.push({
       toolName: event.toolName,
       args: { ...event.args },
@@ -95,7 +118,6 @@ export class ExplainRecorder implements AgentRecorder {
   }
 
   onTurnComplete(event: TurnCompleteEvent): void {
-    // Capture the final LLM response as a claim — always, regardless of prior events
     this.claims.push({
       content: event.content,
       model: this.lastModel,
@@ -113,12 +135,23 @@ export class ExplainRecorder implements AgentRecorder {
     return [...this.claims];
   }
 
-  /** Tool call decisions — what the LLM chose to do. Returns snapshot-safe copies. */
+  /** Tool call decisions — what the LLM chose to do. */
   getDecisions(): readonly AgentDecision[] {
     return this.decisions.map((d) => ({ ...d, args: { ...d.args } }));
   }
 
-  /** Structured explanation of the agent's execution. */
+  /** What the LLM had when it made decisions — for evaluation. */
+  getContext(): LLMContext {
+    return {
+      input: this.input,
+      systemPrompt: this.lastSystemPrompt,
+      availableTools: this.lastToolDescriptions ? [...this.lastToolDescriptions] : undefined,
+      messages: this.lastMessages ? [...this.lastMessages] : undefined,
+      model: this.lastModel,
+    };
+  }
+
+  /** Structured explanation — everything needed for evaluation. */
   explain(): Explanation {
     const toolNames = [...new Set(this.decisions.map((d) => d.toolName))];
     const summary =
@@ -132,6 +165,7 @@ export class ExplainRecorder implements AgentRecorder {
       sources: this.getSources(),
       claims: this.getClaims(),
       decisions: this.getDecisions(),
+      context: this.getContext(),
       summary,
     };
   }
@@ -141,7 +175,11 @@ export class ExplainRecorder implements AgentRecorder {
     this.claims = [];
     this.decisions = [];
     this.currentTurn = 0;
+    this.input = undefined;
     this.lastModel = undefined;
     this.lastIteration = 0;
+    this.lastSystemPrompt = undefined;
+    this.lastToolDescriptions = undefined;
+    this.lastMessages = undefined;
   }
 }

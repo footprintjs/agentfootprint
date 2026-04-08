@@ -39,6 +39,12 @@ export interface LLMCallEvent {
   readonly turnNumber: number;
   readonly loopIteration: number;
   readonly finishReason?: LLMResponse['finishReason'];
+  /** System prompt the LLM received (for evaluation context). */
+  readonly systemPrompt?: string;
+  /** Tool descriptions sent to the LLM (for tool selection evaluation). */
+  readonly toolDescriptions?: ReadonlyArray<{ name: string; description: string }>;
+  /** Messages sent to the LLM (for context evaluation). */
+  readonly messages?: ReadonlyArray<{ role: string; content: unknown }>;
 }
 
 export interface ToolCallEvent {

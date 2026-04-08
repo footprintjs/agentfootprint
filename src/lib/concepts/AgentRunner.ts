@@ -243,15 +243,28 @@ export class AgentRunner {
     executor.enableNarrative({ renderer: this.narrativeRenderer });
     executor.attachRecorder(new MetricRecorder('metrics'));
 
-    // Capture every adapterRawResponse write — fires per LLM iteration,
-    // not just once at the end. This gives accurate LLM call counts + token totals.
+    // Capture LLM responses + context during traversal via scope recorder.
+    // adapterRawResponse fires per LLM iteration (accurate call counts + token totals).
+    // systemPrompt, toolDescriptions, messages fire before the LLM call (evaluation context).
     const llmResponses: LLMResponse[] = [];
+    let lastSystemPrompt: string | undefined;
+    let lastToolDescriptions: Array<{ name: string; description: string }> | undefined;
+    let lastMessages: Array<{ role: string; content: unknown }> | undefined;
     if (bridge) {
       const llmCapture: Recorder = {
         id: '__llm-capture',
         onWrite(event: WriteEvent) {
           if (event.key === 'adapterRawResponse' && event.value) {
             llmResponses.push(event.value as LLMResponse);
+          }
+          if (event.key === 'systemPrompt' && typeof event.value === 'string') {
+            lastSystemPrompt = event.value;
+          }
+          if (event.key === 'toolDescriptions' && Array.isArray(event.value)) {
+            lastToolDescriptions = event.value as Array<{ name: string; description: string }>;
+          }
+          if (event.key === 'messages' && Array.isArray(event.value)) {
+            lastMessages = event.value as Array<{ role: string; content: unknown }>;
           }
         },
       };
@@ -294,11 +307,16 @@ export class AgentRunner {
     });
 
     if (bridge) {
-      // Dispatch per-iteration LLM calls (captured by scope recorder above)
+      // Dispatch per-iteration LLM calls with evaluation context
       const perCallMs =
         llmResponses.length > 0 ? Math.round((Date.now() - startMs) / llmResponses.length) : 0;
+      const llmContext = {
+        systemPrompt: lastSystemPrompt,
+        toolDescriptions: lastToolDescriptions,
+        messages: lastMessages,
+      };
       for (const resp of llmResponses) {
-        bridge.dispatchLLMCall(resp, perCallMs);
+        bridge.dispatchLLMCall(resp, perCallMs, llmContext);
       }
       bridge.dispatchTurnComplete(
         agentResult.content,

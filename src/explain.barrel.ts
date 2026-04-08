@@ -28,5 +28,6 @@ export type {
   ToolSource,
   LLMClaim,
   AgentDecision,
+  LLMContext,
   Explanation,
 } from './recorders/v2/ExplainRecorder';

@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-04-07
+
+### Added
+
+- **`explain().context`** — ExplainRecorder now captures full evaluation context during traversal: user input, system prompt, available tools, messages, model. Everything an LLM evaluator needs in one call.
+- **`LLMCallEvent.systemPrompt`/`toolDescriptions`/`messages`** — context fields on LLM call events (optional, backward-compatible)
+
 ## [1.2.0] - 2026-04-07
 
 ### Added

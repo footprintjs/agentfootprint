@@ -27,7 +27,15 @@ export class RecorderBridge {
   }
 
   /** Dispatch LLM call event from the adapter response stored in scope. */
-  dispatchLLMCall(response: LLMResponse, latencyMs = 0): void {
+  dispatchLLMCall(
+    response: LLMResponse,
+    latencyMs = 0,
+    context?: {
+      systemPrompt?: string;
+      toolDescriptions?: Array<{ name: string; description: string }>;
+      messages?: Array<{ role: string; content: unknown }>;
+    },
+  ): void {
     const event: LLMCallEvent = {
       model: response.model,
       usage: response.usage,
@@ -35,6 +43,9 @@ export class RecorderBridge {
       turnNumber: this.turnNumber,
       loopIteration: this.loopIteration,
       finishReason: response.finishReason,
+      systemPrompt: context?.systemPrompt,
+      toolDescriptions: context?.toolDescriptions,
+      messages: context?.messages,
     };
     this.dispatch('onLLMCall', event);
   }

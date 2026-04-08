@@ -137,11 +137,17 @@ export class LLMCallRunner {
     const lastAsst = lastAssistantMessage(messages);
     const content = (state.result as string) ?? (lastAsst ? getTextContent(lastAsst.content) : '');
 
-    // Dispatch LLM call event from the adapter response stored in scope
+    // Dispatch LLM call event with evaluation context
     if (bridge) {
       const response = state.adapterRawResponse as LLMResponse | undefined;
       if (response) {
-        bridge.dispatchLLMCall(response, Date.now() - startMs);
+        bridge.dispatchLLMCall(response, Date.now() - startMs, {
+          systemPrompt: state.systemPrompt as string | undefined,
+          toolDescriptions: state.toolDescriptions as
+            | Array<{ name: string; description: string }>
+            | undefined,
+          messages: messages as Array<{ role: string; content: unknown }>,
+        });
       }
       bridge.dispatchTurnComplete(content, messages.length);
     }
