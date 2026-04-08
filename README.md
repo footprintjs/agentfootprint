@@ -219,32 +219,32 @@ SSE for web backends: `res.write(SSEFormatter.format(event))`
 
 ## Recorders — Passive Observation
 
-Observe without shaping behavior. Collect during traversal.
+Observe without shaping behavior. Collect during traversal. One call for everything:
 
 ```typescript
-import { TokenRecorder, CostRecorder, QualityRecorder, GuardrailRecorder } from 'agentfootprint';
+import { agentObservability } from 'agentfootprint/observe';
 
-const tokens = new TokenRecorder();
-const cost = new CostRecorder({ pricingTable: { 'claude-sonnet': { input: 3, output: 15 } } });
-
-const agent = Agent.create({ provider })
-  .recorder(tokens)
-  .recorder(cost)
-  .build();
-
+const obs = agentObservability();
+const agent = Agent.create({ provider }).tool(searchTool).recorder(obs).build();
 await agent.run('Hello');
-tokens.getStats();       // { totalCalls, totalInputTokens, totalOutputTokens, ... }
-cost.getTotalCost();     // USD amount
+
+obs.tokens();   // metrics: { totalCalls, totalInputTokens, totalOutputTokens, calls[] }
+obs.tools();    // metrics: { totalCalls, byTool: { search: { calls, errors, latency } } }
+obs.cost();     // metrics: USD amount
+obs.explain();  // evaluation: { iterations, sources, claims, decisions, context, summary }
 ```
 
-| Recorder | What it tracks |
-|----------|---------------|
-| `TokenRecorder` | Input/output tokens per LLM call |
-| `CostRecorder` | USD cost per model |
-| `ToolUsageRecorder` | Tool call counts, latency, errors |
-| `QualityRecorder` | Score each response via custom judge |
-| `GuardrailRecorder` | Flag policy violations via custom check |
-| `PermissionRecorder` | Blocked/denied/allowed tool events |
+### 5 Categories
+
+| Category | Recorders | Audience |
+|----------|-----------|----------|
+| **Evaluation** | `ExplainRecorder` | LLM evaluator — faithfulness, hallucination, grounding |
+| **Metrics** | `TokenRecorder`, `CostRecorder`, `ToolUsageRecorder`, `TurnRecorder` | Ops dashboard, billing |
+| **Safety** | `GuardrailRecorder`, `PermissionRecorder`, `QualityRecorder` | Security, compliance |
+| **Export** | `OTelRecorder` | Datadog, Grafana, any OTel backend |
+| **Composition** | `CompositeRecorder`, `agentObservability()` | Bundle recorders |
+
+`obs.explain()` is the differentiator — per-iteration evaluation units with connected context. See [`recorders/README.md`](src/recorders/README.md).
 
 ---
 
@@ -321,22 +321,31 @@ const provider = resilientProvider([anthropicAdapter, openaiAdapter, ollamaAdapt
 
 ---
 
-## Architecture
+## Architecture — 5 Layers
 
 ```
-src/
-├── concepts/     → LLMCall, Agent, RAG, FlowChart, Swarm (builders + runners)
-├── lib/          → Instructions, narrative (grounding helpers), loop (buildAgentLoop), slots, call stages
-├── adapters/     → LLM adapters (Anthropic, OpenAI, Bedrock, Mock) + protocol (MCP, A2A)
-├── providers/    → Prompt/tool/message strategies
-├── recorders/    → AgentRecorders (Token, Cost, Quality, Guardrail, Permission)
-├── streaming/    → AgentStreamEvent, StreamEmitter, SSEFormatter
-├── tools/        → ToolRegistry, defineTool
-├── compositions/ → withRetry, withFallback, withCircuitBreaker
-└── types/        → All type definitions
+Layer 1: BUILD          → concepts/     Single LLM (LLMCall, Agent, RAG)
+                                         Multi-Agent (FlowChart, Parallel, Swarm)
+                          tools/         defineTool, ToolRegistry, askHuman
+
+Layer 2: COMPOSE        → lib/loop/     buildAgentLoop — the ReAct engine
+                          lib/slots/    SystemPrompt, Messages, Tools subflows
+
+Layer 3: EVALUATE       → recorders/    ExplainRecorder — per-iteration evaluation
+                          explain       obs.explain() → { iterations, sources, claims, context }
+
+Layer 4: MONITOR        → recorders/    TokenRecorder, CostRecorder, ToolUsageRecorder
+                          streaming/    AgentStreamEvent, SSEFormatter
+                          narrative     Human-readable execution story (footprintjs)
+
+Layer 5: INFRASTRUCTURE → adapters/     Anthropic, OpenAI, Bedrock, Mock, MCP, A2A
+                          providers/    Prompt, Message, Tool strategies
+                          memory/       Conversation stores (Redis, Postgres, DynamoDB)
 ```
 
-Built on [footprintjs](https://github.com/footprintjs/footPrint) — the flowchart pattern for backend code.
+Each folder has a README explaining what, when, and how. Start at Layer 1, add layers as you need them.
+
+Built on [footprintjs](https://github.com/footprintjs/footPrint) — the flowchart pattern for backend code. One DFS traversal, three observer systems (scope/flow/agent), connected data out.
 
 ---
 

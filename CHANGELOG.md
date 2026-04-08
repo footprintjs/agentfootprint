@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.1] - 2026-04-07
+
+### Fixed
+
+- **`RecorderBridge.loopIteration`** — now increments after each `dispatchLLMCall` (was always 0)
+- **Per-iteration context** — each LLM call gets its own context snapshot (was sharing last state for all)
+- **`resume()` path** — captures context same as `run()` (was empty)
+- **`ExplainRecorder`** — guards `iteration: -1` when `onTurnComplete` fires without `onLLMCall`
+- **Format gate** — release script fails on unformatted files instead of silently fixing
+
+### Added
+
+- **5 folder READMEs** — concepts, adapters, providers, memory, tools — with relatable naming (Single LLM / Multi-Agent), code examples, and cross-references
+- **Main README** — 5-layer architecture diagram (Build → Compose → Evaluate → Monitor → Infrastructure), updated Recorders section with 5 categories
+- **recorders/README.md** — event → recorder mapping, design principles
+- **5 tests** for `EvalIteration`, per-iteration context, flat/iteration consistency
+- **Flattened `recorders/v2/`** → `recorders/` — removed unnecessary indirection
+
+### Changed
+
+- `CLAUDE.md` + `AGENTS.md` — updated directory tree descriptions
+
 ## [1.4.0] - 2026-04-07
 
 ### Added
