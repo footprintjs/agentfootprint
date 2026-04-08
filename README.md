@@ -53,6 +53,8 @@ Features no other agent framework provides — and why they matter.
 | **Permission-Gated Tools** | LLM never SEES blocked tools — filtered at resolve time, not just execution | **Safety** — can't hallucinate a tool it never saw. Defense in depth. |
 | **Narrative Trace** | Human-readable execution story a follow-up LLM can reason about | **Debugging** — feed the trace to an LLM: "What went wrong?" It can answer. |
 | **Single Traversal Collection** | 3 observer systems fire during ONE DFS pass → all data connected | **Performance** — no post-processing walks. Snapshot has everything after `run()`. |
+| **Pause & Resume** | Agent pauses mid-execution, serializes to JSON, resumes hours later on a different server | **UX** — build approval flows, human-in-the-loop forms, multi-step wizards. `askHuman()` tool pauses the loop. |
+| **Streaming Events** | 9-event discriminated union: `token`, `tool_start`, `tool_end`, `llm_end`, etc. | **UX** — build real-time UI with React/Next.js. SSEFormatter for server-sent events. Every event typed. |
 
 ---
 
