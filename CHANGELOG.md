@@ -7,12 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-04-07
+
+### Added
+
+- **`explain().iterations`** — per-iteration evaluation units with connected data. Each iteration captures context (what the LLM had), decisions (tools chosen), sources (results), and claim (LLM output). Evaluators walk iterations to check faithfulness, relevance, and hallucination.
+- **`EvalIteration` type** — self-contained evaluation unit for each loop iteration
+
 ## [1.3.0] - 2026-04-07
 
 ### Added
 
-- **`explain().context`** — ExplainRecorder now captures full evaluation context during traversal: user input, system prompt, available tools, messages, model. Everything an LLM evaluator needs in one call.
-- **`LLMCallEvent.systemPrompt`/`toolDescriptions`/`messages`** — context fields on LLM call events (optional, backward-compatible)
+- **`explain().context`** — ExplainRecorder captures evaluation context during traversal: input, systemPrompt, availableTools, messages, model
+- **`LLMContext` type** — what the LLM had when making decisions
+- **`LLMCallEvent.systemPrompt`/`toolDescriptions`/`messages`** — context fields on events (optional, backward-compatible)
 
 ## [1.2.0] - 2026-04-07
 

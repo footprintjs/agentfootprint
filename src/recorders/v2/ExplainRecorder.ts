@@ -1,20 +1,23 @@
 /**
  * ExplainRecorder — collects grounding evidence + evaluation context during traversal.
  *
- * Captures:
- *   - Sources (tool results — ground truth)
- *   - Claims (LLM output — to verify)
- *   - Decisions (tool calls — what the LLM chose to do)
- *   - Context (system prompt, tool descriptions, messages — what the LLM had)
+ * Data is structured per-iteration for evaluation:
+ *   iterations[0] = { context (what LLM had), decisions (tools chosen), sources (results), claim? }
+ *   iterations[1] = { context (updated with tool results), decisions, sources, claim (final answer) }
  *
- * Everything for evaluation in one recorder: "what did it have?" + "what did it produce?"
+ * An evaluator walks iterations: for each one that has a claim, check if it's
+ * grounded in that iteration's sources + all prior sources.
  *
  * Usage:
  *   const explain = new ExplainRecorder();
  *   agent.recorder(explain);
  *   await agent.run('Check order');
  *
- *   explain.explain();  // { sources, claims, decisions, context, summary }
+ *   const report = explain.explain();
+ *   report.iterations;  // per-iteration evaluation units
+ *   report.sources;     // flat convenience (all sources)
+ *   report.claims;      // flat convenience (all claims)
+ *   report.context;     // last context snapshot
  */
 
 import type {
@@ -61,28 +64,48 @@ export interface LLMContext {
   readonly model?: string;
 }
 
-/** Structured explanation of an agent's execution — everything needed for evaluation. */
-export interface Explanation {
-  readonly sources: readonly ToolSource[];
-  readonly claims: readonly LLMClaim[];
+/** One iteration of the agent loop — a self-contained evaluation unit. */
+export interface EvalIteration {
+  /** Loop iteration number (0-based). */
+  readonly iteration: number;
+  /** What the LLM had THIS iteration (context changes each loop — messages grow). */
+  readonly context: LLMContext;
+  /** Tool calls the LLM chose to make (empty if final response). */
   readonly decisions: readonly AgentDecision[];
-  /** What the LLM had when it made decisions. */
+  /** Tool results returned (empty if no tools called). */
+  readonly sources: readonly ToolSource[];
+  /** LLM's response — null for tool-calling iterations, string for final answer. */
+  readonly claim: LLMClaim | null;
+}
+
+/** Structured explanation — everything needed for evaluation. */
+export interface Explanation {
+  /** Per-iteration evaluation units — the connected data shape. */
+  readonly iterations: readonly EvalIteration[];
+  /** Flat convenience: all sources across all iterations. */
+  readonly sources: readonly ToolSource[];
+  /** Flat convenience: all claims across all iterations. */
+  readonly claims: readonly LLMClaim[];
+  /** Flat convenience: all decisions across all iterations. */
+  readonly decisions: readonly AgentDecision[];
+  /** Last context snapshot (same as iterations[last].context). */
   readonly context: LLMContext;
   readonly summary: string;
 }
 
 export class ExplainRecorder implements AgentRecorder {
   readonly id: string;
-  private sources: ToolSource[] = [];
-  private claims: LLMClaim[] = [];
-  private decisions: AgentDecision[] = [];
+
+  // Per-iteration accumulation
+  private iterations: EvalIteration[] = [];
+  private currentIterationDecisions: AgentDecision[] = [];
+  private currentIterationSources: ToolSource[] = [];
+
+  // Tracking state
   private currentTurn = 0;
   private input?: string;
-  private lastModel?: string;
-  private lastIteration = 0;
-  private lastSystemPrompt?: string;
-  private lastToolDescriptions?: ReadonlyArray<{ name: string; description: string }>;
-  private lastMessages?: ReadonlyArray<{ role: string; content: unknown }>;
+  private currentIteration = -1;
+  private currentContext: LLMContext = {};
 
   constructor(id = 'explain-recorder') {
     this.id = id;
@@ -94,92 +117,124 @@ export class ExplainRecorder implements AgentRecorder {
   }
 
   onLLMCall(event: LLMCallEvent): void {
-    this.lastModel = event.model;
-    this.lastIteration = event.loopIteration;
-    // Capture evaluation context from the LLM call event
-    if (event.systemPrompt) this.lastSystemPrompt = event.systemPrompt;
-    if (event.toolDescriptions) this.lastToolDescriptions = event.toolDescriptions;
-    if (event.messages) this.lastMessages = event.messages;
+    // Flush previous iteration (if any) — it had no claim (tool-calling response)
+    if (this.currentIteration >= 0) {
+      this.flushIteration(null);
+    }
+
+    this.currentIteration = event.loopIteration;
+
+    // Snapshot context for THIS iteration
+    this.currentContext = {
+      input: this.input,
+      systemPrompt: event.systemPrompt ?? this.currentContext.systemPrompt,
+      availableTools: event.toolDescriptions
+        ? [...event.toolDescriptions]
+        : this.currentContext.availableTools,
+      messages: event.messages ? [...event.messages] : this.currentContext.messages,
+      model: event.model,
+    };
   }
 
   onToolCall(event: ToolCallEvent): void {
-    this.sources.push({
+    const source: ToolSource = {
       toolName: event.toolName,
       args: { ...event.args },
       result: String(event.result.content),
       turnNumber: this.currentTurn,
-    });
+    };
+    this.currentIterationSources.push(source);
 
-    this.decisions.push({
+    const decision: AgentDecision = {
       toolName: event.toolName,
       args: { ...event.args },
       latencyMs: event.latencyMs,
-    });
+    };
+    this.currentIterationDecisions.push(decision);
   }
 
   onTurnComplete(event: TurnCompleteEvent): void {
-    this.claims.push({
+    // Final iteration has a claim
+    const claim: LLMClaim = {
       content: event.content,
-      model: this.lastModel,
-      iteration: this.lastIteration,
-    });
-  }
-
-  /** Tool results — the ground truth data. */
-  getSources(): readonly ToolSource[] {
-    return [...this.sources];
-  }
-
-  /** LLM responses — what it claimed. */
-  getClaims(): readonly LLMClaim[] {
-    return [...this.claims];
-  }
-
-  /** Tool call decisions — what the LLM chose to do. */
-  getDecisions(): readonly AgentDecision[] {
-    return this.decisions.map((d) => ({ ...d, args: { ...d.args } }));
-  }
-
-  /** What the LLM had when it made decisions — for evaluation. */
-  getContext(): LLMContext {
-    return {
-      input: this.input,
-      systemPrompt: this.lastSystemPrompt,
-      availableTools: this.lastToolDescriptions ? [...this.lastToolDescriptions] : undefined,
-      messages: this.lastMessages ? [...this.lastMessages] : undefined,
-      model: this.lastModel,
+      model: this.currentContext.model,
+      iteration: this.currentIteration,
     };
+    this.flushIteration(claim);
   }
 
-  /** Structured explanation — everything needed for evaluation. */
+  /** Flush current iteration data into the iterations array. */
+  private flushIteration(claim: LLMClaim | null): void {
+    this.iterations.push({
+      iteration: this.currentIteration,
+      context: { ...this.currentContext },
+      decisions: this.currentIterationDecisions.map((d) => ({ ...d, args: { ...d.args } })),
+      sources: [...this.currentIterationSources],
+      claim,
+    });
+    this.currentIterationDecisions = [];
+    this.currentIterationSources = [];
+  }
+
+  // ── Flat convenience accessors (backward compatible) ────
+
+  getSources(): readonly ToolSource[] {
+    return this.iterations.flatMap((it) => it.sources);
+  }
+
+  getClaims(): readonly LLMClaim[] {
+    return this.iterations.filter((it) => it.claim).map((it) => it.claim!);
+  }
+
+  getDecisions(): readonly AgentDecision[] {
+    return this.iterations.flatMap((it) =>
+      it.decisions.map((d) => ({ ...d, args: { ...d.args } })),
+    );
+  }
+
+  getContext(): LLMContext {
+    return { ...this.currentContext };
+  }
+
+  /** Per-iteration evaluation units. */
+  getIterations(): readonly EvalIteration[] {
+    return this.iterations.map((it) => ({
+      ...it,
+      context: { ...it.context },
+      decisions: it.decisions.map((d) => ({ ...d, args: { ...d.args } })),
+      sources: [...it.sources],
+    }));
+  }
+
+  /** Structured explanation — flat + per-iteration, everything for evaluation. */
   explain(): Explanation {
-    const toolNames = [...new Set(this.decisions.map((d) => d.toolName))];
+    const allDecisions = this.getDecisions();
+    const toolNames = [...new Set(allDecisions.map((d) => d.toolName))];
+    const allSources = this.getSources();
     const summary =
-      this.sources.length === 0
+      allSources.length === 0
         ? `Agent responded directly without calling tools.`
-        : `Agent called ${toolNames.join(', ')} (${this.sources.length} call${
-            this.sources.length > 1 ? 's' : ''
+        : `Agent called ${toolNames.join(', ')} (${allSources.length} call${
+            allSources.length > 1 ? 's' : ''
           }), then responded based on the results.`;
 
     return {
-      sources: this.getSources(),
+      iterations: this.getIterations(),
+      sources: allSources,
       claims: this.getClaims(),
-      decisions: this.getDecisions(),
+      decisions: allDecisions,
       context: this.getContext(),
       summary,
     };
   }
 
   clear(): void {
-    this.sources = [];
-    this.claims = [];
-    this.decisions = [];
+    this.iterations = [];
+    this.currentIterationDecisions = [];
+    this.currentIterationSources = [];
     this.currentTurn = 0;
     this.input = undefined;
-    this.lastModel = undefined;
-    this.lastIteration = 0;
-    this.lastSystemPrompt = undefined;
-    this.lastToolDescriptions = undefined;
-    this.lastMessages = undefined;
+    this.currentIteration = -1;
+    this.currentContext = {};
   }
 }

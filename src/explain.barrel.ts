@@ -29,5 +29,6 @@ export type {
   LLMClaim,
   AgentDecision,
   LLMContext,
+  EvalIteration,
   Explanation,
 } from './recorders/v2/ExplainRecorder';
