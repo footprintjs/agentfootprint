@@ -1,5 +1,5 @@
 <p align="center">
-  <h1 align="center">agentfootprint</h1>
+  <h1 align="center">AGENT FOOTPRINT</h1>
   <p align="center">
     <strong>The explainable agent framework</strong>
   </p>
