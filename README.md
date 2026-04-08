@@ -60,7 +60,7 @@ Features no other agent framework provides — and why they matter.
 
 ## Start Simple, Compose Up
 
-Five concepts. Each adds one capability. No upfront graph DSL — start with a function call and grow.
+Six concepts. Start with a single LLM call, compose up to multi-agent. No upfront graph DSL.
 
 ```typescript
 import { Agent, defineTool, mock } from 'agentfootprint';
@@ -75,15 +75,23 @@ console.log(result.content);
 console.log(agent.getNarrative());  // connected execution trace
 ```
 
+**Single LLM** (one agent, one task):
+
 | Concept | What it adds | Use case |
 |---------|-------------|----------|
 | **LLMCall** | Single LLM invocation | Summarization, classification |
 | **Agent** | + Tool use loop (ReAct) | Research, code generation |
 | **RAG** | + Retrieval | Q&A over documents |
-| **FlowChart** | + Sequential pipeline | Approval flows, ETL |
-| **Swarm** | + LLM-driven routing | Customer support, triage |
 
-All five share one interface: `.build()` → `.run()`, `.getNarrative()`, `.getSnapshot()`.
+**Multi-Agent** (compose agents):
+
+| Concept | What it adds | Use case |
+|---------|-------------|----------|
+| **FlowChart** | Sequential pipeline | Approval flows, ETL — output of one feeds the next |
+| **Parallel** | Concurrent execution | Analysis from multiple perspectives — merged by LLM |
+| **Swarm** | LLM-driven routing | Customer support — orchestrator delegates to specialists |
+
+All six share one interface: `.build()` → `.run()`, `.getNarrative()`, `.getSnapshot()`.
 
 ---
 
