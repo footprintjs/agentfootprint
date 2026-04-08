@@ -39,6 +39,23 @@ import { SSEFormatter } from 'agentfootprint/stream';            // Real-time ev
 
 ---
 
+## What's Different
+
+Features no other agent framework provides — and why they matter.
+
+| Feature | What | Why it matters |
+|---------|------|---------------|
+| **Dynamic ReAct** | All 3 slots (prompt, tools, messages) re-evaluate EACH loop iteration | **Quality** — agent adapts mid-conversation. Tools unlock progressively. Prompt changes based on what happened. |
+| **Conditional Instructions** | `defineInstruction({ activeWhen })` — rules activate based on accumulated decision state | **Quality** — progressive behavior without hardcoded if/else. Define once, fires when relevant. |
+| **Tool Result Recency** | Instructions inject into the recency window AFTER tool calls | **Quality** — LLM gets guidance at the exact moment it matters, not buried in the system prompt. |
+| **Per-Iteration Evaluation** | `obs.explain().iterations` — context + decisions + sources + claims connected per loop | **Quality** — faithfulness and hallucination checks without a separate eval pipeline. |
+| **$0 Testing** | `mock()` has the same interface as Anthropic/OpenAI adapters | **Cost** — full test suite with deterministic assertions, zero API spend. |
+| **Permission-Gated Tools** | LLM never SEES blocked tools — filtered at resolve time, not just execution | **Safety** — can't hallucinate a tool it never saw. Defense in depth. |
+| **Narrative Trace** | Human-readable execution story a follow-up LLM can reason about | **Debugging** — feed the trace to an LLM: "What went wrong?" It can answer. |
+| **Single Traversal Collection** | 3 observer systems fire during ONE DFS pass → all data connected | **Performance** — no post-processing walks. Snapshot has everything after `run()`. |
+
+---
+
 ## Start Simple, Compose Up
 
 Five concepts. Each adds one capability. No upfront graph DSL — start with a function call and grow.
