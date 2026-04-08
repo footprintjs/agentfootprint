@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.2] - 2026-04-07
+
+### Fixed
+
+- **README rewrite** — Architecture moved to 3rd section, headers renamed to relatable terms (Conditional Behavior, Observability, Human-in-the-Loop), 4 broken import paths fixed, redundant sections folded, 380→280 lines
+- **5 folder READMEs** — concepts, adapters, providers, memory, tools with relatable naming and code examples
+- **recorders/README.md** — 5 categories, event→recorder mapping, design principles
+- **What's Different section** — 10 unique features grouped by concern (Quality/Safety/UX/Debugging)
+
 ## [1.4.1] - 2026-04-07
 
 ### Fixed
