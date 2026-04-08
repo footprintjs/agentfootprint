@@ -18,7 +18,7 @@ src/
 ├── adapters/    → LLMProvider implementations (mock, anthropic, openai, bedrock, mcp, a2a)
 ├── models/      → ModelConfig factories (anthropic(), openai(), ollama(), bedrock())
 ├── providers/   → Strategy implementations (prompt/, messages/, tools/)
-├── recorders/   → Scope-level (LLMRecorder, RAGRecorder) + v2 AgentRecorder impls
+├── recorders/   → AgentRecorder impls: Evaluation (Explain), Metrics (Token, Cost, Tool, Turn), Safety (Guardrail, Permission, Quality), Export (OTel), Composition (Composite, agentObservability)
 ├── tools/       → ToolRegistry + defineTool
 ├── stages/      → Reusable flowchart stages (seedScope, callLLM, parseResponse, etc.)
 ├── scope/       → AgentScope paths + helpers
