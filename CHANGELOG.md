@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-04-09
+
+### Added
+
+- **`runtimeStageId`** — mandatory on `LLMCallEvent` and `ToolCallEvent`. The universal key linking recorder data to execution tree nodes and commit log entries. Format: `[subflowPath/]stageId#executionIndex`.
+- **Map-based recorders** — `TokenRecorder`, `ToolUsageRecorder`, `CostRecorder` extend `KeyedRecorder<T>` from `footprintjs/trace`. O(1) lookup via `getByKey(runtimeStageId)`, `getMap()`. Zero fallback keys.
+- **`EvalIteration.runtimeStageId`** — each iteration links to its execution step
+- **`createLLMCaptureRecorder()`** — shared factory for run() and resume() LLM capture. Both paths now track `runtimeStageId` for stream bridge tool events.
+- **`RecorderBridge.setToolRuntimeStageId()`** — encapsulated state tracking (was public mutable field)
+- 5 new tests for runtimeStageId on all recorder types
+
+### Changed
+
+- **footprintjs >=4.7.0 required** — added to `dependencies` (was only in devDependencies)
+- **`agentLoop.ts`** — uses `buildRuntimeStageId` + `createExecutionCounter` from `footprintjs/trace`
+- **`LLMCallRunner` + `RAGRunner`** — use `findCommit` from `footprintjs/trace` (zero `(b: any)` casts)
+- CLAUDE.md + AGENTS.md — documented `runtimeStageId`, `KeyedRecorder`, `getByKey()` pattern
+
+### Removed
+
+- All `__auto_` fallback keys — runtimeStageId is always provided
+- Duplicate LLM capture code in resume() path — replaced by shared factory
+
 ## [1.4.2] - 2026-04-07
 
 ### Fixed
