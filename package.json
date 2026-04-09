@@ -144,6 +144,9 @@
     }
   },
   "sideEffects": false,
+  "dependencies": {
+    "footprintjs": ">=4.7.0"
+  },
   "peerDependencies": {
     "@anthropic-ai/sdk": ">=0.30.0",
     "@aws-sdk/client-bedrock-runtime": ">=3.0.0",

@@ -112,3 +112,20 @@ const narrative = executor.getNarrative();
 ```
 
 Narrative lives in footprintjs because it's a flowchart concern (stage execution order). AgentRecorders live in agentfootprint because they're agent concerns (LLM calls, tool use, evaluation).
+
+## KeyedRecorder<T> — Map-Based Storage
+
+All metric recorders (Token, ToolUsage, Cost) extend `KeyedRecorder<T>` from `footprintjs/trace`. Data is stored as `Map<runtimeStageId, T>` — keyed by the unique execution step identifier.
+
+```typescript
+// O(1) lookup by runtimeStageId
+const llmCall = tokens.getByKey('call-llm#5');
+
+// All entries as a Map (insertion-ordered)
+const map = tokens.getMap();
+
+// Aggregated stats (backward compatible)
+const stats = tokens.getStats();
+```
+
+Every recorder event carries a mandatory `runtimeStageId` — the universal key that links recorder data to the commit log and execution tree. No fallbacks, no auto-generated keys.

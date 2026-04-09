@@ -149,7 +149,13 @@ describe('CostRecorder (v2)', () => {
 
   it('getEntries returns defensive copy', () => {
     const recorder = new CostRecorder();
-    recorder.onLLMCall({ model: 'x', latencyMs: 0, turnNumber: 0, loopIteration: 0 });
+    recorder.onLLMCall({
+      model: 'x',
+      latencyMs: 0,
+      turnNumber: 0,
+      loopIteration: 0,
+      runtimeStageId: 'call-llm#0',
+    });
     const entries = recorder.getEntries();
     expect(entries).toHaveLength(1);
     expect(recorder.getEntries()).not.toBe(entries); // different array reference
