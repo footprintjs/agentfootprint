@@ -163,45 +163,35 @@ const provider = createProvider(bedrock('anthropic.claude-3-sonnet'));
 
 ## Recorder System
 
-Attach via `.recorder(rec)` on any builder. All implement `AgentRecorder` interface.
+All recorders implement `AgentRecorder` and extend `KeyedRecorder<T>` from `footprintjs/trace`. Data stored as `Map<runtimeStageId, T>` — every event carries a mandatory `runtimeStageId` (unique execution step identifier).
 
 ```typescript
-import {
-  TokenRecorder,
-  CostRecorder,
-  TurnRecorder,
-  ToolUsageRecorder,
-  QualityRecorder,
-  GuardrailRecorder,
-  CompositeRecorder,
-} from 'agentfootprint';
+import { agentObservability } from 'agentfootprint/observe';
 
-const tokens = new TokenRecorder();
-const costs = new CostRecorder({ pricingTable: { 'claude-sonnet': { input: 3, output: 15 } } });
-const turns = new TurnRecorder();
-const toolUsage = new ToolUsageRecorder();
-
-const agent = Agent.create({ provider })
-  .system('...')
-  .recorder(tokens)
-  .recorder(costs)
-  .build();
-
+// One call — tokens, tools, cost, grounding
+const obs = agentObservability();
+const agent = Agent.create({ provider }).tool(searchTool).recorder(obs).build();
 await agent.run('Hello');
 
-tokens.getStats();       // { totalCalls, totalInputTokens, totalOutputTokens, ... }
-costs.getTotalCost();    // number (USD)
-costs.getEntries();      // CostEntry[]
-turns.getEntries();      // TurnEntry[]
-toolUsage.getStats();    // ToolUsageStats
+// Aggregated stats
+obs.tokens();   // { totalCalls, totalInputTokens, totalOutputTokens, calls[] }
+obs.tools();    // { totalCalls, byTool: { search: { calls, errors, latency } } }
+obs.cost();     // number (USD)
+obs.explain();  // { iterations, sources, claims, decisions, context, summary }
+
+// O(1) lookup by runtimeStageId — every recorder supports this
+const tokens = new TokenRecorder();
+tokens.getByKey('call-llm#5');  // LLMCallEntry for that specific execution step
+tokens.getMap();                // ReadonlyMap<string, LLMCallEntry>
+tokens.getStats();              // aggregated totals
+
+// runtimeStageId format: [subflowPath/]stageId#executionIndex
+// Examples: 'call-llm#5', 'sf-tools/execute-tool-calls#8', 'call-llm#9' (loop)
 ```
 
-Use `CompositeRecorder` to bundle multiple recorders:
+**5 categories:** Evaluation (ExplainRecorder), Metrics (Token, Cost, Tool, Turn), Safety (Guardrail, Permission, Quality), Export (OTel), Composition (CompositeRecorder, agentObservability).
 
-```typescript
-const composite = new CompositeRecorder([tokens, costs, turns]);
-agent.recorder(composite);
-```
+**runtimeStageId** — the universal key linking recorder data → commit log → execution tree. Mandatory on `LLMCallEvent` and `ToolCallEvent`. See `recorders/README.md` for full category docs.
 
 ## Compositions (Resilience Wrappers)
 

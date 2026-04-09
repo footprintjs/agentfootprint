@@ -163,45 +163,25 @@ const provider = createProvider(bedrock('anthropic.claude-3-sonnet'));
 
 ## Recorder System
 
-Attach via `.recorder(rec)` on any builder. All implement `AgentRecorder` interface.
+Recorders extend `KeyedRecorder<T>` from `footprintjs/trace`. Data keyed by `runtimeStageId` (unique execution step ID).
 
 ```typescript
-import {
-  TokenRecorder,
-  CostRecorder,
-  TurnRecorder,
-  ToolUsageRecorder,
-  QualityRecorder,
-  GuardrailRecorder,
-  CompositeRecorder,
-} from 'agentfootprint';
+import { agentObservability } from 'agentfootprint/observe';
 
-const tokens = new TokenRecorder();
-const costs = new CostRecorder({ pricingTable: { 'claude-sonnet': { input: 3, output: 15 } } });
-const turns = new TurnRecorder();
-const toolUsage = new ToolUsageRecorder();
-
-const agent = Agent.create({ provider })
-  .system('...')
-  .recorder(tokens)
-  .recorder(costs)
-  .build();
-
+const obs = agentObservability();
+agent.recorder(obs).build();
 await agent.run('Hello');
 
-tokens.getStats();       // { totalCalls, totalInputTokens, totalOutputTokens, ... }
-costs.getTotalCost();    // number (USD)
-costs.getEntries();      // CostEntry[]
-turns.getEntries();      // TurnEntry[]
-toolUsage.getStats();    // ToolUsageStats
+obs.tokens();   // aggregated stats
+obs.tools();    // per-tool breakdown
+obs.cost();     // USD
+obs.explain();  // { iterations, sources, claims, context }
+
+// O(1) lookup: tokens.getByKey('call-llm#5'), tokens.getMap()
+// runtimeStageId format: [subflowPath/]stageId#executionIndex
 ```
 
-Use `CompositeRecorder` to bundle multiple recorders:
-
-```typescript
-const composite = new CompositeRecorder([tokens, costs, turns]);
-agent.recorder(composite);
-```
+5 categories: Evaluation (Explain), Metrics (Token, Cost, Tool, Turn), Safety (Guardrail, Permission, Quality), Export (OTel), Composition (Composite, agentObservability).
 
 ## Compositions (Resilience Wrappers)
 
