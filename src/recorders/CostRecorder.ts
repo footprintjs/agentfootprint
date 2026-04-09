@@ -63,6 +63,11 @@ export class CostRecorder implements AgentRecorder {
     return this.data.get(runtimeStageId);
   }
 
+  /** All entries as a Map (insertion-ordered). */
+  getMap(): ReadonlyMap<string, CostEntry> {
+    return this.data;
+  }
+
   getTotalCost(): number {
     let total = 0;
     for (const e of this.data.values()) total += e.totalCost;

@@ -277,7 +277,7 @@ export class AgentRunner {
           if (event.key === 'adapterRawResponse' && event.value) {
             llmCaptures.push({
               response: event.value as LLMResponse,
-              runtimeStageId: (event as any).runtimeStageId,
+              runtimeStageId: event.runtimeStageId,
               context: {
                 systemPrompt: lastSystemPrompt,
                 toolDescriptions: lastToolDescriptions ? [...lastToolDescriptions] : undefined,
@@ -414,7 +414,7 @@ export class AgentRunner {
           if (event.key === 'adapterRawResponse' && event.value) {
             llmCaptures.push({
               response: event.value as LLMResponse,
-              runtimeStageId: (event as any).runtimeStageId,
+              runtimeStageId: event.runtimeStageId,
               context: {
                 systemPrompt: lastSystemPrompt,
                 toolDescriptions: lastToolDescriptions ? [...lastToolDescriptions] : undefined,

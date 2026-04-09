@@ -68,6 +68,8 @@ export interface LLMContext {
 export interface EvalIteration {
   /** Loop iteration number (0-based). */
   readonly iteration: number;
+  /** Unique execution step identifier for this LLM call. */
+  readonly runtimeStageId?: string;
   /** What the LLM had THIS iteration (context changes each loop — messages grow). */
   readonly context: LLMContext;
   /** Tool calls the LLM chose to make (empty if final response). */
@@ -105,6 +107,7 @@ export class ExplainRecorder implements AgentRecorder {
   private currentTurn = 0;
   private input?: string;
   private currentIteration = -1;
+  private currentRuntimeStageId?: string;
   private currentContext: LLMContext = {};
 
   constructor(id = 'explain-recorder') {
@@ -123,6 +126,7 @@ export class ExplainRecorder implements AgentRecorder {
     }
 
     this.currentIteration = event.loopIteration;
+    this.currentRuntimeStageId = event.runtimeStageId;
 
     // Snapshot context for THIS iteration
     this.currentContext = {
@@ -168,6 +172,7 @@ export class ExplainRecorder implements AgentRecorder {
   private flushIteration(claim: LLMClaim | null): void {
     this.iterations.push({
       iteration: this.currentIteration,
+      runtimeStageId: this.currentRuntimeStageId,
       context: { ...this.currentContext },
       decisions: this.currentIterationDecisions.map((d) => ({ ...d, args: { ...d.args } })),
       sources: [...this.currentIterationSources],
@@ -236,6 +241,7 @@ export class ExplainRecorder implements AgentRecorder {
     this.currentTurn = 0;
     this.input = undefined;
     this.currentIteration = -1;
+    this.currentRuntimeStageId = undefined;
     this.currentContext = {};
   }
 }
