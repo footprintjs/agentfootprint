@@ -1,14 +1,7 @@
 /**
- * CostRecorder (v2) — calculates USD cost from AgentRecorder LLM call events.
+ * CostRecorder — calculates USD cost from AgentRecorder LLM call events.
  *
- * Unlike the v1 CostRecorder (which observes scope writes), this one
- * receives structured LLMCallEvent objects from the core loop.
- *
- * Usage:
- *   const cost = new CostRecorder({ pricingTable: { 'claude-sonnet': { input: 3, output: 15 } } });
- *   agent.recorder(cost);
- *   await agent.run(...);
- *   console.log(`$${cost.getTotalCost().toFixed(4)}`);
+ * Stores data as Map<runtimeStageId, CostEntry> for O(1) lookup.
  */
 
 import type { AgentRecorder, LLMCallEvent } from '../core';
@@ -22,6 +15,7 @@ export interface CostEntry {
   readonly inputCost: number;
   readonly outputCost: number;
   readonly totalCost: number;
+  readonly runtimeStageId?: string;
 }
 
 export interface CostRecorderOptions {
@@ -32,8 +26,9 @@ export interface CostRecorderOptions {
 
 export class CostRecorder implements AgentRecorder {
   readonly id: string;
-  private entries: CostEntry[] = [];
+  private data = new Map<string, CostEntry>();
   private pricingTable: Record<string, ModelPricing>;
+  private _autoKey = 0;
 
   constructor(options: CostRecorderOptions = {}) {
     this.id = options.id ?? 'cost-recorder';
@@ -49,25 +44,37 @@ export class CostRecorder implements AgentRecorder {
     const inputCost = pricing ? (inputTokens / 1_000_000) * pricing.input : 0;
     const outputCost = pricing ? (outputTokens / 1_000_000) * pricing.output : 0;
 
-    this.entries.push({
+    const entry: CostEntry = {
       model,
       inputTokens,
       outputTokens,
       inputCost,
       outputCost,
       totalCost: inputCost + outputCost,
-    });
+      runtimeStageId: event.runtimeStageId,
+    };
+
+    const key = event.runtimeStageId ?? `__auto_${this._autoKey++}`;
+    this.data.set(key, entry);
+  }
+
+  /** O(1) lookup by runtimeStageId. */
+  getByKey(runtimeStageId: string): CostEntry | undefined {
+    return this.data.get(runtimeStageId);
   }
 
   getTotalCost(): number {
-    return this.entries.reduce((s, e) => s + e.totalCost, 0);
+    let total = 0;
+    for (const e of this.data.values()) total += e.totalCost;
+    return total;
   }
 
   getEntries(): CostEntry[] {
-    return [...this.entries];
+    return [...this.data.values()];
   }
 
   clear(): void {
-    this.entries = [];
+    this.data.clear();
+    this._autoKey = 0;
   }
 }

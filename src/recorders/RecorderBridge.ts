@@ -34,6 +34,7 @@ export class RecorderBridge {
       systemPrompt?: string;
       toolDescriptions?: Array<{ name: string; description: string }>;
       messages?: Array<{ role: string; content: unknown }>;
+      runtimeStageId?: string;
     },
   ): void {
     const event: LLMCallEvent = {
@@ -43,6 +44,7 @@ export class RecorderBridge {
       turnNumber: this.turnNumber,
       loopIteration: this.loopIteration,
       finishReason: response.finishReason,
+      runtimeStageId: context?.runtimeStageId,
       systemPrompt: context?.systemPrompt,
       toolDescriptions: context?.toolDescriptions,
       messages: context?.messages,
@@ -69,8 +71,9 @@ export class RecorderBridge {
     args: Record<string, unknown>,
     result: { content: string; error?: boolean },
     latencyMs: number,
+    runtimeStageId?: string,
   ): void {
-    this.dispatch('onToolCall', { toolName, args, result, latencyMs });
+    this.dispatch('onToolCall', { toolName, args, result, latencyMs, runtimeStageId });
   }
 
   /**

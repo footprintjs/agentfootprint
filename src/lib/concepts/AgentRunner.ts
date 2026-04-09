@@ -249,6 +249,7 @@ export class AgentRunner {
     // We snapshot context alongside each response for per-iteration evaluation.
     interface LLMCallCapture {
       response: LLMResponse;
+      runtimeStageId?: string;
       context: {
         systemPrompt?: string;
         toolDescriptions?: Array<{ name: string; description: string }>;
@@ -276,6 +277,7 @@ export class AgentRunner {
           if (event.key === 'adapterRawResponse' && event.value) {
             llmCaptures.push({
               response: event.value as LLMResponse,
+              runtimeStageId: (event as any).runtimeStageId,
               context: {
                 systemPrompt: lastSystemPrompt,
                 toolDescriptions: lastToolDescriptions ? [...lastToolDescriptions] : undefined,
@@ -328,7 +330,10 @@ export class AgentRunner {
       const perCallMs =
         llmCaptures.length > 0 ? Math.round((Date.now() - startMs) / llmCaptures.length) : 0;
       for (const capture of llmCaptures) {
-        bridge.dispatchLLMCall(capture.response, perCallMs, capture.context);
+        bridge.dispatchLLMCall(capture.response, perCallMs, {
+          ...capture.context,
+          runtimeStageId: capture.runtimeStageId,
+        });
       }
       bridge.dispatchTurnComplete(
         agentResult.content,
@@ -382,6 +387,7 @@ export class AgentRunner {
     const bridge = this.recorders.length > 0 ? new RecorderBridge(this.recorders) : null;
     interface LLMCallCapture {
       response: LLMResponse;
+      runtimeStageId?: string;
       context: {
         systemPrompt?: string;
         toolDescriptions?: Array<{ name: string; description: string }>;
@@ -408,6 +414,7 @@ export class AgentRunner {
           if (event.key === 'adapterRawResponse' && event.value) {
             llmCaptures.push({
               response: event.value as LLMResponse,
+              runtimeStageId: (event as any).runtimeStageId,
               context: {
                 systemPrompt: lastSystemPrompt,
                 toolDescriptions: lastToolDescriptions ? [...lastToolDescriptions] : undefined,
@@ -427,7 +434,10 @@ export class AgentRunner {
       const perCallMs =
         llmCaptures.length > 0 ? Math.round((Date.now() - startMs) / llmCaptures.length) : 0;
       for (const capture of llmCaptures) {
-        bridge.dispatchLLMCall(capture.response, perCallMs, capture.context);
+        bridge.dispatchLLMCall(capture.response, perCallMs, {
+          ...capture.context,
+          runtimeStageId: capture.runtimeStageId,
+        });
       }
     }
 

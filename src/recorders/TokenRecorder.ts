@@ -1,17 +1,15 @@
 /**
  * TokenRecorder — tracks token usage and cost across LLM calls.
  *
- * Implements AgentRecorder. Observes onLLMCall events and accumulates
- * input/output token counts, call count, latency stats, and per-call cost.
+ * Stores data as Map<runtimeStageId, LLMCallEntry> for O(1) lookup.
+ * Flat accessors (getStats, calls[]) preserved for backward compatibility.
  *
  * Usage:
  *   const tokens = new TokenRecorder();
  *   agent.recorder(tokens);
  *   await agent.run(...);
- *   console.log(tokens.getStats());
- *
- * With pricing:
- *   const tokens = new TokenRecorder({ pricing: { 'claude-sonnet-4-20250514': { input: 3, output: 15 } } });
+ *   console.log(tokens.getStats());        // aggregated totals
+ *   console.log(tokens.getByKey('call-llm#5'));  // per-stage lookup
  */
 
 import type { AgentRecorder, LLMCallEvent } from '../core';
@@ -44,16 +42,18 @@ export interface LLMCallEntry {
   readonly loopIteration: number;
   /** Estimated cost in USD for this call. 0 if model not in pricing table. */
   readonly cost: number;
+  /** Unique execution step identifier for key-value lookup. */
+  readonly runtimeStageId?: string;
 }
 
 export class TokenRecorder implements AgentRecorder {
   readonly id: string;
-  private calls: LLMCallEntry[] = [];
+  private data = new Map<string, LLMCallEntry>();
   private readonly pricing: Record<string, ModelPricing>;
+  private _autoKey = 0;
 
   constructor(options?: TokenRecorderOptions | string) {
     if (typeof options === 'string') {
-      // Backward compat: new TokenRecorder('my-id')
       this.id = options;
       this.pricing = {};
     } else {
@@ -71,7 +71,7 @@ export class TokenRecorder implements AgentRecorder {
       ? (inputTokens / 1_000_000) * p.input + (outputTokens / 1_000_000) * p.output
       : 0;
 
-    this.calls.push({
+    const entry: LLMCallEntry = {
       model,
       inputTokens,
       outputTokens,
@@ -79,15 +79,31 @@ export class TokenRecorder implements AgentRecorder {
       turnNumber: event.turnNumber,
       loopIteration: event.loopIteration,
       cost,
-    });
+      runtimeStageId: event.runtimeStageId,
+    };
+
+    const key = event.runtimeStageId ?? `__auto_${this._autoKey++}`;
+    this.data.set(key, entry);
   }
 
+  /** O(1) lookup by runtimeStageId. */
+  getByKey(runtimeStageId: string): LLMCallEntry | undefined {
+    return this.data.get(runtimeStageId);
+  }
+
+  /** All entries as a Map (insertion-ordered). */
+  getMap(): ReadonlyMap<string, LLMCallEntry> {
+    return this.data;
+  }
+
+  /** Aggregated stats (backward compatible). */
   getStats(): TokenStats {
-    const totalCalls = this.calls.length;
-    const totalInputTokens = this.calls.reduce((s, c) => s + c.inputTokens, 0);
-    const totalOutputTokens = this.calls.reduce((s, c) => s + c.outputTokens, 0);
-    const totalLatencyMs = this.calls.reduce((s, c) => s + c.latencyMs, 0);
-    const totalCost = this.calls.reduce((s, c) => s + c.cost, 0);
+    const calls = [...this.data.values()];
+    const totalCalls = calls.length;
+    const totalInputTokens = calls.reduce((s, c) => s + c.inputTokens, 0);
+    const totalOutputTokens = calls.reduce((s, c) => s + c.outputTokens, 0);
+    const totalLatencyMs = calls.reduce((s, c) => s + c.latencyMs, 0);
+    const totalCost = calls.reduce((s, c) => s + c.cost, 0);
 
     return {
       totalCalls,
@@ -96,15 +112,18 @@ export class TokenRecorder implements AgentRecorder {
       totalLatencyMs,
       averageLatencyMs: totalCalls > 0 ? Math.round(totalLatencyMs / totalCalls) : 0,
       totalCost,
-      calls: [...this.calls],
+      calls,
     };
   }
 
   getTotalTokens(): number {
-    return this.calls.reduce((s, c) => s + c.inputTokens + c.outputTokens, 0);
+    let total = 0;
+    for (const c of this.data.values()) total += c.inputTokens + c.outputTokens;
+    return total;
   }
 
   clear(): void {
-    this.calls = [];
+    this.data.clear();
+    this._autoKey = 0;
   }
 }

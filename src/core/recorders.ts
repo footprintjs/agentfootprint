@@ -39,6 +39,8 @@ export interface LLMCallEvent {
   readonly turnNumber: number;
   readonly loopIteration: number;
   readonly finishReason?: LLMResponse['finishReason'];
+  /** Unique per-execution-step identifier from footprintjs traversal. */
+  readonly runtimeStageId?: string;
   /** System prompt the LLM received (for evaluation context). */
   readonly systemPrompt?: string;
   /** Tool descriptions sent to the LLM (for tool selection evaluation). */
@@ -52,6 +54,8 @@ export interface ToolCallEvent {
   readonly args: Record<string, unknown>;
   readonly result: ToolExecutionResult;
   readonly latencyMs: number;
+  /** Unique per-execution-step identifier from footprintjs traversal. */
+  readonly runtimeStageId?: string;
 }
 
 export interface TurnCompleteEvent {

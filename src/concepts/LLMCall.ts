@@ -140,8 +140,14 @@ export class LLMCallRunner {
     // Dispatch LLM call event with evaluation context
     if (bridge) {
       const response = state.adapterRawResponse as LLMResponse | undefined;
+      // Find runtimeStageId from commitLog — the CallLLM stage's commit
+      const llmCommit = snapshot?.commitLog?.find(
+        (b: any) =>
+          b.stageId === 'call-llm' && b.trace?.some((t: any) => t.path === 'adapterRawResponse'),
+      );
       if (response) {
         bridge.dispatchLLMCall(response, Date.now() - startMs, {
+          runtimeStageId: llmCommit?.runtimeStageId,
           systemPrompt: state.systemPrompt as string | undefined,
           toolDescriptions: state.toolDescriptions as
             | Array<{ name: string; description: string }>

@@ -1,14 +1,8 @@
 /**
  * ToolUsageRecorder — tracks which tools are called, how often, and latency.
  *
- * Useful for understanding agent behavior: which tools are hot,
- * which are slow, and which are erroring.
- *
- * Usage:
- *   const toolUsage = new ToolUsageRecorder();
- *   agent.recorder(toolUsage);
- *   await agent.run(...);
- *   console.log(toolUsage.getStats());
+ * Stores data as Map<runtimeStageId, ToolCallEvent> for O(1) lookup.
+ * Aggregated stats (byTool) computed from Map values.
  */
 
 import type { AgentRecorder, ToolCallEvent } from '../core';
@@ -28,20 +22,34 @@ export interface ToolStats {
 
 export class ToolUsageRecorder implements AgentRecorder {
   readonly id: string;
-  private toolCalls: ToolCallEvent[] = [];
+  private data = new Map<string, ToolCallEvent>();
+  private _autoKey = 0;
 
   constructor(id = 'tool-usage-recorder') {
     this.id = id;
   }
 
   onToolCall(event: ToolCallEvent): void {
-    this.toolCalls.push(event);
+    const key = event.runtimeStageId ?? `__auto_${this._autoKey++}`;
+    this.data.set(key, event);
   }
 
+  /** O(1) lookup by runtimeStageId. */
+  getByKey(runtimeStageId: string): ToolCallEvent | undefined {
+    return this.data.get(runtimeStageId);
+  }
+
+  /** All entries as a Map (insertion-ordered). */
+  getMap(): ReadonlyMap<string, ToolCallEvent> {
+    return this.data;
+  }
+
+  /** Aggregated stats (backward compatible). */
   getStats(): ToolUsageStats {
+    const calls = [...this.data.values()];
     const byTool: Record<string, { calls: number; errors: number; totalLatencyMs: number }> = {};
 
-    for (const call of this.toolCalls) {
+    for (const call of calls) {
       if (!byTool[call.toolName]) {
         byTool[call.toolName] = { calls: 0, errors: 0, totalLatencyMs: 0 };
       }
@@ -61,17 +69,18 @@ export class ToolUsageRecorder implements AgentRecorder {
     }
 
     return {
-      totalCalls: this.toolCalls.length,
-      totalErrors: this.toolCalls.filter((c) => c.result.error).length,
+      totalCalls: calls.length,
+      totalErrors: calls.filter((c) => c.result.error).length,
       byTool: result,
     };
   }
 
   getToolNames(): string[] {
-    return [...new Set(this.toolCalls.map((c) => c.toolName))];
+    return [...new Set([...this.data.values()].map((c) => c.toolName))];
   }
 
   clear(): void {
-    this.toolCalls = [];
+    this.data.clear();
+    this._autoKey = 0;
   }
 }
