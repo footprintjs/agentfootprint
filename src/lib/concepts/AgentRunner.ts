@@ -249,7 +249,7 @@ export class AgentRunner {
     // We snapshot context alongside each response for per-iteration evaluation.
     interface LLMCallCapture {
       response: LLMResponse;
-      runtimeStageId?: string;
+      runtimeStageId: string;
       context: {
         systemPrompt?: string;
         toolDescriptions?: Array<{ name: string; description: string }>;
@@ -263,6 +263,10 @@ export class AgentRunner {
     if (bridge) {
       const llmCapture: Recorder = {
         id: '__llm-capture',
+        onStageStart(event: any) {
+          // Track current stage runtimeStageId — bridge reads it for stream tool events
+          if (bridge) bridge.lastToolRuntimeStageId = event.runtimeStageId ?? '';
+        },
         onWrite(event: WriteEvent) {
           if (event.key === 'systemPrompt' && typeof event.value === 'string') {
             lastSystemPrompt = event.value;
@@ -387,7 +391,7 @@ export class AgentRunner {
     const bridge = this.recorders.length > 0 ? new RecorderBridge(this.recorders) : null;
     interface LLMCallCapture {
       response: LLMResponse;
-      runtimeStageId?: string;
+      runtimeStageId: string;
       context: {
         systemPrompt?: string;
         toolDescriptions?: Array<{ name: string; description: string }>;

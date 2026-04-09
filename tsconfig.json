@@ -17,7 +17,8 @@
     "moduleResolution": "node",
     "paths": {
       "footprintjs/advanced": ["./node_modules/footprintjs/dist/types/advanced.d.ts"],
-      "footprintjs/recorders": ["./node_modules/footprintjs/dist/types/recorders.d.ts"]
+      "footprintjs/recorders": ["./node_modules/footprintjs/dist/types/recorders.d.ts"],
+      "footprintjs/trace": ["./node_modules/footprintjs/dist/types/trace.d.ts"]
     },
     "noUnusedLocals": true,
     "noUnusedParameters": true,

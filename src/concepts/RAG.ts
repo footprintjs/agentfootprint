@@ -181,7 +181,13 @@ export class RAGRunner {
     if (bridge) {
       const response = state.adapterRawResponse as LLMResponse | undefined;
       if (response) {
-        bridge.dispatchLLMCall(response, Date.now() - startMs);
+        const llmCommit = snapshot?.commitLog?.find(
+          (b: any) =>
+            b.stageId === 'call-llm' && b.trace?.some((t: any) => t.path === 'adapterRawResponse'),
+        );
+        bridge.dispatchLLMCall(response, Date.now() - startMs, {
+          runtimeStageId: llmCommit?.runtimeStageId ?? 'call-llm#0',
+        });
       }
       bridge.dispatchTurnComplete(content, messages.length);
     }

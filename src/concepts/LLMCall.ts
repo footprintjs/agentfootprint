@@ -147,7 +147,7 @@ export class LLMCallRunner {
       );
       if (response) {
         bridge.dispatchLLMCall(response, Date.now() - startMs, {
-          runtimeStageId: llmCommit?.runtimeStageId,
+          runtimeStageId: llmCommit?.runtimeStageId ?? 'call-llm#0',
           systemPrompt: state.systemPrompt as string | undefined,
           toolDescriptions: state.toolDescriptions as
             | Array<{ name: string; description: string }>

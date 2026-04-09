@@ -16,6 +16,7 @@ describe('TokenRecorder', () => {
       latencyMs: 250,
       turnNumber: 0,
       loopIteration: 0,
+      runtimeStageId: 'call-llm#0',
     });
 
     const stats = recorder.getStats();
@@ -32,12 +33,14 @@ describe('TokenRecorder', () => {
       latencyMs: 200,
       turnNumber: 0,
       loopIteration: 0,
+      runtimeStageId: 'call-llm#0',
     });
     recorder.onLLMCall({
       usage: { inputTokens: 200, outputTokens: 100 },
       latencyMs: 300,
       turnNumber: 0,
       loopIteration: 1,
+      runtimeStageId: 'call-llm#1',
     });
 
     const stats = recorder.getStats();
@@ -54,6 +57,7 @@ describe('TokenRecorder', () => {
       latencyMs: 0,
       turnNumber: 0,
       loopIteration: 0,
+      runtimeStageId: 'call-llm#0',
     });
     expect(recorder.getTotalTokens()).toBe(150);
   });
@@ -72,6 +76,7 @@ describe('TokenRecorder', () => {
       latencyMs: 0,
       turnNumber: 0,
       loopIteration: 0,
+      runtimeStageId: 'call-llm#0',
     });
     recorder.clear();
     expect(recorder.getStats().totalCalls).toBe(0);
@@ -93,6 +98,7 @@ describe('CostRecorder (v2)', () => {
       latencyMs: 0,
       turnNumber: 0,
       loopIteration: 0,
+      runtimeStageId: 'call-llm#0',
     });
 
     expect(recorder.getTotalCost()).toBe(18); // $3 input + $15 output
@@ -106,6 +112,7 @@ describe('CostRecorder (v2)', () => {
       latencyMs: 0,
       turnNumber: 0,
       loopIteration: 0,
+      runtimeStageId: 'call-llm#0',
     });
     expect(recorder.getTotalCost()).toBe(0);
   });
@@ -120,6 +127,7 @@ describe('CostRecorder (v2)', () => {
       latencyMs: 0,
       turnNumber: 0,
       loopIteration: 0,
+      runtimeStageId: 'call-llm#0',
     });
     recorder.onLLMCall({
       model: 'test-model',
@@ -127,6 +135,7 @@ describe('CostRecorder (v2)', () => {
       latencyMs: 0,
       turnNumber: 0,
       loopIteration: 1,
+      runtimeStageId: 'call-llm#1',
     });
 
     // 2 calls × ($0.50 input + $1.00 output) = $3.00
@@ -149,6 +158,7 @@ describe('CostRecorder (v2)', () => {
       latencyMs: 0,
       turnNumber: 0,
       loopIteration: 0,
+      runtimeStageId: 'call-llm#0',
     });
     recorder.clear();
     expect(recorder.getTotalCost()).toBe(0);
@@ -158,11 +168,13 @@ describe('CostRecorder (v2)', () => {
 // ── ToolUsageRecorder ───────────────────────────────────────
 
 describe('ToolUsageRecorder', () => {
+  let toolIdx = 0;
   const makeToolEvent = (name: string, latencyMs: number, error = false): ToolCallEvent => ({
     toolName: name,
     args: {},
     result: { content: error ? 'error' : 'ok', error: error || undefined },
     latencyMs,
+    runtimeStageId: `execute-tools#${toolIdx++}`,
   });
 
   it('tracks tool call counts by name', () => {

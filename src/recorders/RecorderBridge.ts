@@ -16,6 +16,8 @@ export class RecorderBridge {
   private readonly recorders: AgentRecorder[];
   private turnNumber = 1;
   private loopIteration = 0;
+  /** Set by AgentRunner scope recorder when tool execution writes results. */
+  public lastToolRuntimeStageId = '';
 
   constructor(recorders: AgentRecorder[]) {
     this.recorders = recorders;
@@ -29,12 +31,12 @@ export class RecorderBridge {
   /** Dispatch LLM call event from the adapter response stored in scope. */
   dispatchLLMCall(
     response: LLMResponse,
-    latencyMs = 0,
-    context?: {
+    latencyMs: number,
+    context: {
+      runtimeStageId: string;
       systemPrompt?: string;
       toolDescriptions?: Array<{ name: string; description: string }>;
       messages?: Array<{ role: string; content: unknown }>;
-      runtimeStageId?: string;
     },
   ): void {
     const event: LLMCallEvent = {
@@ -44,7 +46,7 @@ export class RecorderBridge {
       turnNumber: this.turnNumber,
       loopIteration: this.loopIteration,
       finishReason: response.finishReason,
-      runtimeStageId: context?.runtimeStageId,
+      runtimeStageId: context.runtimeStageId,
       systemPrompt: context?.systemPrompt,
       toolDescriptions: context?.toolDescriptions,
       messages: context?.messages,
@@ -65,13 +67,13 @@ export class RecorderBridge {
     this.loopIteration = 0;
   }
 
-  /** Dispatch tool call event from stream events. */
+  /** Dispatch tool call event. */
   dispatchToolCall(
     toolName: string,
     args: Record<string, unknown>,
     result: { content: string; error?: boolean },
     latencyMs: number,
-    runtimeStageId?: string,
+    runtimeStageId: string,
   ): void {
     this.dispatch('onToolCall', { toolName, args, result, latencyMs, runtimeStageId });
   }
@@ -101,6 +103,7 @@ export class RecorderBridge {
             pending.args,
             { content: event.result, error: event.error },
             event.latencyMs,
+            this.lastToolRuntimeStageId,
           );
           pendingTools.delete(event.toolCallId);
         }
