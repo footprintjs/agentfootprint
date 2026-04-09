@@ -16,8 +16,12 @@ export class RecorderBridge {
   private readonly recorders: AgentRecorder[];
   private turnNumber = 1;
   private loopIteration = 0;
-  /** Set by AgentRunner scope recorder when tool execution writes results. */
-  public lastToolRuntimeStageId = '';
+  private _toolRuntimeStageId = '';
+
+  /** Set by the LLM capture recorder's onStageStart — tracks current stage's runtimeStageId. */
+  setToolRuntimeStageId(id: string): void {
+    this._toolRuntimeStageId = id;
+  }
 
   constructor(recorders: AgentRecorder[]) {
     this.recorders = recorders;
@@ -103,7 +107,7 @@ export class RecorderBridge {
             pending.args,
             { content: event.result, error: event.error },
             event.latencyMs,
-            this.lastToolRuntimeStageId,
+            this._toolRuntimeStageId,
           );
           pendingTools.delete(event.toolCallId);
         }

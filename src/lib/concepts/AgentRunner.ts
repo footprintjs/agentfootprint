@@ -33,6 +33,17 @@ import type { MemoryConfig } from '../../adapters/memory/types';
 import type { AgentRecorder, PromptProvider, ToolProvider } from '../../core';
 import { RecorderBridge } from '../../recorders/RecorderBridge';
 
+/** Captured LLM call with response, runtimeStageId, and evaluation context. */
+interface LLMCallCapture {
+  response: LLMResponse;
+  runtimeStageId: string;
+  context: {
+    systemPrompt?: string;
+    toolDescriptions?: Array<{ name: string; description: string }>;
+    messages?: Array<{ role: string; content: unknown }>;
+  };
+}
+
 /** Options for constructing an AgentRunner. Created by Agent.build(). */
 export interface AgentRunnerOptions {
   readonly provider: LLMProvider;
@@ -243,55 +254,11 @@ export class AgentRunner {
     executor.enableNarrative({ renderer: this.narrativeRenderer });
     executor.attachRecorder(new MetricRecorder('metrics'));
 
-    // Capture LLM responses + per-call context during traversal via scope recorder.
-    // Scope writes fire in order: systemPrompt → messages → toolDescriptions → adapterRawResponse.
-    // When adapterRawResponse fires, the current last* vars = context for THAT call.
-    // We snapshot context alongside each response for per-iteration evaluation.
-    interface LLMCallCapture {
-      response: LLMResponse;
-      runtimeStageId: string;
-      context: {
-        systemPrompt?: string;
-        toolDescriptions?: Array<{ name: string; description: string }>;
-        messages?: Array<{ role: string; content: unknown }>;
-      };
-    }
-    const llmCaptures: LLMCallCapture[] = [];
-    let lastSystemPrompt: string | undefined;
-    let lastToolDescriptions: Array<{ name: string; description: string }> | undefined;
-    let lastMessages: Array<{ role: string; content: unknown }> | undefined;
+    // Capture LLM responses + per-call context during traversal
+    const { recorder: llmCaptureRecorder, captures: llmCaptures } =
+      this.createLLMCaptureRecorder(bridge);
     if (bridge) {
-      const llmCapture: Recorder = {
-        id: '__llm-capture',
-        onStageStart(event: any) {
-          // Track current stage runtimeStageId — bridge reads it for stream tool events
-          if (bridge) bridge.lastToolRuntimeStageId = event.runtimeStageId ?? '';
-        },
-        onWrite(event: WriteEvent) {
-          if (event.key === 'systemPrompt' && typeof event.value === 'string') {
-            lastSystemPrompt = event.value;
-          }
-          if (event.key === 'toolDescriptions' && Array.isArray(event.value)) {
-            lastToolDescriptions = event.value as Array<{ name: string; description: string }>;
-          }
-          if (event.key === 'messages' && Array.isArray(event.value)) {
-            lastMessages = event.value as Array<{ role: string; content: unknown }>;
-          }
-          // adapterRawResponse fires AFTER context writes — snapshot context per call
-          if (event.key === 'adapterRawResponse' && event.value) {
-            llmCaptures.push({
-              response: event.value as LLMResponse,
-              runtimeStageId: event.runtimeStageId,
-              context: {
-                systemPrompt: lastSystemPrompt,
-                toolDescriptions: lastToolDescriptions ? [...lastToolDescriptions] : undefined,
-                messages: lastMessages ? [...lastMessages] : undefined,
-              },
-            });
-          }
-        },
-      };
-      executor.attachRecorder(llmCapture);
+      executor.attachRecorder(llmCaptureRecorder);
     }
 
     const startMs = Date.now();
@@ -387,48 +354,12 @@ export class AgentRunner {
       throw new Error('Cannot resume: no checkpoint available.');
     }
 
-    // Capture LLM calls + context during resume (same pattern as run())
+    // Capture LLM calls + context during resume (same factory as run())
     const bridge = this.recorders.length > 0 ? new RecorderBridge(this.recorders) : null;
-    interface LLMCallCapture {
-      response: LLMResponse;
-      runtimeStageId: string;
-      context: {
-        systemPrompt?: string;
-        toolDescriptions?: Array<{ name: string; description: string }>;
-        messages?: Array<{ role: string; content: unknown }>;
-      };
-    }
-    const llmCaptures: LLMCallCapture[] = [];
-    let lastSystemPrompt: string | undefined;
-    let lastToolDescriptions: Array<{ name: string; description: string }> | undefined;
-    let lastMessages: Array<{ role: string; content: unknown }> | undefined;
+    const { recorder: llmCaptureRecorder, captures: llmCaptures } =
+      this.createLLMCaptureRecorder(bridge);
     if (bridge) {
-      const llmCapture: Recorder = {
-        id: '__llm-capture-resume',
-        onWrite(event: WriteEvent) {
-          if (event.key === 'systemPrompt' && typeof event.value === 'string') {
-            lastSystemPrompt = event.value;
-          }
-          if (event.key === 'toolDescriptions' && Array.isArray(event.value)) {
-            lastToolDescriptions = event.value as Array<{ name: string; description: string }>;
-          }
-          if (event.key === 'messages' && Array.isArray(event.value)) {
-            lastMessages = event.value as Array<{ role: string; content: unknown }>;
-          }
-          if (event.key === 'adapterRawResponse' && event.value) {
-            llmCaptures.push({
-              response: event.value as LLMResponse,
-              runtimeStageId: event.runtimeStageId,
-              context: {
-                systemPrompt: lastSystemPrompt,
-                toolDescriptions: lastToolDescriptions ? [...lastToolDescriptions] : undefined,
-                messages: lastMessages ? [...lastMessages] : undefined,
-              },
-            });
-          }
-        },
-      };
-      executor.attachRecorder(llmCapture);
+      executor.attachRecorder(llmCaptureRecorder);
     }
 
     const startMs = Date.now();
@@ -446,6 +377,54 @@ export class AgentRunner {
     }
 
     return this.buildResult(executor);
+  }
+
+  /**
+   * Create a scope recorder that captures LLM responses + context during traversal.
+   * Shared by run() and resume() — eliminates duplication and ensures both paths
+   * track runtimeStageId for stream bridge tool events.
+   */
+  private createLLMCaptureRecorder(bridge: RecorderBridge | null): {
+    recorder: Recorder;
+    captures: LLMCallCapture[];
+  } {
+    const captures: LLMCallCapture[] = [];
+    let lastSystemPrompt: string | undefined;
+    let lastToolDescriptions: Array<{ name: string; description: string }> | undefined;
+    let lastMessages: Array<{ role: string; content: unknown }> | undefined;
+
+    const recorder: Recorder = {
+      id: '__llm-capture',
+      onStageStart(event: { runtimeStageId: string }) {
+        // Track current stage runtimeStageId — bridge reads it for stream tool events
+        if (bridge) bridge.setToolRuntimeStageId(event.runtimeStageId);
+      },
+      onWrite(event: WriteEvent) {
+        if (event.key === 'systemPrompt' && typeof event.value === 'string') {
+          lastSystemPrompt = event.value;
+        }
+        if (event.key === 'toolDescriptions' && Array.isArray(event.value)) {
+          lastToolDescriptions = event.value as Array<{ name: string; description: string }>;
+        }
+        if (event.key === 'messages' && Array.isArray(event.value)) {
+          lastMessages = event.value as Array<{ role: string; content: unknown }>;
+        }
+        // adapterRawResponse fires AFTER context writes — snapshot context per call
+        if (event.key === 'adapterRawResponse' && event.value) {
+          captures.push({
+            response: event.value as LLMResponse,
+            runtimeStageId: event.runtimeStageId,
+            context: {
+              systemPrompt: lastSystemPrompt,
+              toolDescriptions: lastToolDescriptions ? [...lastToolDescriptions] : undefined,
+              messages: lastMessages ? [...lastMessages] : undefined,
+            },
+          });
+        }
+      },
+    };
+
+    return { recorder, captures };
   }
 
   /** Extract AgentResult from executor state — shared by run() and resume(). */

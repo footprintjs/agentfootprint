@@ -16,6 +16,7 @@
  *   const result = await agentLoop(config, 'Hello', { signal, timeoutMs });
  */
 
+import { buildRuntimeStageId, createExecutionCounter } from 'footprintjs/trace';
 import type { AgentLoopConfig } from '../core';
 import type {
   AgentRecorder,
@@ -76,7 +77,7 @@ export async function agentLoop(
     const systemPrompt = await promptProvider.resolve(promptCtx);
 
     let loopIteration = 0;
-    let executionStep = 0;
+    const executionCounter = createExecutionCounter();
     let finalContent = '';
 
     while (loopIteration < maxIterations) {
@@ -113,7 +114,7 @@ export async function agentLoop(
         turnNumber,
         loopIteration,
         finishReason: llmResponse.finishReason,
-        runtimeStageId: `call-llm#${executionStep++}`,
+        runtimeStageId: buildRuntimeStageId('call-llm', executionCounter.value++),
       };
       dispatchRecorderEvent(recorders, 'onLLMCall', llmEvent);
 
@@ -147,7 +148,7 @@ export async function agentLoop(
             args: toolCall.arguments,
             result: toolResult,
             latencyMs: toolLatency,
-            runtimeStageId: `execute-tools#${executionStep++}`,
+            runtimeStageId: buildRuntimeStageId('execute-tools', executionCounter.value++),
           };
           dispatchRecorderEvent(recorders, 'onToolCall', toolEvent);
 

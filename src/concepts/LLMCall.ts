@@ -12,6 +12,7 @@
 
 import { flowChart, FlowChartExecutor, MetricRecorder } from 'footprintjs';
 import type { FlowChart as FlowChartType, FlowChartExecutorOptions, TypedScope } from 'footprintjs';
+import { findCommit } from 'footprintjs/trace';
 import { annotateSpecIcons } from './specIcons';
 
 import type { LLMProvider, LLMResponse, Message } from '../types';
@@ -141,10 +142,9 @@ export class LLMCallRunner {
     if (bridge) {
       const response = state.adapterRawResponse as LLMResponse | undefined;
       // Find runtimeStageId from commitLog — the CallLLM stage's commit
-      const llmCommit = snapshot?.commitLog?.find(
-        (b: any) =>
-          b.stageId === 'call-llm' && b.trace?.some((t: any) => t.path === 'adapterRawResponse'),
-      );
+      const llmCommit = snapshot?.commitLog
+        ? findCommit(snapshot.commitLog, 'call-llm', 'adapterRawResponse')
+        : undefined;
       if (response) {
         bridge.dispatchLLMCall(response, Date.now() - startMs, {
           runtimeStageId: llmCommit?.runtimeStageId ?? 'call-llm#0',

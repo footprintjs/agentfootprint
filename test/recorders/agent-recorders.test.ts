@@ -64,7 +64,12 @@ describe('TokenRecorder', () => {
 
   it('handles missing usage gracefully', () => {
     const recorder = new TokenRecorder();
-    recorder.onLLMCall({ latencyMs: 100, turnNumber: 0, loopIteration: 0 });
+    recorder.onLLMCall({
+      latencyMs: 100,
+      turnNumber: 0,
+      loopIteration: 0,
+      runtimeStageId: 'call-llm#0',
+    });
     expect(recorder.getStats().totalInputTokens).toBe(0);
     expect(recorder.getStats().totalOutputTokens).toBe(0);
   });
