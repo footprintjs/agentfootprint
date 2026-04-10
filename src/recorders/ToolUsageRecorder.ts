@@ -65,4 +65,17 @@ export class ToolUsageRecorder extends KeyedRecorder<ToolCallEvent> implements A
   getToolNames(): string[] {
     return [...new Set(this.values().map((c) => c.toolName))];
   }
+
+  toSnapshot() {
+    return {
+      name: 'Tools',
+      description: 'Translator (KeyedRecorder) — per-call tool usage and latency',
+      preferredOperation: 'translate' as const,
+      data: {
+        numericField: 'latencyMs',
+        grandTotal: this.aggregate((sum, e) => sum + e.latencyMs, 0),
+        steps: Object.fromEntries(this.getMap()),
+      },
+    };
+  }
 }

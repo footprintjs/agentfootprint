@@ -156,9 +156,13 @@ export class InstructionRecorder implements AgentRecorder {
     return toolFirings ? [...toolFirings.keys()] : [];
   }
 
-  /** Serialize for inclusion in executor.getSnapshot().recorders. */
-  toSnapshot(): { name: string; data: unknown } {
-    return { name: 'Instructions', data: this.getSummary() };
+  toSnapshot() {
+    return {
+      name: 'Instructions',
+      description: 'Translator (FlowRecorder) — per-tool instruction injection log',
+      preferredOperation: 'translate' as const,
+      data: this.getSummary(),
+    };
   }
 
   clear(): void {

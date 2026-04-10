@@ -74,10 +74,10 @@ export class TokenRecorder extends KeyedRecorder<LLMCallEntry> implements AgentR
   getStats(): TokenStats {
     const calls = this.values();
     const totalCalls = calls.length;
-    const totalInputTokens = calls.reduce((s, c) => s + c.inputTokens, 0);
-    const totalOutputTokens = calls.reduce((s, c) => s + c.outputTokens, 0);
-    const totalLatencyMs = calls.reduce((s, c) => s + c.latencyMs, 0);
-    const totalCost = calls.reduce((s, c) => s + c.cost, 0);
+    const totalInputTokens = this.aggregate((s, c) => s + c.inputTokens, 0);
+    const totalOutputTokens = this.aggregate((s, c) => s + c.outputTokens, 0);
+    const totalLatencyMs = this.aggregate((s, c) => s + c.latencyMs, 0);
+    const totalCost = this.aggregate((s, c) => s + c.cost, 0);
 
     return {
       totalCalls,
@@ -91,8 +91,19 @@ export class TokenRecorder extends KeyedRecorder<LLMCallEntry> implements AgentR
   }
 
   getTotalTokens(): number {
-    let total = 0;
-    for (const c of this.values()) total += c.inputTokens + c.outputTokens;
-    return total;
+    return this.aggregate((sum, c) => sum + c.inputTokens + c.outputTokens, 0);
+  }
+
+  toSnapshot() {
+    return {
+      name: 'Tokens',
+      description: 'Aggregator (KeyedRecorder) — per-call LLM token usage',
+      preferredOperation: 'aggregate' as const,
+      data: {
+        numericField: 'inputTokens',
+        grandTotal: this.getTotalTokens(),
+        steps: Object.fromEntries(this.getMap()),
+      },
+    };
   }
 }

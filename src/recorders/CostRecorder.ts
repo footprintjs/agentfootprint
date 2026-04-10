@@ -55,12 +55,23 @@ export class CostRecorder extends KeyedRecorder<CostEntry> implements AgentRecor
   }
 
   getTotalCost(): number {
-    let total = 0;
-    for (const e of this.values()) total += e.totalCost;
-    return total;
+    return this.aggregate((sum, e) => sum + e.totalCost, 0);
   }
 
   getEntries(): CostEntry[] {
     return this.values();
+  }
+
+  toSnapshot() {
+    return {
+      name: 'Cost',
+      description: 'Accumulator (KeyedRecorder) — per-call LLM cost tracking',
+      preferredOperation: 'accumulate' as const,
+      data: {
+        numericField: 'totalCost',
+        grandTotal: this.getTotalCost(),
+        steps: Object.fromEntries(this.getMap()),
+      },
+    };
   }
 }
