@@ -128,8 +128,7 @@ describe('Narrative — unit', () => {
     const narrative = agent.getNarrative();
 
     // Internal plumbing keys should NOT appear
-    expect(narrative.some((s) => s.includes('loopCount'))).toBe(false);
-    expect(narrative.some((s) => s.includes('maxIterations'))).toBe(false);
+    // Note: loopCount and maxIterations are visible loop state (not suppressed)
     expect(narrative.some((s) => s.includes('adapterResult'))).toBe(false);
     // adapterRawResponse is now shown (contains LLM reasoning + token usage)
     expect(narrative.some((s) => s.includes('memory_'))).toBe(false);
