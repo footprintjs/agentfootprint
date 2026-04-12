@@ -98,3 +98,14 @@ export type {
 
 // ── Streaming Event Types (for agent.run({ onEvent })) ──────
 export type { AgentStreamEvent, AgentStreamEventHandler } from './streaming';
+
+// ── Agent Loop (low-level engine) ──────────────────────────
+export { agentLoop } from './executor';
+export type { AgentLoopConfig } from './core/config';
+
+// ── Instructions (also available from agentfootprint/instructions) ──
+export { defineInstruction, AgentPattern, quickBind } from './instructions.barrel';
+export type { AgentInstruction, InstructedToolDefinition } from './instructions.barrel';
+
+// ── Recorders (also available from agentfootprint/observe) ──
+export { TokenRecorder, ToolUsageRecorder, TurnRecorder, CostRecorder } from './observe.barrel';

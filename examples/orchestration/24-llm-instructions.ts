@@ -32,7 +32,7 @@ const evaluateLoanTool = defineTool({
       loanAmount: { type: 'number' },
     },
   },
-  handler: async ({ applicantName, creditScore, loanAmount }) => {
+  handler: async ({ applicantName, creditScore, loanAmount }: { applicantName: string; creditScore: number; loanAmount: number }) => {
     // Simulate loan evaluation
     const score = creditScore as number;
     const amount = loanAmount as number;
@@ -64,7 +64,7 @@ const evaluateLoanTool = defineTool({
     {
       id: 'denial-empathy',
       description: 'Guide LLM to be empathetic when loan is denied',
-      when: (ctx) => (ctx.content as any)?.status === 'denied',
+      when: (ctx: any) => (ctx.content as any)?.status === 'denied',
       inject: 'The loan application was denied. Be empathetic and understanding. '
         + 'Do NOT promise the decision can be reversed. '
         + 'Suggest the applicant can try again after improving their credit score.',
@@ -77,7 +77,7 @@ const evaluateLoanTool = defineTool({
     {
       id: 'approval-congrats',
       description: 'Guide LLM to congratulate on approval',
-      when: (ctx) => (ctx.content as any)?.status === 'approved',
+      when: (ctx: any) => (ctx.content as any)?.status === 'approved',
       inject: 'The loan was approved! Congratulate the applicant. '
         + 'Mention the interest rate and term from the result.',
       priority: 1,
@@ -85,13 +85,13 @@ const evaluateLoanTool = defineTool({
     {
       id: 'pii-safety',
       description: 'Prevent PII leakage from loan results',
-      when: (ctx) => !!(ctx.content as any)?.ssn,
+      when: (ctx: any) => !!(ctx.content as any)?.ssn,
       inject: 'Result contains PII (SSN). Do NOT repeat the SSN to the user. '
         + 'Refer to it only as "on file" if the user asks.',
       safety: true, // Never truncated, always injected LAST (highest attention)
     },
   ],
-} as InstructedToolDefinition) as any;
+} as unknown as InstructedToolDefinition) as any;
 
 // ── Denial trace tool (follow-up target) ───────────────────────
 

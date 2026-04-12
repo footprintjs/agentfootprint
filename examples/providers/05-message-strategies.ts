@@ -21,8 +21,9 @@ export async function run(_input: string) {
   const windowStrategy = slidingWindow({ maxMessages: 4 });
   const budgetStrategy = charBudget({ maxChars: 100 });
 
-  const windowed = windowStrategy.prepare(messages);
-  const truncated = budgetStrategy.prepare(messages);
+  const dummyContext = { message: '', turnNumber: 1, loopIteration: 0 };
+  const windowed = await windowStrategy.prepare(messages, dummyContext);
+  const truncated = await budgetStrategy.prepare(messages, dummyContext);
 
   return {
     original: messages.length + ' messages',

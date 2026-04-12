@@ -23,7 +23,7 @@ export async function run(_input: string) {
   }));
 
   return {
-    tools: registry.all().map(t => t.name),
+    tools: registry.all().map(t => t.id),
     count: registry.all().length,
     hasCalculator: registry.get('calculator') !== undefined,
   };

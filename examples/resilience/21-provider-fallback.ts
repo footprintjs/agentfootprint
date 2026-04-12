@@ -25,11 +25,11 @@ export async function run(input: string) {
   const provider = fallbackProvider(
     [primaryProvider, backupProvider],
     {
-      onFallback: (from: number, to: number, error: Error) => {
-        fallbacks.push(`Falling back from ${from} to ${to}: ${error.message}`);
+      onFallback: (from: number, to: number, error: unknown) => {
+        fallbacks.push(`Falling back from ${from} to ${to}: ${(error as Error).message}`);
       },
-      shouldFallback: (error: Error) => {
-        return error.message.includes('429') || error.message.includes('500');
+      shouldFallback: (error: unknown) => {
+        return error instanceof Error && (error.message.includes('429') || error.message.includes('500'));
       },
     },
   );

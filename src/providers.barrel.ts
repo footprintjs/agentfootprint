@@ -49,7 +49,7 @@ export type {
 } from './core';
 
 // Tool provider strategies
-export { agentAsTool, compositeTools, gatedTools } from './providers';
+export { agentAsTool, compositeTools, gatedTools, staticTools, noTools } from './providers';
 export type { AgentAsToolConfig } from './providers';
 
 // Prompt strategies

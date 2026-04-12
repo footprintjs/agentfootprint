@@ -47,3 +47,6 @@ export type {
 } from './recorders';
 
 export type { AgentRecorder } from './core';
+
+// ExplainRecorder — also available from agentfootprint/explain
+export { ExplainRecorder } from './recorders/ExplainRecorder';
