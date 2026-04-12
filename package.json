@@ -52,6 +52,7 @@
     "build": "tsc && tsc -p tsconfig.esm.json",
     "watch": "tsc -w",
     "test": "vitest run",
+    "test:examples": "tsc -p examples/tsconfig.json",
     "test:watch": "vitest --watch",
     "lint": "eslint 'src/**/*.ts' 'test/**/*.ts' --ext .ts",
     "lint:fix": "eslint 'src/**/*.ts' 'test/**/*.ts' --ext .ts --fix",
@@ -145,7 +146,7 @@
   },
   "sideEffects": false,
   "dependencies": {
-    "footprintjs": ">=4.7.0"
+    "footprintjs": ">=4.12.0"
   },
   "peerDependencies": {
     "@anthropic-ai/sdk": ">=0.30.0",
