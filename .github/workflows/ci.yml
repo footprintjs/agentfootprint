@@ -22,7 +22,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node-version }}
-          cache: npm
+          # no cache — lockfile not committed (platform-specific native deps)
 
       - run: npm install
       - run: npx tsc --noEmit
@@ -37,7 +37,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
+          # no cache — lockfile not committed (platform-specific native deps)
 
       - run: npm install
       - run: npm run lint
