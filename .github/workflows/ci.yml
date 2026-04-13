@@ -24,7 +24,7 @@ jobs:
           node-version: ${{ matrix.node-version }}
           cache: npm
 
-      - run: npm ci
+      - run: npm install
       - run: npx tsc --noEmit
       - run: npm test
       - run: npm run build
@@ -39,6 +39,6 @@ jobs:
           node-version: 22
           cache: npm
 
-      - run: npm ci
+      - run: npm install
       - run: npm run lint
       - run: npm run format
