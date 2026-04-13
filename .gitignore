@@ -28,3 +28,4 @@ api-docs/
 
 # Playwright
 .playwright-mcp/
+package-lock.json
