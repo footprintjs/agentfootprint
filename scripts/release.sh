@@ -123,11 +123,15 @@ if [[ -z "$NOTES" ]]; then
   echo "Warning: CHANGELOG.md entry for [$VERSION] is empty. Continuing anyway."
 fi
 
-# ── Update lockfile ────────────────────────────────────────────────────
-npm install --package-lock-only
+# ── Update lockfile (skip if gitignored — platform-specific native deps) ──
+if ! git check-ignore -q package-lock.json 2>/dev/null; then
+  npm install --package-lock-only
+fi
 
 # ── Commit + tag + push ───────────────────────────────────────────────
-git add package.json package-lock.json
+git add package.json
+# Add lockfile only if tracked
+git add package-lock.json 2>/dev/null || true
 git commit -m "chore: release v$VERSION"
 git tag "v$VERSION"
 git push
