@@ -96,12 +96,40 @@ export async function executeToolCalls(
   signal?: AbortSignal,
   instructionConfig?: InstructionConfig,
   decision?: Record<string, unknown>,
+  options?: { parallel?: boolean },
 ): Promise<ToolCallsResult> {
   // Single copy upfront — O(M+N) instead of O(M*N) from repeated spreads
   const result = [...messages];
   let askHumanPause: ToolCallsResult['askHumanPause'];
 
   const onStreamEvent = instructionConfig?.onStreamEvent;
+
+  // Parallel mode: run per-tool work concurrently, collect tool result messages in
+  // original order, surface the first ask_human pause (if any). Decide() mutations
+  // to the shared `decision` object are NOT serialized — parallel tools should not
+  // rely on strict decide ordering. Sequential mode (default) preserves prior semantics.
+  if (options?.parallel && toolCalls.length > 1) {
+    type PerTool = { resultMessage: Message; askHumanMarker?: ToolCallsResult['askHumanPause'] };
+    const perTool = await Promise.all(
+      toolCalls.map(
+        (toolCall): Promise<PerTool> =>
+          executeOneToolCall(
+            toolCall,
+            registry,
+            toolProvider,
+            signal,
+            instructionConfig,
+            decision,
+            onStreamEvent,
+          ),
+      ),
+    );
+    for (const { resultMessage, askHumanMarker } of perTool) {
+      result.push(resultMessage);
+      if (!askHumanPause && askHumanMarker) askHumanPause = askHumanMarker;
+    }
+    return { messages: result, askHumanPause };
+  }
 
   for (const toolCall of toolCalls) {
     let resultContent: string;
@@ -258,4 +286,165 @@ export async function executeToolCalls(
   }
 
   return { messages: result, askHumanPause };
+}
+
+/**
+ * Execute a single tool call and return its result message + optional pause marker.
+ * Pure in the sense of side-effect-on-messages — does not mutate any shared array.
+ * DOES mutate `decision` via decide() functions when instructions fire (shared by design).
+ *
+ * Used by executeToolCalls in parallel mode so multiple tool calls can run concurrently
+ * while the caller appends results in toolCall order.
+ */
+async function executeOneToolCall(
+  toolCall: ToolCall,
+  registry: ToolRegistry,
+  toolProvider: ToolProvider | undefined,
+  signal: AbortSignal | undefined,
+  instructionConfig: InstructionConfig | undefined,
+  decision: Record<string, unknown> | undefined,
+  onStreamEvent: AgentStreamEventHandler | undefined,
+): Promise<{ resultMessage: Message; askHumanMarker?: { question: string; toolCallId: string } }> {
+  let resultContent: string;
+  let runtimeInstructions: readonly string[] | undefined;
+  let runtimeFollowUps: readonly RuntimeFollowUp[] | undefined;
+  let errorInfo: { code?: string; message: string } | undefined;
+  let askHumanMarker: { question: string; toolCallId: string } | undefined;
+  const startMs = Date.now();
+
+  onStreamEvent?.({
+    type: 'tool_start',
+    toolName: toolCall.name,
+    toolCallId: toolCall.id,
+    args: (toolCall.arguments ?? {}) as Record<string, unknown>,
+  });
+
+  // Try ToolProvider.execute() first (handles remote tools, gated tools, etc.)
+  // Skip ToolProvider for ask_human — it must run locally (uses Symbol marker for pause detection).
+  if (toolProvider?.execute && toolCall.name !== 'ask_human') {
+    try {
+      const execResult = await toolProvider.execute(toolCall, signal);
+      resultContent = execResult.content;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      errorInfo = { message: msg };
+      resultContent = JSON.stringify({ error: true, message: msg });
+    }
+  } else {
+    const tool = registry.get(toolCall.name);
+    if (!tool) {
+      const safeName = String(toolCall.name).slice(0, 100).replace(/[\n\r]/g, '');
+      errorInfo = { code: 'NOT_FOUND', message: `Tool '${safeName}' not found` };
+      resultContent = JSON.stringify({ error: true, message: errorInfo.message });
+    } else {
+      const toolArgs = (toolCall.arguments ?? {}) as Record<string, unknown>;
+      if (tool.inputSchema && Object.keys(tool.inputSchema).length > 0) {
+        const validation = validateToolInput(toolArgs, tool.inputSchema);
+        if (!validation.valid) {
+          errorInfo = {
+            code: 'INVALID_INPUT',
+            message: `Invalid arguments for '${tool.id}': ${formatValidationErrors(
+              validation.errors,
+            )}`,
+          };
+          resultContent = JSON.stringify({ error: true, message: errorInfo.message });
+          return {
+            resultMessage: toolResultMessage(resultContent, toolCall.id),
+            askHumanMarker: undefined,
+          };
+        }
+      }
+      try {
+        const execResult = await tool.handler(toolArgs);
+        resultContent = execResult.content;
+        if (isAskHumanResult(execResult)) {
+          askHumanMarker = { question: execResult.question, toolCallId: toolCall.id };
+        }
+        const instructed = execResult as {
+          instructions?: readonly string[];
+          followUps?: readonly RuntimeFollowUp[];
+        };
+        runtimeInstructions = instructed.instructions;
+        runtimeFollowUps = instructed.followUps;
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        errorInfo = { message: msg };
+        resultContent = JSON.stringify({ error: true, message: msg });
+      }
+    }
+  }
+
+  const toolExecLatencyMs = Date.now() - startMs;
+
+  if (instructionConfig) {
+    const perToolInstructions = instructionConfig.instructionsByToolId.get(toolCall.name);
+    const agentRules = instructionConfig.agentResponseRules;
+    const buildTimeInstructions = agentRules?.length
+      ? [...agentRules, ...(perToolInstructions ?? [])]
+      : perToolInstructions;
+    const hasInstructions =
+      buildTimeInstructions?.length || runtimeInstructions?.length || runtimeFollowUps?.length;
+
+    if (hasInstructions) {
+      let parsedContent: unknown;
+      try {
+        parsedContent = JSON.parse(resultContent);
+      } catch {
+        parsedContent = resultContent;
+      }
+
+      const ctx: InstructionContext = {
+        content: parsedContent,
+        error: errorInfo,
+        latencyMs: toolExecLatencyMs,
+        input: toolCall.arguments,
+        toolId: toolCall.name,
+      };
+
+      const injectionResult = processInstructions(
+        resultContent,
+        buildTimeInstructions,
+        ctx,
+        runtimeInstructions || runtimeFollowUps
+          ? { instructions: runtimeInstructions, followUps: runtimeFollowUps }
+          : undefined,
+        instructionConfig?.template,
+      );
+
+      if (injectionResult.injected) {
+        resultContent = injectionResult.content;
+      }
+
+      if (injectionResult.fired.length > 0 && instructionConfig?.onInstructionsFired) {
+        instructionConfig.onInstructionsFired(toolCall.name, injectionResult.fired);
+      }
+
+      if (decision && instructionConfig?.decideFunctions?.size) {
+        for (const fired of injectionResult.fired) {
+          const decideFn = instructionConfig.decideFunctions.get(fired.id);
+          if (decideFn) {
+            try {
+              decideFn(decision, ctx);
+            } catch {
+              // decide errors are fail-open — don't crash tool execution
+            }
+          }
+        }
+      }
+    }
+  }
+
+  onStreamEvent?.({
+    type: 'tool_end',
+    toolName: toolCall.name,
+    toolCallId: toolCall.id,
+    result: resultContent,
+    error: !!errorInfo,
+    latencyMs: toolExecLatencyMs,
+  });
+
+  return {
+    resultMessage: toolResultMessage(resultContent, toolCall.id),
+    askHumanMarker,
+  };
 }

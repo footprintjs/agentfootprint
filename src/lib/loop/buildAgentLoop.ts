@@ -31,6 +31,7 @@ import { flowChart } from 'footprintjs';
 import { ArrayMergeMode } from 'footprintjs/advanced';
 import type { FlowChart } from 'footprintjs';
 import type { AgentLoopState } from '../../scope/types';
+import type { RoutingBranch } from './types';
 import { systemMessage, userMessage } from '../../types/messages';
 import { buildSystemPromptSubflow } from '../slots/system-prompt';
 import { buildMessagesSubflow } from '../slots/messages';
@@ -52,6 +53,8 @@ import type {
   LLMInstruction,
   InstructedToolDefinition,
 } from '../instructions';
+import type { RunnerLike } from '../../types/multiAgent';
+import { assistantMessage } from '../../types/messages';
 
 // ── Default Agent Routing ─────────────────────────────────────────────────────
 
@@ -239,6 +242,7 @@ export function buildAgentLoop(
   const toolExecutionSubflow = buildToolExecutionSubflow({
     registry: config.registry,
     toolProvider: config.toolProvider,
+    parallel: config.parallelTools === true,
     // Always pass instruction config — even without build-time instructions,
     // tool handlers can return runtime instructions/followUps.
     instructionConfig: {
@@ -397,8 +401,15 @@ export function buildAgentLoop(
   );
 
   // ── Routing — one code path for both Agent and Swarm ──
-  const routing: RoutingConfig =
-    config.routing ?? defaultAgentRouting(toolExecutionSubflow, useCommitFlag);
+  // Priority: explicit config.routing (Swarm) > routeExtensions (user .route()) > default
+  const routing: RoutingConfig = config.routing
+    ? config.routing
+    : config.routeExtensions && config.routeExtensions.length > 0
+      ? extendDefaultRouting(
+          defaultAgentRouting(toolExecutionSubflow, useCommitFlag),
+          config.routeExtensions,
+        )
+      : defaultAgentRouting(toolExecutionSubflow, useCommitFlag);
 
   // Validate branches
   if (routing.branches.length === 0) {
@@ -495,6 +506,97 @@ export function buildAgentLoop(
     return { chart: builder.build(), spec, getStrictFollowUp };
   }
   return { chart: builder.build(), getStrictFollowUp };
+}
+
+/**
+ * Wrap a base RoutingConfig with user-defined extensions.
+ *
+ * User extensions run BEFORE the base decider. First matching `when` predicate wins.
+ * If no extension matches, base routing applies. Runners are mounted as subflows
+ * when they expose `.toFlowChart()`; otherwise they are wrapped with runnerAsStage.
+ */
+function extendDefaultRouting(
+  base: RoutingConfig,
+  extensions: readonly {
+    readonly id?: string;
+    readonly when: (scope: any) => boolean;
+    readonly runner: RunnerLike;
+  }[],
+): RoutingConfig {
+  // Each user branch is a TERMINAL fn stage: run the runner, write the content as the
+  // agent's final result, and break the loop. We don't mount as a subflow because we
+  // need terminate semantics in the parent loop — a subflow would return control to
+  // the decider and keep looping. Drill-down via runner.toFlowChart() is a future
+  // enhancement; for Phase 1 we optimize for correctness and simplicity.
+  const userBranches: RoutingBranch[] = extensions.map((ext, idx) => {
+    const id = ext.id ?? `route-${idx}`;
+    return {
+      id,
+      kind: 'fn' as const,
+      fn: createRouteExtensionStage(ext.runner),
+      name: id,
+      description: `User routing branch '${id}'`,
+    };
+  });
+
+  const extendedBranches: readonly RoutingBranch[] = [...userBranches, ...base.branches];
+
+  return {
+    deciderName: base.deciderName,
+    deciderId: base.deciderId,
+    deciderDescription: base.deciderDescription,
+    decider: (scope: any, breakFn, streamCb) => {
+      // User predicates evaluated first — first match wins.
+      for (let i = 0; i < extensions.length; i++) {
+        try {
+          if (extensions[i].when(scope)) {
+            return userBranches[i].id;
+          }
+        } catch {
+          // Predicate errors fall through to base routing (fail-open).
+        }
+      }
+      return base.decider(scope, breakFn, streamCb);
+    },
+    branches: extendedBranches,
+    defaultBranch: base.defaultBranch,
+  };
+}
+
+/**
+ * Build a terminal stage fn that invokes a user-provided runner, writes its content
+ * as the agent's final answer, and breaks the loop.
+ *
+ * Called when a user `.route()` branch predicate fires. The runner receives the last
+ * user message as input; its output content becomes the agent's assistant response.
+ */
+function createRouteExtensionStage(runner: RunnerLike) {
+  return async (scope: TypedScope<AgentLoopState>) => {
+    const messages = scope.messages ?? [];
+    const lastUser = [...messages].reverse().find((m) => m.role === 'user');
+    const input =
+      typeof lastUser?.content === 'string'
+        ? lastUser.content
+        : Array.isArray(lastUser?.content)
+          ? lastUser.content
+              .map((b: any) => (typeof b?.text === 'string' ? b.text : ''))
+              .filter(Boolean)
+              .join('\n')
+          : '';
+
+    const env = scope.$getEnv();
+    const signal = env?.signal;
+    const timeoutMs = env?.timeoutMs;
+
+    const output = await runner.run(input, { signal, timeoutMs });
+    const content = typeof output?.content === 'string' ? output.content : '';
+
+    // Append the runner's answer as an assistant message so downstream
+    // observers (narrative, recorders) see a coherent conversation.
+    scope.messages = [...messages, assistantMessage(content)];
+    scope.result = content;
+    scope.$break();
+  };
 }
 
 /**

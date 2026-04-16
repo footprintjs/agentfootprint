@@ -27,6 +27,7 @@ export {
   Parallel,
   ParallelRunner,
 } from './concepts';
+export type { CustomRouteBranch, CustomRouteConfig } from './concepts';
 
 // ── Tools ───────────────────────────────────────────────────
 export { defineTool, askHuman, ToolRegistry } from './tools';

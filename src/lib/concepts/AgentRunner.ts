@@ -17,6 +17,7 @@ import type { InstructionOverride, AgentInstruction } from '../instructions';
 import type { DecideFn } from '../call/helpers';
 import type { AgentStreamEvent, AgentStreamEventHandler } from '../../streaming';
 import type { AgentLoopConfig } from '../loop';
+import type { CustomRouteConfig } from './AgentBuilder';
 import { createAgentRenderer } from '../narrative';
 import { annotateSpecIcons } from '../../concepts/specIcons';
 import type { SpecLike } from '../../concepts/specIcons';
@@ -64,6 +65,10 @@ export interface AgentRunnerOptions {
   readonly verboseNarrative?: boolean;
   /** Structured output format — passed through to LLM provider. */
   readonly responseFormat?: ResponseFormat;
+  /** Run tool calls within a single turn concurrently. Default: false. */
+  readonly parallelTools?: boolean;
+  /** User-defined routing branches evaluated before default tool-calls/final. */
+  readonly customRoute?: CustomRouteConfig;
 }
 
 export class AgentRunner {
@@ -83,6 +88,8 @@ export class AgentRunner {
   private readonly initialDecision?: Readonly<Record<string, unknown>>;
   private readonly streamingEnabled: boolean;
   private readonly responseFormat?: ResponseFormat;
+  private readonly parallelToolsEnabled: boolean;
+  private readonly customRoute?: CustomRouteConfig;
   private readonly cachedDecideFunctions?: ReadonlyMap<string, DecideFn>;
   private conversationHistory: Message[] = [];
   private lastExecutor?: FlowChartExecutor;
@@ -107,6 +114,8 @@ export class AgentRunner {
     this.initialDecision = options.initialDecision;
     this.streamingEnabled = options.streaming ?? false;
     this.responseFormat = options.responseFormat;
+    this.parallelToolsEnabled = options.parallelTools ?? false;
+    this.customRoute = options.customRoute;
     this.verboseNarrative = options.verboseNarrative ?? false;
     if (this.verboseNarrative) {
       this.narrativeRenderer = createAgentRenderer({ verbose: true });
@@ -514,6 +523,8 @@ export class AgentRunner {
       decideFunctions: this.cachedDecideFunctions,
       streaming: this.streamingEnabled,
       responseFormat: this.responseFormat,
+      parallelTools: this.parallelToolsEnabled,
+      routeExtensions: this.customRoute?.branches,
       onStreamEvent,
       onInstructionsFired: (toolId, fired) => {
         for (const rec of this.recorders) {

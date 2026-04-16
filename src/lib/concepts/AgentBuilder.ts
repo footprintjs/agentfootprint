@@ -12,12 +12,38 @@ import type { ToolDefinition, LLMProvider, ResponseFormat } from '../../types';
 import type { ModelConfig } from '../../models';
 import type { MemoryConfig } from '../../adapters/memory/types';
 import type { AgentRecorder, PromptProvider, ToolProvider } from '../../core';
+import type { RunnerLike } from '../../types/multiAgent';
 import type { InstructionOverride, AgentInstruction } from '../instructions';
 import { resolveProvider } from '../../adapters/createProvider';
 import { zodToJsonSchema, isZodSchema } from '../../tools/zodToJsonSchema';
 import { ToolRegistry } from '../../tools';
 import { AgentPattern } from '../loop';
 import { AgentRunner } from './AgentRunner';
+
+/**
+ * A single user-defined branch in `Agent.route({...})`.
+ *
+ * The `when` predicate runs BEFORE the default tool-calls/final routing. First match wins.
+ * If no user branch matches, the Agent routes as normal (tool-calls if the LLM requested
+ * tools, final otherwise).
+ *
+ * `runner` must be a RunnerLike — any concept (Agent, LLMCall, RAG, Swarm, etc.) or a
+ * custom object with `.run(input)`. When the branch fires, the runner executes as a
+ * subflow and the returned content replaces the agent's current response.
+ */
+export interface CustomRouteBranch<TScope = any> {
+  /** Predicate evaluated on the agent scope after ParseResponse. First matching branch wins. */
+  readonly when: (scope: TScope) => boolean;
+  /** Runner to execute when the branch fires. */
+  readonly runner: RunnerLike;
+  /** Stable id for narrative + recorder dispatch. Auto-generated if omitted. */
+  readonly id?: string;
+}
+
+export interface CustomRouteConfig<TScope = any> {
+  /** User-defined branches, evaluated in order before default tool-calls/final. */
+  readonly branches: readonly CustomRouteBranch<TScope>[];
+}
 
 export interface AgentOptions {
   /** LLMProvider instance or ModelConfig from anthropic()/openai()/bedrock()/ollama(). */
@@ -42,6 +68,8 @@ export class Agent {
   private enableStreaming = false;
   private enableVerboseNarrative = false;
   private outputResponseFormat?: ResponseFormat;
+  private parallelToolsEnabled = false;
+  private customRoute?: CustomRouteConfig;
 
   private constructor(options: AgentOptions) {
     this.provider = resolveProvider(options.provider);
@@ -109,6 +137,55 @@ export class Agent {
   /** Enable streaming — tokens emitted incrementally via onToken callback. */
   streaming(enabled = true): this {
     this.enableStreaming = enabled;
+    return this;
+  }
+
+  /**
+   * Run multiple tool calls within a single turn concurrently via Promise.all.
+   *
+   * Only beneficial when the LLM requests 2+ independent tool calls in one turn
+   * (e.g., "look up customer, orders, and product in parallel"). Results are
+   * appended to the conversation in the order the LLM requested them.
+   *
+   * **Caveat:** decide() functions on tool-level instructions mutate a shared
+   * Decision Scope — in parallel mode those mutations are not serialized.
+   * If your instructions rely on strict ordering, keep sequential (default).
+   *
+   * @example
+   * ```ts
+   * Agent.create({ provider })
+   *   .tools([getCustomer, getOrders, getProduct])
+   *   .parallelTools(true)
+   *   .build();
+   * ```
+   */
+  parallelTools(enabled = true): this {
+    this.parallelToolsEnabled = enabled;
+    return this;
+  }
+
+  /**
+   * Register user-defined routing branches evaluated BEFORE the default
+   * `tool-calls | final` routing. First matching `when` predicate wins.
+   *
+   * Useful for injecting escalation paths, safety gates, or bespoke handlers
+   * without touching the Agent loop internals. The default tool-calls and
+   * final branches still apply when no user branch matches.
+   *
+   * @example
+   * ```ts
+   * Agent.create({ provider })
+   *   .tool(searchTool)
+   *   .route({
+   *     branches: [
+   *       { id: 'escalate', when: (s) => s.parsedResponse.content.includes('[ESCALATE]'), runner: humanReviewAgent },
+   *     ],
+   *   })
+   *   .build();
+   * ```
+   */
+  route(config: CustomRouteConfig): this {
+    this.customRoute = config;
     return this;
   }
 
@@ -252,6 +329,8 @@ export class Agent {
       streaming: this.enableStreaming,
       verboseNarrative: this.enableVerboseNarrative,
       responseFormat: this.outputResponseFormat,
+      parallelTools: this.parallelToolsEnabled,
+      customRoute: this.customRoute,
     });
   }
 }

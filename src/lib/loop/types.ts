@@ -251,6 +251,13 @@ export interface AgentLoopConfig {
   readonly responseFormat?: ResponseFormat;
 
   /**
+   * Run multiple tool calls within a single turn concurrently via Promise.all.
+   * Results are appended in the order the LLM requested them. Default: false.
+   * Only beneficial when the LLM requests 2+ independent tool calls in a turn.
+   */
+  readonly parallelTools?: boolean;
+
+  /**
    * Custom routing strategy — replaces the default RouteResponse decider.
    *
    * When provided, buildAgentLoop uses this RoutingConfig instead of the
@@ -262,6 +269,29 @@ export interface AgentLoopConfig {
    * @internal Consumers use Agent/Swarm builders, not this field directly.
    */
   readonly routing?: RoutingConfig;
+
+  /**
+   * User-defined routing branches prepended to the default `tool-calls | final` routing.
+   *
+   * Each extension's `when` predicate is evaluated (in order) before the default
+   * decider logic. If none match, the default routing applies. If the runner
+   * exposes `.toFlowChart()`, the branch is mounted as a subflow; otherwise the
+   * runner is wrapped as a stage function.
+   *
+   * Ignored when `routing` is also set (Swarm path).
+   *
+   * @example
+   * ```ts
+   * routeExtensions: [
+   *   { id: 'escalate', when: (s) => s.parsedResponse.content.includes('[ESCALATE]'), runner: humanAgent },
+   * ]
+   * ```
+   */
+  readonly routeExtensions?: readonly {
+    readonly id?: string;
+    readonly when: (scope: any) => boolean;
+    readonly runner: import('../../types/multiAgent').RunnerLike;
+  }[];
 }
 
 /**

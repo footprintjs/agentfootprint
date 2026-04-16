@@ -1,6 +1,6 @@
 // Agent rebuilt on library-of-libraries architecture (src/lib/)
 export { Agent, AgentRunner } from '../lib/concepts';
-export type { AgentOptions } from '../lib/concepts';
+export type { AgentOptions, CustomRouteBranch, CustomRouteConfig } from '../lib/concepts';
 export { LLMCall, LLMCallRunner } from './LLMCall';
 export type { LLMCallOptions } from './LLMCall';
 export { RAG, RAGRunner } from './RAG';
