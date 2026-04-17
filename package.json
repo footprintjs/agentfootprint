@@ -117,6 +117,11 @@
       "types": "./dist/types/stream.barrel.d.ts",
       "import": "./dist/esm/stream.barrel.js",
       "require": "./dist/stream.barrel.js"
+    },
+    "./patterns": {
+      "types": "./dist/types/patterns.barrel.d.ts",
+      "import": "./dist/esm/patterns.barrel.js",
+      "require": "./dist/patterns.barrel.js"
     }
   },
   "typesVersions": {
@@ -141,6 +146,9 @@
       ],
       "stream": [
         "dist/types/stream.barrel.d.ts"
+      ],
+      "patterns": [
+        "dist/types/patterns.barrel.d.ts"
       ]
     }
   },
