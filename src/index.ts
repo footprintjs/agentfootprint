@@ -26,8 +26,15 @@ export {
   SwarmRunner,
   Parallel,
   ParallelRunner,
+  Conditional,
+  ConditionalRunner,
 } from './concepts';
-export type { CustomRouteBranch, CustomRouteConfig } from './concepts';
+export type {
+  CustomRouteBranch,
+  CustomRouteConfig,
+  ConditionalOptions,
+  ConditionalPredicate,
+} from './concepts';
 
 // ── Tools ───────────────────────────────────────────────────
 export { defineTool, askHuman, ToolRegistry } from './tools';

@@ -10,3 +10,5 @@ export { Swarm, SwarmRunner } from './Swarm';
 export type { SwarmOptions } from './Swarm';
 export { Parallel, ParallelRunner } from './Parallel';
 export type { ParallelOptions, ParallelResult, BranchResult } from './Parallel';
+export { Conditional, ConditionalRunner } from './Conditional';
+export type { ConditionalOptions, ConditionalPredicate } from './Conditional';

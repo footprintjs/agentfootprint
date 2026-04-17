@@ -5,7 +5,7 @@ This is the agentfootprint library — the explainable agent framework. Build AI
 ## Core Principles
 
 - **Adapter-swap testing.** Every concept uses `LLMProvider` — swap `mock([...])` for `createProvider(anthropic(...))` with zero code changes. $0 test runs, deterministic assertions.
-- **Concept ladder.** Five concepts, each a flowchart: LLMCall < RAG < Agent < FlowChart < Swarm. Each adds exactly one capability.
+- **Concept ladder.** Seven concepts, each a flowchart: LLMCall (leaf), RAG (augmented leaf), Agent (ReAct cycle), Swarm (LLM dispatch), FlowChart (sequence), Parallel (fan-out), Conditional (branch). Each wraps a footprintjs primitive. DAG-complete: leaf + sequence + fan-out + branch + cycle covers every shape.
 - **Built-in recorders.** Observe tokens, cost, tool usage, quality, guardrails — all via `.recorder()` on the builder. Never shape behavior, only observe.
 - **Collect during traversal.** Inherited from footprintjs — all data collection happens as side effects of the single DFS traversal pass. Never post-process.
 
@@ -14,7 +14,7 @@ This is the agentfootprint library — the explainable agent framework. Build AI
 ```
 src/
 ├── core/        → AgentLoopConfig, AgentRecorder interface, PromptProvider/ToolProvider interfaces
-├── concepts/    → 5 builders + runners (LLMCall, Agent, RAG, FlowChart, Swarm)
+├── concepts/    → 7 builders + runners (LLMCall, Agent, RAG, FlowChart, Swarm, Parallel, Conditional)
 ├── adapters/    → LLMProvider implementations (mock, anthropic, openai, bedrock, mcp, a2a)
 ├── models/      → ModelConfig factories (anthropic(), openai(), ollama(), bedrock())
 ├── providers/   → Strategy implementations (prompt/, messages/, tools/)
