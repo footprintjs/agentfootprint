@@ -277,9 +277,7 @@ function formatAdapterRawResponse(rawValue: unknown, limits: TruncationLimits): 
   // only names, which hid the common failure mode where the LLM retries the
   // same call with empty / wrong arguments.
   if (r.toolCalls && r.toolCalls.length > 0) {
-    const signatures = r.toolCalls
-      .map((tc) => formatToolCallSignature(tc, limits))
-      .join(', ');
+    const signatures = r.toolCalls.map((tc) => formatToolCallSignature(tc, limits)).join(', ');
     parts.push(`→ tool_calls: [${signatures}]`);
   }
 
@@ -424,8 +422,9 @@ export function createAgentRenderer(options?: AgentRendererOptions): NarrativeRe
           })
           .join(', ');
         return (
-          `LLM request (iter ${p.iteration}): ${p.messageCount} msgs [${p.messageRoles.join(',')}], ` +
-          `${p.toolCount} tools — ${toolsDetail}`
+          `LLM request (iter ${p.iteration}): ${p.messageCount} msgs [${p.messageRoles.join(
+            ',',
+          )}], ` + `${p.toolCount} tools — ${toolsDetail}`
         );
       }
 

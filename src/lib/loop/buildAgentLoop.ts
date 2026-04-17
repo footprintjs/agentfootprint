@@ -408,11 +408,11 @@ export function buildAgentLoop(
   const routing: RoutingConfig = config.routing
     ? config.routing
     : config.routeExtensions && config.routeExtensions.length > 0
-      ? extendDefaultRouting(
-          defaultAgentRouting(toolExecutionSubflow, useCommitFlag),
-          config.routeExtensions,
-        )
-      : defaultAgentRouting(toolExecutionSubflow, useCommitFlag);
+    ? extendDefaultRouting(
+        defaultAgentRouting(toolExecutionSubflow, useCommitFlag),
+        config.routeExtensions,
+      )
+    : defaultAgentRouting(toolExecutionSubflow, useCommitFlag);
 
   // Validate branches
   if (routing.branches.length === 0) {
@@ -605,11 +605,11 @@ function createRouteExtensionStage(runner: RunnerLike) {
       typeof lastUser?.content === 'string'
         ? lastUser.content
         : Array.isArray(lastUser?.content)
-          ? lastUser.content
-              .map((b: any) => (typeof b?.text === 'string' ? b.text : ''))
-              .filter(Boolean)
-              .join('\n')
-          : '';
+        ? lastUser.content
+            .map((b: any) => (typeof b?.text === 'string' ? b.text : ''))
+            .filter(Boolean)
+            .join('\n')
+        : '';
 
     const env = scope.$getEnv();
     const signal = env?.signal;

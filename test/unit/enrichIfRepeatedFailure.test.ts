@@ -22,7 +22,9 @@ function errorMsg(payload: Record<string, unknown>): string {
   return JSON.stringify({ error: true, ...payload });
 }
 
-function history(calls: Array<{ args: Record<string, unknown>; result: string; id: string }>): Message[] {
+function history(
+  calls: Array<{ args: Record<string, unknown>; result: string; id: string }>,
+): Message[] {
   const msgs: Message[] = [userMessage('go')];
   for (const c of calls) {
     const tc: ToolCall = { id: c.id, name: 'broken', arguments: c.args };

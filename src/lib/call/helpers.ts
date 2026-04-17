@@ -554,7 +554,9 @@ async function executeOneToolCall(
   } else {
     const tool = registry.get(toolCall.name);
     if (!tool) {
-      const safeName = String(toolCall.name).slice(0, 100).replace(/[\n\r]/g, '');
+      const safeName = String(toolCall.name)
+        .slice(0, 100)
+        .replace(/[\n\r]/g, '');
       errorInfo = { code: 'NOT_FOUND', message: `Tool '${safeName}' not found` };
       resultContent = JSON.stringify({ error: true, message: errorInfo.message });
     } else {

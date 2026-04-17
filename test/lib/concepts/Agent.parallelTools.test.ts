@@ -83,7 +83,10 @@ describe('Agent.parallelTools — unit', () => {
       { content: 'final' },
     ]);
 
-    const agent = Agent.create({ provider }).tools([build('a'), build('b'), build('c')]).parallelTools(true).build();
+    const agent = Agent.create({ provider })
+      .tools([build('a'), build('b'), build('c')])
+      .parallelTools(true)
+      .build();
     const result = await agent.run('go');
 
     const toolResults = result.messages.filter((m) => m.role === 'tool');
@@ -133,7 +136,9 @@ describe('Agent.parallelTools — unit', () => {
       { content: 'final' },
     ]);
 
-    const agent = Agent.create({ provider }).tools([tool('a'), tool('b')]).build();
+    const agent = Agent.create({ provider })
+      .tools([tool('a'), tool('b')])
+      .build();
     await agent.run('go');
 
     // Sequential: a finishes fully before b starts.
