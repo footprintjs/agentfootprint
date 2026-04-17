@@ -69,6 +69,11 @@ export interface AgentRunnerOptions {
   readonly parallelTools?: boolean;
   /** User-defined routing branches evaluated before default tool-calls/final. */
   readonly customRoute?: CustomRouteConfig;
+  /**
+   * Consecutive-identical-failure threshold for escalation. `0` disables.
+   * Defaults to `REPEATED_FAILURE_ESCALATION_THRESHOLD` (3) when omitted.
+   */
+  readonly maxIdenticalFailures?: number;
 }
 
 export class AgentRunner {
@@ -90,6 +95,7 @@ export class AgentRunner {
   private readonly responseFormat?: ResponseFormat;
   private readonly parallelToolsEnabled: boolean;
   private readonly customRoute?: CustomRouteConfig;
+  private readonly maxIdenticalFailures?: number;
   private readonly cachedDecideFunctions?: ReadonlyMap<string, DecideFn>;
   private conversationHistory: Message[] = [];
   private lastExecutor?: FlowChartExecutor;
@@ -116,6 +122,7 @@ export class AgentRunner {
     this.responseFormat = options.responseFormat;
     this.parallelToolsEnabled = options.parallelTools ?? false;
     this.customRoute = options.customRoute;
+    this.maxIdenticalFailures = options.maxIdenticalFailures;
     this.verboseNarrative = options.verboseNarrative ?? false;
     if (this.verboseNarrative) {
       this.narrativeRenderer = createAgentRenderer({ verbose: true });
@@ -293,6 +300,7 @@ export class AgentRunner {
         content: '',
         iterations: pauseResult.iterations,
         paused: true,
+        reason: 'paused' as const,
       });
       return pauseResult;
     }
@@ -303,6 +311,7 @@ export class AgentRunner {
       type: 'turn_end',
       content: agentResult.content,
       iterations: agentResult.iterations,
+      ...(agentResult.maxIterationsReached && { reason: 'maxIterations' as const }),
     });
 
     if (bridge) {
@@ -457,10 +466,16 @@ export class AgentRunner {
     const lastAsst = lastAssistantMessage(messages);
     const result = (state.result as string) ?? (lastAsst ? getTextContent(lastAsst.content) : '');
     const iterations = (state.loopCount as number) ?? 0;
+    const maxIterationsReached = state.maxIterationsReached === true;
 
     this.conversationHistory = messages;
 
-    return { content: result, messages, iterations };
+    return {
+      content: result,
+      messages,
+      iterations,
+      ...(maxIterationsReached && { maxIterationsReached: true }),
+    };
   }
 
   getNarrative(): string[] {
@@ -524,6 +539,9 @@ export class AgentRunner {
       streaming: this.streamingEnabled,
       responseFormat: this.responseFormat,
       parallelTools: this.parallelToolsEnabled,
+      ...(this.maxIdenticalFailures !== undefined && {
+        maxIdenticalFailures: this.maxIdenticalFailures,
+      }),
       routeExtensions: this.customRoute?.branches,
       onStreamEvent,
       onInstructionsFired: (toolId, fired) => {

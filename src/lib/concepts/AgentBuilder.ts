@@ -70,6 +70,7 @@ export class Agent {
   private outputResponseFormat?: ResponseFormat;
   private parallelToolsEnabled = false;
   private customRoute?: CustomRouteConfig;
+  private maxIdenticalFailuresValue?: number;
 
   private constructor(options: AgentOptions) {
     this.provider = resolveProvider(options.provider);
@@ -186,6 +187,37 @@ export class Agent {
    */
   route(config: CustomRouteConfig): this {
     this.customRoute = config;
+    return this;
+  }
+
+  /**
+   * Set the repeated-identical-failure escalation threshold. When a tool call
+   * with the exact same (name, args) has failed this many times in a row, a
+   * one-shot `escalation` field is injected into that tool result content
+   * urging the LLM to change arguments, switch tools, or finalize. Fires
+   * exactly once per (name, args) key per conversation — further identical
+   * failures are left bare to avoid token bloat.
+   *
+   * Defaults to `3`. Pass `0` to disable escalation entirely.
+   *
+   * @example
+   * ```ts
+   * Agent.create({ provider })
+   *   .tools([...])
+   *   .maxIdenticalFailures(2) // fire escalation after 2 identical failures
+   *   .build();
+   *
+   * // Disable entirely:
+   * Agent.create({ provider }).tools([...]).maxIdenticalFailures(0).build();
+   * ```
+   */
+  maxIdenticalFailures(n: number): this {
+    if (!Number.isFinite(n) || n < 0) {
+      throw new Error(
+        `AgentBuilder.maxIdenticalFailures: expected a non-negative finite number, got ${n}`,
+      );
+    }
+    this.maxIdenticalFailuresValue = n;
     return this;
   }
 
@@ -331,6 +363,9 @@ export class Agent {
       responseFormat: this.outputResponseFormat,
       parallelTools: this.parallelToolsEnabled,
       customRoute: this.customRoute,
+      ...(this.maxIdenticalFailuresValue !== undefined && {
+        maxIdenticalFailures: this.maxIdenticalFailuresValue,
+      }),
     });
   }
 }

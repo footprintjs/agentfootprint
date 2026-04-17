@@ -172,16 +172,9 @@ export class AnthropicAdapter implements LLMProvider {
             // Tool input streaming — accumulate but don't yield as token
           }
         } else if (event.type === 'content_block_start' && event.content_block) {
-          if (event.content_block.type === 'tool_use') {
-            yield {
-              type: 'tool_call',
-              toolCall: {
-                id: event.content_block.id!,
-                name: event.content_block.name!,
-                arguments: {},
-              },
-            };
-          }
+          // Tool args arrive via input_json_delta — skip yield here
+          // (empty args would lock in `{}`). Yield tool_calls below
+          // from stream.finalMessage() which has the complete args.
         } else if (event.type === 'message_delta' && event.usage) {
           // Final usage — will be in the finalMessage
         }
@@ -190,6 +183,13 @@ export class AnthropicAdapter implements LLMProvider {
       // Get final message for complete response
       const finalMessage = await stream.finalMessage();
       const finalResponse = convertResponse(finalMessage);
+
+      // Emit tool_calls with fully-accumulated args.
+      if (finalResponse.toolCalls) {
+        for (const tc of finalResponse.toolCalls) {
+          yield { type: 'tool_call', toolCall: tc };
+        }
+      }
 
       yield {
         type: 'usage',

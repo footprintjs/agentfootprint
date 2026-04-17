@@ -18,6 +18,170 @@ import type { ResolvedInstruction } from '../instructions';
 import { processInstructions } from '../instructions';
 import type { AgentStreamEventHandler } from '../../streaming';
 
+// ── Repeated-failure escalation ──────────────────────────────────────────────
+//
+// When the LLM gets stuck calling a tool with the exact same (name, args) that
+// keeps failing, some models loop until `maxIterations` is hit. To escape that
+// trap, we inject a one-shot escalation message into the tool result content
+// telling the LLM to change its approach. The escalation fires exactly once
+// per (name, args) key — further identical failures are left alone, so we
+// don't bloat tokens with repeated hectoring.
+//
+// Detection uses strict JSON parsing (not substring sniffing) so that a tool
+// legitimately returning prose containing `"error":true` is not misclassified.
+
+/**
+ * Default threshold for escalating repeated-identical-failure feedback.
+ * Override per-agent with `AgentBuilder.maxIdenticalFailures(n)`; pass `0` to
+ * disable escalation entirely.
+ */
+export const REPEATED_FAILURE_ESCALATION_THRESHOLD = 3;
+
+/**
+ * Stable JSON.stringify — keys sorted at every object level — so two calls
+ * with the same logical arguments but different key insertion order are
+ * treated as identical. Only handles plain JSON values (strings, numbers,
+ * booleans, nulls, arrays, plain objects), which matches the JSON-Schema
+ * shape of tool arguments.
+ */
+export function stableStringify(value: unknown): string {
+  if (value === null || value === undefined) return JSON.stringify(value ?? null);
+  if (typeof value !== 'object') return JSON.stringify(value);
+  if (Array.isArray(value)) {
+    return `[${value.map(stableStringify).join(',')}]`;
+  }
+  const obj = value as Record<string, unknown>;
+  const keys = Object.keys(obj).sort();
+  return `{${keys.map((k) => `${JSON.stringify(k)}:${stableStringify(obj[k])}`).join(',')}}`;
+}
+
+/**
+ * True iff the given message is a tool result that we wrote as an error — i.e.
+ * a top-level JSON object with `error === true`. Strict JSON parse: no
+ * substring sniffing, so tool content containing the literal phrase
+ * `"error":true` but not as a top-level field is not misclassified.
+ */
+function isErrorToolMessage(m: Message): boolean {
+  if (m.role !== 'tool') return false;
+  const content = typeof m.content === 'string' ? m.content : '';
+  const trimmed = content.trim();
+  if (!trimmed.startsWith('{')) return false;
+  try {
+    const parsed = JSON.parse(trimmed) as unknown;
+    return (
+      typeof parsed === 'object' &&
+      parsed !== null &&
+      (parsed as Record<string, unknown>).error === true
+    );
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Count prior tool-result messages in `messages` that match the given
+ * (toolName, argsJson) key AND represent an error.
+ *
+ * Cost: O(M × K) worst-case where M is messages.length and K is the average
+ * number of tool calls per assistant message. In practice K ≈ 1–3.
+ */
+function scanPriorFailures(
+  messages: readonly Message[],
+  toolName: string,
+  argsJson: string,
+): { failures: number } {
+  let failures = 0;
+  for (let i = 0; i < messages.length; i++) {
+    const m = messages[i];
+    if (m.role !== 'tool') continue;
+    if (!isErrorToolMessage(m)) continue;
+    const toolCallId = m.toolCallId;
+
+    // Find the originating assistant tool call (nearest preceding assistant
+    // message that declares a tool call with this result's toolCallId).
+    let matchedCall: ToolCall | undefined;
+    for (let j = i - 1; j >= 0; j--) {
+      const prev = messages[j];
+      if (prev.role === 'assistant' && prev.toolCalls) {
+        matchedCall = prev.toolCalls.find((tc) => tc.id === toolCallId);
+        if (matchedCall) break;
+      }
+    }
+    if (!matchedCall) continue;
+    if (matchedCall.name !== toolName) continue;
+    if (stableStringify(matchedCall.arguments ?? {}) !== argsJson) continue;
+    failures++;
+  }
+  return { failures };
+}
+
+/**
+ * If the current call is a real error AND the (toolName, args) key has failed
+ * a multiple of `threshold` times (i.e. on the threshold-th, 2×threshold-th,
+ * 3×threshold-th … identical failure), inject an `escalation` field into
+ * the JSON result content.
+ *
+ * ## Why periodic, not one-shot
+ *
+ * A single escalation message early in the loop is easy for an LLM to skim
+ * past — especially when multiple parallel tool calls fail in the same
+ * turn. Firing periodically (every Nth identical failure) keeps nudging
+ * the LLM to change strategy while bounding token bloat to at most
+ * `maxIterations / threshold` escalations per key.
+ *
+ * Returns the possibly-enriched content. Pure — does not mutate inputs.
+ *
+ * Guarantees:
+ *   - No false positives from substring matching (strict JSON parse).
+ *   - Fires at every `N × threshold`-th failure, never between.
+ *   - Stable under argument key reordering (uses `stableStringify`).
+ *   - No-op when `threshold <= 0` (user-disabled).
+ *   - No-op when `didError` is false OR content is non-JSON.
+ */
+export function enrichIfRepeatedFailure(
+  resultContent: string,
+  toolCall: ToolCall,
+  priorMessages: readonly Message[],
+  options: { didError: boolean; threshold: number },
+): string {
+  const { didError, threshold } = options;
+  if (!didError) return resultContent;
+  if (!Number.isFinite(threshold) || threshold <= 0) return resultContent;
+
+  // Must be well-formed JSON we can extend. If it isn't, we still could wrap
+  // it — but that changes public tool-result shape unexpectedly, so skip.
+  const trimmed = resultContent.trim();
+  if (!trimmed.startsWith('{')) return resultContent;
+  let parsed: Record<string, unknown>;
+  try {
+    const raw = JSON.parse(trimmed) as unknown;
+    if (typeof raw !== 'object' || raw === null) return resultContent;
+    parsed = raw as Record<string, unknown>;
+  } catch {
+    return resultContent;
+  }
+
+  const argsJson = stableStringify(toolCall.arguments ?? {});
+  const { failures } = scanPriorFailures(priorMessages, toolCall.name, argsJson);
+  const total = failures + 1;
+
+  // Fire on every Nth multiple of `threshold` — total in {threshold,
+  // 2*threshold, 3*threshold, ...}. Below threshold, or between multiples,
+  // return the bare error content. The LLM gets a fresh escalation nudge
+  // periodically without flooding the context.
+  if (total < threshold) return resultContent;
+  if (total % threshold !== 0) return resultContent;
+
+  parsed.repeatedFailures = total;
+  parsed.escalation =
+    `STOP — this call to '${toolCall.name}' with these EXACT arguments has now failed ${total} times in a row. ` +
+    `Retrying with the same arguments will fail again. You MUST change course: ` +
+    `(1) call '${toolCall.name}' with DIFFERENT arguments (see expectedSchema above), ` +
+    `(2) use a different tool, or ` +
+    `(3) stop calling tools and reply with a plain text final answer.`;
+  return JSON.stringify(parsed);
+}
+
 /**
  * Normalize an LLMResponse into an AdapterResult discriminated union.
  */
@@ -96,20 +260,33 @@ export async function executeToolCalls(
   signal?: AbortSignal,
   instructionConfig?: InstructionConfig,
   decision?: Record<string, unknown>,
-  options?: { parallel?: boolean },
+  options?: { parallel?: boolean; maxIdenticalFailures?: number },
 ): Promise<ToolCallsResult> {
   // Single copy upfront — O(M+N) instead of O(M*N) from repeated spreads
   const result = [...messages];
   let askHumanPause: ToolCallsResult['askHumanPause'];
 
   const onStreamEvent = instructionConfig?.onStreamEvent;
+  const escalationThreshold =
+    options?.maxIdenticalFailures ?? REPEATED_FAILURE_ESCALATION_THRESHOLD;
 
   // Parallel mode: run per-tool work concurrently, collect tool result messages in
   // original order, surface the first ask_human pause (if any). Decide() mutations
   // to the shared `decision` object are NOT serialized — parallel tools should not
   // rely on strict decide ordering. Sequential mode (default) preserves prior semantics.
+  //
+  // Escalation caveat: prior-failure scanning runs against `result` at the moment
+  // each enrichment call is made, which in parallel mode means earlier tool calls
+  // in the same batch (by LLM order, not wall-clock order) count as "prior" for
+  // later ones. That's acceptable — what matters for the LLM's next turn is the
+  // aggregate signal that identical calls keep failing, not the fine-grained
+  // concurrency semantics inside one batch.
   if (options?.parallel && toolCalls.length > 1) {
-    type PerTool = { resultMessage: Message; askHumanMarker?: ToolCallsResult['askHumanPause'] };
+    type PerTool = {
+      resultMessage: Message;
+      didError: boolean;
+      askHumanMarker?: ToolCallsResult['askHumanPause'];
+    };
     const perTool = await Promise.all(
       toolCalls.map(
         (toolCall): Promise<PerTool> =>
@@ -124,8 +301,17 @@ export async function executeToolCalls(
           ),
       ),
     );
-    for (const { resultMessage, askHumanMarker } of perTool) {
-      result.push(resultMessage);
+    for (let i = 0; i < perTool.length; i++) {
+      const { resultMessage, askHumanMarker, didError } = perTool[i];
+      const originalContent =
+        typeof resultMessage.content === 'string' ? resultMessage.content : '';
+      const enriched = enrichIfRepeatedFailure(originalContent, toolCalls[i], result, {
+        didError,
+        threshold: escalationThreshold,
+      });
+      result.push(
+        enriched === originalContent ? resultMessage : { ...resultMessage, content: enriched },
+      );
       if (!askHumanPause && askHumanMarker) askHumanPause = askHumanMarker;
     }
     return { messages: result, askHumanPause };
@@ -178,8 +364,28 @@ export async function executeToolCalls(
                 validation.errors,
               )}`,
             };
-            resultContent = JSON.stringify({ error: true, message: errorInfo.message });
-            result.push(toolResultMessage(resultContent, toolCall.id));
+            // Include the expected schema so the LLM has a concrete structural
+            // target to conform to on retry — addresses the most common cause
+            // of LLMs looping on validation errors (they can't see the schema
+            // from the error message alone).
+            resultContent = JSON.stringify({
+              error: true,
+              message: errorInfo.message,
+              expectedSchema: tool.inputSchema,
+              receivedArguments: toolArgs,
+            });
+            // Repeated-failure escalation also applies to invalid-input failures —
+            // that's the primary symptom this catches. Fall through to the normal
+            // emit/push path (no early `continue`) so enrichment runs.
+            result.push(
+              toolResultMessage(
+                enrichIfRepeatedFailure(resultContent, toolCall, result, {
+                  didError: true,
+                  threshold: escalationThreshold,
+                }),
+                toolCall.id,
+              ),
+            );
             continue;
           }
         }
@@ -273,6 +479,17 @@ export async function executeToolCalls(
       }
     }
 
+    // Enrich repeated identical failures with escalation text BEFORE emitting
+    // tool_end and pushing the message — so both the stream consumer and the
+    // LLM's next turn see the stronger feedback. Driven by the explicit
+    // `didError` signal (not substring sniffing of the result content), so
+    // tool handlers that legitimately include the phrase "error":true in their
+    // content are not misclassified.
+    resultContent = enrichIfRepeatedFailure(resultContent, toolCall, result, {
+      didError: errorInfo !== undefined,
+      threshold: escalationThreshold,
+    });
+
     onStreamEvent?.({
       type: 'tool_end',
       toolName: toolCall.name,
@@ -304,7 +521,11 @@ async function executeOneToolCall(
   instructionConfig: InstructionConfig | undefined,
   decision: Record<string, unknown> | undefined,
   onStreamEvent: AgentStreamEventHandler | undefined,
-): Promise<{ resultMessage: Message; askHumanMarker?: { question: string; toolCallId: string } }> {
+): Promise<{
+  resultMessage: Message;
+  didError: boolean;
+  askHumanMarker?: { question: string; toolCallId: string };
+}> {
   let resultContent: string;
   let runtimeInstructions: readonly string[] | undefined;
   let runtimeFollowUps: readonly RuntimeFollowUp[] | undefined;
@@ -347,9 +568,18 @@ async function executeOneToolCall(
               validation.errors,
             )}`,
           };
-          resultContent = JSON.stringify({ error: true, message: errorInfo.message });
+          // Include the expected schema + what the LLM actually sent so it can
+          // self-correct on retry (the narrow error message alone is often
+          // not enough for the LLM to reconstruct the required shape).
+          resultContent = JSON.stringify({
+            error: true,
+            message: errorInfo.message,
+            expectedSchema: tool.inputSchema,
+            receivedArguments: toolArgs,
+          });
           return {
             resultMessage: toolResultMessage(resultContent, toolCall.id),
+            didError: true,
             askHumanMarker: undefined,
           };
         }
@@ -445,6 +675,7 @@ async function executeOneToolCall(
 
   return {
     resultMessage: toolResultMessage(resultContent, toolCall.id),
+    didError: errorInfo !== undefined,
     askHumanMarker,
   };
 }

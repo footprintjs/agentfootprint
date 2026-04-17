@@ -59,6 +59,25 @@ export function createStreamingCallLLMStage(
 
     onStreamEvent?.({ type: 'llm_start', iteration });
 
+    // ── Emit: request-side ─────────────────────────────────────────────
+    // Mirror of callLLMStage.ts — surface the EXACT shape being sent so
+    // attached EmitRecorders (including CombinedNarrativeRecorder) render
+    // it inline under the CallLLM stage. Critical for debugging stuck
+    // patterns like "LLM returns empty args every turn".
+    scope.$emit('agentfootprint.llm.request', {
+      iteration,
+      messageCount: messages.length,
+      messageRoles: messages.map((m) => m.role),
+      toolCount: tools.length,
+      toolNames: tools.map((t) => t.name),
+      toolsWithRequired: tools.map((t) => ({
+        name: t.name,
+        description: t.description,
+        required: (t.inputSchema as { required?: string[] } | undefined)?.required ?? [],
+      })),
+      hasResponseFormat: !!responseFormat,
+    });
+
     // If streaming is available and callback is injected, use chatStream
     if (streamCallback && provider.chatStream) {
       const contentParts: string[] = [];
@@ -112,6 +131,19 @@ export function createStreamingCallLLMStage(
       scope.adapterRawResponse = response;
       scope.adapterResult = normalizeAdapterResponse(response);
 
+      scope.$emit('agentfootprint.llm.response', {
+        iteration,
+        model: response.model,
+        stopReason: (response as { finishReason?: string }).finishReason,
+        usage: response.usage,
+        content: response.content,
+        toolCalls: (response.toolCalls ?? []).map((tc) => ({
+          name: tc.name,
+          arguments: tc.arguments,
+        })),
+        latencyMs: Date.now() - startMs,
+      });
+
       onStreamEvent?.({
         type: 'llm_end',
         iteration,
@@ -127,6 +159,19 @@ export function createStreamingCallLLMStage(
     const response = await provider.chat(messages, options);
     scope.adapterRawResponse = response;
     scope.adapterResult = normalizeAdapterResponse(response);
+
+    scope.$emit('agentfootprint.llm.response', {
+      iteration,
+      model: response.model,
+      stopReason: (response as { finishReason?: string }).finishReason,
+      usage: response.usage,
+      content: response.content,
+      toolCalls: (response.toolCalls ?? []).map((tc) => ({
+        name: tc.name,
+        arguments: tc.arguments,
+      })),
+      latencyMs: Date.now() - startMs,
+    });
 
     onStreamEvent?.({
       type: 'llm_end',

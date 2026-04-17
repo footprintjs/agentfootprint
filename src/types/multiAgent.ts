@@ -56,4 +56,11 @@ export interface TraversalResult {
   readonly agents: AgentResultEntry[];
   /** Total traversal execution time. */
   readonly totalLatencyMs: number;
+  /**
+   * True when the traversal ended because `loopCount >= maxIterations` in the
+   * underlying agent loop (set by `safeDecider`), rather than because the LLM
+   * chose to stop. Surfaced uniformly across Swarm / Pipeline / custom runners
+   * so consumers can render a distinct "agent gave up" state.
+   */
+  readonly maxIterationsReached?: boolean;
 }

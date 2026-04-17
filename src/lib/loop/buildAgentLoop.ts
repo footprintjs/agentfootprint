@@ -243,6 +243,9 @@ export function buildAgentLoop(
     registry: config.registry,
     toolProvider: config.toolProvider,
     parallel: config.parallelTools === true,
+    ...(config.maxIdenticalFailures !== undefined && {
+      maxIdenticalFailures: config.maxIdenticalFailures,
+    }),
     // Always pass instruction config — even without build-time instructions,
     // tool handlers can return runtime instructions/followUps.
     instructionConfig: {
@@ -428,12 +431,36 @@ export function buildAgentLoop(
   }
 
   // Wrap decider with structural maxIterations guard — no custom routing can bypass this.
-  // If loopCount >= maxIterations, force-route to defaultBranch.
+  // If loopCount >= maxIterations, force-route to defaultBranch and set the
+  // `maxIterationsReached` flag on scope so ANY default-branch stage (Finalize,
+  // Swarm's RouteSpecialist fallback, user-supplied terminal stage, …) can
+  // surface the fact that this was a forced termination rather than a chosen
+  // one. Setting the flag here — rather than inside a specific Finalize stage —
+  // makes the signal available for every routing topology built on top of
+  // buildAgentLoop.
+  //
   // The defaultBranch MUST call $break() or breakFn() — validated below.
   const safeDecider: RoutingConfig['decider'] = (scope: any, breakFn, streamCb) => {
     const loopCount = scope.loopCount ?? 0;
     const maxIter = scope.maxIterations ?? 10;
-    if (loopCount >= maxIter) return routing.defaultBranch;
+    if (loopCount >= maxIter) {
+      // Deciders can write to scope — the write is committed with the decider
+      // stage's transaction. For TypedScope, property assignment goes through
+      // the Proxy set trap; for raw ScopeFacade, fall back to setValue if the
+      // property assignment is rejected.
+      try {
+        scope.maxIterationsReached = true;
+      } catch {
+        if (typeof scope.setValue === 'function') {
+          try {
+            scope.setValue('maxIterationsReached', true);
+          } catch {
+            /* unable to record — consumers must read loopCount vs maxIterations */
+          }
+        }
+      }
+      return routing.defaultBranch;
+    }
     return routing.decider(scope, breakFn, streamCb);
   };
 
@@ -611,7 +638,24 @@ function createFinalizeStage(options: { useCommitFlag: boolean }) {
   return (scope: TypedScope<AgentLoopState>) => {
     const messages = scope.messages ?? [];
     const lastAsst = lastAssistantMessage(messages);
-    scope.result = lastAsst ? getTextContent(lastAsst.content) : '';
+    const lastAsstText = lastAsst ? getTextContent(lastAsst.content) : '';
+
+    // safeDecider sets `maxIterationsReached` when it force-routes at the cap.
+    // Read it here — don't re-derive from loopCount — so this stage agrees
+    // with whatever safeDecider decided (single source of truth).
+    const exhausted = scope.maxIterationsReached === true;
+
+    if (exhausted) {
+      const maxIter = scope.maxIterations ?? 10;
+      // Prefer the LLM's last reasoning text if present — otherwise synthesize
+      // a clear "agent gave up" message so callers never see an unexplained
+      // empty response after a long tool-error loop.
+      scope.result =
+        lastAsstText ||
+        `Agent stopped after ${maxIter} iterations without a final answer. The LLM may be stuck in a tool-error retry loop — check the execution trace.`;
+    } else {
+      scope.result = lastAsstText;
+    }
 
     if (useCommitFlag) {
       scope.memory_shouldCommit = true;

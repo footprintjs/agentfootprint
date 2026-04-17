@@ -1,5 +1,5 @@
 /**
- * Agent NarrativeRenderer — LLM-optimized narrative for agent loop execution.
+ * Agent NarrativeFormatter — LLM-optimized narrative for agent loop execution.
  *
  * Designed for LLM follow-up reasoning: the narrative answers "what happened?"
  * so a downstream LLM can ask informed questions about the agent's execution.
@@ -20,6 +20,12 @@
  * renderer only controls the text. Time-travel UI sync is unaffected.
  */
 
+// Note: imports `NarrativeRenderer` (the deprecated alias) instead of
+// `NarrativeFormatter` because the currently-installed footprintjs version
+// does not yet export the new name. Migrate to `NarrativeFormatter` when
+// the next footprintjs release is consumed (the two types are identical —
+// `NarrativeRenderer` is a `type NarrativeRenderer = NarrativeFormatter`
+// alias in footprintjs, marked `@deprecated`).
 import type {
   NarrativeRenderer,
   StageRenderContext,
@@ -31,6 +37,7 @@ import type {
   DecisionRenderContext,
   ForkRenderContext,
   SelectedRenderContext,
+  EmitRenderContext,
 } from 'footprintjs/recorders';
 
 // ── Stage name → agent-specific label ────────────────────────────────────────
@@ -133,7 +140,14 @@ const DEFAULT_LIMITS: TruncationLimits = {
   result: 100,
   systemPrompt: 200,
   parsedContent: 100,
-  toolResult: 80,
+  // Tool results can contain diagnostic fields the library injects for
+  // debuggers — `expectedSchema`, `receivedArguments`, `escalation`,
+  // `repeatedFailures`. Truncating at 80 hides those after the opening
+  // `{"error":true,"message":"..."}` prefix, making it look like the LLM
+  // is being fed a bare error when in fact it has all the context it needs
+  // to self-correct. Bump to 400 so the fields are visible in BTS. Consumers
+  // who want the raw content use `verbose: true` (Infinity).
+  toolResult: 400,
   toolArgs: 60,
   message: 100,
 };
@@ -186,6 +200,26 @@ function formatToolDescriptions(rawValue: unknown): string {
   return `Tools: [${names}]`;
 }
 
+/**
+ * Format a single tool call as `name({...})` — always including the paren
+ * group so that empty arguments render as `name({})` rather than `name`.
+ *
+ * This matters for debugging: when the LLM calls a tool with missing
+ * required fields, the bug signal is precisely that `arguments` is `{}`
+ * (or contains the wrong keys). Hiding that behind a bare `name` used to
+ * make every failing-loop narrative look like a healthy one — you couldn't
+ * tell that the args were empty until you dug into the raw snapshot.
+ */
+function formatToolCallSignature(
+  tc: { name?: string; arguments?: Record<string, unknown> },
+  limits: TruncationLimits,
+): string {
+  const name = tc.name ?? '?';
+  const args = tc.arguments ?? {};
+  const argsStr = JSON.stringify(args);
+  return `${name}(${truncate(argsStr, limits.toolArgs)})`;
+}
+
 function formatParsedResponse(rawValue: unknown, limits: TruncationLimits): string {
   if (!rawValue || typeof rawValue !== 'object') return 'Parsed: (unknown)';
   const r = rawValue as {
@@ -194,14 +228,7 @@ function formatParsedResponse(rawValue: unknown, limits: TruncationLimits): stri
     toolCalls?: Array<{ name?: string; arguments?: Record<string, unknown> }>;
   };
   if (r.hasToolCalls && Array.isArray(r.toolCalls)) {
-    const toolSummaries = r.toolCalls.map((tc) => {
-      const name = tc.name ?? '?';
-      if (tc.arguments && Object.keys(tc.arguments).length > 0) {
-        const argsStr = JSON.stringify(tc.arguments);
-        return `${name}(${truncate(argsStr, limits.toolArgs)})`;
-      }
-      return name;
-    });
+    const toolSummaries = r.toolCalls.map((tc) => formatToolCallSignature(tc, limits));
     return `Parsed: tool_calls → [${toolSummaries.join(', ')}]`;
   }
   if (typeof r.content === 'string') {
@@ -224,7 +251,7 @@ function formatAdapterRawResponse(rawValue: unknown, limits: TruncationLimits): 
   if (!rawValue || typeof rawValue !== 'object') return 'LLM response: (unknown)';
   const r = rawValue as {
     content?: string;
-    toolCalls?: Array<{ name?: string }>;
+    toolCalls?: Array<{ name?: string; arguments?: Record<string, unknown> }>;
     usage?: { inputTokens?: number; outputTokens?: number };
     model?: string;
   };
@@ -245,10 +272,15 @@ function formatAdapterRawResponse(rawValue: unknown, limits: TruncationLimits): 
     parts.push(`Reasoning: "${truncate(r.content, limits.parsedContent)}"`);
   }
 
-  // Tool calls summary
+  // Tool calls summary — include arguments so the reader can see at a glance
+  // whether the LLM actually passed required fields. Previously this showed
+  // only names, which hid the common failure mode where the LLM retries the
+  // same call with empty / wrong arguments.
   if (r.toolCalls && r.toolCalls.length > 0) {
-    const names = r.toolCalls.map((tc) => tc.name ?? '?').join(', ');
-    parts.push(`→ tool_calls: [${names}]`);
+    const signatures = r.toolCalls
+      .map((tc) => formatToolCallSignature(tc, limits))
+      .join(', ');
+    parts.push(`→ tool_calls: [${signatures}]`);
   }
 
   return parts.join('\n  ');
@@ -257,7 +289,12 @@ function formatAdapterRawResponse(rawValue: unknown, limits: TruncationLimits): 
 // ── Renderer factory ─────────────────────────────────────────────────────────
 
 /**
- * Create an agent-optimized NarrativeRenderer.
+ * Create an agent-optimized narrative formatter.
+ *
+ * Returns the `NarrativeRenderer` type (structurally identical to
+ * footprintjs's new `NarrativeFormatter`). Once a newer footprintjs
+ * release is consumed here, migrate the return type to
+ * `NarrativeFormatter` — no behavioural change.
  *
  * Usage:
  * ```typescript
@@ -358,6 +395,71 @@ export function createAgentRenderer(options?: AgentRendererOptions): NarrativeRe
 
     renderSelected(ctx: SelectedRenderContext): string {
       return `Selected ${ctx.selected.length}/${ctx.total}: ${ctx.selected.join(', ')}`;
+    },
+
+    /**
+     * Custom render for agentfootprint's emit-channel events. Recognizes the
+     * adapter-level request/response events and produces compact, diagnostic
+     * narrative lines that surface the exact shape of what the adapter sent
+     * and received — the key visibility for debugging LLM behavior like
+     * "why is the model calling with empty args?".
+     *
+     * Returns `undefined` for unrecognized event names so the default
+     * library template handles them.
+     */
+    renderEmit(ctx: EmitRenderContext): string | null | undefined {
+      if (ctx.name === 'agentfootprint.llm.request') {
+        const p = ctx.payload as {
+          iteration: number;
+          messageCount: number;
+          messageRoles: string[];
+          toolCount: number;
+          toolNames: string[];
+          toolsWithRequired: Array<{ name: string; description: string; required: string[] }>;
+        };
+        const toolsDetail = p.toolsWithRequired
+          .map((t) => {
+            const req = t.required.length ? ` required:[${t.required.join(',')}]` : '';
+            return `${t.name}${req}`;
+          })
+          .join(', ');
+        return (
+          `LLM request (iter ${p.iteration}): ${p.messageCount} msgs [${p.messageRoles.join(',')}], ` +
+          `${p.toolCount} tools — ${toolsDetail}`
+        );
+      }
+
+      if (ctx.name === 'agentfootprint.llm.response') {
+        const p = ctx.payload as {
+          iteration: number;
+          model?: string;
+          stopReason?: string;
+          usage?: { inputTokens?: number; outputTokens?: number };
+          content?: string;
+          toolCalls: Array<{ name: string; arguments: Record<string, unknown> }>;
+          latencyMs: number;
+        };
+        const usage = p.usage
+          ? `${p.usage.inputTokens ?? '?'}in/${p.usage.outputTokens ?? '?'}out`
+          : '';
+        const stop = p.stopReason ? ` stop=${p.stopReason}` : '';
+        const toolCallsDetail = p.toolCalls.length
+          ? ` calls=[${p.toolCalls
+              .map((tc) => `${tc.name}(${JSON.stringify(tc.arguments)})`)
+              .join(', ')}]`
+          : '';
+        const contentPreview =
+          p.content && p.content.length > 0
+            ? ` content="${p.content.length > 60 ? p.content.slice(0, 57) + '...' : p.content}"`
+            : '';
+        return (
+          `LLM response (iter ${p.iteration}, ${p.latencyMs}ms, ${usage}${stop}):` +
+          `${contentPreview}${toolCallsDetail}`
+        );
+      }
+
+      // Unrecognized event — fall back to default library template.
+      return undefined;
     },
   };
 }

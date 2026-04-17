@@ -54,6 +54,31 @@ export function createCallLLMStage(
 
     onStreamEvent?.({ type: 'llm_start', iteration });
 
+    // ── Emit: request-side ─────────────────────────────────────────────
+    //
+    // Surface the EXACT shape the adapter is about to send. Any attached
+    // EmitRecorder (including CombinedNarrativeRecorder) will render this
+    // inline in the narrative under the CallLLM stage.
+    //
+    // This is diagnostic data (not business state) — using $emit avoids
+    // polluting scope with duplicate per-iteration writes, while still
+    // giving consumers real-time visibility into what was sent. The
+    // library's existing adapterRawResponse scope write covers the
+    // response side for the scope-data narrative path.
+    scope.$emit('agentfootprint.llm.request', {
+      iteration,
+      messageCount: messages.length,
+      messageRoles: messages.map((m) => m.role),
+      toolCount: tools.length,
+      toolNames: tools.map((t) => t.name),
+      toolsWithRequired: tools.map((t) => ({
+        name: t.name,
+        description: t.description,
+        required: (t.inputSchema as { required?: string[] } | undefined)?.required ?? [],
+      })),
+      hasResponseFormat: !!responseFormat,
+    });
+
     const options: LLMCallOptions = {
       ...(tools.length > 0 ? { tools } : {}),
       ...(signal ? { signal } : {}),
@@ -77,6 +102,24 @@ export function createCallLLMStage(
       ? `${usage.inputTokens ?? '?'}in / ${usage.outputTokens ?? '?'}out`
       : 'no usage data';
     scope.llmCall = `${model} (${usageSummary})`;
+
+    // ── Emit: response-side ─────────────────────────────────────────────
+    //
+    // Surface the full LLM response — model, usage, stop_reason, tool-call
+    // signatures (name + args). The (name, args) view is the critical one
+    // for debugging stuck patterns like "LLM returns empty args every turn".
+    scope.$emit('agentfootprint.llm.response', {
+      iteration,
+      model: response.model,
+      stopReason: (response as { finishReason?: string }).finishReason,
+      usage: response.usage,
+      content: response.content,
+      toolCalls: (response.toolCalls ?? []).map((tc) => ({
+        name: tc.name,
+        arguments: tc.arguments,
+      })),
+      latencyMs: Date.now() - startMs,
+    });
 
     onStreamEvent?.({
       type: 'llm_end',

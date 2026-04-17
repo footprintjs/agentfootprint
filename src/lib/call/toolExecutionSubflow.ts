@@ -71,6 +71,12 @@ export interface ToolExecutionSubflowConfig {
    * Default: false (sequential).
    */
   readonly parallel?: boolean;
+  /**
+   * Consecutive-identical-failure threshold for repeated-failure escalation.
+   * Forwarded to `executeToolCalls`. Passing `0` (or any non-positive number)
+   * disables escalation entirely. Defaults to the library default when omitted.
+   */
+  readonly maxIdenticalFailures?: number;
 }
 
 // ── Builder ──────────────────────────────────────────────────
@@ -83,7 +89,7 @@ export interface ToolExecutionSubflowConfig {
  * loopCount) is mapped.
  */
 export function buildToolExecutionSubflow(config: ToolExecutionSubflowConfig): FlowChart {
-  const { registry, toolProvider, instructionConfig, parallel } = config;
+  const { registry, toolProvider, instructionConfig, parallel, maxIdenticalFailures } = config;
 
   const executeStageFn = async (scope: TypedScope<ToolExecutionSubflowState>) => {
     const parsed = scope.parsedResponse;
@@ -122,7 +128,10 @@ export function buildToolExecutionSubflow(config: ToolExecutionSubflowConfig): F
       signal,
       instructionConfig,
       decisionRef,
-      parallel ? { parallel: true } : undefined,
+      {
+        ...(parallel ? { parallel: true } : {}),
+        ...(maxIdenticalFailures !== undefined ? { maxIdenticalFailures } : {}),
+      },
     );
 
     // Output DELTA only — footprintjs applyOutputMapping concatenates arrays,

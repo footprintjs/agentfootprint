@@ -48,10 +48,19 @@ export function parseResponseStage(scope: TypedScope<AgentLoopState>): void {
   );
   scope.messages = appendMessage(messages, asstMsg);
 
-  // Write summary for narrative visibility
+  // Write summary for narrative visibility — include arguments so debuggers
+  // can see at a glance whether the LLM passed required fields. Names alone
+  // hide the common failure mode of retrying with empty / wrong args.
   if (parsed.hasToolCalls) {
-    const toolNames = parsed.toolCalls.map((tc) => tc.name).join(', ');
-    scope.responseType = `tool_calls: [${toolNames}]`;
+    const signatures = parsed.toolCalls
+      .map((tc) => {
+        const argsStr = JSON.stringify(tc.arguments ?? {});
+        // Tight cap — narrative line, not a full dump
+        const truncated = argsStr.length > 120 ? argsStr.slice(0, 117) + '...' : argsStr;
+        return `${tc.name}(${truncated})`;
+      })
+      .join(', ');
+    scope.responseType = `tool_calls: [${signatures}]`;
   } else {
     const preview =
       result.content.length > 80 ? result.content.slice(0, 80) + '...' : result.content;

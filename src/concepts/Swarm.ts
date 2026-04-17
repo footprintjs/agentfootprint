@@ -314,6 +314,7 @@ export class SwarmRunner {
       content: result,
       agents,
       totalLatencyMs: Date.now() - startTime,
+      ...(state.maxIterationsReached === true && { maxIterationsReached: true }),
     };
   }
 

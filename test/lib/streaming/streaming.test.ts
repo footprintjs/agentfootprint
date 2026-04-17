@@ -33,6 +33,7 @@ describe('Streaming — unit', () => {
     const scope = {
       messages: [{ role: 'user', content: 'hi' }],
       $getValue: (k: string) => undefined,
+      $emit: () => {},
     } as any;
 
     await stage(scope, () => {}, undefined); // no streamCallback

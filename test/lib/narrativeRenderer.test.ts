@@ -187,7 +187,9 @@ describe('renderOp', () => {
     ).toBe('Tools: (none)');
   });
 
-  it('parsedResponse tool_calls shows tool names', () => {
+  it('parsedResponse tool_calls shows tool names with arguments (empty args rendered as {})', () => {
+    // Empty args MUST still render as `name({})` — not dropped — so debuggers
+    // can see at a glance when the LLM called a tool without required fields.
     const parsed = {
       hasToolCalls: true,
       toolCalls: [{ name: 'search' }, { name: 'rank' }],
@@ -202,7 +204,48 @@ describe('renderOp', () => {
         operation: 'set',
         stepNumber: 1,
       }),
-    ).toBe('Parsed: tool_calls → [search, rank]');
+    ).toBe('Parsed: tool_calls → [search({}), rank({})]');
+  });
+
+  it('adapterRawResponse tool_calls renders with arguments (empty args as {})', () => {
+    const raw = {
+      content: 'reasoning text',
+      toolCalls: [
+        { name: 'calculator', arguments: {} },
+        { name: 'search', arguments: { q: 'x' } },
+      ],
+      usage: { inputTokens: 100, outputTokens: 20 },
+      model: 'claude',
+    };
+    const out = renderer.renderOp!({
+      type: 'write',
+      key: 'adapterRawResponse',
+      rawValue: raw,
+      valueSummary: '(object)',
+      operation: 'set',
+      stepNumber: 1,
+    });
+    expect(out).toContain('calculator({})');
+    expect(out).toContain('search({"q":"x"})');
+    expect(out).toContain('tool_calls:');
+  });
+
+  it('parsedResponse tool_calls renders non-empty arguments inline', () => {
+    const parsed = {
+      hasToolCalls: true,
+      toolCalls: [{ name: 'search', arguments: { query: 'footprint' } }],
+      content: '',
+    };
+    expect(
+      renderer.renderOp!({
+        type: 'write',
+        key: 'parsedResponse',
+        rawValue: parsed,
+        valueSummary: '(object)',
+        operation: 'set',
+        stepNumber: 1,
+      }),
+    ).toBe('Parsed: tool_calls → [search({"query":"footprint"})]');
   });
 
   it('parsedResponse final shows content preview', () => {

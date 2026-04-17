@@ -258,6 +258,17 @@ export interface AgentLoopConfig {
   readonly parallelTools?: boolean;
 
   /**
+   * After this many consecutive identical (name, args) tool-call failures, the
+   * library injects a one-shot `escalation` field into the tool result content
+   * telling the LLM to change arguments, switch tools, or finalize. Fires
+   * exactly once per (name, args) key per conversation.
+   *
+   * Defaults to `REPEATED_FAILURE_ESCALATION_THRESHOLD` (3). Pass `0` (or any
+   * non-positive number) to disable.
+   */
+  readonly maxIdenticalFailures?: number;
+
+  /**
    * Custom routing strategy — replaces the default RouteResponse decider.
    *
    * When provided, buildAgentLoop uses this RoutingConfig instead of the

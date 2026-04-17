@@ -26,6 +26,13 @@ export interface AgentResult {
   readonly paused?: boolean;
   /** Pause data from ask_human (question + toolCallId). */
   readonly pauseData?: { question: string; toolCallId: string };
+  /**
+   * True when the turn ended because the agent hit its iteration cap
+   * (safeDecider force-routed to Finalize). The LLM did not choose to stop —
+   * it was cut off. Render a distinct state so users understand the loop
+   * didn't complete normally.
+   */
+  readonly maxIterationsReached?: boolean;
 }
 
 export interface AgentRunOptions {

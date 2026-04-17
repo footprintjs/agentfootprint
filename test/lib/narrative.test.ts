@@ -340,6 +340,9 @@ describe('Narrative — property', () => {
       'loop',
       'break',
       'error',
+      'pause',
+      'resume',
+      'emit',
     ]);
     for (const entry of entries) {
       expect(validTypes.has(entry.type)).toBe(true);

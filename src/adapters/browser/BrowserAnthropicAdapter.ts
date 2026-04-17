@@ -169,19 +169,15 @@ export class BrowserAnthropicAdapter implements LLMProvider {
             inputTokens = event.message.usage.input_tokens ?? 0;
           } else if (event.type === 'content_block_start' && event.content_block) {
             if (event.content_block.type === 'tool_use') {
+              // Buffer only — args arrive via input_json_delta. Yielding
+              // tool_call here with empty args would lock in `{}` because
+              // the consumer pushes the first emission and never reconciles
+              // with the accumulated JSON.
               toolInputBuffers.set(event.index ?? blockIndex, {
                 id: event.content_block.id!,
                 name: event.content_block.name!,
                 json: '',
               });
-              yield {
-                type: 'tool_call',
-                toolCall: {
-                  id: event.content_block.id!,
-                  name: event.content_block.name!,
-                  arguments: {},
-                },
-              };
             }
             blockIndex = (event.index ?? blockIndex) + 1;
           } else if (event.type === 'content_block_delta' && event.delta) {
@@ -193,6 +189,26 @@ export class BrowserAnthropicAdapter implements LLMProvider {
             } else if (event.delta.type === 'input_json_delta' && event.delta.partial_json) {
               const buf = toolInputBuffers.get(event.index ?? 0);
               if (buf) buf.json += event.delta.partial_json;
+            }
+          } else if (event.type === 'content_block_stop') {
+            // Emit tool_call with parsed args now that input_json_delta
+            // accumulation is complete. Anthropic sends an empty string
+            // when the tool takes no args — JSON.parse('') throws, so
+            // default to `{}` in that case.
+            const buf = toolInputBuffers.get(event.index ?? 0);
+            if (buf) {
+              let parsedArgs: Record<string, unknown> = {};
+              if (buf.json.length > 0) {
+                try {
+                  parsedArgs = JSON.parse(buf.json) as Record<string, unknown>;
+                } catch {
+                  parsedArgs = {};
+                }
+              }
+              yield {
+                type: 'tool_call',
+                toolCall: { id: buf.id, name: buf.name, arguments: parsedArgs },
+              };
             }
           } else if (event.type === 'message_delta' && event.usage) {
             // Anthropic sends output_tokens in message_delta

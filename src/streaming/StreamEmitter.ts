@@ -43,7 +43,21 @@ export type AgentStreamEvent =
       error?: boolean;
       latencyMs: number;
     }
-  | { type: 'turn_end'; content: string; iterations: number; paused?: boolean }
+  | {
+      type: 'turn_end';
+      content: string;
+      iterations: number;
+      paused?: boolean;
+      /**
+       * Why the turn ended. Absent when the LLM chose to stop normally.
+       *   - 'maxIterations': safeDecider force-finalized at the iteration cap.
+       *   - 'paused':        the agent paused for human input (ask_human). Paired
+       *                      with `paused: true`; the `reason` variant lets
+       *                      consumers switch on a single field instead of two.
+       * Future reasons can be added without breaking consumers (optional field).
+       */
+      reason?: 'maxIterations' | 'paused';
+    }
   | { type: 'error'; phase: AgentPhase; message: string };
 
 export type AgentStreamEventHandler = (event: AgentStreamEvent) => void;

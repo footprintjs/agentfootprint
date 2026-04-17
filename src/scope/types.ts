@@ -92,6 +92,13 @@ export interface AgentLoopState {
   maxIterations: number;
   /** Final answer text (set when turn finalizes). */
   result: string;
+  /**
+   * Set by Finalize when the turn ended because `loopCount >= maxIterations`
+   * (safeDecider force-routed to the default branch), rather than because the
+   * LLM chose to stop. Consumers use it to render a distinct "agent gave up"
+   * state instead of an ambiguous empty response.
+   */
+  maxIterationsReached?: boolean;
 
   // ── Memory internal keys ──────────────────────────────────
   /** Prepared messages after strategy applied (Messages slot output). */
