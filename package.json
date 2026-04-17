@@ -146,6 +146,7 @@
   },
   "sideEffects": false,
   "peerDependencies": {
+    "footprintjs": ">=4.13.0",
     "@anthropic-ai/sdk": ">=0.30.0",
     "@aws-sdk/client-bedrock-runtime": ">=3.0.0",
     "openai": ">=4.0.0"
@@ -167,7 +168,7 @@
     "@typescript-eslint/parser": "^5.61.0",
     "eslint": "^8.44.0",
     "eslint-config-prettier": "^6.15.0",
-    "footprintjs": "file:../footPrint",
+    "footprintjs": "^4.13.0",
     "prettier": "^2.8.1",
     "typescript": "~5.4.5",
     "vitest": "^4.0.18",
