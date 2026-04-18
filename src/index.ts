@@ -36,6 +36,10 @@ export type {
   ConditionalPredicate,
 } from './concepts';
 
+// ── Trace export (paste-into-viewer / share-with-support workflow) ─
+export { exportTrace } from './exportTrace';
+export type { AgentfootprintTrace, ExportTraceOptions } from './exportTrace';
+
 // ── Tools ───────────────────────────────────────────────────
 export { defineTool, askHuman, ToolRegistry } from './tools';
 
