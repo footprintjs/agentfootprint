@@ -61,6 +61,7 @@ export default defineConfig({
           label: 'Guides',
           items: [
             { label: 'Agent pattern', slug: 'guides/agent' },
+            { label: 'Dynamic ReAct', slug: 'guides/dynamic-react' },
             { label: 'Tool use', slug: 'guides/tools' },
             { label: 'Instructions & decisions', slug: 'guides/instructions' },
             { label: 'RAG pattern', slug: 'guides/rag' },
