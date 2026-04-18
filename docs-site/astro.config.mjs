@@ -52,6 +52,8 @@ export default defineConfig({
           items: [
             { label: 'Quick Start', slug: 'getting-started/quick-start' },
             { label: 'Key Concepts', slug: 'getting-started/key-concepts' },
+            { label: 'Why explainability matters', slug: 'getting-started/debug' },
+            { label: 'vs. LangGraph / LangChain / CrewAI', slug: 'getting-started/vs' },
             { label: 'Why agentfootprint?', slug: 'getting-started/why' },
           ],
         },

@@ -1,0 +1,174 @@
+---
+title: Why explainability matters
+description: The one thing agentfootprint does that nothing else does — and why it's the only thing that matters when an agent goes wrong in production.
+---
+
+import { Aside, Code, Tabs, TabItem } from '@astrojs/starlight/components';
+
+Every agent framework lets you build an agent. Most of them let you watch logs stream as it runs. **Exactly one — agentfootprint — lets you replay any production run as a time-travel slider weeks after the fact, from a single JSON file.**
+
+That capability is the whole pitch. This page explains why it's load-bearing and what it gives you that nothing else does.
+
+## The scenario everyone has lived through
+
+Your agent worked in dev. It passed tests. It shipped to prod. Then a customer files a bug: *"The agent said my refund is $500 but we never gave anyone a $500 refund. Why?"*
+
+You open the logs. You see:
+- a system prompt, truncated at 2 KB
+- "calling tool: get_customer"
+- "calling tool: process_refund"
+- "response sent"
+
+That's not a bug report. That's a haystack.
+
+## What agentfootprint gives you instead
+
+```ts
+import { exportTrace } from 'agentfootprint';
+
+const trace = exportTrace(agent);
+await saveToS3(`traces/${userId}/${runId}.json`, JSON.stringify(trace));
+```
+
+That's it. Every production run, one line at the end. The trace is a JSON file (~40 KB typical) that contains:
+
+- **Flowchart spec** — the exact DAG your agent executed
+- **Narrative** — every read/write/decision/tool-call as a timestamped line
+- **Snapshot** — scope memory at every commit, time-indexed
+- **Commit log** — per-stage diff of what changed
+- **Decision evidence** — for every branch, *which values triggered it*
+- **Recorder data** — tokens, latency, cost, tool usage
+
+Days later, when the bug report arrives: paste the JSON into [`<TraceViewer />`](https://footprintjs.github.io/agent-playground/#/viewer) or embed the component in your own support tool. Drag the slider. Watch the bug replay frame by frame.
+
+<Aside type="tip">
+**This is what competitors don't have.** LangSmith costs money and runs as a SaaS. LangGraph Studio shows topology but not evidence. CrewAI has no audit trail. OpenAI Agents SDK has no introspection at all.
+</Aside>
+
+## The five capabilities that compose into "debuggable"
+
+### 1. Combined narrative
+
+Every stage execution logs its reads, writes, tool calls, and decisions in-order. Not separate log streams you have to stitch together — one timeline with every fact.
+
+```
+1. [Seed] Initialized agent state
+2. Preparing system prompt [→ sf-system-prompt]
+3. [CallLLM] Called LLM
+   LLM request (iter 1): 2 msgs [system,user], 1 tools
+   LLM: claude-sonnet-4 (695in / 90out)
+   → tool_calls: [calculator({"expression":"4+5+67"})]
+4. [ParseResponse] Parsed LLM response
+5. [RouteResponse] Chose ExecuteTools
+6. Executing tool calls [→ tool-calls]
+   Tool results: "4+5+67 = 76"
+7. [CallLLM] Called LLM (iter 2)
+   → final: "The answer is 76"
+```
+
+Turn that into an audit report. Send it to compliance. Replay the reasoning.
+
+### 2. Decision evidence with `decide()`
+
+When your agent routes between branches, you don't get "it chose branch B." You get *why*:
+
+```ts
+decide(scope, [
+  { when: { creditScore: { gt: 700 }, dti: { lt: 0.43 } }, then: 'approve', label: 'Prime borrower' },
+  { when: (s) => s.creditScore > 600, then: 'manual-review', label: 'Marginal' },
+], 'reject');
+
+// Narrative: "It evaluated Rule 0 'Prime borrower': creditScore 750 gt 700,
+//             dti 0.38 lt 0.43, and chose approve."
+```
+
+The *exact* values that satisfied the predicate appear inline. Post-hoc, you can answer: *was this decision correct given the data we had?*
+
+### 3. Causal chain — backward slicing
+
+Six stages run. The final answer is wrong. Which stages contributed to the bad value?
+
+```ts
+import { causalChain } from 'footprintjs/trace';
+
+const chain = causalChain(snapshot.commitLog, 'finalAnswer');
+// → DAG: finalAnswer ← parsedResponse ← adapterResult ← (CallLLM stage 7)
+//                   ← ragContext ← (Retrieve stage 3)
+```
+
+That's not manual trace reading. That's Weiser 1984 program slicing on your agent. It works on any run, post-hoc, from the exported trace.
+
+### 4. Pause / resume without external state
+
+A tool call times out. A human review is needed. The request is cancelled and retried hours later on a different server.
+
+```ts
+await executor.run();
+if (executor.isPaused()) {
+  const checkpoint = executor.getCheckpoint();  // JSON-safe
+  await saveToRedis(userId, checkpoint);
+  return res.send({ status: 'awaiting review' });
+}
+// ... hours later, different server ...
+const checkpoint = await loadFromRedis(userId);
+await executor.resume(checkpoint, { approved: true });
+```
+
+No stateful worker process. No in-memory continuation. The checkpoint is bytes. LangGraph needs its Checkpointer abstraction; we need `JSON.stringify`.
+
+### 5. Adapter swap — $0 tests
+
+```ts
+// Tests:
+const agent = buildAgent(mock([{ content: 'Hello!' }]));
+
+// Production:
+const agent = buildAgent(anthropic('claude-sonnet-4'));
+```
+
+Same agent, same flowchart, same recorders, same narrative shape. Zero code changes between dev and prod. Zero API cost for the CI suite. **Every code snippet in the docs is a real example run under this pattern** (2389 tests across the stack).
+
+## What this means in practice
+
+| Situation | Other frameworks | agentfootprint |
+|---|---|---|
+| Prod bug report arrives 2 weeks later | Re-run with same input and hope | Paste saved trace → exact replay |
+| Compliance asks "why did the agent approve this?" | Screenshot logs, explain manually | Export trace, point to decision evidence |
+| CI cost is too high | Move some tests to manual | `mock()` — whole test suite is free |
+| Agent is stuck looping | Watch logs, can't tell what's different each turn | Emit channel shows exact tool-call args at every iteration |
+| Customer wants a refund audit | Dig through 500 lines of logs | Narrative already reads like an audit |
+
+## The viewer, live
+
+Try it now with the shipped sample trace:
+
+1. Open [https://footprintjs.github.io/agent-playground/#/viewer](https://footprintjs.github.io/agent-playground/#/viewer)
+2. Click **Load sample trace (calculator agent)**
+3. Drag the slider across the execution
+
+Every step, every memory diff, every decision. That's what you ship to production for every agent run, for the cost of one JSON file per turn.
+
+## Embed the viewer in your own app
+
+```tsx
+import { TraceViewer } from 'footprint-explainable-ui';
+
+function MySupportTool({ traceFromDB }: { traceFromDB: string }) {
+  return <TraceViewer trace={traceFromDB} fallback={<div>No trace</div>} />;
+}
+```
+
+One component. One line to embed. Build your internal debug tool on top of the same UI the playground uses.
+
+## The rest of the library follows from this
+
+Every other feature in `agentfootprint` — patterns, Conditional, Swarm, resilience wrappers, memory stores — composes into the same narrative. Every concept, every stage, every recorder writes into the same trace. You never run into a situation where "part of the agent is explainable and part isn't." The contract holds at every layer.
+
+That's not a feature list. That's an architecture choice made once, at the bottom of the stack, and honored all the way up.
+
+## Next
+
+- [Quick Start](/agentfootprint/getting-started/quick-start/) — build your first agent in 5 minutes
+- [vs. LangGraph / LangChain / CrewAI](/agentfootprint/getting-started/vs/) — honest comparison
+- [Key concepts](/agentfootprint/getting-started/key-concepts/) — the 7-concept ladder
+- [Observability guide](/agentfootprint/guides/observability/) — recorders, emit channel, OTel

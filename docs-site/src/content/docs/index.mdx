@@ -1,118 +1,91 @@
 ---
 title: agentfootprint
-description: The explainable agent framework. Build AI agents that show their work.
+description: The only agent framework you can actually debug. Narrative, causal chain, time-travel snapshot viewer. Paste a trace, see what happened.
 template: splash
 hero:
-  tagline: Build agents that explain their reasoning. Every decision traced, every tool call documented.
+  tagline: Agents you can debug like code. Export a trace, paste it into the viewer, drag the slider — see every decision, tool call, and memory write.
   actions:
-    - text: Quick Start
+    - text: Try it (no setup)
+      link: https://footprintjs.github.io/agent-playground/#/viewer
+      icon: external
+      variant: primary
+    - text: 5-min quick start
       link: /agentfootprint/getting-started/quick-start/
       icon: right-arrow
-      variant: primary
-    - text: Live Playground
-      link: https://footprintjs.github.io/agent-playground/
-      icon: external
       variant: secondary
+    - text: Why agentfootprint?
+      link: /agentfootprint/getting-started/debug/
+      icon: document
+      variant: minimal
 ---
 
-import { Card, CardGrid, LinkButton } from '@astrojs/starlight/components';
+import { Card, CardGrid, Code } from '@astrojs/starlight/components';
 
-## Why agentfootprint?
+## The one thing that's different
+
+Every other agent framework ships agents you debug with **logs**. `agentfootprint` ships agents you debug with a **time-travel slider**.
+
+```ts
+import { Agent, exportTrace, anthropic } from 'agentfootprint';
+
+const agent = Agent.create({ provider: anthropic('claude-sonnet-4') })
+  .system('You are a helpful assistant.')
+  .tools([...])
+  .build();
+
+await agent.run('What is 4 + 5 + 67?');
+
+// Capture the full execution as portable JSON
+const trace = exportTrace(agent);
+console.log(JSON.stringify(trace));
+```
+
+Paste that JSON into the [viewer](https://footprintjs.github.io/agent-playground/#/viewer) → see the flowchart, the narrative timeline, the memory state at every step. No extra SaaS, no hosted service, no instrumentation. The trace is already there because every stage records itself as it runs.
 
 <CardGrid stagger>
-  <Card title="Connected evidence" icon="document">
-    Every tool call, every LLM decision, every response is captured in a
-    **structured trace** — not disconnected logs. See exactly what happened,
-    verify the LLM wasn't hallucinating, and debug in minutes.
+  <Card title="Narrative" icon="document">
+    Every read, write, decision, and tool call appears as a timestamped line in a combined narrative. No log parsing.
+  </Card>
+  <Card title="Decision evidence" icon="magnifier">
+    `decide()` captures *why* the agent took branch B over A — the exact values that made the predicate true.
+  </Card>
+  <Card title="Causal chain" icon="random">
+    Backward program slicing on the commit log: "what stages produced this output?" Answer in one query.
+  </Card>
+  <Card title="Time-travel viewer" icon="seti:clock">
+    `exportTrace(agent)` → JSON → paste into `<TraceViewer />`. Replay any execution without re-running it.
   </Card>
   <Card title="$0 test runs" icon="approve-check-circle">
-    Write tests with `mock()`. Deploy with `anthropic()`. Same agent, same tools,
-    same flowchart. Swap one line.
+    `mock([...])` for tests, `anthropic(...)` for prod. Same agent, same flowchart, zero API cost in CI.
   </Card>
-  <Card title="Conditional instructions" icon="magnifier">
-    `defineInstruction()` injects into system prompt, tools, AND tool-result
-    recency — driven by accumulated state. Progressive tool authorization,
-    context-aware prompts, all declarative.
-  </Card>
-  <Card title="6 concepts, one interface" icon="puzzle">
-    LLMCall, Agent, RAG, FlowChart, Swarm, Parallel. Each adds one capability.
-    All share `.build()` → `.run()` → `.getNarrative()`.
+  <Card title="7 concepts, one interface" icon="puzzle">
+    LLMCall, Agent, RAG, FlowChart, Parallel, Conditional, Swarm. Each wraps one footprintjs primitive. DAG-complete.
   </Card>
 </CardGrid>
 
-## Connected evidence — see it in action
+## 30-second demo
 
-When an agent runs, agentfootprint captures **every stage, every tool call, every LLM decision** as structured narrative entries. Not logs. Not spans. Connected evidence with provenance.
+1. Pick a pattern in [Live Chat](https://footprintjs.github.io/agent-playground/#/live) (works with a mock adapter — no API key needed).
+2. Send a message. See the response + the **Behind the Scenes** button.
+3. Click **Copy Trace**. Paste it into [Trace Viewer](https://footprintjs.github.io/agent-playground/#/viewer).
+4. Drag the time-travel slider. Every step of the agent's reasoning is there.
 
-```
-User: "Check order ORD-1003 and help me with a refund"
+Zero typing. Zero keys. Everything else in this library follows from this one workflow.
 
-[Seed] Initialized agent state
-  Messages: 1 (1 user)
-[Subflow: SystemPrompt] Preparing system prompt
-[Subflow: Messages] Preparing conversation history
-[Subflow: Tools] Resolving available tools
-  Tools: [lookup_order, check_inventory, ask_human]
-[CallLLM] Called LLM
-  LLM: claude-sonnet-4-20250514 (243in / 45out)
-  → tool_calls: [lookup_order]
-[ParseResponse] Parsed LLM response
-  Parsed: tool_calls → [lookup_order({orderId: "ORD-1003"})]
-[ExecuteToolCalls] Executed tool calls
-  Tool results: {"orderId":"ORD-1003","status":"cancelled","amount":299}
-[CallLLM] Called LLM
-  LLM: claude-sonnet-4-20250514 (512in / 89out)
-  Reasoning: "The order is cancelled. I should offer a refund..."
-[Finalize] Extract final answer
-  Result: "Your order ORD-1003 was cancelled. I can process a refund of $299..."
+## Install
+
+```sh
+npm install agentfootprint footprintjs
 ```
 
-Every entry has `type`, `key`, `stageId`, `subflowId` — use them for [grounding analysis](/agentfootprint/guides/grounding/) (hallucination detection), audit trails, or feeding to another LLM.
+Peer dep: `footprintjs >= 4.14.0`. Optional: `@anthropic-ai/sdk`, `openai`, `@aws-sdk/client-bedrock-runtime` — depending on the LLM provider you want.
 
-<div style="margin: 1rem 0;">
-  <LinkButton href="https://footprintjs.github.io/agent-playground/" variant="secondary" icon="external">Try it in the Playground</LinkButton>
-</div>
+## Not convinced?
 
-## Start simple, compose up
+- [How does this compare to LangGraph / LangChain / CrewAI?](/agentfootprint/getting-started/vs/)
+- [Why explainability matters more than graph editors](/agentfootprint/getting-started/debug/)
+- [Every code snippet in the docs is a real runnable example](https://github.com/footprintjs/agentfootprint/tree/main/examples)
 
-```ts
-import { Agent, defineTool, anthropic } from 'agentfootprint';
+## Who built this
 
-const agent = Agent.create({ provider: anthropic('claude-sonnet-4-20250514') })
-  .system('You are a research assistant.')
-  .tool(searchTool)
-  .build();
-
-const result = await agent.run('Find AI trends');
-console.log(result.content);
-console.log(agent.getNarrative());  // connected execution trace
-```
-
-| Concept | What it adds | Use case |
-|---------|-------------|----------|
-| **LLMCall** | Single LLM invocation | Summarization, classification |
-| **Agent** | + Tool use loop (ReAct) | Research, code generation |
-| **RAG** | + Retrieval | Q&A over documents |
-| **FlowChart** | + Sequential pipeline | Approval flows, ETL |
-| **Swarm** | + LLM-driven routing | Customer support, triage |
-| **Parallel** | + Concurrent execution | Multi-perspective analysis |
-
-## Import what you need
-
-Each capability is a subpath — import only what you use:
-
-```ts
-import { Agent, defineTool } from 'agentfootprint';
-import { anthropic } from 'agentfootprint/providers';
-import { defineInstruction } from 'agentfootprint/instructions';
-import { agentObservability } from 'agentfootprint/observe';
-import { withRetry } from 'agentfootprint/resilience';
-import { gatedTools } from 'agentfootprint/security';
-import { ExplainRecorder } from 'agentfootprint/explain';
-import { SSEFormatter } from 'agentfootprint/stream';
-```
-
-<div style="display: flex; gap: 1rem; margin-top: 2rem;">
-  <LinkButton href="/agentfootprint/getting-started/quick-start/" variant="primary">Get started</LinkButton>
-  <LinkButton href="/agentfootprint/guides/agent/" variant="secondary">Explore guides</LinkButton>
-</div>
+Built on [footprintjs](https://footprintjs.github.io/footPrint/) — the flowchart pattern for backend code. MIT licensed, TypeScript-first, 2389+ tests across the stack. [GitHub](https://github.com/footprintjs/agentfootprint) · [npm](https://www.npmjs.com/package/agentfootprint).
