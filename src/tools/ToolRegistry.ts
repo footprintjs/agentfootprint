@@ -2,7 +2,7 @@
  * ToolRegistry — register, lookup, and format tools for LLM function calling.
  */
 
-import type { ToolDefinition, LLMToolDescription } from '../types';
+import type { ToolDefinition, ToolDefinitionInput, LLMToolDescription } from '../types';
 import { zodToJsonSchema, isZodSchema } from './zodToJsonSchema';
 
 export class ToolRegistry {
@@ -98,13 +98,18 @@ export class ToolRegistry {
  * });
  * ```
  */
-export function defineTool(tool: ToolDefinition): ToolDefinition {
+export function defineTool(tool: ToolDefinitionInput): ToolDefinition {
   const schema = tool.inputSchema;
 
-  // Duck-type Zod detection: Zod schemas have ._def and .safeParse
+  // Duck-type Zod detection: Zod schemas have ._def and .safeParse.
+  // Convert to JSON Schema eagerly so every downstream consumer of
+  // `ToolDefinition` sees a plain object — no Zod dependency in the
+  // wire path.
   if (isZodSchema(schema)) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return { ...tool, inputSchema: zodToJsonSchema(schema as any) };
   }
 
-  return tool;
+  // Already a plain object — safe to assert the narrow ToolDefinition shape.
+  return tool as ToolDefinition;
 }

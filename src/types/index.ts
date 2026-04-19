@@ -55,7 +55,13 @@ export type {
   FinishReason,
 } from './llm';
 
-export type { ToolDefinition, ToolHandler, ToolResult } from './tools';
+export type {
+  ToolDefinition,
+  ToolDefinitionInput,
+  ToolHandler,
+  ToolResult,
+  ZodSchemaLike,
+} from './tools';
 
 export type {
   AdapterResult,
