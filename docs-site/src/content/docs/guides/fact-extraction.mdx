@@ -1,0 +1,230 @@
+---
+title: Fact extraction
+description: Store stable user claims as key/value facts, deduped by key. What's currently true — not what happened.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Narrative memory tells you **what happened** (beats — append-only summaries). Fact extraction tells you **what's currently true** (key/value claims — deduped on write).
+
+```
+Turn 1: "my name is Alice"              → fact:user.name = "Alice"
+Turn 2: "I live in Berlin"              → fact:user.location = "Berlin"
+Turn 7: "actually, it's Alicia"         → fact:user.name overwrites → "Alicia"
+                                           (one entry, not two)
+```
+
+Facts complement beats — they're the structured, queryable layer for identity, preferences, commitments, and task states. Where beats grow with conversation length, facts stay compact: one entry per distinct claim, updated in place.
+
+## Quick start
+
+```ts
+import { Agent, anthropic } from 'agentfootprint';
+import { factPipeline, InMemoryStore } from 'agentfootprint/memory';
+
+// Zero-dep, zero-cost default — regex heuristics catch the common
+// self-disclosures (name, email, location, preferences).
+const pipeline = factPipeline({ store: new InMemoryStore() });
+
+const agent = Agent.create({ provider: anthropic('claude-sonnet-4-5') })
+  .system('You remember facts about the user.')
+  .memoryPipeline(pipeline)
+  .build();
+
+await agent.run('my name is Alice. I live in Berlin.', {
+  identity: { conversationId: 'alice-session' },
+  turnNumber: 1,
+});
+
+await agent.run("what's my name?", {
+  identity: { conversationId: 'alice-session' },
+  turnNumber: 2,
+}); // → "Your name is Alice."
+```
+
+<Aside type="note" title="Pass turnNumber explicitly">
+Facts are tagged with `source.turn` for provenance. If you don't pass `turnNumber` in `run()`, every call defaults to `1`. Increment per-call so the provenance is accurate.
+</Aside>
+
+## What's in the LLM prompt
+
+Once facts exist for an identity, the read subflow injects a compact system block:
+
+```
+Known facts about the user:
+
+- user.name: Alice
+- user.email: alice@example.com
+- user.location: Berlin
+```
+
+Not per-entry `<memory>` tags (that's `defaultPipeline`). Not a story paragraph (that's `narrativePipeline`). A bulleted key/value list — the shape LLMs parse most efficiently.
+
+## Two extractors
+
+| Extractor | Cost | Quality | When to use |
+|---|---|---|---|
+| `patternFactExtractor()` (default) | $0 | Regex heuristics for identity/email/location/preference | Dev, testing, baseline coverage |
+| `llmFactExtractor({ provider })` | One call per turn | Open-ended — any domain-specific fact | Production, rich preference/commitment extraction |
+
+### Pattern extractor (default)
+
+Captures common self-disclosures:
+
+```
+"my name is Alice"           → user.name = "Alice"       (conf 0.9)
+"I'm Bob"                    → user.name = "Bob"         (conf 0.9)
+"my email is x@y.z"          → user.email = "x@y.z"      (conf 0.95)
+"I live in San Francisco"    → user.location = "SF"      (conf 0.8)
+"I prefer dark mode"         → user.preferences = "..."  (conf 0.7)
+```
+
+Zero LLM cost. Miss rate is real — users who say "call me Al" or "I'm based out of Seattle" won't match. Upgrade to `llmFactExtractor` for open-ended coverage.
+
+### LLM extractor
+
+```ts
+import { anthropic } from 'agentfootprint';
+import { factPipeline, llmFactExtractor, InMemoryStore } from 'agentfootprint/memory';
+
+const pipeline = factPipeline({
+  store: new InMemoryStore(),
+  extractor: llmFactExtractor({
+    provider: anthropic('claude-haiku-4-5'), // a cheap model is fine
+  }),
+});
+```
+
+The LLM is prompted to emit JSON of the shape:
+
+```json
+{
+  "facts": [
+    {
+      "key": "user.name",
+      "value": "Alice",
+      "confidence": 0.95,
+      "category": "identity",
+      "refs": ["msg-1-0"]
+    }
+  ]
+}
+```
+
+Malformed responses fall back to `[]` — bad extraction never crashes a turn. Parse failures fire `onParseError` so you can route them to telemetry.
+
+## Stable ids — the dedup guarantee
+
+Every fact is stored under `fact:${key}`. Writing `user.name` twice overwrites in place:
+
+```ts
+import { factId } from 'agentfootprint/memory';
+
+factId('user.name');  // "fact:user.name"
+```
+
+This is the core property that differentiates facts from beats (append-only) and messages (append-only). There is no fact history by default — if you need history, run `narrativePipeline` alongside and the beat with `refs: [...]` gives you the timeline.
+
+## Pipeline topology
+
+```
+READ subflow:
+  LoadFacts           (prefix-scan for fact: ids in store.list)
+    → FormatFacts     (emit one system message with "Known facts:")
+
+WRITE subflow:
+  LoadFacts           (surface existing facts to the extractor)
+    → ExtractFacts    (run the extractor, wrap as MemoryEntry<Fact>)
+    → WriteFacts      (store.putMany — overwrites on key collision)
+```
+
+LoadFacts runs on BOTH sides. On the write side, it passes existing facts to the extractor via `scope.loadedFacts` so LLM extractors can update rather than re-emit. Costs one extra `store.list` per turn for dedup correctness.
+
+## Pairing with narrative memory
+
+Facts and beats are complementary — compose them yourself:
+
+```ts
+import { Agent, anthropic } from 'agentfootprint';
+import {
+  factPipeline,
+  narrativePipeline,
+  llmExtractor,
+  llmFactExtractor,
+  InMemoryStore,
+} from 'agentfootprint/memory';
+
+const store = new InMemoryStore();
+const provider = anthropic('claude-haiku-4-5');
+
+// Beats = "what happened" (append-only)
+const beats = narrativePipeline({ store, extractor: llmExtractor({ provider }) });
+
+// Facts = "what's true now" (dedup-on-key)
+const facts = factPipeline({ store, extractor: llmFactExtractor({ provider }) });
+
+// Pick one — or build a hybrid pipeline by composing the subflows.
+```
+
+A future `auto()` preset will wire beats + facts + messages together automatically; until then, pick the primary shape for your app or compose manually.
+
+## Tuning
+
+```ts
+factPipeline({
+  store,
+  extractor: llmFactExtractor({ provider }),
+
+  // Read
+  loadLimit: 100,             // upper bound on store.list page size
+  tiers: ['hot'],             // only load hot-tier facts
+  formatHeader: 'Known facts about the user:',
+  formatFooter: 'Use these only when relevant to the current turn.',
+  formatShowConfidence: false,
+
+  // Write
+  writeTier: 'hot',           // tag new facts as hot
+  writeTtlMs: 30 * 24 * 60 * 60_000,  // 30 days
+});
+```
+
+## When to use which pipeline
+
+| Situation | Pipeline |
+|---|---|
+| Short chat, exact-message recall (debugging, legal transcripts) | `defaultPipeline` |
+| Long chat, want compression, traceable summaries | `narrativePipeline` |
+| User asks about topics from deep history | `semanticPipeline` |
+| **Stable identity / preferences / commitments, dedup required** | **`factPipeline`** |
+| Facts + events (audit trail) | `factPipeline` + `narrativePipeline` on same store |
+| Compliance — read context only, no writes | `ephemeralPipeline` |
+
+## Category taxonomy
+
+The built-in pattern extractor tags facts with these categories:
+
+| Category | Rule | Default confidence |
+|---|---|---|
+| `identity` | `my name is X` / `I'm X` | 0.9 |
+| `contact` | `my email is x@y.z` | 0.95 |
+| `profile` | `I live in X` | 0.8 |
+| `preference` | `I prefer X` / `I like X` | 0.7 |
+
+LLM extractors are prompted to use `identity`, `contact`, `profile`, `preference`, `commitment`, `fact`, or `other` — but the field is free-form. Pick your own taxonomy if you need one.
+
+## Explainability — why does the agent know this?
+
+Like beats, facts support a `refs?: readonly string[]` field pointing back to the source messages. Pattern extractors don't populate it (regex matches aren't tied to message boundaries), but `llmFactExtractor` prompts the model to cite sources:
+
+```json
+{ "key": "user.name", "value": "Alice", "refs": ["msg-1-0"] }
+```
+
+When you need to answer "why does the agent think the user's name is Alice?", walk the ref backwards to the raw message. Same audit story as narrative memory, applied to facts.
+
+## See also
+
+- [Memory pipeline](/agentfootprint/guides/memory) — base pipeline architecture
+- [Narrative memory](/agentfootprint/guides/narrative-memory) — beat-based compression (complementary)
+- [Semantic retrieval](/agentfootprint/guides/semantic-retrieval) — vector recall for deep history
+- [Memory stores](/agentfootprint/integrations/memory-stores) — plugging in Redis / Postgres / pgvector

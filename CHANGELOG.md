@@ -5,7 +5,39 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.14.0]
+
+### Added
+
+- **Fact extraction** (`agentfootprint/memory`). Stable key/value
+  fact memory with dedup-on-write — "what's currently true" as a
+  complement to beats ("what happened").
+  - `Fact<V>` type with `key` / `value` / optional `confidence` /
+    `category` / `refs[]` (source-message provenance, like beats).
+  - `factId(key)` helper → stable `fact:${key}` MemoryStore ids.
+    Last-write-wins: the same key written twice REPLACES the prior
+    entry (unlike beats/messages which are append-only).
+  - `FactExtractor` interface + two implementations:
+    - `patternFactExtractor()` — zero-dep regex heuristics for
+      identity / contact / location / preference. Free.
+    - `llmFactExtractor({ provider })` — LLM-backed extraction with
+      `existing`-facts prompt injection so the model can update
+      rather than duplicate. One call per turn. Malformed JSON falls
+      back to `[]` with `onParseError` callback.
+  - Stages: `extractFacts`, `writeFacts`, `loadFacts`, `formatFacts`.
+    `formatFacts` renders a compact `Known facts:` key/value block
+    (not `<memory>` tags, not a paragraph) — the shape LLMs parse
+    most efficiently.
+  - `factPipeline({ store, extractor? })` preset. Read subflow:
+    LoadFacts → FormatFacts. Write subflow: LoadFacts → ExtractFacts
+    → WriteFacts (LoadFacts-on-write surfaces existing facts to the
+    extractor for update-awareness).
+  - Full documentation: `/guides/fact-extraction`.
+
+### Tests
+
+- 104 new tests across 6 files (5-pattern coverage per layer).
+- Library total: 1802 tests passing.
 
 ## [1.13.0]
 

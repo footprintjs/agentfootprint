@@ -68,6 +68,7 @@ export default defineConfig({
             { label: 'Memory pipeline', slug: 'guides/memory' },
             { label: 'Narrative memory', slug: 'guides/narrative-memory' },
             { label: 'Semantic retrieval', slug: 'guides/semantic-retrieval' },
+            { label: 'Fact extraction', slug: 'guides/fact-extraction' },
             { label: 'Multi-agent (Swarm)', slug: 'guides/swarm' },
             { label: 'Pausable (human-in-the-loop)', slug: 'guides/pausable' },
             { label: 'Streaming', slug: 'guides/streaming' },

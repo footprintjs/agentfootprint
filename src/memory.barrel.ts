@@ -68,6 +68,8 @@ export { narrativePipeline } from './memory/pipeline';
 export type { NarrativePipelineConfig } from './memory/pipeline';
 export { semanticPipeline } from './memory/pipeline';
 export type { SemanticPipelineConfig } from './memory/pipeline';
+export { factPipeline } from './memory/pipeline';
+export type { FactPipelineConfig } from './memory/pipeline';
 
 // ── Embedding (SemanticRetrieval building blocks) ──────────
 export type { Embedder, EmbedArgs, EmbedBatchArgs } from './memory/embedding';
@@ -101,6 +103,29 @@ export type {
   WriteBeatsConfig,
   FormatAsNarrativeConfig,
 } from './memory/beats';
+
+// ── Facts (FactExtraction building blocks) ─────────────────
+export type { Fact, FactExtractor, FactExtractArgs } from './memory/facts';
+export {
+  factId,
+  isFactId,
+  isFact,
+  asConfidence,
+  patternFactExtractor,
+  llmFactExtractor,
+  extractFacts,
+  writeFacts,
+  loadFacts,
+  formatFacts,
+} from './memory/facts';
+export type {
+  LLMFactExtractorConfig,
+  ExtractFactsConfig,
+  FactPipelineState,
+  WriteFactsConfig,
+  LoadFactsConfig,
+  FormatFactsConfig,
+} from './memory/facts';
 
 // ── Wire helpers (for custom flowcharts) ────────────────────
 export { mountMemoryRead, mountMemoryWrite, mountMemoryPipeline } from './memory/wire';
