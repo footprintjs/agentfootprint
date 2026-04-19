@@ -5,6 +5,51 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.17.2]
+
+### Fixed
+
+- **InstructionsToLLM subflow was concatenating arrays across Dynamic
+  ReAct iterations.** `buildAgentLoop` mounted `sf-instructions-to-llm`
+  without `arrayMerge: ArrayMergeMode.Replace`, so each loop iteration
+  appended its `promptInjections` / `toolInjections` to the parent
+  scope — the effective system prompt grew 7→14→21→28 lines, and the
+  tool list doubled on every turn, triggering Anthropic's
+  `"tools: Tool names must be unique"` rejection on iter 4+. Matches the
+  existing Replace flag on `sf-messages` / `sf-tools`.
+- **`.skills(registry)` did not register per-skill tools for dispatch.**
+  Skill tools were declared to the LLM via `AgentInstruction.tools`
+  injections, but the dispatch registry only had `list_skills` +
+  `read_skill`. When an LLM called a skill-gated tool,
+  `staticTools.execute()` returned `{error: true, content: "Unknown
+  tool: ..."}` and the turn wedged. `.skills()` now iterates each
+  skill's `tools: []` and registers them into the agent's `ToolRegistry`
+  so dispatch is always reachable.
+- **ToolProvider dispatch now falls back to the registry on "Unknown
+  tool" errors.** Callers who use a narrow resolve-time provider
+  (`staticTools([listSkills, readSkill])` + injection-based visibility)
+  need dispatch to reach the registered skill tools. Both the
+  sequential and parallel dispatch paths in `lib/call/helpers.ts` now
+  check: if the primary provider reports the tool as unknown AND the
+  registry has it, fall through to the registry handler.
+- **Decision scope now persists across `.run()` calls.** Previously
+  `scope.decision = { ...initialDecision }` reset the decision on every
+  turn, so follow-up messages would silently lose the `currentSkill`
+  written by the prior turn's `read_skill` — causing `autoActivate` to
+  stop surfacing the skill's tools on iter 1 of turn 2+. The runner now
+  captures `state.decision` after each run and re-seeds from it next
+  time. Cleared by `resetConversation()` for clean new dialogues.
+  Unblocks multi-turn chat where the skill context should feel
+  continuous.
+- **`buildToolsSubflow` now defensively dedupes on three axes.** Base
+  tools vs. base tools (in case the provider returned duplicates),
+  base vs. injections (pre-existing check), and within injections
+  themselves. First-wins on every axis. Belt-and-braces safety net
+  against the Anthropic "tool names must be unique" rejection even if
+  a future bug reintroduces an injection collision.
+- Added 2 new tests to `test/lib/slots/tools.test.ts` pinning the dedup
+  behaviors — 15/15 slot tests pass, 1874/1874 full suite still green.
+
 ## [1.17.1]
 
 ### Fixed

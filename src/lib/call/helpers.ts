@@ -318,7 +318,7 @@ export async function executeToolCalls(
   }
 
   for (const toolCall of toolCalls) {
-    let resultContent: string;
+    let resultContent: string = '';
     let runtimeInstructions: readonly string[] | undefined;
     let runtimeFollowUps: readonly RuntimeFollowUp[] | undefined;
     let errorInfo: { code?: string; message: string } | undefined;
@@ -333,23 +333,38 @@ export async function executeToolCalls(
 
     // Try ToolProvider.execute() first (handles remote tools, gated tools, etc.)
     // Skip ToolProvider for ask_human — it must run locally (uses Symbol marker for pause detection).
+    // If the provider reports the tool as unknown but the local registry has it,
+    // fall through to the registry path — this lets callers use a narrow
+    // resolve-time provider (e.g. staticTools([listSkills,readSkill])) while
+    // still dispatching every tool the agent registered during `.skills()`.
+    let handledByProvider = false;
     if (toolProvider?.execute && toolCall.name !== 'ask_human') {
       try {
         const execResult = await toolProvider.execute(toolCall, signal);
-        resultContent = execResult.content;
-        // Apply optional decision-scope update surfaced by the inner tool.
-        // Shallow-merge into the shared `decision` ref so the next
-        // iteration's InstructionsToLLM sees the new state. See
-        // `ToolResult.decisionUpdate` + `ToolExecutionResult.decisionUpdate`.
-        if (decision && execResult.decisionUpdate) {
-          Object.assign(decision, execResult.decisionUpdate);
+        const providerSawUnknown =
+          execResult.error === true &&
+          typeof execResult.content === 'string' &&
+          execResult.content.startsWith('Unknown tool:') &&
+          registry.get(toolCall.name) !== undefined;
+        if (!providerSawUnknown) {
+          resultContent = execResult.content;
+          // Apply optional decision-scope update surfaced by the inner tool.
+          // Shallow-merge into the shared `decision` ref so the next
+          // iteration's InstructionsToLLM sees the new state. See
+          // `ToolResult.decisionUpdate` + `ToolExecutionResult.decisionUpdate`.
+          if (decision && execResult.decisionUpdate) {
+            Object.assign(decision, execResult.decisionUpdate);
+          }
+          handledByProvider = true;
         }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         errorInfo = { message: msg };
         resultContent = JSON.stringify({ error: true, message: msg });
+        handledByProvider = true;
       }
-    } else {
+    }
+    if (!handledByProvider) {
       // Fall back to ToolRegistry (local ToolDefinition handlers)
       const tool = registry.get(toolCall.name);
       if (!tool) {
@@ -538,7 +553,7 @@ async function executeOneToolCall(
   didError: boolean;
   askHumanMarker?: { question: string; toolCallId: string };
 }> {
-  let resultContent: string;
+  let resultContent: string = '';
   let runtimeInstructions: readonly string[] | undefined;
   let runtimeFollowUps: readonly RuntimeFollowUp[] | undefined;
   let errorInfo: { code?: string; message: string } | undefined;
@@ -554,21 +569,32 @@ async function executeOneToolCall(
 
   // Try ToolProvider.execute() first (handles remote tools, gated tools, etc.)
   // Skip ToolProvider for ask_human — it must run locally (uses Symbol marker for pause detection).
+  // Matches the sequential path: if the provider reports the tool as unknown
+  // but the local registry has it, fall through to the registry handler.
+  let handledByProvider = false;
   if (toolProvider?.execute && toolCall.name !== 'ask_human') {
     try {
       const execResult = await toolProvider.execute(toolCall, signal);
-      resultContent = execResult.content;
-      // Same merge as the sequential path — preserves decisionUpdate from
-      // any built-in ToolProvider (staticTools, gatedTools, etc.).
-      if (decision && execResult.decisionUpdate) {
-        Object.assign(decision, execResult.decisionUpdate);
+      const providerSawUnknown =
+        execResult.error === true &&
+        typeof execResult.content === 'string' &&
+        execResult.content.startsWith('Unknown tool:') &&
+        registry.get(toolCall.name) !== undefined;
+      if (!providerSawUnknown) {
+        resultContent = execResult.content;
+        if (decision && execResult.decisionUpdate) {
+          Object.assign(decision, execResult.decisionUpdate);
+        }
+        handledByProvider = true;
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       errorInfo = { message: msg };
       resultContent = JSON.stringify({ error: true, message: msg });
+      handledByProvider = true;
     }
-  } else {
+  }
+  if (!handledByProvider) {
     const tool = registry.get(toolCall.name);
     if (!tool) {
       const safeName = String(toolCall.name)

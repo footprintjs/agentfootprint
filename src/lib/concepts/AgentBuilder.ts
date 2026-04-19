@@ -367,6 +367,25 @@ export class Agent {
     if (!this.registry.has(listSkills.id)) this.registry.register(listSkills);
     if (!this.registry.has(readSkill.id)) this.registry.register(readSkill);
 
+    // 2b. Per-skill tools → dispatch registry. Each skill's `tools` array
+    //     is declared to the LLM at resolve-time via AgentInstruction.tools
+    //     injections, but execute-time dispatch still needs a local
+    //     handler. Register them into the agent's ToolRegistry so
+    //     `toolProvider.execute` / `registry.get()` can both reach them.
+    //     Skipping this step is why callers who use a narrow
+    //     `staticTools([listSkills, readSkill])` toolProvider see
+    //     "Unknown tool" at dispatch for every skill-gated tool.
+    //     Track them under `skillsTools` too so a later `.skills()`
+    //     replace unregisters them cleanly.
+    for (const skill of registry.list()) {
+      if (!skill.tools) continue;
+      for (const tool of skill.tools) {
+        if (this.registry.has(tool.id)) continue;
+        this.registry.register(tool);
+        this.skillsTools.push(tool);
+      }
+    }
+
     // 3. System-prompt fragment (only under 'system-prompt' / 'both' modes).
     //    Stored as a separate field so it can be stripped if `.skills()` is
     //    called again with a different registry.

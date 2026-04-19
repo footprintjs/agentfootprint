@@ -99,6 +99,16 @@ export class AgentRunner {
   private readonly maxIdenticalFailures?: number;
   private readonly cachedDecideFunctions?: ReadonlyMap<string, DecideFn>;
   private conversationHistory: Message[] = [];
+  /**
+   * Decision scope carried forward between `.run()` calls. Tool handlers
+   * write into `scope.decision` via `decisionUpdate`; without this carry-
+   * over, every new turn would see an empty decision and skill-gated
+   * tools (autoActivate) would disappear on follow-up messages.
+   * `resetConversation()` clears this alongside `conversationHistory` so
+   * a fresh conversation really starts fresh. Undefined before the first
+   * run — falls back to `initialDecision` from build config.
+   */
+  private lastDecision?: Readonly<Record<string, unknown>>;
   private lastExecutor?: FlowChartExecutor;
   private lastSpec?: unknown;
   private readonly verboseNarrative: boolean;
@@ -359,6 +369,13 @@ export class AgentRunner {
         'seed:userMessage': message,
         'seed:existingMessages': existingMessages,
       };
+      // Carry decision scope across turns — if a previous run wrote
+      // fields (e.g. `currentSkill` via a tool's `decisionUpdate`),
+      // re-seed them so follow-up turns start from the same vantage.
+      // `resetConversation()` clears this back to undefined.
+      if (this.lastDecision) {
+        runInput['seed:initialDecision'] = this.lastDecision;
+      }
       if (options?.identity) runInput['memory:identity'] = options.identity;
       if (options?.turnNumber !== undefined) runInput['memory:turnNumber'] = options.turnNumber;
       if (options?.contextTokensRemaining !== undefined) {
@@ -530,8 +547,16 @@ export class AgentRunner {
   private buildResult(executor: FlowChartExecutor): AgentResult {
     if (executor.isPaused()) {
       const cp = executor.getCheckpoint();
-      const pausedMessages = (executor.getSnapshot()?.sharedState?.messages as Message[]) ?? [];
+      const pausedSnapshot = executor.getSnapshot();
+      const pausedMessages = (pausedSnapshot?.sharedState?.messages as Message[]) ?? [];
       this.conversationHistory = pausedMessages;
+      // Also persist decision scope on pause so `resume()` picks up where
+      // we stopped. Without this, a human-in-the-loop `ask_human` mid-
+      // turn would drop any skill context written before the pause.
+      const pausedDecision = pausedSnapshot?.sharedState?.decision;
+      if (pausedDecision && typeof pausedDecision === 'object') {
+        this.lastDecision = { ...(pausedDecision as Record<string, unknown>) };
+      }
       return {
         content: '',
         messages: pausedMessages,
@@ -550,6 +575,14 @@ export class AgentRunner {
     const maxIterationsReached = state.maxIterationsReached === true;
 
     this.conversationHistory = messages;
+    // Capture the final decision scope so the NEXT `.run()` call re-seeds
+    // from here. Tool handlers that wrote `decisionUpdate` (e.g. the
+    // auto-generated `read_skill` writing `currentSkill`) stay in scope
+    // across turns. Cleared by `resetConversation()`.
+    const finalDecision = state.decision;
+    if (finalDecision && typeof finalDecision === 'object') {
+      this.lastDecision = { ...(finalDecision as Record<string, unknown>) };
+    }
 
     return {
       content: result,
@@ -586,6 +619,10 @@ export class AgentRunner {
   }
   resetConversation(): void {
     this.conversationHistory = [];
+    // Clear decision scope too — a new conversation should start with a
+    // clean slate, not with a stale `currentSkill` or other decision
+    // fields carried from the prior dialogue.
+    this.lastDecision = undefined;
   }
 
   /**

@@ -371,6 +371,13 @@ export function buildAgentLoop(
     const argUserMessage = args['seed:userMessage'] as string | undefined;
     const argExisting = args['seed:existingMessages'] as Message[] | undefined;
     const argMessages = args['seed:messages'] as Message[] | undefined;
+    // Carry-over decision scope from the caller's previous run. When the
+    // agent is reused across multiple `.run()` calls (multi-turn chat),
+    // decision fields written by tools on turn N should still be visible
+    // on turn N+1 — otherwise skill-gated tool visibility (autoActivate)
+    // resets between turns and the LLM silently loses its active skill.
+    // See AgentRunner.lastDecision for the capture side.
+    const argSeedDecision = args['seed:initialDecision'] as Record<string, unknown> | undefined;
 
     const effectiveExisting = argExisting ?? existingMessages;
     const effectiveIncoming =
@@ -386,7 +393,7 @@ export function buildAgentLoop(
     scope.loopCount = 0;
     scope.maxIterations = maxIterations;
     if (hasAgentInstructions) {
-      scope.decision = { ...initialDecision };
+      scope.decision = { ...(argSeedDecision ?? initialDecision) };
     }
   };
 
@@ -460,7 +467,14 @@ export function buildAgentLoop(
     builder = mountMemoryRead(builder, { pipeline: memoryPipeline });
   }
 
-  // Mount InstructionsToLLM subflow BEFORE the 3 API slots (only when instructions registered)
+  // Mount InstructionsToLLM subflow BEFORE the 3 API slots (only when instructions registered).
+  //
+  // arrayMerge: Replace is REQUIRED here — without it, Dynamic ReAct loops
+  // concatenate promptInjections/toolInjections across iterations. That
+  // both (a) inflates the system prompt on every turn and (b) sends the
+  // same tool names twice to Anthropic on iteration 2+, which rejects with
+  // "tools: Tool names must be unique." sf-messages and sf-tools below
+  // already have this flag for the same reason.
   if (hasAgentInstructions) {
     const instructionsSubflow = buildInstructionsToLLMSubflow(config.agentInstructions!);
     builder = builder.addSubFlowChartNext(
@@ -477,6 +491,7 @@ export function buildAgentLoop(
           responseRules: sf.responseRules,
           matchedInstructions: sf.matchedInstructions,
         }),
+        arrayMerge: ArrayMergeMode.Replace,
       },
     );
   }

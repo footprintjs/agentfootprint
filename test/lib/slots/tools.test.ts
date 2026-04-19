@@ -202,6 +202,49 @@ describe('Tools slot — security', () => {
     await expect(runSubflow(failProvider)).rejects.toThrow('provider crashed');
   });
 
+  it('dedupes duplicate base tools (provider returned same id twice)', async () => {
+    const duped = staticTools([searchTool, calcTool, searchTool]);
+    const state = await runSubflow(duped);
+    const tools = state.toolDescriptions as LLMToolDescription[];
+    const names = tools.map((t) => t.name);
+    expect(names).toEqual(['search', 'calculator']);
+  });
+
+  it('dedupes when an injected tool shares a name with a base tool', async () => {
+    const subflow = buildToolsSubflow({ provider: staticTools([searchTool]) });
+    const wrapper = flowChart<ToolsSubflowState>(
+      'Seed',
+      (scope) => {
+        scope.messages = [user('hi')];
+        scope.loopCount = 0;
+        scope.toolInjections = [
+          { name: 'search', description: 'injection-override', inputSchema: { type: 'object' } },
+          { name: 'calculator', description: 'Do math', inputSchema: { type: 'object' } },
+        ];
+      },
+      'test-seed',
+    )
+      .addSubFlowChartNext('sf-tools', subflow, 'Tools', {
+        inputMapper: (p: Record<string, unknown>) => ({
+          messages: p.messages,
+          loopCount: p.loopCount,
+          toolInjections: p.toolInjections,
+        }),
+        outputMapper: (sf: Record<string, unknown>) => ({
+          toolDescriptions: sf.toolDescriptions,
+        }),
+      })
+      .build();
+    const executor = new FlowChartExecutor(wrapper);
+    await executor.run();
+    const state = executor.getSnapshot()?.sharedState ?? {};
+    const tools = state.toolDescriptions as LLMToolDescription[];
+    const names = tools.map((t) => t.name);
+    expect(names).toEqual(['search', 'calculator']);
+    // Base tool wins on collision — its description, not the injection's.
+    expect(tools[0].description).toBe('Search the web');
+  });
+
   it('tool with complex schema is preserved as-is', async () => {
     const complexTool: ToolDefinition = {
       id: 'complex',

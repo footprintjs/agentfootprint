@@ -55,14 +55,33 @@ export function buildToolsSubflow(config: ToolsSlotConfig): FlowChart {
       const ctx = buildToolContext(scope);
       const decision = await config.provider.resolve(ctx);
 
-      // Merge tool injections from InstructionsToLLM (if any)
-      // Deduplicate by name — base tools take precedence over injected.
-      // Note: dedup compares injected `name` (converted from ToolDefinition.id)
-      // against base tool `name`. Works when base ToolProvider uses id as name.
-      const injections = scope.toolInjections;
-      const baseNames = new Set(decision.value.map((t) => t.name));
-      const newTools = injections?.length ? injections.filter((t) => !baseNames.has(t.name)) : [];
-      const allTools = newTools.length ? [...decision.value, ...newTools] : decision.value;
+      // Merge tool injections from InstructionsToLLM (if any).
+      //
+      // Dedup is defensive on THREE axes — any overlap would cause the
+      // LLM adapter to reject the request (Anthropic returns
+      // "tools: Tool names must be unique"). First-wins in each pass:
+      //   1. Base tools own their slot (ToolProvider.resolve can return
+      //      the same id twice if the consumer built a static list with
+      //      duplicates; normalize before merging).
+      //   2. Base tools take precedence over injections on name collision.
+      //   3. Injections themselves are already unique-by-id at the
+      //      InstructionsToLLM layer, but we guard here too in case
+      //      future callers write `scope.toolInjections` directly.
+      const injections = scope.toolInjections ?? [];
+      const seenNames = new Set<string>();
+      const deduped: typeof decision.value = [];
+      for (const t of decision.value) {
+        if (seenNames.has(t.name)) continue;
+        seenNames.add(t.name);
+        deduped.push(t);
+      }
+      const newTools: typeof deduped = [];
+      for (const t of injections) {
+        if (seenNames.has(t.name)) continue;
+        seenNames.add(t.name);
+        newTools.push(t);
+      }
+      const allTools = newTools.length ? [...deduped, ...newTools] : deduped;
 
       scope.toolDescriptions = allTools;
 
