@@ -189,11 +189,7 @@ describe('factPipeline — property', () => {
     const pipeline = factPipeline({ store });
     await runWrite(
       pipeline,
-      [
-        user(
-          'my name is Alice. my email is alice@x.y. I live in Berlin. I prefer tea.',
-        ),
-      ],
+      [user('my name is Alice. my email is alice@x.y. I live in Berlin. I prefer tea.')],
       1,
     );
     const { entries } = await store.list<Fact>(ID, { limit: 100 });

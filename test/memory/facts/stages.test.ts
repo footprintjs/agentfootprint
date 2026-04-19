@@ -42,7 +42,11 @@ function makeScope(partial?: Partial<FactPipelineState>): FactPipelineState {
 }
 
 async function runStages(
-  stages: Array<{ name: string; id: string; fn: Parameters<typeof flowChart<FactPipelineState>>[1] }>,
+  stages: Array<{
+    name: string;
+    id: string;
+    fn: Parameters<typeof flowChart<FactPipelineState>>[1];
+  }>,
   seed: Partial<FactPipelineState>,
 ): Promise<FactPipelineState> {
   const initial = makeScope(seed);
@@ -90,7 +94,13 @@ describe('extractFacts — unit', () => {
 
   it('writes MemoryEntry-wrapped facts with fact: ids', async () => {
     const state = await runStages(
-      [{ name: 'Extract', id: 'extract-facts', fn: extractFacts({ extractor: patternFactExtractor() }) }],
+      [
+        {
+          name: 'Extract',
+          id: 'extract-facts',
+          fn: extractFacts({ extractor: patternFactExtractor() }),
+        },
+      ],
       { newMessages: [user('my name is Alice.')] },
     );
     expect(state.newFacts).toHaveLength(1);
@@ -185,9 +195,7 @@ describe('extractFacts — property', () => {
         },
       ],
       {
-        newMessages: [
-          user('my name is Alice. my email is a@b.c. I live in Berlin. I prefer tea.'),
-        ],
+        newMessages: [user('my name is Alice. my email is a@b.c. I live in Berlin. I prefer tea.')],
       },
     );
     expect(state.newFacts!.length).toBeGreaterThan(0);
@@ -205,10 +213,9 @@ describe('extractFacts — security', () => {
       },
     };
     await expect(
-      runStages(
-        [{ name: 'Extract', id: 'extract-facts', fn: extractFacts({ extractor: bad }) }],
-        { newMessages: [user('x')] },
-      ),
+      runStages([{ name: 'Extract', id: 'extract-facts', fn: extractFacts({ extractor: bad }) }], {
+        newMessages: [user('x')],
+      }),
     ).rejects.toThrow('extractor bomb');
   });
 });
@@ -230,10 +237,9 @@ describe('writeFacts — unit', () => {
         accessCount: 0,
       },
     ];
-    await runStages(
-      [{ name: 'Write', id: 'write-facts', fn: writeFacts({ store }) }],
-      { newFacts },
-    );
+    await runStages([{ name: 'Write', id: 'write-facts', fn: writeFacts({ store }) }], {
+      newFacts,
+    });
     expect(putSpy).toHaveBeenCalledTimes(1);
     const call = putSpy.mock.calls[0];
     expect(call[1]).toHaveLength(1);
@@ -245,10 +251,9 @@ describe('writeFacts — boundary', () => {
   it('empty newFacts → store.putMany NOT called', async () => {
     const store = new InMemoryStore();
     const putSpy = vi.spyOn(store, 'putMany');
-    await runStages(
-      [{ name: 'Write', id: 'write-facts', fn: writeFacts({ store }) }],
-      { newFacts: [] },
-    );
+    await runStages([{ name: 'Write', id: 'write-facts', fn: writeFacts({ store }) }], {
+      newFacts: [],
+    });
     expect(putSpy).not.toHaveBeenCalled();
   });
 });
@@ -265,14 +270,12 @@ describe('writeFacts — scenario', () => {
       lastAccessedAt: Date.now(),
       accessCount: 0,
     });
-    await runStages(
-      [{ name: 'Write', id: 'write-facts', fn: writeFacts({ store }) }],
-      { newFacts: [mkEntry('Alice', 1)] },
-    );
-    await runStages(
-      [{ name: 'Write', id: 'write-facts', fn: writeFacts({ store }) }],
-      { newFacts: [mkEntry('Alicia', 2)] },
-    );
+    await runStages([{ name: 'Write', id: 'write-facts', fn: writeFacts({ store }) }], {
+      newFacts: [mkEntry('Alice', 1)],
+    });
+    await runStages([{ name: 'Write', id: 'write-facts', fn: writeFacts({ store }) }], {
+      newFacts: [mkEntry('Alicia', 2)],
+    });
     const after = await store.get<Fact>(ID, factId('user.name'));
     expect(after?.value.value).toBe('Alicia');
   });
@@ -348,10 +351,9 @@ describe('loadFacts — scenario', () => {
         accessCount: 0,
       },
     ];
-    const state = await runStages(
-      [{ name: 'Load', id: 'load-facts', fn: loadFacts({ store }) }],
-      { loadedFacts: seeded },
-    );
+    const state = await runStages([{ name: 'Load', id: 'load-facts', fn: loadFacts({ store }) }], {
+      loadedFacts: seeded,
+    });
     expect(state.loadedFacts).toHaveLength(2);
     expect(state.loadedFacts!.map((e) => e.id).sort()).toEqual([
       'fact:user.email',
@@ -384,10 +386,9 @@ describe('formatFacts — unit', () => {
         accessCount: 0,
       },
     ];
-    const state = await runStages(
-      [{ name: 'Format', id: 'format-facts', fn: formatFacts() }],
-      { loadedFacts: loaded },
-    );
+    const state = await runStages([{ name: 'Format', id: 'format-facts', fn: formatFacts() }], {
+      loadedFacts: loaded,
+    });
     expect(state.formatted).toHaveLength(1);
     expect(state.formatted[0].role).toBe('system');
     const content = state.formatted[0].content as string;
@@ -399,10 +400,9 @@ describe('formatFacts — unit', () => {
 
 describe('formatFacts — boundary', () => {
   it('empty loadedFacts → formatted is [] (no injection)', async () => {
-    const state = await runStages(
-      [{ name: 'Format', id: 'format-facts', fn: formatFacts() }],
-      { loadedFacts: [] },
-    );
+    const state = await runStages([{ name: 'Format', id: 'format-facts', fn: formatFacts() }], {
+      loadedFacts: [],
+    });
     expect(state.formatted).toEqual([]);
   });
 
@@ -444,10 +444,9 @@ describe('formatFacts — scenario', () => {
         accessCount: 0,
       },
     ];
-    const state = await runStages(
-      [{ name: 'Format', id: 'format-facts', fn: formatFacts() }],
-      { loadedFacts: loaded },
-    );
+    const state = await runStages([{ name: 'Format', id: 'format-facts', fn: formatFacts() }], {
+      loadedFacts: loaded,
+    });
     const content = state.formatted[0].content as string;
     expect(content).toContain('user.age: 32');
     expect(content).toContain('user.addr: {"city":"SF"}');
@@ -488,10 +487,9 @@ describe('facts stages — security', () => {
         accessCount: 0,
       },
     ];
-    const state = await runStages(
-      [{ name: 'Format', id: 'format-facts', fn: formatFacts() }],
-      { loadedFacts: loaded },
-    );
+    const state = await runStages([{ name: 'Format', id: 'format-facts', fn: formatFacts() }], {
+      loadedFacts: loaded,
+    });
     const content = state.formatted[0].content as string;
     expect(content).not.toContain('</memory>');
     expect(content).toContain('</m\u200Demory>');

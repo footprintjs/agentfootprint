@@ -112,8 +112,7 @@ export function formatFacts(config: FormatFactsConfig = {}) {
     );
 
     const body = lines.join('\n');
-    const content =
-      (header ? `${header}\n\n` : '') + body + (footer ? `\n\n${footer}` : '');
+    const content = (header ? `${header}\n\n` : '') + body + (footer ? `\n\n${footer}` : '');
 
     scope.formatted = [{ role: 'system', content }];
   };

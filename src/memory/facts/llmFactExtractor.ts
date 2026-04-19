@@ -110,17 +110,17 @@ function formatMessagesForExtractor(messages: readonly Message[], turnNumber: nu
       typeof m.content === 'string'
         ? m.content
         : Array.isArray(m.content)
-          ? m.content
-              .map((b) => {
-                if (b && typeof b === 'object') {
-                  const blk = b as { type?: string; text?: string };
-                  if (blk.type === 'text' && typeof blk.text === 'string') return blk.text;
-                }
-                return '';
-              })
-              .filter(Boolean)
-              .join(' ')
-          : '';
+        ? m.content
+            .map((b) => {
+              if (b && typeof b === 'object') {
+                const blk = b as { type?: string; text?: string };
+                if (blk.type === 'text' && typeof blk.text === 'string') return blk.text;
+              }
+              return '';
+            })
+            .filter(Boolean)
+            .join(' ')
+        : '';
     lines.push(`[${ref}] ${m.role}: ${content}`);
   }
   return lines.join('\n');

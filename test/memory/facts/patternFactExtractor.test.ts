@@ -93,9 +93,7 @@ describe('patternFactExtractor — boundary', () => {
 describe('patternFactExtractor — scenario', () => {
   it('multi-rule single user message produces facts for each match', async () => {
     const facts = await run([
-      user(
-        "My name is Alice. I live in Berlin. My email is alice@example.com. I prefer tea.",
-      ),
+      user('My name is Alice. I live in Berlin. My email is alice@example.com. I prefer tea.'),
     ]);
     expect(findKey(facts, 'user.name')?.value).toBe('Alice');
     expect(findKey(facts, 'user.location')?.value).toBe('Berlin');
