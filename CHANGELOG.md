@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.17.1]
+
+### Fixed
+
+- `SkillRegistry.toTools()` aliased `this` via `const registry = this` which
+  tripped the `@typescript-eslint/no-this-alias` rule post-release CI.
+  Replaced with explicit `.bind(this)` method captures + a direct reference
+  to `this.options.autoActivate` — cleaner closure pattern, no behavioral
+  change, 1872/1872 tests still pass.
+
 ## [1.17.0]
 
 ### Added

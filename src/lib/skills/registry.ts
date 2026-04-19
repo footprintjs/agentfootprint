@@ -175,7 +175,13 @@ export class SkillRegistry<TDecision = unknown> {
    * narrative / toOpenAPI output (panel #6).
    */
   toTools(): GeneratedSkillTools {
-    const registry = this;
+    // Capture the specific methods and config the closures below need,
+    // rather than aliasing `this`. Arrow-function handlers inherit
+    // lexical `this` so no aliasing is required — this pattern also
+    // satisfies @typescript-eslint/no-this-alias.
+    const search = this.search.bind(this);
+    const getById = this.getById.bind(this);
+    const autoActivate = this.options.autoActivate;
 
     const listSkills = defineTool({
       id: 'list_skills',
@@ -195,7 +201,7 @@ export class SkillRegistry<TDecision = unknown> {
         },
       },
       handler: async (input: { scope?: string; query?: string }) => {
-        const matches = registry.search({
+        const matches = search({
           ...(input?.scope && { scope: input.scope }),
           ...(input?.query && { query: input.query }),
         });
@@ -223,7 +229,7 @@ export class SkillRegistry<TDecision = unknown> {
       },
       handler: async (input: { id: string }) => {
         const id = input?.id;
-        const auto = registry.autoActivate;
+        const auto = autoActivate;
 
         if (typeof id !== 'string' || id.length === 0) {
           return {
@@ -231,7 +237,7 @@ export class SkillRegistry<TDecision = unknown> {
             isError: true,
           };
         }
-        const skill = registry.getById(id);
+        const skill = getById(id);
         if (!skill) {
           // Panel #3 + #8: unknown id is a tool-result error the model
           // can recover from — NOT a thrown exception.
