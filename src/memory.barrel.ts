@@ -70,6 +70,8 @@ export { semanticPipeline } from './memory/pipeline';
 export type { SemanticPipelineConfig } from './memory/pipeline';
 export { factPipeline } from './memory/pipeline';
 export type { FactPipelineConfig } from './memory/pipeline';
+export { autoPipeline } from './memory/pipeline';
+export type { AutoPipelineConfig, AutoPipelineState } from './memory/pipeline';
 
 // ── Embedding (SemanticRetrieval building blocks) ──────────
 export type { Embedder, EmbedArgs, EmbedBatchArgs } from './memory/embedding';

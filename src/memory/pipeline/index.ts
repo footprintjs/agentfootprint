@@ -9,3 +9,5 @@ export { semanticPipeline } from './semantic';
 export type { SemanticPipelineConfig } from './semantic';
 export { factPipeline } from './fact';
 export type { FactPipelineConfig } from './fact';
+export { autoPipeline } from './auto';
+export type { AutoPipelineConfig, AutoPipelineState } from './auto';

@@ -1,0 +1,182 @@
+---
+title: Auto memory
+description: The one-line default — facts (dedup on key) + beats (traceable narrative) on a single store, with a single upgrade knob for LLM-backed quality.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Four memory presets asking you to pick one is too many choices for a first-draft agent. `autoPipeline()` is the opinionated default — it composes **facts** (dedup-on-key truth) and **beats** (append-only narrative) on the same store, with one knob to upgrade both to LLM-backed extraction.
+
+```ts
+import { Agent, anthropic } from 'agentfootprint';
+import { autoPipeline, InMemoryStore } from 'agentfootprint/memory';
+
+// Zero-LLM-cost defaults — regex + heuristics. Free.
+const pipeline = autoPipeline({ store: new InMemoryStore() });
+
+const agent = Agent.create({ provider: anthropic('claude-sonnet-4-5') })
+  .system('You remember the user across turns.')
+  .memoryPipeline(pipeline)
+  .build();
+```
+
+<Aside type="tip" title="When auto() is right">
+Use `autoPipeline` when you want "just give me memory" without committing to a strategy. When you need exact-message transcripts, deep-history vector recall, or compliance-grade read-only sessions, reach for the specific preset (`defaultPipeline` / `semanticPipeline` / `ephemeralPipeline`).
+</Aside>
+
+## What it stores
+
+Two complementary shapes on the same `MemoryStore`:
+
+| Shape | Example | Write semantics |
+|---|---|---|
+| **Facts** (dedup) | `user.name = "Alice"` | Second write to `user.name` OVERWRITES |
+| **Beats** (accumulate) | `"User asked about order ORD-123"` | Append-only, one per salient event |
+
+Facts answer "what's true about this user right now?" Beats answer "what happened?" Together they cover the two memory shapes every long-running agent needs.
+
+## What the LLM sees
+
+One combined system message:
+
+```
+Known facts about the user:
+
+- user.name: Alice
+- user.email: alice@example.com
+- user.location: Berlin
+
+From earlier: User revealed their name is Alice. User asked about
+refunds for order ORD-123. Assistant confirmed the refund was processed.
+```
+
+One message, not two — better attention budget for the LLM. Facts first (who the user is), then narrative (what happened).
+
+## The one upgrade knob — `provider`
+
+The default extractors are free:
+- Facts: `patternFactExtractor()` — regex heuristics for name / email / location / preferences.
+- Beats: `heuristicExtractor()` — keyword-based salience.
+
+Pass a `provider` to upgrade BOTH to LLM-backed:
+
+```ts
+import { anthropic } from 'agentfootprint';
+import { autoPipeline, InMemoryStore } from 'agentfootprint/memory';
+
+const pipeline = autoPipeline({
+  store: new InMemoryStore(),
+  provider: anthropic('claude-haiku-4-5'), // cheap model; runs 2× per turn
+});
+```
+
+One knob, two extractors. The same cheap model handles both calls.
+
+## Pipeline topology
+
+```
+READ subflow:
+  LoadAll             (one store.list, split by payload shape)
+    → FormatAuto      (emit ONE system msg: facts block + narrative)
+
+WRITE subflow:
+  LoadFacts           (surface existing facts for update-awareness)
+    → ExtractFacts    (run fact extractor)
+    → WriteFacts      (store.putMany — overwrite on fact:${key})
+    → ExtractBeats    (run beat extractor)
+    → WriteBeats      (store.putMany — beat-${turn}-${idx})
+```
+
+Under the hood auto() reuses the same stages as `factPipeline` and `narrativePipeline` — there's no separate code path, just opinionated composition.
+
+## Per-extractor overrides
+
+When you want mixed quality (e.g. facts via LLM but beats via heuristic):
+
+```ts
+import { anthropic } from 'agentfootprint';
+import {
+  autoPipeline,
+  InMemoryStore,
+  llmFactExtractor,
+  heuristicExtractor,
+} from 'agentfootprint/memory';
+
+const pipeline = autoPipeline({
+  store: new InMemoryStore(),
+  factExtractor: llmFactExtractor({ provider: anthropic('claude-haiku-4-5') }),
+  beatExtractor: heuristicExtractor(), // keep beats free
+});
+```
+
+`factExtractor` / `beatExtractor` take precedence over `provider`.
+
+## Tuning
+
+```ts
+autoPipeline({
+  store,
+  provider: anthropic('claude-haiku-4-5'),
+
+  // Load
+  loadLimit: 200,              // upper bound on store.list page size
+  tiers: ['hot'],              // only load hot-tier entries
+
+  // Write
+  writeTier: 'hot',            // tag both facts AND beats as hot
+  writeTtlMs: 30 * 24 * 60 * 60_000,
+
+  // Formatting
+  factsHeader: 'Known facts about the user:',
+  narrativeLeadIn: 'From earlier: ',
+  showConfidence: false,       // append (conf 0.87) to each fact
+  showRefs: false,             // append (refs: msg-1-0) to each beat
+});
+```
+
+## When to reach for a specific preset instead
+
+| Situation | Preset |
+|---|---|
+| Debugging / legal transcripts — need exact message text | `defaultPipeline` |
+| User asks about deep history — "what were we discussing last week?" | `semanticPipeline` |
+| Compliance — read prior context, never write | `ephemeralPipeline` |
+| Just facts, no event history needed | `factPipeline` |
+| Just beats, no dedup-on-key needed | `narrativePipeline` |
+| **Everything above too specific — just remember the user** | **`autoPipeline`** |
+
+## Composing with semantic retrieval
+
+`autoPipeline` doesn't include vector recall. If your agent gets questions about topics from far-back history, layer `semanticPipeline` on a separate store:
+
+```ts
+// One store for facts+beats, one for vector-indexed raw messages.
+const memoryStore = new InMemoryStore();
+const vectorStore = new InMemoryStore();
+
+// Mount auto on the primary slot.
+const agent = Agent.create({ provider: anthropic('claude-sonnet-4-5') })
+  .memoryPipeline(autoPipeline({ store: memoryStore, provider: haiku }))
+  .build();
+```
+
+Hybrid mounting (two pipelines side-by-side) is a future `hybridPipeline` preset; until then, stick with one or compose at the agent layer.
+
+## Explainability — why does the agent know this?
+
+Facts and beats BOTH carry `refs?: string[]` fields. Pattern / heuristic extractors don't populate refs. LLM extractors do.
+
+When auditing "why does the agent think X?", walk the ref backwards to the raw message id, then fetch the message from the same store:
+
+```ts
+const beat = beats.find((b) => b.value.summary.includes('Alice'));
+const sourceIds = beat!.value.refs; // ['msg-1-0', 'msg-1-1']
+// sourceIds point to message entries in the same store
+```
+
+## See also
+
+- [Fact extraction](/agentfootprint/guides/fact-extraction) — dedup-on-key store
+- [Narrative memory](/agentfootprint/guides/narrative-memory) — beat-based compression
+- [Memory pipeline](/agentfootprint/guides/memory) — base architecture
+- [Semantic retrieval](/agentfootprint/guides/semantic-retrieval) — vector recall for deep history

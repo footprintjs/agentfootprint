@@ -5,6 +5,33 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.15.0]
+
+### Added
+
+- **`autoPipeline()`** — the opinionated default memory preset
+  (`agentfootprint/memory`). Composes facts (dedup-on-key) + beats
+  (append-only narrative) on a single store, emitting ONE combined
+  system message on read.
+  - Zero-LLM-cost defaults (`patternFactExtractor` + `heuristicExtractor`).
+  - Single `provider` config knob upgrades BOTH extractors to
+    LLM-backed in one line.
+  - Explicit `factExtractor` / `beatExtractor` escape hatches for
+    mixed-quality configurations.
+  - READ subflow: `LoadAll` (one `store.list`, split by payload shape
+    via `isFactId` + `isNarrativeBeat`) → `FormatAuto` (facts block +
+    narrative paragraph in one system msg).
+  - WRITE subflow: `LoadFacts` (update-awareness) → `ExtractFacts` →
+    `WriteFacts` → `ExtractBeats` → `WriteBeats`.
+  - `AutoPipelineState` extends both `FactPipelineState` +
+    `ExtractBeatsState` for typed scope.
+  - Full documentation: `/guides/auto-memory`.
+
+### Tests
+
+- 16 new tests across 2 files (5-pattern coverage + acceptance).
+- Library total: 1818 tests passing.
+
 ## [1.14.0]
 
 ### Added

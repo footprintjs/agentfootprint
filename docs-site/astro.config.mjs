@@ -69,6 +69,7 @@ export default defineConfig({
             { label: 'Narrative memory', slug: 'guides/narrative-memory' },
             { label: 'Semantic retrieval', slug: 'guides/semantic-retrieval' },
             { label: 'Fact extraction', slug: 'guides/fact-extraction' },
+            { label: 'Auto memory', slug: 'guides/auto-memory' },
             { label: 'Multi-agent (Swarm)', slug: 'guides/swarm' },
             { label: 'Pausable (human-in-the-loop)', slug: 'guides/pausable' },
             { label: 'Streaming', slug: 'guides/streaming' },
