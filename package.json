@@ -122,6 +122,11 @@
       "types": "./dist/types/patterns.barrel.d.ts",
       "import": "./dist/esm/patterns.barrel.js",
       "require": "./dist/patterns.barrel.js"
+    },
+    "./memory": {
+      "types": "./dist/types/memory.barrel.d.ts",
+      "import": "./dist/esm/memory.barrel.js",
+      "require": "./dist/memory.barrel.js"
     }
   },
   "typesVersions": {
@@ -149,6 +154,9 @@
       ],
       "patterns": [
         "dist/types/patterns.barrel.d.ts"
+      ],
+      "memory": [
+        "dist/types/memory.barrel.d.ts"
       ]
     }
   },

@@ -14,6 +14,7 @@ import type { ToolProvider } from '../../core';
 import type { ToolRegistry } from '../../tools';
 import type { Message } from '../../types/messages';
 import type { CommitMemoryConfig } from '../../stages/commitMemory';
+import type { MemoryPipeline } from '../../memory/pipeline';
 import type { SystemPromptSlotConfig } from '../slots/system-prompt';
 import type { MessagesSlotConfig } from '../slots/messages';
 import type { ToolsSlotConfig } from '../slots/tools';
@@ -195,19 +196,27 @@ export interface AgentLoopConfig {
 
   /**
    * When true, the Finalize branch sets `memory_shouldCommit` flag instead of
-   * calling $break() directly. Only use when a CommitMemory stage is mounted
-   * after the RouteResponse decider — without it, the loop will not terminate
-   * until maxIterations is reached.
+   * calling $break() directly. Only use when a CommitMemory stage (or a
+   * memoryPipeline.write subflow) is mounted after the RouteResponse decider.
    *
-   * Auto-enabled when `commitMemory` is provided.
+   * Auto-enabled when `commitMemory` or `memoryPipeline.write` is provided.
    */
   readonly useCommitFlag?: boolean;
 
   /**
-   * When provided, mounts a CommitMemory stage after the RouteResponse decider.
-   * Automatically enables `useCommitFlag`.
+   * Legacy — when provided, mounts a CommitMemory stage after RouteResponse.
+   * Automatically enables `useCommitFlag`. Superseded by `memoryPipeline` but
+   * kept for backward-compatibility with existing tests.
    */
   readonly commitMemory?: CommitMemoryConfig;
+
+  /**
+   * New path — mounts the pipeline's read subflow before CallLLM and the
+   * write subflow (if present) after Finalize. Flows from
+   * `AgentBuilder.memoryPipeline()`. When both this and `commitMemory` are
+   * provided, only `memoryPipeline` is used (the new path takes precedence).
+   */
+  readonly memoryPipeline?: MemoryPipeline;
 
   /**
    * Callback when LLM instructions fire during tool execution.

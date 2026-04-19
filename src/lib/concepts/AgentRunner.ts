@@ -31,6 +31,7 @@ import { getTextContent } from '../../types/content';
 import { userMessage, toolResultMessage, assistantMessage } from '../../types';
 import type { LLMProvider, LLMResponse, AgentResult, Message, ResponseFormat } from '../../types';
 import type { MemoryConfig } from '../../adapters/memory/types';
+import type { MemoryPipeline } from '../../memory/pipeline';
 import type { AgentRecorder, PromptProvider, ToolProvider } from '../../core';
 import { RecorderBridge } from '../../recorders/RecorderBridge';
 
@@ -54,6 +55,7 @@ export interface AgentRunnerOptions {
   readonly maxIterations?: number;
   readonly recorders?: AgentRecorder[];
   readonly memoryConfig?: MemoryConfig;
+  readonly memoryPipeline?: MemoryPipeline;
   readonly pattern?: AgentPattern;
   readonly promptProvider?: PromptProvider;
   readonly toolProvider?: ToolProvider;
@@ -85,6 +87,7 @@ export class AgentRunner {
   private readonly maxIter: number;
   private readonly recorders: AgentRecorder[];
   private readonly memoryConfig?: MemoryConfig;
+  private readonly memoryPipeline?: MemoryPipeline;
   private readonly agentPattern: AgentPattern;
   private readonly customPromptProvider?: PromptProvider;
   private readonly customToolProvider?: ToolProvider;
@@ -112,6 +115,7 @@ export class AgentRunner {
     this.maxIter = options.maxIterations ?? 10;
     this.recorders = [...(options.recorders ?? [])];
     this.memoryConfig = options.memoryConfig;
+    this.memoryPipeline = options.memoryPipeline;
     this.agentPattern = options.pattern ?? AgentPattern.Regular;
     this.customPromptProvider = options.promptProvider;
     this.customToolProvider = options.toolProvider;
@@ -184,6 +188,26 @@ export class AgentRunner {
       onEvent?: AgentStreamEventHandler;
       /** @deprecated Use onEvent instead. Ignored if onEvent is also provided. */
       onToken?: (token: string) => void;
+      /**
+       * Memory identity for this turn. Forwarded to the memory pipeline
+       * (if configured via `.memoryPipeline()`). Same agent instance can
+       * serve many users by passing different identities per-run.
+       *
+       * Only consulted when the agent has `.memoryPipeline()` attached;
+       * ignored for legacy `.memory()` configurations and for agents
+       * without memory at all.
+       */
+      identity?: { tenant?: string; principal?: string; conversationId: string };
+      /**
+       * Run-local turn counter. Written into `MemoryEntry.source.turn` by
+       * the write subflow for cross-turn provenance. Defaults to 1.
+       */
+      turnNumber?: number;
+      /**
+       * Context-window token budget hint. Picker stage uses this to bound
+       * how much memory it injects. Defaults to 4000.
+       */
+      contextTokensRemaining?: number;
     },
   ): Promise<AgentResult> {
     // Resolve stream event handler: onEvent takes precedence over onToken.
@@ -235,7 +259,11 @@ export class AgentRunner {
       }
     }
 
-    const existingMessages = this.memoryConfig?.store ? [] : this.conversationHistory;
+    // With a memory pipeline or store, prior-turn messages come from the
+    // pipeline's read subflow / memory store. Without memory, fall back
+    // to the in-runner conversation history.
+    const existingMessages =
+      this.memoryPipeline || this.memoryConfig?.store ? [] : this.conversationHistory;
 
     // Create bridge for recorder dispatch (before buildAgentLoop so mergedStreamEvent is available)
     const bridge = this.recorders.length > 0 ? new RecorderBridge(this.recorders) : null;
@@ -280,9 +308,23 @@ export class AgentRunner {
     const startMs = Date.now();
 
     try {
+      // Thread memory identity / turn / budget into getArgs() so the
+      // MemorySeed stage (mounted when memoryPipeline is set) can copy
+      // them onto scope. Args are scoped under `memory:*` keys to avoid
+      // locking same-named scope fields (runtime enforces readonly on args
+      // — a `identity` args key would prevent the seed from writing to
+      // `scope.identity`). Harmless for agents without memory.
+      const runInput: Record<string, unknown> = {};
+      if (options?.identity) runInput['memory:identity'] = options.identity;
+      if (options?.turnNumber !== undefined) runInput['memory:turnNumber'] = options.turnNumber;
+      if (options?.contextTokensRemaining !== undefined) {
+        runInput['memory:contextTokensRemaining'] = options.contextTokensRemaining;
+      }
+
       await executor.run({
         signal: options?.signal,
         timeoutMs: options?.timeoutMs,
+        ...(Object.keys(runInput).length > 0 && { input: runInput }),
       });
     } catch (err) {
       this.lastExecutor = executor;
@@ -518,19 +560,24 @@ export class AgentRunner {
       systemPrompt: { provider: promptProvider },
       messages: {
         strategy: this.memoryConfig?.strategy ?? slidingWindow({ maxMessages: 100 }),
-        store: this.memoryConfig?.store,
-        conversationId: this.memoryConfig?.conversationId,
+        ...(this.memoryConfig?.store && { store: this.memoryConfig.store }),
+        ...(this.memoryConfig?.conversationId && {
+          conversationId: this.memoryConfig.conversationId,
+        }),
       },
       tools: { provider: toolsProvider },
       toolProvider: this.customToolProvider,
       registry: this.registry,
       maxIterations: this.maxIter,
+      // Legacy path — CommitMemory stage; kept alongside new pipeline.
       commitMemory: this.memoryConfig
         ? {
             store: this.memoryConfig.store,
             conversationId: this.memoryConfig.conversationId,
           }
         : undefined,
+      // New path — pipeline subflows; wired in buildAgentLoop when set.
+      memoryPipeline: this.memoryPipeline,
       pattern: this.agentPattern,
       instructionOverrides: this.instructionOverrides,
       agentInstructions: this.agentInstructions,

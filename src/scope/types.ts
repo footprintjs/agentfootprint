@@ -108,6 +108,29 @@ export interface AgentLoopState {
   /** Flag: HandleResponse sets true when finalizing; CommitMemory reads. */
   memory_shouldCommit: boolean;
 
+  // ── New memory pipeline integration (AgentBuilder.memoryPipeline) ──
+  /**
+   * Hierarchical identity for the memory pipeline. Populated from
+   * `run(message, { identity })` options via a MemorySeed stage when
+   * `memoryPipeline` is configured. Pipeline subflows read this to
+   * scope storage calls.
+   */
+  identity?: import('../memory/identity').MemoryIdentity;
+  /** Turn counter for pipeline provenance (source.turn). Defaults to 1. */
+  turnNumber?: number;
+  /** Budget hint for the picker stage. Defaults to 4000. */
+  contextTokensRemaining?: number;
+  /**
+   * Output of the memory read subflow — formatted system messages that
+   * AssemblePrompt prepends to the LLM prompt.
+   */
+  memoryInjection?: Message[];
+  /**
+   * Messages packaged for the memory write subflow — populated after the
+   * LLM call and Finalize. The write subflow persists these to the store.
+   */
+  newMessages?: Message[];
+
   // ── Narrative enrichment (written by stages for BTS visibility) ──
   /** Tool resolution summary (e.g. "3 tools: calculator, datetime, search"). */
   resolvedTools: string;

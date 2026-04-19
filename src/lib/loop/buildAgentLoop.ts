@@ -32,6 +32,7 @@ import { ArrayMergeMode } from 'footprintjs/advanced';
 import type { FlowChart } from 'footprintjs';
 import type { AgentLoopState } from '../../scope/types';
 import type { RoutingBranch } from './types';
+import type { Message } from '../../types/messages';
 import { systemMessage, userMessage } from '../../types/messages';
 import { buildSystemPromptSubflow } from '../slots/system-prompt';
 import { buildMessagesSubflow } from '../slots/messages';
@@ -166,8 +167,9 @@ export function buildAgentLoop(
   const existingMessages = seed?.existingMessages ?? [];
   const subflowMode = seed?.subflowMode ?? false;
 
-  // Auto-enable useCommitFlag when commitMemory is provided
-  const useCommitFlag = config.useCommitFlag || !!config.commitMemory;
+  // Auto-enable useCommitFlag when either memory path needs post-Finalize work.
+  const useCommitFlag =
+    config.useCommitFlag || !!config.commitMemory || !!config.memoryPipeline?.write;
 
   // Build slot subflows
   const systemPromptSubflow = buildSystemPromptSubflow(config.systemPrompt);
@@ -355,23 +357,81 @@ export function buildAgentLoop(
     arrayMerge: ArrayMergeMode.Replace,
   });
 
+  // ── Memory pipeline: read-side mount ────────────────────────
+  //
+  // When a MemoryPipeline is attached (via `Agent.memoryPipeline()`), mount
+  // its read subflow AFTER slot resolution and BEFORE AssemblePrompt. The
+  // subflow reads identity + turnNumber + budget from parent scope, loads
+  // relevant memory from the store, picks entries that fit the budget, and
+  // writes a `memoryInjection` array of system messages back to parent scope.
+  // AssemblePrompt then prepends those to `messages` alongside the system
+  // prompt — the LLM sees memory context before the user's current turn.
+  //
+  // A small MemorySeed stage runs first to copy identity / turnNumber /
+  // contextTokensRemaining from `scope.$getArgs()` into scope state. This
+  // keeps the pipeline subflows isolated from args-reading concerns.
+  if (config.memoryPipeline) {
+    const memoryPipeline = config.memoryPipeline;
+
+    builder = builder.addFunction(
+      'MemorySeed',
+      (scope: TypedScope<AgentLoopState>) => {
+        // Read from `memory:*` namespaced args keys (set by AgentRunner.run).
+        // Using a namespace keeps args keys distinct from scope keys —
+        // args are readonly at runtime, so reusing the same names would
+        // lock writes to scope.identity etc. here.
+        const args = scope.$getArgs<Record<string, unknown>>() ?? {};
+        const identity = args['memory:identity'] as AgentLoopState['identity'] | undefined;
+        const turnNumber = args['memory:turnNumber'] as number | undefined;
+        const budget = args['memory:contextTokensRemaining'] as number | undefined;
+
+        // Identity falls back to a single-conversation default so a
+        // pipelinified agent still works for the common "one user, one
+        // session" case without the caller plumbing identity explicitly.
+        scope.identity = identity ?? { conversationId: 'default' };
+        scope.turnNumber = turnNumber ?? 1;
+        scope.contextTokensRemaining = budget ?? 4000;
+      },
+      'memory-seed',
+      'Seed memory identity / turn / budget from run() args',
+    );
+
+    // Read subflow mount — produces `memoryInjection` on parent scope.
+    builder = builder.addSubFlowChartNext('sf-memory-read', memoryPipeline.read, 'Load Memory', {
+      inputMapper: (parent: Record<string, unknown>) => ({
+        identity: parent.identity,
+        turnNumber: parent.turnNumber,
+        contextTokensRemaining: parent.contextTokensRemaining,
+        newMessages: [],
+      }),
+      outputMapper: (sfOutput: Record<string, unknown>) => ({
+        memoryInjection: sfOutput.formatted,
+      }),
+    });
+  }
+
   const assemblePromptStage = (scope: TypedScope<AgentLoopState>) => {
     const messages = scope.messages ?? [];
     const sysPrompt = scope.systemPrompt;
-    if (sysPrompt) {
-      // Replace existing system message (if any) with current system prompt.
-      // In Dynamic mode, the system prompt changes each iteration (instruction injections).
-      const nonSystem = messages.filter((m) => m.role !== 'system');
-      scope.messages = [systemMessage(sysPrompt), ...nonSystem];
-    }
+    const injection = scope.memoryInjection ?? [];
+
+    // Build the final prompt: system prompt → memory injection → user
+    // messages. Memory comes AFTER the system prompt (role instructions)
+    // but BEFORE the ongoing dialogue, matching the conceptual ordering
+    // "your role, what you know from before, what the user just said."
+    const nonSystem = messages.filter((m) => m.role !== 'system');
+    const prefix: Message[] = [];
+    if (sysPrompt) prefix.push(systemMessage(sysPrompt));
+    prefix.push(...injection);
+    scope.messages = [...prefix, ...nonSystem];
   };
 
-  // AssemblePrompt: prepend system message if not already present
+  // AssemblePrompt: prepend system message + memory injection
   builder = builder.addFunction(
     'AssemblePrompt',
     assemblePromptStage,
     'assemble-prompt',
-    'Prepend system prompt to messages before LLM call',
+    'Prepend system prompt + memory injection to messages before LLM call',
   );
 
   // CallLLM → ParseResponse → Routing(decider)
@@ -502,7 +562,7 @@ export function buildAgentLoop(
 
   builder = decider.setDefault(routing.defaultBranch).end();
 
-  // Mount CommitMemory when persistent memory is configured.
+  // Mount CommitMemory when legacy persistent memory is configured.
   // CommitMemory saves full history to store (fire-and-forget) and calls $break().
   if (config.commitMemory) {
     const commitMemory = createCommitMemoryStage(config.commitMemory);
@@ -511,6 +571,53 @@ export function buildAgentLoop(
       commitMemory,
       'commit-memory',
       'Persist conversation history to store',
+    );
+  }
+
+  // ── Memory pipeline: write-side mount ───────────────────────
+  //
+  // When a MemoryPipeline.write is present (legacy commitMemory takes
+  // precedence if both somehow set — which the builder guards against),
+  // mount the write subflow at the loop terminus. A PackageForWrite
+  // stage first copies the final messages from scope into `newMessages`
+  // so the subflow sees them in the expected field.
+  if (config.memoryPipeline?.write && !config.commitMemory) {
+    builder = builder.addFunction(
+      'PackageForWrite',
+      (scope: TypedScope<AgentLoopState>) => {
+        // New messages are everything beyond the original seed history.
+        // For the first turn with no history, that's all non-system msgs.
+        // Simpler: persist the user turn + assistant turn appended this run.
+        const msgs = scope.messages ?? [];
+        scope.newMessages = msgs.filter((m) => m.role !== 'system');
+      },
+      'package-for-write',
+      'Package messages for the memory write subflow',
+    );
+
+    builder = builder.addSubFlowChartNext(
+      'sf-memory-write',
+      config.memoryPipeline.write,
+      'Save Memory',
+      {
+        inputMapper: (parent: Record<string, unknown>) => ({
+          identity: parent.identity,
+          turnNumber: parent.turnNumber,
+          contextTokensRemaining: parent.contextTokensRemaining ?? 0,
+          newMessages: parent.newMessages ?? [],
+        }),
+        // No outputMapper — write subflow has no parent-visible output.
+      },
+    );
+
+    // Terminate the flow so loopTo below does not cycle back endlessly.
+    builder = builder.addFunction(
+      'BreakAfterSave',
+      (scope: TypedScope<AgentLoopState>) => {
+        scope.$break();
+      },
+      'break-after-save',
+      'Break after memory save (pipeline path)',
     );
   }
 

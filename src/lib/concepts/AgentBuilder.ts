@@ -11,6 +11,7 @@
 import type { ToolDefinition, LLMProvider, ResponseFormat } from '../../types';
 import type { ModelConfig } from '../../models';
 import type { MemoryConfig } from '../../adapters/memory/types';
+import type { MemoryPipeline } from '../../memory/pipeline';
 import type { AgentRecorder, PromptProvider, ToolProvider } from '../../core';
 import type { RunnerLike } from '../../types/multiAgent';
 import type { InstructionOverride, AgentInstruction } from '../instructions';
@@ -61,6 +62,7 @@ export class Agent {
   private maxIter = 10;
   private readonly recorders: AgentRecorder[] = [];
   private memoryConfig?: MemoryConfig;
+  private configuredMemoryPipeline?: MemoryPipeline;
   private agentPattern: AgentPattern = AgentPattern.Regular;
   private readonly overrides = new Map<string, InstructionOverride>();
   private readonly agentInstructions: AgentInstruction[] = [];
@@ -329,9 +331,50 @@ export class Agent {
     return this;
   }
 
-  /** Enable persistent conversation memory. */
+  /**
+   * Enable persistent conversation memory (legacy API — kept for the
+   * existing test suite; new consumers should prefer `.memoryPipeline()`).
+   */
   memory(config: MemoryConfig): this {
+    if (this.configuredMemoryPipeline) {
+      throw new Error('Agent.memory(): cannot combine .memory() with .memoryPipeline() — use one.');
+    }
     this.memoryConfig = config;
+    return this;
+  }
+
+  /**
+   * Attach a memory pipeline built from `defaultPipeline`, `ephemeralPipeline`,
+   * or custom composition. Subflows handle load / pick / format before
+   * CallLLM and persist / summarize after Finalize.
+   *
+   * Identity is supplied at `run()` time via `{ identity: {...} }` so the
+   * same agent instance can serve many users / tenants safely.
+   *
+   * @example
+   * ```ts
+   * import { Agent, mock } from 'agentfootprint';
+   * import { defaultPipeline, InMemoryStore } from 'agentfootprint/memory';
+   *
+   * const pipeline = defaultPipeline({ store: new InMemoryStore() });
+   *
+   * const agent = Agent.create({ provider: mock([...]) })
+   *   .system('You remember the user across turns.')
+   *   .memoryPipeline(pipeline)
+   *   .build();
+   *
+   * await agent.run('My name is Alice', {
+   *   identity: { conversationId: 'alice-session-1' },
+   * });
+   * ```
+   */
+  memoryPipeline(pipeline: MemoryPipeline): this {
+    if (this.memoryConfig) {
+      throw new Error(
+        'Agent.memoryPipeline(): cannot combine .memoryPipeline() with .memory() — use one.',
+      );
+    }
+    this.configuredMemoryPipeline = pipeline;
     return this;
   }
 
@@ -351,6 +394,7 @@ export class Agent {
       maxIterations: this.maxIter,
       recorders: [...this.recorders],
       memoryConfig: this.memoryConfig,
+      memoryPipeline: this.configuredMemoryPipeline,
       pattern: this.agentPattern,
       promptProvider: this.customPromptProvider,
       toolProvider: this.customToolProvider,
