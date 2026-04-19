@@ -19,6 +19,7 @@ import { defineTool } from '../../tools';
 import { resolveSkillBody } from './renderBody';
 import { resolveSurfaceMode } from './surfaceMode';
 import type {
+  AutoActivateOptions,
   GeneratedSkillTools,
   Skill,
   SkillListEntry,
@@ -31,14 +32,29 @@ const DEFAULT_PROMPT_HEADER = 'Available skills — call `read_skill({ id })` to
 export class SkillRegistry<TDecision = unknown> {
   private readonly skills = new Map<string, Skill<TDecision>>();
   private readonly options: Required<Pick<SkillRegistryOptions, 'surfaceMode' | 'promptHeader'>> &
-    Pick<SkillRegistryOptions, 'providerHint'>;
+    Pick<SkillRegistryOptions, 'providerHint' | 'autoActivate'>;
 
   constructor(options: SkillRegistryOptions = {}) {
     this.options = {
       surfaceMode: options.surfaceMode ?? 'tool-only',
       promptHeader: options.promptHeader ?? DEFAULT_PROMPT_HEADER,
       ...(options.providerHint && { providerHint: options.providerHint }),
+      ...(options.autoActivate && { autoActivate: options.autoActivate }),
     };
+  }
+
+  /**
+   * True when `autoActivate` is configured — exposed so consumers
+   * writing custom builders can check without depending on the private
+   * options field.
+   */
+  get hasAutoActivate(): boolean {
+    return !!this.options.autoActivate;
+  }
+
+  /** The configured autoActivate (or undefined). Exposed for advanced use. */
+  get autoActivate(): AutoActivateOptions | undefined {
+    return this.options.autoActivate;
   }
 
   /**
@@ -125,10 +141,32 @@ export class SkillRegistry<TDecision = unknown> {
   /**
    * Compile skills into the `AgentInstruction[]` the Agent loop already
    * knows how to evaluate. Every Skill already extends AgentInstruction —
-   * this is a type-narrowed passthrough.
+   * this is a type-narrowed passthrough, with one augmentation:
+   *
+   * When `autoActivate` is configured AND a skill has no `activeWhen`
+   * of its own, the registry injects a default predicate of
+   *   `(d) => d[stateField] === skill.id`
+   * so the skill's tools / prompt / onToolResult rules gate themselves
+   * automatically on activation. Consumers who want custom activation
+   * logic simply declare `activeWhen` on the skill and the default is
+   * skipped.
    */
   toInstructions(): readonly AgentInstruction<TDecision>[] {
-    return Array.from(this.skills.values());
+    const auto = this.options.autoActivate;
+    if (!auto) return Array.from(this.skills.values());
+    return Array.from(this.skills.values()).map((skill) => {
+      if (skill.activeWhen) return skill;
+      const field = auto.stateField;
+      const skillId = skill.id;
+      // Inject the default gate. Cast is safe because the user declared
+      // stateField as a key on their TDecision type.
+      return {
+        ...skill,
+        activeWhen: ((d: TDecision) =>
+          (d as Record<string, unknown>)[field] ===
+          skillId) as AgentInstruction<TDecision>['activeWhen'],
+      };
+    });
   }
 
   /**
@@ -185,6 +223,8 @@ export class SkillRegistry<TDecision = unknown> {
       },
       handler: async (input: { id: string }) => {
         const id = input?.id;
+        const auto = registry.autoActivate;
+
         if (typeof id !== 'string' || id.length === 0) {
           return {
             content: 'Error: read_skill requires a non-empty `id` string.',
@@ -195,13 +235,31 @@ export class SkillRegistry<TDecision = unknown> {
         if (!skill) {
           // Panel #3 + #8: unknown id is a tool-result error the model
           // can recover from — NOT a thrown exception.
-          return {
+          // autoActivate + onUnknownSkill: 'clear' → clear the field so
+          // the prior skill's tools/prompt disappear on a miss.
+          const base = {
             content: `Error: skill '${id}' not found. Call list_skills to see available skills.`,
             isError: true,
           };
+          if (auto?.onUnknownSkill === 'clear') {
+            return {
+              ...base,
+              decisionUpdate: { [auto.stateField]: undefined },
+            };
+          }
+          return base;
         }
         try {
           const body = await resolveSkillBody(skill);
+          // autoActivate path: also write the id into decision scope so
+          // `(d) => d[stateField] === id` activeWhen predicates fire on
+          // the next iteration. See SkillRegistryOptions.autoActivate.
+          if (auto) {
+            return {
+              content: body,
+              decisionUpdate: { [auto.stateField]: skill.id },
+            };
+          }
           return { content: body };
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);

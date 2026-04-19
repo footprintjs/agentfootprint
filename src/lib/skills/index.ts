@@ -3,6 +3,7 @@ export type {
   SurfaceMode,
   ProviderHint,
   SkillRegistryOptions,
+  AutoActivateOptions,
   SkillListEntry,
   GeneratedSkillTools,
 } from './types';

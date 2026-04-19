@@ -45,6 +45,7 @@ export type {
   SurfaceMode,
   ProviderHint,
   SkillRegistryOptions,
+  AutoActivateOptions,
   SkillListEntry,
   GeneratedSkillTools,
 } from './lib/skills';

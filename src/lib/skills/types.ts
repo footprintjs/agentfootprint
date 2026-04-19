@@ -114,6 +114,45 @@ export interface SkillRegistryOptions {
    * `"Available skills — call `read_skill({ id })` to activate one:"`.
    */
   readonly promptHeader?: string;
+
+  /**
+   * When configured, the auto-generated `read_skill(id)` tool:
+   *   1. returns the skill body as usual (tool-result recency delivery),
+   *   2. AND writes the loaded skill's id into agent decision scope at
+   *      `decision[stateField]`.
+   *
+   * Enables **skill-gated tool visibility**: downstream
+   * `AgentInstruction.activeWhen: (d) => d[stateField] === 'my-skill'`
+   * predicates fire naturally, so each skill's `tools: [...]` only reach
+   * the LLM when that skill is active. Without this option, consumers
+   * must hand-wire a ~30-LOC bridge (an onToolResult instruction +
+   * manual decision mutation); with it, skill-gating is one line.
+   *
+   * When a skill doesn't declare its own `activeWhen`, the registry
+   * auto-fills `activeWhen: (d) => d[stateField] === skill.id` — so
+   * consumers only need to set `autoActivate` once and every skill
+   * gates its own tools by id automatically.
+   */
+  readonly autoActivate?: AutoActivateOptions;
+}
+
+/** Configuration for `SkillRegistryOptions.autoActivate`. */
+export interface AutoActivateOptions {
+  /**
+   * Key on the agent's decision scope that receives the active skill's
+   * id when `read_skill(id)` runs. Must be a string-keyed field the
+   * consumer has shaped into their `TDecision` type — e.g.
+   * `stateField: 'currentSkill'` with `TDecision = { currentSkill?: string }`.
+   */
+  readonly stateField: string;
+
+  /**
+   * What to do when `read_skill(unknownId)` is called.
+   *   - `'leave'` (default): prior `decision[stateField]` is unchanged.
+   *   - `'clear'`: `decision[stateField]` is set to `undefined`, so any
+   *     previously-active skill's tools disappear.
+   */
+  readonly onUnknownSkill?: 'leave' | 'clear';
 }
 
 /**

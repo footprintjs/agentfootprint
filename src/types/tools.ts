@@ -62,4 +62,22 @@ export type ToolHandler = (input: any) => Promise<ToolResult> | ToolResult;
 export interface ToolResult {
   readonly content: string;
   readonly error?: boolean;
+  /**
+   * Optional — a partial decision-scope update to merge after the tool
+   * executes. The agent loop's tool-execution stage applies this into
+   * the current decision ref, so downstream `AgentInstruction.activeWhen`
+   * predicates see the new state on the next iteration.
+   *
+   * Primary use case: tools that activate a mode / skill / routing
+   * branch by writing a single scalar into decision scope. Example:
+   * the auto-generated `read_skill` tool (from `SkillRegistry` with
+   * `autoActivate` configured) returns
+   *   `{ content, decisionUpdate: { [stateField]: skillId } }`
+   * so skill-gated `activeWhen: (d) => d.currentSkill === 'x'`
+   * predicates fire without any user-written bridge.
+   *
+   * Merge semantics: shallow `Object.assign(decision, decisionUpdate)`.
+   * Not provided → decision unchanged.
+   */
+  readonly decisionUpdate?: Record<string, unknown>;
 }

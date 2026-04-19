@@ -373,6 +373,18 @@ export class Agent {
     const fragment = registry.toPromptFragment();
     if (fragment) this.skillsPromptAddition = fragment;
 
+    // 4. autoActivate requires Dynamic pattern to take effect WITHIN a
+    //    single turn — Regular (default) pattern assembles instructions
+    //    once at turn start and loops straight back to CallLLM, so a
+    //    decisionUpdate emitted mid-turn would only affect the NEXT
+    //    user turn. Auto-switch to Dynamic so skill-gated tool visibility
+    //    works as designed. Consumers who explicitly want Regular
+    //    behavior can call `.pattern(AgentPattern.Regular)` AFTER
+    //    `.skills(registry)` to override.
+    if (registry.hasAutoActivate && this.agentPattern === AgentPattern.Regular) {
+      this.agentPattern = AgentPattern.Dynamic;
+    }
+
     return this;
   }
 

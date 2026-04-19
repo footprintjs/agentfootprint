@@ -201,6 +201,67 @@ registry.register(refund);
 
 Pick `.instruction()` for context injection you control entirely. Pick `.skills()` when the model should **discover** a procedure by description and choose it.
 
+## Skill-gated tool visibility (`autoActivate`) — since 1.17.0
+
+When your agent has ~20+ tools, the full tool menu advertised on every turn starts to cost real tokens (and can drift smaller models). `autoActivate` flips the default:
+
+- **Base tool set** = just `list_skills` + `read_skill` (2 tools, always visible).
+- **Each skill declares its own `tools: [...]`.**
+- When the model calls `read_skill(id)`, the registry writes `id` into agent decision scope; the matching skill's `activeWhen` fires; its tools become visible on the next iteration. Other skills' tools stay hidden.
+
+Result: the LLM sees ~5–7 tools max (2 discovery + ~3–5 skill-specific), regardless of whether you have 20 skills or 200.
+
+```ts
+interface TriageDecision {
+  currentSkill?: string;
+}
+
+const registry = new SkillRegistry<TriageDecision>({
+  surfaceMode: 'auto',
+  autoActivate: { stateField: 'currentSkill' },
+});
+
+registry.register(
+  defineSkill<TriageDecision>({
+    id: 'port-error-triage',
+    version: '1.0.0',
+    title: 'Port triage',
+    description: 'Investigate CRC errors and signal losses.',
+    tools: [getMetrics, getLogs, getFlogi],
+    // activeWhen auto-filled to (d) => d.currentSkill === 'port-error-triage'
+    // by the registry when you omit it and autoActivate is on.
+  }),
+);
+
+Agent.create({ provider: anthropic('claude-sonnet-4-5') })
+  .decision<TriageDecision>({})
+  .skills(registry)
+  .build();
+```
+
+**`onUnknownSkill`** — what happens when `read_skill('unknown-id')` fires:
+
+- `'leave'` (default): the prior active skill stays active; the model sees an error but tools don't change.
+- `'clear'`: `decision[stateField]` is reset to `undefined` so the prior skill's tools disappear.
+
+**Pattern switch** — `autoActivate` auto-switches the agent to `AgentPattern.Dynamic` when you call `.skills(registry)`. That's required for the skill's newly-activated tools to appear **within the same turn** (Regular pattern assembles the tool list once per turn and wouldn't rebuild it). If you want Regular behavior explicitly, call `.pattern(AgentPattern.Regular)` after `.skills(registry)`.
+
+**Custom decisionUpdate from any tool** — the feature is powered by `ToolResult.decisionUpdate`, which any tool can use:
+
+```ts
+defineTool({
+  id: 'escalate',
+  description: '...',
+  inputSchema: z.object({ severity: z.string() }),
+  handler: async ({ severity }) => ({
+    content: 'Escalated.',
+    decisionUpdate: { severity },  // now `activeWhen: (d) => d.severity === 'critical'` fires
+  }),
+});
+```
+
+The tool-execution stage merges `decisionUpdate` into decision scope via `Object.assign`. Works with `staticTools`, `gatedTools`, `compositeTools`, and `agentAsTool` without further configuration.
+
 ## Tuning the tools
 
 ```ts

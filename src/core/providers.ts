@@ -181,4 +181,12 @@ export interface ToolProvider {
 export interface ToolExecutionResult {
   readonly content: string;
   readonly error?: boolean;
+  /**
+   * Optional decision-scope update surfaced by the inner tool via
+   * `ToolResult.decisionUpdate`. Built-in ToolProviders (staticTools,
+   * gatedTools, compositeTools, agentAsTool) pass this through from
+   * the inner handler; the tool-execution stage merges it into the
+   * agent's decision scope. Parallel with `ToolResult.decisionUpdate`.
+   */
+  readonly decisionUpdate?: Record<string, unknown>;
 }

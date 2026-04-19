@@ -337,6 +337,13 @@ export async function executeToolCalls(
       try {
         const execResult = await toolProvider.execute(toolCall, signal);
         resultContent = execResult.content;
+        // Apply optional decision-scope update surfaced by the inner tool.
+        // Shallow-merge into the shared `decision` ref so the next
+        // iteration's InstructionsToLLM sees the new state. See
+        // `ToolResult.decisionUpdate` + `ToolExecutionResult.decisionUpdate`.
+        if (decision && execResult.decisionUpdate) {
+          Object.assign(decision, execResult.decisionUpdate);
+        }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         errorInfo = { message: msg };
@@ -396,6 +403,11 @@ export async function executeToolCalls(
           // Check for ask_human pause marker
           if (isAskHumanResult(execResult)) {
             askHumanPause = { question: execResult.question, toolCallId: toolCall.id };
+          }
+          // Apply optional decision-scope update surfaced by the tool.
+          // See `ToolResult.decisionUpdate` for the full contract.
+          if (decision && execResult.decisionUpdate) {
+            Object.assign(decision, execResult.decisionUpdate);
           }
           // Check for InstructedToolResult (runtime instructions/followUps)
           const instructed = execResult as {
@@ -546,6 +558,11 @@ async function executeOneToolCall(
     try {
       const execResult = await toolProvider.execute(toolCall, signal);
       resultContent = execResult.content;
+      // Same merge as the sequential path — preserves decisionUpdate from
+      // any built-in ToolProvider (staticTools, gatedTools, etc.).
+      if (decision && execResult.decisionUpdate) {
+        Object.assign(decision, execResult.decisionUpdate);
+      }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       errorInfo = { message: msg };
@@ -591,6 +608,14 @@ async function executeOneToolCall(
         resultContent = execResult.content;
         if (isAskHumanResult(execResult)) {
           askHumanMarker = { question: execResult.question, toolCallId: toolCall.id };
+        }
+        // Apply optional decision-scope update returned by the tool. Shallow
+        // merge into the shared `decision` ref so downstream
+        // AgentInstruction.activeWhen predicates see the new state on the
+        // next iteration. Used by SkillRegistry.autoActivate and any
+        // consumer-authored tool that flips a routing flag.
+        if (decision && execResult.decisionUpdate) {
+          Object.assign(decision, execResult.decisionUpdate);
         }
         const instructed = execResult as {
           instructions?: readonly string[];

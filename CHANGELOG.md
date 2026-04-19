@@ -5,6 +5,66 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.17.0]
+
+### Added
+
+- **`SkillRegistry.autoActivate`** — one-line skill-gated tool visibility
+  (`agentfootprint/skills`). Unlocks the 25+-tool regime without
+  customers hand-wiring a ~30-LOC bridge for every adopter.
+
+  When configured, the auto-generated `read_skill(id)` tool writes the
+  loaded skill's id into agent decision scope. Downstream
+  `AgentInstruction.activeWhen: (d) => d[stateField] === 'my-skill'`
+  predicates fire naturally — so each skill's `tools: [...]` only reach
+  the LLM when that skill is active. Smaller tool menus per turn, no
+  token-budget drift on long tool lists.
+
+  ```ts
+  const registry = new SkillRegistry<TriageDecision>({
+    surfaceMode: 'auto',
+    autoActivate: { stateField: 'currentSkill' },
+  });
+  ```
+
+  - `SkillRegistryOptions.autoActivate?: AutoActivateOptions` — new
+    config shape: `{ stateField: string, onUnknownSkill?: 'leave'|'clear' }`
+  - `read_skill` now returns `{ content, decisionUpdate: { [stateField]: id } }`
+    when configured; decisionUpdate is merged into agent decision scope
+    by the tool-execution stage.
+  - `toInstructions()` auto-fills `activeWhen: (d) => d[stateField] === skill.id`
+    on any skill that doesn't declare its own — so consumers set
+    `autoActivate` once and every skill gates its own tools by id.
+  - `AgentBuilder.skills(registry)` auto-switches agent pattern to
+    `Dynamic` when registry has autoActivate, because Regular pattern
+    assembles instructions once per turn and wouldn't re-materialize
+    tools on the next iteration. Explicit `.pattern(AgentPattern.Regular)`
+    after `.skills()` overrides.
+  - `SkillRegistry.hasAutoActivate` / `.autoActivate` getters for
+    consumers writing custom builders.
+
+- **`ToolResult.decisionUpdate` + `ToolExecutionResult.decisionUpdate`**
+  — new optional field any tool (not just auto-generated skill tools)
+  can use to write a partial update into the agent's decision scope.
+  The tool-execution stage applies shallow `Object.assign(decision, update)`
+  after the tool runs. Built-in ToolProviders (`staticTools`,
+  `gatedTools`, `compositeTools`, `agentAsTool`) pass it through from
+  the inner handler.
+
+### Changed
+
+- Tool-execution subflow: `decisionRef` is now always allocated as `{}`
+  when the inbound decision scope is undefined (previously tri-state).
+  Simpler invariant + fixes a latent bug where the first turn's
+  decision writes from any tool (decide() or decisionUpdate) could be
+  dropped if no initial decision scope was configured.
+
+### Tests
+
+- 13 new 5-pattern tests for `autoActivate` (unit / boundary / scenario
+  / property / security). Library total: **1872 tests passing**
+  (was 1859).
+
 ## [1.16.0]
 
 ### Added

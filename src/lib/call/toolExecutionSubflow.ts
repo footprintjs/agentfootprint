@@ -111,16 +111,18 @@ export function buildToolExecutionSubflow(config: ToolExecutionSubflowConfig): F
     // $getEnv() is a TypedScope proxy method — always available, not in state interface
     const signal = scope.$getEnv()?.signal;
 
-    // Copy decision scope for `decide` field mutations.
-    // decide() functions mutate the copy in-place; we write it back as updatedDecision.
-    // currentDecision may be undefined when initial decision is {} (empty objects
-    // are dropped by footprintjs inputMapper). Use {} as fallback when instructions are configured.
+    // Copy decision scope for tool-driven mutations.
+    // Two mutation paths feed into this ref:
+    //   1. `decide()` inside tool flowcharts — mutates the ref in-place
+    //   2. `ToolResult.decisionUpdate` — shallow-merged by executeToolCalls
+    // Always allocate `{}` when the scope arrives without a decision so
+    // autoActivate-style decision writes land on the first turn too
+    // (footprintjs inputMapper drops empty-object decisions; without an
+    // allocation here, a skill's `read_skill` decisionUpdate would be
+    // dropped on the first iteration — surfaced by the 1.17.0 test
+    // `autoActivate — scenario: end-to-end: read_skill flips decision`).
     const rawDecision = scope.currentDecision;
-    const decisionRef = rawDecision
-      ? { ...rawDecision }
-      : instructionConfig?.decideFunctions?.size
-      ? {}
-      : undefined;
+    const decisionRef: Record<string, unknown> = rawDecision ? { ...rawDecision } : {};
 
     // `helpers.executeToolCalls` takes an `onStreamEvent` callback in its
     // instruction config for `tool_start` / `tool_end` lifecycle events.
@@ -158,11 +160,9 @@ export function buildToolExecutionSubflow(config: ToolExecutionSubflowConfig): F
     scope.updatedLoopCount = (scope.currentLoopCount ?? 0) + 1;
 
     // Write mutated decision as output so it flows through outputMapper.
-    // Always write when decisionRef exists — even if no decide() ran, the
+    // Always writes — even if no decide() and no decisionUpdate ran, the
     // decision may need to propagate for the next iteration's InstructionsToLLM.
-    if (decisionRef) {
-      scope.updatedDecision = decisionRef;
-    }
+    scope.updatedDecision = decisionRef;
 
     // If ask_human was called, store pause data on scope and return it.
     // Engine: non-void return from isPausable stage → PauseSignal with this as pauseData.

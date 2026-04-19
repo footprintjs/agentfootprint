@@ -112,7 +112,13 @@ export type { AgentInstruction, InstructedToolDefinition } from './instructions.
 
 // ── Skills (also available from agentfootprint/skills) ──
 export { defineSkill, SkillRegistry } from './skills.barrel';
-export type { Skill, SurfaceMode, SkillRegistryOptions, SkillListEntry } from './skills.barrel';
+export type {
+  Skill,
+  SurfaceMode,
+  SkillRegistryOptions,
+  AutoActivateOptions,
+  SkillListEntry,
+} from './skills.barrel';
 
 // ── Recorders (also available from agentfootprint/observe) ──
 export { TokenRecorder, ToolUsageRecorder, TurnRecorder, CostRecorder } from './observe.barrel';
