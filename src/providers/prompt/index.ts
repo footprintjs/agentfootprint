@@ -5,6 +5,6 @@
 export { staticPrompt } from './static';
 export { templatePrompt } from './template';
 export { skillBasedPrompt } from './skillBasedPrompt';
-export type { Skill, SkillBasedPromptOptions } from './skillBasedPrompt';
+export type { PromptSkill, SkillBasedPromptOptions } from './skillBasedPrompt';
 export { compositePrompt } from './compositePrompt';
 export type { CompositePromptOptions } from './compositePrompt';

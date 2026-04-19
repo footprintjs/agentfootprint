@@ -17,7 +17,7 @@ import type { PromptProvider, PromptContext } from '../../core';
 
 // ── Types ────────────────────────────────────────────────────
 
-export interface Skill {
+export interface PromptSkill {
   /** Unique identifier for this skill. */
   readonly id: string;
   /** The prompt fragment to include when this skill matches. */
@@ -38,7 +38,7 @@ export interface SkillBasedPromptOptions {
 // ── Factory ──────────────────────────────────────────────────
 
 export function skillBasedPrompt(
-  skills: readonly Skill[],
+  skills: readonly PromptSkill[],
   options: SkillBasedPromptOptions = {},
 ): PromptProvider {
   const { base, separator = '\n\n', fallback = '' } = options;

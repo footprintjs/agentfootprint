@@ -126,7 +126,7 @@ export type {
   ResilientProviderOptions,
 } from './adapters';
 export type {
-  Skill,
+  PromptSkill,
   SkillBasedPromptOptions,
   CompositePromptOptions,
   AgentAsToolConfig,

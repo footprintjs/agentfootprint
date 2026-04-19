@@ -54,7 +54,7 @@ export type { AgentAsToolConfig } from './providers';
 
 // Prompt strategies
 export { staticPrompt, templatePrompt, skillBasedPrompt, compositePrompt } from './providers';
-export type { Skill, SkillBasedPromptOptions, CompositePromptOptions } from './providers';
+export type { PromptSkill, SkillBasedPromptOptions, CompositePromptOptions } from './providers';
 
 // Message strategies
 export {

@@ -8,7 +8,7 @@
  */
 
 export { staticPrompt, templatePrompt, skillBasedPrompt, compositePrompt } from './prompt';
-export type { Skill, SkillBasedPromptOptions, CompositePromptOptions } from './prompt';
+export type { PromptSkill, SkillBasedPromptOptions, CompositePromptOptions } from './prompt';
 export {
   fullHistory,
   slidingWindow,
