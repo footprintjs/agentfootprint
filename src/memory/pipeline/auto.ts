@@ -57,7 +57,6 @@ import type { MemoryStore } from '../store';
 import type { MemoryEntry } from '../entry';
 import type { Message } from '../../types/messages';
 import type { MemoryPipeline } from './types';
-import type { MemoryState } from '../stages';
 
 import {
   extractFacts,
@@ -230,8 +229,10 @@ export function autoPipeline(config: AutoPipelineConfig): MemoryPipeline {
   const read = flowChart<AutoPipelineState>(
     'LoadAll',
     async (scope: TypedScope<AutoPipelineState>): Promise<void> => {
-      const listOpts: Parameters<MemoryStore['list']>[1] = { limit: loadLimit };
-      if (config.tiers) listOpts.tiers = config.tiers;
+      const listOpts = {
+        limit: loadLimit,
+        ...(config.tiers && { tiers: config.tiers }),
+      };
       const { entries } = await config.store.list(scope.identity, listOpts);
 
       const loadedFacts: MemoryEntry<Fact>[] = [];
