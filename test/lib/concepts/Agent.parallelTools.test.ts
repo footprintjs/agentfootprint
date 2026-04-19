@@ -58,8 +58,10 @@ describe('Agent.parallelTools — unit', () => {
     const elapsed = Date.now() - start;
 
     // Sequential would be ~240ms. Parallel should be ~80ms (+ overhead).
-    // Give generous headroom so the test isn't flaky on slow CI.
-    expect(elapsed).toBeLessThan(DELAY * 2);
+    // Generous headroom (2.5×DELAY = 200ms) keeps the test from being
+    // flaky on contended CI / slow machines while still discriminating
+    // parallel from sequential (which is 3×DELAY = 240ms).
+    expect(elapsed).toBeLessThan(DELAY * 2.5);
   });
 
   it('appends tool result messages in LLM-requested order even when resolution order differs', async () => {

@@ -68,6 +68,43 @@ export interface PutIfVersionResult {
   readonly currentVersion?: number;
 }
 
+/** Options for a vector similarity search. */
+export interface SearchOptions {
+  /**
+   * How many top-scoring entries to return. Default 10. Adapters may
+   * cap this lower (Pinecone: 10000, pgvector: user-defined, etc.).
+   */
+  readonly k?: number;
+
+  /** Filter results by tier (e.g. `['hot']`) before ranking. */
+  readonly tiers?: ReadonlyArray<'hot' | 'warm' | 'cold'>;
+
+  /**
+   * Drop entries whose similarity score is below this threshold. Useful
+   * when "no match" is a valid outcome (vs. always returning the k
+   * nearest no matter how far away). Range [-1, 1] for cosine.
+   */
+  readonly minScore?: number;
+
+  /**
+   * Embedder id the query was produced with. When present, adapters MAY
+   * skip entries whose `embeddingModel` doesn't match — prevents silent
+   * cross-model similarity pollution. Absent = trust caller knows what
+   * they're doing.
+   */
+  readonly embedderId?: string;
+}
+
+/**
+ * A `MemoryEntry` annotated with its similarity score. Returned by
+ * `store.search()`. Score semantics are adapter-defined but SHOULD
+ * use cosine similarity by default ([-1, 1], higher = closer).
+ */
+export interface ScoredEntry<T = unknown> {
+  readonly entry: MemoryEntry<T>;
+  readonly score: number;
+}
+
 /**
  * Common surface for all backends. Every method takes `MemoryIdentity`
  * as the scoping argument; stores MUST prefix their internal keys with
@@ -187,4 +224,29 @@ export interface MemoryStore {
    * Must be implementable in one operation per backend (DELETE WHERE prefix).
    */
   forget(identity: MemoryIdentity): Promise<void>;
+
+  /**
+   * Optional — similarity search over entries that carry an
+   * `embedding` field. Returns the top-k entries by cosine similarity
+   * (descending). Adapters that don't support vector search should
+   * OMIT this method; callers feature-detect via `if (store.search)`.
+   *
+   * Semantics:
+   *   - Entries with no `embedding` field are ignored (not errored).
+   *   - Entries with `embedding` of mismatched length are skipped
+   *     (cosine would throw — silent-skip avoids poisoning the top-k).
+   *   - TTL-expired entries are omitted (same as `get`/`list`).
+   *   - Ordering: descending by score. Ties broken by adapter choice.
+   *
+   * Reference backends:
+   *   - **InMemoryStore**: O(n) linear scan over identity-scoped entries.
+   *     Fine for dev / tests. Production needs a real vector DB.
+   *   - **pgvector**: `ORDER BY embedding <=> query LIMIT k`.
+   *   - **Pinecone / Qdrant / Weaviate**: native vector query API.
+   */
+  search?<T = unknown>(
+    identity: MemoryIdentity,
+    query: readonly number[],
+    options?: SearchOptions,
+  ): Promise<readonly ScoredEntry<T>[]>;
 }

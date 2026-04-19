@@ -82,6 +82,21 @@ export function writeMessages(config: WriteMessagesConfig) {
     const messages = scope.newMessages ?? [];
     if (messages.length === 0) return;
 
+    // Optional: embedMessages may have run earlier and written
+    // per-message vectors to scope. Attach them to the entries so
+    // vector-capable stores index on `embedding`.
+    const embeddings = (
+      scope as unknown as {
+        newMessageEmbeddings?: readonly (readonly number[])[];
+        newMessageEmbeddingModel?: string;
+      }
+    ).newMessageEmbeddings;
+    const embeddingModel = (
+      scope as unknown as {
+        newMessageEmbeddingModel?: string;
+      }
+    ).newMessageEmbeddingModel;
+
     const now = Date.now();
     const ttl = config.ttlMs ? now + config.ttlMs : undefined;
 
@@ -92,6 +107,7 @@ export function writeMessages(config: WriteMessagesConfig) {
     const entries: MemoryEntry<Message>[] = [];
     for (let i = 0; i < messages.length; i++) {
       const message = messages[i];
+      const embedding = embeddings?.[i];
       entries.push({
         id: idFrom(turn, i, message),
         value: message,
@@ -102,6 +118,8 @@ export function writeMessages(config: WriteMessagesConfig) {
         accessCount: 0,
         ...(ttl !== undefined && { ttl }),
         ...(config.tier && { tier: config.tier }),
+        ...(embedding && embedding.length > 0 && { embedding: [...embedding] }),
+        ...(embeddingModel && { embeddingModel }),
         source: { turn, identity },
       });
     }

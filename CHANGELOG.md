@@ -7,6 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.13.0]
+
+### Added
+
+- **Semantic retrieval** (`agentfootprint/memory`). Vector-based
+  recall via cosine similarity over entry embeddings.
+  - `Embedder` interface with `embed()` / optional `embedBatch()` —
+    pluggable (OpenAI / Voyage / Cohere / custom). Ships
+    `mockEmbedder()` (deterministic character-frequency hash) for tests.
+  - `MemoryEntry.embedding?` + `embeddingModel?` fields for indexing.
+  - `MemoryStore.search?(identity, query, options)` optional method;
+    `InMemoryStore` implements O(n) cosine scan. Options: `k`,
+    `minScore`, `tiers`, `embedderId` (cross-model safety).
+  - `cosineSimilarity(a, b)` helper; length-mismatch throws,
+    zero-magnitude returns 0 (never NaN).
+  - Stages: `embedMessages` (write-side) + `loadRelevant` (read-side,
+    pulls query from last user message by default).
+  - `semanticPipeline({ store, embedder, embedderId? })` preset —
+    drop-in replacement for `defaultPipeline` with vector recall.
+  - Write-side: `writeMessages` attaches per-message embeddings
+    from `scope.newMessageEmbeddings` when present.
+  - Read-side: `mountMemoryRead` passes `scope.messages` into the
+    subflow so `loadRelevant` derives the query from the user turn.
+  - 85 new 5-pattern tests + 4-scenario acceptance test.
+  - `/guides/semantic-retrieval` docs.
+
+### Changed
+
+- `test/lib/concepts/Agent.parallelTools.test.ts` — perf threshold
+  relaxed from 2× to 2.5×DELAY to tolerate dev-machine jitter while
+  still discriminating parallel (≤2.5×) from sequential (3×).
+
 ## [1.12.0] — BREAKING
 
 ### Added

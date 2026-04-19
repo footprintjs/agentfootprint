@@ -4,5 +4,7 @@ export type {
   ListResult,
   MemoryCursor,
   PutIfVersionResult,
+  SearchOptions,
+  ScoredEntry,
 } from './types';
 export { InMemoryStore } from './InMemoryStore';

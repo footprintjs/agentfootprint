@@ -84,10 +84,24 @@ export interface MemoryEntry<T = unknown> {
   readonly source?: MemorySource;
 
   /**
-   * When the entry's `value` is an embedding, the model that produced it.
-   * Vector search stages verify this matches the current embedder before
-   * trusting distance scores — prevents silent retrieval corruption when a
-   * model is swapped.
+   * Optional dense vector embedding of this entry's value. Populated
+   * by semantic-memory pipelines (see `embedMessages` / `embedBeats`
+   * stages) when an `Embedder` is configured. Stores that support
+   * vector search index on this field; stores that don't ignore it.
+   *
+   * Vector length MUST match the configured embedder's `dimensions`.
+   * Mixing embedders of different sizes within the same identity
+   * namespace will break cosine similarity — `store.search()` uses
+   * `cosineSimilarity()` which throws on length mismatch.
+   */
+  readonly embedding?: readonly number[];
+
+  /**
+   * Identifier of the embedder that produced `embedding`. Search
+   * stages compare this against the active embedder's id before
+   * trusting distance scores — prevents silent retrieval corruption
+   * when an embedding model is swapped but old entries are still
+   * indexed with the previous vector space.
    */
   readonly embeddingModel?: string;
 }

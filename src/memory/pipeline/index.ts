@@ -5,3 +5,5 @@ export { ephemeralPipeline } from './ephemeral';
 export type { EphemeralPipelineConfig } from './ephemeral';
 export { narrativePipeline } from './narrative';
 export type { NarrativePipelineConfig } from './narrative';
+export { semanticPipeline } from './semantic';
+export type { SemanticPipelineConfig } from './semantic';

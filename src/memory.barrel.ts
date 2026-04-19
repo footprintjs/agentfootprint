@@ -66,6 +66,22 @@ export { ephemeralPipeline } from './memory/pipeline';
 export type { EphemeralPipelineConfig } from './memory/pipeline';
 export { narrativePipeline } from './memory/pipeline';
 export type { NarrativePipelineConfig } from './memory/pipeline';
+export { semanticPipeline } from './memory/pipeline';
+export type { SemanticPipelineConfig } from './memory/pipeline';
+
+// ── Embedding (SemanticRetrieval building blocks) ──────────
+export type { Embedder, EmbedArgs, EmbedBatchArgs } from './memory/embedding';
+export { cosineSimilarity, mockEmbedder } from './memory/embedding';
+export type { MockEmbedderOptions } from './memory/embedding';
+export { embedMessages, loadRelevant } from './memory/embedding';
+export type {
+  EmbedMessagesConfig,
+  EmbedMessagesState,
+  LoadRelevantConfig,
+} from './memory/embedding';
+
+// ── Vector search (store extensions for SemanticRetrieval) ──
+export type { SearchOptions, ScoredEntry } from './memory/store';
 
 // ── Narrative beats (NarrativeMemory building blocks) ──────
 export type { NarrativeBeat, BeatImportance, BeatExtractor, ExtractArgs } from './memory/beats';

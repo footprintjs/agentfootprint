@@ -16,7 +16,15 @@
 import type { MemoryIdentity } from '../identity';
 import { identityNamespace } from '../identity';
 import type { MemoryEntry } from '../entry';
-import type { ListOptions, ListResult, MemoryStore, PutIfVersionResult } from './types';
+import { cosineSimilarity } from '../embedding/cosine';
+import type {
+  ListOptions,
+  ListResult,
+  MemoryStore,
+  PutIfVersionResult,
+  ScoredEntry,
+  SearchOptions,
+} from './types';
 
 interface NamespaceSlot {
   readonly entries: Map<string, MemoryEntry>;
@@ -194,5 +202,51 @@ export class InMemoryStore implements MemoryStore {
 
   async forget(identity: MemoryIdentity): Promise<void> {
     this.namespaces.delete(identityNamespace(identity));
+  }
+
+  /**
+   * O(n) linear scan over identity-scoped entries. Fine for dev / tests
+   * — for production, plug in a real vector backend (pgvector, Pinecone,
+   * Qdrant) that implements the same interface.
+   *
+   * Semantics per the `MemoryStore.search?` contract:
+   *   - Entries without `embedding` are skipped (ignored, not errored).
+   *   - Entries with `embedding.length` mismatching the query are
+   *     skipped (cosine would throw — silent-skip avoids poisoning top-k).
+   *   - TTL-expired entries are omitted.
+   *   - Optional `tiers` / `minScore` / `embedderId` filters applied.
+   *   - Returns descending by score; ties broken by id for determinism.
+   */
+  async search<T = unknown>(
+    identity: MemoryIdentity,
+    query: readonly number[],
+    options?: SearchOptions,
+  ): Promise<readonly ScoredEntry<T>[]> {
+    const slot = this.slot(identity);
+    const k = options?.k ?? 10;
+    const tierFilter = options?.tiers ? new Set(options.tiers) : undefined;
+    const minScore = options?.minScore;
+    const embedderId = options?.embedderId;
+
+    const scored: ScoredEntry<T>[] = [];
+    for (const entry of slot.entries.values()) {
+      if (this.isExpired(entry)) continue;
+      if (tierFilter && (!entry.tier || !tierFilter.has(entry.tier))) continue;
+      const emb = entry.embedding;
+      if (!emb || !Array.isArray(emb) || emb.length === 0) continue;
+      if (emb.length !== query.length) continue;
+      if (embedderId && entry.embeddingModel && entry.embeddingModel !== embedderId) continue;
+
+      const score = cosineSimilarity(emb, query);
+      if (minScore !== undefined && score < minScore) continue;
+      scored.push({ entry: entry as MemoryEntry<T>, score });
+    }
+
+    scored.sort((a, b) => {
+      if (b.score !== a.score) return b.score - a.score;
+      return a.entry.id < b.entry.id ? -1 : a.entry.id > b.entry.id ? 1 : 0;
+    });
+
+    return scored.slice(0, k);
   }
 }

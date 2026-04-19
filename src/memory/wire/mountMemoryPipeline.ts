@@ -126,6 +126,11 @@ export function mountMemoryRead<ParentState>(
       identity: parentState[identityKey],
       turnNumber: parentState[turnNumberKey],
       contextTokensRemaining: parentState[contextTokensKey],
+      // Pass the current turn's messages through — semantic read stages
+      // like `loadRelevant` derive the query from the last user
+      // message here. The write-side `newMessages` field is empty
+      // during read; these are two different concerns.
+      messages: parentState.messages ?? [],
       newMessages: [], // write side unused in read subflow
     }),
     outputMapper: (subflowState: Record<string, unknown>) => ({
