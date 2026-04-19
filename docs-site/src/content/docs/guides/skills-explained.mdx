@@ -1,19 +1,52 @@
 ---
 title: Skills, explained
-description: Skills are misunderstood. They are not a new Messages API primitive — they are a disciplined pattern over fields that already exist. Here is what you are actually looking at.
+description: Skills are context engineering for instructions — abstracted so you don't do it by hand and get it wrong. A conceptual walk through what they actually are, and why the abstraction exists.
 ---
 
 import { Aside } from '@astrojs/starlight/components';
 
-Anthropic shipped Skills in the Claude Agent SDK. Since then, "Skills" has become a word every agent framework wants a story for. The first question most teams ask is reasonable and almost always wrong:
+## In one line
+
+**Skills are context engineering for instructions — abstracted so you don't do it by hand and get it wrong.**
+
+That's the whole thing. The rest of this doc is why that's the right frame, what "by hand and wrong" looks like, and how `agentfootprint`'s Skills machinery guarantees the context engineering stays correct across providers and context lengths.
+
+## Unpacking it
+
+**"Context engineering"** is the named practice in the modern agent stack: deciding what goes into the LLM's context window on each turn. What lives in the system prompt. What lives in tool descriptions. What's retrieved and injected. What's pruned. Whether a piece of content sits ahead of the conversation or inside the recency window. It's one of the handful of disciplines that separates a working agent from a broken one.
+
+**"For instructions"** narrows it to one sub-domain. There are four kinds of content you engineer into a turn:
+
+| Kind of content | The named abstraction | Example |
+|---|---|---|
+| **Instructions** — how to do something | **Skills** (+ `AgentInstruction`) | "When investigating port errors, fetch metrics first." |
+| **Data** — what the world looks like | RAG, retrieval | "Here are the 5 most-similar past tickets." |
+| **History** — what has happened so far | Memory | "The user said earlier that their name is Alice." |
+| **Capabilities** — what can be done | Tools | "You may call `getMetrics(interface)`." |
+
+Skills are the context-engineering abstraction for the **instructions** row. Memory (which we shipped in 1.14–1.15) is the abstraction for history. Tools is the abstraction for capabilities. RAG is the abstraction for data. Each row has its own answer because each row has a different shape of correctness problem.
+
+**"Abstracted so you don't do it by hand and get it wrong"** is the value proposition in one phrase. Doing this by hand is not conceptually hard — it's just *unusually error-prone* because the right answer changes with conditions you don't control:
+
+- Put instructions in the system prompt and they drift out of attention on non-Claude providers.
+- Put them all in tool results and you need a registry to dispatch them.
+- Put every instruction everywhere and you pay the token cost per turn forever — even when none apply.
+- Put them too early in the conversation and they're stale by turn 40.
+- Put them too late and the model hasn't seen them when it needs them.
+
+Getting this right is non-obvious, provider-specific, and context-length-dependent. **Skills are the abstraction that makes it correct by construction.** An app author shouldn't need to know which generation of which provider has strong system-prompt adherence, or which tool-result positions survive long-context attention decay. A library can know that. Skills is where we encode it.
+
+## Why this framing matters
+
+The first question most teams ask about Skills is reasonable and almost always wrong:
 
 > "Is Skills a new LLM protocol we need to support?"
 
-No. Skills is not a protocol. Skills is not a new field on the Messages API. Skills is not a model-level capability Anthropic trained into Claude 4.
+No. Skills is not a protocol. Skills is not a new field on the Messages API. Skills is not a model-level capability Anthropic trained into Claude 4. At the protocol layer, Skills is a **folder convention plus a loading discipline**, riding entirely on top of fields that have been there since the Messages API shipped: `system`, `tools`, `tool_use`, `tool_result`. Everything interesting is happening one layer up — in how a framework decides what to put where.
 
-Skills is a **folder convention plus a loading discipline**, riding entirely on top of the message fields that have been there since the Messages API shipped: `system`, `tools`, `tool_use`, `tool_result`. That's the whole story at the protocol level. Everything interesting is happening one layer up — in how an SDK decides what to put where.
+Context-engineering-for-instructions is what that "one layer up" is doing. That's the whole game.
 
-This doc exists because when that framing is missing, people reinvent Skills badly. Understanding the three-stage anatomy and the cross-provider-correctness tradeoff is the difference between "we built a Skills system" and "we packaged Claude Agent SDK's wrapper with the quiet bug that broke on our OpenAI deployment."
+This doc exists because when that framing is missing, people reinvent Skills badly. They treat it as a protocol feature (it isn't). They parallel it with their existing instruction system (it's the same thing). They build it Claude-first and ship to OpenAI (the context engineering silently drifts). Understanding the three-stage anatomy and the cross-provider-correctness tradeoff is the difference between "we built a Skills system" and "we packaged Claude Agent SDK's wrapper with the quiet bug that broke on our OpenAI deployment."
 
 <Aside type="tip" title="Companion doc">
 For the actual API — [`defineSkill`](/agentfootprint/guides/skills), [`SkillRegistry`](/agentfootprint/guides/skills), `AgentBuilder.skills()` — see the [Skills guide](/agentfootprint/guides/skills). This page is the **why**, that page is the **how**.
@@ -220,7 +253,7 @@ No primitive is invented. Every step uses a field the Messages API has always ha
 
 ## The one-line takeaway
 
-> Skills aren't a new protocol. They're a disciplined pattern over the Messages API's existing `system` + `tools` + `tool_result` fields. The SDK-level value is **packaging** (namespacing, progressive disclosure, auto-registration). The cross-provider-correctness value is **choosing where descriptions live based on what each provider's training can be trusted to follow**. That second piece is the reason Skills in `agentfootprint` are built on top of `AgentInstruction.onToolResult` rather than as a system-prompt-only block — the Agent SDK's design is right for Claude; `agentfootprint` is right for every provider, `mock()` included.
+> Skills are **context engineering for instructions**, abstracted so you don't do it by hand and get it wrong. The protocol layer stays the Messages API's existing `system` + `tools` + `tool_result` fields — nothing new there. The framework layer's job is deciding where each instruction lives **on every turn, per provider, per context length**, so the model actually follows it. The Agent SDK's Claude-first answer is right for Claude; `agentfootprint`'s `surfaceMode: 'auto'` + `onToolResult` delivery is right for every provider, `mock()` included.
 
 ## When this understanding matters
 
