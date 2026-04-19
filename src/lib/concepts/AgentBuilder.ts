@@ -14,6 +14,7 @@ import type { MemoryPipeline } from '../../memory/pipeline';
 import type { AgentRecorder, PromptProvider, ToolProvider } from '../../core';
 import type { RunnerLike } from '../../types/multiAgent';
 import type { InstructionOverride, AgentInstruction } from '../instructions';
+import type { SkillRegistry } from '../skills';
 import { resolveProvider } from '../../adapters/createProvider';
 import { zodToJsonSchema, isZodSchema } from '../../tools/zodToJsonSchema';
 import { ToolRegistry } from '../../tools';
@@ -63,7 +64,9 @@ export class Agent {
   private configuredMemoryPipeline?: MemoryPipeline;
   private agentPattern: AgentPattern = AgentPattern.Regular;
   private readonly overrides = new Map<string, InstructionOverride>();
-  private readonly agentInstructions: AgentInstruction[] = [];
+  private agentInstructions: AgentInstruction[] = [];
+  private skillsPromptAddition?: string;
+  private skillsTools?: ToolDefinition[];
   private initialDecisionScope?: Readonly<Record<string, unknown>>;
   private enableStreaming = false;
   private enableVerboseNarrative = false;
@@ -312,6 +315,68 @@ export class Agent {
   }
 
   /**
+   * Attach a `SkillRegistry` — a typed, versioned bundle of procedures
+   * the model can discover via `list_skills` and activate via
+   * `read_skill(id)`. Registry's skills are wired through the existing
+   * AgentInstruction pipeline (each skill IS-A AgentInstruction) so
+   * per-skill `activeWhen` / `prompt` / `tools` / `onToolResult` rules
+   * fire exactly as with plain `.instruction(...)`.
+   *
+   * Idempotent: calling `.skills()` twice REPLACES the prior registry
+   * (panel #6). For additive composition, compose registries yourself
+   * before passing them in.
+   *
+   * @example
+   * ```ts
+   * const registry = new SkillRegistry<MyDecision>({ surfaceMode: 'auto' });
+   * registry.register(defineSkill({ id: 'port-triage', ... }));
+   *
+   * Agent.create({ provider: anthropic('claude-sonnet-4-5') })
+   *   .skills(registry)
+   *   .build();
+   * ```
+   */
+  skills<TDecision = any>(registry: SkillRegistry<TDecision>): this {
+    // Drop any previously-mounted skill state — idempotent replace.
+    this.agentInstructions = this.agentInstructions.filter(
+      (i) => !(i as { __skillMount?: boolean }).__skillMount,
+    );
+    if (this.skillsTools) {
+      for (const t of this.skillsTools) this.registry.unregister(t.id);
+    }
+    this.skillsPromptAddition = undefined;
+    this.skillsTools = undefined;
+
+    // 1. Skill bodies → AgentInstructions (per-skill prompt/tools/onToolResult/activeWhen)
+    for (const instr of registry.toInstructions()) {
+      // Mark so a later .skills() call can strip this one without
+      // affecting hand-registered instructions.
+      const tagged = { ...instr, __skillMount: true } as AgentInstruction<any> & {
+        __skillMount: boolean;
+      };
+      this.agentInstructions.push(tagged);
+    }
+
+    // 2. Auto-generated tools (list_skills, read_skill). Always registered —
+    //    these are the discovery path for the model and must remain callable
+    //    regardless of any skill's `activeWhen`. The `has()` guard handles
+    //    the edge case where a caller registered a tool with the same id
+    //    manually BEFORE calling `.skills()`.
+    const { listSkills, readSkill } = registry.toTools();
+    this.skillsTools = [listSkills, readSkill];
+    if (!this.registry.has(listSkills.id)) this.registry.register(listSkills);
+    if (!this.registry.has(readSkill.id)) this.registry.register(readSkill);
+
+    // 3. System-prompt fragment (only under 'system-prompt' / 'both' modes).
+    //    Stored as a separate field so it can be stripped if `.skills()` is
+    //    called again with a different registry.
+    const fragment = registry.toPromptFragment();
+    if (fragment) this.skillsPromptAddition = fragment;
+
+    return this;
+  }
+
+  /**
    * Set the initial Decision Scope values.
    * Tool handlers update these values; InstructionsToLLM reads them
    * to evaluate `activeWhen` predicates.
@@ -367,10 +432,17 @@ export class Agent {
 
   /** Build the agent and return a runner. */
   build(): AgentRunner {
+    // If `.skills(registry)` supplied a system-prompt fragment, append
+    // it to the user's base prompt. Separated with a blank line so the
+    // two blocks read as distinct sections to the model.
+    const effectivePrompt = this.skillsPromptAddition
+      ? [this.systemPromptText, this.skillsPromptAddition].filter(Boolean).join('\n\n')
+      : this.systemPromptText;
+
     return new AgentRunner({
       provider: this.provider,
       name: this.agentName,
-      systemPromptText: this.systemPromptText,
+      systemPromptText: effectivePrompt,
       registry: this.registry,
       maxIterations: this.maxIter,
       recorders: [...this.recorders],

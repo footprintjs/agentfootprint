@@ -93,6 +93,11 @@
       "import": "./dist/esm/instructions.barrel.js",
       "require": "./dist/instructions.barrel.js"
     },
+    "./skills": {
+      "types": "./dist/types/skills.barrel.d.ts",
+      "import": "./dist/esm/skills.barrel.js",
+      "require": "./dist/skills.barrel.js"
+    },
     "./observe": {
       "types": "./dist/types/observe.barrel.d.ts",
       "import": "./dist/esm/observe.barrel.js",

@@ -17,6 +17,20 @@ export class ToolRegistry {
     return this;
   }
 
+  /**
+   * Remove a tool by ID. Silently no-ops when the tool isn't registered
+   * so callers can call safely before a re-registration.
+   *
+   * Intended for builder-layer idempotent replace flows (e.g.
+   * `AgentBuilder.skills(registry)` re-mounting skill tools) — NOT for
+   * runtime tool hot-removal, which would require coordinating with the
+   * LLM's recency window.
+   */
+  unregister(id: string): this {
+    this.tools.delete(id);
+    return this;
+  }
+
   /** Get a tool by ID. */
   get(id: string): ToolDefinition | undefined {
     return this.tools.get(id);

@@ -108,5 +108,9 @@ export type { AgentLoopConfig } from './core/config';
 export { defineInstruction, AgentPattern, quickBind } from './instructions.barrel';
 export type { AgentInstruction, InstructedToolDefinition } from './instructions.barrel';
 
+// ── Skills (also available from agentfootprint/skills) ──
+export { defineSkill, SkillRegistry } from './skills.barrel';
+export type { Skill, SurfaceMode, SkillRegistryOptions, SkillListEntry } from './skills.barrel';
+
 // ── Recorders (also available from agentfootprint/observe) ──
 export { TokenRecorder, ToolUsageRecorder, TurnRecorder, CostRecorder } from './observe.barrel';

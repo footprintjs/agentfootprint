@@ -5,6 +5,40 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.16.0]
+
+### Added
+
+- **Skills** (`agentfootprint/skills`) — typed, versioned agent skills
+  with cross-provider correct delivery. The Claude Agent SDK pattern,
+  packaged at `agentfootprint`'s framework layer.
+  - `defineSkill<TDecision>(skill)` factory — typed, inference-friendly.
+  - `SkillRegistry<TDecision>` — compile skills into `AgentInstruction[]`
+    + auto-generated `list_skills` / `read_skill` tools + optional
+    system-prompt fragment.
+  - `Skill extends AgentInstruction` — every `activeWhen` / `prompt` /
+    `tools` / `onToolResult` field inherited, skills add `id`,
+    `version`, `title`, `description`, optional `scope[]`, `steps[]`,
+    and `body` (string or async loader for disk/blob/Notion).
+  - Four surface modes: `'tool-only'` (portable default, works on every
+    provider), `'system-prompt'`, `'both'`, `'auto'` (library picks per
+    provider — Claude ≥ 3.5 → `'both'`, everyone else → `'tool-only'`).
+  - `AgentBuilder.skills(registry)` — one-line wiring. Idempotent
+    replace (call twice, latest wins).
+  - Tag-escape defense in rendered skill bodies: `</memory>`,
+    `</tool_use>`, `</skill>` escaped in author-controlled fields.
+  - Error paths (unknown id, lazy-loader throws, path-traversal
+    attempts) return `isError: true` in the tool result — agent
+    recovers, no crash.
+  - Full documentation: `/guides/skills`.
+  - `ToolRegistry.unregister(id)` — small focused API for builder-layer
+    idempotent replace flows.
+
+### Tests
+
+- 41 new tests across 2 files (32 unit + 9 acceptance).
+- Library total: 1859 tests passing.
+
 ## [1.15.0]
 
 ### Added
