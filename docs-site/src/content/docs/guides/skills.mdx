@@ -9,6 +9,10 @@ A **Skill** is a named, versioned procedure the agent can discover and activate 
 
 The pattern is the one Anthropic popularized in the Claude Agent SDK — recency-first delivery via tool results, no model-level primitive required. Packaged here with two `agentfootprint`-native advantages: **cross-provider correctness** (tool-only by default, portable across OpenAI / mock / Claude) and **typed authoring** (full `TDecision` inference on `activeWhen` predicates).
 
+<Aside type="tip" title="New to Skills?">
+Before diving into the API, read **[Skills, explained](/agentfootprint/guides/skills-explained)** — the conceptual model. Skills are misunderstood more often than almost anything else in the agent ecosystem. That doc explains what they actually are (a folder convention + discipline over existing Messages API fields, not a new protocol) and why the cross-provider correctness story matters.
+</Aside>
+
 ```ts
 import { Agent, anthropic } from 'agentfootprint';
 import { defineSkill, SkillRegistry } from 'agentfootprint/skills';

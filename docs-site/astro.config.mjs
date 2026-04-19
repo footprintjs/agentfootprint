@@ -65,6 +65,7 @@ export default defineConfig({
             { label: 'Tool use', slug: 'guides/tools' },
             { label: 'Instructions & decisions', slug: 'guides/instructions' },
             { label: 'Skills', slug: 'guides/skills' },
+            { label: 'Skills, explained', slug: 'guides/skills-explained' },
             { label: 'RAG pattern', slug: 'guides/rag' },
             { label: 'Memory pipeline', slug: 'guides/memory' },
             { label: 'Narrative memory', slug: 'guides/narrative-memory' },
