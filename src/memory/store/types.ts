@@ -91,6 +91,34 @@ export interface MemoryStore {
   put<T = unknown>(identity: MemoryIdentity, entry: MemoryEntry<T>): Promise<void>;
 
   /**
+   * Batched unconditional write. Semantically equivalent to N sequential
+   * `put()` calls but gives adapters a chance to batch the round-trip.
+   *
+   * - **InMemoryStore**: no-op optimization — loops internally.
+   * - **Redis**: pipelined MSET / MULTI-EXEC.
+   * - **DynamoDB**: `BatchWriteItem` (25-entry limit enforced by caller
+   *   or adapter — adapters MAY chunk).
+   * - **Postgres**: multi-row INSERT … ON CONFLICT DO UPDATE.
+   *
+   * Atomicity is NOT guaranteed across the batch — a partial failure
+   * may leave some entries written, some not. Stages that need
+   * transactional semantics should use `putIfVersion` per entry with
+   * application-level rollback. Most memory flows are append-idempotent
+   * (ids are deterministic like `msg-{turn}-{idx}`), so the batch model
+   * matches the common case.
+   *
+   * **Empty batch (`entries.length === 0`): MUST be a no-op.** Callers
+   * rely on this to skip a round-trip when there's nothing to persist
+   * (e.g., a turn that produced no new messages). Adapters must not
+   * reject empty batches — return a resolved Promise immediately.
+   *
+   * Default implementation for adapters that don't override: sequentially
+   * calls `put()` for each entry. Adapters SHOULD override for
+   * performance-critical paths.
+   */
+  putMany<T = unknown>(identity: MemoryIdentity, entries: readonly MemoryEntry<T>[]): Promise<void>;
+
+  /**
    * Optimistic-concurrency write. Writes only if the stored version equals
    * `expectedVersion`, OR if no entry exists at all AND `expectedVersion`
    * is `0` (first-write sentinel).

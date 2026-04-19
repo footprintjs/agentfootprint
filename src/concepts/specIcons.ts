@@ -17,11 +17,13 @@ const ICON_MAP: Record<string, string> = {
   'parse-response': 'parse',
   finalize: 'end',
   'handle-response': 'tool',
+  break: 'end',
 
   // Agent loop stages
   'assemble-prompt': 'process',
   'apply-prepared-messages': 'memory',
   'commit-memory': 'memory',
+  'package-for-write': 'memory',
 
   // RAG-specific
   retrieve: 'rag',

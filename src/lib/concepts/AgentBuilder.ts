@@ -10,7 +10,6 @@
 
 import type { ToolDefinition, LLMProvider, ResponseFormat } from '../../types';
 import type { ModelConfig } from '../../models';
-import type { MemoryConfig } from '../../adapters/memory/types';
 import type { MemoryPipeline } from '../../memory/pipeline';
 import type { AgentRecorder, PromptProvider, ToolProvider } from '../../core';
 import type { RunnerLike } from '../../types/multiAgent';
@@ -61,7 +60,6 @@ export class Agent {
   private customToolProvider?: ToolProvider;
   private maxIter = 10;
   private readonly recorders: AgentRecorder[] = [];
-  private memoryConfig?: MemoryConfig;
   private configuredMemoryPipeline?: MemoryPipeline;
   private agentPattern: AgentPattern = AgentPattern.Regular;
   private readonly overrides = new Map<string, InstructionOverride>();
@@ -332,18 +330,6 @@ export class Agent {
   }
 
   /**
-   * Enable persistent conversation memory (legacy API — kept for the
-   * existing test suite; new consumers should prefer `.memoryPipeline()`).
-   */
-  memory(config: MemoryConfig): this {
-    if (this.configuredMemoryPipeline) {
-      throw new Error('Agent.memory(): cannot combine .memory() with .memoryPipeline() — use one.');
-    }
-    this.memoryConfig = config;
-    return this;
-  }
-
-  /**
    * Attach a memory pipeline built from `defaultPipeline`, `ephemeralPipeline`,
    * or custom composition. Subflows handle load / pick / format before
    * CallLLM and persist / summarize after Finalize.
@@ -369,11 +355,6 @@ export class Agent {
    * ```
    */
   memoryPipeline(pipeline: MemoryPipeline): this {
-    if (this.memoryConfig) {
-      throw new Error(
-        'Agent.memoryPipeline(): cannot combine .memoryPipeline() with .memory() — use one.',
-      );
-    }
     this.configuredMemoryPipeline = pipeline;
     return this;
   }
@@ -393,7 +374,6 @@ export class Agent {
       registry: this.registry,
       maxIterations: this.maxIter,
       recorders: [...this.recorders],
-      memoryConfig: this.memoryConfig,
       memoryPipeline: this.configuredMemoryPipeline,
       pattern: this.agentPattern,
       promptProvider: this.customPromptProvider,

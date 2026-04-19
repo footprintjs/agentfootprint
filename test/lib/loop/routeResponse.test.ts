@@ -151,27 +151,12 @@ describe('RouteResponse decider — unit', () => {
 // ── Boundary Tests ──────────────────────────────────────────
 
 describe('RouteResponse decider — Finalize isolation', () => {
-  it('Finalize with useCommitFlag=false calls $break', async () => {
+  it('Finalize branch extracts result and terminates the loop', async () => {
     const config = minimalConfig({
       provider: mockProvider([{ content: 'done' }]),
     });
     const { state } = await runLoop(config);
-    // $break was called — loop terminated, result extracted
     expect(state.result).toBe('done');
-    // memory_shouldCommit should NOT be set
-    expect(state.memory_shouldCommit).toBeUndefined();
-  });
-
-  it('Finalize with useCommitFlag=true sets shouldCommit without $break', async () => {
-    const store = { load: vi.fn().mockReturnValue([]), save: vi.fn() };
-    const config = minimalConfig({
-      provider: mockProvider([{ content: 'committed' }]),
-      commitMemory: { store, conversationId: 'test' },
-    });
-    const { state } = await runLoop(config);
-    // CommitMemory ran, saved, and broke the loop
-    expect(state.result).toBe('committed');
-    expect(store.save).toHaveBeenCalledOnce();
   });
 });
 
@@ -274,19 +259,6 @@ describe('RouteResponse decider — scenario', () => {
     expect(toolMsgs).toHaveLength(2);
     expect(toolMsgs[0].content).toBe('search-result');
     expect(toolMsgs[1].content).toBe('42');
-  });
-
-  it('useCommitFlag: Finalize sets shouldCommit instead of breaking', async () => {
-    const store = { load: vi.fn().mockReturnValue([]), save: vi.fn() };
-    const config = minimalConfig({
-      provider: mockProvider([{ content: 'done' }]),
-      commitMemory: { store, conversationId: 'conv-1' },
-    });
-
-    const { state } = await runLoop(config);
-    expect(state.result).toBe('done');
-    // CommitMemory stage should have run and saved
-    expect(store.save).toHaveBeenCalledOnce();
   });
 
   it('narrative shows decision branch for tool-calls and final', async () => {
@@ -449,5 +421,154 @@ describe('RouteResponse decider — security', () => {
     const parsed = JSON.parse(toolMsgs[0].content as string);
     expect(parsed.error).toBe(true);
     expect(parsed.message).toBe('tool crashed');
+  });
+});
+
+// ── RouteResponse — filter-form decide() evidence ───────────
+
+describe('RouteResponse decider — filter-form evidence on onDecision', () => {
+  // Five patterns for the evidence plumbing that was added this session:
+  // filter-form decide() → structured conditions on FlowRecorder.onDecision.
+
+  async function captureRouteDecision(
+    config: AgentLoopConfig,
+    userMsg = 'hello',
+  ): Promise<
+    Array<{
+      chosen?: string;
+      evidence?: {
+        chosen?: string;
+        default?: string;
+        rules?: Array<{
+          type?: string;
+          branch?: string;
+          matched?: boolean;
+          label?: string;
+          conditions?: Array<{
+            key?: string;
+            op?: string;
+            threshold?: unknown;
+            actualSummary?: string;
+            result?: boolean;
+            redacted?: boolean;
+          }>;
+        }>;
+      };
+    }>
+  > {
+    const { chart } = buildAgentLoop(config, { messages: [userMessage(userMsg)] });
+    const exec = new FlowChartExecutor(chart);
+    const events: Array<any> = [];
+    exec.attachFlowRecorder({
+      id: 'probe',
+      onDecision: (e) => {
+        if (e.traversalContext?.stageId === 'route-response') {
+          events.push({ chosen: e.chosen, evidence: e.evidence });
+        }
+      },
+    });
+    await exec.run();
+    return events;
+  }
+
+  // unit: filter form emits structured condition evidence
+  it('final branch captures filter condition with actualSummary=false', async () => {
+    const config = minimalConfig({ provider: mockProvider([{ content: 'done' }]) });
+    const decisions = await captureRouteDecision(config);
+    expect(decisions.length).toBe(1);
+    const ev = decisions[0].evidence!;
+    expect(ev.chosen).toBe('final');
+    expect(ev.rules![0].type).toBe('filter');
+    expect(ev.rules![0].matched).toBe(false);
+    expect(ev.rules![0].conditions![0].key).toBe('hasToolCalls');
+    expect(ev.rules![0].conditions![0].op).toBe('eq');
+    expect(ev.rules![0].conditions![0].threshold).toBe(true);
+    expect(ev.rules![0].conditions![0].actualSummary).toBe('false');
+    expect(ev.rules![0].conditions![0].result).toBe(false);
+  });
+
+  // unit: tool-calls branch captures matching condition
+  it('tool-calls branch captures filter condition with actualSummary=true', async () => {
+    const tc: ToolCall = { id: 'tc1', name: 'search', arguments: { q: 'x' } };
+    const registry = new ToolRegistry();
+    registry.register(searchTool);
+    const config = minimalConfig({
+      provider: mockProvider([
+        { content: 'searching', toolCalls: [tc] },
+        { content: 'final answer' },
+      ]),
+      tools: { provider: staticTools(registry.all()) },
+      registry,
+    });
+    const decisions = await captureRouteDecision(config);
+    // Multi-turn: first decision is tool-calls, second is final
+    const first = decisions[0].evidence!;
+    expect(first.chosen).toBe('tool-calls');
+    expect(first.rules![0].conditions![0].actualSummary).toBe('true');
+    expect(first.rules![0].matched).toBe(true);
+  });
+
+  // boundary: label flows through to the evidence
+  it('rule label appears on evidence for audit-trail consumption', async () => {
+    const config = minimalConfig({ provider: mockProvider([{ content: 'done' }]) });
+    const decisions = await captureRouteDecision(config);
+    expect(decisions[0].evidence!.rules![0].label).toContain('LLM requested tool calls');
+  });
+
+  // scenario: evidence chosen field matches the branch the engine took
+  it('evidence.chosen always matches the branch the engine actually took', async () => {
+    const tc: ToolCall = { id: 'tc1', name: 'search', arguments: { q: 'x' } };
+    const registry = new ToolRegistry();
+    registry.register(searchTool);
+    const config = minimalConfig({
+      provider: mockProvider([{ content: 'searching', toolCalls: [tc] }, { content: 'final' }]),
+      tools: { provider: staticTools(registry.all()) },
+      registry,
+    });
+    const decisions = await captureRouteDecision(config);
+    for (const d of decisions) {
+      // `chosen` (top-level) and `evidence.chosen` must agree — they come
+      // from the same DecisionResult, so they should never diverge.
+      const narrativeChosen = d.chosen; // 'ExecuteTools' | 'Finalize' (branch display name)
+      const evidenceChosen = d.evidence!.chosen; // 'tool-calls' | 'final' (branch id)
+      const expected = evidenceChosen === 'tool-calls' ? 'ExecuteTools' : 'Finalize';
+      expect(narrativeChosen).toBe(expected);
+    }
+  });
+
+  // property: redacted flag present on every condition (defaults to false here)
+  it('every condition record carries a redacted boolean flag', async () => {
+    const config = minimalConfig({ provider: mockProvider([{ content: 'done' }]) });
+    const decisions = await captureRouteDecision(config);
+    for (const d of decisions) {
+      for (const rule of d.evidence!.rules ?? []) {
+        for (const cond of rule.conditions ?? []) {
+          expect(typeof cond.redacted).toBe('boolean');
+        }
+      }
+    }
+  });
+
+  // security: force-routed max-iterations still produces a route-response
+  // decision (safeDecider wraps base decider) — the evidence represents
+  // the pre-force decision but the engine routed to the default branch.
+  it('decision evidence captured even when safeDecider force-routes at maxIterations', async () => {
+    const registry = new ToolRegistry();
+    registry.register(searchTool);
+    const tc: ToolCall = { id: 'tc1', name: 'search', arguments: { q: 'x' } };
+    const config = minimalConfig({
+      maxIterations: 1,
+      provider: mockProvider([
+        { content: 'a', toolCalls: [tc] },
+        { content: 'b', toolCalls: [tc] },
+      ]),
+      tools: { provider: staticTools(registry.all()) },
+      registry,
+    });
+    const decisions = await captureRouteDecision(config);
+    // At least one decision fired; last one is the force-routed final
+    expect(decisions.length).toBeGreaterThan(0);
+    const last = decisions[decisions.length - 1];
+    expect(last.chosen).toBe('Finalize');
   });
 });

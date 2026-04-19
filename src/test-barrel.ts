@@ -39,7 +39,6 @@ export type { ParsedResponse } from './scope';
 export {
   createCallLLMStage,
   parseResponseStage,
-  createCommitMemoryStage,
   finalizeStage,
   normalizeAdapterResponse,
   executeToolCalls,
@@ -47,7 +46,6 @@ export {
   augmentPromptStage,
   runnerAsStage,
 } from './stages';
-export type { CommitMemoryConfig } from './stages';
 export {
   appendMessage,
   lastMessage,
@@ -55,14 +53,11 @@ export {
   lastMessageHasToolCalls,
   createToolResults,
 } from './memory';
-export { InMemoryStore } from './adapters/memory/inMemory';
-export type { ConversationStore, MemoryConfig } from './adapters/memory/types';
 export { agentLoop } from './executor';
 export type { AgentLoopOptions, AgentLoopResult } from './executor';
 export { AgentPattern } from './lib/loop';
 export { buildAgentLoop, SUBFLOW_MESSAGE_KEY } from './lib/loop';
 export type { AgentLoopSeedOptions, AgentLoopConfig as AgentLoopConfigType } from './lib/loop';
-export { createPrepareMemorySubflow } from './subflows';
 export { buildSystemPromptSubflow, buildMessagesSubflow, buildToolsSubflow } from './lib/slots';
 export { createAdapterSubflow } from './adapters';
 export { ADAPTER_PATHS, hasToolCalls, wrapSDKError, classifyStatusCode } from './types';
@@ -184,7 +179,6 @@ export type {
   AgentObservabilityOptions,
   AgentObservabilityRecorder,
 } from './recorders';
-export type { PrepareMemoryConfig } from './subflows';
 export type { SystemPromptSlotConfig, MessagesSlotConfig, ToolsSlotConfig } from './lib/slots';
 
 // Tool provider strategies (needed by security sample)

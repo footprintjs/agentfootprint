@@ -13,9 +13,10 @@ import type {
 } from 'footprintjs';
 import { buildAgentLoop, AgentPattern } from '../loop';
 import { PendingFollowUpManager, InstructionRecorder } from '../instructions';
-import type { InstructionOverride, AgentInstruction } from '../instructions';
+import type { InstructionOverride, AgentInstruction, ResolvedFollowUp } from '../instructions';
 import type { DecideFn } from '../call/helpers';
 import type { AgentStreamEvent, AgentStreamEventHandler } from '../../streaming';
+import { createStreamEventRecorder } from '../../streaming';
 import type { AgentLoopConfig } from '../loop';
 import type { CustomRouteConfig } from './AgentBuilder';
 import { createAgentRenderer } from '../narrative';
@@ -30,7 +31,6 @@ import { lastAssistantMessage } from '../../memory';
 import { getTextContent } from '../../types/content';
 import { userMessage, toolResultMessage, assistantMessage } from '../../types';
 import type { LLMProvider, LLMResponse, AgentResult, Message, ResponseFormat } from '../../types';
-import type { MemoryConfig } from '../../adapters/memory/types';
 import type { MemoryPipeline } from '../../memory/pipeline';
 import type { AgentRecorder, PromptProvider, ToolProvider } from '../../core';
 import { RecorderBridge } from '../../recorders/RecorderBridge';
@@ -54,7 +54,6 @@ export interface AgentRunnerOptions {
   readonly registry: ToolRegistry;
   readonly maxIterations?: number;
   readonly recorders?: AgentRecorder[];
-  readonly memoryConfig?: MemoryConfig;
   readonly memoryPipeline?: MemoryPipeline;
   readonly pattern?: AgentPattern;
   readonly promptProvider?: PromptProvider;
@@ -86,7 +85,6 @@ export class AgentRunner {
   private readonly registry: ToolRegistry;
   private readonly maxIter: number;
   private readonly recorders: AgentRecorder[];
-  private readonly memoryConfig?: MemoryConfig;
   private readonly memoryPipeline?: MemoryPipeline;
   private readonly agentPattern: AgentPattern;
   private readonly customPromptProvider?: PromptProvider;
@@ -107,6 +105,25 @@ export class AgentRunner {
   private narrativeRenderer = createAgentRenderer();
   private readonly pendingFollowUps = new PendingFollowUpManager();
 
+  /**
+   * Cached charts — built lazily on first use, reused across every
+   * `.run()` / `.toFlowChart()` call. Stream events flow through the
+   * emit channel (via a per-run `StreamEventRecorder` attached to the
+   * executor), so no per-run closure ever lands in chart stages. This
+   * lets both standalone and subflow-mode charts be pure static
+   * structures.
+   */
+  private cachedStandaloneChart?: FlowChartType;
+  private cachedSubflowChart?: FlowChartType;
+
+  /**
+   * Per-run strict follow-up that fired during tool execution. Reset at
+   * the start of each `.run()` call so state doesn't leak between turns.
+   * Populated by the `onInstructionsFired` callback wired through
+   * `buildConfig()`.
+   */
+  private runStrictFollowUp?: { followUp: ResolvedFollowUp; sourceToolId: string };
+
   constructor(options: AgentRunnerOptions) {
     this.provider = options.provider;
     this.name = options.name;
@@ -114,7 +131,6 @@ export class AgentRunner {
     this.registry = options.registry;
     this.maxIter = options.maxIterations ?? 10;
     this.recorders = [...(options.recorders ?? [])];
-    this.memoryConfig = options.memoryConfig;
     this.memoryPipeline = options.memoryPipeline;
     this.agentPattern = options.pattern ?? AgentPattern.Regular;
     this.customPromptProvider = options.promptProvider;
@@ -164,18 +180,37 @@ export class AgentRunner {
     }
   }
 
-  /** Expose the agent's internal flowChart for subflow composition. */
+  /**
+   * Expose the agent's internal flowChart for subflow composition.
+   * Cached — built once, reused across all mount sites.
+   */
   toFlowChart(): FlowChartType {
-    const { chart, spec } = buildAgentLoop(
-      this.buildConfig(),
-      {
-        messages: [],
-        subflowMode: true,
-      },
-      { captureSpec: true },
-    );
-    this.lastSpec = annotateSpecIcons(spec as SpecLike);
-    return chart;
+    if (!this.cachedSubflowChart) {
+      const { chart, spec } = buildAgentLoop(
+        this.buildConfig(),
+        { messages: [], subflowMode: true },
+        { captureSpec: true },
+      );
+      this.cachedSubflowChart = chart;
+      this.lastSpec = annotateSpecIcons(spec as SpecLike);
+    }
+    return this.cachedSubflowChart;
+  }
+
+  /**
+   * Lazy-build the standalone chart on first `.run()`. Stream handler
+   * flows via a per-run emit recorder attached in `run()` — the chart
+   * itself is a pure static structure and is reused forever.
+   */
+  private getStandaloneChart(): FlowChartType {
+    if (!this.cachedStandaloneChart) {
+      const { chart, spec } = buildAgentLoop(this.buildConfig(), undefined, {
+        captureSpec: true,
+      });
+      this.cachedStandaloneChart = chart;
+      this.lastSpec = annotateSpecIcons(spec as SpecLike);
+    }
+    return this.cachedStandaloneChart;
   }
 
   /** Run the agent with a user message. */
@@ -192,10 +227,7 @@ export class AgentRunner {
        * Memory identity for this turn. Forwarded to the memory pipeline
        * (if configured via `.memoryPipeline()`). Same agent instance can
        * serve many users by passing different identities per-run.
-       *
-       * Only consulted when the agent has `.memoryPipeline()` attached;
-       * ignored for legacy `.memory()` configurations and for agents
-       * without memory at all.
+       * Ignored when the agent has no memory pipeline attached.
        */
       identity?: { tenant?: string; principal?: string; conversationId: string };
       /**
@@ -259,11 +291,10 @@ export class AgentRunner {
       }
     }
 
-    // With a memory pipeline or store, prior-turn messages come from the
-    // pipeline's read subflow / memory store. Without memory, fall back
-    // to the in-runner conversation history.
-    const existingMessages =
-      this.memoryPipeline || this.memoryConfig?.store ? [] : this.conversationHistory;
+    // With a memory pipeline attached, prior-turn messages come from
+    // the pipeline's read subflow. Without memory, fall back to the
+    // in-runner conversation history.
+    const existingMessages = this.memoryPipeline ? [] : this.conversationHistory;
 
     // Create bridge for recorder dispatch (before buildAgentLoop so mergedStreamEvent is available)
     const bridge = this.recorders.length > 0 ? new RecorderBridge(this.recorders) : null;
@@ -276,12 +307,14 @@ export class AgentRunner {
           }
         : bridgeHandler ?? onStreamEvent;
 
-    const { chart, spec, getStrictFollowUp } = buildAgentLoop(
-      this.buildConfig(mergedStreamEvent),
-      { messages: message ? [userMessage(message)] : [], existingMessages },
-      { captureSpec: true },
-    );
-    this.lastSpec = annotateSpecIcons(spec as SpecLike);
+    // Reset per-run state — must happen BEFORE the cached chart runs,
+    // since its onInstructionsFired callback writes into this field.
+    this.runStrictFollowUp = undefined;
+
+    // Cached standalone chart — built once on first run(), reused
+    // forever. Per-run stream handler flows via a dedicated emit
+    // recorder attached below (NOT through the chart's closure).
+    const chart = this.getStandaloneChart();
 
     bridge?.dispatchTurnStart(message);
 
@@ -298,6 +331,15 @@ export class AgentRunner {
     executor.enableNarrative({ renderer: this.narrativeRenderer });
     executor.attachRecorder(new MetricRecorder('metrics'));
 
+    // Attach the per-run stream event recorder — translates
+    // `agentfootprint.stream.*` emits (from CallLLM / Streaming / tool
+    // execution stages) back into the user's `{ onEvent }` callback.
+    // Bypassing closure capture in the chart is what lets the chart be
+    // cached across runs.
+    if (mergedStreamEvent) {
+      executor.attachEmitRecorder(createStreamEventRecorder(mergedStreamEvent));
+    }
+
     // Capture LLM responses + per-call context during traversal
     const { recorder: llmCaptureRecorder, captures: llmCaptures } =
       this.createLLMCaptureRecorder(bridge);
@@ -308,13 +350,15 @@ export class AgentRunner {
     const startMs = Date.now();
 
     try {
-      // Thread memory identity / turn / budget into getArgs() so the
-      // MemorySeed stage (mounted when memoryPipeline is set) can copy
-      // them onto scope. Args are scoped under `memory:*` keys to avoid
-      // locking same-named scope fields (runtime enforces readonly on args
-      // — a `identity` args key would prevent the seed from writing to
-      // `scope.identity`). Harmless for agents without memory.
-      const runInput: Record<string, unknown> = {};
+      // Per-run memory namespace args — user-supplied identity, turn,
+      // and context-budget flow to the memory pipeline. Seed args
+      // (`seed:*`) ARE threaded through even though closure still
+      // carries messages — future-proof for when the cached-chart
+      // architecture lands alongside an extensible footprintjs env.
+      const runInput: Record<string, unknown> = {
+        'seed:userMessage': message,
+        'seed:existingMessages': existingMessages,
+      };
       if (options?.identity) runInput['memory:identity'] = options.identity;
       if (options?.turnNumber !== undefined) runInput['memory:turnNumber'] = options.turnNumber;
       if (options?.contextTokensRemaining !== undefined) {
@@ -324,7 +368,7 @@ export class AgentRunner {
       await executor.run({
         signal: options?.signal,
         timeoutMs: options?.timeoutMs,
-        ...(Object.keys(runInput).length > 0 && { input: runInput }),
+        input: runInput,
       });
     } catch (err) {
       this.lastExecutor = executor;
@@ -373,13 +417,8 @@ export class AgentRunner {
       );
     }
 
-    const strictFU = getStrictFollowUp();
-    if (strictFU) {
-      this.pendingFollowUps.setPending({
-        followUp: strictFU.followUp,
-        sourceToolId: strictFU.sourceToolId,
-      });
-    }
+    // Surface strict follow-ups captured by buildConfig's onInstructionsFired.
+    this.flushStrictFollowUp();
 
     return agentResult;
   }
@@ -549,7 +588,28 @@ export class AgentRunner {
     this.conversationHistory = [];
   }
 
-  private buildConfig(onStreamEvent?: AgentStreamEventHandler): AgentLoopConfig {
+  /**
+   * Forward a strict follow-up captured during the run to the pending
+   * queue. Isolated into a method so TypeScript doesn't narrow the
+   * field type to `never` via control-flow from the earlier reset.
+   */
+  private flushStrictFollowUp(): void {
+    const pending = this.runStrictFollowUp;
+    if (!pending) return;
+    this.pendingFollowUps.setPending({
+      followUp: pending.followUp,
+      sourceToolId: pending.sourceToolId,
+    });
+  }
+
+  /**
+   * Build the static AgentLoopConfig. Called ONCE by the cached-chart
+   * builder (`getStandaloneChart` / `toFlowChart`). Contains no per-run
+   * inputs — `onStreamEvent` flows through args per turn, and the
+   * `onInstructionsFired` callback writes into `this.runStrictFollowUp`
+   * which `run()` resets at each turn's start.
+   */
+  private buildConfig(): AgentLoopConfig {
     const hasTools = this.registry.size > 0;
     const promptProvider = this.customPromptProvider ?? staticPrompt(this.systemPromptText ?? '');
     const toolsProvider =
@@ -559,24 +619,16 @@ export class AgentRunner {
       provider: this.provider,
       systemPrompt: { provider: promptProvider },
       messages: {
-        strategy: this.memoryConfig?.strategy ?? slidingWindow({ maxMessages: 100 }),
-        ...(this.memoryConfig?.store && { store: this.memoryConfig.store }),
-        ...(this.memoryConfig?.conversationId && {
-          conversationId: this.memoryConfig.conversationId,
-        }),
+        // Default windowing — slide to the last 100 messages so long
+        // conversations don't blow past the context budget. Consumers
+        // can swap this via future API surface if finer control is
+        // needed; memoryPipeline handles durable persistence separately.
+        strategy: slidingWindow({ maxMessages: 100 }),
       },
       tools: { provider: toolsProvider },
       toolProvider: this.customToolProvider,
       registry: this.registry,
       maxIterations: this.maxIter,
-      // Legacy path — CommitMemory stage; kept alongside new pipeline.
-      commitMemory: this.memoryConfig
-        ? {
-            store: this.memoryConfig.store,
-            conversationId: this.memoryConfig.conversationId,
-          }
-        : undefined,
-      // New path — pipeline subflows; wired in buildAgentLoop when set.
       memoryPipeline: this.memoryPipeline,
       pattern: this.agentPattern,
       instructionOverrides: this.instructionOverrides,
@@ -590,8 +642,24 @@ export class AgentRunner {
         maxIdenticalFailures: this.maxIdenticalFailures,
       }),
       routeExtensions: this.customRoute?.branches,
-      onStreamEvent,
+      // No `onStreamEvent` at build time — routed through args per run.
       onInstructionsFired: (toolId, fired) => {
+        // Track strict follow-up for this run. `run()` resets
+        // `runStrictFollowUp` before each call, so state can't leak
+        // across turns even though the callback closure is shared
+        // (captured at build time and lives as long as the agent).
+        if (!this.runStrictFollowUp) {
+          for (const instr of fired) {
+            if (instr.resolvedFollowUp?.strict) {
+              this.runStrictFollowUp = {
+                followUp: instr.resolvedFollowUp,
+                sourceToolId: toolId,
+              };
+              break;
+            }
+          }
+        }
+        // Forward to external observers (InstructionRecorder).
         for (const rec of this.recorders) {
           if (rec instanceof InstructionRecorder) rec.recordFirings(toolId, fired);
         }

@@ -7,9 +7,9 @@
  *   - `write` runs afterTurn — persists `scope.newMessages`
  *
  * Having BOTH returned as a bundle keeps the two sides coupled to a
- * single store/config choice: you can't accidentally use `.memory(preset1.read)`
- * with `preset2.write` and end up writing to a different store than you
- * read from.
+ * single store/config choice: you can't accidentally use
+ * `.memoryPipeline(preset1.read)` with `preset2.write` and end up
+ * writing to a different store than you read from.
  */
 import type { FlowChart } from 'footprintjs';
 import type { MemoryState } from '../stages';

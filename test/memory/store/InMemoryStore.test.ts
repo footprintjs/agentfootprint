@@ -313,3 +313,72 @@ describe('InMemoryStore — security', () => {
     expect(await store.get(normal, 'k')).toBeNull();
   });
 });
+
+// ── putMany — batch write ────────────────────────────────────
+
+describe('InMemoryStore — putMany', () => {
+  it('writes all entries in the batch (unit)', async () => {
+    const entries = [makeEntry('a'), makeEntry('b'), makeEntry('c')];
+    await store.putMany(ID_A, entries);
+    expect((await store.get(ID_A, 'a'))?.id).toBe('a');
+    expect((await store.get(ID_A, 'b'))?.id).toBe('b');
+    expect((await store.get(ID_A, 'c'))?.id).toBe('c');
+  });
+
+  it('empty batch is a no-op (boundary)', async () => {
+    await expect(store.putMany(ID_A, [])).resolves.toBeUndefined();
+    const listed = await store.list(ID_A);
+    expect(listed.entries.length).toBe(0);
+  });
+
+  it('respects tenant isolation like put (security)', async () => {
+    await store.putMany(ID_A, [makeEntry('k', { value: 'tenant-A' })]);
+    expect(await store.get(ID_TENANT2, 'k')).toBeNull();
+  });
+
+  it('last-write-wins for duplicate ids within one batch (boundary)', async () => {
+    await store.putMany(ID_A, [
+      makeEntry('dup', { value: 'first', version: 1 }),
+      makeEntry('dup', { value: 'second', version: 2 }),
+    ]);
+    const got = await store.get(ID_A, 'dup');
+    expect(got?.value).toBe('second');
+    expect(got?.version).toBe(2);
+  });
+
+  it('putMany equivalent to N sequential put calls (property)', async () => {
+    const storeBatch = new InMemoryStore();
+    const storeSeq = new InMemoryStore();
+    const entries = Array.from({ length: 50 }, (_, i) => makeEntry(`k${i}`));
+
+    await storeBatch.putMany(ID_A, entries);
+    for (const e of entries) await storeSeq.put(ID_A, e);
+
+    const batchListed = await storeBatch.list(ID_A, { limit: 100 });
+    const seqListed = await storeSeq.list(ID_A, { limit: 100 });
+    expect(batchListed.entries.length).toBe(seqListed.entries.length);
+    expect(new Set(batchListed.entries.map((e) => e.id))).toEqual(
+      new Set(seqListed.entries.map((e) => e.id)),
+    );
+  });
+
+  it('multi-identity scenario: separate batches per identity isolate cleanly', async () => {
+    // Realistic use: two tenants each persist a turn's messages in one
+    // putMany. Neither sees the other, each sees its own entries.
+    const turnA = [makeEntry('msg-1-0', { value: 'a0' }), makeEntry('msg-1-1', { value: 'a1' })];
+    const turnB = [makeEntry('msg-1-0', { value: 'b0' }), makeEntry('msg-1-1', { value: 'b1' })];
+
+    await store.putMany(ID_A, turnA);
+    await store.putMany(ID_TENANT2, turnB);
+
+    const listA = await store.list(ID_A, { limit: 10 });
+    const listB = await store.list(ID_TENANT2, { limit: 10 });
+    expect(listA.entries.length).toBe(2);
+    expect(listB.entries.length).toBe(2);
+    // Same ids, disjoint values — identity-namespace isolation verified.
+    const valuesA = new Set(listA.entries.map((e) => e.value));
+    const valuesB = new Set(listB.entries.map((e) => e.value));
+    expect(valuesA).toEqual(new Set(['a0', 'a1']));
+    expect(valuesB).toEqual(new Set(['b0', 'b1']));
+  });
+});

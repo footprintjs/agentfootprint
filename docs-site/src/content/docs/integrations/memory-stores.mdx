@@ -1,177 +1,71 @@
 ---
 title: Memory Stores
-description: Persist conversations with Redis, PostgreSQL, or DynamoDB — bring your own client, zero new dependencies.
+description: Storage backends for the agentfootprint memory pipeline.
 ---
 
-import { Tabs, TabItem } from '@astrojs/starlight/components';
+import { Aside } from '@astrojs/starlight/components';
 
-## How memory works
+agentfootprint's memory architecture separates two concerns:
 
-agentfootprint has a 2-layer memory system:
+1. **`MemoryStore`** — WHERE memory entries are persisted (in-memory, Redis, DynamoDB, Postgres). A 10-method CRUD surface with tenant-aware `MemoryIdentity`.
+2. **`MemoryPipeline`** — HOW memory is loaded / picked / formatted / written each turn. Two subflows (`read`, `write`) composed of explainable stages.
 
-1. **ConversationStore** — WHERE messages are stored (Redis, Postgres, DynamoDB, in-memory)
-2. **MessageStrategy** — HOW history is trimmed before each LLM call (sliding window, char budget)
-
-You configure both via `.memory()` on the agent builder:
+You attach a pipeline to an agent via `.memoryPipeline()`:
 
 ```ts
-const agent = Agent.create({ provider })
-  .system('You are a support agent.')
-  .memory({
-    store: myStore,                    // WHERE
-    conversationId: 'session-123',     // unique key
-    strategy: slidingWindow({ maxMessages: 20 }),  // HOW (optional)
-  })
+import { Agent, anthropic } from 'agentfootprint';
+import { defaultPipeline, InMemoryStore } from 'agentfootprint/memory';
+
+const pipeline = defaultPipeline({ store: new InMemoryStore() });
+
+const agent = Agent.create({ provider: anthropic('claude-sonnet-4-5') })
+  .system('You remember the user across sessions.')
+  .memoryPipeline(pipeline)
   .build();
 
-await agent.run('My name is Alice');
-await agent.run('What is my name?');  // "Your name is Alice"
-```
-
-## InMemoryStore (development)
-
-Built-in, no dependencies. Data lost on restart.
-
-```ts
-import { Agent, InMemoryStore } from 'agentfootprint';
-
-const store = new InMemoryStore();
-const agent = Agent.create({ provider })
-  .memory({ store, conversationId: 'dev-session' })
-  .build();
-```
-
-## Redis
-
-<Tabs>
-  <TabItem label="ioredis">
-    ```ts
-    import Redis from 'ioredis';
-    import { Agent, redisStore } from 'agentfootprint';
-
-    const store = redisStore(new Redis(), {
-      prefix: 'myapp:conv:',   // key prefix (default: 'agentfp:conv:')
-      ttlSeconds: 3600,         // auto-expire after 1 hour
-    });
-
-    const agent = Agent.create({ provider })
-      .memory({ store, conversationId: 'user-123' })
-      .build();
-    ```
-  </TabItem>
-  <TabItem label="node-redis">
-    ```ts
-    import { createClient } from 'redis';
-    import { Agent, redisStore } from 'agentfootprint';
-
-    const client = createClient();
-    await client.connect();
-
-    const store = redisStore(client, { ttlSeconds: 7200 });
-    const agent = Agent.create({ provider })
-      .memory({ store, conversationId: 'user-123' })
-      .build();
-    ```
-  </TabItem>
-</Tabs>
-
-**Install:** `npm install ioredis` or `npm install redis`
-
-## PostgreSQL
-
-```ts
-import { Pool } from 'pg';
-import { Agent, postgresStore } from 'agentfootprint';
-
-const pool = new Pool({ connectionString: process.env.DATABASE_URL });
-
-const store = postgresStore(pool, {
-  tableName: 'conversations',  // default
+await agent.run('My name is Alice', {
+  identity: { conversationId: 'alice-session-1' },
 });
-
-const agent = Agent.create({ provider })
-  .memory({ store, conversationId: 'user-123' })
-  .build();
 ```
 
-**Install:** `npm install pg`
+See the [Memory pipeline guide](/agentfootprint/guides/memory) for the full API.
 
-**Required table:**
-```sql
-CREATE TABLE conversations (
-  id TEXT PRIMARY KEY,
-  messages JSONB,
-  updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-```
+## Shipped adapters
 
-## DynamoDB
+| Adapter | Purpose |
+|---|---|
+| `InMemoryStore` | Dev / tests. In-process Map-backed, tenant-aware, implements the full `MemoryStore` contract incl. batched `putMany`. |
+
+## Roadmap
+
+Real persistent backends (Redis, DynamoDB, Postgres) land in Phase 3 and implement the same `MemoryStore` interface. Tests written against `InMemoryStore` transfer directly to any backend.
+
+## Writing a custom adapter
+
+Implement the `MemoryStore` interface:
 
 ```ts
-import { DynamoDBDocumentClient, GetCommand, PutCommand } from '@aws-sdk/lib-dynamodb';
-import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { Agent, dynamoStore } from 'agentfootprint';
+import type { MemoryStore } from 'agentfootprint/memory';
 
-const docClient = DynamoDBDocumentClient.from(new DynamoDBClient({}));
-
-const store = dynamoStore({
-  get: async (table, key) => {
-    const result = await docClient.send(new GetCommand({ TableName: table, Key: key }));
-    return result.Item ?? null;
-  },
-  put: async (table, item) => {
-    await docClient.send(new PutCommand({ TableName: table, Item: item }));
-  },
-}, { tableName: 'conversations', partitionKey: 'id' });
-
-const agent = Agent.create({ provider })
-  .memory({ store, conversationId: 'user-123' })
-  .build();
-```
-
-**Install:** `npm install @aws-sdk/client-dynamodb @aws-sdk/lib-dynamodb`
-
-## Custom store
-
-Implement 2 methods — `load()` and `save()`:
-
-```ts
-import type { ConversationStore } from 'agentfootprint';
-
-const myStore: ConversationStore = {
-  async load(conversationId) {
-    // Return messages array or null
-    const data = await myDB.get(conversationId);
-    return data ? JSON.parse(data) : null;
-  },
-  async save(conversationId, messages) {
-    // Persist messages (fire-and-forget — errors are swallowed)
-    await myDB.set(conversationId, JSON.stringify(messages));
-  },
+const myStore: MemoryStore = {
+  async get(identity, id) { /* ... */ },
+  async put(identity, entry) { /* ... */ },
+  async putMany(identity, entries) { /* batched write — N → 1 round-trip */ },
+  async putIfVersion(identity, entry, expectedVersion) { /* OCC */ },
+  async list(identity, options) { /* paginated */ },
+  async delete(identity, id) { /* ... */ },
+  async seen(identity, signature) { /* dedupe signal */ },
+  async recordSignature(identity, signature) { /* ... */ },
+  async feedback(identity, id, usefulness) { /* -1..1 */ },
+  async getFeedback(identity, id) { /* aggregate */ },
+  async forget(identity) { /* GDPR erasure */ },
 };
 ```
 
-## Switching stores
+<Aside type="caution" title="Tenant isolation">
+Every call takes `MemoryIdentity` as the scoping argument. Adapters MUST prefix internal keys with `identityNamespace(identity)` to prevent cross-tenant access. A bug that passes the wrong identity surfaces as "no data" rather than a cross-tenant leak.
+</Aside>
 
-Same agent code, different store — swap one line:
-
-<Tabs>
-  <TabItem label="Development">
-    ```ts
-    import { InMemoryStore } from 'agentfootprint';
-    const store = new InMemoryStore();
-    ```
-  </TabItem>
-  <TabItem label="Production (Redis)">
-    ```ts
-    import { redisStore } from 'agentfootprint';
-    const store = redisStore(new Redis(process.env.REDIS_URL));
-    ```
-  </TabItem>
-  <TabItem label="Production (Postgres)">
-    ```ts
-    import { postgresStore } from 'agentfootprint';
-    const store = postgresStore(pool);
-    ```
-  </TabItem>
-</Tabs>
+<Aside type="note" title="Batched writes">
+`putMany` is the hot path for turn-end persistence (multiple messages per turn). Real backends should override it to pipeline the round-trip — Redis `MULTI`, DynamoDB `BatchWriteItem`, Postgres multi-row `INSERT`. Default fallback: sequential `put()` calls.
+</Aside>

@@ -22,8 +22,8 @@
  *     agent's outgoing LLM prompt).
  *
  * This helper does NOT own any of those concerns — it owns only the
- * mechanical subflow mounting. Consumer-facing API (`AgentBuilder.memory()`)
- * will be layered on top in a later pass.
+ * mechanical subflow mounting. Consumer-facing API
+ * (`AgentBuilder.memoryPipeline()`) is layered on top.
  *
  * Why a standalone helper, not a direct `AgentBuilder` patch?
  *   - Lets us test the wire mechanism end-to-end in isolation (Layer 6)

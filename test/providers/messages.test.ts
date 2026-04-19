@@ -4,8 +4,6 @@ import type { Message, MessageContext } from '../../src/test-barrel';
 import {
   summaryStrategy,
   compositeMessages,
-  persistentHistory,
-  InMemoryStore,
   slidingWindow,
   withToolPairSafety,
   fullHistory,
@@ -127,65 +125,7 @@ describe('compositeMessages', () => {
   });
 });
 
-// ── persistentHistory ───────────────────────────────────────
-
-describe('persistentHistory', () => {
-  it('stores and loads conversation across calls', async () => {
-    const store = new InMemoryStore();
-    const strategy = persistentHistory({ conversationId: 'conv-1', store });
-
-    // First call — no stored history
-    const history1 = [userMessage('Hello'), assistantMessage('Hi!')];
-    const decision1 = await strategy.prepare(history1, msgCtx());
-    expect(decision1.value).toEqual(history1);
-
-    // Second call — stored history is merged with new messages
-    const history2 = [userMessage('Hello'), assistantMessage('Hi!'), userMessage('How are you?')];
-    const decision2 = await strategy.prepare(history2, msgCtx());
-    expect(decision2.value.length).toBe(3);
-    expect(decision2.value[2].content).toBe('How are you?');
-  });
-
-  it('separate conversations are isolated', async () => {
-    const store = new InMemoryStore();
-    const s1 = persistentHistory({ conversationId: 'a', store });
-    const s2 = persistentHistory({ conversationId: 'b', store });
-
-    await s1.prepare([userMessage('A')], msgCtx());
-    await s2.prepare([userMessage('B')], msgCtx());
-
-    const loaded1 = await store.load('a');
-    const loaded2 = await store.load('b');
-
-    expect(loaded1[0].content).toBe('A');
-    expect(loaded2[0].content).toBe('B');
-  });
-
-  it('InMemoryStore.clear empties all conversations', async () => {
-    const store = new InMemoryStore();
-    await store.save('conv-1', [userMessage('test')]);
-    store.clear();
-    expect(await store.load('conv-1')).toEqual([]);
-  });
-
-  it('returns empty stored for unknown conversation', async () => {
-    const store = new InMemoryStore();
-    const strategy = persistentHistory({ conversationId: 'new', store });
-
-    const history = [userMessage('Fresh start')];
-    const decision = await strategy.prepare(history, msgCtx());
-    expect(decision.value).toEqual(history);
-  });
-
-  it('composes with other strategies via compositeMessages', async () => {
-    const store = new InMemoryStore();
-    const strategy = compositeMessages([
-      persistentHistory({ conversationId: 'conv-1', store }),
-      slidingWindow({ maxMessages: 3 }),
-    ]);
-
-    const history = conversation(6);
-    const decision = await strategy.prepare(history, msgCtx());
-    expect(decision.value.length).toBe(3); // sliding window keeps 3
-  });
-});
+// Legacy persistentHistory strategy + its in-file InMemoryStore were
+// removed when the library moved to a single memory path via
+// `agentfootprint/memory`. Durable conversation history is now owned
+// by `MemoryPipeline.write` + `MemoryStore.putMany`.

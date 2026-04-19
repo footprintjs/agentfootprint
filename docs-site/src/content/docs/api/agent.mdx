@@ -23,7 +23,7 @@ Creates an agent builder. Chain methods to configure, then `.build()` to get a r
 | `.pattern(pattern)` | `AgentPattern.Regular` or `AgentPattern.Dynamic` |
 | `.maxIterations(n)` | Max tool loop iterations (default: 10) |
 | `.streaming(bool)` | Enable token streaming |
-| `.memory(config)` | Conversation persistence |
+| `.memoryPipeline(pipeline)` | Attach a memory pipeline (see [Memory pipeline](/agentfootprint/guides/memory)) |
 | `.recorder(rec)` | Attach an AgentRecorder |
 | `.verbose(bool)` | Verbose narrative output |
 | `.build()` | Returns `AgentRunner` |

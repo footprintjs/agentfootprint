@@ -79,6 +79,22 @@ export class InMemoryStore implements MemoryStore {
     slot.entries.set(entry.id, entry as MemoryEntry);
   }
 
+  /**
+   * Batched write — resolves the slot once and writes each entry into the
+   * same Map. Saves N-1 slot lookups vs. calling `put()` in a loop, and
+   * gives network-backed adapters a place to pipeline round-trips.
+   */
+  async putMany<T = unknown>(
+    identity: MemoryIdentity,
+    entries: readonly MemoryEntry<T>[],
+  ): Promise<void> {
+    if (entries.length === 0) return;
+    const slot = this.slot(identity);
+    for (const entry of entries) {
+      slot.entries.set(entry.id, entry as MemoryEntry);
+    }
+  }
+
   async putIfVersion<T = unknown>(
     identity: MemoryIdentity,
     entry: MemoryEntry<T>,

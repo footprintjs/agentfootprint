@@ -64,6 +64,27 @@ export { defaultPipeline } from './memory/pipeline';
 export type { DefaultPipelineConfig } from './memory/pipeline';
 export { ephemeralPipeline } from './memory/pipeline';
 export type { EphemeralPipelineConfig } from './memory/pipeline';
+export { narrativePipeline } from './memory/pipeline';
+export type { NarrativePipelineConfig } from './memory/pipeline';
+
+// ── Narrative beats (NarrativeMemory building blocks) ──────
+export type { NarrativeBeat, BeatImportance, BeatExtractor, ExtractArgs } from './memory/beats';
+export {
+  asImportance,
+  isNarrativeBeat,
+  heuristicExtractor,
+  llmExtractor,
+  extractBeats,
+  writeBeats,
+  formatAsNarrative,
+} from './memory/beats';
+export type {
+  LLMExtractorConfig,
+  ExtractBeatsConfig,
+  ExtractBeatsState,
+  WriteBeatsConfig,
+  FormatAsNarrativeConfig,
+} from './memory/beats';
 
 // ── Wire helpers (for custom flowcharts) ────────────────────
 export { mountMemoryRead, mountMemoryWrite, mountMemoryPipeline } from './memory/wire';

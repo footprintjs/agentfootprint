@@ -209,3 +209,61 @@ describe('parseResponseStage — security', () => {
     await expect(runParseResponse(errorResult)).rejects.toThrow('Internal error');
   });
 });
+
+// ── hasToolCalls flat mirror (decide-filter enablement) ──────
+
+describe('parseResponseStage — hasToolCalls flat field', () => {
+  // unit: both branches of the flat mirror
+  it('writes scope.hasToolCalls=true when the adapter returned tool calls', async () => {
+    const toolsResult: AdapterResult = {
+      type: 'tools',
+      toolCalls: [makeToolCall('search')],
+      content: 'Let me search',
+    };
+    const state = await runParseResponse(toolsResult);
+    expect(state.hasToolCalls).toBe(true);
+  });
+
+  it('writes scope.hasToolCalls=false when the adapter returned a final answer', async () => {
+    const finalResult: AdapterResult = { type: 'final', content: 'answer' };
+    const state = await runParseResponse(finalResult);
+    expect(state.hasToolCalls).toBe(false);
+  });
+
+  // boundary: empty tool-call array is still "tools" type
+  it('hasToolCalls mirrors parsedResponse.hasToolCalls for every case', async () => {
+    // property-style check: the flat mirror must always equal the nested field
+    const cases: AdapterResult[] = [
+      { type: 'final', content: 'x' },
+      { type: 'tools', toolCalls: [makeToolCall('a')], content: 'y' },
+      { type: 'tools', toolCalls: [makeToolCall('a'), makeToolCall('b')], content: 'z' },
+    ];
+    for (const result of cases) {
+      const state = await runParseResponse(result);
+      const parsed = state.parsedResponse as ParsedResponse;
+      expect(state.hasToolCalls).toBe(parsed.hasToolCalls);
+    }
+  });
+
+  // security: flat mirror can't diverge from the structured source
+  it('hasToolCalls is derived only from parse — never set by external input', async () => {
+    // Seed scope with a bogus pre-existing hasToolCalls; parse should overwrite.
+    const chart = flowChart<AgentLoopState>(
+      'Seed',
+      (scope) => {
+        scope.messages = [user('hi')];
+        scope.adapterResult = { type: 'final', content: 'done' };
+        (scope as unknown as { hasToolCalls: boolean }).hasToolCalls = true; // bogus pre-seed
+      },
+      'seed',
+    )
+      .addFunction('ParseResponse', parseResponseStage, 'parse-response')
+      .build();
+
+    const executor = new FlowChartExecutor(chart);
+    await executor.run();
+    const state = executor.getSnapshot()?.sharedState ?? {};
+    // Parse must have overwritten the bogus pre-seed with the correct value.
+    expect(state.hasToolCalls).toBe(false);
+  });
+});

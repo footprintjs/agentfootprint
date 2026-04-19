@@ -14,8 +14,8 @@
  * Extra tools are all executed in one pass by the swarm-tools subflow.
  */
 
-import { flowChart } from 'footprintjs';
-import type { FlowChart, TypedScope } from 'footprintjs';
+import { flowChart, decide } from 'footprintjs';
+import type { FlowChart, TypedScope, DecisionResult } from 'footprintjs';
 import { toolResultMessage } from '../../types';
 import type { Message } from '../../types/messages';
 import { getTextContent } from '../../types/content';
@@ -99,9 +99,25 @@ export function buildSwarmRouting(config: SwarmRoutingConfig): RoutingConfig {
 
   const MAX_MESSAGE_LEN = 100_000; // 100KB — prevents LLM-controlled DoS
 
-  const decider = (scope: SwarmRoutingScope, _breakFn: () => void, _streamCb?: unknown): string => {
+  const decider = (
+    scope: SwarmRoutingScope,
+    _breakFn: () => void,
+    _streamCb?: unknown,
+  ): DecisionResult => {
+    // Helper: wrap a determined branch id in decide() so the chosen
+    // branch + rationale land on FlowRecorder.onDecision as structured
+    // evidence. We compute the branch imperatively (side-effects on
+    // scope, multi-toolCall scanning) and then use a single always-true
+    // rule labelled with the rationale — so the narrative/audit trail
+    // always includes the "why" for swarm routing, matching how
+    // RouteResponse captures evidence for the main agent loop.
+    const emit = (branch: string, label: string): DecisionResult =>
+      decide(scope, [{ when: () => true, then: branch, label }], 'final');
+
     const parsed = scope.parsedResponse;
-    if (!parsed?.hasToolCalls || !parsed.toolCalls?.length) return 'final';
+    if (!parsed?.hasToolCalls || !parsed.toolCalls?.length) {
+      return emit('final', 'no tool calls — LLM produced a final answer');
+    }
 
     // Find the first specialist or extra tool call (first-match semantics)
     let matchedIndex = -1;
@@ -157,10 +173,18 @@ export function buildSwarmRouting(config: SwarmRoutingConfig): RoutingConfig {
     if (matchedIndex === -1) {
       const unknownNames = parsed.toolCalls.map((tc) => String(tc.name).slice(0, 50)).join(', ');
       scope.routingWarning = `Unknown tool(s): ${unknownNames}`;
-      return 'final';
+      return emit(
+        'final',
+        `no specialist or extra tool matched — unknown tool(s): ${unknownNames}`,
+      );
     }
 
-    return matchedBranch;
+    const matchedName = String(parsed.toolCalls[matchedIndex].name);
+    const label =
+      matchedBranch === 'swarm-tools'
+        ? `Extra tool '${matchedName}' matched — dispatching to swarm-tools`
+        : `Specialist '${matchedBranch}' selected — dispatching`;
+    return emit(matchedBranch, label);
   };
 
   // ── Branches ─────────────────────────────────────────────

@@ -96,8 +96,6 @@ const SUPPRESSED_KEYS = new Set([
   'updatedLoopCount',
   // Memory internals (memory subflow stages already narrate this)
   'memory_preparedMessages',
-  'memory_storedHistory',
-  'memory_shouldCommit',
   // adapterResult is redundant with parsedResponse
   'adapterResult',
   // adapterRawResponse is now shown — contains LLM reasoning + token usage

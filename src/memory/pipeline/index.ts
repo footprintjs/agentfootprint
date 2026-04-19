@@ -3,3 +3,5 @@ export { defaultPipeline } from './default';
 export type { DefaultPipelineConfig } from './default';
 export { ephemeralPipeline } from './ephemeral';
 export type { EphemeralPipelineConfig } from './ephemeral';
+export { narrativePipeline } from './narrative';
+export type { NarrativePipelineConfig } from './narrative';

@@ -21,6 +21,8 @@ import type { ToolRegistry } from '../../tools';
 import type { ToolProvider } from '../../core';
 import type { InstructionConfig } from './helpers';
 import type { ParsedResponse } from '../../scope/types';
+import type { AgentStreamEvent } from '../../streaming';
+import { STREAM_EMIT_PREFIX } from '../../streaming';
 import { executeToolCalls } from './helpers';
 
 // ── Subflow state ────────────────────────────────────────────
@@ -120,13 +122,29 @@ export function buildToolExecutionSubflow(config: ToolExecutionSubflowConfig): F
       ? {}
       : undefined;
 
+    // `helpers.executeToolCalls` takes an `onStreamEvent` callback in its
+    // instruction config for `tool_start` / `tool_end` lifecycle events.
+    // We construct that callback as a thin scope-emit wrapper so events
+    // flow through the same emit channel as everything else — zero
+    // closure capture of per-run handlers. `StreamEventRecorder`
+    // (attached by AgentRunner) consumes them and forwards to `onEvent`.
+    const emitAsScope = (event: AgentStreamEvent): void => {
+      scope.$emit(`${STREAM_EMIT_PREFIX}${event.type}`, event);
+    };
+    const effectiveInstructionConfig: InstructionConfig | undefined = instructionConfig
+      ? { ...instructionConfig, onStreamEvent: emitAsScope }
+      : {
+          instructionsByToolId: new Map(),
+          onStreamEvent: emitAsScope,
+        };
+
     const { messages: resultMessages, askHumanPause } = await executeToolCalls(
       parsed.toolCalls,
       registry,
       messages,
       toolProvider,
       signal,
-      instructionConfig,
+      effectiveInstructionConfig,
       decisionRef,
       {
         ...(parallel ? { parallel: true } : {}),

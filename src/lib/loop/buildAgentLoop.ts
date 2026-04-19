@@ -27,7 +27,7 @@
  *   - Chart is self-contained — no wrapping needed
  */
 
-import { flowChart } from 'footprintjs';
+import { flowChart, decide } from 'footprintjs';
 import { ArrayMergeMode } from 'footprintjs/advanced';
 import type { FlowChart } from 'footprintjs';
 import type { AgentLoopState } from '../../scope/types';
@@ -42,18 +42,13 @@ import { createCallLLMStage } from '../call/callLLMStage';
 import { createStreamingCallLLMStage } from '../call/streamingCallLLMStage';
 import { parseResponseStage } from '../call/parseResponseStage';
 import { buildToolExecutionSubflow } from '../call/toolExecutionSubflow';
-import { createCommitMemoryStage } from '../../stages/commitMemory';
 import { getTextContent } from '../../types/content';
 import { lastAssistantMessage } from '../../memory';
+import { mountMemoryRead, mountMemoryWrite } from '../../memory/wire/mountMemoryPipeline';
 import { AgentPattern } from './types';
 import type { AgentLoopConfig, AgentLoopSeedOptions, RoutingConfig } from './types';
 import { applyInstructionOverrides, buildInstructionsToLLMSubflow } from '../instructions';
-import type {
-  ResolvedFollowUp,
-  ResolvedInstruction,
-  LLMInstruction,
-  InstructedToolDefinition,
-} from '../instructions';
+import type { LLMInstruction, InstructedToolDefinition } from '../instructions';
 import type { RunnerLike } from '../../types/multiAgent';
 import { assistantMessage } from '../../types/messages';
 
@@ -64,20 +59,45 @@ import { assistantMessage } from '../../types/messages';
  *
  * Expressed as a RoutingConfig so buildAgentLoop has ONE code path
  * for both Agent and Swarm routing.
+ *
+ * The `final` branch is a SUBFLOW that owns its own post-work:
+ * Finalize → (optional commit / memory-write) → Break. This keeps
+ * branch-specific work inside the branch — no post-decider trailing
+ * stages gated on flags. Tool-calls is a separate branch with its own
+ * subflow.
  */
 function defaultAgentRouting(
   toolExecutionSubflow: FlowChart,
-  useCommitFlag: boolean,
+  finalBranchSubflow: FlowChart,
 ): RoutingConfig {
   return {
     deciderName: 'RouteResponse',
     deciderId: 'route-response',
     deciderDescription: 'Route to tool execution or finalization based on LLM response',
-    decider: (scope: any) => {
-      const parsed = scope.parsedResponse;
-      if (parsed?.hasToolCalls) return 'tool-calls';
-      return 'final';
-    },
+    // Filter-form decide() — captures structured evidence
+    // `{ key: 'hasToolCalls', op: 'eq', threshold: true, actual: ..., result: ... }`
+    // on FlowRecorder.onDecision (and the commit log's decision record),
+    // which is what explainability consumers query post-hoc.
+    //
+    // ParseResponse lifts `parsedResponse.hasToolCalls` to the flat
+    // `scope.hasToolCalls` field so we can use filter form — v1 filter
+    // DSL is flat-keys-only, no nested access.
+    //
+    // Returns the full DecisionResult (NOT `.branch`): DeciderHandler
+    // recognizes the DECISION_RESULT symbol brand and extracts evidence.
+    // Returning a bare string would drop the evidence entirely.
+    decider: (scope: any) =>
+      decide(
+        scope,
+        [
+          {
+            when: { hasToolCalls: { eq: true } },
+            then: 'tool-calls',
+            label: 'LLM requested tool calls — execute them',
+          },
+        ],
+        'final',
+      ),
     branches: [
       {
         id: 'tool-calls',
@@ -101,15 +121,108 @@ function defaultAgentRouting(
       },
       {
         id: 'final',
-        kind: 'fn',
-        fn: createFinalizeStage({ useCommitFlag }),
-        description: 'Extract final answer and stop the loop',
+        kind: 'subflow',
+        chart: finalBranchSubflow,
         name: 'Finalize',
+        mount: {
+          inputMapper: (parent: Record<string, unknown>) => ({
+            messages: parent.messages,
+            maxIterations: parent.maxIterations,
+            maxIterationsReached: parent.maxIterationsReached,
+            identity: parent.identity,
+            turnNumber: parent.turnNumber,
+            contextTokensRemaining: parent.contextTokensRemaining,
+          }),
+          outputMapper: (sf: Record<string, unknown>) => ({
+            result: sf.result,
+          }),
+          // Inner Break at end of subflow → parent $break, ending the loop.
+          propagateBreak: true,
+        },
       },
     ],
     defaultBranch: 'final',
   };
 }
+
+/**
+ * Build the `final` branch subflow. This subflow runs exclusively on
+ * the final branch — tool-calls iterations never enter it — so its
+ * stages run only once per `.run()` and are unconditional. Structure:
+ *
+ *   Finalize → [PackageForWrite + sf-memory-write]? → Break
+ *
+ * Finalize writes `result`. The optional middle stages persist the turn
+ * when `memoryPipeline.write` is configured. Break terminates the loop;
+ * the subflow mount's `propagateBreak: true` lifts it into the parent.
+ */
+function buildFinalBranchSubflow(config: AgentLoopConfig): FlowChart {
+  let b = flowChart<AgentLoopState>(
+    'Finalize',
+    finalizeStage,
+    'finalize',
+    undefined,
+    'Extract final answer from last assistant message',
+  );
+
+  if (config.memoryPipeline?.write) {
+    b = b.addFunction(
+      'PackageForWrite',
+      (scope: TypedScope<AgentLoopState>) => {
+        const msgs = scope.messages ?? [];
+        scope.newMessages = msgs.filter((m) => m.role !== 'system');
+      },
+      'package-for-write',
+      'Package messages for the memory write subflow',
+    );
+    // Delegates to the `mountMemoryWrite` wire helper — defaults match
+    // the scope field names used above (identity/turnNumber/contextTokensRemaining/newMessages).
+    b = mountMemoryWrite(b, { pipeline: config.memoryPipeline });
+  }
+
+  b = b.addFunction(
+    'Break',
+    (scope: TypedScope<AgentLoopState>) => scope.$break(),
+    'break',
+    'Terminate the agent loop',
+  );
+
+  return b.build();
+}
+
+/**
+ * Finalize stage — write the final answer into scope.result.
+ *
+ * Pure data work: extracts text from the last assistant message and
+ * writes `result`. No loop control — the final-branch subflow's Break
+ * stage owns termination.
+ *
+ * Also emits `agentfootprint.agent.turn_complete` on the emit channel,
+ * mirroring the existing `agentfootprint.llm.request/response` events
+ * emitted by CallLLM. Gives external consumers a structured turn-end
+ * signal with the reason (natural vs forced) and iteration count.
+ */
+const finalizeStage = (scope: TypedScope<AgentLoopState>) => {
+  const messages = scope.messages ?? [];
+  const lastAsst = lastAssistantMessage(messages);
+  const lastAsstText = lastAsst ? getTextContent(lastAsst.content) : '';
+
+  const exhausted = scope.maxIterationsReached === true;
+  if (exhausted) {
+    const maxIter = scope.maxIterations ?? 10;
+    scope.result =
+      lastAsstText ||
+      `Agent stopped after ${maxIter} iterations without a final answer. The LLM may be stuck in a tool-error retry loop — check the execution trace.`;
+  } else {
+    scope.result = lastAsstText;
+  }
+
+  scope.$emit('agentfootprint.agent.turn_complete', {
+    iterations: scope.loopCount ?? 0,
+    reason: exhausted ? 'max_iterations' : 'final',
+    resultLength: (scope.result ?? '').length,
+  });
+};
 
 /**
  * Well-known scope key for the user message in subflow mode.
@@ -131,15 +244,8 @@ export const SUBFLOW_MESSAGE_KEY = 'message';
  * await executor.run();
  * ```
  */
-export interface StrictFollowUpResult {
-  followUp: ResolvedFollowUp;
-  sourceToolId: string;
-}
-
 export interface AgentLoopBuild {
   chart: FlowChart;
-  /** Get strict follow-up that fired during the last execution (if any). */
-  getStrictFollowUp: () => StrictFollowUpResult | undefined;
 }
 
 export interface AgentLoopResult extends AgentLoopBuild {
@@ -166,10 +272,6 @@ export function buildAgentLoop(
   const seedMessages = seed?.messages ?? [];
   const existingMessages = seed?.existingMessages ?? [];
   const subflowMode = seed?.subflowMode ?? false;
-
-  // Auto-enable useCommitFlag when either memory path needs post-Finalize work.
-  const useCommitFlag =
-    config.useCommitFlag || !!config.commitMemory || !!config.memoryPipeline?.write;
 
   // Build slot subflows
   const systemPromptSubflow = buildSystemPromptSubflow(config.systemPrompt);
@@ -211,34 +313,22 @@ export function buildAgentLoop(
     }
   }
 
-  // Capture strict follow-ups that fire during tool execution.
-  // Stored in a closure variable — AgentRunner reads it after run() completes.
-  let lastStrictFollowUp: ResolvedFollowUp | undefined;
-  let lastStrictSourceToolId: string | undefined;
+  // Strict follow-up tracking is now OWNED BY THE CALLER. buildAgentLoop
+  // doesn't buffer state between runs — consumers (AgentRunner) implement
+  // `config.onInstructionsFired` to track strict firings in their own
+  // per-run state. This lets the chart be built ONCE and reused across
+  // many `.run()` calls without state leaking between turns.
+  const onInstructionsFired = config.onInstructionsFired;
 
-  const onInstructionsFired = (toolId: string, fired: ResolvedInstruction[]) => {
-    // Find the first strict follow-up that fired (highest priority wins)
-    if (!lastStrictFollowUp) {
-      for (const instr of fired) {
-        if (instr.resolvedFollowUp?.strict) {
-          lastStrictFollowUp = instr.resolvedFollowUp;
-          lastStrictSourceToolId = toolId;
-          break;
-        }
-      }
-    }
-    // Forward to external callback (InstructionRecorder)
-    config.onInstructionsFired?.(toolId, fired);
-  };
-
-  // Build call stages — pass onStreamEvent + responseFormat for llm_start/llm_end events
+  // Build call stages. Stream lifecycle events flow through the emit
+  // channel (see callLLMStage / streamingCallLLMStage) — no closure
+  // capture of per-run stream handlers. AgentRunner attaches a
+  // StreamEventRecorder per-run to forward emits to the user callback.
   const callLLM = config.streaming
     ? createStreamingCallLLMStage(config.provider, {
-        onStreamEvent: config.onStreamEvent,
         responseFormat: config.responseFormat,
       })
     : createCallLLMStage(config.provider, {
-        onStreamEvent: config.onStreamEvent,
         responseFormat: config.responseFormat,
       });
   const toolExecutionSubflow = buildToolExecutionSubflow({
@@ -249,7 +339,9 @@ export function buildAgentLoop(
       maxIdenticalFailures: config.maxIdenticalFailures,
     }),
     // Always pass instruction config — even without build-time instructions,
-    // tool handlers can return runtime instructions/followUps.
+    // tool handlers can return runtime instructions/followUps. The
+    // `onStreamEvent` inside is populated by toolExecutionSubflow's own
+    // stage wrapper as a scope-emit adapter.
     instructionConfig: {
       instructionsByToolId,
       onInstructionsFired,
@@ -257,16 +349,40 @@ export function buildAgentLoop(
       agentResponseRules: hasAgentInstructions
         ? config.agentInstructions!.flatMap((i) => i.onToolResult ?? [])
         : undefined,
-      onStreamEvent: config.onStreamEvent,
     },
   });
 
   // Two distinct Seed stage implementations — no runtime boolean.
   // The flowchart is built differently for standalone vs subflow composition.
+  //
+  // Per-run data (the user's message, accumulated conversation history)
+  // flows in through `scope.$getArgs()` — NOT through closure captures of
+  // `seedMessages` / `existingMessages`. This lets AgentRunner build the
+  // chart ONCE at construction and pass new inputs via `run({ input })`
+  // every turn, instead of rebuilding the whole chart per call.
+  //
+  // Back-compat: if `seed.messages` / `seed.existingMessages` are
+  // provided AND args don't override, the closure values are still used
+  // so existing single-shot tests keep working.
   const initialDecision = config.initialDecision ?? {};
 
   const seedStandalone = (scope: TypedScope<AgentLoopState>) => {
-    scope.messages = [...existingMessages, ...seedMessages];
+    const args = scope.$getArgs<Record<string, unknown>>() ?? {};
+    const argUserMessage = args['seed:userMessage'] as string | undefined;
+    const argExisting = args['seed:existingMessages'] as Message[] | undefined;
+    const argMessages = args['seed:messages'] as Message[] | undefined;
+
+    const effectiveExisting = argExisting ?? existingMessages;
+    const effectiveIncoming =
+      argMessages !== undefined
+        ? argMessages
+        : argUserMessage !== undefined
+        ? argUserMessage
+          ? [userMessage(argUserMessage)]
+          : []
+        : seedMessages;
+
+    scope.messages = [...effectiveExisting, ...effectiveIncoming];
     scope.loopCount = 0;
     scope.maxIterations = maxIterations;
     if (hasAgentInstructions) {
@@ -275,6 +391,9 @@ export function buildAgentLoop(
   };
 
   const seedSubflow = (scope: TypedScope<AgentLoopState>) => {
+    // In subflow mode the parent's inputMapper pipes the user turn
+    // through `scope.message` — that's the contract for mounting agent
+    // loops inside other flowcharts (FlowChart/Conditional/Swarm specs).
     const msg = scope.message ?? '';
     scope.messages = msg ? [userMessage(msg)] : [];
     scope.loopCount = 0;
@@ -293,6 +412,53 @@ export function buildAgentLoop(
     undefined,
     'Initialize agent loop state',
   );
+
+  // ── Memory pipeline: read-side mount ────────────────────────
+  //
+  // Mounted BEFORE the loop body so both Regular (`call-llm`) and
+  // Dynamic (`sf-system-prompt` / `sf-instructions-to-llm`) loop targets
+  // skip over it on re-entry. Memory context is a per-TURN concern —
+  // the store doesn't change mid-turn, so re-reading on every iteration
+  // is pure waste. Runs exactly once per `.run()`.
+  //
+  // A small MemorySeed stage runs first to copy identity / turnNumber /
+  // contextTokensRemaining from `scope.$getArgs()` into scope state.
+  // The subflow itself reads from parent scope via inputMapper, loads
+  // relevant entries from the store, picks what fits the budget, and
+  // writes `memoryInjection` (system messages) back for AssemblePrompt
+  // to prepend.
+  if (config.memoryPipeline) {
+    const memoryPipeline = config.memoryPipeline;
+
+    builder = builder.addFunction(
+      'MemorySeed',
+      (scope: TypedScope<AgentLoopState>) => {
+        const args = scope.$getArgs<Record<string, unknown>>() ?? {};
+        const identity = args['memory:identity'] as AgentLoopState['identity'] | undefined;
+        const turnNumber = args['memory:turnNumber'] as number | undefined;
+        const budget = args['memory:contextTokensRemaining'] as number | undefined;
+
+        if (!identity && isDevMode()) {
+          console.warn(
+            '[agentfootprint] .memoryPipeline() used without identity — falling back to ' +
+              '{ conversationId: "default" }. Pass `run(msg, { identity: { conversationId, ... } })` ' +
+              'to scope memory per user / session.',
+          );
+        }
+        scope.identity = identity ?? { conversationId: 'default' };
+        scope.turnNumber = turnNumber ?? 1;
+        scope.contextTokensRemaining = budget ?? 4000;
+      },
+      'memory-seed',
+      'Seed memory identity / turn / budget from run() args',
+    );
+
+    // Delegates to the `mountMemoryRead` wire helper — defaults match
+    // what we'd inline (identity/turnNumber/contextTokensRemaining/newMessages →
+    // sf-memory-read, outputs `memoryInjection`). Keeps the helper and
+    // the agent loop in lockstep and avoids maintaining two copies.
+    builder = mountMemoryRead(builder, { pipeline: memoryPipeline });
+  }
 
   // Mount InstructionsToLLM subflow BEFORE the 3 API slots (only when instructions registered)
   if (hasAgentInstructions) {
@@ -338,7 +504,6 @@ export function buildAgentLoop(
     outputMapper: (sfOutput: Record<string, unknown>) => ({
       messages: sfOutput.memory_preparedMessages,
       memory_preparedMessages: sfOutput.memory_preparedMessages,
-      memory_storedHistory: sfOutput.memory_storedHistory,
     }),
     arrayMerge: ArrayMergeMode.Replace,
   });
@@ -356,59 +521,6 @@ export function buildAgentLoop(
     }),
     arrayMerge: ArrayMergeMode.Replace,
   });
-
-  // ── Memory pipeline: read-side mount ────────────────────────
-  //
-  // When a MemoryPipeline is attached (via `Agent.memoryPipeline()`), mount
-  // its read subflow AFTER slot resolution and BEFORE AssemblePrompt. The
-  // subflow reads identity + turnNumber + budget from parent scope, loads
-  // relevant memory from the store, picks entries that fit the budget, and
-  // writes a `memoryInjection` array of system messages back to parent scope.
-  // AssemblePrompt then prepends those to `messages` alongside the system
-  // prompt — the LLM sees memory context before the user's current turn.
-  //
-  // A small MemorySeed stage runs first to copy identity / turnNumber /
-  // contextTokensRemaining from `scope.$getArgs()` into scope state. This
-  // keeps the pipeline subflows isolated from args-reading concerns.
-  if (config.memoryPipeline) {
-    const memoryPipeline = config.memoryPipeline;
-
-    builder = builder.addFunction(
-      'MemorySeed',
-      (scope: TypedScope<AgentLoopState>) => {
-        // Read from `memory:*` namespaced args keys (set by AgentRunner.run).
-        // Using a namespace keeps args keys distinct from scope keys —
-        // args are readonly at runtime, so reusing the same names would
-        // lock writes to scope.identity etc. here.
-        const args = scope.$getArgs<Record<string, unknown>>() ?? {};
-        const identity = args['memory:identity'] as AgentLoopState['identity'] | undefined;
-        const turnNumber = args['memory:turnNumber'] as number | undefined;
-        const budget = args['memory:contextTokensRemaining'] as number | undefined;
-
-        // Identity falls back to a single-conversation default so a
-        // pipelinified agent still works for the common "one user, one
-        // session" case without the caller plumbing identity explicitly.
-        scope.identity = identity ?? { conversationId: 'default' };
-        scope.turnNumber = turnNumber ?? 1;
-        scope.contextTokensRemaining = budget ?? 4000;
-      },
-      'memory-seed',
-      'Seed memory identity / turn / budget from run() args',
-    );
-
-    // Read subflow mount — produces `memoryInjection` on parent scope.
-    builder = builder.addSubFlowChartNext('sf-memory-read', memoryPipeline.read, 'Load Memory', {
-      inputMapper: (parent: Record<string, unknown>) => ({
-        identity: parent.identity,
-        turnNumber: parent.turnNumber,
-        contextTokensRemaining: parent.contextTokensRemaining,
-        newMessages: [],
-      }),
-      outputMapper: (sfOutput: Record<string, unknown>) => ({
-        memoryInjection: sfOutput.formatted,
-      }),
-    });
-  }
 
   const assemblePromptStage = (scope: TypedScope<AgentLoopState>) => {
     const messages = scope.messages ?? [];
@@ -465,14 +577,15 @@ export function buildAgentLoop(
 
   // ── Routing — one code path for both Agent and Swarm ──
   // Priority: explicit config.routing (Swarm) > routeExtensions (user .route()) > default
+  const finalBranchSubflow = buildFinalBranchSubflow(config);
   const routing: RoutingConfig = config.routing
     ? config.routing
     : config.routeExtensions && config.routeExtensions.length > 0
     ? extendDefaultRouting(
-        defaultAgentRouting(toolExecutionSubflow, useCommitFlag),
+        defaultAgentRouting(toolExecutionSubflow, finalBranchSubflow),
         config.routeExtensions,
       )
-    : defaultAgentRouting(toolExecutionSubflow, useCommitFlag);
+    : defaultAgentRouting(toolExecutionSubflow, finalBranchSubflow);
 
   // Validate branches
   if (routing.branches.length === 0) {
@@ -490,35 +603,16 @@ export function buildAgentLoop(
     );
   }
 
-  // Wrap decider with structural maxIterations guard — no custom routing can bypass this.
-  // If loopCount >= maxIterations, force-route to defaultBranch and set the
-  // `maxIterationsReached` flag on scope so ANY default-branch stage (Finalize,
-  // Swarm's RouteSpecialist fallback, user-supplied terminal stage, …) can
-  // surface the fact that this was a forced termination rather than a chosen
-  // one. Setting the flag here — rather than inside a specific Finalize stage —
-  // makes the signal available for every routing topology built on top of
-  // buildAgentLoop.
-  //
-  // The defaultBranch MUST call $break() or breakFn() — validated below.
+  // Wrap decider with structural maxIterations guard — no custom routing
+  // can bypass this. If loopCount >= maxIterations, force-route to the
+  // defaultBranch and set `maxIterationsReached` so the default branch
+  // (Finalize, Swarm's fallback, user-supplied terminal, etc.) can
+  // surface the fact that this was a forced termination.
   const safeDecider: RoutingConfig['decider'] = (scope: any, breakFn, streamCb) => {
     const loopCount = scope.loopCount ?? 0;
     const maxIter = scope.maxIterations ?? 10;
     if (loopCount >= maxIter) {
-      // Deciders can write to scope — the write is committed with the decider
-      // stage's transaction. For TypedScope, property assignment goes through
-      // the Proxy set trap; for raw ScopeFacade, fall back to setValue if the
-      // property assignment is rejected.
-      try {
-        scope.maxIterationsReached = true;
-      } catch {
-        if (typeof scope.setValue === 'function') {
-          try {
-            scope.setValue('maxIterationsReached', true);
-          } catch {
-            /* unable to record — consumers must read loopCount vs maxIterations */
-          }
-        }
-      }
+      scope.maxIterationsReached = true;
       return routing.defaultBranch;
     }
     return routing.decider(scope, breakFn, streamCb);
@@ -562,64 +656,9 @@ export function buildAgentLoop(
 
   builder = decider.setDefault(routing.defaultBranch).end();
 
-  // Mount CommitMemory when legacy persistent memory is configured.
-  // CommitMemory saves full history to store (fire-and-forget) and calls $break().
-  if (config.commitMemory) {
-    const commitMemory = createCommitMemoryStage(config.commitMemory);
-    builder = builder.addFunction(
-      'CommitMemory',
-      commitMemory,
-      'commit-memory',
-      'Persist conversation history to store',
-    );
-  }
-
-  // ── Memory pipeline: write-side mount ───────────────────────
-  //
-  // When a MemoryPipeline.write is present (legacy commitMemory takes
-  // precedence if both somehow set — which the builder guards against),
-  // mount the write subflow at the loop terminus. A PackageForWrite
-  // stage first copies the final messages from scope into `newMessages`
-  // so the subflow sees them in the expected field.
-  if (config.memoryPipeline?.write && !config.commitMemory) {
-    builder = builder.addFunction(
-      'PackageForWrite',
-      (scope: TypedScope<AgentLoopState>) => {
-        // New messages are everything beyond the original seed history.
-        // For the first turn with no history, that's all non-system msgs.
-        // Simpler: persist the user turn + assistant turn appended this run.
-        const msgs = scope.messages ?? [];
-        scope.newMessages = msgs.filter((m) => m.role !== 'system');
-      },
-      'package-for-write',
-      'Package messages for the memory write subflow',
-    );
-
-    builder = builder.addSubFlowChartNext(
-      'sf-memory-write',
-      config.memoryPipeline.write,
-      'Save Memory',
-      {
-        inputMapper: (parent: Record<string, unknown>) => ({
-          identity: parent.identity,
-          turnNumber: parent.turnNumber,
-          contextTokensRemaining: parent.contextTokensRemaining ?? 0,
-          newMessages: parent.newMessages ?? [],
-        }),
-        // No outputMapper — write subflow has no parent-visible output.
-      },
-    );
-
-    // Terminate the flow so loopTo below does not cycle back endlessly.
-    builder = builder.addFunction(
-      'BreakAfterSave',
-      (scope: TypedScope<AgentLoopState>) => {
-        scope.$break();
-      },
-      'break-after-save',
-      'Break after memory save (pipeline path)',
-    );
-  }
+  // No post-decider memory stages: the final branch subflow owns
+  // finalize + commit/memory-write + break. Tool-calls branch falls
+  // through to loopTo below and iterates cleanly.
 
   // Loop target depends on pattern:
   //   Regular (default): loop to CallLLM — slots resolve once
@@ -629,17 +668,11 @@ export function buildAgentLoop(
   const loopTarget = config.pattern === AgentPattern.Dynamic ? dynamicTarget : 'call-llm';
   builder = builder.loopTo(loopTarget);
 
-  /** Get strict follow-up that fired during the last execution (if any). */
-  const getStrictFollowUp = () =>
-    lastStrictFollowUp
-      ? { followUp: lastStrictFollowUp, sourceToolId: lastStrictSourceToolId! }
-      : undefined;
-
   if (options?.captureSpec) {
     const spec = builder.toSpec();
-    return { chart: builder.build(), spec, getStrictFollowUp };
+    return { chart: builder.build(), spec };
   }
-  return { chart: builder.build(), getStrictFollowUp };
+  return { chart: builder.build() };
 }
 
 /**
@@ -686,8 +719,17 @@ function extendDefaultRouting(
           if (extensions[i].when(scope)) {
             return userBranches[i].id;
           }
-        } catch {
+        } catch (err) {
           // Predicate errors fall through to base routing (fail-open).
+          // Warn in dev so the silent skip is visible — matches the
+          // library-wide "silent skips must surface in dev" rule.
+          if (isDevMode()) {
+            console.warn(
+              `[agentfootprint] .route() branch '${userBranches[i].id}' predicate threw — ` +
+                `falling through to default routing.`,
+              err,
+            );
+          }
         }
       }
       return base.decider(scope, breakFn, streamCb);
@@ -730,45 +772,6 @@ function createRouteExtensionStage(runner: RunnerLike) {
     scope.messages = [...messages, assistantMessage(content)];
     scope.result = content;
     scope.$break();
-  };
-}
-
-/**
- * Create the Finalize stage function (decider 'final' branch).
- *
- * Extracts the final answer text from the last assistant message and stops
- * the loop. When useCommitFlag is set, writes memory_shouldCommit instead
- * of calling $break() directly — the downstream CommitMemory stage will break.
- */
-function createFinalizeStage(options: { useCommitFlag: boolean }) {
-  const { useCommitFlag } = options;
-  return (scope: TypedScope<AgentLoopState>) => {
-    const messages = scope.messages ?? [];
-    const lastAsst = lastAssistantMessage(messages);
-    const lastAsstText = lastAsst ? getTextContent(lastAsst.content) : '';
-
-    // safeDecider sets `maxIterationsReached` when it force-routes at the cap.
-    // Read it here — don't re-derive from loopCount — so this stage agrees
-    // with whatever safeDecider decided (single source of truth).
-    const exhausted = scope.maxIterationsReached === true;
-
-    if (exhausted) {
-      const maxIter = scope.maxIterations ?? 10;
-      // Prefer the LLM's last reasoning text if present — otherwise synthesize
-      // a clear "agent gave up" message so callers never see an unexplained
-      // empty response after a long tool-error loop.
-      scope.result =
-        lastAsstText ||
-        `Agent stopped after ${maxIter} iterations without a final answer. The LLM may be stuck in a tool-error retry loop — check the execution trace.`;
-    } else {
-      scope.result = lastAsstText;
-    }
-
-    if (useCommitFlag) {
-      scope.memory_shouldCommit = true;
-    } else {
-      scope.$break();
-    }
   };
 }
 

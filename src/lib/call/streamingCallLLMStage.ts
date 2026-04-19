@@ -18,28 +18,23 @@ import type {
   ResponseFormat,
   ToolCall,
 } from '../../types';
-import type { AgentStreamEventHandler } from '../../streaming';
+import { STREAM_EMIT_PREFIX } from '../../streaming';
 import { normalizeAdapterResponse } from './helpers';
 
 export interface StreamingCallLLMStageOptions {
-  onStreamEvent?: AgentStreamEventHandler;
   responseFormat?: ResponseFormat;
 }
 
 /**
- * Create a streaming-capable CallLLM stage function.
+ * Create a streaming-capable CallLLM stage function. Stream lifecycle
+ * events (`llm_start`, `token`, `thinking`, `llm_end`) flow through
+ * the emit channel — see `StreamEventRecorder` for the plumbing.
  */
 export function createStreamingCallLLMStage(
   provider: LLMProvider,
-  optionsOrHandler?: StreamingCallLLMStageOptions | AgentStreamEventHandler,
+  options?: StreamingCallLLMStageOptions,
 ) {
-  // Backward compat: accept bare handler or options object
-  const stageOpts: StreamingCallLLMStageOptions =
-    typeof optionsOrHandler === 'function'
-      ? { onStreamEvent: optionsOrHandler }
-      : optionsOrHandler ?? {};
-
-  const { onStreamEvent, responseFormat } = stageOpts;
+  const responseFormat = options?.responseFormat;
 
   return async (
     scope: TypedScope<AgentLoopState>,
@@ -49,7 +44,7 @@ export function createStreamingCallLLMStage(
     const messages = scope.messages ?? [];
     const tools = scope.toolDescriptions ?? [];
     const signal = scope.$getEnv?.()?.signal;
-    const options: LLMCallOptions = {
+    const callOpts: LLMCallOptions = {
       ...(tools.length > 0 ? { tools } : {}),
       ...(signal ? { signal } : {}),
       ...(responseFormat ? { responseFormat } : {}),
@@ -57,7 +52,7 @@ export function createStreamingCallLLMStage(
     const iteration = (scope.loopCount ?? 0) + 1;
     const startMs = Date.now();
 
-    onStreamEvent?.({ type: 'llm_start', iteration });
+    scope.$emit(`${STREAM_EMIT_PREFIX}llm_start`, { type: 'llm_start', iteration });
 
     // ── Emit: request-side ─────────────────────────────────────────────
     // Mirror of callLLMStage.ts — surface the EXACT shape being sent so
@@ -87,14 +82,16 @@ export function createStreamingCallLLMStage(
 
       for await (const chunk of provider.chatStream(
         messages,
-        Object.keys(options).length > 0 ? options : undefined,
+        Object.keys(callOpts).length > 0 ? callOpts : undefined,
       )) {
         switch (chunk.type) {
           case 'thinking':
             if (chunk.content) {
               thinkingParts.push(chunk.content);
-              // Emit as AgentStreamEvent.thinking (not as token)
-              onStreamEvent?.({ type: 'thinking', content: chunk.content });
+              scope.$emit(`${STREAM_EMIT_PREFIX}thinking`, {
+                type: 'thinking',
+                content: chunk.content,
+              });
             }
             break;
           case 'token':
@@ -130,6 +127,7 @@ export function createStreamingCallLLMStage(
 
       scope.adapterRawResponse = response;
       scope.adapterResult = normalizeAdapterResponse(response);
+      const latencyMs = Date.now() - startMs;
 
       scope.$emit('agentfootprint.llm.response', {
         iteration,
@@ -141,24 +139,25 @@ export function createStreamingCallLLMStage(
           name: tc.name,
           arguments: tc.arguments,
         })),
-        latencyMs: Date.now() - startMs,
+        latencyMs,
       });
 
-      onStreamEvent?.({
+      scope.$emit(`${STREAM_EMIT_PREFIX}llm_end`, {
         type: 'llm_end',
         iteration,
         toolCallCount: toolCalls.length,
         content,
         model: response.model,
-        latencyMs: Date.now() - startMs,
+        latencyMs,
       });
       return;
     }
 
     // Fallback: non-streaming chat()
-    const response = await provider.chat(messages, options);
+    const response = await provider.chat(messages, callOpts);
     scope.adapterRawResponse = response;
     scope.adapterResult = normalizeAdapterResponse(response);
+    const latencyMs = Date.now() - startMs;
 
     scope.$emit('agentfootprint.llm.response', {
       iteration,
@@ -170,16 +169,16 @@ export function createStreamingCallLLMStage(
         name: tc.name,
         arguments: tc.arguments,
       })),
-      latencyMs: Date.now() - startMs,
+      latencyMs,
     });
 
-    onStreamEvent?.({
+    scope.$emit(`${STREAM_EMIT_PREFIX}llm_end`, {
       type: 'llm_end',
       iteration,
       toolCallCount: response.toolCalls?.length ?? 0,
       content: response.content,
       model: response.model,
-      latencyMs: Date.now() - startMs,
+      latencyMs,
     });
   };
 }

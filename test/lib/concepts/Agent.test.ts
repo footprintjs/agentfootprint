@@ -12,7 +12,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { Agent } from '../../../src/lib/concepts/Agent';
 import { defineTool } from '../../../src/tools/ToolRegistry';
-import { InMemoryStore } from '../../../src/adapters/memory/inMemory';
 import type { LLMProvider, LLMResponse, Message, ToolCall } from '../../../src/types';
 
 // ── Helpers ──────────────────────────────────────────────────
@@ -285,112 +284,9 @@ describe('Agent — property', () => {
   });
 });
 
-// ── Memory Tests ────────────────────────────────────────────
-
-describe('Agent — memory', () => {
-  it('memory() method is chainable', () => {
-    const store = new InMemoryStore();
-    const agent = Agent.create({
-      provider: mockProvider([{ content: 'ok' }]),
-    })
-      .system('test')
-      .memory({ store, conversationId: 'conv-1' })
-      .build();
-
-    expect(agent).toBeDefined();
-  });
-
-  it('memory persists conversation across runs', async () => {
-    const store = new InMemoryStore();
-    let callCount = 0;
-    const provider: LLMProvider = {
-      chat: vi.fn(async (msgs: Message[]) => {
-        callCount++;
-        if (callCount === 1) return { content: 'First response.' };
-        const hasHistory = msgs.some(
-          (m) => m.role === 'assistant' && m.content === 'First response.',
-        );
-        return { content: hasHistory ? 'I remember!' : 'No history.' };
-      }),
-    };
-
-    // First agent instance — run turn 1
-    const agent1 = Agent.create({ provider }).memory({ store, conversationId: 'conv-1' }).build();
-
-    await agent1.run('hello');
-
-    // Second agent instance — new agent, same store + conversationId
-    const agent2 = Agent.create({ provider }).memory({ store, conversationId: 'conv-1' }).build();
-
-    const result = await agent2.run('do you remember?');
-    expect(result.content).toBe('I remember!');
-  });
-
-  it('memory store receives full conversation on save', async () => {
-    const store = new InMemoryStore();
-    const agent = Agent.create({
-      provider: mockProvider([{ content: 'answer' }]),
-    })
-      .memory({ store, conversationId: 'conv-1' })
-      .build();
-
-    await agent.run('question');
-
-    // Store should have the conversation
-    const stored = store.load('conv-1');
-    expect(stored.length).toBeGreaterThan(0);
-    expect(stored.some((m: Message) => m.role === 'user')).toBe(true);
-    expect(stored.some((m: Message) => m.role === 'assistant')).toBe(true);
-  });
-
-  it('memory with different conversationId creates separate histories', async () => {
-    const store = new InMemoryStore();
-
-    const agent1 = Agent.create({
-      provider: mockProvider([{ content: 'response for conv-1' }]),
-    })
-      .memory({ store, conversationId: 'conv-1' })
-      .build();
-
-    const agent2 = Agent.create({
-      provider: mockProvider([{ content: 'response for conv-2' }]),
-    })
-      .memory({ store, conversationId: 'conv-2' })
-      .build();
-
-    await agent1.run('msg1');
-    await agent2.run('msg2');
-
-    const history1 = store.load('conv-1');
-    const history2 = store.load('conv-2');
-    expect(history1.length).toBeGreaterThan(0);
-    expect(history2.length).toBeGreaterThan(0);
-    expect(history1).not.toEqual(history2);
-  });
-
-  it('agent without memory does not persist to store', async () => {
-    const agent = Agent.create({
-      provider: mockProvider([{ content: 'ok' }]),
-    }).build();
-
-    await agent.run('hello');
-    // No store involved — just verifying no errors
-    expect(agent.getMessages().length).toBeGreaterThan(0);
-  });
-
-  it('toFlowChart with memory includes commit-memory stage', () => {
-    const store = new InMemoryStore();
-    const agent = Agent.create({
-      provider: mockProvider([{ content: 'ok' }]),
-    })
-      .memory({ store, conversationId: 'conv-1' })
-      .build();
-
-    const chart = agent.toFlowChart();
-    const stageIds = Array.from(chart.stageMap.keys());
-    expect(stageIds).toContain('commit-memory');
-  });
-});
+// Legacy `.memory()` API was retired — memory behavior is now covered
+// end-to-end by `test/integration/memoryPipeline.test.ts` which
+// exercises the canonical `.memoryPipeline()` path.
 
 // ── Security Tests ──────────────────────────────────────────
 

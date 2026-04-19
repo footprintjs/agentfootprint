@@ -7,6 +7,118 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.12.0] — BREAKING
+
+### Added
+
+- **Narrative memory** (`agentfootprint/memory`). A new memory strategy
+  that compresses each turn into `NarrativeBeat`s on write and recalls
+  them as a single cohesive paragraph on read — instead of storing
+  raw messages.
+  - `NarrativeBeat` type: `{ summary, importance, refs, category? }`
+    — every beat carries `refs[]` traceable back to source messages
+    for explainability / audit.
+  - `BeatExtractor` interface with two built-in implementations:
+    - `heuristicExtractor()` — zero-dep, zero-cost baseline.
+    - `llmExtractor({ provider, systemPrompt?, onParseError? })` —
+      one LLM call per turn, produces semantically rich beats. Robust
+      JSON parsing; malformed responses skipped without crashing turns.
+  - `extractBeats(config)` + `writeBeats(config)` write-side stages.
+  - `formatAsNarrative(config)` read-side stage — composes selected
+    beats into a single paragraph (vs `formatDefault`'s per-entry blocks).
+  - `narrativePipeline({ store, extractor?, ... })` preset — drop-in
+    replacement for `defaultPipeline` with beat-based memory.
+  - **Differentiator**: no other open-source agent framework provides
+    beat-level traceability for recalled memory.
+  - 77 new 5-pattern tests + 4-scenario acceptance test.
+  - `/guides/narrative-memory` docs.
+
+### Removed (hard break — pre-GA, no deprecation cycle)
+
+- **`Agent.memory(config: MemoryConfig)`** builder method.
+  Superseded by `.memoryPipeline(pipeline)` which landed in 1.11.0.
+- **`MemoryConfig` / `ConversationStore`** interfaces and the legacy
+  `InMemoryStore` adapter from `src/adapters/memory/`. The canonical
+  store interface is now `MemoryStore` in `agentfootprint/memory`.
+- **`createCommitMemoryStage` / `CommitMemoryConfig`** —
+  `CommitMemory` stage retired; the memory pipeline's write subflow
+  lives inside the `final` branch subflow and is composed via
+  `mountMemoryWrite`.
+- **`createPrepareMemorySubflow` / `PrepareMemoryConfig`** —
+  absorbed into the memory pipeline's read subflow.
+- **`persistentHistory()` message strategy + its bundled `InMemoryStore`** —
+  message strategies now focus on in-context reshaping (sliding
+  window, char budget, summary). Durable persistence lives in the
+  memory pipeline.
+- **`MessagesSlotConfig.store` / `.conversationId`** fields — the
+  Messages slot is now strategy-only. Durable persistence is owned by
+  the memory pipeline.
+- **`AgentLoopConfig.commitMemory` / `.useCommitFlag` / `.onStreamEvent`**.
+  Memory wiring flows via `memoryPipeline`. Stream events route
+  through the emit channel — attach an onEvent callback via
+  `agent.run(msg, { onEvent })`.
+- **`memory_storedHistory` scope field + `MEMORY_PATHS.STORED_HISTORY`** —
+  dead after `CommitMemory` removal.
+- **Legacy store adapters** `redisStore`, `dynamoStore`, `postgresStore`
+  — real backends land in Phase 3 against the new `MemoryStore` interface.
+
+### Changed
+
+- **Conditional concept** (`Agent.route()` extensions) now mounts
+  branches as subflows when the runner exposes `toFlowChart()`,
+  matching the `FlowChart.ts` / `Swarm` patterns. UI consumers get
+  drill-down into routed-to agents for free.
+- **Stream events now flow through the emit channel.**
+  `agentfootprint.stream.llm_start` / `llm_end` / `token` / `thinking`
+  / `tool_start` / `tool_end` events are emitted with the full
+  `AgentStreamEvent` as the payload. `AgentRunner` attaches a
+  `StreamEventRecorder` (public API in `agentfootprint/stream`) that
+  forwards emits to the consumer's `{ onEvent }` callback — zero
+  closure capture of handlers inside stage code.
+- **Agent chart is now CACHED** — built once per agent, reused across
+  all `.run()` and `.toFlowChart()` calls. Per-run data (stream handler,
+  memory identity, seed messages) flows via args / attached recorders.
+- **`pickByBudget`** restructured as a proper decider stage with three
+  branches (`skip-empty`, `skip-no-budget`, `pick`) — decision evidence
+  now lands on `FlowRecorder.onDecision` with structured `rules[]`.
+- **`MemoryStore.putMany`** added for batched writes. `writeMessages`
+  now persists a turn's messages in one round-trip instead of N.
+- **`RouteResponse` decider** uses the filter-form `decide()` DSL with
+  structured evidence (`{ key: 'hasToolCalls', op: 'eq', threshold: true, … }`).
+  `ParseResponse` lifts `parsedResponse.hasToolCalls` to the flat
+  `scope.hasToolCalls` so the filter form can reach it.
+- **`buildSwarmRouting` + `Conditional`** deciders return full
+  `DecisionResult` objects so `FlowRecorder.onDecision` captures
+  evidence (no more silent `.branch`-only returns).
+
+### Migration
+
+Replace:
+
+```ts
+const store = new InMemoryStore();
+const agent = Agent.create({ provider })
+  .memory({ store, conversationId: 'user-123' })
+  .build();
+```
+
+With:
+
+```ts
+import { defaultPipeline, InMemoryStore } from 'agentfootprint/memory';
+
+const pipeline = defaultPipeline({ store: new InMemoryStore() });
+const agent = Agent.create({ provider })
+  .memoryPipeline(pipeline)
+  .build();
+
+await agent.run(message, {
+  identity: { conversationId: 'user-123' },
+});
+```
+
+
+
 ## [1.11.0]
 
 ### Added

@@ -8,19 +8,18 @@
  */
 
 import type { FlowChart } from 'footprintjs';
+import type { DecisionResult } from 'footprintjs';
 import type { StageFunction, SubflowMountOptions } from 'footprintjs/advanced';
 import type { LLMProvider, ResponseFormat } from '../../types';
 import type { ToolProvider } from '../../core';
 import type { ToolRegistry } from '../../tools';
 import type { Message } from '../../types/messages';
-import type { CommitMemoryConfig } from '../../stages/commitMemory';
 import type { MemoryPipeline } from '../../memory/pipeline';
 import type { SystemPromptSlotConfig } from '../slots/system-prompt';
 import type { MessagesSlotConfig } from '../slots/messages';
 import type { ToolsSlotConfig } from '../slots/tools';
 import type { ResolvedInstruction, InstructionOverride, AgentInstruction } from '../instructions';
 import type { DecideFn } from '../call/helpers';
-import type { AgentStreamEventHandler } from '../../streaming';
 
 // ── RoutingConfig — pluggable post-ParseResponse routing ─────────────────────
 
@@ -74,17 +73,22 @@ export interface RoutingConfig {
   readonly deciderDescription?: string;
   /**
    * Decider function — called after ParseResponse commits.
-   * Returns a branch ID string that matches one of the branches.
    *
-   * Receives the scope (with parsedResponse, loopCount, etc.) and must return
-   * a string matching one of the branch IDs. maxIterations enforcement is
-   * handled structurally by buildAgentLoop — the decider does not need to check it.
+   * Returns EITHER a branch-id string OR a `DecisionResult` from `decide()`.
+   * When returning `decide(...)`'s full result, footprintjs's DeciderHandler
+   * extracts the structured evidence and attaches it to `FlowRecorder.onDecision`
+   * — this is what enables "why did we take this branch?" audit queries.
+   * Returning only a bare string loses that evidence.
+   *
+   * Scope shape: see `parsedResponse`, `hasToolCalls`, `loopCount`, etc.
+   * maxIterations enforcement is handled structurally by buildAgentLoop —
+   * the decider does not need to check it.
    */
   readonly decider: (
     scope: any,
     breakFn: () => void,
     streamCb?: unknown,
-  ) => string | Promise<string>;
+  ) => string | DecisionResult | Promise<string | DecisionResult>;
   /** Branch definitions — each maps to a subflow or inline function.
    *  Order matters: branches are added to the decider in array order. */
   readonly branches: readonly RoutingBranch[];
@@ -195,26 +199,9 @@ export interface AgentLoopConfig {
   readonly pattern?: AgentPattern;
 
   /**
-   * When true, the Finalize branch sets `memory_shouldCommit` flag instead of
-   * calling $break() directly. Only use when a CommitMemory stage (or a
-   * memoryPipeline.write subflow) is mounted after the RouteResponse decider.
-   *
-   * Auto-enabled when `commitMemory` or `memoryPipeline.write` is provided.
-   */
-  readonly useCommitFlag?: boolean;
-
-  /**
-   * Legacy — when provided, mounts a CommitMemory stage after RouteResponse.
-   * Automatically enables `useCommitFlag`. Superseded by `memoryPipeline` but
-   * kept for backward-compatibility with existing tests.
-   */
-  readonly commitMemory?: CommitMemoryConfig;
-
-  /**
-   * New path — mounts the pipeline's read subflow before CallLLM and the
-   * write subflow (if present) after Finalize. Flows from
-   * `AgentBuilder.memoryPipeline()`. When both this and `commitMemory` are
-   * provided, only `memoryPipeline` is used (the new path takes precedence).
+   * Memory pipeline — mounts the pipeline's read subflow before the
+   * loop body and the write subflow (if present) INSIDE the `final`
+   * branch. Flows from `AgentBuilder.memoryPipeline()`.
    */
   readonly memoryPipeline?: MemoryPipeline;
 
@@ -249,9 +236,6 @@ export interface AgentLoopConfig {
    * (stripped on write), so they're captured as a closure map.
    */
   readonly decideFunctions?: ReadonlyMap<string, DecideFn>;
-
-  /** Stream event handler for consumer-facing lifecycle events. */
-  readonly onStreamEvent?: AgentStreamEventHandler;
 
   /** When true, CallLLM uses addStreamingFunction for token-by-token output. */
   readonly streaming?: boolean;

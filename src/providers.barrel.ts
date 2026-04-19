@@ -64,15 +64,5 @@ export {
   withToolPairSafety,
   summaryStrategy,
   compositeMessages,
-  persistentHistory,
 } from './providers';
-export type {
-  SlidingWindowOptions,
-  CharBudgetOptions,
-  SummaryStrategyOptions,
-  PersistentHistoryOptions,
-} from './providers';
-
-// Memory strategies
-export { InMemoryStore } from './adapters/memory/inMemory';
-export type { ConversationStore, MemoryConfig } from './adapters/memory/types';
+export type { SlidingWindowOptions, CharBudgetOptions, SummaryStrategyOptions } from './providers';

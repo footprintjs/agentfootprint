@@ -65,6 +65,8 @@ export default defineConfig({
             { label: 'Tool use', slug: 'guides/tools' },
             { label: 'Instructions & decisions', slug: 'guides/instructions' },
             { label: 'RAG pattern', slug: 'guides/rag' },
+            { label: 'Memory pipeline', slug: 'guides/memory' },
+            { label: 'Narrative memory', slug: 'guides/narrative-memory' },
             { label: 'Multi-agent (Swarm)', slug: 'guides/swarm' },
             { label: 'Pausable (human-in-the-loop)', slug: 'guides/pausable' },
             { label: 'Streaming', slug: 'guides/streaming' },

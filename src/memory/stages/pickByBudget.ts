@@ -1,41 +1,75 @@
 /**
- * pickByBudget — decider stage that selects which loaded entries fit in
- * the context-token budget.
+ * pickByBudget — a composable **decider + branches** that selects which
+ * loaded entries fit in the context-token budget.
  *
  * Reads from scope:  `loaded`, `contextTokensRemaining`
  * Writes to scope:   `selected` (array of entries that fit)
  *
- * Uses footprintjs's `decide()` so the selection rationale appears in
- * the narrative as evidence, not just output:
+ * Shape:
+ *   PickDecider (decider stage)
+ *     ├─ skip-empty     → fn: scope.selected = []
+ *     ├─ skip-no-budget → fn: scope.selected = []
+ *     └─ pick           → fn: greedy budget-aware selection
  *
- *   "Picker evaluated: 12 loaded, budget 2048 tokens, reserved 200 for
- *    prompt headers. Included 8 entries (most recent first) totaling
- *    1847 tokens. Skipped 4 (would exceed budget)."
+ * `pickByBudget(config)` returns a **builder-extension function** —
+ * call it with your `FlowChartBuilder` and it appends the decider +
+ * branches to your pipeline:
  *
- * Why a decider, not a plain function?
- *   "Which memories went into the prompt?" is a question we want to be
- *   able to answer post-hoc via `decide()` evidence + narrative. Using
- *   a decider makes the selection first-class in the commit log —
- *   `causalChain` can trace any recalled fact back to this pick.
+ * ```ts
+ * let b = flowChart<MemoryState>('LoadRecent', loadRecent(...), 'load-recent');
+ * b = pickByBudget(config)(b);
+ * b = b.addFunction('Format', formatDefault(...), 'format-default');
+ * ```
  *
- * Selection algorithm (intentionally simple):
- *   1. Sort entries by `updatedAt` descending (newest first). The
- *      recency heuristic is robust across domains and matches how users
- *      typically expect chat history to behave.
+ * Why a real decider stage (not a single function stage)?
+ *   The "which memories went into the prompt?" decision is first-class —
+ *   we want its evidence on `FlowRecorder.onDecision` so audit trails
+ *   (causalChain, explainable UI, compliance logs) can answer "why was
+ *   X recalled / skipped?" without scraping emit-channel events. A
+ *   single function stage using `decide()` inline leaves the evidence
+ *   buried in a local variable; a real decider stage surfaces it
+ *   structurally.
+ *
+ * Selection algorithm (pick branch, intentionally simple):
+ *   1. Sort entries by `updatedAt` descending (newest first).
  *   2. Greedily include entries while the running token total stays
  *      under `contextTokensRemaining - reserveTokens`.
  *   3. Preserve the original chronological order in the output (oldest
  *      first) so the LLM reads them in natural time sequence.
  *
  * More sophisticated strategies (relevance-weighted, decay-weighted,
- * ILP-optimal) can replace this stage without touching consumers.
+ * ILP-optimal) can replace the `pick` branch without touching the
+ * decider or the skip branches.
  */
 import type { TypedScope } from 'footprintjs';
 import { decide } from 'footprintjs';
+import type { FlowChartBuilder } from 'footprintjs';
 import type { MemoryEntry } from '../entry';
 import type { Message } from '../../types/messages';
 import type { MemoryState } from './types';
 import { approximateTokenCounter, countMessageTokens, type TokenCounter } from './tokenize';
+
+/**
+ * Reusable shape for a **composable pipeline segment** — a function that
+ * appends one or more stages to a builder and returns the builder. This
+ * is the memory layer's convention for packaging multi-stage work
+ * (decider + branches, multi-stage sub-pipelines) as a single unit that
+ * consumers can drop into any flowchart:
+ *
+ * ```ts
+ * let b = flowChart<MyState>('Seed', seed, 'seed');
+ * b = pickByBudget(config)(b);          // appends a decider + 3 branches
+ * b = b.addFunction('Format', fmt, ...);
+ * ```
+ *
+ * Generic in `T` so segments targeting the memory layer can be composed
+ * into host flowcharts whose state extends `MemoryState`. Future
+ * segments (NarrativeMemory, SemanticRetrieval, FactExtraction) follow
+ * the same shape for uniform composition ergonomics.
+ */
+export type PipelineSegment<T extends object> = (
+  builder: FlowChartBuilder<T>,
+) => FlowChartBuilder<T>;
 
 export interface PickByBudgetConfig {
   /**
@@ -70,48 +104,59 @@ export interface PickByBudgetConfig {
 const DEFAULT_RESERVE = 256;
 const DEFAULT_MINIMUM = 100;
 
-export function pickByBudget(config: PickByBudgetConfig = {}) {
+/**
+ * Build the decider function. Returns the full `DecisionResult` so
+ * DeciderHandler recognizes the DECISION_RESULT brand and attaches
+ * evidence to `FlowRecorder.onDecision`. Predicates read from `scope`
+ * (not closed-over locals) so the temp recorder captures the values
+ * that drove the choice.
+ */
+function buildPickDecider(config: PickByBudgetConfig) {
   const reserveTokens = config.reserveTokens ?? DEFAULT_RESERVE;
   const minimumTokens = config.minimumTokens ?? DEFAULT_MINIMUM;
-  const countTokens = config.countTokens ?? approximateTokenCounter;
-  const maxEntries = config.maxEntries;
-
-  return async (scope: TypedScope<MemoryState>): Promise<void> => {
-    const loaded = scope.loaded ?? [];
-    const remaining = scope.contextTokensRemaining;
-    const budget = remaining - reserveTokens;
-
-    // Decider structure — decide() captures the chosen branch + evidence.
-    // Each branch is a pure "when" predicate over scope state. The picker
-    // writes `selected` as a side effect based on the chosen branch; the
-    // narrative shows WHICH branch fired and why.
-    // decide<S extends object> is parameterized on scope type; the branch
-    // id it returns is always a string. We match on string values, not a
-    // narrowed literal union.
-    const outcome = decide(
+  return (scope: TypedScope<MemoryState>) =>
+    decide(
       scope,
       [
         {
-          when: () => loaded.length === 0,
+          when: (s) => (s.loaded ?? []).length === 0,
           then: 'skip-empty',
-          label: 'no entries loaded',
+          label: 'no entries loaded — nothing to pick',
         },
         {
-          when: () => budget < minimumTokens,
+          when: (s) => (s.contextTokensRemaining ?? 0) - reserveTokens < minimumTokens,
           then: 'skip-no-budget',
-          label: 'budget below minimum threshold',
+          label: 'budget below minimum threshold — skip injection',
         },
       ],
       'pick',
     );
+}
 
-    if (outcome.branch === 'skip-empty' || outcome.branch === 'skip-no-budget') {
-      scope.selected = [];
-      return;
-    }
+/** Both skip branches share the same body — no entries survive. */
+const skipStage = (scope: TypedScope<MemoryState>): void => {
+  scope.selected = [];
+};
 
-    // Greedy selection — newest first, preserve chronological output.
-    const byNewest = [...loaded].sort((a, b) => b.updatedAt - a.updatedAt);
+/** The `pick` branch: greedy newest-first selection within budget. */
+function buildPickStage(config: PickByBudgetConfig) {
+  const reserveTokens = config.reserveTokens ?? DEFAULT_RESERVE;
+  const countTokens = config.countTokens ?? approximateTokenCounter;
+  const maxEntries = config.maxEntries;
+
+  return (scope: TypedScope<MemoryState>): void => {
+    const loaded = scope.loaded ?? [];
+    const budget = (scope.contextTokensRemaining ?? 0) - reserveTokens;
+
+    // Sort newest-first. Secondary key on `id` guarantees deterministic
+    // ordering when entries share `updatedAt` (batch writes, low-resolution
+    // clocks) — without it, ties resolve to implementation-defined order
+    // which breaks trace replay and A/B eval comparisons.
+    const byNewest = [...loaded].sort((a, b) => {
+      const byTime = b.updatedAt - a.updatedAt;
+      if (byTime !== 0) return byTime;
+      return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+    });
     const picked: MemoryEntry<Message>[] = [];
     let used = 0;
 
@@ -124,8 +169,57 @@ export function pickByBudget(config: PickByBudgetConfig = {}) {
       used += cost;
     }
 
-    // Emit in chronological order so the LLM reads them as time moves
-    // forward. `picked` is newest-first; reverse to oldest-first.
+    // Emit in chronological order — `picked` is newest-first; reverse.
     scope.selected = picked.reverse();
+  };
+}
+
+/**
+ * Append the pick-by-budget decider + branches to `builder`. Returns
+ * the builder so calls chain naturally:
+ *
+ * ```ts
+ * let b = flowChart<MemoryState>('LoadRecent', loadRecent(config), 'load-recent');
+ * b = pickByBudget(pickConfig)(b);
+ * b = b.addFunction('Format', formatDefault(formatConfig), 'format-default');
+ * ```
+ *
+ * Generic in `T` so consumers whose scope extends `MemoryState` (e.g.,
+ * an AgentLoopState that embeds memory fields) can compose this into
+ * their own pipeline without casting.
+ */
+export function pickByBudget<T extends MemoryState = MemoryState>(
+  config: PickByBudgetConfig = {},
+): PipelineSegment<T> {
+  const decider = buildPickDecider(config);
+  const pickStage = buildPickStage(config);
+
+  return (builder) => {
+    return builder
+      .addDeciderFunction(
+        'PickDecider',
+        decider as never,
+        'pick-decider',
+        'Decide whether to pick entries, skip (empty), or skip (no budget)',
+      )
+      .addFunctionBranch(
+        'skip-empty',
+        'SkipEmpty',
+        skipStage as never,
+        'Mark selected as [] — no entries loaded',
+      )
+      .addFunctionBranch(
+        'skip-no-budget',
+        'SkipNoBudget',
+        skipStage as never,
+        'Mark selected as [] — budget below minimum',
+      )
+      .addFunctionBranch(
+        'pick',
+        'Pick',
+        pickStage as never,
+        'Greedy newest-first selection within token budget',
+      )
+      .end() as unknown as FlowChartBuilder<T>;
   };
 }

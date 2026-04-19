@@ -52,22 +52,28 @@ Seed → SystemPrompt → Messages → Tools → AssemblePrompt → CallLLM → 
 
 ## Memory
 
-Persist conversations across turns:
+Persist conversations across turns with the memory pipeline:
 
 ```ts
-import { InMemoryStore } from 'agentfootprint';
+import { Agent } from 'agentfootprint';
+import { defaultPipeline, InMemoryStore } from 'agentfootprint/memory';
+
+const pipeline = defaultPipeline({ store: new InMemoryStore() });
 
 const agent = Agent.create({ provider })
   .system('You are helpful.')
-  .memory({
-    store: new InMemoryStore(),
-    conversationId: 'user-123',
-  })
+  .memoryPipeline(pipeline)
   .build();
 
-await agent.run('My name is Alice');
-await agent.run('What is my name?');  // "Your name is Alice"
+await agent.run('My name is Alice', {
+  identity: { conversationId: 'user-123' },
+});
+await agent.run('What is my name?', {
+  identity: { conversationId: 'user-123' },
+}); // "Your name is Alice"
 ```
+
+See [Memory pipeline](/agentfootprint/guides/memory) for the full guide.
 
 ## Streaming
 
@@ -103,28 +109,12 @@ if (result.paused) {
 
 ## Memory stores (production)
 
-For production, use a persistent store — Redis, DynamoDB, or PostgreSQL:
+Pluggable storage backends implement the `MemoryStore` interface.
+`InMemoryStore` ships for dev and tests. Redis / DynamoDB / Postgres
+adapters land in Phase 3.
 
-```ts
-import { Agent, anthropic, redisStore } from 'agentfootprint';
-import Redis from 'ioredis';
-
-const agent = Agent.create({ provider: anthropic('claude-sonnet-4-20250514') })
-  .system('You are a support agent.')
-  .memory({
-    store: redisStore(new Redis(), { ttlSeconds: 3600 }),
-    conversationId: 'session-abc',
-  })
-  .build();
-```
-
-Available adapters — consumer brings their own client:
-
-| Adapter | Client | Install |
-|---------|--------|---------|
-| `redisStore(client)` | ioredis / node-redis | `npm install ioredis` |
-| `postgresStore(client)` | pg | `npm install pg` |
-| `dynamoStore(client)` | @aws-sdk/lib-dynamodb | `npm install @aws-sdk/lib-dynamodb` |
+See [Memory pipeline](/agentfootprint/guides/memory) for the full
+API and the `MemoryStore` contract.
 
 ## Structured output
 

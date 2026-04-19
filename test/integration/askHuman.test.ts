@@ -14,7 +14,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { Agent, askHuman, mock, InMemoryStore } from '../../src/test-barrel';
+import { Agent, askHuman, mock } from '../../src/test-barrel';
 import { agentObservability } from '../../src/recorders/agentObservability';
 
 describe('askHuman — integration', () => {
@@ -68,11 +68,14 @@ describe('askHuman — integration', () => {
     expect(provider.getCallCount()).toBe(1);
   });
 
-  it('pauses when memory is enabled (regression: Live Chat scenario)', async () => {
-    // Live Chat in agent-playground wires .memory() + .system() + multiple tools
-    // + askHuman. Reproduce that shape here to catch any interaction between
-    // CommitMemory stage, the ExecuteTools pausable subflow, and finalize routing.
-    const store = new InMemoryStore();
+  it('pauses when memoryPipeline is enabled (regression: Live Chat scenario)', async () => {
+    // Live Chat wires .memoryPipeline() + .system() + askHuman. Reproduce
+    // that shape to catch interactions between memory-read/write subflows,
+    // the ExecuteTools pausable subflow, and finalize routing.
+    const { defaultPipeline, InMemoryStore: PipelineStore } = await import(
+      '../../src/memory.barrel'
+    );
+    const pipeline = defaultPipeline({ store: new PipelineStore() });
     const agent = Agent.create({
       provider: mock([
         {
@@ -83,20 +86,23 @@ describe('askHuman — integration', () => {
     })
       .system('You are a helpful assistant.')
       .tool(askHuman())
-      .memory({ store, conversationId: 'live-chat' })
+      .memoryPipeline(pipeline)
       .maxIterations(10)
       .build();
 
-    const result = await agent.run('Search for movie review');
+    const result = await agent.run('Search for movie review', {
+      identity: { conversationId: 'live-chat' },
+    });
 
     expect(result.paused).toBe(true);
     expect(result.pauseData?.question).toBe('Which movie?');
   });
 
   it('pauses with full Live Chat stack — system + memory + recorder + streaming', async () => {
-    // Exact shape used by buildLiveRunner in agent-playground: system prompt,
-    // persistent memory, observability recorder, and streaming enabled.
-    const store = new InMemoryStore();
+    const { defaultPipeline, InMemoryStore: PipelineStore } = await import(
+      '../../src/memory.barrel'
+    );
+    const pipeline = defaultPipeline({ store: new PipelineStore() });
     const obs = agentObservability();
     const builder = Agent.create({
       provider: mock([
@@ -109,12 +115,13 @@ describe('askHuman — integration', () => {
       .system('You are a helpful assistant.')
       .tool(askHuman())
       .streaming(true)
-      .memory({ store, conversationId: 'live-chat' })
+      .memoryPipeline(pipeline)
       .maxIterations(10);
     (builder as any).recorder(obs);
     const agent = builder.build();
 
     const result = await agent.run('Weather?', {
+      identity: { conversationId: 'live-chat' },
       onToken: () => {
         /* no-op */
       },

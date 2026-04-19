@@ -44,7 +44,6 @@ describe('AgentLoopState', () => {
     const state: AgentLoopState = {} as AgentLoopState;
     const _prepared: Message[] = state.memory_preparedMessages;
     const _stored: Message[] = state.memory_storedHistory;
-    const _commit: boolean = state.memory_shouldCommit;
     expect(true).toBe(true);
   });
 
@@ -122,7 +121,6 @@ describe('scenario', () => {
       'result',
       'memory_preparedMessages',
       'memory_storedHistory',
-      'memory_shouldCommit',
       'resolvedTools',
       'promptSummary',
       'llmCall',
@@ -158,11 +156,7 @@ describe('property', () => {
 
   it('AgentLoopState covers all MEMORY_PATHS values', () => {
     const memoryPathValues = Object.values(MEMORY_PATHS);
-    const stateKeys: (keyof AgentLoopState)[] = [
-      'memory_preparedMessages',
-      'memory_storedHistory',
-      'memory_shouldCommit',
-    ];
+    const stateKeys: (keyof AgentLoopState)[] = ['memory_preparedMessages', 'memory_storedHistory'];
     for (const path of memoryPathValues) {
       expect(stateKeys).toContain(path);
     }

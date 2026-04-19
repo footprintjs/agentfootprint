@@ -8,6 +8,7 @@
  *
  * Writes to scope:
  *   - parsedResponse (hasToolCalls, toolCalls[], content)
+ *   - hasToolCalls (flat mirror so RouteResponse can use decide() filter form)
  *   - messages (appends assistant message)
  *   - responseType (narrative summary of the response)
  */
@@ -39,6 +40,11 @@ export function parseResponseStage(scope: TypedScope<AgentLoopState>): void {
   };
 
   scope.parsedResponse = parsed;
+  // Flat mirror — enables RouteResponse's decide() to use filter form
+  // (`{ hasToolCalls: { eq: true } }`) which captures structured
+  // `{ key, op, threshold, actual, result }` evidence in the commit log,
+  // vs. the opaque function-form match boolean.
+  scope.hasToolCalls = parsed.hasToolCalls;
 
   // Append assistant message to conversation
   const messages = scope.messages ?? [];

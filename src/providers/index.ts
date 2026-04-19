@@ -16,16 +16,8 @@ export {
   withToolPairSafety,
   summaryStrategy,
   compositeMessages,
-  persistentHistory,
-  InMemoryStore,
 } from './messages';
-export type {
-  SlidingWindowOptions,
-  CharBudgetOptions,
-  SummaryStrategyOptions,
-  ConversationStore,
-  PersistentHistoryOptions,
-} from './messages';
+export type { SlidingWindowOptions, CharBudgetOptions, SummaryStrategyOptions } from './messages';
 export {
   staticTools,
   dynamicTools,

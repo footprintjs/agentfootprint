@@ -105,7 +105,7 @@ describe('Swarm multi-tool-call — unit', () => {
     };
 
     // Calculator comes first → routes to swarm-tools
-    expect(routing.decider(scope, () => {})).toBe('swarm-tools');
+    expect(routing.decider(scope, () => {}).branch).toBe('swarm-tools');
   });
 
   it('decider routes to specialist when it comes first', () => {
@@ -124,7 +124,7 @@ describe('Swarm multi-tool-call — unit', () => {
       },
     };
 
-    expect(routing.decider(scope, () => {})).toBe('coding');
+    expect(routing.decider(scope, () => {}).branch).toBe('coding');
     expect(scope.specialistMessage).toBe('code');
   });
 
@@ -144,7 +144,7 @@ describe('Swarm multi-tool-call — unit', () => {
       },
     };
 
-    expect(routing.decider(scope, () => {})).toBe('swarm-tools');
+    expect(routing.decider(scope, () => {}).branch).toBe('swarm-tools');
   });
 });
 
@@ -163,7 +163,7 @@ describe('Swarm multi-tool-call — boundary', () => {
       },
     };
 
-    expect(routing.decider(scope, () => {})).toBe('final');
+    expect(routing.decider(scope, () => {}).branch).toBe('final');
     expect(scope.routingWarning).toContain('fake1');
     expect(scope.routingWarning).toContain('fake2');
   });
@@ -171,7 +171,7 @@ describe('Swarm multi-tool-call — boundary', () => {
   it('empty toolCalls routes to final', () => {
     const routing = buildSwarmRouting({ specialists: [makeSpecialist('coding')] });
     const scope: any = { parsedResponse: { hasToolCalls: true, toolCalls: [] } };
-    expect(routing.decider(scope, () => {})).toBe('final');
+    expect(routing.decider(scope, () => {}).branch).toBe('final');
   });
 
   it('single tool call works (backward compat)', () => {
@@ -182,7 +182,7 @@ describe('Swarm multi-tool-call — boundary', () => {
         toolCalls: [{ id: 'tc1', name: 'coding', arguments: { message: 'hello' } }],
       },
     };
-    expect(routing.decider(scope, () => {})).toBe('coding');
+    expect(routing.decider(scope, () => {}).branch).toBe('coding');
   });
 });
 
@@ -252,7 +252,7 @@ describe('Swarm multi-tool-call — property', () => {
       },
     };
 
-    expect(routing.decider(scope, () => {})).toBe('writing');
+    expect(routing.decider(scope, () => {}).branch).toBe('writing');
     expect(scope.specialistMessage).toBe('poem');
   });
 });

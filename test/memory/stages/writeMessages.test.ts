@@ -220,8 +220,10 @@ describe('writeMessages — property', () => {
 
 describe('writeMessages — security', () => {
   it('errors from store propagate (fail-loud)', async () => {
+    // writeMessages batches via `putMany` (N messages → 1 round-trip).
+    // The broken store throws from putMany.
     const brokenStore = {
-      put: async () => {
+      putMany: async () => {
         throw new Error('write failed');
       },
     } as unknown as InMemoryStore;
@@ -230,6 +232,51 @@ describe('writeMessages — security', () => {
     await expect(writeMessages({ store: brokenStore })(scope as never)).rejects.toThrow(
       /write failed/,
     );
+  });
+
+  it('calls store.putMany ONCE per invocation — not N times — regardless of message count', async () => {
+    // This is the whole point of the batching work. Pin it.
+    let putManyCallCount = 0;
+    let putCallCount = 0;
+    const countingStore = {
+      putMany: async (_id: unknown, entries: readonly unknown[]) => {
+        putManyCallCount++;
+        // Ensure the full batch reaches the adapter in one call
+        expect(entries.length).toBe(5);
+      },
+      put: async () => {
+        putCallCount++;
+      },
+      recordSignature: async () => {},
+    } as unknown as InMemoryStore;
+
+    const scope = makeScope({
+      newMessages: [
+        msg('user', 'a'),
+        msg('assistant', 'b'),
+        msg('user', 'c'),
+        msg('assistant', 'd'),
+        msg('user', 'e'),
+      ],
+    });
+    await writeMessages({ store: countingStore })(scope as never);
+
+    expect(putManyCallCount).toBe(1);
+    expect(putCallCount).toBe(0); // writeMessages must NOT fall back to per-entry put()
+  });
+
+  it('empty newMessages array → store.putMany NOT called (save a round-trip)', async () => {
+    let putManyCallCount = 0;
+    const countingStore = {
+      putMany: async () => {
+        putManyCallCount++;
+      },
+    } as unknown as InMemoryStore;
+
+    const scope = makeScope({ newMessages: [] });
+    await writeMessages({ store: countingStore })(scope as never);
+    // Nothing to persist; don't hit the network at all.
+    expect(putManyCallCount).toBe(0);
   });
 
   it('does not carry source.identity across identities by mistake', async () => {

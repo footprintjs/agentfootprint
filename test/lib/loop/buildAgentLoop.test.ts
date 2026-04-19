@@ -238,86 +238,10 @@ describe('buildAgentLoop — subflowMode', () => {
   });
 });
 
-// ── CommitMemory Integration Tests ──────────────────────────
-
-describe('buildAgentLoop — commitMemory', () => {
-  it('commitMemory config mounts commit-memory stage', () => {
-    const config = minimalConfig({
-      commitMemory: {
-        store: { load: vi.fn(), save: vi.fn() },
-        conversationId: 'conv-1',
-      },
-    });
-
-    const { chart } = buildAgentLoop(config, { messages: [userMessage('hi')] });
-    const stageIds = Array.from(chart.stageMap.keys());
-    expect(stageIds).toContain('commit-memory');
-  });
-
-  it('no commitMemory config means no commit-memory stage', () => {
-    const config = minimalConfig();
-    const { chart } = buildAgentLoop(config, { messages: [userMessage('hi')] });
-    const stageIds = Array.from(chart.stageMap.keys());
-    expect(stageIds).not.toContain('commit-memory');
-  });
-
-  it('commitMemory auto-enables useCommitFlag (shouldCommit is set)', async () => {
-    const store = { load: vi.fn().mockReturnValue([]), save: vi.fn() };
-    const provider = mockProvider([{ content: 'done' }]);
-
-    const config = minimalConfig({
-      provider,
-      commitMemory: { store, conversationId: 'conv-1' },
-    });
-
-    const { chart } = buildAgentLoop(config, { messages: [userMessage('hi')] });
-    const executor = new FlowChartExecutor(chart);
-    await executor.run();
-    const state = executor.getSnapshot()?.sharedState ?? {};
-
-    // CommitMemory should have run and saved
-    expect(store.save).toHaveBeenCalledOnce();
-    expect(store.save).toHaveBeenCalledWith('conv-1', expect.any(Array));
-    expect(state.result).toBe('done');
-  });
-
-  it('commitMemory with persistent Messages slot loads from store', async () => {
-    const stored: Message[] = [
-      { role: 'user', content: 'previous question' },
-      { role: 'assistant', content: 'previous answer' },
-    ];
-    const store = { load: vi.fn().mockReturnValue(stored), save: vi.fn() };
-    const provider = mockProvider([{ content: 'I remember' }]);
-
-    const config: AgentLoopConfig = {
-      provider,
-      systemPrompt: { provider: staticPrompt('You are helpful.') },
-      messages: {
-        strategy: slidingWindow({ maxMessages: 100 }),
-        store,
-        conversationId: 'conv-1',
-      },
-      tools: { provider: noTools() },
-      registry: new ToolRegistry(),
-      commitMemory: { store, conversationId: 'conv-1' },
-    };
-
-    const { chart } = buildAgentLoop(config, { messages: [userMessage('new question')] });
-    const executor = new FlowChartExecutor(chart);
-    await executor.run();
-
-    // Store.load should have been called
-    expect(store.load).toHaveBeenCalledWith('conv-1');
-
-    // LLM should have received merged history
-    const calledMsgs = (provider.chat as ReturnType<typeof vi.fn>).mock.calls[0][0] as Message[];
-    const userMsgs = calledMsgs.filter((m) => m.role === 'user');
-    expect(userMsgs.length).toBeGreaterThanOrEqual(2);
-
-    // Store.save should have been called with the full conversation
-    expect(store.save).toHaveBeenCalledOnce();
-  });
-});
+// Legacy commitMemory / persistent-messages-slot tests were retired
+// alongside the legacy `.memory()` API. Memory behavior is now
+// covered by `test/integration/memoryPipeline.test.ts` which exercises
+// the canonical `.memoryPipeline()` + `defaultPipeline()` path.
 
 // ── Scenario Tests ──────────────────────────────────────────
 
@@ -380,26 +304,6 @@ describe('buildAgentLoop — scenario', () => {
     const toolResultMsg = secondCallMsgs.find((m) => m.role === 'tool');
     expect(toolResultMsg).toBeDefined();
     expect(toolResultMsg!.content).toBe('search-result-xyz');
-  });
-
-  it('useCommitFlag sets shouldCommit — verified via mock CommitMemory', async () => {
-    // useCommitFlag makes Finalize set shouldCommit instead of $break().
-    // A real CommitMemory stage reads it and breaks. We simulate that here by
-    // building the chart manually and adding a CommitMemory-like break stage.
-    const provider = mockProvider([{ content: 'done' }]);
-    const config = minimalConfig({
-      provider,
-      useCommitFlag: true,
-    });
-
-    // Build loop and verify the decider architecture is in place.
-    const { chart } = buildAgentLoop(config, { messages: [userMessage('hi')] });
-    const stageIds = Array.from(chart.stageMap.keys());
-    expect(stageIds).toContain('route-response');
-
-    // Config passes through — Finalize branch sets memory_shouldCommit
-    // when useCommitFlag=true. We verify the assembler accepts it without error.
-    expect(config.useCommitFlag).toBe(true);
   });
 
   it('ToolProvider.execute() used when provided', async () => {

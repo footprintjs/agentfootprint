@@ -86,6 +86,14 @@ export interface AgentLoopState {
   adapterRawResponse: LLMResponse;
   /** Structured parse of LLM response. */
   parsedResponse: ParsedResponse;
+  /**
+   * Flat mirror of `parsedResponse.hasToolCalls`. Written by ParseResponse
+   * so the RouteResponse decider can use `decide()`'s filter form
+   * (`{ hasToolCalls: { eq: true } }`), producing structured
+   * `{ key, op, threshold, actual, result }` evidence in the commit log
+   * rather than an opaque function-match boolean.
+   */
+  hasToolCalls: boolean;
   /** Current loop iteration count. */
   loopCount: number;
   /** Max loop iterations allowed. */
@@ -100,15 +108,11 @@ export interface AgentLoopState {
    */
   maxIterationsReached?: boolean;
 
-  // ── Memory internal keys ──────────────────────────────────
+  // ── Messages slot output ──────────────────────────────────
   /** Prepared messages after strategy applied (Messages slot output). */
   memory_preparedMessages: Message[];
-  /** Raw history loaded from ConversationStore. */
-  memory_storedHistory: Message[];
-  /** Flag: HandleResponse sets true when finalizing; CommitMemory reads. */
-  memory_shouldCommit: boolean;
 
-  // ── New memory pipeline integration (AgentBuilder.memoryPipeline) ──
+  // ── Memory pipeline integration (AgentBuilder.memoryPipeline) ──
   /**
    * Hierarchical identity for the memory pipeline. Populated from
    * `run(message, { identity })` options via a MemorySeed stage when
@@ -182,13 +186,12 @@ export interface ToolsSubflowState {
   toolInjections?: LLMToolDescription[];
 }
 
-/** State for the Messages slot subflow (in-memory path). */
+/** State for the Messages slot subflow. */
 export interface MessagesSubflowState {
   /** Current messages passed from parent via inputMapper. */
   currentMessages: Message[];
   loopCount: number;
   memory_preparedMessages: Message[];
-  memory_storedHistory: Message[];
 }
 
 /** State for the InstructionsToLLM subflow. */

@@ -93,7 +93,7 @@ describe('buildSwarmRouting — unit', () => {
     };
 
     const result = routing.decider(scope, () => {});
-    expect(result).toBe('writing');
+    expect(result.branch).toBe('writing');
     expect(scope.specialistMessage).toBe('write a poem');
     expect(scope.specialistToolCallId).toBe('tc1');
   });
@@ -107,7 +107,7 @@ describe('buildSwarmRouting — unit', () => {
       parsedResponse: { hasToolCalls: false, toolCalls: [], content: 'Done' },
     };
 
-    expect(routing.decider(scope, () => {})).toBe('final');
+    expect(routing.decider(scope, () => {}).branch).toBe('final');
   });
 });
 
@@ -148,7 +148,7 @@ describe('buildSwarmRouting — boundary', () => {
       },
     };
 
-    expect(routing.decider(scope, () => {})).toBe('swarm-tools');
+    expect(routing.decider(scope, () => {}).branch).toBe('swarm-tools');
   });
 });
 
@@ -251,7 +251,7 @@ describe('buildSwarmRouting — security', () => {
       },
     };
 
-    expect(routing.decider(scope, () => {})).toBe('final');
+    expect(routing.decider(scope, () => {}).branch).toBe('final');
   });
 
   it('specialist message falls back to empty string when args.message missing', () => {
@@ -303,7 +303,7 @@ describe('buildSwarmRouting — security', () => {
 
     // Routes to first specialist — the loop re-calls LLM for the rest
     const result = routing.decider(scope, () => {});
-    expect(result).toBe('coding');
+    expect(result.branch).toBe('coding');
     expect(scope.specialistMessage).toBe('first');
     expect(scope.specialistToolCallId).toBe('tc1');
   });
@@ -320,7 +320,7 @@ describe('buildSwarmRouting — security', () => {
       },
     };
 
-    expect(routing.decider(scope, () => {})).toBe('final');
+    expect(routing.decider(scope, () => {}).branch).toBe('final');
     expect(scope.routingWarning).toContain('hallucinated-tool');
   });
 

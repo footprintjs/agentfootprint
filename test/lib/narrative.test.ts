@@ -15,7 +15,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { Agent } from '../../src/lib/concepts/Agent';
 import { defineTool } from '../../src/tools';
-import { InMemoryStore } from '../../src/adapters/memory/inMemory';
 import type { LLMProvider, ToolCall } from '../../src/types';
 
 // ── Helpers ──────────────────────────────────────────────────
@@ -240,19 +239,23 @@ describe('Narrative — scenario', () => {
     expect(subflowStages.some((e) => e.stageName?.includes('sf-tools/'))).toBe(true);
   });
 
-  it('memory agent narrative includes commit-memory stage', async () => {
-    const store = new InMemoryStore();
+  it('memoryPipeline agent narrative includes memory-write subflow', async () => {
+    const { defaultPipeline, InMemoryStore: PipelineStore } = await import(
+      '../../src/memory.barrel'
+    );
+    const pipeline = defaultPipeline({ store: new PipelineStore() });
     const agent = Agent.create({
       provider: mockProvider([{ content: 'remembered' }]),
     })
-      .memory({ store, conversationId: 'conv-1' })
+      .memoryPipeline(pipeline)
       .build();
 
-    await agent.run('remember this');
+    await agent.run('remember this', { identity: { conversationId: 'conv-1' } });
     const narrative = agent.getNarrative();
 
-    // CommitMemory stage (agent renderer format)
-    expect(narrative.some((s) => s.includes('[CommitMemory]'))).toBe(true);
+    // The final-branch subflow mounts sf-memory-write when pipeline.write
+    // is configured — confirm it shows up in the narrative.
+    expect(narrative.some((s) => s.includes('Save Memory'))).toBe(true);
   });
 
   it('multi-turn narrative is independent per run', async () => {

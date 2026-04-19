@@ -13,9 +13,10 @@
  *   - Single-stage write keeps the persistence story simple for Phase 1;
  *     Phase 1.5 adds a second stage (extractFacts) to the write side.
  *
- * This preset is intentionally opinionated. Users who need more control
- * should compose their own FlowChart and pass it to `.memory()` directly
- * — the preset is teaching code, not a one-size-fits-all.
+ * This preset is intentionally opinionated. Users who need more
+ * control should compose their own FlowChart and pass it to
+ * `.memoryPipeline()` directly — the preset is teaching code, not a
+ * one-size-fits-all.
  *
  * **Build once, mount many.** Call `defaultPipeline(config)` at application
  * startup (or whenever the config changes). The returned `{read, write}`
@@ -36,7 +37,7 @@
  *
  * const agent = Agent.create({ provider: anthropic('claude-sonnet-4') })
  *   .system('You are a helpful assistant.')
- *   .memory(pipeline)
+ *   .memoryPipeline(pipeline)
  *   .build();
  * ```
  */
@@ -129,19 +130,19 @@ export function defaultPipeline(config: DefaultPipelineConfig): MemoryPipeline {
     ...(config.writeTtlMs !== undefined && { ttlMs: config.writeTtlMs }),
   };
 
-  const read = flowChart<MemoryState>(
+  // Compose: LoadRecent → [PickDecider → skip-empty | skip-no-budget | pick] → Format
+  // pickByBudget is a builder-extension — it appends a decider + 3
+  // branches to the pipeline so "why did / didn't we inject memory?" is
+  // answerable via FlowRecorder.onDecision evidence, not just emit events.
+  let readBuilder = flowChart<MemoryState>(
     'LoadRecent',
     loadRecent(loadConfig),
     'load-recent',
     undefined,
     'Read N most-recent entries from storage into scope.loaded',
-  )
-    .addFunction(
-      'Pick',
-      pickByBudget(pickConfig),
-      'pick-by-budget',
-      'Pick entries that fit the context-token budget; writes scope.selected',
-    )
+  );
+  readBuilder = pickByBudget(pickConfig)(readBuilder);
+  const read = readBuilder
     .addFunction(
       'Format',
       formatDefault(formatConfig),

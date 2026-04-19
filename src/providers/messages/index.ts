@@ -11,5 +11,3 @@ export { withToolPairSafety } from './withToolPairSafety';
 export { summaryStrategy } from './summaryStrategy';
 export type { SummaryStrategyOptions } from './summaryStrategy';
 export { compositeMessages } from './compositeMessages';
-export { persistentHistory, InMemoryStore } from './persistentHistory';
-export type { ConversationStore, PersistentHistoryOptions } from './persistentHistory';

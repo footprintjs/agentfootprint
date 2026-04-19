@@ -57,7 +57,6 @@ withToolPairSafety(slidingWindow({ maxMessages: 20 }))
 | `withToolPairSafety()` | Wrap any strategy to preserve tool pairs |
 | `summaryStrategy()` | Compress old messages into summary |
 | `compositeMessages()` | Chain strategies (summarize + window) |
-| `persistentHistory()` | Load/save from ConversationStore |
 
 ## Tool Strategies
 
@@ -92,7 +91,6 @@ Agent.create({ provider })
   .pattern(AgentPattern.Dynamic)
   .promptProvider(myDynamicPrompt)     // re-evaluated each loop
   .toolProvider(myDynamicTools)        // re-evaluated each loop
-  .memory({ strategy: slidingWindow({ maxMessages: 20 }) })  // message strategy via .memory()
   .build();
 ```
 

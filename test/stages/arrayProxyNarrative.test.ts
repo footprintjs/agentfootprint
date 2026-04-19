@@ -27,7 +27,6 @@ describe('array proxy narrative — agentfootprint regression', () => {
         scope.messages = [user('hello'), assistant('hi'), user('how?')];
         scope.memory_storedHistory = [user('hello'), assistant('hi'), user('how?')];
         scope.memory_preparedMessages = [user('hello'), assistant('hi'), user('how?')];
-        scope.memory_shouldCommit = true;
       },
       'seed',
     )

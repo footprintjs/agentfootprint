@@ -51,6 +51,11 @@ import { RecorderBridge } from '../recorders/RecorderBridge';
 import { annotateSpecIcons } from './specIcons';
 import { createAgentRenderer } from '../lib/narrative';
 
+/** True iff the runner exposes `toFlowChart()` for subflow composition. */
+function hasFlowChart(runner: RunnerLike): runner is RunnerLike & { toFlowChart(): FlowChartDef } {
+  return typeof (runner as unknown as Record<string, unknown>).toFlowChart === 'function';
+}
+
 /** Predicate tested against the input string + scope state. */
 export type ConditionalPredicate = (input: string, state: Record<string, unknown>) => boolean;
 
@@ -263,15 +268,12 @@ export class ConditionalRunner {
       scope.pipelineInput = args?.message ?? '';
     };
 
-    // Decider: evaluate predicates in order. Use decide() so the matched
-    // branch id appears in the narrative as decision evidence.
-    //
-    // `decide()` returns a `DecisionResult<T>` — we extract `.value` to
-    // satisfy footprintjs's `addDeciderFunction` signature (string branch id).
-    // The full DecisionResult is still captured internally by the engine so
-    // it appears in the narrative / FlowRecorder `onDecision` evidence field.
+    // Decider: evaluate predicates in order. Returns the full DecisionResult
+    // (NOT `.branch`) — DeciderHandler recognizes the DECISION_RESULT symbol
+    // brand and extracts evidence onto FlowRecorder.onDecision. Returning a
+    // bare string would silently drop that evidence.
     const branches = this.opts.branches;
-    const deciderFn = (scope: TypedScope<ConditionalState>): string => {
+    const deciderFn = (scope: TypedScope<ConditionalState>) => {
       const input = scope.pipelineInput ?? '';
       // Frozen state snapshot so a predicate can't accidentally mutate scope.
       // Only exposes well-known fields — predicates must not depend on
@@ -279,10 +281,7 @@ export class ConditionalRunner {
       const state: Readonly<Record<string, unknown>> = Object.freeze({
         pipelineInput: input,
       });
-      // decide() returns a DecisionResult whose `.branch` is the chosen id.
-      // footprintjs's addDeciderFunction accepts DecisionResult directly, but
-      // we extract `.branch` for a clearer string-typed return.
-      const result = decide(
+      return decide(
         scope,
         branches.map((b) => ({
           when: () => {
@@ -299,7 +298,6 @@ export class ConditionalRunner {
         })),
         'default',
       );
-      return result.branch;
     };
 
     let builder = buildFlowChart<ConditionalState>('Seed', seedStage, 'seed');
@@ -310,28 +308,32 @@ export class ConditionalRunner {
       'Pick the branch whose predicate matches first.',
     );
 
-    // Mount every branch as `runnerAsStage` — it calls `runner.run(input)`
-    // and writes the output to `scope.result` on the parent. This keeps
-    // propagation simple: whichever branch fires, its content ends up on
-    // `result` for the caller to read. Subflow-mount variants (for UI
-    // drill-down) can be added behind a flag if/when needed.
-    for (const b of this.opts.branches) {
-      decider = decider.addFunctionBranch(
-        b.id,
-        b.name,
-        runnerAsStage({ id: b.id, name: b.name, runner: b.runner }),
-      );
-    }
+    // Mount each branch: if the runner exposes `toFlowChart()`, mount
+    // as a subflow branch so narrative / explainable-UI consumers get
+    // drill-down into the chosen runner. Otherwise fall back to
+    // `runnerAsStage`. Matches the pattern used by FlowChart.ts and
+    // buildSwarmRouting — no concept should silently lose drill-down.
+    const mountRunnerBranch = (id: string, name: string, runner: RunnerLike): void => {
+      if (hasFlowChart(runner)) {
+        decider = decider.addSubFlowChartBranch(id, runner.toFlowChart(), name, {
+          // The runner's seed stage reads `scope.message` when invoked
+          // in subflow mode — pipe the pipeline input through.
+          inputMapper: (parent: Record<string, unknown>) => ({
+            message: (parent.pipelineInput as string) ?? '',
+          }),
+          outputMapper: (sfOutput: Record<string, unknown>) => ({
+            result: String(sfOutput.result ?? sfOutput.content ?? ''),
+          }),
+        });
+      } else {
+        decider = decider.addFunctionBranch(id, name, runnerAsStage({ id, name, runner }));
+      }
+    };
 
-    decider = decider.addFunctionBranch(
-      'default',
-      this.opts.defaultName,
-      runnerAsStage({
-        id: 'default',
-        name: this.opts.defaultName,
-        runner: this.opts.defaultRunner,
-      }),
-    );
+    for (const b of this.opts.branches) {
+      mountRunnerBranch(b.id, b.name, b.runner);
+    }
+    mountRunnerBranch('default', this.opts.defaultName, this.opts.defaultRunner);
 
     builder = decider.setDefault('default').end();
 

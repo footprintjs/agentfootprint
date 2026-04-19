@@ -1,0 +1,192 @@
+---
+title: Memory pipeline
+description: Give your agent durable memory across turns and sessions — composed as flowchart subflows you can inspect, swap, and audit.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Agents forget everything when the process ends — each `.run()` starts with a blank slate unless you hand them context. The **memory pipeline** is how you give an agent durable recall across turns and sessions, composed as two flowchart subflows:
+
+- **Read** runs BEFORE `CallLLM` — loads relevant prior content from a store, picks what fits the token budget, formats it as a `system` message, and prepends it to the prompt.
+- **Write** runs AFTER the turn finalizes — persists the new user / assistant messages back to the store, tagged with turn number + identity for later recall.
+
+Because both halves are flowcharts, the narrative shows *which* memories were recalled, why the picker included them, and what got persisted. Nothing is hidden inside a black-box adapter.
+
+## Quick start
+
+```ts
+import { Agent, anthropic } from 'agentfootprint';
+import { defaultPipeline, InMemoryStore } from 'agentfootprint/memory';
+
+// One store, shared across all turns / tenants.
+const store = new InMemoryStore();
+
+// Build the pipeline once at startup. It compiles two subflows
+// (read + write) that the Agent will mount inside its loop.
+const pipeline = defaultPipeline({
+  store,
+  loadCount: 20,          // how many recent entries to consider
+  reserveTokens: 512,     // tokens to leave for headers + new user turn
+  maxEntries: 10,         // cap to avoid lost-in-the-middle
+});
+
+const agent = Agent.create({ provider: anthropic('claude-sonnet-4-5') })
+  .system('You remember the user across turns.')
+  .memoryPipeline(pipeline)
+  .build();
+
+// Turn 1 — gets persisted
+await agent.run('My name is Alice.', {
+  identity: { conversationId: 'alice-session' },
+});
+
+// Turn 2 — read subflow injects "Alice" back into the LLM prompt
+const result = await agent.run('What did I tell you my name was?', {
+  identity: { conversationId: 'alice-session' },
+});
+// result.content → "Your name is Alice."
+```
+
+## Per-run identity — one agent, many users
+
+The agent is a **singleton**; identity is supplied per `.run()`. Pass it in `run()`'s second argument:
+
+```ts
+await agent.run('Show my orders', {
+  identity: {
+    tenant: 'acme-corp',      // optional — for multi-tenant isolation
+    principal: 'user-42',      // optional — user within tenant
+    conversationId: 'thread-7', // required — the "session" key
+  },
+  turnNumber: 3,               // optional — defaults to 1
+  contextTokensRemaining: 8000, // optional — defaults to 4000
+});
+```
+
+The store namespaces all keys by identity — tenant `A` can never see tenant `B`'s memory, even with identical `conversationId`. No app-level isolation code required.
+
+<Aside type="caution" title="Identity is mandatory in multi-tenant apps">
+If you don't pass `identity`, the pipeline falls back to `{ conversationId: 'default' }`. Fine for demos. **Dangerous** in prod — every user's turns share one conversation. In dev mode you'll see a console warning; in prod the fallback is silent.
+</Aside>
+
+## How it composes into the loop
+
+```
+Seed
+  → MemorySeed           ← copies identity/turn/budget from run() args onto scope
+  → [sf-memory-read]     ← the pipeline.read subflow: LoadRecent → Pick → Format
+  → [SystemPrompt subflow]
+  → [Messages subflow]
+  → [Tools subflow]
+  → AssemblePrompt       ← prepends system prompt + memory injection to messages
+  → CallLLM
+  → ParseResponse
+  → RouteResponse(decider)
+      ├─ tool-calls → [ToolExecution subflow] → loop
+      └─ final      → [Finalize subflow]
+                        ├─ Finalize (extract result)
+                        ├─ PackageForWrite
+                        ├─ [sf-memory-write]  ← the pipeline.write subflow
+                        └─ Break              (propagates to parent loop)
+```
+
+Memory-read is mounted **before** the loop body so it runs exactly once per `.run()` call — even in [Dynamic ReAct](/agentfootprint/guides/dynamic-react) mode, where `sf-system-prompt` and `sf-tools` re-evaluate every iteration. The store doesn't change mid-turn, so re-reading would be pure waste.
+
+Both memory subflows show up in the narrative and in any viewer built on `footprint-explainable-ui` — you can click into them, see which entries the picker included, and see what the write side actually persisted.
+
+## The default pipeline
+
+`defaultPipeline({ store })` composes three read stages and one write stage:
+
+| Stage | Reads | Writes | Purpose |
+|---|---|---|---|
+| `LoadRecent` | `identity`, `turnNumber` | `loaded` | Fetch N most-recent entries from the store (newest first) |
+| `PickByBudget` | `loaded`, `contextTokensRemaining` | `selected` | Greedy select entries that fit the budget, newest first |
+| `FormatDefault` | `selected` | `formatted` | Render as `<memory role="user" turn="5">...</memory>` blocks inside one `system` message |
+| `WriteMessages` | `identity`, `turnNumber`, `newMessages` | *store* | Persist each message as `MemoryEntry` with id `msg-{turn}-{index}` |
+
+The picker is a `decide()` — the narrative captures which branch fired (`skip-empty`, `skip-no-budget`, or "included N/M entries totaling K tokens"), so you can answer "why did / didn't you remember this?" after the fact.
+
+## Configuring the default pipeline
+
+```ts
+defaultPipeline({
+  store,                          // required
+  loadCount: 50,                  // default 20
+  reserveTokens: 1024,            // default 256 — leave room for new user turn
+  minimumTokens: 200,             // default 100 — below this, inject nothing (noise)
+  maxEntries: 10,                 // default: no cap, budget-only
+  tiers: ['hot'],                 // filter reads to a specific tier
+  writeTier: 'hot',               // tag written entries for tier-aware reads
+  writeTtlMs: 30 * 24 * 60 * 60_000, // expire after 30 days (compliance)
+  formatHeader: 'Prior session notes:',
+  formatFooter: 'Only reference these when relevant.',
+});
+```
+
+Tiered writes (`hot`/`warm`/`cold`) let you keep recent turns fresh while letting older ones expire. Combined with `writeTtlMs`, they're a cheap path to a MemGPT-style hot/warm/cold store.
+
+## The ephemeral pipeline
+
+For compliance-sensitive workflows where you want memory recall **but no persistence** (e.g., the agent should see prior-turn context but nothing should ever land on disk):
+
+```ts
+import { ephemeralPipeline, InMemoryStore } from 'agentfootprint/memory';
+
+// Pre-seed the store with known context; the pipeline will READ from it
+// but never write back.
+const store = new InMemoryStore();
+await store.put({ conversationId: 'x' }, { /* MemoryEntry */ });
+
+const agent = Agent.create({ provider })
+  .memoryPipeline(ephemeralPipeline({ store }))
+  .build();
+```
+
+`ephemeralPipeline` returns `{ read }` only — there's no write subflow to mount, so the agent reads context but nothing gets persisted from the turn itself.
+
+## Custom pipelines
+
+Both halves are plain `FlowChart`s. To build your own:
+
+```ts
+import { flowChart } from 'footprintjs';
+import type { MemoryPipeline } from 'agentfootprint/memory';
+
+const customRead = flowChart('MyLoad', myLoadStage, 'load')
+  .addFunction('Rerank', myRerankStage, 'rerank')
+  .addFunction('Format', myFormatStage, 'format')
+  .build();
+
+const customWrite = flowChart('ExtractFacts', myFactExtractor, 'extract')
+  .addFunction('Persist', myPersistStage, 'persist')
+  .build();
+
+const pipeline: MemoryPipeline = { read: customRead, write: customWrite };
+agent.memoryPipeline(pipeline);
+```
+
+As long as each subflow reads/writes the documented scope keys (`identity`, `turnNumber`, `contextTokensRemaining`, `newMessages`, and writes `formatted` on the read side), the agent will thread everything through correctly.
+
+## Stores
+
+The `MemoryStore` interface is a 9-method CRUD surface: `get`, `put`, `putIfVersion` (optimistic concurrency), `list` (with cursor pagination), `delete`, `seen` (content-hash dedupe), `recordSignature`, `feedback` (user ratings), `forget` (privacy erasure). `InMemoryStore` is the reference implementation; real backends (Redis, DynamoDB, Postgres) plug in via the same interface.
+
+The interface is deliberately small. If your backend needs extra features (vector search, full-text indexing), add them as separate stages in your custom read subflow — the store stays a simple CRUD layer.
+
+## Tradeoffs
+
+| Use the default pipeline when... | Build a custom pipeline when... |
+|---|---|
+| You want "chat history that persists" with minimal setup | You need semantic retrieval, reranking, or fact extraction |
+| Recency heuristic is fine | Relevance > recency (RAG-style vector search) |
+| Memory is cheap enough to include recent turns verbatim | You need MemGPT-style compaction / summarization |
+| Single-store, single-tier | Multi-store routing (hot SSD + cold S3), tier migration |
+
+Memory-read runs exactly **once per turn**, regardless of loop pattern (Regular or Dynamic) or how many tool-call iterations happen inside the turn. You pay one store query per `.run()` call — no multiplication by iteration count.
+
+## See also
+
+- [`agentfootprint/memory` API reference](/agentfootprint/api/) — full type definitions for `MemoryStore`, `MemoryEntry`, `MemoryIdentity`
+- [RAG pattern](/agentfootprint/guides/rag) — semantic retrieval for when relevance matters more than recency
+- [Grounding analysis](/agentfootprint/guides/grounding) — verify that the LLM actually used the memory you injected
