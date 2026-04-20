@@ -111,6 +111,11 @@ export function createCallLLMStage(provider: LLMProvider, options?: CallLLMStage
       content: response.content,
       model: response.model,
       latencyMs,
+      // Forward usage + stopReason so downstream consumers (Lens,
+      // token counters, billing) don't have to subscribe to the
+      // richer `agentfootprint.llm.response` event just to get tokens.
+      usage: response.usage,
+      stopReason: (response as { finishReason?: string }).finishReason,
     });
   };
 }

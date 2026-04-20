@@ -32,6 +32,14 @@ export type AgentStreamEvent =
       content: string;
       model?: string;
       latencyMs: number;
+      /** Token accounting reported by the provider. Forwarded verbatim
+       *  so consumers (Lens, billing, analytics) can tally without
+       *  having to subscribe to the richer `agentfootprint.llm.response`
+       *  event. */
+      usage?: { inputTokens?: number; outputTokens?: number };
+      /** Provider's stop-reason / finish-reason string
+       *  (e.g. "end_turn", "tool_use", "max_tokens"). */
+      stopReason?: string;
     }
   | { type: 'tool_start'; toolName: string; toolCallId: string; args: Record<string, unknown> }
   | {

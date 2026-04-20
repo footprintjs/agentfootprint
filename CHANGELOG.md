@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.17.3]
+
+### Fixed
+
+- **`agentfootprint.stream.llm_end` now forwards token usage and stop
+  reason.** The typed `AgentStreamEvent` schema carried
+  `{iteration, toolCallCount, content, model, latencyMs}` but omitted
+  `usage` and `stopReason` — so stream consumers (Lens, cost meters,
+  any dashboard subscribing to the stream) got `0→0` tokens and no
+  finish reason, even though the same data was already present on the
+  sibling `agentfootprint.llm.response` event. Three emit sites
+  (`callLLMStage.ts` + both paths in `streamingCallLLMStage.ts`) now
+  include `usage: response.usage` and
+  `stopReason: response.finishReason`. Schema additions are optional
+  fields → backwards-compatible for consumers that ignore them.
+
 ## [1.17.2]
 
 ### Fixed

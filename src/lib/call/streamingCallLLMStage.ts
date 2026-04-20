@@ -149,6 +149,8 @@ export function createStreamingCallLLMStage(
         content,
         model: response.model,
         latencyMs,
+        usage: response.usage,
+        stopReason: (response as { finishReason?: string }).finishReason,
       });
       return;
     }
@@ -179,6 +181,8 @@ export function createStreamingCallLLMStage(
       content: response.content,
       model: response.model,
       latencyMs,
+      usage: response.usage,
+      stopReason: (response as { finishReason?: string }).finishReason,
     });
   };
 }
