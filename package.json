@@ -1,6 +1,6 @@
 {
   "name": "agentfootprint",
-  "version": "1.17.4",
+  "version": "1.17.5",
   "description": "The explainable agent framework — build AI agents you can explain, audit, and trust. Built on footprintjs.",
   "license": "MIT",
   "author": "Sanjay Krishna Anbalagan",
