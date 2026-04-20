@@ -1,0 +1,718 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`examples smoke test > advanced/01-agent-loop.ts — runs + output matches snapshot 1`] = `
+{
+  "basic": {
+    "content": "Hello! How can I help?",
+    "iterations": 1,
+  },
+  "observed": {
+    "calls": 1,
+    "turns": 1,
+  },
+  "withTool": {
+    "content": "San Francisco is 72F and sunny!",
+    "iterations": 2,
+  },
+}
+`;
+
+exports[`examples smoke test > concepts/01-llm-call.ts — runs + output matches snapshot 1`] = `
+{
+  "content": "This text discusses AI safety and alignment challenges.",
+  "cost": 0,
+  "tokens": {
+    "averageLatencyMs": "[LATENCY]",
+    "calls": [
+      {
+        "cost": 0,
+        "inputTokens": 10,
+        "latencyMs": "[LATENCY]",
+        "loopIteration": 0,
+        "model": "mock",
+        "outputTokens": 20,
+        "runtimeStageId": "call-llm#2",
+        "turnNumber": 1,
+      },
+    ],
+    "totalCalls": 1,
+    "totalCost": 0,
+    "totalInputTokens": 10,
+    "totalLatencyMs": "[LATENCY]",
+    "totalOutputTokens": 20,
+  },
+  "tools": {
+    "byTool": {},
+    "totalCalls": 0,
+    "totalErrors": 0,
+  },
+}
+`;
+
+exports[`examples smoke test > concepts/02-agent.ts — runs + output matches snapshot 1`] = `
+{
+  "content": "The sum of 17 and 25 is 42.",
+  "cost": 0,
+  "iterations": 1,
+  "tokens": {
+    "averageLatencyMs": "[LATENCY]",
+    "calls": [
+      {
+        "cost": 0,
+        "inputTokens": 10,
+        "latencyMs": "[LATENCY]",
+        "loopIteration": 0,
+        "model": "mock",
+        "outputTokens": 20,
+        "runtimeStageId": "call-llm#8",
+        "turnNumber": 1,
+      },
+      {
+        "cost": 0,
+        "inputTokens": 10,
+        "latencyMs": "[LATENCY]",
+        "loopIteration": 1,
+        "model": "mock",
+        "outputTokens": 20,
+        "runtimeStageId": "call-llm#13",
+        "turnNumber": 1,
+      },
+    ],
+    "totalCalls": 2,
+    "totalCost": 0,
+    "totalInputTokens": 20,
+    "totalLatencyMs": "[LATENCY]",
+    "totalOutputTokens": 40,
+  },
+  "tools": {
+    "byTool": {
+      "add": {
+        "averageLatencyMs": "[LATENCY]",
+        "calls": 1,
+        "errors": 0,
+        "totalLatencyMs": "[LATENCY]",
+      },
+    },
+    "totalCalls": 1,
+    "totalErrors": 0,
+  },
+}
+`;
+
+exports[`examples smoke test > concepts/03-rag.ts — runs + output matches snapshot 1`] = `
+{
+  "chunks": [
+    {
+      "content": "The ultimate answer to life, the universe, and everything is 42.",
+      "metadata": {
+        "source": "guide.pdf",
+      },
+      "score": 0.95,
+    },
+    {
+      "content": "This was computed by Deep Thought over 7.5 million years.",
+      "metadata": {
+        "source": "guide.pdf",
+      },
+      "score": 0.82,
+    },
+  ],
+  "content": "According to the documentation, the answer is 42.",
+  "cost": 0,
+  "tokens": {
+    "averageLatencyMs": "[LATENCY]",
+    "calls": [
+      {
+        "cost": 0,
+        "inputTokens": 10,
+        "latencyMs": "[LATENCY]",
+        "loopIteration": 0,
+        "model": "mock",
+        "outputTokens": 20,
+        "runtimeStageId": "call-llm#4",
+        "turnNumber": 1,
+      },
+    ],
+    "totalCalls": 1,
+    "totalCost": 0,
+    "totalInputTokens": 10,
+    "totalLatencyMs": "[LATENCY]",
+    "totalOutputTokens": 20,
+  },
+  "tools": {
+    "byTool": {},
+    "totalCalls": 0,
+    "totalErrors": 0,
+  },
+}
+`;
+
+exports[`examples smoke test > concepts/04-flowchart.ts — runs + output matches snapshot 1`] = `
+{
+  "content": "Dear customer, we have processed your refund of $50.",
+  "cost": 0,
+  "tokens": {
+    "averageLatencyMs": "[LATENCY]",
+    "calls": [],
+    "totalCalls": 0,
+    "totalCost": 0,
+    "totalInputTokens": 0,
+    "totalLatencyMs": "[LATENCY]",
+    "totalOutputTokens": 0,
+  },
+  "tools": {
+    "byTool": {},
+    "totalCalls": 0,
+    "totalErrors": 0,
+  },
+}
+`;
+
+exports[`examples smoke test > concepts/05-parallel.ts — runs + output matches snapshot 1`] = `
+{
+  "branches": [
+    {
+      "content": "Ethics: minimal PII risk if rate-limiting logs are redacted.",
+      "id": "ethics",
+      "status": "fulfilled",
+    },
+    {
+      "content": "Cost: ~$200/month in egress + compute at projected 10k req/day.",
+      "id": "cost",
+      "status": "fulfilled",
+    },
+    {
+      "content": "Technical: build on existing API gateway; 2-week estimate.",
+      "id": "tech",
+      "status": "fulfilled",
+    },
+  ],
+  "content": "Recommendation: proceed. All three dimensions are acceptable; redact PII in rate-limit logs per ethics review.",
+  "cost": 0,
+  "tokens": {
+    "averageLatencyMs": "[LATENCY]",
+    "calls": [],
+    "totalCalls": 0,
+    "totalCost": 0,
+    "totalInputTokens": 0,
+    "totalLatencyMs": "[LATENCY]",
+    "totalOutputTokens": 0,
+  },
+  "tools": {
+    "byTool": {},
+    "totalCalls": 0,
+    "totalErrors": 0,
+  },
+}
+`;
+
+exports[`examples smoke test > concepts/06-conditional.ts — runs + output matches snapshot 1`] = `
+{
+  "content": "Refund initiated. Confirmation #R-00123.",
+  "cost": 0,
+  "tokens": {
+    "averageLatencyMs": "[LATENCY]",
+    "calls": [],
+    "totalCalls": 0,
+    "totalCost": 0,
+    "totalInputTokens": 0,
+    "totalLatencyMs": "[LATENCY]",
+    "totalOutputTokens": 0,
+  },
+  "tools": {
+    "byTool": {},
+    "totalCalls": 0,
+    "totalErrors": 0,
+  },
+}
+`;
+
+exports[`examples smoke test > concepts/07-swarm.ts — runs + output matches snapshot 1`] = `
+{
+  "content": "Routing to billing.",
+  "cost": 0,
+  "tokens": {
+    "averageLatencyMs": "[LATENCY]",
+    "calls": [],
+    "totalCalls": 0,
+    "totalCost": 0,
+    "totalInputTokens": 0,
+    "totalLatencyMs": "[LATENCY]",
+    "totalOutputTokens": 0,
+  },
+  "tools": {
+    "byTool": {},
+    "totalCalls": 0,
+    "totalErrors": 0,
+  },
+}
+`;
+
+exports[`examples smoke test > integrations/01-full-integration.ts — runs + output matches snapshot 1`] = `
+{
+  "content": "Your order ORD-123 has been shipped. Total was $49.99.",
+}
+`;
+
+exports[`examples smoke test > integrations/02-error-handling.ts — runs + output matches snapshot 1`] = `
+{
+  "authError": {
+    "code": "auth",
+    "retryable": false,
+  },
+  "classifications": {
+    "401": "auth",
+    "413": "context_length",
+    "429": "rate_limit",
+    "500": "server",
+  },
+  "rateLimitError": {
+    "code": "rate_limit",
+    "retryable": true,
+  },
+  "wrappedNetworkError": {
+    "code": "network",
+    "retryable": true,
+  },
+}
+`;
+
+exports[`examples smoke test > observability/01-recorders.ts — runs + output matches snapshot 1`] = `
+{
+  "cost": 0,
+  "explain": {
+    "claims": [
+      "[CIRCULAR]",
+    ],
+    "context": {
+      "availableTools": "[CIRCULAR]",
+      "input": "What is the answer?",
+      "messages": "[CIRCULAR]",
+      "model": "mock",
+      "systemPrompt": "You are a helpful assistant.",
+    },
+    "decisions": [
+      {
+        "args": {
+          "topic": "answer",
+        },
+        "latencyMs": "[LATENCY]",
+        "toolName": "lookup",
+      },
+    ],
+    "iterations": [
+      {
+        "claim": null,
+        "context": {
+          "availableTools": [
+            {
+              "description": "Look up a fact",
+              "inputSchema": {
+                "properties": {
+                  "topic": {
+                    "type": "string",
+                  },
+                },
+                "type": "object",
+              },
+              "name": "lookup",
+            },
+          ],
+          "input": "What is the answer?",
+          "messages": [
+            {
+              "content": "You are a helpful assistant.",
+              "role": "system",
+            },
+            {
+              "content": "What is the answer?",
+              "role": "user",
+            },
+          ],
+          "model": "mock",
+          "systemPrompt": "You are a helpful assistant.",
+        },
+        "decisions": [
+          {
+            "args": {
+              "topic": "answer",
+            },
+            "latencyMs": "[LATENCY]",
+            "toolName": "lookup",
+          },
+        ],
+        "iteration": 0,
+        "runtimeStageId": "call-llm#8",
+        "sources": [
+          {
+            "args": {
+              "topic": "answer",
+            },
+            "result": "answer: 42",
+            "toolName": "lookup",
+            "turnNumber": 1,
+          },
+        ],
+      },
+      {
+        "claim": {
+          "content": "The answer is 42.",
+          "iteration": 1,
+          "model": "mock",
+        },
+        "context": {
+          "availableTools": [
+            "[CIRCULAR]",
+          ],
+          "input": "What is the answer?",
+          "messages": [
+            {
+              "content": "You are a helpful assistant.",
+              "role": "system",
+            },
+            {
+              "content": "What is the answer?",
+              "role": "user",
+            },
+            {
+              "content": "Let me look that up.",
+              "role": "assistant",
+              "toolCalls": [
+                {
+                  "arguments": {
+                    "topic": "answer",
+                  },
+                  "id": "1",
+                  "name": "lookup",
+                },
+              ],
+            },
+          ],
+          "model": "mock",
+          "systemPrompt": "You are a helpful assistant.",
+        },
+        "decisions": [],
+        "iteration": 1,
+        "runtimeStageId": "call-llm#13",
+        "sources": [],
+      },
+    ],
+    "sources": [
+      "[CIRCULAR]",
+    ],
+    "summary": "Agent called lookup (1 call), then responded based on the results.",
+  },
+  "tokens": {
+    "averageLatencyMs": "[LATENCY]",
+    "calls": [
+      {
+        "cost": 0,
+        "inputTokens": 10,
+        "latencyMs": "[LATENCY]",
+        "loopIteration": 0,
+        "model": "mock",
+        "outputTokens": 20,
+        "runtimeStageId": "call-llm#8",
+        "turnNumber": 1,
+      },
+      {
+        "cost": 0,
+        "inputTokens": 10,
+        "latencyMs": "[LATENCY]",
+        "loopIteration": 1,
+        "model": "mock",
+        "outputTokens": 20,
+        "runtimeStageId": "call-llm#13",
+        "turnNumber": 1,
+      },
+    ],
+    "totalCalls": 2,
+    "totalCost": 0,
+    "totalInputTokens": 20,
+    "totalLatencyMs": "[LATENCY]",
+    "totalOutputTokens": 40,
+  },
+  "tools": {
+    "byTool": {
+      "lookup": {
+        "averageLatencyMs": "[LATENCY]",
+        "calls": 1,
+        "errors": 0,
+        "totalLatencyMs": "[LATENCY]",
+      },
+    },
+    "totalCalls": 1,
+    "totalErrors": 0,
+  },
+}
+`;
+
+exports[`examples smoke test > observability/02-explain.ts — runs + output matches snapshot 1`] = `
+{
+  "claims": 1,
+  "decisions": 1,
+  "firstClaim": "Your order ORD-1003 has shipped. Total: $299.",
+  "firstSource": {
+    "args": {
+      "orderId": "ORD-1003",
+    },
+    "result": "{"orderId":"ORD-1003","status":"shipped","amount":299}",
+    "toolName": "lookup_order",
+    "turnNumber": 1,
+  },
+  "iterations": 2,
+  "sources": 1,
+  "summary": "Agent called lookup_order (1 call), then responded based on the results.",
+}
+`;
+
+exports[`examples smoke test > observability/03-otel.ts — runs + output matches snapshot 1`] = `
+{
+  "llmCalls": 2,
+  "totalCost": 0,
+  "turns": 1,
+}
+`;
+
+exports[`examples smoke test > observability/04-export-trace.ts — runs + output matches snapshot 1`] = `
+{
+  "exportedAt": "[TIMESTAMP]",
+  "narrativeEntries": 43,
+  "narrativeLines": 43,
+  "redacted": true,
+  "schemaVersion": 1,
+  "sizeKb": 31,
+  "snapshotKeys": [
+    "sharedState",
+    "executionTree",
+    "commitLog",
+    "subflowResults",
+    "recorders",
+  ],
+}
+`;
+
+exports[`examples smoke test > patterns/01-regular-vs-dynamic.ts — runs + output matches snapshot 1`] = `
+{
+  "content": "San Francisco is 72°F (22°C), sunny with a light breeze.",
+  "iterations": 2,
+  "pattern": "Regular",
+  "tokenStats": {
+    "averageLatencyMs": "[LATENCY]",
+    "calls": [
+      {
+        "cost": 0,
+        "inputTokens": 10,
+        "latencyMs": "[LATENCY]",
+        "loopIteration": 0,
+        "model": "mock",
+        "outputTokens": 20,
+        "runtimeStageId": "call-llm#8",
+        "turnNumber": 1,
+      },
+      {
+        "cost": 0,
+        "inputTokens": 10,
+        "latencyMs": "[LATENCY]",
+        "loopIteration": 1,
+        "model": "mock",
+        "outputTokens": 20,
+        "runtimeStageId": "call-llm#13",
+        "turnNumber": 1,
+      },
+      {
+        "cost": 0,
+        "inputTokens": 10,
+        "latencyMs": "[LATENCY]",
+        "loopIteration": 2,
+        "model": "mock",
+        "outputTokens": 20,
+        "runtimeStageId": "call-llm#18",
+        "turnNumber": 1,
+      },
+    ],
+    "totalCalls": 3,
+    "totalCost": 0,
+    "totalInputTokens": 30,
+    "totalLatencyMs": "[LATENCY]",
+    "totalOutputTokens": 60,
+  },
+  "toolStats": {
+    "byTool": {
+      "convert-units": {
+        "averageLatencyMs": "[LATENCY]",
+        "calls": 1,
+        "errors": 0,
+        "totalLatencyMs": "[LATENCY]",
+      },
+      "get-weather": {
+        "averageLatencyMs": "[LATENCY]",
+        "calls": 1,
+        "errors": 0,
+        "totalLatencyMs": "[LATENCY]",
+      },
+    },
+    "totalCalls": 2,
+    "totalErrors": 0,
+  },
+}
+`;
+
+exports[`examples smoke test > patterns/02-plan-execute.ts — runs + output matches snapshot 1`] = `
+{
+  "content": "Executed plan: launch announcement drafted with key points.",
+}
+`;
+
+exports[`examples smoke test > patterns/03-reflexion.ts — runs + output matches snapshot 1`] = `
+{
+  "content": "Improved draft with examples added.",
+}
+`;
+
+exports[`examples smoke test > patterns/04-tree-of-thoughts.ts — runs + output matches snapshot 1`] = `
+{
+  "content": "=== thinker-0 ===
+candidate answer 1
+
+=== thinker-1 ===
+candidate answer 2
+
+=== thinker-2 ===
+candidate answer 3",
+}
+`;
+
+exports[`examples smoke test > patterns/05-map-reduce.ts — runs + output matches snapshot 1`] = `
+{
+  "content": "Merged summary: doc-0, doc-1, doc-2",
+}
+`;
+
+exports[`examples smoke test > providers/01-prompt.ts — runs + output matches snapshot 1`] = `
+{
+  "summary": "This is a concise summary of the input.",
+  "translation": "Ceci est une traduction en francais.",
+}
+`;
+
+exports[`examples smoke test > providers/02-message.ts — runs + output matches snapshot 1`] = `
+{
+  "original": "7 messages",
+  "truncated": "7 messages (kept 7 of 7 (95 chars))",
+  "windowed": "4 messages (kept 4 of 7)",
+}
+`;
+
+exports[`examples smoke test > providers/03-tool.ts — runs + output matches snapshot 1`] = `
+{
+  "count": 2,
+  "hasCalculator": true,
+  "tools": [
+    "calculator",
+    "weather",
+  ],
+}
+`;
+
+exports[`examples smoke test > resilience/01-runner-wrappers.ts — runs + output matches snapshot 1`] = `
+{
+  "attempts": 3,
+  "content": "Success on attempt 3",
+}
+`;
+
+exports[`examples smoke test > resilience/02-provider-fallback.ts — runs + output matches snapshot 1`] = `
+{
+  "content": "Hello! I am the backup provider. The primary was rate limited.",
+  "fallbacks": [
+    "Falling back from 0 to 1: 429 Rate Limited",
+  ],
+}
+`;
+
+exports[`examples smoke test > runtime-features/custom-route/01-custom-route.ts — runs + output matches snapshot 1`] = `
+{
+  "content": "[ROUTED TO HUMAN REVIEW] Ticket queued: "I've been waiting 2 weeks with no response, this is unacceptable!"",
+}
+`;
+
+exports[`examples smoke test > runtime-features/instructions/01-basic.ts — runs + output matches snapshot 1`] = `
+{
+  "content": "Order ORD-42 shipped for $299. Refund requires manager approval per policy.",
+}
+`;
+
+exports[`examples smoke test > runtime-features/instructions/02-llm-instructions.ts — runs + output matches snapshot 1`] = `
+{
+  "agentResponse": "I'm sorry, the loan application was denied due to a credit score below threshold. You can improve your chances by building credit. Would you like the detailed reasoning?",
+  "followUpInjected": true,
+  "instructionsInjected": false,
+  "messageCount": 4,
+}
+`;
+
+exports[`examples smoke test > runtime-features/memory/01-memory-pipeline.ts — runs + output matches snapshot 1`] = `
+{
+  "alice": {
+    "entries": 4,
+    "turn1": "Nice to meet you, Alice!",
+    "turn2": "You live in San Francisco, Alice.",
+  },
+  "bob": {
+    "entries": 2,
+    "turn1": "I don't know yet.",
+  },
+}
+`;
+
+exports[`examples smoke test > runtime-features/parallel-tools/01-parallel-tools.ts — runs + output matches snapshot 1`] = `
+{
+  "content": "Alice Chen (premium) has 1 recent order for WIDGET-A — 42 in stock.",
+  "elapsedMs": "[LATENCY]",
+  "tools": {
+    "byTool": {
+      "get_orders": {
+        "averageLatencyMs": "[LATENCY]",
+        "calls": 1,
+        "errors": 0,
+        "totalLatencyMs": "[LATENCY]",
+      },
+    },
+    "totalCalls": 1,
+    "totalErrors": 0,
+  },
+}
+`;
+
+exports[`examples smoke test > runtime-features/streaming/01-events.ts — runs + output matches snapshot 1`] = `
+{
+  "eventTypes": [
+    "turn_start",
+    "llm_start",
+    "llm_end",
+    "tool_start",
+    "tool_end",
+    "llm_start",
+    "llm_end",
+    "turn_end",
+  ],
+  "totalEvents": 8,
+}
+`;
+
+exports[`examples smoke test > security/01-gated-tools.ts — runs + output matches snapshot 1`] = `
+{
+  "blocked": [
+    {
+      "id": "delete-user",
+      "phase": "resolve",
+    },
+  ],
+  "content": "I searched for AI news. I cannot delete users as I do not have admin access.",
+  "permissions": [
+    "search",
+    "run-code",
+  ],
+}
+`;

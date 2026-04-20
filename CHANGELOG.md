@@ -5,6 +5,38 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.17.6]
+
+### Examples — full footprintjs-style parity
+
+- **Wrote 19 missing `.md` explainer files** so every `.ts` example now has
+  a paired `.md` (31 / 31 — full 1:1 coverage matching the
+  footprintjs/examples/ pattern). New explainers cover: `providers/` (3),
+  `runtime-features/{streaming,instructions,parallel-tools,custom-route,memory}/`
+  (6), `observability/` (4), `security/` (1), `resilience/` (2),
+  `advanced/` (1), `integrations/` (2). Same frontmatter format
+  (`name`, `group`, `guide`, `defaultInput`) and same section structure
+  (When to use / What you'll see in the trace / Key API / Failure modes /
+  Related) as the `concepts/` and `patterns/` explainers shipped in
+  v1.17.5.
+
+### Tests — snapshot regression detection
+
+- **`test/examples-smoke.test.ts` now asserts `toMatchSnapshot()`** on
+  every example's `run()` output. The previous version only verified
+  "does it run without throwing?" — too weak to catch silent behavior
+  drift. Now if a library change alters tool counts, iteration counts,
+  branch selection, content shape, or any other observable result, the
+  snapshot diff fails loudly and forces the author to either fix the
+  example or update the golden with `npm test -- -u`.
+- 31 baseline snapshots committed to `test/__snapshots__/`. Stable across
+  re-runs (verified) — non-determinism (timestamps, latencies, generated
+  trace IDs, JSON byte sizes) is scrubbed by a small `sanitize()` helper
+  before comparison.
+- Brings the in-repo gate to parity with footprintjs's
+  `footprint-samples/test/integration` snapshot suite — but inside the
+  main repo, no external sibling required.
+
 ## [1.17.5]
 
 ### Examples
