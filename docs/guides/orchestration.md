@@ -100,6 +100,10 @@ const resilient = withFallback(primaryAgent, fallbackAgent, {
 
 ## withCircuitBreaker
 
+> **Like:** an electrical breaker — after too many failures, the circuit "opens" and all requests fast-fail until reset time. Stops you from hammering a downed service.
+
+Background: the *Circuit Breaker* pattern was popularized by Martin Fowler (2014) and implemented widely by Hystrix and Resilience4j; this is the same pattern applied to `LLMProvider` calls.
+
 Tracks consecutive failures. After reaching the threshold, the circuit opens and all calls fail immediately (fast-fail) until the reset timeout elapses.
 
 ```typescript
@@ -177,6 +181,8 @@ const result = await production.run('Hello');
 1. `withFallback` — if primary fails, try fallback
 2. `withRetry` — retry the fallback-wrapped runner up to 2 times
 3. `withCircuitBreaker` — if 3 consecutive runs fail, fast-fail for 60s
+
+> **⚠ Stacking order matters.** The outer wrapper sees errors only AFTER inner wrappers have had their chance. Common mistake: putting `withCircuitBreaker` *inside* `withRetry` — every retry counts as a separate breaker probe, so the breaker never trips. Put `withCircuitBreaker` outside `withRetry` if you want one logical "request" per breaker tick.
 
 ### In FlowChart
 

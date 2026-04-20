@@ -8,6 +8,10 @@ Production agent systems face two problems that infrastructure alone can't solve
 
 agentfootprint solves both at the agent level — where the LLM decision happens, not at the infrastructure level where it's too late.
 
+> **Background on tool visibility as an attack surface:** Greshake et al. 2023 ("Not what you've signed up for: Compromising Real-World LLM-Integrated Applications with Indirect Prompt Injection") showed that any tool description an LLM can read becomes part of its attack surface — a malicious tool description can hijack the agent. Filtering tools at *resolve* time (not just at *execute* time) is a defense, not just a UX nicety.
+
+Here's how each problem is solved in the library.
+
 ---
 
 ## Tool Gating — `gatedTools`
@@ -36,6 +40,8 @@ const agent = Agent.create({ provider })
 
 Both layers run every loop iteration. Permissions can change mid-conversation (e.g., after the user authenticates).
 
+**What's novel here:** MCP allow-lists and OpenAI's tool filtering exist; they operate at a single layer (typically execute-time). `gatedTools` enforces at **both** layers (resolve **and** execute), wires permission events into the recorder system for an audit trail, and recomputes per loop iteration so policies that depend on conversation state work without restarting the agent. The two-layer + audit-trail combination is what's specific to agentfootprint.
+
 ### Context-Aware Permissions
 
 The permission checker receives the full `ToolContext` — message, turn number, conversation history:
@@ -49,6 +55,8 @@ const gated = gatedTools(tools, (toolId, ctx) => {
   return allowedTools.has(toolId);
 });
 ```
+
+> **Checker exception behavior:** if your checker throws, the tool is treated as **denied** (fail-closed) and an `onBlocked(toolId, 'error')` event fires. Make sure your checker is total — exceptions don't fall through to "allow."
 
 ### Observability — `onBlocked`
 

@@ -6,6 +6,7 @@ Comprehensive guides for using agentfootprint — the explainable agent framewor
 |-------|---------------|
 | **[Quick Start](quick-start.md)** | Install, first LLMCall, first Agent with tools, adapter-swap testing |
 | **[Concepts](concepts.md)** | The concept ladder: LLMCall, Agent, RAG, FlowChart, Swarm |
+| **[Patterns](patterns.md)** | Loop patterns (Regular/Dynamic ReAct) + composition patterns (planExecute, reflexion, treeOfThoughts, mapReduce) |
 | **[Providers](providers.md)** | PromptProvider, MessageStrategy, ToolProvider — swap strategies without changing agent code |
 | **[Recorders](recorders.md)** | All 7 recorders (Token, Cost, Turn, ToolUsage, Quality, Guardrail, Composite) + `.recorder()` API |
 | **[Adapters](adapters.md)** | LLM adapters (Anthropic, OpenAI, Bedrock, Ollama, Mock) + protocol adapters (MCP, A2A) |

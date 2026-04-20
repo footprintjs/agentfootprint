@@ -5,6 +5,46 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.17.4]
+
+### Documentation
+
+- **New `docs/guides/patterns.md`** covering both loop patterns
+  (`AgentPattern.Regular` vs `Dynamic`) and the four composition pattern
+  factories (`planExecute`, `reflexion`, `treeOfThoughts`, `mapReduce`)
+  that ship from `agentfootprint/patterns` but were previously
+  undocumented. Each pattern section includes an everyday analogy, the
+  canonical research citation (Yao et al. 2023, Shinn et al. 2023, Wang
+  et al. 2023, Madaan et al. 2023, Dean & Ghemawat 2004), an
+  "honesty box" naming the simplification (e.g. shipped `reflexion`
+  factory is closer to Self-Refine than full Reflexion), per-pattern
+  observability + failure-mode notes, and a
+  "Picking a quality pattern" decision table.
+- **`docs/guides/concepts.md` updated to reflect the seven shipped
+  concepts** (was documenting five — `Parallel` and `Conditional` were
+  missing). Added builder + runner sections for both, plus
+  per-concept analogies, ReAct/RAG/Swarm citations, and failure-mode
+  notes for every concept.
+- **`docs/guides/recorders.md` adds the missing `ExplainRecorder`
+  section** — the per-iteration grounding evidence recorder that the
+  README pitches as the differentiator. Also adds the LLM-as-judge
+  caveat (Zheng et al. 2023) on `QualityRecorder`, the recorder-id
+  idempotency rule, and updates the summary table with `ExplainRecorder`,
+  `PermissionRecorder`, and `agentObservability()`.
+- **All other guides (`quick-start`, `providers`, `adapters`,
+  `orchestration`, `security`, `instructions`, `streaming`) reviewed
+  through a four-persona lens** (student / professor / senior engineer
+  / researcher) and updated with: opening analogies, prior-art
+  citations where applicable, "Failure modes" / "Cost note" /
+  "What's novel" subsections at production-relevant spots, and honest
+  positioning language separating shipped behavior from prior art.
+- Quick-start example tool replaced (deterministic `add` instead of a
+  fake `web_search` returning a hallucinated answer); a new
+  "Before You Ship" production checklist links the security /
+  orchestration / observability primitives readers should add before
+  deploying with a real provider.
+- No source code changes — documentation-only release.
+
 ## [1.17.3]
 
 ### Fixed

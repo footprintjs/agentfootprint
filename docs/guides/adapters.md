@@ -1,9 +1,13 @@
 # Adapters
 
+> **Like:** power-plug adapters for traveling between countries — same device, different socket. The agent code doesn't change when you switch from Anthropic to OpenAI to a local model.
+
 Adapters bridge external systems to agentfootprint's interfaces. There are two categories:
 
 1. **LLM Adapters** — implement `LLMProvider` to connect to LLM APIs
 2. **Protocol Adapters** — bridge external protocols (MCP, A2A) to agentfootprint's ToolProvider/RunnerLike
+
+> **Resilience adapters** (`fallbackProvider`, `resilientProvider`) wrap one or more `LLMProvider`s into a more robust one. They live with the security primitives because they pair with `gatedTools` for production hardening — see [security.md](security.md). They do *not* require special adapter code.
 
 ---
 
@@ -220,6 +224,20 @@ interface A2AResponse {
 
 ---
 
+## Provider Semantic Differences
+
+Adapters normalize most things, but a few provider-specific behaviors leak through. Be aware:
+
+| Provider feature | Adapter handling |
+|---|---|
+| Anthropic extended thinking | Surfaces as `thinking` events when `.streaming(true)` |
+| OpenAI parallel tool calls | Returned as `toolCalls[]` with multiple entries; agentfootprint executes them per `.parallelTools()` setting |
+| Bedrock model IDs | Use the full ARN-style id (`anthropic.claude-3-sonnet-20240229-v1:0`) — Bedrock IDs differ from Anthropic API IDs |
+| Token usage shape | Normalized to `{ inputTokens, outputTokens }`; Anthropic's cache token fields are NOT yet surfaced |
+| Stop reasons | Normalized to `'stop' \| 'tool_use' \| 'length' \| 'content_filter'`; provider-specific reasons are mapped to the closest match |
+
+If your code branches on provider behavior, don't — write against the normalized interface and report the gap.
+
 ## Error Handling
 
 All adapters normalize errors to `LLMError`:
@@ -243,6 +261,8 @@ type LLMErrorCode =
 const error = new LLMError({ message: 'rate limited', code: 'rate_limit', provider: 'openai' });
 error.retryable; // true (rate_limit, server, timeout, network are retryable)
 ```
+
+**Adapters do NOT retry automatically.** A `rate_limit` error propagates immediately. Wrap with `withRetry` (or use `resilientProvider` from [security.md](security.md)) to add retry behavior.
 
 Combine with [orchestration wrappers](orchestration.md) for automatic retry on retryable errors:
 

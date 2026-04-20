@@ -1,6 +1,29 @@
 # Streaming & Lifecycle Events
 
+> **Like:** a sportscaster narrating a game in real time. You hear what's happening as it happens, not after.
+
 agentfootprint provides real-time lifecycle events during agent execution via `AgentStreamEvent`. Consumers (CLI, web, mobile) use these to build smooth UX.
+
+## Mental Model — Nested Lifecycles
+
+The 9 event types form a nested hierarchy. Read them as scopes:
+
+```
+turn_start ─────────────────────────────────────────── turn_end
+   │
+   ├─ llm_start ── (token | thinking)* ── llm_end
+   │
+   ├─ tool_start ────── tool_end
+   │
+   ├─ llm_start ── (token | thinking)* ── llm_end
+   │
+   └─ tool_start ────── tool_end
+        ⋮
+```
+
+A **turn** is one user message → final response. A turn contains one or more **iterations**, each made of an LLM call (with optional `token` / `thinking` events inside) followed by zero or more tool calls. `error` can fire at any nesting level, terminating the enclosing scope.
+
+**Background:** the event taxonomy mirrors the providers' native streaming protocols — Anthropic's Messages API distinguishes thinking / text / tool_use blocks; OpenAI's chat completions stream content + tool_calls separately. The `AgentStreamEvent` union is the lowest-common-denominator across them, plus the agentfootprint-specific framing events (turn_*, tool_*).
 
 ## Quick Start
 
@@ -163,6 +186,29 @@ data: {"type":"tool_start","toolName":"search","toolCallId":"tc-1","args":{"q":"
 ## Error Isolation
 
 `onEvent` handler errors are swallowed — they never crash the agent pipeline. This is the same pattern as `RecorderBridge` (passive observers never break execution).
+
+> **Visibility into swallowed errors:** in dev mode (`enableDevMode()` from `footprintjs`), swallowed `onEvent` errors are surfaced via `console.warn` so you can see when your handler is broken. Production stays silent.
+
+## Parallel Tool Call Ordering
+
+When `.parallelTools(true)` is set on the Agent builder, multiple tools in a single iteration execute concurrently via `Promise.all`. Their `tool_start` / `tool_end` events **interleave** in real time order — there is no per-tool serial ordering guarantee within an iteration.
+
+To reconstruct per-tool order in the UI, group events by `toolCallId`:
+
+```typescript
+const tools = new Map<string, { name: string; startedAt: number; endedAt?: number }>();
+
+onEvent: (e) => {
+  if (e.type === 'tool_start') {
+    tools.set(e.toolCallId, { name: e.toolName, startedAt: Date.now() });
+  } else if (e.type === 'tool_end') {
+    const t = tools.get(e.toolCallId);
+    if (t) t.endedAt = Date.now();
+  }
+};
+```
+
+Without `.parallelTools()`, tools execute sequentially in the order the LLM requested them and events arrive serial.
 
 ## Pause Events
 

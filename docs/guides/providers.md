@@ -1,12 +1,18 @@
 # Providers
 
-Providers are active strategies that shape what the LLM sees. There are three provider types:
+> **Like:** swapping ingredients in a recipe without rewriting the recipe. Same agent, different prompt / memory / tool source.
 
-| Provider | Controls | Interface |
-|----------|----------|-----------|
-| **PromptProvider** | System prompt per turn | `resolve(context) → string` |
-| **MessageStrategy** | Message array sent to LLM | `prepare(history, context) → Message[]` |
-| **ToolProvider** | Which tools are available | `resolve(context) → LLMToolDescription[]` |
+`.system("...")`, `.tool(t)`, and the default conversation history are shortcuts. **Providers** are the strategy pattern underneath them — swap *how* the system prompt, message history, and tool list are computed each turn, without rewriting the agent.
+
+There are three provider types — one for each input the LLM API actually accepts (`system`, `messages`, `tools`):
+
+| Provider | Controls | Interface | Maps to LLM API |
+|----------|----------|-----------|---|
+| **PromptProvider** | System prompt per turn | `resolve(context) → string` | `system` |
+| **MessageStrategy** | Message array sent to LLM | `prepare(history, context) → Message[]` | `messages` |
+| **ToolProvider** | Which tools are available | `resolve(context) → LLMToolDescription[]` | `tools` |
+
+Three slots, because the LLM API has three slots. Each one is a strategy point you can re-implement. **In `AgentPattern.Dynamic`**, all three re-evaluate each loop iteration — see [Patterns](patterns.md).
 
 All three are swappable. The agent builder uses simple defaults (static prompt, full history, static tools from `.tool()`), but for advanced use cases you can plug in custom providers via the low-level `agentLoop()`.
 
@@ -123,6 +129,8 @@ import { charBudget } from 'agentfootprint';
 const strategy = charBudget({ maxChars: 10_000 });
 // Trims oldest messages to stay under character budget
 ```
+
+> **Cost note:** `slidingWindow` and `charBudget` are pure functions — free. `summaryStrategy` triggers an additional LLM call when its threshold is crossed — adds tokens and latency. `persistentHistory` performs an I/O round-trip per turn. Pick the cheapest strategy that meets your context-window constraint.
 
 #### withToolPairSafety
 
@@ -243,3 +251,15 @@ const result = await agentLoop({
 ```
 
 See the [Adapters Guide](adapters.md) for LLM provider configuration.
+
+---
+
+## Measuring Strategy Quality
+
+There is **no built-in evaluator for these strategies** — they each represent a quality / cost trade-off you have to measure on your own data. The library gives you the hooks:
+
+- **`TokenRecorder`** + **`CostRecorder`** — measure the cost side of the trade-off
+- **`QualityRecorder`** with an LLM-as-judge — measure the quality side
+- **`ExplainRecorder`** — see exactly which messages reached the LLM each turn (so you can audit what `slidingWindow` dropped)
+
+When picking between `fullHistory`, `slidingWindow(20)`, and `summaryStrategy(...)`, run the same task through each with these recorders attached and compare. Don't pick by intuition.

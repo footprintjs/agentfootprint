@@ -18,6 +18,8 @@ npm install @aws-sdk/client-bedrock-runtime  # AWS Bedrock
 
 ## Your First LLMCall
 
+> **Like:** asking a question, getting an answer. No tools, no loops, no memory.
+
 The simplest concept — a single LLM invocation with no tools or loops.
 
 ```typescript
@@ -39,39 +41,40 @@ console.log(call.getNarrative());
 
 ## Agent with Tools
 
-Add tools and the agent runs a ReAct loop — calling tools until it has enough information to respond.
+> **Like:** a research assistant — you ask, it looks things up, then answers.
+
+Add tools and the agent runs a **ReAct loop** (*reasoning + acting* interleaved — Yao et al. 2023, ICLR) — calling tools until it has enough information to respond.
 
 ```typescript
 import { Agent, mock, defineTool } from 'agentfootprint';
 
-const searchTool = defineTool({
-  id: 'web_search',
-  description: 'Search the web for information.',
+// Deterministic tool — easy to verify the agent's grounding
+const addTool = defineTool({
+  id: 'add',
+  description: 'Add two integers and return the sum.',
   inputSchema: {
     type: 'object',
-    properties: { query: { type: 'string' } },
-    required: ['query'],
+    properties: { a: { type: 'number' }, b: { type: 'number' } },
+    required: ['a', 'b'],
   },
-  handler: async (input) => ({
-    content: `Results for "${input.query}": AI is transforming industries.`,
-  }),
+  handler: async ({ a, b }) => ({ content: String(a + b) }),
 });
 
 const agent = Agent.create({
   provider: mock([
     {
-      content: 'Let me search for that.',
-      toolCalls: [{ id: 'tc1', name: 'web_search', arguments: { query: 'AI trends' } }],
+      content: 'Let me compute that.',
+      toolCalls: [{ id: 'tc1', name: 'add', arguments: { a: 17, b: 25 } }],
     },
-    { content: 'Based on my research, AI is transforming multiple industries.' },
+    { content: 'The sum of 17 and 25 is 42.' },
   ]),
 })
-  .system('You are a research assistant.')
-  .tool(searchTool)
+  .system('You are a math assistant. Use the add tool for arithmetic.')
+  .tool(addTool)
   .build();
 
-const result = await agent.run('What are the AI trends?');
-console.log(result.content);    // "Based on my research, AI is transforming multiple industries."
+const result = await agent.run('What is 17 + 25?');
+console.log(result.content);    // "The sum of 17 and 25 is 42."
 console.log(result.iterations); // 2 (one tool call + one final response)
 ```
 
@@ -168,10 +171,29 @@ const spec = agent.getSpec();
 
 ---
 
+## Before You Ship
+
+The examples above use `mock()` for clarity. Before deploying anything for real:
+
+| Concern | What to add |
+|---|---|
+| **Real provider** | `createProvider(anthropic('claude-sonnet-4-20250514'))` instead of `mock()` |
+| **Cost / token caps** | Pass `maxTokens` to the model factory; attach `TokenRecorder` + `CostRecorder` |
+| **Cancellation** | Pass `signal: abortController.signal` to `.run()` so users can cancel |
+| **Retry on rate limits** | Wrap the runner with `withRetry({ shouldRetry: (e) => e.retryable })` — see [orchestration.md](orchestration.md) |
+| **Tool authorization** | Wrap tools with `gatedTools(...)` — see [security.md](security.md) |
+| **Audit trail** | Attach `agentObservability()` for tokens + tools + cost + grounding in one call |
+
+Treat the move from `mock()` to a real provider as a deployment milestone, not a one-line swap.
+
+---
+
 ## Next Steps
 
 - [Concepts](concepts.md) — understand the full concept ladder
+- [Patterns](patterns.md) — Regular vs Dynamic ReAct + 4 composition patterns
 - [Providers](providers.md) — customize prompts, messages, and tools
 - [Recorders](recorders.md) — deep dive into all recorder types
 - [Adapters](adapters.md) — connect to real LLMs
 - [Orchestration](orchestration.md) — retry, fallback, circuit breaker
+- [Security](security.md) — tool gating + provider resilience

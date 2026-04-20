@@ -1,18 +1,23 @@
 # Concepts — The Concept Ladder
 
-agentfootprint organizes AI patterns into five concepts, each building on the previous one. Start with the simplest concept that solves your problem. Compose up when you need more.
+agentfootprint organizes AI patterns into seven concepts, each building on the previous one. Start with the simplest concept that solves your problem — **pick the lowest rung that works, because each step adds cost and latency** — and compose up only when you need more.
 
 ```
-LLMCall → Agent → RAG → FlowChart → Swarm
-  │         │       │       │          │
-  │         │       │       │          └─ + Dynamic LLM-driven routing
-  │         │       │       └─ + Sequential/branching pipeline
-  │         │       └─ + Retrieval (vector search)
-  │         └─ + Tool use loop (ReAct)
-  └─ Single LLM invocation
+Single-LLM
+  LLMCall  → one prompt in, one response out
+  Agent    → + tool-use loop (ReAct)
+  RAG      → + retrieval before generation
+
+Multi-runner composition
+  FlowChart    → sequential pipeline (runner → runner → runner)
+  Parallel     → fan out N runners concurrently, merge results
+  Conditional  → if/else routing between runners
+  Swarm        → LLM decides which specialist to call (dynamic routing)
 ```
 
-All five share the same interface:
+**Background:** the loop concept is *ReAct* (Yao et al. 2023, ICLR — "reasoning and acting" interleaved). RAG is *Retrieval-Augmented Generation* (Lewis et al. 2020, NeurIPS). Swarm follows the orchestrator-worker pattern (popularized by OpenAI's Swarm 2024 reference implementation).
+
+All seven share the same interface:
 
 ```typescript
 // Builder: .create() → .system() → .recorder() → .build()
@@ -22,6 +27,8 @@ All five share the same interface:
 ---
 
 ## LLMCall
+
+> **Like:** asking a question and getting an answer. No back-and-forth.
 
 The simplest concept: one prompt in, one response out. No tools, no loops.
 
@@ -56,9 +63,13 @@ console.log(result.content); // "Positive sentiment."
 | `.getSnapshot()` | `RuntimeSnapshot` | Full execution state |
 | `.getSpec()` | Stage graph | Flowchart metadata |
 
+**Failure modes:** provider call throws → propagates as `LLMError` (use `withRetry`). Provider returns empty content → returned as `{ content: '' }`. No tool support — if your prompt asks the LLM to "search", you'll get refusal text, not a search.
+
 ---
 
 ## Agent
+
+> **Like:** a research assistant — you ask, it looks things up, then answers.
 
 Adds a tool-use loop (ReAct pattern). The agent calls tools repeatedly until it decides to respond.
 
@@ -123,6 +134,8 @@ console.log(result.iterations); // 2
 | `.getSnapshot()` | `RuntimeSnapshot` | Full execution state |
 | `.getSpec()` | Stage graph | Flowchart metadata |
 
+**Failure modes:** tool throws → result becomes `{ error: true, content: errorMessage }` and flows into the conversation; LLM may retry or apologize. Hits `maxIterations` → loop terminates with whatever the LLM last said. Tool result too large → may exceed model context window; consider summarizing tool output.
+
 **Multi-turn conversations:**
 
 ```typescript
@@ -139,6 +152,8 @@ agent.resetConversation(); // Clear when done
 ---
 
 ## RAG
+
+> **Like:** open-book exam — look up the relevant pages, then answer.
 
 Adds retrieval before generation. Fetches relevant chunks from a knowledge base and injects them into the prompt.
 
@@ -192,9 +207,13 @@ const retriever = {
 };
 ```
 
+**Failure modes:** retriever returns zero chunks → LLM gets an empty context block and may answer from training data (not grounded). Always inspect `result.chunks.length` for callers that require grounding. `minScore` too high → silent zero-chunk problem.
+
 ---
 
 ## FlowChart
+
+> **Like:** an assembly line — each station does one thing, output of one feeds the next.
 
 Composes multiple runners into a sequential pipeline. Each runner feeds into the next.
 
@@ -242,9 +261,95 @@ The `.agent()` options support `inputMapper` and `outputMapper` for custom data 
 
 **Runner result:** `{ content, agents, totalLatencyMs }`
 
+**Failure modes:** any runner throws → entire pipeline fails (no partial-success). Wrap individual runners with `withRetry`/`withFallback` if upstream stages must survive downstream failures. Latency is **sum** of all stages — no parallelism.
+
+---
+
+## Parallel
+
+> **Like:** asking three colleagues the same question, then merging their answers.
+
+Fan out N runners concurrently, then merge their results either via an LLM call or a custom function. Capped at 10 branches as a safety guard.
+
+**Internal flowchart:** `Seed → [fork] → branch-A | branch-B | branch-C → Merge → Finalize`
+
+```typescript
+import { Parallel, Agent, mock } from 'agentfootprint';
+
+const ethicsReviewer = Agent.create({ provider, name: 'ethics' })
+  .system('Review the proposal from an ethics perspective.').build();
+const costReviewer = Agent.create({ provider, name: 'cost' })
+  .system('Review the proposal from a cost perspective.').build();
+const techReviewer = Agent.create({ provider, name: 'tech' })
+  .system('Review the proposal from a technical feasibility perspective.').build();
+
+const review = Parallel.create({ provider, name: 'panel-review' })
+  .agent('ethics', ethicsReviewer, 'Ethics review')
+  .agent('cost',   costReviewer,   'Cost review')
+  .agent('tech',   techReviewer,   'Technical review')
+  .mergeWithLLM('Synthesize the three reviews into a single recommendation.')
+  .build();
+
+const result = await review.run('Build an internal LLM proxy.');
+console.log(result.content);   // merged recommendation
+console.log(result.branches);  // per-reviewer outputs with status: 'fulfilled' | 'rejected'
+```
+
+**Builder API:**
+
+| Method | Description |
+|--------|-------------|
+| `Parallel.create({ provider, name? })` | Create builder |
+| `.agent(id, runner, description)` | Add a parallel branch |
+| `.mergeWithLLM(prompt)` | Merge results via an LLM call |
+| `.merge(fn)` | Merge results via a pure function (no LLM call) |
+| `.recorder(rec)` | Attach an AgentRecorder |
+| `.build()` | Returns `ParallelRunner` |
+
+**Runner result:** `{ content, branches: BranchResult[], messages }` where each `BranchResult` carries `{ id, status, content, error? }`.
+
+**Failure modes:** one branch throws → the failed branch surfaces as `{ status: 'rejected', error }`; the LLM merge step still runs over the remaining branches (so reduce keeps going). The `.merge(fn)` callback receives all branches including failures — you decide how to handle them. Cap at 10 branches; raise via raw footprintjs if you genuinely need more.
+
+---
+
+## Conditional
+
+> **Like:** a triage nurse — look at the request, route to the right specialist.
+
+`if/else` routing between runners. Predicates run in `.when()` order, first match wins; no match runs `.otherwise()`. A predicate that throws is treated as a miss (fail-open).
+
+```typescript
+import { Conditional } from 'agentfootprint';
+
+const triage = Conditional.create({ name: 'triage' })
+  .when((input) => input.toLowerCase().includes('refund'), refundAgent)
+  .when((input) => input.length > 500,                      ragRunner)
+  .otherwise(generalAgent)
+  .build();
+
+const result = await triage.run('I want a refund please');
+// Narrative: "[triage] Chose refundAgent — predicate 0 matched"
+```
+
+**Builder API:**
+
+| Method | Description |
+|--------|-------------|
+| `Conditional.create({ name? })` | Create builder |
+| `.when(predicate, runner)` | Add a branch (predicate: `(input, state) => boolean`) |
+| `.otherwise(runner)` | Default branch (required) |
+| `.recorder(rec)` | Attach an AgentRecorder |
+| `.build()` | Returns `ConditionalRunner` |
+
+**Difference from `Agent.route()`:** `Conditional` is a top-level routing decision between runners. `Agent.route()` branches **inside** a ReAct loop. Use `Conditional` when the shape is "pick one runner and return its result" (triage, classification). Use `Agent.route()` when the routing happens mid-loop based on tool results.
+
+**Failure modes:** all predicates miss AND no `.otherwise()` → build error. Predicate throws → silent miss (intentional fail-open); enable dev mode to see warnings on suspicious predicates.
+
 ---
 
 ## Swarm
+
+> **Like:** a project manager who reads each request and assigns it to the right specialist on the team.
 
 Dynamic LLM-driven delegation. An orchestrator agent decides which specialist to call based on the conversation.
 
@@ -296,6 +401,8 @@ console.log(result.agents);  // Which specialists were called
 
 **Runner result:** `{ content, agents, totalLatencyMs }`
 
+**Failure modes:** orchestrator hallucinates a specialist name → call returns `{ error: true }` and orchestrator sees the error, may recover or loop. Specialist throws → flows back as a tool error message; orchestrator decides what to do. Hits `maxIterations` → returns whatever the orchestrator last said. **Cost note:** every specialist invocation is also wrapped as an LLM tool call → orchestrator pays its own LLM cost on top of each specialist's cost.
+
 ---
 
 ## RunnerLike Interface
@@ -322,4 +429,8 @@ Any object implementing `run(message) => { content }` can be used in FlowChart o
 | Research, code generation, multi-step reasoning | **Agent** |
 | Q&A over documents or knowledge bases | **RAG** |
 | Ordered multi-step pipelines (research then write) | **FlowChart** |
-| Dynamic routing (customer support triage) | **Swarm** |
+| Independent perspectives merged together (multi-perspective review) | **Parallel** |
+| Static if/else routing (triage, content classification) | **Conditional** |
+| Dynamic LLM-driven routing (customer support, project manager) | **Swarm** |
+
+For higher-level shapes built on top of these (Plan-Execute, Reflexion, Tree-of-Thoughts, MapReduce, plus the Regular vs Dynamic ReAct loop), see the [Patterns guide](patterns.md).

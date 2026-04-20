@@ -1,6 +1,10 @@
 # Instructions — Conditional Context Injection
 
+> **The hook:** some rules should only apply *sometimes*. An instruction lets you say "when X is true, tell the LLM Y, and give it tools Z." Plain prompts can't do that — they're always on. Instructions are the conditional layer.
+
 Instructions inject the right context at the right position at the right time into the LLM's context window. A single instruction can inject into all 3 LLM API positions: system prompt, tools, and tool-result recency window.
+
+**Background:** the activate-when-condition-holds pattern is essentially **production rules** (forward-chaining rule systems — Newell 1973, OPS5, Rete networks) applied to LLM context. The "Decision Scope" is a bounded **belief state** (the dialog-state-tracking literature — Williams et al. 2016 — uses the same idea). What's specific here is the three-position injection: a single rule fires, but its consequences land in three different LLM API slots.
 
 ## Defining an Instruction
 
@@ -86,17 +90,9 @@ The flow:
 3. Next iteration: `refund-handling` instruction activates (orderStatus is 'denied')
 4. System prompt now includes empathy guidance, refund tools become available
 
-## Three Naming Conventions
+## Safety Instructions — Fail-Closed Rules
 
-| Level | Predicate | Reads |
-|-------|-----------|-------|
-| Agent-level | `activeWhen(decision)` | Decision Scope |
-| Tool-level | `when(ctx)` | Tool result context |
-| Decision | `decide(decision, ctx)` | Both |
-
-No collision — different names, different signatures.
-
-## Safety Instructions
+For compliance, content policy, and other rules that **must** fire even when something goes wrong, mark an instruction as `safety: true`.
 
 ```typescript
 defineInstruction({
@@ -108,9 +104,23 @@ defineInstruction({
 ```
 
 Safety instructions:
-- Cannot be suppressed
-- Predicate throws → instruction fires (fail-closed)
-- Sorted LAST in output (highest priority position)
+- Cannot be suppressed by overrides
+- Predicate throws → instruction fires (fail-closed) — **the opposite of regular instructions, which silently miss on a throw**
+- Sorted LAST in the output list, which gives them the highest priority position in the assembled prompt
+
+> **Audit which safety instructions fired:** attach `InstructionRecorder` (from `agentfootprint/instructions`). It records every instruction evaluation — which fired, which were suppressed, which threw. This is what auditors will ask for; wire it before you ship.
+
+## Three Naming Conventions
+
+Three predicate hooks with three different names — chosen so the signatures don't collide and so it's obvious from the call site what each one reads:
+
+| Level | Predicate | Reads | Lives on |
+|-------|-----------|-------|---|
+| Agent-level | `activeWhen(decision)` | Decision Scope | `defineInstruction({ activeWhen })` |
+| Tool-level | `when(ctx)` | Tool result context | `onToolResult: [{ when }]` |
+| Bridge | `decide(decision, ctx)` | Both — writes Decision Scope from tool ctx | `onToolResult: [{ decide }]` |
+
+A single shared name would force readers to remember which signature applies where. Keeping the three names lets the signature tell you what's available.
 
 ## Key Design Decisions
 

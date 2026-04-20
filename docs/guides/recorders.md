@@ -1,6 +1,8 @@
 # Recorders
 
-Recorders are passive observers that watch agent execution without changing behavior. They collect metrics, track costs, evaluate quality, and enforce guardrails — all during traversal, never as a post-processing step.
+> **An agent that can't be measured can't be improved.** Recorders are agentfootprint's measurement layer.
+
+Recorders are passive observers that watch agent execution without changing behavior. They collect metrics, track costs, evaluate quality, surface grounding evidence, and enforce guardrails — all during traversal, never as a post-processing step.
 
 Attach recorders to any concept via the `.recorder()` builder method:
 
@@ -149,9 +151,46 @@ toolUsage.getToolNames(); // ['web_search', 'calculator']
 toolUsage.clear();
 ```
 
+### ExplainRecorder
+
+The differentiator: collects **per-iteration grounding evidence** during traversal. Each loop iteration becomes a self-contained evaluation unit — what context the LLM had, what tools it chose to call, what those tools returned, and the LLM's claim. An external evaluator can then verify each claim against its sources without re-running the agent.
+
+```typescript
+import { ExplainRecorder } from 'agentfootprint/explain';
+
+const explain = new ExplainRecorder();
+const agent = Agent.create({ provider }).tool(lookupOrder).recorder(explain).build();
+await agent.run('Check order ORD-1003');
+
+const report = explain.explain();
+report.iterations;  // EvalIteration[] — { context, decisions, sources, claim } per loop
+report.sources;     // ToolSource[]    — flat: every tool result
+report.claims;      // LLMClaim[]      — flat: every LLM response
+report.decisions;   // AgentDecision[] — flat: every tool call
+report.context;     // LLMContext      — last context snapshot
+report.summary;     // string          — human-readable summary
+```
+
+Per-iteration shape (the "connected data" the rest of the library is structured around):
+
+```typescript
+interface EvalIteration {
+  iteration: number;            // 0-based loop index
+  runtimeStageId?: string;      // links to commit log + execution tree
+  context: LLMContext;          // system prompt, available tools, messages, model
+  decisions: AgentDecision[];   // tool calls made this iteration
+  sources: ToolSource[];        // tool results returned
+  claim: LLMClaim | null;       // LLM response (null on tool-calling iterations)
+}
+```
+
+**Why this matters:** the connected shape lets a follow-up LLM (or a human reviewer) trace every claim back to the tool result that supports it. Most observability stacks log events; `ExplainRecorder` produces *evidence*. This is what `agentObservability().explain()` returns under the hood.
+
 ### QualityRecorder
 
 Evaluates output quality via a custom judge function. The judge runs on each turn completion.
+
+> **LLM-as-judge caveat:** when the judge is itself an LLM, you inherit the well-documented biases of LLM-as-judge evaluation (Zheng et al. 2023 — "LLM as a Judge"): position bias, verbosity bias, self-preference. Validate judge output against a small human-labeled set before trusting averages.
 
 ```typescript
 import { QualityRecorder } from 'agentfootprint';
@@ -257,9 +296,14 @@ all.clear();        // Clears all children
 | `CostRecorder` | `onLLMCall` | `getTotalCost()`, `getEntries()`, `clear()` |
 | `TurnRecorder` | `onTurnStart`, `onTurnComplete`, `onError` | `getTurns()`, `getCompletedCount()`, `getErrorCount()`, `clear()` |
 | `ToolUsageRecorder` | `onToolCall` | `getStats()`, `getToolNames()`, `clear()` |
+| `ExplainRecorder` | `onTurnStart`, `onLLMCall`, `onToolCall`, `onTurnComplete` | `explain()` → `{ iterations, sources, claims, decisions, context, summary }` |
 | `QualityRecorder` | `onTurnComplete` | `getScores()`, `getAverageScore()`, `clear()` |
 | `GuardrailRecorder` | `onTurnComplete` | `getViolations()`, `hasViolations()`, `getViolationsByRule()`, `clear()` |
+| `PermissionRecorder` | `onToolCall` + `onBlocked` (wired via `gatedTools`) | `getSummary()`, `getBlocked()`, `getDenied()`, `getAllowed()` — see [security.md](security.md) |
 | `CompositeRecorder` | All (fans out) | `getRecorders()`, `clear()` |
+| `agentObservability()` | All — bundles Token + Cost + Tool + Explain | `.tokens()`, `.tools()`, `.cost()`, `.explain()` |
+
+> **Recorder ID & idempotency:** `attachRecorder` is idempotent by `id` — attaching a recorder with the same id replaces the previous one. Different ids coexist. Built-ins use auto-incremented defaults (`metrics-1`, `cost-1`, ...) so multiple instances don't accidentally collide. If a framework auto-attaches a recorder, override it by attaching your own with the same id.
 
 ---
 
