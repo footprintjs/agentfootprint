@@ -5,6 +5,63 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.17.5]
+
+### Examples
+
+- **Restructured `examples/` from feature-buckets into a lifecycle-based
+  ladder** that mirrors the footprintjs/examples/ pattern. New folders:
+  `concepts/` (the 7-concept ladder, in order), `patterns/` (Regular vs
+  Dynamic + the 4 composition patterns each in their own file),
+  `providers/`, `runtime-features/{streaming,instructions,memory,parallel-tools,custom-route}`,
+  `observability/`, `security/`, `resilience/`, `advanced/`,
+  `integrations/`. The old folders (`basics/`, `orchestration/`,
+  `memory/`, `integration/`) are gone — files renumbered sequentially
+  within their new home so `01,02,03,...` reflects learning order.
+- **Added `examples/DESIGN.md`** explaining the categorization rationale,
+  the file contract, and the playground-injection pattern. Added
+  `examples/README.md` as the reader's entry point.
+- **Every example now follows a single contract**: exports
+  `run(input, provider?)` (factory pattern) + `meta: ExampleMeta`
+  (catalog metadata for the playground) + a CLI fallback so
+  `npx tsx examples/...` still works. The optional `provider` parameter
+  lets the playground inject any LLMProvider at runtime — the example
+  source stays clean and copy-pastable. Multi-provider examples
+  (`planExecute`, `reflexion`, `treeOfThoughts`, `mapReduce`) accept an
+  object with named slots declared in `meta.providerSlots`.
+- **Split `orchestration/28-patterns.ts`** into four separate files
+  under `patterns/` — one per pattern — so each is independently
+  citable and runnable.
+- **Added `concepts/05-parallel.ts`** — the Parallel concept previously
+  had no standalone example.
+- **Added paired `.md` files** for `concepts/` (7) and `patterns/` (5)
+  with frontmatter (`name`, `group`, `guide`, `defaultInput`),
+  "When to use", "What you'll see in the trace", "Key API",
+  "Failure modes", and "Related concepts" sections — same shape as
+  footprintjs/examples/building-blocks/*.md. Other folders' .md files
+  will be added in follow-up patches.
+- **New `examples/helpers/cli.ts`** centralizes the
+  `isCliEntry(import.meta.url)` guard, the `printResult()` formatter,
+  and the `ExampleMeta` type.
+
+### Tests
+
+- **New `test/examples-smoke.test.ts`** auto-discovers every example
+  under `examples/`, verifies the file contract (`run` + `meta`
+  exports with the right shape), and invokes each `run()` with the
+  example's own scripted mock provider. 32 examples covered. This
+  replaces the previous gate-5 dependency on
+  `agent-samples/npm-run-all` — examples are now self-validating
+  inside the agentfootprint repo.
+
+### `agent-samples` (separate repo)
+
+- **Updated `agent-samples/package.json`** to point at the new example
+  paths so the cross-repo `npm run all` keeps working through the
+  transition. Marked the package as DEPRECATED in its description —
+  the in-repo smoke test supersedes it; the directory will be removed
+  once the playground migration is complete.
+
 ## [1.17.4]
 
 ### Documentation
