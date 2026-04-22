@@ -60,6 +60,7 @@ export type {
   AgentMessage,
   AgentContextInjection,
   AgentContextLedger,
+  AgentInfo,
 } from './recorders';
 
 export type { AgentRecorder } from './core';

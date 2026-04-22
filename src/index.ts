@@ -141,4 +141,5 @@ export type {
   AgentMessage,
   AgentContextInjection,
   AgentContextLedger,
+  AgentInfo,
 } from './observe.barrel';

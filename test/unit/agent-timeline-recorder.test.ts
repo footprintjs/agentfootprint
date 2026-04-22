@@ -207,6 +207,32 @@ describe('AgentTimelineRecorder — 5 pattern tests', () => {
     ]);
   });
 
+  it('6. agent metadata: timeline.agent.{id,name} comes from recorder options', () => {
+    // Single source of truth for "which agent did this run belong to."
+    // UI libraries read `timeline.agent.name` instead of fishing the
+    // name out of the runtime snapshot or asking consumers to thread a
+    // separate prop. Multi-agent (next phase) gives each sub-agent its
+    // own recorder → its own `agent` block on its own timeline.
+    const explicit = agentTimeline({ id: 'classify', name: 'Classify Bot' });
+    explicit.onEmit(evt('agentfootprint.agent.turn_start', { userMessage: 'q' }));
+    explicit.onEmit(evt('agentfootprint.stream.llm_start', { iteration: 1 }));
+    explicit.onEmit(
+      evt('agentfootprint.stream.llm_end', { iteration: 1, content: 'a', toolCallCount: 0 }),
+    );
+    expect(explicit.getTimeline().agent).toEqual({ id: 'classify', name: 'Classify Bot' });
+    expect(explicit.id).toBe('classify');
+    expect(explicit.name).toBe('Classify Bot');
+
+    // Defaults — id falls back to 'agentfootprint-agent-timeline',
+    // name falls back to 'Agent'. UIs that get the fallback name
+    // render "Agent · Agent" rather than crashing on undefined.
+    const defaults = agentTimeline();
+    expect(defaults.getTimeline().agent).toEqual({
+      id: 'agentfootprint-agent-timeline',
+      name: 'Agent',
+    });
+  });
+
   it('5. clear() wipes recorder state — ready for re-use across runs', () => {
     const t = agentTimeline();
     t.onEmit(evt('agentfootprint.agent.turn_start', { userMessage: 'first' }));

@@ -151,8 +151,28 @@ export interface AgentTurn {
   readonly contextLedger: AgentContextLedger;
 }
 
+/**
+ * Agent identity attached to a timeline. The `id` matches the
+ * recorder's id (the same one passed to `agentTimeline({ id })`); the
+ * `name` is the display name from `Agent.create({ name })`. Single
+ * source of truth for "which agent did this run belong to" — UI
+ * libraries read `timeline.agent.name` instead of fishing it out of
+ * the runtime snapshot or asking the consumer to thread a separate
+ * prop. Also the foundation for multi-agent rendering: each sub-agent
+ * has its own recorder, its own timeline, its own `agent` block.
+ */
+export interface AgentInfo {
+  /** Recorder id — also used as snapshot slot key for multi-agent. */
+  readonly id: string;
+  /** Display name for UI. Defaults to "Agent" when not supplied. */
+  readonly name: string;
+}
+
 /** The full picture: every turn stitched together. */
 export interface AgentTimeline {
+  /** Identity of the agent that produced this timeline. UIs label
+   *  containers / cards / panels with this. */
+  readonly agent: AgentInfo;
   readonly turns: readonly AgentTurn[];
   readonly messages: readonly AgentMessage[];
   readonly tools: readonly AgentToolInvocation[];
@@ -241,10 +261,19 @@ export interface AgentTimelineRecorderOptions {
   /** Recorder id. Default: `agentfootprint-agent-timeline`. Override
    *  for multi-agent so each sub-agent gets its own snapshot slot. */
   readonly id?: string;
+  /**
+   * Display name for the agent — surfaces on `timeline.agent.name` so
+   * UIs can label the agent's container / card / panel without needing
+   * the consumer to thread a separate prop. Defaults to "Agent" when
+   * unset. Match this to `Agent.create({ name })` for end-to-end
+   * consistency.
+   */
+  readonly name?: string;
 }
 
 export class AgentTimelineRecorder extends SequenceRecorder<TimelineEntry> implements EmitRecorder {
   readonly id: string;
+  readonly name: string;
 
   /** True between an iter's llm_start and llm_end. Drives context-event
    *  routing (THIS iter vs NEXT iter). */
@@ -253,6 +282,7 @@ export class AgentTimelineRecorder extends SequenceRecorder<TimelineEntry> imple
   constructor(options?: AgentTimelineRecorderOptions) {
     super();
     this.id = options?.id ?? 'agentfootprint-agent-timeline';
+    this.name = options?.name ?? 'Agent';
   }
 
   // ── EmitRecorder ─────────────────────────────────────────────────────
@@ -290,7 +320,7 @@ export class AgentTimelineRecorder extends SequenceRecorder<TimelineEntry> imple
    * output. Cheap because entry count is bounded by run length.
    */
   getTimeline(): AgentTimeline {
-    return foldEntries(this.getEntries());
+    return foldEntries(this.getEntries(), { id: this.id, name: this.name });
   }
 }
 
@@ -507,7 +537,7 @@ interface MutableTool {
   durationMs?: number;
 }
 
-function foldEntries(entries: readonly TimelineEntry[]): AgentTimeline {
+function foldEntries(entries: readonly TimelineEntry[], agent: AgentInfo): AgentTimeline {
   const turns: MutableTurn[] = [];
   const messages: AgentMessage[] = [];
   const toolByCallId = new Map<string, MutableTool>();
@@ -674,6 +704,7 @@ function foldEntries(entries: readonly TimelineEntry[]): AgentTimeline {
   });
 
   return {
+    agent,
     turns: frozenTurns,
     messages: [...messages],
     tools: allTools,

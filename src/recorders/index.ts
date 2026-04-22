@@ -37,4 +37,5 @@ export type {
   AgentMessage,
   AgentContextInjection,
   AgentContextLedger,
+  AgentInfo,
 } from './AgentTimelineRecorder';

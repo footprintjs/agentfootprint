@@ -5,6 +5,33 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.20.0]
+
+### Agent identity surfaces on `AgentTimeline`
+
+- **`agentTimeline({ name })`** — new option on the recorder factory.
+  Set the display name once at recorder construction; surfaces on
+  `timeline.agent.name`. Match this to `Agent.create({ name })` for
+  end-to-end identity consistency.
+- **`AgentTimeline.agent`** — new required field of shape
+  `{ id, name }`. UI libraries read this directly instead of fishing
+  the agent name out of `runtimeSnapshot.agentName / .name` or asking
+  the consumer to thread a separate prop. Single source of truth.
+- **New exported type `AgentInfo`** —
+  `{ id: string; name: string }`. Shape of the new field.
+- **Defaults**: `id` falls back to `agentfootprint-agent-timeline`,
+  `name` falls back to `Agent`. UIs that get the fallback render
+  "Agent · Agent" rather than crashing on undefined.
+- **Multi-agent foundation**: each sub-agent recorder
+  (`agentTimeline({ id: 'classify', name: 'Classify Bot' })`) carries
+  its own identity → multi-agent shells render N labeled containers
+  pulling each name from `timeline.agent.name` directly.
+- 6th pattern test added, full suite green (1959 tests).
+
+This is the data-layer counterpart to lens 0.9.0's "Agent container +
+LLM rename" UI work. Lens reads `timeline.agent.name` to label the
+dotted Agent boundary that wraps the LLM / Tool / Skill / satellites.
+
 ## [1.19.0]
 
 ### New recorder — `agentTimeline()` (the canonical agent narrative)
