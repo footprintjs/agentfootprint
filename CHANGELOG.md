@@ -5,6 +5,72 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.23.0]
+
+### BREAKING — but no users yet, shipped as minor
+
+`AgentTimelineRecorder` redesigned around an event stream + selectors + pluggable humanizer. `getTimeline()` method + the `AgentTimeline` bundle interface are removed. Consumers compose typed selectors directly (or use a thin helper like Lens's `timelineFromRecorder`). Three-layer architecture:
+
+```
+EVENT STREAM              (structured, canonical — single source of truth)
+    ↓
+SELECTORS                 (typed, memoized, lazy, composable — THE API)
+    ↓
+VIEWS                     (renderer plugs in: React / Vue / Angular / CLI / Grafana)
+```
+
+### Added — new selector API on `AgentTimelineRecorder`
+
+- `getEvents(): readonly AgentEvent[]` — raw structured event stream
+- `selectAgent()`, `selectTurns()`, `selectMessages()`, `selectTools()`, `selectSubAgents()`, `selectFinalDecision()` — classic slices
+- `selectTopology()` — composition graph for flowchart renderers (engineer view)
+- `selectCommentary(cursor?)` — humanized narrative, one line per event (analyst view)
+- `selectActivities(cursor?)` + `selectStatus(cursor?)` — breadcrumb + typing-bubble (end-user view)
+- `selectRunSummary()` — tokens, tool counts, duration, skills activated
+- `selectIterationRanges()` — iter ↔ event-index map for scrubbers
+- `selectContextBySource(cursor?)` — per-slot injection ledger grouped by source (rag / skill / memory / instructions / ...) — powers slot-row badges in Lens and the "teach context engineering" pedagogical surface
+- `setHumanizer(Humanizer)` — pluggable domain phrasings. Library defaults ("Thinking", "Running ${toolName}", "Got result") override per-tool for domain-friendly text ("Checking port status on switch-3"). Translation, localization, UX tone = humanizer swap, NOT data change.
+
+### Added — new exported types
+
+`AgentEvent` (discriminated union — the canonical contract), `Activity`, `StatusLine`, `CommentaryLine`, `RunSummary`, `IterationRange`, `IterationRangeIndex`, `ContextBySource`, `ContextSlotSummary`, `ContextSourceSummary`, `Humanizer`.
+
+### Changed — `selectSubAgents()` heuristic
+
+A topology subflow classifies as a sub-agent only if its descendants include one of the API-slot subflows (`sf-system-prompt` / `sf-messages` / `sf-tools`). This correctly distinguishes:
+- **Single-agent runs** — the API-slot subflows are top-level, nothing wraps them → no sub-agents
+- **Multi-agent runs** (Pipeline/Parallel/Swarm/Conditional) — each Agent wraps its own slots → each qualifies
+
+Robust against future internal-agent subflow additions (auto-classifies as "internal").
+
+### Composed primitive
+
+`AgentTimelineRecorder` now composes footprintjs's `TopologyRecorder` (new in footprintjs 4.15.0) internally. Runner-side `setComposition()` handshake — DELETED. Composition shape discovered at runtime from the executor's traversal (subflow / fork / decision / loop events).
+
+### Memoized selectors
+
+Every selector is memoized by `(name, version, cursor)`. `version` increments on every `emit()` / `setHumanizer()` / `clear()` — long runs don't recompute unchanged views. Same selector call returns the same reference until new events arrive (referential equality for React).
+
+### 10+ new pattern tests
+
+selectActivities state machine + cursor, selectStatus idle/at-cursor, selectCommentary, selectRunSummary totals, humanizer override + fall-through + swap invalidation, selectIterationRanges, memoization reference equality, clear() invalidation, selectContextBySource grouping + cursor.
+
+### Migration
+
+```diff
+- const t = agentTimeline();
+- const timeline = t.getTimeline();
+- timeline.turns;
+- timeline.messages;
+- timeline.subAgents;
++ const t = agentTimeline();
++ const turns = t.selectTurns();
++ const messages = t.selectMessages();
++ const subAgents = t.selectSubAgents();
+```
+
+UI libraries that want a bundled shape define their own helper (Lens ships `timelineFromRecorder(recorder)`).
+
 ## [1.22.0]
 
 ### attachRecorder() on every runner — multi-agent flows end-to-end
