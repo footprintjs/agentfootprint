@@ -171,7 +171,8 @@ describe('AgentTimelineRecorder v2 — humanizer', () => {
     const t = agentTimeline();
     const neoStyle: Humanizer = {
       describeToolStart: (e) => {
-        if (e.toolName === 'influx_get_port_status') return `Checking port status on ${e.args.switchName}`;
+        if (e.toolName === 'influx_get_port_status')
+          return `Checking port status on ${e.args.switchName}`;
         return undefined; // fall through for other tools
       },
     };

@@ -13,11 +13,7 @@
  *   P5  getTopology()          → direct access to composed accumulator
  */
 import { describe, it, expect } from 'vitest';
-import type {
-  FlowDecisionEvent,
-  FlowForkEvent,
-  FlowSubflowEvent,
-} from 'footprintjs';
+import type { FlowDecisionEvent, FlowForkEvent, FlowSubflowEvent } from 'footprintjs';
 import { agentTimeline } from '../../src/recorders/AgentTimelineRecorder';
 
 // ── Helpers ─────────────────────────────────────────────────────────────
@@ -34,11 +30,7 @@ const fork = (parent: string, children: string[], runtimeStageId: string): FlowF
   traversalContext: { stageId: parent, runtimeStageId, stageName: parent, depth: 0 },
 });
 
-const decision = (
-  decider: string,
-  chosen: string,
-  runtimeStageId: string,
-): FlowDecisionEvent => ({
+const decision = (decider: string, chosen: string, runtimeStageId: string): FlowDecisionEvent => ({
   decider,
   chosen,
   traversalContext: { stageId: decider, runtimeStageId, stageName: decider, depth: 0 },

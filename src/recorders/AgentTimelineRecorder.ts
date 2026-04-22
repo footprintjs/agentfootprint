@@ -1280,7 +1280,11 @@ function defaultContextInjection(e: { source: string; slot: string }): string {
 }
 
 /** Pick the humanizer's phrasing or fall through to the default. */
-function humanize<T>(custom: ((e: T) => string | undefined) | undefined, fallback: (e: T) => string, e: T): string {
+function humanize<T>(
+  custom: ((e: T) => string | undefined) | undefined,
+  fallback: (e: T) => string,
+  e: T,
+): string {
   if (custom) {
     const r = custom(e);
     if (typeof r === 'string') return r;
@@ -1370,7 +1374,10 @@ function reduceActivities(
   return out;
 }
 
-function findToolNameForCallId(events: readonly AgentEvent[], toolCallId: string): string | undefined {
+function findToolNameForCallId(
+  events: readonly AgentEvent[],
+  toolCallId: string,
+): string | undefined {
   for (const e of events) {
     if (e.type === 'tool_start' && e.toolCallId === toolCallId) return e.toolName;
   }
@@ -1379,27 +1386,43 @@ function findToolNameForCallId(events: readonly AgentEvent[], toolCallId: string
 
 // ── Status one-liner ──────────────────────────────────────────────────
 
-function deriveStatus(
-  events: readonly AgentEvent[],
-  h: Humanizer,
-  cursor?: number,
-): StatusLine {
+function deriveStatus(events: readonly AgentEvent[], h: Humanizer, cursor?: number): StatusLine {
   const end = cursor === undefined ? events.length - 1 : Math.min(cursor, events.length - 1);
   if (end < 0) {
-    return { text: humanize(h.describeTurnStart, defaultTurnStart, { userMessage: '' }), kind: 'idle', eventIndex: -1 };
+    return {
+      text: humanize(h.describeTurnStart, defaultTurnStart, { userMessage: '' }),
+      kind: 'idle',
+      eventIndex: -1,
+    };
   }
   const e = events[end];
   switch (e.type) {
     case 'turn_start':
-      return { text: humanize(h.describeTurnStart, defaultTurnStart, e), kind: 'turn', eventIndex: end };
+      return {
+        text: humanize(h.describeTurnStart, defaultTurnStart, e),
+        kind: 'turn',
+        eventIndex: end,
+      };
     case 'turn_end':
-      return { text: humanize(h.describeTurnEnd, defaultTurnEnd, e), kind: 'turn', eventIndex: end };
+      return {
+        text: humanize(h.describeTurnEnd, defaultTurnEnd, e),
+        kind: 'turn',
+        eventIndex: end,
+      };
     case 'llm_start':
-      return { text: humanize(h.describeLLMStart, defaultLLMStart, e), kind: 'llm', eventIndex: end };
+      return {
+        text: humanize(h.describeLLMStart, defaultLLMStart, e),
+        kind: 'llm',
+        eventIndex: end,
+      };
     case 'llm_end':
       return { text: humanize(h.describeLLMEnd, defaultLLMEnd, e), kind: 'llm', eventIndex: end };
     case 'tool_start':
-      return { text: humanize(h.describeToolStart, defaultToolStart, e), kind: 'tool', eventIndex: end };
+      return {
+        text: humanize(h.describeToolStart, defaultToolStart, e),
+        kind: 'tool',
+        eventIndex: end,
+      };
     case 'tool_end': {
       const toolName = findToolNameForCallId(events, e.toolCallId) ?? '';
       return {
@@ -1577,7 +1600,12 @@ function computeContextBySource(events: readonly AgentEvent[], cursor?: number):
     const sources: ContextSourceSummary[] = [];
     let totalInjections = 0;
     for (const [source, group] of bucket) {
-      sources.push({ source, count: group.count, deltaCount: group.deltaCount, labels: group.labels });
+      sources.push({
+        source,
+        count: group.count,
+        deltaCount: group.deltaCount,
+        labels: group.labels,
+      });
       totalInjections += group.count;
     }
     return { slot, sources, totalInjections };
