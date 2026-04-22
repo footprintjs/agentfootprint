@@ -636,6 +636,55 @@ export class AgentRunner {
     return this.dispatcher.observe(handler);
   }
 
+  /**
+   * Attach a recorder POST-BUILD. Mirrors the build-time `.recorder()`
+   * AgentBuilder method — the recorder participates in every subsequent
+   * `.run()` (gets `clear()` lifecycle + receives events through the
+   * executor's emit channel via `forwardEmitRecorders`).
+   *
+   * Why post-build attach matters: UI consumers like Lens receive an
+   * already-built agent via `<Lens for={agent} />` and can't influence
+   * the build-time `.recorder()` chain. Without this method they'd
+   * have to subscribe via `observe()` and get a translated AgentStreamEvent
+   * shape (no runtimeStageId, no subflowPath). With this method they
+   * get the full EmitEvent — proper recorder pattern, multi-agent ready.
+   *
+   * Returns a detach function; calling it removes the recorder from
+   * subsequent runs. Idempotent by recorder id (matching the same
+   * contract as build-time recorders).
+   *
+   * @example
+   * ```ts
+   * import { agentTimeline } from 'agentfootprint';
+   * const t = agentTimeline({ name: 'Neo' });
+   * const stop = agent.attachRecorder(t);
+   * await agent.run('hello');
+   * console.log(t.getTimeline());
+   * stop();  // detach
+   * ```
+   */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  attachRecorder(recorder: any): () => void {
+    // Idempotent on id — replace existing entry with same id, otherwise
+    // append. Matches the recorder-attachment contract footprintjs uses
+    // (executor.attachRecorder is also idempotent by id).
+    const id = (recorder as { id?: string })?.id;
+    if (typeof id === 'string') {
+      const existing = this.recorders.findIndex((r) => (r as { id?: string }).id === id);
+      if (existing >= 0) {
+        this.recorders[existing] = recorder;
+      } else {
+        this.recorders.push(recorder);
+      }
+    } else {
+      this.recorders.push(recorder);
+    }
+    return () => {
+      const idx = this.recorders.indexOf(recorder);
+      if (idx >= 0) this.recorders.splice(idx, 1);
+    };
+  }
+
   getSpec(): unknown {
     if (!this.lastSpec) {
       const { spec } = buildAgentLoop(

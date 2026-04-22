@@ -5,6 +5,35 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.21.0]
+
+### Multi-agent foundations
+
+- **`runner.attachRecorder(rec)`** — new method on AgentRunner. Attach
+  a recorder POST-BUILD; it participates in every subsequent `.run()`
+  with the standard recorder lifecycle (clear() + emit-channel hookup
+  via forwardEmitRecorders). Returns a detach function; idempotent on
+  recorder id (matching the rest of the recorder-attachment contract).
+  Lets `<Lens for={runner} />` consume EmitEvents directly (real
+  runtimeStageId + subflowPath), unblocking multi-agent grouping.
+- **`AgentTimeline.subAgents`** — new field on the timeline shape.
+  Per-sub-agent slices for multi-agent runs (Pipeline / Swarm /
+  Routing). Empty array for single-agent runs. Each entry is its own
+  SubAgentTimeline with `id`, `name`, own `turns`, own `tools` —
+  derived by grouping TimelineEntries by `subflowPath[0]`.
+- **`SubAgentTimeline`** — new exported type. Self-contained sub-
+  agent timeline shape that UIs iterate over for multi-agent
+  rendering.
+- **TimelineEntry now carries `subflowPath`** internally — preserved
+  verbatim from the EmitEvent so the folder can derive sub-agents
+  without re-reading source events.
+- 7th pattern test added covering multi-agent grouping (Pipeline-style
+  classify→analyze→respond) + single-agent's empty subAgents.
+
+The data shape is the contract every UI library reads. `agentfootprint-
+lens` 0.11+ uses it to render N agent containers (one per sub-agent)
+for Pipeline / Swarm / Routing samples.
+
 ## [1.20.0]
 
 ### Agent identity surfaces on `AgentTimeline`

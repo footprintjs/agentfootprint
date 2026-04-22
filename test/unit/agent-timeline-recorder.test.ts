@@ -28,6 +28,14 @@ function evt(name: string, payload: Record<string, unknown>, opts?: Partial<Emit
   };
 }
 
+function subEvt(
+  name: string,
+  payload: Record<string, unknown>,
+  subflowPath: readonly string[],
+): EmitEvent {
+  return evt(name, payload, { subflowPath });
+}
+
 describe('AgentTimelineRecorder — 5 pattern tests', () => {
   it('1. translates emit events into a folded AgentTimeline', () => {
     const t = agentTimeline();
@@ -231,6 +239,62 @@ describe('AgentTimelineRecorder — 5 pattern tests', () => {
       id: 'agentfootprint-agent-timeline',
       name: 'Agent',
     });
+  });
+
+  it('7. multi-agent: events with subflowPath group into AgentTimeline.subAgents', () => {
+    // Pipeline-style multi-agent run: parent FlowChart routes through
+    // 3 sub-agents (classify → analyze → respond). Each sub-agent's
+    // events fire with subflowPath = ["<sub-agent-id>"]. The recorder
+    // groups them into per-sub-agent slices on the parent timeline.
+    const t = agentTimeline({ name: 'Pipeline' });
+    t.onEmit(evt('agentfootprint.agent.turn_start', { userMessage: 'classify this' }));
+
+    // Sub-agent 'classify'
+    t.onEmit(subEvt('agentfootprint.stream.llm_start', { iteration: 1 }, ['classify']));
+    t.onEmit(
+      subEvt(
+        'agentfootprint.stream.llm_end',
+        { iteration: 1, content: 'class=A', toolCallCount: 0 },
+        ['classify'],
+      ),
+    );
+    // Sub-agent 'analyze'
+    t.onEmit(subEvt('agentfootprint.stream.llm_start', { iteration: 1 }, ['analyze']));
+    t.onEmit(
+      subEvt(
+        'agentfootprint.stream.llm_end',
+        { iteration: 1, content: 'analysis done', toolCallCount: 0 },
+        ['analyze'],
+      ),
+    );
+    // Sub-agent 'respond'
+    t.onEmit(subEvt('agentfootprint.stream.llm_start', { iteration: 1 }, ['respond']));
+    t.onEmit(
+      subEvt(
+        'agentfootprint.stream.llm_end',
+        { iteration: 1, content: 'final answer', toolCallCount: 0 },
+        ['respond'],
+      ),
+    );
+
+    t.onEmit(evt('agentfootprint.agent.turn_complete', { content: 'final answer' }));
+
+    const tl = t.getTimeline();
+    // Three distinct sub-agents, in emission order.
+    expect(tl.subAgents.map((s) => s.id)).toEqual(['classify', 'analyze', 'respond']);
+    // Each sub-agent has its own turn / iteration slice.
+    expect(tl.subAgents[0].turns).toHaveLength(1);
+    expect(tl.subAgents[0].turns[0].iterations[0].assistantContent).toBe('class=A');
+    expect(tl.subAgents[1].turns[0].iterations[0].assistantContent).toBe('analysis done');
+    expect(tl.subAgents[2].turns[0].iterations[0].assistantContent).toBe('final answer');
+    // Single-agent runs (no subflowPath) → empty subAgents.
+    const single = agentTimeline();
+    single.onEmit(evt('agentfootprint.agent.turn_start', { userMessage: 'hi' }));
+    single.onEmit(evt('agentfootprint.stream.llm_start', { iteration: 1 }));
+    single.onEmit(
+      evt('agentfootprint.stream.llm_end', { iteration: 1, content: 'a', toolCallCount: 0 }),
+    );
+    expect(single.getTimeline().subAgents).toEqual([]);
   });
 
   it('5. clear() wipes recorder state — ready for re-use across runs', () => {

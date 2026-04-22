@@ -142,4 +142,5 @@ export type {
   AgentContextInjection,
   AgentContextLedger,
   AgentInfo,
+  SubAgentTimeline,
 } from './observe.barrel';

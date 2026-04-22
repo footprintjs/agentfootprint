@@ -61,6 +61,7 @@ export type {
   AgentContextInjection,
   AgentContextLedger,
   AgentInfo,
+  SubAgentTimeline,
 } from './recorders';
 
 export type { AgentRecorder } from './core';

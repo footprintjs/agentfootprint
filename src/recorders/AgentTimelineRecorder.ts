@@ -168,6 +168,30 @@ export interface AgentInfo {
   readonly name: string;
 }
 
+/**
+ * One sub-agent inside a multi-agent timeline. Distinct from
+ * `AgentInfo` because sub-agents carry their own slice of turns +
+ * messages + tools — they're "small timelines" inside the bigger one.
+ *
+ * Detection: events from a sub-agent arrive with `subflowPath`
+ * populated (e.g. `["classify"]` for the classify stage of a
+ * Pipeline). The recorder groups entries by `subflowPath[0]` to
+ * derive these sub-agent slices. Single-agent runs have empty
+ * `subflowPath` on every event → no sub-agents derived.
+ */
+export interface SubAgentTimeline {
+  /** Sub-agent identity — derived from `subflowPath[0]`. */
+  readonly id: string;
+  /** Display name. Same as `id` until upstream wiring carries the
+   *  human-readable name (e.g. via `Agent.create({ name })` on the
+   *  sub-agent's builder). */
+  readonly name: string;
+  /** Turns owned by this sub-agent. */
+  readonly turns: readonly AgentTurn[];
+  /** Tool invocations from this sub-agent (subset of timeline.tools). */
+  readonly tools: readonly AgentToolInvocation[];
+}
+
 /** The full picture: every turn stitched together. */
 export interface AgentTimeline {
   /** Identity of the agent that produced this timeline. UIs label
@@ -177,6 +201,17 @@ export interface AgentTimeline {
   readonly messages: readonly AgentMessage[];
   readonly tools: readonly AgentToolInvocation[];
   readonly finalDecision: Record<string, unknown>;
+  /**
+   * Per-sub-agent slices for multi-agent runs (Pipeline / Swarm /
+   * Routing patterns). Empty array for single-agent runs (the typical
+   * Agent / LLMCall / RAG case). UIs check `subAgents.length > 0` to
+   * decide between single-container and N-container rendering.
+   *
+   * Each entry is a self-contained sub-timeline keyed by the
+   * `subflowPath[0]` of the events it owns. Multi-agent shells
+   * iterate over `subAgents` and render one container per entry.
+   */
+  readonly subAgents: readonly SubAgentTimeline[];
 }
 
 // ── Internal entry shape — what SequenceRecorder<T> stores ────────────
@@ -198,6 +233,14 @@ type TimelineEntry =
 interface BaseEntry {
   readonly runtimeStageId?: string;
   readonly timestamp: number;
+  /**
+   * Subflow path from outermost parent down to the subflow that
+   * emitted this event. Populated by the executor on every EmitEvent
+   * — preserved verbatim here so the folder can derive per-sub-agent
+   * slices for multi-agent runs (group entries by `subflowPath[0]`).
+   * Empty array for root-flowchart events (single-agent case).
+   */
+  readonly subflowPath: readonly string[];
 }
 
 interface TurnStartEntry extends BaseEntry {
@@ -340,12 +383,16 @@ function translate(event: EmitEvent, llmPhaseActive: boolean): TimelineEntry | n
   const id = event.runtimeStageId;
   const payload = (event.payload ?? {}) as Record<string, unknown>;
   const name = event.name;
+  // Preserve subflowPath verbatim — the folder uses it to derive the
+  // multi-agent `subAgents` slices. Empty array for root flowchart.
+  const subflowPath = event.subflowPath ?? [];
 
   if (name === 'agentfootprint.stream.llm_start') {
     return {
       type: 'llm_start',
       runtimeStageId: id,
       timestamp: ts,
+      subflowPath,
       iteration: numberOr(payload.iteration, 1),
     };
   }
@@ -354,6 +401,7 @@ function translate(event: EmitEvent, llmPhaseActive: boolean): TimelineEntry | n
       type: 'llm_end',
       runtimeStageId: id,
       timestamp: ts,
+      subflowPath,
       iteration: numberOr(payload.iteration, 1),
       content: stringOr(payload.content, ''),
       ...(typeof payload.model === 'string' && { model: payload.model }),
@@ -368,6 +416,7 @@ function translate(event: EmitEvent, llmPhaseActive: boolean): TimelineEntry | n
       type: 'tool_start',
       runtimeStageId: id,
       timestamp: ts,
+      subflowPath,
       toolName: stringOr(payload.toolName, 'unknown'),
       toolCallId: stringOr(payload.toolCallId, `tool-${ts}`),
       args: (payload.args as Record<string, unknown>) ?? {},
@@ -386,6 +435,7 @@ function translate(event: EmitEvent, llmPhaseActive: boolean): TimelineEntry | n
       type: 'tool_end',
       runtimeStageId: id,
       timestamp: ts,
+      subflowPath,
       toolCallId: stringOr(payload.toolCallId, ''),
       result,
       ...(error ? { error: true } : {}),
@@ -397,6 +447,7 @@ function translate(event: EmitEvent, llmPhaseActive: boolean): TimelineEntry | n
       type: 'turn_start',
       runtimeStageId: id,
       timestamp: ts,
+      subflowPath,
       userMessage: stringOr(payload.userMessage, ''),
     };
   }
@@ -405,6 +456,7 @@ function translate(event: EmitEvent, llmPhaseActive: boolean): TimelineEntry | n
       type: 'turn_end',
       runtimeStageId: id,
       timestamp: ts,
+      subflowPath,
       ...(typeof payload.content === 'string' && { finalContent: payload.content }),
     };
   }
@@ -415,6 +467,7 @@ function translate(event: EmitEvent, llmPhaseActive: boolean): TimelineEntry | n
       type: 'context_injection',
       runtimeStageId: id,
       timestamp: ts,
+      subflowPath,
       ...tagged,
       attachedToCurrentIter: llmPhaseActive,
     };
@@ -537,7 +590,11 @@ interface MutableTool {
   durationMs?: number;
 }
 
-function foldEntries(entries: readonly TimelineEntry[], agent: AgentInfo): AgentTimeline {
+function foldCore(
+  entries: readonly TimelineEntry[],
+  agent: AgentInfo,
+  deriveSubs: boolean,
+): AgentTimeline {
   const turns: MutableTurn[] = [];
   const messages: AgentMessage[] = [];
   const toolByCallId = new Map<string, MutableTool>();
@@ -709,5 +766,75 @@ function foldEntries(entries: readonly TimelineEntry[], agent: AgentInfo): Agent
     messages: [...messages],
     tools: allTools,
     finalDecision: {},
+    // `subAgents` is the multi-agent dimension. When the caller is
+    // `foldEntries` (the public path), we derive it. When the caller
+    // is `deriveSubAgents` (already inside a sub-agent fold), we don't
+    // recurse — passing `deriveSubs: false` short-circuits the recursion.
+    subAgents: deriveSubs ? deriveSubAgents(entries) : [],
   };
+}
+
+function foldEntries(entries: readonly TimelineEntry[], agent: AgentInfo): AgentTimeline {
+  return foldCore(entries, agent, true);
+}
+
+/**
+ * Group timeline entries by their `subflowPath[0]` (the top-level
+ * sub-agent name) and fold each group into its own SubAgentTimeline.
+ *
+ * Single-agent runs have `subflowPath = []` on every event → produces
+ * empty array (UIs render single container).
+ *
+ * Multi-agent runs (Pipeline / Swarm) — events from each sub-agent
+ * fire with `subflowPath = ["classify"]`, `["analyze"]`, etc. — one
+ * SubAgentTimeline per distinct first segment.
+ *
+ * Each sub-agent slice is its own self-contained timeline (re-folded
+ * from the subset of entries belonging to it). The OUTER timeline
+ * still contains everything; sub-agents are an additional view, not
+ * a replacement.
+ */
+function deriveSubAgents(entries: readonly TimelineEntry[]): SubAgentTimeline[] {
+  // Group by subflowPath[0]. Skip entries with empty subflowPath
+  // (those belong to the root parent agent, not a sub-agent).
+  const bySubAgent = new Map<string, TimelineEntry[]>();
+  for (const entry of entries) {
+    const subAgentId = entry.subflowPath[0];
+    if (!subAgentId) continue;
+    const arr = bySubAgent.get(subAgentId) ?? [];
+    arr.push(entry);
+    bySubAgent.set(subAgentId, arr);
+  }
+  if (bySubAgent.size === 0) return [];
+
+  // Find the parent's user message — sub-agent slices don't get their
+  // own turn_start (the parent owns the conversation), but the fold
+  // requires one to initialize `currentTurn`. Synthesize one prepended
+  // to each sub-agent's entries so the fold has a turn anchor.
+  const parentTurnStart = entries.find((e) => e.type === 'turn_start');
+  const parentUserMessage =
+    parentTurnStart?.type === 'turn_start' ? parentTurnStart.userMessage : '';
+
+  // Fold each group with `deriveSubs=false` to short-circuit recursion.
+  // Sub-agents inherit the subflow id as their name — upstream wiring
+  // (Agent.create({ name }) on sub-agents) can carry the real human
+  // name through future enhancements.
+  const out: SubAgentTimeline[] = [];
+  for (const [id, subEntries] of bySubAgent) {
+    const synthTurnStart: TimelineEntry = {
+      type: 'turn_start',
+      runtimeStageId: `synth:turn_start:${id}`,
+      timestamp: subEntries[0]?.timestamp ?? Date.now(),
+      subflowPath: [id],
+      userMessage: parentUserMessage,
+    };
+    const subTimeline = foldCore([synthTurnStart, ...subEntries], { id, name: id }, false);
+    out.push({
+      id,
+      name: id,
+      turns: subTimeline.turns,
+      tools: subTimeline.tools,
+    });
+  }
+  return out;
 }
