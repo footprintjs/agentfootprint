@@ -25,6 +25,8 @@ export {
   CompositeRecorder,
   agentObservability,
   contextEngineering,
+  agentTimeline,
+  AgentTimelineRecorder,
 } from './recorders';
 
 export { OTelRecorder } from './recorders/OTelRecorder';
@@ -49,6 +51,15 @@ export type {
   ContextEngineeringRecorderOptions,
   ContextInjectionRecord,
   ContextLedger,
+  AgentTimelineRecorderOptions,
+  AgentTimeline,
+  AgentTurn,
+  AgentIteration,
+  AgentToolInvocation,
+  AgentToolCallStub,
+  AgentMessage,
+  AgentContextInjection,
+  AgentContextLedger,
 } from './recorders';
 
 export type { AgentRecorder } from './core';

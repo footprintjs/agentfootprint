@@ -5,6 +5,42 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.19.0]
+
+### New recorder — `agentTimeline()` (the canonical agent narrative)
+
+Parallels footprintjs's `CombinedNarrativeRecorder`. One place every UI
+/ observability consumer translates the agentfootprint emit stream into
+the agent-shaped narrative they render against — turns → iterations →
+tool calls + per-iteration context injections + folded ledger. UI
+libraries (`agentfootprint-lens`, `agentfootprint-grafana`, custom
+dashboards) consume the same shape instead of each re-implementing
+their own translation.
+
+- **`agentTimeline(options?)`** factory, exported from both
+  `agentfootprint` and `agentfootprint/observe`. Returns an
+  `AgentTimelineRecorder` that extends footprintjs
+  `SequenceRecorder<TimelineEntry>` and implements `EmitRecorder`.
+  Gets storage, keyed index, range index, progressive `accumulate()`,
+  and the `clear()` lifecycle hook for free — no reinvented
+  bookkeeping.
+- Attach via the standard `.recorder(t)` on AgentBuilder;
+  `forwardEmitRecorders` routes to `executor.attachEmitRecorder(t)`.
+- **Public types**: `AgentTimeline`, `AgentTurn`, `AgentIteration`,
+  `AgentToolInvocation`, `AgentToolCallStub`, `AgentMessage`,
+  `AgentContextInjection`, `AgentContextLedger`. These are the data
+  contract every UI library consumes.
+- **Context-injection routing** preserves semantics: events during the
+  LLM phase shape THIS iter's prompt; events between phases shape the
+  NEXT iter (skill activation post-`read_skill`).
+- **Multi-agent**: `agentTimeline({ id: 'classify' })` — each sub-agent
+  in a Pipeline/Swarm gets its own named recorder, its own snapshot
+  slot.
+- 5 pattern tests (`test/unit/agent-timeline-recorder.test.ts`):
+  basic shape, ReAct loop ordering (tool_start after llm_end),
+  context-injection routing, multi-turn, clear() lifecycle.
+- Docs update in `src/recorders/README.md`.
+
 ## [1.18.0]
 
 ### Context engineering — first-class teaching surface

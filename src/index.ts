@@ -127,9 +127,18 @@ export {
   TurnRecorder,
   CostRecorder,
   contextEngineering,
+  agentTimeline,
 } from './observe.barrel';
 export type {
   ContextEngineeringRecorder,
   ContextInjectionRecord,
   ContextLedger,
+  AgentTimeline,
+  AgentTurn,
+  AgentIteration,
+  AgentToolInvocation,
+  AgentToolCallStub,
+  AgentMessage,
+  AgentContextInjection,
+  AgentContextLedger,
 } from './observe.barrel';

@@ -26,3 +26,15 @@ export type {
   ContextInjectionRecord,
   ContextLedger,
 } from './ContextEngineeringRecorder';
+export { agentTimeline, AgentTimelineRecorder } from './AgentTimelineRecorder';
+export type {
+  AgentTimelineRecorderOptions,
+  AgentTimeline,
+  AgentTurn,
+  AgentIteration,
+  AgentToolInvocation,
+  AgentToolCallStub,
+  AgentMessage,
+  AgentContextInjection,
+  AgentContextLedger,
+} from './AgentTimelineRecorder';

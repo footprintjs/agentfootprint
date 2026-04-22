@@ -83,6 +83,48 @@ obs.cost();     // CostRecorder total
 obs.explain();  // ExplainRecorder evaluation data — the differentiator
 ```
 
+### Agent narrative — UI-shaped run timeline
+
+| Export | What | Use case |
+|--------|------|----------|
+| `agentTimeline()` | Subscribes to `agentfootprint.stream.*` + `.context.*` emits, folds into the agent-shaped narrative (turns → iterations → tool calls + per-iteration context injections + ledger) | The canonical "what happened in this run" data structure for UIs (Lens, Grafana, custom dashboards, CLI debuggers, replay tools) |
+
+**The abstraction**: parallels footprintjs's `CombinedNarrativeRecorder` — one place every UI / observability tool consumes the agent's run, instead of each UI library re-implementing the translation.
+
+```typescript
+import { Agent, agentTimeline, anthropic } from 'agentfootprint';
+
+const t = agentTimeline();
+const agent = Agent.create({ provider: anthropic('claude-sonnet-4-5') })
+  .recorder(t)
+  .build();
+
+await agent.run('Investigate port errors on switch-3');
+
+const timeline = t.getTimeline();
+timeline.turns;                    // AgentTurn[] — one per .run() call
+timeline.turns[0].iterations;      // AgentIteration[] — one per LLM call
+timeline.turns[0].iterations[0].toolCalls;  // tool invocations + results
+timeline.turns[0].contextInjections;        // RAG / Skill / Memory / Instructions tags
+timeline.turns[0].contextLedger;            // folded counter delta
+                                            // { systemPromptChars: 1200, system: 1, ... }
+
+// SequenceRecorder primitives (inherited from footprintjs/trace):
+t.getEntries();         // raw TimelineEntry[] in emit order
+t.getEntryRanges();     // O(1) per-step range index — for time-travel sliders
+t.aggregate(...);       // reduce all entries
+```
+
+**Multi-agent**: each sub-agent in a Pipeline / Swarm gets its own named instance. Each lands in its own snapshot slot for separate visualization:
+
+```typescript
+const classify = agentTimeline({ id: 'classify' });
+const analyze  = agentTimeline({ id: 'analyze'  });
+const respond  = agentTimeline({ id: 'respond'  });
+```
+
+**Why a separate library?** Same pattern as `contextEngineering()` — agentfootprint owns the contract and the translation, UI libraries (`agentfootprint-lens`, `agentfootprint-grafana`, custom dashboards) own the rendering. One translation, many UIs.
+
 ## Event → Recorder Mapping
 
 | AgentRecorder hook | Who fires it | Which recorders listen |
