@@ -239,10 +239,11 @@ export class FlowChartRunner {
 
   /**
    * Attach a recorder POST-BUILD. Mirrors AgentRunner.attachRecorder.
-   * Lets `<Lens for={runner} />` consume EmitEvents directly (real
-   * runtimeStageId + subflowPath) — required for multi-agent grouping
-   * since FlowChart mounts each sub-agent as a subflow named by
-   * `agentConfig.id`.
+   *
+   * Multi-agent composition is discovered at RUNTIME by the recorder's
+   * `TopologyRecorder` via `onSubflowEntry` / `onFork` / `onDecision`
+   * events from the executor traversal — no runner-side declaration
+   * needed. The runner is a pure attach surface.
    */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   attachRecorder(recorder: any): () => void {

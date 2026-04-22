@@ -297,8 +297,8 @@ export class ConditionalRunner {
 
   /**
    * Attach a recorder POST-BUILD. See AgentRunner.attachRecorder.
-   * Lets `<Lens for={runner} />` consume EmitEvents directly so
-   * subflowPath flows through for multi-agent grouping.
+   * Conditional composition is discovered at runtime via the executor's
+   * onDecision events, routed through the recorder's TopologyRecorder.
    */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   attachRecorder(recorder: any): () => void {

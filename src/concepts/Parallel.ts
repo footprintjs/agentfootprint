@@ -401,7 +401,9 @@ export class ParallelRunner {
     return this.dispatcher.observe(handler);
   }
 
-  /** Attach a recorder POST-BUILD. See AgentRunner.attachRecorder. */
+  /** Attach a recorder POST-BUILD. See AgentRunner.attachRecorder.
+   *  Parallel composition is discovered at runtime via the executor's
+   *  onFork events, routed through the recorder's TopologyRecorder. */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   attachRecorder(recorder: any): () => void {
     return attachRecorderToList(this.opts.recorders as AgentRecorder[], recorder);

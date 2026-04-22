@@ -123,6 +123,16 @@ const analyze  = agentTimeline({ id: 'analyze'  });
 const respond  = agentTimeline({ id: 'respond'  });
 ```
 
+**Composition discovery is automatic.** `agentTimeline()` composes footprintjs's `TopologyRecorder` internally. When the executor crosses into a subflow, forks into parallel branches, or takes a conditional/swarm route, the topology graph updates live. `timeline.subAgents` derives from the topology's subflow nodes — no runner-side `setComposition()` handshake, no per-runner declaration, no emit-channel archaeology. Works for any composition shape (Pipeline / Parallel / Conditional / Swarm / any future pattern) because composition shape comes from footprintjs's primitive channels.
+
+```typescript
+const t = agentTimeline();
+// ... attach, run ...
+t.getTimeline().subAgents;           // surfaces from topology subflow nodes
+t.getTopology().getTopology();       // full composition graph for advanced queries
+t.getTopology().getByKind('fork-branch');  // all parallel branches this run produced
+```
+
 **Why a separate library?** Same pattern as `contextEngineering()` — agentfootprint owns the contract and the translation, UI libraries (`agentfootprint-lens`, `agentfootprint-grafana`, custom dashboards) own the rendering. One translation, many UIs.
 
 ## Event → Recorder Mapping

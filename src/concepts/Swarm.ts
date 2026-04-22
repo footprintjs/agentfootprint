@@ -361,7 +361,10 @@ export class SwarmRunner {
     return this.dispatcher.observe(handler);
   }
 
-  /** Attach a recorder POST-BUILD. See AgentRunner.attachRecorder. */
+  /** Attach a recorder POST-BUILD. See AgentRunner.attachRecorder.
+   *  Swarm composition is discovered at runtime via the executor's
+   *  onDecision events (specialist routing), routed through the
+   *  recorder's TopologyRecorder. */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   attachRecorder(recorder: any): () => void {
     return attachRecorderToList(this.recorders, recorder);

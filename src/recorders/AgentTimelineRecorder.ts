@@ -45,8 +45,16 @@
  * shells aggregate them by id.
  */
 
-import type { EmitEvent, EmitRecorder } from 'footprintjs';
-import { SequenceRecorder } from 'footprintjs/trace';
+import type {
+  EmitEvent,
+  EmitRecorder,
+  FlowDecisionEvent,
+  FlowForkEvent,
+  FlowLoopEvent,
+  FlowRecorder,
+  FlowSubflowEvent,
+} from 'footprintjs';
+import { SequenceRecorder, TopologyRecorder } from 'footprintjs/trace';
 
 // ── Public types — the AGENT-SHAPED narrative every UI consumes ───────
 //
@@ -314,7 +322,39 @@ export interface AgentTimelineRecorderOptions {
   readonly name?: string;
 }
 
-export class AgentTimelineRecorder extends SequenceRecorder<TimelineEntry> implements EmitRecorder {
+/**
+ * AgentTimelineRecorder implements THREE footprintjs observer channels:
+ *
+ *   1. EmitRecorder  — receives `agentfootprint.stream.*` and
+ *                     `agentfootprint.context.*` events from stages.
+ *   2. FlowRecorder  — receives subflow/fork/decision/loop events from the
+ *                     executor traversal. Forwarded to a composed
+ *                     `TopologyRecorder` — the library-level primitive for
+ *                     "what's the shape of this run?"
+ *   3. SequenceRecorder<TimelineEntry> base — storage primitive for the
+ *                     flat emit-event history.
+ *
+ * Multi-agent rendering is fully automatic: when the executor crosses into
+ * a subflow (Pipeline → classify, Pipeline → analyze, ...), the composed
+ * TopologyRecorder records a subflow node. When it forks (Parallel), one
+ * fork-branch node per child. When it branches (Conditional/Swarm), a
+ * decision-branch node. `getTimeline().subAgents` derives from the
+ * topology's subflow nodes — no per-runner declarations, no legacy
+ * `setComposition()` handshake.
+ *
+ * Composition over duplication: `TopologyRecorder` (in `footprintjs/trace`)
+ * is the ONE place subflow-stack + fork-map + decision-tracker logic lives.
+ * Every domain library shares it.
+ *
+ * Footprintjs's `attachCombinedRecorder` detects which methods this
+ * recorder implements and routes events accordingly. The runner's
+ * `forwardEmitRecorders()` helper takes that path so all three channels
+ * wire up with one attach call.
+ */
+export class AgentTimelineRecorder
+  extends SequenceRecorder<TimelineEntry>
+  implements EmitRecorder, FlowRecorder
+{
   readonly id: string;
   readonly name: string;
 
@@ -322,10 +362,19 @@ export class AgentTimelineRecorder extends SequenceRecorder<TimelineEntry> imple
    *  routing (THIS iter vs NEXT iter). */
   private llmPhaseActive = false;
 
+  /**
+   * Composed topology accumulator — the single source of truth for
+   * composition shape. Receives forwarded FlowRecorder events. Queried
+   * at `getTimeline()` time to derive `subAgents`. Owned by the recorder
+   * (not attached separately) so consumers stay with one attach call.
+   */
+  private readonly topology: TopologyRecorder;
+
   constructor(options?: AgentTimelineRecorderOptions) {
     super();
     this.id = options?.id ?? 'agentfootprint-agent-timeline';
     this.name = options?.name ?? 'Agent';
+    this.topology = new TopologyRecorder({ id: `${this.id}-topology` });
   }
 
   // ── EmitRecorder ─────────────────────────────────────────────────────
@@ -348,22 +397,68 @@ export class AgentTimelineRecorder extends SequenceRecorder<TimelineEntry> imple
     this.emit(entry);
   }
 
+  // ── FlowRecorder hooks ──────────────────────────────────────────────
+  //
+  // All flow events forward to the composed TopologyRecorder. It's the
+  // library-level primitive for composition-graph tracking; we don't
+  // duplicate its subflow-stack / fork-map / decision-tracker logic here.
+
+  onSubflowEntry(event: FlowSubflowEvent): void {
+    this.topology.onSubflowEntry(event);
+  }
+
+  onSubflowExit(event: FlowSubflowEvent): void {
+    this.topology.onSubflowExit(event);
+  }
+
+  onFork(event: FlowForkEvent): void {
+    this.topology.onFork(event);
+  }
+
+  onDecision(event: FlowDecisionEvent): void {
+    this.topology.onDecision(event);
+  }
+
+  onLoop(event: FlowLoopEvent): void {
+    this.topology.onLoop(event);
+  }
+
   /** Reset state. Called automatically by the executor before each
    *  `run()` (recorder-pattern lifecycle hook). */
   override clear(): void {
     super.clear();
     this.llmPhaseActive = false;
+    this.topology.clear();
   }
 
   // ── Derived view ────────────────────────────────────────────────────
 
   /**
    * Fold the recorder's flat entry sequence into the agent-shaped
-   * AgentTimeline. Pure derivation — same input always produces same
-   * output. Cheap because entry count is bounded by run length.
+   * AgentTimeline. Sub-agents derive from the composed topology's
+   * subflow nodes — one source of truth, works for any composition
+   * pattern the executor traverses.
    */
   getTimeline(): AgentTimeline {
-    return foldEntries(this.getEntries(), { id: this.id, name: this.name });
+    const base = foldEntries(this.getEntries(), { id: this.id, name: this.name });
+    const subflowNodes = this.topology.getSubflowNodes();
+    if (subflowNodes.length === 0) return base;
+    const subAgents = subflowNodes.map((node) => ({
+      id: node.id,
+      name: node.name,
+      turns: [] as readonly AgentTurn[],
+      tools: [] as readonly AgentToolInvocation[],
+    }));
+    return { ...base, subAgents };
+  }
+
+  /**
+   * Direct access to the composed topology accumulator — useful for
+   * consumers that want the full composition graph (fork-branches,
+   * decision-branches, edges) rather than only the subflow slice.
+   */
+  getTopology(): TopologyRecorder {
+    return this.topology;
   }
 }
 
