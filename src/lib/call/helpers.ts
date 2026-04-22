@@ -318,7 +318,7 @@ export async function executeToolCalls(
   }
 
   for (const toolCall of toolCalls) {
-    let resultContent: string = '';
+    let resultContent = '';
     let runtimeInstructions: readonly string[] | undefined;
     let runtimeFollowUps: readonly RuntimeFollowUp[] | undefined;
     let errorInfo: { code?: string; message: string } | undefined;
@@ -553,7 +553,7 @@ async function executeOneToolCall(
   didError: boolean;
   askHumanMarker?: { question: string; toolCallId: string };
 }> {
-  let resultContent: string = '';
+  let resultContent = '';
   let runtimeInstructions: readonly string[] | undefined;
   let runtimeFollowUps: readonly RuntimeFollowUp[] | undefined;
   let errorInfo: { code?: string; message: string } | undefined;

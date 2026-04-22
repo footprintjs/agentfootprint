@@ -26,8 +26,13 @@ jobs:
 
       - run: npm install
       - run: npx tsc --noEmit
-      - run: npm test
+      # Build BEFORE test. Examples in test/examples-smoke.test.ts import
+      # from the package name 'agentfootprint' (not relative paths), and
+      # Node's resolver looks up the local package's main/exports which
+      # point to dist/. Without an upstream build, those imports fail
+      # with "Failed to resolve entry for package 'agentfootprint'".
       - run: npm run build
+      - run: npm test
 
   lint:
     runs-on: ubuntu-latest

@@ -21,8 +21,12 @@ jobs:
           registry-url: https://registry.npmjs.org
 
       - run: npm install
-      - run: npm test
+      # Build BEFORE test. Examples in test/examples-smoke.test.ts import
+      # from the package name 'agentfootprint', resolved via the local
+      # package's main/exports → dist/. Without an upstream build those
+      # imports fail. (Same fix as in ci.yml.)
       - run: npm run build
+      - run: npm test
       - run: npm publish --provenance --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
