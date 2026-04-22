@@ -47,11 +47,10 @@ const decision = (
 // ── P1: base case ──────────────────────────────────────────────────────
 
 describe('AgentTimelineRecorder — topology composition', () => {
-  it('P1 base case: no flow events → base timeline with empty subAgents', () => {
+  it('P1 base case: no flow events → selectAgent works, selectSubAgents is empty', () => {
     const rec = agentTimeline({ id: 'agent-1', name: 'Root' });
-    const t = rec.getTimeline();
-    expect(t.agent).toEqual({ id: 'agent-1', name: 'Root' });
-    expect(t.subAgents ?? []).toEqual([]);
+    expect(rec.selectAgent()).toEqual({ id: 'agent-1', name: 'Root' });
+    expect(rec.selectSubAgents()).toEqual([]);
   });
 
   // ── P2: sequential ────────────────────────────────────────────────────
@@ -65,9 +64,9 @@ describe('AgentTimelineRecorder — topology composition', () => {
     rec.onSubflowEntry(entry('sf-respond', 'Respond', 'r#4'));
     rec.onSubflowExit(entry('sf-respond', 'Respond', 'r#5'));
 
-    const t = rec.getTimeline();
-    expect(t.subAgents?.map((sa) => sa.id)).toEqual(['sf-classify', 'sf-analyze', 'sf-respond']);
-    expect(t.subAgents?.map((sa) => sa.name)).toEqual(['Classify', 'Analyze', 'Respond']);
+    const subAgents = rec.selectSubAgents();
+    expect(subAgents.map((sa) => sa.id)).toEqual(['sf-classify', 'sf-analyze', 'sf-respond']);
+    expect(subAgents.map((sa) => sa.name)).toEqual(['Classify', 'Analyze', 'Respond']);
   });
 
   // ── P3: parallel fork ─────────────────────────────────────────────────
@@ -82,11 +81,10 @@ describe('AgentTimelineRecorder — topology composition', () => {
     rec.onSubflowExit(entry('sf-beta', 'Beta', 'b#5'));
 
     // Timeline subAgents reflects ALL subflow nodes (parent + 2 branches).
-    const t = rec.getTimeline();
-    expect(t.subAgents?.map((sa) => sa.id)).toEqual(['sf-parent', 'sf-alpha', 'sf-beta']);
+    expect(rec.selectSubAgents().map((sa) => sa.id)).toEqual(['sf-parent', 'sf-alpha', 'sf-beta']);
 
     // Topology graph carries the full composition shape including forks.
-    const topo = rec.getTopology().getTopology();
+    const topo = rec.selectTopology();
     const forkBranches = topo.nodes.filter((n) => n.kind === 'fork-branch');
     expect(forkBranches.map((n) => n.name)).toEqual(['Alpha', 'Beta']);
 
@@ -105,7 +103,7 @@ describe('AgentTimelineRecorder — topology composition', () => {
     rec.onSubflowEntry(entry('sf-high', 'HighRisk', 'h#2'));
     rec.onSubflowExit(entry('sf-high', 'HighRisk', 'h#3'));
 
-    const topo = rec.getTopology().getTopology();
+    const topo = rec.selectTopology();
     const decBranch = topo.nodes.find((n) => n.kind === 'decision-branch')!;
     const sfHigh = topo.nodes.find((n) => n.id === 'sf-high')!;
 
@@ -114,7 +112,7 @@ describe('AgentTimelineRecorder — topology composition', () => {
     expect(sfHigh.parentId).toBe(decBranch.id);
 
     // Timeline still exposes the chosen subflow as a sub-agent.
-    expect(rec.getTimeline().subAgents?.map((s) => s.id)).toContain('sf-high');
+    expect(rec.selectSubAgents().map((s) => s.id)).toContain('sf-high');
   });
 
   // ── P5: direct topology access ────────────────────────────────────────
@@ -134,10 +132,10 @@ describe('AgentTimelineRecorder — topology composition', () => {
   it('clear() resets both the entry sequence and the composed topology', () => {
     const rec = agentTimeline();
     rec.onSubflowEntry(entry('sf-x', 'X', 'x#0'));
-    expect(rec.getTimeline().subAgents).toBeDefined();
+    expect(rec.selectSubAgents().length).toBeGreaterThan(0);
 
     rec.clear();
-    expect(rec.getTimeline().subAgents ?? []).toEqual([]);
-    expect(rec.getTopology().getTopology().nodes).toEqual([]);
+    expect(rec.selectSubAgents()).toEqual([]);
+    expect(rec.selectTopology().nodes).toEqual([]);
   });
 });

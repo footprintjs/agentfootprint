@@ -52,7 +52,7 @@ export type {
   ContextInjectionRecord,
   ContextLedger,
   AgentTimelineRecorderOptions,
-  AgentTimeline,
+  AgentEvent,
   AgentTurn,
   AgentIteration,
   AgentToolInvocation,
@@ -62,6 +62,13 @@ export type {
   AgentContextLedger,
   AgentInfo,
   SubAgentTimeline,
+  Activity,
+  StatusLine,
+  CommentaryLine,
+  RunSummary,
+  IterationRange,
+  IterationRangeIndex,
+  Humanizer,
 } from './recorders';
 
 export type { AgentRecorder } from './core';

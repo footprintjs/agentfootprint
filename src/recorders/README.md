@@ -91,6 +91,18 @@ obs.explain();  // ExplainRecorder evaluation data — the differentiator
 
 **The abstraction**: parallels footprintjs's `CombinedNarrativeRecorder` — one place every UI / observability tool consumes the agent's run, instead of each UI library re-implementing the translation.
 
+### The v2 architecture — event stream + selectors + humanizer
+
+```
+EVENT STREAM              (structured, canonical — single source of truth)
+    ↓
+SELECTORS                 (typed, memoized, lazy, composable — THE API)
+    ↓
+VIEWS                     (React / Vue / Angular / CLI / Grafana / replay)
+```
+
+No pre-shaped "timeline blob" — every renderer calls the selectors it needs. Lazy memoization makes re-reads free until new events arrive. New view? Add a selector. New domain phrasing? Swap the humanizer.
+
 ```typescript
 import { Agent, agentTimeline, anthropic } from 'agentfootprint';
 
@@ -101,19 +113,44 @@ const agent = Agent.create({ provider: anthropic('claude-sonnet-4-5') })
 
 await agent.run('Investigate port errors on switch-3');
 
-const timeline = t.getTimeline();
-timeline.turns;                    // AgentTurn[] — one per .run() call
-timeline.turns[0].iterations;      // AgentIteration[] — one per LLM call
-timeline.turns[0].iterations[0].toolCalls;  // tool invocations + results
-timeline.turns[0].contextInjections;        // RAG / Skill / Memory / Instructions tags
-timeline.turns[0].contextLedger;            // folded counter delta
-                                            // { systemPromptChars: 1200, system: 1, ... }
+// Raw (rare — low-level tooling only)
+t.getEvents();              // readonly AgentEvent[] — the canonical stream
 
-// SequenceRecorder primitives (inherited from footprintjs/trace):
-t.getEntries();         // raw TimelineEntry[] in emit order
-t.getEntryRanges();     // O(1) per-step range index — for time-travel sliders
-t.aggregate(...);       // reduce all entries
+// Selectors — the API every renderer uses
+t.selectAgent();            // { id, name }
+t.selectTurns();            // AgentTurn[] — iterations + tool calls + context
+t.selectMessages();         // AgentMessage[]
+t.selectTools();            // AgentToolInvocation[]
+t.selectSubAgents();        // SubAgentTimeline[] — identity + content per sub-agent
+t.selectFinalDecision();    // Record<string, unknown>
+
+// v2 audience-laddered selectors (engineer → analyst → user)
+t.selectTopology();         // engineer view: composition graph (nodes + edges)
+t.selectCommentary();       // analyst view: human narrative per event
+t.selectActivities();       // user view: ThinkKit-style breadcrumb list
+t.selectStatus();           // user view: single-line current-status pill
+
+// Aggregates + indexes
+t.selectRunSummary();       // totals (tokens, tool counts, skill activations)
+t.selectIterationRanges();  // iter ↔ event-index map for scrubbers
 ```
+
+**Humanizer — pluggable, not baked in**
+
+Events stay pure data. Human-readable strings only appear at selector time, through the humanizer. Swap it for domain-specific phrasings without touching data:
+
+```typescript
+t.setHumanizer({
+  describeToolStart: (e) => {
+    if (e.toolName === 'influx_get_port_status') {
+      return `Checking port status on ${e.args.switchName}`;
+    }
+    return undefined; // fall through to library default ("Running toolName")
+  },
+});
+```
+
+Translation, localization, and UX tone changes are humanizer swaps — no data-model changes.
 
 **Multi-agent**: each sub-agent in a Pipeline / Swarm gets its own named instance. Each lands in its own snapshot slot for separate visualization:
 
@@ -123,17 +160,9 @@ const analyze  = agentTimeline({ id: 'analyze'  });
 const respond  = agentTimeline({ id: 'respond'  });
 ```
 
-**Composition discovery is automatic.** `agentTimeline()` composes footprintjs's `TopologyRecorder` internally. When the executor crosses into a subflow, forks into parallel branches, or takes a conditional/swarm route, the topology graph updates live. `timeline.subAgents` derives from the topology's subflow nodes — no runner-side `setComposition()` handshake, no per-runner declaration, no emit-channel archaeology. Works for any composition shape (Pipeline / Parallel / Conditional / Swarm / any future pattern) because composition shape comes from footprintjs's primitive channels.
+**Composition discovery is automatic.** `agentTimeline()` composes footprintjs's `TopologyRecorder` internally. `selectSubAgents()` folds per-sub-agent content from emit events tagged with matching `subflowPath`. Works for any composition shape (Pipeline / Parallel / Conditional / Swarm / arbitrary nesting) because composition shape comes from footprintjs's primitive channels — no runner-side declarations.
 
-```typescript
-const t = agentTimeline();
-// ... attach, run ...
-t.getTimeline().subAgents;           // surfaces from topology subflow nodes
-t.getTopology().getTopology();       // full composition graph for advanced queries
-t.getTopology().getByKind('fork-branch');  // all parallel branches this run produced
-```
-
-**Why a separate library?** Same pattern as `contextEngineering()` — agentfootprint owns the contract and the translation, UI libraries (`agentfootprint-lens`, `agentfootprint-grafana`, custom dashboards) own the rendering. One translation, many UIs.
+**One shape, many renderers.** Lens (React), future Vue/Angular consumers, CLI tools, Grafana panels — all import the typed selector surface. The UI is a pure renderer. The recorder owns every derivation.
 
 ## Event → Recorder Mapping
 

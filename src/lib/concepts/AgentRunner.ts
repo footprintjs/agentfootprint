@@ -659,7 +659,7 @@ export class AgentRunner {
    * const t = agentTimeline({ name: 'Neo' });
    * const stop = agent.attachRecorder(t);
    * await agent.run('hello');
-   * console.log(t.getTimeline());
+   * console.log(t.selectTurns(), t.selectActivities());
    * stop();  // detach
    * ```
    */

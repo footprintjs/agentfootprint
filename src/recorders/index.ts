@@ -29,7 +29,7 @@ export type {
 export { agentTimeline, AgentTimelineRecorder } from './AgentTimelineRecorder';
 export type {
   AgentTimelineRecorderOptions,
-  AgentTimeline,
+  AgentEvent,
   AgentTurn,
   AgentIteration,
   AgentToolInvocation,
@@ -39,4 +39,12 @@ export type {
   AgentContextLedger,
   AgentInfo,
   SubAgentTimeline,
+  // v2 — selector output types + humanizer
+  Activity,
+  StatusLine,
+  CommentaryLine,
+  RunSummary,
+  IterationRange,
+  IterationRangeIndex,
+  Humanizer,
 } from './AgentTimelineRecorder';

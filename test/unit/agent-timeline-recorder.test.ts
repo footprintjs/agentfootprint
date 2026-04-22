@@ -13,7 +13,7 @@
  *   5. clear() resets the recorder for re-use across runs
  */
 import { describe, it, expect } from 'vitest';
-import { agentTimeline } from '../../src/recorders/AgentTimelineRecorder';
+import { agentTimeline, AgentTimelineRecorder } from '../../src/recorders/AgentTimelineRecorder';
 import type { EmitEvent } from 'footprintjs';
 
 function evt(name: string, payload: Record<string, unknown>, opts?: Partial<EmitEvent>): EmitEvent {
@@ -25,6 +25,20 @@ function evt(name: string, payload: Record<string, unknown>, opts?: Partial<Emit
     subflowPath: opts?.subflowPath ?? [],
     pipelineId: opts?.pipelineId ?? 'test-pipeline',
     timestamp: opts?.timestamp ?? Date.now(),
+  };
+}
+
+// Test helper: bundle selectors into one object for assertions that
+// historically used the getTimeline() shape. Production code should
+// call selectors directly — this helper just minimizes test churn.
+function snapshot(t: AgentTimelineRecorder) {
+  return {
+    agent: t.selectAgent(),
+    turns: t.selectTurns(),
+    messages: t.selectMessages(),
+    tools: t.selectTools(),
+    subAgents: t.selectSubAgents(),
+    finalDecision: t.selectFinalDecision(),
   };
 }
 
@@ -53,7 +67,7 @@ describe('AgentTimelineRecorder — 5 pattern tests', () => {
     );
     t.onEmit(evt('agentfootprint.agent.turn_complete', { content: 'hello!' }));
 
-    const timeline = t.getTimeline();
+    const timeline = snapshot(t);
     expect(timeline.turns).toHaveLength(1);
     const turn = timeline.turns[0];
     expect(turn.userPrompt).toBe('hi');
@@ -107,7 +121,7 @@ describe('AgentTimelineRecorder — 5 pattern tests', () => {
     );
     t.onEmit(evt('agentfootprint.agent.turn_complete', { content: 'done' }));
 
-    const timeline = t.getTimeline();
+    const timeline = snapshot(t);
     expect(timeline.tools.map((tc) => tc.name)).toEqual(['list_skills']);
     expect(timeline.turns[0].iterations[0].toolCalls.map((tc) => tc.name)).toEqual(['list_skills']);
     // Iter 1 owns the tool, not iter 2.
@@ -158,7 +172,7 @@ describe('AgentTimelineRecorder — 5 pattern tests', () => {
     );
     t.onEmit(evt('agentfootprint.agent.turn_complete', { content: 'final' }));
 
-    const turn = t.getTimeline().turns[0];
+    const turn = snapshot(t).turns[0];
     // Iter 1 sees only the RAG injection (fired during its phase)
     expect(turn.iterations[0].contextInjections.map((ci) => ci.source)).toEqual(['rag']);
     // Iter 2 sees only the skill injection (fired between phases)
@@ -203,7 +217,7 @@ describe('AgentTimelineRecorder — 5 pattern tests', () => {
     );
     t.onEmit(evt('agentfootprint.agent.turn_complete', { content: 'two' }));
 
-    const timeline = t.getTimeline();
+    const timeline = snapshot(t);
     expect(timeline.turns).toHaveLength(2);
     expect(timeline.turns.map((tt) => tt.userPrompt)).toEqual(['first', 'second']);
     expect(timeline.turns.map((tt) => tt.totalInputTokens)).toEqual([5, 7]);
@@ -227,7 +241,7 @@ describe('AgentTimelineRecorder — 5 pattern tests', () => {
     explicit.onEmit(
       evt('agentfootprint.stream.llm_end', { iteration: 1, content: 'a', toolCallCount: 0 }),
     );
-    expect(explicit.getTimeline().agent).toEqual({ id: 'classify', name: 'Classify Bot' });
+    expect(snapshot(explicit).agent).toEqual({ id: 'classify', name: 'Classify Bot' });
     expect(explicit.id).toBe('classify');
     expect(explicit.name).toBe('Classify Bot');
 
@@ -235,7 +249,7 @@ describe('AgentTimelineRecorder — 5 pattern tests', () => {
     // name falls back to 'Agent'. UIs that get the fallback name
     // render "Agent · Agent" rather than crashing on undefined.
     const defaults = agentTimeline();
-    expect(defaults.getTimeline().agent).toEqual({
+    expect(defaults.selectAgent()).toEqual({
       id: 'agentfootprint-agent-timeline',
       name: 'Agent',
     });
@@ -247,9 +261,17 @@ describe('AgentTimelineRecorder — 5 pattern tests', () => {
     // events fire with subflowPath = ["<sub-agent-id>"]. The recorder
     // groups them into per-sub-agent slices on the parent timeline.
     const t = agentTimeline({ name: 'Pipeline' });
+    const fakeSubflowEntry = (id: string, name: string) => ({
+      name,
+      subflowId: id,
+      traversalContext: { stageId: id, runtimeStageId: `${id}#0`, stageName: name, depth: 0 },
+    });
     t.onEmit(evt('agentfootprint.agent.turn_start', { userMessage: 'classify this' }));
 
-    // Sub-agent 'classify'
+    // Sub-agent 'classify' — FlowRecorder fires onSubflowEntry (topology
+    // discovers identity), emit events tagged with subflowPath carry the
+    // per-sub-agent content.
+    t.onSubflowEntry(fakeSubflowEntry('classify', 'Classify'));
     t.onEmit(subEvt('agentfootprint.stream.llm_start', { iteration: 1 }, ['classify']));
     t.onEmit(
       subEvt(
@@ -258,7 +280,10 @@ describe('AgentTimelineRecorder — 5 pattern tests', () => {
         ['classify'],
       ),
     );
+    t.onSubflowExit(fakeSubflowEntry('classify', 'Classify'));
+
     // Sub-agent 'analyze'
+    t.onSubflowEntry(fakeSubflowEntry('analyze', 'Analyze'));
     t.onEmit(subEvt('agentfootprint.stream.llm_start', { iteration: 1 }, ['analyze']));
     t.onEmit(
       subEvt(
@@ -267,7 +292,10 @@ describe('AgentTimelineRecorder — 5 pattern tests', () => {
         ['analyze'],
       ),
     );
+    t.onSubflowExit(fakeSubflowEntry('analyze', 'Analyze'));
+
     // Sub-agent 'respond'
+    t.onSubflowEntry(fakeSubflowEntry('respond', 'Respond'));
     t.onEmit(subEvt('agentfootprint.stream.llm_start', { iteration: 1 }, ['respond']));
     t.onEmit(
       subEvt(
@@ -276,10 +304,11 @@ describe('AgentTimelineRecorder — 5 pattern tests', () => {
         ['respond'],
       ),
     );
+    t.onSubflowExit(fakeSubflowEntry('respond', 'Respond'));
 
     t.onEmit(evt('agentfootprint.agent.turn_complete', { content: 'final answer' }));
 
-    const tl = t.getTimeline();
+    const tl = snapshot(t);
     // Three distinct sub-agents, in emission order.
     expect(tl.subAgents.map((s) => s.id)).toEqual(['classify', 'analyze', 'respond']);
     // Each sub-agent has its own turn / iteration slice.
@@ -294,7 +323,7 @@ describe('AgentTimelineRecorder — 5 pattern tests', () => {
     single.onEmit(
       evt('agentfootprint.stream.llm_end', { iteration: 1, content: 'a', toolCallCount: 0 }),
     );
-    expect(single.getTimeline().subAgents).toEqual([]);
+    expect(single.selectSubAgents()).toEqual([]);
   });
 
   it('5. clear() wipes recorder state — ready for re-use across runs', () => {
@@ -305,12 +334,12 @@ describe('AgentTimelineRecorder — 5 pattern tests', () => {
       evt('agentfootprint.stream.llm_end', { iteration: 1, content: 'partial', toolCallCount: 0 }),
     );
 
-    expect(t.getTimeline().turns).toHaveLength(1);
+    expect(snapshot(t).turns).toHaveLength(1);
     expect(t.entryCount).toBeGreaterThan(0);
 
     t.clear();
 
-    expect(t.getTimeline().turns).toHaveLength(0);
+    expect(snapshot(t).turns).toHaveLength(0);
     expect(t.entryCount).toBe(0);
 
     // After clear, llmPhaseActive is reset → context events route correctly again
@@ -321,7 +350,7 @@ describe('AgentTimelineRecorder — 5 pattern tests', () => {
       evt('agentfootprint.stream.llm_end', { iteration: 1, content: 'done', toolCallCount: 0 }),
     );
 
-    const timeline = t.getTimeline();
+    const timeline = snapshot(t);
     expect(timeline.turns).toHaveLength(1);
     expect(timeline.turns[0].userPrompt).toBe('fresh');
     // Pre-iter RAG was buffered + flushed onto iter 1

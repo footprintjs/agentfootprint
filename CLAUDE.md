@@ -193,6 +193,54 @@ tokens.getStats();              // aggregated totals
 
 **runtimeStageId** — the universal key linking recorder data → commit log → execution tree. Mandatory on `LLMCallEvent` and `ToolCallEvent`. See `recorders/README.md` for full category docs.
 
+### agentTimeline() — event stream + selectors + humanizer (v2 — the canonical UI-facing recorder)
+
+The ONE recorder every UI consumer reads from (Lens, Vue/Angular/CLI/Grafana, future X). Three-layer architecture:
+
+```
+EVENT STREAM              (structured, canonical — single source of truth)
+    ↓
+SELECTORS                 (typed, memoized, lazy, composable — THE API)
+    ↓
+VIEWS                     (renderer plugs in)
+```
+
+```typescript
+import { agentTimeline } from 'agentfootprint';
+
+const t = agentTimeline();
+const agent = Agent.create({ provider }).recorder(t).build();
+await agent.run('...');
+
+// Raw stream — rare, low-level tooling only
+t.getEvents();              // readonly AgentEvent[]
+
+// Selectors — what every renderer uses (memoized by (version, cursor))
+t.selectAgent();            // { id, name }
+t.selectTurns();            // AgentTurn[] — iterations + tool calls + context
+t.selectTopology();         // engineer view: composition graph
+t.selectCommentary();       // analyst view: human narrative per event
+t.selectActivities();       // user view: ThinkKit-style breadcrumb
+t.selectStatus();           // user view: typing-bubble one-liner
+t.selectRunSummary();       // totals (tokens, tools, duration)
+t.selectIterationRanges();  // scrubber index
+t.selectSubAgents();        // multi-agent slices (identity from topology + content by subflowPath)
+
+// Humanizer — pluggable domain phrasings
+t.setHumanizer({
+  describeToolStart: (e) => e.toolName === 'influx_get_port_status'
+    ? `Checking port status on ${e.args.switchName}`
+    : undefined, // fall through to default
+});
+```
+
+**Load-bearing rules:**
+- **Events stay pure data.** No pre-rendered strings. Humanizer runs at selector time.
+- **Selectors are the API.** Never add pre-computed fields to a blob — add a selector.
+- **Humanizer is swappable.** Translation / localization / UX tone = humanizer swap, not data change.
+- **Memoized by (selector, version, cursor).** Long runs don't recompute unchanged views.
+- **`getTimeline()` does not exist.** Consumers compose selectors.
+
 ## Compositions (Resilience Wrappers)
 
 ```typescript
