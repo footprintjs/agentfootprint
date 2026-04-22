@@ -22,7 +22,7 @@ function mockScope(
 function fakeRunner(content: string, narrative?: string[]): RunnerLike {
   return {
     run: vi.fn(async () => ({ content })),
-    getNarrative: narrative ? () => narrative : undefined,
+    getNarrativeEntries: narrative ? () => narrative.map((text) => ({ text })) : undefined,
   };
 }
 

@@ -89,7 +89,10 @@ describe('Conditional — unit', () => {
 
     await runner.run('I want a refund please');
 
-    const narrative = runner.getNarrative().join('\n');
+    const narrative = runner
+      .getNarrativeEntries()
+      .map((e) => e.text)
+      .join('\n');
     expect(narrative).toMatch(/Refund Handler|refund/i);
   });
 

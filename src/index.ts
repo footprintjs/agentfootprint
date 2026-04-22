@@ -121,4 +121,15 @@ export type {
 } from './skills.barrel';
 
 // ── Recorders (also available from agentfootprint/observe) ──
-export { TokenRecorder, ToolUsageRecorder, TurnRecorder, CostRecorder } from './observe.barrel';
+export {
+  TokenRecorder,
+  ToolUsageRecorder,
+  TurnRecorder,
+  CostRecorder,
+  contextEngineering,
+} from './observe.barrel';
+export type {
+  ContextEngineeringRecorder,
+  ContextInjectionRecord,
+  ContextLedger,
+} from './observe.barrel';

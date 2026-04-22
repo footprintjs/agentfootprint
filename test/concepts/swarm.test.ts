@@ -116,7 +116,7 @@ describe('Swarm', () => {
       .build();
 
     await swarm.run('test');
-    const narrative = swarm.getNarrative();
+    const narrative = swarm.getNarrativeEntries().map((e) => e.text);
     expect(narrative.length).toBeGreaterThan(0);
   });
 });

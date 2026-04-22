@@ -1,11 +1,18 @@
-# Patterns
+# Patterns — named compositions of primitives
 
-Canonical agent composition patterns that ship with agentfootprint. Each pattern is either a **loop-shape flag** on `Agent` or a **factory** over existing concepts — no new primitives, no new runtime, same narrative + recorders as hand-wired flows.
+Every named pattern in the agent literature is a **composition of the 2 primitives + 3 compositions** from the [concepts taxonomy](concepts.md). Not a new Agent class. Not a new runtime. A recipe.
+
+```
+PRIMITIVES: LLM, Agent
+COMPOSITIONS: Sequence, Parallel, Conditional
+```
+
+Each page below opens with a **"Built from"** line showing the recipe, plus a paper citation. Patterns ship either as a loop-shape flag on `Agent` or as a thin factory over existing concepts — same narrative, same recorders as hand-wired flows.
 
 Two categories:
 
 - **Loop patterns** — `AgentPattern.Regular` vs `AgentPattern.Dynamic`. Controls when the three API slots (SystemPrompt, Messages, Tools) re-evaluate inside the ReAct loop.
-- **Composition patterns** — `planExecute`, `reflexion`, `treeOfThoughts`, `mapReduce`. Factories from `agentfootprint/patterns` that wire existing concepts into a named shape.
+- **Composition patterns** — `planExecute`, `reflexion`, `treeOfThoughts`, `mapReduce`. Factories from `agentfootprint/patterns` that wire primitives + compositions into a named shape.
 
 Import:
 
@@ -20,6 +27,10 @@ import { planExecute, reflexion, treeOfThoughts, mapReduce } from 'agentfootprin
 
 ## Loop patterns — `AgentPattern`
 
+**Built from:** Agent (the ReAct primitive). Loop flag changes where the loop target lands; the shape stays the same.
+
+**Paper:** ReAct (Yao et al. 2022, ICLR — "Reasoning and Acting").
+
 Every `Agent` runs a ReAct loop: some `SystemPrompt / Messages / Tools` preamble, then `CallLLM → Parse → Route → ExecuteTools`, loop. The pattern flag controls **where the loop jumps back to**, which determines which stages re-run each iteration.
 
 | Pattern | Loop target | Re-evaluates each turn |
@@ -27,7 +38,11 @@ Every `Agent` runs a ReAct loop: some `SystemPrompt / Messages / Tools` preamble
 | `AgentPattern.Regular` (default) | `CallLLM` | Only the loop body |
 | `AgentPattern.Dynamic` | `SystemPrompt` | All three slots + loop body |
 
-### Regular (default)
+### ReAct — Regular (default)
+
+**Built from:** Agent (default).
+**Paper:** ReAct, Yao et al. 2022.
+
 
 ```
 [SystemPrompt] → [Messages] → [Tools] → AssemblePrompt
@@ -47,7 +62,10 @@ const agent = Agent.create({ provider })
   .build();  // AgentPattern.Regular is the default
 ```
 
-### Dynamic
+### Dynamic ReAct
+
+**Built from:** Agent with slots re-evaluating per iteration.
+**Paper:** — (agentfootprint extension; closest literature is adaptive prompting / per-step context assembly).
 
 ```
 [SystemPrompt] → [Messages] → [Tools] → AssemblePrompt
@@ -83,14 +101,16 @@ Dynamic re-runs the prompt/messages/tools subflows every turn. If those subflows
 
 ## Composition patterns — `agentfootprint/patterns`
 
-All four are **thin factories** over existing concepts. Reading the source ([src/patterns/](../../src/patterns/)) is the fastest way to learn how to build your own.
+All four are **thin factories** that express a named paper as a composition of primitives. Reading the source ([src/patterns/](../../src/patterns/)) is the fastest way to learn how to build your own.
 
-| Pattern | Shape | Returns | Source |
-|---|---|---|---|
-| `planExecute` | Planner → Executor | `FlowChartRunner` | [planExecute.ts](../../src/patterns/planExecute.ts) |
-| `reflexion` | Solve → Critique → Improve | `FlowChartRunner` | [reflexion.ts](../../src/patterns/reflexion.ts) |
-| `treeOfThoughts` | N parallel thinkers → judge | `FlowChartRunner` | [treeOfThoughts.ts](../../src/patterns/treeOfThoughts.ts) |
-| `mapReduce` | Fan-out N mappers → reduce | `ParallelRunner` | [mapReduce.ts](../../src/patterns/mapReduce.ts) |
+| Pattern | Built from | Paper | Returns | Source |
+|---|---|---|---|---|
+| `planExecute` | LLM-plan + Sequence(Agent per step) | Wang et al. 2023 (Plan-and-Solve) | `FlowChartRunner` | [planExecute.ts](../../src/patterns/planExecute.ts) |
+| `reflexion` | Sequence(Agent, LLM-critique, Agent) | Shinn et al. 2023 (Reflexion / Self-Refine) | `FlowChartRunner` | [reflexion.ts](../../src/patterns/reflexion.ts) |
+| `treeOfThoughts` | Parallel(Agent × N) + LLM-rank | Yao et al. 2023 (Tree of Thoughts) | `FlowChartRunner` | [treeOfThoughts.ts](../../src/patterns/treeOfThoughts.ts) |
+| `mapReduce` | Parallel(Agent × N) + LLM-merge | Dean & Ghemawat 2004 | `ParallelRunner` | [mapReduce.ts](../../src/patterns/mapReduce.ts) |
+
+> **Hierarchy (Swarm)** — also a pattern (Agent with specialist-Agents as tools). It ships under `Swarm.create(...)` as a first-class builder rather than as a `patterns/` factory, because the shape is opinionated enough to deserve its own surface. The recipe is still "Agent whose tools happen to be Agents" — see [Concepts → Hierarchy (Swarm)](concepts.md#hierarchy-swarm--worked-example). Paper: OpenAI Swarm (2024).
 
 Each returns a runner, so patterns **compose with each other** — drop a `reflexion` runner into a `FlowChart`, a `mapReduce` into an `Agent.route()` branch, or wrap anything in `Conditional` for a loop-until-good-enough variant.
 
@@ -112,6 +132,9 @@ Rule of thumb: reflexion helps on single-path reasoning; ToT helps when the firs
 ### `planExecute` — Planner → Executor
 
 > **Like:** writing the outline before writing the essay.
+
+**Built from:** LLM (planner) + Sequence → Agent (executor).
+**Paper:** *Plan-and-Solve Prompting* (Wang et al. 2023, ACL).
 
 Two runners chained sequentially. The planner takes the request and produces a plan; the executor carries that plan out.
 
@@ -156,6 +179,9 @@ Under the hood: `FlowChart.create().agent('plan', ...).agent('execute', ...).bui
 ### `reflexion` — Solve → Critique → Improve
 
 > **Like:** writing a first draft, then handing it to an editor.
+
+**Built from:** Sequence(Agent, LLM-critique, Agent).
+**Paper:** *Reflexion* (Shinn et al. 2023, NeurIPS); closely related to *Self-Refine* (Madaan et al. 2023).
 
 Three-stage self-review pass. A solver drafts an answer, a critic lists weaknesses, an improver integrates the critique.
 
@@ -207,6 +233,9 @@ Under the hood: `FlowChart.create().agent('solve', ...).agent('critique', ...).a
 ### `treeOfThoughts` — N parallel thinkers → judge
 
 > **Like:** a brainstorm — three people propose, one picks the best.
+
+**Built from:** Parallel(Agent × N) + LLM-rank (judge).
+**Paper:** *Tree of Thoughts: Deliberate Problem Solving with Large Language Models* (Yao et al. 2023, NeurIPS); closely related to *Self-Consistency* (Wang et al. 2022).
 
 Fan out N parallel attempts, concatenate them as labeled candidates, hand to a judge runner that picks or synthesizes the best.
 
@@ -268,6 +297,9 @@ Under the hood: `FlowChart[ Parallel(thinker-0..N-1, merge=labeledConcat), judge
 
 > **Like:** assigning each book in a stack to a different reader, then having them write a joint summary.
 
+**Built from:** Parallel(Agent × N) + LLM-merge (or pure-function reducer).
+**Paper:** Map-Reduce (Dean & Ghemawat 2004); LLM-flavored variants appear in summarization-tree literature.
+
 N pre-bound mappers (each runner already has its slice of work baked in) run in parallel, then a reducer combines the results. Reducer is either LLM-synthesized or a custom function.
 
 **Why:** map-reduce is a common shape — summarize N documents, compare N candidates, evaluate a prompt against N rubrics. The **pre-bind** style (each mapper already knows its slice) keeps the factory shape simple and avoids a separate "splitter" stage for the common case.
@@ -315,9 +347,9 @@ Under the hood: `Parallel.create(...).agent(id, runner, desc).mergeWithLLM(promp
 
 ---
 
-## Composing patterns with concepts
+## Composing patterns with primitives and compositions
 
-Every pattern returns a runner, so they plug into every concept that accepts one:
+Every pattern returns a runner, so they plug into every composition (Sequence / Parallel / Conditional) and into any Agent slot:
 
 ```typescript
 // Pattern inside FlowChart:
@@ -345,9 +377,9 @@ Agent.create({ provider })
 
 ## Beyond the shipped patterns
 
-The four factories cover the most common shapes (sequence, fan-out, self-review, planner-executor split). When you need something outside that set:
+The four factories cover the most common shapes (sequence, fan-out, self-review, planner-executor split). When you need something outside that set, remember: **every named pattern is a composition of 2 primitives + 3 compositions.** Don't invent new Agent classes — compose primitives.
 
-1. **Start with the concepts** — `FlowChart`, `Parallel`, `Conditional`, `Agent`, `Swarm` already express most graph shapes.
+1. **Start with the primitives + compositions** — Agent + Sequence / Parallel / Conditional already express most graph shapes.
 2. **Use `Agent.route({ branches })`** — user-defined routing branches (prepended to the default decider) cover most dynamic-control cases without leaving the Agent abstraction.
 3. **Drop to footprintjs** — the builder (`flowChart()`, `addFunction`, `addDeciderFunction`, `addSubFlowChart`, `loopTo`) is the same library agentfootprint is built on. No escape, no re-learning.
 

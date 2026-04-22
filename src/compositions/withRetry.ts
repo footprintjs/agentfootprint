@@ -58,7 +58,7 @@ export function withRetry(runner: RunnerLike, options: RetryOptions = {}): Runne
 
       throw lastError;
     },
-    getNarrative: runner.getNarrative?.bind(runner),
+    getNarrativeEntries: runner.getNarrativeEntries?.bind(runner),
     getSnapshot: runner.getSnapshot?.bind(runner),
   };
 }

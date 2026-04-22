@@ -167,9 +167,9 @@
   },
   "sideEffects": false,
   "peerDependencies": {
-    "footprintjs": ">=4.14.0",
     "@anthropic-ai/sdk": ">=0.30.0",
     "@aws-sdk/client-bedrock-runtime": ">=3.0.0",
+    "footprintjs": ">=4.14.0",
     "openai": ">=4.0.0"
   },
   "peerDependenciesMeta": {
@@ -192,7 +192,7 @@
     "footprintjs": "^4.14.0",
     "prettier": "^2.8.1",
     "typescript": "~5.4.5",
-    "vitest": "^4.0.18",
+    "vitest": "^4.1.5",
     "zod": "^3.25.76"
   }
 }

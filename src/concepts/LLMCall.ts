@@ -20,13 +20,16 @@ import type { ModelConfig } from '../models';
 import { getTextContent } from '../types/content';
 import { userMessage, systemMessage } from '../types';
 import type { RAGState } from '../scope/types';
-import { createCallLLMStage } from '../stages/callLLM';
+import { createCallLLMStage } from '../lib/call/callLLMStage';
 import { parseResponseStage } from '../stages/parseResponse';
 import { finalizeStage } from '../stages/finalize';
 import { lastAssistantMessage } from '../memory';
 import type { AgentRecorder } from '../core';
 import { RecorderBridge } from '../recorders/RecorderBridge';
+import { forwardEmitRecorders } from '../recorders/forwardEmitRecorders';
 import { resolveProvider } from '../adapters/createProvider';
+import type { AgentStreamEventHandler, AgentStreamEvent } from '../streaming';
+import { createStreamEventRecorder, EventDispatcher } from '../streaming';
 
 export interface LLMCallOptions {
   /** LLMProvider instance or ModelConfig from anthropic()/openai()/bedrock()/ollama(). */
@@ -57,9 +60,12 @@ export class LLMCall {
     return this;
   }
 
-  /** Attach an AgentRecorder to observe execution events. */
-  recorder(rec: AgentRecorder): this {
-    this.recorders.push(rec);
+  /** Attach a recorder. Accepts AgentRecorder OR EmitRecorder shape;
+   *  shape auto-detected at run-time so `contextEngineering()` works
+   *  here too (see RAG.recorder for the full rationale). */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  recorder(rec: AgentRecorder | { id: string; onEmit?: (event: any) => void }): this {
+    this.recorders.push(rec as AgentRecorder);
     return this;
   }
 
@@ -80,6 +86,8 @@ export class LLMCallRunner {
   private readonly streamingEnabled: boolean;
   private lastExecutor?: FlowChartExecutor;
   private lastSpec?: unknown;
+  /** Persistent observer list — same pattern as AgentRunner.dispatcher. */
+  private readonly dispatcher = new EventDispatcher();
 
   constructor(
     provider: LLMProvider,
@@ -100,11 +108,37 @@ export class LLMCallRunner {
 
   async run(
     message: string,
-    options?: { signal?: AbortSignal; timeoutMs?: number; onToken?: (token: string) => void },
+    options?: {
+      signal?: AbortSignal;
+      timeoutMs?: number;
+      onToken?: (token: string) => void;
+      /** Full event stream — llm_start, llm_end, tool_start, tool_end, token,
+       *  turn_start, turn_end. Same contract as `Agent.run({ onEvent })` so
+       *  `useLiveTimeline` / Lens works identically across every runner. */
+      onEvent?: AgentStreamEventHandler;
+    },
   ): Promise<{ content: string; messages: Message[] }> {
     const chart = this.buildChart(message);
     const bridge = this.recorders.length > 0 ? new RecorderBridge(this.recorders) : null;
 
+    // Merge persistent observers with per-run callback — same pattern as AgentRunner.
+    const dispatcher = this.dispatcher;
+    const perRun = options?.onEvent;
+    const onStreamEvent: AgentStreamEventHandler | undefined =
+      dispatcher.size > 0 || perRun
+        ? (e: AgentStreamEvent) => {
+            dispatcher.dispatch(e);
+            if (perRun) {
+              try {
+                perRun(e);
+              } catch {
+                /* swallow */
+              }
+            }
+          }
+        : undefined;
+
+    onStreamEvent?.({ type: 'turn_start', userMessage: message });
     bridge?.dispatchTurnStart(message);
 
     const executorOpts: FlowChartExecutorOptions = { enrichSnapshots: true };
@@ -118,6 +152,13 @@ export class LLMCallRunner {
     const executor = new FlowChartExecutor(chart, executorOpts);
     executor.enableNarrative();
     executor.attachRecorder(new MetricRecorder('metrics'));
+    forwardEmitRecorders(executor, this.recorders);
+    // Bridge the footprintjs emit channel to our unified dispatcher —
+    // callLLMStage fires `agentfootprint.stream.*` emits, and the
+    // recorder forwards them to every observer + per-run handler.
+    if (onStreamEvent) {
+      executor.attachEmitRecorder(createStreamEventRecorder(onStreamEvent));
+    }
     const startMs = Date.now();
 
     try {
@@ -158,7 +199,17 @@ export class LLMCallRunner {
       bridge.dispatchTurnComplete(content, messages.length);
     }
 
+    onStreamEvent?.({ type: 'turn_end', content, iterations: 1 });
+
     return { content, messages };
+  }
+
+  /**
+   * Subscribe to the runner's live stream of events. Returns an
+   * unsubscribe function. Matches `AgentRunner.observe()`.
+   */
+  observe(handler: AgentStreamEventHandler): () => void {
+    return this.dispatcher.observe(handler);
   }
 
   private buildChart(message: string): FlowChartType {
@@ -180,7 +231,13 @@ export class LLMCallRunner {
       scope.messages = msgs;
     };
 
-    const callLLM = createCallLLMStage(this.provider);
+    // Cast: the shared callLLMStage is typed for AgentLoopState (which has
+    // loopCount / tool fields we don't use here), but the stage only reads
+    // messages / toolDescriptions and writes adapterResult / adapterRawResponse
+    // / llmCall — all of which RAGState provides. Cast keeps the call site
+    // clean; the runtime read/write shape is compatible.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const callLLM = createCallLLMStage(this.provider) as any;
 
     let builder = flowChart<RAGState>(
       'SystemPrompt',
@@ -209,11 +266,11 @@ export class LLMCallRunner {
     return this.lastSpec;
   }
 
-  getNarrative(): string[] {
-    return this.lastExecutor?.getNarrative() ?? [];
-  }
-
   getSnapshot() {
     return this.lastExecutor?.getSnapshot();
+  }
+
+  getNarrativeEntries() {
+    return this.lastExecutor?.getNarrativeEntries() ?? [];
   }
 }

@@ -49,7 +49,7 @@ describe('Sample 03: RAG Retrieval', () => {
     expect(result.content).toBe('Answer.');
 
     // RAG produces narrative showing retrieval + generation
-    const narrative = rag.getNarrative();
+    const narrative = rag.getNarrativeEntries().map((e) => e.text);
     expect(narrative.length).toBeGreaterThan(0);
   });
 });

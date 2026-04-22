@@ -32,10 +32,13 @@ import type { RunnerLike } from '../types/multiAgent';
 import type { AgentRecorder } from '../core';
 import { RecorderBridge } from '../recorders/RecorderBridge';
 import { resolveProvider } from '../adapters/createProvider';
+import type { AgentStreamEventHandler, AgentStreamEvent } from '../streaming';
+import { createStreamEventRecorder, EventDispatcher } from '../streaming';
+import { forwardEmitRecorders } from '../recorders/forwardEmitRecorders';
 import { createAgentRenderer } from '../lib/narrative';
 import { annotateSpecIcons } from './specIcons';
 import type { SpecLike } from './specIcons';
-import { createCallLLMStage } from '../stages/callLLM';
+import { createCallLLMStage } from '../lib/call/callLLMStage';
 
 // ── Types ────────────────────────────────────────────────────
 
@@ -128,8 +131,9 @@ export class Parallel {
     return this;
   }
 
-  recorder(rec: AgentRecorder): this {
-    this.recorders.push(rec);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  recorder(rec: AgentRecorder | { id: string; onEmit?: (event: any) => void }): this {
+    this.recorders.push(rec as AgentRecorder);
     return this;
   }
 
@@ -181,6 +185,8 @@ export class ParallelRunner {
   private lastExecutor?: FlowChartExecutor;
   private lastSpec?: unknown;
   private readonly narrativeRenderer = createAgentRenderer();
+  /** Persistent observer list — see AgentRunner.dispatcher. */
+  private readonly dispatcher = new EventDispatcher();
 
   constructor(options: ParallelRunnerOptions) {
     this.opts = options;
@@ -229,7 +235,9 @@ export class ParallelRunner {
     // Merge stage — after all branches complete
     if (mergePrompt) {
       // LLM merge: feed all branch results to LLM
-      const callLLM = createCallLLMStage(provider);
+      // Cast — see LLMCall.ts for rationale (shared stage typed for AgentLoopState).
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const callLLM = createCallLLMStage(provider) as any;
 
       builder = builder
         .addFunction(
@@ -313,10 +321,33 @@ export class ParallelRunner {
 
   async run(
     message: string,
-    options?: { signal?: AbortSignal; timeoutMs?: number; onToken?: (token: string) => void },
+    options?: {
+      signal?: AbortSignal;
+      timeoutMs?: number;
+      onToken?: (token: string) => void;
+      onEvent?: AgentStreamEventHandler;
+    },
   ): Promise<ParallelResult> {
     const chart = this.buildChart(message);
     const bridge = this.opts.recorders.length > 0 ? new RecorderBridge(this.opts.recorders) : null;
+
+    const dispatcher = this.dispatcher;
+    const perRun = options?.onEvent;
+    const onStreamEvent: AgentStreamEventHandler | undefined =
+      dispatcher.size > 0 || perRun
+        ? (e: AgentStreamEvent) => {
+            dispatcher.dispatch(e);
+            if (perRun) {
+              try {
+                perRun(e);
+              } catch {
+                /* swallow */
+              }
+            }
+          }
+        : undefined;
+
+    onStreamEvent?.({ type: 'turn_start', userMessage: message });
     bridge?.dispatchTurnStart(message);
 
     const executorOpts: FlowChartExecutorOptions = { enrichSnapshots: true };
@@ -331,6 +362,10 @@ export class ParallelRunner {
     const executor = new FlowChartExecutor(chart, executorOpts);
     executor.enableNarrative({ renderer: this.narrativeRenderer });
     executor.attachRecorder(new MetricRecorder('metrics'));
+    forwardEmitRecorders(executor, this.opts.recorders);
+    if (onStreamEvent) {
+      executor.attachEmitRecorder(createStreamEventRecorder(onStreamEvent));
+    }
 
     try {
       await executor.run({
@@ -351,6 +386,7 @@ export class ParallelRunner {
     const messages = (state.messages as Message[]) ?? [];
 
     bridge?.dispatchTurnComplete(result, messages.length);
+    onStreamEvent?.({ type: 'turn_end', content: result, iterations: 1 });
 
     return {
       content: result,
@@ -359,8 +395,9 @@ export class ParallelRunner {
     };
   }
 
-  getNarrative(): string[] {
-    return this.lastExecutor?.getNarrative() ?? [];
+  /** Subscribe to the runner's live stream of events. See AgentRunner.observe(). */
+  observe(handler: AgentStreamEventHandler): () => void {
+    return this.dispatcher.observe(handler);
   }
 
   getNarrativeEntries() {

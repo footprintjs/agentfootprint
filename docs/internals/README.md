@@ -226,9 +226,9 @@ Runners with `.toFlowChart()` can be mounted as subflows in FlowChart, enabling 
 
 The builder pattern (`create → configure → build`) keeps configuration separate from execution. The builder is mutable during setup, the runner is immutable after build. This prevents accidental reconfiguration mid-execution.
 
-### Why a concept ladder?
+### Why a layered taxonomy?
 
-Each concept adds exactly one capability. Users start with the simplest concept that solves their problem and compose up when they need more. No upfront graph DSL required. This makes the learning curve incremental.
+The 5-layer taxonomy (2 primitives → 3 compositions → N named patterns → context engineering → features) keeps each layer orthogonal. Users start with a primitive (`LLM` or `Agent`), compose with `Sequence`/`Parallel`/`Conditional`, and add context engineering (RAG, Memory, Skills) as injection into Agent slots. No upfront graph DSL required; named patterns from the literature are expressed as recipes, not new runtime classes.
 
 ### Why two recorder generations?
 

@@ -332,7 +332,7 @@ describe('InstructionsToLLM wiring — narrative', () => {
     const config = minimalConfig({ agentInstructions: instructions });
     const { executor } = await runLoop(config);
 
-    const narrative = executor.getNarrative();
+    const narrative = executor.getNarrativeEntries().map((e) => e.text);
     expect(
       narrative.some(
         (s: string) => s.includes('InstructionsToLLM') || s.includes('EvaluateInstructions'),
@@ -414,7 +414,7 @@ describe('InstructionsToLLM wiring — Dynamic pattern', () => {
     expect(state.result).toBe('Done.');
 
     // Narrative should show InstructionsToLLM appearing (re-evaluated on 2nd iteration)
-    const narrative = executor.getNarrative();
+    const narrative = executor.getNarrativeEntries().map((e) => e.text);
     const instrEntries = narrative.filter(
       (s: string) => s.includes('InstructionsToLLM') || s.includes('EvaluateInstructions'),
     );

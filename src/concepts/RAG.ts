@@ -30,14 +30,17 @@ import { getTextContent } from '../types/content';
 import { userMessage, systemMessage } from '../types';
 import type { AgentRecorder } from '../core';
 import { RecorderBridge } from '../recorders/RecorderBridge';
+import { forwardEmitRecorders } from '../recorders/forwardEmitRecorders';
 import { resolveProvider } from '../adapters/createProvider';
 import type { RAGState } from '../scope/types';
 import { createRetrieveStage } from '../stages/retrieve';
 import { augmentPromptStage } from '../stages/augmentPrompt';
-import { createCallLLMStage } from '../stages/callLLM';
+import { createCallLLMStage } from '../lib/call/callLLMStage';
 import { parseResponseStage } from '../stages/parseResponse';
 import { finalizeStage } from '../stages/finalize';
 import { lastAssistantMessage } from '../memory';
+import type { AgentStreamEventHandler, AgentStreamEvent } from '../streaming';
+import { createStreamEventRecorder, EventDispatcher } from '../streaming';
 
 export interface RAGOptions {
   /** LLMProvider instance or ModelConfig from anthropic()/openai()/bedrock()/ollama(). */
@@ -86,9 +89,20 @@ export class RAG {
     return this;
   }
 
-  /** Attach an AgentRecorder to observe execution events. */
-  recorder(rec: AgentRecorder): this {
-    this.recorders.push(rec);
+  /**
+   * Attach a recorder to observe execution events. Accepts any of:
+   *   - `AgentRecorder` (onTurnStart / onLLMCall / onToolCall) — semantic
+   *     events routed through RecorderBridge.
+   *   - `EmitRecorder` (onEmit) — raw emit events from the executor.
+   *     Used by `contextEngineering()`, custom `agentfootprint.context.*`
+   *     listeners, telemetry exporters.
+   *
+   * Shape auto-detected at run-time. Consumers don't pick a method;
+   * one `.recorder(rec)` call covers every recorder type.
+   */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  recorder(rec: AgentRecorder | { id: string; onEmit?: (event: any) => void }): this {
+    this.recorders.push(rec as AgentRecorder);
     return this;
   }
 
@@ -113,6 +127,8 @@ export class RAGRunner {
   private readonly recorders: AgentRecorder[];
   private lastExecutor?: FlowChartExecutor;
   private lastSpec?: unknown;
+  /** Persistent observer list — see AgentRunner.dispatcher. */
+  private readonly dispatcher = new EventDispatcher();
 
   private readonly streamingEnabled: boolean;
 
@@ -139,11 +155,34 @@ export class RAGRunner {
 
   async run(
     message: string,
-    options?: { signal?: AbortSignal; timeoutMs?: number; onToken?: (token: string) => void },
+    options?: {
+      signal?: AbortSignal;
+      timeoutMs?: number;
+      onToken?: (token: string) => void;
+      /** Full event stream — same contract as Agent.run({ onEvent }). */
+      onEvent?: AgentStreamEventHandler;
+    },
   ): Promise<RAGResult> {
     const chart = this.buildChart(message);
     const bridge = this.recorders.length > 0 ? new RecorderBridge(this.recorders) : null;
 
+    const dispatcher = this.dispatcher;
+    const perRun = options?.onEvent;
+    const onStreamEvent: AgentStreamEventHandler | undefined =
+      dispatcher.size > 0 || perRun
+        ? (e: AgentStreamEvent) => {
+            dispatcher.dispatch(e);
+            if (perRun) {
+              try {
+                perRun(e);
+              } catch {
+                /* swallow */
+              }
+            }
+          }
+        : undefined;
+
+    onStreamEvent?.({ type: 'turn_start', userMessage: message });
     bridge?.dispatchTurnStart(message);
 
     const executorOpts: FlowChartExecutorOptions = { enrichSnapshots: true };
@@ -157,6 +196,12 @@ export class RAGRunner {
     const executor = new FlowChartExecutor(chart, executorOpts);
     executor.enableNarrative();
     executor.attachRecorder(new MetricRecorder('metrics'));
+    if (onStreamEvent) {
+      executor.attachEmitRecorder(createStreamEventRecorder(onStreamEvent));
+    }
+    // Route EmitRecorder-shaped consumers (e.g. `contextEngineering()`)
+    // to the executor's emit channel — see forwardEmitRecorders for why.
+    forwardEmitRecorders(executor, this.recorders);
     const startMs = Date.now();
 
     try {
@@ -192,6 +237,8 @@ export class RAGRunner {
       bridge.dispatchTurnComplete(content, messages.length);
     }
 
+    onStreamEvent?.({ type: 'turn_end', content, iterations: 1 });
+
     return {
       content,
       messages,
@@ -220,7 +267,9 @@ export class RAGRunner {
     };
 
     const retrieve = createRetrieveStage(this.retriever, this.retrieveOptions);
-    const callLLM = createCallLLMStage(this.provider);
+    // Cast — see LLMCall.ts for rationale (shared stage typed for AgentLoopState).
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const callLLM = createCallLLMStage(this.provider) as any;
 
     let builder = flowChart<RAGState>('SystemPrompt', systemPromptStage, 'system-prompt')
       .addFunction('Messages', messagesStage, 'messages')
@@ -249,14 +298,14 @@ export class RAGRunner {
     return this.lastSpec;
   }
 
-  /** Get the narrative from the last run. */
-  getNarrative(): string[] {
-    return this.lastExecutor?.getNarrative() ?? [];
-  }
-
   /** Get structured narrative entries from the last run. */
   getNarrativeEntries() {
     return this.lastExecutor?.getNarrativeEntries() ?? [];
+  }
+
+  /** Subscribe to the runner's live stream of events. See AgentRunner.observe(). */
+  observe(handler: AgentStreamEventHandler): () => void {
+    return this.dispatcher.observe(handler);
   }
 
   /** Get the full execution snapshot from the last run. */

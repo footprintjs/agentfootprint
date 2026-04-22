@@ -279,7 +279,7 @@ describe('Agent — property', () => {
     }).build();
 
     await agent.run('hi');
-    const narrative = agent.getNarrative();
+    const narrative = agent.getNarrativeEntries().map((e) => e.text);
     expect(Array.isArray(narrative)).toBe(true);
   });
 });

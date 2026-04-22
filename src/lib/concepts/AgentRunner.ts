@@ -16,7 +16,7 @@ import { PendingFollowUpManager, InstructionRecorder } from '../instructions';
 import type { InstructionOverride, AgentInstruction, ResolvedFollowUp } from '../instructions';
 import type { DecideFn } from '../call/helpers';
 import type { AgentStreamEvent, AgentStreamEventHandler } from '../../streaming';
-import { createStreamEventRecorder } from '../../streaming';
+import { createStreamEventRecorder, EventDispatcher } from '../../streaming';
 import type { AgentLoopConfig } from '../loop';
 import type { CustomRouteConfig } from './AgentBuilder';
 import { createAgentRenderer } from '../narrative';
@@ -34,6 +34,7 @@ import type { LLMProvider, LLMResponse, AgentResult, Message, ResponseFormat } f
 import type { MemoryPipeline } from '../../memory/pipeline';
 import type { AgentRecorder, PromptProvider, ToolProvider } from '../../core';
 import { RecorderBridge } from '../../recorders/RecorderBridge';
+import { forwardEmitRecorders } from '../../recorders/forwardEmitRecorders';
 
 /** Captured LLM call with response, runtimeStageId, and evaluation context. */
 interface LLMCallCapture {
@@ -113,6 +114,13 @@ export class AgentRunner {
   private lastSpec?: unknown;
   private readonly verboseNarrative: boolean;
   private narrativeRenderer = createAgentRenderer();
+  /**
+   * Persistent observer list for `runner.observe(handler)`. One dispatcher
+   * per runner instance — every `.run()` call funnels events through here
+   * in addition to any per-run `options.onEvent` callback. Used by Lens,
+   * telemetry, and anyone else who wants to watch what the agent does.
+   */
+  private readonly dispatcher = new EventDispatcher();
   private readonly pendingFollowUps = new PendingFollowUpManager();
 
   /**
@@ -259,23 +267,30 @@ export class AgentRunner {
         '[agentfootprint] Both onEvent and onToken provided. onToken is ignored when onEvent is set.',
       );
     }
-    // Wrap consumer callback with error isolation — handler errors never crash the agent.
-    const rawHandler =
+    // Merge persistent observers (from `runner.observe(...)`) with the
+    // optional per-run callback. Both see every event. Per-run `onToken`
+    // is translated into a `token` event observer for backward compat.
+    const perRunHandler: AgentStreamEventHandler | undefined =
       options?.onEvent ??
       (options?.onToken
         ? (e: AgentStreamEvent) => {
             if (e.type === 'token') options.onToken!(e.content);
           }
         : undefined);
-    const onStreamEvent: AgentStreamEventHandler | undefined = rawHandler
-      ? (event: AgentStreamEvent) => {
-          try {
-            rawHandler(event);
-          } catch {
-            /* swallow */
+    const dispatcher = this.dispatcher;
+    const onStreamEvent: AgentStreamEventHandler | undefined =
+      dispatcher.size > 0 || perRunHandler
+        ? (event: AgentStreamEvent) => {
+            dispatcher.dispatch(event);
+            if (perRunHandler) {
+              try {
+                perRunHandler(event);
+              } catch {
+                /* swallow */
+              }
+            }
           }
-        }
-      : undefined;
+        : undefined;
 
     onStreamEvent?.({ type: 'turn_start', userMessage: message });
 
@@ -340,6 +355,7 @@ export class AgentRunner {
     const executor = new FlowChartExecutor(chart, executorOpts);
     executor.enableNarrative({ renderer: this.narrativeRenderer });
     executor.attachRecorder(new MetricRecorder('metrics'));
+    forwardEmitRecorders(executor, this.recorders);
 
     // Attach the per-run stream event recorder — translates
     // `agentfootprint.stream.*` emits (from CallLLM / Streaming / tool
@@ -592,14 +608,32 @@ export class AgentRunner {
     };
   }
 
-  getNarrative(): string[] {
-    return this.lastExecutor?.getNarrative() ?? [];
-  }
   getNarrativeEntries() {
     return this.lastExecutor?.getNarrativeEntries() ?? [];
   }
   getSnapshot() {
     return this.lastExecutor?.getSnapshot();
+  }
+
+  /**
+   * Subscribe to the agent's live stream of events — `turn_start`,
+   * `llm_start`/`llm_end`, `tool_start`/`tool_end`, `token` (when
+   * streaming), `turn_end`. The returned function unsubscribes.
+   *
+   * Multiple observers are supported; each gets every event. A throwing
+   * observer never propagates — the library error-isolates each call.
+   *
+   * @example
+   * ```ts
+   * const stop = agent.observe((e) => {
+   *   if (e.type === 'llm_end') metrics.record(e.usage);
+   * });
+   * // later:
+   * stop();
+   * ```
+   */
+  observe(handler: AgentStreamEventHandler): () => void {
+    return this.dispatcher.observe(handler);
   }
 
   getSpec(): unknown {

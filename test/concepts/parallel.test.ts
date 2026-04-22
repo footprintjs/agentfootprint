@@ -224,7 +224,7 @@ describe('Parallel — property', () => {
       .build();
 
     await parallel.run('test');
-    const narrative = parallel.getNarrative();
+    const narrative = parallel.getNarrativeEntries().map((e) => e.text);
     expect(narrative.length).toBeGreaterThan(0);
   });
 });

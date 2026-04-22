@@ -77,7 +77,7 @@ describe('FlowChart end-to-end flow', () => {
 
     await pipeline.run('test');
 
-    const narrative = pipeline.getNarrative();
+    const narrative = pipeline.getNarrativeEntries().map((e) => e.text);
     expect(narrative.length).toBeGreaterThan(0);
   });
 

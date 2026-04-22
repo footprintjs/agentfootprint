@@ -1,7 +1,16 @@
 ---
-title: RAG Pattern
-description: Retrieval-augmented generation — answer questions from your documents.
+title: RAG (Context Engineering)
+description: Retrieval-augmented generation — inject retrieved chunks into the Agent's messages slot.
 ---
+
+import { Aside } from '@astrojs/starlight/components';
+
+<Aside type="note" title="RAG is context engineering, not a primitive">
+RAG isn't a new kind of primitive. It's a **context engineering technique** — what you inject into the Agent's `messages` slot. The `RAG.create(...)` helper packages "LLM call with retriever wired into messages" for convenience; you can do the same thing in any Agent via a `MessageStrategy` that calls a retriever.
+
+**Where it lives in the taxonomy:** Context Engineering → messages slot.
+**Paper:** *Retrieval-Augmented Generation* (Lewis et al. 2020, NeurIPS).
+</Aside>
 
 ## Basic RAG
 

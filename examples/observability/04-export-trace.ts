@@ -38,7 +38,7 @@ export async function run(input: string, provider?: LLMProvider) {
     schemaVersion: trace.schemaVersion,
     exportedAt: trace.exportedAt,
     redacted: trace.redacted,
-    narrativeLines: trace.narrative?.length ?? 0,
+    narrativeLines: trace.narrativeEntries?.length ?? 0,
     narrativeEntries: trace.narrativeEntries?.length ?? 0,
     snapshotKeys: Object.keys((trace.snapshot as object) ?? {}),
     sizeKb: Number((json.length / 1024).toFixed(1)),

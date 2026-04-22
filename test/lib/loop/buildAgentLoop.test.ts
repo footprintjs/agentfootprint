@@ -194,7 +194,7 @@ describe('buildAgentLoop — subflowMode', () => {
     await executor.run();
 
     // Verify Seed ran and read 'message' (narrative shows the read)
-    const narrative = executor.getNarrative();
+    const narrative = executor.getNarrativeEntries().map((e) => e.text);
     const seedRead = narrative.some((n: string) => n.includes('Read message'));
     expect(seedRead).toBe(true);
   });

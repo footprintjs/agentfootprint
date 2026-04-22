@@ -200,7 +200,7 @@ describe('Agent builder — instruction narrative', () => {
     const agent = Agent.create({ provider }).instruction(instr).build();
 
     await agent.run('hi');
-    const narrative = agent.getNarrative();
+    const narrative = agent.getNarrativeEntries().map((e) => e.text);
     expect(
       narrative.some(
         (s: string) => s.includes('InstructionsToLLM') || s.includes('EvaluateInstructions'),

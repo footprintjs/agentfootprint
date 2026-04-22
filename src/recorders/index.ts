@@ -19,3 +19,10 @@ export { PermissionRecorder } from './PermissionRecorder';
 export type { PermissionEvent } from './PermissionRecorder';
 export { agentObservability } from './agentObservability';
 export type { AgentObservabilityOptions, AgentObservabilityRecorder } from './agentObservability';
+export { contextEngineering } from './ContextEngineeringRecorder';
+export type {
+  ContextEngineeringRecorder,
+  ContextEngineeringRecorderOptions,
+  ContextInjectionRecord,
+  ContextLedger,
+} from './ContextEngineeringRecorder';

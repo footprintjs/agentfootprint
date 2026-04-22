@@ -42,7 +42,7 @@ describe('Scenario: Adapter Swap ($0 testing)', () => {
 
     expect(result.content).toBe('It is sunny in Seattle.');
 
-    const narrative = agent.getNarrative();
+    const narrative = agent.getNarrativeEntries().map((e) => e.text);
     // Verify the narrative has the expected structure
     expect(narrative.some((s) => s.includes('[Seed]'))).toBe(true);
     expect(narrative.some((s) => s.includes('Preparing system prompt'))).toBe(true);

@@ -143,7 +143,7 @@ describe('buildInstructionsToLLMSubflow — narrative', () => {
     const executor = new FlowChartExecutor(wrapper);
     executor.enableNarrative();
     await executor.run();
-    const narrative = executor.getNarrative();
+    const narrative = executor.getNarrativeEntries().map((e) => e.text);
     // Subflow shows in narrative — either as entry or as a stage path
     expect(
       narrative.some(

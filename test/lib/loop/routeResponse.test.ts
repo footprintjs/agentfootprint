@@ -96,7 +96,7 @@ describe('RouteResponse decider — unit', () => {
 
     expect(state.result).toBe('No tools needed.');
     // Decider should have fired (visible in narrative as condition)
-    const narrative = executor.getNarrative();
+    const narrative = executor.getNarrativeEntries().map((e) => e.text);
     expect(narrative.some((s: string) => s.includes('Finalize'))).toBe(true);
   });
 
@@ -283,7 +283,7 @@ describe('RouteResponse decider — scenario', () => {
     expect(conditionEntries.length).toBeGreaterThanOrEqual(1);
 
     // Should mention ExecuteTools and Finalize
-    const narrative = executor.getNarrative();
+    const narrative = executor.getNarrativeEntries().map((e) => e.text);
     expect(narrative.some((s: string) => s.includes('ExecuteTools'))).toBe(true);
     expect(narrative.some((s: string) => s.includes('Finalize'))).toBe(true);
   });

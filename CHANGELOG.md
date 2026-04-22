@@ -5,6 +5,68 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.18.0]
+
+### Context engineering — first-class teaching surface
+
+- **New `contextEngineering()` recorder** (`src/recorders/ContextEngineeringRecorder.ts`).
+  Public consumer-facing recorder that subscribes to the emit channel and
+  exposes a structured query API: `injections()`, `ledger()`,
+  `ledgerByIteration()`, `bySource()`, `bySlot()`, `clear()`. Lets any
+  UI layer (Lens, Datadog, custom panels) observe **who** injected
+  **what** into **which** Agent slot, on every iteration. Mirrors
+  `agentObservability()` in shape — same factory, same emit-channel
+  substrate, different domain focus.
+
+- **Context-injection emits land at the source of truth.**
+  - `agentfootprint.context.rag.chunks` fires from
+    `src/stages/augmentPrompt.ts` with role + targetIndex + chunkCount +
+    topScore (was previously emitted before role/index were known).
+  - `agentfootprint.context.skill.activated` fires from
+    `src/lib/call/toolExecutionSubflow.ts` whenever
+    `decision.currentSkill` flips post-`read_skill`. Carries `skillId`,
+    `previousSkillId`, `deltaCount: { systemPromptChars, toolsFromSkill }`.
+  - `agentfootprint.context.instructions.fired` fires when
+    AgentInstructions fire on a turn — counted, with delta info.
+  - `agentfootprint.context.memory.injected` fires from memory subsystem
+    when prior-turn memory writes flow back into the prompt.
+
+- **`forwardEmitRecorders()` helper**
+  (`src/recorders/forwardEmitRecorders.ts`). Detects whether a
+  user-supplied recorder implements `onEmit` and routes it to
+  `executor.attachEmitRecorder()`. Wired into all 7 runners (Agent,
+  LLMCall, RAG, FlowChart, Parallel, Swarm, Conditional) so
+  `.recorder(contextEngineering())` Just Works without consumers having
+  to know about footprintjs's three-channel observer architecture.
+
+- **`StreamEventRecorder` forwards `agentfootprint.context.*`** events to
+  the `AgentStreamEventHandler`, so consumers using `<Lens for={runner} />`
+  see context events alongside stream events without a separate
+  subscription.
+
+### Multi-agent + EventDispatcher
+
+- **`EventDispatcher`** — per-runner observer list pattern in
+  `src/streaming/EventDispatcher.ts`. Foundation for the
+  `runner.observe()` contract Lens consumes.
+- Multi-agent type updates in `src/types/multiAgent.ts` + tests.
+
+### Examples + tests
+
+- Snapshot tests updated for the new emit events in execution traces.
+- New test scaffolding for context-engineering recorder e2e
+  (`test/integration/ce-recorder-e2e.test.ts`,
+  `test/unit/context-engineering-recorder.test.ts`,
+  `test/unit/context-injection-emits.test.ts`,
+  `test/unit/runner-observe-contract.test.ts`).
+
+### Docs
+
+- New / updated guides: `dynamic-react.mdx`, `rag.mdx`, `swarm.mdx`,
+  `key-concepts.mdx`, `quick-start.mdx`, `why.mdx`, `vs.mdx`,
+  `debug.mdx`.
+- README + index.mdx refreshed for the new context-engineering surface.
+
 ## [1.17.6]
 
 ### Examples — full footprintjs-style parity

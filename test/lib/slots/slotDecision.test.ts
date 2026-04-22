@@ -55,7 +55,7 @@ describe('SlotDecision — unit', () => {
     const result = await agent.run('test');
     expect(result.content).toBe('hi');
     // Custom prompt was used — verify via narrative
-    const narrative = agent.getNarrative();
+    const narrative = agent.getNarrativeEntries().map((e) => e.text);
     expect(narrative.some((l) => l.includes('Custom prompt here'))).toBe(true);
   });
 
@@ -174,7 +174,7 @@ describe('SlotDecision — scenario', () => {
       .build();
 
     await agent.run('test');
-    const narrative = agent.getNarrative();
+    const narrative = agent.getNarrativeEntries().map((e) => e.text);
     // Decision should appear in narrative
     expect(narrative.some((l) => l.includes('elevated'))).toBe(true);
   });

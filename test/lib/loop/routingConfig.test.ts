@@ -53,7 +53,7 @@ describe('RoutingConfig — unit', () => {
     executor.enableNarrative();
     await executor.run();
 
-    const narrative = executor.getNarrative();
+    const narrative = executor.getNarrativeEntries().map((e) => e.text);
     expect(narrative.some((s: string) => s.includes('Finalize'))).toBe(true);
   });
 
@@ -261,7 +261,7 @@ describe('RoutingConfig — property', () => {
     executor.enableNarrative();
     await executor.run();
 
-    const narrative = executor.getNarrative();
+    const narrative = executor.getNarrativeEntries().map((e) => e.text);
     // Should still have RouteResponse and Finalize in narrative
     expect(
       narrative.some((s: string) => s.includes('RouteResponse') || s.includes('Finalize')),

@@ -1,23 +1,46 @@
-# Concepts — The Concept Ladder
+# Concepts — The Taxonomy
 
-agentfootprint organizes AI patterns into seven concepts, each building on the previous one. Start with the simplest concept that solves your problem — **pick the lowest rung that works, because each step adds cost and latency** — and compose up only when you need more.
+agentfootprint organizes AI work into five layers. Read top to bottom; each layer is built from the one above.
 
 ```
-Single-LLM
-  LLMCall  → one prompt in, one response out
-  Agent    → + tool-use loop (ReAct)
-  RAG      → + retrieval before generation
+PRIMITIVES (2 — atomic invocation units)
+  1. LLM      — one call
+  2. Agent    — a loop of calls + tools + decisions (= ReAct)
 
-Multi-runner composition
-  FlowChart    → sequential pipeline (runner → runner → runner)
-  Parallel     → fan out N runners concurrently, merge results
-  Conditional  → if/else routing between runners
-  Swarm        → LLM decides which specialist to call (dynamic routing)
+COMPOSITIONS (3 — how primitives arrange)
+  1. Sequence     — one after another
+  2. Parallel     — at the same time
+  3. Conditional  — branch on a decider
+
+PATTERNS (N — named configurations; every named paper is a recipe)
+  ReAct              = Agent (default)
+  Dynamic ReAct      = Agent with slots re-evaluating per iter
+  Hierarchy (Swarm)  = Agent with specialist-Agents as tools
+  Reflexion          = Sequence(Agent, LLM-critique, Agent)
+  Tree-of-Thoughts   = Parallel(Agent × N) + LLM-rank
+  Plan-Execute       = LLM-plan + Sequence(Agent per step)
+  Map-Reduce         = Parallel(Agent × N) + LLM-merge
+
+CONTEXT ENGINEERING (cross-cutting — what you inject into Agent slots)
+  RAG          → messages
+  Memory       → messages
+  Skills       → system-prompt (+ tools)
+  Instructions → system-prompt (after specific tool results)
+  Tools        → tools slot
+  Grounding    → system-prompt (style, rules)
+
+FEATURES (infrastructure)
+  Providers · Runtime · Observability · Security · Resilience
 ```
 
-**Background:** the loop concept is *ReAct* (Yao et al. 2023, ICLR — "reasoning and acting" interleaved). RAG is *Retrieval-Augmented Generation* (Lewis et al. 2020, NeurIPS). Swarm follows the orchestrator-worker pattern (popularized by OpenAI's Swarm 2024 reference implementation).
+**Two theses to hold in your head:**
 
-All seven share the same interface:
+1. **Agent = ReAct.** If it doesn't loop-with-tools, it isn't an Agent — it's an LLM call. Don't call something an Agent unless there's a loop.
+2. **Every named pattern in the literature = a composition of the 2 primitives + 3 compositions.** Reflexion isn't a new Agent class; it's `Sequence(Agent, critique-LLM, Agent)`. Tree-of-Thoughts isn't a new runtime; it's `Parallel(Agent × N) + rank`. Hierarchy/Swarm is an Agent whose tools happen to be other Agents.
+
+**Paper citations tie each pattern to its source:** ReAct (Yao 2022), Reflexion (Shinn 2023), Tree-of-Thoughts (Yao 2023), Swarm (OpenAI 2024). We express those papers as compositions of the 5 primitives — not as new class names per paper.
+
+All runners share the same interface — that's what makes composition work:
 
 ```typescript
 // Builder: .create() → .system() → .recorder() → .build()
@@ -26,7 +49,9 @@ All seven share the same interface:
 
 ---
 
-## LLMCall
+## PRIMITIVES
+
+### 1. LLM — one call (`LLMCall`)
 
 > **Like:** asking a question and getting an answer. No back-and-forth.
 
@@ -67,11 +92,11 @@ console.log(result.content); // "Positive sentiment."
 
 ---
 
-## Agent
+### 2. Agent — a loop of calls + tools + decisions (= ReAct)
 
 > **Like:** a research assistant — you ask, it looks things up, then answers.
 
-Adds a tool-use loop (ReAct pattern). The agent calls tools repeatedly until it decides to respond.
+**Agent = ReAct.** This is the definition, not a default. The Agent primitive IS the ReAct loop (Yao et al. 2022, ICLR — "Reasoning + Acting" interleaved). If it doesn't loop-with-tools, it isn't an Agent.
 
 **Internal flowchart:** `SeedScope → PromptAssembly → CallLLM → ParseResponse → HandleResponse → loopTo(CallLLM)`
 
@@ -151,71 +176,15 @@ agent.resetConversation(); // Clear when done
 
 ---
 
-## RAG
+## COMPOSITIONS
 
-> **Like:** open-book exam — look up the relevant pages, then answer.
+The three ways primitives arrange into bigger shapes. Every named pattern below is some arrangement of these three.
 
-Adds retrieval before generation. Fetches relevant chunks from a knowledge base and injects them into the prompt.
-
-**Internal flowchart:** `SeedScope → Retrieve → AugmentPrompt → CallLLM → ParseResponse → Finalize`
-
-```typescript
-import { RAG, mock, mockRetriever } from 'agentfootprint';
-
-const rag = RAG.create({
-  provider: mock([{ content: 'Employees receive 20 days PTO per year.' }]),
-  retriever: mockRetriever([{
-    query: 'PTO policy',
-    chunks: [
-      { content: 'Employees receive 20 days PTO per year.', score: 0.95 },
-      { content: 'PTO requests must be submitted 2 weeks in advance.', score: 0.82 },
-    ],
-  }]),
-})
-  .system('Answer questions using the provided context.')
-  .topK(5)
-  .minScore(0.7)
-  .build();
-
-const result = await rag.run('What is our PTO policy?');
-console.log(result.content); // "Employees receive 20 days PTO per year."
-console.log(result.chunks);  // Retrieved chunks with scores
-console.log(result.query);   // The query used for retrieval
-```
-
-**Builder API:**
-
-| Method | Description |
-|--------|-------------|
-| `RAG.create({ provider, retriever })` | Create builder with LLM + retriever |
-| `.system(prompt)` | Set system prompt |
-| `.topK(n)` | Number of chunks to retrieve |
-| `.minScore(score)` | Minimum relevance threshold |
-| `.recorder(rec)` | Attach an AgentRecorder |
-| `.build()` | Returns `RAGRunner` |
-
-**Runner result:** `{ content, messages, chunks, query }`
-
-**Custom retriever:**
-
-```typescript
-const retriever = {
-  retrieve: async (query: string, options?: { topK?: number; minScore?: number }) => ({
-    query,
-    chunks: [{ content: 'Retrieved text...', score: 0.9 }],
-  }),
-};
-```
-
-**Failure modes:** retriever returns zero chunks → LLM gets an empty context block and may answer from training data (not grounded). Always inspect `result.chunks.length` for callers that require grounding. `minScore` too high → silent zero-chunk problem.
-
----
-
-## FlowChart
+### 1. Sequence — one after another (`FlowChart`)
 
 > **Like:** an assembly line — each station does one thing, output of one feeds the next.
 
-Composes multiple runners into a sequential pipeline. Each runner feeds into the next.
+Composes multiple runners (LLMs, Agents, or other compositions) into a sequential pipeline. Each runner feeds into the next.
 
 **Internal flowchart:** `Seed → Runner1 (subflow) → Runner2 (subflow) → ... → RunnerN (subflow)`
 
@@ -265,7 +234,7 @@ The `.agent()` options support `inputMapper` and `outputMapper` for custom data 
 
 ---
 
-## Parallel
+### 2. Parallel — at the same time (`Parallel`)
 
 > **Like:** asking three colleagues the same question, then merging their answers.
 
@@ -312,7 +281,7 @@ console.log(result.branches);  // per-reviewer outputs with status: 'fulfilled' 
 
 ---
 
-## Conditional
+### 3. Conditional — branch on a decider (`Conditional`)
 
 > **Like:** a triage nurse — look at the request, route to the right specialist.
 
@@ -347,13 +316,31 @@ const result = await triage.run('I want a refund please');
 
 ---
 
-## Swarm
+## PATTERNS — named compositions
+
+Every paper in the agent literature is a composition of 2 primitives + 3 compositions. We ship a handful as factories; see the [Patterns guide](patterns.md) for the full set with source papers. A sample:
+
+| Pattern | Built from | Paper |
+|---|---|---|
+| **ReAct** | Agent (default) | Yao et al. 2022 |
+| **Dynamic ReAct** | Agent with slots re-evaluating per iter | — (this library) |
+| **Hierarchy (Swarm)** | Agent with specialist-Agents as tools | OpenAI Swarm 2024 |
+| **Reflexion** | Sequence(Agent, LLM-critique, Agent) | Shinn et al. 2023 |
+| **Tree-of-Thoughts** | Parallel(Agent × N) + LLM-rank | Yao et al. 2023 |
+| **Plan-Execute** | LLM-plan + Sequence(Agent per step) | Wang et al. 2023 |
+| **Map-Reduce** | Parallel(Agent × N) + LLM-merge | Dean & Ghemawat 2004 |
+
+> **Display-name note.** Runtime class names (`SwarmRunner`, `LLMCallRunner`, `FlowChartRunner`) don't change. In prose we use display labels: "LLM", "Agent", "Sequence", "Hierarchy (Swarm)". Don't invent a new primitive class for each pattern — that's LangChain's mistake. Hierarchy is an Agent whose tools happen to be other Agents.
+
+### Hierarchy (Swarm) — worked example
 
 > **Like:** a project manager who reads each request and assigns it to the right specialist on the team.
 
-Dynamic LLM-driven delegation. An orchestrator agent decides which specialist to call based on the conversation.
+Dynamic LLM-driven delegation. An orchestrator Agent decides which specialist to call based on the conversation.
 
-Unlike FlowChart (static sequential), Swarm lets the LLM decide routing at runtime by converting specialists into tools via `agentAsTool`.
+**Built from:** Agent, with specialist-Agents exposed as tools (via `agentAsTool`). Not a new primitive — an Agent with a specific tool shape.
+
+Unlike Sequence (static), Hierarchy lets the LLM decide routing at runtime by converting specialists into tools.
 
 ```typescript
 import { Swarm, mock } from 'agentfootprint';
@@ -405,9 +392,40 @@ console.log(result.agents);  // Which specialists were called
 
 ---
 
+## CONTEXT ENGINEERING (cross-cutting)
+
+These are **not primitives.** They're injection patterns — what you put into an Agent's three slots (system-prompt / messages / tools). Every "RAG-agent", "memory-agent", or "skills-agent" is still an Agent; it just has different context plumbed into its slots.
+
+| Technique | Where it injects | Purpose |
+|---|---|---|
+| **RAG** | messages | Retrieve relevant chunks at query time |
+| **Memory** | messages | Persist conversation / facts across turns |
+| **Skills** | system-prompt (+ tools) | Auto-activate persona + tools when a trigger fires |
+| **Instructions** | system-prompt (after specific tool results) | Conditional behavior after a tool observation |
+| **Tools** | tools slot | Actions the Agent can invoke |
+| **Grounding** | system-prompt | Style / citation / safety rules |
+
+> **Callout: RAG is context engineering, not a primitive.** `RAG.create(...)` in this library is a convenience helper that builds an LLM call with a retriever wired into its messages slot. It isn't a new kind of thing — it's a worked example of "inject retrieved chunks into the messages slot." You can do the same thing by hand in any Agent via a `MessageStrategy` that calls a retriever. *Retrieval-Augmented Generation* is the technique (Lewis et al. 2020, NeurIPS); the helper is the packaging.
+
+Individual guides: [RAG](../../docs-site/src/content/docs/guides/rag.mdx), [Memory](../../docs-site/src/content/docs/guides/memory.mdx), [Skills](../../docs-site/src/content/docs/guides/skills.mdx), [Instructions](instructions.md), [Tools](../../docs-site/src/content/docs/guides/tools.mdx), [Grounding](../../docs-site/src/content/docs/guides/grounding.mdx).
+
+---
+
+## FEATURES (infrastructure)
+
+Cross-cutting infrastructure that every primitive and composition uses. See:
+
+- [Providers](providers.md) — LLM adapters, PromptProvider, MessageStrategy, ToolProvider
+- [Recorders](recorders.md) — observability (Token, Cost, Turn, ToolUsage, Quality, Guardrail, Composite)
+- [Orchestration](orchestration.md) — `withRetry`, `withFallback`, `withCircuitBreaker`
+- [Security](security.md) — tool gating, permission policy, audit trail
+- [Streaming](streaming.md) — real-time lifecycle events
+
+---
+
 ## RunnerLike Interface
 
-All runners conform to the `RunnerLike` interface, making them composable:
+All runners — primitives, compositions, and pattern factories — conform to the `RunnerLike` interface. That's what makes composition work:
 
 ```typescript
 interface RunnerLike {
@@ -417,20 +435,24 @@ interface RunnerLike {
 }
 ```
 
-Any object implementing `run(message) => { content }` can be used in FlowChart or Swarm. This means external services, A2A agents, or simple functions all compose naturally.
+Any object implementing `run(message) => { content }` plugs into any composition (Sequence / Parallel / Conditional) or any pattern factory. External services, A2A agents, and plain functions all compose naturally.
 
 ---
 
-## Choosing the Right Concept
+## Choosing the right shape
 
 | Need | Use |
 |------|-----|
-| Summarization, classification, extraction | **LLMCall** |
+| Summarization, classification, extraction | **LLM** (`LLMCall`) |
 | Research, code generation, multi-step reasoning | **Agent** |
-| Q&A over documents or knowledge bases | **RAG** |
-| Ordered multi-step pipelines (research then write) | **FlowChart** |
-| Independent perspectives merged together (multi-perspective review) | **Parallel** |
+| Q&A over documents or knowledge bases | Agent + RAG context (or `RAG` helper) |
+| Ordered multi-step pipelines (research then write) | **Sequence** (`FlowChart`) |
+| Independent perspectives merged together | **Parallel** |
 | Static if/else routing (triage, content classification) | **Conditional** |
-| Dynamic LLM-driven routing (customer support, project manager) | **Swarm** |
+| Dynamic LLM-driven routing across specialists | **Hierarchy (Swarm)** |
+| Draft → critique → improve | Pattern: `reflexion` |
+| Multiple attempts, judge picks best | Pattern: `treeOfThoughts` |
+| Plan first, execute per step | Pattern: `planExecute` |
+| Fan-out across N inputs, reduce | Pattern: `mapReduce` |
 
-For higher-level shapes built on top of these (Plan-Execute, Reflexion, Tree-of-Thoughts, MapReduce, plus the Regular vs Dynamic ReAct loop), see the [Patterns guide](patterns.md).
+For the named patterns (Dynamic ReAct / Plan-Execute / Reflexion / Tree-of-Thoughts / Map-Reduce / Hierarchy), see the [Patterns guide](patterns.md).

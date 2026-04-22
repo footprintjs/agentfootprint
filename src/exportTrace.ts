@@ -57,10 +57,9 @@ export interface AgentfootprintTrace {
   /**
    * Structured per-step narrative entries. Use this to render a timeline
    * UI; each entry has a `type`, `text`, `depth`, and `runtimeStageId`.
+   * Render flat strings locally via `entries.map(e => e.text)` when needed.
    */
   readonly narrativeEntries?: unknown[];
-  /** Flat string-list narrative — convenience view for logs / chat UIs. */
-  readonly narrative?: string[];
   /**
    * Flowchart spec — node + edge metadata for rendering the topology of
    * what ran. Stable across runs of the same agent shape.
@@ -75,8 +74,7 @@ interface ExportableRunner extends RunnerLike {
    * Older snapshots ignore the argument and return raw — safe fallback.
    */
   getSnapshot?(options?: { redact?: boolean }): unknown;
-  getNarrativeEntries?(): unknown[];
-  getNarrative?(): string[];
+  getNarrativeEntries?(): Array<{ text: string }>;
   getSpec?(): unknown;
 }
 
@@ -124,7 +122,6 @@ export function exportTrace(runner: RunnerLike, options?: ExportTraceOptions): A
     redacted: redact,
     snapshot,
     narrativeEntries: r.getNarrativeEntries?.(),
-    narrative: r.getNarrative?.(),
     spec: r.getSpec?.(),
   };
 }

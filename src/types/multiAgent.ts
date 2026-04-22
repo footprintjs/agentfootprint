@@ -11,7 +11,7 @@ export interface RunnerLike {
     message: string,
     options?: { signal?: AbortSignal; timeoutMs?: number },
   ): Promise<{ content: string }>;
-  getNarrative?(): string[];
+  getNarrativeEntries?(): Array<{ text: string }>;
   getSnapshot?(): unknown;
 }
 

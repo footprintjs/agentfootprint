@@ -33,7 +33,8 @@ export function withFallback(
       }
     },
     // Narrative/snapshot from whichever runner succeeded
-    getNarrative: () => primary.getNarrative?.() ?? fallback.getNarrative?.() ?? [],
+    getNarrativeEntries: () =>
+      primary.getNarrativeEntries?.() ?? fallback.getNarrativeEntries?.() ?? [],
     getSnapshot: () => primary.getSnapshot?.() ?? fallback.getSnapshot?.(),
   };
 }

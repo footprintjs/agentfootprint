@@ -49,7 +49,7 @@ export function runnerAsStage(config: AgentStageConfig) {
       name: config.name,
       content: output.content,
       latencyMs,
-      narrative: config.runner.getNarrative?.() ?? undefined,
+      narrative: config.runner.getNarrativeEntries?.().map((e) => e.text) ?? undefined,
     };
 
     const existing = scope.agentResults ?? [];

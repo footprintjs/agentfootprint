@@ -18,7 +18,7 @@ describe('Scenario: Simple LLM Call', () => {
 
     await caller.run('Do something.');
 
-    const narrative = caller.getNarrative();
+    const narrative = caller.getNarrativeEntries().map((e) => e.text);
     expect(narrative.length).toBeGreaterThan(0);
     expect(narrative.some((s) => s.includes('SystemPrompt'))).toBe(true);
   });

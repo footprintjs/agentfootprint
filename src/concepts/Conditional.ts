@@ -50,6 +50,9 @@ import { runnerAsStage } from '../stages/runnerAsStage';
 import { RecorderBridge } from '../recorders/RecorderBridge';
 import { annotateSpecIcons } from './specIcons';
 import { createAgentRenderer } from '../lib/narrative';
+import type { AgentStreamEvent, AgentStreamEventHandler } from '../streaming';
+import { createStreamEventRecorder, EventDispatcher } from '../streaming';
+import { forwardEmitRecorders } from '../recorders/forwardEmitRecorders';
 
 /** True iff the runner exposes `toFlowChart()` for subflow composition. */
 function hasFlowChart(runner: RunnerLike): runner is RunnerLike & { toFlowChart(): FlowChartDef } {
@@ -155,8 +158,9 @@ export class Conditional {
     return this;
   }
 
-  recorder(rec: AgentRecorder): this {
-    this.recorders.push(rec);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  recorder(rec: AgentRecorder | { id: string; onEmit?: (event: any) => void }): this {
+    this.recorders.push(rec as AgentRecorder);
     return this;
   }
 
@@ -214,6 +218,8 @@ export class ConditionalRunner {
   private lastExecutor?: FlowChartExecutor;
   private lastSpec?: unknown;
   private readonly narrativeRenderer = createAgentRenderer();
+  /** Persistent observer list — see AgentRunner.dispatcher. */
+  private readonly dispatcher = new EventDispatcher();
 
   constructor(opts: ConditionalRunnerOptions) {
     this.opts = opts;
@@ -221,12 +227,29 @@ export class ConditionalRunner {
 
   async run(
     message: string,
-    options?: { signal?: AbortSignal; timeoutMs?: number },
+    options?: { signal?: AbortSignal; timeoutMs?: number; onEvent?: AgentStreamEventHandler },
   ): Promise<TraversalResult> {
     const startTime = Date.now();
     const bridge =
       this.opts.recorders.length > 0 ? new RecorderBridge([...this.opts.recorders]) : null;
 
+    const dispatcher = this.dispatcher;
+    const perRun = options?.onEvent;
+    const onStreamEvent: AgentStreamEventHandler | undefined =
+      dispatcher.size > 0 || perRun
+        ? (e: AgentStreamEvent) => {
+            dispatcher.dispatch(e);
+            if (perRun) {
+              try {
+                perRun(e);
+              } catch {
+                /* swallow */
+              }
+            }
+          }
+        : undefined;
+
+    onStreamEvent?.({ type: 'turn_start', userMessage: message });
     bridge?.dispatchTurnStart(message);
 
     const chart = this.buildChart();
@@ -234,6 +257,10 @@ export class ConditionalRunner {
     const executor = new FlowChartExecutor(chart, { enrichSnapshots: true });
     executor.enableNarrative({ renderer: this.narrativeRenderer });
     executor.attachRecorder(new MetricRecorder('metrics'));
+    forwardEmitRecorders(executor, this.opts.recorders);
+    if (onStreamEvent) {
+      executor.attachEmitRecorder(createStreamEventRecorder(onStreamEvent));
+    }
 
     try {
       await executor.run({
@@ -253,12 +280,18 @@ export class ConditionalRunner {
     const content = (state.result as string) ?? '';
 
     bridge?.dispatchTurnComplete(content, 0);
+    onStreamEvent?.({ type: 'turn_end', content, iterations: 1 });
 
     return {
       content,
       agents: [],
       totalLatencyMs: Date.now() - startTime,
     };
+  }
+
+  /** Subscribe to the runner's live stream of events. See AgentRunner.observe(). */
+  observe(handler: AgentStreamEventHandler): () => void {
+    return this.dispatcher.observe(handler);
   }
 
   private buildChart(): FlowChartDef {
@@ -352,11 +385,6 @@ export class ConditionalRunner {
   /** Expose the flowchart definition so this runner can be mounted as a subflow. */
   toFlowChart(): FlowChartDef {
     return this.buildChart();
-  }
-
-  /** Get the narrative from the last run. */
-  getNarrative(): string[] {
-    return this.lastExecutor?.getNarrative() ?? [];
   }
 
   /** Get structured narrative entries from the last run. */

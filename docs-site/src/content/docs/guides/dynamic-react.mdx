@@ -5,6 +5,9 @@ description: When to loop back to SystemPrompt instead of CallLLM — and why th
 
 import { Aside, Code, Tabs, TabItem } from '@astrojs/starlight/components';
 
+**Built from:** Agent (ReAct) with slots re-evaluating per iteration.
+**Relation to literature:** agentfootprint extension; closest concepts are adaptive prompting and per-step context assembly. Not a new primitive — still the Agent primitive, with a different loop target.
+
 Most agents use a **standard ReAct** loop: system prompt + tools + memory are decided once before the first LLM call, then the agent loops `CallLLM → tools → CallLLM` until it finishes. Simple, fast, predictable.
 
 **Dynamic ReAct** changes one thing: the loop target. Instead of looping back to `CallLLM`, it loops back to `SystemPrompt` — which means all three API slots (system prompt, message history, tools) **re-evaluate between every turn**. The prompt can change. The tool set can change. The memory window can change. Every iteration.

@@ -273,7 +273,10 @@ describe('Acceptance — agent remembers across turns', () => {
     executor.enableNarrative();
     await executor.run();
 
-    const narrative = executor.getNarrative().join('\n');
+    const narrative = executor
+      .getNarrativeEntries()
+      .map((e) => e.text)
+      .join('\n');
     // Both subflow mount points appear in the combined narrative —
     // we explicitly name them 'Load Memory' and 'Save Memory'.
     expect(narrative).toMatch(/Load Memory|sf-memory-read/);

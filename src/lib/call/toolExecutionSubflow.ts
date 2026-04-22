@@ -133,8 +133,55 @@ export function buildToolExecutionSubflow(config: ToolExecutionSubflowConfig): F
     const emitAsScope = (event: AgentStreamEvent): void => {
       scope.$emit(`${STREAM_EMIT_PREFIX}${event.type}`, event);
     };
+    // Context-engineering emit: wrap onInstructionsFired so when per-tool
+    // agent instructions fire, Lens can tag the iteration with
+    // "instructions → sys prompt · N". Preserves the original callback
+    // (which routes to InstructionRecorder) — we're a tee, not a replacement.
+    const userOnInstructionsFired = instructionConfig?.onInstructionsFired;
+    const teeInstructionsFired = (
+      toolId: string,
+      fired: import('../instructions').ResolvedInstruction[],
+    ): void => {
+      // Forward to the original recorder callback first.
+      userOnInstructionsFired?.(toolId, fired);
+      // Then emit the context-engineering event.
+      //
+      // Teaching detail: instructions inject guidance AFTER a specific
+      // tool result — they land in the recency window of the next
+      // iteration (effectively the system prompt slot at that point,
+      // since the guidance is authoritative app-controlled text not
+      // part of the conversation). Char-delta approximated from the
+      // resolved injection content length.
+      const totalChars = fired.reduce((n, f) => {
+        const c =
+          (
+            f as {
+              resolvedFollowUp?: { description?: string };
+              followUp?: { description?: string };
+            }
+          ).resolvedFollowUp?.description ??
+          (f as { followUp?: { description?: string } }).followUp?.description ??
+          '';
+        return n + (typeof c === 'string' ? c.length : 0);
+      }, 0);
+      scope.$emit('agentfootprint.context.instructions.fired', {
+        slot: 'system-prompt',
+        toolId,
+        count: fired.length,
+        ids: fired.map((f) => f.id),
+        deltaCount: {
+          // Approximate — falls back to the count of instructions × 1
+          // if we can't read lengths (better than no signal).
+          systemPromptChars: totalChars > 0 ? totalChars : fired.length,
+        },
+      });
+    };
     const effectiveInstructionConfig: InstructionConfig | undefined = instructionConfig
-      ? { ...instructionConfig, onStreamEvent: emitAsScope }
+      ? {
+          ...instructionConfig,
+          onStreamEvent: emitAsScope,
+          onInstructionsFired: teeInstructionsFired,
+        }
       : {
           instructionsByToolId: new Map(),
           onStreamEvent: emitAsScope,
@@ -163,6 +210,61 @@ export function buildToolExecutionSubflow(config: ToolExecutionSubflowConfig): F
     // Always writes — even if no decide() and no decisionUpdate ran, the
     // decision may need to propagate for the next iteration's InstructionsToLLM.
     scope.updatedDecision = decisionRef;
+
+    // Context-engineering emit: detect a skill activation. A successful
+    // `read_skill(id)` call writes `{ currentSkill: id }` (or the custom
+    // stateField) via decisionUpdate. If decisionRef now carries a new
+    // currentSkill, the skill just became active for the NEXT iteration.
+    //
+    // Teaching-surface detail: a skill activation does TWO things under
+    // the hood — (1) the skill body appears in the NEXT iteration's
+    // system prompt (via the SystemPrompt slot's provider re-resolving
+    // under Dynamic ReAct OR on next turn's assembly for Regular), and
+    // (2) any `activeWhen` tools gated on the skill id now appear in
+    // the Tools slot. We emit BOTH deltas so Lens can show the counter
+    // jump on both slots.
+    const priorSkill = (rawDecision as Record<string, unknown> | undefined)?.currentSkill;
+    const nextSkill = decisionRef.currentSkill;
+    if (nextSkill !== priorSkill && typeof nextSkill === 'string' && nextSkill.length > 0) {
+      // Read the resolved tool result to figure out how big the skill
+      // body is + whether the skill carries its own tools. Skill
+      // activation flows through `read_skill` whose `content` is the
+      // skill's body text. We don't have direct access here to the
+      // registry / skill metadata, so approximate via the tool result.
+      const skillToolResult = parsed.toolCalls.find(
+        (tc) => (tc as { name?: string }).name === 'read_skill',
+      );
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const bodyChars = (() => {
+        // Find the matching result in resultMessages (tool-role message).
+        const resultMsg = resultMessages.find(
+          (m) =>
+            m.role === 'tool' &&
+            (m as { toolCallId?: string }).toolCallId === (skillToolResult as { id?: string })?.id,
+        );
+        const c = (resultMsg as { content?: unknown })?.content;
+        if (typeof c === 'string') return c.length;
+        return undefined;
+      })();
+      scope.$emit('agentfootprint.context.skill.activated', {
+        // Skills touch TWO slots simultaneously. Primary slot = system-prompt
+        // (skill body), secondary = tools (skill-gated tools). Lens UI
+        // tags both; the ledger delta reflects both.
+        slot: 'system-prompt',
+        skillId: nextSkill,
+        previousSkillId: priorSkill,
+        deltaCount: {
+          // Skill body gets concatenated into the system prompt on the
+          // next iteration's assembly — its char count is the delta.
+          ...(bodyChars !== undefined && { systemPromptChars: bodyChars }),
+          // Skill-gated tools appear in the Tools slot. The exact count
+          // is a registry concern the tool subflow doesn't own; surface
+          // it as unknown-positive with a flag so Lens can render
+          // "+? tools" until a later enrichment pass carries the number.
+          toolsFromSkill: true,
+        },
+      });
+    }
 
     // If ask_human was called, store pause data on scope and return it.
     // Engine: non-void return from isPausable stage → PauseSignal with this as pauseData.

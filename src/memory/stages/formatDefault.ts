@@ -124,5 +124,26 @@ export function formatDefault(config: FormatDefaultConfig = {}) {
     const content = (header ? `${header}\n\n` : '') + blocks + (footer ? `\n\n${footer}` : '');
 
     scope.formatted = [{ role: 'system', content }];
+
+    // Context-engineering emit: memory formatted N entries into a
+    // system message that lands in the Agent's Messages slot via the
+    // memory-pipeline's outputMapper. Lens tags the iteration with
+    // "memory · N msg(s)" so the student sees WHERE the re-injected
+    // prior turns came from.
+    if (typeof (scope as unknown as { $emit?: unknown }).$emit === 'function') {
+      scope.$emit('agentfootprint.context.memory.injected', {
+        slot: 'messages',
+        // Memory injects ONE system-role message containing every selected
+        // entry as a citation block (see DEFAULT_HEADER + renderEntry).
+        // The downstream count delta is therefore +1 system, regardless
+        // of how many memory entries it carries.
+        role: 'system' as const,
+        deltaCount: { system: 1 },
+        count: selected.length,
+        // Tiers present in the injection — lets the UI show "working / long-term"
+        // differentiation later without a schema change.
+        tiers: Array.from(new Set(selected.map((e) => e.tier).filter(Boolean))),
+      });
+    }
   };
 }

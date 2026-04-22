@@ -95,7 +95,7 @@ describe('Scenario: Agent with Tool Loop (ReAct)', () => {
 
     await agent.run('Search for test');
 
-    const narrative = agent.getNarrative();
+    const narrative = agent.getNarrativeEntries().map((e) => e.text);
     expect(narrative.length).toBeGreaterThan(0);
   });
 

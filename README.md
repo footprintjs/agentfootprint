@@ -16,7 +16,7 @@
   <a href="https://footprintjs.github.io/footPrint/"><img src="https://img.shields.io/badge/Built_on-footprintjs-ca8a04?style=flat" alt="Built on footprintjs"></a>
 </p>
 
-> **Most agent frameworks give you execution. agentfootprint gives you connected evidence** — grounded, auditable, LLM-readable. The LLM can explain its own decisions. You can verify it wasn't hallucinating.
+> **Most agent frameworks invent new class names for every paper. agentfootprint gives you 2 primitives, 3 compositions, and makes every other "feature" explicit about what it injects into the Agent's prompt.** Context engineering, visible. Students and engineers can read any agent paper and see it in agentfootprint terms.
 
 ```bash
 npm install agentfootprint
@@ -35,9 +35,9 @@ import { SSEFormatter } from 'agentfootprint/stream';            // Real-time ev
 
 ---
 
-## Start Simple, Compose Up
+## The Mental Model — 2 Primitives + 3 Compositions + N Patterns
 
-Six concepts. Start with a single LLM call, compose up to multi-agent. No upfront graph DSL.
+Everything in agentfootprint is expressible in five building blocks. Named patterns (ReAct, Swarm, Reflexion, Tree-of-Thoughts, Plan-Execute...) are recipes that combine them — not new classes.
 
 ```typescript
 import { Agent, defineTool } from 'agentfootprint';
@@ -56,23 +56,47 @@ console.log(result.content);              // LLM response
 console.log(obs.explain().iterations);    // per-iteration evaluation data ← the differentiator
 ```
 
-**Single LLM** (one agent, one task):
+**Primitives — atomic invocation units:**
 
-| Concept | What it adds | Use case |
-|---------|-------------|----------|
-| **LLMCall** | Single LLM invocation | Summarization, classification |
-| **Agent** | + Tool use loop (ReAct) | Research, code generation |
-| **RAG** | + Retrieval | Q&A over documents |
+| # | Primitive | What it is | Use case |
+|---|-----------|------------|----------|
+| 1 | **LLM** | One call in, one response out | Summarization, classification, extraction |
+| 2 | **Agent** | A loop of (think → tool → think) — **Agent = ReAct** | Research, code generation, anything iterative |
 
-**Multi-Agent** (compose agents):
+**Compositions — how primitives arrange:**
 
-| Concept | What it adds | Use case |
-|---------|-------------|----------|
-| **FlowChart** | Sequential pipeline | Approval flows, ETL — output of one feeds the next |
-| **Parallel** | Concurrent execution | Analysis from multiple perspectives — merged by LLM |
-| **Swarm** | LLM-driven routing | Customer support — orchestrator delegates to specialists |
+| # | Composition | What it is | Use case |
+|---|-------------|------------|----------|
+| 1 | **Sequence** | One after another | Approval flows, ETL — output of one feeds the next |
+| 2 | **Parallel** | At the same time | Analysis from multiple perspectives — merged by LLM |
+| 3 | **Conditional** | Branch on a decider | Triage flows, deterministic routing |
 
-All six share one interface: `.build()` → `.run()`, `.getNarrative()`, `.getSnapshot()`.
+**Patterns — named configurations of the above:**
+
+| Pattern | Built from | Source |
+|---------|-----------|--------|
+| **ReAct** | Agent (default) | Yao 2022 |
+| **Dynamic ReAct** | Agent with per-iteration context re-evaluation | agentfootprint extension |
+| **Hierarchy (Swarm)** | Agent routing to specialist-Agents via tools | OpenAI 2024 |
+| **Reflexion** | Sequence(Agent, LLM-critique, Agent) | Shinn 2023 |
+| **Tree-of-Thoughts** | Parallel(Agent × N) + LLM-rank | Yao 2023 |
+| **Plan-Execute** | LLM-plan + Sequence(Agent per step) | Wang 2023 |
+| **Map-Reduce** | Parallel(Agent × N) + LLM-merge | Dean 2004 applied to LLMs |
+
+**Context Engineering — cross-cutting, applies to any Agent:**
+
+What you inject into the Agent's slots. This is the library's teaching thesis — every "new agent feature" that competing frameworks wrap in new classes is just **content flowing into one of three slots**.
+
+| Mechanism | Target slot | What it does |
+|-----------|-------------|--------------|
+| **RAG** | messages | Retrieved chunks injected into the prompt |
+| **Memory** | messages | Prior-turn context re-injected |
+| **Skills** | system-prompt (+ tools) | Activate a skill → its prompt + tools become visible |
+| **Instructions** | system-prompt | Per-tool guidance injected after specific tool results |
+| **Tools** | tools slot | Available functions the LLM can call |
+| **Grounding** | system-prompt | Style guides, rules, non-negotiables |
+
+**Every runner** (LLMCall, Agent, Sequence/FlowChart, Parallel, Conditional, Swarm) shares one interface: `.build()` → `.run()`, `.observe(h)`, `.getNarrativeEntries()`, `.getSnapshot()`, `.getSpec()`.
 
 ---
 

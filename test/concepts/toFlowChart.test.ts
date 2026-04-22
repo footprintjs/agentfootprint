@@ -161,7 +161,7 @@ describe('FlowChart with toFlowChart() subflows', () => {
     const pipeline = FlowChart.create().agent('sf-agent', 'Agent', agent).build();
 
     await pipeline.run('hello');
-    const narrative = pipeline.getNarrative();
+    const narrative = pipeline.getNarrativeEntries().map((e) => e.text);
     expect(narrative.length).toBeGreaterThan(0);
 
     // Should mention the subflow

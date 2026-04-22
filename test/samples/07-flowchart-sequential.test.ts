@@ -117,7 +117,7 @@ describe('Sample 07: FlowChart Sequential', () => {
 
     await pipeline.run('go');
 
-    const narrative = pipeline.getNarrative();
+    const narrative = pipeline.getNarrativeEntries().map((e) => e.text);
     expect(narrative.length).toBeGreaterThan(0);
   });
 });

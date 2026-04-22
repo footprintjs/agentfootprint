@@ -45,7 +45,7 @@ describe('Scenario: RAG end-to-end', () => {
 
     await rag.run('Question');
 
-    const narrative = rag.getNarrative();
+    const narrative = rag.getNarrativeEntries().map((e) => e.text);
     expect(narrative.length).toBeGreaterThan(0);
     // Should mention the RAG stages
     const fullNarrative = narrative.join(' ');

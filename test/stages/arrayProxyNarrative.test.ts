@@ -58,7 +58,7 @@ describe('array proxy narrative — agentfootprint regression', () => {
     await executor.run({});
 
     const entries = executor.getNarrativeEntries();
-    const narrativeLines = executor.getNarrative();
+    const narrativeLines = executor.getNarrativeEntries().map((e) => e.text);
 
     // Count "Read memory_preparedMessages" entries in the CommitMemory stage
     const preparedReads = entries.filter(

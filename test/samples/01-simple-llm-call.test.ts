@@ -30,7 +30,7 @@ describe('Sample 01: Simple LLM Call', () => {
     await call.run('Hello');
 
     // Every run produces a narrative — a human-readable trace
-    const narrative = call.getNarrative();
+    const narrative = call.getNarrativeEntries().map((e) => e.text);
     expect(narrative.length).toBeGreaterThan(0);
   });
 

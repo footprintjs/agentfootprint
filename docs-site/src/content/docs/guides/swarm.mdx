@@ -1,11 +1,16 @@
 ---
-title: Multi-Agent (Swarm)
-description: Orchestrate multiple specialist agents with LLM-driven routing.
+title: Hierarchy (Swarm)
+description: Orchestrate multiple specialist agents with LLM-driven routing — an Agent whose tools are other Agents.
 ---
+
+**Built from:** Agent with specialist-Agents exposed as tools.
+**Paper:** OpenAI Swarm (2024).
+
+Hierarchy (Swarm) is **not a new primitive.** It's an Agent whose tools happen to be other Agents. The orchestrator runs a normal ReAct loop; each "specialist" is a sub-Agent wrapped as a tool via `agentAsTool`.
 
 ## Specialist routing
 
-The Swarm pattern routes requests to specialist agents. The orchestrator LLM decides which specialist handles each request.
+The Hierarchy pattern routes requests to specialist agents. The orchestrator LLM decides which specialist handles each request.
 
 ```ts
 import { Swarm, Agent, anthropic } from 'agentfootprint';

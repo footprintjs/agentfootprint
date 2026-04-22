@@ -84,7 +84,7 @@ describe('Swarm unified — unit', () => {
       .build();
 
     await swarm.run('hi');
-    const narrative = swarm.getNarrative();
+    const narrative = swarm.getNarrativeEntries().map((e) => e.text);
 
     // 3-slot stages should appear in narrative
     expect(

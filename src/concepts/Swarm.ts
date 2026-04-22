@@ -31,6 +31,9 @@ import { slidingWindow } from '../providers/messages/slidingWindow';
 import { ToolRegistry } from '../tools';
 import type { Message } from '../types/messages';
 import { createAgentRenderer } from '../lib/narrative';
+import type { AgentStreamEvent, AgentStreamEventHandler } from '../streaming';
+import { createStreamEventRecorder, EventDispatcher } from '../streaming';
+import { forwardEmitRecorders } from '../recorders/forwardEmitRecorders';
 import { RecorderBridge } from '../recorders/RecorderBridge';
 import { annotateSpecIcons } from './specIcons';
 import type { SpecLike } from './specIcons';
@@ -104,8 +107,9 @@ export class Swarm {
     return this;
   }
 
-  recorder(rec: AgentRecorder): this {
-    this.recorders.push(rec);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  recorder(rec: AgentRecorder | { id: string; onEmit?: (event: any) => void }): this {
+    this.recorders.push(rec as AgentRecorder);
     return this;
   }
 
@@ -141,6 +145,8 @@ export class SwarmRunner {
   private lastExecutor?: FlowChartExecutor;
   private lastSpec?: unknown;
   private readonly narrativeRenderer = createAgentRenderer();
+  /** Persistent observer list — see AgentRunner.dispatcher. */
+  private readonly dispatcher = new EventDispatcher();
 
   /** Cached routing config — constructed once, reused across runs. */
   private readonly routingConfig: RoutingConfig;
@@ -246,12 +252,33 @@ export class SwarmRunner {
 
   async run(
     message: string,
-    options?: { signal?: AbortSignal; timeoutMs?: number; onToken?: (token: string) => void },
+    options?: {
+      signal?: AbortSignal;
+      timeoutMs?: number;
+      onToken?: (token: string) => void;
+      onEvent?: AgentStreamEventHandler;
+    },
   ): Promise<TraversalResult> {
     const startTime = Date.now();
 
     const { chart, spec } = this.buildLoop(message);
     this.lastSpec = annotateSpecIcons(spec as SpecLike);
+
+    const dispatcher = this.dispatcher;
+    const perRun = options?.onEvent;
+    const onStreamEvent: AgentStreamEventHandler | undefined =
+      dispatcher.size > 0 || perRun
+        ? (e: AgentStreamEvent) => {
+            dispatcher.dispatch(e);
+            if (perRun) {
+              try {
+                perRun(e);
+              } catch {
+                /* swallow */
+              }
+            }
+          }
+        : undefined;
 
     const executorOpts: FlowChartExecutorOptions = { enrichSnapshots: true };
     if (options?.onToken && this.streamingEnabled) {
@@ -265,9 +292,14 @@ export class SwarmRunner {
     const executor = new FlowChartExecutor(chart, executorOpts);
     executor.enableNarrative({ renderer: this.narrativeRenderer });
     executor.attachRecorder(new MetricRecorder('metrics'));
+    forwardEmitRecorders(executor, this.recorders);
+    if (onStreamEvent) {
+      executor.attachEmitRecorder(createStreamEventRecorder(onStreamEvent));
+    }
 
     // Wire AgentRecorders via RecorderBridge
     const bridge = this.recorders.length > 0 ? new RecorderBridge(this.recorders) : null;
+    onStreamEvent?.({ type: 'turn_start', userMessage: message });
     bridge?.dispatchTurnStart(message);
 
     try {
@@ -309,6 +341,11 @@ export class SwarmRunner {
 
     // Dispatch recorder events
     bridge?.dispatchTurnComplete(result, messages.length, (state.loopCount as number) ?? 0);
+    onStreamEvent?.({
+      type: 'turn_end',
+      content: result,
+      iterations: (state.loopCount as number) ?? 1,
+    });
 
     return {
       content: result,
@@ -316,6 +353,11 @@ export class SwarmRunner {
       totalLatencyMs: Date.now() - startTime,
       ...(state.maxIterationsReached === true && { maxIterationsReached: true }),
     };
+  }
+
+  /** Subscribe to the runner's live stream of events. See AgentRunner.observe(). */
+  observe(handler: AgentStreamEventHandler): () => void {
+    return this.dispatcher.observe(handler);
   }
 
   /** Get conversation history (for multi-turn). */
@@ -326,10 +368,6 @@ export class SwarmRunner {
   /** Reset conversation state for a fresh conversation. */
   resetConversation(): void {
     this.conversationHistory = [];
-  }
-
-  getNarrative(): string[] {
-    return this.lastExecutor?.getNarrative() ?? [];
   }
 
   getNarrativeEntries() {

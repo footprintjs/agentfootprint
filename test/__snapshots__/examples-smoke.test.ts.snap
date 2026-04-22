@@ -481,7 +481,7 @@ exports[`examples smoke test > observability/04-export-trace.ts — runs + outpu
   "narrativeLines": 43,
   "redacted": true,
   "schemaVersion": 1,
-  "sizeKb": 31,
+  "sizeKb": 30,
   "snapshotKeys": [
     "sharedState",
     "executionTree",

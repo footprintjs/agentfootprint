@@ -22,7 +22,10 @@ import { runnerAsStage } from '../stages/runnerAsStage';
 import type { RunnerLike } from '../types';
 import type { AgentRecorder } from '../core';
 import { RecorderBridge } from '../recorders/RecorderBridge';
+import { forwardEmitRecorders } from '../recorders/forwardEmitRecorders';
 import type { MultiAgentState } from '../scope/types';
+import type { AgentStreamEvent, AgentStreamEventHandler } from '../streaming';
+import { createStreamEventRecorder, EventDispatcher } from '../streaming';
 
 /**
  * Check if a runner exposes its internal flowChart for subflow composition.
@@ -65,9 +68,10 @@ export class FlowChart {
     return this;
   }
 
-  /** Attach an AgentRecorder to observe execution events. */
-  recorder(rec: AgentRecorder): this {
-    this.recorders.push(rec);
+  /** Attach a recorder. AgentRecorder OR EmitRecorder (e.g. contextEngineering). */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  recorder(rec: AgentRecorder | { id: string; onEmit?: (event: any) => void }): this {
+    this.recorders.push(rec as AgentRecorder);
     return this;
   }
 
@@ -85,6 +89,8 @@ export class FlowChartRunner {
   private readonly recorders: AgentRecorder[];
   private lastExecutor?: FlowChartExecutor;
   private lastSpec?: unknown;
+  /** Persistent observer list — see AgentRunner.dispatcher. */
+  private readonly dispatcher = new EventDispatcher();
 
   constructor(agents: readonly AgentStageConfig[], recorders: AgentRecorder[] = []) {
     this.agents = agents;
@@ -93,11 +99,28 @@ export class FlowChartRunner {
 
   async run(
     message: string,
-    options?: { signal?: AbortSignal; timeoutMs?: number },
+    options?: { signal?: AbortSignal; timeoutMs?: number; onEvent?: AgentStreamEventHandler },
   ): Promise<TraversalResult> {
     const startTime = Date.now();
     const bridge = this.recorders.length > 0 ? new RecorderBridge(this.recorders) : null;
 
+    const dispatcher = this.dispatcher;
+    const perRun = options?.onEvent;
+    const onStreamEvent: AgentStreamEventHandler | undefined =
+      dispatcher.size > 0 || perRun
+        ? (e: AgentStreamEvent) => {
+            dispatcher.dispatch(e);
+            if (perRun) {
+              try {
+                perRun(e);
+              } catch {
+                /* swallow */
+              }
+            }
+          }
+        : undefined;
+
+    onStreamEvent?.({ type: 'turn_start', userMessage: message });
     bridge?.dispatchTurnStart(message);
 
     // Seed stage: set input and initialize agent results.
@@ -143,6 +166,10 @@ export class FlowChartRunner {
     const executor = new FlowChartExecutor(chart, { enrichSnapshots: true });
     executor.enableNarrative();
     executor.attachRecorder(new MetricRecorder('metrics'));
+    forwardEmitRecorders(executor, this.recorders);
+    if (onStreamEvent) {
+      executor.attachEmitRecorder(createStreamEventRecorder(onStreamEvent));
+    }
 
     try {
       await executor.run({
@@ -195,12 +222,18 @@ export class FlowChartRunner {
       (flatAgentResults.length > 0 ? flatAgentResults[flatAgentResults.length - 1].content : '');
 
     bridge?.dispatchTurnComplete(content, 0);
+    onStreamEvent?.({ type: 'turn_end', content, iterations: 1 });
 
     return {
       content,
       agents: allAgentResults,
       totalLatencyMs: Date.now() - startTime,
     };
+  }
+
+  /** Subscribe to the runner's live stream of events. See AgentRunner.observe(). */
+  observe(handler: AgentStreamEventHandler): () => void {
+    return this.dispatcher.observe(handler);
   }
 
   /** Get the flowchart spec (stage graph metadata). */
@@ -235,11 +268,6 @@ export class FlowChartRunner {
       this.lastSpec = annotateSpecIcons(builder.toSpec());
     }
     return this.lastSpec;
-  }
-
-  /** Get the narrative from the last run. */
-  getNarrative(): string[] {
-    return this.lastExecutor?.getNarrative() ?? [];
   }
 
   /** Get structured narrative entries from the last run. */

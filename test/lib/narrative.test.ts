@@ -49,7 +49,7 @@ describe('Narrative — unit', () => {
       .build();
 
     await agent.run('hi');
-    const narrative = agent.getNarrative();
+    const narrative = agent.getNarrativeEntries().map((e) => e.text);
 
     // Seed stage (agent renderer format)
     expect(narrative.some((s) => s.includes('[Seed]'))).toBe(true);
@@ -92,7 +92,7 @@ describe('Narrative — unit', () => {
       .build();
 
     await agent.run('hello');
-    const narrative = agent.getNarrative();
+    const narrative = agent.getNarrativeEntries().map((e) => e.text);
 
     // System prompt shows actual text
     expect(
@@ -110,7 +110,7 @@ describe('Narrative — unit', () => {
       .build();
 
     await agent.run('hello');
-    const narrative = agent.getNarrative();
+    const narrative = agent.getNarrativeEntries().map((e) => e.text);
 
     // Messages formatted with count
     expect(narrative.some((s) => s.includes('Messages:') && s.includes('user'))).toBe(true);
@@ -124,7 +124,7 @@ describe('Narrative — unit', () => {
       .build();
 
     await agent.run('hello');
-    const narrative = agent.getNarrative();
+    const narrative = agent.getNarrativeEntries().map((e) => e.text);
 
     // Internal plumbing keys should NOT appear
     // Note: loopCount and maxIterations are visible loop state (not suppressed)
@@ -159,7 +159,7 @@ describe('Narrative — boundary', () => {
     }).build();
 
     await agent.run('hi');
-    const narrative = agent.getNarrative();
+    const narrative = agent.getNarrativeEntries().map((e) => e.text);
 
     // SystemPrompt subflow still runs (agent renderer label)
     expect(narrative.some((s) => s.includes('Preparing system prompt'))).toBe(true);
@@ -184,7 +184,7 @@ describe('Narrative — boundary', () => {
     }).build();
 
     await agent.run('');
-    const narrative = agent.getNarrative();
+    const narrative = agent.getNarrativeEntries().map((e) => e.text);
     expect(narrative.length).toBeGreaterThan(0);
   });
 });
@@ -205,7 +205,7 @@ describe('Narrative — scenario', () => {
       .build();
 
     await agent.run('weather?');
-    const narrative = agent.getNarrative();
+    const narrative = agent.getNarrativeEntries().map((e) => e.text);
 
     // Loop iteration (agent renderer format)
     expect(narrative.some((s) => s.includes('Tool loop iteration 1'))).toBe(true);
@@ -251,7 +251,7 @@ describe('Narrative — scenario', () => {
       .build();
 
     await agent.run('remember this', { identity: { conversationId: 'conv-1' } });
-    const narrative = agent.getNarrative();
+    const narrative = agent.getNarrativeEntries().map((e) => e.text);
 
     // The final-branch subflow mounts sf-memory-write when pipeline.write
     // is configured — confirm it shows up in the narrative.
@@ -264,10 +264,10 @@ describe('Narrative — scenario', () => {
     }).build();
 
     await agent.run('turn1');
-    const narrative1 = agent.getNarrative();
+    const narrative1 = agent.getNarrativeEntries().map((e) => e.text);
 
     await agent.run('turn2');
-    const narrative2 = agent.getNarrative();
+    const narrative2 = agent.getNarrativeEntries().map((e) => e.text);
 
     // Each run produces fresh narrative
     expect(narrative1.length).toBeGreaterThan(0);
@@ -285,7 +285,7 @@ describe('Narrative — scenario', () => {
       .build();
 
     await agent.run('find something');
-    const narrative = agent.getNarrative();
+    const narrative = agent.getNarrativeEntries().map((e) => e.text);
 
     // System prompt shows actual text
     expect(
@@ -315,10 +315,10 @@ describe('Narrative — property', () => {
     }).build();
 
     // Before run
-    expect(Array.isArray(agent.getNarrative())).toBe(true);
+    expect(Array.isArray(agent.getNarrativeEntries().map((e) => e.text))).toBe(true);
 
     await agent.run('hi');
-    const narrative = agent.getNarrative();
+    const narrative = agent.getNarrativeEntries().map((e) => e.text);
     expect(Array.isArray(narrative)).toBe(true);
     for (const line of narrative) {
       expect(typeof line).toBe('string');
@@ -413,7 +413,7 @@ describe('Narrative — security', () => {
     await expect(agent.run('hi')).rejects.toThrow('API failure');
 
     // Narrative should exist up to the point of failure
-    const narrative = agent.getNarrative();
+    const narrative = agent.getNarrativeEntries().map((e) => e.text);
     expect(narrative.length).toBeGreaterThan(0);
     // Should include [Seed] stage
     expect(narrative.some((s) => s.includes('[Seed]'))).toBe(true);
@@ -429,7 +429,7 @@ describe('Narrative — security', () => {
       .build();
 
     const result = await agent.run('search');
-    const narrative = agent.getNarrative();
+    const narrative = agent.getNarrativeEntries().map((e) => e.text);
 
     // Should have narrative entries
     expect(narrative.length).toBeGreaterThan(0);

@@ -23,7 +23,7 @@ export default defineConfig({
         },
         {
           tag: 'meta',
-          attrs: { property: 'og:description', content: 'Build AI agents that show their work. Every decision traced, every tool call documented. 6 concepts, one interface.' },
+          attrs: { property: 'og:description', content: 'Build AI agents that show their work. Context engineering, visible. 2 primitives, 3 compositions, every named pattern is a recipe.' },
         },
         {
           tag: 'meta',
@@ -39,7 +39,7 @@ export default defineConfig({
         },
         {
           tag: 'meta',
-          attrs: { name: 'twitter:description', content: 'Build AI agents that show their work. 6 patterns, $0 test runs, grounding analysis.' },
+          attrs: { name: 'twitter:description', content: 'Build AI agents that show their work. 2 primitives + 3 compositions, $0 test runs, grounding analysis.' },
         },
         {
           tag: 'meta',

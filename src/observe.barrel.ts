@@ -24,6 +24,7 @@ export {
   PermissionRecorder,
   CompositeRecorder,
   agentObservability,
+  contextEngineering,
 } from './recorders';
 
 export { OTelRecorder } from './recorders/OTelRecorder';
@@ -44,6 +45,10 @@ export type {
   PermissionEvent,
   AgentObservabilityOptions,
   AgentObservabilityRecorder,
+  ContextEngineeringRecorder,
+  ContextEngineeringRecorderOptions,
+  ContextInjectionRecord,
+  ContextLedger,
 } from './recorders';
 
 export type { AgentRecorder } from './core';

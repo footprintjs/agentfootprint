@@ -31,9 +31,8 @@ describe('exportTrace — unit', () => {
 
     const trace = exportTrace(agent);
     expect(trace.snapshot).toBeDefined();
-    expect(Array.isArray(trace.narrative)).toBe(true);
-    expect(trace.narrative!.length).toBeGreaterThan(0);
     expect(Array.isArray(trace.narrativeEntries)).toBe(true);
+    expect(trace.narrativeEntries!.length).toBeGreaterThan(0);
     expect(trace.spec).toBeDefined();
   });
 
@@ -71,7 +70,6 @@ describe('exportTrace — boundary', () => {
 
     expect(trace.schemaVersion).toBe(1);
     expect(trace.snapshot).toBeUndefined();
-    expect(trace.narrative).toBeUndefined();
     expect(trace.narrativeEntries).toBeUndefined();
     expect(trace.spec).toBeUndefined();
   });
@@ -122,7 +120,9 @@ describe('exportTrace — scenario', () => {
     expect(result.content ?? '').toBe('answer');
 
     // Narrative contains the seeded content
-    const narrativeStr = (trace.narrative as string[]).join('\n');
+    const narrativeStr = (trace.narrativeEntries as Array<{ text: string }>)
+      .map((e) => e.text)
+      .join('\n');
     expect(narrativeStr).toMatch(/answer|Finalize|CallLLM/);
   });
 });
@@ -137,7 +137,7 @@ describe('exportTrace — property', () => {
     // Missing-optional fields are omitted entirely
     const parsed = JSON.parse(json);
     expect('snapshot' in parsed).toBe(false);
-    expect('narrative' in parsed).toBe(false);
+    expect('narrativeEntries' in parsed).toBe(false);
   });
 });
 

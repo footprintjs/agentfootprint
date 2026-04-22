@@ -25,7 +25,7 @@ This page stays honest about our weaknesses. If we're wrong or out of date, [ope
 
 | Capability | agentfootprint | LangGraph | LangChain | CrewAI | Strands | OpenAI SDK | AutoGen |
 |---|---|---|---|---|---|---|---|
-| DAG primitives (leaf/sequence/fan-out/branch/cycle/dispatch) | ✅ 7 concepts | ✅ StateGraph (custom) | ⚠️ LCEL chains | ❌ roles only | ⚠️ linear | ⚠️ handoffs | ❌ group-chat |
+| DAG primitives (leaf/sequence/fan-out/branch/cycle/dispatch) | ✅ 2 primitives + 3 compositions | ✅ StateGraph (custom) | ⚠️ LCEL chains | ❌ roles only | ⚠️ linear | ⚠️ handoffs | ❌ group-chat |
 | Combined narrative (reads/writes/decisions in one timeline) | ✅ built-in | ❌ LangSmith (paid SaaS) | ❌ verbose logs | ❌ | ❌ | ⚠️ partial OTel | ❌ |
 | Decision evidence (`why` this branch?) | ✅ `decide()` capture | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
 | Causal chain / program slicing | ✅ `causalChain()` | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
@@ -82,7 +82,7 @@ The nearest competitor is **LangSmith**, which:
 
 **You care about CI cost.** `mock([...])` means your 500-test agent suite runs free in CI. Swap to real adapter with zero code changes for integration runs.
 
-**You want the same framework for LLM call, RAG, agent, and multi-agent.** The concept ladder (LLMCall < RAG < Agent < Swarm < Parallel < FlowChart < Conditional) covers the whole spectrum with one interface.
+**You want the same framework for LLM call, RAG, agent, and multi-agent.** The taxonomy is 2 primitives (LLM, Agent) + 3 compositions (Sequence, Parallel, Conditional), with RAG / Memory / Skills as context engineering on top. Every named pattern (Reflexion, Tree-of-Thoughts, Hierarchy/Swarm) is a recipe — not a new class. One interface, the whole spectrum.
 
 **You want to debug agents like you debug code.** Time-travel slider. Memory diff per step. "Why did stage 7 get this value?" → causal chain. That's the whole pitch.
 

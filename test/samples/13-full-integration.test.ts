@@ -247,7 +247,7 @@ describe('Sample 13: Full Integration', () => {
     expect(guardrail.hasViolations()).toBe(false);
 
     // Narrative covers all agents
-    const narrative = pipeline.getNarrative();
+    const narrative = pipeline.getNarrativeEntries().map((e) => e.text);
     expect(narrative.length).toBeGreaterThan(0);
 
     // Snapshot enables drill-down

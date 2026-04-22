@@ -94,7 +94,7 @@ export function withCircuitBreaker(
         throw err;
       }
     },
-    getNarrative: runner.getNarrative?.bind(runner),
+    getNarrativeEntries: runner.getNarrativeEntries?.bind(runner),
     getSnapshot: runner.getSnapshot?.bind(runner),
   };
 

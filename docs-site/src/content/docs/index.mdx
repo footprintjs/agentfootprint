@@ -1,9 +1,9 @@
 ---
 title: agentfootprint
-description: The only agent framework you can actually debug. Narrative, causal chain, time-travel snapshot viewer. Paste a trace, see what happened.
+description: Context engineering, visible. 2 primitives, 3 compositions, every named pattern is a recipe. Paste a trace, see what happened.
 template: splash
 hero:
-  tagline: Agents you can debug like code. Export a trace, paste it into the viewer, drag the slider — see every decision, tool call, and memory write.
+  tagline: "Context engineering, visible. 2 primitives, 3 compositions, every named pattern is a recipe. Export a trace, paste it into the viewer, drag the slider — see every decision, tool call, and memory write."
   actions:
     - text: Try it (no setup)
       link: https://footprintjs.github.io/agent-playground/#/viewer
@@ -58,10 +58,28 @@ Paste that JSON into the [viewer](https://footprintjs.github.io/agent-playground
   <Card title="$0 test runs" icon="approve-check-circle">
     `mock([...])` for tests, `anthropic(...)` for prod. Same agent, same flowchart, zero API cost in CI.
   </Card>
-  <Card title="7 concepts, one interface" icon="puzzle">
-    LLMCall, Agent, RAG, FlowChart, Parallel, Conditional, Swarm. Each wraps one footprintjs primitive. DAG-complete.
+  <Card title="2 primitives, 3 compositions" icon="puzzle">
+    Primitives: **LLM**, **Agent** (= ReAct). Compositions: **Sequence**, **Parallel**, **Conditional**. Every named pattern — Reflexion, Tree-of-Thoughts, Hierarchy — is a recipe built from these. No new classes per paper.
   </Card>
 </CardGrid>
+
+## The stack, in one box
+
+```
+PRIMITIVES (2)        LLM · Agent (= ReAct)
+COMPOSITIONS (3)      Sequence · Parallel · Conditional
+PATTERNS (N)          ReAct · Dynamic ReAct · Hierarchy (Swarm) ·
+                      Reflexion · Tree-of-Thoughts · Plan-Execute · Map-Reduce
+CONTEXT ENGINEERING   RAG · Memory · Skills · Instructions · Tools · Grounding
+FEATURES              Providers · Recorders · Orchestration · Security · Streaming
+```
+
+Two theses:
+
+1. **Agent = ReAct.** If it doesn't loop-with-tools, it isn't an Agent.
+2. **Every named paper is a recipe of primitives + compositions.** Reflexion = `Sequence(Agent, critique-LLM, Agent)`. Tree-of-Thoughts = `Parallel(Agent × N) + rank`. Hierarchy (Swarm) = Agent whose tools are Agents. RAG isn't a primitive; it's context engineering — what you inject into the messages slot.
+
+See the [Key Concepts](/agentfootprint/getting-started/key-concepts/) page for the full taxonomy with worked examples.
 
 ## 30-second demo
 

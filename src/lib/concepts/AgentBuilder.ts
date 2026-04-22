@@ -455,9 +455,12 @@ export class Agent {
     return this;
   }
 
-  /** Attach an AgentRecorder to observe execution events. */
-  recorder(rec: AgentRecorder): this {
-    this.recorders.push(rec);
+  /** Attach a recorder. Accepts AgentRecorder OR EmitRecorder shape;
+   *  shape auto-detected at run-time. `contextEngineering()` works
+   *  here too — see RAG.recorder for the full rationale. */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  recorder(rec: AgentRecorder | { id: string; onEmit?: (event: any) => void }): this {
+    this.recorders.push(rec as AgentRecorder);
     return this;
   }
 
