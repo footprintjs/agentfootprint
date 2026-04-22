@@ -68,6 +68,9 @@ export type {
   RunSummary,
   IterationRange,
   IterationRangeIndex,
+  ContextBySource,
+  ContextSlotSummary,
+  ContextSourceSummary,
   Humanizer,
 } from './recorders';
 

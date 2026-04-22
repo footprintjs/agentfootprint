@@ -253,6 +253,35 @@ export interface CommentaryLine {
   readonly timestamp: number;
 }
 
+/**
+ * Per-slot injection summary — what each Agent API slot received and from
+ * which source. Powers slot-row badges on the flowchart ("Messages +3 from
+ * RAG · +5 from memory") and the analyst Commentary panel.
+ *
+ * Shape:
+ *   slots[]             — one entry per system-prompt / messages / tools slot
+ *   slots[].sources[]   — per-source group within that slot (rag / skill / memory / ...)
+ *   slots[].totalInjections — all injections into this slot (all sources summed)
+ *   aggregatedLedger    — deltaCount values summed across all slots + sources
+ */
+export interface ContextBySource {
+  readonly slots: readonly ContextSlotSummary[];
+  readonly aggregatedLedger: Readonly<Record<string, number | boolean>>;
+}
+
+export interface ContextSlotSummary {
+  readonly slot: 'system-prompt' | 'messages' | 'tools';
+  readonly sources: readonly ContextSourceSummary[];
+  readonly totalInjections: number;
+}
+
+export interface ContextSourceSummary {
+  readonly source: string;
+  readonly count: number;
+  readonly deltaCount: Readonly<Record<string, number | boolean>>;
+  readonly labels: readonly string[];
+}
+
 /** Numeric totals over the entire run — for dashboards & headers. */
 export interface RunSummary {
   readonly turnCount: number;
@@ -650,6 +679,15 @@ export class AgentTimelineRecorder
     return this.memo('runSummary', () => computeRunSummary(this.getEvents()));
   }
 
+  /** Context-engineering injection summary — per slot, grouped by source
+   *  (rag / skill / memory / instructions / custom). Powers slot-row badges
+   *  on the flowchart AND the analyst Commentary panel. Cursor-aware:
+   *  pass an event index to see injections up to that point. */
+  selectContextBySource(cursor?: number): ContextBySource {
+    const key = cursor === undefined ? 'contextBySource:all' : `contextBySource:${cursor}`;
+    return this.memo(key, () => computeContextBySource(this.getEvents(), cursor));
+  }
+
   /** Iteration ↔ event-stream index map for scrubbers / time-travel. */
   selectIterationRanges(): IterationRangeIndex {
     return this.memo('iterationRanges', () => computeIterationRanges(this.getEvents()));
@@ -934,7 +972,23 @@ function foldCore(entries: readonly TimelineEntry[]): FoldedBundle {
         break;
       }
       case 'llm_start': {
-        if (!currentTurn) continue;
+        // Synthesize a turn anchor if none exists. Real executors call
+        // recorder.clear() at run-start, wiping any turn_start that
+        // arrived via observe() BEFORE run. Rather than forcing every
+        // caller to emit turn_start on the emit channel, we recover
+        // here: first llm_start without a turn creates a synthetic one.
+        if (!currentTurn) {
+          currentTurn = {
+            index: turns.length,
+            userPrompt: '',
+            iterations: [],
+            finalContent: '',
+            totalInputTokens: 0,
+            totalOutputTokens: 0,
+            totalDurationMs: 0,
+          };
+          turns.push(currentTurn);
+        }
         currentIter = {
           index: entry.iteration,
           assistantContent: '',
@@ -1090,19 +1144,67 @@ function foldCore(entries: readonly TimelineEntry[]): FoldedBundle {
  * For sub-agents that have no matching emit events (e.g. a plain-stage
  * fork child), turns/tools are empty arrays.
  */
+/**
+ * An Agent's signature — the set of API-slot subflows every Agent
+ * mounts via `buildAgentLoop`. A topology subflow that CONTAINS any of
+ * these as a child is an Agent wrapper (and therefore a sub-agent when
+ * nested inside a composition runner). Subflows that ARE one of these
+ * slots themselves, or other leaf subflows not containing a slot, are
+ * internal structure — not sub-agents.
+ *
+ * This heuristic replaces a hardcoded deny-list. Robust against new
+ * internal-agent subflows added later (they'll auto-classify as
+ * "internal" because they don't wrap slots).
+ */
+const AGENT_SLOT_SUBFLOW_IDS: ReadonlySet<string> = new Set([
+  'sf-system-prompt',
+  'sf-messages',
+  'sf-tools',
+]);
+
+/** TopologyRecorder disambiguates re-entered subflows with a `#n`
+ *  suffix. Strip that suffix so a re-entered slot still matches the
+ *  signature set. */
+function baseSubflowId(id: string): string {
+  const hashIdx = id.indexOf('#');
+  return hashIdx === -1 ? id : id.slice(0, hashIdx);
+}
+
+function isAgentWrapper(nodeId: string, topology: TopologyRecorder): boolean {
+  // A sub-agent is a subflow whose descendants in the topology tree
+  // include at least one of the API-slot signature subflows.
+  const stack = [...topology.getChildren(nodeId)];
+  while (stack.length > 0) {
+    const child = stack.pop()!;
+    if (AGENT_SLOT_SUBFLOW_IDS.has(baseSubflowId(child.id))) return true;
+    stack.push(...topology.getChildren(child.id));
+  }
+  return false;
+}
+
 function deriveSubAgentSlices(
   events: readonly AgentEvent[],
   topology: TopologyRecorder,
 ): readonly SubAgentTimeline[] {
-  const nodes = topology.getSubflowNodes();
+  const allNodes = topology.getSubflowNodes();
+  // Keep only subflows that WRAP an Agent (have API-slot descendants).
+  // In single-agent runs, the slots are top-level — nothing wraps them
+  // → empty array → Lens renders the single-agent flowchart.
+  // In multi-agent (Pipeline/Parallel/Swarm/Conditional), each sub-agent
+  // root wraps its own slots → returned as a sub-agent.
+  const nodes = allNodes.filter((n) => isAgentWrapper(n.id, topology));
   if (nodes.length === 0) return [];
 
-  // Group events by first subflowPath segment. Events with empty
-  // subflowPath belong to the root agent and are skipped here.
+  // Group events by first subflowPath segment. Keep only events whose
+  // top-of-path IS one of the classified sub-agents (filter out events
+  // belonging to internal-agent subflows of the root agent, which are
+  // technically at subflowPath[0] in single-agent runs but aren't
+  // sub-agents).
+  const subAgentIds = new Set(nodes.map((n) => n.id));
   const bySubAgent = new Map<string, AgentEvent[]>();
   for (const e of events) {
     const id = e.subflowPath[0];
-    if (!id) continue;
+    if (!id || !subAgentIds.has(id)) continue;
     const arr = bySubAgent.get(id) ?? [];
     arr.push(e);
     bySubAgent.set(id, arr);
@@ -1431,6 +1533,57 @@ function computeRunSummary(events: readonly AgentEvent[]): RunSummary {
     toolUsage: Object.fromEntries(toolUsage),
     skillsActivated: [...skillsActivated],
   };
+}
+
+// ── Context-engineering summary ───────────────────────────────────────
+
+function computeContextBySource(events: readonly AgentEvent[], cursor?: number): ContextBySource {
+  const end = cursor === undefined ? events.length : Math.min(cursor + 1, events.length);
+  const slotOrder: Array<ContextSlotSummary['slot']> = ['system-prompt', 'messages', 'tools'];
+  const slotBuckets = new Map<
+    ContextSlotSummary['slot'],
+    Map<string, { count: number; deltaCount: Record<string, number | boolean>; labels: string[] }>
+  >();
+  const aggregatedLedger: Record<string, number | boolean> = {};
+
+  for (const slot of slotOrder) slotBuckets.set(slot, new Map());
+
+  for (let i = 0; i < end; i++) {
+    const e = events[i];
+    if (e.type !== 'context_injection') continue;
+    const slot = e.slot;
+    const bucket = slotBuckets.get(slot);
+    if (!bucket) continue;
+    const group = bucket.get(e.source) ?? { count: 0, deltaCount: {}, labels: [] };
+    group.count += 1;
+    group.labels.push(e.label);
+    if (e.deltaCount) {
+      for (const [k, v] of Object.entries(e.deltaCount)) {
+        if (typeof v === 'number') {
+          group.deltaCount[k] = ((group.deltaCount[k] as number | undefined) ?? 0) + v;
+          aggregatedLedger[k] = ((aggregatedLedger[k] as number | undefined) ?? 0) + v;
+        } else if (typeof v === 'boolean') {
+          // Boolean flags: true wins (indicates feature was active at least once).
+          group.deltaCount[k] = (group.deltaCount[k] as boolean | undefined) || v;
+          aggregatedLedger[k] = (aggregatedLedger[k] as boolean | undefined) || v;
+        }
+      }
+    }
+    bucket.set(e.source, group);
+  }
+
+  const slots: ContextSlotSummary[] = slotOrder.map((slot) => {
+    const bucket = slotBuckets.get(slot)!;
+    const sources: ContextSourceSummary[] = [];
+    let totalInjections = 0;
+    for (const [source, group] of bucket) {
+      sources.push({ source, count: group.count, deltaCount: group.deltaCount, labels: group.labels });
+      totalInjections += group.count;
+    }
+    return { slot, sources, totalInjections };
+  });
+
+  return { slots, aggregatedLedger };
 }
 
 // ── Iteration ↔ event-stream range index ──────────────────────────────

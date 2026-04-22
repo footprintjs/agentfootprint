@@ -44,6 +44,26 @@ const decision = (
   traversalContext: { stageId: decider, runtimeStageId, stageName: decider, depth: 0 },
 });
 
+/**
+ * Enter a fake sub-agent: its root subflow + a synthetic API-slot
+ * subflow (sf-messages) inside it + exit both. This makes the subflow
+ * qualify as a sub-agent under the new "wraps an API slot" heuristic
+ * that selectSubAgents uses to distinguish real sub-agents from
+ * single-agent internal structure.
+ */
+const enterAgent = (
+  rec: ReturnType<typeof agentTimeline>,
+  id: string,
+  name: string,
+  enterAt: string,
+  exitAt: string,
+) => {
+  rec.onSubflowEntry(entry(id, name, enterAt));
+  rec.onSubflowEntry(entry('sf-messages', 'Messages', `${enterAt}.slot`));
+  rec.onSubflowExit(entry('sf-messages', 'Messages', `${enterAt}.slot-end`));
+  rec.onSubflowExit(entry(id, name, exitAt));
+};
+
 // ── P1: base case ──────────────────────────────────────────────────────
 
 describe('AgentTimelineRecorder — topology composition', () => {
@@ -55,14 +75,11 @@ describe('AgentTimelineRecorder — topology composition', () => {
 
   // ── P2: sequential ────────────────────────────────────────────────────
 
-  it('P2 sequential subflows: subAgents derived from topology subflow nodes in order', () => {
+  it('P2 sequential sub-agents (each wraps an API slot): subAgents derived in order', () => {
     const rec = agentTimeline({ id: 'pipeline' });
-    rec.onSubflowEntry(entry('sf-classify', 'Classify', 'c#0'));
-    rec.onSubflowExit(entry('sf-classify', 'Classify', 'c#1'));
-    rec.onSubflowEntry(entry('sf-analyze', 'Analyze', 'a#2'));
-    rec.onSubflowExit(entry('sf-analyze', 'Analyze', 'a#3'));
-    rec.onSubflowEntry(entry('sf-respond', 'Respond', 'r#4'));
-    rec.onSubflowExit(entry('sf-respond', 'Respond', 'r#5'));
+    enterAgent(rec, 'sf-classify', 'Classify', 'c#0', 'c#1');
+    enterAgent(rec, 'sf-analyze', 'Analyze', 'a#2', 'a#3');
+    enterAgent(rec, 'sf-respond', 'Respond', 'r#4', 'r#5');
 
     const subAgents = rec.selectSubAgents();
     expect(subAgents.map((sa) => sa.id)).toEqual(['sf-classify', 'sf-analyze', 'sf-respond']);
@@ -71,16 +88,16 @@ describe('AgentTimelineRecorder — topology composition', () => {
 
   // ── P3: parallel fork ─────────────────────────────────────────────────
 
-  it('P3 parallel fork of subflows: fork-branch nodes + subflow children; timeline surfaces subflow ids only', () => {
+  it('P3 parallel fork of sub-agents: fork-branch nodes + slot-wrapping children → subAgents', () => {
     const rec = agentTimeline({ id: 'parallel' });
     rec.onSubflowEntry(entry('sf-parent', 'Parent', 'p#0'));
+    rec.onSubflowEntry(entry('sf-messages', 'Messages', 'p#0.slot'));
+    rec.onSubflowExit(entry('sf-messages', 'Messages', 'p#0.slot-end'));
     rec.onFork(fork('Parent', ['Alpha', 'Beta'], 'p#1'));
-    rec.onSubflowEntry(entry('sf-alpha', 'Alpha', 'a#2'));
-    rec.onSubflowExit(entry('sf-alpha', 'Alpha', 'a#3'));
-    rec.onSubflowEntry(entry('sf-beta', 'Beta', 'b#4'));
-    rec.onSubflowExit(entry('sf-beta', 'Beta', 'b#5'));
+    enterAgent(rec, 'sf-alpha', 'Alpha', 'a#2', 'a#3');
+    enterAgent(rec, 'sf-beta', 'Beta', 'b#4', 'b#5');
 
-    // Timeline subAgents reflects ALL subflow nodes (parent + 2 branches).
+    // subAgents: all three wrap slots (parent wraps own + alpha/beta wrap theirs)
     expect(rec.selectSubAgents().map((sa) => sa.id)).toEqual(['sf-parent', 'sf-alpha', 'sf-beta']);
 
     // Topology graph carries the full composition shape including forks.
@@ -96,12 +113,13 @@ describe('AgentTimelineRecorder — topology composition', () => {
 
   // ── P4: conditional ───────────────────────────────────────────────────
 
-  it('P4 conditional → subflow: decision-branch node + chosen subflow nested under it', () => {
+  it('P4 conditional → sub-agent: decision-branch node + chosen agent nested under it', () => {
     const rec = agentTimeline({ id: 'router' });
     rec.onSubflowEntry(entry('sf-root', 'Root', 'r#0'));
+    rec.onSubflowEntry(entry('sf-messages', 'Messages', 'r#0.slot'));
+    rec.onSubflowExit(entry('sf-messages', 'Messages', 'r#0.slot-end'));
     rec.onDecision(decision('Route', 'HighRisk', 'r#1'));
-    rec.onSubflowEntry(entry('sf-high', 'HighRisk', 'h#2'));
-    rec.onSubflowExit(entry('sf-high', 'HighRisk', 'h#3'));
+    enterAgent(rec, 'sf-high', 'HighRisk', 'h#2', 'h#3');
 
     const topo = rec.selectTopology();
     const decBranch = topo.nodes.find((n) => n.kind === 'decision-branch')!;
@@ -111,7 +129,7 @@ describe('AgentTimelineRecorder — topology composition', () => {
     expect(decBranch.metadata?.decider).toBe('Route');
     expect(sfHigh.parentId).toBe(decBranch.id);
 
-    // Timeline still exposes the chosen subflow as a sub-agent.
+    // Chosen sub-agent surfaces because it wraps an API slot.
     expect(rec.selectSubAgents().map((s) => s.id)).toContain('sf-high');
   });
 
@@ -131,7 +149,7 @@ describe('AgentTimelineRecorder — topology composition', () => {
 
   it('clear() resets both the entry sequence and the composed topology', () => {
     const rec = agentTimeline();
-    rec.onSubflowEntry(entry('sf-x', 'X', 'x#0'));
+    enterAgent(rec, 'sf-x', 'X', 'x#0', 'x#1');
     expect(rec.selectSubAgents().length).toBeGreaterThan(0);
 
     rec.clear();

@@ -128,6 +128,7 @@ export {
   CostRecorder,
   contextEngineering,
   agentTimeline,
+  AgentTimelineRecorder,
 } from './observe.barrel';
 export type {
   ContextEngineeringRecorder,
@@ -149,5 +150,8 @@ export type {
   RunSummary,
   IterationRange,
   IterationRangeIndex,
+  ContextBySource,
+  ContextSlotSummary,
+  ContextSourceSummary,
   Humanizer,
 } from './observe.barrel';

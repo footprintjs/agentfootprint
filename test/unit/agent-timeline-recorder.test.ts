@@ -270,8 +270,11 @@ describe('AgentTimelineRecorder — 5 pattern tests', () => {
 
     // Sub-agent 'classify' — FlowRecorder fires onSubflowEntry (topology
     // discovers identity), emit events tagged with subflowPath carry the
-    // per-sub-agent content.
+    // per-sub-agent content. Inner sf-messages entry makes it qualify as
+    // a real Agent wrapper under the new heuristic.
     t.onSubflowEntry(fakeSubflowEntry('classify', 'Classify'));
+    t.onSubflowEntry(fakeSubflowEntry('sf-messages', 'Messages'));
+    t.onSubflowExit(fakeSubflowEntry('sf-messages', 'Messages'));
     t.onEmit(subEvt('agentfootprint.stream.llm_start', { iteration: 1 }, ['classify']));
     t.onEmit(
       subEvt(
@@ -284,6 +287,8 @@ describe('AgentTimelineRecorder — 5 pattern tests', () => {
 
     // Sub-agent 'analyze'
     t.onSubflowEntry(fakeSubflowEntry('analyze', 'Analyze'));
+    t.onSubflowEntry(fakeSubflowEntry('sf-messages', 'Messages'));
+    t.onSubflowExit(fakeSubflowEntry('sf-messages', 'Messages'));
     t.onEmit(subEvt('agentfootprint.stream.llm_start', { iteration: 1 }, ['analyze']));
     t.onEmit(
       subEvt(
@@ -296,6 +301,8 @@ describe('AgentTimelineRecorder — 5 pattern tests', () => {
 
     // Sub-agent 'respond'
     t.onSubflowEntry(fakeSubflowEntry('respond', 'Respond'));
+    t.onSubflowEntry(fakeSubflowEntry('sf-messages', 'Messages'));
+    t.onSubflowExit(fakeSubflowEntry('sf-messages', 'Messages'));
     t.onEmit(subEvt('agentfootprint.stream.llm_start', { iteration: 1 }, ['respond']));
     t.onEmit(
       subEvt(

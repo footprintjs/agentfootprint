@@ -205,6 +205,87 @@ describe('AgentTimelineRecorder v2 — humanizer', () => {
   });
 });
 
+// ── P6-ctx: selectContextBySource ──────────────────────────────────────
+
+describe('AgentTimelineRecorder v2 — selectContextBySource', () => {
+  it('groups injections per slot, per source with counts + ledger sums', () => {
+    const t = agentTimeline();
+    t.onEmit(evt('agentfootprint.agent.turn_start', { userMessage: 'q' }));
+    t.onEmit(evt('agentfootprint.stream.llm_start', { iteration: 1 }));
+    // RAG injects 3 docs into messages
+    t.onEmit(
+      evt('agentfootprint.context.rag.chunks', {
+        slot: 'messages',
+        role: 'system',
+        chunkCount: 3,
+        deltaCount: { system: 1 },
+      }),
+    );
+    // Skill adds 1200 chars to system prompt
+    t.onEmit(
+      evt('agentfootprint.context.skill.activated', {
+        slot: 'system-prompt',
+        skillId: 'port-triage',
+        deltaCount: { systemPromptChars: 1200, toolsFromSkill: true },
+      }),
+    );
+    // Memory injects 5 prior turns into messages
+    t.onEmit(
+      evt('agentfootprint.context.memory.injected', {
+        slot: 'messages',
+        count: 5,
+        deltaCount: { memoryMsgs: 5 },
+      }),
+    );
+
+    const ctx = t.selectContextBySource();
+    const msgs = ctx.slots.find((s) => s.slot === 'messages')!;
+    const sys = ctx.slots.find((s) => s.slot === 'system-prompt')!;
+
+    // Messages received 2 injections — one from rag, one from memory
+    expect(msgs.totalInjections).toBe(2);
+    expect(msgs.sources.map((s) => s.source).sort()).toEqual(['memory', 'rag']);
+    const ragSource = msgs.sources.find((s) => s.source === 'rag')!;
+    const memSource = msgs.sources.find((s) => s.source === 'memory')!;
+    expect(ragSource.deltaCount.system).toBe(1);
+    expect(memSource.deltaCount.memoryMsgs).toBe(5);
+
+    // System prompt received 1 injection from 'skill'
+    expect(sys.sources.map((s) => s.source)).toEqual(['skill']);
+    expect(sys.sources[0].deltaCount.systemPromptChars).toBe(1200);
+    expect(sys.sources[0].deltaCount.toolsFromSkill).toBe(true);
+
+    // Aggregated ledger sums numbers, OR's booleans
+    expect(ctx.aggregatedLedger.system).toBe(1);
+    expect(ctx.aggregatedLedger.memoryMsgs).toBe(5);
+    expect(ctx.aggregatedLedger.systemPromptChars).toBe(1200);
+    expect(ctx.aggregatedLedger.toolsFromSkill).toBe(true);
+  });
+
+  it('cursor param returns context injections up to that event index', () => {
+    const t = agentTimeline();
+    t.onEmit(evt('agentfootprint.agent.turn_start', { userMessage: 'q' }));
+    t.onEmit(evt('agentfootprint.stream.llm_start', { iteration: 1 }));
+    t.onEmit(
+      evt('agentfootprint.context.rag.chunks', {
+        slot: 'messages',
+        role: 'system',
+        chunkCount: 3,
+        deltaCount: { system: 1 },
+      }),
+    );
+
+    // Cursor before the RAG injection (event index 1 = llm_start): no RAG yet
+    const before = t.selectContextBySource(1);
+    expect(before.slots.every((s) => s.totalInjections === 0)).toBe(true);
+
+    // Cursor at the RAG injection (event index 2): RAG visible
+    const at = t.selectContextBySource(2);
+    const msgs = at.slots.find((s) => s.slot === 'messages')!;
+    expect(msgs.totalInjections).toBe(1);
+  });
+});
+
 // ── P6: iteration range index ──────────────────────────────────────────
 
 describe('AgentTimelineRecorder v2 — selectIterationRanges', () => {
