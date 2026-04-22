@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.22.0]
+
+### attachRecorder() on every runner — multi-agent flows end-to-end
+
+- **FlowChartRunner / ConditionalRunner / ParallelRunner / SwarmRunner**
+  all gain `attachRecorder(recorder)` matching the AgentRunner contract.
+  Returns detach function; idempotent on recorder id.
+- Without this, `<Lens for={runner} />` for these multi-agent
+  composition runners fell back to `runner.observe()` + flat
+  AgentStreamEvent translation — losing `subflowPath`, which
+  broke multi-agent grouping in Lens (subAgents always empty).
+- New shared helper `attachRecorderToList()` so the four
+  composition runners + AgentRunner stay in sync; future *Runner
+  classes get the same behavior with one line of glue.
+- 1960 / 1960 tests pass.
+
+End-to-end multi-agent now works in `<Lens for={runner} />`:
+- FlowChart pipeline (classify → analyze → respond) renders 3
+  stacked sub-agent boxes
+- Conditional / Parallel / Swarm samples render the right number
+  of sub-agent boxes for their composition pattern
+
 ## [1.21.0]
 
 ### Multi-agent foundations

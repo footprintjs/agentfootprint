@@ -23,6 +23,7 @@ import type { RunnerLike } from '../types';
 import type { AgentRecorder } from '../core';
 import { RecorderBridge } from '../recorders/RecorderBridge';
 import { forwardEmitRecorders } from '../recorders/forwardEmitRecorders';
+import { attachRecorderToList } from '../recorders/attachRecorderHelper';
 import type { MultiAgentState } from '../scope/types';
 import type { AgentStreamEvent, AgentStreamEventHandler } from '../streaming';
 import { createStreamEventRecorder, EventDispatcher } from '../streaming';
@@ -234,6 +235,18 @@ export class FlowChartRunner {
   /** Subscribe to the runner's live stream of events. See AgentRunner.observe(). */
   observe(handler: AgentStreamEventHandler): () => void {
     return this.dispatcher.observe(handler);
+  }
+
+  /**
+   * Attach a recorder POST-BUILD. Mirrors AgentRunner.attachRecorder.
+   * Lets `<Lens for={runner} />` consume EmitEvents directly (real
+   * runtimeStageId + subflowPath) — required for multi-agent grouping
+   * since FlowChart mounts each sub-agent as a subflow named by
+   * `agentConfig.id`.
+   */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  attachRecorder(recorder: any): () => void {
+    return attachRecorderToList(this.recorders, recorder);
   }
 
   /** Get the flowchart spec (stage graph metadata). */

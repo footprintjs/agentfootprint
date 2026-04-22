@@ -34,6 +34,7 @@ import { createAgentRenderer } from '../lib/narrative';
 import type { AgentStreamEvent, AgentStreamEventHandler } from '../streaming';
 import { createStreamEventRecorder, EventDispatcher } from '../streaming';
 import { forwardEmitRecorders } from '../recorders/forwardEmitRecorders';
+import { attachRecorderToList } from '../recorders/attachRecorderHelper';
 import { RecorderBridge } from '../recorders/RecorderBridge';
 import { annotateSpecIcons } from './specIcons';
 import type { SpecLike } from './specIcons';
@@ -358,6 +359,12 @@ export class SwarmRunner {
   /** Subscribe to the runner's live stream of events. See AgentRunner.observe(). */
   observe(handler: AgentStreamEventHandler): () => void {
     return this.dispatcher.observe(handler);
+  }
+
+  /** Attach a recorder POST-BUILD. See AgentRunner.attachRecorder. */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  attachRecorder(recorder: any): () => void {
+    return attachRecorderToList(this.recorders, recorder);
   }
 
   /** Get conversation history (for multi-turn). */

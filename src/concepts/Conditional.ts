@@ -53,6 +53,7 @@ import { createAgentRenderer } from '../lib/narrative';
 import type { AgentStreamEvent, AgentStreamEventHandler } from '../streaming';
 import { createStreamEventRecorder, EventDispatcher } from '../streaming';
 import { forwardEmitRecorders } from '../recorders/forwardEmitRecorders';
+import { attachRecorderToList } from '../recorders/attachRecorderHelper';
 
 /** True iff the runner exposes `toFlowChart()` for subflow composition. */
 function hasFlowChart(runner: RunnerLike): runner is RunnerLike & { toFlowChart(): FlowChartDef } {
@@ -292,6 +293,16 @@ export class ConditionalRunner {
   /** Subscribe to the runner's live stream of events. See AgentRunner.observe(). */
   observe(handler: AgentStreamEventHandler): () => void {
     return this.dispatcher.observe(handler);
+  }
+
+  /**
+   * Attach a recorder POST-BUILD. See AgentRunner.attachRecorder.
+   * Lets `<Lens for={runner} />` consume EmitEvents directly so
+   * subflowPath flows through for multi-agent grouping.
+   */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  attachRecorder(recorder: any): () => void {
+    return attachRecorderToList(this.opts.recorders as AgentRecorder[], recorder);
   }
 
   private buildChart(): FlowChartDef {
