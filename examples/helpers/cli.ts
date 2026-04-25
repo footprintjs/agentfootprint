@@ -9,16 +9,23 @@
  * whatever provider they've selected.
  */
 
-import { fileURLToPath } from 'url';
-
 /**
  * True if the current module is being executed directly (e.g. `npx tsx file.ts`)
  * rather than imported. Compare the resolved file path rather than the raw
  * `import.meta.url` because the URL carries a `file://` scheme and
  * `process.argv[1]` is a plain filesystem path.
+ *
+ * In the browser (where `process` doesn't exist) this always returns `false`
+ * so examples can be imported as modules in playgrounds and bundlers without
+ * pulling in Node's `url` module.
  */
 export function isCliEntry(importMetaUrl: string): boolean {
+  // Browser-safe guard: bail out before touching `process` or `url`.
+  if (typeof process === 'undefined' || !process.argv) return false;
   try {
+    // Dynamic require so bundlers don't hoist `url` into a browser graph.
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { fileURLToPath } = require('url') as typeof import('url');
     return fileURLToPath(importMetaUrl) === process.argv[1];
   } catch {
     return false;
