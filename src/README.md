@@ -1,20 +1,25 @@
-# `src/v2/` — agentfootprint v2
+# `src/` — agentfootprint
 
 > The grouping layer over footprintjs.
 
 ## What lives here
 
-Everything under `v2/` composes into one public API: **primitives** (LLMCall, Agent), **compositions** (Sequence/Parallel/Conditional/Loop — Phase 4), **patterns** (Swarm/MapReduce/… — Phase 6), all backed by a **typed event registry** with an **observability layer** consumers opt into in one line.
+Everything under `src/` composes into one public API: **primitives** (LLMCall, Agent), **compositions** (Sequence/Parallel/Conditional/Loop), **patterns** (Swarm/MapReduce/Debate/Reflection/SelfConsistency/ToT), a **typed event registry** with an **observability layer** consumers opt into in one line, and a self-contained **memory subsystem** (beats / facts / embeddings / pipelines).
 
 ```
-src/v2/
-├── events/             The stable contract: 47 typed events, the dispatcher.
+src/
+├── events/             The stable contract: 45+ typed events, the dispatcher.
 ├── conventions.ts      Builder↔Recorder protocol (subflow IDs, injection keys).
-├── adapters/           Ports-and-Adapters outer ring (LLM providers, stores, …).
-├── bridge/             Bridging helpers (footprintjs → v2 event meta).
-├── core/               Primitives (LLMCall, Agent) + slot subflow builders.
+├── adapters/           Ports-and-Adapters outer ring (LLM provider interface + Mock).
+├── bridge/             Bridging helpers (footprintjs → agentfootprint event meta).
+├── core/               Primitives (LLMCall, Agent) + slot subflow builders + Tool.
+├── core-flow/          Compositions (Sequence, Parallel, Conditional, Loop).
+├── patterns/           Pattern factories (Swarm, MapReduce, Reflection, Debate, …).
+├── memory/             Beats, facts, embeddings, pipelines, stores. Also reachable
+│                       via the `agentfootprint/memory` subpath (avoids type
+│                       collision between adapter `MemoryStore` and memory store types).
 ├── recorders/core/     Semantic grouping (raw events → typed events).
-├── recorders/observability/   Tier-3 features consumers enable (thinking, logging, …).
+├── recorders/observability/   Tier-3 features consumers enable (Flowchart, Logging, Thinking).
 └── index.ts            Public barrel. Everything consumers import.
 ```
 
@@ -43,7 +48,7 @@ Dependency flow is one-way, bottom-up. Each layer depends on lower layers only.
 
 ## Axioms
 
-These invariants are preserved across every file in `v2/`:
+These invariants are preserved across every file in `src/`:
 
 - **A1** Every runner exposes `.toFlowChart()` — composition nests freely.
 - **A2** The API boundary IS the atom boundary. Consumers never parse subflow paths.
@@ -73,7 +78,7 @@ Components:
 | `events/` | The stable public event contract. Additive within a major. |
 | `conventions.ts` | The builder↔recorder coordination protocol. One file, one source of truth. |
 | `adapters/` | Provider-agnostic interfaces. External dependencies hide behind ports. |
-| `bridge/` | Translation helpers between footprintjs and v2 event meta. |
+| `bridge/` | Translation helpers between footprintjs and agentfootprint event meta. |
 | `core/` | Consumer-facing primitives. Symmetric builder API across all runners. |
 | `recorders/core/` | Library-owned grouping — emits the domain events the library promises. |
 | `recorders/observability/` | Consumer opt-in features via `.enable.*`. Each one line. |

@@ -197,3 +197,28 @@ export { MockProvider, type MockProviderOptions } from './adapters/llm/MockProvi
 // Patterns — factory functions composing primitives + core-flow into
 // well-known agent patterns from the research literature.
 export * from './patterns/index.js';
+
+// Memory subsystem — narrative beats, fact extraction, embedding-based
+// retrieval, and pipelines that compose them. Top-level barrel exports
+// the most-used factories; the full subsystem (including types that
+// would collide with adapter types like MemoryStore) is reachable via
+// the `agentfootprint/memory` subpath import.
+export {
+  // Pipelines
+  defaultPipeline,
+  ephemeralPipeline,
+  factPipeline,
+  narrativePipeline,
+  semanticPipeline,
+  autoPipeline,
+} from './memory/pipeline/index.js';
+export {
+  // Beat extractors
+  heuristicExtractor,
+  llmExtractor,
+} from './memory/beats/index.js';
+export {
+  // Fact extractors
+  patternFactExtractor,
+  llmFactExtractor,
+} from './memory/facts/index.js';

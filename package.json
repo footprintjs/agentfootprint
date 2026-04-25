@@ -83,105 +83,15 @@
       "import": "./dist/esm/index.js",
       "require": "./dist/index.js"
     },
-    "./providers": {
-      "types": "./dist/types/providers.barrel.d.ts",
-      "import": "./dist/esm/providers.barrel.js",
-      "require": "./dist/providers.barrel.js"
-    },
-    "./instructions": {
-      "types": "./dist/types/instructions.barrel.d.ts",
-      "import": "./dist/esm/instructions.barrel.js",
-      "require": "./dist/instructions.barrel.js"
-    },
-    "./skills": {
-      "types": "./dist/types/skills.barrel.d.ts",
-      "import": "./dist/esm/skills.barrel.js",
-      "require": "./dist/skills.barrel.js"
-    },
-    "./observe": {
-      "types": "./dist/types/observe.barrel.d.ts",
-      "import": "./dist/esm/observe.barrel.js",
-      "require": "./dist/observe.barrel.js"
-    },
-    "./resilience": {
-      "types": "./dist/types/resilience.barrel.d.ts",
-      "import": "./dist/esm/resilience.barrel.js",
-      "require": "./dist/resilience.barrel.js"
-    },
-    "./security": {
-      "types": "./dist/types/security.barrel.d.ts",
-      "import": "./dist/esm/security.barrel.js",
-      "require": "./dist/security.barrel.js"
-    },
-    "./explain": {
-      "types": "./dist/types/explain.barrel.d.ts",
-      "import": "./dist/esm/explain.barrel.js",
-      "require": "./dist/explain.barrel.js"
-    },
-    "./stream": {
-      "types": "./dist/types/stream.barrel.d.ts",
-      "import": "./dist/esm/stream.barrel.js",
-      "require": "./dist/stream.barrel.js"
-    },
-    "./patterns": {
-      "types": "./dist/types/patterns.barrel.d.ts",
-      "import": "./dist/esm/patterns.barrel.js",
-      "require": "./dist/patterns.barrel.js"
-    },
     "./memory": {
-      "types": "./dist/types/memory.barrel.d.ts",
-      "import": "./dist/esm/memory.barrel.js",
-      "require": "./dist/memory.barrel.js"
-    }
-  },
-  "typesVersions": {
-    "*": {
-      "providers": [
-        "dist/types/providers.barrel.d.ts"
-      ],
-      "instructions": [
-        "dist/types/instructions.barrel.d.ts"
-      ],
-      "observe": [
-        "dist/types/observe.barrel.d.ts"
-      ],
-      "resilience": [
-        "dist/types/resilience.barrel.d.ts"
-      ],
-      "security": [
-        "dist/types/security.barrel.d.ts"
-      ],
-      "explain": [
-        "dist/types/explain.barrel.d.ts"
-      ],
-      "stream": [
-        "dist/types/stream.barrel.d.ts"
-      ],
-      "patterns": [
-        "dist/types/patterns.barrel.d.ts"
-      ],
-      "memory": [
-        "dist/types/memory.barrel.d.ts"
-      ]
+      "types": "./dist/types/memory/index.d.ts",
+      "import": "./dist/esm/memory/index.js",
+      "require": "./dist/memory/index.js"
     }
   },
   "sideEffects": false,
   "peerDependencies": {
-    "@anthropic-ai/sdk": ">=0.30.0",
-    "@aws-sdk/client-bedrock-runtime": ">=3.0.0",
-    "footprintjs": ">=4.14.0",
-    "openai": ">=4.0.0"
-  },
-  "peerDependenciesMeta": {
-    "@anthropic-ai/sdk": {
-      "optional": true
-    },
-    "openai": {
-      "optional": true
-    },
-    "@aws-sdk/client-bedrock-runtime": {
-      "optional": true
-    }
+    "footprintjs": ">=4.14.0"
   },
   "devDependencies": {
     "@types/node": "^25.5.2",
