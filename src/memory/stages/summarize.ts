@@ -55,7 +55,7 @@
  */
 import type { TypedScope } from 'footprintjs';
 import type { MemoryEntry } from '../entry';
-import type { Message } from '../../types/messages';
+import type { LLMMessage as Message } from '../../adapters/types';
 import type { MemoryState } from './types';
 
 export interface SummarizeConfig {

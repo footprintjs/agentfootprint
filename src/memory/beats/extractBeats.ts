@@ -15,7 +15,7 @@
  * Returning an empty array is valid — not every turn produces a beat.
  */
 import type { TypedScope } from 'footprintjs';
-import type { Message } from '../../types/messages';
+import type { LLMMessage as Message } from '../../adapters/types';
 import type { MemoryEntry } from '../entry';
 import type { MemoryState } from '../stages';
 import type { BeatExtractor } from './extractor';

@@ -45,7 +45,7 @@ import type { TypedScope } from 'footprintjs';
 import { decide } from 'footprintjs';
 import type { FlowChartBuilder } from 'footprintjs';
 import type { MemoryEntry } from '../entry';
-import type { Message } from '../../types/messages';
+import type { LLMMessage as Message } from '../../adapters/types';
 import type { MemoryState } from './types';
 import { approximateTokenCounter, countMessageTokens, type TokenCounter } from './tokenize';
 

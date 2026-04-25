@@ -18,7 +18,7 @@
  * rules-based extractor for a specific domain, or a hybrid that
  * combines heuristics with LLM rescoring.
  */
-import type { Message } from '../../types/messages';
+import type { LLMMessage as Message } from '../../adapters/types';
 import type { NarrativeBeat } from './types';
 
 export interface ExtractArgs {

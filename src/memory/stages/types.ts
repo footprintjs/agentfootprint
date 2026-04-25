@@ -16,7 +16,7 @@
  */
 import type { MemoryIdentity } from '../identity';
 import type { MemoryEntry } from '../entry';
-import type { Message } from '../../types/messages';
+import type { LLMMessage as Message } from '../../adapters/types';
 
 export interface MemoryState {
   /**

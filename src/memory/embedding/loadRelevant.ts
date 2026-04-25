@@ -22,7 +22,7 @@
  *   non-vector store is a config bug, not a runtime condition.
  */
 import type { TypedScope } from 'footprintjs';
-import type { Message } from '../../types/messages';
+import type { LLMMessage as Message } from '../../adapters/types';
 import type { MemoryStore } from '../store';
 import type { MemoryState } from '../stages';
 import type { Embedder } from './types';

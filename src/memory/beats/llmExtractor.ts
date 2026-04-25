@@ -36,7 +36,7 @@
  * });
  * ```
  */
-import type { LLMProvider, Message } from '../../types';
+import type { LLMProvider, LLMMessage as Message } from '../../adapters/types';
 import type { BeatExtractor, ExtractArgs } from './extractor';
 import type { NarrativeBeat } from './types';
 import { asImportance } from './types';

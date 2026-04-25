@@ -38,7 +38,7 @@
  * });
  * ```
  */
-import type { LLMProvider, Message } from '../../types';
+import type { LLMProvider, LLMMessage as Message } from '../../adapters/types';
 import type { FactExtractArgs, FactExtractor } from './extractor';
 import type { Fact } from './types';
 import { asConfidence } from './types';

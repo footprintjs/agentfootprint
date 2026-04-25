@@ -19,7 +19,7 @@
  * the dependency-free baseline.
  */
 
-import type { Message } from '../../types/messages';
+import type { LLMMessage as Message } from '../../adapters/types';
 
 /** A function that returns the token count of a string. */
 export type TokenCounter = (text: string) => number;

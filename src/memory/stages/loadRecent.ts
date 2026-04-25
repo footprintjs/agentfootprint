@@ -22,7 +22,7 @@
  */
 import type { TypedScope } from 'footprintjs';
 import type { MemoryStore } from '../store';
-import type { Message } from '../../types/messages';
+import type { LLMMessage as Message } from '../../adapters/types';
 import type { MemoryState } from './types';
 
 export interface LoadRecentConfig {

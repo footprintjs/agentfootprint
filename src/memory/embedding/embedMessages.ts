@@ -20,7 +20,7 @@
  */
 import type { TypedScope } from 'footprintjs';
 import type { Embedder } from './types';
-import type { Message } from '../../types/messages';
+import type { LLMMessage as Message } from '../../adapters/types';
 import type { MemoryState } from '../stages';
 
 /** Extend MemoryState to carry per-message embeddings for writeMessages. */
