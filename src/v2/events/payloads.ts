@@ -1,0 +1,416 @@
+/**
+ * Event payload types — the 45 typed event payloads across 13 domains.
+ *
+ * Pattern: Discriminated Union (Gang of Four inspired, TS-native).
+ * Role:    Contract layer of Event-Driven Hexagonal Architecture.
+ * Emits:   (types only).
+ */
+
+import type {
+  CompositionKind,
+  ContextLifetime,
+  ContextRecency,
+  ContextRole,
+  ContextSlot,
+  ContextSource,
+  LLMProviderName,
+  ToolProtocol,
+} from './types.js';
+
+// ─── Tier 1+2: Core Domain (library-emitted) ──────────────────────────
+
+// composition.* (8)
+export interface CompositionEnterPayload {
+  readonly kind: CompositionKind;
+  readonly id: string;
+  readonly name: string;
+  readonly childCount: number;
+}
+
+export interface CompositionExitPayload {
+  readonly kind: CompositionKind;
+  readonly id: string;
+  readonly status: 'ok' | 'err' | 'break' | 'budget_exhausted';
+  readonly durationMs: number;
+}
+
+export interface ParallelForkStartPayload {
+  readonly parentId: string;
+  readonly branches: readonly { id: string; name: string }[];
+}
+
+export interface ParallelBranchCompletePayload {
+  readonly parentId: string;
+  readonly branchId: string;
+  readonly status: 'ok' | 'err';
+  readonly durationMs: number;
+}
+
+export interface ParallelMergeEndPayload {
+  readonly parentId: string;
+  readonly strategy: 'llm' | 'fn';
+  readonly resultSummary: string;
+  readonly mergedBranchCount: number;
+}
+
+export interface ConditionalRouteDecidedPayload {
+  readonly conditionalId: string;
+  readonly chosen: string;
+  readonly rationale?: string;
+  readonly evidence?: unknown;
+}
+
+export interface LoopIterationStartPayload {
+  readonly loopId: string;
+  readonly iteration: number;
+}
+
+export interface LoopIterationExitPayload {
+  readonly loopId: string;
+  readonly iteration: number;
+  readonly reason: 'budget' | 'guard_false' | 'break' | 'body_complete';
+}
+
+// agent.* (6)
+export interface AgentTurnStartPayload {
+  readonly turnIndex: number;
+  readonly userPrompt: string;
+}
+
+export interface AgentTurnEndPayload {
+  readonly turnIndex: number;
+  readonly finalContent: string;
+  readonly totalInputTokens: number;
+  readonly totalOutputTokens: number;
+  readonly iterationCount: number;
+  readonly durationMs: number;
+}
+
+export interface AgentIterationStartPayload {
+  readonly turnIndex: number;
+  readonly iterIndex: number;
+}
+
+export interface AgentIterationEndPayload {
+  readonly turnIndex: number;
+  readonly iterIndex: number;
+  readonly toolCallCount: number;
+}
+
+export interface AgentRouteDecidedPayload {
+  readonly turnIndex: number;
+  readonly iterIndex: number;
+  readonly chosen: 'tool-calls' | 'final';
+  readonly rationale?: string;
+}
+
+export interface AgentHandoffPayload {
+  readonly fromAgentId: string;
+  readonly toAgentId: string;
+  readonly reason?: string;
+  readonly viaProtocol?: 'native' | 'mcp' | 'http';
+}
+
+// stream.* (5)
+export interface LLMStartPayload {
+  readonly iteration: number;
+  readonly provider: LLMProviderName;
+  readonly model: string;
+  readonly systemPromptChars: number;
+  readonly messagesCount: number;
+  readonly toolsCount: number;
+  readonly estimatedPromptTokens?: number;
+  readonly temperature?: number;
+  readonly providerRequestRef?: string;
+}
+
+export interface LLMEndPayload {
+  readonly iteration: number;
+  readonly content: string;
+  readonly toolCallCount: number;
+  readonly usage: {
+    readonly input: number;
+    readonly output: number;
+    readonly cacheRead?: number;
+    readonly cacheWrite?: number;
+  };
+  readonly stopReason: string;
+  readonly durationMs: number;
+  readonly providerResponseRef?: string;
+}
+
+export interface LLMTokenPayload {
+  readonly iteration: number;
+  readonly tokenIndex: number;
+  readonly content: string;
+}
+
+export interface ToolStartPayload {
+  readonly toolName: string;
+  readonly toolCallId: string;
+  readonly args: Readonly<Record<string, unknown>>;
+  readonly parallelCount?: number;
+  readonly protocol?: ToolProtocol;
+}
+
+export interface ToolEndPayload {
+  readonly toolCallId: string;
+  readonly result: unknown;
+  readonly error?: boolean;
+  readonly durationMs: number;
+}
+
+// context.* (4) — THE CORE DOMAIN
+export interface ContextInjectedPayload {
+  readonly contentSummary: string;
+  readonly contentHash: string;
+  readonly rawContent?: string;
+  readonly slot: ContextSlot;
+  readonly asRole?: ContextRole;
+  readonly asRecency?: ContextRecency;
+  readonly position?: number;
+  readonly sectionTag?: string;
+  readonly source: ContextSource;
+  readonly sourceId?: string;
+  readonly upstreamRef?: string;
+  readonly reason: string;
+  readonly retrievalScore?: number;
+  readonly rankPosition?: number;
+  readonly threshold?: number;
+  readonly budgetSpent?: { readonly tokens: number; readonly fractionOfCap: number };
+  readonly expiresAfter?: ContextLifetime;
+}
+
+export interface ContextEvictedPayload {
+  readonly slot: ContextSlot;
+  readonly contentHash: string;
+  readonly reason: 'budget' | 'stale' | 'low_score' | 'policy' | 'user_revoked';
+  readonly survivalMs: number;
+}
+
+export interface ContextSlotComposedPayload {
+  readonly slot: ContextSlot;
+  readonly iteration: number;
+  readonly budget: {
+    readonly cap: number;
+    readonly used: number;
+    readonly headroomChars: number;
+  };
+  readonly sourceBreakdown: Readonly<
+    Partial<Record<ContextSource, { readonly chars: number; readonly count: number }>>
+  >;
+  readonly orderingStrategy?: string;
+  readonly droppedCount: number;
+  readonly droppedSummaries: readonly string[];
+}
+
+export interface ContextBudgetPressurePayload {
+  readonly slot: ContextSlot;
+  readonly capTokens: number;
+  readonly projectedTokens: number;
+  readonly overflowBy: number;
+  readonly planAction: 'evict' | 'summarize' | 'abort';
+}
+
+// error.fatal + pause (always-on from library core)
+export interface ErrorFatalPayload {
+  readonly error: string;
+  readonly stage: string;
+  readonly scope: string;
+}
+
+export interface PauseRequestPayload {
+  readonly reason: string;
+  readonly questionPayload: Readonly<Record<string, unknown>>;
+}
+
+export interface PauseResumePayload {
+  readonly resumeInput: Readonly<Record<string, unknown>>;
+  readonly pausedDurationMs: number;
+}
+
+// ─── Tier 3: Observability Layers (recorder-emitted, opt-in) ──────────
+
+// memory.* (4)
+export interface MemoryStrategyAppliedPayload {
+  readonly strategyId: string;
+  readonly strategyKind:
+    | 'sliding-window'
+    | 'summarizing'
+    | 'semantic'
+    | 'fact-extraction'
+    | 'hybrid';
+  readonly reason: string;
+  readonly scoreEvidence?: Readonly<Record<string, unknown>>;
+  readonly inputMemoryCount: number;
+  readonly outputMemoryCount: number;
+  readonly droppedIds: readonly string[];
+  readonly addedIds: readonly string[];
+}
+
+export interface MemoryAttachedPayload {
+  readonly memoryId: string;
+  readonly contentSummary: string;
+  readonly score?: number;
+  readonly rank?: number;
+  readonly source: 'store' | 'auto-extract' | 'manual';
+  readonly retriever?: 'pinecone' | 'weaviate' | 'qdrant' | 'chroma' | 'custom';
+}
+
+export interface MemoryDetachedPayload {
+  readonly memoryId: string;
+  readonly reason: 'stale' | 'budget' | 'score_low' | 'policy';
+}
+
+export interface MemoryWrittenPayload {
+  readonly memoryId: string;
+  readonly contentSummary: string;
+  readonly source: 'auto' | 'manual';
+  readonly actor?: string;
+}
+
+// tools.* (3)
+export interface ToolsOfferedPayload {
+  readonly availableIds: readonly string[];
+  readonly withheldIds: readonly string[];
+  readonly withheldReasons: Readonly<
+    Record<string, 'permission' | 'skill_inactive' | 'gated' | 'cost_guard'>
+  >;
+  readonly reason: string;
+}
+
+export interface ToolsActivatedPayload {
+  readonly toolId: string;
+  readonly reason: 'skill_activated' | 'autoActivate' | 'permission_granted';
+  readonly source?: string;
+}
+
+export interface ToolsDeactivatedPayload {
+  readonly toolId: string;
+  readonly reason: 'skill_deactivated' | 'permission_revoked';
+}
+
+// skill.* (2)
+export interface SkillActivatedPayload {
+  readonly skillId: string;
+  readonly reason: 'autoActivate' | 'read_skill_result' | 'manual';
+  readonly injectedTools?: readonly string[];
+  readonly injectedSystemPromptChars?: number;
+}
+
+export interface SkillDeactivatedPayload {
+  readonly skillId: string;
+  readonly reason: string;
+}
+
+// permission.* (3)
+export interface PermissionCheckPayload {
+  readonly capability:
+    | 'tool_call'
+    | 'memory_read'
+    | 'memory_write'
+    | 'external_net'
+    | 'user_data';
+  readonly actor: string;
+  readonly target?: string;
+  readonly result: 'allow' | 'deny' | 'gate_open';
+  readonly policyEngine?: 'opa' | 'cerbos' | 'custom';
+  readonly policyRuleId?: string;
+  readonly rationale?: string;
+}
+
+export interface PermissionGateOpenedPayload {
+  readonly gateId: string;
+  readonly openedBy: string;
+  readonly expiresAt?: number;
+}
+
+export interface PermissionGateClosedPayload {
+  readonly gateId: string;
+  readonly reason: string;
+}
+
+// risk.* + fallback.* (2)
+export interface RiskFlaggedPayload {
+  readonly severity: 'low' | 'medium' | 'high' | 'critical';
+  readonly category:
+    | 'pii'
+    | 'prompt_injection'
+    | 'runaway_loop'
+    | 'cost_overrun'
+    | 'hallucination_flag';
+  readonly detector: 'nemo_guardrails' | 'llama_guard' | 'custom' | 'heuristic';
+  readonly evidence: Readonly<Record<string, unknown>>;
+  readonly action: 'warn' | 'redact' | 'abort';
+}
+
+export interface FallbackTriggeredPayload {
+  readonly kind: 'provider' | 'tool' | 'skill';
+  readonly primary: string;
+  readonly fallback: string;
+  readonly reason: string;
+}
+
+// cost.* (2)
+export interface CostTickPayload {
+  readonly scope: 'iteration' | 'turn' | 'run';
+  readonly tokensInput: number;
+  readonly tokensOutput: number;
+  readonly estimatedUsd: number;
+  readonly cumulative: {
+    readonly tokensInput: number;
+    readonly tokensOutput: number;
+    readonly estimatedUsd: number;
+  };
+}
+
+export interface CostLimitHitPayload {
+  readonly kind: 'max_tokens' | 'max_cost' | 'max_iterations' | 'max_wallclock';
+  readonly limit: number;
+  readonly actual: number;
+  readonly action: 'abort' | 'warn' | 'degrade';
+}
+
+// eval.* (2)
+export interface EvalScorePayload {
+  readonly metricId: string;
+  readonly value: number;
+  readonly threshold?: number;
+  readonly target: 'iteration' | 'turn' | 'run' | 'toolCall';
+  readonly targetRef: string;
+  readonly evaluator?: 'llm' | 'fn' | 'heuristic';
+  readonly evidence?: Readonly<Record<string, unknown>>;
+}
+
+export interface EvalThresholdCrossedPayload {
+  readonly metricId: string;
+  readonly direction: 'above' | 'below';
+  readonly value: number;
+  readonly threshold: number;
+  readonly actionTaken?: string;
+}
+
+// error.* (retry/recover; fatal is Tier 1)
+export interface ErrorRetriedPayload {
+  readonly attempt: number;
+  readonly maxAttempts: number;
+  readonly lastError: string;
+  readonly backoffMs: number;
+  readonly reason: string;
+}
+
+export interface ErrorRecoveredPayload {
+  readonly attempt: number;
+  readonly totalDurationMs: number;
+}
+
+// embedding.* (1)
+export interface EmbeddingGeneratedPayload {
+  readonly model: string;
+  readonly provider: 'openai' | 'cohere' | 'voyage' | 'local' | 'custom';
+  readonly inputKind: 'query' | 'document';
+  readonly dimension: number;
+  readonly count: number;
+  readonly durationMs: number;
+  readonly tokensSpent?: number;
+}
