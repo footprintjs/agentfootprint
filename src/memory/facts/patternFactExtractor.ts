@@ -25,19 +25,7 @@ import { asConfidence } from './types';
 
 /** Extract plaintext from any Message content shape. */
 function textOf(message: Message): string {
-  const c = message.content;
-  if (typeof c === 'string') return c;
-  if (Array.isArray(c)) {
-    const parts: string[] = [];
-    for (const block of c) {
-      if (block && typeof block === 'object') {
-        const b = block as { type?: string; text?: string };
-        if (b.type === 'text' && typeof b.text === 'string') parts.push(b.text);
-      }
-    }
-    return parts.join(' ');
-  }
-  return '';
+  return message.content ?? '';
 }
 
 /**

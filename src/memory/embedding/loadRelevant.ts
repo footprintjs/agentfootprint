@@ -74,17 +74,7 @@ function defaultQueryFrom(scope: TypedScope<MemoryState>): string {
   for (let i = source.length - 1; i >= 0; i--) {
     const m = source[i];
     if (m.role !== 'user') continue;
-    if (typeof m.content === 'string') return m.content;
-    if (Array.isArray(m.content)) {
-      const parts: string[] = [];
-      for (const block of m.content) {
-        if (block && typeof block === 'object') {
-          const b = block as { type?: string; text?: string };
-          if (b.type === 'text' && typeof b.text === 'string') parts.push(b.text);
-        }
-      }
-      if (parts.length > 0) return parts.join(' ');
-    }
+    if (m.content) return m.content;
   }
   return '';
 }

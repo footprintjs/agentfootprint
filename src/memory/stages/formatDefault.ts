@@ -85,22 +85,7 @@ function defaultRenderEntry(entry: MemoryEntry<Message>): string {
   const updatedAttr =
     entry.updatedAt !== undefined ? ` updated="${new Date(entry.updatedAt).toISOString()}"` : '';
 
-  // Content extraction — handle both string and content-block variants.
-  let text: string;
-  if (typeof msg.content === 'string') {
-    text = msg.content;
-  } else if (Array.isArray(msg.content)) {
-    const parts: string[] = [];
-    for (const block of msg.content) {
-      if (typeof block === 'object' && block !== null) {
-        const b = block as { type?: string; text?: string };
-        if (b.type === 'text' && typeof b.text === 'string') parts.push(b.text);
-      }
-    }
-    text = parts.join(' ');
-  } else {
-    text = '';
-  }
+  const text = msg.content ?? '';
 
   const role = msg.role ?? 'unknown';
   return `<memory role="${role}"${turnAttr}${updatedAttr}>\n${escapeMemoryTag(text)}\n</memory>`;

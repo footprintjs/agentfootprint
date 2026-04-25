@@ -106,22 +106,7 @@ function formatMessagesForExtractor(messages: readonly Message[], turnNumber: nu
     const m = messages[i];
     if (m.role === 'system') continue;
     const ref = refId(turnNumber, i);
-    const content =
-      typeof m.content === 'string'
-        ? m.content
-        : Array.isArray(m.content)
-        ? m.content
-            .map((b) => {
-              if (b && typeof b === 'object') {
-                const blk = b as { type?: string; text?: string };
-                if (blk.type === 'text' && typeof blk.text === 'string') return blk.text;
-              }
-              return '';
-            })
-            .filter(Boolean)
-            .join(' ')
-        : '';
-    lines.push(`[${ref}] ${m.role}: ${content}`);
+    lines.push(`[${ref}] ${m.role}: ${m.content}`);
   }
   return lines.join('\n');
 }
@@ -199,13 +184,12 @@ export function llmFactExtractor(config: LLMFactExtractorConfig): FactExtractor 
       const prior = formatExistingFacts(args.existing ?? [], includeExistingLimit);
       const userContent = prior.length > 0 ? `${prior}\n\n${turn}` : turn;
 
-      const response = await provider.chat(
-        [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userContent },
-        ],
-        args.signal ? { signal: args.signal } : undefined,
-      );
+      const response = await provider.complete({
+        systemPrompt,
+        messages: [{ role: 'user', content: userContent }],
+        model: 'memory-extractor',
+        ...(args.signal ? { signal: args.signal } : {}),
+      });
 
       return parseFactsResponse(response.content ?? '', onParseError);
     },

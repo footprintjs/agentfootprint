@@ -50,24 +50,5 @@ export function countMessageTokens(
   message: Message,
   counter: TokenCounter = approximateTokenCounter,
 ): number {
-  if (typeof message.content === 'string') {
-    return counter(message.content);
-  }
-  if (Array.isArray(message.content)) {
-    let total = 0;
-    for (const block of message.content) {
-      if (typeof block === 'object' && block !== null) {
-        const b = block as { type?: string; text?: string };
-        if (b.type === 'text' && typeof b.text === 'string') {
-          total += counter(b.text);
-        } else {
-          // Tool calls, images, etc. Conservative fixed cost so budget
-          // stays bounded even when block shapes are unknown.
-          total += 10;
-        }
-      }
-    }
-    return total;
-  }
-  return 0;
+  return counter(message.content ?? '');
 }
