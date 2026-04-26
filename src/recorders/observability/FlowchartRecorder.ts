@@ -42,7 +42,13 @@
  *     });
  */
 
-import { topologyRecorder, type TopologyRecorder } from 'footprintjs/trace';
+import {
+  boundaryRecorder,
+  topologyRecorder,
+  type BoundaryRecorder,
+  type StepBoundary,
+  type TopologyRecorder,
+} from 'footprintjs/trace';
 import type { CombinedRecorder } from 'footprintjs';
 import type {
   AgentfootprintEvent,
@@ -158,6 +164,80 @@ export interface StepNode {
    * container in drill-down mode.
    */
   readonly isAgentBoundary?: boolean;
+  /**
+   * Primitive kind parsed from the subflow root's description prefix
+   * (e.g., `'Agent: ReAct loop'` → `'Agent'`, `'LLMCall: one-shot'` →
+   * `'LLMCall'`, `'Sequence: 3-step pipeline'` → `'Sequence'`). Set on
+   * `subflow` StepNodes whose description follows the
+   * `'<Kind>: <detail>'` taxonomy convention; undefined otherwise.
+   *
+   * Use: lets downstream renderers (Lens) label a container with the
+   * correct primitive name + subtitle without re-parsing description
+   * strings. For example, an LLMCall sample shows
+   * `'LLMCall · one-shot'` instead of the wrong default
+   * `'Agent · ReAct loop'`.
+   */
+  readonly primitiveKind?: string;
+  /**
+   * True when this StepNode is a top-level boundary for ANY known
+   * primitive (Agent, LLMCall, Sequence, Parallel, Conditional, Loop).
+   * Drives the container/drill-in treatment in renderers like Lens —
+   * each primitive subflow surfaces as its own outlined container,
+   * regardless of whether it's a real ReAct agent or a composition.
+   *
+   * `isAgentBoundary` (narrow — true ONLY for `Agent`) stays available
+   * for callers that need to distinguish "real ReAct agent" from "any
+   * primitive" — useful for cost / iteration / token attribution that
+   * only applies to agents.
+   *
+   * Auxiliary subflows that pattern factories build internally (Swarm's
+   * `IdentityRunner`, mapReduce's `Split` / `Unpack` adapters) carry no
+   * `Kind:` prefix and are correctly NOT flagged as boundaries — they
+   * stay rendered as flat stages within their parent primitive.
+   */
+  readonly isPrimitiveBoundary?: boolean;
+  /**
+   * Payload from this subflow's `inputMapper` — the data that flowed IN
+   * at the boundary entry. Sourced from footprintjs `BoundaryRecorder`
+   * via the engine's `FlowSubflowEvent.mappedInput`. Only set for
+   * `kind === 'subflow'` nodes; topology nodes (`fork-branch` /
+   * `decision-branch`) don't have mapper payloads. Undefined when the
+   * subflow had no `inputMapper` or the mapper produced no output.
+   *
+   * Use: Lens's right-pane node-detail panel renders this as the
+   * "entered with" view — showing the developer exactly what context
+   * the subflow received. Same data is available via the underlying
+   * `BoundaryRecorder.getBoundary(runtimeStageId)` for downstream
+   * libraries that want raw access.
+   */
+  readonly entryPayload?: Readonly<Record<string, unknown>>;
+  /**
+   * Payload at this subflow's exit — the subflow's shared state when the
+   * `outputMapper` ran. Sourced from `BoundaryRecorder` via
+   * `FlowSubflowEvent.outputState`. Only set for `kind === 'subflow'`.
+   * Undefined for in-progress / paused subflows (the engine doesn't fire
+   * `onSubflowExit` until the subflow resumes and exits cleanly) — Lens
+   * should render an "in progress" placeholder in that case.
+   *
+   * Use: paired with `entryPayload`, this is the "exited with" view in
+   * Lens's right-pane node-detail panel. The arrow between two adjacent
+   * boundaries IS literally `prev.exitPayload → next.entryPayload` —
+   * future Lens edges can render that directly.
+   */
+  readonly exitPayload?: Readonly<Record<string, unknown>>;
+  /**
+   * Stable per-execution key — `runtimeStageId` from footprintjs.
+   * Identifies one specific execution of this subflow (loop iterations
+   * get distinct values automatically). Lens uses this to:
+   *   1. Bind hover/click between Trace view and Lens view (same id
+   *      across both projections snaps them in sync).
+   *   2. Look up the underlying `StepBoundary` for raw payload access.
+   *
+   * Only set for `kind === 'subflow'` nodes that came from
+   * `BoundaryRecorder`. Empty string when the engine didn't propagate
+   * a runtime context (defensive default).
+   */
+  readonly runtimeStageId?: string;
 }
 
 /**
@@ -266,7 +346,8 @@ export function attachFlowchart(
 ): FlowchartHandle {
   const builder = new StepGraphBuilder(options.onUpdate);
   const topo = topologyRecorder();
-  const recorder = wrapTopology(topo, builder);
+  const boundaries = boundaryRecorder();
+  const recorder = wrapPrimitiveRecorders(topo, boundaries, builder);
   const offAttach = runnerAttach(recorder);
 
   // Subscribe to ReAct transitions from the v2 dispatcher.
@@ -278,7 +359,7 @@ export function attachFlowchart(
   );
 
   return {
-    getSnapshot: () => builder.snapshot(topo),
+    getSnapshot: () => builder.snapshot(topo, boundaries),
     unsubscribe: () => {
       offAttach();
       offDispatcher();
@@ -341,13 +422,19 @@ class StepGraphBuilder {
 
   constructor(private readonly onUpdate?: (g: StepGraph) => void) {}
 
-  /** Snapshot the graph. Topology param supplies composition structure. */
-  snapshot(topo: TopologyRecorder): StepGraph {
+  /**
+   * Snapshot the graph. Composition structure comes from `topo`; subflow
+   * boundary payloads (entry/exit) come from `boundaries`. The two
+   * recorders bind by `runtimeStageId` — same key, two perspectives, one
+   * graph.
+   */
+  snapshot(topo: TopologyRecorder, boundaries: BoundaryRecorder): StepGraph {
     // Merge ReAct step nodes with topology nodes. Topology nodes use
     // their own ids (subflow paths) — they won't collide with the
     // `step-N` ids we assign.
     const topology = topo.getTopology();
-    const mergedNodes = [...this.nodes, ...mapTopologyToSteps(topology.nodes)];
+    const boundaryIndex = indexBoundariesByTopologyNodeId(boundaries);
+    const mergedNodes = [...this.nodes, ...mapTopologyToSteps(topology.nodes, boundaryIndex)];
     const mergedEdges = [...this.edges, ...mapTopologyEdges(topology.edges, topology.nodes)];
     return {
       nodes: mergedNodes,
@@ -533,31 +620,42 @@ function isReActStep(kind: StepNode['kind']): boolean {
 }
 
 /**
- * Wrap TopologyRecorder so its FlowRecorder hooks additionally nudge the
- * StepGraphBuilder's emit path — when a subflow/fork/decision/loop
- * event fires, the consumer's `onUpdate` gets a fresh snapshot that
- * includes the new topology structure.
+ * Wrap TopologyRecorder + BoundaryRecorder into one CombinedRecorder.
+ *
+ * Each FlowRecorder hook fans out to BOTH primitive recorders so the
+ * snapshot has access to composition shape (topology) AND boundary
+ * payloads (mapped input/output). The consumer's `onUpdate` fires
+ * after each event with a freshly-merged snapshot.
+ *
+ * Why both: TopologyRecorder captures fork-branch / decision-branch /
+ * loop edges that BoundaryRecorder doesn't track. BoundaryRecorder
+ * captures inputMapper/outputMapper payloads that TopologyRecorder
+ * doesn't track. They're orthogonal and compose cleanly.
  */
-function wrapTopology(
+function wrapPrimitiveRecorders(
   topo: TopologyRecorder,
+  boundaries: BoundaryRecorder,
   builder: StepGraphBuilder,
 ): CombinedRecorder {
   const emit = () => {
     const topology = topo.getTopology();
+    const boundaryIndex = indexBoundariesByTopologyNodeId(boundaries);
     builder['onUpdate']?.({
-      nodes: [...builder['nodes'], ...mapTopologyToSteps(topology.nodes)],
+      nodes: [...builder['nodes'], ...mapTopologyToSteps(topology.nodes, boundaryIndex)],
       edges: [...builder['edges'], ...mapTopologyEdges(topology.edges, topology.nodes)],
       activeNodeId: builder['openStepId'] ?? topology.activeNodeId ?? undefined,
     });
   };
   return {
-    id: topo.id,
+    id: `flowchart-${topo.id}`,
     onSubflowEntry: (e) => {
       topo.onSubflowEntry?.(e);
+      boundaries.onSubflowEntry?.(e);
       emit();
     },
     onSubflowExit: (e) => {
       topo.onSubflowExit?.(e);
+      boundaries.onSubflowExit?.(e);
       emit();
     },
     onFork: (e) => {
@@ -610,6 +708,30 @@ const AGENT_INTERNAL_SUBFLOW_NAMES: ReadonlySet<string> = new Set([
   'Compose tools slot',
 ]);
 
+/**
+ * Known primitives whose subflows surface as drill-in containers in
+ * Lens. Each maps 1:1 to a builder/factory in `core/` (Agent, LLMCall),
+ * `core-flow/` (Sequence/Parallel/Conditional/Loop), or a pattern that
+ * is itself one of these primitives at the root (Swarm = Loop, etc.).
+ *
+ * Auxiliary subflows pattern factories build internally — Swarm's
+ * `IdentityRunner`, mapReduce's `Split` / `Unpack` adapters — are NOT
+ * in this set. They carry no `Kind:` prefix on their description, so
+ * the boundary check correctly leaves them as flat stages.
+ *
+ * Adding a new primitive: add its name here AND add its description-
+ * prefix marker at the primitive's `flowChart('...', ..., 'Kind: …')`
+ * call site. Both sides are required.
+ */
+const KNOWN_PRIMITIVES: ReadonlySet<string> = new Set([
+  'Agent',
+  'LLMCall',
+  'Sequence',
+  'Parallel',
+  'Conditional',
+  'Loop',
+]);
+
 function isAgentInternalSubflow(n: { name?: string; id?: string }): boolean {
   const name = n.name ?? '';
   if (AGENT_INTERNAL_SUBFLOW_NAMES.has(name)) return true;
@@ -639,18 +761,89 @@ function isAgentInternalSubflow(n: { name?: string; id?: string }): boolean {
  * The prefix convention is the temporary contract. Long-term plan is a
  * dedicated metadata field; prefix is minimum-surface for v2.
  */
+/**
+ * Index of `BoundaryRecorder` entries keyed by their topology-node id.
+ *
+ * The topology node's id is the engine's path-prefixed `subflowId` plus
+ * an optional `#n` re-entry suffix (added by `TopologyRecorder` to
+ * disambiguate loop iterations). `BoundaryRecorder` keys by
+ * `runtimeStageId`, which has different shape — so to align them we
+ * walk subflow nodes in topology insertion order and pair each with the
+ * corresponding boundary entry/exit pair (also in insertion order).
+ *
+ * Returns `Map<topologyNodeId, { entry?, exit?, runtimeStageId }>`.
+ */
+type BoundaryIndex = ReadonlyMap<
+  string,
+  {
+    entry?: StepBoundary;
+    exit?: StepBoundary;
+    runtimeStageId: string;
+  }
+>;
+
+function indexBoundariesByTopologyNodeId(boundaries: BoundaryRecorder): BoundaryIndex {
+  // Build the index by walking the boundary stream. Each `entry` opens
+  // a new bucket; the next `exit` for the SAME runtimeStageId closes it.
+  // We key the bucket by the engine's path-prefixed `subflowId` —
+  // same shape topology uses for its node ids, except topology adds a
+  // `#n` suffix on re-entry. We track that suffix locally to match.
+  const index = new Map<string, { entry?: StepBoundary; exit?: StepBoundary; runtimeStageId: string }>();
+  // Per-subflowId re-entry counter — mirrors TopologyRecorder's logic.
+  const reentryCount = new Map<string, number>();
+  // Per-runtimeStageId → current node id (so a matching `exit` resolves to the right entry).
+  const openByRuntimeId = new Map<string, string>();
+
+  for (const b of boundaries.getBoundaries()) {
+    if (b.phase === 'entry') {
+      const baseId = b.subflowId;
+      const seen = reentryCount.get(baseId) ?? 0;
+      const nodeId = seen === 0 ? baseId : `${baseId}#${seen}`;
+      reentryCount.set(baseId, seen + 1);
+      index.set(nodeId, { entry: b, runtimeStageId: b.runtimeStageId });
+      openByRuntimeId.set(b.runtimeStageId, nodeId);
+    } else {
+      const nodeId = openByRuntimeId.get(b.runtimeStageId);
+      if (!nodeId) continue;
+      const bucket = index.get(nodeId);
+      if (bucket) bucket.exit = b;
+      openByRuntimeId.delete(b.runtimeStageId);
+    }
+  }
+
+  return index;
+}
+
 function mapTopologyToSteps(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   topoNodes: readonly any[],
+  boundaryIndex: BoundaryIndex,
 ): StepNode[] {
   return topoNodes
     .filter((n) => !isAgentInternalSubflow(n))
     .map((n) => {
       const description: string | undefined = n.metadata?.description;
-      const isAgentBoundary =
+      // Parse the `<Kind>:` taxonomy prefix from the root description.
+      // Anything before the first `:` is the primitive name (Agent /
+      // LLMCall / Sequence / Parallel / Conditional / Loop). Used for
+      // both the agent-boundary check and to surface the kind to
+      // downstream renderers.
+      const primitiveKind =
+        n.kind === 'subflow' && typeof description === 'string'
+          ? description.split(':', 1)[0]?.trim() || undefined
+          : undefined;
+      const isAgentBoundary = n.kind === 'subflow' && primitiveKind === 'Agent';
+      const isPrimitiveBoundary =
         n.kind === 'subflow' &&
-        typeof description === 'string' &&
-        description.startsWith('Agent:');
+        primitiveKind !== undefined &&
+        KNOWN_PRIMITIVES.has(primitiveKind);
+
+      // Boundary payloads — only meaningful for `subflow` nodes. Topology
+      // nodes (fork-branch / decision-branch) never appear in the
+      // BoundaryRecorder stream, so the lookup naturally yields
+      // `undefined` for them.
+      const bucket = n.kind === 'subflow' ? boundaryIndex.get(n.id) : undefined;
+
       return {
         id: n.id,
         kind: n.kind as StepNode['kind'],
@@ -658,6 +851,11 @@ function mapTopologyToSteps(
         startOffsetMs: 0,
         subflowPath: [n.id],
         isAgentBoundary,
+        isPrimitiveBoundary,
+        ...(primitiveKind ? { primitiveKind } : {}),
+        ...(bucket?.entry?.payload ? { entryPayload: bucket.entry.payload } : {}),
+        ...(bucket?.exit?.payload ? { exitPayload: bucket.exit.payload } : {}),
+        ...(bucket?.runtimeStageId ? { runtimeStageId: bucket.runtimeStageId } : {}),
       };
     });
 }
