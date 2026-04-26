@@ -1,7 +1,7 @@
 /**
  * Tests — `FlowchartRecorder` boundary-payload integration.
  *
- * The recorder composes footprintjs `BoundaryRecorder` alongside
+ * The recorder composes footprintjs `InOutRecorder` alongside
  * `TopologyRecorder` so subflow StepNodes carry the payloads crossing
  * each subflow's boundary (`inputMapper` result on entry, subflow shared
  * state on exit). This is what feeds Lens's right-pane node-detail
@@ -158,7 +158,7 @@ describe('FlowchartRecorder boundary — P3: runtimeStageId on subflow nodes', (
 // ─── P4: topology nodes don't have payloads ────────────────────────────
 
 describe('FlowchartRecorder boundary — P4: fork/decision nodes never carry payloads', () => {
-  it('fork-branch nodes have no entry/exit payload (BoundaryRecorder only tracks subflows)', () => {
+  it('fork-branch nodes have no entry/exit payload (InOutRecorder only tracks subflows)', () => {
     const { recorder, getGraph } = freshHandle();
     recorder.onSubflowEntry!(entryEvent('sf-root', 'Root', 'r#0'));
     recorder.onFork!(fork('Root', ['Alpha', 'Beta'], 'r#1'));
@@ -190,7 +190,7 @@ describe('FlowchartRecorder boundary — P5: loop re-entry distinct payloads', (
   it('each loop iteration produces a separate subflow node with its own payload', () => {
     const { recorder, getGraph } = freshHandle();
     // Same subflowId entered twice — TopologyRecorder appends `#1` to the
-    // second entry; BoundaryRecorder's index aligns by re-entry counter.
+    // second entry; InOutRecorder's index aligns by re-entry counter.
     recorder.onSubflowEntry!(entryEvent('sf-iter', 'Iter', 'iter#0', { round: 1 }));
     recorder.onSubflowExit!(exitEvent('sf-iter', 'Iter', 'iter#0', { result: 'first' }));
     recorder.onSubflowEntry!(entryEvent('sf-iter', 'Iter', 'iter#1', { round: 2 }));

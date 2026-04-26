@@ -112,6 +112,11 @@ export {
   type StepGraph,
   type StepNode,
 } from './recorders/observability/FlowchartRecorder.js';
+export {
+  BoundaryRecorder,
+  boundaryRecorder,
+  type BoundaryEntry,
+} from './recorders/observability/BoundaryRecorder.js';
 
 // Primitives (core/)
 export {

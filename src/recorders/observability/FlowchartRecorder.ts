@@ -43,10 +43,10 @@
  */
 
 import {
-  boundaryRecorder,
+  inOutRecorder,
   topologyRecorder,
-  type BoundaryRecorder,
-  type StepBoundary,
+  type InOutRecorder,
+  type InOutEntry,
   type TopologyRecorder,
 } from 'footprintjs/trace';
 import type { CombinedRecorder } from 'footprintjs';
@@ -198,7 +198,7 @@ export interface StepNode {
   readonly isPrimitiveBoundary?: boolean;
   /**
    * Payload from this subflow's `inputMapper` — the data that flowed IN
-   * at the boundary entry. Sourced from footprintjs `BoundaryRecorder`
+   * at the boundary entry. Sourced from footprintjs `InOutRecorder`
    * via the engine's `FlowSubflowEvent.mappedInput`. Only set for
    * `kind === 'subflow'` nodes; topology nodes (`fork-branch` /
    * `decision-branch`) don't have mapper payloads. Undefined when the
@@ -207,13 +207,13 @@ export interface StepNode {
    * Use: Lens's right-pane node-detail panel renders this as the
    * "entered with" view — showing the developer exactly what context
    * the subflow received. Same data is available via the underlying
-   * `BoundaryRecorder.getBoundary(runtimeStageId)` for downstream
+   * `InOutRecorder.getBoundary(runtimeStageId)` for downstream
    * libraries that want raw access.
    */
   readonly entryPayload?: Readonly<Record<string, unknown>>;
   /**
    * Payload at this subflow's exit — the subflow's shared state when the
-   * `outputMapper` ran. Sourced from `BoundaryRecorder` via
+   * `outputMapper` ran. Sourced from `InOutRecorder` via
    * `FlowSubflowEvent.outputState`. Only set for `kind === 'subflow'`.
    * Undefined for in-progress / paused subflows (the engine doesn't fire
    * `onSubflowExit` until the subflow resumes and exits cleanly) — Lens
@@ -234,7 +234,7 @@ export interface StepNode {
    *   2. Look up the underlying `StepBoundary` for raw payload access.
    *
    * Only set for `kind === 'subflow'` nodes that came from
-   * `BoundaryRecorder`. Empty string when the engine didn't propagate
+   * `InOutRecorder`. Empty string when the engine didn't propagate
    * a runtime context (defensive default).
    */
   readonly runtimeStageId?: string;
@@ -346,7 +346,7 @@ export function attachFlowchart(
 ): FlowchartHandle {
   const builder = new StepGraphBuilder(options.onUpdate);
   const topo = topologyRecorder();
-  const boundaries = boundaryRecorder();
+  const boundaries = inOutRecorder();
   const recorder = wrapPrimitiveRecorders(topo, boundaries, builder);
   const offAttach = runnerAttach(recorder);
 
@@ -428,7 +428,7 @@ class StepGraphBuilder {
    * recorders bind by `runtimeStageId` — same key, two perspectives, one
    * graph.
    */
-  snapshot(topo: TopologyRecorder, boundaries: BoundaryRecorder): StepGraph {
+  snapshot(topo: TopologyRecorder, boundaries: InOutRecorder): StepGraph {
     // Merge ReAct step nodes with topology nodes. Topology nodes use
     // their own ids (subflow paths) — they won't collide with the
     // `step-N` ids we assign.
@@ -620,7 +620,7 @@ function isReActStep(kind: StepNode['kind']): boolean {
 }
 
 /**
- * Wrap TopologyRecorder + BoundaryRecorder into one CombinedRecorder.
+ * Wrap TopologyRecorder + InOutRecorder into one CombinedRecorder.
  *
  * Each FlowRecorder hook fans out to BOTH primitive recorders so the
  * snapshot has access to composition shape (topology) AND boundary
@@ -628,13 +628,13 @@ function isReActStep(kind: StepNode['kind']): boolean {
  * after each event with a freshly-merged snapshot.
  *
  * Why both: TopologyRecorder captures fork-branch / decision-branch /
- * loop edges that BoundaryRecorder doesn't track. BoundaryRecorder
+ * loop edges that InOutRecorder doesn't track. InOutRecorder
  * captures inputMapper/outputMapper payloads that TopologyRecorder
  * doesn't track. They're orthogonal and compose cleanly.
  */
 function wrapPrimitiveRecorders(
   topo: TopologyRecorder,
-  boundaries: BoundaryRecorder,
+  boundaries: InOutRecorder,
   builder: StepGraphBuilder,
 ): CombinedRecorder {
   const emit = () => {
@@ -676,28 +676,27 @@ function wrapPrimitiveRecorders(
 // ─── Topology → StepNode/StepEdge mapping ──────────────────────────
 
 /**
- * Subflow names that are INTERNAL to the Agent primitive — its own
- * context-assembly pipeline and routing sub-stages. These are
- * implementation details of Agent, not scrubbable ReAct steps:
+ * Subflow names that are pure plumbing — Agent state-machine routing
+ * branches and footprintjs wrapper subflows that have no semantic meaning
+ * to a developer reading the run. These get filtered from the StepGraph.
  *
- *   - "System Prompt" / "Messages" / "Tools"  → 3 input slots;
- *     already surfaced as slot rows inside the LLM card.
- *   - "callLLM" / "route" / "ToolCalls" / "Final" → internal branches
- *     of the Agent's state machine; the ReAct step transitions
- *     (user→llm / llm→tool / tool→llm / llm→user) already capture
- *     the observable moments these produce.
+ *   - "callLLM" / "route" / "ToolCalls" / "Final" → Agent state-machine
+ *     branches; the ReAct step transitions (user→llm / llm→tool /
+ *     tool→llm / llm→user) already capture the observable moments these
+ *     produce.
  *   - "body" / "Compose … slot" → footprintjs-level wrappers.
  *
- * Emitting these as StepNodes pollutes the scrub axis with ~7 extra
- * "steps" per Agent turn and clutters the flowchart with boxes that
- * duplicate what the LLM/Tool stage + slot rows already show. They
- * stay in the raw TopologyRecorder graph for low-level consumers; the
- * StepGraph just omits them.
+ * The 3 input slots (System Prompt / Messages / Tools) are NOT filtered
+ * — they're real context-engineering moments. Every slot subflow's
+ * inputMapper assembles the slot from its sources (RAG / Skill / Memory /
+ * user / tool-result); that IS a step in the run, not noise. Surfacing
+ * them as scrub targets makes context engineering visible — the central
+ * thesis of agentfootprint Lens.
+ *
+ * InOutRecorder captures their entry/exit payloads regardless; this
+ * filter only controls timeline visibility.
  */
 const AGENT_INTERNAL_SUBFLOW_NAMES: ReadonlySet<string> = new Set([
-  'System Prompt',
-  'Messages',
-  'Tools',
   'ToolCalls',
   'Final',
   'callLLM',
@@ -762,11 +761,11 @@ function isAgentInternalSubflow(n: { name?: string; id?: string }): boolean {
  * dedicated metadata field; prefix is minimum-surface for v2.
  */
 /**
- * Index of `BoundaryRecorder` entries keyed by their topology-node id.
+ * Index of `InOutRecorder` entries keyed by their topology-node id.
  *
  * The topology node's id is the engine's path-prefixed `subflowId` plus
  * an optional `#n` re-entry suffix (added by `TopologyRecorder` to
- * disambiguate loop iterations). `BoundaryRecorder` keys by
+ * disambiguate loop iterations). `InOutRecorder` keys by
  * `runtimeStageId`, which has different shape — so to align them we
  * walk subflow nodes in topology insertion order and pair each with the
  * corresponding boundary entry/exit pair (also in insertion order).
@@ -782,7 +781,7 @@ type BoundaryIndex = ReadonlyMap<
   }
 >;
 
-function indexBoundariesByTopologyNodeId(boundaries: BoundaryRecorder): BoundaryIndex {
+function indexBoundariesByTopologyNodeId(boundaries: InOutRecorder): BoundaryIndex {
   // Build the index by walking the boundary stream. Each `entry` opens
   // a new bucket; the next `exit` for the SAME runtimeStageId closes it.
   // We key the bucket by the engine's path-prefixed `subflowId` —
@@ -840,7 +839,7 @@ function mapTopologyToSteps(
 
       // Boundary payloads — only meaningful for `subflow` nodes. Topology
       // nodes (fork-branch / decision-branch) never appear in the
-      // BoundaryRecorder stream, so the lookup naturally yields
+      // InOutRecorder stream, so the lookup naturally yields
       // `undefined` for them.
       const bucket = n.kind === 'subflow' ? boundaryIndex.get(n.id) : undefined;
 
