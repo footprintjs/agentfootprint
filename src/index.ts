@@ -29,28 +29,22 @@ export {
   type WildcardSubscription,
 } from './events/dispatcher.js';
 
-// Conventions
-export {
-  SUBFLOW_IDS,
-  STAGE_IDS,
-  type SubflowId,
-  type StageId,
-  isSlotSubflow,
-  slotFromSubflowId,
-  isKnownSubflow,
-  isKnownStage,
-} from './conventions.js';
-
 // Adapter interfaces (ports)
 export * from './adapters/types.js';
 
-// Injection keys + recorder types (convention layer for Phase 2)
+// Injection keys + recorder authoring helpers — needed by anyone writing
+// a custom recorder that switches on injection events.
 export {
   INJECTION_KEYS,
   injectionKeyForSlot,
   isInjectionKey,
   type InjectionKey,
 } from './conventions.js';
+// `STAGE_IDS`, `SUBFLOW_IDS`, `isSlotSubflow`, `slotFromSubflowId`,
+// `isKnownStage`, `isKnownSubflow` are intentionally NOT exported — they
+// are the internal builder↔recorder coordination protocol, not consumer
+// API. Library code reaches them via the relative `./conventions.js`
+// import; downstream code should never need them.
 export {
   COMPOSITION_KEYS,
   type BudgetPressureRecord,
@@ -86,12 +80,13 @@ export { typedEmit } from './recorders/core/typedEmit.js';
 export type { EmittedEvent, EnableNamespace, Runner } from './core/runner.js';
 export { RunnerBase, makeRunId } from './core/RunnerBase.js';
 
-// Pause/Resume primitives
+// Pause/Resume primitives — consumer API for human-in-the-loop tools.
+// `PauseRequest` (the throwable signal class) stays internal; consumers
+// detect pauses via `isPauseRequest(err)` / `isPaused(outcome)`.
 export {
   pauseHere,
   isPauseRequest,
   isPaused,
-  PauseRequest,
   type RunnerPauseOutcome,
 } from './core/pause.js';
 
@@ -139,21 +134,14 @@ export type {
   ToolRegistryEntry,
 } from './core/tools.js';
 
-// Slot subflow builders
-export {
-  buildSystemPromptSlot,
-  type SystemPromptFn,
-  type SystemPromptSlotConfig,
-} from './core/slots/buildSystemPromptSlot.js';
-export {
-  buildMessagesSlot,
-  type InputMessage,
-  type MessagesSlotConfig,
-} from './core/slots/buildMessagesSlot.js';
-export {
-  buildToolsSlot,
-  type ToolsSlotConfig,
-} from './core/slots/buildToolsSlot.js';
+// Slot subflow builders are intentionally NOT exported. They are
+// internal helpers used only by `Agent.buildChart()` and
+// `LLMCall.buildChart()` to construct each primitive's three-slot
+// context-engineering subflow tree. Consumers compose at the
+// primitive / composition level (Agent / LLMCall / Sequence / …) — they
+// never construct slot subflows directly. Power-users authoring a
+// custom Agent-like primitive should copy the pattern from
+// `src/core/Agent.ts` rather than depend on a private helper surface.
 
 // Compositions (core-flow/)
 export {
