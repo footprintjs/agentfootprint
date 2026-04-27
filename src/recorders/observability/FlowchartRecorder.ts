@@ -424,6 +424,12 @@ export function buildStepGraph(boundary: BoundaryRecorder): StepGraph {
         break;
       }
       case 'decision.branch': {
+        // Agent-internal Route decisions (tool-calls / final) are
+        // wiring, not steps — the actor arrows that follow already
+        // encode the routing observably. Filter them out of the
+        // timeline; the rationale is still in the event log for the
+        // right-pane / commentary to read.
+        if (e.isAgentInternal) break;
         const id = `decision-${e.runtimeStageId}-${e.chosen}`;
         nodes.push({
           id,

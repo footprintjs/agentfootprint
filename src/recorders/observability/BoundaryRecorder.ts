@@ -151,6 +151,17 @@ export interface DomainDecisionBranchEvent extends DomainEventBase {
   readonly decider: string;
   readonly chosen: string;
   readonly rationale?: string;
+  /**
+   * `true` when this decision comes from one of the Agent's internal
+   * routing stages (e.g., the ReAct `Route` decider that picks
+   * `tool-calls` vs `final`). Filtered out of the timeline by
+   * `buildStepGraph` — the actor arrows that follow already encode
+   * the routing observably (`llm→tool` vs `llm→user`).
+   *
+   * `false` when the decision comes from a consumer-defined
+   * `Conditional` primitive — those ARE meaningful timeline steps.
+   */
+  readonly isAgentInternal: boolean;
 }
 
 export interface DomainLoopIterationEvent extends DomainEventBase {
@@ -339,6 +350,18 @@ export class BoundaryRecorder
 
   onDecision(event: FlowDecisionEvent): void {
     const ctx = event.traversalContext;
+    // Agent-internal decisions (Route picking tool-calls / final) are
+    // identified by the deciding stage's stableId matching one of the
+    // known Agent-internal subflow ids. The actor arrows that follow
+    // (`llm→tool` / `llm→user`) already encode the routing observably,
+    // so the timeline filters these out — but we still capture them in
+    // the event log so the right-pane / commentary can read the
+    // rationale when present.
+    const stageId = ctx?.stageId ?? '';
+    const localStageId = stageId.includes('/')
+      ? stageId.slice(stageId.lastIndexOf('/') + 1)
+      : stageId;
+    const isAgentInternal = AGENT_INTERNAL_LOCAL_IDS.has(localStageId);
     this.emit({
       type: 'decision.branch',
       runtimeStageId: ctx?.runtimeStageId ?? '',
@@ -348,6 +371,7 @@ export class BoundaryRecorder
       decider: event.decider,
       chosen: event.chosen,
       ...(event.rationale ? { rationale: event.rationale } : {}),
+      isAgentInternal,
     });
   }
 

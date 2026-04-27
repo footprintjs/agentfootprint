@@ -323,6 +323,111 @@ describe('buildStepGraph — slot boundaries attached to each LLM step', () => {
   });
 });
 
+// ─── Decision-branch filtering: Agent-internal vs Conditional ─────────
+
+describe('buildStepGraph — Agent-internal decision.branch filtering', () => {
+  // Helper: synthesize a footprintjs FlowDecisionEvent that BoundaryRecorder
+  // ingests via onDecision. The `stageId` of the decider's traversalContext
+  // is what the filter checks (must match an Agent-internal subflow id to
+  // be classified as agent-internal).
+  function decE(
+    decider: string,
+    chosen: string,
+    runtimeStageId: string,
+    deciderStageId: string,
+    rationale?: string,
+  ) {
+    return {
+      decider,
+      chosen,
+      rationale,
+      traversalContext: {
+        stageId: deciderStageId,
+        runtimeStageId,
+        stageName: decider,
+        depth: 0,
+      },
+    };
+  }
+
+  it('D1: decision whose deciderStageId === sf-route is FILTERED from the timeline', () => {
+    const { rec } = fresh();
+    rec.onDecision!(decE('Route', 'tool-calls', 'r#0', SUBFLOW_IDS.ROUTE, 'LLM requested tools'));
+    rec.onDecision!(decE('Route', 'final', 'r#1', SUBFLOW_IDS.ROUTE));
+
+    const g = buildStepGraph(rec);
+    const decisions = g.nodes.filter((n) => n.kind === 'decision-branch');
+    expect(decisions).toHaveLength(0);
+  });
+
+  it('D2: decision whose deciderStageId is consumer-defined IS kept in the timeline', () => {
+    const { rec } = fresh();
+    rec.onDecision!(decE('RouteRisk', 'high', 'r#0', 'risk-classifier'));
+
+    const g = buildStepGraph(rec);
+    const decisions = g.nodes.filter((n) => n.kind === 'decision-branch');
+    expect(decisions).toHaveLength(1);
+    expect(decisions[0].label).toBe('high');
+  });
+
+  it('D3: filtered decision events are STILL in BoundaryRecorder.getEvents() — only the projection skips them', () => {
+    const { rec } = fresh();
+    rec.onDecision!(decE('Route', 'tool-calls', 'r#0', SUBFLOW_IDS.ROUTE, 'LLM wants tools'));
+
+    // Boundary log keeps the event; the rationale must remain accessible
+    // for the right-pane / commentary panels to read it.
+    const events = rec.getEventsByType('decision.branch');
+    expect(events).toHaveLength(1);
+    expect(events[0].isAgentInternal).toBe(true);
+    expect(events[0].rationale).toBe('LLM wants tools');
+  });
+
+  it('D4: nested decider stage id (path-prefixed) is still classified correctly', () => {
+    const { rec } = fresh();
+    // Engine emits the decider's stageId path-prefixed when nested inside
+    // an Agent's body subflow. The filter checks the LAST segment.
+    rec.onDecision!(decE('Route', 'tool-calls', 'r#0', `agent-body/${SUBFLOW_IDS.ROUTE}`));
+
+    const events = rec.getEventsByType('decision.branch');
+    expect(events[0].isAgentInternal).toBe(true);
+    expect(buildStepGraph(rec).nodes.filter((n) => n.kind === 'decision-branch')).toHaveLength(0);
+  });
+
+  it('D5: full Agent + 1 tool round-trip yields exactly 5 visible timeline steps', () => {
+    const { rec, dispatcher } = fresh();
+    rec.onRunStart!(runE({}));
+    // iter 1
+    llmStart(dispatcher); llmEnd(dispatcher, 1);
+    rec.onDecision!(decE('Route', 'tool-calls', 'r#0', SUBFLOW_IDS.ROUTE, 'tools requested'));
+    toolStart(dispatcher, 'weather', 'c1'); toolEnd(dispatcher, 'c1');
+    // iter 2
+    llmStart(dispatcher); llmEnd(dispatcher, 0);
+    rec.onDecision!(decE('Route', 'final', 'r#1', SUBFLOW_IDS.ROUTE));
+    rec.onRunEnd!(runE({}));
+
+    const g = buildStepGraph(rec);
+    const visible = g.nodes.filter(
+      (n) =>
+        n.kind === 'subflow' ||
+        n.kind === 'user->llm' ||
+        n.kind === 'llm->tool' ||
+        n.kind === 'tool->llm' ||
+        n.kind === 'llm->user',
+    );
+    // 1 root subflow (Run) + user→llm + llm→tool + tool→llm + llm→user = 5
+    expect(visible).toHaveLength(5);
+    expect(visible.map((n) => n.kind)).toEqual([
+      'subflow',     // Run root
+      'user->llm',
+      'llm->tool',
+      'tool->llm',
+      'llm->user',
+    ]);
+    // No decision-branch noise.
+    expect(g.nodes.filter((n) => n.kind === 'decision-branch')).toHaveLength(0);
+  });
+});
+
 // ─── P7: context.injected attaches to next LLM step ────────────────────
 
 describe('buildStepGraph — P7: context.injected attaches to NEXT user→llm step', () => {
