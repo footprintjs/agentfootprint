@@ -1,79 +1,69 @@
 /**
- * Tests — `BoundaryRecorder`: agent-domain projection over `InOutRecorder`.
+ * Tests — `BoundaryRecorder`: unified domain event log.
  *
- * `BoundaryRecorder` is the single source of truth Lens reads to dispatch
- * its render shape. Each entry carries 3 domain tags:
- *   • `slotKind`        — system-prompt / messages / tools (3 slots)
- *   • `primitiveKind`   — Agent / LLMCall / Sequence / …
- *   • `isAgentInternal` — true for Agent's routing/wrapper subflows
+ * The recorder is the single source of truth for "every observable
+ * moment in a run, tagged with its domain meaning". It captures:
+ *   - FlowRecorder events from footprintjs (run / subflow / fork /
+ *     decision / loop)
+ *   - Typed events from the agentfootprint dispatcher (llm.* / tool.* /
+ *     context.injected)
+ * and emits a single ordered `DomainEvent` stream.
  *
  * 7 patterns cover the consumer circle:
- *   P1  Root entry/exit → primitiveKind=undefined, isRoot=true
- *   P2  Slot subflow (sf-system-prompt) → slotKind set, isAgentInternal=false
- *   P3  Primitive subflow with description → primitiveKind parsed from prefix
- *   P4  Agent-internal subflow (sf-route) → isAgentInternal=true
- *   P5  Nested slot subflow (path-prefixed id) → slotKind still detected
- *   P6  getSlotBoundaries groups by slotKind
- *   P7  getVisibleSteps filters out agent-internal routing
+ *   P1  Run lifecycle               → run.entry + run.exit, isRoot=true
+ *   P2  Subflow with all 3 tags     → primitiveKind, slotKind, isAgentInternal
+ *   P3  Fork (3 children)           → 3 fork.branch events
+ *   P4  Decision branch + Loop      → decision.branch + loop.iteration
+ *   P5  LLM lifecycle               → llm.start + llm.end with payloads
+ *   P6  Tool lifecycle              → tool.start + tool.end
+ *   P7  Context injected            → context.injected with all 5 axes
  *
- * Plus query API + factory.
+ * Plus query API + lifecycle.
  */
 
 import { describe, expect, it } from 'vitest';
-import {
-  ROOT_RUNTIME_STAGE_ID,
-  inOutRecorder,
-  type InOutRecorder,
-} from 'footprintjs/trace';
-import type { FlowRunEvent, FlowSubflowEvent } from 'footprintjs/dist/types/lib/engine/narrative/types.js';
+import { ROOT_RUNTIME_STAGE_ID, ROOT_SUBFLOW_ID } from 'footprintjs/trace';
+import type {
+  FlowDecisionEvent,
+  FlowForkEvent,
+  FlowLoopEvent,
+  FlowSubflowEvent,
+} from 'footprintjs';
+import type { FlowRunEvent } from 'footprintjs/dist/types/lib/engine/narrative/types.js';
+import { EventDispatcher } from '../../../src/events/dispatcher.js';
 import {
   BoundaryRecorder,
   boundaryRecorder,
+  type DomainEvent,
 } from '../../../src/recorders/observability/BoundaryRecorder.js';
 import { SUBFLOW_IDS } from '../../../src/conventions.js';
 
 // ── Helpers ─────────────────────────────────────────────────────────────
 
-function freshRecorder(): { source: InOutRecorder; boundary: BoundaryRecorder } {
-  const source = inOutRecorder();
-  const boundary = boundaryRecorder(source);
-  return { source, boundary };
+function freshRecorder(): { rec: BoundaryRecorder; dispatcher: EventDispatcher } {
+  const rec = new BoundaryRecorder();
+  const dispatcher = new EventDispatcher();
+  rec.subscribe(dispatcher);
+  return { rec, dispatcher };
 }
 
-function runEvent(payload?: unknown): FlowRunEvent {
+function runEvt(payload?: unknown): FlowRunEvent {
   return { payload };
 }
 
-function entryEvent(
+function subEvt(
   subflowId: string,
   name: string,
   runtimeStageId: string,
   description?: string,
   mappedInput?: Record<string, unknown>,
+  outputState?: Record<string, unknown>,
 ): FlowSubflowEvent {
   return {
     name,
     subflowId,
     description,
     mappedInput,
-    traversalContext: {
-      stageId: subflowId,
-      runtimeStageId,
-      stageName: name,
-      depth: subflowId.split('/').length - 1,
-    },
-  };
-}
-
-function exitEvent(
-  subflowId: string,
-  name: string,
-  runtimeStageId: string,
-  outputState?: Record<string, unknown>,
-): FlowSubflowEvent {
-  return {
-    name,
-    subflowId,
     outputState,
     traversalContext: {
       stageId: subflowId,
@@ -84,193 +74,390 @@ function exitEvent(
   };
 }
 
-// ── P1: root entry/exit ─────────────────────────────────────────────────
+function forkEvt(parent: string, children: string[], runtimeStageId: string): FlowForkEvent {
+  return {
+    parent,
+    children,
+    traversalContext: { stageId: parent, runtimeStageId, stageName: parent, depth: 0 },
+  };
+}
 
-describe('BoundaryRecorder — P1: root entry/exit', () => {
-  it('the synthetic root pair has isRoot=true, no slotKind, no primitiveKind, isAgentInternal=false', () => {
-    const { source, boundary } = freshRecorder();
-    source.onRunStart!(runEvent({ request: 'go' }));
-    source.onRunEnd!(runEvent({ result: 'done' }));
+function decisionEvt(
+  decider: string,
+  chosen: string,
+  runtimeStageId: string,
+  rationale?: string,
+): FlowDecisionEvent {
+  return {
+    decider,
+    chosen,
+    rationale,
+    traversalContext: { stageId: decider, runtimeStageId, stageName: decider, depth: 0 },
+  };
+}
 
-    const root = boundary.getRootBoundary();
-    expect(root.entry).toMatchObject({
+function loopEvt(target: string, iteration: number, runtimeStageId: string): FlowLoopEvent {
+  return {
+    target,
+    iteration,
+    traversalContext: { stageId: target, runtimeStageId, stageName: target, depth: 0 },
+  };
+}
+
+function dispatchTyped(
+  dispatcher: EventDispatcher,
+  type: string,
+  payload: Record<string, unknown>,
+  runtimeStageId = 'stage#0',
+): void {
+  dispatcher.dispatch({
+    type,
+    payload,
+    meta: {
+      wallClockMs: 1000,
+      runOffsetMs: 0,
+      runtimeStageId,
+      subflowPath: [],
+      compositionPath: [],
+      runId: 'test',
+    },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  } as any);
+}
+
+// ─── P1: run lifecycle ───────────────────────────────────────────────────
+
+describe('BoundaryRecorder — P1: run.entry + run.exit', () => {
+  it('emits run.entry on onRunStart and run.exit on onRunEnd, both with isRoot=true', () => {
+    const { rec } = freshRecorder();
+    rec.onRunStart!(runEvt({ request: 'analyze' }));
+    rec.onRunEnd!(runEvt({ result: 'done' }));
+
+    const events = rec.getEvents();
+    expect(events).toHaveLength(2);
+    expect(events[0]).toMatchObject({
+      type: 'run.entry',
       runtimeStageId: ROOT_RUNTIME_STAGE_ID,
+      subflowPath: [ROOT_SUBFLOW_ID],
+      depth: 0,
       isRoot: true,
-      isAgentInternal: false,
-      payload: { request: 'go' },
+      payload: { request: 'analyze' },
     });
-    expect(root.entry?.slotKind).toBeUndefined();
-    expect(root.entry?.primitiveKind).toBeUndefined();
-    expect(root.exit?.payload).toEqual({ result: 'done' });
+    expect(events[1]).toMatchObject({ type: 'run.exit', isRoot: true, payload: { result: 'done' } });
   });
 });
 
-// ── P2: slot subflow ────────────────────────────────────────────────────
+// ─── P2: subflow with full tagging ───────────────────────────────────────
 
-describe('BoundaryRecorder — P2: slot subflow tagging', () => {
-  it('sf-system-prompt subflow gets slotKind=system-prompt, isAgentInternal=false', () => {
-    const { source, boundary } = freshRecorder();
-    source.onSubflowEntry!(entryEvent(SUBFLOW_IDS.SYSTEM_PROMPT, 'System Prompt', 'sp#0'));
-    source.onSubflowExit!(exitEvent(SUBFLOW_IDS.SYSTEM_PROMPT, 'System Prompt', 'sp#0'));
-
-    const pair = boundary.getBoundary('sp#0');
-    expect(pair.entry?.slotKind).toBe('system-prompt');
-    expect(pair.entry?.isAgentInternal).toBe(false);
-  });
-
-  it('sf-messages and sf-tools also detected', () => {
-    const { source, boundary } = freshRecorder();
-    source.onSubflowEntry!(entryEvent(SUBFLOW_IDS.MESSAGES, 'Messages', 'm#0'));
-    source.onSubflowExit!(exitEvent(SUBFLOW_IDS.MESSAGES, 'Messages', 'm#0'));
-    source.onSubflowEntry!(entryEvent(SUBFLOW_IDS.TOOLS, 'Tools', 't#0'));
-    source.onSubflowExit!(exitEvent(SUBFLOW_IDS.TOOLS, 'Tools', 't#0'));
-
-    expect(boundary.getBoundary('m#0').entry?.slotKind).toBe('messages');
-    expect(boundary.getBoundary('t#0').entry?.slotKind).toBe('tools');
-  });
-});
-
-// ── P3: primitiveKind from description prefix ──────────────────────────
-
-describe('BoundaryRecorder — P3: primitiveKind parsing', () => {
-  it('parses Agent / LLMCall / Sequence from the colon-prefixed root description', () => {
-    const { source, boundary } = freshRecorder();
-    source.onSubflowEntry!(entryEvent('sf-agent', 'Agent', 'a#0', 'Agent: ReAct loop'));
-    source.onSubflowExit!(exitEvent('sf-agent', 'Agent', 'a#0'));
-    source.onSubflowEntry!(entryEvent('sf-llmcall', 'LLMCall', 'lc#0', 'LLMCall: one-shot'));
-    source.onSubflowExit!(exitEvent('sf-llmcall', 'LLMCall', 'lc#0'));
-    source.onSubflowEntry!(entryEvent('sf-seq', 'Seq', 's#0', 'Sequence: 3-step pipeline'));
-    source.onSubflowExit!(exitEvent('sf-seq', 'Seq', 's#0'));
-
-    expect(boundary.getBoundary('a#0').entry?.primitiveKind).toBe('Agent');
-    expect(boundary.getBoundary('lc#0').entry?.primitiveKind).toBe('LLMCall');
-    expect(boundary.getBoundary('s#0').entry?.primitiveKind).toBe('Sequence');
-  });
-
-  it('subflow without a colon-prefixed description has no primitiveKind', () => {
-    const { source, boundary } = freshRecorder();
-    source.onSubflowEntry!(entryEvent('sf-anon', 'Anon', 'an#0', 'free-form text without colon'));
-    source.onSubflowExit!(exitEvent('sf-anon', 'Anon', 'an#0'));
-
-    expect(boundary.getBoundary('an#0').entry?.primitiveKind).toBeUndefined();
-  });
-});
-
-// ── P4: agent-internal routing ─────────────────────────────────────────
-
-describe('BoundaryRecorder — P4: agent-internal routing subflows', () => {
-  it('sf-route, sf-tool-calls, sf-final, sf-merge are flagged as isAgentInternal', () => {
-    const { source, boundary } = freshRecorder();
-    for (const id of [SUBFLOW_IDS.ROUTE, SUBFLOW_IDS.TOOL_CALLS, SUBFLOW_IDS.FINAL, SUBFLOW_IDS.MERGE]) {
-      source.onSubflowEntry!(entryEvent(id, id, `${id}#0`));
-      source.onSubflowExit!(exitEvent(id, id, `${id}#0`));
-    }
-
-    for (const id of [SUBFLOW_IDS.ROUTE, SUBFLOW_IDS.TOOL_CALLS, SUBFLOW_IDS.FINAL, SUBFLOW_IDS.MERGE]) {
-      const pair = boundary.getBoundary(`${id}#0`);
-      expect(pair.entry?.isAgentInternal).toBe(true);
-    }
-  });
-
-  it('slot subflows are NOT flagged as agent-internal (they are real context-engineering steps)', () => {
-    const { source, boundary } = freshRecorder();
-    source.onSubflowEntry!(entryEvent(SUBFLOW_IDS.SYSTEM_PROMPT, 'SP', 'sp#0'));
-    source.onSubflowExit!(exitEvent(SUBFLOW_IDS.SYSTEM_PROMPT, 'SP', 'sp#0'));
-
-    expect(boundary.getBoundary('sp#0').entry?.isAgentInternal).toBe(false);
-  });
-});
-
-// ── P5: nested path-prefixed id still detects slot ─────────────────────
-
-describe('BoundaryRecorder — P5: nested slot subflow', () => {
-  it('slotKind detected when subflow id is path-prefixed (e.g., llm-call-internals/sf-system-prompt)', () => {
-    const { source, boundary } = freshRecorder();
-    source.onSubflowEntry!(
-      entryEvent(`llm-call-internals/${SUBFLOW_IDS.SYSTEM_PROMPT}`, 'System Prompt', 'sp#0'),
+describe('BoundaryRecorder — P2: subflow.entry/exit with primitiveKind + slotKind + isAgentInternal', () => {
+  it('Agent-prefixed description → primitiveKind="Agent", isAgentInternal=false', () => {
+    const { rec } = freshRecorder();
+    rec.onSubflowEntry!(
+      subEvt('sf-agent', 'Agent', 'a#0', 'Agent: ReAct loop', { in: 1 }),
     );
-    source.onSubflowExit!(
-      exitEvent(`llm-call-internals/${SUBFLOW_IDS.SYSTEM_PROMPT}`, 'System Prompt', 'sp#0'),
-    );
+    rec.onSubflowExit!(subEvt('sf-agent', 'Agent', 'a#0', undefined, undefined, { out: 2 }));
 
-    expect(boundary.getBoundary('sp#0').entry?.slotKind).toBe('system-prompt');
+    const sub = rec.getEventsByType('subflow.entry')[0];
+    expect(sub).toMatchObject({
+      type: 'subflow.entry',
+      subflowId: 'sf-agent',
+      localSubflowId: 'sf-agent',
+      subflowName: 'Agent',
+      subflowPath: [ROOT_SUBFLOW_ID, 'sf-agent'],
+      depth: 1,
+      primitiveKind: 'Agent',
+      isAgentInternal: false,
+      payload: { in: 1 },
+    });
+    expect(sub.slotKind).toBeUndefined();
+
+    const exit = rec.getEventsByType('subflow.exit')[0];
+    expect(exit.payload).toEqual({ out: 2 });
+  });
+
+  it('slot subflow id (sf-system-prompt) → slotKind set, isAgentInternal=false', () => {
+    const { rec } = freshRecorder();
+    rec.onSubflowEntry!(subEvt(SUBFLOW_IDS.SYSTEM_PROMPT, 'SP', 'sp#0'));
+    expect(rec.getEventsByType('subflow.entry')[0]).toMatchObject({
+      slotKind: 'system-prompt',
+      isAgentInternal: false,
+    });
+  });
+
+  it('routing subflow id (sf-route) → isAgentInternal=true', () => {
+    const { rec } = freshRecorder();
+    rec.onSubflowEntry!(subEvt(SUBFLOW_IDS.ROUTE, 'route', 'r#0'));
+    expect(rec.getEventsByType('subflow.entry')[0]).toMatchObject({
+      isAgentInternal: true,
+    });
+  });
+
+  it('nested subflow id (parent/child) → path includes parent + slotKind detected at any nesting', () => {
+    const { rec } = freshRecorder();
+    rec.onSubflowEntry!(subEvt(`outer/${SUBFLOW_IDS.MESSAGES}`, 'M', 'm#0'));
+    const e = rec.getEventsByType('subflow.entry')[0];
+    expect(e.subflowPath).toEqual([ROOT_SUBFLOW_ID, 'outer', SUBFLOW_IDS.MESSAGES]);
+    expect(e.localSubflowId).toBe(SUBFLOW_IDS.MESSAGES);
+    expect(e.slotKind).toBe('messages');
   });
 });
 
-// ── P6: getSlotBoundaries groups by slotKind ────────────────────────────
+// ─── P3: fork synthesizes one event per child ───────────────────────────
 
-describe('BoundaryRecorder — P6: getSlotBoundaries grouping', () => {
-  it('groups entry+exit pairs into systemPrompt / messages / tools', () => {
-    const { source, boundary } = freshRecorder();
-    source.onSubflowEntry!(entryEvent(SUBFLOW_IDS.SYSTEM_PROMPT, 'SP', 'sp#0', undefined, { from: 'base' }));
-    source.onSubflowExit!(exitEvent(SUBFLOW_IDS.SYSTEM_PROMPT, 'SP', 'sp#0', { rendered: 'base prompt' }));
-    source.onSubflowEntry!(entryEvent(SUBFLOW_IDS.MESSAGES, 'M', 'm#0', undefined, { from: 'history' }));
-    source.onSubflowExit!(exitEvent(SUBFLOW_IDS.MESSAGES, 'M', 'm#0', { rendered: 'msgs' }));
-    source.onSubflowEntry!(entryEvent(SUBFLOW_IDS.TOOLS, 'T', 't#0'));
-    source.onSubflowExit!(exitEvent(SUBFLOW_IDS.TOOLS, 'T', 't#0'));
+describe('BoundaryRecorder — P3: fork.branch (one event per parallel child)', () => {
+  it('onFork(N children) emits N fork.branch events', () => {
+    const { rec } = freshRecorder();
+    rec.onFork!(forkEvt('parent', ['Alpha', 'Beta', 'Gamma'], 'p#1'));
 
-    const slots = boundary.getSlotBoundaries();
-    expect(slots.systemPrompt).toHaveLength(2); // entry + exit
-    expect(slots.messages).toHaveLength(2);
-    expect(slots.tools).toHaveLength(2);
-    // Confirm no cross-contamination — each slot only contains its own entries.
-    expect(slots.systemPrompt.every((b) => b.slotKind === 'system-prompt')).toBe(true);
-    expect(slots.messages.every((b) => b.slotKind === 'messages')).toBe(true);
-    expect(slots.tools.every((b) => b.slotKind === 'tools')).toBe(true);
+    const forks = rec.getEventsByType('fork.branch');
+    expect(forks).toHaveLength(3);
+    expect(forks.map((e) => e.childName)).toEqual(['Alpha', 'Beta', 'Gamma']);
+    expect(forks.every((e) => e.parentSubflowId === 'parent')).toBe(true);
+    expect(forks.every((e) => e.runtimeStageId === 'p#1')).toBe(true);
   });
 });
 
-// ── P7: getVisibleSteps filters out agent-internal ─────────────────────
+// ─── P4: decision + loop ────────────────────────────────────────────────
 
-describe('BoundaryRecorder — P7: getVisibleSteps', () => {
-  it('excludes agent-internal routing subflows from the visible timeline', () => {
-    const { source, boundary } = freshRecorder();
-    source.onRunStart!(runEvent({}));
-    source.onSubflowEntry!(entryEvent(SUBFLOW_IDS.ROUTE, 'route', 'r#0'));
-    source.onSubflowExit!(exitEvent(SUBFLOW_IDS.ROUTE, 'route', 'r#0'));
-    source.onSubflowEntry!(entryEvent(SUBFLOW_IDS.SYSTEM_PROMPT, 'SP', 'sp#0'));
-    source.onSubflowExit!(exitEvent(SUBFLOW_IDS.SYSTEM_PROMPT, 'SP', 'sp#0'));
-    source.onSubflowEntry!(entryEvent(SUBFLOW_IDS.TOOL_CALLS, 'tc', 'tc#0'));
-    source.onSubflowExit!(exitEvent(SUBFLOW_IDS.TOOL_CALLS, 'tc', 'tc#0'));
-    source.onRunEnd!(runEvent({}));
+describe('BoundaryRecorder — P4: decision.branch + loop.iteration', () => {
+  it('decision and loop events captured with their distinguishing fields', () => {
+    const { rec } = freshRecorder();
+    rec.onDecision!(decisionEvt('RouteRisk', 'high', 'r#1', 'credit < 600'));
+    rec.onLoop!(loopEvt('agent-body', 2, 'l#3'));
 
-    const all = boundary.getSteps();
-    expect(all).toHaveLength(4); // root, route, sp, tc
+    const dec = rec.getEventsByType('decision.branch')[0];
+    expect(dec).toMatchObject({
+      type: 'decision.branch',
+      decider: 'RouteRisk',
+      chosen: 'high',
+      rationale: 'credit < 600',
+      runtimeStageId: 'r#1',
+    });
 
-    const visible = boundary.getVisibleSteps();
-    // Root + sp visible; route + tc filtered.
-    expect(visible.map((b) => b.subflowId)).toEqual([
-      '__root__',
-      SUBFLOW_IDS.SYSTEM_PROMPT,
-    ]);
+    const loop = rec.getEventsByType('loop.iteration')[0];
+    expect(loop).toMatchObject({
+      type: 'loop.iteration',
+      target: 'agent-body',
+      iteration: 2,
+      runtimeStageId: 'l#3',
+    });
   });
 });
 
-// ── Query API + factory ────────────────────────────────────────────────
+// ─── P5: LLM lifecycle ─────────────────────────────────────────────────
+
+describe('BoundaryRecorder — P5: llm.start + llm.end via dispatcher', () => {
+  it('typed llm_start/llm_end events surface as llm.start/llm.end DomainEvents with payloads', () => {
+    const { rec, dispatcher } = freshRecorder();
+    dispatchTyped(dispatcher, 'agentfootprint.stream.llm_start', {
+      model: 'gpt-mock', provider: 'mock',
+      systemPromptChars: 100, messagesCount: 5, toolsCount: 2,
+    });
+    dispatchTyped(dispatcher, 'agentfootprint.stream.llm_end', {
+      content: 'Hello!', toolCallCount: 0,
+      usage: { input: 30, output: 8 }, stopReason: 'stop',
+    });
+
+    const start = rec.getEventsByType('llm.start')[0];
+    expect(start).toMatchObject({
+      type: 'llm.start',
+      model: 'gpt-mock',
+      provider: 'mock',
+      systemPromptChars: 100,
+      messagesCount: 5,
+      toolsCount: 2,
+    });
+
+    const end = rec.getEventsByType('llm.end')[0];
+    expect(end).toMatchObject({
+      type: 'llm.end',
+      content: 'Hello!',
+      toolCallCount: 0,
+      usage: { input: 30, output: 8 },
+      stopReason: 'stop',
+    });
+  });
+});
+
+// ─── P6: Tool lifecycle ────────────────────────────────────────────────
+
+describe('BoundaryRecorder — P6: tool.start + tool.end via dispatcher', () => {
+  it('typed tool_start/tool_end events surface with toolName + args + result', () => {
+    const { rec, dispatcher } = freshRecorder();
+    dispatchTyped(dispatcher, 'agentfootprint.stream.tool_start', {
+      toolName: 'weather', toolCallId: 'c1', args: { city: 'SF' },
+    });
+    dispatchTyped(dispatcher, 'agentfootprint.stream.tool_end', {
+      toolCallId: 'c1', result: '72°F sunny', durationMs: 42,
+    });
+
+    const start = rec.getEventsByType('tool.start')[0];
+    expect(start).toMatchObject({
+      type: 'tool.start',
+      toolName: 'weather',
+      toolCallId: 'c1',
+      args: { city: 'SF' },
+    });
+
+    const end = rec.getEventsByType('tool.end')[0];
+    expect(end).toMatchObject({
+      type: 'tool.end',
+      toolCallId: 'c1',
+      result: '72°F sunny',
+      durationMs: 42,
+    });
+  });
+});
+
+// ─── P7: context.injected (5 axes of context engineering) ──────────────
+
+describe('BoundaryRecorder — P7: context.injected with the 5 axes', () => {
+  it('typed context.injected event surfaces with slot, source, role, content, reason', () => {
+    const { rec, dispatcher } = freshRecorder();
+    dispatchTyped(dispatcher, 'agentfootprint.context.injected', {
+      slot: 'messages',
+      source: 'rag',
+      sourceId: 'doc-42',
+      asRole: 'user',
+      contentSummary: 'Q3 financials excerpt',
+      reason: 'RAG match for "revenue"',
+      sectionTag: 'finance',
+      upstreamRef: 'retriever#0',
+    });
+
+    const inj = rec.getEventsByType('context.injected')[0];
+    expect(inj).toMatchObject({
+      type: 'context.injected',
+      slot: 'messages',
+      source: 'rag',
+      sourceId: 'doc-42',
+      asRole: 'user',
+      contentSummary: 'Q3 financials excerpt',
+      reason: 'RAG match for "revenue"',
+      sectionTag: 'finance',
+      upstreamRef: 'retriever#0',
+    });
+  });
+});
+
+// ─── Query API ─────────────────────────────────────────────────────────
 
 describe('BoundaryRecorder — query API', () => {
-  it('getBoundaries returns all entries (root + subflow, entry + exit) in order', () => {
-    const { source, boundary } = freshRecorder();
-    source.onRunStart!(runEvent({}));
-    source.onSubflowEntry!(entryEvent('sf-x', 'X', 'x#0'));
-    source.onSubflowExit!(exitEvent('sf-x', 'X', 'x#0'));
-    source.onRunEnd!(runEvent({}));
+  it('getEvents() returns the canonical ordered stream (FlowRecorder + dispatcher interleaved)', () => {
+    const { rec, dispatcher } = freshRecorder();
+    rec.onRunStart!(runEvt({}));
+    dispatchTyped(dispatcher, 'agentfootprint.stream.llm_start', {
+      model: 'm', provider: 'p',
+    });
+    rec.onSubflowEntry!(subEvt(SUBFLOW_IDS.SYSTEM_PROMPT, 'SP', 'sp#0'));
+    dispatchTyped(dispatcher, 'agentfootprint.context.injected', {
+      slot: 'system-prompt', source: 'base',
+    });
+    rec.onSubflowExit!(subEvt(SUBFLOW_IDS.SYSTEM_PROMPT, 'SP', 'sp#0'));
+    dispatchTyped(dispatcher, 'agentfootprint.stream.llm_end', {
+      content: '', toolCallCount: 0, usage: { input: 1, output: 1 },
+    });
+    rec.onRunEnd!(runEvt({}));
 
-    expect(boundary.getBoundaries()).toHaveLength(4);
+    const types = rec.getEvents().map((e) => e.type);
+    expect(types).toEqual([
+      'run.entry',
+      'llm.start',
+      'subflow.entry',
+      'context.injected',
+      'subflow.exit',
+      'llm.end',
+      'run.exit',
+    ]);
   });
 
-  it('factory matches the inOutRecorder() / topologyRecorder() style', () => {
-    const source = inOutRecorder();
-    const b = boundaryRecorder(source);
-    expect(b).toBeInstanceOf(BoundaryRecorder);
+  it('getBoundary returns entry/exit pair by runtimeStageId', () => {
+    const { rec } = freshRecorder();
+    rec.onRunStart!(runEvt({ in: 1 }));
+    rec.onRunEnd!(runEvt({ out: 2 }));
+
+    const root = rec.getRootBoundary();
+    expect(root.entry?.payload).toEqual({ in: 1 });
+    expect(root.exit?.payload).toEqual({ out: 2 });
   });
 
-  it('getRootBoundary returns the root pair', () => {
-    const { source, boundary } = freshRecorder();
-    source.onRunStart!(runEvent({ a: 1 }));
-    source.onRunEnd!(runEvent({ a: 2 }));
-    const root = boundary.getRootBoundary();
-    expect(root.entry?.payload).toEqual({ a: 1 });
-    expect(root.exit?.payload).toEqual({ a: 2 });
+  it('getVisibleSteps excludes agent-internal routing subflows', () => {
+    const { rec } = freshRecorder();
+    rec.onRunStart!(runEvt({}));
+    rec.onSubflowEntry!(subEvt(SUBFLOW_IDS.ROUTE, 'route', 'r#0'));
+    rec.onSubflowEntry!(subEvt(SUBFLOW_IDS.SYSTEM_PROMPT, 'SP', 'sp#0'));
+    rec.onSubflowEntry!(subEvt('sf-agent', 'A', 'a#0', 'Agent: ReAct'));
+
+    const visible = rec.getVisibleSteps();
+    // run.entry + sp + agent — route filtered out
+    const ids = visible.map((s) => (s.type === 'subflow.entry' ? s.subflowId : s.runtimeStageId));
+    expect(ids).toEqual([ROOT_RUNTIME_STAGE_ID, SUBFLOW_IDS.SYSTEM_PROMPT, 'sf-agent']);
+  });
+
+  it('getSlotBoundaries groups subflow events by slotKind', () => {
+    const { rec } = freshRecorder();
+    rec.onSubflowEntry!(subEvt(SUBFLOW_IDS.SYSTEM_PROMPT, 'SP', 'sp#0'));
+    rec.onSubflowExit!(subEvt(SUBFLOW_IDS.SYSTEM_PROMPT, 'SP', 'sp#0'));
+    rec.onSubflowEntry!(subEvt(SUBFLOW_IDS.MESSAGES, 'M', 'm#0'));
+    rec.onSubflowExit!(subEvt(SUBFLOW_IDS.MESSAGES, 'M', 'm#0'));
+
+    const slots = rec.getSlotBoundaries();
+    expect(slots.systemPrompt).toHaveLength(2); // entry + exit
+    expect(slots.messages).toHaveLength(2);
+    expect(slots.tools).toHaveLength(0);
+  });
+
+  it('factory + ID handling', () => {
+    const a = boundaryRecorder();
+    const b = boundaryRecorder();
+    expect(a.id).not.toBe(b.id);
+    expect(a.id).toMatch(/^boundary-\d+$/);
+    expect(boundaryRecorder({ id: 'mine' }).id).toBe('mine');
+  });
+});
+
+// ─── Lifecycle ─────────────────────────────────────────────────────────
+
+describe('BoundaryRecorder — lifecycle', () => {
+  it('clear() resets all stored events', () => {
+    const { rec, dispatcher } = freshRecorder();
+    rec.onRunStart!(runEvt({}));
+    dispatchTyped(dispatcher, 'agentfootprint.stream.llm_start', { model: 'm', provider: 'p' });
+    expect(rec.getEvents().length).toBeGreaterThan(0);
+
+    rec.clear();
+    expect(rec.getEvents()).toEqual([]);
+  });
+
+  it('subscribe returns an unsubscribe that stops further ingestion', () => {
+    const rec = new BoundaryRecorder();
+    const dispatcher = new EventDispatcher();
+    const unsub = rec.subscribe(dispatcher);
+
+    dispatchTyped(dispatcher, 'agentfootprint.stream.llm_start', { model: 'm', provider: 'p' });
+    expect(rec.getEvents()).toHaveLength(1);
+
+    unsub();
+    dispatchTyped(dispatcher, 'agentfootprint.stream.llm_end', {
+      content: '', toolCallCount: 0, usage: { input: 1, output: 1 },
+    });
+    expect(rec.getEvents()).toHaveLength(1);
+  });
+
+  it('toSnapshot returns standard bundle shape', () => {
+    const rec = new BoundaryRecorder();
+    rec.onRunStart!(runEvt({}));
+    const snap = rec.toSnapshot();
+    expect(snap.name).toBe('BoundaryEvents');
+    expect(snap.preferredOperation).toBe('translate');
+    expect(Array.isArray(snap.data)).toBe(true);
+    expect((snap.data as DomainEvent[])[0].type).toBe('run.entry');
+  });
+
+  it('ignores subflow events without a subflowId (defensive)', () => {
+    const rec = new BoundaryRecorder();
+    rec.onSubflowEntry!({ name: 'Anon' });
+    rec.onSubflowExit!({ name: 'Anon' });
+    expect(rec.getEvents()).toEqual([]);
   });
 });

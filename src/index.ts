@@ -115,7 +115,18 @@ export {
 export {
   BoundaryRecorder,
   boundaryRecorder,
-  type BoundaryEntry,
+  type BoundaryRecorderOptions,
+  type DomainContextInjectedEvent,
+  type DomainDecisionBranchEvent,
+  type DomainEvent,
+  type DomainForkBranchEvent,
+  type DomainLLMEndEvent,
+  type DomainLLMStartEvent,
+  type DomainLoopIterationEvent,
+  type DomainRunEvent,
+  type DomainSubflowEvent,
+  type DomainToolEndEvent,
+  type DomainToolStartEvent,
 } from './recorders/observability/BoundaryRecorder.js';
 
 // Primitives (core/)

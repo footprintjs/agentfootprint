@@ -1,103 +1,224 @@
 /**
- * BoundaryRecorder — domain-tagged projection over footprintjs `InOutRecorder`.
+ * BoundaryRecorder — unified domain event log for an agentfootprint run.
  *
- * Pattern: Pure projection. Holds a reference to an `InOutRecorder`,
- *          maps each `InOutEntry` to a `BoundaryEntry` with three
- *          domain tags:
- *            • `slotKind`        — `'system-prompt' | 'messages' | 'tools'`
- *                                   for the 3 agent input slots; undefined otherwise.
- *            • `primitiveKind`   — `'Agent' | 'LLMCall' | 'Sequence' | …`
- *                                   parsed from the subflow root description prefix.
- *            • `isAgentInternal` — `true` for Agent state-machine routing
- *                                   subflows (`route`, `tool-calls`, `final`)
- *                                   that are pure plumbing — Lens hides them
- *                                   from the timeline.
+ * The single source of truth Lens (and any other consumer) reads to
+ * render a run. Every observable moment in a run is captured as one
+ * `DomainEvent` in a single ordered stream:
  *
- *          The 3 fields are derived from data already on the `InOutEntry`
- *          (`subflowId`, `description`) — no second event subscription, no
- *          stateful accumulation. Called on every render in Lens; cost is
- *          one `Array.map` over the recorder's flat entries.
+ *   - `run.entry` / `run.exit`              — top-level executor.run()
+ *   - `subflow.entry` / `subflow.exit`      — every subflow boundary
+ *   - `fork.branch`                         — one per parallel child
+ *   - `decision.branch`                     — chosen branch of a Conditional
+ *   - `loop.iteration`                      — one per back-edge traversal
+ *   - `llm.start` / `llm.end`               — LLM provider call lifecycle
+ *   - `tool.start` / `tool.end`             — tool execution lifecycle
+ *   - `context.injected`                    — anything injected into a slot
  *
- * Role:    Single source of truth for "every step in the run, tagged
- *          with its domain meaning". Lens reads this directly to
- *          dispatch render shape (slot row inside LLM card vs.
- *          arrow-in / body / arrow-out for primitives vs. user → run →
- *          user for the root). No more "merge topology + boundaries +
- *          state machine" ceremony in the consumer.
+ * All events carry `runtimeStageId` (binds with footprintjs Trace view +
+ * with each other), `subflowPath`, `depth`, and `ts` (wall-clock ms).
+ * Subflow events are domain-tagged (`slotKind` / `primitiveKind` /
+ * `isAgentInternal`) so consumers dispatch on tag without re-parsing.
  *
- * Naming: the footprintjs primitive is `InOutRecorder` (domain-agnostic;
- * captures every chart's input/output uniformly). This one is
- * `BoundaryRecorder` (agent-domain-aware; tags entries so Lens can render
- * them by type). Two recorders, one ID space (`runtimeStageId`).
+ * Architecture:
+ *
+ *   ┌──── footprintjs (domain-agnostic) ────┐
+ *   │  FlowRecorder events (run/subflow/    │  ──┐
+ *   │  fork/decision/loop)                  │    │
+ *   └───────────────────────────────────────┘    │
+ *                                                │
+ *   ┌──── agentfootprint dispatcher ─────────┐   │  consumed by
+ *   │  Typed events (llm/tool/context)       │  ──┤
+ *   └────────────────────────────────────────┘   │
+ *                                                ▼
+ *                                  ┌─── BoundaryRecorder ───┐
+ *                                  │  one tagged stream of  │
+ *                                  │  DomainEvent           │
+ *                                  └────────────────────────┘
+ *                                                │
+ *                                                ▼  consumed by
+ *                                  ┌────── Lens (UI) ──────┐
+ *                                  │  Slider / RunFlow /   │
+ *                                  │  NodeDetail / etc.    │
+ *                                  └───────────────────────┘
+ *
+ * Why ONE recorder: Lens scrub axis, run-flow graph, slot rows inside
+ * the LLM card, right-pane detail panel, commentary panel — every UI
+ * surface reads from the SAME stream. Adding a new domain event = one
+ * tagged emit + one render shape. No state machines spread across
+ * renderers, no merging of multiple sources, no name-based filter lists.
+ *
+ * Naming: `runtimeStageId` is footprintjs's primitive (path-prefixed +
+ * `#executionIndex`). `subflowPath` is rooted under the synthetic
+ * `'__root__'`. `slotKind` / `primitiveKind` are agent-domain. The
+ * design follows the React Fiber + OpenTelemetry pattern:
+ * **producers self-describe; consumers dispatch on type**.
  *
  * @example
  * ```typescript
- * import { inOutRecorder } from 'footprintjs/trace';
  * import { boundaryRecorder } from 'agentfootprint';
  *
- * const inOut = inOutRecorder();
- * executor.attachCombinedRecorder(inOut);
+ * const boundary = boundaryRecorder();
+ * executor.attachCombinedRecorder(boundary);   // wires FlowRecorder side
+ * boundary.subscribe(runner.dispatcher);        // wires typed-event side
+ *
  * await executor.run({ input });
  *
- * const boundaries = boundaryRecorder(inOut);
- * for (const step of boundaries.getSteps()) {
- *   if (step.isRoot) renderRoot(step);
- *   else if (step.slotKind) renderSlotRow(step);             // 3-slot pedagogy
- *   else if (step.primitiveKind) renderPrimitive(step);      // arrow-in / body / arrow-out
+ * for (const e of boundary.getEvents()) {
+ *   switch (e.type) {
+ *     case 'run.entry':       renderRoot(e); break;
+ *     case 'subflow.entry':   if (e.slotKind) renderSlotRow(e);
+ *                              else if (e.primitiveKind) renderPrimitive(e);
+ *                              break;
+ *     case 'llm.start':       renderLLMCall(e); break;
+ *     // ...
+ *   }
  * }
  * ```
  */
 
-import { ROOT_RUNTIME_STAGE_ID, type InOutEntry, type InOutRecorder } from 'footprintjs/trace';
+import {
+  ROOT_RUNTIME_STAGE_ID,
+  ROOT_SUBFLOW_ID,
+  SequenceRecorder,
+} from 'footprintjs/trace';
+import type {
+  CombinedRecorder,
+  FlowDecisionEvent,
+  FlowForkEvent,
+  FlowLoopEvent,
+  FlowSubflowEvent,
+} from 'footprintjs';
+// FlowRunEvent isn't re-exported from the main barrel — pulled directly
+// from the engine type module. (footprintjs/trace doesn't expose it
+// either today; this is the canonical source.)
+// eslint-disable-next-line @typescript-eslint/consistent-type-imports
+import type { FlowRunEvent } from 'footprintjs/dist/types/lib/engine/narrative/types.js';
+import type { AgentfootprintEvent, AgentfootprintEventType } from '../../events/registry.js';
+import type { EventDispatcher, Unsubscribe } from '../../events/dispatcher.js';
 import { SUBFLOW_IDS, slotFromSubflowId } from '../../conventions.js';
 import type { ContextSlot } from '../../events/types.js';
 
-// ── Public types ─────────────────────────────────────────────────────
+// ─── DomainEvent: discriminated union ────────────────────────────────
 
-/**
- * One half of a chart execution boundary, with agent-domain tags layered on.
- *
- * Inherits all `InOutEntry` fields (runtimeStageId, subflowId,
- * subflowPath, depth, phase, payload, isRoot, …) and adds:
- */
-export interface BoundaryEntry extends InOutEntry {
-  /**
-   * Which of the 3 context-engineering slots this boundary is, when
-   * applicable. Set ONLY for `sf-system-prompt` / `sf-messages` /
-   * `sf-tools` subflow boundaries (matched by `slotFromSubflowId`,
-   * which handles path-prefixed nested IDs too).
-   *
-   * Lens renders these as `in / out` cells inside the LLM card —
-   * the visible "context engineering" surface. Undefined for any
-   * non-slot subflow and for the root.
-   */
-  readonly slotKind?: ContextSlot;
-  /**
-   * Primitive kind parsed from the subflow root description prefix
-   * (`'Agent: ReAct loop'` → `'Agent'`, `'LLMCall: one-shot'` →
-   * `'LLMCall'`, etc). Set when the subflow's description follows the
-   * `'<Kind>: <detail>'` taxonomy convention; undefined otherwise.
-   *
-   * Lens dispatches render shape on this — `'Agent' | 'LLMCall'` →
-   * the 3-slot LLM card; everything else → arrow-in / body / arrow-out.
-   */
-  readonly primitiveKind?: string;
-  /**
-   * `true` when this boundary belongs to an Agent state-machine routing
-   * subflow (`sf-route` / `sf-tool-calls` / `sf-final`). These are pure
-   * plumbing — Lens hides them from the timeline.
-   *
-   * Slot subflows are NOT marked internal — they're real
-   * context-engineering moments that Lens displays.
-   */
-  readonly isAgentInternal: boolean;
+/** Fields every domain event carries. */
+interface DomainEventBase {
+  /** Stable per-execution key (footprintjs primitive). For run events it
+   *  is `'__root__#0'`; subflow events use the parent stage's runtimeStageId
+   *  at mount; typed events use the firing stage's runtimeStageId. */
+  readonly runtimeStageId: string;
+  /** Decomposition of `subflowId` into segments, rooted under `'__root__'`. */
+  readonly subflowPath: readonly string[];
+  /** Depth in the run tree — root = 0, top-level subflow = 1, etc. */
+  readonly depth: number;
+  /** Wall-clock ms at capture time. */
+  readonly ts: number;
 }
 
-// ── Internal: which subflow IDs are agent-internal routing ───────────
+export interface DomainRunEvent extends DomainEventBase {
+  readonly type: 'run.entry' | 'run.exit';
+  readonly payload?: unknown;
+  /** Always `true` for run events — convenience flag for filter callers. */
+  readonly isRoot: true;
+}
 
-/** Routing / wrapper subflows that have no semantic meaning to a developer.
- *  The 3 slot subflows (`sf-system-prompt` / `sf-messages` / `sf-tools`)
- *  are NOT in this set — they ARE meaningful context-engineering steps. */
+export interface DomainSubflowEvent extends DomainEventBase {
+  readonly type: 'subflow.entry' | 'subflow.exit';
+  /** Path-prefixed engine id (matches `FlowSubflowEvent.subflowId`). */
+  readonly subflowId: string;
+  /** Last segment of `subflowId` — convenience for leaf-name grouping. */
+  readonly localSubflowId: string;
+  readonly subflowName: string;
+  /** Build-time description from the subflow root (`'<Kind>: <detail>'`). */
+  readonly description?: string;
+  /** Parsed `'<Kind>:'` prefix — `'Agent'`, `'LLMCall'`, `'Sequence'`, etc. */
+  readonly primitiveKind?: string;
+  /** Set ONLY for the 3 input-slot subflows (sf-system-prompt / sf-messages / sf-tools). */
+  readonly slotKind?: ContextSlot;
+  /** True for Agent state-machine routing/wrapper subflows (route, tool-calls, final, merge). */
+  readonly isAgentInternal: boolean;
+  /** `inputMapper` result on entry; subflow shared state on exit. */
+  readonly payload?: unknown;
+}
+
+export interface DomainForkBranchEvent extends DomainEventBase {
+  readonly type: 'fork.branch';
+  readonly parentSubflowId: string;
+  readonly childName: string;
+}
+
+export interface DomainDecisionBranchEvent extends DomainEventBase {
+  readonly type: 'decision.branch';
+  readonly decider: string;
+  readonly chosen: string;
+  readonly rationale?: string;
+}
+
+export interface DomainLoopIterationEvent extends DomainEventBase {
+  readonly type: 'loop.iteration';
+  readonly target: string;
+  readonly iteration: number;
+}
+
+export interface DomainLLMStartEvent extends DomainEventBase {
+  readonly type: 'llm.start';
+  readonly model: string;
+  readonly provider: string;
+  readonly systemPromptChars?: number;
+  readonly messagesCount?: number;
+  readonly toolsCount?: number;
+}
+
+export interface DomainLLMEndEvent extends DomainEventBase {
+  readonly type: 'llm.end';
+  readonly content: string;
+  readonly toolCallCount: number;
+  readonly usage: { readonly input: number; readonly output: number };
+  readonly stopReason?: string;
+}
+
+export interface DomainToolStartEvent extends DomainEventBase {
+  readonly type: 'tool.start';
+  readonly toolName: string;
+  readonly toolCallId: string;
+  readonly args?: unknown;
+}
+
+export interface DomainToolEndEvent extends DomainEventBase {
+  readonly type: 'tool.end';
+  readonly toolCallId: string;
+  readonly result?: unknown;
+  readonly durationMs?: number;
+  readonly error?: boolean;
+}
+
+export interface DomainContextInjectedEvent extends DomainEventBase {
+  readonly type: 'context.injected';
+  readonly slot: ContextSlot;
+  readonly source: string;
+  readonly sourceId?: string;
+  readonly asRole?: 'system' | 'user' | 'assistant' | 'tool';
+  readonly contentSummary?: string;
+  readonly reason?: string;
+  readonly sectionTag?: string;
+  readonly upstreamRef?: string;
+}
+
+/** Discriminated union covering every observable moment in a run. */
+export type DomainEvent =
+  | DomainRunEvent
+  | DomainSubflowEvent
+  | DomainForkBranchEvent
+  | DomainDecisionBranchEvent
+  | DomainLoopIterationEvent
+  | DomainLLMStartEvent
+  | DomainLLMEndEvent
+  | DomainToolStartEvent
+  | DomainToolEndEvent
+  | DomainContextInjectedEvent;
+
+/** Closed set of routing/wrapper subflow IDs that are pure plumbing.
+ *  Slot subflows (`sf-system-prompt` / `sf-messages` / `sf-tools`) are
+ *  NOT in this set — they're real context-engineering moments. */
 const AGENT_INTERNAL_LOCAL_IDS: ReadonlySet<string> = new Set([
   SUBFLOW_IDS.ROUTE,
   SUBFLOW_IDS.TOOL_CALLS,
@@ -105,89 +226,385 @@ const AGENT_INTERNAL_LOCAL_IDS: ReadonlySet<string> = new Set([
   SUBFLOW_IDS.MERGE,
 ]);
 
-// ── BoundaryRecorder ─────────────────────────────────────────────────
+export interface BoundaryRecorderOptions {
+  readonly id?: string;
+}
 
-export class BoundaryRecorder {
+let _counter = 0;
+
+/** Factory — matches the `inOutRecorder()` / `topologyRecorder()` style. */
+export function boundaryRecorder(options: BoundaryRecorderOptions = {}): BoundaryRecorder {
+  return new BoundaryRecorder(options);
+}
+
+/**
+ * Unified domain event recorder. Implements `CombinedRecorder` so it can
+ * attach to the executor's FlowRecorder channel; exposes `subscribe()`
+ * to wire to the agentfootprint typed-event dispatcher.
+ *
+ * Internally stores events in a `SequenceRecorder<DomainEvent>` so the
+ * usual time-travel utilities (`getEntryRanges`, `accumulate`) work
+ * out of the box.
+ */
+export class BoundaryRecorder
+  extends SequenceRecorder<DomainEvent>
+  implements CombinedRecorder
+{
+  readonly id: string;
+
+  constructor(options: BoundaryRecorderOptions = {}) {
+    super();
+    this.id = options.id ?? `boundary-${++_counter}`;
+  }
+
+  // ── FlowRecorder hooks (footprintjs side) ───────────────────────────
+
+  onRunStart(event: FlowRunEvent): void {
+    this.emit(buildRunEvent('run.entry', event.payload));
+  }
+
+  onRunEnd(event: FlowRunEvent): void {
+    this.emit(buildRunEvent('run.exit', event.payload));
+  }
+
+  onSubflowEntry(event: FlowSubflowEvent): void {
+    const e = buildSubflowEvent(event, 'subflow.entry');
+    if (e) this.emit(e);
+  }
+
+  onSubflowExit(event: FlowSubflowEvent): void {
+    const e = buildSubflowEvent(event, 'subflow.exit');
+    if (e) this.emit(e);
+  }
+
+  onFork(event: FlowForkEvent): void {
+    const ts = Date.now();
+    const ctx = event.traversalContext;
+    const runtimeStageId = ctx?.runtimeStageId ?? '';
+    const segments = ctx?.subflowPath ? ctx.subflowPath.split('/').filter(Boolean) : [];
+    const subflowPath: readonly string[] = [ROOT_SUBFLOW_ID, ...segments];
+    for (const childName of event.children) {
+      this.emit({
+        type: 'fork.branch',
+        runtimeStageId,
+        subflowPath,
+        depth: subflowPath.length - 1,
+        ts,
+        parentSubflowId: event.parent,
+        childName,
+      });
+    }
+  }
+
+  onDecision(event: FlowDecisionEvent): void {
+    const ctx = event.traversalContext;
+    this.emit({
+      type: 'decision.branch',
+      runtimeStageId: ctx?.runtimeStageId ?? '',
+      subflowPath: pathFromCtx(ctx?.subflowPath),
+      depth: ctxDepth(ctx?.subflowPath),
+      ts: Date.now(),
+      decider: event.decider,
+      chosen: event.chosen,
+      ...(event.rationale ? { rationale: event.rationale } : {}),
+    });
+  }
+
+  onLoop(event: FlowLoopEvent): void {
+    const ctx = event.traversalContext;
+    this.emit({
+      type: 'loop.iteration',
+      runtimeStageId: ctx?.runtimeStageId ?? '',
+      subflowPath: pathFromCtx(ctx?.subflowPath),
+      depth: ctxDepth(ctx?.subflowPath),
+      ts: Date.now(),
+      target: event.target,
+      iteration: event.iteration,
+    });
+  }
+
+  // ── Typed-event subscription (agentfootprint dispatcher side) ───────
+
   /**
-   * @param source the `InOutRecorder` already attached to the executor.
-   * `BoundaryRecorder` does NOT subscribe to events itself — the source
-   * captures everything; this class is a tag-only projection.
+   * Subscribe to the runner's typed-event dispatcher and emit a domain
+   * event for each `llm.*` / `tool.*` / `context.injected` event.
+   *
+   * Returns an unsubscribe function; safe to call multiple times (each
+   * call adds a new subscription). Most consumers call this once at
+   * recorder construction and dispose with the returned function.
    */
-  constructor(private readonly source: InOutRecorder) {}
-
-  /** All boundaries (entry+exit interleaved) with domain tags. */
-  getBoundaries(): BoundaryEntry[] {
-    return this.source.getBoundaries().map(tagEntry);
+  subscribe(dispatcher: EventDispatcher): Unsubscribe {
+    return dispatcher.on(
+      '*' as unknown as AgentfootprintEventType,
+      (event: AgentfootprintEvent) => this.ingestTypedEvent(event),
+    );
   }
 
-  /** Just the `entry`-phase boundaries — the timeline projection.
-   *  Includes the root entry (depth 0, `isRoot: true`) followed by every
-   *  subflow's entry in execution order. */
-  getSteps(): BoundaryEntry[] {
-    return this.source.getSteps().map(tagEntry);
+  private ingestTypedEvent(event: AgentfootprintEvent): void {
+    const meta = event.meta;
+    const runtimeStageId = meta.runtimeStageId ?? '';
+    const subflowPath = [ROOT_SUBFLOW_ID, ...(meta.subflowPath ?? [])];
+    const depth = subflowPath.length - 1;
+    const ts = meta.wallClockMs;
+
+    switch (event.type) {
+      case 'agentfootprint.stream.llm_start': {
+        const p = event.payload;
+        this.emit({
+          type: 'llm.start',
+          runtimeStageId,
+          subflowPath,
+          depth,
+          ts,
+          model: p.model,
+          provider: p.provider,
+          ...(p.systemPromptChars !== undefined ? { systemPromptChars: p.systemPromptChars } : {}),
+          ...(p.messagesCount !== undefined ? { messagesCount: p.messagesCount } : {}),
+          ...(p.toolsCount !== undefined ? { toolsCount: p.toolsCount } : {}),
+        });
+        break;
+      }
+      case 'agentfootprint.stream.llm_end': {
+        const p = event.payload;
+        this.emit({
+          type: 'llm.end',
+          runtimeStageId,
+          subflowPath,
+          depth,
+          ts,
+          content: p.content,
+          toolCallCount: p.toolCallCount,
+          usage: { input: p.usage.input, output: p.usage.output },
+          ...(p.stopReason ? { stopReason: p.stopReason } : {}),
+        });
+        break;
+      }
+      case 'agentfootprint.stream.tool_start': {
+        const p = event.payload;
+        this.emit({
+          type: 'tool.start',
+          runtimeStageId,
+          subflowPath,
+          depth,
+          ts,
+          toolName: p.toolName,
+          toolCallId: p.toolCallId,
+          ...(p.args !== undefined ? { args: p.args } : {}),
+        });
+        break;
+      }
+      case 'agentfootprint.stream.tool_end': {
+        const p = event.payload;
+        this.emit({
+          type: 'tool.end',
+          runtimeStageId,
+          subflowPath,
+          depth,
+          ts,
+          toolCallId: p.toolCallId,
+          ...(p.result !== undefined ? { result: p.result } : {}),
+          ...(p.durationMs !== undefined ? { durationMs: p.durationMs } : {}),
+          ...(p.error !== undefined ? { error: p.error } : {}),
+        });
+        break;
+      }
+      case 'agentfootprint.context.injected': {
+        const p = event.payload;
+        this.emit({
+          type: 'context.injected',
+          runtimeStageId,
+          subflowPath,
+          depth,
+          ts,
+          slot: p.slot,
+          source: p.source ?? 'unknown',
+          ...(p.sourceId ? { sourceId: p.sourceId } : {}),
+          ...(p.asRole ? { asRole: p.asRole } : {}),
+          ...(p.contentSummary ? { contentSummary: p.contentSummary } : {}),
+          ...(p.reason ? { reason: p.reason } : {}),
+          ...(p.sectionTag ? { sectionTag: p.sectionTag } : {}),
+          ...(p.upstreamRef ? { upstreamRef: p.upstreamRef } : {}),
+        });
+        break;
+      }
+      default:
+        // Other typed events (composition.*, agent.*, etc.) are not
+        // mapped to DomainEvent for now — they're either implied by
+        // FlowRecorder events (composition) or higher-level summaries
+        // (agent.turn_*) that downstream selectors derive on demand.
+        break;
+    }
   }
 
-  /** Entry/exit pair for one chart execution.
-   *  `exit` is `undefined` for in-progress / paused charts. */
-  getBoundary(runtimeStageId: string): { entry?: BoundaryEntry; exit?: BoundaryEntry } {
-    const pair = this.source.getBoundary(runtimeStageId);
+  // ── Read API ────────────────────────────────────────────────────────
+
+  /** All events in capture order (the canonical projection). */
+  getEvents(): DomainEvent[] {
+    return this.getEntries();
+  }
+
+  /** Type-narrowed lookup: all events of one kind. */
+  getEventsByType<T extends DomainEvent['type']>(
+    type: T,
+  ): Extract<DomainEvent, { type: T }>[] {
+    const out: Extract<DomainEvent, { type: T }>[] = [];
+    for (const e of this.getEntries()) {
+      if (e.type === type) out.push(e as Extract<DomainEvent, { type: T }>);
+    }
+    return out;
+  }
+
+  // ── Back-compat / convenience query helpers ─────────────────────────
+
+  /** All boundary events (run + subflow, entry + exit interleaved). */
+  getBoundaries(): (DomainRunEvent | DomainSubflowEvent)[] {
+    const out: (DomainRunEvent | DomainSubflowEvent)[] = [];
+    for (const e of this.getEntries()) {
+      if (
+        e.type === 'run.entry' ||
+        e.type === 'run.exit' ||
+        e.type === 'subflow.entry' ||
+        e.type === 'subflow.exit'
+      ) {
+        out.push(e);
+      }
+    }
+    return out;
+  }
+
+  /** Just the entry-phase boundary events — the "step list" timeline. */
+  getSteps(): (DomainRunEvent | DomainSubflowEvent)[] {
+    return this.getBoundaries().filter(
+      (b) => b.type === 'run.entry' || b.type === 'subflow.entry',
+    );
+  }
+
+  /** Subset of `getSteps()` excluding agent-internal routing subflows. */
+  getVisibleSteps(): (DomainRunEvent | DomainSubflowEvent)[] {
+    return this.getSteps().filter(
+      (s) => s.type !== 'subflow.entry' || !s.isAgentInternal,
+    );
+  }
+
+  /** Entry/exit pair for one chart execution by `runtimeStageId`. */
+  getBoundary(runtimeStageId: string): {
+    entry?: DomainRunEvent | DomainSubflowEvent;
+    exit?: DomainRunEvent | DomainSubflowEvent;
+  } {
+    const matches = this.getEntriesForStep(runtimeStageId);
+    let entry: DomainRunEvent | DomainSubflowEvent | undefined;
+    let exit: DomainRunEvent | DomainSubflowEvent | undefined;
+    for (const e of matches) {
+      if (e.type === 'run.entry' || e.type === 'subflow.entry') entry = e;
+      else if (e.type === 'run.exit' || e.type === 'subflow.exit') exit = e;
+    }
     return {
-      ...(pair.entry ? { entry: tagEntry(pair.entry) } : {}),
-      ...(pair.exit ? { exit: tagEntry(pair.exit) } : {}),
+      ...(entry ? { entry } : {}),
+      ...(exit ? { exit } : {}),
     };
   }
 
-  /** Convenience for the outermost run pair. */
-  getRootBoundary(): { entry?: BoundaryEntry; exit?: BoundaryEntry } {
-    return this.getBoundary(ROOT_RUNTIME_STAGE_ID);
+  /** Convenience for the outermost `__root__` pair. */
+  getRootBoundary(): {
+    entry?: DomainRunEvent;
+    exit?: DomainRunEvent;
+  } {
+    const pair = this.getBoundary(ROOT_RUNTIME_STAGE_ID);
+    return {
+      ...(pair.entry?.type === 'run.entry' ? { entry: pair.entry } : {}),
+      ...(pair.exit?.type === 'run.exit' ? { exit: pair.exit } : {}),
+    };
   }
 
-  /** Subset of `getSteps()` that excludes Agent-internal routing subflows.
-   *  Lens uses this for the slider's scrub axis — clean timeline, no
-   *  router/branch noise. */
-  getVisibleSteps(): BoundaryEntry[] {
-    return this.getSteps().filter((s) => !s.isAgentInternal);
-  }
-
-  /** All entries grouped by `slotKind` — convenience for slot-row rendering
-   *  inside the LLM card. */
-  getSlotBoundaries(): { systemPrompt: BoundaryEntry[]; messages: BoundaryEntry[]; tools: BoundaryEntry[] } {
-    const systemPrompt: BoundaryEntry[] = [];
-    const messages: BoundaryEntry[] = [];
-    const tools: BoundaryEntry[] = [];
-    for (const b of this.getBoundaries()) {
-      if (b.slotKind === 'system-prompt') systemPrompt.push(b);
-      else if (b.slotKind === 'messages') messages.push(b);
-      else if (b.slotKind === 'tools') tools.push(b);
+  /** Subflow events grouped by the 3 input slots — for slot-row rendering. */
+  getSlotBoundaries(): {
+    systemPrompt: DomainSubflowEvent[];
+    messages: DomainSubflowEvent[];
+    tools: DomainSubflowEvent[];
+  } {
+    const systemPrompt: DomainSubflowEvent[] = [];
+    const messages: DomainSubflowEvent[] = [];
+    const tools: DomainSubflowEvent[] = [];
+    for (const e of this.getEntries()) {
+      if (e.type !== 'subflow.entry' && e.type !== 'subflow.exit') continue;
+      if (e.slotKind === 'system-prompt') systemPrompt.push(e);
+      else if (e.slotKind === 'messages') messages.push(e);
+      else if (e.slotKind === 'tools') tools.push(e);
     }
     return { systemPrompt, messages, tools };
   }
-}
 
-/** Factory — matches the `inOutRecorder()` / `topologyRecorder()` style. */
-export function boundaryRecorder(source: InOutRecorder): BoundaryRecorder {
-  return new BoundaryRecorder(source);
+  /** Snapshot bundle — included in `executor.getSnapshot()` if the
+   *  executor implements the snapshot extension protocol. */
+  toSnapshot() {
+    return {
+      name: 'BoundaryEvents',
+      description: 'Unified domain event log — run/subflow boundaries + LLM/tool/context events',
+      preferredOperation: 'translate' as const,
+      data: this.getEvents(),
+    };
+  }
 }
 
 // ── Internal helpers ─────────────────────────────────────────────────
 
-function tagEntry(e: InOutEntry): BoundaryEntry {
-  const slotKind = e.isRoot ? undefined : slotFromSubflowId(e.subflowId);
-  const primitiveKind = e.description ? parsePrimitiveKindFromDescription(e.description) : undefined;
-  const isAgentInternal = e.isRoot ? false : AGENT_INTERNAL_LOCAL_IDS.has(e.localSubflowId);
+function buildRunEvent(type: 'run.entry' | 'run.exit', payload: unknown): DomainRunEvent {
   return {
-    ...e,
-    ...(slotKind ? { slotKind } : {}),
-    ...(primitiveKind ? { primitiveKind } : {}),
-    isAgentInternal,
+    type,
+    runtimeStageId: ROOT_RUNTIME_STAGE_ID,
+    subflowPath: [ROOT_SUBFLOW_ID],
+    depth: 0,
+    ts: Date.now(),
+    payload,
+    isRoot: true,
   };
 }
 
-/**
- * Parse the `'<Kind>:'` prefix from a subflow root's description.
- * Returns `undefined` when no colon-prefix is present (consumer-authored
- * subflow without taxonomy markers).
- */
+function buildSubflowEvent(
+  event: FlowSubflowEvent,
+  type: 'subflow.entry' | 'subflow.exit',
+): DomainSubflowEvent | undefined {
+  const subflowId = event.subflowId;
+  if (!subflowId) return undefined;
+
+  const ctx = event.traversalContext;
+  const runtimeStageId = ctx?.runtimeStageId ?? '';
+  const segments = subflowId.split('/').filter(Boolean);
+  const subflowPath: readonly string[] = [ROOT_SUBFLOW_ID, ...segments];
+  const depth = subflowPath.length - 1;
+  const localSubflowId = segments[segments.length - 1] ?? subflowId;
+  const description = event.description;
+  const primitiveKind = description ? parsePrimitiveKindFromDescription(description) : undefined;
+  const slotKind = slotFromSubflowId(subflowId);
+  const isAgentInternal = AGENT_INTERNAL_LOCAL_IDS.has(localSubflowId);
+  const payload = type === 'subflow.entry' ? event.mappedInput : event.outputState;
+
+  return {
+    type,
+    runtimeStageId,
+    subflowPath,
+    depth,
+    ts: Date.now(),
+    subflowId,
+    localSubflowId,
+    subflowName: event.name,
+    ...(description ? { description } : {}),
+    ...(primitiveKind ? { primitiveKind } : {}),
+    ...(slotKind ? { slotKind } : {}),
+    isAgentInternal,
+    ...(payload !== undefined ? { payload } : {}),
+  };
+}
+
+function pathFromCtx(subflowPath: string | undefined): readonly string[] {
+  if (!subflowPath) return [ROOT_SUBFLOW_ID];
+  return [ROOT_SUBFLOW_ID, ...subflowPath.split('/').filter(Boolean)];
+}
+
+function ctxDepth(subflowPath: string | undefined): number {
+  return pathFromCtx(subflowPath).length - 1;
+}
+
 function parsePrimitiveKindFromDescription(description: string): string | undefined {
   const colonIdx = description.indexOf(':');
   if (colonIdx <= 0) return undefined;

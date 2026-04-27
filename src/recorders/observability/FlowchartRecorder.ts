@@ -210,7 +210,7 @@ export interface StepNode {
    * `InOutRecorder.getBoundary(runtimeStageId)` for downstream
    * libraries that want raw access.
    */
-  readonly entryPayload?: Readonly<Record<string, unknown>>;
+  readonly entryPayload?: unknown;
   /**
    * Payload at this subflow's exit — the subflow's shared state when the
    * `outputMapper` ran. Sourced from `InOutRecorder` via
@@ -224,14 +224,14 @@ export interface StepNode {
    * boundaries IS literally `prev.exitPayload → next.entryPayload` —
    * future Lens edges can render that directly.
    */
-  readonly exitPayload?: Readonly<Record<string, unknown>>;
+  readonly exitPayload?: unknown;
   /**
    * Stable per-execution key — `runtimeStageId` from footprintjs.
    * Identifies one specific execution of this subflow (loop iterations
    * get distinct values automatically). Lens uses this to:
    *   1. Bind hover/click between Trace view and Lens view (same id
    *      across both projections snaps them in sync).
-   *   2. Look up the underlying `StepBoundary` for raw payload access.
+   *   2. Look up the underlying `InOutEntry` for raw payload access.
    *
    * Only set for `kind === 'subflow'` nodes that came from
    * `InOutRecorder`. Empty string when the engine didn't propagate
@@ -485,7 +485,6 @@ class StepGraphBuilder {
       }
       case 'agentfootprint.stream.llm_end': {
         const hasToolCalls = event.payload.toolCallCount > 0;
-        const justClosed = this.nodes[this.nodes.length - 1];
         this.closeStep(offset, {
           tokens: { in: event.payload.usage.input, out: event.payload.usage.output },
         });
@@ -495,29 +494,24 @@ class StepGraphBuilder {
           // `llm->tool` step with its own non-zero duration. A marker
           // here would double-count the same transition and render as
           // a dangling edge before the tool execution actually begins.
-          // The LLM's decision-to-call-a-tool is observable IN step 1
-          // (this closed step) by the presence of toolCallCount > 0.
+          // The LLM's decision-to-call-a-tool is observable IN the closed
+          // step by the presence of toolCallCount > 0.
           this.pendingToolToLLM = false;
           this.emit();
-        } else if (justClosed && justClosed.kind === 'user->llm') {
-          // Simple one-call path (no tool ever invoked): user asked,
-          // LLM answered terminal. Collapse into one `llm->user` step.
-          // Keep iterationIndex (same iteration), clear slotUpdated
-          // (terminal delivery doesn't "update a slot").
-          (justClosed as { kind: StepNode['kind'] }).kind = 'llm->user';
-          (justClosed as { label: string }).label = 'llm → user';
-          (justClosed as { slotUpdated?: StepNode['slotUpdated'] }).slotUpdated = undefined;
-          this.emit();
         } else {
-          // Terminal LLM call AFTER a tool round-trip. Keep the closed
-          // `tool->llm` node (the LLM ingested the tool result) AND
-          // append a zero-duration `llm->user` delivery marker. This
-          // gives the user's 4-step mental model a distinct scrub
-          // position for "answer delivered" without double-counting
-          // the tool transition.
+          // Terminal LLM call (no tool calls). Append a separate
+          // `llm → user` step for the response delivery.
+          //
+          // BEFORE: for one-shot (justClosed.kind === 'user->llm') we
+          // collapsed `user → llm` into `llm → user` to render a single
+          // step. That hid the actor-arrow distinction the slider should
+          // surface — every LLM call has TWO arrows: in and out.
+          //
+          // NOW: always append a discrete `llm → user` delivery marker.
+          // Slider shows 2 steps for a one-shot LLMCall (user→llm + llm→user)
+          // and 4 steps for a tool-using Agent iteration (user→llm + llm→tool +
+          // tool→llm + llm→user). Consistent across primitives.
           const id = this.newId();
-          // Terminal delivery marker — inherits the iteration of the
-          // call that just terminated. No slot update (it's outbound).
           this.nodes.push({
             id,
             kind: 'llm->user',
@@ -676,27 +670,39 @@ function wrapPrimitiveRecorders(
 // ─── Topology → StepNode/StepEdge mapping ──────────────────────────
 
 /**
- * Subflow names that are pure plumbing — Agent state-machine routing
- * branches and footprintjs wrapper subflows that have no semantic meaning
- * to a developer reading the run. These get filtered from the StepGraph.
+ * Subflow names that are filtered from the StepGraph timeline.
  *
+ * The slider shows ACTOR ARROWS only — `user → llm`, `llm → tool`,
+ * `tool → llm`, `llm → user`. Internal subflows the Agent / LLMCall
+ * primitives use to compose context (the 3 input slots) or route
+ * control flow (callLLM / route / ToolCalls / Final / wrappers) are
+ * sub-components of those actor arrows, not separate scrub positions.
+ *
+ *   - "System Prompt" / "Messages" / "Tools" → 3 input slots; the LLM
+ *     call assembles them BEFORE dispatching. They're decomposed details
+ *     rendered INSIDE the LLM card (Lens reads slot data from
+ *     BoundaryRecorder when a slot row is inspected), but they don't
+ *     advance the slider.
  *   - "callLLM" / "route" / "ToolCalls" / "Final" → Agent state-machine
- *     branches; the ReAct step transitions (user→llm / llm→tool /
- *     tool→llm / llm→user) already capture the observable moments these
- *     produce.
+ *     branches; the ReAct step transitions already capture the observable
+ *     moments these produce.
  *   - "body" / "Compose … slot" → footprintjs-level wrappers.
  *
- * The 3 input slots (System Prompt / Messages / Tools) are NOT filtered
- * — they're real context-engineering moments. Every slot subflow's
- * inputMapper assembles the slot from its sources (RAG / Skill / Memory /
- * user / tool-result); that IS a step in the run, not noise. Surfacing
- * them as scrub targets makes context engineering visible — the central
- * thesis of agentfootprint Lens.
- *
- * InOutRecorder captures their entry/exit payloads regardless; this
- * filter only controls timeline visibility.
+ * The agentfootprint `BoundaryRecorder` captures every subflow's
+ * entry/exit payloads regardless — this filter only controls TIMELINE
+ * visibility. Use `boundaryRecorder.getSlotBoundaries()` to render slot
+ * detail inside the LLM card.
  */
 const AGENT_INTERNAL_SUBFLOW_NAMES: ReadonlySet<string> = new Set([
+  // The 3 input slots are sub-components of the `user → llm` ReAct step,
+  // NOT separate timeline steps. Lens reads their boundary payloads from
+  // BoundaryRecorder when a slot row is inspected, but they don't get
+  // their own slider position. Slider shows actor arrows only:
+  // user → llm, llm → tool, tool → llm, llm → user.
+  'System Prompt',
+  'Messages',
+  'Tools',
+  // Routing / wrapper internals — pure plumbing.
   'ToolCalls',
   'Final',
   'callLLM',
@@ -775,8 +781,8 @@ function isAgentInternalSubflow(n: { name?: string; id?: string }): boolean {
 type BoundaryIndex = ReadonlyMap<
   string,
   {
-    entry?: StepBoundary;
-    exit?: StepBoundary;
+    entry?: InOutEntry;
+    exit?: InOutEntry;
     runtimeStageId: string;
   }
 >;
@@ -787,7 +793,7 @@ function indexBoundariesByTopologyNodeId(boundaries: InOutRecorder): BoundaryInd
   // We key the bucket by the engine's path-prefixed `subflowId` —
   // same shape topology uses for its node ids, except topology adds a
   // `#n` suffix on re-entry. We track that suffix locally to match.
-  const index = new Map<string, { entry?: StepBoundary; exit?: StepBoundary; runtimeStageId: string }>();
+  const index = new Map<string, { entry?: InOutEntry; exit?: InOutEntry; runtimeStageId: string }>();
   // Per-subflowId re-entry counter — mirrors TopologyRecorder's logic.
   const reentryCount = new Map<string, number>();
   // Per-runtimeStageId → current node id (so a matching `exit` resolves to the right entry).

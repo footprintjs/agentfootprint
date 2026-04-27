@@ -236,9 +236,14 @@ describe('FlowchartRecorder — pattern 4: no context.injected events', () => {
     emit(dispatcher, 'agentfootprint.stream.llm_start', { model: 'mock', provider: 'mock', systemPromptChars: 0, messagesCount: 1, toolsCount: 0 });
     emit(dispatcher, 'agentfootprint.stream.llm_end', { content: 'hi', toolCallCount: 0, usage: { input: 1, output: 1 }, stopReason: 'stop' });
 
+    // 2 actor-arrow steps now: user→llm + llm→user. Injections attach to
+    // the user→llm half (the call that consumed assembled context); the
+    // llm→user marker is the response delivery and has no injection bag.
     const calls = llmCallSteps(getGraph());
-    expect(calls).toHaveLength(1);
+    expect(calls).toHaveLength(2);
+    expect(calls[0].kind).toBe('user->llm');
     expect(calls[0].injections ?? []).toEqual([]);
+    expect(calls[1].kind).toBe('llm->user');
   });
 });
 

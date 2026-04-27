@@ -94,13 +94,17 @@ function llmSteps(graph: StepGraph): readonly StepNode[] {
 // ─── Pattern 1: first user->llm is iteration 1 ────────────────────────
 
 describe('StepNode metadata — pattern 1: iteration starts at 1', () => {
-  it('first user->llm has iterationIndex === 1', () => {
+  it('one-shot LLMCall produces 2 steps (user→llm + llm→user), both at iteration 1', () => {
     const { dispatcher, getGraph } = freshRecorder();
     llmStart(dispatcher);
     llmEnd(dispatcher);
     const s = llmSteps(getGraph());
-    expect(s[0].kind).toBe('llm->user'); // relabeled by simple-path
+    // Slider shows 2 actor arrows now: user→llm + llm→user (no collapse).
+    expect(s).toHaveLength(2);
+    expect(s[0].kind).toBe('user->llm');
+    expect(s[1].kind).toBe('llm->user');
     expect(s[0].iterationIndex).toBe(1);
+    expect(s[1].iterationIndex).toBe(1);
   });
 });
 
