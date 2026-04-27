@@ -498,6 +498,10 @@ export function buildStepGraph(boundary: BoundaryRecorder): StepGraph {
           injections,
           iterationIndex: iter,
           slotUpdated: 'messages',
+          // Bind to the underlying boundary event's runtimeStageId so
+          // consumers (Lens commentary, custom dashboards) can look up
+          // every event that belongs to this LLM call by id.
+          runtimeStageId: e.runtimeStageId,
           ...(slotBoundaries ? { slotBoundaries } : {}),
         };
         nodes.push(node);
@@ -535,6 +539,7 @@ export function buildStepGraph(boundary: BoundaryRecorder): StepGraph {
             endOffsetMs: t,
             subflowPath: e.subflowPath,
             iterationIndex: iter,
+            runtimeStageId: e.runtimeStageId,
           };
           nodes.push(node);
           if (prevReActId) {
@@ -560,6 +565,7 @@ export function buildStepGraph(boundary: BoundaryRecorder): StepGraph {
           subflowPath: e.subflowPath,
           iterationIndex: iter,
           slotUpdated: 'tools',
+          runtimeStageId: e.runtimeStageId,
         };
         nodes.push(node);
         if (prevReActId) {
