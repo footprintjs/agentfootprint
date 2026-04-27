@@ -214,6 +214,115 @@ describe('buildStepGraph — P6: agent-internal routing subflows are skipped', (
   });
 });
 
+// ─── Slot boundary attribution (1:1 mapping with each LLM call) ──────
+
+describe('buildStepGraph — slot boundaries attached to each LLM step', () => {
+  function emitSlot(rec: BoundaryRecorder, slotId: string, name: string, runtimeStageId: string,
+                   inputData: Record<string, unknown>, outputData: Record<string, unknown>): void {
+    rec.onSubflowEntry!(subE(slotId, name, runtimeStageId, undefined, inputData));
+    rec.onSubflowExit!(subE(slotId, name, runtimeStageId, undefined, undefined, outputData));
+  }
+
+  it('S1: slot subflows preceding llm.start are attached to that StepNode', () => {
+    const { rec, dispatcher } = fresh();
+    emitSlot(rec, SUBFLOW_IDS.SYSTEM_PROMPT, 'SP', 'sp#0',
+             { sources: ['base'] }, { rendered: 'You are helpful.' });
+    emitSlot(rec, SUBFLOW_IDS.MESSAGES, 'M', 'm#1',
+             { history: 1 }, { messages: [{ role: 'user', content: 'hi' }] });
+    emitSlot(rec, SUBFLOW_IDS.TOOLS, 'T', 't#2',
+             { registered: 0 }, { tools: [] });
+    llmStart(dispatcher);
+    llmEnd(dispatcher, 0);
+
+    const userToLlm = buildStepGraph(rec).nodes.find((n) => n.kind === 'user->llm')!;
+    expect(userToLlm.slotBoundaries).toBeDefined();
+    expect(userToLlm.slotBoundaries!.systemPrompt?.entryPayload).toEqual({ sources: ['base'] });
+    expect(userToLlm.slotBoundaries!.systemPrompt?.exitPayload).toEqual({ rendered: 'You are helpful.' });
+    expect(userToLlm.slotBoundaries!.messages?.exitPayload).toEqual({
+      messages: [{ role: 'user', content: 'hi' }],
+    });
+    expect(userToLlm.slotBoundaries!.tools).toBeDefined();
+  });
+
+  it('S2: each iteration of an Agent gets its OWN slot boundary attribution', () => {
+    const { rec, dispatcher } = fresh();
+    // Iter 1
+    emitSlot(rec, SUBFLOW_IDS.SYSTEM_PROMPT, 'SP', 'sp#0', { v: 1 }, { v: 'iter1-prompt' });
+    emitSlot(rec, SUBFLOW_IDS.MESSAGES, 'M', 'm#1', { v: 1 }, { v: 'iter1-msgs' });
+    llmStart(dispatcher); llmEnd(dispatcher, 1);
+    toolStart(dispatcher, 't', 'c1'); toolEnd(dispatcher, 'c1');
+    // Iter 2
+    emitSlot(rec, SUBFLOW_IDS.SYSTEM_PROMPT, 'SP', 'sp#5', { v: 2 }, { v: 'iter2-prompt' });
+    emitSlot(rec, SUBFLOW_IDS.MESSAGES, 'M', 'm#6', { v: 2 }, { v: 'iter2-msgs' });
+    llmStart(dispatcher); llmEnd(dispatcher, 0);
+
+    const reactNodes = buildStepGraph(rec).nodes.filter(
+      (n) => n.kind === 'user->llm' || n.kind === 'tool->llm',
+    );
+    expect(reactNodes).toHaveLength(2);
+    // Iter 1 sees iter1 slots; iter 2 sees iter2 slots — no cross-contamination.
+    expect(reactNodes[0].slotBoundaries!.systemPrompt!.exitPayload).toEqual({ v: 'iter1-prompt' });
+    expect(reactNodes[1].slotBoundaries!.systemPrompt!.exitPayload).toEqual({ v: 'iter2-prompt' });
+  });
+
+  it('S3: SlotBoundary carries the runtimeStageId for cross-view binding', () => {
+    const { rec, dispatcher } = fresh();
+    emitSlot(rec, SUBFLOW_IDS.SYSTEM_PROMPT, 'SP', 'sp#42', {}, {});
+    llmStart(dispatcher); llmEnd(dispatcher, 0);
+
+    const node = buildStepGraph(rec).nodes.find((n) => n.kind === 'user->llm')!;
+    expect(node.slotBoundaries!.systemPrompt!.runtimeStageId).toBe('sp#42');
+  });
+
+  it('S4: missing slots leave the entry undefined (partial attribution OK)', () => {
+    const { rec, dispatcher } = fresh();
+    // Only system-prompt fires — messages and tools skipped.
+    emitSlot(rec, SUBFLOW_IDS.SYSTEM_PROMPT, 'SP', 'sp#0', {}, { v: 'only sp' });
+    llmStart(dispatcher); llmEnd(dispatcher, 0);
+
+    const node = buildStepGraph(rec).nodes.find((n) => n.kind === 'user->llm')!;
+    expect(node.slotBoundaries!.systemPrompt?.exitPayload).toEqual({ v: 'only sp' });
+    expect(node.slotBoundaries!.messages).toBeUndefined();
+    expect(node.slotBoundaries!.tools).toBeUndefined();
+  });
+
+  it('S5: slot subflows AFTER the LLM end do NOT leak into the previous step', () => {
+    const { rec, dispatcher } = fresh();
+    llmStart(dispatcher); llmEnd(dispatcher, 0);
+    // After the llm.end, a slot fires (would belong to a hypothetical
+    // next call, but there isn't one) — must not retroactively attach
+    // to the just-closed step.
+    emitSlot(rec, SUBFLOW_IDS.SYSTEM_PROMPT, 'SP', 'sp#9', {}, { v: 'late' });
+
+    const node = buildStepGraph(rec).nodes.find((n) => n.kind === 'user->llm')!;
+    expect(node.slotBoundaries).toBeUndefined();
+  });
+
+  it('S6: nested slot subflowId (path-prefixed) still attributed correctly', () => {
+    const { rec, dispatcher } = fresh();
+    rec.onSubflowEntry!(
+      subE(`internals/${SUBFLOW_IDS.SYSTEM_PROMPT}`, 'SP', 'sp#0', undefined, { in: 1 }),
+    );
+    rec.onSubflowExit!(
+      subE(`internals/${SUBFLOW_IDS.SYSTEM_PROMPT}`, 'SP', 'sp#0', undefined, undefined, { out: 2 }),
+    );
+    llmStart(dispatcher); llmEnd(dispatcher, 0);
+
+    const node = buildStepGraph(rec).nodes.find((n) => n.kind === 'user->llm')!;
+    expect(node.slotBoundaries!.systemPrompt!.entryPayload).toEqual({ in: 1 });
+    expect(node.slotBoundaries!.systemPrompt!.exitPayload).toEqual({ out: 2 });
+  });
+
+  it('S7: llm→user terminal marker has NO slotBoundaries (only ingress steps do)', () => {
+    const { rec, dispatcher } = fresh();
+    emitSlot(rec, SUBFLOW_IDS.SYSTEM_PROMPT, 'SP', 'sp#0', {}, { v: 'sp' });
+    llmStart(dispatcher); llmEnd(dispatcher, 0);
+
+    const llmToUser = buildStepGraph(rec).nodes.find((n) => n.kind === 'llm->user')!;
+    expect(llmToUser.slotBoundaries).toBeUndefined();
+  });
+});
+
 // ─── P7: context.injected attaches to next LLM step ────────────────────
 
 describe('buildStepGraph — P7: context.injected attaches to NEXT user→llm step', () => {

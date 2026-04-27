@@ -107,6 +107,41 @@ export interface StepNode {
   readonly exitPayload?: unknown;
   /** Stable per-execution key — same `runtimeStageId` Trace view uses. */
   readonly runtimeStageId?: string;
+  /**
+   * Slot boundary payloads composed for THIS LLM step.
+   *
+   * Set ONLY for `kind === 'user->llm'` and `kind === 'tool->llm'`
+   * StepNodes — the moments where context flows INTO the LLM. Each
+   * entry carries the slot subflow's `inputMapper` result (entryPayload)
+   * and rendered slot output (exitPayload).
+   *
+   * Attribution: any slot subflow that fired BETWEEN the previous LLM
+   * end (or run start) and THIS LLM start is attributed to this call.
+   * Done at projection time over `boundary.getEvents()`; no consumer-
+   * side correlation required.
+   *
+   * Lens uses this to make the 3 slot rows inside the LLM card
+   * clickable — clicking a slot reveals its entry/exit payloads in
+   * the right-pane detail panel without needing direct BoundaryRecorder
+   * access.
+   */
+  readonly slotBoundaries?: {
+    readonly systemPrompt?: SlotBoundary;
+    readonly messages?: SlotBoundary;
+    readonly tools?: SlotBoundary;
+  };
+}
+
+/** One slot's boundary pair attributed to a specific LLM step. */
+export interface SlotBoundary {
+  /** runtimeStageId of the slot subflow execution. */
+  readonly runtimeStageId: string;
+  /** `inputMapper` payload — the data the slot was COMPOSED FROM
+   *  (RAG hits, skill content, user message, tool result, etc). */
+  readonly entryPayload?: unknown;
+  /** Subflow shared state at exit — the rendered slot content
+   *  (system prompt string, messages array, tools array). */
+  readonly exitPayload?: unknown;
 }
 
 /** Consumer-facing context injection (5 axes of context engineering). */
@@ -277,6 +312,22 @@ export function buildStepGraph(boundary: BoundaryRecorder): StepGraph {
   let runStartTs: number | undefined;
   let activeNodeId: string | undefined;
 
+  /**
+   * Slot boundaries that fired since the LAST llm boundary; flushed
+   * onto the next user→llm or tool→llm StepNode at its `llm.start`
+   * event. Mirrors how `pendingInjections` works — same "buffer until
+   * the next LLM call consumes it" pattern.
+   *
+   * Cleared on each llm.start (after attribution) AND on llm.end with
+   * actorArrow='llm→tool' (the slots assembled BEFORE the next iteration
+   * may still fire after this point — keep buffering).
+   */
+  let pendingSlotBoundaries: {
+    systemPrompt?: SlotBoundary;
+    messages?: SlotBoundary;
+    tools?: SlotBoundary;
+  } = {};
+
   // Track open "subflow" nodes so we can close them on subflow.exit
   // (set endOffsetMs, exitPayload). Keyed by runtimeStageId — same key
   // the entry event carries; pause/in-progress subflows simply never
@@ -318,10 +369,17 @@ export function buildStepGraph(boundary: BoundaryRecorder): StepGraph {
         break;
       }
       case 'subflow.entry': {
-        // Skip subflows that are pure plumbing OR slot subflows (those
-        // are sub-components of the user→llm step, rendered inside the
-        // LLM card via `boundary.getSlotBoundaries()`).
-        if (e.isAgentInternal || e.slotKind) break;
+        // Slot subflows: NOT separate timeline steps — buffer their
+        // entry payload to attach to the next LLM call's StepNode.
+        if (e.slotKind) {
+          pendingSlotBoundaries[slotPropName(e.slotKind)] = {
+            runtimeStageId: e.runtimeStageId,
+            ...(e.payload !== undefined ? { entryPayload: e.payload } : {}),
+          };
+          break;
+        }
+        // Agent-internal routing: pure plumbing, not a step.
+        if (e.isAgentInternal) break;
         const node = subflowToStepNode(e, t);
         nodes.push(node);
         connectAdjacent(nodes, edges);
@@ -330,7 +388,20 @@ export function buildStepGraph(boundary: BoundaryRecorder): StepGraph {
         break;
       }
       case 'subflow.exit': {
-        if (e.isAgentInternal || e.slotKind) break;
+        // Slot subflow exit: enrich the buffered slot boundary with
+        // its rendered output (the actual slot content the LLM saw).
+        if (e.slotKind) {
+          const key = slotPropName(e.slotKind);
+          const existing = pendingSlotBoundaries[key];
+          if (existing) {
+            pendingSlotBoundaries[key] = {
+              ...existing,
+              ...(e.payload !== undefined ? { exitPayload: e.payload } : {}),
+            };
+          }
+          break;
+        }
+        if (e.isAgentInternal) break;
         const open = openSubflowsByRuntimeId.get(e.runtimeStageId);
         if (open) {
           (open as { endOffsetMs?: number }).endOffsetMs = t;
@@ -399,6 +470,13 @@ export function buildStepGraph(boundary: BoundaryRecorder): StepGraph {
         const id = `step-llm-start-${e.runtimeStageId}-${iter}`;
         const injections = pendingInjections;
         pendingInjections = [];
+        // Flush buffered slot boundaries onto this LLM step. Slot
+        // subflows that fired since the previous LLM end (or run start)
+        // are attributed to THIS call.
+        const slotBoundaries = Object.keys(pendingSlotBoundaries).length > 0
+          ? pendingSlotBoundaries
+          : undefined;
+        pendingSlotBoundaries = {};
         // BoundaryRecorder uses the unicode arrow `→` for the typed
         // `actorArrow` field; StepNode.kind uses ASCII `->` for legacy
         // compatibility. Map between them.
@@ -414,6 +492,7 @@ export function buildStepGraph(boundary: BoundaryRecorder): StepGraph {
           injections,
           iterationIndex: iter,
           slotUpdated: 'messages',
+          ...(slotBoundaries ? { slotBoundaries } : {}),
         };
         nodes.push(node);
         if (prevReActId) {
@@ -554,4 +633,18 @@ function findLastByKind(
     if (kinds.includes(nodes[i].kind)) return nodes[i];
   }
   return undefined;
+}
+
+/** Map a `slotKind` (kebab-case) to the camelCase property name on
+ *  `StepNode.slotBoundaries`. Single source — change here if either
+ *  side ever renames. */
+function slotPropName(slotKind: 'system-prompt' | 'messages' | 'tools'): 'systemPrompt' | 'messages' | 'tools' {
+  switch (slotKind) {
+    case 'system-prompt':
+      return 'systemPrompt';
+    case 'messages':
+      return 'messages';
+    case 'tools':
+      return 'tools';
+  }
 }
