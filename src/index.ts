@@ -115,6 +115,7 @@ export {
 export {
   BoundaryRecorder,
   boundaryRecorder,
+  type ActorArrow,
   type BoundaryRecorderOptions,
   type DomainContextInjectedEvent,
   type DomainDecisionBranchEvent,

@@ -159,6 +159,22 @@ export interface DomainLoopIterationEvent extends DomainEventBase {
   readonly iteration: number;
 }
 
+/**
+ * The 4 actor arrows of a ReAct cycle. Tagged on `llm.start` / `llm.end`
+ * at capture time so consumers (slider, run-flow renderer) dispatch by
+ * `event.actorArrow` instead of running their own state machine.
+ *
+ *   - `'user→llm'` — first LLM call, or any LLM call NOT preceded by a
+ *     tool result (assembled-context delivery to the model).
+ *   - `'tool→llm'` — LLM call that follows a tool's result (the next
+ *     iteration of a ReAct loop).
+ *   - `'llm→tool'` — `llm.end` whose `toolCallCount > 0` (the LLM is
+ *     requesting tool execution).
+ *   - `'llm→user'` — `llm.end` with `toolCallCount === 0` (terminal
+ *     response delivered to the user).
+ */
+export type ActorArrow = 'user→llm' | 'tool→llm' | 'llm→tool' | 'llm→user';
+
 export interface DomainLLMStartEvent extends DomainEventBase {
   readonly type: 'llm.start';
   readonly model: string;
@@ -166,6 +182,9 @@ export interface DomainLLMStartEvent extends DomainEventBase {
   readonly systemPromptChars?: number;
   readonly messagesCount?: number;
   readonly toolsCount?: number;
+  /** Capture-time classification: `'user→llm'` for the first call or any
+   *  call not preceded by a tool result; `'tool→llm'` after a tool result. */
+  readonly actorArrow: 'user→llm' | 'tool→llm';
 }
 
 export interface DomainLLMEndEvent extends DomainEventBase {
@@ -174,6 +193,9 @@ export interface DomainLLMEndEvent extends DomainEventBase {
   readonly toolCallCount: number;
   readonly usage: { readonly input: number; readonly output: number };
   readonly stopReason?: string;
+  /** Capture-time classification: `'llm→tool'` when the LLM requested
+   *  tools (`toolCallCount > 0`); `'llm→user'` for terminal delivery. */
+  readonly actorArrow: 'llm→tool' | 'llm→user';
 }
 
 export interface DomainToolStartEvent extends DomainEventBase {
@@ -252,9 +274,22 @@ export class BoundaryRecorder
 {
   readonly id: string;
 
+  /**
+   * Tracks whether the most recent `llm.end` had toolCalls. Used to
+   * classify the NEXT `llm.start` as `'tool→llm'` (vs `'user→llm'` if
+   * there's no pending tool result). Reset on `clear()` and on every
+   * `llm.start` event after the classification is applied.
+   */
+  private prevLLMEndHadTools = false;
+
   constructor(options: BoundaryRecorderOptions = {}) {
     super();
     this.id = options.id ?? `boundary-${++_counter}`;
+  }
+
+  override clear(): void {
+    super.clear();
+    this.prevLLMEndHadTools = false;
   }
 
   // ── FlowRecorder hooks (footprintjs side) ───────────────────────────
@@ -350,6 +385,14 @@ export class BoundaryRecorder
     switch (event.type) {
       case 'agentfootprint.stream.llm_start': {
         const p = event.payload;
+        // Classify the actor arrow at capture time. State is local to
+        // THIS recorder and consumed-then-reset on each llm.start. No
+        // state machine spread across renderers; consumers just read
+        // `event.actorArrow`.
+        const actorArrow: 'user→llm' | 'tool→llm' = this.prevLLMEndHadTools
+          ? 'tool→llm'
+          : 'user→llm';
+        this.prevLLMEndHadTools = false;
         this.emit({
           type: 'llm.start',
           runtimeStageId,
@@ -361,11 +404,19 @@ export class BoundaryRecorder
           ...(p.systemPromptChars !== undefined ? { systemPromptChars: p.systemPromptChars } : {}),
           ...(p.messagesCount !== undefined ? { messagesCount: p.messagesCount } : {}),
           ...(p.toolsCount !== undefined ? { toolsCount: p.toolsCount } : {}),
+          actorArrow,
         });
         break;
       }
       case 'agentfootprint.stream.llm_end': {
         const p = event.payload;
+        const actorArrow: 'llm→tool' | 'llm→user' = p.toolCallCount > 0
+          ? 'llm→tool'
+          : 'llm→user';
+        // Set the pending flag for the NEXT llm.start (if any). A
+        // terminal call (toolCallCount === 0) leaves the flag false so
+        // a hypothetical follow-up call would correctly be 'user→llm'.
+        this.prevLLMEndHadTools = p.toolCallCount > 0;
         this.emit({
           type: 'llm.end',
           runtimeStageId,
@@ -376,6 +427,7 @@ export class BoundaryRecorder
           toolCallCount: p.toolCallCount,
           usage: { input: p.usage.input, output: p.usage.output },
           ...(p.stopReason ? { stopReason: p.stopReason } : {}),
+          actorArrow,
         });
         break;
       }

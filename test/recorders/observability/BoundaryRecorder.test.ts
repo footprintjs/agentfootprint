@@ -416,6 +416,147 @@ describe('BoundaryRecorder — query API', () => {
   });
 });
 
+// ─── ActorArrow classification (capture-time, no state machine) ───────
+
+describe('BoundaryRecorder — actorArrow classification', () => {
+  it('A1: first llm.start tagged user→llm; llm.end with no tools tagged llm→user', () => {
+    const { rec, dispatcher } = freshRecorder();
+    dispatchTyped(dispatcher, 'agentfootprint.stream.llm_start', { model: 'm', provider: 'p' });
+    dispatchTyped(dispatcher, 'agentfootprint.stream.llm_end', {
+      content: 'done', toolCallCount: 0, usage: { input: 1, output: 1 },
+    });
+    expect(rec.getEventsByType('llm.start')[0].actorArrow).toBe('user→llm');
+    expect(rec.getEventsByType('llm.end')[0].actorArrow).toBe('llm→user');
+  });
+
+  it('A2: llm.end with toolCallCount>0 tagged llm→tool', () => {
+    const { rec, dispatcher } = freshRecorder();
+    dispatchTyped(dispatcher, 'agentfootprint.stream.llm_start', { model: 'm', provider: 'p' });
+    dispatchTyped(dispatcher, 'agentfootprint.stream.llm_end', {
+      content: '', toolCallCount: 2, usage: { input: 1, output: 1 },
+    });
+    expect(rec.getEventsByType('llm.end')[0].actorArrow).toBe('llm→tool');
+  });
+
+  it('A3: llm.start AFTER a tool round-trip tagged tool→llm', () => {
+    const { rec, dispatcher } = freshRecorder();
+    // First call: tool requested
+    dispatchTyped(dispatcher, 'agentfootprint.stream.llm_start', { model: 'm', provider: 'p' });
+    dispatchTyped(dispatcher, 'agentfootprint.stream.llm_end', {
+      content: '', toolCallCount: 1, usage: { input: 1, output: 1 },
+    });
+    // Tool runs
+    dispatchTyped(dispatcher, 'agentfootprint.stream.tool_start', {
+      toolName: 't', toolCallId: 'c',
+    });
+    dispatchTyped(dispatcher, 'agentfootprint.stream.tool_end', {
+      toolCallId: 'c', result: 'x', durationMs: 10,
+    });
+    // Second call: should be tool→llm
+    dispatchTyped(dispatcher, 'agentfootprint.stream.llm_start', { model: 'm', provider: 'p' });
+    dispatchTyped(dispatcher, 'agentfootprint.stream.llm_end', {
+      content: 'done', toolCallCount: 0, usage: { input: 1, output: 1 },
+    });
+
+    const starts = rec.getEventsByType('llm.start');
+    expect(starts[0].actorArrow).toBe('user→llm');
+    expect(starts[1].actorArrow).toBe('tool→llm');
+
+    const ends = rec.getEventsByType('llm.end');
+    expect(ends[0].actorArrow).toBe('llm→tool');
+    expect(ends[1].actorArrow).toBe('llm→user');
+  });
+
+  it('A4: full ReAct cycle (1 iteration) yields 4 distinct actor arrows', () => {
+    const { rec, dispatcher } = freshRecorder();
+    dispatchTyped(dispatcher, 'agentfootprint.stream.llm_start', { model: 'm', provider: 'p' });
+    dispatchTyped(dispatcher, 'agentfootprint.stream.llm_end', {
+      content: '', toolCallCount: 1, usage: { input: 1, output: 1 },
+    });
+    dispatchTyped(dispatcher, 'agentfootprint.stream.tool_start', {
+      toolName: 't', toolCallId: 'c',
+    });
+    dispatchTyped(dispatcher, 'agentfootprint.stream.tool_end', {
+      toolCallId: 'c', result: 'x', durationMs: 1,
+    });
+    dispatchTyped(dispatcher, 'agentfootprint.stream.llm_start', { model: 'm', provider: 'p' });
+    dispatchTyped(dispatcher, 'agentfootprint.stream.llm_end', {
+      content: 'done', toolCallCount: 0, usage: { input: 1, output: 1 },
+    });
+
+    const arrows = rec
+      .getEvents()
+      .filter((e) => e.type === 'llm.start' || e.type === 'llm.end')
+      .map((e) => (e as { actorArrow: string }).actorArrow);
+    expect(arrows).toEqual(['user→llm', 'llm→tool', 'tool→llm', 'llm→user']);
+  });
+
+  it('A5: clear() resets the prevLLMEndHadTools flag — subsequent run starts fresh', () => {
+    const { rec, dispatcher } = freshRecorder();
+    dispatchTyped(dispatcher, 'agentfootprint.stream.llm_start', { model: 'm', provider: 'p' });
+    dispatchTyped(dispatcher, 'agentfootprint.stream.llm_end', {
+      content: '', toolCallCount: 1, usage: { input: 1, output: 1 },
+    });
+    rec.clear();
+    // After clear, the next llm.start should be user→llm (not tool→llm)
+    // even though the previous run ended with toolCalls.
+    dispatchTyped(dispatcher, 'agentfootprint.stream.llm_start', { model: 'm', provider: 'p' });
+    expect(rec.getEventsByType('llm.start')[0].actorArrow).toBe('user→llm');
+  });
+
+  it('A6: 2-iteration ReAct (tool→llm→tool→llm) maintains correct chain', () => {
+    const { rec, dispatcher } = freshRecorder();
+    // Iter 1
+    dispatchTyped(dispatcher, 'agentfootprint.stream.llm_start', { model: 'm', provider: 'p' });
+    dispatchTyped(dispatcher, 'agentfootprint.stream.llm_end', {
+      content: '', toolCallCount: 1, usage: { input: 1, output: 1 },
+    });
+    dispatchTyped(dispatcher, 'agentfootprint.stream.tool_start', {
+      toolName: 't', toolCallId: 'c1',
+    });
+    dispatchTyped(dispatcher, 'agentfootprint.stream.tool_end', {
+      toolCallId: 'c1', result: 'a', durationMs: 1,
+    });
+    // Iter 2 — also requests tool
+    dispatchTyped(dispatcher, 'agentfootprint.stream.llm_start', { model: 'm', provider: 'p' });
+    dispatchTyped(dispatcher, 'agentfootprint.stream.llm_end', {
+      content: '', toolCallCount: 1, usage: { input: 1, output: 1 },
+    });
+    dispatchTyped(dispatcher, 'agentfootprint.stream.tool_start', {
+      toolName: 't', toolCallId: 'c2',
+    });
+    dispatchTyped(dispatcher, 'agentfootprint.stream.tool_end', {
+      toolCallId: 'c2', result: 'b', durationMs: 1,
+    });
+    // Iter 3 — terminal
+    dispatchTyped(dispatcher, 'agentfootprint.stream.llm_start', { model: 'm', provider: 'p' });
+    dispatchTyped(dispatcher, 'agentfootprint.stream.llm_end', {
+      content: 'final', toolCallCount: 0, usage: { input: 1, output: 1 },
+    });
+
+    const arrows = rec
+      .getEvents()
+      .filter((e) => e.type === 'llm.start' || e.type === 'llm.end')
+      .map((e) => (e as { actorArrow: string }).actorArrow);
+    expect(arrows).toEqual([
+      'user→llm', 'llm→tool',  // iter 1
+      'tool→llm', 'llm→tool',  // iter 2
+      'tool→llm', 'llm→user',  // iter 3 (terminal)
+    ]);
+  });
+
+  it('A7: isolated llm.end (no preceding start) classifies on toolCallCount alone', () => {
+    // Defensive: malformed event order shouldn't crash. The classifier
+    // consults only the toolCallCount on llm.end — its actorArrow is
+    // independent of state. (State affects only the NEXT llm.start.)
+    const { rec, dispatcher } = freshRecorder();
+    dispatchTyped(dispatcher, 'agentfootprint.stream.llm_end', {
+      content: 'orphan', toolCallCount: 0, usage: { input: 1, output: 1 },
+    });
+    expect(rec.getEventsByType('llm.end')[0].actorArrow).toBe('llm→user');
+  });
+});
+
 // ─── Lifecycle ─────────────────────────────────────────────────────────
 
 describe('BoundaryRecorder — lifecycle', () => {
