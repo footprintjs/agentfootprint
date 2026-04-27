@@ -223,6 +223,12 @@ export interface DomainContextInjectedEvent extends DomainEventBase {
   readonly reason?: string;
   readonly sectionTag?: string;
   readonly upstreamRef?: string;
+  readonly retrievalScore?: number;
+  readonly rankPosition?: number;
+  /** Tokens consumed by this injection (from `budgetSpent.tokens`). */
+  readonly budgetTokens?: number;
+  /** Fraction of slot cap consumed (from `budgetSpent.fractionOfCap`). */
+  readonly budgetFraction?: number;
 }
 
 /** Discriminated union covering every observable moment in a run. */
@@ -476,6 +482,12 @@ export class BoundaryRecorder
           ...(p.reason ? { reason: p.reason } : {}),
           ...(p.sectionTag ? { sectionTag: p.sectionTag } : {}),
           ...(p.upstreamRef ? { upstreamRef: p.upstreamRef } : {}),
+          ...(p.retrievalScore !== undefined ? { retrievalScore: p.retrievalScore } : {}),
+          ...(p.rankPosition !== undefined ? { rankPosition: p.rankPosition } : {}),
+          ...(p.budgetSpent?.tokens !== undefined ? { budgetTokens: p.budgetSpent.tokens } : {}),
+          ...(p.budgetSpent?.fractionOfCap !== undefined
+            ? { budgetFraction: p.budgetSpent.fractionOfCap }
+            : {}),
         });
         break;
       }

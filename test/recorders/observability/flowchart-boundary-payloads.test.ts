@@ -124,7 +124,7 @@ describe('FlowchartRecorder boundary — P1: entryPayload from inputMapper', () 
     );
     recorder.onSubflowExit!(exitEvent('sf-task', 'Task', 'task#0', { result: 'done' }));
 
-    const subflowNode = getGraph().nodes.find((n) => n.kind === 'subflow' && n.id === 'sf-task');
+    const subflowNode = getGraph().nodes.find((n) => n.kind === 'subflow' && n.runtimeStageId === 'task#0');
     expect(subflowNode?.entryPayload).toEqual({ request: 'analyze' });
   });
 });
@@ -137,7 +137,7 @@ describe('FlowchartRecorder boundary — P2: exitPayload from subflow shared sta
     recorder.onSubflowEntry!(entryEvent('sf-task', 'Task', 'task#0', { in: 1 }));
     recorder.onSubflowExit!(exitEvent('sf-task', 'Task', 'task#0', { in: 1, out: 2 }));
 
-    const subflowNode = getGraph().nodes.find((n) => n.kind === 'subflow' && n.id === 'sf-task');
+    const subflowNode = getGraph().nodes.find((n) => n.kind === 'subflow' && n.runtimeStageId === 'task#0');
     expect(subflowNode?.exitPayload).toEqual({ in: 1, out: 2 });
   });
 });
@@ -150,7 +150,7 @@ describe('FlowchartRecorder boundary — P3: runtimeStageId on subflow nodes', (
     recorder.onSubflowEntry!(entryEvent('sf-x', 'X', 'x#5', {}));
     recorder.onSubflowExit!(exitEvent('sf-x', 'X', 'x#5', {}));
 
-    const subflowNode = getGraph().nodes.find((n) => n.kind === 'subflow' && n.id === 'sf-x');
+    const subflowNode = getGraph().nodes.find((n) => n.kind === 'subflow' && n.runtimeStageId === 'x#5');
     expect(subflowNode?.runtimeStageId).toBe('x#5');
   });
 });
@@ -189,15 +189,17 @@ describe('FlowchartRecorder boundary — P4: fork/decision nodes never carry pay
 describe('FlowchartRecorder boundary — P5: loop re-entry distinct payloads', () => {
   it('each loop iteration produces a separate subflow node with its own payload', () => {
     const { recorder, getGraph } = freshHandle();
-    // Same subflowId entered twice — TopologyRecorder appends `#1` to the
-    // second entry; InOutRecorder's index aligns by re-entry counter.
+    // Same subflowId entered twice — each iteration has a distinct
+    // runtimeStageId (engine's parent execution counter increments),
+    // so each becomes its own StepNode keyed by runtimeStageId.
     recorder.onSubflowEntry!(entryEvent('sf-iter', 'Iter', 'iter#0', { round: 1 }));
     recorder.onSubflowExit!(exitEvent('sf-iter', 'Iter', 'iter#0', { result: 'first' }));
     recorder.onSubflowEntry!(entryEvent('sf-iter', 'Iter', 'iter#1', { round: 2 }));
     recorder.onSubflowExit!(exitEvent('sf-iter', 'Iter', 'iter#1', { result: 'second' }));
 
     const subflowNodes = getGraph().nodes.filter((n) => n.kind === 'subflow');
-    expect(subflowNodes.map((n) => n.id)).toEqual(['sf-iter', 'sf-iter#1']);
+    // node.id IS the runtimeStageId now — single ID space across views.
+    expect(subflowNodes.map((n) => n.id)).toEqual(['iter#0', 'iter#1']);
     expect(subflowNodes[0].entryPayload).toEqual({ round: 1 });
     expect(subflowNodes[0].exitPayload).toEqual({ result: 'first' });
     expect(subflowNodes[1].entryPayload).toEqual({ round: 2 });
@@ -223,8 +225,8 @@ describe('FlowchartRecorder boundary — P6: nested subflows', () => {
     recorder.onSubflowExit!(exitEvent('sf-parent', 'Parent', 'p#0', { back: 'to caller' }));
 
     const nodes = getGraph().nodes.filter((n) => n.kind === 'subflow');
-    const parent = nodes.find((n) => n.id === 'sf-parent')!;
-    const child = nodes.find((n) => n.id === 'sf-parent/sf-child')!;
+    const parent = nodes.find((n) => n.runtimeStageId === 'p#0')!;
+    const child = nodes.find((n) => n.runtimeStageId === 'c#1')!;
 
     expect(parent.entryPayload).toEqual({ from: 'caller' });
     expect(parent.exitPayload).toEqual({ back: 'to caller' });
@@ -243,7 +245,7 @@ describe('FlowchartRecorder boundary — P7: in-progress subflow (entry without 
     );
     // No matching onSubflowExit — pause re-throws PauseSignal before exit fires.
 
-    const subflowNode = getGraph().nodes.find((n) => n.kind === 'subflow' && n.id === 'sf-pause');
+    const subflowNode = getGraph().nodes.find((n) => n.kind === 'subflow' && n.runtimeStageId === 'pause#0');
     expect(subflowNode?.entryPayload).toEqual({ question: 'Approve $50k?' });
     expect(subflowNode?.exitPayload).toBeUndefined();
     expect(subflowNode?.runtimeStageId).toBe('pause#0');

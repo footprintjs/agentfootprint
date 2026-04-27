@@ -1,80 +1,76 @@
 /**
- * FlowchartRecorder — live StepGraph for any Runner.
+ * FlowchartRecorder — StepGraph projection over `BoundaryRecorder`.
  *
- * Pattern: Wraps footprintjs `TopologyRecorder` (for control-flow edges
- *          and composition-structure nodes) + subscribes to the v2 event
- *          dispatcher (for ReAct step transitions: user→llm, llm→tool,
- *          tool→llm, llm→user). Produces a single StepGraph consumers
- *          render directly.
+ * Pattern: Pure projection. `attachFlowchart` wires a `BoundaryRecorder`
+ *          to the executor + dispatcher; `buildStepGraph` is a fold over
+ *          `boundary.getEvents()` that produces the renderer-friendly
+ *          `StepGraph` shape Lens (and any other consumer) renders.
+ *
+ *          ZERO state machine in this file. ZERO event subscription.
+ *          ZERO name-based filters. Everything that decides "what's a
+ *          step" lives in BoundaryRecorder via capture-time tags
+ *          (`actorArrow`, `slotKind`, `primitiveKind`, `isAgentInternal`).
+ *
  * Role:    Tier 3 observability. Enabled via
- *          `runner.enable.flowchart({ onUpdate })`. Zero footprintjs
- *          imports in the consumer; zero monkey-patching. Consumer gets
- *          a live, step-level graph + a subscription.
- * Emits:   Does NOT emit v2 events. Reads the footprintjs FlowRecorder
- *          channel AND the v2 typed event stream, merges them into one
- *          consumer-facing graph.
+ *          `runner.enable.flowchart({ onUpdate })`. The handle exposes:
  *
- * Why this lives here (not in Lens):
- *   - Step grouping (user→llm / llm→tool / tool→llm / llm→user) is ReAct
- *     semantics. That's the library's domain, not a UI concern.
- *   - Vue / Angular / CLI consumers get the same StepGraph for free.
- *   - Edge kinds (next / loop-iteration / fork-branch / decision-branch)
- *     are reused directly from footprintjs topology — no translation
- *     layer, no duplicate derivation.
- *   - Progressive rendering is free: every event updates the graph
- *     synchronously; `onUpdate` fires the moment the structure changes.
+ *            handle.getSnapshot()  → derived StepGraph (back-compat)
+ *            handle.boundary       → the underlying BoundaryRecorder
+ *                                     (Lens reads it directly for richer
+ *                                     queries: getSlotBoundaries(),
+ *                                     getEventsByType, etc.)
  *
- * Consumer example:
+ * Event → StepNode mapping (the entire policy):
  *
- *     const handle = agent.enable.flowchart({
- *       onUpdate: (graph) => {
- *         for (const step of graph.nodes) {
- *           if (step.kind === 'user->llm' || step.kind === 'tool->llm') {
- *             // step.injections carries the 5-axis chips for this call:
- *             //   slot × role × source × timing (upstreamRef) × decision
- *             // No post-walk, no correlation — the field is ready to render.
- *             for (const inj of step.injections ?? []) {
- *               console.log(`[${inj.slot}] ${inj.source}:${inj.sourceId ?? ''}`);
- *             }
- *           }
- *         }
- *       },
- *     });
+ *   run.entry            → StepNode kind='subflow', primitiveKind='Run'
+ *   subflow.entry        → StepNode kind='subflow' (skipped if isAgentInternal
+ *                                                    or slotKind set —
+ *                                                    those are sub-components
+ *                                                    of the actor arrows)
+ *   fork.branch          → StepNode kind='fork-branch'
+ *   decision.branch      → StepNode kind='decision-branch'
+ *   llm.start            → StepNode kind=actorArrow ('user→llm' | 'tool→llm')
+ *   tool.start           → StepNode kind='llm->tool'
+ *   llm.end terminal     → StepNode kind='llm->user' (delivery marker)
+ *   loop.iteration       → loop-iteration StepEdge
+ *   context.injected     → attached to NEXT user→llm / tool→llm StepNode
+ *
+ * Result: a one-to-one correspondence between visible scrubbable steps
+ * and DomainEvents. Adding a new event type adds one mapping line here
+ * (or in the pure projection); no state machine, no merging.
  */
 
-import {
-  inOutRecorder,
-  topologyRecorder,
-  type InOutRecorder,
-  type InOutEntry,
-  type TopologyRecorder,
-} from 'footprintjs/trace';
 import type { CombinedRecorder } from 'footprintjs';
 import type {
   AgentfootprintEvent,
   AgentfootprintEventType,
 } from '../../events/registry.js';
 import type { EventDispatcher } from '../../events/dispatcher.js';
+import {
+  BoundaryRecorder,
+  boundaryRecorder,
+  type DomainSubflowEvent,
+} from './BoundaryRecorder.js';
 
-// ─── Public types ────────────────────────────────────────────────────
+// ─── Public types (preserved shape — Lens consumes these today) ─────
 
 /**
  * One node in the step-level flowchart. Node kind drives rendering
  * (actor icon, color). ReAct steps carry token + tool details; topology
- * nodes (subflow / fork-branch / decision-branch) mirror their
- * footprintjs counterparts and exist so composition structure (Loop,
- * Parallel, Conditional, Swarm) stays visible in the graph.
+ * nodes (subflow / fork-branch / decision-branch) mirror the footprintjs
+ * composition events and exist so composition structure (Loop, Parallel,
+ * Conditional, Swarm) stays visible in the graph.
  */
 export interface StepNode {
   readonly id: string;
   readonly kind:
-    | 'user->llm' // context built → LLM call begins (first iteration)
-    | 'llm->tool' // LLM returned tool_calls → tool execution begins
-    | 'tool->llm' // tool_result returned → next LLM call begins
-    | 'llm->user' // terminal LLM response (no tool_calls)
-    | 'subflow' // agentfootprint subflow boundary (agent-as-tool, hierarchy)
-    | 'fork-branch' // one branch of a Parallel fan-out
-    | 'decision-branch'; // chosen branch of a Conditional
+    | 'user->llm'         // input arrived at the LLM (first iteration)
+    | 'llm->tool'         // LLM requested tool execution
+    | 'tool->llm'         // tool result returned, next LLM call begins
+    | 'llm->user'         // terminal LLM response (no tool calls remaining)
+    | 'subflow'           // composition boundary (root run + non-internal subflows)
+    | 'fork-branch'       // one branch of a Parallel fan-out
+    | 'decision-branch';  // chosen branch of a Conditional
   readonly label: string;
   readonly startOffsetMs: number;
   readonly endOffsetMs?: number;
@@ -84,189 +80,38 @@ export interface StepNode {
   readonly toolName?: string;
   /** user->llm / tool->llm: the model that was invoked. */
   readonly llmModel?: string;
-  /**
-   * Full subflow path from topology. Lens uses this to drill into a
-   * subflow boundary — click a `subflow` node → rendered its internal
-   * graph via `getSubtreeSnapshot` or nested FlowchartRecorder.
-   */
+  /** Decomposition of the underlying subflowId (rooted under '__root__'). */
   readonly subflowPath: readonly string[];
-  /**
-   * Context injections attributed to THIS step.
-   *
-   * Populated when:
-   *   - `kind === 'user->llm'` / `'tool->llm'` → the LLM call consumed
-   *     any `context.injected` events that fired in its slot-assembly
-   *     phase. Array length equals the event count; empty array means
-   *     the call was made with no injections (extremely rare — user
-   *     message is almost always injected).
-   *
-   * Undefined when:
-   *   - `kind === 'llm->user'` → terminal delivery marker; no
-   *     `llm_start` event opened it, so there's nothing to flush.
-   *   - `kind === 'subflow' / 'fork-branch' / 'decision-branch'` →
-   *     topology nodes; context is attributed to the LLM steps INSIDE
-   *     the subflow, not to the boundary itself.
-   *
-   * Attribution is deterministic: every `context.injected` event is
-   * consumed by the NEXT `stream.llm_start` that follows it. No
-   * ancestor walking, no time-window math, no post-walk in the
-   * consumer. See `ContextInjection` for the field set.
-   */
+  /** Context injections attributed to this step (LLM steps only). */
   readonly injections?: readonly ContextInjection[];
-  /**
-   * 1-based ReAct iteration this step belongs to.
-   *
-   * The iteration counter increments each time a new LLM call opens:
-   *   - First `user->llm` → iteration 1
-   *   - Each `tool->llm` (tool result → next LLM call) → iteration N+1
-   *   - `llm->tool` and `llm->user` inherit the iteration of the LLM
-   *     call they're bound to.
-   *
-   * Special cases:
-   *   - LLMCall (single-shot primitive) → always iteration 1
-   *   - LLMCall never has `tool->llm`, so never advances past 1
-   *   - Agent with no tool calls → terminal marker at iteration 1
-   *
-   * Undefined for topology nodes (subflow / fork-branch / decision-branch)
-   * where the concept of "ReAct iteration" doesn't apply — those are
-   * composition boundaries, not LLM-call boundaries.
-   *
-   * Distinct from Loop iterations: footprintjs topology carries
-   * `loop-iteration` edges with their own `iteration?: number`.
-   * `iterationIndex` is ReAct-specific; `StepEdge.iteration` is
-   * Loop-specific. Different concepts, different fields.
-   *
-   * Use: Lens renders an "iter N/total" badge on the Agent container
-   * so the student knows which round they're scrubbing. No consumer-
-   * side counting required.
-   */
+  /** 1-based ReAct iteration this step belongs to. Undefined for
+   *  topology / composition nodes. */
   readonly iterationIndex?: number;
-  /**
-   * Which of the Agent's three slots observably CHANGED at this step.
-   * Drives per-slot highlight / pulse on the LLM card so the student
-   * sees the flow of context one step at a time.
-   *
-   * Derivation (by step kind):
-   *   - `user->llm` → `messages` (user message just arrived in-slot)
-   *   - `tool->llm` → `messages` (tool result just arrived as tool-role)
-   *   - `llm->tool` → `tools` (LLM invoking from the tools slot)
-   *   - `llm->user` → undefined (answer delivery; nothing new in-slot)
-   *   - subflow / fork-branch / decision-branch → undefined
-   */
+  /** Which slot the step's input updated. ReAct steps only. */
   readonly slotUpdated?: 'system-prompt' | 'messages' | 'tools';
-  /**
-   * True when this node represents an AGENT boundary (a real agent in
-   * a multi-agent composition, e.g. `triage` / `billing` / `tech` in a
-   * Swarm). Agent-internal subflows like `System Prompt` / `Messages`
-   * / `Tools` / `callLLM` / `route` are filtered out before they
-   * become StepNodes, so all surviving `subflow` nodes are agent
-   * boundaries. Downstream: Lens renders each as its own Agent
-   * container in drill-down mode.
-   */
+  /** True ONLY for `subflow` StepNodes whose primitiveKind is `'Agent'`.
+   *  Narrow flag for callers that distinguish ReAct agents from other
+   *  composition primitives (cost / iteration / token attribution). */
   readonly isAgentBoundary?: boolean;
-  /**
-   * Primitive kind parsed from the subflow root's description prefix
-   * (e.g., `'Agent: ReAct loop'` → `'Agent'`, `'LLMCall: one-shot'` →
-   * `'LLMCall'`, `'Sequence: 3-step pipeline'` → `'Sequence'`). Set on
-   * `subflow` StepNodes whose description follows the
-   * `'<Kind>: <detail>'` taxonomy convention; undefined otherwise.
-   *
-   * Use: lets downstream renderers (Lens) label a container with the
-   * correct primitive name + subtitle without re-parsing description
-   * strings. For example, an LLMCall sample shows
-   * `'LLMCall · one-shot'` instead of the wrong default
-   * `'Agent · ReAct loop'`.
-   */
+  /** Primitive kind from the subflow root description prefix
+   *  (`'Agent'` / `'LLMCall'` / `'Sequence'` / etc.). */
   readonly primitiveKind?: string;
-  /**
-   * True when this StepNode is a top-level boundary for ANY known
-   * primitive (Agent, LLMCall, Sequence, Parallel, Conditional, Loop).
-   * Drives the container/drill-in treatment in renderers like Lens —
-   * each primitive subflow surfaces as its own outlined container,
-   * regardless of whether it's a real ReAct agent or a composition.
-   *
-   * `isAgentBoundary` (narrow — true ONLY for `Agent`) stays available
-   * for callers that need to distinguish "real ReAct agent" from "any
-   * primitive" — useful for cost / iteration / token attribution that
-   * only applies to agents.
-   *
-   * Auxiliary subflows that pattern factories build internally (Swarm's
-   * `IdentityRunner`, mapReduce's `Split` / `Unpack` adapters) carry no
-   * `Kind:` prefix and are correctly NOT flagged as boundaries — they
-   * stay rendered as flat stages within their parent primitive.
-   */
+  /** True for `subflow` StepNodes representing any KNOWN primitive
+   *  (Agent / LLMCall / Sequence / Parallel / Conditional / Loop) —
+   *  drives Lens's drill-in container treatment. */
   readonly isPrimitiveBoundary?: boolean;
-  /**
-   * Payload from this subflow's `inputMapper` — the data that flowed IN
-   * at the boundary entry. Sourced from footprintjs `InOutRecorder`
-   * via the engine's `FlowSubflowEvent.mappedInput`. Only set for
-   * `kind === 'subflow'` nodes; topology nodes (`fork-branch` /
-   * `decision-branch`) don't have mapper payloads. Undefined when the
-   * subflow had no `inputMapper` or the mapper produced no output.
-   *
-   * Use: Lens's right-pane node-detail panel renders this as the
-   * "entered with" view — showing the developer exactly what context
-   * the subflow received. Same data is available via the underlying
-   * `InOutRecorder.getBoundary(runtimeStageId)` for downstream
-   * libraries that want raw access.
-   */
+  /** `inputMapper` payload at the subflow's entry. Subflow nodes only. */
   readonly entryPayload?: unknown;
-  /**
-   * Payload at this subflow's exit — the subflow's shared state when the
-   * `outputMapper` ran. Sourced from `InOutRecorder` via
-   * `FlowSubflowEvent.outputState`. Only set for `kind === 'subflow'`.
-   * Undefined for in-progress / paused subflows (the engine doesn't fire
-   * `onSubflowExit` until the subflow resumes and exits cleanly) — Lens
-   * should render an "in progress" placeholder in that case.
-   *
-   * Use: paired with `entryPayload`, this is the "exited with" view in
-   * Lens's right-pane node-detail panel. The arrow between two adjacent
-   * boundaries IS literally `prev.exitPayload → next.entryPayload` —
-   * future Lens edges can render that directly.
-   */
+  /** Subflow shared state at exit. Subflow nodes only.
+   *  Undefined for in-progress / paused subflows. */
   readonly exitPayload?: unknown;
-  /**
-   * Stable per-execution key — `runtimeStageId` from footprintjs.
-   * Identifies one specific execution of this subflow (loop iterations
-   * get distinct values automatically). Lens uses this to:
-   *   1. Bind hover/click between Trace view and Lens view (same id
-   *      across both projections snaps them in sync).
-   *   2. Look up the underlying `InOutEntry` for raw payload access.
-   *
-   * Only set for `kind === 'subflow'` nodes that came from
-   * `InOutRecorder`. Empty string when the engine didn't propagate
-   * a runtime context (defensive default).
-   */
+  /** Stable per-execution key — same `runtimeStageId` Trace view uses. */
   readonly runtimeStageId?: string;
 }
 
-/**
- * Consumer-facing shape of a context injection — the teaching payload
- * for one chip in Lens (and for any non-React consumer's equivalent).
- *
- * Mirrors the 5 axes of the unified context-engineering model:
- *   1. `slot`      — which of system-prompt / messages / tools
- *   2. `asRole`    — role assigned inside the slot (for messages)
- *   3. `source`    — the flavor (rag / skill / memory / instruction / user / tool-result)
- *   4. Timing      — carried by `upstreamRef` + `reason`
- *   5. Decision    — rule-based vs LLM-guided; derivable from `source`
- *                    or explicit via `decisionKind`
- *
- * Every field below is sourced verbatim from the `context.injected`
- * event payload. No reinterpretation, no renaming.
- */
+/** Consumer-facing context injection (5 axes of context engineering). */
 export interface ContextInjection {
-  /**
-   * Which of the three Agent input slots this injection targets.
-   * Closed set — adding a slot kind is a breaking change to the v2
-   * API surface. Keep in sync with `ContextSlot` in
-   * `src/events/payloads.ts`.
-   */
   readonly slot: 'system-prompt' | 'messages' | 'tools';
-  /**
-   * Role inside the slot (for `messages` only). Closed set —
-   * widening requires a major version bump.
-   */
   readonly asRole?: 'system' | 'user' | 'assistant' | 'tool';
   readonly source: string;
   readonly sourceId?: string;
@@ -280,16 +125,11 @@ export interface ContextInjection {
   readonly budgetFraction?: number;
 }
 
-/**
- * One edge between two step nodes. Kinds mirror footprintjs topology
- * exactly — consumers don't have to learn a separate vocabulary.
- */
 export interface StepEdge {
   readonly id: string;
   readonly from: string;
   readonly to: string;
   readonly kind: 'next' | 'loop-iteration' | 'fork-branch' | 'decision-branch';
-  /** Loop body index — only set for `loop-iteration` edges. */
   readonly iteration?: number;
 }
 
@@ -300,66 +140,72 @@ export interface StepGraph {
 }
 
 export interface FlowchartOptions {
-  /**
-   * Called each time the graph changes (ReAct step starts/ends, subflow
-   * entry/exit, fork/decision branch taken, loop iterates). Fires
-   * synchronously on the driving event, so the UI updates the moment
-   * the structure changes.
-   */
+  /** Called each time the graph changes; fires synchronously on the
+   *  driving event so the UI updates the moment the structure changes. */
   readonly onUpdate?: (graph: StepGraph) => void;
 }
 
 export interface FlowchartHandle {
-  /** Current step graph. Safe to call during or after a run. */
+  /** Current step graph (derived from boundary events). Safe during or
+   *  after a run. */
   readonly getSnapshot: () => StepGraph;
+  /** Underlying BoundaryRecorder. Use for richer queries — slot data,
+   *  full event log, type-narrowed lookups. The single source of truth
+   *  Lens reads. */
+  readonly boundary: BoundaryRecorder;
   /** Detach from executor + dispatcher. Subsequent events ignored. */
   readonly unsubscribe: () => void;
 }
-
-// Deprecated shapes — kept exported so external consumers that fetched
-// the raw topology don't break during migration. Lens reads StepGraph now.
-// TODO: delete after the playground migration is verified.
-export type {
-  // Re-exported for back-compat; new code should use `StepGraph`.
-};
 
 // ─── Attach entry point ──────────────────────────────────────────────
 
 /**
  * Attach a live FlowchartRecorder to a runner.
  *
- * Internal contract: the caller hands us:
- *   - `runnerAttach(recorder)` — wires a CombinedRecorder through to the
- *     executor's attachCombinedRecorder chain. We pass in a
- *     TopologyRecorder-backed CombinedRecorder here.
- *   - `dispatcher` — the v2 EventDispatcher we subscribe to for ReAct
- *     step transitions (stream.llm_* / stream.tool_*).
+ *   1. Creates a `BoundaryRecorder` (the unified domain event log).
+ *   2. Attaches it to the executor's FlowRecorder channel via
+ *      `runnerAttach` — captures run / subflow / fork / decision / loop.
+ *   3. Subscribes it to the dispatcher — captures llm.* / tool.* /
+ *      context.injected.
+ *   4. Wires `onUpdate` so the consumer sees a fresh derived StepGraph
+ *      on every event.
  *
- * Called from `RunnerBase.enable.flowchart`.
- *
- * @internal
+ * @internal Called from `RunnerBase.enable.flowchart`.
  */
 export function attachFlowchart(
   runnerAttach: (recorder: CombinedRecorder) => () => void,
   dispatcher: EventDispatcher,
   options: FlowchartOptions = {},
 ): FlowchartHandle {
-  const builder = new StepGraphBuilder(options.onUpdate);
-  const topo = topologyRecorder();
-  const boundaries = inOutRecorder();
-  const recorder = wrapPrimitiveRecorders(topo, boundaries, builder);
-  const offAttach = runnerAttach(recorder);
+  const boundary = boundaryRecorder();
+  const onUpdate = options.onUpdate;
 
-  // Subscribe to ReAct transitions from the v2 dispatcher.
+  // Wrap the recorder to also re-emit StepGraph after each FlowRecorder
+  // event. Without this, consumers see updates only on dispatcher events
+  // (which fire less often than subflow boundaries).
+  const wrapped: CombinedRecorder = onUpdate
+    ? wrapWithEmit(boundary, () => onUpdate(buildStepGraph(boundary)))
+    : boundary;
+
+  const offAttach = runnerAttach(wrapped);
+
+  // Subscribe to typed events. The boundary recorder emits a domain
+  // event per llm/tool/context event and we re-derive the StepGraph.
   const offDispatcher = dispatcher.on(
     '*' as unknown as AgentfootprintEventType,
     (event: AgentfootprintEvent) => {
-      builder.ingestV2(event);
+      // Boundary recorder ingests directly via its own subscribe — but
+      // since we own the lifecycle here, route through it explicitly so
+      // we control the onUpdate timing.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (boundary as any).ingestTypedEvent?.(event);
+      onUpdate?.(buildStepGraph(boundary));
     },
   );
 
   return {
-    getSnapshot: () => builder.snapshot(topo, boundaries),
+    getSnapshot: () => buildStepGraph(boundary),
+    boundary,
     unsubscribe: () => {
       offAttach();
       offDispatcher();
@@ -367,366 +213,31 @@ export function attachFlowchart(
   };
 }
 
-// ─── Step builder ────────────────────────────────────────────────────
-
 /**
- * Accumulates step nodes + edges as events arrive. State machine
- * tracks the ReAct cycle so consecutive events collapse into the
- * right step:
- *
- *   stream.llm_start (first)       → open 'user->llm'
- *   stream.llm_end (toolCalls>0)   → close current LLM step, next is 'llm->tool'
- *   stream.tool_start              → open 'llm->tool'
- *   stream.tool_end                → close, pending 'tool->llm'
- *   stream.llm_start (after tool)  → open 'tool->llm'
- *   stream.llm_end (toolCalls===0) → close as 'llm->user' (terminal)
- *
- * Topology nodes (subflow/fork/decision) append directly from the
- * FlowRecorder hooks in `wrapTopology()`.
+ * Wrap a recorder so each FlowRecorder hook also calls `afterEach` with
+ * a fresh snapshot. `afterEach` runs AFTER the wrapped hook returns so
+ * the snapshot reflects the just-applied event.
  */
-class StepGraphBuilder {
-  private readonly nodes: StepNode[] = [];
-  private readonly edges: StepEdge[] = [];
-  /** The currently-open step id — `undefined` when between steps. */
-  private openStepId?: string;
-  /** Run-start wall clock; used to compute startOffsetMs. */
-  private runStartMs?: number;
-  /** Seq counter for unique node ids across the run. */
-  private seq = 0;
-  /** True when the last closed LLM step had tool calls → next LLM is tool->llm. */
-  private pendingToolToLLM = false;
-  /**
-   * 1-based ReAct iteration counter. Incremented on every LLM call
-   * open (user->llm / tool->llm); llm->tool and llm->user markers
-   * inherit the current value. Zero before the first LLM call.
-   */
-  private iterationCounter = 0;
-  /**
-   * Context injections seen since the last `stream.llm_start` — attributed
-   * to the NEXT LLM call at open-step time. This is the "every injection
-   * belongs to the upcoming LLM call" rule made concrete: a single buffer
-   * that's flushed into the StepNode on creation. No post-walk, no
-   * ancestor scan, no time-window math.
-   *
-   * Cleared at every `stream.llm_start` after the StepNode absorbs it.
-   * Accumulates from any `agentfootprint.context.injected` event that
-   * lands between llm calls — which is precisely the slot-assembly phase.
-   *
-   * Ordering invariant: context.injected events ALWAYS precede the
-   * llm_start they feed. Enforced by the library — slot assembly runs
-   * synchronously before the LLM call is dispatched. An out-of-order
-   * event (hypothetical race) would be lost from StepNode.injections
-   * but still appears in the EventLog, so consumers retain access.
-   */
-  private pendingInjections: ContextInjection[] = [];
-
-  constructor(private readonly onUpdate?: (g: StepGraph) => void) {}
-
-  /**
-   * Snapshot the graph. Composition structure comes from `topo`; subflow
-   * boundary payloads (entry/exit) come from `boundaries`. The two
-   * recorders bind by `runtimeStageId` — same key, two perspectives, one
-   * graph.
-   */
-  snapshot(topo: TopologyRecorder, boundaries: InOutRecorder): StepGraph {
-    // Merge ReAct step nodes with topology nodes. Topology nodes use
-    // their own ids (subflow paths) — they won't collide with the
-    // `step-N` ids we assign.
-    const topology = topo.getTopology();
-    const boundaryIndex = indexBoundariesByTopologyNodeId(boundaries);
-    const mergedNodes = [...this.nodes, ...mapTopologyToSteps(topology.nodes, boundaryIndex)];
-    const mergedEdges = [...this.edges, ...mapTopologyEdges(topology.edges, topology.nodes)];
-    return {
-      nodes: mergedNodes,
-      edges: mergedEdges,
-      activeNodeId: this.openStepId ?? topology.activeNodeId ?? undefined,
-    };
-  }
-
-  ingestV2(event: AgentfootprintEvent): void {
-    const wall = event.meta.wallClockMs;
-    if (this.runStartMs === undefined) this.runStartMs = wall;
-    const offset = wall - this.runStartMs;
-
-    switch (event.type) {
-      case 'agentfootprint.context.injected': {
-        // Buffer the injection; it will be attributed to the NEXT
-        // llm_start when the step is created. This is the architectural
-        // commitment: the LLM call consumes its context-assembly
-        // output; we record the hand-off by baking the injections into
-        // the StepNode at open time.
-        this.pendingInjections.push(mapInjection(event.payload));
-        this.emit();
-        break;
-      }
-      case 'agentfootprint.stream.llm_start': {
-        const kind = this.pendingToolToLLM ? 'tool->llm' : 'user->llm';
-        // Flush pending injections into this step. Consumers read
-        // `step.injections` directly — no post-walk in the renderer.
-        const injections: readonly ContextInjection[] = this.pendingInjections;
-        this.pendingInjections = [];
-        // Bump the ReAct iteration counter. Every LLM call opens a
-        // new iteration — first call is iter 1; every tool->llm
-        // advances. llm->tool and llm->user markers inherit from
-        // their bound LLM call via `this.iterationCounter`.
-        this.iterationCounter += 1;
-        this.openStep({
-          kind,
-          label: kind === 'tool->llm' ? 'tool → llm' : 'user → llm',
-          startOffsetMs: offset,
-          llmModel: event.payload.model,
-          subflowPath: event.meta.subflowPath ?? [],
-          injections,
-          iterationIndex: this.iterationCounter,
-          slotUpdated: 'messages',
-        });
-        this.pendingToolToLLM = false;
-        break;
-      }
-      case 'agentfootprint.stream.llm_end': {
-        const hasToolCalls = event.payload.toolCallCount > 0;
-        this.closeStep(offset, {
-          tokens: { in: event.payload.usage.input, out: event.payload.usage.output },
-        });
-        if (hasToolCalls) {
-          // LLM emitted tool_calls. DO NOT add a zero-duration marker
-          // here — the upcoming `tool_start` event will open the real
-          // `llm->tool` step with its own non-zero duration. A marker
-          // here would double-count the same transition and render as
-          // a dangling edge before the tool execution actually begins.
-          // The LLM's decision-to-call-a-tool is observable IN the closed
-          // step by the presence of toolCallCount > 0.
-          this.pendingToolToLLM = false;
-          this.emit();
-        } else {
-          // Terminal LLM call (no tool calls). Append a separate
-          // `llm → user` step for the response delivery.
-          //
-          // BEFORE: for one-shot (justClosed.kind === 'user->llm') we
-          // collapsed `user → llm` into `llm → user` to render a single
-          // step. That hid the actor-arrow distinction the slider should
-          // surface — every LLM call has TWO arrows: in and out.
-          //
-          // NOW: always append a discrete `llm → user` delivery marker.
-          // Slider shows 2 steps for a one-shot LLMCall (user→llm + llm→user)
-          // and 4 steps for a tool-using Agent iteration (user→llm + llm→tool +
-          // tool→llm + llm→user). Consistent across primitives.
-          const id = this.newId();
-          this.nodes.push({
-            id,
-            kind: 'llm->user',
-            label: 'llm → user',
-            startOffsetMs: offset,
-            endOffsetMs: offset,
-            subflowPath: event.meta.subflowPath ?? [],
-            iterationIndex: this.iterationCounter,
-          });
-          this.connectPrev(id);
-          this.emit();
-        }
-        break;
-      }
-      case 'agentfootprint.stream.tool_start': {
-        // llm->tool step "updates" the tools slot (LLM invoked a tool
-        // from there). Inherits the current iteration.
-        this.openStep({
-          kind: 'llm->tool',
-          label: `llm → tool (${event.payload.toolName})`,
-          startOffsetMs: offset,
-          toolName: event.payload.toolName,
-          subflowPath: event.meta.subflowPath ?? [],
-          iterationIndex: this.iterationCounter,
-          slotUpdated: 'tools',
-        });
-        break;
-      }
-      case 'agentfootprint.stream.tool_end': {
-        this.closeStep(offset);
-        this.pendingToolToLLM = true;
-        break;
-      }
-    }
-  }
-
-  private openStep(data: Omit<StepNode, 'id' | 'endOffsetMs'>): void {
-    const id = this.newId();
-    this.nodes.push({ ...data, id });
-    this.connectPrev(id);
-    this.openStepId = id;
-    this.emit();
-  }
-
-  private closeStep(endOffsetMs: number, extra?: Pick<StepNode, 'tokens'>): void {
-    if (!this.openStepId) return;
-    const last = this.nodes[this.nodes.length - 1];
-    if (!last || last.id !== this.openStepId) {
-      this.openStepId = undefined;
-      return;
-    }
-    (last as { endOffsetMs: number }).endOffsetMs = endOffsetMs;
-    if (extra?.tokens) (last as { tokens: StepNode['tokens'] }).tokens = extra.tokens;
-    this.openStepId = undefined;
-    this.emit();
-  }
-
-  /** Connect the new node to the previous ReAct-step node via a `next` edge. */
-  private connectPrev(toId: string): void {
-    if (this.nodes.length < 2) return;
-    const from = this.nodes[this.nodes.length - 2];
-    // Only wire edges between ReAct-step nodes; topology nodes bring
-    // their own edges via the topology merge.
-    if (!isReActStep(from.kind)) return;
-    this.edges.push({
-      id: `${from.id}->${toId}`,
-      from: from.id,
-      to: toId,
-      kind: 'next',
-    });
-  }
-
-  private newId(): string {
-    return `step-${++this.seq}`;
-  }
-
-  private emit(): void {
-    if (!this.onUpdate) return;
-    // snapshot() needs the topology object; we don't hold one here, so
-    // emit a stub and rely on the snapshot helper at the call site. The
-    // real consumer entry point is `handle.getSnapshot()` which combines
-    // ReAct nodes + topology. For the onUpdate firing path we emit just
-    // the ReAct portion so the UI still updates; topology-only changes
-    // flow through `wrapTopology`'s own emit call.
-    this.onUpdate({
-      nodes: this.nodes,
-      edges: this.edges,
-      activeNodeId: this.openStepId,
-    });
-  }
-}
-
-function isReActStep(kind: StepNode['kind']): boolean {
-  return (
-    kind === 'user->llm' ||
-    kind === 'llm->tool' ||
-    kind === 'tool->llm' ||
-    kind === 'llm->user'
-  );
-}
-
-/**
- * Wrap TopologyRecorder + InOutRecorder into one CombinedRecorder.
- *
- * Each FlowRecorder hook fans out to BOTH primitive recorders so the
- * snapshot has access to composition shape (topology) AND boundary
- * payloads (mapped input/output). The consumer's `onUpdate` fires
- * after each event with a freshly-merged snapshot.
- *
- * Why both: TopologyRecorder captures fork-branch / decision-branch /
- * loop edges that InOutRecorder doesn't track. InOutRecorder
- * captures inputMapper/outputMapper payloads that TopologyRecorder
- * doesn't track. They're orthogonal and compose cleanly.
- */
-function wrapPrimitiveRecorders(
-  topo: TopologyRecorder,
-  boundaries: InOutRecorder,
-  builder: StepGraphBuilder,
-): CombinedRecorder {
-  const emit = () => {
-    const topology = topo.getTopology();
-    const boundaryIndex = indexBoundariesByTopologyNodeId(boundaries);
-    builder['onUpdate']?.({
-      nodes: [...builder['nodes'], ...mapTopologyToSteps(topology.nodes, boundaryIndex)],
-      edges: [...builder['edges'], ...mapTopologyEdges(topology.edges, topology.nodes)],
-      activeNodeId: builder['openStepId'] ?? topology.activeNodeId ?? undefined,
-    });
-  };
+function wrapWithEmit(boundary: BoundaryRecorder, afterEach: () => void): CombinedRecorder {
   return {
-    id: `flowchart-${topo.id}`,
-    onSubflowEntry: (e) => {
-      topo.onSubflowEntry?.(e);
-      boundaries.onSubflowEntry?.(e);
-      emit();
-    },
-    onSubflowExit: (e) => {
-      topo.onSubflowExit?.(e);
-      boundaries.onSubflowExit?.(e);
-      emit();
-    },
-    onFork: (e) => {
-      topo.onFork?.(e);
-      emit();
-    },
-    onDecision: (e) => {
-      topo.onDecision?.(e);
-      emit();
-    },
-    onLoop: (e) => {
-      topo.onLoop?.(e);
-      emit();
-    },
+    id: boundary.id,
+    onRunStart: (e) => { boundary.onRunStart!(e); afterEach(); },
+    onRunEnd: (e) => { boundary.onRunEnd!(e); afterEach(); },
+    onSubflowEntry: (e) => { boundary.onSubflowEntry!(e); afterEach(); },
+    onSubflowExit: (e) => { boundary.onSubflowExit!(e); afterEach(); },
+    onFork: (e) => { boundary.onFork!(e); afterEach(); },
+    onDecision: (e) => { boundary.onDecision!(e); afterEach(); },
+    onLoop: (e) => { boundary.onLoop!(e); afterEach(); },
   };
 }
 
-// ─── Topology → StepNode/StepEdge mapping ──────────────────────────
+// ─── Pure projection: events → StepGraph ─────────────────────────────
 
 /**
- * Subflow names that are filtered from the StepGraph timeline.
- *
- * The slider shows ACTOR ARROWS only — `user → llm`, `llm → tool`,
- * `tool → llm`, `llm → user`. Internal subflows the Agent / LLMCall
- * primitives use to compose context (the 3 input slots) or route
- * control flow (callLLM / route / ToolCalls / Final / wrappers) are
- * sub-components of those actor arrows, not separate scrub positions.
- *
- *   - "System Prompt" / "Messages" / "Tools" → 3 input slots; the LLM
- *     call assembles them BEFORE dispatching. They're decomposed details
- *     rendered INSIDE the LLM card (Lens reads slot data from
- *     BoundaryRecorder when a slot row is inspected), but they don't
- *     advance the slider.
- *   - "callLLM" / "route" / "ToolCalls" / "Final" → Agent state-machine
- *     branches; the ReAct step transitions already capture the observable
- *     moments these produce.
- *   - "body" / "Compose … slot" → footprintjs-level wrappers.
- *
- * The agentfootprint `BoundaryRecorder` captures every subflow's
- * entry/exit payloads regardless — this filter only controls TIMELINE
- * visibility. Use `boundaryRecorder.getSlotBoundaries()` to render slot
- * detail inside the LLM card.
- */
-const AGENT_INTERNAL_SUBFLOW_NAMES: ReadonlySet<string> = new Set([
-  // The 3 input slots are sub-components of the `user → llm` ReAct step,
-  // NOT separate timeline steps. Lens reads their boundary payloads from
-  // BoundaryRecorder when a slot row is inspected, but they don't get
-  // their own slider position. Slider shows actor arrows only:
-  // user → llm, llm → tool, tool → llm, llm → user.
-  'System Prompt',
-  'Messages',
-  'Tools',
-  // Routing / wrapper internals — pure plumbing.
-  'ToolCalls',
-  'Final',
-  'callLLM',
-  'route',
-  'body',
-  'Compose system-prompt slot',
-  'Compose messages slot',
-  'Compose tools slot',
-]);
-
-/**
- * Known primitives whose subflows surface as drill-in containers in
- * Lens. Each maps 1:1 to a builder/factory in `core/` (Agent, LLMCall),
- * `core-flow/` (Sequence/Parallel/Conditional/Loop), or a pattern that
- * is itself one of these primitives at the root (Swarm = Loop, etc.).
- *
- * Auxiliary subflows pattern factories build internally — Swarm's
- * `IdentityRunner`, mapReduce's `Split` / `Unpack` adapters — are NOT
- * in this set. They carry no `Kind:` prefix on their description, so
- * the boundary check correctly leaves them as flat stages.
- *
- * Adding a new primitive: add its name here AND add its description-
- * prefix marker at the primitive's `flowChart('...', ..., 'Kind: …')`
- * call site. Both sides are required.
+ * Closed set of primitives Lens treats as drill-in containers.
+ * Adding a new primitive: ship its `'Kind:'` description prefix at the
+ * builder's `flowChart('...', ..., 'Kind: …')` call site AND add the
+ * name here. Both sides are required.
  */
 const KNOWN_PRIMITIVES: ReadonlySet<string> = new Set([
   'Agent',
@@ -737,178 +248,310 @@ const KNOWN_PRIMITIVES: ReadonlySet<string> = new Set([
   'Loop',
 ]);
 
-function isAgentInternalSubflow(n: { name?: string; id?: string }): boolean {
-  const name = n.name ?? '';
-  if (AGENT_INTERNAL_SUBFLOW_NAMES.has(name)) return true;
-  // decision-body/... wrappers are synthetic routing artifacts; the
-  // chosen sub-agent surfaces as its own topology subflow node.
-  if (typeof n.id === 'string' && n.id.startsWith('decision-body')) return true;
-  return false;
-}
-
 /**
- * Topology nodes become `subflow` / `fork-branch` / `decision-branch`
- * StepNodes. Agent-internal subflows are filtered out — they're not
- * meaningful scrub targets.
+ * Project a `BoundaryRecorder`'s event stream into a `StepGraph`.
  *
- * `isAgentBoundary` is narrowed by the `'Agent:'` description prefix
- * that `Agent.buildChart()` writes onto its root stage. Composition
- * primitives (`Sequence:` / `Parallel:` / `Conditional:` / `Loop:`) and
- * `LLMCall:` subflows are NOT agent boundaries — they're composition
- * nodes. A Sequence of 2 LLMCalls thus produces zero agent boundaries;
- * a Swarm of 3 Agents produces 3 (once Swarm topology gap is fixed).
+ * Pure function — no side effects, no recorder mutation, deterministic.
+ * Called on every snapshot request and on every `onUpdate` fire. O(N)
+ * over the event stream; consumer-side memoization (e.g., React's
+ * `useMemo`) is straightforward when needed.
  *
- * Unknown / unmarked subflows default to `false` — consumer-authored
- * FlowCharts aren't treated as agents unless the author opts in by
- * prefixing their root description with `'Agent:'`. Forward-compatible:
- * future primitives self-identify with `'<Kind>:'` at build time.
- *
- * The prefix convention is the temporary contract. Long-term plan is a
- * dedicated metadata field; prefix is minimum-surface for v2.
+ * The mapping is local to each event type: see the mapping table in
+ * the file header. State carried across the fold:
+ *   - `iter`: 1-based ReAct iteration counter, incremented on each
+ *     `llm.start`. ReAct nodes inherit the current value.
+ *   - `pendingInjections`: context.injected events buffered between
+ *     LLM calls; flushed onto the next user→llm or tool→llm StepNode.
+ *   - `prevReActId`: id of the previous ReAct StepNode for `next`-edge
+ *     wiring within an iteration.
+ *   - `runStartTs`: wall-clock at run start, for relative offsets.
  */
-/**
- * Index of `InOutRecorder` entries keyed by their topology-node id.
- *
- * The topology node's id is the engine's path-prefixed `subflowId` plus
- * an optional `#n` re-entry suffix (added by `TopologyRecorder` to
- * disambiguate loop iterations). `InOutRecorder` keys by
- * `runtimeStageId`, which has different shape — so to align them we
- * walk subflow nodes in topology insertion order and pair each with the
- * corresponding boundary entry/exit pair (also in insertion order).
- *
- * Returns `Map<topologyNodeId, { entry?, exit?, runtimeStageId }>`.
- */
-type BoundaryIndex = ReadonlyMap<
-  string,
-  {
-    entry?: InOutEntry;
-    exit?: InOutEntry;
-    runtimeStageId: string;
-  }
->;
+export function buildStepGraph(boundary: BoundaryRecorder): StepGraph {
+  const events = boundary.getEvents();
+  const nodes: StepNode[] = [];
+  const edges: StepEdge[] = [];
 
-function indexBoundariesByTopologyNodeId(boundaries: InOutRecorder): BoundaryIndex {
-  // Build the index by walking the boundary stream. Each `entry` opens
-  // a new bucket; the next `exit` for the SAME runtimeStageId closes it.
-  // We key the bucket by the engine's path-prefixed `subflowId` —
-  // same shape topology uses for its node ids, except topology adds a
-  // `#n` suffix on re-entry. We track that suffix locally to match.
-  const index = new Map<string, { entry?: InOutEntry; exit?: InOutEntry; runtimeStageId: string }>();
-  // Per-subflowId re-entry counter — mirrors TopologyRecorder's logic.
-  const reentryCount = new Map<string, number>();
-  // Per-runtimeStageId → current node id (so a matching `exit` resolves to the right entry).
-  const openByRuntimeId = new Map<string, string>();
+  let iter = 0;
+  let pendingInjections: ContextInjection[] = [];
+  let prevReActId: string | undefined;
+  let runStartTs: number | undefined;
+  let activeNodeId: string | undefined;
 
-  for (const b of boundaries.getBoundaries()) {
-    if (b.phase === 'entry') {
-      const baseId = b.subflowId;
-      const seen = reentryCount.get(baseId) ?? 0;
-      const nodeId = seen === 0 ? baseId : `${baseId}#${seen}`;
-      reentryCount.set(baseId, seen + 1);
-      index.set(nodeId, { entry: b, runtimeStageId: b.runtimeStageId });
-      openByRuntimeId.set(b.runtimeStageId, nodeId);
-    } else {
-      const nodeId = openByRuntimeId.get(b.runtimeStageId);
-      if (!nodeId) continue;
-      const bucket = index.get(nodeId);
-      if (bucket) bucket.exit = b;
-      openByRuntimeId.delete(b.runtimeStageId);
+  // Track open "subflow" nodes so we can close them on subflow.exit
+  // (set endOffsetMs, exitPayload). Keyed by runtimeStageId — same key
+  // the entry event carries; pause/in-progress subflows simply never
+  // close their entry.
+  const openSubflowsByRuntimeId = new Map<string, StepNode>();
+
+  for (const e of events) {
+    if (runStartTs === undefined) runStartTs = e.ts;
+    const t = e.ts - runStartTs;
+
+    switch (e.type) {
+      case 'run.entry': {
+        const node: StepNode = {
+          id: e.runtimeStageId,
+          kind: 'subflow',
+          label: 'Run',
+          startOffsetMs: t,
+          subflowPath: e.subflowPath,
+          primitiveKind: 'Run',
+          isPrimitiveBoundary: false,
+          ...(e.payload !== undefined ? { entryPayload: e.payload } : {}),
+          runtimeStageId: e.runtimeStageId,
+        };
+        nodes.push(node);
+        openSubflowsByRuntimeId.set(e.runtimeStageId, node);
+        activeNodeId = node.id;
+        break;
+      }
+      case 'run.exit': {
+        const open = openSubflowsByRuntimeId.get(e.runtimeStageId);
+        if (open) {
+          (open as { endOffsetMs?: number }).endOffsetMs = t;
+          if (e.payload !== undefined) {
+            (open as { exitPayload?: unknown }).exitPayload = e.payload;
+          }
+          openSubflowsByRuntimeId.delete(e.runtimeStageId);
+        }
+        activeNodeId = undefined;
+        break;
+      }
+      case 'subflow.entry': {
+        // Skip subflows that are pure plumbing OR slot subflows (those
+        // are sub-components of the user→llm step, rendered inside the
+        // LLM card via `boundary.getSlotBoundaries()`).
+        if (e.isAgentInternal || e.slotKind) break;
+        const node = subflowToStepNode(e, t);
+        nodes.push(node);
+        connectAdjacent(nodes, edges);
+        openSubflowsByRuntimeId.set(e.runtimeStageId, node);
+        activeNodeId = node.id;
+        break;
+      }
+      case 'subflow.exit': {
+        if (e.isAgentInternal || e.slotKind) break;
+        const open = openSubflowsByRuntimeId.get(e.runtimeStageId);
+        if (open) {
+          (open as { endOffsetMs?: number }).endOffsetMs = t;
+          if (e.payload !== undefined) {
+            (open as { exitPayload?: unknown }).exitPayload = e.payload;
+          }
+          openSubflowsByRuntimeId.delete(e.runtimeStageId);
+        }
+        break;
+      }
+      case 'fork.branch': {
+        const id = `fork-${e.runtimeStageId}-${e.childName}`;
+        nodes.push({
+          id,
+          kind: 'fork-branch',
+          label: e.childName,
+          startOffsetMs: t,
+          subflowPath: e.subflowPath,
+        });
+        break;
+      }
+      case 'decision.branch': {
+        const id = `decision-${e.runtimeStageId}-${e.chosen}`;
+        nodes.push({
+          id,
+          kind: 'decision-branch',
+          label: e.chosen,
+          startOffsetMs: t,
+          subflowPath: e.subflowPath,
+        });
+        break;
+      }
+      case 'loop.iteration': {
+        // Self-edge on the currently active subflow node. If no active
+        // subflow node, drop the edge (edge with no `from` is invalid).
+        if (activeNodeId) {
+          edges.push({
+            id: `loop-${activeNodeId}-${e.iteration}`,
+            from: activeNodeId,
+            to: activeNodeId,
+            kind: 'loop-iteration',
+            iteration: e.iteration,
+          });
+        }
+        break;
+      }
+      case 'context.injected': {
+        pendingInjections.push({
+          slot: e.slot,
+          source: e.source,
+          ...(e.sourceId ? { sourceId: e.sourceId } : {}),
+          ...(e.asRole ? { asRole: e.asRole } : {}),
+          ...(e.contentSummary ? { contentSummary: e.contentSummary } : {}),
+          ...(e.reason ? { reason: e.reason } : {}),
+          ...(e.sectionTag ? { sectionTag: e.sectionTag } : {}),
+          ...(e.upstreamRef ? { upstreamRef: e.upstreamRef } : {}),
+          ...(e.retrievalScore !== undefined ? { retrievalScore: e.retrievalScore } : {}),
+          ...(e.rankPosition !== undefined ? { rankPosition: e.rankPosition } : {}),
+          ...(e.budgetTokens !== undefined ? { budgetTokens: e.budgetTokens } : {}),
+          ...(e.budgetFraction !== undefined ? { budgetFraction: e.budgetFraction } : {}),
+        });
+        break;
+      }
+      case 'llm.start': {
+        iter += 1;
+        const id = `step-llm-start-${e.runtimeStageId}-${iter}`;
+        const injections = pendingInjections;
+        pendingInjections = [];
+        // BoundaryRecorder uses the unicode arrow `→` for the typed
+        // `actorArrow` field; StepNode.kind uses ASCII `->` for legacy
+        // compatibility. Map between them.
+        const stepKind: StepNode['kind'] =
+          e.actorArrow === 'tool→llm' ? 'tool->llm' : 'user->llm';
+        const node: StepNode = {
+          id,
+          kind: stepKind,
+          label: stepKind === 'tool->llm' ? 'tool → llm' : 'user → llm',
+          startOffsetMs: t,
+          llmModel: e.model,
+          subflowPath: e.subflowPath,
+          injections,
+          iterationIndex: iter,
+          slotUpdated: 'messages',
+        };
+        nodes.push(node);
+        if (prevReActId) {
+          edges.push({
+            id: `${prevReActId}->${id}`,
+            from: prevReActId,
+            to: id,
+            kind: 'next',
+          });
+        }
+        prevReActId = id;
+        break;
+      }
+      case 'llm.end': {
+        // The just-prior llm.start's StepNode gets tokens added.
+        // For terminal calls (actorArrow='llm→user') we ALSO append a
+        // separate llm→user delivery marker so the slider has a
+        // distinct "answer delivered" position.
+        const lastStart = findLastByKind(nodes, ['user->llm', 'tool->llm']);
+        if (lastStart) {
+          (lastStart as { tokens?: StepNode['tokens'] }).tokens = {
+            in: e.usage.input,
+            out: e.usage.output,
+          };
+          (lastStart as { endOffsetMs?: number }).endOffsetMs = t;
+        }
+        if (e.actorArrow === 'llm→user') {
+          const id = `step-llm-end-${e.runtimeStageId}-${iter}`;
+          const node: StepNode = {
+            id,
+            kind: 'llm->user',
+            label: 'llm → user',
+            startOffsetMs: t,
+            endOffsetMs: t,
+            subflowPath: e.subflowPath,
+            iterationIndex: iter,
+          };
+          nodes.push(node);
+          if (prevReActId) {
+            edges.push({
+              id: `${prevReActId}->${id}`,
+              from: prevReActId,
+              to: id,
+              kind: 'next',
+            });
+          }
+          prevReActId = id;
+        }
+        break;
+      }
+      case 'tool.start': {
+        const id = `step-tool-start-${e.runtimeStageId}-${e.toolCallId}`;
+        const node: StepNode = {
+          id,
+          kind: 'llm->tool',
+          label: `llm → tool (${e.toolName})`,
+          startOffsetMs: t,
+          toolName: e.toolName,
+          subflowPath: e.subflowPath,
+          iterationIndex: iter,
+          slotUpdated: 'tools',
+        };
+        nodes.push(node);
+        if (prevReActId) {
+          edges.push({
+            id: `${prevReActId}->${id}`,
+            from: prevReActId,
+            to: id,
+            kind: 'next',
+          });
+        }
+        prevReActId = id;
+        break;
+      }
+      case 'tool.end': {
+        const lastTool = findLastByKind(nodes, ['llm->tool']);
+        if (lastTool) {
+          (lastTool as { endOffsetMs?: number }).endOffsetMs = t;
+        }
+        break;
+      }
     }
   }
 
-  return index;
+  return { nodes, edges, activeNodeId };
 }
 
-function mapTopologyToSteps(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  topoNodes: readonly any[],
-  boundaryIndex: BoundaryIndex,
-): StepNode[] {
-  return topoNodes
-    .filter((n) => !isAgentInternalSubflow(n))
-    .map((n) => {
-      const description: string | undefined = n.metadata?.description;
-      // Parse the `<Kind>:` taxonomy prefix from the root description.
-      // Anything before the first `:` is the primitive name (Agent /
-      // LLMCall / Sequence / Parallel / Conditional / Loop). Used for
-      // both the agent-boundary check and to surface the kind to
-      // downstream renderers.
-      const primitiveKind =
-        n.kind === 'subflow' && typeof description === 'string'
-          ? description.split(':', 1)[0]?.trim() || undefined
-          : undefined;
-      const isAgentBoundary = n.kind === 'subflow' && primitiveKind === 'Agent';
-      const isPrimitiveBoundary =
-        n.kind === 'subflow' &&
-        primitiveKind !== undefined &&
-        KNOWN_PRIMITIVES.has(primitiveKind);
+// ─── Helpers ─────────────────────────────────────────────────────────
 
-      // Boundary payloads — only meaningful for `subflow` nodes. Topology
-      // nodes (fork-branch / decision-branch) never appear in the
-      // InOutRecorder stream, so the lookup naturally yields
-      // `undefined` for them.
-      const bucket = n.kind === 'subflow' ? boundaryIndex.get(n.id) : undefined;
-
-      return {
-        id: n.id,
-        kind: n.kind as StepNode['kind'],
-        label: n.name ?? n.id,
-        startOffsetMs: 0,
-        subflowPath: [n.id],
-        isAgentBoundary,
-        isPrimitiveBoundary,
-        ...(primitiveKind ? { primitiveKind } : {}),
-        ...(bucket?.entry?.payload ? { entryPayload: bucket.entry.payload } : {}),
-        ...(bucket?.exit?.payload ? { exitPayload: bucket.exit.payload } : {}),
-        ...(bucket?.runtimeStageId ? { runtimeStageId: bucket.runtimeStageId } : {}),
-      };
-    });
-}
-
-/**
- * Translate a `context.injected` event payload into the consumer-facing
- * `ContextInjection` shape. Straight field copy — no interpretation,
- * no derivation. Consumers render the 5-axis model from this shape.
- *
- * @internal — called from the v2 event handler in StepGraphBuilder.
- */
-function mapInjection(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  payload: any,
-): ContextInjection {
+function subflowToStepNode(e: DomainSubflowEvent, t: number): StepNode {
+  const isAgentBoundary = e.primitiveKind === 'Agent';
+  const isPrimitiveBoundary =
+    e.primitiveKind !== undefined && KNOWN_PRIMITIVES.has(e.primitiveKind);
   return {
-    slot: payload.slot as ContextInjection['slot'],
-    asRole: payload.asRole,
-    source: payload.source ?? 'unknown',
-    sourceId: payload.sourceId,
-    contentSummary: payload.contentSummary,
-    reason: payload.reason,
-    sectionTag: payload.sectionTag,
-    upstreamRef: payload.upstreamRef,
-    retrievalScore: payload.retrievalScore,
-    rankPosition: payload.rankPosition,
-    budgetTokens: payload.budgetSpent?.tokens,
-    budgetFraction: payload.budgetSpent?.fractionOfCap,
+    id: e.runtimeStageId,
+    kind: 'subflow',
+    label: e.subflowName,
+    startOffsetMs: t,
+    subflowPath: e.subflowPath,
+    isAgentBoundary,
+    isPrimitiveBoundary,
+    ...(e.primitiveKind ? { primitiveKind: e.primitiveKind } : {}),
+    ...(e.payload !== undefined ? { entryPayload: e.payload } : {}),
+    runtimeStageId: e.runtimeStageId,
   };
 }
 
-function mapTopologyEdges(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  topoEdges: readonly any[],
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  topoNodes: readonly any[],
-): StepEdge[] {
-  // Drop edges whose endpoints we filtered out with the Agent internals.
-  // Keeping them would dangle — renderer would have no target to attach.
-  const keptIds = new Set(
-    topoNodes.filter((n) => !isAgentInternalSubflow(n)).map((n) => n.id),
+/** Append a `next` edge between the previous and current node IF both
+ *  are ReAct steps (we don't auto-wire subflow-to-subflow edges; those
+ *  come from explicit fork/decision events). */
+function connectAdjacent(nodes: StepNode[], edges: StepEdge[]): void {
+  if (nodes.length < 2) return;
+  const prev = nodes[nodes.length - 2];
+  const curr = nodes[nodes.length - 1];
+  if (!isReActKind(prev.kind) || !isReActKind(curr.kind)) return;
+  edges.push({
+    id: `${prev.id}->${curr.id}`,
+    from: prev.id,
+    to: curr.id,
+    kind: 'next',
+  });
+}
+
+function isReActKind(kind: StepNode['kind']): boolean {
+  return (
+    kind === 'user->llm' ||
+    kind === 'llm->tool' ||
+    kind === 'tool->llm' ||
+    kind === 'llm->user'
   );
-  return topoEdges
-    .filter((e) => keptIds.has(e.from) && keptIds.has(e.to))
-    .map((e) => ({
-      id: `topo-${e.from}->${e.to}-${e.kind}`,
-      from: e.from,
-      to: e.to,
-      kind: e.kind as StepEdge['kind'],
-    }));
+}
+
+function findLastByKind(
+  nodes: readonly StepNode[],
+  kinds: readonly StepNode['kind'][],
+): StepNode | undefined {
+  for (let i = nodes.length - 1; i >= 0; i--) {
+    if (kinds.includes(nodes[i].kind)) return nodes[i];
+  }
+  return undefined;
 }
