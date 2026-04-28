@@ -40,3 +40,50 @@ export interface ToolRegistryEntry {
   readonly name: string;
   readonly tool: Tool;
 }
+
+/**
+ * Convenience input for `defineTool` — flatter than `Tool` itself.
+ * Consumers describe the tool inline; the helper assembles `schema`.
+ *
+ * `inputSchema` is a JSON Schema object (the same one the LLM will
+ * see). For tools that take no arguments, pass `{ type: 'object',
+ * properties: {} }` or omit and we'll default to that.
+ */
+export interface DefineToolOptions<TArgs, TResult> {
+  readonly name: string;
+  readonly description: string;
+  readonly inputSchema?: Readonly<Record<string, unknown>>;
+  execute(args: TArgs, ctx: ToolExecutionContext): Promise<TResult> | TResult;
+}
+
+/**
+ * Ergonomic builder for `Tool`. Equivalent to constructing an object
+ * literal with `schema` + `execute`, but flatter and safer — the name
+ * + description live alongside the executor so they can't drift.
+ *
+ * @example
+ *   const weather = defineTool<{ city: string }, string>({
+ *     name: 'weather',
+ *     description: 'Get current weather for a city',
+ *     inputSchema: {
+ *       type: 'object',
+ *       properties: { city: { type: 'string' } },
+ *       required: ['city'],
+ *     },
+ *     execute: async ({ city }) => `${city}: 72°F sunny`,
+ *   });
+ *
+ *   const agent = Agent.create({ provider }).tool(weather).build();
+ */
+export function defineTool<TArgs = Record<string, unknown>, TResult = unknown>(
+  options: DefineToolOptions<TArgs, TResult>,
+): Tool<TArgs, TResult> {
+  return {
+    schema: {
+      name: options.name,
+      description: options.description,
+      inputSchema: options.inputSchema ?? { type: 'object', properties: {} },
+    },
+    execute: options.execute,
+  };
+}

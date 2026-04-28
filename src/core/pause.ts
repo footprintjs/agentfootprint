@@ -83,3 +83,20 @@ export function isPauseRequest(err: unknown): err is PauseRequest {
       Object.prototype.hasOwnProperty.call(err, 'data'))
   );
 }
+
+/**
+ * Ergonomic alias for `pauseHere(data)` — the human-in-the-loop name.
+ *
+ * `pauseHere` describes the mechanism (control-flow throw); `askHuman`
+ * describes the intent (ask a person to decide). Both work identically.
+ *
+ * @example
+ *   const approveRefund: Tool<{ amount: number }, string> = {
+ *     schema: { name: 'approve_refund', description: '...', inputSchema: {...} },
+ *     execute: async ({ amount }) => {
+ *       if (amount > 1000) askHuman({ question: `Approve $${amount}?` });
+ *       return 'auto-approved';
+ *     },
+ *   };
+ */
+export const askHuman = pauseHere;

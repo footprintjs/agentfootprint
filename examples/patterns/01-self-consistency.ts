@@ -7,8 +7,9 @@
  * Run:  npx tsx examples/v2/patterns/01-self-consistency.ts
  */
 
-import { selfConsistency, MockProvider } from '../../src/index.js';
+import { selfConsistency } from '../../src/index.js';
 import { isCliEntry, printResult, type ExampleMeta } from '../helpers/cli.js';
+import { exampleProvider } from '../helpers/provider.js';
 
 export const meta: ExampleMeta = {
   id: 'v2/patterns/01-self-consistency',
@@ -21,16 +22,16 @@ export const meta: ExampleMeta = {
 };
 
 
-export async function run(input: string, _provider?: import("../../src/index.js").LLMProvider): Promise<unknown> {
-  // Mock sampler — rotates through three "answers" with some ties.
+export async function run(input: string, provider?: import("../../src/index.js").LLMProvider): Promise<unknown> {
+  // Mock sampler — rotates through five "answers" with some ties so
+  // the majority vote is deterministic. Real provider injected via
+  // ProviderPicker bypasses the scripted respond.
   let i = 0;
   const samples = ['42', '42', '43', '42', '41'];
-  const provider = new MockProvider({
-    respond: () => samples[i++ % samples.length]!,
-  });
-
   const runner = selfConsistency({
-    provider,
+    provider: provider ?? exampleProvider('pattern', {
+      respond: () => samples[i++ % samples.length]!,
+    }),
     model: 'mock',
     systemPrompt:
       'Solve the problem. End your response with just the final number.',

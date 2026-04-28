@@ -20,8 +20,23 @@ import type { ContextRole, ContextSlot, ContextSource } from '../events/types.js
 export interface LLMMessage {
   readonly role: ContextRole;
   readonly content: string;
+  /** For `role: 'tool'` — the tool_use id this result corresponds to. */
   readonly toolCallId?: string;
+  /** For `role: 'tool'` — the tool name this result corresponds to. */
   readonly toolName?: string;
+  /**
+   * For `role: 'assistant'` only — the tool calls the LLM requested in this
+   * turn. Required for providers (Anthropic, OpenAI) that need to round-trip
+   * tool_use blocks across iterations: when the next `complete()` includes
+   * a `role: 'tool'` message, the provider reconstructs the matching
+   * `tool_use` block on the previous assistant turn from this field.
+   * Empty array on text-only turns; undefined for non-assistant roles.
+   */
+  readonly toolCalls?: readonly {
+    readonly id: string;
+    readonly name: string;
+    readonly args: Readonly<Record<string, unknown>>;
+  }[];
 }
 
 export interface LLMToolSchema {
@@ -60,8 +75,23 @@ export interface LLMResponse {
 
 export interface LLMChunk {
   readonly tokenIndex: number;
+  /** Token text. Empty for the terminal chunk (`done: true`). */
   readonly content: string;
+  /** True only for the final chunk in a stream. */
   readonly done: boolean;
+  /**
+   * Authoritative response payload, populated ONLY on the final chunk
+   * (`done: true`). Carries `toolCalls`, `usage`, `stopReason` — the
+   * fields that drive the ReAct loop. The `content` mirrors the
+   * concatenation of all non-terminal chunks; consumers can use
+   * either source.
+   *
+   * Streaming providers SHOULD populate this. Older providers that
+   * yield only text and end with `done: true` (no `response`) are
+   * still supported — Agent falls back to `complete()` for the
+   * authoritative payload in that case.
+   */
+  readonly response?: LLMResponse;
 }
 
 export interface LLMProvider {

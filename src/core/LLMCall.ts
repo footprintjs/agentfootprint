@@ -288,10 +288,18 @@ export class LLMCall extends RunnerBase<LLMCallInput, LLMCallOutput> {
     };
 
     // Description prefix `LLMCall:` is a taxonomy marker — consumers
-    // distinguish LLMCall subflows from Agent subflows (`Agent:`)
-    // via this prefix. Only Agent subflows surface as "agent
-    // boundaries" in Lens; LLMCall subflows are stages inside a
-    // composition, not agents in their own right.
+    // distinguish LLMCall subflows from Agent subflows (`Agent:`) via
+    // this prefix. Only Agent subflows surface as "agent boundaries"
+    // in Lens; LLMCall subflows are stages inside a composition, not
+    // agents in their own right.
+    //
+    // Chart shape — the canonical footprintjs idiom: input arrives via
+    // `runner.run({...})` (no "user" stage in the graph), output is
+    // the chart's TraversalResult (no "response" stage either). The
+    // five stages below are the actual work. When LLMCall is composed
+    // into Sequence / Parallel / Conditional / Loop, the parent's
+    // `addSubFlowChartNext` mounts THIS chart as a single drill-in
+    // unit — drill-in is free, no wrap required at this level.
     return flowChart<LLMCallState>(
       'Seed',
       seed,

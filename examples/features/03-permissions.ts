@@ -12,10 +12,10 @@
 
 import {
   Agent,
-  type LLMProvider,
   type PermissionChecker,
 } from '../../src/index.js';
 import { isCliEntry, printResult, type ExampleMeta } from '../helpers/cli.js';
+import { exampleProvider } from '../helpers/provider.js';
 
 export const meta: ExampleMeta = {
   id: 'v2/features/03-permissions',
@@ -28,7 +28,7 @@ export const meta: ExampleMeta = {
 };
 
 
-export async function run(input: string, _provider?: import("../../src/index.js").LLMProvider): Promise<unknown> {
+export async function run(input: string, provider?: import("../../src/index.js").LLMProvider): Promise<unknown> {
   // Allow read-only tools; deny write/delete tools.
   const readOnlyOnly: PermissionChecker = {
     name: 'read-only-policy',
@@ -45,29 +45,11 @@ export async function run(input: string, _provider?: import("../../src/index.js"
     },
   };
 
-  const provider: LLMProvider = {
-    name: 'mock',
-    complete: async (req) => {
-      const hadTool = req.messages.some((m) => m.role === 'tool');
-      if (hadTool) {
-        return {
-          content: 'Attempt recorded.',
-          toolCalls: [],
-          usage: { input: 40, output: 10 },
-          stopReason: 'stop',
-        };
-      }
-      return {
-        content: "I'll delete the record.",
-        toolCalls: [{ id: 'c1', name: 'delete_record', args: { id: 42 } }],
-        usage: { input: 30, output: 10 },
-        stopReason: 'tool_use',
-      };
-    },
-  };
-
+  // 'feature' kind: smart mock auto-runs "tool call → final answer".
+  // The PermissionChecker denies the call, so this also exercises the
+  // deny path automatically.
   const agent = Agent.create({
-    provider,
+    provider: provider ?? exampleProvider('feature'),
     model: 'mock',
     permissionChecker: readOnlyOnly,
   })

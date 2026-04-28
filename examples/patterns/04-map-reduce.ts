@@ -9,8 +9,9 @@
  * Run:  npx tsx examples/v2/patterns/04-map-reduce.ts
  */
 
-import { mapReduce, MockProvider } from '../../src/index.js';
+import { mapReduce } from '../../src/index.js';
 import { isCliEntry, printResult, type ExampleMeta } from '../helpers/cli.js';
+import { exampleProvider } from '../helpers/provider.js';
 
 export const meta: ExampleMeta = {
   id: 'v2/patterns/04-map-reduce',
@@ -23,15 +24,7 @@ export const meta: ExampleMeta = {
 };
 
 
-export async function run(input: string, _provider?: import("../../src/index.js").LLMProvider): Promise<unknown> {
-  // Mock summarizer — returns "summary(<shard>)" to show shard routing.
-  const provider = new MockProvider({
-    respond: (req) => {
-      const last = [...req.messages].reverse().find((m) => m.role === 'user');
-      return `summary(${last?.content ?? ''})`;
-    },
-  });
-
+export async function run(input: string, provider?: import("../../src/index.js").LLMProvider): Promise<unknown> {
   // Simulated long document — the splitter breaks it into 3 paragraphs.
   const doc = [
     'Paragraph 1: intro about cats.',
@@ -40,7 +33,14 @@ export async function run(input: string, _provider?: import("../../src/index.js"
   ].join('\n\n');
 
   const runner = mapReduce({
-    provider,
+    // Mock summarizer — returns "summary(<shard>)" so shard routing is
+    // visible in the output. Real provider via ProviderPicker bypasses.
+    provider: provider ?? exampleProvider('pattern', {
+      respond: (req) => {
+        const last = [...req.messages].reverse().find((m) => m.role === 'user');
+        return `summary(${last?.content ?? ''})`;
+      },
+    }),
     model: 'mock',
     mapPrompt: 'Summarize the paragraph in one sentence.',
     shardCount: 3,

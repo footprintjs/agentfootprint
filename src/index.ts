@@ -83,8 +83,11 @@ export { RunnerBase, makeRunId } from './core/RunnerBase.js';
 // Pause/Resume primitives — consumer API for human-in-the-loop tools.
 // `PauseRequest` (the throwable signal class) stays internal; consumers
 // detect pauses via `isPauseRequest(err)` / `isPaused(outcome)`.
+// `askHuman` is the HITL-named alias for `pauseHere` — same behavior,
+// reads more naturally inside a tool that's asking a person to decide.
 export {
   pauseHere,
+  askHuman,
   isPauseRequest,
   isPaused,
   type RunnerPauseOutcome,
@@ -130,6 +133,34 @@ export {
   type DomainToolStartEvent,
 } from './recorders/observability/BoundaryRecorder.js';
 
+// Commentary — bundled prose templates + engine for narrating a run.
+// Consumers ship their own JSON locale / brand voice via the same
+// shape; viewers (Lens, CLI tail, log file) consume this surface.
+export {
+  defaultCommentaryTemplates,
+  selectCommentaryKey,
+  extractCommentaryVars,
+  renderCommentary,
+  type CommentaryContext,
+  type CommentaryTemplates,
+} from './recorders/observability/commentary/commentaryTemplates.js';
+
+// Thinking — chat-bubble surface (separate audience: the end user
+// chatting). State machine: idle / streaming / tool / paused. Same
+// contract shape as commentary (`Record<string, string>` with
+// `{{vars}}`, partial overrides supported, missing keys ignored)
+// but a different vocabulary — first-person status, mid-call only.
+// Per-tool keys (`tool.<toolName>`) win over the generic `tool` key.
+export {
+  defaultThinkingTemplates,
+  selectThinkingState,
+  renderThinkingLine,
+  type ThinkingContext,
+  type ThinkingState,
+  type ThinkingStateKind,
+  type ThinkingTemplates,
+} from './recorders/observability/thinking/thinkingTemplates.js';
+
 // Primitives (core/)
 export {
   LLMCall,
@@ -149,7 +180,9 @@ export type {
   Tool,
   ToolExecutionContext,
   ToolRegistryEntry,
+  DefineToolOptions,
 } from './core/tools.js';
+export { defineTool } from './core/tools.js';
 
 // Slot subflow builders are intentionally NOT exported. They are
 // internal helpers used only by `Agent.buildChart()` and
@@ -197,7 +230,52 @@ export {
 } from './core-flow/Loop.js';
 
 // Adapters — LLM providers
-export { MockProvider, type MockProviderOptions } from './adapters/llm/MockProvider.js';
+// `mock(...)` is the lowercase factory equivalent to `new MockProvider(...)`.
+// `anthropic(...)` is the real Claude provider via `@anthropic-ai/sdk`.
+export {
+  MockProvider,
+  mock,
+  type MockProviderOptions,
+} from './adapters/llm/MockProvider.js';
+export {
+  anthropic,
+  AnthropicProvider,
+  type AnthropicProviderOptions,
+} from './adapters/llm/AnthropicProvider.js';
+export {
+  openai,
+  OpenAIProvider,
+  ollama,
+  type OpenAIProviderOptions,
+} from './adapters/llm/OpenAIProvider.js';
+export {
+  bedrock,
+  BedrockProvider,
+  type BedrockProviderOptions,
+} from './adapters/llm/BedrockProvider.js';
+export {
+  browserAnthropic,
+  BrowserAnthropicProvider,
+  type BrowserAnthropicProviderOptions,
+} from './adapters/llm/BrowserAnthropicProvider.js';
+export {
+  browserOpenai,
+  BrowserOpenAIProvider,
+  type BrowserOpenAIProviderOptions,
+} from './adapters/llm/BrowserOpenAIProvider.js';
+export {
+  createProvider,
+  type ProviderKind,
+  type CreateProviderOptions,
+} from './adapters/llm/createProvider.js';
+
+// Streaming helpers — agent events → SSE for browser delivery.
+export {
+  toSSE,
+  SSEFormatter,
+  encodeSSE,
+  type ToSSEOptions,
+} from './stream.js';
 
 // Patterns — factory functions composing primitives + core-flow into
 // well-known agent patterns from the research literature.

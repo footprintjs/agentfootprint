@@ -8,8 +8,9 @@
  * Run:  npx tsx examples/v2/03-sequence.ts
  */
 
-import { Sequence, LLMCall, MockProvider } from '../../src/index.js';
+import { Sequence, LLMCall } from '../../src/index.js';
 import { isCliEntry, printResult, type ExampleMeta } from '../helpers/cli.js';
+import { exampleProvider } from '../helpers/provider.js';
 
 export const meta: ExampleMeta = {
   id: 'v2/core-flow/01-sequence',
@@ -22,16 +23,16 @@ export const meta: ExampleMeta = {
 };
 
 
-export async function run(input: string, _provider?: import("../../src/index.js").LLMProvider): Promise<unknown> {
+export async function run(input: string, provider?: import("../../src/index.js").LLMProvider): Promise<unknown> {
   const classify = LLMCall.create({
-    provider: new MockProvider({ reply: 'billing' }),
+    provider: provider ?? exampleProvider('core-flow', { reply: 'billing' }),
     model: 'mock',
   })
     .system('Classify the user intent as one word: billing, tech, or general.')
     .build();
 
   const respond = LLMCall.create({
-    provider: new MockProvider({
+    provider: provider ?? exampleProvider('core-flow', {
       respond: (req) => {
         const last = [...req.messages].reverse().find((m) => m.role === 'user');
         return `Handled as [${last?.content}] — please hold for the right team.`;

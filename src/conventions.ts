@@ -59,7 +59,12 @@ export function isSlotSubflow(
 
 /** Map a slot subflow id to its ContextSlot type. Undefined for non-slot ids. */
 export function slotFromSubflowId(id: string): ContextSlot | undefined {
-  switch (id) {
+  // Footprintjs prefixes nested subflow IDs with the parent's path
+  // (e.g., 'llm-call-internals/sf-system-prompt' when a slot subflow
+  // is mounted inside a wrapper subflow). Match the LAST segment so
+  // the convention works at any nesting depth.
+  const lastSegment = id.includes('/') ? id.slice(id.lastIndexOf('/') + 1) : id;
+  switch (lastSegment) {
     case SUBFLOW_IDS.SYSTEM_PROMPT:
       return 'system-prompt';
     case SUBFLOW_IDS.MESSAGES:

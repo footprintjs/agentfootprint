@@ -87,6 +87,26 @@
       "types": "./dist/types/memory/index.d.ts",
       "import": "./dist/esm/memory/index.js",
       "require": "./dist/memory/index.js"
+    },
+    "./providers": {
+      "types": "./dist/types/providers.d.ts",
+      "import": "./dist/esm/providers.js",
+      "require": "./dist/providers.js"
+    },
+    "./observe": {
+      "types": "./dist/types/observe.d.ts",
+      "import": "./dist/esm/observe.js",
+      "require": "./dist/observe.js"
+    },
+    "./resilience": {
+      "types": "./dist/types/resilience/index.d.ts",
+      "import": "./dist/esm/resilience/index.js",
+      "require": "./dist/resilience/index.js"
+    },
+    "./stream": {
+      "types": "./dist/types/stream.d.ts",
+      "import": "./dist/esm/stream.js",
+      "require": "./dist/stream.js"
     }
   },
   "sideEffects": false,

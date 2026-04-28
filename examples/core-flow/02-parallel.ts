@@ -9,8 +9,9 @@
  * Run:  npx tsx examples/v2/04-parallel.ts
  */
 
-import { Parallel, LLMCall, MockProvider } from '../../src/index.js';
+import { Parallel, LLMCall } from '../../src/index.js';
 import { isCliEntry, printResult, type ExampleMeta } from '../helpers/cli.js';
+import { exampleProvider } from '../helpers/provider.js';
 
 export const meta: ExampleMeta = {
   id: 'v2/core-flow/02-parallel',
@@ -23,10 +24,10 @@ export const meta: ExampleMeta = {
 };
 
 
-export async function run(input: string, _provider?: import("../../src/index.js").LLMProvider): Promise<unknown> {
+export async function run(input: string, provider?: import("../../src/index.js").LLMProvider): Promise<unknown> {
   const brief = (tag: string) =>
     LLMCall.create({
-      provider: new MockProvider({ reply: `${tag} review: looks good.` }),
+      provider: provider ?? exampleProvider('core-flow', { reply: `${tag} review: looks good.` }),
       model: 'mock',
     })
       .system(`You are a ${tag} reviewer. Give one line.`)

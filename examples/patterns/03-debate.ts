@@ -8,8 +8,9 @@
  * Run:  npx tsx examples/v2/patterns/03-debate.ts
  */
 
-import { debate, MockProvider } from '../../src/index.js';
+import { debate } from '../../src/index.js';
 import { isCliEntry, printResult, type ExampleMeta } from '../helpers/cli.js';
+import { exampleProvider } from '../helpers/provider.js';
 
 export const meta: ExampleMeta = {
   id: 'v2/patterns/03-debate',
@@ -22,7 +23,7 @@ export const meta: ExampleMeta = {
 };
 
 
-export async function run(input: string, _provider?: import("../../src/index.js").LLMProvider): Promise<unknown> {
+export async function run(input: string, provider?: import("../../src/index.js").LLMProvider): Promise<unknown> {
   // Per-call canned transcript: proposer, critic, proposer, critic, judge.
   const replies = [
     'P: the proposal is good because X',
@@ -34,7 +35,7 @@ export async function run(input: string, _provider?: import("../../src/index.js"
   let i = 0;
 
   const runner = debate({
-    provider: new MockProvider({ respond: () => replies[i++ % replies.length]! }),
+    provider: provider ?? exampleProvider('pattern', { respond: () => replies[i++ % replies.length]! }),
     model: 'mock',
     proposerPrompt: 'You argue FOR the proposal. Be concise.',
     criticPrompt: 'You argue AGAINST the proposal. Point out flaws.',

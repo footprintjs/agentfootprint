@@ -7,8 +7,9 @@
  * Run:  npx tsx examples/v2/05-conditional.ts
  */
 
-import { Conditional, LLMCall, MockProvider } from '../../src/index.js';
+import { Conditional, LLMCall } from '../../src/index.js';
 import { isCliEntry, printResult, type ExampleMeta } from '../helpers/cli.js';
+import { exampleProvider } from '../helpers/provider.js';
 
 export const meta: ExampleMeta = {
   id: 'v2/core-flow/03-conditional',
@@ -21,16 +22,16 @@ export const meta: ExampleMeta = {
 };
 
 
-export async function run(input: string, _provider?: import("../../src/index.js").LLMProvider): Promise<unknown> {
+export async function run(input: string, provider?: import("../../src/index.js").LLMProvider): Promise<unknown> {
   const urgent = LLMCall.create({
-    provider: new MockProvider({ reply: 'Escalating to on-call engineer.' }),
+    provider: provider ?? exampleProvider('core-flow', { reply: 'Escalating to on-call engineer.' }),
     model: 'mock',
   })
     .system('You are the urgent-issue bot. Escalate immediately.')
     .build();
 
   const normal = LLMCall.create({
-    provider: new MockProvider({ reply: "We'll respond within 24 hours." }),
+    provider: provider ?? exampleProvider('core-flow', { reply: "We'll respond within 24 hours." }),
     model: 'mock',
   })
     .system('You are the standard support bot.')

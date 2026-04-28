@@ -8,8 +8,9 @@
  * Run:  npx tsx examples/v2/patterns/02-reflection.ts
  */
 
-import { reflection, MockProvider } from '../../src/index.js';
+import { reflection } from '../../src/index.js';
 import { isCliEntry, printResult, type ExampleMeta } from '../helpers/cli.js';
+import { exampleProvider } from '../helpers/provider.js';
 
 export const meta: ExampleMeta = {
   id: 'v2/patterns/02-reflection',
@@ -22,7 +23,7 @@ export const meta: ExampleMeta = {
 };
 
 
-export async function run(input: string, _provider?: import("../../src/index.js").LLMProvider): Promise<unknown> {
+export async function run(input: string, provider?: import("../../src/index.js").LLMProvider): Promise<unknown> {
   // Mock the conversation: two rounds of "draft + critique", then
   // the critic says DONE.
   const replies = [
@@ -34,7 +35,7 @@ export async function run(input: string, _provider?: import("../../src/index.js"
   let i = 0;
 
   const runner = reflection({
-    provider: new MockProvider({ respond: () => replies[i++ % replies.length]! }),
+    provider: provider ?? exampleProvider('pattern', { respond: () => replies[i++ % replies.length]! }),
     model: 'mock',
     proposerPrompt: 'Write or revise a short poem about night.',
     criticPrompt:

@@ -16,6 +16,7 @@
 
 import { Agent, type LLMProvider } from '../../src/index.js';
 import { isCliEntry, printResult, type ExampleMeta } from '../helpers/cli.js';
+import { exampleProvider } from '../helpers/provider.js';
 
 export const meta: ExampleMeta = {
   id: 'v2/features/06-flowchart-boundary-payloads',
@@ -28,24 +29,12 @@ export const meta: ExampleMeta = {
   tags: ['v2', 'feature', 'flowchart', 'observability', 'boundary'],
 };
 
-export async function run(input: string, _provider?: LLMProvider): Promise<unknown> {
-  // Mock provider — calls one tool then returns a final answer.
-  const provider: LLMProvider = {
-    name: 'mock',
-    complete: async (req) => {
-      const hadTool = req.messages.some((m) => m.role === 'tool');
-      return hadTool
-        ? { content: 'Analysis complete.', toolCalls: [], usage: { input: 30, output: 10 }, stopReason: 'stop' }
-        : {
-            content: '',
-            toolCalls: [{ id: 't1', name: 'analyze', args: { topic: 'q3' } }],
-            usage: { input: 25, output: 8 },
-            stopReason: 'tool_use',
-          };
-    },
-  };
-
-  const agent = Agent.create({ provider, model: 'mock' })
+export async function run(input: string, provider?: LLMProvider): Promise<unknown> {
+  // 'feature' kind: smart mock auto-runs "tool call → final answer".
+  const agent = Agent.create({
+    provider: provider ?? exampleProvider('feature'),
+    model: 'mock',
+  })
     .system('You analyze reports.')
     .tool({
       schema: { name: 'analyze', description: '', inputSchema: { type: 'object' } },

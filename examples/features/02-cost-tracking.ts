@@ -10,8 +10,9 @@
  * Run:  npx tsx examples/v2/08-cost-tracking.ts
  */
 
-import { Agent, type LLMProvider, type PricingTable } from '../../src/index.js';
+import { Agent, type PricingTable } from '../../src/index.js';
 import { isCliEntry, printResult, type ExampleMeta } from '../helpers/cli.js';
+import { exampleProvider } from '../helpers/provider.js';
 
 export const meta: ExampleMeta = {
   id: 'v2/features/02-cost-tracking',
@@ -24,7 +25,7 @@ export const meta: ExampleMeta = {
 };
 
 
-export async function run(input: string, _provider?: import("../../src/index.js").LLMProvider): Promise<unknown> {
+export async function run(input: string, provider?: import("../../src/index.js").LLMProvider): Promise<unknown> {
   // Flat-rate pricing for demo. Real pricing tables look up by model + kind.
   const pricing: PricingTable = {
     name: 'demo-pricing',
@@ -35,29 +36,11 @@ export async function run(input: string, _provider?: import("../../src/index.js"
     },
   };
 
-  const provider: LLMProvider = {
-    name: 'mock',
-    complete: async (req) => {
-      const hadTool = req.messages.some((m) => m.role === 'tool');
-      if (hadTool) {
-        return {
-          content: 'Done.',
-          toolCalls: [],
-          usage: { input: 150, output: 20 },
-          stopReason: 'stop',
-        };
-      }
-      return {
-        content: 'thinking',
-        toolCalls: [{ id: 't', name: 'noop', args: {} }],
-        usage: { input: 100, output: 10 },
-        stopReason: 'tool_use',
-      };
-    },
-  };
-
+  // 'feature' kind drives the smart tool-call flow. Cost ticks fire
+  // automatically off the per-iteration usage MockProvider estimates
+  // (chars/4) — sufficient to demo the budget crossing.
   const agent = Agent.create({
-    provider,
+    provider: provider ?? exampleProvider('feature'),
     model: 'demo-sonnet',
     pricingTable: pricing,
     costBudget: 0.0001, // trip the warning

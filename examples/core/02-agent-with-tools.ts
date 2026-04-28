@@ -8,6 +8,7 @@
 
 import { Agent, type LLMProvider } from '../../src/index.js';
 import { isCliEntry, printResult, type ExampleMeta } from '../helpers/cli.js';
+import { exampleProvider } from '../helpers/provider.js';
 
 export const meta: ExampleMeta = {
   id: 'v2/core/02-agent-with-tools',
@@ -20,33 +21,12 @@ export const meta: ExampleMeta = {
   tags: ['v2', 'primitive', 'Agent', 'tools', 'ReAct'],
 };
 
-/** Scripted mock — first call requests a tool, second returns the final answer. */
-function scriptedProvider(): LLMProvider {
-  return {
-    name: 'weather-mock',
-    complete: async (req) => {
-      const hasToolResult = req.messages.some((m) => m.role === 'tool');
-      if (hasToolResult) {
-        return {
-          content: 'Based on the lookup, the weather is sunny at 72°F.',
-          toolCalls: [],
-          usage: { input: 30, output: 20 },
-          stopReason: 'stop',
-        };
-      }
-      return {
-        content: "I'll look that up.",
-        toolCalls: [{ id: 'c1', name: 'weather', args: { city: 'SF' } }],
-        usage: { input: 20, output: 10 },
-        stopReason: 'tool_use',
-      };
-    },
-  };
-}
-
 export async function run(input: string, provider?: LLMProvider): Promise<string> {
   const agent = Agent.create({
-    provider: provider ?? scriptedProvider(),
+    // 'feature' kind drives the smart tool-call flow: first iteration
+    // calls the first registered tool, second returns a final answer.
+    // No per-example scripted respond needed.
+    provider: provider ?? exampleProvider('feature'),
     model: 'mock',
     maxIterations: 5,
   })

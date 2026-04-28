@@ -8,8 +8,9 @@
  * Run:  npx tsx examples/v2/06-loop.ts
  */
 
-import { Loop, LLMCall, MockProvider } from '../../src/index.js';
+import { Loop, LLMCall } from '../../src/index.js';
 import { isCliEntry, printResult, type ExampleMeta } from '../helpers/cli.js';
+import { exampleProvider } from '../helpers/provider.js';
 
 export const meta: ExampleMeta = {
   id: 'v2/core-flow/04-loop',
@@ -22,11 +23,11 @@ export const meta: ExampleMeta = {
 };
 
 
-export async function run(input: string, _provider?: import("../../src/index.js").LLMProvider): Promise<unknown> {
+export async function run(input: string, provider?: import("../../src/index.js").LLMProvider): Promise<unknown> {
   // A "thinking" LLM that appends the iteration count each call.
   let iter = 0;
   const think = LLMCall.create({
-    provider: new MockProvider({
+    provider: provider ?? exampleProvider('core-flow', {
       respond: () => `Pass ${++iter}: refined idea.`,
     }),
     model: 'mock',

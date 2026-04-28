@@ -14,9 +14,9 @@
 import {
   Agent,
   LoggingDomains,
-  type LLMProvider,
 } from '../../src/index.js';
 import { isCliEntry, printResult, type ExampleMeta } from '../helpers/cli.js';
+import { exampleProvider } from '../helpers/provider.js';
 
 export const meta: ExampleMeta = {
   id: 'v2/features/04-observability',
@@ -29,29 +29,10 @@ export const meta: ExampleMeta = {
 };
 
 
-export async function run(input: string, _provider?: import("../../src/index.js").LLMProvider): Promise<unknown> {
-  const provider: LLMProvider = {
-    name: 'mock',
-    complete: async (req) => {
-      const hadTool = req.messages.some((m) => m.role === 'tool');
-      return hadTool
-        ? {
-            content: 'Done analyzing.',
-            toolCalls: [],
-            usage: { input: 40, output: 10 },
-            stopReason: 'stop',
-          }
-        : {
-            content: '',
-            toolCalls: [{ id: 't', name: 'analyze', args: {} }],
-            usage: { input: 30, output: 5 },
-            stopReason: 'tool_use',
-          };
-    },
-  };
-
+export async function run(input: string, provider?: import("../../src/index.js").LLMProvider): Promise<unknown> {
+  // 'feature' kind: smart mock auto-runs "tool call → final answer".
   const agent = Agent.create({
-    provider,
+    provider: provider ?? exampleProvider('feature'),
     model: 'mock',
   })
     .system('You analyze data.')

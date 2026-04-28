@@ -10,8 +10,9 @@
  * Run:  npx tsx examples/v2/patterns/06-swarm.ts
  */
 
-import { swarm, LLMCall, MockProvider } from '../../src/index.js';
+import { swarm, LLMCall } from '../../src/index.js';
 import { isCliEntry, printResult, type ExampleMeta } from '../helpers/cli.js';
+import { exampleProvider } from '../helpers/provider.js';
 
 export const meta: ExampleMeta = {
   id: 'v2/patterns/06-swarm',
@@ -24,24 +25,24 @@ export const meta: ExampleMeta = {
 };
 
 
-export async function run(input: string, _provider?: import("../../src/index.js").LLMProvider): Promise<unknown> {
+export async function run(input: string, provider?: import("../../src/index.js").LLMProvider): Promise<unknown> {
   // Three specialist agents — each tagged so we can see hand-offs.
   const billing = LLMCall.create({
-    provider: new MockProvider({ reply: '[billing] refund eligibility confirmed' }),
+    provider: provider ?? exampleProvider('pattern', { reply: '[billing] refund eligibility confirmed' }),
     model: 'mock',
   })
     .system('You handle billing questions only.')
     .build();
 
   const tech = LLMCall.create({
-    provider: new MockProvider({ reply: '[tech] system status is normal' }),
+    provider: provider ?? exampleProvider('pattern', { reply: '[tech] system status is normal' }),
     model: 'mock',
   })
     .system('You handle technical questions only.')
     .build();
 
   const triage = LLMCall.create({
-    provider: new MockProvider({ reply: 'refund please' }),
+    provider: provider ?? exampleProvider('pattern', { reply: 'refund please' }),
     model: 'mock',
   })
     .system('You classify user requests and forward them.')

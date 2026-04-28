@@ -28,12 +28,15 @@ import { emitCostTick } from './cost.js';
 import type {
   LLMProvider,
   LLMMessage,
+  LLMResponse,
   PermissionChecker,
   PricingTable,
 } from '../adapters/types.js';
 import type { ContextRole } from '../events/types.js';
 import type { RunContext } from '../bridge/eventMeta.js';
 import { STAGE_IDS, SUBFLOW_IDS } from '../conventions.js';
+import { defaultCommentaryTemplates } from '../recorders/observability/commentary/commentaryTemplates.js';
+import { defaultThinkingTemplates } from '../recorders/observability/thinking/thinkingTemplates.js';
 import { ContextRecorder } from '../recorders/core/ContextRecorder.js';
 import { streamRecorder } from '../recorders/core/StreamRecorder.js';
 import { agentRecorder } from '../recorders/core/AgentRecorder.js';
@@ -140,6 +143,17 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
   private readonly costBudget?: number;
   private readonly permissionChecker?: PermissionChecker;
 
+  /**
+   * Voice config — shared by viewers (Lens, ChatThinkKit, CLI tail).
+   * `appName` is the active actor in narration ("Chatbot called…").
+   * `commentaryTemplates` drives Lens's third-person panel.
+   * `thinkingTemplates` drives chat-bubble first-person status.
+   * Defaults to bundled English; consumer overrides via builder.
+   */
+  readonly appName: string;
+  readonly commentaryTemplates: Readonly<Record<string, string>>;
+  readonly thinkingTemplates: Readonly<Record<string, string>>;
+
   private currentRunContext: RunContext = {
     runStartMs: 0,
     runId: 'pending',
@@ -150,6 +164,11 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     opts: AgentOptions,
     systemPromptValue: string,
     registry: readonly ToolRegistryEntry[],
+    voice: {
+      readonly appName: string;
+      readonly commentaryTemplates: Readonly<Record<string, string>>;
+      readonly thinkingTemplates: Readonly<Record<string, string>>;
+    },
   ) {
     super();
     this.provider = opts.provider;
@@ -164,6 +183,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     if (opts.pricingTable) this.pricingTable = opts.pricingTable;
     if (opts.costBudget !== undefined) this.costBudget = opts.costBudget;
     if (opts.permissionChecker) this.permissionChecker = opts.permissionChecker;
+    this.appName = voice.appName;
+    this.commentaryTemplates = voice.commentaryTemplates;
+    this.thinkingTemplates = voice.thinkingTemplates;
   }
 
   static create(opts: AgentOptions): AgentBuilder {
@@ -342,14 +364,46 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       });
 
       const startMs = Date.now();
-      const response = await provider.complete({
+      const llmRequest = {
         ...(systemPrompt.length > 0 && { systemPrompt }),
         messages,
         ...(toolSchemas.length > 0 && { tools: toolSchemas }),
         model,
         ...(temperature !== undefined && { temperature }),
         ...(maxTokens !== undefined && { maxTokens }),
-      });
+      };
+
+      // Streaming-first: when the provider implements `stream()` we
+      // consume chunk-by-chunk so consumers (Lens commentary, chat
+      // UIs) see tokens as they arrive instead of waiting for the
+      // full LLM call to finish. Each non-terminal chunk fires
+      // `agentfootprint.stream.token` with the token text + index.
+      //
+      // The terminal chunk SHOULD carry the authoritative
+      // `LLMResponse` (toolCalls + usage + stopReason); when it does
+      // we use it directly. When it doesn't (older providers, partial
+      // implementations) we fall back to `complete()` for the
+      // authoritative payload — keeping the ReAct loop deterministic.
+      let response: LLMResponse | undefined;
+      if (provider.stream) {
+        for await (const chunk of provider.stream(llmRequest)) {
+          if (chunk.done) {
+            if (chunk.response) response = chunk.response;
+            break;
+          }
+          if (chunk.content.length > 0) {
+            typedEmit(scope, 'agentfootprint.stream.token', {
+              iteration,
+              tokenIndex: chunk.tokenIndex,
+              content: chunk.content,
+            });
+          }
+        }
+      }
+      if (!response) {
+        // No `stream()` OR stream finished without a response payload.
+        response = await provider.complete(llmRequest);
+      }
       const durationMs = Date.now() - startMs;
 
       scope.totalInputTokens = scope.totalInputTokens + response.usage.input;
@@ -413,10 +467,17 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
         }[];
         const iteration = scope.iteration as number;
         const newHistory: LLMMessage[] = [...(scope.history as readonly LLMMessage[])];
-        if (scope.llmLatestContent) {
+        // ALWAYS push the assistant turn when there are tool calls — even
+        // if the content was empty — so providers (Anthropic, OpenAI) can
+        // round-trip the tool_use blocks via `LLMMessage.toolCalls`.
+        // Without this, the next iteration's request lacks the assistant
+        // turn that initiated the tool call, and the API rejects the
+        // following tool_result with "preceding tool_use missing".
+        if (scope.llmLatestContent || toolCalls.length > 0) {
           newHistory.push({
             role: 'assistant' as ContextRole,
-            content: scope.llmLatestContent,
+            content: scope.llmLatestContent ?? '',
+            ...(toolCalls.length > 0 && { toolCalls }),
           });
         }
         for (const tc of toolCalls) {
@@ -632,6 +693,14 @@ export class AgentBuilder {
   private readonly opts: AgentOptions;
   private systemPromptValue = '';
   private readonly registry: ToolRegistryEntry[] = [];
+  // Voice config — defaults until the consumer calls .appName() /
+  // .commentaryTemplates() / .thinkingTemplates(). Stored as plain
+  // dicts (Record<string, string>) so the builder doesn't depend on
+  // the template-engine modules at compile time; the runtime types
+  // come from the agentfootprint barrel exports.
+  private appNameValue = 'Chatbot';
+  private commentaryOverrides: Readonly<Record<string, string>> = {};
+  private thinkingOverrides: Readonly<Record<string, string>> = {};
 
   constructor(opts: AgentOptions) {
     this.opts = opts;
@@ -651,8 +720,54 @@ export class AgentBuilder {
     return this;
   }
 
+  /**
+   * Set the agent's display name — substituted as `{{appName}}` in
+   * commentary + thinking templates. Same place to brand a tenant
+   * ("Acme Bot"), distinguish multi-agent roles ("Triage" vs
+   * "Reviewer"), or localize ("Asistente"). Default: `'Chatbot'`.
+   */
+  appName(name: string): this {
+    this.appNameValue = name;
+    return this;
+  }
+
+  /**
+   * Override agentfootprint's bundled commentary templates. Spread on
+   * top of `defaultCommentaryTemplates`; missing keys fall back. Same
+   * `Record<string, string>` shape with `{{vars}}` substitution as
+   * the bundled defaults — see `defaultCommentaryTemplates` for the
+   * full key list.
+   *
+   * Use cases: i18n (`'agent.turn_start': 'El usuario...'`), brand
+   * voice ("You: {{userPrompt}}"), per-tenant customization.
+   */
+  commentaryTemplates(templates: Readonly<Record<string, string>>): this {
+    this.commentaryOverrides = { ...this.commentaryOverrides, ...templates };
+    return this;
+  }
+
+  /**
+   * Override agentfootprint's bundled thinking templates. Same
+   * contract shape as commentary; different vocabulary — first-person
+   * status the chat bubble shows mid-call. Per-tool overrides go via
+   * `tool.<toolName>` keys (e.g., `'tool.weather': 'Looking up the
+   * weather…'`). See `defaultThinkingTemplates` for the full key list.
+   */
+  thinkingTemplates(templates: Readonly<Record<string, string>>): this {
+    this.thinkingOverrides = { ...this.thinkingOverrides, ...templates };
+    return this;
+  }
+
   build(): Agent {
-    return new Agent(this.opts, this.systemPromptValue, this.registry);
+    // Resolve the voice config: bundled defaults + consumer overrides.
+    // Templates flow through the same barrel exports the rest of the
+    // library uses, so a future locale-pack swap is a single import.
+    const voice = {
+      appName: this.appNameValue,
+      commentaryTemplates: { ...defaultCommentaryTemplates, ...this.commentaryOverrides },
+      thinkingTemplates: { ...defaultThinkingTemplates, ...this.thinkingOverrides },
+    };
+    return new Agent(this.opts, this.systemPromptValue, this.registry, voice);
   }
 }
 

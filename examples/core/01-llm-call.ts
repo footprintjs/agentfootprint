@@ -12,6 +12,7 @@ import {
   type LLMProvider,
 } from '../../src/index.js';
 import { isCliEntry, printResult, type ExampleMeta } from '../helpers/cli.js';
+import { exampleProvider } from '../helpers/provider.js';
 
 export const meta: ExampleMeta = {
   id: 'v2/core/01-llm-call',
@@ -27,7 +28,7 @@ export const meta: ExampleMeta = {
 
 export async function run(input: string, provider?: LLMProvider): Promise<string> {
   const llm = LLMCall.create({
-    provider: provider ?? new MockProvider({ reply: "It's sunny in San Francisco." }),
+    provider: provider ?? exampleProvider('core', { reply: "It's sunny in San Francisco." }),
     model: 'mock-weather',
     temperature: 0.2,
   })
