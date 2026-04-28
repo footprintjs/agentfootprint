@@ -29,6 +29,7 @@ import type {
   LLMProvider,
   LLMMessage,
   LLMResponse,
+  LLMToolSchema,
   PermissionChecker,
   PricingTable,
 } from '../adapters/types.js';
@@ -50,8 +51,11 @@ import type { InjectionRecord } from '../recorders/core/types.js';
 import { buildSystemPromptSlot } from './slots/buildSystemPromptSlot.js';
 import { buildMessagesSlot } from './slots/buildMessagesSlot.js';
 import { buildToolsSlot } from './slots/buildToolsSlot.js';
+import { buildInjectionEngineSubflow } from '../lib/injection-engine/buildInjectionEngineSubflow.js';
+import type { ActiveInjection, Injection } from '../lib/injection-engine/types.js';
 import { RunnerBase, makeRunId } from './RunnerBase.js';
 import type { Tool, ToolRegistryEntry } from './tools.js';
+import { defineTool } from './tools.js';
 
 export interface AgentOptions {
   readonly provider: LLMProvider;
@@ -127,6 +131,18 @@ interface AgentState {
   cumTokensOutput: number;
   cumEstimatedUsd: number;
   costBudgetHit: boolean;
+  // Injection Engine state ─────────────────────────────────────
+  /** Active set output by InjectionEngine subflow each iteration —
+   *  POJO projections (no functions) suitable for scope round-trip. */
+  activeInjections: readonly ActiveInjection[];
+  /** IDs of LLM-activated Skills the LLM has activated this turn
+   *  (via the `read_skill` tool). InjectionEngine matches by id. */
+  activatedInjectionIds: readonly string[];
+  /** Most recent tool result — drives `on-tool-return` triggers. */
+  lastToolResult?: { toolName: string; result: string };
+  /** Tool schemas resolved by the tools slot subflow each iteration
+   *  (registry + injection-supplied). Used by callLLM. */
+  dynamicToolSchemas: readonly LLMToolSchema[];
 }
 
 export class Agent extends RunnerBase<AgentInput, AgentOutput> {
@@ -139,6 +155,12 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
   private readonly maxIterations: number;
   private readonly systemPromptValue: string;
   private readonly registry: readonly ToolRegistryEntry[];
+  /**
+   * The Injection list — Skills, Steering, Instructions, Facts (and
+   * v2.1+: RAG, Memory). Evaluated each iteration by the
+   * InjectionEngine subflow; active set is filtered by slot subflows.
+   */
+  private readonly injections: readonly Injection[];
   private readonly pricingTable?: PricingTable;
   private readonly costBudget?: number;
   private readonly permissionChecker?: PermissionChecker;
@@ -169,6 +191,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       readonly commentaryTemplates: Readonly<Record<string, string>>;
       readonly thinkingTemplates: Readonly<Record<string, string>>;
     },
+    injections: readonly Injection[] = [],
   ) {
     super();
     this.provider = opts.provider;
@@ -180,6 +203,12 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     this.maxIterations = clampIterations(opts.maxIterations ?? 10);
     this.systemPromptValue = systemPromptValue;
     this.registry = registry;
+    this.injections = injections;
+    // Eager validation: tool names must be unique across .tool() +
+    // every Skill.inject.tools — the LLM dispatches by name. Runs in
+    // constructor so `Agent.build()` throws immediately on collision,
+    // not at first run().
+    validateToolNameUniqueness(registry, injections);
     if (opts.pricingTable) this.pricingTable = opts.pricingTable;
     if (opts.costBudget !== undefined) this.costBudget = opts.costBudget;
     if (opts.permissionChecker) this.permissionChecker = opts.permissionChecker;
@@ -283,8 +312,10 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     const maxTokens = this.maxTokens;
     const systemPromptValue = this.systemPromptValue;
     const registry = this.registry;
-    const registryByName = new Map(registry.map((e) => [e.name, e.tool] as const));
-    const toolSchemas = registry.map((e) => e.tool.schema);
+    // (registryByName + toolSchemas redefined below using
+    // `augmentedRegistry` which adds the auto-attached `read_skill`
+    // tool when Skills are registered.)
+    const _legacyRegistry = registry; void _legacyRegistry;
     const maxIterations = this.maxIterations;
     const pricingTable = this.pricingTable;
     const costBudget = this.costBudget;
@@ -312,6 +343,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       scope.cumTokensOutput = 0;
       scope.cumEstimatedUsd = 0;
       scope.costBudgetHit = false;
+      scope.activeInjections = [];
+      scope.activatedInjectionIds = [];
+      scope.dynamicToolSchemas = toolSchemas;
 
       typedEmit(scope, 'agentfootprint.agent.turn_start', {
         turnIndex: 0,
@@ -319,6 +353,61 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       });
     };
 
+    // Tool registry composition — three sources:
+    //
+    //   1. Static registry: tools registered via `.tool()`. Always
+    //      visible to the LLM; always executable.
+    //   2. `read_skill` (auto-attached when ≥1 Skill is registered):
+    //      activation tool for LLM-guided Skills.
+    //   3. Skill-supplied tools (`Skill.inject.tools[]`): visible only
+    //      when the Skill is active (filtered by tools slot subflow);
+    //      MUST always be in the executor registry so when the LLM
+    //      calls one, the tool-calls handler can dispatch.
+    //
+    // Tool-name uniqueness is enforced across all three sources at
+    // build time. The LLM only sees `tool.schema.name` (no ids), so
+    // names ARE the runtime dispatch key — collisions break the LLM's
+    // ability to call the right tool. Throw early instead of subtly
+    // shadowing.
+    const skills = this.injections.filter((i) => i.flavor === 'skill');
+    const skillToolEntries: ToolRegistryEntry[] = [];
+    for (const skill of skills) {
+      const toolsFromSkill = skill.inject.tools ?? [];
+      for (const tool of toolsFromSkill) {
+        skillToolEntries.push({ name: tool.schema.name, tool });
+      }
+    }
+    const readSkillEntries: readonly ToolRegistryEntry[] = skills.length > 0
+      ? [{ name: 'read_skill', tool: buildReadSkillTool(skills) }]
+      : [];
+    const augmentedRegistry: readonly ToolRegistryEntry[] = [
+      ...registry,
+      ...readSkillEntries,
+      ...skillToolEntries,
+    ];
+
+    // Validate: tool names must be unique across registry + skills.
+    // The LLM dispatches by name; collisions silently shadow.
+    const seenNames = new Set<string>();
+    for (const entry of augmentedRegistry) {
+      if (seenNames.has(entry.name)) {
+        throw new Error(
+          `Agent: duplicate tool name '${entry.name}'. Tool names must be unique ` +
+            `across .tool() registrations and all Skills' inject.tools (the LLM ` +
+            `dispatches by name; collisions break tool routing).`,
+        );
+      }
+      seenNames.add(entry.name);
+    }
+
+    const registryByName = new Map(
+      augmentedRegistry.map((e) => [e.name, e.tool] as const),
+    );
+    const toolSchemas = augmentedRegistry.map((e) => e.tool.schema);
+
+    const injectionEngineSubflow = buildInjectionEngineSubflow({
+      injections: this.injections,
+    });
     const systemPromptSubflow = buildSystemPromptSlot({
       prompt: systemPromptValue,
       reason: 'Agent.system()',
@@ -364,10 +453,16 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       });
 
       const startMs = Date.now();
+      // Use dynamic schemas — registry tools + injection-supplied
+      // tools (Skills' `inject.tools` when their Injection is active).
+      // Falls back to the static schemas at startup before the tools
+      // slot has run for the first time.
+      const activeToolSchemas =
+        (scope.dynamicToolSchemas as readonly LLMToolSchema[] | undefined) ?? toolSchemas;
       const llmRequest = {
         ...(systemPrompt.length > 0 && { systemPrompt }),
         messages,
-        ...(toolSchemas.length > 0 && { tools: toolSchemas }),
+        ...(activeToolSchemas.length > 0 && { tools: activeToolSchemas }),
         model,
         ...(temperature !== undefined && { temperature }),
         ...(maxTokens !== undefined && { maxTokens }),
@@ -569,12 +664,35 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
             durationMs,
             ...(error === true && { error: true }),
           });
+          const resultStr = typeof result === 'string' ? result : safeStringify(result);
           newHistory.push({
             role: 'tool',
-            content: typeof result === 'string' ? result : safeStringify(result),
+            content: resultStr,
             toolCallId: tc.id,
             toolName: tc.name,
           });
+
+          // ── Dynamic ReAct wiring ───────────────────────────────
+          //
+          // (1) `lastToolResult` drives `on-tool-return` Injection
+          //     triggers — the InjectionEngine's NEXT pass will see
+          //     this and activate any matching Instructions.
+          scope.lastToolResult = { toolName: tc.name, result: resultStr };
+
+          // (2) `read_skill` is the auto-attached activation tool.
+          //     When the LLM calls it with a valid Skill id, append
+          //     to `activatedInjectionIds` so the InjectionEngine's
+          //     NEXT pass activates that Skill (lifetime: turn — stays
+          //     active until the turn ends).
+          if (tc.name === 'read_skill' && !error && !denied) {
+            const requestedId = (tc.args as { id?: unknown }).id;
+            if (typeof requestedId === 'string' && requestedId.length > 0) {
+              const current = scope.activatedInjectionIds as readonly string[];
+              if (!current.includes(requestedId)) {
+                scope.activatedInjectionIds = [...current, requestedId];
+              }
+            }
+          }
         }
         scope.history = newHistory;
 
@@ -655,10 +773,29 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // this prefix and flag them as true agent boundaries (separate
     // from LLMCall subflows which use `LLMCall:` prefix).
     return flowChart<AgentState>('Seed', seed, STAGE_IDS.SEED, undefined, 'Agent: ReAct loop')
+      // Injection Engine — evaluates every Injection's trigger once
+      // per iteration; writes activeInjections[] to parent scope for
+      // the slot subflows to consume. Skipped if no injections were
+      // registered (no observable difference, just one more no-op
+      // subflow boundary).
+      .addSubFlowChartNext(SUBFLOW_IDS.INJECTION_ENGINE, injectionEngineSubflow, 'Injection Engine', {
+        inputMapper: (parent) => ({
+          iteration: parent.iteration as number | undefined,
+          userMessage: parent.userMessage as string | undefined,
+          history: parent.history as readonly LLMMessage[] | undefined,
+          lastToolResult: parent.lastToolResult as
+            | { toolName: string; result: string }
+            | undefined,
+          activatedInjectionIds:
+            (parent.activatedInjectionIds as readonly string[] | undefined) ?? [],
+        }),
+        outputMapper: (sf) => ({ activeInjections: sf.activeInjections }),
+      })
       .addSubFlowChartNext(SUBFLOW_IDS.SYSTEM_PROMPT, systemPromptSubflow, 'System Prompt', {
         inputMapper: (parent) => ({
           userMessage: parent.userMessage as string | undefined,
           iteration: parent.iteration as number | undefined,
+          activeInjections: parent.activeInjections as readonly ActiveInjection[] | undefined,
         }),
         outputMapper: (sf) => ({ systemPromptInjections: sf.systemPromptInjections }),
       })
@@ -666,12 +803,21 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
         inputMapper: (parent) => ({
           messages: parent.history as readonly LLMMessage[] | undefined,
           iteration: parent.iteration as number | undefined,
+          activeInjections: parent.activeInjections as readonly ActiveInjection[] | undefined,
         }),
         outputMapper: (sf) => ({ messagesInjections: sf.messagesInjections }),
       })
       .addSubFlowChartNext(SUBFLOW_IDS.TOOLS, toolsSubflow, 'Tools', {
-        inputMapper: (parent) => ({ iteration: parent.iteration as number | undefined }),
-        outputMapper: (sf) => ({ toolsInjections: sf.toolsInjections }),
+        inputMapper: (parent) => ({
+          iteration: parent.iteration as number | undefined,
+          activeInjections: parent.activeInjections as readonly ActiveInjection[] | undefined,
+        }),
+        outputMapper: (sf) => ({
+          toolsInjections: sf.toolsInjections,
+          // Pass merged tool schemas (registry + injection-supplied)
+          // back up so callLLM uses the right list for THIS iteration.
+          dynamicToolSchemas: sf.toolSchemas,
+        }),
       })
       .addFunction('IterationStart', iterationStart, 'iteration-start', 'Iteration begin marker')
       .addFunction('CallLLM', callLLM, STAGE_IDS.CALL_LLM, 'LLM invocation')
@@ -693,6 +839,7 @@ export class AgentBuilder {
   private readonly opts: AgentOptions;
   private systemPromptValue = '';
   private readonly registry: ToolRegistryEntry[] = [];
+  private readonly injectionList: Injection[] = [];
   // Voice config — defaults until the consumer calls .appName() /
   // .commentaryTemplates() / .thinkingTemplates(). Stored as plain
   // dicts (Record<string, string>) so the builder doesn't depend on
@@ -758,6 +905,61 @@ export class AgentBuilder {
     return this;
   }
 
+  // ─── Injection sugar — context engineering surface ───────────
+  //
+  // ALL of these push into the same `injectionList`. The Injection
+  // primitive is identical across flavors; the methods are just
+  // narrative-friendly aliases. Duplicate ids throw at build time.
+
+  /**
+   * Register any `Injection`. Use this for power-user / custom flavors;
+   * for built-in flavors use the typed sugar (`.skill`, `.steering`,
+   * `.instruction`, `.fact`).
+   */
+  injection(injection: Injection): this {
+    if (this.injectionList.some((i) => i.id === injection.id)) {
+      throw new Error(`Agent.injection(): duplicate id '${injection.id}'`);
+    }
+    this.injectionList.push(injection);
+    return this;
+  }
+
+  /**
+   * Register a Skill — LLM-activated, system-prompt + tools.
+   * Auto-attaches the `read_skill` activation tool to the agent.
+   * Skill stays active for the rest of the turn once activated.
+   */
+  skill(injection: Injection): this {
+    return this.injection(injection);
+  }
+
+  /**
+   * Register a Steering doc — always-on system-prompt rule.
+   * Use for invariant guidance: output format, persona, safety policies.
+   */
+  steering(injection: Injection): this {
+    return this.injection(injection);
+  }
+
+  /**
+   * Register an Instruction — rule-based system-prompt guidance.
+   * Predicate runs each iteration. Use for context-dependent rules
+   * including the "Dynamic ReAct" `on-tool-return` pattern.
+   */
+  instruction(injection: Injection): this {
+    return this.injection(injection);
+  }
+
+  /**
+   * Register a Fact — developer-supplied data the LLM should see.
+   * User profile, env info, computed summary, current time, …
+   * Distinct from Skills (LLM-activated guidance) and Steering
+   * (always-on rules) in INTENT — the engine treats them all alike.
+   */
+  fact(injection: Injection): this {
+    return this.injection(injection);
+  }
+
   build(): Agent {
     // Resolve the voice config: bundled defaults + consumer overrides.
     // Templates flow through the same barrel exports the rest of the
@@ -767,7 +969,13 @@ export class AgentBuilder {
       commentaryTemplates: { ...defaultCommentaryTemplates, ...this.commentaryOverrides },
       thinkingTemplates: { ...defaultThinkingTemplates, ...this.thinkingOverrides },
     };
-    return new Agent(this.opts, this.systemPromptValue, this.registry, voice);
+    return new Agent(
+      this.opts,
+      this.systemPromptValue,
+      this.registry,
+      voice,
+      this.injectionList,
+    );
   }
 }
 
@@ -775,6 +983,91 @@ function clampIterations(n: number): number {
   if (!Number.isInteger(n) || n < 1) return 1;
   if (n > 50) return 50;
   return n;
+}
+
+/**
+ * Validate tool-name uniqueness across `.tool()`-registered tools +
+ * every Skill's `inject.tools[]`. The LLM dispatches by `tool.schema.name`
+ * (the wire format), so any collision silently shadows execution.
+ *
+ * Called eagerly in the Agent constructor so `Agent.build()` throws
+ * immediately, not on first `run()`.
+ *
+ * `read_skill` is reserved when ≥1 Skill is registered — collisions
+ * with consumer tools throw.
+ */
+function validateToolNameUniqueness(
+  registry: readonly ToolRegistryEntry[],
+  injections: readonly Injection[],
+): void {
+  const seen = new Set<string>();
+  const claim = (name: string, sourceLabel: string): void => {
+    if (seen.has(name)) {
+      throw new Error(
+        `Agent: duplicate tool name '${name}' (${sourceLabel}). Tool names must be ` +
+          `unique across .tool() registrations and all Skills' inject.tools — the LLM ` +
+          `dispatches by name; collisions break tool routing.`,
+      );
+    }
+    seen.add(name);
+  };
+  for (const entry of registry) claim(entry.name, '.tool()');
+  const skills = injections.filter((i) => i.flavor === 'skill');
+  if (skills.length > 0) claim('read_skill', 'auto-attached for Skills');
+  for (const skill of skills) {
+    for (const tool of skill.inject.tools ?? []) {
+      claim(tool.schema.name, `from Skill '${skill.id}'`);
+    }
+  }
+}
+
+/**
+ * Build the auto-attached `read_skill` tool from a list of Skill
+ * Injections. The LLM picks WHICH skill via the `id` argument.
+ *
+ * Tool execute() does the bookkeeping: appends the requested skill id
+ * to `scope.activatedInjectionIds`. The next iteration's
+ * InjectionEngine matches Skills with `trigger.kind: 'llm-activated'`
+ * by id and includes them in the active set; slot subflows then
+ * inject the body + tools.
+ *
+ * The tool's description lists each Skill's `id` + `description` so
+ * the LLM can choose meaningfully.
+ */
+function buildReadSkillTool(skills: readonly Injection[]): Tool {
+  const skillIds = skills.map((s) => s.id);
+  const skillCatalog = skills
+    .map((s) => `  - ${s.id}: ${s.description ?? '(no description)'}`)
+    .join('\n');
+
+  return defineTool<{ id: string }, string>({
+    name: 'read_skill',
+    description:
+      `Activate a skill for the next iteration. Available skills:\n${skillCatalog}\n\n` +
+      `Pass the skill's id. The skill's body becomes part of the system prompt and any ` +
+      `gated tools become available on the next call.`,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        id: {
+          type: 'string',
+          enum: skillIds,
+          description: 'The skill id to activate.',
+        },
+      },
+      required: ['id'],
+    },
+    execute: ({ id }) => {
+      // Bookkeeping is handled by the Agent's tool-calls subflow,
+      // which inspects `read_skill` returns and updates
+      // `scope.activatedInjectionIds` before the next iteration.
+      // The tool itself returns a confirmation string for the LLM.
+      if (!skillIds.includes(id)) {
+        return `Unknown skill '${id}'. Available: ${skillIds.join(', ')}`;
+      }
+      return `Skill '${id}' activated for the next iteration.`;
+    },
+  });
 }
 
 /**

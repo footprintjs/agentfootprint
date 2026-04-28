@@ -13,8 +13,9 @@ import {
 } from '../../../src/conventions.js';
 
 describe('SUBFLOW_IDS — single source of truth', () => {
-  it('has exactly the 7 known subflow IDs', () => {
+  it('has exactly the 8 known subflow IDs', () => {
     const expected = [
+      'sf-injection-engine',
       'sf-system-prompt',
       'sf-messages',
       'sf-tools',

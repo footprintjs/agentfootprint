@@ -17,6 +17,7 @@ import type { LLMToolSchema } from '../../adapters/types.js';
 import { INJECTION_KEYS } from '../../conventions.js';
 import type { InjectionRecord } from '../../recorders/core/types.js';
 import { COMPOSITION_KEYS } from '../../recorders/core/types.js';
+import type { Injection } from '../../lib/injection-engine/types.js';
 import { composeSlot, fnv1a, truncate } from './helpers.js';
 
 export interface ToolsSlotConfig {
@@ -55,7 +56,7 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
         // `.tool(...)` are baseline API flow (the static tool list
         // sent to the LLM), NOT context engineering. Skills /
         // Instructions that gate tools dynamically tag their
-        // injections with `source: 'skill'` / `source: 'instruction'`.
+        // injections with their flavor below.
         return {
           contentSummary: truncate(summary, 80),
           contentHash: fnv1a(`tool:${t.name}:${t.description}`),
@@ -68,15 +69,38 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
         };
       });
 
+      // Active Injections targeting the tools slot (Skills with
+      // tools=[…]). Filter activeInjections by `inject.tools`.
+      const activeInjections =
+        (scope.$getValue('activeInjections') as readonly Injection[] | undefined) ?? [];
+      const dynamicSchemas: LLMToolSchema[] = [];
+      for (const inj of activeInjections) {
+        const injTools = inj.inject.tools;
+        if (!injTools || injTools.length === 0) continue;
+        for (const tool of injTools) {
+          const schema = tool.schema;
+          dynamicSchemas.push(schema);
+          const summary = `${schema.name}: ${schema.description}`;
+          injections.push({
+            contentSummary: truncate(summary, 80),
+            contentHash: fnv1a(`tool:${inj.flavor}:${inj.id}:${schema.name}`),
+            slot: 'tools',
+            source: inj.flavor,
+            sourceId: inj.id,
+            reason: `${inj.flavor} '${inj.id}' unlocked tool '${schema.name}'`,
+            rawContent: summary,
+            position: tools.length + dynamicSchemas.length - 1,
+          });
+        }
+      }
+
       scope.$setValue(INJECTION_KEYS.TOOLS, injections);
-      // Pass the actual schemas through so callers (LLMCall / Agent) can
-      // hand them to the provider without re-reading config. Direct
-      // property access (the Proxy intercepts) because the key is
-      // hardcoded locally — no convention constant needed.
-      scope.toolSchemas = tools;
+      // Pass merged schemas (registry + active injection-supplied) so
+      // the Agent sends ALL of them to the provider on this iteration.
+      scope.toolSchemas = [...tools, ...dynamicSchemas];
       scope.$setValue(
         COMPOSITION_KEYS.SLOT_COMPOSED,
-        composeSlot('tools', iteration, injections, budgetCap, 'registry-order'),
+        composeSlot('tools', iteration, injections, budgetCap, 'registry+injections'),
       );
     },
     'compose',

@@ -18,6 +18,7 @@ import type { FlowChart, TypedScope } from 'footprintjs';
 import { INJECTION_KEYS } from '../../conventions.js';
 import type { InjectionRecord } from '../../recorders/core/types.js';
 import { COMPOSITION_KEYS } from '../../recorders/core/types.js';
+import type { Injection } from '../../lib/injection-engine/types.js';
 import { composeSlot, fnv1a, truncate } from './helpers.js';
 
 /**
@@ -69,12 +70,14 @@ export function buildSystemPromptSlot(config: SystemPromptSlotConfig): FlowChart
         typeof promptSource === 'function' ? await promptSource(args) : promptSource;
 
       const injections: InjectionRecord[] = [];
+
+      // Base prompt — `source: 'base'`. Configured at build time via
+      // Agent.create({...}).system('...') OR LLMCall config. Baseline
+      // LLM API flow, not context engineering. The InjectionEngine
+      // subflow (mounted before this one) writes activeInjections[]
+      // to scope; this slot reads them and appends Injection-derived
+      // InjectionRecords below.
       if (resolved && resolved.length > 0) {
-        // `source: 'base'` — this is the static system prompt configured
-        // at build time via `.system('...')`. It's baseline API flow,
-        // NOT context engineering. An Instructions system that injects
-        // a dynamic rule-based system-prompt addition tags with
-        // `source: 'instruction'` instead.
         injections.push({
           contentSummary: truncate(resolved, 80),
           contentHash: fnv1a(`sp:${resolved}`),
@@ -82,6 +85,28 @@ export function buildSystemPromptSlot(config: SystemPromptSlotConfig): FlowChart
           source: 'base',
           reason,
           rawContent: resolved,
+        });
+      }
+
+      // Active Injections targeting the system-prompt slot — the
+      // InjectionEngine subflow (mounted before this slot) wrote
+      // `activeInjections` to scope. We filter by `inject.systemPrompt`
+      // and append one InjectionRecord per active injection, tagged
+      // with the Injection's `flavor` (skill / steering / instructions /
+      // fact / etc.). ContextRecorder picks up zero-change.
+      const activeInjections =
+        (scope.$getValue('activeInjections') as readonly ActiveInjection[] | undefined) ?? [];
+      for (const inj of activeInjections) {
+        const promptContent = inj.inject.systemPrompt;
+        if (!promptContent || promptContent.length === 0) continue;
+        injections.push({
+          contentSummary: truncate(promptContent, 80),
+          contentHash: fnv1a(`sp:${inj.flavor}:${inj.id}:${promptContent}`),
+          slot: 'system-prompt',
+          source: inj.flavor,
+          sourceId: inj.id,
+          reason: inj.description ?? `${inj.flavor} '${inj.id}' active`,
+          rawContent: promptContent,
         });
       }
 

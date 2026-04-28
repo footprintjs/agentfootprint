@@ -19,11 +19,13 @@ export type ContextSlot = 'system-prompt' | 'messages' | 'tools';
  *   - `registry`    → static tool registry configured at build time
  *
  * ENGINEERED sources (context engineering flavors — the teaching layer):
- *   - `rag`         → retrieval-augmented injection
- *   - `skill`       → skill activation (LLM-guided via read_skill)
- *   - `memory`      → memory strategy re-injection
- *   - `instructions`→ rule-based follow-up after a specific tool call
- *   - `custom`      → consumer-defined (grounding, domain rules, etc.)
+ *   - `rag`          → retrieval-augmented injection (v2.1+)
+ *   - `skill`        → skill activation (LLM-guided via read_skill)
+ *   - `memory`       → memory strategy re-injection (v2.1+)
+ *   - `instructions` → rule-based behavior guidance
+ *   - `steering`     → always-on policy / persona / format rule
+ *   - `fact`         → developer-supplied data (user profile, env, …)
+ *   - `custom`       → consumer-defined (anything bespoke)
  *
  * Adding a new source is NOT a breaking change; removing one IS.
  */
@@ -33,6 +35,8 @@ export type ContextSource =
   | 'skill'
   | 'memory'
   | 'instructions'
+  | 'steering'
+  | 'fact'
   | 'custom'
   // Baseline flow (hidden from Context Engineering bin — shown via edges)
   | 'user'

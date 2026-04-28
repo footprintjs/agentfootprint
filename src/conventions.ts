@@ -14,6 +14,9 @@ import type { ContextSlot } from './events/types.js';
 
 /** Subflow IDs — mounted by builders, observed by recorders. */
 export const SUBFLOW_IDS = {
+  /** Injection Engine subflow. Evaluates every Injection's trigger
+   *  and writes activeInjections[] for the slot subflows to consume. */
+  INJECTION_ENGINE: 'sf-injection-engine',
   /** System-prompt slot subflow. Observed by ContextRecorder. */
   SYSTEM_PROMPT: 'sf-system-prompt',
   /** Messages slot subflow. */

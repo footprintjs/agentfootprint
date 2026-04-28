@@ -107,6 +107,11 @@
       "types": "./dist/types/stream.d.ts",
       "import": "./dist/esm/stream.js",
       "require": "./dist/stream.js"
+    },
+    "./injection-engine": {
+      "types": "./dist/types/injection-engine.d.ts",
+      "import": "./dist/esm/injection-engine.js",
+      "require": "./dist/injection-engine.js"
     }
   },
   "sideEffects": false,

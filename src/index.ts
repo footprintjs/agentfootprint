@@ -277,6 +277,31 @@ export {
   type ToSSEOptions,
 } from './stream.js';
 
+// Injection Engine — the unifying primitive of v2 context engineering.
+// One Injection type, four sugar factories, one engine subflow.
+export {
+  // Primitive types
+  type Injection,
+  type InjectionTrigger,
+  type InjectionContent,
+  type InjectionContext,
+  type InjectionEvaluation,
+  // Engine
+  evaluateInjections,
+  buildInjectionEngineSubflow,
+  type InjectionEngineConfig,
+  // Sugar factories (v2.0 ships 4)
+  defineInstruction,
+  type DefineInstructionOptions,
+  defineSkill,
+  type DefineSkillOptions,
+  defineSteering,
+  type DefineSteeringOptions,
+  defineFact,
+  type DefineFactOptions,
+} from './lib/injection-engine/index.js';
+
+
 // Patterns — factory functions composing primitives + core-flow into
 // well-known agent patterns from the research literature.
 export * from './patterns/index.js';
