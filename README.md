@@ -85,49 +85,48 @@ agentfootprint handles all three timing levels through the **same** primitive (`
 
 ---
 
-## How does this library help you build it?
+## Building a generative app = deciding when/how to inject
 
-agentfootprint sits on [footprintjs](https://github.com/footprintjs/footPrint) &mdash; the flowchart pattern for backend code. That gives you context engineering at the **control-flow level**, not as a new abstraction layer:
+That's the discipline. agentfootprint abstracts it for you in two layers, both built on the [footprintjs](https://github.com/footprintjs/footPrint) flowchart substrate:
+
+### Layer 1 — Single agent: one `Injection` primitive
+
+For ONE agent, every Skill / Steering / Instruction / Fact / Memory / RAG is the same `Injection` primitive: *"this content lands in this slot when this trigger matches."* You define them; the engine evaluates them per iteration; observability flows through one event.
 
 ```
-┌─ 2 primitives ──────────────────────────────────────────────┐
-│  LLMCall   — one shot                                       │
-│  Agent     — ReAct loop (LLM ↔ tools)                       │
-├─ 3 compositions + Loop ─────────────────────────────────────┤
-│  Sequence    — A → B → C                                     │
-│  Parallel    — fan-out, merge                                │
-│  Conditional — predicate-based routing                       │
-│  Loop        — repeat-with-budget                            │
-└─────────────────────────────────────────────────────────────┘
+Agent  ─►  InjectionEngine  ─►  ┌─ system-prompt slot ─► CallLLM ─► Tools ─► loop
+                                  ├─ messages slot
+                                  └─ tools slot
 ```
 
-That's the whole substrate. Every "named pattern" is a **recipe** built from these:
+### Layer 2 — Multi-agent: connect agents through control flow
 
-- **ReAct** = `Agent` with the default loop
-- **Reflexion** = `Sequence(Agent, critique-LLM, Agent)`
-- **Tree-of-Thoughts** = `Parallel(Agent &times; N) + rank`
-- **Map-Reduce** = `Parallel(Agent &times; N) + merge`
-- **Swarm** = `Agent` whose tools are other `Agent`s
+For MULTIPLE agents, you don't need a new primitive. Connect them with the same control-flow building blocks that connect any flowchart stages:
 
-You compose. We don't ship a `ReflexionAgent` class.
-
----
-
-## Out-of-box patterns &mdash; ready to copy
-
-For the canonical patterns, we ship runnable examples. Each is pure composition over the substrate:
-
-| Pattern | Built from | Source |
+| Composition | What it does | Multi-agent example |
 |---|---|---|
-| **ReAct** | Agent (default) | Yao 2022 |
-| **Reflexion** | Sequence(Agent, critique, Agent) | Shinn 2023 |
-| **Tree-of-Thoughts** | Parallel + rank | Yao 2023 |
-| **Self-Consistency** | Parallel + majority-vote | Wang 2022 |
-| **Debate** | Loop(Agent &times; 2 + judge) | Du 2023 |
-| **Map-Reduce** | Parallel + merge | Dean 2004 (LLM-applied) |
-| **Swarm (Hierarchy)** | Agent whose tools are Agents | OpenAI 2024 |
+| **Sequence** | A → B → C | `Sequence(Researcher, Writer, Editor)` — output flows downstream |
+| **Parallel** | fan-out, merge | `Parallel(Critic1, Critic2, Critic3) + merge` — multi-perspective review |
+| **Conditional** | predicate-based routing | route to specialist Agent based on intent classification |
+| **Loop** | repeat with budget | `Loop(Agent + judge)` — iterate until quality bar hit |
 
-Browse them all in [`examples/patterns/`](examples/patterns/) &mdash; every file runs end-to-end with `npm run example examples/patterns/<file>.ts`.
+That's it. **No `MultiAgentSystem` class. No `Orchestrator` class. No new vocabulary.** Multi-agent is just compositions of single Agents through control flow.
+
+### Same abstraction → native patterns
+
+Because the substrate is so small (Agent + Sequence/Parallel/Conditional/Loop), every named multi-agent pattern is just a recipe — and we ship runnable examples for the canonical ones:
+
+| Pattern | Recipe | Source |
+|---|---|---|
+| **ReAct** | `Agent` with the default loop | Yao 2022 |
+| **Reflexion** | `Sequence(Agent, critique-LLM, Agent)` | Shinn 2023 |
+| **Tree-of-Thoughts** | `Parallel(Agent × N) + rank` | Yao 2023 |
+| **Self-Consistency** | `Parallel(Agent × N) + majority-vote` | Wang 2022 |
+| **Debate** | `Loop(Agent × 2 + judge)` | Du 2023 |
+| **Map-Reduce** | `Parallel(Agent × N) + merge` | Dean 2004 |
+| **Swarm** | `Agent` whose tools are other `Agent`s | OpenAI 2024 |
+
+Browse them in [`examples/patterns/`](examples/patterns/). Every file runs end-to-end with `npm run example examples/patterns/<file>.ts`. **You compose. We don't ship a `ReflexionAgent` class.**
 
 ---
 
