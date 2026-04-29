@@ -96,7 +96,35 @@ registry.register(newSkill);
 
 `agent.skills(registry)` is the bulk-register companion to `.skill(t)`. Use the registry pattern when 2+ agents share overlapping skills; use `.skill(...)` directly when one agent has its own catalog.
 
-`SkillRegistry` methods: `register(skill)` · `replace(id, skill)` · `unregister(id)` · `get(id)` · `has(id)` · `list()` · `clear()` · `size`. Throws on duplicate `register` (use `replace` for explicit overwrites). Throws on non-Skill flavor inputs.
+`SkillRegistry` methods: `register(skill)` · `replace(id, skill)` · `unregister(id)` · `get(id)` · `has(id)` · `list()` · `clear()` · `size` · `toTools()`. Throws on duplicate `register` (use `replace` for explicit overwrites). Throws on non-Skill flavor inputs.
+
+### `registry.toTools()` — explicit composition (v2.5)
+
+When you want to wire skill discovery into a custom tool chain (e.g., a `gatedTools` layer that filters by role) instead of the Agent's auto-attached `read_skill`, use `toTools()`:
+
+```ts
+import { SkillRegistry } from 'agentfootprint';
+import { gatedTools, staticTools } from 'agentfootprint/tool-providers';
+import { PermissionPolicy } from 'agentfootprint/security';
+
+const registry = new SkillRegistry();
+registry.register(billingSkill).register(refundSkill);
+
+const { listSkills, readSkill } = registry.toTools();
+// listSkills: Tool — no-arg discovery (LLM calls to enumerate skills)
+// readSkill:  Tool — same as the auto-attached one (activation by id)
+
+const policy = PermissionPolicy.fromRoles({...}, 'support');
+const allTools = [listSkills!, readSkill!, lookupTool, refundTool];
+const provider = gatedTools(staticTools(allTools), (n) => policy.isAllowed(n));
+```
+
+Two reasons to choose `toTools()` over the auto-attach:
+
+1. **Token-efficient discovery** — the auto-attached `read_skill` embeds the catalog in its `description` (every iteration's tool list pays the cost). `list_skills` lets the LLM browse on demand; `read_skill`'s description can stay terse. For ~20+ skill registries, this matters.
+2. **Permission gating** — pass `read_skill` through `gatedTools` like any other tool, so a `readonly` role can see `list_skills` but not `read_skill`, or vice versa.
+
+`toTools()` returns `{ listSkills: undefined, readSkill: undefined }` for an empty registry — filter with `.filter(Boolean)` before adding to a tool list.
 
 ## When to use Skills vs Steering vs Instruction
 

@@ -57,10 +57,10 @@ import { buildSystemPromptSlot } from './slots/buildSystemPromptSlot.js';
 import { buildMessagesSlot } from './slots/buildMessagesSlot.js';
 import { buildToolsSlot } from './slots/buildToolsSlot.js';
 import { buildInjectionEngineSubflow } from '../lib/injection-engine/buildInjectionEngineSubflow.js';
+import { buildReadSkillTool } from '../lib/injection-engine/skillTools.js';
 import type { ActiveInjection, Injection } from '../lib/injection-engine/types.js';
 import { RunnerBase, makeRunId } from './RunnerBase.js';
 import type { Tool, ToolRegistryEntry } from './tools.js';
-import { defineTool } from './tools.js';
 
 export interface AgentOptions {
   readonly provider: LLMProvider;
@@ -422,8 +422,12 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
         skillToolEntries.push({ name: tool.schema.name, tool });
       }
     }
+    // buildReadSkillTool returns undefined when skills is empty; the
+    // length check below short-circuits so the non-null assertion is safe.
     const readSkillEntries: readonly ToolRegistryEntry[] =
-      skills.length > 0 ? [{ name: 'read_skill', tool: buildReadSkillTool(skills) }] : [];
+      skills.length > 0
+        ? [{ name: 'read_skill', tool: buildReadSkillTool(skills)! }]
+        : [];
     const augmentedRegistry: readonly ToolRegistryEntry[] = [
       ...registry,
       ...readSkillEntries,
@@ -1263,55 +1267,6 @@ function validateToolNameUniqueness(
       claim(tool.schema.name, `from Skill '${skill.id}'`);
     }
   }
-}
-
-/**
- * Build the auto-attached `read_skill` tool from a list of Skill
- * Injections. The LLM picks WHICH skill via the `id` argument.
- *
- * Tool execute() does the bookkeeping: appends the requested skill id
- * to `scope.activatedInjectionIds`. The next iteration's
- * InjectionEngine matches Skills with `trigger.kind: 'llm-activated'`
- * by id and includes them in the active set; slot subflows then
- * inject the body + tools.
- *
- * The tool's description lists each Skill's `id` + `description` so
- * the LLM can choose meaningfully.
- */
-function buildReadSkillTool(skills: readonly Injection[]): Tool {
-  const skillIds = skills.map((s) => s.id);
-  const skillCatalog = skills
-    .map((s) => `  - ${s.id}: ${s.description ?? '(no description)'}`)
-    .join('\n');
-
-  return defineTool<{ id: string }, string>({
-    name: 'read_skill',
-    description:
-      `Activate a skill for the next iteration. Available skills:\n${skillCatalog}\n\n` +
-      `Pass the skill's id. The skill's body becomes part of the system prompt and any ` +
-      `gated tools become available on the next call.`,
-    inputSchema: {
-      type: 'object',
-      properties: {
-        id: {
-          type: 'string',
-          enum: skillIds,
-          description: 'The skill id to activate.',
-        },
-      },
-      required: ['id'],
-    },
-    execute: ({ id }) => {
-      // Bookkeeping is handled by the Agent's tool-calls subflow,
-      // which inspects `read_skill` returns and updates
-      // `scope.activatedInjectionIds` before the next iteration.
-      // The tool itself returns a confirmation string for the LLM.
-      if (!skillIds.includes(id)) {
-        return `Unknown skill '${id}'. Available: ${skillIds.join(', ')}`;
-      }
-      return `Skill '${id}' activated for the next iteration.`;
-    },
-  });
 }
 
 /**

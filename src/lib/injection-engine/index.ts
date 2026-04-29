@@ -35,6 +35,16 @@ export {
 
 export { SkillRegistry } from './SkillRegistry.js';
 
+// Skill-tool builders — used by SkillRegistry.toTools() and the Agent's
+// auto-attach path. Exported so consumers building custom tool wiring
+// (e.g., gatedTools chains) can compose the same `list_skills` /
+// `read_skill` tools directly.
+export {
+  buildListSkillsTool,
+  buildReadSkillTool,
+  type SkillToolPair,
+} from './skillTools.js';
+
 export { defineSteering, type DefineSteeringOptions } from './factories/defineSteering.js';
 
 export { defineFact, type DefineFactOptions } from './factories/defineFact.js';

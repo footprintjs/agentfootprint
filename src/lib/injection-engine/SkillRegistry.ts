@@ -25,6 +25,11 @@
  */
 
 import type { Injection } from './types.js';
+import {
+  buildListSkillsTool,
+  buildReadSkillTool,
+  type SkillToolPair,
+} from './skillTools.js';
 
 export class SkillRegistry {
   private readonly skills = new Map<string, Injection>();
@@ -99,5 +104,41 @@ export class SkillRegistry {
   /** Drop all registrations. */
   clear(): void {
     this.skills.clear();
+  }
+
+  /**
+   * Materialize the LLM-facing skill discovery tools from the current
+   * registry contents. Returns `{ listSkills, readSkill }`:
+   *
+   *   - `list_skills` — no-arg tool the LLM calls to enumerate
+   *     `{ id, description }` for every registered skill. Lets the
+   *     LLM discover skills without paying the prompt-token cost of
+   *     a static catalog in the system prompt.
+   *
+   *   - `read_skill({ id })` — activates the named skill for the
+   *     NEXT iteration. The Agent's tool-calls subflow inspects this
+   *     tool call by name and updates `scope.activatedInjectionIds`
+   *     so the InjectionEngine on iter N+1 includes the skill in the
+   *     active set (body lands in the system slot; gated tools land
+   *     in the tools slot).
+   *
+   * Both entries are `undefined` when the registry is empty — filter
+   * before adding to a tool list:
+   *
+   *   const { listSkills, readSkill } = registry.toTools();
+   *   const tools = [listSkills, readSkill, ...other].filter(Boolean) as Tool[];
+   *
+   * Composes with `gatedTools` from `agentfootprint/tool-providers`
+   * so PermissionPolicy can scope which roles see the skill discovery
+   * surface.
+   *
+   * @returns A `SkillToolPair` (`{ listSkills, readSkill }`).
+   */
+  toTools(): SkillToolPair {
+    const skills = this.list();
+    return {
+      listSkills: buildListSkillsTool(skills),
+      readSkill: buildReadSkillTool(skills),
+    };
   }
 }
