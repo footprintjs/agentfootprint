@@ -1,0 +1,81 @@
+---
+title: How agentfootprint thinks
+description: A manifesto in first person — the design choices, the rejections, the things we will not build. The framework's perspective on what context engineering actually requires.
+---
+
+> A framework's first job is to **decide what it won't be**. agentfootprint is a substrate for context engineering — not an LLM SDK, not an agent platform, not a workflow orchestrator. This page is the perspective behind those rejections.
+
+## What we are
+
+We are an abstraction over **context engineering** — the discipline of deciding what content lands in which slot of an LLM call, when, and why. Just as PyTorch's autograd abstracts gradient computation, just as Express abstracts the HTTP request loop, just as React abstracts the DOM, agentfootprint abstracts the slot-management bookkeeping that practitioners were doing by hand. You describe injections declaratively. The framework evaluates every trigger every iteration, composes the `system` / `messages` / `tools` slots, observes every decision as a typed event, and persists checkpoints you can replay six months later.
+
+## What we are not
+
+- **We are not an LLM SDK wrapper.** Provider adapters are 100-line shims around vendor SDKs. They translate `LLMRequest` ↔ vendor format. They do not invent abstractions.
+- **We are not an agent platform.** No deployment dashboard, no managed runtime, no saved-agent registry. You bring your own infrastructure.
+- **We are not a workflow orchestrator.** Sequence / Parallel / Conditional / Loop are 4 compositions, not 40 step types. You will not find scheduled triggers, queue management, or retry-with-DLQ semantics here.
+- **We are not multi-modal.** `LLMMessage.content` is a string. Images and video would multiply the surface; we said no.
+- **We are not a graph DSL.** Compositions are typed functions, not a separate graph language. You will not write JSON or YAML to describe an agent.
+
+These rejections are deliberate. Each thing we are not is a thing we DO not have to maintain, document, observe, or version.
+
+## What we believe
+
+### The framework should own the loop
+
+The biggest lesson from React, autograd, Prisma, Kubernetes — every load-bearing dev tool of the last decade — is that **the framework owns the traversal**. When the framework owns it, the framework can record everything that happens inside it. Without a single round-trip on your part. Without an instrumentation layer.
+
+agentfootprint's flowchart-pattern substrate ([footprintjs](https://github.com/footprintjs/footPrint)) is what makes our typed-event stream + replayable traces automatic. You do not write `agent.observe(...)`. You write `.steering(rule)` and the framework already knows when that rule fired, on which iteration, against which context.
+
+### Every named pattern is a recipe, not a class
+
+Reflexion, Tree-of-Thoughts, Self-Consistency, Debate, Map-Reduce, Swarm — every named pattern in the agent literature reduces to a composition of our 2 primitives + 4 compositions. **We were one paper away from shipping a thirteenth Agent class when we stopped and asked: what if every new pattern is just a composition of what we already have?** That question is why our core stays small as the field grows. New paper drops? New recipe in `examples/patterns/`. No new engine code.
+
+### The trace is a cache of the agent's thinking
+
+Other frameworks' memory remembers what was said. Ours remembers what was *decided* — every value the flowchart captured, persisted as a JSON-portable snapshot. That single artifact serves three downstream consumers:
+
+- **Audit / explain** — six-months-later "why did the agent decide X?" answered from the source, not reconstruction
+- **Cheap-model triage** — follow-up questions about a recorded run go to a Haiku-class model that just READS the trace; the expensive model already did the work
+- **Training data** — every successful production run is a labeled SFT / DPO / process-RL trajectory
+
+One recording, three economics. This is the design that makes agentfootprint's value compound over time, not just at the moment of the agent run.
+
+### Mocks are first-class, not an afterthought
+
+Generative AI development is expensive when every iteration hits a paid API. We treat **$0 development as a first-class workflow** — the entire app (agent, context, memory, RAG, MCP) builds against in-memory mocks. Real infrastructure swaps in one boundary at a time. The flowchart, narrative, recorders, and tests do not change between dev and prod.
+
+This is structurally different from "you can use mocks if you want." We assume you will, and design for it.
+
+### Multi-tenant isolation is enforced at the storage boundary
+
+Every memory call takes a `MemoryIdentity` tuple — `{ tenant?, principal?, conversationId }`. Adapters MUST namespace internal keys by the full tuple. **A bug passing the wrong tenant surfaces as "no data" — never as a cross-tenant leak.** This is a non-negotiable property for any framework that wants to be deployed in regulated multi-tenant environments. We chose it as a default, not an option.
+
+### We will say "coming in vN.x" instead of pretending
+
+Skills features (`surfaceMode` / `refreshPolicy` / `SkillRegistry`) ship in v2.4 Phase 4. The Reliability subsystem (`CircuitBreaker` / 3-tier fallback / auto-resume-on-error) ships in v2.5. Production embedder factories ship in v2.6. **Until those releases land, we will not pretend they exist.** Code blocks for unshipped features are clearly marked as illustrative pseudo-code; CHANGELOG is the source of truth for what's actually released. This rule cost us prose pretty in the short term and bought us trust in the long term.
+
+## What we ask of you
+
+If you adopt this framework, you adopt the discipline that comes with it:
+
+- **Pass per-tenant `identity` at every `agent.run()` in production.** The default is for prototypes only.
+- **Use the typed event stream, not `console.log` inside tools.** The framework already knows; subscribe.
+- **Build with mocks first.** Run the agent end-to-end against `mock()` before you wire the real provider. Catch bugs in CI for $0; pay for tokens once you ship.
+- **Express new patterns as compositions of what exists.** If you find yourself wanting a new primitive, ask first whether your idea is a Sequence-of-existing-stuff in disguise. It usually is.
+
+## The unbuilt future
+
+We have rejected building several things that other frameworks ship, in some cases vigorously requested. Examples:
+
+- A graph DSL — JavaScript is the DSL.
+- A managed runtime — bring your own Lambda / container / cron.
+- Per-step retry queues — that's your queue's job.
+- A saved-agent registry — your filesystem + git already do this.
+- Model-output validation built into the agent — use a tool for that and call it.
+
+Each of these would expand the surface. None of them would make the abstraction sharper. We will continue saying no to additions that do not earn a place in the substrate.
+
+## Built on footprintjs
+
+agentfootprint is the agent layer. [footprintjs](https://footprintjs.github.io/footPrint/) is the substrate — the flowchart-pattern execution engine that makes our typed-event stream + replayable traces automatic. The same way autograd's forward-pass traversal is what makes gradient inspection automatic, footprintjs's flowchart traversal is what makes agentfootprint's observability automatic. You don't need to learn footprintjs to use agentfootprint — but if you want to build your own primitives at this depth, [start there](https://footprintjs.github.io/footPrint/).

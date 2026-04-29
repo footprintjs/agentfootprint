@@ -59,68 +59,101 @@ export default defineConfig({
       ],
       sidebar: [
         {
-          label: 'Getting Started',
+          label: '📘 Get Started',
           items: [
             { label: 'Quick Start', slug: 'getting-started/quick-start' },
             { label: 'Key Concepts', slug: 'getting-started/key-concepts' },
-            { label: 'Why explainability matters', slug: 'getting-started/debug' },
-            { label: 'vs. LangGraph / LangChain / CrewAI', slug: 'getting-started/vs' },
             { label: 'Why agentfootprint?', slug: 'getting-started/why' },
+            { label: 'vs LangChain / LangGraph / CrewAI', slug: 'getting-started/vs' },
+            { label: 'Debugging', slug: 'getting-started/debug' },
           ],
         },
         {
-          label: 'Guides',
+          label: '🧠 The mental model',
           items: [
-            { label: 'Agent pattern', slug: 'guides/agent' },
+            { label: 'Manifesto — how agentfootprint thinks', slug: 'manifesto' },
+          ],
+        },
+        {
+          label: '🧬 Primitives & compositions',
+          items: [
+            { label: 'Agent (= ReAct)', slug: 'guides/agent' },
             { label: 'Dynamic ReAct', slug: 'guides/dynamic-react' },
-            { label: 'Tool use', slug: 'guides/tools' },
-            { label: 'Instructions & decisions', slug: 'guides/instructions' },
+            { label: 'Multi-agent (Swarm)', slug: 'guides/swarm' },
+          ],
+        },
+        {
+          label: '🎯 Context engineering',
+          items: [
+            { label: 'Instructions', slug: 'guides/instructions' },
             { label: 'Skills', slug: 'guides/skills' },
             { label: 'Skills, explained', slug: 'guides/skills-explained' },
-            { label: 'RAG pattern', slug: 'guides/rag' },
-            { label: 'Memory pipeline', slug: 'guides/memory' },
+            { label: 'Tools', slug: 'guides/tools' },
+            { label: 'Grounding', slug: 'guides/grounding' },
+          ],
+        },
+        {
+          label: '🧠 Memory',
+          items: [
+            { label: 'Memory overview', slug: 'guides/memory' },
+            { label: 'Auto memory (Hybrid)', slug: 'guides/auto-memory' },
+            { label: 'Fact extraction', slug: 'guides/fact-extraction' },
             { label: 'Narrative memory', slug: 'guides/narrative-memory' },
             { label: 'Semantic retrieval', slug: 'guides/semantic-retrieval' },
-            { label: 'Fact extraction', slug: 'guides/fact-extraction' },
-            { label: 'Auto memory', slug: 'guides/auto-memory' },
-            { label: 'Multi-agent (Swarm)', slug: 'guides/swarm' },
-            { label: 'Pausable (human-in-the-loop)', slug: 'guides/pausable' },
-            { label: 'Streaming', slug: 'guides/streaming' },
-            { label: 'Observability', slug: 'guides/observability' },
-            { label: 'Grounding analysis', slug: 'guides/grounding' },
-            { label: 'Error handling', slug: 'guides/error-handling' },
-            { label: 'Testing', slug: 'guides/testing' },
-            { label: 'Security & tool gating', slug: 'guides/security' },
-            { label: 'Deployment', slug: 'guides/deployment' },
-            { label: 'Resilience', slug: 'guides/resilience' },
+            { label: 'RAG', slug: 'guides/rag' },
+            { label: 'Causal memory deep-dive', slug: 'causal-deep-dive' },
           ],
         },
         {
-          label: 'API Reference',
+          label: '📊 Observability',
           items: [
-            { label: 'Agent / LLMCall', slug: 'api/agent' },
-            { label: 'FlowChart / Swarm / Parallel', slug: 'api/flowchart-swarm' },
-            { label: 'Providers', slug: 'api/providers' },
-            { label: 'Tools', slug: 'api/tools' },
-            { label: 'Instructions', slug: 'api/instructions' },
-            { label: 'Recorders', slug: 'api/recorders' },
-            { label: 'Streaming', slug: 'api/streaming' },
+            { label: 'Observability', slug: 'guides/observability' },
+            { label: 'Streaming', slug: 'guides/streaming' },
           ],
         },
         {
-          label: 'Integrations',
+          label: '🏭 Production',
+          items: [
+            { label: 'Deployment', slug: 'guides/deployment' },
+            { label: 'Pause / Resume', slug: 'guides/pausable' },
+            { label: 'Resilience', slug: 'guides/resilience' },
+            { label: 'Error handling', slug: 'guides/error-handling' },
+            { label: 'Security', slug: 'guides/security' },
+            { label: 'Testing', slug: 'guides/testing' },
+          ],
+        },
+        {
+          label: '🔌 Providers',
           items: [
             { label: 'Anthropic (Claude)', slug: 'integrations/anthropic' },
             { label: 'OpenAI', slug: 'integrations/openai' },
             { label: 'AWS Bedrock', slug: 'integrations/aws-bedrock' },
-            { label: 'Bedrock AgentCore', slug: 'integrations/agentcore' },
-            { label: 'Ollama (Local)', slug: 'integrations/ollama' },
-            { label: 'Memory Stores', slug: 'integrations/memory-stores' },
-            { label: 'Custom Provider', slug: 'integrations/custom-provider' },
+            { label: 'Ollama (local)', slug: 'integrations/ollama' },
+            { label: 'Custom provider', slug: 'integrations/custom-provider' },
           ],
         },
         {
-          label: 'Resources',
+          label: '🗄 Memory stores',
+          items: [
+            { label: 'Memory store adapters', slug: 'integrations/memory-stores' },
+            { label: 'Bedrock AgentCore', slug: 'integrations/agentcore' },
+          ],
+        },
+        {
+          label: '📐 Architecture',
+          items: [
+            { label: 'Dependency graph (8-layer DAG)', slug: 'architecture/dependency-graph' },
+          ],
+        },
+        {
+          label: '📚 Reference',
+          items: [
+            { label: 'Citations & papers', slug: 'research/citations' },
+            { label: 'API reference (auto-generated)', slug: 'api/agent' },
+          ],
+        },
+        {
+          label: '🤝 Resources',
           items: [
             {
               label: 'Live Playground',
@@ -128,8 +161,13 @@ export default defineConfig({
               attrs: { target: '_blank', rel: 'noopener' },
             },
             {
-              label: 'footprintjs (core library)',
+              label: 'footprintjs (substrate)',
               link: 'https://footprintjs.github.io/footPrint/',
+              attrs: { target: '_blank', rel: 'noopener' },
+            },
+            {
+              label: 'GitHub repo',
+              link: 'https://github.com/footprintjs/agentfootprint',
               attrs: { target: '_blank', rel: 'noopener' },
             },
           ],

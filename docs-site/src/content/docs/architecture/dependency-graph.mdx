@@ -1,0 +1,114 @@
+---
+title: Dependency graph (8-layer DAG)
+description: How the library is structured. Each layer depends only on the ones above it; consumers can reach any layer directly without going through the others. The architecture diagram + the principles behind it.
+---
+
+> A senior engineer evaluating adoption spends 5 minutes on the README, 10 minutes on examples, then **wants to see the dependency graph + layer separation**. This page is that map.
+
+## The 8 layers
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│ Layer 8 — Public Barrel (src/index.ts)                       │
+│   What consumers `import` from. Re-exports curated subset.    │
+└─────────────────────────────────────────────────────────────┘
+                            ▲
+┌─────────────────────────────────────────────────────────────┐
+│ Layer 7 — Compositions (Sequence, Parallel, Conditional, Loop) │
+│   Multi-runner orchestration. Each composition IS a runner.   │
+└─────────────────────────────────────────────────────────────┘
+                            ▲
+┌─────────────────────────────────────────────────────────────┐
+│ Layer 6 — Primitives (Agent, LLMCall)                         │
+│   Single-runner units. Agent = ReAct loop. LLMCall = one shot.│
+└─────────────────────────────────────────────────────────────┘
+                            ▲
+┌─────────────────────────────────────────────────────────────┐
+│ Layer 5 — Context Engineering (InjectionEngine)               │
+│   Skill, Steering, Instruction, Fact, Memory, RAG — all       │
+│   reduce to {trigger, slot, content} via one engine.          │
+└─────────────────────────────────────────────────────────────┘
+                            ▲
+┌─────────────────────────────────────────────────────────────┐
+│ Layer 4 — Memory subsystem (defineMemory + pipelines)         │
+│   4 types × 7 strategies × N stores. Per-tenant isolation.    │
+└─────────────────────────────────────────────────────────────┘
+                            ▲
+┌─────────────────────────────────────────────────────────────┐
+│ Layer 3 — Adapters (LLM providers, MemoryStore impls, MCP)    │
+│   Outer ring (Hexagonal). Hand-written shims around vendor    │
+│   SDKs. Lazy-required peer-deps.                              │
+└─────────────────────────────────────────────────────────────┘
+                            ▲
+┌─────────────────────────────────────────────────────────────┐
+│ Layer 2 — Event taxonomy + dispatcher                         │
+│   47 typed events × 13 domains. EventDispatcher.              │
+│   AgentfootprintEvent discriminated union.                    │
+└─────────────────────────────────────────────────────────────┘
+                            ▲
+┌─────────────────────────────────────────────────────────────┐
+│ Layer 1 — Substrate (footprintjs)                             │
+│   Flowchart execution engine. DFS traversal owns the loop.    │
+│   This is what makes every layer above's observability        │
+│   automatic.                                                   │
+└─────────────────────────────────────────────────────────────┘
+```
+
+## Reading this diagram
+
+- **Each layer depends only on layers below it.** No cycles. A layer-5 file imports from layers 1–4 only.
+- **Consumers can reach any layer directly.** A power user who wants to build a custom recorder reaches Layer 2 directly via the public barrel. A power user who wants to wrap a new LLM provider implements at Layer 3 via the published interfaces.
+- **The substrate at Layer 1 is what makes everything above it composable.** Because footprintjs owns the traversal, every layer above gets typed-event observability for free.
+
+## Why this shape
+
+Two properties make the architecture worth describing:
+
+### 1. The substrate is shared
+
+footprintjs at Layer 1 is the same engine running underneath Agent, Sequence, Parallel, Conditional, Loop. Every runner traverses a flowchart; every traversal emits typed events; every event flows through the same dispatcher. This is why you can `agent.on('agentfootprint.composition.iteration_start')` on a Loop — it's just another flowchart traversal under the hood.
+
+### 2. Adapters are isolated at the outer ring
+
+Layer 3 — providers, stores, MCP — is the only layer that talks to the outside world. The whole rest of the library has zero dependency on `@anthropic-ai/sdk`, `openai`, `ioredis`, `@modelcontextprotocol/sdk`, or any other vendor SDK. Adapters are lazy-required at first call; consumers who use only `mock()` + `InMemoryStore` install zero peer-deps. This is the Hexagonal / Ports-and-Adapters discipline (Cockburn 2005) applied honestly.
+
+## Subpath exports = subset boundaries
+
+The package.json `exports` field publishes subpath imports per layer:
+
+| Subpath | Layer | What it exposes |
+|---|---|---|
+| `agentfootprint` (default) | 8 | The full curated barrel — 90% of consumers use only this |
+| `agentfootprint/memory` | 4 | `defineMemory`, `MEMORY_TYPES`, `MEMORY_STRATEGIES`, `InMemoryStore` |
+| `agentfootprint/memory-redis` | 3 | `RedisStore` (lazy `ioredis`) |
+| `agentfootprint/memory-agentcore` | 3 | `AgentCoreStore` (lazy AWS SDK) |
+| `agentfootprint/providers` | 3 | All LLM provider exports |
+| `agentfootprint/observe` | 2 | Event taxonomy + dispatcher types |
+| `agentfootprint/resilience` | 3 | `withRetry`, `withFallback`, `resilientProvider` |
+| `agentfootprint/stream` | (cross-cutting) | SSE bridge for streaming agent events to HTTP |
+| `agentfootprint/injection-engine` | 5 | `Injection`, `InjectionTrigger`, `evaluateInjections` |
+
+Each subpath maps to a single layer (or in some cases a single layer's slice). Tree-shaking picks up only what's used.
+
+## What this enables
+
+- **Power users build at the layer they need.** Want a custom Memory store? Implement Layer 3's `MemoryStore` interface; everything above unchanged. Want a new pattern? Compose Layer 7 over existing Layer 6 primitives.
+- **Plugin authors build at the boundary.** A "Skills inspector" library subscribes to `agentfootprint.skill.*` events at Layer 2; doesn't need to touch the InjectionEngine.
+- **The library's own internals follow the same rule.** No layer-7 file imports a layer-6 file's private internals; layer-6 files import only published Layer-5 + below interfaces.
+
+## Anti-cycles enforced by tooling
+
+`scripts/check-dup-types.mjs` runs in CI to detect circular type imports across layers. The release script (Gate 2.5) blocks releases that introduce cycles.
+
+## Related principles
+
+- **GoF Adapter pattern** — every Layer-3 file is one
+- **GoF Decorator pattern** — `withRetry` / `withFallback` (Layer 3, on top of LLMProvider)
+- **Hexagonal Architecture (Cockburn 2005)** — Layers 1–2 are the inner rings; Layer 3 is the outer ring
+- **footprintjs flowchart pattern** — the substrate that makes the typed-event observability automatic
+
+## Next steps
+
+- [Manifesto](/agentfootprint/manifesto/) — the framework's perspective on what it is + isn't
+- [Custom provider](/agentfootprint/integrations/custom-provider/) — implement at Layer 3
+- [footprintjs](https://footprintjs.github.io/footPrint/) — Layer 1 substrate, if you want to build at this depth

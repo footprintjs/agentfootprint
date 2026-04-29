@@ -1,0 +1,174 @@
+---
+title: Causal memory deep-dive
+description: The exact snapshot shape a Causal memory persists, the four projection rules, and a worked replay end-to-end. The differentiator other frameworks don't have, made tangible.
+---
+
+import CodeFile from '@/components/CodeFile.astro';
+
+> A loan officer agent decides on Monday to reject application #42 — credit score 580, threshold 600. On Friday a different user asks *"why was application #42 rejected?"* You want the agent to answer from the EXACT decision evidence, not from "memory of memory" reconstruction. **That requires the framework to record the agent's reasoning at the moment it happened**, not summarize after the fact. This page shows exactly what that recording looks like.
+
+## What gets persisted
+
+When you configure `defineMemory({ type: CAUSAL, ... })`, every `agent.run()` records a `RunSnapshot` to the configured store. The snapshot is the agent's flowchart traversal frozen as JSON — every `decide()` value, every `select()` evidence, every commit-log entry, the narrative entries, the timing.
+
+The snapshot is the THING. Subsequent retrievals load it back into context; the LLM reads it on a follow-up turn; the answer is grounded in WHAT THE AGENT ACTUALLY DID, not in what an LLM thinks it probably did.
+
+## The shape (annotated)
+
+A `RunSnapshot` looks like this when serialized:
+
+```json
+{
+  "runtimeStageId": "loan-decide#3",
+  "subflowPath": ["__root__", "sf-decide-tier"],
+  "depth": 2,
+  "phase": "exit",
+
+  "scope": {
+    "applicationId": "42",
+    "creditScore": 580,
+    "amount": 50000,
+    "tier": "tier-3-rejected"
+  },
+
+  "decideLog": [
+    {
+      "stageId": "ClassifyRisk",
+      "rule": "Marginal credit",
+      "values": { "creditScore": 580, "threshold": 600 },
+      "outcome": "rejected",
+      "predicate": "creditScore >= 600",
+      "matched": false,
+      "at": 1730308473000
+    }
+  ],
+
+  "selectLog": [
+    {
+      "stageId": "PickReason",
+      "options": ["credit-too-low", "income-too-low", "manual-review"],
+      "chosen": "credit-too-low",
+      "rationale": "Credit (580) below floor (600); income above floor",
+      "at": 1730308473123
+    }
+  ],
+
+  "commitLog": [
+    { "stage": "Seed", "stageId": "seed", "runtimeStageId": "seed#0", "updates": { "applicationId": "42" }, "trace": [] },
+    { "stage": "ClassifyRisk", "stageId": "classify-risk", "runtimeStageId": "classify-risk#1", "updates": { "tier": "tier-3-rejected" }, "trace": [...] },
+    { "stage": "PickReason", "stageId": "pick-reason", "runtimeStageId": "pick-reason#2", "updates": { "rejectionReason": "credit-too-low" }, "trace": [...] }
+  ],
+
+  "narrative": [
+    "[Seed] application #42 received",
+    "[ClassifyRisk] credit 580 < threshold 600 → rejected",
+    "[PickReason] chose credit-too-low (income above floor)"
+  ],
+
+  "metadata": {
+    "query": "Should we approve loan #42?",
+    "timestamp": 1730308473000,
+    "embedderId": "openai-text-embedding-3-small",
+    "queryEmbedding": [0.012, -0.045, ...]
+  }
+}
+```
+
+Three fields are load-bearing:
+1. **`decideLog`** — every rule the agent's `decide(...)` call evaluated, with the values that fed the predicate
+2. **`selectLog`** — every `select(...)` choice with the options + chosen + rationale
+3. **`commitLog`** — every commit to shared scope, stage by stage
+
+Together they ARE the agent's reasoning, byte-for-byte.
+
+## The four projection modes
+
+When a snapshot is RETRIEVED for a follow-up turn, you don't always want the whole thing — context budget matters. `projection` controls what slice gets injected into the next prompt:
+
+| Projection | What lands in the prompt | Use when |
+|---|---|---|
+| `SNAPSHOT_PROJECTIONS.DECISIONS` | `decideLog` + `selectLog` only | "Why did the agent decide X?" follow-ups (cheapest) |
+| `SNAPSHOT_PROJECTIONS.COMMITS` | `commitLog` only | "What state did the agent reach?" |
+| `SNAPSHOT_PROJECTIONS.NARRATIVE` | `narrative` array (rendered prose) | Human-readable replay |
+| `SNAPSHOT_PROJECTIONS.FULL` | Everything (largest, most expensive) | Forensic-grade audit |
+
+Most apps use `DECISIONS` — it's the smallest projection that answers the "why" question, and it's what cheap-model triage works best with.
+
+## Define the memory
+
+<CodeFile path="examples/memory/06-causal-snapshot.ts" region="define-causal" title="examples/memory/06-causal-snapshot.ts (region: define-causal)" />
+
+`topK: 1` retrieves the single best-matching past run. `threshold: 0.5` is strict — if no past run cosine-matches above 0.5, NO injection happens. The LLM sees no past context. Garbage low-confidence matches make hallucination MORE likely; the strict threshold is intentional.
+
+`embedder` is the SAME instance used at write time. Mixing embedders silently corrupts retrieval; the framework tags entries with `embedderId` and filters on read.
+
+## A worked replay
+
+```ts
+// Monday — production decision
+const monday = Agent.create({ provider: anthropic({...}), model: 'claude-sonnet-4-5-20250929' })
+  .system('You decide loan applications based on credit + income + amount.')
+  .memory(causal)  // CAUSAL × TOP_K × DECISIONS
+  .build();
+
+await monday.run({
+  message: 'Should we approve application #42? Credit: 580. Income: 95k. Amount: 50k.',
+  identity: { tenant: 'lending', conversationId: 'app-42' },
+});
+// → "Application #42: REJECTED. Credit (580) below floor (600). Suggest manual review."
+
+// (snapshot persisted automatically with decideLog/selectLog from the run)
+
+// ─── Friday — different user, different conversation ──────────────────
+
+const friday = Agent.create({ provider: anthropic({...}), model: 'claude-haiku-4-5-20251001' })
+  // ↑ NOTE: cheap follow-up model. Causal memory makes this safe — the
+  //   trace IS the reasoning, so a smaller model can read it.
+  .memory(causal)  // same definition, different agent instance
+  .build();
+
+await friday.run({
+  message: 'Why was application #42 rejected?',
+  identity: { tenant: 'lending', conversationId: 'app-42-followup' },
+});
+// → "Application #42 was rejected because credit score 580 was below
+//    the threshold of 600. The decision was made on Monday at 2:14 PM."
+```
+
+The Friday agent's prompt includes the projected `decideLog` entries from Monday's run — the LLM sees, verbatim, that `creditScore: 580` was checked against `threshold: 600` and the predicate matched=false. The follow-up answer is grounded in EXACT past facts, not reconstruction.
+
+## The cheap-model triage economic argument
+
+A trace recorded from your expensive production model (Sonnet-4) is a perfectly good *input* for a small, fast, cheap model (Haiku, GPT-4o-mini) answering follow-up questions about that run. **Reading recorded decision evidence is structurally simpler than re-deriving the answer from first principles** — so a smaller model is enough.
+
+Across a production system that handles audit / explain / "why did the agent do X?" traffic, the cost difference compounds:
+
+| | Cost per turn |
+|---|---|
+| Sonnet-4 re-deriving the answer from raw history | $0.045 |
+| Haiku-4-5 reading the projected `decideLog` from snapshot | ~$0.005 |
+
+10× cost reduction on the follow-up traffic. Same correctness — better, in fact, because the cheap model isn't hallucinating from compressed memory; it's reading recorded facts.
+
+## The training-data bridge (planned v2.5)
+
+The same JSON snapshot data shape feeds SFT / DPO / process-RL training pipelines. `causalMemory.exportForTraining({ format: 'sft' | 'dpo' | 'process' })` lands in v2.5 — production traffic becomes labeled trajectories with zero extra instrumentation:
+
+- Every successful customer interaction → positive trajectory
+- Every escalation / override → counter-example
+- Every `decide()` evidence → the supervision signal for process-RL
+
+This is the third downstream consumer of the same snapshot. One recording, three economics. No other framework on the market has this shape today.
+
+## Anti-patterns
+
+- Don't fall back to top-K-anyway when threshold misses. The library throws by design; garbage past context is worse than no context.
+- Don't change embedders between writes and reads. The framework tags + filters, but only if you respect the contract.
+- Don't use `FULL` projection by default. It's the largest payload; reserve for forensic-grade scenarios. `DECISIONS` covers 90% of real follow-up queries.
+- Don't share the causal store across tenants. The `MemoryIdentity` tuple namespaces, but only if you pass per-tenant identity at every `agent.run()` call.
+
+## Next steps
+
+- [Memory guide](/agentfootprint/guides/memory/) — the full type × strategy matrix that includes Causal
+- [Auto memory (Hybrid)](/agentfootprint/guides/auto-memory/) — stack causal alongside recent + facts
+- [Citations & papers](/agentfootprint/research/citations/) — the research foundation

@@ -1,0 +1,118 @@
+---
+title: Citations & papers
+description: The research foundation of agentfootprint — every named pattern shipped as a recipe is grounded in a paper. References + how the recipe in examples/patterns/ relates to the original work.
+---
+
+> *"agentfootprint is not the inventor of these patterns. We are the substrate that lets you express them in 30 lines."*
+
+## Patterns shipped as recipes
+
+Every pattern in `examples/patterns/` is a recipe over the 2-primitive + 4-composition substrate. The recipe is faithful to the paper's *idea*; some implementation details (the LLM, the prompts, the iteration count) are tunable. Each entry below cites the paper + links the recipe + notes the deviation.
+
+### ReAct (the default Agent loop)
+
+> Yao, Zhao, Yu, Du, Shafran, Narasimhan, Cao. **"ReAct: Synergizing Reasoning and Acting in Language Models."** *ICLR 2023*. [arXiv:2210.03629](https://arxiv.org/abs/2210.03629)
+
+Recipe: the `Agent` primitive itself. No separate file — `Agent.create({ provider, model }).tool(...).build()` IS ReAct. The framework owns the loop (think → act → observe → repeat).
+
+Deviation: none — this is the canonical loop, with tool dispatch + result feedback identical to the paper.
+
+### Reflexion
+
+> Shinn, Cassano, Berman, Gopinath, Narasimhan, Yao. **"Reflexion: Language Agents with Verbal Reinforcement Learning."** *NeurIPS 2023*. [arXiv:2303.11366](https://arxiv.org/abs/2303.11366)
+
+Recipe: [`examples/patterns/02-reflection.ts`](https://github.com/footprintjs/agentfootprint/blob/main/examples/patterns/02-reflection.ts) — `Sequence(Agent, critique-LLM, Agent)` wrapped in a Loop that exits when the critic emits `DONE`.
+
+Deviation: the paper's full Reflexion includes "verbal RL" (memory of past mistakes informing future attempts). Our recipe is the propose-critique-revise loop only; long-horizon verbal-memory is left to the consumer (or a `defineMemory({ type: NARRATIVE })` layer).
+
+### Tree-of-Thoughts (ToT)
+
+> Yao, Yu, Zhao, Shafran, Griffiths, Cao, Narasimhan. **"Tree of Thoughts: Deliberate Problem Solving with Large Language Models."** *NeurIPS 2023*. [arXiv:2305.10601](https://arxiv.org/abs/2305.10601)
+
+Recipe: [`examples/patterns/05-tot.ts`](https://github.com/footprintjs/agentfootprint/blob/main/examples/patterns/05-tot.ts) — `Parallel(Agent × N) + LLM-rank merge`.
+
+Deviation: paper's full ToT includes BFS / DFS search over the thought tree with backtracking. Our recipe is one-level fan-out + LLM rank — covers the "Self-Consistency-with-explicit-reasoning" use case. Multi-level search is composable via nested Parallel + Loop, not currently shipped as a recipe.
+
+### Self-Consistency
+
+> Wang, Wei, Schuurmans, Le, Chi, Narang, Chowdhery, Zhou. **"Self-Consistency Improves Chain of Thought Reasoning in Language Models."** *ICLR 2023*. [arXiv:2203.11171](https://arxiv.org/abs/2203.11171)
+
+Recipe: [`examples/patterns/01-self-consistency.ts`](https://github.com/footprintjs/agentfootprint/blob/main/examples/patterns/01-self-consistency.ts) — `Parallel(Agent × N) + majority-vote merge`.
+
+Deviation: none meaningful — same idea, expressed as a Parallel + a deterministic merge.
+
+### Debate
+
+> Du, Li, Torralba, Tenenbaum, Mordatch. **"Improving Factuality and Reasoning in Language Models through Multiagent Debate."** *ICML 2024*. [arXiv:2305.14325](https://arxiv.org/abs/2305.14325)
+
+Recipe: [`examples/patterns/03-debate.ts`](https://github.com/footprintjs/agentfootprint/blob/main/examples/patterns/03-debate.ts) — `Loop(Agent × 2 + judge)`.
+
+Deviation: paper varies N agents, M rounds, judge configurations. Our recipe is two debaters + one judge + bounded rounds — the simplest form. N-agent variants compose via wider Parallel.
+
+### Map-Reduce
+
+> Dean, Ghemawat. **"MapReduce: Simplified Data Processing on Large Clusters."** *OSDI 2004*. [Original paper](https://research.google/pubs/mapreduce-simplified-data-processing-on-large-clusters/)
+
+Recipe: [`examples/patterns/04-map-reduce.ts`](https://github.com/footprintjs/agentfootprint/blob/main/examples/patterns/04-map-reduce.ts) — `Parallel(Agent × N) + LLM-merge`.
+
+Deviation: not really a deviation — Map-Reduce in the agent context is fan-out-then-merge, which is what `Parallel` does. The original paper is about distributed computing; the LLM-agent flavor is a faithful translation.
+
+### Swarm
+
+> OpenAI engineering. **"Swarm: An ergonomic, lightweight multi-agent orchestration framework."** *2024*. [GitHub](https://github.com/openai/swarm)
+
+Recipe: [`examples/patterns/06-swarm.ts`](https://github.com/footprintjs/agentfootprint/blob/main/examples/patterns/06-swarm.ts) — `swarm({ agents, route, maxHandoffs })` over Loop.
+
+Deviation: OpenAI's Swarm uses LLM-driven routing (each agent decides the handoff). Our recipe is sync-deterministic-route by default (the route function is a pure JS function). LLM-driven routing is composable via Conditional with an LLM predicate, but the deterministic flavor is what production teams actually want for predictable cost + observability.
+
+### Skills (Anthropic Agent SDK)
+
+> Anthropic engineering. **"Agent Skills."** *2024*. [Documentation](https://docs.anthropic.com/en/docs/build-with-claude/agent-skills)
+
+Recipe: `defineSkill({ id, description, body, tools })` with auto-attached `read_skill` tool. See [Skills, explained](/agentfootprint/guides/skills-explained/) for the full essay on how the implementation differs from Anthropic's Claude-first design.
+
+Deviation: agentfootprint's Skills work cross-provider via tool-result delivery (recency-first, protocol-level guarantee). Anthropic's SDK uses system-prompt anchoring (Claude-trained-correct, drifts on other providers). Our v2.4 Phase 4 ships `surfaceMode: 'auto'` to pick per provider.
+
+### Causal memory (decision-evidence persistence)
+
+No prior paper. This is agentfootprint-original, building on:
+
+- **footprintjs's `decide()` / `select()` evidence-capture primitives** — see [footprintjs docs](https://footprintjs.github.io/footPrint/)
+- **Hippocampus-inspired causal memory frameworks** — broadly inspired by cognitive-architecture work on episodic vs causal memory; specific paper inspirations include LIDA (Franklin et al.) and ACT-R (Anderson) but the implementation is structural, not theory-driven
+
+The closest published analog is **MemGPT-style snapshot memory** (Packer et al., [arXiv:2310.08560](https://arxiv.org/abs/2310.08560)), but MemGPT snapshots message history; we snapshot decision evidence. Different shape, different downstream economics (audit + cheap-model triage + training data).
+
+See [Causal memory deep-dive](/agentfootprint/causal-deep-dive/) for the snapshot shape + worked replay.
+
+## Foundational frameworks we build on
+
+- **footprintjs** — the flowchart-pattern execution engine. The "framework owns the loop" property comes from footprintjs's DFS traversal. [GitHub](https://github.com/footprintjs/footPrint).
+- **Hexagonal Architecture (Alistair Cockburn, 2005)** — provider adapters as ports. Outer-ring isolation.
+- **GoF Patterns** — Adapter pattern for every provider/store integration. Decorator pattern for resilience composition.
+
+## Augmented LM framing
+
+The unifying mental model — "Skills, RAG, Memory, Instructions, Tools are all augmentations of the LLM call" — maps to:
+
+> Mialon, Dessì, Lomeli, Nalmpantis, Pasunuru, Raileanu, Rozière, Schick, Dwivedi-Yu, Celikyilmaz, Grave, LeCun, Scialom. **"Augmented Language Models: a Survey."** *TMLR 2023*. [arXiv:2302.07842](https://arxiv.org/abs/2302.07842)
+
+This survey's framing — every external input as an augmentation — is the conceptual root of our Injection primitive. We just gave it a concrete shape (`{ trigger, slot, content }`) and a typed event channel.
+
+## How to cite agentfootprint
+
+If you build on agentfootprint in academic work, please cite:
+
+```bibtex
+@software{agentfootprint,
+  title = {agentfootprint: Context engineering, abstracted},
+  author = {Sanjay Krishna Anbalagan},
+  year = {2026},
+  url = {https://github.com/footprintjs/agentfootprint},
+}
+```
+
+## Next steps
+
+- [Manifesto](/agentfootprint/manifesto/) — the framework's perspective on what it is + isn't
+- [Skills, explained](/agentfootprint/guides/skills-explained/) — the strongest essay in the docs, with full cross-provider correctness analysis
+- [Causal deep-dive](/agentfootprint/causal-deep-dive/) — the differentiator, made tangible
