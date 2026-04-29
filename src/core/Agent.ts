@@ -961,7 +961,18 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       })
       .setDefault('final')
       .end()
-      .loopTo(SUBFLOW_IDS.MESSAGES);
+      // Dynamic ReAct: loop back to the InjectionEngine so EVERY iteration
+      // re-evaluates triggers (rule predicates, on-tool-return, llm-activated)
+      // against the freshest context (the just-appended tool result).
+      // Without this, the InjectionEngine runs ONCE per turn and:
+      //   - on-tool-return predicates never fire on iter 2+
+      //   - read_skill('X') activations are never picked up next iteration
+      //   - autoActivate per-skill tool gating is structurally impossible
+      //   - tools / system-prompt slots stay frozen at iter 1 content
+      // The v2.4 default of loopTo(MESSAGES) bypassed all four — quietly
+      // breaking the framework's "Dynamic ReAct" claim. v2.5 restores the
+      // v1 behavior that documents promise.
+      .loopTo(SUBFLOW_IDS.INJECTION_ENGINE);
 
     return builder.build();
   }

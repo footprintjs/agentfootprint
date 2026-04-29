@@ -13,6 +13,14 @@ A regular Instruction has an `activeWhen(ctx)` predicate that runs every iterati
 
 This is the **on-tool-return** trigger from the [4-trigger taxonomy](/agentfootprint/getting-started/key-concepts/#context-engineering-cross-cutting). It's the recency-first injection point: the LLM's attention is freshest on the most recent message, and a tool result IS a recent message.
 
+### How "every iteration" actually works
+
+The agent's flowchart loops through a sequence of stages: **InjectionEngine → System Prompt → Messages → Tools → CallLLM → Route**. Each iteration starts at InjectionEngine — every trigger re-evaluates against the freshest context (the just-appended tool result, the new iteration count, any newly-activated skill). Then the slot subflows recompose the system prompt, the messages, and the tools list from the active injection set. The LLM sees a freshly-composed prompt + tool list every iteration.
+
+This means tool results reshape the next iteration's prompt + tool list + active skills. **That's the differentiator** vs frameworks that compose context once and reuse it across iterations.
+
+> **v2.5 fix note:** v2.4 had a regression where the loop target skipped InjectionEngine on iter 2+, quietly disabling per-iteration re-evaluation. v2.5 (commit pending) restored the v1 behavior. Tests added at `test/core/dynamic-react-loop.test.ts` pin the per-iteration evaluation contract — `on-tool-return` predicates now fire on iter 2+, `autoActivate` per-skill tool gating becomes feasible (lands in v2.5 Block A5), and skill bodies inject on the iteration after `read_skill('X')` activation.
+
 ## The pattern
 
 <CodeFile path="examples/context-engineering/05-dynamic-react.ts" region="on-tool-return" title="examples/context-engineering/05-dynamic-react.ts (region: on-tool-return)" />
