@@ -9,9 +9,13 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  defineRAG, indexDocuments, type RagDocument,
-  Agent, mock,
-  InMemoryStore, mockEmbedder,
+  defineRAG,
+  indexDocuments,
+  type RagDocument,
+  Agent,
+  mock,
+  InMemoryStore,
+  mockEmbedder,
 } from '../../../src/index.js';
 
 // ─── Unit — defineRAG factory shape ────────────────────────────────
@@ -126,8 +130,12 @@ describe('indexDocuments — unit', () => {
     const store = new InMemoryStore();
     const tenantA = { tenant: 'a', conversationId: 'corpus' };
     const tenantB = { tenant: 'b', conversationId: 'corpus' };
-    await indexDocuments(store, mockEmbedder(), [{ id: 'a-only', content: 'A' }], { identity: tenantA });
-    await indexDocuments(store, mockEmbedder(), [{ id: 'b-only', content: 'B' }], { identity: tenantB });
+    await indexDocuments(store, mockEmbedder(), [{ id: 'a-only', content: 'A' }], {
+      identity: tenantA,
+    });
+    await indexDocuments(store, mockEmbedder(), [{ id: 'b-only', content: 'B' }], {
+      identity: tenantB,
+    });
 
     const a = await store.list(tenantA);
     const b = await store.list(tenantB);
@@ -140,12 +148,10 @@ describe('indexDocuments — unit', () => {
   it('attaches optional tier + ttl', async () => {
     const store = new InMemoryStore();
     const ttlMs = 60_000;
-    await indexDocuments(
-      store,
-      mockEmbedder(),
-      [{ id: 'd', content: 'doc' }],
-      { tier: 'hot', ttlMs },
-    );
+    await indexDocuments(store, mockEmbedder(), [{ id: 'd', content: 'doc' }], {
+      tier: 'hot',
+      ttlMs,
+    });
     const r = await store.list({ conversationId: '_global' });
     expect(r.entries[0]!.tier).toBe('hot');
     expect(r.entries[0]!.ttl).toBeGreaterThan(Date.now());

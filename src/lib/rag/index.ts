@@ -4,8 +4,4 @@
  * subsystem (semantic + top-K + strict threshold).
  */
 export { defineRAG, type DefineRAGOptions } from './defineRAG.js';
-export {
-  indexDocuments,
-  type IndexDocumentsOptions,
-  type RagDocument,
-} from './indexDocuments.js';
+export { indexDocuments, type IndexDocumentsOptions, type RagDocument } from './indexDocuments.js';
