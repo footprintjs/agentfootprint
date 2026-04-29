@@ -45,7 +45,20 @@ export interface IndexDocumentsOptions {
   /**
    * Identity scope to write under. Default: a single shared
    * `{ conversationId: '_global' }` namespace, suitable for app-wide
-   * corpora. Override for per-tenant document partitions.
+   * corpora.
+   *
+   * **Multi-tenant footgun:** the read side (`agent.run({ identity })`)
+   * queries within whichever identity is passed at request time.
+   * If you index here under `_global` but query under
+   * `{ tenant: 'acme' }`, you'll get ZERO results — silently. Either:
+   *   1. Index every document under each tenant's identity (duplicated
+   *      storage, but isolated), or
+   *   2. Index under `_global` AND query under `_global` (shared
+   *      corpus across tenants — fine for product docs, NOT for
+   *      tenant-private data), or
+   *   3. Use a vector store adapter that supports multi-namespace
+   *      reads at query time (Pinecone, Qdrant — outside this helper's
+   *      scope).
    */
   readonly identity?: MemoryIdentity;
 
@@ -75,6 +88,15 @@ export interface IndexDocumentsOptions {
    * this through to abort batch indexing on shutdown / timeout.
    */
   readonly signal?: AbortSignal;
+
+  /**
+   * Max number of concurrent embed calls when the embedder doesn't
+   * implement `embedBatch`. Default `8`. Without this cap, a 10K-doc
+   * corpus would fire 10K parallel embed calls and trigger rate limits.
+   * Ignored when `embedBatch` is available (the embedder controls
+   * its own batching).
+   */
+  readonly maxConcurrency?: number;
 }
 
 const DEFAULT_IDENTITY: MemoryIdentity = { conversationId: '_global' };
@@ -83,6 +105,14 @@ const DEFAULT_IDENTITY: MemoryIdentity = { conversationId: '_global' };
  * Embed + persist documents. Returns the count actually indexed
  * (skips duplicates if the store rejects them). Throws on embedder
  * failure or store error — fail loud at startup is desirable.
+ *
+ * **Re-indexing semantics:** entries are written with `version: 1` and
+ * `putMany` (most adapters: last-write-wins). Re-running this helper
+ * after the store has been mutated by other writers may stomp their
+ * versions. For idempotent corpus refresh, either delete-then-index
+ * or use a custom upsert via `store.putIfVersion()` per document. A
+ * first-class `mode: 'upsert' | 'replace'` API is planned for a
+ * future release.
  */
 export async function indexDocuments(
   store: MemoryStore,
@@ -99,15 +129,20 @@ export async function indexDocuments(
   const now = Date.now();
   const ttl = options.ttlMs ? now + options.ttlMs : undefined;
 
-  // Embed in batch when supported, else fall back to parallel single calls.
+  // Embed in batch when supported, else fall back to capped-concurrency
+  // single calls. Unlimited concurrency on a large corpus would
+  // saturate embedder rate limits; cap defaults to 8.
   const texts = documents.map((d) => d.content);
-  const vectors: readonly (readonly number[])[] = embedder.embedBatch
-    ? await embedder.embedBatch({ texts, ...(options.signal && { signal: options.signal }) })
-    : await Promise.all(
-        texts.map((text) =>
-          embedder.embed({ text, ...(options.signal && { signal: options.signal }) }),
-        ),
-      );
+  let vectors: readonly (readonly number[])[];
+  if (embedder.embedBatch) {
+    vectors = await embedder.embedBatch({
+      texts,
+      ...(options.signal && { signal: options.signal }),
+    });
+  } else {
+    const limit = Math.max(1, options.maxConcurrency ?? 8);
+    vectors = await embedWithConcurrency(embedder, texts, limit, options.signal);
+  }
 
   const entries: MemoryEntry<RagDocument>[] = documents.map((doc, i) => {
     const vec = vectors[i];
@@ -129,4 +164,26 @@ export async function indexDocuments(
 
   await store.putMany(identity, entries);
   return entries.length;
+}
+
+async function embedWithConcurrency(
+  embedder: Embedder,
+  texts: readonly string[],
+  limit: number,
+  signal?: AbortSignal,
+): Promise<readonly (readonly number[])[]> {
+  const results: (readonly number[])[] = new Array(texts.length);
+  let next = 0;
+  const workers = Array.from({ length: Math.min(limit, texts.length) }, async () => {
+    for (;;) {
+      const i = next++;
+      if (i >= texts.length) return;
+      results[i] = await embedder.embed({
+        text: texts[i]!,
+        ...(signal && { signal }),
+      });
+    }
+  });
+  await Promise.all(workers);
+  return results;
 }

@@ -7,32 +7,6 @@
  *          recorders, or compositions.
  * Emits:   N/A.
  *
- * ─── 7-panel design review (2026-04-28) ─────────────────────────────
- *
- *   LLM-AI system design   ✓ Native function-calling. messages map
- *                            1:1 to OpenAI shape (system/user/assistant/tool
- *                            roles match) — minimal translation.
- *   Performance            ✓ Single SDK call per `complete()`. Stream
- *                            uses native SSE; deltas yielded as they
- *                            arrive.
- *   Scalability            ✓ Stateless; concurrent runs share one
- *                            provider freely.
- *   Research alignment     ✓ Mirrors v1 OpenAIAdapter conversion logic
- *                            (origin/main `c6e11d0`); same usage
- *                            normalization (prompt_tokens/completion_tokens
- *                            → input/output).
- *   Flexibility            ✓ `baseURL` enables OpenAI-compatible APIs
- *                            (Ollama, Together, Groq, vLLM, LM Studio)
- *                            without a separate adapter — see `ollama()`
- *                            convenience factory below.
- *   Abstraction-modular    ✓ Two converters (`toOpenAIMessages`,
- *                            `fromOpenAIResponse`) isolate the
- *                            shape-shifting; `complete()` and
- *                            `stream()` reuse them.
- *   Software engineering   ✓ Duck-typed SDK. Errors wrapped with
- *                            provider tag. JSON-parsed tool args fall
- *                            back to `{}` on malformed strings.
- *
  * ─── Limitations ────────────────────────────────────────────────────
  *
  * • Multi-modal NOT supported  (`LLMMessage.content` is
@@ -40,9 +14,9 @@
  * • `responseFormat` (JSON-mode) NOT exposed  — pass schema
  *   instructions via `systemPrompt` for now.
  *
- * ─── 7-pattern test coverage ────────────────────────────────────────
- *
- *   See `test/adapters/unit/OpenAIProvider.test.ts`.
+ * The `baseURL` option enables OpenAI-compatible APIs (Ollama, Together,
+ * Groq, vLLM, LM Studio) without a separate adapter — see the `ollama()`
+ * convenience factory below.
  */
 
 import type {

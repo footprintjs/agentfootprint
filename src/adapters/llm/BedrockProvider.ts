@@ -10,40 +10,14 @@
  *
  * Requires: `npm install @aws-sdk/client-bedrock-runtime`
  *
- * ─── 7-panel design review (2026-04-28) ─────────────────────────────
- *
- *   LLM-AI system design   ✓ Converse API is model-agnostic — one
- *                            adapter covers every Bedrock-hosted
- *                            model. tool_use / tool_result blocks
- *                            map cleanly to toolCalls.
- *   Performance            ✓ Single SDK send() per `complete()`;
- *                            ConverseStream for `stream()` yields
- *                            deltas natively.
- *   Scalability            ✓ Stateless adapter. AWS SDK handles
- *                            credential refresh + region routing.
- *   Research alignment     ✓ Mirrors v1 BedrockAdapter (origin/main
- *                            `c6e11d0`). Maps same field renames
- *                            (toolUseId, inputSchema.json, etc.).
- *   Flexibility            ✓ `region` + `client` injectable. Model
- *                            id passes through for fine-grained
- *                            routing (cross-region inference profiles
- *                            work as-is).
- *   Abstraction-modular    ✓ Separate converters mirror the
- *                            Anthropic/OpenAI adapters. Easy to keep
- *                            in lockstep when LLMMessage evolves.
- *   Software engineering   ✓ Duck-typed SDK shape. Errors wrapped
- *                            with provider tag. Tests cover the
- *                            7-pattern matrix.
+ * The Converse API is model-agnostic — one adapter covers every
+ * Bedrock-hosted model (Claude, Llama, Mistral, Titan, Mixtral, ...).
  *
  * ─── Limitations ────────────────────────────────────────────────────
  *
  * • Multi-modal NOT supported  (text content only).
  * • Guardrail integration NOT exposed yet — pass via the SDK client
  *   directly if needed.
- *
- * ─── 7-pattern test coverage ────────────────────────────────────────
- *
- *   See `test/adapters/unit/BedrockProvider.test.ts`.
  */
 
 import type {

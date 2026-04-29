@@ -156,6 +156,57 @@ describe('indexDocuments — unit', () => {
     expect(r.entries[0]!.tier).toBe('hot');
     expect(r.entries[0]!.ttl).toBeGreaterThan(Date.now());
   });
+
+  it('caps embed-fallback concurrency to maxConcurrency (rate-limit safety)', async () => {
+    // Embedder without embedBatch → single-call fallback path. Without a
+    // cap, indexing 100 docs would fire 100 parallel embed calls and
+    // saturate provider rate limits. Verify the cap is honored.
+    let inFlight = 0;
+    let peakInFlight = 0;
+    const embedder = {
+      name: 'tracked-embedder',
+      dimensions: 4,
+      embed: async ({ text }: { text: string }) => {
+        inFlight++;
+        peakInFlight = Math.max(peakInFlight, inFlight);
+        await new Promise((r) => setTimeout(r, 1));
+        inFlight--;
+        // simple deterministic vector based on first-char codepoint
+        return [text.charCodeAt(0) / 128, 0, 0, 0];
+      },
+    };
+    const store = new InMemoryStore();
+    const docs: RagDocument[] = Array.from({ length: 50 }, (_, i) => ({
+      id: `d${i}`,
+      content: `chunk ${String.fromCharCode(65 + (i % 26))}`,
+    }));
+    await indexDocuments(store, embedder, docs, { maxConcurrency: 4 });
+    expect(peakInFlight).toBeLessThanOrEqual(4);
+    const r = await store.list({ conversationId: '_global' });
+    expect(r.entries.length).toBe(50);
+  });
+
+  it('default fallback concurrency is 8 (sane production default)', async () => {
+    let inFlight = 0;
+    let peakInFlight = 0;
+    const embedder = {
+      name: 'tracked',
+      dimensions: 4,
+      embed: async () => {
+        inFlight++;
+        peakInFlight = Math.max(peakInFlight, inFlight);
+        await new Promise((r) => setTimeout(r, 1));
+        inFlight--;
+        return [0, 0, 0, 0];
+      },
+    };
+    await indexDocuments(
+      new InMemoryStore(),
+      embedder,
+      Array.from({ length: 30 }, (_, i) => ({ id: `d${i}`, content: 'x' })),
+    );
+    expect(peakInFlight).toBeLessThanOrEqual(8);
+  });
 });
 
 // ─── Integration — Agent + RAG end-to-end ─────────────────────────

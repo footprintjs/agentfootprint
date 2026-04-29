@@ -12,41 +12,11 @@
  * header for direct browser-to-API calls. This is intentional — production
  * apps should proxy through a backend.
  *
- * ─── 7-panel design review (2026-04-28) ─────────────────────────────
- *
- *   LLM-AI system design   ✓ Same message + tool conversion as the
- *                            Node `AnthropicProvider`. Native tool_use
- *                            blocks; `LLMMessage.toolCalls` round-trip.
- *   Performance            ✓ One fetch() per `complete()`. Stream
- *                            uses native `ReadableStream` via SSE
- *                            parsing — no buffering past one chunk.
- *   Scalability            ✓ Stateless. Multiple agents share one
- *                            provider; browser fetch handles
- *                            concurrent requests fine.
- *   Research alignment     ✓ Mirrors v1 BrowserAnthropicAdapter
- *                            (origin/main `c6e11d0`). Same headers,
- *                            same SSE event shape.
- *   Flexibility            ✓ `apiUrl` override for proxy/edge
- *                            deployments. Custom `fetch` injection
- *                            for tests + workers.
- *   Abstraction-modular    ✓ Re-uses `toAnthropicMessages` /
- *                            `fromAnthropicResponse` semantics from
- *                            the Node adapter (small duplication kept
- *                            local — both files stay readable).
- *   Software engineering   ✓ Zero peer deps (browser fetch is
- *                            ambient). Errors wrapped with status
- *                            for `withRetry` policy hooks. SSE parser
- *                            handles partial chunks.
- *
  * ─── Limitations ────────────────────────────────────────────────────
  *
- * • Multi-modal NOT .
+ * • Multi-modal NOT supported.
  * • Browser CORS — works because Anthropic explicitly allows the
  *   dangerous-direct header. Future API changes could require a proxy.
- *
- * ─── 7-pattern test coverage ────────────────────────────────────────
- *
- *   See `test/adapters/unit/BrowserAnthropicProvider.test.ts`.
  */
 
 import type {

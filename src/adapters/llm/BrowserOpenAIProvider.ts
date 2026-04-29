@@ -10,21 +10,11 @@
  * Also works with OpenAI-compatible endpoints (Ollama, Together, vLLM)
  * via `apiUrl`.
  *
- * ─── 7-panel review ─────────────────────────────────────────────────
- *
- *   Same posture as `BrowserAnthropicProvider`: native fetch, SSE
- *   parser, stateless, error-wrapped, message-conversion mirrors the
- *   Node `OpenAIProvider`. See that adapter's review for full rubric.
- *
  * ─── Limitations ────────────────────────────────────────────────────
  *
- * • Multi-modal NOT .
+ * • Multi-modal NOT supported.
  * • CORS depends on the endpoint — OpenAI requires the user-supplied
  *   key in the Authorization header, which they'll do explicitly.
- *
- * ─── 7-pattern test coverage ────────────────────────────────────────
- *
- *   See `test/adapters/unit/BrowserOpenAIProvider.test.ts`.
  */
 
 import type {

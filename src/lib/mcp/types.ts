@@ -139,6 +139,8 @@ export interface McpSdkClient {
   callTool(args: {
     readonly name: string;
     readonly arguments?: Readonly<Record<string, unknown>>;
+    /** Forwarded from `McpClientOptions.signal` so consumers can cancel hung tool calls. */
+    readonly signal?: AbortSignal;
   }): Promise<{
     readonly content: ReadonlyArray<{
       readonly type: string;

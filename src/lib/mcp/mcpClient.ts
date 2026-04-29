@@ -29,23 +29,6 @@
  *          `McpClientOptions` so observability surfaces can group
  *          tool calls by server.
  *
- * 7-panel review (2026-04-29):
- * - LLM Systems    ✅  inputSchema preserved verbatim — the LLM sees
- *                      the same tool schema MCP advertised
- * - Architect      ✅  pure adapter; no engine code. New tool sources
- *                      slot in via the same `Tool` interface
- * - API Designer   ✅  three methods (.tools / .refresh / .close)
- *                      mirror the MCP SDK lifecycle
- * - Performance    ✅  tool list cached after first fetch; .refresh
- *                      is opt-in. callTool round-trip is one network
- *                      hop per tool call (same as direct LLM-tool flow)
- * - Privacy        ✅  no implicit logging; consumer controls auth
- *                      via transport headers
- * - SoftEng        ✅  lazy-required SDK + friendly install error;
- *                      mock injection point for tests
- * - TS Engineer    ✅  structural McpSdkClient shim — works against
- *                      any future SDK version with the same shape
- *
  * Lazy-require pattern: the `@modelcontextprotocol/sdk` peer-dep
  * loads only when a consumer actually constructs a client. Tests
  * inject `_client` and skip the import path entirely.
@@ -54,9 +37,12 @@
 import type { Tool } from '../../core/tools.js';
 import type { McpClient, McpClientOptions, McpSdkClient, McpTransport } from './types.js';
 
+// Version-less identity. The MCP `clientInfo` field is informational
+// (server logs it); a hardcoded number drifts every release. Consumers
+// who care about wire-level identity pass `clientInfo` explicitly.
 const DEFAULT_CLIENT_INFO = {
   name: 'agentfootprint',
-  version: '2.1.0', // bumped per release
+  version: '0.0.0',
 };
 
 /**
@@ -75,23 +61,36 @@ export async function mcpClient(opts: McpClientOptions): Promise<McpClient> {
   // Tool cache so consumers calling `.tools()` more than once don't
   // hammer the server. `.refresh()` invalidates it.
   let cache: readonly Tool[] | null = null;
+  let closed = false;
+
+  const ensureOpen = (op: string): void => {
+    if (closed) {
+      throw new Error(
+        `mcpClient[${name}].${op}() called after close(). Construct a new client to reconnect.`,
+      );
+    }
+  };
 
   const buildTools = async (): Promise<readonly Tool[]> => {
     const listed = await sdk.listTools();
-    return listed.tools.map((t) => wrapMcpTool(sdk, t));
+    return listed.tools.map((t) => wrapMcpTool(name, sdk, t, opts.signal));
   };
 
   return {
     name,
     async tools(): Promise<readonly Tool[]> {
+      ensureOpen('tools');
       if (!cache) cache = await buildTools();
       return cache;
     },
     async refresh(): Promise<readonly Tool[]> {
+      ensureOpen('refresh');
       cache = await buildTools();
       return cache;
     },
     async close(): Promise<void> {
+      if (closed) return;
+      closed = true;
       cache = null;
       await sdk.close();
     },
@@ -164,37 +163,50 @@ async function buildTransport(t: McpTransport): Promise<unknown> {
 // ─── Tool wrapping ─────────────────────────────────────────────────
 
 function wrapMcpTool(
+  serverName: string,
   sdk: McpSdkClient,
   mcp: {
     readonly name: string;
     readonly description?: string;
     readonly inputSchema: Readonly<Record<string, unknown>>;
   },
+  signal?: AbortSignal,
 ): Tool {
-  return {
+  const tool: Tool = {
     schema: {
       name: mcp.name,
       description: mcp.description ?? `MCP tool: ${mcp.name}`,
       inputSchema: mcp.inputSchema,
     },
     execute: async (args) => {
+      // The agent passes args as `unknown` per Tool contract. MCP
+      // expects a JSON object — non-object inputs become `{}` rather
+      // than failing the SDK call.
+      const argsObj =
+        args !== null && typeof args === 'object' && !Array.isArray(args)
+          ? (args as Record<string, unknown>)
+          : {};
       const result = await sdk.callTool({
         name: mcp.name,
-        arguments: (args as Record<string, unknown>) ?? {},
+        arguments: argsObj,
+        ...(signal && { signal }),
       });
       // MCP returns content blocks. We concatenate text blocks into
       // a single string for the agent's tool-result event payload.
       // Non-text blocks (images, resources) are summarized with their
-      // type — full multi-modal mapping is a v2.x follow-up.
+      // type — full multi-modal mapping is a future-release follow-up.
       const text = result.content
         .map((c) => (c.type === 'text' && c.text ? c.text : `[${c.type}]`))
         .join('\n');
       if (result.isError) {
-        throw new Error(`MCP tool '${mcp.name}' returned an error: ${text}`);
+        throw new Error(
+          `MCP tool '${mcp.name}' (server '${serverName}') returned an error: ${text}`,
+        );
       }
       return text;
     },
-  } as Tool;
+  };
+  return tool;
 }
 
 // ─── Module shim types (for the lazy-required SDK) ─────────────────

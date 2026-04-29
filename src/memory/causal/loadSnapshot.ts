@@ -12,7 +12,7 @@
  * Strict-threshold semantics:
  *   When `minScore` is set and no past snapshot meets it, returns an
  *   empty `formatted`. NO fallback — garbage past context is worse than
- *   no context. Aligns with the LLM-systems panel verdict in the design.
+ *   no context.
  *
  * Empty-query handling:
  *   No user message → no embedding → no search → empty result.

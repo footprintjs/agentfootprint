@@ -29,24 +29,6 @@
  *          `agentfootprint.context.injected` when retrieved chunks
  *          land in the messages slot.
  *
- * 7-panel review (2026-04-29):
- * - LLM Systems    ✅  injects as 'user' role by default — RAG chunks
- *                      land where the LLM treats them as authoritative
- *                      retrieved context, not behavior rules
- * - Architect      ✅  composition over defineMemory; zero new engine
- *                      code; multi-RAG layering works via per-id keys
- * - API Designer   ✅  one factory, mirrors defineMemory shape; consumer
- *                      ergonomics: `agent.rag(defineRAG({...}))`
- * - Performance    ✅  embedding cost is one call per turn (TURN_START
- *                      timing, default); strict threshold prevents
- *                      injecting low-confidence noise
- * - Privacy        ✅  multi-tenant via MemoryIdentity tuple; doc
- *                      content never crosses tenant boundaries
- * - ML / IR        ✅  embedder version pinned via `embedderId`; cosine
- *                      score semantics inherited from MemoryStore
- * - SoftEng        ✅  thin file (this one); existing memory tests
- *                      cover the underlying pipeline
- *
  * @see ./indexDocuments.ts  for the seeding helper
  * @see ../../memory/define.ts  for the underlying factory
  *
@@ -129,14 +111,29 @@ export interface DefineRAGOptions {
    * Minimum cosine similarity to inject. **Strict** — when no chunk
    * meets the threshold, NO injection happens (no fallback that would
    * pollute the prompt with weak matches). Default 0.7.
+   *
+   * Tuning note: 0.7 is a high bar for some embedders. Sentence-BERT
+   * relatives (`all-MiniLM-L6-v2`, etc.) often score 0.4–0.6 even on
+   * relevant chunks. If you see frequent zero-result silent skips,
+   * lower to ~0.5 and observe the `agentfootprint.context.injected`
+   * stream. OpenAI `text-embedding-3-*` and Cohere embed-v3 typically
+   * sit comfortably with 0.7.
    */
   readonly threshold?: number;
 
   /**
    * Role to use when injecting retrieved chunks into the messages
-   * slot. Default `'user'` — RAG chunks are most often treated as
-   * "context the user provided" by LLMs. Use `'system'` for
-   * authoritative reference docs that should outweigh user instruction.
+   * slot. Default `'user'`.
+   *
+   * Why `'user'`: in tool-using ReAct loops, retrieved chunks
+   * conceptually "augment what the user asked." Anthropic's tool-use
+   * cookbook and OpenAI's RAG cookbook both show retrieved context
+   * inside user-turn messages.
+   *
+   * Use `'system'` for authoritative reference docs that should
+   * outweigh user instruction (policy / compliance / brand-voice
+   * corpora). Use `'assistant'` only if you've persisted prior agent
+   * turns as context — rare.
    */
   readonly asRole?: ContextRole;
 }

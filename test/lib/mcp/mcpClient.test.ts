@@ -123,6 +123,70 @@ describe('mcpClient — unit', () => {
     await client.close();
     expect(closeSpy).toHaveBeenCalledOnce();
   });
+
+  it('.tools() / .refresh() after .close() throws — no torn-transport calls', async () => {
+    const sdk = makeMockSdk();
+    const listToolsSpy = sdk.listTools as ReturnType<typeof vi.fn>;
+    const client = await mcpClient({
+      name: 'test',
+      transport: { transport: 'stdio', command: 'echo' },
+      _client: sdk,
+    });
+    await client.tools(); // populate cache
+    await client.close();
+    listToolsSpy.mockClear();
+    await expect(client.tools()).rejects.toThrow(/mcpClient\[test\]\.tools\(\) called after close/);
+    await expect(client.refresh()).rejects.toThrow(
+      /mcpClient\[test\]\.refresh\(\) called after close/,
+    );
+    expect(listToolsSpy).not.toHaveBeenCalled();
+  });
+
+  it('.close() is idempotent — second call is a no-op (no double-close on SDK)', async () => {
+    const sdk = makeMockSdk();
+    const closeSpy = sdk.close as ReturnType<typeof vi.fn>;
+    const client = await mcpClient({
+      transport: { transport: 'stdio', command: 'echo' },
+      _client: sdk,
+    });
+    await client.close();
+    await client.close();
+    expect(closeSpy).toHaveBeenCalledOnce();
+  });
+});
+
+describe('mcpClient — signal + arg-coercion fixes', () => {
+  it('McpClientOptions.signal threads through to sdk.callTool() — consumer can cancel', async () => {
+    const sdk = makeMockSdk({ tools: [{ name: 't', inputSchema: {} }] });
+    const callSpy = sdk.callTool as ReturnType<typeof vi.fn>;
+    const ac = new AbortController();
+    const client = await mcpClient({
+      transport: { transport: 'stdio', command: 'echo' },
+      signal: ac.signal,
+      _client: sdk,
+    });
+    const tools = await client.tools();
+    await tools[0]!.execute({ q: 'x' });
+    const callArgs = callSpy.mock.calls[0]![0];
+    expect(callArgs.signal).toBe(ac.signal);
+  });
+
+  it('non-object args coerce to {} (defensive — LLM may hallucinate scalar)', async () => {
+    const sdk = makeMockSdk({ tools: [{ name: 't', inputSchema: {} }] });
+    const callSpy = sdk.callTool as ReturnType<typeof vi.fn>;
+    const client = await mcpClient({
+      transport: { transport: 'stdio', command: 'echo' },
+      _client: sdk,
+    });
+    const tools = await client.tools();
+    // null, scalar, array — all become {}
+    await tools[0]!.execute(null);
+    await tools[0]!.execute('oops' as unknown as Record<string, unknown>);
+    await tools[0]!.execute(['oops'] as unknown as Record<string, unknown>);
+    for (const call of callSpy.mock.calls) {
+      expect(call[0].arguments).toEqual({});
+    }
+  });
 });
 
 // ─── Unit — tool wrapping (execute → callTool round trip) ─────────
@@ -163,18 +227,19 @@ describe('mcpClient — execute wraps callTool', () => {
     expect(result).toBe('caption\n[image]\n[resource]');
   });
 
-  it('execute() throws when MCP returns isError=true', async () => {
+  it('execute() throws when MCP returns isError=true (error includes server name for traceability)', async () => {
     const sdk = makeMockSdk({
       tools: [{ name: 'broken', inputSchema: {} }],
       callResult: { content: [{ type: 'text', text: 'permission denied' }], isError: true },
     });
     const client = await mcpClient({
+      name: 'auth-server',
       transport: { transport: 'stdio', command: 'echo' },
       _client: sdk,
     });
     const tools = await client.tools();
     await expect(tools[0]!.execute({})).rejects.toThrow(
-      /'broken' returned an error.*permission denied/,
+      /'broken'.*server 'auth-server'.*permission denied/,
     );
   });
 

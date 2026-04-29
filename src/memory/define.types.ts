@@ -32,16 +32,6 @@
  *          `agentfootprint.context.injected` event with `source: 'memory'`
  *          when its read subflow places content into the messages slot.
  *
- * 8-panel review (2026-04-28):
- * - LLM Systems   ✅  asRole knob added so memories can land as user/system/assistant
- * - Architect     ✅  per-id scope keys (`memoryInjection_${id}`) — multi-memory layering safe
- * - API Designer  ✅  ONE factory for all four types incl. Causal (no separate `snapshotMemory`)
- * - Performance   ✅  default `MEMORY_TIMING.TURN_START` (was per-iteration — perf trap)
- * - Privacy       ✅  `redact?` API hook reserved
- * - ML / IR       ✅  causal snapshots tagged with original query for retrieval embedding
- * - SoftEng       ✅  discriminated union with `kind` discriminator → full TS narrowing
- * - TS Engineer   ✅  generic over `MemoryEntry<T>` payload preserves type-safety
- *
  * @see ./define.ts          for the `defineMemory()` factory itself
  * @see ../../docs-site      for guides + the 7 strategy examples
  * @see MEMORY.md            for the load-bearing design memory
@@ -220,8 +210,8 @@ export type Strategy =
 /**
  * Reserved API surface for content redaction before memory writes.
  * Impl is deferred; the field exists now so adding redaction later
- * is non-breaking. Privacy panel review: snapshot/episodic writes may
- * carry PII — this is the integration point.
+ * is non-breaking. Snapshot/episodic writes may carry PII — this is
+ * the integration point.
  */
 export interface MemoryRedactionPolicy {
   /** Patterns to mask in stored content. */

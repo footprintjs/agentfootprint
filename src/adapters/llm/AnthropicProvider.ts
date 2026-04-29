@@ -7,33 +7,6 @@
  *          recorders, or compositions.
  * Emits:   N/A — providers don't emit; recorders observe via Agent.
  *
- * ─── 7-panel design review (2026-04-28) ─────────────────────────────
- *
- *   LLM-AI system design   ✓ Native tool_use blocks. Round-trips
- *                            assistant tool_calls via the new
- *                            `LLMMessage.toolCalls` field — preserves
- *                            multi-iteration ReAct correctness.
- *   Performance            ✓ Single SDK call per `complete()`. Stream
- *                            uses SDK's native iterator; no buffering.
- *   Scalability            ✓ Stateless adapter. Concurrent runs share
- *                            one provider instance freely.
- *   Research alignment     ✓ Mirrors v1 AnthropicAdapter's tested
- *                            message-conversion logic (origin/main
- *                            `c6e11d0`); tool-result merge follows the
- *                            documented Anthropic API expectation.
- *   Flexibility            ✓ `_client` injection point for tests.
- *                            `apiKey` falls back to env. `maxTokens`
- *                            override per-construction or per-request.
- *   Abstraction-modular    ✓ Two converters (toAnthropicMessages,
- *                            fromAnthropicResponse) isolate the
- *                            shape-shifting; `complete()` and
- *                            `stream()` reuse them.
- *   Software engineering   ✓ Duck-typed SDK shape (no hard import).
- *                            Errors wrapped with provider tag for
- *                            uniform downstream handling. Tests cover
- *                            unit + scenario + integration + property
- *                            + security + performance + ROI.
- *
  * ─── Limitations ────────────────────────────────────────────────────
  *
  * • Multi-modal content (images, video) NOT supported  — the framework's
@@ -42,10 +15,6 @@
  *   in lockstep.
  * • `responseFormat` (JSON-Schema-coerced output) NOT exposed
  *   — consumers can pass schema instructions via `systemPrompt`.
- *
- * ─── 7-pattern test coverage ────────────────────────────────────────
- *
- *   See `test/adapters/llm/AnthropicProvider/*.test.ts`.
  */
 
 import type {

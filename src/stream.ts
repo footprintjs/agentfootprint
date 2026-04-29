@@ -7,35 +7,6 @@
  *          framework that accepts an async iterable response body
  *          (Fetch Response, Express res.write, Hono streaming, etc.).
  * Emits:   N/A — observes only.
- *
- * ─── 7-panel design review (2026-04-28) ─────────────────────────────
- *
- *   LLM-AI system design   ✓ One-line-per-event SSE format. Each
- *                            event = one observation; each chunk
- *                            includes the `runtimeStageId` for
- *                            cross-view binding.
- *   Performance            ✓ AsyncIterable<string> — no buffering;
- *                            yields each event as it arrives. Stops
- *                            naturally when the run completes.
- *   Scalability            ✓ Per-run instance. No shared state;
- *                            many concurrent SSE streams safe.
- *   Research alignment     ✓ Standard SSE wire format
- *                            (text/event-stream). Browsers'
- *                            native EventSource API consumes directly.
- *   Flexibility            ✓ `format` option for full event payload
- *                            vs slim text-only mode (chat UIs that
- *                            only want token deltas). `filter`
- *                            predicate gates events.
- *   Abstraction-modular    ✓ One function (`toSSE`) + one class
- *                            (`SSEFormatter`); class is sugar for
- *                            consumers who prefer .pipeTo() shape.
- *   Software engineering   ✓ Pure observer. No global state. Tests
- *                            cover unit + scenario + property +
- *                            security + performance.
- *
- * ─── 7-pattern test coverage ────────────────────────────────────────
- *
- *   See `test/stream/unit/SSEFormatter.test.ts`.
  */
 
 import type { AgentfootprintEvent } from './events/registry.js';

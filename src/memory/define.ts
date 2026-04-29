@@ -23,22 +23,8 @@
  *          `agentfootprint.context.injected` with `source: 'memory'`
  *          when their formatter writes to the messages slot.
  *
- * 8-panel review (2026-04-28):
- * - LLM Systems   ✅  asRole knob honored when present, defaults to 'system'
- * - Architect     ✅  per-id scope keys (`memoryInjectionKey(id)`)
- * - API Designer  ✅  one factory; CAUSAL stays here, no separate snapshotMemory
- * - Performance   ✅  default `MEMORY_TIMING.TURN_START`; pipelines compiled once
- * - Privacy       ✅  redact field passes through
- * - ML / IR       ✅  threshold maps to semantic.minScore strictly; no fallback
- * - SoftEng       ✅  unsupported combos throw with clear remediation hint
- * - TS Engineer   ✅  discriminated union narrowing preserved across switches
- *
- * Book reference: AI Agents — The Definitive Guide, Ch 10 (Memory,
- *   Autonomy, Long-Horizon Use — chapter still unavailable in pre-pub).
- *
  * @see ./define.types.ts        for the const-objects + types
  * @see ./pipeline/*.ts          for the existing pipeline factories this dispatches to
- * @see MEMORY.md                load-bearing design memory
  */
 
 import type { ContextRole } from '../events/types.js';
