@@ -29,3 +29,7 @@ api-docs/
 # Playwright
 .playwright-mcp/
 package-lock.json
+
+# Proposal scratchpads (drafts that get folded into real files)
+*.proposed.md
+docs/canonical-demo.md
