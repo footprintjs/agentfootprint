@@ -125,6 +125,7 @@ describe('withFallback — stream()', () => {
       {
         name: 'p',
         complete: async () => okResponse('p'),
+        // eslint-disable-next-line require-yield
         stream: async function* () {
           throw new Error('stream init failed');
         },
