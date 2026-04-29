@@ -72,6 +72,71 @@ agent.instruction(useRedacted).instruction(cite).instruction(summarizeOnLargeRes
 
 Each one fires on its specific tool/condition. Together they form a recency-first behavior layer that the LLM sees per-iteration as the situation calls for.
 
+## What this unlocks — use cases that emerge from per-iteration evaluation
+
+Dynamic ReAct isn't a feature; it's the substrate that makes a whole class of agent behaviors expressible without hand-rolled state machines. The use cases below all share the same shape: *"the agent's NEXT iteration sees a different prompt / tool list / active skill because of what just happened in THIS iteration."*
+
+### 1. Tool-by-tool LLM steering
+
+The hero use case. Agent calls `redact_pii` → next iteration's system prompt acquires *"use the redacted text. Don't paraphrase the original."* The instruction fires only on iter N+1; on iter N+2 (different `lastToolResult`), it stops firing.
+
+```ts
+defineInstruction({
+  id: 'use-redacted',
+  activeWhen: (ctx) => ctx.lastToolResult?.toolName === 'redact_pii',
+  prompt: 'Use the redacted text. Do not paraphrase the original.',
+});
+```
+
+### 2. Adaptive tool exposure (per-skill gating)
+
+The LLM activates `billing` via `read_skill('billing')` → next iteration's tool list flips from "all 25 tools" to "the 7 tools billing actually uses". 3× context-budget reduction + sharper LLM tool-choice. Powered by `autoActivate` + `gatedTools` (Block A1+A5 in v2.5).
+
+### 3. Cost guardrails
+
+Accumulated turn cost crosses a threshold → next iteration's system prompt adds *"be concise; final answer in 2 sentences"*. Pure predicate over scope state; no separate cost-management subsystem needed.
+
+```ts
+defineInstruction({
+  id: 'be-concise',
+  activeWhen: (ctx) => ctx.accumulatedCostUsd > 0.50,
+  prompt: 'You are over budget for this turn. Final answer in 2 sentences.',
+});
+```
+
+### 4. Iterative format refinement
+
+Iter 1 prompt has *"output a JSON object with these fields"*; iter 2 sees *"continue this format"* (because iter 1's output established it); iter 5 drops it entirely (pattern is locked in). All driven by predicates over `ctx.iteration` + `ctx.history`.
+
+### 5. Failure adaptation — self-correcting agent without retraining
+
+Tool X returned an error → next iteration's prompt adds *"don't try X again; use Y as fallback"*. The agent learns from THIS run's failures without external coordination.
+
+```ts
+defineInstruction({
+  id: 'avoid-failed-tool',
+  activeWhen: (ctx) =>
+    ctx.lastToolResult?.toolName === 'flaky_api' &&
+    typeof ctx.lastToolResult.result === 'string' &&
+    ctx.lastToolResult.result.includes('error'),
+  prompt: 'flaky_api is unavailable; use cached_lookup instead.',
+});
+```
+
+### 6. Few-shot example evolution
+
+Iter 1 prompt has an example showing the rare edge case → iter 2 drops it because the agent has emitted the right format → iter 4 re-injects it because the agent regressed. Predicates that track which examples have already done their job.
+
+### 7. Skill body refresh on long-context runs
+
+System-prompt skill body decays past long contexts (~50K tokens on most providers) → re-inject via tool result so the LLM sees it fresh again. Powered by `defineSkill({ refreshPolicy: { afterTokens: 50_000, via: 'tool-result' } })` (v2.5+).
+
+---
+
+These all share one structural property: **per-iteration re-evaluation of every Injection trigger.** Without that, none of them work. With it, all seven are one-line predicates.
+
+That's why Dynamic ReAct is the framework's load-bearing claim — it's not a feature, it's the substrate that makes context engineering compositional.
+
 ## When to use dynamic ReAct vs steering vs skill
 
 | Use case | Use |

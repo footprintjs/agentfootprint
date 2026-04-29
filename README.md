@@ -188,11 +188,11 @@ Why exactly four? Because *who decides activation* is a closed axis: nobody / th
 
 ---
 
-## Why this isn't just an ergonomics win
+## Why this isn't just an ergonomics win — Dynamic ReAct
 
-The React parallel goes one layer deeper than "less code." Because the framework owns the wiring, the framework can do things you couldn't do by hand:
+The React parallel goes one layer deeper than "less code." Because the framework owns the loop, **the framework recomposes the prompt + tool list every iteration based on what just happened.** That's what we call **Dynamic ReAct** — and it's the thing other agent frameworks don't do.
 
-| You write declaratively | The framework does for you |
+| You write declaratively | The framework does for you, **every iteration** |
 |---|---|
 | `.steering(rule)` | Evaluates every iteration, composes into `system` slot |
 | `.instruction(activeWhen, prompt)` | Re-evaluates predicate per iteration; routes to `system` or `messages` for attention positioning |
@@ -201,6 +201,24 @@ The React parallel goes one layer deeper than "less code." Because the framework
 | `.tool(weather)` | Schemas to LLM, dispatches calls, captures args/results, gates by permission policy |
 | `.attach(recorder)` | Subscribes to 47 typed events across 13 domains as the chart traverses |
 | `agent.run({...})` | Captures every decision, every commit, every tool call as a JSON checkpoint that's replayable cross-server |
+
+LangChain assembles prompts once per turn. LangGraph composes state per node, not per loop iteration. CrewAI's Agent is tool-aware but not iteration-aware. **Per-iteration recomposition of all three slots based on the latest tool result + accumulated state is structurally distinct.** It's the closest a framework comes to "executive-function-like" behavior — context that adapts to what the agent just observed, not just what it was originally told.
+
+### What "every iteration" makes possible
+
+Use cases that emerge once the loop re-evaluates everything:
+
+| Use case | The mechanism |
+|---|---|
+| **Tool-by-tool LLM steering** — agent called `redact_pii` → next iter, system prompt gets *"use redacted text, don't paraphrase original"* | `defineInstruction({ activeWhen: (ctx) => ctx.lastToolResult?.toolName === 'redact_pii' })` |
+| **Adaptive tool exposure** — agent activated `billing` skill → next iter, tool list switches to billing-only set (3× context-budget reduction) | `defineSkill({...}) + autoActivate` (lands in v2.5+) |
+| **Cost guardrails** — accumulated cost > threshold → next iter, system prompt adds *"be concise"* | `defineInstruction({ activeWhen: (ctx) => ctx.accumulatedCostUsd > 0.50 })` |
+| **Iterative format refinement** — iter 1 emitted JSON → iter 2 prompt adds *"continue this format"*; iter 5 prompt drops it | predicate over `ctx.iteration` + `ctx.history` |
+| **Failure adaptation** — tool X returned an error → next iter, prompt adds *"don't try X again; use Y"* | `on-tool-return` predicate inspecting `ctx.lastToolResult` for error markers |
+| **Few-shot evolution** — iter 1 prompt has example for the rare case → iter 2 drops it because example is consumed | predicate that tracks which examples have already fired |
+| **Skill body refresh** — long-context run, system-prompt skill body decayed → re-inject via tool result | `defineSkill({ refreshPolicy: { afterTokens: 50_000 } })` (v2.5+) |
+
+The framework owns the loop. The framework re-evaluates triggers every iteration. Tool results reshape the next iteration's prompt. **That's what makes context engineering compositional instead of static.**
 
 **The flowchart-pattern substrate** ([footprintjs](https://github.com/footprintjs/footPrint)) is what makes the observation automatic. Every stage execution is a typed event during one DFS traversal — no instrumentation, no post-processing. Same way React DevTools shows you the component tree because React owns the render path, agentfootprint shows you the slot composition because agentfootprint owns the prompt path.
 

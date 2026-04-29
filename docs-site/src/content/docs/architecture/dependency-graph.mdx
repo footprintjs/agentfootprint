@@ -90,6 +90,56 @@ The package.json `exports` field publishes subpath imports per layer:
 
 Each subpath maps to a single layer (or in some cases a single layer's slice). Tree-shaking picks up only what's used.
 
+## The Dynamic ReAct loop — runtime view of the same architecture
+
+The 8-layer DAG describes the static dependency shape — what imports what. The RUNTIME shape is the agent's flowchart loop, which IS the substrate (Layer 1, footprintjs) executing through the layers above it. The loop is what makes the architecture EXPRESSIVE.
+
+```
+                                ┌──────────────────────────┐
+                                │  agent.run({message})    │
+                                └──────────┬───────────────┘
+                                           ▼
+        ┌──────────────────────────────────────────────────────────────────┐
+        │  iteration N starts here every time the loop iterates             │
+        │                                                                   │
+        │   ┌──────────────────┐                                            │
+        │   │ INJECTION_ENGINE │  evaluates EVERY trigger this iteration   │
+        │   └──────────┬───────┘  (always / rule / on-tool-return /         │
+        │              ▼            llm-activated). Outputs activeInjections │
+        │   ┌──────────────────┐                                            │
+        │   │  SYSTEM_PROMPT   │  composes system slot from active set      │
+        │   └──────────┬───────┘                                            │
+        │              ▼                                                    │
+        │   ┌──────────────────┐                                            │
+        │   │     MESSAGES     │  composes messages slot (+ history)        │
+        │   └──────────┬───────┘                                            │
+        │              ▼                                                    │
+        │   ┌──────────────────┐                                            │
+        │   │      TOOLS       │  composes tools slot (per-skill gating,    │
+        │   └──────────┬───────┘   permission filter — Block A1+A2+A5)      │
+        │              ▼                                                    │
+        │   ┌──────────────────┐                                            │
+        │   │     CallLLM      │  the LLM sees a freshly-composed           │
+        │   └──────────┬───────┘   prompt + tool list every iteration       │
+        │              ▼                                                    │
+        │   ┌──────────────────┐                                            │
+        │   │   Route decider  │  tool calls? → execute → loop back ↑       │
+        │   └─────┬────────────┘  no tool calls? → final → done             │
+        │         │                                                         │
+        └─────────┼─────────────────────────────────────────────────────────┘
+                  │ if tool calls executed:
+                  └─► append result to history → loopTo(INJECTION_ENGINE)
+                                                  ↑
+                                  RE-RUNS THE WHOLE PIPELINE TOP-DOWN
+                                  (this is what makes Dynamic ReAct work)
+```
+
+**Why this matters architecturally:** every iteration re-evaluates triggers against the FRESHEST context. Tool results from iteration N reshape the system prompt, tool list, and active skills for iteration N+1. The framework's typed-event stream + replayable traces are the OBSERVABILITY consequence; per-iteration recomposition is the EXPRESSIVE consequence.
+
+This is what we mean by "the framework owns the loop." It's not just that we own the iteration count — we own the slot composition pipeline that runs THROUGH each iteration. Without that, "context engineering" collapses to "static prompt assembly" and the framework's distinctness disappears.
+
+See [Dynamic ReAct guide](/agentfootprint/guides/dynamic-react/) for the full mechanics + use cases.
+
 ## What this enables
 
 - **Power users build at the layer they need.** Want a custom Memory store? Implement Layer 3's `MemoryStore` interface; everything above unchanged. Want a new pattern? Compose Layer 7 over existing Layer 6 primitives.

@@ -27,6 +27,16 @@ The biggest lesson from React, autograd, Prisma, Kubernetes — every load-beari
 
 agentfootprint's flowchart-pattern substrate ([footprintjs](https://github.com/footprintjs/footPrint)) is what makes our typed-event stream + replayable traces automatic. You do not write `agent.observe(...)`. You write `.steering(rule)` and the framework already knows when that rule fired, on which iteration, against which context.
 
+### Owning the loop means recomposing context every iteration — Dynamic ReAct
+
+The corollary that makes "context engineering" worth the name. Static prompt assembly is what every framework does. **Per-iteration recomposition** — re-running every Injection trigger, recomputing the system prompt, recomputing the tool list, all based on the latest tool result + accumulated state — is what makes context engineering compositional instead of static.
+
+This is structurally distinct from LangChain (assembles prompts once per turn), LangGraph (composes state per node, not per loop iteration), or CrewAI (tool-aware but not iteration-aware). It's the closest a framework comes to "executive-function-like" behavior — context that adapts to what the agent just observed, not just what it was originally told.
+
+The use cases that emerge are real, not theoretical: tool-by-tool LLM steering, adaptive tool exposure (per-skill gating), cost guardrails, iterative format refinement, failure adaptation, few-shot evolution, long-context skill body refresh. See [the Dynamic ReAct guide](/agentfootprint/guides/dynamic-react/#what-this-unlocks) for the full taxonomy.
+
+If "context engineering" is the discipline, **Dynamic ReAct is what makes the discipline expressive.** Without it, the bar drops to static prompt assembly and we'd have nothing distinctive to say.
+
 ### Every named pattern is a recipe, not a class
 
 Reflexion, Tree-of-Thoughts, Self-Consistency, Debate, Map-Reduce, Swarm — every named pattern in the agent literature reduces to a composition of our 2 primitives + 4 compositions. **We were one paper away from shipping a thirteenth Agent class when we stopped and asked: what if every new pattern is just a composition of what we already have?** That question is why our core stays small as the field grows. New paper drops? New recipe in `examples/patterns/`. No new engine code.
