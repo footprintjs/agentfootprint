@@ -393,3 +393,12 @@ export {
   type ToolDispatchContext,
   type ToolGatePredicate,
 } from './tool-providers/index.js';
+
+// Cross-cutting authorization (v2.5+). `agentfootprint/security` is the
+// dedicated subpath; the root barrel also re-exports `PermissionPolicy`
+// so existing v2.4 consumers find it at the top level.
+export {
+  PermissionPolicy,
+  type RoleAllowlist,
+  type PermissionPolicyOptions,
+} from './security/index.js';

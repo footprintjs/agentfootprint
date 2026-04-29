@@ -11,7 +11,10 @@
  *
  * @example
  *   const provider = staticTools([weatherTool, lookupTool]);
- *   const agent = Agent.create({ provider, model }).toolProvider(provider).build();
+ *   // Materialize the visible list and register via .tools(...).
+ *   // Direct .toolProvider(...) wiring on the builder lands in Block A5 / v2.5+.
+ *   const visible = provider.list({ iteration: 0, identity: { conversationId: '_' } });
+ *   const agent = Agent.create({ provider: llm, model }).tools(visible).build();
  */
 
 import type { Tool } from '../core/tools.js';

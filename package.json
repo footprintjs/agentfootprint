@@ -131,6 +131,11 @@
       "types": "./dist/types/tool-providers/index.d.ts",
       "import": "./dist/esm/tool-providers/index.js",
       "require": "./dist/tool-providers/index.js"
+    },
+    "./security": {
+      "types": "./dist/types/security/index.d.ts",
+      "import": "./dist/esm/security/index.js",
+      "require": "./dist/security/index.js"
     }
   },
   "sideEffects": false,
