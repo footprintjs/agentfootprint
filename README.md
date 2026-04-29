@@ -22,6 +22,15 @@
 npm install agentfootprint footprintjs
 ```
 
+```typescript
+const agent = Agent.create({ provider: anthropic(...) })
+  .steering(tone)              // always-on persona
+  .instruction(urgentRule)     // rule-gated, fires when matched
+  .skill(billingSkill)         // LLM-activated body + tools
+  .memory(causalMemory)        // cross-run "why" replay
+  .build();
+```
+
 ---
 
 ## What is context engineering?
@@ -128,6 +137,33 @@ Because the substrate is so small (Agent + Sequence/Parallel/Conditional/Loop), 
 
 Browse them in [`examples/patterns/`](examples/patterns/). Every file runs end-to-end with `npm run example examples/patterns/<file>.ts`. **You compose. We don't ship a `ReflexionAgent` class.**
 
+> **Show me the smallest one** — [`examples/patterns/02-reflection.ts`](examples/patterns/02-reflection.ts) implements Reflexion in ~30 lines. Run it: `npm run example examples/patterns/02-reflection.ts`.
+
+---
+
+## Why a context-engineering framework
+
+If you're going to build generative AI apps on a framework, pick the one whose **core stays small as the field grows**. agentfootprint's core has *one* Injection primitive. Every current flavor reduces to it &mdash; and so will every flavor that hasn't been invented yet.
+
+```
+Skill        =  Injection { trigger: 'llm-activated', slots: [system-prompt, tools] }
+Steering     =  Injection { trigger: 'always-on',     slots: [system-prompt] }
+Instruction  =  Injection { trigger: 'rule',          slots: [system-prompt | messages] }
+Fact         =  Injection { trigger: 'always-on',     slots: [system-prompt | messages] }
+RAG          =  Injection { trigger: 'rule + score',  slots: [messages] }            (v2.1)
+Guardrail    =  Injection { trigger: 'on-tool-return',slots: [system-prompt]  }      (v2.x)
+???          =  Injection { trigger: ?,               slots: ? }                    (your idea)
+```
+
+Adding the next flavor is **one new factory file** &mdash; no engine change, no slot subflow change, no consumer-API change. Lens chips, observability events, audit trails all flow through the same plumbing.
+
+| | Frameworks growing class-per-paper | agentfootprint |
+|---|---|---|
+| Adding a new flavor (e.g. *guardrail*) | New `GuardrailAgent` class, new event type, new UI surface | One factory file, same `Injection` shape, same `context.injected` event |
+| Cross-run "why was X rejected?" | LLM reconstructs from messages | Replay EXACT past decisions from causal snapshots |
+| Training-data export | Manual, lossy, optional | Same snapshot shape → SFT / DPO / process-RL ready (v2.1+) |
+| Decision evidence | Lost &mdash; only the final answer survives | First-class events from `decide()` / `select()` captured during traversal |
+
 ---
 
 ## Quick Start
@@ -136,12 +172,23 @@ Browse them in [`examples/patterns/`](examples/patterns/). Every file runs end-t
 import {
   Agent, defineTool, defineSteering, defineInstruction,
   defineMemory, MEMORY_TYPES, MEMORY_STRATEGIES,
-  InMemoryStore, mock,
+  InMemoryStore, anthropic,
 } from 'agentfootprint';
+
+// Want $0 testing? Swap `anthropic({...})` for `mock({ reply: '...' })`
+// — same agent, same flowchart, no API key needed.
 
 // 1. A tool the agent can call
 const weather = defineTool({
-  schema: { name: 'weather', description: 'Current weather.', inputSchema: {...} },
+  schema: {
+    name: 'weather',
+    description: 'Current weather for a city.',
+    inputSchema: {
+      type: 'object',
+      properties: { city: { type: 'string' } },
+      required: ['city'],
+    },
+  },
   execute: async (args) => `${(args as { city: string }).city}: 72°F, sunny`,
 });
 
@@ -166,7 +213,10 @@ const memory = defineMemory({
 });
 
 // 4. Build — every layer composes
-const agent = Agent.create({ provider: mock({ reply: '...' }), model: 'mock' })
+const agent = Agent.create({
+  provider: anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! }),
+  model: 'claude-sonnet-4-5-20250929',
+})
   .system('You are a helpful weather assistant.')
   .tool(weather)
   .steering(tone)
@@ -210,31 +260,6 @@ The same snapshot data shape becomes RL/SFT/DPO training data in v2.1+.
 
 ---
 
-## Why a context-engineering framework
-
-If you're going to build agents on a framework, pick the one whose **core stays small as the field grows**. agentfootprint's core has *one* Injection primitive. Every current flavor reduces to it &mdash; and so will every flavor that hasn't been invented yet.
-
-```
-Skill        =  Injection { trigger: 'llm-activated', slots: [system-prompt, tools] }
-Steering     =  Injection { trigger: 'always-on',     slots: [system-prompt] }
-Instruction  =  Injection { trigger: 'rule',          slots: [system-prompt | messages] }
-Fact         =  Injection { trigger: 'always-on',     slots: [system-prompt | messages] }
-RAG          =  Injection { trigger: 'rule + score',  slots: [messages] }            (v2.1)
-Guardrail    =  Injection { trigger: 'on-tool-return',slots: [system-prompt]  }      (v2.x)
-???          =  Injection { trigger: ?,               slots: ? }                    (your idea)
-```
-
-Adding the next flavor is **one new factory file** &mdash; no engine change, no slot subflow change, no consumer-API change. Lens chips, observability events, audit trails all flow through the same plumbing.
-
-| | Frameworks growing class-per-paper | agentfootprint |
-|---|---|---|
-| Adding a new flavor (e.g. *guardrail*) | New `GuardrailAgent` class, new event type, new UI surface | One factory file, same `Injection` shape, same `context.injected` event |
-| Cross-run "why was X rejected?" | LLM reconstructs from messages | Replay EXACT past decisions from causal snapshots |
-| Training-data export | Manual, lossy, optional | Same snapshot shape → SFT / DPO / process-RL ready (v2.1+) |
-| Decision evidence | Lost &mdash; only the final answer survives | First-class events from `decide()` / `select()` captured during traversal |
-
----
-
 ## Documentation
 
 | Resource | Link |
@@ -247,15 +272,29 @@ Adding the next flavor is **one new factory file** &mdash; no engine change, no 
 
 ---
 
-## Roadmap
+## What v2.0 ships (today)
+
+- **2 primitives** — `LLMCall`, `Agent` (ReAct loop)
+- **3 compositions + Loop** — Sequence · Parallel · Conditional · Loop
+- **6 LLM providers** — Anthropic · OpenAI · Bedrock · Ollama · Browser-Anthropic · Browser-OpenAI · Mock (for $0 testing)
+- **InjectionEngine** — one `Injection` primitive + 4 typed factories (`defineSkill` / `defineSteering` / `defineInstruction` / `defineFact`); covers Dynamic ReAct via `on-tool-return` triggers
+- **Memory subsystem** — `defineMemory` factory, 4 types (Episodic / Semantic / Narrative / **Causal** ⭐) × 7 strategies (Window / Budget / Summarize / TopK / Extract / Decay / Hybrid)
+- **Multi-agent through control flow** — no separate `MultiAgentSystem` class; agents compose via Sequence / Parallel / Conditional / Loop
+- **6 canonical patterns** runnable as examples — ReAct · Reflexion · ToT · Self-Consistency · Debate · Map-Reduce · Swarm
+- **Observability** — 47 typed events × 13 domains; recorders for context · stream · agent · cost · skill · permission · eval · memory
+- **Resilience helpers** — `withRetry`, `withFallback`, `resilientProvider`
+- **Pause / resume** — JSON-serializable checkpoints; agent can pause via `askHuman`/`pauseHere` and resume hours later on a different server
+- **AI-coding-tool support** — bundled instructions for Claude Code / Cursor / Windsurf / Cline / Kiro / Copilot
+- **33 runnable end-to-end examples** — every example is a real test exercising the documented surface
+
+## What's next
 
 | Release | Focus |
 |---|---|
-| **v2.0 (this)** | Foundation + InjectionEngine + Memory (4 types &times; 7 strategies + Causal) |
-| v2.1 | Reliability subsystem (3-tier fallback, CircuitBreaker, auto-retry, fault-tolerant resume) + Redis store adapter |
-| v2.2 | Governance subsystem (Policy, BudgetTracker, access levels) + DynamoDB adapter |
-| v2.3 | Causal training-data exports (`exportForTraining({ format: 'sft' \| 'dpo' \| 'process' })`) |
-| v2.4+ | MCP integration, Deep Agents, A2A protocol |
+| v2.1 | RAG flavor (`defineRAG`) · Redis memory store adapter · MCP integration · CircuitBreaker as a first-class primitive · 3-tier structured-output fallback |
+| v2.2 | Governance subsystem (`Policy`, `BudgetTracker`, role-based access) · DynamoDB / Postgres / Pinecone store adapters |
+| v2.3 | Causal training-data exports — `causalMemory.exportForTraining({ format: 'sft' \| 'dpo' \| 'process' })` for HuggingFace / OpenAI / Anthropic batch fine-tune |
+| v2.4+ | Deep Agents (planning-before-execution) · A2A protocol · Lens UI deep-link |
 
 ---
 
