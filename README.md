@@ -233,6 +233,55 @@ Every `.steering` / `.instruction` / `.memory` / `.tool` call adds an injection 
 
 ---
 
+## Build with mocks first &mdash; swap real infra later
+
+Generative AI app development is expensive when every iteration hits a paid API. agentfootprint is designed so you can **build the entire app &mdash; agent, context engineering, tool chains, memory, RAG &mdash; against in-memory mocks**, prove the logic and patterns end-to-end with zero API cost, then swap real infrastructure in piece by piece.
+
+```typescript
+import {
+  Agent, defineTool, defineSteering, defineMemory,
+  MEMORY_TYPES, MEMORY_STRATEGIES,
+  mock, InMemoryStore,        // ← the mock surfaces
+} from 'agentfootprint';
+
+const agent = Agent.create({
+  provider: mock({ reply: 'Refunds take 3 business days.' }),  // ← no API key
+  model: 'mock',
+})
+  .steering(defineSteering({ id: 'tone', prompt: 'Be friendly.' }))
+  .tool(defineTool({
+    schema: { name: 'lookup', description: '...', inputSchema: {} },
+    execute: async () => 'mock data',                          // ← inline mock
+  }))
+  .memory(defineMemory({
+    id: 'short-term',
+    type: MEMORY_TYPES.EPISODIC,
+    strategy: { kind: MEMORY_STRATEGIES.WINDOW, size: 10 },
+    store: new InMemoryStore(),                                // ← ephemeral
+  }))
+  .build();
+
+await agent.run({ message: 'How long does a refund take?' });
+```
+
+The whole flow runs offline. Iterate on context engineering, narrative, control-flow patterns, error handling, multi-agent compositions &mdash; **without** spending a cent.
+
+When the logic is right, swap one boundary at a time:
+
+| Boundary | Mock for development | Production swap |
+|---|---|---|
+| **LLM provider** | `mock({ reply })` | `anthropic()` &middot; `openai()` &middot; `bedrock()` &middot; `ollama()` |
+| **Embedder** | `mockEmbedder()` | OpenAI / Cohere / Bedrock embedder (factories on roadmap) |
+| **Memory store** | `InMemoryStore` | Redis / DynamoDB / Postgres / Pinecone (peer-dep adapters) |
+| **MCP server** | `mcpClient({ _client })` injection | `mcpClient({ transport })` to a real server |
+| **Tool execution** | `defineTool({ execute: async () => '...' })` | Same `defineTool`, real implementation |
+
+Each swap is one line. The flowchart, narrative, recorders, and tests don't change. Ship the patterns first; pay for tokens last.
+
+> Why this matters: it's the difference between *learning context engineering by trying things* and *learning by burning your API budget*. The library treats $0 development as a first-class workflow, not an afterthought.
+
+---
+
 ## Memory &mdash; one factory, four types, seven strategies
 
 `defineMemory({ type, strategy, store })` &mdash; one factory dispatches `type &times; strategy.kind` onto the right pipeline.

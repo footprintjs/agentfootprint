@@ -32,6 +32,36 @@ The flavors are how you *mark intent* — but they all reduce to one `Injection`
 | **Instruction** | Predicate (`activeWhen` / `on-tool-return`) | system-prompt or messages |
 | **Fact** | Always-on (data) | system-prompt or messages |
 
+## Mock-first development (RECOMMENDED workflow)
+
+Build the entire app — agent, context engineering, tools, memory, RAG, MCP — against in-memory mocks first. Validate logic and patterns end-to-end with $0 API cost. Swap real infrastructure in, one boundary at a time, only after the flow is right.
+
+```typescript
+import { Agent, mock, InMemoryStore, mockEmbedder, defineTool } from 'agentfootprint';
+
+// Mock LLM provider — no API key, deterministic reply.
+const provider = mock({ reply: 'Refunds take 3 business days.' });
+
+// Inline-mocked tool — no real backend yet.
+const lookup = defineTool({
+  schema: { name: 'lookup', description: '...', inputSchema: {} },
+  execute: async () => 'mock data',
+});
+
+const agent = Agent.create({ provider, model: 'mock' }).tool(lookup).build();
+await agent.run({ message: 'How long does a refund take?' });
+```
+
+| Boundary | Mock for development | Production swap |
+|---|---|---|
+| LLM provider | `mock({ reply })` | `anthropic()` · `openai()` · `bedrock()` · `ollama()` |
+| Embedder | `mockEmbedder()` | OpenAI / Cohere / Bedrock embedder factory |
+| Memory store | `InMemoryStore` | Redis · DynamoDB · Postgres · Pinecone (peer-dep adapters) |
+| MCP server | `mcpClient({ _client })` injection | `mcpClient({ transport })` to a real server |
+| Tool execute | inline `async () => '...'` closure | real implementation |
+
+When generating starter code for users, **default to the mock surface** unless they explicitly say they have a key / endpoint / store ready. Show real-provider code as the "swap" step, not the first step.
+
 ## Public API
 
 ### MCP — `mcpClient` (connect to MCP servers, register their tools)

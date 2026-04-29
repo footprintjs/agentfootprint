@@ -41,20 +41,37 @@ Every "agent feature" is content flowing into one of:
 - `messages` array — history / RAG / memory replay / injected instructions
 - `tools` array — Tool schemas (registered + Skill-attached)
 
+## Mock-first development (RECOMMENDED)
+
+Build with `mock()` provider + `InMemoryStore` + `mockEmbedder()` + inline tool closures first; swap real infra (Anthropic / OpenAI / Bedrock / Redis / Pinecone / real MCP) after the flow is right. Default code suggestions to mocks unless the user has set up keys/endpoints.
+
+| Mock | Production swap |
+|---|---|
+| `mock({ reply })` | `anthropic()` / `openai()` / `bedrock()` / `ollama()` |
+| `InMemoryStore` | Redis · Dynamo · Postgres · Pinecone (peer-dep adapters) |
+| `mockEmbedder()` | OpenAI / Cohere / Bedrock embedder factory |
+| `mcpClient({ _client })` | `mcpClient({ transport })` real server |
+
 ## Canonical examples
 
-### Hello agent
+### Hello agent — mock-first
 
 ```typescript
-const agent = Agent.create({
-  provider: anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! }),
-  model: 'claude-sonnet-4-5-20250929',
-})
+import { Agent, mock } from 'agentfootprint';
+
+const agent = Agent.create({ provider: mock({ reply: 'San Francisco: 72°F.' }), model: 'mock' })
   .system('You are a helpful assistant.')
   .tool(weatherTool)
   .build();
 
 const result = await agent.run({ message: 'Weather in SF?' });
+```
+
+To swap to a real provider, change ONE line:
+
+```typescript
+provider: anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! }),
+model: 'claude-sonnet-4-5-20250929',
 ```
 
 ### Tools

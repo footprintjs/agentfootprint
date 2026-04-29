@@ -68,7 +68,21 @@ import {
 (`agentfootprint/instructions`, `agentfootprint/observe`,
 `agentfootprint/security`, `agentfootprint/explain` — these are v1).
 
-## Hello agent
+## Mock-first development (RECOMMENDED)
+
+Build the entire agent + context engineering + tools + memory + RAG + MCP with in-memory mocks first. Validate logic and patterns end-to-end with $0 API cost. Swap real infrastructure in one boundary at a time after the flow is right.
+
+| Mock | Production swap |
+|---|---|
+| `mock({ reply })` | `anthropic()` / `openai()` / `bedrock()` / `ollama()` |
+| `InMemoryStore` | Redis · Dynamo · Postgres · Pinecone (peer-dep adapters) |
+| `mockEmbedder()` | OpenAI / Cohere / Bedrock embedder factory |
+| `mcpClient({ _client })` injection | `mcpClient({ transport })` real server |
+| inline `defineTool({ execute: async () => '...' })` | real implementation |
+
+When generating starter code, default to the mock surface unless the user explicitly says they have a key / endpoint / store ready.
+
+## Hello agent — mock-first
 
 ```typescript
 const weather = defineTool({
@@ -81,12 +95,12 @@ const weather = defineTool({
       required: ['city'],
     },
   },
-  execute: async (args) => `${(args as { city: string }).city}: 72°F`,
+  execute: async (args) => `${(args as { city: string }).city}: 72°F`,  // mock data
 });
 
 const agent = Agent.create({
-  provider: anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! }),
-  model: 'claude-sonnet-4-5-20250929',
+  provider: mock({ reply: 'San Francisco: 72°F, sunny.' }),  // ← no API key
+  model: 'mock',
   maxIterations: 10,
 })
   .system('You are a helpful weather assistant.')
@@ -96,7 +110,12 @@ const agent = Agent.create({
 const result = await agent.run({ message: 'Weather in SF?' });
 ```
 
-For testing, swap `anthropic({...})` for `mock({ reply: 'sunny' })` — same agent, $0.
+When the logic is right, swap to a real provider — one line:
+
+```typescript
+provider: anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! }),
+model: 'claude-sonnet-4-5-20250929',
+```
 
 ## Context engineering
 
