@@ -5,6 +5,49 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.1]
+
+The first npm-published v2 build. v2.0.0 was tagged on GitHub but the
+publish workflow failed before reaching `npm publish` because of a
+case-sensitive Linux CI failure (`mapReduce.ts` vs `MapReduce.ts`).
+2.0.1 carries every v2.0 feature plus the post-tag fixes:
+
+### Fixed
+- `src/patterns/mapReduce.ts` → `MapReduce.ts` so case-sensitive Linux
+  CI resolves `import '../../../src/patterns/MapReduce.js'`. macOS dev
+  hid the issue.
+- ESLint `require-yield` violation in
+  `test/resilience/unit/withFallback.test.ts` (intentionally-empty
+  generator that throws before yielding — suppression added locally).
+
+### Changed
+- Release script Gate 5: now runs the in-repo `examples/` sweep
+  (`npm run test:examples` → typecheck + tsx end-to-end run) instead
+  of the external `../agent-samples` repo. Examples are now the source
+  of truth for the consumer surface.
+- Root README: tagline reframed to "Building Generative AI applications
+  is mostly context engineering" (was "Building agents..."). Quick Start
+  leads with `anthropic({...})` not `mock({reply})`. Roadmap split
+  into "What v2.0 ships (today)" + "What's next" so v2.0 reads as a
+  complete release. "Why a context-engineering framework" comparison
+  table moved up — right after the patterns recipes — where the
+  contrast lands hardest.
+- Root README: 3-line code teaser between install + the pedagogy
+  sections so fluent readers see the builder API in 5 seconds.
+
+### AI tooling overhaul
+- `CLAUDE.md`, `AGENTS.md`, and every file under `ai-instructions/`
+  rewritten for the v2.0 surface. The old contents were stale (copy
+  of footprintjs's instructions or v1 agentfootprint patterns), so
+  AI coding tools using bundled instructions would generate code
+  against APIs that no longer exist. New surface covers:
+  - 6-layer mental model
+  - All four `define*` factories (Skill / Steering / Instruction / Fact)
+  - `defineMemory({ type, strategy, store })` with 4 types × 7 strategies
+  - Multi-agent via control flow (no `MultiAgentSystem` class)
+  - Anti-patterns naming the v1 vocabulary so tools don't regress
+    consumers to old APIs
+
 ## [2.0.0]
 
 The release that lands the **6-layer mental model** end-to-end:
