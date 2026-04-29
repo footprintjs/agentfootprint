@@ -1,69 +1,71 @@
 ---
-title: RAG (Context Engineering)
-description: Retrieval-augmented generation — inject retrieved chunks into the Agent's messages slot.
+title: RAG
+description: defineRAG — sugar over defineMemory(SEMANTIC + TOP_K) with retrieval-friendly defaults. Chunks land in the messages slot when cosine similarity clears the threshold.
 ---
 
-import { Aside } from '@astrojs/starlight/components';
+import CodeFile from '@/components/CodeFile.astro';
 
-<Aside type="note" title="RAG is context engineering, not a primitive">
-RAG isn't a new kind of primitive. It's a **context engineering technique** — what you inject into the Agent's `messages` slot. The `RAG.create(...)` helper packages "LLM call with retriever wired into messages" for convenience; you can do the same thing in any Agent via a `MessageStrategy` that calls a retriever.
+> Your support agent confidently tells a customer the refund window is 30 days. The actual policy says 14. The LLM is hallucinating from training data because **you never gave it the source**. RAG is how you stop the hallucination at its root — embed the user's question, retrieve the actual policy chunks, inject them into the messages slot, and the LLM answers from the SOURCE instead of memory.
 
-**Where it lives in the taxonomy:** Context Engineering → messages slot.
-**Paper:** *Retrieval-Augmented Generation* (Lewis et al. 2020, NeurIPS).
-</Aside>
+## What RAG is
 
-## Basic RAG
+**RAG** = retrieval-augmented generation. Conceptually:
 
-```ts
-import { RAG, mockRetriever } from 'agentfootprint';
+1. Embed the user's query into a vector
+2. Search a vector store for top-K most-similar document chunks
+3. Inject those chunks into the next LLM call's messages slot
+4. The LLM answers using the retrieved chunks as context
 
-const retriever = mockRetriever([{
-  chunks: [
-    { content: 'Return policy: 14 days for full refund.', metadata: { source: 'policy' } },
-    { content: 'AppleCare+: 3 years, $199/year.', metadata: { source: 'applecare' } },
-  ],
-}]);
+In agentfootprint, RAG is **the same plumbing as `defineMemory({ type: SEMANTIC, strategy: TOP_K })`** — the same engine, the same observability event (`agentfootprint.context.injected` with `source: 'rag'`), the same multi-tenant identity. `defineRAG` is just a friendlier factory with retrieval-tuned defaults (`asRole: 'user'`, `topK: 3`, `threshold: 0.7`).
 
-const rag = RAG.create({ provider, retriever })
-  .system('Answer based on retrieved documents only. Cite your source.')
-  .topK(5)
-  .build();
+## Define a retriever, attach to an agent
 
-const result = await rag.run('What is the return policy?');
-```
+`defineRAG({ id, store, embedder, topK?, threshold?, asRole? })` returns a definition. `agent.rag(definition)` attaches it (alias for `.memory(definition)` — same plumbing, clearer intent):
 
-## How it works
+<CodeFile path="examples/context-engineering/07-rag.ts" region="define-and-attach" title="examples/context-engineering/07-rag.ts (region: define-and-attach)" />
 
-```
-Query → Retrieve (topK chunks) → Inject into context → CallLLM → Response
-```
+The store is a `MemoryStore` with vector-search support. `InMemoryStore` works for dev. Production options: pgvector / Pinecone / Qdrant / Weaviate (planned for v2.6 — track on roadmap).
 
-The RAG pattern is a single-pass pipeline: retrieve relevant chunks, inject them into the LLM context, and generate an answer. No tool loop — one LLM call per query.
+## Strict threshold semantics
 
-## Custom retrievers
+`threshold` is **strict**. When no chunk meets the threshold, NO injection happens — the LLM gets no context. This is intentional: garbage low-confidence chunks pollute the prompt and make hallucination MORE likely, not less. The library throws on empty by design.
 
-Implement the `Retriever` interface to connect any vector database:
+If your threshold is too high and you see frequent zero-result skips, lower to ~0.5 (sentence-BERT-class embedders often score relevant matches there). The `defineRAG` JSDoc has provider-specific tuning notes.
+
+## Indexing — `indexDocuments`
+
+Before queries can return chunks, the store needs documents. `indexDocuments(store, embedder, docs)` is the seeding helper — embeds each doc, batches into `store.putMany()`. Caps concurrency at 8 by default to avoid embedder rate limits:
 
 ```ts
-const retriever = {
-  retrieve: async (query, options) => {
-    const results = await vectorDB.search(query, { limit: options?.topK ?? 5 });
-    return {
-      chunks: results.map(r => ({
-        content: r.text,
-        metadata: { source: r.source, score: r.score },
-      })),
-      query,
-    };
-  },
-};
+import { indexDocuments } from 'agentfootprint';
+
+await indexDocuments(store, embedder, [
+  { id: 'doc1', content: 'Refund policy: 14 days from delivery for full refund.' },
+  { id: 'doc2', content: 'Pro plan costs $20/month and includes priority support.' },
+]);
 ```
 
-## Observability
+Identity defaults to `{ conversationId: '_global' }`. **Multi-tenant footgun:** if you index under `_global` but query under `{ tenant: 'acme' }`, you'll get zero results silently. Either index per-tenant OR query under the same identity. JSDoc spells out the resolution patterns.
+
+## Mocks-first development
+
+For dev, use `mockEmbedder()` — deterministic vectors, zero API cost. Swap to a real embedder when you ship:
 
 ```ts
-const result = await rag.run('What is the return policy?');
-
-// Narrative shows: retrieved chunks, injected context, LLM response
-rag.getNarrative();
+const embedder = process.env.NODE_ENV === 'production'
+  ? openaiEmbedder({ model: 'text-embedding-3-small' })  // planned v2.6
+  : mockEmbedder();
 ```
+
+Production embedder factories (`openaiEmbedder` / `cohereEmbedder` / `bedrockEmbedder`) are on the v2.6 roadmap. Until then, wire your provider's embedding API into a small `Embedder` shim — see `src/memory/embedding/types.ts` for the interface.
+
+## Anti-patterns
+
+- Don't fall back to top-K-anyway when threshold returns nothing. The library throws by design.
+- Don't change embedders between writes and reads — entries are tagged with the embedder used at index time. Swap silently corrupts retrieval.
+- Don't pass huge documents (50KB) — chunk first. RAG quality is dominated by chunk size + chunk boundary choice.
+
+## Next steps
+
+- [Memory guide](/agentfootprint/guides/memory/) — `defineMemory` covers all 4 types × 7 strategies including RAG
+- [Memory store adapters](/agentfootprint/integrations/memory-stores/) — Redis · AgentCore · planned vector-capable backends

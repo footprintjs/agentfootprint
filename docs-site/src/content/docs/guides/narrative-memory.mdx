@@ -1,206 +1,58 @@
 ---
-title: Narrative memory
-description: Compress conversations into traceable narrative beats instead of raw logs. The explainable memory strategy — no other framework has this.
+title: Narrative memory (Summarization)
+description: Compress long conversations into beats. Older turns are LLM-summarized into a shorter narrative; recent turns stay raw. Trades one cheap LLM call per write for token savings on every read.
 ---
 
-import { Aside } from '@astrojs/starlight/components';
+import CodeFile from '@/components/CodeFile.astro';
 
-Most agent frameworks store every message verbatim. 100 turns → 100 × N messages in the store, growing linearly, dominated by low-signal noise. Context windows fill up with "let me think..." and "ok.", and recall picks whatever fits the token budget — salience be damned.
+> Your support agent is on turn 47 of a single conversation. The user is debugging an integration issue and the back-and-forth has been going for 90 minutes. The context window is filling up with detail that's no longer relevant — the LLM is one tool call away from losing the thread. **The fix isn't a bigger context window** — it's compressing the older turns into a summary so the LLM keeps the BEAT of the conversation without the noise.
 
-**Narrative memory** inverts this. Each turn is compressed into **narrative beats** — one-sentence summaries with provenance — during the write phase. On read, beats are picked by importance + budget and composed back into a single cohesive paragraph.
+## What summarization memory is
 
-```
-User said: My name is Alice.              →  beat (importance 0.9, refs: msg-1-0)
-Assistant replied: Nice to meet you.      →  beat (importance 0.5, refs: msg-1-1)
-Tool result: {orders: ['ORD-123']}        →  beat (importance 0.3, refs: msg-2-2)
-...
-```
+`defineMemory({ type: EPISODIC, strategy: { kind: SUMMARIZE, recent, llm } })` — keeps the last N turns raw, runs older turns through a cheap LLM summarizer, persists the summary as a "beat" for future reads.
 
-Recall on turn 10:
+The `recent` parameter sets the boundary. Turns inside the window are stored as raw messages. Turns past it are compressed into one summary per write batch. On reads, the messages slot gets: `[summary of older turns] + [last N raw turns]`.
 
-```
-Relevant context from prior conversations. Use when it helps answer the current turn.
+Cheaper than infinite raw retention. More semantic than truncation.
 
-From earlier: User said: My name is Alice. User asked about refunds
-for order ORD-123. Assistant confirmed the refund was processed.
-```
+## Define a summarizing memory
 
-One paragraph. Salient beats. Every sentence has `refs[]` tracing back to the exact source messages.
+<CodeFile path="examples/memory/03-summarize-strategy.ts" region="define" title="examples/memory/03-summarize-strategy.ts (region: define)" />
 
-## The differentiator — explainability
+The `llm` parameter is the dedicated summarizer model. **Use a cheap one** — Haiku, GPT-4o-mini, or any local model. The summarizer doesn't need to be smart, it needs to be FAST and CHEAP because it runs on every memory write.
 
-Every beat carries `refs: string[]`. Given any recalled beat, you can walk **backwards** to the raw messages that produced it. This is the audit query every compliance team will ask:
+## How summarization fires
 
-> "Why does the agent think the user lives in SF?"
+The write subflow runs after every successful turn. Each invocation:
+1. Loads the current entries from the store
+2. If count > `recent`, takes the OLDEST `(count - recent)` turns
+3. Sends them to the summarizer LLM with a fixed compression prompt
+4. Replaces the older turns with one summary entry tagged `kind: 'summary'`
+5. Keeps the `recent` turns unchanged
 
-With raw-message memory: "Because it's in the prompt."
-With narrative memory: "Because beat `beat-5-2` summarized `msg-3-0` and `msg-3-1` at turn 3, extracted by the `identity` category."
+The summary is itself an entry in the store, so future writes summarize the previous summary + new older turns into a fresh summary. The conversation BEATS get progressively coarser the further back you look — exactly like human episodic memory.
 
-No other open-source agent framework provides this level of traceability for recalled memory.
+## When to use this vs window vs extract
 
-## Quick start
-
-```ts
-import { Agent, anthropic } from 'agentfootprint';
-import { narrativePipeline, InMemoryStore } from 'agentfootprint/memory';
-
-// Zero-dep, zero-cost default — uses `heuristicExtractor()` which
-// produces baseline beats with no LLM call.
-const pipeline = narrativePipeline({ store: new InMemoryStore() });
-
-const agent = Agent.create({ provider: anthropic('claude-sonnet-4-5') })
-  .system('You remember the user across sessions.')
-  .memoryPipeline(pipeline)
-  .build();
-
-await agent.run('My name is Alice', {
-  identity: { conversationId: 'alice-session' },
-  turnNumber: 1,
-});
-
-await agent.run('What is my name?', {
-  identity: { conversationId: 'alice-session' },
-  turnNumber: 2,
-});
-// → "Your name is Alice"
-```
-
-<Aside type="note" title="Pass turnNumber explicitly">
-Beat ids default to `beat-{turn}-{index}`. If you don't pass `turnNumber` in `run()`, every call defaults to `1` and overwrites the previous turn's beats. Increment per-call.
-</Aside>
-
-## Upgrading to LLM-extracted beats
-
-The default `heuristicExtractor()` produces baseline beats with no LLM cost — fine for most cases. For semantic quality (better summaries, nuanced categories, smart importance scoring), use `llmExtractor`:
-
-```ts
-import { anthropic } from 'agentfootprint';
-import { narrativePipeline, llmExtractor, InMemoryStore } from 'agentfootprint/memory';
-
-const pipeline = narrativePipeline({
-  store: new InMemoryStore(),
-  // One extraction call per turn. Use a cheap/fast model.
-  extractor: llmExtractor({ provider: anthropic('claude-haiku-4-5') }),
-});
-```
-
-Cost model: **one extra LLM call per turn** (not per message, not per iteration). On Haiku, that's ~1 cent per 1000 turns. You can switch to the heuristic extractor in dev / tests at zero cost.
-
-## Pipeline topology
-
-```
-READ subflow:
-  LoadRecent          (reads MemoryEntry<NarrativeBeat>[] from store)
-    → PickByBudget    (decider: skip-empty / skip-no-budget / pick)
-    → FormatAsNarrative  (composes selected beats into one paragraph)
-
-WRITE subflow:
-  ExtractBeats        (extractor: heuristic or LLM)
-    → WriteBeats      (store.putMany — 1 RTT regardless of beat count)
-```
-
-The read subflow reuses `LoadRecent` + `PickByBudget` from `defaultPipeline` unchanged. Only the formatter and write path differ. That's the advantage of the memory pipeline abstraction: strategies compose from the same primitives.
-
-## When to use which pipeline
-
-| Use | When |
+| Situation | Strategy |
 |---|---|
-| `defaultPipeline` | Short conversations, debugging, exact-message recall needed (e.g., legal transcripts) |
-| `narrativePipeline` with heuristic extractor | Long conversations, want compression, OK with baseline beat quality |
-| `narrativePipeline` with LLM extractor | Production, long multi-session chats, need high-quality recall |
-| `ephemeralPipeline` | Compliance-sensitive — read context only, no writes |
+| Short chats (under window size) | WINDOW (no compression needed) |
+| Long chats where the BEAT matters more than the detail | SUMMARIZE (this guide) |
+| Long chats where you want STRUCTURED facts, not narrative | EXTRACT |
+| Cross-run "what did we settle on last time?" | NARRATIVE type (different shape) or CAUSAL type (decision evidence) |
 
-## Tuning the pipeline
+## Multi-tenant identity scoping
 
-```ts
-narrativePipeline({
-  store,
-  extractor: llmExtractor({ provider: anthropic('claude-haiku-4-5') }),
+Every read and write scopes by `MemoryIdentity`. A summary belongs to one `(tenant, principal, conversationId)` tuple — no cross-tenant leakage even if the same store backs many tenants.
 
-  loadCount: 50,           // how many beats to consider per turn
-  reserveTokens: 512,      // tokens NOT used for memory
-  minimumTokens: 100,      // below this, skip injection
-  maxEntries: 10,          // cap selected beats (lost-in-the-middle)
-  writeTier: 'hot',        // tag writes for tier-aware reads
-  writeTtlMs: 30 * 24 * 60 * 60_000,  // 30-day retention
+## Anti-patterns
 
-  // Formatter tuning
-  formatShowRefs: true,    // append (refs: msg-x-y) to each sentence
-  formatLeadIn: 'Prior session notes: ',
-});
-```
+- Don't use the production model as the summarizer. Cost will dominate. Use a cheap model dedicated to compression.
+- Don't summarize every turn. The library already batches — summarization fires only when the over-`recent` count justifies it.
+- Don't summarize facts. Use SEMANTIC × EXTRACT for facts. SUMMARIZE compresses NARRATIVE flow; EXTRACT distills DATA.
 
-## Inspecting beats
+## Next steps
 
-Because beats are regular `MemoryEntry<NarrativeBeat>` records, the existing `MemoryStore` surface queries them:
-
-```ts
-import { isNarrativeBeat } from 'agentfootprint/memory';
-
-const { entries } = await store.list({ conversationId: 'alice-session' });
-const beats = entries.filter((e) => isNarrativeBeat(e.value));
-
-for (const entry of beats) {
-  const beat = entry.value;
-  console.log({
-    summary: beat.summary,
-    importance: beat.importance,
-    category: beat.category,
-    refs: beat.refs,          // ← source messages for audit queries
-    turn: entry.source?.turn,
-  });
-}
-```
-
-## Category taxonomy
-
-The heuristic extractor assigns these categories:
-
-| Category | Trigger |
-|---|---|
-| `identity` | Phrases like "my name is", "I am", "I'm" |
-| `question` | User messages ending in `?` |
-| `tool-result` | Tool role messages |
-| (none) | Assistant replies, plain user messages |
-
-The LLM extractor produces richer categories (`preference`, `fact`, `task-status`, `commitment`, etc.) following the system prompt. You can override the system prompt:
-
-```ts
-llmExtractor({
-  provider,
-  systemPrompt: 'Your custom extraction instructions...',
-});
-```
-
-## Writing a custom extractor
-
-Implement `BeatExtractor`:
-
-```ts
-import type { BeatExtractor, NarrativeBeat } from 'agentfootprint/memory';
-
-const mySharedRulesExtractor: BeatExtractor = {
-  async extract({ messages, turnNumber }) {
-    const beats: NarrativeBeat[] = [];
-    for (let i = 0; i < messages.length; i++) {
-      const m = messages[i];
-      if (m.role === 'user' && String(m.content).match(/\$\d+/)) {
-        beats.push({
-          summary: `User mentioned a dollar amount: ${m.content}`,
-          importance: 0.8,
-          refs: [`msg-${turnNumber}-${i}`],
-          category: 'money',
-        });
-      }
-    }
-    return beats;
-  },
-};
-```
-
-Mix rules + LLM for a hybrid extractor — e.g., run heuristics first, rescore importance with an LLM pass.
-
-## See also
-
-- [Memory pipeline](/agentfootprint/guides/memory) — the base pipeline architecture (defaultPipeline, storage, identity)
-- [Memory stores](/agentfootprint/integrations/memory-stores) — implementing a custom `MemoryStore` backend
+- [Memory guide](/agentfootprint/guides/memory/) — the full type × strategy matrix
+- [Fact extraction](/agentfootprint/guides/fact-extraction/) — the structured-data alternative to summarization
+- [Auto memory (hybrid)](/agentfootprint/guides/auto-memory/) — stack SUMMARIZE alongside other layers

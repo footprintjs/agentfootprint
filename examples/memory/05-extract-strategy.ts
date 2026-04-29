@@ -38,6 +38,7 @@ export async function run(input: string, provider?: LLMProvider): Promise<string
 
   // Pattern extractor — regex heuristics, zero LLM cost. Swap to
   // 'llm' + an `llm: anthropic('claude-haiku-4-5')` for richer extraction.
+  // #region define
   const memory = defineMemory({
     id: 'user-facts',
     type: MEMORY_TYPES.SEMANTIC,
@@ -49,6 +50,7 @@ export async function run(input: string, provider?: LLMProvider): Promise<string
     },
     store,
   });
+  // #endregion define
 
   const agent = Agent.create({
     provider: provider ?? mock({ reply: "I know your name is Alice and you're on the Pro plan." }),

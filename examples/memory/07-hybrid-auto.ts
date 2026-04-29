@@ -44,6 +44,7 @@ export async function run(input: string, provider?: LLMProvider): Promise<string
   const factsStore = new InMemoryStore();
   const causalStore = new InMemoryStore();
 
+  // #region hybrid-stack
   // 1. Short-term: last 10 turns (cheap, fast)
   const recent = defineMemory({
     id: 'recent',
@@ -76,6 +77,7 @@ export async function run(input: string, provider?: LLMProvider): Promise<string
     },
     store: causalStore,
   });
+  // #endregion hybrid-stack
 
   const agent = Agent.create({
     provider: provider ?? mock({ reply: 'Your loan #42 was rejected; you mentioned upgrading to Pro.' }),

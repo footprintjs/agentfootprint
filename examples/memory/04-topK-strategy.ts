@@ -41,6 +41,7 @@ export async function run(input: string, provider?: LLMProvider): Promise<string
   // changing the example.
   const store = new InMemoryStore();
 
+  // #region define
   const memory = defineMemory({
     id: 'semantic-recall',
     type: MEMORY_TYPES.SEMANTIC,
@@ -52,6 +53,7 @@ export async function run(input: string, provider?: LLMProvider): Promise<string
     },
     store,
   });
+  // #endregion define
 
   const agent = Agent.create({
     provider: provider ?? mock({ reply: 'Refunds are processed within 3 business days.' }),

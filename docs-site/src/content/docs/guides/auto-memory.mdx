@@ -1,182 +1,50 @@
 ---
-title: Auto memory
-description: The one-line default — facts (dedup on key) + beats (traceable narrative) on a single store, with a single upgrade knob for LLM-backed quality.
+title: Auto memory (Hybrid)
+description: Compose multiple memory layers — recent window + extracted facts + causal snapshots — each as its own .memory() call. Production-grade memory stack in ~30 lines.
 ---
 
-import { Aside } from '@astrojs/starlight/components';
+import CodeFile from '@/components/CodeFile.astro';
 
-Four memory presets asking you to pick one is too many choices for a first-draft agent. `autoPipeline()` is the opinionated default — it composes **facts** (dedup-on-key truth) and **beats** (append-only narrative) on the same store, with one knob to upgrade both to LLM-backed extraction.
+> A customer comes back after a week and asks *"what did we settle on?"* Your agent needs three things at once: the last few messages of THIS conversation (recent), the extracted facts about THIS customer (semantic), and the decision evidence from past loan reviews (causal). One memory type can't do all three. **The hybrid pattern stacks them.**
 
-```ts
-import { Agent, anthropic } from 'agentfootprint';
-import { autoPipeline, InMemoryStore } from 'agentfootprint/memory';
+## What hybrid memory is
 
-// Zero-LLM-cost defaults — regex + heuristics. Free.
-const pipeline = autoPipeline({ store: new InMemoryStore() });
+The `defineMemory` factory returns ONE memory definition. Real production agents need MULTIPLE — different types for different time horizons:
 
-const agent = Agent.create({ provider: anthropic('claude-sonnet-4-5') })
-  .system('You remember the user across turns.')
-  .memoryPipeline(pipeline)
-  .build();
-```
+| Layer | Type × Strategy | Time horizon | Cost |
+|---|---|---|---|
+| Recent window | EPISODIC × WINDOW | Last N turns of THIS conversation | Free |
+| Extracted facts | SEMANTIC × EXTRACT | All known facts about this user | One LLM call per write |
+| Causal snapshots | CAUSAL × TOP_K | Decision evidence from past runs | Embedding call per query |
 
-<Aside type="tip" title="When auto() is right">
-Use `autoPipeline` when you want "just give me memory" without committing to a strategy. When you need exact-message transcripts, deep-history vector recall, or compliance-grade read-only sessions, reach for the specific preset (`defaultPipeline` / `semanticPipeline` / `ephemeralPipeline`).
-</Aside>
+Stack them via multiple `.memory(...)` calls on the same agent. Each layer's read subflow runs independently and contributes to the messages slot:
 
-## What it stores
+<CodeFile path="examples/memory/07-hybrid-auto.ts" region="hybrid-stack" title="examples/memory/07-hybrid-auto.ts (region: hybrid-stack)" />
 
-Two complementary shapes on the same `MemoryStore`:
+The agent sees a layered context: short-term turns (most recent), extracted facts (always-relevant), and the matching past snapshot (when cosine clears the threshold). Each layer can use its OWN store — `recentStore` could be Redis-hot, `factsStore` Postgres, `causalStore` S3+pgvector — each tuned to the layer's read-frequency vs durability needs.
 
-| Shape | Example | Write semantics |
-|---|---|---|
-| **Facts** (dedup) | `user.name = "Alice"` | Second write to `user.name` OVERWRITES |
-| **Beats** (accumulate) | `"User asked about order ORD-123"` | Append-only, one per salient event |
+## Why three layers, not one
 
-Facts answer "what's true about this user right now?" Beats answer "what happened?" Together they cover the two memory shapes every long-running agent needs.
+Different parts of "what the agent knows" have different update rates and retention needs:
 
-## What the LLM sees
+- **Recent window** turns over every minute (every conversation turn).
+- **Extracted facts** turn over every day (new facts learned about the user).
+- **Causal snapshots** turn over every quarter (every meaningful decision the agent made).
 
-One combined system message:
+A single store optimized for one cadence is wrong for the other two. RedisStore is great for recent (sub-ms latency, TTL). Postgres is great for facts (queryable, joinable). pgvector / Pinecone is great for causal (vector search). The hybrid pattern lets each layer use the right backend.
 
-```
-Known facts about the user:
+## Per-layer scope keys prevent collision
 
-- user.name: Alice
-- user.email: alice@example.com
-- user.location: Berlin
+Multiple memories on the same agent each get their own scope key — `memoryInjection_${id}` — so they layer cleanly. The unique IDs (`recent`, `facts`, `causal` above) become observability event identifiers; you can filter `agentfootprint.context.injected` by `e.payload.source === 'memory:facts'` to see exactly which layer fired when.
 
-From earlier: User revealed their name is Alice. User asked about
-refunds for order ORD-123. Assistant confirmed the refund was processed.
-```
+## Anti-patterns
 
-One message, not two — better attention budget for the LLM. Facts first (who the user is), then narrative (what happened).
+- Don't share one store across layers — defeats the per-layer backend tuning. Use one store per layer, each adapter chosen for that layer's access pattern.
+- Don't mix incompatible strategies on one type — `EXTRACT` writes structured facts; `WINDOW` reads raw messages. Mixing them on one definition produces nonsense.
+- Don't forget identity. All three layers scope by the same `MemoryIdentity` tuple — a single `agent.run({ identity })` propagates to all of them.
 
-## The one upgrade knob — `provider`
+## Next steps
 
-The default extractors are free:
-- Facts: `patternFactExtractor()` — regex heuristics for name / email / location / preferences.
-- Beats: `heuristicExtractor()` — keyword-based salience.
-
-Pass a `provider` to upgrade BOTH to LLM-backed:
-
-```ts
-import { anthropic } from 'agentfootprint';
-import { autoPipeline, InMemoryStore } from 'agentfootprint/memory';
-
-const pipeline = autoPipeline({
-  store: new InMemoryStore(),
-  provider: anthropic('claude-haiku-4-5'), // cheap model; runs 2× per turn
-});
-```
-
-One knob, two extractors. The same cheap model handles both calls.
-
-## Pipeline topology
-
-```
-READ subflow:
-  LoadAll             (one store.list, split by payload shape)
-    → FormatAuto      (emit ONE system msg: facts block + narrative)
-
-WRITE subflow:
-  LoadFacts           (surface existing facts for update-awareness)
-    → ExtractFacts    (run fact extractor)
-    → WriteFacts      (store.putMany — overwrite on fact:${key})
-    → ExtractBeats    (run beat extractor)
-    → WriteBeats      (store.putMany — beat-${turn}-${idx})
-```
-
-Under the hood auto() reuses the same stages as `factPipeline` and `narrativePipeline` — there's no separate code path, just opinionated composition.
-
-## Per-extractor overrides
-
-When you want mixed quality (e.g. facts via LLM but beats via heuristic):
-
-```ts
-import { anthropic } from 'agentfootprint';
-import {
-  autoPipeline,
-  InMemoryStore,
-  llmFactExtractor,
-  heuristicExtractor,
-} from 'agentfootprint/memory';
-
-const pipeline = autoPipeline({
-  store: new InMemoryStore(),
-  factExtractor: llmFactExtractor({ provider: anthropic('claude-haiku-4-5') }),
-  beatExtractor: heuristicExtractor(), // keep beats free
-});
-```
-
-`factExtractor` / `beatExtractor` take precedence over `provider`.
-
-## Tuning
-
-```ts
-autoPipeline({
-  store,
-  provider: anthropic('claude-haiku-4-5'),
-
-  // Load
-  loadLimit: 200,              // upper bound on store.list page size
-  tiers: ['hot'],              // only load hot-tier entries
-
-  // Write
-  writeTier: 'hot',            // tag both facts AND beats as hot
-  writeTtlMs: 30 * 24 * 60 * 60_000,
-
-  // Formatting
-  factsHeader: 'Known facts about the user:',
-  narrativeLeadIn: 'From earlier: ',
-  showConfidence: false,       // append (conf 0.87) to each fact
-  showRefs: false,             // append (refs: msg-1-0) to each beat
-});
-```
-
-## When to reach for a specific preset instead
-
-| Situation | Preset |
-|---|---|
-| Debugging / legal transcripts — need exact message text | `defaultPipeline` |
-| User asks about deep history — "what were we discussing last week?" | `semanticPipeline` |
-| Compliance — read prior context, never write | `ephemeralPipeline` |
-| Just facts, no event history needed | `factPipeline` |
-| Just beats, no dedup-on-key needed | `narrativePipeline` |
-| **Everything above too specific — just remember the user** | **`autoPipeline`** |
-
-## Composing with semantic retrieval
-
-`autoPipeline` doesn't include vector recall. If your agent gets questions about topics from far-back history, layer `semanticPipeline` on a separate store:
-
-```ts
-// One store for facts+beats, one for vector-indexed raw messages.
-const memoryStore = new InMemoryStore();
-const vectorStore = new InMemoryStore();
-
-// Mount auto on the primary slot.
-const agent = Agent.create({ provider: anthropic('claude-sonnet-4-5') })
-  .memoryPipeline(autoPipeline({ store: memoryStore, provider: haiku }))
-  .build();
-```
-
-Hybrid mounting (two pipelines side-by-side) is a future `hybridPipeline` preset; until then, stick with one or compose at the agent layer.
-
-## Explainability — why does the agent know this?
-
-Facts and beats BOTH carry `refs?: string[]` fields. Pattern / heuristic extractors don't populate refs. LLM extractors do.
-
-When auditing "why does the agent think X?", walk the ref backwards to the raw message id, then fetch the message from the same store:
-
-```ts
-const beat = beats.find((b) => b.value.summary.includes('Alice'));
-const sourceIds = beat!.value.refs; // ['msg-1-0', 'msg-1-1']
-// sourceIds point to message entries in the same store
-```
-
-## See also
-
-- [Fact extraction](/agentfootprint/guides/fact-extraction) — dedup-on-key store
-- [Narrative memory](/agentfootprint/guides/narrative-memory) — beat-based compression
-- [Memory pipeline](/agentfootprint/guides/memory) — base architecture
-- [Semantic retrieval](/agentfootprint/guides/semantic-retrieval) — vector recall for deep history
+- [Memory guide](/agentfootprint/guides/memory/) — single-layer fundamentals + the 4-types × 7-strategies matrix
+- [Causal deep-dive](/agentfootprint/guides/causal-deep-dive/) — snapshot shape, projection, replay (coming v2.4)
+- [Memory store adapters](/agentfootprint/integrations/memory-stores/) — Redis · AgentCore · planned backends

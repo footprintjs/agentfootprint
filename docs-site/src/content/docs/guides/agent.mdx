@@ -1,161 +1,88 @@
 ---
-title: Agent Pattern
-description: Build ReAct agents with tool use, memory, and streaming.
+title: Agent
+description: Agent = ReAct. The loop primitive that thinks, acts (tool call), observes the result, and repeats until done.
 ---
 
-The Agent is the core pattern — an LLM that can call tools in a loop until it has an answer. This is called the **ReAct pattern** (Reasoning + Acting): the LLM reasons about what to do, acts by calling a tool, observes the result, and repeats until it can answer.
+import CodeFile from '@/components/CodeFile.astro';
 
-## Basic agent
+> A user asks *"what's the weather in Paris?"*. Your code can't just hit a weather API — the LLM has to decide which tool to call, with what args, then read the result, then decide whether to call another tool or respond. **That decide → act → observe → repeat is what makes an Agent an Agent**, not a function call.
+
+## Agent = ReAct
+
+The Agent primitive **is** the ReAct loop (Yao 2022). One iteration:
+
+```
+LLM call → route → [tool calls → loop] OR [final answer]
+```
+
+Each iteration: the LLM produces text + optional tool calls. If tools were called, the framework executes them, appends results to the message history, and starts another iteration. If no tools were called (or `maxIterations` is hit), the loop exits with the final text.
+
+**If it doesn't loop-with-tools, it isn't an Agent — it's an [LLMCall](/agentfootprint/getting-started/key-concepts/#1-llmcall--one-call).**
+
+## Build an agent
+
+`Agent.create({ provider, model })` → builder. `.system(...)` sets the system prompt. `.tool(...)` registers tools (each with a JSON schema). `.build()` finalizes:
+
+<CodeFile path="examples/core/02-agent-with-tools.ts" region="build" title="examples/core/02-agent-with-tools.ts (region: build)" />
+
+The framework owns the iteration loop. You declare what tools the agent has; the LLM decides when (and with what args) to call them; the framework dispatches and feeds results back.
+
+## Observe the loop
+
+Because the framework owns the loop, observability is just attaching listeners — no SDK, no agent-instrumentation wrapper:
+
+<CodeFile path="examples/core/02-agent-with-tools.ts" region="observe" title="examples/core/02-agent-with-tools.ts (region: observe)" />
+
+47 typed events fire across 13 domains during a single `agent.run()`. See the [Observability guide](/agentfootprint/guides/observability/) for the full taxonomy.
+
+## maxIterations
+
+Every Agent has a `maxIterations` cap (default 10). The loop exits when:
+
+1. The LLM returns text with no tool calls (normal completion)
+2. `maxIterations` is reached (forced exit; final iteration's text becomes the result)
+3. A tool throws (propagates as an error; subject to `withRetry` if wrapped)
+4. The agent pauses via `askHuman` / `pauseHere` (returns a `PauseResult` instead of a string)
+
+Tune `maxIterations` to your tool budget. Tool-heavy agents (research, code-gen) commonly run 15–30; chat agents 3–5.
+
+## Identity for multi-tenant memory
+
+If your agent uses memory (`.memory(...)`), every `.run()` call must include an `identity` so memory is scoped per tenant / principal / conversation:
 
 ```ts
-import { Agent, defineTool, anthropic } from 'agentfootprint';
-
-const provider = anthropic('claude-sonnet-4-20250514');
-
-const searchTool = defineTool({
-  id: 'search',
-  description: 'Search the web for information',
-  inputSchema: {
-    type: 'object',
-    properties: { query: { type: 'string' } },
-    required: ['query'],
-  },
-  handler: async ({ query }) => {
-    const results = await fetch(`https://api.search.com?q=${query}`);
-    return { content: JSON.stringify(await results.json()) };
-  },
-});
-
-const agent = Agent.create({ provider })
-  .system('You are a research assistant. Use search to find information.')
-  .tool(searchTool)
-  .maxIterations(10)
-  .build();
-
-const result = await agent.run('What are the latest AI trends?');
-```
-
-## How the loop works
-
-```
-Seed → SystemPrompt → Messages → Tools → AssemblePrompt → CallLLM → ParseResponse → RouteResponse
-                                                                                         ↓
-                                                            ┌──── tool-calls ──── ExecuteTools ──┐
-                                                            └──── final ──── Finalize ───────────┘
-                                                                                         ↑ loop
-```
-
-1. **CallLLM** sends the assembled prompt to the LLM
-2. **ParseResponse** extracts the LLM's response (text or tool calls)
-3. **RouteResponse** decides: tool calls → execute and loop, or final → done
-4. Each iteration rebuilds the prompt with tool results in the message history
-
-## Memory
-
-Persist conversations across turns with the memory pipeline:
-
-```ts
-import { Agent } from 'agentfootprint';
-import { defaultPipeline, InMemoryStore } from 'agentfootprint/memory';
-
-const pipeline = defaultPipeline({ store: new InMemoryStore() });
-
-const agent = Agent.create({ provider })
-  .system('You are helpful.')
-  .memoryPipeline(pipeline)
-  .build();
-
-await agent.run('My name is Alice', {
-  identity: { conversationId: 'user-123' },
-});
-await agent.run('What is my name?', {
-  identity: { conversationId: 'user-123' },
-}); // "Your name is Alice"
-```
-
-See [Memory pipeline](/agentfootprint/guides/memory) for the full guide.
-
-## Streaming
-
-```ts
-const agent = Agent.create({ provider })
-  .system('You are helpful.')
-  .streaming(true)
-  .build();
-
-await agent.run('Tell me a story', {
-  onEvent: (event) => {
-    if (event.type === 'token') process.stdout.write(event.content);
-    if (event.type === 'tool_start') console.log(`\nRunning ${event.toolName}...`);
-  },
+await agent.run({
+  message: 'How long do refunds take?',
+  identity: { tenant: 'acme', principal: 'alice', conversationId: 'thread-42' },
 });
 ```
 
-## Human-in-the-loop
+Without an identity, memory falls back to a global namespace — fine for single-user prototypes, dangerous in production multi-tenant apps. See [Memory guide](/agentfootprint/guides/memory/).
+
+## Composition with other Agents
+
+An Agent is a runner, just like LLMCall, Sequence, Parallel, Conditional. Use them as steps in larger graphs:
 
 ```ts
-import { askHuman } from 'agentfootprint';
+import { Sequence } from 'agentfootprint';
 
-const agent = Agent.create({ provider })
-  .tool(askHuman())
-  .build();
-
-const result = await agent.run('Process refund for ORD-123');
-if (result.paused) {
-  // Agent asked a question — get human response
-  const final = await agent.resume('Yes, approved');
-}
-```
-
-## Memory stores (production)
-
-Pluggable storage backends implement the `MemoryStore` interface.
-`InMemoryStore` ships for dev and tests. Redis / DynamoDB / Postgres
-adapters land in Phase 3.
-
-See [Memory pipeline](/agentfootprint/guides/memory) for the full
-API and the `MemoryStore` contract.
-
-## Structured output
-
-Request JSON output matching a schema:
-
-```ts
-import { z } from 'zod';
-
-const agent = Agent.create({ provider: anthropic('claude-sonnet-4-20250514') })
-  .system('Extract city and temperature from the text.')
-  .outputSchema(z.object({
-    city: z.string(),
-    temperature: z.number(),
-    unit: z.enum(['celsius', 'fahrenheit']),
-  }))
-  .build();
-
-const result = await agent.run('It is 72°F in Paris today.');
-const data = JSON.parse(result.content);
-// { city: 'Paris', temperature: 72, unit: 'fahrenheit' }
-```
-
-For Anthropic: schema is injected into the prompt (system or user message). For OpenAI: uses native `response_format`.
-
-```ts
-// Inject in user message (recency window) for better compliance
-agent.outputSchema(schema, { injection: 'user' });
-```
-
-## Dynamic ReAct
-
-In Dynamic mode, all three **slots** (the system prompt, available tools, and message history) re-evaluate each iteration. This means the agent's behavior can change based on what happened — tools unlock after verification, prompts change after classification:
-
-```ts
-import { AgentPattern } from 'agentfootprint';
-
-const agent = Agent.create({ provider })
-  .pattern(AgentPattern.Dynamic)
-  .toolProvider(dynamicTools)
-  .promptProvider(dynamicPrompt)
+const research = Sequence.create()
+  .step('plan', plannerLLM)
+  .step('execute', researchAgent)
+  .step('summarize', summarizerLLM)
   .build();
 ```
 
-See [Instructions guide](/agentfootprint/guides/instructions/) for conditional context injection.
+There is no separate "multi-agent" class — agents *are* the building blocks. See [Patterns](/agentfootprint/getting-started/key-concepts/#patterns--named-compositions) for Reflexion / ToT / Debate / Map-Reduce / Swarm recipes.
+
+## Anti-patterns
+
+- Don't subclass Agent for a "smarter" agent — use `.skill()` / `.instruction()` to inject behavior. Subclassing breaks composition.
+- Don't put async I/O in tool `execute`'s synchronous setup — it runs every iteration. Cache outside; pure dispatch inside.
+- Don't bypass `maxIterations` to "let the agent decide" — every loop has a cost ceiling. Set it explicitly; observe `agentfootprint.agent.iteration_end` to track.
+
+## Next steps
+
+- [Tools guide](/agentfootprint/guides/tools/) — `defineTool`, MCP integration, permission gating
+- [Memory guide](/agentfootprint/guides/memory/) — `.memory(defineMemory({...}))` for cross-run state
+- [Skills, explained](/agentfootprint/guides/skills-explained/) — LLM-activated body + tools

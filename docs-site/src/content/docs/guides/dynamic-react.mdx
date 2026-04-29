@@ -1,244 +1,85 @@
 ---
 title: Dynamic ReAct
-description: When to loop back to SystemPrompt instead of CallLLM — and why that changes what your agent can do.
+description: Context that adapts mid-loop. The on-tool-return trigger fires the iteration after a specific tool ran — recency-first injection without hand-rolled state.
 ---
 
-import { Aside, Code, Tabs, TabItem } from '@astrojs/starlight/components';
+import CodeFile from '@/components/CodeFile.astro';
 
-**Built from:** Agent (ReAct) with slots re-evaluating per iteration.
-**Relation to literature:** agentfootprint extension; closest concepts are adaptive prompting and per-step context assembly. Not a new primitive — still the Agent primitive, with a different loop target.
+> An agent calls `redact_pii(text)` and gets back the redacted version. On the next iteration, the LLM ignores the redaction and paraphrases the original anyway. **The fix isn't a bigger system prompt** — it's an instruction that fires AT THE EXACT MOMENT the LLM is about to read the redacted output, telling it: *"use the redacted text. Don't paraphrase the original."* That's Dynamic ReAct.
 
-Most agents use a **standard ReAct** loop: system prompt + tools + memory are decided once before the first LLM call, then the agent loops `CallLLM → tools → CallLLM` until it finishes. Simple, fast, predictable.
+## What "dynamic" means here
 
-**Dynamic ReAct** changes one thing: the loop target. Instead of looping back to `CallLLM`, it loops back to `SystemPrompt` — which means all three API slots (system prompt, message history, tools) **re-evaluate between every turn**. The prompt can change. The tool set can change. The memory window can change. Every iteration.
+A regular Instruction has an `activeWhen(ctx)` predicate that runs every iteration. A **Dynamic ReAct** Instruction is just an Instruction whose predicate inspects `ctx.lastToolResult` — naturally one-shot because the next iteration's `lastToolResult` will be from a different (or no) tool.
 
-This page explains when that's worth the extra tokens, and when it's not.
+This is the **on-tool-return** trigger from the [4-trigger taxonomy](/agentfootprint/getting-started/key-concepts/#context-engineering-cross-cutting). It's the recency-first injection point: the LLM's attention is freshest on the most recent message, and a tool result IS a recent message.
 
-## TL;DR
+## The pattern
 
-| Symptom in your agent | Use this |
-|---|---|
-| Fixed persona, fixed tools, just iterating toward an answer | **Regular** (default) |
-| User must earn tools as they prove identity / permission | **Dynamic** |
-| Prompt should shift as the conversation reveals the task | **Dynamic** |
-| Memory window should shrink as the conversation grows | **Dynamic** |
-| Different specialist personas take over at different turns | Prefer `Swarm`; Dynamic if you need finer control |
-| You just want tool calls + a loop | **Regular**. Always start here. |
+<CodeFile path="examples/context-engineering/05-dynamic-react.ts" region="on-tool-return" title="examples/context-engineering/05-dynamic-react.ts (region: on-tool-return)" />
 
-## The loop shapes, side by side
+The reminder lands ONLY on the iteration where the LLM is about to read the redacted output. Without it, the LLM sometimes paraphrases the original (defeating the redaction). With it, the LLM is told *"use the redacted text"* at the exact moment it needs to hear it.
+
+This is structurally better than baking the same advice into the always-on system prompt:
+- System prompt advice has to compete with everything else in the prompt for attention
+- Most providers' attention to system-prompt content decays past long contexts
+- The reminder fires only when needed (not on every iteration), so token cost is minimal
+
+## Why on-tool-return is recency-first by design
+
+The Messages API position structure looks like:
 
 ```
-Regular (default):
-  [SystemPrompt] → [Messages] → [Tools] → AssemblePrompt
-    → CallLLM → Parse → Route → ExecuteTools → loopTo(CallLLM)
-          ↑                                         |
-          └─────────────────────────────────────────┘
-  ─ Prompt / tools / memory decided ONCE, outside the loop.
-  ─ Each iteration: LLM + tools only.
-
-Dynamic:
-  [SystemPrompt] → [Messages] → [Tools] → AssemblePrompt
-    → CallLLM → Parse → Route → ExecuteTools → loopTo(SystemPrompt)
-   ↑                                                  |
-   └──────────────────────────────────────────────────┘
-  ─ Prompt / tools / memory RE-EVALUATED every iteration.
-  ─ Each iteration: full slot resolution + LLM + tools.
+[ system ] [ msg1 ] [ msg2 ] ... [ msgN-1 ] [ msgN: latest tool result ]
 ```
 
-## Switching patterns
+The model reads top-to-bottom but its attention isn't uniform — recent positions consistently get stronger attention than the system prompt across every modern provider. By placing your "use the redacted text" instruction **on the iteration where the redacted text is the latest tool result**, you're injecting at the highest-attention slot the protocol offers.
 
-Adding one line flips your agent to Dynamic mode:
+This is a protocol-level guarantee, not a training-level one. It works on Claude, GPT, Llama, Mistral, and `mock()` identically.
+
+## Composing multiple on-tool-return rules
+
+Stack them. Each rule's predicate runs independently; matches all land in their target slot in registration order:
 
 ```ts
-import { Agent, AgentPattern, anthropic } from 'agentfootprint';
-
-const agent = Agent.create({ provider: anthropic('claude-sonnet-4') })
-  .system('You are a helpful assistant.')
-  .tools([...])
-  .pattern(AgentPattern.Dynamic)  // ← the only change
-  .build();
-```
-
-Default is `AgentPattern.Regular`. Every other method (`.system`, `.tools`, `.memory`, `.maxIterations`) works identically.
-
-## Use cases that need Dynamic
-
-### 1. Progressive tool authorization
-
-A support agent that reveals admin tools only after the user verifies identity:
-
-```ts
-import { Agent, AgentPattern, dynamicTools, defineTool } from 'agentfootprint';
-
-const verifyIdentity = defineTool({
-  id: 'verify_identity',
-  description: 'Verify user identity with their account PIN',
-  inputSchema: {
-    type: 'object',
-    properties: { pin: { type: 'string' } },
-    required: ['pin'],
-  },
-  handler: async ({ pin }, ctx) => {
-    const isAdmin = await checkPin(pin);
-    ctx.scope.isAdmin = isAdmin;
-    return { content: isAdmin ? 'Verified as admin.' : 'Standard user.' };
-  },
+const useRedacted = defineInstruction({
+  id: 'use-redacted',
+  activeWhen: (ctx) => ctx.lastToolResult?.toolName === 'redact_pii',
+  prompt: 'Use the redacted text. Do not paraphrase the original.',
 });
 
-const refundAccount = defineTool({
-  id: 'refund_account',
-  description: 'Issue a refund (admin only)',
-  inputSchema: { /* ... */ },
-  handler: async (_args) => ({ content: 'Refund issued.' }),
+const cite = defineInstruction({
+  id: 'cite-after-search',
+  activeWhen: (ctx) => ctx.lastToolResult?.toolName === 'search',
+  prompt: 'Cite each fact with the source URL the search returned.',
 });
 
-const agent = Agent.create({ provider: anthropic('claude-sonnet-4') })
-  .system('You are a support agent. Help the user. Verify identity before issuing refunds.')
-  // Tools change based on accumulated state
-  .toolProvider(
-    dynamicTools((ctx) => {
-      const baseTools = [verifyIdentity];
-      const state = ctx.scope as { isAdmin?: boolean };
-      return state.isAdmin ? [...baseTools, refundAccount] : baseTools;
-    }),
-  )
-  .pattern(AgentPattern.Dynamic)
-  .build();
+const summarizeOnLargeResult = defineInstruction({
+  id: 'summarize-large',
+  activeWhen: (ctx) => (ctx.lastToolResult?.content?.length ?? 0) > 5000,
+  prompt: 'The tool returned a large result. Summarize before responding.',
+});
+
+agent.instruction(useRedacted).instruction(cite).instruction(summarizeOnLargeResult);
 ```
 
-**Regular mode would fail here.** Tools resolve *once*, before `verify_identity` has run. The admin tool never appears, even after verification. Dynamic resolves tools fresh on every iteration — after `verifyIdentity` sets `isAdmin=true`, the next iteration sees the new tool set.
+Each one fires on its specific tool/condition. Together they form a recency-first behavior layer that the LLM sees per-iteration as the situation calls for.
 
-### 2. Adaptive system prompt (skill-based)
+## When to use dynamic ReAct vs steering vs skill
 
-The agent's persona shifts as the task reveals itself:
-
-```ts
-import { Agent, AgentPattern, skillBasedPrompt, anthropic } from 'agentfootprint';
-
-const agent = Agent.create({ provider: anthropic('claude-sonnet-4') })
-  .promptProvider(
-    skillBasedPrompt([
-      {
-        when: (ctx) => /refund|money back/i.test(lastUserMessage(ctx)),
-        prompt: 'You are a refund specialist. Confirm policy limits and process carefully.',
-      },
-      {
-        when: (ctx) => /login|password|locked/i.test(lastUserMessage(ctx)),
-        prompt: 'You are an account recovery specialist. Never reveal account details without verification.',
-      },
-      {
-        prompt: 'You are a general support agent.', // default
-      },
-    ]),
-  )
-  .tools([/* all tools */])
-  .pattern(AgentPattern.Dynamic)
-  .build();
-```
-
-Mid-conversation pivot: user starts with a refund question, then asks about login. Dynamic picks the right persona at each turn.
-
-<Aside type="tip">
-Prefer **`Swarm`** when you have 3+ clearly-bounded specialist personas — it dispatches via LLM-decided routing and is more natural to reason about. Use Dynamic ReAct when you want rule-based routing via predicates (cheaper — no LLM call to decide) or when a single agent's prompt just needs to adjust.
-</Aside>
-
-### 3. Compacting memory as the conversation grows
-
-```ts
-import { Agent, AgentPattern, slidingWindow, summaryStrategy, compositeMessages } from 'agentfootprint';
-
-const agent = Agent.create({ provider: anthropic('claude-sonnet-4') })
-  .messageStrategy(
-    compositeMessages(
-      // Keep last 10 turns verbatim
-      slidingWindow({ windowSize: 10 }),
-      // Summarize everything older
-      summaryStrategy({ provider, triggerTurnCount: 20 }),
-    ),
-  )
-  .pattern(AgentPattern.Dynamic)
-  .build();
-```
-
-With `Regular`, memory is computed once at the start — if the conversation grows past 20 turns within a single `run()`, the summary window never re-fires. Dynamic re-resolves the message strategy every iteration, so compaction happens as the agent itself extends the conversation via tool calls.
-
-## When NOT to use Dynamic
-
-**The token cost roughly doubles.** Each iteration re-runs the SystemPrompt, Messages, and Tools subflows. For a 5-turn agent, that's 5× the slot resolution work instead of 1× + 5 LLM calls. If your slots just return the same values every iteration, you're paying for work that changes nothing.
-
-**Reach for Regular when**:
-- Your system prompt is a constant string
-- Your tool set doesn't depend on accumulated state
-- Your message strategy is `fullHistory()` or a fixed-size sliding window
-- You don't need permissions that change mid-conversation
-
-Run Regular first. Promote to Dynamic only when you see a concrete case where a slot must react to mid-run state.
-
-## What the narrative shows
-
-The Behind-the-Scenes narrative makes Regular vs. Dynamic obvious at a glance. Regular shows slot subflows once, at the top; Dynamic repeats them every iteration:
-
-**Regular narrative (one-shot slot resolution):**
-```
-1. [Seed] Initialized agent state
-2. Preparing system prompt [→ sf-system-prompt]
-3. Preparing conversation history [→ sf-messages]
-4. Resolving available tools [→ sf-tools]
-5. [AssemblePrompt] ...
-6. [CallLLM] ...
-7. Tool loop iteration 1: re-calling LLM
-8. [CallLLM] ...         ← jumps straight back to CallLLM
-9. Tool loop iteration 2: re-calling LLM
-10. [CallLLM] ...
-```
-
-**Dynamic narrative (slots re-run per iteration):**
-```
-1. [Seed] Initialized agent state
-2. Preparing system prompt [→ sf-system-prompt]
-3. Preparing conversation history [→ sf-messages]
-4. Resolving available tools [→ sf-tools]
-5. [AssemblePrompt] ...
-6. [CallLLM] ...
-7. Tool loop iteration 1: re-calling LLM
-8. Preparing system prompt [→ sf-system-prompt]   ← re-resolved
-9. Preparing conversation history [→ sf-messages]  ← re-resolved
-10. Resolving available tools [→ sf-tools]          ← re-resolved
-11. [AssemblePrompt] ...
-12. [CallLLM] ...
-```
-
-If you're wondering "why is my agent not picking up the tool I added mid-conversation?" — the narrative is definitive: if stages 8–10 aren't re-running, you need `AgentPattern.Dynamic`.
-
-## Gotchas
-
-### `memory_preparedMessages` deduplication
-
-Dynamic re-runs the Messages subflow every iteration, which means `memory_preparedMessages` (internal scratch field) must be cleared between turns. The library handles this automatically — no consumer action required. If you ever see duplicated messages in the prompt, it's a library bug; file an issue with a trace.
-
-### Parallel tools + Dynamic
-
-Tools run in parallel (`.parallelTools(true)`) can mutate shared decision scope. When combined with Dynamic, those mutations take effect on the *next* iteration's slot resolution. If two parallel tools both mutate the same key (e.g. both set `isAdmin`), they race. Avoid `decide()` / shared-state mutations inside parallel tools, or keep parallelism off for Dynamic agents until isolation lands (follow-up release).
-
-### Output schema and Dynamic
-
-`.outputSchema(...)` still applies — the LLM is asked to match the schema on the FINAL turn only. Dynamic doesn't change when the schema fires, just what tools / prompt were used to get there.
-
-## Internals — what actually changes
-
-The only difference between Regular and Dynamic at the engine level is the `loopTo()` target chosen by the builder:
-
-| Pattern | `loopTo(...)` target |
+| Use case | Use |
 |---|---|
-| `Regular` (default) | `'call-llm'` |
-| `Dynamic` | `'sf-system-prompt'` |
+| *"Always be friendly"* (every turn) | `defineSteering` — always-on system prompt |
+| *"If user wrote 'urgent', prioritize speed"* (any turn matching the predicate) | `defineInstruction` with rule trigger |
+| *"After redact_pii ran, use redacted text"* (the iteration after a specific tool) | `defineInstruction` with on-tool-return predicate (this guide) |
+| *"When the LLM asks for billing help, load the billing playbook + tools"* (LLM-activated) | `defineSkill` |
 
-Every other stage, recorder, and hook behaves identically. The recorder narrative, causal chain, and trace export all work the same. Switching modes is a one-line change with no other downstream impact.
+## Anti-patterns
 
-See [`buildAgentLoop.ts`](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/loop/buildAgentLoop.ts) for the wiring.
+- Don't put SLOW logic in the predicate. It runs every iteration. `ctx.lastToolResult?.toolName === 'X'` is fine; `await db.query(...)` is not.
+- Don't use Dynamic ReAct for state that lives across runs. Use Memory for that.
+- Don't write one giant predicate that covers many tools. Write multiple small ones — easier to reason about, easier to observe (one event per matching id).
 
-## Next
+## Next steps
 
-- [Tool use](/agentfootprint/guides/tools/) — `dynamicTools`, `gatedTools`, composition
-- [Instructions & decisions](/agentfootprint/guides/instructions/) — conditional context injection (cheaper alternative to Dynamic for some cases)
-- [Multi-agent (Swarm)](/agentfootprint/guides/swarm/) — when to reach for Swarm instead
+- [Instructions guide](/agentfootprint/guides/instructions/) — the broader Instruction primitive (rule + on-tool-return + always)
+- [Skills, explained](/agentfootprint/guides/skills-explained/) — LLM-activated body + tools (the cousin pattern)

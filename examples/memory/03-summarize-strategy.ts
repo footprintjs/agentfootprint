@@ -37,6 +37,7 @@ export async function run(input: string, provider?: LLMProvider): Promise<string
   // deployments pass `anthropic('claude-haiku-4-5')` or equivalent.
   const summarizer = mock({ reply: 'User discussed billing, email update, and refund.' });
 
+  // #region define
   const memory = defineMemory({
     id: 'long-chat',
     type: MEMORY_TYPES.EPISODIC,
@@ -47,6 +48,7 @@ export async function run(input: string, provider?: LLMProvider): Promise<string
     },
     store,
   });
+  // #endregion define
 
   const agent = Agent.create({
     provider: provider ?? mock({ reply: 'We covered billing, email, and refund topics.' }),

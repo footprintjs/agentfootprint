@@ -1,205 +1,72 @@
 ---
-title: Semantic retrieval
-description: Vector-based memory recall — find the most relevant past messages by cosine similarity, not recency.
+title: Semantic retrieval (Top-K)
+description: Cosine-similarity search over embedded entries. Returns the most relevant top-K above a strict threshold — the read-side primitive behind RAG.
 ---
 
-import { Aside } from '@astrojs/starlight/components';
+import CodeFile from '@/components/CodeFile.astro';
 
-Recency-based recall (`defaultPipeline`) loses you context from many turns back: once a message scrolls out of the loadRecent window, it's gone. Semantic retrieval fixes that by **embedding every persisted message** and retrieving the top-k most similar to the current user turn, regardless of how many turns ago they were written.
+> A user asks *"how do I cancel my subscription?"* on turn 1. On turn 47 they ask the same thing differently — *"can I get out of the plan?"* You'd want the SAME context to load both times, even though the wording differs. **Semantic retrieval** is what makes that possible: embed both queries, find the same documents in vector space.
 
-```
-User turn 1:   "I'm planning a trip to Japan in October"
-User turns 2-4: [unrelated chatter]
-User turn 5:   "what was I planning for October?"
-                ↓
-Semantic recall retrieves turn 1's message — even though it's
-  4 turns back and would've been trimmed by sliding-window.
-```
+## What semantic retrieval is
 
-## Quick start
+`defineMemory({ type: SEMANTIC, strategy: { kind: TOP_K, topK, threshold, embedder } })` — every read embeds the current query, cosine-searches the vector store, returns the top-K most-similar entries that meet the threshold.
 
-```ts
-import { Agent, anthropic } from 'agentfootprint';
-import { semanticPipeline, InMemoryStore, mockEmbedder } from 'agentfootprint/memory';
+The read subflow:
+1. Embed the current `userMessage` into a vector
+2. Call `store.search(identity, queryVector, { k: topK, minScore: threshold })`
+3. Format matches as a system message
+4. Inject into the messages slot for this turn
 
-// For tests — deterministic, zero-dep
-const pipeline = semanticPipeline({
-  store: new InMemoryStore(),
-  embedder: mockEmbedder(),
-});
+This is the engine behind [`defineRAG`](/agentfootprint/guides/rag/). RAG is just SEMANTIC × TOP_K with retrieval-tuned defaults (`asRole: 'user'`, `topK: 3`, `threshold: 0.7`).
 
-const agent = Agent.create({ provider: anthropic('claude-sonnet-4-5') })
-  .system('You remember the user across turns.')
-  .memoryPipeline(pipeline)
-  .build();
+## Define a TOP_K memory
 
-await agent.run("I'm planning a trip to Japan in October.", {
-  identity: { conversationId: 'alice' },
-  turnNumber: 1,
-});
+<CodeFile path="examples/memory/04-topK-strategy.ts" region="define" title="examples/memory/04-topK-strategy.ts (region: define)" />
 
-// ... many turns later ...
-await agent.run('what was I planning for October?', {
-  identity: { conversationId: 'alice' },
-  turnNumber: 42,
-}); // → retrieves the Japan-trip message via vector similarity
-```
+`topK` caps the number of matches returned. `threshold` is the minimum cosine similarity for a match to count — strict by design (see below). `embedder` produces the query vector + is called per turn at read time.
 
-<Aside type="caution" title="Production needs a real embedder">
-`mockEmbedder()` is a deterministic character-frequency hash — fine for tests, useless for real semantic retrieval. Bring your own:
+## Strict threshold semantics
 
-```ts
-import type { Embedder } from 'agentfootprint/memory';
-import OpenAI from 'openai';
+`threshold` is **strict**. When NO entries meet the threshold, NO content injects. The library throws on empty by design. Garbage-low-confidence chunks pollute the prompt and make hallucination MORE likely, not less — silently injecting weak matches is the wrong default.
 
-const openai = new OpenAI();
+Tuning notes:
+- Sentence-BERT-class embedders (`all-MiniLM-L6-v2`, etc.) often score relevant matches at 0.4–0.6. Use `threshold: 0.5`.
+- OpenAI `text-embedding-3-*` and Cohere embed-v3 typically sit comfortably with `threshold: 0.7`.
+- If you see frequent zero-result silent skips, lower the threshold and observe `agentfootprint.context.injected` to see which entries fire.
 
-const openAIEmbedder: Embedder = {
-  dimensions: 1536,
-  async embed({ text, signal }) {
-    const res = await openai.embeddings.create(
-      { model: 'text-embedding-3-small', input: text },
-      { signal },
-    );
-    return res.data[0].embedding;
-  },
-  async embedBatch({ texts, signal }) {
-    const res = await openai.embeddings.create(
-      { model: 'text-embedding-3-small', input: texts as string[] },
-      { signal },
-    );
-    return res.data.map((d) => d.embedding);
-  },
-};
+## Embedder identity matters
 
-const pipeline = semanticPipeline({
-  store: new InMemoryStore(),
-  embedder: openAIEmbedder,
-  embedderId: 'openai-text-embedding-3-small',
-});
-```
-</Aside>
+Each entry written with an embedder is tagged with the embedder's id. Read-side cosine search filters to entries from the SAME embedder when `embedderId` is set on the search call. **Mixing embedders silently corrupts retrieval** — vectors from different models live in incompatible spaces.
 
-## Pipeline topology
+If you swap embedders (model upgrade, provider switch), either:
+1. Re-embed and re-write all entries (invalidates the old `embedderId`), or
+2. Run two parallel SEMANTIC memories with different `embedderId`s during the migration
 
-```
-READ subflow:
-  LoadRelevant        (embed user turn → store.search → top-k)
-    → PickByBudget    (decider: skip-empty / skip-no-budget / pick)
-    → FormatDefault   (inject as system message)
+## Vector store requirements
 
-WRITE subflow:
-  EmbedMessages       (one vector per new message via embedder)
-    → WriteMessages   (persists with embeddings via store.putMany)
-```
+`SEMANTIC × TOP_K` requires a `MemoryStore` that implements `search()`. Today:
+- ✅ `InMemoryStore` (dev / tests) — O(n) linear scan, fine for thousands of entries
+- ⏳ pgvector / Pinecone / Qdrant / Weaviate (planned v2.6) — true vector indexing
 
-Reuses `PickByBudget` and `FormatDefault` unchanged from `defaultPipeline` — only the load and write stages differ. That's the memory-pipeline abstraction paying off: strategies compose from the same primitives.
+The v2.3 production adapters (`RedisStore`, `AgentCoreStore`) ship without `search()` for now — Redis needs the RedisSearch module for vector indexing; AgentCore's retrieval API is server-side and doesn't fit the cosine-similarity contract. RAG users with v2.3 should use `InMemoryStore` until vector-capable production adapters land.
 
-## The `Embedder` interface
+## When to use this vs RAG vs other strategies
 
-```ts
-interface Embedder {
-  readonly dimensions: number;
-  embed(args: { text: string; signal?: AbortSignal }): Promise<number[]>;
-  embedBatch?(args: { texts: readonly string[]; signal?: AbortSignal }): Promise<number[][]>;
-}
-```
-
-`embedBatch` is optional but recommended — when present, `embedMessages` uses it to embed a whole turn's worth of messages in one API call instead of N round-trips.
-
-## Store vector-search contract
-
-Any `MemoryStore` that implements `search()` works:
-
-```ts
-interface MemoryStore {
-  // ... existing methods ...
-  search?<T>(
-    identity: MemoryIdentity,
-    query: readonly number[],
-    options?: { k?: number; minScore?: number; tiers?: ...; embedderId?: string },
-  ): Promise<readonly ScoredEntry<T>[]>;
-}
-```
-
-| Backend | Search impl |
+| Situation | Strategy |
 |---|---|
-| `InMemoryStore` | O(n) linear scan with cosine — dev/tests |
-| pgvector | `ORDER BY embedding <=> query LIMIT k` (roadmap) |
-| Pinecone | Native `query()` API (roadmap) |
-| Qdrant / Weaviate | Native vector search (roadmap) |
+| External docs corpus, retrieve-then-answer | `defineRAG` (sugar over this) |
+| Conversation memory with cosine recall | SEMANTIC × TOP_K (this guide) |
+| Conversation memory, just keep recent | EPISODIC × WINDOW |
+| Conversation memory, distill into facts | SEMANTIC × EXTRACT |
 
-If you want to pass `embedderId` at retrieval time to filter out entries produced by a different model, both sides of the pipeline accept it.
+## Anti-patterns
 
-## When to use which pipeline
+- Don't fall back to top-K-anyway when threshold returns nothing. The library throws by design.
+- Don't change embedders without re-indexing. Read-side filtering is your safety net; rotating without filter ID is a footgun.
+- Don't pass huge entries (50KB content) to a vector store designed for small chunks. Chunk first.
 
-| Situation | Pipeline |
-|---|---|
-| Short chat, exact-message recall (debugging, legal transcripts) | `defaultPipeline` |
-| Long chat, want compression, baseline beat quality | `narrativePipeline` with heuristic extractor |
-| Long chat, need high-quality beat recall | `narrativePipeline` with `llmExtractor` |
-| **User asks about topics from deep history** | **`semanticPipeline`** |
-| Want beats AND vector recall | Compose `extractBeats` + `embedBeats` yourself (future: `hybridPipeline`) |
-| Compliance — read context only, no writes | `ephemeralPipeline` |
+## Next steps
 
-## Tuning
-
-```ts
-semanticPipeline({
-  store,
-  embedder,
-  embedderId: 'openai-text-embedding-3-small',
-
-  k: 20,                 // top-k retrieved per turn (picker narrows further)
-  minScore: 0.5,         // drop weak matches (cosine threshold)
-  tiers: ['hot'],        // retrieve only hot tier
-  writeTier: 'hot',      // tag writes for tier-aware reads
-  writeTtlMs: 30 * 24 * 60 * 60_000,
-
-  reserveTokens: 512,    // forwarded to pickByBudget
-  minimumTokens: 100,
-  maxEntries: 10,        // lost-in-the-middle cap
-});
-```
-
-## Custom query derivation
-
-By default, `loadRelevant` embeds the last user message from `scope.messages`. Override for custom retrieval signals (e.g., combine user + recent tool-use context):
-
-```ts
-import { loadRelevant } from 'agentfootprint/memory';
-
-const customLoad = loadRelevant({
-  store,
-  embedder,
-  queryFrom: (scope) => {
-    const msgs = scope.messages ?? [];
-    const user = msgs.filter((m) => m.role === 'user').slice(-2);
-    return user.map((m) => String(m.content)).join(' ');
-  },
-});
-```
-
-## Cross-model safety
-
-Swap embedding models between deployments without retroactively polluting search. Set `embedderId` in the pipeline config — it's written onto every entry's `embeddingModel` field and used to filter retrievals:
-
-```ts
-// Old pipeline (v1) — stored entries have embeddingModel: "voyage-2"
-const v1 = semanticPipeline({ store, embedder: voyage, embedderId: 'voyage-2' });
-
-// New pipeline (v2) — searches ignore v1 entries
-const v2 = semanticPipeline({
-  store,
-  embedder: openai,
-  embedderId: 'openai-text-embedding-3-small',
-});
-```
-
-Old-model entries stay in the store (you can still `store.get` them) but don't contaminate the new-model's top-k.
-
-## See also
-
-- [Memory pipeline](/agentfootprint/guides/memory) — base pipeline architecture
-- [Narrative memory](/agentfootprint/guides/narrative-memory) — beat-based compression, complementary strategy
-- [Memory stores](/agentfootprint/integrations/memory-stores) — implementing a custom backend
+- [RAG guide](/agentfootprint/guides/rag/) — the document-corpus flavor of this primitive
+- [Memory guide](/agentfootprint/guides/memory/) — the full type × strategy matrix
+- [Memory store adapters](/agentfootprint/integrations/memory-stores/) — vector-capable backends roadmap
