@@ -5,6 +5,156 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.4.0]
+
+**We made it impossible for our docs to lie.**
+
+The headline of this release is structural: every code block on the
+docs site is now imported from a real, runnable file in `examples/`.
+A docs build fails if a referenced example doesn't exist or if a
+named region marker is missing. Drift between docs and code becomes
+impossible by construction — you can't ship a docs page that
+documents an API that isn't there.
+
+Suite: 1229 → 1253 (+24 from new Skills features). Pages: 67% drift
+→ ~0%.
+
+### The structural drift fix
+
+- New `<CodeFile path="..." region="..." />` Astro component imports
+  code from any file in the repo at docs-build time. Region markers
+  in source files (`// #region NAME` / `// #endregion NAME`) let you
+  show only the relevant slice.
+- New CI job `docs` (`.github/workflows/ci.yml`) runs the docs-site
+  build. A missing file → ENOENT. A missing region →
+  `RegionNotFoundError`. Either kills CI.
+- 35 of 42 docs pages converted to `<CodeFile>` imports. ~25 region
+  markers added across `examples/`. Inline code blocks in the docs
+  surface now exist only for illustrative anti-examples (the
+  "without agentfootprint" 80-line block in the README).
+
+### Skills features — the essay becomes truth
+
+The `skills-explained.mdx` essay was the strongest piece of writing
+in the docs and the most aspirational. Three features it described
+now ship:
+
+- `defineSkill({ surfaceMode })` — typed `'auto' | 'system-prompt' |
+  'tool-only' | 'both'`. Default `'auto'` resolves per provider via
+  `resolveSurfaceMode`.
+- `defineSkill({ refreshPolicy })` — typed
+  `{ afterTokens, via: 'tool-result' }` for re-injecting skill bodies
+  past a token threshold. API surface ships today; runtime hook lands
+  in v2.5 (long-context attention work) — non-breaking.
+- `resolveSurfaceMode(provider, model)` — pure function, exported.
+  Per-provider attention-profile defaults match the essay:
+  Claude ≥ 3.5 → `'both'`; everywhere else → `'tool-only'`.
+- `SkillRegistry` class — centralized governance for shared skill
+  catalogs across multiple agents. Methods: `register / replace /
+  unregister / get / has / list / size / clear`. Throws on duplicate
+  register. Throws on non-Skill flavor inputs.
+- `agent.skills(registry)` builder method — bulk-register every skill
+  in a registry on an agent. Companion to existing `.skill(t)`.
+
+Today's runtime treats every `surfaceMode` the same (the cross-
+provider-correct activation + next-iteration injection pattern the
+essay calls right). Full per-mode runtime routing diversity lands in
+v2.5 — non-breaking; consumer code written today continues to work.
+
+24 new tests cover the new API surface end-to-end.
+
+### New navigation + 4 new pages
+
+The docs site sidebar restructured around how readers actually
+navigate (persona-aware grouping, max 7 items per group):
+
+  Get Started → Mental model → Primitives & compositions →
+  Context engineering → Memory → Observability → Production →
+  Providers → Memory stores → Architecture → Reference → Resources
+
+Four new pages address the gaps the multi-persona review surfaced:
+
+- `manifesto.mdx` — "How agentfootprint thinks". First-person
+  opinionated essay naming what we are, what we're not, what we
+  believe, what we ask of you. The framework's perspective made
+  tangible. Storyteller's voice.
+- `causal-deep-dive.mdx` — researcher-grade snapshot deep-dive.
+  Annotated JSON shape of a `RunSnapshot` byte-for-byte. Four
+  projection modes documented. Worked Monday→Friday replay with
+  cheap-model triage economic argument (Sonnet→Haiku follow-up
+  at ~10× lower cost).
+- `research/citations.mdx` — bibliography for every shipped pattern
+  (ReAct, Reflexion, ToT, Self-Consistency, Debate, Map-Reduce,
+  Swarm, Skills) with proper paper references + how the recipe in
+  `examples/patterns/` relates to + deviates from each paper. Plus
+  the augmented-LM survey as the conceptual root of our Injection
+  primitive. Plus a BibTeX entry for citing agentfootprint.
+- `architecture/dependency-graph.mdx` — 8-layer DAG diagram for
+  senior engineers. Substrate (footprintjs) → events → adapters →
+  memory → context engineering → primitives → compositions → public
+  barrel. Documents the Hexagonal isolation property + per-layer
+  subpath exports + anti-cycle CI enforcement.
+
+### API reference — auto-generated via TypeDoc
+
+- New devDeps: `typedoc` + `typedoc-plugin-markdown`.
+- New script: `npm run docs:api`. Reads `src/index.ts`, follows the
+  public exports, emits markdown to `docs/api-reference/`.
+- Generated tree committed so consumers browsing GitHub can follow
+  links to it directly. Five sections: classes/ + functions/ +
+  interfaces/ + type-aliases/ + variables/.
+- The 7 hand-written API ref pages (which were drifted) consolidated
+  to a single `api/agent.mdx` placeholder that points at the
+  generated tree.
+
+### Coverage badge
+
+- New devDep: `@vitest/coverage-v8`.
+- New script: `npm run test:coverage`.
+- New CI job `coverage` (`.github/workflows/ci.yml`) uploads
+  `coverage/lcov.info` to Codecov via `codecov-action@v5`. No
+  threshold enforcement — badge surfaces the number; consumers
+  ratchet up over time.
+- README badge added. Initial baseline: 85.75% lines, 83.77%
+  statements, 90.30% functions, 73.20% branches across 3962
+  statements.
+
+### README rewrite
+
+- Tagline changed: "Context engineering, abstracted."
+- New autograd / Express / Prisma / Kubernetes / React framing places
+  agentfootprint in the category of credible abstractions — not
+  "another agent framework."
+- Side-by-side "without (~80 LOC, drifts) vs with agentfootprint
+  (~8 LOC, stable)" code blocks.
+- "The trace is a cache of the agent's thinking" reframing of
+  causal memory with three downstream consumers: audit, cheap-
+  model triage, training data.
+- "Why exactly four triggers? Because *who decides activation* is
+  a closed axis: nobody / dev / system / LLM" — defensibly stable
+  surface argument.
+- Evergreen sections — no version-specific facts in the README. The
+  npm version badge auto-updates from the registry; CHANGELOG carries
+  per-release truth. **From now on the README never needs touching
+  for a release.**
+
+### Process
+
+- Six 6-persona reviews (one per phase: 1, 2, 3, 4, 6 + Phase 7 final).
+  Every review's adjustments folded into the next phase.
+- Design memo signed off BEFORE code, per the v2.3 process change.
+  No internal panel verdicts in JSDoc — design lives in
+  `memory/agentfootprint_v24_design.md`.
+
+### What's next (v2.5)
+
+- Reliability subsystem — `CircuitBreaker`, 3-tier output fallback,
+  `agent.resumeOnError(checkpoint, input)`. Deferred from v2.4.
+- Skills runtime per-mode routing diversity — suppressing system-
+  prompt slot for `'tool-only'`, synthesizing fresh tool-result for
+  `refreshPolicy`. The API surface is shipped today; the runtime
+  tightening lands in v2.5 non-breaking.
+
 ## [2.3.0]
 
 Mock-first development is now a first-class workflow with two new
