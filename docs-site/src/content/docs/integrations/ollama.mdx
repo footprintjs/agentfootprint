@@ -1,103 +1,64 @@
 ---
-title: Ollama (Local)
-description: Run agents locally with Ollama — no API keys, no cost.
+title: Ollama
+description: ollama() — local-model provider via Ollama's OpenAI-compatible API. Run llama3, mistral, qwen, deepseek locally; same agent code as production providers.
 ---
+
+> Ollama runs local models on your machine. agentfootprint's `ollama()` factory wraps Ollama's OpenAI-compatible endpoint as an `LLMProvider` — your agent code is identical between local-Ollama dev and cloud-Anthropic production.
 
 ## Install
 
-```bash
-npm install agentfootprint openai
-```
-
-The `openai` package is required — agentfootprint's Ollama adapter uses the OpenAI-compatible API under the hood.
-
-Ollama must be running locally. [Install Ollama](https://ollama.com) and pull a model:
+Ollama itself: see [ollama.com/download](https://ollama.com/download). Pull a model:
 
 ```bash
-ollama pull llama3
+ollama pull llama3.1
 ```
 
-## Usage
+agentfootprint side: `ollama()` uses the `openai` SDK under the hood (via OpenAI-compatible endpoint), so install the OpenAI peer dep:
 
-```ts
-import { Agent, ollama, defineTool } from 'agentfootprint';
-
-const provider = ollama('llama3');
-
-const agent = Agent.create({ provider })
-  .system('You are a helpful assistant.')
-  .build();
-
-const result = await agent.run('Hello');
+```bash
+npm install openai
 ```
 
-## Switching from raw Ollama API
-
-import { Tabs, TabItem } from '@astrojs/starlight/components';
-
-<Tabs>
-  <TabItem label="Before (raw fetch)">
-    ```ts
-    const response = await fetch('http://localhost:11434/api/chat', {
-      method: 'POST',
-      body: JSON.stringify({
-        model: 'llama3.3',
-        messages: [{ role: 'user', content: 'Hello' }],
-      }),
-    });
-    const data = await response.json();
-    console.log(data.message.content);
-    ```
-  </TabItem>
-  <TabItem label="After (agentfootprint)">
-    ```ts
-    import { Agent, ollama } from 'agentfootprint';
-
-    const agent = Agent.create({ provider: ollama('llama3.3') })
-      .system('You are helpful.')
-      .build();
-
-    const result = await agent.run('Hello');
-    console.log(result.content);
-    console.log(agent.getNarrative());  // full trace, $0 cost
-    ```
-  </TabItem>
-</Tabs>
-
-## Custom endpoint
+## Use
 
 ```ts
-const provider = ollama('llama3', {
-  baseUrl: 'http://192.168.1.100:11434',  // remote Ollama instance
+import { Agent, ollama } from 'agentfootprint';
+
+const provider = ollama({
+  model: 'llama3.1',
+  baseURL: 'http://localhost:11434/v1',  // default
 });
+
+const agent = Agent.create({
+  provider,
+  model: 'llama3.1',
+}).build();
 ```
 
-## Development workflow
+## When to use Ollama
 
-Use Ollama for local development, switch to Claude for production:
+- **Local development** — no API key, no cost, no network.
+- **Privacy-sensitive workloads** — model + data never leave the machine.
+- **Cost-sensitive batch jobs** — local inference for high-volume background processing.
+- **Edge / offline deployments** — bundle the model with your app.
+
+## Limitations
+
+- Local models are smaller and less capable than frontier models. Tool-calling reliability varies by model — llama3.1 + qwen2.5 + deepseek work; smaller models may struggle.
+- No streaming for some local models (depends on Ollama config).
+- Multi-modal not exposed.
+
+## Switching to Anthropic / OpenAI for production
+
+Same agent code; swap the provider one line:
 
 ```ts
 const provider = process.env.NODE_ENV === 'production'
-  ? anthropic('claude-sonnet-4-20250514')
-  : ollama('llama3');
-
-// Same agent, same tools — just different provider
-const agent = Agent.create({ provider })
-  .system('You are a support agent.')
-  .tool(lookupOrder)
-  .build();
+  ? anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
+  : ollama({ model: 'llama3.1' });
 ```
 
-## Supported models
+## Next steps
 
-Any model available in your local Ollama installation. Common choices:
-
-| Model | Best for |
-|-------|----------|
-| `llama3.3` | General purpose |
-| `llama4` | Latest, multimodal |
-| `qwen3` | Reasoning, multilingual |
-| `deepseek-r1` | Deep reasoning |
-| `gemma3` | Fast, lightweight |
-
-Ollama uses the OpenAI-compatible API. For tool use, choose models with reliable function calling support (`llama3.1+`, `qwen2.5`, `mistral-nemo`). Smaller models may produce unreliable tool calls.
+- [OpenAI](/agentfootprint/integrations/openai/) — `baseURL` pattern works with any OpenAI-compatible endpoint
+- [Mocks-first development](/agentfootprint/getting-started/quick-start/) — `mock()` for $0 deterministic tests

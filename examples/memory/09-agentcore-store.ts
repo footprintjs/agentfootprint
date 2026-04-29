@@ -51,6 +51,7 @@ export const meta: ExampleMeta = {
 
 export async function run(input: string, provider?: LLMProvider): Promise<string> {
   const fakeClient = makeFakeAgentCore();
+  // #region define
   const store = new AgentCoreStore({
     memoryId: 'arn:aws:bedrock:us-east-1:000000000000:memory/demo',
     _client: fakeClient,
@@ -63,6 +64,7 @@ export async function run(input: string, provider?: LLMProvider): Promise<string
     strategy: { kind: MEMORY_STRATEGIES.WINDOW, size: 10 },
     store,
   });
+  // #endregion define
 
   const agent = Agent.create({
     provider:

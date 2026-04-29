@@ -1,71 +1,111 @@
 ---
-title: Memory Stores
-description: Storage backends for the agentfootprint memory pipeline.
+title: Memory store adapters
+description: Where memory lives. InMemoryStore for dev; RedisStore + AgentCoreStore production-ready; DynamoDB / Postgres / Pinecone planned.
 ---
 
-import { Aside } from '@astrojs/starlight/components';
+> Memory's TYPE × STRATEGY combinations are agnostic about WHERE the bytes live. **The store is the third axis** — the persistence boundary that turns memory from "ephemeral local state" into "production multi-tenant state with GDPR forget + multi-instance access". Pick by access pattern + durability needs.
 
-agentfootprint's memory architecture separates two concerns:
+## What ships today
 
-1. **`MemoryStore`** — WHERE memory entries are persisted (in-memory, Redis, DynamoDB, Postgres). A 10-method CRUD surface with tenant-aware `MemoryIdentity`.
-2. **`MemoryPipeline`** — HOW memory is loaded / picked / formatted / written each turn. Two subflows (`read`, `write`) composed of explainable stages.
+| Store | Subpath | Peer-dep | Vector search | When to use |
+|---|---|---|---|---|
+| `InMemoryStore` | (top-level) | — | ✅ | Dev, tests, single-process scenarios |
+| `RedisStore` | `agentfootprint/memory-redis` | `ioredis` | ❌ (RedisSearch later) | Hot recent memory + signatures + feedback aggregation |
+| `AgentCoreStore` | `agentfootprint/memory-agentcore` | `@aws-sdk/client-bedrock-agent-runtime` | ❌ (server-side retrieve later) | Bedrock-native session + event memory |
 
-You attach a pipeline to an agent via `.memoryPipeline()`:
+All three implement the same `MemoryStore` interface — `defineMemory({ store })` doesn't care which one you pass. Drop-in.
+
+## InMemoryStore
+
+The default for dev / tests. O(n) linear scan for `search()`; fine for thousands of entries; bounded by process memory:
 
 ```ts
-import { Agent, anthropic } from 'agentfootprint';
-import { defaultPipeline, InMemoryStore } from 'agentfootprint/memory';
+import { InMemoryStore } from 'agentfootprint';
+const store = new InMemoryStore();
+```
 
-const pipeline = defaultPipeline({ store: new InMemoryStore() });
+Resets on process restart. Per-process — multi-instance deploys lose state.
 
-const agent = Agent.create({ provider: anthropic('claude-sonnet-4-5') })
-  .system('You remember the user across sessions.')
-  .memoryPipeline(pipeline)
-  .build();
+## RedisStore
 
-await agent.run('My name is Alice', {
-  identity: { conversationId: 'alice-session-1' },
+Subpath import keeps the main barrel small. Lazy-required `ioredis`:
+
+```ts
+import { RedisStore } from 'agentfootprint/memory-redis';
+
+const store = new RedisStore({ url: 'redis://localhost:6379' });
+// or share an existing client:
+// const store = new RedisStore({ client: existingIoredisClient });
+```
+
+Implements every `MemoryStore` method except `search()`. `putIfVersion` uses an atomic Lua compare-and-swap; `putMany` uses pipelining; `forget()` uses SCAN (never KEYS — KEYS blocks Redis). Tested with mock-injected `_client`; CI doesn't need a live Redis.
+
+**Vector search NOT included.** RedisSearch is a separate Redis module with its own API. A `RedisSearchStore` is planned for v2.6.
+
+## AgentCoreStore
+
+AWS Bedrock AgentCore Memory adapter. Subpath import; lazy-required AWS SDK:
+
+```ts
+import { AgentCoreStore } from 'agentfootprint/memory-agentcore';
+
+const store = new AgentCoreStore({
+  memoryId: 'arn:aws:bedrock:us-east-1:...:memory/my-mem',
+  region: 'us-east-1',
 });
 ```
 
-See the [Memory pipeline guide](/agentfootprint/guides/memory) for the full API.
+Maps `MemoryStore` calls onto AgentCore's session/event model. **Caveats** (also documented in JSDoc):
 
-## Shipped adapters
+- `putIfVersion` is emulated client-side (read+write). Adequate for single-writer-per-session deploys; weaker for multi-writer.
+- `seen` / `feedback` use in-process shadow state — don't survive process restart. Use Redis for durable recognition.
+- `search()` not exposed today. AgentCore has a server-side retrieve API; mapping it to `MemoryStore.search` would be a leaky abstraction. A separate `agentcoreRetrieve()` helper is planned.
 
-| Adapter | Purpose |
-|---|---|
-| `InMemoryStore` | Dev / tests. In-process Map-backed, tenant-aware, implements the full `MemoryStore` contract incl. batched `putMany`. |
+## Choosing per layer
 
-## Roadmap
-
-Real persistent backends (Redis, DynamoDB, Postgres) land in Phase 3 and implement the same `MemoryStore` interface. Tests written against `InMemoryStore` transfer directly to any backend.
-
-## Writing a custom adapter
-
-Implement the `MemoryStore` interface:
+In hybrid memory setups (multiple `.memory(...)` calls on one agent), each layer can use a different store optimized for its access pattern:
 
 ```ts
-import type { MemoryStore } from 'agentfootprint/memory';
+import { defineMemory, MEMORY_TYPES, MEMORY_STRATEGIES } from 'agentfootprint';
+import { RedisStore } from 'agentfootprint/memory-redis';
+import { AgentCoreStore } from 'agentfootprint/memory-agentcore';
 
-const myStore: MemoryStore = {
-  async get(identity, id) { /* ... */ },
-  async put(identity, entry) { /* ... */ },
-  async putMany(identity, entries) { /* batched write — N → 1 round-trip */ },
-  async putIfVersion(identity, entry, expectedVersion) { /* OCC */ },
-  async list(identity, options) { /* paginated */ },
-  async delete(identity, id) { /* ... */ },
-  async seen(identity, signature) { /* dedupe signal */ },
-  async recordSignature(identity, signature) { /* ... */ },
-  async feedback(identity, id, usefulness) { /* -1..1 */ },
-  async getFeedback(identity, id) { /* aggregate */ },
-  async forget(identity) { /* GDPR erasure */ },
-};
+const recent = defineMemory({
+  id: 'recent',
+  type: MEMORY_TYPES.EPISODIC,
+  strategy: { kind: MEMORY_STRATEGIES.WINDOW, size: 10 },
+  store: new RedisStore({ url: redisUrl }),  // sub-ms hot reads, TTL
+});
+
+const causal = defineMemory({
+  id: 'causal',
+  type: MEMORY_TYPES.CAUSAL,
+  strategy: { kind: MEMORY_STRATEGIES.TOP_K, topK: 1, threshold: 0.7, embedder },
+  store: new AgentCoreStore({ memoryId, region }),  // managed durability
+});
+
+agent.memory(recent).memory(causal);
 ```
 
-<Aside type="caution" title="Tenant isolation">
-Every call takes `MemoryIdentity` as the scoping argument. Adapters MUST prefix internal keys with `identityNamespace(identity)` to prevent cross-tenant access. A bug that passes the wrong identity surfaces as "no data" rather than a cross-tenant leak.
-</Aside>
+See [Auto memory (hybrid)](/agentfootprint/guides/auto-memory/) for the layered pattern.
 
-<Aside type="note" title="Batched writes">
-`putMany` is the hot path for turn-end persistence (multiple messages per turn). Real backends should override it to pipeline the round-trip — Redis `MULTI`, DynamoDB `BatchWriteItem`, Postgres multi-row `INSERT`. Default fallback: sequential `put()` calls.
-</Aside>
+## Planned (v2.6)
+
+| Store | Why it's planned |
+|---|---|
+| **DynamoDB** | AWS-native, globally distributed, serverless-friendly |
+| **Postgres** (with pgvector) | Vector search built-in; queryable + joinable with app data |
+| **Pinecone** / **Qdrant** / **Weaviate** | Vector-first; serious-scale RAG / semantic-retrieval workloads |
+| **`RedisSearchStore`** | Vector search via the RedisSearch module |
+
+All four follow the same peer-dep + subpath import pattern as RedisStore + AgentCoreStore.
+
+## Multi-tenant identity is enforced at the store
+
+Every `MemoryStore` method takes `MemoryIdentity` as the first arg. Adapters MUST namespace internal keys by the full tuple. A bug passing the wrong identity surfaces as "no data" — not as a cross-tenant leak.
+
+## Next steps
+
+- [Memory guide](/agentfootprint/guides/memory/) — types × strategies × stores
+- [Auto memory (hybrid)](/agentfootprint/guides/auto-memory/) — layer multiple stores per their access pattern
+- [Deployment](/agentfootprint/guides/deployment/) — production checklist

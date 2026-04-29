@@ -1,122 +1,93 @@
 ---
 title: agentfootprint
-description: Context engineering, visible. 2 primitives, 3 compositions, every named pattern is a recipe. Paste a trace, see what happened.
+description: Context engineering, abstracted. The substrate for agents whose every decision, tool call, memory write, and context injection is a typed event you can replay six months later.
 template: splash
 hero:
-  tagline: "Context engineering, visible. 2 primitives, 3 compositions, every named pattern is a recipe. Export a trace, paste it into the viewer, drag the slider — see every decision, tool call, and memory write."
+  tagline: "Context engineering, abstracted. Every decision an Agent makes — tool call, memory write, context injection — is a typed event you can replay, audit, and explain. Six months later. On a different machine."
   actions:
-    - text: Try it (no setup)
-      link: https://footprintjs.github.io/agent-playground/#/viewer
-      icon: external
-      variant: primary
-    - text: 5-min quick start
+    - text: 5-min Quick Start
       link: /agentfootprint/getting-started/quick-start/
       icon: right-arrow
-      variant: secondary
+      variant: primary
     - text: Why agentfootprint?
-      link: /agentfootprint/getting-started/debug/
+      link: /agentfootprint/getting-started/why/
       icon: document
+      variant: secondary
+    - text: Compare to other frameworks
+      link: /agentfootprint/getting-started/vs/
+      icon: external
       variant: minimal
 ---
 
-import { Card, CardGrid, Code } from '@astrojs/starlight/components';
+import CodeFile from '@/components/CodeFile.astro';
+import { Card, CardGrid } from '@astrojs/starlight/components';
 
 ## The one thing that's different
 
-Every other agent framework ships agents you debug with **logs**. `agentfootprint` ships agents whose **every decision, tool call, memory write, and context injection is captured as a typed event during one DFS traversal** — no instrumentation, no post-processing.
+Every other agent framework ships agents you debug with **logs**. agentfootprint ships agents whose every decision, tool call, memory write, and context injection is **captured as a typed event during one DFS traversal** — no instrumentation, no post-processing.
 
-```ts
-import { Agent, defineMemory, MEMORY_TYPES, MEMORY_STRATEGIES, InMemoryStore, mock } from 'agentfootprint';
+The framework owns the loop, so the framework can record everything that happens inside it. Same way `autograd`'s forward-pass traversal makes gradient inspection automatic, agentfootprint's flowchart traversal makes the typed-event stream + replayable traces automatic.
 
-const agent = Agent.create({ provider: mock({ reply: 'Hi Alice!' }), model: 'mock' })
-  .memory(defineMemory({
-    id: 'short-term',
-    type: MEMORY_TYPES.EPISODIC,
-    strategy: { kind: MEMORY_STRATEGIES.WINDOW, size: 10 },
-    store: new InMemoryStore(),
-  }))
-  .build();
+## In 30 seconds — runs offline, no API key
 
-const id = { conversationId: 'alice-session' };
-await agent.run({ message: 'My name is Alice.', identity: id });
-const result = await agent.run({ message: 'What did I just say?', identity: id });
+<CodeFile path="examples/memory/01-window-strategy.ts" region="define" title="examples/memory/01-window-strategy.ts (region: define)" />
 
-// Inspect what happened
-console.log(agent.getNarrative());
-agent.on('agentfootprint.context.injected', (e) =>
-  console.log(`[${e.payload.source}] landed in ${e.payload.slot} slot`));
+```bash
+npm install agentfootprint footprintjs
+npm run example examples/memory/01-window-strategy.ts
 ```
 
-Every event is typed (47 events × 13 domains). Every memory injection is a `context.injected` event. Every decision is a `decide()` evidence record. Every tool call has start/end events with args + results. The trace is **already there** because the library was built on the flowchart pattern from day one.
+Outputs *"You just asked about your previous message."* in under 100ms. Deterministic, free, no API key. Swap `mock(...)` for `anthropic(...)` / `openai(...)` / `bedrock(...)` / `ollama(...)` for production. Nothing else changes.
+
+## Pick your starting door
 
 <CardGrid stagger>
-  <Card title="Narrative" icon="document">
-    Every read, write, decision, and tool call appears as a timestamped line in a combined narrative. No log parsing.
+  <Card title="🎓 New to agents" icon="rocket">
+    Start with the [5-min Quick Start](/agentfootprint/getting-started/quick-start/). First agent runs offline against `mock()`. No API key needed.
   </Card>
-  <Card title="Decision evidence" icon="magnifier">
-    `decide()` captures *why* the agent took branch B over A — the exact values that made the predicate true.
+  <Card title="🛠️ LangChain / CrewAI / LangGraph user" icon="seti:typescript">
+    Start with [vs other frameworks](/agentfootprint/getting-started/vs/) — honest comparison, migration sketch.
   </Card>
-  <Card title="Causal chain" icon="random">
-    Backward program slicing on the commit log: "what stages produced this output?" Answer in one query.
+  <Card title="🏗️ Architecting an enterprise rollout" icon="setting">
+    Start with [Deployment](/agentfootprint/guides/deployment/) — multi-tenant identity, audit trails, peer-deps, observability stack.
   </Card>
-  <Card title="Memory ↔ training data" icon="rocket">
-    Causal memory persists footprintjs decision-evidence snapshots. The same data shape doubles as RL/SFT/DPO training data — every successful production run becomes a labeled trajectory.
-  </Card>
-  <Card title="$0 test runs" icon="approve-check-circle">
-    `mock([...])` for tests, `anthropic(...)` for prod. Same agent, same flowchart, zero API cost in CI.
-  </Card>
-  <Card title="2 primitives, 3 compositions" icon="puzzle">
-    Primitives: **LLM**, **Agent** (= ReAct). Compositions: **Sequence**, **Parallel**, **Conditional**, **Loop**. Every named pattern — Reflexion, Tree-of-Thoughts, Hierarchy — is a recipe built from these. No new classes per paper.
-  </Card>
-  <Card title="defineMemory: 4 types × 7 strategies" icon="laptop">
-    One factory, four types (Episodic / Semantic / Narrative / **Causal**), seven strategies (Window / Budget / Summarize / TopK / Extract / Decay / Hybrid). Causal type — `decide()` evidence persisted across runs — is unique to agentfootprint.
+  <Card title="🔬 Researcher / extending the framework" icon="open-book">
+    Start with [Skills, explained](/agentfootprint/guides/skills-explained/) — context-engineering essay; the strongest writing in the docs.
   </Card>
 </CardGrid>
 
-## The stack, in one box
+## What you can build
 
-```
-PRIMITIVES (2)        LLM · Agent (= ReAct)
-COMPOSITIONS (3)      Sequence · Parallel · Conditional
-PATTERNS (N)          ReAct · Dynamic ReAct · Hierarchy (Swarm) ·
-                      Reflexion · Tree-of-Thoughts · Plan-Execute · Map-Reduce
-CONTEXT ENGINEERING   defineSkill · defineSteering · defineInstruction · defineFact
-                       (one Injection primitive, four typed sugar factories)
-MEMORY                4 types × 7 strategies — defineMemory({type, strategy, store})
-                       Episodic · Semantic · Narrative · Causal (cross-run replay)
-FEATURES              Providers · Recorders · Pause/Resume · Permissions · Streaming
-```
+Three example shapes, all runnable end-to-end with `npm run example examples/<file>.ts`:
 
-Two theses:
+- **[Customer support agent](/agentfootprint/guides/skills-explained/)** with skills, memory, and an audit trail — `examples/context-engineering/06-mixed-flavors.ts`
+- **[Research pipeline](/agentfootprint/getting-started/key-concepts/#patterns--named-compositions)** with multi-agent fan-out + LLM merge — `examples/patterns/05-tot.ts` (Tree-of-Thoughts) or `01-self-consistency.ts`
+- **[Streaming chat agent](/agentfootprint/guides/streaming/)** with token-by-token output to a browser — see streaming guide for the SSE pattern
 
-1. **Agent = ReAct.** If it doesn't loop-with-tools, it isn't an Agent.
-2. **Every named paper is a recipe of primitives + compositions.** Reflexion = `Sequence(Agent, critique-LLM, Agent)`. Tree-of-Thoughts = `Parallel(Agent × N) + rank`. Hierarchy (Swarm) = Agent whose tools are Agents. RAG isn't a primitive; it's context engineering — what you inject into the messages slot.
+## The two differentiators
 
-See the [Key Concepts](/agentfootprint/getting-started/key-concepts/) page for the full taxonomy with worked examples.
+### 1. Causal memory — replay *why*, not just *what*
 
-## 30-second demo
+`defineMemory({ type: CAUSAL })` records the agent's decision evidence — every `decide()` value the flowchart captured. New questions cosine-match past queries; matching snapshots inject the prior decision evidence; the LLM answers from EXACT past facts, not reconstruction. See [Memory guide § Causal](/agentfootprint/guides/memory/#causal-memory--replay-decisions-not-just-messages).
 
-1. Pick a pattern in [Live Chat](https://footprintjs.github.io/agent-playground/#/live) (works with a mock adapter — no API key needed).
-2. Send a message. See the response + the **Behind the Scenes** button.
-3. Click **Copy Trace**. Paste it into [Trace Viewer](https://footprintjs.github.io/agent-playground/#/viewer).
-4. Drag the time-travel slider. Every step of the agent's reasoning is there.
+### 2. Trace export → trace replay
 
-Zero typing. Zero keys. Everything else in this library follows from this one workflow.
+Every run exports as one JSON checkpoint. Persist it (Redis, Postgres, S3); resume on a different process, day, or server. The same JSON shape feeds SFT / DPO / process-RL training pipelines (`exportForTraining({ format })` on the v2.5 roadmap).
 
-## Install
+## Mocks first, prod second
 
-```sh
-npm install agentfootprint footprintjs
-```
+| Boundary | Dev (mock) | Prod (one-line swap) |
+|---|---|---|
+| LLM provider | `mock({ replies })` | `anthropic()` · `openai()` · `bedrock()` · `ollama()` |
+| Embedder | `mockEmbedder()` | OpenAI / Cohere / Bedrock embedder (planned v2.6) |
+| Memory store | `InMemoryStore` | `RedisStore` · `AgentCoreStore` (planned: pgvector / Pinecone) |
+| MCP server | `mockMcpClient({ tools })` | `mcpClient({ transport })` |
+| Tool execute | inline closure | real implementation |
 
-Peer dep: `footprintjs >= 4.14.0`. Optional: `@anthropic-ai/sdk`, `openai`, `@aws-sdk/client-bedrock-runtime` — depending on the LLM provider you want.
+Ship the patterns first; pay for tokens last.
 
-## Not convinced?
+## What's next
 
-- [How does this compare to LangGraph / LangChain / CrewAI?](/agentfootprint/getting-started/vs/)
-- [Why explainability matters more than graph editors](/agentfootprint/getting-started/debug/)
-- [Every code snippet in the docs is a real runnable example](https://github.com/footprintjs/agentfootprint/tree/main/examples)
-
-## Who built this
-
-Built on [footprintjs](https://footprintjs.github.io/footPrint/) — the flowchart pattern for backend code. MIT licensed, TypeScript-first, 2389+ tests across the stack. [GitHub](https://github.com/footprintjs/agentfootprint) · [npm](https://www.npmjs.com/package/agentfootprint).
+- [Why agentfootprint?](/agentfootprint/getting-started/why/) — the substrate argument with worked examples
+- [Quick Start](/agentfootprint/getting-started/quick-start/) — first agent in 5 minutes
+- [Key Concepts](/agentfootprint/getting-started/key-concepts/) — the 5-layer taxonomy

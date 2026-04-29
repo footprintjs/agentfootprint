@@ -1,167 +1,137 @@
 ---
-title: Custom Provider
-description: Implement LLMProvider to connect any LLM to agentfootprint.
+title: Custom provider
+description: Implement the LLMProvider interface to wrap any LLM API. Two methods (complete, stream) — that's the whole contract.
 ---
 
-## The LLMProvider interface
+> Your team uses an internal model serving cluster, or a provider not yet shipped as a built-in adapter. **You don't need agentfootprint to support it explicitly** — you just implement two methods. The library treats your custom provider identically to `anthropic()` or `openai()`.
 
-Implement two methods to connect any LLM:
+## The contract
 
 ```ts
+import type { LLMProvider, LLMRequest, LLMResponse, LLMChunk } from 'agentfootprint';
+
 interface LLMProvider {
-  /** Single request-response call. */
-  chat(messages: Message[], options?: LLMCallOptions): Promise<LLMResponse>;
+  readonly name: string;
 
-  /** Streaming call (optional — enables token-by-token output). */
-  chatStream?(messages: Message[], options?: LLMCallOptions): AsyncIterable<LLMStreamChunk>;
+  complete(req: LLMRequest): Promise<LLMResponse>;
+
+  stream?(req: LLMRequest): AsyncIterable<LLMChunk>;
 }
 ```
 
-## Minimal implementation
+That's the whole interface. `complete` is required; `stream` is optional (the library falls back to `complete` if absent).
+
+## A minimal custom provider
 
 ```ts
-import type { LLMProvider, Message, LLMResponse, LLMCallOptions } from 'agentfootprint';
+class MyCustomProvider implements LLMProvider {
+  readonly name = 'my-custom';
+  private apiKey: string;
 
-class MyProvider implements LLMProvider {
-  async chat(messages: Message[], options?: LLMCallOptions): Promise<LLMResponse> {
-    const response = await fetch('https://my-llm-api.com/chat', {
+  constructor(opts: { apiKey: string }) {
+    this.apiKey = opts.apiKey;
+  }
+
+  async complete(req: LLMRequest): Promise<LLMResponse> {
+    const res = await fetch('https://my-llm-api.example.com/v1/chat', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        messages: messages.map(m => ({ role: m.role, content: m.content })),
-        tools: options?.tools,
-      }),
-      signal: options?.signal,
+      headers: { 'Authorization': `Bearer ${this.apiKey}` },
+      body: JSON.stringify(toMyApiFormat(req)),
     });
-
-    const data = await response.json();
-
-    return {
-      content: data.text,
-      toolCalls: data.tool_calls?.map(tc => ({
-        id: tc.id,
-        name: tc.name,
-        arguments: tc.arguments,
-      })),
-      usage: {
-        inputTokens: data.usage?.input_tokens ?? 0,
-        outputTokens: data.usage?.output_tokens ?? 0,
-        totalTokens: data.usage?.total_tokens ?? 0,
-      },
-      model: 'my-model',
-    };
+    const json = await res.json();
+    return fromMyApiFormat(json);
   }
 }
 ```
 
-## Use it
+The two converters (`toMyApiFormat`, `fromMyApiFormat`) are the only API-specific code. The agent loop, recorders, memory, skills — all work unchanged.
+
+## Stream implementation
+
+For UI-streaming support:
 
 ```ts
-import { Agent } from 'agentfootprint';
+async *stream(req: LLMRequest): AsyncIterable<LLMChunk> {
+  const res = await fetch('https://my-llm-api.example.com/v1/stream', { ... });
+  const reader = res.body!.getReader();
+  let tokenIndex = 0;
+  let accumulated = '';
 
-const agent = Agent.create({ provider: new MyProvider() })
-  .system('You are helpful.')
-  .build();
-```
-
-## Adding streaming
-
-```ts
-class MyProvider implements LLMProvider {
-  async chat(messages, options) { /* ... */ }
-
-  async *chatStream(messages: Message[], options?: LLMCallOptions): AsyncIterable<LLMStreamChunk> {
-    const response = await fetch('https://my-llm-api.com/stream', {
-      method: 'POST',
-      body: JSON.stringify({ messages, stream: true }),
-    });
-
-    const reader = response.body!.getReader();
-    const decoder = new TextDecoder();
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-
-      const text = decoder.decode(value);
-      yield { type: 'token', content: text };
-    }
-
-    yield { type: 'done', content: '' };
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    const text = new TextDecoder().decode(value);
+    accumulated += text;
+    yield { tokenIndex: tokenIndex++, content: text, done: false };
   }
+
+  // Final chunk MUST carry the authoritative LLMResponse
+  yield {
+    tokenIndex,
+    content: '',
+    done: true,
+    response: {
+      content: accumulated,
+      toolCalls: [],   // populate from API's terminal payload
+      usage: { input: 0, output: 0 },
+      stopReason: 'stop',
+    },
+  };
 }
 ```
 
-## Key types
+The agent reads `response` off the final chunk to drive ReAct decisioning. UI consumers read intermediate `content` chunks for token streaming. One round-trip, two consumers.
 
-### Message
+## AbortSignal support
 
-A discriminated union — each role has its own shape:
-
-```ts
-interface SystemMessage  { role: 'system';    content: string }
-interface UserMessage     { role: 'user';      content: string | ContentBlock[] }
-interface AssistantMessage { role: 'assistant'; content: string | ContentBlock[]; toolCalls?: ToolCall[] }
-interface ToolResultMessage { role: 'tool';     content: string | ContentBlock[]; toolCallId: string }
-
-type Message = SystemMessage | UserMessage | AssistantMessage | ToolResultMessage;
-
-interface ToolCall { id: string; name: string; arguments: Record<string, unknown> }
-```
-
-### LLMResponse
+Honor `req.signal` so consumers can cancel mid-stream:
 
 ```ts
-interface LLMResponse {
-  content: string;
-  toolCalls?: ToolCall[];
-  usage?: TokenUsage;
-  model?: string;
-  finishReason?: 'stop' | 'tool_calls' | 'length' | 'error';
-  thinking?: string;  // extended thinking (Anthropic)
+async complete(req: LLMRequest): Promise<LLMResponse> {
+  const res = await fetch(url, {
+    signal: req.signal,
+    // ...
+  });
+  // ...
 }
 ```
 
-### LLMStreamChunk
+The library's resilience decorators (`withRetry`, `withFallback`) wrap your custom provider transparently — no special integration needed.
 
-A flat interface — all optional fields except `type`:
+## Wrapping with resilience
 
-```ts
-interface LLMStreamChunk {
-  type: 'token' | 'thinking' | 'tool_call' | 'usage' | 'done';
-  content?: string;     // present on 'token' and optionally on 'done'
-  toolCall?: ToolCall;   // present on 'tool_call'
-  usage?: TokenUsage;    // present on 'usage'
-}
-```
-
-## Error handling
-
-For best compatibility with `fallbackProvider` and error classification, throw `LLMError` from your provider:
+Drop into the standard composition:
 
 ```ts
-import { LLMError, classifyStatusCode } from 'agentfootprint';
+import { withRetry } from 'agentfootprint';
 
-class MyProvider implements LLMProvider {
-  async chat(messages: Message[], options?: LLMCallOptions): Promise<LLMResponse> {
-    const response = await fetch('https://my-llm-api.com/chat', { ... });
-
-    if (!response.ok) {
-      throw new LLMError({
-        message: `API error: ${response.statusText}`,
-        code: classifyStatusCode(response.status),  // 'rate_limit', 'auth', 'server', etc.
-        provider: 'my-provider',
-        statusCode: response.status,
-      });
-    }
-
-    // ... parse response
-  }
-}
+const provider = withRetry(new MyCustomProvider({ apiKey: '...' }), {
+  maxAttempts: 5,
+});
 ```
 
-This ensures `withRetry`, `withFallback`, and `fallbackProvider` correctly classify your errors as retryable or not.
+If your provider throws errors that should be retryable, wrap them in `LLMError` with `retryable: true` so the standard retry policy catches them:
 
-> All interface fields are `readonly` in the actual TypeScript types. The examples above omit `readonly` for brevity.
+```ts
+import { LLMError } from 'agentfootprint';
 
-All agentfootprint features (tools, streaming, recorders, narrative, instructions) work with any custom provider.
+throw new LLMError({
+  code: 'rate_limit',
+  provider: 'my-custom',
+  message: '429 from upstream',
+  statusCode: 429,
+  retryable: true,
+});
+```
+
+## Anti-patterns
+
+- Don't bake retry logic into `complete`. Let `withRetry` handle it; your provider should be a thin SDK wrapper.
+- Don't return raw API errors. Wrap in `LLMError` so the framework's classification works (retryable vs terminal).
+- Don't omit usage from the response — recorders depend on it for cost tracking.
+
+## Next steps
+
+- [Anthropic](/agentfootprint/integrations/anthropic/) — reference adapter implementation
+- [OpenAI](/agentfootprint/integrations/openai/) — reference adapter implementation
+- [Resilience](/agentfootprint/guides/resilience/) — your custom provider gets retry + fallback for free

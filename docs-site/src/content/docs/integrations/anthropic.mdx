@@ -1,144 +1,72 @@
 ---
-title: Anthropic (Claude)
-description: Integrate agentfootprint with the Anthropic SDK and Claude models.
+title: Anthropic
+description: anthropic() — Claude provider via @anthropic-ai/sdk. Lazy-loaded peer-dep; install when you use it.
 ---
 
-import { Tabs, TabItem } from '@astrojs/starlight/components';
+> The Anthropic SDK is the production path for Claude. agentfootprint's `anthropic()` factory wraps it as an `LLMProvider` — same interface as `mock()`, so the rest of your agent code is identical between dev and prod.
 
 ## Install
 
 ```bash
-npm install agentfootprint @anthropic-ai/sdk
+npm install @anthropic-ai/sdk
 ```
 
-The `@anthropic-ai/sdk` is a peer dependency — agentfootprint's `AnthropicAdapter` wraps it. Default `max_tokens` is 4096 — override with `maxTokens` in the provider options.
+The SDK is a peer dependency declared in `peerDependenciesMeta` with `optional: true` — npm doesn't auto-install it. Lazy-required at first call; friendly install hint if missing.
 
-## Server-side (Node.js)
+## Use
 
 ```ts
-import { Agent, anthropic, defineTool } from 'agentfootprint';
+import { Agent, anthropic } from 'agentfootprint';
 
-const provider = anthropic('claude-sonnet-4-20250514', {
-  apiKey: process.env.ANTHROPIC_API_KEY,  // or set ANTHROPIC_API_KEY env var
+const provider = anthropic({
+  apiKey: process.env.ANTHROPIC_API_KEY!,
+  // defaultModel: 'claude-sonnet-4-5-20250929',  // optional, used when Agent doesn't override
 });
 
-const agent = Agent.create({ provider })
-  .system('You are a helpful assistant.')
-  .tool(myTool)
-  .streaming(true)
-  .build();
-
-const result = await agent.run('Hello');
+const agent = Agent.create({
+  provider,
+  model: 'claude-sonnet-4-5-20250929',
+}).build();
 ```
 
-## Browser / Edge
+Model strings need date suffixes (`claude-sonnet-4-5-20250929`, `claude-haiku-4-5-20251001`) — Anthropic's API requires the explicit version for stability.
 
-No SDK dependency — calls the Anthropic REST API directly:
+## Tools (native function calling)
+
+Anthropic's Messages API has native tool_use blocks. The provider translates the agent's `Tool[]` into the API's tool format and round-trips assistant tool_calls via `LLMMessage.toolCalls`. ReAct correctness preserved across multi-iteration runs.
+
+## Streaming
+
+`provider.stream(req)` uses the SDK's native iterator; chunks land as they arrive. Final chunk carries the full `LLMResponse` (toolCalls + usage + stopReason) — single round-trip serves UI tokens AND ReAct decisioning.
+
+## Production patterns
+
+Wrap with resilience decorators for production:
 
 ```ts
-import { Agent, BrowserAnthropicAdapter } from 'agentfootprint';
+import { withRetry, withFallback, anthropic, openai } from 'agentfootprint';
 
-const provider = new BrowserAnthropicAdapter({
-  apiKey: userApiKey,  // from your settings UI
-  model: 'claude-sonnet-4-20250514',
-});
-
-const agent = Agent.create({ provider })
-  .system('You are a helpful assistant.')
-  .streaming(true)
-  .build();
+const provider = withRetry(
+  withFallback(
+    anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! }),
+    openai({ apiKey: process.env.OPENAI_API_KEY! }),
+  ),
+  { maxAttempts: 5 },
+);
 ```
 
-> The browser adapter sends `anthropic-dangerous-direct-browser-access` header. This is for **prototyping and playground use only**. For production, proxy API calls through your backend to protect your API key.
+See [Resilience guide](/agentfootprint/guides/resilience/).
 
-## Available models
+## Browser variant
 
-| Model | ID | Best for |
-|-------|-----|----------|
-| Claude Sonnet 4 | `claude-sonnet-4-20250514` | Best balance of speed and quality |
-| Claude Opus 4 | `claude-opus-4-20250514` | Complex reasoning, coding |
-| Claude Haiku 3.5 | `claude-haiku-3-5-20241022` | Fast, low cost |
+For browser environments where the Anthropic Node SDK doesn't bundle cleanly, use `BrowserAnthropicProvider` — `fetch`-based, zero peer deps. Requires the `anthropic-dangerous-direct-browser-access: true` header (which the provider sets automatically). Production browser apps should proxy through a backend.
 
-## Extended thinking
+## Limitations
 
-Claude models support extended reasoning. When enabled via the Anthropic API, the model's thinking is included in the streamed response as tokens. The full reasoning appears in the narrative trace:
+- Multi-modal content (images, video) not supported — `LLMMessage.content` is `string`.
+- `responseFormat` (JSON-Schema-coerced output) not exposed yet — pass schema instructions via `systemPrompt`.
 
-```ts
-const agent = Agent.create({ provider })
-  .system('You are a math tutor. Show your reasoning step by step.')
-  .streaming(true)
-  .build();
+## Next steps
 
-await agent.run('If x² + 3x - 10 = 0, find x', {
-  onEvent: (event) => {
-    if (event.type === 'token') {
-      process.stdout.write(event.content);
-    }
-  },
-});
-
-// The narrative captures the full LLM response including reasoning
-console.log(agent.getNarrative());
-```
-
-> Extended thinking content appears as part of the LLM response text in the narrative. The `thinking` event type in `AgentStreamEvent` is reserved for future dedicated support.
-
-## Observability
-
-Track token usage and cost with Anthropic pricing:
-
-```ts
-import { agentObservability } from 'agentfootprint';
-
-const obs = agentObservability();
-
-const agent = Agent.create({ provider })
-  .recorder(obs)
-  .build();
-
-await agent.run('Hello');
-
-console.log(obs.tokens());
-// { totalCalls: 1, totalInputTokens: 24, totalOutputTokens: 15, calls: [...] }
-
-// Cost is auto-calculated from model pricing
-console.log(obs.cost());
-// 0.000297 (USD)
-```
-
-## Switching from the Anthropic SDK
-
-If you're currently using `@anthropic-ai/sdk` directly:
-
-<Tabs>
-  <TabItem label="Before (raw SDK)">
-    ```ts
-    import Anthropic from '@anthropic-ai/sdk';
-
-    const client = new Anthropic();
-    const response = await client.messages.create({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: 1024,
-      messages: [{ role: 'user', content: 'Hello' }],
-    });
-    console.log(response.content[0].text);
-    ```
-  </TabItem>
-  <TabItem label="After (agentfootprint)">
-    ```ts
-    import { Agent, anthropic } from 'agentfootprint';
-
-    const agent = Agent.create({
-      provider: anthropic('claude-sonnet-4-20250514'),
-    })
-      .system('You are helpful.')
-      .build();
-
-    const result = await agent.run('Hello');
-    console.log(result.content);
-    console.log(agent.getNarrative());  // bonus: full execution trace
-    ```
-  </TabItem>
-</Tabs>
-
-**What you gain:** tool use loop, narrative trace, grounding analysis, `mock()` testing, streaming events, memory, instructions — all with the same Claude models.
+- [Resilience](/agentfootprint/guides/resilience/) — wrap with `withRetry` / `withFallback`
+- [Streaming](/agentfootprint/guides/streaming/) — token-by-token UI rendering

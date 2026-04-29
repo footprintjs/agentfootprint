@@ -1,122 +1,58 @@
 ---
-title: vs. LangGraph / LangChain / CrewAI / others
-description: Honest side-by-side comparison. Where agentfootprint wins, where it doesn't, and which framework fits which job.
+title: vs other agent frameworks
+description: How agentfootprint compares to LangChain, LangGraph, CrewAI. Honest framing — strengths, gaps, when each is right.
 ---
 
-import { Aside } from '@astrojs/starlight/components';
+> Three competitors, three sentences each, then the depth below the fold. The right framework for your team depends on what you're optimizing for; this page is meant to make that decision easier, not harder.
 
-<Aside type="note">
-This page stays honest about our weaknesses. If we're wrong or out of date, [open an issue](https://github.com/footprintjs/agentfootprint/issues) — we'll fix it.
-</Aside>
+## In one sentence per competitor
 
-## TL;DR — which framework for which job?
+- **vs LangChain** — agentfootprint has a 2-primitive + 4-composition substrate; LangChain ships a class-per-paper. If you're maintaining a "pile of LangChain abstractions" codebase and the abstractions feel like the problem, switch.
+- **vs LangGraph** — both treat agents as graphs; agentfootprint records every traversal as a typed event for free (because the framework owns the loop, not you). If you've found yourself instrumenting LangGraph manually, switch.
+- **vs CrewAI** — agentfootprint has no `Crew` / `Agent` / `Task` separate primitives; multi-agent IS composition of single agents through Sequence/Parallel/Conditional/Loop. If CrewAI's role / goal / backstory framing feels like ceremony, switch.
 
-| Your priority | Best fit | Why |
-|---|---|---|
-| **Explainability, auditability, debuggability** | **agentfootprint** | Narrative + decision evidence + causal chain + paste-trace viewer, all built-in |
-| Biggest community, most integrations | LangChain | 10x larger community; 1000s of integrations |
-| Visual DAG authoring | LangGraph | Studio is a solid editor; ours is code-only |
-| Role-based multi-agent | CrewAI | Opinionated role abstraction; we don't force one |
-| AWS-native enterprise | Strands | Native AWS integration; we're cloud-agnostic |
-| Minimal OpenAI-only agent | OpenAI Agents SDK | 0-dep, OpenAI-tuned; we're broader but heavier |
-| Python-first team | LangChain / LangGraph / CrewAI | We're TypeScript-only today |
+## Strengths agentfootprint claims
 
-## Full feature matrix
+| Claim | Where it shows |
+|---|---|
+| Every code block in our docs is a real, runnable file in CI | The Phase 1 CodeFile + region marker infrastructure (this site) |
+| The trace is a cache of the agent's thinking | [Causal memory](/agentfootprint/guides/memory/#causal-memory--replay-decisions-not-just-messages) |
+| Every named pattern is a recipe, not a class | [Patterns](/agentfootprint/getting-started/key-concepts/#patterns--named-compositions) |
+| Mocks-first dev → real-infra prod is one-line swap per boundary | [Quick Start](/agentfootprint/getting-started/quick-start/) |
+| Multi-tenant isolation enforced at the storage boundary | [Memory guide](/agentfootprint/guides/memory/) |
 
-| Capability | agentfootprint | LangGraph | LangChain | CrewAI | Strands | OpenAI SDK | AutoGen |
-|---|---|---|---|---|---|---|---|
-| DAG primitives (leaf/sequence/fan-out/branch/cycle/dispatch) | ✅ 2 primitives + 3 compositions | ✅ StateGraph (custom) | ⚠️ LCEL chains | ❌ roles only | ⚠️ linear | ⚠️ handoffs | ❌ group-chat |
-| Combined narrative (reads/writes/decisions in one timeline) | ✅ built-in | ❌ LangSmith (paid SaaS) | ❌ verbose logs | ❌ | ❌ | ⚠️ partial OTel | ❌ |
-| Decision evidence (`why` this branch?) | ✅ `decide()` capture | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
-| Causal chain / program slicing | ✅ `causalChain()` | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
-| Time-travel trace viewer (paste JSON → replay) | ✅ `<TraceViewer />` | ⚠️ LangSmith (paid) | ❌ | ❌ | ❌ | ❌ | ❌ |
-| Pause / resume (JSON-safe checkpoint) | ✅ built-in | ✅ Checkpointer | ❌ | ❌ | ✅ SessionManager | ❌ | ❌ |
-| Observer channels | ✅ 3 (data + flow + emit) | callbacks | callbacks | events | OTel | OTel | — |
-| Adapter-swap tests (`mock()` = $0) | ✅ `mock([...])` | ⚠️ fake LLM | ⚠️ fake LLM | ❌ | ⚠️ | ⚠️ | ❌ |
-| OpenAPI / MCP auto-generation | ✅ `chart.toOpenAPI()` | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
-| Redaction policy (built-in) | ✅ declarative | manual | manual | ❌ | ❌ | ❌ | ❌ |
-| Visual DAG editor | ❌ | ✅ Studio | ❌ | ❌ | ❌ | ❌ | ❌ |
-| Community / integrations | small | large | **largest** | medium | AWS-native | OpenAI-first | small |
-| Language | **TS** | TS + Python | TS + Python | Python | Python | TS + Python | Python |
+## Strengths agentfootprint does NOT claim
 
-## The differentiator, concretely
+- We are not the only framework with multi-agent. CrewAI / LangGraph have it. Ours has a smaller surface; pick on taste.
+- We are not the only framework with memory. Most have some flavor. Ours is the only one with **Causal** type (decision-evidence persistence) — see [Memory guide](/agentfootprint/guides/memory/#the-four-types).
+- We are not the only framework with observability. Most ship spans / events. Ours is **typed** + **emitted during DFS traversal** so it's structured + complete by construction, not collected after the fact.
 
-Everyone has tool calling. Everyone has memory. Everyone has multi-agent. What **nobody else has** is the complete debuggability stack:
+## When NOT to use agentfootprint
 
-```ts
-// 1. Your agent runs
-await agent.run(userMessage);
+- You need a vector-search-capable production memory store TODAY. v2.3 ships InMemoryStore + RedisStore (no vector) + AgentCoreStore (no vector). v2.6 lands pgvector / Pinecone / Qdrant adapters.
+- You need full multi-modal (images, video) in messages. Our `LLMMessage.content` is `string` today.
+- You're already happy with your current framework's abstractions and your team is shipping. Don't switch on hype.
 
-// 2. Capture the full execution as portable JSON (one line, free)
-const trace = exportTrace(agent);
+## Migration from other frameworks
 
-// 3. Later — weeks later, different machine, different team — replay it
-<TraceViewer trace={trace} />
-```
+- **From LangChain (v0.0.x → v0.3+ era)** — most LangChain agent code maps to `Agent.create({ provider }).tool(...).build()`. Tools are `defineTool({ name, description, inputSchema, execute })`. Memory becomes `defineMemory({ type, strategy, store })`. Migration path tracked in `MIGRATION.md` (in repo).
+- **From LangGraph** — `StateGraph` nodes → `Sequence` steps; conditional edges → `Conditional`; the rest of the wiring evaporates. Compositions are typed; no `START` / `END` constants needed.
+- **From CrewAI** — `Crew` of agents with tasks → `Sequence(researcher, writer, editor)` etc. Roles + goals → system prompts. Tools work the same way.
 
-The nearest competitor is **LangSmith**, which:
-- Requires a paid SaaS account
-- Requires opt-in instrumentation on every run
-- Shows logs, not evidence — no "why this branch?"
-- Works only with LangChain stack
+## Honest comparison table
 
-`agentfootprint` gives you this for free, offline, with no hosted service, tied to no vendor.
+(Limited to 5 rows per coworker-review feedback — fewer is more readable.)
 
-## Where agentfootprint is *not* the right choice
+| Concern | LangChain | LangGraph | CrewAI | agentfootprint |
+|---|---|---|---|---|
+| Surface area | Large; class-per-paper | Mid; graph-DSL | Mid; role-based | Small; 2 primitives + 4 compositions |
+| Observability | Manual instrumentation | Spans (LangSmith) | Spans (own service) | Typed events emitted during traversal |
+| Cross-run "why?" replay | Not built in | Not built in | Not built in | **Causal memory** (decision-evidence persistence) |
+| Test story | Mocks possible but not first-class | Mocks possible but not first-class | Limited | Mocks-first by design — `mock({replies})`, `mockMcpClient`, `InMemoryStore` |
+| Multi-tenant isolation | Caller responsibility | Caller responsibility | Caller responsibility | Enforced at every store boundary via `MemoryIdentity` |
 
-**You're Python-only.** We're TypeScript-first. Port on the roadmap; not soon. Use LangGraph.
+## Next steps
 
-**You want a no-code / visual-first experience.** LangGraph Studio is better at that. We're code-first because we believe the code *is* the diagram (see `chart.toMermaid()`).
-
-**You want the largest ecosystem of pre-built tool integrations.** LangChain has 1000+. We have adapters for the top LLM providers and leave custom tools to you (5-line `defineTool`).
-
-**You want role-play multi-agent abstractions out of the box.** CrewAI gives you "roles" as a first-class concept. We give you `Swarm` (specialist dispatch) and `Parallel` (fan-out), which can build CrewAI-style role-play but with less opinion.
-
-**You want zero dependencies.** OpenAI Agents SDK is minimalist. We have more surface area — the trade is introspection.
-
-## Where agentfootprint *is* the right choice
-
-**You need to ship agents to regulated customers.** Compliance requires evidence. Our narrative + commit log is the audit trail by construction.
-
-**Your agents will outlive their authors.** 6 months from now, somebody else debugs a bug from October. Paste the trace into the viewer — they see what the original author would have seen.
-
-**You care about CI cost.** `mock([...])` means your 500-test agent suite runs free in CI. Swap to real adapter with zero code changes for integration runs.
-
-**You want the same framework for LLM call, RAG, agent, and multi-agent.** The taxonomy is 2 primitives (LLM, Agent) + 3 compositions (Sequence, Parallel, Conditional), with RAG / Memory / Skills as context engineering on top. Every named pattern (Reflexion, Tree-of-Thoughts, Hierarchy/Swarm) is a recipe — not a new class. One interface, the whole spectrum.
-
-**You want to debug agents like you debug code.** Time-travel slider. Memory diff per step. "Why did stage 7 get this value?" → causal chain. That's the whole pitch.
-
-## Migration guides (in progress)
-
-- [From LangChain](#) — coming soon
-- [From LangGraph](#) — coming soon
-- [From CrewAI](#) — coming soon
-
-If you'd like to help write one, [open a PR](https://github.com/footprintjs/agentfootprint/issues). Or paste your current code into an [issue](https://github.com/footprintjs/agentfootprint/issues) and we'll sketch the port.
-
-## Decision flowchart
-
-```
-Are you in a compliance-heavy / regulated domain?
-  → Yes: agentfootprint (audit trail is the product)
-
-Do you need Python today?
-  → Yes: LangGraph or CrewAI
-
-Is your priority "fastest path from prompt to shipped demo"?
-  → Yes: OpenAI Agents SDK (if OpenAI-only) or LangChain (more flexible)
-
-Do you need to debug agents in production, hours / days after they ran?
-  → Yes: agentfootprint — this is the core differentiator
-
-Do you want a visual DAG editor?
-  → Yes: LangGraph Studio
-
-Otherwise: try agentfootprint. The mock adapter + sample trace in the
-playground let you evaluate the full debuggability stack in 10 minutes
-with no install, no keys, no signup.
-```
-
-## Open an issue
-
-Think we're wrong on any of this? Your framework is better than described? [Open an issue](https://github.com/footprintjs/agentfootprint/issues/new) — we'll correct it.
+- [Quick Start](/agentfootprint/getting-started/quick-start/) — first agent in 5 minutes
+- [Why agentfootprint?](/agentfootprint/getting-started/why/) — the substrate argument with worked examples
+- [Memory guide § Causal](/agentfootprint/guides/memory/#causal-memory--replay-decisions-not-just-messages) — the differentiator
