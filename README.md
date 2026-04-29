@@ -1,7 +1,7 @@
 <p align="center">
   <h1 align="center">AgentFootPrint</h1>
   <p align="center">
-    <strong>The agent framework where every decision, tool call, and memory write is captured as a typed event &mdash; built on the flowchart pattern.</strong>
+    <strong>Context engineering, made buildable.</strong>
   </p>
 </p>
 
@@ -16,7 +16,7 @@
 
 <br>
 
-**Other agent frameworks invent new classes for every paper. agentfootprint is a different pattern** &mdash; one `Injection` primitive shapes context, one `defineMemory` factory captures persistence, and **causal memory** lets agents answer follow-up questions from exact past decision evidence. Built on [footprintjs](https://github.com/footprintjs/footPrint), so the trace is already there &mdash; no instrumentation, no post-processing, no hallucination.
+**Building agents is mostly *context engineering*** &mdash; deciding *what content lands in which slot of the LLM call, when, and why*. agentfootprint is the library that makes this discipline buildable: at the **control-flow level** (Sequence, Parallel, Conditional, Loop), not as another framework with new classes per paper.
 
 ```bash
 npm install agentfootprint footprintjs
@@ -24,53 +24,110 @@ npm install agentfootprint footprintjs
 
 ---
 
-## The Problem
+## What is context engineering?
 
-Your agent decided to reject a loan. Days later, the user asks: **"Why was I rejected?"**
+Every LLM call has **three slots**:
 
-| | LangGraph / Strands / CrewAI | agentfootprint |
+```
+┌──────────────────────────────────────────────────────────────┐
+│  ┌─────────────────────┐  ┌──────────────┐  ┌────────────┐   │
+│  │  system-prompt slot │  │ messages slot│  │ tools slot │   │
+│  │  (instructions,     │  │ (history,    │  │ (functions │   │
+│  │   persona, rules)   │  │  user input, │  │  the LLM   │   │
+│  │                     │  │  tool results)│ │  may call) │   │
+│  └─────────────────────┘  └──────────────┘  └────────────┘   │
+└──────────────────────────────────────────────────────────────┘
+```
+
+Context engineering is **deciding what flows into each slot, when**. The same content can be a *Skill* (LLM activates it), a *Steering* doc (always-on), an *Instruction* (rule-gated), a *Fact* (developer-supplied data), or a *Memory* (learned across runs). They're flavors of the same idea: **injection into a slot at the right moment**.
+
+| Flavor | Slot | When it injects |
 |---|---|---|
-| **Cross-run "why?" follow-up** | LLM reconstructs reasoning from messages | Replay the EXACT decision evidence from a stored snapshot &mdash; zero hallucination |
-| **Memory model** | One conversation history per session | 4 types &times; 7 strategies, single `defineMemory({ type, strategy, store })` factory |
-| **Context engineering** | N classes (RAG, Memory, Skills, Instructions) | One `Injection` primitive, four typed sugar factories |
-| **Decision evidence** | Lost &mdash; only the final answer survives | First-class events captured by `decide()` / `select()` during traversal |
-| **Training-data export** | Manual, lossy, optional | Same snapshot data shape &rarr; SFT / DPO / process-RL ready (v2.1+) |
+| **Skill** | system-prompt + tools | When the LLM calls `read_skill('billing')` |
+| **Steering** | system-prompt | Always-on (persona, output format, safety) |
+| **Instruction** | system-prompt or messages | Rule-gated (predicate matches the turn / a tool just returned) |
+| **Fact** | system-prompt or messages | Always-on, but data &mdash; user profile, env, current time |
+| **Memory** | messages | Learned across runs &mdash; window / facts / narrative / **causal snapshots** |
+| **RAG** | messages | Retrieved chunks (rule + score threshold) |
+
+You're not learning N new framework classes &mdash; you're learning **one model**: slot &times; flavor &times; timing.
 
 ---
 
-## How It Works
+## Where do you inject?
 
-A loan agent rejects Bob on Monday. On Friday &mdash; in a **new conversation** &mdash; Bob asks:
+Into the three slots of the LLM API call:
 
-> "Why was my application rejected last week?"
+| LLM API field | Holds | Examples of what you'd inject here |
+|---|---|---|
+| **`system` prompt** | Persona, rules, available capabilities | Steering doc · Instruction text · Skill body · Fact data · formatted memory |
+| **`messages` array** | Conversation turns + tool results | Memory replay · RAG chunks · synthetic tool results · injected instructions on a recent turn |
+| **`tools` array** | Function schemas the LLM may call | Skill-attached tools · permission-gated subset · per-iteration dynamic registry |
 
-Most agent libraries lose this signal. agentfootprint captures it.
+Every injection — Skill, Steering, Instruction, Fact, Memory, RAG, Guardrail — lands in **one of these three places**. There is no fourth slot.
 
-**Monday's run** (snapshot persisted automatically):
+## When (and how) do we inject?
 
-```
-[Seed]            user: Approve loan #42? creditScore=580 dti=0.45
-[CallLLM]         decide → 'rejected'
-                    rule "tier-A" failed (creditScore < 600)
-                    rule "manual-review" failed (dti > 0.43)
-                    defaulted to "rejected"
-[Final]           Rejected. creditScore=580 below threshold of 600.
-[MemoryWrite]     causal snapshot stored, embedded by query
-```
-
-**Friday's run** (different conversation, same `identity.principal`):
+Context engineering happens at runtime. Three timing levels of expressiveness:
 
 ```
-[Seed]            user: Why was my application rejected last week?
-[MemoryRead]      causal: cosine-match to Monday's snapshot (score=0.89)
-                  → inject DECISIONS projection into system context
-[CallLLM]         answers from EXACT past facts, not from imagination:
-[Final]           "Rejected because creditScore=580 was below the
-                   threshold of 600. The 'manual-review' rule didn't
-                   trigger because dti=0.45 exceeded the 0.43 cap."
+1.  LLMCall                  ← one-shot. Inject once before the call.
+       ↓
+2.  Agent (ReAct loop)       ← inject before EVERY iteration.
+       ↓
+3.  Dynamic Agent            ← inject DIFFERENTLY per iteration based on
+                                tool results, reasoning state, or user input.
 ```
 
-That answer came from the trace &mdash; not from the LLM's imagination.
+The third level is where context engineering pays off. The agent calls a `redact_pii` tool → on the *next* iteration, an Instruction with `trigger: 'on-tool-return'` fires that says *"use the redacted text only, don't paraphrase the original"*. That kind of just-in-time injection is what separates an LLM that follows the rules from one that drifts.
+
+agentfootprint handles all three timing levels through the **same** primitive (`Injection`), evaluated by the **same** engine, observed by the **same** event (`agentfootprint.context.injected`).
+
+---
+
+## How does this library help you build it?
+
+agentfootprint sits on [footprintjs](https://github.com/footprintjs/footPrint) &mdash; the flowchart pattern for backend code. That gives you context engineering at the **control-flow level**, not as a new abstraction layer:
+
+```
+┌─ 2 primitives ──────────────────────────────────────────────┐
+│  LLMCall   — one shot                                       │
+│  Agent     — ReAct loop (LLM ↔ tools)                       │
+├─ 3 compositions + Loop ─────────────────────────────────────┤
+│  Sequence    — A → B → C                                     │
+│  Parallel    — fan-out, merge                                │
+│  Conditional — predicate-based routing                       │
+│  Loop        — repeat-with-budget                            │
+└─────────────────────────────────────────────────────────────┘
+```
+
+That's the whole substrate. Every "named pattern" is a **recipe** built from these:
+
+- **ReAct** = `Agent` with the default loop
+- **Reflexion** = `Sequence(Agent, critique-LLM, Agent)`
+- **Tree-of-Thoughts** = `Parallel(Agent &times; N) + rank`
+- **Map-Reduce** = `Parallel(Agent &times; N) + merge`
+- **Swarm** = `Agent` whose tools are other `Agent`s
+
+You compose. We don't ship a `ReflexionAgent` class.
+
+---
+
+## Out-of-box patterns &mdash; ready to copy
+
+For the canonical patterns, we ship runnable examples. Each is pure composition over the substrate:
+
+| Pattern | Built from | Source |
+|---|---|---|
+| **ReAct** | Agent (default) | Yao 2022 |
+| **Reflexion** | Sequence(Agent, critique, Agent) | Shinn 2023 |
+| **Tree-of-Thoughts** | Parallel + rank | Yao 2023 |
+| **Self-Consistency** | Parallel + majority-vote | Wang 2022 |
+| **Debate** | Loop(Agent &times; 2 + judge) | Du 2023 |
+| **Map-Reduce** | Parallel + merge | Dean 2004 (LLM-applied) |
+| **Swarm (Hierarchy)** | Agent whose tools are Agents | OpenAI 2024 |
+
+Browse them all in [`examples/patterns/`](examples/patterns/) &mdash; every file runs end-to-end with `npm run example examples/patterns/<file>.ts`.
 
 ---
 
@@ -78,22 +135,30 @@ That answer came from the trace &mdash; not from the LLM's imagination.
 
 ```typescript
 import {
-  Agent, defineTool, defineMemory,
-  MEMORY_TYPES, MEMORY_STRATEGIES,
+  Agent, defineTool, defineSteering, defineInstruction,
+  defineMemory, MEMORY_TYPES, MEMORY_STRATEGIES,
   InMemoryStore, mock,
 } from 'agentfootprint';
 
-// 1. Define a tool
+// 1. A tool the agent can call
 const weather = defineTool({
-  schema: {
-    name: 'weather',
-    description: 'Current weather for a city.',
-    inputSchema: { type: 'object', properties: { city: { type: 'string' } } },
-  },
+  schema: { name: 'weather', description: 'Current weather.', inputSchema: {...} },
   execute: async (args) => `${(args as { city: string }).city}: 72°F, sunny`,
 });
 
-// 2. Add memory
+// 2. Context engineering: one steering doc + one rule-gated instruction
+const tone = defineSteering({
+  id: 'tone',
+  prompt: 'Be friendly and concise. Acknowledge feelings before facts.',
+});
+
+const urgent = defineInstruction({
+  id: 'urgent',
+  activeWhen: (ctx) => /urgent|asap|emergency/i.test(ctx.userMessage),
+  prompt: 'The user marked this urgent. Prioritize the fastest resolution.',
+});
+
+// 3. Memory across runs
 const memory = defineMemory({
   id: 'short-term',
   type: MEMORY_TYPES.EPISODIC,
@@ -101,55 +166,27 @@ const memory = defineMemory({
   store: new InMemoryStore(),
 });
 
-// 3. Build the agent (mock provider for $0 testing)
-const agent = Agent.create({ provider: mock({ reply: 'Sunny, 72°F.' }), model: 'mock' })
-  .system('You answer weather questions using the `weather` tool.')
+// 4. Build — every layer composes
+const agent = Agent.create({ provider: mock({ reply: '...' }), model: 'mock' })
+  .system('You are a helpful weather assistant.')
   .tool(weather)
+  .steering(tone)
+  .instruction(urgent)
   .memory(memory)
   .build();
 
-// 4. Run — multi-tenant via identity
-const result = await agent.run({
-  message: 'Weather in SF?',
-  identity: { conversationId: 'demo' },
-});
-
-// 5. Inspect what happened
-console.log(agent.getNarrative());
-agent.on('agentfootprint.context.injected', (e) =>
-  console.log(`[${e.payload.source}] landed in ${e.payload.slot} slot`));
+// 5. Run with multi-tenant identity
+const id = { conversationId: 'alice-session' };
+await agent.run({ message: 'Weather in SF urgently?', identity: id });
 ```
 
-> **[Browse 33+ runnable examples](https://github.com/footprintjs/agentfootprint/tree/main/examples)** &mdash; primitives, compositions, patterns, context engineering, all 7 memory strategies, runtime features. Run any one with `npm run example examples/<path>.ts`.
+Every `.steering` / `.instruction` / `.memory` / `.tool` call adds an injection or a binding. The Agent's flowchart shows them as visible subflows in the narrative &mdash; you can read exactly *what landed in which slot, when, and why* for any run.
 
 ---
 
-## The Six Layers
+## Memory &mdash; one factory, four types, seven strategies
 
-Every layer is pure composition over the layers below &mdash; no hidden primitives.
-
-```
-PRIMITIVES (2)         LLMCall · Agent (= ReAct)
-COMPOSITIONS (3)       Sequence · Parallel · Conditional + Loop
-PATTERNS (N)           ReAct · Reflexion · ToT · Debate · MapReduce ·
-                       SelfConsistency · Swarm · …
-CONTEXT ENGINEERING    defineSkill · defineSteering · defineInstruction
-                       · defineFact (one Injection primitive, N factories)
-MEMORY                 defineMemory({ type, strategy, store })
-                       4 types · 7 strategies · Causal differentiator ⭐
-FEATURES               Pause/Resume · Cost · Permissions · Observability
-                       · Events (47 typed events × 13 domains)
-```
-
-> **Two theses:**
-> 1. **Agent = ReAct.** If it doesn't loop-with-tools, it isn't an Agent.
-> 2. **Every named paper is a recipe of primitives + compositions + injections.** Reflexion = `Sequence(Agent, critique-LLM, Agent)`. Tree-of-Thoughts = `Parallel(Agent × N) + rank`. Swarm = Agent whose tools are Agents. RAG / Memory / Skills aren't primitives &mdash; they're context engineering, *what you inject* into one of three slots.
-
----
-
-## Memory &mdash; the differentiator
-
-`defineMemory({ type, strategy, store })` &mdash; one factory dispatches `type × strategy.kind` onto the right pipeline. Type = *what shape you keep*, strategy = *how you fit it into the next LLM call*, store = *where the bytes live*.
+`defineMemory({ type, strategy, store })` &mdash; one factory dispatches `type &times; strategy.kind` onto the right pipeline.
 
 | Type | What's stored |
 |---|---|
@@ -162,70 +199,40 @@ FEATURES               Pause/Resume · Cost · Permissions · Observability
 |---|---|
 | `WINDOW` | Last N entries (rule, no LLM, no embeddings) |
 | `BUDGET` | Fit-to-tokens (decider) |
-| `SUMMARIZE` | LLM compresses older turns ("context janitor") |
+| `SUMMARIZE` | LLM compresses older turns |
 | `TOP_K` | Score-threshold semantic retrieval |
 | `EXTRACT` | LLM distills facts/beats on write |
 | `DECAY` | Recency-weighted (planned) |
 | `HYBRID` | Compose multiple |
 
-**Causal memory** persists footprintjs `decide()` / `select()` evidence so the agent can answer follow-up questions from exact past facts. The same snapshot data shape becomes RL/SFT/DPO training data in v2.1+ &mdash; every successful production run becomes a labeled trajectory.
+**Causal memory** is the differentiator: footprintjs's `decide()` and `select()` capture decision evidence as first-class events. Causal memory persists those snapshots tagged with the user's original query. New questions cosine-match past queries → inject the prior decision evidence → the LLM answers from EXACT past facts. Cross-run "why was X rejected last week?" follow-ups answer correctly without reconstruction.
+
+The same snapshot data shape becomes RL/SFT/DPO training data in v2.1+.
 
 ---
 
-## Context Engineering &mdash; one primitive, four flavors
+## Why a context-engineering framework
 
-Every "skill" / "steering doc" / "instruction" / "fact" is the same `Injection` primitive with a different trigger. One engine subflow evaluates them; one event (`agentfootprint.context.injected`) reports where each landed.
+If you're going to build agents on a framework, pick the one whose **core stays small as the field grows**. agentfootprint's core has *one* Injection primitive. Every current flavor reduces to it &mdash; and so will every flavor that hasn't been invented yet.
 
-```typescript
-import { defineSkill, defineSteering, defineInstruction, defineFact } from 'agentfootprint';
-
-agent
-  .steering(defineSteering({ id: 'tone', prompt: 'Be friendly and concise.' }))
-  .instruction(defineInstruction({
-    id: 'urgent',
-    activeWhen: (ctx) => /urgent|asap/i.test(ctx.userMessage),
-    prompt: 'Prioritize the fastest path to resolution.',
-  }))
-  .skill(defineSkill({
-    id: 'account', description: 'Use for password resets.',
-    body: 'Confirm identity (last 4 digits) before resetting.',
-    tools: [resetPasswordTool],
-  }))
-  .fact(defineFact({ id: 'user', data: 'User: Alice (alice@example.com), Plan: Pro.' }));
+```
+Skill        =  Injection { trigger: 'llm-activated', slots: [system-prompt, tools] }
+Steering     =  Injection { trigger: 'always-on',     slots: [system-prompt] }
+Instruction  =  Injection { trigger: 'rule',          slots: [system-prompt | messages] }
+Fact         =  Injection { trigger: 'always-on',     slots: [system-prompt | messages] }
+RAG          =  Injection { trigger: 'rule + score',  slots: [messages] }            (v2.1)
+Guardrail    =  Injection { trigger: 'on-tool-return',slots: [system-prompt]  }      (v2.x)
+???          =  Injection { trigger: ?,               slots: ? }                    (your idea)
 ```
 
-| Factory | Slot | Trigger |
+Adding the next flavor is **one new factory file** &mdash; no engine change, no slot subflow change, no consumer-API change. Lens chips, observability events, audit trails all flow through the same plumbing.
+
+| | Frameworks growing class-per-paper | agentfootprint |
 |---|---|---|
-| `defineSteering` | system-prompt | always-on |
-| `defineInstruction` | system-prompt OR messages | predicate (`activeWhen`) &mdash; including `on-tool-return` for Dynamic ReAct |
-| `defineSkill` | system-prompt + tools | LLM-activated (`read_skill`) |
-| `defineFact` | system-prompt OR messages | always-on (data, not behavior) |
-
----
-
-## Features
-
-| Feature | Description |
-|---|---|
-| **Causal memory** | footprintjs `decide()` evidence persisted &mdash; cross-run "why?" follow-ups answer from exact past facts |
-| **`defineMemory` factory** | One factory, 4 types &times; 7 strategies &mdash; from sliding window to LLM summarization to vector retrieval |
-| **InjectionEngine** | One `Injection` primitive, four typed factories &mdash; same engine subflow handles Skill, Steering, Instruction, Fact |
-| **Multi-tenant identity** | `agent.run({ identity: { tenant, principal, conversationId } })` &mdash; full namespace isolation in stores |
-| **Adapter-swap testing** | `mock(...)` for tests, `anthropic(...)` / `openai(...)` / `bedrock(...)` for prod &mdash; same agent, $0 CI |
-| **Human-in-the-loop** | `pauseHere()` / `askHuman()` &mdash; agent pauses, serializes to JSON, resumes hours later on a different server |
-| **47 typed events** | Across 13 domains (context, agent, stream, tools, skill, permission, eval, cost, memory, …) |
-| **Built on flowchart pattern** | Inherits causal traces, decision evidence, single-DFS observability from footprintjs |
-
----
-
-## AI Coding Tool Support
-
-agentfootprint ships with built-in instructions for AI coding assistants. Your AI tool understands the API, patterns, and anti-patterns out of the box (the project's `CLAUDE.md` is the reference; other tools follow).
-
-| Tool | Source |
-|---|---|
-| **Claude Code** | `CLAUDE.md` at the repo root |
-| **Cursor / Windsurf / Cline / Copilot** | Mirror `CLAUDE.md` into the tool's rules file |
+| Adding a new flavor (e.g. *guardrail*) | New `GuardrailAgent` class, new event type, new UI surface | One factory file, same `Injection` shape, same `context.injected` event |
+| Cross-run "why was X rejected?" | LLM reconstructs from messages | Replay EXACT past decisions from causal snapshots |
+| Training-data export | Manual, lossy, optional | Same snapshot shape → SFT / DPO / process-RL ready (v2.1+) |
+| Decision evidence | Lost &mdash; only the final answer survives | First-class events from `decide()` / `select()` captured during traversal |
 
 ---
 
@@ -235,7 +242,7 @@ agentfootprint ships with built-in instructions for AI coding assistants. Your A
 |---|---|
 | **Getting Started** | [Quick Start](https://footprintjs.github.io/agentfootprint/getting-started/quick-start/) &middot; [Key Concepts](https://footprintjs.github.io/agentfootprint/getting-started/key-concepts/) &middot; [Why agentfootprint?](https://footprintjs.github.io/agentfootprint/getting-started/why/) |
 | **Guides** | [Agent](https://footprintjs.github.io/agentfootprint/guides/agent/) &middot; [Memory](https://footprintjs.github.io/agentfootprint/guides/memory/) &middot; [Skills](https://footprintjs.github.io/agentfootprint/guides/skills-explained/) &middot; [Instructions](https://footprintjs.github.io/agentfootprint/guides/instructions/) &middot; [Streaming](https://footprintjs.github.io/agentfootprint/guides/streaming/) |
-| **Examples** | [33 runnable examples](https://github.com/footprintjs/agentfootprint/tree/main/examples) &mdash; primitives, patterns, context engineering, memory, features |
+| **Examples** | [33 runnable examples](https://github.com/footprintjs/agentfootprint/tree/main/examples) &mdash; primitives, compositions, patterns, context engineering, memory, runtime features |
 | **Integrations** | [Anthropic](https://footprintjs.github.io/agentfootprint/integrations/anthropic/) &middot; [OpenAI](https://footprintjs.github.io/agentfootprint/integrations/openai/) &middot; [AWS Bedrock](https://footprintjs.github.io/agentfootprint/integrations/aws-bedrock/) &middot; [Ollama](https://footprintjs.github.io/agentfootprint/integrations/ollama/) |
 | **Built on** | [footprintjs](https://github.com/footprintjs/footPrint) &mdash; the flowchart pattern for backend code |
 
