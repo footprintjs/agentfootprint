@@ -8,9 +8,10 @@ set -euo pipefail
 #   1. Clean working tree
 #   2. Documentation check (no stale API refs in .md files)
 #   2.5 Duplicate type check (no same type name defined in two files)
+#   2.75 Format check (prettier --list-different)
 #   3. Build (CJS + ESM)
 #   4. Full test suite
-#   5. Sample projects (agent-samples: tests + run all)
+#   5. Examples (typecheck + tsx end-to-end run for every example)
 #   6. CHANGELOG entry exists
 #   Then: version bump → commit + tag + push → GitHub release → CI npm publish
 #
@@ -22,7 +23,6 @@ set -euo pipefail
 BUMP="${1:?Usage: release.sh <patch|minor|major>}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-SAMPLES_DIR="$(cd "$PROJECT_DIR/../agent-samples" 2>/dev/null && pwd || echo "")"
 
 # ── Gate 1: Clean working tree ──────────────────────────────────────────
 if [[ "$BUMP" != "patch" && "$BUMP" != "minor" && "$BUMP" != "major" ]]; then
@@ -68,39 +68,20 @@ npm test
 
 echo "[4/8] Full test suite ✓"
 
-# ── Gate 5: Sample projects ─────────────────────────────────────────────
-if [[ -n "$SAMPLES_DIR" && -d "$SAMPLES_DIR" ]]; then
-  echo "==> Running sample projects ($SAMPLES_DIR)..."
-
-  # Install latest local build
-  (cd "$SAMPLES_DIR" && npm install 2>&1 | tail -1)
-
-  # Run integration tests
-  echo "==> Running sample integration tests..."
-  if (cd "$SAMPLES_DIR" && npm test 2>&1 | tail -5); then
-    echo "  Sample integration tests passed."
-  else
-    echo ""
-    echo "Error: Sample integration tests failed."
-    exit 1
-  fi
-
-  # Run all samples defined in package.json "all" script
-  if (cd "$SAMPLES_DIR" && npm run all 2>&1 | tail -3); then
-    echo "  All samples passed."
-  else
-    echo ""
-    echo "Error: Sample projects failed."
-    echo "Fix the samples before releasing — these are what developers copy-paste."
-    exit 1
-  fi
-
-  echo "[5/8] Sample projects ✓"
-else
-  echo "==> Skipping samples (../agent-samples not found)."
-  echo "    To enable: clone agent-samples next to agentfootprint."
-  echo "[5/8] Sample projects ⊘ (skipped)"
+# ── Gate 5: Examples (typecheck + run end-to-end) ───────────────────────
+# Source of truth for the consumer-facing surface — every .ts under
+# examples/ is run as a real end-to-end test. `npm run test:examples`
+# does typecheck (tsc -p examples/tsconfig.json) AND the runtime sweep
+# (scripts/run-all-examples.sh).
+echo "==> Running all examples end-to-end (typecheck + tsx sweep)..."
+if ! npm run test:examples; then
+  echo ""
+  echo "Error: examples/ failed."
+  echo "Fix the failing examples before releasing — these are what developers copy-paste."
+  exit 1
 fi
+
+echo "[5/8] Examples ✓"
 
 # ── Version bump ────────────────────────────────────────────────────────
 npm version "$BUMP" --no-git-tag-version
@@ -161,12 +142,13 @@ echo "    npm: https://www.npmjs.com/package/agentfootprint/v/$VERSION (publishe
 echo "    changelog: CHANGELOG.md"
 echo ""
 echo "Release pipeline passed all gates:"
-echo "  1.   Clean tree               ✓"
-echo "  2.   Doc check                ✓  (0 stale API refs)"
-echo "  2.5  Dup type check           ✓  (no duplicate exported type names)"
-echo "  3.   Build                    ✓  (CJS + ESM)"
-echo "  4.   Full test suite          ✓"
-echo "  5.   Sample projects          ✓  (agent-samples tests + all samples)"
-echo "  6.   CHANGELOG                ✓"
-echo "  7.   Commit + tag + push      ✓"
-echo "  8.   GitHub release           ✓"
+echo "  1.    Clean tree              ✓"
+echo "  2.    Doc check               ✓  (0 stale API refs)"
+echo "  2.5   Dup type check          ✓  (no duplicate exported type names)"
+echo "  2.75  Format check            ✓  (prettier clean)"
+echo "  3.    Build                   ✓  (CJS + ESM)"
+echo "  4.    Full test suite         ✓"
+echo "  5.    Examples                ✓  (typecheck + tsx end-to-end run)"
+echo "  6.    CHANGELOG               ✓"
+echo "  7.    Commit + tag + push     ✓"
+echo "  8.    GitHub release          ✓"
