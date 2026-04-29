@@ -291,7 +291,8 @@ The same snapshot data shape becomes RL/SFT/DPO training data in v2.1+.
 
 | Release | Focus |
 |---|---|
-| v2.1 | RAG flavor (`defineRAG`) · Redis memory store adapter · MCP integration · CircuitBreaker as a first-class primitive · 3-tier structured-output fallback |
+| ~~v2.1~~ ✓ | RAG flavor (`defineRAG`) — shipped in 2.1.0 |
+| v2.2 | MCP integration (`mcpClient`) ✓ · Redis memory store adapter · CircuitBreaker primitive · 3-tier structured-output fallback |
 | v2.2 | Governance subsystem (`Policy`, `BudgetTracker`, role-based access) · DynamoDB / Postgres / Pinecone store adapters |
 | v2.3 | Causal training-data exports — `causalMemory.exportForTraining({ format: 'sft' \| 'dpo' \| 'process' })` for HuggingFace / OpenAI / Anthropic batch fine-tune |
 | v2.4+ | Deep Agents (planning-before-execution) · A2A protocol · Lens UI deep-link |

@@ -210,6 +210,38 @@ The 7 **strategies**:
 - `TOP_K` (score-threshold) · `EXTRACT` (LLM distills on write)
 - `DECAY` (recency-weighted, planned) · `HYBRID` (compose multiple)
 
+## MCP — `mcpClient` (connect to external MCP servers)
+
+```typescript
+import { Agent, mcpClient } from 'agentfootprint';
+
+const slack = await mcpClient({
+  name: 'slack',
+  transport: { transport: 'stdio', command: 'npx', args: ['@example/slack-mcp'] },
+});
+
+const agent = Agent.create({ provider })
+  .tools(await slack.tools())  // pull ALL tools from server in one call
+  .build();
+
+await agent.run({ message: '...' });
+await slack.close();
+```
+
+Transports:
+- `{ transport: 'stdio', command, args, env?, cwd? }` — local subprocess
+- `{ transport: 'http', url, headers? }` — remote Streamable HTTP
+
+The `@modelcontextprotocol/sdk` peer-dep is **lazy-required** — zero
+runtime cost when MCP isn't used. Friendly install hint if missing.
+
+`agent.tools(arr)` is the bulk-register companion to `agent.tool(t)`.
+Tool-name uniqueness is validated at `.build()` across MCP servers +
+manual `.tool()` calls — duplicates throw early.
+
+Server-side support (exposing your agent as an MCP tool to other LLMs)
+is a separate concern, not yet shipped.
+
 ## RAG — `defineRAG` + `indexDocuments`
 
 ```typescript

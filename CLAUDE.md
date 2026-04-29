@@ -34,6 +34,33 @@ The flavors are how you *mark intent* — but they all reduce to one `Injection`
 
 ## Public API
 
+### MCP — `mcpClient` (connect to MCP servers, register their tools)
+
+```typescript
+import { Agent, mcpClient } from 'agentfootprint';
+
+const slack = await mcpClient({
+  name: 'slack',
+  transport: { transport: 'stdio', command: 'npx', args: ['@example/slack-mcp'] },
+});
+
+const agent = Agent.create({ provider })
+  .tools(await slack.tools())  // pull ALL tools from the server in one call
+  .build();
+
+await agent.run({ message: '...' });
+await slack.close();
+```
+
+Transports: `stdio` (local subprocess), `http` (Streamable HTTP). The
+`@modelcontextprotocol/sdk` peer-dep is lazy-required — zero runtime
+cost when MCP isn't used. Friendly install hint if missing.
+
+`agent.tools(arr)` is the bulk-register companion to `agent.tool(t)`.
+Pair with `await client.tools()` to register everything an MCP server
+exposes in one builder call. Tool-name uniqueness is still validated
+at `.build()` across MCP servers + manual `.tool()` calls.
+
 ### RAG — `defineRAG` (one factory, one helper)
 
 ```typescript
@@ -387,6 +414,7 @@ Recorders (auto-attached when relevant builder method is called):
 | Cross-run "why?" replay | `defineMemory({ type: CAUSAL, strategy: TOP_K })` ⭐ |
 | Long conversation overflows context | `defineMemory({ type: EPISODIC, strategy: SUMMARIZE })` |
 | Retrieve from a document corpus | `defineRAG({ store, embedder, topK, threshold })` |
+| Use tools from an external MCP server | `mcpClient({ transport, ... })` + `agent.tools(await c.tools())` |
 
 ## Build & Test
 

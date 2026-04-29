@@ -354,3 +354,17 @@ export {
   type IndexDocumentsOptions,
   type RagDocument,
 } from './lib/rag/index.js';
+
+// MCP — Model Context Protocol client. Connect to MCP servers and
+// expose their tools as agentfootprint Tool[] for `agent.tools(...)`.
+// `@modelcontextprotocol/sdk` is a lazy-required peer-dep (no runtime
+// cost when MCP isn't used).
+export {
+  mcpClient,
+  type McpClient,
+  type McpClientOptions,
+  type McpHttpTransport,
+  type McpStdioTransport,
+  type McpTransport,
+  type McpSdkClient,
+} from './lib/mcp/index.js';

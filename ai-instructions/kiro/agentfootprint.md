@@ -115,6 +115,28 @@ await agent.run({
 Types: `EPISODIC` · `SEMANTIC` · `NARRATIVE` · `CAUSAL` (snapshot replay ⭐).
 Strategies: `WINDOW` · `BUDGET` · `SUMMARIZE` · `TOP_K` · `EXTRACT` · `DECAY` · `HYBRID`.
 
+### MCP (Model Context Protocol — connect to external MCP servers)
+
+```typescript
+import { Agent, mcpClient } from 'agentfootprint';
+
+const slack = await mcpClient({
+  name: 'slack',
+  transport: { transport: 'stdio', command: 'npx', args: ['@example/slack-mcp'] },
+});
+
+const agent = Agent.create({ provider })
+  .tools(await slack.tools())  // bulk-register all server tools
+  .build();
+
+await slack.close();
+```
+
+Transports: `stdio` (local subprocess), `http` (Streamable HTTP). The
+`@modelcontextprotocol/sdk` peer-dep is lazy-required — install it
+when you actually use MCP, not before. `agent.tools(arr)` is the
+bulk-register companion to `agent.tool(t)`.
+
 ### RAG (retrieval-augmented generation)
 
 ```typescript

@@ -5,6 +5,72 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.0]
+
+Adds MCP (Model Context Protocol) client integration. Connect to any
+MCP server, pull its tools as agentfootprint `Tool[]`, register them
+on your agent in one builder call. Validates the v2.0 thesis again:
+new tool sources slot in via the existing `Tool` interface — no
+engine code, no new event types.
+
+### Added — `mcpClient` (Model Context Protocol client)
+
+```typescript
+import { Agent, mcpClient } from 'agentfootprint';
+
+const slack = await mcpClient({
+  name: 'slack',
+  transport: { transport: 'stdio', command: 'npx', args: ['@example/slack-mcp'] },
+});
+
+const agent = Agent.create({ provider })
+  .tools(await slack.tools())   // bulk-register every tool the server exposes
+  .build();
+
+await agent.run({ message: 'Send "deploy succeeded" to #alerts' });
+await slack.close();
+```
+
+- Transports: `stdio` (local subprocess) and `http` (Streamable HTTP)
+- Lazy-required `@modelcontextprotocol/sdk` peer-dep — zero runtime
+  cost when MCP isn't used; friendly install hint if missing
+- `_client` injection point for testing without the SDK
+- Each MCP tool wraps as one agentfootprint `Tool` — `inputSchema`
+  preserved verbatim; `callTool()` becomes the wrapped `execute()`
+- MCP error responses (`isError: true`) throw with the server's
+  message; non-text content blocks (image / resource) summarized as
+  `[type]` placeholders (full multi-modal mapping is a future release)
+
+### Added — `Agent.tools(toolArray)` builder method
+
+Bulk-register companion to `.tool(t)`. Pair with
+`await mcpClient(...).tools()` for the canonical MCP flow:
+
+```typescript
+agent
+  .tools(await slack.tools())
+  .tools(await github.tools())
+  .tools(await db.tools())
+  .build();
+```
+
+Tool-name uniqueness still validated per-entry across all sources
+(MCP servers + manual `.tool()` calls). Duplicates throw at build
+time.
+
+### Added — `examples/context-engineering/08-mcp.ts` + `.md`
+
+End-to-end runnable example using an injected mock MCP client. Same
+code path as production; only the SDK construction is mocked. Pairs
+with the existing 7 context-engineering examples.
+
+### Internal
+
+- 1157 tests (was 1141 — 16 new MCP tests across 7 patterns)
+- 35 examples (was 34 — added 08-mcp.ts)
+- AI tooling instructions (CLAUDE.md, AGENTS.md, all `ai-instructions/`)
+  updated to cover MCP
+
 ## [2.1.0]
 
 The first new context-engineering flavor since the v2.0 InjectionEngine

@@ -1005,6 +1005,17 @@ export class AgentBuilder {
   }
 
   /**
+   * Register many tools at once. Convenience for tool sources that
+   * return a list (e.g., `await mcpClient(...).tools()`). Each tool
+   * is registered via `.tool()` so duplicate-name validation still
+   * fires per-entry.
+   */
+  tools(tools: ReadonlyArray<Tool>): this {
+    for (const t of tools) this.tool(t);
+    return this;
+  }
+
+  /**
    * Set the agent's display name — substituted as `{{appName}}` in
    * commentary + thinking templates. Same place to brand a tenant
    * ("Acme Bot"), distinguish multi-agent roles ("Triage" vs
