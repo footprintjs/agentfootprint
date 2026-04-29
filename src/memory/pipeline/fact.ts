@@ -26,24 +26,22 @@
  * accumulation, no "fact history" by default. Consumers who need fact
  * history should run `narrativePipeline` alongside.
  *
- * @example
+ * Most consumers reach for `factPipeline` indirectly through
+ * `defineMemory({ type: MEMORY_TYPES.SEMANTIC, strategy: { kind:
+ * MEMORY_STRATEGIES.EXTRACT, extractor: 'pattern' | 'llm' }, store })`.
+ *
+ * @example Direct usage (low-level — custom flowchart composition):
  * ```ts
- * import { Agent, anthropic } from 'agentfootprint';
- * import { factPipeline, InMemoryStore, llmFactExtractor } from 'agentfootprint/memory';
+ * import { factPipeline, llmFactExtractor, InMemoryStore } from 'agentfootprint/memory';
  *
  * // Cheap default — regex heuristics, no LLM cost.
  * const pipeline = factPipeline({ store: new InMemoryStore() });
  *
- * // Or opt into LLM-backed extraction:
+ * // Or opt into LLM-backed extraction (pass any LLMProvider):
  * const hqPipeline = factPipeline({
  *   store: new InMemoryStore(),
- *   extractor: llmFactExtractor({ provider: anthropic('claude-haiku-4-5') }),
+ *   extractor: llmFactExtractor({ provider: yourLLMProvider }),
  * });
- *
- * const agent = Agent.create({ provider: anthropic('claude-sonnet-4-5') })
- *   .system('You remember facts about the user across turns.')
- *   .memoryPipeline(pipeline)
- *   .build();
  * ```
  */
 import { flowChart } from 'footprintjs';

@@ -21,23 +21,18 @@
  * `mockEmbedder()` for tests — bring your own for production
  * (OpenAI, Voyage, Cohere, Sentence Transformers, custom).
  *
- * @example
+ * Most consumers reach for `semanticPipeline` indirectly through
+ * `defineMemory({ type: MEMORY_TYPES.SEMANTIC, strategy: { kind:
+ * MEMORY_STRATEGIES.TOP_K, topK, threshold, embedder }, store })`.
+ *
+ * @example Direct usage (low-level — custom flowchart composition):
  * ```ts
- * import { Agent, anthropic } from 'agentfootprint';
- * import {
- *   semanticPipeline,
- *   InMemoryStore,
- *   mockEmbedder,
- * } from 'agentfootprint/memory';
+ * import { semanticPipeline, mockEmbedder, InMemoryStore } from 'agentfootprint/memory';
  *
  * const pipeline = semanticPipeline({
  *   store: new InMemoryStore(),
- *   embedder: mockEmbedder(),  // swap for openaiEmbedder() etc.
+ *   embedder: mockEmbedder(),  // swap for openaiEmbedder() etc. in production
  * });
- *
- * const agent = Agent.create({ provider: anthropic('claude-sonnet-4-5') })
- *   .memoryPipeline(pipeline)
- *   .build();
  * ```
  */
 import { flowChart } from 'footprintjs';
@@ -98,7 +93,7 @@ export interface SemanticPipelineConfig {
 
 /**
  * Build the semantic read + write pipelines sharing a single store.
- * Returns `{ read, write }` ready to pass to `.memoryPipeline()`.
+ * Returns `{ read, write }` ready to pass to `Agent.memory()` via the appropriate `defineMemory` config (or used directly via `mountMemoryRead`/`mountMemoryWrite`).
  */
 export function semanticPipeline(config: SemanticPipelineConfig): MemoryPipeline {
   if (!config.store.search) {

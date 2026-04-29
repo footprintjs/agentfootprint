@@ -34,7 +34,7 @@
  *
  * const pipeline = factPipeline({
  *   store: new InMemoryStore(),
- *   extractor: llmFactExtractor({ provider: anthropic('claude-haiku-4-5') }),
+ *   extractor: llmFactExtractor({ provider: yourLLMProvider }),
  * });
  * ```
  */

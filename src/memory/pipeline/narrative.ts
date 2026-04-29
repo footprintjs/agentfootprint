@@ -25,23 +25,22 @@
  * when you want semantic quality.
  *
  * @example
+ * Most consumers reach for `narrativePipeline` indirectly through
+ * `defineMemory({ type: MEMORY_TYPES.NARRATIVE, strategy: { kind:
+ * MEMORY_STRATEGIES.EXTRACT, extractor: 'pattern' | 'llm' }, store })`.
+ *
+ * @example Direct usage (low-level — custom flowchart composition):
  * ```ts
- * import { Agent, anthropic } from 'agentfootprint';
- * import { narrativePipeline, InMemoryStore, llmExtractor } from 'agentfootprint/memory';
+ * import { narrativePipeline, llmExtractor, InMemoryStore } from 'agentfootprint/memory';
  *
  * // Cheap default — heuristic beats, no LLM cost.
  * const pipeline = narrativePipeline({ store: new InMemoryStore() });
  *
- * // Or opt into LLM-backed beats:
+ * // Or opt into LLM-backed beats (pass any LLMProvider):
  * const pipelineHQ = narrativePipeline({
  *   store: new InMemoryStore(),
- *   extractor: llmExtractor({ provider: anthropic('claude-haiku-4-5') }),
+ *   extractor: llmExtractor({ provider: yourLLMProvider }),
  * });
- *
- * const agent = Agent.create({ provider: anthropic('claude-sonnet-4-5') })
- *   .system('You remember the user across turns.')
- *   .memoryPipeline(pipeline)
- *   .build();
  * ```
  */
 import { flowChart } from 'footprintjs';
@@ -99,7 +98,7 @@ export interface NarrativePipelineConfig {
 
 /**
  * Build the narrative read + write pipelines sharing a single store.
- * Returns `{ read, write }` ready to be passed to `.memoryPipeline()`.
+ * Returns `{ read, write }` ready to be passed to `Agent.memory()` via the appropriate `defineMemory` config (or used directly via `mountMemoryRead`/`mountMemoryWrite`).
  */
 export function narrativePipeline(config: NarrativePipelineConfig): MemoryPipeline {
   const extractor = config.extractor ?? heuristicExtractor();

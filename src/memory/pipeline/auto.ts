@@ -30,24 +30,23 @@
  * preset focuses on the two *compressed / deduplicated* shapes. Layer on
  * `defaultPipeline` or `semanticPipeline` manually if you want raw recall.
  *
- * @example
+ * Most consumers reach for `autoPipeline` indirectly through
+ * `defineMemory({ type: MEMORY_TYPES.SEMANTIC, strategy: { kind:
+ * MEMORY_STRATEGIES.HYBRID, ... }, store })`, which dispatches here
+ * for hybrid-style composition.
+ *
+ * @example Direct usage (low-level — custom flowchart composition):
  * ```ts
- * import { Agent, anthropic } from 'agentfootprint';
- * import { autoPipeline, InMemoryStore } from 'agentfootprint/memory';
+ * import { autoPipeline, mountMemoryRead, mountMemoryWrite, InMemoryStore } from 'agentfootprint/memory';
  *
  * // Free defaults — regex + heuristics, no LLM cost.
  * const pipeline = autoPipeline({ store: new InMemoryStore() });
  *
- * // Or upgrade both extractors in one knob:
+ * // Or upgrade both extractors in one knob (pass any LLMProvider):
  * const hq = autoPipeline({
  *   store: new InMemoryStore(),
- *   provider: anthropic('claude-haiku-4-5'),
+ *   provider: yourLLMProvider,
  * });
- *
- * const agent = Agent.create({ provider: anthropic('claude-sonnet-4-5') })
- *   .system('You remember the user across turns.')
- *   .memoryPipeline(pipeline)
- *   .build();
  * ```
  */
 import { flowChart, type TypedScope } from 'footprintjs';

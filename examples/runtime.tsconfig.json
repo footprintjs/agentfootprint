@@ -1,0 +1,12 @@
+{
+  "//": "Runtime tsconfig used by `npm run example` — paths-free so tsx uses node resolution + package.json exports for footprintjs/* subpaths. The root tsconfig.json keeps a `paths` block for tsc type-resolution, which would otherwise resolve footprintjs/trace to a .d.ts file at runtime.",
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "esModuleInterop": true,
+    "strict": true,
+    "skipLibCheck": true,
+    "noEmit": true
+  }
+}

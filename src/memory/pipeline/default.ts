@@ -15,7 +15,7 @@
  *
  * This preset is intentionally opinionated. Users who need more
  * control should compose their own FlowChart and pass it to
- * `.memoryPipeline()` directly — the preset is teaching code, not a
+ * `.memory()` directly — the preset is teaching code, not a
  * one-size-fits-all.
  *
  * **Build once, mount many.** Call `defaultPipeline(config)` at application
@@ -24,10 +24,17 @@
  * agent builds and many `.run()` calls. Rebuilding per-turn is wasteful —
  * the stages capture their config at build time and don't read it later.
  *
- * @example
+ * Most consumers should use `defineMemory({ type: MEMORY_TYPES.EPISODIC,
+ * strategy: { kind: MEMORY_STRATEGIES.WINDOW, ... }, store })` instead
+ * of calling `defaultPipeline()` directly — the factory dispatches
+ * onto this pipeline under the hood. Use `defaultPipeline()` directly
+ * only when composing memory subflows into a non-Agent flowchart via
+ * `mountMemoryRead`/`mountMemoryWrite`.
+ *
+ * @example Direct usage (low-level — custom flowchart composition):
  * ```ts
- * import { Agent, anthropic } from 'agentfootprint';
- * import { defaultPipeline, InMemoryStore } from 'agentfootprint/memory';
+ * import { defaultPipeline, mountMemoryRead, InMemoryStore } from 'agentfootprint/memory';
+ * import { flowChart } from 'footprintjs';
  *
  * const pipeline = defaultPipeline({
  *   store: new InMemoryStore(),
@@ -35,10 +42,9 @@
  *   reserveTokens: 512,
  * });
  *
- * const agent = Agent.create({ provider: anthropic('claude-sonnet-4') })
- *   .system('You are a helpful assistant.')
- *   .memoryPipeline(pipeline)
- *   .build();
+ * let builder = flowChart('Seed', seedFn, 'seed');
+ * builder = mountMemoryRead(builder, { pipeline });
+ * // ... continue building your custom flowchart
  * ```
  */
 import { flowChart } from 'footprintjs';

@@ -32,7 +32,7 @@
  *
  * const pipeline = narrativePipeline({
  *   store: new InMemoryStore(),
- *   extractor: llmExtractor({ provider: anthropic('claude-haiku-4-5') }),
+ *   extractor: llmExtractor({ provider: yourLLMProvider }),
  * });
  * ```
  */

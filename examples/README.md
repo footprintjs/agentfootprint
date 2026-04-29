@@ -1,18 +1,41 @@
-# agentfootprint v2 — examples
+# agentfootprint — examples
 
-Canonical runnable examples covering every v2 feature. Folder layout
-mirrors the source structure: `core/` + `core-flow/` + `patterns/` +
-`features/`. Each file uses `MockProvider` or a thin inline `LLMProvider`
-so no API key is required.
+Every example is a runnable end-to-end demo. Each one uses the
+in-memory `MockProvider` so you can run them without an API key, and
+each is doubled by a `.md` companion that explains *when to use it*
+and *how it composes with other examples*.
 
-## Layout
+## Running an example
+
+```bash
+# Run any single example end-to-end
+npm run example examples/memory/01-window-strategy.ts
+
+# Typecheck + run every example (used by CI)
+npm run test:examples
+```
+
+`npm run example` is a thin wrapper around `tsx` with the right
+runtime tsconfig. Substitute `npx tsx` directly only if you also set
+`TSX_TSCONFIG_PATH=examples/runtime.tsconfig.json` (the root tsconfig's
+`paths` block points to `.d.ts` files for tsc, which trips `tsx` at
+runtime).
+
+## DNA progression — pick examples by where you are
 
 ```
-examples/
-├── core/        — 2 primitives (LLMCall, Agent)
-├── core-flow/   — 4 compositions (Sequence, Parallel, Conditional, Loop)
-├── patterns/    — 6 canonical research patterns
-└── features/    — runtime features (pause, cost, permission, observability, events)
+┌─────────────────────────────────────────────────────────────────────┐
+│  Foundation        →  core/         (LLMCall, Agent)                 │
+│  Compositions      →  core-flow/    (Sequence, Parallel, …)          │
+│  Patterns          →  patterns/     (ReAct, Reflexion, ToT, …)       │
+│  Context shaping   →  context-engineering/  (Skill, Steering,        │
+│                                              Instruction, Fact,      │
+│                                              Dynamic-ReAct, mixed)   │
+│  Memory            →  memory/       (Window, Budget, Summarize,      │
+│                                      TopK, Extract, Causal ⭐, Hybrid)│
+│  Production        →  features/     (Pause, Cost, Permissions,       │
+│                                      Observability, Events)          │
+└─────────────────────────────────────────────────────────────────────┘
 ```
 
 ## [`core/`](core/) — primitives
@@ -42,6 +65,41 @@ examples/
 | 05 | [patterns/05-tot.ts](patterns/05-tot.ts) | Yao et al., 2023 |
 | 06 | [patterns/06-swarm.ts](patterns/06-swarm.ts) | OpenAI Swarm |
 
+## [`context-engineering/`](context-engineering/) — InjectionEngine flavors
+
+The single `Injection` primitive with N typed sugar factories. All
+flavors flow through one engine subflow + emit `context.injected`
+with `source` discriminating per flavor.
+
+| # | File | Flavor | Trigger |
+|---|---|---|---|
+| 01 | [context-engineering/01-instruction.ts](context-engineering/01-instruction.ts) | Instruction | rule (predicate) |
+| 02 | [context-engineering/02-skill.ts](context-engineering/02-skill.ts) | Skill | LLM-activated (`read_skill`) |
+| 03 | [context-engineering/03-steering.ts](context-engineering/03-steering.ts) | Steering | always-on |
+| 04 | [context-engineering/04-fact.ts](context-engineering/04-fact.ts) | Fact | always-on (data) |
+| 05 | [context-engineering/05-dynamic-react.ts](context-engineering/05-dynamic-react.ts) | Instruction | on-tool-return (4-iteration morph) |
+| 06 | [context-engineering/06-mixed-flavors.ts](context-engineering/06-mixed-flavors.ts) | All four | mixed |
+
+## [`memory/`](memory/) — defineMemory + 4 types × 7 strategies
+
+`defineMemory({ type, strategy, store })` — single factory, dispatched
+onto the right pipeline. Examples organized **by strategy** (the
+discipline) since strategies are universal across types.
+
+| # | File | Strategy | Type |
+|---|---|---|---|
+| 01 | [memory/01-window-strategy.ts](memory/01-window-strategy.ts) | Window — last N (rule) | Episodic |
+| 02 | [memory/02-budget-strategy.ts](memory/02-budget-strategy.ts) | Budget — fit-to-tokens (decider) | Episodic |
+| 03 | [memory/03-summarize-strategy.ts](memory/03-summarize-strategy.ts) | Summarize — LLM compresses older turns | Episodic |
+| 04 | [memory/04-topK-strategy.ts](memory/04-topK-strategy.ts) | Top-K — semantic retrieval (relevance) | Semantic |
+| 05 | [memory/05-extract-strategy.ts](memory/05-extract-strategy.ts) | Extract — LLM distills facts on write | Semantic |
+| 06 | [memory/06-causal-snapshot.ts](memory/06-causal-snapshot.ts) | Top-K on snapshots ⭐ — replay decisions | **Causal** |
+| 07 | [memory/07-hybrid-auto.ts](memory/07-hybrid-auto.ts) | Hybrid — recent + facts + causal | All |
+
+⭐ Causal memory is the differentiator no other library has — persists
+footprintjs decision-evidence snapshots so cross-run follow-ups
+("why did you reject X last week?") get EXACT past facts.
+
 ## [`features/`](features/) — runtime features
 
 | # | File | Feature |
@@ -52,33 +110,23 @@ examples/
 | 04 | [features/04-observability.ts](features/04-observability.ts) | `.enable.thinking()` + `.enable.logging()` |
 | 05 | [features/05-events.ts](features/05-events.ts) | Typed `.on()` listeners, wildcards, `runner.emit()` |
 
-## The 2 + 4 + N taxonomy
+## The closed taxonomy
 
 ```
-┌─ 2 primitives ──────────────────────┐
-│  LLMCall, Agent                     │
-├─ 4 core-flow compositions ──────────┤
-│  Sequence, Parallel, Conditional,   │
-│  Loop                               │
-├─ N patterns (pure composition) ─────┤
-│  SelfConsistency, Reflection,       │
-│  Debate, MapReduce, ToT, Swarm …    │
-├─ 13 event domains (47 typed events) ┤
-│  composition · agent · stream ·     │
-│  context · memory · tools · skill · │
-│  permission · risk · fallback ·     │
-│  cost · eval · error · pause ·      │
-│  embedding                          │
-└─────────────────────────────────────┘
+2 primitives        +  3 compositions     +  N patterns          (pure composition)
+   LLMCall              Sequence              SelfConsistency
+   Agent                Parallel              Reflection
+                        Conditional/Loop      Debate · MapReduce · ToT · Swarm
+─────────────────────────────────────────────────────────────────────────────────
++ Context Engineering   +  Memory             +  Production features
+   Injection (1) ×        Type × Strategy        Pause · Cost · Permissions ·
+   N factories            × Store                Observability · Events
+   (Skill / Steering /    (Episodic /
+   Instruction / Fact)    Semantic /
+                          Narrative /
+                          Causal ⭐)
 ```
 
-Every pattern is pure composition — no new primitives introduced.
-The taxonomy is closed; new agent shapes are combinations of the
-existing pieces.
-
-## Running an example
-
-```bash
-# Type-check all examples (project's official check)
-npm run test:examples
-```
+Every higher layer is pure composition over the lower layers — no
+hidden primitives. New agent shapes are combinations of pieces
+already shown in these examples.
