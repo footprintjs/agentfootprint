@@ -115,6 +115,25 @@ await agent.run({
 Types: `EPISODIC` · `SEMANTIC` · `NARRATIVE` · `CAUSAL` (snapshot replay ⭐).
 Strategies: `WINDOW` · `BUDGET` · `SUMMARIZE` · `TOP_K` · `EXTRACT` · `DECAY` · `HYBRID`.
 
+### RAG (retrieval-augmented generation)
+
+```typescript
+import { defineRAG, indexDocuments } from 'agentfootprint';
+
+const store = new InMemoryStore();
+const embedder = mockEmbedder();
+
+await indexDocuments(store, embedder, [
+  { id: 'doc1', content: 'Refunds processed in 3 business days.' },
+  { id: 'doc2', content: 'Pro plan: $20/month.' },
+]);
+
+const docs = defineRAG({ id: 'docs', store, embedder, topK: 3, threshold: 0.7 });
+agent.rag(docs);  // alias for .memory(), same plumbing
+```
+
+`defineRAG` is sugar over `defineMemory({ type: SEMANTIC, strategy: TOP_K })` with RAG-friendly defaults (asRole='user', topK=3, threshold=0.7). Same engine, clearer intent.
+
 ### Multi-agent via control flow (no `MultiAgentSystem` class)
 
 ```typescript

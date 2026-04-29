@@ -150,7 +150,7 @@ Skill        =  Injection { trigger: 'llm-activated', slots: [system-prompt, too
 Steering     =  Injection { trigger: 'always-on',     slots: [system-prompt] }
 Instruction  =  Injection { trigger: 'rule',          slots: [system-prompt | messages] }
 Fact         =  Injection { trigger: 'always-on',     slots: [system-prompt | messages] }
-RAG          =  Injection { trigger: 'rule + score',  slots: [messages] }            (v2.1)
+RAG          =  Injection { trigger: 'rule + score',  slots: [messages] }            (v2.1) ✓
 Guardrail    =  Injection { trigger: 'on-tool-return',slots: [system-prompt]  }      (v2.x)
 ???          =  Injection { trigger: ?,               slots: ? }                    (your idea)
 ```

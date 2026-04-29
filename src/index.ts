@@ -343,3 +343,14 @@ export {
   type MemoryIdentity,
   type Embedder,
 } from './memory/index.js';
+
+// RAG — retrieval-augmented generation as a context-engineering flavor.
+// Thin sugar over `defineMemory({ type: SEMANTIC, strategy: TOP_K })`
+// plus the `indexDocuments` helper for seeding the corpus at startup.
+export {
+  defineRAG,
+  type DefineRAGOptions,
+  indexDocuments,
+  type IndexDocumentsOptions,
+  type RagDocument,
+} from './lib/rag/index.js';

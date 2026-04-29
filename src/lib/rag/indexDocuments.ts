@@ -1,0 +1,132 @@
+/**
+ * indexDocuments — seed a vector-capable MemoryStore with documents.
+ *
+ * Embeds each document, builds a `MemoryEntry<{content, metadata?}>`,
+ * batches into `store.putMany()`. Used at application startup to
+ * populate a RAG store before the first agent run.
+ *
+ * Pattern: Bulk-write helper. Not a flowchart stage — it runs once
+ *          at boot, not per-iteration.
+ * Role:    Layer-3 RAG pipeline starter. Pairs with `defineRAG()`
+ *          which only does the read side.
+ * Emits:   N/A — startup-time batch write, not part of the agent run.
+ *
+ * @example
+ * ```ts
+ * import { InMemoryStore, mockEmbedder, indexDocuments, defineRAG } from 'agentfootprint';
+ *
+ * const store = new InMemoryStore();
+ * const embedder = mockEmbedder();
+ *
+ * await indexDocuments(store, embedder, [
+ *   { id: 'doc1', content: 'Refunds processed within 3 business days.' },
+ *   { id: 'doc2', content: 'Pro plan: $20/mo, includes priority support.', metadata: { tier: 'pro' } },
+ *   { id: 'doc3', content: 'Free plan: limited to 100 calls/month.' },
+ * ]);
+ *
+ * const docs = defineRAG({ id: 'product-docs', store, embedder });
+ * agent.rag(docs);
+ * ```
+ */
+
+import type { Embedder } from '../../memory/embedding/index.js';
+import type { MemoryEntry } from '../../memory/entry/index.js';
+import type { MemoryStore } from '../../memory/store/index.js';
+import type { MemoryIdentity } from '../../memory/identity/index.js';
+
+/** A document to index. `id` must be unique within the store + identity. */
+export interface RagDocument {
+  readonly id: string;
+  readonly content: string;
+  readonly metadata?: Readonly<Record<string, unknown>>;
+}
+
+export interface IndexDocumentsOptions {
+  /**
+   * Identity scope to write under. Default: a single shared
+   * `{ conversationId: '_global' }` namespace, suitable for app-wide
+   * corpora. Override for per-tenant document partitions.
+   */
+  readonly identity?: MemoryIdentity;
+
+  /**
+   * Stable id of the embedder. Stored on each entry so a future
+   * embedder swap doesn't silently mix similarity scores. Default:
+   * `'default-embedder'` — pass an explicit id when you may rotate
+   * embedders.
+   */
+  readonly embedderId?: string;
+
+  /**
+   * Optional tier tag to attach to indexed entries (`'hot'` /
+   * `'warm'` / `'cold'`). Useful when read-side `defineRAG` should
+   * filter to a subset of the corpus.
+   */
+  readonly tier?: 'hot' | 'warm' | 'cold';
+
+  /**
+   * Optional TTL in milliseconds from indexing time. Useful for
+   * compliance retention windows (e.g., re-index quarterly).
+   */
+  readonly ttlMs?: number;
+
+  /**
+   * Optional abort signal — embedders making network calls thread
+   * this through to abort batch indexing on shutdown / timeout.
+   */
+  readonly signal?: AbortSignal;
+}
+
+const DEFAULT_IDENTITY: MemoryIdentity = { conversationId: '_global' };
+
+/**
+ * Embed + persist documents. Returns the count actually indexed
+ * (skips duplicates if the store rejects them). Throws on embedder
+ * failure or store error — fail loud at startup is desirable.
+ */
+export async function indexDocuments(
+  store: MemoryStore,
+  embedder: Embedder,
+  documents: readonly RagDocument[],
+  options: IndexDocumentsOptions = {},
+): Promise<number> {
+  if (!store) throw new Error('indexDocuments: `store` is required.');
+  if (!embedder) throw new Error('indexDocuments: `embedder` is required.');
+  if (!Array.isArray(documents) || documents.length === 0) return 0;
+
+  const identity = options.identity ?? DEFAULT_IDENTITY;
+  const embedderId = options.embedderId ?? 'default-embedder';
+  const now = Date.now();
+  const ttl = options.ttlMs ? now + options.ttlMs : undefined;
+
+  // Embed in batch when supported, else fall back to parallel single calls.
+  const texts = documents.map((d) => d.content);
+  const vectors: readonly (readonly number[])[] = embedder.embedBatch
+    ? await embedder.embedBatch({ texts, ...(options.signal && { signal: options.signal }) })
+    : await Promise.all(
+        texts.map((text) =>
+          embedder.embed({ text, ...(options.signal && { signal: options.signal }) }),
+        ),
+      );
+
+  const entries: MemoryEntry<RagDocument>[] = documents.map((doc, i) => {
+    const vec = vectors[i];
+    return {
+      id: doc.id,
+      value: doc,
+      version: 1,
+      createdAt: now,
+      updatedAt: now,
+      lastAccessedAt: now,
+      accessCount: 0,
+      ...(vec && vec.length > 0 && { embedding: [...vec] }),
+      embeddingModel: embedderId,
+      ...(ttl !== undefined && { ttl }),
+      ...(options.tier && { tier: options.tier }),
+      source: { turn: 0, identity },
+    };
+  });
+
+  await store.putMany(identity, entries);
+  return entries.length;
+}

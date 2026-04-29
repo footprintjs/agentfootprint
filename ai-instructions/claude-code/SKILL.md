@@ -210,6 +210,35 @@ The 7 **strategies**:
 - `TOP_K` (score-threshold) · `EXTRACT` (LLM distills on write)
 - `DECAY` (recency-weighted, planned) · `HYBRID` (compose multiple)
 
+## RAG — `defineRAG` + `indexDocuments`
+
+```typescript
+import { defineRAG, indexDocuments, InMemoryStore, mockEmbedder } from 'agentfootprint';
+
+const store = new InMemoryStore();
+const embedder = mockEmbedder();
+
+// Seed corpus once at startup
+await indexDocuments(store, embedder, [
+  { id: 'doc1', content: 'Refunds processed in 3 business days.' },
+  { id: 'doc2', content: 'Pro plan: $20/month.' },
+]);
+
+// Define retriever
+const docs = defineRAG({
+  id: 'product-docs',
+  store, embedder,
+  topK: 3,
+  threshold: 0.7,        // STRICT — no fallback when nothing matches
+  asRole: 'user',        // chunks land as user-role context
+});
+
+// Wire — `.rag()` is alias for `.memory()`, same plumbing
+agent.rag(docs);
+```
+
+`defineRAG` is sugar over `defineMemory({ type: SEMANTIC, strategy: TOP_K })` with RAG-friendly defaults. Distinction is intent: RAG = document corpus retrieval; `defineMemory` = conversation/run-state memory.
+
 ## Multi-agent via control flow
 
 There is **no** `MultiAgentSystem` class. Multi-agent = compositions of single Agents through the same control flow that connects any flowchart stages:

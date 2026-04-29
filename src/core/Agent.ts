@@ -1131,6 +1131,27 @@ export class AgentBuilder {
     return this;
   }
 
+  /**
+   * Register a RAG retriever — semantic search over a vector-indexed
+   * corpus. Identical plumbing to `.memory()` (RAG resolves to a
+   * `MemoryDefinition` produced by `defineRAG()`); this alias exists
+   * so the consumer's intent reads clearly:
+   *
+   * ```ts
+   * agent
+   *   .memory(shortTermConversation)   // remembers what the USER said
+   *   .rag(productDocs)                // retrieves what the CORPUS says
+   *   .build();
+   * ```
+   *
+   * Both end up as memory subflows, but the alias separates "user
+   * conversation memory" from "document corpus retrieval" in code
+   * intent, ids, and Lens chips.
+   */
+  rag(definition: MemoryDefinition): this {
+    return this.memory(definition);
+  }
+
   build(): Agent {
     // Resolve the voice config: bundled defaults + consumer overrides.
     // Templates flow through the same barrel exports the rest of the

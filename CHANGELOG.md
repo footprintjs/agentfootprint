@@ -5,6 +5,72 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.0]
+
+The first new context-engineering flavor since the v2.0 InjectionEngine
+shipped. Validates the v2.0 thesis: "adding the next flavor is one new
+factory file." defineRAG is exactly that — composes over the existing
+memory subsystem (semantic + top-K + strict threshold), zero engine
+changes, zero new event types.
+
+### Added — RAG (`defineRAG` + `indexDocuments`)
+
+Two-function public surface:
+
+- `defineRAG({ id, store, embedder, topK?, threshold?, asRole? })` —
+  the read-side factory. Returns a `MemoryDefinition` with RAG-friendly
+  defaults (asRole='user', topK=3, threshold=0.7).
+- `indexDocuments(store, embedder, documents, options?)` — the seeding
+  helper. Embeds each doc, batches into `store.putMany()`. Used at
+  application startup to populate the corpus before the first agent run.
+
+Plus `Agent.rag(definition)` builder method — alias for `.memory()` so
+consumer intent reads clearly:
+
+```typescript
+import {
+  defineRAG, indexDocuments,
+  InMemoryStore, mockEmbedder,
+} from 'agentfootprint';
+
+const embedder = mockEmbedder();
+const store = new InMemoryStore();
+
+await indexDocuments(store, embedder, [
+  { id: 'doc1', content: 'Refunds processed in 3 business days.' },
+  { id: 'doc2', content: 'Pro plan: $20/month.' },
+]);
+
+const docs = defineRAG({ id: 'product-docs', store, embedder, topK: 3, threshold: 0.7 });
+
+agent.rag(docs);  // alias for .memory(docs); same plumbing
+```
+
+Strict threshold semantics: when no chunk meets the threshold, no
+injection happens (no fallback to top-K-anyway). Same panel-decision
+rule as defineMemory({strategy: TOP_K}).
+
+Multi-tenant corpora supported via `IndexDocumentsOptions.identity`.
+
+### Added — `examples/context-engineering/07-rag.ts` + `.md`
+
+End-to-end runnable example demonstrating the full RAG flow (seed →
+define → query → retrieved-context-injected). Pairs with the existing
+6 context-engineering examples.
+
+### Added — AI tooling instructions cover RAG
+
+`CLAUDE.md`, `AGENTS.md`, and every file under `ai-instructions/`
+updated to include the RAG section so AI coding tools generate v2.1
+code by default.
+
+### Internal
+
+- 1141 tests (was 1121 — 20 new RAG tests)
+- 34 examples (was 33 — added 07-rag.ts)
+- Public exports: `defineRAG`, `DefineRAGOptions`, `indexDocuments`,
+  `IndexDocumentsOptions`, `RagDocument` from top-level barrel
+
 ## [2.0.1]
 
 The first npm-published v2 build. v2.0.0 was tagged on GitHub but the

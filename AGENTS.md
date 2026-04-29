@@ -34,6 +34,38 @@ The flavors are how you *mark intent* — but they all reduce to one `Injection`
 
 ## Public API
 
+### RAG — `defineRAG` (one factory, one helper)
+
+```typescript
+import {
+  defineRAG, indexDocuments,
+  InMemoryStore, mockEmbedder,
+} from 'agentfootprint';
+
+const embedder = mockEmbedder();
+const store = new InMemoryStore();
+
+// Seed the corpus once at startup
+await indexDocuments(store, embedder, [
+  { id: 'doc1', content: 'Refunds are processed within 3 business days.' },
+  { id: 'doc2', content: 'Pro plan costs $20/month.' },
+]);
+
+// Define the retriever
+const docs = defineRAG({
+  id: 'product-docs',
+  store, embedder,
+  topK: 3,
+  threshold: 0.7,        // STRICT — no fallback when nothing matches
+  asRole: 'user',        // chunks land as user-role context (RAG default)
+});
+
+// Wire to agent — `.rag()` is an alias for `.memory()`, same plumbing
+agent.rag(docs);
+```
+
+`defineRAG` is sugar over `defineMemory({ type: SEMANTIC, strategy: TOP_K })`. Same plumbing, different intent: RAG = document corpus retrieval; `defineMemory` = conversation/run-state memory.
+
 ### Agent (ReAct primitive)
 
 ```typescript
@@ -354,6 +386,7 @@ Recorders (auto-attached when relevant builder method is called):
 | Semantic recall via embeddings | `defineMemory({ type: SEMANTIC, strategy: TOP_K })` |
 | Cross-run "why?" replay | `defineMemory({ type: CAUSAL, strategy: TOP_K })` ⭐ |
 | Long conversation overflows context | `defineMemory({ type: EPISODIC, strategy: SUMMARIZE })` |
+| Retrieve from a document corpus | `defineRAG({ store, embedder, topK, threshold })` |
 
 ## Build & Test
 
