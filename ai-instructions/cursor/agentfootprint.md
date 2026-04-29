@@ -1,100 +1,159 @@
 # agentfootprint — Cursor Rules
 
-The explainable agent framework. Every agent is a footprintjs flowchart with auto-generated causal traces.
+Building Generative AI applications is mostly **context engineering** — deciding what content lands in which slot of the LLM call, when, and why. agentfootprint exposes this discipline through 2 primitives + 3 compositions + 1 unifying injection primitive + 1 memory factory.
 
-## Core Principle
-
-**Every concept is a flowchart. Collect during traversal, never post-process.**
-
-## 5 Concepts
+## Core API (use these, not v1 names)
 
 ```typescript
-// 1. LLMCall — single LLM call, no tools, no loop
-LLMCall.create({ provider }).system('...').recorder(rec).build()
-
-// 2. Agent — ReAct agent with tools + loop
-Agent.create({ provider, name? }).system('...').tool(t).maxIterations(n).recorder(rec).build()
-
-// 3. RAG — retrieve-augment-generate
-RAG.create({ provider, retriever }).system('...').topK(5).recorder(rec).build()
-
-// 4. FlowChart — sequential multi-agent pipeline
-FlowChart.create().agent('id', 'name', runner).recorder(rec).build()
-
-// 5. Swarm — LLM-routed multi-agent handoff
-Swarm.create({ provider }).specialist('id', 'desc', runner).recorder(rec).build()
+import {
+  Agent, LLMCall, defineTool,
+  Sequence, Parallel, Conditional, Loop,
+  defineSkill, defineSteering, defineInstruction, defineFact,
+  defineMemory, MEMORY_TYPES, MEMORY_STRATEGIES, SNAPSHOT_PROJECTIONS,
+  InMemoryStore, mockEmbedder,
+  anthropic, openai, bedrock, ollama, mock,
+  askHuman, pauseHere, isPaused,
+  withRetry, withFallback, resilientProvider,
+} from 'agentfootprint';
 ```
 
-## Tools
+**Top-level barrel only.** Don't import from stale subpaths like
+`agentfootprint/instructions`, `agentfootprint/observe`,
+`agentfootprint/security`, `agentfootprint/explain`.
+
+## The 6-layer mental model
+
+```
+2 primitives        : LLMCall · Agent (= ReAct)
+3 compositions+Loop : Sequence · Parallel · Conditional · Loop
+N patterns          : ReAct · Reflexion · ToT · MapReduce · Debate · Swarm
+                      (RECIPES, not classes)
+Context engineering : defineSkill · defineSteering · defineInstruction · defineFact
+Memory              : defineMemory({type, strategy, store}) — 4 types × 7 strategies
+Production features : pause/resume · cost · permissions · observability · events
+```
+
+## Three slots of the LLM API call
+
+Every "agent feature" is content flowing into one of:
+
+- `system` prompt — Steering / Instruction / Skill body / Fact / formatted memory
+- `messages` array — history / RAG / memory replay / injected instructions
+- `tools` array — Tool schemas (registered + Skill-attached)
+
+## Canonical examples
+
+### Hello agent
 
 ```typescript
-import { defineTool } from 'agentfootprint';
-const tool = defineTool({
-  id: 'search',
-  description: 'Search the web',
-  inputSchema: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] },
-  handler: async (args) => `Results for: ${args.query}`,
+const agent = Agent.create({
+  provider: anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! }),
+  model: 'claude-sonnet-4-5-20250929',
+})
+  .system('You are a helpful assistant.')
+  .tool(weatherTool)
+  .build();
+
+const result = await agent.run({ message: 'Weather in SF?' });
+```
+
+### Tools
+
+```typescript
+const weather = defineTool({
+  schema: {
+    name: 'weather',
+    description: 'Current weather for a city.',
+    inputSchema: {
+      type: 'object',
+      properties: { city: { type: 'string' } },
+      required: ['city'],
+    },
+  },
+  execute: async (args) => `${(args as { city: string }).city}: 72°F`,
 });
 ```
 
-## Recorders (AgentRecorder interface)
+### Context engineering
 
 ```typescript
-import { TokenRecorder, CostRecorder, TurnRecorder, ToolUsageRecorder,
-         QualityRecorder, GuardrailRecorder, CompositeRecorder } from 'agentfootprint';
+const tone = defineSteering({ id: 'tone', prompt: 'Be friendly.' });
+const urgent = defineInstruction({
+  id: 'urgent',
+  activeWhen: (ctx) => /urgent/i.test(ctx.userMessage),
+  prompt: 'Prioritize the fastest path.',
+});
+const billing = defineSkill({
+  id: 'billing',
+  description: 'Use for refunds.',
+  body: 'Confirm identity first.',
+  tools: [refundTool],
+});
+const userProfile = defineFact({ id: 'user', data: 'Alice, Pro plan.' });
 
-const tokens = new TokenRecorder();
-const cost = new CostRecorder();
-const composite = new CompositeRecorder([tokens, cost]);
-
-// Attach via .recorder(rec) on any builder
+agent.steering(tone).instruction(urgent).skill(billing).fact(userProfile);
 ```
 
-## Providers & Testing
+### Memory
 
 ```typescript
-import { mock, mockRetriever, createProvider, anthropic } from 'agentfootprint';
+const memory = defineMemory({
+  id: 'short-term',
+  type: MEMORY_TYPES.EPISODIC,
+  strategy: { kind: MEMORY_STRATEGIES.WINDOW, size: 10 },
+  store: new InMemoryStore(),
+});
 
-// Testing — no API keys needed
-const provider = mock([{ content: 'Hello' }]);
-const retriever = mockRetriever([{ chunks: [{ content: '...', score: 0.9, metadata: {} }] }]);
+agent.memory(memory);
 
-// Production
-const claude = createProvider(anthropic({ modelId: 'claude-sonnet-4-20250514', apiKey: '...' }));
+await agent.run({
+  message: '...',
+  identity: { tenant: 'acme', principal: 'alice', conversationId: 'thread-42' },
+});
 ```
 
-## Prompt Providers
+Types: `EPISODIC` · `SEMANTIC` · `NARRATIVE` · `CAUSAL` (snapshot replay ⭐).
+Strategies: `WINDOW` · `BUDGET` · `SUMMARIZE` · `TOP_K` · `EXTRACT` · `DECAY` · `HYBRID`.
+
+### Multi-agent via control flow (no `MultiAgentSystem` class)
 
 ```typescript
-import { staticPrompt, templatePrompt, skillBasedPrompt, compositePrompt } from 'agentfootprint';
+const pipeline = Sequence.create()
+  .step(researcher).step(writer).step(editor)
+  .build();
+
+const tot = Parallel.create()
+  .branch(thoughtAgent).branch(thoughtAgent).branch(thoughtAgent)
+  .merge(rankerLLM)
+  .build();
 ```
 
-## Tool Providers
+## Anti-patterns — Don't
 
-```typescript
-import { agentAsTool, compositeTools, mcpToolProvider } from 'agentfootprint';
-```
+- ❌ `agent.run('string')` → use `agent.run({ message: '...', identity? })`
+- ❌ Stale subpaths: `agentfootprint/instructions`, `agentfootprint/observe`, `agentfootprint/security`
+- ❌ `.memoryPipeline(pipeline)` (v1) → use `.memory(defineMemory({...}))`
+- ❌ Shipping a `ReflexionAgent` class → compose `Sequence(Agent, critique-LLM, Agent)`
+- ❌ Closures or class instances in scope (can't be cloned)
+- ❌ Falling back when TopK threshold returns nothing (strict semantics)
 
-## Compositions (Resilience)
+## Decision tree
 
-```typescript
-import { withRetry, withFallback, withCircuitBreaker } from 'agentfootprint';
-```
+| Goal | Use |
+|---|---|
+| One-shot LLM call | `LLMCall` |
+| Loop with tools | `Agent` |
+| Two LLM calls in series | `Sequence` |
+| Multiple critics → merge | `Parallel` |
+| Route by intent | `Conditional` |
+| Iterate until quality bar | `Loop` |
+| Output format / persona / safety | `defineSteering` |
+| Rule-gated context | `defineInstruction` |
+| LLM-activated body + tools | `defineSkill` |
+| User profile / env data | `defineFact` |
+| Last N turns | `defineMemory({ type: EPISODIC, strategy: WINDOW })` |
+| Vector retrieval | `defineMemory({ type: SEMANTIC, strategy: TOP_K })` |
+| Cross-run "why?" replay | `defineMemory({ type: CAUSAL, strategy: TOP_K })` |
+| Long convo overflow | `defineMemory({ type: EPISODIC, strategy: SUMMARIZE })` |
 
-## Runner API (all concepts)
-
-```typescript
-runner.run(message, { signal?, timeoutMs? })
-runner.getNarrative()           // causal trace
-runner.getSnapshot()            // full memory state
-runner.getSpec()                // flowchart spec for visualization
-runner.toFlowChart()            // expose for subflow composition
-```
-
-## Rules
-
-- Never post-process — use recorders
-- Always use `mock([...])` in tests — no API keys
-- Use concept builders, not raw stages
-- Use `FlowChart`/`Swarm` for multi-agent, not flat stages
-- Attach recorders via `.recorder(rec)` on builders
+When in doubt — read [`examples/`](examples/) (33 runnable specs).
