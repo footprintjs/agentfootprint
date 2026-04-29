@@ -190,3 +190,77 @@ describe('MockProvider.realistic()', () => {
     expect(Date.now() - t0).toBeLessThan(200);
   });
 });
+
+// ── replies — scripted multi-turn / tool-call deterministic mock ────
+
+describe('MockProvider — replies (multi-turn scripting)', () => {
+  it('consumes replies in order across multiple complete() calls', async () => {
+    const provider = new MockProvider({
+      replies: ['turn 1', 'turn 2', 'turn 3'],
+    });
+    expect((await provider.complete(req())).content).toBe('turn 1');
+    expect((await provider.complete(req())).content).toBe('turn 2');
+    expect((await provider.complete(req())).content).toBe('turn 3');
+  });
+
+  it('supports Partial<LLMResponse> entries with toolCalls', async () => {
+    const provider = new MockProvider({
+      replies: [
+        {
+          toolCalls: [{ id: '1', name: 'lookup', args: { id: 42 } as Record<string, unknown> }],
+        },
+        { content: 'Found it: 42 is the answer.' },
+      ],
+    });
+    const r1 = await provider.complete(req());
+    expect(r1.toolCalls).toHaveLength(1);
+    expect(r1.toolCalls?.[0]!.name).toBe('lookup');
+    expect(r1.stopReason).toBe('tool_use'); // auto-set when toolCalls non-empty
+    const r2 = await provider.complete(req());
+    expect(r2.content).toBe('Found it: 42 is the answer.');
+    expect(r2.toolCalls).toEqual([]);
+  });
+
+  it('throws a clear error when exhausted (loud failure for test bugs)', async () => {
+    const provider = new MockProvider({ name: 'test-mock', replies: ['only one'] });
+    await provider.complete(req());
+    await expect(provider.complete(req())).rejects.toThrow(
+      /MockProvider\[test-mock\] exhausted: scripted 1 replies but received request #2/,
+    );
+  });
+
+  it('replies takes precedence over reply + respond', async () => {
+    const provider = new MockProvider({
+      reply: 'fallback',
+      respond: () => 'callback',
+      replies: ['scripted'],
+    });
+    expect((await provider.complete(req())).content).toBe('scripted');
+  });
+
+  it('resetReplies() rewinds the cursor for cross-scenario reuse', async () => {
+    const provider = new MockProvider({ replies: ['a', 'b'] });
+    await provider.complete(req());
+    await provider.complete(req());
+    provider.resetReplies();
+    expect((await provider.complete(req())).content).toBe('a');
+  });
+
+  it('stream() also consumes replies + throws on exhaustion', async () => {
+    const provider = new MockProvider({
+      replies: ['stream once'],
+      thinkingMs: 0,
+      chunkDelayMs: 0,
+    });
+    // First call drains replies[0]
+    const chunks: LLMChunk[] = [];
+    for await (const c of provider.stream(req())) chunks.push(c);
+    expect(chunks.at(-1)?.response?.content).toBe('stream once');
+    // Second call exhausts
+    await expect(async () => {
+      for await (const _ of provider.stream(req())) {
+        /* drain */
+      }
+    }).rejects.toThrow(/exhausted/);
+  });
+});

@@ -5,6 +5,7 @@
  * use case, not yet shipped).
  */
 export { mcpClient } from './mcpClient.js';
+export { mockMcpClient, type MockMcpClientOptions, type MockMcpTool } from './mockMcpClient.js';
 export type {
   McpClient,
   McpClientOptions,

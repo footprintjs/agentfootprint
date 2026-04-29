@@ -1,6 +1,6 @@
 {
   "name": "agentfootprint",
-  "version": "2.2.0",
+  "version": "2.3.0",
   "description": "The explainable agent framework — build AI agents you can explain, audit, and trust. Built on footprintjs.",
   "license": "MIT",
   "author": "Sanjay Krishna Anbalagan",
@@ -114,11 +114,30 @@
       "types": "./dist/types/injection-engine.d.ts",
       "import": "./dist/esm/injection-engine.js",
       "require": "./dist/injection-engine.js"
+    },
+    "./memory-redis": {
+      "types": "./dist/types/adapters/memory/redis.d.ts",
+      "import": "./dist/esm/adapters/memory/redis.js",
+      "require": "./dist/adapters/memory/redis.js"
+    },
+    "./memory-agentcore": {
+      "types": "./dist/types/adapters/memory/agentcore.d.ts",
+      "import": "./dist/esm/adapters/memory/agentcore.js",
+      "require": "./dist/adapters/memory/agentcore.js"
     }
   },
   "sideEffects": false,
   "peerDependencies": {
     "footprintjs": ">=4.14.0"
+  },
+  "peerDependenciesMeta": {
+    "@anthropic-ai/sdk": { "optional": true },
+    "openai": { "optional": true },
+    "@aws-sdk/client-bedrock-runtime": { "optional": true },
+    "@aws-sdk/client-bedrock-agent-runtime": { "optional": true },
+    "@modelcontextprotocol/sdk": { "optional": true },
+    "ioredis": { "optional": true },
+    "zod": { "optional": true }
   },
   "devDependencies": {
     "@types/node": "^25.5.2",

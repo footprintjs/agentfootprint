@@ -47,10 +47,10 @@ Build with `mock()` provider + `InMemoryStore` + `mockEmbedder()` + inline tool 
 
 | Mock | Production swap |
 |---|---|
-| `mock({ reply })` | `anthropic()` / `openai()` / `bedrock()` / `ollama()` |
-| `InMemoryStore` | Redis · Dynamo · Postgres · Pinecone (peer-dep adapters) |
+| `mock({ reply })` · `mock({ replies })` for scripted multi-turn | `anthropic()` / `openai()` / `bedrock()` / `ollama()` |
+| `InMemoryStore` | `RedisStore` (`agentfootprint/memory-redis`) · `AgentCoreStore` (`agentfootprint/memory-agentcore`) · Dynamo · Postgres · Pinecone (planned) |
 | `mockEmbedder()` | OpenAI / Cohere / Bedrock embedder factory |
-| `mcpClient({ _client })` | `mcpClient({ transport })` real server |
+| `mockMcpClient({ tools })` — in-memory, no SDK | `mcpClient({ transport })` real server |
 
 ## Canonical examples
 

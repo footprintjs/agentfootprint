@@ -54,13 +54,35 @@ await agent.run({ message: 'How long does a refund take?' });
 
 | Boundary | Mock for development | Production swap |
 |---|---|---|
-| LLM provider | `mock({ reply })` | `anthropic()` · `openai()` · `bedrock()` · `ollama()` |
+| LLM provider | `mock({ reply })` · `mock({ replies })` for scripted ReAct | `anthropic()` · `openai()` · `bedrock()` · `ollama()` |
 | Embedder | `mockEmbedder()` | OpenAI / Cohere / Bedrock embedder factory |
-| Memory store | `InMemoryStore` | Redis · DynamoDB · Postgres · Pinecone (peer-dep adapters) |
-| MCP server | `mcpClient({ _client })` injection | `mcpClient({ transport })` to a real server |
+| Memory store | `InMemoryStore` | `RedisStore` (`agentfootprint/memory-redis`) · `AgentCoreStore` (`agentfootprint/memory-agentcore`) · DynamoDB / Postgres / Pinecone (planned) |
+| MCP server | `mockMcpClient({ tools })` — in-memory, no SDK | `mcpClient({ transport })` to a real server |
 | Tool execute | inline `async () => '...'` closure | real implementation |
 
 When generating starter code for users, **default to the mock surface** unless they explicitly say they have a key / endpoint / store ready. Show real-provider code as the "swap" step, not the first step.
+
+**Subpath imports** for memory adapters keep the main barrel small + tree-shaking clean:
+
+```typescript
+import { RedisStore } from 'agentfootprint/memory-redis';
+import { AgentCoreStore } from 'agentfootprint/memory-agentcore';
+```
+
+Both lazy-require their SDK (`ioredis` / `@aws-sdk/client-bedrock-agent-runtime`) and accept `_client` for test injection.
+
+**Multi-turn mock for tool-using ReAct:**
+
+```typescript
+const provider = mock({
+  replies: [
+    { toolCalls: [{ id: '1', name: 'lookup', args: { topic: 'refunds' } }] },
+    { content: 'Refunds take 3 business days.' },
+  ],
+});
+```
+
+Each `complete()` consumes one reply in order. Exhaustion throws loud — misnumbered scripts fail tests instead of silently looping.
 
 ## Public API
 

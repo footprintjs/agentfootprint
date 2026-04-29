@@ -26,10 +26,40 @@ import type { LLMChunk, LLMProvider, LLMRequest, LLMResponse } from '../types.js
 /** Either a fixed value (in ms) or a random `[min, max]` range (inclusive). */
 export type LatencyMs = number | readonly [number, number];
 
+/**
+ * One scripted reply consumed in order from `MockProviderOptions.replies`.
+ * String → plain text content; Partial<LLMResponse> → can include
+ * `toolCalls`, `usage`, `stopReason` for tool-using ReAct loops.
+ */
+export type MockReply = string | Partial<LLMResponse>;
+
 export interface MockProviderOptions {
   readonly name?: string;
   /** Fixed response content. Overrides `respond` when set. */
   readonly reply?: string;
+  /**
+   * Scripted replies for multi-turn / tool-using agents. Each entry
+   * is consumed in order — iteration 1 reads `replies[0]`, iteration
+   * 2 reads `replies[1]`, and so on. Use Partial<LLMResponse> to
+   * inject `toolCalls`:
+   *
+   * ```ts
+   * mock({
+   *   replies: [
+   *     { toolCalls: [{ id: '1', name: 'lookup', args: { id: 42 } }] },
+   *     { content: 'Found it: refunds take 3 business days.' },
+   *   ],
+   * });
+   * ```
+   *
+   * **Exhaustion semantics:** if the agent calls the LLM more times
+   * than there are replies, `complete()` / `stream()` throw a clear
+   * error. This makes mock-script bugs loud, not silent. Tune the
+   * agent's `maxIterations` to bound the call count.
+   *
+   * Takes precedence over `reply` and `respond` when set.
+   */
+  readonly replies?: readonly MockReply[];
   /**
    * Build the response from the request. Returns either a plain
    * string (renders as content with no tool calls) or a partial
@@ -73,6 +103,8 @@ export interface MockProviderOptions {
 export class MockProvider implements LLMProvider {
   readonly name: string;
   private readonly reply?: string;
+  private readonly replies?: readonly MockReply[];
+  private repliesCursor = 0;
   private readonly respond: (req: LLMRequest) => string | Partial<LLMResponse>;
   private readonly thinkingMs: LatencyMs;
   private readonly chunkDelayMs: LatencyMs;
@@ -82,6 +114,7 @@ export class MockProvider implements LLMProvider {
   constructor(options: MockProviderOptions = {}) {
     this.name = options.name ?? 'mock';
     this.reply = options.reply;
+    this.replies = options.replies;
     this.respond =
       options.respond ??
       ((req) => {
@@ -93,6 +126,16 @@ export class MockProvider implements LLMProvider {
     this.chunkDelayMs = options.chunkDelayMs ?? 30;
     this.stopReason = options.stopReason ?? 'stop';
     this.usageOverride = options.usage;
+  }
+
+  /**
+   * Reset the scripted-replies cursor. Useful when reusing one
+   * `MockProvider` instance across multiple test scenarios — each
+   * scenario can `provider.resetReplies()` to start from `replies[0]`
+   * again. No-op when `replies` was not supplied.
+   */
+  resetReplies(): void {
+    this.repliesCursor = 0;
   }
 
   /**
@@ -143,7 +186,7 @@ export class MockProvider implements LLMProvider {
   }
 
   private buildResponse(req: LLMRequest): LLMResponse {
-    const raw = this.reply !== undefined ? this.reply : this.respond(req);
+    const raw = this.consumeNextReply(req);
     const partial: Partial<LLMResponse> = typeof raw === 'string' ? { content: raw } : raw;
     const content = partial.content ?? '';
     const toolCalls = partial.toolCalls ?? [];
@@ -164,6 +207,30 @@ export class MockProvider implements LLMProvider {
       },
       stopReason: partial.stopReason ?? (toolCalls.length > 0 ? 'tool_use' : this.stopReason),
     };
+  }
+
+  /**
+   * Resolve the next reply source for one `complete()` / `stream()` call.
+   * Priority: `replies` (scripted, throws on exhaustion) → `reply` (single
+   * fixed string) → `respond` (callback default). Replies are consumed
+   * in order; the cursor is per-instance, not per-request.
+   */
+  private consumeNextReply(req: LLMRequest): string | Partial<LLMResponse> {
+    if (this.replies !== undefined) {
+      if (this.repliesCursor >= this.replies.length) {
+        throw new Error(
+          `MockProvider[${this.name}] exhausted: scripted ${this.replies.length} replies ` +
+            `but received request #${this.repliesCursor + 1}. Add more entries to ` +
+            `\`replies\` or bound the agent with \`maxIterations\`. ` +
+            `Call \`provider.resetReplies()\` to rewind across test scenarios.`,
+        );
+      }
+      const next = this.replies[this.repliesCursor]!;
+      this.repliesCursor++;
+      return next;
+    }
+    if (this.reply !== undefined) return this.reply;
+    return this.respond(req);
   }
 }
 

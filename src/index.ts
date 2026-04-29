@@ -232,7 +232,12 @@ export {
 // Adapters — LLM providers
 // `mock(...)` is the lowercase factory equivalent to `new MockProvider(...)`.
 // `anthropic(...)` is the real Claude provider via `@anthropic-ai/sdk`.
-export { MockProvider, mock, type MockProviderOptions } from './adapters/llm/MockProvider.js';
+export {
+  MockProvider,
+  mock,
+  type MockProviderOptions,
+  type MockReply,
+} from './adapters/llm/MockProvider.js';
 export {
   anthropic,
   AnthropicProvider,
@@ -361,10 +366,13 @@ export {
 // cost when MCP isn't used).
 export {
   mcpClient,
+  mockMcpClient,
   type McpClient,
   type McpClientOptions,
   type McpHttpTransport,
   type McpStdioTransport,
   type McpTransport,
   type McpSdkClient,
+  type MockMcpClientOptions,
+  type MockMcpTool,
 } from './lib/mcp/index.js';

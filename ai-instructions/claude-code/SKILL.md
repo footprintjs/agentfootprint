@@ -74,10 +74,10 @@ Build the entire agent + context engineering + tools + memory + RAG + MCP with i
 
 | Mock | Production swap |
 |---|---|
-| `mock({ reply })` | `anthropic()` / `openai()` / `bedrock()` / `ollama()` |
-| `InMemoryStore` | Redis · Dynamo · Postgres · Pinecone (peer-dep adapters) |
+| `mock({ reply })` · `mock({ replies })` for scripted multi-turn | `anthropic()` / `openai()` / `bedrock()` / `ollama()` |
+| `InMemoryStore` | `RedisStore` (`agentfootprint/memory-redis`) · `AgentCoreStore` (`agentfootprint/memory-agentcore`) · Dynamo · Postgres · Pinecone (planned) |
 | `mockEmbedder()` | OpenAI / Cohere / Bedrock embedder factory |
-| `mcpClient({ _client })` injection | `mcpClient({ transport })` real server |
+| `mockMcpClient({ tools })` — in-memory, no SDK | `mcpClient({ transport })` real server |
 | inline `defineTool({ execute: async () => '...' })` | real implementation |
 
 When generating starter code, default to the mock surface unless the user explicitly says they have a key / endpoint / store ready.

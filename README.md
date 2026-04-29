@@ -270,10 +270,10 @@ When the logic is right, swap one boundary at a time:
 
 | Boundary | Mock for development | Production swap |
 |---|---|---|
-| **LLM provider** | `mock({ reply })` | `anthropic()` &middot; `openai()` &middot; `bedrock()` &middot; `ollama()` |
+| **LLM provider** | `mock({ reply })` &middot; `mock({ replies })` for scripted ReAct | `anthropic()` &middot; `openai()` &middot; `bedrock()` &middot; `ollama()` |
 | **Embedder** | `mockEmbedder()` | OpenAI / Cohere / Bedrock embedder (factories on roadmap) |
-| **Memory store** | `InMemoryStore` | Redis / DynamoDB / Postgres / Pinecone (peer-dep adapters) |
-| **MCP server** | `mcpClient({ _client })` injection | `mcpClient({ transport })` to a real server |
+| **Memory store** | `InMemoryStore` | `RedisStore` (`agentfootprint/memory-redis`) &middot; `AgentCoreStore` (`agentfootprint/memory-agentcore`) &middot; DynamoDB / Postgres / Pinecone (planned) |
+| **MCP server** | `mockMcpClient({ tools })` &mdash; in-memory, no SDK | `mcpClient({ transport })` to a real server |
 | **Tool execution** | `defineTool({ execute: async () => '...' })` | Same `defineTool`, real implementation |
 
 Each swap is one line. The flowchart, narrative, recorders, and tests don't change. Ship the patterns first; pay for tokens last.

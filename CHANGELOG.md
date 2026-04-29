@@ -5,6 +5,147 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.3.0]
+
+Mock-first development is now a first-class workflow with two new
+public surfaces, the first two production memory-store adapters
+arrive as peer-deps via subpath imports, and `package.json` declares
+every optional SDK in `peerDependenciesMeta`. Suite: 1229 / 1229.
+
+### Added — `mock({ replies })` for scripted multi-turn agents
+
+```typescript
+import { Agent, mock, defineTool } from 'agentfootprint';
+
+const provider = mock({
+  replies: [
+    // Iteration 1: LLM decides to call a tool
+    { toolCalls: [{ id: '1', name: 'lookup', args: { topic: 'refunds' } }] },
+    // Iteration 2: LLM produces final answer
+    { content: 'Refunds take 3 business days.' },
+  ],
+});
+```
+
+Each `complete()` / `stream()` consumes one reply in order. Exhaustion
+throws a clear error so a misnumbered script fails the test instead
+of silently looping. `provider.resetReplies()` rewinds the cursor for
+cross-scenario reuse.
+
+### Added — `mockMcpClient({ tools })` (in-memory MCP server)
+
+Drop-in replacement for `mcpClient(opts)` — same `McpClient` shape,
+zero subprocess / network / SDK install. Build the entire MCP
+integration offline, swap to real `mcpClient` when ready.
+
+```typescript
+import { Agent, mock, mockMcpClient } from 'agentfootprint';
+
+const slack = mockMcpClient({
+  name: 'slack',
+  tools: [
+    {
+      name: 'send_message',
+      description: 'Post a message to a channel',
+      inputSchema: { type: 'object' },
+      handler: async ({ text }) => `Posted: ${text}`,
+    },
+  ],
+});
+
+const agent = Agent.create({ provider: mock({ reply: 'ok' }) })
+  .tools(await slack.tools())
+  .build();
+```
+
+The `_client` injection on `mcpClient` is `@internal` because the SDK
+shape isn't a stable public surface. `mockMcpClient` is the public,
+documented mock entry point.
+
+### Added — `RedisStore` (subpath: `agentfootprint/memory-redis`)
+
+Persistent `MemoryStore` implementation backed by Redis. Lazy-requires
+`ioredis`; no runtime cost when another adapter is in use.
+
+```typescript
+import { RedisStore } from 'agentfootprint/memory-redis';
+
+const store = new RedisStore({ url: 'redis://localhost:6379' });
+const memory = defineMemory({
+  id: 'redis-window',
+  type: MEMORY_TYPES.EPISODIC,
+  strategy: { kind: MEMORY_STRATEGIES.WINDOW, size: 10 },
+  store,
+});
+```
+
+Implements every `MemoryStore` method except `search()`. `putIfVersion`
+is atomic via a small Lua script (real CAS, not emulated). RedisSearch
+(vector retrieval) lands as a separate adapter in a future release.
+
+### Added — `AgentCoreStore` (subpath: `agentfootprint/memory-agentcore`)
+
+AWS Bedrock AgentCore Memory adapter. Lazy-requires
+`@aws-sdk/client-bedrock-agent-runtime`.
+
+```typescript
+import { AgentCoreStore } from 'agentfootprint/memory-agentcore';
+
+const store = new AgentCoreStore({
+  memoryId: 'arn:aws:bedrock:us-east-1:...:memory/my-mem',
+  region: 'us-east-1',
+});
+```
+
+Maps the `MemoryStore` interface onto AgentCore's session/event model.
+Caveats called out in the JSDoc:
+
+- `putIfVersion` is emulated client-side (read+write) — fine for
+  single-writer-per-session deployments.
+- `seen` / `feedback` use in-process shadow state (don't survive
+  process restart). Use `RedisStore` for durable recognition.
+- `search()` is NOT exposed in v2.3 — AgentCore's native retrieve API
+  will land as a separate `agentcoreRetrieve()` helper in a future release.
+
+### Changed — `package.json` peer-dep declarations
+
+Every lazy-required SDK is now declared in `peerDependenciesMeta` with
+`optional: true` so npm advertises the relationship without auto-installing
+or warning:
+
+- `@anthropic-ai/sdk` (was undeclared — silent peer-dep)
+- `openai` (was undeclared)
+- `@aws-sdk/client-bedrock-runtime` (was undeclared)
+- `@aws-sdk/client-bedrock-agent-runtime` (new — AgentCore)
+- `@modelcontextprotocol/sdk` (was undeclared)
+- `ioredis` (new — Redis)
+- `zod` (already declared)
+
+Friendly install hints fire at first call when an SDK is missing — same
+pattern as `AnthropicProvider` since v1.
+
+### Examples
+
+- `examples/features/07-mock-multi-turn-replies.ts` — scripted ReAct loop
+- `examples/memory/08-redis-store.ts` — RedisStore with mock-injected client
+- `examples/memory/09-agentcore-store.ts` — AgentCoreStore with mock-injected client
+
+All run end-to-end via `npm run example <path>`.
+
+### Tests
+
++66 new tests (1163 → 1229):
+- +6 MockProvider replies (consumption order, toolCalls partial, exhaustion, reset, precedence, stream)
+- +15 mockMcpClient (lifecycle, handler dispatch, arg coercion, error context, Agent integration, schema fidelity)
+- +23 RedisStore (CAS Lua, TTL, multi-tenant isolation, GDPR forget, signatures, feedback)
+- +22 AgentCoreStore (emulated CAS, session-keyed isolation, shadow state, GDPR forget)
+
+### Process change — design memo BEFORE release
+
+v2.3 ships with a 9-panel design memo signed off ahead of code, per the
+process-change committed in v2.2.x: panel verdicts live in
+`memory/agentfootprint_v23_design.md`, not in JSDoc.
+
 ## [2.2.0]
 
 Adds MCP (Model Context Protocol) client integration. Connect to any
