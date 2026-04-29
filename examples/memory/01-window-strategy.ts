@@ -33,6 +33,7 @@ export const meta: ExampleMeta = {
 export async function run(input: string, provider?: LLMProvider): Promise<string> {
   const store = new InMemoryStore();
 
+  // #region define
   const memory = defineMemory({
     id: 'last-10',
     description: 'Keep the last 10 turns of conversation.',
@@ -40,6 +41,7 @@ export async function run(input: string, provider?: LLMProvider): Promise<string
     strategy: { kind: MEMORY_STRATEGIES.WINDOW, size: 10 },
     store,
   });
+  // #endregion define
 
   const agent = Agent.create({
     provider: provider ?? mock({ reply: "You just asked about your previous message." }),

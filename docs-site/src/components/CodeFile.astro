@@ -1,0 +1,72 @@
+---
+/**
+ * <CodeFile> — import a code block from a file in the repo.
+ *
+ * The whole point: code shown in docs ALWAYS comes from a real file
+ * in `examples/` (or `src/`) that the test suite already runs against.
+ * Docs and code can never drift, because there is no docs code — only
+ * imports of code that's already proven to compile and run.
+ *
+ * Usage in MDX:
+ *   import CodeFile from '@/components/CodeFile.astro';
+ *
+ *   <CodeFile path="examples/memory/01-window-strategy.ts" />
+ *   <CodeFile path="examples/memory/01-window-strategy.ts" region="define" />
+ *   <CodeFile path="examples/memory/01-window-strategy.ts" region="define" title="Define a window memory" />
+ *
+ * Build behavior:
+ *   - Path is resolved RELATIVE TO THE REPO ROOT (one level above docs-site/).
+ *   - Missing file → build fails (Node fs throws).
+ *   - Missing region → build fails (RegionNotFoundError throws).
+ *   - Region found → renders only the lines BETWEEN the markers,
+ *     dedented to remove common leading whitespace.
+ *
+ * This file runs at build time in Node — `fs.readFileSync` is fine.
+ */
+import fs from 'node:fs';
+import path from 'node:path';
+import { Code } from '@astrojs/starlight/components';
+import { extractRegion, extractWholeFile } from '../lib/regionExtractor';
+
+interface Props {
+  /** Path to the source file, RELATIVE TO THE REPO ROOT. */
+  readonly path: string;
+  /** Optional region marker name. When omitted, the whole file is shown. */
+  readonly region?: string;
+  /** Display title (defaults to the path). */
+  readonly title?: string;
+  /** Language hint (defaults to detected from extension). */
+  readonly lang?: string;
+}
+
+const { path: filePath, region, title, lang } = Astro.props;
+
+// Repo root is one level up from docs-site/ — astro processes are
+// always launched from docs-site/ so process.cwd() is reliable here.
+const repoRoot = path.resolve(process.cwd(), '..');
+const absolutePath = path.resolve(repoRoot, filePath);
+
+// Read the file. Throws if missing — exactly the desired behavior:
+// docs build fails loudly when an example was renamed or deleted.
+const source = fs.readFileSync(absolutePath, 'utf-8');
+
+const code = region
+  ? extractRegion(source, region, filePath).code
+  : extractWholeFile(source);
+
+const detectedLang =
+  lang ??
+  (filePath.endsWith('.ts')
+    ? 'ts'
+    : filePath.endsWith('.tsx')
+      ? 'tsx'
+      : filePath.endsWith('.js')
+        ? 'js'
+        : filePath.endsWith('.json')
+          ? 'json'
+          : 'text');
+
+const displayTitle = title ?? filePath + (region ? ` — region: ${region}` : '');
+---
+
+<Code code={code} lang={detectedLang} title={displayTitle} />
