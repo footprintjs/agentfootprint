@@ -1,192 +1,98 @@
 ---
-title: Memory pipeline
-description: Give your agent durable memory across turns and sessions — composed as flowchart subflows you can inspect, swap, and audit.
+title: Memory
+description: One factory, four types, seven strategies. Persistent context across agent runs — observable, swappable, multi-tenant.
 ---
 
-import { Aside } from '@astrojs/starlight/components';
+import CodeFile from '@/components/CodeFile.astro';
 
-Agents forget everything when the process ends — each `.run()` starts with a blank slate unless you hand them context. The **memory pipeline** is how you give an agent durable recall across turns and sessions, composed as two flowchart subflows:
+> Your support agent told a customer their refund was processed last Monday. Six weeks later they ask *"why did you tell me that when it wasn't true?"* You go to look. The agent is gone. Logs are scattered. The decision evidence is not there. **Memory in agentfootprint exists to close that gap** — and the **Causal** type goes one step further by persisting *the decision evidence itself*, not just the conversation.
 
-- **Read** runs BEFORE `CallLLM` — loads relevant prior content from a store, picks what fits the token budget, formats it as a `system` message, and prepends it to the prompt.
-- **Write** runs AFTER the turn finalizes — persists the new user / assistant messages back to the store, tagged with turn number + identity for later recall.
+## What memory is
 
-Because both halves are flowcharts, the narrative shows *which* memories were recalled, why the picker included them, and what got persisted. Nothing is hidden inside a black-box adapter.
+A **Memory** is one flavor of the [Injection primitive](/agentfootprint/getting-started/key-concepts/) that operates *across runs*: a paired read+write subflow that loads relevant past content into the messages slot before the LLM call, then persists the new turn back to a store after the turn finalizes.
 
-## Quick start
+The discipline is captured in two orthogonal axes:
 
-```ts
-import { Agent, anthropic } from 'agentfootprint';
-import { defaultPipeline, InMemoryStore } from 'agentfootprint/memory';
+| Axis | What it is | Choose by |
+|---|---|---|
+| **Type** | What shape of memory you're keeping | Episodic / Semantic / Narrative / **Causal** ⭐ |
+| **Strategy** | How content is selected for the next call | Window / Budget / Summarize / TopK / Extract / Decay / Hybrid |
 
-// One store, shared across all turns / tenants.
-const store = new InMemoryStore();
+`type × strategy × store` combinations cover almost every memory pattern in the agent literature, including ones the literature hasn't named yet. The store layer is where multi-tenant isolation lives — every read and write is namespaced by the identity tuple `{ tenant, principal, conversationId }`.
 
-// Build the pipeline once at startup. It compiles two subflows
-// (read + write) that the Agent will mount inside its loop.
-const pipeline = defaultPipeline({
-  store,
-  loadCount: 20,          // how many recent entries to consider
-  reserveTokens: 512,     // tokens to leave for headers + new user turn
-  maxEntries: 10,         // cap to avoid lost-in-the-middle
-});
+## The four types
 
-const agent = Agent.create({ provider: anthropic('claude-sonnet-4-5') })
-  .system('You remember the user across turns.')
-  .memoryPipeline(pipeline)
-  .build();
+| Type | Stores | When to use |
+|---|---|---|
+| `EPISODIC` | Raw conversation messages | Default for chat — "what was said earlier" |
+| `SEMANTIC` | Extracted structured facts | "What does the agent know about this customer?" |
+| `NARRATIVE` | Beats / summaries of prior runs | Long-running session summaries; cross-session highlights |
+| **`CAUSAL`** ⭐ | footprintjs decision-evidence snapshots | Cross-run "why" replay — answer follow-up questions from the SOURCE, not from reconstruction |
 
-// Turn 1 — gets persisted
-await agent.run('My name is Alice.', {
-  identity: { conversationId: 'alice-session' },
-});
+Causal memory is the differentiator. Other libraries' memory remembers what was said. agentfootprint's `defineMemory({ type: CAUSAL })` remembers what the agent's flowchart *captured* during the run — every `decide()` value, every `select()` evidence, every commit log entry. New questions cosine-match past queries; the past decision evidence injects into the next prompt; the LLM answers from EXACT past facts, not from reconstruction.
 
-// Turn 2 — read subflow injects "Alice" back into the LLM prompt
-const result = await agent.run('What did I tell you my name was?', {
-  identity: { conversationId: 'alice-session' },
-});
-// result.content → "Your name is Alice."
-```
+## The seven strategies
 
-## Per-run identity — one agent, many users
+| Strategy | How content is selected | Cost |
+|---|---|---|
+| `WINDOW` | Last N entries (rule, no LLM, no embeddings) | Free |
+| `BUDGET` | Fit-to-tokens via decider | Free |
+| `SUMMARIZE` | LLM compresses older turns into beats | One LLM call per write |
+| `TOP_K` | Score-threshold semantic retrieval | Embedding call per query |
+| `EXTRACT` | LLM distills structured facts on write | One LLM call per write |
+| `DECAY` | Recency-weighted relevance | Free; needs `decayPolicy` per entry |
+| `HYBRID` | Compose multiple strategies | Sum of constituents |
 
-The agent is a **singleton**; identity is supplied per `.run()`. Pass it in `run()`'s second argument:
+A `WINDOW` strategy on an Episodic store keeps the last N messages. The same `WINDOW` on a Causal store keeps the last N decision-evidence snapshots. Mix and match.
 
-```ts
-await agent.run('Show my orders', {
-  identity: {
-    tenant: 'acme-corp',      // optional — for multi-tenant isolation
-    principal: 'user-42',      // optional — user within tenant
-    conversationId: 'thread-7', // required — the "session" key
-  },
-  turnNumber: 3,               // optional — defaults to 1
-  contextTokensRemaining: 8000, // optional — defaults to 4000
-});
-```
+## Quick start — sliding window
 
-The store namespaces all keys by identity — tenant `A` can never see tenant `B`'s memory, even with identical `conversationId`. No app-level isolation code required.
+The simplest memory: last N turns, no LLM, no embeddings, near-zero cost. Good default for short-to-medium chats.
 
-<Aside type="caution" title="Identity is mandatory in multi-tenant apps">
-If you don't pass `identity`, the pipeline falls back to `{ conversationId: 'default' }`. Fine for demos. **Dangerous** in prod — every user's turns share one conversation. In dev mode you'll see a console warning; in prod the fallback is silent.
-</Aside>
+<CodeFile path="examples/memory/01-window-strategy.ts" region="define" title="examples/memory/01-window-strategy.ts (region: define)" />
 
-## How it composes into the loop
+`InMemoryStore` is for dev. Production swaps to `RedisStore` (`agentfootprint/memory-redis`), `AgentCoreStore` (`agentfootprint/memory-agentcore`), or another adapter — same `MemoryStore` interface, drop-in.
 
-```
-Seed
-  → MemorySeed           ← copies identity/turn/budget from run() args onto scope
-  → [sf-memory-read]     ← the pipeline.read subflow: LoadRecent → Pick → Format
-  → [SystemPrompt subflow]
-  → [Messages subflow]
-  → [Tools subflow]
-  → AssemblePrompt       ← prepends system prompt + memory injection to messages
-  → CallLLM
-  → ParseResponse
-  → RouteResponse(decider)
-      ├─ tool-calls → [ToolExecution subflow] → loop
-      └─ final      → [Finalize subflow]
-                        ├─ Finalize (extract result)
-                        ├─ PackageForWrite
-                        ├─ [sf-memory-write]  ← the pipeline.write subflow
-                        └─ Break              (propagates to parent loop)
-```
+## Causal memory — replay decisions, not just messages
 
-Memory-read is mounted **before** the loop body so it runs exactly once per `.run()` call — even in [Dynamic ReAct](/agentfootprint/guides/dynamic-react) mode, where `sf-system-prompt` and `sf-tools` re-evaluate every iteration. The store doesn't change mid-turn, so re-reading would be pure waste.
+The `CAUSAL` type stores footprintjs decision-evidence snapshots tagged with the user's original query. On follow-up runs, the read subflow embeds the new query, cosine-searches the snapshot store, and (when above threshold) injects the matching past snapshot's decision evidence into the next LLM call. The LLM answers about past behavior from the actual recorded reasoning, not by hallucinating consistency.
 
-Both memory subflows show up in the narrative and in any viewer built on `footprint-explainable-ui` — you can click into them, see which entries the picker included, and see what the write side actually persisted.
+<CodeFile path="examples/memory/06-causal-snapshot.ts" region="define-causal" title="examples/memory/06-causal-snapshot.ts (region: define-causal)" />
 
-## The default pipeline
+`projection: SNAPSHOT_PROJECTIONS.DECISIONS` says "when injecting, include only the `decide()` and `select()` evidence — not the full snapshot." Other projections: `COMMITS` (commit-log only), `NARRATIVE` (rendered narrative entries), `FULL` (everything).
 
-`defaultPipeline({ store })` composes three read stages and one write stage:
+The same snapshot data shape feeds SFT / DPO / process-RL training pipelines (`exportForTraining({ format })` is on the v2.5+ roadmap). One recording, three downstream consumers (audit / cheap-model triage / training data) — see the README's "differentiator" section for the full economic argument.
 
-| Stage | Reads | Writes | Purpose |
-|---|---|---|---|
-| `LoadRecent` | `identity`, `turnNumber` | `loaded` | Fetch N most-recent entries from the store (newest first) |
-| `PickByBudget` | `loaded`, `contextTokensRemaining` | `selected` | Greedy select entries that fit the budget, newest first |
-| `FormatDefault` | `selected` | `formatted` | Render as `<memory role="user" turn="5">...</memory>` blocks inside one `system` message |
-| `WriteMessages` | `identity`, `turnNumber`, `newMessages` | *store* | Persist each message as `MemoryEntry` with id `msg-{turn}-{index}` |
+## Multi-tenant identity
 
-The picker is a `decide()` — the narrative captures which branch fired (`skip-empty`, `skip-no-budget`, or "included N/M entries totaling K tokens"), so you can answer "why did / didn't you remember this?" after the fact.
-
-## Configuring the default pipeline
+Every store call takes a `MemoryIdentity` tuple — `{ tenant?, principal?, conversationId }`. Adapters MUST namespace internal keys by the full tuple. A bug passing the wrong tenant surfaces as "no data" not as a cross-tenant leak.
 
 ```ts
-defaultPipeline({
-  store,                          // required
-  loadCount: 50,                  // default 20
-  reserveTokens: 1024,            // default 256 — leave room for new user turn
-  minimumTokens: 200,             // default 100 — below this, inject nothing (noise)
-  maxEntries: 10,                 // default: no cap, budget-only
-  tiers: ['hot'],                 // filter reads to a specific tier
-  writeTier: 'hot',               // tag written entries for tier-aware reads
-  writeTtlMs: 30 * 24 * 60 * 60_000, // expire after 30 days (compliance)
-  formatHeader: 'Prior session notes:',
-  formatFooter: 'Only reference these when relevant.',
-});
+const identity = { tenant: 'acme', principal: 'alice', conversationId: 'thread-42' };
+await agent.run({ message: '...', identity });
 ```
 
-Tiered writes (`hot`/`warm`/`cold`) let you keep recent turns fresh while letting older ones expire. Combined with `writeTtlMs`, they're a cheap path to a MemGPT-style hot/warm/cold store.
-
-## The ephemeral pipeline
-
-For compliance-sensitive workflows where you want memory recall **but no persistence** (e.g., the agent should see prior-turn context but nothing should ever land on disk):
-
-```ts
-import { ephemeralPipeline, InMemoryStore } from 'agentfootprint/memory';
-
-// Pre-seed the store with known context; the pipeline will READ from it
-// but never write back.
-const store = new InMemoryStore();
-await store.put({ conversationId: 'x' }, { /* MemoryEntry */ });
-
-const agent = Agent.create({ provider })
-  .memoryPipeline(ephemeralPipeline({ store }))
-  .build();
-```
-
-`ephemeralPipeline` returns `{ read }` only — there's no write subflow to mount, so the agent reads context but nothing gets persisted from the turn itself.
-
-## Custom pipelines
-
-Both halves are plain `FlowChart`s. To build your own:
-
-```ts
-import { flowChart } from 'footprintjs';
-import type { MemoryPipeline } from 'agentfootprint/memory';
-
-const customRead = flowChart('MyLoad', myLoadStage, 'load')
-  .addFunction('Rerank', myRerankStage, 'rerank')
-  .addFunction('Format', myFormatStage, 'format')
-  .build();
-
-const customWrite = flowChart('ExtractFacts', myFactExtractor, 'extract')
-  .addFunction('Persist', myPersistStage, 'persist')
-  .build();
-
-const pipeline: MemoryPipeline = { read: customRead, write: customWrite };
-agent.memoryPipeline(pipeline);
-```
-
-As long as each subflow reads/writes the documented scope keys (`identity`, `turnNumber`, `contextTokensRemaining`, `newMessages`, and writes `formatted` on the read side), the agent will thread everything through correctly.
+For a deeper dive on how identity flows through the store + RAG indexing footgun, see [Adapter caveats](#) (TODO link in v2.4 Phase 3).
 
 ## Stores
 
-The `MemoryStore` interface is a 9-method CRUD surface: `get`, `put`, `putIfVersion` (optimistic concurrency), `list` (with cursor pagination), `delete`, `seen` (content-hash dedupe), `recordSignature`, `feedback` (user ratings), `forget` (privacy erasure). `InMemoryStore` is the reference implementation; real backends (Redis, DynamoDB, Postgres) plug in via the same interface.
+| Store | Subpath | Production-ready |
+|---|---|---|
+| `InMemoryStore` | (top-level) | Dev / tests / single-process scenarios |
+| `RedisStore` | `agentfootprint/memory-redis` | ✅ — peer-dep `ioredis`, atomic Lua CAS, pipelined writes, GDPR forget |
+| `AgentCoreStore` | `agentfootprint/memory-agentcore` | ✅ — peer-dep `@aws-sdk/client-bedrock-agent-runtime`, session/event mapping |
+| DynamoDB / Postgres / Pinecone | (planned) | v2.6+ |
 
-The interface is deliberately small. If your backend needs extra features (vector search, full-text indexing), add them as separate stages in your custom read subflow — the store stays a simple CRUD layer.
+Both production adapters lazy-require their SDK and accept `_client` for test injection. See [memory-stores](/agentfootprint/integrations/memory-stores/) for the full integration matrix.
 
-## Tradeoffs
+## Anti-patterns
 
-| Use the default pipeline when... | Build a custom pipeline when... |
-|---|---|
-| You want "chat history that persists" with minimal setup | You need semantic retrieval, reranking, or fact extraction |
-| Recency heuristic is fine | Relevance > recency (RAG-style vector search) |
-| Memory is cheap enough to include recent turns verbatim | You need MemGPT-style compaction / summarization |
-| Single-store, single-tier | Multi-store routing (hot SSD + cold S3), tier migration |
+- ❌ **Don't fall back when TopK threshold returns nothing** — strict semantics. Garbage past context is worse than no context. The library throws on empty by design; don't catch + ignore.
+- ❌ **Don't change `embedderId` between writes and reads** — stored entries are tagged with the embedder used at write time. Reading with a different embedder silently corrupts retrieval. Use the same embedder or filter `embedderId` at search.
+- ❌ **Don't use `_global` identity in production multi-tenant apps** — defaults are dev-friendly footguns. Pass per-tenant identity at every `agent.run()` call.
 
-Memory-read runs exactly **once per turn**, regardless of loop pattern (Regular or Dynamic) or how many tool-call iterations happen inside the turn. You pay one store query per `.run()` call — no multiplication by iteration count.
+## Next steps
 
-## See also
-
-- [`agentfootprint/memory` API reference](/agentfootprint/api/) — full type definitions for `MemoryStore`, `MemoryEntry`, `MemoryIdentity`
-- [RAG pattern](/agentfootprint/guides/rag) — semantic retrieval for when relevance matters more than recency
-- [Grounding analysis](/agentfootprint/guides/grounding) — verify that the LLM actually used the memory you injected
+- [Skills, explained](/agentfootprint/guides/skills-explained/) — context engineering for instructions, the cousin pattern to memory
+- [Causal deep-dive](/agentfootprint/guides/causal-deep-dive/) — exact snapshot shape + projection rules + worked replay (coming in v2.4)
+- [Memory store adapters](/agentfootprint/integrations/memory-stores/) — Redis · AgentCore · planned backends

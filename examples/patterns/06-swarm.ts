@@ -48,6 +48,7 @@ export async function run(input: string, provider?: import("../../src/index.js")
     .system('You classify user requests and forward them.')
     .build();
 
+  // #region swarm-recipe
   const router = swarm({
     agents: [
       { id: 'triage', runner: triage },
@@ -66,6 +67,7 @@ export async function run(input: string, provider?: import("../../src/index.js")
     },
     maxHandoffs: 5,
   });
+  // #endregion swarm-recipe
 
   router.on('agentfootprint.composition.iteration_start', (e) =>
     console.log(`▶ handoff ${e.payload.iteration}`),

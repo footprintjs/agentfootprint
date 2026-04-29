@@ -27,6 +27,7 @@ export const meta: ExampleMeta = {
 };
 
 export async function run(input: string, provider?: LLMProvider): Promise<string> {
+  // #region build
   const llm = LLMCall.create({
     provider: provider ?? exampleProvider('core', { reply: "It's sunny in San Francisco." }),
     model: 'mock-weather',
@@ -34,6 +35,7 @@ export async function run(input: string, provider?: LLMProvider): Promise<string
   })
     .system('You are a terse weather assistant. One sentence answers.')
     .build();
+  // #endregion build
 
   llm.on('agentfootprint.stream.llm_start', (e) =>
     console.log(`→ calling ${e.payload.provider}/${e.payload.model}`),

@@ -42,11 +42,14 @@ export async function run(input: string, provider?: import("../../src/index.js")
     })
     .build();
 
+  // #region enable-thinking
   // Live status line — user-facing "what's the agent doing right now".
   const stopThinking = agent.enable.thinking({
     onStatus: (status) => console.log(`  ⎈ ${status}`),
   });
+  // #endregion enable-thinking
 
+  // #region enable-logging
   // Firehose logging filtered to stream + agent domains. The logger
   // object wraps console, pino, winston, etc. — any object with a
   // `log(message, data?)` method.
@@ -56,6 +59,7 @@ export async function run(input: string, provider?: import("../../src/index.js")
       log: (message) => console.log(`  [log] ${message}`),
     },
   });
+  // #endregion enable-logging
 
   let out: unknown;
   try {

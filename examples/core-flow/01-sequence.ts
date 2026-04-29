@@ -43,11 +43,13 @@ export async function run(input: string, provider?: import("../../src/index.js")
     .system('You are a support dispatcher. Write a short acknowledgement.')
     .build();
 
+  // #region build
   const pipeline = Sequence.create({ name: 'IntakePipeline' })
     .step('classify', classify)
     .pipeVia((label) => ({ message: `Intent: ${label.trim()}` }))
     .step('respond', respond)
     .build();
+  // #endregion build
 
   pipeline.on('agentfootprint.composition.enter', (e) =>
     console.log(`[enter] ${e.payload.kind}:${e.payload.id} with ${e.payload.childCount} children`),

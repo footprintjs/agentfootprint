@@ -37,6 +37,7 @@ export async function run(input: string, provider?: import("../../src/index.js")
     .system('You are the standard support bot.')
     .build();
 
+  // #region build
   const triage = Conditional.create({ name: 'Triage' })
     .when(
       'urgent',
@@ -45,6 +46,7 @@ export async function run(input: string, provider?: import("../../src/index.js")
     )
     .otherwise('normal', normal)
     .build();
+  // #endregion build
 
   triage.on('agentfootprint.composition.route_decided', (e) =>
     console.log(`[route] chose "${e.payload.chosen}" — ${e.payload.rationale}`),

@@ -46,12 +46,14 @@ export async function run(input: string, provider?: LLMProvider): Promise<string
       `Refund issued for order ${orderId}: $42.99 to original payment method.`,
   });
 
+  // #region define-skill
   const billingSkill = defineSkill({
     id: 'billing',
     description: 'Read for refund / charge / billing questions. Unlocks process_refund.',
     body: 'When handling billing: confirm the order id, then call process_refund. Always state the amount + payment method in the final reply.',
     tools: [refundTool],
   });
+  // #endregion define-skill
 
   // Two-iteration mock: first turn the LLM "asks for billing skill" via
   // read_skill('billing'); second turn it uses process_refund.

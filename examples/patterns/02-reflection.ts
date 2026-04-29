@@ -34,6 +34,7 @@ export async function run(input: string, provider?: import("../../src/index.js")
   ];
   let i = 0;
 
+  // #region reflexion-recipe
   const runner = reflection({
     provider: provider ?? exampleProvider('pattern', { respond: () => replies[i++ % replies.length]! }),
     model: 'mock',
@@ -42,6 +43,7 @@ export async function run(input: string, provider?: import("../../src/index.js")
       'Critique the poem. When it is good enough include the marker DONE.',
     maxIterations: 5,
   });
+  // #endregion reflexion-recipe
 
   runner.on('agentfootprint.composition.iteration_start', (e) =>
     console.log(`▶ refine iteration ${e.payload.iteration}`),

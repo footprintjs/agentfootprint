@@ -33,6 +33,7 @@ export async function run(input: string, provider?: import("../../src/index.js")
       .system(`You are a ${tag} reviewer. Give one line.`)
       .build();
 
+  // #region build
   // STRICT (default): any branch failure → whole Parallel throws
   const committee = Parallel.create({ name: 'Committee' })
     .branch('legal', brief('legal'))
@@ -44,6 +45,7 @@ export async function run(input: string, provider?: import("../../src/index.js")
         .join('\n'),
     )
     .build();
+  // #endregion build
 
   console.log('--- strict mode ---');
   const strict = await committee.run({ message: input });

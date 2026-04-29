@@ -52,6 +52,7 @@ export async function run(input: string, provider?: LLMProvider): Promise<string
   //   iteration 2 — produce the final answer using the tool result
   const scriptedProvider =
     provider ??
+    // #region scripted-replies
     mock({
       replies: [
         {
@@ -66,6 +67,7 @@ export async function run(input: string, provider?: LLMProvider): Promise<string
         { content: 'Refunds take 3 business days.' },
       ],
     });
+  // #endregion scripted-replies
 
   const agent = Agent.create({
     provider: scriptedProvider,

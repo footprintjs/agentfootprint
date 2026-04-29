@@ -31,6 +31,7 @@ export const meta: ExampleMeta = {
 };
 
 export async function run(input: string, provider?: LLMProvider): Promise<string> {
+  // #region define
   const calmTone = defineInstruction({
     id: 'calm-tone',
     description: 'Calm, empathetic tone with frustrated users.',
@@ -43,7 +44,9 @@ export async function run(input: string, provider?: LLMProvider): Promise<string
     activeWhen: (ctx) => ctx.iteration === 1, // first iteration only
     prompt: 'Keep your first response under 3 sentences.',
   });
+  // #endregion define
 
+  // #region attach
   const agent = Agent.create({
     provider: provider ?? mock({ reply: 'I hear you. Let me help.' }),
     model: 'mock',
@@ -53,6 +56,7 @@ export async function run(input: string, provider?: LLMProvider): Promise<string
     .instruction(calmTone)
     .instruction(concise)
     .build();
+  // #endregion attach
 
   const result = await agent.run({ message: input });
   if (typeof result !== 'string') throw new Error('Agent paused unexpectedly.');

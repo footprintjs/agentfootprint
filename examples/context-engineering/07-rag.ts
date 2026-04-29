@@ -56,6 +56,7 @@ export async function run(input: string, provider?: LLMProvider): Promise<string
     },
   ]);
 
+  // #region define-and-attach
   const docs = defineRAG({
     id: 'product-docs',
     description: 'Product documentation chunks',
@@ -74,6 +75,7 @@ export async function run(input: string, provider?: LLMProvider): Promise<string
     .system('You answer support questions using the retrieved docs.')
     .rag(docs)
     .build();
+  // #endregion define-and-attach
 
   // Identity is shared with the corpus indexing default ('_global').
   const result = await agent.run({

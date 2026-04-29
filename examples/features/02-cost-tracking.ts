@@ -36,6 +36,7 @@ export async function run(input: string, provider?: import("../../src/index.js")
     },
   };
 
+  // #region cost-tracking
   // 'feature' kind drives the smart tool-call flow. Cost ticks fire
   // automatically off the per-iteration usage MockProvider estimates
   // (chars/4) — sufficient to demo the budget crossing.
@@ -58,6 +59,7 @@ export async function run(input: string, provider?: import("../../src/index.js")
       `[tick] +$${p.estimatedUsd.toFixed(6)} — cumulative $${p.cumulative.estimatedUsd.toFixed(6)}`,
     );
   });
+  // #endregion cost-tracking
   agent.on('agentfootprint.cost.limit_hit', (e) => {
     console.log(`⚠  budget ${e.payload.limit} crossed — actual ${e.payload.actual} (${e.payload.action})`);
   });

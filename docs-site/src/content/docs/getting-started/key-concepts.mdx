@@ -1,7 +1,11 @@
 ---
 title: Key Concepts
-description: The 5-layer taxonomy. 2 primitives, 3 compositions, N patterns, context engineering, features.
+description: The 5-layer taxonomy. 2 primitives, 4 compositions, N patterns, context engineering, features.
 ---
+
+import CodeFile from '@/components/CodeFile.astro';
+
+> We were one paper away from shipping a thirteenth Agent class when we stopped and asked: *what if every new pattern is just a composition of what we already have?* That question is why this library has 2 primitives and 4 compositions instead of 13 classes.
 
 ## Key terms
 
@@ -12,12 +16,13 @@ Before diving in, here are the terms you'll see throughout the docs:
 | **LLM** | One prompt in, one response out. The atomic invocation. |
 | **Agent** | An LLM that loops: calls tools, reads results, calls more tools, responds. **Agent = ReAct** — if it doesn't loop-with-tools, it isn't an Agent. |
 | **ReAct** | "Reasoning + Acting" — the loop where an LLM thinks, acts (calls a tool), observes the result, and repeats. (Yao et al. 2022) |
-| **Composition** | How primitives arrange: Sequence (one after another), Parallel (at the same time), Conditional (branch on a decider). |
+| **Composition** | How primitives arrange: Sequence (one after another), Parallel (at the same time), Conditional (branch on a decider), Loop (iterate until quality bar). |
 | **Pattern** | A named configuration — Reflexion, Tree-of-Thoughts, Hierarchy. Every named paper is a **recipe** of primitives + compositions, not a new class. |
 | **Context engineering** | What you inject into an Agent's three slots (system-prompt, messages, tools). RAG, Memory, Skills, Instructions, Grounding — all live here. |
+| **Injection** | The unified primitive behind every flavor of context engineering — content + slot + trigger. Skills, Steering, Instructions, Facts, Memory, RAG all reduce to this. |
 | **Narrative** | A structured execution trace — what happened, in what order, with what data. Not logs — connected entries with provenance. |
 | **Recorder** | A passive observer that collects data (tokens, cost, tool usage) during execution without affecting behavior. |
-| **Provider** | The LLM backend — Claude, GPT, Ollama, or your own. Swap with one line. |
+| **Provider** | The LLM backend — Claude, GPT, Bedrock, Ollama, or your own. Swap with one line. |
 
 ## The taxonomy
 
@@ -25,70 +30,52 @@ agentfootprint organizes AI work into **five layers**. Each layer is built from 
 
 ```
 PRIMITIVES (2 — atomic invocation units)
-  1. LLM      — one call
+  1. LLMCall  — one call
   2. Agent    — a loop of calls + tools + decisions (= ReAct)
 
-COMPOSITIONS (3 — how primitives arrange)
+COMPOSITIONS (4 — how primitives arrange)
   1. Sequence     — one after another
-  2. Parallel     — at the same time
+  2. Parallel     — at the same time, with merge
   3. Conditional  — branch on a decider
+  4. Loop         — iterate until quality bar
 
 PATTERNS (N — named configurations; every named paper is a recipe)
   ReAct              = Agent (default)
-  Dynamic ReAct      = Agent with slots re-evaluating per iter
-  Hierarchy (Swarm)  = Agent with specialist-Agents as tools
   Reflexion          = Sequence(Agent, LLM-critique, Agent)
   Tree-of-Thoughts   = Parallel(Agent × N) + LLM-rank
-  Plan-Execute       = LLM-plan + Sequence(Agent per step)
+  Self-Consistency   = Parallel(Agent × N) + majority-vote
+  Debate             = Loop(Agent × 2 + judge)
   Map-Reduce         = Parallel(Agent × N) + LLM-merge
+  Swarm              = Agent whose tools are other Agents
 
-CONTEXT ENGINEERING (cross-cutting — what you inject into Agent slots)
-  RAG          → messages
-  Memory       → messages
-  Skills       → system-prompt (+ tools)
-  Instructions → system-prompt (after specific tool results)
-  Tools        → tools slot
-  Grounding    → system-prompt (style, rules)
+CONTEXT ENGINEERING (cross-cutting — Injection primitive into Agent slots)
+  Steering     → system-prompt           (always-on)
+  Instruction  → system-prompt|messages  (rule-gated)
+  Skill        → system-prompt + tools   (LLM-activated)
+  Fact         → system-prompt|messages  (always-on data)
+  Memory       → messages                (cross-run)
+  RAG          → messages                (retrieve + score-threshold)
 
 FEATURES (infrastructure)
-  Providers · Runtime · Observability · Security · Resilience
+  Providers · Mocks-first · Observability · Pause/Resume · Resilience
 ```
 
 **Two theses to hold in your head:**
 
 1. **Agent = ReAct.** Not "Agent with ReAct as default." The Agent primitive IS the ReAct loop. If it doesn't loop-with-tools, it isn't an Agent — it's an LLM call.
-2. **Every named pattern = a composition of the 2 primitives + 3 compositions.** Don't invent new Agent classes for every paper (that's LangChain's mistake). Express papers as recipes.
+2. **Every named pattern = a composition of the 2 primitives + 4 compositions.** Don't invent new Agent classes for every paper (that's LangChain's mistake). Express papers as recipes.
 
-All runners share the same shape — `create → configure → build → run → observe`:
-
-```ts
-const runner = Concept.create({ provider }).build();
-const result = await runner.run(input);
-runner.getNarrative();   // what happened
-runner.getSnapshot();    // full state
-runner.getSpec();        // flowchart spec for visualization
-```
+All runners share the same shape — `create → configure → build → run → observe`.
 
 ---
 
 ## PRIMITIVES
 
-### 1. LLM (`LLMCall`) — one call
+### 1. LLMCall — one call
 
 The atom. One prompt in, one response out. No tools, no loop.
 
-```ts
-import { LLMCall, anthropic } from 'agentfootprint';
-
-const provider = anthropic('claude-sonnet-4-20250514');
-
-const call = LLMCall.create({ provider })
-  .system('Summarize in one sentence.')
-  .build();
-
-const result = await call.run('Long article text...');
-console.log(result.content);  // "The article discusses..."
-```
+<CodeFile path="examples/core/01-llm-call.ts" region="build" title="examples/core/01-llm-call.ts (region: build)" />
 
 **Use for:** summarization, classification, translation, extraction.
 
@@ -96,26 +83,7 @@ console.log(result.content);  // "The article discusses..."
 
 **Agent = ReAct.** This is the definition. The Agent primitive IS the ReAct loop — thinks, acts (tool call), observes, repeats.
 
-```ts
-import { Agent, defineTool, anthropic } from 'agentfootprint';
-
-const provider = anthropic('claude-sonnet-4-20250514');
-
-const searchTool = defineTool({
-  id: 'search',
-  description: 'Search the web',
-  inputSchema: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] },
-  handler: async ({ query }) => ({ content: `Results for "${query}": ...` }),
-});
-
-const agent = Agent.create({ provider })
-  .system('You are a research assistant.')
-  .tool(searchTool)
-  .maxIterations(10)
-  .build();
-
-const result = await agent.run('What are the latest AI trends?');
-```
+<CodeFile path="examples/core/02-agent-with-tools.ts" region="build" title="examples/core/02-agent-with-tools.ts (region: build)" />
 
 **Use for:** research, code generation, customer support, data analysis — anywhere you need tools-in-a-loop.
 
@@ -123,60 +91,21 @@ const result = await agent.run('What are the latest AI trends?');
 
 ## COMPOSITIONS
 
-The three ways primitives arrange. Every named pattern is built from these.
+The four ways primitives arrange. Every named pattern is built from these.
 
-### 1. Sequence (`FlowChart`) — one after another
+### 1. Sequence — one after another
 
-Chains multiple runners into a sequential pipeline. Each runner feeds into the next.
+Chains multiple runners into a sequential pipeline. Each step's output flows into the next via `pipeVia` (when shapes don't match):
 
-```ts
-import { FlowChart, Agent, anthropic } from 'agentfootprint';
+<CodeFile path="examples/core-flow/01-sequence.ts" region="build" title="examples/core-flow/01-sequence.ts (region: build)" />
 
-const provider = anthropic('claude-sonnet-4-20250514');
-
-const researcher = Agent.create({ provider, name: 'researcher' })
-  .system('Research the topic thoroughly.')
-  .build();
-
-const writer = Agent.create({ provider, name: 'writer' })
-  .system('Write a clear summary from the research.')
-  .build();
-
-const pipeline = FlowChart.create()
-  .agent('research', 'Research phase', researcher)
-  .agent('write', 'Writing phase', writer)
-  .build();
-
-const result = await pipeline.run('Explain quantum computing');
-```
-
-**Use for:** multi-step workflows, approval flows, ETL pipelines.
+**Use for:** multi-step workflows, classify-then-respond, ETL pipelines.
 
 ### 2. Parallel — at the same time
 
-Run multiple runners simultaneously and merge their results.
+Run multiple runners simultaneously and merge their results. Merge can be a function (deterministic) or an LLM (synthesis):
 
-```ts
-import { Parallel, Agent, anthropic } from 'agentfootprint';
-
-const provider = anthropic('claude-sonnet-4-20250514');
-
-const optimist = Agent.create({ provider, name: 'optimist' })
-  .system('Analyze the positive aspects.')
-  .build();
-
-const critic = Agent.create({ provider, name: 'critic' })
-  .system('Analyze the risks and downsides.')
-  .build();
-
-const analysis = Parallel.create({ provider, name: 'balanced-analysis' })
-  .agent('optimist', optimist, 'Positive analysis')
-  .agent('critic', critic, 'Critical analysis')
-  .mergeWithLLM('Synthesize both perspectives into a balanced summary.')
-  .build();
-
-const result = await analysis.run('Should we adopt microservices?');
-```
+<CodeFile path="examples/core-flow/02-parallel.ts" region="build" title="examples/core-flow/02-parallel.ts (region: build)" />
 
 **Use for:** multi-perspective analysis, A/B comparison, ensemble approaches.
 
@@ -184,107 +113,70 @@ const result = await analysis.run('Should we adopt microservices?');
 
 `if/else` routing between runners. First matching predicate wins; fallback runs `.otherwise()`.
 
-```ts
-import { Conditional } from 'agentfootprint';
+<CodeFile path="examples/core-flow/03-conditional.ts" region="build" title="examples/core-flow/03-conditional.ts (region: build)" />
 
-const triage = Conditional.create({ name: 'triage' })
-  .when((input) => input.toLowerCase().includes('refund'), refundAgent)
-  .when((input) => input.length > 500, detailedAgent)
-  .otherwise(generalAgent)
-  .build();
+**Use for:** triage, content classification, intent-based routing.
 
-const result = await triage.run('I want a refund please');
-```
+### 4. Loop — iterate until quality bar
 
-**Use for:** triage, content classification, static routing.
+Repeat a runner until a condition is met or a budget is exhausted. The Reflexion recipe (below) uses Loop under the hood.
+
+See [`examples/core-flow/04-loop.ts`](https://github.com/footprintjs/agentfootprint/blob/main/examples/core-flow/04-loop.ts) for the full pattern.
 
 ---
 
 ## PATTERNS — named compositions
 
-Every paper in the agent literature is a composition of 2 primitives + 3 compositions. Sample recipes:
+Every paper in the agent literature is a composition of 2 primitives + 4 compositions. Sample recipes:
 
 | Pattern | Built from | Paper |
 |---|---|---|
 | **ReAct** | Agent (default) | Yao 2022 |
-| **Dynamic ReAct** | Agent with slots re-evaluating per iter | — |
-| **Hierarchy (Swarm)** | Agent with specialist-Agents as tools | OpenAI 2024 |
-| **Reflexion** | Sequence(Agent, LLM-critique, Agent) | Shinn 2023 |
+| **Reflexion** | Sequence(Agent, LLM-critique, Agent) — wraps Loop | Shinn 2023 |
 | **Tree-of-Thoughts** | Parallel(Agent × N) + LLM-rank | Yao 2023 |
-| **Plan-Execute** | LLM-plan + Sequence(Agent per step) | Wang 2023 |
-| **Map-Reduce** | Parallel(Agent × N) + LLM-merge | Dean & Ghemawat 2004 |
+| **Self-Consistency** | Parallel(Agent × N) + majority-vote | Wang 2022 |
+| **Debate** | Loop(Agent × 2 + judge) | Du 2023 |
+| **Map-Reduce** | Parallel(Agent × N) + LLM-merge | Dean 2004 |
+| **Swarm** | Agent whose tools are other Agents | OpenAI 2024 |
 
-### Hierarchy (Swarm) — worked example
+### Reflexion — worked example
 
-LLM-driven routing to specialist agents. An orchestrator Agent decides which specialist handles each request. The orchestrator's tools happen to be other Agents.
+Iterative propose/critique/revise. The recipe is `Sequence(Agent, critique-LLM, Agent)` wrapped in a Loop that exits when the critic says DONE:
 
-```ts
-import { Swarm, Agent, anthropic } from 'agentfootprint';
+<CodeFile path="examples/patterns/02-reflection.ts" region="reflexion-recipe" title="examples/patterns/02-reflection.ts (region: reflexion-recipe)" />
 
-const provider = anthropic('claude-sonnet-4-20250514');
+### Swarm — worked example
 
-const coder = Agent.create({ provider, name: 'coder' })
-  .system('You are a coding specialist.')
-  .build();
+LLM-driven routing to specialist runners. A `route` function (sync, pure) decides which agent handles each turn; handoffs continue until route returns undefined:
 
-const writer = Agent.create({ provider, name: 'writer' })
-  .system('You are a writing specialist.')
-  .build();
-
-const swarm = Swarm.create({ provider, name: 'orchestrator' })
-  .system('Route coding questions to coder, writing tasks to writer.')
-  .specialist('coder', 'Handle programming tasks', coder)
-  .specialist('writer', 'Handle creative writing', writer)
-  .build();
-
-const result = await swarm.run('Write a haiku about debugging');
-```
+<CodeFile path="examples/patterns/06-swarm.ts" region="swarm-recipe" title="examples/patterns/06-swarm.ts (region: swarm-recipe)" />
 
 **Use for:** customer support triage, multi-domain assistants, expert routing.
 
-See the [Patterns guide](/agentfootprint/guides/) for Reflexion, Tree-of-Thoughts, Plan-Execute, Map-Reduce with full recipes.
+See `examples/patterns/` for the rest — Tree-of-Thoughts, Self-Consistency, Debate, Map-Reduce all run end-to-end with `npm run example examples/patterns/<file>.ts`.
 
 ---
 
 ## CONTEXT ENGINEERING (cross-cutting)
 
-These are **not primitives.** They're what you inject into an Agent's three slots.
+These are **not primitives.** They're flavors of the Injection primitive — content that lands in one of the agent's three slots (`system` / `messages` / `tools`) under one of four triggers (always / rule / on-tool-return / llm-activated).
 
-| Technique | Slot | Purpose |
-|---|---|---|
-| **RAG** | messages | Retrieve relevant chunks at query time |
-| **Memory** | messages | Persist conversation / facts across turns |
-| **Skills** | system-prompt (+ tools) | Auto-activate persona + tools when a trigger fires |
-| **Instructions** | system-prompt | Conditional behavior after a tool observation |
-| **Tools** | tools slot | Actions the Agent can invoke |
-| **Grounding** | system-prompt | Style / citation / safety rules |
-
-> **RAG is context engineering, not a primitive.** The `RAG.create(...)` helper in this library packages "LLM call with retriever wired into messages slot" for convenience. It isn't a new primitive — it's a worked example of "inject retrieved chunks into the messages slot." You can do the same thing in any Agent via a `MessageStrategy` that calls a retriever.
+| Flavor | Slot | Trigger | Purpose |
+|---|---|---|---|
+| **Steering** | system-prompt | always | Persona, tone, output format, safety rules |
+| **Instruction** | system-prompt or messages | rule | Conditional behavior (`activeWhen` predicate) |
+| **Skill** | system-prompt + tools | llm-activated | LLM calls `read_skill('billing')` to unlock body + tools |
+| **Fact** | system-prompt or messages | always | Developer-supplied data (user profile, env, current time) |
+| **Memory** | messages | rule | Persist conversation / facts across turns |
+| **RAG** | messages | rule + score | Retrieve relevant chunks at query time |
 
 ### RAG (worked example)
 
-```ts
-import { RAG, mockRetriever, anthropic } from 'agentfootprint';
+`defineRAG` is sugar over `defineMemory({ type: SEMANTIC, strategy: TOP_K })` with RAG-friendly defaults — same plumbing, different intent label:
 
-const retriever = mockRetriever([{
-  chunks: [
-    { content: 'Return policy: 14 days for full refund.', metadata: { source: 'policy' } },
-  ],
-}]);
+<CodeFile path="examples/context-engineering/07-rag.ts" region="define-and-attach" title="examples/context-engineering/07-rag.ts (region: define-and-attach)" />
 
-const provider = anthropic('claude-sonnet-4-20250514');
-
-const rag = RAG.create({ provider, retriever })
-  .system('Answer from the product docs only.')
-  .topK(5)
-  .build();
-
-const result = await rag.run('What is the return policy?');
-```
-
-**Use for:** Q&A over documents, product knowledge bases, policy lookup.
-
-See dedicated guides: [RAG](/agentfootprint/guides/rag/), [Memory](/agentfootprint/guides/memory/), [Skills](/agentfootprint/guides/skills/), [Instructions](/agentfootprint/guides/instructions/), [Tools](/agentfootprint/guides/tools/), [Grounding](/agentfootprint/guides/grounding/).
+See dedicated guides: [Memory](/agentfootprint/guides/memory/), [Skills](/agentfootprint/guides/skills/), [Instructions](/agentfootprint/guides/instructions/), [RAG](/agentfootprint/guides/rag/), [Tools](/agentfootprint/guides/tools/).
 
 ---
 
@@ -294,16 +186,15 @@ Every primitive and composition supports:
 
 | Feature | Method | Description |
 |---------|--------|-------------|
-| Streaming | `.streaming(true)` | Token-by-token output |
-| Recorders | `.recorder(obs)` | Passive observation (tokens, cost, tools) |
-| Narrative | `.getNarrative()` | Human-readable execution trace |
-| Snapshot | `.getSnapshot()` | Full execution state for debugging |
-| Spec | `.getSpec()` | Flowchart spec for visualization |
+| Recorders | `.attach(recorder)` | Passive observation (tokens, cost, narrative) |
+| Event listeners | `.on('agentfootprint.<domain>.<event>', fn)` | Typed event subscription |
+| Streaming | `provider.stream(...)` | Token-by-token output |
+| Pause / Resume | `askHuman` / `pauseHere` | JSON-checkpointed, cross-server resumable |
+| Memory | `.memory(defineMemory({...}))` | Cross-run state with multi-tenant identity |
 
 ## Next steps
 
-- [Agent guide](/agentfootprint/guides/agent/) — deep dive into ReAct agents with tools and memory
-- [Dynamic ReAct guide](/agentfootprint/guides/dynamic-react/) — when to re-evaluate slots per iteration
-- [Instructions guide](/agentfootprint/guides/instructions/) — conditional context injection
-- [Observability guide](/agentfootprint/guides/observability/) — recorders, narrative, grounding analysis
-- [API reference](/agentfootprint/api/agent/) — complete method signatures
+- [Quick Start](/agentfootprint/getting-started/quick-start/) — first agent runs in 5 minutes
+- [Memory guide](/agentfootprint/guides/memory/) — defineMemory across 4 types × 7 strategies
+- [Skills guide](/agentfootprint/guides/skills-explained/) — context engineering for instructions
+- [Observability guide](/agentfootprint/guides/observability/) — recorders, event taxonomy

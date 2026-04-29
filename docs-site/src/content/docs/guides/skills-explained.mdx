@@ -4,6 +4,11 @@ description: Skills are context engineering for instructions — abstracted so y
 ---
 
 import { Aside } from '@astrojs/starlight/components';
+import CodeFile from '@/components/CodeFile.astro';
+
+<Aside type="note" title="What ships today vs what's coming">
+This essay describes the **full Skills system** agentfootprint is converging on. The shipped-today surface is `defineSkill({ id, description, body, tools })` with auto-attached `read_skill` tool — the runnable code block below works against the published library. The `surfaceMode: 'auto'`, `refreshPolicy`, and `SkillRegistry` features discussed later in this essay land in **v2.4 Phase 4** — code blocks for those are clearly marked as *coming-soon illustrative pseudo-code* until they ship.
+</Aside>
 
 ## In one line
 
@@ -65,6 +70,14 @@ Before the anatomy, clear up a frequent conflation:
 These are not equivalent primitives. Skills is a discovery-and-dispatch pattern. Steering Docs are always-on context. `AgentInstruction` is a predicate-gated rule.
 
 **A Skill, in our library, is composed from `AgentInstruction`s. It is not a peer.** That hierarchy keeps the primitive count honest.
+
+### What ships today (the runnable surface)
+
+`defineSkill({ id, description, body, tools })`. The library auto-attaches a `read_skill` tool to your agent's tool registry; the LLM activates the skill by calling it. When activated, the skill's body lands in the system slot and the skill's tools become available for the rest of the turn:
+
+<CodeFile path="examples/context-engineering/02-skill.ts" region="define-skill" title="examples/context-engineering/02-skill.ts (region: define-skill)" />
+
+That's the foundation. The rest of this essay explains *why* this design + what we're building on top of it (`surfaceMode`, `refreshPolicy`, `SkillRegistry` — all v2.4 Phase 4).
 
 ## The actual anatomy — three stages over Messages API
 
@@ -155,7 +168,12 @@ Given the above, our Skills implementation makes four choices. All of them fit i
 
 ### 1. `surfaceMode: 'auto'` — the library picks per provider
 
+<Aside type="caution" title="Coming in v2.4 Phase 4 — illustrative pseudo-code">
+The `surfaceMode` knob ships in v2.4 Phase 4 (currently in development). The block below is the resolver pseudo-code for the planned implementation, not runnable today. Until it ships, all skills use the equivalent of `'tool-only'` mode (recency-first via tool_result), which is the cross-provider-correct path described below.
+</Aside>
+
 ```ts
+// Coming in v2.4 Phase 4 — pseudo-code for the planned resolver.
 function resolveSurfaceMode(provider): SurfaceMode {
   if (provider === 'anthropic' && model >= 'claude-3-5') return 'both';
   if (provider === 'anthropic')                          return 'tool-only';
@@ -181,18 +199,25 @@ That text lands in the freshest possible position by protocol, not by training. 
 
 ### 3. Refresh policy for long contexts
 
+<Aside type="caution" title="Coming in v2.4 Phase 4 — illustrative pseudo-code">
+The `refreshPolicy` knob ships in v2.4 Phase 4. The block below shows the planned API shape.
+</Aside>
+
 ```ts
+// Coming in v2.4 Phase 4.
 refreshPolicy: {
   afterTokens: 50_000,
   via: 'tool-result',
 }
 ```
 
-Belt-and-suspenders: even if system-prompt anchoring was honored at turn 1, by turn 40 on a non-Claude provider it's drifted out of effective attention. Re-inject the registry as a fresh tool result past a token threshold. (Phase 2 — the hook is reserved in the registry API so it lands non-breaking.)
+Belt-and-suspenders: even if system-prompt anchoring was honored at turn 1, by turn 40 on a non-Claude provider it's drifted out of effective attention. Re-inject the registry as a fresh tool result past a token threshold.
 
 ### 4. Auto-generated loader tools
 
-The consumer registers `defineSkill(...)`s with a `SkillRegistry`. The library auto-generates two tools — `list_skills` and `read_skill` — and wires them into the agent's tool registry. The consumer never hand-writes either.
+**Today (shipped):** `defineSkill(...)` auto-attaches a single `read_skill` tool to the agent's tool registry. The consumer never hand-writes it.
+
+**Coming in v2.4 Phase 4:** A `SkillRegistry` for centralized skill governance across multiple agents. The registry will auto-generate both `list_skills` (for skill discovery) and `read_skill` (for skill activation) and provide a single `agent.skills(registry)` builder for shared-skill setups.
 
 <Aside type="note" title="Why `read_skill` not `Skill`">
 Agent SDK calls its loader `Skill`. We mirror the verb-object convention of every other tool in `agentfootprint` (`search`, `load_file`, `get_trace`) and name it `read_skill`. Same protocol, clearer name.

@@ -1,108 +1,97 @@
 ---
 title: Observability
-description: Passive recorders that observe without shaping behavior.
+description: Typed event streams, recorders, and tier-3 enable.* helpers — observe what the agent did without shaping what it does.
 ---
 
-## agentObservability() — one call
+import CodeFile from '@/components/CodeFile.astro';
 
-```ts
-import { Agent, mock } from 'agentfootprint';
-import { agentObservability } from 'agentfootprint';
+> Logs that say *"agent ran"* are useless. Logs that say *"agent called `redact_pii({text: '...'})` and then injected the result into the messages slot before iteration 3, costing $0.0042"* let you debug a hallucination at 2 AM. The difference is whether observability is **structured + typed at the source** or **string-formatted at the sink**.
 
-const provider = mock([{ content: 'Hello!' }]);
+## The model
 
-const obs = agentObservability();
-const agent = Agent.create({ provider })
-  .recorder(obs)
-  .build();
+Every runner (`Agent`, `LLMCall`, `Sequence`, etc.) exposes the same observability surface, in three layers:
 
-await agent.run('hello');
+| Layer | API | When to use |
+|---|---|---|
+| **Events** | `runner.on('agentfootprint.<domain>.<event>', fn)` | You want a typed stream — payloads are auto-completed by your IDE |
+| **Recorders** | `runner.attach(recorder)` | You want pre-built aggregation (cost totals, token counts, narrative entries) |
+| **Tier-3 helpers** | `runner.enable.thinking({...})`, `runner.enable.logging({...})` | You want a one-liner for the common case (status line, structured logs) |
 
-obs.tokens();  // { totalCalls: 2, totalInputTokens: 150, calls: [...] }
-obs.tools();   // { totalCalls: 1, byTool: { search: { calls: 1, errors: 0 } } }
-obs.cost();    // 0.0042
+There are **47 typed events across 13 domains**: `context`, `stream`, `agent`, `cost`, `permission`, `eval`, `memory`, `skill`, `composition`, and more. Every event has a typed payload — `gen_ai.chat`, `tool.start`, `cost.tick`, `composition.iteration_start`, etc. The framework owns the loop and emits during DFS traversal — no instrumentation, no spans-after-the-fact.
+
+## Tier-3 — `.enable.thinking()` and `.enable.logging()`
+
+The 80% case: a live status line ("what is the agent doing right now?") and a domain-filtered log firehose. Both are one-liners.
+
+<CodeFile path="examples/features/04-observability.ts" region="enable-thinking" title="examples/features/04-observability.ts (region: enable-thinking)" />
+
+`.enable.thinking({ onStatus })` gives you a Claude-Code-style live status line — one string per agent state transition. Use for terminal UIs, CLI progress, or chat-UI typing indicators.
+
+<CodeFile path="examples/features/04-observability.ts" region="enable-logging" title="examples/features/04-observability.ts (region: enable-logging)" />
+
+`.enable.logging({ domains, logger })` gives you structured logs filtered to specific event domains. The `logger` is any object with a `log(message, data?)` method — drop in `console`, `pino`, `winston`, or your own.
+
+Both return a `stop()` function — call it on shutdown to detach the listener cleanly.
+
+## Cost tracking
+
+Pass a `pricingTable` to the Agent constructor and the framework emits `agentfootprint.cost.tick` after every LLM call with per-call and cumulative USD. Add a `costBudget` and you also get a one-shot `cost.limit_hit` the first time cumulative crosses the budget. The library never auto-aborts — *you* decide what to do (cancel via signal, escalate, log, etc.):
+
+<CodeFile path="examples/features/02-cost-tracking.ts" region="cost-tracking" title="examples/features/02-cost-tracking.ts (region: cost-tracking)" />
+
+## Event taxonomy
+
+```
+agentfootprint.<domain>.<event>
 ```
 
-## Individual recorders
+| Domain | Sample events | What it covers |
+|---|---|---|
+| `stream` | `llm_start` · `llm_end` · `token` · `tool_start` · `tool_end` | Token-by-token + tool-call lifecycle |
+| `agent` | `turn_start` · `turn_end` · `iteration_start` · `iteration_end` | ReAct loop boundaries |
+| `context` | `injected` (one event for every Skill / Steering / Instruction / Fact / Memory / RAG that activates) | Context engineering — the unified channel |
+| `cost` | `tick` · `limit_hit` | Per-call USD + budget threshold crossings |
+| `composition` | `enter` · `iteration_start` · `iteration_exit` · `route_decided` | Sequence / Parallel / Conditional / Loop lifecycles |
+| `memory` | `read` · `write` · `compress` | Memory pipeline subflows |
+| `skill` | `activated` · `body_loaded` | LLM-activated skill resolution |
+| `permission` | `check` · `denied` | PermissionChecker decisions |
+| `eval` | `score` · `failed` | Custom quality / guardrail signals |
+| `pause` / `resume` | `paused` · `resumed` | Human-in-the-loop checkpoints |
 
-For fine-grained control, attach individual recorders:
+Every event is exhaustively typed via `AgentfootprintEvent` (a discriminated union); your IDE autocompletes the payload shape based on the event name. **No string-parsing logs.** No "I think this means the tool was called."
 
-```ts
-import {
-  TokenRecorder, CostRecorder, ToolUsageRecorder,
-  QualityRecorder, GuardrailRecorder, PermissionRecorder,
-} from 'agentfootprint';
+## Custom recorders
 
-const tokens = new TokenRecorder();
-const cost = new CostRecorder({
-  pricingTable: { 'claude-sonnet-4-20250514': { input: 3, output: 15 } },
-});
-
-const agent = Agent.create({ provider })
-  .recorder(tokens)
-  .recorder(cost)
-  .build();
-```
-
-## Recorder reference
-
-| Recorder | What it tracks | Key method |
-|----------|---------------|------------|
-| `TokenRecorder` | Input/output tokens per LLM call | `getStats()` |
-| `CostRecorder` | USD cost per model | `getTotalCost()` |
-| `ToolUsageRecorder` | Calls, latency, errors per tool | `getStats()` |
-| `QualityRecorder` | Custom quality score per response | `getScores()` |
-| `GuardrailRecorder` | Policy violations per response | `getViolations()` |
-| `PermissionRecorder` | Blocked/allowed tool events | `getEvents()` |
-
-## Narrative
-
-Every agent produces a connected narrative — not logs, structured entries:
+For aggregations the built-ins don't cover, write your own. A recorder is just an object with `on*` methods matching the event names:
 
 ```ts
-agent.getNarrative();
-// [
-//   "[Seed] Initialized agent state",
-//   "[CallLLM] claude-sonnet-4 (127in / 45out)",
-//   "[ExecuteToolCalls] lookup_order({orderId: 'ORD-1003'})",
-//   "[CallLLM] claude-sonnet-4 (312in / 89out)",
-//   "[Finalize] Your order was denied..."
-// ]
+const myRecorder = {
+  id: 'my-recorder',
+  onContextInjected: (e) => {
+    // e.payload is fully typed — { source, slot, role?, content?, ... }
+  },
+  onAgentTurnEnd: (e) => {
+    // e.payload — { iterationCount, totalInputTokens, totalOutputTokens, ... }
+  },
+};
 
-// Structured entries for programmatic access
-agent.getNarrativeEntries();
-// Each: { type, text, key, stageId, subflowId }
+runner.attach(myRecorder);
 ```
 
-## OpenTelemetry (OTelRecorder)
+The recorder discovers handler methods via runtime method-shape detection — implement only the events you care about; ignore the rest.
 
-Export agent events as OpenTelemetry spans — no `@opentelemetry` dependency in core. Bring your own tracer:
+## OpenTelemetry
 
-```ts
-import { trace } from '@opentelemetry/api';
-import { OTelRecorder } from 'agentfootprint';
+Currently no built-in `OTelRecorder` ships. The recommended pattern is to write a small adapter that subscribes to the events you care about and emits OTel spans via your own `@opentelemetry/api` tracer. Documenting this pattern as a first-class adapter is on the v2.4+ roadmap.
 
-const recorder = new OTelRecorder(trace.getTracer('agentfootprint'));
-const agent = Agent.create({ provider })
-  .recorder(recorder)
-  .build();
+## Anti-patterns
 
-await agent.run('Hello');
-// Spans: agent.turn → gen_ai.chat (per LLM call) → tool.* (per tool call)
-// Attributes follow OpenTelemetry GenAI semantic conventions
-```
+- ❌ **Don't log every event** — 47 typed events × N iterations × M agents = your log infra hates you. Filter to the domains you actually need.
+- ❌ **Don't subscribe in a hot loop** — `runner.on(...)` returns an unsubscribe; call it on shutdown. Forgotten subscriptions leak listeners across runs.
+- ❌ **Don't use `getNarrative()` as a log sink** — it's structured trace data, not log lines. Pass the entries to a real log/trace backend if you need to ship them.
 
-Works with Datadog, New Relic, Grafana, Jaeger, or any OTel-compatible backend.
+## Next steps
 
-## Grounding analysis
-
-```ts
-import { ExplainRecorder } from 'agentfootprint';
-
-const explain = new ExplainRecorder();
-// attach via .recorder(explain) before .build()
-await agent.run(...);
-const report = explain.explain();
-report.sources;   // tool results (ground truth)
-report.claims;    // LLM output (to verify)
-```
+- [Cost tracking](/agentfootprint/guides/observability/) — pricingTable + costBudget patterns
+- [Event taxonomy reference](/agentfootprint/api/recorders/) — full 47-event signature list (auto-generated, in progress)
+- [Streaming guide](/agentfootprint/guides/streaming/) — token-by-token rendering via `provider.stream()`

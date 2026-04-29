@@ -61,12 +61,14 @@ export async function run(input: string, provider?: LLMProvider): Promise<string
   // Activates AFTER the LLM calls redact_pii, for the next iteration only
   // (predicate inspects ctx.lastToolResult — naturally one-shot since the
   //  next iteration's lastToolResult will be different).
+  // #region on-tool-return
   const postPii = defineInstruction({
     id: 'post-pii',
     description: 'Brief reminder to use the redacted text, not the original.',
     activeWhen: (ctx) => ctx.lastToolResult?.toolName === 'redact_pii',
     prompt: 'Use the redacted text in your reply. Do not paraphrase the original.',
   });
+  // #endregion on-tool-return
 
   // LLM-activated body + tools — loaded only when the LLM asks
   const billingSkill = defineSkill({

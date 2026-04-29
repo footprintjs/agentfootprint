@@ -22,11 +22,8 @@ export const meta: ExampleMeta = {
 };
 
 export async function run(input: string, provider?: LLMProvider): Promise<string> {
+  // #region build
   const agent = Agent.create({
-    // The default smart-mock would call `weather` with empty args. This
-    // tool needs a `city`, so we supply a respond that extracts it from
-    // the user's message ("Weather in SF?" → "SF") on iteration 1, then
-    // returns a final answer once the tool result has landed.
     provider: provider ?? exampleProvider('feature', { respond: weatherRespond }),
     model: 'mock',
     maxIterations: 5,
@@ -45,13 +42,16 @@ export async function run(input: string, provider?: LLMProvider): Promise<string
       execute: async (args) => `${(args as { city: string }).city}: sunny, 72°F`,
     })
     .build();
+  // #endregion build
 
+  // #region observe
   agent.on('agentfootprint.stream.tool_start', (e) =>
     console.log(`→ tool ${e.payload.toolName}(${JSON.stringify(e.payload.args)})`),
   );
   agent.on('agentfootprint.stream.tool_end', (e) =>
     console.log(`← tool result: ${e.payload.result}`),
   );
+  // #endregion observe
   agent.on('agentfootprint.agent.turn_end', (e) =>
     console.log(
       `\n[done] ${e.payload.iterationCount} iterations, ${e.payload.totalInputTokens}+${e.payload.totalOutputTokens} tokens`,

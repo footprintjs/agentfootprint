@@ -40,6 +40,7 @@ export async function run(input: string, provider?: LLMProvider): Promise<string
   const embedder = mockEmbedder();
   const store = new InMemoryStore();
 
+  // #region define-causal
   const causal = defineMemory({
     id: 'causal',
     description: 'Store snapshots of past runs; replay decisions on follow-up.',
@@ -53,6 +54,7 @@ export async function run(input: string, provider?: LLMProvider): Promise<string
     store,
     projection: SNAPSHOT_PROJECTIONS.DECISIONS,  // inject decision evidence
   });
+  // #endregion define-causal
 
   const agent = Agent.create({
     provider: provider ?? mock({ reply: 'Your application was rejected because creditScore (580) was below threshold (600).' }),

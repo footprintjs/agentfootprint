@@ -1,115 +1,74 @@
 ---
-title: Instructions & Decisions
-description: Conditional context injection driven by accumulated state.
+title: Instructions
+description: Rule-gated context injection. The Instruction primitive activates a prompt when a predicate matches the current iteration's context.
 ---
 
-## The problem
+import CodeFile from '@/components/CodeFile.astro';
 
-You want different behavior based on what happened during execution. A refund instruction should only activate when the order is cancelled. An admin prompt should only appear after identity verification.
+> A user types *"my refund still hasn't arrived I'm furious"*. You want the agent to acknowledge feelings before facts — but only on this kind of message, not every message. That's an Instruction. A predicate matches the iteration; the matching prompt joins the system slot for *this* turn only. No global state to drift, no separate "rules engine" to maintain.
 
-## Level 1: Always-active instructions
+## What an Instruction is
 
-The simplest instruction — no conditions, just extra prompt text and tools:
+An **Instruction** is one flavor of the [Injection primitive](/agentfootprint/getting-started/key-concepts/) — content that lands in a slot when a trigger matches. For Instructions specifically:
 
-```ts
-import { Agent, defineTool } from 'agentfootprint';
-import { defineInstruction } from 'agentfootprint';
+- **Slot:** `system-prompt` (default) or `messages`
+- **Trigger:** `rule` — a predicate `(ctx) => boolean` you write
+- **Fires:** every iteration of the agent loop, against fresh context
 
-// Always-active: adds prompt + tools regardless of state
-const politeness = defineInstruction({
-  id: 'politeness',
-  prompt: 'Always be polite and professional. Use the customer name when known.',
-});
+If the predicate returns true, the prompt text is appended to the system slot for that iteration. If it returns false, nothing happens. The predicate re-runs every iteration so the same Instruction can activate on iteration 3 but not on iteration 5 — context is fresh each time.
 
-const escalation = defineInstruction({
-  id: 'escalation-tools',
-  tools: [escalateToManagerTool],  // always available
-});
+## Defining an Instruction
 
-const agent = Agent.create({ provider })
-  .system('You are a support agent.')
-  .instruction(politeness)
-  .instruction(escalation)
-  .build();
-```
+`defineInstruction` takes an `id`, a `prompt`, and an `activeWhen` predicate. The predicate receives an `InjectionContext` with the current `userMessage`, `iteration` count, `lastToolResult`, activated `skills`, and conversation `history`:
 
-No `activeWhen` = always active. Good for baseline behavior.
+<CodeFile path="examples/context-engineering/01-instruction.ts" region="define" title="examples/context-engineering/01-instruction.ts (region: define)" />
 
-## Level 2: Conditional instructions
+Two instructions, two predicates. `calmTone` activates when the user's message contains an upset-sounding word. `concise` activates only on the first iteration (so follow-up turns can be longer if they need to be). Predicates are pure functions — no side effects, no async, no IO. They run dozens of times per `agent.run()`.
 
-Add `activeWhen` to activate based on accumulated state:
+## Attaching to an Agent
 
-```ts
-import { defineInstruction } from 'agentfootprint';
+Once defined, attach with `.instruction(...)`. Multiple instructions stack — each runs its own predicate; matches all land in the system slot in registration order:
 
-const refundHandling = defineInstruction({
-  id: 'refund-handling',
-  activeWhen: (decision) => decision.orderStatus === 'cancelled',
-  prompt: 'Handle with empathy. Offer refund. Timeline: 3-5 business days.',
-  tools: [processRefundTool],
-  onToolResult: [{ id: 'empathy', text: 'Do NOT promise reversal.' }],
-});
-```
+<CodeFile path="examples/context-engineering/01-instruction.ts" region="attach" title="examples/context-engineering/01-instruction.ts (region: attach)" />
 
-This instruction only activates when `orderStatus === 'cancelled'` in the Decision Scope.
+The agent doesn't know there are "instructions" attached — it just sees a system prompt that varies by turn. The `agentfootprint.context.injected` event fires with `source: 'instruction'` and the matching `id` so observability surfaces can show which rules fired when.
 
-## Level 3: Decision Scope
+## The on-tool-return trigger (Dynamic ReAct)
 
-The **Decision Scope** is a simple object that accumulates state from tool results during execution. Think of it as "what the agent has learned so far." Instructions check the Decision Scope to decide whether to activate.
+An Instruction whose predicate inspects `ctx.lastToolResult` is naturally one-shot — fires on the iteration RIGHT AFTER the named tool ran, then the predicate stops matching on the next iteration because `lastToolResult` will be from a different (or no) tool. This is the **on-tool-return** trigger pattern from the 4-trigger taxonomy:
 
-Instructions activate based on a **Decision Scope** — a simple object that accumulates state from tool results:
+<CodeFile path="examples/context-engineering/05-dynamic-react.ts" region="on-tool-return" title="examples/context-engineering/05-dynamic-react.ts (region: on-tool-return)" />
 
-```ts
-const classify = defineInstruction({
-  id: 'classify-order',
-  onToolResult: [{
-    id: 'classify',
-    decide: (decision, ctx) => {
-      if (ctx.content.status) decision.orderStatus = ctx.content.status;
-      if (ctx.content.amount > 500) decision.highValue = true;
-    },
-  }],
-});
+The reminder lands ONLY on the iteration where the LLM is about to read the redacted output. Without this, the LLM sometimes paraphrases the original (defeating the redaction). With it, the LLM is told *"use the redacted text"* at the exact moment it needs to hear it. Modern LLMs attend more strongly to recent messages than to the system prompt, so injecting at this position is structurally better than baking the same advice into the always-on system prompt.
 
-const agent = Agent.create({ provider })
-  .tool(lookupOrder)
-  .instruction(classify)
-  .instruction(refundHandling)
-  .decision({ orderStatus: null, highValue: false })  // initial state
-  .pattern(AgentPattern.Dynamic)
-  .build();
-```
+This is the **Dynamic ReAct** pattern from Shinn 2023's reflection paper — context that adapts mid-loop based on what the agent just observed.
 
-## How it works
+## Where the Instruction lands — `slot` choice
 
-```
-Turn 1: CallLLM → lookup_order({orderId: 'ORD-1003'})
-        → tool returns {status: 'cancelled', amount: 5000}
-        → decide() sets orderStatus = 'cancelled', highValue = true
-
-Turn 2: InstructionsToLLM re-evaluates
-        → refundHandling activates (orderStatus === 'cancelled')
-        → empathy prompt injected into system message
-        → processRefund tool now available
-        → recency text added to message history
-```
-
-## Safety instructions
+By default the Instruction's prompt joins the `system` slot. For instructions that should land with **higher attention recency** (the "use redacted text" example above), set `slot: 'messages'` so the content appears alongside fresh tool results in the message history rather than buried in the long system prompt:
 
 ```ts
 defineInstruction({
-  id: 'compliance',
-  safety: true,   // fail-closed: fires even when predicate throws
-  prompt: 'GDPR compliance required. Never share PII.',
+  id: 'critical-after-tool',
+  activeWhen: (ctx) => ctx.lastToolResult?.toolName === 'critical_op',
+  prompt: '...',
+  slot: 'messages',  // override default; lands as a synthetic system message in messages array
 });
 ```
 
-Safety instructions are unsuppressable, fail-closed, and sorted to the highest LLM attention position (last in the prompt).
+When to use which:
+- `slot: 'system'` (default) — baseline behavior shaping (tone, format, persona). Provider attention to system prompts varies but is reliable on Claude/GPT-4.
+- `slot: 'messages'` — recency-first. Use when the rule MUST be honored and you suspect long-context attention decay would weaken a system-prompt placement.
 
-## Three injection positions
+## Anti-patterns
 
-| Position | Field | When it appears |
-|----------|-------|----------------|
-| System prompt | `prompt` | Prepended to system message |
-| Tools | `tools` | Added to available tool list |
-| Recency window | `onToolResult` | Injected after tool results in message history |
+- ❌ **Don't put dynamic state in the predicate's closure** — it's evaluated per iteration, with fresh `ctx`. Reading from `ctx` is correct; capturing a `let counter` in the closure is racy.
+- ❌ **Don't make `activeWhen` async or side-effecting** — it runs many times per turn; latency multiplies.
+- ❌ **Don't combine many predicates into one giant Instruction** — register multiple small ones with single-purpose predicates. Easier to reason about, easier to observe (one event per matching id).
+- ❌ **Don't rely on Instruction order for correctness** — registration order determines the order of matching prompts in the system slot, but the LLM doesn't strictly read top-to-bottom. If two Instructions could conflict, write one Instruction with the conflict resolved in its prompt.
+
+## Next steps
+
+- [Skills, explained](/agentfootprint/guides/skills-explained/) — context engineering for instructions, taken further (LLM-activated skills + tools)
+- [Memory guide](/agentfootprint/guides/memory/) — for stateful context across runs (Instructions are per-iteration; Memory is cross-run)
+- [Where to land an injection](/agentfootprint/guides/where-to-land-an-injection/) — slot × trigger × per-provider attention guidance (coming in v2.4)
