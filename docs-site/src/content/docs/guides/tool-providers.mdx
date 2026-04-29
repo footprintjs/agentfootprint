@@ -1,0 +1,93 @@
+---
+title: Tool providers
+description: staticTools + gatedTools — chainable tool dispatch primitives. Compose permission gating + per-skill tool filtering at the dispatch boundary, not inside each tool's execute.
+---
+
+import CodeFile from '@/components/CodeFile.astro';
+
+> A read-only support agent has 25 tools registered, but on a refund turn the LLM should only see the 3 billing tools. **Putting the gating logic inside each tool's `execute` is wrong** — the tool runs AFTER the LLM has already chosen it. The right place to gate is BEFORE the LLM sees the menu. That's what `ToolProvider` exists for.
+
+## What `ToolProvider` is
+
+A `ToolProvider` answers ONE question per iteration: *"what tools should the LLM see right now?"* It's pure compute — given the current iteration context, return the visible tool set.
+
+Two implementations ship:
+
+- **`staticTools(arr)`** — the 90% case. Wraps a fixed `Tool[]` list. What `agent.tools(arr)` does today, made composable.
+- **`gatedTools(inner, predicate)`** — the DECORATOR. Wraps any provider with an additional per-tool filter. Composes freely.
+
+Plus tool sources from the same subpath:
+- **`mcpClient(opts)`** — connect to a real MCP server
+- **`mockMcpClient({ tools })`** — in-memory MCP source for dev / tests
+
+## staticTools — the simplest provider
+
+<CodeFile path="src/tool-providers/staticTools.ts" region="staticTools" title="src/tool-providers/staticTools.ts (region: staticTools)" />
+
+That's the whole implementation. Captures the input list defensively (mutating the source array doesn't leak), returns a fresh array each `list()` call so reference-equality checks see the update.
+
+## gatedTools — the decorator
+
+<CodeFile path="src/tool-providers/gatedTools.ts" region="gatedTools" title="src/tool-providers/gatedTools.ts (region: gatedTools)" />
+
+Takes any inner `ToolProvider` and a per-tool predicate. Filters the inner output. Predicates that throw propagate — better to fail closed than silently allow tools through a broken policy.
+
+## Composition — read-only over skill-gated
+
+The composability is the point. Two concerns, two layers, decorator-shaped:
+
+```ts
+import { staticTools, gatedTools } from 'agentfootprint/tool-providers';
+
+const isReadonly = (toolName: string) => toolName.startsWith('read_');
+const skillToolMap: Record<string, readonly string[]> = {
+  billing: ['read_billing', 'write_billing'],
+  health: ['read_health'],
+};
+
+const provider = gatedTools(
+  gatedTools(staticTools(allTools), isReadonly),                        // (1) read-only
+  (name, ctx) =>                                                         // (2) skill-gated
+    ctx.activeSkillId
+      ? (skillToolMap[ctx.activeSkillId] ?? []).includes(name)
+      : true,
+);
+```
+
+Reads as: *"static list of all tools, filtered by readonly policy, then further filtered by the active skill's tool set."* Each gate is one concern; composition handles the rest.
+
+When the LLM is on a billing turn (`ctx.activeSkillId === 'billing'`), the visible tool set becomes `['read_billing']` — both gates pass. When no skill is active, the read-only gate alone applies.
+
+## ToolDispatchContext — what predicates can inspect
+
+Predicates receive a read-only context per iteration:
+
+| Field | Meaning |
+|---|---|
+| `iteration` | Current ReAct iteration (1-based) |
+| `activeSkillId?` | The id of the currently-activated Skill, if any. Set by `read_skill(id)` |
+| `identity?` | Caller identity tuple — `{ tenant?, principal?, conversationId }` for role checks |
+
+Predicates MUST be pure — no side effects, no async. They run dozens of times per `agent.run()`.
+
+## When to use this vs flat `agent.tools(arr)`
+
+| Situation | Use |
+|---|---|
+| All tools always visible | `agent.tools(arr)` (top-level builder) |
+| Permission filtering needed | `gatedTools(staticTools(arr), permissionPredicate)` |
+| Per-skill tool gating (autoActivate) | `gatedTools(staticTools(arr), skillPredicate)` |
+| Both stacked | Layer two `gatedTools` calls — each one concern |
+
+## Anti-patterns
+
+- **Don't put permission checks inside tool `execute`.** The LLM has already chosen the tool by then. Gate at dispatch with `gatedTools`.
+- **Don't make predicates async.** They run per iteration, per tool. Async predicates multiply latency.
+- **Don't make predicates have side effects.** They run during the agent loop's hot path; mutation breaks composition.
+- **Don't catch + ignore predicate exceptions.** Failing closed is correct — a bug in your policy SHOULD crash, not silently allow tools through.
+
+## Next steps
+
+- [Permission policy](/agentfootprint/guides/security/) — the natural consumer of `gatedTools` (data-driven role-based gating)
+- [Skills](/agentfootprint/guides/skills/) — `autoActivate` uses the same `gatedTools` pattern under the hood
+- [MCP integration](/agentfootprint/integrations/) — `mcpClient` ships in the same `tool-providers` subpath

@@ -126,6 +126,11 @@
       "types": "./dist/types/adapters/memory/agentcore.d.ts",
       "import": "./dist/esm/adapters/memory/agentcore.js",
       "require": "./dist/adapters/memory/agentcore.js"
+    },
+    "./tool-providers": {
+      "types": "./dist/types/tool-providers/index.d.ts",
+      "import": "./dist/esm/tool-providers/index.js",
+      "require": "./dist/tool-providers/index.js"
     }
   },
   "sideEffects": false,

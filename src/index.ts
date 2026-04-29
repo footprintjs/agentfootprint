@@ -380,3 +380,16 @@ export {
   type MockMcpClientOptions,
   type MockMcpTool,
 } from './lib/mcp/index.js';
+
+// Tool dispatch primitives (v2.5+). New `agentfootprint/tool-providers`
+// subpath bundles tool sources (mcpClient / mockMcpClient) with tool
+// dispatch primitives (staticTools / gatedTools) so consumers find
+// "everything tool-related" in one place. Top-level barrel re-exports
+// the dispatch primitives too — `mcpClient` already re-exports above.
+export {
+  staticTools,
+  gatedTools,
+  type ToolProvider,
+  type ToolDispatchContext,
+  type ToolGatePredicate,
+} from './tool-providers/index.js';
