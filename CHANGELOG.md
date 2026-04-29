@@ -5,6 +5,136 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0]
+
+The release that lands the **6-layer mental model** end-to-end:
+2 primitives + 3 compositions + N patterns + Context Engineering +
+**Memory** + Production Features. Every layer is pure composition over
+the layers below — no hidden primitives.
+
+### Added — InjectionEngine (unified context-engineering primitive)
+
+One `Injection` primitive evaluated by one engine subflow each
+iteration, with N typed sugar factories that all reduce to the same
+shape:
+
+- `defineSkill(...)` — LLM-activated body + tools (auto-attaches `read_skill`)
+- `defineSteering(...)` — always-on system-prompt rule
+- `defineInstruction(...)` — predicate-gated, supports `on-tool-return` for Dynamic ReAct
+- `defineFact(...)` — developer-supplied data injection
+
+Consumer wires them via `Agent.create(...).skill(...)`, `.steering(...)`,
+`.instruction(...)`, `.fact(...)`, or the generic `.injection(...)`. Every
+flavor emits `agentfootprint.context.injected` with `source` discriminating
+the flavor — Lens / observability surfaces show one chip per active
+injection without per-feature special casing.
+
+### Added — Memory subsystem (`defineMemory` factory)
+
+Single factory dispatches `type × strategy.kind` onto the right
+pipeline. The 2D mental model:
+
+```
+                MEMORY = TYPE × STRATEGY × STORE
+
+  TYPE                       STRATEGY                    STORE
+  ──────────────────         ──────────────────          ─────────
+  EPISODIC   messages        WINDOW    last N            InMemoryStore
+  SEMANTIC   facts        ×  BUDGET    fit-to-tokens  ×  Redis · Dynamo
+  NARRATIVE  beats           SUMMARIZE LLM compress      Postgres · …
+  CAUSAL ⭐  snapshots       TOP_K     score-threshold   (peer-deps in v2.1+)
+                              EXTRACT   distill on write
+                              DECAY     recency × access
+                              HYBRID    composed
+```
+
+- `Agent.memory(definition)` builder method — multiple memories layer
+  cleanly via per-id scope keys (`memoryInjection_${id}`)
+- `agent.run({ message, identity })` — multi-tenant scope through the
+  full `MemoryIdentity` tuple (tenant / principal / conversationId)
+- READ subflow runs at `MEMORY_TIMING.TURN_START` (default; `EVERY_ITERATION`
+  opt-in for tool-result-sensitive memory)
+- WRITE subflow mounts in the Final route branch with `propagateBreak`
+  so writes happen reliably before the loop terminates
+- Strict TopK threshold semantics — no fallback when nothing matches
+  (garbage past context worse than no context)
+
+**Causal memory ⭐ — the differentiator no other library has.**
+footprintjs's `decide()` / `select()` capture decision evidence as
+first-class events during traversal. Causal memory persists those
+snapshots tagged with the original user query; new questions match
+against past queries via cosine similarity, injecting decision evidence
+into the next turn's context. Cross-run "why did you reject X?"
+follow-ups answer from EXACT past facts — zero hallucination. Same data
+shape supports SFT/DPO/process-RL training-data export in v2.1+.
+
+### Added — examples folder (33 examples, all runnable end-to-end)
+
+- `examples/core/` — 2 primitives (LLMCall, Agent + tools)
+- `examples/core-flow/` — 4 compositions (Sequence, Parallel, Conditional, Loop)
+- `examples/patterns/` — 6 canonical patterns (ReAct, Reflexion, ToT, MapReduce, Debate, Swarm)
+- `examples/context-engineering/` — 6 InjectionEngine flavors
+  (Instruction / Skill / Steering / Fact / Dynamic-ReAct / mixed)
+- `examples/memory/` — 7 strategy-organized memory examples
+- `examples/features/` — pause-resume, cost, permissions, observability, events
+
+Every example is a runnable end-to-end test (CI runs `npm run test:examples`
+which now does both typecheck + sweep). New `npm run example <path>`
+wraps tsx with the right runtime tsconfig so consumers don't need
+`TSX_TSCONFIG_PATH` env-var gymnastics.
+
+### Added — top-level public exports
+
+```ts
+import {
+  // Memory
+  defineMemory,
+  MEMORY_TYPES, MEMORY_STRATEGIES, MEMORY_TIMING, SNAPSHOT_PROJECTIONS,
+  InMemoryStore, mockEmbedder, identityNamespace,
+  // InjectionEngine
+  defineSkill, defineSteering, defineInstruction, defineFact,
+  evaluateInjections, buildInjectionEngineSubflow,
+  // … (existing core surface unchanged)
+} from 'agentfootprint';
+```
+
+### Changed — Agent flowchart shape (internal — no consumer impact)
+
+The Agent's main flowchart now has memory READ subflows mounted
+between Seed and InjectionEngine, and the `Route → 'final'` branch is
+now a sub-chart (`PrepareFinal → memory-write subflows → BreakFinal`)
+so memory writes happen reliably before the loop terminates. This is
+visible in narrative + Lens but doesn't change the consumer API.
+
+### Changed — top-level scrub
+
+- All `v2` marketing prefixes scrubbed from `src/` JSDoc / READMEs.
+  The library is now just "agentfootprint", not "agentfootprint v2".
+- Removed redundant `Execution stopped... due to break condition`
+  console.info from footprintjs (3 sites — break is already recorded
+  via `narrativeGenerator.onBreak`).
+
+### Fixed — example runtime
+
+- `examples/core/02-agent-with-tools.ts` — custom respond extracts
+  city from user message instead of returning empty args
+- All 33 examples now run end-to-end in CI; previously only typecheck
+  was verified
+
+### Internal — test counts
+
+- agentfootprint: **1121 tests** (was 1044 in 1.23.0; +77 new memory tests)
+- footprintjs (peer dep): 2436 tests pass after the leaked-log fix
+
+### Roadmap (next minor releases)
+
+| Release | Focus |
+|---|---|
+| v2.1 | Reliability subsystem (3-tier fallback, CircuitBreaker, auto-retry, fault-tolerant resume) + Redis store adapter |
+| v2.2 | Governance subsystem (Policy, BudgetTracker, access levels) + DynamoDB adapter |
+| v2.3 | Causal training-data exports (`exportForTraining({format})`) + RLPolicyRecorder |
+| v2.4+ | MCP integration, Deep Agents, A2A |
+
 ## [1.23.0]
 
 ### BREAKING — but no users yet, shipped as minor
