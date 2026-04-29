@@ -149,9 +149,9 @@ describe('SkillRegistry — basic operations', () => {
   it('register throws on duplicate id (use replace to overwrite)', () => {
     const r = new SkillRegistry();
     r.register(defineSkill({ id: 'billing', description: 'd', body: 'b1' }));
-    expect(() =>
-      r.register(defineSkill({ id: 'billing', description: 'd', body: 'b2' })),
-    ).toThrow(/already registered.*Use \.replace/);
+    expect(() => r.register(defineSkill({ id: 'billing', description: 'd', body: 'b2' }))).toThrow(
+      /already registered.*Use \.replace/,
+    );
   });
 
   it('register throws on non-Skill flavor', () => {
@@ -183,9 +183,9 @@ describe('SkillRegistry — basic operations', () => {
   it('replace throws on id mismatch', () => {
     const r = new SkillRegistry();
     r.register(defineSkill({ id: 'a', description: 'd', body: 'b' }));
-    expect(() =>
-      r.replace('a', defineSkill({ id: 'b', description: 'd', body: 'b' })),
-    ).toThrow(/does not match the slot id/);
+    expect(() => r.replace('a', defineSkill({ id: 'b', description: 'd', body: 'b' }))).toThrow(
+      /does not match the slot id/,
+    );
   });
 
   it('unregister removes by id; no-op for missing', () => {
