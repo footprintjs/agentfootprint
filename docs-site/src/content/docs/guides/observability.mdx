@@ -7,7 +7,7 @@ description: Passive recorders that observe without shaping behavior.
 
 ```ts
 import { Agent, mock } from 'agentfootprint';
-import { agentObservability } from 'agentfootprint/observe';
+import { agentObservability } from 'agentfootprint';
 
 const provider = mock([{ content: 'Hello!' }]);
 
@@ -31,7 +31,7 @@ For fine-grained control, attach individual recorders:
 import {
   TokenRecorder, CostRecorder, ToolUsageRecorder,
   QualityRecorder, GuardrailRecorder, PermissionRecorder,
-} from 'agentfootprint/observe';
+} from 'agentfootprint';
 
 const tokens = new TokenRecorder();
 const cost = new CostRecorder({
@@ -80,7 +80,7 @@ Export agent events as OpenTelemetry spans — no `@opentelemetry` dependency in
 
 ```ts
 import { trace } from '@opentelemetry/api';
-import { OTelRecorder } from 'agentfootprint/observe';
+import { OTelRecorder } from 'agentfootprint';
 
 const recorder = new OTelRecorder(trace.getTracer('agentfootprint'));
 const agent = Agent.create({ provider })
@@ -97,7 +97,7 @@ Works with Datadog, New Relic, Grafana, Jaeger, or any OTel-compatible backend.
 ## Grounding analysis
 
 ```ts
-import { ExplainRecorder } from 'agentfootprint/explain';
+import { ExplainRecorder } from 'agentfootprint';
 
 const explain = new ExplainRecorder();
 // attach via .recorder(explain) before .build()

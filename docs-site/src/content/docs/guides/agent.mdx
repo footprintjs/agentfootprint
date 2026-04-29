@@ -149,7 +149,7 @@ agent.outputSchema(schema, { injection: 'user' });
 In Dynamic mode, all three **slots** (the system prompt, available tools, and message history) re-evaluate each iteration. This means the agent's behavior can change based on what happened — tools unlock after verification, prompts change after classification:
 
 ```ts
-import { AgentPattern } from 'agentfootprint/instructions';
+import { AgentPattern } from 'agentfootprint';
 
 const agent = Agent.create({ provider })
   .pattern(AgentPattern.Dynamic)

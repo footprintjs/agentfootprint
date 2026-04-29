@@ -13,7 +13,7 @@ An LLM calls `lookup_order` and gets `{status: 'shipped', amount: 299}`. Then it
 
 ```ts
 import { Agent, mock, defineTool } from 'agentfootprint';
-import { ExplainRecorder } from 'agentfootprint/explain';
+import { ExplainRecorder } from 'agentfootprint';
 
 const lookupOrder = defineTool({
   id: 'lookup_order',

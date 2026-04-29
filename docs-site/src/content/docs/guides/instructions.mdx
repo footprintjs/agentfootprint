@@ -13,7 +13,7 @@ The simplest instruction — no conditions, just extra prompt text and tools:
 
 ```ts
 import { Agent, defineTool } from 'agentfootprint';
-import { defineInstruction } from 'agentfootprint/instructions';
+import { defineInstruction } from 'agentfootprint';
 
 // Always-active: adds prompt + tools regardless of state
 const politeness = defineInstruction({
@@ -40,7 +40,7 @@ No `activeWhen` = always active. Good for baseline behavior.
 Add `activeWhen` to activate based on accumulated state:
 
 ```ts
-import { defineInstruction } from 'agentfootprint/instructions';
+import { defineInstruction } from 'agentfootprint';
 
 const refundHandling = defineInstruction({
   id: 'refund-handling',

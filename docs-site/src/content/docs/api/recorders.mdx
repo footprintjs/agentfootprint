@@ -10,7 +10,7 @@ description: API reference for AgentRecorder implementations.
 Bundles TokenRecorder + ToolUsageRecorder + CostRecorder:
 
 ```ts
-import { agentObservability } from 'agentfootprint/observe';
+import { agentObservability } from 'agentfootprint';
 
 const obs = agentObservability({
   pricing: { 'claude-sonnet-4-20250514': { input: 3, output: 15 } },
@@ -122,7 +122,7 @@ Export events as OpenTelemetry spans. Zero `@opentelemetry` dependency — bring
 
 ```ts
 import { trace } from '@opentelemetry/api';
-import { OTelRecorder } from 'agentfootprint/observe';
+import { OTelRecorder } from 'agentfootprint';
 
 const rec = new OTelRecorder(trace.getTracer('agentfootprint'));
 // Spans: agent.turn, gen_ai.chat, tool.*, agent.error
@@ -134,7 +134,7 @@ const rec = new OTelRecorder(trace.getTracer('agentfootprint'));
 Collect grounding evidence during traversal (no post-processing):
 
 ```ts
-import { ExplainRecorder } from 'agentfootprint/explain';
+import { ExplainRecorder } from 'agentfootprint';
 
 const rec = new ExplainRecorder();
 agent.recorder(rec);

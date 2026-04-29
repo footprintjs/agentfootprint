@@ -25,7 +25,7 @@ Verify the agent calls the right tools and uses the results:
 ```ts
 import { describe, it, expect } from 'vitest';
 import { Agent, mock, defineTool } from 'agentfootprint';
-import { agentObservability } from 'agentfootprint/observe';
+import { agentObservability } from 'agentfootprint';
 
 const lookupOrder = defineTool({
   id: 'lookup_order',
@@ -88,7 +88,7 @@ it('narrative includes tool call details', async () => {
 Verify conditional instructions activate based on decision scope:
 
 ```ts
-import { defineInstruction, AgentPattern } from 'agentfootprint/instructions';
+import { defineInstruction, AgentPattern } from 'agentfootprint';
 
 it('refund instruction activates for cancelled orders', async () => {
   const refund = defineInstruction({
@@ -143,7 +143,7 @@ it('emits tool_start and tool_end events', async () => {
 ## Testing grounding
 
 ```ts
-import { ExplainRecorder } from 'agentfootprint/explain';
+import { ExplainRecorder } from 'agentfootprint';
 
 it('LLM response is grounded in tool results', async () => {
   const explain = new ExplainRecorder();

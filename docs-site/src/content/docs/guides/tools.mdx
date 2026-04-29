@@ -62,7 +62,7 @@ const dynamicTools: ToolProvider = {
   },
 };
 
-import { AgentPattern } from 'agentfootprint/instructions';
+import { AgentPattern } from 'agentfootprint';
 
 const agent = Agent.create({ provider })
   .pattern(AgentPattern.Dynamic)
@@ -76,8 +76,8 @@ The LLM never sees tools it can't use:
 
 ```ts
 import { Agent } from 'agentfootprint';
-import { gatedTools, PermissionPolicy } from 'agentfootprint/security';
-import { staticTools } from 'agentfootprint/providers';
+import { gatedTools, PermissionPolicy } from 'agentfootprint';
+import { staticTools } from 'agentfootprint';
 
 const policy = PermissionPolicy.fromRoles({
   user: ['search', 'calc'],

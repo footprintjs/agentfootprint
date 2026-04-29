@@ -1,19 +1,20 @@
 ---
 title: Quick Start
-description: Build your first explainable agent in 5 minutes.
+description: Build your first agent in 5 minutes — and add memory in 5 more.
 ---
 
 import { Tabs, TabItem, Aside } from '@astrojs/starlight/components';
 
 ## What is an AI agent?
 
-An AI agent is an LLM (like Claude or GPT) that can **take actions** — not just generate text. It calls tools (APIs, databases, functions), reads the results, and decides what to do next. This loop continues until the agent has enough information to answer.
+An LLM that can **take actions**, not just generate text. It calls tools, reads
+the results, decides what to do next, and loops until done. agentfootprint
+makes every step of that loop **inspectable** — what landed in which slot,
+which tool ran with what args, why a decision branched the way it did.
 
 ```
 User question → LLM thinks → calls a tool → reads result → thinks again → responds
 ```
-
-agentfootprint builds agents that **show their work** — every tool call, every decision, every LLM response is captured in a structured trace you can inspect, test, and audit.
 
 ## Install
 
@@ -40,152 +41,101 @@ agentfootprint builds agents that **show their work** — every tool call, every
 ```ts
 import { Agent, defineTool, mock } from 'agentfootprint';
 
-// 1. Define a tool
-const getWeather = defineTool({
-  id: 'get_weather',
-  description: 'Get current weather for a city',
-  inputSchema: {
-    type: 'object',
-    properties: { city: { type: 'string' } },
-    required: ['city'],
+const weather = defineTool({
+  schema: {
+    name: 'weather',
+    description: 'Get current weather for a city.',
+    inputSchema: {
+      type: 'object',
+      properties: { city: { type: 'string' } },
+      required: ['city'],
+    },
   },
-  handler: async ({ city }) => ({
-    content: JSON.stringify({ city, temp: 72, condition: 'sunny' }),
-  }),
+  execute: async (args) => `${(args as { city: string }).city}: 72°F, sunny`,
 });
 
-// 2. Build the agent (mock provider for testing — $0 cost)
 const agent = Agent.create({
-  provider: mock([
-    // Call 1: LLM decides to use the tool
-    { content: '', toolCalls: [{ id: 'tc1', name: 'get_weather', arguments: { city: 'Paris' } }] },
-    // Call 2: LLM responds with the tool result
-    { content: 'The weather in Paris is 72°F and sunny.' },
-  ]),
+  provider: mock({ reply: 'Paris is 72°F and sunny today.' }),
+  model: 'mock',
+  maxIterations: 5,
 })
-  .system('You are a weather assistant. Use get_weather to answer.')
-  .tool(getWeather)
+  .system('You answer weather questions using the `weather` tool.')
+  .tool(weather)
   .build();
 
-// 3. Run it
-const result = await agent.run('What is the weather in Paris?');
-console.log(result.content);
-// → "The weather in Paris is 72°F and sunny."
+const result = await agent.run({ message: 'Weather in Paris?' });
+console.log(result);
+// → "Paris is 72°F and sunny today."
+```
 
-// 4. See what happened
+The `mock` provider returns a scripted reply — perfect for `$0` testing.
+Swap to `anthropic` / `openai` / `bedrock` / `ollama` for real LLMs;
+**no other code changes**.
+
+## Add memory in 5 more lines
+
+agentfootprint ships a single `defineMemory({ type, strategy, store })`
+factory. Pick a TYPE (what shape you keep), a STRATEGY (how you fit it
+in), and a STORE.
+
+```ts
+import {
+  Agent, defineMemory, MEMORY_TYPES, MEMORY_STRATEGIES, InMemoryStore, mock,
+} from 'agentfootprint';
+
+const memory = defineMemory({
+  id: 'short-term',
+  type: MEMORY_TYPES.EPISODIC,
+  strategy: { kind: MEMORY_STRATEGIES.WINDOW, size: 10 }, // last 10 turns
+  store: new InMemoryStore(),
+});
+
+const agent = Agent.create({ provider: mock({ reply: 'Hi Alice!' }), model: 'mock' })
+  .memory(memory)
+  .build();
+
+// Pass an `identity` so memory accumulates per conversation.
+const id = { conversationId: 'alice-session' };
+await agent.run({ message: 'My name is Alice', identity: id });
+const result = await agent.run({ message: 'What did I just say?', identity: id });
+// → memory subflow loaded the prior turn; the agent answered from context
+```
+
+Read [memory examples](https://github.com/footprintjs/agentfootprint/tree/main/examples/memory)
+for all 7 strategies (window / budget / summarize / topK / extract /
+**causal** / hybrid).
+
+## See what happened
+
+```ts
 console.log(agent.getNarrative());
-// → [
-//   "[Seed] Initialized agent state",
-//   "[CallLLM] Called LLM",
-//   "[ParseResponse] Parsed: tool_calls → [get_weather({city: "Paris"})]",
-//   "[ExecuteToolCalls] Tool results: {city: "Paris", temp: 72, condition: "sunny"}",
-//   "[CallLLM] Called LLM",
-//   "[Finalize] The weather in Paris is 72°F and sunny."
-// ]
+// Human-readable execution trace — every stage, every decision,
+// every tool call, every memory injection.
 ```
 
-## Switch to Claude
-
-Replace `mock()` with a real provider — same agent, same tools, same code:
-
-<Tabs>
-  <TabItem label="Anthropic (Claude)">
-    ```ts
-    import { Agent, anthropic } from 'agentfootprint';
-
-    const agent = Agent.create({
-      provider: anthropic('claude-sonnet-4-20250514'),
-    })
-      .system('You are a weather assistant.')
-      .tool(getWeather)
-      .build();
-    ```
-  </TabItem>
-  <TabItem label="OpenAI">
-    ```ts
-    import { Agent, openai } from 'agentfootprint';
-
-    const agent = Agent.create({
-      provider: openai('gpt-4o'),
-    })
-      .system('You are a weather assistant.')
-      .tool(getWeather)
-      .build();
-    ```
-  </TabItem>
-  <TabItem label="AWS Bedrock">
-    ```ts
-    import { Agent, bedrock } from 'agentfootprint';
-
-    const agent = Agent.create({
-      provider: bedrock('anthropic.claude-sonnet-4-20250514-v1:0'),
-    })
-      .system('You are a weather assistant.')
-      .tool(getWeather)
-      .build();
-    ```
-  </TabItem>
-</Tabs>
-
-## Add observability
-
-One line — tokens, tools, and cost tracking:
+Or attach typed event listeners:
 
 ```ts
-import { Agent, anthropic } from 'agentfootprint';
-import { agentObservability } from 'agentfootprint/observe';
-
-const obs = agentObservability();
-const agent = Agent.create({ provider: anthropic('claude-sonnet-4-20250514') })
-  .system('You are a weather assistant.')
-  .tool(getWeather)
-  .recorder(obs)    // ← one line
-  .build();
-
-await agent.run('What is the weather in Paris?');
-
-console.log(obs.tokens());
-// → { totalCalls: 2, totalInputTokens: 243, totalOutputTokens: 31, calls: [...] }
-
-console.log(obs.tools());
-// → { totalCalls: 1, byTool: { get_weather: { calls: 1, errors: 0, averageLatencyMs: 2 } } }
-```
-
-## Write a test
-
-The same mock provider makes tests deterministic and free:
-
-```ts
-import { describe, it, expect } from 'vitest';
-import { Agent, mock, defineTool } from 'agentfootprint';
-
-describe('weather agent', () => {
-  it('calls get_weather and responds with results', async () => {
-    const provider = mock([
-      { content: '', toolCalls: [{ id: 'tc1', name: 'get_weather', arguments: { city: 'Paris' } }] },
-      { content: 'Paris is 72°F and sunny.' },
-    ]);
-
-    const agent = Agent.create({ provider })
-      .system('You are a weather assistant.')
-      .tool(getWeather)
-      .build();
-
-    const result = await agent.run('Weather in Paris?');
-
-    expect(result.content).toContain('72°F');
-    expect(result.iterations).toBe(2);  // 2 LLM calls: tool call + response
-  });
+agent.on('agentfootprint.context.injected', (e) => {
+  console.log(`[${e.payload.source}] landed in ${e.payload.slot} slot`);
+});
+agent.on('agentfootprint.stream.tool_start', (e) => {
+  console.log(`→ tool ${e.payload.toolName}(${JSON.stringify(e.payload.args)})`);
 });
 ```
 
-## Recommended learning path
+Every event is typed: 47 events across 13 domains (context, agent, stream,
+tools, skill, permission, eval, cost, memory, …).
 
-Follow this order for the smoothest experience:
+## Next steps
 
-1. **[Key Concepts](/agentfootprint/getting-started/key-concepts/)** — the 5-layer taxonomy (2 primitives, 3 compositions, N patterns, context engineering, features)
-2. **[Agent guide](/agentfootprint/guides/agent/)** — memory, streaming, human-in-the-loop
-3. **[Tool use guide](/agentfootprint/guides/tools/)** — define tools, dynamic tool providers
-4. **[Testing guide](/agentfootprint/guides/testing/)** — write tests with mock()
-5. **[Observability guide](/agentfootprint/guides/observability/)** — track tokens, cost, tool usage
-6. **[Instructions guide](/agentfootprint/guides/instructions/)** — conditional behavior (advanced)
+- **[Key concepts](./key-concepts/)** — the 2 + 3 + N + Context Engineering + Memory mental model
+- **[Agent guide](../guides/agent/)** — Agent fluent API in depth
+- **[Memory guide](../guides/memory/)** — `defineMemory`, all 4 types × 7 strategies
+- **[Skills](../guides/skills-explained/)** / **[Instructions](../guides/instructions/)** — context engineering primitives
+- **[Provider integrations](../integrations/anthropic/)** — switch from `mock` to a real LLM
+
+<Aside type="tip">
+Run any of the 33 examples end-to-end with `npm run example examples/<path>.ts`
+inside a clone of the repo. Every example is also an end-to-end test in CI.
+</Aside>

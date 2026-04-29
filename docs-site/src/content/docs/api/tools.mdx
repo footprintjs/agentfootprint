@@ -70,8 +70,8 @@ interface ToolProvider {
 ## gatedTools
 
 ```ts
-import { staticTools } from 'agentfootprint/providers';
-import { gatedTools, PermissionPolicy } from 'agentfootprint/security';
+import { staticTools } from 'agentfootprint';
+import { gatedTools, PermissionPolicy } from 'agentfootprint';
 
 // gatedTools wraps a ToolProvider (not an array)
 const gated = gatedTools(staticTools(allTools), policy.checker());

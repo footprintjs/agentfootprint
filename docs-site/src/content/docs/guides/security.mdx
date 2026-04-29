@@ -15,8 +15,8 @@ Two layers of defense:
 
 ```ts
 import { Agent } from 'agentfootprint';
-import { staticTools } from 'agentfootprint/providers';
-import { gatedTools, PermissionPolicy } from 'agentfootprint/security';
+import { staticTools } from 'agentfootprint';
+import { gatedTools, PermissionPolicy } from 'agentfootprint';
 
 const allTools = [searchTool, calculatorTool, deleteUserTool];
 
@@ -68,7 +68,7 @@ policy.setRole('admin');
 Track what was blocked and allowed:
 
 ```ts
-import { PermissionRecorder } from 'agentfootprint/observe';
+import { PermissionRecorder } from 'agentfootprint';
 
 const permRec = new PermissionRecorder();
 // Wire to gatedTools via onBlocked callback
@@ -79,7 +79,7 @@ const permRec = new PermissionRecorder();
 Instructions marked `safety: true` are fail-closed — they fire even if the predicate throws:
 
 ```ts
-import { defineInstruction } from 'agentfootprint/instructions';
+import { defineInstruction } from 'agentfootprint';
 
 const compliance = defineInstruction({
   id: 'gdpr-compliance',

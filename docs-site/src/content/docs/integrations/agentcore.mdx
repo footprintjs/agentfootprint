@@ -42,7 +42,7 @@ AgentCore Runtime hosts your agent as a serverless endpoint. The handler uses an
 import { BedrockAgentCoreApp } from 'bedrock-agentcore/runtime';
 import { z } from 'zod';
 import { Agent, bedrock, defineTool } from 'agentfootprint';
-import { agentObservability } from 'agentfootprint/observe';
+import { agentObservability } from 'agentfootprint';
 
 // 1. Build your agent
 const provider = bedrock('anthropic.claude-sonnet-4-20250514-v1:0');
@@ -212,7 +212,7 @@ Export agentfootprint's structured recorder data to CloudWatch:
 
 ```ts
 import { CloudWatch } from '@aws-sdk/client-cloudwatch';
-import { agentObservability } from 'agentfootprint/observe';
+import { agentObservability } from 'agentfootprint';
 
 const cw = new CloudWatch({ region: 'us-east-1' });
 const obs = agentObservability();

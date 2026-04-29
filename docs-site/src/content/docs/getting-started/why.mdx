@@ -45,7 +45,7 @@ const entries = agent.getNarrativeEntries();
 Compare what tools returned vs what the LLM said. Hallucination detection without a separate eval pipeline:
 
 ```ts
-import { ExplainRecorder } from 'agentfootprint/explain';
+import { ExplainRecorder } from 'agentfootprint';
 
 const explain = new ExplainRecorder();
 const agent = Agent.create({ provider })
@@ -87,7 +87,7 @@ Start with a function call. Add capabilities as your needs grow:
 
 ```ts
 import { LLMCall, Agent, anthropic } from 'agentfootprint';
-import { defineInstruction, AgentPattern } from 'agentfootprint/instructions';
+import { defineInstruction, AgentPattern } from 'agentfootprint';
 
 // Level 1: Single LLM call
 const provider = anthropic('claude-sonnet-4-20250514');

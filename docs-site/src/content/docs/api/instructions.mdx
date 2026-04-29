@@ -8,7 +8,7 @@ description: API reference for defineInstruction and AgentPattern.
 <div class="api-sig">defineInstruction(options: InstructionOptions): AgentInstruction</div>
 
 ```ts
-import { defineInstruction } from 'agentfootprint/instructions';
+import { defineInstruction } from 'agentfootprint';
 
 const instruction = defineInstruction({
   id: 'refund-handling',
@@ -48,7 +48,7 @@ const instruction = defineInstruction({
 ## AgentPattern
 
 ```ts
-import { AgentPattern } from 'agentfootprint/instructions';
+import { AgentPattern } from 'agentfootprint';
 
 AgentPattern.Regular  // default — slots evaluated once
 AgentPattern.Dynamic  // re-evaluate all slots each iteration

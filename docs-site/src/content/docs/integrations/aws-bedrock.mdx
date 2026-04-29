@@ -163,7 +163,7 @@ Track tokens, cost, and tool usage — export to CloudWatch:
 
 ```ts
 import { Agent, bedrock } from 'agentfootprint';
-import { agentObservability } from 'agentfootprint/observe';
+import { agentObservability } from 'agentfootprint';
 import { CloudWatch } from '@aws-sdk/client-cloudwatch';
 
 const cw = new CloudWatch({ region: 'us-east-1' });
@@ -221,7 +221,7 @@ await agent.run('Check order ORD-1003', {
 Compare tool results vs LLM claims — hallucination detection without a separate eval pipeline:
 
 ```ts
-import { ExplainRecorder } from 'agentfootprint/explain';
+import { ExplainRecorder } from 'agentfootprint';
 
 const explain = new ExplainRecorder();
 // attach via .recorder(explain) before .build()

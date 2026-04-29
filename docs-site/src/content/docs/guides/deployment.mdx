@@ -10,7 +10,7 @@ The most common deployment — an HTTP server that handles chat requests:
 ```ts
 import express from 'express';
 import { Agent, anthropic, defineTool } from 'agentfootprint';
-import { agentObservability } from 'agentfootprint/observe';
+import { agentObservability } from 'agentfootprint';
 import { SSEFormatter } from 'agentfootprint/stream';
 
 const app = express();
