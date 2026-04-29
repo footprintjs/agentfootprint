@@ -18,6 +18,6 @@
 export { selfConsistency, type SelfConsistencyOptions } from './SelfConsistency.js';
 export { reflection, type ReflectionOptions } from './Reflection.js';
 export { debate, type DebateOptions } from './Debate.js';
-export { mapReduce, type MapReduceOptions } from './mapReduce.js';
+export { mapReduce, type MapReduceOptions } from './MapReduce.js';
 export { tot, type ToTOptions } from './ToT.js';
 export { swarm, type SwarmOptions, type SwarmAgent } from './Swarm.js';

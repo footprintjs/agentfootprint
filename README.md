@@ -16,7 +16,7 @@
 
 <br>
 
-**Building agents is mostly *context engineering*** &mdash; deciding *what content lands in which slot of the LLM call, when, and why*. agentfootprint is the library that makes this discipline buildable: at the **control-flow level** (Sequence, Parallel, Conditional, Loop), not as another framework with new classes per paper.
+**Building Generative AI applications is mostly *context engineering*** &mdash; deciding *what content lands in which slot of the LLM call, when, and why*. agentfootprint gives you a framework to build generative AI apps — single LLM calls, agents, multi-agent systems — where this discipline is **buildable at the control-flow level** (Sequence, Parallel, Conditional, Loop), not hidden inside new classes per paper.
 
 ```bash
 npm install agentfootprint footprintjs
