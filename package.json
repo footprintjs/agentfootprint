@@ -52,10 +52,12 @@
     "build": "tsc && tsc -p tsconfig.esm.json",
     "watch": "tsc -w",
     "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
     "test:examples": "tsc -p examples/tsconfig.json && bash scripts/run-all-examples.sh",
     "test:examples:typecheck": "tsc -p examples/tsconfig.json",
     "example": "TSX_TSCONFIG_PATH=examples/runtime.tsconfig.json npx --yes tsx",
     "test:watch": "vitest --watch",
+    "docs:api": "typedoc",
     "lint": "eslint 'src/**/*.ts' 'test/**/*.ts' --ext .ts",
     "lint:fix": "eslint 'src/**/*.ts' 'test/**/*.ts' --ext .ts --fix",
     "format": "prettier --config .prettierrc.js --list-different 'src/**/*.ts' 'test/**/*.ts'",
@@ -131,22 +133,39 @@
     "footprintjs": ">=4.14.0"
   },
   "peerDependenciesMeta": {
-    "@anthropic-ai/sdk": { "optional": true },
-    "openai": { "optional": true },
-    "@aws-sdk/client-bedrock-runtime": { "optional": true },
-    "@aws-sdk/client-bedrock-agent-runtime": { "optional": true },
-    "@modelcontextprotocol/sdk": { "optional": true },
-    "ioredis": { "optional": true },
-    "zod": { "optional": true }
+    "@anthropic-ai/sdk": {
+      "optional": true
+    },
+    "openai": {
+      "optional": true
+    },
+    "@aws-sdk/client-bedrock-runtime": {
+      "optional": true
+    },
+    "@aws-sdk/client-bedrock-agent-runtime": {
+      "optional": true
+    },
+    "@modelcontextprotocol/sdk": {
+      "optional": true
+    },
+    "ioredis": {
+      "optional": true
+    },
+    "zod": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@types/node": "^25.5.2",
     "@typescript-eslint/eslint-plugin": "^5.61.0",
     "@typescript-eslint/parser": "^5.61.0",
+    "@vitest/coverage-v8": "^4.1.5",
     "eslint": "^8.44.0",
     "eslint-config-prettier": "^6.15.0",
     "footprintjs": "^4.14.0",
     "prettier": "^2.8.1",
+    "typedoc": "^0.28.19",
+    "typedoc-plugin-markdown": "^4.11.0",
     "typescript": "~5.4.5",
     "vitest": "^4.1.5",
     "zod": "^3.25.76"

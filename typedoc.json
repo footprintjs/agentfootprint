@@ -1,0 +1,17 @@
+{
+  "$schema": "https://typedoc.org/schema.json",
+  "entryPoints": ["src/index.ts"],
+  "out": "docs/api-reference",
+  "plugin": ["typedoc-plugin-markdown"],
+  "readme": "none",
+  "githubPages": false,
+  "hideGenerator": true,
+  "excludePrivate": true,
+  "excludeProtected": true,
+  "excludeInternal": true,
+  "exclude": ["**/*.test.ts", "**/test-barrel*", "test/**/*"],
+  "categorizeByGroup": true,
+  "sort": ["alphabetical"],
+  "publicPath": "/agentfootprint/api/generated/",
+  "skipErrorChecking": true
+}

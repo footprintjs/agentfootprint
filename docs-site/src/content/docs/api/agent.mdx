@@ -1,9 +1,9 @@
 ---
 title: API reference
-description: Auto-generated API reference is on the v2.4 backlog (TypeDoc + plugin). Until that lands, refer to the source-code JSDoc and the type definitions shipped in dist/types/.
+description: Auto-generated API reference via TypeDoc. Browse the generated tree in the repo's docs/api-reference/ directory, or use your IDE's autocomplete + go-to-definition for live exploration.
 ---
 
-> The API reference for agentfootprint is generated from TypeScript types + JSDoc. Auto-generation via TypeDoc is on the v2.4 backlog (Phase 6). Until that ships, the authoritative reference is the source code itself — every public export has JSDoc with examples, every type is in `dist/types/`, and your IDE's autocomplete on `import { ... } from 'agentfootprint'` shows the current shape.
+> The API reference is auto-generated from TypeScript types + JSDoc by TypeDoc. The output lives in [`docs/api-reference/`](https://github.com/footprintjs/agentfootprint/tree/main/docs/api-reference) — browse online via GitHub or run `npm run docs:api` to regenerate locally.
 
 ## Where to find what
 
@@ -29,20 +29,23 @@ import { withRetry, withFallback } from 'agentfootprint/resilience';         // 
 import { toSSE } from 'agentfootprint/stream';                               // SSE bridge
 ```
 
-## Coming in v2.4 Phase 6
+## How it's generated
 
-Auto-generated API reference via:
+```bash
+npm run docs:api    # runs `typedoc` per typedoc.json
+```
 
-- `typedoc` — TypeScript → structured JSON
-- `typedoc-plugin-markdown` — JSON → MDX
-- Generated output emitted to `docs-site/src/content/docs/api/`
-- CI step regenerates on every commit; published with the docs build
+TypeDoc reads `src/index.ts`, follows the public exports, emits markdown to `docs/api-reference/`. Configuration lives in `typedoc.json` at the repo root. The release script regenerates before each release; consumers can regenerate locally to browse offline.
 
-When that lands, this page is replaced by the auto-generated tree.
+## Browsing the reference
 
-## Why we're deferring it
+The generated tree is organized by TypeScript declaration kind:
 
-API reference auto-gen is mechanical; we want to do it once correctly rather than ship a half-broken version now. The current source-code JSDoc is COMPLETE and accurate (every public export has it; `npm run lint` enforces). For now, your editor's go-to-definition + JSDoc rendering covers what an HTML reference would.
+- [`docs/api-reference/classes/`](https://github.com/footprintjs/agentfootprint/tree/main/docs/api-reference/classes) — every exported class (Agent, LLMCall, MockProvider, etc.)
+- [`docs/api-reference/functions/`](https://github.com/footprintjs/agentfootprint/tree/main/docs/api-reference/functions) — every exported function (defineMemory, defineRAG, mock, withRetry, etc.)
+- [`docs/api-reference/interfaces/`](https://github.com/footprintjs/agentfootprint/tree/main/docs/api-reference/interfaces) — every exported interface (LLMProvider, MemoryStore, Tool, etc.)
+- [`docs/api-reference/type-aliases/`](https://github.com/footprintjs/agentfootprint/tree/main/docs/api-reference/type-aliases) — every exported type alias
+- [`docs/api-reference/variables/`](https://github.com/footprintjs/agentfootprint/tree/main/docs/api-reference/variables) — exported constants (MEMORY_TYPES, etc.)
 
 ## Next steps
 

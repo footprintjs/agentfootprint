@@ -74,3 +74,28 @@ jobs:
       - name: Build docs-site (gates every CodeFile import)
         working-directory: docs-site
         run: npm run build
+
+  # Coverage gate — runs vitest with v8 coverage; uploads lcov to Codecov.
+  # No threshold enforcement (per design memo); badge surfaces the number
+  # so it stays visible without becoming a hostage to chasing the metric.
+  coverage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - run: npm install
+      - run: npm run build
+      - run: npm run test:coverage
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          files: ./coverage/lcov.info
+          flags: unittests
+          fail_ci_if_error: false
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
