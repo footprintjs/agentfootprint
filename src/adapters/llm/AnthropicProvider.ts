@@ -1,8 +1,8 @@
 /**
- * AnthropicProvider — wraps `@anthropic-ai/sdk` as an v2 `LLMProvider`.
+ * AnthropicProvider — wraps `@anthropic-ai/sdk` as an `LLMProvider`.
  *
  * Pattern: Adapter (GoF) + Ports-and-Adapters (Cockburn 2005).
- * Role:    Outer ring — translates v2 `LLMRequest`/`LLMResponse` to/from
+ * Role:    Outer ring — translates `LLMRequest`/`LLMResponse` to/from
  *          Anthropic's Messages API. Knows nothing about agents,
  *          recorders, or compositions.
  * Emits:   N/A — providers don't emit; recorders observe via Agent.
@@ -36,11 +36,11 @@
  *
  * ─── Limitations ────────────────────────────────────────────────────
  *
- * • Multi-modal content (images, video) NOT supported in v2.0 — v2's
+ * • Multi-modal content (images, video) NOT supported  — the framework's
  *   `LLMMessage.content` is `string`. The adapter accepts text-only.
- *   v2.1 may extend the message shape; this provider will be updated
+ *   May extend in a future release the message shape; this provider will be updated
  *   in lockstep.
- * • `responseFormat` (JSON-Schema-coerced output) NOT exposed in v2.0
+ * • `responseFormat` (JSON-Schema-coerced output) NOT exposed 
  *   — consumers can pass schema instructions via `systemPrompt`.
  *
  * ─── 7-pattern test coverage ────────────────────────────────────────
@@ -251,7 +251,7 @@ function buildParams(
 }
 
 /**
- * Convert v2 messages to Anthropic message params.
+ * Convert messages to Anthropic message params.
  *
  * Key transforms:
  *   • `role: 'system'` → extracted by the caller (we filter it out

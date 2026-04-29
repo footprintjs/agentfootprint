@@ -1,6 +1,6 @@
 ---
 name: Swarm — multi-agent handoff (OpenAI Swarm)
-group: v2-patterns
+group: patterns
 guide: ../../README.md#patterns
 defaultInput: my invoice is wrong
 ---

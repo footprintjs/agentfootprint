@@ -1,10 +1,10 @@
 /**
- * System-Prompt slot subflow builder — v2.
+ * System-Prompt slot subflow builder
  *
  * Pattern: Builder (returns a FlowChart mountable via addSubFlowChartNext).
  * Role:    Layer-3 context engineering; inside Layer-5 primitives
  *          (LLMCall, Agent). Ported from v1's buildSystemPromptSubflow
- *          to v2's InjectionRecord + SlotComposition shape.
+ *          to InjectionRecord + SlotComposition shape.
  * Emits:   None directly. Writes to conventional scope keys; ContextRecorder
  *          observes and emits context.* events.
  *
@@ -18,7 +18,7 @@ import type { FlowChart, TypedScope } from 'footprintjs';
 import { INJECTION_KEYS } from '../../conventions.js';
 import type { InjectionRecord } from '../../recorders/core/types.js';
 import { COMPOSITION_KEYS } from '../../recorders/core/types.js';
-import type { Injection } from '../../lib/injection-engine/types.js';
+import type { ActiveInjection } from '../../lib/injection-engine/types.js';
 import { composeSlot, fnv1a, truncate } from './helpers.js';
 
 /**

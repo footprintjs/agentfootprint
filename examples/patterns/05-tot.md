@@ -1,6 +1,6 @@
 ---
 name: Tree of Thoughts (Yao et al., 2023)
-group: v2-patterns
+group: patterns
 guide: ../../README.md#patterns
 defaultInput: "Solve: find path."
 ---

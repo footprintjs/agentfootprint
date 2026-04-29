@@ -1,5 +1,5 @@
 /**
- * Agent — v2 ReAct primitive (LLM + tools + iteration loop).
+ * Agent — ReAct primitive (LLM + tools + iteration loop).
  *
  * Pattern: Builder (GoF) → produces a Runner backed by a footprintjs FlowChart.
  * Role:    Layer-5 primitive (core/). Assembles the 3-slot context
@@ -48,6 +48,11 @@ import { memoryRecorder } from '../recorders/core/MemoryRecorder.js';
 import { skillRecorder } from '../recorders/core/SkillRecorder.js';
 import { typedEmit } from '../recorders/core/typedEmit.js';
 import type { InjectionRecord } from '../recorders/core/types.js';
+import type { MemoryIdentity } from '../memory/identity/index.js';
+import type { MemoryDefinition } from '../memory/define.types.js';
+import { memoryInjectionKey } from '../memory/define.types.js';
+import { unwrapMemoryFlowChart } from '../memory/define.js';
+import { mountMemoryRead, mountMemoryWrite } from '../memory/wire/mountMemoryPipeline.js';
 import { buildSystemPromptSlot } from './slots/buildSystemPromptSlot.js';
 import { buildMessagesSlot } from './slots/buildMessagesSlot.js';
 import { buildToolsSlot } from './slots/buildToolsSlot.js';
@@ -94,6 +99,16 @@ export interface AgentOptions {
 
 export interface AgentInput {
   readonly message: string;
+
+  /**
+   * Multi-tenant memory scope. Populated to `scope.identity` so memory
+   * subflows registered via `.memory()` can isolate reads/writes per
+   * tenant + principal + conversation.
+   *
+   * Defaults to `{ conversationId: '<runId>' }` when omitted, so agents
+   * without memory work unchanged.
+   */
+  readonly identity?: MemoryIdentity;
 }
 
 export type AgentOutput = string;
@@ -111,6 +126,20 @@ interface AgentState {
   totalInputTokens: number;
   totalOutputTokens: number;
   turnStartMs: number;
+  // Multi-tenant memory scope. Defaulted in seed when AgentInput.identity
+  // is omitted, so non-memory agents work unchanged. Field is named
+  // `runIdentity` (not `identity`) so it doesn't collide with the
+  // readonly `identity` input arg in scope's typed-args view.
+  runIdentity: MemoryIdentity;
+  // Set during the final branch — the (user, assistant) pair the
+  // memory write subflows persist for cross-run recall.
+  newMessages: readonly LLMMessage[];
+  // Turn counter — incremented per agent.run(). Memory writes tag
+  // entries with this so retrieval can show "recalled from turn 5".
+  turnNumber: number;
+  // Token-budget signal used by memory pickByBudget deciders. Defaults
+  // to a permissive cap; consumers tune via PricingTable hooks later.
+  contextTokensRemaining: number;
   // Populated by slot subflow outputMappers:
   systemPromptInjections: readonly InjectionRecord[];
   messagesInjections: readonly InjectionRecord[];
@@ -157,7 +186,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
   private readonly registry: readonly ToolRegistryEntry[];
   /**
    * The Injection list — Skills, Steering, Instructions, Facts (and
-   * v2.1+: RAG, Memory). Evaluated each iteration by the
+   * RAG, Memory). Evaluated each iteration by the
    * InjectionEngine subflow; active set is filtered by slot subflows.
    */
   private readonly injections: readonly Injection[];
@@ -182,6 +211,14 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     compositionPath: [],
   };
 
+  /**
+   * Memory subsystems registered via `.memory()`. Each definition mounts
+   * its `read` subflow before the InjectionEngine on every turn; per-id
+   * scope keys (`memoryInjectionKey(id)`) keep multi-memory layering
+   * collision-free.
+   */
+  private readonly memories: readonly MemoryDefinition[];
+
   constructor(
     opts: AgentOptions,
     systemPromptValue: string,
@@ -192,6 +229,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       readonly thinkingTemplates: Readonly<Record<string, string>>;
     },
     injections: readonly Injection[] = [],
+    memories: readonly MemoryDefinition[] = [],
   ) {
     super();
     this.provider = opts.provider;
@@ -204,11 +242,15 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     this.systemPromptValue = systemPromptValue;
     this.registry = registry;
     this.injections = injections;
+    this.memories = memories;
     // Eager validation: tool names must be unique across .tool() +
     // every Skill.inject.tools — the LLM dispatches by name. Runs in
     // constructor so `Agent.build()` throws immediately on collision,
     // not at first run().
     validateToolNameUniqueness(registry, injections);
+    // Eager validation: memory ids must be unique so per-id scope keys
+    // (`memoryInjection_${id}`) don't collide.
+    validateMemoryIdUniqueness(memories);
     if (opts.pricingTable) this.pricingTable = opts.pricingTable;
     if (opts.costBudget !== undefined) this.costBudget = opts.costBudget;
     if (opts.permissionChecker) this.permissionChecker = opts.permissionChecker;
@@ -231,7 +273,10 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
   ): Promise<AgentOutput | RunnerPauseOutcome> {
     const executor = this.createExecutor();
     const result = await executor.run({
-      input: { message: input.message },
+      input: {
+        message: input.message,
+        ...(input.identity !== undefined && { identity: input.identity }),
+      },
       ...(options ?? {}),
     });
     return this.finalizeResult(executor, result);
@@ -325,6 +370,17 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       const args = scope.$getArgs<AgentInput>();
       scope.userMessage = args.message;
       scope.history = [{ role: 'user', content: args.message }];
+      // Default identity uses the runId so multi-run isolation works
+      // without consumer changes; explicit identity (multi-tenant)
+      // overrides via `agent.run({ identity })`.
+      scope.runIdentity =
+        args.identity ?? { conversationId: this.currentRunContext?.runId ?? 'default' };
+      scope.newMessages = [];
+      scope.turnNumber = 1;
+      // Permissive default — explicit cap will land when PricingTable
+      // gets a context-window field. Memory pickByBudget treats anything
+      // ≥ minimumTokens as "fits", so this just enables the budget path.
+      scope.contextTokensRemaining = 32_000;
       scope.iteration = 1;
       scope.maxIterations = maxIterations;
       scope.finalContent = '';
@@ -745,9 +801,18 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       },
     };
 
-    const finalStage = (scope: TypedScope<AgentState>) => {
+    // Final branch is split so memory-write subflows can mount BETWEEN
+    // setting `finalContent` and breaking the ReAct loop. PrepareFinal
+    // captures the turn payload; BreakFinal terminates the loop.
+    const prepareFinalStage = (scope: TypedScope<AgentState>) => {
       const iteration = scope.iteration as number;
       scope.finalContent = scope.llmLatestContent as string;
+      // The turn payload memory writes persist: the user's message
+      // paired with the agent's final answer.
+      scope.newMessages = [
+        { role: 'user', content: scope.userMessage as string },
+        { role: 'assistant', content: scope.finalContent as string },
+      ];
 
       typedEmit(scope, 'agentfootprint.agent.iteration_end', {
         turnIndex: 0,
@@ -762,17 +827,73 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
         iterationCount: iteration,
         durationMs: Date.now() - (scope.turnStartMs as number),
       });
-      // $break terminates the flow BEFORE loopTo fires below, ending
-      // the ReAct iteration. Pattern inherited from v1 buildAgentLoop.
-      scope.$break();
-      return scope.finalContent;
     };
+
+    const breakFinalStage = (scope: TypedScope<AgentState>) => {
+      // $break terminates the flow before loopTo fires, ending the
+      // ReAct iteration once memory writes (if any) have persisted.
+      scope.$break();
+      return scope.finalContent as string;
+    };
+
+    // Compose the final branch as its own subflow so memory write
+    // subflows mount as visible siblings in narrative + Lens.
+    let finalBranchBuilder = flowChart<AgentState>(
+      'PrepareFinal',
+      prepareFinalStage,
+      'prepare-final',
+      undefined,
+      'Capture turn payload (finalContent + newMessages)',
+    );
+    for (const m of this.memories) {
+      if (m.write) {
+        finalBranchBuilder = mountMemoryWrite(finalBranchBuilder, {
+          pipeline: {
+            read: unwrapMemoryFlowChart(m.read) as never,
+            write: unwrapMemoryFlowChart(m.write) as never,
+          },
+          identityKey: 'runIdentity',
+          turnNumberKey: 'turnNumber',
+          contextTokensKey: 'contextTokensRemaining',
+          newMessagesKey: 'newMessages',
+          writeSubflowId: `sf-memory-write-${m.id}`,
+        });
+      }
+    }
+    const finalBranchChart = finalBranchBuilder
+      .addFunction(
+        'BreakFinal',
+        breakFinalStage,
+        'break-final',
+        'Terminate the ReAct loop',
+      )
+      .build();
 
     // Description prefix `Agent:` is a taxonomy marker — consumers
     // (Lens + FlowchartRecorder) detect Agent-primitive subflows via
     // this prefix and flag them as true agent boundaries (separate
     // from LLMCall subflows which use `LLMCall:` prefix).
-    return flowChart<AgentState>('Seed', seed, STAGE_IDS.SEED, undefined, 'Agent: ReAct loop')
+    let builder = flowChart<AgentState>('Seed', seed, STAGE_IDS.SEED, undefined, 'Agent: ReAct loop');
+
+    // Memory READ subflows — mounted between Seed and InjectionEngine
+    // for TURN_START timing (default). Each memory writes to its own
+    // scope key (`memoryInjection_${id}`) so multiple `.memory()`
+    // registrations layer without colliding.
+    for (const m of this.memories) {
+      builder = mountMemoryRead(builder, {
+        pipeline: {
+          read: unwrapMemoryFlowChart(m.read) as never,
+          ...(m.write !== undefined && { write: unwrapMemoryFlowChart(m.write) as never }),
+        },
+        identityKey: 'runIdentity',
+        turnNumberKey: 'turnNumber',
+        contextTokensKey: 'contextTokensRemaining',
+        injectionKey: memoryInjectionKey(m.id),
+        readSubflowId: `sf-memory-read-${m.id}`,
+      });
+    }
+
+    builder = builder
       // Injection Engine — evaluates every Injection's trigger once
       // per iteration; writes activeInjections[] to parent scope for
       // the slot subflows to consume. Skipped if no injections were
@@ -823,11 +944,33 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       .addFunction('CallLLM', callLLM, STAGE_IDS.CALL_LLM, 'LLM invocation')
       .addDeciderFunction('Route', routeDecider, SUBFLOW_IDS.ROUTE, 'ReAct routing')
         .addPausableFunctionBranch('tool-calls', 'ToolCalls', toolCallsHandler, 'Tool execution (pausable via pauseHere)')
-        .addFunctionBranch('final', 'Final', finalStage)
+        .addSubFlowChartBranch('final', finalBranchChart, 'Final', {
+          // Pass through the read-only state the sub-chart needs;
+          // OMIT keys the sub-chart writes (finalContent, newMessages)
+          // — passing those via inputMapper would freeze them as args.
+          inputMapper: (parent) => {
+            const {
+              finalContent: _f,
+              newMessages: _nm,
+              ...rest
+            } = parent;
+            void _f;
+            void _nm;
+            return rest;
+          },
+          outputMapper: (sf) => ({
+            finalContent: sf.finalContent as string,
+          }),
+          // BreakFinal's $break() must reach the outer loopTo so the
+          // ReAct iteration terminates; without this the inner break
+          // only exits the sub-chart and the outer loop continues.
+          propagateBreak: true,
+        })
         .setDefault('final')
         .end()
-      .loopTo(SUBFLOW_IDS.MESSAGES)
-      .build();
+      .loopTo(SUBFLOW_IDS.MESSAGES);
+
+    return builder.build();
   }
 }
 
@@ -840,6 +983,7 @@ export class AgentBuilder {
   private systemPromptValue = '';
   private readonly registry: ToolRegistryEntry[] = [];
   private readonly injectionList: Injection[] = [];
+  private readonly memoryList: MemoryDefinition[] = [];
   // Voice config — defaults until the consumer calls .appName() /
   // .commentaryTemplates() / .thinkingTemplates(). Stored as plain
   // dicts (Record<string, string>) so the builder doesn't depend on
@@ -960,6 +1104,40 @@ export class AgentBuilder {
     return this.injection(injection);
   }
 
+  /**
+   * Register a Memory subsystem — load/persist conversation context,
+   * facts, narrative beats, or causal snapshots across runs.
+   *
+   * The `MemoryDefinition` is produced by `defineMemory({ type, strategy,
+   * store })`. Multiple memories layer cleanly via per-id scope keys
+   * (`memoryInjection_${id}`):
+   *
+   * ```ts
+   * Agent.create({ provider })
+   *   .memory(defineMemory({ id: 'short', type: MEMORY_TYPES.EPISODIC,
+   *                          strategy: { kind: MEMORY_STRATEGIES.WINDOW, size: 10 },
+   *                          store }))
+   *   .memory(defineMemory({ id: 'facts', type: MEMORY_TYPES.SEMANTIC,
+   *                          strategy: { kind: MEMORY_STRATEGIES.EXTRACT,
+   *                                      extractor: 'pattern' }, store }))
+   *   .build();
+   * ```
+   *
+   * The READ subflow runs at the configured `timing` (default
+   * `MEMORY_TIMING.TURN_START`) and writes its formatted output to the
+   * `memoryInjection_${id}` scope key for the slot subflows to consume.
+   */
+  memory(definition: MemoryDefinition): this {
+    if (this.memoryList.some((m) => m.id === definition.id)) {
+      throw new Error(
+        `Agent.memory(): duplicate id '${definition.id}' — each memory needs a unique id ` +
+          'to keep its scope key (`memoryInjection_${id}`) collision-free.',
+      );
+    }
+    this.memoryList.push(definition);
+    return this;
+  }
+
   build(): Agent {
     // Resolve the voice config: bundled defaults + consumer overrides.
     // Templates flow through the same barrel exports the rest of the
@@ -975,7 +1153,21 @@ export class AgentBuilder {
       this.registry,
       voice,
       this.injectionList,
+      this.memoryList,
     );
+  }
+}
+
+function validateMemoryIdUniqueness(memories: readonly MemoryDefinition[]): void {
+  const seen = new Set<string>();
+  for (const m of memories) {
+    if (seen.has(m.id)) {
+      throw new Error(
+        `Agent: duplicate memory id '${m.id}'. Each memory needs a unique id to keep ` +
+          'its scope key (`memoryInjection_${id}`) collision-free.',
+      );
+    }
+    seen.add(m.id);
   }
 }
 

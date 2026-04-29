@@ -1,4 +1,4 @@
-# `src/v2/recorders/core/` — semantic grouping layer
+# `src/recorders/core/` — semantic grouping layer
 
 ## What lives here
 
@@ -19,7 +19,7 @@ recorders/core/
 Raw footprintjs events are structural (onSubflowEntry, onSubflowExit, onWrite, onNext, onFork, onDecision). They describe execution mechanics, not domain semantics. Core recorders **group** these raw signals into typed domain events consumers understand:
 
 ```
-Raw footprintjs events                              Grouped v2 events
+Raw footprintjs events                              Grouped events
 ────────────────────────────────                   ──────────────────────
 onSubflowEntry(sf-messages)                 ──►
 onWrite(key=messagesInjections, value=...)  ──►    agentfootprint.context.injected × N
@@ -47,9 +47,9 @@ This contrasts with Tier-3 observability recorders (`recorders/observability/`),
 
 **Context events** come from scope-write observation because injection records are WRITTEN to scope by slot subflows. The recorder OBSERVES the writes.
 
-**Stream + agent events** come from direct emit at the stage level (via `typedEmit()`). The bridge observes the emit channel and re-dispatches to the v2 dispatcher with enriched meta.
+**Stream + agent events** come from direct emit at the stage level (via `typedEmit()`). The bridge observes the emit channel and re-dispatches to the dispatcher with enriched meta.
 
-Both paths end at the same v2 dispatcher — consumers see one unified event stream.
+Both paths end at the same dispatcher — consumers see one unified event stream.
 
 ### Decision 3: Typed emit instead of untyped `scope.$emit(...)`
 
@@ -57,7 +57,7 @@ Stage code never calls `scope.$emit('agentfootprint.stream.llm_start', ...)` wit
 
 ### Decision 4: EmitBridge over one shared factory
 
-StreamRecorder and AgentRecorder are nearly identical — they forward emits matching a prefix to the v2 dispatcher. Factoring the shared logic into `EmitBridge` + thin factories (`streamRecorder`, `agentRecorder`) keeps this DRY. Future domains (e.g. a `CompositionEmitRecorder` when compositions ship in Phase 4) add one line.
+StreamRecorder and AgentRecorder are nearly identical — they forward emits matching a prefix to the dispatcher. Factoring the shared logic into `EmitBridge` + thin factories (`streamRecorder`, `agentRecorder`) keeps this DRY. Future domains (e.g. a `CompositionEmitRecorder` when compositions ship in Phase 4) add one line.
 
 ### Decision 5: ContextRecorder diffs injections by `contentHash`
 
@@ -67,7 +67,7 @@ The seen-hash set resets on slot exit — so a new iteration can re-inject the s
 
 ### Decision 6: Enrich with `EventMeta` at emit time
 
-Raw footprintjs events carry structural metadata (runtimeStageId, subflowPath, stageName). The bridge enriches each outbound v2 event with `EventMeta` (wallClockMs, runOffsetMs, compositionPath, runId, optional traceId + correlationId). Consumers get consistent metadata on every event; subscribers don't compute offsets or parse paths themselves.
+Raw footprintjs events carry structural metadata (runtimeStageId, subflowPath, stageName). The bridge enriches each outbound event with `EventMeta` (wallClockMs, runOffsetMs, compositionPath, runId, optional traceId + correlationId). Consumers get consistent metadata on every event; subscribers don't compute offsets or parse paths themselves.
 
 `buildEventMeta()` is in `../bridge/` to keep recorders focused on translation and meta construction in one place.
 

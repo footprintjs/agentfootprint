@@ -2,7 +2,7 @@
  * pause — runner-level pause/resume primitives.
  *
  * Pattern: Control-flow exception (PauseRequest) + typed outcome (RunnerPauseOutcome).
- * Role:    core/ layer. Bridges footprintjs's pause signal into the v2
+ * Role:    core/ layer. Bridges footprintjs.s pause signal into the agentfootprint
  *          Runner contract: tools call `pauseHere(data)` to raise a pause
  *          intent; runners detect the paused executor result and return a
  *          `RunnerPauseOutcome` instead of `TOut`. Consumers call

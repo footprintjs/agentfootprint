@@ -1,6 +1,6 @@
 ---
 name: Permissions — tool-call gating
-group: v2-features
+group: features
 guide: ../../README.md#features
 defaultInput: delete the test record
 ---

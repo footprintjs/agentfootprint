@@ -1,6 +1,6 @@
 /**
  * EmitBridge — forwards footprintjs emits whose name starts with a given
- * prefix to the v2 EventDispatcher, enriched with EventMeta.
+ * prefix to the EventDispatcher, enriched with EventMeta.
  *
  * Pattern: Adapter (GoF) + Pipes & Filters (Hohpe & Woolf, 2003).
  * Role:    Single reusable translation layer for every "pass-through"

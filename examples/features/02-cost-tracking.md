@@ -1,6 +1,6 @@
 ---
 name: Cost tracking — pricingTable + costBudget
-group: v2-features
+group: features
 guide: ../../README.md#features
 defaultInput: do the thing
 ---

@@ -1,6 +1,6 @@
 ---
 name: LLMCall — one-shot LLM primitive
-group: v2-core
+group: core
 guide: ../../README.md#core
 defaultInput: Weather in SF?
 ---

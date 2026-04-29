@@ -1,9 +1,9 @@
 /**
- * CostRecorder — forwards `agentfootprint.cost.*` emits to v2 dispatcher.
+ * CostRecorder — forwards `agentfootprint.cost.*` emits to the dispatcher.
  *
  * Pattern: Factory (GoF) returning an EmitBridge instance.
  * Role:    Bridges `cost.tick` + `cost.limit_hit` emits from LLMCall / Agent
- *          stages (via `emitCostTick`) to the v2 EventDispatcher so typed
+ *          stages (via `emitCostTick`) to the EventDispatcher so typed
  *          consumer listeners fire.
  * Emits:   agentfootprint.cost.tick / cost.limit_hit
  */

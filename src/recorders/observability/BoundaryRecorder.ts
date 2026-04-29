@@ -87,12 +87,17 @@ import type {
   FlowForkEvent,
   FlowLoopEvent,
   FlowSubflowEvent,
+  TraversalContext,
 } from 'footprintjs';
-// FlowRunEvent isn't re-exported from the main barrel — pulled directly
-// from the engine type module. (footprintjs/trace doesn't expose it
-// either today; this is the canonical source.)
-// eslint-disable-next-line @typescript-eslint/consistent-type-imports
-import type { FlowRunEvent } from 'footprintjs/dist/types/lib/engine/narrative/types.js';
+// `FlowRunEvent` isn't re-exported from footprintjs's main barrel in
+// 4.16.0. Local structural copy matches the public shape exactly —
+// `{ payload?: unknown; traversalContext?: TraversalContext }`.
+// Add this to footprintjs/index re-exports next minor; remove this
+// shim then.
+interface FlowRunEvent {
+  readonly payload?: unknown;
+  readonly traversalContext?: TraversalContext;
+}
 import type { AgentfootprintEvent, AgentfootprintEventType } from '../../events/registry.js';
 import type { EventDispatcher, Unsubscribe } from '../../events/dispatcher.js';
 import { SUBFLOW_IDS, slotFromSubflowId } from '../../conventions.js';

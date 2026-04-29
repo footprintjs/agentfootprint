@@ -1,5 +1,5 @@
 /**
- * SkillRecorder — forwards `agentfootprint.skill.*` emits to the v2 dispatcher.
+ * SkillRecorder — forwards `agentfootprint.skill.*` emits to the dispatcher.
  *
  * Pattern: Factory over EmitBridge.
  * Role:    Bridges skill lifecycle events (activated, deactivated) emitted

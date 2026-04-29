@@ -44,13 +44,13 @@ import { isCliEntry, printResult, type ExampleMeta } from '../helpers/cli.js';
 import { exampleProvider } from '../helpers/provider.js';
 
 export const meta: ExampleMeta = {
-  id: 'v2/features/01-pause-resume',
+  id: 'features/01-pause-resume',
   title: 'Pause / Resume — human-in-the-loop',
-  group: 'v2-features',
+  group: 'features',
   description: 'Two-phase HITL: run() may pause and return a checkpoint; resume(checkpoint, answer) finishes the run from the human\'s reply. Process A and Process B can be days apart.',
   defaultInput: 'refund order 123',
   providerSlots: ['default'],
-  tags: ['v2', 'feature', 'pause', 'resume', 'HITL'],
+  tags: ['feature', 'pause', 'resume', 'HITL'],
 };
 
 /**

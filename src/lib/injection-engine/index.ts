@@ -1,7 +1,7 @@
 /**
  * agentfootprint Injection Engine — public barrel.
  *
- * The unifying primitive of agentfootprint v2's context engineering.
+ * The unifying primitive of agentfootprint context engineering.
  * One `Injection` type. One `InjectionEngine` subflow. N typed sugar
  * factories. See `README.md` in this folder for the full concept.
  *
@@ -9,7 +9,7 @@
  *
  *   LLM-AI system design   ✓ ONE primitive replaces N feature-specific
  *                            subsystems. Skill, Steering, Instruction,
- *                            Context (and v2.1+: RAG, Memory, Guardrail)
+ *                            Context (and RAG, Memory, Guardrail)
  *                            are typed sugar producing the same shape.
  *                            Engine is shared; observability is shared;
  *                            Lens chips are shared.
@@ -76,7 +76,7 @@ export {
   type InjectionEngineConfig,
 } from './buildInjectionEngineSubflow.js';
 
-// Sugar factories — v2.0 ships four; v2.1+ adds RAG / Memory / Guardrail
+// Sugar factories — Ships four; more flavors planned (RAG / Memory / Guardrail)
 export {
   defineInstruction,
   type DefineInstructionOptions,

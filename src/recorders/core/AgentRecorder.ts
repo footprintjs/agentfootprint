@@ -1,5 +1,5 @@
 /**
- * AgentRecorder — forwards `agentfootprint.agent.*` emits to v2 dispatcher.
+ * AgentRecorder — forwards `agentfootprint.agent.*` emits to the dispatcher.
  *
  * Pattern: Factory (GoF) returning an EmitBridge instance.
  * Role:    Convenience constructor for the agent-lifecycle bridge recorder.

@@ -5,7 +5,7 @@
  * a third judge agent renders the verdict.
  * https://arxiv.org/abs/2305.14325
  *
- * Run:  npx tsx examples/v2/patterns/03-debate.ts
+ * Run:  npx tsx examples/patterns/03-debate.ts
  */
 
 import { debate } from '../../src/index.js';
@@ -13,13 +13,13 @@ import { isCliEntry, printResult, type ExampleMeta } from '../helpers/cli.js';
 import { exampleProvider } from '../helpers/provider.js';
 
 export const meta: ExampleMeta = {
-  id: 'v2/patterns/03-debate',
+  id: 'patterns/03-debate',
   title: 'Multi-Agent Debate (Du et al., 2023)',
-  group: 'v2-patterns',
+  group: 'patterns',
   description: 'Proposer and Critic alternate for N rounds; a Judge renders verdict. Paper: https://arxiv.org/abs/2305.14325',
   defaultInput: 'Should we ship feature X?',
   providerSlots: ['default'],
-  tags: ['v2', 'pattern', 'Debate', 'multi-agent'],
+  tags: ['pattern', 'Debate', 'multi-agent'],
 };
 
 

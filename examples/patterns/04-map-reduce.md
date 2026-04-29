@@ -1,6 +1,6 @@
 ---
 name: MapReduce — split → summarize shards → combine
-group: v2-patterns
+group: patterns
 guide: ../../README.md#patterns
 defaultInput: |
   Paragraph 1: intro about cats.

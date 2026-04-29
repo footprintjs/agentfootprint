@@ -7,7 +7,7 @@
  *
  * Origin: OpenAI Swarm experiment.
  *
- * Run:  npx tsx examples/v2/patterns/06-swarm.ts
+ * Run:  npx tsx examples/patterns/06-swarm.ts
  */
 
 import { swarm, LLMCall } from '../../src/index.js';
@@ -15,13 +15,13 @@ import { isCliEntry, printResult, type ExampleMeta } from '../helpers/cli.js';
 import { exampleProvider } from '../helpers/provider.js';
 
 export const meta: ExampleMeta = {
-  id: 'v2/patterns/06-swarm',
+  id: 'patterns/06-swarm',
   title: 'Swarm — multi-agent handoff (OpenAI Swarm)',
-  group: 'v2-patterns',
+  group: 'patterns',
   description: 'Fixed agent roster + route() function; Loop(Conditional(agent-select)) until route returns undefined.',
   defaultInput: 'my invoice is wrong',
   providerSlots: ['default'],
-  tags: ['v2', 'pattern', 'Swarm', 'handoff'],
+  tags: ['pattern', 'Swarm', 'handoff'],
 };
 
 

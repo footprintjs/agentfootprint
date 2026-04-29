@@ -7,7 +7,7 @@
  * one-shot `cost.limit_hit` fires the FIRST time cumulative crosses
  * the budget. The library never auto-aborts — consumers decide.
  *
- * Run:  npx tsx examples/v2/08-cost-tracking.ts
+ * Run:  npx tsx examples/08-cost-tracking.ts
  */
 
 import { Agent, type PricingTable } from '../../src/index.js';
@@ -15,13 +15,13 @@ import { isCliEntry, printResult, type ExampleMeta } from '../helpers/cli.js';
 import { exampleProvider } from '../helpers/provider.js';
 
 export const meta: ExampleMeta = {
-  id: 'v2/features/02-cost-tracking',
+  id: 'features/02-cost-tracking',
   title: 'Cost tracking — pricingTable + costBudget',
-  group: 'v2-features',
+  group: 'features',
   description: 'Add a PricingTable adapter to get cost.tick after every LLM call; add costBudget to get a one-shot cost.limit_hit on threshold crossing.',
   defaultInput: 'do the thing',
   providerSlots: ['default'],
-  tags: ['v2', 'feature', 'cost', 'budget', 'pricing'],
+  tags: ['feature', 'cost', 'budget', 'pricing'],
 };
 
 

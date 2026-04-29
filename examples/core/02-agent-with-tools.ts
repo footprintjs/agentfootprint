@@ -6,27 +6,28 @@
  * Tools register with a JSON schema + execute function.
  */
 
-import { Agent, type LLMProvider } from '../../src/index.js';
+import { Agent, type LLMProvider, type LLMRequest, type LLMResponse } from '../../src/index.js';
 import { isCliEntry, printResult, type ExampleMeta } from '../helpers/cli.js';
 import { exampleProvider } from '../helpers/provider.js';
 
 export const meta: ExampleMeta = {
-  id: 'v2/core/02-agent-with-tools',
+  id: 'core/02-agent-with-tools',
   title: 'Agent + tools (ReAct)',
-  group: 'v2-core',
+  group: 'core',
   description:
     'Agent primitive with a tool registry. Each iteration: LLM call → route → tool-calls loop, or final.',
   defaultInput: 'Weather in SF?',
   providerSlots: ['default'],
-  tags: ['v2', 'primitive', 'Agent', 'tools', 'ReAct'],
+  tags: ['primitive', 'Agent', 'tools', 'ReAct'],
 };
 
 export async function run(input: string, provider?: LLMProvider): Promise<string> {
   const agent = Agent.create({
-    // 'feature' kind drives the smart tool-call flow: first iteration
-    // calls the first registered tool, second returns a final answer.
-    // No per-example scripted respond needed.
-    provider: provider ?? exampleProvider('feature'),
+    // The default smart-mock would call `weather` with empty args. This
+    // tool needs a `city`, so we supply a respond that extracts it from
+    // the user's message ("Weather in SF?" → "SF") on iteration 1, then
+    // returns a final answer once the tool result has landed.
+    provider: provider ?? exampleProvider('feature', { respond: weatherRespond }),
     model: 'mock',
     maxIterations: 5,
   })
@@ -62,6 +63,20 @@ export async function run(input: string, provider?: LLMProvider): Promise<string
     throw new Error('Agent paused — this example has no pauseHere tool.');
   }
   return result;
+}
+
+function weatherRespond(req: LLMRequest): Partial<LLMResponse> {
+  const lastTool = [...req.messages].reverse().find((m) => m.role === 'tool');
+  if (lastTool) return { content: `Got it — ${String(lastTool.content ?? '').trim()}` };
+
+  const lastUser = [...req.messages].reverse().find((m) => m.role === 'user');
+  const text = typeof lastUser?.content === 'string' ? lastUser.content : '';
+  const city = text.match(/in\s+([A-Z][A-Za-z]+)/)?.[1] ?? 'San Francisco';
+
+  return {
+    content: '',
+    toolCalls: [{ id: 'call-weather-1', name: 'weather', args: { city } }],
+  };
 }
 
 if (isCliEntry(import.meta.url)) {

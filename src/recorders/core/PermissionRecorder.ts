@@ -1,6 +1,6 @@
 /**
  * PermissionRecorder — forwards `agentfootprint.permission.*` emits
- * to the v2 dispatcher.
+ * to the dispatcher.
  *
  * Pattern: Factory over EmitBridge.
  * Role:    Bridges permission.check, permission.gate_opened, and

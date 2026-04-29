@@ -6,7 +6,7 @@
  * and expand again. Final output is the best thought at the deepest level.
  * https://arxiv.org/abs/2305.10601
  *
- * Run:  npx tsx examples/v2/patterns/05-tot.ts
+ * Run:  npx tsx examples/patterns/05-tot.ts
  */
 
 import { tot } from '../../src/index.js';
@@ -14,13 +14,13 @@ import { isCliEntry, printResult, type ExampleMeta } from '../helpers/cli.js';
 import { exampleProvider } from '../helpers/provider.js';
 
 export const meta: ExampleMeta = {
-  id: 'v2/patterns/05-tot',
+  id: 'patterns/05-tot',
   title: 'Tree of Thoughts (Yao et al., 2023)',
-  group: 'v2-patterns',
+  group: 'patterns',
   description: 'BFS reasoning: Loop(Parallel(K thoughts)) with scoring + beam-width pruning each level. Paper: https://arxiv.org/abs/2305.10601',
   defaultInput: 'Solve: find path.',
   providerSlots: ['default'],
-  tags: ['v2', 'pattern', 'ToT', 'beam-search'],
+  tags: ['pattern', 'ToT', 'beam-search'],
 };
 
 

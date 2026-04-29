@@ -1,5 +1,5 @@
 /**
- * MemoryRecorder — forwards `agentfootprint.memory.*` emits to the v2 dispatcher.
+ * MemoryRecorder — forwards `agentfootprint.memory.*` emits to the dispatcher.
  *
  * Pattern: Factory over EmitBridge.
  * Role:    Bridges memory-layer events (strategy_applied, attached,

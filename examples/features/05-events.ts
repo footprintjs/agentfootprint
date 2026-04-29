@@ -5,7 +5,7 @@
  * checking. Wildcards: `'*'` for all, `'agentfootprint.<domain>.*'` for a
  * domain. Consumer-owned domains (eval, memory, skill) use `runner.emit()`.
  *
- * Run:  npx tsx examples/v2/11-events.ts
+ * Run:  npx tsx examples/11-events.ts
  */
 
 import { Agent } from '../../src/index.js';
@@ -13,13 +13,13 @@ import { isCliEntry, printResult, type ExampleMeta } from '../helpers/cli.js';
 import { exampleProvider } from '../helpers/provider.js';
 
 export const meta: ExampleMeta = {
-  id: 'v2/features/05-events',
+  id: 'features/05-events',
   title: 'Events — typed .on() + wildcards + runner.emit()',
-  group: 'v2-features',
+  group: 'features',
   description: 'The 47-event typed registry: .on(type, listener) is compile-time checked; wildcards (* / domain.*) for broad subscriptions; runner.emit() for consumer events.',
   defaultInput: 'find info',
   providerSlots: ['default'],
-  tags: ['v2', 'feature', 'events', 'typed', 'wildcard'],
+  tags: ['feature', 'events', 'typed', 'wildcard'],
 };
 
 

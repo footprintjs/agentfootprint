@@ -1,4 +1,4 @@
-# `src/v2/core-flow/` — compositions
+# `src/core-flow/` — compositions
 
 ## What lives here
 

@@ -4,7 +4,7 @@
  * `Conditional` picks exactly ONE runner based on predicate order.
  * First matching `.when()` wins. `.otherwise()` is mandatory.
  *
- * Run:  npx tsx examples/v2/05-conditional.ts
+ * Run:  npx tsx examples/05-conditional.ts
  */
 
 import { Conditional, LLMCall } from '../../src/index.js';
@@ -12,13 +12,13 @@ import { isCliEntry, printResult, type ExampleMeta } from '../helpers/cli.js';
 import { exampleProvider } from '../helpers/provider.js';
 
 export const meta: ExampleMeta = {
-  id: 'v2/core-flow/03-conditional',
+  id: 'core-flow/03-conditional',
   title: 'Conditional — predicate routing',
-  group: 'v2-core-flow',
+  group: 'core-flow',
   description: 'Pick one runner via first-match predicate. .otherwise() is mandatory.',
   defaultInput: 'Site is DOWN help!',
   providerSlots: ['default'],
-  tags: ['v2', 'composition', 'Conditional', 'routing'],
+  tags: ['composition', 'Conditional', 'routing'],
 };
 
 

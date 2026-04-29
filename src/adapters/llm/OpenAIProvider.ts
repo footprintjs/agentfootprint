@@ -1,15 +1,15 @@
 /**
- * OpenAIProvider — wraps the `openai` SDK as an v2 `LLMProvider`.
+ * OpenAIProvider — wraps the `openai` SDK as an `LLMProvider`.
  *
  * Pattern: Adapter (GoF) + Ports-and-Adapters (Cockburn 2005).
- * Role:    Outer ring — translates v2 `LLMRequest`/`LLMResponse` to/from
+ * Role:    Outer ring — translates `LLMRequest`/`LLMResponse` to/from
  *          OpenAI's Chat Completions API. Knows nothing about agents,
  *          recorders, or compositions.
  * Emits:   N/A.
  *
  * ─── 7-panel design review (2026-04-28) ─────────────────────────────
  *
- *   LLM-AI system design   ✓ Native function-calling. v2 messages map
+ *   LLM-AI system design   ✓ Native function-calling. messages map
  *                            1:1 to OpenAI shape (system/user/assistant/tool
  *                            roles match) — minimal translation.
  *   Performance            ✓ Single SDK call per `complete()`. Stream
@@ -35,9 +35,9 @@
  *
  * ─── Limitations ────────────────────────────────────────────────────
  *
- * • Multi-modal NOT supported in v2.0 (v2's `LLMMessage.content` is
- *   `string`). v2.1 may extend.
- * • `responseFormat` (JSON-mode) NOT exposed in v2.0 — pass schema
+ * • Multi-modal NOT supported  (`LLMMessage.content` is
+ *   `string`). May extend in a future release.
+ * • `responseFormat` (JSON-mode) NOT exposed  — pass schema
  *   instructions via `systemPrompt` for now.
  *
  * ─── 7-pattern test coverage ────────────────────────────────────────
@@ -348,7 +348,7 @@ function buildParams(
 }
 
 /**
- * v2 messages → OpenAI messages.
+ * messages → OpenAI messages.
  *
  * Roles map 1:1: system/user/assistant/tool. Assistant turns with
  * `toolCalls` get those serialized into `message.tool_calls` (args

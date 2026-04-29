@@ -105,7 +105,7 @@ export async function* toSSE<TIn, TOut>(
 
   // Pull the dispatcher off the runner. RunnerBase exposes it as
   // protected — we cast to access. No public dispatcher() method
-  // exists in v2.0; runners forward .on/.off via their public API.
+  // exists ; runners forward .on/.off via their public API.
   const dispatcher = (runner as unknown as { dispatcher: EventDispatcher }).dispatcher;
 
   // Bounded queue: events drained as the consumer iterates.

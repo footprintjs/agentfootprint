@@ -19,9 +19,9 @@ export type ContextSlot = 'system-prompt' | 'messages' | 'tools';
  *   - `registry`    → static tool registry configured at build time
  *
  * ENGINEERED sources (context engineering flavors — the teaching layer):
- *   - `rag`          → retrieval-augmented injection (v2.1+)
+ *   - `rag`          → retrieval-augmented injection
  *   - `skill`        → skill activation (LLM-guided via read_skill)
- *   - `memory`       → memory strategy re-injection (v2.1+)
+ *   - `memory`       → memory strategy re-injection
  *   - `instructions` → rule-based behavior guidance
  *   - `steering`     → always-on policy / persona / format rule
  *   - `fact`         → developer-supplied data (user profile, env, …)

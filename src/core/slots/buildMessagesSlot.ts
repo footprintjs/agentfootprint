@@ -1,5 +1,5 @@
 /**
- * Messages slot subflow builder — v2.
+ * Messages slot subflow builder
  *
  * Pattern: Builder (returns a FlowChart mountable via addSubFlowChartNext).
  * Role:    Layer-3 context engineering. Produces InjectionRecord[] from

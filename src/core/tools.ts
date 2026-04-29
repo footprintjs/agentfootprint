@@ -1,5 +1,5 @@
 /**
- * Tool types — v2 Agent's tool-call contract.
+ * Tool types — Agent's tool-call contract.
  *
  * Pattern: Strategy (GoF) — each Tool is a strategy for "how to execute
  *          this named operation given these args".

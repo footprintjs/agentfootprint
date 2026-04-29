@@ -19,14 +19,14 @@ import { isCliEntry, printResult, type ExampleMeta } from '../helpers/cli.js';
 import { exampleProvider } from '../helpers/provider.js';
 
 export const meta: ExampleMeta = {
-  id: 'v2/features/06-flowchart-boundary-payloads',
+  id: 'features/06-flowchart-boundary-payloads',
   title: 'Flowchart — subflow boundary payloads (entry/exit)',
-  group: 'v2-features',
+  group: 'features',
   description:
     'Every subflow StepNode carries entryPayload + exitPayload sourced from footprintjs BoundaryRecorder. Bound by runtimeStageId.',
   defaultInput: 'analyze the report',
   providerSlots: ['default'],
-  tags: ['v2', 'feature', 'flowchart', 'observability', 'boundary'],
+  tags: ['feature', 'flowchart', 'observability', 'boundary'],
 };
 
 export async function run(input: string, provider?: LLMProvider): Promise<unknown> {
@@ -46,7 +46,7 @@ export async function run(input: string, provider?: LLMProvider): Promise<unknow
 
   let answer: unknown;
   try {
-    answer = await agent.run({ input });
+    answer = await agent.run({ message: input });
   } finally {
     handle.unsubscribe();
   }
@@ -80,7 +80,7 @@ export async function run(input: string, provider?: LLMProvider): Promise<unknow
 
 if (isCliEntry(import.meta.url)) {
   run('analyze the Q3 report')
-    .then((r) => printResult(meta, r))
+    .then((r) => printResult(r))
     .catch((e) => {
       console.error(e);
       process.exit(1);

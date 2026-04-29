@@ -246,7 +246,7 @@ export abstract class RunnerBase<TIn = unknown, TOut = unknown>
       // Hand the recorder's attach() AND the dispatcher out as narrow
       // capabilities — no reference to `this`, no coupling to the
       // runner class tree. attachFlowchart wires a TopologyRecorder
-      // via the attach path AND subscribes to the v2 event dispatcher
+      // via the attach path AND subscribes to the event dispatcher
       // for ReAct step transitions (stream.llm_* / stream.tool_*).
       attachFlowchart((r) => this.attach(r), this.dispatcher, opts),
   };

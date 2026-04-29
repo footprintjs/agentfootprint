@@ -8,7 +8,7 @@
  * These are one-liners. Under the hood they subscribe to the runner's
  * typed dispatcher and format the events.
  *
- * Run:  npx tsx examples/v2/10-observability.ts
+ * Run:  npx tsx examples/10-observability.ts
  */
 
 import {
@@ -19,13 +19,13 @@ import { isCliEntry, printResult, type ExampleMeta } from '../helpers/cli.js';
 import { exampleProvider } from '../helpers/provider.js';
 
 export const meta: ExampleMeta = {
-  id: 'v2/features/04-observability',
+  id: 'features/04-observability',
   title: 'Observability — enable.thinking + enable.logging',
-  group: 'v2-features',
+  group: 'features',
   description: 'One-liner Tier-3 observability: .enable.thinking for status line + .enable.logging for firehose structured logs.',
   defaultInput: 'analyze the Q3 report',
   providerSlots: ['default'],
-  tags: ['v2', 'feature', 'observability', 'thinking', 'logging'],
+  tags: ['feature', 'observability', 'thinking', 'logging'],
 };
 
 

@@ -1,6 +1,6 @@
 # Injection Engine
 
-The heart of agentfootprint v2's context engineering: one primitive that
+The heart of agentfootprint context engineering: one primitive that
 does one thing, exhaustively.
 
 > **Every piece of content reaching an LLM is either:**
@@ -109,8 +109,8 @@ recall, environment.
 | Factory | Trigger | Slot(s) | What |
 |---|---|---|---|
 | `defineFact` | always or rule | system-prompt or messages | User profile, env info, computed summary |
-| `defineRAG` (v2.1+) | rule (retrieval score) | messages | Knowledge-base chunks |
-| `defineMemory` (v2.1+) | rule (recency) | messages | Prior turns, extracted facts |
+| `defineRAG` | rule (retrieval score) | messages | Knowledge-base chunks |
+| `defineMemory` | rule (recency) | messages | Prior turns, extracted facts |
 
 **Same engine, same Injection primitive, same observability, same Lens
 chips — different intent.** That symmetry is the library's DNA.
@@ -244,7 +244,7 @@ Adding a flavor adds NO new events — just new `flavor`/`source` values.
 
 ---
 
-## Adding a new flavor (v2.1+)
+## Adding a new flavor
 
 A new flavor is one file in `factories/`. Engine doesn't change.
 
@@ -295,9 +295,9 @@ it.
 
 ---
 
-## v2.0 surface — locked
+## API surface
 
-Four sugar factories ship in v2.0:
+Four sugar factories ship :
 
 ```typescript
 import {
@@ -315,7 +315,7 @@ const agent = Agent.create({ provider, model: 'mock' })
   .build();
 ```
 
-v2.1+ adds: `defineRAG`, `defineMemory`, `defineGuardrail`. Same
+Future flavors planned: `defineRAG`, `defineMemory`, `defineGuardrail`. Same
 pattern. No engine change.
 
 **This is the architecture. One primitive. Many recipes.**

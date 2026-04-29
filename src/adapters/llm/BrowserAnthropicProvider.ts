@@ -40,7 +40,7 @@
  *
  * ─── Limitations ────────────────────────────────────────────────────
  *
- * • Multi-modal NOT in v2.0.
+ * • Multi-modal NOT .
  * • Browser CORS — works because Anthropic explicitly allows the
  *   dangerous-direct header. Future API changes could require a proxy.
  *

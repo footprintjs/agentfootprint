@@ -1,5 +1,5 @@
 /**
- * LoggingRecorder — firehose-style structured logging of every v2 event.
+ * LoggingRecorder — firehose-style structured logging of every event.
  *
  * Pattern: Facade over EventDispatcher's wildcard subscription.
  * Role:    Tier 3 observability — enabled via `agent.enable.logging({...})`.
@@ -88,7 +88,7 @@ export interface LoggingOptions {
 }
 
 /**
- * Attach a logging subscription to the v2 event dispatcher.
+ * Attach a logging subscription to the event dispatcher.
  * Returns an Unsubscribe — call to detach.
  */
 export function attachLogging(

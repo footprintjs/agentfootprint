@@ -1,5 +1,5 @@
 /**
- * eventMeta — build v2 EventMeta from a footprintjs TraversalContext.
+ * eventMeta — build EventMeta from a footprintjs TraversalContext.
  *
  * Pattern: Adapter (GoF) — translates footprintjs's per-stage context into
  *          agentfootprint's per-event metadata shape.

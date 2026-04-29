@@ -1,6 +1,6 @@
 ---
 name: Loop — iteration with mandatory budget
-group: v2-core-flow
+group: core-flow
 guide: ../../README.md#core-flow
 defaultInput: initial idea
 ---

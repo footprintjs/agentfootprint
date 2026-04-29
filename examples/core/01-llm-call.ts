@@ -15,15 +15,15 @@ import { isCliEntry, printResult, type ExampleMeta } from '../helpers/cli.js';
 import { exampleProvider } from '../helpers/provider.js';
 
 export const meta: ExampleMeta = {
-  id: 'v2/core/01-llm-call',
+  id: 'core/01-llm-call',
   title: 'LLMCall — one-shot LLM primitive',
-  group: 'v2-core',
+  group: 'core',
   description:
     'The atomic "ask the model once" primitive — composes into every ' +
     'Sequence/Parallel/Conditional/Loop and emits stream.llm_* events.',
   defaultInput: 'Weather in SF?',
   providerSlots: ['default'],
-  tags: ['v2', 'primitive', 'LLMCall', 'stream'],
+  tags: ['primitive', 'LLMCall', 'stream'],
 };
 
 export async function run(input: string, provider?: LLMProvider): Promise<string> {

@@ -1,6 +1,6 @@
 ---
 name: Multi-Agent Debate (Du et al., 2023)
-group: v2-patterns
+group: patterns
 guide: ../../README.md#patterns
 defaultInput: Should we ship feature X?
 ---

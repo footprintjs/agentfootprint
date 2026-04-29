@@ -1,4 +1,4 @@
-# `src/v2/core/slots/` — the 3-slot context model
+# `src/core/slots/` — the 3-slot context model
 
 ## What lives here
 

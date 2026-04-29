@@ -7,7 +7,7 @@
  * `deny`, the tool is skipped and the LLM sees a synthetic denial
  * string. Throwing from the checker is treated as deny-by-default.
  *
- * Run:  npx tsx examples/v2/09-permissions.ts
+ * Run:  npx tsx examples/09-permissions.ts
  */
 
 import {
@@ -18,13 +18,13 @@ import { isCliEntry, printResult, type ExampleMeta } from '../helpers/cli.js';
 import { exampleProvider } from '../helpers/provider.js';
 
 export const meta: ExampleMeta = {
-  id: 'v2/features/03-permissions',
+  id: 'features/03-permissions',
   title: 'Permissions — tool-call gating',
-  group: 'v2-features',
+  group: 'features',
   description: 'Supply a PermissionChecker; Agent calls check() before every tool.execute and emits permission.check events. Deny skips the tool.',
   defaultInput: 'delete the test record',
   providerSlots: ['default'],
-  tags: ['v2', 'feature', 'permission', 'policy'],
+  tags: ['feature', 'permission', 'policy'],
 };
 
 

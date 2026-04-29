@@ -1,6 +1,6 @@
 ---
 name: Reflection / Self-Refine (Madaan et al., 2023)
-group: v2-patterns
+group: patterns
 guide: ../../README.md#patterns
 defaultInput: Write a poem about night.
 ---

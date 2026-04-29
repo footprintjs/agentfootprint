@@ -8,7 +8,7 @@ so no API key is required.
 ## Layout
 
 ```
-examples/v2/
+examples/
 ├── core/        — 2 primitives (LLMCall, Agent)
 ├── core-flow/   — 4 compositions (Sequence, Parallel, Conditional, Loop)
 ├── patterns/    — 6 canonical research patterns

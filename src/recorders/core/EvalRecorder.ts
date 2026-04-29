@@ -1,5 +1,5 @@
 /**
- * EvalRecorder — forwards `agentfootprint.eval.*` emits to the v2 dispatcher.
+ * EvalRecorder — forwards `agentfootprint.eval.*` emits to the dispatcher.
  *
  * Pattern: Factory over EmitBridge.
  * Role:    Bridges consumer-emitted `eval.score` + `eval.threshold_crossed`

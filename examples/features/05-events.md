@@ -1,6 +1,6 @@
 ---
 name: Events — typed .on() + wildcards + runner.emit()
-group: v2-features
+group: features
 guide: ../../README.md#features
 defaultInput: find info
 ---
@@ -58,7 +58,7 @@ off();
 `composition · agent · stream · context · memory · tools · skill ·
 permission · risk · fallback · cost · eval · error · pause · embedding`
 
-47 typed events total. See `src/v2/events/registry.ts` for the full list.
+47 typed events total. See `src/events/registry.ts` for the full list.
 
 ## Related
 

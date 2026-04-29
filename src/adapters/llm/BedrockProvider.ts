@@ -1,8 +1,8 @@
 /**
- * BedrockProvider — wraps AWS Bedrock's Converse API as an v2 `LLMProvider`.
+ * BedrockProvider — wraps AWS Bedrock's Converse API as an `LLMProvider`.
  *
  * Pattern: Adapter (GoF) + Ports-and-Adapters (Cockburn 2005).
- * Role:    Outer ring — translates v2 `LLMRequest`/`LLMResponse` to/from
+ * Role:    Outer ring — translates `LLMRequest`/`LLMResponse` to/from
  *          AWS Bedrock's model-agnostic Converse / ConverseStream APIs.
  *          Works with ANY Bedrock-hosted model (Claude, Llama, Mistral,
  *          Titan, Mixtral, ...) without format-specific code.
@@ -15,7 +15,7 @@
  *   LLM-AI system design   ✓ Converse API is model-agnostic — one
  *                            adapter covers every Bedrock-hosted
  *                            model. tool_use / tool_result blocks
- *                            map cleanly to v2 toolCalls.
+ *                            map cleanly to toolCalls.
  *   Performance            ✓ Single SDK send() per `complete()`;
  *                            ConverseStream for `stream()` yields
  *                            deltas natively.
@@ -37,7 +37,7 @@
  *
  * ─── Limitations ────────────────────────────────────────────────────
  *
- * • Multi-modal NOT supported in v2.0 (text content only).
+ * • Multi-modal NOT supported  (text content only).
  * • Guardrail integration NOT exposed yet — pass via the SDK client
  *   directly if needed.
  *
@@ -204,7 +204,7 @@ export function bedrock(options: BedrockProviderOptions = {}): LLMProvider {
         }
         const finalResponse: LLMResponse = {
           content: textParts.join(''),
-          // Tool-call streaming is NOT yielded as deltas in this v2.0
+          // Tool-call streaming is NOT yielded as deltas
           // build — the consumer falls back to `complete()` to recover
           // the authoritative tool_use payload. Most Bedrock streams
           // currently emit tool_use only at messageEnd anyway.

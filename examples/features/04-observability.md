@@ -1,6 +1,6 @@
 ---
 name: Observability — enable.thinking + enable.logging
-group: v2-features
+group: features
 guide: ../../README.md#features
 defaultInput: analyze the Q3 report
 ---

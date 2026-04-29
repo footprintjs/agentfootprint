@@ -1,6 +1,6 @@
 /**
  * ContextRecorder — observes footprintjs subflow + scope events, emits
- * grouped `context.*` domain events via the v2 EventDispatcher.
+ * grouped `context.*` domain events via the EventDispatcher.
  *
  * Pattern: Observer (GoF) + Pipes & Filters (Hohpe & Woolf, 2003).
  * Role:    Core semantic grouping layer for the 3-slot model. Watches

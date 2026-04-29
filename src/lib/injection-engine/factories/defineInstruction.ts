@@ -28,7 +28,8 @@
  *   });
  */
 
-import type { Injection, InjectionContext } from '../types.js';
+import type { ContextRole } from '../../../events/types.js';
+import type { Injection, InjectionContext, InjectionContent } from '../types.js';
 
 export interface DefineInstructionOptions {
   readonly id: string;
@@ -42,8 +43,28 @@ export interface DefineInstructionOptions {
    * `agentfootprint.context.evaluated`.
    */
   readonly activeWhen?: (ctx: InjectionContext) => boolean;
-  /** Text appended to the system-prompt slot when active. */
+  /** Instruction text. Lands in the slot specified by `slot` (default system-prompt). */
   readonly prompt: string;
+  /**
+   * Where the instruction lands.
+   *
+   * - `'system-prompt'` (default) — appended to the system prompt.
+   *   Lower attention than recent messages but always available.
+   * - `'messages'` — appended as a recent message. **Higher attention
+   *   weight** — the LLM reads recent messages more carefully than
+   *   system-prompt text. Use this for guidance that MUST be salient
+   *   on this turn (post-tool-result reminders, urgent corrections).
+   *
+   * Same instruction object can target both slots in different agents
+   * — the trigger semantics don't change.
+   */
+  readonly slot?: 'system-prompt' | 'messages';
+  /**
+   * When `slot: 'messages'`, the role to use. Default `'system'`.
+   * `'user'` is also valid; `'assistant'` and `'tool'` work in
+   * principle but rarely make pedagogical sense.
+   */
+  readonly role?: ContextRole;
 }
 
 export function defineInstruction(opts: DefineInstructionOptions): Injection {
@@ -56,11 +77,15 @@ export function defineInstruction(opts: DefineInstructionOptions): Injection {
   const trigger = opts.activeWhen
     ? { kind: 'rule' as const, activeWhen: opts.activeWhen }
     : { kind: 'always' as const };
+  const slot = opts.slot ?? 'system-prompt';
+  const inject: InjectionContent = slot === 'messages'
+    ? { messages: [{ role: opts.role ?? 'system', content: opts.prompt }] }
+    : { systemPrompt: opts.prompt };
   return Object.freeze({
     id: opts.id,
     ...(opts.description && { description: opts.description }),
     flavor: 'instructions' as const,
     trigger,
-    inject: { systemPrompt: opts.prompt },
+    inject,
   }) as unknown as Injection;
 }

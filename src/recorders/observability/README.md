@@ -1,4 +1,4 @@
-# `src/v2/recorders/observability/` — Tier-3 observability features
+# `src/recorders/observability/` — Tier-3 observability features
 
 ## What lives here
 
@@ -21,17 +21,17 @@ Keeping them in a separate folder makes the split obvious:
 | Core (`../core/`) | Observability (this folder) |
 |---|---|
 | Always attached | Opt-in via `.enable.*` |
-| Emits typed v2 events | Consumes typed v2 events |
+| Emits typed events | Consumes typed events |
 | Library-owned shape | Consumer-configured output |
 | Cost: minor, fast-path gated | Cost: zero when disabled |
 
 ## Architectural decisions
 
-### Decision 1: Attach to the v2 dispatcher, NOT footprintjs's emit channel
+### Decision 1: Attach to the dispatcher, NOT footprintjs's emit channel
 
-Observability recorders subscribe to the v2 `EventDispatcher` (via `dispatcher.on('*', ...)`). They see the **unified event stream** — every domain, including `context.*` events which never flow through footprintjs's emit channel (they come from scope-write observation in `ContextRecorder`).
+Observability recorders subscribe to the `EventDispatcher` (via `dispatcher.on('*', ...)`). They see the **unified event stream** — every domain, including `context.*` events which never flow through footprintjs's emit channel (they come from scope-write observation in `ContextRecorder`).
 
-If an observability recorder were to attach as a footprintjs `CombinedRecorder`, it would miss `context.*` entirely. The v2 dispatcher is the single fan-in point.
+If an observability recorder were to attach as a footprintjs `CombinedRecorder`, it would miss `context.*` entirely. The dispatcher is the single fan-in point.
 
 ### Decision 2: Each feature is a factory function, not a class
 
@@ -52,7 +52,7 @@ Factory returns an `Unsubscribe` function. Consumer calls the unsubscribe to dis
 The `Runner` interface exposes an `enable` namespace. Each feature has a single method. The method calls the factory, returns the `Unsubscribe`.
 
 ```typescript
-// Runner.enable namespace — types declared in src/v2/core/runner.ts
+// Runner.enable namespace — types declared in src/core/runner.ts
 interface EnableNamespace {
   thinking(opts: ThinkingOptions): Unsubscribe;
   logging(opts?: LoggingOptions): Unsubscribe;

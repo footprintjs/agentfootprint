@@ -5,7 +5,7 @@
  * step's `{ message }` input. Use `.pipeVia(fn)` to transform between
  * steps when string-chain isn't what you want.
  *
- * Run:  npx tsx examples/v2/03-sequence.ts
+ * Run:  npx tsx examples/03-sequence.ts
  */
 
 import { Sequence, LLMCall } from '../../src/index.js';
@@ -13,13 +13,13 @@ import { isCliEntry, printResult, type ExampleMeta } from '../helpers/cli.js';
 import { exampleProvider } from '../helpers/provider.js';
 
 export const meta: ExampleMeta = {
-  id: 'v2/core-flow/01-sequence',
+  id: 'core-flow/01-sequence',
   title: 'Sequence — linear pipeline',
-  group: 'v2-core-flow',
+  group: 'core-flow',
   description: 'Chain runners; each step’s string output becomes the next step’s input. Use .pipeVia() to transform between steps.',
   defaultInput: 'my invoice has an error',
   providerSlots: ['default'],
-  tags: ['v2', 'composition', 'Sequence', 'pipeVia'],
+  tags: ['composition', 'Sequence', 'pipeVia'],
 };
 
 

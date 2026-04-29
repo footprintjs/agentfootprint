@@ -18,7 +18,7 @@
  *
  * ─── Limitations ────────────────────────────────────────────────────
  *
- * • Multi-modal NOT in v2.0.
+ * • Multi-modal NOT .
  * • CORS depends on the endpoint — OpenAI requires the user-supplied
  *   key in the Authorization header, which they'll do explicitly.
  *

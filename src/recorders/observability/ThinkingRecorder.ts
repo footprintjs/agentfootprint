@@ -51,7 +51,7 @@ const RELEVANT: ReadonlySet<AgentfootprintEventType> = new Set<AgentfootprintEve
 ]);
 
 /**
- * Attach a thinking-status subscription to the v2 event dispatcher.
+ * Attach a thinking-status subscription to the event dispatcher.
  * Returns an Unsubscribe — call to detach.
  */
 export function attachThinking(

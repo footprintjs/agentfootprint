@@ -5,7 +5,7 @@
  * `.times(n)`, `.forAtMost(ms)`, or `.until(guard)` must fire. Default
  * is `times(10)`. A hard ceiling of 500 iterations prevents runaway.
  *
- * Run:  npx tsx examples/v2/06-loop.ts
+ * Run:  npx tsx examples/06-loop.ts
  */
 
 import { Loop, LLMCall } from '../../src/index.js';
@@ -13,13 +13,13 @@ import { isCliEntry, printResult, type ExampleMeta } from '../helpers/cli.js';
 import { exampleProvider } from '../helpers/provider.js';
 
 export const meta: ExampleMeta = {
-  id: 'v2/core-flow/04-loop',
+  id: 'core-flow/04-loop',
   title: 'Loop — iteration with mandatory budget',
-  group: 'v2-core-flow',
+  group: 'core-flow',
   description: 'Iterate a body runner with a required budget: .times(n), .forAtMost(ms), or .until(guard).',
   defaultInput: 'initial idea',
   providerSlots: ['default'],
-  tags: ['v2', 'composition', 'Loop', 'budget', 'until'],
+  tags: ['composition', 'Loop', 'budget', 'until'],
 };
 
 

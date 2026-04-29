@@ -5,7 +5,7 @@
  * emits a stop marker OR when the iteration budget is exhausted.
  * https://arxiv.org/abs/2303.17651
  *
- * Run:  npx tsx examples/v2/patterns/02-reflection.ts
+ * Run:  npx tsx examples/patterns/02-reflection.ts
  */
 
 import { reflection } from '../../src/index.js';
@@ -13,13 +13,13 @@ import { isCliEntry, printResult, type ExampleMeta } from '../helpers/cli.js';
 import { exampleProvider } from '../helpers/provider.js';
 
 export const meta: ExampleMeta = {
-  id: 'v2/patterns/02-reflection',
+  id: 'patterns/02-reflection',
   title: 'Reflection / Self-Refine (Madaan et al., 2023)',
-  group: 'v2-patterns',
+  group: 'patterns',
   description: 'Loop(Propose → Critique) until the critic emits a DONE marker. Paper: https://arxiv.org/abs/2303.17651',
   defaultInput: 'Write a poem about night.',
   providerSlots: ['default'],
-  tags: ['v2', 'pattern', 'Reflection', 'Self-Refine'],
+  tags: ['pattern', 'Reflection', 'Self-Refine'],
 };
 
 

@@ -10,7 +10,7 @@
  * Pattern: Strategy (GoF) — each Injection's trigger is a strategy for
  *          "should I activate this iteration?". Each Injection's
  *          `inject` is the Memento (GoF) carrying content to slots.
- * Role:    Layer-3 context engineering primitive in the v2 stack.
+ * Role:    Layer-3 context engineering primitive in the stack.
  *          Sits below the slot subflows.
  * Emits:   Engine emits `agentfootprint.context.evaluated` once per
  *          iteration. Slot subflows emit `agentfootprint.context.injected`

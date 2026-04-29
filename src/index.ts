@@ -1,8 +1,8 @@
 /**
- * v2 barrel — public surface for Phase 1 (types + dispatcher + conventions).
+ * agentfootprint — public barrel.
  *
- * Pattern: Facade (GoF) over the v2 sublayers.
- * Role:    Single entry point consumers import from during v2 development.
+ * Pattern: Facade (GoF) over the typed sublayers.
+ * Role:    Single entry point consumers import from.
  * Emits:   N/A.
  */
 
@@ -277,7 +277,7 @@ export {
   type ToSSEOptions,
 } from './stream.js';
 
-// Injection Engine — the unifying primitive of v2 context engineering.
+// Injection Engine — the unifying primitive of context engineering.
 // One Injection type, four sugar factories, one engine subflow.
 export {
   // Primitive types
@@ -290,7 +290,7 @@ export {
   evaluateInjections,
   buildInjectionEngineSubflow,
   type InjectionEngineConfig,
-  // Sugar factories (v2.0 ships 4)
+  // Sugar factories — one per injection flavor
   defineInstruction,
   type DefineInstructionOptions,
   defineSkill,
@@ -330,3 +330,26 @@ export {
   patternFactExtractor,
   llmFactExtractor,
 } from './memory/facts/index.js';
+export {
+  // Layered memory API — consumer-facing factory + const-objects
+  defineMemory,
+  MEMORY_TYPES,
+  MEMORY_STRATEGIES,
+  MEMORY_TIMING,
+  SNAPSHOT_PROJECTIONS,
+  type MemoryType,
+  type MemoryStrategyKind,
+  type MemoryTiming,
+  type SnapshotProjection,
+  type Strategy,
+  type MemoryDefinition,
+  type DefineMemoryOptions,
+  // Reference implementations + helpers consumers reach for daily.
+  // Real-backend adapters (Redis, Postgres, Pinecone, ...) ship as
+  // separate subpath exports.
+  InMemoryStore,
+  mockEmbedder,
+  identityNamespace,
+  type MemoryIdentity,
+  type Embedder,
+} from './memory/index.js';

@@ -1,4 +1,4 @@
-# `src/v2/core/` — primitives + Runner foundation
+# `src/core/` — primitives + Runner foundation
 
 ## What lives here
 

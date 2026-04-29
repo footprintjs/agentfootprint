@@ -1,5 +1,5 @@
 /**
- * CompositionRecorder — forwards `agentfootprint.composition.*` emits to v2 dispatcher.
+ * CompositionRecorder — forwards `agentfootprint.composition.*` emits to the dispatcher.
  *
  * Pattern: Factory (GoF) returning an EmitBridge instance.
  * Role:    Convenience constructor for the composition-domain bridge recorder.
@@ -7,7 +7,7 @@
  *          composition.enter/exit/fork_start/branch_complete/merge_end/
  *          route_decided/iteration_start/iteration_exit from their internal
  *          stages; this recorder observes via footprintjs's EmitRecorder
- *          channel and re-dispatches through v2 with typed payloads + meta.
+ *          channel and re-dispatches with typed payloads + meta.
  * Emits:   agentfootprint.composition.*
  */
 

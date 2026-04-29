@@ -1,5 +1,5 @@
 /**
- * Tools slot subflow builder — v2.
+ * Tools slot subflow builder
  *
  * Pattern: Builder (returns a FlowChart mountable via addSubFlowChartNext).
  * Role:    Layer-3 context engineering. Resolves the tools list the LLM

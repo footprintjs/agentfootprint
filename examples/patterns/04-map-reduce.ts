@@ -6,7 +6,7 @@
  *
  * Classic use case: summarize a document that exceeds the context window.
  *
- * Run:  npx tsx examples/v2/patterns/04-map-reduce.ts
+ * Run:  npx tsx examples/patterns/04-map-reduce.ts
  */
 
 import { mapReduce } from '../../src/index.js';
@@ -14,13 +14,13 @@ import { isCliEntry, printResult, type ExampleMeta } from '../helpers/cli.js';
 import { exampleProvider } from '../helpers/provider.js';
 
 export const meta: ExampleMeta = {
-  id: 'v2/patterns/04-map-reduce',
+  id: 'patterns/04-map-reduce',
   title: 'MapReduce — split → summarize shards → combine',
-  group: 'v2-patterns',
+  group: 'patterns',
   description: 'Fixed shard count; each branch runs one LLMCall; a reducer fn or merge-LLM combines. Classic long-document summarization pattern.',
   defaultInput: 'Paragraph 1: intro about cats.\n\nParagraph 2: habits of cats.\n\nParagraph 3: cats vs dogs.',
   providerSlots: ['default'],
-  tags: ['v2', 'pattern', 'MapReduce'],
+  tags: ['pattern', 'MapReduce'],
 };
 
 

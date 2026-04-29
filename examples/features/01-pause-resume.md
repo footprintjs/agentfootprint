@@ -1,6 +1,6 @@
 ---
 name: Pause / Resume — human-in-the-loop
-group: v2-features
+group: features
 guide: ../../README.md#features
 defaultInput: refund order 123
 ---

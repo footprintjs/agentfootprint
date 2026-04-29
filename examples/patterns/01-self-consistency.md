@@ -1,6 +1,6 @@
 ---
 name: SelfConsistency (Wang et al., 2022)
-group: v2-patterns
+group: patterns
 guide: ../../README.md#patterns
 defaultInput: What is the answer?
 ---

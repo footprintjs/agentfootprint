@@ -1,6 +1,6 @@
 ---
 name: Sequence — linear pipeline
-group: v2-core-flow
+group: core-flow
 guide: ../../README.md#core-flow
 defaultInput: my invoice has an error
 ---

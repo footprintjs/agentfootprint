@@ -1,5 +1,5 @@
 /**
- * Shared helpers for v2 slot subflow builders.
+ * Shared helpers for slot subflow builders.
  *
  * Pattern: utility module.
  * Role:    Tiny pure functions the slot builders share — hash, truncate,

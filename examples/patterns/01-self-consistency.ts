@@ -4,7 +4,7 @@
  * Sample N answers in parallel, pick the majority vote.
  * https://arxiv.org/abs/2203.11171
  *
- * Run:  npx tsx examples/v2/patterns/01-self-consistency.ts
+ * Run:  npx tsx examples/patterns/01-self-consistency.ts
  */
 
 import { selfConsistency } from '../../src/index.js';
@@ -12,13 +12,13 @@ import { isCliEntry, printResult, type ExampleMeta } from '../helpers/cli.js';
 import { exampleProvider } from '../helpers/provider.js';
 
 export const meta: ExampleMeta = {
-  id: 'v2/patterns/01-self-consistency',
+  id: 'patterns/01-self-consistency',
   title: 'SelfConsistency (Wang et al., 2022)',
-  group: 'v2-patterns',
+  group: 'patterns',
   description: 'Sample N answers in parallel with higher temperature, vote for the majority. Paper: https://arxiv.org/abs/2203.11171',
   defaultInput: 'What is the answer?',
   providerSlots: ['default'],
-  tags: ['v2', 'pattern', 'SelfConsistency', 'voting'],
+  tags: ['pattern', 'SelfConsistency', 'voting'],
 };
 
 

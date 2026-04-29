@@ -1,6 +1,6 @@
 ---
 name: Conditional — predicate routing
-group: v2-core-flow
+group: core-flow
 guide: ../../README.md#core-flow
 defaultInput: Site is DOWN help!
 ---

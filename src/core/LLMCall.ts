@@ -221,7 +221,7 @@ export class LLMCall extends RunnerBase<LLMCallInput, LLMCallOutput> {
       scope.costBudgetHit = false;
     };
 
-    // v2 slot subflow builders. Each emits InjectionRecord[] + SlotComposition
+    // slot subflow builders. Each emits InjectionRecord[] + SlotComposition
     // through the convention scope keys; ContextRecorder observes and
     // dispatches context.* events.
     const systemPromptSubflow = buildSystemPromptSlot({

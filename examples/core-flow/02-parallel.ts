@@ -6,7 +6,7 @@
  * merges (e.g., "combine whatever succeeded"), opt into tolerant mode
  * with `.mergeOutcomesWithFn()` — receives typed `{ ok, value | error }`.
  *
- * Run:  npx tsx examples/v2/04-parallel.ts
+ * Run:  npx tsx examples/04-parallel.ts
  */
 
 import { Parallel, LLMCall } from '../../src/index.js';
@@ -14,13 +14,13 @@ import { isCliEntry, printResult, type ExampleMeta } from '../helpers/cli.js';
 import { exampleProvider } from '../helpers/provider.js';
 
 export const meta: ExampleMeta = {
-  id: 'v2/core-flow/02-parallel',
+  id: 'core-flow/02-parallel',
   title: 'Parallel — fan-out + merge (strict / tolerant)',
-  group: 'v2-core-flow',
+  group: 'core-flow',
   description: 'Fan out to N branches and merge. Fail-loud by default; opt into tolerant mode with .mergeOutcomesWithFn().',
   defaultInput: 'Can we ship feature X?',
   providerSlots: ['default'],
-  tags: ['v2', 'composition', 'Parallel', 'merge', 'tolerant'],
+  tags: ['composition', 'Parallel', 'merge', 'tolerant'],
 };
 
 

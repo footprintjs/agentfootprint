@@ -1,8 +1,8 @@
-# `src/v2/bridge/` — footprintjs ↔ v2 translation helpers
+# `src/bridge/` — footprintjs ↔ agentfootprint translation helpers
 
 ## What lives here
 
-Helpers that translate between footprintjs's runtime context shapes and v2's event meta shape. Small, focused, pure.
+Helpers that translate between footprintjs's runtime context shapes and event meta shape. Small, focused, pure.
 
 ```
 bridge/
@@ -11,7 +11,7 @@ bridge/
 
 ## Why this folder exists
 
-Recorders need to enrich every v2 event with `EventMeta`:
+Recorders need to enrich every event with `EventMeta`:
 
 ```typescript
 interface EventMeta {
@@ -93,6 +93,6 @@ Rarely. A new helper lands here only when multiple recorders need the same trans
 
 1. Pure function with no state.
 2. Used by 2+ recorders (existing or planned).
-3. Translates between footprintjs and v2 vocabularies.
+3. Translates between footprintjs and agentfootprint vocabularies.
 
 Otherwise, keep the utility local to the caller.

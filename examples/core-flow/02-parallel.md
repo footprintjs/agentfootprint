@@ -1,6 +1,6 @@
 ---
 name: Parallel — fan-out + merge (strict / tolerant)
-group: v2-core-flow
+group: core-flow
 guide: ../../README.md#core-flow
 defaultInput: Can we ship feature X?
 ---

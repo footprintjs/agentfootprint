@@ -1,4 +1,4 @@
-# `src/v2/events/` — the event registry + dispatcher
+# `src/events/` — the event registry + dispatcher
 
 ## What lives here
 
