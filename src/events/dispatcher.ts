@@ -124,11 +124,7 @@ export class EventDispatcher {
     options?: ListenOptions,
   ): Unsubscribe;
   /** Subscribe to a domain wildcard ('agentfootprint.context.*') or '*'. */
-  on(
-    type: WildcardSubscription,
-    listener: WildcardListener,
-    options?: ListenOptions,
-  ): Unsubscribe;
+  on(type: WildcardSubscription, listener: WildcardListener, options?: ListenOptions): Unsubscribe;
   on(
     type: string,
     listener: (event: AgentfootprintEvent) => void,
@@ -157,15 +153,9 @@ export class EventDispatcher {
    * Subscribe a one-shot listener. Fires at most once and then auto-removes.
    * Equivalent to `on(type, listener, { once: true })`.
    */
-  once<K extends AgentfootprintEventType>(
-    type: K,
-    listener: EventListener<K>,
-  ): Unsubscribe;
+  once<K extends AgentfootprintEventType>(type: K, listener: EventListener<K>): Unsubscribe;
   once(type: WildcardSubscription, listener: WildcardListener): Unsubscribe;
-  once(
-    type: string,
-    listener: (event: AgentfootprintEvent) => void,
-  ): Unsubscribe {
+  once(type: string, listener: (event: AgentfootprintEvent) => void): Unsubscribe {
     // Internal listener-add — the public `on()` overloads constrain `type`
     // to either typed keys or wildcards, but internally the dispatcher's
     // bucket logic accepts any string and classifies by shape.
@@ -244,10 +234,7 @@ export class EventDispatcher {
     return this.byType.get(type);
   }
 
-  private fireBucket(
-    bucket: Set<StoredListener> | undefined,
-    event: AgentfootprintEvent,
-  ): void {
+  private fireBucket(bucket: Set<StoredListener> | undefined, event: AgentfootprintEvent): void {
     if (!bucket || bucket.size === 0) return;
     // Snapshot to allow self-removal during iteration (once-listeners).
     const snapshot = [...bucket];
@@ -261,10 +248,7 @@ export class EventDispatcher {
         // itself throws. Errors are surfaced via console.error in dev mode.
         if (isDevMode()) {
           // eslint-disable-next-line no-console
-          console.error(
-            `[agentfootprint] Listener for "${event.type}" threw:`,
-            err,
-          );
+          console.error(`[agentfootprint] Listener for "${event.type}" threw:`, err);
         }
       }
     }
@@ -314,10 +298,7 @@ function wrapForDev(
       // Capture unhandled rejections so they don't vanish silently.
       (result as Promise<unknown>).catch((err: unknown) => {
         // eslint-disable-next-line no-console
-        console.error(
-          `[agentfootprint] Listener Promise for "${type}" rejected:`,
-          err,
-        );
+        console.error(`[agentfootprint] Listener Promise for "${type}" rejected:`, err);
       });
     }
   };

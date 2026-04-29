@@ -25,7 +25,7 @@ describe('patternFactExtractor — unit', () => {
     expect(facts.find((f) => f.key === 'user.name')?.value).toBe('Alice');
   });
 
-  it("extracts user.name from \"I'm X\"", async () => {
+  it('extracts user.name from "I\'m X"', async () => {
     const facts = await patternFactExtractor().extract({
       messages: [user("I'm Bob")],
       turnNumber: 1,

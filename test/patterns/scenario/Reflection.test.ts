@@ -64,9 +64,7 @@ describe('Reflection', () => {
       maxIterations: 5,
     });
     const exits: string[] = [];
-    runner.on('agentfootprint.composition.iteration_exit', (e) =>
-      exits.push(e.payload.reason),
-    );
+    runner.on('agentfootprint.composition.iteration_exit', (e) => exits.push(e.payload.reason));
     await runner.run({ message: 'p' });
     expect(exits).toContain('guard_false');
   });
@@ -80,9 +78,7 @@ describe('Reflection', () => {
       maxIterations: 2,
     });
     const exits: string[] = [];
-    runner.on('agentfootprint.composition.iteration_exit', (e) =>
-      exits.push(e.payload.reason),
-    );
+    runner.on('agentfootprint.composition.iteration_exit', (e) => exits.push(e.payload.reason));
     await runner.run({ message: 'p' });
     // Last exit should be the budget
     expect(exits[exits.length - 1]).toBe('budget');

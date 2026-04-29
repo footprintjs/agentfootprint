@@ -31,19 +31,11 @@ function freshRecorder(): {
   getGraph: () => StepGraph;
 } {
   const dispatcher = new EventDispatcher();
-  const handle = attachFlowchart(
-    (_r: CombinedRecorder) => () => undefined,
-    dispatcher,
-    {},
-  );
+  const handle = attachFlowchart((_r: CombinedRecorder) => () => undefined, dispatcher, {});
   return { dispatcher, getGraph: handle.getSnapshot };
 }
 
-function emit(
-  dispatcher: EventDispatcher,
-  type: string,
-  payload: Record<string, unknown>,
-): void {
+function emit(dispatcher: EventDispatcher, type: string, payload: Record<string, unknown>): void {
   dispatcher.dispatch({
     type,
     payload,
@@ -61,13 +53,18 @@ function emit(
 
 function llmStart(dispatcher: EventDispatcher, model = 'mock'): void {
   emit(dispatcher, 'agentfootprint.stream.llm_start', {
-    model, provider: 'mock', systemPromptChars: 0, messagesCount: 0, toolsCount: 0,
+    model,
+    provider: 'mock',
+    systemPromptChars: 0,
+    messagesCount: 0,
+    toolsCount: 0,
   });
 }
 
 function llmEnd(dispatcher: EventDispatcher, toolCallCount = 0): void {
   emit(dispatcher, 'agentfootprint.stream.llm_end', {
-    content: '', toolCallCount,
+    content: '',
+    toolCallCount,
     usage: { input: 1, output: 1 },
     stopReason: toolCallCount > 0 ? 'tool_use' : 'stop',
   });
@@ -75,19 +72,28 @@ function llmEnd(dispatcher: EventDispatcher, toolCallCount = 0): void {
 
 function toolStart(dispatcher: EventDispatcher, toolName = 't'): void {
   emit(dispatcher, 'agentfootprint.stream.tool_start', {
-    toolName, toolCallId: 'c1', args: {},
+    toolName,
+    toolCallId: 'c1',
+    args: {},
   });
 }
 
 function toolEnd(dispatcher: EventDispatcher): void {
   emit(dispatcher, 'agentfootprint.stream.tool_end', {
-    toolName: 't', toolCallId: 'c1', result: '', latencyMs: 0,
+    toolName: 't',
+    toolCallId: 'c1',
+    result: '',
+    latencyMs: 0,
   });
 }
 
 function llmSteps(graph: StepGraph): readonly StepNode[] {
   return graph.nodes.filter(
-    (n) => n.kind === 'user->llm' || n.kind === 'tool->llm' || n.kind === 'llm->user' || n.kind === 'llm->tool',
+    (n) =>
+      n.kind === 'user->llm' ||
+      n.kind === 'tool->llm' ||
+      n.kind === 'llm->user' ||
+      n.kind === 'llm->tool',
   );
 }
 
@@ -230,8 +236,15 @@ describe('StepNode metadata — pattern 6b: taxonomy prefix filter', async () =>
     const { Agent } = await import('../../../src/core/Agent.js');
     const { MockProvider } = await import('../../../src/adapters/llm/MockProvider.js');
 
-    const triage = Agent.create({ provider: new MockProvider({ reply: 'triage' }), model: 'mock' }).system('t').build();
-    const billing = Agent.create({ provider: new MockProvider({ reply: 'billing' }), model: 'mock' }).system('b').build();
+    const triage = Agent.create({ provider: new MockProvider({ reply: 'triage' }), model: 'mock' })
+      .system('t')
+      .build();
+    const billing = Agent.create({
+      provider: new MockProvider({ reply: 'billing' }),
+      model: 'mock',
+    })
+      .system('b')
+      .build();
 
     const runner = swarm({
       agents: [
@@ -247,7 +260,11 @@ describe('StepNode metadata — pattern 6b: taxonomy prefix filter', async () =>
     });
 
     let lastGraph: StepGraph = { nodes: [], edges: [] };
-    runner.enable.flowchart({ onUpdate: (g) => { lastGraph = g; } });
+    runner.enable.flowchart({
+      onUpdate: (g) => {
+        lastGraph = g;
+      },
+    });
 
     await runner.run({ message: 'hi' });
 
@@ -279,11 +296,15 @@ describe('StepNode metadata — pattern 6b: taxonomy prefix filter', async () =>
     const classify = LLMCall.create({
       provider: new MockProvider({ reply: 'class' }),
       model: 'mock',
-    }).system('c').build();
+    })
+      .system('c')
+      .build();
     const respond = LLMCall.create({
       provider: new MockProvider({ reply: 'resp' }),
       model: 'mock',
-    }).system('r').build();
+    })
+      .system('r')
+      .build();
 
     const runner = Sequence.create({ id: 'intake' })
       .step('classify', classify)
@@ -291,7 +312,11 @@ describe('StepNode metadata — pattern 6b: taxonomy prefix filter', async () =>
       .build();
 
     let lastGraph: StepGraph = { nodes: [], edges: [] };
-    runner.enable.flowchart({ onUpdate: (g) => { lastGraph = g; } });
+    runner.enable.flowchart({
+      onUpdate: (g) => {
+        lastGraph = g;
+      },
+    });
 
     await runner.run({ message: 'hi' });
 
@@ -309,15 +334,18 @@ describe('StepNode metadata — pattern 7: monotonic iteration', () => {
     const { dispatcher, getGraph } = freshRecorder();
 
     // 3 iterations: user->llm + 2 tool round-trips
-    llmStart(dispatcher); llmEnd(dispatcher, 1);
-    toolStart(dispatcher); toolEnd(dispatcher);
-    llmStart(dispatcher); llmEnd(dispatcher, 1);
-    toolStart(dispatcher); toolEnd(dispatcher);
-    llmStart(dispatcher); llmEnd(dispatcher, 0);
+    llmStart(dispatcher);
+    llmEnd(dispatcher, 1);
+    toolStart(dispatcher);
+    toolEnd(dispatcher);
+    llmStart(dispatcher);
+    llmEnd(dispatcher, 1);
+    toolStart(dispatcher);
+    toolEnd(dispatcher);
+    llmStart(dispatcher);
+    llmEnd(dispatcher, 0);
 
-    const calls = getGraph().nodes.filter(
-      (s) => s.kind === 'user->llm' || s.kind === 'tool->llm',
-    );
+    const calls = getGraph().nodes.filter((s) => s.kind === 'user->llm' || s.kind === 'tool->llm');
     const iters = calls.map((s) => s.iterationIndex);
     expect(iters).toEqual([1, 2, 3]);
   });

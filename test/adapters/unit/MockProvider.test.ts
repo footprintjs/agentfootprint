@@ -101,7 +101,10 @@ describe('MockProvider — M4: stream()', () => {
     expect(chunks[chunks.length - 1].done).toBe(true);
     expect(chunks[chunks.length - 1].content).toBe('');
     // Concatenating non-final chunk content reconstructs the original
-    const reconstructed = chunks.slice(0, -1).map((c) => c.content).join('');
+    const reconstructed = chunks
+      .slice(0, -1)
+      .map((c) => c.content)
+      .join('');
     expect(reconstructed).toBe('hello world from mock');
     // tokenIndex increments monotonically
     for (let i = 0; i < chunks.length; i++) {
@@ -152,7 +155,10 @@ describe('MockProvider — M4: stream()', () => {
     });
     const chunks: LLMChunk[] = [];
     for await (const c of provider.stream!(req())) chunks.push(c);
-    const concat = chunks.slice(0, -1).map((c) => c.content).join('');
+    const concat = chunks
+      .slice(0, -1)
+      .map((c) => c.content)
+      .join('');
     expect(chunks[chunks.length - 1].response!.content).toBe(concat);
   });
 });

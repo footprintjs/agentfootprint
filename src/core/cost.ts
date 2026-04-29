@@ -73,11 +73,7 @@ export function emitCostTick(
   });
 
   // First-time crossing of costBudget — emit limit_hit once per run.
-  if (
-    costBudget !== undefined &&
-    !scope.costBudgetHit &&
-    scope.cumEstimatedUsd > costBudget
-  ) {
+  if (costBudget !== undefined && !scope.costBudgetHit && scope.cumEstimatedUsd > costBudget) {
     scope.costBudgetHit = true;
     typedEmit(scope, 'agentfootprint.cost.limit_hit', {
       kind: 'max_cost',

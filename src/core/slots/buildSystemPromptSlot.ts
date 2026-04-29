@@ -66,8 +66,7 @@ export function buildSystemPromptSlot(config: SystemPromptSlotConfig): FlowChart
     'Compose',
     async (scope: TypedScope<SystemPromptSubflowState>) => {
       const args = scope.$getArgs<{ userMessage?: string; iteration?: number }>();
-      const resolved =
-        typeof promptSource === 'function' ? await promptSource(args) : promptSource;
+      const resolved = typeof promptSource === 'function' ? await promptSource(args) : promptSource;
 
       const injections: InjectionRecord[] = [];
 

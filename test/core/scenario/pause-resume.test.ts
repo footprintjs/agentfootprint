@@ -102,10 +102,7 @@ describe('scenario — pause via tool + resume round trip', () => {
 
   it('checkpoint is JSON-serializable and survives a roundtrip', async () => {
     const agent = Agent.create({
-      provider: scripted(
-        resp('', [{ id: 't1', name: 'ask', args: {} }]),
-        resp('done'),
-      ),
+      provider: scripted(resp('', [{ id: 't1', name: 'ask', args: {} }]), resp('done')),
       model: 'mock',
     })
       .system('')
@@ -131,10 +128,7 @@ describe('scenario — pause via tool + resume round trip', () => {
 
   it('emits pause.request on pause and pause.resume on resume', async () => {
     const agent = Agent.create({
-      provider: scripted(
-        resp('', [{ id: 't1', name: 'ask', args: {} }]),
-        resp('done'),
-      ),
+      provider: scripted(resp('', [{ id: 't1', name: 'ask', args: {} }]), resp('done')),
       model: 'mock',
     })
       .system('')

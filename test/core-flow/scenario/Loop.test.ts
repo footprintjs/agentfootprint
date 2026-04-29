@@ -29,9 +29,7 @@ function counterProvider(): LLMProvider {
 
 describe('Loop — maxIterations budget', () => {
   it('runs body N times when maxIterations=N and no until() guard', async () => {
-    const body = LLMCall.create({ provider: counterProvider(), model: 'mock' })
-      .system('')
-      .build();
+    const body = LLMCall.create({ provider: counterProvider(), model: 'mock' }).system('').build();
 
     const loop = Loop.create().repeat(body).times(3).build();
 
@@ -48,18 +46,14 @@ describe('Loop — maxIterations budget', () => {
     const loop = Loop.create().repeat(body).times(2).build();
 
     const exits: string[] = [];
-    loop.on('agentfootprint.composition.iteration_exit', (e) =>
-      exits.push(e.payload.reason),
-    );
+    loop.on('agentfootprint.composition.iteration_exit', (e) => exits.push(e.payload.reason));
     await loop.run({ message: 'go' });
     // Iter 1 body_complete, iter 2 budget (cap hit)
     expect(exits).toEqual(['body_complete', 'budget']);
   });
 
   it('default maxIterations is 10 when only .repeat() is set', async () => {
-    const body = LLMCall.create({ provider: counterProvider(), model: 'mock' })
-      .system('')
-      .build();
+    const body = LLMCall.create({ provider: counterProvider(), model: 'mock' }).system('').build();
     const loop = Loop.create().repeat(body).build();
 
     const out = await loop.run({ message: 'x' });
@@ -70,9 +64,7 @@ describe('Loop — maxIterations budget', () => {
 
 describe('Loop — until() guard', () => {
   it('exits early when until() returns true', async () => {
-    const body = LLMCall.create({ provider: counterProvider(), model: 'mock' })
-      .system('')
-      .build();
+    const body = LLMCall.create({ provider: counterProvider(), model: 'mock' }).system('').build();
 
     const loop = Loop.create()
       .repeat(body)
@@ -85,9 +77,7 @@ describe('Loop — until() guard', () => {
   });
 
   it('iteration_exit reason=guard_false when until() fires', async () => {
-    const body = LLMCall.create({ provider: counterProvider(), model: 'mock' })
-      .system('')
-      .build();
+    const body = LLMCall.create({ provider: counterProvider(), model: 'mock' }).system('').build();
 
     const loop = Loop.create()
       .repeat(body)
@@ -96,9 +86,7 @@ describe('Loop — until() guard', () => {
       .build();
 
     const exits: string[] = [];
-    loop.on('agentfootprint.composition.iteration_exit', (e) =>
-      exits.push(e.payload.reason),
-    );
+    loop.on('agentfootprint.composition.iteration_exit', (e) => exits.push(e.payload.reason));
     await loop.run({ message: 'x' });
     expect(exits).toEqual(['body_complete', 'guard_false']);
   });
@@ -107,7 +95,11 @@ describe('Loop — until() guard', () => {
 describe('Loop — events', () => {
   it('emits composition.enter once and composition.exit once', async () => {
     const loop = Loop.create()
-      .repeat(LLMCall.create({ provider: new MockProvider({ reply: 'y' }), model: 'mock' }).system('').build())
+      .repeat(
+        LLMCall.create({ provider: new MockProvider({ reply: 'y' }), model: 'mock' })
+          .system('')
+          .build(),
+      )
       .times(3)
       .build();
 
@@ -124,14 +116,16 @@ describe('Loop — events', () => {
 
   it('iteration_start fires once per iteration', async () => {
     const loop = Loop.create()
-      .repeat(LLMCall.create({ provider: new MockProvider({ reply: 'y' }), model: 'mock' }).system('').build())
+      .repeat(
+        LLMCall.create({ provider: new MockProvider({ reply: 'y' }), model: 'mock' })
+          .system('')
+          .build(),
+      )
       .times(4)
       .build();
 
     const starts: number[] = [];
-    loop.on('agentfootprint.composition.iteration_start', (e) =>
-      starts.push(e.payload.iteration),
-    );
+    loop.on('agentfootprint.composition.iteration_start', (e) => starts.push(e.payload.iteration));
     await loop.run({ message: 'go' });
     expect(starts).toEqual([1, 2, 3, 4]);
   });

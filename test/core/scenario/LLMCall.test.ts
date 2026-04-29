@@ -13,9 +13,7 @@ import { MockProvider } from '../../../src/adapters/llm/MockProvider.js';
 describe('LLMCall — end-to-end', () => {
   it('runs to completion and returns the mock response', async () => {
     const provider = new MockProvider({ reply: 'hello back' });
-    const llm = LLMCall.create({ provider, model: 'mock-model' })
-      .system('you are helpful')
-      .build();
+    const llm = LLMCall.create({ provider, model: 'mock-model' }).system('you are helpful').build();
 
     const out = await llm.run({ message: 'hi' });
     expect(out).toBe('hello back');
@@ -23,9 +21,7 @@ describe('LLMCall — end-to-end', () => {
 
   it('emits stream.llm_start and stream.llm_end during the run', async () => {
     const provider = new MockProvider({ reply: 'ok' });
-    const llm = LLMCall.create({ provider, model: 'mock-model' })
-      .system('sys')
-      .build();
+    const llm = LLMCall.create({ provider, model: 'mock-model' }).system('sys').build();
 
     const starts = vi.fn();
     const ends = vi.fn();
@@ -41,9 +37,7 @@ describe('LLMCall — end-to-end', () => {
 
   it('emits context.injected for system prompt and user message', async () => {
     const provider = new MockProvider({ reply: 'ok' });
-    const llm = LLMCall.create({ provider, model: 'mock-model' })
-      .system('You are a tutor')
-      .build();
+    const llm = LLMCall.create({ provider, model: 'mock-model' }).system('You are a tutor').build();
 
     const injections: string[] = [];
     llm.on('agentfootprint.context.injected', (e) => {

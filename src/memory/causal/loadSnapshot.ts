@@ -63,7 +63,7 @@ export interface LoadSnapshotConfig {
 function defaultQueryFrom(scope: TypedScope<MemoryState>): string {
   const scopeAny = scope as unknown as { messages?: readonly LLMMessage[] };
   const incoming = scopeAny.messages ?? [];
-  const source = incoming.length > 0 ? incoming : (scope.newMessages ?? []);
+  const source = incoming.length > 0 ? incoming : scope.newMessages ?? [];
   for (let i = source.length - 1; i >= 0; i--) {
     const m = source[i];
     if (m.role === 'user' && m.content) return String(m.content);
@@ -155,9 +155,7 @@ function formatProjection(
       body =
         snap.decisions.length === 0
           ? `(no commit log captured)\nFinal answer: ${snap.finalContent}`
-          : snap.decisions
-              .map((d) => `${d.stageId}: chose "${d.chosen}"`)
-              .join('\n');
+          : snap.decisions.map((d) => `${d.stageId}: chose "${d.chosen}"`).join('\n');
       break;
 
     case SNAPSHOT_PROJECTIONS.FULL:

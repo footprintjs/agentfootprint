@@ -122,18 +122,10 @@ export class Sequence extends RunnerBase<SequenceInput, SequenceOutput> {
     const dispatcher = this.getDispatcher();
     const getRunCtx = (): RunContext => this.currentRunContext;
 
-    executor.attachCombinedRecorder(
-      new ContextRecorder({ dispatcher, getRunContext: getRunCtx }),
-    );
-    executor.attachCombinedRecorder(
-      streamRecorder({ dispatcher, getRunContext: getRunCtx }),
-    );
-    executor.attachCombinedRecorder(
-      agentRecorder({ dispatcher, getRunContext: getRunCtx }),
-    );
-    executor.attachCombinedRecorder(
-      compositionRecorder({ dispatcher, getRunContext: getRunCtx }),
-    );
+    executor.attachCombinedRecorder(new ContextRecorder({ dispatcher, getRunContext: getRunCtx }));
+    executor.attachCombinedRecorder(streamRecorder({ dispatcher, getRunContext: getRunCtx }));
+    executor.attachCombinedRecorder(agentRecorder({ dispatcher, getRunContext: getRunCtx }));
+    executor.attachCombinedRecorder(compositionRecorder({ dispatcher, getRunContext: getRunCtx }));
     for (const r of this.attachedRecorders) executor.attachCombinedRecorder(r);
     return executor;
   }
@@ -181,22 +173,16 @@ export class Sequence extends RunnerBase<SequenceInput, SequenceOutput> {
     // input comes from parent.current (mapped via mapFromPrev); the
     // step's return becomes parent.current (via outputMapper).
     for (const step of steps) {
-      builder = builder.addSubFlowChartNext(
-        `step-${step.id}`,
-        step.runner.toFlowChart(),
-        step.id,
-        {
-          inputMapper: (parent) =>
-            step.mapFromPrev((parent.current as string) ?? ''),
-          // `sfOutput` is the subflow's TraversalResult — for Runner-backed
-          // subflows whose last stage returns a string, sfOutput IS that
-          // string. We pipe it into parent.current for the next step's
-          // inputMapper to pick up.
-          outputMapper: (sfOutput) => ({
-            current: typeof sfOutput === 'string' ? sfOutput : '',
-          }),
-        },
-      );
+      builder = builder.addSubFlowChartNext(`step-${step.id}`, step.runner.toFlowChart(), step.id, {
+        inputMapper: (parent) => step.mapFromPrev((parent.current as string) ?? ''),
+        // `sfOutput` is the subflow's TraversalResult — for Runner-backed
+        // subflows whose last stage returns a string, sfOutput IS that
+        // string. We pipe it into parent.current for the next step's
+        // inputMapper to pick up.
+        outputMapper: (sfOutput) => ({
+          current: typeof sfOutput === 'string' ? sfOutput : '',
+        }),
+      });
     }
 
     // Final stage: emit composition.exit and return the current string

@@ -384,7 +384,11 @@ async function* parseSSE(body: ReadableStream<Uint8Array>): AsyncIterable<unknow
             return;
           }
           if (data) {
-            try { yield JSON.parse(data); } catch { /* skip malformed */ }
+            try {
+              yield JSON.parse(data);
+            } catch {
+              /* skip malformed */
+            }
           }
         }
       }
@@ -396,9 +400,15 @@ async function* parseSSE(body: ReadableStream<Uint8Array>): AsyncIterable<unknow
 
 async function wrapStatus(response: Response): Promise<Error> {
   let bodyText = '';
-  try { bodyText = await response.text(); } catch { /* ignore */ }
+  try {
+    bodyText = await response.text();
+  } catch {
+    /* ignore */
+  }
   return Object.assign(
-    new Error(`[browser-openai] ${response.status} ${response.statusText} — ${bodyText.slice(0, 200)}`),
+    new Error(
+      `[browser-openai] ${response.status} ${response.statusText} — ${bodyText.slice(0, 200)}`,
+    ),
     { name: 'BrowserOpenAIProviderError', status: response.status },
   );
 }

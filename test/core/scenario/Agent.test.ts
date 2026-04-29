@@ -130,8 +130,7 @@ describe('Agent — maxIterations guard', () => {
     // Provider ALWAYS requests a tool — would loop forever without the guard
     const provider: LLMProvider = {
       name: 'mock',
-      complete: async () =>
-        llmResponse('thinking...', [{ id: 'tc', name: 'noop', args: {} }]),
+      complete: async () => llmResponse('thinking...', [{ id: 'tc', name: 'noop', args: {} }]),
     };
 
     const agent = Agent.create({ provider, model: 'mock', maxIterations: 3 })
@@ -182,8 +181,7 @@ describe('Agent — error paths', () => {
   });
 
   it('rejects duplicate tool names at build time', () => {
-    const agent = Agent.create({ provider: new MockProvider(), model: 'mock' })
-      .system('');
+    const agent = Agent.create({ provider: new MockProvider(), model: 'mock' }).system('');
     agent.tool({
       schema: { name: 'dup', description: '', inputSchema: { type: 'object' } },
       execute: () => 1,

@@ -87,8 +87,7 @@ export const MEMORY_STRATEGIES = {
   DECAY: 'decay',
   HYBRID: 'hybrid',
 } as const;
-export type MemoryStrategyKind =
-  (typeof MEMORY_STRATEGIES)[keyof typeof MEMORY_STRATEGIES];
+export type MemoryStrategyKind = (typeof MEMORY_STRATEGIES)[keyof typeof MEMORY_STRATEGIES];
 
 /**
  * When the memory's READ subflow runs.
@@ -118,8 +117,7 @@ export const SNAPSHOT_PROJECTIONS = {
   NARRATIVE: 'narrative',
   FULL: 'full',
 } as const;
-export type SnapshotProjection =
-  (typeof SNAPSHOT_PROJECTIONS)[keyof typeof SNAPSHOT_PROJECTIONS];
+export type SnapshotProjection = (typeof SNAPSHOT_PROJECTIONS)[keyof typeof SNAPSHOT_PROJECTIONS];
 
 // ─── Strategy discriminated-union ───────────────────────────────────
 
@@ -336,9 +334,7 @@ export function isMemoryTiming(value: string): value is MemoryTiming {
   return (Object.values(MEMORY_TIMING) as string[]).includes(value);
 }
 
-export function isSnapshotProjection(
-  value: string,
-): value is SnapshotProjection {
+export function isSnapshotProjection(value: string): value is SnapshotProjection {
   return (Object.values(SNAPSHOT_PROJECTIONS) as string[]).includes(value);
 }
 

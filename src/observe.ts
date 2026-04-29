@@ -32,24 +32,15 @@
  */
 
 // Tier 1 — context + stream
-export {
-  ContextRecorder,
-  type ContextRecorderOptions,
-} from './recorders/core/ContextRecorder.js';
-export {
-  streamRecorder,
-  type StreamRecorderOptions,
-} from './recorders/core/StreamRecorder.js';
+export { ContextRecorder, type ContextRecorderOptions } from './recorders/core/ContextRecorder.js';
+export { streamRecorder, type StreamRecorderOptions } from './recorders/core/StreamRecorder.js';
 
 // Tier 2 — composition + agent
 export {
   compositionRecorder,
   type CompositionRecorderOptions,
 } from './recorders/core/CompositionRecorder.js';
-export {
-  agentRecorder,
-  type AgentRecorderOptions,
-} from './recorders/core/AgentRecorder.js';
+export { agentRecorder, type AgentRecorderOptions } from './recorders/core/AgentRecorder.js';
 export {
   boundaryRecorder,
   BoundaryRecorder,
@@ -74,26 +65,14 @@ export {
 } from './recorders/observability/FlowchartRecorder.js';
 
 // Tier 3 — domain dashboards
-export {
-  costRecorder,
-  type CostRecorderOptions,
-} from './recorders/core/CostRecorder.js';
-export {
-  evalRecorder,
-  type EvalRecorderOptions,
-} from './recorders/core/EvalRecorder.js';
-export {
-  memoryRecorder,
-  type MemoryRecorderOptions,
-} from './recorders/core/MemoryRecorder.js';
+export { costRecorder, type CostRecorderOptions } from './recorders/core/CostRecorder.js';
+export { evalRecorder, type EvalRecorderOptions } from './recorders/core/EvalRecorder.js';
+export { memoryRecorder, type MemoryRecorderOptions } from './recorders/core/MemoryRecorder.js';
 export {
   permissionRecorder,
   type PermissionRecorderOptions,
 } from './recorders/core/PermissionRecorder.js';
-export {
-  skillRecorder,
-  type SkillRecorderOptions,
-} from './recorders/core/SkillRecorder.js';
+export { skillRecorder, type SkillRecorderOptions } from './recorders/core/SkillRecorder.js';
 export {
   attachLogging,
   LoggingDomains,

@@ -62,9 +62,10 @@ export function defineFact(opts: DefineFactOptions): Injection {
     ? { kind: 'rule', activeWhen: opts.activeWhen }
     : { kind: 'always' };
   const slot = opts.slot ?? 'system-prompt';
-  const inject = slot === 'messages'
-    ? { messages: [{ role: opts.role ?? ('system' as const), content: opts.data }] }
-    : { systemPrompt: opts.data };
+  const inject =
+    slot === 'messages'
+      ? { messages: [{ role: opts.role ?? ('system' as const), content: opts.data }] }
+      : { systemPrompt: opts.data };
 
   // Two-stage cast (`as unknown as Injection`) is required because
   // `flavor: 'fact'` narrows tighter than `ContextSource`. Both stages

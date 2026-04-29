@@ -81,7 +81,13 @@ interface BedrockMessage {
 type BedrockContentBlock =
   | { text: string }
   | { toolUse: { toolUseId: string; name: string; input: Record<string, unknown> } }
-  | { toolResult: { toolUseId: string; content: Array<{ text: string }>; status?: 'success' | 'error' } };
+  | {
+      toolResult: {
+        toolUseId: string;
+        content: Array<{ text: string }>;
+        status?: 'success' | 'error';
+      };
+    };
 
 interface BedrockTool {
   toolSpec: {
@@ -399,8 +405,9 @@ function wrapError(err: unknown): Error {
     return Object.assign(new Error(`[bedrock] ${err.message}`), {
       name: 'BedrockProviderError',
       cause: err,
-      status: (err as { $metadata?: { httpStatusCode?: number } }).$metadata?.httpStatusCode
-        ?? (err as { status?: number }).status,
+      status:
+        (err as { $metadata?: { httpStatusCode?: number } }).$metadata?.httpStatusCode ??
+        (err as { status?: number }).status,
     });
   }
   return new Error(`[bedrock] ${String(err)}`);

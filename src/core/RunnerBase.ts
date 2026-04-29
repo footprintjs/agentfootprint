@@ -30,10 +30,7 @@ import type {
   AgentfootprintEventType,
 } from '../events/registry.js';
 import type { EventMeta } from '../events/types.js';
-import {
-  attachLogging,
-  type LoggingOptions,
-} from '../recorders/observability/LoggingRecorder.js';
+import { attachLogging, type LoggingOptions } from '../recorders/observability/LoggingRecorder.js';
 import {
   attachThinking,
   type ThinkingOptions,
@@ -54,9 +51,7 @@ export function makeRunId(): string {
   return `run-${Date.now()}-${++_runIdSeq}`;
 }
 
-export abstract class RunnerBase<TIn = unknown, TOut = unknown>
-  implements Runner<TIn, TOut>
-{
+export abstract class RunnerBase<TIn = unknown, TOut = unknown> implements Runner<TIn, TOut> {
   protected readonly dispatcher = new EventDispatcher();
   protected readonly attachedRecorders: CombinedRecorder[] = [];
 
@@ -109,8 +104,8 @@ export abstract class RunnerBase<TIn = unknown, TOut = unknown>
       checkpoint.pauseData !== undefined
         ? checkpoint.pauseData
         : typeof result === 'object' && result !== null && 'paused' in result
-          ? (result as { pauseData?: unknown }).pauseData
-          : undefined;
+        ? (result as { pauseData?: unknown }).pauseData
+        : undefined;
 
     this.emitPauseRequest(checkpoint, pauseData);
 
@@ -121,10 +116,7 @@ export abstract class RunnerBase<TIn = unknown, TOut = unknown>
    * Emit `agentfootprint.pause.request` through the dispatcher. Called by
    * `detectPause()`. Subclasses should not emit this directly.
    */
-  private emitPauseRequest(
-    checkpoint: FlowchartCheckpoint,
-    pauseData: unknown,
-  ): void {
+  private emitPauseRequest(checkpoint: FlowchartCheckpoint, pauseData: unknown): void {
     const meta = this.minimalMeta();
     const reasonFromData =
       typeof pauseData === 'object' && pauseData !== null && 'reason' in pauseData
@@ -151,10 +143,7 @@ export abstract class RunnerBase<TIn = unknown, TOut = unknown>
    * Emit `agentfootprint.pause.resume` through the dispatcher. Called from
    * concrete runners' `resume()` BEFORE invoking `executor.resume()`.
    */
-  protected emitPauseResume(
-    checkpoint: FlowchartCheckpoint,
-    input: unknown,
-  ): void {
+  protected emitPauseResume(checkpoint: FlowchartCheckpoint, input: unknown): void {
     const meta = this.minimalMeta();
     const pausedDurationMs = Date.now() - checkpoint.pausedAt;
     this.dispatcher.dispatch({
@@ -181,11 +170,7 @@ export abstract class RunnerBase<TIn = unknown, TOut = unknown>
     listener: EventListener<K>,
     options?: ListenOptions,
   ): Unsubscribe;
-  on(
-    type: WildcardSubscription,
-    listener: WildcardListener,
-    options?: ListenOptions,
-  ): Unsubscribe;
+  on(type: WildcardSubscription, listener: WildcardListener, options?: ListenOptions): Unsubscribe;
   on(
     type: string,
     listener: (event: AgentfootprintEvent) => void,
@@ -194,35 +179,35 @@ export abstract class RunnerBase<TIn = unknown, TOut = unknown>
     // Cast via unknown — the public overloads on EventDispatcher restrict
     // `type` to either a specific key or a known wildcard; our public
     // signature is equivalent but TS can't prove that through the union.
-    return (this.dispatcher.on as unknown as (
-      type: string,
-      listener: (event: AgentfootprintEvent) => void,
-      options?: ListenOptions,
-    ) => Unsubscribe)(type, listener, options);
+    return (
+      this.dispatcher.on as unknown as (
+        type: string,
+        listener: (event: AgentfootprintEvent) => void,
+        options?: ListenOptions,
+      ) => Unsubscribe
+    )(type, listener, options);
   }
 
   off<K extends AgentfootprintEventType>(type: K, listener: EventListener<K>): void;
   off(type: WildcardSubscription, listener: WildcardListener): void;
   off(type: string, listener: (event: AgentfootprintEvent) => void): void {
-    (this.dispatcher.off as unknown as (
-      type: string,
-      listener: (event: AgentfootprintEvent) => void,
-    ) => void)(type, listener);
+    (
+      this.dispatcher.off as unknown as (
+        type: string,
+        listener: (event: AgentfootprintEvent) => void,
+      ) => void
+    )(type, listener);
   }
 
-  once<K extends AgentfootprintEventType>(
-    type: K,
-    listener: EventListener<K>,
-  ): Unsubscribe;
+  once<K extends AgentfootprintEventType>(type: K, listener: EventListener<K>): Unsubscribe;
   once(type: WildcardSubscription, listener: WildcardListener): Unsubscribe;
-  once(
-    type: string,
-    listener: (event: AgentfootprintEvent) => void,
-  ): Unsubscribe {
-    return (this.dispatcher.once as unknown as (
-      type: string,
-      listener: (event: AgentfootprintEvent) => void,
-    ) => Unsubscribe)(type, listener);
+  once(type: string, listener: (event: AgentfootprintEvent) => void): Unsubscribe {
+    return (
+      this.dispatcher.once as unknown as (
+        type: string,
+        listener: (event: AgentfootprintEvent) => void,
+      ) => Unsubscribe
+    )(type, listener);
   }
 
   // ─── Recorder attach ───────────────────────────────────────────
@@ -238,10 +223,8 @@ export abstract class RunnerBase<TIn = unknown, TOut = unknown>
   // ─── Enable namespace (Tier 3 observability features) ─────────
 
   readonly enable: EnableNamespace = {
-    thinking: (opts: ThinkingOptions): Unsubscribe =>
-      attachThinking(this.dispatcher, opts),
-    logging: (opts?: LoggingOptions): Unsubscribe =>
-      attachLogging(this.dispatcher, opts),
+    thinking: (opts: ThinkingOptions): Unsubscribe => attachThinking(this.dispatcher, opts),
+    logging: (opts?: LoggingOptions): Unsubscribe => attachLogging(this.dispatcher, opts),
     flowchart: (opts?: FlowchartOptions): FlowchartHandle =>
       // Hand the recorder's attach() AND the dispatcher out as narrow
       // capabilities — no reference to `this`, no coupling to the

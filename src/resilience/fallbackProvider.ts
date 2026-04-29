@@ -32,9 +32,7 @@ export interface FallbackProviderOptions extends WithFallbackOptions {
  * Compose N providers into a single fallback chain. At least one
  * provider is required; throws synchronously on empty input.
  */
-export function fallbackProvider(
-  ...providers: readonly LLMProvider[]
-): LLMProvider;
+export function fallbackProvider(...providers: readonly LLMProvider[]): LLMProvider;
 export function fallbackProvider(
   options: FallbackProviderOptions,
   ...providers: readonly LLMProvider[]

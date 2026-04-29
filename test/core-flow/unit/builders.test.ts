@@ -28,18 +28,14 @@ describe('Sequence builder', () => {
   });
 
   it('accepts custom name + id', () => {
-    const seq = Sequence.create({ name: 'Pipe', id: 'p' })
-      .step('a', trivialRunner())
-      .build();
+    const seq = Sequence.create({ name: 'Pipe', id: 'p' }).step('a', trivialRunner()).build();
     expect(seq.name).toBe('Pipe');
     expect(seq.id).toBe('p');
   });
 
   it('rejects duplicate step ids', () => {
     expect(() =>
-      Sequence.create()
-        .step('same', trivialRunner())
-        .step('same', trivialRunner()),
+      Sequence.create().step('same', trivialRunner()).step('same', trivialRunner()),
     ).toThrow(/duplicate step id/);
   });
 
@@ -78,18 +74,13 @@ describe('Parallel builder', () => {
 
   it('rejects duplicate branch ids', () => {
     expect(() =>
-      Parallel.create()
-        .branch('same', trivialRunner())
-        .branch('same', trivialRunner()),
+      Parallel.create().branch('same', trivialRunner()).branch('same', trivialRunner()),
     ).toThrow(/duplicate branch id/);
   });
 
   it('rejects build() without any merge strategy', () => {
     expect(() =>
-      Parallel.create()
-        .branch('a', trivialRunner())
-        .branch('b', trivialRunner())
-        .build(),
+      Parallel.create().branch('a', trivialRunner()).branch('b', trivialRunner()).build(),
     ).toThrow(/merge/);
   });
 
@@ -166,11 +157,9 @@ describe('Loop builder', () => {
   });
 
   it('rejects second .repeat() call', () => {
-    expect(() =>
-      Loop.create()
-        .repeat(trivialRunner())
-        .repeat(trivialRunner()),
-    ).toThrow(/already set/);
+    expect(() => Loop.create().repeat(trivialRunner()).repeat(trivialRunner())).toThrow(
+      /already set/,
+    );
   });
 
   it('accepts .repeat() alone (default maxIterations=10)', () => {
@@ -212,9 +201,7 @@ describe('Loop builder', () => {
   });
 
   it('accepts custom name + id', () => {
-    const loop = Loop.create({ name: 'MyLoop', id: 'ml' })
-      .repeat(trivialRunner())
-      .build();
+    const loop = Loop.create({ name: 'MyLoop', id: 'ml' }).repeat(trivialRunner()).build();
     expect(loop.name).toBe('MyLoop');
     expect(loop.id).toBe('ml');
   });

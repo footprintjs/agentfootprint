@@ -11,9 +11,7 @@ import { MockProvider } from '../../../src/adapters/llm/MockProvider.js';
 
 describe('Agent.create() + builder', () => {
   it('accepts minimum required options', () => {
-    const inst = Agent.create({ provider: new MockProvider(), model: 'mock' })
-      .system('')
-      .build();
+    const inst = Agent.create({ provider: new MockProvider(), model: 'mock' }).system('').build();
     expect(inst.id).toBe('agent');
     expect(inst.name).toBe('Agent');
   });
@@ -64,9 +62,7 @@ describe('Agent.create() + builder', () => {
 
 describe('Agent maxIterations clamping', () => {
   it('default maxIterations = 10 when not specified', () => {
-    const inst = Agent.create({ provider: new MockProvider(), model: 'mock' })
-      .system('')
-      .build();
+    const inst = Agent.create({ provider: new MockProvider(), model: 'mock' }).system('').build();
     // We can't introspect maxIterations directly without running, but we
     // can verify a non-looping agent completes without error (degenerate case).
     expect(inst).toBeDefined();
@@ -122,9 +118,7 @@ describe('Agent maxIterations clamping', () => {
 
 describe('Agent runner-contract compliance', () => {
   it('exposes all Runner methods', () => {
-    const inst = Agent.create({ provider: new MockProvider(), model: 'mock' })
-      .system('')
-      .build();
+    const inst = Agent.create({ provider: new MockProvider(), model: 'mock' }).system('').build();
     expect(typeof inst.run).toBe('function');
     expect(typeof inst.toFlowChart).toBe('function');
     expect(typeof inst.on).toBe('function');

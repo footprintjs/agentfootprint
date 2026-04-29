@@ -104,9 +104,7 @@ describe('defineMemory — unit', () => {
       type: MEMORY_TYPES.SEMANTIC,
       strategy: {
         kind: MEMORY_STRATEGIES.HYBRID,
-        strategies: [
-          { kind: MEMORY_STRATEGIES.WINDOW, size: 5 },
-        ],
+        strategies: [{ kind: MEMORY_STRATEGIES.WINDOW, size: 5 }],
       },
       store: new InMemoryStore(),
     });

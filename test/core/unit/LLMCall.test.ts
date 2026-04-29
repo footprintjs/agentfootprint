@@ -11,9 +11,7 @@ import { MockProvider } from '../../../src/adapters/llm/MockProvider.js';
 
 describe('LLMCall.create() + builder', () => {
   it('accepts minimum required options (provider + model)', () => {
-    const inst = LLMCall.create({ provider: new MockProvider(), model: 'mock' })
-      .system('')
-      .build();
+    const inst = LLMCall.create({ provider: new MockProvider(), model: 'mock' }).system('').build();
     expect(inst).toBeDefined();
     expect(inst.id).toBe('llm-call');
     expect(inst.name).toBe('LLMCall');
@@ -25,7 +23,9 @@ describe('LLMCall.create() + builder', () => {
       model: 'mock',
       name: 'MyLLM',
       id: 'my-llm-id',
-    }).system('').build();
+    })
+      .system('')
+      .build();
     expect(inst.name).toBe('MyLLM');
     expect(inst.id).toBe('my-llm-id');
   });
@@ -36,14 +36,14 @@ describe('LLMCall.create() + builder', () => {
       model: 'mock',
       temperature: 0.7,
       maxTokens: 500,
-    }).system('').build();
+    })
+      .system('')
+      .build();
     expect(inst).toBeDefined();
   });
 
   it('system prompt is optional (empty string allowed)', () => {
-    const inst = LLMCall.create({ provider: new MockProvider(), model: 'mock' })
-      .system('')
-      .build();
+    const inst = LLMCall.create({ provider: new MockProvider(), model: 'mock' }).system('').build();
     expect(inst).toBeDefined();
   });
 
@@ -55,9 +55,7 @@ describe('LLMCall.create() + builder', () => {
 
 describe('LLMCall runner-contract compliance', () => {
   it('exposes .run() / .toFlowChart() / .on() / .off() / .once() / .attach() / .emit()', () => {
-    const inst = LLMCall.create({ provider: new MockProvider(), model: 'mock' })
-      .system('')
-      .build();
+    const inst = LLMCall.create({ provider: new MockProvider(), model: 'mock' }).system('').build();
     expect(typeof inst.run).toBe('function');
     expect(typeof inst.toFlowChart).toBe('function');
     expect(typeof inst.on).toBe('function');
@@ -68,17 +66,13 @@ describe('LLMCall runner-contract compliance', () => {
   });
 
   it('exposes enable.thinking and enable.logging namespaces', () => {
-    const inst = LLMCall.create({ provider: new MockProvider(), model: 'mock' })
-      .system('')
-      .build();
+    const inst = LLMCall.create({ provider: new MockProvider(), model: 'mock' }).system('').build();
     expect(typeof inst.enable.thinking).toBe('function');
     expect(typeof inst.enable.logging).toBe('function');
   });
 
   it('toFlowChart() returns a defined chart object (composable)', () => {
-    const inst = LLMCall.create({ provider: new MockProvider(), model: 'mock' })
-      .system('')
-      .build();
+    const inst = LLMCall.create({ provider: new MockProvider(), model: 'mock' }).system('').build();
     const chart = inst.toFlowChart();
     expect(chart).toBeDefined();
     expect(typeof chart).toBe('object');

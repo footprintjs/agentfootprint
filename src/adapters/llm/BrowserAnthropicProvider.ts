@@ -245,7 +245,8 @@ function buildBody(
   defaultMaxTokens: number,
 ): AnthropicRequestBody {
   const body: AnthropicRequestBody = {
-    model: req.model === 'anthropic' || req.model === 'browser-anthropic' ? defaultModel : req.model,
+    model:
+      req.model === 'anthropic' || req.model === 'browser-anthropic' ? defaultModel : req.model,
     max_tokens: req.maxTokens ?? defaultMaxTokens,
     messages: toAnthropicMessages(req.messages),
   };
@@ -274,7 +275,7 @@ function toAnthropicMessages(messages: readonly LLMMessage[]): AnthropicMessageP
       }
       result.push({
         role: 'assistant',
-        content: blocks.length > 0 ? blocks : (m.content || ''),
+        content: blocks.length > 0 ? blocks : m.content || '',
       });
       continue;
     }
@@ -373,11 +374,20 @@ async function* parseSSE(
 
 async function wrapStatus(response: Response): Promise<Error> {
   let bodyText = '';
-  try { bodyText = await response.text(); } catch { /* ignore */ }
-  return Object.assign(new Error(`[browser-anthropic] ${response.status} ${response.statusText} — ${bodyText.slice(0, 200)}`), {
-    name: 'BrowserAnthropicProviderError',
-    status: response.status,
-  });
+  try {
+    bodyText = await response.text();
+  } catch {
+    /* ignore */
+  }
+  return Object.assign(
+    new Error(
+      `[browser-anthropic] ${response.status} ${response.statusText} — ${bodyText.slice(0, 200)}`,
+    ),
+    {
+      name: 'BrowserAnthropicProviderError',
+      status: response.status,
+    },
+  );
 }
 
 function wrapError(err: unknown): Error {

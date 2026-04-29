@@ -5,10 +5,7 @@
 
 import { describe, expect, it, vi } from 'vitest';
 
-import {
-  bedrock,
-  BedrockProvider,
-} from '../../../src/adapters/llm/BedrockProvider.js';
+import { bedrock, BedrockProvider } from '../../../src/adapters/llm/BedrockProvider.js';
 import type { LLMRequest, LLMMessage } from '../../../src/adapters/types.js';
 
 interface FakeResponse {
@@ -225,12 +222,20 @@ describe('BedrockProvider — security', () => {
       },
     };
     const Commands = {
-      Converse: class { constructor(public input: unknown) {} },
-      ConverseStream: class { constructor(public input: unknown) {} },
+      Converse: class {
+        constructor(public input: unknown) {}
+      },
+      ConverseStream: class {
+        constructor(public input: unknown) {}
+      },
     } as never;
     const p = bedrock({ _client: broken as never, _commands: Commands });
     let caught: Error | undefined;
-    try { await p.complete(baseRequest); } catch (e) { caught = e as Error; }
+    try {
+      await p.complete(baseRequest);
+    } catch (e) {
+      caught = e as Error;
+    }
     expect(caught?.name).toBe('BedrockProviderError');
     expect(caught?.message).toContain('AccessDeniedException');
     expect((caught as { status?: number }).status).toBe(403);

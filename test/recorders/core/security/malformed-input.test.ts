@@ -7,10 +7,7 @@ import { describe, it, expect, vi } from 'vitest';
 import type { FlowSubflowEvent, WriteEvent } from 'footprintjs';
 import { EventDispatcher } from '../../../../src/events/dispatcher.js';
 import { ContextRecorder } from '../../../../src/recorders/core/ContextRecorder.js';
-import {
-  INJECTION_KEYS,
-  SUBFLOW_IDS,
-} from '../../../../src/conventions.js';
+import { INJECTION_KEYS, SUBFLOW_IDS } from '../../../../src/conventions.js';
 
 function sf(subflowId: string): FlowSubflowEvent {
   return {

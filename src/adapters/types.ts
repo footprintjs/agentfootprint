@@ -165,12 +165,7 @@ export interface RiskDetector {
 // ─── Permission Engine ──────────────────────────────────────────────
 
 export interface PermissionRequest {
-  readonly capability:
-    | 'tool_call'
-    | 'memory_read'
-    | 'memory_write'
-    | 'external_net'
-    | 'user_data';
+  readonly capability: 'tool_call' | 'memory_read' | 'memory_write' | 'external_net' | 'user_data';
   readonly actor: string;
   readonly target?: string;
   readonly context?: Readonly<Record<string, unknown>>;

@@ -104,7 +104,11 @@ describe('BrowserAnthropicProvider — security', () => {
       _fetch: fakeFetch({ error: 'unauthorized' }, 401),
     });
     let caught: Error | undefined;
-    try { await p.complete(baseRequest); } catch (e) { caught = e as Error; }
+    try {
+      await p.complete(baseRequest);
+    } catch (e) {
+      caught = e as Error;
+    }
     expect(caught?.name).toBe('BrowserAnthropicProviderError');
     expect((caught as { status?: number }).status).toBe(401);
   });
@@ -115,7 +119,11 @@ describe('BrowserAnthropicProvider — security', () => {
     }) as unknown as typeof fetch;
     const p = browserAnthropic({ apiKey: 'sk-test', _fetch: networkError });
     let caught: Error | undefined;
-    try { await p.complete(baseRequest); } catch (e) { caught = e as Error; }
+    try {
+      await p.complete(baseRequest);
+    } catch (e) {
+      caught = e as Error;
+    }
     expect(caught?.message).toContain('fetch failed');
     expect(caught?.name).toBe('BrowserAnthropicProviderError');
   });
@@ -211,7 +219,11 @@ describe('BrowserOpenAIProvider — security', () => {
       _fetch: fakeFetch({ error: 'rate limited' }, 429),
     });
     let caught: Error | undefined;
-    try { await p.complete(openaiRequest); } catch (e) { caught = e as Error; }
+    try {
+      await p.complete(openaiRequest);
+    } catch (e) {
+      caught = e as Error;
+    }
     expect(caught?.name).toBe('BrowserOpenAIProviderError');
     expect((caught as { status?: number }).status).toBe(429);
   });

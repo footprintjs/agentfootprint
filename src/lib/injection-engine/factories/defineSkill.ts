@@ -51,7 +51,9 @@ export function defineSkill(opts: DefineSkillOptions): Injection {
     throw new Error('defineSkill: `id` is required and must be non-empty.');
   }
   if (!opts.description || opts.description.length === 0) {
-    throw new Error(`defineSkill(${opts.id}): \`description\` is required (LLM uses it to decide when to activate).`);
+    throw new Error(
+      `defineSkill(${opts.id}): \`description\` is required (LLM uses it to decide when to activate).`,
+    );
   }
   if (!opts.body || opts.body.length === 0) {
     throw new Error(`defineSkill(${opts.id}): \`body\` is required.`);

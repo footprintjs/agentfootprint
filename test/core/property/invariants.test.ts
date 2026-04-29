@@ -85,9 +85,7 @@ describe('property — iteration indices are monotonic (1, 2, 3, …)', () => {
       .build();
 
     const iters: number[] = [];
-    agent.on('agentfootprint.agent.iteration_start', (e) =>
-      iters.push(e.payload.iterIndex),
-    );
+    agent.on('agentfootprint.agent.iteration_start', (e) => iters.push(e.payload.iterIndex));
 
     await agent.run({ message: 'go' });
     expect(iters).toEqual([1, 2, 3, 4]);
@@ -121,10 +119,7 @@ describe('property — route_decided fires exactly once per iteration', () => {
 describe('property — llm_start count matches iteration count', () => {
   it('each iteration produces exactly one llm_start + one llm_end', async () => {
     const agent = Agent.create({
-      provider: scripted(
-        resp('', [{ id: 't', name: 'noop', args: {} }]),
-        resp('answer'),
-      ),
+      provider: scripted(resp('', [{ id: 't', name: 'noop', args: {} }]), resp('answer')),
       model: 'mock',
     })
       .system('')

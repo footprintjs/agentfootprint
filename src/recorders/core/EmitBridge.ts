@@ -12,10 +12,7 @@
 
 import type { CombinedRecorder, EmitEvent } from 'footprintjs';
 import type { EventDispatcher } from '../../events/dispatcher.js';
-import type {
-  AgentfootprintEventMap,
-  AgentfootprintEventType,
-} from '../../events/registry.js';
+import type { AgentfootprintEventMap, AgentfootprintEventType } from '../../events/registry.js';
 import { buildEventMeta, type RunContext } from '../../bridge/eventMeta.js';
 
 export interface EmitBridgeOptions {

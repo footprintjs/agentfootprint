@@ -32,10 +32,7 @@ describe('property — every pause emits exactly one pause.request', () => {
     'for pauseData=%s, exactly 1 pause.request event fires',
     async (pauseData) => {
       const agent = Agent.create({
-        provider: scripted(
-          resp('', [{ id: 't', name: 'ask', args: {} }]),
-          resp('done'),
-        ),
+        provider: scripted(resp('', [{ id: 't', name: 'ask', args: {} }]), resp('done')),
         model: 'mock',
       })
         .system('')
@@ -62,10 +59,7 @@ describe('property — every resume emits exactly one pause.resume', () => {
   it('regardless of resume input shape', async () => {
     for (const input of ['str', 42, { a: 1 }, null]) {
       const agent = Agent.create({
-        provider: scripted(
-          resp('', [{ id: 't', name: 'ask', args: {} }]),
-          resp('done'),
-        ),
+        provider: scripted(resp('', [{ id: 't', name: 'ask', args: {} }]), resp('done')),
         model: 'mock',
       })
         .system('')
@@ -92,10 +86,7 @@ describe('property — every resume emits exactly one pause.resume', () => {
 describe('property — checkpoint round-trips through JSON without data loss', () => {
   it('serialize/deserialize preserves pausedStageId + subflowPath + pauseData', async () => {
     const agent = Agent.create({
-      provider: scripted(
-        resp('', [{ id: 't', name: 'ask', args: {} }]),
-        resp('done'),
-      ),
+      provider: scripted(resp('', [{ id: 't', name: 'ask', args: {} }]), resp('done')),
       model: 'mock',
     })
       .system('')
@@ -123,10 +114,7 @@ describe('property — checkpoint round-trips through JSON without data loss', (
 describe('property — pause.request meta.runtimeStageId identifies the paused stage', () => {
   it('runtimeStageId embeds the paused stageId', async () => {
     const agent = Agent.create({
-      provider: scripted(
-        resp('', [{ id: 't', name: 'ask', args: {} }]),
-        resp('done'),
-      ),
+      provider: scripted(resp('', [{ id: 't', name: 'ask', args: {} }]), resp('done')),
       model: 'mock',
     })
       .system('')

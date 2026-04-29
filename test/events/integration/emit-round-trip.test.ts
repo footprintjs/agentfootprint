@@ -7,10 +7,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { EventDispatcher } from '../../../src/events/dispatcher.js';
-import {
-  ALL_EVENT_TYPES,
-  type AgentfootprintEvent,
-} from '../../../src/events/registry.js';
+import { ALL_EVENT_TYPES, type AgentfootprintEvent } from '../../../src/events/registry.js';
 import type { EventMeta } from '../../../src/events/types.js';
 
 function meta(): EventMeta {
@@ -48,12 +45,8 @@ describe('integration — every registered event round-trips', () => {
       d.dispatch({ type, payload: {}, meta: meta() } as unknown as AgentfootprintEvent);
     }
 
-    const expectedContext = ALL_EVENT_TYPES.filter((t) =>
-      t.startsWith('agentfootprint.context.'),
-    );
-    const expectedStream = ALL_EVENT_TYPES.filter((t) =>
-      t.startsWith('agentfootprint.stream.'),
-    );
+    const expectedContext = ALL_EVENT_TYPES.filter((t) => t.startsWith('agentfootprint.context.'));
+    const expectedStream = ALL_EVENT_TYPES.filter((t) => t.startsWith('agentfootprint.stream.'));
     expect(contextReceived).toEqual([...expectedContext]);
     expect(streamReceived).toEqual([...expectedStream]);
   });

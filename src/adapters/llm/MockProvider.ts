@@ -21,12 +21,7 @@
  * common 3–8 s thinking + 30–80 ms per word streaming preset.
  */
 
-import type {
-  LLMChunk,
-  LLMProvider,
-  LLMRequest,
-  LLMResponse,
-} from '../types.js';
+import type { LLMChunk, LLMProvider, LLMRequest, LLMResponse } from '../types.js';
 
 /** Either a fixed value (in ms) or a random `[min, max]` range (inclusive). */
 export type LatencyMs = number | readonly [number, number];
@@ -149,8 +144,7 @@ export class MockProvider implements LLMProvider {
 
   private buildResponse(req: LLMRequest): LLMResponse {
     const raw = this.reply !== undefined ? this.reply : this.respond(req);
-    const partial: Partial<LLMResponse> =
-      typeof raw === 'string' ? { content: raw } : raw;
+    const partial: Partial<LLMResponse> = typeof raw === 'string' ? { content: raw } : raw;
     const content = partial.content ?? '';
     const toolCalls = partial.toolCalls ?? [];
     const inputChars = messagesChars(req.messages) + (req.systemPrompt?.length ?? 0);
@@ -168,9 +162,7 @@ export class MockProvider implements LLMProvider {
           cacheWrite: this.usageOverride.cacheWrite,
         }),
       },
-      stopReason:
-        partial.stopReason ??
-        (toolCalls.length > 0 ? 'tool_use' : this.stopReason),
+      stopReason: partial.stopReason ?? (toolCalls.length > 0 ? 'tool_use' : this.stopReason),
     };
   }
 }

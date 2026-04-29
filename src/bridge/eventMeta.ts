@@ -70,8 +70,8 @@ export function buildEventMeta(
   const subflowPath: readonly string[] = Array.isArray(raw)
     ? raw
     : typeof raw === 'string'
-      ? parseSubflowPath(raw)
-      : parseSubflowPath(parseRuntimeStageId(runtimeStageId).subflowPath);
+    ? parseSubflowPath(raw)
+    : parseSubflowPath(parseRuntimeStageId(runtimeStageId).subflowPath);
   return {
     wallClockMs: now,
     runOffsetMs: now - run.runStartMs,

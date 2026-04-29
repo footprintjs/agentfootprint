@@ -129,8 +129,8 @@ export async function* toSSE<TIn, TOut>(
     // ends the stream naturally; the consumer's `for await` finishes
     // when the iterator returns.
     if (
-      event.type === 'agentfootprint.agent.turn_end'
-      || event.type === 'agentfootprint.error.fatal'
+      event.type === 'agentfootprint.agent.turn_end' ||
+      event.type === 'agentfootprint.error.fatal'
     ) {
       done = true;
       wakeup();

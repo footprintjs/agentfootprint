@@ -89,7 +89,12 @@ describe('Parallel failure — scenario', () => {
       name: 'merge-mock',
       complete: async (req) => {
         mergeCalled(req);
-        return { content: 'merged', toolCalls: [], usage: { input: 0, output: 1 }, stopReason: 'stop' };
+        return {
+          content: 'merged',
+          toolCalls: [],
+          usage: { input: 0, output: 1 },
+          stopReason: 'stop',
+        };
       },
     };
     const par = Parallel.create()
@@ -152,23 +157,26 @@ describe('Parallel failure — property', () => {
     [1, 2],
     [2, 3],
     [3, 4],
-  ])('with %d failures in %d branches, tolerant mode sees exactly N outcomes', async (nFail, nTotal) => {
-    let b = Parallel.create();
-    for (let i = 0; i < nTotal; i++) {
-      const runner = i < nFail ? failing(`fail-${i}`) : ok(`ok-${i}`);
-      b = b.branch(`branch${i}`, runner);
-    }
-    const par = b
-      .mergeOutcomesWithFn((outcomes) => {
-        const okCount = Object.values(outcomes).filter((o) => o.ok).length;
-        const errCount = Object.values(outcomes).filter((o) => !o.ok).length;
-        return `ok=${okCount} err=${errCount}`;
-      })
-      .build();
+  ])(
+    'with %d failures in %d branches, tolerant mode sees exactly N outcomes',
+    async (nFail, nTotal) => {
+      let b = Parallel.create();
+      for (let i = 0; i < nTotal; i++) {
+        const runner = i < nFail ? failing(`fail-${i}`) : ok(`ok-${i}`);
+        b = b.branch(`branch${i}`, runner);
+      }
+      const par = b
+        .mergeOutcomesWithFn((outcomes) => {
+          const okCount = Object.values(outcomes).filter((o) => o.ok).length;
+          const errCount = Object.values(outcomes).filter((o) => !o.ok).length;
+          return `ok=${okCount} err=${errCount}`;
+        })
+        .build();
 
-    const out = await par.run({ message: 'go' });
-    expect(out).toBe(`ok=${nTotal - nFail} err=${nFail}`);
-  });
+      const out = await par.run({ message: 'go' });
+      expect(out).toBe(`ok=${nTotal - nFail} err=${nFail}`);
+    },
+  );
 
   it('BranchOutcome is a strict discriminated union — ok implies value, !ok implies error', async () => {
     const par = Parallel.create()

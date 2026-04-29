@@ -27,16 +27,9 @@ import type {
   WildcardListener,
   WildcardSubscription,
 } from '../events/dispatcher.js';
-import type {
-  AgentfootprintEvent,
-  AgentfootprintEventType,
-} from '../events/registry.js';
-import type {
-  LoggingOptions,
-} from '../recorders/observability/LoggingRecorder.js';
-import type {
-  ThinkingOptions,
-} from '../recorders/observability/ThinkingRecorder.js';
+import type { AgentfootprintEvent, AgentfootprintEventType } from '../events/registry.js';
+import type { LoggingOptions } from '../recorders/observability/LoggingRecorder.js';
+import type { ThinkingOptions } from '../recorders/observability/ThinkingRecorder.js';
 import type {
   FlowchartHandle,
   FlowchartOptions,
@@ -99,21 +92,14 @@ export interface Runner<TIn = unknown, TOut = unknown>
     options?: ListenOptions,
   ): Unsubscribe;
   /** Subscribe to a domain wildcard (e.g. 'agentfootprint.context.*') or '*'. */
-  on(
-    type: WildcardSubscription,
-    listener: WildcardListener,
-    options?: ListenOptions,
-  ): Unsubscribe;
+  on(type: WildcardSubscription, listener: WildcardListener, options?: ListenOptions): Unsubscribe;
 
   /** Unsubscribe a previously-registered listener. */
   off<K extends AgentfootprintEventType>(type: K, listener: EventListener<K>): void;
   off(type: WildcardSubscription, listener: WildcardListener): void;
 
   /** Subscribe a one-shot listener (fires once then auto-removes). */
-  once<K extends AgentfootprintEventType>(
-    type: K,
-    listener: EventListener<K>,
-  ): Unsubscribe;
+  once<K extends AgentfootprintEventType>(type: K, listener: EventListener<K>): Unsubscribe;
   once(type: WildcardSubscription, listener: WildcardListener): Unsubscribe;
 
   /**

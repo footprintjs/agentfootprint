@@ -76,7 +76,16 @@ describe('streamRecorder / agentRecorder factories', () => {
     d.on('agentfootprint.stream.llm_end', fn);
     const rec = streamRecorder({ dispatcher: d, getRunContext: runCtx });
     expect(rec.id).toBe('agentfootprint.stream-recorder');
-    rec.onEmit?.(emit('agentfootprint.stream.llm_end', { iteration: 1, content: '', toolCallCount: 0, usage: { input: 0, output: 0 }, stopReason: 'stop', durationMs: 0 }));
+    rec.onEmit?.(
+      emit('agentfootprint.stream.llm_end', {
+        iteration: 1,
+        content: '',
+        toolCallCount: 0,
+        usage: { input: 0, output: 0 },
+        stopReason: 'stop',
+        durationMs: 0,
+      }),
+    );
     expect(fn).toHaveBeenCalledTimes(1);
   });
 

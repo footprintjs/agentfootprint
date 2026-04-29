@@ -100,10 +100,7 @@ export class Loop extends RunnerBase<LoopInput, LoopOutput> {
     return this.buildChart();
   }
 
-  async run(
-    input: LoopInput,
-    options?: RunOptions,
-  ): Promise<LoopOutput | RunnerPauseOutcome> {
+  async run(input: LoopInput, options?: RunOptions): Promise<LoopOutput | RunnerPauseOutcome> {
     const executor = this.createExecutor();
     const result = await executor.run({
       input: { message: input.message },
@@ -136,18 +133,10 @@ export class Loop extends RunnerBase<LoopInput, LoopOutput> {
     const dispatcher = this.getDispatcher();
     const getRunCtx = (): RunContext => this.currentRunContext;
 
-    executor.attachCombinedRecorder(
-      new ContextRecorder({ dispatcher, getRunContext: getRunCtx }),
-    );
-    executor.attachCombinedRecorder(
-      streamRecorder({ dispatcher, getRunContext: getRunCtx }),
-    );
-    executor.attachCombinedRecorder(
-      agentRecorder({ dispatcher, getRunContext: getRunCtx }),
-    );
-    executor.attachCombinedRecorder(
-      compositionRecorder({ dispatcher, getRunContext: getRunCtx }),
-    );
+    executor.attachCombinedRecorder(new ContextRecorder({ dispatcher, getRunContext: getRunCtx }));
+    executor.attachCombinedRecorder(streamRecorder({ dispatcher, getRunContext: getRunCtx }));
+    executor.attachCombinedRecorder(agentRecorder({ dispatcher, getRunContext: getRunCtx }));
+    executor.attachCombinedRecorder(compositionRecorder({ dispatcher, getRunContext: getRunCtx }));
     for (const r of this.attachedRecorders) executor.attachCombinedRecorder(r);
     return executor;
   }
@@ -207,10 +196,7 @@ export class Loop extends RunnerBase<LoopInput, LoopOutput> {
 
       if (iteration >= maxIterations) {
         exitReason = 'budget';
-      } else if (
-        maxWallclockMs !== undefined &&
-        Date.now() - startMs >= maxWallclockMs
-      ) {
+      } else if (maxWallclockMs !== undefined && Date.now() - startMs >= maxWallclockMs) {
         exitReason = 'budget';
       } else if (iteration >= HARD_ITERATION_CAP) {
         exitReason = 'budget';
@@ -251,18 +237,13 @@ export class Loop extends RunnerBase<LoopInput, LoopOutput> {
     // FlowchartRecorder.mapTopologyToSteps for the consumer side.
     return flowChart<LoopState>('Seed', seed, 'seed', undefined, 'Loop: iterated body')
       .addFunction('IterationStart', iterationStart, 'iteration-start', 'Loop iteration marker')
-      .addSubFlowChartNext(
-        'body',
-        body.toFlowChart(),
-        'body',
-        {
-          inputMapper: (parent) => ({ message: (parent.current as string) ?? '' }),
-          // Body's string return becomes next iteration's input via `current`.
-          outputMapper: (sfOutput) => ({
-            current: typeof sfOutput === 'string' ? sfOutput : '',
-          }),
-        },
-      )
+      .addSubFlowChartNext('body', body.toFlowChart(), 'body', {
+        inputMapper: (parent) => ({ message: (parent.current as string) ?? '' }),
+        // Body's string return becomes next iteration's input via `current`.
+        outputMapper: (sfOutput) => ({
+          current: typeof sfOutput === 'string' ? sfOutput : '',
+        }),
+      })
       .addFunction('Guard', guard, 'guard', 'Loop exit-condition guard')
       .loopTo('iteration-start')
       .build();

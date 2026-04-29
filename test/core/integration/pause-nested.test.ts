@@ -37,10 +37,7 @@ function resp(
 
 function pausingAgent(reason: string) {
   return Agent.create({
-    provider: scripted(
-      resp('', [{ id: 't1', name: 'ask', args: {} }]),
-      resp(`done-${reason}`),
-    ),
+    provider: scripted(resp('', [{ id: 't1', name: 'ask', args: {} }]), resp(`done-${reason}`)),
     model: 'mock',
   })
     .system('')
@@ -56,9 +53,7 @@ function pausingAgent(reason: string) {
 
 describe('integration — Agent paused inside Sequence', () => {
   it('outer Sequence surfaces the pause as its own RunnerPauseOutcome', async () => {
-    const seq = Sequence.create()
-      .step('approve', pausingAgent('refund'))
-      .build();
+    const seq = Sequence.create().step('approve', pausingAgent('refund')).build();
 
     const paused = await seq.run({ message: 'refund me' });
     expect(isPaused(paused)).toBe(true);
@@ -67,9 +62,7 @@ describe('integration — Agent paused inside Sequence', () => {
   });
 
   it('Sequence.resume() completes a paused Agent subflow', async () => {
-    const seq = Sequence.create()
-      .step('approve', pausingAgent('refund'))
-      .build();
+    const seq = Sequence.create().step('approve', pausingAgent('refund')).build();
 
     const paused = await seq.run({ message: 'refund me' });
     if (!isPaused(paused)) return expect.fail('expected paused');

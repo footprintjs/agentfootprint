@@ -2,10 +2,7 @@
  * tokenize unit tests — approximate token counter + per-message helper.
  */
 import { describe, expect, it } from 'vitest';
-import {
-  approximateTokenCounter,
-  countMessageTokens,
-} from '../../../src/memory/stages/tokenize';
+import { approximateTokenCounter, countMessageTokens } from '../../../src/memory/stages/tokenize';
 import type { LLMMessage } from '../../../src/adapters/types';
 
 describe('approximateTokenCounter', () => {

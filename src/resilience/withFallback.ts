@@ -18,12 +18,7 @@
  * duplicate the partial output.
  */
 
-import type {
-  LLMChunk,
-  LLMProvider,
-  LLMRequest,
-  LLMResponse,
-} from '../adapters/types.js';
+import type { LLMChunk, LLMProvider, LLMRequest, LLMResponse } from '../adapters/types.js';
 
 export interface WithFallbackOptions {
   /**
@@ -76,9 +71,7 @@ export function withFallback(
   // would replay tokens. Yields from primary as long as it's working;
   // catches errors in the iteration setup or first chunk only.
   if (primary.stream || fallback.stream) {
-    wrapped.stream = async function* fallbackStream(
-      req: LLMRequest,
-    ): AsyncIterable<LLMChunk> {
+    wrapped.stream = async function* fallbackStream(req: LLMRequest): AsyncIterable<LLMChunk> {
       // No primary stream support → fallback's stream (or its complete-only).
       if (!primary.stream) {
         if (fallback.stream) yield* fallback.stream(req);
@@ -118,10 +111,7 @@ function defaultShouldFallback(err: unknown): boolean {
  * fallback chain still satisfy a `stream()` request even when the
  * fallback only implements `complete()`.
  */
-async function* completeAsStream(
-  provider: LLMProvider,
-  req: LLMRequest,
-): AsyncIterable<LLMChunk> {
+async function* completeAsStream(provider: LLMProvider, req: LLMRequest): AsyncIterable<LLMChunk> {
   const response = await provider.complete(req);
   yield {
     tokenIndex: 0,

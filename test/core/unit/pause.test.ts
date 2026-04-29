@@ -6,12 +6,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import {
-  isPauseRequest,
-  isPaused,
-  pauseHere,
-  PauseRequest,
-} from '../../../src/core/pause.js';
+import { isPauseRequest, isPaused, pauseHere, PauseRequest } from '../../../src/core/pause.js';
 
 describe('pauseHere()', () => {
   it('throws a PauseRequest carrying the provided data', () => {

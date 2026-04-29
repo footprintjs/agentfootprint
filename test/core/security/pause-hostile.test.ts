@@ -9,11 +9,7 @@
 import { describe, it, expect } from 'vitest';
 import { Agent } from '../../../src/core/Agent.js';
 import { isPaused, pauseHere } from '../../../src/core/pause.js';
-import type {
-  FlowchartCheckpoint,
-  LLMProvider,
-  LLMResponse,
-} from '../../../src/adapters/types.js';
+import type { FlowchartCheckpoint, LLMProvider, LLMResponse } from '../../../src/adapters/types.js';
 
 function scripted(...responses: readonly LLMResponse[]): LLMProvider {
   let i = 0;
@@ -37,10 +33,7 @@ function resp(
 
 function pausingAgent() {
   return Agent.create({
-    provider: scripted(
-      resp('', [{ id: 't', name: 'ask', args: {} }]),
-      resp('done'),
-    ),
+    provider: scripted(resp('', [{ id: 't', name: 'ask', args: {} }]), resp('done')),
     model: 'mock',
   })
     .system('')

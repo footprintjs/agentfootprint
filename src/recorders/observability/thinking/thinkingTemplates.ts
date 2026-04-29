@@ -76,10 +76,10 @@ export interface ThinkingContext {
  * `tool.<toolName>` keys.
  */
 export const defaultThinkingTemplates: ThinkingTemplates = {
-  idle:      'Thinking…',
+  idle: 'Thinking…',
   streaming: '{{partial}}',
-  tool:      'Working on `{{toolName}}`…',
-  paused:    'Waiting on you: {{question}}',
+  tool: 'Working on `{{toolName}}`…',
+  paused: 'Waiting on you: {{question}}',
 };
 
 // ── Selector ───────────────────────────────────────────────────────
@@ -108,9 +108,7 @@ export const defaultThinkingTemplates: ThinkingTemplates = {
  * cancels its matching opener so a completed tool.start/tool.end
  * pair leaves the state quiescent.
  */
-export function selectThinkingState(
-  events: readonly AgentfootprintEvent[],
-): ThinkingState | null {
+export function selectThinkingState(events: readonly AgentfootprintEvent[]): ThinkingState | null {
   let activePause: { question: string; toolCallId?: string } | null = null;
   let activeTool: { toolName: string; toolCallId?: string } | null = null;
   let activeLlmStartIdx = -1; // -1 = no active LLM call

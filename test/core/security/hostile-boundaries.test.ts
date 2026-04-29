@@ -65,9 +65,7 @@ describe('security — LLM provider misbehavior', () => {
         stopReason: 'tool_use', // misleading stopReason — library ignores it for routing
       }),
     };
-    const agent = Agent.create({ provider, model: 'mock', maxIterations: 10 })
-      .system('')
-      .build();
+    const agent = Agent.create({ provider, model: 'mock', maxIterations: 10 }).system('').build();
     const out = await agent.run({ message: 'hi' });
     expect(out).toBe('answer');
   });
@@ -117,10 +115,7 @@ describe('security — tool misbehavior', () => {
   });
 
   it('Agent — tool returning non-serializable result is stringified without crash', async () => {
-    const provider = scripted(
-      resp('', [{ id: 't1', name: 'circular', args: {} }]),
-      resp('done'),
-    );
+    const provider = scripted(resp('', [{ id: 't1', name: 'circular', args: {} }]), resp('done'));
     // JSON.stringify on a circular ref throws — library must either
     // handle gracefully or surface the error as a tool_end.error.
     const circular: Record<string, unknown> = {};

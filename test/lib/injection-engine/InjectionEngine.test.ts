@@ -134,7 +134,9 @@ describe('evaluateInjections — unit', () => {
   it('rule trigger that throws is reported in skipped, never propagates', () => {
     const bad = defineInstruction({
       id: 'bad',
-      activeWhen: () => { throw new Error('boom'); },
+      activeWhen: () => {
+        throw new Error('boom');
+      },
       prompt: 'p',
     });
     const r = evaluateInjections([bad], baseCtx);
@@ -298,9 +300,7 @@ describe('Injection Engine — integration (Dynamic ReAct)', () => {
 
 describe('Injection Engine — property', () => {
   it('evaluation order is preserved (active list mirrors registration order)', () => {
-    const list = ['a', 'b', 'c', 'd', 'e'].map((id) =>
-      defineSteering({ id, prompt: id }),
-    );
+    const list = ['a', 'b', 'c', 'd', 'e'].map((id) => defineSteering({ id, prompt: id }));
     const r = evaluateInjections(list, baseCtx);
     expect(r.active.map((i) => i.id)).toEqual(['a', 'b', 'c', 'd', 'e']);
   });
@@ -310,7 +310,9 @@ describe('Injection Engine — property', () => {
       defineSteering({ id: 's', prompt: 's' }),
       defineInstruction({
         id: 'i',
-        activeWhen: () => { throw new Error(); },
+        activeWhen: () => {
+          throw new Error();
+        },
         prompt: 'i',
       }),
     ];
@@ -344,10 +346,7 @@ describe('Injection Engine — tool name validation', () => {
       tools: [sharedTool],
     });
     expect(() =>
-      Agent.create({ provider: mock(), model: 'mock' })
-        .tool(sharedTool)
-        .skill(skill)
-        .build(),
+      Agent.create({ provider: mock(), model: 'mock' }).tool(sharedTool).skill(skill).build(),
     ).toThrow(/duplicate tool name 'duplicate'/);
   });
 
@@ -377,9 +376,7 @@ describe('Injection Engine — tool name validation', () => {
       body: 'b',
       tools: [refundTool],
     });
-    const agent = Agent.create({ provider: mock(), model: 'mock' })
-      .skill(billingSkill)
-      .build();
+    const agent = Agent.create({ provider: mock(), model: 'mock' }).skill(billingSkill).build();
     // The agent's chart was built without throwing; refund + read_skill
     // are both in the merged registry. (Direct registry access is
     // private; the build-not-throwing assertion is the proxy here —
@@ -395,7 +392,9 @@ describe('Injection Engine — security', () => {
   it('predicate that throws does not crash the agent run', async () => {
     const bad = defineInstruction({
       id: 'bad',
-      activeWhen: () => { throw new Error('hostile'); },
+      activeWhen: () => {
+        throw new Error('hostile');
+      },
       prompt: 'p',
     });
     const agent = Agent.create({
@@ -411,12 +410,10 @@ describe('Injection Engine — security', () => {
   });
 
   it('factory rejects empty/missing required fields synchronously', () => {
-    expect(() =>
-      defineSkill({ id: 'x', description: '', body: 'b' } as never),
-    ).toThrow(/description/);
-    expect(() =>
-      defineSkill({ id: 'x', description: 'd', body: '' } as never),
-    ).toThrow(/body/);
+    expect(() => defineSkill({ id: 'x', description: '', body: 'b' } as never)).toThrow(
+      /description/,
+    );
+    expect(() => defineSkill({ id: 'x', description: 'd', body: '' } as never)).toThrow(/body/);
   });
 });
 

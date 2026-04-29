@@ -78,9 +78,10 @@ export function defineInstruction(opts: DefineInstructionOptions): Injection {
     ? { kind: 'rule' as const, activeWhen: opts.activeWhen }
     : { kind: 'always' as const };
   const slot = opts.slot ?? 'system-prompt';
-  const inject: InjectionContent = slot === 'messages'
-    ? { messages: [{ role: opts.role ?? 'system', content: opts.prompt }] }
-    : { systemPrompt: opts.prompt };
+  const inject: InjectionContent =
+    slot === 'messages'
+      ? { messages: [{ role: opts.role ?? 'system', content: opts.prompt }] }
+      : { systemPrompt: opts.prompt };
   return Object.freeze({
     id: opts.id,
     ...(opts.description && { description: opts.description }),

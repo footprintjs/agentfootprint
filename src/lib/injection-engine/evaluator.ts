@@ -21,11 +21,7 @@
  *                            previously called `viaToolName(<id>)`).
  */
 
-import type {
-  Injection,
-  InjectionContext,
-  InjectionEvaluation,
-} from './types.js';
+import type { Injection, InjectionContext, InjectionEvaluation } from './types.js';
 
 export function evaluateInjections(
   injections: readonly Injection[],
@@ -61,9 +57,7 @@ export function evaluateInjections(
         const toolName = ctx.lastToolResult?.toolName;
         if (!toolName) break;
         const matches =
-          typeof t.toolName === 'string'
-            ? t.toolName === toolName
-            : t.toolName.test(toolName);
+          typeof t.toolName === 'string' ? t.toolName === toolName : t.toolName.test(toolName);
         if (matches) active.push(inj);
         break;
       }

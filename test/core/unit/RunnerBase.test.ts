@@ -5,9 +5,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import type { CombinedRecorder, FlowChart, RunOptions } from 'footprintjs';
 import { RunnerBase, makeRunId } from '../../../src/core/RunnerBase.js';
-import type {
-  AgentfootprintEventMap,
-} from '../../../src/events/registry.js';
+import type { AgentfootprintEventMap } from '../../../src/events/registry.js';
 
 class TestRunner extends RunnerBase<string, string> {
   toFlowChart(): FlowChart {
@@ -54,7 +52,14 @@ describe('RunnerBase — .on/.off/.once delegate to internal dispatcher', () => 
     r.getInternalDispatcher().dispatch({
       type: 'agentfootprint.agent.turn_start',
       payload: { turnIndex: 0, userPrompt: '' },
-      meta: { wallClockMs: 0, runOffsetMs: 0, runtimeStageId: 's', subflowPath: [], compositionPath: [], runId: 'r' },
+      meta: {
+        wallClockMs: 0,
+        runOffsetMs: 0,
+        runtimeStageId: 's',
+        subflowPath: [],
+        compositionPath: [],
+        runId: 'r',
+      },
     } as AgentfootprintEventMap['agentfootprint.agent.turn_start']);
     expect(fn).not.toHaveBeenCalled();
   });
@@ -66,7 +71,14 @@ describe('RunnerBase — .on/.off/.once delegate to internal dispatcher', () => 
     const event = {
       type: 'agentfootprint.agent.turn_start' as const,
       payload: { turnIndex: 0, userPrompt: '' },
-      meta: { wallClockMs: 0, runOffsetMs: 0, runtimeStageId: 's', subflowPath: [], compositionPath: [], runId: 'r' },
+      meta: {
+        wallClockMs: 0,
+        runOffsetMs: 0,
+        runtimeStageId: 's',
+        subflowPath: [],
+        compositionPath: [],
+        runId: 'r',
+      },
     };
     r.getInternalDispatcher().dispatch(event);
     r.getInternalDispatcher().dispatch(event);

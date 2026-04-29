@@ -51,9 +51,7 @@ function denyToolNamed(name: string, rationale: string): PermissionChecker {
   return {
     name: 'tool-deny',
     check: async (req: PermissionRequest): Promise<PermissionDecision> =>
-      req.target === name
-        ? { result: 'deny', rationale, policyRuleId: 'r1' }
-        : { result: 'allow' },
+      req.target === name ? { result: 'deny', rationale, policyRuleId: 'r1' } : { result: 'allow' },
   };
 }
 
@@ -62,10 +60,7 @@ function denyToolNamed(name: string, rationale: string): PermissionChecker {
 describe('permission — unit', () => {
   it('zero permission events when no checker is configured', async () => {
     const agent = Agent.create({
-      provider: scripted(
-        resp('', [{ id: 't1', name: 'noop', args: {} }]),
-        resp('done'),
-      ),
+      provider: scripted(resp('', [{ id: 't1', name: 'noop', args: {} }]), resp('done')),
       model: 'mock',
     })
       .system('')
@@ -184,29 +179,26 @@ describe('permission — integration', () => {
 // ── 4. Property — one check per tool call invocation ────────────────
 
 describe('permission — property', () => {
-  it.each([1, 2, 3])(
-    'N tool calls in one iteration → N permission.check events',
-    async (n) => {
-      const toolCalls = [];
-      for (let i = 0; i < n; i++) toolCalls.push({ id: `t${i}`, name: 'noop', args: {} });
-      const agent = Agent.create({
-        provider: scripted(resp('', toolCalls), resp('done')),
-        model: 'mock',
-        permissionChecker: allowAll(),
+  it.each([1, 2, 3])('N tool calls in one iteration → N permission.check events', async (n) => {
+    const toolCalls = [];
+    for (let i = 0; i < n; i++) toolCalls.push({ id: `t${i}`, name: 'noop', args: {} });
+    const agent = Agent.create({
+      provider: scripted(resp('', toolCalls), resp('done')),
+      model: 'mock',
+      permissionChecker: allowAll(),
+    })
+      .system('')
+      .tool({
+        schema: { name: 'noop', description: '', inputSchema: { type: 'object' } },
+        execute: () => 'ok',
       })
-        .system('')
-        .tool({
-          schema: { name: 'noop', description: '', inputSchema: { type: 'object' } },
-          execute: () => 'ok',
-        })
-        .build();
+      .build();
 
-      let checks = 0;
-      agent.on('agentfootprint.permission.check', () => checks++);
-      await agent.run({ message: 'go' });
-      expect(checks).toBe(n);
-    },
-  );
+    let checks = 0;
+    agent.on('agentfootprint.permission.check', () => checks++);
+    await agent.run({ message: 'go' });
+    expect(checks).toBe(n);
+  });
 
   it('every decision variant (allow / deny / gate_open) round-trips through the event', async () => {
     const decisions: PermissionDecision[] = [
@@ -220,10 +212,7 @@ describe('permission — property', () => {
         check: async () => expected,
       };
       const agent = Agent.create({
-        provider: scripted(
-          resp('', [{ id: 't', name: 'x', args: {} }]),
-          resp('done'),
-        ),
+        provider: scripted(resp('', [{ id: 't', name: 'x', args: {} }]), resp('done')),
         model: 'mock',
         permissionChecker: checker,
       })
@@ -256,10 +245,7 @@ describe('permission — security', () => {
       },
     };
     const agent = Agent.create({
-      provider: scripted(
-        resp('', [{ id: 't', name: 'x', args: {} }]),
-        resp('recovered'),
-      ),
+      provider: scripted(resp('', [{ id: 't', name: 'x', args: {} }]), resp('recovered')),
       model: 'mock',
       permissionChecker: brokenChecker,
     })
@@ -289,10 +275,7 @@ describe('permission — security', () => {
       },
     };
     const agent = Agent.create({
-      provider: scripted(
-        resp('', [{ id: 't', name: 'x', args: {} }]),
-        resp('ok'),
-      ),
+      provider: scripted(resp('', [{ id: 't', name: 'x', args: {} }]), resp('ok')),
       model: 'mock',
       permissionChecker: checker,
     })
@@ -342,9 +325,7 @@ describe('permission — ROI', () => {
         name: 'mock',
         complete: async (req) => {
           const hadTool = req.messages.some((m) => m.role === 'tool');
-          return hadTool
-            ? resp('done')
-            : resp('', [{ id: 't', name: 'noop', args: {} }]);
+          return hadTool ? resp('done') : resp('', [{ id: 't', name: 'noop', args: {} }]);
         },
       },
       model: 'mock',

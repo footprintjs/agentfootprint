@@ -29,10 +29,7 @@ function resp(
 
 function freshAgent() {
   return Agent.create({
-    provider: scripted(
-      resp('', [{ id: 't', name: 'ask', args: {} }]),
-      resp('done'),
-    ),
+    provider: scripted(resp('', [{ id: 't', name: 'ask', args: {} }]), resp('done')),
     model: 'mock',
   })
     .system('')
@@ -75,9 +72,7 @@ function cyclingProvider(): LLMProvider {
   return {
     name: 'mock',
     complete: async () => {
-      const out = i % 2 === 0
-        ? resp('', [{ id: `t${i}`, name: 'ask', args: {} }])
-        : resp('done');
+      const out = i % 2 === 0 ? resp('', [{ id: `t${i}`, name: 'ask', args: {} }]) : resp('done');
       i++;
       return out;
     },

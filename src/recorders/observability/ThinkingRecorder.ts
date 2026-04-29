@@ -54,10 +54,7 @@ const RELEVANT: ReadonlySet<AgentfootprintEventType> = new Set<AgentfootprintEve
  * Attach a thinking-status subscription to the event dispatcher.
  * Returns an Unsubscribe — call to detach.
  */
-export function attachThinking(
-  dispatcher: EventDispatcher,
-  options: ThinkingOptions,
-): Unsubscribe {
+export function attachThinking(dispatcher: EventDispatcher, options: ThinkingOptions): Unsubscribe {
   const format = options.format ?? defaultFormatter;
   return dispatcher.on('*', (event: AgentfootprintEvent) => {
     if (!RELEVANT.has(event.type)) return;

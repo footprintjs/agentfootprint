@@ -47,9 +47,7 @@ function nsPerOp(iters: number, fn: () => void): number {
 describe('perf — no-listener fast path', () => {
   it('hasListenersFor is <500ns/op when no listener is attached', () => {
     const d = new EventDispatcher();
-    const ns = nsPerOp(100_000, () =>
-      d.hasListenersFor('agentfootprint.agent.turn_start'),
-    );
+    const ns = nsPerOp(100_000, () => d.hasListenersFor('agentfootprint.agent.turn_start'));
     // Target 20ns in real use; allow 500ns envelope in CI under load.
     expect(ns).toBeLessThan(500);
   });

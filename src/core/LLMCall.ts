@@ -163,18 +163,12 @@ export class LLMCall extends RunnerBase<LLMCallInput, LLMCallOutput> {
     const dispatcher = this.getDispatcher();
     const getRunCtx = (): RunContext => this.currentRunContext;
 
-    executor.attachCombinedRecorder(
-      new ContextRecorder({ dispatcher, getRunContext: getRunCtx }),
-    );
-    executor.attachCombinedRecorder(
-      streamRecorder({ dispatcher, getRunContext: getRunCtx }),
-    );
+    executor.attachCombinedRecorder(new ContextRecorder({ dispatcher, getRunContext: getRunCtx }));
+    executor.attachCombinedRecorder(streamRecorder({ dispatcher, getRunContext: getRunCtx }));
     if (this.pricingTable) {
       // Only attach cost bridge when pricing is configured — zero overhead
       // on runs that don't opt into cost accounting.
-      executor.attachCombinedRecorder(
-        costRecorder({ dispatcher, getRunContext: getRunCtx }),
-      );
+      executor.attachCombinedRecorder(costRecorder({ dispatcher, getRunContext: getRunCtx }));
     }
     // Always-on bridges for consumer-emitted domain events (eval / memory /
     // skill). EmitBridge early-exits when no listener is attached, so
@@ -234,8 +228,7 @@ export class LLMCall extends RunnerBase<LLMCallInput, LLMCallOutput> {
     const callLLM = async (scope: TypedScope<LLMCallState>) => {
       const systemPromptInjections = (scope.systemPromptInjections ??
         []) as readonly InjectionRecord[];
-      const messagesInjections = (scope.messagesInjections ??
-        []) as readonly InjectionRecord[];
+      const messagesInjections = (scope.messagesInjections ?? []) as readonly InjectionRecord[];
       const iteration = (scope.iteration as number | undefined) ?? 1;
 
       const systemPrompt = systemPromptInjections
@@ -300,13 +293,7 @@ export class LLMCall extends RunnerBase<LLMCallInput, LLMCallOutput> {
     // into Sequence / Parallel / Conditional / Loop, the parent's
     // `addSubFlowChartNext` mounts THIS chart as a single drill-in
     // unit — drill-in is free, no wrap required at this level.
-    return flowChart<LLMCallState>(
-      'Seed',
-      seed,
-      STAGE_IDS.SEED,
-      undefined,
-      'LLMCall: one-shot',
-    )
+    return flowChart<LLMCallState>('Seed', seed, STAGE_IDS.SEED, undefined, 'LLMCall: one-shot')
       .addSubFlowChartNext(SUBFLOW_IDS.SYSTEM_PROMPT, systemPromptSubflow, 'System Prompt', {
         inputMapper: (parent) => ({
           userMessage: parent.userMessage as string | undefined,
@@ -320,9 +307,7 @@ export class LLMCall extends RunnerBase<LLMCallInput, LLMCallOutput> {
           // messages slot. Full conversation history arrives with Agent.
           const userMessage = parent.userMessage as string | undefined;
           return {
-            messages: userMessage
-              ? [{ role: 'user' as const, content: userMessage }]
-              : [],
+            messages: userMessage ? [{ role: 'user' as const, content: userMessage }] : [],
             iteration: parent.iteration as number | undefined,
           };
         },
@@ -361,4 +346,3 @@ export class LLMCallBuilder {
 // (Helpers previously inlined are now in ./slots/helpers.ts — the slot
 // builders import them directly. LLMCall stays thin: Builder + chart
 // assembly + internal recorder wiring.)
-

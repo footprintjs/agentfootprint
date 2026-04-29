@@ -17,10 +17,7 @@ import {
   type InjectionRecord,
   type SlotComposition,
 } from '../../../../src/recorders/core/types.js';
-import {
-  INJECTION_KEYS,
-  SUBFLOW_IDS,
-} from '../../../../src/conventions.js';
+import { INJECTION_KEYS, SUBFLOW_IDS } from '../../../../src/conventions.js';
 import type { RunContext } from '../../../../src/bridge/eventMeta.js';
 
 function makeRun(): RunContext {
@@ -100,9 +97,7 @@ describe('ContextRecorder — injection emit', () => {
     const rec = new ContextRecorder({ dispatcher, getRunContext: makeRun });
 
     rec.onSubflowEntry(subflowEntry(SUBFLOW_IDS.SYSTEM_PROMPT));
-    rec.onWrite(
-      writeEvent(INJECTION_KEYS.SYSTEM_PROMPT, [injection({ contentHash: 'a' })]),
-    );
+    rec.onWrite(writeEvent(INJECTION_KEYS.SYSTEM_PROMPT, [injection({ contentHash: 'a' })]));
     rec.onWrite(
       writeEvent(INJECTION_KEYS.SYSTEM_PROMPT, [
         injection({ contentHash: 'a' }), // duplicate
@@ -121,9 +116,7 @@ describe('ContextRecorder — injection emit', () => {
     const rec = new ContextRecorder({ dispatcher, getRunContext: makeRun });
 
     // No subflow entry — just a write. Should be ignored.
-    rec.onWrite(
-      writeEvent(INJECTION_KEYS.SYSTEM_PROMPT, [injection({ contentHash: 'a' })]),
-    );
+    rec.onWrite(writeEvent(INJECTION_KEYS.SYSTEM_PROMPT, [injection({ contentHash: 'a' })]));
     expect(fn).not.toHaveBeenCalled();
   });
 
@@ -135,9 +128,7 @@ describe('ContextRecorder — injection emit', () => {
 
     // Inside messages subflow, a write to the TOOLS injection key is ignored.
     rec.onSubflowEntry(subflowEntry(SUBFLOW_IDS.MESSAGES));
-    rec.onWrite(
-      writeEvent(INJECTION_KEYS.TOOLS, [injection({ slot: 'tools', contentHash: 'a' })]),
-    );
+    rec.onWrite(writeEvent(INJECTION_KEYS.TOOLS, [injection({ slot: 'tools', contentHash: 'a' })]));
     expect(fn).not.toHaveBeenCalled();
   });
 
@@ -148,9 +139,7 @@ describe('ContextRecorder — injection emit', () => {
     const rec = new ContextRecorder({ dispatcher, getRunContext: makeRun });
 
     rec.onSubflowEntry(subflowEntry(SUBFLOW_IDS.ROUTE));
-    rec.onWrite(
-      writeEvent(INJECTION_KEYS.SYSTEM_PROMPT, [injection({ contentHash: 'a' })]),
-    );
+    rec.onWrite(writeEvent(INJECTION_KEYS.SYSTEM_PROMPT, [injection({ contentHash: 'a' })]));
     expect(fn).not.toHaveBeenCalled();
   });
 });
@@ -208,7 +197,13 @@ describe('ContextRecorder — budget pressure emit', () => {
 
     rec.onSubflowEntry(subflowEntry(SUBFLOW_IDS.TOOLS));
     const pressure: BudgetPressureRecord[] = [
-      { slot: 'tools', capTokens: 2000, projectedTokens: 2500, overflowBy: 500, planAction: 'evict' },
+      {
+        slot: 'tools',
+        capTokens: 2000,
+        projectedTokens: 2500,
+        overflowBy: 500,
+        planAction: 'evict',
+      },
     ];
     rec.onWrite(writeEvent(COMPOSITION_KEYS.BUDGET_PRESSURE, pressure));
 
@@ -225,9 +220,7 @@ describe('ContextRecorder — listener-count fast path', () => {
 
     // No listener for context.injected -- dispatch should be skipped.
     rec.onSubflowEntry(subflowEntry(SUBFLOW_IDS.SYSTEM_PROMPT));
-    rec.onWrite(
-      writeEvent(INJECTION_KEYS.SYSTEM_PROMPT, [injection({ contentHash: 'a' })]),
-    );
+    rec.onWrite(writeEvent(INJECTION_KEYS.SYSTEM_PROMPT, [injection({ contentHash: 'a' })]));
     expect(dispatchSpy).not.toHaveBeenCalled();
   });
 });

@@ -39,20 +39,12 @@ describe('fallbackProvider', () => {
   });
 
   it('advances through the full chain', async () => {
-    const p = fallbackProvider(
-      stub('A', 'fail'),
-      stub('B', 'fail'),
-      stub('C'),
-    );
+    const p = fallbackProvider(stub('A', 'fail'), stub('B', 'fail'), stub('C'));
     expect((await p.complete(req)).content).toBe('C');
   });
 
   it('throws the last error if every provider fails', async () => {
-    const p = fallbackProvider(
-      stub('A', 'fail'),
-      stub('B', 'fail'),
-      stub('C', 'fail'),
-    );
+    const p = fallbackProvider(stub('A', 'fail'), stub('B', 'fail'), stub('C', 'fail'));
     await expect(p.complete(req)).rejects.toThrow('C failed');
   });
 
@@ -68,11 +60,7 @@ describe('fallbackProvider', () => {
 
   it('accepts options + providers via the options-first overload', async () => {
     const onFallback = vi.fn();
-    const p = fallbackProvider(
-      { onFallback, name: 'chain' },
-      stub('A', 'fail'),
-      stub('B'),
-    );
+    const p = fallbackProvider({ onFallback, name: 'chain' }, stub('A', 'fail'), stub('B'));
 
     expect(p.name).toBe('chain');
     expect((await p.complete(req)).content).toBe('B');

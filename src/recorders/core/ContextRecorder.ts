@@ -13,16 +13,9 @@
  *          agentfootprint.context.budget_pressure
  */
 
-import type {
-  CombinedRecorder,
-  FlowSubflowEvent,
-  WriteEvent,
-} from 'footprintjs';
+import type { CombinedRecorder, FlowSubflowEvent, WriteEvent } from 'footprintjs';
 import type { EventDispatcher } from '../../events/dispatcher.js';
-import type {
-  AgentfootprintEventMap,
-  AgentfootprintEventType,
-} from '../../events/registry.js';
+import type { AgentfootprintEventMap, AgentfootprintEventType } from '../../events/registry.js';
 import type { ContextSlot } from '../../events/types.js';
 import { INJECTION_KEYS, slotFromSubflowId } from '../../conventions.js';
 import { buildEventMeta, type RunContext } from '../../bridge/eventMeta.js';

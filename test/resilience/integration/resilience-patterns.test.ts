@@ -12,11 +12,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { Agent } from '../../../src/core/Agent.js';
 import { defineTool } from '../../../src/core/tools.js';
 import { mock } from '../../../src/adapters/llm/MockProvider.js';
-import {
-  withRetry,
-  withFallback,
-  fallbackProvider,
-} from '../../../src/resilience/index.js';
+import { withRetry, withFallback, fallbackProvider } from '../../../src/resilience/index.js';
 import type { LLMProvider, LLMRequest, LLMResponse } from '../../../src/adapters/types.js';
 
 const ok = (tag: string): LLMResponse => ({
@@ -49,10 +45,10 @@ describe('resilience — scenario (production recipes)', () => {
       },
     };
 
-    const provider = withRetry(
-      fallbackProvider(anthropicSim, openaiSim),
-      { maxAttempts: 4, initialDelayMs: 1 },
-    );
+    const provider = withRetry(fallbackProvider(anthropicSim, openaiSim), {
+      maxAttempts: 4,
+      initialDelayMs: 1,
+    });
 
     const result = await provider.complete(req);
 
@@ -67,8 +63,18 @@ describe('resilience — scenario (production recipes)', () => {
 
   it('three-tier fallback chain: premium → standard → mock-degraded', async () => {
     const provider = fallbackProvider(
-      { name: 'premium', complete: async () => { throw new Error('quota'); } },
-      { name: 'standard', complete: async () => { throw new Error('down'); } },
+      {
+        name: 'premium',
+        complete: async () => {
+          throw new Error('quota');
+        },
+      },
+      {
+        name: 'standard',
+        complete: async () => {
+          throw new Error('down');
+        },
+      },
       mock({ reply: '[degraded] all upstream providers failed' }),
     );
 
@@ -109,7 +115,9 @@ describe('resilience — integration (Agent + resilient provider)', () => {
   it('Agent surfaces error after retry exhaustion', async () => {
     const dead: LLMProvider = {
       name: 'dead',
-      complete: async () => { throw new Error('permanent failure'); },
+      complete: async () => {
+        throw new Error('permanent failure');
+      },
     };
     const provider = withRetry(dead, { maxAttempts: 2, initialDelayMs: 1 });
 
@@ -128,11 +136,18 @@ describe('resilience — property (invariants)', () => {
       let calls = 0;
       const provider: LLMProvider = {
         name: 'count',
-        complete: async () => { calls++; throw new Error('always'); },
+        complete: async () => {
+          calls++;
+          throw new Error('always');
+        },
       };
       const wrapped = withRetry(provider, { maxAttempts, initialDelayMs: 0 });
 
-      try { await wrapped.complete(req); } catch { /* expected */ }
+      try {
+        await wrapped.complete(req);
+      } catch {
+        /* expected */
+      }
 
       expect(calls).toBeLessThanOrEqual(maxAttempts);
     }
@@ -142,7 +157,9 @@ describe('resilience — property (invariants)', () => {
     const observedDelays: number[] = [];
     const provider: LLMProvider = {
       name: 'fail',
-      complete: async () => { throw new Error('always'); },
+      complete: async () => {
+        throw new Error('always');
+      },
     };
     const wrapped = withRetry(provider, {
       maxAttempts: 8,
@@ -152,7 +169,11 @@ describe('resilience — property (invariants)', () => {
       onRetry: (_e, _a, ms) => observedDelays.push(ms),
     });
 
-    try { await wrapped.complete(req); } catch { /* expected */ }
+    try {
+      await wrapped.complete(req);
+    } catch {
+      /* expected */
+    }
 
     expect(observedDelays.length).toBeGreaterThan(0);
     for (const d of observedDelays) expect(d).toBeLessThanOrEqual(500);
@@ -166,7 +187,12 @@ describe('resilience — property (invariants)', () => {
         chain.push(
           i === winnerIndex
             ? { name: `p${i}`, complete: async () => ok(`winner-${i}`) }
-            : { name: `p${i}`, complete: async () => { throw new Error(`p${i} fail`); } },
+            : {
+                name: `p${i}`,
+                complete: async () => {
+                  throw new Error(`p${i} fail`);
+                },
+              },
         );
       }
       // First-success means: shortcut at the first non-throwing provider.
@@ -184,10 +210,14 @@ describe('resilience — security (hostile inputs)', () => {
   it('shouldRetry that throws does not crash withRetry — the original error propagates', async () => {
     const provider: LLMProvider = {
       name: 'fail',
-      complete: async () => { throw new Error('original'); },
+      complete: async () => {
+        throw new Error('original');
+      },
     };
     const wrapped = withRetry(provider, {
-      shouldRetry: () => { throw new Error('hostile predicate'); },
+      shouldRetry: () => {
+        throw new Error('hostile predicate');
+      },
       initialDelayMs: 0,
     });
 
@@ -201,7 +231,9 @@ describe('resilience — security (hostile inputs)', () => {
     const provider: LLMProvider = {
       name: 'syncthrow',
       // @ts-expect-error — async function returning sync throw is unusual but valid.
-      complete: () => { throw new Error('sync boom'); },
+      complete: () => {
+        throw new Error('sync boom');
+      },
     };
     const wrapped = withRetry(provider, { maxAttempts: 2, initialDelayMs: 0 });
     await expect(wrapped.complete(req)).rejects.toThrow('sync boom');
@@ -211,7 +243,10 @@ describe('resilience — security (hostile inputs)', () => {
     let calls = 0;
     const provider: LLMProvider = {
       name: 'fail',
-      complete: async () => { calls++; throw new Error('boom'); },
+      complete: async () => {
+        calls++;
+        throw new Error('boom');
+      },
     };
     const ctrl = new AbortController();
     const wrapped = withRetry(provider, { maxAttempts: 10, initialDelayMs: 50 });
@@ -286,9 +321,27 @@ describe('resilience — ROI (realistic SLO budgets)', () => {
 
   it('fallback chain shortcuts on first success — no wasted calls', async () => {
     const calls = { a: 0, b: 0, c: 0 };
-    const a: LLMProvider = { name: 'a', complete: async () => { calls.a++; return ok('a'); } };
-    const b: LLMProvider = { name: 'b', complete: async () => { calls.b++; return ok('b'); } };
-    const c: LLMProvider = { name: 'c', complete: async () => { calls.c++; return ok('c'); } };
+    const a: LLMProvider = {
+      name: 'a',
+      complete: async () => {
+        calls.a++;
+        return ok('a');
+      },
+    };
+    const b: LLMProvider = {
+      name: 'b',
+      complete: async () => {
+        calls.b++;
+        return ok('b');
+      },
+    };
+    const c: LLMProvider = {
+      name: 'c',
+      complete: async () => {
+        calls.c++;
+        return ok('c');
+      },
+    };
     const provider = fallbackProvider(a, b, c);
 
     await provider.complete(req);
@@ -298,7 +351,12 @@ describe('resilience — ROI (realistic SLO budgets)', () => {
 
   it('integration with mock — Agent can run with degraded ([reply]) provider', async () => {
     const provider = fallbackProvider(
-      { name: 'down', complete: async () => { throw new Error('500'); } },
+      {
+        name: 'down',
+        complete: async () => {
+          throw new Error('500');
+        },
+      },
       mock({ reply: 'degraded mode' }),
     );
     const agent = Agent.create({ provider, model: 'mock', maxIterations: 1 }).build();

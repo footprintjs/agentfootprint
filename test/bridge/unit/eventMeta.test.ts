@@ -48,14 +48,11 @@ describe('buildEventMeta — origin shapes', () => {
   });
 
   it('derives subflowPath from runtimeStageId when origin lacks explicit subflowPath', () => {
-    const meta = buildEventMeta(
-      { runtimeStageId: 'sf-outer/sf-inner/s#7' },
-      run(),
-    );
+    const meta = buildEventMeta({ runtimeStageId: 'sf-outer/sf-inner/s#7' }, run());
     expect(meta.subflowPath).toEqual(['sf-outer', 'sf-inner']);
   });
 
-  it("degrades gracefully when origin is undefined", () => {
+  it('degrades gracefully when origin is undefined', () => {
     const meta = buildEventMeta(undefined, run());
     expect(meta.runtimeStageId).toBe('unknown#0');
     expect(meta.subflowPath).toEqual([]);
@@ -112,9 +109,7 @@ describe('INJECTION_KEYS + COMPOSITION_KEYS stability', () => {
 
   it('COMPOSITION_KEYS are all distinct from INJECTION_KEYS', async () => {
     const { INJECTION_KEYS } = await import('../../../src/conventions.js');
-    const { COMPOSITION_KEYS } = await import(
-      '../../../src/recorders/core/types.js'
-    );
+    const { COMPOSITION_KEYS } = await import('../../../src/recorders/core/types.js');
     const injection = new Set(Object.values(INJECTION_KEYS));
     for (const comp of Object.values(COMPOSITION_KEYS)) {
       expect(injection.has(comp as string)).toBe(false);

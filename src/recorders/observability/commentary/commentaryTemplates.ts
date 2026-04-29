@@ -59,7 +59,7 @@ export const defaultCommentaryTemplates: CommentaryTemplates = {
   'stream.llm_start.iter1': '{{appName}} sent the question to the LLM.',
   'stream.llm_start.iterN': "{{appName}} sent the tool's result to the LLM for reasoning.",
 
-  'stream.llm_end.tools':    'The LLM said it needs to use a tool. {{appName}} will do that next.',
+  'stream.llm_end.tools': 'The LLM said it needs to use a tool. {{appName}} will do that next.',
   'stream.llm_end.terminal': 'The LLM gave the final answer. {{appName}} returned it to the user.',
 
   // Streaming. Token chunks are NOT rendered as one line each — that
@@ -73,29 +73,35 @@ export const defaultCommentaryTemplates: CommentaryTemplates = {
   //     ("Chatbot is responding: {{partial}}")
   // Selecting these is a viewer concern; the engine emits the keys
   // and the renderer decides whether to mount a live line or skip.
-  'stream.thinking':       '{{appName}} is thinking…',
-  'stream.token.partial':  '{{appName}} is responding: {{partial}}',
+  'stream.thinking': '{{appName}} is thinking…',
+  'stream.token.partial': '{{appName}} is responding: {{partial}}',
 
-  'stream.tool_start':         '{{appName}} called the `{{toolName}}` tool{{descClause}}. The LLM asked for it, and {{appName}} figured out the inputs from the conversation.',
-  'stream.tool_start.desc':    ' — registered as "{{desc}}"',
-  'stream.tool_start.noDesc':  '',
+  'stream.tool_start':
+    '{{appName}} called the `{{toolName}}` tool{{descClause}}. The LLM asked for it, and {{appName}} figured out the inputs from the conversation.',
+  'stream.tool_start.desc': ' — registered as "{{desc}}"',
+  'stream.tool_start.noDesc': '',
 
   'stream.tool_end': 'The tool returned its result. {{appName}} will share it with the LLM next.',
 
-  'context.injected.rag':          '{{appName}} retrieved relevant content and added it to the conversation.',
-  'context.injected.skill':        '{{appName}} activated a skill — its body went into the system prompt, and its tools became available to the LLM.',
-  'context.injected.memory':       '{{appName}} pulled prior content from memory and added it to the conversation.',
-  'context.injected.instructions': '{{appName}} added a tool-specific instruction to the system prompt after that tool returned.',
-  'context.injected.custom':       '{{appName}} injected a custom piece of context.',
+  'context.injected.rag':
+    '{{appName}} retrieved relevant content and added it to the conversation.',
+  'context.injected.skill':
+    '{{appName}} activated a skill — its body went into the system prompt, and its tools became available to the LLM.',
+  'context.injected.memory':
+    '{{appName}} pulled prior content from memory and added it to the conversation.',
+  'context.injected.instructions':
+    '{{appName}} added a tool-specific instruction to the system prompt after that tool returned.',
+  'context.injected.custom': '{{appName}} injected a custom piece of context.',
 
-  'skill.activated':   '{{appName}} turned on a skill — its tools and instructions are now available.',
+  'skill.activated':
+    '{{appName}} turned on a skill — its tools and instructions are now available.',
   'skill.deactivated': '{{appName}} turned off a skill.',
 
   'composition.fork_start': '{{appName}} fanned out into parallel branches.',
-  'composition.merge_end':  '{{appName}} merged the parallel branches back into one.',
+  'composition.merge_end': '{{appName}} merged the parallel branches back into one.',
 
   'pause.request': '{{appName}} paused — waiting for input from a human or external system.',
-  'pause.resume':  '{{appName}} resumed.',
+  'pause.resume': '{{appName}} resumed.',
 
   'cost.limit_hit': '{{appName}} hit a cost limit and stopped.',
 };
@@ -122,9 +128,7 @@ export interface CommentaryContext {
  *   `undefined` → fall through to caller's default humanizer
  *   `string`    → render `templates[key]` with `extractCommentaryVars`
  */
-export function selectCommentaryKey(
-  event: AgentfootprintEvent,
-): string | null | undefined {
+export function selectCommentaryKey(event: AgentfootprintEvent): string | null | undefined {
   switch (event.type) {
     case 'agentfootprint.agent.turn_start':
       return 'agent.turn_start';
@@ -132,14 +136,10 @@ export function selectCommentaryKey(
       return null;
 
     case 'agentfootprint.stream.llm_start':
-      return event.payload.iteration === 1
-        ? 'stream.llm_start.iter1'
-        : 'stream.llm_start.iterN';
+      return event.payload.iteration === 1 ? 'stream.llm_start.iter1' : 'stream.llm_start.iterN';
 
     case 'agentfootprint.stream.llm_end':
-      return event.payload.toolCallCount > 0
-        ? 'stream.llm_end.tools'
-        : 'stream.llm_end.terminal';
+      return event.payload.toolCallCount > 0 ? 'stream.llm_end.tools' : 'stream.llm_end.terminal';
 
     case 'agentfootprint.stream.tool_start':
       return 'stream.tool_start';
@@ -148,11 +148,16 @@ export function selectCommentaryKey(
 
     case 'agentfootprint.context.injected':
       switch (event.payload.source) {
-        case 'rag':          return 'context.injected.rag';
-        case 'skill':        return 'context.injected.skill';
-        case 'memory':       return 'context.injected.memory';
-        case 'instructions': return 'context.injected.instructions';
-        case 'custom':       return 'context.injected.custom';
+        case 'rag':
+          return 'context.injected.rag';
+        case 'skill':
+          return 'context.injected.skill';
+        case 'memory':
+          return 'context.injected.memory';
+        case 'instructions':
+          return 'context.injected.instructions';
+        case 'custom':
+          return 'context.injected.custom';
         // Baseline injections (LLM API natives, not engineering
         // decisions): drop from prose.
         case 'user':
@@ -161,24 +166,32 @@ export function selectCommentaryKey(
         case 'base':
         case 'registry':
           return null;
-        default: return 'context.injected.custom';
+        default:
+          return 'context.injected.custom';
       }
 
-    case 'agentfootprint.skill.activated':   return 'skill.activated';
-    case 'agentfootprint.skill.deactivated': return 'skill.deactivated';
+    case 'agentfootprint.skill.activated':
+      return 'skill.activated';
+    case 'agentfootprint.skill.deactivated':
+      return 'skill.deactivated';
 
     case 'agentfootprint.agent.iteration_start':
     case 'agentfootprint.agent.iteration_end':
     case 'agentfootprint.agent.route_decided':
       return null; // implicit in surrounding llm.start/end narrative
 
-    case 'agentfootprint.composition.fork_start': return 'composition.fork_start';
-    case 'agentfootprint.composition.merge_end':  return 'composition.merge_end';
+    case 'agentfootprint.composition.fork_start':
+      return 'composition.fork_start';
+    case 'agentfootprint.composition.merge_end':
+      return 'composition.merge_end';
 
-    case 'agentfootprint.pause.request': return 'pause.request';
-    case 'agentfootprint.pause.resume':  return 'pause.resume';
+    case 'agentfootprint.pause.request':
+      return 'pause.request';
+    case 'agentfootprint.pause.resume':
+      return 'pause.resume';
 
-    case 'agentfootprint.cost.limit_hit': return 'cost.limit_hit';
+    case 'agentfootprint.cost.limit_hit':
+      return 'cost.limit_hit';
 
     // Slot mechanics — plumbing, not pedagogy. The engineered
     // injections above already narrate WHAT was added; the surrounding
@@ -223,7 +236,7 @@ export function extractCommentaryVars(
       // sees a literal string. Keeps the engine flat (non-recursive).
       const descClause = hasDesc
         ? renderCommentary(templates['stream.tool_start.desc'] ?? '', { desc: desc! })
-        : (templates['stream.tool_start.noDesc'] ?? '');
+        : templates['stream.tool_start.noDesc'] ?? '';
       return { ...base, toolName, descClause };
     }
 
@@ -243,9 +256,6 @@ export function extractCommentaryVars(
  * placeholders. Compose sub-templates upstream (see
  * `extractCommentaryVars`).
  */
-export function renderCommentary(
-  template: string,
-  vars: Record<string, string>,
-): string {
+export function renderCommentary(template: string, vars: Record<string, string>): string {
   return template.replace(/\{\{(\w+)\}\}/g, (_, name) => vars[name] ?? '');
 }

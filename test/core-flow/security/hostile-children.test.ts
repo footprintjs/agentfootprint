@@ -46,9 +46,13 @@ describe('security — Sequence: a failing step propagates (does not silently pa
 describe('security — Conditional: a hostile predicate throwing surfaces cleanly', () => {
   it('predicate throwing does not hang the Conditional', async () => {
     const cond = Conditional.create()
-      .when('boom', () => {
-        throw new Error('predicate exploded');
-      }, llm('never'))
+      .when(
+        'boom',
+        () => {
+          throw new Error('predicate exploded');
+        },
+        llm('never'),
+      )
       .otherwise('fallback', llm('fallback'))
       .build();
 

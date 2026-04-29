@@ -17,9 +17,7 @@ export type CompositionRecorderOptions = Omit<EmitBridgeOptions, 'id' | 'prefix'
   readonly id?: string;
 };
 
-export function compositionRecorder(
-  options: CompositionRecorderOptions,
-): EmitBridge {
+export function compositionRecorder(options: CompositionRecorderOptions): EmitBridge {
   return new EmitBridge({
     id: options.id ?? 'agentfootprint.composition-recorder',
     prefix: 'agentfootprint.composition.',

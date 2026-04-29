@@ -142,15 +142,15 @@ describe('Parallel — validation', () => {
   });
 
   it('rejects duplicate branch ids', () => {
-    expect(() =>
-      Parallel.create().branch('same', llm('a')).branch('same', llm('b')),
-    ).toThrow(/duplicate branch id/);
+    expect(() => Parallel.create().branch('same', llm('a')).branch('same', llm('b'))).toThrow(
+      /duplicate branch id/,
+    );
   });
 
   it('rejects build() with no merge strategy', () => {
-    expect(() =>
-      Parallel.create().branch('a', llm('x')).branch('b', llm('y')).build(),
-    ).toThrow(/no merge strategy/);
+    expect(() => Parallel.create().branch('a', llm('x')).branch('b', llm('y')).build()).toThrow(
+      /no merge strategy/,
+    );
   });
 
   it('rejects setting two merge strategies', () => {

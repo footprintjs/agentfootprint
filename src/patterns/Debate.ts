@@ -73,10 +73,7 @@ export function debate(opts: DebateOptions): Runner<{ message: string }, string>
   const roundsRunner =
     rounds === 1
       ? buildRound()
-      : Loop.create({ id: 'debate-rounds' })
-          .repeat(buildRound())
-          .times(rounds)
-          .build();
+      : Loop.create({ id: 'debate-rounds' }).repeat(buildRound()).times(rounds).build();
 
   return Sequence.create({
     name: opts.name ?? 'Debate',

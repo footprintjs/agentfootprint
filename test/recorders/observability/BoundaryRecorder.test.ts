@@ -143,7 +143,11 @@ describe('BoundaryRecorder — P1: run.entry + run.exit', () => {
       isRoot: true,
       payload: { request: 'analyze' },
     });
-    expect(events[1]).toMatchObject({ type: 'run.exit', isRoot: true, payload: { result: 'done' } });
+    expect(events[1]).toMatchObject({
+      type: 'run.exit',
+      isRoot: true,
+      payload: { result: 'done' },
+    });
   });
 });
 
@@ -152,9 +156,7 @@ describe('BoundaryRecorder — P1: run.entry + run.exit', () => {
 describe('BoundaryRecorder — P2: subflow.entry/exit with primitiveKind + slotKind + isAgentInternal', () => {
   it('Agent-prefixed description → primitiveKind="Agent", isAgentInternal=false', () => {
     const { rec } = freshRecorder();
-    rec.onSubflowEntry!(
-      subEvt('sf-agent', 'Agent', 'a#0', 'Agent: ReAct loop', { in: 1 }),
-    );
+    rec.onSubflowEntry!(subEvt('sf-agent', 'Agent', 'a#0', 'Agent: ReAct loop', { in: 1 }));
     rec.onSubflowExit!(subEvt('sf-agent', 'Agent', 'a#0', undefined, undefined, { out: 2 }));
 
     const sub = rec.getEventsByType('subflow.entry')[0];
@@ -250,12 +252,17 @@ describe('BoundaryRecorder — P5: llm.start + llm.end via dispatcher', () => {
   it('typed llm_start/llm_end events surface as llm.start/llm.end DomainEvents with payloads', () => {
     const { rec, dispatcher } = freshRecorder();
     dispatchTyped(dispatcher, 'agentfootprint.stream.llm_start', {
-      model: 'gpt-mock', provider: 'mock',
-      systemPromptChars: 100, messagesCount: 5, toolsCount: 2,
+      model: 'gpt-mock',
+      provider: 'mock',
+      systemPromptChars: 100,
+      messagesCount: 5,
+      toolsCount: 2,
     });
     dispatchTyped(dispatcher, 'agentfootprint.stream.llm_end', {
-      content: 'Hello!', toolCallCount: 0,
-      usage: { input: 30, output: 8 }, stopReason: 'stop',
+      content: 'Hello!',
+      toolCallCount: 0,
+      usage: { input: 30, output: 8 },
+      stopReason: 'stop',
     });
 
     const start = rec.getEventsByType('llm.start')[0];
@@ -285,10 +292,14 @@ describe('BoundaryRecorder — P6: tool.start + tool.end via dispatcher', () => 
   it('typed tool_start/tool_end events surface with toolName + args + result', () => {
     const { rec, dispatcher } = freshRecorder();
     dispatchTyped(dispatcher, 'agentfootprint.stream.tool_start', {
-      toolName: 'weather', toolCallId: 'c1', args: { city: 'SF' },
+      toolName: 'weather',
+      toolCallId: 'c1',
+      args: { city: 'SF' },
     });
     dispatchTyped(dispatcher, 'agentfootprint.stream.tool_end', {
-      toolCallId: 'c1', result: '72°F sunny', durationMs: 42,
+      toolCallId: 'c1',
+      result: '72°F sunny',
+      durationMs: 42,
     });
 
     const start = rec.getEventsByType('tool.start')[0];
@@ -347,15 +358,19 @@ describe('BoundaryRecorder — query API', () => {
     const { rec, dispatcher } = freshRecorder();
     rec.onRunStart!(runEvt({}));
     dispatchTyped(dispatcher, 'agentfootprint.stream.llm_start', {
-      model: 'm', provider: 'p',
+      model: 'm',
+      provider: 'p',
     });
     rec.onSubflowEntry!(subEvt(SUBFLOW_IDS.SYSTEM_PROMPT, 'SP', 'sp#0'));
     dispatchTyped(dispatcher, 'agentfootprint.context.injected', {
-      slot: 'system-prompt', source: 'base',
+      slot: 'system-prompt',
+      source: 'base',
     });
     rec.onSubflowExit!(subEvt(SUBFLOW_IDS.SYSTEM_PROMPT, 'SP', 'sp#0'));
     dispatchTyped(dispatcher, 'agentfootprint.stream.llm_end', {
-      content: '', toolCallCount: 0, usage: { input: 1, output: 1 },
+      content: '',
+      toolCallCount: 0,
+      usage: { input: 1, output: 1 },
     });
     rec.onRunEnd!(runEvt({}));
 
@@ -423,7 +438,9 @@ describe('BoundaryRecorder — actorArrow classification', () => {
     const { rec, dispatcher } = freshRecorder();
     dispatchTyped(dispatcher, 'agentfootprint.stream.llm_start', { model: 'm', provider: 'p' });
     dispatchTyped(dispatcher, 'agentfootprint.stream.llm_end', {
-      content: 'done', toolCallCount: 0, usage: { input: 1, output: 1 },
+      content: 'done',
+      toolCallCount: 0,
+      usage: { input: 1, output: 1 },
     });
     expect(rec.getEventsByType('llm.start')[0].actorArrow).toBe('user→llm');
     expect(rec.getEventsByType('llm.end')[0].actorArrow).toBe('llm→user');
@@ -433,7 +450,9 @@ describe('BoundaryRecorder — actorArrow classification', () => {
     const { rec, dispatcher } = freshRecorder();
     dispatchTyped(dispatcher, 'agentfootprint.stream.llm_start', { model: 'm', provider: 'p' });
     dispatchTyped(dispatcher, 'agentfootprint.stream.llm_end', {
-      content: '', toolCallCount: 2, usage: { input: 1, output: 1 },
+      content: '',
+      toolCallCount: 2,
+      usage: { input: 1, output: 1 },
     });
     expect(rec.getEventsByType('llm.end')[0].actorArrow).toBe('llm→tool');
   });
@@ -443,19 +462,26 @@ describe('BoundaryRecorder — actorArrow classification', () => {
     // First call: tool requested
     dispatchTyped(dispatcher, 'agentfootprint.stream.llm_start', { model: 'm', provider: 'p' });
     dispatchTyped(dispatcher, 'agentfootprint.stream.llm_end', {
-      content: '', toolCallCount: 1, usage: { input: 1, output: 1 },
+      content: '',
+      toolCallCount: 1,
+      usage: { input: 1, output: 1 },
     });
     // Tool runs
     dispatchTyped(dispatcher, 'agentfootprint.stream.tool_start', {
-      toolName: 't', toolCallId: 'c',
+      toolName: 't',
+      toolCallId: 'c',
     });
     dispatchTyped(dispatcher, 'agentfootprint.stream.tool_end', {
-      toolCallId: 'c', result: 'x', durationMs: 10,
+      toolCallId: 'c',
+      result: 'x',
+      durationMs: 10,
     });
     // Second call: should be tool→llm
     dispatchTyped(dispatcher, 'agentfootprint.stream.llm_start', { model: 'm', provider: 'p' });
     dispatchTyped(dispatcher, 'agentfootprint.stream.llm_end', {
-      content: 'done', toolCallCount: 0, usage: { input: 1, output: 1 },
+      content: 'done',
+      toolCallCount: 0,
+      usage: { input: 1, output: 1 },
     });
 
     const starts = rec.getEventsByType('llm.start');
@@ -471,17 +497,24 @@ describe('BoundaryRecorder — actorArrow classification', () => {
     const { rec, dispatcher } = freshRecorder();
     dispatchTyped(dispatcher, 'agentfootprint.stream.llm_start', { model: 'm', provider: 'p' });
     dispatchTyped(dispatcher, 'agentfootprint.stream.llm_end', {
-      content: '', toolCallCount: 1, usage: { input: 1, output: 1 },
+      content: '',
+      toolCallCount: 1,
+      usage: { input: 1, output: 1 },
     });
     dispatchTyped(dispatcher, 'agentfootprint.stream.tool_start', {
-      toolName: 't', toolCallId: 'c',
+      toolName: 't',
+      toolCallId: 'c',
     });
     dispatchTyped(dispatcher, 'agentfootprint.stream.tool_end', {
-      toolCallId: 'c', result: 'x', durationMs: 1,
+      toolCallId: 'c',
+      result: 'x',
+      durationMs: 1,
     });
     dispatchTyped(dispatcher, 'agentfootprint.stream.llm_start', { model: 'm', provider: 'p' });
     dispatchTyped(dispatcher, 'agentfootprint.stream.llm_end', {
-      content: 'done', toolCallCount: 0, usage: { input: 1, output: 1 },
+      content: 'done',
+      toolCallCount: 0,
+      usage: { input: 1, output: 1 },
     });
 
     const arrows = rec
@@ -495,7 +528,9 @@ describe('BoundaryRecorder — actorArrow classification', () => {
     const { rec, dispatcher } = freshRecorder();
     dispatchTyped(dispatcher, 'agentfootprint.stream.llm_start', { model: 'm', provider: 'p' });
     dispatchTyped(dispatcher, 'agentfootprint.stream.llm_end', {
-      content: '', toolCallCount: 1, usage: { input: 1, output: 1 },
+      content: '',
+      toolCallCount: 1,
+      usage: { input: 1, output: 1 },
     });
     rec.clear();
     // After clear, the next llm.start should be user→llm (not tool→llm)
@@ -509,29 +544,41 @@ describe('BoundaryRecorder — actorArrow classification', () => {
     // Iter 1
     dispatchTyped(dispatcher, 'agentfootprint.stream.llm_start', { model: 'm', provider: 'p' });
     dispatchTyped(dispatcher, 'agentfootprint.stream.llm_end', {
-      content: '', toolCallCount: 1, usage: { input: 1, output: 1 },
+      content: '',
+      toolCallCount: 1,
+      usage: { input: 1, output: 1 },
     });
     dispatchTyped(dispatcher, 'agentfootprint.stream.tool_start', {
-      toolName: 't', toolCallId: 'c1',
+      toolName: 't',
+      toolCallId: 'c1',
     });
     dispatchTyped(dispatcher, 'agentfootprint.stream.tool_end', {
-      toolCallId: 'c1', result: 'a', durationMs: 1,
+      toolCallId: 'c1',
+      result: 'a',
+      durationMs: 1,
     });
     // Iter 2 — also requests tool
     dispatchTyped(dispatcher, 'agentfootprint.stream.llm_start', { model: 'm', provider: 'p' });
     dispatchTyped(dispatcher, 'agentfootprint.stream.llm_end', {
-      content: '', toolCallCount: 1, usage: { input: 1, output: 1 },
+      content: '',
+      toolCallCount: 1,
+      usage: { input: 1, output: 1 },
     });
     dispatchTyped(dispatcher, 'agentfootprint.stream.tool_start', {
-      toolName: 't', toolCallId: 'c2',
+      toolName: 't',
+      toolCallId: 'c2',
     });
     dispatchTyped(dispatcher, 'agentfootprint.stream.tool_end', {
-      toolCallId: 'c2', result: 'b', durationMs: 1,
+      toolCallId: 'c2',
+      result: 'b',
+      durationMs: 1,
     });
     // Iter 3 — terminal
     dispatchTyped(dispatcher, 'agentfootprint.stream.llm_start', { model: 'm', provider: 'p' });
     dispatchTyped(dispatcher, 'agentfootprint.stream.llm_end', {
-      content: 'final', toolCallCount: 0, usage: { input: 1, output: 1 },
+      content: 'final',
+      toolCallCount: 0,
+      usage: { input: 1, output: 1 },
     });
 
     const arrows = rec
@@ -539,9 +586,12 @@ describe('BoundaryRecorder — actorArrow classification', () => {
       .filter((e) => e.type === 'llm.start' || e.type === 'llm.end')
       .map((e) => (e as { actorArrow: string }).actorArrow);
     expect(arrows).toEqual([
-      'user→llm', 'llm→tool',  // iter 1
-      'tool→llm', 'llm→tool',  // iter 2
-      'tool→llm', 'llm→user',  // iter 3 (terminal)
+      'user→llm',
+      'llm→tool', // iter 1
+      'tool→llm',
+      'llm→tool', // iter 2
+      'tool→llm',
+      'llm→user', // iter 3 (terminal)
     ]);
   });
 
@@ -551,7 +601,9 @@ describe('BoundaryRecorder — actorArrow classification', () => {
     // independent of state. (State affects only the NEXT llm.start.)
     const { rec, dispatcher } = freshRecorder();
     dispatchTyped(dispatcher, 'agentfootprint.stream.llm_end', {
-      content: 'orphan', toolCallCount: 0, usage: { input: 1, output: 1 },
+      content: 'orphan',
+      toolCallCount: 0,
+      usage: { input: 1, output: 1 },
     });
     expect(rec.getEventsByType('llm.end')[0].actorArrow).toBe('llm→user');
   });
@@ -580,7 +632,9 @@ describe('BoundaryRecorder — lifecycle', () => {
 
     unsub();
     dispatchTyped(dispatcher, 'agentfootprint.stream.llm_end', {
-      content: '', toolCallCount: 0, usage: { input: 1, output: 1 },
+      content: '',
+      toolCallCount: 0,
+      usage: { input: 1, output: 1 },
     });
     expect(rec.getEvents()).toHaveLength(1);
   });

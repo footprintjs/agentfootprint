@@ -13,11 +13,7 @@ import { describe, expect, it } from 'vitest';
 
 import { Agent } from '../../src/core/Agent.js';
 import { mock } from '../../src/adapters/llm/MockProvider.js';
-import {
-  defineMemory,
-  MEMORY_TYPES,
-  MEMORY_STRATEGIES,
-} from '../../src/memory/index.js';
+import { defineMemory, MEMORY_TYPES, MEMORY_STRATEGIES } from '../../src/memory/index.js';
 import { InMemoryStore } from '../../src/memory/store/index.js';
 import { mockEmbedder } from '../../src/memory/embedding/index.js';
 
@@ -92,8 +88,7 @@ describe('Agent.memory() — integration', () => {
       store: new InMemoryStore(),
     });
 
-    const builder = Agent.create({ provider: mock({ reply: 'ok' }), model: 'mock' })
-      .memory(a);
+    const builder = Agent.create({ provider: mock({ reply: 'ok' }), model: 'mock' }).memory(a);
 
     expect(() => builder.memory(b)).toThrow(/duplicate id 'collide'/);
   });

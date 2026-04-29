@@ -248,9 +248,7 @@ describe('cost — property', () => {
       .build();
 
     const cumUsd: number[] = [];
-    agent.on('agentfootprint.cost.tick', (e) =>
-      cumUsd.push(e.payload.cumulative.estimatedUsd),
-    );
+    agent.on('agentfootprint.cost.tick', (e) => cumUsd.push(e.payload.cumulative.estimatedUsd));
     await agent.run({ message: 'go' });
     for (let i = 1; i < cumUsd.length; i++) {
       expect(cumUsd[i]).toBeGreaterThanOrEqual(cumUsd[i - 1]);

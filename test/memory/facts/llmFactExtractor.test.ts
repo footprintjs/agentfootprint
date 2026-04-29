@@ -8,12 +8,7 @@
  */
 import { describe, expect, it, vi } from 'vitest';
 import { llmFactExtractor } from '../../../src/memory/facts/llmFactExtractor';
-import type {
-  LLMProvider,
-  LLMRequest,
-  LLMResponse,
-  LLMMessage,
-} from '../../../src/adapters/types';
+import type { LLMProvider, LLMRequest, LLMResponse, LLMMessage } from '../../../src/adapters/types';
 
 interface ScriptedProviderOptions {
   readonly content: string;
@@ -81,9 +76,7 @@ describe('llmFactExtractor — unit', () => {
     await llmFactExtractor({ provider }).extract({
       messages: [msg('user', 'update')],
       turnNumber: 5,
-      existing: [
-        { key: 'name', value: 'Alice', confidence: 0.9, refs: [] },
-      ],
+      existing: [{ key: 'name', value: 'Alice', confidence: 0.9, refs: [] }],
     });
     expect(seen[0].messages[0].content).toMatch(/Alice/);
   });

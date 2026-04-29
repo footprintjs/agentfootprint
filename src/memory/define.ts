@@ -69,10 +69,7 @@ import {
   type ExtractStrategy,
   type HybridStrategy,
 } from './define.types.js';
-import type {
-  MemoryDefinition,
-  ReadonlyMemoryFlowChart,
-} from './define.types.js';
+import type { MemoryDefinition, ReadonlyMemoryFlowChart } from './define.types.js';
 
 // ─── Public factory ────────────────────────────────────────────────
 
@@ -280,7 +277,9 @@ function buildSemanticPipeline(options: DefineSemanticOptions): MemoryPipeline {
     case MEMORY_STRATEGIES.SUMMARIZE:
     case MEMORY_STRATEGIES.DECAY:
       throw new Error(
-        `defineMemory[${options.id}]: ${String(s.kind)} strategy is not supported on SEMANTIC type. ` +
+        `defineMemory[${options.id}]: ${String(
+          s.kind,
+        )} strategy is not supported on SEMANTIC type. ` +
           'Use TOP_K (vector retrieval), EXTRACT (LLM/pattern fact extraction), ' +
           'WINDOW (recency-load), or HYBRID (auto compose).',
       );
@@ -326,7 +325,9 @@ function buildNarrativePipeline(options: DefineNarrativeOptions): MemoryPipeline
     case MEMORY_STRATEGIES.SUMMARIZE:
     case MEMORY_STRATEGIES.DECAY:
       throw new Error(
-        `defineMemory[${options.id}]: ${String(s.kind)} strategy is not supported on NARRATIVE type. ` +
+        `defineMemory[${options.id}]: ${String(
+          s.kind,
+        )} strategy is not supported on NARRATIVE type. ` +
           'Use EXTRACT (LLM/heuristic beat extraction), WINDOW (recency-load), or HYBRID.',
       );
 
@@ -351,7 +352,7 @@ function buildCausalPipeline(options: DefineCausalOptions): MemoryPipeline {
     throw new Error(
       `defineMemory[${options.id}]: CAUSAL type only supports TOP_K strategy. ` +
         'Snapshots are matched semantically against the new user query; ' +
-        'WINDOW/BUDGET/SUMMARIZE/EXTRACT/DECAY/HYBRID don\'t apply.',
+        "WINDOW/BUDGET/SUMMARIZE/EXTRACT/DECAY/HYBRID don't apply.",
     );
   }
 

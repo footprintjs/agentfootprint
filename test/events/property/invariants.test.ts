@@ -5,10 +5,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { EventDispatcher } from '../../../src/events/dispatcher.js';
-import {
-  ALL_EVENT_TYPES,
-  type AgentfootprintEvent,
-} from '../../../src/events/registry.js';
+import { ALL_EVENT_TYPES, type AgentfootprintEvent } from '../../../src/events/registry.js';
 
 function meta() {
   return {

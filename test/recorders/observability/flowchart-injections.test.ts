@@ -63,7 +63,10 @@ function freshRecorder(): {
   getGraph: () => StepGraph;
 } {
   const dispatcher = new EventDispatcher();
-  const attach = (_r: CombinedRecorder): (() => void) => () => undefined;
+  const attach =
+    (_r: CombinedRecorder): (() => void) =>
+    () =>
+      undefined;
   const handle = attachFlowchart(attach, dispatcher, {});
   return {
     dispatcher,
@@ -170,10 +173,7 @@ describe('FlowchartRecorder — pattern 2: Agent with one tool', () => {
     // re-injects the same content at each iteration, so identical
     // contentSummary values CAN appear across calls. That's correct;
     // the distinct events are what matter.
-    const attributed = calls.reduce(
-      (sum, c) => sum + (c.injections?.length ?? 0),
-      0,
-    );
+    const attributed = calls.reduce((sum, c) => sum + (c.injections?.length ?? 0), 0);
     expect(attributed).toBe(injectedCount);
   });
 });
@@ -219,10 +219,7 @@ describe('FlowchartRecorder — pattern 3: multi-iteration agent', () => {
     // exactly one call's injections[]. The graph's total equals the
     // event stream's total; no loss from dropped events, no doubling
     // from ancestor-walk-style duplication.
-    const attributed = calls.reduce(
-      (sum, c) => sum + (c.injections?.length ?? 0),
-      0,
-    );
+    const attributed = calls.reduce((sum, c) => sum + (c.injections?.length ?? 0), 0);
     expect(attributed).toBe(injectedCount);
   });
 });
@@ -233,8 +230,19 @@ describe('FlowchartRecorder — pattern 4: no context.injected events', () => {
   it('LLM step has empty or undefined injections; does not crash', () => {
     const { dispatcher, getGraph } = freshRecorder();
 
-    emit(dispatcher, 'agentfootprint.stream.llm_start', { model: 'mock', provider: 'mock', systemPromptChars: 0, messagesCount: 1, toolsCount: 0 });
-    emit(dispatcher, 'agentfootprint.stream.llm_end', { content: 'hi', toolCallCount: 0, usage: { input: 1, output: 1 }, stopReason: 'stop' });
+    emit(dispatcher, 'agentfootprint.stream.llm_start', {
+      model: 'mock',
+      provider: 'mock',
+      systemPromptChars: 0,
+      messagesCount: 1,
+      toolsCount: 0,
+    });
+    emit(dispatcher, 'agentfootprint.stream.llm_end', {
+      content: 'hi',
+      toolCallCount: 0,
+      usage: { input: 1, output: 1 },
+      stopReason: 'stop',
+    });
 
     // 2 actor-arrow steps now: user→llm + llm→user. Injections attach to
     // the user→llm half (the call that consumed assembled context); the
@@ -254,15 +262,54 @@ describe('FlowchartRecorder — pattern 5: injection between iterations', () => 
     const { dispatcher, getGraph } = freshRecorder();
 
     // Call 1
-    emit(dispatcher, 'agentfootprint.context.injected', mkInjection('messages', 'user', 'user', 'First'));
-    emit(dispatcher, 'agentfootprint.stream.llm_start', { model: 'mock', provider: 'mock', systemPromptChars: 0, messagesCount: 1, toolsCount: 0 });
-    emit(dispatcher, 'agentfootprint.stream.llm_end', { content: '', toolCallCount: 1, usage: { input: 1, output: 1 }, stopReason: 'tool_use' });
-    emit(dispatcher, 'agentfootprint.stream.tool_start', { toolName: 't', toolCallId: 'c1', args: {} });
-    emit(dispatcher, 'agentfootprint.stream.tool_end', { toolName: 't', toolCallId: 'c1', result: '', latencyMs: 0 });
+    emit(
+      dispatcher,
+      'agentfootprint.context.injected',
+      mkInjection('messages', 'user', 'user', 'First'),
+    );
+    emit(dispatcher, 'agentfootprint.stream.llm_start', {
+      model: 'mock',
+      provider: 'mock',
+      systemPromptChars: 0,
+      messagesCount: 1,
+      toolsCount: 0,
+    });
+    emit(dispatcher, 'agentfootprint.stream.llm_end', {
+      content: '',
+      toolCallCount: 1,
+      usage: { input: 1, output: 1 },
+      stopReason: 'tool_use',
+    });
+    emit(dispatcher, 'agentfootprint.stream.tool_start', {
+      toolName: 't',
+      toolCallId: 'c1',
+      args: {},
+    });
+    emit(dispatcher, 'agentfootprint.stream.tool_end', {
+      toolName: 't',
+      toolCallId: 'c1',
+      result: '',
+      latencyMs: 0,
+    });
     // Injection fires HERE — between iterations, in the next call's assembly phase.
-    emit(dispatcher, 'agentfootprint.context.injected', mkInjection('messages', 'tool', 'tool-result', 'tool result', 'c1'));
-    emit(dispatcher, 'agentfootprint.stream.llm_start', { model: 'mock', provider: 'mock', systemPromptChars: 0, messagesCount: 2, toolsCount: 0 });
-    emit(dispatcher, 'agentfootprint.stream.llm_end', { content: 'done', toolCallCount: 0, usage: { input: 1, output: 1 }, stopReason: 'stop' });
+    emit(
+      dispatcher,
+      'agentfootprint.context.injected',
+      mkInjection('messages', 'tool', 'tool-result', 'tool result', 'c1'),
+    );
+    emit(dispatcher, 'agentfootprint.stream.llm_start', {
+      model: 'mock',
+      provider: 'mock',
+      systemPromptChars: 0,
+      messagesCount: 2,
+      toolsCount: 0,
+    });
+    emit(dispatcher, 'agentfootprint.stream.llm_end', {
+      content: 'done',
+      toolCallCount: 0,
+      usage: { input: 1, output: 1 },
+      stopReason: 'stop',
+    });
 
     const calls = llmCallSteps(getGraph());
     // Three LLM-kind steps: user->llm (iter 1), tool->llm (iter 2),
@@ -306,8 +353,19 @@ describe('FlowchartRecorder — pattern 6: full payload mapping', () => {
       rankPosition: 0,
       budgetSpent: { tokens: 150, fractionOfCap: 0.15 },
     });
-    emit(dispatcher, 'agentfootprint.stream.llm_start', { model: 'mock', provider: 'mock', systemPromptChars: 0, messagesCount: 0, toolsCount: 0 });
-    emit(dispatcher, 'agentfootprint.stream.llm_end', { content: 'hi', toolCallCount: 0, usage: { input: 1, output: 1 }, stopReason: 'stop' });
+    emit(dispatcher, 'agentfootprint.stream.llm_start', {
+      model: 'mock',
+      provider: 'mock',
+      systemPromptChars: 0,
+      messagesCount: 0,
+      toolsCount: 0,
+    });
+    emit(dispatcher, 'agentfootprint.stream.llm_end', {
+      content: 'hi',
+      toolCallCount: 0,
+      usage: { input: 1, output: 1 },
+      stopReason: 'stop',
+    });
 
     const call = llmCallSteps(getGraph())[0];
     const inj = (call.injections ?? [])[0];
@@ -333,11 +391,34 @@ describe('FlowchartRecorder — pattern 7: multi-slot injections', () => {
   it('injections into system-prompt, messages, tools all attribute to same LLM call', () => {
     const { dispatcher, getGraph } = freshRecorder();
 
-    emit(dispatcher, 'agentfootprint.context.injected', mkInjection('system-prompt', 'system', 'instructions', 'base'));
-    emit(dispatcher, 'agentfootprint.context.injected', mkInjection('messages', 'user', 'user', 'question'));
-    emit(dispatcher, 'agentfootprint.context.injected', mkInjection('tools', undefined, 'registry', 'weather'));
-    emit(dispatcher, 'agentfootprint.stream.llm_start', { model: 'mock', provider: 'mock', systemPromptChars: 0, messagesCount: 1, toolsCount: 1 });
-    emit(dispatcher, 'agentfootprint.stream.llm_end', { content: 'ok', toolCallCount: 0, usage: { input: 1, output: 1 }, stopReason: 'stop' });
+    emit(
+      dispatcher,
+      'agentfootprint.context.injected',
+      mkInjection('system-prompt', 'system', 'instructions', 'base'),
+    );
+    emit(
+      dispatcher,
+      'agentfootprint.context.injected',
+      mkInjection('messages', 'user', 'user', 'question'),
+    );
+    emit(
+      dispatcher,
+      'agentfootprint.context.injected',
+      mkInjection('tools', undefined, 'registry', 'weather'),
+    );
+    emit(dispatcher, 'agentfootprint.stream.llm_start', {
+      model: 'mock',
+      provider: 'mock',
+      systemPromptChars: 0,
+      messagesCount: 1,
+      toolsCount: 1,
+    });
+    emit(dispatcher, 'agentfootprint.stream.llm_end', {
+      content: 'ok',
+      toolCallCount: 0,
+      usage: { input: 1, output: 1 },
+      stopReason: 'stop',
+    });
 
     const call = llmCallSteps(getGraph())[0];
     const slots = new Set((call.injections ?? []).map((i) => i.slot));

@@ -77,22 +77,10 @@ export {
 } from './buildInjectionEngineSubflow.js';
 
 // Sugar factories — Ships four; more flavors planned (RAG / Memory / Guardrail)
-export {
-  defineInstruction,
-  type DefineInstructionOptions,
-} from './factories/defineInstruction.js';
+export { defineInstruction, type DefineInstructionOptions } from './factories/defineInstruction.js';
 
-export {
-  defineSkill,
-  type DefineSkillOptions,
-} from './factories/defineSkill.js';
+export { defineSkill, type DefineSkillOptions } from './factories/defineSkill.js';
 
-export {
-  defineSteering,
-  type DefineSteeringOptions,
-} from './factories/defineSteering.js';
+export { defineSteering, type DefineSteeringOptions } from './factories/defineSteering.js';
 
-export {
-  defineFact,
-  type DefineFactOptions,
-} from './factories/defineFact.js';
+export { defineFact, type DefineFactOptions } from './factories/defineFact.js';

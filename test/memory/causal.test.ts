@@ -206,8 +206,14 @@ describe('CAUSAL memory — integration', () => {
       .memory(memory)
       .build();
 
-    await agent.run({ message: 'tenant A question', identity: { tenant: 'a', conversationId: 'a-1' } });
-    await agent.run({ message: 'tenant B question', identity: { tenant: 'b', conversationId: 'b-1' } });
+    await agent.run({
+      message: 'tenant A question',
+      identity: { tenant: 'a', conversationId: 'a-1' },
+    });
+    await agent.run({
+      message: 'tenant B question',
+      identity: { tenant: 'b', conversationId: 'b-1' },
+    });
 
     const a = await store.list({ tenant: 'a', conversationId: 'a-1' });
     const b = await store.list({ tenant: 'b', conversationId: 'b-1' });

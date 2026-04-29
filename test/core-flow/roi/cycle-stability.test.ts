@@ -22,10 +22,7 @@ function llm(reply: string) {
 
 describe('ROI — Sequence reused across N runs', () => {
   it('produces consistent output for N=20 runs', async () => {
-    const seq = Sequence.create()
-      .step('a', llm('first'))
-      .step('b', llm('second'))
-      .build();
+    const seq = Sequence.create().step('a', llm('first')).step('b', llm('second')).build();
 
     for (let i = 0; i < 20; i++) {
       const out = await seq.run({ message: `r${i}` });
@@ -98,10 +95,7 @@ describe('ROI — Loop reused across N runs', () => {
 
 describe('ROI — nested composition reused across N runs', () => {
   it('Loop wrapping Sequence runs cleanly 10 times in a row', async () => {
-    const inner = Sequence.create()
-      .step('s1', llm('A'))
-      .step('s2', llm('B'))
-      .build();
+    const inner = Sequence.create().step('s1', llm('A')).step('s2', llm('B')).build();
     const loop = Loop.create().repeat(inner).times(2).build();
 
     for (let i = 0; i < 10; i++) {

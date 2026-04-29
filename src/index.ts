@@ -232,11 +232,7 @@ export {
 // Adapters — LLM providers
 // `mock(...)` is the lowercase factory equivalent to `new MockProvider(...)`.
 // `anthropic(...)` is the real Claude provider via `@anthropic-ai/sdk`.
-export {
-  MockProvider,
-  mock,
-  type MockProviderOptions,
-} from './adapters/llm/MockProvider.js';
+export { MockProvider, mock, type MockProviderOptions } from './adapters/llm/MockProvider.js';
 export {
   anthropic,
   AnthropicProvider,
@@ -270,12 +266,7 @@ export {
 } from './adapters/llm/createProvider.js';
 
 // Streaming helpers — agent events → SSE for browser delivery.
-export {
-  toSSE,
-  SSEFormatter,
-  encodeSSE,
-  type ToSSEOptions,
-} from './stream.js';
+export { toSSE, SSEFormatter, encodeSSE, type ToSSEOptions } from './stream.js';
 
 // Injection Engine — the unifying primitive of context engineering.
 // One Injection type, four sugar factories, one engine subflow.
@@ -300,7 +291,6 @@ export {
   defineFact,
   type DefineFactOptions,
 } from './lib/injection-engine/index.js';
-
 
 // Patterns — factory functions composing primitives + core-flow into
 // well-known agent patterns from the research literature.

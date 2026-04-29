@@ -21,7 +21,7 @@ function meta() {
   };
 }
 
-describe('ROI — listener lifecycle doesn\'t leak', () => {
+describe("ROI — listener lifecycle doesn't leak", () => {
   it('100k subscribe/unsubscribe cycles result in zero residual listeners', () => {
     const d = new EventDispatcher();
     for (let i = 0; i < 100_000; i++) {

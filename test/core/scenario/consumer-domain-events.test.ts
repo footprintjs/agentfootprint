@@ -197,9 +197,7 @@ describe('consumer-domain events — security', () => {
       /* no-op */
     });
     // Dispatcher passes the payload reference directly; no serialization.
-    expect(() =>
-      llm.emit('agentfootprint.eval.score', { payload: circular }),
-    ).not.toThrow();
+    expect(() => llm.emit('agentfootprint.eval.score', { payload: circular })).not.toThrow();
   });
 });
 

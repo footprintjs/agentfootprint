@@ -305,12 +305,7 @@ export interface SkillDeactivatedPayload {
 
 // permission.* (3)
 export interface PermissionCheckPayload {
-  readonly capability:
-    | 'tool_call'
-    | 'memory_read'
-    | 'memory_write'
-    | 'external_net'
-    | 'user_data';
+  readonly capability: 'tool_call' | 'memory_read' | 'memory_write' | 'external_net' | 'user_data';
   readonly actor: string;
   readonly target?: string;
   readonly result: 'allow' | 'deny' | 'gate_open';

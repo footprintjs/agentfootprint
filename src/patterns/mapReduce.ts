@@ -19,19 +19,11 @@
  */
 
 import type { LLMProvider } from '../adapters/types.js';
-import {
-  flowChart,
-  FlowChartExecutor,
-  type FlowChart,
-  type TypedScope,
-} from 'footprintjs';
+import { flowChart, FlowChartExecutor, type FlowChart, type TypedScope } from 'footprintjs';
 import { LLMCall } from '../core/LLMCall.js';
 import { RunnerBase } from '../core/RunnerBase.js';
 import type { Runner } from '../core/runner.js';
-import type {
-  MergeFn,
-  MergeWithLLMOptions,
-} from '../core-flow/Parallel.js';
+import type { MergeFn, MergeWithLLMOptions } from '../core-flow/Parallel.js';
 import { Parallel } from '../core-flow/Parallel.js';
 import { Sequence } from '../core-flow/Sequence.js';
 
@@ -156,11 +148,7 @@ class ShardSplitRunner extends RunnerBase<{ message: string }, string> {
       },
       'split',
     )
-      .addFunction(
-        'Return',
-        (scope: TypedScope<{ packed: string }>) => scope.packed,
-        'return',
-      )
+      .addFunction('Return', (scope: TypedScope<{ packed: string }>) => scope.packed, 'return')
       .build();
   }
 
@@ -222,11 +210,7 @@ class ShardBranchRunner extends RunnerBase<{ message: string }, string> {
           result: typeof sfOutput === 'string' ? sfOutput : '',
         }),
       })
-      .addFunction(
-        'Return',
-        (scope: TypedScope<WrapperState>) => scope.result,
-        'return',
-      )
+      .addFunction('Return', (scope: TypedScope<WrapperState>) => scope.result, 'return')
       .build();
   }
 

@@ -60,7 +60,13 @@ describe('selectThinkingState — T1: no events', () => {
 describe('selectThinkingState — T2: llm.start without tokens', () => {
   it('returns "idle" state', () => {
     const out = selectThinkingState([
-      evt('agentfootprint.stream.llm_start', { iteration: 1, provider: 'm', model: 'm', messagesCount: 1, toolsCount: 0 }),
+      evt('agentfootprint.stream.llm_start', {
+        iteration: 1,
+        provider: 'm',
+        model: 'm',
+        messagesCount: 1,
+        toolsCount: 0,
+      }),
     ]);
     expect(out).toEqual({ state: 'idle', vars: {} });
   });
@@ -85,8 +91,17 @@ describe('selectThinkingState — T4: tool active', () => {
   it('returns "tool" with the toolName when tool.start has no matching end', () => {
     const out = selectThinkingState([
       evt('agentfootprint.stream.llm_start', {}),
-      evt('agentfootprint.stream.llm_end', { toolCallCount: 1, usage: { input: 1, output: 1 }, stopReason: 'tool_use', durationMs: 1 }),
-      evt('agentfootprint.stream.tool_start', { toolName: 'weather', toolCallId: 'c1', args: { city: 'SF' } }),
+      evt('agentfootprint.stream.llm_end', {
+        toolCallCount: 1,
+        usage: { input: 1, output: 1 },
+        stopReason: 'tool_use',
+        durationMs: 1,
+      }),
+      evt('agentfootprint.stream.tool_start', {
+        toolName: 'weather',
+        toolCallId: 'c1',
+        args: { city: 'SF' },
+      }),
     ]);
     expect(out?.state).toBe('tool');
     expect(out?.toolName).toBe('weather');
@@ -100,7 +115,12 @@ describe('selectThinkingState — T5: tool.end clears tool state', () => {
   it('after tool.end with no further llm.start, returns null (run quiescent between calls)', () => {
     const out = selectThinkingState([
       evt('agentfootprint.stream.llm_start', {}),
-      evt('agentfootprint.stream.llm_end', { toolCallCount: 1, usage: { input: 1, output: 1 }, stopReason: 'tool_use', durationMs: 1 }),
+      evt('agentfootprint.stream.llm_end', {
+        toolCallCount: 1,
+        usage: { input: 1, output: 1 },
+        stopReason: 'tool_use',
+        durationMs: 1,
+      }),
       evt('agentfootprint.stream.tool_start', { toolName: 'weather', toolCallId: 'c1', args: {} }),
       evt('agentfootprint.stream.tool_end', { toolCallId: 'c1', result: '72F', durationMs: 1 }),
     ]);
@@ -114,7 +134,12 @@ describe('selectThinkingState — T6: llm.end terminal', () => {
   it('returns null after llm.end with no tool active', () => {
     const out = selectThinkingState([
       evt('agentfootprint.stream.llm_start', {}),
-      evt('agentfootprint.stream.llm_end', { toolCallCount: 0, usage: { input: 1, output: 1 }, stopReason: 'stop', durationMs: 1 }),
+      evt('agentfootprint.stream.llm_end', {
+        toolCallCount: 0,
+        usage: { input: 1, output: 1 },
+        stopReason: 'stop',
+        durationMs: 1,
+      }),
     ]);
     expect(out).toBeNull();
   });
@@ -125,7 +150,11 @@ describe('selectThinkingState — T6: llm.end terminal', () => {
 describe('selectThinkingState — T7: pause.request active', () => {
   it('returns "paused" with question even if a tool is also "active"', () => {
     const out = selectThinkingState([
-      evt('agentfootprint.stream.tool_start', { toolName: 'askOperator', toolCallId: 'c1', args: {} }),
+      evt('agentfootprint.stream.tool_start', {
+        toolName: 'askOperator',
+        toolCallId: 'c1',
+        args: {},
+      }),
       evt('agentfootprint.pause.request', {
         stage: 'tool-calls',
         reason: 'awaiting human approval',
@@ -142,8 +171,16 @@ describe('selectThinkingState — T7: pause.request active', () => {
 describe('selectThinkingState — T8: pause + resume', () => {
   it('after pause.resume, no longer in "paused" state', () => {
     const out = selectThinkingState([
-      evt('agentfootprint.stream.tool_start', { toolName: 'askOperator', toolCallId: 'c1', args: {} }),
-      evt('agentfootprint.pause.request', { stage: 'tool-calls', reason: 'wait', toolCallId: 'c1' }),
+      evt('agentfootprint.stream.tool_start', {
+        toolName: 'askOperator',
+        toolCallId: 'c1',
+        args: {},
+      }),
+      evt('agentfootprint.pause.request', {
+        stage: 'tool-calls',
+        reason: 'wait',
+        toolCallId: 'c1',
+      }),
       evt('agentfootprint.pause.resume', { pausedDurationMs: 100, hasInput: true }),
     ]);
     // Tool is still active (no tool.end yet) so falls back to 'tool' state.
@@ -156,10 +193,14 @@ describe('selectThinkingState — T8: pause + resume', () => {
 describe('renderThinkingLine — T9: per-tool template fallback', () => {
   it('prefers `tool.<name>` over generic `tool` when present', () => {
     const state = { state: 'tool' as const, toolName: 'weather', vars: { toolName: 'weather' } };
-    const line = renderThinkingLine(state, { appName: 'Chatbot' }, {
-      ...defaultThinkingTemplates,
-      'tool.weather': 'Looking up the weather…',
-    });
+    const line = renderThinkingLine(
+      state,
+      { appName: 'Chatbot' },
+      {
+        ...defaultThinkingTemplates,
+        'tool.weather': 'Looking up the weather…',
+      },
+    );
     expect(line).toBe('Looking up the weather…');
   });
 
@@ -186,10 +227,14 @@ describe('renderThinkingLine — substitution + null contract', () => {
 
   it('consumer can override defaults — full Spanish swap', () => {
     const state = { state: 'idle' as const, vars: {} };
-    const line = renderThinkingLine(state, { appName: 'Chatbot' }, {
-      ...defaultThinkingTemplates,
-      idle: 'Pensando…',
-    });
+    const line = renderThinkingLine(
+      state,
+      { appName: 'Chatbot' },
+      {
+        ...defaultThinkingTemplates,
+        idle: 'Pensando…',
+      },
+    );
     expect(line).toBe('Pensando…');
   });
 });

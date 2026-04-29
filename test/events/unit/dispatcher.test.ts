@@ -8,10 +8,7 @@
 
 import { describe, it, expect, vi } from 'vitest';
 import { EventDispatcher } from '../../../src/events/dispatcher.js';
-import type {
-  AgentfootprintEvent,
-  AgentfootprintEventMap,
-} from '../../../src/events/registry.js';
+import type { AgentfootprintEvent, AgentfootprintEventMap } from '../../../src/events/registry.js';
 import type { EventMeta } from '../../../src/events/types.js';
 
 function fakeMeta(overrides: Partial<EventMeta> = {}): EventMeta {
@@ -73,9 +70,7 @@ describe('EventDispatcher — on/dispatch', () => {
     d.on('agentfootprint.agent.turn_start', () => order.push(1));
     d.on('agentfootprint.agent.turn_start', () => order.push(2));
     d.on('agentfootprint.agent.turn_start', () => order.push(3));
-    d.dispatch(
-      makeEvent('agentfootprint.agent.turn_start', { turnIndex: 0, userPrompt: 'q' }),
-    );
+    d.dispatch(makeEvent('agentfootprint.agent.turn_start', { turnIndex: 0, userPrompt: 'q' }));
     expect(order).toEqual([1, 2, 3]);
   });
 });
@@ -199,9 +194,7 @@ describe('EventDispatcher — AbortSignal', () => {
     const ac = new AbortController();
     d.on('agentfootprint.agent.turn_start', fn, { signal: ac.signal });
     ac.abort();
-    d.dispatch(
-      makeEvent('agentfootprint.agent.turn_start', { turnIndex: 0, userPrompt: 'q' }),
-    );
+    d.dispatch(makeEvent('agentfootprint.agent.turn_start', { turnIndex: 0, userPrompt: 'q' }));
     expect(fn).not.toHaveBeenCalled();
   });
 
@@ -211,9 +204,7 @@ describe('EventDispatcher — AbortSignal', () => {
     const ac = new AbortController();
     ac.abort();
     d.on('agentfootprint.agent.turn_start', fn, { signal: ac.signal });
-    d.dispatch(
-      makeEvent('agentfootprint.agent.turn_start', { turnIndex: 0, userPrompt: 'q' }),
-    );
+    d.dispatch(makeEvent('agentfootprint.agent.turn_start', { turnIndex: 0, userPrompt: 'q' }));
     expect(fn).not.toHaveBeenCalled();
   });
 });
@@ -227,9 +218,7 @@ describe('EventDispatcher — non-blocking semantics', () => {
       // The dispatcher MUST NOT await it; subsequent code runs immediately.
       return new Promise((resolve) => setTimeout(resolve, 50)) as unknown as void;
     });
-    d.dispatch(
-      makeEvent('agentfootprint.agent.turn_start', { turnIndex: 0, userPrompt: 'q' }),
-    );
+    d.dispatch(makeEvent('agentfootprint.agent.turn_start', { turnIndex: 0, userPrompt: 'q' }));
     tookNext = true;
     expect(tookNext).toBe(true); // Reached immediately — dispatcher didn't block.
   });
@@ -241,9 +230,7 @@ describe('EventDispatcher — non-blocking semantics', () => {
       throw new Error('boom');
     });
     d.on('agentfootprint.agent.turn_start', ok);
-    d.dispatch(
-      makeEvent('agentfootprint.agent.turn_start', { turnIndex: 0, userPrompt: 'q' }),
-    );
+    d.dispatch(makeEvent('agentfootprint.agent.turn_start', { turnIndex: 0, userPrompt: 'q' }));
     expect(ok).toHaveBeenCalledTimes(1);
   });
 });

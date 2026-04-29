@@ -6,14 +6,8 @@
  *          breakdown. Kept co-located to avoid cross-package import churn.
  */
 
-import type {
-  ContextSource,
-  ContextSlot,
-} from '../../events/types.js';
-import type {
-  InjectionRecord,
-  SlotComposition,
-} from '../../recorders/core/types.js';
+import type { ContextSource, ContextSlot } from '../../events/types.js';
+import type { InjectionRecord, SlotComposition } from '../../recorders/core/types.js';
 
 /** Non-cryptographic stable hash — sufficient for InjectionRecord dedup. */
 export function fnv1a(input: string): string {

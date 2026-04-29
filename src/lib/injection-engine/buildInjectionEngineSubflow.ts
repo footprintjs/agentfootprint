@@ -32,11 +32,7 @@
 import { flowChart } from 'footprintjs';
 import type { FlowChart, TypedScope } from 'footprintjs';
 import { evaluateInjections } from './evaluator.js';
-import {
-  projectActiveInjection,
-  type Injection,
-  type InjectionContext,
-} from './types.js';
+import { projectActiveInjection, type Injection, type InjectionContext } from './types.js';
 
 export interface InjectionEngineConfig {
   /**
@@ -55,9 +51,7 @@ interface InjectionEngineState {
  * Build the Injection Engine subflow. One stage: `evaluate`.
  * Pure function over the injection list + the iteration context.
  */
-export function buildInjectionEngineSubflow(
-  config: InjectionEngineConfig,
-): FlowChart {
+export function buildInjectionEngineSubflow(config: InjectionEngineConfig): FlowChart {
   const injections = config.injections;
 
   return flowChart<InjectionEngineState>(
@@ -106,9 +100,7 @@ export function buildInjectionEngineSubflow(
 }
 
 /** Count active injections by trigger kind (observability metric). */
-function countTriggerKinds(
-  active: readonly Injection[],
-): Readonly<Record<string, number>> {
+function countTriggerKinds(active: readonly Injection[]): Readonly<Record<string, number>> {
   const counts: Record<string, number> = {};
   for (const inj of active) {
     counts[inj.trigger.kind] = (counts[inj.trigger.kind] ?? 0) + 1;

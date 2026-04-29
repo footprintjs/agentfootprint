@@ -7,14 +7,8 @@
 
 import { describe, expect, it, vi } from 'vitest';
 
-import {
-  anthropic,
-  AnthropicProvider,
-} from '../../../src/adapters/llm/AnthropicProvider.js';
-import type {
-  LLMRequest,
-  LLMMessage,
-} from '../../../src/adapters/types.js';
+import { anthropic, AnthropicProvider } from '../../../src/adapters/llm/AnthropicProvider.js';
+import type { LLMRequest, LLMMessage } from '../../../src/adapters/types.js';
 
 // ─── Fake Anthropic SDK shape ──────────────────────────────────────
 
@@ -44,11 +38,14 @@ function makeFakeClient(
       }),
       stream: vi.fn((params: unknown) => {
         recorder?.params.push(params);
-        const final = typeof responses === 'function'
-          ? responses(params)
-          : responses[i++] ?? responses[responses.length - 1]!;
+        const final =
+          typeof responses === 'function'
+            ? responses(params)
+            : responses[i++] ?? responses[responses.length - 1]!;
         // SDK stream that yields one text-delta event per text block, then finalMessage().
-        const textBlocks = final.content.filter((b) => b.type === 'text') as Array<{ text: string }>;
+        const textBlocks = final.content.filter((b) => b.type === 'text') as Array<{
+          text: string;
+        }>;
         const events = textBlocks.flatMap((b) =>
           b.text.split('').map((ch) => ({
             type: 'content_block_delta',
@@ -278,12 +275,18 @@ describe('AnthropicProvider — security', () => {
         create: async () => {
           throw Object.assign(new Error('401 unauthorized'), { status: 401 });
         },
-        stream: () => { throw new Error('not used'); },
+        stream: () => {
+          throw new Error('not used');
+        },
       },
     };
     const p = anthropic({ _client: broken as never });
     let caught: Error | undefined;
-    try { await p.complete(baseRequest); } catch (e) { caught = e as Error; }
+    try {
+      await p.complete(baseRequest);
+    } catch (e) {
+      caught = e as Error;
+    }
     expect(caught?.name).toBe('AnthropicProviderError');
     expect(caught?.message).toContain('401 unauthorized');
     expect((caught as { status?: number }).status).toBe(401);
@@ -296,7 +299,7 @@ describe('AnthropicProvider — security', () => {
       ...baseRequest,
       messages: [
         { role: 'user', content: 'q' },
-        { role: 'tool', content: 'orphan', /* no toolCallId */ },
+        { role: 'tool', content: 'orphan' /* no toolCallId */ },
       ],
     });
     const params = recorder.params[0] as { messages: Array<{ content: unknown }> };

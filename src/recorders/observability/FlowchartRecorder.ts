@@ -41,16 +41,9 @@
  */
 
 import type { CombinedRecorder } from 'footprintjs';
-import type {
-  AgentfootprintEvent,
-  AgentfootprintEventType,
-} from '../../events/registry.js';
+import type { AgentfootprintEvent, AgentfootprintEventType } from '../../events/registry.js';
 import type { EventDispatcher } from '../../events/dispatcher.js';
-import {
-  BoundaryRecorder,
-  boundaryRecorder,
-  type DomainSubflowEvent,
-} from './BoundaryRecorder.js';
+import { BoundaryRecorder, boundaryRecorder, type DomainSubflowEvent } from './BoundaryRecorder.js';
 
 // ─── Public types (preserved shape — Lens consumes these today) ─────
 
@@ -64,13 +57,13 @@ import {
 export interface StepNode {
   readonly id: string;
   readonly kind:
-    | 'user->llm'         // input arrived at the LLM (first iteration)
-    | 'llm->tool'         // LLM requested tool execution
-    | 'tool->llm'         // tool result returned, next LLM call begins
-    | 'llm->user'         // terminal LLM response (no tool calls remaining)
-    | 'subflow'           // composition boundary (root run + non-internal subflows)
-    | 'fork-branch'       // one branch of a Parallel fan-out
-    | 'decision-branch';  // chosen branch of a Conditional
+    | 'user->llm' // input arrived at the LLM (first iteration)
+    | 'llm->tool' // LLM requested tool execution
+    | 'tool->llm' // tool result returned, next LLM call begins
+    | 'llm->user' // terminal LLM response (no tool calls remaining)
+    | 'subflow' // composition boundary (root run + non-internal subflows)
+    | 'fork-branch' // one branch of a Parallel fan-out
+    | 'decision-branch'; // chosen branch of a Conditional
   readonly label: string;
   readonly startOffsetMs: number;
   readonly endOffsetMs?: number;
@@ -256,13 +249,34 @@ export function attachFlowchart(
 function wrapWithEmit(boundary: BoundaryRecorder, afterEach: () => void): CombinedRecorder {
   return {
     id: boundary.id,
-    onRunStart: (e) => { boundary.onRunStart!(e); afterEach(); },
-    onRunEnd: (e) => { boundary.onRunEnd!(e); afterEach(); },
-    onSubflowEntry: (e) => { boundary.onSubflowEntry!(e); afterEach(); },
-    onSubflowExit: (e) => { boundary.onSubflowExit!(e); afterEach(); },
-    onFork: (e) => { boundary.onFork!(e); afterEach(); },
-    onDecision: (e) => { boundary.onDecision!(e); afterEach(); },
-    onLoop: (e) => { boundary.onLoop!(e); afterEach(); },
+    onRunStart: (e) => {
+      boundary.onRunStart!(e);
+      afterEach();
+    },
+    onRunEnd: (e) => {
+      boundary.onRunEnd!(e);
+      afterEach();
+    },
+    onSubflowEntry: (e) => {
+      boundary.onSubflowEntry!(e);
+      afterEach();
+    },
+    onSubflowExit: (e) => {
+      boundary.onSubflowExit!(e);
+      afterEach();
+    },
+    onFork: (e) => {
+      boundary.onFork!(e);
+      afterEach();
+    },
+    onDecision: (e) => {
+      boundary.onDecision!(e);
+      afterEach();
+    },
+    onLoop: (e) => {
+      boundary.onLoop!(e);
+      afterEach();
+    },
   };
 }
 
@@ -479,15 +493,13 @@ export function buildStepGraph(boundary: BoundaryRecorder): StepGraph {
         // Flush buffered slot boundaries onto this LLM step. Slot
         // subflows that fired since the previous LLM end (or run start)
         // are attributed to THIS call.
-        const slotBoundaries = Object.keys(pendingSlotBoundaries).length > 0
-          ? pendingSlotBoundaries
-          : undefined;
+        const slotBoundaries =
+          Object.keys(pendingSlotBoundaries).length > 0 ? pendingSlotBoundaries : undefined;
         pendingSlotBoundaries = {};
         // BoundaryRecorder uses the unicode arrow `→` for the typed
         // `actorArrow` field; StepNode.kind uses ASCII `->` for legacy
         // compatibility. Map between them.
-        const stepKind: StepNode['kind'] =
-          e.actorArrow === 'tool→llm' ? 'tool->llm' : 'user->llm';
+        const stepKind: StepNode['kind'] = e.actorArrow === 'tool→llm' ? 'tool->llm' : 'user->llm';
         const node: StepNode = {
           id,
           kind: stepKind,
@@ -630,10 +642,7 @@ function connectAdjacent(nodes: StepNode[], edges: StepEdge[]): void {
 
 function isReActKind(kind: StepNode['kind']): boolean {
   return (
-    kind === 'user->llm' ||
-    kind === 'llm->tool' ||
-    kind === 'tool->llm' ||
-    kind === 'llm->user'
+    kind === 'user->llm' || kind === 'llm->tool' || kind === 'tool->llm' || kind === 'llm->user'
   );
 }
 
@@ -650,7 +659,9 @@ function findLastByKind(
 /** Map a `slotKind` (kebab-case) to the camelCase property name on
  *  `StepNode.slotBoundaries`. Single source — change here if either
  *  side ever renames. */
-function slotPropName(slotKind: 'system-prompt' | 'messages' | 'tools'): 'systemPrompt' | 'messages' | 'tools' {
+function slotPropName(
+  slotKind: 'system-prompt' | 'messages' | 'tools',
+): 'systemPrompt' | 'messages' | 'tools' {
   switch (slotKind) {
     case 'system-prompt':
       return 'systemPrompt';

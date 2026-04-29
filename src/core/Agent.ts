@@ -267,10 +267,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     return this.buildChart();
   }
 
-  async run(
-    input: AgentInput,
-    options?: RunOptions,
-  ): Promise<AgentOutput | RunnerPauseOutcome> {
+  async run(input: AgentInput, options?: RunOptions): Promise<AgentOutput | RunnerPauseOutcome> {
     const executor = this.createExecutor();
     const result = await executor.run({
       input: {
@@ -310,24 +307,14 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     const dispatcher = this.getDispatcher();
     const getRunCtx = (): RunContext => this.currentRunContext;
 
-    executor.attachCombinedRecorder(
-      new ContextRecorder({ dispatcher, getRunContext: getRunCtx }),
-    );
-    executor.attachCombinedRecorder(
-      streamRecorder({ dispatcher, getRunContext: getRunCtx }),
-    );
-    executor.attachCombinedRecorder(
-      agentRecorder({ dispatcher, getRunContext: getRunCtx }),
-    );
+    executor.attachCombinedRecorder(new ContextRecorder({ dispatcher, getRunContext: getRunCtx }));
+    executor.attachCombinedRecorder(streamRecorder({ dispatcher, getRunContext: getRunCtx }));
+    executor.attachCombinedRecorder(agentRecorder({ dispatcher, getRunContext: getRunCtx }));
     if (this.pricingTable) {
-      executor.attachCombinedRecorder(
-        costRecorder({ dispatcher, getRunContext: getRunCtx }),
-      );
+      executor.attachCombinedRecorder(costRecorder({ dispatcher, getRunContext: getRunCtx }));
     }
     if (this.permissionChecker) {
-      executor.attachCombinedRecorder(
-        permissionRecorder({ dispatcher, getRunContext: getRunCtx }),
-      );
+      executor.attachCombinedRecorder(permissionRecorder({ dispatcher, getRunContext: getRunCtx }));
     }
     // Always-on bridges for consumer-emitted domain events.
     executor.attachCombinedRecorder(evalRecorder({ dispatcher, getRunContext: getRunCtx }));
@@ -360,7 +347,8 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // (registryByName + toolSchemas redefined below using
     // `augmentedRegistry` which adds the auto-attached `read_skill`
     // tool when Skills are registered.)
-    const _legacyRegistry = registry; void _legacyRegistry;
+    const _legacyRegistry = registry;
+    void _legacyRegistry;
     const maxIterations = this.maxIterations;
     const pricingTable = this.pricingTable;
     const costBudget = this.costBudget;
@@ -373,8 +361,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       // Default identity uses the runId so multi-run isolation works
       // without consumer changes; explicit identity (multi-tenant)
       // overrides via `agent.run({ identity })`.
-      scope.runIdentity =
-        args.identity ?? { conversationId: this.currentRunContext?.runId ?? 'default' };
+      scope.runIdentity = args.identity ?? {
+        conversationId: this.currentRunContext?.runId ?? 'default',
+      };
       scope.newMessages = [];
       scope.turnNumber = 1;
       // Permissive default — explicit cap will land when PricingTable
@@ -433,9 +422,8 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
         skillToolEntries.push({ name: tool.schema.name, tool });
       }
     }
-    const readSkillEntries: readonly ToolRegistryEntry[] = skills.length > 0
-      ? [{ name: 'read_skill', tool: buildReadSkillTool(skills) }]
-      : [];
+    const readSkillEntries: readonly ToolRegistryEntry[] =
+      skills.length > 0 ? [{ name: 'read_skill', tool: buildReadSkillTool(skills) }] : [];
     const augmentedRegistry: readonly ToolRegistryEntry[] = [
       ...registry,
       ...readSkillEntries,
@@ -456,9 +444,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       seenNames.add(entry.name);
     }
 
-    const registryByName = new Map(
-      augmentedRegistry.map((e) => [e.name, e.tool] as const),
-    );
+    const registryByName = new Map(augmentedRegistry.map((e) => [e.name, e.tool] as const));
     const toolSchemas = augmentedRegistry.map((e) => e.tool.schema);
 
     const injectionEngineSubflow = buildInjectionEngineSubflow({
@@ -481,8 +467,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     const callLLM = async (scope: TypedScope<AgentState>) => {
       const systemPromptInjections =
         (scope.systemPromptInjections as readonly InjectionRecord[]) ?? [];
-      const messagesInjections =
-        (scope.messagesInjections as readonly InjectionRecord[]) ?? [];
+      const messagesInjections = (scope.messagesInjections as readonly InjectionRecord[]) ?? [];
       const iteration = scope.iteration as number;
 
       const systemPrompt = systemPromptInjections
@@ -491,11 +476,13 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
         .join('\n\n');
 
       const messages = messagesInjections
-        .map((r): LLMMessage => ({
-          role: r.asRole ?? 'user',
-          content: r.rawContent ?? r.contentSummary,
-          ...(r.sourceId !== undefined && { toolCallId: r.sourceId }),
-        }))
+        .map(
+          (r): LLMMessage => ({
+            role: r.asRole ?? 'user',
+            content: r.rawContent ?? r.contentSummary,
+            ...(r.sourceId !== undefined && { toolCallId: r.sourceId }),
+          }),
+        )
         .filter((m) => m.content.length > 0);
 
       typedEmit(scope, 'agentfootprint.stream.llm_start', {
@@ -589,8 +576,8 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
           chosen === 'tool-calls'
             ? `LLM requested ${toolCalls.length} tool call(s)`
             : iteration >= scope.maxIterations
-              ? 'maxIterations reached — forcing final'
-              : 'LLM produced no tool calls — final answer',
+            ? 'maxIterations reached — forcing final'
+            : 'LLM produced no tool calls — final answer',
       });
 
       return chosen;
@@ -769,8 +756,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
         const toolCallId = scope.pausedToolCallId as string;
         const toolName = scope.pausedToolName as string;
         const startMs = scope.pausedToolStartMs as number;
-        const resultStr =
-          typeof input === 'string' ? input : safeStringify(input);
+        const resultStr = typeof input === 'string' ? input : safeStringify(input);
         const newHistory: LLMMessage[] = [
           ...(scope.history as readonly LLMMessage[]),
           {
@@ -861,19 +847,20 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       }
     }
     const finalBranchChart = finalBranchBuilder
-      .addFunction(
-        'BreakFinal',
-        breakFinalStage,
-        'break-final',
-        'Terminate the ReAct loop',
-      )
+      .addFunction('BreakFinal', breakFinalStage, 'break-final', 'Terminate the ReAct loop')
       .build();
 
     // Description prefix `Agent:` is a taxonomy marker — consumers
     // (Lens + FlowchartRecorder) detect Agent-primitive subflows via
     // this prefix and flag them as true agent boundaries (separate
     // from LLMCall subflows which use `LLMCall:` prefix).
-    let builder = flowChart<AgentState>('Seed', seed, STAGE_IDS.SEED, undefined, 'Agent: ReAct loop');
+    let builder = flowChart<AgentState>(
+      'Seed',
+      seed,
+      STAGE_IDS.SEED,
+      undefined,
+      'Agent: ReAct loop',
+    );
 
     // Memory READ subflows — mounted between Seed and InjectionEngine
     // for TURN_START timing (default). Each memory writes to its own
@@ -899,19 +886,24 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       // the slot subflows to consume. Skipped if no injections were
       // registered (no observable difference, just one more no-op
       // subflow boundary).
-      .addSubFlowChartNext(SUBFLOW_IDS.INJECTION_ENGINE, injectionEngineSubflow, 'Injection Engine', {
-        inputMapper: (parent) => ({
-          iteration: parent.iteration as number | undefined,
-          userMessage: parent.userMessage as string | undefined,
-          history: parent.history as readonly LLMMessage[] | undefined,
-          lastToolResult: parent.lastToolResult as
-            | { toolName: string; result: string }
-            | undefined,
-          activatedInjectionIds:
-            (parent.activatedInjectionIds as readonly string[] | undefined) ?? [],
-        }),
-        outputMapper: (sf) => ({ activeInjections: sf.activeInjections }),
-      })
+      .addSubFlowChartNext(
+        SUBFLOW_IDS.INJECTION_ENGINE,
+        injectionEngineSubflow,
+        'Injection Engine',
+        {
+          inputMapper: (parent) => ({
+            iteration: parent.iteration as number | undefined,
+            userMessage: parent.userMessage as string | undefined,
+            history: parent.history as readonly LLMMessage[] | undefined,
+            lastToolResult: parent.lastToolResult as
+              | { toolName: string; result: string }
+              | undefined,
+            activatedInjectionIds:
+              (parent.activatedInjectionIds as readonly string[] | undefined) ?? [],
+          }),
+          outputMapper: (sf) => ({ activeInjections: sf.activeInjections }),
+        },
+      )
       .addSubFlowChartNext(SUBFLOW_IDS.SYSTEM_PROMPT, systemPromptSubflow, 'System Prompt', {
         inputMapper: (parent) => ({
           userMessage: parent.userMessage as string | undefined,
@@ -943,31 +935,32 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       .addFunction('IterationStart', iterationStart, 'iteration-start', 'Iteration begin marker')
       .addFunction('CallLLM', callLLM, STAGE_IDS.CALL_LLM, 'LLM invocation')
       .addDeciderFunction('Route', routeDecider, SUBFLOW_IDS.ROUTE, 'ReAct routing')
-        .addPausableFunctionBranch('tool-calls', 'ToolCalls', toolCallsHandler, 'Tool execution (pausable via pauseHere)')
-        .addSubFlowChartBranch('final', finalBranchChart, 'Final', {
-          // Pass through the read-only state the sub-chart needs;
-          // OMIT keys the sub-chart writes (finalContent, newMessages)
-          // — passing those via inputMapper would freeze them as args.
-          inputMapper: (parent) => {
-            const {
-              finalContent: _f,
-              newMessages: _nm,
-              ...rest
-            } = parent;
-            void _f;
-            void _nm;
-            return rest;
-          },
-          outputMapper: (sf) => ({
-            finalContent: sf.finalContent as string,
-          }),
-          // BreakFinal's $break() must reach the outer loopTo so the
-          // ReAct iteration terminates; without this the inner break
-          // only exits the sub-chart and the outer loop continues.
-          propagateBreak: true,
-        })
-        .setDefault('final')
-        .end()
+      .addPausableFunctionBranch(
+        'tool-calls',
+        'ToolCalls',
+        toolCallsHandler,
+        'Tool execution (pausable via pauseHere)',
+      )
+      .addSubFlowChartBranch('final', finalBranchChart, 'Final', {
+        // Pass through the read-only state the sub-chart needs;
+        // OMIT keys the sub-chart writes (finalContent, newMessages)
+        // — passing those via inputMapper would freeze them as args.
+        inputMapper: (parent) => {
+          const { finalContent: _f, newMessages: _nm, ...rest } = parent;
+          void _f;
+          void _nm;
+          return rest;
+        },
+        outputMapper: (sf) => ({
+          finalContent: sf.finalContent as string,
+        }),
+        // BreakFinal's $break() must reach the outer loopTo so the
+        // ReAct iteration terminates; without this the inner break
+        // only exits the sub-chart and the outer loop continues.
+        propagateBreak: true,
+      })
+      .setDefault('final')
+      .end()
       .loopTo(SUBFLOW_IDS.MESSAGES);
 
     return builder.build();

@@ -69,18 +69,12 @@ export class Conditional extends RunnerBase<ConditionalInput, ConditionalOutput>
     compositionPath: [],
   };
 
-  constructor(
-    opts: ConditionalOptions,
-    branches: readonly BranchEntry[],
-    fallbackId: string,
-  ) {
+  constructor(opts: ConditionalOptions, branches: readonly BranchEntry[], fallbackId: string) {
     super();
     this.name = opts.name ?? 'Conditional';
     this.id = opts.id ?? 'conditional';
     if (branches.length < 2) {
-      throw new Error(
-        'Conditional: must have at least one .when() branch plus an .otherwise()',
-      );
+      throw new Error('Conditional: must have at least one .when() branch plus an .otherwise()');
     }
     this.branches = branches;
     this.fallbackId = fallbackId;
@@ -130,18 +124,10 @@ export class Conditional extends RunnerBase<ConditionalInput, ConditionalOutput>
     const dispatcher = this.getDispatcher();
     const getRunCtx = (): RunContext => this.currentRunContext;
 
-    executor.attachCombinedRecorder(
-      new ContextRecorder({ dispatcher, getRunContext: getRunCtx }),
-    );
-    executor.attachCombinedRecorder(
-      streamRecorder({ dispatcher, getRunContext: getRunCtx }),
-    );
-    executor.attachCombinedRecorder(
-      agentRecorder({ dispatcher, getRunContext: getRunCtx }),
-    );
-    executor.attachCombinedRecorder(
-      compositionRecorder({ dispatcher, getRunContext: getRunCtx }),
-    );
+    executor.attachCombinedRecorder(new ContextRecorder({ dispatcher, getRunContext: getRunCtx }));
+    executor.attachCombinedRecorder(streamRecorder({ dispatcher, getRunContext: getRunCtx }));
+    executor.attachCombinedRecorder(agentRecorder({ dispatcher, getRunContext: getRunCtx }));
+    executor.attachCombinedRecorder(compositionRecorder({ dispatcher, getRunContext: getRunCtx }));
     for (const r of this.attachedRecorders) executor.attachCombinedRecorder(r);
     return executor;
   }
@@ -220,19 +206,14 @@ export class Conditional extends RunnerBase<ConditionalInput, ConditionalOutput>
       'Conditional branch selection',
     );
     for (const b of branches) {
-      decList = decList.addSubFlowChartBranch(
-        b.id,
-        b.runner.toFlowChart(),
-        b.name,
-        {
-          inputMapper: (parent) => ({ message: (parent.userMessage as string) ?? '' }),
-          // Branch's string return becomes sfOutput; propagate to parent
-          // as `result` for the Finalize stage to read.
-          outputMapper: (sfOutput) => ({
-            result: typeof sfOutput === 'string' ? sfOutput : '',
-          }),
-        },
-      );
+      decList = decList.addSubFlowChartBranch(b.id, b.runner.toFlowChart(), b.name, {
+        inputMapper: (parent) => ({ message: (parent.userMessage as string) ?? '' }),
+        // Branch's string return becomes sfOutput; propagate to parent
+        // as `result` for the Finalize stage to read.
+        outputMapper: (sfOutput) => ({
+          result: typeof sfOutput === 'string' ? sfOutput : '',
+        }),
+      });
     }
     let builder = decList.setDefault(fallbackId).end();
 

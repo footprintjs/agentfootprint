@@ -6,10 +6,7 @@ import { describe, it, expect, vi } from 'vitest';
 import type { FlowSubflowEvent, WriteEvent } from 'footprintjs';
 import { EventDispatcher } from '../../../../src/events/dispatcher.js';
 import { ContextRecorder } from '../../../../src/recorders/core/ContextRecorder.js';
-import {
-  INJECTION_KEYS,
-  SUBFLOW_IDS,
-} from '../../../../src/conventions.js';
+import { INJECTION_KEYS, SUBFLOW_IDS } from '../../../../src/conventions.js';
 import type { InjectionRecord } from '../../../../src/recorders/core/types.js';
 
 function sf(subflowId: string): FlowSubflowEvent {
@@ -37,7 +34,13 @@ function we(key: string, value: unknown): WriteEvent {
   } as WriteEvent;
 }
 function inj(hash: string): InjectionRecord {
-  return { contentSummary: '', contentHash: hash, slot: 'system-prompt', source: 'skill', reason: '' };
+  return {
+    contentSummary: '',
+    contentHash: hash,
+    slot: 'system-prompt',
+    source: 'skill',
+    reason: '',
+  };
 }
 
 describe('property — N unique injections → N injected events', () => {

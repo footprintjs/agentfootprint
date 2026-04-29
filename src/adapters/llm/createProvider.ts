@@ -28,10 +28,7 @@ import {
   browserAnthropic,
   type BrowserAnthropicProviderOptions,
 } from './BrowserAnthropicProvider.js';
-import {
-  browserOpenai,
-  type BrowserOpenAIProviderOptions,
-} from './BrowserOpenAIProvider.js';
+import { browserOpenai, type BrowserOpenAIProviderOptions } from './BrowserOpenAIProvider.js';
 
 /** Built-in provider kinds. Custom providers don't go through this factory. */
 export type ProviderKind =

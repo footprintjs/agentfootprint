@@ -54,9 +54,7 @@ export function isSlotSubflow(
   id: string,
 ): id is typeof SUBFLOW_IDS.SYSTEM_PROMPT | typeof SUBFLOW_IDS.MESSAGES | typeof SUBFLOW_IDS.TOOLS {
   return (
-    id === SUBFLOW_IDS.SYSTEM_PROMPT ||
-    id === SUBFLOW_IDS.MESSAGES ||
-    id === SUBFLOW_IDS.TOOLS
+    id === SUBFLOW_IDS.SYSTEM_PROMPT || id === SUBFLOW_IDS.MESSAGES || id === SUBFLOW_IDS.TOOLS
   );
 }
 
@@ -107,9 +105,7 @@ export const INJECTION_KEYS = {
 export type InjectionKey = (typeof INJECTION_KEYS)[keyof typeof INJECTION_KEYS];
 
 /** Map a slot to its injection scope key. */
-export function injectionKeyForSlot(
-  slot: 'system-prompt' | 'messages' | 'tools',
-): InjectionKey {
+export function injectionKeyForSlot(slot: 'system-prompt' | 'messages' | 'tools'): InjectionKey {
   switch (slot) {
     case 'system-prompt':
       return INJECTION_KEYS.SYSTEM_PROMPT;
@@ -124,4 +120,3 @@ export function injectionKeyForSlot(
 export function isInjectionKey(key: string): key is InjectionKey {
   return (Object.values(INJECTION_KEYS) as string[]).includes(key);
 }
-

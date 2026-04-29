@@ -7,11 +7,7 @@
 
 import { describe, expect, it, vi } from 'vitest';
 
-import {
-  openai,
-  OpenAIProvider,
-  ollama,
-} from '../../../src/adapters/llm/OpenAIProvider.js';
+import { openai, OpenAIProvider, ollama } from '../../../src/adapters/llm/OpenAIProvider.js';
 import type { LLMRequest, LLMMessage } from '../../../src/adapters/types.js';
 
 // ─── Fake OpenAI SDK ───────────────────────────────────────────────
@@ -44,8 +40,7 @@ function makeFakeClient(
       completions: {
         create: vi.fn((params: { stream?: boolean }) => {
           recorder?.params.push(params);
-          const finalRes =
-            typeof result === 'function' ? result(params) : result;
+          const finalRes = typeof result === 'function' ? result(params) : result;
           if (params.stream) {
             // Synthesize a stream: text deltas per character + final
             // chunk with finish_reason + usage.
@@ -105,9 +100,7 @@ function makeFakeClient(
             events.push({
               id: finalRes.id,
               model: finalRes.model,
-              choices: [
-                { index: 0, delta: {}, finish_reason: finalRes.choices[0]!.finish_reason },
-              ],
+              choices: [{ index: 0, delta: {}, finish_reason: finalRes.choices[0]!.finish_reason }],
               ...(finalRes.usage && { usage: finalRes.usage }),
             });
             return (async function* () {
@@ -200,12 +193,19 @@ describe('OpenAIProvider — scenario (tool round-trip)', () => {
     await p.complete({ ...baseRequest, messages: history });
 
     const params = recorder.params[0] as {
-      messages: Array<{ role: string; content: string | null; tool_calls?: unknown[]; tool_call_id?: string }>;
+      messages: Array<{
+        role: string;
+        content: string | null;
+        tool_calls?: unknown[];
+        tool_call_id?: string;
+      }>;
     };
     const asst = params.messages[1]!;
     expect(asst.role).toBe('assistant');
     expect(asst.tool_calls).toBeDefined();
-    expect((asst.tool_calls as Array<{ id: string; function: { name: string; arguments: string } }>)[0]).toEqual({
+    expect(
+      (asst.tool_calls as Array<{ id: string; function: { name: string; arguments: string } }>)[0],
+    ).toEqual({
       id: 'c1',
       type: 'function',
       function: { name: 'weather', arguments: JSON.stringify({ city: 'SF' }) },
@@ -338,7 +338,11 @@ describe('OpenAIProvider — security', () => {
     };
     const p = openai({ _client: broken as never });
     let caught: Error | undefined;
-    try { await p.complete(baseRequest); } catch (e) { caught = e as Error; }
+    try {
+      await p.complete(baseRequest);
+    } catch (e) {
+      caught = e as Error;
+    }
     expect(caught?.message).toContain('429 rate limit');
     expect(caught?.name).toBe('OpenAIProviderError');
     expect((caught as { status?: number }).status).toBe(429);

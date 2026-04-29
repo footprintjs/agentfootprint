@@ -58,9 +58,7 @@ export type BranchOutcome =
   | { readonly ok: true; readonly value: string }
   | { readonly ok: false; readonly error: string };
 
-export type MergeOutcomesFn = (
-  outcomes: Readonly<Record<string, BranchOutcome>>,
-) => string;
+export type MergeOutcomesFn = (outcomes: Readonly<Record<string, BranchOutcome>>) => string;
 
 export interface MergeWithLLMOptions {
   readonly provider: LLMProvider;
@@ -98,11 +96,7 @@ export class Parallel extends RunnerBase<ParallelInput, ParallelOutput> {
     compositionPath: [],
   };
 
-  constructor(
-    opts: ParallelOptions,
-    branches: readonly BranchEntry[],
-    merge: MergeStrategy,
-  ) {
+  constructor(opts: ParallelOptions, branches: readonly BranchEntry[], merge: MergeStrategy) {
     super();
     this.name = opts.name ?? 'Parallel';
     this.id = opts.id ?? 'parallel';
@@ -157,18 +151,10 @@ export class Parallel extends RunnerBase<ParallelInput, ParallelOutput> {
     const dispatcher = this.getDispatcher();
     const getRunCtx = (): RunContext => this.currentRunContext;
 
-    executor.attachCombinedRecorder(
-      new ContextRecorder({ dispatcher, getRunContext: getRunCtx }),
-    );
-    executor.attachCombinedRecorder(
-      streamRecorder({ dispatcher, getRunContext: getRunCtx }),
-    );
-    executor.attachCombinedRecorder(
-      agentRecorder({ dispatcher, getRunContext: getRunCtx }),
-    );
-    executor.attachCombinedRecorder(
-      compositionRecorder({ dispatcher, getRunContext: getRunCtx }),
-    );
+    executor.attachCombinedRecorder(new ContextRecorder({ dispatcher, getRunContext: getRunCtx }));
+    executor.attachCombinedRecorder(streamRecorder({ dispatcher, getRunContext: getRunCtx }));
+    executor.attachCombinedRecorder(agentRecorder({ dispatcher, getRunContext: getRunCtx }));
+    executor.attachCombinedRecorder(compositionRecorder({ dispatcher, getRunContext: getRunCtx }));
     for (const r of this.attachedRecorders) executor.attachCombinedRecorder(r);
     return executor;
   }
@@ -224,22 +210,17 @@ export class Parallel extends RunnerBase<ParallelInput, ParallelOutput> {
     // Strict mode (default): Merge throws on any branch failure. Tolerant
     // mode: Merge passes the full outcomes map to the consumer's merge fn.
     for (const branch of branches) {
-      builder = builder.addSubFlowChart(
-        branch.id,
-        buildBranchWrapperChart(branch),
-        branch.name,
-        {
-          inputMapper: (parent) => ({ message: (parent.userMessage as string) ?? '' }),
-          // The wrapper's terminal stage returns a BranchOutcome. Stash it
-          // under the branch id; shallow-merge across siblings produces
-          // the full outcomes map.
-          outputMapper: (sfOutput) => ({
-            branchOutcomes: {
-              [branch.id]: sfOutput as BranchOutcome,
-            },
-          }),
-        },
-      );
+      builder = builder.addSubFlowChart(branch.id, buildBranchWrapperChart(branch), branch.name, {
+        inputMapper: (parent) => ({ message: (parent.userMessage as string) ?? '' }),
+        // The wrapper's terminal stage returns a BranchOutcome. Stash it
+        // under the branch id; shallow-merge across siblings produces
+        // the full outcomes map.
+        outputMapper: (sfOutput) => ({
+          branchOutcomes: {
+            [branch.id]: sfOutput as BranchOutcome,
+          },
+        }),
+      });
     }
 
     // Merge stage — runs after all fork children complete (join point).
@@ -468,10 +449,7 @@ async function mergeWithLLM(
 }
 
 function xmlEscape(s: string): string {
-  return s
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
 function truncate(s: string, n: number): string {

@@ -29,14 +29,22 @@ describe('Conditional — predicate routing', () => {
   it('evaluates predicates in registration order (first match wins)', async () => {
     const seen: string[] = [];
     const cond = Conditional.create()
-      .when('a', (i) => {
-        seen.push('a');
-        return i.message === 'x';
-      }, llm('A'))
-      .when('b', (i) => {
-        seen.push('b');
-        return i.message === 'x';
-      }, llm('B'))
+      .when(
+        'a',
+        (i) => {
+          seen.push('a');
+          return i.message === 'x';
+        },
+        llm('A'),
+      )
+      .when(
+        'b',
+        (i) => {
+          seen.push('b');
+          return i.message === 'x';
+        },
+        llm('B'),
+      )
       .otherwise('default', llm('DEFAULT'))
       .build();
 
@@ -107,7 +115,9 @@ describe('Conditional — events', () => {
 describe('Conditional — validation', () => {
   it('rejects build() without .otherwise()', () => {
     expect(() =>
-      Conditional.create().when('a', () => true, llm('A')).build(),
+      Conditional.create()
+        .when('a', () => true, llm('A'))
+        .build(),
     ).toThrow(/missing \.otherwise/);
   });
 

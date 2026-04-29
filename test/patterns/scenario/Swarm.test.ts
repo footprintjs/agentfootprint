@@ -30,7 +30,9 @@ describe('Swarm', () => {
     const billing = LLMCall.create({ provider: tagged('billing'), model: 'm' })
       .system('')
       .build();
-    const tech = LLMCall.create({ provider: tagged('tech'), model: 'm' }).system('').build();
+    const tech = LLMCall.create({ provider: tagged('tech'), model: 'm' })
+      .system('')
+      .build();
 
     const runner = swarm({
       agents: [
@@ -107,9 +109,7 @@ describe('Swarm', () => {
         agents: [
           {
             id: 'only',
-            runner: LLMCall.create({ provider: new MockProvider(), model: 'm' })
-              .system('')
-              .build(),
+            runner: LLMCall.create({ provider: new MockProvider(), model: 'm' }).system('').build(),
           },
         ],
         route: () => 'only',
@@ -118,9 +118,7 @@ describe('Swarm', () => {
   });
 
   it('rejects agent id "done" (reserved for halt branch)', () => {
-    const r = LLMCall.create({ provider: new MockProvider(), model: 'm' })
-      .system('')
-      .build();
+    const r = LLMCall.create({ provider: new MockProvider(), model: 'm' }).system('').build();
     expect(() =>
       swarm({
         agents: [
@@ -133,8 +131,12 @@ describe('Swarm', () => {
   });
 
   it('maxHandoffs bounds runaway routing', async () => {
-    const a = LLMCall.create({ provider: tagged('A'), model: 'm' }).system('').build();
-    const b = LLMCall.create({ provider: tagged('B'), model: 'm' }).system('').build();
+    const a = LLMCall.create({ provider: tagged('A'), model: 'm' })
+      .system('')
+      .build();
+    const b = LLMCall.create({ provider: tagged('B'), model: 'm' })
+      .system('')
+      .build();
 
     // Route ping-pongs between A and B forever.
     let flip = true;

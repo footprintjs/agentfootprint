@@ -46,7 +46,11 @@ function subE(
   outputState?: Record<string, unknown>,
 ): FlowSubflowEvent {
   return {
-    name, subflowId, description, mappedInput, outputState,
+    name,
+    subflowId,
+    description,
+    mappedInput,
+    outputState,
     traversalContext: {
       stageId: subflowId,
       runtimeStageId,
@@ -58,11 +62,15 @@ function subE(
 
 function dispatch(d: EventDispatcher, type: string, payload: Record<string, unknown>): void {
   d.dispatch({
-    type, payload,
+    type,
+    payload,
     meta: {
-      wallClockMs: 1000, runOffsetMs: 0,
+      wallClockMs: 1000,
+      runOffsetMs: 0,
       runtimeStageId: 'call-llm#0',
-      subflowPath: [], compositionPath: [], runId: 'test',
+      subflowPath: [],
+      compositionPath: [],
+      runId: 'test',
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } as any);
@@ -96,8 +104,12 @@ describe('buildStepGraph — P1: one-shot LLMCall (no tools)', () => {
     rec.onRunEnd!(runE({}));
 
     const g = buildStepGraph(rec);
-    const reactNodes = g.nodes.filter((n) =>
-      n.kind === 'user->llm' || n.kind === 'llm->tool' || n.kind === 'tool->llm' || n.kind === 'llm->user',
+    const reactNodes = g.nodes.filter(
+      (n) =>
+        n.kind === 'user->llm' ||
+        n.kind === 'llm->tool' ||
+        n.kind === 'tool->llm' ||
+        n.kind === 'llm->user',
     );
     expect(reactNodes.map((n) => n.kind)).toEqual(['user->llm', 'llm->user']);
     expect(reactNodes[0].tokens).toEqual({ in: 5, out: 3 });
@@ -120,8 +132,12 @@ describe('buildStepGraph — P2: tool-using cycle', () => {
 
     const g = buildStepGraph(rec);
     const kinds = g.nodes
-      .filter((n) =>
-        n.kind === 'user->llm' || n.kind === 'llm->tool' || n.kind === 'tool->llm' || n.kind === 'llm->user',
+      .filter(
+        (n) =>
+          n.kind === 'user->llm' ||
+          n.kind === 'llm->tool' ||
+          n.kind === 'tool->llm' ||
+          n.kind === 'llm->user',
       )
       .map((n) => n.kind);
     expect(kinds).toEqual(['user->llm', 'llm->tool', 'tool->llm', 'llm->user']);
@@ -140,24 +156,36 @@ describe('buildStepGraph — P3: multi-iteration alternation', () => {
   it('actor arrows alternate correctly across 3 iterations', () => {
     const { rec, dispatcher } = fresh();
     // iter 1: tool
-    llmStart(dispatcher); llmEnd(dispatcher, 1);
-    toolStart(dispatcher, 't', 'a'); toolEnd(dispatcher, 'a');
+    llmStart(dispatcher);
+    llmEnd(dispatcher, 1);
+    toolStart(dispatcher, 't', 'a');
+    toolEnd(dispatcher, 'a');
     // iter 2: tool
-    llmStart(dispatcher); llmEnd(dispatcher, 1);
-    toolStart(dispatcher, 't', 'b'); toolEnd(dispatcher, 'b');
+    llmStart(dispatcher);
+    llmEnd(dispatcher, 1);
+    toolStart(dispatcher, 't', 'b');
+    toolEnd(dispatcher, 'b');
     // iter 3: terminal
-    llmStart(dispatcher); llmEnd(dispatcher, 0);
+    llmStart(dispatcher);
+    llmEnd(dispatcher, 0);
 
     const g = buildStepGraph(rec);
     const kinds = g.nodes
-      .filter((n) =>
-        n.kind === 'user->llm' || n.kind === 'llm->tool' || n.kind === 'tool->llm' || n.kind === 'llm->user',
+      .filter(
+        (n) =>
+          n.kind === 'user->llm' ||
+          n.kind === 'llm->tool' ||
+          n.kind === 'tool->llm' ||
+          n.kind === 'llm->user',
       )
       .map((n) => n.kind);
     expect(kinds).toEqual([
-      'user->llm', 'llm->tool',  // iter 1
-      'tool->llm', 'llm->tool',  // iter 2
-      'tool->llm', 'llm->user',  // iter 3
+      'user->llm',
+      'llm->tool', // iter 1
+      'tool->llm',
+      'llm->tool', // iter 2
+      'tool->llm',
+      'llm->user', // iter 3
     ]);
   });
 });
@@ -205,7 +233,12 @@ describe('buildStepGraph — P5: slot subflows are NOT timeline steps', () => {
 describe('buildStepGraph — P6: agent-internal routing subflows are skipped', () => {
   it('sf-route, sf-tool-calls, sf-final, sf-merge do not produce StepNodes', () => {
     const { rec } = fresh();
-    for (const id of [SUBFLOW_IDS.ROUTE, SUBFLOW_IDS.TOOL_CALLS, SUBFLOW_IDS.FINAL, SUBFLOW_IDS.MERGE]) {
+    for (const id of [
+      SUBFLOW_IDS.ROUTE,
+      SUBFLOW_IDS.TOOL_CALLS,
+      SUBFLOW_IDS.FINAL,
+      SUBFLOW_IDS.MERGE,
+    ]) {
       rec.onSubflowEntry!(subE(id, id, `${id}#0`));
       rec.onSubflowExit!(subE(id, id, `${id}#0`));
     }
@@ -217,27 +250,46 @@ describe('buildStepGraph — P6: agent-internal routing subflows are skipped', (
 // ─── Slot boundary attribution (1:1 mapping with each LLM call) ──────
 
 describe('buildStepGraph — slot boundaries attached to each LLM step', () => {
-  function emitSlot(rec: BoundaryRecorder, slotId: string, name: string, runtimeStageId: string,
-                   inputData: Record<string, unknown>, outputData: Record<string, unknown>): void {
+  function emitSlot(
+    rec: BoundaryRecorder,
+    slotId: string,
+    name: string,
+    runtimeStageId: string,
+    inputData: Record<string, unknown>,
+    outputData: Record<string, unknown>,
+  ): void {
     rec.onSubflowEntry!(subE(slotId, name, runtimeStageId, undefined, inputData));
     rec.onSubflowExit!(subE(slotId, name, runtimeStageId, undefined, undefined, outputData));
   }
 
   it('S1: slot subflows preceding llm.start are attached to that StepNode', () => {
     const { rec, dispatcher } = fresh();
-    emitSlot(rec, SUBFLOW_IDS.SYSTEM_PROMPT, 'SP', 'sp#0',
-             { sources: ['base'] }, { rendered: 'You are helpful.' });
-    emitSlot(rec, SUBFLOW_IDS.MESSAGES, 'M', 'm#1',
-             { history: 1 }, { messages: [{ role: 'user', content: 'hi' }] });
-    emitSlot(rec, SUBFLOW_IDS.TOOLS, 'T', 't#2',
-             { registered: 0 }, { tools: [] });
+    emitSlot(
+      rec,
+      SUBFLOW_IDS.SYSTEM_PROMPT,
+      'SP',
+      'sp#0',
+      { sources: ['base'] },
+      { rendered: 'You are helpful.' },
+    );
+    emitSlot(
+      rec,
+      SUBFLOW_IDS.MESSAGES,
+      'M',
+      'm#1',
+      { history: 1 },
+      { messages: [{ role: 'user', content: 'hi' }] },
+    );
+    emitSlot(rec, SUBFLOW_IDS.TOOLS, 'T', 't#2', { registered: 0 }, { tools: [] });
     llmStart(dispatcher);
     llmEnd(dispatcher, 0);
 
     const userToLlm = buildStepGraph(rec).nodes.find((n) => n.kind === 'user->llm')!;
     expect(userToLlm.slotBoundaries).toBeDefined();
     expect(userToLlm.slotBoundaries!.systemPrompt?.entryPayload).toEqual({ sources: ['base'] });
-    expect(userToLlm.slotBoundaries!.systemPrompt?.exitPayload).toEqual({ rendered: 'You are helpful.' });
+    expect(userToLlm.slotBoundaries!.systemPrompt?.exitPayload).toEqual({
+      rendered: 'You are helpful.',
+    });
     expect(userToLlm.slotBoundaries!.messages?.exitPayload).toEqual({
       messages: [{ role: 'user', content: 'hi' }],
     });
@@ -249,12 +301,15 @@ describe('buildStepGraph — slot boundaries attached to each LLM step', () => {
     // Iter 1
     emitSlot(rec, SUBFLOW_IDS.SYSTEM_PROMPT, 'SP', 'sp#0', { v: 1 }, { v: 'iter1-prompt' });
     emitSlot(rec, SUBFLOW_IDS.MESSAGES, 'M', 'm#1', { v: 1 }, { v: 'iter1-msgs' });
-    llmStart(dispatcher); llmEnd(dispatcher, 1);
-    toolStart(dispatcher, 't', 'c1'); toolEnd(dispatcher, 'c1');
+    llmStart(dispatcher);
+    llmEnd(dispatcher, 1);
+    toolStart(dispatcher, 't', 'c1');
+    toolEnd(dispatcher, 'c1');
     // Iter 2
     emitSlot(rec, SUBFLOW_IDS.SYSTEM_PROMPT, 'SP', 'sp#5', { v: 2 }, { v: 'iter2-prompt' });
     emitSlot(rec, SUBFLOW_IDS.MESSAGES, 'M', 'm#6', { v: 2 }, { v: 'iter2-msgs' });
-    llmStart(dispatcher); llmEnd(dispatcher, 0);
+    llmStart(dispatcher);
+    llmEnd(dispatcher, 0);
 
     const reactNodes = buildStepGraph(rec).nodes.filter(
       (n) => n.kind === 'user->llm' || n.kind === 'tool->llm',
@@ -268,7 +323,8 @@ describe('buildStepGraph — slot boundaries attached to each LLM step', () => {
   it('S3: SlotBoundary carries the runtimeStageId for cross-view binding', () => {
     const { rec, dispatcher } = fresh();
     emitSlot(rec, SUBFLOW_IDS.SYSTEM_PROMPT, 'SP', 'sp#42', {}, {});
-    llmStart(dispatcher); llmEnd(dispatcher, 0);
+    llmStart(dispatcher);
+    llmEnd(dispatcher, 0);
 
     const node = buildStepGraph(rec).nodes.find((n) => n.kind === 'user->llm')!;
     expect(node.slotBoundaries!.systemPrompt!.runtimeStageId).toBe('sp#42');
@@ -278,7 +334,8 @@ describe('buildStepGraph — slot boundaries attached to each LLM step', () => {
     const { rec, dispatcher } = fresh();
     // Only system-prompt fires — messages and tools skipped.
     emitSlot(rec, SUBFLOW_IDS.SYSTEM_PROMPT, 'SP', 'sp#0', {}, { v: 'only sp' });
-    llmStart(dispatcher); llmEnd(dispatcher, 0);
+    llmStart(dispatcher);
+    llmEnd(dispatcher, 0);
 
     const node = buildStepGraph(rec).nodes.find((n) => n.kind === 'user->llm')!;
     expect(node.slotBoundaries!.systemPrompt?.exitPayload).toEqual({ v: 'only sp' });
@@ -288,7 +345,8 @@ describe('buildStepGraph — slot boundaries attached to each LLM step', () => {
 
   it('S5: slot subflows AFTER the LLM end do NOT leak into the previous step', () => {
     const { rec, dispatcher } = fresh();
-    llmStart(dispatcher); llmEnd(dispatcher, 0);
+    llmStart(dispatcher);
+    llmEnd(dispatcher, 0);
     // After the llm.end, a slot fires (would belong to a hypothetical
     // next call, but there isn't one) — must not retroactively attach
     // to the just-closed step.
@@ -304,9 +362,12 @@ describe('buildStepGraph — slot boundaries attached to each LLM step', () => {
       subE(`internals/${SUBFLOW_IDS.SYSTEM_PROMPT}`, 'SP', 'sp#0', undefined, { in: 1 }),
     );
     rec.onSubflowExit!(
-      subE(`internals/${SUBFLOW_IDS.SYSTEM_PROMPT}`, 'SP', 'sp#0', undefined, undefined, { out: 2 }),
+      subE(`internals/${SUBFLOW_IDS.SYSTEM_PROMPT}`, 'SP', 'sp#0', undefined, undefined, {
+        out: 2,
+      }),
     );
-    llmStart(dispatcher); llmEnd(dispatcher, 0);
+    llmStart(dispatcher);
+    llmEnd(dispatcher, 0);
 
     const node = buildStepGraph(rec).nodes.find((n) => n.kind === 'user->llm')!;
     expect(node.slotBoundaries!.systemPrompt!.entryPayload).toEqual({ in: 1 });
@@ -316,7 +377,8 @@ describe('buildStepGraph — slot boundaries attached to each LLM step', () => {
   it('S7: llm→user terminal marker has NO slotBoundaries (only ingress steps do)', () => {
     const { rec, dispatcher } = fresh();
     emitSlot(rec, SUBFLOW_IDS.SYSTEM_PROMPT, 'SP', 'sp#0', {}, { v: 'sp' });
-    llmStart(dispatcher); llmEnd(dispatcher, 0);
+    llmStart(dispatcher);
+    llmEnd(dispatcher, 0);
 
     const llmToUser = buildStepGraph(rec).nodes.find((n) => n.kind === 'llm->user')!;
     expect(llmToUser.slotBoundaries).toBeUndefined();
@@ -397,11 +459,14 @@ describe('buildStepGraph — Agent-internal decision.branch filtering', () => {
     const { rec, dispatcher } = fresh();
     rec.onRunStart!(runE({}));
     // iter 1
-    llmStart(dispatcher); llmEnd(dispatcher, 1);
+    llmStart(dispatcher);
+    llmEnd(dispatcher, 1);
     rec.onDecision!(decE('Route', 'tool-calls', 'r#0', SUBFLOW_IDS.ROUTE, 'tools requested'));
-    toolStart(dispatcher, 'weather', 'c1'); toolEnd(dispatcher, 'c1');
+    toolStart(dispatcher, 'weather', 'c1');
+    toolEnd(dispatcher, 'c1');
     // iter 2
-    llmStart(dispatcher); llmEnd(dispatcher, 0);
+    llmStart(dispatcher);
+    llmEnd(dispatcher, 0);
     rec.onDecision!(decE('Route', 'final', 'r#1', SUBFLOW_IDS.ROUTE));
     rec.onRunEnd!(runE({}));
 
@@ -417,7 +482,7 @@ describe('buildStepGraph — Agent-internal decision.branch filtering', () => {
     // 1 root subflow (Run) + user→llm + llm→tool + tool→llm + llm→user = 5
     expect(visible).toHaveLength(5);
     expect(visible.map((n) => n.kind)).toEqual([
-      'subflow',     // Run root
+      'subflow', // Run root
       'user->llm',
       'llm->tool',
       'tool->llm',
@@ -434,10 +499,14 @@ describe('buildStepGraph — P7: context.injected attaches to NEXT user→llm st
   it('injections fired before llm.start attach to that LLM call', () => {
     const { rec, dispatcher } = fresh();
     dispatch(dispatcher, 'agentfootprint.context.injected', {
-      slot: 'messages', source: 'user', contentSummary: 'analyze report',
+      slot: 'messages',
+      source: 'user',
+      contentSummary: 'analyze report',
     });
     dispatch(dispatcher, 'agentfootprint.context.injected', {
-      slot: 'system-prompt', source: 'base', contentSummary: 'you are an analyst',
+      slot: 'system-prompt',
+      source: 'base',
+      contentSummary: 'you are an analyst',
     });
     llmStart(dispatcher);
     llmEnd(dispatcher, 0);
@@ -446,10 +515,13 @@ describe('buildStepGraph — P7: context.injected attaches to NEXT user→llm st
     const userToLlm = g.nodes.find((n) => n.kind === 'user->llm')!;
     expect(userToLlm.injections).toHaveLength(2);
     expect(userToLlm.injections![0]).toMatchObject({
-      slot: 'messages', source: 'user', contentSummary: 'analyze report',
+      slot: 'messages',
+      source: 'user',
+      contentSummary: 'analyze report',
     });
     expect(userToLlm.injections![1]).toMatchObject({
-      slot: 'system-prompt', source: 'base',
+      slot: 'system-prompt',
+      source: 'base',
     });
   });
 });

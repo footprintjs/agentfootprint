@@ -40,8 +40,18 @@ describe('Sequence — two LLMCalls chained', () => {
 
   it('emits composition.enter and composition.exit once each', async () => {
     const seq = Sequence.create()
-      .step('s1', LLMCall.create({ provider: new MockProvider({ reply: 'a' }), model: 'mock' }).system('').build())
-      .step('s2', LLMCall.create({ provider: new MockProvider({ reply: 'b' }), model: 'mock' }).system('').build())
+      .step(
+        's1',
+        LLMCall.create({ provider: new MockProvider({ reply: 'a' }), model: 'mock' })
+          .system('')
+          .build(),
+      )
+      .step(
+        's2',
+        LLMCall.create({ provider: new MockProvider({ reply: 'b' }), model: 'mock' })
+          .system('')
+          .build(),
+      )
       .build();
 
     const enters = vi.fn();
@@ -59,8 +69,18 @@ describe('Sequence — two LLMCalls chained', () => {
 
   it('forwards stream events from nested steps', async () => {
     const seq = Sequence.create()
-      .step('s1', LLMCall.create({ provider: new MockProvider({ reply: 'a' }), model: 'mock' }).system('').build())
-      .step('s2', LLMCall.create({ provider: new MockProvider({ reply: 'b' }), model: 'mock' }).system('').build())
+      .step(
+        's1',
+        LLMCall.create({ provider: new MockProvider({ reply: 'a' }), model: 'mock' })
+          .system('')
+          .build(),
+      )
+      .step(
+        's2',
+        LLMCall.create({ provider: new MockProvider({ reply: 'b' }), model: 'mock' })
+          .system('')
+          .build(),
+      )
       .build();
 
     const starts = vi.fn();
@@ -78,7 +98,9 @@ describe('Sequence — pipeVia custom mapper', () => {
     const step1 = LLMCall.create({
       provider: new MockProvider({ reply: 'RAW' }),
       model: 'mock',
-    }).system('').build();
+    })
+      .system('')
+      .build();
     const step2 = LLMCall.create({
       provider: new MockProvider({
         respond: (req) => {
@@ -88,7 +110,9 @@ describe('Sequence — pipeVia custom mapper', () => {
         },
       }),
       model: 'mock',
-    }).system('').build();
+    })
+      .system('')
+      .build();
 
     const seq = Sequence.create()
       .step('a', step1)
@@ -103,7 +127,10 @@ describe('Sequence — pipeVia custom mapper', () => {
   it('throws if .pipeVia() is dangling at build time', () => {
     expect(() =>
       Sequence.create()
-        .step('a', LLMCall.create({ provider: new MockProvider(), model: 'mock' }).system('').build())
+        .step(
+          'a',
+          LLMCall.create({ provider: new MockProvider(), model: 'mock' }).system('').build(),
+        )
         .pipeVia((prev) => ({ message: prev }))
         .build(),
     ).toThrow(/dangling|no following|pipeVia/i);
@@ -113,9 +140,9 @@ describe('Sequence — pipeVia custom mapper', () => {
 describe('Sequence — validation', () => {
   it('rejects duplicate step ids', () => {
     const step = LLMCall.create({ provider: new MockProvider(), model: 'mock' }).system('').build();
-    expect(() =>
-      Sequence.create().step('same', step).step('same', step),
-    ).toThrow(/duplicate step id/);
+    expect(() => Sequence.create().step('same', step).step('same', step)).toThrow(
+      /duplicate step id/,
+    );
   });
 
   it('rejects build() with zero steps', () => {
@@ -132,9 +159,7 @@ describe('Sequence — nesting (Agent inside Sequence)', () => {
       .system('')
       .build();
 
-    const seq = Sequence.create({ name: 'Pipe' })
-      .step('agent', agent)
-      .build();
+    const seq = Sequence.create({ name: 'Pipe' }).step('agent', agent).build();
 
     const turnEnds = vi.fn();
     seq.on('agentfootprint.agent.turn_end', turnEnds);

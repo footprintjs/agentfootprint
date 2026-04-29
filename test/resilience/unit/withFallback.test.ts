@@ -35,7 +35,12 @@ describe('withFallback — complete()', () => {
 
   it('returns fallback on primary error', async () => {
     const provider = withFallback(
-      { name: 'p', complete: async () => { throw new Error('primary down'); } },
+      {
+        name: 'p',
+        complete: async () => {
+          throw new Error('primary down');
+        },
+      },
       { name: 'f', complete: async () => okResponse('fallback') },
     );
 
@@ -47,7 +52,12 @@ describe('withFallback — complete()', () => {
   it('does not fall back on AbortError', async () => {
     const abortErr = Object.assign(new Error('cancelled'), { name: 'AbortError' });
     const provider = withFallback(
-      { name: 'p', complete: async () => { throw abortErr; } },
+      {
+        name: 'p',
+        complete: async () => {
+          throw abortErr;
+        },
+      },
       { name: 'f', complete: async () => okResponse('fallback') },
     );
 
@@ -57,7 +67,12 @@ describe('withFallback — complete()', () => {
   it('fires onFallback hook with the primary error', async () => {
     const onFallback = vi.fn();
     const provider = withFallback(
-      { name: 'p', complete: async () => { throw new Error('boom'); } },
+      {
+        name: 'p',
+        complete: async () => {
+          throw new Error('boom');
+        },
+      },
       { name: 'f', complete: async () => okResponse('fallback') },
       { onFallback },
     );
@@ -69,7 +84,12 @@ describe('withFallback — complete()', () => {
 
   it('respects custom shouldFallback predicate', async () => {
     const provider = withFallback(
-      { name: 'p', complete: async () => { throw new Error('keep me'); } },
+      {
+        name: 'p',
+        complete: async () => {
+          throw new Error('keep me');
+        },
+      },
       { name: 'f', complete: async () => okResponse('fallback') },
       { shouldFallback: (err) => !(err as Error).message.includes('keep me') },
     );

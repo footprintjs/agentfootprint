@@ -19,12 +19,7 @@
  *                  network errors, and unknown shapes.
  */
 
-import type {
-  LLMChunk,
-  LLMProvider,
-  LLMRequest,
-  LLMResponse,
-} from '../adapters/types.js';
+import type { LLMChunk, LLMProvider, LLMRequest, LLMResponse } from '../adapters/types.js';
 
 export interface WithRetryOptions {
   /** Total attempts including the first. Default 3. Must be >= 1. */
@@ -58,10 +53,7 @@ export interface WithRetryOptions {
  *     onRetry: (err, attempt, ms) => console.warn(`retry ${attempt} in ${ms}ms`, err),
  *   });
  */
-export function withRetry(
-  provider: LLMProvider,
-  options: WithRetryOptions = {},
-): LLMProvider {
+export function withRetry(provider: LLMProvider, options: WithRetryOptions = {}): LLMProvider {
   const maxAttempts = Math.max(1, options.maxAttempts ?? 3);
   const initialDelayMs = options.initialDelayMs ?? 200;
   const backoffFactor = options.backoffFactor ?? 2;
@@ -81,10 +73,7 @@ export function withRetry(
           if (attempt >= maxAttempts || !shouldRetry(err, attempt)) {
             throw err;
           }
-          const delay = Math.min(
-            maxDelayMs,
-            initialDelayMs * Math.pow(backoffFactor, attempt - 1),
-          );
+          const delay = Math.min(maxDelayMs, initialDelayMs * Math.pow(backoffFactor, attempt - 1));
           onRetry?.(err, attempt + 1, delay);
           await sleep(delay, req.signal);
         }
@@ -114,8 +103,9 @@ export function withRetry(
  */
 function defaultShouldRetry(err: unknown, _attempt: number): boolean {
   if (isAbortError(err)) return false;
-  const status = (err as { status?: number; statusCode?: number })?.status
-    ?? (err as { statusCode?: number })?.statusCode;
+  const status =
+    (err as { status?: number; statusCode?: number })?.status ??
+    (err as { statusCode?: number })?.statusCode;
   if (typeof status === 'number' && status >= 400 && status < 500) {
     // 429 Too Many Requests is the one 4xx that benefits from retry.
     return status === 429;

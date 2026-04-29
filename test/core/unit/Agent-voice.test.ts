@@ -70,9 +70,7 @@ describe('Agent voice — V3: .commentaryTemplates()', () => {
       })
       .build();
     // Overridden key wins.
-    expect(agent.commentaryTemplates['agent.turn_start']).toBe(
-      'Customer: "{{userPrompt}}"',
-    );
+    expect(agent.commentaryTemplates['agent.turn_start']).toBe('Customer: "{{userPrompt}}"');
     // Untouched keys still resolve from bundled defaults.
     expect(agent.commentaryTemplates['stream.tool_end']).toBe(
       defaultCommentaryTemplates['stream.tool_end'],

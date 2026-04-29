@@ -40,7 +40,7 @@
  *   `LLMMessage.content` is `string`. The adapter accepts text-only.
  *   May extend in a future release the message shape; this provider will be updated
  *   in lockstep.
- * • `responseFormat` (JSON-Schema-coerced output) NOT exposed 
+ * • `responseFormat` (JSON-Schema-coerced output) NOT exposed
  *   — consumers can pass schema instructions via `systemPrompt`.
  *
  * ─── 7-pattern test coverage ────────────────────────────────────────
@@ -169,9 +169,9 @@ export function anthropic(options: AnthropicProviderOptions = {}): LLMProvider {
       try {
         for await (const event of stream) {
           if (
-            event.type === 'content_block_delta'
-            && event.delta?.type === 'text_delta'
-            && event.delta.text
+            event.type === 'content_block_delta' &&
+            event.delta?.type === 'text_delta' &&
+            event.delta.text
           ) {
             yield { tokenIndex, content: event.delta.text, done: false };
             tokenIndex++;
@@ -261,9 +261,7 @@ function buildParams(
  *     tool_result blocks (Anthropic's expected shape). Consecutive
  *     tool messages merge into one user turn.
  */
-function toAnthropicMessages(
-  messages: readonly LLMMessage[],
-): AnthropicMessageParam[] {
+function toAnthropicMessages(messages: readonly LLMMessage[]): AnthropicMessageParam[] {
   const result: AnthropicMessageParam[] = [];
   for (const m of messages) {
     if (m.role === 'system') continue; // System lives outside message array.
@@ -286,7 +284,7 @@ function toAnthropicMessages(
       }
       result.push({
         role: 'assistant',
-        content: blocks.length > 0 ? blocks : (m.content || ''),
+        content: blocks.length > 0 ? blocks : m.content || '',
       });
       continue;
     }

@@ -6,14 +6,8 @@ import { describe, it, expect, vi } from 'vitest';
 import type { FlowSubflowEvent, WriteEvent } from 'footprintjs';
 import { EventDispatcher } from '../../../../src/events/dispatcher.js';
 import { ContextRecorder } from '../../../../src/recorders/core/ContextRecorder.js';
-import {
-  COMPOSITION_KEYS,
-  type InjectionRecord,
-} from '../../../../src/recorders/core/types.js';
-import {
-  INJECTION_KEYS,
-  SUBFLOW_IDS,
-} from '../../../../src/conventions.js';
+import { COMPOSITION_KEYS, type InjectionRecord } from '../../../../src/recorders/core/types.js';
+import { INJECTION_KEYS, SUBFLOW_IDS } from '../../../../src/conventions.js';
 
 function sf(subflowId: string): FlowSubflowEvent {
   return {
@@ -72,8 +66,18 @@ describe('scenario — ReAct iteration with RAG + skill', () => {
     rec.onSubflowEntry(sf(SUBFLOW_IDS.SYSTEM_PROMPT));
     rec.onWrite(
       we(INJECTION_KEYS.SYSTEM_PROMPT, [
-        inj({ slot: 'system-prompt', source: 'instructions', contentHash: 'i1', reason: 'base rules' }),
-        inj({ slot: 'system-prompt', source: 'skill', contentHash: 's1', reason: 'skill activated' }),
+        inj({
+          slot: 'system-prompt',
+          source: 'instructions',
+          contentHash: 'i1',
+          reason: 'base rules',
+        }),
+        inj({
+          slot: 'system-prompt',
+          source: 'skill',
+          contentHash: 's1',
+          reason: 'skill activated',
+        }),
       ]),
     );
     rec.onWrite(
@@ -81,7 +85,10 @@ describe('scenario — ReAct iteration with RAG + skill', () => {
         slot: 'system-prompt',
         iteration: 1,
         budget: { cap: 4000, used: 800, headroomChars: 3200 },
-        sourceBreakdown: { instructions: { chars: 400, count: 1 }, skill: { chars: 400, count: 1 } },
+        sourceBreakdown: {
+          instructions: { chars: 400, count: 1 },
+          skill: { chars: 400, count: 1 },
+        },
         droppedCount: 0,
         droppedSummaries: [],
       }),
@@ -93,8 +100,20 @@ describe('scenario — ReAct iteration with RAG + skill', () => {
     rec.onWrite(
       we(INJECTION_KEYS.MESSAGES, [
         inj({ slot: 'messages', source: 'user', contentHash: 'u1', asRole: 'user' }),
-        inj({ slot: 'messages', source: 'rag', contentHash: 'r1', asRole: 'tool', retrievalScore: 0.92 }),
-        inj({ slot: 'messages', source: 'rag', contentHash: 'r2', asRole: 'tool', retrievalScore: 0.85 }),
+        inj({
+          slot: 'messages',
+          source: 'rag',
+          contentHash: 'r1',
+          asRole: 'tool',
+          retrievalScore: 0.92,
+        }),
+        inj({
+          slot: 'messages',
+          source: 'rag',
+          contentHash: 'r2',
+          asRole: 'tool',
+          retrievalScore: 0.85,
+        }),
       ]),
     );
     rec.onWrite(
@@ -149,7 +168,13 @@ describe('scenario — budget pressure + evictions', () => {
     rec.onSubflowEntry(sf(SUBFLOW_IDS.MESSAGES));
     rec.onWrite(
       we(COMPOSITION_KEYS.BUDGET_PRESSURE, [
-        { slot: 'messages', capTokens: 10000, projectedTokens: 12000, overflowBy: 2000, planAction: 'evict' },
+        {
+          slot: 'messages',
+          capTokens: 10000,
+          projectedTokens: 12000,
+          overflowBy: 2000,
+          planAction: 'evict',
+        },
       ]),
     );
     rec.onWrite(

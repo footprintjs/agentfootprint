@@ -35,9 +35,7 @@ export interface RunnerPauseOutcome {
 /** Type guard — discriminates `RunnerPauseOutcome` from a normal `TOut`. */
 export function isPaused<T>(result: T | RunnerPauseOutcome): result is RunnerPauseOutcome {
   return (
-    typeof result === 'object' &&
-    result !== null &&
-    (result as RunnerPauseOutcome).paused === true
+    typeof result === 'object' && result !== null && (result as RunnerPauseOutcome).paused === true
   );
 }
 

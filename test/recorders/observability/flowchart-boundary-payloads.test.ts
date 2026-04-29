@@ -124,7 +124,9 @@ describe('FlowchartRecorder boundary — P1: entryPayload from inputMapper', () 
     );
     recorder.onSubflowExit!(exitEvent('sf-task', 'Task', 'task#0', { result: 'done' }));
 
-    const subflowNode = getGraph().nodes.find((n) => n.kind === 'subflow' && n.runtimeStageId === 'task#0');
+    const subflowNode = getGraph().nodes.find(
+      (n) => n.kind === 'subflow' && n.runtimeStageId === 'task#0',
+    );
     expect(subflowNode?.entryPayload).toEqual({ request: 'analyze' });
   });
 });
@@ -137,7 +139,9 @@ describe('FlowchartRecorder boundary — P2: exitPayload from subflow shared sta
     recorder.onSubflowEntry!(entryEvent('sf-task', 'Task', 'task#0', { in: 1 }));
     recorder.onSubflowExit!(exitEvent('sf-task', 'Task', 'task#0', { in: 1, out: 2 }));
 
-    const subflowNode = getGraph().nodes.find((n) => n.kind === 'subflow' && n.runtimeStageId === 'task#0');
+    const subflowNode = getGraph().nodes.find(
+      (n) => n.kind === 'subflow' && n.runtimeStageId === 'task#0',
+    );
     expect(subflowNode?.exitPayload).toEqual({ in: 1, out: 2 });
   });
 });
@@ -150,7 +154,9 @@ describe('FlowchartRecorder boundary — P3: runtimeStageId on subflow nodes', (
     recorder.onSubflowEntry!(entryEvent('sf-x', 'X', 'x#5', {}));
     recorder.onSubflowExit!(exitEvent('sf-x', 'X', 'x#5', {}));
 
-    const subflowNode = getGraph().nodes.find((n) => n.kind === 'subflow' && n.runtimeStageId === 'x#5');
+    const subflowNode = getGraph().nodes.find(
+      (n) => n.kind === 'subflow' && n.runtimeStageId === 'x#5',
+    );
     expect(subflowNode?.runtimeStageId).toBe('x#5');
   });
 });
@@ -216,12 +222,8 @@ describe('FlowchartRecorder boundary — P6: nested subflows', () => {
     const { recorder, getGraph } = freshHandle();
     recorder.onSubflowEntry!(entryEvent('sf-parent', 'Parent', 'p#0', { from: 'caller' }));
     // Engine emits child subflowId path-prefixed under the parent.
-    recorder.onSubflowEntry!(
-      entryEvent('sf-parent/sf-child', 'Child', 'c#1', { from: 'parent' }),
-    );
-    recorder.onSubflowExit!(
-      exitEvent('sf-parent/sf-child', 'Child', 'c#1', { back: 'to parent' }),
-    );
+    recorder.onSubflowEntry!(entryEvent('sf-parent/sf-child', 'Child', 'c#1', { from: 'parent' }));
+    recorder.onSubflowExit!(exitEvent('sf-parent/sf-child', 'Child', 'c#1', { back: 'to parent' }));
     recorder.onSubflowExit!(exitEvent('sf-parent', 'Parent', 'p#0', { back: 'to caller' }));
 
     const nodes = getGraph().nodes.filter((n) => n.kind === 'subflow');
@@ -245,7 +247,9 @@ describe('FlowchartRecorder boundary — P7: in-progress subflow (entry without 
     );
     // No matching onSubflowExit — pause re-throws PauseSignal before exit fires.
 
-    const subflowNode = getGraph().nodes.find((n) => n.kind === 'subflow' && n.runtimeStageId === 'pause#0');
+    const subflowNode = getGraph().nodes.find(
+      (n) => n.kind === 'subflow' && n.runtimeStageId === 'pause#0',
+    );
     expect(subflowNode?.entryPayload).toEqual({ question: 'Approve $50k?' });
     expect(subflowNode?.exitPayload).toBeUndefined();
     expect(subflowNode?.runtimeStageId).toBe('pause#0');

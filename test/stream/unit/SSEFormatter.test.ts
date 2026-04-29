@@ -96,7 +96,8 @@ describe('toSSE — property', () => {
   it('filter predicate gates events 1:1 (no double-emit)', async () => {
     const agent = buildAgent();
     const stream = toSSE(agent, {
-      filter: (e) => e.type === 'agentfootprint.agent.turn_start' || e.type === 'agentfootprint.agent.turn_end',
+      filter: (e) =>
+        e.type === 'agentfootprint.agent.turn_start' || e.type === 'agentfootprint.agent.turn_end',
     });
     const collected: string[] = [];
     const collect = (async () => {

@@ -104,7 +104,8 @@ function collectEventNames(obj: Record<string, unknown>): string[] {
   const out: string[] = [];
   for (const v of Object.values(obj)) {
     if (typeof v === 'string') out.push(v);
-    else if (v && typeof v === 'object') out.push(...collectEventNames(v as Record<string, unknown>));
+    else if (v && typeof v === 'object')
+      out.push(...collectEventNames(v as Record<string, unknown>));
   }
   return out;
 }

@@ -66,10 +66,7 @@ describe('memory const-objects — unit', () => {
   });
 
   it('MEMORY_TIMING exposes exactly 2 timings', () => {
-    expect(Object.keys(MEMORY_TIMING).sort()).toEqual([
-      'EVERY_ITERATION',
-      'TURN_START',
-    ]);
+    expect(Object.keys(MEMORY_TIMING).sort()).toEqual(['EVERY_ITERATION', 'TURN_START']);
     expect(MEMORY_TIMING.TURN_START).toBe('turn-start');
   });
 
@@ -126,7 +123,10 @@ describe('memory const-objects — consumer scenarios', () => {
   });
 
   it('typed config — TopK strategy narrowed with embedder + threshold', () => {
-    const embedder = { dimensions: 1536, embed: async () => [] } as unknown as TopKStrategy['embedder'];
+    const embedder = {
+      dimensions: 1536,
+      embed: async () => [],
+    } as unknown as TopKStrategy['embedder'];
     const s: Strategy = {
       kind: MEMORY_STRATEGIES.TOP_K,
       topK: 5,

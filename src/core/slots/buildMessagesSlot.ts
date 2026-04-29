@@ -15,10 +15,7 @@
 import { flowChart } from 'footprintjs';
 import type { FlowChart, TypedScope } from 'footprintjs';
 import { INJECTION_KEYS } from '../../conventions.js';
-import type {
-  ContextRecency,
-  ContextRole,
-} from '../../events/types.js';
+import type { ContextRecency, ContextRole } from '../../events/types.js';
 import type { InjectionRecord } from '../../recorders/core/types.js';
 import { COMPOSITION_KEYS } from '../../recorders/core/types.js';
 import type { Injection } from '../../lib/injection-engine/types.js';
@@ -95,7 +92,8 @@ export function buildMessagesSlot(config: MessagesSlotConfig = {}): FlowChart {
             slot: 'messages',
             source: inj.flavor,
             sourceId: inj.id,
-            reason: inj.description ?? `${inj.flavor} '${inj.id}' active (trigger: ${inj.trigger.kind})`,
+            reason:
+              inj.description ?? `${inj.flavor} '${inj.id}' active (trigger: ${inj.trigger.kind})`,
             rawContent: msg.content,
             asRole: msg.role,
             asRecency: 'latest',

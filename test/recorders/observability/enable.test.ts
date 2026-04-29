@@ -49,12 +49,7 @@ describe('enable.thinking — Claude-Code-style status line', () => {
     //   iteration_start → Iteration 1
     //   route_decided(final) → Composing answer...
     //   turn_end → Done
-    expect(statuses).toEqual([
-      'Thinking...',
-      'Iteration 1',
-      'Composing answer...',
-      'Done',
-    ]);
+    expect(statuses).toEqual(['Thinking...', 'Iteration 1', 'Composing answer...', 'Done']);
   });
 
   it('fires onStatus for tool-call path (calling / got result / continuing)', async () => {

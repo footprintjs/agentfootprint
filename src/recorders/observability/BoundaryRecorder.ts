@@ -76,11 +76,7 @@
  * ```
  */
 
-import {
-  ROOT_RUNTIME_STAGE_ID,
-  ROOT_SUBFLOW_ID,
-  SequenceRecorder,
-} from 'footprintjs/trace';
+import { ROOT_RUNTIME_STAGE_ID, ROOT_SUBFLOW_ID, SequenceRecorder } from 'footprintjs/trace';
 import type {
   CombinedRecorder,
   FlowDecisionEvent,
@@ -290,10 +286,7 @@ export function boundaryRecorder(options: BoundaryRecorderOptions = {}): Boundar
  * usual time-travel utilities (`getEntryRanges`, `accumulate`) work
  * out of the box.
  */
-export class BoundaryRecorder
-  extends SequenceRecorder<DomainEvent>
-  implements CombinedRecorder
-{
+export class BoundaryRecorder extends SequenceRecorder<DomainEvent> implements CombinedRecorder {
   readonly id: string;
 
   /**
@@ -404,9 +397,8 @@ export class BoundaryRecorder
    * recorder construction and dispose with the returned function.
    */
   subscribe(dispatcher: EventDispatcher): Unsubscribe {
-    return dispatcher.on(
-      '*' as unknown as AgentfootprintEventType,
-      (event: AgentfootprintEvent) => this.ingestTypedEvent(event),
+    return dispatcher.on('*' as unknown as AgentfootprintEventType, (event: AgentfootprintEvent) =>
+      this.ingestTypedEvent(event),
     );
   }
 
@@ -445,9 +437,7 @@ export class BoundaryRecorder
       }
       case 'agentfootprint.stream.llm_end': {
         const p = event.payload;
-        const actorArrow: 'llm→tool' | 'llm→user' = p.toolCallCount > 0
-          ? 'llm→tool'
-          : 'llm→user';
+        const actorArrow: 'llm→tool' | 'llm→user' = p.toolCallCount > 0 ? 'llm→tool' : 'llm→user';
         // Set the pending flag for the NEXT llm.start (if any). A
         // terminal call (toolCallCount === 0) leaves the flag false so
         // a hypothetical follow-up call would correctly be 'user→llm'.
@@ -537,9 +527,7 @@ export class BoundaryRecorder
   }
 
   /** Type-narrowed lookup: all events of one kind. */
-  getEventsByType<T extends DomainEvent['type']>(
-    type: T,
-  ): Extract<DomainEvent, { type: T }>[] {
+  getEventsByType<T extends DomainEvent['type']>(type: T): Extract<DomainEvent, { type: T }>[] {
     const out: Extract<DomainEvent, { type: T }>[] = [];
     for (const e of this.getEntries()) {
       if (e.type === type) out.push(e as Extract<DomainEvent, { type: T }>);
@@ -567,16 +555,12 @@ export class BoundaryRecorder
 
   /** Just the entry-phase boundary events — the "step list" timeline. */
   getSteps(): (DomainRunEvent | DomainSubflowEvent)[] {
-    return this.getBoundaries().filter(
-      (b) => b.type === 'run.entry' || b.type === 'subflow.entry',
-    );
+    return this.getBoundaries().filter((b) => b.type === 'run.entry' || b.type === 'subflow.entry');
   }
 
   /** Subset of `getSteps()` excluding agent-internal routing subflows. */
   getVisibleSteps(): (DomainRunEvent | DomainSubflowEvent)[] {
-    return this.getSteps().filter(
-      (s) => s.type !== 'subflow.entry' || !s.isAgentInternal,
-    );
+    return this.getSteps().filter((s) => s.type !== 'subflow.entry' || !s.isAgentInternal);
   }
 
   /** Entry/exit pair for one chart execution by `runtimeStageId`. */

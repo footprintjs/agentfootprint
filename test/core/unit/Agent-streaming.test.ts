@@ -59,9 +59,7 @@ function completeOnly(response: LLMResponse): LLMProvider {
   };
 }
 
-function makeResponse(
-  overrides: Partial<LLMResponse> = {},
-): LLMResponse {
+function makeResponse(overrides: Partial<LLMResponse> = {}): LLMResponse {
   return {
     content: 'hello world',
     toolCalls: [],
@@ -217,10 +215,14 @@ describe('Agent streaming — S6: signal abort', () => {
         for (let i = 0; i < 10; i++) {
           await new Promise((res, rej) => {
             const id = setTimeout(res, 50);
-            req.signal?.addEventListener('abort', () => {
-              clearTimeout(id);
-              rej(req.signal!.reason ?? new Error('aborted'));
-            }, { once: true });
+            req.signal?.addEventListener(
+              'abort',
+              () => {
+                clearTimeout(id);
+                rej(req.signal!.reason ?? new Error('aborted'));
+              },
+              { once: true },
+            );
           });
           yield { tokenIndex: i, content: `t${i} `, done: false };
         }
@@ -229,9 +231,7 @@ describe('Agent streaming — S6: signal abort', () => {
     };
     const agent = Agent.create({ provider, model: 'm' }).system('').build();
     setTimeout(() => ac.abort(new Error('user cancel')), 30);
-    await expect(
-      agent.run({ message: 'go' }, { signal: ac.signal }),
-    ).rejects.toThrow();
+    await expect(agent.run({ message: 'go' }, { signal: ac.signal })).rejects.toThrow();
   });
 });
 

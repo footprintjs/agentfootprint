@@ -184,9 +184,7 @@ export function openai(options: OpenAIProviderOptions = {}): LLMProvider {
     async complete(req: LLMRequest): Promise<LLMResponse> {
       const params = buildParams(req, defaultModel, defaultMaxTokens, false);
       try {
-        const response = (await client.chat.completions.create(
-          params,
-        )) as OpenAIChatCompletion;
+        const response = (await client.chat.completions.create(params)) as OpenAIChatCompletion;
         return fromOpenAIResponse(response);
       } catch (err) {
         throw wrapError(err);
@@ -205,10 +203,7 @@ export function openai(options: OpenAIProviderOptions = {}): LLMProvider {
       // authoritative LLMResponse on the terminal chunk. OpenAI streams
       // tool_calls in chunks too — assemble id/name/args by index.
       const textParts: string[] = [];
-      const toolCallsByIndex = new Map<
-        number,
-        { id: string; name: string; argsJson: string }
-      >();
+      const toolCallsByIndex = new Map<number, { id: string; name: string; argsJson: string }>();
       let lastFinishReason: string | null = null;
       let lastUsage: { prompt_tokens: number; completion_tokens: number } | undefined;
       let lastId = '';
@@ -230,8 +225,7 @@ export function openai(options: OpenAIProviderOptions = {}): LLMProvider {
           if (delta.tool_calls) {
             for (const tcDelta of delta.tool_calls) {
               const idx = tcDelta.index;
-              const existing =
-                toolCallsByIndex.get(idx) ?? { id: '', name: '', argsJson: '' };
+              const existing = toolCallsByIndex.get(idx) ?? { id: '', name: '', argsJson: '' };
               if (tcDelta.id) existing.id = tcDelta.id;
               if (tcDelta.function?.name) existing.name = tcDelta.function.name;
               if (tcDelta.function?.arguments) existing.argsJson += tcDelta.function.arguments;
@@ -316,7 +310,10 @@ function resolveClient(options: OpenAIProviderOptions): OpenAIClient {
   try {
     // eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-require-imports
     const mod = require('openai');
-    OpenAI = (mod.default ?? mod.OpenAI ?? mod) as new (opts: { apiKey?: string; baseURL?: string }) => OpenAIClient;
+    OpenAI = (mod.default ?? mod.OpenAI ?? mod) as new (opts: {
+      apiKey?: string;
+      baseURL?: string;
+    }) => OpenAIClient;
   } catch {
     throw new Error(
       'OpenAIProvider requires the `openai` package.\n' +
