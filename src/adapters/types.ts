@@ -100,36 +100,6 @@ export interface LLMProvider {
   stream?(req: LLMRequest): AsyncIterable<LLMChunk>;
 }
 
-// ─── Memory Store ────────────────────────────────────────────────────
-
-export interface Memory {
-  readonly id: string;
-  readonly content: string;
-  readonly embedding?: readonly number[];
-  readonly metadata?: Readonly<Record<string, unknown>>;
-  readonly createdAt: number;
-}
-
-export interface MemoryQuery {
-  readonly text?: string;
-  readonly embedding?: readonly number[];
-  readonly topK: number;
-  readonly filter?: Readonly<Record<string, unknown>>;
-  readonly minScore?: number;
-}
-
-export interface ScoredMemory {
-  readonly memory: Memory;
-  readonly score: number;
-}
-
-export interface MemoryStore {
-  readonly name: string;
-  upsert(memories: readonly Memory[]): Promise<void>;
-  query(q: MemoryQuery): Promise<readonly ScoredMemory[]>;
-  delete(ids: readonly string[]): Promise<void>;
-}
-
 // ─── Context Source ──────────────────────────────────────────────────
 
 export interface ResolveCtx {
