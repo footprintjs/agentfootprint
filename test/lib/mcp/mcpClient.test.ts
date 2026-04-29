@@ -15,20 +15,26 @@ import type { McpSdkClient } from '../../../src/lib/mcp/types.js';
 
 // ─── Mock SDK client factory ──────────────────────────────────────
 
-function makeMockSdk(opts: {
-  tools?: ReadonlyArray<{
-    name: string;
-    description?: string;
-    inputSchema: Record<string, unknown>;
-  }>;
-  callResult?: { content: ReadonlyArray<{ type: string; text?: string }>; isError?: boolean };
-  callImpl?: (args: { name: string; arguments?: Record<string, unknown> }) => Promise<{
-    content: ReadonlyArray<{ type: string; text?: string }>;
-    isError?: boolean;
-  }>;
-} = {}): McpSdkClient {
+function makeMockSdk(
+  opts: {
+    tools?: ReadonlyArray<{
+      name: string;
+      description?: string;
+      inputSchema: Record<string, unknown>;
+    }>;
+    callResult?: { content: ReadonlyArray<{ type: string; text?: string }>; isError?: boolean };
+    callImpl?: (args: { name: string; arguments?: Record<string, unknown> }) => Promise<{
+      content: ReadonlyArray<{ type: string; text?: string }>;
+      isError?: boolean;
+    }>;
+  } = {},
+): McpSdkClient {
   const tools = opts.tools ?? [
-    { name: 'echo', description: 'Echo input', inputSchema: { type: 'object', properties: { text: { type: 'string' } } } },
+    {
+      name: 'echo',
+      description: 'Echo input',
+      inputSchema: { type: 'object', properties: { text: { type: 'string' } } },
+    },
   ];
   const callResult = opts.callResult ?? { content: [{ type: 'text', text: 'mock result' }] };
   return {
@@ -145,11 +151,7 @@ describe('mcpClient — execute wraps callTool', () => {
     const sdk = makeMockSdk({
       tools: [{ name: 't', inputSchema: {} }],
       callResult: {
-        content: [
-          { type: 'text', text: 'caption' },
-          { type: 'image' },
-          { type: 'resource' },
-        ],
+        content: [{ type: 'text', text: 'caption' }, { type: 'image' }, { type: 'resource' }],
       },
     });
     const client = await mcpClient({
@@ -171,7 +173,9 @@ describe('mcpClient — execute wraps callTool', () => {
       _client: sdk,
     });
     const tools = await client.tools();
-    await expect(tools[0]!.execute({})).rejects.toThrow(/'broken' returned an error.*permission denied/);
+    await expect(tools[0]!.execute({})).rejects.toThrow(
+      /'broken' returned an error.*permission denied/,
+    );
   });
 
   it('execute() forwards tool args to callTool', async () => {

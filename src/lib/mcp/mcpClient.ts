@@ -52,12 +52,7 @@
  */
 
 import type { Tool } from '../../core/tools.js';
-import type {
-  McpClient,
-  McpClientOptions,
-  McpSdkClient,
-  McpTransport,
-} from './types.js';
+import type { McpClient, McpClientOptions, McpSdkClient, McpTransport } from './types.js';
 
 const DEFAULT_CLIENT_INFO = {
   name: 'agentfootprint',
@@ -121,10 +116,9 @@ async function resolveClient(
     );
   }
 
-  const client: McpSdkClient = new mod.Client(
-    clientInfo ?? DEFAULT_CLIENT_INFO,
-    { capabilities: {} },
-  );
+  const client: McpSdkClient = new mod.Client(clientInfo ?? DEFAULT_CLIENT_INFO, {
+    capabilities: {},
+  });
 
   const transportImpl = await buildTransport(transport);
   await client.connect(transportImpl);
