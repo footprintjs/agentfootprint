@@ -1,60 +1,61 @@
 ---
-title: Hierarchy (Swarm)
-description: Orchestrate multiple specialist agents with LLM-driven routing — an Agent whose tools are other Agents.
+title: Swarm
+description: Hierarchical routing where one agent's tools are other agents. Triage routes to specialists; specialists may hand off back. The pattern is a Loop over Agent calls — no SwarmAgent class needed.
 ---
 
-**Built from:** Agent with specialist-Agents exposed as tools.
-**Paper:** OpenAI Swarm (2024).
+import CodeFile from '@/components/CodeFile.astro';
 
-Hierarchy (Swarm) is **not a new primitive.** It's an Agent whose tools happen to be other Agents. The orchestrator runs a normal ReAct loop; each "specialist" is a sub-Agent wrapped as a tool via `agentAsTool`.
+> A user message arrives that could be billing OR technical OR a refund. **You don't want one giant prompt that knows everything** — that's where agents get vague and hallucinate. You want a triage agent that figures out *which specialist* should handle this, then hands off. The specialist focuses on its domain. That's Swarm — and it's just a Loop over `Agent`s with a route function.
 
-## Specialist routing
+## What Swarm is
 
-The Hierarchy pattern routes requests to specialist agents. The orchestrator LLM decides which specialist handles each request.
-
-```ts
-import { Swarm, Agent, anthropic } from 'agentfootprint';
-
-const provider = anthropic('claude-sonnet-4-20250514');
-
-const researcher = Agent.create({ provider, name: 'researcher' })
-  .system('You are a research specialist. Be thorough and factual.')
-  .maxIterations(3)
-  .build();
-
-const writer = Agent.create({ provider, name: 'writer' })
-  .system('You are a writing specialist. Be creative and engaging.')
-  .maxIterations(3)
-  .build();
-
-const swarm = Swarm.create({ provider, name: 'orchestrator' })
-  .system('Route research questions to the researcher, writing tasks to the writer.')
-  .specialist('researcher', 'Research topics and provide factual information', researcher)
-  .specialist('writer', 'Write or rewrite content in a specific style', writer)
-  .streaming(true)
-  .maxIterations(5)
-  .build();
-
-const result = await swarm.run('Write a haiku about debugging');
-```
-
-## How it works
-
-The orchestrator sees each specialist as a tool. When it calls the `researcher` tool, the researcher agent runs as a subflow. The narrative captures the full execution path — orchestrator decision, specialist execution, and result.
+Swarm = a hierarchical agent pattern where one orchestrator routes each turn to a specialist agent. The route function is sync, pure, and returns the id of the next agent (or `undefined` to halt). Each handoff is one iteration of a Loop:
 
 ```
-Orchestrator → route to "writer" → Writer Agent runs → result returned → Orchestrator responds
+Loop {
+  current_agent = route(input)
+  if current_agent is undefined → exit
+  result = current_agent.run(input)
+  input = result + handoff annotation
+}
 ```
 
-## Observability
+In agentfootprint there is **no `SwarmAgent` class**. Swarm is a recipe — `swarm({ agents, route, maxHandoffs })` constructs a runnable that wraps a Loop. The 4-composition substrate (Sequence/Parallel/Conditional/Loop) is enough; we don't need a 5th primitive.
 
-```ts
-swarm.getNarrative();
-// [Seed] Initialized agent state
-// [CallLLM] Orchestrator decided to route to writer
-// [Subflow: writer] Writer specialist executed
-//   [CallLLM] Writer generated haiku
-// [Finalize] Final response assembled
-```
+## The recipe
 
-Each specialist's execution appears as a subflow — drill into it for full detail.
+<CodeFile path="examples/patterns/06-swarm.ts" region="swarm-recipe" title="examples/patterns/06-swarm.ts (region: swarm-recipe)" />
+
+The `route` function is the orchestrator's brain. It inspects the current input (often the previous handoff's result) and decides which agent to dispatch next. Returning `undefined` halts the loop — the most recent specialist's output becomes the final answer.
+
+`maxHandoffs` caps the loop so a buggy route function can't infinite-loop. Production: 3–5 handoffs covers most triage flows.
+
+## Why route is sync, not LLM-driven
+
+You CAN make `route` call an LLM internally — it's just a function. But the standard pattern is a **deterministic** route based on the previous specialist's output (often via convention markers like `[BILLING]` or `[ESCALATE]` in the message). That keeps the routing layer cheap, fast, and debuggable. The intelligence lives in the specialists; the routing is mechanical dispatch.
+
+If you need LLM-driven routing, use [Conditional](/agentfootprint/getting-started/key-concepts/#3-conditional--branch-on-a-decider) with an LLM-based predicate — different shape, same outcome.
+
+## Multi-tenant identity propagates
+
+Every specialist's call inherits the orchestrator's `identity` automatically. Memory, observability, cost tracking — all scoped per-tenant across the entire handoff chain.
+
+## When to use Swarm vs Conditional vs Sequence
+
+| Situation | Use |
+|---|---|
+| One classifier picks ONE specialist for the whole turn | Conditional |
+| Specialists may hand back to triage or to each other | Swarm (this guide) |
+| Fixed pipeline: research → write → edit (no branching) | Sequence |
+| Multi-perspective fan-out → merge | Parallel |
+
+## Anti-patterns
+
+- Don't put expensive logic in the route function. It runs every iteration. Keep it as cheap as text inspection.
+- Don't share state between specialists via globals. Use `MemoryIdentity` + memory layer for cross-agent state.
+- Don't omit `maxHandoffs`. A buggy route returning the same agent every time runs forever.
+
+## Next steps
+
+- [Patterns overview](/agentfootprint/getting-started/key-concepts/#patterns--named-compositions) — Reflexion, ToT, Debate, Map-Reduce all run the same way (recipes over the substrate)
+- [Conditional](/agentfootprint/getting-started/key-concepts/#3-conditional--branch-on-a-decider) — single-shot routing alternative

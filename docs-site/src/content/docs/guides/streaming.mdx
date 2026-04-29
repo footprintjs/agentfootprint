@@ -1,68 +1,71 @@
 ---
 title: Streaming
-description: Real-time lifecycle events for any UX — CLI, web, mobile.
+description: Token-by-token output via provider.stream(). The same response is delivered as a stream for UI feedback AND as the authoritative LLMResponse for the ReAct loop — single round-trip, no double call.
 ---
 
-## 9-event lifecycle
+import CodeFile from '@/components/CodeFile.astro';
 
-agentfootprint emits a discriminated union of 9 event types. Build any UX.
+> A user types a question into your chat UI. They expect the answer to appear word-by-word like ChatGPT — not in one big block five seconds later. Behind the scenes the agent is also using that same response to decide whether to call a tool. **One LLM call, two consumers**: the UI streams tokens; the agent loop reads the final LLMResponse to drive ReAct decisioning.
+
+## How streaming works
+
+Every LLM provider implements two methods:
+
+| Method | Returns | Use |
+|---|---|---|
+| `complete(req)` | `LLMResponse` | One-shot, full response at end |
+| `stream(req)` | `AsyncIterable<LLMChunk>` | Token-by-token chunks ending with a final chunk that carries the full LLMResponse |
+
+The agent calls `stream()` when streaming is active. Each chunk has `tokenIndex`, `content`, and `done`. The final chunk has `done: true` AND `response: LLMResponse` — the full authoritative shape with `toolCalls`, `usage`, `stopReason`. This single round-trip serves BOTH the UI's appetite for token-by-token feedback AND the agent loop's need for the structured response.
+
+## Listen to streamed events
+
+Every runner exposes typed events. Subscribe to `agentfootprint.stream.*` for the streaming surface:
+
+<CodeFile path="examples/core/02-agent-with-tools.ts" region="observe" title="examples/core/02-agent-with-tools.ts (region: observe)" />
+
+The event taxonomy:
+- `stream.llm_start` — provider call about to start (model, request shape)
+- `stream.token` — one token chunk arrived (content, tokenIndex)
+- `stream.llm_end` — final chunk processed (full response, usage, stopReason)
+- `stream.tool_start` — agent about to dispatch a tool (name, args)
+- `stream.tool_end` — tool returned (result or error)
+
+## SSE for browser clients
+
+Pipe stream events to Server-Sent Events for browser delivery. Wire your HTTP framework's response writer to the events:
 
 ```ts
-await agent.run('Check order', {
-  onEvent: (event) => {
-    switch (event.type) {
-      case 'turn_start':  console.log('--- Turn started ---'); break;
-      case 'llm_start':   console.log(`LLM call #${event.iteration}...`); break;
-      case 'thinking':     console.log(`[thinking] ${event.content}`); break;
-      case 'token':        process.stdout.write(event.content); break;
-      case 'llm_end':      console.log(`\n[${event.toolCallCount} tools, ${event.latencyMs}ms]`); break;
-      case 'tool_start':   console.log(`Running ${event.toolName}...`); break;
-      case 'tool_end':     console.log(`Done (${event.latencyMs}ms)`); break;
-      case 'turn_end':     console.log(`--- Done (${event.iterations} iterations) ---`); break;
-      case 'error':        console.error(`[${event.phase}] ${event.message}`); break;
-    }
-  },
+// Express / Hono / Fastify
+agent.on('agentfootprint.stream.token', (e) => {
+  res.write(`data: ${JSON.stringify({ type: 'token', content: e.payload.content })}\n\n`);
 });
-```
-
-## Events
-
-| Event | When | Key fields |
-|-------|------|-----------|
-| `turn_start` | Agent begins processing | `userMessage` |
-| `llm_start` | LLM API call begins | `iteration` |
-| `thinking` | Extended thinking content | `content` |
-| `token` | Token streamed from LLM | `content` |
-| `llm_end` | LLM API call completes | `toolCallCount`, `content`, `model`, `latencyMs` |
-| `tool_start` | Tool execution begins | `toolName`, `toolCallId`, `args` |
-| `tool_end` | Tool execution completes | `toolName`, `toolCallId`, `result`, `latencyMs` |
-| `turn_end` | Agent done | `content`, `iterations`, `paused` |
-| `error` | Error occurred | `phase`, `message` |
-
-## SSE for web backends
-
-```ts
-import { SSEFormatter } from 'agentfootprint/stream';
-
-app.get('/chat', async (req, res) => {
-  res.setHeader('Content-Type', 'text/event-stream');
-
-  await agent.run(req.query.message, {
-    onEvent: (event) => {
-      res.write(SSEFormatter.format(event));
-    },
-  });
-
+agent.on('agentfootprint.stream.tool_start', (e) => {
+  res.write(`data: ${JSON.stringify({ type: 'tool', name: e.payload.toolName })}\n\n`);
+});
+agent.on('agentfootprint.stream.llm_end', () => {
+  res.write(`event: done\ndata: {}\n\n`);
   res.end();
 });
+
+await agent.run({ message: userInput });
 ```
 
-## Enable streaming
+The browser consumes via `EventSource` and renders tokens into the UI as they arrive.
 
-```ts
-const agent = Agent.create({ provider })
-  .streaming(true)   // enables token-by-token streaming
-  .build();
-```
+## When streaming isn't useful
 
-Tool lifecycle events (`tool_start`, `tool_end`) fire even without `.streaming(true)` — only `token` events require streaming mode.
+- **Cost-sensitive batch jobs** — `complete()` is one less per-call cost than `stream()` on most providers (negligibly).
+- **Tool-heavy ReAct loops** — tool dispatch happens at `stream.llm_end`, not during token chunks. If your UI doesn't render tokens, `complete()` is simpler.
+- **Tests / mocks** — `mock({ reply: 'X' })` works in both modes; pick whichever the test asserts on.
+
+## Anti-patterns
+
+- Don't try to dispatch tools off `stream.token`. Tool calls land in the final chunk's `response.toolCalls`. Token chunks are content-only.
+- Don't keep the SSE connection open after `stream.llm_end`. End it; the browser's EventSource will reconnect automatically if needed.
+- Don't run two `stream()`s concurrently on the same agent. Build one, run one.
+
+## Next steps
+
+- [Observability guide](/agentfootprint/guides/observability/) — the full 47-event taxonomy + recorders
+- [Mock provider](/agentfootprint/integrations/) — `mock({ reply })` streams word-by-word for $0 dev

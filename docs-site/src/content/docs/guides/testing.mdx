@@ -1,170 +1,97 @@
 ---
-title: Testing Agents
-description: Deterministic, free, instant testing with mock() — patterns for vitest and jest.
+title: Testing
+description: mock({ replies }) + mockMcpClient + InMemoryStore — script every agent decision deterministically. No API keys, no flake, no hidden $40k OpenAI bill from a runaway test loop.
 ---
 
-## The mock() story
+import CodeFile from '@/components/CodeFile.astro';
 
-`mock()` returns responses in order. Same agent, same tools, $0 cost, deterministic results.
+> A junior dev pushes a test that runs your agent in a `for (let i = 0; i < 1000; i++)` loop. They forgot to set `provider: mock(...)`. Their CI run hits the production OpenAI key. **You discover this when finance forwards a $40,000 invoice.** The mocks-first development workflow makes this scenario impossible — by default, your agents run against deterministic mocks and you never accidentally hit a paid API in a test.
 
-```ts
-import { mock } from 'agentfootprint';
+## Three mock surfaces, three boundaries
 
-const provider = mock([
-  // Response 1: LLM decides to call a tool
-  { content: '', toolCalls: [{ id: 'tc1', name: 'search', arguments: { query: 'AI trends' } }] },
-  // Response 2: LLM generates final answer using tool results
-  { content: 'The latest AI trends include...' },
-]);
-```
+| Surface | What it mocks |
+|---|---|
+| `mock({ reply })` / `mock({ replies })` | LLM provider — single reply or scripted multi-turn |
+| `mockMcpClient({ tools })` | MCP server — in-memory, no SDK install |
+| `mockEmbedder()` | Embedder — deterministic vectors |
+| `InMemoryStore` | Memory store — ephemeral, no Redis / Postgres / cloud |
+| inline `defineTool({ execute: async () => '...' })` | Tool implementations — pure closure, no real backend |
 
-## Testing tool calls
+## Scripted multi-turn agent test
 
-Verify the agent calls the right tools and uses the results:
+Tool-using agents are notoriously hard to test because the LLM's behavior is non-deterministic. `mock({ replies })` solves that — each entry in the array is consumed in order on each iteration:
 
-```ts
-import { describe, it, expect } from 'vitest';
-import { Agent, mock, defineTool } from 'agentfootprint';
-import { agentObservability } from 'agentfootprint';
+<CodeFile path="examples/features/07-mock-multi-turn-replies.ts" region="scripted-replies" title="examples/features/07-mock-multi-turn-replies.ts (region: scripted-replies)" />
 
-const lookupOrder = defineTool({
-  id: 'lookup_order',
-  description: 'Look up an order',
-  inputSchema: { type: 'object', properties: { orderId: { type: 'string' } }, required: ['orderId'] },
-  handler: async ({ orderId }) => ({
-    content: JSON.stringify({ orderId, status: 'shipped', amount: 299 }),
-  }),
-});
+Iteration 1 calls the tool with the scripted args; iteration 2 returns the final answer. The tool actually executes; the agent loop is real. Only the LLM is mocked.
 
-describe('support agent', () => {
-  it('looks up the order and responds with status', async () => {
-    const obs = agentObservability();
-    const agent = Agent.create({
-      provider: mock([
-        { content: '', toolCalls: [{ id: 'tc1', name: 'lookup_order', arguments: { orderId: 'ORD-1003' } }] },
-        { content: 'Your order ORD-1003 has shipped!' },
-      ]),
-    })
-      .system('You are a support agent.')
-      .tool(lookupOrder)
-      .recorder(obs)
-      .build();
+**Exhaustion behavior:** if the agent calls the LLM more times than there are entries in `replies`, the next call throws a clear error — *"MockProvider exhausted: scripted N replies but received N+1"* — so misnumbered scripts fail tests instead of silently looping forever.
 
-    const result = await agent.run('Check order ORD-1003');
+`provider.resetReplies()` rewinds the cursor for cross-scenario reuse — useful when one test file runs many test cases against the same provider instance.
 
-    // Assert on content
-    expect(result.content).toContain('shipped');
+## Mocking MCP without subprocess
 
-    // Assert on iterations (2 = tool call + final response)
-    expect(result.iterations).toBe(2);
-
-    // Assert on recorder data
-    expect(obs.tokens().totalCalls).toBe(2);
-    expect(obs.tools().byTool['lookup_order'].calls).toBe(1);
-  });
-});
-```
-
-## Testing narrative
-
-Verify the execution trace contains expected entries:
+For agents that use MCP, `mockMcpClient({ tools })` is a drop-in replacement for `mcpClient(opts)` — same `McpClient` interface, in-memory implementation. No subprocess, no network, no `@modelcontextprotocol/sdk` install needed:
 
 ```ts
-it('narrative includes tool call details', async () => {
-  const agent = Agent.create({ provider: mock([...]) })
-    .tool(lookupOrder)
-    .build();
+import { mockMcpClient } from 'agentfootprint';
 
-  await agent.run('Check order ORD-1003');
-
-  const narrative = agent.getNarrative();
-  expect(narrative.some(line => line.includes('lookup_order'))).toBe(true);
-  expect(narrative.some(line => line.includes('shipped'))).toBe(true);
+const mockServer = mockMcpClient({
+  tools: [
+    {
+      name: 'list_files',
+      description: 'List files in a directory',
+      inputSchema: { type: 'object' },
+      handler: async () => 'file1.txt\nfile2.txt',
+    },
+  ],
 });
+
+const agent = Agent.create({ provider: mock({ reply: 'ok' }) })
+  .tools(await mockServer.tools())
+  .build();
 ```
 
-## Testing instructions
+When you ship to production, swap `mockMcpClient` for `mcpClient` — the rest of the agent code is identical.
 
-Verify conditional instructions activate based on decision scope:
+## Memory tests with InMemoryStore
+
+`InMemoryStore` is the default memory adapter for tests. Ephemeral, isolated per-test, no infrastructure:
 
 ```ts
-import { defineInstruction, AgentPattern } from 'agentfootprint';
+import { defineMemory, MEMORY_TYPES, MEMORY_STRATEGIES, InMemoryStore } from 'agentfootprint';
 
-it('refund instruction activates for cancelled orders', async () => {
-  const refund = defineInstruction({
-    id: 'refund-handling',
-    activeWhen: (d) => d.orderStatus === 'cancelled',
-    prompt: 'Offer refund. Timeline: 3-5 days.',
-  });
-
-  const agent = Agent.create({
-    provider: mock([
-      // Call 1: tool call
-      { content: '', toolCalls: [{ id: 'tc1', name: 'lookup_order', arguments: { orderId: 'ORD-1003' } }] },
-      // Call 2: response (should mention refund since instruction activated)
-      { content: 'Your order was cancelled. I can process a refund in 3-5 days.' },
-    ]),
-  })
-    .tool(lookupOrder)
-    .instruction(refund)
-    .decision({ orderStatus: null })
-    .pattern(AgentPattern.Dynamic)
-    .build();
-
-  const result = await agent.run('Check order ORD-1003');
-  expect(result.content).toContain('refund');
+const memory = defineMemory({
+  id: 'test-window',
+  type: MEMORY_TYPES.EPISODIC,
+  strategy: { kind: MEMORY_STRATEGIES.WINDOW, size: 10 },
+  store: new InMemoryStore(),
 });
+
+// each test gets a fresh store via fresh definition
 ```
 
-## Testing streaming events
+For tests that need to verify the store WAS called correctly (e.g., "did the agent persist this fact?"), use vitest spies on the store's methods OR list entries directly via `store.list(identity)`.
 
-```ts
-import type { AgentStreamEvent } from 'agentfootprint';
+## CI integration
 
-it('emits tool_start and tool_end events', async () => {
-  const events: AgentStreamEvent[] = [];
+The project's own examples are tested end-to-end in CI:
 
-  const agent = Agent.create({ provider: mock([...]) })
-    .tool(lookupOrder)
-    .build();
-
-  await agent.run('Check order', {
-    onEvent: (event) => events.push(event),
-  });
-
-  const toolStarts = events.filter(e => e.type === 'tool_start');
-  const toolEnds = events.filter(e => e.type === 'tool_end');
-  expect(toolStarts).toHaveLength(1);
-  expect(toolEnds).toHaveLength(1);
-  expect(toolStarts[0].toolName).toBe('lookup_order');
-});
+```bash
+npm run test:examples           # tsc + tsx run for every example
+npm run test:examples:typecheck # type-check only (faster)
 ```
 
-## Testing grounding
+Every example file in `examples/` runs against mocks (no API keys); CI proves they still compile + execute correctly on every commit. Pattern this for your own codebase: a mocks-first test suite is fast enough to run on every push.
 
-```ts
-import { ExplainRecorder } from 'agentfootprint';
+## Anti-patterns
 
-it('LLM response is grounded in tool results', async () => {
-  const explain = new ExplainRecorder();
-  const agent = Agent.create({ provider: mock([...]) })
-    .tool(lookupOrder)
-    .recorder(explain)
-    .build();
+- Don't mix mock and real providers in one test. If a test should hit a real API (integration test), mark it explicitly + isolate from the mocked test pool.
+- Don't share a single `mock()` instance across tests without `resetReplies()`. Tests will pollute each other's cursor state.
+- Don't test agent logic by mocking the entire `Agent` class. Mock the BOUNDARIES (provider, store, MCP); let the real Agent loop run. That's where bugs hide.
 
-  await agent.run('Check order ORD-1003');
-  const report = explain.explain();
+## Next steps
 
-  // Sources should contain the order data
-  expect(report.sources.length).toBeGreaterThan(0);
-  // Claims should reference data from sources
-  expect(report.claims.length).toBeGreaterThan(0);
-});
-```
-
-## Tips
-
-- **One mock response per LLM call.** If the agent makes 2 LLM calls (tool + response), provide 2 mock responses.
-- **Tool handlers still execute.** `mock()` replaces the LLM, not your tools. Tool handlers run normally.
-- **Use `agentObservability()`** to assert on token counts, tool usage, and cost.
-- **Use `.getNarrativeEntries()`** for structured assertions instead of string matching on `.getNarrative()`.
+- [Quick Start § mocks-first](/agentfootprint/getting-started/quick-start/) — the workflow recommendation
+- [MCP integration](/agentfootprint/integrations/) — `mockMcpClient` shape + production swap
+- [Memory guide](/agentfootprint/guides/memory/) — `InMemoryStore` for ephemeral test scenarios

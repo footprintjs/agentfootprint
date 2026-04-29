@@ -1,93 +1,76 @@
 ---
-title: Tool Use
-description: Define tools, register them, and use dynamic tool providers.
+title: Tools
+description: defineTool — flat builder for the Tool interface. JSON schema in, async execute out. Drop into agent.tool() or pull a whole MCP server's surface via agent.tools().
 ---
 
-## Defining tools
+import CodeFile from '@/components/CodeFile.astro';
+
+> Your agent needs to look up an order. The LLM doesn't know your order database — it knows what you tell it via the tool's JSON schema. **Tools are the contract** between LLM intent ("call this with these args") and your code ("here's what happens"). Get the schema right and the LLM uses the tool well; get it wrong and you debug schema-vs-args mismatches at 2 AM.
+
+## What a tool is
+
+A `Tool` has two parts:
+
+```ts
+{
+  schema: { name, description, inputSchema },  // what the LLM sees
+  execute: async (args) => result,             // what runs when LLM calls it
+}
+```
+
+The `inputSchema` is a JSON Schema describing the args the LLM should produce. It's the LLM's contract — it generates well-formed args based on that shape.
+
+## defineTool — the flat builder
+
+`defineTool` is a flatter helper that puts name + description + inputSchema at the top level instead of nested under `schema`:
 
 ```ts
 import { defineTool } from 'agentfootprint';
 
-const weatherTool = defineTool({
-  id: 'get_weather',
-  description: 'Get current weather for a city',
+const lookup = defineTool<{ orderId: string }, string>({
+  name: 'lookup_order',
+  description: 'Look up an order by ID',
   inputSchema: {
     type: 'object',
-    properties: {
-      city: { type: 'string', description: 'City name' },
-    },
-    required: ['city'],
+    properties: { orderId: { type: 'string' } },
+    required: ['orderId'],
   },
-  handler: async ({ city }) => {
-    const data = await fetchWeather(city);
-    return { content: JSON.stringify(data) };
-  },
+  execute: async ({ orderId }) => `Order ${orderId}: shipped, $299`,
 });
+
+const agent = Agent.create({ provider }).tool(lookup).build();
 ```
 
-## Registering tools
+Type parameters `<TArgs, TResult>` flow into `execute` so your handler is fully typed.
 
-```ts
-const agent = Agent.create({ provider })
-  .tool(weatherTool)                    // single tool
-  .tools([searchTool, calculatorTool])  // multiple tools
-  .build();
-```
+## Example — agent + tool registered inline
 
-## Dynamic tool providers
+<CodeFile path="examples/core/02-agent-with-tools.ts" region="build" title="examples/core/02-agent-with-tools.ts (region: build)" />
 
-Tools that change based on conversation state:
+`.tool(...)` accepts both shapes (flat `{schema, execute}` or `defineTool` output) — the agent doesn't care which.
 
-```ts
-import type { ToolProvider } from 'agentfootprint';
+## Bulk-register from MCP
 
-const dynamicTools: ToolProvider = {
-  resolve: (ctx) => {
-    const verified = ctx.messages.some(m =>
-      m.content.includes('"verified":true'));
+Pull a whole MCP server's tool surface into the agent in one call:
 
-    const tools = verified
-      ? [...basicTools, ...adminTools]
-      : basicTools;
+<CodeFile path="examples/context-engineering/08-mcp.ts" region="connect-and-attach" title="examples/context-engineering/08-mcp.ts (region: connect-and-attach)" />
 
-    return {
-      value: tools.map(t => ({ name: t.id, description: t.description, inputSchema: t.inputSchema })),
-      chosen: verified ? 'elevated' : 'basic',
-    };
-  },
-  execute: async (call) => {
-    const tool = allTools.find(t => t.id === call.name);
-    if (!tool) return { content: `Unknown tool: ${call.name}`, error: true };
-    return tool.handler(call.arguments);
-  },
-};
+`agent.tools(arr)` is the bulk-register companion to `agent.tool(t)`. Tool-name uniqueness is validated at `.build()` time — if an MCP-imported tool collides with a manually-defined tool, the build throws with a clear error.
 
-import { AgentPattern } from 'agentfootprint';
+For mock-first development of MCP integrations without spawning a subprocess, use `mockMcpClient({ tools })` — same `McpClient` interface, in-memory implementation. See [MCP integration](/agentfootprint/integrations/) for the full surface.
 
-const agent = Agent.create({ provider })
-  .pattern(AgentPattern.Dynamic)
-  .toolProvider(dynamicTools)
-  .build();
-```
+## Tool errors
 
-## Tool gating
+When `execute` throws, the framework catches it, reports it to the LLM as a tool error, and continues the loop. The LLM sees the error message and can decide to retry with different args, try a different tool, or surface to the user. See [Error handling](/agentfootprint/guides/error-handling/) for the typed error contract + retry decorators.
 
-The LLM never sees tools it can't use:
+## Anti-patterns
 
-```ts
-import { Agent } from 'agentfootprint';
-import { gatedTools, PermissionPolicy } from 'agentfootprint';
-import { staticTools } from 'agentfootprint';
+- Don't make `execute` synchronous — it must return a Promise. The agent loop is async end-to-end.
+- Don't put validation logic in `execute` for things JSON Schema can express (`type`, `required`, `enum`). The LLM honors well-formed schemas; redundant runtime checks are noise.
+- Don't make tool descriptions ambiguous. "Get data" is bad. "Look up an order by ID; returns status + amount" is good. The LLM picks tools by description.
 
-const policy = PermissionPolicy.fromRoles({
-  user: ['search', 'calc'],
-  admin: ['search', 'calc', 'delete-user'],
-}, 'user');
+## Next steps
 
-const agent = Agent.create({ provider })
-  .toolProvider(gatedTools(staticTools(allTools), policy.checker()))
-  .build();
-
-// Upgrade mid-conversation
-policy.setRole('admin');
-```
+- [MCP integration](/agentfootprint/integrations/) — connect to any MCP server with `mcpClient({ transport })`
+- [Skills, explained](/agentfootprint/guides/skills-explained/) — LLM-activated tool bundles
+- [Permission gating](/agentfootprint/guides/security/) — restrict which tools an agent can call

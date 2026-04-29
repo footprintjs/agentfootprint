@@ -1,181 +1,135 @@
 ---
 title: Deployment
-description: Deploy agentfootprint agents — Express, Docker, serverless, and production patterns.
+description: Multi-tenant identity at every store call, peer-dep declarations, mocks-first dev → real-infra prod swap. The patterns that take an agentfootprint app from laptop to production.
 ---
 
-## Express / Node.js server
+> Friday afternoon, 4:50 PM. You're about to push your agent service to production for the first time. **What's the checklist?** Not "did the tests pass" (CI proved that) — the higher-stakes things: tenant isolation, peer-dep installed, observability hooks wired, secrets out of the codebase. This guide is the checklist.
 
-The most common deployment — an HTTP server that handles chat requests:
+## The mocks-first → prod-swap workflow
 
-```ts
-import express from 'express';
-import { Agent, anthropic, defineTool } from 'agentfootprint';
-import { agentObservability } from 'agentfootprint';
-import { SSEFormatter } from 'agentfootprint/stream';
+If you developed against the [mocks-first stack](/agentfootprint/getting-started/quick-start/), the deployment is mechanical:
 
-const app = express();
-app.use(express.json());
+| Boundary | Dev (mock) | Prod (one-line swap) |
+|---|---|---|
+| LLM provider | `mock({ reply })` | `anthropic({...})` · `openai({...})` · `bedrock({...})` |
+| Embedder | `mockEmbedder()` | OpenAI / Cohere / Bedrock embedder factory (planned v2.6) |
+| Memory store | `InMemoryStore` | `RedisStore` (`agentfootprint/memory-redis`) · `AgentCoreStore` (`agentfootprint/memory-agentcore`) |
+| MCP server | `mockMcpClient({ tools })` | `mcpClient({ transport })` |
+| Tool execute | inline closure | real implementation |
 
-const provider = anthropic('claude-sonnet-4-20250514');
-
-// Define tools once — shared across requests
-const lookupOrder = defineTool({ /* ... */ });
-
-app.post('/chat', async (req, res) => {
-  const { message, sessionId } = req.body;
-
-  // Create a NEW agent per request for isolation
-  const obs = agentObservability();
-  const agent = Agent.create({ provider })
-    .system('You are a support agent.')
-    .tool(lookupOrder)
-    .recorder(obs)
-    .streaming(true)
-    .build();
-
-  // SSE streaming response
-  res.setHeader('Content-Type', 'text/event-stream');
-  res.setHeader('Cache-Control', 'no-cache');
-  res.setHeader('Connection', 'keep-alive');
-
-  await agent.run(message, {
-    onEvent: (event) => {
-      res.write(SSEFormatter.format(event));
-    },
-  });
-
-  res.end();
-});
-
-app.listen(3000);
-```
-
-## Concurrency
-
-**Create a new agent instance per request.** The `Agent.create().build()` call is lightweight — it builds an internal flowchart but doesn't allocate heavy resources. The provider (LLM adapter) can be shared across requests.
-
-```ts
-// GOOD: shared provider, per-request agent
-const provider = anthropic('claude-sonnet-4-20250514');
-
-app.post('/chat', async (req, res) => {
-  const agent = Agent.create({ provider })  // lightweight — new per request
-    .system('You are helpful.')
-    .build();
-
-  const result = await agent.run(req.body.message);
-  res.json({ content: result.content });
-});
-```
-
-```ts
-// BAD: shared agent across requests — narrative and state will bleed
-const agent = Agent.create({ provider }).build();  // DON'T share this
-
-app.post('/chat', async (req, res) => {
-  const result = await agent.run(req.body.message);  // race conditions
-});
-```
-
-## Docker
-
-```dockerfile
-FROM node:22-slim
-WORKDIR /app
-COPY package*.json ./
-RUN npm ci --production
-COPY . .
-EXPOSE 3000
-CMD ["node", "dist/server.js"]
-```
-
-```bash
-docker build -t my-agent .
-docker run -p 3000:3000 -e ANTHROPIC_API_KEY=sk-ant-... my-agent
-```
-
-## Environment variables
-
-| Variable | Description |
-|----------|-------------|
-| `ANTHROPIC_API_KEY` | Anthropic API key (for `AnthropicAdapter`) |
-| `OPENAI_API_KEY` | OpenAI API key (for `OpenAIAdapter`) |
-| `AWS_REGION` | AWS region (for `BedrockAdapter`) |
-| `AWS_ACCESS_KEY_ID` | AWS credentials (or use IAM roles) |
-
-Never hardcode API keys — use environment variables or a secrets manager.
-
-## Serverless (AWS Lambda)
-
-```ts
-import { Agent, bedrock } from 'agentfootprint';
-
-const provider = bedrock('anthropic.claude-sonnet-4-20250514-v1:0');
-
-export const handler = async (event: any) => {
-  const { message } = JSON.parse(event.body);
-
-  const agent = Agent.create({ provider })
-    .system('You are helpful.')
-    .build();
-
-  const result = await agent.run(message);
-
-  return {
-    statusCode: 200,
-    body: JSON.stringify({ content: result.content }),
-  };
-};
-```
-
-For AWS AgentCore (managed serverless with VM isolation), see the [AgentCore integration](/agentfootprint/integrations/agentcore/).
-
-## Health check
-
-Add a health endpoint for Kubernetes, ECS, or load balancer probes:
-
-```ts
-app.get('/health', (_req, res) => {
-  res.json({ status: 'ok', uptime: process.uptime() });
-});
-```
-
-## Graceful shutdown
-
-Drain in-flight requests before stopping. Use `AbortController` to cancel running agents:
-
-```ts
-const activeControllers = new Set<AbortController>();
-
-app.post('/chat', async (req, res) => {
-  const controller = new AbortController();
-  activeControllers.add(controller);
-
-  try {
-    const agent = Agent.create({ provider }).build();
-    const result = await agent.run(req.body.message, {
-      signal: controller.signal,  // agent respects AbortSignal
-    });
-    res.json({ content: result.content });
-  } finally {
-    activeControllers.delete(controller);
-  }
-});
-
-// On SIGTERM: cancel all running agents, then exit
-process.on('SIGTERM', () => {
-  for (const c of activeControllers) c.abort();
-  server.close(() => process.exit(0));
-});
-```
+The flowchart, recorders, narrative, tests don't change. **Ship the patterns first; pay for tokens last.**
 
 ## Production checklist
 
-- [ ] API keys in environment variables (not in code)
-- [ ] `agentObservability()` attached to every agent
-- [ ] Error handling with `withRetry` / `withFallback`
-- [ ] Per-request agent instances (not shared)
-- [ ] Token/cost monitoring via CloudWatch or your observability stack
-- [ ] `maxIterations` set to prevent runaway loops
-- [ ] Streaming enabled for user-facing agents
-- [ ] Tests with `mock()` in CI pipeline
+### 1. Multi-tenant identity at every `agent.run()`
+
+Every memory call namespaces by `MemoryIdentity`. The default `{ conversationId: '_global' }` is fine for prototypes — DANGEROUS in production multi-tenant apps. Pass per-tenant identity at every call site:
+
+```ts
+const identity = {
+  tenant: req.tenantId,
+  principal: req.userId,
+  conversationId: req.threadId,
+};
+await agent.run({ message: req.body.message, identity });
+```
+
+A bug that omits `tenant` surfaces as "no data found" — never as a cross-tenant leak. Adapters refuse cross-tenant reads at the storage boundary.
+
+### 2. Peer-dep SDKs installed
+
+agentfootprint declares optional SDKs in `peerDependenciesMeta`. Install only what you use:
+
+```bash
+npm install agentfootprint footprintjs   # core (always)
+npm install @anthropic-ai/sdk            # if using anthropic()
+npm install openai                       # if using openai()
+npm install @aws-sdk/client-bedrock-runtime              # if using bedrock()
+npm install ioredis                                      # if using RedisStore
+npm install @aws-sdk/client-bedrock-agent-runtime        # if using AgentCoreStore
+npm install @modelcontextprotocol/sdk                    # if using mcpClient()
+```
+
+Lazy-required at first call with friendly install hints. `npm install agentfootprint` on its own works for mocks-first dev.
+
+### 3. Secrets in env, not code
+
+Provider factories accept `apiKey` as a constructor arg — pass via `process.env`:
+
+```ts
+const provider = anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
+```
+
+Never commit keys. Use a secrets manager (AWS Secrets Manager, HashiCorp Vault, Doppler, etc.) for production.
+
+### 4. Observability hooks wired
+
+Pick one per concern:
+
+- **Status line** — `agent.enable.thinking({ onStatus })` (terminal UIs, chat typing indicators)
+- **Structured logs** — `agent.enable.logging({ domains, logger })` (pino, winston, console)
+- **Cost tracking** — pass `pricingTable` + `costBudget` to `Agent.create()`
+- **Custom recorders** — `agent.attach(myRecorder)` for aggregation
+
+See [Observability guide](/agentfootprint/guides/observability/) for the full surface.
+
+### 5. Resilience decorators wrapping the provider
+
+Production providers should be wrapped:
+
+```ts
+const provider = withRetry(
+  withFallback(
+    anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! }),
+    openai({ apiKey: process.env.OPENAI_API_KEY! }),
+  ),
+  { maxAttempts: 5 },
+);
+```
+
+See [Resilience guide](/agentfootprint/guides/resilience/) for `withRetry` / `withFallback` / `resilientProvider` decorators.
+
+### 6. Pause/resume infrastructure
+
+If your agent uses `pauseHere` or `askHuman`, wire the checkpoint persistence + resume path:
+
+```ts
+// On pause
+const result = await agent.run({...});
+if (isPaused(result)) {
+  await db.save('pause:' + sessionId, JSON.stringify(result.checkpoint));
+  triggerHumanWorkflow(result.pauseData);
+  return; // request done
+}
+
+// On human reply (different process / day)
+const checkpoint = JSON.parse(await db.get('pause:' + sessionId));
+const finalResult = await agent.resume(checkpoint, humanAnswer);
+```
+
+See [Pause/Resume guide](/agentfootprint/guides/pausable/).
+
+## Multi-instance considerations
+
+- **CircuitBreaker state** is per-process today. Multi-instance deploys won't share circuit state. Acceptable for v2.4; v2.5 adds shared-state options. (Reliability subsystem.)
+- **Memory stores** are inherently multi-instance friendly when backed by Redis / AgentCore / external DBs.
+- **Pause/resume checkpoints** are JSON; any instance can resume any pause given the checkpoint.
+
+## What's NOT here yet
+
+- Rate-limit budget enforcement → Reliability subsystem v2.5
+- 3-tier output fallback → Reliability subsystem v2.5
+- Per-agent IAM-style policy → Governance subsystem v2.6
+- DynamoDB / Postgres / Pinecone memory adapters → v2.6
+
+## Anti-patterns
+
+- Don't wire production keys into your test suite. Use `mock(...)` for tests; reserve real keys for staged env.
+- Don't omit identity in production. Default-global is a footgun.
+- Don't cache the agent instance across requests when memory is involved. Build fresh per request; the memory layer handles state.
+
+## Next steps
+
+- [Quick Start](/agentfootprint/getting-started/quick-start/) — the mocks-first workflow
+- [Memory store adapters](/agentfootprint/integrations/memory-stores/) — production backend matrix
+- [Resilience guide](/agentfootprint/guides/resilience/) — production-grade decorators

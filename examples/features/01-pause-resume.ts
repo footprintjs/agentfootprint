@@ -59,6 +59,7 @@ export const meta: ExampleMeta = {
  * tool registry, voice config) is identical across the two phases.
  */
 function buildAgent(provider?: LLMProvider) {
+  // #region pause-tool
   return Agent.create({
     provider: provider ?? exampleProvider('feature'),
     model: 'mock',
@@ -83,6 +84,7 @@ function buildAgent(provider?: LLMProvider) {
       },
     })
     .build();
+  // #endregion pause-tool
 }
 
 /**

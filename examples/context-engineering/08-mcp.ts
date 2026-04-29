@@ -73,6 +73,7 @@ export async function run(input: string, provider?: LLMProvider): Promise<string
     close: async () => {},
   };
 
+  // #region connect-and-attach
   // Connect once at startup. In production: use a real transport.
   const fileServer = await mcpClient({
     name: 'file-server',
@@ -89,6 +90,7 @@ export async function run(input: string, provider?: LLMProvider): Promise<string
     .system('You answer file-system questions using the MCP tools provided.')
     .tools(await fileServer.tools())
     .build();
+  // #endregion connect-and-attach
 
   const result = await agent.run({ message: input });
   await fileServer.close();

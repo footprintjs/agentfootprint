@@ -1,158 +1,67 @@
 ---
-title: Pausable — Human-in-the-Loop
-description: Agent pauses for human input, serializes state to JSON, resumes on any server.
+title: Pause / Resume
+description: Human-in-the-loop with JSON-checkpointed state. Pause hours mid-run via askHuman or pauseHere; resume on a different process, day, or server.
 ---
 
-## The pattern
+import CodeFile from '@/components/CodeFile.astro';
 
-Some decisions need a human. A refund approval, a deployment confirmation, a content review. The agent pauses, asks the human, and resumes with their answer.
+> An agent processes a refund request. Mid-run, the LLM calls `askOperator({ question: 'approve $500 refund?' })`. **The agent has to wait for a human** — could be 30 seconds, could be 3 hours, could be tomorrow. You can't keep the process running. The framework hands you back a JSON checkpoint; you persist it (Redis, Postgres, S3); when the human responds, you resume. Different process, different server — same conversation.
 
-```
-Agent runs → calls ask_human tool → PAUSES → checkpoint saved (JSON)
-                                                    ↓
-                              ... hours later, different server ...
-                                                    ↓
-                            Human responds → agent.resume(answer) → continues
-```
+## What "pausable" means here
 
-## askHuman tool
+Two halves:
 
-Add `askHuman()` to your agent — it's a special tool that pauses execution:
+1. **Pause** — a tool calls `pauseHere(...)` (or the agent uses the built-in `askHuman` tool); the framework throws a `PauseRequest`; the agent loop catches it; `agent.run()` returns a `RunnerPauseOutcome` containing a JSON-serializable `checkpoint` + the pause data.
+2. **Resume** — your code persists the checkpoint anywhere; when the human's reply is ready, `agent.resume(checkpoint, humanAnswer)` re-builds the state, returns the answer to the paused tool, and continues the agent loop from exactly where it stopped.
+
+The checkpoint is **JSON** — no functions, no class instances, no closures. Cross-server safe.
+
+## A pausing tool
+
+<CodeFile path="examples/features/01-pause-resume.ts" region="pause-tool" title="examples/features/01-pause-resume.ts (region: pause-tool)" />
+
+`pauseHere({ question, severity })` throws a special `PauseRequest`. The agent catches it, captures the checkpoint, and surfaces a `RunnerPauseOutcome` up to whoever called `.run()`.
+
+The tool's `execute` looks like it never returns — that's correct. `pauseHere` always throws. The "return" happens later via `resume()`.
+
+## Process A → checkpoint → Process B
 
 ```ts
-import { Agent, mock, askHuman } from 'agentfootprint';
-
-const agent = Agent.create({
-  provider: mock([
-    // LLM decides to ask the human
-    { content: '', toolCalls: [{
-      id: 'tc1',
-      name: 'ask_human',
-      arguments: { question: 'Approve refund of $299 for ORD-1003?' },
-    }] },
-    // After resume: LLM responds with the human's answer
-    { content: 'The refund has been approved and processed.' },
-  ]),
-})
-  .system('You are a support agent. Use ask_human for manager approval before refunds.')
-  .tool(askHuman())
-  .build();
-
-const result = await agent.run('I want a refund for order ORD-1003');
-
-if (result.paused) {
-  console.log(result.pauseData?.question);
-  // "Approve refund of $299 for ORD-1003?"
-
-  // Later — could be hours, different server:
-  const final = await agent.resume('Yes, approved');
-  console.log(final.content);
-  // "The refund has been approved and processed."
+// Process A
+const result = await agent.run({ message: 'refund order 123' });
+if (isPaused(result)) {
+  // result.checkpoint is JSON-serializable
+  await db.save('pauses:' + sessionId, JSON.stringify(result.checkpoint));
+  notifyHuman(result.pauseData);
+  return; // process A is done
 }
+
+// Process B (later, different server, different day)
+const checkpoint = JSON.parse(await db.get('pauses:' + sessionId));
+const humanAnswer = { approved: true, amount: 500 };
+const finalResult = await agent.resume(checkpoint, humanAnswer);
+// finalResult is the agent's final string output
 ```
 
-## How it works
+Build the agent fresh in Process B — same factory function, NOT the same instance. The checkpoint is the only thing that crosses the process boundary.
 
-1. The LLM calls the `ask_human` tool with a `question`
-2. The agent **pauses** — execution stops, state is serialized
-3. `result.paused === true` and `result.pauseData` contains the question
-4. You store the checkpoint (Redis, database, anywhere)
-5. When the human responds, call `agent.resume(answer)`
-6. The agent continues from where it paused — the answer becomes the tool result
+## When to use pause/resume vs error vs callback
 
-## Conditional pause
+| Situation | Use |
+|---|---|
+| Long-running approval workflow | pause/resume (this guide) |
+| Synchronous tool error → LLM retries | tool throws; see [Error handling](/agentfootprint/guides/error-handling/) |
+| External webhook → trigger something | pause/resume + webhook handler calls `agent.resume()` |
+| Background task fires multiple times | not an agent — use a queue + per-job agent |
 
-The LLM decides whether to pause. If it doesn't call `ask_human`, the agent completes normally:
+## Anti-patterns
 
-```ts
-const agent = Agent.create({ provider })
-  .system(`You are a support agent.
-    For refunds under $50, process automatically.
-    For refunds over $50, use ask_human for manager approval.`)
-  .tool(lookupOrder)
-  .tool(processRefund)
-  .tool(askHuman())
-  .build();
-
-// Small refund — no pause
-await agent.run('Refund order ORD-100 ($25)');
-// result.paused === false
-
-// Large refund — pauses
-await agent.run('Refund order ORD-200 ($500)');
-// result.paused === true
-```
-
-## Storing checkpoints
-
-The pause data is JSON-serializable — store it anywhere:
-
-```ts
-const result = await agent.run(message);
-
-if (result.paused) {
-  // Store in your database
-  await db.save({
-    sessionId: 'session-123',
-    question: result.pauseData?.question,
-    agentState: 'paused',
-  });
-
-  // Return to the UI
-  return { paused: true, question: result.pauseData?.question };
-}
-```
-
-## Resuming on a different server
-
-The resume doesn't need to be on the same server. As long as you have the same agent configuration:
-
-```ts
-// Server B — hours later
-const agent = Agent.create({ provider })
-  .system('Same system prompt')
-  .tool(lookupOrder)
-  .tool(askHuman())
-  .build();
-
-// Load the stored state
-const stored = await db.load('session-123');
-
-// Resume with the human's response
-const final = await agent.resume(stored.humanResponse);
-```
-
-## With streaming
-
-Pause works with streaming — tool events still fire:
-
-```ts
-await agent.run('Process refund', {
-  onEvent: (event) => {
-    if (event.type === 'tool_start' && event.toolName === 'ask_human') {
-      console.log('Agent is asking for human input...');
-    }
-  },
-});
-```
-
-## Narrative
-
-The narrative captures the full lifecycle — before pause, the question, and after resume:
-
-```ts
-agent.getNarrative();
-// [
-//   "[CallLLM] Called LLM",
-//   "[ParseResponse] Parsed: tool_calls → [ask_human({question: "Approve?"})]",
-//   "[Pause] Agent paused — waiting for human input",
-//   "--- resume ---",
-//   "[CallLLM] Called LLM",
-//   "[Finalize] Refund approved and processed."
-// ]
-```
+- Don't store closures in the checkpoint. The serializer rejects them. Build the agent fresh in Process B from the same factory.
+- Don't pass the live agent instance across processes. Pass the checkpoint. The framework rebuilds state from it.
+- Don't poll the agent for "is it paused yet?" — the result of `.run()` tells you. `isPaused(result)` is a typed predicate.
 
 ## Next steps
 
-- [Agent guide](/agentfootprint/guides/agent/) — memory, streaming, Dynamic ReAct
-- [Testing guide](/agentfootprint/guides/testing/) — test pause/resume with mock()
+- [Error handling](/agentfootprint/guides/error-handling/) — what's recoverable via retry vs what needs human escalation
+- [Security guide](/agentfootprint/guides/security/) — permission-gated pauses for sensitive operations
+- v2.5 will add `agent.resumeOnError(checkpoint, input)` — auto-checkpointing on uncaught errors so any failure becomes resumable, not just intentional pauses. See the roadmap.

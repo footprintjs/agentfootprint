@@ -1,128 +1,75 @@
 ---
-title: Grounding Analysis
-description: Detect hallucinations by comparing tool results against LLM claims.
+title: Grounding
+description: Reduce hallucination by giving the LLM the source material — and recording what it produced vs what it was given. The trace IS the grounding evidence.
 ---
 
-## The problem
+> Your agent answers a customer's policy question. The customer screenshots the answer and emails your CEO: *"I asked your bot whether refunds were available; it said no. Now I'm seeing they ARE available — what's going on?"* You go to look. The agent might have hallucinated. Without **grounding evidence** captured at the moment of the answer, you cannot tell. agentfootprint's typed event stream + memory snapshots make grounding evidence a first-class artifact, not a thing you reconstruct.
 
-An LLM calls `lookup_order` and gets `{status: 'shipped', amount: 299}`. Then it tells the user "Your order of $399 is being processed." The amount is wrong and the status is different. This is a hallucination — and most frameworks have no way to detect it without a separate eval pipeline.
+## What grounding means here
 
-## How agentfootprint solves it
+**Grounding** = constraining the LLM to answer from supplied source material, not from training-data memory. Two complementary mechanisms:
 
-`ExplainRecorder` collects sources (tool results), claims (LLM outputs), and decisions (tool calls) **during traversal** — no post-processing.
+1. **Source injection** — the source material (docs, policy text, retrieved chunks, prior decisions) lands in the messages slot via [RAG](/agentfootprint/guides/rag/), [Memory](/agentfootprint/guides/memory/), or `defineFact`. The LLM sees it as fresh context.
+2. **Source observation** — the framework records what was injected (event: `agentfootprint.context.injected`) and what the LLM produced (event: `agentfootprint.stream.llm_end`). Side-by-side comparison is the grounding audit.
+
+Together they form a *verifiable answer*: not "the LLM said X", but "the LLM said X having been given Y as the source material."
+
+## RAG as grounding
+
+The [RAG guide](/agentfootprint/guides/rag/) is the standard pattern. `defineRAG` retrieves top-K matching chunks above a strict threshold; if the threshold is missed, NO chunks inject (the LLM gets no context). This is intentional — *garbage low-confidence chunks make hallucination MORE likely, not less*.
 
 ```ts
-import { Agent, mock, defineTool } from 'agentfootprint';
-import { ExplainRecorder } from 'agentfootprint';
-
-const lookupOrder = defineTool({
-  id: 'lookup_order',
-  description: 'Look up an order',
-  inputSchema: { type: 'object', properties: { orderId: { type: 'string' } }, required: ['orderId'] },
-  handler: async ({ orderId }) => ({
-    content: JSON.stringify({ orderId, status: 'shipped', amount: 299 }),
-  }),
+const docs = defineRAG({
+  id: 'policy-docs',
+  store, embedder,
+  topK: 3, threshold: 0.7,  // strict — no chunks if nothing clears 0.7
 });
-
-const explain = new ExplainRecorder();
-
-const agent = Agent.create({
-  provider: mock([
-    { content: '', toolCalls: [{ id: 'tc1', name: 'lookup_order', arguments: { orderId: 'ORD-1003' } }] },
-    { content: 'Your order ORD-1003 is shipped. Total: $299.' },
-  ]),
-})
-  .tool(lookupOrder)
-  .recorder(explain)
-  .build();
-
-await agent.run('Check order ORD-1003');
-
-const report = explain.explain();
-// {
-//   sources: [{ toolName: 'lookup_order', args: { orderId: 'ORD-1003' }, result: '...' }],
-//   claims: [{ content: 'Your order ORD-1003 is shipped. Total: $299.' }],
-//   decisions: [{ toolName: 'lookup_order', args: { orderId: 'ORD-1003' }, latencyMs: 2 }],
-//   summary: 'Agent called lookup_order (1 call), then responded based on the results.'
-// }
+agent.rag(docs);
 ```
 
-## Comparing sources to claims
+When chunks DO match, they land in the messages slot tagged with `source: 'rag'`. Observability surfaces show exactly which chunks were retrieved per turn.
 
-Use the structured data to check for hallucinations:
+## Causal memory as grounding for follow-ups
 
-```ts
-function checkGrounding(report: Explanation): string[] {
-  const issues: string[] = [];
-  const sourceText = report.sources.map(s => s.result).join(' ');
+For *cross-run* grounding (the customer asks "why did you tell me that earlier?"), [Causal memory](/agentfootprint/guides/memory/) persists the agent's decision evidence from past runs. New questions cosine-match past queries; matching snapshots inject the prior decision evidence. The follow-up answer is grounded in EXACT past facts, not reconstruction.
 
-  for (const claim of report.claims) {
-    const amounts = claim.content.match(/\$(\d+)/g);
-    if (amounts) {
-      for (const amount of amounts) {
-        if (!sourceText.includes(amount.replace('$', ''))) {
-          issues.push(`Claim mentions ${amount} but source data doesn't contain this amount`);
-        }
-      }
-    }
-  }
+This is the differentiator no other framework has. See [Memory guide § Causal memory](/agentfootprint/guides/memory/#causal-memory--replay-decisions-not-just-messages).
 
-  return issues;
-}
-```
+## Recording what was injected
 
-## Using in tests
+Subscribe to `agentfootprint.context.injected` to capture every injection in real time:
 
 ```ts
-import { describe, it, expect } from 'vitest';
-
-it('agent response is grounded in tool results', async () => {
-  await agent.run('Check order ORD-1003');
-
-  const report = explain.explain();
-
-  // Sources should exist (tools were called)
-  expect(report.sources.length).toBeGreaterThan(0);
-
-  // Claims should reference data actually in the sources
-  const sourceText = report.sources.map(s => s.result).join(' ');
-  for (const claim of report.claims) {
-    const amounts = claim.content.match(/\d{3,}/g) ?? [];
-    for (const amount of amounts) {
-      expect(sourceText).toContain(amount);
-    }
-  }
+agent.on('agentfootprint.context.injected', (e) => {
+  // e.payload — { source, slot, role?, content, id, ... }
+  // source: 'steering' | 'instruction' | 'skill' | 'fact' | 'memory' | 'rag'
+  audit.log({ when: Date.now(), source: e.payload.source, content: e.payload.content });
 });
 ```
 
-## Using in production
+Every flavor of context engineering routes through the SAME event channel — the audit log is uniform across Skill, Steering, Instruction, Fact, Memory, RAG. One event taxonomy for context observability; no per-feature integration glue.
 
-```ts
-const explain = new ExplainRecorder();
-const agent = Agent.create({ provider }).tool(orderTool).recorder(explain).build();
+## Recording what the LLM produced
 
-const result = await agent.run(userMessage);
+`agentfootprint.stream.llm_end` carries the full `LLMResponse` — content, toolCalls, usage, stopReason. Pair with `context.injected` events to produce grounding triplets:
 
-const report = explain.explain();
-const issues = checkGrounding(report);
-if (issues.length > 0) {
-  logger.warn('Grounding issues detected', { issues, report });
-}
-
-return result.content;
+```
+For each turn:
+  injected_chunks = events.filter(e => e.type === 'context.injected')
+  llm_output       = events.find(e => e.type === 'stream.llm_end')
+  triplet           = { question, injected_chunks, llm_output }
 ```
 
-## How it works
+That triplet IS the grounding evidence. Persist it (S3, Postgres, your audit trail) and you can show six months later exactly what the LLM saw and what it said.
 
-ExplainRecorder implements `AgentRecorder` hooks:
+## Anti-patterns
 
-1. `onToolCall` — captures each tool result as a source of truth
-2. `onTurnComplete` — captures the final LLM response as a claim
-3. `onLLMCall` — tracks model/iteration for claim attribution
-
-All data collected during traversal — follows the core principle. No narrative entry parsing, no post-processing.
+- Don't claim "grounded" without persisting the triplet. Without injection-content + LLM-output captured at the moment, you have NO grounding evidence — just logs.
+- Don't trust the LLM to cite sources from memory. It will hallucinate URLs / doc IDs. Cite by injecting the source AND requiring the LLM to repeat the injected source ID in its answer (verifiable via comparison).
+- Don't mix high-confidence and low-confidence sources without flagging. If RAG returns chunks at score 0.9 and 0.5, the LLM treats them equally. Either threshold strictly OR weight injection role to mark uncertainty.
 
 ## Next steps
 
-- [Observability guide](/agentfootprint/guides/observability/) — recorders and narrative
-- [Testing guide](/agentfootprint/guides/testing/) — test grounding in CI
+- [RAG guide](/agentfootprint/guides/rag/) — the strict-threshold retrieval pattern
+- [Memory guide](/agentfootprint/guides/memory/) — Causal memory for cross-run grounding
+- [Observability guide](/agentfootprint/guides/observability/) — the full 47-event taxonomy
