@@ -1082,6 +1082,22 @@ export class AgentBuilder {
   }
 
   /**
+   * Bulk-register every Skill in a `SkillRegistry`. Use for shared
+   * skill catalogs across multiple Agents — register skills once on
+   * the registry; attach the same registry to every consumer Agent.
+   *
+   * @example
+   *   const registry = new SkillRegistry();
+   *   registry.register(billingSkill).register(refundSkill);
+   *   const supportAgent = Agent.create({ provider }).skills(registry).build();
+   *   const escalationAgent = Agent.create({ provider }).skills(registry).build();
+   */
+  skills(registry: { list(): readonly Injection[] }): this {
+    for (const skill of registry.list()) this.injection(skill);
+    return this;
+  }
+
+  /**
    * Register a Steering doc — always-on system-prompt rule.
    * Use for invariant guidance: output format, persona, safety policies.
    */

@@ -6,8 +6,8 @@ description: Skills are context engineering for instructions — abstracted so y
 import { Aside } from '@astrojs/starlight/components';
 import CodeFile from '@/components/CodeFile.astro';
 
-<Aside type="note" title="What ships today vs what's coming">
-This essay describes the **full Skills system** agentfootprint is converging on. The shipped-today surface is `defineSkill({ id, description, body, tools })` with auto-attached `read_skill` tool — the runnable code block below works against the published library. The `surfaceMode: 'auto'`, `refreshPolicy`, and `SkillRegistry` features discussed later in this essay land in **v2.4 Phase 4** — code blocks for those are clearly marked as *coming-soon illustrative pseudo-code* until they ship.
+<Aside type="note" title="What ships today">
+Every API surface this essay describes — `defineSkill({ id, description, body, tools, surfaceMode, refreshPolicy })`, `resolveSurfaceMode(provider, model)`, and `SkillRegistry` — is shipped and runnable. The runtime polish for fully-divergent per-mode behavior (suppressing the system-prompt slot for `'tool-only'`, etc.) lands in v2.5; today's runtime treats every mode as the cross-provider-correct path the essay calls right. Consumers express intent today; behavior tightens silently.
 </Aside>
 
 ## In one line
@@ -168,19 +168,14 @@ Given the above, our Skills implementation makes four choices. All of them fit i
 
 ### 1. `surfaceMode: 'auto'` — the library picks per provider
 
-<Aside type="caution" title="Coming in v2.4 Phase 4 — illustrative pseudo-code">
-The `surfaceMode` knob ships in v2.4 Phase 4 (currently in development). The block below is the resolver pseudo-code for the planned implementation, not runnable today. Until it ships, all skills use the equivalent of `'tool-only'` mode (recency-first via tool_result), which is the cross-provider-correct path described below.
-</Aside>
-
 ```ts
-// Coming in v2.4 Phase 4 — pseudo-code for the planned resolver.
-function resolveSurfaceMode(provider): SurfaceMode {
-  if (provider === 'anthropic' && model >= 'claude-3-5') return 'both';
-  if (provider === 'anthropic')                          return 'tool-only';
-  if (provider === 'openai')                             return 'tool-only';
-  if (provider === 'mock')                               return 'tool-only';
-  return 'tool-only';
-}
+import { resolveSurfaceMode } from 'agentfootprint';
+
+// Pure function — no side effects. Inspect what 'auto' will resolve to.
+resolveSurfaceMode('anthropic', 'claude-sonnet-4-5-20250929'); // → 'both'
+resolveSurfaceMode('anthropic', 'claude-3-haiku-20240307');    // → 'tool-only'
+resolveSurfaceMode('openai', 'gpt-4o');                        // → 'tool-only'
+resolveSurfaceMode('mock');                                    // → 'tool-only'
 ```
 
 Four modes: `'system-prompt'`, `'tool-only'`, `'both'`, `'auto'`. On Claude ≥ 3.5 we use `'both'` (cheap to cache, high adherence). Everywhere else we fall back to `'tool-only'` — **recency-first delivery via tool result, which is a protocol-level guarantee and doesn't rely on training**.
@@ -199,25 +194,37 @@ That text lands in the freshest possible position by protocol, not by training. 
 
 ### 3. Refresh policy for long contexts
 
-<Aside type="caution" title="Coming in v2.4 Phase 4 — illustrative pseudo-code">
-The `refreshPolicy` knob ships in v2.4 Phase 4. The block below shows the planned API shape.
-</Aside>
-
 ```ts
-// Coming in v2.4 Phase 4.
-refreshPolicy: {
-  afterTokens: 50_000,
-  via: 'tool-result',
-}
+defineSkill({
+  id: 'critical-rule',
+  description: 'Critical reasoning rule for long-context runs',
+  body: '...',
+  refreshPolicy: { afterTokens: 50_000, via: 'tool-result' },
+});
 ```
 
-Belt-and-suspenders: even if system-prompt anchoring was honored at turn 1, by turn 40 on a non-Claude provider it's drifted out of effective attention. Re-inject the registry as a fresh tool result past a token threshold.
+Belt-and-suspenders: even if system-prompt anchoring was honored at turn 1, by turn 40 on a non-Claude provider it's drifted out of effective attention. Re-inject the registry as a fresh tool result past a token threshold. The API surface is shipped today; the runtime hook lands in v2.5 as part of the long-context attention work — specifying `refreshPolicy` today is non-breaking.
 
-### 4. Auto-generated loader tools
+### 4. Auto-generated loader tools + centralized governance
 
-**Today (shipped):** `defineSkill(...)` auto-attaches a single `read_skill` tool to the agent's tool registry. The consumer never hand-writes it.
+`defineSkill(...)` auto-attaches a single `read_skill` tool to the agent's tool registry. The consumer never hand-writes it.
 
-**Coming in v2.4 Phase 4:** A `SkillRegistry` for centralized skill governance across multiple agents. The registry will auto-generate both `list_skills` (for skill discovery) and `read_skill` (for skill activation) and provide a single `agent.skills(registry)` builder for shared-skill setups.
+For shared skill catalogs across multiple agents, `SkillRegistry` is the centralized-governance answer:
+
+```ts
+import { SkillRegistry } from 'agentfootprint';
+
+const registry = new SkillRegistry();
+registry.register(billingSkill).register(refundSkill).register(complianceSkill);
+
+const supportAgent = Agent.create({ provider }).skills(registry).build();
+const escalationAgent = Agent.create({ provider }).skills(registry).build();
+
+// Add a new skill — every consumer Agent picks it up at next build.
+registry.register(newSkill);
+```
+
+`agent.skills(registry)` is the bulk-register companion to `.skill(t)`. Use the registry pattern when 2+ agents share overlapping skills; use `.skill(...)` directly when one agent has its own catalog.
 
 <Aside type="note" title="Why `read_skill` not `Skill`">
 Agent SDK calls its loader `Skill`. We mirror the verb-object convention of every other tool in `agentfootprint` (`search`, `load_file`, `get_trace`) and name it `read_skill`. Same protocol, clearer name.

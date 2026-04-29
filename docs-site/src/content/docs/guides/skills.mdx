@@ -44,15 +44,59 @@ The LLM's tool-call to `read_skill({ id: 'billing' })` is the activation event. 
 
 The skill stays active until the agent run ends. The next `agent.run()` starts fresh.
 
-## Coming in v2.4 Phase 4
+## Per-provider surface selection (`surfaceMode`)
 
-Three upgrades land in v2.4 to match the [Skills, explained](/agentfootprint/guides/skills-explained/) essay:
+```ts
+import { defineSkill, resolveSurfaceMode } from 'agentfootprint';
 
-- **`surfaceMode: 'auto'`** — per-provider surface selection (system-prompt anchoring on Claude, tool-only delivery elsewhere). Today's behavior is equivalent to `'tool-only'`.
-- **`refreshPolicy`** — re-inject skill bodies past a token threshold to defend against long-context attention decay.
-- **`SkillRegistry`** — centralized skill governance across multiple agents; auto-generates both `list_skills` and `read_skill` instead of just `read_skill`.
+const billingSkill = defineSkill({
+  id: 'billing',
+  description: 'Refund / charge / billing.',
+  body: 'When handling billing: confirm the order id...',
+  tools: [refundTool],
+  surfaceMode: 'auto',  // resolves to 'both' on Claude ≥ 3.5; 'tool-only' elsewhere
+});
 
-These features extend the existing surface; v2.4 ships them backward-compatibly.
+// Pure inspector — see what 'auto' will resolve to in your stack:
+resolveSurfaceMode('anthropic', 'claude-sonnet-4-5-20250929');  // → 'both'
+resolveSurfaceMode('openai', 'gpt-4o');                         // → 'tool-only'
+```
+
+Four modes: `'system-prompt'`, `'tool-only'`, `'both'`, `'auto'`. See [Skills, explained](/agentfootprint/guides/skills-explained/) for the full per-provider attention argument.
+
+## Long-context refresh (`refreshPolicy`)
+
+```ts
+defineSkill({
+  id: 'critical-rule',
+  description: 'Critical reasoning rule for long-context runs',
+  body: 'When the value is ambiguous, ask for clarification before acting.',
+  refreshPolicy: { afterTokens: 50_000, via: 'tool-result' },
+});
+```
+
+Re-injects the body via tool result past a token threshold. The runtime hook lands in v2.5 (long-context attention work); the API surface ships in v2.4 + is non-breaking.
+
+## SkillRegistry — centralized governance
+
+For shared skill catalogs across multiple agents:
+
+```ts
+import { Agent, SkillRegistry } from 'agentfootprint';
+
+const registry = new SkillRegistry();
+registry.register(billingSkill).register(refundSkill).register(complianceSkill);
+
+const supportAgent = Agent.create({ provider }).skills(registry).build();
+const escalationAgent = Agent.create({ provider }).skills(registry).build();
+
+// Add a skill — every consumer Agent picks it up at next build.
+registry.register(newSkill);
+```
+
+`agent.skills(registry)` is the bulk-register companion to `.skill(t)`. Use the registry pattern when 2+ agents share overlapping skills; use `.skill(...)` directly when one agent has its own catalog.
+
+`SkillRegistry` methods: `register(skill)` · `replace(id, skill)` · `unregister(id)` · `get(id)` · `has(id)` · `list()` · `clear()` · `size`. Throws on duplicate `register` (use `replace` for explicit overwrites). Throws on non-Skill flavor inputs.
 
 ## When to use Skills vs Steering vs Instruction
 

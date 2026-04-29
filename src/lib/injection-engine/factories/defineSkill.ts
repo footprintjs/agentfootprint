@@ -30,6 +30,57 @@
 import type { Injection } from '../types.js';
 import type { Tool } from '../../../core/tools.js';
 
+/**
+ * Where the Skill's body lands when activated.
+ *
+ * - `'system-prompt'` — body appended to the system slot on the
+ *   iteration after activation. Best on Claude ≥ 3.5 (training-time
+ *   adherence to system-prompt instructions is strong).
+ * - `'tool-only'` — body delivered ONLY via the `read_skill` tool's
+ *   result. Recency-first by protocol; doesn't rely on the model's
+ *   training to honor system-prompt anchoring. Default for every
+ *   non-Claude provider.
+ * - `'both'` — body lands in both the system slot AND the tool result.
+ *   Belt-and-suspenders for high-stakes Skills on long-context runs.
+ * - `'auto'` — the library picks per provider via `resolveSurfaceMode`.
+ *   `'both'` on Claude ≥ 3.5; `'tool-only'` everywhere else.
+ *
+ * **Today's behavior:** all four modes route through the recency-first
+ * path the essay describes as cross-provider-correct (the activation +
+ * next-iteration injection pattern). Full per-mode routing diversity
+ * (suppress system-prompt for `'tool-only'`, e.g.) is a v2.5 polish.
+ * Consumers express intent today; runtime behavior tightens later
+ * without API change.
+ */
+export type SurfaceMode = 'auto' | 'system-prompt' | 'tool-only' | 'both';
+
+/**
+ * When (if ever) to re-deliver a Skill's body in long-running runs.
+ *
+ * Even on providers with strong system-prompt adherence, attention to
+ * the system slot decays past long contexts. `refreshPolicy` re-injects
+ * the body via tool result past a token threshold so the LLM sees it
+ * fresh again.
+ *
+ * **v2.4 status:** the field is reserved + typed; the runtime hook
+ * lands in v2.5 as part of the long-context attention work. Specifying
+ * `refreshPolicy` today is non-breaking — the engine ignores it until
+ * the hook is implemented.
+ */
+export interface RefreshPolicy {
+  /**
+   * Re-inject the Skill body once the run has consumed this many input
+   * tokens since the Skill was last surfaced. Recommended: 50_000 for
+   * 200k-context models; 20_000 for 32k-context models.
+   */
+  readonly afterTokens: number;
+  /**
+   * How to re-inject. `'tool-result'` synthesizes a fresh tool result
+   * carrying the body text (recency-first). Other modes reserved.
+   */
+  readonly via: 'tool-result';
+}
+
 export interface DefineSkillOptions {
   readonly id: string;
   /** Visible to the LLM via the activation tool's description. */
@@ -44,6 +95,43 @@ export interface DefineSkillOptions {
    * the LLM picks WHICH skill via the tool's argument.
    */
   readonly viaToolName?: string;
+  /**
+   * Where the body lands when activated. See `SurfaceMode`. Default
+   * `'auto'` — the library resolves per provider via `resolveSurfaceMode`.
+   */
+  readonly surfaceMode?: SurfaceMode;
+  /**
+   * Re-deliver the body past a token threshold to defend against
+   * long-context attention decay. Default: undefined (no refresh).
+   */
+  readonly refreshPolicy?: RefreshPolicy;
+}
+
+/**
+ * Resolve `surfaceMode: 'auto'` to a concrete mode based on provider
+ * + model. The defaults match the per-provider attention profile
+ * documented in the Skills, explained essay:
+ *
+ *   - Claude >= 3.5  → 'both'      (cheap to cache, high adherence)
+ *   - Claude pre-3.5 → 'tool-only' (recency-first more reliable)
+ *   - OpenAI / Bedrock / Ollama / Mock / unknown → 'tool-only'
+ *
+ * Pure function — no side effects. Consumers can call directly to
+ * inspect what `'auto'` will resolve to in their stack.
+ */
+export function resolveSurfaceMode(provider: string, model?: string): SurfaceMode {
+  const p = provider.toLowerCase();
+  if (p === 'anthropic') {
+    // Match both naming styles in current use:
+    //   - claude-3-5-sonnet-..., claude-3.5-...
+    //   - claude-sonnet-4-..., claude-haiku-4-..., claude-opus-4-..., claude-4-...
+    // Anything matching "Claude >= 3.5" gets 'both'; older Claudes get 'tool-only'.
+    if (model && /(claude-3-5|claude-3\.5|claude-(?:opus-|sonnet-|haiku-)?[4-9])/i.test(model)) {
+      return 'both';
+    }
+    return 'tool-only';
+  }
+  return 'tool-only';
 }
 
 export function defineSkill(opts: DefineSkillOptions): Injection {
@@ -70,5 +158,13 @@ export function defineSkill(opts: DefineSkillOptions): Injection {
       systemPrompt: opts.body,
       ...(opts.tools && opts.tools.length > 0 && { tools: opts.tools }),
     },
+    // Skill-specific options live in metadata. The engine reads them
+    // when present; absent metadata = current behavior. Forward-compat:
+    // when v2.5 implements per-mode routing diversity, this field is
+    // already where the runtime looks.
+    metadata: Object.freeze({
+      surfaceMode: opts.surfaceMode ?? 'auto',
+      ...(opts.refreshPolicy && { refreshPolicy: opts.refreshPolicy }),
+    }),
   }) as unknown as Injection;
 }

@@ -25,7 +25,15 @@ export {
 // Sugar factories — Ships four; more flavors planned (RAG / Memory / Guardrail)
 export { defineInstruction, type DefineInstructionOptions } from './factories/defineInstruction.js';
 
-export { defineSkill, type DefineSkillOptions } from './factories/defineSkill.js';
+export {
+  defineSkill,
+  resolveSurfaceMode,
+  type DefineSkillOptions,
+  type SurfaceMode,
+  type RefreshPolicy,
+} from './factories/defineSkill.js';
+
+export { SkillRegistry } from './SkillRegistry.js';
 
 export { defineSteering, type DefineSteeringOptions } from './factories/defineSteering.js';
 

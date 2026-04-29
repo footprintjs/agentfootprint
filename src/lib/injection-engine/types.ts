@@ -142,6 +142,16 @@ export interface Injection {
   readonly trigger: InjectionTrigger;
   /** WHAT to contribute (one or more slots). */
   readonly inject: InjectionContent;
+  /**
+   * Optional flavor-specific metadata. Engine ignores keys it doesn't
+   * recognize; flavor factories use this for opt-in fields without
+   * widening the Injection contract.
+   *
+   * Known keys:
+   *   - `surfaceMode` (Skill) — `'auto' | 'system-prompt' | 'tool-only' | 'both'`
+   *   - `refreshPolicy` (Skill) — `{ afterTokens, via }`
+   */
+  readonly metadata?: Readonly<Record<string, unknown>>;
 }
 
 // ─── Evaluation result ─────────────────────────────────────────────
