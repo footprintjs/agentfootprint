@@ -6,6 +6,42 @@
  * Emits:   N/A.
  */
 
+// Substrate (footprintjs) types consumers reach for when wiring
+// recorders + custom executors. Re-exported here so consumer code
+// stays "agentfootprint only" — no need to know the substrate name.
+// agentfootprint sits ON footprintjs; consumers shouldn't have to
+// chase down the substrate to type their CombinedRecorder objects.
+export type {
+  // Recorder interfaces (the three observation channels)
+  CombinedRecorder,
+  Recorder,
+  FlowRecorder,
+  EmitRecorder,
+  // Scope events (data-flow channel)
+  WriteEvent,
+  ReadEvent,
+  CommitEvent,
+  StageEvent,
+  ErrorEvent,
+  // Flow events (control-flow channel)
+  FlowStageEvent,
+  FlowNextEvent,
+  FlowDecisionEvent,
+  FlowForkEvent,
+  FlowSelectedEvent,
+  FlowSubflowEvent,
+  FlowSubflowRegisteredEvent,
+  FlowLoopEvent,
+  FlowBreakEvent,
+  FlowErrorEvent,
+  TraversalContext,
+  // Emit events (consumer-emitted channel)
+  EmitEvent,
+  // Redaction
+  RedactionPolicy,
+  RedactionReport,
+} from 'footprintjs';
+
 // Events — registry, types, payloads
 export * from './events/types.js';
 export * from './events/payloads.js';
