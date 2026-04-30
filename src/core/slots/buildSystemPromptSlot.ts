@@ -98,6 +98,13 @@ export function buildSystemPromptSlot(config: SystemPromptSlotConfig): FlowChart
       for (const inj of activeInjections) {
         const promptContent = inj.inject.systemPrompt;
         if (!promptContent || promptContent.length === 0) continue;
+        // Block C — per-mode dispatch. Skills with surfaceMode='tool-only'
+        // do NOT land in the system slot; their body is delivered via
+        // the read_skill tool result instead. Other modes (system-prompt,
+        // both, auto, or absent) keep the current v2.4 path: body lands
+        // here. 'both' lands here AND in the tool result; the duplication
+        // is intentional belt-and-suspenders for high-stakes skills.
+        if (inj.flavor === 'skill' && inj.surfaceMode === 'tool-only') continue;
         injections.push({
           contentSummary: truncate(promptContent, 80),
           contentHash: fnv1a(`sp:${inj.flavor}:${inj.id}:${promptContent}`),

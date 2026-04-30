@@ -64,6 +64,22 @@ resolveSurfaceMode('openai', 'gpt-4o');                         // → 'tool-onl
 
 Four modes: `'system-prompt'`, `'tool-only'`, `'both'`, `'auto'`. See [Skills, explained](/agentfootprint/guides/skills-explained/) for the full per-provider attention argument.
 
+### Per-mode runtime dispatch (v2.5+)
+
+What each mode actually does at runtime when the LLM activates the skill via `read_skill('id')`:
+
+| `surfaceMode` | System slot (next iteration) | `read_skill` tool result |
+|---|---|---|
+| `'system-prompt'` | body lands here | confirmation only |
+| `'tool-only'` | body SUPPRESSED | body delivered verbatim |
+| `'both'` | body lands here | body delivered verbatim |
+| `'auto'` (default) | body lands here | confirmation only |
+
+Two consequences worth knowing:
+
+1. **`'tool-only'` is recency-first by protocol.** The LLM sees the body as the most recent tool result on the next iteration — providers' attention to the latest message is consistently strong. No reliance on system-prompt training adherence.
+2. **`'auto'` preserves v2.4 behavior** so existing consumers see no surprises. The Block A4 cascade resolves `'auto'` against provider/model context (Claude ≥ 3.5 → `'both'`; everything else → `'tool-only'`); that runtime resolution lands in a future v2.5.x — for v2.5 today, `'auto'` is treated as `'system-prompt'` at the dispatch layer.
+
 ## Long-context refresh (`refreshPolicy`)
 
 ```ts

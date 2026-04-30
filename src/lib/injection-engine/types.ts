@@ -182,6 +182,24 @@ export interface ActiveInjection {
   readonly id: string;
   readonly flavor: import('../../events/types.js').ContextSource;
   readonly description?: string;
+  /**
+   * Resolved surfaceMode (Skill flavor only). Drives Block C runtime
+   * dispatch — slot subflows skip system-slot injection when this is
+   * `'tool-only'`; the read_skill tool delivers the body in its
+   * result for `'tool-only'` and `'both'`.
+   *
+   * `'auto'` and absent both mean "keep v2.4 behavior" (body in
+   * system slot, tool result is confirmation only). The Block A4
+   * cascade resolves 'auto' against provider/model context at a
+   * later layer; this projection stays declarative.
+   */
+  readonly surfaceMode?: 'auto' | 'system-prompt' | 'tool-only' | 'both';
+  /**
+   * Per-skill tool gating intent (Skill flavor only). Reserved for
+   * Block C+ runtime auto-wiring of `skillScopedTools`. Today
+   * consumers wire this manually via `agentfootprint/tool-providers`.
+   */
+  readonly autoActivate?: 'currentSkill';
   readonly inject: {
     readonly systemPrompt?: string;
     readonly messages?: ReadonlyArray<{
@@ -198,10 +216,20 @@ export interface ActiveInjection {
 
 /** Project a full Injection (with functions) into a scope-safe POJO. */
 export function projectActiveInjection(inj: Injection): ActiveInjection {
+  // Project per-skill metadata that slot subflows need to dispatch on.
+  // `surfaceMode` drives the system-prompt-suppression decision (Block C).
+  // `autoActivate` is reserved for runtime tool gating (forward-compat).
+  const meta = inj.metadata as
+    | { surfaceMode?: string; autoActivate?: string }
+    | undefined;
   const out: ActiveInjection = {
     id: inj.id,
     flavor: inj.flavor,
     ...(inj.description && { description: inj.description }),
+    ...(meta?.surfaceMode && { surfaceMode: meta.surfaceMode as ActiveInjection['surfaceMode'] }),
+    ...(meta?.autoActivate && {
+      autoActivate: meta.autoActivate as ActiveInjection['autoActivate'],
+    }),
     inject: {
       ...(inj.inject.systemPrompt && { systemPrompt: inj.inject.systemPrompt }),
       ...(inj.inject.messages && { messages: inj.inject.messages.map((m) => ({ ...m })) }),

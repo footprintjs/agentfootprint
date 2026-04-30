@@ -13,7 +13,11 @@ export type {
   InjectionContent,
   InjectionContext,
   InjectionEvaluation,
+  ActiveInjection,
 } from './types.js';
+
+// POJO projection — used by slot subflows + advanced consumers
+export { projectActiveInjection } from './types.js';
 
 // Engine
 export { evaluateInjections } from './evaluator.js';

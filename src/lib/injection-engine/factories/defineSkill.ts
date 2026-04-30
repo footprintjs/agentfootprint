@@ -45,12 +45,13 @@ import type { Tool } from '../../../core/tools.js';
  * - `'auto'` — the library picks per provider via `resolveSurfaceMode`.
  *   `'both'` on Claude ≥ 3.5; `'tool-only'` everywhere else.
  *
- * **Today's behavior:** all four modes route through the recency-first
- * path the essay describes as cross-provider-correct (the activation +
- * next-iteration injection pattern). Full per-mode routing diversity
- * (suppress system-prompt for `'tool-only'`, e.g.) is a v2.5 polish.
- * Consumers express intent today; runtime behavior tightens later
- * without API change.
+ * **v2.5 runtime dispatch (Block C):** modes now route differently:
+ *   - `'system-prompt'` → body in system slot, tool result is confirmation
+ *   - `'tool-only'`     → body SUPPRESSED from system slot, tool result IS the body
+ *   - `'both'`          → body in system slot AND in tool result
+ *   - `'auto'`          → keeps v2.4 behavior (body in system slot, tool result is confirmation)
+ *     The Block A4 cascade resolves `'auto'` against provider/model context
+ *     at a future runtime layer (Claude ≥ 3.5 → `'both'`; else `'tool-only'`).
  */
 export type SurfaceMode = 'auto' | 'system-prompt' | 'tool-only' | 'both';
 

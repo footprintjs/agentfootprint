@@ -309,7 +309,9 @@ export {
   // Engine
   evaluateInjections,
   buildInjectionEngineSubflow,
+  projectActiveInjection,
   type InjectionEngineConfig,
+  type ActiveInjection,
   // Sugar factories — one per injection flavor
   defineInstruction,
   type DefineInstructionOptions,

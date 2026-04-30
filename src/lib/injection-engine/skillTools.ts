@@ -89,6 +89,21 @@ export function buildReadSkillTool(skills: readonly Injection[]): Tool | undefin
     .map((s) => `  - ${s.id}: ${s.description ?? '(no description)'}`)
     .join('\n');
 
+  // Index per-skill body + surfaceMode (Block C — runtime per-mode dispatch).
+  // For 'tool-only' / 'both' surface modes, the read_skill tool result
+  // CONTAINS the skill body (recency-first delivery). For 'system-prompt'
+  // and 'auto', the result is a confirmation string only — the body
+  // lands via system slot on the next iteration.
+  type SkillEntry = { body: string; surfaceMode: string };
+  const byId = new Map<string, SkillEntry>();
+  for (const s of skills) {
+    const meta = s.metadata as { surfaceMode?: string } | undefined;
+    byId.set(s.id, {
+      body: s.inject.systemPrompt ?? '',
+      surfaceMode: meta?.surfaceMode ?? 'auto',
+    });
+  }
+
   return defineTool<{ id: string }, string>({
     name: 'read_skill',
     description:
@@ -107,8 +122,17 @@ export function buildReadSkillTool(skills: readonly Injection[]): Tool | undefin
       required: ['id'],
     },
     execute: ({ id }) => {
-      if (!skillIds.includes(id)) {
+      const entry = byId.get(id);
+      if (!entry) {
         return `Unknown skill '${id}'. Available: ${skillIds.join(', ')}`;
+      }
+      // Block C — per-mode tool-result dispatch:
+      //   - 'tool-only' / 'both' → return body verbatim (recency-first
+      //     delivery; LLM sees it as the most recent tool result).
+      //   - 'system-prompt' / 'auto' / unspecified → return confirmation
+      //     only; body lands via system slot on the next iteration.
+      if ((entry.surfaceMode === 'tool-only' || entry.surfaceMode === 'both') && entry.body) {
+        return entry.body;
       }
       return `Skill '${id}' activated for the next iteration.`;
     },
