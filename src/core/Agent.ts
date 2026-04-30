@@ -17,12 +17,21 @@
 import {
   FlowChartExecutor,
   flowChart,
+  type CombinedNarrativeEntry,
   type FlowChart,
   type FlowchartCheckpoint,
   type PausableHandler,
   type RunOptions,
+  type RuntimeSnapshot,
   type TypedScope,
 } from 'footprintjs';
+// ArrayMergeMode lives on footprintjs's `advanced` subpath, not its
+// main barrel. Used to set `arrayMerge: Replace` on subflow output
+// mapping for the Tools slot — the slot's deduped tool list must
+// REPLACE the parent's `dynamicToolSchemas` rather than concatenate
+// with it (default behavior re-introduces duplicate tool names that
+// LLM providers reject).
+import { ArrayMergeMode } from 'footprintjs/advanced';
 import { isPauseRequest, type RunnerPauseOutcome } from './pause.js';
 import { emitCostTick } from './cost.js';
 import type {
@@ -220,6 +229,23 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
   };
 
   /**
+   * Reference to the most recent executor. Set on every `createExecutor()`
+   * call (i.e., every `run()` and `resume()`); read by `getLastSnapshot()`
+   * / `getLastNarrativeEntries()` so post-run UIs (Lens Trace tab,
+   * ExplainableShell) can pull execution state without intercepting the
+   * call. `undefined` until the first run.
+   */
+  private lastExecutor?: FlowChartExecutor;
+
+  /**
+   * Reference to the FlowChart compiled for the most recent run. Cached
+   * here rather than recomputed via `buildChart()` so `getSpec()` returns
+   * the SAME spec the executor traced — important when the spec is used
+   * to reconcile `getLastSnapshot()` for ExplainableShell.
+   */
+  private lastFlowChart?: FlowChart;
+
+  /**
    * Memory subsystems registered via `.memory()`. Each definition mounts
    * its `read` subflow before the InjectionEngine on every turn; per-id
    * scope keys (`memoryInjectionKey(id)`) keep multi-memory layering
@@ -296,6 +322,42 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
 
   toFlowChart(): FlowChart {
     return this.buildChart();
+  }
+
+  /**
+   * The footprintjs `RuntimeSnapshot` from the most recent `run()` /
+   * `resume()`. Feeds Lens's Trace tab (ExplainableShell `runtimeSnapshot`
+   * prop) so consumers can scrub the execution timeline post-run without
+   * threading a recorder through the call site.
+   *
+   * Returns `undefined` before the first run completes. Returns the
+   * snapshot of the most recent run on every call after — including
+   * across multiple turns of the same Agent instance.
+   */
+  getLastSnapshot(): RuntimeSnapshot | undefined {
+    return this.lastExecutor?.getSnapshot();
+  }
+
+  /**
+   * Structured narrative entries from the most recent run. Pairs with
+   * `getLastSnapshot()` for ExplainableShell's `narrativeEntries` prop.
+   * Empty array (not `undefined`) when no run has completed — matches
+   * the prop's expected shape so consumers can wire it directly without
+   * a defensive guard.
+   */
+  getLastNarrativeEntries(): readonly CombinedNarrativeEntry[] {
+    return this.lastExecutor?.getNarrativeEntries() ?? [];
+  }
+
+  /**
+   * The FlowChart compiled for the most recent run (or a freshly-built
+   * one if no run has happened yet). Feeds ExplainableShell's `spec`
+   * prop. Returning the cached chart matters: the spec must match what
+   * `getLastSnapshot()` traced, otherwise the Trace view's stage tree
+   * desyncs from the snapshot's runtime tree.
+   */
+  getSpec(): FlowChart {
+    return this.lastFlowChart ?? this.buildChart();
   }
 
   /**
@@ -383,6 +445,12 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
 
     const chart = this.buildChart();
     const executor = new FlowChartExecutor(chart);
+    // Enable structured narrative so `getLastNarrativeEntries()` can
+    // hand a populated array to consumer Trace views (ExplainableShell).
+    // Cheap when no consumer reads it; the recorder accumulates only.
+    executor.enableNarrative();
+    this.lastExecutor = executor;
+    this.lastFlowChart = chart;
 
     const dispatcher = this.getDispatcher();
     const getRunCtx = (): RunContext => this.currentRunContext;
@@ -500,9 +568,23 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // same name throws (already validated upstream by
     // validateToolNameUniqueness) — we keep the runtime check as
     // belt-and-suspenders.
+    //
+    // Block C runtime — `autoActivate: 'currentSkill'` semantics:
+    //   When a skill's `defineSkill({ autoActivate: 'currentSkill' })`
+    //   is set, its tools are EXCLUDED from the static registry. They
+    //   flow into the LLM's tool list ONLY through `dynamicSchemas`
+    //   (the buildToolsSlot path that reads activeInjections), which
+    //   means they're visible ONLY on iterations after the skill is
+    //   activated by `read_skill('id')`. Without this, the LLM sees
+    //   every skill's tools on every iteration and the
+    //   per-skill-narrowing autoActivate promised in `defineSkill`
+    //   doesn't actually narrow anything. Skills WITHOUT autoActivate
+    //   keep the v2.4 behavior (tools always visible) for back-compat.
     const skillToolEntries: ToolRegistryEntry[] = [];
     const sharedSkillTools = new Map<string, Tool>();
     for (const skill of skills) {
+      const meta = skill.metadata as { autoActivate?: string } | undefined;
+      const isAutoActivate = meta?.autoActivate === 'currentSkill';
       const toolsFromSkill = skill.inject.tools ?? [];
       for (const tool of toolsFromSkill) {
         const name = tool.schema.name;
@@ -518,6 +600,11 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
           continue; // dedupe — same reference already added
         }
         sharedSkillTools.set(name, tool as unknown as Tool);
+        // autoActivate skills: their tools come ONLY through
+        // dynamicSchemas (buildToolsSlot.ts pulls them from
+        // activeInjections.inject.tools when the skill is active).
+        // Don't pre-load them in the static registry.
+        if (isAutoActivate) continue;
         skillToolEntries.push({ name, tool });
       }
     }
@@ -551,6 +638,19 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     }
 
     const registryByName = new Map(augmentedRegistry.map((e) => [e.name, e.tool] as const));
+    // Block C runtime — autoActivate skill tools live OUTSIDE the LLM-
+    // visible registry (so they don't pollute the per-iteration tool
+    // list before the skill activates), but they MUST still be findable
+    // by the dispatch handler — the LLM calls them by name once the
+    // skill is active, and dispatch looks up by name. Add them to the
+    // dispatch map so `lookupTool` resolves correctly. Using the Map
+    // backing the static registryByName means autoActivate tools share
+    // the same `.execute` wiring as normal tools — no special path.
+    for (const [name, tool] of sharedSkillTools.entries()) {
+      if (!registryByName.has(name)) {
+        registryByName.set(name, tool);
+      }
+    }
     const toolSchemas = augmentedRegistry.map((e) => e.tool.schema);
 
     const injectionEngineSubflow = buildInjectionEngineSubflow({
@@ -576,7 +676,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     const callLLM = async (scope: TypedScope<AgentState>) => {
       const systemPromptInjections =
         (scope.systemPromptInjections as readonly InjectionRecord[]) ?? [];
-      const messagesInjections = (scope.messagesInjections as readonly InjectionRecord[]) ?? [];
+      // `scope.messagesInjections` is read by ContextRecorder for
+      // observability; the LLM-wire path now reads scope.history
+      // directly (see below for rationale).
       const iteration = scope.iteration as number;
 
       const systemPrompt = systemPromptInjections
@@ -584,15 +686,14 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
         .filter((s) => s.length > 0)
         .join('\n\n');
 
-      const messages = messagesInjections
-        .map(
-          (r): LLMMessage => ({
-            role: r.asRole ?? 'user',
-            content: r.rawContent ?? r.contentSummary,
-            ...(r.sourceId !== undefined && { toolCallId: r.sourceId }),
-          }),
-        )
-        .filter((m) => m.content.length > 0);
+      // Read the LLM message stream from `scope.history` directly.
+      // The `messagesInjections` projection is for observability
+      // (ContextRecorder, Lens) — it flattens InjectionRecords for
+      // event reporting and doesn't carry the full LLM-protocol
+      // shape (assistant `toolCalls[]`, etc.). For Anthropic's API
+      // contract we need the original LLMMessage with `toolCalls`
+      // intact so tool_use → tool_result correlation survives.
+      const messages = (scope.history as readonly LLMMessage[] | undefined) ?? [];
 
       typedEmit(scope, 'agentfootprint.stream.llm_start', {
         iteration,
@@ -1046,6 +1147,11 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
           activeInjections: parent.activeInjections as readonly ActiveInjection[] | undefined,
         }),
         outputMapper: (sf) => ({ systemPromptInjections: sf.systemPromptInjections }),
+        // See Tools-subflow comment below — same array-concat hazard.
+        // Without Replace, iter N+1's systemPromptInjections gets
+        // CONCATENATED with iter N's, multiplying the system prompt
+        // each iteration.
+        arrayMerge: ArrayMergeMode.Replace,
       })
       .addSubFlowChartNext(SUBFLOW_IDS.MESSAGES, messagesSubflow, 'Messages', {
         inputMapper: (parent) => ({
@@ -1054,6 +1160,15 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
           activeInjections: parent.activeInjections as readonly ActiveInjection[] | undefined,
         }),
         outputMapper: (sf) => ({ messagesInjections: sf.messagesInjections }),
+        // Same array-concat hazard. messagesInjections is consumer-
+        // facing observability metadata (ContextRecorder, Lens) — must
+        // reflect THIS iteration's history, not be appended to last
+        // iteration's. CallLLM no longer reads this for the wire
+        // request (uses scope.history directly), so the LLM-protocol
+        // bug is fixed independently — but consumers of the
+        // messagesInjections stream still expect the per-iteration
+        // semantics.
+        arrayMerge: ArrayMergeMode.Replace,
       })
       .addSubFlowChartNext(SUBFLOW_IDS.TOOLS, toolsSubflow, 'Tools', {
         inputMapper: (parent) => ({
@@ -1076,6 +1191,16 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
           // back up so callLLM uses the right list for THIS iteration.
           dynamicToolSchemas: sf.toolSchemas,
         }),
+        // CRITICAL: footprintjs's default `applyOutputMapping`
+        // CONCATENATES arrays from subflow output with the parent's
+        // existing array values. Without `Replace`, the parent's
+        // `dynamicToolSchemas` (carrying the iter N value) gets
+        // concatenated with the slot's iter N+1 deduped list,
+        // re-introducing duplicate tool names that Anthropic's API
+        // rejects with "tools: Tool names must be unique." The slot's
+        // toolSchemas IS the authoritative list — replace, don't
+        // concatenate.
+        arrayMerge: ArrayMergeMode.Replace,
       })
       .addFunction('IterationStart', iterationStart, 'iteration-start', 'Iteration begin marker')
       .addFunction('CallLLM', callLLM, STAGE_IDS.CALL_LLM, 'LLM invocation')
