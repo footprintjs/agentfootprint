@@ -183,6 +183,12 @@ export {
   type OutputSchemaParser,
   type OutputSchemaOptions,
 } from './core/outputSchema.js';
+export {
+  flowchartAsTool,
+  type FlowchartAsToolOptions,
+  type FlowchartResultMapper,
+  type FlowchartToolSnapshot,
+} from './core/flowchartAsTool.js';
 export type {
   Tool,
   ToolExecutionContext,

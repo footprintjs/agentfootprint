@@ -1,0 +1,151 @@
+---
+title: Flowchart as tool
+description: Wrap a footprintjs FlowChart as one Agent tool. Compose existing multi-step procedures (decision evidence, branches, loops, pause/resume) into the LLM's tool surface — no flatten/restructure required.
+---
+
+> A team has a working footprintjs flowchart for refund processing — `validate → look-up-order → decide-eligibility → process-refund → notify`, with `decide()` evidence captured at the eligibility step. The agent that needs to expose this as a tool **shouldn't have to flatten it into 5 separate tools**. `flowchartAsTool` wraps the existing chart as ONE tool the LLM can call. The flowchart's recorders, narrative, and pause/resume continue to work exactly as outside the agent.
+
+## What it does
+
+```ts
+import { flowChart } from 'footprintjs';
+import { flowchartAsTool, Agent } from 'agentfootprint';
+
+// Existing flowchart — defined once, shared by humans + agents
+const refundChart = flowChart<RefundState>('RefundFlow', validateInput, 'validate')
+  .addDeciderFunction('Eligibility', eligibilityDecider, 'eligibility')
+    .addFunctionBranch('eligible', 'Process', processRefund)
+    .addFunctionBranch('ineligible', 'Notify', notifyIneligible)
+    .end()
+  .build();
+
+// One-line bridge to the Agent's tool surface
+const refundTool = flowchartAsTool({
+  name: 'process_refund',
+  description: 'Process a refund. Validates, decides eligibility, processes or notifies.',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      orderId: { type: 'string' },
+      reason:  { type: 'string' },
+    },
+    required: ['orderId', 'reason'],
+  },
+  flowchart: refundChart,
+});
+
+const agent = Agent.create({ provider, model: 'claude-sonnet-4-5' })
+  .system('You handle refund requests.')
+  .tool(refundTool)
+  .build();
+```
+
+## What happens at runtime
+
+When the LLM calls `process_refund({ orderId, reason })`:
+
+1. A fresh `FlowChartExecutor(refundChart)` is constructed (no cross-call state leakage).
+2. `executor.run({ input: args, env: { signal: ctx.signal } })` runs — args land in `scope.$getArgs()`; the agent's abort signal propagates.
+3. The chart executes normally. Every footprintjs recorder you'd attach for human-only use (narrative, metrics, decide-evidence, etc.) continues to fire.
+4. `executor.getSnapshot()` is read; `resultMapper(snapshot)` (or the default `JSON.stringify(snapshot.values)`) returns the string the LLM sees as the tool result.
+5. If the chart's `decide()` evidence was captured, that evidence lives in the snapshot — `resultMapper` can extract specific commit artifacts to surface in the tool result.
+
+## Customizing the result
+
+The default mapper is `JSON.stringify(snapshot.values)`. Override with `resultMapper`:
+
+```ts
+const refundTool = flowchartAsTool({
+  name: 'process_refund',
+  description: '...',
+  flowchart: refundChart,
+  resultMapper: (snapshot) => {
+    const v = snapshot.values as { refundId?: string; reason?: string };
+    return JSON.stringify({
+      ok: v.refundId !== undefined,
+      refundId: v.refundId,
+      explanation: v.reason ?? 'no explanation',
+    });
+  },
+});
+```
+
+`FlowchartToolSnapshot` carries:
+
+| Field | What it holds |
+|---|---|
+| `values` | Final merged scope state (what every stage wrote) |
+| `narrative` | Combined narrative entries (flow + data ops) for audit-style result shaping |
+
+If the mapper throws, the tool result is enveloped as `[mapper-error: <reason>]` so the LLM sees a useful diagnostic instead of an unhandled crash.
+
+## Pause inside a flowchart
+
+If a stage uses `addPausableFunction` and pauses (waiting for a human approval, e.g.), the wrapped tool throws an Error with the checkpoint attached:
+
+```ts
+try {
+  await agent.run({ message: 'refund O-100' });
+} catch (e) {
+  const err = e as Error & { checkpoint?: unknown };
+  if (err.checkpoint) {
+    // Persist the checkpoint; resume the inner flowchart later.
+    // Polished agent-side pause integration lands in v2.6.
+  }
+}
+```
+
+Today: the pause surfaces as a thrown error so the consumer can persist the inner chart's checkpoint manually. **Block C / v2.6** ships an integrated path where the agent's outer run pauses cleanly with the inner checkpoint included in the agent's checkpoint envelope.
+
+## Why this matters
+
+| Without `flowchartAsTool` | With `flowchartAsTool` |
+|---|---|
+| Flatten N-stage flowchart into N tools the LLM can call independently | Wrap once; LLM calls one tool |
+| LLM has to plan the right sequence each turn | Sequence is already encoded in the chart |
+| Tool-level errors lose the chart's branch context | Errors propagate with the chart's full narrative + commitLog |
+| Decision evidence (`decide()`) is invisible to the agent | `resultMapper` can surface it directly |
+| Pre-existing flowchart code requires rewrite | Existing code unchanged |
+
+## Composition with other v2.5 primitives
+
+`flowchartAsTool` produces a regular `Tool` — it composes with everything tool-side:
+
+```ts
+import { staticTools, gatedTools } from 'agentfootprint/tool-providers';
+import { PermissionPolicy } from 'agentfootprint/security';
+
+const refundTool   = flowchartAsTool({...});
+const triageTool   = flowchartAsTool({...});
+const policy       = PermissionPolicy.fromRoles({...}, 'support');
+
+const provider = gatedTools(
+  staticTools([refundTool, triageTool, lookupTool]),
+  (name) => policy.isAllowed(name),
+);
+```
+
+Or wrap inside a `defineSkill` for LLM-activated unlocking:
+
+```ts
+const refundSkill = defineSkill({
+  id: 'refund',
+  description: 'Refund processing capabilities',
+  body: 'When the user asks to refund, call process_refund with the order id.',
+  tools: [refundTool],  // The flowchart-backed tool
+  autoActivate: 'currentSkill',  // Hide it until billing is active
+});
+```
+
+## Anti-patterns
+
+- **Don't put async LLM calls inside the wrapped flowchart** without thinking about it. Each tool call is one inference step from the LLM's perspective; if the inner chart calls another LLM, that's a billable second inference the agent's cost tracker doesn't see. Use `LLMCall` or `Agent` runners for that — they integrate with the cost subsystem.
+- **Don't share mutable state between calls.** Each `tool.execute()` constructs a fresh executor; if you need persistence across invocations, use `defineMemory` or a side store.
+- **Don't ignore the abort signal.** Long-running flowcharts should honor `ctx.signal` so the agent's caller can cancel the whole run.
+
+## Next steps
+
+- [Tools guide](/agentfootprint/guides/tools/) — the underlying Tool primitive
+- [Tool providers](/agentfootprint/guides/tool-providers/) — `gatedTools` / `skillScopedTools` chains
+- [Output schema](/agentfootprint/guides/output-schema/) — pair with `outputSchema` when the wrapped chart's result is a structured contract
+- [footprintjs](https://footprintjs.github.io/footPrint/) — the underlying flowchart pattern
