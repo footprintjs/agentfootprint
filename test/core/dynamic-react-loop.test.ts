@@ -245,9 +245,8 @@ describe('Dynamic ReAct loop — properties', () => {
     const finalMessages = (
       (snap?.sharedState as { messagesInjections?: readonly unknown[] })?.messagesInjections ?? []
     ).length;
-    const historyLen = (
-      (snap?.sharedState as { history?: readonly unknown[] })?.history ?? []
-    ).length;
+    const historyLen = ((snap?.sharedState as { history?: readonly unknown[] })?.history ?? [])
+      .length;
     // Messages slot mirrors history (1 user + N assistant/tool pairs).
     // Allow up to 1.5× history (extra room for any consumer-injected
     // assistant prefills); reject 2×+ which is the accumulation bug.

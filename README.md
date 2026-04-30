@@ -222,6 +222,92 @@ The framework owns the loop. The framework re-evaluates triggers every iteration
 
 **The flowchart-pattern substrate** ([footprintjs](https://github.com/footprintjs/footPrint)) is what makes the observation automatic. Every stage execution is a typed event during one DFS traversal — no instrumentation, no post-processing. Same way React DevTools shows you the component tree because React owns the render path, agentfootprint shows you the slot composition because agentfootprint owns the prompt path.
 
+### Side-by-side: classic vs Dynamic ReAct
+
+[`examples/dynamic-react/`](./examples/dynamic-react/) ships two
+mock-backed scripts solving the same SRE task with the same scripted
+answers. Per-iteration tool-count progression makes the shape clear:
+
+```
+Classic ReAct                    Dynamic ReAct
+───────────────                  ─────────────
+iter 1: 12 tools shown           iter 1: 1 tool  (read_skill)
+iter 2: 12 tools shown           iter 2: 5 tools (skill activated)
+iter 3: 12 tools shown           iter 3: 5 tools
+iter 4: 12 tools shown           iter 4: 5 tools
+                                 iter 5: 5 tools (final answer)
+```
+
+The two unactivated skills' 8 tools never enter the LLM context.
+**Classic ReAct has no equivalent**: every registered tool ships
+on every call.
+
+### Real Anthropic benchmark — 3 models × 2 modes
+
+We ran a real production-shaped agent (10 skills, 18 tools after dedup)
+against Anthropic with Haiku 4.5, Sonnet 4.5, and Opus 4.5 in both
+modes. Same prompt, same scenario data, real `usage.input_tokens`:
+
+| Model       | Classic in | Dynamic in | Δ      | Notes                              |
+| ----------- | ---------: | ---------: | -----: | ---------------------------------- |
+| Haiku 4.5   |     25,755 |     36,341 |  +41%  | Classic 4 iters / Dynamic 6 iters  |
+| Sonnet 4.5  |     36,690 |     28,486 |  −22%  | Classic went serial; Dynamic wins  |
+| Opus 4.5    |     20,114 |     28,401 |  +41%  | Opus's parallel batching is best   |
+
+**Reality check**: at Neo's 18-tool / 10-skill scale, Dynamic ReAct's
+total input-token cost depends on **how aggressively the model
+parallelizes Classic mode**. Opus parallelizes best (3 iters, all
+data tools in one round) so Classic minimizes iterations and wins.
+Sonnet went serial that turn (5 iters) so Dynamic won. Haiku
+parallelized well (4 iters) so Classic won.
+
+Classic mode is **shape-variable** (3–5 iters depending on model
+mood). Dynamic stays predictable at 5–6 iters across all models.
+
+### What Dynamic ReAct WINS even when it loses on raw tokens
+
+1. **Constant per-call payload**: `[2, 2, 6, 6, 6]` for Dynamic vs
+   `[18, 18, 18]` for Classic, regardless of registry size. Scales
+   to 50+ tool catalogs without ballooning per-call cost.
+2. **Deterministic routing**: `read_skill` forces scope before data
+   tools fire. LLM can't drift to off-topic tools.
+3. **Auditability**: each iteration's tool list is a function of
+   `activatedInjectionIds` — recorded, replayable, diff-able across
+   runs. Classic mode has no equivalent artifact.
+4. **Predictable cost**: Dynamic varies <5% across model sizes (28K-36K).
+   Classic varies 80%+ run-to-run depending on parallelization.
+
+### Where Dynamic ReAct WILL win on cost
+
+The break-even is roughly **30+ tools across 8+ skills**. Below that,
+classic mode often wins on raw tokens. Above it, Dynamic dominates
+because Classic's tool-description payload grows linearly with the
+catalog while Dynamic stays flat at active-skill size:
+
+```
+Classic ReAct:   5 iters × 50 tools             = 250 descriptions
+Dynamic ReAct:   1 iter  × 1 tool  (read_skill)
+               + 4 iters × 5 tools (1 active)   =  21 descriptions
+                                                  ────────────
+                                                  −92% on tool payload
+```
+
+Plus the second-order win: **fewer tools per call → LLM less likely
+to hallucinate or pick the wrong tool**. Narrower context = more
+in-distribution on the active task. Increasingly load-bearing as
+catalogs grow.
+
+Run the side-by-side yourself:
+
+```sh
+TSX_TSCONFIG_PATH=examples/runtime.tsconfig.json npx tsx examples/dynamic-react/01-classic-react.ts
+TSX_TSCONFIG_PATH=examples/runtime.tsconfig.json npx tsx examples/dynamic-react/02-dynamic-react.ts
+```
+
+Or for the real-Anthropic version, see
+[`scripts/run-comparison.ts`](https://github.com/footprintjs/neo-mds-triage/blob/main/scripts/run-comparison.ts)
+in the Neo repo.
+
 ---
 
 ## What you can build

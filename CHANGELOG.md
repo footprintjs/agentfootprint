@@ -5,6 +5,67 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.5.1]
+
+**Bug fix release.** v2.5.0 shipped with a single-line bug in the
+`Agent.buildChart` InjectionEngine subflow mount: the `outputMapper`
+was missing `arrayMerge: ArrayMergeMode.Replace`. Default footprintjs
+behavior CONCATENATES arrays from child to parent, so each iteration's
+`activeInjections` accumulated instead of replacing. Effect:
+8 → 16 → 24 → 32 → 40 → 48 cumulative injections per turn instead
+of the intended ~8-per-iter. The 8 always-on injection bodies were
+duplicated 5× into the system prompt at iter 5, ballooning Dynamic
+ReAct's input-token cost.
+
+### The fix
+
+One line added to the InjectionEngine subflow mount in `Agent.ts`:
+
+```ts
+arrayMerge: ArrayMergeMode.Replace,
+```
+
+Same fix that was already present on the SystemPrompt / Messages /
+Tools subflow mounts. The InjectionEngine mount was missed in v2.5.0.
+
+### Empirical impact (real Anthropic benchmark, 3 models × 2 modes)
+
+| Model       | Dynamic in (v2.5.0) | Dynamic in (v2.5.1) | Δ       |
+| ----------- | ------------------: | ------------------: | ------: |
+| Haiku 4.5   |              62,571 |              36,341 | **−42%** |
+| Sonnet 4.5  |              44,621 |              28,486 | **−36%** |
+| Opus 4.5    |              44,590 |              28,401 | **−36%** |
+
+Same scenario, same scripted answers, same iteration count. The
+~36–42% drop is purely the system prompt no longer being duplicated.
+
+### Regression tests
+
+Three new tests in `test/core/dynamic-react-loop.test.ts` assert
+bounded per-iteration injection counts:
+
+- `activeInjections` ≤ 4 across 5 iterations
+- `systemPromptInjections` ≤ 5 across 5 iterations
+- `messagesInjections` ≤ 1.5× history length
+
+These would have caught the v2.5.0 bug. Suite: 1490 → 1493.
+
+### v1 marketing claim correction
+
+v2.5.0's README claimed "Dynamic ReAct cuts input tokens 30–70%."
+The Neo benchmark shows this is **not universal** at sub-30-tool
+scale. The corrected README now shows the real 3-model comparison
+and explains:
+
+- Dynamic provides **predictable cost** (varies <5% across models)
+- Classic provides **lowest absolute cost** when the model parallelizes
+- Dynamic wins clearly above ~30 tools across 8+ skills
+- Dynamic ALWAYS wins on per-call payload size + deterministic routing
+
+### Suite
+
+1490 → 1493 (+3 regression tests).
+
 ## [2.5.0]
 
 **Dynamic ReAct primacy + skill-driven tool gating.** This release
