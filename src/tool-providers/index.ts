@@ -36,6 +36,7 @@
 
 export { staticTools } from './staticTools.js';
 export { gatedTools } from './gatedTools.js';
+export { skillScopedTools } from './skillScopedTools.js';
 export type {
   ToolProvider,
   ToolDispatchContext,

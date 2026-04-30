@@ -90,7 +90,7 @@ defineInstruction({
 
 ### 2. Adaptive tool exposure (per-skill gating)
 
-The LLM activates `billing` via `read_skill('billing')` → next iteration's tool list flips from "all 25 tools" to "the 7 tools billing actually uses". 3× context-budget reduction + sharper LLM tool-choice. Powered by `autoActivate` + `gatedTools` (Block A1+A5 in v2.5).
+The LLM activates `billing` via `read_skill('billing')` → next iteration's tool list flips from "all 25 tools" to "the 7 tools billing actually uses". 3× context-budget reduction + sharper LLM tool-choice. Powered by `defineSkill({ autoActivate: 'currentSkill' })` + `skillScopedTools(id, tools)` from `agentfootprint/tool-providers` (Block A1 + A5 shipped in v2.5; auto-runtime wiring lands Block C).
 
 ### 3. Cost guardrails
 

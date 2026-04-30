@@ -299,6 +299,7 @@ export {
   type DefineSkillOptions,
   type SurfaceMode,
   type RefreshPolicy,
+  type AutoActivateMode,
   defineSteering,
   type DefineSteeringOptions,
   defineFact,
@@ -393,6 +394,7 @@ export {
 export {
   staticTools,
   gatedTools,
+  skillScopedTools,
   type ToolProvider,
   type ToolDispatchContext,
   type ToolGatePredicate,

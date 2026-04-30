@@ -158,6 +158,54 @@ Two reasons to choose `toTools()` over the auto-attach:
 
 `toTools()` returns `{ listSkills: undefined, readSkill: undefined }` for an empty registry — filter with `.filter(Boolean)` before adding to a tool list.
 
+## Per-skill tool gating — `autoActivate` (v2.5)
+
+By default, a Skill's `tools` array is ADDED to the agent's tool registry on activation. With ~3 skills and ~5 tools each, that's fine. With 20 skills and 100+ tools, the LLM's choice space gets noisy — every iteration's tool list pays the cost.
+
+`autoActivate: 'currentSkill'` declares intent: when this skill is active, ONLY this skill's tools should be visible (plus whatever baseline you compose alongside).
+
+```ts
+import { defineSkill } from 'agentfootprint';
+import { skillScopedTools, staticTools, type ToolProvider } from 'agentfootprint/tool-providers';
+
+const billingTools = [refundTool, chargeTool];
+
+const billingSkill = defineSkill({
+  id: 'billing',
+  description: 'Billing assistance',
+  body: '...',
+  tools: billingTools,
+  autoActivate: 'currentSkill',
+});
+
+// Materialize the gate manually today (Block C v2.5 wires this from
+// skill.metadata.autoActivate automatically):
+const baseline = staticTools([lookupOrderTool, listSkills, readSkill]);
+const billingScope = skillScopedTools('billing', billingTools);
+const refundScope = skillScopedTools('refund', [reverseTool]);
+
+const provider: ToolProvider = {
+  id: 'composite',
+  list: (ctx) => [
+    ...baseline.list(ctx),
+    ...billingScope.list(ctx),
+    ...refundScope.list(ctx),
+  ],
+};
+```
+
+What the LLM sees per iteration:
+
+| `ctx.activeSkillId` | Visible tools |
+|---|---|
+| `undefined` (no skill) | `lookup_order`, `list_skills`, `read_skill` |
+| `'billing'` | baseline + `refund`, `charge` |
+| `'refund'` | baseline + `reverse` |
+
+This is a [Dynamic ReAct](/agentfootprint/guides/dynamic-react/) payoff: the next iteration's tool list reshapes based on what just happened. 3× context-budget reduction in large catalogs + sharper LLM tool-choice.
+
+**Today:** the `autoActivate` field is stored on `skill.metadata.autoActivate`; consumers wire `skillScopedTools(...)` manually. **Block C (v2.5+):** the runtime reads `skill.metadata.autoActivate` and wires the scope automatically when you `agent.skills(registry)`.
+
 ## When to use Skills vs Steering vs Instruction
 
 | You want | Use |

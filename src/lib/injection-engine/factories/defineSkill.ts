@@ -105,7 +105,34 @@ export interface DefineSkillOptions {
    * long-context attention decay. Default: undefined (no refresh).
    */
   readonly refreshPolicy?: RefreshPolicy;
+  /**
+   * Per-skill tool gating intent. Block A5 / v2.5.
+   *
+   * - `'currentSkill'` — when this Skill is the only active one, the
+   *   agent's tool list should narrow to this Skill's `tools` (plus
+   *   the consumer-composed baseline). Used with
+   *   `skillScopedTools(id, tools)` from `agentfootprint/tool-providers`
+   *   to materialize the gate. Block C wires this into the runtime
+   *   automatically.
+   * - `undefined` (default) — current additive behavior: this Skill's
+   *   tools are added to the agent's registry on activation, alongside
+   *   every other tool already registered.
+   *
+   * The field is a forward-compat marker today: the metadata stores
+   * it; consumers can read `skill.metadata.autoActivate` to drive
+   * their own ToolProvider composition. v2.5 runtime wiring builds
+   * on this contract without API change.
+   */
+  readonly autoActivate?: AutoActivateMode;
 }
+
+/**
+ * Per-skill tool gating mode. See `DefineSkillOptions.autoActivate`.
+ *
+ * Reserved future values: `'always'` (always show this Skill's tools
+ * regardless of activation), `'group'` (gate by a named skill group).
+ */
+export type AutoActivateMode = 'currentSkill';
 
 /**
  * Resolve `surfaceMode: 'auto'` to a concrete mode based on provider
@@ -165,6 +192,7 @@ export function defineSkill(opts: DefineSkillOptions): Injection {
     metadata: Object.freeze({
       surfaceMode: opts.surfaceMode ?? 'auto',
       ...(opts.refreshPolicy && { refreshPolicy: opts.refreshPolicy }),
+      ...(opts.autoActivate && { autoActivate: opts.autoActivate }),
     }),
   }) as unknown as Injection;
 }

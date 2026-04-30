@@ -31,6 +31,7 @@ export {
   type DefineSkillOptions,
   type SurfaceMode,
   type RefreshPolicy,
+  type AutoActivateMode,
 } from './factories/defineSkill.js';
 
 export { SkillRegistry, type SkillRegistryOptions } from './SkillRegistry.js';
