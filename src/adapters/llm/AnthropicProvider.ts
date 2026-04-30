@@ -25,6 +25,7 @@ import type {
   LLMResponse,
   LLMToolSchema,
 } from '../types.js';
+import { lazyRequire } from '../../lib/lazyRequire.js';
 
 // ─── Anthropic SDK shape (duck-typed; no hard import) ──────────────
 
@@ -188,8 +189,9 @@ function resolveClient(options: AnthropicProviderOptions): AnthropicClient {
   if (options._client) return options._client;
   let Anthropic: new (opts: { apiKey?: string }) => AnthropicClient;
   try {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-require-imports
-    const mod = require('@anthropic-ai/sdk');
+    const mod = lazyRequire<{ default?: unknown } | unknown>('@anthropic-ai/sdk') as {
+      default?: unknown;
+    };
     Anthropic = (mod.default ?? mod) as new (opts: { apiKey?: string }) => AnthropicClient;
   } catch {
     throw new Error(

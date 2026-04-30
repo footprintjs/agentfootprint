@@ -292,28 +292,27 @@ export {
 // Adapters — LLM providers
 // `mock(...)` is the lowercase factory equivalent to `new MockProvider(...)`.
 // `anthropic(...)` is the real Claude provider via `@anthropic-ai/sdk`.
+// Zero-peer-dep providers — safe to re-export from the main barrel
+// because bundlers walking these never touch optional peer-dep code.
+//
+// Vendor-SDK-backed providers (AnthropicProvider, OpenAIProvider,
+// BedrockProvider) live ONLY at `agentfootprint/llm-providers` (or
+// the legacy `agentfootprint/providers` alias). That subpath
+// segregation means bundlers walking from `agentfootprint` main
+// never see the lazy peer-dep requires for `@anthropic-ai/sdk`,
+// `openai`, `@aws-sdk/client-bedrock-runtime`, etc. — automatic
+// tree-shaking, no bundler-side workarounds.
+//
+// Migration (v2.4 → v2.5):
+//   import { AnthropicProvider } from 'agentfootprint';                  // ❌ removed
+//   import { AnthropicProvider } from 'agentfootprint/llm-providers';    // ✓ canonical
+//   import { AnthropicProvider } from 'agentfootprint/providers';        // ✓ legacy alias
 export {
   MockProvider,
   mock,
   type MockProviderOptions,
   type MockReply,
 } from './adapters/llm/MockProvider.js';
-export {
-  anthropic,
-  AnthropicProvider,
-  type AnthropicProviderOptions,
-} from './adapters/llm/AnthropicProvider.js';
-export {
-  openai,
-  OpenAIProvider,
-  ollama,
-  type OpenAIProviderOptions,
-} from './adapters/llm/OpenAIProvider.js';
-export {
-  bedrock,
-  BedrockProvider,
-  type BedrockProviderOptions,
-} from './adapters/llm/BedrockProvider.js';
 export {
   browserAnthropic,
   BrowserAnthropicProvider,

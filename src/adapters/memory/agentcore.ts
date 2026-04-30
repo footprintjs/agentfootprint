@@ -61,6 +61,7 @@ import type {
 import type { MemoryEntry } from '../../memory/entry/index.js';
 import type { MemoryIdentity } from '../../memory/identity/index.js';
 import { identityNamespace } from '../../memory/identity/index.js';
+import { lazyRequire } from '../../lib/lazyRequire.js';
 
 /**
  * Minimal surface over `@aws-sdk/client-bedrock-agent-runtime` that
@@ -355,8 +356,7 @@ interface BedrockSdkModule {
 function createAgentCoreClient(region: string | undefined): AgentCoreLikeClient {
   let mod: BedrockSdkModule;
   try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    mod = require('@aws-sdk/client-bedrock-agent-runtime') as BedrockSdkModule;
+    mod = lazyRequire<BedrockSdkModule>('@aws-sdk/client-bedrock-agent-runtime');
   } catch {
     throw new Error(
       'AgentCoreStore requires the `@aws-sdk/client-bedrock-agent-runtime` peer dependency.\n' +

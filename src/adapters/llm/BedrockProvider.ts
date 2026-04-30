@@ -28,6 +28,7 @@ import type {
   LLMResponse,
   LLMToolSchema,
 } from '../types.js';
+import { lazyRequire } from '../../lib/lazyRequire.js';
 
 // ─── Bedrock Converse SDK shape (duck-typed) ───────────────────────
 
@@ -238,8 +239,7 @@ function resolveClient(options: BedrockProviderOptions): {
     ConverseStreamCommand: new (input: BedrockConverseCommand) => unknown;
   };
   try {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-require-imports
-    mod = require('@aws-sdk/client-bedrock-runtime');
+    mod = lazyRequire('@aws-sdk/client-bedrock-runtime');
   } catch {
     throw new Error(
       'BedrockProvider requires `@aws-sdk/client-bedrock-runtime`.\n' +

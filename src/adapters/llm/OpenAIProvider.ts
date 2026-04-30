@@ -27,6 +27,7 @@ import type {
   LLMResponse,
   LLMToolSchema,
 } from '../types.js';
+import { lazyRequire } from '../../lib/lazyRequire.js';
 
 // ─── OpenAI SDK shape (duck-typed) ─────────────────────────────────
 
@@ -282,8 +283,10 @@ function resolveClient(options: OpenAIProviderOptions): OpenAIClient {
   if (options._client) return options._client;
   let OpenAI: new (opts: { apiKey?: string; baseURL?: string }) => OpenAIClient;
   try {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-require-imports
-    const mod = require('openai');
+    const mod = lazyRequire<{ default?: unknown; OpenAI?: unknown } | unknown>('openai') as {
+      default?: unknown;
+      OpenAI?: unknown;
+    };
     OpenAI = (mod.default ?? mod.OpenAI ?? mod) as new (opts: {
       apiKey?: string;
       baseURL?: string;

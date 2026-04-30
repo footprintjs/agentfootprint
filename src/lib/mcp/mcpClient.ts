@@ -36,6 +36,7 @@
 
 import type { Tool } from '../../core/tools.js';
 import type { McpClient, McpClientOptions, McpSdkClient, McpTransport } from './types.js';
+import { lazyRequire } from '../lazyRequire.js';
 
 // Version-less identity. The MCP `clientInfo` field is informational
 // (server logs it); a hardcoded number drifts every release. Consumers
@@ -105,8 +106,7 @@ async function resolveClient(
 ): Promise<McpSdkClient> {
   let mod: McpSdkExports;
   try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    mod = require('@modelcontextprotocol/sdk/client/index.js') as McpSdkExports;
+    mod = lazyRequire<McpSdkExports>('@modelcontextprotocol/sdk/client/index.js');
   } catch {
     throw new Error(
       'mcpClient requires @modelcontextprotocol/sdk.\n' +
@@ -128,8 +128,7 @@ async function buildTransport(t: McpTransport): Promise<unknown> {
   if (t.transport === 'stdio') {
     let stdioMod: McpStdioExports;
     try {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      stdioMod = require('@modelcontextprotocol/sdk/client/stdio.js') as McpStdioExports;
+      stdioMod = lazyRequire<McpStdioExports>('@modelcontextprotocol/sdk/client/stdio.js');
     } catch {
       throw new Error(
         'mcpClient(stdio) requires @modelcontextprotocol/sdk/client/stdio.js — ' +
@@ -147,8 +146,7 @@ async function buildTransport(t: McpTransport): Promise<unknown> {
   // http transport
   let httpMod: McpHttpExports;
   try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    httpMod = require('@modelcontextprotocol/sdk/client/streamableHttp.js') as McpHttpExports;
+    httpMod = lazyRequire<McpHttpExports>('@modelcontextprotocol/sdk/client/streamableHttp.js');
   } catch {
     throw new Error(
       'mcpClient(http) requires @modelcontextprotocol/sdk/client/streamableHttp.js — ' +

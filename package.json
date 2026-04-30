@@ -157,7 +157,14 @@
   },
   "sideEffects": false,
   "peerDependencies": {
-    "footprintjs": ">=4.14.0"
+    "footprintjs": ">=4.14.0",
+    "@anthropic-ai/sdk": "*",
+    "openai": "*",
+    "@aws-sdk/client-bedrock-runtime": "*",
+    "@aws-sdk/client-bedrock-agent-runtime": "*",
+    "@modelcontextprotocol/sdk": "*",
+    "ioredis": "*",
+    "zod": "*"
   },
   "peerDependenciesMeta": {
     "@anthropic-ai/sdk": {

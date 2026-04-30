@@ -40,6 +40,7 @@ import type {
 import type { MemoryEntry } from '../../memory/entry/index.js';
 import type { MemoryIdentity } from '../../memory/identity/index.js';
 import { identityNamespace } from '../../memory/identity/index.js';
+import { lazyRequire } from '../../lib/lazyRequire.js';
 
 /**
  * Minimal `ioredis` client surface this adapter needs. Defined locally so
@@ -387,8 +388,7 @@ interface IoredisModule {
 function createIoredis(url: string): RedisLikeClient {
   let mod: IoredisModule | { new (url: string): RedisLikeClient };
   try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    mod = require('ioredis') as IoredisModule;
+    mod = lazyRequire<IoredisModule>('ioredis');
   } catch {
     throw new Error(
       'RedisStore requires the `ioredis` peer dependency.\n' +
