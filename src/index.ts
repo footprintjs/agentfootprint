@@ -176,6 +176,13 @@ export {
   type AgentOptions,
   type AgentOutput,
 } from './core/Agent.js';
+export {
+  OutputSchemaError,
+  applyOutputSchema,
+  buildDefaultInstruction,
+  type OutputSchemaParser,
+  type OutputSchemaOptions,
+} from './core/outputSchema.js';
 export type {
   Tool,
   ToolExecutionContext,

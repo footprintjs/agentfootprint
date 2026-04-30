@@ -59,6 +59,13 @@ import { buildToolsSlot } from './slots/buildToolsSlot.js';
 import { buildInjectionEngineSubflow } from '../lib/injection-engine/buildInjectionEngineSubflow.js';
 import { buildReadSkillTool } from '../lib/injection-engine/skillTools.js';
 import type { ActiveInjection, Injection } from '../lib/injection-engine/types.js';
+import { defineInstruction } from '../lib/injection-engine/factories/defineInstruction.js';
+import {
+  applyOutputSchema,
+  buildDefaultInstruction,
+  type OutputSchemaOptions,
+  type OutputSchemaParser,
+} from './outputSchema.js';
 import { RunnerBase, makeRunId } from './RunnerBase.js';
 import type { Tool, ToolRegistryEntry } from './tools.js';
 
@@ -219,6 +226,14 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    */
   private readonly memories: readonly MemoryDefinition[];
 
+  /**
+   * Optional terminal contract. Set via the builder's `.outputSchema()`.
+   * When present, `agent.runTyped()` parses + validates the final
+   * answer against this parser. `agent.run()` keeps returning the
+   * raw string; consumers opt into typed mode explicitly.
+   */
+  private readonly outputSchemaParser?: OutputSchemaParser<unknown>;
+
   constructor(
     opts: AgentOptions,
     systemPromptValue: string,
@@ -230,6 +245,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     },
     injections: readonly Injection[] = [],
     memories: readonly MemoryDefinition[] = [],
+    outputSchemaParser?: OutputSchemaParser<unknown>,
   ) {
     super();
     this.provider = opts.provider;
@@ -243,6 +259,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     this.registry = registry;
     this.injections = injections;
     this.memories = memories;
+    this.outputSchemaParser = outputSchemaParser;
     // Eager validation: tool names must be unique across .tool() +
     // every Skill.inject.tools — the LLM dispatches by name. Runs in
     // constructor so `Agent.build()` throws immediately on collision,
@@ -265,6 +282,55 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
 
   toFlowChart(): FlowChart {
     return this.buildChart();
+  }
+
+  /**
+   * Parse + validate a raw agent answer against the agent's
+   * `outputSchema` parser. Throws `OutputSchemaError` on JSON parse
+   * or schema validation failure (the rawOutput is preserved on the
+   * error for triage). Throws a plain `Error` if the agent has no
+   * outputSchema set.
+   *
+   * Use this when you need to keep `agent.run()` returning the raw
+   * string for logging/observability and validate at a different
+   * layer; otherwise prefer `agent.runTyped()`.
+   */
+  parseOutput<T = unknown>(raw: string): T {
+    if (!this.outputSchemaParser) {
+      throw new Error(
+        `Agent.parseOutput: this agent has no outputSchema. Use ` +
+          `Agent.create({...}).outputSchema(parser).build() to enable typed output.`,
+      );
+    }
+    return applyOutputSchema(raw, this.outputSchemaParser as OutputSchemaParser<T>);
+  }
+
+  /**
+   * Run the agent and return the schema-validated typed output.
+   * Convenience over `parseOutput(await agent.run({...}))`.
+   *
+   * Throws `OutputSchemaError` on parse / validation failure.
+   * Throws if the agent has no outputSchema set or if the run
+   * pauses (use `run()` directly when pauses are expected).
+   */
+  async runTyped<T = unknown>(
+    input: AgentInput,
+    options?: RunOptions,
+  ): Promise<T> {
+    if (!this.outputSchemaParser) {
+      throw new Error(
+        `Agent.runTyped: this agent has no outputSchema. Use ` +
+          `Agent.create({...}).outputSchema(parser).build() to enable typed output.`,
+      );
+    }
+    const out = await this.run(input, options);
+    if (typeof out !== 'string') {
+      throw new Error(
+        'Agent.runTyped: run paused — typed mode does not support pauses. ' +
+          'Use agent.run() + agent.parseOutput(...) after resume.',
+      );
+    }
+    return this.parseOutput<T>(out);
   }
 
   async run(input: AgentInput, options?: RunOptions): Promise<AgentOutput | RunnerPauseOutcome> {
@@ -992,6 +1058,11 @@ export class AgentBuilder {
   private readonly registry: ToolRegistryEntry[] = [];
   private readonly injectionList: Injection[] = [];
   private readonly memoryList: MemoryDefinition[] = [];
+  /**
+   * Optional terminal contract — see `outputSchema()`. Stored on the
+   * builder, propagated to the Agent at `.build()` time.
+   */
+  private outputSchemaParser?: OutputSchemaParser<unknown>;
   // Voice config — defaults until the consumer calls .appName() /
   // .commentaryTemplates() / .thinkingTemplates(). Stored as plain
   // dicts (Record<string, string>) so the builder doesn't depend on
@@ -1194,6 +1265,61 @@ export class AgentBuilder {
     return this.memory(definition);
   }
 
+  /**
+   * Declarative terminal contract. The agent's final answer must be
+   * JSON matching `parser`. Auto-injects a system-prompt instruction
+   * telling the LLM the shape, and exposes `agent.runTyped()` /
+   * `agent.parseOutput()` for parse + validate at the call site.
+   *
+   * The `parser` is duck-typed: any object with a `parse(unknown): T`
+   * method works (Zod, Valibot, ArkType, hand-written). The optional
+   * `description` field on the parser drives the auto-generated
+   * instruction; consumers can also override via `opts.instruction`.
+   *
+   * Throws if called more than once on the same builder (avoids
+   * silent override surprises).
+   *
+   * @param parser  Validation strategy that throws on shape failure.
+   * @param opts    Optional `{ name, instruction }` to customize.
+   *
+   * @example
+   *   import { z } from 'zod';
+   *   const Output = z.object({
+   *     status: z.enum(['ok', 'err']),
+   *     items: z.array(z.string()),
+   *   }).describe('A status enum + an array of strings.');
+   *
+   *   const agent = Agent.create({...})
+   *     .outputSchema(Output)
+   *     .build();
+   *
+   *   const typed = await agent.runTyped({ message: '...' });
+   *   typed.status; // narrowed to 'ok' | 'err'
+   */
+  outputSchema<T>(
+    parser: OutputSchemaParser<T>,
+    opts?: OutputSchemaOptions,
+  ): this {
+    if (this.outputSchemaParser) {
+      throw new Error(
+        'AgentBuilder.outputSchema: already set. Each agent has at most one terminal contract.',
+      );
+    }
+    this.outputSchemaParser = parser as OutputSchemaParser<unknown>;
+    const instructionText = opts?.instruction ?? buildDefaultInstruction(parser);
+    const id = opts?.name ?? 'output-schema';
+    // Always-on system-slot instruction. Activates every iteration so
+    // long runs keep the contract present (recency-first redundancy).
+    this.injectionList.push(
+      defineInstruction({
+        id,
+        activeWhen: () => true,
+        prompt: instructionText,
+      }),
+    );
+    return this;
+  }
+
   build(): Agent {
     // Resolve the voice config: bundled defaults + consumer overrides.
     // Templates flow through the same barrel exports the rest of the
@@ -1210,6 +1336,7 @@ export class AgentBuilder {
       voice,
       this.injectionList,
       this.memoryList,
+      this.outputSchemaParser,
     );
   }
 }

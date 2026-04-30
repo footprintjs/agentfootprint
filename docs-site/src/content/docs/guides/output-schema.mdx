@@ -1,0 +1,137 @@
+---
+title: Output schema
+description: Declarative terminal contract for an Agent's final answer. The schema serves three jobs at once — instruct the LLM, parse + validate, type-narrow at the call site.
+---
+
+> An agent helps a user pick a refund option. The LLM answers conversationally; your downstream code does `JSON.parse(answer)` and crashes 5% of the time when the LLM emits prose instead. **Most fixes are post-hoc** — try/catch, retry-with-prompt, brittle regex extraction. `outputSchema` solves it at the source: the agent's final answer MUST be JSON matching a Zod (or Zod-like) schema, the framework auto-instructs the LLM, parses, and type-narrows the run output. One declaration, three jobs.
+
+## What `outputSchema` does
+
+A single declaration:
+
+```ts
+import { z } from 'zod';
+import { Agent } from 'agentfootprint';
+
+const Output = z.object({
+  status: z.enum(['ok', 'err']),
+  items: z.array(z.string()),
+}).describe('A status flag and an array of item ids.');
+
+const agent = Agent.create({ provider, model: 'claude-sonnet-4-5' })
+  .system('You are a support agent.')
+  .outputSchema(Output)
+  .build();
+
+const typed = await agent.runTyped({ message: 'list pending tickets' });
+typed.status; // narrowed: 'ok' | 'err'
+```
+
+Three things happen at runtime:
+
+1. **System-prompt instruction** — auto-injected by `outputSchema` as a `defineInstruction` (always-on, system slot). Default text: *"Respond ONLY with valid JSON matching the output schema. Do NOT include prose, markdown fences, or explanatory text. The output shape: \<schema description\>."* The `<schema description>` segment uses Zod's `.describe()` (or whatever you set on the parser's `description` field).
+2. **JSON parse + validation** — when you call `agent.runTyped({...})`, the framework parses the final string answer as JSON, then runs `parser.parse(value)`. If either step fails, throws `OutputSchemaError` with the `rawOutput` preserved for triage.
+3. **Type narrowing** — `agent.runTyped<T>()` returns `Promise<T>`. The TS-side type flows from the parser's `parse(unknown): T` signature.
+
+## Two access points
+
+| Method | When to use |
+|---|---|
+| `agent.runTyped<T>({...})` | Default — runs + parses + narrows in one call |
+| `agent.parseOutput<T>(rawString)` | Already have a raw answer (replay, log inspection, custom retry) |
+
+`runTyped` throws if the run pauses — typed mode does not support pauses. Use `agent.run()` + `agent.parseOutput()` after resume when pauses are expected.
+
+## Custom instruction
+
+Override the auto-generated instruction when the LLM benefits from domain-specific framing:
+
+```ts
+.outputSchema(Output, {
+  name: 'support-output-contract',
+  instruction:
+    'Return only a JSON object: { status, items }. status is "ok" if you found tickets, ' +
+    '"err" if you couldn\'t. items is the ticket ids. Never include reasoning text.',
+})
+```
+
+The `name` field is the injection id (default `'output-schema'`). Override when you have multiple agents in one process and want diagnostic events to disambiguate.
+
+## Two-stage error reporting
+
+`OutputSchemaError.stage` distinguishes WHY the parse failed:
+
+```ts
+import { OutputSchemaError } from 'agentfootprint';
+
+try {
+  const typed = await agent.runTyped({ message: '...' });
+  process(typed);
+} catch (e) {
+  if (e instanceof OutputSchemaError) {
+    console.error(`Stage: ${e.stage}`);   // 'json-parse' | 'schema-validate'
+    console.error(`Raw:   ${e.rawOutput}`); // The agent's actual output
+    console.error(`Cause: ${e.cause}`);   // ZodError, native SyntaxError, etc.
+  }
+}
+```
+
+- **`'json-parse'`** — the LLM emitted prose, markdown fences, or otherwise non-JSON. Tighten the instruction or switch to `'tool-only'` surface mode for the schema.
+- **`'schema-validate'`** — the LLM produced valid JSON but the shape is wrong (missing field, wrong enum, etc.). The error.cause carries the validator's detailed failure (Zod's `ZodError.issues`, etc.).
+
+## Duck-typed parser
+
+The parser is structural — anything with `parse(unknown): T` works:
+
+```ts
+// Zod
+import { z } from 'zod';
+const ZodOut = z.object({ x: z.number() });
+.outputSchema(ZodOut)
+
+// Valibot — wrap to match the duck-type
+import * as v from 'valibot';
+const VSchema = v.object({ x: v.number() });
+.outputSchema({ parse: (val) => v.parse(VSchema, val), description: '{ x: number }' })
+
+// Hand-written
+.outputSchema({
+  parse(val) {
+    if (typeof val !== 'object' || val === null) throw new Error('expected object');
+    const v = val as { x?: unknown };
+    if (typeof v.x !== 'number') throw new Error('x must be number');
+    return { x: v.x };
+  },
+  description: '{ x: number }',
+})
+```
+
+**Today's behavior:** the parser is called with the JSON-parsed value; whatever it throws becomes the `cause` of `OutputSchemaError`.
+
+## Composing with skills, instructions, memory
+
+`outputSchema` registers itself as one Injection alongside everything else. Order doesn't matter — the framework's slot composition resolves all active Injections per iteration ([Dynamic ReAct](/agentfootprint/guides/dynamic-react/)):
+
+```ts
+const agent = Agent.create({ provider, model })
+  .system('You are a refund triage agent.')
+  .instruction(beFriendly)
+  .skills(supportRegistry)
+  .memory(recentMemory)
+  .outputSchema(RefundDecision)
+  .build();
+```
+
+`outputSchema` is always-on (every iteration's system slot includes the JSON-mode instruction), so the LLM sees the contract on the final iteration where it actually emits the answer. No special "final-iteration" flag needed.
+
+## Anti-patterns
+
+- **Don't use `outputSchema` for intermediate tool results.** Tool results have their own typing via `defineTool({ inputSchema })`. `outputSchema` is for the AGENT'S terminal answer only.
+- **Don't call `.outputSchema()` twice on the same builder.** The builder throws; each agent has at most one terminal contract. If you need different shapes per call, build two agents.
+- **Don't put your raw JSON-shape in the instruction text manually.** Use the parser's `.describe()` (Zod) or `description` field (custom) so the description stays in lockstep with the runtime parser.
+
+## Next steps
+
+- [Tools guide](/agentfootprint/guides/tools/) — input-schema typing for individual tools (the inverse direction)
+- [Instructions guide](/agentfootprint/guides/instructions/) — the broader Injection primitive `outputSchema` composes with
+- [Dynamic ReAct guide](/agentfootprint/guides/dynamic-react/) — why per-iteration recomposition lets `outputSchema` always be present without special-casing
