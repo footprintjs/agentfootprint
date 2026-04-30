@@ -33,3 +33,7 @@ package-lock.json
 # Proposal scratchpads (drafts that get folded into real files)
 *.proposed.md
 docs/canonical-demo.md
+
+# Local scratch artifacts
+index-claude.html
+*.scratch.*
