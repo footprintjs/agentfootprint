@@ -30,9 +30,62 @@ import {
   buildReadSkillTool,
   type SkillToolPair,
 } from './skillTools.js';
+import { resolveSurfaceMode, type SurfaceMode } from './factories/defineSkill.js';
+
+/**
+ * Options for `new SkillRegistry({...})`. All fields are optional;
+ * the empty-object form (`new SkillRegistry()`) is the v2.4 surface.
+ *
+ * @see SkillRegistry.resolveForSkill — applies the cascade
+ */
+export interface SkillRegistryOptions {
+  /**
+   * Registry-level default `surfaceMode`. Applies to skills whose own
+   * `surfaceMode` is `'auto'` (the `defineSkill` default). Per-skill
+   * `surfaceMode` always wins; this is the fallback BEFORE the global
+   * `resolveSurfaceMode(provider, model)` rule.
+   *
+   * Use case: a registry shared across agents pointed at the same
+   * provider can lock surfaceMode here once instead of repeating it
+   * on every `defineSkill`.
+   */
+  readonly surfaceMode?: SurfaceMode;
+
+  /**
+   * Provider name used as a hint when resolving `surfaceMode: 'auto'`
+   * inside this registry. Most consumers don't set this — runtime code
+   * passes the provider name into `resolveForSkill(skill, provider, model)`
+   * directly. This field is for cases where the registry is composed
+   * far from the agent (test fixtures, design-time inspectors).
+   *
+   * Match the provider's `name` field — `'anthropic'`, `'openai'`,
+   * `'mock'`, etc.
+   */
+  readonly providerHint?: string;
+}
 
 export class SkillRegistry {
   private readonly skills = new Map<string, Injection>();
+  private readonly opts: SkillRegistryOptions;
+
+  /**
+   * Construct an empty registry. Optional `{ surfaceMode, providerHint }`
+   * fields set registry-level defaults; absent both, the registry is a
+   * pure container (the v2.4 surface).
+   */
+  constructor(opts: SkillRegistryOptions = {}) {
+    this.opts = Object.freeze({ ...opts });
+  }
+
+  /** Registry-level default `surfaceMode`, or `undefined` if unset. */
+  get surfaceMode(): SurfaceMode | undefined {
+    return this.opts.surfaceMode;
+  }
+
+  /** Registry-level provider hint, or `undefined` if unset. */
+  get providerHint(): string | undefined {
+    return this.opts.providerHint;
+  }
 
   /**
    * Register a skill. Throws if `skill.flavor !== 'skill'` or if a
@@ -140,5 +193,60 @@ export class SkillRegistry {
       listSkills: buildListSkillsTool(skills),
       readSkill: buildReadSkillTool(skills),
     };
+  }
+
+  /**
+   * Resolve the effective `surfaceMode` for a skill, applying the
+   * cascade:
+   *
+   *   1. If the skill's own `metadata.surfaceMode` is concrete
+   *      (`'system-prompt'` / `'tool-only'` / `'both'`), return it.
+   *      Per-skill explicit choice always wins.
+   *   2. Else if the registry was constructed with a concrete
+   *      `surfaceMode`, return that.
+   *   3. Else delegate to `resolveSurfaceMode(provider, model)` using
+   *      the explicit `provider` arg (or `this.providerHint` if
+   *      omitted). Falls back to `'tool-only'` when no provider is
+   *      known.
+   *
+   * Forward-compat for Block C / v2.5 per-mode runtime routing: the
+   * runtime calls this with the agent's provider + model to decide
+   * how to materialize the skill's body into slots.
+   *
+   * Throws if the skill is not registered (catches typos at the
+   * caller site rather than silently resolving against a stranger).
+   *
+   * @param skillOrId  A registered Skill `Injection` OR its `id`.
+   * @param provider   Provider name override (wins over `providerHint`).
+   * @param model      Model name for the per-provider attention rule.
+   */
+  resolveForSkill(
+    skillOrId: Injection | string,
+    provider?: string,
+    model?: string,
+  ): Exclude<SurfaceMode, 'auto'> {
+    const skill = typeof skillOrId === 'string' ? this.get(skillOrId) : skillOrId;
+    if (!skill) {
+      const id = typeof skillOrId === 'string' ? skillOrId : skillOrId.id;
+      throw new Error(
+        `SkillRegistry.resolveForSkill: no skill registered at id '${id}'.`,
+      );
+    }
+    if (skill.flavor !== 'skill') {
+      throw new Error(
+        `SkillRegistry.resolveForSkill: '${skill.id}' has flavor '${skill.flavor}', expected 'skill'.`,
+      );
+    }
+
+    const meta = skill.metadata as { surfaceMode?: SurfaceMode } | undefined;
+    const skillMode = meta?.surfaceMode;
+    if (skillMode && skillMode !== 'auto') return skillMode;
+
+    if (this.opts.surfaceMode && this.opts.surfaceMode !== 'auto') {
+      return this.opts.surfaceMode;
+    }
+
+    const effectiveProvider = provider ?? this.opts.providerHint ?? 'unknown';
+    return resolveSurfaceMode(effectiveProvider, model) as Exclude<SurfaceMode, 'auto'>;
   }
 }

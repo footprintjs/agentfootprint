@@ -33,7 +33,7 @@ export {
   type RefreshPolicy,
 } from './factories/defineSkill.js';
 
-export { SkillRegistry } from './SkillRegistry.js';
+export { SkillRegistry, type SkillRegistryOptions } from './SkillRegistry.js';
 
 // Skill-tool builders — used by SkillRegistry.toTools() and the Agent's
 // auto-attach path. Exported so consumers building custom tool wiring

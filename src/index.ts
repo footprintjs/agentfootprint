@@ -292,6 +292,7 @@ export {
   defineSkill,
   resolveSurfaceMode,
   SkillRegistry,
+  type SkillRegistryOptions,
   buildListSkillsTool,
   buildReadSkillTool,
   type SkillToolPair,

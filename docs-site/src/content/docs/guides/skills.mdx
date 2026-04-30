@@ -96,7 +96,39 @@ registry.register(newSkill);
 
 `agent.skills(registry)` is the bulk-register companion to `.skill(t)`. Use the registry pattern when 2+ agents share overlapping skills; use `.skill(...)` directly when one agent has its own catalog.
 
-`SkillRegistry` methods: `register(skill)` · `replace(id, skill)` · `unregister(id)` · `get(id)` · `has(id)` · `list()` · `clear()` · `size` · `toTools()`. Throws on duplicate `register` (use `replace` for explicit overwrites). Throws on non-Skill flavor inputs.
+`SkillRegistry` methods: `register(skill)` · `replace(id, skill)` · `unregister(id)` · `get(id)` · `has(id)` · `list()` · `clear()` · `size` · `toTools()` · `resolveForSkill(skillOrId, provider?, model?)`. Throws on duplicate `register` (use `replace` for explicit overwrites). Throws on non-Skill flavor inputs.
+
+### Registry-level defaults — `new SkillRegistry({ surfaceMode, providerHint })` (v2.5)
+
+When every skill in a registry should share the same `surfaceMode`, set it once on the constructor instead of repeating it on every `defineSkill`:
+
+```ts
+import { SkillRegistry } from 'agentfootprint';
+
+// All skills here default to 'tool-only' (overrides defineSkill's 'auto')
+const registry = new SkillRegistry({ surfaceMode: 'tool-only' });
+registry.register(billingSkill);   // billingSkill.surfaceMode 'auto' → resolves to 'tool-only'
+registry.register(refundSkill);
+
+// providerHint helps when the registry is composed far from the agent
+// (test fixtures, design-time inspectors, multi-provider routing).
+const registry2 = new SkillRegistry({ providerHint: 'anthropic' });
+```
+
+The cascade for `surfaceMode` resolution is:
+
+1. **Per-skill explicit `surfaceMode`** wins. `defineSkill({ surfaceMode: 'both' })` is honored regardless of registry default.
+2. **Registry's `surfaceMode` ctor opt** (if set + not `'auto'`).
+3. **Global `resolveSurfaceMode(provider, model)`** — Claude ≥ 3.5 → `'both'`, everything else → `'tool-only'`.
+
+Inspect the resolved mode for any registered skill:
+
+```ts
+registry.resolveForSkill('billing', 'anthropic', 'claude-sonnet-4-5');
+// → returns 'system-prompt' | 'tool-only' | 'both' (never 'auto')
+```
+
+Forward-compat: Block C (v2.5+) wires this cascade into the runtime so per-mode routing diversity (suppressing system-prompt for `'tool-only'`, etc.) takes effect. Today consumers express intent; runtime tightens later without API change.
 
 ### `registry.toTools()` — explicit composition (v2.5)
 
