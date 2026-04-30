@@ -495,11 +495,30 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // ability to call the right tool. Throw early instead of subtly
     // shadowing.
     const skills = this.injections.filter((i) => i.flavor === 'skill');
+    // Collect skill tools, deduping by name when the SAME Tool reference
+    // is shared across skills. Different Tool implementations under the
+    // same name throws (already validated upstream by
+    // validateToolNameUniqueness) — we keep the runtime check as
+    // belt-and-suspenders.
     const skillToolEntries: ToolRegistryEntry[] = [];
+    const sharedSkillTools = new Map<string, Tool>();
     for (const skill of skills) {
       const toolsFromSkill = skill.inject.tools ?? [];
       for (const tool of toolsFromSkill) {
-        skillToolEntries.push({ name: tool.schema.name, tool });
+        const name = tool.schema.name;
+        const existing = sharedSkillTools.get(name);
+        if (existing) {
+          if (existing !== (tool as unknown as Tool)) {
+            throw new Error(
+              `Agent: tool name '${name}' is declared by multiple skills with different ` +
+                `Tool implementations. Skills MAY share the SAME Tool reference; they may ` +
+                `NOT register different functions under the same name.`,
+            );
+          }
+          continue; // dedupe — same reference already added
+        }
+        sharedSkillTools.set(name, tool as unknown as Tool);
+        skillToolEntries.push({ name, tool });
       }
     }
     // buildReadSkillTool returns undefined when skills is empty; the
@@ -514,15 +533,18 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       ...skillToolEntries,
     ];
 
-    // Validate: tool names must be unique across registry + skills.
-    // The LLM dispatches by name; collisions silently shadow.
+    // Final cross-source name-uniqueness check: static .tool() vs
+    // read_skill vs (deduped) skill tools. After the dedupe above this
+    // catches collisions BETWEEN sources (e.g., a static .tool('foo')
+    // colliding with a Skill's foo) which are real bugs.
     const seenNames = new Set<string>();
     for (const entry of augmentedRegistry) {
       if (seenNames.has(entry.name)) {
         throw new Error(
           `Agent: duplicate tool name '${entry.name}'. Tool names must be unique ` +
-            `across .tool() registrations and all Skills' inject.tools (the LLM ` +
-            `dispatches by name; collisions break tool routing).`,
+            `across .tool() registrations and Skills' inject.tools (after deduping ` +
+            `same-reference shares across skills). The LLM dispatches by name; ` +
+            `collisions break tool routing.`,
         );
       }
       seenNames.add(entry.name);
