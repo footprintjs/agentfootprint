@@ -347,10 +347,13 @@ describe('Injection Engine — tool name validation', () => {
     });
     expect(() =>
       Agent.create({ provider: mock(), model: 'mock' }).tool(sharedTool).skill(skill).build(),
-    ).toThrow(/duplicate tool name 'duplicate'/);
+    ).toThrow(/collides with the static \.tool\(\) registry/);
   });
 
-  it('throws at build time on duplicate tool name across two skills', () => {
+  it('SAME Tool reference shared across two skills is supported (deduped at dispatch)', () => {
+    // Multiple investigation skills often share common data tools
+    // (e.g., a `flogi_lookup` used by port-error-triage AND io-profile).
+    // Sharing the same Tool object is the supported pattern.
     const sharedTool = defineTool({
       name: 'shared',
       description: 'd',
@@ -361,7 +364,29 @@ describe('Injection Engine — tool name validation', () => {
         .skill(defineSkill({ id: 'a', description: 'd', body: 'b', tools: [sharedTool] }))
         .skill(defineSkill({ id: 'b', description: 'd', body: 'b', tools: [sharedTool] }))
         .build(),
-    ).toThrow(/duplicate tool name 'shared'/);
+    ).not.toThrow();
+  });
+
+  it('DIFFERENT Tool implementations with the same name across skills throws (ambiguous dispatch)', () => {
+    // Two skills declare tools with the SAME name but DIFFERENT execute
+    // functions. This is the actual bug — the LLM dispatches by name
+    // and would get one or the other inconsistently.
+    const a = defineTool({
+      name: 'collide',
+      description: 'first',
+      execute: () => 'A',
+    });
+    const b = defineTool({
+      name: 'collide',
+      description: 'second',
+      execute: () => 'B',
+    });
+    expect(() =>
+      Agent.create({ provider: mock(), model: 'mock' })
+        .skill(defineSkill({ id: 'a', description: 'd', body: 'b', tools: [a] }))
+        .skill(defineSkill({ id: 'b', description: 'd', body: 'b', tools: [b] }))
+        .build(),
+    ).toThrow(/different Tool implementations|ambiguous dispatch/);
   });
 
   it('Skill-supplied tools are in the executor registry (callable when LLM uses them)', () => {
