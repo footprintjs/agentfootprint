@@ -80,9 +80,13 @@ The package.json `exports` field publishes subpath imports per layer:
 |---|---|---|
 | `agentfootprint` (default) | 8 | The full curated barrel — 90% of consumers use only this |
 | `agentfootprint/memory` | 4 | `defineMemory`, `MEMORY_TYPES`, `MEMORY_STRATEGIES`, `InMemoryStore` |
-| `agentfootprint/memory-redis` | 3 | `RedisStore` (lazy `ioredis`) |
-| `agentfootprint/memory-agentcore` | 3 | `AgentCoreStore` (lazy AWS SDK) |
-| `agentfootprint/providers` | 3 | All LLM provider exports |
+| `agentfootprint/llm-providers` | 3 | LLM provider adapters (canonical v2.5+) |
+| `agentfootprint/memory-providers` | 3 | Memory store adapters — `RedisStore`, `AgentCoreStore`, future stores (canonical v2.5+) |
+| `agentfootprint/tool-providers` | 3 | Tool dispatch + sources — `staticTools`, `gatedTools`, `skillScopedTools`, `mcpClient` |
+| `agentfootprint/security` | 3 | Cross-cutting authorization — `PermissionPolicy` |
+| `agentfootprint/providers` | 3 | Legacy alias for `llm-providers` (still works through v2.x; removed v3.0) |
+| `agentfootprint/memory-redis` | 3 | Legacy per-adapter alias (still works through v2.x; removed v3.0) |
+| `agentfootprint/memory-agentcore` | 3 | Legacy per-adapter alias (still works through v2.x; removed v3.0) |
 | `agentfootprint/observe` | 2 | Event taxonomy + dispatcher types |
 | `agentfootprint/resilience` | 3 | `withRetry`, `withFallback`, `resilientProvider` |
 | `agentfootprint/stream` | (cross-cutting) | SSE bridge for streaming agent events to HTTP |

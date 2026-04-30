@@ -97,6 +97,16 @@
       "import": "./dist/esm/providers.js",
       "require": "./dist/providers.js"
     },
+    "./llm-providers": {
+      "types": "./dist/types/llm-providers.d.ts",
+      "import": "./dist/esm/llm-providers.js",
+      "require": "./dist/llm-providers.js"
+    },
+    "./memory-providers": {
+      "types": "./dist/types/memory-providers.d.ts",
+      "import": "./dist/esm/memory-providers.js",
+      "require": "./dist/memory-providers.js"
+    },
     "./observe": {
       "types": "./dist/types/observe.d.ts",
       "import": "./dist/esm/observe.js",

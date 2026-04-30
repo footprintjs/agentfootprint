@@ -1,6 +1,17 @@
 /**
  * agentfootprint/providers — LLM provider adapters.
  *
+ * **DEPRECATION NOTICE (v2.5):** This subpath is now the legacy alias.
+ * The canonical name in v2.5+ is `agentfootprint/llm-providers`,
+ * matching the parallel structure (`tool-providers` /
+ * `memory-providers` / `security`). Existing imports keep working
+ * unchanged through the v2.x line; the alias is removed in v3.0.
+ *
+ *   // Old (still works through v2.x):
+ *   import { mock } from 'agentfootprint/providers';
+ *   // New canonical:
+ *   import { mock } from 'agentfootprint/llm-providers';
+ *
  * Pattern: Adapter (GoF) — concrete `LLMProvider` implementations that
  *          translate the agentfootprint port to a specific vendor SDK.
  * Role:    Outer ring (Hexagonal). Swappable at runtime; the Agent
