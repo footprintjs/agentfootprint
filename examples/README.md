@@ -210,4 +210,11 @@ _Run `npm run examples:readme` after adding/editing examples._
 |---|---|---|---|
 | — | [`loan-officer-causal.ts`](canonical/loan-officer-causal.ts) | Canonical: Loan officer with causal-memory cross-run replay | Monday: expensive model underwrites loan #42 (REJECT). Friday: cheap model answers  |
 
+### [`dynamic-react/`](dynamic-react/) — examples
+
+| # | File | Title | Description |
+|---|---|---|---|
+| 01 | [`01-classic-react.ts`](dynamic-react/01-classic-react.ts) | Classic ReAct — every tool on every iteration | All 12 tools registered up front. Every LLM call ships every  |
+| 02 | [`02-dynamic-react.ts`](dynamic-react/02-dynamic-react.ts) | Dynamic ReAct — tools narrow via autoActivate skills | Same 12 tools as 01-classic-react.ts, but behind 3 skills with  |
+
 <!-- AUTO-GENERATED:examples:end -->
