@@ -5,6 +5,97 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.5.0]
+
+**Dynamic ReAct primacy + skill-driven tool gating.** This release
+makes the Dynamic ReAct loop the load-bearing story: tools and
+system-prompt content recompose every iteration, so an agent with
+N skills × M tools no longer pays the full tool-list token cost on
+every LLM call. Plus eight new builder/runtime features for
+production agent surfaces.
+
+### Block A — eight runtime + builder additions
+
+- **A1 `.toolProvider()`** — first-class builder method for dynamic
+  tool sources (registry-backed, MCP-mediated, runtime-decided).
+- **A2 `PermissionPolicy`** — declarative role/capability allowlists
+  on `agent.run({ identity })`. Tool-call recorder consults the
+  policy; deny → tool throws `PermissionDeniedError`.
+- **A3 `SkillRegistry.toTools()`** — explicit conversion API so
+  consumers can opt skill-supplied tools into the static registry
+  (gated by autoActivate mode).
+- **A4 Builder ergonomics** — `.maxIterations()`, `.recorder()`,
+  `.instructions()` on AgentBuilder.
+- **A5 `autoActivate: 'currentSkill'`** — runtime tool gating: a
+  skill's tools become visible to the LLM only when that skill is
+  the most-recently-activated one. Cuts tool-list bloat for agents
+  with N skills × M tools.
+- **A6 `outputSchema(parser)`** — terminal-contract validation via
+  `agent.runTyped()`. Uses footprintjs's schema abstraction
+  (Zod-optional, duck-typed). On parse/validation failure throws
+  `OutputSchemaError` with `.rawOutput` preserved.
+- **A7 `flowchartAsTool(chart)`** — wraps a footprintjs FlowChart
+  as an LLM-callable Tool. Inner pause throws with
+  `error.checkpoint` attached (full nested-pause integration is on
+  the v2.6 backlog).
+- **A8 Richer `Skill`** — first-class `metadata`, `inject` shape,
+  per-skill activation hooks. Subsumes v2.4 ad-hoc skill factories.
+
+### Block B — `agentfootprint/{llm,tool,memory}-providers` + `/security`
+
+Subpath restructure so consumers don't pay tree-shake costs for
+adapters they don't use. v2.4's main barrel pulled every provider;
+v2.5 splits them. The genuinely-clean per-adapter subpath
+(Drizzle/Lucia pattern) is on the v2.6 backlog.
+
+### Block C — Skills runtime per-mode routing
+
+Closes the v2.4 Phase 4 commitment: `autoActivate` now actually
+narrows the tool slot at runtime (was previously a static-only
+hint). The Tools slot subflow consults `activatedInjectionIds`
+each iteration.
+
+### Block D — Message Catalog Pattern (`agentfootprint/locales`)
+
+i18n-ready prose templates for Lens commentary and chat-bubble
+thinking messages. `defaultThinkingMessages`, `composeMessages`,
+`validateMessages` exports.
+
+### Block E — examples README auto-generator
+
+`scripts/generate-examples-readme.mjs` walks `examples/`, extracts
+title + summary from each file's leading JSDoc, emits a
+table-of-contents README. Runs as a release gate.
+
+### Post-run trace accessors
+
+`agent.getLastSnapshot()`, `agent.getLastNarrativeEntries()`,
+`agent.getSpec()` — three accessors for post-run UIs (Lens Trace
+tab, ExplainableShell, custom dashboards) to pull execution state
+without intercepting the run() call site. `enableNarrative()` is
+called inside `createExecutor()` so the entries array is populated
+for any consumer that asks.
+
+### BrowserAnthropicProvider — streaming-spec fixes
+
+The v1→v2 rewrite regressed the SSE parser. v2.5 restores both:
+**tool args via `input_json_delta`** (per-block accumulation, parsed
+on `content_block_stop` — was always landing as `{}`) and
+**cumulative usage tracking** from `message_start.usage` +
+`message_delta.usage` (was always 0).
+
+### Tool dedupe in Tools slot
+
+Three sources can register the same tool name (static registry +
+toolProvider + skill injection); LLMs reject duplicates. Tools
+slot now dedupes by name + uses `ArrayMergeMode.Replace` on the
+subflow output mapping (the documented fix to the documented
+anti-pattern).
+
+### Suite
+
+1408 → 1490 (+82).
+
 ## [2.4.0]
 
 **We made it impossible for our docs to lie.**
