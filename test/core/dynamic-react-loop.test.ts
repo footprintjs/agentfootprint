@@ -174,6 +174,85 @@ describe('Dynamic ReAct loop — properties', () => {
     // Iterations are 1-indexed; should see at least 4 distinct iters
     expect(noisyIters.size).toBeGreaterThanOrEqual(4);
   });
+
+  it('activeInjections array stays bounded per iteration (no accumulation)', async () => {
+    // REGRESSION TEST for the v2.5.0 InjectionEngine subflow bug:
+    // outputMapper was missing `arrayMerge: ArrayMergeMode.Replace`.
+    // Effect: parent's `activeInjections` accumulated each iteration
+    //   iter 1: [...] (8 items)
+    //   iter 2: [...prev, ...new] (16 items)
+    //   iter 3: 24, iter 4: 32, ...
+    // System prompt grew linearly with iteration count → Dynamic-mode
+    // input tokens roughly 1.5–3× over the correct value.
+    //
+    // Property: at any iteration, scope.activeInjections must contain
+    // ONLY the injections active for THAT iteration, not the union of
+    // all prior iterations. With the always-on `noisy` + on-tool-return
+    // `post-echo` predicates, the count should be ≤2 per iter (the
+    // user message itself can add a 'user' source but this only lands
+    // in messagesInjections, not activeInjections).
+    const { agent } = buildEchoAgent({ iterations: 5 });
+    const perIterCounts: number[] = [];
+    let currentIter = 0;
+    agent.on('agentfootprint.agent.iteration_start', (e) => {
+      currentIter = e.payload.iterIndex;
+    });
+    // ContextRecorder dispatches `slot_composed` per-slot with a
+    // sourceBreakdown summary. We instead introspect the snapshot
+    // post-run for the ground-truth `activeInjections` length.
+    await agent.run({ message: 'echo something' });
+    const snap = agent.getLastSnapshot();
+    const finalActive = (
+      (snap?.sharedState as { activeInjections?: readonly unknown[] })?.activeInjections ?? []
+    ).length;
+    // The agent has exactly 2 injection definitions (`noisy` always-on +
+    // `post-echo` on-tool-return). On the FINAL iteration after the
+    // loop unwinds, scope.activeInjections reflects that iter's
+    // engine output. Pre-fix: 2 × N iterations = 10+ entries by iter 5.
+    // Post-fix: ≤2 entries (one or both predicates true).
+    // We assert ≤4 (generous upper bound that still catches the bug;
+    // 5+ proves accumulation).
+    expect(finalActive).toBeLessThanOrEqual(4);
+    // Capture for diagnostic message in case of regression
+    perIterCounts.push(currentIter);
+  });
+
+  it('systemPromptInjections stays bounded per iteration', async () => {
+    // Sister regression: even with InjectionEngine fixed, if the
+    // SystemPrompt slot subflow lost its arrayMerge: Replace flag,
+    // the system prompt would still grow. This test exercises the
+    // composed pipeline end-to-end.
+    const { agent } = buildEchoAgent({ iterations: 5 });
+    await agent.run({ message: 'echo something' });
+    const snap = agent.getLastSnapshot();
+    const finalSystem = (
+      (snap?.sharedState as { systemPromptInjections?: readonly unknown[] })
+        ?.systemPromptInjections ?? []
+    ).length;
+    // Pre-fix: 1 base prompt + ~2 injections × 5 iters = 11+ entries.
+    // Post-fix: 1 base prompt + ≤2 injections = ≤3 entries.
+    // Cap at 5 to catch any accumulation while tolerating minor variation.
+    expect(finalSystem).toBeLessThanOrEqual(5);
+  });
+
+  it('messagesInjections stays bounded per iteration', async () => {
+    // Same property for the Messages slot.
+    const { agent } = buildEchoAgent({ iterations: 5 });
+    await agent.run({ message: 'echo something' });
+    const snap = agent.getLastSnapshot();
+    // History grows with tool calls + tool results, that's expected.
+    // But messagesInjections should mirror history size, not multiply it.
+    const finalMessages = (
+      (snap?.sharedState as { messagesInjections?: readonly unknown[] })?.messagesInjections ?? []
+    ).length;
+    const historyLen = (
+      (snap?.sharedState as { history?: readonly unknown[] })?.history ?? []
+    ).length;
+    // Messages slot mirrors history (1 user + N assistant/tool pairs).
+    // Allow up to 1.5× history (extra room for any consumer-injected
+    // assistant prefills); reject 2×+ which is the accumulation bug.
+    expect(finalMessages).toBeLessThanOrEqual(Math.ceil(historyLen * 1.5));
+  });
 });
 
 // ─── 5. SECURITY — predicates can NOT skip iterations ──────────────

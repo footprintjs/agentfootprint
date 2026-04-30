@@ -1132,6 +1132,22 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
               (parent.activatedInjectionIds as readonly string[] | undefined) ?? [],
           }),
           outputMapper: (sf) => ({ activeInjections: sf.activeInjections }),
+          // CRITICAL: footprintjs's default `applyOutputMapping`
+          // CONCATENATES arrays from subflow output with the parent's
+          // existing array values. Without `Replace`, the parent's
+          // `activeInjections` from iter N gets CONCATENATED with the
+          // subflow's iter N+1 fresh evaluation — producing
+          // 8 → 16 → 24 → 32 cumulative injections per turn instead of
+          // the intended ~8-per-iter.
+          //
+          // The slot subflows below (SystemPrompt, Messages, Tools) all
+          // read `activeInjections` and render every entry, so without
+          // Replace the system prompt grows linearly with iteration
+          // count. This was the root-cause of Dynamic-mode costing
+          // ~2x more input tokens than Classic in the v2.5.0 Neo
+          // benchmarks — the InjectionEngine's intended per-iter
+          // recomposition wasn't happening; it was per-iter ACCUMULATION.
+          arrayMerge: ArrayMergeMode.Replace,
         },
       )
       .addSubFlowChartNext(SUBFLOW_IDS.SYSTEM_PROMPT, systemPromptSubflow, 'System Prompt', {
