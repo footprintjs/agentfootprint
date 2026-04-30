@@ -18,11 +18,21 @@ import { INJECTION_KEYS } from '../../conventions.js';
 import type { InjectionRecord } from '../../recorders/core/types.js';
 import { COMPOSITION_KEYS } from '../../recorders/core/types.js';
 import type { Injection } from '../../lib/injection-engine/types.js';
+import type { ToolProvider, ToolDispatchContext } from '../../tool-providers/types.js';
 import { composeSlot, fnv1a, truncate } from './helpers.js';
 
 export interface ToolsSlotConfig {
   /** Tool registry exposed to the LLM. Empty → empty slot (LLMCall case). */
   readonly tools: readonly LLMToolSchema[];
+  /**
+   * Optional `ToolProvider` consulted PER-ITERATION (Block A5 follow-up).
+   * When set, the slot calls `provider.list(ctx)` each iteration with
+   * the current `{ iteration, activeSkillId, identity }`. Provider-
+   * supplied tool schemas are MERGED with the static `tools` registry
+   * — both flow to the LLM. This is what makes Dynamic ReAct's tool
+   * list reshape per iteration.
+   */
+  readonly toolProvider?: ToolProvider;
   /** Budget cap (chars). Default: 2000. */
   readonly budgetCap?: number;
 }
@@ -43,6 +53,7 @@ interface ToolsSubflowState {
 export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
   const budgetCap = config.budgetCap ?? 2000;
   const tools = config.tools;
+  const toolProvider = config.toolProvider;
 
   return flowChart<ToolsSubflowState>(
     'Compose',
@@ -69,6 +80,42 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
         };
       });
 
+      // Block A5/Neo follow-up: when an external `ToolProvider` is
+      // configured, consult it per iteration. Closure-held in
+      // `toolProvider` since scope can't carry functions. The provider
+      // sees `{ iteration, activeSkillId, identity }` so dynamic
+      // chains (`gatedTools`, `skillScopedTools`) react to the
+      // current activation state.
+      const providerSchemas: LLMToolSchema[] = [];
+      if (toolProvider) {
+        const activatedIds =
+          (scope.$getValue('activatedInjectionIds') as readonly string[] | undefined) ?? [];
+        const identity = scope.$getValue('runIdentity') as
+          | { tenant?: string; principal?: string; conversationId: string }
+          | undefined;
+        const ctx: ToolDispatchContext = {
+          iteration,
+          ...(activatedIds.length > 0 && { activeSkillId: activatedIds[activatedIds.length - 1] }),
+          ...(identity && { identity }),
+        };
+        const visibleTools = toolProvider.list(ctx);
+        for (const t of visibleTools) {
+          const schema = t.schema;
+          providerSchemas.push(schema);
+          const summary = `${schema.name}: ${schema.description}`;
+          injections.push({
+            contentSummary: truncate(summary, 80),
+            contentHash: fnv1a(`tool:provider:${schema.name}`),
+            slot: 'tools',
+            source: 'registry',
+            sourceId: schema.name,
+            reason: `tool provider${toolProvider.id ? ` '${toolProvider.id}'` : ''}`,
+            rawContent: summary,
+            position: tools.length + providerSchemas.length - 1,
+          });
+        }
+      }
+
       // Active Injections targeting the tools slot (Skills with
       // tools=[…]). Filter activeInjections by `inject.tools`.
       const activeInjections =
@@ -89,18 +136,24 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
             sourceId: inj.id,
             reason: `${inj.flavor} '${inj.id}' unlocked tool '${schema.name}'`,
             rawContent: summary,
-            position: tools.length + dynamicSchemas.length - 1,
+            position: tools.length + providerSchemas.length + dynamicSchemas.length - 1,
           });
         }
       }
 
       scope.$setValue(INJECTION_KEYS.TOOLS, injections);
-      // Pass merged schemas (registry + active injection-supplied) so
-      // the Agent sends ALL of them to the provider on this iteration.
-      scope.toolSchemas = [...tools, ...dynamicSchemas];
+      // Pass merged schemas (registry + provider + active injection-
+      // supplied) so the Agent sends ALL of them to the LLM provider.
+      scope.toolSchemas = [...tools, ...providerSchemas, ...dynamicSchemas];
       scope.$setValue(
         COMPOSITION_KEYS.SLOT_COMPOSED,
-        composeSlot('tools', iteration, injections, budgetCap, 'registry+injections'),
+        composeSlot(
+          'tools',
+          iteration,
+          injections,
+          budgetCap,
+          toolProvider ? 'registry+provider+injections' : 'registry+injections',
+        ),
       );
     },
     'compose',

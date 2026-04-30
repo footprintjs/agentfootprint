@@ -68,6 +68,7 @@ import {
 } from './outputSchema.js';
 import { RunnerBase, makeRunId } from './RunnerBase.js';
 import type { Tool, ToolRegistryEntry } from './tools.js';
+import type { ToolDispatchContext, ToolProvider } from '../tool-providers/types.js';
 
 export interface AgentOptions {
   readonly provider: LLMProvider;
@@ -234,6 +235,17 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    */
   private readonly outputSchemaParser?: OutputSchemaParser<unknown>;
 
+  /**
+   * Optional `ToolProvider` set via the builder's `.toolProvider()`.
+   * When present, the Tools slot subflow consults it per iteration
+   * (Block A5 follow-up) — the provider's tools land alongside any
+   * tools registered statically via `.tool()` / `.tools()`. The
+   * tool-call dispatcher also consults it for per-iteration execute
+   * lookup so dynamic chains (`gatedTools`, `skillScopedTools`)
+   * dispatch correctly when their visible-set changes mid-turn.
+   */
+  private readonly externalToolProvider?: ToolProvider;
+
   constructor(
     opts: AgentOptions,
     systemPromptValue: string,
@@ -246,6 +258,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     injections: readonly Injection[] = [],
     memories: readonly MemoryDefinition[] = [],
     outputSchemaParser?: OutputSchemaParser<unknown>,
+    toolProvider?: ToolProvider,
   ) {
     super();
     this.provider = opts.provider;
@@ -260,6 +273,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     this.injections = injections;
     this.memories = memories;
     this.outputSchemaParser = outputSchemaParser;
+    this.externalToolProvider = toolProvider;
     // Eager validation: tool names must be unique across .tool() +
     // every Skill.inject.tools — the LLM dispatches by name. Runs in
     // constructor so `Agent.build()` throws immediately on collision,
@@ -525,7 +539,10 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       reason: 'Agent.system()',
     });
     const messagesSubflow = buildMessagesSlot();
-    const toolsSubflow = buildToolsSlot({ tools: toolSchemas });
+    const toolsSubflow = buildToolsSlot({
+      tools: toolSchemas,
+      ...(this.externalToolProvider && { toolProvider: this.externalToolProvider }),
+    });
 
     const iterationStart = (scope: TypedScope<AgentState>) => {
       typedEmit(scope, 'agentfootprint.agent.iteration_start', {
@@ -688,8 +705,34 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
             ...(toolCalls.length > 0 && { toolCalls }),
           });
         }
+        // Resolve a tool by name, consulting the external ToolProvider
+        // if one was wired via `.toolProvider()` and the static
+        // registry doesn't carry the tool. The provider sees the same
+        // ctx the Tools slot used, so dispatch + visibility stay
+        // consistent within the iteration.
+        const externalToolProvider = this.externalToolProvider;
+        const lookupTool = (toolName: string): Tool | undefined => {
+          const fromRegistry = registryByName.get(toolName) as Tool | undefined;
+          if (fromRegistry) return fromRegistry;
+          if (!externalToolProvider) return undefined;
+          const activatedIds =
+            (scope.activatedInjectionIds as readonly string[] | undefined) ?? [];
+          const identity = scope.runIdentity as
+            | { tenant?: string; principal?: string; conversationId: string }
+            | undefined;
+          const ctx: ToolDispatchContext = {
+            iteration: scope.iteration as number,
+            ...(activatedIds.length > 0 && {
+              activeSkillId: activatedIds[activatedIds.length - 1],
+            }),
+            ...(identity && { identity }),
+          };
+          const visible = externalToolProvider.list(ctx);
+          return visible.find((t) => t.schema.name === toolName);
+        };
+
         for (const tc of toolCalls) {
-          const tool = registryByName.get(tc.name) as Tool | undefined;
+          const tool = lookupTool(tc.name);
           typedEmit(scope, 'agentfootprint.stream.tool_start', {
             toolName: tc.name,
             toolCallId: tc.id,
@@ -994,6 +1037,16 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
         inputMapper: (parent) => ({
           iteration: parent.iteration as number | undefined,
           activeInjections: parent.activeInjections as readonly ActiveInjection[] | undefined,
+          // The slot subflow reads these to build the per-iteration
+          // ToolDispatchContext when an external `.toolProvider()` is
+          // configured. Without them the provider sees activeSkillId
+          // = undefined every iteration, breaking skillScopedTools etc.
+          activatedInjectionIds: parent.activatedInjectionIds as
+            | readonly string[]
+            | undefined,
+          runIdentity: parent.runIdentity as
+            | { tenant?: string; principal?: string; conversationId: string }
+            | undefined,
         }),
         outputMapper: (sf) => ({
           toolsInjections: sf.toolsInjections,
@@ -1063,6 +1116,13 @@ export class AgentBuilder {
    * builder, propagated to the Agent at `.build()` time.
    */
   private outputSchemaParser?: OutputSchemaParser<unknown>;
+  /**
+   * Optional `ToolProvider` set via `.toolProvider()`. Propagated to
+   * the Agent's Tools slot subflow + tool-call dispatcher; consulted
+   * per iteration so dynamic chains (`gatedTools`, `skillScopedTools`)
+   * react to current activation state.
+   */
+  private toolProviderRef?: ToolProvider;
   // Voice config — defaults until the consumer calls .appName() /
   // .commentaryTemplates() / .thinkingTemplates(). Stored as plain
   // dicts (Record<string, string>) so the builder doesn't depend on
@@ -1098,6 +1158,50 @@ export class AgentBuilder {
    */
   tools(tools: ReadonlyArray<Tool>): this {
     for (const t of tools) this.tool(t);
+    return this;
+  }
+
+  /**
+   * Wire a chainable `ToolProvider` (from `agentfootprint/tool-providers`)
+   * as the agent's per-iteration tool source.
+   *
+   * The provider is consulted EVERY iteration via `provider.list(ctx)`
+   * with `ctx = { iteration, activeSkillId, identity }`. Tools the
+   * provider emits flow into the Tools slot alongside any static
+   * tools registered via `.tool()` / `.tools()`. The tool-call
+   * dispatcher also consults the provider so dynamic chains
+   * (`gatedTools`, `skillScopedTools`) dispatch correctly when their
+   * visible-set changes mid-turn.
+   *
+   * Throws if called more than once on the same builder (avoids
+   * silent override surprises).
+   *
+   * @example  Permission-gated baseline
+   *   import { gatedTools, staticTools } from 'agentfootprint/tool-providers';
+   *   import { PermissionPolicy } from 'agentfootprint/security';
+   *
+   *   const policy = PermissionPolicy.fromRoles({
+   *     readonly: ['lookup', 'list_skills', 'read_skill'],
+   *     admin:    ['lookup', 'list_skills', 'read_skill', 'delete'],
+   *   }, 'readonly');
+   *
+   *   const provider = gatedTools(
+   *     staticTools(allTools),
+   *     (toolName) => policy.isAllowed(toolName),
+   *   );
+   *
+   *   const agent = Agent.create({ provider: llm, model })
+   *     .system('You answer.')
+   *     .toolProvider(provider)
+   *     .build();
+   */
+  toolProvider(provider: ToolProvider): this {
+    if (this.toolProviderRef) {
+      throw new Error(
+        'AgentBuilder.toolProvider: already set. Each agent has at most one external ToolProvider.',
+      );
+    }
+    this.toolProviderRef = provider;
     return this;
   }
 
@@ -1337,6 +1441,7 @@ export class AgentBuilder {
       this.injectionList,
       this.memoryList,
       this.outputSchemaParser,
+      this.toolProviderRef,
     );
   }
 }
