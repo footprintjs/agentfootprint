@@ -144,44 +144,112 @@ export function browserAnthropic(options: BrowserAnthropicProviderOptions): LLMP
       if (!response.body) throw new Error('[browser-anthropic] response has no body');
 
       let tokenIndex = 0;
-      let final: AnthropicMessage | undefined;
       const accumulatedText: string[] = [];
-      const toolUses: Array<{ id: string; name: string; input: Record<string, unknown> }> = [];
+      // Tool-use blocks arrive in two waves: `content_block_start` carries
+      // {id, name, input: {}} (input is ALWAYS empty there), then a series
+      // of `content_block_delta` events with `delta.type === 'input_json_delta'`
+      // ship the JSON args as string fragments. We accumulate the fragments
+      // per content-block index, then JSON.parse on `content_block_stop`.
+      // Indexing by `event.data.index` (NOT array push order) because text
+      // and tool_use blocks can interleave.
+      const toolUseByIndex = new Map<
+        number,
+        { id: string; name: string; partialJson: string[] }
+      >();
+      const completedToolUses: Array<{
+        id: string;
+        name: string;
+        input: Record<string, unknown>;
+      }> = [];
+      // Anthropic's stream ships usage in two places:
+      //   1. `message_start.message.usage.input_tokens` — input count, sent first.
+      //   2. `message_delta.usage.output_tokens` — running output count.
+      // The terminal `message_stop` carries no usage; we close on whatever
+      // the latest `message_delta` had. There is no final JSON message.
+      let messageId: string | undefined;
+      let stopReason: string | undefined;
+      let inputTokens = 0;
+      let outputTokens = 0;
 
       for await (const event of parseSSE(response.body)) {
-        if (event.event === 'content_block_delta') {
-          const delta = (event.data as { delta?: { type?: string; text?: string } }).delta;
+        if (event.event === 'message_start') {
+          const msg = (event.data as { message?: AnthropicMessage }).message;
+          if (msg) {
+            messageId = msg.id;
+            inputTokens = msg.usage?.input_tokens ?? 0;
+            outputTokens = msg.usage?.output_tokens ?? 0;
+          }
+        } else if (event.event === 'message_delta') {
+          // Carries `delta.stop_reason` + cumulative `usage.output_tokens`.
+          const data = event.data as {
+            delta?: { stop_reason?: string };
+            usage?: { input_tokens?: number; output_tokens?: number };
+          };
+          if (data.delta?.stop_reason) stopReason = data.delta.stop_reason;
+          if (data.usage?.output_tokens !== undefined) outputTokens = data.usage.output_tokens;
+          if (data.usage?.input_tokens !== undefined) inputTokens = data.usage.input_tokens;
+        } else if (event.event === 'content_block_start') {
+          const data = event.data as {
+            index?: number;
+            content_block?: AnthropicContentBlock;
+          };
+          const block = data.content_block;
+          if (block?.type === 'tool_use' && typeof data.index === 'number') {
+            toolUseByIndex.set(data.index, {
+              id: block.id,
+              name: block.name,
+              partialJson: [],
+            });
+          }
+        } else if (event.event === 'content_block_delta') {
+          const data = event.data as {
+            index?: number;
+            delta?: { type?: string; text?: string; partial_json?: string };
+          };
+          const delta = data.delta;
           if (delta?.type === 'text_delta' && delta.text) {
             accumulatedText.push(delta.text);
             yield { tokenIndex, content: delta.text, done: false };
             tokenIndex++;
+          } else if (
+            delta?.type === 'input_json_delta' &&
+            typeof data.index === 'number' &&
+            typeof delta.partial_json === 'string'
+          ) {
+            const tu = toolUseByIndex.get(data.index);
+            if (tu) tu.partialJson.push(delta.partial_json);
           }
-        } else if (event.event === 'message_start') {
-          // Initial message metadata; ignore.
-        } else if (event.event === 'message_delta') {
-          // Stop-reason updates; ignore — final message_stop carries it.
-        } else if (event.event === 'message_stop') {
-          // The terminal event; SSE stream ends naturally.
-        } else if (event.event === 'content_block_start') {
-          const block = (event.data as { content_block?: AnthropicContentBlock }).content_block;
-          if (block?.type === 'tool_use') {
-            toolUses.push({ id: block.id, name: block.name, input: { ...block.input } });
+        } else if (event.event === 'content_block_stop') {
+          const data = event.data as { index?: number };
+          if (typeof data.index === 'number') {
+            const tu = toolUseByIndex.get(data.index);
+            if (tu) {
+              const joined = tu.partialJson.join('');
+              // Empty partial_json is valid — means no args (e.g. list_skills()).
+              // JSON.parse('') throws; default to `{}` on empty OR malformed
+              // payloads (which we should never see, but defending against an
+              // upstream malformed chunk is cheaper than a broken loop).
+              let parsed: Record<string, unknown> = {};
+              if (joined.length > 0) {
+                try {
+                  parsed = JSON.parse(joined) as Record<string, unknown>;
+                } catch {
+                  parsed = {};
+                }
+              }
+              completedToolUses.push({ id: tu.id, name: tu.name, input: parsed });
+              toolUseByIndex.delete(data.index);
+            }
           }
         }
       }
 
-      // Build the authoritative response from the streamed pieces. The
-      // Anthropic SSE protocol doesn't ship a final JSON message; we
-      // reconstruct from accumulated deltas.
       const response2: LLMResponse = {
         content: accumulatedText.join(''),
-        toolCalls: toolUses.map((t) => ({ id: t.id, name: t.name, args: t.input })),
-        usage: {
-          input: final?.usage.input_tokens ?? 0,
-          output: final?.usage.output_tokens ?? 0,
-        },
-        stopReason: normalizeStopReason(final?.stop_reason ?? 'stop'),
-        ...(final?.id && { providerRef: final.id }),
+        toolCalls: completedToolUses.map((t) => ({ id: t.id, name: t.name, args: t.input })),
+        usage: { input: inputTokens, output: outputTokens },
+        stopReason: normalizeStopReason(stopReason ?? 'stop'),
+        ...(messageId && { providerRef: messageId }),
       };
       yield { tokenIndex, content: '', done: true, response: response2 };
     },
@@ -333,7 +401,18 @@ async function* parseSSE(
           if (line.startsWith('event:')) event = line.slice(6).trim();
           else if (line.startsWith('data:')) dataLines.push(line.slice(5).trim());
         }
-        const data = dataLines.length > 0 ? JSON.parse(dataLines.join('\n')) : {};
+        // Belt-and-suspenders: a malformed SSE chunk should not throw out of
+        // the async generator and tear down the whole stream. v1 wrapped
+        // this; an upstream proxy or a partial flush could in principle
+        // produce a non-JSON `data:` line.
+        let data: unknown = {};
+        if (dataLines.length > 0) {
+          try {
+            data = JSON.parse(dataLines.join('\n'));
+          } catch {
+            data = {};
+          }
+        }
         yield { event, data };
       }
     }
