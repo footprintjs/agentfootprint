@@ -59,6 +59,17 @@ export { buildEventMeta, parseSubflowPath, type RunContext } from './bridge/even
 
 // Core recorders
 export { ContextRecorder, type ContextRecorderOptions } from './recorders/core/ContextRecorder.js';
+export {
+  contextEngineering,
+  isEngineeredSource,
+  isBaselineSource,
+  ENGINEERED_SOURCES,
+  BASELINE_SOURCES,
+  type ContextEngineeringHandle,
+  type ContextEngineeringUnsubscribe,
+  type ContextInjectedEvent,
+  type ContextInjectedListener,
+} from './recorders/core/contextEngineering.js';
 export { EmitBridge, type EmitBridgeOptions } from './recorders/core/EmitBridge.js';
 export { streamRecorder, type StreamRecorderOptions } from './recorders/core/StreamRecorder.js';
 export { agentRecorder, type AgentRecorderOptions } from './recorders/core/AgentRecorder.js';
