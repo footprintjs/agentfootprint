@@ -55,6 +55,8 @@
     "test:coverage": "vitest run --coverage",
     "test:examples": "tsc -p examples/tsconfig.json && bash scripts/run-all-examples.sh",
     "test:examples:typecheck": "tsc -p examples/tsconfig.json",
+    "examples:readme": "node scripts/generate-examples-readme.mjs",
+    "examples:readme:check": "node scripts/generate-examples-readme.mjs --check",
     "example": "TSX_TSCONFIG_PATH=examples/runtime.tsconfig.json npx --yes tsx",
     "test:watch": "vitest --watch",
     "docs:api": "typedoc",

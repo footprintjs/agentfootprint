@@ -1,0 +1,190 @@
+#!/usr/bin/env node
+/**
+ * generate-examples-readme.mjs
+ *
+ * Walks `examples/` and regenerates the per-folder example tables in
+ * `examples/README.md` between marker comments:
+ *
+ *   <!-- AUTO-GENERATED:examples:start -->
+ *   ... regenerated content ...
+ *   <!-- AUTO-GENERATED:examples:end -->
+ *
+ * Surrounding prose (DNA progression, closed taxonomy, etc.) stays
+ * hand-written; only the per-folder tables are managed here so the
+ * narrative voice doesn't get clobbered by a build step.
+ *
+ * The script extracts metadata from each example's `export const
+ * meta: ExampleMeta = { ... }` block via a permissive regex.
+ * Examples without a `meta` export are listed as raw filenames so
+ * the script doesn't silently drop them.
+ *
+ * Run via:
+ *   npm run examples:readme        # regenerate
+ *   npm run examples:readme:check  # verify no drift (CI guard)
+ */
+
+import { readdirSync, readFileSync, writeFileSync, statSync } from 'node:fs';
+import { dirname, join, relative, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const REPO_ROOT = resolve(__dirname, '..');
+const EXAMPLES_DIR = join(REPO_ROOT, 'examples');
+const README_PATH = join(EXAMPLES_DIR, 'README.md');
+const START_MARKER = '<!-- AUTO-GENERATED:examples:start -->';
+const END_MARKER = '<!-- AUTO-GENERATED:examples:end -->';
+
+// Folder display order + label. Folders not listed appear after these
+// in alphabetical order.
+const FOLDER_ORDER = [
+  { dir: 'core', label: 'core/ — primitives' },
+  { dir: 'core-flow', label: 'core-flow/ — compositions' },
+  { dir: 'patterns', label: 'patterns/ — canonical patterns' },
+  { dir: 'context-engineering', label: 'context-engineering/ — InjectionEngine flavors' },
+  { dir: 'memory', label: 'memory/ — defineMemory + 4 types × 7 strategies' },
+  { dir: 'features', label: 'features/ — runtime features' },
+  { dir: 'canonical', label: 'canonical/ — end-to-end patterns' },
+];
+
+// Folders to skip entirely (helpers, config-only, non-example dirs).
+const SKIP_FOLDERS = new Set(['helpers']);
+
+function listExampleFolders() {
+  return readdirSync(EXAMPLES_DIR)
+    .filter((name) => {
+      const full = join(EXAMPLES_DIR, name);
+      try {
+        return statSync(full).isDirectory();
+      } catch {
+        return false;
+      }
+    })
+    .filter((name) => !SKIP_FOLDERS.has(name));
+}
+
+function listExampleFiles(folderAbs) {
+  return readdirSync(folderAbs)
+    .filter((name) => name.endsWith('.ts'))
+    .sort();
+}
+
+/**
+ * Extract `export const meta: ExampleMeta = { ... }` and parse the
+ * minimal subset we need (`id`, `title`, `description`).
+ */
+function extractMeta(filePath) {
+  const text = readFileSync(filePath, 'utf-8');
+  const blockRe = /export\s+const\s+meta\s*(?::\s*ExampleMeta)?\s*=\s*({[\s\S]*?});/m;
+  const m = blockRe.exec(text);
+  if (!m) return null;
+  const block = m[1];
+
+  function fieldOf(key) {
+    const re = new RegExp(`${key}\\s*:\\s*['"\`]((?:\\\\.|[^'"\`\\\\])*)['"\`]`);
+    const found = re.exec(block);
+    return found ? found[1] : null;
+  }
+
+  const id = fieldOf('id');
+  const title = fieldOf('title');
+  const description = fieldOf('description');
+  if (!id || !title) return null;
+  return { id, title, description: description ?? '' };
+}
+
+function renderFolderTable(folder, files) {
+  if (files.length === 0) return '';
+  const knownLabel = FOLDER_ORDER.find((f) => f.dir === folder)?.label;
+  const trailingLabel = knownLabel
+    ? knownLabel.split(' — ').slice(1).join(' — ') || 'examples'
+    : 'examples';
+  const lines = [];
+  lines.push(`### [\`${folder}/\`](${folder}/) — ${trailingLabel}`);
+  lines.push('');
+  lines.push('| # | File | Title | Description |');
+  lines.push('|---|---|---|---|');
+
+  for (const file of files) {
+    const fullPath = join(EXAMPLES_DIR, folder, file);
+    const meta = extractMeta(fullPath);
+    const numMatch = /^(\d+)/.exec(file);
+    const num = numMatch ? numMatch[1] : '—';
+    const rel = `${folder}/${file}`;
+    if (!meta) {
+      lines.push(`| ${num} | [\`${file}\`](${rel}) | _no meta_ | — |`);
+      continue;
+    }
+    const title = meta.title.replace(/\|/g, '\\|');
+    const desc = meta.description.replace(/\|/g, '\\|').replace(/\n/g, ' ');
+    lines.push(`| ${num} | [\`${file}\`](${rel}) | ${title} | ${desc} |`);
+  }
+
+  return lines.join('\n');
+}
+
+function generate() {
+  const folders = listExampleFolders();
+  const ordered = [
+    ...FOLDER_ORDER.map((f) => f.dir).filter((d) => folders.includes(d)),
+    ...folders
+      .filter((f) => !FOLDER_ORDER.some((o) => o.dir === f))
+      .sort(),
+  ];
+
+  const sections = [];
+  for (const folder of ordered) {
+    const folderAbs = join(EXAMPLES_DIR, folder);
+    const files = listExampleFiles(folderAbs);
+    if (files.length === 0) continue;
+    sections.push(renderFolderTable(folder, files));
+  }
+
+  const generatedBlock = [
+    START_MARKER,
+    '',
+    '## Examples by folder',
+    '',
+    '_This section is auto-generated by `scripts/generate-examples-readme.mjs`._',
+    '_Run `npm run examples:readme` after adding/editing examples._',
+    '',
+    sections.join('\n\n'),
+    '',
+    END_MARKER,
+  ].join('\n');
+
+  let readme = readFileSync(README_PATH, 'utf-8');
+  if (readme.includes(START_MARKER) && readme.includes(END_MARKER)) {
+    const startIdx = readme.indexOf(START_MARKER);
+    const endIdx = readme.indexOf(END_MARKER) + END_MARKER.length;
+    readme = readme.slice(0, startIdx) + generatedBlock + readme.slice(endIdx);
+  } else {
+    if (!readme.endsWith('\n')) readme += '\n';
+    readme += '\n' + generatedBlock + '\n';
+  }
+  return readme;
+}
+
+const isCheckMode = process.argv.includes('--check');
+const newContent = generate();
+const existing = readFileSync(README_PATH, 'utf-8');
+
+if (isCheckMode) {
+  if (newContent !== existing) {
+    process.stderr.write(
+      `\n[FAIL] ${relative(REPO_ROOT, README_PATH)} is OUT OF DATE.\n` +
+        `  Run: npm run examples:readme\n` +
+        `  Then commit the updated file.\n\n`,
+    );
+    process.exit(1);
+  }
+  process.stdout.write(`[OK] ${relative(REPO_ROOT, README_PATH)} is up to date.\n`);
+  process.exit(0);
+}
+
+if (newContent === existing) {
+  process.stdout.write(`[OK] ${relative(REPO_ROOT, README_PATH)} already up to date.\n`);
+  process.exit(0);
+}
+
+writeFileSync(README_PATH, newContent, 'utf-8');
+process.stdout.write(`[OK] Regenerated ${relative(REPO_ROOT, README_PATH)}.\n`);
