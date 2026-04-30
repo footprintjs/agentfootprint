@@ -434,3 +434,14 @@ export {
   type RoleAllowlist,
   type PermissionPolicyOptions,
 } from './security/index.js';
+
+// Message Catalog Pattern (v2.5+). `agentfootprint/locales` is the
+// dedicated subpath; the root barrel also re-exports the helpers so
+// existing v2.4 consumers find them at the top level.
+export {
+  defaultCommentaryMessages,
+  defaultThinkingMessages,
+  composeMessages,
+  validateMessages,
+  type MessageCatalog,
+} from './locales/index.js';

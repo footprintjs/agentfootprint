@@ -146,6 +146,11 @@
       "types": "./dist/types/security/index.d.ts",
       "import": "./dist/esm/security/index.js",
       "require": "./dist/security/index.js"
+    },
+    "./locales": {
+      "types": "./dist/types/locales/index.d.ts",
+      "import": "./dist/esm/locales/index.js",
+      "require": "./dist/locales/index.js"
     }
   },
   "sideEffects": false,

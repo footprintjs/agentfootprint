@@ -112,6 +112,7 @@ export default defineConfig({
             { label: 'Observability', slug: 'guides/observability' },
             { label: 'Context engineering recorder', slug: 'guides/context-engineering-recorder' },
             { label: 'Streaming', slug: 'guides/streaming' },
+            { label: 'Locales (Message Catalog)', slug: 'guides/locales' },
           ],
         },
         {

@@ -1,0 +1,106 @@
+---
+title: Locales (Message Catalog Pattern)
+description: Ship the agent's voice as a locale pack. defaultCommentaryMessages + defaultThinkingMessages + composeMessages + validateMessages — the i18n surface for agentfootprint observability prose.
+---
+
+> agentfootprint emits two streams of user-facing prose: **commentary** (third-person — "the agent dispatched the refund tool") and **thinking** (first-person — "Looking up your order…"). Both live as flat `Record<string, string>` catalogs with `{{var}}` substitution. **The Message Catalog Pattern** lets you ship a Spanish, branded, or domain-specific catalog the way you'd ship an i18n bundle — `composeMessages(defaults, overrides)` + `validateMessages(catalog, requiredKeys)`.
+
+## What ships in `agentfootprint/locales`
+
+| Export | Purpose |
+|---|---|
+| `defaultCommentaryMessages` | Canonical English commentary bundle (alias of `defaultCommentaryTemplates`) |
+| `defaultThinkingMessages`   | Canonical English thinking bundle (alias of `defaultThinkingTemplates`) |
+| `composeMessages(defaults, overrides?)` | Spread overrides on defaults; missing keys fall back. Returns frozen catalog. |
+| `validateMessages(catalog, requiredKeys, opts?)` | Assert required keys are present; batches errors |
+| `MessageCatalog` (type) | `Readonly<Record<string, string>>` |
+
+Symbol identity is preserved: `defaultCommentaryMessages === defaultCommentaryTemplates` (the v2.4 name still works). The new naming reflects the pattern's purpose; the old name keeps existing imports valid.
+
+## The two catalogs
+
+| Catalog | Audience | Voice | Where it shows |
+|---|---|---|---|
+| **Commentary** | Third-person narrator | Past-tense prose | Lens bottom panel, CLI tail, log files |
+| **Thinking** | First-person status | Present-tense status line | Chat-bubble UIs, "the agent is doing X" indicators |
+
+Both share the same shape: a flat `Record<string, string>` with `{{var}}` substitution. Keys mirror agentfootprint event types (e.g., `'stream.tool_start'`, `'context.injected.rag'`).
+
+## Locale pack drop-in
+
+```ts
+import { Agent } from 'agentfootprint';
+import {
+  defaultThinkingMessages,
+  composeMessages,
+  validateMessages,
+} from 'agentfootprint/locales';
+
+// Spanish locale pack — override only the keys you customize
+const esThinking = composeMessages(defaultThinkingMessages, {
+  'stream.llm_start.iter1': '{{appName}} está pensando...',
+  'stream.tool_start':       'Llamando a {{toolName}}...',
+});
+
+// Catch drift between your pack and the framework's required keys at boot
+validateMessages(esThinking, Object.keys(defaultThinkingMessages), 'es-MX thinking');
+
+const agent = Agent.create({ provider, model: 'claude-sonnet-4-5' })
+  .system('Eres un asistente.')
+  .appName('Asistente')
+  .thinkingTemplates(esThinking)
+  .build();
+```
+
+## Empty values are intentional
+
+The default catalogs use `''` (empty string) for events the renderer should skip — *"don't render anything for this event in the UI."* `validateMessages` accepts empty values by default to match this convention. If your locale-pack contract requires every key to have a non-empty value, opt in:
+
+```ts
+validateMessages(myCatalog, requiredKeys, { forbidEmpty: true });
+// Throws on missing OR empty.
+```
+
+## Composability
+
+`composeMessages` returns a frozen object (no post-hoc mutation). Inputs are not mutated. Extra override keys are preserved (forward-compat for consumer-defined keys):
+
+```ts
+const merged = composeMessages(defaultCommentaryMessages, {
+  brand:                       'Acme',           // consumer-defined extra
+  'stream.tool_start':         '{{toolName}}',  // override existing
+});
+// merged.brand === 'Acme'
+// merged['stream.tool_start'] === '{{toolName}}'
+// every other defaultCommentaryMessages key falls back
+```
+
+## Validate forms
+
+```ts
+// Bare label string (legacy-friendly)
+validateMessages(myCatalog, requiredKeys, 'es-MX commentary');
+
+// Options object (preferred — supports forbidEmpty)
+validateMessages(myCatalog, requiredKeys, {
+  label: 'es-MX commentary',
+  forbidEmpty: true,
+});
+```
+
+## Why the Message Catalog name (vs "templates")
+
+v2.4 named these `defaultCommentaryTemplates` / `defaultThinkingTemplates` — accurate but generic. "Templates" overloads the term across TypeScript generics, templating-engine output, and i18n message bundles. The Message Catalog Pattern name has industry currency (Resource Bundle in Java, ICU MessageFormat, Fluent in Mozilla's i18n stack) and makes the i18n shape explicit.
+
+The v2.4 names remain symbol-identical aliases so existing code keeps working unchanged through the v2.x line.
+
+## Anti-patterns
+
+- **Don't bundle locale packs into your library code.** Ship them as data (JSON, separate files) so your CI/CD / l10n pipeline can update them without touching agent logic.
+- **Don't skip `validateMessages` at boot.** A typo in a key name silently falls through to the default; you'll discover it weeks later when someone asks why the Spanish version says "Calling X..." in English. Validate at boot.
+- **Don't mutate a returned `composeMessages` result.** It's frozen for that reason. Re-compose to update.
+
+## Next steps
+
+- [Observability guide](/agentfootprint/guides/observability/) — what the catalogs drive
+- [Streaming guide](/agentfootprint/guides/streaming/) — `streamRecorder` consumes these too
