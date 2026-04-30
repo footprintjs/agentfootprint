@@ -89,7 +89,9 @@ export class PermissionPolicy implements PermissionChecker {
   private constructor(private readonly opts: PermissionPolicyOptions) {
     if (!opts.roles[opts.activeRole]) {
       throw new Error(
-        `PermissionPolicy: activeRole '${opts.activeRole}' is not defined in roles. Available: ${Object.keys(opts.roles).join(', ') || '(none)'}`,
+        `PermissionPolicy: activeRole '${opts.activeRole}' is not defined in roles. Available: ${
+          Object.keys(opts.roles).join(', ') || '(none)'
+        }`,
       );
     }
   }

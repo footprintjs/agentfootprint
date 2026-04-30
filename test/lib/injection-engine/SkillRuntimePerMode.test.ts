@@ -22,7 +22,11 @@ import {
 
 // ─── Fixtures ─────────────────────────────────────────────────────
 
-function makeSkill(id: string, surfaceMode?: 'auto' | 'system-prompt' | 'tool-only' | 'both', body = `body for ${id}`) {
+function makeSkill(
+  id: string,
+  surfaceMode?: 'auto' | 'system-prompt' | 'tool-only' | 'both',
+  body = `body for ${id}`,
+) {
   return defineSkill({
     id,
     description: `${id} skill`,
@@ -121,10 +125,13 @@ describe('Block C — read_skill tool-result dispatch', () => {
   it("'tool-only' → tool result IS the body", async () => {
     const skill = makeSkill('billing', 'tool-only', 'TOOL_ONLY_BODY');
     const tool = buildReadSkillTool([skill])!;
-    const out = await tool.execute({ id: 'billing' }, {
-      toolCallId: 't',
-      iteration: 1,
-    });
+    const out = await tool.execute(
+      { id: 'billing' },
+      {
+        toolCallId: 't',
+        iteration: 1,
+      },
+    );
     expect(out).toBe('TOOL_ONLY_BODY');
   });
 
@@ -199,7 +206,9 @@ describe('Block C — security', () => {
       metadata: { surfaceMode: 'tool-only' as const },
     };
     // Use a type-cast since hand-built shape doesn't match Injection's type narrowly
-    const tool = buildReadSkillTool([skill as unknown as Parameters<typeof buildReadSkillTool>[0][number]])!;
+    const tool = buildReadSkillTool([
+      skill as unknown as Parameters<typeof buildReadSkillTool>[0][number],
+    ])!;
     const out = await tool.execute({ id: 'billing' }, { toolCallId: 't', iteration: 1 });
     // Empty body → falls back to the activation-confirmation path
     expect(out).toContain('activated');
@@ -238,7 +247,10 @@ describe('Block C — ROI: end-to-end via Agent', () => {
     const observedToolResults: string[] = [];
     let calls = 0;
     const provider = mock({
-      respond: (req: { systemPrompt?: string; messages?: ReadonlyArray<{ role: string; content: string }> }) => {
+      respond: (req: {
+        systemPrompt?: string;
+        messages?: ReadonlyArray<{ role: string; content: string }>;
+      }) => {
         observedSystem = req.systemPrompt ?? '';
         // Capture the user's view of recent tool results
         for (const m of req.messages ?? []) {

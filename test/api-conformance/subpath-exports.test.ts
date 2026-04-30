@@ -87,10 +87,7 @@ describe('Block B — package.json exports table', () => {
     const pkgPath = join(__dirname, '../../package.json');
     const raw = readFileSync(pkgPath, 'utf-8');
     const pkg = JSON.parse(raw) as { exports?: Record<string, unknown> };
-    return pkg.exports as Record<
-      string,
-      { types?: string; import?: string; require?: string }
-    >;
+    return pkg.exports as Record<string, { types?: string; import?: string; require?: string }>;
   }
 
   it('canonical subpaths are present', () => {

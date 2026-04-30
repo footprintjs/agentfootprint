@@ -92,8 +92,7 @@ export const defaultCommentaryTemplates: CommentaryTemplates = {
   // Generic — fits always-on rules + on-tool-return predicates uniformly.
   // Specialized variants below disambiguate when the trigger metadata
   // is available on the event.
-  'context.injected.instructions':
-    '{{appName}} added a rule to the system prompt: {{descClause}}.',
+  'context.injected.instructions': '{{appName}} added a rule to the system prompt: {{descClause}}.',
   'context.injected.instructions.onToolReturn':
     '{{appName}} added a tool-specific reminder after `{{lastToolName}}` returned: {{descClause}}.',
   'context.injected.instructions.alwaysOn':

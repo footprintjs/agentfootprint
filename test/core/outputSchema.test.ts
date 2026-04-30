@@ -96,7 +96,7 @@ describe('buildDefaultInstruction — scenario', () => {
     expect(instr).not.toContain('output shape:');
   });
 
-  it("appends parser.description when present", () => {
+  it('appends parser.description when present', () => {
     const instr = buildDefaultInstruction(makeTicketParser({ description: '{ status, items[] }' }));
     expect(instr).toContain('output shape: { status, items[] }');
   });
@@ -106,7 +106,9 @@ describe('buildDefaultInstruction — scenario', () => {
 
 describe('Agent.outputSchema — integration', () => {
   it('builder method is chainable', () => {
-    const provider = mock({ respond: () => ({ content: '{"status":"ok","items":[]}', toolCalls: [] }) });
+    const provider = mock({
+      respond: () => ({ content: '{"status":"ok","items":[]}', toolCalls: [] }),
+    });
     const agent = Agent.create({ provider, model: 'mock' })
       .system('s')
       .outputSchema(makeTicketParser())
@@ -230,10 +232,7 @@ describe('outputSchema — security', () => {
         return { a: value.a };
       },
     };
-    const out = applyOutputSchema(
-      '{"a":1, "__proto__": {"polluted": true}}',
-      parser,
-    );
+    const out = applyOutputSchema('{"a":1, "__proto__": {"polluted": true}}', parser);
     expect(out.a).toBe(1);
     expect(({} as Record<string, unknown>).polluted).toBeUndefined();
   });

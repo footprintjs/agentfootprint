@@ -37,11 +37,7 @@
 export { staticTools } from './staticTools.js';
 export { gatedTools } from './gatedTools.js';
 export { skillScopedTools } from './skillScopedTools.js';
-export type {
-  ToolProvider,
-  ToolDispatchContext,
-  ToolGatePredicate,
-} from './types.js';
+export type { ToolProvider, ToolDispatchContext, ToolGatePredicate } from './types.js';
 
 // Re-export tool sources from the MCP module so consumers find them in
 // one place. The top-level barrel still exports `mcpClient` for v2.2

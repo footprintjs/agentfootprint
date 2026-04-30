@@ -45,10 +45,7 @@ import type { Tool } from '../core/tools.js';
 import type { ToolProvider, ToolDispatchContext } from './types.js';
 
 // #region skillScopedTools
-export function skillScopedTools(
-  skillId: string,
-  tools: readonly Tool[],
-): ToolProvider {
+export function skillScopedTools(skillId: string, tools: readonly Tool[]): ToolProvider {
   if (!skillId || skillId.trim().length === 0) {
     throw new Error('skillScopedTools: `skillId` is required and must be non-empty.');
   }

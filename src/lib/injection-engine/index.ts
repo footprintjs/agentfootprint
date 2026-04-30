@@ -44,11 +44,7 @@ export { SkillRegistry, type SkillRegistryOptions } from './SkillRegistry.js';
 // auto-attach path. Exported so consumers building custom tool wiring
 // (e.g., gatedTools chains) can compose the same `list_skills` /
 // `read_skill` tools directly.
-export {
-  buildListSkillsTool,
-  buildReadSkillTool,
-  type SkillToolPair,
-} from './skillTools.js';
+export { buildListSkillsTool, buildReadSkillTool, type SkillToolPair } from './skillTools.js';
 
 export { defineSteering, type DefineSteeringOptions } from './factories/defineSteering.js';
 

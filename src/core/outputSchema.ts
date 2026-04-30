@@ -123,9 +123,7 @@ export class OutputSchemaError extends Error {
  * Zod schemas authored with `.describe('...')` propagate naturally.
  */
 export function buildDefaultInstruction(parser: OutputSchemaParser<unknown>): string {
-  const tail = parser.description
-    ? ` The output shape: ${parser.description}.`
-    : '';
+  const tail = parser.description ? ` The output shape: ${parser.description}.` : '';
   return (
     'Respond ONLY with valid JSON matching the output schema. ' +
     'Do NOT include prose, markdown fences, or explanatory text.' +
@@ -144,10 +142,7 @@ export function buildDefaultInstruction(parser: OutputSchemaParser<unknown>): st
  *   - Schema validation failure → `stage: 'schema-validate'` (JSON
  *     was valid but didn't match the contracted shape)
  */
-export function applyOutputSchema<T>(
-  raw: string,
-  parser: OutputSchemaParser<T>,
-): T {
+export function applyOutputSchema<T>(raw: string, parser: OutputSchemaParser<T>): T {
   let parsed: unknown;
   try {
     parsed = JSON.parse(raw);
@@ -160,9 +155,10 @@ export function applyOutputSchema<T>(
   try {
     return parser.parse(parsed);
   } catch (cause) {
-    throw new OutputSchemaError(
-      'Agent final answer parsed as JSON but failed schema validation.',
-      { rawOutput: raw, stage: 'schema-validate', cause },
-    );
+    throw new OutputSchemaError('Agent final answer parsed as JSON but failed schema validation.', {
+      rawOutput: raw,
+      stage: 'schema-validate',
+      cause,
+    });
   }
 }

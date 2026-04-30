@@ -176,9 +176,7 @@ describe('SkillRegistry.resolveForSkill — security/fail-fast', () => {
       activeWhen: () => true,
       prompt: 'r',
     });
-    expect(() => r.resolveForSkill(instruction)).toThrow(
-      /flavor 'instructions', expected 'skill'/,
-    );
+    expect(() => r.resolveForSkill(instruction)).toThrow(/flavor 'instructions', expected 'skill'/);
   });
 });
 

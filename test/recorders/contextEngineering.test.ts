@@ -33,7 +33,15 @@ import {
 
 describe('contextEngineering — unit: pure classifiers', () => {
   it('isEngineeredSource returns true for known engineered values', () => {
-    const engineered: ContextSource[] = ['rag', 'skill', 'memory', 'instructions', 'steering', 'fact', 'custom'];
+    const engineered: ContextSource[] = [
+      'rag',
+      'skill',
+      'memory',
+      'instructions',
+      'steering',
+      'fact',
+      'custom',
+    ];
     for (const s of engineered) expect(isEngineeredSource(s)).toBe(true);
   });
 
@@ -83,10 +91,7 @@ describe('contextEngineering — integration: wrapper routing', () => {
     type Listener = (e: ContextInjectedEvent) => void;
     const listeners: Listener[] = [];
     return {
-      on: (
-        type: 'agentfootprint.context.injected',
-        listener: Listener,
-      ) => {
+      on: (type: 'agentfootprint.context.injected', listener: Listener) => {
         if (type !== 'agentfootprint.context.injected') {
           throw new Error('fake supports only context.injected');
         }
@@ -201,8 +206,18 @@ describe('contextEngineering — properties', () => {
     // The test helper that asserts non-overlap is in the SCENARIO block.
     // Here we verify total coverage of known values.
     const known: ContextSource[] = [
-      'rag', 'skill', 'memory', 'instructions', 'steering', 'fact', 'custom',
-      'user', 'tool-result', 'assistant', 'base', 'registry',
+      'rag',
+      'skill',
+      'memory',
+      'instructions',
+      'steering',
+      'fact',
+      'custom',
+      'user',
+      'tool-result',
+      'assistant',
+      'base',
+      'registry',
     ];
     for (const s of known) {
       const inE = ENGINEERED_SOURCES.has(s);

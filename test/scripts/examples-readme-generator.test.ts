@@ -107,10 +107,7 @@ describe('Block E — --check mode catches drift', () => {
     try {
       // Introduce drift: append a stale marker comment inside the
       // auto-section so the regenerator's diff detects it.
-      const drifted = original.replace(
-        START_MARKER,
-        `${START_MARKER}\nSTALE_DRIFT_MARKER`,
-      );
+      const drifted = original.replace(START_MARKER, `${START_MARKER}\nSTALE_DRIFT_MARKER`);
       writeFileSync(README_PATH, drifted, 'utf-8');
 
       const { code, err } = runGenerator(['--check']);

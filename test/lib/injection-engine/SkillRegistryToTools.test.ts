@@ -267,7 +267,9 @@ describe('SkillRegistry.toTools — ROI: explicit composition', () => {
       schema: { name: 'lookup', description: 'lookup', inputSchema: { type: 'object' } },
       execute: async () => 'ok',
     };
-    const tools: Tool[] = [listSkills, readSkill, otherTool].filter((t): t is Tool => t !== undefined);
+    const tools: Tool[] = [listSkills, readSkill, otherTool].filter(
+      (t): t is Tool => t !== undefined,
+    );
     expect(tools.map((t) => t.schema.name)).toEqual(['list_skills', 'read_skill', 'lookup']);
   });
 });

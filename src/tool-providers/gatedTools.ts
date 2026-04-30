@@ -36,10 +36,7 @@
 import type { ToolProvider, ToolDispatchContext, ToolGatePredicate } from './types.js';
 
 // #region gatedTools
-export function gatedTools(
-  inner: ToolProvider,
-  predicate: ToolGatePredicate,
-): ToolProvider {
+export function gatedTools(inner: ToolProvider, predicate: ToolGatePredicate): ToolProvider {
   return {
     id: 'gated',
     list(ctx: ToolDispatchContext) {

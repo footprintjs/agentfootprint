@@ -63,9 +63,7 @@
 import { defaultCommentaryTemplates } from '../recorders/observability/commentary/commentaryTemplates.js';
 import { defaultThinkingTemplates } from '../recorders/observability/thinking/thinkingTemplates.js';
 
-export type {
-  CommentaryTemplates as MessageCatalog,
-} from '../recorders/observability/commentary/commentaryTemplates.js';
+export type { CommentaryTemplates as MessageCatalog } from '../recorders/observability/commentary/commentaryTemplates.js';
 
 /**
  * Canonical English commentary bundle. Alias of v2.4's
@@ -150,8 +148,7 @@ export function validateMessages(
   requiredKeys: readonly string[],
   opts: ValidateMessagesOptions | string = {},
 ): void {
-  const resolved: ValidateMessagesOptions =
-    typeof opts === 'string' ? { label: opts } : opts;
+  const resolved: ValidateMessagesOptions = typeof opts === 'string' ? { label: opts } : opts;
   const label = resolved.label ?? 'message catalog';
   const forbidEmpty = resolved.forbidEmpty ?? false;
 

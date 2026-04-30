@@ -45,10 +45,7 @@ describe('Block D — defaults alias v2.4 templates', () => {
 
 describe('Block D — composeMessages', () => {
   it('overrides win over defaults for matching keys', () => {
-    const merged = composeMessages(
-      { greet: 'Hello', bye: 'Bye' },
-      { greet: 'Hola' },
-    );
+    const merged = composeMessages({ greet: 'Hello', bye: 'Bye' }, { greet: 'Hola' });
     expect(merged.greet).toBe('Hola');
     expect(merged.bye).toBe('Bye');
   });
@@ -59,10 +56,7 @@ describe('Block D — composeMessages', () => {
   });
 
   it('extra override keys are preserved (forward-compat for consumer-defined keys)', () => {
-    const merged = composeMessages(
-      { greet: 'Hello' },
-      { brand: 'Acme' },
-    );
+    const merged = composeMessages({ greet: 'Hello' }, { brand: 'Acme' });
     expect(merged.brand).toBe('Acme');
     expect(merged.greet).toBe('Hello');
   });
@@ -92,9 +86,7 @@ describe('Block D — composeMessages', () => {
 
 describe('Block D — validateMessages', () => {
   it('does not throw when all required keys are present + non-empty', () => {
-    expect(() =>
-      validateMessages({ a: 'A', b: 'B' }, ['a', 'b']),
-    ).not.toThrow();
+    expect(() => validateMessages({ a: 'A', b: 'B' }, ['a', 'b'])).not.toThrow();
   });
 
   it('throws on missing key with the key listed', () => {
@@ -102,9 +94,9 @@ describe('Block D — validateMessages', () => {
   });
 
   it('throws on empty value with the key listed (forbidEmpty)', () => {
-    expect(() =>
-      validateMessages({ a: 'A', b: '' }, ['a', 'b'], { forbidEmpty: true }),
-    ).toThrow(/empty values: b/);
+    expect(() => validateMessages({ a: 'A', b: '' }, ['a', 'b'], { forbidEmpty: true })).toThrow(
+      /empty values: b/,
+    );
   });
 
   it('empty values are VALID by default (default catalogs use them)', () => {
@@ -112,15 +104,13 @@ describe('Block D — validateMessages', () => {
   });
 
   it('batches missing AND empty keys into one error message (forbidEmpty)', () => {
-    expect(() =>
-      validateMessages({ a: '' }, ['a', 'b'], { forbidEmpty: true }),
-    ).toThrow(/missing keys: b.*empty values: a|empty values: a.*missing keys: b/s);
+    expect(() => validateMessages({ a: '' }, ['a', 'b'], { forbidEmpty: true })).toThrow(
+      /missing keys: b.*empty values: a|empty values: a.*missing keys: b/s,
+    );
   });
 
   it('label parameter customizes the error prefix (string-form)', () => {
-    expect(() => validateMessages({}, ['a'], 'es-MX commentary')).toThrow(
-      /es-MX commentary/,
-    );
+    expect(() => validateMessages({}, ['a'], 'es-MX commentary')).toThrow(/es-MX commentary/);
   });
 
   it('label parameter customizes the error prefix (options-form)', () => {
@@ -156,9 +146,7 @@ describe('Block D — properties', () => {
   it('composing then validating round-trips for any non-empty override', () => {
     const overrides = { 'stream.tool_start': 'Custom thinking' };
     const merged = composeMessages(defaultThinkingMessages, overrides);
-    expect(() =>
-      validateMessages(merged, Object.keys(defaultThinkingMessages)),
-    ).not.toThrow();
+    expect(() => validateMessages(merged, Object.keys(defaultThinkingMessages))).not.toThrow();
   });
 });
 

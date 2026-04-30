@@ -152,10 +152,7 @@ export function browserAnthropic(options: BrowserAnthropicProviderOptions): LLMP
       // per content-block index, then JSON.parse on `content_block_stop`.
       // Indexing by `event.data.index` (NOT array push order) because text
       // and tool_use blocks can interleave.
-      const toolUseByIndex = new Map<
-        number,
-        { id: string; name: string; partialJson: string[] }
-      >();
+      const toolUseByIndex = new Map<number, { id: string; name: string; partialJson: string[] }>();
       const completedToolUses: Array<{
         id: string;
         name: string;

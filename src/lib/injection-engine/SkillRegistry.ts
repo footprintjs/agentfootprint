@@ -25,11 +25,7 @@
  */
 
 import type { Injection } from './types.js';
-import {
-  buildListSkillsTool,
-  buildReadSkillTool,
-  type SkillToolPair,
-} from './skillTools.js';
+import { buildListSkillsTool, buildReadSkillTool, type SkillToolPair } from './skillTools.js';
 import { resolveSurfaceMode, type SurfaceMode } from './factories/defineSkill.js';
 
 /**
@@ -228,9 +224,7 @@ export class SkillRegistry {
     const skill = typeof skillOrId === 'string' ? this.get(skillOrId) : skillOrId;
     if (!skill) {
       const id = typeof skillOrId === 'string' ? skillOrId : skillOrId.id;
-      throw new Error(
-        `SkillRegistry.resolveForSkill: no skill registered at id '${id}'.`,
-      );
+      throw new Error(`SkillRegistry.resolveForSkill: no skill registered at id '${id}'.`);
     }
     if (skill.flavor !== 'skill') {
       throw new Error(

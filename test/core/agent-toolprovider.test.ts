@@ -131,7 +131,7 @@ describe('Agent.toolProvider — integration: gatedTools', () => {
     expect(observedToolNames).not.toContain('gamma');
   });
 
-  it("provider-supplied tool dispatches correctly when LLM calls it", async () => {
+  it('provider-supplied tool dispatches correctly when LLM calls it', async () => {
     let calls = 0;
     const provider = mock({
       respond: () => {
@@ -167,7 +167,7 @@ describe('Agent.toolProvider — integration: gatedTools', () => {
 // ─── 4. PROPERTY — per-iteration ctx propagation ────────────────
 
 describe('Agent.toolProvider — properties: per-iteration ctx', () => {
-  it("provider receives current iteration + activeSkillId per call", async () => {
+  it('provider receives current iteration + activeSkillId per call', async () => {
     const ctxLog: { iteration: number; activeSkillId?: string }[] = [];
     // Build a custom ToolProvider that records ctx
     const recordingProvider = {
@@ -216,18 +216,17 @@ describe('Agent.toolProvider — properties: per-iteration ctx', () => {
   it('skillScopedTools narrows visible-set per active skill', async () => {
     const observedAcrossIterations: string[][] = [];
     const provider = mock({
-      respond: ((counter) =>
-        (req: { tools?: readonly LLMToolSchema[] }) => {
-          observedAcrossIterations.push((req.tools ?? []).map((t) => t.name));
-          counter.n++;
-          if (counter.n === 1) {
-            return {
-              content: '',
-              toolCalls: [{ id: 'tc-1', name: 'read_skill', args: { id: 'billing' } }],
-            };
-          }
-          return { content: 'done', toolCalls: [] };
-        })({ n: 0 }),
+      respond: ((counter) => (req: { tools?: readonly LLMToolSchema[] }) => {
+        observedAcrossIterations.push((req.tools ?? []).map((t) => t.name));
+        counter.n++;
+        if (counter.n === 1) {
+          return {
+            content: '',
+            toolCalls: [{ id: 'tc-1', name: 'read_skill', args: { id: 'billing' } }],
+          };
+        }
+        return { content: 'done', toolCalls: [] };
+      })({ n: 0 }),
     });
 
     const billingTools = [fakeTool('refund')];
@@ -275,9 +274,7 @@ describe('Agent.toolProvider — security: gate honored on dispatch', () => {
 
     const agent = Agent.create({ provider, model: 'mock', maxIterations: 4 })
       .system('s')
-      .toolProvider(
-        gatedTools(staticTools([fakeTool('forbidden_tool')]), () => false),
-      )
+      .toolProvider(gatedTools(staticTools([fakeTool('forbidden_tool')]), () => false))
       .build();
     await agent.run({ message: 'go' });
 

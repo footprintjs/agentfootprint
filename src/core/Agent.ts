@@ -389,10 +389,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    * Throws if the agent has no outputSchema set or if the run
    * pauses (use `run()` directly when pauses are expected).
    */
-  async runTyped<T = unknown>(
-    input: AgentInput,
-    options?: RunOptions,
-  ): Promise<T> {
+  async runTyped<T = unknown>(input: AgentInput, options?: RunOptions): Promise<T> {
     if (!this.outputSchemaParser) {
       throw new Error(
         `Agent.runTyped: this agent has no outputSchema. Use ` +
@@ -611,9 +608,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // buildReadSkillTool returns undefined when skills is empty; the
     // length check below short-circuits so the non-null assertion is safe.
     const readSkillEntries: readonly ToolRegistryEntry[] =
-      skills.length > 0
-        ? [{ name: 'read_skill', tool: buildReadSkillTool(skills)! }]
-        : [];
+      skills.length > 0 ? [{ name: 'read_skill', tool: buildReadSkillTool(skills)! }] : [];
     const augmentedRegistry: readonly ToolRegistryEntry[] = [
       ...registry,
       ...readSkillEntries,
@@ -838,8 +833,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
           const fromRegistry = registryByName.get(toolName) as Tool | undefined;
           if (fromRegistry) return fromRegistry;
           if (!externalToolProvider) return undefined;
-          const activatedIds =
-            (scope.activatedInjectionIds as readonly string[] | undefined) ?? [];
+          const activatedIds = (scope.activatedInjectionIds as readonly string[] | undefined) ?? [];
           const identity = scope.runIdentity as
             | { tenant?: string; principal?: string; conversationId: string }
             | undefined;
@@ -1178,9 +1172,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
           // ToolDispatchContext when an external `.toolProvider()` is
           // configured. Without them the provider sees activeSkillId
           // = undefined every iteration, breaking skillScopedTools etc.
-          activatedInjectionIds: parent.activatedInjectionIds as
-            | readonly string[]
-            | undefined,
+          activatedInjectionIds: parent.activatedInjectionIds as readonly string[] | undefined,
           runIdentity: parent.runIdentity as
             | { tenant?: string; principal?: string; conversationId: string }
             | undefined,
@@ -1373,9 +1365,7 @@ export class AgentBuilder {
    */
   maxIterations(n: number): this {
     if (!Number.isInteger(n) || n <= 0) {
-      throw new Error(
-        `AgentBuilder.maxIterations: expected a positive integer, got ${n}.`,
-      );
+      throw new Error(`AgentBuilder.maxIterations: expected a positive integer, got ${n}.`);
     }
     this.maxIterationsOverride = n;
     return this;
@@ -1603,10 +1593,7 @@ export class AgentBuilder {
    *   const typed = await agent.runTyped({ message: '...' });
    *   typed.status; // narrowed to 'ok' | 'err'
    */
-  outputSchema<T>(
-    parser: OutputSchemaParser<T>,
-    opts?: OutputSchemaOptions,
-  ): this {
+  outputSchema<T>(parser: OutputSchemaParser<T>, opts?: OutputSchemaOptions): this {
     if (this.outputSchemaParser) {
       throw new Error(
         'AgentBuilder.outputSchema: already set. Each agent has at most one terminal contract.',

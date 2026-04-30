@@ -172,8 +172,7 @@ export function flowchartAsTool(opts: FlowchartAsToolOptions): Tool {
   }
 
   const mapper: FlowchartResultMapper =
-    opts.resultMapper ??
-    ((snapshot) => JSON.stringify(snapshot.values));
+    opts.resultMapper ?? ((snapshot) => JSON.stringify(snapshot.values));
 
   return defineTool<Record<string, unknown>, string>({
     name: opts.name,

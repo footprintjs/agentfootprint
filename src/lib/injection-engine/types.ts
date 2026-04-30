@@ -219,9 +219,7 @@ export function projectActiveInjection(inj: Injection): ActiveInjection {
   // Project per-skill metadata that slot subflows need to dispatch on.
   // `surfaceMode` drives the system-prompt-suppression decision (Block C).
   // `autoActivate` is reserved for runtime tool gating (forward-compat).
-  const meta = inj.metadata as
-    | { surfaceMode?: string; autoActivate?: string }
-    | undefined;
+  const meta = inj.metadata as { surfaceMode?: string; autoActivate?: string } | undefined;
   const out: ActiveInjection = {
     id: inj.id,
     flavor: inj.flavor,

@@ -119,7 +119,8 @@ describe('tool-providers — scenario: composition', () => {
     };
     const provider = gatedTools(
       gatedTools(staticTools(allTools), (name) => name.startsWith('read_')), // read-only
-      (name, ctx) => (ctx.activeSkillId ? skillToolMap[ctx.activeSkillId]?.includes(name) ?? false : true), // skill-gated
+      (name, ctx) =>
+        ctx.activeSkillId ? skillToolMap[ctx.activeSkillId]?.includes(name) ?? false : true, // skill-gated
     );
 
     // No active skill → just the read filter
@@ -251,18 +252,13 @@ describe('tool-providers — ROI', () => {
     //   2. read-only gate → gatedTools(inner, isReadonly)
     //   3. skill gate     → gatedTools(inner, isActiveSkillTool)
     // Each layer is one concern. Composition handles the rest.
-    const allTools = [
-      fakeTool('read_billing'),
-      fakeTool('write_billing'),
-      fakeTool('read_health'),
-    ];
+    const allTools = [fakeTool('read_billing'), fakeTool('write_billing'), fakeTool('read_health')];
     const isReadonly = (n: string) => n.startsWith('read_');
     const skillMap: Record<string, readonly string[]> = {
       billing: ['read_billing', 'write_billing'],
     };
-    const provider = gatedTools(
-      gatedTools(staticTools(allTools), isReadonly),
-      (n, c) => (c.activeSkillId ? (skillMap[c.activeSkillId] ?? []).includes(n) : true),
+    const provider = gatedTools(gatedTools(staticTools(allTools), isReadonly), (n, c) =>
+      c.activeSkillId ? (skillMap[c.activeSkillId] ?? []).includes(n) : true,
     );
     const visible = provider.list({ ...baseCtx, activeSkillId: 'billing' });
     // Read-only AND in billing skill = read_billing only

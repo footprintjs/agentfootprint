@@ -8,12 +8,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import {
-  Agent,
-  defineInstruction,
-  mock,
-  type AgentfootprintEvent,
-} from '../../src/index.js';
+import { Agent, defineInstruction, mock, type AgentfootprintEvent } from '../../src/index.js';
 
 // ─── 1. .maxIterations() ──────────────────────────────────────────
 
@@ -63,10 +58,7 @@ describe('AgentBuilder.recorder', () => {
       },
     };
     const provider = mock({ respond: () => ({ content: 'final', toolCalls: [] }) });
-    const agent = Agent.create({ provider, model: 'mock' })
-      .system('s')
-      .recorder(recorder)
-      .build();
+    const agent = Agent.create({ provider, model: 'mock' }).system('s').recorder(recorder).build();
     await agent.run({ message: 'go' });
     expect(events.length).toBeGreaterThan(0);
   });

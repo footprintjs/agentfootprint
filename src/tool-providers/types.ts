@@ -104,7 +104,4 @@ export interface ToolProvider {
 }
 
 /** Predicate for `gatedTools` — runs per tool, per iteration. */
-export type ToolGatePredicate = (
-  toolName: string,
-  ctx: ToolDispatchContext,
-) => boolean;
+export type ToolGatePredicate = (toolName: string, ctx: ToolDispatchContext) => boolean;

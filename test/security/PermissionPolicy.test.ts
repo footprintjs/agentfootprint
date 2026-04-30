@@ -18,10 +18,7 @@ import {
   type ToolDispatchContext,
   type Tool,
 } from '../../src/index.js';
-import type {
-  PermissionChecker,
-  PermissionRequest,
-} from '../../src/security/index.js';
+import type { PermissionChecker, PermissionRequest } from '../../src/security/index.js';
 
 // ─── Fixtures ─────────────────────────────────────────────────────
 
@@ -35,7 +32,14 @@ function fakeTool(name: string): Tool {
 const ROLES = {
   readonly: ['lookup_order', 'get_status', 'list_skills', 'read_skill'],
   support: ['lookup_order', 'get_status', 'process_refund', 'list_skills', 'read_skill'],
-  admin: ['lookup_order', 'get_status', 'process_refund', 'delete_user', 'list_skills', 'read_skill'],
+  admin: [
+    'lookup_order',
+    'get_status',
+    'process_refund',
+    'delete_user',
+    'list_skills',
+    'read_skill',
+  ],
 } as const;
 
 const baseCtx: ToolDispatchContext = {

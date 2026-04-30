@@ -16,12 +16,7 @@
 import { describe, expect, it } from 'vitest';
 import { flowChart } from 'footprintjs';
 import type { PausableHandler } from 'footprintjs';
-import {
-  Agent,
-  flowchartAsTool,
-  mock,
-  type FlowchartToolSnapshot,
-} from '../../src/index.js';
+import { Agent, flowchartAsTool, mock, type FlowchartToolSnapshot } from '../../src/index.js';
 
 // ─── Fixtures ─────────────────────────────────────────────────────
 
@@ -85,19 +80,19 @@ describe('flowchartAsTool — unit', () => {
 
   it('throws on empty/whitespace name', () => {
     const chart = buildRefundChart();
-    expect(() =>
-      flowchartAsTool({ name: '', description: 'd', flowchart: chart }),
-    ).toThrow(/`name` is required/);
-    expect(() =>
-      flowchartAsTool({ name: '  ', description: 'd', flowchart: chart }),
-    ).toThrow(/`name` is required/);
+    expect(() => flowchartAsTool({ name: '', description: 'd', flowchart: chart })).toThrow(
+      /`name` is required/,
+    );
+    expect(() => flowchartAsTool({ name: '  ', description: 'd', flowchart: chart })).toThrow(
+      /`name` is required/,
+    );
   });
 
   it('throws on missing description', () => {
     const chart = buildRefundChart();
-    expect(() =>
-      flowchartAsTool({ name: 'ok', description: '', flowchart: chart }),
-    ).toThrow(/`description` is required/);
+    expect(() => flowchartAsTool({ name: 'ok', description: '', flowchart: chart })).toThrow(
+      /`description` is required/,
+    );
   });
 
   it('throws on missing flowchart', () => {

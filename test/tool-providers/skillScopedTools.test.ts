@@ -88,18 +88,14 @@ describe('skillScopedTools — unit', () => {
 // ─── 2. SCENARIO — multiple skill scopes side by side ─────────────
 
 describe('skillScopedTools — scenario: multiple skill scopes', () => {
-  it('concat-style composition shows ONLY the active skill\'s tools', () => {
+  it("concat-style composition shows ONLY the active skill's tools", () => {
     const baseline = staticTools([fakeTool('lookup_order')]);
     const billing = skillScopedTools('billing', [fakeTool('refund'), fakeTool('charge')]);
     const refund = skillScopedTools('refund', [fakeTool('reverse')]);
 
     const composite: ToolProvider = {
       id: 'composite',
-      list: (ctx) => [
-        ...baseline.list(ctx),
-        ...billing.list(ctx),
-        ...refund.list(ctx),
-      ],
+      list: (ctx) => [...baseline.list(ctx), ...billing.list(ctx), ...refund.list(ctx)],
     };
 
     // No skill → only baseline
@@ -232,7 +228,7 @@ describe('skillScopedTools — performance', () => {
 // ─── 7. ROI — what the primitive unlocks ──────────────────────────
 
 describe('skillScopedTools — ROI: per-skill choice space narrowing', () => {
-  it('the LLM\'s tool list flips between activations — recency-first context engineering', () => {
+  it("the LLM's tool list flips between activations — recency-first context engineering", () => {
     // The Dynamic ReAct payoff: when the LLM activates `billing`, the
     // tool list narrows to billing's tools. When it activates `refund`,
     // it narrows to refund's tools. Sharper choice space per turn.
