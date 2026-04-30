@@ -1123,6 +1123,17 @@ export class AgentBuilder {
    * react to current activation state.
    */
   private toolProviderRef?: ToolProvider;
+  /**
+   * Optional override for `AgentOptions.maxIterations`. When set via
+   * the `.maxIterations()` builder method, takes precedence over the
+   * value passed to `Agent.create({ maxIterations })`.
+   */
+  private maxIterationsOverride?: number;
+  /**
+   * Recorders collected via `.recorder()`. Attached to the built Agent
+   * before `build()` returns (each via `agent.attach(rec)`).
+   */
+  private readonly recorderList: import('footprintjs').CombinedRecorder[] = [];
   // Voice config — defaults until the consumer calls .appName() /
   // .commentaryTemplates() / .thinkingTemplates(). Stored as plain
   // dicts (Record<string, string>) so the builder doesn't depend on
@@ -1202,6 +1213,39 @@ export class AgentBuilder {
       );
     }
     this.toolProviderRef = provider;
+    return this;
+  }
+
+  /**
+   * Override the ReAct iteration cap set via `Agent.create({
+   * maxIterations })`. Convenience for builder-style code that prefers
+   * fluent setters over constructor opts. Last call wins.
+   *
+   * Throws if `n` is not a positive integer or exceeds the hard cap
+   * (`clampIterations`'s upper bound).
+   */
+  maxIterations(n: number): this {
+    if (!Number.isInteger(n) || n <= 0) {
+      throw new Error(
+        `AgentBuilder.maxIterations: expected a positive integer, got ${n}.`,
+      );
+    }
+    this.maxIterationsOverride = n;
+    return this;
+  }
+
+  /**
+   * Attach a footprintjs `CombinedRecorder` to the built Agent. Wired
+   * via `agent.attach(rec)` immediately after construction, so the
+   * recorder sees every event from the very first run.
+   *
+   * Equivalent to calling `agent.attach(rec)` post-build; the builder
+   * method is a convenience for codebases that prefer fully-fluent
+   * agent assembly. Multiple recorders are supported (each gets its
+   * own `attach()` call).
+   */
+  recorder(rec: import('footprintjs').CombinedRecorder): this {
+    this.recorderList.push(rec);
     return this;
   }
 
@@ -1302,6 +1346,18 @@ export class AgentBuilder {
    */
   instruction(injection: Injection): this {
     return this.injection(injection);
+  }
+
+  /**
+   * Bulk-register many instructions at once. Convenience for consumer
+   * code that organizes its instruction set in a flat array (`const
+   * instructions = [outputFormat, dataRouting, ...]`). Each element
+   * is registered via `.instruction()` so duplicate-id checks still
+   * fire per-entry.
+   */
+  instructions(injections: ReadonlyArray<Injection>): this {
+    for (const i of injections) this.instruction(i);
+    return this;
   }
 
   /**
@@ -1433,8 +1489,12 @@ export class AgentBuilder {
       commentaryTemplates: { ...defaultCommentaryTemplates, ...this.commentaryOverrides },
       thinkingTemplates: { ...defaultThinkingTemplates, ...this.thinkingOverrides },
     };
-    return new Agent(
-      this.opts,
+    const opts =
+      this.maxIterationsOverride !== undefined
+        ? { ...this.opts, maxIterations: this.maxIterationsOverride }
+        : this.opts;
+    const agent = new Agent(
+      opts,
       this.systemPromptValue,
       this.registry,
       voice,
@@ -1443,6 +1503,13 @@ export class AgentBuilder {
       this.outputSchemaParser,
       this.toolProviderRef,
     );
+    // Attach builder-collected recorders so they receive events from
+    // the very first run. Mirrors what consumers would do post-build
+    // via `agent.attach(rec)`; the builder method is purely sugar.
+    for (const rec of this.recorderList) {
+      agent.attach(rec);
+    }
+    return agent;
   }
 }
 
