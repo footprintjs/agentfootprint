@@ -142,9 +142,26 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
       }
 
       scope.$setValue(INJECTION_KEYS.TOOLS, injections);
-      // Pass merged schemas (registry + provider + active injection-
-      // supplied) so the Agent sends ALL of them to the LLM provider.
-      scope.toolSchemas = [...tools, ...providerSchemas, ...dynamicSchemas];
+      // Merge schemas from all three sources, deduping by tool name.
+      // Order: static .tool() registry FIRST (auto-attached read_skill
+      // / list_skills land here when `.skills(registry)` is wired),
+      // then external `.toolProvider()` output, then per-skill
+      // inject.tools. First occurrence wins.
+      //
+      // Why dedupe matters: Neo wires `gatedTools(staticTools([listSkills,
+      // readSkill]), policy.isAllowed)` AND calls `.skills(registry)`
+      // — the framework auto-attaches its own `read_skill` from the
+      // skill registry, AND the consumer's toolProvider emits one too.
+      // Without dedupe both reach the LLM and Anthropic rejects the
+      // request: "tools: Tool names must be unique."
+      const seen = new Set<string>();
+      const merged: LLMToolSchema[] = [];
+      for (const t of [...tools, ...providerSchemas, ...dynamicSchemas]) {
+        if (seen.has(t.name)) continue;
+        seen.add(t.name);
+        merged.push(t);
+      }
+      scope.toolSchemas = merged;
       scope.$setValue(
         COMPOSITION_KEYS.SLOT_COMPOSED,
         composeSlot(

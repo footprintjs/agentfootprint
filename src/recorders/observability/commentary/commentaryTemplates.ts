@@ -89,8 +89,15 @@ export const defaultCommentaryTemplates: CommentaryTemplates = {
     '{{appName}} activated a skill — its body went into the system prompt, and its tools became available to the LLM.',
   'context.injected.memory':
     '{{appName}} pulled prior content from memory and added it to the conversation.',
+  // Generic — fits always-on rules + on-tool-return predicates uniformly.
+  // Specialized variants below disambiguate when the trigger metadata
+  // is available on the event.
   'context.injected.instructions':
-    '{{appName}} added a tool-specific instruction to the system prompt after that tool returned.',
+    '{{appName}} added a rule to the system prompt: {{descClause}}.',
+  'context.injected.instructions.onToolReturn':
+    '{{appName}} added a tool-specific reminder after `{{lastToolName}}` returned: {{descClause}}.',
+  'context.injected.instructions.alwaysOn':
+    '{{appName}} added an always-on rule to the system prompt: {{descClause}}.',
   'context.injected.custom': '{{appName}} injected a custom piece of context.',
 
   'skill.activated':
