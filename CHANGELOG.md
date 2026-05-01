@@ -5,6 +5,52 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.6.4]
+
+**Fix: v2.6 cache-layer subflows leaked as fake user-visible steps in
+the StepGraph.** When v2.6 introduced `CacheDecisionSubflow` (with
+local id `sf-cache-decision`) and the `CacheGate` decider (stage id
+`cache-gate`), neither was registered in `BoundaryRecorder`'s
+`AGENT_INTERNAL_LOCAL_IDS` set. Result: every iteration of an agent
+emitted `subflow.entry` / `subflow.exit` / `decision.branch` events
+that weren't tagged `isAgentInternal: true`, so `FlowchartRecorder`
+projected them as user-facing `StepNode`s. A 5-iteration run showed
+~30 nodes instead of ~14 — every iter contributed 3 fake steps the
+user had to scrub past. Same issue (pre-existing) for
+`SUBFLOW_IDS.INJECTION_ENGINE`.
+
+### Fix
+
+Three ids added to `AGENT_INTERNAL_LOCAL_IDS` in
+`src/recorders/observability/BoundaryRecorder.ts`:
+
+```ts
+SUBFLOW_IDS.INJECTION_ENGINE,   // pre-existing oversight
+SUBFLOW_IDS.CACHE_DECISION,     // v2.6
+STAGE_IDS.CACHE_GATE,           // v2.6 (decider stage id)
+```
+
+Plus a comment block warning future contributors: when adding a new
+subflow to the Agent's internal flowchart, decide whether it's a
+context-engineering moment (leave OUT — it should be a user-visible
+step) or pure plumbing (add HERE — it's wiring, not a step).
+
+### Regression guard
+
+New test `test/recorders/observability/internal-ids-coverage.test.ts`
+enumerates `SUBFLOW_IDS` and asserts every entry is categorized as
+either a slot subflow OR an agent-internal id. The next time someone
+adds a new entry to `SUBFLOW_IDS` without categorizing it, the test
+fails by NAME so the bug is caught before it leaks into Lens.
+
+### Verified
+
+In the Neo MDS triage browser app (1630/1630 tests passing, lens dist
+unchanged):
+
+- 5-iteration run, before fix: 30+ visible step-graph nodes
+- 5-iteration run, after fix: 14 nodes (1 Run + per-iter LLM/tool steps + final llm→user)
+
 ## [2.6.3]
 
 **README rewrite + new `Inspiration` section in docs/site.** Three docs

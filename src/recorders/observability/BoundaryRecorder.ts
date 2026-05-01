@@ -96,7 +96,7 @@ interface FlowRunEvent {
 }
 import type { AgentfootprintEvent, AgentfootprintEventType } from '../../events/registry.js';
 import type { EventDispatcher, Unsubscribe } from '../../events/dispatcher.js';
-import { SUBFLOW_IDS, slotFromSubflowId } from '../../conventions.js';
+import { SUBFLOW_IDS, STAGE_IDS, slotFromSubflowId } from '../../conventions.js';
 import type { ContextSlot } from '../../events/types.js';
 
 // ─── DomainEvent: discriminated union ────────────────────────────────
@@ -258,12 +258,25 @@ export type DomainEvent =
 
 /** Closed set of routing/wrapper subflow IDs that are pure plumbing.
  *  Slot subflows (`sf-system-prompt` / `sf-messages` / `sf-tools`) are
- *  NOT in this set — they're real context-engineering moments. */
-const AGENT_INTERNAL_LOCAL_IDS: ReadonlySet<string> = new Set([
+ *  NOT in this set — they're real context-engineering moments.
+ *
+ *  When you add a new subflow to the Agent's internal flowchart, decide:
+ *    - Is it a context-engineering moment the user should see?  → leave OUT
+ *    - Is it pure routing / dispatch / cache plumbing?           → add HERE
+ *
+ *  Forgetting to add it leaks every iteration of that subflow into the
+ *  StepGraph as a fake "step" the user has to scrub past. */
+const AGENT_INTERNAL_LOCAL_IDS: ReadonlySet<string> = new Set<string>([
+  // Subflow ids (`sf-*`)
+  SUBFLOW_IDS.INJECTION_ENGINE, // collects activeInjections; pure plumbing
   SUBFLOW_IDS.ROUTE,
   SUBFLOW_IDS.TOOL_CALLS,
   SUBFLOW_IDS.FINAL,
   SUBFLOW_IDS.MERGE,
+  SUBFLOW_IDS.CACHE_DECISION, // v2.6 — emits cacheMarkers; not a user step
+  // Decider stage ids (the same set is used to filter `decision.branch`
+  // events whose deciding stage is plumbing rather than user-facing).
+  STAGE_IDS.CACHE_GATE, // v2.6 — apply-markers / no-markers routing; plumbing
 ]);
 
 export interface BoundaryRecorderOptions {
