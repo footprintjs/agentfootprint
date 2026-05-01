@@ -5,6 +5,85 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.6.0]
+
+**Provider-agnostic prompt caching.** Dynamic ReAct repeats the same
+stable prefix (system prompt + tool schemas + active skill body) on
+every iteration. Without caching, every iter pays full price for that
+duplicated context. v2.6 introduces a unified DSL — `cache:` policy on
+each injection flavor — over per-provider strategies, so the right
+cache hints land on the wire automatically.
+
+### What's new
+
+- **CacheDecision subflow** walks `activeInjections` each iteration,
+  evaluates each injection's `cache:` directive, and emits a
+  provider-agnostic `CacheMarker[]`.
+- **CacheGate decider** uses footprintjs `decide()` with three rules —
+  kill switch (`cachingDisabled`), hit-rate floor (skip when recent
+  hit-rate < 0.3), and skill-churn (skip when ≥3 unique skills in the
+  last 5 iters). Decision evidence captured for free.
+- **5 cache strategies** (auto-registered via side-effect imports):
+  - `AnthropicCacheStrategy` — manual `cache_control` on system blocks
+    (4-marker clamp; surfaces `cache_creation_input_tokens` +
+    `cache_read_input_tokens`)
+  - `OpenAICacheStrategy` — pass-through (auto-cache); extracts
+    `prompt_tokens_details.cached_tokens` for metrics
+  - `BedrockCacheStrategy` — model-aware: Anthropic-style hints when
+    modelId matches `^anthropic\.claude`, pass-through otherwise
+  - `NoOpCacheStrategy` — wildcard fallback for unknown providers
+  - Future: `GeminiCacheStrategy`
+- **Per-flavor defaults** (overridable on each `defineX(...)`):
+  - `defineSteering` → `'always'`
+  - `defineFact` → `'always'`
+  - `defineSkill` → `'while-active'`
+  - `defineInstruction` → `'never'`
+  - `defineMemory` → `'while-active'`
+- **`cacheRecorder()`** — high-level observability; dump after a run
+  for gate decisions + total markers emitted.
+- **`Agent.create({ caching: 'on' | 'off' })`** — top-level kill switch
+  (defaults to `'on'`).
+
+### Validated on Neo MDS triage benchmark
+
+Same task ("Investigate port errors on SHNETWPLPSW903"), same scenario:
+
+| Mode (Sonnet 4.5) | cache=off | cache=on | Δ |
+|---|---|---|---|
+| Classic (no skill markdown) | 40,563 | (untested) | — |
+| Static (all skill markdowns stuffed) | ~140,000 | 7,640 | **−95%** |
+| **Dynamic (smart gating)** | **28,404** | **6,535** | **−77%** |
+
+Cross-model Dynamic cache=on results:
+
+| Model | cache=off | cache=on | Δ |
+|---|---|---|---|
+| Sonnet 4.5 | 36,322 | **6,535** | −82% |
+| Haiku 4.5 | 36,309 | **13,637** | −62% |
+| Opus 4.5 | 28,477 | **10,745** | −62% |
+
+### Strategic implication
+
+Pre-v2.6 the only economically sane Dynamic ReAct shape was smart
+gating — bind tools and skill markdowns conditionally per iter.
+Post-v2.6 you have a real second option: **stuff-and-cache** (put every
+skill markdown into the system prompt always, let the cache layer carry
+the cost). Both patterns are now first-class. Pick based on your team's
+preferences, not on token cost alone.
+
+### Migration
+
+Zero breaking changes. Existing agents get caching for free if they use
+Anthropic, Bedrock-Claude, or OpenAI providers. Disable explicitly with
+`Agent.create({ caching: 'off' })`.
+
+### Tests / Docs
+
+- +66 tests in `test/cache/` (1627/1627 pass)
+- New guide: [docs/guides/caching.md](docs/guides/caching.md) — Caching
+  in 60 seconds + per-strategy reference + custom-strategy authoring
+  template
+
 ## [2.5.1]
 
 **Bug fix release.** v2.5.0 shipped with a single-line bug in the
