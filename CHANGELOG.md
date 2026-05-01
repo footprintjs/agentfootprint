@@ -5,6 +5,49 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.6.3]
+
+**README rewrite + new `Inspiration` section in docs/site.** Three docs
+moves bundled together:
+
+1. **README rewrite** — leads with the abstraction-lineage framing
+   (PyTorch autograd / Express / Prisma / Kubernetes / React → agentfootprint
+   for context engineering). Same kind-of-move applied to a new domain.
+   The hand-rolled vs declarative code comparison is now the visual hook;
+   the differentiator section ("the trace is a cache of the agent's
+   thinking") names the unique IP claim.
+
+2. **New "Why it's shaped this way — two pillars" section** in the README.
+   - **THE WHY (user-visible win):** Palantir's 2003 thesis applied to
+     agent runtime — connect the four classes of agent data (state,
+     decisions, execution, memory) so the next token compounds the
+     connection instead of paying for it again.
+   - **THE HOW (engineering discipline):** Liskov's ADT + LSP work, applied
+     to flowcharts. Every framework boundary is LSP-substitutable.
+     Subflows are CLU clusters. Locality of reasoning enforced as a
+     runtime invariant.
+
+3. **New `docs/inspiration/` section + matching `docs-site/inspiration/`**:
+   - `README.md` (index) explaining the two-pillar structure
+   - `connected-data-palantir.md` — full Palantir thesis → agentfootprint
+     mapping; the four classes of agent data; where we go beyond Palantir
+     (emergent vs pre-built ontology)
+   - `modularity-liskov.md` — CLU clusters → subflows; LSP examples
+     (CacheStrategy / LLMProvider / ToolProvider); locality of reasoning
+     → operationalized; where we extend beyond classical Liskov
+   - New "💡 Inspiration" sidebar section in the docs site between
+     Architecture and Reference
+
+Plus accuracy fixes uncovered during README verification:
+- Provider count: 6 → **7** (Anthropic, OpenAI, Bedrock, Ollama,
+  Browser-Anthropic, Browser-OpenAI, Mock)
+- "47 typed events" → **48+ typed events** (recounted via grep)
+- Strengthened the "frameworks that compose state per-node can't recompute
+  cache markers in lockstep" claim about other frameworks (less
+  combative phrasing, same defensible point)
+
+No code change. 1627/1627 tests pass.
+
 ## [2.6.2]
 
 **Docs: tool-dependency framing for Dynamic ReAct + remove application-specific

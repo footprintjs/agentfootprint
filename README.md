@@ -28,16 +28,38 @@
 | **Prisma / SQLAlchemy** | Schema + query intent | SQL generation, connection pooling, migrations |
 | **Kubernetes** | Desired state (manifests) | Scheduling, health checks, reconciliation loop |
 | **React** | Components + state | DOM diffing, render path, event delegation |
-| **agentfootprint** | Injections (slot × trigger) | Slot composition, iteration loop, observation, replay |
+| **agentfootprint** | Injections (slot × trigger × cache) | Slot composition, iteration loop, prompt caching, observation, replay |
 
-The closest structural parallel is **autograd**: you describe the graph, the framework traverses it, and *because the framework owns the traversal it can record everything that happens for free*. Same idea here — you describe Injections, agentfootprint runs the iteration loop, and the typed-event stream + replayable checkpoints are a consequence, not an extra feature.
+The closest structural parallel is **autograd**: you describe the graph, the framework traverses it, and *because the framework owns the traversal it can record everything that happens for free*. Same idea here — you describe Injections, agentfootprint runs the iteration loop, and the typed-event stream + replayable checkpoints + provider-agnostic prompt caching are consequences, not extra features.
 
-<!-- ┌────────────────────────────────────────────────────────────────┐
-     │  📹  30-second demo video here.                                 │
-     │      Embed: paste-trace → drag time-travel slider →             │
-     │      every slot, every decision, every tool call visible.       │
-     │      Frame this as "agent DevTools" — the React DevTools moment.│
-     └────────────────────────────────────────────────────────────────┘ -->
+---
+
+## Why it's shaped this way — two pillars
+
+The abstraction lineage above tells you *what* this library is. The two pillars below explain *why* it's structured the way it is. Neither is decorative — both are operationalized in the runtime.
+
+### THE WHY — connected data (the user-visible win)
+
+Palantir's 2003 thesis: enterprise insight is bottlenecked by **data fragmentation**, not analyst skill. Connecting siloed data into one ontology collapses weeks of manual correlation into minutes.
+
+LLM agents face the same fragmentation problem at *runtime*. Disconnected tool state, lost decision evidence, scattered execution context — the agent re-discovers relationships every iteration, burning tokens. agentfootprint connects four classes of agent data so the next token compounds the connection instead of paying for it again:
+
+| Class | Mechanism |
+|---|---|
+| **State** | `TypedScope<S>` — single typed shared state, every read/write tracked |
+| **Decisions** | `decide()` evidence — every branch carries the inputs that triggered it |
+| **Execution** | `commitLog` + `runtimeStageId` — every state mutation keyed to its writing stage |
+| **Memory** | Causal memory — full footprintjs snapshots persisted, cosine-matched on follow-up runs |
+
+**Connected data → fewer iterations → fewer tokens.** Same arithmetic Palantir was attacking in 2003, different decade, different layer.
+
+### THE HOW — modular boundaries (the engineering discipline)
+
+Liskov's ADT (1974) and LSP (1987) work gives a vocabulary for boundaries that don't leak. Every framework boundary in agentfootprint is an LSP-substitutable interface — `LLMProvider`, `ToolProvider`, `CacheStrategy`, `Recorder`, `MemoryStore` — so you can swap implementations without changing agent code. Subflows are CLU clusters with explicit input/output mappers; nothing leaks across the boundary.
+
+Together: **clean modules + connected data = a runtime that's both fast (Palantir multiplier) and reasonable (Liskov locality).** Boundaries alone produce a clean but dumb library. Connections alone produce a fast but unmaintainable one.
+
+Detailed write-ups: [`docs/inspiration/`](./docs/inspiration/) — *"Connected Data — the Palantir lineage"* and *"Modularity — the Liskov lineage"*. Not required reading for using the library; required reading for extending or evaluating it.
 
 ---
 
@@ -74,9 +96,10 @@ async function runAgentTurn(userMsg, state) {
   const memEntries = await store.list({ tenant, conversationId });
   messages.unshift({ role: 'system', content: formatMemory(memEntries.slice(-10)) });
 
-  // 6. Call LLM, route tool calls, loop, capture state for resume...
-  // 7. Persist new turn back to memory tagged with identity...
-  // 8. Wire SSE for streaming, attach observability hooks...
+  // 6. Decide what's cacheable; place provider-specific cache_control markers...
+  // 7. Call LLM, route tool calls, loop, capture state for resume...
+  // 8. Persist new turn back to memory tagged with identity...
+  // 9. Wire SSE for streaming, attach observability hooks...
 
   // No replay. No audit trail. Per agent, hundreds of lines.
   // Every refactor risks a slot-ordering bug nobody catches until prod.
@@ -102,7 +125,7 @@ agent.on('agentfootprint.context.injected', (e) =>
   console.log(`[${e.payload.source}] landed in ${e.payload.slot}`));
 ```
 
-Same agent. The hand-rolled version is ~80 lines and growing; the declarative version is ~8 and stable. **The framework owns the wiring** — which is exactly why it can observe, replay, and audit it for you.
+Same agent. The hand-rolled version is ~80 lines and growing; the declarative version is ~8 and stable. **The framework owns the wiring** — which is exactly why it can observe, replay, audit, and cache it for you.
 
 ---
 
@@ -199,24 +222,21 @@ The React parallel goes one layer deeper than "less code." Because the framework
 | `.skill(billing)` | Auto-attaches `read_skill` tool; LLM activates by id; body + unlocked tools land in next iteration |
 | `.memory(causal)` | Persists footprintjs decision-evidence snapshots; embeds queries; cosine-matches on follow-up runs |
 | `.tool(weather)` | Schemas to LLM, dispatches calls, captures args/results, gates by permission policy |
-| `.attach(recorder)` | Subscribes to 47 typed events across 13 domains as the chart traverses |
+| `.attach(recorder)` | Subscribes to typed events across many domains as the chart traverses |
 | `agent.run({...})` | Captures every decision, every commit, every tool call as a JSON checkpoint that's replayable cross-server |
 
-LangChain assembles prompts once per turn. LangGraph composes state per node, not per loop iteration. CrewAI's Agent is tool-aware but not iteration-aware. **Per-iteration recomposition of all three slots based on the latest tool result + accumulated state is structurally distinct.** It's the closest a framework comes to "executive-function-like" behavior — context that adapts to what the agent just observed, not just what it was originally told.
+LangChain assembles prompts once per turn. LangGraph composes state per node, not per loop iteration. CrewAI's Agent is tool-aware but not iteration-aware. **Per-iteration recomposition of all three slots based on the latest tool result + accumulated state is structurally distinct.** Frameworks that compose state per-node rather than per-loop-iteration can't recompute cache markers in lockstep with the active injection set — the structural prerequisite for the cache layer below.
 
 ### What "every iteration" makes possible
-
-Use cases that emerge once the loop re-evaluates everything:
 
 | Use case | The mechanism |
 |---|---|
 | **Tool-by-tool LLM steering** — agent called `redact_pii` → next iter, system prompt gets *"use redacted text, don't paraphrase original"* | `defineInstruction({ activeWhen: (ctx) => ctx.lastToolResult?.toolName === 'redact_pii' })` |
-| **Adaptive tool exposure** — agent activated `billing` skill → next iter, tool list switches to billing-only set (3× context-budget reduction) | `defineSkill({...}) + autoActivate` (lands in v2.5+) |
+| **Adaptive tool exposure** — agent activated `billing` skill → next iter, tool list switches to billing-only set (3× context-budget reduction) | `defineSkill({...})` + LLM-activated trigger |
 | **Cost guardrails** — accumulated cost > threshold → next iter, system prompt adds *"be concise"* | `defineInstruction({ activeWhen: (ctx) => ctx.accumulatedCostUsd > 0.50 })` |
 | **Iterative format refinement** — iter 1 emitted JSON → iter 2 prompt adds *"continue this format"*; iter 5 prompt drops it | predicate over `ctx.iteration` + `ctx.history` |
 | **Failure adaptation** — tool X returned an error → next iter, prompt adds *"don't try X again; use Y"* | `on-tool-return` predicate inspecting `ctx.lastToolResult` for error markers |
 | **Few-shot evolution** — iter 1 prompt has example for the rare case → iter 2 drops it because example is consumed | predicate that tracks which examples have already fired |
-| **Skill body refresh** — long-context run, system-prompt skill body decayed → re-inject via tool result | `defineSkill({ refreshPolicy: { afterTokens: 50_000 } })` (v2.5+) |
 
 The framework owns the loop. The framework re-evaluates triggers every iteration. Tool results reshape the next iteration's prompt. **That's what makes context engineering compositional instead of static.**
 
@@ -224,23 +244,15 @@ The framework owns the loop. The framework re-evaluates triggers every iteration
 
 ### When to use Dynamic ReAct
 
-Use it when **your tools have dependencies** — when one tool's output
-implies which tool to call next.
+Use it when **your tools have dependencies** — when one tool's output implies which tool to call next.
 
-A skill body like *"if `get_port_errors` reports CRC > 0, call
-`get_sfp_diag` next; if it reports `signal_loss`, call `get_flogi`
-next"* IS a dependency graph. The skill encodes the workflow; Dynamic
-ReAct gates the tool surface to that workflow at runtime.
+A skill body like *"if `get_port_errors` reports CRC > 0, call `get_sfp_diag` next; if it reports `signal_loss`, call `get_flogi` next"* IS a dependency graph. The skill encodes the workflow; Dynamic ReAct gates the tool surface to that workflow at runtime.
 
-If your tools are independent (the LLM can call any of them at any
-time, ordering doesn't matter), Classic ReAct is fine and simpler —
-don't reach for Skills.
+If your tools are independent (the LLM can call any of them at any time, ordering doesn't matter), Classic ReAct is fine and simpler — don't reach for Skills.
 
 ### Side-by-side example
 
-[`examples/dynamic-react/`](./examples/dynamic-react/) ships two
-mock-backed scripts solving the same task. Per-iteration tool-count
-progression makes the shape clear:
+[`examples/dynamic-react/`](./examples/dynamic-react/) ships two mock-backed scripts solving the same task. Per-iteration tool-count progression makes the shape clear:
 
 ```
 Classic ReAct                    Dynamic ReAct
@@ -252,19 +264,16 @@ iter 4: 12 tools shown           iter 4: 5 tools
                                  iter 5: 5 tools (final answer)
 ```
 
-The unactivated skills' tools never enter the LLM context. Classic
-ReAct has no equivalent — every registered tool ships on every call.
+The unactivated skills' tools never enter the LLM context. Classic ReAct has no equivalent — every registered tool ships on every call.
 
 What Dynamic gives you that Classic doesn't:
 
-1. **Constant per-call payload** bounded by active-skill size, not
-   registry size. Scales to 50+ tool catalogs.
-2. **Deterministic routing** — `read_skill` forces scope before data
-   tools fire. LLM can't drift to off-topic tools.
-3. **Auditability** — each iteration's tool list is a pure function of
-   `activatedInjectionIds`. Recorded, replayable, diff-able across runs.
-4. **Less hallucination** — fewer tools per call = more in-distribution
-   on the active task.
+1. **Constant per-call payload** bounded by active-skill size, not registry size. Scales to 50+ tool catalogs.
+2. **Deterministic routing** — `read_skill` forces scope before data tools fire. LLM can't drift to off-topic tools.
+3. **Auditability** — each iteration's tool list is a pure function of `activatedInjectionIds`. Recorded, replayable, diff-able across runs.
+4. **Less hallucination** — fewer tools per call = more in-distribution on the active task.
+
+> **Compounds with the cache layer (next section).** Because the framework owns both the per-iteration slot recomposition AND the cache marker placement, cache invalidation tracks the live skill state — when a skill deactivates, only its prefix invalidates; the rest of the cached system prompt stays warm.
 
 Run it:
 
@@ -275,17 +284,88 @@ TSX_TSCONFIG_PATH=examples/runtime.tsconfig.json npx tsx examples/dynamic-react/
 
 ---
 
+## The cache layer — provider-agnostic prompt caching
+
+Anthropic gives you `cache_control` blocks. OpenAI auto-caches. Bedrock has its own format. Each provider's docs are 30+ pages, the wire formats are different, and the right cache placement depends on what's stable across iterations vs what's volatile.
+
+agentfootprint gives you **one declarative API across all three** (and a `NoOp` wildcard for the rest). You annotate intent at the injection level; the framework computes the cacheable boundary every iteration; per-provider strategies translate to the right wire format.
+
+### Declarative cache directives
+
+Every injection factory has a `cache:` field. Four forms:
+
+| Policy | Meaning |
+|---|---|
+| `'always'` | Cache whenever this injection is in `activeInjections`. |
+| `'never'` | Never cache — volatile content (timestamps, per-request IDs). |
+| `'while-active'` | Cache while the injection is active; invalidates the moment it becomes inactive. |
+| `{ until: ctx => boolean }` | Predicate-driven invalidation (Turing-complete escape hatch). |
+
+**Smart defaults per factory** — most consumers never write `cache:` explicitly:
+
+```typescript
+defineSteering({ id: 'tone',     prompt: '...' });                          // default: 'always'
+defineFact({     id: 'profile',  data: '...' });                            // default: 'always'
+defineSkill({    id: 'billing',  body: '...', tools: [...] });              // default: 'while-active'
+defineInstruction({ id: 'urgent', activeWhen: ..., prompt: '...' });         // default: 'never'
+defineMemory({   id: 'causal',   type: MEMORY_TYPES.CAUSAL, ... });          // default: 'while-active'
+```
+
+For composition beyond the four sentinels, use the predicate form:
+
+```typescript
+// Stable for the first 5 iterations, then flush:
+defineSteering({ id: 'examples', prompt: '...', cache: { until: ctx => ctx.iteration > 5 } });
+
+// Invalidate when cumulative spend exceeds budget:
+defineFact({ id: 'rules', data: '...', cache: { until: ctx => ctx.cumulativeInputTokens > 50_000 } });
+```
+
+### What the framework does every iteration
+
+1. **`CacheDecisionSubflow`** walks `activeInjections`, evaluates each one's cache directive, and emits provider-independent `CacheMarker[]`.
+2. **`CacheGate decider`** uses footprintjs `decide()` with three rules — kill switch, hit-rate floor (skip when recent hit-rate < 0.3), skill-churn (skip when ≥3 unique skills in the last 5 iters). Decision evidence captured for free.
+3. **The active provider strategy** (registered automatically per `LLMProvider.name`) translates markers to wire format:
+   - `AnthropicCacheStrategy` → `cache_control` on system blocks (4-marker clamp)
+   - `OpenAICacheStrategy` → no-op writes (auto-cached); extracts metrics from `prompt_tokens_details.cached_tokens`
+   - `BedrockCacheStrategy` → model-aware (Anthropic-style for Claude, pass-through else)
+   - `NoOpCacheStrategy` → wildcard fallback
+4. **`cacheRecorder`** emits typed events: hit rate, fresh-input tokens, cache-read tokens, cache-write tokens, markers applied. Same observability surface as every other event domain.
+
+For the per-iteration cache invalidation walkthrough and the full benchmark numbers, see [`docs/guides/caching.md`](./docs/guides/caching.md).
+
+### When to use it
+
+Always — it's on by default. The smart defaults handle 80% of cases.
+
+To audit it:
+
+```typescript
+import { cacheRecorder } from 'agentfootprint';
+
+agent.attach(cacheRecorder({ onTurnEnd: (m) => console.log(m) }));
+// → { hitRate: 0.71, freshInput: 1240, cacheRead: 9180, cacheWrite: 0, markersApplied: 2 }
+```
+
+To opt out globally for a specific run:
+
+```typescript
+const agent = Agent.create({ provider, caching: 'off', ... }).build();
+```
+
+---
+
 ## What you can build
 
 Three example shapes, all runnable end-to-end with `npm run example examples/<file>.ts`.
 
-### Customer support agent (skills + memory + audit trail)
+### Customer support agent (skills + memory + audit trail + cache)
 
 ```typescript
 const agent = Agent.create({ provider, model: 'claude-sonnet-4-5-20250929' })
   .system('You are a friendly support assistant.')
-  .skill(billingSkill)        // LLM activates with read_skill('billing')
-  .steering(toneGuidelines)   // always-on
+  .skill(billingSkill)        // LLM activates with read_skill('billing'); cached while active
+  .steering(toneGuidelines)   // always-on; cached forever
   .memory(conversationMemory) // remembers across .run() calls, per-tenant
   .build();
 ```
@@ -307,19 +387,19 @@ await research.run({ message: 'Should we adopt microservices?' });
 
 ### Streaming chat agent (token-by-token to a browser)
 
-<!-- ┌────────────────────────────────────────────────────────────────┐
-     │  📹  Streaming demo clip here.                                  │
-     │      Short loop: user types → tokens stream → tool call         │
-     │      surfaces mid-stream → final answer.                        │
-     └────────────────────────────────────────────────────────────────┘ -->
-
 ```typescript
-agent.on('agentfootprint.stream.token', (e) => res.write(e.payload.content));
-agent.on('agentfootprint.stream.tool_start', (e) => res.write(`\n→ ${e.payload.toolName}...\n`));
-await agent.run({ message: userInput });
-```
+import express from 'express';
+import { toSSE } from 'agentfootprint';
 
-→ [`docs-site/guides/streaming/`](docs-site/src/content/docs/guides/streaming.mdx)
+app.get('/chat', async (req, res) => {
+  res.setHeader('Content-Type', 'text/event-stream');
+  agent.on('agentfootprint.stream.token',     (e) => res.write(toSSE(e)));
+  agent.on('agentfootprint.stream.tool_start', (e) => res.write(toSSE(e)));
+  agent.on('agentfootprint.stream.tool_end',   (e) => res.write(toSSE(e)));
+  await agent.run({ message: req.query.message as string });
+  res.end();
+});
+```
 
 ---
 
@@ -375,7 +455,7 @@ This is memoization for agent reasoning — do the expensive work once, serve ma
 
 ### 3. Training data — every successful run becomes a labeled trajectory
 
-The same snapshot data shape is the input to SFT / DPO / process-RL training pipelines (`causalMemory.exportForTraining({ format: 'sft' | 'dpo' | 'process' })` is on the roadmap — see below). You don't run a separate data-collection phase — **your production traffic IS your training set.** Every successful customer interaction is a positive trajectory; every escalation or override is a counter-example.
+The same snapshot data shape is the input to SFT / DPO / process-RL training pipelines (`causalMemory.exportForTraining({ format: 'sft' | 'dpo' | 'process' })` is on the roadmap). You don't run a separate data-collection phase — **your production traffic IS your training set.** Every successful customer interaction is a positive trajectory; every escalation or override is a counter-example.
 
 The same JSON shape that powered the audit trail and the cheap-model follow-up is the training payload. One recording, three downstream consumers, no extra instrumentation.
 
@@ -392,6 +472,7 @@ Generative AI development is expensive when every iteration hits a paid API. age
 | Memory store | `InMemoryStore` | `RedisStore` (`agentfootprint/memory-redis`) · `AgentCoreStore` (`agentfootprint/memory-agentcore`) · DynamoDB / Postgres / Pinecone (planned) |
 | MCP server | `mockMcpClient({ tools })` — in-memory, no SDK | `mcpClient({ transport })` to a real server |
 | Tool execution | inline closure | real implementation |
+| Cache strategy | `NoOpCacheStrategy` (when `mock` provider) | Auto-selected by provider: `AnthropicCacheStrategy` / `OpenAICacheStrategy` / `BedrockCacheStrategy` |
 
 The flowchart, recorders, narrative, and tests don't change between dev and prod. **Ship the patterns first; pay for tokens last.**
 
@@ -404,6 +485,8 @@ The flowchart, recorders, narrative, and tests don't change between dev and prod
 | 🎓 **New to agents** | [5-minute Quick Start](https://footprintjs.github.io/agentfootprint/getting-started/quick-start/) → first agent runs offline |
 | 🛠️ **A LangChain / CrewAI / LangGraph user** | [Migration sketch](https://footprintjs.github.io/agentfootprint/getting-started/vs/) — same patterns, fewer classes |
 | 🏗️ **Architecting an enterprise rollout** | [Production guide](https://footprintjs.github.io/agentfootprint/guides/deployment/) — multi-tenant identity, audit trails, redaction, OTel |
+| 🏛️ **Doing production due diligence** | [Architecture page](https://footprintjs.github.io/agentfootprint/architecture/dependency-graph/) — 8-layer stack, hexagonal ports, the conventions SSOT |
+| 💡 **Curious about the design philosophy** | [Inspiration](./docs/inspiration/) — Palantir-style connected data + Liskov-style modular boundaries |
 | 🔬 **Researcher / extending the framework** | [Extension guide](https://footprintjs.github.io/agentfootprint/contributing/extension-guide/) — add a new flavor in 50 lines |
 
 Every code snippet on the docs site is imported from a real, runnable file in [`examples/`](examples/) — every example is also an end-to-end test in CI. There is no docs-only code in this repo.
@@ -414,16 +497,17 @@ Every code snippet on the docs site is imported from a real, runnable file in [`
 
 - **2 primitives** — `LLMCall`, `Agent` (the ReAct loop)
 - **4 compositions** — `Sequence`, `Parallel`, `Conditional`, `Loop`
-- **6 LLM providers** — Anthropic · OpenAI · Bedrock · Ollama · Browser-Anthropic · Browser-OpenAI · Mock (with `mock({ replies })` for scripted multi-turn)
-- **One Injection primitive** — `defineSkill` / `defineSteering` / `defineInstruction` / `defineFact` (one engine, four typed factories, all reduce to `{ trigger, slot }`)
+- **7 LLM providers** — Anthropic · OpenAI · Bedrock · Ollama · Browser-Anthropic · Browser-OpenAI · Mock (with `mock({ replies })` for scripted multi-turn)
+- **One Injection primitive** — `defineSkill` / `defineSteering` / `defineInstruction` / `defineFact` (one engine, four typed factories, all reduce to `{ trigger, slot, cache }`)
 - **One Memory factory** — `defineMemory({ type, strategy, store })` — 4 types × 7 strategies including **Causal**
+- **Provider-agnostic prompt caching** — declarative `cache:` field per injection · per-iteration marker recomputation via `CacheDecisionSubflow` · registered strategies for Anthropic / OpenAI / Bedrock with `NoOp` wildcard fallback · `cacheRecorder` for hit-rate observability
 - **RAG** — `defineRAG()` + `indexDocuments()` (sugar over Semantic + TopK)
 - **MCP** — `mcpClient({ transport })` for real servers · `mockMcpClient({ tools })` for in-memory development
 - **Memory store adapters** — `InMemoryStore` · `RedisStore` (subpath `agentfootprint/memory-redis`) · `AgentCoreStore` (subpath `agentfootprint/memory-agentcore`)
-- **47 typed observability events** across 13 domains — context · stream · agent · cost · skill · permission · eval · memory · …
+- **48+ typed observability events** across context · stream · agent · cost · skill · permission · eval · memory · cache · embedding · error · …
 - **Pause / resume** — JSON-serializable checkpoints; pause via `askHuman` / `pauseHere`, resume hours later on a different server
 - **Resilience** — `withRetry`, `withFallback`, `resilientProvider`
-- **AI-coding-tool support** — bundled instructions for Claude Code · Cursor · Windsurf · Cline · Kiro · Copilot
+- **AI-coding-tool support** — bundled instructions for Claude Code · Cursor · Windsurf · Cline · Kiro · Copilot (see `ai-instructions/`)
 - **Runnable examples** organized by DNA layer (core · core-flow · patterns · context-engineering · memory · features) — every example is also an end-to-end CI test
 
 ## What's next (clearly marked roadmap)
@@ -433,6 +517,7 @@ Every code snippet on the docs site is imported from a real, runnable file in [`
 | **Reliability subsystem** | `CircuitBreaker` · 3-tier output fallback · auto-resume-on-error · Skills upgrades (`surfaceMode`, `refreshPolicy`) · `MockEnvironment` composer |
 | **Causal training-data exports** | `causalMemory.exportForTraining({ format: 'sft' \| 'dpo' \| 'process' })` — production traffic becomes labeled SFT / DPO / process-RL trajectories |
 | **Governance** | `Policy` · `BudgetTracker` · DynamoDB / Postgres / Pinecone memory adapters · production embedder factories |
+| **Cache layer v2** | Gemini handle-based caching · automatic provider routing based on causal-memory state · `cacheRecorder` cost-attribution |
 | **Deep Agents · A2A protocol** | Planning-before-execution · agent-to-agent protocol · Lens UI deep-link |
 
 For shipped features per release see [CHANGELOG.md](./CHANGELOG.md). Roadmap items are *not* claims about the current API — if a feature isn't in `npm install agentfootprint` today, it's listed here, not in the documentation.

@@ -150,6 +150,14 @@ export default defineConfig({
           ],
         },
         {
+          label: '💡 Inspiration',
+          items: [
+            { label: 'Why this design (overview)', slug: 'inspiration' },
+            { label: 'Connected data — Palantir lineage', slug: 'inspiration/connected-data-palantir' },
+            { label: 'Modularity — Liskov lineage', slug: 'inspiration/modularity-liskov' },
+          ],
+        },
+        {
           label: '📚 Reference',
           items: [
             { label: 'Citations & papers', slug: 'research/citations' },
