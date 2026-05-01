@@ -32,6 +32,13 @@ import {
 // with it (default behavior re-introduces duplicate tool names that
 // LLM providers reject).
 import { ArrayMergeMode } from 'footprintjs/advanced';
+import type { CacheMarker, CachePolicy, CacheStrategy } from '../cache/types.js';
+import { cacheDecisionSubflow } from '../cache/CacheDecisionSubflow.js';
+import {
+  cacheGateDecide,
+  updateSkillHistory as updateSkillHistoryStage,
+} from '../cache/CacheGateDecider.js';
+import { getDefaultCacheStrategy } from '../cache/strategyRegistry.js';
 import { isPauseRequest, type RunnerPauseOutcome } from './pause.js';
 import { emitCostTick } from './cost.js';
 import type {
@@ -112,6 +119,24 @@ export interface AgentOptions {
    * normally.
    */
   readonly permissionChecker?: PermissionChecker;
+  /**
+   * Global cache kill switch (v2.6+). `'off'` disables the cache
+   * layer entirely — the CacheGate decider routes to `'no-markers'`
+   * every iteration regardless of other rules. Default: caching
+   * enabled (auto-resolved per provider via the strategy registry).
+   *
+   * Use `'off'` for low-frequency agents (cron jobs running once per
+   * hour) where the cache TTL guarantees zero cache hits and the
+   * cache-write penalty isn't worth paying.
+   */
+  readonly caching?: 'off';
+  /**
+   * Optional explicit CacheStrategy override (v2.6+). Defaults to
+   * `getDefaultCacheStrategy(provider.name)` — so Anthropic/OpenAI/
+   * Bedrock/Mock providers auto-resolve to their respective strategies
+   * once those land in Phase 7+.
+   */
+  readonly cacheStrategy?: CacheStrategy;
 }
 
 export interface AgentInput {
@@ -189,6 +214,20 @@ interface AgentState {
   /** Tool schemas resolved by the tools slot subflow each iteration
    *  (registry + injection-supplied). Used by callLLM. */
   dynamicToolSchemas: readonly LLMToolSchema[];
+  // ── Cache layer state (v2.6) ────────────────────────────────
+  /** Provider-agnostic cache markers emitted by CacheDecision subflow.
+   *  Cleared each iteration by the SkipCaching branch when the
+   *  CacheGate decides to skip (kill switch / hit-rate / churn). */
+  cacheMarkers: readonly CacheMarker[];
+  /** Global cache kill switch from `Agent.create({ caching: 'off' })`. */
+  cachingDisabled: boolean;
+  /** Running cache hit rate from recent iterations (0..1). Computed
+   *  by cacheRecorder (Phase 9); `undefined` until first metrics. */
+  recentHitRate: number | undefined;
+  /** Rolling window of active-skill IDs across recent iterations.
+   *  Maintained by the UpdateSkillHistory function stage; consumed
+   *  by CacheGate's skill-churn rule. */
+  skillHistory: readonly (string | undefined)[];
 }
 
 export class Agent extends RunnerBase<AgentInput, AgentOutput> {
@@ -200,6 +239,27 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
   private readonly maxTokens?: number;
   private readonly maxIterations: number;
   private readonly systemPromptValue: string;
+  /**
+   * Cache policy for the base system prompt (set via
+   * `.system(text, { cache })`). Default `'always'` — base prompt is
+   * stable per-turn, ideal cache anchor. CacheDecision subflow reads
+   * this when computing the SystemPrompt slot's cache markers.
+   */
+  private readonly systemPromptCachePolicy: CachePolicy;
+  /**
+   * Global cache kill switch from `Agent.create({ caching: 'off' })`.
+   * Threaded into agent scope at seed-time as `scope.cachingDisabled`;
+   * read by the CacheGate decider every iteration (highest-priority rule).
+   */
+  private readonly cachingDisabledValue: boolean;
+  /**
+   * Provider-specific CacheStrategy. Auto-resolved from
+   * `getDefaultCacheStrategy(provider.name)` at agent build time
+   * unless the consumer explicitly passes one via builder option.
+   * Phase 7+ implementations (Anthropic, OpenAI, Bedrock) register
+   * themselves in the strategyRegistry on import.
+   */
+  private readonly cacheStrategy: CacheStrategy;
   private readonly registry: readonly ToolRegistryEntry[];
   /**
    * The Injection list — Skills, Steering, Instructions, Facts (and
@@ -285,6 +345,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     memories: readonly MemoryDefinition[] = [],
     outputSchemaParser?: OutputSchemaParser<unknown>,
     toolProvider?: ToolProvider,
+    systemPromptCachePolicy: CachePolicy = 'always',
+    cachingDisabled: boolean = false,
+    cacheStrategy?: CacheStrategy,
   ) {
     super();
     this.provider = opts.provider;
@@ -295,6 +358,11 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     this.maxTokens = opts.maxTokens;
     this.maxIterations = clampIterations(opts.maxIterations ?? 10);
     this.systemPromptValue = systemPromptValue;
+    this.systemPromptCachePolicy = systemPromptCachePolicy;
+    this.cachingDisabledValue = cachingDisabled;
+    // Auto-resolve strategy from provider.name unless caller overrides.
+    // NoOp is the wildcard fallback so unknown providers stay safe.
+    this.cacheStrategy = cacheStrategy ?? getDefaultCacheStrategy(opts.provider.name);
     this.registry = registry;
     this.injections = injections;
     this.memories = memories;
@@ -322,6 +390,16 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
 
   toFlowChart(): FlowChart {
     return this.buildChart();
+  }
+
+  /**
+   * Cache policy for the base system prompt. Read by the CacheDecision
+   * subflow (v2.6 Phase 4) to know how to treat the SystemPrompt slot's
+   * cache markers. Exposed as a method (not direct field access) so
+   * the Agent's encapsulation boundary stays clean.
+   */
+  getSystemPromptCachePolicy(): CachePolicy {
+    return this.systemPromptCachePolicy;
   }
 
   /**
@@ -498,6 +576,15 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     const pricingTable = this.pricingTable;
     const costBudget = this.costBudget;
     const permissionChecker = this.permissionChecker;
+    // Cache layer (v2.6) — capture for the seed + chart-build closures.
+    // `systemPromptCachePolicy` is fed into the CacheDecision subflow's
+    // inputMapper. `cacheStrategy` is consulted by BuildLLMRequest at
+    // run-time (Phase 7+ for the actual prepareRequest call). For
+    // Phase 6b the chart mounts the stages but BuildLLMRequest is a
+    // pass-through; Phase 7 lights up the strategy call.
+    const systemPromptCachePolicy = this.systemPromptCachePolicy;
+    const cachingDisabled = this.cachingDisabledValue;
+    const cacheStrategy = this.cacheStrategy;
 
     const seed = (scope: TypedScope<AgentState>) => {
       const args = scope.$getArgs<AgentInput>();
@@ -536,6 +623,17 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       scope.activeInjections = [];
       scope.activatedInjectionIds = [];
       scope.dynamicToolSchemas = toolSchemas;
+      // Cache layer state (v2.6) — initialized to inert defaults.
+      // CacheDecision subflow populates `cacheMarkers` per iteration;
+      // UpdateSkillHistory + CacheGate consume `cachingDisabled`,
+      // `recentHitRate`, `skillHistory`. Empty defaults mean the
+      // CacheGate falls through to 'apply-markers' on iter 1 (no
+      // history yet → no churn detected; recentHitRate undefined →
+      // hit-rate floor doesn't fire).
+      scope.cacheMarkers = [];
+      scope.cachingDisabled = cachingDisabled;
+      scope.recentHitRate = undefined;
+      scope.skillHistory = [];
 
       typedEmit(scope, 'agentfootprint.agent.turn_start', {
         turnIndex: 0,
@@ -707,7 +805,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       // slot has run for the first time.
       const activeToolSchemas =
         (scope.dynamicToolSchemas as readonly LLMToolSchema[] | undefined) ?? toolSchemas;
-      const llmRequest = {
+      const baseRequest = {
         ...(systemPrompt.length > 0 && { systemPrompt }),
         messages,
         ...(activeToolSchemas.length > 0 && { tools: activeToolSchemas }),
@@ -715,6 +813,19 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
         ...(temperature !== undefined && { temperature }),
         ...(maxTokens !== undefined && { maxTokens }),
       };
+      // v2.6+ — call cache strategy to attach provider-specific cache
+      // hints. CacheGate has already routed (apply-markers / no-markers)
+      // and populated scope.cacheMarkers accordingly. Strategy.prepareRequest
+      // is a pass-through for empty markers.
+      const cacheMarkers =
+        (scope.cacheMarkers as readonly CacheMarker[] | undefined) ?? [];
+      const cachePrepared = await cacheStrategy.prepareRequest(baseRequest, cacheMarkers, {
+        iteration,
+        iterationsRemaining: Math.max(0, maxIterations - iteration),
+        recentHitRate: scope.recentHitRate as number | undefined,
+        cachingDisabled: (scope.cachingDisabled as boolean | undefined) ?? false,
+      });
+      const llmRequest = cachePrepared.request;
 
       // Streaming-first: when the provider implements `stream()` we
       // consume chunk-by-chunk so consumers (Lens commentary, chat
@@ -1210,6 +1321,62 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
         // concatenate.
         arrayMerge: ArrayMergeMode.Replace,
       })
+      // ── Cache layer (v2.6) ─────────────────────────────────────
+      // CacheDecision subflow walks `activeInjections` + evaluates
+      // each `cache:` directive, emits provider-agnostic
+      // `CacheMarker[]` to scope. Pure transform; no IO.
+      //
+      // CRITICAL: arrayMerge: ArrayMergeMode.Replace — same lesson
+      // as the v2.5.1 InjectionEngine fix. The default footprintjs
+      // behavior CONCATENATES arrays from child to parent;
+      // `cacheMarkers` MUST replace each iteration, not accumulate.
+      .addSubFlowChartNext(SUBFLOW_IDS.CACHE_DECISION, cacheDecisionSubflow, 'CacheDecision', {
+        inputMapper: (parent) => ({
+          activeInjections: (parent.activeInjections as readonly Injection[] | undefined) ?? [],
+          iteration: (parent.iteration as number | undefined) ?? 1,
+          maxIterations: (parent.maxIterations as number | undefined) ?? maxIterations,
+          userMessage: (parent.userMessage as string | undefined) ?? '',
+          ...(parent.lastToolResult !== undefined && {
+            lastToolName: (parent.lastToolResult as { toolName: string } | undefined)?.toolName,
+          }),
+          cumulativeInputTokens: (parent.totalInputTokens as number | undefined) ?? 0,
+          systemPromptCachePolicy,
+          cachingDisabled: (parent.cachingDisabled as boolean | undefined) ?? false,
+        }),
+        outputMapper: (sf) => ({ cacheMarkers: sf.cacheMarkers }),
+        arrayMerge: ArrayMergeMode.Replace,
+      })
+      .addFunction(
+        'UpdateSkillHistory',
+        updateSkillHistoryStage as never,
+        STAGE_IDS.UPDATE_SKILL_HISTORY,
+        'Update skill-history rolling window for CacheGate churn detection',
+      )
+      .addDeciderFunction(
+        'CacheGate',
+        cacheGateDecide as never,
+        STAGE_IDS.CACHE_GATE,
+        'Gate cache-marker application: kill switch / hit-rate / skill-churn',
+      )
+      .addFunctionBranch(
+        STAGE_IDS.APPLY_MARKERS,
+        'ApplyMarkers',
+        // Pass-through stage — markers stay in scope as-is.
+        // BuildLLMRequest (Phase 7+) reads them on the next stage.
+        () => undefined,
+        'Proceed with cache markers from CacheDecision',
+      )
+      .addFunctionBranch(
+        STAGE_IDS.SKIP_CACHING,
+        'SkipCaching',
+        // Clear markers so BuildLLMRequest sees an empty list and
+        // makes the request unmodified.
+        (scope: TypedScope<AgentState>) => {
+          scope.cacheMarkers = [];
+        },
+        'Skip caching this iteration',
+      )
+      .end()
       .addFunction('IterationStart', iterationStart, 'iteration-start', 'Iteration begin marker')
       .addFunction('CallLLM', callLLM, STAGE_IDS.CALL_LLM, 'LLM invocation')
       .addDeciderFunction('Route', routeDecider, SUBFLOW_IDS.ROUTE, 'ReAct routing')
@@ -1263,6 +1430,26 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
 export class AgentBuilder {
   private readonly opts: AgentOptions;
   private systemPromptValue = '';
+  /**
+   * Cache policy for the base system prompt. Set via the optional
+   * 2nd argument to `.system(text, { cache })`. Default `'always'` —
+   * the base prompt is stable per-turn and an ideal cache anchor.
+   */
+  private systemPromptCachePolicy: CachePolicy = 'always';
+  /**
+   * Global cache kill switch. Set via `Agent.create({ caching: 'off' })`
+   * (handled in `AgentOptions` propagation). Defaults to `false`
+   * (caching enabled). When `true`, the CacheGate decider routes to
+   * `'no-markers'` every iteration regardless of other rules.
+   */
+  private cachingDisabledValue = false;
+  /**
+   * Optional explicit CacheStrategy override. Default: undefined,
+   * which means the agent auto-resolves from
+   * `getDefaultCacheStrategy(provider.name)` at construction. Power
+   * users override here for custom backends or test mocks.
+   */
+  private cacheStrategyOverride?: CacheStrategy;
   private readonly registry: ToolRegistryEntry[] = [];
   private readonly injectionList: Injection[] = [];
   private readonly memoryList: MemoryDefinition[] = [];
@@ -1300,10 +1487,33 @@ export class AgentBuilder {
 
   constructor(opts: AgentOptions) {
     this.opts = opts;
+    // Cache layer: opts.caching === 'off' propagates to scope's
+    // `cachingDisabled` kill switch read by CacheGate. opts.cacheStrategy
+    // overrides the registry-resolved default.
+    if (opts.caching === 'off') this.cachingDisabledValue = true;
+    if (opts.cacheStrategy !== undefined) this.cacheStrategyOverride = opts.cacheStrategy;
   }
 
-  system(prompt: string): this {
+  /**
+   * Set the base system prompt.
+   *
+   * @param prompt - The system prompt text. Stable per-turn.
+   * @param options - Optional config. `cache` controls how the
+   *   CacheDecision subflow treats this prompt block:
+   *   - `'always'` (default) — cache the base prompt as a stable
+   *     prefix anchor. Highest cache-hit rate; recommended for
+   *     production agents whose system prompt rarely changes.
+   *   - `'never'` — skip caching. Use if the prompt contains volatile
+   *     content (timestamps, per-request user IDs).
+   *   - `'while-active'` — semantically equivalent to `'always'` for
+   *     the base prompt (it's always active by definition).
+   *   - `{ until }` — conditional invalidation (e.g., flush after iter 5).
+   */
+  system(prompt: string, options?: { readonly cache?: CachePolicy }): this {
     this.systemPromptValue = prompt;
+    if (options?.cache !== undefined) {
+      this.systemPromptCachePolicy = options.cache;
+    }
     return this;
   }
 
@@ -1652,6 +1862,9 @@ export class AgentBuilder {
       this.memoryList,
       this.outputSchemaParser,
       this.toolProviderRef,
+      this.systemPromptCachePolicy,
+      this.cachingDisabledValue,
+      this.cacheStrategyOverride,
     );
     // Attach builder-collected recorders so they receive events from
     // the very first run. Mirrors what consumers would do post-build

@@ -30,6 +30,7 @@ Two theses:
 | Features | **[Orchestration](orchestration.md)** | `withRetry`, `withFallback`, `withCircuitBreaker` — reliability wrappers |
 | Features | **[Security](security.md)** | Tool gating, permission policy, provider fallback, resilient providers, audit trail |
 | Features | **[Streaming](streaming.md)** | Real-time lifecycle events (AgentStreamEvent), SSE, onEvent callback |
+| Features | **[Caching](caching.md)** | v2.6+ — provider-agnostic cache layer with per-injection policies; 77% token reduction on Dynamic ReAct |
 
 ---
 

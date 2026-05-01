@@ -30,6 +30,8 @@
 
 import type { ContextRole } from '../../../events/types.js';
 import type { Injection, InjectionContext, InjectionContent } from '../types.js';
+import { resolveCachePolicy } from '../../../cache/applyCachePolicy.js';
+import type { CachePolicy } from '../../../cache/types.js';
 
 export interface DefineInstructionOptions {
   readonly id: string;
@@ -65,6 +67,16 @@ export interface DefineInstructionOptions {
    * principle but rarely make pedagogical sense.
    */
   readonly role?: ContextRole;
+  /**
+   * Cache policy for this instruction. Defaults to `'never'` —
+   * instructions are typically rule-based (volatile per-iter
+   * `activeWhen` predicates, on-tool-return reminders). Override to
+   * `'always'` only for instructions you know are stable per-turn
+   * (e.g., a static safety rule wrapped as `defineInstruction` for
+   * narrative tagging — though `defineSteering` is the cleaner choice
+   * for that case).
+   */
+  readonly cache?: CachePolicy;
 }
 
 export function defineInstruction(opts: DefineInstructionOptions): Injection {
@@ -82,11 +94,13 @@ export function defineInstruction(opts: DefineInstructionOptions): Injection {
     slot === 'messages'
       ? { messages: [{ role: opts.role ?? 'system', content: opts.prompt }] }
       : { systemPrompt: opts.prompt };
+  const cache = resolveCachePolicy('instruction', opts.cache);
   return Object.freeze({
     id: opts.id,
     ...(opts.description && { description: opts.description }),
     flavor: 'instructions' as const,
     trigger,
     inject,
+    metadata: Object.freeze({ cache }),
   }) as unknown as Injection;
 }

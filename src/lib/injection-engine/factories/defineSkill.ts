@@ -29,6 +29,8 @@
 
 import type { Injection } from '../types.js';
 import type { Tool } from '../../../core/tools.js';
+import { resolveCachePolicy } from '../../../cache/applyCachePolicy.js';
+import type { CachePolicy } from '../../../cache/types.js';
 
 /**
  * Where the Skill's body lands when activated.
@@ -125,6 +127,20 @@ export interface DefineSkillOptions {
    * on this contract without API change.
    */
   readonly autoActivate?: AutoActivateMode;
+  /**
+   * Cache policy for this skill's body. Defaults to `'while-active'` —
+   * the body caches while the skill is in `activeInjections[]` (i.e.,
+   * while it's the most-recently-activated skill); invalidates the
+   * moment it deactivates.
+   *
+   * For skills with stable, frequently-accessed bodies, consider
+   * `'always'` to keep the body cached even when temporarily inactive.
+   * For skills with bodies that depend on per-iter state, use
+   * `'never'` or `{ until: ... }`.
+   *
+   * See `CachePolicy` in `agentfootprint/src/cache/types.ts`.
+   */
+  readonly cache?: CachePolicy;
 }
 
 /**
@@ -190,10 +206,14 @@ export function defineSkill(opts: DefineSkillOptions): Injection {
     // when present; absent metadata = current behavior. Forward-compat:
     // when v2.5 implements per-mode routing diversity, this field is
     // already where the runtime looks.
+    //
+    // `cache` joins the metadata bag in v2.6 — CacheDecision subflow
+    // reads `metadata.cache` to know how to treat this skill's body.
     metadata: Object.freeze({
       surfaceMode: opts.surfaceMode ?? 'auto',
       ...(opts.refreshPolicy && { refreshPolicy: opts.refreshPolicy }),
       ...(opts.autoActivate && { autoActivate: opts.autoActivate }),
+      cache: resolveCachePolicy('skill', opts.cache),
     }),
   }) as unknown as Injection;
 }

@@ -31,6 +31,9 @@ export const SUBFLOW_IDS = {
   MERGE: 'sf-merge',
   /** Final-answer composition inside Agent. */
   FINAL: 'sf-final',
+  /** Cache decision subflow (v2.6). Walks activeInjections, emits
+   *  agnostic CacheMarker[]. Provider-independent. */
+  CACHE_DECISION: 'sf-cache-decision',
 } as const;
 
 export type SubflowId = (typeof SUBFLOW_IDS)[keyof typeof SUBFLOW_IDS];
@@ -43,6 +46,21 @@ export const STAGE_IDS = {
   FORMAT_MERGE: 'format-merge',
   MERGE_LLM: 'merge-llm',
   EXTRACT_MERGE: 'extract-merge',
+  /** Updates the rolling skill-history window before CacheGate
+   *  evaluates skill-churn (v2.6). */
+  UPDATE_SKILL_HISTORY: 'update-skill-history',
+  /** CacheGate decider stage — routes to apply-markers / no-markers
+   *  based on kill switch / hit rate / skill churn (v2.6). */
+  CACHE_GATE: 'cache-gate',
+  /** CacheGate branch (routing key) when markers SHOULD be applied
+   *  this iteration. Pass-through stage; markers stay in scope. (v2.6) */
+  APPLY_MARKERS: 'apply-markers',
+  /** CacheGate branch (routing key) when markers should be SKIPPED
+   *  this iteration. Stage clears scope.cacheMarkers. (v2.6) */
+  SKIP_CACHING: 'no-markers',
+  /** BuildLLMRequest stage — calls strategy.prepareRequest to apply
+   *  markers to the wire request (v2.6). */
+  BUILD_LLM_REQUEST: 'build-llm-request',
 } as const;
 
 export type StageId = (typeof STAGE_IDS)[keyof typeof STAGE_IDS];

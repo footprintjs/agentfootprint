@@ -54,6 +54,17 @@ export interface LLMRequest {
   readonly maxTokens?: number;
   readonly stop?: readonly string[];
   readonly signal?: AbortSignal;
+  /**
+   * Cache markers (v2.6+) — provider-agnostic prefix-cache hints
+   * populated by `CacheStrategy.prepareRequest` after the agent's
+   * CacheGate decider routes to `apply-markers`. Each marker
+   * identifies a cacheable prefix in `system` / `tools` / `messages`.
+   *
+   * Providers that support caching (Anthropic, Bedrock-Claude) read
+   * this field and translate to their wire format. Providers without
+   * cache support (OpenAI auto-cache, Mock, NoOp) ignore it.
+   */
+  readonly cacheMarkers?: readonly import('../cache/types.js').CacheMarker[];
 }
 
 export interface LLMResponse {

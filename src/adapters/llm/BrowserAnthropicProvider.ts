@@ -289,7 +289,81 @@ function buildBody(
   if (req.tools && req.tools.length > 0) body.tools = req.tools.map(toAnthropicTool);
   if (req.temperature !== undefined) body.temperature = req.temperature;
   if (req.stop && req.stop.length > 0) body.stop_sequences = [...req.stop];
+  // v2.6+ cache markers — applied AFTER body construction so we have
+  // the materialized fields (system / tools / messages) to mark.
+  // Markers are clamped to Anthropic's 4-marker limit by
+  // AnthropicCacheStrategy before we get here, so the loop below
+  // doesn't need to enforce.
+  if (req.cacheMarkers && req.cacheMarkers.length > 0) {
+    applyCacheMarkers(body, req.cacheMarkers);
+  }
   return body;
+}
+
+/**
+ * Apply CacheMarker[] to an Anthropic request body in-place.
+ *
+ * Per-field positional rules (Anthropic API):
+ *   - `system`: convert from `string` → array of text blocks; mark
+ *     the block at `boundaryIndex` (clamped to last block) with
+ *     `cache_control`. We currently put the whole system prompt in
+ *     ONE block, so any system marker effectively caches the whole
+ *     prompt. Splitting into per-injection blocks is a v2.7+ refinement.
+ *   - `tools`: mark the tool at `boundaryIndex` (clamped to last tool).
+ *   - `messages`: mark the LAST content block of the LAST message in
+ *     the cacheable prefix. Anthropic only honors cache_control on
+ *     the final content block of the final cached message.
+ */
+function applyCacheMarkers(
+  body: AnthropicRequestBody,
+  markers: readonly { field: string; boundaryIndex: number; ttl: 'short' | 'long' }[],
+): void {
+  for (const m of markers) {
+    const cacheControl =
+      m.ttl === 'long'
+        ? { type: 'ephemeral' as const, ttl: '1h' as const }
+        : { type: 'ephemeral' as const };
+    if (m.field === 'system') {
+      // Convert string system → array form so we can attach
+      // cache_control. v2.6 ships single-block system prompt; v2.7
+      // may split per-injection for finer cache boundaries.
+      if (typeof body.system === 'string') {
+        body.system = [
+          {
+            type: 'text',
+            text: body.system,
+            cache_control: cacheControl,
+          },
+        ] as unknown as string;
+      }
+    } else if (m.field === 'tools' && body.tools && body.tools.length > 0) {
+      const idx = Math.min(m.boundaryIndex, body.tools.length - 1);
+      const tool = body.tools[idx] as AnthropicTool & {
+        cache_control?: typeof cacheControl;
+      };
+      tool.cache_control = cacheControl;
+    } else if (m.field === 'messages' && body.messages.length > 0) {
+      // Mark the LAST content block of the LAST message in the
+      // cacheable prefix. Anthropic ONLY honors cache_control there.
+      const msgIdx = Math.min(m.boundaryIndex, body.messages.length - 1);
+      const msg = body.messages[msgIdx];
+      // String content → wrap in array so we can attach cache_control
+      if (typeof msg.content === 'string') {
+        (body.messages[msgIdx] as { content: AnthropicContentBlock[] }).content = [
+          {
+            type: 'text',
+            text: msg.content,
+            cache_control: cacheControl,
+          } as AnthropicContentBlock & { cache_control: typeof cacheControl },
+        ];
+      } else if (Array.isArray(msg.content) && msg.content.length > 0) {
+        const last = msg.content[msg.content.length - 1] as AnthropicContentBlock & {
+          cache_control?: typeof cacheControl;
+        };
+        last.cache_control = cacheControl;
+      }
+    }
+  }
 }
 
 function toAnthropicMessages(messages: readonly LLMMessage[]): AnthropicMessageParam[] {

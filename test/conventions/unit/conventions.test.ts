@@ -13,7 +13,7 @@ import {
 } from '../../../src/conventions.js';
 
 describe('SUBFLOW_IDS — single source of truth', () => {
-  it('has exactly the 8 known subflow IDs', () => {
+  it('has exactly the 9 known subflow IDs', () => {
     const expected = [
       'sf-injection-engine',
       'sf-system-prompt',
@@ -23,6 +23,7 @@ describe('SUBFLOW_IDS — single source of truth', () => {
       'sf-tool-calls',
       'sf-merge',
       'sf-final',
+      'sf-cache-decision',
     ];
     const actual = Object.values(SUBFLOW_IDS).sort();
     expect(actual).toEqual(expected.sort());
@@ -36,10 +37,23 @@ describe('SUBFLOW_IDS — single source of truth', () => {
 });
 
 describe('STAGE_IDS — single source of truth', () => {
-  it('has the 6 known stage IDs', () => {
+  it('has the 11 known stage IDs', () => {
     const actual = Object.values(STAGE_IDS).sort();
     expect(actual).toEqual(
-      ['seed', 'call-llm', 'final', 'format-merge', 'merge-llm', 'extract-merge'].sort(),
+      [
+        'seed',
+        'call-llm',
+        'final',
+        'format-merge',
+        'merge-llm',
+        'extract-merge',
+        // Cache layer (v2.6+):
+        'update-skill-history',
+        'cache-gate',
+        'apply-markers',
+        'no-markers',
+        'build-llm-request',
+      ].sort(),
     );
   });
 });
