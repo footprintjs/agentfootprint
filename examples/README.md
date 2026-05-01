@@ -202,6 +202,7 @@ _Run `npm run examples:readme` after adding/editing examples._
 | 04 | [`04-observability.ts`](features/04-observability.ts) | Observability — enable.thinking + enable.logging | One-liner Tier-3 observability: .enable.thinking for status line + .enable.logging for firehose structured logs. |
 | 05 | [`05-events.ts`](features/05-events.ts) | Events — typed .on() + wildcards + runner.emit() | The 47-event typed registry: .on(type, listener) is compile-time checked; wildcards (* / domain.*) for broad subscriptions; runner.emit() for consumer events. |
 | 06 | [`06-flowchart-boundary-payloads.ts`](features/06-flowchart-boundary-payloads.ts) | Flowchart — subflow boundary payloads (entry/exit) | Every subflow StepNode carries entryPayload + exitPayload sourced from footprintjs BoundaryRecorder. Bound by runtimeStageId. |
+| 06 | [`06-status-subpath.ts`](features/06-status-subpath.ts) | Status subpath — selectThinkingState + renderThinkingLine + templates | Low-level chat-bubble status: derive ThinkingState from events, render via per-tool templates with var interpolation. Sister to enable.thinking; this is the primitive consumers compose into custom UIs. |
 | 07 | [`07-mock-multi-turn-replies.ts`](features/07-mock-multi-turn-replies.ts) | Mock — scripted multi-turn replies (deterministic ReAct) | mock({ replies: [...] }) drives a tool-using ReAct loop with exact,  |
 
 ### [`canonical/`](canonical/) — end-to-end patterns
