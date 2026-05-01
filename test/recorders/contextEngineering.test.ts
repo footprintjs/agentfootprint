@@ -244,7 +244,7 @@ describe('contextEngineering — properties', () => {
 
 describe('contextEngineering — security', () => {
   it('throwing inner unsub does not break detach for sibling subscriptions', () => {
-    let goodCalled = false;
+    const goodCalled = false;
     const fake = {
       on: () => {
         // Mix one throwing unsub with one normal unsub

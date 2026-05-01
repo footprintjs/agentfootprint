@@ -28,7 +28,7 @@ import {
 
 // ─── Fixtures ─────────────────────────────────────────────────────
 
-function fakeTool(name: string, body: string = 'ok'): Tool {
+function fakeTool(name: string, body = 'ok'): Tool {
   return defineTool({
     name,
     description: name,

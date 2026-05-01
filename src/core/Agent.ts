@@ -346,7 +346,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     outputSchemaParser?: OutputSchemaParser<unknown>,
     toolProvider?: ToolProvider,
     systemPromptCachePolicy: CachePolicy = 'always',
-    cachingDisabled: boolean = false,
+    cachingDisabled = false,
     cacheStrategy?: CacheStrategy,
   ) {
     super();
