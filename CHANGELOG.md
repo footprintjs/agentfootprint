@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.7.2]
+
+**Docs + example for the `agentfootprint/status` subpath.**
+
+The v2.7.0 subpath shipped without a runnable example. v2.7.2 adds:
+
+- **`examples/features/06-status-subpath.ts`** — runnable end-to-end
+  example. Subscribes to `'*'` (the global wildcard), feeds events to
+  `selectThinkingState`, renders via `renderThinkingLine` with
+  per-tool template overrides. Same path Neo's chat-bubble feed uses.
+  Now part of the CI sweep — future regressions in the subpath get
+  caught before release.
+- **`examples/features/06-status-subpath.md`** — companion guide.
+  Explains the state machine, the renderer, built-in template vars
+  (`{{appName}}` / `{{toolName}}` / `{{toolCallId}}` / `{{partial}}` /
+  `{{question}}`), and where consumers need to walk events directly
+  for arg-aware templates.
+- **README — "Chat-bubble status surface" bullet** in "What ships
+  today", linking the high-level `enable.thinking` and low-level
+  `agentfootprint/status` paths so consumers see both.
+
+No code change. Tests still 1630/1630.
+
 ## [2.7.1]
 
 **Docs fix: `'agentfootprint.*'` is NOT a valid wildcard pattern.**

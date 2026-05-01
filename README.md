@@ -505,6 +505,7 @@ Every code snippet on the docs site is imported from a real, runnable file in [`
 - **MCP** — `mcpClient({ transport })` for real servers · `mockMcpClient({ tools })` for in-memory development
 - **Memory store adapters** — `InMemoryStore` · `RedisStore` (subpath `agentfootprint/memory-redis`) · `AgentCoreStore` (subpath `agentfootprint/memory-agentcore`)
 - **48+ typed observability events** across context · stream · agent · cost · skill · permission · eval · memory · cache · embedding · error · …
+- **Chat-bubble status surface** — `agent.enable.thinking({ onStatus })` for one-callback Claude-Code-style updates · `agentfootprint/status` subpath (`selectThinkingState` · `renderThinkingLine` · `defaultThinkingTemplates`) for custom UIs with per-tool template overrides + locale switching — see [`examples/features/06-status-subpath.md`](./examples/features/06-status-subpath.md)
 - **Pause / resume** — JSON-serializable checkpoints; pause via `askHuman` / `pauseHere`, resume hours later on a different server
 - **Resilience** — `withRetry`, `withFallback`, `resilientProvider`
 - **AI-coding-tool support** — bundled instructions for Claude Code · Cursor · Windsurf · Cline · Kiro · Copilot (see `ai-instructions/`)
