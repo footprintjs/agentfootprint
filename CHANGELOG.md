@@ -5,6 +5,55 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.7.0]
+
+**New `agentfootprint/status` subpath** — chat-bubble status surface.
+
+Tiny addition (one re-export file + one `package.json` exports entry)
+that brings the thinking-state primitives in line with the rest of the
+library's subpath organization:
+
+| Subpath | What's in it |
+|---|---|
+| `agentfootprint/observe` | BoundaryRecorder, StepGraph, FlowchartRecorder |
+| `agentfootprint/locales` | composeMessages, validateMessages, defaultThinkingMessages |
+| `agentfootprint/status` ← **new** | selectThinkingState, renderThinkingLine, defaultThinkingTemplates, types |
+| `agentfootprint/tool-providers` | staticTools, gatedTools, … |
+
+### Why
+
+Consumers building chat UIs / status indicators / Lens-style live
+panels can now opt-in explicitly:
+
+```typescript
+// Before (still works — back-compat preserved)
+import { selectThinkingState, renderThinkingLine } from 'agentfootprint';
+
+// After (preferred for new code)
+import { selectThinkingState, renderThinkingLine } from 'agentfootprint/status';
+```
+
+The import line is self-documenting (matches `agentfootprint/observe`
+and `agentfootprint/locales` naming). Bundler tree-shaking is more
+explicit. Future extended-thinking primitives (Anthropic
+`thinking_delta` / `redacted_thinking`) will land here too without
+inflating the main entry.
+
+### What's exported
+
+- `selectThinkingState(events)` — derive current state (idle / tool /
+  streaming / paused / null) from the typed event log
+- `renderThinkingLine(state, templates, ctx)` — resolve template +
+  substitute vars to a final string
+- `defaultThinkingTemplates` — bundled English defaults
+- `type ThinkingTemplates` / `ThinkingState` / `ThinkingStateKind` /
+  `ThinkingContext`
+
+### Migration
+
+Zero breaking changes. Main `agentfootprint` exports unchanged. New
+code uses the subpath; old code keeps working indefinitely.
+
 ## [2.6.4]
 
 **Fix: v2.6 cache-layer subflows leaked as fake user-visible steps in

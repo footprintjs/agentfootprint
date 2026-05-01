@@ -153,6 +153,11 @@
       "types": "./dist/types/locales/index.d.ts",
       "import": "./dist/esm/locales/index.js",
       "require": "./dist/locales/index.js"
+    },
+    "./status": {
+      "types": "./dist/types/status.d.ts",
+      "import": "./dist/esm/status.js",
+      "require": "./dist/status.js"
     }
   },
   "sideEffects": false,
