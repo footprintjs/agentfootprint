@@ -56,6 +56,18 @@ if ! npm run format; then
 fi
 echo "[2.75/8] Format check ✓"
 
+# ── Gate 2.85: Lint check (errors only — warnings tolerated for now) ────
+# CI on main runs eslint and FAILS on any error. Gate it here so the
+# release script catches the same problem before we tag a version that
+# would ship to npm with lint errors. Run with --max-warnings=Infinity
+# so pre-existing warnings don't block; only errors fail the gate.
+echo "==> Checking lint (errors only)..."
+if ! npm run lint --silent -- --max-warnings=99999; then
+  echo "Error: Lint errors found. Run 'npm run lint:fix' to auto-fix where possible."
+  exit 1
+fi
+echo "[2.85/8] Lint check ✓"
+
 # ── Gate 3: Build ───────────────────────────────────────────────────────
 echo "==> Building (CJS + ESM)..."
 npm run build
@@ -146,6 +158,7 @@ echo "  1.    Clean tree              ✓"
 echo "  2.    Doc check               ✓  (0 stale API refs)"
 echo "  2.5   Dup type check          ✓  (no duplicate exported type names)"
 echo "  2.75  Format check            ✓  (prettier clean)"
+echo "  2.85  Lint check              ✓  (eslint errors = 0)"
 echo "  3.    Build                   ✓  (CJS + ESM)"
 echo "  4.    Full test suite         ✓"
 echo "  5.    Examples                ✓  (typecheck + tsx end-to-end run)"

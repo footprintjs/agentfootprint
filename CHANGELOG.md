@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.6.1]
+
+**Lint cleanup + release-pipeline hardening.** v2.6.0 shipped with three
+trivial eslint errors (`prefer-const`, `no-inferrable-types`) in cache
+files and pre-existing test files. The release script's 8 gates didn't
+include lint — only docs / format / build / tests / examples — so the
+errors slipped through. Two-part fix:
+
+1. **Source fix** — auto-applied via `eslint --fix`. Three lines changed
+   across `src/core/Agent.ts`, `test/core/agent-toolprovider.test.ts`,
+   and `test/recorders/contextEngineering.test.ts`. No behavior change.
+2. **Process fix** — added Gate 2.85 to `scripts/release.sh`:
+   `npm run lint --max-warnings=99999`. Errors fail the gate; warnings
+   tolerated for now (334 pre-existing non-null-assertion warnings need
+   a separate cleanup pass).
+
+Net: all 1627 tests still pass; CI is green; future releases can't
+ship with eslint errors.
+
 ## [2.6.0]
 
 **Provider-agnostic prompt caching.** Dynamic ReAct repeats the same
