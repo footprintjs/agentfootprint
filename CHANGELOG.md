@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.6.2]
+
+**Docs: tool-dependency framing for Dynamic ReAct + remove application-specific
+references.** Two unrelated docs cleanups bundled together:
+
+1. **README — sharper rule for when to use Dynamic ReAct.** The previous
+   benchmark-heavy section (4 sub-sections, multi-model token tables,
+   parallelization caveats) led with the wrong heuristic ("30+ tools across
+   8+ skills"). Replaced with the clearer rule: **use Dynamic ReAct when
+   your tools have dependencies — when one tool's output implies which tool
+   to call next.** Skills encode that workflow. If tools are independent
+   and order doesn't matter, Classic is fine. The side-by-side example +
+   "what Dynamic gives you that Classic doesn't" list is preserved; the
+   noisy benchmark tables are gone.
+
+2. **Removed all application-specific references.** Earlier docs referred
+   to "Neo" (a Cisco MDS Fibre Channel triage agent used internally for
+   benchmarking) by name. Generic phrasing now: "production-shaped Skills
+   agent (10 skills, 18 tools after dedup)." Affected: README.md,
+   CHANGELOG.md (2.6.0 + 2.5.0 entries), docs/guides/caching.md,
+   examples/dynamic-react/README.md.
+
+No code change. 1627/1627 tests still pass.
+
 ## [2.6.1]
 
 **Lint cleanup + release-pipeline hardening.** v2.6.0 shipped with three
@@ -63,9 +87,10 @@ cache hints land on the wire automatically.
 - **`Agent.create({ caching: 'on' | 'off' })`** — top-level kill switch
   (defaults to `'on'`).
 
-### Validated on Neo MDS triage benchmark
+### Validated on a production-shaped Skills agent
 
-Same task ("Investigate port errors on SHNETWPLPSW903"), same scenario:
+Same task, same scenario, against the live Anthropic API on a
+10-skill / 18-tool agent:
 
 | Mode (Sonnet 4.5) | cache=off | cache=on | Δ |
 |---|---|---|---|
@@ -151,7 +176,7 @@ These would have caught the v2.5.0 bug. Suite: 1490 → 1493.
 ### v1 marketing claim correction
 
 v2.5.0's README claimed "Dynamic ReAct cuts input tokens 30–70%."
-The Neo benchmark shows this is **not universal** at sub-30-tool
+The real-world benchmark above shows this is **not universal** at sub-30-tool
 scale. The corrected README now shows the real 3-model comparison
 and explains:
 

@@ -123,9 +123,9 @@ const myStrategy: CacheStrategy = {
 registerCacheStrategy('my-provider', myStrategy);
 ```
 
-## Real-world numbers (Neo MDS triage benchmark)
+## Real-world numbers (production-shaped Skills agent)
 
-Same task ("Investigate port errors on SHNETWPLPSW903"), same scenario, three context-engineering modes:
+Same task, same scenario, three context-engineering modes — measured on a 10-skill / 18-tool agent against the live Anthropic API:
 
 | Mode | What's in the system prompt | cache=off | cache=on | Δ |
 |---|---|---|---|---|

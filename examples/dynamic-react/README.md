@@ -55,9 +55,8 @@ has no equivalent — every registered tool ships every iteration.
 
 ## Why this matters at scale
 
-A real production agent like Neo (MDS Fibre Channel triage) has
-**10 skills × ~4 tools each = 40+ tools**. Same 5-iteration
-investigation:
+A real production agent with **10 skills × ~4 tools each = 40+ tools**
+running the same 5-iteration investigation:
 
 ```
 Classic ReAct:    5 iters × 40 tools                 = 200 descriptions
