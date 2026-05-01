@@ -9,7 +9,7 @@ description: How to debug an agentfootprint agent — typed events, narrative en
 
 | Surface | When to use |
 |---|---|
-| **Typed event listeners** | Mid-run debugging in tests / dev (`agent.on('agentfootprint.*', ...)`) |
+| **Typed event listeners** | Mid-run debugging in tests / dev — `agent.on('*', ...)` for every event, or `agent.on('agentfootprint.stream.*', ...)` per-domain |
 | **Narrative recorder** | Post-run human-readable trace ("what happened, in order") |
 | **Time-travel checkpoint** | Replay decisions cross-process, cross-day (Causal memory snapshot) |
 

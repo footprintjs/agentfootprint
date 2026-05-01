@@ -367,8 +367,10 @@ agent.on('agentfootprint.stream.tool_start', (e) =>
 agent.on('agentfootprint.agent.turn_end', (e) =>
   console.log(`[${e.payload.iterationCount} iter, tokens=${e.payload.totalInputTokens}+${e.payload.totalOutputTokens}]`));
 
-// Wildcards work
-agent.on('agentfootprint.*', (e) => log(e));
+// Wildcards: '*' for every event, or 'agentfootprint.<domain>.*' per-domain.
+// 'agentfootprint.*' is NOT a valid pattern — silently matches nothing.
+agent.on('*', (e) => log(e));
+agent.on('agentfootprint.stream.*', (e) => log(e));
 ```
 
 ## Anti-patterns — Don't

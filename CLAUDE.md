@@ -426,7 +426,7 @@ agent.on('agentfootprint.agent.turn_end', (e) =>
   console.log(`[${e.payload.iterationCount} iter, ${e.payload.totalInputTokens}+${e.payload.totalOutputTokens} tokens]`));
 ```
 
-Wildcard `.on('agentfootprint.*', ...)` works. All events typed via `AgentfootprintEventMap`.
+Wildcards: `.on('*', ...)` for every event, or `.on('agentfootprint.<domain>.*', ...)` per-domain (`agent`, `stream`, `context`, `tools`, `memory`, `cost`, `error`, …). `'agentfootprint.*'` is NOT a valid pattern — the dispatcher accepts `'*'` or `'agentfootprint.<DOMAIN>.*'` only. All events typed via `AgentfootprintEventMap`.
 
 Recorders (auto-attached when relevant builder method is called):
 - `ContextRecorder` — `context.evaluated` / `context.injected` / `context.slot_composed`

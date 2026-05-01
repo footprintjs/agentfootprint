@@ -5,6 +5,48 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.7.1]
+
+**Docs fix: `'agentfootprint.*'` is NOT a valid wildcard pattern.**
+
+Four docs incorrectly told consumers to subscribe via
+`agent.on('agentfootprint.*', listener)`:
+
+- `CLAUDE.md` line 429
+- `AGENTS.md` line 429
+- `docs-site/.../debug.mdx` line 12
+- `ai-instructions/claude-code/SKILL.md` line 371
+
+The `EventDispatcher` only accepts:
+
+| Pattern | Match |
+|---|---|
+| `'*'` | every event |
+| `'agentfootprint.<domain>.*'` | every event in one domain (15 domains: `agent`, `stream`, `context`, `tools`, `memory`, `cost`, `error`, `pause`, `embedding`, …) |
+| Specific type | one event |
+
+`'agentfootprint.*'` (just the namespace, no domain) silently matches
+nothing — the dispatcher's wildcard table doesn't include it. TypeScript
+catches it via `WildcardSubscription`, but consumers using `as never`
+casts (or following these docs verbatim) hit silent zero-match: agent
+runs, no events fire on the listener, chat UIs stay frozen on initial
+state.
+
+This bit a real consumer (Neo's chat-feed status bubble) — the
+listener subscribed via the broken pattern, no events arrived, the
+bubble stayed stuck on "Getting started…" through the entire run even
+though the agent completed successfully and Lens received its events
+through a different (correct) path.
+
+### Fix
+
+All 4 docs updated to:
+- Recommend `'*'` for global subscription
+- Document `'agentfootprint.<domain>.*'` for per-domain
+- Explicitly call out that `'agentfootprint.*'` is invalid
+
+No code change. No behavior change. Tests still 1630/1630.
+
 ## [2.7.0]
 
 **New `agentfootprint/status` subpath** — chat-bubble status surface.
