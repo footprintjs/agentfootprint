@@ -21,6 +21,7 @@ The academic shoulders agentfootprint stands on, organized into two pillars.
 |---|---|---|
 | **THE WHY** | [connected-data-palantir.md](./connected-data-palantir.md) | Palantir's 2003 thesis (connect data, not analysts) returns at agent runtime. Disconnected state burns iterations and tokens. agentfootprint connects four classes of agent data (state · decisions · execution · memory). |
 | **THE HOW** | [modularity-liskov.md](./modularity-liskov.md) | Liskov's ADT + LSP work, applied to flowcharts. Subflows are CLU clusters. CacheStrategy / LLMProvider / ToolProvider are LSP-substitutable. Locality of reasoning is enforced as a runtime invariant. |
+| **THE SCALING SPINE** | [strategy-everywhere.md](./strategy-everywhere.md) | Strategy + Bridge + Hexagonal + Algebraic-Effects, applied as ONE pattern across cache / observability / cost / status / lens. v2.6 cache layer is the proof-of-concept; v2.8 generalizes it. AWS-first vendor priority (AgentCore observability → CloudWatch → X-Ray). |
 
 Future entries (planned): the ReAct paper · Parnas information hiding · Hewitt actors · Anthropic Skills · flow-based programming.
 

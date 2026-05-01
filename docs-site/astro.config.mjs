@@ -155,6 +155,7 @@ export default defineConfig({
             { label: 'Why this design (overview)', slug: 'inspiration' },
             { label: 'Connected data — Palantir lineage', slug: 'inspiration/connected-data-palantir' },
             { label: 'Modularity — Liskov lineage', slug: 'inspiration/modularity-liskov' },
+            { label: 'Strategy everywhere — port/adapter scaling spine', slug: 'inspiration/strategy-everywhere' },
           ],
         },
         {

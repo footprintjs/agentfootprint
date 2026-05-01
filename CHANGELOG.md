@@ -5,6 +5,56 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.7.3]
+
+**Design memo: `strategy-everywhere.md` — AWS-first vendor adapter
+roadmap for v2.8+.**
+
+The v2.6 cache layer proved out a pattern: one DSL, N vendor
+strategies, side-effect-import auto-registration, wildcard fallback.
+Sonnet Dynamic ReAct dropped 36,322 → 6,535 input tokens (−82%) end
+to end. v2.8+ generalizes this as the universal architectural pattern.
+
+This release adds the design memo only — no code changes, no API
+surface changes. Implementation lands in v2.8.0+ across separate
+minors per vendor adapter.
+
+### What the memo covers
+
+- **Pattern lineage**: Strategy Pattern (GoF) + Bridge + Hexagonal +
+  Provider model (.NET) + Algebraic effects (Plotkin/Pretnar). Same
+  architectural shape, 5 names.
+- **4 groups in scope for v2.8**: `enable.observability`, `enable.cost`,
+  `enable.liveStatus`, `enable.lens` — each gets a strategy slot.
+- **AWS-first adapter priority**: builds on the existing
+  `memory-agentcore` peer-dep precedent. v2.8.1 ships
+  `observability-agentcore` (AWS Bedrock AgentCore Observability —
+  same SDK consumers already imported for memory). v2.8.2 ships
+  `observability-cloudwatch`. v2.8.3 ships `observability-xray`.
+  Non-AWS adapters (OTel, Datadog, Pino) follow in v2.9.x.
+- **Locked-in design decisions** from a 7-expert panel review (AWS
+  IAM, Datadog, OTel, Stripe, Vercel, React, Anthropic): discriminated
+  union options, idempotent stop, tier knob with cost-of-on docs,
+  sample-rate, dry-run mode for audit, zero-arg defaults, dev/prod
+  auto-detect, `compose([...])` combinator.
+- **Migration plan**: v2.8.0 additive; v3.0 removes deprecated flat
+  `enable.thinking` / `enable.logging` / `enable.flowchart`.
+- **Approval gates** before v2.8.0 implementation: strategy interface
+  signatures locked, 1 vendor adapter prototyped end-to-end (suggest
+  AgentCore as the first), mock-strategy contract test,
+  performance baseline (`compose([...])` of 5 children must add ≤ 5%
+  overhead).
+
+### Files
+
+- `docs/inspiration/strategy-everywhere.md` (canonical)
+- `docs-site/src/content/docs/inspiration/strategy-everywhere.mdx` (mirrored)
+- `docs-site/astro.config.mjs` (sidebar entry)
+- `docs/inspiration/README.md` (index updated — third pillar after
+  Palantir/Liskov: "the scaling spine")
+
+No code change. 1630/1630 tests pass.
+
 ## [2.7.2]
 
 **Docs + example for the `agentfootprint/status` subpath.**
