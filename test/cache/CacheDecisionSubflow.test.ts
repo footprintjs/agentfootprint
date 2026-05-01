@@ -66,15 +66,13 @@ function makeInjection(opts: {
  * Tests call the pure transform directly. The subflow body is a thin
  * scope-binding wrapper exercised by the integration tests in Phase 5+.
  */
-function runSubflow(
-  state: Omit<CacheDecisionState, 'cacheMarkers'>,
-): readonly CacheMarker[] {
+function runSubflow(state: Omit<CacheDecisionState, 'cacheMarkers'>): readonly CacheMarker[] {
   return computeCacheMarkers(state);
 }
 
 // ─── 1. Unit — evaluateCachePolicy correctness ────────────────────
 
-describe("evaluateCachePolicy — unit", () => {
+describe('evaluateCachePolicy — unit', () => {
   it("'always' returns true regardless of context", () => {
     expect(evaluateCachePolicy('always', makeContext())).toBe(true);
     expect(evaluateCachePolicy('always', makeContext({ iteration: 99 }))).toBe(true);
@@ -88,13 +86,13 @@ describe("evaluateCachePolicy — unit", () => {
     expect(evaluateCachePolicy('while-active', makeContext())).toBe(true);
   });
 
-  it("{ until } predicate: cacheable when predicate returns false", () => {
+  it('{ until } predicate: cacheable when predicate returns false', () => {
     const pol: CachePolicy = { until: (c) => c.iteration > 5 };
     expect(evaluateCachePolicy(pol, makeContext({ iteration: 3 }))).toBe(true);
     expect(evaluateCachePolicy(pol, makeContext({ iteration: 6 }))).toBe(false);
   });
 
-  it("{ until } predicate: composition with cumulativeInputTokens budget", () => {
+  it('{ until } predicate: composition with cumulativeInputTokens budget', () => {
     const pol: CachePolicy = { until: (c) => c.cumulativeInputTokens > 50_000 };
     expect(evaluateCachePolicy(pol, makeContext({ cumulativeInputTokens: 30_000 }))).toBe(true);
     expect(evaluateCachePolicy(pol, makeContext({ cumulativeInputTokens: 60_000 }))).toBe(false);
@@ -165,9 +163,7 @@ describe('CacheDecision subflow — boundary', () => {
 
   it('cachingDisabled=true short-circuits to zero markers', async () => {
     const markers = await runSubflow({
-      activeInjections: [
-        makeInjection({ id: 's1', cache: 'always', systemPrompt: 'rule' }),
-      ],
+      activeInjections: [makeInjection({ id: 's1', cache: 'always', systemPrompt: 'rule' })],
       iteration: 1,
       maxIterations: 5,
       userMessage: 'go',
@@ -314,7 +310,7 @@ describe('CacheDecision subflow — properties', () => {
 // ─── 5. Security — defensive fail-closed ──────────────────────────
 
 describe('CacheDecision subflow — security', () => {
-  it("predicate that throws fails-closed (cacheable=false)", () => {
+  it('predicate that throws fails-closed (cacheable=false)', () => {
     const policy: CachePolicy = {
       until: () => {
         throw new Error('oops');
@@ -323,7 +319,7 @@ describe('CacheDecision subflow — security', () => {
     expect(evaluateCachePolicy(policy, makeContext())).toBe(false);
   });
 
-  it("unknown policy form fails-closed (cacheable=false)", () => {
+  it('unknown policy form fails-closed (cacheable=false)', () => {
     // Force an invalid shape via cast — simulates a buggy consumer or
     // future format we don't recognize. Must not crash; must not cache.
     const bogus = 'sometimes' as unknown as CachePolicy;

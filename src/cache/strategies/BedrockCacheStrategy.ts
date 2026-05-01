@@ -44,11 +44,7 @@ const BEDROCK_CAPABILITIES: CacheCapabilities = Object.freeze({
   enabled: true,
   maxMarkers: BEDROCK_MAX_MARKERS,
   ttls: ['short', 'long'] as readonly ('short' | 'long')[],
-  fields: ['system', 'tools', 'messages'] as readonly (
-    | 'system'
-    | 'tools'
-    | 'messages'
-  )[],
+  fields: ['system', 'tools', 'messages'] as readonly ('system' | 'tools' | 'messages')[],
   automatic: false,
 });
 

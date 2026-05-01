@@ -64,10 +64,7 @@ export interface CacheDecisionState {
  * Evaluate a `CachePolicy` against the current context.
  * Returns `true` if the policy says THIS iteration's content is cacheable.
  */
-export function evaluateCachePolicy(
-  policy: CachePolicy,
-  ctx: CachePolicyContext,
-): boolean {
+export function evaluateCachePolicy(policy: CachePolicy, ctx: CachePolicyContext): boolean {
   if (policy === 'always') return true;
   if (policy === 'never') return false;
   if (policy === 'while-active') {

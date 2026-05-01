@@ -25,18 +25,19 @@ const sonnetPricing: PricingTable = {
   name: 'sonnet-4-5',
   pricePerToken(_model: string, kind: TokenKind): number {
     switch (kind) {
-      case 'input': return 3 / 1_000_000;
-      case 'output': return 15 / 1_000_000;
-      case 'cacheRead': return 0.3 / 1_000_000; // 10% of input
-      case 'cacheWrite': return 3.75 / 1_000_000; // 125% of input
+      case 'input':
+        return 3 / 1_000_000;
+      case 'output':
+        return 15 / 1_000_000;
+      case 'cacheRead':
+        return 0.3 / 1_000_000; // 10% of input
+      case 'cacheWrite':
+        return 3.75 / 1_000_000; // 125% of input
     }
   },
 };
 
-function decisionEvent(
-  branch: 'apply-markers' | 'no-markers',
-  rule?: string,
-): FlowDecisionEvent {
+function decisionEvent(branch: 'apply-markers' | 'no-markers', rule?: string): FlowDecisionEvent {
   return {
     decider: 'cache-gate',
     chosen: branch,

@@ -28,10 +28,12 @@ const ctx = (overrides: Partial<CacheStrategyContext> = {}): CacheStrategyContex
   ...overrides,
 });
 
-const m = (
-  field: 'system' | 'tools' | 'messages',
-  boundaryIndex: number,
-): CacheMarker => ({ field, boundaryIndex, ttl: 'short', reason: 'test' });
+const m = (field: 'system' | 'tools' | 'messages', boundaryIndex: number): CacheMarker => ({
+  field,
+  boundaryIndex,
+  ttl: 'short',
+  reason: 'test',
+});
 
 const claudeOnBedrock: LLMRequest = {
   model: 'anthropic.claude-3-5-sonnet-20240620-v1:0',
@@ -71,7 +73,7 @@ describe('BedrockCacheStrategy — unit', () => {
     expect(getDefaultCacheStrategy('bedrock').providerName).toBe('bedrock');
   });
 
-  it("capabilities: 4 markers, both TTLs, all 3 fields (matching Bedrock-Claude)", () => {
+  it('capabilities: 4 markers, both TTLs, all 3 fields (matching Bedrock-Claude)', () => {
     const s = new BedrockCacheStrategy();
     expect(s.capabilities.maxMarkers).toBe(4);
     expect(s.capabilities.ttls).toEqual(['short', 'long']);
@@ -145,11 +147,7 @@ describe('Phase 8 strategies — property', () => {
       'anthropic.claude-haiku-3-5',
     ];
     for (const model of variants) {
-      const result = await s.prepareRequest(
-        { ...claudeOnBedrock, model },
-        [m('system', 0)],
-        ctx(),
-      );
+      const result = await s.prepareRequest({ ...claudeOnBedrock, model }, [m('system', 0)], ctx());
       expect(result.markersApplied).toHaveLength(1);
     }
   });

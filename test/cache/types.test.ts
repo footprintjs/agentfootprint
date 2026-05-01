@@ -51,7 +51,7 @@ describe('CacheMarker — unit', () => {
 });
 
 describe('CachePolicy — unit', () => {
-  it("accepts the four sentinel forms", () => {
+  it('accepts the four sentinel forms', () => {
     const a: CachePolicy = 'always';
     const b: CachePolicy = 'never';
     const c: CachePolicy = 'while-active';
@@ -135,16 +135,12 @@ describe('CacheStrategy — scenario: defining a no-op strategy is type-clean', 
         return undefined;
       },
     };
-    const result = await noop.prepareRequest(
-      { messages: [], model: 'mock' } as never,
-      [],
-      {
-        iteration: 1,
-        iterationsRemaining: 4,
-        recentHitRate: undefined,
-        cachingDisabled: false,
-      },
-    );
+    const result = await noop.prepareRequest({ messages: [], model: 'mock' } as never, [], {
+      iteration: 1,
+      iterationsRemaining: 4,
+      recentHitRate: undefined,
+      cachingDisabled: false,
+    });
     expect(result.markersApplied).toEqual([]);
     expect(noop.extractMetrics({})).toBeUndefined();
   });

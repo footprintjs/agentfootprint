@@ -188,7 +188,7 @@ describe('detectSkillChurn — performance', () => {
 // ─── 7. ROI — evidence captured for cacheRecorder ─────────────────
 
 describe('cacheGateDecide — ROI: evidence captures rule + inputs', () => {
-  it('matched rule\'s label propagates to evidence', () => {
+  it("matched rule's label propagates to evidence", () => {
     const result = cacheGateDecide(makeScope({ cachingDisabled: true }));
     expect(result.evidence).toBeDefined();
     const matched = result.evidence!.rules.find((r) => r.matched);
@@ -196,7 +196,10 @@ describe('cacheGateDecide — ROI: evidence captures rule + inputs', () => {
   });
 
   it("updateSkillHistory appends current iter's active skill, bounds the window", () => {
-    const scope: { activatedInjectionIds?: readonly string[]; skillHistory: readonly (string|undefined)[] } = {
+    const scope: {
+      activatedInjectionIds?: readonly string[];
+      skillHistory: readonly (string | undefined)[];
+    } = {
       activatedInjectionIds: ['skill-x'],
       skillHistory: Array.from({ length: SKILL_CHURN_WINDOW * 2 }, (_, i) => `skill-${i}`),
     };

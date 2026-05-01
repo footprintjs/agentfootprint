@@ -116,9 +116,7 @@ export type CacheGateBranch = 'apply-markers' | 'no-markers';
  * For non-routing consumers (testing the decision in isolation), read
  * the `.branch` field of the returned DecisionResult.
  */
-export function cacheGateDecide(
-  scope: TypedScope<CacheGateState>,
-): DecisionResult {
+export function cacheGateDecide(scope: TypedScope<CacheGateState>): DecisionResult {
   return decide(
     scope,
     [
@@ -128,8 +126,7 @@ export function cacheGateDecide(
         label: "kill switch active (Agent.create({ caching: 'off' }))",
       },
       {
-        when: (s) =>
-          s.recentHitRate !== undefined && s.recentHitRate < HIT_RATE_FLOOR,
+        when: (s) => s.recentHitRate !== undefined && s.recentHitRate < HIT_RATE_FLOOR,
         then: 'no-markers',
         label: `hit rate < ${HIT_RATE_FLOOR * 100}% — auto-disable`,
       },
@@ -164,7 +161,6 @@ export function updateSkillHistory(
   const next = [...prior, current];
   // Bounded buffer — keep window*2 to give detectSkillChurn room
   // without pinning every prior iteration in memory.
-  const trimmed =
-    next.length > SKILL_CHURN_WINDOW * 2 ? next.slice(-SKILL_CHURN_WINDOW * 2) : next;
+  const trimmed = next.length > SKILL_CHURN_WINDOW * 2 ? next.slice(-SKILL_CHURN_WINDOW * 2) : next;
   scope.skillHistory = trimmed;
 }

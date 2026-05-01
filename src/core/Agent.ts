@@ -817,8 +817,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       // hints. CacheGate has already routed (apply-markers / no-markers)
       // and populated scope.cacheMarkers accordingly. Strategy.prepareRequest
       // is a pass-through for empty markers.
-      const cacheMarkers =
-        (scope.cacheMarkers as readonly CacheMarker[] | undefined) ?? [];
+      const cacheMarkers = (scope.cacheMarkers as readonly CacheMarker[] | undefined) ?? [];
       const cachePrepared = await cacheStrategy.prepareRequest(baseRequest, cacheMarkers, {
         iteration,
         iterationsRemaining: Math.max(0, maxIterations - iteration),

@@ -38,7 +38,7 @@ describe('agent-chart cache integration — unit', () => {
     expect(typeof result).toBe('string');
   });
 
-  it("scope.cacheMarkers is initialized in seed", async () => {
+  it('scope.cacheMarkers is initialized in seed', async () => {
     const agent = buildAgent();
     await agent.run({ message: 'go' });
     const snap = agent.getLastSnapshot();
@@ -47,7 +47,7 @@ describe('agent-chart cache integration — unit', () => {
     expect(Array.isArray(state?.cacheMarkers)).toBe(true);
   });
 
-  it("scope.cachingDisabled is false by default", async () => {
+  it('scope.cachingDisabled is false by default', async () => {
     const agent = buildAgent();
     await agent.run({ message: 'go' });
     const snap = agent.getLastSnapshot();
@@ -94,7 +94,7 @@ describe('agent-chart cache integration — scenario', () => {
 // ─── 4. Property ──────────────────────────────────────────────────
 
 describe('agent-chart cache integration — property', () => {
-  it("activeInjections stays bounded across iterations (regression — same property as v2.5.1)", async () => {
+  it('activeInjections stays bounded across iterations (regression — same property as v2.5.1)', async () => {
     const agent = buildAgent();
     await agent.run({ message: 'go' });
     const snap = agent.getLastSnapshot();
@@ -105,7 +105,7 @@ describe('agent-chart cache integration — property', () => {
     expect(active?.length ?? 0).toBeLessThanOrEqual(4);
   });
 
-  it("skillHistory is initialized as empty array, populated by UpdateSkillHistory", async () => {
+  it('skillHistory is initialized as empty array, populated by UpdateSkillHistory', async () => {
     const agent = buildAgent();
     await agent.run({ message: 'go' });
     const snap = agent.getLastSnapshot();
@@ -137,7 +137,7 @@ describe('agent-chart cache integration — security', () => {
 // ─── 6. Performance ───────────────────────────────────────────────
 
 describe('agent-chart cache integration — performance', () => {
-  it("Cache-layer stages add <100ms wall-clock overhead per run (mocked LLM)", async () => {
+  it('Cache-layer stages add <100ms wall-clock overhead per run (mocked LLM)', async () => {
     const agent = buildAgent();
     const start = Date.now();
     await agent.run({ message: 'go' });
