@@ -1,6 +1,6 @@
 <p align="center">
   <h1 align="center"><img width="1536" height="1024" alt="agent-footprint-logo" src="https://github.com/user-attachments/assets/a47840f4-cc8b-4bea-b88d-d9753f59616b" />
-agentfootprint</h1>
+AGENTfootprint</h1>
   <p align="center">
     <strong>Context engineering, abstracted.</strong>
   </p>
