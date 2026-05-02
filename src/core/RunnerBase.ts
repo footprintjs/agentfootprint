@@ -32,6 +32,11 @@ import type {
 import type { EventMeta } from '../events/types.js';
 import { attachLogging, type LoggingOptions } from '../recorders/observability/LoggingRecorder.js';
 import {
+  attachObservabilityStrategy,
+  attachCostStrategy,
+  attachLiveStatusStrategy,
+} from '../strategies/attach.js';
+import {
   attachThinking,
   type ThinkingOptions,
 } from '../recorders/observability/ThinkingRecorder.js';
@@ -232,6 +237,11 @@ export abstract class RunnerBase<TIn = unknown, TOut = unknown> implements Runne
       // via the attach path AND subscribes to the event dispatcher
       // for ReAct step transitions (stream.llm_* / stream.tool_*).
       attachFlowchart((r) => this.attach(r), this.dispatcher, opts),
+    // v2.8 grouped strategy enablers — see
+    // `docs/inspiration/strategy-everywhere.md`.
+    observability: (opts) => attachObservabilityStrategy(this.dispatcher, opts),
+    cost: (opts) => attachCostStrategy(this.dispatcher, opts),
+    liveStatus: (opts) => attachLiveStatusStrategy(this.dispatcher, opts),
   };
 
   // ─── Consumer custom emit ──────────────────────────────────────
