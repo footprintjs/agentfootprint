@@ -5,6 +5,42 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.8.0]
+
+### Added
+
+- **Detached observability via `footprintjs/detach` — `enable.observability(...)` and `enable.cost(...)` now accept an opt-in `detach` option** that schedules the strategy's hot-path call (`exportEvent` / `recordCost`) onto a [footprintjs detach driver](https://footprintjs.github.io/footPrint/guides/patterns/detach/) instead of running it inline. The agent loop returns immediately; exports flush on the driver's schedule. Sync inline behavior is unchanged when the option is omitted — full back-compat for every existing consumer.
+
+  Three semantics:
+  - `detach: { driver, mode: 'forget' }` — discard the handle. Pure fire-and-forget telemetry. (Default when `mode` omitted.)
+  - `detach: { driver, mode: 'join-later', onHandle: (h) => ... }` — driver returns a `DetachHandle`; we deliver it to your callback so you can `await` later (graceful shutdown, tests, backpressure).
+  - omitted (default) — sync inline, same as v2.7.x and earlier.
+
+  ```ts
+  import { microtaskBatchDriver, flushAllDetached } from 'footprintjs/detach';
+
+  agent.enable.observability({
+    strategy: datadogExporter(...),
+    detach: { driver: microtaskBatchDriver, mode: 'forget' },
+  });
+
+  // Graceful shutdown:
+  process.on('SIGTERM', async () => {
+    const stats = await flushAllDetached({ timeoutMs: 10_000 });
+    process.exit(stats.pending === 0 ? 0 : 1);
+  });
+  ```
+
+  Pick a driver by environment: `microtaskBatchDriver` (default cross-runtime), `setImmediateDriver` (Node), `setTimeoutDriver` (cross-runtime, configurable delay), `sendBeaconDriver` (browser, survives page-unload), `workerThreadDriver` (CPU-isolated). All from `footprintjs/detach`.
+
+  `enable.thinking` and `enable.lens` deliberately **stay sync** — UI/debugger render must feel responsive and can't be deferred to next microtask.
+
+  9 new 7-pattern tests in `test/strategies/detach-integration.test.ts` (Unit / Boundary / Scenario / Property / Security / ROI). Total suite now 1696 passing, 0 regressions. New runnable example: `examples/features/06-detached-observability.ts`.
+
+### Changed
+
+- **footprintjs peer-dep bumped to `>=4.17.1`** (was `>=4.14.0`). The `detach` option requires the `footprintjs/detach` subpath shipped in 4.17.0 and the publish-pipeline fix shipped in 4.17.1.
+
 ## [2.7.3]
 
 **Design memo: `strategy-everywhere.md` — AWS-first vendor adapter

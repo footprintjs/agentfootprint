@@ -18,7 +18,8 @@
     "paths": {
       "footprintjs/advanced": ["./node_modules/footprintjs/dist/types/advanced.d.ts"],
       "footprintjs/recorders": ["./node_modules/footprintjs/dist/types/recorders.d.ts"],
-      "footprintjs/trace": ["./node_modules/footprintjs/dist/types/trace.d.ts"]
+      "footprintjs/trace": ["./node_modules/footprintjs/dist/types/trace.d.ts"],
+      "footprintjs/detach": ["./node_modules/footprintjs/dist/types/detach.d.ts"]
     },
     "noUnusedLocals": true,
     "noUnusedParameters": true,

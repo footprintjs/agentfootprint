@@ -34,6 +34,11 @@ import type {
   FlowchartHandle,
   FlowchartOptions,
 } from '../recorders/observability/FlowchartRecorder.js';
+import type {
+  ObservabilityEnableOptions,
+  CostEnableOptions,
+  LiveStatusEnableOptions,
+} from '../strategies/attach.js';
 
 /**
  * High-level feature-enable methods. Each attaches a pre-built observability
@@ -41,9 +46,15 @@ import type {
  * Phase 5 (lens, tracing, cost, guardrails, ...).
  */
 export interface EnableNamespace {
-  /** Claude-Code-style live status line. */
+  /**
+   * @deprecated v2.8 — use `enable.liveStatus({ strategy: chatBubbleLiveStatus({onLine}) })`.
+   * Kept for back-compat; removed in v3.0.
+   */
   thinking(opts: ThinkingOptions): Unsubscribe;
-  /** Firehose-style structured logging of every event. */
+  /**
+   * @deprecated v2.8 — use `enable.observability({ strategy: pinoObservability({...}) })`
+   * or another vendor strategy. Kept for back-compat; removed in v3.0.
+   */
   logging(opts?: LoggingOptions): Unsubscribe;
   /**
    * Live composition graph — subflow / fork-branch / decision-branch
@@ -55,6 +66,26 @@ export interface EnableNamespace {
    * at any time (not just via onUpdate).
    */
   flowchart(opts?: FlowchartOptions): FlowchartHandle;
+  /**
+   * v2.8+ — grouped strategy enabler for observability. Pipes every
+   * typed event into a vendor strategy (Datadog, OTel, AgentCore,
+   * CloudWatch, …) or the default `consoleObservability()`. See
+   * `agentfootprint/strategies` + `docs/inspiration/strategy-everywhere.md`.
+   */
+  observability(opts?: ObservabilityEnableOptions): Unsubscribe;
+  /**
+   * v2.8+ — grouped strategy enabler for cost. Subscribes the strategy
+   * to `cost.tick` events; defaults to `inMemorySinkCost()` for
+   * read-back / test inspection.
+   */
+  cost(opts?: CostEnableOptions): Unsubscribe;
+  /**
+   * v2.8+ — grouped strategy enabler for chat-bubble live status.
+   * Maintains the thinking-state machine; calls strategy.renderStatus
+   * each time the rendered line changes (deduped — not on every token).
+   * Strategy is required (consumer must wire UI).
+   */
+  liveStatus(opts: LiveStatusEnableOptions): Unsubscribe;
 }
 
 /**
