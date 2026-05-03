@@ -84,6 +84,14 @@ import {
   type ResolvedOutputFallback,
 } from './outputFallback.js';
 import {
+  buildCheckpoint,
+  classifyFailurePhase,
+  RunCheckpointError,
+  validateCheckpoint,
+  type AgentRunCheckpoint,
+  type RunCheckpointTracker,
+} from './runCheckpoint.js';
+import {
   applyOutputSchema,
   buildDefaultInstruction,
   OutputSchemaError,
@@ -337,6 +345,11 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    */
   private readonly outputFallbackCfg?: ResolvedOutputFallback<unknown>;
 
+  /** Side-channel for `resumeOnError(...)` — when set, the seed
+   *  function restores `scope.history` from this instead of starting
+   *  fresh. Cleared on first read so subsequent runs start clean. */
+  private pendingResumeHistory?: readonly LLMMessage[];
+
   /**
    * Optional `ToolProvider` set via the builder's `.toolProvider()`.
    * When present, the Tools slot subflow consults it per iteration
@@ -552,15 +565,115 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
   }
 
   async run(input: AgentInput, options?: RunOptions): Promise<AgentOutput | RunnerPauseOutcome> {
+    // (helper used in the catch block below — module-private function
+    // declared at file end via hoisting)
     const executor = this.createExecutor();
-    const result = await executor.run({
-      input: {
-        message: input.message,
-        ...(input.identity !== undefined && { identity: input.identity }),
-      },
-      ...(options ?? {}),
-    });
-    return this.finalizeResult(executor, result);
+
+    // Auto-checkpoint at iteration boundaries — captures the latest
+    // conversation history into a per-run tracker. On error, we
+    // wrap the underlying error in `RunCheckpointError` carrying
+    // this checkpoint so `agent.resumeOnError(checkpoint)` can
+    // continue from the last good iteration.
+    const tracker: RunCheckpointTracker = {
+      runId: this.currentRunContext?.runId ?? 'unknown',
+      originalInput: { message: input.message },
+      history: [],
+      lastCompletedIteration: 0,
+    };
+    const stopTracking = this.installCheckpointTracker(tracker);
+
+    try {
+      const result = await executor.run({
+        input: {
+          message: input.message,
+          ...(input.identity !== undefined && { identity: input.identity }),
+        },
+        ...(options ?? {}),
+      });
+      return this.finalizeResult(executor, result);
+    } catch (cause) {
+      // Wrap recoverable errors with the last-known-good checkpoint.
+      // Pause-signal exceptions are not recoverable in this sense
+      // (they're intentional askHuman pauses) — let those propagate.
+      if (cause instanceof Error && cause.name !== 'PauseSignal' && tracker.history.length > 0) {
+        const checkpoint = buildCheckpoint(tracker, {
+          iteration: tracker.inFlightIteration ?? tracker.lastCompletedIteration + 1,
+          phase: classifyFailurePhase(cause),
+        });
+        throw new RunCheckpointError(cause, checkpoint);
+      }
+      throw cause;
+    } finally {
+      stopTracking();
+    }
+  }
+
+  /**
+   * Resume an agent run from a checkpoint produced by a prior
+   * `RunCheckpointError`. Unlike `agent.resume()` (which takes a
+   * `FlowchartCheckpoint` from an intentional pause), this takes
+   * an `AgentRunCheckpoint` (conversation-history snapshot) and
+   * replays the agent run with that history restored.
+   *
+   * The next iteration retries the call that originally failed —
+   * with the latest provider state (circuit breaker may have
+   * closed, vendor may have recovered, etc.).
+   *
+   * @example
+   * ```ts
+   * try {
+   *   const result = await agent.run({ message: 'long task' });
+   * } catch (err) {
+   *   if (err instanceof RunCheckpointError) {
+   *     await checkpointStore.put(sessionId, err.checkpoint);
+   *     // hours / restart later:
+   *     const checkpoint = await checkpointStore.get(sessionId);
+   *     const result = await agent.resumeOnError(checkpoint);
+   *   }
+   * }
+   * ```
+   */
+  async resumeOnError(
+    checkpoint: AgentRunCheckpoint | unknown,
+    options?: RunOptions,
+  ): Promise<AgentOutput | RunnerPauseOutcome> {
+    const cp = validateCheckpoint(checkpoint);
+    // Stash the checkpointed history on the side channel; the seed
+    // function reads + clears it before scope.history initializes.
+    this.pendingResumeHistory = cp.history as readonly LLMMessage[];
+    return this.run({ message: cp.originalInput.message }, options);
+  }
+
+  /**
+   * Install a per-run checkpoint tracker. Listens for the agent's
+   * own iteration_end events on `this.dispatcher` and snapshots the
+   * conversation history into the tracker. Returns a stop function.
+   *
+   * @internal
+   */
+  private installCheckpointTracker(tracker: RunCheckpointTracker): () => void {
+    const offIterStart = this.dispatcher.on(
+      'agentfootprint.agent.iteration_start' as never,
+      ((event: { payload?: { iterIndex?: number } }) => {
+        const p = event.payload;
+        if (typeof p?.iterIndex === 'number') tracker.inFlightIteration = p.iterIndex;
+      }) as never,
+    );
+    const offIterEnd = this.dispatcher.on(
+      'agentfootprint.agent.iteration_end' as never,
+      ((event: { payload?: { iterIndex?: number; history?: ReadonlyArray<unknown> } }) => {
+        const p = event.payload;
+        if (typeof p?.iterIndex === 'number') tracker.lastCompletedIteration = p.iterIndex;
+        if (Array.isArray(p?.history)) {
+          tracker.history = p.history as readonly LLMMessage[];
+        }
+        tracker.inFlightIteration = undefined;
+      }) as never,
+    );
+    return () => {
+      offIterStart();
+      offIterEnd();
+    };
   }
 
   async resume(
@@ -656,7 +769,17 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     const seed = (scope: TypedScope<AgentState>) => {
       const args = scope.$getArgs<AgentInput>();
       scope.userMessage = args.message;
-      scope.history = [{ role: 'user', content: args.message }];
+      // If `resumeOnError(...)` set the side channel, restore the
+      // checkpointed conversation history. The next iteration sees
+      // the prior messages and continues from the failure point.
+      // We always clear the field after reading so subsequent runs
+      // (without resumeOnError) start fresh.
+      if (this.pendingResumeHistory && this.pendingResumeHistory.length > 0) {
+        scope.history = [...this.pendingResumeHistory];
+        this.pendingResumeHistory = undefined;
+      } else {
+        scope.history = [{ role: 'user', content: args.message }];
+      }
       // Default identity uses the runId so multi-run isolation works
       // without consumer changes; explicit identity (multi-tenant)
       // overrides via `agent.run({ identity })`.
@@ -1150,6 +1273,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
           turnIndex: 0,
           iterIndex: iteration,
           toolCallCount: toolCalls.length,
+          history: scope.history,
         });
         scope.iteration = iteration + 1;
         return undefined; // explicit: no pause, flow continues to loopTo
@@ -1185,6 +1309,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
           turnIndex: 0,
           iterIndex: iteration,
           toolCallCount: 1,
+          history: scope.history,
         });
         scope.iteration = iteration + 1;
         // Clear pause checkpoint fields.

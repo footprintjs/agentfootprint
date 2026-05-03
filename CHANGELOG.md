@@ -5,6 +5,57 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.10.2]
+
+### Added — Reliability subsystem (part 3 of 3 — COMPLETE)
+
+The Reliability subsystem ships its third and final piece. v2.10.0 was CircuitBreaker; v2.10.1 was outputFallback; v2.10.2 closes the trio with **fault-tolerant resume on error**.
+
+- **`agent.resumeOnError(checkpoint)` + `RunCheckpointError` + auto-checkpoint at iteration boundaries.** Today's `agent.run()` throws on mid-run errors (LLM 500, vendor outage, tool throw, container restart) and the consumer must restart from scratch — losing every prior iteration's work. With this release, recoverable errors come wrapped in `RunCheckpointError` carrying a JSON-serializable checkpoint of the conversation history at the last completed iteration:
+
+  ```ts
+  import { Agent, RunCheckpointError } from 'agentfootprint';
+
+  try {
+    const result = await agent.run({ message: 'long task' });
+  } catch (err) {
+    if (err instanceof RunCheckpointError) {
+      // Persist anywhere — Redis, Postgres, S3, queue, file.
+      await checkpointStore.put(sessionId, err.checkpoint);
+
+      // hours / restart / new process / next deploy later:
+      const checkpoint = await checkpointStore.get(sessionId);
+      const result = await agent.resumeOnError(checkpoint);
+    } else {
+      throw err; // non-recoverable — propagate
+    }
+  }
+  ```
+
+  **Three new exports** from the main barrel: `RunCheckpointError`, `AgentRunCheckpoint`, and `agent.resumeOnError(checkpoint, options?)`.
+
+  **Auto-checkpoint at iteration boundaries** — the agent listens to its own `agentfootprint.agent.iteration_end` events and snapshots the conversation history into a per-run tracker. On error, the tracker's last snapshot is wrapped in `RunCheckpointError`.
+
+  **Failure-phase classifier** — `RunCheckpointError.checkpoint.failurePoint.phase` is one of `'llm' | 'tool' | 'iteration' | 'unknown'`. Recognizes `CircuitOpenError` from v2.10.0, `AnthropicError` / `OpenAIError` / `BedrockError`. Goes straight into oncall postmortem queries.
+
+  **Conversation-history checkpoint shape** — JSON-serializable, tiny payload, survives process restart. Tradeoff: tools inside the failed iteration **re-execute on resume**. For idempotent tools (read-only DB queries) this is fine; **for non-idempotent tools (charge card, send email) consumers MUST add their own idempotency keys**. Documented prominently. v2.10.3+ may add `toolCallId`-based dedup.
+
+  **`AgentIterationEndPayload.history` field added** (optional, for back-compat).
+
+  13 7-pattern tests covering happy path, error → checkpoint, end-to-end resume cycle, JSON round-trip, forward-compat version guard, missing-field validation, and failure-phase classifier. Total suite: **1781 / 1781 passing, 0 regressions.**
+
+### Reliability subsystem complete
+
+| Piece | Release | What it solves |
+|---|---|---|
+| **`withCircuitBreaker`** | v2.10.0 | Vendor outage detection; fail-fast in <5µs |
+| **`outputFallback`** | v2.10.1 | Schema-validation failure; 3-tier degradation |
+| **`resumeOnError`** | v2.10.2 | Mid-run failure recovery; checkpoint + restart |
+
+### Coming next
+
+- **v2.11.0** — Reliability guide on docs site + runnable example covering all 3 primitives end-to-end + integration test with snapshots. Closes the docs/example gap noted in the v2.10.0 retrospective.
+
 ## [2.10.1]
 
 ### Added — Reliability subsystem (part 2 of 3)

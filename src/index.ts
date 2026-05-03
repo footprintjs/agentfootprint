@@ -241,6 +241,7 @@ export {
   type OutputSchemaOptions,
 } from './core/outputSchema.js';
 export { type OutputFallbackOptions, type OutputFallbackFn } from './core/outputFallback.js';
+export { RunCheckpointError, type AgentRunCheckpoint } from './core/runCheckpoint.js';
 export {
   flowchartAsTool,
   type FlowchartAsToolOptions,

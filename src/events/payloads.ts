@@ -95,6 +95,13 @@ export interface AgentIterationEndPayload {
   readonly turnIndex: number;
   readonly iterIndex: number;
   readonly toolCallCount: number;
+  /** Conversation history (LLM messages) at the END of this
+   *  iteration. Captured by `agent.run()` for fault-tolerant
+   *  resume — `RunCheckpointError.checkpoint` snapshots this so
+   *  `agent.resumeOnError(...)` can replay from the last good
+   *  iteration. Optional for back-compat with v2.x recorders that
+   *  subscribed without expecting this field. */
+  readonly history?: ReadonlyArray<unknown>;
 }
 
 export interface AgentRouteDecidedPayload {
