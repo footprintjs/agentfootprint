@@ -5,6 +5,46 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.8.1]
+
+### Added
+
+- **`agentfootprint/observability-providers` — new grouped subpath for vendor observability strategies.** Follows the parallel-providers pattern v2.5 established for `llm-providers` / `tool-providers` / `memory-providers`. Future vendor adapters add an export here, NOT a new subpath — keeps `package.json#exports` from sprawling.
+
+  Ships with one adapter:
+
+  - **`agentcoreObservability(opts)`** — AWS Bedrock AgentCore observability adapter. Ships every `AgentfootprintEvent` to **CloudWatch Logs** in a structured-JSON shape AgentCore's hosted-agent telemetry layer understands. Buffers in `exportEvent` (sync + non-throwing); drains in `flush()` (async batch). Default flush window: 1s OR 10 KB, whichever first.
+
+  ```ts
+  import { agentcoreObservability } from 'agentfootprint/observability-providers';
+  import { microtaskBatchDriver } from 'footprintjs/detach';
+
+  agent.enable.observability({
+    strategy: agentcoreObservability({
+      region: 'us-east-1',
+      logGroupName: '/agentfootprint/my-agent',
+      logStreamName: `${process.env.HOSTNAME}/${Date.now()}`,
+    }),
+    detach: { driver: microtaskBatchDriver, mode: 'forget' },
+  });
+  ```
+
+  Peer dep: `@aws-sdk/client-cloudwatch-logs` (declared as **optional** via `peerDependenciesMeta.{name}.optional = true` — only consumers who actually call `agentcoreObservability(...)` need to install it). Lazy-required via `lib/lazyRequire.ts` so bundlers don't pull the AWS SDK into builds that never use the adapter.
+
+  `_client` test injection escape hatch lets tests skip the SDK require entirely. 11 7-pattern tests in `test/observability-providers/agentcore.test.ts`.
+
+### Fixed
+
+- **Roadmap JSDoc in `src/strategies/index.ts` corrected.** v2.8.0 ship notes mistakenly listed the per-vendor subpath naming (`agentfootprint/observability-agentcore`, `observability-cloudwatch`, etc.) — same anti-pattern v2.5 fixed for memory adapters when collapsing 6+ per-vendor subpaths into `memory-providers`. Now lists the correct grouped subpaths: `observability-providers`, `cost-providers`, `lens-providers`. Pure docs change; no code surface affected.
+
+### Coming next
+
+- **v2.8.2** — `cloudwatchObservability` (the same SDK without AgentCore-specific log-group conventions).
+- **v2.8.3** — `xrayObservability` (AWS distributed tracing).
+- **v2.9.x** — `otelObservability` + `datadogObservability` (industry-standard backends).
+
+All future vendor adapters land under the existing `agentfootprint/observability-providers` subpath — no new subpaths.
+
 ## [2.8.0]
 
 ### Added

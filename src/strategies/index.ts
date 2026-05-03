@@ -7,14 +7,28 @@
  *   - `types.ts` — typed interfaces (Observability, Cost, LiveStatus, Lens)
  *   - `defaults/` — the 4 in-core default strategies
  *
- * Vendor strategies ship as separate subpaths:
- *   - `agentfootprint/observability-agentcore` (v2.8.1)
- *   - `agentfootprint/observability-cloudwatch` (v2.8.2)
- *   - `agentfootprint/observability-xray` (v2.8.3)
- *   - `agentfootprint/observability-otel` (v2.9.x)
- *   - `agentfootprint/observability-datadog` (v2.9.x)
- *   - `agentfootprint/cost-stripe` (v2.10.x)
- *   - `agentfootprint/lens-browser` / `lens-cli` (v2.12.x)
+ * Vendor strategies ship under three GROUPED subpaths (matching the
+ * parallel-providers pattern v2.5 established for `llm-providers` /
+ * `tool-providers` / `memory-providers`). Each subpath holds N
+ * vendor-named factories — adding a vendor never adds a new subpath:
+ *
+ *   - `agentfootprint/observability-providers`
+ *       agentcoreObservability (v2.8.1)
+ *       cloudwatchObservability (v2.8.2)
+ *       xrayObservability (v2.8.3)
+ *       otelObservability (v2.9.x)
+ *       datadogObservability (v2.9.x)
+ *
+ *   - `agentfootprint/cost-providers`
+ *       stripeCost (v2.10.x)
+ *
+ *   - `agentfootprint/lens-providers`
+ *       browserLens / cliLens (v2.12.x)
+ *
+ * Each adapter lazy-imports its vendor SDK via `lib/lazyRequire.ts`,
+ * so consumers who never call a particular factory don't have to
+ * install that SDK. Peer-deps are declared in package.json with
+ * `peerDependenciesMeta.{name}.optional = true`.
  */
 
 export * from './types.js';

@@ -109,6 +109,11 @@
       "import": "./dist/esm/memory-providers.js",
       "require": "./dist/memory-providers.js"
     },
+    "./observability-providers": {
+      "types": "./dist/types/observability-providers.d.ts",
+      "import": "./dist/esm/observability-providers.js",
+      "require": "./dist/observability-providers.js"
+    },
     "./observe": {
       "types": "./dist/types/observe.d.ts",
       "import": "./dist/esm/observe.js",
@@ -165,6 +170,7 @@
     "@anthropic-ai/sdk": "*",
     "@aws-sdk/client-bedrock-agent-runtime": "*",
     "@aws-sdk/client-bedrock-runtime": "*",
+    "@aws-sdk/client-cloudwatch-logs": "*",
     "@modelcontextprotocol/sdk": "*",
     "footprintjs": ">=4.17.1",
     "ioredis": "*",
@@ -182,6 +188,9 @@
       "optional": true
     },
     "@aws-sdk/client-bedrock-agent-runtime": {
+      "optional": true
+    },
+    "@aws-sdk/client-cloudwatch-logs": {
       "optional": true
     },
     "@modelcontextprotocol/sdk": {
