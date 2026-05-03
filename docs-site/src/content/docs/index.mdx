@@ -165,8 +165,9 @@ Ship the patterns first; pay for tokens last.
 - **47 typed events across 13 domains** — context, stream, agent, cost, permission, eval, memory, skill, composition, cache, and more
 - **6 detach drivers** for non-blocking observability (microtask, immediate, setImmediate, setTimeout, sendBeacon, worker-thread)
 - **Provider-agnostic prompt cache** — Anthropic + OpenAI + Bedrock + NoOp, with a strategy registry for vendor-specific subpaths
-- **CloudWatch Logs observability adapter** (v2.8.1) — `agentcoreObservability` under `agentfootprint/observability-providers`
+- **4 observability vendor adapters** (v2.8.1 → v2.9.0) — `agentcoreObservability`, `cloudwatchObservability`, `xrayObservability` (hierarchical AWS X-Ray traces), `otelObservability` (OpenTelemetry — unlocks Honeycomb / Datadog / Splunk / etc. via OTLP). All under `agentfootprint/observability-providers`.
 - **Strategy-pattern grouped enablers** (v2.8) — `enable.observability/cost/liveStatus` accept typed strategies + optional `detach` drivers
+- **Reliability subsystem** (v2.10.x) — `withCircuitBreaker` (vendor outage detection, sub-µs fail-fast), `outputFallback` (3-tier degradation on schema failure), `resumeOnError` (mid-run failure recovery via JSON-serializable checkpoint). [Guide →](/agentfootprint/guides/reliability/)
 
 ## What's next
 
@@ -175,15 +176,19 @@ Ship the patterns first; pay for tokens last.
 - [Key Concepts](/agentfootprint/getting-started/key-concepts/) — the 5-layer taxonomy
 - [Dynamic ReAct guide](/agentfootprint/guides/dynamic-react/) — per-iteration recomposition explained
 - [Observability guide](/agentfootprint/guides/observability/) — `enable.*` API, vendor adapters, detach for non-blocking telemetry
+- [Reliability guide](/agentfootprint/guides/reliability/) — circuit breaker + output fallback + fault-tolerant resume
 
 ### Roadmap
 
-| Version | What |
-|---|---|
-| ✅ v2.8.1 | `agentcoreObservability` (CloudWatch Logs) |
-| v2.8.2 | `cloudwatchObservability` |
-| v2.8.3 | `xrayObservability` (AWS distributed tracing) |
-| v2.9.x | `otelObservability` + `datadogObservability` |
-| v2.10.x | `cost-stripe` + cost-providers subpath |
-| v2.11.x | Reliability subsystem (CircuitBreaker / 3-tier fallback / `resumeOnError`) |
-| v2.12.x | `lens-browser` / `lens-cli` (visual debugger backends) |
+| Version | What | Status |
+|---|---|---|
+| v2.8.1 | `agentcoreObservability` (CloudWatch Logs) | ✅ |
+| v2.8.2 | `cloudwatchObservability` | ✅ |
+| v2.8.3 | `xrayObservability` (AWS distributed tracing) | ✅ |
+| v2.9.0 | `otelObservability` (the industry-standard unlock — covers ~every backend via OTLP) | ✅ |
+| v2.10.0 | Reliability — `withCircuitBreaker` | ✅ |
+| v2.10.1 | Reliability — `outputFallback` | ✅ |
+| v2.10.2 | Reliability — `resumeOnError` + `RunCheckpointError` | ✅ |
+| v2.11.0 | Reliability guide + runnable example + integration test (this release) | ✅ |
+| v2.12.x | `cost-providers` subpath + first cost adapter (TBD: Stripe metered billing OR pricing-data refresh) | planned |
+| v2.13.x | `lens-browser` / `lens-cli` (visual debugger backends) | planned |

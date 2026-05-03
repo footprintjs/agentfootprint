@@ -1,0 +1,223 @@
+---
+title: Reliability
+description: Three primitives for production agents — circuit breaker for vendor outages, output-fallback for malformed LLM JSON, resume-on-error for mid-run failure recovery.
+---
+
+import CodeFile from '@/components/CodeFile.astro';
+
+> Your agent is in production. The LLM provider 503s for 4 minutes. Half your requests crash, the other half take 30 seconds because `withRetry` keeps hammering. Then a model rollout starts emitting prose instead of JSON for 2% of outputs. Then a container restarts mid-iteration and 47 in-flight runs vanish. **agentfootprint v2.10.x ships three primitives that make each of those a non-event.**
+
+## The Reliability subsystem (v2.10.x — three primitives, three failure modes)
+
+| Primitive | Release | What it solves | Where it lives |
+|---|---|---|---|
+| **`withCircuitBreaker(provider, opts)`** | v2.10.0 | Vendor outage detection; fail-fast in &lt;5µs after N consecutive failures | `agentfootprint/resilience` |
+| **`.outputFallback({ fallback, canned })`** | v2.10.1 | Schema-validation failure; 3-tier degradation (primary → fallback → canned) | builder method on `Agent.create({...})` |
+| **`agent.resumeOnError(checkpoint)`** | v2.10.2 | Mid-run failure recovery; checkpoint at iteration boundaries, persist anywhere, resume hours/restarts later | `agentfootprint` (main barrel) |
+
+All three compose. All three follow the same library convention: opt-in (no behavior change for existing consumers), typed events for observability, fail-open by construction when configured.
+
+## End-to-end example
+
+The single example below exercises all three primitives. The docs site live-imports the source so this snippet stays in sync with the runnable file.
+
+<CodeFile path="examples/features/08-reliability.ts" title="examples/features/08-reliability.ts" />
+
+Sample output:
+
+```
+1. CircuitBreaker — vendor outage detection
+   primary calls: 2 (capped by breaker)
+   fallback calls: 5 (took over after breaker opened)
+
+2. outputFallback — 3-tier degradation on schema failure
+   result: {"amount":0,"reason":"unable to process — please retry"}
+   canned fired: true
+
+3. resumeOnError — mid-run failure recovery
+   failed at: iteration 2 (iteration)
+   checkpoint size: 461 bytes (JSON)
+   resume result: refund processed: $50 for product defect…
+```
+
+## 1. CircuitBreaker — vendor outage detection
+
+`withCircuitBreaker` wraps any `LLMProvider` and tracks consecutive failures. After `failureThreshold` failures, the breaker OPENS and rejects calls immediately with `CircuitOpenError` — no network round-trip. After `cooldownMs`, it enters HALF-OPEN and admits probe calls; `halfOpenSuccessThreshold` successes close it; one failure re-opens it.
+
+```ts
+import { anthropic, openai } from 'agentfootprint/llm-providers';
+import { withCircuitBreaker, withFallback } from 'agentfootprint/resilience';
+
+const provider = withFallback(
+  withCircuitBreaker(anthropic({ apiKey }), {
+    failureThreshold: 5,
+    cooldownMs: 30_000,
+    halfOpenSuccessThreshold: 2,
+    onStateChange: (state, why) => log.info(`circuit ${state}: ${why}`),
+  }),
+  withCircuitBreaker(openai({ apiKey })),
+);
+```
+
+### Why on top of `withRetry`?
+
+`withRetry` keeps hammering one provider with backoff during a multi-minute Anthropic outage. Each request burns 3 retries × backoff = ~3 sec wasted before falling back. Multiplied by your QPS = lots of wasted time + tokens. The breaker says "we just saw 5 failures in a row; stop calling for 30 seconds." Subsequent requests fail in **&lt;5µs** (10k OPEN-state rejections in &lt;50ms), `withFallback` routes to OpenAI immediately.
+
+### Three states with explicit transitions
+
+```
+CLOSED ──[ N consecutive failures ]──► OPEN
+   ▲                                    │
+   │                                    │ [cooldownMs elapsed]
+   │                                    ▼
+   └──[ M probe successes ]──── HALF-OPEN
+```
+
+### Per-instance, NOT distributed
+
+Each `withCircuitBreaker(...)` call holds its own breaker state in process memory. If you run 100 server replicas, each has its own independent breaker (matches Hystrix default). For cluster-wide coordination, layer your own Redis-backed counter via the `onStateChange` hook + `shouldCount` predicate.
+
+## 2. outputFallback — 3-tier degradation on schema failure
+
+When the agent has an `outputSchema` AND the LLM emits malformed JSON, the agent normally throws `OutputSchemaError`. With `.outputFallback({ fallback, canned })`:
+
+```ts
+import { z } from 'zod';
+const Refund = z.object({ amount: z.number().nonnegative(), reason: z.string().min(1) });
+
+const agent = Agent.create({...})
+  .outputSchema(Refund)
+  .outputFallback({
+    fallback: async (err, raw) => ({ amount: 0, reason: 'manual review' }),
+    canned:   { amount: 0, reason: 'unable to process' },
+  })
+  .build();
+
+// Caller never sees OutputSchemaError; gets a typed Refund either way.
+const refund = await agent.runTyped({ message: '...' });
+```
+
+### Three tiers
+
+| Tier | When | Returns |
+|---|---|---|
+| **Primary** | LLM emits valid JSON | LLM's parsed value |
+| **Fallback** | Schema validation failure | `fallback(err, raw)` — re-validated against schema |
+| **Canned** | Fallback throws OR returns invalid | Static safety-net (validated at builder time) |
+
+### Two typed events for observability
+
+- `agentfootprint.resilience.output_fallback_triggered`
+- `agentfootprint.resilience.output_canned_used`
+
+### Builder-time canned validation
+
+The `canned` value is parsed against the schema at `.outputFallback({...})` time — throws `TypeError` immediately on misconfig. Surfaces in CI / dev, not at 3am when the fallback engages.
+
+### Fail-open vs fail-closed
+
+- With `canned` → agent NEVER throws on output failure (fail-open)
+- Without `canned` → fallback errors propagate to caller (fail-closed)
+
+Consumer chooses.
+
+## 3. resumeOnError — mid-run failure recovery
+
+When `agent.run()` throws on a recoverable error mid-iteration, you get back a `RunCheckpointError` carrying a JSON-serializable checkpoint of the conversation history at the last completed iteration boundary. Persist it anywhere; resume later.
+
+```ts
+import { Agent, RunCheckpointError } from 'agentfootprint';
+
+try {
+  const result = await agent.run({ message: 'long task' });
+} catch (err) {
+  if (err instanceof RunCheckpointError) {
+    // Persist anywhere — Redis, Postgres, S3, queue, file.
+    await checkpointStore.put(sessionId, err.checkpoint);
+
+    // hours / restart / new process / next deploy later:
+    const checkpoint = await checkpointStore.get(sessionId);
+    const result = await agent.resumeOnError(checkpoint);
+  } else {
+    throw err; // not recoverable — propagate
+  }
+}
+```
+
+### `AgentRunCheckpoint` shape (JSON-serializable, stable)
+
+| Field | Type | Purpose |
+|---|---|---|
+| `version` | `1` (literal) | Forward-compat guard |
+| `runId` | `string` | Original runId — observability correlation |
+| `history` | `LLMMessage[]` | Conversation at last completed iteration |
+| `lastCompletedIteration` | `number` | Where to resume from |
+| `originalInput` | `{ message: string }` | User's original ask |
+| `checkpointedAt` | `number` (ms) | Wall clock when captured |
+| `failurePoint?` | `{ iteration, phase }` | Where the failure happened (oncall triage) |
+
+### Failure-phase classifier
+
+`RunCheckpointError.checkpoint.failurePoint.phase` is one of `'llm' | 'tool' | 'iteration' | 'unknown'`. Recognizes `CircuitOpenError` (v2.10.0), `AnthropicError`, `OpenAIError`, `BedrockError`. Goes straight into oncall postmortems — *"how often did we lose runs to LLM phase failures last week?"*
+
+### Tradeoffs (be honest)
+
+- ✅ Survives process restart (JSON-serializable, tiny payload — typically &lt;1 KB)
+- ✅ Works with any LLM provider — replay starts from history
+- ✅ No footprintjs core changes
+- ⚠️ Loses mid-iteration partial state (acceptable — iterations are atomic)
+- ⚠️ Tools inside the failed iteration **re-execute on resume**. For idempotent tools (read-only DB queries) this is fine; **for non-idempotent tools (charge card, send email) consumers MUST add their own idempotency keys**. v2.10.3+ may add `toolCallId`-based dedup.
+
+## Composing all three
+
+The three primitives stack naturally — different layer of the failure stack:
+
+```ts
+import { Agent, RunCheckpointError } from 'agentfootprint';
+import { anthropic, openai } from 'agentfootprint/llm-providers';
+import { withCircuitBreaker, withFallback } from 'agentfootprint/resilience';
+import { z } from 'zod';
+
+// Layer 1: provider — circuit-breaker + multi-vendor fallback
+const provider = withFallback(
+  withCircuitBreaker(anthropic({ apiKey })),
+  withCircuitBreaker(openai({ apiKey })),
+);
+
+// Layer 2: agent — output-schema + canned safety-net
+const agent = Agent.create({ provider, model: 'claude-3-5-sonnet' })
+  .system('You decide refund amounts.')
+  .outputSchema(z.object({ amount: z.number(), reason: z.string() }))
+  .outputFallback({
+    fallback: async () => ({ amount: 0, reason: 'manual review' }),
+    canned:   { amount: 0, reason: 'unable to process' },
+  })
+  .build();
+
+// Layer 3: caller — fault-tolerant resume from checkpoint
+async function processRefund(message: string, sessionId: string) {
+  try {
+    return await agent.runTyped({ message });
+  } catch (err) {
+    if (err instanceof RunCheckpointError) {
+      await checkpointStore.put(sessionId, err.checkpoint);
+      throw err; // queue picks up, retries with resumeOnError
+    }
+    throw err;
+  }
+}
+
+// Worker that drains the queue (separate process, fresh container, hours later)
+async function resumeWorker(sessionId: string) {
+  const checkpoint = await checkpointStore.get(sessionId);
+  return await agent.resumeOnError(checkpoint);
+}
+```
+
+Three primitives, three failure modes, one substrate.
+
+## See also
+
+- [`examples/features/08-reliability.ts`](https://github.com/footprintjs/agentfootprint/blob/main/examples/features/08-reliability.ts) — runnable end-to-end example (this guide's source-of-truth)
+- [Error handling guide](/agentfootprint/guides/error-handling/) — typed errors at the SDK boundary; precursor to the Reliability primitives
+- [Observability guide](/agentfootprint/guides/observability/) — wire `onStateChange` / `output_canned_used` / `failurePoint.phase` into your observability backend

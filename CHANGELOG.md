@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.11.0]
+
+### Added — Reliability subsystem documentation
+
+Closes the docs/example gap noted during the v2.10.0 retrospective. v2.10.0 → v2.10.2 shipped the 3 reliability primitives; this minor release ships the unified docs + runnable example + integration test that the patch releases skipped.
+
+- **`examples/features/08-reliability.ts`** — single runnable example covering all 3 reliability primitives end-to-end: `withCircuitBreaker` (vendor outage detection), `outputFallback` (3-tier degradation on schema failure), `resumeOnError` (mid-run failure recovery from JSON-serializable checkpoint). Three demo functions, isolated and copy-pasteable. With regression guards (`process.exit(1)` on any invariant violation).
+- **`examples/features/08-reliability.md`** — companion explainer with the consumer-facing "what to copy" table.
+- **`test/core/reliability-example.test.ts`** — integration test that imports `run()` from the example, asserts each of the 3 primitives engaged correctly, and pins the checkpoint shape via snapshot bounds. Catches silent example breakage so the docs page never lies.
+- **`docs-site/src/content/docs/guides/reliability.mdx`** — new docs site page under Production Concerns sidebar group. Live-imports the example file via `<CodeFile path="..." />` so the docs snippet stays in sync with the runnable file. Covers all 3 primitives with state-machine diagrams, the per-instance vs distributed tradeoff for CircuitBreaker, the fail-open vs fail-closed tradeoff for outputFallback, and the tools-re-execute caveat for resumeOnError.
+- **`docs-site/src/content/docs/index.mdx` updates** — "What ships today" list now mentions the Reliability subsystem with link to guide. "Roadmap" table updated through v2.11.0 with checkmarks for completed releases.
+- **Sidebar entry** — "Reliability subsystem (v2.10)" added under Production Concerns.
+
+Total project tests: **1783 / 1783 passing** (1781 from v2.10.2 + 2 new integration tests). Docs site builds clean (51 pages).
+
+### Coming next
+
+- **v2.11.1+** — Rules-based reliability refactor. Today's `withCircuitBreaker.shouldCount`, `withRetry.shouldRetry`, `withFallback.shouldFallback`, `outputFallback.fallback` are opaque predicate functions — invisible to the trace. v2.11.1 may refactor these to use footprintjs's `decide()` evidence-capture mechanism so every reliability decision lands in the narrative + commit log automatically (same pattern as the v2.6 cache layer's `CacheDecisionSubflow`). Design memo to follow.
+
 ## [2.10.2]
 
 ### Added — Reliability subsystem (part 3 of 3 — COMPLETE)

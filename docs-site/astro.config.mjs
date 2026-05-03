@@ -121,6 +121,7 @@ export default defineConfig({
             { label: 'Deployment', slug: 'guides/deployment' },
             { label: 'Pause / Resume', slug: 'guides/pausable' },
             { label: 'Resilience', slug: 'guides/resilience' },
+            { label: 'Reliability subsystem (v2.10)', slug: 'guides/reliability' },
             { label: 'Error handling', slug: 'guides/error-handling' },
             { label: 'Security', slug: 'guides/security' },
             { label: 'Testing', slug: 'guides/testing' },
