@@ -19,3 +19,9 @@
 export { withRetry, type WithRetryOptions } from './withRetry.js';
 export { withFallback, type WithFallbackOptions } from './withFallback.js';
 export { fallbackProvider, type FallbackProviderOptions } from './fallbackProvider.js';
+export {
+  withCircuitBreaker,
+  CircuitOpenError,
+  type WithCircuitBreakerOptions,
+  type CircuitState,
+} from './withCircuitBreaker.js';

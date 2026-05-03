@@ -5,6 +5,54 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.10.0]
+
+### Added — Reliability subsystem (part 1 of 3)
+
+The Reliability subsystem was deferred from v2.5 → v2.6 → v2.7 → v2.8 → v2.9. It ships in three pieces — this release is the first.
+
+- **`withCircuitBreaker(provider, options)` — Nygard-style circuit breaker decorator** under `agentfootprint/resilience`. Wraps any `LLMProvider`, tracks consecutive failures, and OPENS after `failureThreshold` failures. Once OPEN, calls fail-fast with `CircuitOpenError` (no network round-trip) until `cooldownMs` elapses. Then enters HALF-OPEN: probe calls run; `halfOpenSuccessThreshold` successes close the breaker; one failure re-opens it.
+
+  ```ts
+  import { anthropic, openai } from 'agentfootprint/llm-providers';
+  import { withCircuitBreaker, withFallback } from 'agentfootprint/resilience';
+
+  const provider = withFallback(
+    withCircuitBreaker(anthropic({ apiKey }), {
+      failureThreshold: 5,        // open after 5 consecutive failures
+      cooldownMs: 30_000,         // stay open for 30s before probing
+      halfOpenSuccessThreshold: 2, // need 2 probe successes to close
+    }),
+    withCircuitBreaker(openai({ apiKey })),
+  );
+  ```
+
+  **Why this matters more than `withRetry`** — `withRetry` keeps hammering one provider with backoff during a multi-minute vendor outage. Each request burns 3 retries + backoff = ~3 sec of wasted latency before giving up to the fallback. Multiplied by your QPS, that's a lot of wasted time + tokens. The circuit breaker says "we just saw 5 failures in a row; stop calling for 30 seconds." Subsequent requests fail in <5µs, `withFallback` routes to OpenAI immediately.
+
+  **Three states with explicit transitions:**
+
+  ```
+  CLOSED ──[ N consecutive failures ]──► OPEN
+     ▲                                    │
+     │                                    │ [cooldownMs elapsed]
+     │                                    ▼
+     └──[ M probe successes ]──── HALF-OPEN
+  ```
+
+  - **`shouldCount` predicate** — by default everything except `AbortError` counts toward the threshold. Override to ignore client errors (e.g., 4xx) so a malformed request doesn't trip the breaker for everyone.
+  - **`onStateChange(state, reason)` hook** — fires on every transition. Wire to your observability stack (e.g., emit `agentfootprint.resilience.circuit_state_changed`).
+  - **Streaming-aware** — `stream()` is decorated identically. A mid-stream error doesn't count toward the threshold (could be a content-filter trip on a single request); only stream failures BEFORE any chunk yields count.
+  - **Composable** — wrap inside `withRetry` (per-attempt circuit check) or compose under `fallbackProvider` (which we recommend).
+
+  **Performance:** OPEN-state rejection is sub-µs (10k rejections under 200ms in CI; <5µs/op on a hot core). The wrapped provider isn't called at all when OPEN — that's the whole point.
+
+  12 7-pattern tests in `test/resilience/unit/withCircuitBreaker.test.ts` covering all state transitions (CLOSED → OPEN → HALF-OPEN → CLOSED, HALF-OPEN → OPEN), the `shouldCount` predicate, and composition with `withFallback`. Total suite: 1755 / 1755 passing, 0 regressions.
+
+### Coming next — completing the Reliability subsystem
+
+- **v2.10.1** — 3-tier `outputFallback(primary, fallback, canned)` for structured-output validation: when validation fails after maxIterations, fall through to a fallback output, then to a canned response. Different from provider fallback — this is about the SHAPE of the agent's final answer, not which LLM gets called.
+- **v2.10.2** — `agent.resumeOnError(checkpoint)` + auto-checkpoint at iteration boundaries + `RunCheckpointError`. Today's pause/resume only handles intentional pauses (`askHuman`). With this, an LLM 500 mid-iteration throws `RunCheckpointError` carrying the last-known-good checkpoint, which the consumer can persist to Redis/queue/DB and resume hours/days later from a different process. Reliability subsystem complete.
+
 ## [2.9.0]
 
 ### Added
