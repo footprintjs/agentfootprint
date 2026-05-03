@@ -5,6 +5,59 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.10.1]
+
+### Added — Reliability subsystem (part 2 of 3)
+
+- **`.outputFallback({ fallback, canned })` — 3-tier degradation for output-schema validation failures.** Pairs with `.outputSchema(parser)`. When the LLM's final answer fails schema validation, instead of throwing `OutputSchemaError` to the caller, the agent falls through:
+
+  1. **Primary** — LLM emitted schema-valid JSON. Caller gets the parsed value.
+  2. **Fallback** — async `fallback(error, raw)` runs; its return value is re-validated against the schema.
+  3. **Canned** — static safety-net value (validated against the schema at builder time so it's *guaranteed* to satisfy). When `canned` is set, the agent **NEVER throws** on output-schema failure — fail-open by construction.
+
+  ```ts
+  import { z } from 'zod';
+  const Refund = z.object({ amount: z.number().nonnegative(), reason: z.string().min(1) });
+
+  const agent = Agent.create({...})
+    .system('You decide refund amounts.')
+    .outputSchema(Refund)
+    .outputFallback({
+      fallback: async (err, raw) => ({
+        amount: 0,
+        reason: `manual review (LLM output: ${raw.slice(0, 200)})`,
+      }),
+      canned: { amount: 0, reason: 'unable to process — please retry' },
+    })
+    .build();
+
+  // Caller never sees OutputSchemaError; gets a typed Refund either way.
+  const refund = await agent.runTyped({ message: '...' });
+  ```
+
+  **Two typed events** fire on tier transitions for observability:
+  - `agentfootprint.resilience.output_fallback_triggered` (tier 2 fired)
+  - `agentfootprint.resilience.output_canned_used` (tier 3 fired — fallback also failed)
+
+  **Builder-time `canned` validation** — the canned value is parsed against the schema at `.outputFallback({...})` time. Throws `TypeError` immediately if it doesn't satisfy. Misconfig surfaces in CI / dev, not at 3am when the fallback engages.
+
+  **New method: `agent.parseOutputAsync<T>(raw)`** — async sister of `parseOutput`. Engages the fallback chain. The sync `parseOutput` stays back-compat — always throws on validation failure regardless of fallback config.
+
+  **Fail-open vs fail-closed** is consumer choice:
+  - With `canned` → agent NEVER throws on output failure (fail-open)
+  - Without `canned` → if `fallback` throws or returns invalid value, the error propagates (fail-closed)
+
+  13 7-pattern tests in `test/core/outputFallback.test.ts` covering all 3 tiers, builder-time validation, double-set guard, and event emission. Total suite: 1768 / 1768 passing, 0 regressions.
+
+### Changed — `withCircuitBreaker` documentation
+
+- **JSDoc note: per-instance scope, NOT distributed.** Each `withCircuitBreaker(...)` call holds its own breaker state in process memory. If you run 100 server replicas, each has its own independent breaker (matches Hystrix default). For cluster-wide coordination, layer your own Redis-backed counter via the `onStateChange` hook + `shouldCount` predicate. Surfaced after the 7-panel review on v2.10.0 — pure docs change, no API change.
+
+### Coming next
+
+- **v2.10.2** — `agent.resumeOnError(checkpoint)` + auto-checkpoint at iteration boundaries + `RunCheckpointError`. Reliability subsystem complete.
+- **v2.11.0** — unified Reliability guide page on the docs site + runnable example covering all 3 reliability primitives + integration test.
+
 ## [2.10.0]
 
 ### Added — Reliability subsystem (part 1 of 3)

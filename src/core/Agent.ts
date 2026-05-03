@@ -77,8 +77,16 @@ import { buildReadSkillTool } from '../lib/injection-engine/skillTools.js';
 import type { ActiveInjection, Injection } from '../lib/injection-engine/types.js';
 import { defineInstruction } from '../lib/injection-engine/factories/defineInstruction.js';
 import {
+  applyOutputFallback,
+  validateCannedAgainstSchema,
+  type OutputFallbackFn,
+  type OutputFallbackOptions,
+  type ResolvedOutputFallback,
+} from './outputFallback.js';
+import {
   applyOutputSchema,
   buildDefaultInstruction,
+  OutputSchemaError,
   type OutputSchemaOptions,
   type OutputSchemaParser,
 } from './outputSchema.js';
@@ -322,6 +330,14 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
   private readonly outputSchemaParser?: OutputSchemaParser<unknown>;
 
   /**
+   * Optional 3-tier degradation for output-schema validation
+   * failures. Set via the builder's `.outputFallback({...})`. When
+   * present, `parseOutput()` and `runTyped()` fall through:
+   *   primary → fallback → canned (in order; canned guarantees no-throw).
+   */
+  private readonly outputFallbackCfg?: ResolvedOutputFallback<unknown>;
+
+  /**
    * Optional `ToolProvider` set via the builder's `.toolProvider()`.
    * When present, the Tools slot subflow consults it per iteration
    * (Block A5 follow-up) — the provider's tools land alongside any
@@ -348,6 +364,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     systemPromptCachePolicy: CachePolicy = 'always',
     cachingDisabled = false,
     cacheStrategy?: CacheStrategy,
+    outputFallbackCfg?: ResolvedOutputFallback<unknown>,
   ) {
     super();
     this.provider = opts.provider;
@@ -367,6 +384,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     this.injections = injections;
     this.memories = memories;
     this.outputSchemaParser = outputSchemaParser;
+    this.outputFallbackCfg = outputFallbackCfg;
     this.externalToolProvider = toolProvider;
     // Eager validation: tool names must be unique across .tool() +
     // every Skill.inject.tools — the LLM dispatches by name. Runs in
@@ -460,10 +478,59 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
   }
 
   /**
-   * Run the agent and return the schema-validated typed output.
-   * Convenience over `parseOutput(await agent.run({...}))`.
+   * Async sister of `parseOutput()`. When the agent is configured
+   * with `.outputFallback({...})`, this is the version that engages
+   * the 3-tier degradation chain on validation failure (the sync
+   * `parseOutput` always throws on failure for back-compat).
    *
-   * Throws `OutputSchemaError` on parse / validation failure.
+   * Without `outputFallback`, behaves identically to `parseOutput`
+   * — returns sync-style on the happy path, throws OutputSchemaError
+   * on validation failure.
+   */
+  async parseOutputAsync<T = unknown>(raw: string): Promise<T> {
+    if (!this.outputSchemaParser) {
+      throw new Error(
+        `Agent.parseOutputAsync: this agent has no outputSchema. Use ` +
+          `Agent.create({...}).outputSchema(parser).build() to enable typed output.`,
+      );
+    }
+    const parser = this.outputSchemaParser as OutputSchemaParser<T>;
+    try {
+      return applyOutputSchema(raw, parser);
+    } catch (err) {
+      if (!this.outputFallbackCfg || !(err instanceof OutputSchemaError)) throw err;
+      // Engage the 3-tier fallback. The dispatcher gives us the
+      // typed-event entry; we synthesize a minimal event shape since
+      // these events have no per-stage anchor.
+      const emit = (eventType: string, payload: Record<string, unknown>): void => {
+        try {
+          this.dispatcher.dispatch({
+            type: eventType,
+            timestamp: Date.now(),
+            payload,
+          } as never);
+        } catch {
+          /* observability errors must not poison the fallback path */
+        }
+      };
+      return applyOutputFallback(
+        raw,
+        parser,
+        this.outputFallbackCfg as ResolvedOutputFallback<T>,
+        emit,
+        err,
+      );
+    }
+  }
+
+  /**
+   * Run the agent and return the schema-validated typed output.
+   * Convenience over `parseOutputAsync(await agent.run({...}))`.
+   *
+   * Throws `OutputSchemaError` on parse / validation failure UNLESS
+   * `.outputFallback({...})` is configured, in which case the
+   * 3-tier degradation chain (primary → fallback → canned) engages.
+   *
    * Throws if the agent has no outputSchema set or if the run
    * pauses (use `run()` directly when pauses are expected).
    */
@@ -481,7 +548,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
           'Use agent.run() + agent.parseOutput(...) after resume.',
       );
     }
-    return this.parseOutput<T>(out);
+    return this.parseOutputAsync<T>(out);
   }
 
   async run(input: AgentInput, options?: RunOptions): Promise<AgentOutput | RunnerPauseOutcome> {
@@ -1457,6 +1524,10 @@ export class AgentBuilder {
    * builder, propagated to the Agent at `.build()` time.
    */
   private outputSchemaParser?: OutputSchemaParser<unknown>;
+
+  /** 3-tier output fallback chain — set via `.outputFallback({...})`.
+   *  Optional; absent = current throw-on-validation-failure behavior. */
+  private outputFallbackCfg?: ResolvedOutputFallback<unknown>;
   /**
    * Optional `ToolProvider` set via `.toolProvider()`. Propagated to
    * the Agent's Tools slot subflow + tool-call dispatcher; consulted
@@ -1839,6 +1910,64 @@ export class AgentBuilder {
     return this;
   }
 
+  /**
+   * 3-tier degradation for output-schema validation failures. Pairs
+   * with `.outputSchema()` — calling `.outputFallback()` without an
+   * `outputSchema` first throws (the fallback has nothing to validate).
+   *
+   * Three tiers:
+   *
+   *   1. **Primary** — LLM emitted schema-valid JSON. Caller gets it.
+   *   2. **Fallback** — `OutputSchemaError` thrown. The async
+   *      `fallback(error, raw)` runs; its return is re-validated.
+   *   3. **Canned** — static safety-net value. NEVER throws when set.
+   *
+   * `canned` is validated against the schema at builder time —
+   * fail-fast on misconfig (a `canned` that doesn't validate would
+   * defeat the fail-open guarantee).
+   *
+   * Two typed events fire on tier transitions for observability:
+   *   - `agentfootprint.resilience.output_fallback_triggered`
+   *   - `agentfootprint.resilience.output_canned_used`
+   *
+   * @example
+   * ```ts
+   * import { z } from 'zod';
+   * const Refund = z.object({ amount: z.number(), reason: z.string() });
+   *
+   * const agent = Agent.create({...})
+   *   .outputSchema(Refund)
+   *   .outputFallback({
+   *     fallback: async (err, raw) => ({ amount: 0, reason: 'manual review' }),
+   *     canned:   { amount: 0, reason: 'unable to process' },
+   *   })
+   *   .build();
+   * ```
+   */
+  outputFallback<T>(options: OutputFallbackOptions<T>): this {
+    if (!this.outputSchemaParser) {
+      throw new Error(
+        'AgentBuilder.outputFallback: call .outputSchema(parser) FIRST. ' +
+          'outputFallback supplements outputSchema; one without the other is incoherent.',
+      );
+    }
+    if (this.outputFallbackCfg) {
+      throw new Error(
+        'AgentBuilder.outputFallback: already set. Each agent has at most one fallback chain.',
+      );
+    }
+    // Build-time validation — canned MUST satisfy the schema.
+    if (options.canned !== undefined) {
+      validateCannedAgainstSchema(options.canned, this.outputSchemaParser as OutputSchemaParser<T>);
+    }
+    this.outputFallbackCfg = {
+      fallback: options.fallback as OutputFallbackFn<unknown>,
+      ...(options.canned !== undefined && { canned: options.canned as unknown }),
+      hasCanned: options.canned !== undefined,
+    };
+    return this;
+  }
+
   build(): Agent {
     // Resolve the voice config: bundled defaults + consumer overrides.
     // Templates flow through the same barrel exports the rest of the
@@ -1864,6 +1993,7 @@ export class AgentBuilder {
       this.systemPromptCachePolicy,
       this.cachingDisabledValue,
       this.cacheStrategyOverride,
+      this.outputFallbackCfg,
     );
     // Attach builder-collected recorders so they receive events from
     // the very first run. Mirrors what consumers would do post-build

@@ -51,6 +51,16 @@
  * `stream()` is decorated identically. `name`/`flush`/`stop` pass
  * through unchanged (the consumer's existing observability hooks
  * still see the underlying provider's identity).
+ *
+ * **Scope: per-instance, NOT distributed.** Each `withCircuitBreaker(...)`
+ * call holds its own breaker state in process memory. If you run 100
+ * server replicas, each has its own independent breaker — one
+ * instance can be CLOSED while another is OPEN. This is intentional
+ * (no shared state means no Redis dependency, no SPOF, no
+ * partial-cluster-blast-radius surprises) and matches Hystrix's
+ * default behavior. For cluster-wide coordination, layer your own
+ * Redis-backed counter on top via the `onStateChange` hook +
+ * `shouldCount` predicate.
  */
 
 import type { LLMChunk, LLMProvider, LLMRequest, LLMResponse } from '../adapters/types.js';

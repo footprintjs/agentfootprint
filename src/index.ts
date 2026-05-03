@@ -240,6 +240,7 @@ export {
   type OutputSchemaParser,
   type OutputSchemaOptions,
 } from './core/outputSchema.js';
+export { type OutputFallbackOptions, type OutputFallbackFn } from './core/outputFallback.js';
 export {
   flowchartAsTool,
   type FlowchartAsToolOptions,
