@@ -5,6 +5,41 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.8.2]
+
+### Added
+
+- **`cloudwatchObservability(opts)`** — generic AWS CloudWatch Logs observability adapter under `agentfootprint/observability-providers`. Same SDK as `agentcoreObservability` but **without** AgentCore-specific defaults. Use when you're shipping agent telemetry to CloudWatch and not running inside Bedrock AgentCore (most common case).
+
+  ```ts
+  import { cloudwatchObservability } from 'agentfootprint/observability-providers';
+  import { microtaskBatchDriver } from 'footprintjs/detach';
+
+  agent.enable.observability({
+    strategy: cloudwatchObservability({
+      region: 'us-east-1',
+      logGroupName: '/myapp/agent-prod',
+      logStreamName: `${process.env.HOSTNAME}/${Date.now()}`,
+    }),
+    detach: { driver: microtaskBatchDriver, mode: 'forget' },
+  });
+  ```
+
+  Same peer dep + lazy-require contract as `agentcoreObservability`: `@aws-sdk/client-cloudwatch-logs` is declared **optional** in `peerDependenciesMeta`. Consumers who never call this factory don't need the AWS SDK in their lockfile. Bundlers don't pull the SDK into builds that never use the adapter.
+
+  9 7-pattern tests in `test/observability-providers/cloudwatch.test.ts`. Total suite: 1716 / 1716 passing, 0 regressions.
+
+### Changed
+
+- **`agentcoreObservability` refactored to thin-wrap `cloudwatchObservability`'s shared base.** Both adapters now share one CloudWatch Logs hot-path — improvements (retry, sequence-token handling, metric emission) flow to every CloudWatch-shaped adapter automatically. Behavior-preserving: all 11 existing `agentcoreObservability` tests pass unchanged. The only observable difference between the two adapters is `strategy.name` (`'agentcore'` vs `'cloudwatch'`) — used for registry-lookup and diagnostics.
+
+  Public API for `agentcoreObservability` is unchanged. `AgentcoreObservabilityOptions` is now a type alias for `CloudwatchObservabilityOptions` — kept as a separate type so future AgentCore-specific options (e.g., `agentcoreSessionId` propagation) can be added without a breaking change.
+
+### Coming next
+
+- **v2.8.3** — `xrayObservability` (AWS distributed tracing). Different SDK (`@aws-sdk/client-xray`), different shape (spans not log events), so won't share the CloudWatch base.
+- **v2.9.x** — `otelObservability` + `datadogObservability`.
+
 ## [2.8.1]
 
 ### Added

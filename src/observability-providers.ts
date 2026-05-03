@@ -27,8 +27,8 @@
  * ```
  *
  * Roadmap:
- *   - agentcoreObservability   ← v2.8.1 (this release)
- *   - cloudwatchObservability  ← v2.8.2
+ *   - agentcoreObservability   ← v2.8.1
+ *   - cloudwatchObservability  ← v2.8.2 (this release)
  *   - xrayObservability        ← v2.8.3
  *   - otelObservability        ← v2.9.x
  *   - datadogObservability     ← v2.9.x
@@ -38,3 +38,7 @@ export {
   agentcoreObservability,
   type AgentcoreObservabilityOptions,
 } from './adapters/observability/agentcore.js';
+export {
+  cloudwatchObservability,
+  type CloudwatchObservabilityOptions,
+} from './adapters/observability/cloudwatch.js';
