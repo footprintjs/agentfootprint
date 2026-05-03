@@ -33,6 +33,76 @@ The 80% case: a live status line ("what is the agent doing right now?") and a do
 
 Both return a `stop()` function — call it on shutdown to detach the listener cleanly.
 
+## Tier-3 — `.enable.observability()` (v2.8) — grouped vendor strategies
+
+For shipping events to a vendor backend (CloudWatch, Datadog, OTel, etc.), `.enable.observability(...)` accepts a typed strategy + optional `detach` driver. The strategy is the WHERE; the detach is the HOW (sync inline vs fire-and-forget):
+
+```ts
+import { agentcoreObservability } from 'agentfootprint/observability-providers';
+import { microtaskBatchDriver } from 'footprintjs/detach';
+
+const stop = agent.enable.observability({
+  strategy: agentcoreObservability({
+    region: 'us-east-1',
+    logGroupName: '/agentfootprint/my-agent',
+  }),
+  // Recommended for production — slow exporters never block the agent loop.
+  // The strategy's `exportEvent(event)` runs on the driver's schedule
+  // instead of inline on the dispatcher's hot path.
+  detach: { driver: microtaskBatchDriver, mode: 'forget' },
+});
+```
+
+### Detach modes
+
+| `detach.mode` | Returns | Use when |
+|---|---|---|
+| omitted (no `detach`) | sync | Strategy is fast (< 100µs). Default, back-compat. |
+| `'forget'` (default when `detach` set) | `void` | Pure fire-and-forget telemetry. |
+| `'join-later'` | `onHandle(h)` callback fires per event | You want to `await` exports later (tests, backpressure). |
+
+### Drivers
+
+Pick by environment — see [`footprintjs/detach`](https://footprintjs.github.io/footPrint/guides/patterns/detach/) for the full list. All exported from `'footprintjs/detach'`:
+
+| Driver | Best for |
+|---|---|
+| `microtaskBatchDriver` | Default. Cross-runtime. Lowest latency. |
+| `setImmediateDriver` | Node only. Yields to I/O before flushing. |
+| `setTimeoutDriver` | Cross-runtime, configurable delay. |
+| `sendBeaconDriver` | Browser. Survives page-unload (analytics). |
+| `workerThreadDriver` | CPU-isolated. For heavy serialization. |
+
+### Graceful shutdown
+
+`flushAllDetached()` (from `'footprintjs/detach'`) drains every in-flight handle process-wide:
+
+```ts
+import { flushAllDetached } from 'footprintjs/detach';
+
+process.on('SIGTERM', async () => {
+  const stats = await flushAllDetached({ timeoutMs: 10_000 });
+  console.log(`Drained ${stats.done}, failed ${stats.failed}, pending ${stats.pending}`);
+  process.exit(stats.pending === 0 ? 0 : 1);
+});
+```
+
+### Vendor adapters — `agentfootprint/observability-providers`
+
+Vendor strategies ship under one grouped subpath (parallel-providers pattern, mirrors `llm-providers` / `tool-providers` / `memory-providers`):
+
+| Adapter | Status | Peer dep (optional) |
+|---|---|---|
+| `agentcoreObservability` | ✅ v2.8.1 | `@aws-sdk/client-cloudwatch-logs` |
+| `cloudwatchObservability` | v2.8.2 (next) | `@aws-sdk/client-cloudwatch-logs` |
+| `xrayObservability` | v2.8.3 | `@aws-sdk/client-xray` |
+| `otelObservability` | v2.9.x | `@opentelemetry/sdk-node` |
+| `datadogObservability` | v2.9.x | `dd-trace` |
+
+All peer deps are declared **optional** — consumers who never call a particular factory don't need to install its SDK. Each adapter lazy-imports its SDK at first use.
+
+`enable.cost(...)` accepts the same `detach` option for the same reasons. `enable.thinking` and `enable.lens` deliberately stay sync — UI render must feel responsive.
+
 ## Cost tracking
 
 Pass a `pricingTable` to the Agent constructor and the framework emits `agentfootprint.cost.tick` after every LLM call with per-call and cumulative USD. Add a `costBudget` and you also get a one-shot `cost.limit_hit` the first time cumulative crosses the budget. The library never auto-aborts — *you* decide what to do (cancel via signal, escalate, log, etc.):

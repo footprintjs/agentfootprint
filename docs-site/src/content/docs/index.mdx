@@ -1,9 +1,9 @@
 ---
 title: agentfootprint
-description: Context engineering, abstracted. The substrate for agents whose every decision, tool call, memory write, and context injection is a typed event you can replay six months later.
+description: Context engineering, abstracted. Three architectural moats — Dynamic ReAct, the cache layer, and replayable causal traces — that compound into agents you can debug six months later.
 template: splash
 hero:
-  tagline: "Context engineering, abstracted. Every decision an Agent makes — tool call, memory write, context injection — is a typed event you can replay, audit, and explain. Six months later. On a different machine."
+  tagline: "Context engineering, abstracted. Same kind of move PyTorch made for autograd, Express made for HTTP, Prisma made for SQL — agentfootprint owns the agent loop, so the framework can do the work other frameworks leave to you: per-iteration recomposition, prompt caching, and replayable typed-event traces."
   actions:
     - text: 5-min Quick Start
       link: /agentfootprint/getting-started/quick-start/
@@ -20,13 +20,51 @@ hero:
 ---
 
 import CodeFile from '@/components/CodeFile.astro';
-import { Card, CardGrid } from '@astrojs/starlight/components';
+import { Card, CardGrid, Aside } from '@astrojs/starlight/components';
 
 ## The one thing that's different
 
 Every other agent framework ships agents you debug with **logs**. agentfootprint ships agents whose every decision, tool call, memory write, and context injection is **captured as a typed event during one DFS traversal** — no instrumentation, no post-processing.
 
 The framework owns the loop, so the framework can record everything that happens inside it. Same way `autograd`'s forward-pass traversal makes gradient inspection automatic, agentfootprint's flowchart traversal makes the typed-event stream + replayable traces automatic.
+
+## The mental model — three slots, four triggers, one Injection
+
+Every agentfootprint Agent has **three context slots**: `system`, `messages`, `tools`. Everything you'd want to put into an agent's context — Skills, Steering, Instructions, Facts, Memory, RAG, tool definitions — is one of N **Injections**. Each Injection has a **trigger** that decides when it activates.
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                          Agent (one loop)                        │
+│                                                                  │
+│   Iteration N:   ┌──────────┐  ┌──────────┐  ┌──────────┐      │
+│                  │  system  │  │ messages │  │  tools   │      │
+│                  └────▲─────┘  └────▲─────┘  └────▲─────┘      │
+│                       │              │              │           │
+│                       │   Injections (re-evaluated every iter)   │
+│                       │   ┌──────────────────────────────┐       │
+│                       │   │ Skill / Steering / Instruct  │ → system  │
+│                       │   │ Fact / Memory / RAG          │ → messages│
+│                       │   │ ToolProvider / gatedTools    │ → tools   │
+│                       │   └──────────────────────────────┘       │
+│                                                                  │
+│   Trigger taxonomy: 4 kinds                                      │
+│                                                                  │
+│       always-on         — every iteration                        │
+│       turn-start        — first iteration of a turn              │
+│       on-tool-return    — after each tool call's result          │
+│       llm-activated     — model picks via Skills tool            │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+| Trigger | Fires | Use for |
+|---|---|---|
+| `always-on` | Every iteration | Steering ("respond JSON"), constant facts |
+| `turn-start` | First iteration of a turn | User-specific Skills, session memory |
+| `on-tool-return` | After every tool call | Context based on what the tool just returned |
+| `llm-activated` | Model decides via `listSkills`/`readSkill` tools | Heavy / costly Skills the model loads on demand |
+
+You don't compose context; you **declare what activates when**, and the framework recomposes the three slots per iteration.
 
 ## In 30 seconds — runs offline, no API key
 
@@ -39,6 +77,47 @@ npm run example examples/memory/01-window-strategy.ts
 
 Outputs *"You just asked about your previous message."* in under 100ms. Deterministic, free, no API key. Swap `mock(...)` for `anthropic(...)` / `openai(...)` / `bedrock(...)` / `ollama(...)` for production. Nothing else changes.
 
+## Three architectural moats
+
+Each one alone is good. Together they multiply — the cache amplifies Dynamic ReAct's per-iteration recomposition; the trace export captures the result of every recomposition + every cache hit. Strip any one and you're back to a hand-rolled framework.
+
+### 1. Dynamic ReAct — per-iteration recomposition
+
+Every other ReAct framework runs `prompt → llm → tool` in a loop where the prompt is *frozen at iteration 1*. agentfootprint **recomposes all three slots every iteration** based on the latest tool result. That makes possible:
+
+- **Tool-output-driven steering** — `on-tool-return` injection adds "the user has admin privileges" the moment a permission-check tool returns yes
+- **Per-iteration tool gating** — `gatedTools(inner, scope.role === 'admin')` exposes a different tool set per iteration based on what the agent has learned
+- **Skills that load themselves** — model uses `listSkills` to discover, then `readSkill` to load only the Skills it needs (zero token cost for unused Skills)
+- **Output-schema validation per iteration** — re-prompt with the schema-violation message until structured output validates
+- **Loop-target redirection** — `loopTo()` an earlier stage when validation fails, with a fresh injection cycle each retry
+
+This is what *"the framework owns the loop"* unlocks — see [Dynamic ReAct guide](/agentfootprint/guides/dynamic-react/).
+
+### 2. The cache layer — provider-agnostic prompt caching
+
+Per-iteration recomposition would burn tokens (everything re-builds every iteration) without caching. v2.6 ships a **provider-agnostic cache layer** — declare `cache: 'persistent'` on a Skill / Steering / Instruction and the framework picks the right cache mechanism per provider:
+
+| Provider | Mechanism | Activated by `cache: 'persistent'` |
+|---|---|---|
+| Anthropic | `cache_control: { type: 'ephemeral' }` blocks | ✅ |
+| OpenAI | Automatic (cached prefix discount) | ✅ (no-op — OpenAI handles internally) |
+| Bedrock | Same as Anthropic via Claude on Bedrock | ✅ |
+| All | `noOp` fallback for providers without prompt caching | ✅ |
+
+**Real Sonnet result with v2.6 cache layer:** a Dynamic ReAct workload dropped **36,322 → 6,535 input tokens (−82%)** end-to-end. The cache compounds with Dynamic ReAct: iteration 2+ replays the cached system prompt + Skills, only the new tool result is uncached.
+
+### 3. Replayable causal traces — debug *why*, six months later
+
+Every run exports as one JSON checkpoint. Persist it (Redis, Postgres, S3); resume on a different process, day, or server. `defineMemory({ type: CAUSAL })` stores the agent's **decision evidence** — every `decide()` value the flowchart captured.
+
+New questions cosine-match past queries; matching snapshots inject the prior decision evidence; the LLM answers from EXACT past facts, not reconstruction. See [Memory guide § Causal](/agentfootprint/guides/memory/#causal-memory--replay-decisions-not-just-messages).
+
+The same JSON shape feeds SFT / DPO / process-RL training pipelines (`exportForTraining({ format })` on the roadmap).
+
+<Aside>
+**Why "moats" not "features":** features are checklist items; moats are architectural choices that compound. Dynamic ReAct without the cache layer is expensive. The cache layer without Dynamic ReAct is uninteresting (the prompt doesn't change anyway). Trace replay without typed events is ad-hoc string parsing. Each one alone is good; together they're the substrate other frameworks would have to rebuild from scratch to match.
+</Aside>
+
 ## Pick your starting door
 
 <CardGrid stagger>
@@ -50,6 +129,9 @@ Outputs *"You just asked about your previous message."* in under 100ms. Determin
   </Card>
   <Card title="🏗️ Architecting an enterprise rollout" icon="setting">
     Start with [Deployment](/agentfootprint/guides/deployment/) — multi-tenant identity, audit trails, peer-deps, observability stack.
+  </Card>
+  <Card title="🏛️ Doing production due diligence" icon="approve-check">
+    Start with [Architecture](/agentfootprint/architecture/dependency-graph/) — dependency graph, subsystem boundaries, scope semantics, the one DFS traversal that powers everything.
   </Card>
   <Card title="🔬 Researcher / extending the framework" icon="open-book">
     Start with [Skills, explained](/agentfootprint/guides/skills-explained/) — context-engineering essay; the strongest writing in the docs.
@@ -64,30 +146,44 @@ Three example shapes, all runnable end-to-end with `npm run example examples/<fi
 - **[Research pipeline](/agentfootprint/getting-started/key-concepts/#patterns--named-compositions)** with multi-agent fan-out + LLM merge — `examples/patterns/05-tot.ts` (Tree-of-Thoughts) or `01-self-consistency.ts`
 - **[Streaming chat agent](/agentfootprint/guides/streaming/)** with token-by-token output to a browser — see streaming guide for the SSE pattern
 
-## The two differentiators
-
-### 1. Causal memory — replay *why*, not just *what*
-
-`defineMemory({ type: CAUSAL })` records the agent's decision evidence — every `decide()` value the flowchart captured. New questions cosine-match past queries; matching snapshots inject the prior decision evidence; the LLM answers from EXACT past facts, not reconstruction. See [Memory guide § Causal](/agentfootprint/guides/memory/#causal-memory--replay-decisions-not-just-messages).
-
-### 2. Trace export → trace replay
-
-Every run exports as one JSON checkpoint. Persist it (Redis, Postgres, S3); resume on a different process, day, or server. The same JSON shape feeds SFT / DPO / process-RL training pipelines (`exportForTraining({ format })` on the v2.5 roadmap).
-
 ## Mocks first, prod second
 
 | Boundary | Dev (mock) | Prod (one-line swap) |
 |---|---|---|
 | LLM provider | `mock({ replies })` | `anthropic()` · `openai()` · `bedrock()` · `ollama()` |
-| Embedder | `mockEmbedder()` | OpenAI / Cohere / Bedrock embedder (planned v2.6) |
+| Embedder | `mockEmbedder()` | OpenAI / Cohere / Bedrock embedder (planned) |
 | Memory store | `InMemoryStore` | `RedisStore` · `AgentCoreStore` (planned: pgvector / Pinecone) |
+| Cache strategy | `noOpCache()` | `anthropicCache()` · `openaiCache()` · `bedrockCache()` (v2.6) |
+| Observability | sync inline | `agentcoreObservability()` + `detach: { driver }` (v2.8.1) |
 | MCP server | `mockMcpClient({ tools })` | `mcpClient({ transport })` |
 | Tool execute | inline closure | real implementation |
 
 Ship the patterns first; pay for tokens last.
+
+## What ships today
+
+- **47 typed events across 13 domains** — context, stream, agent, cost, permission, eval, memory, skill, composition, cache, and more
+- **6 detach drivers** for non-blocking observability (microtask, immediate, setImmediate, setTimeout, sendBeacon, worker-thread)
+- **Provider-agnostic prompt cache** — Anthropic + OpenAI + Bedrock + NoOp, with a strategy registry for vendor-specific subpaths
+- **CloudWatch Logs observability adapter** (v2.8.1) — `agentcoreObservability` under `agentfootprint/observability-providers`
+- **Strategy-pattern grouped enablers** (v2.8) — `enable.observability/cost/liveStatus` accept typed strategies + optional `detach` drivers
 
 ## What's next
 
 - [Why agentfootprint?](/agentfootprint/getting-started/why/) — the substrate argument with worked examples
 - [Quick Start](/agentfootprint/getting-started/quick-start/) — first agent in 5 minutes
 - [Key Concepts](/agentfootprint/getting-started/key-concepts/) — the 5-layer taxonomy
+- [Dynamic ReAct guide](/agentfootprint/guides/dynamic-react/) — per-iteration recomposition explained
+- [Observability guide](/agentfootprint/guides/observability/) — `enable.*` API, vendor adapters, detach for non-blocking telemetry
+
+### Roadmap
+
+| Version | What |
+|---|---|
+| ✅ v2.8.1 | `agentcoreObservability` (CloudWatch Logs) |
+| v2.8.2 | `cloudwatchObservability` |
+| v2.8.3 | `xrayObservability` (AWS distributed tracing) |
+| v2.9.x | `otelObservability` + `datadogObservability` |
+| v2.10.x | `cost-stripe` + cost-providers subpath |
+| v2.11.x | Reliability subsystem (CircuitBreaker / 3-tier fallback / `resumeOnError`) |
+| v2.12.x | `lens-browser` / `lens-cli` (visual debugger backends) |
