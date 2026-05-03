@@ -5,6 +5,53 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.8.3]
+
+### Added
+
+- **`xrayObservability(opts)`** — AWS X-Ray distributed-tracing observability adapter under `agentfootprint/observability-providers`. Maps agentfootprint's event taxonomy onto hierarchical X-Ray segment trees:
+
+  ```
+  agent.turn_start          ↦  root segment (one trace per turn)
+  agent.iteration_start     ↦  push subsegment under root
+  stream.llm_start          ↦  push leaf subsegment (model call)
+  stream.tool_start         ↦  push leaf subsegment (tool call)
+  ```
+
+  Result in the X-Ray Trace Map: a hierarchical timeline of every agent run — turn → iteration → llm-call/tool-call — queryable in X-Ray Insights, joinable with the rest of your AWS distributed trace via `AWSTraceHeader` propagation.
+
+  ```ts
+  import { xrayObservability } from 'agentfootprint/observability-providers';
+  import { microtaskBatchDriver } from 'footprintjs/detach';
+
+  agent.enable.observability({
+    strategy: xrayObservability({
+      region: 'us-east-1',
+      serviceName: 'my-agent-prod',
+      sampleRate: 0.1,                    // 10% sampling — decisions made at turn_start
+    }),
+    detach: { driver: microtaskBatchDriver, mode: 'forget' },
+  });
+  ```
+
+  - **Hierarchical segment management**: per-turn stack tracks active segments by `runId` (events for multiple in-flight turns interleave correctly). Defensive `popSegment` matches by name to survive out-of-order `_end` events (e.g., pause/resume mid-turn).
+  - **Sampling**: decisions made at `turn_start` and persist for the whole turn — partial traces never reach X-Ray.
+  - **Standard X-Ray segment shape**: `name`, `id` (16 hex), `trace_id` (`1-{8hex}-{24hex}` per spec), `parent_id`, `start_time` / `end_time` (unix seconds), `annotations` (queryable in X-Ray Insights), `metadata` (visible but not queryable).
+  - **Annotations on segments**: `model` on llm segments, `toolName` on tool segments, `cumulativeCostUsd` from `cost.tick` events lands on the topmost active segment.
+  - **Batching**: up to 25 segments per `PutTraceSegments` call (X-Ray hard caps at 50). Default 1s flush window for low-traffic agents.
+  - **`flush()` is shutdown-safe**: force-closes any in-flight turn segments so partial traces ship on graceful shutdown.
+
+  Peer dep `@aws-sdk/client-xray` declared as **optional** in `peerDependenciesMeta` — consumers who never call `xrayObservability(...)` don't need the AWS SDK in their lockfile. Lazy-required via `lib/lazyRequire.ts`.
+
+  Unlike `cloudwatchObservability` and `agentcoreObservability` (both share the `_buildCloudWatchObservability` base), X-Ray is a fundamentally different shape (spans + parent/child + sampling) so it doesn't share that base.
+
+  12 7-pattern tests in `test/observability-providers/xray.test.ts`. Total suite: 1728 / 1728 passing, 0 regressions.
+
+### Coming next
+
+- **v2.9.0** — `otelObservability` (industry-standard OpenTelemetry) + `datadogObservability` (most-requested commercial vendor).
+- **v2.10.0** — first `cost-providers` adapter (`stripeCost`).
+
 ## [2.8.2]
 
 ### Added

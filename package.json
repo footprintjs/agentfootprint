@@ -171,6 +171,7 @@
     "@aws-sdk/client-bedrock-agent-runtime": "*",
     "@aws-sdk/client-bedrock-runtime": "*",
     "@aws-sdk/client-cloudwatch-logs": "*",
+    "@aws-sdk/client-xray": "*",
     "@modelcontextprotocol/sdk": "*",
     "footprintjs": ">=4.17.1",
     "ioredis": "*",
@@ -191,6 +192,9 @@
       "optional": true
     },
     "@aws-sdk/client-cloudwatch-logs": {
+      "optional": true
+    },
+    "@aws-sdk/client-xray": {
       "optional": true
     },
     "@modelcontextprotocol/sdk": {
