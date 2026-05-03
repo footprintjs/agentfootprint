@@ -29,9 +29,14 @@
  * Roadmap:
  *   - agentcoreObservability   ← v2.8.1
  *   - cloudwatchObservability  ← v2.8.2
- *   - xrayObservability        ← v2.8.3 (this release)
- *   - otelObservability        ← v2.9.x
- *   - datadogObservability     ← v2.9.x
+ *   - xrayObservability        ← v2.8.3
+ *   - otelObservability        ← v2.9.0 (this release)
+ *
+ * Note: `datadogObservability` was on the v2.9 roadmap, but Datadog
+ * APM accepts OTLP — point your OTel SDK at Datadog's OTLP endpoint
+ * and `otelObservability` covers the Datadog use case. We'll ship a
+ * dedicated `dd-trace`-based adapter only if real-world feedback
+ * demands the native Datadog APM client.
  */
 
 export {
@@ -47,3 +52,10 @@ export {
   type XrayObservabilityOptions,
   type XRayLikeClient,
 } from './adapters/observability/xray.js';
+export {
+  otelObservability,
+  type OtelObservabilityOptions,
+  type OtelTracerLike,
+  type OtelSpanLike,
+  type OtelSpanOptions,
+} from './adapters/observability/otel.js';

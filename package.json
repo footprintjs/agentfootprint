@@ -173,6 +173,7 @@
     "@aws-sdk/client-cloudwatch-logs": "*",
     "@aws-sdk/client-xray": "*",
     "@modelcontextprotocol/sdk": "*",
+    "@opentelemetry/api": "*",
     "footprintjs": ">=4.17.1",
     "ioredis": "*",
     "openai": "*",
@@ -198,6 +199,9 @@
       "optional": true
     },
     "@modelcontextprotocol/sdk": {
+      "optional": true
+    },
+    "@opentelemetry/api": {
       "optional": true
     },
     "ioredis": {

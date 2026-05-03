@@ -5,6 +5,54 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.9.0]
+
+### Added
+
+- **`otelObservability(opts)`** — OpenTelemetry distributed-tracing adapter under `agentfootprint/observability-providers`. The strategically biggest unlock since OTel-compat backends include the entire industry: **Honeycomb**, **Grafana Cloud / Tempo / Mimir**, **AWS Distro for OTel** (alternative to `xrayObservability`), **Datadog APM** via OTLP, **Splunk Observability Cloud**, **New Relic**, **Lightstep / ServiceNow Cloud Observability**, and any custom OTel collector pipeline.
+
+  ```ts
+  import { NodeTracerProvider } from '@opentelemetry/sdk-trace-node';
+  import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
+  import { BatchSpanProcessor } from '@opentelemetry/sdk-trace-base';
+  import { otelObservability } from 'agentfootprint/observability-providers';
+  import { microtaskBatchDriver } from 'footprintjs/detach';
+
+  // Set up OTel ONCE at app startup (BYO SDK + exporter).
+  const provider = new NodeTracerProvider();
+  provider.addSpanProcessor(new BatchSpanProcessor(new OTLPTraceExporter({
+    url: 'https://api.honeycomb.io/v1/traces',
+    headers: { 'x-honeycomb-team': process.env.HONEYCOMB_KEY },
+  })));
+  provider.register();
+
+  agent.enable.observability({
+    strategy: otelObservability({ serviceName: 'my-agent' }),
+    detach: { driver: microtaskBatchDriver, mode: 'forget' },
+  });
+  ```
+
+  **BYO SDK contract** — this adapter only takes `@opentelemetry/api` (the small typed API surface) as an OPTIONAL peer dep. The consumer brings the OTel SDK + exporter package(s) for their backend. That's what makes the adapter portable across every OTel-compat destination — we never lock in a particular exporter.
+
+  - **Hierarchical span mapping** — same shape as `xrayObservability`: `agent.turn_start` → root span; `iteration_start` → child; `llm_start` / `tool_start` → leaf children. OTel parent-context propagation via `trace.setSpan(context.active(), parent)`.
+  - **OTel GenAI + Tool semantic conventions** — `gen_ai.request.model`, `tool.name`, `iteration.number`, `cost.cumulative_usd` attributes follow OTel semconv where applicable.
+  - **Sampling** — `sampleRate` option for per-strategy span dropping (separate from OTel SDK Samplers).
+  - **`tool_end` with error sets ERROR span status** (per OTel `SpanStatusCode.ERROR` convention).
+  - **`stop()` is leak-safe** — defensively ends any in-flight spans on teardown.
+  - **`flush()` is a no-op by design** — OTel SDKs handle their own flushing via `provider.forceFlush()`. Documented in JSDoc; consumer's responsibility on shutdown.
+
+  15 7-pattern tests in `test/observability-providers/otel.test.ts` against a mock tracer. Total suite: 1743 / 1743 passing, 0 regressions.
+
+### Changed
+
+- **Datadog adapter deferred** — `datadogObservability` was on the v2.9 roadmap. Datadog APM accepts OTLP, so consumers can point their OTel SDK at Datadog's OTLP endpoint and `otelObservability` covers the Datadog use case end-to-end. We'll ship a dedicated `dd-trace`-based adapter only if real-world feedback demands the native Datadog APM client.
+
+### Coming next
+
+- **v2.10.0** — first `cost-providers` adapter (`stripeCost`).
+- **v2.11.x** — Reliability subsystem (CircuitBreaker / 3-tier fallback / `resumeOnError`) — deferred since v2.5.
+- **v2.12.x** — `lens-browser` / `lens-cli` (visual debugger backends).
+
 ## [2.8.3]
 
 ### Added
