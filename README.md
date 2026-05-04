@@ -1,13 +1,13 @@
 
 <p align="center">
-  <img width="220" alt="agentfootprint logo" src="https://github.com/user-attachments/assets/d548e2f4-cd49-4b9b-bdc2-2e6cbc2817ab" />
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/hero-dark.svg">
+    <source media="(prefers-color-scheme: light)" srcset="docs/assets/hero-light.svg">
+    <img alt="agentfootprint — context engineering, abstracted. Six context flavors (Skills, Grounding, Steering, Tools, Short-term memory, Long-term memory) flow into the agentfootprint mascot, which composes them into three structured LLM slots (System Prompt, Messages API, Tools API)." src="docs/assets/hero-light.svg" width="100%"/>
+  </picture>
 </p>
 
 <h1 align="center">agentfootprint</h1>
-
-<p align="center">
-  <strong>Context engineering, abstracted.</strong>
-</p>
 
 <p align="center">
   <a href="https://github.com/footprintjs/agentfootprint/actions"><img src="https://github.com/footprintjs/agentfootprint/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
