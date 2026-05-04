@@ -35,6 +35,20 @@ const ALLOWLIST = new Set([
   // executor/agentLoop.ts = public result type (content, iterations, finishReason).
   // lib/loop/buildAgentLoop.ts = internal result extending AgentLoopBuild (adds runtime state).
   // The internal one extends the public one — different shapes by design.
+
+  'CircuitState',
+  // resilience/withCircuitBreaker.ts (v2.10.x) = provider-decorator closure API.
+  // reliability/CircuitBreaker.ts (v2.11.1+) = pure state-machine functions.
+  // SAME shape ('closed' | 'open' | 'half-open'); both coexist until v3.x
+  // removes resilience/ entirely. Wire format identical.
+
+  'CircuitOpenError',
+  // resilience/withCircuitBreaker.ts (v2.10.x) = thrown by closure wrapper;
+  //   constructor takes (name, cause: unknown, retryAfter).
+  // reliability/CircuitBreaker.ts (v2.11.1+) = thrown by pure assertAdmit;
+  //   constructor takes (name, lastErrorMessage: string|undefined, retryAfter).
+  // Both expose code: 'ERR_CIRCUIT_OPEN' + retryAfter — `err.code` works
+  // against either; `instanceof` is class-specific. Coexist until v3.x.
 ]);
 
 const ROOT = new URL('../src', import.meta.url).pathname;
