@@ -107,6 +107,9 @@ import {
   validateToolNameUniqueness,
 } from './agent/validators.js';
 import type { AgentInput, AgentOptions, AgentOutput, AgentState } from './agent/types.js';
+import { breakFinalStage } from './agent/stages/breakFinal.js';
+import { iterationStartStage } from './agent/stages/iterationStart.js';
+import { routeDeciderStage } from './agent/stages/route.js';
 
 // Re-export public Agent types so the 28+ existing import sites
 // (e.g., `import { type AgentInput } from '../core/Agent.js'`) keep
@@ -822,12 +825,8 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       ...(this.externalToolProvider && { toolProvider: this.externalToolProvider }),
     });
 
-    const iterationStart = (scope: TypedScope<AgentState>) => {
-      typedEmit(scope, 'agentfootprint.agent.iteration_start', {
-        turnIndex: 0,
-        iterIndex: scope.iteration,
-      });
-    };
+    // iterationStart extracted to ./agent/stages/iterationStart.ts (v2.11.2).
+    const iterationStart = iterationStartStage;
 
     const callLLM = async (scope: TypedScope<AgentState>) => {
       const systemPromptInjections =
@@ -939,27 +938,8 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       emitCostTick(scope, pricingTable, costBudget, model, response.usage);
     };
 
-    /** Decides the next branch: 'tool-calls' or 'final'. */
-    const routeDecider = (scope: TypedScope<AgentState>): 'tool-calls' | 'final' => {
-      const toolCalls = scope.llmLatestToolCalls as readonly { name: string }[];
-      const iteration = scope.iteration as number;
-      const chosen: 'tool-calls' | 'final' =
-        toolCalls.length > 0 && iteration < scope.maxIterations ? 'tool-calls' : 'final';
-
-      typedEmit(scope, 'agentfootprint.agent.route_decided', {
-        turnIndex: 0,
-        iterIndex: iteration,
-        chosen,
-        rationale:
-          chosen === 'tool-calls'
-            ? `LLM requested ${toolCalls.length} tool call(s)`
-            : iteration >= scope.maxIterations
-            ? 'maxIterations reached — forcing final'
-            : 'LLM produced no tool calls — final answer',
-      });
-
-      return chosen;
-    };
+    // routeDecider extracted to ./agent/stages/route.ts (v2.11.2).
+    const routeDecider = routeDeciderStage;
 
     /**
      * Pausable tool-call handler.
@@ -1220,12 +1200,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       });
     };
 
-    const breakFinalStage = (scope: TypedScope<AgentState>) => {
-      // $break terminates the flow before loopTo fires, ending the
-      // ReAct iteration once memory writes (if any) have persisted.
-      scope.$break();
-      return scope.finalContent as string;
-    };
+    // breakFinalStage extracted to ./agent/stages/breakFinal.ts (v2.11.2).
 
     // Compose the final branch as its own subflow so memory write
     // subflows mount as visible siblings in narrative + Lens.
