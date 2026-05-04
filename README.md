@@ -71,18 +71,32 @@ An Injection answers three questions:
 
 That is the whole abstraction. Every named pattern in the agent literature — Reflexion, Tree-of-Thoughts, Skills, RAG, Constitutional AI — reduces to *which slot* + *which trigger*. You learn one model; the field's growth lands as new factories on the same primitive.
 
-```text
-                         LLM call
-        ┌────────────────────────────────────┐
-        │   system      messages      tools  │
-        │      ▲            ▲            ▲   │
-        └──────┼────────────┼────────────┼───┘
-               │            │            │
-          Injection     Injection     Injection
-               ▲
-               │
-      always · rule · on-tool-return · llm-activated
-```
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/triggers-dark.svg">
+    <source media="(prefers-color-scheme: light)" srcset="docs/assets/triggers-light.svg">
+    <img alt="agentfootprint — Every LLM call has 3 fixed slots (system, messages, tools). Every flavor lands in one slot under one of 4 fixed triggers (always · rule · on-tool-return · llm-activated). Sparkle streams flow from each trigger lane down to a specific pill inside its destination slot — same slot can hold pills from different triggers (RAG via rule, Instruction via on-tool-return), and the same flavor (Skill) can land in different slots." src="docs/assets/triggers-light.svg" width="100%"/>
+  </picture>
+</p>
+
+**4 triggers — 1 static, 3 dynamic.** All four are config you give the builder; the runtime handles the rest.
+
+| # | Trigger | Fires when | One-line example | Default slot |
+|---|---|---|---|---|
+| 1 | `always` *(static)* | Every iteration | `.steering('You are a triage agent…')` | `system` |
+| 2 | `rule` *(dynamic — predicate)* | Consumer rule returns true | `.rag({ when: s => /price\|refund/.test(s.userQuery), source: docs })` | `messages` |
+| 3 | `on-tool-return` *(dynamic — lifecycle)* | After a specific tool returns | `.instruction({ after: 'search_db', text: 'Cite source IDs.' })` | `messages` |
+| 4 | `llm-activated` *(dynamic — agent-driven)* | LLM calls `read_skill('id')` | `.skill({ id: 'refund-policy', activatedBy: 'read_skill' })` | `messages` (body) |
+
+> **Slot is a default, not a coupling — same flavor lives in any slot, strategy is config.**
+> A `Skill` can live in:
+> - `tools` slot → schema only, LLM discovers it via `read_skill` — trigger `always`
+> - `messages` slot → body injected on activation — trigger `llm-activated`
+> - `system` slot → body baked into the system prompt as permanent steering — trigger `always`
+>
+> Tomorrow's flavor (few-shot, reflection, persona, A2A handoff…) plugs into the same matrix — no new abstraction.
+
+**3 slots × 4 triggers × N flavors = the entire context-engineering surface.** When you look at any agent feature in the wild, locate it on this grid; that's enough to model it.
 
 ---
 
