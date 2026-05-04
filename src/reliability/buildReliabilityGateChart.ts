@@ -110,9 +110,9 @@ function buildFailPayload(
 }
 
 /** Find the matched rule's index in a DecisionResult evidence list. */
-function findMatchedIndex(
-  evidence: { rules: readonly { matched: boolean }[] },
-): number | undefined {
+function findMatchedIndex(evidence: {
+  rules: readonly { matched: boolean }[];
+}): number | undefined {
   for (let i = 0; i < evidence.rules.length; i++) {
     if (evidence.rules[i].matched) return i;
   }

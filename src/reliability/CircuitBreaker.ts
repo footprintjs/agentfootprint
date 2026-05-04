@@ -36,9 +36,9 @@ export type CircuitState = 'closed' | 'open' | 'half-open';
 export interface BreakerState {
   state: CircuitState;
   consecutiveFailures: number;
-  consecutiveSuccesses: number;  // only counted in HALF-OPEN
-  openedAt: number;              // epoch ms; 0 when CLOSED
-  lastErrorMessage?: string;     // string, NOT the Error object (serializable)
+  consecutiveSuccesses: number; // only counted in HALF-OPEN
+  openedAt: number; // epoch ms; 0 when CLOSED
+  lastErrorMessage?: string; // string, NOT the Error object (serializable)
 }
 
 /**

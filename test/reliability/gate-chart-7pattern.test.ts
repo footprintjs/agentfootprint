@@ -177,7 +177,11 @@ describe('reliability gate chart — P1 unit', () => {
     const result = await runGate({
       config: {
         providers: [
-          { name: 'p1', provider: flakeyProvider('p1', 1, () => http(503, 'transient')), model: 'm' },
+          {
+            name: 'p1',
+            provider: flakeyProvider('p1', 1, () => http(503, 'transient')),
+            model: 'm',
+          },
         ],
         postDecide: [
           {
@@ -312,7 +316,11 @@ describe('reliability gate chart — P2 boundary', () => {
         providers: [{ name: 'p1', provider, model: 'm' }],
         circuitBreaker: { failureThreshold: 3, cooldownMs: 60_000 },
         postDecide: [
-          { when: (s) => s.errorKind === 'circuit-open', then: 'fail-fast', kind: 'circuit-tripped' },
+          {
+            when: (s) => s.errorKind === 'circuit-open',
+            then: 'fail-fast',
+            kind: 'circuit-tripped',
+          },
           {
             when: (s) => s.errorKind === '5xx-transient' && s.attempt < 5,
             then: 'retry',
@@ -327,10 +335,7 @@ describe('reliability gate chart — P2 boundary', () => {
     // fast-fails with circuit-open, classified as 'circuit-open',
     // which the first rule routes to 'circuit-tripped' fail-fast.
     expect(callCount).toBe(3);
-    const breakerStates = result.finalScope.breakerStates as Record<
-      string,
-      { state: string }
-    >;
+    const breakerStates = result.finalScope.breakerStates as Record<string, { state: string }>;
     expect(breakerStates['p1'].state).toBe('open');
     expect(result.finalScope.failKind).toBe('circuit-tripped');
   });
@@ -407,7 +412,8 @@ describe('reliability gate chart — P3 scenario', () => {
         postDecide: [
           {
             when: (s) =>
-              s.errorKind === '5xx-transient' && (s.attemptsPerProvider[s.currentProvider] ?? 0) < 2,
+              s.errorKind === '5xx-transient' &&
+              (s.attemptsPerProvider[s.currentProvider] ?? 0) < 2,
             then: 'retry',
             kind: 'transient-same',
           },
