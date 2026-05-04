@@ -206,9 +206,13 @@ export function xrayObservability(opts: XrayObservabilityOptions): Observability
     // segments. If no match, pop the topmost.
     let idx = turnState.stack.length - 1;
     if (expectedName) {
+      // idx >= 0 guard above guarantees stack[idx] exists.
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
       while (idx >= 0 && turnState.stack[idx]!.name !== expectedName) idx--;
     }
     if (idx < 0) return undefined;
+    // splice(idx, 1) returns a 1-element array; idx < 0 guarded above.
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     const seg = turnState.stack.splice(idx, 1)[0]!;
     seg.end_time = nowSeconds();
     delete seg.in_progress;

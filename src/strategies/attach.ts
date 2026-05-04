@@ -160,6 +160,9 @@ function buildEventHandler(
           exec.detachAndForget(detach.driver, wrapperChart, event);
         } else {
           const handle = exec.detachAndJoinLater(detach.driver, wrapperChart, event);
+          // Caller validates onHandle is set when mode !== 'forget' (see
+          // mode-discrimination above; the mode='joinLater' branch requires it).
+          // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
           onHandle!(handle);
         }
       })

@@ -55,17 +55,26 @@ export function fallbackProvider(
     options = first;
   }
 
+  // Length is checked first so the array accesses below are guaranteed
+  // non-undefined; explicit guards satisfy TypeScript without `!`.
   if (providers.length === 0) {
     throw new Error('fallbackProvider() requires at least one provider');
   }
+  const head = providers[0];
+  const tail = providers[providers.length - 1];
+  if (!head || !tail) {
+    throw new Error('fallbackProvider() unreachable: array access after length guard');
+  }
   if (providers.length === 1) {
-    return providers[0]!;
+    return head;
   }
 
   // Right-fold: withFallback(p0, withFallback(p1, withFallback(p2, p3)))
-  let chained = providers[providers.length - 1]!;
+  let chained = tail;
   for (let i = providers.length - 2; i >= 0; i--) {
-    chained = withFallback(providers[i]!, chained, options);
+    const cur = providers[i];
+    if (!cur) continue; // unreachable; guarded by loop bounds
+    chained = withFallback(cur, chained, options);
   }
 
   // Optionally override the auto-generated name.

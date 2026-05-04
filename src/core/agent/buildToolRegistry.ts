@@ -102,9 +102,12 @@ export function buildToolRegistry(
   }
 
   // buildReadSkillTool returns undefined when skills is empty; the length
-  // check below short-circuits so the non-null assertion is safe.
+  // check left of the ternary short-circuits so the non-null assertion is safe.
   const readSkillEntries: readonly ToolRegistryEntry[] =
-    skills.length > 0 ? [{ name: 'read_skill', tool: buildReadSkillTool(skills)! }] : [];
+    skills.length > 0
+      ? // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+        [{ name: 'read_skill', tool: buildReadSkillTool(skills)! }]
+      : [];
   const augmentedRegistry: readonly ToolRegistryEntry[] = [
     ...registry,
     ...readSkillEntries,

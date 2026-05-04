@@ -243,6 +243,10 @@ export function withCircuitBreaker(
         rejectFastIfOpen();
         let yieldedAnyChunk = false;
         try {
+          // This stream() method is conditionally defined only when
+          // inner.stream exists (see `...(inner.stream && {` above), so
+          // inner.stream is guaranteed non-null inside this body.
+          // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
           for await (const chunk of inner.stream!(req)) {
             yieldedAnyChunk = true;
             yield chunk;

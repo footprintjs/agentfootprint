@@ -225,6 +225,8 @@ export class MockProvider implements LLMProvider {
             `Call \`provider.resetReplies()\` to rewind across test scenarios.`,
         );
       }
+      // Cursor was just bounds-checked above (`>= replies.length` throws).
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
       const next = this.replies[this.repliesCursor]!;
       this.repliesCursor++;
       return next;
@@ -275,6 +277,9 @@ function sleep(ms: number, signal?: AbortSignal): Promise<void> {
     }, ms);
     const onAbort = () => {
       clearTimeout(id);
+      // onAbort is registered only when signal is defined (line below);
+      // accessing signal.reason here is structurally guaranteed.
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
       reject(signal!.reason ?? new Error('Aborted'));
     };
     signal?.addEventListener('abort', onAbort, { once: true });

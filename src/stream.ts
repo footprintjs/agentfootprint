@@ -119,6 +119,8 @@ export async function* toSSE<TIn, TOut>(
   try {
     while (!done || queue.length > 0) {
       while (queue.length > 0) {
+        // queue.length > 0 guards the shift; result is defined.
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
         const event = queue.shift()!;
         if ((event.type as string) === '__heartbeat') {
           yield ': ping\n\n';

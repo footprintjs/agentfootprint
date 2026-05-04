@@ -247,34 +247,38 @@ export function attachFlowchart(
  * the snapshot reflects the just-applied event.
  */
 function wrapWithEmit(boundary: BoundaryRecorder, afterEach: () => void): CombinedRecorder {
+  // Optional chaining (`?.()`) so a BoundaryRecorder that doesn't
+  // implement every hook still works. The previous `!` assertions
+  // assumed all hooks exist; in practice they're optional on the
+  // FlowRecorder interface and may be absent.
   return {
     id: boundary.id,
     onRunStart: (e) => {
-      boundary.onRunStart!(e);
+      boundary.onRunStart?.(e);
       afterEach();
     },
     onRunEnd: (e) => {
-      boundary.onRunEnd!(e);
+      boundary.onRunEnd?.(e);
       afterEach();
     },
     onSubflowEntry: (e) => {
-      boundary.onSubflowEntry!(e);
+      boundary.onSubflowEntry?.(e);
       afterEach();
     },
     onSubflowExit: (e) => {
-      boundary.onSubflowExit!(e);
+      boundary.onSubflowExit?.(e);
       afterEach();
     },
     onFork: (e) => {
-      boundary.onFork!(e);
+      boundary.onFork?.(e);
       afterEach();
     },
     onDecision: (e) => {
-      boundary.onDecision!(e);
+      boundary.onDecision?.(e);
       afterEach();
     },
     onLoop: (e) => {
-      boundary.onLoop!(e);
+      boundary.onLoop?.(e);
       afterEach();
     },
   };

@@ -241,7 +241,9 @@ export function extractCommentaryVars(
       // Pre-render the descClause sub-template so the outer template
       // sees a literal string. Keeps the engine flat (non-recursive).
       const descClause = hasDesc
-        ? renderCommentary(templates['stream.tool_start.desc'] ?? '', { desc: desc! })
+        ? // hasDesc guarantees desc is a non-empty string here.
+          // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+          renderCommentary(templates['stream.tool_start.desc'] ?? '', { desc: desc! })
         : templates['stream.tool_start.noDesc'] ?? '';
       return { ...base, toolName, descClause };
     }

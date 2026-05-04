@@ -86,6 +86,8 @@ export function withRetry(provider: LLMProvider, options: WithRetryOptions = {})
   // Pass-through `stream()` if the underlying provider supports it.
   // No retry on streams (mid-stream resumption is provider-specific).
   if (provider.stream) {
+    // Guarded by `if (provider.stream)` above; assertion safe.
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     wrapped.stream = (req: LLMRequest): AsyncIterable<LLMChunk> => provider.stream!(req);
   }
 

@@ -5,6 +5,44 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.11.4]
+
+### Fixed — actually fix non-null-assertion warnings in src (don't just disable)
+
+v2.11.3 cleaned the CI by turning off `@typescript-eslint/no-non-null-assertion` globally. v2.11.4 walks back the global disable: re-enables the rule for `src/`, fixes each of the 30 source-side warnings either with a proper guard or with a targeted `eslint-disable-next-line` carrying a one-line "why this is safe" reason. Tests stay permissive (`!` is idiomatic in test assertions where the framework guarantees the value).
+
+#### Refactored to proper guards (no `!` retained)
+
+- **`src/recorders/observability/FlowchartRecorder.ts`** — 7 sites: `boundary.onRunStart!(e)` etc. → `boundary.onRunStart?.(e)`. Optional chaining is actually MORE correct because BoundaryRecorder methods are optional on the FlowRecorder interface; the previous `!` would have crashed if a wrapped recorder didn't implement every hook.
+- **`src/patterns/SelfConsistency.ts`** — 4 sites in the merge function: `extract(results[id]!)`, `order[0]!`, `tallies.get(best)!`, `tallies.get(vote)!` → guarded by `if (value === undefined) continue`, explicit empty-results throw, and `?? 0` fallbacks.
+- **`src/resilience/fallbackProvider.ts`** — 3 sites: `providers[0]!`, `providers[providers.length-1]!`, `providers[i]!` → explicit `head`/`tail` consts with throw-on-unreachable + `if (!cur) continue` loop guard.
+
+#### Suppressed with `eslint-disable-next-line` + intent comment (legitimate post-conditions)
+
+- **`src/adapters/llm/MockProvider.ts`** (2) — cursor bounds-checked above; signal-defined invariant inside onAbort.
+- **`src/adapters/observability/otel.ts`** (2) + **`src/adapters/observability/xray.ts`** (2) — `idx >= 0` guard above + 1-element splice result.
+- **`src/cache/strategyRegistry.ts`** (1) — `'*'` wildcard set at module load by registerDefaults.
+- **`src/core/agent/buildToolRegistry.ts`** (1) — `skills.length > 0` guard left of ternary; assertion only fires on the truthy branch.
+- **`src/lib/rag/indexDocuments.ts`** (1) — bounded by `i >= texts.length` early-return.
+- **`src/memory/causal/loadSnapshot.ts`** (1) + **`src/memory/embedding/loadRelevant.ts`** (1) — `store.search` required when an embedder is configured (validated upstream by `defineMemory`).
+- **`src/recorders/observability/commentary/commentaryTemplates.ts`** (1) — `hasDesc` boolean guarantees `desc` is a non-empty string.
+- **`src/resilience/withCircuitBreaker.ts`** (1) — stream method conditionally defined only when `inner.stream` exists.
+- **`src/resilience/withRetry.ts`** (1) — guarded by `if (provider.stream)`.
+- **`src/strategies/attach.ts`** (1) — caller validates `onHandle` is set when `mode !== 'forget'`.
+- **`src/stream.ts`** (1) — `queue.length > 0` guards the shift.
+
+#### `.eslintrc.js`
+
+- `@typescript-eslint/no-non-null-assertion`: `'warn'` (was `'off'` in v2.11.3) for src.
+- Test file override now explicitly turns `no-non-null-assertion` off (idiomatic in test assertions).
+
+#### Verification
+
+- `npm run lint` — **0 problems** (was 365 in v2.11.2 → 0 in v2.11.3 via global disable → 0 in v2.11.4 via actual fixes).
+- `tsc --noEmit` clean.
+- Full suite: **1800 / 1800 passing**, no regressions.
+- Release pipeline (8 gates) passes.
+
 ## [2.11.3]
 
 ### Fixed — CI lint pipeline cleaned to zero warnings

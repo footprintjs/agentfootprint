@@ -79,14 +79,22 @@ export function selfConsistency(opts: SelfConsistencyOptions): Runner<{ message:
       const tallies = new Map<string, number>();
       const order: string[] = [];
       for (const id of Object.keys(results).sort()) {
-        const vote = extract(results[id]!);
+        // Object.keys() guarantees the index hits, so results[id] is defined.
+        const value = results[id];
+        if (value === undefined) continue;
+        const vote = extract(value);
         if (!tallies.has(vote)) order.push(vote);
         tallies.set(vote, (tallies.get(vote) ?? 0) + 1);
       }
-      let best = order[0]!;
-      let bestCount = tallies.get(best)!;
+      // SelfConsistency runs N branches and merges; if N === 0 there's
+      // nothing to vote on. Throw rather than silently returning empty.
+      if (order.length === 0) {
+        throw new Error('SelfConsistency: no branch results to vote on');
+      }
+      let best = order[0];
+      let bestCount = tallies.get(best) ?? 0;
       for (const vote of order) {
-        const count = tallies.get(vote)!;
+        const count = tallies.get(vote) ?? 0;
         if (count > bestCount) {
           best = vote;
           bestCount = count;

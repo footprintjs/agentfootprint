@@ -104,6 +104,9 @@ export function loadRelevant(config: LoadRelevantConfig) {
       ...(signal ? { signal } : {}),
     })) as number[];
 
+    // store.search optional on MemoryStore but required when an embedder
+    // is configured (validated upstream by defineMemory).
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     const results = await store.search!(identity, queryVec, {
       k,
       ...(config.minScore !== undefined && { minScore: config.minScore }),

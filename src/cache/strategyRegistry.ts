@@ -45,7 +45,8 @@ export function getDefaultCacheStrategy(providerName: string): CacheStrategy {
     const lowercased = REGISTRY.get(lower);
     if (lowercased !== undefined) return lowercased;
   }
-  // Fallback wildcard always present
+  // Fallback wildcard always present (set at module load by registerDefaults).
+  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
   return REGISTRY.get('*')!;
 }
 

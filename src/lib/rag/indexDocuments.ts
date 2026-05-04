@@ -178,8 +178,11 @@ async function embedWithConcurrency(
     for (;;) {
       const i = next++;
       if (i >= texts.length) return;
+      // i bounded by texts.length above; texts[i] is defined.
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+      const text = texts[i]!;
       results[i] = await embedder.embed({
-        text: texts[i]!,
+        text,
         ...(signal && { signal }),
       });
     }

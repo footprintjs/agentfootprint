@@ -21,18 +21,11 @@ module.exports = {
     '@typescript-eslint/explicit-module-boundary-types': 'off',
     '@typescript-eslint/no-empty-function': 'warn',
     '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_' }],
-    // Non-null-assertion (`!`) is idiomatic in this codebase for two
-    // patterns where the project has chosen to favor readability over
-    // exhaustive type narrowing:
-    //   1. Tests: asserting on values known to exist after a check.
-    //   2. Source: post-condition guarantees inside well-typed maps
-    //      (e.g., `registryByName.get(name)!` after we've just put it in,
-    //      or `buildReadSkillTool(skills)!` guarded by length check above).
-    // 359 warnings under the recommended preset = consistently ignored.
-    // Either tighten with proper type guards (large refactor across the
-    // suite) OR turn off and rely on tsc + tests to catch real undefined
-    // dereferences. We choose the latter — same effective safety, less noise.
-    '@typescript-eslint/no-non-null-assertion': 'off',
+    // Non-null-assertion enforced in SRC (each `!` justified inline via
+    // eslint-disable-next-line with a reason, OR refactored to a guard).
+    // Test files override below — `!` is idiomatic in test assertions
+    // where a result has just been verified non-null.
+    '@typescript-eslint/no-non-null-assertion': 'warn',
     'no-unused-vars': 'off',
     'no-use-before-define': 'off',
   },
@@ -43,6 +36,10 @@ module.exports = {
         '@typescript-eslint/no-empty-function': 'off',
         '@typescript-eslint/no-explicit-any': 'off',
         '@typescript-eslint/no-unused-vars': 'off',
+        // `!` after `expect(x).toBeDefined()` and similar is idiomatic
+        // in test assertions; the test framework guarantees the value
+        // by the time the next line accesses it. Off for tests only.
+        '@typescript-eslint/no-non-null-assertion': 'off',
       },
     },
   ],
