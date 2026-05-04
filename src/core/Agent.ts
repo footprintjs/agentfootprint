@@ -64,7 +64,6 @@ import { memoryRecorder } from '../recorders/core/MemoryRecorder.js';
 import { skillRecorder } from '../recorders/core/SkillRecorder.js';
 import { typedEmit } from '../recorders/core/typedEmit.js';
 import type { InjectionRecord } from '../recorders/core/types.js';
-import type { MemoryIdentity } from '../memory/identity/index.js';
 import type { MemoryDefinition } from '../memory/define.types.js';
 import { memoryInjectionKey } from '../memory/define.types.js';
 import { unwrapMemoryFlowChart } from '../memory/define.js';
@@ -101,150 +100,24 @@ import {
 import { RunnerBase, makeRunId } from './RunnerBase.js';
 import type { Tool, ToolRegistryEntry } from './tools.js';
 import type { ToolDispatchContext, ToolProvider } from '../tool-providers/types.js';
+import {
+  clampIterations,
+  safeStringify,
+  validateMemoryIdUniqueness,
+  validateToolNameUniqueness,
+} from './agent/validators.js';
+import type { AgentInput, AgentOptions, AgentOutput, AgentState } from './agent/types.js';
 
-export interface AgentOptions {
-  readonly provider: LLMProvider;
-  /** Human-friendly name shown in events/metrics. Default: 'Agent'. */
-  readonly name?: string;
-  /** Stable id used for topology + events. Default: 'agent'. */
-  readonly id?: string;
-  readonly model: string;
-  readonly temperature?: number;
-  readonly maxTokens?: number;
-  /** Hard budget on ReAct iterations. Default: 10. Hard cap: 50. */
-  readonly maxIterations?: number;
-  /**
-   * Pricing adapter. When set, Agent emits `agentfootprint.cost.tick`
-   * after every LLM response (once per ReAct iteration) with per-call
-   * and cumulative USD. Run-scoped — the cumulative resets each `.run()`.
-   */
-  readonly pricingTable?: PricingTable;
-  /**
-   * Cumulative USD budget per run. With `pricingTable`, Agent emits a
-   * one-shot `agentfootprint.cost.limit_hit` (`action: 'warn'`) when
-   * cumulative USD crosses this budget. Execution continues — consumers
-   * choose whether to abort by listening to the event.
-   */
-  readonly costBudget?: number;
-  /**
-   * Permission adapter. When set, the Agent calls
-   * `permissionChecker.check({capability: 'tool_call', ...})` BEFORE every
-   * `tool.execute()`. Emits `agentfootprint.permission.check` with the
-   * decision. On `deny`, the tool is skipped and its result is a
-   * synthetic denial string; on `allow` / `gate_open`, execution proceeds
-   * normally.
-   */
-  readonly permissionChecker?: PermissionChecker;
-  /**
-   * Global cache kill switch (v2.6+). `'off'` disables the cache
-   * layer entirely — the CacheGate decider routes to `'no-markers'`
-   * every iteration regardless of other rules. Default: caching
-   * enabled (auto-resolved per provider via the strategy registry).
-   *
-   * Use `'off'` for low-frequency agents (cron jobs running once per
-   * hour) where the cache TTL guarantees zero cache hits and the
-   * cache-write penalty isn't worth paying.
-   */
-  readonly caching?: 'off';
-  /**
-   * Optional explicit CacheStrategy override (v2.6+). Defaults to
-   * `getDefaultCacheStrategy(provider.name)` — so Anthropic/OpenAI/
-   * Bedrock/Mock providers auto-resolve to their respective strategies
-   * once those land in Phase 7+.
-   */
-  readonly cacheStrategy?: CacheStrategy;
-}
+// Re-export public Agent types so the 28+ existing import sites
+// (e.g., `import { type AgentInput } from '../core/Agent.js'`) keep
+// working while implementation gradually moves into `./agent/*`.
+// Public types canonically live in `./agent/types.ts` (v2.11.1).
+export type { AgentInput, AgentOptions, AgentOutput };
 
-export interface AgentInput {
-  readonly message: string;
+// Public types (AgentOptions, AgentInput, AgentOutput) extracted to
+// ./agent/types.ts and re-exported above (v2.11.1).
 
-  /**
-   * Multi-tenant memory scope. Populated to `scope.identity` so memory
-   * subflows registered via `.memory()` can isolate reads/writes per
-   * tenant + principal + conversation.
-   *
-   * Defaults to `{ conversationId: '<runId>' }` when omitted, so agents
-   * without memory work unchanged.
-   */
-  readonly identity?: MemoryIdentity;
-}
-
-export type AgentOutput = string;
-
-/**
- * Internal scope state. Recorders never read this directly — they read
- * the InjectionRecord convention keys + emit events.
- */
-interface AgentState {
-  userMessage: string;
-  history: readonly LLMMessage[];
-  iteration: number;
-  maxIterations: number;
-  finalContent: string;
-  totalInputTokens: number;
-  totalOutputTokens: number;
-  turnStartMs: number;
-  // Multi-tenant memory scope. Defaulted in seed when AgentInput.identity
-  // is omitted, so non-memory agents work unchanged. Field is named
-  // `runIdentity` (not `identity`) so it doesn't collide with the
-  // readonly `identity` input arg in scope's typed-args view.
-  runIdentity: MemoryIdentity;
-  // Set during the final branch — the (user, assistant) pair the
-  // memory write subflows persist for cross-run recall.
-  newMessages: readonly LLMMessage[];
-  // Turn counter — incremented per agent.run(). Memory writes tag
-  // entries with this so retrieval can show "recalled from turn 5".
-  turnNumber: number;
-  // Token-budget signal used by memory pickByBudget deciders. Defaults
-  // to a permissive cap; consumers tune via PricingTable hooks later.
-  contextTokensRemaining: number;
-  // Populated by slot subflow outputMappers:
-  systemPromptInjections: readonly InjectionRecord[];
-  messagesInjections: readonly InjectionRecord[];
-  toolsInjections: readonly InjectionRecord[];
-  // Latest LLM response state:
-  llmLatestContent: string;
-  llmLatestToolCalls: readonly {
-    readonly id: string;
-    readonly name: string;
-    readonly args: Readonly<Record<string, unknown>>;
-  }[];
-  // Pause checkpoint — set when a tool calls `pauseHere()`, consumed on resume.
-  pausedToolCallId: string;
-  pausedToolName: string;
-  pausedToolStartMs: number;
-  // Cost accounting (only used when pricingTable is set).
-  cumTokensInput: number;
-  cumTokensOutput: number;
-  cumEstimatedUsd: number;
-  costBudgetHit: boolean;
-  // Injection Engine state ─────────────────────────────────────
-  /** Active set output by InjectionEngine subflow each iteration —
-   *  POJO projections (no functions) suitable for scope round-trip. */
-  activeInjections: readonly ActiveInjection[];
-  /** IDs of LLM-activated Skills the LLM has activated this turn
-   *  (via the `read_skill` tool). InjectionEngine matches by id. */
-  activatedInjectionIds: readonly string[];
-  /** Most recent tool result — drives `on-tool-return` triggers. */
-  lastToolResult?: { toolName: string; result: string };
-  /** Tool schemas resolved by the tools slot subflow each iteration
-   *  (registry + injection-supplied). Used by callLLM. */
-  dynamicToolSchemas: readonly LLMToolSchema[];
-  // ── Cache layer state (v2.6) ────────────────────────────────
-  /** Provider-agnostic cache markers emitted by CacheDecision subflow.
-   *  Cleared each iteration by the SkipCaching branch when the
-   *  CacheGate decides to skip (kill switch / hit-rate / churn). */
-  cacheMarkers: readonly CacheMarker[];
-  /** Global cache kill switch from `Agent.create({ caching: 'off' })`. */
-  cachingDisabled: boolean;
-  /** Running cache hit rate from recent iterations (0..1). Computed
-   *  by cacheRecorder (Phase 9); `undefined` until first metrics. */
-  recentHitRate: number | undefined;
-  /** Rolling window of active-skill IDs across recent iterations.
-   *  Maintained by the UpdateSkillHistory function stage; consumed
-   *  by CacheGate's skill-churn rule. */
-  skillHistory: readonly (string | undefined)[];
-}
+// AgentState extracted to ./agent/types.ts (v2.11.1).
 
 export class Agent extends RunnerBase<AgentInput, AgentOutput> {
   readonly name: string;
@@ -2130,120 +2003,4 @@ export class AgentBuilder {
   }
 }
 
-function validateMemoryIdUniqueness(memories: readonly MemoryDefinition[]): void {
-  const seen = new Set<string>();
-  for (const m of memories) {
-    if (seen.has(m.id)) {
-      throw new Error(
-        `Agent: duplicate memory id '${m.id}'. Each memory needs a unique id to keep ` +
-          'its scope key (`memoryInjection_${id}`) collision-free.',
-      );
-    }
-    seen.add(m.id);
-  }
-}
-
-function clampIterations(n: number): number {
-  if (!Number.isInteger(n) || n < 1) return 1;
-  if (n > 50) return 50;
-  return n;
-}
-
-/**
- * Validate tool-name uniqueness across `.tool()`-registered tools +
- * every Skill's `inject.tools[]`. The LLM dispatches by `tool.schema.name`
- * (the wire format), so any collision silently shadows execution.
- *
- * Called eagerly in the Agent constructor so `Agent.build()` throws
- * immediately, not on first `run()`.
- *
- * `read_skill` is reserved when ≥1 Skill is registered — collisions
- * with consumer tools throw.
- */
-function validateToolNameUniqueness(
-  registry: readonly ToolRegistryEntry[],
-  injections: readonly Injection[],
-): void {
-  // Static registry: unique within itself. The Agent.tool() builder
-  // method already throws on per-call duplicates; this is the
-  // belt-and-suspenders check at build time.
-  const staticNames = new Set<string>();
-  for (const entry of registry) {
-    if (staticNames.has(entry.name)) {
-      throw new Error(
-        `Agent: duplicate tool name '${entry.name}' in .tool() registry. ` +
-          `Tool names must be unique within the static registry.`,
-      );
-    }
-    staticNames.add(entry.name);
-  }
-
-  // `read_skill` is reserved when any Skill is registered. Collisions
-  // with consumer-supplied tools break the auto-attach path.
-  const skills = injections.filter((i) => i.flavor === 'skill');
-  if (skills.length > 0 && staticNames.has('read_skill')) {
-    throw new Error(
-      `Agent: tool name 'read_skill' is reserved when ≥1 Skill is registered. ` +
-        `Rename your custom 'read_skill' tool or unregister it.`,
-    );
-  }
-
-  // Per-skill check: a skill's `inject.tools` array must be internally
-  // unique (no duplicate names within the same skill — that's a
-  // skill authoring bug). Across skills, sharing a Tool reference is
-  // EXPECTED and supported — common tools (e.g., a `flogi_lookup`
-  // used by multiple investigation skills) appear in multiple skills'
-  // tool arrays. Only one skill is active at a time (or, when several
-  // are active, deduped by name + reference at runtime). Sharing the
-  // same Tool object across skills is the supported pattern; sharing
-  // a Tool NAME with a DIFFERENT execute function is the actual bug —
-  // we detect that here too.
-  const seenByName = new Map<string, Tool>();
-  for (const skill of skills) {
-    const intraSkill = new Set<string>();
-    for (const tool of skill.inject.tools ?? []) {
-      const name = tool.schema.name;
-      if (intraSkill.has(name)) {
-        throw new Error(
-          `Agent: skill '${skill.id}' lists tool '${name}' more than once in its ` +
-            `inject.tools array. Each skill's tools must be unique within itself.`,
-        );
-      }
-      intraSkill.add(name);
-      // Skill tools collide with the static .tool() registry → ambiguous dispatch
-      if (staticNames.has(name)) {
-        throw new Error(
-          `Agent: skill '${skill.id}' tool '${name}' collides with the static .tool() ` +
-            `registry. Either rename the skill's tool or remove the static registration.`,
-        );
-      }
-      // Same name across skills with DIFFERENT Tool objects = ambiguous when
-      // both skills active. Same name + SAME Tool reference = supported sharing.
-      const prior = seenByName.get(name);
-      if (prior && prior !== (tool as unknown as Tool)) {
-        throw new Error(
-          `Agent: tool name '${name}' is declared by multiple skills with different ` +
-            `Tool implementations. Skills MAY share the SAME Tool reference across ` +
-            `their inject.tools arrays (deduped at dispatch); they may NOT register ` +
-            `different functions under the same name (ambiguous dispatch).`,
-        );
-      }
-      seenByName.set(name, tool as unknown as Tool);
-    }
-  }
-}
-
-/**
- * JSON.stringify with circular-ref protection. Tool results are untrusted —
- * a hostile/buggy tool returning a cyclic object must not crash the run.
- * Falls back to '[unstringifiable: <reason>]' so the LLM still sees that
- * the tool ran and produced something unusable.
- */
-function safeStringify(value: unknown): string {
-  try {
-    return JSON.stringify(value);
-  } catch (err) {
-    const reason = err instanceof Error ? err.message : String(err);
-    return `[unstringifiable: ${reason}]`;
-  }
-}
+// Validators + helpers extracted to ./agent/validators.ts (v2.11.1).
