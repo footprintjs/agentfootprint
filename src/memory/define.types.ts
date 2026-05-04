@@ -263,8 +263,11 @@ export interface MemoryDefinition<T = unknown> {
 /**
  * Opaque tag for the compiled flowchart the factory hands back.
  * The actual type is `FlowChart<MemoryState>` from footprintjs but we
- * keep it nominal here so consumers can't reach in.
+ * keep it nominal here so consumers can't reach in. The phantom type
+ * parameter is preserved so consumers can write `ReadonlyMemoryFlowChart<MyShape>`
+ * for documentation, even though the brand erases the parameter at runtime.
  */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export type ReadonlyMemoryFlowChart<_T> = {
   readonly __brand: 'ReadonlyMemoryFlowChart';
 };

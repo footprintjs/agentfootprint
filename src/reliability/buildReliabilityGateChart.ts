@@ -159,6 +159,12 @@ export function buildReliabilityGateChart(config: ReliabilityConfig): FlowChart 
   // gate invocations via inputMapper/outputMapper — no closure.
   const providers = config.providers ?? [];
   const breakerConfig = config.circuitBreaker;
+  // No-op pass-through for the PreContinue branch — pre-check rules
+  // returned 'continue', so just fall through to CallProvider with no
+  // state change. Lifted to a named const to satisfy the no-empty-function
+  // lint rule (intentional empty body, not a forgotten implementation).
+  const preContinueNoop = (): void => undefined;
+
   const preRules = config.preCheck ?? [];
   const postRules = config.postDecide ?? [];
   const fallbackFn = config.fallback;
@@ -418,7 +424,7 @@ export function buildReliabilityGateChart(config: ReliabilityConfig): FlowChart 
       STAGE_IDS.PRE_CHECK,
       'Reliability: pre-call rule check',
     )
-    .addFunctionBranch(BRANCH_IDS.PRE_CONTINUE, 'PreContinue', () => {})
+    .addFunctionBranch(BRANCH_IDS.PRE_CONTINUE, 'PreContinue', preContinueNoop)
     .addFunctionBranch(BRANCH_IDS.PRE_FAIL_FAST, 'PreFailFast', preFailFastBranchFn)
     .setDefault(BRANCH_IDS.PRE_CONTINUE)
     .end()

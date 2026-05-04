@@ -43,6 +43,10 @@ export interface ListenOptions {
 
 export type Unsubscribe = () => void;
 
+/** Shared no-op returned when subscribing to an already-aborted signal —
+ *  the listener was never registered, so unsubscribe has nothing to do. */
+const noopUnsubscribe: Unsubscribe = () => undefined;
+
 // ─── Wildcard pattern type (restricted to domain wildcards + full) ──
 //
 // Allowed wildcard subscriptions (prevents typos):
@@ -131,8 +135,8 @@ export class EventDispatcher {
     options?: ListenOptions,
   ): Unsubscribe {
     if (options?.signal?.aborted) {
-      // Already aborted; register nothing.
-      return () => {};
+      // Already aborted; register nothing — return a no-op unsubscribe.
+      return noopUnsubscribe;
     }
 
     const wrapped: StoredListener = {

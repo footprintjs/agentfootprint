@@ -50,7 +50,7 @@ import {
  * us anywhere to ship; just no-op silently and return a stoppable
  * unsubscribe so the call site stays composable.
  */
-const NOOP_UNSUBSCRIBE: Unsubscribe = () => {};
+const NOOP_UNSUBSCRIBE: Unsubscribe = (): void => undefined;
 
 // ─── Detach plumbing ─────────────────────────────────────────────────
 //
@@ -99,7 +99,9 @@ async function getDetachExecutor(): Promise<import('footprintjs').FlowChartExecu
   if (detachExecutorSingleton) return detachExecutorSingleton;
   const fp = await import('footprintjs');
   // Trivial host chart — never run, just satisfies the constructor.
-  const noopChart = fp.flowChart('agentfootprint:detach:host', async () => {}, 'host').build();
+  // eslint-disable-next-line @typescript-eslint/no-empty-function
+  const noopHostStage = async (): Promise<void> => {};
+  const noopChart = fp.flowChart('agentfootprint:detach:host', noopHostStage, 'host').build();
   detachExecutorSingleton = new fp.FlowChartExecutor(noopChart);
   return detachExecutorSingleton;
 }

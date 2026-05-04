@@ -88,6 +88,10 @@ async function flushAll(children: readonly { flush?(): void | Promise<void> }[])
     if (!c.flush) continue;
     try {
       const result = c.flush();
+      // Swallow rejections — passive recorders MUST NOT propagate flush
+      // errors up the consumer's stack. If a flush fails, the recorder's
+      // own onError is the right channel; callers of compose() shouldn't see it.
+      // eslint-disable-next-line @typescript-eslint/no-empty-function
       if (result instanceof Promise) promises.push(result.catch(() => {}));
     } catch {
       // ignore — passive recorder rule
