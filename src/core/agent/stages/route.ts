@@ -33,8 +33,8 @@ export const routeDeciderStage = (scope: TypedScope<AgentState>): RouteBranch =>
       chosen === 'tool-calls'
         ? `LLM requested ${toolCalls.length} tool call(s)`
         : iteration >= scope.maxIterations
-          ? 'maxIterations reached — forcing final'
-          : 'LLM produced no tool calls — final answer',
+        ? 'maxIterations reached — forcing final'
+        : 'LLM produced no tool calls — final answer',
   });
 
   return chosen;

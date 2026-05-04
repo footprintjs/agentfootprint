@@ -54,9 +54,7 @@ export interface SeedStageDeps {
  * the chart-build-time constants and the per-run mutable accessors
  * via the deps object.
  */
-export function buildSeedStage(
-  deps: SeedStageDeps,
-): (scope: TypedScope<AgentState>) => void {
+export function buildSeedStage(deps: SeedStageDeps): (scope: TypedScope<AgentState>) => void {
   return (scope) => {
     const args = scope.$getArgs<AgentInput>();
     scope.userMessage = args.message;

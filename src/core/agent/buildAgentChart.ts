@@ -160,26 +160,29 @@ export function buildAgentChart(deps: AgentChartDeps): FlowChart {
     // the slot subflows to consume. Skipped if no injections were
     // registered (no observable difference, just one more no-op
     // subflow boundary).
-    .addSubFlowChartNext(SUBFLOW_IDS.INJECTION_ENGINE, deps.injectionEngineSubflow, 'Injection Engine', {
-      inputMapper: (parent) => ({
-        iteration: parent.iteration as number | undefined,
-        userMessage: parent.userMessage as string | undefined,
-        history: parent.history as readonly LLMMessage[] | undefined,
-        lastToolResult: parent.lastToolResult as
-          | { toolName: string; result: string }
-          | undefined,
-        activatedInjectionIds:
-          (parent.activatedInjectionIds as readonly string[] | undefined) ?? [],
-      }),
-      outputMapper: (sf) => ({ activeInjections: sf.activeInjections }),
-      // CRITICAL: footprintjs's default `applyOutputMapping`
-      // CONCATENATES arrays from subflow output with the parent's
-      // existing array values. Without `Replace`, the parent's
-      // `activeInjections` from iter N gets CONCATENATED with the
-      // subflow's iter N+1 fresh evaluation — producing
-      // 8 → 16 → 24 → 32 cumulative injections per turn.
-      arrayMerge: ArrayMergeMode.Replace,
-    })
+    .addSubFlowChartNext(
+      SUBFLOW_IDS.INJECTION_ENGINE,
+      deps.injectionEngineSubflow,
+      'Injection Engine',
+      {
+        inputMapper: (parent) => ({
+          iteration: parent.iteration as number | undefined,
+          userMessage: parent.userMessage as string | undefined,
+          history: parent.history as readonly LLMMessage[] | undefined,
+          lastToolResult: parent.lastToolResult as { toolName: string; result: string } | undefined,
+          activatedInjectionIds:
+            (parent.activatedInjectionIds as readonly string[] | undefined) ?? [],
+        }),
+        outputMapper: (sf) => ({ activeInjections: sf.activeInjections }),
+        // CRITICAL: footprintjs's default `applyOutputMapping`
+        // CONCATENATES arrays from subflow output with the parent's
+        // existing array values. Without `Replace`, the parent's
+        // `activeInjections` from iter N gets CONCATENATED with the
+        // subflow's iter N+1 fresh evaluation — producing
+        // 8 → 16 → 24 → 32 cumulative injections per turn.
+        arrayMerge: ArrayMergeMode.Replace,
+      },
+    )
     .addSubFlowChartNext(SUBFLOW_IDS.SYSTEM_PROMPT, deps.systemPromptSubflow, 'System Prompt', {
       inputMapper: (parent) => ({
         userMessage: parent.userMessage as string | undefined,
