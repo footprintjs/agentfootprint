@@ -5,6 +5,42 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.11.1]
+
+### Added — Reliability v2.11 internal foundation + Agent.ts decomposition (step 1)
+
+Internal infrastructure for the rules-based reliability refactor flagged in v2.11.0's "Coming next" section. **Public API surface is unchanged** in this release — the foundation lands first as its own atomic checkpoint; wiring it into the Agent's chart lands in a follow-up patch once the Agent.ts decomposition is complete.
+
+#### Reliability foundation (`src/reliability/`)
+
+- **Multi-stage gate chart** built using footprintjs's native `decide()` DSL via `addDeciderFunction`. Shape: `Init → PreCheck (decider) → CallProvider → PostDecide (decider) → loopTo('pre-check')`. Branches that don't `$break()` fall through to the loopTo target → retry semantics; branches that `$break()` escape the loop with the appropriate scope state (success/failure).
+- **`CircuitBreaker` as a pure state machine.** Refactored from a class with instance state to PURE FUNCTIONS (`admitCall`, `recordSuccess`, `recordFailure`, `initialBreakerState`) that take + return a serializable `BreakerState` record. State now lives in scope (round-trippable across gate invocations via inputMapper/outputMapper) instead of closure. Visible in commitLog; ready for v2.12 distributed-state via a future `BreakerStateStore` adapter.
+- **`classifyError`** — pure function mapping any thrown error to a coarse `errorKind` taxonomy (`'5xx-transient'`, `'rate-limit'`, `'circuit-open'`, `'schema-fail'`, `'unknown'`) so rules match on a structured field rather than regexing on `error.message`.
+- **`ReliabilityRule` / `ReliabilityScope` / `ReliabilityFailFastError` types** with full JSDoc on the three-channel discipline: scope state for runtime data (read by `Agent.run()` at the API boundary), `$emit` for passive observability (CloudWatch/X-Ray/OTel), `$break(reason)` for control flow + human narrative reason.
+- **17 7-pattern tests** drive the gate chart end-to-end via real `FlowChartExecutor`, verifying retry, retry-other, fallback, and fail-fast semantics through the decider DSL. Tests pass in isolation; foundation is ready for wiring into the Agent chart in v2.11.2.
+
+#### Agent.ts decomposition (step 1 of N)
+
+Begin breaking up the 2249-LOC `core/Agent.ts`. Step 1 extracts the safe, dependency-free pieces using the **index-file pattern**: extracted modules live under `src/core/agent/`, and `Agent.ts` re-exports them so the 28+ existing import sites stay valid.
+
+- **`src/core/agent/validators.ts`** — 4 pure helpers (`validateMemoryIdUniqueness`, `validateToolNameUniqueness`, `clampIterations`, `safeStringify`).
+- **`src/core/agent/types.ts`** — both PUBLIC types (`AgentOptions`, `AgentInput`, `AgentOutput`) and INTERNAL `AgentState`. `Agent.ts` re-exports the public ones for back-compat.
+- **`Agent.ts`: 2249 → 2006 LOC** (−243). Behavior unchanged.
+
+Steps 2-N will extract the inline stage functions (seed, iterationStart, callLLM, route, toolCalls, breakFinal, updateSkillHistory, cacheGate) to `src/core/agent/stages/*.ts` and the chart composition to `src/core/agent/buildAgentChart.ts`. Each becomes a `build*(deps)` factory taking explicit dependencies — no `this` references in extracted code. Lands progressively in subsequent v2.11.x patches.
+
+#### Verification
+
+- Full suite: **1800 / 1800 passing** (1783 from v2.11.0 + 17 new reliability foundation tests).
+- `tsc --noEmit` clean.
+- Three-channel discipline locked into JSDoc as the canonical pattern for downstream subsystems.
+
+#### Coming next (v2.11.2+)
+
+- Complete the Agent.ts decomposition (extract 8 inline stages + chart composition).
+- Wire the reliability gate chart into `buildAgentChart.ts` via `addSubFlowChartNext('sf-reliability', gateChart)` + a TranslateFailFast agent-level stage that translates the gate's `$break(reason)` into a typed `ReliabilityFailFastError` at the `Agent.run()` API boundary.
+- Update existing builder methods (`.outputFallback()`, plus new `.withRetry()` / `.withCircuitBreaker()` / `.withFallback()` agent-builder methods) to populate the unified internal `ReliabilityConfig`. The existing standalone `withCircuitBreaker(provider, opts)` etc. functions in `agentfootprint/resilience` continue to work unchanged.
+
 ## [2.11.0]
 
 ### Added — Reliability subsystem documentation
