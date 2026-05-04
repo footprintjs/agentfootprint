@@ -1,5 +1,6 @@
+
 <p align="center">
-  <img width="220" alt="agentfootprint logo" src="https://github.com/user-attachments/assets/a47840f4-cc8b-4bea-b88d-d9753f59616b" />
+  <img width="220" alt="agentfootprint logo" src="https://github.com/user-attachments/assets/d548e2f4-cd49-4b9b-bdc2-2e6cbc2817ab" />
 </p>
 
 <h1 align="center">agentfootprint</h1>
