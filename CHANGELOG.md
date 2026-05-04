@@ -5,6 +5,58 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.11.2]
+
+### Refactored — Agent.ts decomposition complete
+
+`core/Agent.ts` reduced from **2249 LOC → 710 LOC (−68%)** by extracting 11 focused files under `src/core/agent/`. **Public API surface is unchanged** — every external import site (28 of them) continues to work via re-exports from `Agent.ts`. Behavior is identical; this is a pure code organization release.
+
+#### Files extracted to `src/core/agent/`
+
+- **`types.ts`** — `AgentOptions`, `AgentInput`, `AgentOutput` (PUBLIC, re-exported from `Agent.ts`) + internal `AgentState`.
+- **`validators.ts`** — `validateMemoryIdUniqueness`, `validateToolNameUniqueness`, `clampIterations`, `safeStringify`. Pure helpers, no class state.
+- **`AgentBuilder.ts`** — full fluent builder class (547 LOC). Re-exported from `Agent.ts`.
+- **`buildToolRegistry.ts`** — pure function composing the 3-source tool registry (static `.tool()` + auto-attached `read_skill` + skill-supplied tools). Handles autoActivate skill scoping + cross-source name uniqueness + same-Tool-reference dedupe across skills.
+- **`buildAgentChart.ts`** — the FlowChart composition that wires every stage + slot subflow + memory subflow together. Takes a comprehensive `AgentChartDeps` interface enumerating all dependencies. The reliability gate chart (v2.11.1 foundation) wires into this file in v2.11.3+.
+- **`stages/breakFinal.ts`** — terminates the ReAct loop ($break + return finalContent).
+- **`stages/iterationStart.ts`** — emits per-iteration marker event.
+- **`stages/route.ts`** — decider routing to 'tool-calls' or 'final'.
+- **`stages/seed.ts`** — initial scope state. Factory takes `consumePendingResumeHistory` + `getCurrentRunId` accessors so the resume side-channel and current run id remain dynamic.
+- **`stages/callLLM.ts`** — the LLM invocation. Factory takes provider/model/cache strategy/pricing. Streaming-first; falls back to `complete()` for the authoritative response.
+- **`stages/toolCalls.ts`** — pausable tool-execution handler. Factory takes `registryByName` + optional `externalToolProvider` + optional `permissionChecker`.
+- **`stages/prepareFinal.ts`** — captures turn payload for the final-branch subflow.
+
+#### Pattern: factory functions take explicit deps
+
+Every extracted stage that previously closed over `this.X` becomes a `build*(deps)` factory taking explicit dependencies as args. No `this` references in the extracted code; everything is testable in isolation. Per-run mutable accessors (e.g., `consumePendingResumeHistory` for the resumeOnError side-channel) are passed as closure functions so the dynamic behavior survives the move.
+
+#### What's left in `Agent.ts` (710 LOC)
+
+- Agent class declaration + 18 readonly fields (~150 LOC)
+- Constructor (validates uniqueness, defaults cache strategy)
+- Public methods (toFlowChart, getSpec, run, runOnce, resumeOnError, resume, parseOutputAsync, runTyped, getLastSnapshot, getLastNarrativeEntries)
+- Private helpers (createExecutor + recorder attachment, finalizeResult, installCheckpointTracker, detectPause)
+- `buildChart()` — now an ~80-line wire-up that captures `this.X` deps as locals, builds 4 slot subflows, builds 6 stage handlers via factories, calls `buildAgentChart()` and returns
+
+#### Why this lands as its own release
+
+1. **Atomic checkpoint.** The decomposition is a clean, behavior-preserving refactor that reviews independently of the v2.11.1 reliability foundation and the upcoming v2.11.3 wiring.
+2. **De-risks the next step.** The reliability gate wiring (v2.11.3) touches `buildAgentChart.ts` (250 LOC) instead of a 2249-line monolith. Smaller blast radius, easier review, easier rollback.
+3. **Sets the pattern for future subsystems.** Cache layer (v2.6) followed the same shape; reliability (v2.11.x), governance (planned), and any future cross-cutting concern should compose into `buildAgentChart.ts` rather than fight a giant `Agent.ts`.
+
+#### Verification
+
+- Full suite: **1800 / 1800 passing** (no regressions; same count as v2.11.1).
+- `tsc --noEmit` clean.
+- All 28 external import sites for `Agent`, `AgentBuilder`, `AgentInput`, `AgentOptions`, `AgentOutput` continue to work unchanged via `Agent.ts` re-exports.
+
+#### Coming next (v2.11.3+)
+
+- Wire the v2.11.1 reliability gate chart into `buildAgentChart.ts` via `addSubFlowChartNext('sf-reliability', gateChart)` between `IterationStart` and `CallLLM` when reliability is configured.
+- Add agent-builder methods `.withRetry()` / `.withCircuitBreaker()` / `.withFallback()` to `AgentBuilder.ts`; each populates a unified internal `ReliabilityConfig`.
+- Wire `Agent.run()` error translation: read `scope.reliabilityFailKind` from snapshot, throw `ReliabilityFailFastError` at the API boundary.
+- Integration test exercising all three reliability modes through a real agent run.
+
 ## [2.11.1]
 
 ### Added — Reliability v2.11 internal foundation + Agent.ts decomposition (step 1)
