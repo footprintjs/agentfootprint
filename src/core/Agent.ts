@@ -20,7 +20,6 @@ import {
   type CombinedNarrativeEntry,
   type FlowChart,
   type FlowchartCheckpoint,
-  type PausableHandler,
   type RunOptions,
   type RuntimeSnapshot,
   type TypedScope,
@@ -32,24 +31,21 @@ import {
 // with it (default behavior re-introduces duplicate tool names that
 // LLM providers reject).
 import { ArrayMergeMode } from 'footprintjs/advanced';
-import type { CacheMarker, CachePolicy, CacheStrategy } from '../cache/types.js';
+import type { CachePolicy, CacheStrategy } from '../cache/types.js';
 import { cacheDecisionSubflow } from '../cache/CacheDecisionSubflow.js';
 import {
   cacheGateDecide,
   updateSkillHistory as updateSkillHistoryStage,
 } from '../cache/CacheGateDecider.js';
 import { getDefaultCacheStrategy } from '../cache/strategyRegistry.js';
-import { isPauseRequest, type RunnerPauseOutcome } from './pause.js';
-import { emitCostTick } from './cost.js';
+import { type RunnerPauseOutcome } from './pause.js';
 import type {
   LLMProvider,
   LLMMessage,
-  LLMResponse,
   LLMToolSchema,
   PermissionChecker,
   PricingTable,
 } from '../adapters/types.js';
-import type { ContextRole } from '../events/types.js';
 import type { RunContext } from '../bridge/eventMeta.js';
 import { STAGE_IDS, SUBFLOW_IDS } from '../conventions.js';
 import { defaultCommentaryTemplates } from '../recorders/observability/commentary/commentaryTemplates.js';
@@ -63,7 +59,6 @@ import { evalRecorder } from '../recorders/core/EvalRecorder.js';
 import { memoryRecorder } from '../recorders/core/MemoryRecorder.js';
 import { skillRecorder } from '../recorders/core/SkillRecorder.js';
 import { typedEmit } from '../recorders/core/typedEmit.js';
-import type { InjectionRecord } from '../recorders/core/types.js';
 import type { MemoryDefinition } from '../memory/define.types.js';
 import { memoryInjectionKey } from '../memory/define.types.js';
 import { unwrapMemoryFlowChart } from '../memory/define.js';
@@ -99,10 +94,9 @@ import {
 } from './outputSchema.js';
 import { RunnerBase, makeRunId } from './RunnerBase.js';
 import type { Tool, ToolRegistryEntry } from './tools.js';
-import type { ToolDispatchContext, ToolProvider } from '../tool-providers/types.js';
+import type { ToolProvider } from '../tool-providers/types.js';
 import {
   clampIterations,
-  safeStringify,
   validateMemoryIdUniqueness,
   validateToolNameUniqueness,
 } from './agent/validators.js';
@@ -110,6 +104,9 @@ import type { AgentInput, AgentOptions, AgentOutput, AgentState } from './agent/
 import { breakFinalStage } from './agent/stages/breakFinal.js';
 import { iterationStartStage } from './agent/stages/iterationStart.js';
 import { routeDeciderStage } from './agent/stages/route.js';
+import { buildSeedStage } from './agent/stages/seed.js';
+import { buildCallLLMStage } from './agent/stages/callLLM.js';
+import { buildToolCallsHandler } from './agent/stages/toolCalls.js';
 
 // Re-export public Agent types so the 28+ existing import sites
 // (e.g., `import { type AgentInput } from '../core/Agent.js'`) keep
@@ -642,70 +639,25 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     const cachingDisabled = this.cachingDisabledValue;
     const cacheStrategy = this.cacheStrategy;
 
-    const seed = (scope: TypedScope<AgentState>) => {
-      const args = scope.$getArgs<AgentInput>();
-      scope.userMessage = args.message;
-      // If `resumeOnError(...)` set the side channel, restore the
-      // checkpointed conversation history. The next iteration sees
-      // the prior messages and continues from the failure point.
-      // We always clear the field after reading so subsequent runs
-      // (without resumeOnError) start fresh.
-      if (this.pendingResumeHistory && this.pendingResumeHistory.length > 0) {
-        scope.history = [...this.pendingResumeHistory];
+    // seed extracted to ./agent/stages/seed.ts (v2.11.2). Factory takes
+    // chart-build-time constants + per-run mutable accessors so the
+    // resume side-channel and current run id remain dynamic.
+    // toolSchemas is finalized further down; pass a getter that reads
+    // the eventual const at stage-execution time.
+    let toolSchemasResolved: readonly LLMToolSchema[] = [];
+    const seed = buildSeedStage({
+      maxIterations,
+      cachingDisabled,
+      get toolSchemas() {
+        return toolSchemasResolved;
+      },
+      consumePendingResumeHistory: () => {
+        const h = this.pendingResumeHistory;
         this.pendingResumeHistory = undefined;
-      } else {
-        scope.history = [{ role: 'user', content: args.message }];
-      }
-      // Default identity uses the runId so multi-run isolation works
-      // without consumer changes; explicit identity (multi-tenant)
-      // overrides via `agent.run({ identity })`.
-      scope.runIdentity = args.identity ?? {
-        conversationId: this.currentRunContext?.runId ?? 'default',
-      };
-      scope.newMessages = [];
-      scope.turnNumber = 1;
-      // Permissive default — explicit cap will land when PricingTable
-      // gets a context-window field. Memory pickByBudget treats anything
-      // ≥ minimumTokens as "fits", so this just enables the budget path.
-      scope.contextTokensRemaining = 32_000;
-      scope.iteration = 1;
-      scope.maxIterations = maxIterations;
-      scope.finalContent = '';
-      scope.totalInputTokens = 0;
-      scope.totalOutputTokens = 0;
-      scope.turnStartMs = Date.now();
-      scope.systemPromptInjections = [];
-      scope.messagesInjections = [];
-      scope.toolsInjections = [];
-      scope.llmLatestContent = '';
-      scope.llmLatestToolCalls = [];
-      scope.pausedToolCallId = '';
-      scope.pausedToolName = '';
-      scope.pausedToolStartMs = 0;
-      scope.cumTokensInput = 0;
-      scope.cumTokensOutput = 0;
-      scope.cumEstimatedUsd = 0;
-      scope.costBudgetHit = false;
-      scope.activeInjections = [];
-      scope.activatedInjectionIds = [];
-      scope.dynamicToolSchemas = toolSchemas;
-      // Cache layer state (v2.6) — initialized to inert defaults.
-      // CacheDecision subflow populates `cacheMarkers` per iteration;
-      // UpdateSkillHistory + CacheGate consume `cachingDisabled`,
-      // `recentHitRate`, `skillHistory`. Empty defaults mean the
-      // CacheGate falls through to 'apply-markers' on iter 1 (no
-      // history yet → no churn detected; recentHitRate undefined →
-      // hit-rate floor doesn't fire).
-      scope.cacheMarkers = [];
-      scope.cachingDisabled = cachingDisabled;
-      scope.recentHitRate = undefined;
-      scope.skillHistory = [];
-
-      typedEmit(scope, 'agentfootprint.agent.turn_start', {
-        turnIndex: 0,
-        userPrompt: args.message,
-      });
-    };
+        return h;
+      },
+      getCurrentRunId: () => this.currentRunContext?.runId,
+    });
 
     // Tool registry composition — three sources:
     //
@@ -811,6 +763,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       }
     }
     const toolSchemas = augmentedRegistry.map((e) => e.tool.schema);
+    // Late-bind toolSchemas into the seed stage's deps (the factory was
+    // built earlier with a getter; this resolves the actual value).
+    toolSchemasResolved = toolSchemas;
 
     const injectionEngineSubflow = buildInjectionEngineSubflow({
       injections: this.injections,
@@ -828,349 +783,31 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // iterationStart extracted to ./agent/stages/iterationStart.ts (v2.11.2).
     const iterationStart = iterationStartStage;
 
-    const callLLM = async (scope: TypedScope<AgentState>) => {
-      const systemPromptInjections =
-        (scope.systemPromptInjections as readonly InjectionRecord[]) ?? [];
-      // `scope.messagesInjections` is read by ContextRecorder for
-      // observability; the LLM-wire path now reads scope.history
-      // directly (see below for rationale).
-      const iteration = scope.iteration as number;
-
-      const systemPrompt = systemPromptInjections
-        .map((r) => r.rawContent ?? '')
-        .filter((s) => s.length > 0)
-        .join('\n\n');
-
-      // Read the LLM message stream from `scope.history` directly.
-      // The `messagesInjections` projection is for observability
-      // (ContextRecorder, Lens) — it flattens InjectionRecords for
-      // event reporting and doesn't carry the full LLM-protocol
-      // shape (assistant `toolCalls[]`, etc.). For Anthropic's API
-      // contract we need the original LLMMessage with `toolCalls`
-      // intact so tool_use → tool_result correlation survives.
-      const messages = (scope.history as readonly LLMMessage[] | undefined) ?? [];
-
-      typedEmit(scope, 'agentfootprint.stream.llm_start', {
-        iteration,
-        provider: provider.name,
-        model,
-        systemPromptChars: systemPrompt.length,
-        messagesCount: messages.length,
-        toolsCount: toolSchemas.length,
-        ...(temperature !== undefined && { temperature }),
-      });
-
-      const startMs = Date.now();
-      // Use dynamic schemas — registry tools + injection-supplied
-      // tools (Skills' `inject.tools` when their Injection is active).
-      // Falls back to the static schemas at startup before the tools
-      // slot has run for the first time.
-      const activeToolSchemas =
-        (scope.dynamicToolSchemas as readonly LLMToolSchema[] | undefined) ?? toolSchemas;
-      const baseRequest = {
-        ...(systemPrompt.length > 0 && { systemPrompt }),
-        messages,
-        ...(activeToolSchemas.length > 0 && { tools: activeToolSchemas }),
-        model,
-        ...(temperature !== undefined && { temperature }),
-        ...(maxTokens !== undefined && { maxTokens }),
-      };
-      // v2.6+ — call cache strategy to attach provider-specific cache
-      // hints. CacheGate has already routed (apply-markers / no-markers)
-      // and populated scope.cacheMarkers accordingly. Strategy.prepareRequest
-      // is a pass-through for empty markers.
-      const cacheMarkers = (scope.cacheMarkers as readonly CacheMarker[] | undefined) ?? [];
-      const cachePrepared = await cacheStrategy.prepareRequest(baseRequest, cacheMarkers, {
-        iteration,
-        iterationsRemaining: Math.max(0, maxIterations - iteration),
-        recentHitRate: scope.recentHitRate as number | undefined,
-        cachingDisabled: (scope.cachingDisabled as boolean | undefined) ?? false,
-      });
-      const llmRequest = cachePrepared.request;
-
-      // Streaming-first: when the provider implements `stream()` we
-      // consume chunk-by-chunk so consumers (Lens commentary, chat
-      // UIs) see tokens as they arrive instead of waiting for the
-      // full LLM call to finish. Each non-terminal chunk fires
-      // `agentfootprint.stream.token` with the token text + index.
-      //
-      // The terminal chunk SHOULD carry the authoritative
-      // `LLMResponse` (toolCalls + usage + stopReason); when it does
-      // we use it directly. When it doesn't (older providers, partial
-      // implementations) we fall back to `complete()` for the
-      // authoritative payload — keeping the ReAct loop deterministic.
-      let response: LLMResponse | undefined;
-      if (provider.stream) {
-        for await (const chunk of provider.stream(llmRequest)) {
-          if (chunk.done) {
-            if (chunk.response) response = chunk.response;
-            break;
-          }
-          if (chunk.content.length > 0) {
-            typedEmit(scope, 'agentfootprint.stream.token', {
-              iteration,
-              tokenIndex: chunk.tokenIndex,
-              content: chunk.content,
-            });
-          }
-        }
-      }
-      if (!response) {
-        // No `stream()` OR stream finished without a response payload.
-        response = await provider.complete(llmRequest);
-      }
-      const durationMs = Date.now() - startMs;
-
-      scope.totalInputTokens = scope.totalInputTokens + response.usage.input;
-      scope.totalOutputTokens = scope.totalOutputTokens + response.usage.output;
-      scope.llmLatestContent = response.content;
-      scope.llmLatestToolCalls = response.toolCalls;
-
-      typedEmit(scope, 'agentfootprint.stream.llm_end', {
-        iteration,
-        content: response.content,
-        toolCallCount: response.toolCalls.length,
-        usage: response.usage,
-        stopReason: response.stopReason,
-        durationMs,
-      });
-
-      emitCostTick(scope, pricingTable, costBudget, model, response.usage);
-    };
+    // callLLM extracted to ./agent/stages/callLLM.ts (v2.11.2). Same
+    // late-binding pattern as seed for toolSchemas (computed below).
+    const callLLM = buildCallLLMStage({
+      provider,
+      model,
+      ...(temperature !== undefined && { temperature }),
+      ...(maxTokens !== undefined && { maxTokens }),
+      ...(pricingTable !== undefined && { pricingTable }),
+      ...(costBudget !== undefined && { costBudget }),
+      maxIterations,
+      cacheStrategy,
+      get toolSchemas() {
+        return toolSchemasResolved;
+      },
+    });
 
     // routeDecider extracted to ./agent/stages/route.ts (v2.11.2).
     const routeDecider = routeDeciderStage;
 
-    /**
-     * Pausable tool-call handler.
-     *
-     * `execute` iterates the LLM-requested tool calls. If a tool throws
-     * `PauseRequest` via `pauseHere()`, we save the remaining work into
-     * scope and return the pause data — footprintjs captures a checkpoint
-     * and bubbles it up. The outer `Agent.run()` surfaces it as a
-     * `RunnerPauseOutcome`.
-     *
-     * `resume` is called when the consumer provides the human's answer.
-     * We treat that answer as the paused tool's result and append it to
-     * history, then continue the ReAct iteration loop.
-     */
-    const toolCallsHandler: PausableHandler<TypedScope<AgentState>> = {
-      execute: async (scope) => {
-        const toolCalls = scope.llmLatestToolCalls as readonly {
-          readonly id: string;
-          readonly name: string;
-          readonly args: Readonly<Record<string, unknown>>;
-        }[];
-        const iteration = scope.iteration as number;
-        const newHistory: LLMMessage[] = [...(scope.history as readonly LLMMessage[])];
-        // ALWAYS push the assistant turn when there are tool calls — even
-        // if the content was empty — so providers (Anthropic, OpenAI) can
-        // round-trip the tool_use blocks via `LLMMessage.toolCalls`.
-        // Without this, the next iteration's request lacks the assistant
-        // turn that initiated the tool call, and the API rejects the
-        // following tool_result with "preceding tool_use missing".
-        if (scope.llmLatestContent || toolCalls.length > 0) {
-          newHistory.push({
-            role: 'assistant' as ContextRole,
-            content: scope.llmLatestContent ?? '',
-            ...(toolCalls.length > 0 && { toolCalls }),
-          });
-        }
-        // Resolve a tool by name, consulting the external ToolProvider
-        // if one was wired via `.toolProvider()` and the static
-        // registry doesn't carry the tool. The provider sees the same
-        // ctx the Tools slot used, so dispatch + visibility stay
-        // consistent within the iteration.
-        const externalToolProvider = this.externalToolProvider;
-        const lookupTool = (toolName: string): Tool | undefined => {
-          const fromRegistry = registryByName.get(toolName) as Tool | undefined;
-          if (fromRegistry) return fromRegistry;
-          if (!externalToolProvider) return undefined;
-          const activatedIds = (scope.activatedInjectionIds as readonly string[] | undefined) ?? [];
-          const identity = scope.runIdentity as
-            | { tenant?: string; principal?: string; conversationId: string }
-            | undefined;
-          const ctx: ToolDispatchContext = {
-            iteration: scope.iteration as number,
-            ...(activatedIds.length > 0 && {
-              activeSkillId: activatedIds[activatedIds.length - 1],
-            }),
-            ...(identity && { identity }),
-          };
-          const visible = externalToolProvider.list(ctx);
-          return visible.find((t) => t.schema.name === toolName);
-        };
-
-        for (const tc of toolCalls) {
-          const tool = lookupTool(tc.name);
-          typedEmit(scope, 'agentfootprint.stream.tool_start', {
-            toolName: tc.name,
-            toolCallId: tc.id,
-            args: tc.args,
-            ...(toolCalls.length > 1 && { parallelCount: toolCalls.length }),
-          });
-          const startMs = Date.now();
-          let result: unknown;
-          let error: boolean | undefined;
-          // Permission gate — when a checker is configured, evaluate BEFORE
-          // executing the tool. Emits `permission.check` with the decision.
-          // On 'deny', the tool is not executed and its result is a
-          // synthetic denial string; on 'allow'/'gate_open', execution
-          // proceeds normally (the gate is informational — the consumer's
-          // checker is responsible for any gate-open side effects).
-          let denied = false;
-          if (permissionChecker) {
-            try {
-              const decision = await permissionChecker.check({
-                capability: 'tool_call',
-                actor: 'agent',
-                target: tc.name,
-                context: tc.args,
-              });
-              typedEmit(scope, 'agentfootprint.permission.check', {
-                capability: 'tool_call',
-                actor: 'agent',
-                target: tc.name,
-                result: decision.result,
-                ...(decision.policyRuleId !== undefined && { policyRuleId: decision.policyRuleId }),
-                ...(decision.rationale !== undefined && { rationale: decision.rationale }),
-              });
-              if (decision.result === 'deny') {
-                denied = true;
-                result = `[permission denied: ${decision.rationale ?? 'policy'}]`;
-              }
-            } catch (permErr) {
-              // A checker that throws is treated as deny-by-default. The
-              // denial message records the thrown error so consumers can
-              // debug policy-adapter failures without losing the run.
-              denied = true;
-              const msg = permErr instanceof Error ? permErr.message : String(permErr);
-              typedEmit(scope, 'agentfootprint.permission.check', {
-                capability: 'tool_call',
-                actor: 'agent',
-                target: tc.name,
-                result: 'deny',
-                rationale: `permission-checker threw: ${msg}`,
-              });
-              result = `[permission denied: checker error: ${msg}]`;
-            }
-          }
-          if (!denied) {
-            try {
-              if (!tool) throw new Error(`Unknown tool: ${tc.name}`);
-              result = await tool.execute(tc.args, {
-                toolCallId: tc.id,
-                iteration,
-              });
-            } catch (err) {
-              if (isPauseRequest(err)) {
-                // Commit partial state so resume() can find history intact.
-                scope.history = newHistory;
-                scope.pausedToolCallId = tc.id;
-                scope.pausedToolName = tc.name;
-                scope.pausedToolStartMs = startMs;
-                // Returning a defined value triggers footprintjs pause —
-                // the returned object becomes the checkpoint's pauseData.
-                return {
-                  toolCallId: tc.id,
-                  toolName: tc.name,
-                  ...(typeof err.data === 'object' && err.data !== null
-                    ? (err.data as Record<string, unknown>)
-                    : { data: err.data }),
-                };
-              }
-              error = true;
-              result = err instanceof Error ? err.message : String(err);
-            }
-          }
-          const durationMs = Date.now() - startMs;
-          typedEmit(scope, 'agentfootprint.stream.tool_end', {
-            toolCallId: tc.id,
-            result,
-            durationMs,
-            ...(error === true && { error: true }),
-          });
-          const resultStr = typeof result === 'string' ? result : safeStringify(result);
-          newHistory.push({
-            role: 'tool',
-            content: resultStr,
-            toolCallId: tc.id,
-            toolName: tc.name,
-          });
-
-          // ── Dynamic ReAct wiring ───────────────────────────────
-          //
-          // (1) `lastToolResult` drives `on-tool-return` Injection
-          //     triggers — the InjectionEngine's NEXT pass will see
-          //     this and activate any matching Instructions.
-          scope.lastToolResult = { toolName: tc.name, result: resultStr };
-
-          // (2) `read_skill` is the auto-attached activation tool.
-          //     When the LLM calls it with a valid Skill id, append
-          //     to `activatedInjectionIds` so the InjectionEngine's
-          //     NEXT pass activates that Skill (lifetime: turn — stays
-          //     active until the turn ends).
-          if (tc.name === 'read_skill' && !error && !denied) {
-            const requestedId = (tc.args as { id?: unknown }).id;
-            if (typeof requestedId === 'string' && requestedId.length > 0) {
-              const current = scope.activatedInjectionIds as readonly string[];
-              if (!current.includes(requestedId)) {
-                scope.activatedInjectionIds = [...current, requestedId];
-              }
-            }
-          }
-        }
-        scope.history = newHistory;
-
-        typedEmit(scope, 'agentfootprint.agent.iteration_end', {
-          turnIndex: 0,
-          iterIndex: iteration,
-          toolCallCount: toolCalls.length,
-          history: scope.history,
-        });
-        scope.iteration = iteration + 1;
-        return undefined; // explicit: no pause, flow continues to loopTo
-      },
-      resume: (scope, input) => {
-        // Consumer-supplied resume input becomes the paused tool's result.
-        // The subflow's pre-pause scope is restored automatically by
-        // footprintjs 4.17.0 via `checkpoint.subflowStates`, so
-        // `scope.history` and `scope.pausedToolCallId` read back cleanly
-        // across same-executor AND cross-executor resume.
-        const toolCallId = scope.pausedToolCallId as string;
-        const toolName = scope.pausedToolName as string;
-        const startMs = scope.pausedToolStartMs as number;
-        const resultStr = typeof input === 'string' ? input : safeStringify(input);
-        const newHistory: LLMMessage[] = [
-          ...(scope.history as readonly LLMMessage[]),
-          {
-            role: 'tool',
-            content: resultStr,
-            toolCallId,
-            toolName,
-          },
-        ];
-        scope.history = newHistory;
-
-        typedEmit(scope, 'agentfootprint.stream.tool_end', {
-          toolCallId,
-          result: input,
-          durationMs: Date.now() - startMs,
-        });
-        const iteration = scope.iteration as number;
-        typedEmit(scope, 'agentfootprint.agent.iteration_end', {
-          turnIndex: 0,
-          iterIndex: iteration,
-          toolCallCount: 1,
-          history: scope.history,
-        });
-        scope.iteration = iteration + 1;
-        // Clear pause checkpoint fields.
-        scope.pausedToolCallId = '';
-        scope.pausedToolName = '';
-        scope.pausedToolStartMs = 0;
-      },
-    };
+    // toolCallsHandler extracted to ./agent/stages/toolCalls.ts (v2.11.2).
+    const toolCallsHandler = buildToolCallsHandler({
+      registryByName,
+      ...(this.externalToolProvider && { externalToolProvider: this.externalToolProvider }),
+      ...(permissionChecker && { permissionChecker }),
+    });
 
     // Final branch is split so memory-write subflows can mount BETWEEN
     // setting `finalContent` and breaking the ReAct loop. PrepareFinal
