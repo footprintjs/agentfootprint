@@ -16,21 +16,12 @@
 
 import {
   FlowChartExecutor,
-  flowChart,
   type CombinedNarrativeEntry,
   type FlowChart,
   type FlowchartCheckpoint,
   type RunOptions,
   type RuntimeSnapshot,
-  type TypedScope,
 } from 'footprintjs';
-// ArrayMergeMode lives on footprintjs's `advanced` subpath, not its
-// main barrel. Used to set `arrayMerge: Replace` on subflow output
-// mapping for the Tools slot — the slot's deduped tool list must
-// REPLACE the parent's `dynamicToolSchemas` rather than concatenate
-// with it (default behavior re-introduces duplicate tool names that
-// LLM providers reject).
-import { ArrayMergeMode } from 'footprintjs/advanced';
 import type { CachePolicy, CacheStrategy } from '../cache/types.js';
 import { cacheDecisionSubflow } from '../cache/CacheDecisionSubflow.js';
 import {
@@ -40,14 +31,13 @@ import {
 import { getDefaultCacheStrategy } from '../cache/strategyRegistry.js';
 import { type RunnerPauseOutcome } from './pause.js';
 import type {
-  LLMProvider,
   LLMMessage,
+  LLMProvider,
   LLMToolSchema,
   PermissionChecker,
   PricingTable,
 } from '../adapters/types.js';
 import type { RunContext } from '../bridge/eventMeta.js';
-import { STAGE_IDS, SUBFLOW_IDS } from '../conventions.js';
 import { defaultCommentaryTemplates } from '../recorders/observability/commentary/commentaryTemplates.js';
 import { defaultThinkingTemplates } from '../recorders/observability/thinking/thinkingTemplates.js';
 import { ContextRecorder } from '../recorders/core/ContextRecorder.js';
@@ -58,17 +48,13 @@ import { permissionRecorder } from '../recorders/core/PermissionRecorder.js';
 import { evalRecorder } from '../recorders/core/EvalRecorder.js';
 import { memoryRecorder } from '../recorders/core/MemoryRecorder.js';
 import { skillRecorder } from '../recorders/core/SkillRecorder.js';
-import { typedEmit } from '../recorders/core/typedEmit.js';
 import type { MemoryDefinition } from '../memory/define.types.js';
-import { memoryInjectionKey } from '../memory/define.types.js';
-import { unwrapMemoryFlowChart } from '../memory/define.js';
-import { mountMemoryRead, mountMemoryWrite } from '../memory/wire/mountMemoryPipeline.js';
 import { buildSystemPromptSlot } from './slots/buildSystemPromptSlot.js';
 import { buildMessagesSlot } from './slots/buildMessagesSlot.js';
 import { buildToolsSlot } from './slots/buildToolsSlot.js';
 import { buildInjectionEngineSubflow } from '../lib/injection-engine/buildInjectionEngineSubflow.js';
 import { buildReadSkillTool } from '../lib/injection-engine/skillTools.js';
-import type { ActiveInjection, Injection } from '../lib/injection-engine/types.js';
+import type { Injection } from '../lib/injection-engine/types.js';
 import { defineInstruction } from '../lib/injection-engine/factories/defineInstruction.js';
 import {
   applyOutputFallback,
@@ -100,13 +86,13 @@ import {
   validateMemoryIdUniqueness,
   validateToolNameUniqueness,
 } from './agent/validators.js';
-import type { AgentInput, AgentOptions, AgentOutput, AgentState } from './agent/types.js';
-import { breakFinalStage } from './agent/stages/breakFinal.js';
+import type { AgentInput, AgentOptions, AgentOutput } from './agent/types.js';
 import { iterationStartStage } from './agent/stages/iterationStart.js';
 import { routeDeciderStage } from './agent/stages/route.js';
 import { buildSeedStage } from './agent/stages/seed.js';
 import { buildCallLLMStage } from './agent/stages/callLLM.js';
 import { buildToolCallsHandler } from './agent/stages/toolCalls.js';
+import { buildAgentChart } from './agent/buildAgentChart.js';
 
 // Re-export public Agent types so the 28+ existing import sites
 // (e.g., `import { type AgentInput } from '../core/Agent.js'`) keep
@@ -809,293 +795,24 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       ...(permissionChecker && { permissionChecker }),
     });
 
-    // Final branch is split so memory-write subflows can mount BETWEEN
-    // setting `finalContent` and breaking the ReAct loop. PrepareFinal
-    // captures the turn payload; BreakFinal terminates the loop.
-    const prepareFinalStage = (scope: TypedScope<AgentState>) => {
-      const iteration = scope.iteration as number;
-      scope.finalContent = scope.llmLatestContent as string;
-      // The turn payload memory writes persist: the user's message
-      // paired with the agent's final answer.
-      scope.newMessages = [
-        { role: 'user', content: scope.userMessage as string },
-        { role: 'assistant', content: scope.finalContent as string },
-      ];
-
-      typedEmit(scope, 'agentfootprint.agent.iteration_end', {
-        turnIndex: 0,
-        iterIndex: iteration,
-        toolCallCount: 0,
-      });
-      typedEmit(scope, 'agentfootprint.agent.turn_end', {
-        turnIndex: 0,
-        finalContent: scope.finalContent,
-        totalInputTokens: scope.totalInputTokens as number,
-        totalOutputTokens: scope.totalOutputTokens as number,
-        iterationCount: iteration,
-        durationMs: Date.now() - (scope.turnStartMs as number),
-      });
-    };
-
-    // breakFinalStage extracted to ./agent/stages/breakFinal.ts (v2.11.2).
-
-    // Compose the final branch as its own subflow so memory write
-    // subflows mount as visible siblings in narrative + Lens.
-    let finalBranchBuilder = flowChart<AgentState>(
-      'PrepareFinal',
-      prepareFinalStage,
-      'prepare-final',
-      undefined,
-      'Capture turn payload (finalContent + newMessages)',
-    );
-    for (const m of this.memories) {
-      if (m.write) {
-        finalBranchBuilder = mountMemoryWrite(finalBranchBuilder, {
-          pipeline: {
-            read: unwrapMemoryFlowChart(m.read) as never,
-            write: unwrapMemoryFlowChart(m.write) as never,
-          },
-          identityKey: 'runIdentity',
-          turnNumberKey: 'turnNumber',
-          contextTokensKey: 'contextTokensRemaining',
-          newMessagesKey: 'newMessages',
-          writeSubflowId: `sf-memory-write-${m.id}`,
-        });
-      }
-    }
-    const finalBranchChart = finalBranchBuilder
-      .addFunction('BreakFinal', breakFinalStage, 'break-final', 'Terminate the ReAct loop')
-      .build();
-
-    // Description prefix `Agent:` is a taxonomy marker — consumers
-    // (Lens + FlowchartRecorder) detect Agent-primitive subflows via
-    // this prefix and flag them as true agent boundaries (separate
-    // from LLMCall subflows which use `LLMCall:` prefix).
-    let builder = flowChart<AgentState>(
-      'Seed',
+    // Chart composition extracted to ./agent/buildAgentChart.ts (v2.11.2).
+    return buildAgentChart({
+      memories: this.memories,
+      systemPromptCachePolicy,
+      maxIterations,
       seed,
-      STAGE_IDS.SEED,
-      undefined,
-      'Agent: ReAct loop',
-    );
-
-    // Memory READ subflows — mounted between Seed and InjectionEngine
-    // for TURN_START timing (default). Each memory writes to its own
-    // scope key (`memoryInjection_${id}`) so multiple `.memory()`
-    // registrations layer without colliding.
-    for (const m of this.memories) {
-      builder = mountMemoryRead(builder, {
-        pipeline: {
-          read: unwrapMemoryFlowChart(m.read) as never,
-          ...(m.write !== undefined && { write: unwrapMemoryFlowChart(m.write) as never }),
-        },
-        identityKey: 'runIdentity',
-        turnNumberKey: 'turnNumber',
-        contextTokensKey: 'contextTokensRemaining',
-        injectionKey: memoryInjectionKey(m.id),
-        readSubflowId: `sf-memory-read-${m.id}`,
-      });
-    }
-
-    builder = builder
-      // Injection Engine — evaluates every Injection's trigger once
-      // per iteration; writes activeInjections[] to parent scope for
-      // the slot subflows to consume. Skipped if no injections were
-      // registered (no observable difference, just one more no-op
-      // subflow boundary).
-      .addSubFlowChartNext(
-        SUBFLOW_IDS.INJECTION_ENGINE,
-        injectionEngineSubflow,
-        'Injection Engine',
-        {
-          inputMapper: (parent) => ({
-            iteration: parent.iteration as number | undefined,
-            userMessage: parent.userMessage as string | undefined,
-            history: parent.history as readonly LLMMessage[] | undefined,
-            lastToolResult: parent.lastToolResult as
-              | { toolName: string; result: string }
-              | undefined,
-            activatedInjectionIds:
-              (parent.activatedInjectionIds as readonly string[] | undefined) ?? [],
-          }),
-          outputMapper: (sf) => ({ activeInjections: sf.activeInjections }),
-          // CRITICAL: footprintjs's default `applyOutputMapping`
-          // CONCATENATES arrays from subflow output with the parent's
-          // existing array values. Without `Replace`, the parent's
-          // `activeInjections` from iter N gets CONCATENATED with the
-          // subflow's iter N+1 fresh evaluation — producing
-          // 8 → 16 → 24 → 32 cumulative injections per turn instead of
-          // the intended ~8-per-iter.
-          //
-          // The slot subflows below (SystemPrompt, Messages, Tools) all
-          // read `activeInjections` and render every entry, so without
-          // Replace the system prompt grows linearly with iteration
-          // count. This was the root-cause of Dynamic-mode costing
-          // ~2x more input tokens than Classic in the v2.5.0 Neo
-          // benchmarks — the InjectionEngine's intended per-iter
-          // recomposition wasn't happening; it was per-iter ACCUMULATION.
-          arrayMerge: ArrayMergeMode.Replace,
-        },
-      )
-      .addSubFlowChartNext(SUBFLOW_IDS.SYSTEM_PROMPT, systemPromptSubflow, 'System Prompt', {
-        inputMapper: (parent) => ({
-          userMessage: parent.userMessage as string | undefined,
-          iteration: parent.iteration as number | undefined,
-          activeInjections: parent.activeInjections as readonly ActiveInjection[] | undefined,
-        }),
-        outputMapper: (sf) => ({ systemPromptInjections: sf.systemPromptInjections }),
-        // See Tools-subflow comment below — same array-concat hazard.
-        // Without Replace, iter N+1's systemPromptInjections gets
-        // CONCATENATED with iter N's, multiplying the system prompt
-        // each iteration.
-        arrayMerge: ArrayMergeMode.Replace,
-      })
-      .addSubFlowChartNext(SUBFLOW_IDS.MESSAGES, messagesSubflow, 'Messages', {
-        inputMapper: (parent) => ({
-          messages: parent.history as readonly LLMMessage[] | undefined,
-          iteration: parent.iteration as number | undefined,
-          activeInjections: parent.activeInjections as readonly ActiveInjection[] | undefined,
-        }),
-        outputMapper: (sf) => ({ messagesInjections: sf.messagesInjections }),
-        // Same array-concat hazard. messagesInjections is consumer-
-        // facing observability metadata (ContextRecorder, Lens) — must
-        // reflect THIS iteration's history, not be appended to last
-        // iteration's. CallLLM no longer reads this for the wire
-        // request (uses scope.history directly), so the LLM-protocol
-        // bug is fixed independently — but consumers of the
-        // messagesInjections stream still expect the per-iteration
-        // semantics.
-        arrayMerge: ArrayMergeMode.Replace,
-      })
-      .addSubFlowChartNext(SUBFLOW_IDS.TOOLS, toolsSubflow, 'Tools', {
-        inputMapper: (parent) => ({
-          iteration: parent.iteration as number | undefined,
-          activeInjections: parent.activeInjections as readonly ActiveInjection[] | undefined,
-          // The slot subflow reads these to build the per-iteration
-          // ToolDispatchContext when an external `.toolProvider()` is
-          // configured. Without them the provider sees activeSkillId
-          // = undefined every iteration, breaking skillScopedTools etc.
-          activatedInjectionIds: parent.activatedInjectionIds as readonly string[] | undefined,
-          runIdentity: parent.runIdentity as
-            | { tenant?: string; principal?: string; conversationId: string }
-            | undefined,
-        }),
-        outputMapper: (sf) => ({
-          toolsInjections: sf.toolsInjections,
-          // Pass merged tool schemas (registry + injection-supplied)
-          // back up so callLLM uses the right list for THIS iteration.
-          dynamicToolSchemas: sf.toolSchemas,
-        }),
-        // CRITICAL: footprintjs's default `applyOutputMapping`
-        // CONCATENATES arrays from subflow output with the parent's
-        // existing array values. Without `Replace`, the parent's
-        // `dynamicToolSchemas` (carrying the iter N value) gets
-        // concatenated with the slot's iter N+1 deduped list,
-        // re-introducing duplicate tool names that Anthropic's API
-        // rejects with "tools: Tool names must be unique." The slot's
-        // toolSchemas IS the authoritative list — replace, don't
-        // concatenate.
-        arrayMerge: ArrayMergeMode.Replace,
-      })
-      // ── Cache layer (v2.6) ─────────────────────────────────────
-      // CacheDecision subflow walks `activeInjections` + evaluates
-      // each `cache:` directive, emits provider-agnostic
-      // `CacheMarker[]` to scope. Pure transform; no IO.
-      //
-      // CRITICAL: arrayMerge: ArrayMergeMode.Replace — same lesson
-      // as the v2.5.1 InjectionEngine fix. The default footprintjs
-      // behavior CONCATENATES arrays from child to parent;
-      // `cacheMarkers` MUST replace each iteration, not accumulate.
-      .addSubFlowChartNext(SUBFLOW_IDS.CACHE_DECISION, cacheDecisionSubflow, 'CacheDecision', {
-        inputMapper: (parent) => ({
-          activeInjections: (parent.activeInjections as readonly Injection[] | undefined) ?? [],
-          iteration: (parent.iteration as number | undefined) ?? 1,
-          maxIterations: (parent.maxIterations as number | undefined) ?? maxIterations,
-          userMessage: (parent.userMessage as string | undefined) ?? '',
-          ...(parent.lastToolResult !== undefined && {
-            lastToolName: (parent.lastToolResult as { toolName: string } | undefined)?.toolName,
-          }),
-          cumulativeInputTokens: (parent.totalInputTokens as number | undefined) ?? 0,
-          systemPromptCachePolicy,
-          cachingDisabled: (parent.cachingDisabled as boolean | undefined) ?? false,
-        }),
-        outputMapper: (sf) => ({ cacheMarkers: sf.cacheMarkers }),
-        arrayMerge: ArrayMergeMode.Replace,
-      })
-      .addFunction(
-        'UpdateSkillHistory',
-        updateSkillHistoryStage as never,
-        STAGE_IDS.UPDATE_SKILL_HISTORY,
-        'Update skill-history rolling window for CacheGate churn detection',
-      )
-      .addDeciderFunction(
-        'CacheGate',
-        cacheGateDecide as never,
-        STAGE_IDS.CACHE_GATE,
-        'Gate cache-marker application: kill switch / hit-rate / skill-churn',
-      )
-      .addFunctionBranch(
-        STAGE_IDS.APPLY_MARKERS,
-        'ApplyMarkers',
-        // Pass-through stage — markers stay in scope as-is.
-        // BuildLLMRequest (Phase 7+) reads them on the next stage.
-        () => undefined,
-        'Proceed with cache markers from CacheDecision',
-      )
-      .addFunctionBranch(
-        STAGE_IDS.SKIP_CACHING,
-        'SkipCaching',
-        // Clear markers so BuildLLMRequest sees an empty list and
-        // makes the request unmodified.
-        (scope: TypedScope<AgentState>) => {
-          scope.cacheMarkers = [];
-        },
-        'Skip caching this iteration',
-      )
-      .end()
-      .addFunction('IterationStart', iterationStart, 'iteration-start', 'Iteration begin marker')
-      .addFunction('CallLLM', callLLM, STAGE_IDS.CALL_LLM, 'LLM invocation')
-      .addDeciderFunction('Route', routeDecider, SUBFLOW_IDS.ROUTE, 'ReAct routing')
-      .addPausableFunctionBranch(
-        'tool-calls',
-        'ToolCalls',
-        toolCallsHandler,
-        'Tool execution (pausable via pauseHere)',
-      )
-      .addSubFlowChartBranch('final', finalBranchChart, 'Final', {
-        // Pass through the read-only state the sub-chart needs;
-        // OMIT keys the sub-chart writes (finalContent, newMessages)
-        // — passing those via inputMapper would freeze them as args.
-        inputMapper: (parent) => {
-          const { finalContent: _f, newMessages: _nm, ...rest } = parent;
-          void _f;
-          void _nm;
-          return rest;
-        },
-        outputMapper: (sf) => ({
-          finalContent: sf.finalContent as string,
-        }),
-        // BreakFinal's $break() must reach the outer loopTo so the
-        // ReAct iteration terminates; without this the inner break
-        // only exits the sub-chart and the outer loop continues.
-        propagateBreak: true,
-      })
-      .setDefault('final')
-      .end()
-      // Dynamic ReAct: loop back to the InjectionEngine so EVERY iteration
-      // re-evaluates triggers (rule predicates, on-tool-return, llm-activated)
-      // against the freshest context (the just-appended tool result).
-      // Without this, the InjectionEngine runs ONCE per turn and:
-      //   - on-tool-return predicates never fire on iter 2+
-      //   - read_skill('X') activations are never picked up next iteration
-      //   - autoActivate per-skill tool gating is structurally impossible
-      //   - tools / system-prompt slots stay frozen at iter 1 content
-      // The v2.4 default of loopTo(MESSAGES) bypassed all four — quietly
-      // breaking the framework's "Dynamic ReAct" claim. v2.5 restores the
-      // v1 behavior that documents promise.
-      .loopTo(SUBFLOW_IDS.INJECTION_ENGINE);
-
-    return builder.build();
+      iterationStart,
+      callLLM,
+      routeDecider,
+      toolCallsHandler,
+      injectionEngineSubflow,
+      systemPromptSubflow,
+      messagesSubflow,
+      toolsSubflow,
+      cacheDecisionSubflow,
+      updateSkillHistoryStage,
+      cacheGateDecide,
+    });
   }
 }
 
