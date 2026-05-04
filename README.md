@@ -88,13 +88,28 @@ That is the whole abstraction. Every named pattern in the agent literature — R
 
 ## Why this isn't just an ergonomics win — Dynamic ReAct
 
-Because the framework owns the loop, **all three slots recompose every iteration based on what just happened.**
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/dynamic-vs-classic-dark.svg">
+    <source media="(prefers-color-scheme: light)" srcset="docs/assets/dynamic-vs-classic-light.svg">
+    <img alt="Classic ReAct vs Dynamic ReAct loop topology — same 5 stages (SystemPrompt, Messages, Tools, CallLLM, Route → ExecuteTools/Finalize), but the loop edge differs: Classic returns to CallLLM only (slots frozen at 12 tools every iteration), Dynamic returns to SystemPrompt (slots recompose, tools shrink from 1 to 5 as skills activate)." src="docs/assets/dynamic-vs-classic-light.svg" width="100%"/>
+  </picture>
+</p>
+
+**Same five stages on both sides. Only one thing differs — where the loop returns.**
+
+- **Classic ReAct** loops back to `CallLLM`. The `SystemPrompt`/`Messages`/`Tools` boxes ran once at the top of the turn and stay frozen for the rest of the iteration. The agent sees the same 12 tools on every iteration regardless of what it just discovered.
+- **Dynamic ReAct** (agentfootprint) loops back to `SystemPrompt`. Every iteration re-enters the slot subflows, so injections that fired on the previous tool result get a chance to recompose the next prompt. The agent sees a 1-tool list on iter 1, then a 5-tool list once a skill activated, then keeps the focused list for the rest of the turn.
+
+That structural choice — *where the loop edge points* — is the difference between context engineering that's **static or compositional**.
+
+How does this compare to other frameworks?
 
 - **LangChain** assembles prompts once per turn.
 - **LangGraph** composes state per node, not per loop iteration.
 - **agentfootprint** recomposes per iteration.
 
-Per-iteration recomposition is what makes context engineering compositional instead of static. It's also the structural prerequisite for the cache layer — cache markers can't track active injections in lockstep without it.
+Per-iteration recomposition is also the structural prerequisite for the cache layer — cache markers can't track active injections in lockstep without it.
 
 ```text
 Classic ReAct                    Dynamic ReAct
@@ -104,7 +119,7 @@ iter 2: 12 tools shown           iter 2: 5 tools (skill activated)
 iter 3: 12 tools shown           iter 3: 5 tools
 ```
 
-Use Dynamic ReAct when your tools have dependencies (one tool's output implies which tool to call next). Use Classic ReAct when all tools are independent and ordering doesn't matter.
+Use **Dynamic ReAct** when your tools have dependencies (one tool's output implies which tool to call next). Use **Classic ReAct** when all tools are independent and ordering doesn't matter.
 
 > 📖 Deep dive: [Dynamic ReAct guide](https://footprintjs.github.io/agentfootprint/guides/dynamic-react/) · [Cache layer](https://footprintjs.github.io/agentfootprint/guides/caching/)
 

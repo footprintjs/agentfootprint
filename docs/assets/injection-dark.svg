@@ -1,0 +1,259 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 600" role="img"
+     aria-label="agentfootprint — every content flavor (Skills, RAG, Short-term memory, Long-term memory, Steering, Grounding, Tool schemas) reduces to ONE primitive: Injection = slot × trigger × cache. Three dimensions, one abstraction.">
+
+  <defs>
+    <radialGradient id="ij-glow-d" cx="50%" cy="50%" r="55%">
+      <stop offset="0%" stop-color="#A78BFA" stop-opacity="0.16"/>
+      <stop offset="60%" stop-color="#A78BFA" stop-opacity="0.04"/>
+      <stop offset="100%" stop-color="#A78BFA" stop-opacity="0"/>
+    </radialGradient>
+
+    <marker id="ij-arrow-d" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0 0 L10 5 L0 10 z" fill="#A78BFA"/>
+    </marker>
+
+    <style>
+      .pulse  { animation: ij-p 2s ease-in-out infinite; transform-origin: center; transform-box: fill-box; }
+      .pulse2 { animation: ij-p 2s ease-in-out infinite; animation-delay: 0.25s; transform-origin: center; transform-box: fill-box; }
+      .pulse3 { animation: ij-p 2s ease-in-out infinite; animation-delay: 0.50s; transform-origin: center; transform-box: fill-box; }
+      .pulse4 { animation: ij-p 2s ease-in-out infinite; animation-delay: 0.75s; transform-origin: center; transform-box: fill-box; }
+      .pulse5 { animation: ij-p 2s ease-in-out infinite; animation-delay: 1.00s; transform-origin: center; transform-box: fill-box; }
+      .pulse6 { animation: ij-p 2s ease-in-out infinite; animation-delay: 1.25s; transform-origin: center; transform-box: fill-box; }
+      .pulse7 { animation: ij-p 2s ease-in-out infinite; animation-delay: 1.50s; transform-origin: center; transform-box: fill-box; }
+      @keyframes ij-p { 0%,100% { opacity: 1 } 50% { opacity: 0.4 } }
+
+      .flow { stroke-dasharray: 0.5 8; stroke-linecap: round; animation: ij-mv 1.4s linear infinite; fill: none; }
+      @keyframes ij-mv { from { stroke-dashoffset: 0 } to { stroke-dashoffset: -24 } }
+
+      .flow-arrow { stroke-dasharray: 5 7; animation: ij-mv 1.4s linear infinite; fill: none; }
+
+      .breath { animation: ij-b 4s ease-in-out infinite; transform-origin: center; transform-box: fill-box; }
+      @keyframes ij-b { 0%,100% { opacity: 0.85 } 50% { opacity: 1 } }
+
+      .label  { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 11px; letter-spacing: 0.2em; font-weight: 700; }
+      .pillN  { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif; font-size: 14px; font-weight: 700; fill: #E5E7EB; }
+      .pillD  { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 10px; fill: #9CA3AF; }
+      .axisL  { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 11px; letter-spacing: 0.18em; font-weight: 800; }
+      .axisV  { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 13px; font-weight: 700; fill: #E5E7EB; }
+      .ijTitle{ font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 22px; font-weight: 800; letter-spacing: 0.14em; fill: #A78BFA; }
+      .ijSub  { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif; font-size: 11px; font-style: italic; fill: #9CA3AF; }
+      .slotN  { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif; font-size: 15px; font-weight: 700; fill: #E5E7EB; }
+      .slotD  { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 10px; fill: #9CA3AF; }
+      .tag    { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif; font-size: 16px; }
+    </style>
+  </defs>
+
+  <!-- ─────────────────── SECTION LABELS ─────────────────── -->
+  <g class="label">
+    <text x="20"   y="32" fill="#9CA3AF">FLAVORS · DECLARED</text>
+    <text x="700"  y="36" fill="#A78BFA" text-anchor="middle"
+          font-size="18" font-weight="800" letter-spacing="0.12em">INJECTION</text>
+    <text x="1380" y="32" fill="#9CA3AF" text-anchor="end">LLM · STRUCTURED</text>
+  </g>
+
+  <!-- ═════════════════════════════════════════════════════════════════
+       LEFT — 7 named patterns (the field's vocabulary)
+       Each pattern has the same neutral tint to reinforce: under the
+       hood they're all the same thing — Injections with different params.
+       ═════════════════════════════════════════════════════════════════ -->
+
+  <g>
+    <!-- Reflexion -->
+    <g transform="translate(20,68)">
+      <rect width="320" height="54" rx="10" fill="rgba(167,139,250,0.07)"/>
+      <text class="pillN" x="22" y="22">Skills</text>
+      <text class="pillD" x="22" y="40">trigger: llm-activated · cache: while-active</text>
+      <circle class="pulse" cx="298" cy="27" r="3.5" fill="#A78BFA"/>
+    </g>
+    <!-- Tree-of-Thoughts -->
+    <g transform="translate(20,134)">
+      <rect width="320" height="54" rx="10" fill="rgba(167,139,250,0.07)"/>
+      <text class="pillN" x="22" y="22">RAG</text>
+      <text class="pillD" x="22" y="40">slot: messages · trigger: rule</text>
+      <circle class="pulse2" cx="298" cy="27" r="3.5" fill="#A78BFA"/>
+    </g>
+    <!-- Skills -->
+    <g transform="translate(20,200)">
+      <rect width="320" height="54" rx="10" fill="rgba(167,139,250,0.07)"/>
+      <text class="pillN" x="22" y="22">Short-term memory</text>
+      <text class="pillD" x="22" y="40">slot: messages · trigger: always</text>
+      <circle class="pulse3" cx="298" cy="27" r="3.5" fill="#A78BFA"/>
+    </g>
+    <!-- RAG -->
+    <g transform="translate(20,266)">
+      <rect width="320" height="54" rx="10" fill="rgba(167,139,250,0.07)"/>
+      <text class="pillN" x="22" y="22">Long-term memory</text>
+      <text class="pillD" x="22" y="40">slot: system · trigger: rule</text>
+      <circle class="pulse4" cx="298" cy="27" r="3.5" fill="#A78BFA"/>
+    </g>
+    <!-- Memory -->
+    <g transform="translate(20,332)">
+      <rect width="320" height="54" rx="10" fill="rgba(167,139,250,0.07)"/>
+      <text class="pillN" x="22" y="22">Steering</text>
+      <text class="pillD" x="22" y="40">slot: system · trigger: always</text>
+      <circle class="pulse5" cx="298" cy="27" r="3.5" fill="#A78BFA"/>
+    </g>
+    <!-- Steering -->
+    <g transform="translate(20,398)">
+      <rect width="320" height="54" rx="10" fill="rgba(167,139,250,0.07)"/>
+      <text class="pillN" x="22" y="22">Grounding</text>
+      <text class="pillD" x="22" y="40">slot: system · cache: always</text>
+      <circle class="pulse6" cx="298" cy="27" r="3.5" fill="#A78BFA"/>
+    </g>
+    <!-- Constitutional AI -->
+    <g transform="translate(20,464)">
+      <rect width="320" height="54" rx="10" fill="rgba(167,139,250,0.07)"/>
+      <text class="pillN" x="22" y="22">Tool schemas</text>
+      <text class="pillD" x="22" y="40">slot: tools · trigger: rule</text>
+      <circle class="pulse7" cx="298" cy="27" r="3.5" fill="#A78BFA"/>
+    </g>
+  </g>
+
+  <!-- ═════════════════════════════════════════════════════════════════
+       CENTER — INJECTION primitive box
+       3 horizontal "axes" showing slot × trigger × cache
+       ═════════════════════════════════════════════════════════════════ -->
+
+  <!-- Glow -->
+  <ellipse cx="660" cy="300" rx="240" ry="200" fill="url(#ij-glow-d)"/>
+
+  <!-- Primitive container -->
+  <g class="breath">
+    <rect x="400" y="140" width="520" height="320" rx="22"
+          fill="rgba(167,139,250,0.06)"/>
+
+    <!-- Title -->
+    <text class="ijTitle" x="660" y="186" text-anchor="middle">INJECTION</text>
+    <text class="ijSub"   x="660" y="206" text-anchor="middle">slot × trigger × cache</text>
+
+    <!-- ─ AXIS 1: WHERE (slot) — sky -->
+    <g transform="translate(440,250)">
+      <text class="axisL" x="0" y="0" fill="#7DD3FC">WHERE</text>
+      <text class="pillD" x="60" y="0" fill="#9CA3AF">→ slot</text>
+      <g transform="translate(0,18)">
+        <rect width="100" height="22" rx="6" fill="rgba(125,211,252,0.10)"/>
+        <text class="axisV" x="50" y="15" text-anchor="middle">system</text>
+      </g>
+      <g transform="translate(115,18)">
+        <rect width="120" height="22" rx="6" fill="rgba(125,211,252,0.10)"/>
+        <text class="axisV" x="60" y="15" text-anchor="middle">messages</text>
+      </g>
+      <g transform="translate(250,18)">
+        <rect width="80" height="22" rx="6" fill="rgba(125,211,252,0.10)"/>
+        <text class="axisV" x="40" y="15" text-anchor="middle">tools</text>
+      </g>
+    </g>
+
+    <!-- ─ AXIS 2: WHEN (trigger) — emerald -->
+    <g transform="translate(440,318)">
+      <text class="axisL" x="0" y="0" fill="#4ADE80">WHEN</text>
+      <text class="pillD" x="55" y="0" fill="#9CA3AF">→ trigger</text>
+      <g transform="translate(0,18)">
+        <rect width="80" height="22" rx="6" fill="rgba(74,222,128,0.10)"/>
+        <text class="axisV" x="40" y="15" text-anchor="middle">always</text>
+      </g>
+      <g transform="translate(95,18)">
+        <rect width="60" height="22" rx="6" fill="rgba(74,222,128,0.10)"/>
+        <text class="axisV" x="30" y="15" text-anchor="middle">rule</text>
+      </g>
+      <g transform="translate(170,18)">
+        <rect width="135" height="22" rx="6" fill="rgba(74,222,128,0.10)"/>
+        <text class="axisV" x="67" y="15" text-anchor="middle">on-tool-return</text>
+      </g>
+      <g transform="translate(320,18)">
+        <rect width="130" height="22" rx="6" fill="rgba(74,222,128,0.10)"/>
+        <text class="axisV" x="65" y="15" text-anchor="middle">llm-activated</text>
+      </g>
+    </g>
+
+    <!-- ─ AXIS 3: HOW (cache) — amber -->
+    <g transform="translate(440,386)">
+      <text class="axisL" x="0" y="0" fill="#FCD34D">HOW</text>
+      <text class="pillD" x="48" y="0" fill="#9CA3AF">→ cache</text>
+      <g transform="translate(0,18)">
+        <rect width="80" height="22" rx="6" fill="rgba(252,211,77,0.10)"/>
+        <text class="axisV" x="40" y="15" text-anchor="middle">always</text>
+      </g>
+      <g transform="translate(95,18)">
+        <rect width="65" height="22" rx="6" fill="rgba(252,211,77,0.10)"/>
+        <text class="axisV" x="32" y="15" text-anchor="middle">never</text>
+      </g>
+      <g transform="translate(175,18)">
+        <rect width="115" height="22" rx="6" fill="rgba(252,211,77,0.10)"/>
+        <text class="axisV" x="57" y="15" text-anchor="middle">while-active</text>
+      </g>
+      <g transform="translate(305,18)">
+        <rect width="100" height="22" rx="6" fill="rgba(252,211,77,0.10)"/>
+        <text class="axisV" x="50" y="15" text-anchor="middle">predicate</text>
+      </g>
+    </g>
+  </g>
+
+  <!-- ═════════════════════════════════════════════════════════════════
+       FLOW LINES — 7 IN (patterns → injection primitive)
+       All use the same violet stroke (Injection's color) to visually
+       say: every pattern is the same thing.
+       ═════════════════════════════════════════════════════════════════ -->
+
+  <g stroke="#A78BFA" stroke-width="2.4" stroke-linecap="round">
+    <path class="flow" d="M340 95  C 370 95, 395 200, 408 250"/>
+    <path class="flow" d="M340 161 C 370 161, 395 230, 408 280" style="animation-delay:0.20s"/>
+    <path class="flow" d="M340 227 C 370 227, 395 260, 408 295" style="animation-delay:0.40s"/>
+    <path class="flow" d="M340 293 C 370 293, 395 295, 408 305" style="animation-delay:0.60s"/>
+    <path class="flow" d="M340 359 C 370 359, 395 340, 408 320" style="animation-delay:0.80s"/>
+    <path class="flow" d="M340 425 C 370 425, 395 380, 408 340" style="animation-delay:1.00s"/>
+    <path class="flow" d="M340 491 C 370 491, 395 420, 408 360" style="animation-delay:1.20s"/>
+  </g>
+
+  <!-- ═════════════════════════════════════════════════════════════════
+       RIGHT — LLM API container with 3 slot boxes
+       ═════════════════════════════════════════════════════════════════ -->
+
+  <g>
+    <rect x="1000" y="160" width="400" height="300" rx="20" fill="rgba(229,231,235,0.07)"/>
+    <rect x="1015" y="142" width="100" height="28" rx="7" fill="#0d1117"/>
+    <text x="1065" y="161" font-family="ui-monospace, monospace" font-size="13"
+          font-weight="800" letter-spacing="0.18em" fill="#9CA3AF" text-anchor="middle">LLM API</text>
+  </g>
+
+  <!-- system prompt -->
+  <g transform="translate(1020,180)">
+    <rect width="360" height="80" rx="14" fill="rgba(125,211,252,0.10)"/>
+    <text class="slotN" x="22" y="32">system prompt</text>
+    <text class="slotD" x="22" y="54">where slot = system · "always" / "rule"</text>
+    <text x="338" y="35" font-family="ui-monospace, monospace" font-size="13" fill="#7DD3FC" text-anchor="end" font-weight="700">{ }</text>
+  </g>
+
+  <!-- messages -->
+  <g transform="translate(1020,270)">
+    <rect width="360" height="80" rx="14" fill="rgba(74,222,128,0.10)"/>
+    <text class="slotN" x="22" y="32">messages</text>
+    <text class="slotD" x="22" y="54">where slot = messages · "rule" / "on-tool-return"</text>
+    <text x="338" y="35" font-family="ui-monospace, monospace" font-size="13" fill="#4ADE80" text-anchor="end" font-weight="700">[ ]</text>
+  </g>
+
+  <!-- tools -->
+  <g transform="translate(1020,360)">
+    <rect width="360" height="80" rx="14" fill="rgba(252,211,77,0.10)"/>
+    <text class="slotN" x="22" y="32">tools</text>
+    <text class="slotD" x="22" y="54">where slot = tools · "llm-activated"</text>
+    <text x="338" y="35" font-family="ui-monospace, monospace" font-size="13" fill="#FCD34D" text-anchor="end" font-weight="700">⚙</text>
+  </g>
+
+  <!-- ═════════════════════════════════════════════════════════════════
+       FLOW LINES — 3 OUT (injection primitive → LLM slots)
+       Each colored to its target slot (sky / emerald / amber).
+       ═════════════════════════════════════════════════════════════════ -->
+
+  <g stroke-width="2.4" stroke-linecap="round">
+    <path class="flow-arrow" d="M920 270 C 970 240, 990 220, 1018 220" stroke="#7DD3FC" marker-end="url(#ij-arrow-d)"/>
+    <path class="flow-arrow" d="M920 305 C 970 305, 990 310, 1018 310" stroke="#4ADE80" marker-end="url(#ij-arrow-d)" style="animation-delay:0.3s"/>
+    <path class="flow-arrow" d="M920 340 C 970 380, 990 395, 1018 400" stroke="#FCD34D" marker-end="url(#ij-arrow-d)" style="animation-delay:0.6s"/>
+  </g>
+
+  <!-- ─────────────────── TAGLINE ─────────────────── -->
+  <g class="tag" transform="translate(700,560)" text-anchor="middle">
+    <text fill="#E5E7EB"><tspan font-weight="400">Every flavor reduces to </tspan><tspan fill="#A78BFA" font-weight="700">slot × trigger × cache.</tspan></text>
+  </g>
+
+</svg>

@@ -1,0 +1,195 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 650" role="img"
+     aria-label="agentfootprint — Classic ReAct vs Dynamic ReAct loop topology. Same 5 stages: SystemPrompt, Messages, Tools, CallLLM, Route → ExecuteTools/Finalize. Classic loop returns to CallLLM only — slots frozen at 12 tools every iteration. Dynamic loop returns to SystemPrompt — slots recompose, tools shrink from 1 to 5 as skills activate.">
+
+  <defs>
+    <marker id="dvc-arrow-l" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0 0 L10 5 L0 10 z" fill="#6B7280"/>
+    </marker>
+    <marker id="dvc-loop-l" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M0 0 L10 5 L0 10 z" fill="#B45309"/>
+    </marker>
+
+    <style>
+      .label    { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 11px; letter-spacing: 0.2em; font-weight: 700; }
+      .colTitle { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif; font-size: 16px; font-weight: 800; }
+      .colSub   { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 11px; fill: #6B7280; }
+      .stageN   { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif; font-size: 13px; font-weight: 700; fill: #2A121B; }
+      .branchN  { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 10px; font-weight: 700; fill: #6B7280; letter-spacing: 0.05em; }
+      .annot    { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 12px; fill: #2A121B; }
+      .annotMuted { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 11px; fill: #6B7280; }
+      .loopBadge { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 9px; font-weight: 800; letter-spacing: 0.2em; fill: #B45309; }
+      .tag      { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif; font-size: 16px; }
+
+      .loop-flow { stroke-dasharray: 5 7; animation: dvc-mv 1.4s linear infinite; fill: none; }
+      @keyframes dvc-mv { from { stroke-dashoffset: 0 } to { stroke-dashoffset: -24 } }
+
+      .pulse { animation: dvc-p 2s ease-in-out infinite; transform-origin: center; transform-box: fill-box; }
+      @keyframes dvc-p { 0%,100% { opacity: 1 } 50% { opacity: 0.5 } }
+    </style>
+  </defs>
+
+  <!-- ─────────────────── SECTION LABELS (TOP) ─────────────────── -->
+  <g class="label">
+    <text x="20" y="32" fill="#6B7280">REACT · LOOP TOPOLOGY</text>
+    <text x="1380" y="32" fill="#6B7280" text-anchor="end">SAME STAGES · DIFFERENT EDGE</text>
+  </g>
+
+  <!-- Subtitle / tagline -->
+  <g class="tag" transform="translate(700,68)" text-anchor="middle">
+    <text fill="#2A121B"><tspan font-weight="400">Where the loop returns determines whether context engineering is </tspan><tspan fill="#B45309" font-weight="700">static or compositional.</tspan></text>
+  </g>
+
+  <!-- ═════════════════════════════════════════════════════════════════
+       LEFT COLUMN — Classic / Static ReAct
+       ═════════════════════════════════════════════════════════════════ -->
+
+  <!-- Column header -->
+  <text class="colTitle" x="220" y="120" text-anchor="middle" fill="#6B7280">Classic ReAct</text>
+  <text class="colSub"   x="220" y="138" text-anchor="middle">slots assemble ONCE per turn</text>
+
+  <!-- Stage boxes — neutral muted (the "before" comparison) -->
+  <g>
+    <!-- SystemPrompt -->
+    <g transform="translate(130,160)">
+      <rect width="180" height="40" rx="8" fill="rgba(75,85,99,0.06)"/>
+      <text class="stageN" x="90" y="25" text-anchor="middle">SystemPrompt</text>
+    </g>
+    <!-- Messages -->
+    <g transform="translate(130,212)">
+      <rect width="180" height="40" rx="8" fill="rgba(75,85,99,0.06)"/>
+      <text class="stageN" x="90" y="25" text-anchor="middle">Messages</text>
+    </g>
+    <!-- Tools -->
+    <g transform="translate(130,264)">
+      <rect width="180" height="40" rx="8" fill="rgba(75,85,99,0.06)"/>
+      <text class="stageN" x="90" y="25" text-anchor="middle">Tools</text>
+    </g>
+    <!-- CallLLM (loop target) -->
+    <g transform="translate(130,316)">
+      <rect width="180" height="40" rx="8" fill="rgba(75,85,99,0.06)"/>
+      <text class="stageN" x="90" y="25" text-anchor="middle">CallLLM</text>
+    </g>
+    <!-- Route (decider) -->
+    <g transform="translate(150,368)">
+      <polygon points="70,0 140,30 70,60 0,30" fill="rgba(75,85,99,0.06)"/>
+      <text class="stageN" x="70" y="36" text-anchor="middle">Route</text>
+    </g>
+    <!-- Branches -->
+    <g transform="translate(50,440)">
+      <rect width="160" height="36" rx="8" fill="rgba(75,85,99,0.05)"/>
+      <text class="stageN" x="80" y="23" text-anchor="middle" font-size="12">ExecuteTools</text>
+    </g>
+    <g transform="translate(230,440)">
+      <rect width="160" height="36" rx="8" fill="rgba(75,85,99,0.05)"/>
+      <text class="stageN" x="80" y="23" text-anchor="middle" font-size="12">Finalize</text>
+    </g>
+  </g>
+
+  <!-- Linear arrows (top-down sequence) -->
+  <g stroke="#9CA3AF" stroke-width="1.2" fill="none">
+    <path d="M220 200 L220 212" marker-end="url(#dvc-arrow-l)"/>
+    <path d="M220 252 L220 264" marker-end="url(#dvc-arrow-l)"/>
+    <path d="M220 304 L220 316" marker-end="url(#dvc-arrow-l)"/>
+    <path d="M220 356 L220 368" marker-end="url(#dvc-arrow-l)"/>
+    <path d="M220 428 L130 440" marker-end="url(#dvc-arrow-l)"/>
+    <path d="M220 428 L310 440" marker-end="url(#dvc-arrow-l)"/>
+    <text class="branchN" x="152" y="426" text-anchor="end">tool-calls</text>
+    <text class="branchN" x="288" y="426">final</text>
+  </g>
+
+  <!-- LOOP ARROW — short — back to CallLLM only -->
+  <g>
+    <path class="loop-flow" d="M130 478 L 130 500 L 35 500 L 35 336 L 120 336"
+          stroke="#B45309" stroke-width="2.2" fill="none" marker-end="url(#dvc-loop-l)"/>
+    <rect x="17" y="425" width="36" height="16" rx="3" fill="rgba(180,83,9,0.12)"/>
+    <text class="loopBadge" x="35" y="436" text-anchor="middle">LOOP</text>
+  </g>
+
+  <!-- Annotation under static column — tools shown per iter (UNCHANGING) -->
+  <g transform="translate(130,565)">
+    <text class="annot" x="90" y="0" text-anchor="middle">12 tools shown every iter</text>
+    <text class="annotMuted" x="90" y="22" text-anchor="middle">iter 1: 12 · iter 2: 12 · iter 3: 12</text>
+  </g>
+
+  <!-- ═════════════════════════════════════════════════════════════════
+       VERTICAL DIVIDER
+       ═════════════════════════════════════════════════════════════════ -->
+  <line x1="700" y1="100" x2="700" y2="585" stroke="rgba(42,18,27,0.10)" stroke-width="1" stroke-dasharray="2 4"/>
+
+  <!-- ═════════════════════════════════════════════════════════════════
+       RIGHT COLUMN — Dynamic ReAct (agentfootprint)
+       ═════════════════════════════════════════════════════════════════ -->
+
+  <text class="colTitle" x="1080" y="120" text-anchor="middle" fill="#B45309">Dynamic ReAct</text>
+  <text class="colSub"   x="1080" y="138" text-anchor="middle" fill="#B45309" opacity="0.85">slots recompose EVERY iteration</text>
+
+  <!-- Stage boxes — gold-tinted (the "after" — agentfootprint behavior) -->
+  <g>
+    <g transform="translate(990,160)">
+      <rect width="180" height="40" rx="8" fill="rgba(180,83,9,0.08)"/>
+      <text class="stageN" x="90" y="25" text-anchor="middle">SystemPrompt</text>
+      <circle class="pulse" cx="166" cy="20" r="3.5" fill="#B45309"/>
+    </g>
+    <g transform="translate(990,212)">
+      <rect width="180" height="40" rx="8" fill="rgba(180,83,9,0.08)"/>
+      <text class="stageN" x="90" y="25" text-anchor="middle">Messages</text>
+      <circle class="pulse" cx="166" cy="20" r="3.5" fill="#B45309"/>
+    </g>
+    <g transform="translate(990,264)">
+      <rect width="180" height="40" rx="8" fill="rgba(180,83,9,0.08)"/>
+      <text class="stageN" x="90" y="25" text-anchor="middle">Tools</text>
+      <circle class="pulse" cx="166" cy="20" r="3.5" fill="#B45309"/>
+    </g>
+    <g transform="translate(990,316)">
+      <rect width="180" height="40" rx="8" fill="rgba(180,83,9,0.06)"/>
+      <text class="stageN" x="90" y="25" text-anchor="middle">CallLLM</text>
+    </g>
+    <g transform="translate(1010,368)">
+      <polygon points="70,0 140,30 70,60 0,30" fill="rgba(180,83,9,0.06)"/>
+      <text class="stageN" x="70" y="36" text-anchor="middle">Route</text>
+    </g>
+    <g transform="translate(910,440)">
+      <rect width="160" height="36" rx="8" fill="rgba(180,83,9,0.05)"/>
+      <text class="stageN" x="80" y="23" text-anchor="middle" font-size="12">ExecuteTools</text>
+    </g>
+    <g transform="translate(1090,440)">
+      <rect width="160" height="36" rx="8" fill="rgba(180,83,9,0.05)"/>
+      <text class="stageN" x="80" y="23" text-anchor="middle" font-size="12">Finalize</text>
+    </g>
+  </g>
+
+  <!-- Linear arrows -->
+  <g stroke="#9CA3AF" stroke-width="1.2" fill="none">
+    <path d="M1080 200 L1080 212" marker-end="url(#dvc-arrow-l)"/>
+    <path d="M1080 252 L1080 264" marker-end="url(#dvc-arrow-l)"/>
+    <path d="M1080 304 L1080 316" marker-end="url(#dvc-arrow-l)"/>
+    <path d="M1080 356 L1080 368" marker-end="url(#dvc-arrow-l)"/>
+    <path d="M1080 428 L990 440" marker-end="url(#dvc-arrow-l)"/>
+    <path d="M1080 428 L1170 440" marker-end="url(#dvc-arrow-l)"/>
+    <text class="branchN" x="1012" y="426" text-anchor="end">tool-calls</text>
+    <text class="branchN" x="1148" y="426">final</text>
+  </g>
+
+  <!-- LOOP ARROW — long — back to SystemPrompt (the top) -->
+  <g>
+    <path class="loop-flow" d="M990 478 L 990 500 L 895 500 L 895 180 L 980 180"
+          stroke="#B45309" stroke-width="2.6" fill="none" marker-end="url(#dvc-loop-l)"/>
+    <rect x="877" y="350" width="40" height="16" rx="3" fill="rgba(180,83,9,0.14)"/>
+    <text class="loopBadge" x="895" y="361" text-anchor="middle">LOOP</text>
+  </g>
+
+  <!-- Annotation under dynamic column — tool counts CHANGING per iter -->
+  <g transform="translate(990,565)">
+    <text class="annot" x="90" y="0" text-anchor="middle">tools shown adapt every iter</text>
+    <text class="annotMuted" x="90" y="22" text-anchor="middle"><tspan>iter 1: 1 · iter 2: 5 · iter 3: 5</tspan></text>
+  </g>
+
+  <!-- ─────────────────── BOTTOM SUMMARY ─────────────────── -->
+  <g transform="translate(700,620)" text-anchor="middle">
+    <text class="annot" fill="#9CA3AF">
+      <tspan>Classic ReAct = </tspan><tspan fill="#2A121B" font-weight="700">prompts frozen</tspan><tspan>.</tspan>
+      <tspan>  Dynamic ReAct = </tspan><tspan fill="#B45309" font-weight="700">prompts evolve with the agent's discoveries</tspan><tspan>.</tspan>
+    </text>
+  </g>
+
+</svg>
