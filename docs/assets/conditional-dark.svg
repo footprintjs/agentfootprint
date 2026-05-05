@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 140" role="img"
-     aria-label="Decide control flow — a yellow diamond gate that routes the input to one of three branches based on a rule.">
+     aria-label="Conditional control flow — a yellow diamond gate that routes the input to one of three branches based on a predicate.">
   <defs>
     <style>
       .pulse  { animation: cf-p 2.4s ease-in-out infinite; transform-origin: center; transform-box: fill-box; }
@@ -21,7 +21,7 @@
       <circle cx="84" cy="0"   r="4" fill="rgba(196,181,253,0.30)" stroke="rgba(196,181,253,0.60)" stroke-width="0.8"/>
       <circle cx="84" cy="18"  r="4" fill="rgba(196,181,253,0.30)" stroke="rgba(196,181,253,0.60)" stroke-width="0.8"/>
     </g>
-    <text x="160" y="100" text-anchor="middle" class="name">DECIDE</text>
-    <text x="160" y="120" text-anchor="middle" class="desc">diamond branch · route on rule</text>
+    <text x="160" y="100" text-anchor="middle" class="name">CONDITIONAL</text>
+    <text x="160" y="120" text-anchor="middle" class="desc">diamond branch · when / otherwise</text>
   </g>
 </svg>

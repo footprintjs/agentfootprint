@@ -136,9 +136,9 @@ Two scales — same alphabet. Four control flows are the entire vocabulary.
 import { Sequence } from 'agentfootprint';
 
 const flow = Sequence.create()
-  .stage(stageA)
-  .stage(stageB)
-  .stage(stageC)
+  .step('a', stageA)
+  .step('b', stageB)
+  .step('c', stageC)
   .build();
 ```
 
@@ -158,9 +158,9 @@ const flow = Sequence.create()
 import { Parallel } from 'agentfootprint';
 
 const fan = Parallel.create()
-  .branch(searchWeb)
-  .branch(searchDocs)
-  .merge(synthesizer)
+  .branch('web', searchWeb)
+  .branch('docs', searchDocs)
+  .mergeWithFn(synthesizer)
   .build();
 ```
 
@@ -169,20 +169,20 @@ const fan = Parallel.create()
 <tr>
 <td width="50%" align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/decide-dark.svg">
-    <source media="(prefers-color-scheme: light)" srcset="docs/assets/decide-light.svg">
-    <img alt="Decide — diamond gate routes to one of N branches based on a rule." src="docs/assets/decide-light.svg" width="100%"/>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/conditional-dark.svg">
+    <source media="(prefers-color-scheme: light)" srcset="docs/assets/conditional-light.svg">
+    <img alt="Conditional — diamond gate routes to one of N branches based on a predicate." src="docs/assets/conditional-light.svg" width="100%"/>
   </picture>
 </td>
 <td width="50%">
 
 ```typescript
-import { Decide } from 'agentfootprint';
+import { Conditional } from 'agentfootprint';
 
-const router = Decide.create()
-  .on(s => s.intent)
-  .branch('billing', billingAgent)
-  .branch('tech', techAgent)
+const router = Conditional.create()
+  .when('billing', s => s.intent === 'billing', billingAgent)
+  .when('tech',    s => s.intent === 'tech',    techAgent)
+  .otherwise('default', defaultAgent)
   .build();
 ```
 
@@ -202,8 +202,8 @@ const router = Decide.create()
 import { Loop } from 'agentfootprint';
 
 const reflexion = Loop.create()
+  .repeat(thinkAgent)
   .until(s => s.satisfied)
-  .body(thinkAgent)
   .build();
 ```
 
@@ -239,7 +239,7 @@ iter 3: 12 tools shown           iter 3: 5 tools
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/assets/compose-dark.svg">
     <source media="(prefers-color-scheme: light)" srcset="docs/assets/compose-light.svg">
-    <img alt="A custom research agent built from the same 4 control flows: input flows into a Decide gate (plan more research?), which fans out to a Parallel block (search_web, search_docs, search_kb), then chains into a Sequence (synthesize → critique), and a Loop arrow returns from the end back to the Decide gate so the agent iterates until satisfied. Formula: Loop( Decide(plan?) → Parallel(search_web, search_docs, search_kb) → Sequence(synth → critique) )." src="docs/assets/compose-light.svg" width="100%"/>
+    <img alt="A custom research agent built from the same 4 control flows: input flows into a Conditional gate (plan more research?), which fans out to a Parallel block (search_web, search_docs, search_kb), then chains into a Sequence (synthesize → critique), and a Loop arrow returns from the end back to the Conditional gate so the agent iterates until satisfied. Formula: Loop( Conditional(plan?) → Parallel(search_web, search_docs, search_kb) → Sequence(synth → critique) )." src="docs/assets/compose-light.svg" width="100%"/>
   </picture>
 </p>
 
@@ -266,7 +266,7 @@ The hand-rolled equivalent is ~80 lines of slot management, trigger evaluation, 
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/assets/patterns-dark.svg">
     <source media="(prefers-color-scheme: light)" srcset="docs/assets/patterns-light.svg">
-    <img alt="6 named multi-agent patterns reduce to compositions of the same 4 control flows: Swarm = Loop(Parallel(Agent×N) → merge); Tree-of-Thoughts = Loop(Parallel(Agent×N) → Decide(score)); Reflexion = Loop(Agent → Decide(critique) → Agent); Debate = Parallel(Agent_pro, Agent_con) → Agent_judge; Router = Decide → Agent_A | Agent_B | Agent_C; Hierarchical = Agent_planner → Sequence(Agent_worker×N) → synth." src="docs/assets/patterns-light.svg" width="100%"/>
+    <img alt="6 named multi-agent patterns reduce to compositions of the same 4 control flows: Swarm = Loop(Parallel(Agent×N) → merge); Tree-of-Thoughts = Loop(Parallel(Agent×N) → Conditional(score)); Reflexion = Loop(Agent → Conditional(critique) → Agent); Debate = Parallel(Agent_pro, Agent_con) → Agent_judge; Router = Conditional → Agent_A | Agent_B | Agent_C; Hierarchical = Agent_planner → Sequence(Agent_worker×N) → synth." src="docs/assets/patterns-light.svg" width="100%"/>
   </picture>
 </p>
 
@@ -275,10 +275,10 @@ The patterns the field knows reduce to the same alphabet:
 | Pattern | Composition |
 |---|---|
 | **Swarm** | `Loop( Parallel( Agent×N ) → merge )` |
-| **Tree-of-Thoughts** | `Loop( Parallel( Agent×N ) → Decide(score) )` |
-| **Reflexion** | `Loop( Agent → Decide(critique) → Agent )` |
+| **Tree-of-Thoughts** | `Loop( Parallel( Agent×N ) → Conditional(score) )` |
+| **Reflexion** | `Loop( Agent → Conditional(critique) → Agent )` |
 | **Debate** | `Parallel( Agent_pro, Agent_con ) → Agent_judge` |
-| **Router** | `Decide → Agent_A \| Agent_B \| Agent_C` |
+| **Router** | `Conditional → Agent_A \| Agent_B \| Agent_C` |
 | **Hierarchical** | `Agent_planner → Sequence( Agent_worker×N ) → synth` |
 
 Same trick as Beat 1: instead of N libraries for N patterns, we found the M building blocks all N patterns are made of.

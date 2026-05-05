@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 380" role="img"
-     aria-label="agentfootprint compose-your-own — A custom research agent built from the same 4 control flows: input flows into a Decide gate (plan more research?), which fans out to a Parallel block (search_web, search_docs, search_kb), then chains into a Sequence (synthesize → critique), and a Loop arrow returns from the end back to the Decide gate so the agent iterates until satisfied. All control-flow edges in yellow; Agent nodes in violet. Formula: Loop( Decide(plan?) → Parallel(search_web, search_docs, search_kb) → Sequence(synth → critique) ).">
+     aria-label="agentfootprint compose-your-own — A custom research agent built from the same 4 control flows: input flows into a Conditional gate (plan more research?), which fans out to a Parallel block (search_web, search_docs, search_kb), then chains into a Sequence (synthesize → critique), and a Loop arrow returns from the end back to the Conditional gate so the agent iterates until satisfied. All control-flow edges in yellow; Agent nodes in violet. Formula: Loop( Conditional(plan?) → Parallel(search_web, search_docs, search_kb) → Sequence(synth → critique) ).">
 
   <defs>
     <style>
@@ -44,7 +44,7 @@
   <circle cx="60" cy="200" r="5" fill="#9CA3AF"/>
   <line x1="66" y1="200" x2="170" y2="200" stroke="#B45309" stroke-width="2.4" stroke-linecap="round"/>
 
-  <!-- DECIDE diamond -->
+  <!-- CONDITIONAL diamond -->
   <g class="pulse" transform="translate(170,200)">
     <polygon points="40,-22 80,0 40,22 0,0" fill="rgba(180,83,9,0.10)" stroke="#B45309" stroke-width="1.8" stroke-linejoin="round"/>
     <text x="40" y="-2" text-anchor="middle" class="nodeT" fill="#B45309">plan?</text>
@@ -95,14 +95,14 @@
 
   <!-- Stage labels -->
   <g transform="translate(0,275)">
-    <text x="210" y="0" text-anchor="middle" class="stageL">DECIDE</text>
+    <text x="210" y="0" text-anchor="middle" class="stageL">CONDITIONAL</text>
     <text x="394" y="0" text-anchor="middle" class="stageL">PARALLEL</text>
     <text x="785" y="0" text-anchor="middle" class="stageL">SEQUENCE</text>
   </g>
 
   <!-- Formula -->
   <text x="700" y="320" text-anchor="middle" class="formula">
-    <tspan fill="#B45309" font-weight="700">Loop</tspan>(  <tspan fill="#B45309" font-weight="700">Decide</tspan>(plan?) → <tspan fill="#B45309" font-weight="700">Parallel</tspan>(search_web, search_docs, search_kb) → <tspan fill="#B45309" font-weight="700">Sequence</tspan>(synth → critique)  )
+    <tspan fill="#B45309" font-weight="700">Loop</tspan>(  <tspan fill="#B45309" font-weight="700">Conditional</tspan>(plan?) → <tspan fill="#B45309" font-weight="700">Parallel</tspan>(search_web, search_docs, search_kb) → <tspan fill="#B45309" font-weight="700">Sequence</tspan>(synth → critique)  )
   </text>
 
   <!-- Tagline -->

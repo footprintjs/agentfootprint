@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 220" role="img"
-     aria-label="agentfootprint — the 4 control flows: Sequence (linear chain A → B → C), Parallel (fan-out then fan-in across multiple agents), Decide (diamond gate that routes on a rule), Loop (cycle back from end to start until convergence). All four shown in one yellow visual language; differentiation is by SHAPE not color, signaling that 'control flow' is one category with four iconic forms.">
+     aria-label="agentfootprint — the 4 control flows: Sequence (linear chain A → B → C), Parallel (fan-out then fan-in across multiple agents), Conditional (diamond gate that routes on a predicate), Loop (cycle back from end to start until convergence). All four shown in one yellow visual language; differentiation is by SHAPE not color, signaling that 'control flow' is one category with four iconic forms.">
 
   <defs>
     <style>
@@ -57,7 +57,7 @@
     <text x="160" y="120" text-anchor="middle" class="desc">fan-out + fan-in · race / vote</text>
   </g>
 
-  <!-- ════════ Card 3: Decide ════════ -->
+  <!-- ════════ Card 3: Conditional ════════ -->
   <g class="pulse3" transform="translate(710,55)">
     <rect width="320" height="140" rx="14" fill="rgba(252,211,77,0.05)" stroke="rgba(252,211,77,0.32)" stroke-width="0.8"/>
     <g transform="translate(106,52)">
@@ -71,8 +71,8 @@
       <circle cx="84" cy="0"   r="4" fill="rgba(196,181,253,0.30)" stroke="rgba(196,181,253,0.60)" stroke-width="0.8"/>
       <circle cx="84" cy="18"  r="4" fill="rgba(196,181,253,0.30)" stroke="rgba(196,181,253,0.60)" stroke-width="0.8"/>
     </g>
-    <text x="160" y="100" text-anchor="middle" class="name">DECIDE</text>
-    <text x="160" y="120" text-anchor="middle" class="desc">diamond branch · route on rule</text>
+    <text x="160" y="100" text-anchor="middle" class="name">CONDITIONAL</text>
+    <text x="160" y="120" text-anchor="middle" class="desc">diamond branch · when / otherwise</text>
   </g>
 
   <!-- ════════ Card 4: Loop ════════ -->

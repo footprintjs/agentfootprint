@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 660" role="img"
-     aria-label="agentfootprint named patterns — Every multi-agent pattern in the literature reduces to a composition of the same 4 control flows. 6 pattern cards in a 2×3 grid, each with a mini diagram (yellow control-flow edges, violet Agent nodes) and the composition formula: Swarm = Loop(Parallel(Agent×N) → merge); Tree-of-Thoughts = Loop(Parallel(Agent×N) → Decide(score)); Reflexion = Loop(Agent → Decide(critique) → Agent); Debate = Parallel(Agent_pro, Agent_con) → Agent_judge; Router = Decide → Agent_A | Agent_B | Agent_C; Hierarchical = Agent_planner → Sequence(Agent_worker×N) → synth.">
+     aria-label="agentfootprint named patterns — Every multi-agent pattern in the literature reduces to a composition of the same 4 control flows. 6 pattern cards in a 2×3 grid, each with a mini diagram (yellow control-flow edges, violet Agent nodes) and the composition formula: Swarm = Loop(Parallel(Agent×N) → merge); Tree-of-Thoughts = Loop(Parallel(Agent×N) → Conditional(score)); Reflexion = Loop(Agent → Conditional(critique) → Agent); Debate = Parallel(Agent_pro, Agent_con) → Agent_judge; Router = Conditional → Agent_A | Agent_B | Agent_C; Hierarchical = Agent_planner → Sequence(Agent_worker×N) → synth.">
 
   <defs>
     <style>
@@ -112,7 +112,7 @@
       <polygon points="6,72 14,72 10,62" fill="#FCD34D"/>
     </g>
 
-    <text x="20" y="220" class="pFormula">Loop( Parallel( Agent×N ) → Decide(score) )</text>
+    <text x="20" y="220" class="pFormula">Loop( Parallel( Agent×N ) → Conditional(score) )</text>
   </g>
 
   <!-- ──────────── PATTERN 3: REFLEXION ──────────── -->
@@ -127,7 +127,7 @@
       <line x1="4" y1="60" x2="40" y2="60" stroke="#FCD34D" stroke-width="2" stroke-linecap="round"/>
       <g transform="translate(40,46)"><rect width="56" height="28" rx="6" fill="rgba(196,181,253,0.18)" stroke="rgba(196,181,253,0.55)" stroke-width="0.8"/><text x="28" y="18" text-anchor="middle" class="nodeT">Agent</text></g>
 
-      <!-- Agent 1 → Decide -->
+      <!-- Agent 1 → Conditional -->
       <line x1="96" y1="60" x2="120" y2="60" stroke="#FCD34D" stroke-width="2" stroke-linecap="round"/>
 
       <g class="pulse2" transform="translate(120,38)">
@@ -135,7 +135,7 @@
         <text x="40" y="46" text-anchor="middle" class="nodeT" fill="#FCD34D">critique</text>
       </g>
 
-      <!-- Decide → Agent 2 -->
+      <!-- Conditional → Agent 2 -->
       <line x1="200" y1="80" x2="220" y2="80" stroke="#FCD34D" stroke-width="2" stroke-linecap="round"/>
 
       <g transform="translate(220,66)"><rect width="56" height="28" rx="6" fill="rgba(196,181,253,0.18)" stroke="rgba(196,181,253,0.55)" stroke-width="0.8"/><text x="28" y="18" text-anchor="middle" class="nodeT">Agent</text></g>
@@ -150,7 +150,7 @@
       <polygon points="36,72 44,72 40,62" fill="#FCD34D"/>
     </g>
 
-    <text x="20" y="220" class="pFormula">Loop( Agent → Decide(critique) → Agent )</text>
+    <text x="20" y="220" class="pFormula">Loop( Agent → Conditional(critique) → Agent )</text>
   </g>
 
   <!-- ──────────── PATTERN 4: DEBATE ──────────── -->
@@ -213,7 +213,7 @@
       <circle cx="292" cy="60" r="3" fill="#9CA3AF"/>
     </g>
 
-    <text x="20" y="220" class="pFormula">Decide → Agent_A | Agent_B | Agent_C</text>
+    <text x="20" y="220" class="pFormula">Conditional → Agent_A | Agent_B | Agent_C</text>
   </g>
 
   <!-- ──────────── PATTERN 6: HIERARCHICAL (2 workers) ──────────── -->

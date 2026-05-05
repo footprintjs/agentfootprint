@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 660" role="img"
-     aria-label="agentfootprint named patterns — Every multi-agent pattern in the literature reduces to a composition of the same 4 control flows. 6 pattern cards in a 2×3 grid, each with a mini diagram (yellow control-flow edges, violet Agent nodes) and the composition formula: Swarm = Loop(Parallel(Agent×N) → merge); Tree-of-Thoughts = Loop(Parallel(Agent×N) → Decide(score)); Reflexion = Loop(Agent → Decide(critique) → Agent); Debate = Parallel(Agent_pro, Agent_con) → Agent_judge; Router = Decide → Agent_A | Agent_B | Agent_C; Hierarchical = Agent_planner → Sequence(Agent_worker×N) → synth.">
+     aria-label="agentfootprint named patterns — Every multi-agent pattern in the literature reduces to a composition of the same 4 control flows. 6 pattern cards in a 2×3 grid, each with a mini diagram (yellow control-flow edges, violet Agent nodes) and the composition formula: Swarm = Loop(Parallel(Agent×N) → merge); Tree-of-Thoughts = Loop(Parallel(Agent×N) → Conditional(score)); Reflexion = Loop(Agent → Conditional(critique) → Agent); Debate = Parallel(Agent_pro, Agent_con) → Agent_judge; Router = Conditional → Agent_A | Agent_B | Agent_C; Hierarchical = Agent_planner → Sequence(Agent_worker×N) → synth.">
 
   <defs>
     <style>
@@ -96,7 +96,7 @@
       <polygon points="6,72 14,72 10,62" fill="#B45309"/>
     </g>
 
-    <text x="20" y="220" class="pFormula">Loop( Parallel( Agent×N ) → Decide(score) )</text>
+    <text x="20" y="220" class="pFormula">Loop( Parallel( Agent×N ) → Conditional(score) )</text>
   </g>
 
   <!-- ──────────── REFLEXION ──────────── -->
@@ -129,7 +129,7 @@
       <polygon points="36,72 44,72 40,62" fill="#B45309"/>
     </g>
 
-    <text x="20" y="220" class="pFormula">Loop( Agent → Decide(critique) → Agent )</text>
+    <text x="20" y="220" class="pFormula">Loop( Agent → Conditional(critique) → Agent )</text>
   </g>
 
   <!-- ──────────── DEBATE ──────────── -->
@@ -187,7 +187,7 @@
       <circle cx="292" cy="60" r="3" fill="#9CA3AF"/>
     </g>
 
-    <text x="20" y="220" class="pFormula">Decide → Agent_A | Agent_B | Agent_C</text>
+    <text x="20" y="220" class="pFormula">Conditional → Agent_A | Agent_B | Agent_C</text>
   </g>
 
   <!-- ──────────── HIERARCHICAL (2 workers) ──────────── -->
