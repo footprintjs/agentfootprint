@@ -61,7 +61,8 @@ That's the whole model: `Injection = slot × trigger × cache`.
 | `on-tool-return` | runtime — lifecycle | After a specific tool returns | `.instruction({ after: 'search_db', text: 'Cite source IDs.' })` | `messages` |
 | `llm-activated` | runtime — agent-driven | LLM calls `read_skill('id')` | `.skill({ id: 'refund-policy', activatedBy: 'read_skill' })` | `messages` (body) |
 
-Slot is a default, not a coupling — the same `Skill` can live in `tools` (schema only, discovered via `read_skill`), `messages` (body injected on activation), or `system` (baked into the prompt as steering).
+> [!NOTE]
+> Slot is a default, not a coupling — the same `Skill` can live in `tools` (schema only, discovered via `read_skill`), `messages` (body injected on activation), or `system` (baked into the prompt as steering).
 
 **3 slots × 4 triggers × N flavors = the entire context-engineering surface.**
 
@@ -84,16 +85,19 @@ We didn't have to choose between them.
 
 agentfootprint is built on **footprintjs** — the flowchart pattern for backend code. footprintjs gives us every one of those abstractions out of the box:
 
-- **Composition** — `Sequence` · `Parallel` · `Conditional` · `Loop`
-- **State machines** — the ReAct loop *is* a flowchart
-- **Multi-agent crews** — compose Agents through control flow, no special class needed
-- **Durable workflows** — `pauseHere()` plus JSON-portable `resume()`
-- **Typed observation** — 47+ events for free, because the framework owns the loop
+| Capability | What footprintjs hands us |
+|---|---|
+| Composition | `Sequence` · `Parallel` · `Conditional` · `Loop` |
+| State machines | The ReAct loop *is* a flowchart |
+| Multi-agent crews | Compose Agents through control flow — no special class needed |
+| Durable workflows | `pauseHere()` plus JSON-portable `resume()` |
+| Typed observation | 57+ events for free, because the framework owns the loop |
 
 So we used the budget those abstractions would have cost us to invest deeply in something they all leave to the developer: **the injection loop.**
 
-> **We abstract context engineering.**
-> Live to develop · offline to monitor · detailed to improve — handed back as the trace.
+> [!IMPORTANT]
+> **We abstract context engineering — and hand back the trace.**
+> Live to develop · offline to monitor · detailed to improve.
 
 ### The reason — agents have a new class of bug
 
@@ -109,7 +113,8 @@ Tracking *which content the model actually saw, and why,* is the entire debuggin
 - The cache prefix invalidated — a stable instruction got silently rewritten with a stale version.
 - A tool returned — but the on-tool-return injection that explains how to interpret the result never fired.
 
-**The model doesn't tell you which of these went wrong. It just gives you the wrong answer.**
+> [!IMPORTANT]
+> **The model doesn't tell you which of these went wrong. It just gives you the wrong answer.**
 
 You can't step through that with a debugger. By the time you read the response, the context that produced it is gone unless something recorded it.
 
@@ -386,21 +391,34 @@ The flowchart, recorders, and tests don't change between dev and prod.
 **Core**
 - 2 primitives — `LLMCall`, `Agent` (the ReAct loop)
 - 4 control flows — `Sequence`, `Parallel`, `Conditional`, `Loop`
-- One Injection primitive — `defineSkill` / `defineSteering` / `defineInstruction` / `defineFact`
+- 1 Injection primitive — `defineSkill` / `defineSteering` / `defineInstruction` / `defineFact`
+- 1 reliability gate — `.reliability({ preCheck, postDecide, providers, circuitBreaker, fallback })`
 
-**Adapters**
-- 7 LLM providers — Anthropic · OpenAI · Bedrock · Ollama · Browser-Anthropic · Browser-OpenAI · Mock
-- RAG · MCP · Memory store adapters — InMemory · Redis · AgentCore (Postgres / DynamoDB / Pinecone via lazy peer-deps)
+**LLM providers** (7)
+
+| Factory | Use for |
+|---|---|
+| `anthropic` | Claude (Sonnet, Opus, Haiku) via `@anthropic-ai/sdk` |
+| `openai` | GPT-4o, GPT-4-turbo via `openai` SDK |
+| `bedrock` | Claude / Titan / Mistral via AWS Bedrock runtime |
+| `ollama` | Local models (OpenAI-compatible endpoint) |
+| `browserAnthropic` | Browser-side Claude calls (no proxy server) |
+| `browserOpenai` | Browser-side OpenAI calls (no proxy server) |
+| `mock` | Deterministic dev/test (zero API cost) |
+
+**Memory + adapters**
+- Memory factory — 4 types (`episodic` / `semantic` / `narrative` / `causal`) × 7 strategies (`window` / `budget` / `summarize` / `topK` / `extract` / `decay` / `hybrid`)
+- Memory stores — `InMemoryStore`, `RedisStore` (peer-dep `ioredis`), `AgentCoreStore` (peer-dep AWS SDK)
+- RAG · MCP adapters — `mockMcpClient(...)` / `mcpClient({ transport })`
 
 **Operability**
-- One Memory factory — 4 types × 7 strategies including **Causal**
 - Provider-agnostic prompt caching — declarative per-injection, per-iteration marker recomputation
 - Pause / resume — JSON-serializable checkpoints; resume hours later on a different server
-- Resilience — `withRetry`, `withFallback`, `resilientProvider`
-- 48+ typed observability events — context · stream · agent · cost · skill · permission · eval · memory · cache · embedding · error
+- Resilience primitives — `withRetry`, `withFallback`, `withCircuitBreaker`, `.outputFallback`, `agent.resumeOnError`
+- 57+ typed observability events — `agent` · `composition` · `context` · `stream` · `tools` · `skill` · `memory` · `cache` · `cost` · `permission` · `eval` · `embedding` · `pause` · `error` · `fallback` · `resilience` · `reliability` · `risk`
 
 **Tooling**
-- **Lens** · **Explainable Trace** — two visual replays of the causal trace
+- **Lens** · **Explainable Trace** — two visual replays of the causal trace (separate `agentfootprint-lens` package)
 - AI-coding-tool support — Claude Code · Cursor · Windsurf · Cline · Kiro · Copilot
 
 > 📖 [Agent API reference](https://footprintjs.github.io/agentfootprint/api/agent/) · [CHANGELOG](./CHANGELOG.md)
