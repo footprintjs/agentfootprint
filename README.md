@@ -48,6 +48,10 @@ The abstraction is three rules:
 
 That's the whole model: `Injection = slot × trigger × cache`.
 
+- **Slot** — which of the 3 LLM API regions the content lands in (`system` / `messages` / `tools`).
+- **Trigger** — when the content fires (static at build time, or runtime: tool response · LLM activation · predicate).
+- **Cache** — how stable the content is across iterations. The framework places provider cache markers for you — stable content gets 80–90% cheaper prefixes.
+
 ### Triggers — static or runtime
 
 Every rule fires from one of two places:
