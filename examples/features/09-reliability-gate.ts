@@ -39,6 +39,7 @@ export const meta: ExampleMeta = {
   group: 'features',
   description:
     'v2.11.5 — declarative reliability rules wrapping every LLM call inside an Agent loop. Demonstrates happy path, transient-retry recovery, and post-decide fail-fast → typed ReliabilityFailFastError. Streaming + reliability uses first-chunk arbitration: pre-first-chunk failures honor the full rule set; mid-stream failures only honor ok / fail-fast.',
+  defaultInput: 'demo all three reliability paths',
   providerSlots: ['feature'],
   tags: ['feature', 'reliability', 'reliability-gate', 'retry', 'fail-fast', 'fallback'],
 };
