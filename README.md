@@ -111,7 +111,7 @@ Every load-bearing dev tool of the last decade made the same move — own the ru
 
 The closest structural parallel is **autograd**: you describe the graph, the framework traverses it, and *because the framework owns the traversal it can record everything for free*. Same idea here. In every other framework, flexibility and observability are a tradeoff — bolt-on instrumentation breaks when you customize. Here, both fall out of the same property: customization happens *inside* the recorded loop, not around it.
 
-> 📖 Long-form: [the Palantir lineage](https://footprintjs.github.io/agentfootprint/inspiration/connected-data/) · [the Liskov lineage](https://footprintjs.github.io/agentfootprint/inspiration/modularity/)
+> 📖 Long-form: [the Palantir lineage](https://footprintjs.github.io/agentfootprint/inspiration/connected-data-palantir/) · [the Liskov lineage](https://footprintjs.github.io/agentfootprint/inspiration/modularity-liskov/)
 
 ---
 
@@ -242,7 +242,7 @@ iter 2: 12 tools shown           iter 2: 5 tools (skill activated)
 iter 3: 12 tools shown           iter 3: 5 tools
 ```
 
-> 📖 [Dynamic ReAct guide](https://footprintjs.github.io/agentfootprint/guides/dynamic-react/) · [Cache layer](https://footprintjs.github.io/agentfootprint/guides/caching/)
+> 📖 [Dynamic ReAct guide](https://footprintjs.github.io/agentfootprint/guides/dynamic-react/) · [Key concepts](https://footprintjs.github.io/agentfootprint/getting-started/key-concepts/)
 
 ### Multi-agent — compose with the alphabet
 
@@ -318,7 +318,7 @@ Two built-in lenses view the same trace:
 | **Lens** | Agent-centric — User/Agent[3 slots]/Tool flowchart with iteration scrubber and round commentary | Live debugging, "what did Neo see at step 5?" |
 | **Explainable Trace** | Structural — subflow tree, full flowchart, memory inspector, per-stage execution timeline | Architecture review, root-cause analysis |
 
-> 📖 Powered by [footprintjs `causalChain()`](https://footprintjs.github.io/footPrint/blog/backward-causal-chain/) — backward thin-slicing on the commit log. [Causal memory guide](https://footprintjs.github.io/agentfootprint/guides/causal-memory/) · [Explainability & compliance](https://footprintjs.github.io/footPrint/blog/explainability-compliance/)
+> 📖 Powered by [footprintjs `causalChain()`](https://footprintjs.github.io/footPrint/blog/backward-causal-chain/) — backward thin-slicing on the commit log. [Causal memory deep dive](https://footprintjs.github.io/agentfootprint/causal-deep-dive/) · [Explainability & compliance](https://footprintjs.github.io/footPrint/blog/explainability-compliance/)
 
 **One recording. Two lenses. Three consumers. Zero extra instrumentation.**
 
@@ -397,7 +397,7 @@ The flowchart, recorders, and tests don't change between dev and prod.
 - **Lens** · **Explainable Trace** — two visual replays of the causal trace
 - AI-coding-tool support — Claude Code · Cursor · Windsurf · Cline · Kiro · Copilot
 
-> 📖 [Full feature list & API reference](https://footprintjs.github.io/agentfootprint/reference/) · [CHANGELOG](./CHANGELOG.md)
+> 📖 [Agent API reference](https://footprintjs.github.io/agentfootprint/api/agent/) · [CHANGELOG](./CHANGELOG.md)
 
 ---
 
@@ -422,8 +422,8 @@ Roadmap items are *not* current API claims. If a feature isn't in `npm install a
 | New to agents | [5-minute quick start](https://footprintjs.github.io/agentfootprint/getting-started/quick-start/) |
 | Coming from LangChain / CrewAI / LangGraph | [Migration guide](https://footprintjs.github.io/agentfootprint/getting-started/vs/) |
 | Architecting an enterprise rollout | [Production guide](https://footprintjs.github.io/agentfootprint/guides/deployment/) |
-| Doing due diligence | [Architecture overview](https://footprintjs.github.io/agentfootprint/architecture/) |
-| Researcher / extending | [Extension guide](https://footprintjs.github.io/agentfootprint/contributing/extension-guide/) |
+| Doing due diligence | [Architecture overview](https://footprintjs.github.io/agentfootprint/architecture/dependency-graph/) |
+| Researcher / academic background | [Citations & prior art](https://footprintjs.github.io/agentfootprint/research/citations/) |
 | Curious about design | [Inspiration docs](https://footprintjs.github.io/agentfootprint/inspiration/) |
 
 Or jump into the [examples gallery](https://github.com/footprintjs/agentfootprint/tree/main/examples) — every example is also an end-to-end CI test.
