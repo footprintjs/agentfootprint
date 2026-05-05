@@ -44,11 +44,7 @@
  */
 
 import type { TypedScope } from 'footprintjs';
-import type {
-  LLMProvider,
-  LLMRequest,
-  LLMResponse,
-} from '../../../adapters/types.js';
+import type { LLMProvider, LLMRequest, LLMResponse } from '../../../adapters/types.js';
 import {
   CircuitOpenError,
   admitCall,
@@ -140,11 +136,7 @@ export async function executeWithReliability(
   };
 
   // Helper: build failPayload + write scope + emit + break.
-  const failFast = (
-    phase: 'pre-check' | 'post-decide',
-    kind: string,
-    label: string,
-  ): undefined => {
+  const failFast = (phase: 'pre-check' | 'post-decide', kind: string, label: string): undefined => {
     const cur = providerEntry();
     const payload: ReliabilityScope['failPayload'] = {
       phase,

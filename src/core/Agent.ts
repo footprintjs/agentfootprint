@@ -622,7 +622,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
           kind: state.reliabilityFailKind,
           reason: state.reliabilityFailReason ?? state.reliabilityFailKind,
           ...(cause !== undefined && { cause }),
-          ...(state.reliabilityFailPayload !== undefined && { payload: state.reliabilityFailPayload }),
+          ...(state.reliabilityFailPayload !== undefined && {
+            payload: state.reliabilityFailPayload,
+          }),
           snapshot: snap,
         });
       }

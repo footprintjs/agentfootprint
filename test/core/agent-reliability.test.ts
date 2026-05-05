@@ -43,11 +43,10 @@ function okProvider(reply: string): LLMProvider {
 
 /** Provider that throws the given error N times, then succeeds. Returns
  *  the captured call count via `getCalls()`. */
-function flakyProvider(opts: {
-  failTimes: number;
-  error: Error;
-  successReply: string;
-}): { provider: LLMProvider; getCalls: () => number } {
+function flakyProvider(opts: { failTimes: number; error: Error; successReply: string }): {
+  provider: LLMProvider;
+  getCalls: () => number;
+} {
   let calls = 0;
   const provider: LLMProvider = {
     name: 'flaky',
