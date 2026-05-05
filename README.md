@@ -83,35 +83,68 @@ Four triggers, two flavors:
 
 ## 2. Why we chose this abstraction
 
-Because owning the injection means we can answer four questions about every LLM call your agent makes:
+The agent space has many credible primary abstractions:
 
-- **What** was injected — which flavor, which content
-- **Who** triggered it — which rule fired
-- **When** it fired — which iteration, after which event
-- **How** it landed — which slot, with what cache strategy
+| Framework | What it abstracts |
+|---|---|
+| **LangChain** | Pipelines of composable components |
+| **LangGraph** | State machines of nodes and edges |
+| **CrewAI · AutoGen** | Crews of role-playing agents |
+| **Mastra · Genkit · Pydantic AI** | Typed full-stack bundles |
+| **DSPy** | Compiled prompts |
+| **Inngest AgentKit** | Durable workflows |
 
-Those answers fold back into your workflow — the same triad in the tagline:
+We didn't have to choose between them.
 
-- **Live** — debug as you build, watch the trace scrub forward in real time
-- **Offline** — monitor what shipped; query the trace months later without a rerun
-- **Detailed** — improve via trace replay, root-cause analysis, and training-data export
-- **Plus** — the LLM itself can use the trace to answer follow-up questions about its own decisions, no extra LLM call
+agentfootprint is built on **footprintjs** — the flowchart pattern for backend code. footprintjs gives us every one of those abstractions out of the box:
 
-### How — we own the runtime loop
+- **Composition** — `Sequence` · `Parallel` · `Conditional` · `Loop`
+- **State machines** — the ReAct loop *is* a flowchart
+- **Multi-agent crews** — compose Agents through control flow, no special class needed
+- **Durable workflows** — `pauseHere()` plus JSON-portable `resume()`
+- **Typed observation** — 47+ events for free, because the framework owns the loop
 
-Every load-bearing dev tool of the last decade made the same move — own the runtime loop, not just the API:
+So we used the budget those abstractions would have cost us to invest deeply in something they all leave to the developer: **the injection loop.**
 
-| Framework | You write | The framework abstracts |
-|---|---|---|
-| **PyTorch (autograd)** | Forward graph | Gradient computation, backward pass |
-| **Express / Fastify** | Routes + handlers | HTTP loop, middleware chain |
-| **Prisma** | Schema + query intent | SQL generation, migrations |
-| **React** | Components + state | DOM diffing, render path |
-| **agentfootprint** | Injections (slot × trigger × cache) | Slot composition, iteration loop, caching, observation, replay |
+> **We abstract context engineering.**
+> Live to develop · offline to monitor · detailed to improve — handed back as the trace.
 
-The closest structural parallel is **autograd**: you describe the graph, the framework traverses it, and *because the framework owns the traversal it can record everything for free*. Same idea here. In every other framework, flexibility and observability are a tradeoff — bolt-on instrumentation breaks when you customize. Here, both fall out of the same property: customization happens *inside* the recorded loop, not around it.
+### The reason — agents have a new class of bug
 
-> 📖 Long-form: [the Palantir lineage](https://footprintjs.github.io/agentfootprint/inspiration/connected-data-palantir/) · [the Liskov lineage](https://footprintjs.github.io/agentfootprint/inspiration/modularity-liskov/)
+For fifty years, software bugs have been **logic errors**. A wrong condition, a missed edge case, an off-by-one. You step through the code until you find the bad branch.
+
+LLM-powered apps add a second class of bug: **contextual errors.** The code is correct. The model is correct. The answer is wrong because **the LLM's decision rests on context that was ambiguous, confusing, or misleading at the moment of inference.**
+
+Tracking *which content the model actually saw, and why,* is the entire debugging job. Without it, the failure mode is invisible:
+
+- The wrong instruction landed in the `system` slot — the model followed the wrong rule.
+- A predicate fired one iteration too early — context arrived with stale assumptions.
+- A skill body was missing when the LLM called `read_skill` — the model invented its own.
+- The cache prefix invalidated — a stable instruction got silently rewritten with a stale version.
+- A tool returned — but the on-tool-return injection that explains how to interpret the result never fired.
+
+**The model doesn't tell you which of these went wrong. It just gives you the wrong answer.**
+
+You can't step through that with a debugger. By the time you read the response, the context that produced it is gone unless something recorded it.
+
+That's the gap agentfootprint fills. A framework that owns the control flow can debug logic errors. A framework that owns the *injection* can debug contextual errors — because every injection is a typed event with a where, when, why, and how-it-cached.
+
+### What that buys you
+
+Because we own the injection, every LLM call backtracks to four typed answers:
+
+- **What** was injected
+- **Who** triggered it (which rule)
+- **When** it fired
+- **How** it landed — slot, position, cache
+
+Same trace, three workflows:
+
+- **Live — debug as you build.** See exactly which injection produced which token, which predicate fired this iteration, which prefix actually got cached.
+- **Offline — monitor what shipped.** Replay any past run from its trace. Alert on drift. Attribute cost per injection.
+- **Detailed — improve via export.** Every successful trajectory is labeled training data for SFT, DPO, or RL — no separate data-collection phase.
+
+And a fourth, novel: **the agent can read its own trace.** Six months after the agent rejected loan #42, *"why did you reject it?"* answers from the recorded evidence (`creditScore=580`, `threshold=600`), not a rerun. Causal memory turns the trace into the agent's working memory.
 
 ---
 
