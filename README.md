@@ -26,40 +26,11 @@
 
 ## 1. What we abstract
 
-The messy reality every agent codebase reinvents — usually badly:
+When you build an Agentic Application, you collect domain-specific data and instructions, then wire them up based on what your system receives.
 
-- Which instructions go in `system`
-- Which messages get added after a tool returns
-- Which tools should be exposed right now
-- Which memory to load for this tenant
-- Which parts of the prompt are stable enough to cache
-- When to retry, what to log, where to put cache markers
+That data and those instructions wear many names — **Skills · Steering · Guardrails · RAG · Tool APIs · Memory** — with more on the way. But they all do the same thing: they **inject into one of three slots** in the LLM call (`system`, `messages`, `tools`).
 
-Hand-rolled, every agent does this differently — and brittlely. agentfootprint replaces all of it with one primitive. The next beat shows what that primitive looks like.
-
----
-
-## 2. How we abstract it
-
-Every LLM call has three slots:
-
-```text
-system     messages     tools
-```
-
-Every agent feature — steering, instructions, skills, facts, memory, RAG, tool schemas — is content flowing into one of those slots. agentfootprint models all of them as one primitive:
-
-```text
-Injection = slot × trigger × cache
-```
-
-An Injection answers three questions:
-
-1. **Where does this content land?** `system`, `messages`, or `tools`
-2. **When does it activate?** `always` · `rule` · `on-tool-return` · `llm-activated`
-3. **How is it cached?** `always` · `never` · `while-active` · predicate
-
-That is the whole abstraction. Every named pattern in the agent literature — Reflexion, Tree-of-Thoughts, Skills, RAG, Constitutional AI — reduces to *which slot* + *which trigger*. You learn one model; the field's growth lands as new factories on the same primitive.
+So we abstracted the injection itself.
 
 <p align="center">
   <picture>
@@ -69,26 +40,62 @@ That is the whole abstraction. Every named pattern in the agent literature — R
   </picture>
 </p>
 
-**4 triggers — 1 static, 3 dynamic.** All four are config you give the builder; the runtime handles the rest.
+The abstraction is three rules:
+
+1. **Three slots are fixed.** `system`, `messages`, `tools` — the LLM API surface.
+2. **N flavors are open.** You declare what you have. Tomorrow's flavor (few-shot, reflection, persona, A2A handoff…) plugs in the same way.
+3. **Rules decide *where* and *when*.** You provide the rules. We collect your data, fire the right one, land it in the right slot at the right iteration.
+
+That's the whole model: `Injection = slot × trigger × cache`.
+
+### Triggers — static or runtime
+
+Every rule fires from one of two places:
+
+- **Static** — set at build time, fires every iteration *(always-on)*
+- **Runtime** — fires from something that happens during the run:
+  - a tool response  *(after_tool)*
+  - an LLM activation  *(read_skill)*
+  - a predicate over scope  *(rule)*
+
+Four triggers, two flavors:
 
 | # | Trigger | Fires when | One-line example | Default slot |
 |---|---|---|---|---|
 | 1 | `always` *(static)* | Every iteration | `.steering('You are a triage agent…')` | `system` |
-| 2 | `rule` *(dynamic — predicate)* | Consumer rule returns true | `.rag({ when: s => /price\|refund/.test(s.userQuery), source: docs })` | `messages` |
-| 3 | `on-tool-return` *(dynamic — lifecycle)* | After a specific tool returns | `.instruction({ after: 'search_db', text: 'Cite source IDs.' })` | `messages` |
-| 4 | `llm-activated` *(dynamic — agent-driven)* | LLM calls `read_skill('id')` | `.skill({ id: 'refund-policy', activatedBy: 'read_skill' })` | `messages` (body) |
+| 2 | `rule` *(runtime — predicate)* | Your rule returns true | `.rag({ when: s => /price\|refund/.test(s.userQuery), source: docs })` | `messages` |
+| 3 | `on-tool-return` *(runtime — lifecycle)* | After a specific tool returns | `.instruction({ after: 'search_db', text: 'Cite source IDs.' })` | `messages` |
+| 4 | `llm-activated` *(runtime — agent-driven)* | LLM calls `read_skill('id')` | `.skill({ id: 'refund-policy', activatedBy: 'read_skill' })` | `messages` (body) |
 
 > **Slot is a default, not a coupling — same flavor lives in any slot, strategy is config.**
 > A `Skill` can live in:
 > - `tools` slot → schema only, LLM discovers it via `read_skill` — trigger `always`
 > - `messages` slot → body injected on activation — trigger `llm-activated`
 > - `system` slot → body baked into the system prompt as permanent steering — trigger `always`
->
-> Tomorrow's flavor (few-shot, reflection, persona, A2A handoff…) plugs into the same matrix — no new abstraction.
 
-**3 slots × 4 triggers × N flavors = the entire context-engineering surface.** When you look at any agent feature in the wild, locate it on this grid; that's enough to model it.
+**3 slots × 4 triggers × N flavors = the entire context-engineering surface.** Locate any agent feature on this grid; that's enough to model it.
 
-### Why this design works — we own the loop
+---
+
+## 2. Why we chose this abstraction
+
+Because owning the injection means we can answer four questions about every LLM call your agent makes:
+
+- **What** was injected — which flavor, which content
+- **Who** triggered it — which rule fired
+- **When** it fired — which iteration, after which event
+- **How** it landed — which slot, with what cache strategy
+
+Those answers fold back into your workflow — the same triad in the tagline:
+
+- **Live** — debug as you build, watch the trace scrub forward in real time
+- **Offline** — monitor what shipped; query the trace months later without a rerun
+- **Detailed** — improve via trace replay, root-cause analysis, and training-data export
+- **Plus** — the LLM itself can use the trace to answer follow-up questions about its own decisions, no extra LLM call
+
+Every named pattern in the agent literature — Reflexion, Tree-of-Thoughts, Skills, RAG, Constitutional AI — reduces to *which slot* + *which trigger*. You learn one model; the field's growth lands as new factories on the same primitive.
+
+### How — we own the runtime loop
 
 Every load-bearing dev tool of the last decade made the same move — own the runtime loop, not just the API:
 
@@ -100,7 +107,7 @@ Every load-bearing dev tool of the last decade made the same move — own the ru
 | **React** | Components + state | DOM diffing, render path |
 | **agentfootprint** | Injections (slot × trigger × cache) | Slot composition, iteration loop, caching, observation, replay |
 
-The closest structural parallel is **autograd**: you describe the graph, the framework traverses it, and *because the framework owns the traversal it can record everything for free*. Same idea here. **Owning the loop is what makes Beats 3 and 4 possible.** In every other framework, flexibility and observability are a tradeoff — bolt-on instrumentation breaks when you customize. Here, both fall out of the same property: customization happens *inside* the recorded loop, not around it.
+The closest structural parallel is **autograd**: you describe the graph, the framework traverses it, and *because the framework owns the traversal it can record everything for free*. Same idea here. In every other framework, flexibility and observability are a tradeoff — bolt-on instrumentation breaks when you customize. Here, both fall out of the same property: customization happens *inside* the recorded loop, not around it.
 
 > 📖 Long-form: [the Palantir lineage](https://footprintjs.github.io/agentfootprint/inspiration/connected-data/) · [the Liskov lineage](https://footprintjs.github.io/agentfootprint/inspiration/modularity/)
 
