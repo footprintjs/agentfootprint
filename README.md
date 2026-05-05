@@ -119,17 +119,97 @@ The closest structural parallel is **autograd**: you describe the graph, the fra
 
 ## 3. How do I design my agent or system of agents?
 
-Two scales — same alphabet.
+Two scales — same alphabet. Four control flows are the entire vocabulary.
 
-<p align="center">
+<table>
+<tr>
+<td width="50%" align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/control-flows-dark.svg">
-    <source media="(prefers-color-scheme: light)" srcset="docs/assets/control-flows-light.svg">
-    <img alt="The 4 control flows: Sequence (linear chain A → B → C), Parallel (fan-out + fan-in), Decide (diamond branch), Loop (cycle back). All shown in one yellow visual language; differentiation is by shape." src="docs/assets/control-flows-light.svg" width="100%"/>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/sequence-dark.svg">
+    <source media="(prefers-color-scheme: light)" srcset="docs/assets/sequence-light.svg">
+    <img alt="Sequence — linear chain A → B → C." src="docs/assets/sequence-light.svg" width="100%"/>
   </picture>
-</p>
+</td>
+<td width="50%">
 
-Four control flows. That's the entire vocabulary. Differentiation is by shape, not category — `Sequence` chains, `Parallel` fans, `Decide` branches, `Loop` cycles.
+```typescript
+import { Sequence } from 'agentfootprint';
+
+const flow = Sequence.create()
+  .stage(stageA)
+  .stage(stageB)
+  .stage(stageC)
+  .build();
+```
+
+</td>
+</tr>
+<tr>
+<td width="50%" align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/parallel-dark.svg">
+    <source media="(prefers-color-scheme: light)" srcset="docs/assets/parallel-light.svg">
+    <img alt="Parallel — fan-out then fan-in across N agents." src="docs/assets/parallel-light.svg" width="100%"/>
+  </picture>
+</td>
+<td width="50%">
+
+```typescript
+import { Parallel } from 'agentfootprint';
+
+const fan = Parallel.create()
+  .branch(searchWeb)
+  .branch(searchDocs)
+  .merge(synthesizer)
+  .build();
+```
+
+</td>
+</tr>
+<tr>
+<td width="50%" align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/decide-dark.svg">
+    <source media="(prefers-color-scheme: light)" srcset="docs/assets/decide-light.svg">
+    <img alt="Decide — diamond gate routes to one of N branches based on a rule." src="docs/assets/decide-light.svg" width="100%"/>
+  </picture>
+</td>
+<td width="50%">
+
+```typescript
+import { Decide } from 'agentfootprint';
+
+const router = Decide.create()
+  .on(s => s.intent)
+  .branch('billing', billingAgent)
+  .branch('tech', techAgent)
+  .build();
+```
+
+</td>
+</tr>
+<tr>
+<td width="50%" align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/loop-dark.svg">
+    <source media="(prefers-color-scheme: light)" srcset="docs/assets/loop-light.svg">
+    <img alt="Loop — body cycles back from end to start until a condition is met." src="docs/assets/loop-light.svg" width="100%"/>
+  </picture>
+</td>
+<td width="50%">
+
+```typescript
+import { Loop } from 'agentfootprint';
+
+const reflexion = Loop.create()
+  .until(s => s.satisfied)
+  .body(thinkAgent)
+  .build();
+```
+
+</td>
+</tr>
+</table>
 
 ### Single agent — the loop is dynamic
 
