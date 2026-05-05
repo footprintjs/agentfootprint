@@ -107,11 +107,13 @@ LLM-powered apps add a second class of bug: **contextual errors.** The code is c
 
 Tracking *which content the model actually saw, and why,* is the entire debugging job. Without it, the failure mode is invisible:
 
-- The wrong instruction landed in the `system` slot — the model followed the wrong rule.
-- A predicate fired one iteration too early — context arrived with stale assumptions.
-- A skill body was missing when the LLM called `read_skill` — the model invented its own.
-- The cache prefix invalidated — a stable instruction got silently rewritten with a stale version.
-- A tool returned — but the on-tool-return injection that explains how to interpret the result never fired.
+| What got injected wrong | What the model did |
+|---|---|
+| Wrong instruction landed in the `system` slot | Followed the wrong rule |
+| Predicate fired one iteration too early | Reasoned with stale assumptions |
+| Skill body missing when the LLM called `read_skill` | Invented its own |
+| Cache prefix invalidated mid-iteration | Saw a silently rewritten stale version |
+| Tool returned but the `on-tool-return` injection didn't fire | Couldn't interpret the result |
 
 > [!IMPORTANT]
 > **The model doesn't tell you which of these went wrong. It just gives you the wrong answer.**
