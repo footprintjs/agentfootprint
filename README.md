@@ -117,14 +117,14 @@ The closest structural parallel is **autograd**: you describe the graph, the fra
 
 ## Where this sits
 
-You'll find pieces of agentfootprint in adjacent frameworks.
+You'll find pieces of agentfootprint in two adjacent categories of framework.
 
-- **Strands** ships a *model-driven* agent runner — the LLM drives the loop. We have one (Dynamic ReAct).
-- **LangGraph** ships *low-level orchestration* — you wire nodes and edges. We ship the same compositions one level up: `Sequence` · `Parallel` · `Conditional` · `Loop`.
+- **Model-driven agent runners** let the LLM drive the loop. We ship one — Dynamic ReAct.
+- **Low-level orchestration frameworks** let you wire nodes and edges. We ship the same compositions one level up: `Sequence` · `Parallel` · `Conditional` · `Loop`.
 
-What neither ships: the **Injection primitive** (Beat 1) and the **causal trace** (Beat 4). Both are free side effects of owning the runtime loop.
+What neither category ships: the **Injection primitive** (Beat 1) and the **causal trace** (Beat 4). Both are free side effects of owning the runtime loop.
 
-> agentfootprint = Strands' agent runner + LangGraph's compositions + context engineering as a first-class layer, trace baked in.
+> agentfootprint = a model-driven agent runner + compositional orchestration + context engineering as a first-class layer, trace baked in.
 
 ---
 
