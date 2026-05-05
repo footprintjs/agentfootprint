@@ -1,11 +1,31 @@
 ---
 title: Observability
-description: Typed event streams, recorders, and tier-3 enable.* helpers — observe what the agent did without shaping what it does.
+description: Typed event streams, recorders, and tier-3 enable.* helpers — observe what the agent did without shaping what it does. 57+ events emitted during DFS traversal, no instrumentation.
 ---
 
 import CodeFile from '@/components/CodeFile.astro';
 
 > Logs that say *"agent ran"* are useless. Logs that say *"agent called `redact_pii({text: '...'})` and then injected the result into the messages slot before iteration 3, costing $0.0042"* let you debug a hallucination at 2 AM. The difference is whether observability is **structured + typed at the source** or **string-formatted at the sink**.
+
+## Three workflows from one trace
+
+agentfootprint's observability isn't bolted on. The framework owns the loop, so every decision and execution is recorded *during* DFS traversal — not collected after the fact via spans. That single artifact serves three workflows:
+
+| Mode | What you do | What the trace gives you |
+|---|---|---|
+| **Live** | Debug as you build | Exactly which injection produced which token; which predicate fired this iteration; which prefix actually got cached |
+| **Offline** | Monitor what shipped | Replay any past run from its trace. Alert on drift. Attribute cost per injection. |
+| **Detailed** | Improve via export | Every successful trajectory is labeled training data for SFT, DPO, or process-RL — no separate data-collection phase |
+
+And a fourth, novel: **the agent can read its own trace.** Six months after the agent rejected loan #42, *"why did you reject it?"* answers from the recorded evidence (`creditScore=580`, `threshold=600`), not a rerun. Causal memory turns the trace into the agent's working memory.
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="/agentfootprint/assets/causal-memory-dark.svg">
+    <source media="(prefers-color-scheme: light)" srcset="/agentfootprint/assets/causal-memory-light.svg">
+    <img alt="One agent run produces a JSON-portable causal trace. Three downstream consumers fan out: audit replay, cheap-model triage, training data export. The fourth, novel: the agent can read its own trace." src="/agentfootprint/assets/causal-memory-light.svg" width="100%" />
+  </picture>
+</p>
 
 ## The model
 
@@ -17,7 +37,7 @@ Every runner (`Agent`, `LLMCall`, `Sequence`, etc.) exposes the same observabili
 | **Recorders** | `runner.attach(recorder)` | You want pre-built aggregation (cost totals, token counts, narrative entries) |
 | **Tier-3 helpers** | `runner.enable.thinking({...})`, `runner.enable.logging({...})` | You want a one-liner for the common case (status line, structured logs) |
 
-There are **47 typed events across 13 domains**: `context`, `stream`, `agent`, `cost`, `permission`, `eval`, `memory`, `skill`, `composition`, and more. Every event has a typed payload — `gen_ai.chat`, `tool.start`, `cost.tick`, `composition.iteration_start`, etc. The framework owns the loop and emits during DFS traversal — no instrumentation, no spans-after-the-fact.
+There are **57+ typed events across 18 domains**: `agent`, `composition`, `context`, `stream`, `tools`, `skill`, `memory`, `cache`, `cost`, `permission`, `eval`, `embedding`, `pause`, `error`, `fallback`, `resilience`, `reliability`, `risk`. Every event has a typed payload — `gen_ai.chat`, `tool.start`, `cost.tick`, `composition.iteration_start`, etc. The framework owns the loop and emits during DFS traversal — no instrumentation, no spans-after-the-fact.
 
 ## Tier-3 — `.enable.thinking()` and `.enable.logging()`
 
@@ -33,9 +53,9 @@ The 80% case: a live status line ("what is the agent doing right now?") and a do
 
 Both return a `stop()` function — call it on shutdown to detach the listener cleanly.
 
-## Tier-3 — `.enable.observability()` (v2.8) — grouped vendor strategies
+## Tier-3 — `.enable.observability()` — grouped vendor strategies
 
-For shipping events to a vendor backend (CloudWatch, Datadog, OTel, etc.), `.enable.observability(...)` accepts a typed strategy + optional `detach` driver. The strategy is the WHERE; the detach is the HOW (sync inline vs fire-and-forget):
+For shipping events to a vendor backend (CloudWatch, X-Ray, OTel, AgentCore), `.enable.observability(...)` accepts a typed strategy + optional `detach` driver. The strategy is the WHERE; the detach is the HOW (sync inline vs fire-and-forget):
 
 ```ts
 import { agentcoreObservability } from 'agentfootprint/observability-providers';
@@ -93,11 +113,11 @@ Vendor strategies ship under one grouped subpath (parallel-providers pattern, mi
 
 | Adapter | Status | Peer dep (optional) |
 |---|---|---|
-| `agentcoreObservability` | ✅ v2.8.1 | `@aws-sdk/client-cloudwatch-logs` |
-| `cloudwatchObservability` | v2.8.2 (next) | `@aws-sdk/client-cloudwatch-logs` |
-| `xrayObservability` | v2.8.3 | `@aws-sdk/client-xray` |
-| `otelObservability` | v2.9.x | `@opentelemetry/sdk-node` |
-| `datadogObservability` | v2.9.x | `dd-trace` |
+| `agentcoreObservability` | ✅ shipped | `@aws-sdk/client-cloudwatch-logs` |
+| `cloudwatchObservability` | ✅ shipped | `@aws-sdk/client-cloudwatch-logs` |
+| `xrayObservability` | ✅ shipped | `@aws-sdk/client-xray` |
+| `otelObservability` | ✅ shipped | `@opentelemetry/api` + `@opentelemetry/sdk-node` |
+| `datadogObservability` | roadmap | `dd-trace` (use `otelObservability` with Datadog OTel collector for now) |
 
 All peer deps are declared **optional** — consumers who never call a particular factory don't need to install its SDK. Each adapter lazy-imports its SDK at first use.
 
@@ -117,16 +137,24 @@ agentfootprint.<domain>.<event>
 
 | Domain | Sample events | What it covers |
 |---|---|---|
+| `agent` | `turn_start` · `turn_end` · `iteration_start` · `iteration_end` · `route_decided` · `handoff` | ReAct loop boundaries |
+| `composition` | `enter` · `exit` · `iteration_start` · `iteration_exit` · `fork_start` · `branch_complete` · `merge_end` · `route_decided` | Sequence / Parallel / Conditional / Loop lifecycles |
+| `context` | `injected` · `evaluated` · `evicted` · `slot_composed` · `budget_pressure` · `memory` | Context engineering — every injection's full lifecycle |
 | `stream` | `llm_start` · `llm_end` · `token` · `tool_start` · `tool_end` | Token-by-token + tool-call lifecycle |
-| `agent` | `turn_start` · `turn_end` · `iteration_start` · `iteration_end` | ReAct loop boundaries |
-| `context` | `injected` (one event for every Skill / Steering / Instruction / Fact / Memory / RAG that activates) | Context engineering — the unified channel |
+| `tools` | `offered` · `activated` · `deactivated` | ToolProvider activation per iteration (skills, gating) |
+| `skill` | `activated` · `deactivated` | LLM-activated skill resolution |
+| `memory` | `attached` · `detached` · `written` · `strategy_applied` | Memory pipeline subflows |
+| `cache` | `applied` · `metrics` | Provider cache marker placement + hit-rate |
 | `cost` | `tick` · `limit_hit` | Per-call USD + budget threshold crossings |
-| `composition` | `enter` · `iteration_start` · `iteration_exit` · `route_decided` | Sequence / Parallel / Conditional / Loop lifecycles |
-| `memory` | `read` · `write` · `compress` | Memory pipeline subflows |
-| `skill` | `activated` · `body_loaded` | LLM-activated skill resolution |
-| `permission` | `check` · `denied` | PermissionChecker decisions |
-| `eval` | `score` · `failed` | Custom quality / guardrail signals |
-| `pause` / `resume` | `paused` · `resumed` | Human-in-the-loop checkpoints |
+| `permission` | `check` · `gate_opened` · `gate_closed` | PermissionChecker decisions |
+| `eval` | `score` · `threshold_crossed` | Custom quality / guardrail signals |
+| `embedding` | `generated` | Embedder calls (RAG / semantic memory) |
+| `pause` | `request` · `resume` | Human-in-the-loop checkpoints |
+| `error` | `fatal` · `recovered` · `retried` | Stage-level error events |
+| `fallback` | `triggered` | Schema-validation fallback chain |
+| `resilience` | `circuit_state_changed` · `retry` · `fallback` · `output_fallback_triggered` · `output_canned_used` | v2.10.x reliability primitives |
+| `reliability` | `fail_fast` | v2.11.5 reliability gate fail-fast events |
+| `risk` | `flagged` | Eval guardrails flagging suspect output |
 
 Every event is exhaustively typed via `AgentfootprintEvent` (a discriminated union); your IDE autocompletes the payload shape based on the event name. **No string-parsing logs.** No "I think this means the tool was called."
 
@@ -152,16 +180,28 @@ The recorder discovers handler methods via runtime method-shape detection — im
 
 ## OpenTelemetry
 
-Currently no built-in `OTelRecorder` ships. The recommended pattern is to write a small adapter that subscribes to the events you care about and emits OTel spans via your own `@opentelemetry/api` tracer. Documenting this pattern as a first-class adapter is on the v2.4+ roadmap.
+`otelObservability` ships in `agentfootprint/observability-providers`. It maps agentfootprint events onto OTel spans + attributes via your own `@opentelemetry/api` tracer. Pair with `@opentelemetry/sdk-node` and your favorite exporter (Jaeger, Tempo, Datadog OTel collector, etc.):
+
+```ts
+import { otelObservability } from 'agentfootprint/observability-providers';
+import { trace } from '@opentelemetry/api';
+
+const stop = agent.enable.observability({
+  strategy: otelObservability({
+    tracer: trace.getTracer('my-agent', '1.0.0'),
+  }),
+  detach: { driver: microtaskBatchDriver, mode: 'forget' },
+});
+```
 
 ## Anti-patterns
 
-- ❌ **Don't log every event** — 47 typed events × N iterations × M agents = your log infra hates you. Filter to the domains you actually need.
+- ❌ **Don't log every event** — 57+ typed events × N iterations × M agents = your log infra hates you. Filter to the domains you actually need.
 - ❌ **Don't subscribe in a hot loop** — `runner.on(...)` returns an unsubscribe; call it on shutdown. Forgotten subscriptions leak listeners across runs.
 - ❌ **Don't use `getNarrative()` as a log sink** — it's structured trace data, not log lines. Pass the entries to a real log/trace backend if you need to ship them.
 
 ## Next steps
 
-- [Cost tracking](/agentfootprint/guides/observability/) — pricingTable + costBudget patterns
-- [Event taxonomy reference](/agentfootprint/api/recorders/) — full 47-event signature list (auto-generated, in progress)
+- [Causal memory deep dive](/agentfootprint/causal-deep-dive/) — the trace as the agent's working memory
+- [Reliability gate](/agentfootprint/guides/reliability-gate/) — `agentfootprint.reliability.fail_fast` event semantics
 - [Streaming guide](/agentfootprint/guides/streaming/) — token-by-token rendering via `provider.stream()`
