@@ -52,32 +52,18 @@ That's the whole model: `Injection = slot × trigger × cache`.
 - **Trigger** — when the content fires (see below).
 - **Cache** — how stable the content is across iterations. The framework places provider cache markers for you — stable content gets 80–90% cheaper prefixes.
 
-### Triggers — static or runtime
+### The 4 triggers
 
-Every rule fires from one of two places:
-
-- **Static** — set at build time, fires every iteration *(always-on)*
-- **Runtime** — fires from something that happens during the run:
-  - a tool response  *(after_tool)*
-  - an LLM activation  *(read_skill)*
-  - a predicate over scope  *(rule)*
-
-Four triggers, two flavors:
-
-| # | Trigger | Fires when | One-line example | Default slot |
+| Trigger | Flavor | Fires when | Builder example | Default slot |
 |---|---|---|---|---|
-| 1 | `always` *(static)* | Every iteration | `.steering('You are a triage agent…')` | `system` |
-| 2 | `rule` *(runtime — predicate)* | Your rule returns true | `.rag({ when: s => /price\|refund/.test(s.userQuery), source: docs })` | `messages` |
-| 3 | `on-tool-return` *(runtime — lifecycle)* | After a specific tool returns | `.instruction({ after: 'search_db', text: 'Cite source IDs.' })` | `messages` |
-| 4 | `llm-activated` *(runtime — agent-driven)* | LLM calls `read_skill('id')` | `.skill({ id: 'refund-policy', activatedBy: 'read_skill' })` | `messages` (body) |
+| `always` | static | Every iteration | `.steering('You are a triage agent…')` | `system` |
+| `rule` | runtime — predicate | Your rule returns true | `.rag({ when: s => /price\|refund/.test(s.userQuery) })` | `messages` |
+| `on-tool-return` | runtime — lifecycle | After a specific tool returns | `.instruction({ after: 'search_db', text: 'Cite source IDs.' })` | `messages` |
+| `llm-activated` | runtime — agent-driven | LLM calls `read_skill('id')` | `.skill({ id: 'refund-policy', activatedBy: 'read_skill' })` | `messages` (body) |
 
-> **Slot is a default, not a coupling — same flavor lives in any slot, strategy is config.**
-> A `Skill` can live in:
-> - `tools` slot → schema only, LLM discovers it via `read_skill` — trigger `always`
-> - `messages` slot → body injected on activation — trigger `llm-activated`
-> - `system` slot → body baked into the system prompt as permanent steering — trigger `always`
+Slot is a default, not a coupling — the same `Skill` can live in `tools` (schema only, discovered via `read_skill`), `messages` (body injected on activation), or `system` (baked into the prompt as steering).
 
-**3 slots × 4 triggers × N flavors = the entire context-engineering surface.** Locate any agent feature on this grid; that's enough to model it.
+**3 slots × 4 triggers × N flavors = the entire context-engineering surface.**
 
 ---
 
