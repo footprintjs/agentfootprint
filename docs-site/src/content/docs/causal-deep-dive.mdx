@@ -1,17 +1,46 @@
 ---
 title: Causal memory deep-dive
-description: The exact snapshot shape a Causal memory persists, the four projection rules, and a worked replay end-to-end. The differentiator other frameworks don't have, made tangible.
+description: How the trace becomes the agent's working memory — the exact snapshot shape persisted, the four projection rules, and a worked replay end-to-end. The fourth workflow that no other framework has.
 ---
 
 import CodeFile from '@/components/CodeFile.astro';
 
 > A loan officer agent decides on Monday to reject application #42 — credit score 580, threshold 600. On Friday a different user asks *"why was application #42 rejected?"* You want the agent to answer from the EXACT decision evidence, not from "memory of memory" reconstruction. **That requires the framework to record the agent's reasoning at the moment it happened**, not summarize after the fact. This page shows exactly what that recording looks like.
 
+## The fourth workflow — agent reads its own trace
+
+If contextual errors are the new class of bug ([Why agentfootprint?](/agentfootprint/getting-started/why/#the-new-class-of-bug)), then the trace is the recording that makes them debuggable. agentfootprint's observability hands the trace back as three workflows — Live, Offline, Detailed.
+
+Causal memory adds the fourth: **the agent itself reads the trace.** Six months later, *"why did you reject loan #42?"* answers from the recorded evidence (`creditScore=580`, `threshold=600`), not a rerun. The trace becomes the agent's working memory.
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="/agentfootprint/assets/causal-memory-dark.svg">
+    <source media="(prefers-color-scheme: light)" srcset="/agentfootprint/assets/causal-memory-light.svg">
+    <img alt="One agent run produces a JSON-portable causal trace. Three downstream consumers fan out (audit replay, cheap-model triage, training data export). The fourth, novel: the agent reads its own trace via causal memory." src="/agentfootprint/assets/causal-memory-light.svg" width="100%" />
+  </picture>
+</p>
+
+This is the differentiator no other framework on the market has today. Other frameworks' memory remembers what was *said* — ours remembers what was *decided*.
+
 ## What gets persisted
 
 When you configure `defineMemory({ type: CAUSAL, ... })`, every `agent.run()` records a `RunSnapshot` to the configured store. The snapshot is the agent's flowchart traversal frozen as JSON — every `decide()` value, every `select()` evidence, every commit-log entry, the narrative entries, the timing.
 
 The snapshot is the THING. Subsequent retrievals load it back into context; the LLM reads it on a follow-up turn; the answer is grounded in WHAT THE AGENT ACTUALLY DID, not in what an LLM thinks it probably did.
+
+### Each snapshot answers four typed questions
+
+The snapshot maps directly onto the four backtrack questions every agentfootprint LLM call answers (see [Why § the four backtrack questions](/agentfootprint/getting-started/why/#the-four-backtrack-questions)):
+
+| Question | Where in the snapshot |
+|---|---|
+| **What** was injected? | `commitLog` entries — every value the agent wrote to scope at every stage |
+| **Who** triggered it? | `decideLog` entries — which rule fired, with the values it evaluated |
+| **When** it fired? | `runtimeStageId` (e.g., `loan-decide#3`) + iteration index in the commit log |
+| **How** it landed? | `subflowPath` + `selectLog` (which branch / option / cache strategy was chosen) |
+
+Causal memory persists all four. Reading the snapshot back IS asking the four backtrack questions — without re-running the agent.
 
 ## The shape (annotated)
 
@@ -137,7 +166,7 @@ await friday.run({
 
 The Friday agent's prompt includes the projected `decideLog` entries from Monday's run — the LLM sees, verbatim, that `creditScore: 580` was checked against `threshold: 600` and the predicate matched=false. The follow-up answer is grounded in EXACT past facts, not reconstruction.
 
-## The cheap-model triage economic argument
+## Why this works — the cheap-model triage economic argument
 
 A trace recorded from your expensive production model (Sonnet-4) is a perfectly good *input* for a small, fast, cheap model (Haiku, GPT-4o-mini) answering follow-up questions about that run. **Reading recorded decision evidence is structurally simpler than re-deriving the answer from first principles** — so a smaller model is enough.
 
@@ -148,27 +177,33 @@ Across a production system that handles audit / explain / "why did the agent do 
 | Sonnet-4 re-deriving the answer from raw history | $0.045 |
 | Haiku-4-5 reading the projected `decideLog` from snapshot | ~$0.005 |
 
-10× cost reduction on the follow-up traffic. Same correctness — better, in fact, because the cheap model isn't hallucinating from compressed memory; it's reading recorded facts.
+**~10× cost reduction** on follow-up traffic. Same correctness — better, in fact, because the cheap model isn't hallucinating from compressed memory; it's reading recorded facts.
 
-## The training-data bridge (planned v2.5)
+This is the second of the three downstream consumers fanning out of one recording (see the hero diagram above): **cheap-model triage**.
 
-The same JSON snapshot data shape feeds SFT / DPO / process-RL training pipelines. `causalMemory.exportForTraining({ format: 'sft' | 'dpo' | 'process' })` lands in v2.5 — production traffic becomes labeled trajectories with zero extra instrumentation:
+## The third downstream consumer — training data export
+
+The same JSON snapshot shape feeds SFT / DPO / process-RL training pipelines. Production traffic becomes labeled trajectories with zero extra instrumentation:
 
 - Every successful customer interaction → positive trajectory
 - Every escalation / override → counter-example
 - Every `decide()` evidence → the supervision signal for process-RL
+- Every `select()` rationale → the verbal explanation that DPO/RLAIF needs
 
-This is the third downstream consumer of the same snapshot. One recording, three economics. No other framework on the market has this shape today.
+The export API (`causalMemory.exportForTraining({ format: 'sft' | 'dpo' | 'process-rl' })`) is roadmap work — tracked in [GitHub issues](https://github.com/footprintjs/agentfootprint/issues). The snapshot shape that makes it possible is shipping today; the export wrapper is the missing 200 lines.
+
+**One recording, three economics.** No other framework on the market has this shape.
 
 ## Anti-patterns
 
-- Don't fall back to top-K-anyway when threshold misses. The library throws by design; garbage past context is worse than no context.
-- Don't change embedders between writes and reads. The framework tags + filters, but only if you respect the contract.
-- Don't use `FULL` projection by default. It's the largest payload; reserve for forensic-grade scenarios. `DECISIONS` covers 90% of real follow-up queries.
-- Don't share the causal store across tenants. The `MemoryIdentity` tuple namespaces, but only if you pass per-tenant identity at every `agent.run()` call.
+- ❌ **Don't fall back to top-K-anyway when threshold misses.** The library throws by design; garbage past context is worse than no context.
+- ❌ **Don't change embedders between writes and reads.** The framework tags + filters, but only if you respect the contract.
+- ❌ **Don't use `FULL` projection by default.** It's the largest payload; reserve for forensic-grade scenarios. `DECISIONS` covers 90% of real follow-up queries.
+- ❌ **Don't share the causal store across tenants.** The `MemoryIdentity` tuple namespaces, but only if you pass per-tenant identity at every `agent.run()` call.
 
 ## Next steps
 
 - [Memory guide](/agentfootprint/guides/memory/) — the full type × strategy matrix that includes Causal
 - [Auto memory (Hybrid)](/agentfootprint/guides/auto-memory/) — stack causal alongside recent + facts
+- [Observability guide](/agentfootprint/guides/observability/) — the three workflows the trace also enables
 - [Citations & papers](/agentfootprint/research/citations/) — the research foundation
