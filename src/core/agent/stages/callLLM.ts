@@ -23,6 +23,7 @@ import type { TypedScope } from 'footprintjs';
 import type {
   LLMMessage,
   LLMProvider,
+  LLMRequest,
   LLMResponse,
   LLMToolSchema,
   PricingTable,
@@ -31,6 +32,8 @@ import type { CacheMarker, CacheStrategy } from '../../../cache/types.js';
 import { typedEmit } from '../../../recorders/core/typedEmit.js';
 import type { InjectionRecord } from '../../../recorders/core/types.js';
 import { emitCostTick } from '../../cost.js';
+import type { ReliabilityConfig } from '../../../reliability/types.js';
+import { executeWithReliability } from './reliabilityExecution.js';
 import type { AgentState } from '../types.js';
 
 export interface CallLLMStageDeps {
@@ -55,6 +58,13 @@ export interface CallLLMStageDeps {
    *  pattern — toolSchemas is computed AFTER stage factories are
    *  built). The getter resolves the eventual value at run time. */
   readonly toolSchemas: readonly LLMToolSchema[];
+  /** Optional rules-based reliability config (v2.11.5+). When set,
+   *  the call is wrapped in a retry/fallback/fail-fast loop driven
+   *  by `config.preCheck` and `config.postDecide` rules. Streaming
+   *  is preserved; mid-stream failures use first-chunk arbitration —
+   *  see `reliabilityExecution.ts` and the streaming + reliability
+   *  design memo. */
+  readonly reliability?: ReliabilityConfig;
 }
 
 /**
@@ -131,25 +141,62 @@ export function buildCallLLMStage(
     // when it doesn't (older providers, partial implementations) we
     // fall back to `complete()` for the authoritative payload —
     // keeping the ReAct loop deterministic.
-    let response: LLMResponse | undefined;
-    if (deps.provider.stream) {
-      for await (const chunk of deps.provider.stream(llmRequest)) {
-        if (chunk.done) {
-          if (chunk.response) response = chunk.response;
-          break;
-        }
-        if (chunk.content.length > 0) {
-          typedEmit(scope, 'agentfootprint.stream.token', {
-            iteration,
-            tokenIndex: chunk.tokenIndex,
-            content: chunk.content,
-          });
+    //
+    // `singleProviderCall` is the per-attempt call function. Used
+    // directly when reliability is OFF; passed into `executeWithReliability`
+    // when reliability is configured (the helper invokes it once per
+    // retry-loop iteration).
+    const singleProviderCall = async (
+      req: LLMRequest,
+      hooks: { onFirstChunk?: () => void },
+    ): Promise<LLMResponse> => {
+      let resp: LLMResponse | undefined;
+      let firstChunkFired = false;
+      if (deps.provider.stream) {
+        for await (const chunk of deps.provider.stream(req)) {
+          if (chunk.done) {
+            if (chunk.response) resp = chunk.response;
+            break;
+          }
+          if (chunk.content.length > 0) {
+            if (!firstChunkFired) {
+              firstChunkFired = true;
+              hooks.onFirstChunk?.();
+            }
+            typedEmit(scope, 'agentfootprint.stream.token', {
+              iteration,
+              tokenIndex: chunk.tokenIndex,
+              content: chunk.content,
+            });
+          }
         }
       }
-    }
-    if (!response) {
-      // No `stream()` OR stream finished without a response payload.
-      response = await deps.provider.complete(llmRequest);
+      if (!resp) {
+        // No `stream()` OR stream finished without a response payload.
+        resp = await deps.provider.complete(req);
+      }
+      return resp;
+    };
+
+    let response: LLMResponse | undefined;
+    if (deps.reliability) {
+      response = await executeWithReliability(
+        scope,
+        llmRequest,
+        deps.reliability,
+        deps.provider,
+        deps.provider.name,
+        deps.model,
+        singleProviderCall,
+      );
+      // `executeWithReliability` returns `undefined` when it took the
+      // fail-fast path. It already wrote scope state and called
+      // `$break(reason)` — `Agent.run()` translates the propagated
+      // break into a `ReliabilityFailFastError` at the API boundary.
+      // Skip the post-call state writes; there is no response to commit.
+      if (response === undefined) return;
+    } else {
+      response = await singleProviderCall(llmRequest, {});
     }
     const durationMs = Date.now() - startMs;
 

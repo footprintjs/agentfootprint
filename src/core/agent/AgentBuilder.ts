@@ -22,6 +22,7 @@ import type { CachePolicy, CacheStrategy } from '../../cache/types.js';
 import type { Injection } from '../../lib/injection-engine/types.js';
 import { defineInstruction } from '../../lib/injection-engine/factories/defineInstruction.js';
 import type { MemoryDefinition } from '../../memory/define.types.js';
+import type { ReliabilityConfig } from '../../reliability/types.js';
 import type { Tool, ToolRegistryEntry } from '../tools.js';
 import type { ToolProvider } from '../../tool-providers/types.js';
 import { defaultCommentaryTemplates } from '../../recorders/observability/commentary/commentaryTemplates.js';
@@ -94,6 +95,13 @@ export class AgentBuilder {
   private appNameValue = 'Chatbot';
   private commentaryOverrides: Readonly<Record<string, string>> = {};
   private thinkingOverrides: Readonly<Record<string, string>> = {};
+  /**
+   * Optional rules-based reliability config (v2.11.5+). Set via
+   * `.reliability({...})`. Wraps every `CallLLM` execution in a
+   * retry/fallback/fail-fast loop driven by `preCheck` and `postDecide`
+   * rules. See `ReliabilityConfig` for the rule shape.
+   */
+  private reliabilityConfig?: ReliabilityConfig;
 
   constructor(opts: AgentOptions) {
     this.opts = opts;
@@ -508,6 +516,68 @@ export class AgentBuilder {
     return this;
   }
 
+  /**
+   * Wire rules-based reliability around every `CallLLM` execution.
+   * The framework wraps the LLM call in a retry/fallback/fail-fast
+   * loop driven by `preCheck` and `postDecide` rules.
+   *
+   * Decision verbs the rules can emit (see `ReliabilityDecision` for
+   * the full list):
+   *
+   *   • `continue`    — pre-check OK, proceed to the call
+   *   • `ok`          — post-call OK, commit and return
+   *   • `retry`       — re-call same provider (bumps `attempt`)
+   *   • `retry-other` — advance to next provider in `providers[]`
+   *   • `fallback`    — invoke `config.fallback(req, lastError)`
+   *   • `fail-fast`   — throw `ReliabilityFailFastError` at `agent.run()`
+   *
+   * **Streaming + reliability semantics — first-chunk arbitration:**
+   * Pre-first-chunk failures (connection/headers/breaker-open) honor
+   * the full rule set (retry, retry-other, fallback, fail-fast).
+   * Post-first-chunk failures (mid-stream) honor only `ok` and
+   * `fail-fast`; rules wanting `retry`/`retry-other`/`fallback` are
+   * escalated to fail-fast with kind `'mid-stream-not-retryable'`.
+   * This matches LangChain's `RunnableWithFallbacks` pattern and
+   * the prevailing industry default — see the streaming + reliability
+   * design memo for the full discussion.
+   *
+   * Throws if called more than once on the same builder.
+   *
+   * @example
+   *   import { Agent } from 'agentfootprint';
+   *   import { ReliabilityFailFastError } from 'agentfootprint/reliability';
+   *
+   *   const agent = Agent.create({ provider, model: 'mock' })
+   *     .system('Triage support tickets.')
+   *     .reliability({
+   *       postDecide: [
+   *         { when: (s) => s.errorKind === '5xx-transient' && s.attempt < 3,
+   *           then: 'retry', kind: 'transient-retry' },
+   *         { when: (s) => s.error !== undefined,
+   *           then: 'fail-fast', kind: 'unrecoverable' },
+   *       ],
+   *       circuitBreaker: { failureThreshold: 3 },
+   *     })
+   *     .build();
+   *
+   *   try {
+   *     await agent.run({ message: 'help' });
+   *   } catch (e) {
+   *     if (e instanceof ReliabilityFailFastError) {
+   *       console.log(e.kind, e.reason);
+   *     }
+   *   }
+   */
+  reliability(config: ReliabilityConfig): this {
+    if (this.reliabilityConfig) {
+      throw new Error(
+        'AgentBuilder.reliability: already set. Each agent has at most one reliability config.',
+      );
+    }
+    this.reliabilityConfig = config;
+    return this;
+  }
+
   build(): Agent {
     // Resolve the voice config: bundled defaults + consumer overrides.
     // Templates flow through the same barrel exports the rest of the
@@ -534,6 +604,7 @@ export class AgentBuilder {
       this.cachingDisabledValue,
       this.cacheStrategyOverride,
       this.outputFallbackCfg,
+      this.reliabilityConfig,
     );
     // Attach builder-collected recorders so they receive events from
     // the very first run. Mirrors what consumers would do post-build

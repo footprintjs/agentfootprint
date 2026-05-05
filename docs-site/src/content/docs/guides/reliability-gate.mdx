@@ -1,0 +1,115 @@
+---
+title: Reliability gate
+description: Rules-based retry / fallback / fail-fast around every LLM call inside an Agent's ReAct loop. v2.11.5 — slot×trigger×cache, but for failure semantics.
+---
+
+import CodeFile from '@/components/CodeFile.astro';
+
+> Your agent ships. Once a week, the LLM provider 503s; the cumulative cost on one tenant exceeds budget; a malformed tool-call response sneaks through. Without rules, every one of these is a bespoke `try/catch` somewhere in your call site. **agentfootprint v2.11.5 lets you declare the rules.**
+
+## What it is
+
+Rules-based retry, fallback, and fail-fast around every LLM call inside an Agent's ReAct loop. You declare rules; the framework wraps the call in a loop driven by those rules.
+
+```ts
+import { Agent } from 'agentfootprint';
+import { ReliabilityFailFastError } from 'agentfootprint/reliability';
+
+const agent = Agent.create({ provider, model: 'claude-sonnet-4-5-20250929' })
+  .system('You triage support tickets.')
+  .reliability({
+    postDecide: [
+      // Transient 5xx → retry up to 3 attempts.
+      { when: (s) => s.errorKind === '5xx-transient' && s.attempt < 3,
+        then: 'retry', kind: 'transient-retry' },
+      // Anything else → fail-fast with typed error.
+      { when: (s) => s.error !== undefined,
+        then: 'fail-fast', kind: 'unrecoverable' },
+    ],
+    circuitBreaker: { failureThreshold: 3 },
+  })
+  .build();
+
+try {
+  await agent.run({ message: 'help' });
+} catch (e) {
+  if (e instanceof ReliabilityFailFastError) {
+    console.log(e.kind, e.reason, e.payload);
+  }
+}
+```
+
+## Decision verbs
+
+A rule's `then` field is one of six verbs:
+
+| Verb           | Phase       | Effect                                                    |
+|----------------|-------------|-----------------------------------------------------------|
+| `continue`     | pre-check   | No issues — proceed to the call                           |
+| `ok`           | post-decide | Call succeeded — commit response and return               |
+| `retry`        | post-decide | Re-run the same provider (bumps `attempt`)                |
+| `retry-other`  | post-decide | Advance to next provider in `providers[]`                 |
+| `fallback`     | post-decide | Invoke `config.fallback(req, lastError)` to repair        |
+| `fail-fast`    | both        | Throw `ReliabilityFailFastError` at `agent.run()`         |
+
+## Streaming + reliability — first-chunk arbitration
+
+Streaming and retry are fundamentally hard to compose. If a stream errors after token 5, retrying re-emits tokens 1-5 (duplicates) — or you buffer the whole stream first and lose progressive UX. There is no clean answer at the LLM provider boundary today.
+
+agentfootprint adopts **first-chunk arbitration** — the same pattern LangChain uses in `RunnableWithFallbacks`:
+
+- **Pre-first-chunk failures** (connection, headers, breaker-open): the full rule set fires. Retry, retry-other, fallback, fail-fast all available.
+- **Post-first-chunk failures** (mid-stream): rules can only fire `ok` or `fail-fast`. Rules wanting `retry`, `retry-other`, or `fallback` are escalated to fail-fast with kind `'mid-stream-not-retryable'`.
+
+Why: once tokens have been delivered to the consumer, neither retrying nor falling back is correct without coordination the LLM provider doesn't offer (no resume tokens, no idempotency for stream content). The honest behavior is to commit what was delivered, or fail-fast.
+
+The consumer keeps streaming on or off as their own choice. Reliability adapts.
+
+## Industry context
+
+Why this design? Because every adjacent framework has confronted the same tradeoff:
+
+| Framework / SDK                | Mid-stream retry | Pattern                                                          |
+|-------------------------------|------------------|------------------------------------------------------------------|
+| Anthropic SDK                 | No               | Skip retry on streams (silently — `#ended`/reject promise)        |
+| OpenAI SDK                    | No               | Skip retry on streams (explicit `isRetryableBody` guard)          |
+| LangChain `RunnableRetry`     | No               | Skip retry on streams (source comment: *"not very intuitive"*)    |
+| LangChain `RunnableWithFallbacks` | Pre-first-chunk only | First-chunk arbitration — pull one chunk, commit on first success |
+| LangGraph Pregel              | Yes (whole node)| Atomic node retry; `task.writes.clear()`; accepts duplicate tokens |
+| Strands                       | Yes (whole stream)| `while True` retry; visible duplicate tokens                      |
+| LlamaIndex                    | No               | Docs: *"set `streaming=False`" to get retry                       |
+| Llama Stack                   | Pre-first-token only | Client-SDK retry on HTTP errors                                   |
+
+agentfootprint sits with the most disciplined cohort (LangChain `RunnableWithFallbacks`, LangGraph's atomic boundary, the OpenAI/Anthropic SDKs): retry honestly when retry is correct, escalate to fail-fast otherwise. The consumer never sees duplicate tokens.
+
+## How it composes with the v2.10.x primitives
+
+v2.11.5's gate is *additive* — the v2.10.x reliability primitives still work and compose cleanly:
+
+| Primitive                        | Layer        | Use when                                                |
+|----------------------------------|--------------|---------------------------------------------------------|
+| **Reliability gate** (v2.11.5)   | per-call     | rules-based retry / fallback / fail-fast inside the loop |
+| `withCircuitBreaker(provider)`   | per-call     | low-level breaker around any LLMProvider                 |
+| `.outputFallback({...})`         | per-turn     | malformed JSON degradation (3-tier)                      |
+| `agent.resumeOnError(checkpoint)`| cross-process| mid-run failure recovery; resume on a different host     |
+
+The gate handles in-loop transient failures. `outputFallback` handles end-of-turn schema failure. `resumeOnError` handles process-level crash recovery. Compose all three for full coverage.
+
+## Future work
+
+- **Tee'd buffer mode** — internal buffer + atomic-deliver-on-success. Makes mid-stream retry safe at the cost of first-token latency. Opt-in config flag.
+- **Token idempotency keys** — moot until LLM providers expose them.
+- **Stage-level granularity** — every retry attempt as a separate stage in the trace (currently one stage execution, internal loop). Trades streaming compatibility for richer trace; available today via the `buildReliabilityGateChart` chart-builder for consumers composing raw `LLMCall + gate` patterns.
+
+## End-to-end example
+
+The single example below exercises happy / retry / fail-fast scenarios. The docs site live-imports the source so this snippet stays in sync with the runnable file.
+
+<CodeFile path="examples/features/09-reliability-gate.ts" title="examples/features/09-reliability-gate.ts" />
+
+## Reference
+
+- `Agent.create({...}).reliability(config)` — fluent builder method
+- `ReliabilityConfig` — the rule list shape (see [`agentfootprint/reliability` types](https://github.com/footprintjs/agentfootprint/blob/main/src/reliability/types.ts))
+- `ReliabilityFailFastError` — thrown at `agent.run()` on `fail-fast` decisions; carries `kind`, `reason`, `cause`, `payload`, `snapshot`
+- `CircuitBreaker` pure functions — exported from `agentfootprint/reliability` for consumers hydrating breaker state from a persistence store

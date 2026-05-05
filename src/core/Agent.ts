@@ -23,6 +23,8 @@ import {
   type RuntimeSnapshot,
 } from 'footprintjs';
 import type { CachePolicy, CacheStrategy } from '../cache/types.js';
+import type { ReliabilityConfig } from '../reliability/types.js';
+import { ReliabilityFailFastError } from '../reliability/types.js';
 import { cacheDecisionSubflow } from '../cache/CacheDecisionSubflow.js';
 import {
   cacheGateDecide,
@@ -207,6 +209,14 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    */
   private readonly externalToolProvider?: ToolProvider;
 
+  /**
+   * Optional rules-based reliability config (v2.11.5+). Set via the
+   * builder's `.reliability({...})`. When present, every CallLLM
+   * execution is wrapped in a retry/fallback/fail-fast loop driven
+   * by `preCheck` and `postDecide` rules. Consumed by `buildCallLLMStage`.
+   */
+  private readonly reliabilityConfig?: ReliabilityConfig;
+
   constructor(
     opts: AgentOptions,
     systemPromptValue: string,
@@ -224,6 +234,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     cachingDisabled = false,
     cacheStrategy?: CacheStrategy,
     outputFallbackCfg?: ResolvedOutputFallback<unknown>,
+    reliabilityConfig?: ReliabilityConfig,
   ) {
     super();
     this.provider = opts.provider;
@@ -256,6 +267,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     if (opts.pricingTable) this.pricingTable = opts.pricingTable;
     if (opts.costBudget !== undefined) this.costBudget = opts.costBudget;
     if (opts.permissionChecker) this.permissionChecker = opts.permissionChecker;
+    if (reliabilityConfig !== undefined) this.reliabilityConfig = reliabilityConfig;
     this.appName = voice.appName;
     this.commentaryTemplates = voice.commentaryTemplates;
     this.thinkingTemplates = voice.thinkingTemplates;
@@ -579,6 +591,42 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
   ): AgentOutput | RunnerPauseOutcome {
     const paused = this.detectPause(executor, result);
     if (paused) return paused;
+    // Reliability fail-fast translation (v2.11.5+) — when the
+    // reliability retry loop in callLLM hits a `fail-fast` decision,
+    // it writes scope.reliabilityFailKind + payload and calls $break.
+    // The chart stops; the executor returns the last finalContent
+    // (typically empty). At the API boundary we surface the typed
+    // error so consumers can `instanceof ReliabilityFailFastError`
+    // and branch on `.kind`.
+    if (this.reliabilityConfig !== undefined) {
+      const snap = executor.getSnapshot();
+      const state = snap.sharedState as {
+        reliabilityFailKind?: string;
+        reliabilityFailPayload?: import('../reliability/types.js').ReliabilityScope['failPayload'];
+        reliabilityFailCauseMessage?: string;
+        reliabilityFailCauseName?: string;
+        reliabilityFailReason?: string;
+      };
+      if (state.reliabilityFailKind !== undefined) {
+        // Reconstruct the cause Error from the captured message+name —
+        // see the matching note in reliabilityExecution.failFast about
+        // why we don't keep the original Error in scope.
+        let cause: Error | undefined;
+        if (state.reliabilityFailCauseMessage !== undefined) {
+          cause = new Error(state.reliabilityFailCauseMessage);
+          if (state.reliabilityFailCauseName !== undefined) {
+            cause.name = state.reliabilityFailCauseName;
+          }
+        }
+        throw new ReliabilityFailFastError({
+          kind: state.reliabilityFailKind,
+          reason: state.reliabilityFailReason ?? state.reliabilityFailKind,
+          ...(cause !== undefined && { cause }),
+          ...(state.reliabilityFailPayload !== undefined && { payload: state.reliabilityFailPayload }),
+          snapshot: snap,
+        });
+      }
+    }
     if (result instanceof Error) throw result;
     if (typeof result === 'string') return result;
     throw new Error('Agent: unexpected result shape — expected final-answer string');
@@ -671,6 +719,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       get toolSchemas() {
         return toolSchemasResolved;
       },
+      ...(this.reliabilityConfig !== undefined && { reliability: this.reliabilityConfig }),
     });
 
     // routeDecider extracted to ./agent/stages/route.ts (v2.11.2).

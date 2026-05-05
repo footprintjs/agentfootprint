@@ -154,6 +154,11 @@
       "import": "./dist/esm/security/index.js",
       "require": "./dist/security/index.js"
     },
+    "./reliability": {
+      "types": "./dist/types/reliability/index.d.ts",
+      "import": "./dist/esm/reliability/index.js",
+      "require": "./dist/reliability/index.js"
+    },
     "./locales": {
       "types": "./dist/types/locales/index.d.ts",
       "import": "./dist/esm/locales/index.js",

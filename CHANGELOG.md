@@ -5,6 +5,71 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.11.5]
+
+### Added — reliability gate wired into Agent
+
+The v2.11.1 reliability foundation (`CircuitBreaker`, `classifyError`, `ReliabilityConfig`, `ReliabilityFailFastError`, `buildReliabilityGateChart`) now has a consumer-facing surface inside `Agent`:
+
+```ts
+const agent = Agent.create({ provider, model: 'mock' })
+  .system('You triage support tickets.')
+  .reliability({
+    postDecide: [
+      { when: (s) => s.errorKind === '5xx-transient' && s.attempt < 3,
+        then: 'retry', kind: 'transient-retry' },
+      { when: (s) => s.error !== undefined,
+        then: 'fail-fast', kind: 'unrecoverable' },
+    ],
+    circuitBreaker: { failureThreshold: 3 },
+  })
+  .build();
+
+try {
+  await agent.run({ message: 'help' });
+} catch (e) {
+  if (e instanceof ReliabilityFailFastError) {
+    console.log(e.kind, e.reason, e.payload);
+  }
+}
+```
+
+#### Streaming + reliability semantics (first-chunk arbitration)
+
+Streaming and retry don't compose cleanly — a stream that errors after token 5 either replays duplicates or has to buffer the whole stream first (losing progressive UX). LLM providers don't expose resume tokens or per-stream idempotency, so the conflict can't be solved at the boundary today.
+
+agentfootprint adopts **first-chunk arbitration** (the same pattern LangChain uses in `RunnableWithFallbacks`):
+
+- **Pre-first-chunk failures** — full rule set fires (retry, retry-other, fallback, fail-fast).
+- **Post-first-chunk failures** — only `ok` and `fail-fast` are honored. Rules wanting retry/retry-other/fallback are escalated to fail-fast with `kind: 'mid-stream-not-retryable'`.
+
+The consumer keeps streaming on or off as their own choice; reliability adapts. See the [reliability gate guide](https://footprintjs.github.io/agentfootprint/guides/reliability-gate/) for the industry-pattern comparison and design rationale.
+
+#### Implementation
+
+- **`src/core/agent/stages/reliabilityExecution.ts`** (new) — JS retry-loop helper invoked by `callLLM` when reliability is configured. Pure function over the LLMCallFn callback; reuses `CircuitBreaker.ts` admit/recordSuccess/recordFailure pure functions; reuses `classifyError` for `errorKind` taxonomy. Closure-local state (attempt, providerIdx, breakerStates, attemptsPerProvider) — closure not scope, because this loop runs WITHIN one footprintjs stage execution.
+- **`src/core/agent/stages/callLLM.ts`** — refactored: extracted `singleProviderCall` so the SAME call function feeds both the unconfigured path (single-shot) and the reliability path (retry loop). Streaming chunk emission unchanged; added `onFirstChunk` hook for the arbitration boundary.
+- **`src/core/agent/AgentBuilder.ts`** — new `.reliability(config)` method (throws on double-call).
+- **`src/core/Agent.ts`** — new constructor parameter + private field; threaded through `buildCallLLMStage`. `finalizeResult` translates fail-fast scope state into typed `ReliabilityFailFastError` at the API boundary.
+- **`package.json`** — `./reliability` subpath added to exports map (alongside existing `./security`, `./locales` etc.).
+
+#### Tests + example
+
+- **`test/core/agent-reliability.test.ts`** (new) — 5 integration tests via the public surface: happy path, retry success, post-decide fail-fast, pre-check fail-fast, double-builder rejection.
+- **`examples/features/09-reliability-gate.ts`** (new) — three runnable scenarios (happy / retry / fail-fast) with `process.exit(1)` regression guards.
+- **`test/core/reliability-gate-example.test.ts`** (new) — integration test wrapping the example so docs-page consumers stay aligned.
+- Suite: **1806 / 1806 passing** (was 1805 before this release).
+
+#### Documentation
+
+- **`docs-site/src/content/docs/guides/reliability-gate.mdx`** (new) — design memo covering decision verbs, streaming semantics, industry comparison (Anthropic SDK / OpenAI SDK / LangChain `RunnableRetry` & `RunnableWithFallbacks` / LangGraph Pregel / Strands / LlamaIndex / Llama Stack), and composition with the v2.10.x reliability primitives.
+
+#### Why this design
+
+- **Loop-internal retry** (rather than chart-level loopTo subflow) preserves streaming, cost tracking, and the existing CallLLM event surface unchanged. Retry attempts are one stage execution; richer "every retry as a separate stage" tracing is available today via `buildReliabilityGateChart` for consumers composing raw `LLMCall + gate` patterns directly.
+- **Closure state, not scope state** — the retry loop runs inside one footprintjs stage execution. Putting attempt/breakerStates into scope would commit them across iterations of the agent's outer ReAct loop, which is not the intent.
+- **Reconstruct cause at the API boundary** — Error instances don't `structuredClone` cleanly through scope; we capture message+name as strings and rebuild the Error in `finalizeResult`. Consumers' `instanceof Error` checks still pass.
+
 ## [2.11.4]
 
 ### Fixed — actually fix non-null-assertion warnings in src (don't just disable)
