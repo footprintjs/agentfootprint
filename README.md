@@ -244,19 +244,12 @@ iter 3: 12 tools shown           iter 3: 5 tools
 Pick the flows that match your problem. Chain them. **That's your Agentic Application.**
 
 ```typescript
-const agent = Agent.create({ provider, model: 'claude-sonnet-4-5-20250929' })
-  .system('You are a support assistant.')
-  .steering(toneRule)            // always-on
-  .instruction(urgentRule)       // rule-gated
-  .skill(billingSkill)           // LLM-activated
-  .memory(conversationMemory)    // cross-run, multi-tenant
-  .tool(weather)
-  .build();
-
-await agent.run({ message: userInput, identity: { conversationId } });
+const research = Loop.create()
+  .repeat(Sequence.create().step('plan', plan).step('search', searchAll).build())
+  .until(s => s.satisfied).build();
 ```
 
-The hand-rolled equivalent is ~80 lines of slot management, trigger evaluation, memory loading, and cache marker placement. The declarative version stays at 8.
+Same `.create().method().build()` shape as the four rows above — just composed.
 
 ### Named patterns — also compositions of the same 4
 
