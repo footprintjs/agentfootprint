@@ -1,58 +1,100 @@
 ---
 title: vs other agent frameworks
-description: How agentfootprint compares to LangChain, LangGraph, CrewAI. Honest framing — strengths, gaps, when each is right.
+description: How agentfootprint sits relative to LangChain, LangGraph, CrewAI, AutoGen, Mastra, Genkit, Pydantic AI, DSPy, and Inngest AgentKit. We didn't have to choose between them.
 ---
 
-> Three competitors, three sentences each, then the depth below the fold. The right framework for your team depends on what you're optimizing for; this page is meant to make that decision easier, not harder.
+> The agent space has many credible primary abstractions. agentfootprint sits *above* the choice — built on footprintjs, which gives us every one of those abstractions out of the box, so we used the budget those abstractions would have cost us to invest deeply in **the injection loop** — the layer every other framework leaves to the developer.
 
-## In one sentence per competitor
+## The agent space — what each framework abstracts
+
+| Framework | What it abstracts |
+|---|---|
+| **LangChain** | Pipelines of composable components |
+| **LangGraph** | State machines of nodes and edges |
+| **CrewAI · AutoGen** | Crews of role-playing agents |
+| **Mastra · Genkit · Pydantic AI** | Typed full-stack bundles |
+| **DSPy** | Compiled prompts |
+| **Inngest AgentKit** | Durable workflows |
+
+We didn't have to choose between them. agentfootprint is built on **[footprintjs](https://github.com/footprintjs/footPrint)** — the flowchart pattern for backend code. footprintjs gives us every one of those abstractions out of the box:
+
+| Capability | What footprintjs hands us |
+|---|---|
+| Composition | `Sequence` · `Parallel` · `Conditional` · `Loop` |
+| State machines | The ReAct loop *is* a flowchart |
+| Multi-agent crews | Compose Agents through control flow — no special class needed |
+| Durable workflows | `pauseHere()` plus JSON-portable `resume()` |
+| Typed observation | 57+ events for free, because the framework owns the loop |
+
+So we used the budget those abstractions would have cost us to invest deeply in something they all leave to the developer: **the injection loop.**
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="/agentfootprint/assets/triggers-dark.svg">
+    <source media="(prefers-color-scheme: light)" srcset="/agentfootprint/assets/triggers-light.svg">
+    <img alt="Every LLM call has 3 fixed slots (system, messages, tools); every flavor lands in one slot under one of 4 fixed triggers. The grid is the entire context-engineering surface — the layer every other framework leaves to the developer." src="/agentfootprint/assets/triggers-light.svg" width="100%" />
+  </picture>
+</p>
+
+## In one sentence per framework
 
 - **vs LangChain** — agentfootprint has a 2-primitive + 4-composition substrate; LangChain ships a class-per-paper. If you're maintaining a "pile of LangChain abstractions" codebase and the abstractions feel like the problem, switch.
-- **vs LangGraph** — both treat agents as graphs; agentfootprint records every traversal as a typed event for free (because the framework owns the loop, not you). If you've found yourself instrumenting LangGraph manually, switch.
-- **vs CrewAI** — agentfootprint has no `Crew` / `Agent` / `Task` separate primitives; multi-agent IS composition of single agents through Sequence/Parallel/Conditional/Loop. If CrewAI's role / goal / backstory framing feels like ceremony, switch.
+- **vs LangGraph** — both treat agents as graphs; agentfootprint records every traversal as a typed event for free (because the framework owns the loop, not you) and adds `Injection = slot × trigger × cache` as a first-class layer. If you've found yourself instrumenting LangGraph manually or building per-node prompt assembly by hand, switch.
+- **vs CrewAI / AutoGen** — agentfootprint has no `Crew` / `Agent` / `Task` separate primitives; multi-agent IS composition of single agents through Sequence/Parallel/Conditional/Loop. If role/goal/backstory framing feels like ceremony, switch.
+- **vs Mastra / Genkit / Pydantic AI** — those are full-stack bundles (DB + auth + workflows + agents). agentfootprint is the agent layer only. Pick those if you need the bundle; pick agentfootprint if you have a stack and want the best context-engineering primitive.
+- **vs DSPy** — DSPy compiles prompts at training time; agentfootprint composes injections at inference time. Different problems. Use DSPy when you want the framework to optimize the prompt; use agentfootprint when you want to control which content lands where, when, and why.
+- **vs Inngest AgentKit** — Inngest is durable workflows with agent helpers; agentfootprint is agents with durable workflow primitives (`pauseHere`, `resume`). If you already run Inngest, keep it for queue/cron and call agentfootprint inside steps. If you don't, agentfootprint's pause/resume covers most of what you'd reach for.
 
-## Strengths agentfootprint claims
+## What agentfootprint claims
 
 | Claim | Where it shows |
 |---|---|
-| Every code block in our docs is a real, runnable file in CI | The Phase 1 CodeFile + region marker infrastructure (this site) |
-| The trace is a cache of the agent's thinking | [Causal memory](/agentfootprint/guides/memory/#causal-memory--replay-decisions-not-just-messages) |
+| Context engineering as a first-class runtime layer | [Why agentfootprint?](/agentfootprint/getting-started/why/#the-new-class-of-bug) — Injection primitive |
+| Every LLM call backtracks to *what / who / when / how* | [4 backtrack questions](/agentfootprint/getting-started/why/#the-four-backtrack-questions) |
+| Every code block in our docs is a real, runnable file in CI | The Phase 1 CodeFile + region marker infrastructure |
+| Causal memory — the trace is a cache of the agent's thinking | [Causal deep dive](/agentfootprint/causal-deep-dive/) |
 | Every named pattern is a recipe, not a class | [Patterns](/agentfootprint/getting-started/key-concepts/#patterns--named-compositions) |
-| Mocks-first dev → real-infra prod is one-line swap per boundary | [Quick Start](/agentfootprint/getting-started/quick-start/) |
+| Mocks-first dev → real-infra prod is a one-line swap per boundary | [Quick Start](/agentfootprint/getting-started/quick-start/) |
 | Multi-tenant isolation enforced at the storage boundary | [Memory guide](/agentfootprint/guides/memory/) |
+| Rules-based reliability gate around every LLM call | [Reliability gate](/agentfootprint/guides/reliability-gate/) (v2.11.5+) |
 
-## Strengths agentfootprint does NOT claim
+## What agentfootprint does NOT claim
 
-- We are not the only framework with multi-agent. CrewAI / LangGraph have it. Ours has a smaller surface; pick on taste.
+- We are not the only framework with multi-agent. CrewAI / LangGraph / AutoGen / Inngest all have it. Ours has a smaller surface; pick on taste.
 - We are not the only framework with memory. Most have some flavor. Ours is the only one with **Causal** type (decision-evidence persistence) — see [Memory guide](/agentfootprint/guides/memory/#the-four-types).
 - We are not the only framework with observability. Most ship spans / events. Ours is **typed** + **emitted during DFS traversal** so it's structured + complete by construction, not collected after the fact.
+- We are not the only framework with reliability primitives. LangGraph's Pregel does retry; LangChain's `with_retry`/`with_fallbacks` exist. Ours adds **first-chunk arbitration** (streaming-aware) and routes via declarative rules — see [Reliability gate](/agentfootprint/guides/reliability-gate/).
 
 ## When NOT to use agentfootprint
 
-- You need a vector-search-capable production memory store TODAY. v2.3 ships InMemoryStore + RedisStore (no vector) + AgentCoreStore (no vector). v2.6 lands pgvector / Pinecone / Qdrant adapters.
-- You need full multi-modal (images, video) in messages. Our `LLMMessage.content` is `string` today.
-- You're already happy with your current framework's abstractions and your team is shipping. Don't switch on hype.
+- **You need vector search in your memory store today.** Ships InMemory + Redis + AgentCore. Vector-search adapters (pgvector / Pinecone / Qdrant) are roadmap items tracked in GitHub.
+- **You need full multi-modal (images, video) in messages.** `LLMMessage.content` is `string` today.
+- **You're already happy with your current framework's abstractions and your team is shipping.** Don't switch on hype.
+- **You want a managed runtime / dashboard.** We're a library, not a platform. Bring your own Lambda / container / cron.
 
-## Migration from other frameworks
+## Migration
 
-- **From LangChain (v0.0.x → v0.3+ era)** — most LangChain agent code maps to `Agent.create({ provider }).tool(...).build()`. Tools are `defineTool({ name, description, inputSchema, execute })`. Memory becomes `defineMemory({ type, strategy, store })`. Migration path tracked in `MIGRATION.md` (in repo).
-- **From LangGraph** — `StateGraph` nodes → `Sequence` steps; conditional edges → `Conditional`; the rest of the wiring evaporates. Compositions are typed; no `START` / `END` constants needed.
-- **From CrewAI** — `Crew` of agents with tasks → `Sequence(researcher, writer, editor)` etc. Roles + goals → system prompts. Tools work the same way.
+- **From LangChain (v0.0.x → v0.3+ era)** — most LangChain agent code maps to `Agent.create({ provider }).tool(...).build()`. Tools are `defineTool({ name, description, inputSchema, execute })`. Memory becomes `defineMemory({ type, strategy, store })`.
+- **From LangGraph** — `StateGraph` nodes → `Sequence` steps; conditional edges → `Conditional`; the rest of the wiring evaporates. Compositions are typed; no `START` / `END` constants needed. Per-node `with_retry` decorators map to `.reliability({...})` rules at the agent level.
+- **From CrewAI / AutoGen** — `Crew` of agents with tasks → `Sequence(researcher, writer, editor)`. Roles + goals → system prompts (or Steering injections). Tools work the same way; no `Task` class.
+- **From DSPy** — your DSPy-compiled prompt is a Steering injection in agentfootprint (`always` trigger, `system` slot). DSPy still does the optimizing offline; agentfootprint does the runtime composition.
 
-## Honest comparison table
-
-(Limited to 5 rows per coworker-review feedback — fewer is more readable.)
+## Honest comparison
 
 | Concern | LangChain | LangGraph | CrewAI | agentfootprint |
 |---|---|---|---|---|
 | Surface area | Large; class-per-paper | Mid; graph-DSL | Mid; role-based | Small; 2 primitives + 4 compositions |
-| Observability | Manual instrumentation | Spans (LangSmith) | Spans (own service) | Typed events emitted during traversal |
+| Context engineering as 1st-class | Manual prompt construction | Per-node prompt assembly | Role/goal/backstory text | **Injection = slot × trigger × cache** |
+| Per-iteration recomposition | Static prompts | Static per-node | Static | **Dynamic ReAct** — slots recompose every iteration |
+| Observability | Manual instrumentation | Spans (LangSmith) | Spans (own service) | Typed events emitted during traversal (57+) |
 | Cross-run "why?" replay | Not built in | Not built in | Not built in | **Causal memory** (decision-evidence persistence) |
-| Test story | Mocks possible but not first-class | Mocks possible but not first-class | Limited | Mocks-first by design — `mock({replies})`, `mockMcpClient`, `InMemoryStore` |
+| Test story | Mocks possible | Mocks possible | Limited | **Mocks-first** by design — `mock({replies})`, `mockMcpClient`, `InMemoryStore` |
 | Multi-tenant isolation | Caller responsibility | Caller responsibility | Caller responsibility | Enforced at every store boundary via `MemoryIdentity` |
+| Reliability semantics | `with_retry` on stream skips retry | Pregel atomic-node retry (duplicate tokens) | Bring-your-own | **First-chunk arbitration** + rule-driven retry/fallback/fail-fast |
 
 ## Next steps
 
 - [Quick Start](/agentfootprint/getting-started/quick-start/) — first agent in 5 minutes
-- [Why agentfootprint?](/agentfootprint/getting-started/why/) — the substrate argument with worked examples
-- [Memory guide § Causal](/agentfootprint/guides/memory/#causal-memory--replay-decisions-not-just-messages) — the differentiator
+- [Why agentfootprint?](/agentfootprint/getting-started/why/) — the bug-class argument with worked examples
+- [Key Concepts](/agentfootprint/getting-started/key-concepts/) — the 5-layer taxonomy
+- [Causal memory deep dive](/agentfootprint/causal-deep-dive/) — the differentiator
