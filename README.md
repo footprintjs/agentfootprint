@@ -7,11 +7,11 @@
   </picture>
 </p>
 
-<h1 align="center">agentfootprint</h1>
+<h1 align="center">Agentfootprint</h1>
 
 <p align="center">
   <strong>We abstract context engineering — and hand back the trace.</strong><br/>
-  <em>Live to develop · offline to monitor · detailed to improve.</em>
+  <strong>Live</strong> to develop · <strong>offline</strong> to monitor · <strong>detailed</strong> to improve.
 </p>
 
 <p align="center">
