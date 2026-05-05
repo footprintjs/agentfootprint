@@ -247,13 +247,11 @@ const reflexion = Loop.create()
 
 **Same five stages on both sides. Only one thing differs — where the loop returns.** Classic ReAct loops back to `CallLLM` and slots stay frozen. Dynamic ReAct (agentfootprint) loops back to `SystemPrompt`, so injections that fired on the previous tool result recompose the next prompt. Per-iteration recomposition is also the structural prerequisite for the cache layer.
 
-```text
-Classic ReAct                    Dynamic ReAct
-───────────────                  ─────────────
-iter 1: 12 tools shown           iter 1: 1 tool  (read_skill)
-iter 2: 12 tools shown           iter 2: 5 tools (skill activated)
-iter 3: 12 tools shown           iter 3: 5 tools
-```
+| Iteration | Classic ReAct | Dynamic ReAct (agentfootprint) |
+|---|---|---|
+| 1 | 12 tools shown | **1 tool** (`read_skill`) |
+| 2 | 12 tools shown | **5 tools** (skill activated) |
+| 3 | 12 tools shown | 5 tools |
 
 > 📖 [Dynamic ReAct guide](https://footprintjs.github.io/agentfootprint/guides/dynamic-react/) · [Key concepts](https://footprintjs.github.io/agentfootprint/getting-started/key-concepts/)
 
