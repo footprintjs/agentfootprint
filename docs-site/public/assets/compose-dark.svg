@@ -1,0 +1,127 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 380" role="img"
+     aria-label="agentfootprint compose-your-own — A custom research agent built from the same 4 control flows: input flows into a Conditional gate (plan more research?), which fans out to a Parallel block (search_web, search_docs, search_kb), then chains into a Sequence (synthesize → critique), and a Loop arrow returns from the end back to the Conditional gate so the agent iterates until satisfied. All control-flow edges in yellow; Agent nodes in violet. Formula: Loop( Conditional(plan?) → Parallel(search_web, search_docs, search_kb) → Sequence(synth → critique) ).">
+
+  <defs>
+    <style>
+      .flow { stroke-dasharray: 0.5 8; stroke-linecap: round; animation: cmp-mv 1.4s linear infinite; fill: none; }
+      @keyframes cmp-mv { from { stroke-dashoffset: 0 } to { stroke-dashoffset: -24 } }
+
+      .pulse  { animation: cmp-p 2.8s ease-in-out infinite; transform-origin: center; transform-box: fill-box; }
+      .pulse2 { animation: cmp-p 2.8s ease-in-out infinite; animation-delay: 0.4s; transform-origin: center; transform-box: fill-box; }
+      .pulse3 { animation: cmp-p 2.8s ease-in-out infinite; animation-delay: 0.8s; transform-origin: center; transform-box: fill-box; }
+      @keyframes cmp-p { 0%,100% { opacity: 1 } 50% { opacity: 0.62 } }
+
+      .h1     { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif; font-size: 26px; font-weight: 800; fill: #E5E7EB; }
+      .h1Acc  { fill: #FCD34D; }
+      .sub    { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif; font-size: 14px; fill: #9CA3AF; }
+
+      .stageL { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 11px; letter-spacing: 0.18em; font-weight: 800; fill: #FCD34D; }
+      .nodeT  { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif; font-size: 11px; font-weight: 800; fill: #C4B5FD; }
+      .nodeS  { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 9px; fill: #9CA3AF; }
+      .ioL    { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 10px; fill: #6B7280; }
+      .formula { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 13px; fill: #9CA3AF; }
+      .tag    { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif; font-size: 14px; }
+    </style>
+  </defs>
+
+  <!-- ─────────────── HEADLINE ─────────────── -->
+  <g class="h1" text-anchor="middle">
+    <text x="700" y="42">Compose what your <tspan class="h1Acc">problem</tspan> needs.</text>
+  </g>
+  <text class="sub" x="700" y="68" text-anchor="middle">
+    Same 4 letters · your word · example: a research agent
+  </text>
+
+  <!-- ════════════════════════════════════════════════════════════
+       LOOP ARROW (top arc, from after Sequence back to before Conditional)
+       Drawn first so the diagram nodes overlay it.
+       Loop start: x=1130, y=170  →  arc up to y=100  →  back to x=130
+       ════════════════════════════════════════════════════════════ -->
+  <g>
+    <path class="flow" d="M 966 188 C 966 110, 588 110, 210 110 L 210 174" stroke="#FCD34D" stroke-width="2.4" fill="none"/>
+    <polygon points="206,170 214,170 210,180" fill="#FCD34D"/>
+    <text x="588" y="92" text-anchor="middle" class="stageL" fill="#FCD34D">LOOP — iterate until satisfied</text>
+  </g>
+
+  <!-- ════════════════════════════════════════════════════════════
+       MAIN DIAGRAM (y center = 200)
+       ════════════════════════════════════════════════════════════ -->
+
+  <!-- input dot + label -->
+  <text x="60" y="180" text-anchor="middle" class="ioL">user query</text>
+  <circle cx="60" cy="200" r="5" fill="#9CA3AF"/>
+  <line x1="66" y1="200" x2="170" y2="200" stroke="#FCD34D" stroke-width="2.4" stroke-linecap="round"/>
+
+  <!-- ─── CONDITIONAL diamond ─── -->
+  <g class="pulse" transform="translate(170,200)">
+    <polygon points="40,-22 80,0 40,22 0,0" fill="rgba(252,211,77,0.10)" stroke="#FCD34D" stroke-width="1.8" stroke-linejoin="round"/>
+    <text x="40" y="-2" text-anchor="middle" class="nodeT" fill="#FCD34D">plan?</text>
+    <text x="40" y="12" text-anchor="middle" class="nodeS">more research</text>
+  </g>
+
+  <!-- arrow Conditional → Parallel fan-out -->
+  <line x1="252" y1="200" x2="290" y2="200" stroke="#FCD34D" stroke-width="2.4" stroke-linecap="round"/>
+
+  <!-- ─── PARALLEL block (3 stacked agents) ─── -->
+  <g transform="translate(290,200)">
+    <!-- fan-out yellow lines -->
+    <line x1="0" y1="0" x2="40" y2="-50" stroke="#FCD34D" stroke-width="2" stroke-linecap="round"/>
+    <line x1="0" y1="0" x2="40" y2="0"   stroke="#FCD34D" stroke-width="2" stroke-linecap="round"/>
+    <line x1="0" y1="0" x2="40" y2="50"  stroke="#FCD34D" stroke-width="2" stroke-linecap="round"/>
+
+    <!-- 3 agents -->
+    <g transform="translate(40,-66)"><rect width="124" height="32" rx="8" fill="rgba(196,181,253,0.16)" stroke="rgba(196,181,253,0.50)" stroke-width="0.8"/><text x="62" y="14" text-anchor="middle" class="nodeT">Agent</text><text x="62" y="26" text-anchor="middle" class="nodeS">search_web</text></g>
+    <g transform="translate(40,-16)"><rect width="124" height="32" rx="8" fill="rgba(196,181,253,0.16)" stroke="rgba(196,181,253,0.50)" stroke-width="0.8"/><text x="62" y="14" text-anchor="middle" class="nodeT">Agent</text><text x="62" y="26" text-anchor="middle" class="nodeS">search_docs</text></g>
+    <g transform="translate(40,34)"><rect width="124" height="32" rx="8" fill="rgba(196,181,253,0.16)" stroke="rgba(196,181,253,0.50)" stroke-width="0.8"/><text x="62" y="14" text-anchor="middle" class="nodeT">Agent</text><text x="62" y="26" text-anchor="middle" class="nodeS">search_kb</text></g>
+
+    <!-- fan-in -->
+    <line x1="164" y1="-50" x2="208" y2="0" stroke="#FCD34D" stroke-width="2" stroke-linecap="round"/>
+    <line x1="164" y1="0"   x2="208" y2="0" stroke="#FCD34D" stroke-width="2" stroke-linecap="round"/>
+    <line x1="164" y1="50"  x2="208" y2="0" stroke="#FCD34D" stroke-width="2" stroke-linecap="round"/>
+  </g>
+
+  <!-- arrow Parallel → Sequence -->
+  <line x1="498" y1="200" x2="548" y2="200" stroke="#FCD34D" stroke-width="2.4" stroke-linecap="round"/>
+  <polygon points="544,196 550,200 544,204" fill="#FCD34D"/>
+
+  <!-- ─── SEQUENCE chain (3 agents) ─── -->
+  <g class="pulse2" transform="translate(550,184)">
+    <rect width="116" height="32" rx="8" fill="rgba(196,181,253,0.16)" stroke="rgba(196,181,253,0.50)" stroke-width="0.8"/>
+    <text x="58" y="14" text-anchor="middle" class="nodeT">Agent</text>
+    <text x="58" y="26" text-anchor="middle" class="nodeS">synthesize</text>
+  </g>
+
+  <line x1="666" y1="200" x2="716" y2="200" stroke="#FCD34D" stroke-width="2.4" stroke-linecap="round"/>
+  <polygon points="712,196 718,200 712,204" fill="#FCD34D"/>
+
+  <g class="pulse3" transform="translate(718,184)">
+    <rect width="116" height="32" rx="8" fill="rgba(196,181,253,0.16)" stroke="rgba(196,181,253,0.50)" stroke-width="0.8"/>
+    <text x="58" y="14" text-anchor="middle" class="nodeT">Agent</text>
+    <text x="58" y="26" text-anchor="middle" class="nodeS">critique</text>
+  </g>
+
+  <line x1="834" y1="200" x2="956" y2="200" stroke="#FCD34D" stroke-width="2.4" stroke-linecap="round"/>
+  <polygon points="954,196 960,200 954,204" fill="#FCD34D"/>
+
+  <!-- output dot + label -->
+  <circle cx="966" cy="200" r="5" fill="#9CA3AF"/>
+  <text x="966" y="180" text-anchor="middle" class="ioL">final answer</text>
+
+  <!-- ════════ Stage labels under the diagram ════════ -->
+  <g transform="translate(0,275)">
+    <text x="210" y="0" text-anchor="middle" class="stageL">CONDITIONAL</text>
+    <text x="394" y="0" text-anchor="middle" class="stageL">PARALLEL</text>
+    <text x="785" y="0" text-anchor="middle" class="stageL">SEQUENCE</text>
+  </g>
+
+  <!-- ════════ Formula ════════ -->
+  <text x="700" y="320" text-anchor="middle" class="formula">
+    <tspan fill="#FCD34D" font-weight="700">Loop</tspan>(  <tspan fill="#FCD34D" font-weight="700">Conditional</tspan>(plan?) → <tspan fill="#FCD34D" font-weight="700">Parallel</tspan>(search_web, search_docs, search_kb) → <tspan fill="#FCD34D" font-weight="700">Sequence</tspan>(synth → critique)  )
+  </text>
+
+  <!-- ════════ Tagline ════════ -->
+  <g class="tag" transform="translate(700,355)" text-anchor="middle">
+    <text fill="#9CA3AF">Pick the flows that match your problem. Chain them. <tspan fill="#E5E7EB" font-weight="700">That's your Agentic Application.</tspan></text>
+  </g>
+
+</svg>

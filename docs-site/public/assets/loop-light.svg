@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 140" role="img"
+     aria-label="Loop control flow — A → B with loop arrow returning back to A.">
+  <defs>
+    <style>
+      .pulse  { animation: cf-p 2.4s ease-in-out infinite; transform-origin: center; transform-box: fill-box; }
+      @keyframes cf-p { 0%,100% { opacity: 1 } 50% { opacity: 0.65 } }
+      .name { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 14px; letter-spacing: 0.18em; font-weight: 800; fill: #B45309; }
+      .desc { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif; font-size: 11px; fill: #6B7280; }
+    </style>
+  </defs>
+  <g class="pulse" transform="translate(20,0)">
+    <rect width="320" height="140" rx="14" fill="rgba(180,83,9,0.05)" stroke="rgba(180,83,9,0.32)" stroke-width="0.8"/>
+    <g transform="translate(130,42)">
+      <circle cx="0" cy="0" r="6" fill="rgba(124,58,237,0.20)" stroke="rgba(124,58,237,0.55)" stroke-width="0.8"/>
+      <line x1="6" y1="0" x2="46" y2="0" stroke="#B45309" stroke-width="2" stroke-linecap="round"/>
+      <polygon points="44,-3 50,0 44,3" fill="#B45309"/>
+      <circle cx="58" cy="0" r="6" fill="rgba(124,58,237,0.20)" stroke="rgba(124,58,237,0.55)" stroke-width="0.8"/>
+      <path d="M 58 8 C 58 32, 0 32, 0 8" stroke="#B45309" stroke-width="2" fill="none" stroke-linecap="round"/>
+      <polygon points="2,10 -3,5 -3,15" fill="#B45309"/>
+    </g>
+    <text x="160" y="100" text-anchor="middle" class="name">LOOP</text>
+    <text x="160" y="120" text-anchor="middle" class="desc">cycle back · iterate / converge</text>
+  </g>
+</svg>

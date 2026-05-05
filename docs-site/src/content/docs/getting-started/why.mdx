@@ -1,17 +1,56 @@
 ---
 title: Why agentfootprint?
-description: What makes agentfootprint different from other agent frameworks.
+description: Agents introduce a class of bug debuggers can't see — contextual errors. agentfootprint is the framework that makes them visible by owning the injection loop and handing back the trace.
 ---
 
 import CodeFile from '@/components/CodeFile.astro';
 
 > Your support agent told a customer their refund was processed. Six weeks later they come back and ask *"why did you tell me my refund was processed when it wasn't?"* You go to look. The agent is gone. Logs are scattered across three services. The decision evidence is not there. **This is the gap agentfootprint exists to close.**
 
-## The problem
+## The new class of bug
 
-Most agent frameworks give you execution. You get an answer, but you can't *explain how the agent got there*. Logs are disconnected. Traces are spans without meaning. When the LLM hallucinates, you find out from your users.
+For fifty years, software bugs have been **logic errors**. A wrong condition, a missed edge case, an off-by-one. You step through the code with a debugger until you find the bad branch.
 
-## Connected evidence
+LLM-powered apps add a second class: **contextual errors.** The code is correct. The model is correct. The answer is wrong because the LLM's decision rests on context that was ambiguous, missing, or invalidated at the moment of inference.
+
+Tracking *which content the model actually saw, and why,* is the entire debugging job. Without it, the failure mode is invisible:
+
+| What got injected wrong | What the model did |
+|---|---|
+| Wrong instruction landed in the `system` slot | Followed the wrong rule |
+| Predicate fired one iteration too early | Reasoned with stale assumptions |
+| Skill body missing when LLM called `read_skill` | Invented its own |
+| Cache prefix invalidated mid-iteration | Saw a silently rewritten stale version |
+| Tool returned but `on-tool-return` injection didn't fire | Couldn't interpret the result |
+
+:::caution[The model doesn't tell you which of these went wrong]
+It just gives you the wrong answer. You can't step through it with a debugger. By the time you read the response, the context that produced it is gone — *unless something recorded it*.
+:::
+
+A framework that owns the control flow can debug logic errors. A framework that owns the **injection** can debug contextual errors — because every injection is a typed event with a where, when, why, and how-it-cached.
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="/agentfootprint/assets/triggers-dark.svg">
+    <source media="(prefers-color-scheme: light)" srcset="/agentfootprint/assets/triggers-light.svg">
+    <img alt="Every LLM call has 3 fixed slots (system, messages, tools); every flavor lands in one slot under one of 4 fixed triggers. The grid is the entire context-engineering surface." src="/agentfootprint/assets/triggers-light.svg" width="100%" />
+  </picture>
+</p>
+
+## The four backtrack questions
+
+Every agentfootprint LLM call backtracks to four typed answers — and they're the answers the wrong-answer customer is asking, ten weeks late:
+
+| Question | What the trace tells you |
+|---|---|
+| **What** was injected? | Every flavor of content the LLM saw on this iteration (Skill bodies, RAG passages, Steering rules, tool schemas). |
+| **Who** triggered it? | Which rule fired (`always` / `rule` predicate / `on-tool-return` / `llm-activated` `read_skill`). |
+| **When** it fired? | Which iteration of the ReAct loop, after which event (which tool returned, which skill activated). |
+| **How** it landed? | Which slot (`system` / `messages` / `tools`), what position, what cache strategy, whether it was actually applied or skipped. |
+
+These aren't logged alongside the call. They're the **structural output** of the call — produced by the framework owning the runtime loop.
+
+## Connected evidence — built declaratively
 
 agentfootprint gives you **connected evidence** — grounded, auditable, LLM-readable. Every iteration of the ReAct loop, every tool call with its args + result, every context injection, every decision branch is captured as a typed event during one DFS traversal — no instrumentation, no post-processing.
 
@@ -19,11 +58,53 @@ The agent + tool registration is built declaratively. The framework owns the loo
 
 <CodeFile path="examples/core/02-agent-with-tools.ts" region="build" title="examples/core/02-agent-with-tools.ts (region: build)" />
 
-And because the framework owns the loop, observability is just attaching listeners — no SDK, no agent.observe wrapper, no separate tracing pipeline:
+Observability is just attaching listeners — no SDK, no `agent.observe` wrapper, no separate tracing pipeline:
 
 <CodeFile path="examples/core/02-agent-with-tools.ts" region="observe" title="examples/core/02-agent-with-tools.ts (region: observe)" />
 
-Every event is typed. Every payload is what you'd want — `toolName` + `args` on tool_start, `result` on tool_end, `iterationCount` + token totals on turn_end. No string-parsing logs. No "I think this means the tool was called."
+Every event is typed. Every payload is what you'd want — `toolName` + `args` on `tool_start`, `result` on `tool_end`, `iterationCount` + token totals on `turn_end`. No string-parsing logs. No "I think this means the tool was called."
+
+## Three workflows from one trace
+
+The same trace serves three workflows:
+
+| Mode | What you do | What the trace gives you |
+|---|---|---|
+| **Live** | Debug as you build | Exactly which injection produced which token; which predicate fired this iteration; which prefix actually got cached |
+| **Offline** | Monitor what shipped | Replay any past run from its trace. Alert on drift. Attribute cost per injection. |
+| **Detailed** | Improve via export | Every successful trajectory is labeled training data for SFT, DPO, or process-RL — no separate data-collection phase |
+
+And a fourth, novel: **the agent can read its own trace.** Six months after the agent rejected loan #42, *"why did you reject it?"* answers from the recorded evidence (`creditScore=580`, `threshold=600`), not a rerun. Causal memory turns the trace into the agent's working memory.
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="/agentfootprint/assets/causal-memory-dark.svg">
+    <source media="(prefers-color-scheme: light)" srcset="/agentfootprint/assets/causal-memory-light.svg">
+    <img alt="One agent run produces a JSON-portable causal trace. Three downstream consumers fan out: audit replay, cheap-model triage, training data export." src="/agentfootprint/assets/causal-memory-light.svg" width="100%" />
+  </picture>
+</p>
+
+## Dynamic ReAct — context recomposes every iteration
+
+The corollary that makes "context engineering" worth the name. Other frameworks assemble the prompt once per turn; agentfootprint re-runs every Injection trigger every iteration. Tool schemas, system prompts, skill bodies, memory recall — all recompute against the freshest state.
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="/agentfootprint/assets/dynamic-vs-classic-dark.svg">
+    <source media="(prefers-color-scheme: light)" srcset="/agentfootprint/assets/dynamic-vs-classic-light.svg">
+    <img alt="Classic ReAct loops back to CallLLM (slots frozen). Dynamic ReAct loops back to SystemPrompt (slots recompose every iteration)." src="/agentfootprint/assets/dynamic-vs-classic-light.svg" width="100%" />
+  </picture>
+</p>
+
+| Iteration | Classic ReAct | Dynamic ReAct (agentfootprint) |
+|---|---|---|
+| 1 | 12 tools shown | **1 tool** (`read_skill`) |
+| 2 | 12 tools shown | **5 tools** (skill activated) |
+| 3 | 12 tools shown | 5 tools |
+
+Per-iteration recomposition is also the structural prerequisite for the cache layer — cache markers can't track active injections in lockstep without it.
+
+> 📖 [Dynamic ReAct guide](/agentfootprint/guides/dynamic-react/) for the full taxonomy of what this unlocks (tool-by-tool steering, adaptive tool exposure, cost guardrails, iterative format refinement, failure adaptation).
 
 ## $0 test runs — scripted ReAct
 
@@ -43,24 +124,13 @@ That's Reflexion (Shinn 2023), expressed as `Sequence(Agent, critique-LLM, Agent
 
 ## Built on footprintjs
 
-agentfootprint is built on [footprintjs](https://footprintjs.github.io/footPrint/) — a flowchart-pattern execution engine for backend code. You don't need to learn footprintjs to use agentfootprint; it's a substrate that does the bookkeeping.
+agentfootprint is the agent layer. [footprintjs](https://footprintjs.github.io/footPrint/) is the substrate — the flowchart-pattern execution engine that makes our typed-event stream + replayable traces automatic. footprintjs gives us composition primitives, state-machine semantics, durable workflow checkpoints, and 57+ typed events out of the box; we used the budget those abstractions would have cost us to invest deeply in **the injection loop** — the layer every other framework leaves to the developer.
 
-**What footprintjs provides (you get for free):**
-- The execution engine that runs the agent loop as a flowchart
-- The narrative recorder system that captures what happened during execution
-- Time-travel checkpoints + cross-server replay
-- The flowchart visualization in the [agent playground](https://footprintjs.github.io/agent-playground/)
-
-**What agentfootprint adds on top:**
-- The 5-layer taxonomy: 2 primitives (LLM, Agent), 4 compositions (Sequence, Parallel, Conditional, Loop), named patterns as recipes, context-engineering Injection primitive, infrastructure features
-- LLM provider adapters (Anthropic, OpenAI, Bedrock, Ollama)
-- The `Injection` primitive (Skill / Steering / Instruction / Fact / Memory / RAG)
-- Memory subsystem (4 types × 7 strategies, including Causal — decision-evidence replay)
-- MCP integration, resilience decorators, mocks-first development surface
-
-The same way `autograd`'s forward-pass traversal is what makes gradient inspection automatic, footprintjs's flowchart traversal is what makes agentfootprint's typed-event stream and replayable traces automatic. The framework owns the loop — that's why it can show you everything inside it.
+You don't need to learn footprintjs to use agentfootprint — but if you want to build your own primitives at this depth, [start there](https://footprintjs.github.io/footPrint/).
 
 ## Next steps
 
 - [Quick Start](/agentfootprint/getting-started/quick-start/) — build your first agent
 - [Key Concepts](/agentfootprint/getting-started/key-concepts/) — the 5-layer taxonomy
+- [Reliability gate](/agentfootprint/guides/reliability-gate/) — rules-based retry / fallback / fail-fast around every LLM call
+- [Causal memory deep dive](/agentfootprint/causal-deep-dive/) — how the trace becomes the agent's working memory

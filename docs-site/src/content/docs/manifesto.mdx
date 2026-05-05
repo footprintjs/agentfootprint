@@ -1,13 +1,94 @@
 ---
 title: How agentfootprint thinks
-description: A manifesto in first person — the design choices, the rejections, the things we will not build. The framework's perspective on what context engineering actually requires.
+description: A manifesto in first person — why agentfootprint exists, what it abstracts, what it refuses to be, and the discipline that comes with adopting it.
 ---
 
 > A framework's first job is to **decide what it won't be**. agentfootprint is a substrate for context engineering — not an LLM SDK, not an agent platform, not a workflow orchestrator. This page is the perspective behind those rejections.
 
+## Why we exist — agents have a new class of bug
+
+For fifty years, software bugs have been **logic errors**. A wrong condition, a missed edge case, an off-by-one. You step through the code with a debugger until you find the bad branch.
+
+LLM-powered apps add a second class of bug: **contextual errors.** The code is correct. The model is correct. The answer is wrong because the LLM's decision rests on context that was ambiguous, missing, or invalidated at the moment of inference.
+
+Tracking *which content the model actually saw, and why,* is the entire debugging job. Without it, the failure mode is invisible:
+
+| What got injected wrong | What the model did |
+|---|---|
+| Wrong instruction landed in the `system` slot | Followed the wrong rule |
+| Predicate fired one iteration too early | Reasoned with stale assumptions |
+| Skill body missing when LLM called `read_skill` | Invented its own |
+| Cache prefix invalidated mid-iteration | Saw a silently rewritten stale version |
+| Tool returned but `on-tool-return` injection didn't fire | Couldn't interpret the result |
+
+:::caution[The model doesn't tell you which of these went wrong]
+It just gives you the wrong answer. You can't step through it with a debugger. By the time you read the response, the context that produced it is gone — *unless something recorded it*.
+:::
+
+That's the gap agentfootprint exists to close. **A framework that owns the control flow can debug logic errors. A framework that owns the *injection* can debug contextual errors** — because every injection is a typed event with a where, when, why, and how-it-cached.
+
 ## What we are
 
-We are an abstraction over **context engineering** — the discipline of deciding what content lands in which slot of an LLM call, when, and why. Just as PyTorch's autograd abstracts gradient computation, just as Express abstracts the HTTP request loop, just as React abstracts the DOM, agentfootprint abstracts the slot-management bookkeeping that practitioners were doing by hand. You describe injections declaratively. The framework evaluates every trigger every iteration, composes the `system` / `messages` / `tools` slots, observes every decision as a typed event, and persists checkpoints you can replay six months later.
+We are an abstraction over **context engineering** — the discipline of deciding what content lands in which slot of an LLM call, when, and why. Every LLM call has three slots: `system`, `messages`, `tools`. Every agent feature — Skills, Steering, Guardrails, RAG, Tool APIs, Memory — is content flowing into one of those slots, decided by some rule, at some moment in the iteration loop. agentfootprint models all of them as **one primitive**:
+
+```text
+Injection = slot × trigger × cache
+```
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="/agentfootprint/assets/triggers-dark.svg">
+    <source media="(prefers-color-scheme: light)" srcset="/agentfootprint/assets/triggers-light.svg">
+    <img alt="Every LLM call has 3 fixed slots (system, messages, tools); every flavor lands in one slot under one of 4 fixed triggers (always, rule, on-tool-return, llm-activated)." src="/agentfootprint/assets/triggers-light.svg" width="100%" />
+  </picture>
+</p>
+
+Three slots are fixed by the LLM API surface. Four triggers are fixed by *when* the framework can fire (`always` at build time, `rule` on a predicate, `on-tool-return` after a tool result, `llm-activated` when the LLM calls `read_skill`). Cache strategy is per-injection. Every flavor — present and future — fits this grid.
+
+You describe injections declaratively. The framework evaluates every trigger every iteration, composes the slots, observes every decision as a typed event, and persists checkpoints you can replay six months later.
+
+## What that buys you
+
+Because we own the injection, every LLM call backtracks to four typed answers:
+
+- **What** was injected (which flavor, which content)
+- **Who** triggered it (which rule fired)
+- **When** it fired (which iteration, after which event)
+- **How** it landed (which slot, with what cache strategy)
+
+Same trace, three workflows:
+
+| Mode | What you do | What the trace gives you |
+|---|---|---|
+| **Live** | Debug as you build | Exactly which injection produced which token; which predicate fired this iteration; which prefix actually got cached |
+| **Offline** | Monitor what shipped | Replay any past run from its trace. Alert on drift. Attribute cost per injection. |
+| **Detailed** | Improve via export | Every successful trajectory is labeled training data for SFT, DPO, or process-RL — no separate data-collection phase |
+
+And a fourth, novel: **the agent can read its own trace.** Six months after the agent rejected loan #42, *"why did you reject it?"* answers from the recorded evidence (`creditScore=580`, `threshold=600`), not a rerun. Causal memory turns the trace into the agent's working memory.
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="/agentfootprint/assets/causal-memory-dark.svg">
+    <source media="(prefers-color-scheme: light)" srcset="/agentfootprint/assets/causal-memory-light.svg">
+    <img alt="One agent run produces a JSON-portable causal trace. Three downstream consumers fan out: audit replay, cheap-model triage, training data export." src="/agentfootprint/assets/causal-memory-light.svg" width="100%" />
+  </picture>
+</p>
+
+## What footprintjs gives us for free
+
+The agent space has many credible primary abstractions — pipelines (LangChain), graphs (LangGraph), crews (CrewAI · AutoGen), typed bundles (Mastra · Genkit · Pydantic AI), compiled prompts (DSPy), durable workflows (Inngest AgentKit). We didn't have to choose between them.
+
+agentfootprint is built on **[footprintjs](https://github.com/footprintjs/footPrint)** — the flowchart pattern for backend code. footprintjs gives us every one of those abstractions out of the box:
+
+| Capability | What footprintjs hands us |
+|---|---|
+| Composition | `Sequence` · `Parallel` · `Conditional` · `Loop` |
+| State machines | The ReAct loop *is* a flowchart |
+| Multi-agent crews | Compose Agents through control flow — no special class needed |
+| Durable workflows | `pauseHere()` plus JSON-portable `resume()` |
+| Typed observation | 57+ events for free, because the framework owns the loop |
+
+So we used the budget those abstractions would have cost us to invest deeply in something they all leave to the developer: **the injection loop.**
 
 ## What we are not
 
@@ -25,7 +106,7 @@ These rejections are deliberate. Each thing we are not is a thing we DO not have
 
 The biggest lesson from React, autograd, Prisma, Kubernetes — every load-bearing dev tool of the last decade — is that **the framework owns the traversal**. When the framework owns it, the framework can record everything that happens inside it. Without a single round-trip on your part. Without an instrumentation layer.
 
-agentfootprint's flowchart-pattern substrate ([footprintjs](https://github.com/footprintjs/footPrint)) is what makes our typed-event stream + replayable traces automatic. You do not write `agent.observe(...)`. You write `.steering(rule)` and the framework already knows when that rule fired, on which iteration, against which context.
+agentfootprint's flowchart-pattern substrate (footprintjs) is what makes our typed-event stream + replayable traces automatic. You do not write `agent.observe(...)`. You write `.steering(rule)` and the framework already knows when that rule fired, on which iteration, against which context.
 
 ### Owning the loop means recomposing context every iteration — Dynamic ReAct
 
@@ -41,16 +122,6 @@ If "context engineering" is the discipline, **Dynamic ReAct is what makes the di
 
 Reflexion, Tree-of-Thoughts, Self-Consistency, Debate, Map-Reduce, Swarm — every named pattern in the agent literature reduces to a composition of our 2 primitives + 4 compositions. **We were one paper away from shipping a thirteenth Agent class when we stopped and asked: what if every new pattern is just a composition of what we already have?** That question is why our core stays small as the field grows. New paper drops? New recipe in `examples/patterns/`. No new engine code.
 
-### The trace is a cache of the agent's thinking
-
-Other frameworks' memory remembers what was said. Ours remembers what was *decided* — every value the flowchart captured, persisted as a JSON-portable snapshot. That single artifact serves three downstream consumers:
-
-- **Audit / explain** — six-months-later "why did the agent decide X?" answered from the source, not reconstruction
-- **Cheap-model triage** — follow-up questions about a recorded run go to a Haiku-class model that just READS the trace; the expensive model already did the work
-- **Training data** — every successful production run is a labeled SFT / DPO / process-RL trajectory
-
-One recording, three economics. This is the design that makes agentfootprint's value compound over time, not just at the moment of the agent run.
-
 ### Mocks are first-class, not an afterthought
 
 Generative AI development is expensive when every iteration hits a paid API. We treat **$0 development as a first-class workflow** — the entire app (agent, context, memory, RAG, MCP) builds against in-memory mocks. Real infrastructure swaps in one boundary at a time. The flowchart, narrative, recorders, and tests do not change between dev and prod.
@@ -63,7 +134,7 @@ Every memory call takes a `MemoryIdentity` tuple — `{ tenant?, principal?, con
 
 ### We will say "coming in vN.x" instead of pretending
 
-Skills features (`surfaceMode` / `refreshPolicy` / `SkillRegistry`) ship in v2.4 Phase 4. The Reliability subsystem (`CircuitBreaker` / 3-tier fallback / auto-resume-on-error) ships in v2.5. Production embedder factories ship in v2.6. **Until those releases land, we will not pretend they exist.** Code blocks for unshipped features are clearly marked as illustrative pseudo-code; CHANGELOG is the source of truth for what's actually released. This rule cost us prose pretty in the short term and bought us trust in the long term.
+When a feature isn't shipped yet, we say so explicitly — even when prose would read smoother by glossing over it. CHANGELOG is the source of truth for what's actually released. Code blocks for unshipped features are clearly marked as illustrative pseudo-code. **This rule cost us prose pretty in the short term and bought us trust in the long term.**
 
 ## What we ask of you
 
@@ -85,7 +156,3 @@ We have rejected building several things that other frameworks ship, in some cas
 - Model-output validation built into the agent — use a tool for that and call it.
 
 Each of these would expand the surface. None of them would make the abstraction sharper. We will continue saying no to additions that do not earn a place in the substrate.
-
-## Built on footprintjs
-
-agentfootprint is the agent layer. [footprintjs](https://footprintjs.github.io/footPrint/) is the substrate — the flowchart-pattern execution engine that makes our typed-event stream + replayable traces automatic. The same way autograd's forward-pass traversal is what makes gradient inspection automatic, footprintjs's flowchart traversal is what makes agentfootprint's observability automatic. You don't need to learn footprintjs to use agentfootprint — but if you want to build your own primitives at this depth, [start there](https://footprintjs.github.io/footPrint/).
