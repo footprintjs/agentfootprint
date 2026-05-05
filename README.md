@@ -320,7 +320,7 @@ The same trace serves three downstream consumers — no extra instrumentation:
 
 2. **Cheap-model triage.** A Sonnet trace becomes good *input* for Haiku to answer follow-ups. ~200 tokens at any model ($0.25/1M) vs ~2,500 tokens at a reasoning model ($15/1M). Memoization for agent thinking — no agent rerun.
 
-3. **Training data export.** Every successful chain is a labeled trajectory — `causalMemory.exportForTraining({ format: 'sft' \| 'dpo' \| 'process-rl' })`. The chain provides per-step rewards out of the box, so process-RL is ready without a separate data-collection phase.
+3. **Training data — the substrate is already there.** Every successful chain is a labeled trajectory. SFT pairs (`{prompt, completion}`) fall out of the snapshot's history field; the export wrapper is roadmap work tracked in [GitHub issues](https://github.com/footprintjs/agentfootprint/issues). DPO and process-RL need additional collection layers (preference feedback, per-step reward annotation) that don't ship today.
 
 Two built-in lenses view the same trace:
 
@@ -378,7 +378,7 @@ Build the entire app against in-memory mocks with **zero API cost**, then swap r
 | Boundary | Dev | Prod |
 |---|---|---|
 | LLM provider | `mock(...)` | `anthropic()` · `openai()` · `bedrock()` · `ollama()` |
-| Memory store | `InMemoryStore` | `RedisStore` · `AgentCoreStore` · DynamoDB / Postgres / Pinecone |
+| Memory store | `InMemoryStore` | `RedisStore` · `AgentCoreStore` |
 | MCP | `mockMcpClient(...)` | `mcpClient({ transport })` |
 | Cache strategy | `NoOpCacheStrategy` | auto-selected per provider |
 
