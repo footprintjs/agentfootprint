@@ -3,7 +3,7 @@
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/assets/hero-dark.svg">
     <source media="(prefers-color-scheme: light)" srcset="docs/assets/hero-light.svg">
-    <img alt="agentfootprint — context engineering, abstracted. Six context flavors (Skills, Grounding, Steering, Tools, Short-term memory, Long-term memory) flow into the agentfootprint mascot, which composes them into three structured LLM slots (System Prompt, Messages API, Tools API)." src="docs/assets/hero-light.svg" width="100%"/>
+    <img alt="agentfootprint mascot composing context flavors (Skills, Grounding, Steering, Tools, Short-term memory, Long-term memory) into three structured LLM slots (System Prompt, Messages API, Tools API) — the central abstraction, visualized." src="docs/assets/hero-light.svg" width="100%"/>
   </picture>
 </p>
 
@@ -19,13 +19,9 @@
 
 ---
 
-## What is agentfootprint?
-
 **A framework for building AI agents by treating context as a first-class runtime system.**
 
-Most agent code becomes context plumbing: which instructions go in `system`, which messages get added after a tool returns, which tools should be exposed right now, which memory to load for this tenant, which parts of the prompt are stable enough to cache.
-
-Without a framework, every agent hand-rolls this logic. Over time it becomes a fragile mix of prompt concatenation, tool routing, memory loading, cache markers, observability hooks, and retry logic.
+Most agent code becomes context plumbing: which instructions go in `system`, which messages get added after a tool returns, which tools should be exposed right now, which memory to load for this tenant, which parts of the prompt are stable enough to cache. Without a framework, every agent hand-rolls this logic — a fragile mix of prompt concatenation, tool routing, memory loading, cache markers, observability hooks, and retry logic.
 
 **agentfootprint abstracts that bookkeeping.** You declare what context to inject, where it lands, and when it activates. The framework owns the agent loop, recomposes the LLM call every iteration, records typed events, applies caching, and persists replayable checkpoints.
 
@@ -33,23 +29,7 @@ Without a framework, every agent hand-rolls this logic. Over time it becomes a f
 
 ---
 
-## The lineage
-
-Every load-bearing dev tool of the last decade made the same move:
-
-| Framework | You write | The framework abstracts |
-|---|---|---|
-| **PyTorch (autograd)** | Forward graph | Gradient computation, backward pass |
-| **Express / Fastify** | Routes + handlers | HTTP loop, middleware chain |
-| **Prisma** | Schema + query intent | SQL generation, migrations |
-| **React** | Components + state | DOM diffing, render path |
-| **agentfootprint** | Injections (slot × trigger × cache) | Slot composition, iteration loop, caching, observation, replay |
-
-The closest structural parallel is **autograd**: you describe the graph, the framework traverses it, and *because the framework owns the traversal it can record everything for free*. Same idea here — typed events, replayable checkpoints, and provider-agnostic prompt caching are consequences of owning the loop, not extra features.
-
----
-
-## The core idea
+## 1. What we abstract
 
 Every LLM call has three slots:
 
@@ -100,7 +80,33 @@ That is the whole abstraction. Every named pattern in the agent literature — R
 
 ---
 
-## Why this isn't just an ergonomics win — Dynamic ReAct
+## 2. How we abstract it
+
+Every load-bearing dev tool of the last decade made the same move — own the runtime loop, not just the API:
+
+| Framework | You write | The framework abstracts |
+|---|---|---|
+| **PyTorch (autograd)** | Forward graph | Gradient computation, backward pass |
+| **Express / Fastify** | Routes + handlers | HTTP loop, middleware chain |
+| **Prisma** | Schema + query intent | SQL generation, migrations |
+| **React** | Components + state | DOM diffing, render path |
+| **agentfootprint** | Injections (slot × trigger × cache) | Slot composition, iteration loop, caching, observation, replay |
+
+The closest structural parallel is **autograd**: you describe the graph, the framework traverses it, and *because the framework owns the traversal it can record everything for free*. Same idea here — typed events, replayable checkpoints, and provider-agnostic prompt caching are consequences of owning the loop, not extra features.
+
+This is the load-bearing design choice. **Owning the loop is what makes the next two beats possible.** In every other framework, flexibility (Beat 3) and observability (Beat 4) are a tradeoff — bolt-on instrumentation breaks when you customize the loop. Here, both fall out of the same property: the framework owns the traversal, so customization happens *inside* the recorded loop, not around it.
+
+> 📖 Long-form: [the Palantir lineage](https://footprintjs.github.io/agentfootprint/inspiration/connected-data/) · [the Liskov lineage](https://footprintjs.github.io/agentfootprint/inspiration/modularity/)
+
+---
+
+## 3. How do I design my agent or system of agents?
+
+Same vocabulary, two scales.
+
+### Single agent — compose CONTEXT with the Injection primitive
+
+The agent loop itself is dynamic. Every iteration recomposes the slots, so injections that fired on the previous tool result get a chance to recompose the next prompt.
 
 <p align="center">
   <picture>
@@ -112,18 +118,8 @@ That is the whole abstraction. Every named pattern in the agent literature — R
 
 **Same five stages on both sides. Only one thing differs — where the loop returns.**
 
-- **Classic ReAct** loops back to `CallLLM`. The `SystemPrompt`/`Messages`/`Tools` boxes ran once at the top of the turn and stay frozen for the rest of the iteration. The agent sees the same 12 tools on every iteration regardless of what it just discovered.
-- **Dynamic ReAct** (agentfootprint) loops back to `SystemPrompt`. Every iteration re-enters the slot subflows, so injections that fired on the previous tool result get a chance to recompose the next prompt. The agent sees a 1-tool list on iter 1, then a 5-tool list once a skill activated, then keeps the focused list for the rest of the turn.
-
-That structural choice — *where the loop edge points* — is the difference between context engineering that's **static or compositional**.
-
-How does this compare to other frameworks?
-
-- **LangChain** assembles prompts once per turn.
-- **LangGraph** composes state per node, not per loop iteration.
-- **agentfootprint** recomposes per iteration.
-
-Per-iteration recomposition is also the structural prerequisite for the cache layer — cache markers can't track active injections in lockstep without it.
+- **Classic ReAct** loops back to `CallLLM`. The slot subflows ran once at the top of the turn and stay frozen. The agent sees the same 12 tools on every iteration regardless of what it just discovered.
+- **Dynamic ReAct** (agentfootprint) loops back to `SystemPrompt`. Per-iteration recomposition is also the structural prerequisite for the cache layer — cache markers can't track active injections in lockstep without it.
 
 ```text
 Classic ReAct                    Dynamic ReAct
@@ -135,7 +131,81 @@ iter 3: 12 tools shown           iter 3: 5 tools
 
 Use **Dynamic ReAct** when your tools have dependencies (one tool's output implies which tool to call next). Use **Classic ReAct** when all tools are independent and ordering doesn't matter.
 
-> 📖 Deep dive: [Dynamic ReAct guide](https://footprintjs.github.io/agentfootprint/guides/dynamic-react/) · [Cache layer](https://footprintjs.github.io/agentfootprint/guides/caching/)
+> 📖 [Dynamic ReAct guide](https://footprintjs.github.io/agentfootprint/guides/dynamic-react/) · [Cache layer](https://footprintjs.github.io/agentfootprint/guides/caching/)
+
+### System of agents — compose AGENTS with control flows
+
+```text
+Primitives:    Agent · LLMCall
+Control flows: Sequence · Parallel · Decide · Loop
+```
+
+Every named multi-agent pattern in the literature reduces to a composition of these:
+
+| Pattern | Composition |
+|---|---|
+| **Swarm** | `Loop( Parallel( Agent×N ) → merge )` |
+| **Tree-of-Thoughts** | `Loop( Parallel( Agent×N ) → Decide(score) )` |
+| **Reflexion** | `Loop( Agent → Decide(critique) → Agent )` |
+| **Debate** | `Parallel( Agent_pro, Agent_con ) → Agent_judge` |
+| **Router** | `Decide → Agent_A \| Agent_B \| Agent_C` |
+| **Hierarchical** | `Agent_planner → Sequence( Agent_worker×N ) → synth` |
+
+Same trick as Beat 1: instead of N libraries for N patterns, we found the M building blocks all N patterns are made of.
+
+### A real agent in 8 lines
+
+```typescript
+const agent = Agent.create({ provider, model: 'claude-sonnet-4-5-20250929' })
+  .system('You are a support assistant.')
+  .steering(toneRule)            // always-on
+  .instruction(urgentRule)       // rule-gated
+  .skill(billingSkill)           // LLM-activated
+  .memory(conversationMemory)    // cross-run, multi-tenant
+  .tool(weather)
+  .build();
+
+await agent.run({ message: userInput, identity: { conversationId } });
+```
+
+The hand-rolled equivalent is ~80 lines of slot management, trigger evaluation, memory loading, and cache marker placement — and growing with every feature. The declarative version stays at 8.
+
+> 📖 Compare: [hand-rolled vs declarative](https://footprintjs.github.io/agentfootprint/getting-started/why/) · [migration from LangChain / CrewAI / LangGraph](https://footprintjs.github.io/agentfootprint/getting-started/vs/)
+
+---
+
+## 4. How do I see what my agent did?
+
+In every other framework, flexibility kills observability — bolt-on instrumentation breaks when you customize the loop. Here it doesn't, because both come from the same property in Beat 2: **the framework owns the loop**, so customization happens inside the recorded traversal, not around it.
+
+Every agent run produces a **causal trace** for free: a scrubbable timeline of every stage with reads, writes, and captured decision evidence. JSON-portable. Queryable. Exportable.
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/causal-memory-dark.svg">
+    <source media="(prefers-color-scheme: light)" srcset="docs/assets/causal-memory-light.svg">
+    <img alt="agentfootprint causal memory — Each agent run produces a JSON-portable causal trace: a scrubbable timeline of every stage with reads, writes, and captured decision evidence. The trace card shows a time-travel slider (Step 5 of 17, Live), an execution timeline with stage-duration bars, and the captured decision evidence pill (riskTier eq high → reject). Two built-in lenses view it: Lens (agent-centric) and Explainable Trace (structural). Three programmatic consumers fan out from it: audit replay (GDPR Article 22 adverse-action notice answered from chain, no LLM call, $15/1M to $0.25/1M tokens), cheap-model triage (Sonnet trace fed to Haiku for follow-ups), and training data export (every chain is a labeled trajectory ready for SFT/DPO/process-RL). One recording, two lenses, three consumers, zero extra instrumentation. Powered by footprintjs causalChain()." src="docs/assets/causal-memory-light.svg" width="100%"/>
+  </picture>
+</p>
+
+The same trace serves three downstream consumers — no extra instrumentation:
+
+1. **Audit / compliance.** Six months later, *"why was loan #42 rejected?"* answers from the chain (`creditScore=580 < 620 ∧ dti=0.6 > 0.43 → riskTier=high → REJECTED`). No LLM call. GDPR Art. 22, ECOA, and EU AI Act adverse-action notices write themselves from the captured decision evidence.
+
+2. **Cheap-model triage.** A Sonnet trace becomes good *input* for Haiku to answer follow-ups. ~200 tokens at any model ($0.25/1M) vs ~2,500 tokens at a reasoning model ($15/1M). Memoization for agent thinking — no agent rerun.
+
+3. **Training data export.** Every successful chain is a labeled trajectory — `causalMemory.exportForTraining({ format: 'sft' \| 'dpo' \| 'process-rl' })`. The chain provides per-step rewards out of the box, so process-RL is ready without a separate data-collection phase.
+
+Two built-in lenses view the same trace:
+
+| Lens | View | When to use |
+|---|---|---|
+| **Lens** | Agent-centric — User/Agent[3 slots]/Tool flowchart with iteration scrubber and round commentary | Live debugging, "what did Neo see at step 5?" |
+| **Explainable Trace** | Structural — subflow tree, full flowchart, memory inspector, per-stage execution timeline | Architecture review, root-cause analysis |
+
+> 📖 Powered by [footprintjs `causalChain()`](https://footprintjs.github.io/footPrint/blog/backward-causal-chain/) — backward thin-slicing on the commit log. [Causal memory guide](https://footprintjs.github.io/agentfootprint/guides/causal-memory/) · [Explainability & compliance](https://footprintjs.github.io/footPrint/blog/explainability-compliance/)
+
+**One recording. Two lenses. Three consumers. Zero extra instrumentation.**
 
 ---
 
@@ -175,69 +245,6 @@ Swap `mock(...)` for `anthropic(...)` / `openai(...)` / `bedrock(...)` / `ollama
 
 ---
 
-## A real agent in 8 lines
-
-```typescript
-const agent = Agent.create({ provider, model: 'claude-sonnet-4-5-20250929' })
-  .system('You are a support assistant.')
-  .steering(toneRule)            // always-on
-  .instruction(urgentRule)       // rule-gated
-  .skill(billingSkill)           // LLM-activated
-  .memory(conversationMemory)    // cross-run, multi-tenant
-  .tool(weather)
-  .build();
-
-await agent.run({ message: userInput, identity: { conversationId } });
-```
-
-The hand-rolled equivalent is ~80 lines of slot management, trigger evaluation, memory loading, and cache marker placement — and growing with every feature. The declarative version stays at 8.
-
-> 📖 Compare: [hand-rolled vs declarative](https://footprintjs.github.io/agentfootprint/getting-started/why/) · [migration from LangChain / CrewAI / LangGraph](https://footprintjs.github.io/agentfootprint/getting-started/vs/)
-
----
-
-## The differentiator: the trace is a cache of the agent's thinking
-
-Other agent frameworks remember *what was said*. agentfootprint's causal memory records the **decision evidence** — every value the flowchart captured during the run, persisted as a JSON-portable snapshot.
-
-That changes the cost structure of everything that happens after the agent runs:
-
-1. **Audit / explain** — six months later, "why was loan #42 rejected?" answers from the original evidence (creditScore=580, threshold=600), not reconstruction.
-2. **Cheap-model triage** — a trace from Sonnet is good *input* for Haiku to answer follow-up questions about that run. Memoization for agent reasoning.
-3. **Training data** — every successful production run is a labeled trajectory for SFT/DPO/process-RL, no separate data-collection phase.
-
-One recording, three downstream consumers, no extra instrumentation.
-
-> 📖 Deep dive: [Causal memory guide](https://footprintjs.github.io/agentfootprint/guides/causal-memory/)
-
----
-
-## What you can build
-
-```typescript
-// Customer support — skills + memory + audit + cache
-const agent = Agent.create({ provider, model })
-  .system('You are a friendly support assistant.')
-  .skill(billingSkill)
-  .steering(toneGuidelines)
-  .memory(conversationMemory)
-  .build();
-
-// Research pipeline — multi-agent fan-out + merge
-const research = Parallel.create()
-  .branch(optimist).branch(skeptic).branch(historian)
-  .merge(synthesizer)
-  .build();
-
-// Streaming chat — token-by-token to a browser via SSE
-agent.on('agentfootprint.stream.token', (e) => res.write(toSSE(e)));
-await agent.run({ message: req.query.message });
-```
-
-> 📖 Full examples: [examples gallery](https://github.com/footprintjs/agentfootprint/tree/main/examples) · every example is also a CI test.
-
----
-
 ## Mocks first, production second
 
 Build the entire app against in-memory mocks with **zero API cost**, then swap real infrastructure one boundary at a time.
@@ -255,17 +262,25 @@ The flowchart, recorders, and tests don't change between dev and prod.
 
 ## What ships today
 
-- **2 primitives** — `LLMCall`, `Agent` (the ReAct loop)
-- **4 compositions** — `Sequence`, `Parallel`, `Conditional`, `Loop`
-- **7 LLM providers** — Anthropic · OpenAI · Bedrock · Ollama · Browser-Anthropic · Browser-OpenAI · Mock
-- **One Injection primitive** — `defineSkill` / `defineSteering` / `defineInstruction` / `defineFact`
-- **One Memory factory** — 4 types × 7 strategies including **Causal**
-- **Provider-agnostic prompt caching** — declarative per-injection, per-iteration marker recomputation
-- **RAG · MCP · Memory store adapters** — InMemory · Redis · AgentCore
-- **48+ typed observability events** across context · stream · agent · cost · skill · permission · eval · memory · cache · embedding · error
-- **Pause / resume** — JSON-serializable checkpoints; resume hours later on a different server
-- **Resilience** — `withRetry`, `withFallback`, `resilientProvider`
-- **AI-coding-tool support** — Claude Code · Cursor · Windsurf · Cline · Kiro · Copilot
+**Core**
+- 2 primitives — `LLMCall`, `Agent` (the ReAct loop)
+- 4 control flows — `Sequence`, `Parallel`, `Conditional`, `Loop`
+- One Injection primitive — `defineSkill` / `defineSteering` / `defineInstruction` / `defineFact`
+
+**Adapters**
+- 7 LLM providers — Anthropic · OpenAI · Bedrock · Ollama · Browser-Anthropic · Browser-OpenAI · Mock
+- RAG · MCP · Memory store adapters — InMemory · Redis · AgentCore (Postgres / DynamoDB / Pinecone via lazy peer-deps)
+
+**Operability**
+- One Memory factory — 4 types × 7 strategies including **Causal**
+- Provider-agnostic prompt caching — declarative per-injection, per-iteration marker recomputation
+- Pause / resume — JSON-serializable checkpoints; resume hours later on a different server
+- Resilience — `withRetry`, `withFallback`, `resilientProvider`
+- 48+ typed observability events — context · stream · agent · cost · skill · permission · eval · memory · cache · embedding · error
+
+**Tooling**
+- **Lens** · **Explainable Trace** — two visual replays of the causal trace
+- AI-coding-tool support — Claude Code · Cursor · Windsurf · Cline · Kiro · Copilot
 
 > 📖 [Full feature list & API reference](https://footprintjs.github.io/agentfootprint/reference/) · [CHANGELOG](./CHANGELOG.md)
 
@@ -282,20 +297,6 @@ The flowchart, recorders, and tests don't change between dev and prod.
 | Deep agents | Planning-before-execution, A2A protocol, Lens UI |
 
 Roadmap items are *not* current API claims. If a feature isn't in `npm install agentfootprint` today, it's listed here, not in the docs.
-
----
-
-## Design philosophy
-
-Two principles shape the runtime:
-
-**Connected data (Palantir, 2003).** Enterprise insight is bottlenecked by data fragmentation, not analyst skill. Agents face the same problem at runtime — disconnected tool state, lost decision evidence, scattered execution context. agentfootprint connects state, decisions, execution, and memory into one runtime footprint so the next iteration compounds the connection instead of paying for it again.
-
-**Modular boundaries (Liskov, 1974).** Every framework boundary — `LLMProvider`, `ToolProvider`, `CacheStrategy`, `Recorder`, `MemoryStore` — is an LSP-substitutable interface. Swap implementations without changing agent code.
-
-Connected data alone is fast but unmaintainable. Modular boundaries alone are clean but dumb. Together: a runtime that's both fast and reasonable.
-
-> 📖 Long-form: [the Palantir lineage](https://footprintjs.github.io/agentfootprint/inspiration/connected-data/) · [the Liskov lineage](https://footprintjs.github.io/agentfootprint/inspiration/modularity/)
 
 ---
 
