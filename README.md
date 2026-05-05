@@ -407,20 +407,6 @@ The flowchart, recorders, and tests don't change between dev and prod.
 
 ---
 
-## Roadmap
-
-| Theme | Focus |
-|---|---|
-| Reliability | Circuit breaker, output fallback, auto-resume-on-error |
-| Causal exports | `causalMemory.exportForTraining({ format: 'sft' \| 'dpo' \| 'process' })` |
-| Governance | Policies, budget tracking, production memory adapters |
-| Cache v2 | Gemini handle-based caching, cost attribution |
-| Deep agents | Planning-before-execution, A2A protocol, Lens UI |
-
-Roadmap items are *not* current API claims. If a feature isn't in `npm install agentfootprint` today, it's listed here, not in the docs.
-
----
-
 ## Where to next
 
 | If you are... | Go here |
