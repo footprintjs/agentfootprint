@@ -3,7 +3,7 @@
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/assets/hero-dark.svg">
     <source media="(prefers-color-scheme: light)" srcset="docs/assets/hero-light.svg">
-    <img alt="agentfootprint mascot composing context flavors (Skills, Grounding, Steering, Tools, Short-term memory, Long-term memory) into three structured LLM slots (System Prompt, Messages API, Tools API) — the central abstraction, visualized." src="docs/assets/hero-light.svg" width="100%"/>
+    <img alt="agentfootprint mascot composing context flavors (Skills, Steering, Guardrails, RAG, Tool APIs, Memory) into three structured LLM slots (system, messages, tools) — the central abstraction, visualized." src="docs/assets/hero-light.svg" width="100%"/>
   </picture>
 </p>
 
@@ -49,7 +49,7 @@ The abstraction is three rules:
 That's the whole model: `Injection = slot × trigger × cache`.
 
 - **Slot** — which of the 3 LLM API regions the content lands in (`system` / `messages` / `tools`).
-- **Trigger** — when the content fires (static at build time, or runtime: tool response · LLM activation · predicate).
+- **Trigger** — when the content fires (see below).
 - **Cache** — how stable the content is across iterations. The framework places provider cache markers for you — stable content gets 80–90% cheaper prefixes.
 
 ### Triggers — static or runtime
@@ -96,8 +96,6 @@ Those answers fold back into your workflow — the same triad in the tagline:
 - **Offline** — monitor what shipped; query the trace months later without a rerun
 - **Detailed** — improve via trace replay, root-cause analysis, and training-data export
 - **Plus** — the LLM itself can use the trace to answer follow-up questions about its own decisions, no extra LLM call
-
-Every named pattern in the agent literature — Reflexion, Tree-of-Thoughts, Skills, RAG, Constitutional AI — reduces to *which slot* + *which trigger*. You learn one model; the field's growth lands as new factories on the same primitive.
 
 ### How — we own the runtime loop
 
@@ -211,7 +209,7 @@ const reflexion = Loop.create()
 </tr>
 </table>
 
-### Single agent — the loop is dynamic
+### Inside one agent — Dynamic vs Classic ReAct
 
 <p align="center">
   <picture>
@@ -289,9 +287,7 @@ Same trick as Beat 1: instead of N libraries for N patterns, we found the M buil
 
 ## 4. How do I see what my agent did?
 
-Because the framework owns the loop (Beat 2), **every decision and execution is captured during traversal** — not bolted on afterward. You get observability freedom: wire the recorders you need, view the trace through any lens, export to any sink. In every other framework, flexibility kills observability — bolt-on instrumentation breaks when you customize. Here it doesn't.
-
-The default capture is the **causal trace** — every stage, read, write, and decision evidence — saved as a JSON-portable, scrubbable, queryable, exportable artifact. Beyond the default, wire custom recorders for cost tracking, latency, quality scoring — any observation hook fires on the same traversal stream.
+Because we own the loop (Beat 2), every decision and execution is captured during traversal — not bolted on. The default capture is the **causal trace**: every stage, read, write, and decision evidence, as a JSON-portable, scrubbable, queryable, exportable artifact. Beyond the default, wire custom recorders for cost, latency, or quality scoring — any observation hook fires on the same stream.
 
 <p align="center">
   <picture>
@@ -430,7 +426,7 @@ Or jump into the [examples gallery](https://github.com/footprintjs/agentfootprin
 
 ## Built on
 
-[footprintjs](https://github.com/footprintjs/footPrint) — the flowchart pattern for backend code. The decision-evidence capture, narrative recording, and time-travel checkpointing this library uses are footprintjs primitives. The same way autograd's forward-pass traversal is what makes gradient inspection automatic, footprintjs's flowchart traversal is what makes agentfootprint's typed-event stream and replayable traces automatic.
+[footprintjs](https://github.com/footprintjs/footPrint) — the flowchart pattern for backend code. agentfootprint's decision-evidence capture, narrative recording, and time-travel checkpointing are footprintjs primitives at the runtime layer.
 
 You don't need to learn footprintjs to use agentfootprint — but if you want to build your own primitives at this depth, [start there](https://footprintjs.github.io/footPrint/).
 
