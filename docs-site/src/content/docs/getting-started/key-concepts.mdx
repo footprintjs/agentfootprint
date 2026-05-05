@@ -1,15 +1,15 @@
 ---
 title: Key Concepts
-description: The 5-layer taxonomy. 2 primitives, 4 compositions, N patterns, context engineering, features.
+description: The 5-layer taxonomy. 2 primitives, 4 compositions, N patterns, the Injection cross-cut, infrastructure. Once these are in your head, every agent paper and every framework can be located on the grid.
 ---
 
 import CodeFile from '@/components/CodeFile.astro';
 
-> We were one paper away from shipping a thirteenth Agent class when we stopped and asked: *what if every new pattern is just a composition of what we already have?* That question is why this library has 2 primitives and 4 compositions instead of 13 classes.
+> This page is the model. **2 primitives, 4 compositions, N named patterns, the Injection cross-cut, the infrastructure layer underneath.** Once these are in your head, every agent paper, every framework, every system you encounter can be located on the grid — including yours.
+
+If you haven't yet, read [Why agentfootprint?](/agentfootprint/getting-started/why/) first. It's the *why*. This page is the *what*.
 
 ## Key terms
-
-Before diving in, here are the terms you'll see throughout the docs:
 
 | Term | Meaning |
 |------|---------|
@@ -18,8 +18,11 @@ Before diving in, here are the terms you'll see throughout the docs:
 | **ReAct** | "Reasoning + Acting" — the loop where an LLM thinks, acts (calls a tool), observes the result, and repeats. (Yao et al. 2022) |
 | **Composition** | How primitives arrange: Sequence (one after another), Parallel (at the same time), Conditional (branch on a decider), Loop (iterate until quality bar). |
 | **Pattern** | A named configuration — Reflexion, Tree-of-Thoughts, Hierarchy. Every named paper is a **recipe** of primitives + compositions, not a new class. |
-| **Context engineering** | What you inject into an Agent's three slots (system-prompt, messages, tools). RAG, Memory, Skills, Instructions, Grounding — all live here. |
-| **Injection** | The unified primitive behind every flavor of context engineering — content + slot + trigger. Skills, Steering, Instructions, Facts, Memory, RAG all reduce to this. |
+| **Context engineering** | What you inject into an Agent's three slots (`system` / `messages` / `tools`). Skills, Steering, Guardrails, RAG, Memory, Tool APIs — all live here. |
+| **Injection** | The unified primitive behind every flavor of context engineering — `slot × trigger × cache`. Skills, Steering, Instructions, Facts, Memory, RAG all reduce to this. |
+| **Slot** | One of three fixed regions of every LLM call: `system`, `messages`, `tools`. Fixed by the LLM API surface. |
+| **Trigger** | When an Injection fires: `always` (build-time), `rule` (predicate), `on-tool-return` (after a tool result), `llm-activated` (LLM calls `read_skill`). |
+| **Cache** | How stable the injection's content is across iterations. Determines where the framework places provider cache markers (80–90% cheaper prefixes for stable content). |
 | **Narrative** | A structured execution trace — what happened, in what order, with what data. Not logs — connected entries with provenance. |
 | **Recorder** | A passive observer that collects data (tokens, cost, tool usage) during execution without affecting behavior. |
 | **Provider** | The LLM backend — Claude, GPT, Bedrock, Ollama, or your own. Swap with one line. |
@@ -57,7 +60,7 @@ CONTEXT ENGINEERING (cross-cutting — Injection primitive into Agent slots)
   RAG          → messages                (retrieve + score-threshold)
 
 FEATURES (infrastructure)
-  Providers · Mocks-first · Observability · Pause/Resume · Resilience
+  Providers · Mocks-first · Observability · Pause/Resume · Resilience · Reliability gate
 ```
 
 **Two theses to hold in your head:**
@@ -87,11 +90,39 @@ The atom. One prompt in, one response out. No tools, no loop.
 
 **Use for:** research, code generation, customer support, data analysis — anywhere you need tools-in-a-loop.
 
+#### Dynamic vs Classic ReAct
+
+agentfootprint's Agent loops back to `SystemPrompt` every iteration, not just `CallLLM`. Slots **recompose** every pass — injections that fired on the previous tool result get a chance to recompose the next prompt. Classic ReAct freezes the slots at the top of the turn.
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="/agentfootprint/assets/dynamic-vs-classic-dark.svg">
+    <source media="(prefers-color-scheme: light)" srcset="/agentfootprint/assets/dynamic-vs-classic-light.svg">
+    <img alt="Classic ReAct loops back to CallLLM (slots frozen, 12 tools every iteration). Dynamic ReAct loops back to SystemPrompt (slots recompose, tools shrink from 1 to 5 as skills activate)." src="/agentfootprint/assets/dynamic-vs-classic-light.svg" width="100%" />
+  </picture>
+</p>
+
+| Iteration | Classic ReAct | Dynamic ReAct (agentfootprint) |
+|---|---|---|
+| 1 | 12 tools shown | **1 tool** (`read_skill`) |
+| 2 | 12 tools shown | **5 tools** (skill activated) |
+| 3 | 12 tools shown | 5 tools |
+
+> 📖 [Dynamic ReAct guide](/agentfootprint/guides/dynamic-react/) for the full taxonomy of what this unlocks.
+
 ---
 
 ## COMPOSITIONS
 
-The four ways primitives arrange. Every named pattern is built from these.
+The four ways primitives arrange. **Every named pattern is built from these.**
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="/agentfootprint/assets/control-flows-dark.svg">
+    <source media="(prefers-color-scheme: light)" srcset="/agentfootprint/assets/control-flows-light.svg">
+    <img alt="The 4 control flows: Sequence (linear chain A → B → C), Parallel (fan-out + fan-in), Conditional (diamond branch), Loop (cycle back)." src="/agentfootprint/assets/control-flows-light.svg" width="100%" />
+  </picture>
+</p>
 
 ### 1. Sequence — one after another
 
@@ -127,7 +158,15 @@ See [`examples/core-flow/04-loop.ts`](https://github.com/footprintjs/agentfootpr
 
 ## PATTERNS — named compositions
 
-Every paper in the agent literature is a composition of 2 primitives + 4 compositions. Sample recipes:
+Every paper in the agent literature is a composition of 2 primitives + 4 compositions. **Same alphabet, different word.**
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="/agentfootprint/assets/patterns-dark.svg">
+    <source media="(prefers-color-scheme: light)" srcset="/agentfootprint/assets/patterns-light.svg">
+    <img alt="6 named multi-agent patterns reduce to compositions of the same 4 control flows: Swarm = Loop(Parallel(Agent×N) → merge); Tree-of-Thoughts = Loop(Parallel(Agent×N) → Conditional(score)); Reflexion = Loop(Agent → Conditional(critique) → Agent); Debate = Parallel(Agent_pro, Agent_con) → Agent_judge; Router = Conditional → Agent_A | Agent_B | Agent_C; Hierarchical = Agent_planner → Sequence(Agent_worker×N) → synth." src="/agentfootprint/assets/patterns-light.svg" width="100%" />
+  </picture>
+</p>
 
 | Pattern | Built from | Paper |
 |---|---|---|
@@ -159,16 +198,45 @@ See `examples/patterns/` for the rest — Tree-of-Thoughts, Self-Consistency, De
 
 ## CONTEXT ENGINEERING (cross-cutting)
 
-These are **not primitives.** They're flavors of the Injection primitive — content that lands in one of the agent's three slots (`system` / `messages` / `tools`) under one of four triggers (always / rule / on-tool-return / llm-activated).
+These are **not primitives.** They're flavors of the **Injection** primitive — content that lands in one of the agent's three slots (`system` / `messages` / `tools`) under one of four triggers.
+
+```text
+Injection = slot × trigger × cache
+```
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="/agentfootprint/assets/triggers-dark.svg">
+    <source media="(prefers-color-scheme: light)" srcset="/agentfootprint/assets/triggers-light.svg">
+    <img alt="Every LLM call has 3 fixed slots (system, messages, tools); every flavor lands in one slot under one of 4 fixed triggers. The grid is the entire context-engineering surface." src="/agentfootprint/assets/triggers-light.svg" width="100%" />
+  </picture>
+</p>
 
 | Flavor | Slot | Trigger | Purpose |
 |---|---|---|---|
-| **Steering** | system-prompt | always | Persona, tone, output format, safety rules |
-| **Instruction** | system-prompt or messages | rule | Conditional behavior (`activeWhen` predicate) |
-| **Skill** | system-prompt + tools | llm-activated | LLM calls `read_skill('billing')` to unlock body + tools |
-| **Fact** | system-prompt or messages | always | Developer-supplied data (user profile, env, current time) |
-| **Memory** | messages | rule | Persist conversation / facts across turns |
-| **RAG** | messages | rule + score | Retrieve relevant chunks at query time |
+| **Steering** | `system` | always | Persona, tone, output format, safety rules |
+| **Instruction** | `system` or `messages` | rule | Conditional behavior (`activeWhen` predicate) |
+| **Skill** | `system` + `tools` | llm-activated | LLM calls `read_skill('billing')` to unlock body + tools |
+| **Fact** | `system` or `messages` | always | Developer-supplied data (user profile, env, current time) |
+| **Memory** | `messages` | rule | Persist conversation / facts across turns |
+| **RAG** | `messages` | rule + score | Retrieve relevant chunks at query time |
+
+:::note[Slot is a default, not a coupling]
+The same `Skill` can live in `tools` (schema only, discovered via `read_skill`), `messages` (body injected on activation), or `system` (baked into the prompt as steering). Strategy is config; flavor is independent of (slot, trigger).
+:::
+
+### Why this grid matters — four backtrack questions
+
+Because the framework owns the injection, every LLM call backtracks to four typed answers:
+
+| Question | What the trace tells you |
+|---|---|
+| **What** was injected? | Every flavor of content the LLM saw on this iteration |
+| **Who** triggered it? | Which rule fired (`always` / `rule` / `on-tool-return` / `llm-activated`) |
+| **When** it fired? | Which iteration of the ReAct loop, after which event |
+| **How** it landed? | Which slot, what position, what cache strategy |
+
+Those four answers are why contextual errors stop being invisible. See [Why agentfootprint?](/agentfootprint/getting-started/why/#the-four-backtrack-questions) for the full bug-class argument.
 
 ### RAG (worked example)
 
@@ -191,10 +259,12 @@ Every primitive and composition supports:
 | Streaming | `provider.stream(...)` | Token-by-token output |
 | Pause / Resume | `askHuman` / `pauseHere` | JSON-checkpointed, cross-server resumable |
 | Memory | `.memory(defineMemory({...}))` | Cross-run state with multi-tenant identity |
+| Reliability gate | `.reliability({ preCheck, postDecide, ... })` | Rules-based retry / fallback / fail-fast (v2.11.5+) |
 
 ## Next steps
 
 - [Quick Start](/agentfootprint/getting-started/quick-start/) — first agent runs in 5 minutes
 - [Memory guide](/agentfootprint/guides/memory/) — defineMemory across 4 types × 7 strategies
 - [Skills guide](/agentfootprint/guides/skills-explained/) — context engineering for instructions
+- [Reliability gate](/agentfootprint/guides/reliability-gate/) — rules-based retry / fallback / fail-fast
 - [Observability guide](/agentfootprint/guides/observability/) — recorders, event taxonomy
