@@ -10,20 +10,17 @@
 <h1 align="center">agentfootprint</h1>
 
 <p align="center">
+  <strong>We abstract context engineering — and hand back the trace.</strong><br/>
+  <em>Live to develop · offline to monitor · detailed to improve.</em>
+</p>
+
+<p align="center">
   <a href="https://github.com/footprintjs/agentfootprint/actions"><img src="https://github.com/footprintjs/agentfootprint/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="https://codecov.io/gh/footprintjs/agentfootprint"><img src="https://codecov.io/gh/footprintjs/agentfootprint/branch/main/graph/badge.svg" alt="Coverage"></a>
   <a href="https://www.npmjs.com/package/agentfootprint"><img src="https://img.shields.io/npm/v/agentfootprint.svg?style=flat" alt="npm version"></a>
   <a href="https://www.npmjs.com/package/agentfootprint"><img src="https://img.shields.io/npm/dm/agentfootprint.svg" alt="Downloads"></a>
   <a href="https://github.com/footprintjs/agentfootprint/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT"></a>
 </p>
-
----
-
-> Your agents deserve a typed context loop.
-
-agentfootprint turns the context plumbing every agent reinvents — slot juggling, trigger evaluation, memory loading, cache markers, observability hooks, retry logic — into one primitive: **Injection = slot × trigger × cache**. You declare; the framework owns the loop. Every run produces a JSON-portable causal trace — audit, replay, export training data, no extra instrumentation.
-
-**One primitive · Own the loop · Causal trace for free · 7 LLM providers · Mocks first · 10-min setup**
 
 ---
 
@@ -111,11 +108,19 @@ The closest structural parallel is **autograd**: you describe the graph, the fra
 
 ## 3. How do I design my agent or system of agents?
 
-Same vocabulary, two scales.
+Two scales — same alphabet.
 
-### Single agent — compose CONTEXT with the Injection primitive
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/control-flows-dark.svg">
+    <source media="(prefers-color-scheme: light)" srcset="docs/assets/control-flows-light.svg">
+    <img alt="The 4 control flows: Sequence (linear chain A → B → C), Parallel (fan-out + fan-in), Decide (diamond branch), Loop (cycle back). All shown in one yellow visual language; differentiation is by shape." src="docs/assets/control-flows-light.svg" width="100%"/>
+  </picture>
+</p>
 
-The agent loop itself is dynamic. Every iteration recomposes the slots, so injections that fired on the previous tool result get a chance to recompose the next prompt.
+Four control flows. That's the entire vocabulary. Differentiation is by shape, not category — `Sequence` chains, `Parallel` fans, `Decide` branches, `Loop` cycles.
+
+### Single agent — the loop is dynamic
 
 <p align="center">
   <picture>
@@ -125,10 +130,7 @@ The agent loop itself is dynamic. Every iteration recomposes the slots, so injec
   </picture>
 </p>
 
-**Same five stages on both sides. Only one thing differs — where the loop returns.**
-
-- **Classic ReAct** loops back to `CallLLM`. The slot subflows ran once at the top of the turn and stay frozen. The agent sees the same 12 tools on every iteration regardless of what it just discovered.
-- **Dynamic ReAct** (agentfootprint) loops back to `SystemPrompt`. Per-iteration recomposition is also the structural prerequisite for the cache layer — cache markers can't track active injections in lockstep without it.
+**Same five stages on both sides. Only one thing differs — where the loop returns.** Classic ReAct loops back to `CallLLM` and slots stay frozen. Dynamic ReAct (agentfootprint) loops back to `SystemPrompt`, so injections that fired on the previous tool result recompose the next prompt. Per-iteration recomposition is also the structural prerequisite for the cache layer.
 
 ```text
 Classic ReAct                    Dynamic ReAct
@@ -138,31 +140,19 @@ iter 2: 12 tools shown           iter 2: 5 tools (skill activated)
 iter 3: 12 tools shown           iter 3: 5 tools
 ```
 
-Use **Dynamic ReAct** when your tools have dependencies (one tool's output implies which tool to call next). Use **Classic ReAct** when all tools are independent and ordering doesn't matter.
-
 > 📖 [Dynamic ReAct guide](https://footprintjs.github.io/agentfootprint/guides/dynamic-react/) · [Cache layer](https://footprintjs.github.io/agentfootprint/guides/caching/)
 
-### System of agents — compose AGENTS with control flows
+### Multi-agent — compose with the alphabet
 
-```text
-Primitives:    Agent · LLMCall
-Control flows: Sequence · Parallel · Decide · Loop
-```
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/compose-dark.svg">
+    <source media="(prefers-color-scheme: light)" srcset="docs/assets/compose-light.svg">
+    <img alt="A custom research agent built from the same 4 control flows: input flows into a Decide gate (plan more research?), which fans out to a Parallel block (search_web, search_docs, search_kb), then chains into a Sequence (synthesize → critique), and a Loop arrow returns from the end back to the Decide gate so the agent iterates until satisfied. Formula: Loop( Decide(plan?) → Parallel(search_web, search_docs, search_kb) → Sequence(synth → critique) )." src="docs/assets/compose-light.svg" width="100%"/>
+  </picture>
+</p>
 
-Every named multi-agent pattern in the literature reduces to a composition of these:
-
-| Pattern | Composition |
-|---|---|
-| **Swarm** | `Loop( Parallel( Agent×N ) → merge )` |
-| **Tree-of-Thoughts** | `Loop( Parallel( Agent×N ) → Decide(score) )` |
-| **Reflexion** | `Loop( Agent → Decide(critique) → Agent )` |
-| **Debate** | `Parallel( Agent_pro, Agent_con ) → Agent_judge` |
-| **Router** | `Decide → Agent_A \| Agent_B \| Agent_C` |
-| **Hierarchical** | `Agent_planner → Sequence( Agent_worker×N ) → synth` |
-
-Same trick as Beat 1: instead of N libraries for N patterns, we found the M building blocks all N patterns are made of.
-
-### A real agent in 8 lines
+Pick the flows that match your problem. Chain them. **That's your Agentic Application.**
 
 ```typescript
 const agent = Agent.create({ provider, model: 'claude-sonnet-4-5-20250929' })
@@ -177,7 +167,30 @@ const agent = Agent.create({ provider, model: 'claude-sonnet-4-5-20250929' })
 await agent.run({ message: userInput, identity: { conversationId } });
 ```
 
-The hand-rolled equivalent is ~80 lines of slot management, trigger evaluation, memory loading, and cache marker placement — and growing with every feature. The declarative version stays at 8.
+The hand-rolled equivalent is ~80 lines of slot management, trigger evaluation, memory loading, and cache marker placement. The declarative version stays at 8.
+
+### Named patterns — also compositions of the same 4
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/patterns-dark.svg">
+    <source media="(prefers-color-scheme: light)" srcset="docs/assets/patterns-light.svg">
+    <img alt="6 named multi-agent patterns reduce to compositions of the same 4 control flows: Swarm = Loop(Parallel(Agent×N) → merge); Tree-of-Thoughts = Loop(Parallel(Agent×N) → Decide(score)); Reflexion = Loop(Agent → Decide(critique) → Agent); Debate = Parallel(Agent_pro, Agent_con) → Agent_judge; Router = Decide → Agent_A | Agent_B | Agent_C; Hierarchical = Agent_planner → Sequence(Agent_worker×N) → synth." src="docs/assets/patterns-light.svg" width="100%"/>
+  </picture>
+</p>
+
+The patterns the field knows reduce to the same alphabet:
+
+| Pattern | Composition |
+|---|---|
+| **Swarm** | `Loop( Parallel( Agent×N ) → merge )` |
+| **Tree-of-Thoughts** | `Loop( Parallel( Agent×N ) → Decide(score) )` |
+| **Reflexion** | `Loop( Agent → Decide(critique) → Agent )` |
+| **Debate** | `Parallel( Agent_pro, Agent_con ) → Agent_judge` |
+| **Router** | `Decide → Agent_A \| Agent_B \| Agent_C` |
+| **Hierarchical** | `Agent_planner → Sequence( Agent_worker×N ) → synth` |
+
+Same trick as Beat 1: instead of N libraries for N patterns, we found the M building blocks all N patterns are made of.
 
 > 📖 Compare: [hand-rolled vs declarative](https://footprintjs.github.io/agentfootprint/getting-started/why/) · [migration from LangChain / CrewAI / LangGraph](https://footprintjs.github.io/agentfootprint/getting-started/vs/)
 
