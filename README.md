@@ -19,17 +19,30 @@
 
 ---
 
-**A framework for building AI agents by treating context as a first-class runtime system.**
+> Your agents deserve a typed context loop.
 
-Most agent code becomes context plumbing: which instructions go in `system`, which messages get added after a tool returns, which tools should be exposed right now, which memory to load for this tenant, which parts of the prompt are stable enough to cache. Without a framework, every agent hand-rolls this logic — a fragile mix of prompt concatenation, tool routing, memory loading, cache markers, observability hooks, and retry logic.
+agentfootprint turns the context plumbing every agent reinvents — slot juggling, trigger evaluation, memory loading, cache markers, observability hooks, retry logic — into one primitive: **Injection = slot × trigger × cache**. You declare; the framework owns the loop. Every run produces a JSON-portable causal trace — audit, replay, export training data, no extra instrumentation.
 
-**agentfootprint abstracts that bookkeeping.** You declare what context to inject, where it lands, and when it activates. The framework owns the agent loop, recomposes the LLM call every iteration, records typed events, applies caching, and persists replayable checkpoints.
-
-> You write the intent. agentfootprint owns the context loop.
+**One primitive · Own the loop · Causal trace for free · 7 LLM providers · Mocks first · 10-min setup**
 
 ---
 
 ## 1. What we abstract
+
+The messy reality every agent codebase reinvents — usually badly:
+
+- Which instructions go in `system`
+- Which messages get added after a tool returns
+- Which tools should be exposed right now
+- Which memory to load for this tenant
+- Which parts of the prompt are stable enough to cache
+- When to retry, what to log, where to put cache markers
+
+Hand-rolled, every agent does this differently — and brittlely. agentfootprint replaces all of it with one primitive. The next beat shows what that primitive looks like.
+
+---
+
+## 2. How we abstract it
 
 Every LLM call has three slots:
 
@@ -78,9 +91,7 @@ That is the whole abstraction. Every named pattern in the agent literature — R
 
 **3 slots × 4 triggers × N flavors = the entire context-engineering surface.** When you look at any agent feature in the wild, locate it on this grid; that's enough to model it.
 
----
-
-## 2. How we abstract it
+### Why this design works — we own the loop
 
 Every load-bearing dev tool of the last decade made the same move — own the runtime loop, not just the API:
 
@@ -92,9 +103,7 @@ Every load-bearing dev tool of the last decade made the same move — own the ru
 | **React** | Components + state | DOM diffing, render path |
 | **agentfootprint** | Injections (slot × trigger × cache) | Slot composition, iteration loop, caching, observation, replay |
 
-The closest structural parallel is **autograd**: you describe the graph, the framework traverses it, and *because the framework owns the traversal it can record everything for free*. Same idea here — typed events, replayable checkpoints, and provider-agnostic prompt caching are consequences of owning the loop, not extra features.
-
-This is the load-bearing design choice. **Owning the loop is what makes the next two beats possible.** In every other framework, flexibility (Beat 3) and observability (Beat 4) are a tradeoff — bolt-on instrumentation breaks when you customize the loop. Here, both fall out of the same property: the framework owns the traversal, so customization happens *inside* the recorded loop, not around it.
+The closest structural parallel is **autograd**: you describe the graph, the framework traverses it, and *because the framework owns the traversal it can record everything for free*. Same idea here. **Owning the loop is what makes Beats 3 and 4 possible.** In every other framework, flexibility and observability are a tradeoff — bolt-on instrumentation breaks when you customize. Here, both fall out of the same property: customization happens *inside* the recorded loop, not around it.
 
 > 📖 Long-form: [the Palantir lineage](https://footprintjs.github.io/agentfootprint/inspiration/connected-data/) · [the Liskov lineage](https://footprintjs.github.io/agentfootprint/inspiration/modularity/)
 
@@ -176,9 +185,9 @@ The hand-rolled equivalent is ~80 lines of slot management, trigger evaluation, 
 
 ## 4. How do I see what my agent did?
 
-In every other framework, flexibility kills observability — bolt-on instrumentation breaks when you customize the loop. Here it doesn't, because both come from the same property in Beat 2: **the framework owns the loop**, so customization happens inside the recorded traversal, not around it.
+Because the framework owns the loop (Beat 2), **every decision and execution is captured during traversal** — not bolted on afterward. You get observability freedom: wire the recorders you need, view the trace through any lens, export to any sink. In every other framework, flexibility kills observability — bolt-on instrumentation breaks when you customize. Here it doesn't.
 
-Every agent run produces a **causal trace** for free: a scrubbable timeline of every stage with reads, writes, and captured decision evidence. JSON-portable. Queryable. Exportable.
+The default capture is the **causal trace** — every stage, read, write, and decision evidence — saved as a JSON-portable, scrubbable, queryable, exportable artifact. Beyond the default, wire custom recorders for cost tracking, latency, quality scoring — any observation hook fires on the same traversal stream.
 
 <p align="center">
   <picture>
