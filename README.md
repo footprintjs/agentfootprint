@@ -148,19 +148,6 @@ And a fourth, novel: **the agent can read its own trace.** Six months after the 
 
 ---
 
-## Where this sits
-
-You'll find pieces of agentfootprint in two adjacent categories of framework.
-
-- **Model-driven agent runners** let the LLM drive the loop. We ship one — Dynamic ReAct.
-- **Low-level orchestration frameworks** let you wire nodes and edges. We ship the same compositions one level up: `Sequence` · `Parallel` · `Conditional` · `Loop`.
-
-What neither category ships: the **Injection primitive** (Beat 1) and the **causal trace** (Beat 4). Both are free side effects of owning the runtime loop.
-
-> agentfootprint = a model-driven agent runner + compositional orchestration + context engineering as a first-class layer, trace baked in.
-
----
-
 ## 3. How do I design my agent or system of agents?
 
 Two scales — same alphabet. Four control flows are the entire vocabulary.
