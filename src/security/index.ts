@@ -38,6 +38,12 @@
 export { PermissionPolicy } from './PermissionPolicy.js';
 export type { RoleAllowlist, PermissionPolicyOptions } from './PermissionPolicy.js';
 
+export { PolicyHaltError } from './PolicyHaltError.js';
+export type { PolicyHaltContext } from './PolicyHaltError.js';
+
+export { extractSequence, SYNTHETIC_DENY_PREFIX } from './extractSequence.js';
+export type { ExtractSequenceOptions } from './extractSequence.js';
+
 // Re-export the permission engine interface types from adapters so
 // consumers can implement custom checkers without depending on the
 // adapters subpath directly. PermissionPolicy itself is a Strategy
@@ -46,4 +52,6 @@ export type {
   PermissionChecker,
   PermissionRequest,
   PermissionDecision,
+  ToolCallEntry,
+  ToolResultContent,
 } from '../adapters/types.js';

@@ -54,6 +54,7 @@ import type {
   PauseResumePayload,
   PermissionCheckPayload,
   PermissionGateClosedPayload,
+  PermissionHaltPayload,
   PermissionGateOpenedPayload,
   RiskFlaggedPayload,
   SkillActivatedPayload,
@@ -125,6 +126,7 @@ export const EVENT_NAMES = {
     check: 'agentfootprint.permission.check',
     gateOpened: 'agentfootprint.permission.gate_opened',
     gateClosed: 'agentfootprint.permission.gate_closed',
+    halt: 'agentfootprint.permission.halt',
   },
   risk: {
     flagged: 'agentfootprint.risk.flagged',
@@ -318,6 +320,10 @@ export interface AgentfootprintEventMap {
     'agentfootprint.permission.gate_closed',
     PermissionGateClosedPayload
   >;
+  'agentfootprint.permission.halt': AgentfootprintEventEnvelope<
+    'agentfootprint.permission.halt',
+    PermissionHaltPayload
+  >;
   // risk + fallback
   'agentfootprint.risk.flagged': AgentfootprintEventEnvelope<
     'agentfootprint.risk.flagged',
@@ -423,6 +429,7 @@ export const ALL_EVENT_TYPES: readonly AgentfootprintEventType[] = [
   'agentfootprint.permission.check',
   'agentfootprint.permission.gate_opened',
   'agentfootprint.permission.gate_closed',
+  'agentfootprint.permission.halt',
   'agentfootprint.risk.flagged',
   'agentfootprint.fallback.triggered',
   'agentfootprint.cost.tick',

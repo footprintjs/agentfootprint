@@ -352,15 +352,17 @@ export interface SkillDeactivatedPayload {
   readonly reason: string;
 }
 
-// permission.* (3)
+// permission.* (4)
 export interface PermissionCheckPayload {
   readonly capability: 'tool_call' | 'memory_read' | 'memory_write' | 'external_net' | 'user_data';
   readonly actor: string;
   readonly target?: string;
-  readonly result: 'allow' | 'deny' | 'gate_open';
+  readonly result: 'allow' | 'deny' | 'halt' | 'gate_open';
   readonly policyEngine?: 'opa' | 'cerbos' | 'custom';
   readonly policyRuleId?: string;
   readonly rationale?: string;
+  /** v2.12 — telemetry tag carried through from PermissionDecision.reason. */
+  readonly reason?: string;
 }
 
 export interface PermissionGateOpenedPayload {
@@ -372,6 +374,27 @@ export interface PermissionGateOpenedPayload {
 export interface PermissionGateClosedPayload {
   readonly gateId: string;
   readonly reason: string;
+}
+
+/**
+ * Emitted (v2.12) when a `PermissionChecker.check()` returns
+ * `{ result: 'halt', ... }`. Pairs with the typed `PolicyHaltError`
+ * thrown by `Agent.run()` — the event is the OBSERVABILITY signal,
+ * the error is the RUNTIME signal. Both carry the same `reason` for
+ * routing (e.g. `'security:exfiltration'` → PagerDuty).
+ *
+ * Fires AFTER the synthetic tool_result has been written to scope.history
+ * but BEFORE the run terminates, so observability adapters see the
+ * halt while the conversation history is consistent for downstream
+ * audit/replay.
+ */
+export interface PermissionHaltPayload {
+  readonly checkerId?: string;
+  readonly target: string;
+  readonly reason: string;
+  readonly tellLLM?: string;
+  readonly iteration: number;
+  readonly sequenceLength: number;
 }
 
 // risk.* + fallback.* (2)

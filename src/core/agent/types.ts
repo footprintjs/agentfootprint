@@ -179,4 +179,23 @@ export interface AgentState {
    *  Maintained by the UpdateSkillHistory function stage; consumed
    *  by CacheGate's skill-churn rule. */
   skillHistory: readonly (string | undefined)[];
+
+  // ── Policy halt state (v2.12) ───────────────────────────────
+  /** Set when a `PermissionChecker` returns `{ result: 'halt', ... }`.
+   *  `Agent.run()` reads these at the API boundary and throws a typed
+   *  `PolicyHaltError` carrying the same context — the chart $break's
+   *  graceful termination becomes a runtime signal callers can catch
+   *  with `instanceof PolicyHaltError`. Telemetry tag from the rule. */
+  policyHaltReason?: string;
+  /** Content delivered to the LLM as the synthetic tool_result before
+   *  termination — also surfaces on `PolicyHaltError.tellLLM` for
+   *  audit / replay. */
+  policyHaltTellLLM?: string;
+  /** The proposed tool call that triggered the halt (NOT executed). */
+  policyHaltTarget?: string;
+  policyHaltArgs?: Readonly<Record<string, unknown>>;
+  /** ReAct iteration the halt fired on. */
+  policyHaltIteration?: number;
+  /** Identifier of the PermissionChecker that returned `'halt'`. */
+  policyHaltCheckerId?: string;
 }

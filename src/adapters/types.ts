@@ -175,23 +175,112 @@ export interface RiskDetector {
 
 // ─── Permission Engine ──────────────────────────────────────────────
 
+/**
+ * One entry in the in-flight tool-call sequence delivered to
+ * `PermissionChecker.check()` since v2.12. Lets sequence-aware
+ * policies (exfil chain detection, idempotency limits, cost guards)
+ * inspect what the agent has already dispatched this run.
+ *
+ * Derived from `scope.history` at check time — single source of truth,
+ * survives `agent.resumeOnError(checkpoint)` correctly.
+ */
+export interface ToolCallEntry {
+  /** Tool name dispatched. */
+  readonly name: string;
+  /** Tool args passed to `tool.execute(args, ctx)`. */
+  readonly args: Readonly<Record<string, unknown>> | undefined;
+  /** ReAct iteration the call was dispatched on. */
+  readonly iteration: number;
+  /**
+   * Optional source identifier — `'local'` for tools registered via
+   * `.tool(...)` / `staticTools(...)`, or the `ToolProvider.id` for
+   * tools resolved through a `discoveryProvider`. Lets cross-hub
+   * exfil rules match on origin, not just name.
+   */
+  readonly providerId?: string;
+}
+
 export interface PermissionRequest {
   readonly capability: 'tool_call' | 'memory_read' | 'memory_write' | 'external_net' | 'user_data';
   readonly actor: string;
   readonly target?: string;
   readonly context?: Readonly<Record<string, unknown>>;
+  /**
+   * v2.12 — Sequence of tool calls already dispatched this run, in
+   * call order. EMPTY for non-`tool_call` capabilities. Sequence-aware
+   * policies (forbidden chains, idempotency limits) read this to make
+   * decisions that single-call governance cannot.
+   */
+  readonly sequence?: readonly ToolCallEntry[];
+  /**
+   * v2.12 — Full conversation history at check time. Lets policies
+   * inspect prior assistant content / tool results without maintaining
+   * parallel state via event subscription.
+   */
+  readonly history?: readonly LLMMessage[];
+  /**
+   * v2.12 — Current ReAct iteration (1-based). Lets policies fire
+   * different rules per iteration without external counters.
+   */
+  readonly iteration?: number;
+  /**
+   * v2.12 — Caller identity from `agent.run({ identity })`. Permission
+   * predicates can role-check on `identity.principal` / `identity.tenant`.
+   */
+  readonly identity?: {
+    readonly tenant?: string;
+    readonly principal?: string;
+    readonly conversationId: string;
+  };
+  /**
+   * v2.12 — Optional abort signal propagated from `agent.run({ env: { signal } })`.
+   * Async checkers (Redis lookups, hub-backed allowlists) MUST honor this
+   * — when the agent run is cancelled, in-flight checks should abort.
+   */
+  readonly signal?: AbortSignal;
 }
 
+/**
+ * v2.12 — content shape mirroring `LLMMessage.content`. Future-compatible
+ * with multi-modal `tool_result` blocks once `LLMMessage` widens.
+ */
+export type ToolResultContent = string;
+
 export interface PermissionDecision {
-  readonly result: 'allow' | 'deny' | 'gate_open';
+  /**
+   * v2.12 — `'halt'` is NEW. Terminates the run cleanly with a typed
+   * `PolicyHaltError`. The framework writes a synthetic `tool_result`
+   * (using `tellLLM`) to `scope.history` BEFORE throwing, so:
+   *   • Anthropic / OpenAI tool_use ↔ tool_result pairing is satisfied
+   *   • The conversation history is consistent for `resumeOnError`
+   *   • Lens / `getNarrative()` shows what the LLM was told
+   *
+   * `'deny'` keeps existing semantics: synthetic tool_result + LLM
+   * continues and can pick differently.
+   */
+  readonly result: 'allow' | 'deny' | 'halt' | 'gate_open';
   readonly policyRuleId?: string;
   readonly rationale?: string;
   readonly gateId?: string;
+  /**
+   * v2.12 — telemetry tag (machine-readable, stable across versions).
+   * Surfaces on `agentfootprint.permission.halt.reason` for routing
+   * alerts (e.g. `'security:exfiltration'` → PagerDuty,
+   * `'cost:context-bloat'` → Slack channel).
+   */
+  readonly reason?: string;
+  /**
+   * v2.12 — content delivered to the LLM as the synthetic `tool_result`
+   * on `'deny'` and `'halt'`. When omitted, defaults to a deliberately
+   * generic `"Tool '${name}' is not available in this context."` —
+   * NEVER falls back to `reason` (which is telemetry, not user-facing).
+   */
+  readonly tellLLM?: ToolResultContent;
 }
 
 export interface PermissionChecker {
   readonly name: string;
-  check(request: PermissionRequest): Promise<PermissionDecision>;
+  check(request: PermissionRequest): Promise<PermissionDecision> | PermissionDecision;
 }
 
 // ─── Pricing Table ──────────────────────────────────────────────────

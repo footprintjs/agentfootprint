@@ -479,6 +479,8 @@ export {
 // so existing v2.4 consumers find it at the top level.
 export {
   PermissionPolicy,
+  PolicyHaltError,
+  type PolicyHaltContext,
   type RoleAllowlist,
   type PermissionPolicyOptions,
 } from './security/index.js';

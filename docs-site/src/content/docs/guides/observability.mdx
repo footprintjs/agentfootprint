@@ -37,7 +37,7 @@ Every runner (`Agent`, `LLMCall`, `Sequence`, etc.) exposes the same observabili
 | **Recorders** | `runner.attach(recorder)` | You want pre-built aggregation (cost totals, token counts, narrative entries) |
 | **Tier-3 helpers** | `runner.enable.thinking({...})`, `runner.enable.logging({...})` | You want a one-liner for the common case (status line, structured logs) |
 
-There are **60+ typed events across 18 domains**: `agent`, `composition`, `context`, `stream`, `tools`, `skill`, `memory`, `cache`, `cost`, `permission`, `eval`, `embedding`, `pause`, `error`, `fallback`, `resilience`, `reliability`, `risk`. Every event has a typed payload — `gen_ai.chat`, `tool.start`, `cost.tick`, `composition.iteration_start`, etc. The framework owns the loop and emits during DFS traversal — no instrumentation, no spans-after-the-fact.
+There are **60+ typed events across 18 domains**: `agent`, `composition`, `context`, `stream`, `tools`, `skill`, `memory`, `cache`, `cost`, `permission` (incl. `halt` for sequence governance), `eval`, `embedding`, `pause`, `error`, `fallback`, `resilience`, `reliability`, `risk`. Every event has a typed payload — `gen_ai.chat`, `tool.start`, `cost.tick`, `composition.iteration_start`, etc. The framework owns the loop and emits during DFS traversal — no instrumentation, no spans-after-the-fact.
 
 ## Tier-3 — `.enable.thinking()` and `.enable.logging()`
 
@@ -146,7 +146,7 @@ agentfootprint.<domain>.<event>
 | `memory` | `attached` · `detached` · `written` · `strategy_applied` | Memory pipeline subflows |
 | `cache` | `applied` · `metrics` | Provider cache marker placement + hit-rate |
 | `cost` | `tick` · `limit_hit` | Per-call USD + budget threshold crossings |
-| `permission` | `check` · `gate_opened` · `gate_closed` | PermissionChecker decisions |
+| `permission` | `check` · `gate_opened` · `gate_closed` · `halt` | PermissionChecker decisions; `halt` fires when a checker terminates the run via sequence governance (v2.12+) |
 | `eval` | `score` · `threshold_crossed` | Custom quality / guardrail signals |
 | `embedding` | `generated` | Embedder calls (RAG / semantic memory) |
 | `pause` | `request` · `resume` | Human-in-the-loop checkpoints |

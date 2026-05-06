@@ -25,6 +25,8 @@ import {
 import type { CachePolicy, CacheStrategy } from '../cache/types.js';
 import type { ReliabilityConfig } from '../reliability/types.js';
 import { ReliabilityFailFastError } from '../reliability/types.js';
+import { extractSequence } from '../security/extractSequence.js';
+import { PolicyHaltError } from '../security/PolicyHaltError.js';
 import { cacheDecisionSubflow } from '../cache/CacheDecisionSubflow.js';
 import {
   cacheGateDecide,
@@ -452,9 +454,21 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       return this.finalizeResult(executor, result);
     } catch (cause) {
       // Wrap recoverable errors with the last-known-good checkpoint.
-      // Pause-signal exceptions are not recoverable in this sense
-      // (they're intentional askHuman pauses) — let those propagate.
-      if (cause instanceof Error && cause.name !== 'PauseSignal' && tracker.history.length > 0) {
+      // Don't wrap intentional terminal signals — let them propagate as
+      // their typed shapes so callers can `instanceof` them:
+      //   • PauseSignal — askHuman pause, not a failure
+      //   • PolicyHaltError — policy-driven termination; resuming would
+      //     immediately re-trigger the same halt (the synthetic
+      //     tool_result is already in history)
+      //   • ReliabilityFailFastError — finalizeResult constructs and
+      //     throws this AFTER the chart returns cleanly, so it never
+      //     enters this catch (kept here for documentation only)
+      const isTerminalTypedError =
+        cause instanceof Error &&
+        (cause.name === 'PauseSignal' ||
+          cause instanceof PolicyHaltError ||
+          cause instanceof ReliabilityFailFastError);
+      if (cause instanceof Error && !isTerminalTypedError && tracker.history.length > 0) {
         const checkpoint = buildCheckpoint(tracker, {
           iteration: tracker.inFlightIteration ?? tracker.lastCompletedIteration + 1,
           phase: classifyFailurePhase(cause),
@@ -628,6 +642,46 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
             payload: state.reliabilityFailPayload,
           }),
           snapshot: snap,
+        });
+      }
+    }
+    // Policy-halt translation (v2.12+) — when a `PermissionChecker` returns
+    // `{ result: 'halt', ... }`, the toolCalls handler writes a synthetic
+    // tool_result, emits `agentfootprint.permission.halt`, sets
+    // scope.policyHalt* fields, and calls $break. The chart stops; we
+    // surface the typed error here so callers can `instanceof PolicyHaltError`
+    // and branch on `.reason` for alert routing.
+    {
+      const snap = executor.getSnapshot();
+      const state = snap.sharedState as {
+        policyHaltReason?: string;
+        policyHaltTellLLM?: string;
+        policyHaltTarget?: string;
+        policyHaltArgs?: Readonly<Record<string, unknown>>;
+        policyHaltIteration?: number;
+        policyHaltCheckerId?: string;
+        history?: import('../adapters/types.js').LLMMessage[];
+      };
+      if (state.policyHaltReason !== undefined && state.policyHaltTarget !== undefined) {
+        const history = state.history ?? [];
+        const iteration = state.policyHaltIteration ?? 1;
+        // Sequence at halt time — derived from history. Includes the
+        // proposed call (which DID land in history as the synthetic
+        // tool_result for protocol compliance, but the policy denied
+        // execution). Filter it out so callers see only dispatched
+        // calls, then append the proposed entry as a hint.
+        const sequenceWithoutProposed = extractSequence(history.slice(0, -1), iteration);
+        throw new PolicyHaltError({
+          reason: state.policyHaltReason,
+          ...(state.policyHaltTellLLM !== undefined && { tellLLM: state.policyHaltTellLLM }),
+          sequence: [
+            ...sequenceWithoutProposed,
+            { name: state.policyHaltTarget, args: state.policyHaltArgs, iteration },
+          ],
+          iteration,
+          history,
+          proposed: { name: state.policyHaltTarget, args: state.policyHaltArgs ?? {} },
+          ...(state.policyHaltCheckerId !== undefined && { checkerId: state.policyHaltCheckerId }),
         });
       }
     }

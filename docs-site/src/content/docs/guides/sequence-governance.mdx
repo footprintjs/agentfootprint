@@ -1,0 +1,214 @@
+---
+title: Sequence governance (recipe)
+description: Build sequence-aware tool governance on the v2.12 PermissionChecker — security (exfil chains), cost (wasteful patterns), correctness (idempotency caps). Same plug point as single-call permission, no new factory.
+---
+
+import CodeFile from '@/components/CodeFile.astro';
+
+> Single-call permission answers *"is this tool allowed?"* — necessary but not sufficient. An agent can be fully compliant on every individual call and still produce harm by chaining individually-allowed steps. v2.12 enriches `PermissionChecker.check()` with **sequence + history + iteration + identity + signal**, and adds **`'halt'`** as a Decision result. Sequence-aware governance is now ~80 LOC of user-land code on top — no new library factory required.
+
+## What v2.12 added (small primitive change)
+
+```ts
+// PermissionRequest — enriched
+interface PermissionRequest {
+  // existing
+  capability: 'tool_call' | ...;
+  actor: string;
+  target?: string;
+  context?: Record<string, unknown>;
+
+  // NEW in v2.12
+  sequence?: readonly ToolCallEntry[];   // dispatched calls so far
+  history?: readonly LLMMessage[];        // full conversation
+  iteration?: number;                     // current ReAct iteration
+  identity?: { tenant?, principal?, conversationId };
+  signal?: AbortSignal;                   // for async checkers
+}
+
+// PermissionDecision — extended
+interface PermissionDecision {
+  result: 'allow' | 'deny' | 'halt' | 'gate_open';  // 'halt' is NEW
+  reason?: string;                                   // NEW — telemetry tag
+  tellLLM?: ToolResultContent;                       // NEW — LLM-facing message
+  rationale?: string;
+  policyRuleId?: string;
+  gateId?: string;
+}
+```
+
+`'halt'` terminates the run via `PolicyHaltError` — the framework writes a synthetic `tool_result` (using `tellLLM`) to `scope.history` BEFORE throwing, so:
+- Anthropic / OpenAI tool_use ↔ tool_result pairing protocol stays satisfied
+- Conversation history is consistent for `agent.resumeOnError(checkpoint)`
+- Lens / `getNarrative()` shows what the LLM was told before the halt
+
+## The recipe — `sequencePolicy({ forbidden, limits })` in user-land
+
+Two helpers + a factory. The full runnable file is [`examples/features/11-sequence-policy.ts`](https://github.com/footprintjs/agentfootprint/blob/main/examples/features/11-sequence-policy.ts) — paste it into your project and adapt.
+
+### Suffix matcher
+
+<CodeFile path="examples/features/11-sequence-policy.ts" region="suffix-matcher" title="examples/features/11-sequence-policy.ts (region: suffix-matcher)" />
+
+### The policy factory
+
+<CodeFile path="examples/features/11-sequence-policy.ts" region="sequence-policy" title="examples/features/11-sequence-policy.ts (region: sequence-policy)" />
+
+That's the whole recipe. Three concepts (`forbidden` rules, `limits`, `tellLLM`) over the v2.12 enriched ctx.
+
+## Three rule categories — same mechanism, three product pitches
+
+| Category | Pattern | What it blocks | Action |
+|---|---|---|---|
+| 🛡 **Security** | `forbidden` with cross-tool / cross-hub matchers | Exfil chains, privilege escalation | `'halt'` — terminate run |
+| 💸 **Cost** | `forbidden` (wasteful patterns) + `limits` (caps) | Context bloat, runaway loops, expensive repeats | `'deny'` — LLM recovers |
+| ✅ **Correctness** | `limits` + ordering checks | Double-charges, idempotency violations | `'halt'` — hard cap |
+
+Same code path. The `reason` field's namespace prefix carries the framing for telemetry routing.
+
+## Wiring it up
+
+```ts
+import { Agent, PolicyHaltError } from 'agentfootprint';
+
+const policy = sequencePolicy({
+  forbidden: [
+    {
+      sequence: ['runPython', { namePrefix: 'slack.' }],
+      action: 'halt',
+      reason: 'security:exfiltration',
+      tellLLM: 'This tool combination is restricted. Operation has been logged for security review.',
+    },
+    {
+      sequence: ['fetchAllUsers', 'summarize'],
+      action: 'deny',
+      reason: 'cost:context-bloat',
+      tellLLM: 'fetchAllUsers returns too much data. Try searchUsers with a filter, then summarize.',
+    },
+  ],
+  limits: {
+    processRefund: {
+      maxPerSession: 3,
+      action: 'halt',
+      reason: 'correctness:idempotency',
+      tellLLM: 'Refund limit reached (3/3). Escalate to a human agent.',
+    },
+  },
+});
+
+const agent = Agent.create({ provider, model, permissionChecker: policy })
+  .system("You're a customer support agent.")
+  .tools([lookupOrder, runPython, slackDM, fetchAllUsers, processRefund, summarize])
+  .build();
+
+try {
+  const result = await agent.run({ message: 'help me with order #42' });
+  console.log(result.content);
+} catch (e) {
+  if (e instanceof PolicyHaltError) {
+    console.log(`HALT: rule='${e.reason}' iteration=${e.iteration}`);
+    console.log(`Sequence: ${e.sequence.map(c => c.name).join(' → ')}`);
+    if (e.reason.startsWith('security:')) await pagerDuty.notify(e);
+    if (e.reason.startsWith('correctness:')) await opsDashboard.flag(e);
+  } else {
+    throw e;
+  }
+}
+
+agent.on('agentfootprint.permission.halt', (e) => {
+  metrics.increment('policy.halt', { reason: e.payload.reason, checker: e.payload.checkerId });
+});
+```
+
+## How sequence is derived (no parallel state)
+
+The framework derives `sequence` on demand from `scope.history` via the `extractSequence` helper. **No parallel state in scope** — the conversation history IS the source of truth. This means:
+
+- ✅ Survives `agent.resumeOnError(checkpoint)` — resumed runs see the same sequence the failed run did
+- ✅ Survives parallel tool calls — siblings already dispatched in the same turn appear in the sequence for later siblings
+- ✅ Skips synthetic-deny tool_results — denied calls don't count as "dispatched"
+- ✅ Skips in-flight calls — proposed calls without a tool_result yet don't pollute the sequence
+
+You can use the helper directly if you need it outside a checker:
+
+```ts
+import { extractSequence } from 'agentfootprint/security';
+
+const sequence = extractSequence(history, currentIteration);
+// → readonly ToolCallEntry[] of {name, args, iteration, providerId?}
+```
+
+## Strict halt ordering — what the framework guarantees
+
+When your checker returns `{ result: 'halt', ... }`:
+
+1. **Synthetic `tool_result`** appended to `scope.history` with `tellLLM` content
+2. **`agentfootprint.permission.halt`** event emitted with `{checkerId, reason, tellLLM, iteration, target, sequenceLength}`
+3. **Stage commits** — `scope.history` written, `runtimeStageId` complete, `commitLog` has the entry
+4. **`scope.$break(...)`** propagates the halt
+5. **`Agent.run()` catches** at the API boundary, constructs `PolicyHaltError` with full forensic context
+6. **`PolicyHaltError` thrown** to the caller
+
+Steps 1–3 happen inside a `try/finally`-equivalent ordering — if anything in the halt path throws, the audit trail is still committed before the run terminates. Same correctness pattern as the v2.11.5 reliability gate.
+
+## Default `tellLLM` — deliberately generic, never leaks `reason`
+
+When you omit `tellLLM` on a `halt` decision, the framework defaults to:
+
+```
+Tool '${name}' is not available in this context.
+```
+
+This is **deliberately generic and NEVER falls back to `reason`**. Why? `reason` is telemetry — your tag is something like `'security:exfiltration'` or `'cost:context-bloat'`. Leaking that to the LLM teaches it the rule space; over enough turns a determined model can probe edges. Consumers who want a richer LLM-facing message provide `tellLLM` explicitly.
+
+For `deny` decisions (which let the LLM recover), the default DOES include `rationale` text (kept for v2.4 back-compat). If you want a generic deny message too, set `tellLLM` explicitly.
+
+## When to use deny vs halt
+
+| Goal | Use |
+|---|---|
+| LLM should pick a different path | `'deny'` — synthetic tool_result lands, run continues |
+| Run must terminate (security / hard idempotency cap) | `'halt'` — `PolicyHaltError` thrown |
+| Want a clean error type for the caller to branch on | `'halt'` always |
+| Want zero impact on cost / latency unless attack succeeds | Either — both are O(1) per check |
+
+## Anti-patterns
+
+- ❌ **Never put protected data in `tellLLM`.** `tellLLM: "Cannot exfiltrate: file has 1543 SSNs"` literally leaks the count. The LLM sees this content; the developer is responsible for keeping sensitive details out.
+- ❌ **Don't default `tellLLM` to your `reason` value.** `reason` is telemetry, not user-facing. The framework default deliberately uses a generic message — match that pattern for your custom defaults.
+- ❌ **Don't throw inside `check()`** unless you mean it. Throwing is treated as deny-by-default with the error message echoed in the synthetic tool_result. Use `{ result: 'halt' }` for clean termination.
+- ❌ **Don't maintain parallel state in scope** to track sequence. Use `request.sequence` (derived from history) — it survives resume correctly.
+- ❌ **Don't overload one rule for multiple categories.** Split into separate rules with distinct `reason` tags so telemetry routing works (`security:*` → PagerDuty, `cost:*` → Slack channel).
+
+## Composition with `staticTools` + `gatedTools`
+
+`PermissionChecker` runs at **dispatch** time. `gatedTools` hides tools at **visibility** time (the LLM doesn't see them). Use both for defense-in-depth:
+
+```ts
+const provider = gatedTools(
+  staticTools(allTools),
+  (toolName) => roleCanCall(toolName),    // visibility — fewer calls to deny
+);
+
+const agent = Agent.create({ provider: llm, model, permissionChecker: sequencePolicy({...}) })
+  .toolProvider(provider)
+  .build();
+```
+
+`gatedTools` reduces wasted LLM cycles ("don't show what we'll deny"); `permissionChecker` enforces what `gatedTools` couldn't catch (sequence patterns the LLM couldn't have seen at visibility time).
+
+## Why no library factory ships in v2.12
+
+Same answer as the v2.11.6 `discoveryProvider` recipe — the **library extends the primitive** to enable consumer policies; consumers ship the convenience layer. Reasons:
+
+1. **Lock-in risk** — committing to ONE matcher API (forbidden / patterns / wildcards / providerId) before real consumer patterns emerge would lock us into the wrong shape
+2. **Cost-benefit** — extending `PermissionChecker` is ~250 LOC of library work; shipping a full `toolSequencePolicy({...})` factory is ~700 LOC plus a new subpath plus more tests, for the same consumer outcome
+3. **Future option** — if 5+ consumers build the same factory shape, we promote it to `agentfootprint/governance` in a future minor with a known-good API
+
+## Next steps
+
+- [`examples/features/11-sequence-policy.ts`](https://github.com/footprintjs/agentfootprint/blob/main/examples/features/11-sequence-policy.ts) — the runnable file behind this recipe
+- [Permission policy](/agentfootprint/guides/security/) — single-call governance + role allowlists (`PermissionPolicy.fromRoles(...)`)
+- [Tool providers](/agentfootprint/guides/tool-providers/) — `gatedTools` for visibility-time filtering
+- [Reliability gate](/agentfootprint/guides/reliability-gate/) — `ReliabilityFailFastError` for LLM-call-level termination (sibling pattern to `PolicyHaltError`)
+- [Observability](/agentfootprint/guides/observability/) — the `agentfootprint.permission.halt` event in the full taxonomy

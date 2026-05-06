@@ -5,6 +5,126 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.12.0]
+
+### Added — sequence-aware PermissionChecker (the recipe primitive)
+
+Single-call permission (v2.4) answers *"is this tool allowed?"* in isolation. v2.12 enriches the check ctx so consumers can build sequence-aware governance — security (exfil chains), cost (wasteful patterns), correctness (idempotency caps) — over the SAME `PermissionChecker` interface, no new factory required.
+
+**Pattern parallels v2.11.6 `discoveryProvider`:** the library extends a primitive, ships a recipe; consumers build the convenience layer in user-land. Avoids API lock-in before real usage shapes the right factory.
+
+#### `PermissionRequest` enrichment (5 new fields)
+
+```ts
+interface PermissionRequest {
+  // existing
+  capability, actor, target?, context?
+
+  // NEW in v2.12
+  sequence?: readonly ToolCallEntry[];   // dispatched calls so far this run
+  history?: readonly LLMMessage[];        // full conversation
+  iteration?: number;                     // current ReAct iteration
+  identity?: { tenant?, principal?, conversationId };
+  signal?: AbortSignal;
+}
+```
+
+The framework derives `sequence` on demand from `scope.history` via `extractSequence()` — single source of truth, survives `agent.resumeOnError(checkpoint)` correctly. No parallel state in scope.
+
+#### `PermissionDecision` extension — `'halt'` + `tellLLM` + `reason`
+
+```ts
+interface PermissionDecision {
+  // existing
+  result: 'allow' | 'deny' | 'gate_open';
+  rationale?, policyRuleId?, gateId?
+
+  // NEW in v2.12
+  result: ... | 'halt';                   // terminates run via PolicyHaltError
+  reason?: string;                        // telemetry tag (machine-readable)
+  tellLLM?: ToolResultContent;            // LLM-facing synthetic tool_result
+}
+```
+
+`'halt'` writes a synthetic tool_result (using `tellLLM`) to history BEFORE throwing — Anthropic / OpenAI tool_use ↔ tool_result protocol stays satisfied; conversation history is consistent for resume.
+
+#### Default `tellLLM` is deliberately generic
+
+Omitted `tellLLM` defaults to `"Tool '${name}' is not available in this context."` — NEVER falls back to `reason` (which is telemetry, e.g. `'security:exfiltration'`). Leaking the reason tag to the LLM teaches it the rule space; consumers who want a richer message provide `tellLLM` explicitly.
+
+#### `PolicyHaltError` typed error
+
+```ts
+class PolicyHaltError extends Error {
+  reason: string;          // telemetry tag from rule
+  tellLLM?: ToolResultContent;
+  sequence: readonly ToolCallEntry[];
+  iteration: number;
+  history: readonly LLMMessage[];
+  proposed: { name: string; args: unknown };
+  checkerId?: string;
+}
+```
+
+Parallel to `ReliabilityFailFastError`. Caller branches on `e.reason.startsWith('security:')` etc. for alert routing (PagerDuty / Slack / dashboard).
+
+#### Strict halt ordering (audit-trail completeness)
+
+When `{ result: 'halt' }` fires:
+1. Synthetic tool_result appended to `scope.history`
+2. `agentfootprint.permission.halt` event emitted
+3. Stage commits (commitLog has the entry, runtimeStageId complete)
+4. `scope.$break` propagates
+5. `Agent.run()` catches at the API boundary, throws `PolicyHaltError`
+
+If anything in the halt path throws, the audit trail is still committed before the run terminates. `agent.run()` exempts `PolicyHaltError` (and `ReliabilityFailFastError`, `PauseSignal`) from the auto-checkpoint wrapping so callers can `instanceof` the typed error directly.
+
+#### One new typed event — `agentfootprint.permission.halt`
+
+```ts
+interface PermissionHaltPayload {
+  checkerId?: string;
+  target: string;
+  reason: string;
+  tellLLM?: string;
+  iteration: number;
+  sequenceLength: number;
+}
+```
+
+Routes via existing `PermissionRecorder` bridge (no new bridge). `PermissionCheckPayload.result` widened to include `'halt'`; `PermissionCheckPayload.reason` field added for telemetry routing on the existing event. Event count: 50 → 51.
+
+#### `extractSequence(history, iteration, options?)` exported helper
+
+Pure function: walks history, returns `readonly ToolCallEntry[]` of dispatched calls in order. Filters out:
+- Calls without a matching `tool` message (in-flight from current turn)
+- Calls whose tool_result starts with `[permission denied:` (synthetic denies — never executed)
+
+Optional `resolveProviderId(toolName) => string | undefined` for cross-hub policy matching (`'local'` for static tools; provider's `id` for `discoveryProvider` tools).
+
+#### Implementation
+
+- **`src/adapters/types.ts`** — `PermissionRequest` enriched; `PermissionDecision` widened with `'halt'` + `tellLLM` + `reason`; `PermissionChecker.check()` may return `Promise<Decision>` OR `Decision` (sync zero-overhead path); `ToolCallEntry` + `ToolResultContent` types added.
+- **`src/security/PolicyHaltError.ts`** (new) — typed error class, `PolicyHaltContext` shape.
+- **`src/security/extractSequence.ts`** (new) — pure helper, `SYNTHETIC_DENY_PREFIX` exported for consumer policies that want to filter their own.
+- **`src/core/agent/stages/toolCalls.ts`** — pass enriched ctx to `permissionChecker.check()`; handle `'halt'` result with strict ordering (synthetic → event → commit → $break).
+- **`src/core/agent/types.ts`** — `AgentState.policyHalt*` fields added.
+- **`src/core/Agent.ts`** — halt translation in `finalizeResult()`; `PolicyHaltError` exempted from `RunCheckpointError` wrapping (parallel to `PauseSignal` / `ReliabilityFailFastError`).
+- **`src/events/payloads.ts`** + **`src/events/registry.ts`** — `PermissionHaltPayload` + entry; `PermissionCheckPayload.result` widened; `PermissionCheckPayload.reason` field added; `ALL_EVENT_TYPES` count 50 → 51.
+
+#### Tests (14 new in `test/security/policy-halt.test.ts`)
+
+Enriched ctx (sequence + history + iteration + identity) / halt → PolicyHaltError with full context / halt without `tellLLM` defaults to safe generic (NEVER leaks `reason`) / `permission.halt` event / strict ordering (synthetic before throw) / `extractSequence` helper (skips synthetic denies, skips in-flight, custom providerId resolver) / async checker (Promise return) / no regression on `'allow'` / `'deny'` / sequence-aware user-land policies (forbidden-suffix + frequency-limit).
+
+#### Recipe + example
+
+- **`examples/features/11-sequence-policy.ts`** — `sequencePolicy({ forbidden, limits })` factory in user-land (~80 LOC); three scenarios (happy path, cost rule denies + LLM recovers, security rule halts via `PolicyHaltError`).
+- **`docs-site/src/content/docs/guides/sequence-governance.mdx`** — full recipe page using CodeFile region markers; explains why no library factory ships (lock-in risk + cost-benefit); composition with `gatedTools`; anti-patterns; deny vs halt decision matrix.
+
+#### Backward compatibility
+
+None broken. Existing v2.4 `PermissionChecker` consumers work unchanged — the new fields are optional reads, the new result is opt-in. The `PermissionDecision.result` widening is a strict superset; existing return types still satisfy the new union.
+
 ## [2.11.6]
 
 ### Added — async ToolProvider for runtime tool discovery

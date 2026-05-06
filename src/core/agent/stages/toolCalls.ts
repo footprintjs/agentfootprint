@@ -29,6 +29,7 @@ import type { PausableHandler, TypedScope } from 'footprintjs';
 import type { LLMMessage, PermissionChecker } from '../../../adapters/types.js';
 import type { ContextRole } from '../../../events/types.js';
 import { typedEmit } from '../../../recorders/core/typedEmit.js';
+import { extractSequence } from '../../../security/extractSequence.js';
 import type { ToolProvider } from '../../../tool-providers/types.js';
 import { isPauseRequest } from '../../pause.js';
 import type { ProviderToolCache } from '../../slots/buildToolsSlot.js';
@@ -102,6 +103,14 @@ export function buildToolCallsHandler(
         return cached.find((t) => t.schema.name === toolName);
       };
 
+      // Capture run identity from scope for the enriched permission ctx.
+      // Same value the Tools slot passes to ToolProvider.list(ctx) so the
+      // checker sees consistent identity across both gates.
+      const runIdentity = scope.runIdentity as
+        | { tenant?: string; principal?: string; conversationId: string }
+        | undefined;
+      const env = scope.$getEnv();
+
       for (const tc of toolCalls) {
         const tool = lookupTool(tc.name);
         typedEmit(scope, 'agentfootprint.stream.tool_start', {
@@ -115,18 +124,47 @@ export function buildToolCallsHandler(
         let error: boolean | undefined;
         // Permission gate — when a checker is configured, evaluate BEFORE
         // executing the tool. Emits `permission.check` with the decision.
-        // On 'deny', the tool is not executed and its result is a
-        // synthetic denial string; on 'allow'/'gate_open', execution
-        // proceeds normally (the gate is informational — the consumer's
-        // checker is responsible for any gate-open side effects).
+        //
+        // v2.12 — three terminal results:
+        //   • 'allow' / 'gate_open' → tool executes normally
+        //   • 'deny'                → synthetic tool_result lands; LLM continues
+        //   • 'halt'                → synthetic tool_result lands; run terminates
+        //                             via scope.$break + Agent.run throws
+        //                             PolicyHaltError at the API boundary
+        //
+        // Strict ordering on halt: synthetic tool_result → halt event →
+        // commit (newHistory written to scope) → $break. This guarantees
+        // the audit trail is complete before the run terminates, so
+        // `agent.resumeOnError(checkpoint)` sees consistent state.
+        //
+        // The checker receives the in-flight sequence (derived from
+        // scope.history), full conversation history, current iteration,
+        // identity, and abort signal — enough surface to build sequence-
+        // aware policies (forbidden chains, idempotency limits, cost
+        // guards) without maintaining parallel state.
         let denied = false;
+        let haltContext:
+          | {
+              reason: string;
+              tellLLM: string;
+              checkerId?: string;
+            }
+          | undefined;
         if (permissionChecker) {
           try {
+            // Sequence is derived from history at check time (not parallel
+            // state) — single source of truth, survives resumeOnError.
+            const sequence = extractSequence(newHistory, iteration);
             const decision = await permissionChecker.check({
               capability: 'tool_call',
               actor: 'agent',
               target: tc.name,
               context: tc.args,
+              sequence,
+              history: newHistory,
+              iteration,
+              ...(runIdentity && { identity: runIdentity }),
+              ...(env.signal && { signal: env.signal }),
             });
             typedEmit(scope, 'agentfootprint.permission.check', {
               capability: 'tool_call',
@@ -135,10 +173,30 @@ export function buildToolCallsHandler(
               result: decision.result,
               ...(decision.policyRuleId !== undefined && { policyRuleId: decision.policyRuleId }),
               ...(decision.rationale !== undefined && { rationale: decision.rationale }),
+              ...(decision.reason !== undefined && { reason: decision.reason }),
             });
             if (decision.result === 'deny') {
               denied = true;
-              result = `[permission denied: ${decision.rationale ?? 'policy'}]`;
+              // Deny default keeps the existing v2.4 shape (carries
+              // rationale text — historically intentional, since deny
+              // lets the LLM recover and rationale is consumer-supplied).
+              const tellLLM =
+                decision.tellLLM ?? `[permission denied: ${decision.rationale ?? 'policy'}]`;
+              result = tellLLM;
+            } else if (decision.result === 'halt') {
+              denied = true;
+              // Halt default is DELIBERATELY GENERIC — never falls back
+              // to `reason` (which is telemetry, e.g. 'security:exfiltration'
+              // — leaking that to the LLM teaches it the rule space).
+              // Consumers who want a richer message provide `tellLLM` explicitly.
+              const tellLLM =
+                decision.tellLLM ?? `Tool '${tc.name}' is not available in this context.`;
+              result = tellLLM;
+              haltContext = {
+                reason: decision.reason ?? decision.rationale ?? 'policy-halt',
+                tellLLM,
+                ...(permissionChecker.name && { checkerId: permissionChecker.name }),
+              };
             }
           } catch (permErr) {
             // A checker that throws is treated as deny-by-default. The
@@ -219,6 +277,36 @@ export function buildToolCallsHandler(
               scope.activatedInjectionIds = [...current, requestedId];
             }
           }
+        }
+
+        // v2.12 — strict halt ordering (continued).
+        //
+        // The synthetic tool_result for the halt-triggering call has
+        // ALREADY been pushed to newHistory above. Now: emit the halt
+        // event, commit history to scope, set the scope flags Agent.run
+        // reads at the API boundary, and break the loop. This SKIPS any
+        // remaining parallel-call siblings (intentional — once a halt
+        // fires, no further tool dispatches should occur this turn).
+        if (haltContext) {
+          typedEmit(scope, 'agentfootprint.permission.halt', {
+            target: tc.name,
+            reason: haltContext.reason,
+            tellLLM: haltContext.tellLLM,
+            iteration,
+            sequenceLength: extractSequence(newHistory, iteration).length,
+            ...(haltContext.checkerId !== undefined && { checkerId: haltContext.checkerId }),
+          });
+          scope.history = newHistory;
+          scope.policyHaltReason = haltContext.reason;
+          scope.policyHaltTellLLM = haltContext.tellLLM;
+          scope.policyHaltTarget = tc.name;
+          scope.policyHaltArgs = tc.args;
+          scope.policyHaltIteration = iteration;
+          if (haltContext.checkerId !== undefined) {
+            scope.policyHaltCheckerId = haltContext.checkerId;
+          }
+          scope.$break(`policy-halt: ${haltContext.reason}`);
+          return undefined;
         }
       }
       scope.history = newHistory;

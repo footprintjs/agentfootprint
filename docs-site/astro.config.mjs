@@ -91,6 +91,7 @@ export default defineConfig({
             { label: 'Tools', slug: 'guides/tools' },
             { label: 'Tool providers', slug: 'guides/tool-providers' },
             { label: 'Tool discovery (async)', slug: 'guides/tool-discovery' },
+            { label: 'Sequence governance (recipe)', slug: 'guides/sequence-governance' },
             { label: 'Flowchart as tool', slug: 'guides/flowchart-as-tool' },
             { label: 'Output schema', slug: 'guides/output-schema' },
             { label: 'Grounding', slug: 'guides/grounding' },
