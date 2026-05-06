@@ -145,6 +145,91 @@ describe('framework-wiring — scenario: auto-wire emits thinking_end event', ()
     expect(events).toHaveLength(1);
     expect(events[0]).toEqual({ blockCount: 1, totalChars: 'reasoning here'.length });
   });
+
+  it('thinking_end (v2.14.1) carries the blocks payload for live consumers', async () => {
+    // The framework's "collect during traversal" rule means consumers
+    // should NOT post-walk scope.history to find per-iteration thinking;
+    // the typed event itself carries the blocks. This test pins the
+    // contract: blocks land on the event with content + signature
+    // matching what hits scope.history.
+    const captured: Array<readonly ThinkingBlock[]> = [];
+    const provider = mockProvider({
+      name: 'mock',
+      rawThinking: {
+        kind: 'anthropic',
+        blocks: [
+          { type: 'thinking', thinking: 'step 1', signature: 'sig-A' },
+          { type: 'thinking', thinking: 'step 2', signature: 'sig-B' },
+        ],
+      },
+    });
+    const agent = Agent.create({ provider, model: 'mock' }).system('s').build();
+    agent.on('agentfootprint.stream.thinking_end', (e) => {
+      if (e.payload.blocks) captured.push(e.payload.blocks);
+    });
+    await agent.run({ message: 'go' });
+    expect(captured).toHaveLength(1);
+    expect(captured[0]).toHaveLength(2);
+    expect(captured[0]?.[0]?.content).toBe('step 1');
+    expect(captured[0]?.[0]?.signature).toBe('sig-A');
+    expect(captured[0]?.[1]?.content).toBe('step 2');
+    expect(captured[0]?.[1]?.signature).toBe('sig-B');
+  });
+
+  it('thinking_end has NO `blocks` field when handler returns []', async () => {
+    // Empty result → blocks omitted entirely (consumers branch on
+    // field presence). Keeps the event payload tight when the model
+    // produced no reasoning content this call.
+    let endEvent: { blocks?: readonly ThinkingBlock[] } | undefined;
+    const provider = mockProvider({
+      name: 'mock',
+      rawThinking: { kind: 'anthropic', blocks: [] }, // handler → []
+    });
+    const agent = Agent.create({ provider, model: 'mock' }).system('s').build();
+    agent.on('agentfootprint.stream.thinking_end', (e) => {
+      endEvent = { ...(e.payload.blocks !== undefined && { blocks: e.payload.blocks }) };
+    });
+    await agent.run({ message: 'go' });
+    // Either no thinking_end fired (subflow early-return when raw is undefined)
+    // OR fired with no blocks. Pin the latter when the event DID fire.
+    if (endEvent) {
+      expect(endEvent.blocks).toBeUndefined();
+    }
+  });
+
+  it('thinking_end blocks have providerMeta stripped (Phase 6 invariant preserved)', async () => {
+    // Phase 6 strips providerMeta before persistence. Phase 6.6 puts
+    // the SAME persisted blocks into the event. So the event's blocks
+    // must NOT contain providerMeta either — same audit-log surface.
+    const SENTINEL = '__provider_meta_sentinel__';
+    const customHandler: ThinkingHandler = {
+      id: 'leak-test-event',
+      providerNames: ['leak-test-event-provider'],
+      normalize: () => [
+        {
+          type: 'thinking',
+          content: 'visible reasoning',
+          providerMeta: { [SENTINEL]: 'should-not-leak' },
+        },
+      ],
+    };
+    const provider = mockProvider({
+      name: 'leak-test-event-provider',
+      rawThinking: { trigger: true },
+    });
+    const agent = Agent.create({ provider, model: 'mock' })
+      .system('s')
+      .thinkingHandler(customHandler)
+      .build();
+    let payload: unknown;
+    agent.on('agentfootprint.stream.thinking_end', (e) => {
+      payload = e.payload;
+    });
+    await agent.run({ message: 'go' });
+    const json = JSON.stringify(payload);
+    expect(json).not.toContain(SENTINEL);
+    expect(json).not.toContain('providerMeta');
+  });
 });
 
 // ─── 3. INTEGRATION — assistant message in history has thinkingBlocks ─

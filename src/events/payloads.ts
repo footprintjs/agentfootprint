@@ -16,6 +16,7 @@ import type {
   LLMProviderName,
   ToolProtocol,
 } from './types.js';
+import type { ThinkingBlock } from '../thinking/types.js';
 
 // ─── Tier 1+2: Core Domain (library-emitted) ──────────────────────────
 
@@ -568,10 +569,11 @@ export interface StreamThinkingDeltaPayload {
  * produced. Pairs with the leading `stream.thinking_delta` events when
  * streaming, OR fires standalone for non-streaming providers (OpenAI).
  *
- * Carries METADATA only — full thinking content lives on
- * `LLMMessage.thinkingBlocks` which is the durable record. Use this
- * event for telemetry, retry-rate dashboards, and "thinking happened"
- * signal in UIs.
+ * Use this event for live per-iteration UIs (chat-bubble reasoning
+ * pills, retry-rate dashboards, telemetry). The `blocks` field carries
+ * the same content that lands on `LLMMessage.thinkingBlocks` — read it
+ * here for live display instead of post-walking `scope.history` after
+ * the run completes (the framework's "collect during traversal" rule).
  *
  * **`tokens` field population:**
  * - Anthropic: `undefined` currently — Anthropic's `response.usage`
@@ -581,12 +583,33 @@ export interface StreamThinkingDeltaPayload {
  *   `response.usage.completion_tokens_details.reasoning_tokens`.
  * - Custom providers: populated when handler computes it during
  *   `normalize()`.
+ *
+ * **Sensitive data:** the `blocks` field carries reasoning content.
+ * Same risk profile as `stream.token` — wildcard (`*`) recorders
+ * piping to external sinks (Datadog, CloudWatch, OTel) will see this.
+ * Treat thinking content with the same redaction posture you give
+ * visible response tokens. `providerMeta` is already stripped by the
+ * framework before persistence (Phase 6 invariant), so the blocks
+ * here match the audit-log surface bytes-exactly.
  */
 export interface StreamThinkingEndPayload {
   readonly iteration: number;
   readonly blockCount: number;
   readonly totalChars: number;
   readonly tokens?: number;
+  /**
+   * v2.14.1+ — the normalized thinking blocks for this LLM call.
+   *
+   * Same data the framework persists to `LLMMessage.thinkingBlocks`
+   * (post-`providerMeta` strip). Lets live consumers render the
+   * model's chain-of-thought per iteration without scope-walking
+   * after the run.
+   *
+   * Empty / undefined when no thinking content was produced this
+   * call (handler returned `[]`). Non-empty when at least one
+   * thinking or redacted_thinking block landed.
+   */
+  readonly blocks?: readonly ThinkingBlock[];
 }
 
 /**

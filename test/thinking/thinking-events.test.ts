@@ -61,6 +61,28 @@ describe('thinking-events — unit: payload shapes', () => {
     expect(withTokens.blockCount).toBe(3);
   });
 
+  it('StreamThinkingEndPayload.blocks (v2.14.1) is optional and carries normalized blocks', () => {
+    const withBlocks: StreamThinkingEndPayload = {
+      iteration: 2,
+      blockCount: 2,
+      totalChars: 100,
+      blocks: [
+        { type: 'thinking', content: 'first reasoning step' },
+        { type: 'thinking', content: 'second reasoning step', signature: 'sig-A' },
+      ],
+    };
+    const withoutBlocks: StreamThinkingEndPayload = {
+      iteration: 2,
+      blockCount: 0,
+      totalChars: 0,
+      // blocks omitted — handler returned [] (no thinking this call)
+    };
+    expect(withBlocks.blocks).toHaveLength(2);
+    expect(withBlocks.blocks?.[0]?.content).toBe('first reasoning step');
+    expect(withBlocks.blocks?.[1]?.signature).toBe('sig-A');
+    expect(withoutBlocks.blocks).toBeUndefined();
+  });
+
   it('AgentThinkingParseFailedPayload has all 5 required fields', () => {
     const payload: AgentThinkingParseFailedPayload = {
       providerName: 'anthropic',
