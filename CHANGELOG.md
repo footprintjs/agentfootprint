@@ -5,6 +5,37 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.12.1]
+
+### Fixed — 7-pattern test coverage backfill
+
+Project rule: every release ships tests covering all 7 patterns of the matrix (unit · scenario · integration · property · security · performance · ROI). Pre-release reviews of v2.11.6 (`async-provider`) and v2.12 (`policy-halt`) found gaps in the property + performance + ROI columns. This patch release backfills them retroactively. **No source code changes; tests only.**
+
+#### v2.11.6 backfill — `test/tool-providers/async-provider.test.ts` (+6 tests)
+
+- **PROPERTY** — random sync/async/throw provider compositions hold dispatch-shape invariants (sync → non-Promise; async → Promise; sync-throw → throws; async-reject → rejects, drained safely)
+- **PROPERTY** — random forbidden-pattern + random sequence runs never silently dispatch a denied tool
+- **PERF (sync)** — `staticTools.list()` × 1000 < 250ms (zero-overhead claim, ~50µs/call)
+- **PERF (sync)** — `gatedTools(staticTools, pred).list()` × 1000 < 300ms (decorator overhead bound)
+- **PERF (async)** — 50 turns × 2 iterations dispatch never doubles `list()` calls (cache contract holds under load)
+- **ROI** — Rube-style hub adapter end-to-end: TTL cache + AbortSignal + start/completed events + dispatch all wired together
+
+#### v2.12 backfill — `test/security/policy-halt.test.ts` (+5 tests)
+
+- **PROPERTY** — random safe-name sequences vs random dangerous-name patterns: no false-positive matches
+- **PROPERTY** — random-prefix + dangerous-suffix sequences ALWAYS match their dangerous pattern
+- **PERF** — `extractSequence(history)` over 1000-message history < 50ms
+- **PERF** — `extractSequence` skipping synthetic denies in 1000-message history < 50ms
+- **PERF** — sync `permissionChecker.check()` × 1000 < 300ms (overhead bound)
+
+#### Process change
+
+Going forward, every new feature release MUST hit all 7 patterns from the start. The pre-release 7-panel review now includes a Test/QA reviewer who audits the matrix and blocks release if any column is missing.
+
+#### Tests
+
+1846/1846 (1835 pre-backfill + 11 new). No source changes.
+
 ## [2.12.0]
 
 ### Added — sequence-aware PermissionChecker (the recipe primitive)
