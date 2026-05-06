@@ -96,8 +96,8 @@ agentfootprint's Agent loops back to `SystemPrompt` every iteration, not just `C
 
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="/agentfootprint/assets/dynamic-vs-classic-dark.svg">
-    <source media="(prefers-color-scheme: light)" srcset="/agentfootprint/assets/dynamic-vs-classic-light.svg">
+    <source media="(prefers-color-scheme: dark)" srcset="/agentfootprint/assets/dynamic-vs-classic-dark.svg" />
+    <source media="(prefers-color-scheme: light)" srcset="/agentfootprint/assets/dynamic-vs-classic-light.svg" />
     <img alt="Classic ReAct loops back to CallLLM (slots frozen, 12 tools every iteration). Dynamic ReAct loops back to SystemPrompt (slots recompose, tools shrink from 1 to 5 as skills activate)." src="/agentfootprint/assets/dynamic-vs-classic-light.svg" width="100%" />
   </picture>
 </p>
@@ -118,8 +118,8 @@ The four ways primitives arrange. **Every named pattern is built from these.**
 
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="/agentfootprint/assets/control-flows-dark.svg">
-    <source media="(prefers-color-scheme: light)" srcset="/agentfootprint/assets/control-flows-light.svg">
+    <source media="(prefers-color-scheme: dark)" srcset="/agentfootprint/assets/control-flows-dark.svg" />
+    <source media="(prefers-color-scheme: light)" srcset="/agentfootprint/assets/control-flows-light.svg" />
     <img alt="The 4 control flows: Sequence (linear chain A → B → C), Parallel (fan-out + fan-in), Conditional (diamond branch), Loop (cycle back)." src="/agentfootprint/assets/control-flows-light.svg" width="100%" />
   </picture>
 </p>
@@ -162,8 +162,8 @@ Every paper in the agent literature is a composition of 2 primitives + 4 composi
 
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="/agentfootprint/assets/patterns-dark.svg">
-    <source media="(prefers-color-scheme: light)" srcset="/agentfootprint/assets/patterns-light.svg">
+    <source media="(prefers-color-scheme: dark)" srcset="/agentfootprint/assets/patterns-dark.svg" />
+    <source media="(prefers-color-scheme: light)" srcset="/agentfootprint/assets/patterns-light.svg" />
     <img alt="6 named multi-agent patterns reduce to compositions of the same 4 control flows: Swarm = Loop(Parallel(Agent×N) → merge); Tree-of-Thoughts = Loop(Parallel(Agent×N) → Conditional(score)); Reflexion = Loop(Agent → Conditional(critique) → Agent); Debate = Parallel(Agent_pro, Agent_con) → Agent_judge; Router = Conditional → Agent_A | Agent_B | Agent_C; Hierarchical = Agent_planner → Sequence(Agent_worker×N) → synth." src="/agentfootprint/assets/patterns-light.svg" width="100%" />
   </picture>
 </p>
@@ -206,8 +206,8 @@ Injection = slot × trigger × cache
 
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="/agentfootprint/assets/triggers-dark.svg">
-    <source media="(prefers-color-scheme: light)" srcset="/agentfootprint/assets/triggers-light.svg">
+    <source media="(prefers-color-scheme: dark)" srcset="/agentfootprint/assets/triggers-dark.svg" />
+    <source media="(prefers-color-scheme: light)" srcset="/agentfootprint/assets/triggers-light.svg" />
     <img alt="Every LLM call has 3 fixed slots (system, messages, tools); every flavor lands in one slot under one of 4 fixed triggers. The grid is the entire context-engineering surface." src="/agentfootprint/assets/triggers-light.svg" width="100%" />
   </picture>
 </p>
