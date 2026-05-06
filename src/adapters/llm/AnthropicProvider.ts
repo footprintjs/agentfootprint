@@ -54,7 +54,12 @@ interface AnthropicMessageParam {
 type AnthropicContentBlock =
   | { type: 'text'; text: string }
   | { type: 'tool_use'; id: string; name: string; input: Record<string, unknown> }
-  | { type: 'tool_result'; tool_use_id: string; content: string; is_error?: boolean };
+  | { type: 'tool_result'; tool_use_id: string; content: string; is_error?: boolean }
+  // v2.14 — extended-thinking blocks. Round-trip on assistant turns
+  // when continuing a tool-using extended-thinking conversation;
+  // signature MUST be byte-exact or Anthropic returns HTTP 400.
+  | { type: 'thinking'; thinking: string; signature?: string }
+  | { type: 'redacted_thinking'; signature?: string };
 
 interface AnthropicTool {
   name: string;
@@ -242,6 +247,29 @@ function toAnthropicMessages(messages: readonly LLMMessage[]): AnthropicMessageP
     }
     if (m.role === 'assistant') {
       const blocks: AnthropicContentBlock[] = [];
+      // v2.14 — thinking blocks come FIRST per Anthropic's wire format
+      // ordering rule. Anthropic validates server-side that signed
+      // blocks appear before text + tool_use; out-of-order = HTTP 400.
+      // Signature passes through BYTE-EXACT — no String() coercion,
+      // no JSON-roundtrip, no trim. Matches the Phase 4a normalization
+      // invariant (the signature on `LLMMessage.thinkingBlocks` is the
+      // exact value Anthropic emitted on the prior turn).
+      if (m.thinkingBlocks && m.thinkingBlocks.length > 0) {
+        for (const tb of m.thinkingBlocks) {
+          if (tb.type === 'redacted_thinking') {
+            blocks.push({
+              type: 'redacted_thinking',
+              ...(tb.signature !== undefined && { signature: tb.signature }),
+            });
+          } else {
+            blocks.push({
+              type: 'thinking',
+              thinking: tb.content,
+              ...(tb.signature !== undefined && { signature: tb.signature }),
+            });
+          }
+        }
+      }
       if (m.content) blocks.push({ type: 'text', text: m.content });
       if (m.toolCalls) {
         for (const tc of m.toolCalls) {
@@ -253,9 +281,14 @@ function toAnthropicMessages(messages: readonly LLMMessage[]): AnthropicMessageP
           });
         }
       }
+      // v2.14 — when thinkingBlocks present, content MUST be the array
+      // (otherwise the signed blocks aren't sent). Without thinking,
+      // preserve the original `m.content || ''` fallback for empty
+      // assistant turns.
+      const hasThinking = m.thinkingBlocks !== undefined && m.thinkingBlocks.length > 0;
       result.push({
         role: 'assistant',
-        content: blocks.length > 0 ? blocks : m.content || '',
+        content: blocks.length > 0 ? blocks : hasThinking ? blocks : m.content || '',
       });
       continue;
     }
@@ -290,10 +323,19 @@ function toAnthropicTool(schema: LLMToolSchema): AnthropicTool {
 function fromAnthropicResponse(message: AnthropicMessage): LLMResponse {
   const textParts: string[] = [];
   const toolCalls: { id: string; name: string; args: Record<string, unknown> }[] = [];
+  // v2.14 — detect whether the response contains any thinking blocks.
+  // When present, surface the FULL `message.content` array as
+  // `rawThinking` so AnthropicThinkingHandler can normalize it.
+  // (Handler filters for thinking + redacted_thinking blocks; passes
+  // through other types without modification — but the handler
+  // expects the full array as input shape per Phase 4a contract.)
+  let hasThinking = false;
   for (const block of message.content) {
     if (block.type === 'text') textParts.push(block.text);
     else if (block.type === 'tool_use') {
       toolCalls.push({ id: block.id, name: block.name, args: block.input });
+    } else if (block.type === 'thinking' || block.type === 'redacted_thinking') {
+      hasThinking = true;
     }
   }
   return {
@@ -302,9 +344,18 @@ function fromAnthropicResponse(message: AnthropicMessage): LLMResponse {
     usage: {
       input: message.usage.input_tokens,
       output: message.usage.output_tokens,
+      // v2.14 — Anthropic doesn't expose thinking tokens as a separate
+      // field today (bundled in output_tokens). When the API surfaces
+      // a dedicated field in the future, populate here. Per Phase 2
+      // contract: undefined means "provider doesn't expose / no thinking".
     },
     stopReason: normalizeStopReason(message.stop_reason),
     providerRef: message.id,
+    // v2.14 — when thinking blocks present, hand the full content array
+    // to the framework's NormalizeThinking sub-subflow (which routes to
+    // AnthropicThinkingHandler). Undefined when no thinking — the
+    // subflow's early-return path skips work.
+    ...(hasThinking && { rawThinking: message.content }),
   };
 }
 
