@@ -94,6 +94,10 @@ export function buildSeedStage(deps: SeedStageDeps): (scope: TypedScope<AgentSta
     scope.toolsInjections = [];
     scope.llmLatestContent = '';
     scope.llmLatestToolCalls = [];
+    // v2.14 — initialize thinking blocks. Empty array means "no thinking
+    // this iteration"; the NormalizeThinking sub-subflow overwrites
+    // this AFTER each CallLLM when a ThinkingHandler is configured.
+    scope.thinkingBlocks = [];
     scope.pausedToolCallId = '';
     scope.pausedToolName = '';
     scope.pausedToolStartMs = 0;

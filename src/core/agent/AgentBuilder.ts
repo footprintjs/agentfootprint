@@ -23,6 +23,7 @@ import type { Injection } from '../../lib/injection-engine/types.js';
 import { defineInstruction } from '../../lib/injection-engine/factories/defineInstruction.js';
 import type { MemoryDefinition } from '../../memory/define.types.js';
 import type { ReliabilityConfig } from '../../reliability/types.js';
+import type { ThinkingHandler } from '../../thinking/types.js';
 import type { Tool, ToolRegistryEntry } from '../tools.js';
 import type { ToolProvider } from '../../tool-providers/types.js';
 import { defaultCommentaryTemplates } from '../../recorders/observability/commentary/commentaryTemplates.js';
@@ -102,6 +103,21 @@ export class AgentBuilder {
    * rules. See `ReliabilityConfig` for the rule shape.
    */
   private reliabilityConfig?: ReliabilityConfig;
+
+  /**
+   * Optional ThinkingHandler (v2.14+). Three states:
+   *   - undefined (default): auto-wire by `provider.name` via
+   *     `findThinkingHandler` from the registry
+   *   - explicit handler: override the auto-wire
+   *   - explicit `null`: opt out (no thinking handler mounted at all,
+   *     even if the provider would auto-match)
+   *
+   * The framework wraps the configured handler in a real footprintjs
+   * sub-subflow at chart build time (see `buildThinkingSubflow`).
+   * Mounted as a stage AFTER CallLLM inside `sf-call-llm`. Build-time
+   * conditional — no stage when no handler resolves.
+   */
+  private thinkingHandlerValue?: ThinkingHandler | null;
 
   constructor(opts: AgentOptions) {
     this.opts = opts;
@@ -578,6 +594,50 @@ export class AgentBuilder {
     return this;
   }
 
+  /**
+   * Wire a thinking handler (v2.14+). Three usage patterns:
+   *
+   *   • OMITTED (default) — framework auto-wires by `provider.name` via
+   *     `findThinkingHandler` from the registry. Most consumers using
+   *     a shipped provider get thinking support for free.
+   *
+   *   • EXPLICIT handler — override the auto-wire. For custom providers
+   *     or for swapping in a custom Anthropic/OpenAI handler with
+   *     different normalization (e.g. redacting blocks before they
+   *     land).
+   *
+   *   • EXPLICIT `null` — opt out entirely. The thinking subflow is NOT
+   *     mounted even if the provider would auto-match. Use when you
+   *     want to skip thinking parsing for this agent (cost / latency /
+   *     UX reasons).
+   *
+   * Calling twice throws — same shape as `.reliability()` /
+   * `.outputSchema()` to enforce single-source intent.
+   *
+   * @example
+   *   // Default — auto-wire AnthropicThinkingHandler for anthropic provider
+   *   Agent.create({ provider: anthropic({...}), model: '...' }).build();
+   *
+   * @example
+   *   // Custom handler that redacts thinking content
+   *   Agent.create({...}).thinkingHandler(myRedactingHandler).build();
+   *
+   * @example
+   *   // Opt out of thinking parsing entirely
+   *   Agent.create({ provider: anthropic({...}), model: '...' })
+   *     .thinkingHandler(null)
+   *     .build();
+   */
+  thinkingHandler(handler: ThinkingHandler | null): this {
+    if (this.thinkingHandlerValue !== undefined) {
+      throw new Error(
+        'AgentBuilder.thinkingHandler: already set. Each agent has at most one thinking-handler choice.',
+      );
+    }
+    this.thinkingHandlerValue = handler;
+    return this;
+  }
+
   build(): Agent {
     // Resolve the voice config: bundled defaults + consumer overrides.
     // Templates flow through the same barrel exports the rest of the
@@ -605,6 +665,7 @@ export class AgentBuilder {
       this.cacheStrategyOverride,
       this.outputFallbackCfg,
       this.reliabilityConfig,
+      this.thinkingHandlerValue,
     );
     // Attach builder-collected recorders so they receive events from
     // the very first run. Mirrors what consumers would do post-build

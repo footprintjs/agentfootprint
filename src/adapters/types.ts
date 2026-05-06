@@ -146,6 +146,21 @@ export interface LLMResponse {
   };
   readonly stopReason: string;
   readonly providerRef?: string;
+  /**
+   * v2.14 — Provider-specific raw thinking data, opaque to the
+   * framework. Providers that support extended thinking populate this
+   * with their native shape (Anthropic: array of `{type, thinking,
+   * signature}` blocks; OpenAI: `reasoning_summary` value; custom:
+   * whatever the provider emits). The framework hands this to a
+   * configured `ThinkingHandler.normalize(rawThinking)` to produce
+   * the normalized `ThinkingBlock[]` that lands on
+   * `LLMMessage.thinkingBlocks`.
+   *
+   * Undefined when the provider has no thinking content for this call
+   * — most calls (gpt-4o, claude without extended thinking enabled,
+   * etc.). The thinking subflow's stage early-returns in this case.
+   */
+  readonly rawThinking?: unknown;
 }
 
 export interface LLMChunk {

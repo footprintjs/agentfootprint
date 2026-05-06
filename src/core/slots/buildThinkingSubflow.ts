@@ -1,0 +1,104 @@
+/**
+ * NormalizeThinking sub-subflow — wraps a consumer's `ThinkingHandler`
+ * (function-pair contract) in a real footprintjs subflow at chart
+ * build time. Mounted as a stage AFTER CallLLM inside `sf-call-llm`
+ * when (and only when) a handler is configured.
+ *
+ * runtimeStageId format: `sf-call-llm/thinking-{handler.id}#N`
+ *
+ * Two-layer architecture (per Phase 1 panel decision):
+ *   - CONSUMER-FACING:    `ThinkingHandler` — simple function-pair
+ *                          (id, providerNames, normalize, parseChunk?)
+ *   - FRAMEWORK-INTERNAL: this file wraps each handler in a real
+ *                         footprintjs subflow with own runtimeStageId,
+ *                         narrative entry, and InOutRecorder boundary.
+ *
+ * Failure isolation: handler `normalize()` throws are caught here.
+ * Framework emits `agentfootprint.agent.thinking_parse_failed`, sets
+ * `scope.thinkingBlocks` to empty, and the subflow exits cleanly. The
+ * agent run continues; the assistant message simply has no thinking
+ * blocks attached. Same graceful pattern as v2.11.6 `tools.discovery_failed`.
+ */
+
+import { flowChart } from 'footprintjs';
+import type { FlowChart, TypedScope } from 'footprintjs';
+import type { ThinkingBlock, ThinkingHandler } from '../../thinking/types.js';
+import { typedEmit } from '../../recorders/core/typedEmit.js';
+
+interface NormalizeThinkingState {
+  rawThinking?: unknown;
+  thinkingBlocks: readonly ThinkingBlock[];
+  iteration: number;
+  [k: string]: unknown;
+}
+
+/**
+ * Build a thinking-normalization sub-subflow for a configured handler.
+ * Mounted as a single-stage subflow inside `sf-call-llm` AFTER CallLLM.
+ *
+ * The subflow:
+ *   1. Reads `scope.rawThinking` (set by CallLLM from `LLMResponse.rawThinking`)
+ *   2. If rawThinking is undefined → write empty array, exit (early-return)
+ *   3. Calls `handler.normalize(rawThinking)`
+ *   4. On success: writes `scope.thinkingBlocks` + emits `stream.thinking_end`
+ *   5. On throw: writes empty array + emits `agent.thinking_parse_failed`
+ *
+ * The result on `scope.thinkingBlocks` is read by toolCalls.ts and
+ * prepareFinal.ts when constructing the assistant message for
+ * `scope.history` — that's where the Anthropic signature round-trip
+ * actually flows from.
+ */
+export function buildThinkingSubflow(handler: ThinkingHandler): FlowChart {
+  const handlerId = handler.id;
+  const providerName = handler.providerNames[0] ?? 'unknown';
+
+  return flowChart<NormalizeThinkingState>(
+    'Normalize',
+    (scope: TypedScope<NormalizeThinkingState>) => {
+      const raw = scope.$getValue('rawThinking');
+      const iteration = (scope.$getValue('iteration') as number) ?? 0;
+
+      // Early-return: no thinking content for this call (most calls).
+      // Write empty array so toolCalls.ts / prepareFinal.ts have a
+      // consistent read shape, even when no thinking is present.
+      if (raw === undefined) {
+        scope.$setValue('thinkingBlocks', []);
+        return;
+      }
+
+      // Failure isolation — same pattern as v2.11.6 tools.discovery_failed.
+      // Handler throws are caught + emitted as the typed event; agent
+      // run continues with no thinking blocks attached.
+      let blocks: readonly ThinkingBlock[];
+      try {
+        blocks = handler.normalize(raw);
+      } catch (err) {
+        const errMsg = err instanceof Error ? err.message : String(err);
+        const errName = err instanceof Error ? err.name : 'Error';
+        scope.$setValue('thinkingBlocks', []);
+        typedEmit(scope, 'agentfootprint.agent.thinking_parse_failed', {
+          providerName,
+          subflowId: handlerId,
+          error: errMsg,
+          errorName: errName,
+          iteration,
+        });
+        return;
+      }
+
+      scope.$setValue('thinkingBlocks', blocks);
+
+      // Per-call summary event. Carries METADATA only — full content
+      // lives on LLMMessage.thinkingBlocks (the durable record).
+      const totalChars = blocks.reduce((sum, b) => sum + b.content.length, 0);
+      typedEmit(scope, 'agentfootprint.stream.thinking_end', {
+        iteration,
+        blockCount: blocks.length,
+        totalChars,
+      });
+    },
+    `thinking-${handlerId}`,
+    undefined,
+    `Normalize ${handlerId} thinking blocks`,
+  ).build();
+}

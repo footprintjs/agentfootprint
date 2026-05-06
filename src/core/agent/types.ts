@@ -19,6 +19,7 @@ import type { CacheMarker, CacheStrategy } from '../../cache/types.js';
 import type { ActiveInjection } from '../../lib/injection-engine/types.js';
 import type { InjectionRecord } from '../../recorders/core/types.js';
 import type { MemoryIdentity } from '../../memory/identity/types.js';
+import type { ThinkingBlock } from '../../thinking/types.js';
 
 // ─── PUBLIC types (consumer-facing) ────────────────────────────────
 
@@ -198,4 +199,17 @@ export interface AgentState {
   policyHaltIteration?: number;
   /** Identifier of the PermissionChecker that returned `'halt'`. */
   policyHaltCheckerId?: string;
+
+  // ── Thinking state (v2.14) ─────────────────────────────────
+  /** Provider-specific raw thinking data, set by callLLM after the
+   *  LLM response lands. The NormalizeThinking sub-subflow reads this
+   *  and feeds it to the configured `ThinkingHandler.normalize()`.
+   *  Undefined when the provider has no thinking content for this call. */
+  rawThinking?: unknown;
+  /** Normalized thinking blocks from the most recent LLM response.
+   *  Written by the NormalizeThinking sub-subflow; read by toolCalls.ts
+   *  + prepareFinal.ts when constructing the assistant message for
+   *  `scope.history` (ensures Anthropic signature round-trip). Empty
+   *  array when no thinking present. */
+  thinkingBlocks: readonly ThinkingBlock[];
 }

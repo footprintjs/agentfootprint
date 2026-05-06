@@ -84,6 +84,9 @@ import { buildToolCallsHandler } from './agent/stages/toolCalls.js';
 import { buildAgentChart } from './agent/buildAgentChart.js';
 import { buildToolRegistry } from './agent/buildToolRegistry.js';
 import { AgentBuilder } from './agent/AgentBuilder.js';
+import { buildThinkingSubflow } from './slots/buildThinkingSubflow.js';
+import { findThinkingHandler } from '../thinking/registry.js';
+import type { ThinkingHandler } from '../thinking/types.js';
 export { AgentBuilder };
 
 // Re-export public Agent types so the 28+ existing import sites
@@ -220,6 +223,15 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    */
   private readonly reliabilityConfig?: ReliabilityConfig;
 
+  /**
+   * Resolved ThinkingHandler (v2.14+). Auto-wired by `provider.name`
+   * via `findThinkingHandler` UNLESS the builder explicitly set one
+   * (or `null` to opt out). When undefined, the NormalizeThinking
+   * sub-subflow is NOT mounted at chart build time — zero overhead
+   * for non-thinking agents.
+   */
+  private readonly thinkingHandler?: ThinkingHandler;
+
   constructor(
     opts: AgentOptions,
     systemPromptValue: string,
@@ -238,6 +250,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     cacheStrategy?: CacheStrategy,
     outputFallbackCfg?: ResolvedOutputFallback<unknown>,
     reliabilityConfig?: ReliabilityConfig,
+    thinkingHandlerValue?: ThinkingHandler | null,
   ) {
     super();
     this.provider = opts.provider;
@@ -271,6 +284,21 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     if (opts.costBudget !== undefined) this.costBudget = opts.costBudget;
     if (opts.permissionChecker) this.permissionChecker = opts.permissionChecker;
     if (reliabilityConfig !== undefined) this.reliabilityConfig = reliabilityConfig;
+    // v2.14 — Resolve thinking handler. Three states:
+    //   - thinkingHandlerValue === undefined → auto-wire by provider.name
+    //   - thinkingHandlerValue === null      → opt out (no handler)
+    //   - thinkingHandlerValue: ThinkingHandler → explicit override
+    // Auto-wire returns undefined for providers without a registered
+    // handler (gpt-4o, mistral, etc.), in which case the subflow is NOT
+    // mounted at chart build time.
+    if (thinkingHandlerValue === null) {
+      // explicit opt-out
+    } else if (thinkingHandlerValue !== undefined) {
+      this.thinkingHandler = thinkingHandlerValue;
+    } else {
+      const auto = findThinkingHandler(opts.provider.name);
+      if (auto) this.thinkingHandler = auto;
+    }
     this.appName = voice.appName;
     this.commentaryTemplates = voice.commentaryTemplates;
     this.thinkingTemplates = voice.thinkingTemplates;
@@ -802,6 +830,15 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       ...(permissionChecker && { permissionChecker }),
     });
 
+    // v2.14 — Build the NormalizeThinking sub-subflow only when a
+    // ThinkingHandler resolved (auto-wired by provider.name OR
+    // explicitly set via .thinkingHandler()). Conditional mount ensures
+    // zero overhead for non-thinking agents — the chart has zero extra
+    // stages when undefined.
+    const thinkingSubflow = this.thinkingHandler
+      ? buildThinkingSubflow(this.thinkingHandler)
+      : undefined;
+
     // Chart composition extracted to ./agent/buildAgentChart.ts (v2.11.2).
     return buildAgentChart({
       memories: this.memories,
@@ -816,6 +853,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       systemPromptSubflow,
       messagesSubflow,
       toolsSubflow,
+      ...(thinkingSubflow !== undefined && { thinkingSubflow }),
       cacheDecisionSubflow,
       updateSkillHistoryStage,
       cacheGateDecide,

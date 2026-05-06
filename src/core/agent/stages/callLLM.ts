@@ -264,6 +264,14 @@ export function buildCallLLMStage(
     scope.totalOutputTokens = scope.totalOutputTokens + response.usage.output;
     scope.llmLatestContent = response.content;
     scope.llmLatestToolCalls = response.toolCalls;
+    // v2.14 — hand provider-specific raw thinking data to the
+    // NormalizeThinking sub-subflow (the next stage in sf-call-llm
+    // when a ThinkingHandler is configured). Undefined when the
+    // provider has no thinking content for this call (most calls).
+    if (response.rawThinking !== undefined) {
+      (scope as TypedScope<AgentState> & { rawThinking: unknown }).rawThinking =
+        response.rawThinking;
+    }
 
     typedEmit(scope, 'agentfootprint.stream.llm_end', {
       iteration,

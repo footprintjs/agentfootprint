@@ -83,10 +83,17 @@ export function buildToolCallsHandler(
       // turn that initiated the tool call, and the API rejects the
       // following tool_result with "preceding tool_use missing".
       if (scope.llmLatestContent || toolCalls.length > 0) {
+        // v2.14 — attach thinking blocks (if any). Required for
+        // Anthropic signature round-trip: the next request MUST echo
+        // back the signed blocks BYTE-EXACT or Anthropic returns 400.
+        // Empty array (no thinking) → field omitted from message.
+        const thinkingBlocks = (scope as { thinkingBlocks?: readonly unknown[] }).thinkingBlocks;
+        const hasThinking = thinkingBlocks !== undefined && thinkingBlocks.length > 0;
         newHistory.push({
           role: 'assistant' as ContextRole,
           content: scope.llmLatestContent ?? '',
           ...(toolCalls.length > 0 && { toolCalls }),
+          ...(hasThinking && { thinkingBlocks: thinkingBlocks as never }),
         });
       }
       // Resolve a tool by name. The Tools slot already invoked

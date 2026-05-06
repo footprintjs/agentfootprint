@@ -82,6 +82,14 @@ export interface AgentChartDeps {
   readonly systemPromptSubflow: FlowChart;
   readonly messagesSubflow: FlowChart;
   readonly toolsSubflow: FlowChart;
+  /**
+   * Optional thinking-normalization sub-subflow (v2.14+). Mounted as a
+   * stage AFTER CallLLM, BEFORE Route, only when a `ThinkingHandler`
+   * resolved (either auto-wired by `provider.name` or explicitly set
+   * via `.thinkingHandler()`). When undefined, the stage is NOT added —
+   * zero overhead for non-thinking agents (build-time conditional mount).
+   */
+  readonly thinkingSubflow?: FlowChart;
 
   // ─ Cache layer ──────────────────────────────────────────────────
   readonly cacheDecisionSubflow: FlowChart;
@@ -279,7 +287,31 @@ export function buildAgentChart(deps: AgentChartDeps): FlowChart {
       'iteration-start',
       'Iteration begin marker',
     )
-    .addFunction('CallLLM', deps.callLLM as never, STAGE_IDS.CALL_LLM, 'LLM invocation')
+    .addFunction('CallLLM', deps.callLLM as never, STAGE_IDS.CALL_LLM, 'LLM invocation');
+  // v2.14 — conditional NormalizeThinking sub-subflow. Mounted ONLY
+  // when a ThinkingHandler resolved (auto-wired by provider.name OR
+  // explicitly set via .thinkingHandler()). When undefined, the stage
+  // is NOT added — zero overhead for non-thinking agents
+  // (build-time conditional mount; matches the panel's design rule).
+  if (deps.thinkingSubflow) {
+    builder = builder.addSubFlowChartNext(
+      'sf-thinking',
+      deps.thinkingSubflow,
+      'NormalizeThinking',
+      {
+        inputMapper: (parent) => ({
+          rawThinking: parent.rawThinking as unknown,
+          iteration: parent.iteration as number | undefined,
+        }),
+        outputMapper: (sf) => ({
+          thinkingBlocks: sf.thinkingBlocks,
+        }),
+        // Replace not concatenate — fresh thinking per iteration
+        arrayMerge: ArrayMergeMode.Replace,
+      },
+    );
+  }
+  builder = builder
     .addDeciderFunction('Route', deps.routeDecider as never, SUBFLOW_IDS.ROUTE, 'ReAct routing')
     .addPausableFunctionBranch(
       'tool-calls',
