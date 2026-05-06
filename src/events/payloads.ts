@@ -598,7 +598,7 @@ export interface StreamThinkingEndPayload {
   readonly totalChars: number;
   readonly tokens?: number;
   /**
-   * v2.14.1+ — the normalized thinking blocks for this LLM call.
+   * v2.14+ — the normalized thinking blocks for this LLM call.
    *
    * Same data the framework persists to `LLMMessage.thinkingBlocks`
    * (post-`providerMeta` strip). Lets live consumers render the

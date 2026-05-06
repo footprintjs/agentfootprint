@@ -61,7 +61,7 @@ describe('thinking-events — unit: payload shapes', () => {
     expect(withTokens.blockCount).toBe(3);
   });
 
-  it('StreamThinkingEndPayload.blocks (v2.14.1) is optional and carries normalized blocks', () => {
+  it('StreamThinkingEndPayload.blocks (v2.14) is optional and carries normalized blocks', () => {
     const withBlocks: StreamThinkingEndPayload = {
       iteration: 2,
       blockCount: 2,

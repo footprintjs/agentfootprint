@@ -107,7 +107,7 @@ export function buildThinkingSubflow(handler: ThinkingHandler): FlowChart {
       // Per-call summary event. Carries METADATA only — full content
       // lives on LLMMessage.thinkingBlocks (the durable record).
       const totalChars = persisted.reduce((sum, b) => sum + b.content.length, 0);
-      // v2.14.1 — embed the persisted blocks in the typed event so live
+      // v2.14 — embed the persisted blocks in the typed event so live
       // consumers can render per-iteration reasoning without
       // post-walking scope.history. The persisted blocks are already
       // providerMeta-stripped (Phase 6 invariant), so the event's

@@ -5,6 +5,90 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.14.0]
+
+### Added — Extended-thinking subsystem (Anthropic + OpenAI o1/o3)
+
+When the LLM emits reasoning blocks (Anthropic extended thinking, OpenAI o1/o3 `reasoning_summary`), v2.14 normalizes them into a provider-agnostic `ThinkingBlock[]`, persists the assistant message with byte-exact signature for the round-trip the next turn requires, and surfaces them on the typed-event stream so live UIs can render reasoning per iteration without post-walking `scope.history`.
+
+**Two-layer architecture:**
+
+- **CONSUMER-FACING:** `ThinkingHandler` — a small function-pair `{id, providerNames, normalize, parseChunk?}`. Provider authors and custom-LLM consumers implement this shape. Auto-wired by `provider.name` via the registry.
+- **FRAMEWORK-INTERNAL:** each handler is auto-wrapped in a real footprintjs subflow at chart build time. The subflow gets its own `runtimeStageId`, narrative entry, and InOutRecorder boundary — full trace observability for free without consumers writing flowchart code.
+
+Same pattern as v2.6 caching, v2.11.5 reliability, v2.11.6 tool-providers: a small typed surface for the consumer, a real subflow for the framework.
+
+**Pre-implementation 7-panel review** (Anthropic + OpenAI + Architect + footprintjs + SRE + Security + QA, each with architect + coder dual lens) ran before EVERY phase. **Post-implementation 7-panel review** at the end of every phase, with must-fixes folded in before the next phase opened. Each phase shipped its own 7-pattern test matrix (unit · scenario · integration · property · security · performance · ROI).
+
+#### Builder surface
+
+```ts
+// Request-side: ASK the model to think.
+//   Anthropic: sets thinking: { type: 'enabled', budget_tokens } on the wire.
+//   OpenAI:    no-op (o1/o3 reasoning is selected at the model id level).
+Agent.create({ provider: anthropic({...}), model: 'claude-sonnet-4-5' })
+  .thinking({ budget: 5000 })
+  .build();
+
+// Response-side: NORMALIZE the response (auto-wired by provider.name).
+// Override per-agent when you need custom normalization or opt out:
+agent.thinkingHandler(myCustomHandler);  // override
+agent.thinkingHandler(null);             // opt out
+```
+
+`max_tokens` is auto-bumped to `budget + 1024` when the resolved value would violate Anthropic's `max_tokens > thinking.budget_tokens` invariant. Consumers who explicitly set `maxTokens` keep their choice.
+
+#### Round-trip integrity (Anthropic)
+
+Anthropic's signed thinking blocks must echo back BYTE-EXACT in subsequent assistant turns or the API rejects with HTTP 400. `LLMMessage.thinkingBlocks` (PERSISTED — different from `ephemeral`) carries the signature through `scope.history`; `AnthropicProvider.toAnthropicMessages` serializes them first in the assistant content array (Anthropic's wire-format ordering rule). Tested with tricky base64 + padding + trailing-whitespace signatures across the full pipeline.
+
+#### Live event stream — collect during traversal
+
+Per-iteration thinking content lands on `agentfootprint.stream.thinking_end.payload.blocks`. Live UIs subscribe once, accumulate as iterations complete — no post-walking `scope.history`:
+
+```ts
+agent.on('agentfootprint.stream.thinking_end', (e) => {
+  // e.payload.blocks: readonly ThinkingBlock[]
+  // e.payload.iteration: which agent loop iteration produced these
+  // e.payload.totalChars / blockCount / tokens: metadata
+});
+```
+
+Same data the framework persists to `LLMMessage.thinkingBlocks` (post-`providerMeta` strip). Privacy: wildcard (`*`) recorders piping to external sinks (Datadog, CloudWatch, OTel) will see reasoning content — same risk profile as `stream.token`.
+
+#### Three new typed events (count 52 → 55)
+
+- `agentfootprint.stream.thinking_delta` — per-chunk streaming reasoning fragments (Anthropic streams these; OpenAI doesn't, as of early 2026)
+- `agentfootprint.stream.thinking_end` — per-call summary with full blocks (use this for live per-iteration UIs)
+- `agentfootprint.agent.thinking_parse_failed` — graceful-failure signal when a handler's `normalize()` throws; framework drops the blocks and continues, same pattern as v2.11.6 `tools.discovery_failed`
+
+#### Three shipped handlers
+
+- `anthropicThinkingHandler` (`'anthropic'` + `'browser-anthropic'`) — Anthropic + browser direct-fetch, byte-exact signature
+- `openAIThinkingHandler` (`'openai'`) — o1 string + o3+ structured `reasoning_summary` array; all blocks marked `summary: true`
+- `mockThinkingHandler` (`'mock'`) — canonical reference implementation; defensive `isMockRaw` guard against malformed shapes
+
+Future provider authors implement `ThinkingHandler` and append to `SHIPPED_THINKING_HANDLERS`; the cross-cutting contract test (`test/thinking/cross-cutting.test.ts`) iterates the registry and pins invariants for every handler.
+
+#### `providerMeta` strip — defense in depth
+
+`ThinkingBlock.providerMeta` is documented as "escape hatch for fields the normalized shape doesn't model." The framework strips it from blocks before persisting to `scope.thinkingBlocks` (which feeds `LLMMessage.thinkingBlocks` → audit logs and the event payload). Type doc declared this; Phase 6 enforced it via test + source fix.
+
+#### Phase summary
+
+- **Phase 1** — types foundation (`ThinkingBlock`, `ThinkingHandler`, registry, mock)
+- **Phase 2** — three typed events (`thinking_delta`, `thinking_end`, `thinking_parse_failed`)
+- **Phase 3** — framework wiring: `buildThinkingSubflow` + auto-wire by `provider.name` + build-time conditional mount (zero overhead for non-thinking agents)
+- **Phase 4a** — `AnthropicThinkingHandler` (response normalization, byte-exact signature)
+- **Phase 4b** — `AnthropicProvider` serialization (request → response → round-trip on second turn)
+- **Phase 5** — `OpenAIThinkingHandler` (string + structured array shapes)
+- **Phase 6** — cross-cutting: registry-iterating contract test + E2E 2-turn signature round-trip + `providerMeta` non-leak. Source fixes for `MockThinkingHandler` defensive guard and `providerMeta` strip in `buildThinkingSubflow`
+- **Phase 6.5** — request-side activation: `LLMRequest.thinking?: { budget }`, `AgentBuilder.thinking({budget})`, plumbed through `callLLM`. `AnthropicProvider` translates to wire format; OpenAI ignores
+- **Phase 6.5b** — `BrowserAnthropicProvider` reaches v2.14 parity (request body + response + streaming `thinking_delta` + `signature_delta` accumulation). `max_tokens` auto-bump in both providers
+- **Phase 6.6** — `StreamThinkingEndPayload.blocks` for live per-iteration consumers; closes the "post-walk scope.history" anti-pattern
+
+Test suite: 2017/2017 (was 1862 before v2.14). Build clean (CJS + ESM). Lint clean. Format clean.
+
 ## [2.13.0]
 
 ### Added — Instructor-style schema retry on the reliability gate

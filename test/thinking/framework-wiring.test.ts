@@ -146,7 +146,7 @@ describe('framework-wiring — scenario: auto-wire emits thinking_end event', ()
     expect(events[0]).toEqual({ blockCount: 1, totalChars: 'reasoning here'.length });
   });
 
-  it('thinking_end (v2.14.1) carries the blocks payload for live consumers', async () => {
+  it('thinking_end (v2.14) carries the blocks payload for live consumers', async () => {
     // The framework's "collect during traversal" rule means consumers
     // should NOT post-walk scope.history to find per-iteration thinking;
     // the typed event itself carries the blocks. This test pins the
