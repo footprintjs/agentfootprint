@@ -170,9 +170,14 @@ describe('AnthropicThinkingHandler — integration: registry', () => {
     expect(findThinkingHandler('anthropic')).toBe(anthropicThinkingHandler);
   });
 
-  it('handler.providerNames includes only "anthropic" for v2.14.0', () => {
-    // Bedrock-via-Anthropic deferred to Phase 5+
-    expect(anthropicThinkingHandler.providerNames).toEqual(['anthropic']);
+  it('handler.providerNames covers anthropic + browser-anthropic (v2.14)', () => {
+    // Both providers route through fromAnthropicResponse → same wire shape.
+    // Bedrock-via-Anthropic deferred to its own handler if its shape diverges.
+    expect(anthropicThinkingHandler.providerNames).toEqual(['anthropic', 'browser-anthropic']);
+  });
+
+  it('findThinkingHandler("browser-anthropic") returns the anthropic handler', () => {
+    expect(findThinkingHandler('browser-anthropic')).toBe(anthropicThinkingHandler);
   });
 });
 

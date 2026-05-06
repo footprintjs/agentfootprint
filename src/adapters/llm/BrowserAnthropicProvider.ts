@@ -42,6 +42,10 @@ interface AnthropicRequestBody {
   temperature?: number;
   stop_sequences?: string[];
   stream?: boolean;
+  // v2.14 — extended-thinking activation. Presence of `thinking`
+  // tells Anthropic to emit reasoning blocks. Mirror of the Node
+  // AnthropicProvider's same field.
+  thinking?: { type: 'enabled'; budget_tokens: number };
 }
 
 interface AnthropicMessageParam {
@@ -52,7 +56,12 @@ interface AnthropicMessageParam {
 type AnthropicContentBlock =
   | { type: 'text'; text: string }
   | { type: 'tool_use'; id: string; name: string; input: Record<string, unknown> }
-  | { type: 'tool_result'; tool_use_id: string; content: string; is_error?: boolean };
+  | { type: 'tool_result'; tool_use_id: string; content: string; is_error?: boolean }
+  // v2.14 — extended-thinking blocks. Round-trip on assistant turns
+  // when continuing a tool-using extended-thinking conversation;
+  // signature MUST be byte-exact or Anthropic returns HTTP 400.
+  | { type: 'thinking'; thinking: string; signature?: string }
+  | { type: 'redacted_thinking'; signature?: string };
 
 interface AnthropicTool {
   name: string;
@@ -158,6 +167,23 @@ export function browserAnthropic(options: BrowserAnthropicProviderOptions): LLMP
         name: string;
         input: Record<string, unknown>;
       }> = [];
+      // v2.14 — thinking blocks arrive across multiple stream events:
+      //   - content_block_start with {type: 'thinking'} or {type:'redacted_thinking', signature}
+      //   - content_block_delta with delta.type === 'thinking_delta' (text fragment)
+      //   - content_block_delta with delta.type === 'signature_delta' (signature fragment)
+      //   - content_block_stop closes the block
+      // We accumulate per-index (text + signature) and reassemble the full
+      // content array at terminal time so the framework's handler can
+      // normalize. The accumulator preserves block ORDER (thinking-first per
+      // Anthropic's wire-format invariant).
+      const thinkingByIndex = new Map<
+        number,
+        { type: 'thinking' | 'redacted_thinking'; thinking: string[]; signature: string[] }
+      >();
+      const completedThinking: Array<
+        | { type: 'thinking'; thinking: string; signature?: string }
+        | { type: 'redacted_thinking'; signature?: string }
+      > = [];
       // Anthropic's stream ships usage in two places:
       //   1. `message_start.message.usage.input_tokens` — input count, sent first.
       //   2. `message_delta.usage.output_tokens` — running output count.
@@ -197,11 +223,30 @@ export function browserAnthropic(options: BrowserAnthropicProviderOptions): LLMP
               name: block.name,
               partialJson: [],
             });
+          } else if (
+            (block?.type === 'thinking' || block?.type === 'redacted_thinking') &&
+            typeof data.index === 'number'
+          ) {
+            // v2.14 — start tracking a thinking block. Text + signature
+            // arrive via subsequent content_block_delta events; if start
+            // ALSO carries a signature (rare but possible for redacted),
+            // we seed the buffer from there.
+            thinkingByIndex.set(data.index, {
+              type: block.type,
+              thinking: [],
+              signature: block.signature !== undefined ? [block.signature] : [],
+            });
           }
         } else if (event.event === 'content_block_delta') {
           const data = event.data as {
             index?: number;
-            delta?: { type?: string; text?: string; partial_json?: string };
+            delta?: {
+              type?: string;
+              text?: string;
+              partial_json?: string;
+              thinking?: string;
+              signature?: string;
+            };
           };
           const delta = data.delta;
           if (delta?.type === 'text_delta' && delta.text) {
@@ -215,6 +260,24 @@ export function browserAnthropic(options: BrowserAnthropicProviderOptions): LLMP
           ) {
             const tu = toolUseByIndex.get(data.index);
             if (tu) tu.partialJson.push(delta.partial_json);
+          } else if (
+            delta?.type === 'thinking_delta' &&
+            typeof data.index === 'number' &&
+            typeof delta.thinking === 'string'
+          ) {
+            // v2.14 — accumulate thinking text fragment
+            const t = thinkingByIndex.get(data.index);
+            if (t) t.thinking.push(delta.thinking);
+          } else if (
+            delta?.type === 'signature_delta' &&
+            typeof data.index === 'number' &&
+            typeof delta.signature === 'string'
+          ) {
+            // v2.14 — accumulate signature fragment (Anthropic ships
+            // the signature as ONE delta but we accumulate just in case
+            // they ever chunk it; concat preserves byte-exact regardless)
+            const t = thinkingByIndex.get(data.index);
+            if (t) t.signature.push(delta.signature);
           }
         } else if (event.event === 'content_block_stop') {
           const data = event.data as { index?: number };
@@ -237,6 +300,25 @@ export function browserAnthropic(options: BrowserAnthropicProviderOptions): LLMP
               completedToolUses.push({ id: tu.id, name: tu.name, input: parsed });
               toolUseByIndex.delete(data.index);
             }
+            // v2.14 — finalize a thinking block at content_block_stop.
+            const t = thinkingByIndex.get(data.index);
+            if (t) {
+              const thinkingText = t.thinking.join('');
+              const signature = t.signature.join('');
+              if (t.type === 'redacted_thinking') {
+                completedThinking.push({
+                  type: 'redacted_thinking',
+                  ...(signature.length > 0 && { signature }),
+                });
+              } else {
+                completedThinking.push({
+                  type: 'thinking',
+                  thinking: thinkingText,
+                  ...(signature.length > 0 && { signature }),
+                });
+              }
+              thinkingByIndex.delete(data.index);
+            }
           }
         }
       }
@@ -247,6 +329,11 @@ export function browserAnthropic(options: BrowserAnthropicProviderOptions): LLMP
         usage: { input: inputTokens, output: outputTokens },
         stopReason: normalizeStopReason(stopReason ?? 'stop'),
         ...(messageId && { providerRef: messageId }),
+        // v2.14 — pass thinking blocks through as `rawThinking` so the
+        // framework's NormalizeThinking subflow can normalize them into
+        // ThinkingBlock[] via AnthropicThinkingHandler. Same shape as the
+        // non-streaming path's fromAnthropicResponse.
+        ...(completedThinking.length > 0 && { rawThinking: completedThinking }),
       };
       yield { tokenIndex, content: '', done: true, response: response2 };
     },
@@ -279,16 +366,27 @@ function buildBody(
   defaultModel: string,
   defaultMaxTokens: number,
 ): AnthropicRequestBody {
+  // v2.14 — auto-bump max_tokens when thinking would violate Anthropic's
+  // `max_tokens > thinking.budget_tokens` invariant. See the matching
+  // logic in AnthropicProvider.buildParams; identical heuristic.
+  let maxTokens = req.maxTokens ?? defaultMaxTokens;
+  if (req.thinking && maxTokens <= req.thinking.budget) {
+    maxTokens = req.thinking.budget + 1024;
+  }
   const body: AnthropicRequestBody = {
     model:
       req.model === 'anthropic' || req.model === 'browser-anthropic' ? defaultModel : req.model,
-    max_tokens: req.maxTokens ?? defaultMaxTokens,
+    max_tokens: maxTokens,
     messages: toAnthropicMessages(req.messages),
   };
   if (req.systemPrompt) body.system = req.systemPrompt;
   if (req.tools && req.tools.length > 0) body.tools = req.tools.map(toAnthropicTool);
   if (req.temperature !== undefined) body.temperature = req.temperature;
   if (req.stop && req.stop.length > 0) body.stop_sequences = [...req.stop];
+  // v2.14 — extended-thinking activation, mirrors Node AnthropicProvider.
+  if (req.thinking) {
+    body.thinking = { type: 'enabled', budget_tokens: req.thinking.budget };
+  }
   // v2.6+ cache markers — applied AFTER body construction so we have
   // the materialized fields (system / tools / messages) to mark.
   // Markers are clamped to Anthropic's 4-marker limit by
@@ -376,15 +474,35 @@ function toAnthropicMessages(messages: readonly LLMMessage[]): AnthropicMessageP
     }
     if (m.role === 'assistant') {
       const blocks: AnthropicContentBlock[] = [];
+      // v2.14 — thinking blocks come FIRST per Anthropic's wire format
+      // ordering rule. Out-of-order = HTTP 400. Signature passes through
+      // BYTE-EXACT — no String() coercion, no JSON-roundtrip, no trim.
+      if (m.thinkingBlocks && m.thinkingBlocks.length > 0) {
+        for (const tb of m.thinkingBlocks) {
+          if (tb.type === 'redacted_thinking') {
+            blocks.push({
+              type: 'redacted_thinking',
+              ...(tb.signature !== undefined && { signature: tb.signature }),
+            });
+          } else {
+            blocks.push({
+              type: 'thinking',
+              thinking: tb.content,
+              ...(tb.signature !== undefined && { signature: tb.signature }),
+            });
+          }
+        }
+      }
       if (m.content) blocks.push({ type: 'text', text: m.content });
       if (m.toolCalls) {
         for (const tc of m.toolCalls) {
           blocks.push({ type: 'tool_use', id: tc.id, name: tc.name, input: { ...tc.args } });
         }
       }
+      const hasThinking = m.thinkingBlocks !== undefined && m.thinkingBlocks.length > 0;
       result.push({
         role: 'assistant',
-        content: blocks.length > 0 ? blocks : m.content || '',
+        content: blocks.length > 0 ? blocks : hasThinking ? blocks : m.content || '',
       });
       continue;
     }
@@ -417,10 +535,16 @@ function toAnthropicTool(schema: LLMToolSchema): AnthropicTool {
 function fromAnthropicResponse(message: AnthropicMessage): LLMResponse {
   const textParts: string[] = [];
   const toolCalls: { id: string; name: string; args: Record<string, unknown> }[] = [];
+  // v2.14 — detect thinking presence so we can pass the full content
+  // array through as `rawThinking` for the framework's thinking subflow
+  // (handler filters thinking + redacted_thinking blocks; ignores rest).
+  let hasThinking = false;
   for (const block of message.content) {
     if (block.type === 'text') textParts.push(block.text);
     else if (block.type === 'tool_use') {
       toolCalls.push({ id: block.id, name: block.name, args: block.input });
+    } else if (block.type === 'thinking' || block.type === 'redacted_thinking') {
+      hasThinking = true;
     }
   }
   return {
@@ -432,6 +556,9 @@ function fromAnthropicResponse(message: AnthropicMessage): LLMResponse {
     },
     stopReason: normalizeStopReason(message.stop_reason),
     providerRef: message.id,
+    // Pass the FULL content array — handler filters by type. Undefined
+    // when no thinking present so the subflow's early-return kicks in.
+    ...(hasThinking && { rawThinking: message.content }),
   };
 }
 

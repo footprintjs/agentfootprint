@@ -219,9 +219,21 @@ function buildParams(
   defaultModel: string,
   defaultMaxTokens: number,
 ): AnthropicCreateParams {
+  // v2.14 — Anthropic requires `max_tokens > thinking.budget_tokens`.
+  // When thinking is enabled and the resolved max_tokens would violate
+  // that, bump max_tokens to `budget + 1024` (1024 visible-response
+  // tokens — typical for tool-using turns where the model emits a
+  // tool_use block + minimal text). Consumers who explicitly set
+  // maxTokens above budget keep their choice; only the default-resolution
+  // path auto-bumps. Otherwise consumers see an opaque HTTP 400 from
+  // Anthropic on every call (which is the bug uncovered in Neo).
+  let maxTokens = req.maxTokens ?? defaultMaxTokens;
+  if (req.thinking && maxTokens <= req.thinking.budget) {
+    maxTokens = req.thinking.budget + 1024;
+  }
   const params: AnthropicCreateParams = {
     model: req.model === 'anthropic' ? defaultModel : req.model,
-    max_tokens: req.maxTokens ?? defaultMaxTokens,
+    max_tokens: maxTokens,
     messages: toAnthropicMessages(req.messages),
   };
   if (req.systemPrompt) params.system = req.systemPrompt;

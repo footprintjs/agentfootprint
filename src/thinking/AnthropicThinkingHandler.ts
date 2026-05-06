@@ -94,7 +94,12 @@ function isAnthropicChunk(chunk: unknown): chunk is AnthropicStreamChunk {
 
 export const anthropicThinkingHandler: ThinkingHandler = {
   id: 'anthropic',
-  providerNames: ['anthropic'],
+  // 'browser-anthropic' shares the same response shape (raw Anthropic
+  // wire format) — both providers route through fromAnthropicResponse
+  // which sets `rawThinking` to `message.content`. Bedrock Claude
+  // would also fit here but ships as a separate handler if/when its
+  // shape diverges.
+  providerNames: ['anthropic', 'browser-anthropic'],
 
   normalize(raw: unknown): readonly ThinkingBlock[] {
     if (!isAnthropicContentArray(raw)) return [];
