@@ -51,4 +51,6 @@ export { mockThinkingHandler, mockAnthropicRaw, mockOpenAIRaw } from './MockThin
 
 export { anthropicThinkingHandler } from './AnthropicThinkingHandler.js';
 
+export { openAIThinkingHandler } from './OpenAIThinkingHandler.js';
+
 export { SHIPPED_THINKING_HANDLERS, findThinkingHandler } from './registry.js';
