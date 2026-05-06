@@ -28,11 +28,11 @@ describe('event registry — names + exhaustiveness', () => {
     expect(fromNames).toEqual(fromList);
   });
 
-  it('ALL_EVENT_TYPES has exactly 52 entries (Tier 1+2+3 combined)', () => {
-    // 52 = 8 composition + 7 agent + 5 stream + 4 context + 4 memory
+  it('ALL_EVENT_TYPES has exactly 55 entries (Tier 1+2+3 combined)', () => {
+    // 55 = 8 composition + 8 agent + 7 stream + 4 context + 4 memory
     //    + 6 tools + 2 skill + 4 permission + 1 risk + 1 fallback
     //    + 2 cost + 2 eval + 3 error + 2 pause + 1 embedding
-    expect(ALL_EVENT_TYPES.length).toBe(52);
+    expect(ALL_EVENT_TYPES.length).toBe(55);
   });
 
   it('every entry in ALL_EVENT_TYPES is a key of AgentfootprintEventMap', () => {

@@ -38,6 +38,9 @@ import type {
   EvalScorePayload,
   EvalThresholdCrossedPayload,
   AgentOutputSchemaValidationFailedPayload,
+  AgentThinkingParseFailedPayload,
+  StreamThinkingDeltaPayload,
+  StreamThinkingEndPayload,
   FallbackTriggeredPayload,
   LLMEndPayload,
   LLMStartPayload,
@@ -92,6 +95,7 @@ export const EVENT_NAMES = {
     routeDecided: 'agentfootprint.agent.route_decided',
     handoff: 'agentfootprint.agent.handoff',
     outputSchemaValidationFailed: 'agentfootprint.agent.output_schema_validation_failed',
+    thinkingParseFailed: 'agentfootprint.agent.thinking_parse_failed',
   },
   stream: {
     llmStart: 'agentfootprint.stream.llm_start',
@@ -99,6 +103,8 @@ export const EVENT_NAMES = {
     token: 'agentfootprint.stream.token',
     toolStart: 'agentfootprint.stream.tool_start',
     toolEnd: 'agentfootprint.stream.tool_end',
+    thinkingDelta: 'agentfootprint.stream.thinking_delta',
+    thinkingEnd: 'agentfootprint.stream.thinking_end',
   },
   context: {
     injected: 'agentfootprint.context.injected',
@@ -224,6 +230,10 @@ export interface AgentfootprintEventMap {
     'agentfootprint.agent.output_schema_validation_failed',
     AgentOutputSchemaValidationFailedPayload
   >;
+  'agentfootprint.agent.thinking_parse_failed': AgentfootprintEventEnvelope<
+    'agentfootprint.agent.thinking_parse_failed',
+    AgentThinkingParseFailedPayload
+  >;
   // stream
   'agentfootprint.stream.llm_start': AgentfootprintEventEnvelope<
     'agentfootprint.stream.llm_start',
@@ -244,6 +254,14 @@ export interface AgentfootprintEventMap {
   'agentfootprint.stream.tool_end': AgentfootprintEventEnvelope<
     'agentfootprint.stream.tool_end',
     ToolEndPayload
+  >;
+  'agentfootprint.stream.thinking_delta': AgentfootprintEventEnvelope<
+    'agentfootprint.stream.thinking_delta',
+    StreamThinkingDeltaPayload
+  >;
+  'agentfootprint.stream.thinking_end': AgentfootprintEventEnvelope<
+    'agentfootprint.stream.thinking_end',
+    StreamThinkingEndPayload
   >;
   // context (THE CORE)
   'agentfootprint.context.injected': AgentfootprintEventEnvelope<
@@ -412,11 +430,14 @@ export const ALL_EVENT_TYPES: readonly AgentfootprintEventType[] = [
   'agentfootprint.agent.route_decided',
   'agentfootprint.agent.handoff',
   'agentfootprint.agent.output_schema_validation_failed',
+  'agentfootprint.agent.thinking_parse_failed',
   'agentfootprint.stream.llm_start',
   'agentfootprint.stream.llm_end',
   'agentfootprint.stream.token',
   'agentfootprint.stream.tool_start',
   'agentfootprint.stream.tool_end',
+  'agentfootprint.stream.thinking_delta',
+  'agentfootprint.stream.thinking_end',
   'agentfootprint.context.injected',
   'agentfootprint.context.evicted',
   'agentfootprint.context.slot_composed',
