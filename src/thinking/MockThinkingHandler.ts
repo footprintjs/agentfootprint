@@ -41,8 +41,14 @@ type MockThinkingRaw = MockAnthropicRaw | MockOpenAIRaw;
 
 function isMockRaw(raw: unknown): raw is MockThinkingRaw {
   if (typeof raw !== 'object' || raw === null) return false;
-  const r = raw as { kind?: unknown };
-  return r.kind === 'anthropic' || r.kind === 'openai';
+  const r = raw as { kind?: unknown; blocks?: unknown; summarySteps?: unknown };
+  // Accept only well-formed shapes — protects against {kind: 'anthropic'}
+  // missing blocks (would crash .map). The framework's failure-isolation
+  // would catch the throw, but defending here keeps the contract
+  // "normalize never throws on garbage" tighter.
+  if (r.kind === 'anthropic') return Array.isArray(r.blocks);
+  if (r.kind === 'openai') return Array.isArray(r.summarySteps);
+  return false;
 }
 
 /**

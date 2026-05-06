@@ -86,14 +86,30 @@ export function buildThinkingSubflow(handler: ThinkingHandler): FlowChart {
         return;
       }
 
-      scope.$setValue('thinkingBlocks', blocks);
+      // Strip providerMeta before persistence — type doc declares
+      // it an "escape hatch" for handler-internal use, NOT the durable
+      // record. Excluding it from scope.thinkingBlocks means it won't
+      // leak into narrative entries (rawValue), scope.history, or
+      // audit-log adapters that read from either.
+      const persisted = blocks.some((b) => b.providerMeta !== undefined)
+        ? blocks.map((b) => {
+            if (b.providerMeta === undefined) return b;
+            // Drop providerMeta — escape hatch is handler-internal, not
+            // persisted. Strip via destructure-and-omit; the discarded
+            // binding is intentionally ignored.
+            const { providerMeta, ...rest } = b;
+            void providerMeta;
+            return rest;
+          })
+        : blocks;
+      scope.$setValue('thinkingBlocks', persisted);
 
       // Per-call summary event. Carries METADATA only — full content
       // lives on LLMMessage.thinkingBlocks (the durable record).
-      const totalChars = blocks.reduce((sum, b) => sum + b.content.length, 0);
+      const totalChars = persisted.reduce((sum, b) => sum + b.content.length, 0);
       typedEmit(scope, 'agentfootprint.stream.thinking_end', {
         iteration,
-        blockCount: blocks.length,
+        blockCount: persisted.length,
         totalChars,
       });
     },
