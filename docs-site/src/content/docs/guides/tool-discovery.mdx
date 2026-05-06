@@ -1,0 +1,227 @@
+---
+title: Tool discovery (async ToolProvider)
+description: Runtime tool catalogs over hubs, MCP registries, and per-tenant indexes. Async ToolProvider.list(ctx) with TTL caching, AbortSignal propagation, and discovery_started/completed/failed events — no library API additions required.
+---
+
+import CodeFile from '@/components/CodeFile.astro';
+
+> **You're shipping an agent whose tool catalog lives behind a network call** — Rube, Composio, an MCP registry, a per-tenant policy service. The list isn't known at startup, and refetching every iteration would burn money. The right shape: a custom `ToolProvider` whose `list(ctx)` returns a `Promise<Tool[]>`, caches behind a TTL, and honors the agent's `AbortSignal`.
+
+## The contract — sync OR async, framework picks the fast path
+
+`ToolProvider.list(ctx)` may return EITHER `readonly Tool[]` OR `Promise<readonly Tool[]>`. The agent runtime checks which before awaiting, so sync providers (`staticTools`, `gatedTools`, `skillScopedTools` — the 99% case) pay zero microtask overhead:
+
+```ts
+// Inside the agent's hot path
+const result = toolProvider.list(ctx);
+const visibleTools = result instanceof Promise ? await result : result;
+```
+
+This is the v2.11.6 type widening. Sync providers run identically to v2.11.5. Async providers — the discovery-style use case — pay the await cost only when they actually need it.
+
+## What `ctx` carries
+
+```ts
+interface ToolDispatchContext {
+  readonly iteration: number;
+  readonly activeSkillId?: string;
+  readonly identity?: {
+    readonly tenant?: string;
+    readonly principal?: string;
+    readonly conversationId: string;
+  };
+  readonly signal?: AbortSignal;  // ← propagated from agent.run({ env: { signal } })
+}
+```
+
+`signal` is the v2.11.6 addition. Async providers MUST honor it — when the agent run is cancelled, an in-flight catalog fetch should abort instead of holding the run open. Sync providers can ignore it.
+
+## A worked example — `discoveryProvider` over a generic `ToolHub`
+
+The minimal hub interface — your real adapter wraps an HTTP / RPC / SDK client:
+
+<CodeFile path="examples/features/10-discovery-provider.ts" region="tool-hub-interface" title="examples/features/10-discovery-provider.ts (region: tool-hub-interface)" />
+
+The provider — TTL cache + signal propagation + stable id for telemetry:
+
+<CodeFile path="examples/features/10-discovery-provider.ts" region="discovery-provider" title="examples/features/10-discovery-provider.ts (region: discovery-provider)" />
+
+Wire it like any other provider:
+
+```ts
+const agent = Agent.create({ provider: llm, model: 'claude-sonnet-4-5-20250929' })
+  .system('You help users via the dynamic tool catalog.')
+  .toolProvider(discoveryProvider({ hub: rubeAdapter, ttlMs: 60_000, id: 'rube' }))
+  .build();
+```
+
+Everything else — composition with `gatedTools`, permission checks, skill activation — works unchanged. `gatedTools(asyncInner, predicate)` correctly returns a `Promise<Tool[]>` when its inner is async; the dynamic-check pattern propagates through the chain.
+
+## How the framework calls list() — Discover → Compose, once per iteration
+
+The Tools slot subflow runs as TWO stages so async discovery is first-class observable:
+
+```
+sf-tools subflow:
+  ├── Discover  ← provider.list(ctx) runs HERE
+  │              own runtimeStageId, own narrative entry,
+  │              own InOutRecorder boundary, own latency timing
+  └── Compose   ← merges schemas, builds injections, sets the slot
+```
+
+Per iteration:
+
+1. **Discover stage** — emits `tools.discovery_started`, calls `provider.list(ctx)` once, emits `tools.discovery_completed` with `durationMs` + `toolCount` (or `tools.discovery_failed` on error). Caches the resolved Tool[] for downstream stages.
+2. **Compose stage** — reads the cached Tool[], merges with static + per-skill schemas, sets `toolSchemas` on scope.
+3. **LLM call** — receives the merged tool schemas.
+4. **Tool dispatch** — if the LLM picks a tool from your provider, the toolCalls handler reads from the SAME iteration's cache. No second `list()` call.
+
+That last point matters for async providers. Without the cache, dispatch would re-invoke `list()` → second network round-trip per iteration. The framework caches internally so async providers pay the discovery cost once per turn.
+
+For sync providers (the 99% case): Discover runs in microseconds — its early-return path handles "no provider configured" too. The trace shape stays consistent across all agents.
+
+## Caching is the provider's job, not the framework's
+
+The framework calls `list(ctx)` once per iteration. It does NOT cache for you. Why? The cache key depends on which fields of `ctx` matter to *your* provider:
+
+- Per-iteration only? Don't cache — let the framework's once-per-iteration call rate stand.
+- Per-skill-activation? Cache keyed by `ctx.activeSkillId`.
+- Per-tenant? Cache keyed by `ctx.identity?.tenant`, possibly with a TTL refresh.
+- Per-conversation? Cache keyed by `ctx.identity?.conversationId`.
+
+A general-purpose framework cache would either over-cache (wrong tools when context shifts) or under-cache (network round-trip per iteration). You know which fields matter — you write the cache.
+
+## Cancellation — `ctx.signal` is the agent's abort signal
+
+When you do `agent.run(input, { env: { signal: controller.signal } })` and call `controller.abort()` mid-run, that signal flows into every `ctx.signal`. A well-behaved async provider:
+
+```ts
+async list(ctx) {
+  const response = await fetch('/api/tools', { signal: ctx.signal });
+  return parseTools(await response.json());
+}
+```
+
+`fetch` honors `AbortSignal` natively. SDK clients that don't take `AbortSignal` directly need a manual race:
+
+```ts
+async list(ctx) {
+  const fetchPromise = sdkClient.listTools();
+  if (!ctx.signal) return await fetchPromise;
+  return await Promise.race([
+    fetchPromise,
+    new Promise<never>((_, reject) =>
+      ctx.signal!.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError'))),
+    ),
+  ]);
+}
+```
+
+## Concurrent agents share one provider safely (the production version)
+
+Providers must be **reentrant** — safe under concurrent calls. The framework guarantees one fresh chart per `agent.run()`, but multiple parallel runs share the same provider instance. The version above is illustrative; the production-shaped one adds in-flight Promise dedup so a second caller piggybacks on the first's pending fetch:
+
+```ts
+function discoveryProvider({ hub, ttlMs }: { hub: ToolHub; ttlMs: number }): ToolProvider {
+  let cache: { tools: readonly Tool[]; expiresAt: number } | undefined;
+  let inFlight: Promise<readonly Tool[]> | undefined;
+  return {
+    id: 'discovery',
+    async list(ctx) {
+      const now = Date.now();
+      if (cache && cache.expiresAt > now) return cache.tools;
+      // Dedup concurrent fetches — the second caller awaits the first's Promise.
+      if (inFlight) return inFlight;
+      inFlight = (async () => {
+        try {
+          const tools = await hub.fetchCatalog({ ...(ctx.signal && { signal: ctx.signal }) });
+          cache = { tools, expiresAt: now + ttlMs };
+          return tools;
+        } finally {
+          inFlight = undefined;
+        }
+      })();
+      return inFlight;
+    },
+  };
+}
+```
+
+## Failure semantics — discovery_failed event + loud throw
+
+A throwing or rejecting provider emits `agentfootprint.tools.discovery_failed`:
+
+```ts
+agent.on('agentfootprint.tools.discovery_failed', (e) => {
+  console.error(`Hub ${e.payload.providerId} failed in ${e.payload.durationMs}ms: ${e.payload.error}`);
+});
+```
+
+Then re-throws — **discovery failure is loud by design**. Silently dropping tools mid-conversation produces non-deterministic agent behavior (the LLM saw `[a, b, c]` last turn, sees `[]` this turn, hallucinates one anyway) that's harder to debug than a crash.
+
+If you want graceful degradation, configure `.reliability(...)` to route the failure:
+
+```ts
+const agent = Agent.create({ provider: llm, model: 'claude-sonnet-4-5-20250929' })
+  .toolProvider(discoveryProvider({ hub: rubeAdapter, ttlMs: 60_000 }))
+  .reliability({
+    postDecide: [
+      {
+        when: (s) => s.error?.message?.includes('hub unreachable') === true && s.attempt < 3,
+        then: 'retry',
+        kind: 'discovery-transient',
+      },
+      {
+        when: (s) => s.error?.name === 'AbortError',
+        then: 'fail-fast',
+        kind: 'cancelled',
+      },
+    ],
+  })
+  .build();
+```
+
+The `discovery_failed` event still fires; the `reliability` rule decides whether to retry / fall back / fail-fast. See [Reliability gate](/agentfootprint/guides/reliability-gate/).
+
+## Observing discovery latency
+
+```ts
+agent.on('agentfootprint.tools.discovery_started', (e) => {
+  console.log(`hub ${e.payload.providerId} fetching for iteration ${e.payload.iteration}`);
+});
+
+agent.on('agentfootprint.tools.discovery_completed', (e) => {
+  if (e.payload.durationMs > 200) {
+    metrics.histogram('tool_discovery_slow_ms', e.payload.durationMs, {
+      provider: e.payload.providerId ?? 'unknown',
+    });
+  }
+});
+```
+
+The `started` → `completed` pair gives you per-iteration latency without joining stages by hand. `tools.discovery_failed` carries the same `durationMs` so you can distinguish a 30s timeout from an immediate ECONNREFUSED.
+
+## MCP servers — the same shape, already async
+
+The shipped `mcpClient({ transport })` is itself an async tool source — MCP's `list_tools` JSON-RPC call returns a Promise. v2.11.6 is what makes that sit cleanly inside `ToolProvider`. If you're writing a custom MCP-style adapter (a hub, registry, or proprietary tool index), the `discoveryProvider` shape above is the pattern.
+
+## Anti-patterns
+
+- ❌ **Don't reach for async unless you need it.** `staticTools` is sync, zero-overhead, and covers most agents. Async earns its cost only when the catalog actually changes per-run.
+- ❌ **Don't cache forever.** A stale catalog is worse than a slow one — the LLM sees tools that don't exist anymore. Use a TTL appropriate to your hub's change rate.
+- ❌ **Don't ignore `ctx.signal`.** When `agent.run({ env: { signal } })` aborts, your in-flight discovery should abort too. Holding the agent open past abort defeats cancellation.
+- ❌ **Don't return a different tool list every call without good reason.** The agent's reference-equality check sees a new array → rebuilds the schemas slot → invalidates provider cache markers. Fine when the catalog changed; wasteful when it didn't.
+- ❌ **Don't swallow errors silently.** Let the framework emit `discovery_failed` and re-throw. Use `.reliability(...)` for graceful retry — never `try { ... } catch { return [] }`.
+
+## When NOT to use async ToolProvider
+
+- **Your tool list is fixed at startup.** Use `staticTools(arr)` — sync, zero overhead.
+- **Your tool list is gated per-iteration but the source is in-memory.** Use `gatedTools(staticTools(all), predicate)` — sync, all in process.
+- **You can prefetch the catalog once at agent construction.** Just pass the resolved `Tool[]` to `.tools(...)`. Discovery only earns its cost when it actually changes per-run.
+
+## Next steps
+
+- [Tool providers](/agentfootprint/guides/tool-providers/) — `staticTools` / `gatedTools` / `skillScopedTools` (the sync 90% case)
+- [Reliability gate](/agentfootprint/guides/reliability-gate/) — declarative retry / fallback / fail-fast over discovery failures
+- [Observability](/agentfootprint/guides/observability/) — the three `tools.discovery_*` events in the full taxonomy
+- [`examples/features/10-discovery-provider.ts`](https://github.com/footprintjs/agentfootprint/blob/main/examples/features/10-discovery-provider.ts) — the runnable file behind this page

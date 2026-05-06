@@ -21,8 +21,8 @@ And a fourth, novel: **the agent can read its own trace.** Six months after the 
 
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="/agentfootprint/assets/causal-memory-dark.svg">
-    <source media="(prefers-color-scheme: light)" srcset="/agentfootprint/assets/causal-memory-light.svg">
+    <source media="(prefers-color-scheme: dark)" srcset="/agentfootprint/assets/causal-memory-dark.svg" />
+    <source media="(prefers-color-scheme: light)" srcset="/agentfootprint/assets/causal-memory-light.svg" />
     <img alt="One agent run produces a JSON-portable causal trace. Three downstream consumers fan out: audit replay, cheap-model triage, training data export. The fourth, novel: the agent can read its own trace." src="/agentfootprint/assets/causal-memory-light.svg" width="100%" />
   </picture>
 </p>
@@ -37,7 +37,7 @@ Every runner (`Agent`, `LLMCall`, `Sequence`, etc.) exposes the same observabili
 | **Recorders** | `runner.attach(recorder)` | You want pre-built aggregation (cost totals, token counts, narrative entries) |
 | **Tier-3 helpers** | `runner.enable.thinking({...})`, `runner.enable.logging({...})` | You want a one-liner for the common case (status line, structured logs) |
 
-There are **57+ typed events across 18 domains**: `agent`, `composition`, `context`, `stream`, `tools`, `skill`, `memory`, `cache`, `cost`, `permission`, `eval`, `embedding`, `pause`, `error`, `fallback`, `resilience`, `reliability`, `risk`. Every event has a typed payload — `gen_ai.chat`, `tool.start`, `cost.tick`, `composition.iteration_start`, etc. The framework owns the loop and emits during DFS traversal — no instrumentation, no spans-after-the-fact.
+There are **60+ typed events across 18 domains**: `agent`, `composition`, `context`, `stream`, `tools`, `skill`, `memory`, `cache`, `cost`, `permission`, `eval`, `embedding`, `pause`, `error`, `fallback`, `resilience`, `reliability`, `risk`. Every event has a typed payload — `gen_ai.chat`, `tool.start`, `cost.tick`, `composition.iteration_start`, etc. The framework owns the loop and emits during DFS traversal — no instrumentation, no spans-after-the-fact.
 
 ## Tier-3 — `.enable.thinking()` and `.enable.logging()`
 
@@ -141,7 +141,7 @@ agentfootprint.<domain>.<event>
 | `composition` | `enter` · `exit` · `iteration_start` · `iteration_exit` · `fork_start` · `branch_complete` · `merge_end` · `route_decided` | Sequence / Parallel / Conditional / Loop lifecycles |
 | `context` | `injected` · `evaluated` · `evicted` · `slot_composed` · `budget_pressure` · `memory` | Context engineering — every injection's full lifecycle |
 | `stream` | `llm_start` · `llm_end` · `token` · `tool_start` · `tool_end` | Token-by-token + tool-call lifecycle |
-| `tools` | `offered` · `activated` · `deactivated` | ToolProvider activation per iteration (skills, gating) |
+| `tools` | `offered` · `activated` · `deactivated` · `discovery_started` · `discovery_completed` · `discovery_failed` | ToolProvider activation per iteration (skills, gating); async-provider lifecycle (start/complete/fail with `durationMs`) |
 | `skill` | `activated` · `deactivated` | LLM-activated skill resolution |
 | `memory` | `attached` · `detached` · `written` · `strategy_applied` | Memory pipeline subflows |
 | `cache` | `applied` · `metrics` | Provider cache marker placement + hit-rate |

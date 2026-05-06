@@ -61,6 +61,9 @@ import type {
   ToolEndPayload,
   ToolsActivatedPayload,
   ToolsDeactivatedPayload,
+  ToolsDiscoveryStartedPayload,
+  ToolsDiscoveryCompletedPayload,
+  ToolsDiscoveryFailedPayload,
   ToolsOfferedPayload,
   ToolStartPayload,
 } from './payloads.js';
@@ -110,6 +113,9 @@ export const EVENT_NAMES = {
     offered: 'agentfootprint.tools.offered',
     activated: 'agentfootprint.tools.activated',
     deactivated: 'agentfootprint.tools.deactivated',
+    discoveryStarted: 'agentfootprint.tools.discovery_started',
+    discoveryCompleted: 'agentfootprint.tools.discovery_completed',
+    discoveryFailed: 'agentfootprint.tools.discovery_failed',
   },
   skill: {
     activated: 'agentfootprint.skill.activated',
@@ -278,6 +284,18 @@ export interface AgentfootprintEventMap {
     'agentfootprint.tools.deactivated',
     ToolsDeactivatedPayload
   >;
+  'agentfootprint.tools.discovery_started': AgentfootprintEventEnvelope<
+    'agentfootprint.tools.discovery_started',
+    ToolsDiscoveryStartedPayload
+  >;
+  'agentfootprint.tools.discovery_completed': AgentfootprintEventEnvelope<
+    'agentfootprint.tools.discovery_completed',
+    ToolsDiscoveryCompletedPayload
+  >;
+  'agentfootprint.tools.discovery_failed': AgentfootprintEventEnvelope<
+    'agentfootprint.tools.discovery_failed',
+    ToolsDiscoveryFailedPayload
+  >;
   // skill
   'agentfootprint.skill.activated': AgentfootprintEventEnvelope<
     'agentfootprint.skill.activated',
@@ -397,6 +415,9 @@ export const ALL_EVENT_TYPES: readonly AgentfootprintEventType[] = [
   'agentfootprint.tools.offered',
   'agentfootprint.tools.activated',
   'agentfootprint.tools.deactivated',
+  'agentfootprint.tools.discovery_started',
+  'agentfootprint.tools.discovery_completed',
+  'agentfootprint.tools.discovery_failed',
   'agentfootprint.skill.activated',
   'agentfootprint.skill.deactivated',
   'agentfootprint.permission.check',

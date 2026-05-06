@@ -33,21 +33,27 @@
  *   );
  */
 
+import type { Tool } from '../core/tools.js';
 import type { ToolProvider, ToolDispatchContext, ToolGatePredicate } from './types.js';
 
 // #region gatedTools
 export function gatedTools(inner: ToolProvider, predicate: ToolGatePredicate): ToolProvider {
   return {
     id: 'gated',
-    list(ctx: ToolDispatchContext) {
+    list(ctx: ToolDispatchContext): readonly Tool[] | Promise<readonly Tool[]> {
       // Pull from the inner provider first; each recomputation sees
-      // the freshest state from any nested gates.
-      const innerTools = inner.list(ctx);
-      // Filter by predicate — tool name from `tool.schema.name`.
-      // Predicates throwing escape: a buggy predicate should crash
-      // loudly, not silently allow tools through. Per the
-      // permission-as-defense-in-depth principle.
-      return innerTools.filter((t) => predicate(t.schema.name, ctx));
+      // the freshest state from any nested gates. Inner may be sync
+      // or async — we mirror what we get back so a sync chain stays
+      // sync (zero microtask overhead) and an async chain stays
+      // async (no premature `Promise.resolve` wrapping).
+      const innerResult = inner.list(ctx);
+      const filter = (innerTools: readonly Tool[]): readonly Tool[] =>
+        // Filter by predicate — tool name from `tool.schema.name`.
+        // Predicates throwing escape: a buggy predicate should crash
+        // loudly, not silently allow tools through. Per the
+        // permission-as-defense-in-depth principle.
+        innerTools.filter((t) => predicate(t.schema.name, ctx));
+      return innerResult instanceof Promise ? innerResult.then(filter) : filter(innerResult);
     },
   };
 }

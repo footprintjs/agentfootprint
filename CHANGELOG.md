@@ -5,6 +5,94 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.11.6]
+
+### Added — async ToolProvider for runtime tool discovery
+
+`ToolProvider.list(ctx)` may now return EITHER `readonly Tool[]` (sync, the 99% case — `staticTools`, `gatedTools`, `skillScopedTools`) OR `Promise<readonly Tool[]>` (async, discovery-style providers backed by tool hubs / MCP registries / per-tenant catalogs). The agent runtime checks `result instanceof Promise` before awaiting, so sync providers pay zero microtask overhead.
+
+```ts
+const provider: ToolProvider = {
+  id: 'rube',
+  async list(ctx) {
+    const response = await fetch('/api/tools', { signal: ctx.signal });
+    return parseTools(await response.json());
+  },
+};
+
+const agent = Agent.create({ provider: llm, model: 'claude-sonnet-4-5-20250929' })
+  .toolProvider(provider)
+  .build();
+```
+
+This is what unlocks Rube / Composio / Arcade / custom-hub adapters as user code over the existing `ToolProvider` abstraction — no library API additions required.
+
+#### Type widening
+
+`ToolProvider.list(ctx): readonly Tool[]` → `readonly Tool[] | Promise<readonly Tool[]>`. No code changes needed for existing sync providers; the sync return type is a strict subset of the new union.
+
+#### `ToolDispatchContext.signal`
+
+`ctx` carries the agent's `AbortSignal` (propagated from `agent.run({ env: { signal } })`). Async providers MUST honor it — when the agent run is cancelled, an in-flight catalog fetch should abort instead of holding the run open. Sync providers can ignore.
+
+#### `agentfootprint.tools.discovery_failed` event
+
+A throwing or rejecting provider emits the typed event with `{ providerId, error, errorName, iteration }` and re-throws. Discovery failure is loud by design — silently dropping tools mid-conversation produces non-deterministic agent behavior harder to debug than a crash. For graceful degradation, configure `.reliability(...)` to route discovery failures via retry / fallback / fail-fast.
+
+#### One `list()` call per iteration
+
+The Tools slot caches the resolved `Tool[]` in a closure shared with the toolCalls handler. When the LLM dispatches a tool from your provider, the handler reads from the cache instead of re-invoking `list()` — async providers pay the discovery cost once per turn, not twice. Fresh chart per `agent.run()` ensures concurrent runs don't share cache state.
+
+#### Tools subflow split: Discover → Compose
+
+The Tools slot subflow now exposes two stages instead of one, so async discovery is first-class observable in every recorder/trace surface:
+
+```
+sf-tools subflow:
+  ├── Discover  ← own runtimeStageId, own InOutRecorder boundary,
+  │              own narrative entry. Calls provider.list(ctx).
+  │              Emits discovery_started → discovery_completed (or
+  │              discovery_failed). When no toolProvider is set,
+  │              early-returns in microseconds (no-op fast path).
+  └── Compose   ← merges static + provider + per-skill schemas into
+                  the slot. Reads providerToolCache.current populated
+                  by Discover.
+```
+
+Why: with discovery + compose merged into one stage (the v2.5–v2.11.5 shape), async-discovery latency was indistinguishable from compose latency in the trace, the discovery had no dedicated `runtimeStageId` for KeyedRecorder lookups, and InOutRecorder showed one boundary instead of two. The split fixes all three. Sync providers pay zero extra cost — Discover early-returns when no provider is set, and the dynamic `instanceof Promise` check still skips await for sync provider returns.
+
+Two new typed events round it out:
+
+- **`agentfootprint.tools.discovery_started`** — `{ providerId, iteration }`. Fires before `provider.list(ctx)`.
+- **`agentfootprint.tools.discovery_completed`** — `{ providerId, iteration, durationMs, toolCount }`. Fires after a successful `list()` resolution. Use the started→completed pair for per-iteration discovery latency.
+
+`tools.discovery_failed` payload now also carries `durationMs` so timeouts are distinguishable from immediate rejections.
+
+Event count: 48 → 50.
+
+#### Implementation
+
+- **`src/tool-providers/types.ts`** — widened `list()` return type; added `signal?: AbortSignal` to `ToolDispatchContext`.
+- **`src/core/slots/buildToolsSlot.ts`** — split into Discover + Compose stages; dynamic `instanceof Promise` check (sync fast-path); typed `discovery_started` / `discovery_completed` / `discovery_failed` emits; `ProviderToolCache` written by Discover, read by Compose AND the toolCalls handler.
+- **`src/core/agent/stages/toolCalls.ts`** — dispatch reads from `providerToolCache.current`, eliminating the second `provider.list(ctx)` call per iteration.
+- **`src/tool-providers/gatedTools.ts`** — propagates async return through the decorator chain via `result instanceof Promise ? result.then(filter) : filter(result)`. A sync inner stays sync; an async inner stays async.
+- **`src/recorders/core/ToolsRecorder.ts`** (new) — EmitBridge for `agentfootprint.tools.*`, parallel to `streamRecorder` / `skillRecorder`. Auto-attached in `Agent.run()`.
+- **`src/events/payloads.ts`** + **`src/events/registry.ts`** — `ToolsDiscoveryStartedPayload` / `ToolsDiscoveryCompletedPayload` / `ToolsDiscoveryFailedPayload` + 3 entries in `ALL_EVENT_TYPES` (now 50).
+
+#### Tests (15 new in `test/tool-providers/async-provider.test.ts`)
+
+Sync path / async path / sync throw / async reject / signal abort / mixed sync+async chain / no double-discovery (cache contract) / concurrent agents (reentrancy) / discovery_started→discovery_completed ordering with timing / failed discovery emits started→failed (no completed) / no-provider agents emit zero discovery events.
+
+#### Docs + example
+
+- **`docs-site/src/content/docs/guides/tool-discovery.mdx`** — sync vs async contract, TTL caching pattern, signal propagation, failure semantics, concurrency notes.
+- **`examples/features/10-discovery-provider.ts`** — `discoveryProvider({ hub, ttlMs })` over a generic `ToolHub` interface; three scenarios (happy + cache hit, cancellation, failure path).
+- **`docs-site/src/content/docs/guides/observability.mdx`** — `tools.discovery_failed` listed in event taxonomy; event count bumped to 58.
+
+#### Backward compatibility
+
+None broken. Sync providers (`staticTools`, `gatedTools`, `skillScopedTools` and any custom sync provider) work unchanged. The widened `list()` return type is a strict superset; the new `ctx.signal` is optional. The cache eliminates a redundant `list()` call that was already correct under the v2.11.5 contract.
+
 ## [2.11.5]
 
 ### Added — reliability gate wired into Agent

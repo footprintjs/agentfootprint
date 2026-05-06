@@ -89,6 +89,8 @@ export default defineConfig({
             { label: 'Skills', slug: 'guides/skills' },
             { label: 'Skills, explained', slug: 'guides/skills-explained' },
             { label: 'Tools', slug: 'guides/tools' },
+            { label: 'Tool providers', slug: 'guides/tool-providers' },
+            { label: 'Tool discovery (async)', slug: 'guides/tool-discovery' },
             { label: 'Flowchart as tool', slug: 'guides/flowchart-as-tool' },
             { label: 'Output schema', slug: 'guides/output-schema' },
             { label: 'Grounding', slug: 'guides/grounding' },

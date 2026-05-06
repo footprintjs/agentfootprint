@@ -297,6 +297,48 @@ export interface ToolsDeactivatedPayload {
   readonly reason: 'skill_deactivated' | 'permission_revoked';
 }
 
+/**
+ * Emitted at the start of a `ToolProvider.list(ctx)` call inside the
+ * Discover stage. Pairs with `tools.discovery_completed` (success) or
+ * `tools.discovery_failed` (error). Use the pair to measure async-
+ * provider latency per iteration without joining stages by hand.
+ */
+export interface ToolsDiscoveryStartedPayload {
+  readonly providerId: string | undefined;
+  readonly iteration: number;
+}
+
+/**
+ * Emitted when `ToolProvider.list(ctx)` resolves successfully. The
+ * `durationMs` is the wall-clock between `tools.discovery_started` and
+ * resolution; `toolCount` is the size of the returned tool list. For
+ * sync providers `durationMs` is ~0; for async hub-backed providers
+ * this is your observability hook for catalog-fetch latency.
+ */
+export interface ToolsDiscoveryCompletedPayload {
+  readonly providerId: string | undefined;
+  readonly iteration: number;
+  readonly durationMs: number;
+  readonly toolCount: number;
+}
+
+/**
+ * Emitted when a custom `ToolProvider.list(ctx)` throws or rejects.
+ * The iteration is aborted; a configured `reliability` rule decides
+ * whether to retry, fall back, or fail-fast. `providerId` lets
+ * consumers route alerts to the right hub adapter (rube / mcp /
+ * custom-discovery). `durationMs` measures how long the failed call
+ * spent before throwing, so timeouts vs immediate rejections are
+ * distinguishable.
+ */
+export interface ToolsDiscoveryFailedPayload {
+  readonly providerId: string | undefined;
+  readonly error: string;
+  readonly errorName: string;
+  readonly iteration: number;
+  readonly durationMs: number;
+}
+
 // skill.* (2)
 export interface SkillActivatedPayload {
   readonly skillId: string;

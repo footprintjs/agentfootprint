@@ -91,7 +91,7 @@ agentfootprint is built on **footprintjs** — the flowchart pattern for backend
 | State machines | The ReAct loop *is* a flowchart |
 | Multi-agent crews | Compose Agents through control flow — no special class needed |
 | Durable workflows | `pauseHere()` plus JSON-portable `resume()` |
-| Typed observation | 57+ events for free, because the framework owns the loop |
+| Typed observation | 60+ events for free, because the framework owns the loop |
 
 So we used the budget those abstractions would have cost us to invest deeply in something they all leave to the developer: **the injection loop.**
 
@@ -393,6 +393,7 @@ The flowchart, recorders, and tests don't change between dev and prod.
 - 4 control flows — `Sequence`, `Parallel`, `Conditional`, `Loop`
 - 1 Injection primitive — `defineSkill` / `defineSteering` / `defineInstruction` / `defineFact`
 - 1 reliability gate — `.reliability({ preCheck, postDecide, providers, circuitBreaker, fallback })`
+- 1 tool dispatch primitive — `ToolProvider` (sync OR async) — `staticTools` · `gatedTools` · `skillScopedTools` · custom `discoveryProvider` over hubs / MCP / per-tenant catalogs
 
 **LLM providers** (7)
 
@@ -415,7 +416,7 @@ The flowchart, recorders, and tests don't change between dev and prod.
 - Provider-agnostic prompt caching — declarative per-injection, per-iteration marker recomputation
 - Pause / resume — JSON-serializable checkpoints; resume hours later on a different server
 - Resilience primitives — `withRetry`, `withFallback`, `withCircuitBreaker`, `.outputFallback`, `agent.resumeOnError`
-- 57+ typed observability events — `agent` · `composition` · `context` · `stream` · `tools` · `skill` · `memory` · `cache` · `cost` · `permission` · `eval` · `embedding` · `pause` · `error` · `fallback` · `resilience` · `reliability` · `risk`
+- 60+ typed observability events — `agent` · `composition` · `context` · `stream` · `tools` · `skill` · `memory` · `cache` · `cost` · `permission` · `eval` · `embedding` · `pause` · `error` · `fallback` · `resilience` · `reliability` · `risk`
 
 **Tooling**
 - **Lens** · **Explainable Trace** — two visual replays of the causal trace (separate `agentfootprint-lens` package)

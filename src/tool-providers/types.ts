@@ -76,6 +76,15 @@ export interface ToolDispatchContext {
     readonly principal?: string;
     readonly conversationId: string;
   };
+  /**
+   * Optional abort signal propagated from the agent's `run({ env })` /
+   * AbortController. Async providers (network discovery, MCP catalog
+   * fetch, registry pull) MUST honor this — abandon the in-flight
+   * request when the agent is cancelled mid-discovery, otherwise the
+   * provider holds the run open past abort. Sync providers can ignore
+   * it.
+   */
+  readonly signal?: AbortSignal;
 }
 
 /**
@@ -83,22 +92,49 @@ export interface ToolDispatchContext {
  * iteration: "what tools should the LLM see right now?"
  *
  * Implementations are PURE — given the same context, return the same
- * tool list. No async (the answer is needed synchronously each
- * iteration; if you need async filtering, precompute upstream).
+ * tool list (no observable mutation; reentrant; safe under concurrent
+ * calls).
+ *
+ * **Sync vs async.** Most providers (`staticTools`, `gatedTools`,
+ * `skillScopedTools`) compute the answer synchronously and return
+ * `readonly Tool[]` — the agent's hot path skips the await microtask
+ * entirely via a runtime `instanceof Promise` check. Discovery-style
+ * providers (MCP catalog fetch, registry pull, dynamic skill resolution)
+ * may return `Promise<readonly Tool[]>`; the agent awaits only when
+ * the value is actually a Promise. Sync providers pay zero overhead.
+ *
+ * **Caching.** The agent calls `list(ctx)` once per iteration. For
+ * expensive lookups (network calls, hub queries), the provider is
+ * responsible for caching — typically TTL- or iteration-keyed. The
+ * framework deliberately does NOT cache for you because the cache
+ * key depends on which fields of `ctx` matter to your provider
+ * (e.g., per-skill vs per-tenant vs per-iteration).
+ *
+ * **Errors.** A throwing or rejecting provider emits
+ * `agentfootprint.tools.discovery_failed` and aborts the iteration —
+ * the run continues only if a configured `reliability` rule routes
+ * the error (`fail-fast`, `retry`, etc.). Discovery failure is loud
+ * by design; silently dropping tools mid-conversation produces
+ * non-deterministic agent behavior that's harder to debug than a
+ * crash.
  */
 export interface ToolProvider {
   /**
    * Return the tool list visible to the LLM for the current iteration.
-   * The returned array MUST be a NEW reference each call (the agent
-   * compares for change detection). Order is preserved — the LLM may
-   * use position as a hint when tool descriptions are ambiguous.
+   * Sync return is the fast path; Promise return is supported for
+   * discovery-style providers. The returned array MUST be a NEW
+   * reference each call (the agent compares for change detection).
+   * Order is preserved — the LLM may use position as a hint when tool
+   * descriptions are ambiguous.
    */
-  list(ctx: ToolDispatchContext): readonly Tool[];
+  list(ctx: ToolDispatchContext): readonly Tool[] | Promise<readonly Tool[]>;
 
   /**
    * Optional: stable id for observability / debugging. Defaults to
    * `'static'` for `staticTools`, `'gated'` for `gatedTools`. Custom
-   * implementations should set their own id.
+   * implementations should set their own id — surfaces on
+   * `agentfootprint.tools.discovery_failed.providerId` so consumers
+   * can route alerts to the right hub adapter.
    */
   readonly id?: string;
 }

@@ -48,10 +48,11 @@ import { permissionRecorder } from '../recorders/core/PermissionRecorder.js';
 import { evalRecorder } from '../recorders/core/EvalRecorder.js';
 import { memoryRecorder } from '../recorders/core/MemoryRecorder.js';
 import { skillRecorder } from '../recorders/core/SkillRecorder.js';
+import { toolsRecorder } from '../recorders/core/ToolsRecorder.js';
 import type { MemoryDefinition } from '../memory/define.types.js';
 import { buildSystemPromptSlot } from './slots/buildSystemPromptSlot.js';
 import { buildMessagesSlot } from './slots/buildMessagesSlot.js';
-import { buildToolsSlot } from './slots/buildToolsSlot.js';
+import { buildToolsSlot, type ProviderToolCache } from './slots/buildToolsSlot.js';
 import { buildInjectionEngineSubflow } from '../lib/injection-engine/buildInjectionEngineSubflow.js';
 import type { Injection } from '../lib/injection-engine/types.js';
 import { applyOutputFallback, type ResolvedOutputFallback } from './outputFallback.js';
@@ -581,6 +582,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     executor.attachCombinedRecorder(evalRecorder({ dispatcher, getRunContext: getRunCtx }));
     executor.attachCombinedRecorder(memoryRecorder({ dispatcher, getRunContext: getRunCtx }));
     executor.attachCombinedRecorder(skillRecorder({ dispatcher, getRunContext: getRunCtx }));
+    executor.attachCombinedRecorder(toolsRecorder({ dispatcher, getRunContext: getRunCtx }));
     for (const r of this.attachedRecorders) executor.attachCombinedRecorder(r);
     return executor;
   }
@@ -699,9 +701,17 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       reason: 'Agent.system()',
     });
     const messagesSubflow = buildMessagesSlot();
+    // Per-run cache shared between buildToolsSlot (writer, each
+    // iteration) and buildToolCallsHandler (reader, same iteration).
+    // Holds the resolved Tool[] from `provider.list(ctx)` so dispatch
+    // doesn't re-invoke `list()` — vital for async network providers.
+    // A fresh chart (and thus fresh cache) is built per `agent.run()`,
+    // so concurrent runs don't share state.
+    const providerToolCache: ProviderToolCache = { current: [] };
     const toolsSubflow = buildToolsSlot({
       tools: toolSchemas,
       ...(this.externalToolProvider && { toolProvider: this.externalToolProvider }),
+      ...(this.externalToolProvider && { providerToolCache }),
     });
 
     // iterationStart extracted to ./agent/stages/iterationStart.ts (v2.11.2).
@@ -731,6 +741,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     const toolCallsHandler = buildToolCallsHandler({
       registryByName,
       ...(this.externalToolProvider && { externalToolProvider: this.externalToolProvider }),
+      ...(this.externalToolProvider && { providerToolCache }),
       ...(permissionChecker && { permissionChecker }),
     });
 

@@ -29,8 +29,9 @@ import type { PausableHandler, TypedScope } from 'footprintjs';
 import type { LLMMessage, PermissionChecker } from '../../../adapters/types.js';
 import type { ContextRole } from '../../../events/types.js';
 import { typedEmit } from '../../../recorders/core/typedEmit.js';
-import type { ToolDispatchContext, ToolProvider } from '../../../tool-providers/types.js';
+import type { ToolProvider } from '../../../tool-providers/types.js';
 import { isPauseRequest } from '../../pause.js';
+import type { ProviderToolCache } from '../../slots/buildToolsSlot.js';
 import type { Tool } from '../../tools.js';
 import { safeStringify } from '../validators.js';
 import type { AgentState } from '../types.js';
@@ -44,6 +45,13 @@ export interface ToolCallsHandlerDeps {
    *  tools (skill-scoped, multi-tenant, etc.). Consulted only when
    *  the static registry doesn't have the tool. */
   readonly externalToolProvider?: ToolProvider;
+  /**
+   * Cache populated by `buildToolsSlot` after each `provider.list(ctx)`
+   * call this iteration. Read here to avoid a second `list()` call
+   * (vital for async / network-backed providers). Same closure shared
+   * within one chart build.
+   */
+  readonly providerToolCache?: ProviderToolCache;
   /** Optional permission gate. When present, every tool dispatch
    *  awaits `check({capability: 'tool_call', ...})` BEFORE executing.
    *  Throwing checkers are treated as deny-by-default. */
@@ -56,7 +64,7 @@ export interface ToolCallsHandlerDeps {
 export function buildToolCallsHandler(
   deps: ToolCallsHandlerDeps,
 ): PausableHandler<TypedScope<AgentState>> {
-  const { registryByName, externalToolProvider, permissionChecker } = deps;
+  const { registryByName, externalToolProvider, providerToolCache, permissionChecker } = deps;
 
   return {
     execute: async (scope) => {
@@ -80,28 +88,18 @@ export function buildToolCallsHandler(
           ...(toolCalls.length > 0 && { toolCalls }),
         });
       }
-      // Resolve a tool by name, consulting the external ToolProvider
-      // if one was wired via `.toolProvider()` and the static
-      // registry doesn't carry the tool. The provider sees the same
-      // ctx the Tools slot used, so dispatch + visibility stay
-      // consistent within the iteration.
+      // Resolve a tool by name. The Tools slot already invoked
+      // `provider.list(ctx)` this iteration and cached the resolved
+      // Tool[] in the closure-shared providerToolCache — read from
+      // there to avoid a second discovery call (especially important
+      // for async network-backed providers). Same iteration ctx →
+      // same result, so the cache is correct.
       const lookupTool = (toolName: string): Tool | undefined => {
         const fromRegistry = registryByName.get(toolName);
         if (fromRegistry) return fromRegistry;
         if (!externalToolProvider) return undefined;
-        const activatedIds = (scope.activatedInjectionIds as readonly string[] | undefined) ?? [];
-        const identity = scope.runIdentity as
-          | { tenant?: string; principal?: string; conversationId: string }
-          | undefined;
-        const ctx: ToolDispatchContext = {
-          iteration: scope.iteration as number,
-          ...(activatedIds.length > 0 && {
-            activeSkillId: activatedIds[activatedIds.length - 1],
-          }),
-          ...(identity && { identity }),
-        };
-        const visible = externalToolProvider.list(ctx);
-        return visible.find((t) => t.schema.name === toolName);
+        const cached = providerToolCache?.current ?? [];
+        return cached.find((t) => t.schema.name === toolName);
       };
 
       for (const tc of toolCalls) {

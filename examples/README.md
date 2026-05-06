@@ -207,6 +207,7 @@ _Run `npm run examples:readme` after adding/editing examples._
 | 07 | [`07-mock-multi-turn-replies.ts`](features/07-mock-multi-turn-replies.ts) | Mock — scripted multi-turn replies (deterministic ReAct) | mock({ replies: [...] }) drives a tool-using ReAct loop with exact,  |
 | 08 | [`08-reliability.ts`](features/08-reliability.ts) | Reliability — CircuitBreaker + outputFallback + resumeOnError | End-to-end demo of the v2.10.x Reliability subsystem: vendor-outage circuit breaker, 3-tier output-schema degradation, and fault-tolerant mid-run resume from JSON-serializable checkpoint. |
 | 09 | [`09-reliability-gate.ts`](features/09-reliability-gate.ts) | Reliability gate — rules-based retry / fallback / fail-fast around CallLLM | v2.11.5 — declarative reliability rules wrapping every LLM call inside an Agent loop. Demonstrates happy path, transient-retry recovery, and post-decide fail-fast → typed ReliabilityFailFastError. Streaming + reliability uses first-chunk arbitration: pre-first-chunk failures honor the full rule set; mid-stream failures only honor ok / fail-fast. |
+| 10 | [`10-discovery-provider.ts`](features/10-discovery-provider.ts) | Discovery-style ToolProvider — async list() over a tool hub with TTL cache | v2.11.6 — ToolProvider.list(ctx) may return Promise<Tool[]> for runtime tool catalogs (Rube, MCP, custom hubs). Demonstrates TTL caching, ctx.signal propagation, and the agentfootprint.tools.discovery_failed event when discovery throws. Sync providers still pay zero overhead. |
 
 ### [`canonical/`](canonical/) — end-to-end patterns
 

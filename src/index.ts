@@ -131,6 +131,7 @@ export {
 export { evalRecorder, type EvalRecorderOptions } from './recorders/core/EvalRecorder.js';
 export { memoryRecorder, type MemoryRecorderOptions } from './recorders/core/MemoryRecorder.js';
 export { skillRecorder, type SkillRecorderOptions } from './recorders/core/SkillRecorder.js';
+export { toolsRecorder, type ToolsRecorderOptions } from './recorders/core/ToolsRecorder.js';
 export { typedEmit } from './recorders/core/typedEmit.js';
 
 // Runner interface + base

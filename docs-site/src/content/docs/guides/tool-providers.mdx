@@ -20,6 +20,8 @@ Plus tool sources from the same subpath:
 - **`mcpClient(opts)`** — connect to a real MCP server
 - **`mockMcpClient({ tools })`** — in-memory MCP source for dev / tests
 
+> **For runtime tool catalogs** (Rube, Composio, MCP registries, per-tenant policy services) where `list()` needs to be a network call: see [Tool discovery (async ToolProvider)](/agentfootprint/guides/tool-discovery/). Same `ToolProvider` interface; `list()` returns `Promise<Tool[]>`. Sync providers on this page stay sync — zero overhead.
+
 ## staticTools — the simplest provider
 
 <CodeFile path="src/tool-providers/staticTools.ts" region="staticTools" title="src/tool-providers/staticTools.ts (region: staticTools)" />
@@ -88,6 +90,7 @@ Predicates MUST be pure — no side effects, no async. They run dozens of times 
 
 ## Next steps
 
+- [Tool discovery (async)](/agentfootprint/guides/tool-discovery/) — the async `Promise<Tool[]>` path for runtime catalogs (Rube / MCP / per-tenant)
 - [Permission policy](/agentfootprint/guides/security/) — the natural consumer of `gatedTools` (data-driven role-based gating)
 - [Skills](/agentfootprint/guides/skills/) — `autoActivate` uses the same `gatedTools` pattern under the hood
 - [MCP integration](/agentfootprint/integrations/) — `mcpClient` ships in the same `tool-providers` subpath
