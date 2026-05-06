@@ -49,4 +49,6 @@ export type { ThinkingBlock, ThinkingHandler } from './types.js';
 
 export { mockThinkingHandler, mockAnthropicRaw, mockOpenAIRaw } from './MockThinkingHandler.js';
 
+export { anthropicThinkingHandler } from './AnthropicThinkingHandler.js';
+
 export { SHIPPED_THINKING_HANDLERS, findThinkingHandler } from './registry.js';

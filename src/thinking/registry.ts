@@ -14,6 +14,7 @@
  *     verifies your handler honors the framework's invariants
  */
 
+import { anthropicThinkingHandler } from './AnthropicThinkingHandler.js';
 import { mockThinkingHandler } from './MockThinkingHandler.js';
 import type { ThinkingHandler } from './types.js';
 
@@ -22,9 +23,9 @@ import type { ThinkingHandler } from './types.js';
  * order (by `id`) so diffs stay readable as new handlers land.
  */
 export const SHIPPED_THINKING_HANDLERS: readonly ThinkingHandler[] = [
+  anthropicThinkingHandler,
   mockThinkingHandler,
-  // Phase 4a: anthropicThinkingHandler
-  // Phase 5:  openAIThinkingHandler
+  // Phase 5: openAIThinkingHandler
 ];
 
 /**
