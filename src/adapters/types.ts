@@ -14,6 +14,7 @@
  */
 
 import type { ContextRole, ContextSlot, ContextSource } from '../events/types.js';
+import type { ThinkingBlock } from '../thinking/types.js';
 
 // ─── LLM Provider ────────────────────────────────────────────────────
 
@@ -37,6 +38,26 @@ export interface LLMMessage {
     readonly name: string;
     readonly args: Readonly<Record<string, unknown>>;
   }[];
+  /**
+   * v2.14 — Thinking blocks emitted by the LLM on assistant turns.
+   *
+   * Required for Anthropic extended-thinking + tool-use flows: signed
+   * blocks MUST be echoed BYTE-EXACT in subsequent assistant turns or
+   * Anthropic's API rejects with 400. The framework persists blocks
+   * here so the AnthropicProvider's serializer (Phase 4b) can restore
+   * them on the next request.
+   *
+   * **Persistence model — DIFFERENT from `ephemeral`:**
+   *   - `ephemeral` messages: NOT persisted to scope.history
+   *   - `thinkingBlocks`: PERSISTED (required for signature round-trip)
+   *
+   * Visible to recorders + audit by default. Use
+   * `RedactionPolicy.thinkingPatterns` (Phase 3) to scrub sensitive
+   * reasoning content before audit-log adapters fire.
+   *
+   * Empty array OR undefined when no thinking is present (most calls).
+   */
+  readonly thinkingBlocks?: readonly ThinkingBlock[];
   /**
    * v2.13 — PERSISTENCE flag (NOT a visibility flag). When `true`:
    *   • The message IS sent to the LLM as part of the next request
@@ -103,6 +124,25 @@ export interface LLMResponse {
     readonly output: number;
     readonly cacheRead?: number;
     readonly cacheWrite?: number;
+    /**
+     * v2.14 — count of reasoning/thinking tokens used by the model.
+     * Distinct from `output` (which is visible-content tokens).
+     *
+     * Semantics:
+     *   - `undefined` — provider doesn't expose / no thinking enabled
+     *                   on this call / call without extended thinking
+     *   - `0`         — thinking enabled but model produced no
+     *                   thinking tokens this call
+     *   - `>0`        — actual reasoning token count (billing-relevant
+     *                   for both Anthropic extended thinking and
+     *                   OpenAI o1/o3 reasoning_tokens)
+     *
+     * Cost dashboards reading `cost.tick` events should track this
+     * separately from `output` — pricing differs (Anthropic charges
+     * extended thinking at output rates; OpenAI o1/o3 reasoning tokens
+     * are billed as a separate line item).
+     */
+    readonly thinking?: number;
   };
   readonly stopReason: string;
   readonly providerRef?: string;
@@ -127,6 +167,22 @@ export interface LLMChunk {
    * authoritative payload in that case.
    */
   readonly response?: LLMResponse;
+  /**
+   * v2.14 — streaming thinking-content tokens. Parallel to `content`
+   * but for the model's reasoning chain rather than visible output.
+   * Set on chunks that carry thinking deltas (Anthropic emits these
+   * via `content_block_delta` events with `delta.type === 'thinking_delta'`);
+   * undefined or empty on chunks that carry only visible-content tokens.
+   *
+   * Frameworks: this field drives `agentfootprint.stream.thinking_delta`
+   * events when a `ThinkingHandler.parseChunk()` returns one. Consumers
+   * who want to render thinking-as-it-streams subscribe to that event.
+   *
+   * Default consumer behavior: thinking tokens are NOT shown to end
+   * users via `enable.thinking({ stream: false })` (the default).
+   * Consumers explicitly opt in with `enable.thinking({ stream: true })`.
+   */
+  readonly thinkingDelta?: string;
 }
 
 export interface LLMProvider {
