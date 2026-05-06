@@ -110,6 +110,32 @@ export interface LLMRequest {
    * cache support (OpenAI auto-cache, Mock, NoOp) ignore it.
    */
   readonly cacheMarkers?: readonly import('../cache/types.js').CacheMarker[];
+  /**
+   * v2.14 — request the LLM emit reasoning/thinking content on this call.
+   *
+   * Activation: presence of this field tells the provider to ASK for
+   * thinking. Anthropic translates to `thinking: { type: 'enabled',
+   * budget_tokens: budget }` on the wire. OpenAI ignores (o1/o3
+   * thinking is selected at the model id level, not per-request).
+   *
+   * `budget` is the maximum reasoning tokens the model may spend.
+   * Anthropic requires it; recommended range 1024-32000 for
+   * claude-sonnet-4-5 / opus-4-5. Models that don't support extended
+   * thinking will reject the request with HTTP 400 — pick a supported
+   * model when setting this field.
+   *
+   * Independent from `LLMMessage.thinkingBlocks` (the response side):
+   *   - `request.thinking` = activation (consumer ASKS for thinking)
+   *   - `message.thinkingBlocks` = round-trip (consumer ECHOES prior
+   *     assistant turn's signed blocks back to the model)
+   *
+   * Set via `AgentBuilder.thinking({ budget })` — applied to every
+   * LLM call the agent makes. Leave undefined to call without thinking
+   * (the v2.13 default).
+   */
+  readonly thinking?: {
+    readonly budget: number;
+  };
 }
 
 export interface LLMResponse {

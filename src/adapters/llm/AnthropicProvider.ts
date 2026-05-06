@@ -44,6 +44,11 @@ interface AnthropicCreateParams {
   tools?: AnthropicTool[];
   temperature?: number;
   stop_sequences?: string[];
+  // v2.14 — extended-thinking activation. When present, the model
+  // emits thinking blocks alongside its visible response. Only
+  // claude-sonnet-4-5 / opus-4-5 (and newer) support this; older
+  // models reject with HTTP 400.
+  thinking?: { type: 'enabled'; budget_tokens: number };
 }
 
 interface AnthropicMessageParam {
@@ -223,6 +228,13 @@ function buildParams(
   if (req.tools && req.tools.length > 0) params.tools = req.tools.map(toAnthropicTool);
   if (req.temperature !== undefined) params.temperature = req.temperature;
   if (req.stop && req.stop.length > 0) params.stop_sequences = [...req.stop];
+  // v2.14 — extended-thinking activation. Presence of req.thinking is
+  // the activation signal; budget translates to budget_tokens. Anthropic
+  // requires max_tokens > budget_tokens — caller's responsibility, the
+  // SDK error path surfaces violations through wrapError().
+  if (req.thinking) {
+    params.thinking = { type: 'enabled', budget_tokens: req.thinking.budget };
+  }
   return params;
 }
 

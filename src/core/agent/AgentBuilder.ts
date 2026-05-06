@@ -118,6 +118,13 @@ export class AgentBuilder {
    * conditional — no stage when no handler resolves.
    */
   private thinkingHandlerValue?: ThinkingHandler | null;
+  /**
+   * v2.14+ — request-side thinking activation. When set, every LLM
+   * call carries `LLMRequest.thinking = { budget }`, asking the
+   * provider (Anthropic) to emit reasoning blocks. Independent from
+   * `.thinkingHandler()` (response-side normalization choice).
+   */
+  private thinkingBudgetValue?: number;
 
   constructor(opts: AgentOptions) {
     this.opts = opts;
@@ -638,6 +645,62 @@ export class AgentBuilder {
     return this;
   }
 
+  /**
+   * v2.14+ — REQUEST-side thinking activation. Tells the provider to
+   * emit reasoning blocks alongside its response.
+   *
+   * **What this does:** every LLM call carries
+   * `LLMRequest.thinking = { budget }`. The AnthropicProvider
+   * translates to `thinking: { type: 'enabled', budget_tokens: N }`
+   * on the wire. The model spends up to `budget` reasoning tokens
+   * before producing the visible response.
+   *
+   * **Distinct from `.thinkingHandler()`:**
+   *   - `.thinking({ budget })` = ASK the model to think (request side)
+   *   - `.thinkingHandler(h)`   = NORMALIZE the response (response side)
+   *
+   * Most consumers want both; auto-wired handler covers the response
+   * side automatically when `.thinking()` is set on a thinking-capable
+   * provider. Setting `.thinking()` without `.thinkingHandler(null)`
+   * is the typical happy path.
+   *
+   * **Provider compatibility:**
+   *   - Anthropic: requires claude-sonnet-4-5 / opus-4-5 (or newer).
+   *     Older models reject with HTTP 400.
+   *   - OpenAI: ignores. o1/o3 reasoning is selected at the model id
+   *     level; this field is a no-op for OpenAIProvider.
+   *
+   * **Budget guidance:** Anthropic recommends 1024-32000 reasoning
+   * tokens. `budget` MUST be less than the request's `max_tokens`
+   * (defaults to 4096 in AnthropicProvider — bump via the request
+   * `maxTokens` if budget > ~3000).
+   *
+   * Calling twice throws — same shape as `.reliability()` /
+   * `.outputSchema()`.
+   *
+   * @example
+   *   Agent.create({ provider: anthropic({...}), model: 'claude-sonnet-4-5' })
+   *     .system('You are a careful reasoning agent.')
+   *     .thinking({ budget: 5000 })   // ask Anthropic to think
+   *     .build();
+   */
+  thinking(opts: { budget: number }): this {
+    if (this.thinkingBudgetValue !== undefined) {
+      throw new Error(
+        'AgentBuilder.thinking: already set. Each agent has at most one thinking-budget choice.',
+      );
+    }
+    if (!Number.isFinite(opts.budget) || opts.budget <= 0) {
+      throw new Error(
+        `AgentBuilder.thinking: budget must be a positive finite number, got ${String(
+          opts.budget,
+        )}.`,
+      );
+    }
+    this.thinkingBudgetValue = opts.budget;
+    return this;
+  }
+
   build(): Agent {
     // Resolve the voice config: bundled defaults + consumer overrides.
     // Templates flow through the same barrel exports the rest of the
@@ -666,6 +729,7 @@ export class AgentBuilder {
       this.outputFallbackCfg,
       this.reliabilityConfig,
       this.thinkingHandlerValue,
+      this.thinkingBudgetValue,
     );
     // Attach builder-collected recorders so they receive events from
     // the very first run. Mirrors what consumers would do post-build

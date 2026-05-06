@@ -78,6 +78,10 @@ export interface CallLLMStageDeps {
    *  NOT set, validation only happens at `agent.parseOutput()` boundary
    *  (existing v2.4 behavior). */
   readonly outputSchemaParser?: OutputSchemaParser<unknown>;
+  /** v2.14+ — request-side thinking budget. When set, every LLMRequest
+   *  carries `thinking: { budget }` so the provider activates extended
+   *  thinking. Undefined = no activation (default). */
+  readonly thinkingBudget?: number;
 }
 
 /**
@@ -132,6 +136,9 @@ export function buildCallLLMStage(
       model: deps.model,
       ...(deps.temperature !== undefined && { temperature: deps.temperature }),
       ...(deps.maxTokens !== undefined && { maxTokens: deps.maxTokens }),
+      ...(deps.thinkingBudget !== undefined && {
+        thinking: { budget: deps.thinkingBudget },
+      }),
     };
     // v2.6+ — call cache strategy to attach provider-specific cache
     // hints. CacheGate has already routed (apply-markers / no-markers)

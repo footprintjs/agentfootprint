@@ -231,6 +231,12 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    * for non-thinking agents.
    */
   private readonly thinkingHandler?: ThinkingHandler;
+  /**
+   * v2.14+ — request-side thinking budget. When set, every LLMRequest
+   * carries `thinking: { budget }`. AnthropicProvider translates to the
+   * wire format. Undefined = no thinking activation (default behavior).
+   */
+  private readonly thinkingBudget?: number;
 
   constructor(
     opts: AgentOptions,
@@ -251,6 +257,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     outputFallbackCfg?: ResolvedOutputFallback<unknown>,
     reliabilityConfig?: ReliabilityConfig,
     thinkingHandlerValue?: ThinkingHandler | null,
+    thinkingBudgetValue?: number,
   ) {
     super();
     this.provider = opts.provider;
@@ -299,6 +306,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       const auto = findThinkingHandler(opts.provider.name);
       if (auto) this.thinkingHandler = auto;
     }
+    if (thinkingBudgetValue !== undefined) this.thinkingBudget = thinkingBudgetValue;
     this.appName = voice.appName;
     this.commentaryTemplates = voice.commentaryTemplates;
     this.thinkingTemplates = voice.thinkingTemplates;
@@ -817,6 +825,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       ...(this.outputSchemaParser !== undefined && {
         outputSchemaParser: this.outputSchemaParser,
       }),
+      ...(this.thinkingBudget !== undefined && { thinkingBudget: this.thinkingBudget }),
     });
 
     // routeDecider extracted to ./agent/stages/route.ts (v2.11.2).
