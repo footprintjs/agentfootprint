@@ -37,6 +37,30 @@ export interface LLMMessage {
     readonly name: string;
     readonly args: Readonly<Record<string, unknown>>;
   }[];
+  /**
+   * v2.13 — PERSISTENCE flag (NOT a visibility flag). When `true`:
+   *   • The message IS sent to the LLM as part of the next request
+   *     (visible to the model, counts toward its context window).
+   *   • The message is OBSERVABLE via narrative/recorders/audit log
+   *     (visible to humans for debugging + forensics).
+   *   • The message is NOT persisted to `scope.history` after the gate
+   *     loop that produced it completes — long-term memory writes,
+   *     `getNarrative()` snapshots, and downstream consumers see only
+   *     non-ephemeral messages.
+   *
+   * Use case: Instructor-style schema retry. The reliability gate
+   * appends `{ role: 'user', content: feedbackForLLM, ephemeral: true }`
+   * before retry — the LLM sees the validation feedback for the next
+   * call, but the conversation history (and any memory persistence
+   * downstream) sees only the final accepted exchange.
+   *
+   * Audit-trail safety: ephemeral DOES NOT mean invisible to security
+   * review. `getNarrative()`, recorders, and the typed-event stream all
+   * see ephemeral messages; only the persistent conversation log filters
+   * them out. An attacker cannot use the ephemeral marker to construct
+   * audit-invisible prompts.
+   */
+  readonly ephemeral?: boolean;
 }
 
 export interface LLMToolSchema {

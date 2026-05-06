@@ -80,6 +80,40 @@ export interface ReliabilityRule {
    * Surfaces in `$break(reason)` and the auto-narrative.
    */
   readonly label?: string;
+
+  /**
+   * v2.13 — content delivered to the LLM as an EPHEMERAL user message
+   * before the next attempt, when this rule fires with `then: 'retry'`
+   * (or `then: 'retry-other'`). The agent appends `{ role: 'user',
+   * content: <feedback>, ephemeral: true }` to the next request's
+   * `messages` array — the LLM sees it for ONE call and it is NEVER
+   * persisted to `scope.history` or memory.
+   *
+   * Use case: Instructor-style schema retry. When schema validation
+   * fails, the rule's `feedbackForLLM` tells the model what to fix:
+   *
+   * ```ts
+   * {
+   *   when: (s) => s.validationError !== undefined && s.attempt < 3,
+   *   then: 'retry',
+   *   kind: 'schema-retry',
+   *   feedbackForLLM: (s) =>
+   *     `Previous output failed validation: ${s.validationError!.message}. ` +
+   *     `Return valid JSON conforming to the schema.`,
+   * }
+   * ```
+   *
+   * String form: same content every retry. Function form: receives the
+   * current `ReliabilityScope` (so feedback can reference `attempt`,
+   * `validationError`, etc.). May return a Promise — async resolvers
+   * (template engines, LLM-judge) work; sync zero-overhead path stays
+   * sync.
+   *
+   * Ignored when `then` is anything other than `'retry'` / `'retry-other'`.
+   * If the rule doesn't set `feedbackForLLM`, the retry uses the same
+   * unchanged request (existing v2.11.5 behavior).
+   */
+  readonly feedbackForLLM?: string | ((scope: ReliabilityScope) => string | Promise<string>);
 }
 
 // ─── Provider routing ────────────────────────────────────────────────
@@ -228,6 +262,47 @@ export interface ReliabilityScope {
   errorKind: 'ok' | '5xx-transient' | 'rate-limit' | 'circuit-open' | 'schema-fail' | 'unknown';
   /** Wall-clock latency of the most recent call attempt, in ms. */
   latencyMs: number;
+
+  /**
+   * v2.13 — schema validation failure detail. Set when the response
+   * was structurally returned by the provider but failed
+   * `outputSchema` validation. Distinct from `error` (which is set by
+   * provider exceptions). Both can be set if the gate is in a state
+   * where validation comes after a separate provider failure.
+   *
+   * Use case: Instructor-style schema retry. Rules read this to fire
+   * `retry` with `feedbackForLLM` that names the validation message:
+   *
+   * ```ts
+   * { when: (s) => s.validationError !== undefined && s.attempt < 3, ... }
+   * ```
+   *
+   * `path` carries the failing field path when the parser exposes it
+   * (Zod `.issues[].path.join('.')`). `rawOutput` is the unparsed
+   * string the LLM returned — useful for narrative entries that show
+   * "what the model actually said."
+   */
+  validationError?: {
+    readonly message: string;
+    readonly path?: string;
+    readonly rawOutput?: string;
+  };
+
+  /**
+   * v2.13 — chronological list of validation error MESSAGES across all
+   * attempts in this gate execution. Pushed once per `schema-fail`
+   * outcome. Empty until the first failure.
+   *
+   * Stuck-loop detection — pair with the `lastNValidationErrorsMatch`
+   * helper (or compare manually) to fail-fast when the model keeps
+   * making the same mistake instead of wasting more retries:
+   *
+   * ```ts
+   * { when: (s) => lastNValidationErrorsMatch(s, 2),
+   *   then: 'fail-fast', kind: 'schema-stuck-loop' }
+   * ```
+   */
+  validationErrorHistory: readonly string[];
 
   // ─ Cumulative state across attempts (within ONE gate execution) ─
   /** Per-provider attempt counts within this gate execution.

@@ -5,6 +5,162 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.13.0]
+
+### Added — Instructor-style schema retry on the reliability gate
+
+When the LLM emits valid JSON that fails your `outputSchema` (e.g. `amount` came back as `"USD 50"` instead of `50`), v2.13 re-prompts the same model with the validation error — within the SAME turn — for up to N retries. Each retry's feedback is an ephemeral message: visible to the model, never persisted to memory or audit logs. Composes on top of the existing v2.11.5 reliability gate; no new factory.
+
+**Pattern parallels v2.11.6 `discoveryProvider` + v2.12 `sequencePolicy`:** the library extends primitives, ships a recipe; consumers build the convenience layer in user-land. Avoids API lock-in before real usage shapes the right factory.
+
+**Pre-implementation 7-panel review** (Anthropic + OpenAI + tool-dispatch + architect + footprintjs + SRE + security + QA) surfaced 7 must-fix items + 10 doc notes; all folded in before code landed. **Post-implementation 7-panel review** in CHANGELOG section below.
+
+#### `ReliabilityScope` extension
+
+```ts
+interface ReliabilityScope {
+  // existing
+  attempt, providerIdx, response?, error?, errorKind, latencyMs, ...
+
+  // NEW in v2.13
+  validationError?: { message: string; path?: string; rawOutput?: string };
+  validationErrorHistory: readonly string[];   // accumulates across retries
+}
+```
+
+Rules read these to drive `retry`/`fail-fast` on schema-fail outcomes.
+
+#### `ReliabilityRule.feedbackForLLM`
+
+```ts
+interface ReliabilityRule {
+  // existing
+  when, then, kind, label?
+
+  // NEW in v2.13
+  feedbackForLLM?: string | ((s: ReliabilityScope) => string | Promise<string>);
+}
+```
+
+When a rule fires with `then: 'retry'` (or `'retry-other'`) AND `feedbackForLLM` is set, the gate appends an ephemeral user message to the next request. Sync OR async (callback may return Promise). Throwing callbacks are caught and fall back to a generic message — never abort the run.
+
+#### `LLMMessage.ephemeral` (persistence flag)
+
+```ts
+interface LLMMessage {
+  // existing
+  role, content, toolCallId?, toolName?, toolCalls?
+
+  // NEW in v2.13 — persistence flag (NOT a visibility flag)
+  ephemeral?: boolean;
+}
+```
+
+Critical clarification (v2.13 7-panel security reviewer's concern): `ephemeral` is a PERSISTENCE flag, not a VISIBILITY flag. Ephemeral messages:
+
+- ✅ ARE sent to the LLM in the next request (visible to the model, count toward context window)
+- ✅ ARE observable via narrative / recorders / typed events (visible to humans for debugging + forensics)
+- ❌ NOT persisted to `scope.history` (so memory writes / `getNarrative()` snapshots don't include them)
+
+An attacker cannot use the ephemeral marker to construct audit-invisible prompts.
+
+#### `ValidationFailure` sentinel + `OutputSchemaValidator` hook
+
+```ts
+class ValidationFailure extends Error {
+  readonly stage: 'json-parse' | 'schema-validate';
+  readonly path?: string;
+  readonly rawOutput?: string;
+}
+
+type OutputSchemaValidator = (response: LLMResponse) => void;
+```
+
+Caller-supplied validators throw `ValidationFailure` to signal schema-fail to the reliability loop. The framework auto-builds a validator from `outputSchemaParser` when both `outputSchema()` AND `reliability()` are configured on the same agent — consumers don't need to write their own validator for the common case.
+
+#### `defaultStuckLoopRule` + `lastNValidationErrorsMatch` helpers
+
+```ts
+import { defaultStuckLoopRule, lastNValidationErrorsMatch } from 'agentfootprint/reliability';
+
+// Drop in BEFORE retry rules:
+.reliability({
+  postDecide: [
+    defaultStuckLoopRule,                // ← fail-fast on 2 identical errors
+    { when: ..., then: 'retry', feedbackForLLM: ..., ... },
+    { when: ..., then: 'fail-fast', ... },
+  ],
+})
+```
+
+Stuck-loop detection is a built-in rule (must-fix #4 from 7-panel review). `kind: 'schema-stuck-loop'` surfaces on `ReliabilityFailFastError.kind` for caller branching. Custom n: `lastNValidationErrorsMatch(scope, 3)`.
+
+#### `agentfootprint.agent.output_schema_validation_failed` event
+
+```ts
+interface AgentOutputSchemaValidationFailedPayload {
+  message: string;
+  stage: 'json-parse' | 'schema-validate';
+  path?: string;
+  rawOutput?: string;
+  attempt: number;
+  cumulativeRetries: number;          // leading indicator for model drift
+}
+```
+
+**Naming clarification** (security reviewer's concern): the event lives in the `agent.*` domain (parallel to `agent.turn_end`), NOT `eval.*` — because "schema" is overloaded in agentfootprint and `output_schema` makes the scope unambiguous. Tool-input schema validation is a different concern handled at the provider layer.
+
+Fires BEFORE PostDecide rules evaluate, so observability sees every validation failure even if a buggy rule routes to fail-fast or swallows it (must-fix #2). Payload includes `attempt` + `cumulativeRetries` for SRE dashboards (must-fix #3).
+
+Total event count: 51 → 52.
+
+#### Validation only fires on terminal turns (must-fix #1)
+
+When the LLM returns `toolCalls.length > 0` (a tool-using turn, not a final answer), validation is skipped. Tool-call turns aren't terminal output; validating them would be premature and break the agent loop. This guard is enforced in `callLLM.ts`; consumers writing custom validators should mirror it.
+
+#### Implementation
+
+- **`src/adapters/types.ts`** — `LLMMessage.ephemeral` field; widened `PermissionChecker.check()` (was already widened in v2.12).
+- **`src/reliability/types.ts`** — `ReliabilityScope.validationError` + `validationErrorHistory`; `ReliabilityRule.feedbackForLLM`.
+- **`src/core/agent/stages/reliabilityExecution.ts`** — validation hook in retry loop; ephemeral feedback append via `applyFeedback` helper; `lastNValidationErrorsMatch` + `defaultStuckLoopRule` exports.
+- **`src/core/agent/stages/callLLM.ts`** — `outputSchemaParser` dep; auto-builds `postValidate` hook from parser; passes through to `executeWithReliability`. Guards on `toolCalls.length === 0` (must-fix #1). Extracts `path` from Zod-style `.issues` when present.
+- **`src/core/Agent.ts`** — passes `outputSchemaParser` through to `callLLM` deps when both reliability + outputSchema are configured.
+- **`src/events/payloads.ts`** + **`src/events/registry.ts`** — `AgentOutputSchemaValidationFailedPayload`; new entry in `ALL_EVENT_TYPES` (count 51 → 52).
+- **`src/reliability/index.ts`** — export `ValidationFailure`, `lastNValidationErrorsMatch`, `defaultStuckLoopRule`, `OutputSchemaValidator`.
+
+#### Tests (16 new in `test/reliability/strict-output.test.ts` — full 7-pattern matrix)
+
+| Pattern | Coverage |
+|---|---|
+| 1. Unit | `lastNValidationErrorsMatch` (4 tests); `defaultStuckLoopRule` (2 tests) |
+| 2. Scenario | Model fails once → retry with feedback → succeeds (1 test) |
+| 3. Integration | `runTyped()` returns parsed value after retry (1 test); throws `ReliabilityFailFastError` when exhausted (1 test) |
+| 4. Property | Random fail counts 0..3 preserve dispatch invariant (1 test) |
+| 5. Security | Throwing `feedbackForLLM` falls back to generic + run continues (1 test); ephemeral messages never leak to `scope.history` (1 test) |
+| 6. Performance | 50 successful runs without validation fail under 5s (overhead bound, 1 test) |
+| 7. ROI | RefundBot stuck-loop guard fires before retry exhaustion (1 test); event payload carries the right fields (1 test); validation does NOT fire on tool-call turns (1 test, must-fix #1 verification) |
+
+Running total: 1862/1862 tests across the suite.
+
+#### Recipe + example
+
+- **`examples/features/12-strict-output.ts`** — `strictOutputRules({maxRetries})` factory in user-land (~30 LOC); 3 scenarios (happy, retry-with-feedback, stuck-loop fail-fast).
+- **`docs-site/src/content/docs/guides/strict-output.mdx`** — full recipe page using CodeFile region markers; explains why no library factory ships; composition order with reliability + outputFallback; streaming trade-off; anti-patterns including security concerns from the 7-panel review.
+
+#### Backward compatibility
+
+None broken. Existing v2.11.5 reliability rules work unchanged — the new `feedbackForLLM` field is optional and ignored when absent. Existing `outputSchema` consumers (parseOutput / runTyped) work unchanged — validation INSIDE the loop only happens when `reliability` is ALSO configured on the same agent.
+
+#### Pattern locked in across 3 features
+
+| Feature | Library effort | Recipe |
+|---|---|---|
+| v2.11.6 `discoveryProvider` (async ToolProvider) | ~5 days | docs/tool-discovery.mdx |
+| v2.12 `sequencePolicy` (sequence governance) | ~2 days | docs/sequence-governance.mdx |
+| v2.13 `strictOutput` (Instructor-style retry) | ~3 days | docs/strict-output.mdx |
+
+Library extends primitives; consumers ship convenience layers; recipes in docs. Avoids API lock-in before real consumer patterns shape the right factory. If 5+ consumers ship the same factory shape over the next quarter, we promote to first-class library export in v3.
+
 ## [2.12.1]
 
 ### Fixed — 7-pattern test coverage backfill

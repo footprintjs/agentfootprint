@@ -37,7 +37,7 @@ Every runner (`Agent`, `LLMCall`, `Sequence`, etc.) exposes the same observabili
 | **Recorders** | `runner.attach(recorder)` | You want pre-built aggregation (cost totals, token counts, narrative entries) |
 | **Tier-3 helpers** | `runner.enable.thinking({...})`, `runner.enable.logging({...})` | You want a one-liner for the common case (status line, structured logs) |
 
-There are **60+ typed events across 18 domains**: `agent`, `composition`, `context`, `stream`, `tools`, `skill`, `memory`, `cache`, `cost`, `permission` (incl. `halt` for sequence governance), `eval`, `embedding`, `pause`, `error`, `fallback`, `resilience`, `reliability`, `risk`. Every event has a typed payload — `gen_ai.chat`, `tool.start`, `cost.tick`, `composition.iteration_start`, etc. The framework owns the loop and emits during DFS traversal — no instrumentation, no spans-after-the-fact.
+There are **60+ typed events across 18 domains**: `agent` (incl. `output_schema_validation_failed` for Instructor-style retry), `composition`, `context`, `stream`, `tools`, `skill`, `memory`, `cache`, `cost`, `permission` (incl. `halt` for sequence governance), `eval`, `embedding`, `pause`, `error`, `fallback`, `resilience`, `reliability`, `risk`. Every event has a typed payload — `gen_ai.chat`, `tool.start`, `cost.tick`, `composition.iteration_start`, etc. The framework owns the loop and emits during DFS traversal — no instrumentation, no spans-after-the-fact.
 
 ## Tier-3 — `.enable.thinking()` and `.enable.logging()`
 
@@ -137,7 +137,7 @@ agentfootprint.<domain>.<event>
 
 | Domain | Sample events | What it covers |
 |---|---|---|
-| `agent` | `turn_start` · `turn_end` · `iteration_start` · `iteration_end` · `route_decided` · `handoff` | ReAct loop boundaries |
+| `agent` | `turn_start` · `turn_end` · `iteration_start` · `iteration_end` · `route_decided` · `handoff` · `output_schema_validation_failed` | ReAct loop boundaries; `output_schema_validation_failed` fires inside the reliability gate when the LLM's final answer fails the agent's `outputSchema` (v2.13+) |
 | `composition` | `enter` · `exit` · `iteration_start` · `iteration_exit` · `fork_start` · `branch_complete` · `merge_end` · `route_decided` | Sequence / Parallel / Conditional / Loop lifecycles |
 | `context` | `injected` · `evaluated` · `evicted` · `slot_composed` · `budget_pressure` · `memory` | Context engineering — every injection's full lifecycle |
 | `stream` | `llm_start` · `llm_end` · `token` · `tool_start` · `tool_end` | Token-by-token + tool-call lifecycle |

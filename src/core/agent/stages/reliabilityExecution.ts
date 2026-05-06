@@ -74,6 +74,49 @@ export type LLMCallFn = (
   },
 ) => Promise<LLMResponse>;
 
+/**
+ * v2.13 — Output-schema validation hook. Called by the reliability loop
+ * AFTER a successful LLM response, BEFORE the response is committed.
+ * Throw to signal validation failure — the gate treats the throw as a
+ * `'schema-fail'` errorKind and routes via PostDecide rules (which can
+ * `retry` with `feedbackForLLM` for Instructor-style schema retry).
+ *
+ * Sentinel error type — the loop unwraps `ValidationFailure` instances
+ * to extract `message` / `path` / `rawOutput` for the
+ * `agentfootprint.agent.output_schema_validation_failed` event payload.
+ *
+ * MUST-FIX #1 from the v2.13 7-panel review: the hook fires ONLY when
+ * `response.toolCalls.length === 0` (final-answer turn). Tool-call
+ * turns aren't terminal output and validation would be premature.
+ * Caller is responsible for the guard; this helper just runs whatever
+ * the caller passes.
+ */
+export type OutputSchemaValidator = (response: LLMResponse) => void;
+
+/**
+ * Sentinel error class thrown by an `OutputSchemaValidator` to signal
+ * a validation failure. Distinct subclass so the reliability loop can
+ * `instanceof` check and route to the schema-fail branch instead of
+ * treating it as a generic provider error.
+ */
+export class ValidationFailure extends Error {
+  readonly stage: 'json-parse' | 'schema-validate';
+  readonly path?: string;
+  readonly rawOutput?: string;
+  constructor(opts: {
+    message: string;
+    stage: 'json-parse' | 'schema-validate';
+    path?: string;
+    rawOutput?: string;
+  }) {
+    super(opts.message);
+    this.name = 'ValidationFailure';
+    this.stage = opts.stage;
+    if (opts.path !== undefined) this.path = opts.path;
+    if (opts.rawOutput !== undefined) this.rawOutput = opts.rawOutput;
+  }
+}
+
 /** Sentinel kind written to scope on a mid-stream failure that the
  *  rules wanted to retry. Surfaces in `ReliabilityFailFastError.kind`. */
 export const MID_STREAM_KIND = 'mid-stream-not-retryable';
@@ -91,7 +134,20 @@ export async function executeWithReliability(
   defaultProviderName: string,
   defaultModel: string,
   callFn: LLMCallFn,
+  /** v2.13 — optional output-schema validator. When supplied, the loop
+   *  invokes it after every successful LLM call WHERE
+   *  `response.toolCalls.length === 0` (final-answer turn). Throws of
+   *  type `ValidationFailure` signal schema-fail and route via
+   *  PostDecide rules. Caller is responsible for guarding tool-call
+   *  turns; this helper assumes the validator is already gated. */
+  postValidate?: OutputSchemaValidator,
 ): Promise<LLMResponse | undefined> {
+  // v2.13 — mutable so feedbackForLLM can append ephemeral messages
+  // before retry. The reliabilityScope() helper captures `request` by
+  // reference; reassignment makes the next iteration's call see the
+  // updated messages array WITHOUT mutating the original (we always
+  // construct a new request object in applyFeedback below).
+  let mutableRequest = request;
   const preRules = config.preCheck ?? [];
   const postRules = config.postDecide ?? [];
   const providers = config.providers ?? [];
@@ -104,12 +160,17 @@ export async function executeWithReliability(
   let firstChunkSeen = false;
   const breakerStates: Record<string, BreakerState> = {};
   const attemptsPerProvider: Record<string, number> = {};
+  // v2.13 — accumulating output-schema validation history. Pushed on every
+  // schema-fail outcome; rules read it via scope.validationErrorHistory.
+  const validationErrorHistory: string[] = [];
+  // v2.13 — current attempt's validation error detail (overwritten each loop).
+  let lastValidationError: ReliabilityScope['validationError'];
 
   // Helper: build the reliability scope view rules read.
   const reliabilityScope = (): ReliabilityScope => {
     const currentProvider = providerEntry().name;
     return {
-      request,
+      request: mutableRequest,
       providersCount: providers.length,
       hasFallback: fallbackFn !== undefined,
       attempt,
@@ -120,6 +181,8 @@ export async function executeWithReliability(
       error: lastError,
       errorKind: lastErrorKind,
       latencyMs: lastLatencyMs,
+      ...(lastValidationError !== undefined && { validationError: lastValidationError }),
+      validationErrorHistory,
       attemptsPerProvider,
       breakerStates,
     };
@@ -241,16 +304,69 @@ export async function executeWithReliability(
     // Fire the actual call (unless breaker pre-emptied above).
     if (lastErrorKind !== 'circuit-open') {
       const t0 = Date.now();
+      // Reset per-attempt validation state (overwritten below if this
+      // attempt produces a schema-fail).
+      lastValidationError = undefined;
       try {
-        const response = await callFn(request, {
+        const response = await callFn(mutableRequest, {
           onFirstChunk: () => {
             firstChunkSeen = true;
           },
         });
-        lastResponse = response;
-        lastError = undefined;
-        lastErrorKind = 'ok';
-        if (breakerConfig !== undefined) {
+        // v2.13 — output-schema validation. MUST-FIX #1: only validate
+        // on terminal turns (no toolCalls). Tool-call turns aren't
+        // final answers; validating them would be premature.
+        if (
+          postValidate !== undefined &&
+          (response.toolCalls === undefined || response.toolCalls.length === 0)
+        ) {
+          try {
+            postValidate(response);
+            // Validation passed — fall through to success branch.
+            lastResponse = response;
+            lastError = undefined;
+            lastErrorKind = 'ok';
+          } catch (vErr) {
+            // Validation failed — treat as schema-fail. Capture detail
+            // for the typed event and for rules that read scope.validationError.
+            const vfailure =
+              vErr instanceof ValidationFailure
+                ? vErr
+                : new ValidationFailure({
+                    message: vErr instanceof Error ? vErr.message : String(vErr),
+                    stage: 'schema-validate',
+                  });
+            lastResponse = undefined;
+            lastError = vfailure;
+            lastErrorKind = 'schema-fail';
+            lastValidationError = {
+              message: vfailure.message,
+              ...(vfailure.path !== undefined && { path: vfailure.path }),
+              ...(vfailure.rawOutput !== undefined && { rawOutput: vfailure.rawOutput }),
+            };
+            validationErrorHistory.push(vfailure.message);
+            // MUST-FIX #2: emit the typed event BEFORE PostDecide runs,
+            // so observability sees the failure even if a buggy rule
+            // routes to fail-fast or swallows it.
+            // MUST-FIX #3: payload includes attempt + cumulativeRetries.
+            scope.$emit('agentfootprint.agent.output_schema_validation_failed', {
+              message: vfailure.message,
+              stage: vfailure.stage,
+              ...(vfailure.path !== undefined && { path: vfailure.path }),
+              ...(vfailure.rawOutput !== undefined && { rawOutput: vfailure.rawOutput }),
+              attempt: attempt + 1, // 1-indexed; bump happens in finally
+              cumulativeRetries: validationErrorHistory.length,
+            });
+            // Validation-fail does NOT count toward circuit-breaker
+            // failures — the provider call itself succeeded.
+          }
+        } else {
+          // No validator configured, OR a tool-call turn (non-terminal).
+          lastResponse = response;
+          lastError = undefined;
+          lastErrorKind = 'ok';
+        }
+        if (lastErrorKind === 'ok' && breakerConfig !== undefined) {
           breakerStates[cur.name] = recordSuccess(
             breakerStates[cur.name] ?? initialBreakerState(),
             breakerConfig,
@@ -314,11 +430,32 @@ export async function executeWithReliability(
     }
 
     if (postBranch === 'retry') {
+      // v2.13 — when the matched rule supplies `feedbackForLLM`, append
+      // it as an ephemeral user message before the next iteration so
+      // the LLM sees the validation hint. The ephemeral marker keeps
+      // it out of scope.history / memory writes — visible in the
+      // request, not persisted long-term.
+      if (matchedRule?.feedbackForLLM !== undefined) {
+        mutableRequest = await applyFeedback(
+          mutableRequest,
+          matchedRule.feedbackForLLM,
+          reliabilityScope(),
+        );
+      }
       // Loop continues; attempt was already bumped in finally.
       continue;
     }
 
     if (postBranch === 'retry-other') {
+      // Same feedback application for retry-other — the new provider
+      // sees the same accumulated context.
+      if (matchedRule?.feedbackForLLM !== undefined) {
+        mutableRequest = await applyFeedback(
+          mutableRequest,
+          matchedRule.feedbackForLLM,
+          reliabilityScope(),
+        );
+      }
       providerIdx += 1;
       if (providerIdx >= Math.max(providers.length, 1)) {
         // Walked past the last provider — convert to fail-fast.
@@ -340,7 +477,7 @@ export async function executeWithReliability(
         );
       }
       try {
-        const repaired = await fallbackFn(request, lastError);
+        const repaired = await fallbackFn(mutableRequest, lastError);
         // Successful fallback — commit and exit.
         return repaired;
       } catch (fallbackErr) {
@@ -364,3 +501,84 @@ export async function executeWithReliability(
     `reliability loop exceeded ${MAX_LOOP} iterations`,
   );
 }
+
+/**
+ * v2.13 — apply a `feedbackForLLM` value to the next request by
+ * appending an ephemeral user message. Resolves the value to a string
+ * (sync or async); returns a NEW LLMRequest with the appended message.
+ *
+ * The new message is marked `ephemeral: true` so:
+ *   • LLM sees it (counts toward this turn's context window)
+ *   • observability (recorders / narrative / typed events) sees it
+ *   • scope.history / memory writes do NOT persist it long-term
+ *
+ * Errors thrown by a function-form `feedbackForLLM` are caught and
+ * swallowed (with a fallback to a generic message) — a buggy
+ * feedback callback MUST NOT abort the agent run that the gate is
+ * already retrying. This is the v2.13 7-panel review's
+ * "callback-throw safety" requirement (OpenAI reviewer).
+ */
+async function applyFeedback(
+  request: LLMRequest,
+  feedback: string | ((scope: ReliabilityScope) => string | Promise<string>),
+  scope: ReliabilityScope,
+): Promise<LLMRequest> {
+  let content: string;
+  if (typeof feedback === 'string') {
+    content = feedback;
+  } else {
+    try {
+      const result = feedback(scope);
+      content = result instanceof Promise ? await result : result;
+    } catch {
+      content = `Previous output failed validation. Return valid JSON conforming to the schema.`;
+    }
+  }
+  return {
+    ...request,
+    messages: [...request.messages, { role: 'user', content, ephemeral: true }],
+  };
+}
+
+/**
+ * v2.13 — stuck-loop detection helper. Returns `true` when the last
+ * `n` validation errors are IDENTICAL — a hallucinating model that
+ * keeps making the same mistake won't make progress on more retries.
+ *
+ * Default rule template — spread into your `postDecide` to short-circuit
+ * stuck loops:
+ *
+ * ```ts
+ * postDecide: [
+ *   defaultStuckLoopRule,            // ← spread first; fail-fast on stuck
+ *   { when: (s) => s.validationError !== undefined && s.attempt < 3, then: 'retry', ... },
+ * ]
+ * ```
+ *
+ * @param scope The reliability scope view passed to rule predicates.
+ * @param n How many trailing identical errors trigger detection. Default 2.
+ */
+export function lastNValidationErrorsMatch(scope: ReliabilityScope, n = 2): boolean {
+  const h = scope.validationErrorHistory;
+  if (h.length < n) return false;
+  const last = h[h.length - 1];
+  for (let i = h.length - n; i < h.length; i++) {
+    if (h[i] !== last) return false;
+  }
+  return true;
+}
+
+/**
+ * v2.13 — drop-in PostDecide rule that fail-fasts when the last 2
+ * validation errors match. Spread into `postDecide` BEFORE retry
+ * rules so it short-circuits before another wasted attempt.
+ *
+ * The matched-rule kind `'schema-stuck-loop'` surfaces on
+ * `ReliabilityFailFastError.kind` for caller branching.
+ */
+export const defaultStuckLoopRule: ReliabilityRule = {
+  when: (s) => lastNValidationErrorsMatch(s, 2),
+  then: 'fail-fast',
+  kind: 'schema-stuck-loop',
+  label: 'model produced the same validation error twice in a row',
+};

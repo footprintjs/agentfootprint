@@ -37,6 +37,7 @@ import type {
   ErrorRetriedPayload,
   EvalScorePayload,
   EvalThresholdCrossedPayload,
+  AgentOutputSchemaValidationFailedPayload,
   FallbackTriggeredPayload,
   LLMEndPayload,
   LLMStartPayload,
@@ -90,6 +91,7 @@ export const EVENT_NAMES = {
     iterationEnd: 'agentfootprint.agent.iteration_end',
     routeDecided: 'agentfootprint.agent.route_decided',
     handoff: 'agentfootprint.agent.handoff',
+    outputSchemaValidationFailed: 'agentfootprint.agent.output_schema_validation_failed',
   },
   stream: {
     llmStart: 'agentfootprint.stream.llm_start',
@@ -217,6 +219,10 @@ export interface AgentfootprintEventMap {
   'agentfootprint.agent.handoff': AgentfootprintEventEnvelope<
     'agentfootprint.agent.handoff',
     AgentHandoffPayload
+  >;
+  'agentfootprint.agent.output_schema_validation_failed': AgentfootprintEventEnvelope<
+    'agentfootprint.agent.output_schema_validation_failed',
+    AgentOutputSchemaValidationFailedPayload
   >;
   // stream
   'agentfootprint.stream.llm_start': AgentfootprintEventEnvelope<
@@ -405,6 +411,7 @@ export const ALL_EVENT_TYPES: readonly AgentfootprintEventType[] = [
   'agentfootprint.agent.iteration_end',
   'agentfootprint.agent.route_decided',
   'agentfootprint.agent.handoff',
+  'agentfootprint.agent.output_schema_validation_failed',
   'agentfootprint.stream.llm_start',
   'agentfootprint.stream.llm_end',
   'agentfootprint.stream.token',

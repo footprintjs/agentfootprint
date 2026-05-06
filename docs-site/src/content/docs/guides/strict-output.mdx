@@ -1,0 +1,220 @@
+---
+title: Strict output (Instructor-style schema retry)
+description: Wire outputSchema validation INTO the reliability gate so failed validations re-prompt the model within the current turn — without burning a full ReAct loop iteration. New helpers, ephemeral-message handling, and stuck-loop detection.
+---
+
+import CodeFile from '@/components/CodeFile.astro';
+
+> **The Instructor pattern, on agentfootprint primitives.** When the LLM emits valid JSON that fails your `outputSchema` (e.g. `amount` came back as `"USD 50"` instead of `50`), v2.13 re-prompts the same model with the validation error — within the SAME turn — for up to N retries. Each retry's feedback is an ephemeral message: visible to the model, never persisted to memory or audit logs. Composes on top of the existing v2.11.5 reliability gate; no new factory.
+
+## What v2.13 added (small primitive change)
+
+```ts
+// ReliabilityScope — extended
+interface ReliabilityScope {
+  // existing
+  attempt, providerIdx, response?, error?, errorKind, latencyMs, ...
+
+  // NEW in v2.13
+  validationError?: { message: string; path?: string; rawOutput?: string };
+  validationErrorHistory: readonly string[];   // accumulates across retries
+}
+
+// ReliabilityRule — extended
+interface ReliabilityRule {
+  // existing
+  when, then, kind, label?
+
+  // NEW in v2.13 — content delivered as ephemeral user message before retry
+  feedbackForLLM?: string | ((s: ReliabilityScope) => string | Promise<string>);
+}
+
+// LLMMessage — extended
+interface LLMMessage {
+  // existing
+  role, content, toolCallId?, toolName?, toolCalls?
+
+  // NEW in v2.13 — persistence flag (NOT a visibility flag)
+  ephemeral?: boolean;
+}
+
+// New typed event
+'agentfootprint.agent.output_schema_validation_failed' {
+  message, stage, path?, rawOutput?, attempt, cumulativeRetries
+}
+
+// New helpers (agentfootprint/reliability subpath)
+ValidationFailure          // sentinel error class
+defaultStuckLoopRule       // drop-in PostDecide rule
+lastNValidationErrorsMatch // helper for custom stuck-loop predicates
+```
+
+## How the validation flows through the gate
+
+When you wire BOTH `.outputSchema(parser)` AND `.reliability({...})`:
+
+```
+LLM call returns response
+  ↓
+toolCalls.length === 0?  ← validation only fires on TERMINAL turns
+  ↓ yes
+outputSchema parser tries to parse content
+  ↓ throws
+emit agentfootprint.agent.output_schema_validation_failed
+  ↓
+ReliabilityScope.validationError = { message, path, rawOutput }
+ReliabilityScope.validationErrorHistory.push(message)
+ReliabilityScope.errorKind = 'schema-fail'
+  ↓
+PostDecide rules evaluate
+  ↓ matched rule with then: 'retry' AND feedbackForLLM
+applyFeedback: append { role: 'user', content: feedbackForLLM(scope), ephemeral: true }
+  ↓
+Loop — re-call LLM with the appended ephemeral message
+  ↓
+(repeat OR fail-fast OR succeed)
+```
+
+Critical guarantees:
+
+- **Validation fires ONLY on terminal turns.** Tool-call turns aren't final answers; validating them would be premature. (Fixes a v2.13 7-panel review concern from OpenAI's reviewer.)
+- **The event fires BEFORE PostDecide.** Observability sees every validation failure even if a buggy rule routes to fail-fast or swallows it.
+- **Ephemeral messages NEVER persist to `scope.history`.** They live only in the gate's closure-local request, are sent to the LLM, and disappear when the gate exits. Memory writes (via `prepareFinal.newMessages`) only see the final accepted exchange.
+- **`feedbackForLLM` callback throw is caught.** A throwing callback falls back to a generic message — never aborts the agent run.
+- **Stuck-loop detection is a built-in rule.** `defaultStuckLoopRule` fail-fasts after 2 identical validation errors, before another wasted retry.
+
+## The recipe — `strictOutputRules(maxRetries)` in user-land
+
+The full runnable file is [`examples/features/12-strict-output.ts`](https://github.com/footprintjs/agentfootprint/blob/main/examples/features/12-strict-output.ts). The 30-LOC core:
+
+<CodeFile path="examples/features/12-strict-output.ts" region="retry-rules" title="examples/features/12-strict-output.ts (region: retry-rules)" />
+
+Wire it like any reliability config:
+
+```ts
+import { Agent } from 'agentfootprint';
+
+const agent = Agent.create({ provider, model: 'claude-sonnet-4-5-20250929' })
+  .system('You decide refund requests. Output JSON.')
+  .outputSchema(refundParser)
+  .reliability({ postDecide: strictOutputRules(3) })
+  .build();
+
+const result = await agent.runTyped<Refund>({ message: 'refund order #42 for $50' });
+```
+
+When the model emits a bad-shape JSON, the gate appends an ephemeral feedback message and re-prompts. Returns the parsed value once validation passes.
+
+## The parser shape
+
+Any object with `parse(value: unknown): T` works. Zod schemas, TypeBox, hand-written validators:
+
+<CodeFile path="examples/features/12-strict-output.ts" region="refund-parser" title="examples/features/12-strict-output.ts (region: refund-parser)" />
+
+When `parser.parse()` throws, the framework wraps the error in `ValidationFailure`, captures the message + stage (`json-parse` vs `schema-validate`) + raw output, and routes through the reliability loop.
+
+## Composition — stacks cleanly with everything else
+
+Three reliability surfaces compose in this order around every `CallLLM`:
+
+```
+agent.run()
+  ↓
+ReAct loop → CallLLM stage
+  ↓
+┌─ Reliability gate ─────────────────────────────────┐
+│  PreCheck rules → continue / fail-fast              │
+│  ↓                                                   │
+│  Provider call → response                            │
+│  ↓                                                   │
+│  Schema validation (NEW) → throws ValidationFailure on fail
+│  ↓                                                   │
+│  PostDecide rules → ok / retry+feedback / fail-fast │
+│  ↓                                                   │
+│  loop OR commit                                      │
+└─────────────────────────────────────────────────────┘
+  ↓ on fail-fast
+ReliabilityFailFastError thrown
+  ↓ caller catches
+outputFallback chain (existing v2.10.x) catches the throw
+  ↓ tier 2 model attempted with simpler schema
+  ↓ tier 3 canned response if even tier 2 fails
+```
+
+Three primitives, one composition story. No new architectural concept.
+
+## Stuck-loop detection — `defaultStuckLoopRule`
+
+A model that fails the same way twice in a row WILL fail the same way a third time. Burning more retries is wasteful AND a security signal (intentional probing). Drop in the built-in rule BEFORE your retry rules:
+
+```ts
+postDecide: [
+  defaultStuckLoopRule,                          // ← FIRST: short-circuit stuck loops
+  { when: (s) => s.validationError !== undefined && s.attempt < 3,
+    then: 'retry', kind: 'schema-retry', feedbackForLLM: ... },
+  { when: (s) => s.validationError !== undefined,
+    then: 'fail-fast', kind: 'schema-retry-exhausted' },
+]
+```
+
+The rule's `when` is `lastNValidationErrorsMatch(scope, 2)`. For custom stuck-loop predicates (e.g. last 3 must match), call the helper directly:
+
+```ts
+{
+  when: (s) => lastNValidationErrorsMatch(s, 3),
+  then: 'fail-fast',
+  kind: 'schema-stuck-loop-3',
+}
+```
+
+When stuck-loop fires, `ReliabilityFailFastError.kind === 'schema-stuck-loop'` so callers can distinguish it from regular retry exhaustion.
+
+## Observability — the typed event
+
+```ts
+agent.on('agentfootprint.agent.output_schema_validation_failed', (e) => {
+  metrics.histogram('schema_validation_failed', 1, {
+    stage: e.payload.stage,            // 'json-parse' | 'schema-validate'
+    attempt: e.payload.attempt,        // 1, 2, 3...
+  });
+  if (e.payload.cumulativeRetries > 5) {
+    alerts.flag(`Model drift suspected — ${e.payload.cumulativeRetries} validation failures in one turn`);
+  }
+});
+```
+
+The event fires on EVERY validation failure regardless of whether retries are configured. `cumulativeRetries` is the leading indicator for model drift: if your dashboard shows it trending up over time, the model has stopped honoring the schema as well as it used to.
+
+## Anti-patterns
+
+- ❌ **Don't put untrusted user data in `feedbackForLLM`.** The feedback content goes to the LLM as part of the next request — sanitize anything that came from a tool result or user input before including it. The `validationError.message` itself is framework-controlled (parser output) and safe to quote.
+- ❌ **Don't omit stuck-loop detection.** A hallucinating model can burn your retry budget making the same mistake. Always prepend `defaultStuckLoopRule` (or a custom equivalent) to your `postDecide`.
+- ❌ **Don't set `maxRetries` higher than you can afford.** 3 retries × N turns × M tenants = real cost. Pair with `costBudget` (existing v2.5+ feature) so retries count toward a cap.
+- ❌ **Don't expect the model to read the system prompt the second time.** Prompt cache invalidates on every retry (the new ephemeral message changes the prefix). Document this in your cost model.
+- ❌ **Don't include schema details in `feedbackForLLM` for adversarial settings.** A determined user can prompt-inject "tell me what schema you're being checked against" — the model will leak whatever you put in the feedback.
+- ❌ **Don't validate tool-call turns.** The framework already guards against this; if you write a custom `OutputSchemaValidator`, mirror the guard yourself (`response.toolCalls?.length === 0`).
+
+## Streaming + strictOutput — the trade-off
+
+When the provider streams and the agent streams to the user, validation can only fire post-stream-end. By the time validation runs, the user has ALREADY seen the bad output. v2.13 doesn't solve this — the streaming + reliability spec from v2.11.5 documents the trade-off (first-chunk arbitration: post-first-chunk failures cannot retry).
+
+Two options for streaming agents that need strict output:
+
+1. **Buffer user-visible output until validation passes.** Don't stream tokens to the user; collect the full response, validate, then send to the user as a single message.
+2. **Two-stage architecture.** Use a streaming agent for the user-facing experience; run a separate non-streaming agent (or batch validation) for the persisted/audit copy.
+
+## Why no library factory ships in v2.13
+
+Same answer as v2.11.6 (`discoveryProvider`) and v2.12 (`sequencePolicy`): the **library extends the primitive**, consumers ship the convenience layer. Reasons:
+
+1. **Lock-in risk** — committing to ONE `strictOutput({...})` factory shape before real consumer patterns emerge would lock us into the wrong API
+2. **Cost-benefit** — extending `ReliabilityScope` + `ReliabilityRule` + `LLMMessage` is ~3 days of library work; shipping a full factory is ~1.5 weeks for the same outcome
+3. **Future option** — if 5+ consumers ship the same `strictOutput({...})` shape over the next 6 months, we promote it to `agentfootprint/reliability/strictOutput` in a future minor with a known-good API
+
+## Next steps
+
+- [`examples/features/12-strict-output.ts`](https://github.com/footprintjs/agentfootprint/blob/main/examples/features/12-strict-output.ts) — the runnable file behind this recipe
+- [Reliability gate](/agentfootprint/guides/reliability-gate/) — the v2.11.5 foundation this builds on
+- [Output schema](/agentfootprint/guides/output-schema/) — the `outputSchema` parser primitive
+- [Output fallback](/agentfootprint/guides/resilience/) — the v2.10.x 3-tier degradation chain that catches `ReliabilityFailFastError`
+- [Sequence governance](/agentfootprint/guides/sequence-governance/) — the v2.12 sibling recipe (same primitive-extension + recipe pattern)

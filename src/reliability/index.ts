@@ -50,3 +50,15 @@ export {
   type BreakerState,
   type CircuitState,
 } from './CircuitBreaker.js';
+
+// v2.13 — Instructor-style schema-retry helpers. `ValidationFailure` is
+// the sentinel error type a custom output validator can throw; the
+// reliability loop unwraps it to drive the schema-fail branch.
+// `lastNValidationErrorsMatch` + `defaultStuckLoopRule` short-circuit
+// stuck retry loops where the model keeps making the same mistake.
+export {
+  ValidationFailure,
+  lastNValidationErrorsMatch,
+  defaultStuckLoopRule,
+} from '../core/agent/stages/reliabilityExecution.js';
+export type { OutputSchemaValidator } from '../core/agent/stages/reliabilityExecution.js';

@@ -94,6 +94,7 @@ export default defineConfig({
             { label: 'Sequence governance (recipe)', slug: 'guides/sequence-governance' },
             { label: 'Flowchart as tool', slug: 'guides/flowchart-as-tool' },
             { label: 'Output schema', slug: 'guides/output-schema' },
+            { label: 'Strict output (recipe)', slug: 'guides/strict-output' },
             { label: 'Grounding', slug: 'guides/grounding' },
           ],
         },

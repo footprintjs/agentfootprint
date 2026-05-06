@@ -33,7 +33,12 @@ import { typedEmit } from '../../../recorders/core/typedEmit.js';
 import type { InjectionRecord } from '../../../recorders/core/types.js';
 import { emitCostTick } from '../../cost.js';
 import type { ReliabilityConfig } from '../../../reliability/types.js';
-import { executeWithReliability } from './reliabilityExecution.js';
+import { applyOutputSchema, type OutputSchemaParser } from '../../outputSchema.js';
+import {
+  executeWithReliability,
+  ValidationFailure,
+  type OutputSchemaValidator,
+} from './reliabilityExecution.js';
 import type { AgentState } from '../types.js';
 
 export interface CallLLMStageDeps {
@@ -65,6 +70,14 @@ export interface CallLLMStageDeps {
    *  see `reliabilityExecution.ts` and the streaming + reliability
    *  design memo. */
   readonly reliability?: ReliabilityConfig;
+  /** Optional output-schema parser (v2.13+). When set AND `reliability`
+   *  is also set, the loop validates the LLM response against this
+   *  parser on terminal turns (no toolCalls). Failures classify as
+   *  `errorKind: 'schema-fail'` so PostDecide rules can route to
+   *  retry-with-feedback (Instructor pattern). When `reliability` is
+   *  NOT set, validation only happens at `agent.parseOutput()` boundary
+   *  (existing v2.4 behavior). */
+  readonly outputSchemaParser?: OutputSchemaParser<unknown>;
 }
 
 /**
@@ -178,6 +191,52 @@ export function buildCallLLMStage(
       return resp;
     };
 
+    // v2.13 — build the output-schema validator hook when both
+    // reliability + outputSchemaParser are configured. The reliability
+    // loop applies the validator only on terminal turns (toolCalls
+    // empty) so tool-using turns aren't rejected for failing the final-
+    // answer schema. ValidationFailure carries `stage` + `path` for the
+    // typed event payload.
+    let postValidate: OutputSchemaValidator | undefined;
+    if (deps.outputSchemaParser !== undefined) {
+      const parser = deps.outputSchemaParser;
+      postValidate = (response) => {
+        try {
+          applyOutputSchema(response.content, parser);
+        } catch (err) {
+          // applyOutputSchema throws OutputSchemaError with
+          // {stage, rawOutput, cause}. Convert to ValidationFailure for
+          // the gate's typed handling. Pull a `path` if the underlying
+          // cause exposes Zod-style issues. Use the cause's message
+          // (the actual parser error) when available, falling back to
+          // the wrapper's message for parsers without a cause.
+          const e = err as {
+            message: string;
+            stage?: 'json-parse' | 'schema-validate';
+            rawOutput?: string;
+            cause?: {
+              message?: string;
+              issues?: ReadonlyArray<{ path?: ReadonlyArray<string | number> }>;
+            };
+          };
+          let path: string | undefined;
+          const firstIssue = e.cause?.issues?.[0];
+          if (firstIssue?.path && firstIssue.path.length > 0) {
+            path = firstIssue.path.join('.');
+          }
+          // Use cause message when present (parsers like Zod attach the
+          // real error as cause); fall back to wrapper message.
+          const message = e.cause?.message ?? e.message;
+          throw new ValidationFailure({
+            message,
+            stage: e.stage ?? 'schema-validate',
+            ...(path !== undefined && { path }),
+            ...(e.rawOutput !== undefined && { rawOutput: e.rawOutput }),
+          });
+        }
+      };
+    }
+
     let response: LLMResponse | undefined;
     if (deps.reliability) {
       response = await executeWithReliability(
@@ -188,6 +247,7 @@ export function buildCallLLMStage(
         deps.provider.name,
         deps.model,
         singleProviderCall,
+        postValidate,
       );
       // `executeWithReliability` returns `undefined` when it took the
       // fail-fast path. It already wrote scope state and called

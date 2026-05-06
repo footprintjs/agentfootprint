@@ -786,6 +786,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
         return toolSchemasResolved;
       },
       ...(this.reliabilityConfig !== undefined && { reliability: this.reliabilityConfig }),
+      ...(this.outputSchemaParser !== undefined && {
+        outputSchemaParser: this.outputSchemaParser,
+      }),
     });
 
     // routeDecider extracted to ./agent/stages/route.ts (v2.11.2).
