@@ -5,6 +5,68 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.14.3]
+
+### Added — `BoundaryRecorder.aggregateForBoundary` + `aggregateAllBoundaries`
+
+Per-boundary rollups for multi-agent / multi-LLM UIs. Two new methods on the existing `BoundaryRecorder` (no new class) plus a new `BoundaryAggregate` type.
+
+**Why this exists:** Lens, CLI live monitors, Sentry breadcrumbs, OTel exporters, and custom dashboards all need the same per-Agent rollup (tokens, llmCalls, toolCalls, iterations, duration). Re-implementing the prefix-match-by-`subflowPath` fold in each consumer is exactly what the recorder pattern is meant to prevent. Domain math (what counts as an "iteration"? does a cache hit count separately?) lives in the library; consumers hook up.
+
+**API:**
+
+```ts
+import { boundaryRecorder, type BoundaryAggregate } from 'agentfootprint';
+
+const boundary = boundaryRecorder();
+// ... attach + run ...
+
+// One boundary's rollup
+const triage: BoundaryAggregate | undefined = boundary.aggregateForBoundary('agent-triage#0');
+
+// Every primitive boundary's rollup, in entry order
+const all = boundary.aggregateAllBoundaries();
+all.forEach((r) => {
+  console.log(`${r.label}: ${r.tokens.input}+${r.tokens.output} tokens, ` +
+              `${r.llmCalls} llm calls, ${r.toolCalls} tool calls, ` +
+              `${r.durationMs ?? '(in flight)'}ms`);
+});
+```
+
+**Shape:**
+
+```ts
+export interface BoundaryAggregate {
+  readonly runtimeStageId: string;
+  readonly subflowId: string;
+  readonly subflowPath: readonly string[];
+  readonly primitiveKind?: string;            // 'Agent' | 'LLMCall' | 'Sequence' | ...
+  readonly label: string;                      // subflow display name
+  readonly tokens: { readonly input: number; readonly output: number };
+  readonly llmCalls: number;                   // count of llm.start
+  readonly toolCalls: number;                  // count of tool.start
+  readonly iterations: number;                 // count of loop.iteration
+  readonly startedAtMs: number;
+  readonly endedAtMs?: number;                 // undefined while in flight
+  readonly durationMs?: number;                // undefined while in flight
+}
+```
+
+**Semantics:**
+
+- Events count toward a boundary's rollup when their `subflowPath` is a **prefix-match** of the boundary's path. Nested boundaries (e.g., `LLMCall` inside an `Agent`) contribute to BOTH rollups — caller decides which level to render.
+- `aggregateAllBoundaries` filters to `primitiveKind`-tagged subflows ONLY (Agent / LLMCall / Sequence / Parallel / Conditional / Loop). Slot subflows (`sf-system-prompt` / `sf-messages` / `sf-tools`) are NOT included — they're context-engineering machinery, not user-facing rollup units.
+- Works **mid-run** — in-flight boundaries get partial values (`endedAtMs` / `durationMs` undefined). Lens uses this for per-agent live chips that update as the run progresses.
+- Works **post-run** — same call, terminal state.
+
+**Performance:** O(N events × M boundaries) for `aggregateAllBoundaries`. Pure projection over the existing flat event stream — no parallel state, no drift risk vs. `getEvents()`. For typical agent runs (<1000 events, <10 boundaries) this is sub-millisecond.
+
+**Tests:** 9 new tests covering single-boundary rollup, in-flight partial, prefix-match isolation, nested rollup contribution, ordering, primitive-kind filter. Total suite 2053/2053.
+
+**Public exports:** `BoundaryAggregate` type from `'agentfootprint'` main barrel + `'agentfootprint/observe'` subpath.
+
+Pure addition. No breaking changes.
+
 ## [2.14.2]
 
 ### Added — `LiveStateRecorder` — O(1) "what's happening RIGHT NOW" reads

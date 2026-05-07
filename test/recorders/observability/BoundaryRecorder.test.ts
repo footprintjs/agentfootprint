@@ -109,6 +109,7 @@ function dispatchTyped(
   type: string,
   payload: Record<string, unknown>,
   runtimeStageId = 'stage#0',
+  subflowPath: readonly string[] = [],
 ): void {
   dispatcher.dispatch({
     type,
@@ -117,7 +118,7 @@ function dispatchTyped(
       wallClockMs: 1000,
       runOffsetMs: 0,
       runtimeStageId,
-      subflowPath: [],
+      subflowPath,
       compositionPath: [],
       runId: 'test',
     },
@@ -654,5 +655,333 @@ describe('BoundaryRecorder — lifecycle', () => {
     rec.onSubflowEntry!({ name: 'Anon' });
     rec.onSubflowExit!({ name: 'Anon' });
     expect(rec.getEvents()).toEqual([]);
+  });
+});
+
+// ─── BoundaryAggregate — per-boundary rollups (v2.14.3) ──────────────
+
+describe('BoundaryRecorder.aggregateForBoundary', () => {
+  it('returns undefined when no entry matches the runtimeStageId', () => {
+    const { rec } = freshRecorder();
+    rec.onRunStart!(runEvt());
+    expect(rec.aggregateForBoundary('nope#0')).toBeUndefined();
+  });
+
+  it('rolls up tokens, llmCalls, toolCalls for one Agent', () => {
+    const { rec, dispatcher } = freshRecorder();
+    rec.onRunStart!(runEvt());
+    rec.onSubflowEntry!(subEvt('agent-a', 'Triage', 'agent-a#0', 'Agent: triage'));
+    // Two LLM calls + one tool call inside this agent
+    dispatchTyped(
+      dispatcher,
+      'agentfootprint.stream.llm_start',
+      {
+        iteration: 0,
+        provider: 'mock',
+        model: 'm',
+        systemPromptChars: 0,
+        messagesCount: 1,
+        toolsCount: 0,
+      },
+      'agent-a/call-llm#1',
+      ['agent-a'],
+    );
+    dispatchTyped(
+      dispatcher,
+      'agentfootprint.stream.llm_end',
+      {
+        iteration: 0,
+        content: 'x',
+        toolCallCount: 1,
+        usage: { input: 100, output: 50 },
+        stopReason: 'tool_use',
+      },
+      'agent-a/call-llm#1',
+      ['agent-a'],
+    );
+    dispatchTyped(
+      dispatcher,
+      'agentfootprint.stream.tool_start',
+      { toolName: 'weather', toolCallId: 'tc-1', args: {} },
+      'agent-a/call-tool#2',
+      ['agent-a'],
+    );
+    dispatchTyped(
+      dispatcher,
+      'agentfootprint.stream.tool_end',
+      { toolCallId: 'tc-1', result: 'ok', durationMs: 5 },
+      'agent-a/call-tool#2',
+      ['agent-a'],
+    );
+    dispatchTyped(
+      dispatcher,
+      'agentfootprint.stream.llm_start',
+      {
+        iteration: 1,
+        provider: 'mock',
+        model: 'm',
+        systemPromptChars: 0,
+        messagesCount: 2,
+        toolsCount: 0,
+      },
+      'agent-a/call-llm#3',
+      ['agent-a'],
+    );
+    dispatchTyped(
+      dispatcher,
+      'agentfootprint.stream.llm_end',
+      {
+        iteration: 1,
+        content: 'y',
+        toolCallCount: 0,
+        usage: { input: 60, output: 20 },
+        stopReason: 'end',
+      },
+      'agent-a/call-llm#3',
+      ['agent-a'],
+    );
+    rec.onSubflowExit!(subEvt('agent-a', 'Triage', 'agent-a#0', 'Agent: triage'));
+
+    const rollup = rec.aggregateForBoundary('agent-a#0');
+    expect(rollup).toBeDefined();
+    expect(rollup!.label).toBe('Triage');
+    expect(rollup!.primitiveKind).toBe('Agent');
+    expect(rollup!.llmCalls).toBe(2);
+    expect(rollup!.toolCalls).toBe(1);
+    expect(rollup!.tokens).toEqual({ input: 160, output: 70 });
+    expect(rollup!.endedAtMs).toBeDefined();
+    expect(rollup!.durationMs).toBeDefined();
+  });
+
+  it('returns partial rollup while in flight (no exit yet)', () => {
+    const { rec, dispatcher } = freshRecorder();
+    rec.onRunStart!(runEvt());
+    rec.onSubflowEntry!(subEvt('agent-a', 'A', 'agent-a#0', 'Agent: a'));
+    dispatchTyped(
+      dispatcher,
+      'agentfootprint.stream.llm_start',
+      {
+        iteration: 0,
+        provider: 'mock',
+        model: 'm',
+        systemPromptChars: 0,
+        messagesCount: 1,
+        toolsCount: 0,
+      },
+      'agent-a/call-llm#1',
+      ['agent-a'],
+    );
+    dispatchTyped(
+      dispatcher,
+      'agentfootprint.stream.llm_end',
+      {
+        iteration: 0,
+        content: 'x',
+        toolCallCount: 0,
+        usage: { input: 10, output: 5 },
+        stopReason: 'end',
+      },
+      'agent-a/call-llm#1',
+      ['agent-a'],
+    );
+    // No subflow.exit yet — boundary is in flight.
+    const rollup = rec.aggregateForBoundary('agent-a#0');
+    expect(rollup).toBeDefined();
+    expect(rollup!.llmCalls).toBe(1);
+    expect(rollup!.tokens).toEqual({ input: 10, output: 5 });
+    expect(rollup!.endedAtMs).toBeUndefined();
+    expect(rollup!.durationMs).toBeUndefined();
+  });
+
+  it('only counts events whose subflowPath is a prefix-match', () => {
+    const { rec, dispatcher } = freshRecorder();
+    rec.onRunStart!(runEvt());
+    rec.onSubflowEntry!(subEvt('agent-a', 'A', 'agent-a#0', 'Agent: a'));
+    rec.onSubflowEntry!(subEvt('agent-b', 'B', 'agent-b#0', 'Agent: b'));
+    // Event scoped to agent-b — must NOT appear in agent-a's rollup
+    dispatchTyped(
+      dispatcher,
+      'agentfootprint.stream.llm_start',
+      {
+        iteration: 0,
+        provider: 'mock',
+        model: 'm',
+        systemPromptChars: 0,
+        messagesCount: 1,
+        toolsCount: 0,
+      },
+      'agent-b/call-llm#1',
+      ['agent-b'],
+    );
+    dispatchTyped(
+      dispatcher,
+      'agentfootprint.stream.llm_end',
+      {
+        iteration: 0,
+        content: 'x',
+        toolCallCount: 0,
+        usage: { input: 99, output: 99 },
+        stopReason: 'end',
+      },
+      'agent-b/call-llm#1',
+      ['agent-b'],
+    );
+
+    const a = rec.aggregateForBoundary('agent-a#0');
+    const b = rec.aggregateForBoundary('agent-b#0');
+    expect(a!.llmCalls).toBe(0);
+    expect(a!.tokens).toEqual({ input: 0, output: 0 });
+    expect(b!.llmCalls).toBe(1);
+    expect(b!.tokens).toEqual({ input: 99, output: 99 });
+  });
+
+  it('nested boundary contributes to BOTH parent and self rollups', () => {
+    // Sequence wraps an Agent — events inside the Agent must roll up
+    // into the Agent AND its parent Sequence.
+    const { rec, dispatcher } = freshRecorder();
+    rec.onRunStart!(runEvt());
+    rec.onSubflowEntry!(subEvt('seq', 'Pipeline', 'seq#0', 'Sequence: p'));
+    rec.onSubflowEntry!(subEvt('seq/agent-a', 'A', 'agent-a#1', 'Agent: a'));
+    dispatchTyped(
+      dispatcher,
+      'agentfootprint.stream.llm_start',
+      {
+        iteration: 0,
+        provider: 'mock',
+        model: 'm',
+        systemPromptChars: 0,
+        messagesCount: 1,
+        toolsCount: 0,
+      },
+      'seq/agent-a/call-llm#2',
+      ['seq', 'agent-a'],
+    );
+    dispatchTyped(
+      dispatcher,
+      'agentfootprint.stream.llm_end',
+      {
+        iteration: 0,
+        content: 'x',
+        toolCallCount: 0,
+        usage: { input: 30, output: 10 },
+        stopReason: 'end',
+      },
+      'seq/agent-a/call-llm#2',
+      ['seq', 'agent-a'],
+    );
+
+    const seqRollup = rec.aggregateForBoundary('seq#0');
+    const agentRollup = rec.aggregateForBoundary('agent-a#1');
+    expect(seqRollup!.llmCalls).toBe(1);
+    expect(seqRollup!.tokens).toEqual({ input: 30, output: 10 });
+    expect(agentRollup!.llmCalls).toBe(1);
+    expect(agentRollup!.tokens).toEqual({ input: 30, output: 10 });
+  });
+});
+
+describe('BoundaryRecorder.aggregateAllBoundaries', () => {
+  it('returns one rollup per primitive boundary in entry order', () => {
+    const { rec, dispatcher } = freshRecorder();
+    rec.onRunStart!(runEvt());
+    rec.onSubflowEntry!(subEvt('agent-a', 'A', 'agent-a#0', 'Agent: a'));
+    dispatchTyped(
+      dispatcher,
+      'agentfootprint.stream.llm_start',
+      {
+        iteration: 0,
+        provider: 'm',
+        model: 'm',
+        systemPromptChars: 0,
+        messagesCount: 1,
+        toolsCount: 0,
+      },
+      'agent-a/call-llm#1',
+      ['agent-a'],
+    );
+    dispatchTyped(
+      dispatcher,
+      'agentfootprint.stream.llm_end',
+      {
+        iteration: 0,
+        content: 'a',
+        toolCallCount: 0,
+        usage: { input: 10, output: 5 },
+        stopReason: 'end',
+      },
+      'agent-a/call-llm#1',
+      ['agent-a'],
+    );
+    rec.onSubflowExit!(subEvt('agent-a', 'A', 'agent-a#0', 'Agent: a'));
+    rec.onSubflowEntry!(subEvt('agent-b', 'B', 'agent-b#0', 'Agent: b'));
+    dispatchTyped(
+      dispatcher,
+      'agentfootprint.stream.llm_start',
+      {
+        iteration: 0,
+        provider: 'm',
+        model: 'm',
+        systemPromptChars: 0,
+        messagesCount: 1,
+        toolsCount: 0,
+      },
+      'agent-b/call-llm#1',
+      ['agent-b'],
+    );
+    dispatchTyped(
+      dispatcher,
+      'agentfootprint.stream.llm_end',
+      {
+        iteration: 0,
+        content: 'b',
+        toolCallCount: 0,
+        usage: { input: 20, output: 10 },
+        stopReason: 'end',
+      },
+      'agent-b/call-llm#1',
+      ['agent-b'],
+    );
+    rec.onSubflowExit!(subEvt('agent-b', 'B', 'agent-b#0', 'Agent: b'));
+
+    const rollups = rec.aggregateAllBoundaries();
+    expect(rollups).toHaveLength(2);
+    expect(rollups[0]!.label).toBe('A');
+    expect(rollups[0]!.tokens).toEqual({ input: 10, output: 5 });
+    expect(rollups[1]!.label).toBe('B');
+    expect(rollups[1]!.tokens).toEqual({ input: 20, output: 10 });
+  });
+
+  it('skips subflows without a primitiveKind (slot subflows etc.)', () => {
+    const { rec } = freshRecorder();
+    rec.onRunStart!(runEvt());
+    // No `Agent:` prefix → no primitiveKind → not in rollups.
+    rec.onSubflowEntry!(subEvt('sf-system-prompt', 'Sys', 'sys#0'));
+    rec.onSubflowExit!(subEvt('sf-system-prompt', 'Sys', 'sys#0'));
+    expect(rec.aggregateAllBoundaries()).toEqual([]);
+  });
+
+  it('returns rollups for in-flight boundaries (mid-run)', () => {
+    const { rec } = freshRecorder();
+    rec.onRunStart!(runEvt());
+    rec.onSubflowEntry!(subEvt('agent-a', 'A', 'agent-a#0', 'Agent: a'));
+    // No exit yet
+    const rollups = rec.aggregateAllBoundaries();
+    expect(rollups).toHaveLength(1);
+    expect(rollups[0]!.label).toBe('A');
+    expect(rollups[0]!.endedAtMs).toBeUndefined();
+  });
+
+  it('preserves entry order across mixed primitive kinds', () => {
+    const { rec } = freshRecorder();
+    rec.onRunStart!(runEvt());
+    rec.onSubflowEntry!(subEvt('s', 'Seq', 's#0', 'Sequence: pipe'));
+    rec.onSubflowEntry!(subEvt('s/llm', 'Call', 'llm#1', 'LLMCall: one-shot'));
+    rec.onSubflowExit!(subEvt('s/llm', 'Call', 'llm#1'));
+    rec.onSubflowEntry!(subEvt('s/agent', 'Triage', 'agent#2', 'Agent: triage'));
+    rec.onSubflowExit!(subEvt('s/agent', 'Triage', 'agent#2'));
+    rec.onSubflowExit!(subEvt('s', 'Seq', 's#0'));
+
+    const rollups = rec.aggregateAllBoundaries();
+    expect(rollups.map((r) => r.label)).toEqual(['Seq', 'Call', 'Triage']);
+    expect(rollups.map((r) => r.primitiveKind)).toEqual(['Sequence', 'LLMCall', 'Agent']);
   });
 });

@@ -256,6 +256,51 @@ export type DomainEvent =
   | DomainToolEndEvent
   | DomainContextInjectedEvent;
 
+// ─── BoundaryAggregate — per-boundary rollup ────────────────────────
+
+/**
+ * Per-boundary rollup returned by
+ * `BoundaryRecorder.aggregateForBoundary` and
+ * `BoundaryRecorder.aggregateAllBoundaries`. Same shape regardless of
+ * primitive kind — UIs render the same chip set for every Agent /
+ * LLMCall / Sequence / Parallel / Conditional / Loop.
+ *
+ * Events count toward this rollup when their `subflowPath` is a
+ * prefix-match of the boundary's `subflowPath`. Nested boundaries
+ * (e.g., LLMCall inside an Agent) contribute to BOTH rollups.
+ *
+ * In-flight boundaries (no `subflow.exit` yet) get partial values;
+ * `endedAtMs` and `durationMs` are undefined until close.
+ */
+export interface BoundaryAggregate {
+  readonly runtimeStageId: string;
+  readonly subflowId: string;
+  readonly subflowPath: readonly string[];
+  /** `'Agent'` / `'LLMCall'` / `'Sequence'` / `'Parallel'` /
+   *  `'Conditional'` / `'Loop'`. Always set on rollups returned by
+   *  `aggregateAllBoundaries` (which filters to primitive boundaries).
+   *  Optional on `aggregateForBoundary` results because the caller may
+   *  request rollup for a non-primitive subflow (rare). */
+  readonly primitiveKind?: string;
+  /** Subflow display name (e.g., 'Triage', 'Billing'). */
+  readonly label: string;
+  /** Token usage summed across every `llm.end` inside this boundary. */
+  readonly tokens: { readonly input: number; readonly output: number };
+  /** Count of `llm.start` events inside this boundary. */
+  readonly llmCalls: number;
+  /** Count of `tool.start` events inside this boundary. */
+  readonly toolCalls: number;
+  /** Count of `agent.iteration_start` events scoped to this boundary —
+   *  ReAct-loop iterations. Always `0` for non-Agent primitives. */
+  readonly iterations: number;
+  /** Wall-clock ms of `subflow.entry`. */
+  readonly startedAtMs: number;
+  /** Wall-clock ms of `subflow.exit`. Undefined while in flight. */
+  readonly endedAtMs?: number;
+  /** `endedAtMs - startedAtMs`. Undefined while in flight. */
+  readonly durationMs?: number;
+}
+
 /** Closed set of routing/wrapper subflow IDs that are pure plumbing.
  *  Slot subflows (`sf-system-prompt` / `sf-messages` / `sf-tools`) are
  *  NOT in this set — they're real context-engineering moments.
@@ -647,6 +692,73 @@ export class BoundaryRecorder extends SequenceRecorder<DomainEvent> implements C
     return { systemPrompt, messages, tools };
   }
 
+  /**
+   * Roll up the event stream for ONE primitive boundary (Agent /
+   * LLMCall / Sequence / Parallel / Conditional / Loop) into per-
+   * boundary totals — tokens, llm calls, tool calls, iterations,
+   * cache hits, duration.
+   *
+   * Pure projection over `getEvents()`. Events are attributed to a
+   * boundary when their `subflowPath` is a **prefix-match** of the
+   * boundary's path — so a nested `LLMCall` inside an `Agent` rolls
+   * up into BOTH (LLMCall total + Agent total).
+   *
+   * Works mid-run (the boundary's `subflow.exit` may not have fired
+   * yet — `endedAtMs` / `durationMs` are undefined in that case).
+   * Works post-run.
+   *
+   * Multi-consumer story: this is the single source of rollup truth
+   * for Lens, CLI live monitors, Sentry breadcrumbs, OTel exporters,
+   * dashboards. Domain math (what counts as an "iteration"? does
+   * cache hit count separately from llmCalls?) lives HERE — every
+   * consumer hooks up; nobody re-implements.
+   *
+   * @param runtimeStageId The boundary's runtimeStageId (the same id
+   *   carried by `StepNode.runtimeStageId` for primitive subflows).
+   * @returns The rollup, or `undefined` if no `subflow.entry` event
+   *   matches `runtimeStageId`.
+   */
+  aggregateForBoundary(runtimeStageId: string): BoundaryAggregate | undefined {
+    const events = this.getEntries();
+    let entry: DomainSubflowEvent | undefined;
+    let exit: DomainSubflowEvent | undefined;
+    for (const e of events) {
+      if (e.type === 'subflow.entry' && e.runtimeStageId === runtimeStageId) entry = e;
+      if (e.type === 'subflow.exit' && e.runtimeStageId === runtimeStageId) exit = e;
+    }
+    if (!entry) return undefined;
+    return foldRollup(events, entry, exit);
+  }
+
+  /**
+   * Roll up every primitive boundary in the run into one rollup each,
+   * in the order their `subflow.entry` events fired. Top-level multi-
+   * agent UIs call this once per render to populate per-agent chips.
+   *
+   * Filters to `primitiveKind`-tagged subflows ONLY (Agent / LLMCall /
+   * Sequence / Parallel / Conditional / Loop). Slot subflows
+   * (`sf-system-prompt` / `sf-messages` / `sf-tools`) are NOT
+   * boundaries in this sense — they're context-engineering machinery,
+   * not user-facing rollup units.
+   */
+  aggregateAllBoundaries(): readonly BoundaryAggregate[] {
+    const events = this.getEntries();
+    const out: BoundaryAggregate[] = [];
+    // Index exits by runtimeStageId for O(1) pair-up.
+    const exitByRid = new Map<string, DomainSubflowEvent>();
+    for (const e of events) {
+      if (e.type === 'subflow.exit' && e.primitiveKind) {
+        exitByRid.set(e.runtimeStageId, e);
+      }
+    }
+    for (const e of events) {
+      if (e.type !== 'subflow.entry' || !e.primitiveKind) continue;
+      const exit = exitByRid.get(e.runtimeStageId);
+      out.push(foldRollup(events, e, exit));
+    }
+    return out;
+  }
+
   /** Snapshot bundle — included in `executor.getSnapshot()` if the
    *  executor implements the snapshot extension protocol. */
   toSnapshot() {
@@ -723,4 +835,72 @@ function parsePrimitiveKindFromDescription(description: string): string | undefi
   if (colonIdx <= 0) return undefined;
   const kind = description.slice(0, colonIdx).trim();
   return kind || undefined;
+}
+
+// ─── Rollup helpers (used by aggregateForBoundary) ──────────────────
+
+/** Returns true when `path` starts with every segment of `prefix`. */
+function isSubflowPathPrefix(prefix: readonly string[], path: readonly string[]): boolean {
+  if (path.length < prefix.length) return false;
+  for (let i = 0; i < prefix.length; i++) {
+    if (path[i] !== prefix[i]) return false;
+  }
+  return true;
+}
+
+/**
+ * Single-pass fold producing a `BoundaryAggregate` from the flat
+ * event stream. Pure projection — no recorder state mutation.
+ */
+function foldRollup(
+  events: readonly DomainEvent[],
+  entry: DomainSubflowEvent,
+  exit: DomainSubflowEvent | undefined,
+): BoundaryAggregate {
+  const path = entry.subflowPath;
+  let llmCalls = 0;
+  let toolCalls = 0;
+  let iterations = 0;
+  let inputTokens = 0;
+  let outputTokens = 0;
+  for (const e of events) {
+    if (!isSubflowPathPrefix(path, e.subflowPath)) continue;
+    switch (e.type) {
+      case 'llm.start':
+        llmCalls++;
+        break;
+      case 'tool.start':
+        toolCalls++;
+        break;
+      case 'llm.end':
+        inputTokens += e.usage.input;
+        outputTokens += e.usage.output;
+        break;
+      // Iteration counting: every loop.iteration scoped to this
+      // boundary OR equivalent. The composition.iteration / agent.
+      // iteration_start typed events fire on the dispatcher channel
+      // but BoundaryRecorder doesn't capture them as DomainEvents
+      // today — instead we count `loop.iteration` events that fire
+      // on the FlowRecorder side (already mapped). For Agent runs
+      // the agent's outer loop contributes one per ReAct cycle.
+      case 'loop.iteration':
+        iterations++;
+        break;
+    }
+  }
+  const startedAtMs = entry.ts;
+  const endedAtMs = exit?.ts;
+  return {
+    runtimeStageId: entry.runtimeStageId,
+    subflowId: entry.subflowId,
+    subflowPath: entry.subflowPath,
+    ...(entry.primitiveKind ? { primitiveKind: entry.primitiveKind } : {}),
+    label: entry.subflowName,
+    tokens: { input: inputTokens, output: outputTokens },
+    llmCalls,
+    toolCalls,
+    iterations,
+    startedAtMs,
+    ...(endedAtMs !== undefined ? { endedAtMs, durationMs: endedAtMs - startedAtMs } : {}),
+  };
 }

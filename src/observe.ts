@@ -44,6 +44,7 @@ export { agentRecorder, type AgentRecorderOptions } from './recorders/core/Agent
 export {
   boundaryRecorder,
   BoundaryRecorder,
+  type BoundaryAggregate,
   type DomainEvent,
   type DomainLLMEndEvent,
   type DomainLLMStartEvent,
