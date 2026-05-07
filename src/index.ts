@@ -190,6 +190,17 @@ export {
   type DomainToolEndEvent,
   type DomainToolStartEvent,
 } from './recorders/observability/BoundaryRecorder.js';
+export {
+  liveStateRecorder,
+  LiveStateRecorder,
+  LiveLLMTracker,
+  LiveToolTracker,
+  LiveAgentTurnTracker,
+  type LLMLiveState,
+  type ToolLiveState,
+  type AgentTurnLiveState,
+  type LiveStateRunnerLike,
+} from './recorders/observability/LiveStateRecorder.js';
 
 // Commentary — bundled prose templates + engine for narrating a run.
 // Consumers ship their own JSON locale / brand voice via the same

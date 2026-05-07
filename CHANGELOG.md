@@ -5,6 +5,84 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.14.2]
+
+### Added — `LiveStateRecorder` — O(1) "what's happening RIGHT NOW" reads
+
+A live-state recorder built on the new footprintjs **`BoundaryStateTracker<TState>`** storage primitive (v4.17.2). Three bracket-scoped trackers + one façade answer "is something in flight, and what's the partial?" without folding the event log.
+
+**The three trackers:**
+
+| Tracker | Boundary | Key | Tracks |
+| --- | --- | --- | --- |
+| `LiveLLMTracker` | `llm_start` ↔ `llm_end` | `runtimeStageId` | partial content (token-stream accumulation), tokens, iteration, provider, model, startedAtMs |
+| `LiveToolTracker` | `tool_start` ↔ `tool_end` | `toolCallId` | toolName, args, toolCallId, startedAtMs |
+| `LiveAgentTurnTracker` | `turn_start` ↔ `turn_end` | `String(turnIndex)` | turnIndex, userPrompt, startedAtMs |
+
+**The façade — `LiveStateRecorder`:** bundles all three with one subscribe call, exposes O(1) convenience reads:
+
+```ts
+import { liveStateRecorder } from 'agentfootprint';
+
+const live = liveStateRecorder();
+live.subscribe(agent);   // wires all 3 trackers to the agent's dispatcher
+
+await agent.run({ message: input });
+
+// Read live, O(1), at any moment during the run:
+live.isLLMInFlight();           // true between llm_start ↔ llm_end
+live.getPartialLLM();           // accumulated tokens of latest active call
+live.isToolExecuting();         // true between tool_start ↔ tool_end
+live.getExecutingToolNames();   // names of currently-executing tools
+live.isAgentInTurn();           // true between turn_start ↔ turn_end
+live.getCurrentTurnIndex();     // most-recent active turn (-1 if none)
+
+live.unsubscribe();
+```
+
+Each tracker is also independently usable when a consumer only needs one slice (e.g., a CLI status line that only cares about LLM streaming):
+
+```ts
+import { LiveLLMTracker } from 'agentfootprint';
+
+const llm = new LiveLLMTracker();
+llm.subscribe(agent);
+llm.isInFlight();
+llm.getLatestPartial();
+```
+
+**Mental model:**
+
+> Existing recorder *interfaces* (`Recorder` / `FlowRecorder` / `EmitRecorder` / `CombinedRecorder`) are **observers**. Storage primitives (`SequenceRecorder<T>` / `KeyedRecorder<T>` / **`BoundaryStateTracker<TState>` 🆕**) are **bookkeeping shelves**. A real recorder picks ONE observer interface AND ONE storage shelf via `extends + implements`. `LiveLLMTracker` extends the new `BoundaryStateTracker` shelf and subscribes to typed events from the agentfootprint dispatcher.
+
+**Subscribe semantics:** `live.subscribe(runner)` is idempotent — calling twice unsubscribes the prior subscription before re-attaching, so consumers don't have to track state. `live.clear()` resets transient state across all three trackers without unsubscribing.
+
+**Tier 1 (live) only.** Past states are not stored — when a boundary closes, its transient state clears. For time-travel queries ("what was the LLM partial at slider step N?"), snapshot to a `SequenceRecorder<TState>`. See the `BoundaryStateTracker` JSDoc on the footprintjs side for the rationale.
+
+**Multi-consumer story:**
+
+- Lens / UI live commentary (the "Chatbot is responding: …" line)
+- CLI live monitor (stdout status line)
+- Sentry breadcrumb capture ("agent in flight at exception time")
+- Test harness (`await waitForLLMIdle()`)
+
+Each consumer reads `live.*` getters in O(1) — no per-render fold over the event log.
+
+**Tests:** 27 new tests across 7 tiers (unit / scenario / integration / property / perf / security / ROI). Total suite 2044/2044.
+
+**Example:** [examples/features/13-live-state.ts](examples/features/13-live-state.ts) — full ReAct turn with mid-stream peeks demonstrating the transient state evolving and clearing.
+
+**Public exports:** main barrel `'agentfootprint'` + `'agentfootprint/observe'` subpath:
+
+- `LiveStateRecorder` / `liveStateRecorder()` factory
+- `LiveLLMTracker` / `LiveToolTracker` / `LiveAgentTurnTracker`
+- `LLMLiveState` / `ToolLiveState` / `AgentTurnLiveState` (state shape types)
+- `LiveStateRunnerLike` (minimal Runner shape required by `subscribe`)
+
+### Bumped — peer dependency on footprintjs to `>=4.17.2`
+
+`LiveStateRecorder` extends `BoundaryStateTracker<TState>` which lands in footprintjs v4.17.2. Existing v4.17.1 consumers will see a peer-dep warning until they bump. No breaking changes in either library.
+
 ## [2.14.1]
 
 ### Added — `StepNode` payload fields for ReAct steps

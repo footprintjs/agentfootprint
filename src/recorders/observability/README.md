@@ -7,8 +7,13 @@ The opt-in observability layer. Each file is ONE feature consumers enable in one
 ```
 recorders/observability/
 ├── ThinkingRecorder.ts   enable.thinking({ onStatus }) — live status line
-└── LoggingRecorder.ts    enable.logging({ domains, logger }) — structured logging
+├── LoggingRecorder.ts    enable.logging({ domains, logger }) — structured logging
+├── BoundaryRecorder.ts   unified domain event log (run / subflow / llm / tool / context)
+├── FlowchartRecorder.ts  StepGraph projection for Lens UI
+└── LiveStateRecorder.ts  O(1) "is X happening NOW" reads (LLM stream / tool / agent turn)
 ```
+
+`LiveStateRecorder` is built on the footprintjs `BoundaryStateTracker<TState>` storage primitive (v4.17.2+). Three independently-usable trackers (`LiveLLMTracker`, `LiveToolTracker`, `LiveAgentTurnTracker`) plus a façade. Use the façade when you want all three; use a single tracker when you only need one slice. State is **transient** — clears on stop. For time-travel, snapshot to a `SequenceRecorder`.
 
 Phase 5 additions (planned): `enable.lens`, `enable.tracing`, `enable.cost`, `enable.guardrails`, `enable.eval`.
 

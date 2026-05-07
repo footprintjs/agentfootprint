@@ -63,6 +63,17 @@ export {
   type FlowchartOptions,
   type FlowchartHandle,
 } from './recorders/observability/FlowchartRecorder.js';
+export {
+  liveStateRecorder,
+  LiveStateRecorder,
+  LiveLLMTracker,
+  LiveToolTracker,
+  LiveAgentTurnTracker,
+  type LLMLiveState,
+  type ToolLiveState,
+  type AgentTurnLiveState,
+  type LiveStateRunnerLike,
+} from './recorders/observability/LiveStateRecorder.js';
 
 // Tier 3 — domain dashboards
 export { costRecorder, type CostRecorderOptions } from './recorders/core/CostRecorder.js';
