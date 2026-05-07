@@ -40,7 +40,7 @@ import {
   type Tool,
   type ToolCallEntry,
 } from '../../src/index.js';
-import { type ExampleMeta } from '../helpers/cli.js';
+import { isCliEntry, type ExampleMeta } from '../helpers/cli.js';
 
 export const meta: ExampleMeta = {
   id: 'features/11-sequence-policy',
@@ -326,7 +326,10 @@ async function main(): Promise<void> {
   console.log('\nAll three scenarios complete.');
 }
 
-main().catch((e) => {
-  console.error(e);
-  process.exit(1);
-});
+// Browser-safe auto-run guard (see helpers/cli.ts).
+if (isCliEntry(import.meta.url)) {
+  main().catch((e) => {
+    console.error(e);
+    process.exit(1);
+  });
+}

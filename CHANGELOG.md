@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.14.1]
+
+### Added — `StepNode` payload fields for ReAct steps
+
+`StepNode` now carries the actual data crossing each ReAct boundary, not just metadata. Three new optional fields populated during `buildStepGraph`:
+
+- `assistantText` — LLM's text content. Set on `llm->tool` (the reasoning emitted alongside `tool_use` blocks) and on `llm->user` (the terminal answer).
+- `toolArgs` — tool input arguments the LLM produced. Set on `llm->tool` from the matching `tool.start` event payload.
+- `toolResult` — tool result returned to the LLM. Set on `tool->llm` from the preceding `tool.end` event payload.
+
+Lets renderers (e.g. agentfootprint-lens NodeDetailPanel) surface "what arrived / what was produced" per ReAct step without consumer-side correlation.
+
+### Fixed — `SUBFLOW_IDS.FINAL` now matches the route-branch key
+
+`SUBFLOW_IDS.FINAL` was `'sf-final'` but the Agent mounts the final-answer composition via `addSubFlowChartBranch('final', ...)` — the branch key IS the subflow id, no `sf-` prefix. The mismatch leaked the final subflow into the user-facing StepGraph as a phantom "step". Now `SUBFLOW_IDS.FINAL = 'final'`, and `BoundaryRecorder`'s `AGENT_INTERNAL_LOCAL_IDS` correctly skips it.
+
+### Added — `SUBFLOW_IDS.THINKING` registered + filtered
+
+The v2.14 thinking-normalize subflow (`sf-thinking`) and its inner handler subflows (`thinking-anthropic`, `thinking-openai`) are now declared in `SUBFLOW_IDS` and filtered from the StepGraph via `AGENT_INTERNAL_LOCAL_IDS` plus a new `thinking-` prefix matcher in `isAgentInternalId()`. The wrapping LLM step's `assistantText`/`toolArgs`/`toolResult` already carry the relevant info, so the inner subflows don't surface as separate user-facing steps.
+
 ## [2.14.0]
 
 ### Added — Extended-thinking subsystem (Anthropic + OpenAI o1/o3)

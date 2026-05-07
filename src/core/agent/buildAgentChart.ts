@@ -295,7 +295,7 @@ export function buildAgentChart(deps: AgentChartDeps): FlowChart {
   // (build-time conditional mount; matches the panel's design rule).
   if (deps.thinkingSubflow) {
     builder = builder.addSubFlowChartNext(
-      'sf-thinking',
+      SUBFLOW_IDS.THINKING,
       deps.thinkingSubflow,
       'NormalizeThinking',
       {
@@ -319,7 +319,7 @@ export function buildAgentChart(deps: AgentChartDeps): FlowChart {
       deps.toolCallsHandler as never,
       'Tool execution (pausable via pauseHere)',
     )
-    .addSubFlowChartBranch('final', finalBranchChart, 'Final', {
+    .addSubFlowChartBranch(SUBFLOW_IDS.FINAL, finalBranchChart, 'Final', {
       // Pass through the read-only state the sub-chart needs;
       // OMIT keys the sub-chart writes (finalContent, newMessages)
       // — passing those via inputMapper would freeze them as args.
@@ -337,7 +337,7 @@ export function buildAgentChart(deps: AgentChartDeps): FlowChart {
       // only exits the sub-chart and the outer loop continues.
       propagateBreak: true,
     })
-    .setDefault('final')
+    .setDefault(SUBFLOW_IDS.FINAL)
     .end()
     // Dynamic ReAct: loop back to the InjectionEngine so EVERY iteration
     // re-evaluates triggers (rule predicates, on-tool-return,

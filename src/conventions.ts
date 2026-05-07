@@ -29,11 +29,22 @@ export const SUBFLOW_IDS = {
   TOOL_CALLS: 'sf-tool-calls',
   /** Merge step inside Parallel. */
   MERGE: 'sf-merge',
-  /** Final-answer composition inside Agent. */
-  FINAL: 'sf-final',
+  /** Final-answer composition inside Agent. Mounted via
+   *  `addSubFlowChartBranch('final', ...)` so the subflow id is the
+   *  Route decider's branch key — `'final'`, no `sf-` prefix. The
+   *  decider returns `'final'` as a routing value AND the same string
+   *  becomes the subflow's id. */
+  FINAL: 'final',
   /** Cache decision subflow (v2.6). Walks activeInjections, emits
    *  agnostic CacheMarker[]. Provider-independent. */
   CACHE_DECISION: 'sf-cache-decision',
+  /** Thinking-normalization mount (v2.14). Wraps the consumer's
+   *  ThinkingHandler.normalize() in a real footprintjs subflow so it
+   *  has its own runtimeStageId for tracing. The result lands on the
+   *  parent LLMCall's `thinkingBlocks` payload, so this subflow is
+   *  pure plumbing from the agent step's POV — never a user-facing
+   *  step in the StepGraph. */
+  THINKING: 'sf-thinking',
 } as const;
 
 export type SubflowId = (typeof SUBFLOW_IDS)[keyof typeof SUBFLOW_IDS];

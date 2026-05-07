@@ -44,6 +44,7 @@ const EXPECTED_INTERNAL_SUBFLOW_IDS: ReadonlySet<string> = new Set<string>([
   SUBFLOW_IDS.FINAL,
   SUBFLOW_IDS.MERGE,
   SUBFLOW_IDS.CACHE_DECISION,
+  SUBFLOW_IDS.THINKING, // v2.14 — normalize-thinking mount; payload folds onto parent LLM step
 ]);
 
 /** Decider stage ids that are pure plumbing. */

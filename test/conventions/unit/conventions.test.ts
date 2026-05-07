@@ -13,7 +13,7 @@ import {
 } from '../../../src/conventions.js';
 
 describe('SUBFLOW_IDS — single source of truth', () => {
-  it('has exactly the 9 known subflow IDs', () => {
+  it('has exactly the 10 known subflow IDs', () => {
     const expected = [
       'sf-injection-engine',
       'sf-system-prompt',
@@ -22,15 +22,22 @@ describe('SUBFLOW_IDS — single source of truth', () => {
       'sf-route',
       'sf-tool-calls',
       'sf-merge',
-      'sf-final',
+      'final', // mounted via addSubFlowChartBranch — id IS the route key
       'sf-cache-decision',
+      'sf-thinking', // v2.14 — normalize-thinking mount (agent-internal)
     ];
     const actual = Object.values(SUBFLOW_IDS).sort();
     expect(actual).toEqual(expected.sort());
   });
 
-  it('all IDs start with sf- prefix', () => {
+  it('all subflow IDs use the sf- prefix EXCEPT route-branch keys', () => {
+    // Route-decider branches use the branch key as the subflow id.
+    // The Route decider returns `'final' | 'tool-calls'`, so those
+    // string values double as subflow ids and don't carry the sf-
+    // prefix. Everything else does.
+    const branchKeyExceptions = new Set<string>([SUBFLOW_IDS.FINAL]);
     for (const id of Object.values(SUBFLOW_IDS)) {
+      if (branchKeyExceptions.has(id)) continue;
       expect(id.startsWith('sf-')).toBe(true);
     }
   });

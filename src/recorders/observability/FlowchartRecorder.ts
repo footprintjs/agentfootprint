@@ -98,6 +98,15 @@ export interface StepNode {
   /** Subflow shared state at exit. Subflow nodes only.
    *  Undefined for in-progress / paused subflows. */
   readonly exitPayload?: unknown;
+  /** LLM's text content. Set on `llm->tool` (the reasoning emitted with the
+   *  tool_use blocks) and on `llm->user` (the terminal answer). */
+  readonly assistantText?: string;
+  /** Tool input arguments the LLM produced. Set on `llm->tool` from the
+   *  matching `tool.start` event payload. */
+  readonly toolArgs?: unknown;
+  /** Tool result returned to the LLM. Set on `tool->llm` from the
+   *  preceding `tool.end` event payload. */
+  readonly toolResult?: unknown;
   /** Stable per-execution key — same `runtimeStageId` Trace view uses. */
   readonly runtimeStageId?: string;
   /**
@@ -346,6 +355,15 @@ export function buildStepGraph(boundary: BoundaryRecorder): StepGraph {
     tools?: SlotBoundary;
   } = {};
 
+  // Most recent `llm.end` content with toolCalls (actorArrow='llm→tool').
+  // Stamped onto the NEXT `tool.start` StepNode as `assistantText` — the
+  // reasoning text the LLM emitted alongside its tool_use blocks.
+  let pendingAssistantText: string | undefined;
+  // Most recent `tool.end` result. Stamped onto the NEXT `tool.start`-
+  // following `llm.start` (actorArrow='tool→llm') as `toolResult` — what
+  // the LLM is now seeing.
+  let pendingToolResult: unknown;
+
   // Track open "subflow" nodes so we can close them on subflow.exit
   // (set endOffsetMs, exitPayload). Keyed by runtimeStageId — same key
   // the entry event carries; pause/in-progress subflows simply never
@@ -504,6 +522,10 @@ export function buildStepGraph(boundary: BoundaryRecorder): StepGraph {
         // `actorArrow` field; StepNode.kind uses ASCII `->` for legacy
         // compatibility. Map between them.
         const stepKind: StepNode['kind'] = e.actorArrow === 'tool→llm' ? 'tool->llm' : 'user->llm';
+        // For tool→llm calls, the most recent tool.end's result is what
+        // the LLM is now seeing — surface it as the step's input data.
+        const toolResult = stepKind === 'tool->llm' ? pendingToolResult : undefined;
+        if (stepKind === 'tool->llm') pendingToolResult = undefined;
         const node: StepNode = {
           id,
           kind: stepKind,
@@ -519,6 +541,7 @@ export function buildStepGraph(boundary: BoundaryRecorder): StepGraph {
           // every event that belongs to this LLM call by id.
           runtimeStageId: e.runtimeStageId,
           ...(slotBoundaries ? { slotBoundaries } : {}),
+          ...(toolResult !== undefined ? { toolResult } : {}),
         };
         nodes.push(node);
         if (prevReActId) {
@@ -556,6 +579,7 @@ export function buildStepGraph(boundary: BoundaryRecorder): StepGraph {
             subflowPath: e.subflowPath,
             iterationIndex: iter,
             runtimeStageId: e.runtimeStageId,
+            ...(e.content ? { assistantText: e.content } : {}),
           };
           nodes.push(node);
           if (prevReActId) {
@@ -567,11 +591,18 @@ export function buildStepGraph(boundary: BoundaryRecorder): StepGraph {
             });
           }
           prevReActId = id;
+        } else {
+          // actorArrow === 'llm→tool': stash the reasoning text emitted
+          // alongside tool_use blocks; the next tool.start will claim it
+          // as that step's `assistantText`.
+          pendingAssistantText = e.content || undefined;
         }
         break;
       }
       case 'tool.start': {
         const id = `step-tool-start-${e.runtimeStageId}-${e.toolCallId}`;
+        const assistantText = pendingAssistantText;
+        pendingAssistantText = undefined;
         const node: StepNode = {
           id,
           kind: 'llm->tool',
@@ -582,6 +613,8 @@ export function buildStepGraph(boundary: BoundaryRecorder): StepGraph {
           iterationIndex: iter,
           slotUpdated: 'tools',
           runtimeStageId: e.runtimeStageId,
+          ...(assistantText ? { assistantText } : {}),
+          ...(e.args !== undefined ? { toolArgs: e.args } : {}),
         };
         nodes.push(node);
         if (prevReActId) {
@@ -600,6 +633,9 @@ export function buildStepGraph(boundary: BoundaryRecorder): StepGraph {
         if (lastTool) {
           (lastTool as { endOffsetMs?: number }).endOffsetMs = t;
         }
+        // Stash the result for the NEXT tool→llm StepNode (created at
+        // the following llm.start) so the user sees what was sent back.
+        if (e.result !== undefined) pendingToolResult = e.result;
         break;
       }
     }

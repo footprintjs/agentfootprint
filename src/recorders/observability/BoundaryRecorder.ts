@@ -274,10 +274,33 @@ const AGENT_INTERNAL_LOCAL_IDS: ReadonlySet<string> = new Set<string>([
   SUBFLOW_IDS.FINAL,
   SUBFLOW_IDS.MERGE,
   SUBFLOW_IDS.CACHE_DECISION, // v2.6 — emits cacheMarkers; not a user step
+  SUBFLOW_IDS.THINKING, // v2.14 — normalize result lands on parent LLM step
   // Decider stage ids (the same set is used to filter `decision.branch`
   // events whose deciding stage is plumbing rather than user-facing).
   STAGE_IDS.CACHE_GATE, // v2.6 — apply-markers / no-markers routing; plumbing
-]);
+] as readonly string[]);
+// Constructed as a set on a separate line so we can extend with the
+// thinking-handler inner-subflow ids below without the literal set
+// initializer needing every value at compile time.
+const _AGENT_INTERNAL_PREFIXES = ['thinking-'] as const;
+/**
+ * True when a local stage/subflow id should be hidden from the user-
+ * facing StepGraph. Either an exact match against `AGENT_INTERNAL_LOCAL_IDS`
+ * OR a prefix match against `_AGENT_INTERNAL_PREFIXES`.
+ *
+ * The prefix path catches the inner subflow that
+ * `buildThinkingSubflow` creates with stageId `thinking-{handlerId}`
+ * (e.g. `thinking-anthropic`, `thinking-openai`) — its results are
+ * already folded into the wrapping LLMCall step's payload, so the
+ * inner subflow is pure plumbing too.
+ */
+function isAgentInternalId(localId: string): boolean {
+  if (AGENT_INTERNAL_LOCAL_IDS.has(localId)) return true;
+  for (const p of _AGENT_INTERNAL_PREFIXES) {
+    if (localId.startsWith(p)) return true;
+  }
+  return false;
+}
 
 export interface BoundaryRecorderOptions {
   readonly id?: string;
@@ -372,7 +395,7 @@ export class BoundaryRecorder extends SequenceRecorder<DomainEvent> implements C
     const localStageId = stageId.includes('/')
       ? stageId.slice(stageId.lastIndexOf('/') + 1)
       : stageId;
-    const isAgentInternal = AGENT_INTERNAL_LOCAL_IDS.has(localStageId);
+    const isAgentInternal = isAgentInternalId(localStageId);
     this.emit({
       type: 'decision.branch',
       runtimeStageId: ctx?.runtimeStageId ?? '',
@@ -666,7 +689,7 @@ function buildSubflowEvent(
   const description = event.description;
   const primitiveKind = description ? parsePrimitiveKindFromDescription(description) : undefined;
   const slotKind = slotFromSubflowId(subflowId);
-  const isAgentInternal = AGENT_INTERNAL_LOCAL_IDS.has(localSubflowId);
+  const isAgentInternal = isAgentInternalId(localSubflowId);
   const payload = type === 'subflow.entry' ? event.mappedInput : event.outputState;
 
   return {

@@ -46,7 +46,7 @@ import {
   type ToolDispatchContext,
   type ToolProvider,
 } from '../../src/index.js';
-import { type ExampleMeta } from '../helpers/cli.js';
+import { isCliEntry, type ExampleMeta } from '../helpers/cli.js';
 
 export const meta: ExampleMeta = {
   id: 'features/10-discovery-provider',
@@ -253,7 +253,13 @@ async function main(): Promise<void> {
   console.log('\nAll three scenarios complete.');
 }
 
-main().catch((e) => {
-  console.error(e);
-  process.exit(1);
-});
+// Gate auto-run on CLI invocation only — browser-safe per
+// `helpers/cli.ts`. Without this, the playground catalog imports the
+// module and main() fires unbidden, hitting localhost:* with the
+// scripted scenarios.
+if (isCliEntry(import.meta.url)) {
+  main().catch((e) => {
+    console.error(e);
+    process.exit(1);
+  });
+}

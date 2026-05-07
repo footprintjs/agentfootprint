@@ -31,7 +31,7 @@
 import { Agent } from '../../src/index.js';
 import { ReliabilityFailFastError } from '../../src/reliability/types.js';
 import type { LLMProvider, LLMRequest, LLMResponse } from '../../src/adapters/types.js';
-import { type ExampleMeta } from '../helpers/cli.js';
+import { isCliEntry, type ExampleMeta } from '../helpers/cli.js';
 
 export const meta: ExampleMeta = {
   id: 'features/09-reliability-gate',
@@ -202,8 +202,11 @@ export async function run(): Promise<{
 }
 
 // Run as a script: regression-guard the example so the CI integration
-// test catches drift if the API changes.
-if (import.meta.url === `file://${process.argv[1]}`) {
+// test catches drift if the API changes. `isCliEntry` is browser-safe
+// (guards `typeof process === 'undefined'`) so the playground can
+// import this file as an ES module without crashing — same convention
+// every other example uses.
+if (isCliEntry(import.meta.url)) {
   run()
     .then((out) => {
       console.log('=== reliability gate scenarios ===');
