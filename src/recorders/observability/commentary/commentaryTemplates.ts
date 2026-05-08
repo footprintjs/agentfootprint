@@ -298,12 +298,11 @@ export function extractCommentaryVars(
 
     case 'agentfootprint.composition.exit': {
       const p = event.payload;
-      // CompositionExitPayload carries `id` but no `name` — use the id
-      // as the display key. Consumers can override the template if
-      // they want to look up names from a side table.
+      // CompositionExitPayload carries `name` (since v2.14.5);
+      // fall back to `id` for older emitters that didn't pass name.
       return {
         ...base,
-        name: p.id,
+        name: p.name ?? p.id,
         kind: p.kind,
         status: p.status,
         durationMs: String(p.durationMs ?? 0),

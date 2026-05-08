@@ -236,6 +236,7 @@ export class Parallel extends RunnerBase<ParallelInput, ParallelOutput> {
         typedEmit(scope, 'agentfootprint.composition.exit', {
           kind: 'Parallel',
           id: compositionId,
+          name: compositionName,
           status: 'err',
           durationMs: Date.now() - this.currentRunContext.runStartMs,
         });
@@ -270,6 +271,7 @@ export class Parallel extends RunnerBase<ParallelInput, ParallelOutput> {
       typedEmit(scope, 'agentfootprint.composition.exit', {
         kind: 'Parallel',
         id: compositionId,
+        name: compositionName,
         status: 'ok',
         durationMs: Date.now() - this.currentRunContext.runStartMs,
       });

@@ -5,6 +5,45 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.14.5]
+
+### Added — `name` field on `CompositionExitPayload`
+
+Mirror of the `name` field already on `CompositionEnterPayload`, so consumers narrating the exit moment can reference the same human-readable identity used at entry — no name-cache required across the start/stop pair.
+
+```ts
+// Before (v2.14.4 and earlier):
+interface CompositionExitPayload {
+  kind: CompositionKind;
+  id: string;
+  status: 'ok' | 'err' | 'break' | 'budget_exhausted';
+  durationMs: number;
+}
+
+// After (v2.14.5):
+interface CompositionExitPayload {
+  kind: CompositionKind;
+  id: string;
+  name?: string;          // ← NEW (optional for back-compat)
+  status: ...;
+  durationMs: number;
+}
+```
+
+**Why:** the v2.14.4 `composition.exit` commentary template (`'`{{name}}` finished — {{status}} in {{durationMs}}ms.'`) had to fall back to `id` because the exit payload didn't carry `name`. For runs like `Sequence.create({ name: 'IntakePipeline' })`, the closing line read `'`sequence` finished'` (lowercase id) instead of `'`IntakePipeline` finished'`. Now reads correctly.
+
+### Changed — Sequence / Parallel / Conditional / Loop emit `name` on exit
+
+All four core-flow primitives now pass their build-time `name` through to `composition.exit`. Pre-existing consumers reading only `id` are unaffected. Consumers using the `composition.exit` template automatically get the right name.
+
+`extractCommentaryVars` for `composition.exit` reads `p.name ?? p.id` so v2.14.4-emitter events still render (using id as a fallback).
+
+### Tests
+
+2071/2071 unchanged — the field is optional for back-compat, and existing test fixtures that asserted on the exit payload didn't reference `name`.
+
+Pure addition. No breaking changes.
+
 ## [2.14.4]
 
 ### Added — `{{agentName}}` template variable + multi-agent commentary templates

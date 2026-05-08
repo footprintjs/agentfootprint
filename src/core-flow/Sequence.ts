@@ -194,6 +194,7 @@ export class Sequence extends RunnerBase<SequenceInput, SequenceOutput> {
         typedEmit(scope, 'agentfootprint.composition.exit', {
           kind: 'Sequence',
           id: compositionId,
+          name: compositionName,
           status: 'ok',
           durationMs: Date.now() - this.currentRunContext.runStartMs,
         });

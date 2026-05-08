@@ -213,6 +213,7 @@ export class Loop extends RunnerBase<LoopInput, LoopOutput> {
         typedEmit(scope, 'agentfootprint.composition.exit', {
           kind: 'Loop',
           id: compositionId,
+          name: compositionName,
           status: exitReason === 'budget' ? 'budget_exhausted' : 'ok',
           durationMs: Date.now() - this.currentRunContext.runStartMs,
         });

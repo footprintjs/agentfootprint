@@ -248,6 +248,7 @@ export class Conditional extends RunnerBase<ConditionalInput, ConditionalOutput>
         typedEmit(scope, 'agentfootprint.composition.exit', {
           kind: 'Conditional',
           id: compositionId,
+          name: compositionName,
           status: 'ok',
           durationMs: Date.now() - this.currentRunContext.runStartMs,
         });
