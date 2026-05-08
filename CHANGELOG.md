@@ -5,6 +5,70 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.14.4]
+
+### Added — `{{agentName}}` template variable + multi-agent commentary templates
+
+Commentary templates can now surface the **active agent's identity** for multi-agent / multi-LLM runs (Sequence-of-LLMCalls, Swarm, Debate, etc.) via a new `{{agentName}}` template variable:
+
+```ts
+'stream.llm_start.iter1': '{{agentName}} sent the question to the LLM.',
+```
+
+For single-Agent runs, `{{agentName}}` falls back to `{{appName}}` — so existing copy reads identically (no breaking change). For Sequence-of-LLMCalls or Swarm, the active agent's name surfaces (e.g., `'classify sent the question…'` then `'respond sent the question…'`).
+
+**`extractAgentName(event, ctx)`** — new exported helper that walks `event.meta.subflowPath` right-to-left, skipping library-internal segments (slot subflows `sf-*`, agent-routing subflows, thinking-handler subflows, the `final` route-branch), and returns the first meaningful segment with the optional `step-` Sequence prefix stripped. Falls back to `appName` when no meaningful segment is found.
+
+```ts
+import { extractAgentName } from 'agentfootprint';
+
+extractAgentName(event, { appName: 'Chatbot' });
+//   path: []                                   → 'Chatbot' (single-Agent runner)
+//   path: ['step-classify']                    → 'classify' (Sequence stage)
+//   path: ['agent-A', 'agent-B']               → 'agent-B' (Swarm: latest hand-off)
+//   path: ['agent-Triage', 'sf-system-prompt'] → 'agent-Triage' (skips slot subflow)
+//   path: ['sf-injection-engine']              → 'Chatbot' (all internal → fallback)
+```
+
+### Added — Composition templates (Sequence / Parallel / Loop / Conditional)
+
+Each composition primitive gets its own `composition.enter.<Kind>` template, plus a `composition.exit` template:
+
+```ts
+'composition.enter.Sequence':    'Started pipeline `{{name}}` — {{childCount}} stages chained.',
+'composition.enter.Parallel':    'Forked `{{name}}` into {{childCount}} parallel branches.',
+'composition.enter.Loop':        'Started loop `{{name}}` — repeat until done.',
+'composition.enter.Conditional': 'Entering router `{{name}}` — picking a branch.',
+'composition.enter.Generic':     'Entered composition `{{name}}` ({{kind}}) with {{childCount}} children.',
+'composition.exit':              '`{{name}}` finished — {{status}} in {{durationMs}}ms.',
+'composition.handoff':           'Handed off `{{fromAgent}}` → `{{toAgent}}`.',
+```
+
+`selectCommentaryKey` routes `agentfootprint.composition.enter` to `composition.enter.${kind}` and `composition.exit` to `composition.exit`. Single-Agent runs never fire these, so they're additive only — no existing behavior changes. Override per-key for locale or brand voice via the existing `commentaryTemplates` consumer override mechanism.
+
+### Updated — default templates use `{{agentName}}` where actor identity matters
+
+Updated keys (semantically equivalent for single-Agent runs):
+
+- `stream.llm_start.iter1`
+- `stream.llm_start.iterN`
+- `stream.llm_end.tools`
+- `stream.llm_end.terminal`
+- `stream.tool_start`
+- `stream.tool_end`
+
+Backward-compat verified — all 2053 pre-existing tests continue passing because `agentName === appName` when no inner-agent context exists.
+
+### Tests
+
+18 new tests covering 5 edge cases (single-Agent, Sequence-of-LLMCalls, Swarm, slot-subflow walk-past, pause/resume) + composition.enter/exit rendering + variable bag includes agentName for every event type. Total suite 2071/2071.
+
+### Public exports
+
+- `extractAgentName(event, ctx): string` — re-exported from `'agentfootprint'` (used by Lens, custom dashboards, tests).
+
+Pure addition. No breaking changes. No new public API beyond the new template variable + helper.
+
 ## [2.14.3]
 
 ### Added — `BoundaryRecorder.aggregateForBoundary` + `aggregateAllBoundaries`

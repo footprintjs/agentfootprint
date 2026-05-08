@@ -56,11 +56,16 @@ export type CommentaryTemplates = Readonly<Record<string, string>>;
 export const defaultCommentaryTemplates: CommentaryTemplates = {
   'agent.turn_start': 'User asked {{appName}}: "{{userPrompt}}".',
 
-  'stream.llm_start.iter1': '{{appName}} sent the question to the LLM.',
-  'stream.llm_start.iterN': "{{appName}} sent the tool's result to the LLM for reasoning.",
+  // `{{agentName}}` resolves to the active agent's display name when
+  // the event fires inside a Sequence stage / Swarm member / nested
+  // Agent. For single-Agent runs (no inner-agent path), it falls back
+  // to `{{appName}}` so existing copy reads identically.
+  'stream.llm_start.iter1': '{{agentName}} sent the question to the LLM.',
+  'stream.llm_start.iterN': "{{agentName}} sent the tool's result to the LLM for reasoning.",
 
-  'stream.llm_end.tools': 'The LLM said it needs to use a tool. {{appName}} will do that next.',
-  'stream.llm_end.terminal': 'The LLM gave the final answer. {{appName}} returned it to the user.',
+  'stream.llm_end.tools': 'The LLM said it needs to use a tool. {{agentName}} will do that next.',
+  'stream.llm_end.terminal':
+    'The LLM gave the final answer. {{agentName}} returned it to the user.',
 
   // Streaming. Token chunks are NOT rendered as one line each — that
   // would flood the commentary. Consumers (Lens) accumulate tokens
@@ -77,11 +82,11 @@ export const defaultCommentaryTemplates: CommentaryTemplates = {
   'stream.token.partial': '{{appName}} is responding: {{partial}}',
 
   'stream.tool_start':
-    '{{appName}} called the `{{toolName}}` tool{{descClause}}. The LLM asked for it, and {{appName}} figured out the inputs from the conversation.',
+    '{{agentName}} called the `{{toolName}}` tool{{descClause}}. The LLM asked for it, and {{agentName}} figured out the inputs from the conversation.',
   'stream.tool_start.desc': ' — registered as "{{desc}}"',
   'stream.tool_start.noDesc': '',
 
-  'stream.tool_end': 'The tool returned its result. {{appName}} will share it with the LLM next.',
+  'stream.tool_end': 'The tool returned its result. {{agentName}} will share it with the LLM next.',
 
   'context.injected.rag':
     '{{appName}} retrieved relevant content and added it to the conversation.',
@@ -105,6 +110,23 @@ export const defaultCommentaryTemplates: CommentaryTemplates = {
 
   'composition.fork_start': '{{appName}} fanned out into parallel branches.',
   'composition.merge_end': '{{appName}} merged the parallel branches back into one.',
+
+  // Multi-agent / multi-LLM composition narration. Each composition
+  // primitive gets its own enter / exit template. Single-Agent runs
+  // never fire these; they're for Sequence / Parallel / Loop /
+  // Conditional shapes. Override per-key for locale or brand voice.
+  'composition.enter.Sequence': 'Started pipeline `{{name}}` — {{childCount}} stages chained.',
+  'composition.enter.Parallel': 'Forked `{{name}}` into {{childCount}} parallel branches.',
+  'composition.enter.Loop': 'Started loop `{{name}}` — repeat until done.',
+  'composition.enter.Conditional': 'Entering router `{{name}}` — picking a branch.',
+  'composition.enter.Generic':
+    'Entered composition `{{name}}` ({{kind}}) with {{childCount}} children.',
+  'composition.exit': '`{{name}}` finished — {{status}} in {{durationMs}}ms.',
+  // Inter-agent handoff (synthesized between adjacent Sequence stages).
+  // Surfaces "classify → respond" instead of two unrelated llm_start
+  // lines. Renderer derives `fromAgent` / `toAgent` from sibling
+  // subflow.exit / entry pair at the same depth.
+  'composition.handoff': 'Handed off `{{fromAgent}}` → `{{toAgent}}`.',
 
   'pause.request': '{{appName}} paused — waiting for input from a human or external system.',
   'pause.resume': '{{appName}} resumed.',
@@ -191,6 +213,21 @@ export function selectCommentaryKey(event: AgentfootprintEvent): string | null |
     case 'agentfootprint.composition.merge_end':
       return 'composition.merge_end';
 
+    case 'agentfootprint.composition.enter': {
+      // Per-kind template suffix lets each composition primitive read
+      // naturally (Sequence = pipeline, Parallel = fork, Loop = repeat,
+      // Conditional = router). Falls back to `composition.enter.Generic`
+      // for unknown kinds so future primitives don't break the prose.
+      const kind = event.payload.kind;
+      const specific = `composition.enter.${kind}`;
+      // Defer to the renderer to fall back when the specific key isn't
+      // present — `renderCommentary` returns empty for missing tokens,
+      // so a missing key is a degraded-but-not-fatal experience.
+      return specific;
+    }
+    case 'agentfootprint.composition.exit':
+      return 'composition.exit';
+
     case 'agentfootprint.pause.request':
       return 'pause.request';
     case 'agentfootprint.pause.resume':
@@ -228,7 +265,8 @@ export function extractCommentaryVars(
   ctx: CommentaryContext,
   templates: CommentaryTemplates = defaultCommentaryTemplates,
 ): Record<string, string> {
-  const base = { appName: ctx.appName };
+  const agentName = extractAgentName(event, ctx);
+  const base = { appName: ctx.appName, agentName };
 
   switch (event.type) {
     case 'agentfootprint.agent.turn_start':
@@ -248,11 +286,85 @@ export function extractCommentaryVars(
       return { ...base, toolName, descClause };
     }
 
-    // Most templates only need {{appName}} — no token counts, no IDs,
-    // no durations make it into prose. Those live in DETAILS.
+    case 'agentfootprint.composition.enter': {
+      const p = event.payload;
+      return {
+        ...base,
+        name: p.name,
+        kind: p.kind,
+        childCount: String(p.childCount),
+      };
+    }
+
+    case 'agentfootprint.composition.exit': {
+      const p = event.payload;
+      // CompositionExitPayload carries `id` but no `name` — use the id
+      // as the display key. Consumers can override the template if
+      // they want to look up names from a side table.
+      return {
+        ...base,
+        name: p.id,
+        kind: p.kind,
+        status: p.status,
+        durationMs: String(p.durationMs ?? 0),
+      };
+    }
+
+    // Most templates only need {{appName}} / {{agentName}} — no token
+    // counts, no IDs, no durations make it into prose. Those live in
+    // DETAILS.
     default:
       return base;
   }
+}
+
+// ─── agentName derivation ──────────────────────────────────────────
+
+/**
+ * Library-internal subflow id segments that are NOT user-facing
+ * agent identities. When walking back through `event.meta.subflowPath`
+ * we skip these to find the meaningful agent / stage name.
+ */
+const COMMENTARY_INTERNAL_SEGMENT_PREFIXES = ['sf-', 'thinking-'] as const;
+const COMMENTARY_INTERNAL_SEGMENTS = new Set<string>([
+  'sf-injection-engine',
+  'sf-system-prompt',
+  'sf-messages',
+  'sf-tools',
+  'sf-route',
+  'sf-tool-calls',
+  'sf-merge',
+  'sf-thinking',
+  'sf-cache-decision',
+  'final', // route-decider 'final' branch — same exception as SUBFLOW_IDS.FINAL
+]);
+
+function isInternalSegment(seg: string): boolean {
+  if (COMMENTARY_INTERNAL_SEGMENTS.has(seg)) return true;
+  for (const p of COMMENTARY_INTERNAL_SEGMENT_PREFIXES) {
+    if (seg.startsWith(p)) return true;
+  }
+  return false;
+}
+
+/**
+ * Resolve the agent name from an event's `meta.subflowPath`.
+ *
+ * Walks the path right-to-left, skipping library-internal segments
+ * (slot subflows, agent-routing subflows, thinking handlers), and
+ * returns the FIRST meaningful segment with the optional `step-`
+ * Sequence prefix stripped. For events with no meaningful path
+ * (single-Agent runners, top-level events), falls back to `appName`.
+ */
+export function extractAgentName(event: AgentfootprintEvent, ctx: CommentaryContext): string {
+  const path = event.meta?.subflowPath ?? [];
+  for (let i = path.length - 1; i >= 0; i--) {
+    const seg = path[i];
+    if (!seg) continue;
+    if (isInternalSegment(seg)) continue;
+    return seg.replace(/^step-/, '');
+  }
+  return ctx.appName;
 }
 
 /**

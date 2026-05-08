@@ -208,9 +208,10 @@ export {
 // shape; viewers (Lens, CLI tail, log file) consume this surface.
 export {
   defaultCommentaryTemplates,
-  selectCommentaryKey,
+  extractAgentName,
   extractCommentaryVars,
   renderCommentary,
+  selectCommentaryKey,
   type CommentaryContext,
   type CommentaryTemplates,
 } from './recorders/observability/commentary/commentaryTemplates.js';
