@@ -8,6 +8,8 @@
  * for back-compat (the 28+ existing import sites continue to work).
  */
 
+import type { StructureRecorder } from 'footprintjs';
+import type { GroupTranslator } from '../translator.js';
 import type {
   LLMMessage,
   LLMProvider,
@@ -74,6 +76,33 @@ export interface AgentOptions {
    * once those land in Phase 7+.
    */
   readonly cacheStrategy?: CacheStrategy;
+  /**
+   * Optional build-time recorders threaded into footprintjs's
+   * `flowChart()` factory. Each recorder fires `onStageAdded` once per
+   * node in the Agent's internal chart (Seed, IterationStart, CallLLM,
+   * Route, tool handler, slot mounts, PrepareFinal, BreakFinal), and
+   * `onSubflowMounted` once per mounted subflow. Recorders own their
+   * own accumulators — agentfootprint just threads them through.
+   *
+   * Cascade: each slot subflow (system-prompt, messages, tools)
+   * was built earlier with its OWN recorders (or none).
+   * footprintjs does NOT propagate StructureRecorders into mounted
+   * subflows — attach the same recorders to every nested composition
+   * for full coverage.
+   *
+   * When omitted, no build-time observation is wired up.
+   */
+  readonly structureRecorders?: readonly StructureRecorder[];
+  /**
+   * Optional per-COMPOSITION translator (UI-agnostic). See
+   * `core/translator.ts`. When attached, `agent.getUIGroup()` invokes
+   * it with the Agent's `GroupMetadata` (kind `'Agent'`, id, name,
+   * empty `members[]`, plus `extra.slots` and `extra.toolNames`).
+   * Tools are not `Runner` instances (they're function executors)
+   * so they're conveyed by name in `extra`, not as group members.
+   * Returns `undefined` when omitted.
+   */
+  readonly groupTranslator?: GroupTranslator;
 }
 
 export interface AgentInput {

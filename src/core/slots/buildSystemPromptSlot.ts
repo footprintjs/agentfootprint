@@ -123,7 +123,6 @@ export function buildSystemPromptSlot(config: SystemPromptSlotConfig): FlowChart
       );
     },
     'compose',
-    undefined,
-    'Compose system-prompt slot',
+    { description: 'Compose system-prompt slot' },
   ).build();
 }

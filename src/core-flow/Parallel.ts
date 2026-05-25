@@ -14,11 +14,19 @@
 import {
   FlowChartExecutor,
   flowChart,
+  isFlowEvent,
+  type CombinedRecorder,
   type FlowChart,
   type FlowchartCheckpoint,
   type RunOptions,
+  type StructureRecorder,
   type TypedScope,
 } from 'footprintjs';
+import type {
+  GroupMember,
+  GroupMetadata,
+  GroupTranslator,
+} from '../core/translator.js';
 import type { RunnerPauseOutcome } from '../core/pause.js';
 import type { LLMMessage, LLMProvider } from '../adapters/types.js';
 import type { Runner } from '../core/runner.js';
@@ -33,6 +41,36 @@ import { typedEmit } from '../recorders/core/typedEmit.js';
 export interface ParallelOptions {
   readonly name?: string;
   readonly id?: string;
+  /**
+   * Optional build-time recorders passed through to footprintjs's
+   * `flowChart()` factory. Each recorder observes per-node build
+   * events (`onStageAdded` / `onSubflowMounted` / etc.) for this
+   * composition's internal chart (Seed + each branch mount + Merge).
+   *
+   * Cascade: each branch runner attaches its OWN recorders at its
+   * own construction time. footprintjs does NOT propagate
+   * StructureRecorders into mounted subflows — so for full coverage,
+   * attach the same recorders to every nested composition. See the
+   * core-flow README's "StructureRecorder cascade" section.
+   *
+   * When omitted, no build-time observation is wired up.
+   */
+  readonly structureRecorders?: readonly StructureRecorder[];
+  /**
+   * Optional per-COMPOSITION translator (UI-agnostic). When attached,
+   * `runner.getUIGroup()` invokes it with the Parallel's
+   * `GroupMetadata` (kind, id, name, branches list, merge strategy)
+   * and returns whatever shape the translator produces.
+   *
+   * Independent of `structureRecorders` — those observe per-node spec
+   * events, this shapes whole-composition UI groups. Common case is to
+   * thread the SAME `GroupTranslator` reference through every nested
+   * composition so `member.uiGroup` is populated recursively; L1c
+   * per-method overrides add finer control.
+   *
+   * When omitted, `getUIGroup()` returns `undefined`.
+   */
+  readonly groupTranslator?: GroupTranslator;
 }
 
 export interface ParallelInput {
@@ -73,6 +111,27 @@ interface BranchEntry {
   readonly id: string;
   readonly name: string;
   readonly runner: BranchChild;
+  /**
+   * Optional per-method translator override for THIS branch only.
+   * When set, the branch's `member.uiGroup` is produced by invoking
+   * this translator against the runner's own `GroupMetadata`, instead
+   * of calling `branch.runner.getUIGroup()` (which would use the
+   * runner's own constructor-level translator).
+   */
+  readonly groupTranslator?: GroupTranslator;
+}
+
+/**
+ * Options bag accepted by `ParallelBuilder.branch()` for per-method
+ * overrides. Backwards-compatible with the legacy
+ * `.branch(id, runner, name?)` signature: when the third arg is a
+ * string it's still treated as `name`.
+ */
+export interface ParallelBranchOptions {
+  /** Human-friendly name for this branch. Default: the branch id. */
+  readonly name?: string;
+  /** Per-method translator override. See `BranchEntry.groupTranslator`. */
+  readonly groupTranslator?: GroupTranslator;
 }
 
 type MergeStrategy =
@@ -89,6 +148,7 @@ export class Parallel extends RunnerBase<ParallelInput, ParallelOutput> {
   readonly id: string;
   private readonly branches: readonly BranchEntry[];
   private readonly merge: MergeStrategy;
+  private readonly opts: ParallelOptions;
 
   private currentRunContext: RunContext = {
     runStartMs: 0,
@@ -96,8 +156,24 @@ export class Parallel extends RunnerBase<ParallelInput, ParallelOutput> {
     compositionPath: [],
   };
 
+  /**
+   * Per-branch first-error messages captured during the current run.
+   *
+   * Filled by an internal CombinedRecorder attached in `createExecutor()`
+   * that observes footprintjs `FlowErrorEvent`s. Errors are keyed by the
+   * branch id (the first segment of `traversalContext.subflowPath`); only
+   * the first error per branch is kept so the surface mirrors the wrapper
+   * `try/catch` semantics that preceded the v0.x architectural refactor.
+   *
+   * Read by the Merge stage to populate strict-mode error messages and
+   * tolerant-mode `BranchOutcome.error` strings. Cleared at the start of
+   * every `run()` / `resume()`.
+   */
+  private readonly branchErrors = new Map<string, string>();
+
   constructor(opts: ParallelOptions, branches: readonly BranchEntry[], merge: MergeStrategy) {
     super();
+    this.opts = opts;
     this.name = opts.name ?? 'Parallel';
     this.id = opts.id ?? 'parallel';
     if (branches.length < 2) {
@@ -105,14 +181,54 @@ export class Parallel extends RunnerBase<ParallelInput, ParallelOutput> {
     }
     this.branches = branches;
     this.merge = merge;
+    // Eager chart construction — see `RunnerBase.initChart` JSDoc.
+    // Safe: the merge stage's closure captures `this.branchErrors`
+    // (an instance field initialized at declaration time, line 130),
+    // which is set BEFORE the constructor body runs.
+    this.initChart(() => this.buildChart());
   }
 
   static create(opts: ParallelOptions = {}): ParallelBuilder {
     return new ParallelBuilder(opts);
   }
 
-  toFlowChart(): FlowChart {
-    return this.buildChart();
+  // `getSpec()` inherited from RunnerBase — returns the cached chart.
+
+  // ─── UI group translation (L1b) ───────────────────────────────
+  protected override getGroupTranslator(): GroupTranslator | undefined {
+    return this.opts.groupTranslator;
+  }
+
+  /**
+   * Build the Parallel's `GroupMetadata` — kind `'Parallel'`, with one
+   * `GroupMember` per branch. Each member exposes its `runner` plus
+   * the runner's own `getUIGroup()` output (when the consumer
+   * threaded the same translator through that branch's construction).
+   */
+  protected override buildUIGroupMetadata(): GroupMetadata {
+    const members: GroupMember[] = this.branches.map((b) => ({
+      memberId: b.id,
+      runner: b.runner,
+      // Per-method override (L1c) takes precedence over the branch
+      // runner's own constructor-level translator. When present, the
+      // override runs against the branch runner's own GroupMetadata
+      // and its output becomes `member.uiGroup`. When absent, fall
+      // back to `branch.runner.getUIGroup()` which applies the
+      // runner's own translator (if any).
+      uiGroup:
+        b.groupTranslator !== undefined
+          ? b.runner.getUIGroupWith(b.groupTranslator)
+          : b.runner.getUIGroup(),
+    }));
+    return {
+      kind: 'Parallel',
+      id: this.id,
+      name: this.name,
+      members,
+      extra: {
+        mergeStrategy: this.merge.kind,
+      },
+    };
   }
 
   async run(
@@ -120,6 +236,7 @@ export class Parallel extends RunnerBase<ParallelInput, ParallelOutput> {
     options?: RunOptions,
   ): Promise<ParallelOutput | RunnerPauseOutcome> {
     const executor = this.createExecutor();
+    this.lastExecutor = executor;
     const result = await executor.run({
       input: { message: input.message },
       ...(options ?? {}),
@@ -145,8 +262,13 @@ export class Parallel extends RunnerBase<ParallelInput, ParallelOutput> {
       compositionPath: [`Parallel:${this.id}`],
     };
 
-    const chart = this.buildChart();
-    const executor = new FlowChartExecutor(chart);
+    // Reset per-run branch-error capture. Fork children now mount the
+    // branch runner's own chart (no try/catch wrapper); errors are
+    // captured via FlowRecorder.onError correlation by subflow path.
+    this.branchErrors.clear();
+
+    // Reuse the cached chart built at constructor time.
+    const executor = new FlowChartExecutor(this.getSpec());
 
     const dispatcher = this.getDispatcher();
     const getRunCtx = (): RunContext => this.currentRunContext;
@@ -155,8 +277,55 @@ export class Parallel extends RunnerBase<ParallelInput, ParallelOutput> {
     executor.attachCombinedRecorder(streamRecorder({ dispatcher, getRunContext: getRunCtx }));
     executor.attachCombinedRecorder(agentRecorder({ dispatcher, getRunContext: getRunCtx }));
     executor.attachCombinedRecorder(compositionRecorder({ dispatcher, getRunContext: getRunCtx }));
+    executor.attachCombinedRecorder(this.makeBranchErrorRecorder());
     for (const r of this.attachedRecorders) executor.attachCombinedRecorder(r);
     return executor;
+  }
+
+  /**
+   * Build the internal recorder that captures first-error-per-branch.
+   *
+   * footprintjs's `SubflowExecutor` swallows subflow errors into
+   * `parentContext.debug.addError(...)` and skips the `outputMapper`,
+   * so the failed branch's error message never lands in parent scope.
+   * To preserve the per-branch error surface the wrapper-based design
+   * provided, we observe `FlowRecorder.onError` and correlate by the
+   * first segment of `traversalContext.subflowPath`.
+   *
+   * Only the FIRST error per branch is kept. Errors fired outside any
+   * branch (e.g., a Merge-stage error) are ignored.
+   */
+  private makeBranchErrorRecorder(): CombinedRecorder {
+    const branchIds = new Set(this.branches.map((b) => b.id));
+    return {
+      id: 'parallel-branch-errors',
+      onError: (event) => {
+        if (!isFlowEvent(event)) return;
+        const ctx = event.traversalContext;
+        if (!ctx) return;
+        // The branch id is the first segment of the engine-prefixed
+        // `stageId` (e.g. `bad/call-llm` → branch `bad`). `subflowPath`
+        // is sometimes empty for first-level subflows, and `subflowId`
+        // can be deeper than the branch when LLMCall/Agent mount their
+        // own internal subflows. The stageId prefix is the canonical
+        // origin path.
+        const stageId = ctx.stageId ?? '';
+        const slash = stageId.indexOf('/');
+        const branchId = slash >= 0 ? stageId.slice(0, slash) : undefined;
+        if (branchId === undefined || !branchIds.has(branchId)) return;
+        if (!this.branchErrors.has(branchId)) {
+          // Strip the leading "Error: " that `error.toString()` adds
+          // for standard `Error` instances so the captured message
+          // matches the original `throw new Error(msg)` reason exactly
+          // (consumers expect the bare message). Non-Error throws
+          // never carry this prefix, so the strip is a no-op there.
+          const m = event.message.startsWith('Error: ')
+            ? event.message.slice('Error: '.length)
+            : event.message;
+          this.branchErrors.set(branchId, m);
+        }
+      },
+    };
   }
 
   private finalizeResult(
@@ -194,45 +363,75 @@ export class Parallel extends RunnerBase<ParallelInput, ParallelOutput> {
 
     // Root description prefix `Parallel:` is the taxonomy marker — see
     // FlowchartRecorder.mapTopologyToSteps for the consumer side.
+    // The 4th arg threads the consumer's `structureRecorders` (when set)
+    // into footprintjs's builder so every node in this chart is observed
+    // by them at construction time.
     let builder = flowChart<ParallelState>(
       'Seed',
       seed,
       'seed',
-      undefined,
-      `Parallel: ${branches.length}-way fanout`,
+      {
+        ...(this.opts.structureRecorders !== undefined && {
+          structureRecorders: [...this.opts.structureRecorders],
+        }),
+        description: `Parallel: ${branches.length}-way fanout`,
+      },
     );
 
-    // Fork children — each branch is wrapped in a chart that runs the
-    // branch runner in try/catch. The wrapper always succeeds (no error
-    // propagates up), so the outputMapper always fires and records a
-    // typed `BranchOutcome` for the Merge stage to inspect.
+    // Fork children — each branch is mounted as a proper subflow via
+    // footprintjs's native fork mode. Multiple `addSubFlowChart` calls
+    // on the same builder cursor produce a fork node (`type: 'fork'`);
+    // `ChildrenExecutor` runs them concurrently via `Promise.allSettled`.
     //
-    // Strict mode (default): Merge throws on any branch failure. Tolerant
-    // mode: Merge passes the full outcomes map to the consumer's merge fn.
+    // The branch's OWN chart (its `getSpec()`) is mounted directly — no
+    // wrapper. This preserves the parent's `runtimeStageId` address
+    // space across branch internals: every LLM call, tool execution,
+    // and commit inside a branch appears in the parent executor's
+    // commitLog with a globally-unique id. Recorder events flow
+    // naturally — no `scope.$emit` forwarding needed.
+    //
+    // Error handling: a failing branch's `outputMapper` does NOT fire
+    // (footprintjs convention: `subflowError` skips output mapping).
+    // The branch id is absent from `branchResults`. The merge stage
+    // detects this via `branches.map(b => b.id) \ keys(branchResults)`
+    // and either throws (strict mode) or synthesizes `BranchOutcome`
+    // entries for the tolerant `outcomes-fn` merge.
     for (const branch of branches) {
-      builder = builder.addSubFlowChart(branch.id, buildBranchWrapperChart(branch), branch.name, {
+      builder = builder.addSubFlowChart(branch.id, branch.runner.getSpec(), branch.name, {
         inputMapper: (parent) => ({ message: (parent.userMessage as string) ?? '' }),
-        // The wrapper's terminal stage returns a BranchOutcome. Stash it
-        // under the branch id; shallow-merge across siblings produces
-        // the full outcomes map.
         outputMapper: (sfOutput) => ({
-          branchOutcomes: {
-            [branch.id]: sfOutput as BranchOutcome,
+          branchResults: {
+            [branch.id]: typeof sfOutput === 'string' ? sfOutput : '',
           },
         }),
       });
     }
 
     // Merge stage — runs after all fork children complete (join point).
+    // Closes over `this.branchErrors` (populated by the internal
+    // `parallel-branch-errors` recorder) so per-branch error messages
+    // survive subflow boundary swallowing in footprintjs.
+    const branchErrors = this.branchErrors;
     const mergeStage = async (scope: TypedScope<ParallelState>): Promise<string> => {
-      const outcomes = (scope.branchOutcomes as Record<string, BranchOutcome>) ?? {};
+      const results = (scope.branchResults as Record<string, string>) ?? {};
 
-      const failures = Object.entries(outcomes).filter(([, o]) => !o.ok);
+      // Detect failures by absence: any expected branch id missing
+      // from `branchResults` is a branch whose `outputMapper` didn't
+      // fire — i.e., one whose subflow errored. The specific error
+      // message comes from the recorder-captured `branchErrors` map.
+      //
+      // Caveat: footprintjs does NOT fire `FlowRecorder.onError` for
+      // errors thrown INSIDE `applyOutputMapping` (those are caught
+      // separately in `SubflowExecutor` and routed to
+      // `parentContext.addError('outputMapperError', ...)`). A branch
+      // whose subflow completed cleanly but whose outputMapper threw
+      // will therefore show up here as a missing id with no entry in
+      // `branchErrors` — strict-mode aggregation prints `unknown
+      // error` for it and tolerant-mode synthesizes the same string.
+      // This is a known gap; see `core-flow/README.md` Decision 8.
+      const failedIds = branches.map((b) => b.id).filter((id) => !(id in results));
       const isTolerant = merge.kind === 'outcomes-fn';
-      if (failures.length > 0 && !isTolerant) {
-        const details = failures
-          .map(([id, o]) => `  ${id}: ${(o as { ok: false; error: string }).error}`)
-          .join('\n');
+      if (failedIds.length > 0 && !isTolerant) {
         typedEmit(scope, 'agentfootprint.composition.exit', {
           kind: 'Parallel',
           id: compositionId,
@@ -240,33 +439,63 @@ export class Parallel extends RunnerBase<ParallelInput, ParallelOutput> {
           status: 'err',
           durationMs: Date.now() - this.currentRunContext.runStartMs,
         });
+        const details = failedIds
+          .map((id) => `  ${id}: ${branchErrors.get(id) ?? 'unknown error'}`)
+          .join('\n');
         throw new Error(
-          `Parallel '${compositionId}': ${failures.length} branch(es) failed:\n${details}\n` +
+          `Parallel '${compositionId}': ${failedIds.length} branch(es) failed:\n${details}\n` +
             `(use .mergeOutcomesWithFn() for tolerant-mode partial-failure handling)`,
         );
       }
 
+      // Run the merge strategy. Wrap in try/catch so that a merge-stage
+      // failure (e.g., merge LLM throws) still produces a
+      // `composition.exit` event with `status: 'err'` — without this the
+      // event stream would have a `composition.enter` without a matching
+      // `composition.exit`, breaking dashboards that pair the two.
       let merged: string;
-      if (merge.kind === 'fn') {
-        const results: Record<string, string> = {};
-        for (const [id, o] of Object.entries(outcomes)) {
-          if (o.ok) results[id] = o.value;
+      try {
+        if (merge.kind === 'fn') {
+          merged = merge.fn(results);
+        } else if (merge.kind === 'llm') {
+          merged = await mergeWithLLM(scope, merge.opts, results);
+        } else {
+          // Tolerant-mode: synthesize BranchOutcome map for the consumer.
+          const outcomes: Record<string, BranchOutcome> = {};
+          for (const b of branches) {
+            if (b.id in results) {
+              outcomes[b.id] = { ok: true, value: results[b.id]! };
+            } else {
+              outcomes[b.id] = {
+                ok: false,
+                error: branchErrors.get(b.id) ?? 'unknown error',
+              };
+            }
+          }
+          merged = merge.fn(outcomes);
         }
-        merged = merge.fn(results);
-      } else if (merge.kind === 'llm') {
-        const results: Record<string, string> = {};
-        for (const [id, o] of Object.entries(outcomes)) {
-          if (o.ok) results[id] = o.value;
-        }
-        merged = await mergeWithLLM(scope, merge.opts, results);
-      } else {
-        merged = merge.fn(outcomes);
+      } catch (err) {
+        typedEmit(scope, 'agentfootprint.composition.exit', {
+          kind: 'Parallel',
+          id: compositionId,
+          name: compositionName,
+          status: 'err',
+          durationMs: Date.now() - this.currentRunContext.runStartMs,
+        });
+        throw err;
       }
+      const succeededCount = Object.keys(results).length;
       typedEmit(scope, 'agentfootprint.composition.merge_end', {
         parentId: compositionId,
-        strategy: merge.kind === 'outcomes-fn' ? 'fn' : merge.kind,
+        // Emit the merge.kind verbatim so consumers can distinguish
+        // tolerant (`outcomes-fn`) from strict (`fn` / `llm`).
+        strategy: merge.kind,
         resultSummary: truncate(merged, 80),
-        mergedBranchCount: branches.length,
+        // Number of branches that actually contributed a result to the
+        // merge. Equals `totalBranchCount` on full success; smaller in
+        // tolerant-mode runs where some branches failed.
+        mergedBranchCount: succeededCount,
+        totalBranchCount: branches.length,
       });
       typedEmit(scope, 'agentfootprint.composition.exit', {
         kind: 'Parallel',
@@ -284,60 +513,6 @@ export class Parallel extends RunnerBase<ParallelInput, ParallelOutput> {
   }
 }
 
-/**
- * Build a wrapper chart that runs a branch Runner in a try/catch and
- * emits its events to the Parallel's dispatcher. The chart's terminal
- * stage returns a `BranchOutcome` — never throws up to the traverser.
- *
- * Event forwarding: the branch runner has its own EventDispatcher. We
- * subscribe to the wildcard `'*'` during run() and re-dispatch each
- * event on Parallel's dispatcher so consumers who attach listeners at
- * the Parallel level see the branch's llm/context/agent events.
- */
-function buildBranchWrapperChart(branch: BranchEntry): FlowChart {
-  const runBranch = async (scope: TypedScope<ParallelState>): Promise<BranchOutcome> => {
-    const args = scope.$getArgs<{ message: string }>();
-    // Forward every branch-runner event via `scope.$emit` so it flows
-    // through footprintjs's emit channel. That channel reaches every
-    // EmitBridge attached to the CURRENT executor — including bridges
-    // belonging to outer compositions when this Parallel is nested
-    // (e.g., `Loop(Parallel(...))`). Forwarding directly to the
-    // Parallel's own dispatcher would be invisible to outer layers.
-    const unsubscribe = branch.runner.on('*', (e) => {
-      // `e.payload` is the typed payload union for the specific event;
-      // $emit accepts `unknown`, so no cast is needed — let it pass
-      // through structurally.
-      scope.$emit(e.type, e.payload);
-    });
-    try {
-      const result = await branch.runner.run({ message: args.message ?? '' });
-      if (typeof result === 'string') {
-        return { ok: true, value: result };
-      }
-      // Paused outcome: surface as "ok" with empty value — pauses from
-      // nested runners aren't failures, but Parallel doesn't yet propagate
-      // them through the merge. Consumers who need pause-inside-Parallel
-      // should set up nested pause handling at their own layer.
-      return { ok: true, value: '' };
-    } catch (err) {
-      return {
-        ok: false,
-        error: err instanceof Error ? err.message : String(err),
-      };
-    } finally {
-      unsubscribe();
-    }
-  };
-
-  return flowChart<ParallelState>(
-    'RunBranch',
-    runBranch,
-    'run-branch',
-    undefined,
-    `Parallel branch '${branch.id}' — catches failures`,
-  ).build();
-}
-
 /** Fluent builder. Requires at least 2 branches + one merge strategy. */
 export class ParallelBuilder {
   private readonly opts: ParallelOptions;
@@ -349,13 +524,47 @@ export class ParallelBuilder {
     this.opts = opts;
   }
 
-  /** Add a branch. All branches run concurrently with the same input. */
-  branch(id: string, runner: BranchChild, name?: string): this {
+  /**
+   * Add a branch. All branches run concurrently with the same input.
+   *
+   * Third arg accepts EITHER a legacy bare `name` string (back-compat
+   * with pre-L1c callers) OR a `ParallelBranchOptions` bag containing
+   * `name` and/or a per-method `groupTranslator` override. The
+   * override applies ONLY to this branch's `member.uiGroup` and does
+   * not affect any other branch or the runner's own translator.
+   */
+  branch(
+    id: string,
+    runner: BranchChild,
+    nameOrOpts?: string | ParallelBranchOptions,
+  ): this {
     if (this.seenIds.has(id)) {
       throw new Error(`Parallel.branch(): duplicate branch id '${id}'`);
     }
+    // Branch errors are correlated back to the originating branch by the
+    // first `/`-separated segment of footprintjs's engine-prefixed
+    // `traversalContext.stageId` (e.g., `legal/call-llm` → branch
+    // `legal`). A branch id containing `/` would silently shadow that
+    // mapping and drop the error message into 'unknown error' fallback.
+    if (id.includes('/')) {
+      throw new Error(
+        `Parallel.branch(): id '${id}' must not contain '/' — it collides with footprintjs's subflow-path separator used for per-branch error correlation`,
+      );
+    }
     this.seenIds.add(id);
-    this.branches.push({ id, runner, name: name ?? id });
+    const opts =
+      typeof nameOrOpts === 'string'
+        ? ({ name: nameOrOpts } satisfies ParallelBranchOptions)
+        : nameOrOpts ?? {};
+    const entry: BranchEntry = {
+      id,
+      runner,
+      name: opts.name ?? id,
+      ...(opts.groupTranslator !== undefined && {
+        groupTranslator: opts.groupTranslator,
+      }),
+    };
+    this.branches.push(entry);
     return this;
   }
 

@@ -61,9 +61,10 @@
  * ```
  */
 
-import { BoundaryStateTracker } from 'footprintjs/trace';
+import { BoundaryStateStore } from 'footprintjs/trace';
 import type { Unsubscribe } from '../../events/dispatcher.js';
 import type { AgentfootprintEvent, AgentfootprintEventType } from '../../events/registry.js';
+import { createRunIdObserver, type RunIdObserver } from './observeRunId.js';
 
 /** Minimal Runner shape this recorder needs — only the public `on(...)`
  *  subscription method, so the same trackers can attach to a real Runner
@@ -121,16 +122,28 @@ export interface AgentTurnLiveState {
  * calls (Parallel composition with multiple branches) get distinct
  * keys and are tracked independently.
  */
-export class LiveLLMTracker extends BoundaryStateTracker<LLMLiveState> {
+export class LiveLLMTracker {
   readonly id = 'live-llm';
+
+  /** Composition: bracket-scoped storage primitive. */
+  private readonly store = new BoundaryStateStore<LLMLiveState>();
+  /** Wipes the store when a fresh run reuses identical runtimeStageId keys. */
+  private readonly runIdGuard: RunIdObserver = createRunIdObserver(() =>
+    this.store.clear(),
+  );
+
+  private observeRunId(runId: string | undefined): void {
+    this.runIdGuard.observe(runId);
+  }
 
   /** Subscribe to a runner's dispatcher. Returns an Unsubscribe. */
   subscribe(runner: LiveStateRunnerLike): Unsubscribe {
     const offs: Unsubscribe[] = [];
     offs.push(
       runner.on('agentfootprint.stream.llm_start', (event) => {
+        this.observeRunId(event.meta.runId);
         const p = event.payload;
-        this.startBoundary(event.meta.runtimeStageId, {
+        this.store.start(event.meta.runtimeStageId, {
           partial: '',
           tokens: 0,
           iteration: p.iteration,
@@ -142,7 +155,8 @@ export class LiveLLMTracker extends BoundaryStateTracker<LLMLiveState> {
     );
     offs.push(
       runner.on('agentfootprint.stream.token', (event) => {
-        this.updateBoundary(event.meta.runtimeStageId, (s) => ({
+        this.observeRunId(event.meta.runId);
+        this.store.update(event.meta.runtimeStageId, (s) => ({
           ...s,
           partial: s.partial + event.payload.content,
           tokens: s.tokens + 1,
@@ -151,25 +165,52 @@ export class LiveLLMTracker extends BoundaryStateTracker<LLMLiveState> {
     );
     offs.push(
       runner.on('agentfootprint.stream.llm_end', (event) => {
-        this.stopBoundary(event.meta.runtimeStageId);
+        this.observeRunId(event.meta.runId);
+        this.store.stop(event.meta.runtimeStageId);
       }),
     );
     return () => offs.forEach((off) => off());
   }
 
-  /** True if any LLM call is currently in flight. Same as `hasActive`. */
+  /** Reset all transient state. Called by `LiveStateRecorder.clear()`. */
+  clear(): void {
+    this.store.clear();
+    this.runIdGuard.reset();
+  }
+
+  /** True if any LLM call is currently in flight. */
   isInFlight(): boolean {
-    return this.hasActive;
+    return this.store.hasActive;
+  }
+
+  /** Same as `store.hasActive` — exposed for parity with the v4 API. */
+  get hasActive(): boolean {
+    return this.store.hasActive;
+  }
+
+  /** Number of currently-active boundaries. */
+  get activeCount(): number {
+    return this.store.activeCount;
+  }
+
+  /** Currently-active boundary state for one runtimeStageId. */
+  getActive(runtimeStageId: string): LLMLiveState | undefined {
+    return this.store.get(runtimeStageId);
+  }
+
+  /** All currently-active boundaries. */
+  getAllActive(): ReadonlyMap<string, LLMLiveState> {
+    return this.store.getAll();
   }
 
   /** Accumulated partial content of the MOST RECENTLY started active
    *  LLM call. Empty string when no call is active. Useful for the
    *  classic "Chatbot is responding: …" live commentary line. */
   getLatestPartial(): string {
-    if (!this.hasActive) return '';
+    if (!this.store.hasActive) return '';
     let latest: LLMLiveState | undefined;
     let latestStart = -Infinity;
-    for (const state of this.getAllActive().values()) {
+    for (const state of this.store.getAll().values()) {
       if (state.startedAtMs > latestStart) {
         latestStart = state.startedAtMs;
         latest = state;
@@ -189,15 +230,25 @@ export class LiveLLMTracker extends BoundaryStateTracker<LLMLiveState> {
  * Boundary key: `toolCallId` (more granular than `runtimeStageId` —
  * parallel tools share one calling stage but have distinct toolCallIds).
  */
-export class LiveToolTracker extends BoundaryStateTracker<ToolLiveState> {
+export class LiveToolTracker {
   readonly id = 'live-tool';
+
+  private readonly store = new BoundaryStateStore<ToolLiveState>();
+  private readonly runIdGuard: RunIdObserver = createRunIdObserver(() =>
+    this.store.clear(),
+  );
+
+  private observeRunId(runId: string | undefined): void {
+    this.runIdGuard.observe(runId);
+  }
 
   subscribe(runner: LiveStateRunnerLike): Unsubscribe {
     const offs: Unsubscribe[] = [];
     offs.push(
       runner.on('agentfootprint.stream.tool_start', (event) => {
+        this.observeRunId(event.meta.runId);
         const p = event.payload;
-        this.startBoundary(p.toolCallId, {
+        this.store.start(p.toolCallId, {
           toolName: p.toolName,
           args: p.args,
           toolCallId: p.toolCallId,
@@ -207,20 +258,42 @@ export class LiveToolTracker extends BoundaryStateTracker<ToolLiveState> {
     );
     offs.push(
       runner.on('agentfootprint.stream.tool_end', (event) => {
-        this.stopBoundary(event.payload.toolCallId);
+        this.observeRunId(event.meta.runId);
+        this.store.stop(event.payload.toolCallId);
       }),
     );
     return () => offs.forEach((off) => off());
   }
 
+  clear(): void {
+    this.store.clear();
+    this.runIdGuard.reset();
+  }
+
   /** True if any tool is currently executing. */
   isExecuting(): boolean {
-    return this.hasActive;
+    return this.store.hasActive;
+  }
+
+  get hasActive(): boolean {
+    return this.store.hasActive;
+  }
+
+  get activeCount(): number {
+    return this.store.activeCount;
+  }
+
+  getActive(toolCallId: string): ToolLiveState | undefined {
+    return this.store.get(toolCallId);
+  }
+
+  getAllActive(): ReadonlyMap<string, ToolLiveState> {
+    return this.store.getAll();
   }
 
   /** Names of tools currently executing. Empty when none. */
   getExecutingToolNames(): readonly string[] {
-    return [...this.getAllActive().values()].map((s) => s.toolName);
+    return [...this.store.getAll().values()].map((s) => s.toolName);
   }
 }
 
@@ -234,15 +307,25 @@ export class LiveToolTracker extends BoundaryStateTracker<ToolLiveState> {
  * Boundary key: stringified `turnIndex` from the payload — survives
  * across runner instances because turnIndex resets per-session.
  */
-export class LiveAgentTurnTracker extends BoundaryStateTracker<AgentTurnLiveState> {
+export class LiveAgentTurnTracker {
   readonly id = 'live-agent-turn';
+
+  private readonly store = new BoundaryStateStore<AgentTurnLiveState>();
+  private readonly runIdGuard: RunIdObserver = createRunIdObserver(() =>
+    this.store.clear(),
+  );
+
+  private observeRunId(runId: string | undefined): void {
+    this.runIdGuard.observe(runId);
+  }
 
   subscribe(runner: LiveStateRunnerLike): Unsubscribe {
     const offs: Unsubscribe[] = [];
     offs.push(
       runner.on('agentfootprint.agent.turn_start', (event) => {
+        this.observeRunId(event.meta.runId);
         const p = event.payload;
-        this.startBoundary(String(p.turnIndex), {
+        this.store.start(String(p.turnIndex), {
           turnIndex: p.turnIndex,
           userPrompt: p.userPrompt,
           startedAtMs: event.meta.wallClockMs,
@@ -251,23 +334,45 @@ export class LiveAgentTurnTracker extends BoundaryStateTracker<AgentTurnLiveStat
     );
     offs.push(
       runner.on('agentfootprint.agent.turn_end', (event) => {
-        this.stopBoundary(String(event.payload.turnIndex));
+        this.observeRunId(event.meta.runId);
+        this.store.stop(String(event.payload.turnIndex));
       }),
     );
     return () => offs.forEach((off) => off());
   }
 
+  clear(): void {
+    this.store.clear();
+    this.runIdGuard.reset();
+  }
+
   /** True if the agent is currently inside a turn. */
   isInTurn(): boolean {
-    return this.hasActive;
+    return this.store.hasActive;
+  }
+
+  get hasActive(): boolean {
+    return this.store.hasActive;
+  }
+
+  get activeCount(): number {
+    return this.store.activeCount;
+  }
+
+  getActive(turnIndex: string): AgentTurnLiveState | undefined {
+    return this.store.get(turnIndex);
+  }
+
+  getAllActive(): ReadonlyMap<string, AgentTurnLiveState> {
+    return this.store.getAll();
   }
 
   /** Index of the most-recently started active turn (-1 if none). */
   getCurrentTurnIndex(): number {
-    if (!this.hasActive) return -1;
+    if (!this.store.hasActive) return -1;
     let latest = -1;
     let latestStart = -Infinity;
-    for (const state of this.getAllActive().values()) {
+    for (const state of this.store.getAll().values()) {
       if (state.startedAtMs > latestStart) {
         latestStart = state.startedAtMs;
         latest = state.turnIndex;
@@ -323,9 +428,22 @@ export class LiveStateRecorder {
 
   /** Subscribe all three trackers to one runner. Idempotent — calling
    *  twice on the same recorder unsubscribes the prior subscription
-   *  first to avoid double-counting. */
+   *  first to avoid double-counting.
+   *
+   *  Adds a wildcard `*` listener that observes runId on EVERY event
+   *  (regardless of which tracker subscribes to it) and calls
+   *  `clear()` on all three trackers when the runId changes. This
+   *  closes the gap where a tracker that never saw events in run 1
+   *  would fail to reset in run 2. */
   subscribe(runner: LiveStateRunnerLike): Unsubscribe {
     this.unsubscribe();
+    // Each tracker observes runId in its own per-event handler. A
+    // facade-level wildcard would fire AFTER the per-event handler
+    // (dispatcher order: byType → domainWildcards → allWildcards),
+    // wiping state the tracker just stored. Per-tracker observation is
+    // sufficient: a tracker that stores data necessarily ran its
+    // handler, which set lastRunId. A tracker that holds no data
+    // doesn't need a reset.
     const offs = [
       this.llm.subscribe(runner),
       this.tool.subscribe(runner),
@@ -334,6 +452,7 @@ export class LiveStateRecorder {
     this.active = () => offs.forEach((off) => off());
     return this.active;
   }
+
 
   /** Detach all three trackers from the current runner. Idempotent. */
   unsubscribe(): void {

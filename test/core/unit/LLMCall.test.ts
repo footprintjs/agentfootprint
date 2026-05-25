@@ -54,10 +54,10 @@ describe('LLMCall.create() + builder', () => {
 });
 
 describe('LLMCall runner-contract compliance', () => {
-  it('exposes .run() / .toFlowChart() / .on() / .off() / .once() / .attach() / .emit()', () => {
+  it('exposes .run() / .getSpec() / .on() / .off() / .once() / .attach() / .emit()', () => {
     const inst = LLMCall.create({ provider: new MockProvider(), model: 'mock' }).system('').build();
     expect(typeof inst.run).toBe('function');
-    expect(typeof inst.toFlowChart).toBe('function');
+    expect(typeof inst.getSpec).toBe('function');
     expect(typeof inst.on).toBe('function');
     expect(typeof inst.off).toBe('function');
     expect(typeof inst.once).toBe('function');
@@ -71,9 +71,9 @@ describe('LLMCall runner-contract compliance', () => {
     expect(typeof inst.enable.logging).toBe('function');
   });
 
-  it('toFlowChart() returns a defined chart object (composable)', () => {
+  it('getSpec() returns a defined chart object (composable)', () => {
     const inst = LLMCall.create({ provider: new MockProvider(), model: 'mock' }).system('').build();
-    const chart = inst.toFlowChart();
+    const chart = inst.getSpec();
     expect(chart).toBeDefined();
     expect(typeof chart).toBe('object');
   });

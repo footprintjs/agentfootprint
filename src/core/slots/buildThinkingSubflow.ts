@@ -121,7 +121,6 @@ export function buildThinkingSubflow(handler: ThinkingHandler): FlowChart {
       });
     },
     `thinking-${handlerId}`,
-    undefined,
-    `Normalize ${handlerId} thinking blocks`,
+    { description: `Normalize ${handlerId} thinking blocks` },
   ).build();
 }

@@ -94,8 +94,7 @@ export function buildInjectionEngineSubflow(config: InjectionEngineConfig): Flow
       });
     },
     'evaluate',
-    undefined,
-    'Evaluate every Injection trigger; produce activeInjections + metadata',
+    { description: 'Evaluate every Injection trigger; produce activeInjections + metadata' },
   ).build();
 }
 

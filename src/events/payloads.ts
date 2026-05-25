@@ -56,9 +56,23 @@ export interface ParallelBranchCompletePayload {
 
 export interface ParallelMergeEndPayload {
   readonly parentId: string;
-  readonly strategy: 'llm' | 'fn';
+  /**
+   * Which merge strategy ran. `'fn'` = `mergeWithFn` (strict, plain
+   * results map). `'llm'` = `mergeWithLLM` (strict, LLM synthesis).
+   * `'outcomes-fn'` = `mergeOutcomesWithFn` (tolerant, full
+   * `BranchOutcome` map). Distinct values so consumers can render
+   * tolerant vs strict merges differently in dashboards.
+   */
+  readonly strategy: 'llm' | 'fn' | 'outcomes-fn';
   readonly resultSummary: string;
+  /** Number of branches whose result FED the merge — i.e., succeeded
+   *  (or, in tolerant mode, those the merge fn actually consumed as
+   *  `{ok: true}`). Failing branches are counted in `totalBranchCount
+   *  - mergedBranchCount`. */
   readonly mergedBranchCount: number;
+  /** Total number of branches declared on the Parallel — equals
+   *  `mergedBranchCount` on all-success runs, larger on partial. */
+  readonly totalBranchCount: number;
 }
 
 export interface ConditionalRouteDecidedPayload {

@@ -50,7 +50,7 @@ Dependency flow is one-way, bottom-up. Each layer depends on lower layers only.
 
 These invariants are preserved across every file in `src/`:
 
-- **A1** Every runner exposes `.toFlowChart()` — composition nests freely.
+- **A1** Every runner exposes `.getSpec()` — composition nests freely.
 - **A2** The API boundary IS the atom boundary. Consumers never parse subflow paths.
 - **A3** Every decision that matters is a typed event. Event stream + topology = fully reconstructable run.
 - **A4** Breaking changes OK across major; additive within major. No back-compat shims.

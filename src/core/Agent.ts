@@ -33,6 +33,7 @@ import {
   updateSkillHistory as updateSkillHistoryStage,
 } from '../cache/CacheGateDecider.js';
 import { getDefaultCacheStrategy } from '../cache/strategyRegistry.js';
+import { SUBFLOW_IDS } from '../conventions.js';
 import { type RunnerPauseOutcome } from './pause.js';
 import type {
   LLMMessage,
@@ -158,22 +159,17 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     compositionPath: [],
   };
 
-  /**
-   * Reference to the most recent executor. Set on every `createExecutor()`
-   * call (i.e., every `run()` and `resume()`); read by `getLastSnapshot()`
-   * / `getLastNarrativeEntries()` so post-run UIs (Lens Trace tab,
-   * ExplainableShell) can pull execution state without intercepting the
-   * call. `undefined` until the first run.
-   */
-  private lastExecutor?: FlowChartExecutor;
+  // `lastExecutor` is now inherited as a protected field from RunnerBase
+  // (single canonical source for footprintjs snapshot access across all
+  // runners). Agent's `getLastSnapshot()` delegates to the inherited
+  // implementation but is kept here for the JSDoc + clearer return type.
 
-  /**
-   * Reference to the FlowChart compiled for the most recent run. Cached
-   * here rather than recomputed via `buildChart()` so `getSpec()` returns
-   * the SAME spec the executor traced — important when the spec is used
-   * to reconcile `getLastSnapshot()` for ExplainableShell.
-   */
-  private lastFlowChart?: FlowChart;
+  // The chart is now cached on RunnerBase (`protected chart`) via
+  // `initChart()` — built ONCE at constructor time. `getSpec()` returns
+  // it. `createExecutor()` reuses it. The earlier `lastFlowChart`
+  // field was a per-run workaround for the lazy-build pattern; both
+  // are obsolete now. `getSpec()` always returns the same reference
+  // the executor traces.
 
   /**
    * Memory subsystems registered via `.memory()`. Each definition mounts
@@ -237,6 +233,14 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    * wire format. Undefined = no thinking activation (default behavior).
    */
   private readonly thinkingBudget?: number;
+  /** Threaded to footprintjs `flowChart()` so every node the Agent
+   *  builder creates is observed by these recorders at build time. Set
+   *  from `opts.structureRecorders`; undefined when consumer didn't
+   *  attach any. */
+  private readonly structureRecorders?: readonly import('footprintjs').StructureRecorder[];
+  /** Per-COMPOSITION translator (L1b). Set from `opts.groupTranslator`;
+   *  undefined when consumer didn't attach one. */
+  private readonly agentGroupTranslator?: import('./translator.js').GroupTranslator;
 
   constructor(
     opts: AgentOptions,
@@ -267,6 +271,8 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     this.temperature = opts.temperature;
     this.maxTokens = opts.maxTokens;
     this.maxIterations = clampIterations(opts.maxIterations ?? 10);
+    this.structureRecorders = opts.structureRecorders;
+    this.agentGroupTranslator = opts.groupTranslator;
     this.systemPromptValue = systemPromptValue;
     this.systemPromptCachePolicy = systemPromptCachePolicy;
     this.cachingDisabledValue = cachingDisabled;
@@ -310,14 +316,25 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     this.appName = voice.appName;
     this.commentaryTemplates = voice.commentaryTemplates;
     this.thinkingTemplates = voice.thinkingTemplates;
+
+    // Eager chart construction — see `RunnerBase.initChart` JSDoc.
+    // Note re Agent specifics (footprintjs inventor's review):
+    // - `providerToolCache: { current: Tool[] }` is closed over by the
+    //   chart's Discover + dispatch stages. It's shared across
+    //   sequential runs of this Agent instance, but the Discover stage
+    //   overwrites `current` at the start of every iteration (line 158
+    //   of `buildToolsSlot.ts`), so stale data never reaches a tool
+    //   call. Concurrent runs on the SAME Agent instance already share
+    //   `currentRunContext` and the recorder dispatcher — eager build
+    //   doesn't change that constraint.
+    // - `currentRunContext` is read by the per-stage `getRunCtx`
+    //   lambda at execution time (not at chart-build time), so a fresh
+    //   value per run still flows through correctly.
+    this.initChart(() => this.buildChart());
   }
 
   static create(opts: AgentOptions): AgentBuilder {
     return new AgentBuilder(opts);
-  }
-
-  toFlowChart(): FlowChart {
-    return this.buildChart();
   }
 
   /**
@@ -362,8 +379,43 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    * `getLastSnapshot()` traced, otherwise the Trace view's stage tree
    * desyncs from the snapshot's runtime tree.
    */
-  getSpec(): FlowChart {
-    return this.lastFlowChart ?? this.buildChart();
+  // `getSpec()` inherited from RunnerBase — returns the cached chart
+  // built once at constructor time via `initChart()`. Same reference
+  // every call, same reference the executor traces.
+
+  // ─── UI group translation (L1b) ───────────────────────────────
+  protected override getGroupTranslator():
+    | import('./translator.js').GroupTranslator
+    | undefined {
+    return this.agentGroupTranslator;
+  }
+
+  /** Agent has no nested-runner members (tools are function executors,
+   *  not Runner instances). Slot ids + tool names live in `extra` so
+   *  Lens can render an Agent card with slot rows + a tool list without
+   *  inspecting `buildTimeStructure`.
+   *
+   *  Memories are NOT included as members — they're an internal
+   *  mechanism, not a composition-level concept. Consumers who need
+   *  memory visibility should listen for `agentfootprint.memory.*`
+   *  events at runtime. */
+  protected override buildUIGroupMetadata(): import('./translator.js').GroupMetadata {
+    const toolNames = this.registry.map((r) => r.name);
+    return {
+      kind: 'Agent',
+      id: this.id,
+      name: this.name,
+      members: [],
+      extra: {
+        slots: [
+          SUBFLOW_IDS.SYSTEM_PROMPT,
+          SUBFLOW_IDS.MESSAGES,
+          SUBFLOW_IDS.TOOLS,
+        ] as const,
+        toolNames,
+        maxIterations: this.maxIterations,
+      },
+    };
   }
 
   /**
@@ -607,14 +659,13 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       compositionPath: [`Agent:${this.id}`],
     };
 
-    const chart = this.buildChart();
-    const executor = new FlowChartExecutor(chart);
+    // Reuse the cached chart built at constructor time.
+    const executor = new FlowChartExecutor(this.getSpec());
     // Enable structured narrative so `getLastNarrativeEntries()` can
     // hand a populated array to consumer Trace views (ExplainableShell).
     // Cheap when no consumer reads it; the recorder accumulates only.
     executor.enableNarrative();
     this.lastExecutor = executor;
-    this.lastFlowChart = chart;
 
     const dispatcher = this.getDispatcher();
     const getRunCtx = (): RunContext => this.currentRunContext;
@@ -866,6 +917,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       cacheDecisionSubflow,
       updateSkillHistoryStage,
       cacheGateDecide,
+      ...(this.structureRecorders !== undefined && { structureRecorders: [...this.structureRecorders] }),
     });
   }
 }

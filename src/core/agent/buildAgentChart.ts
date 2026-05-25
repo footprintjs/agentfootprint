@@ -40,7 +40,7 @@
 
 import { ArrayMergeMode } from 'footprintjs/advanced';
 import { flowChart } from 'footprintjs';
-import type { FlowChart } from 'footprintjs';
+import type { FlowChart, StructureRecorder } from 'footprintjs';
 import type { LLMMessage } from '../../adapters/types.js';
 import type { CachePolicy } from '../../cache/types.js';
 import { STAGE_IDS, SUBFLOW_IDS } from '../../conventions.js';
@@ -95,6 +95,14 @@ export interface AgentChartDeps {
   readonly cacheDecisionSubflow: FlowChart;
   readonly updateSkillHistoryStage: (scope: never) => void;
   readonly cacheGateDecide: (scope: never) => unknown;
+
+  // ─ Build-time recorders (optional) ─────────────────────────────
+  /** Structure recorders threaded into both `flowChart()` calls (the
+   *  main chart and the PrepareFinal sub-chart). Each recorder
+   *  observes per-node build events (`onStageAdded` /
+   *  `onSubflowMounted` / etc.) for the Agent's chart. Undefined when
+   *  the consumer didn't attach any. */
+  readonly structureRecorders?: readonly StructureRecorder[];
 }
 
 /**
@@ -109,8 +117,12 @@ export function buildAgentChart(deps: AgentChartDeps): FlowChart {
     'PrepareFinal',
     prepareFinalStage,
     'prepare-final',
-    undefined,
-    'Capture turn payload (finalContent + newMessages)',
+    {
+      ...(deps.structureRecorders !== undefined && {
+        structureRecorders: [...deps.structureRecorders],
+      }),
+      description: 'Capture turn payload (finalContent + newMessages)',
+    },
   );
   for (const m of deps.memories) {
     if (m.write) {
@@ -140,8 +152,12 @@ export function buildAgentChart(deps: AgentChartDeps): FlowChart {
     'Seed',
     deps.seed as never,
     STAGE_IDS.SEED,
-    undefined,
-    'Agent: ReAct loop',
+    {
+      ...(deps.structureRecorders !== undefined && {
+        structureRecorders: [...deps.structureRecorders],
+      }),
+      description: 'Agent: ReAct loop',
+    },
   );
 
   // Memory READ subflows — mounted between Seed and InjectionEngine

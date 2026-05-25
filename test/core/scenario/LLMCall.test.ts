@@ -74,10 +74,10 @@ describe('LLMCall — end-to-end', () => {
     expect(r2).toBe('echo: second');
   });
 
-  it('is composable: toFlowChart() returns a FlowChart for subflow mounting', () => {
+  it('is composable: getSpec() returns a FlowChart for subflow mounting', () => {
     const provider = new MockProvider();
     const llm = LLMCall.create({ provider, model: 'mock-model' }).build();
-    const chart = llm.toFlowChart();
+    const chart = llm.getSpec();
     expect(chart).toBeDefined();
     // ComposableRunner contract — can be passed to addSubFlowChart.
     expect(typeof chart).toBe('object');

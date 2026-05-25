@@ -8,7 +8,7 @@ import { RunnerBase, makeRunId } from '../../../src/core/RunnerBase.js';
 import type { AgentfootprintEventMap } from '../../../src/events/registry.js';
 
 class TestRunner extends RunnerBase<string, string> {
-  toFlowChart(): FlowChart {
+  getSpec(): FlowChart {
     return {} as FlowChart; // stub — unused in these tests
   }
   async run(input: string, _options?: RunOptions): Promise<string> {

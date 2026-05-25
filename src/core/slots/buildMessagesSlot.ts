@@ -110,8 +110,7 @@ export function buildMessagesSlot(config: MessagesSlotConfig = {}): FlowChart {
       );
     },
     'compose',
-    undefined,
-    'Compose messages slot',
+    { description: 'Compose messages slot' },
   ).build();
 }
 

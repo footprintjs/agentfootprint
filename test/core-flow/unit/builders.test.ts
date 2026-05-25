@@ -55,7 +55,7 @@ describe('Sequence builder', () => {
   it('exposes runner-contract methods', () => {
     const seq = Sequence.create().step('a', trivialRunner()).build();
     expect(typeof seq.run).toBe('function');
-    expect(typeof seq.toFlowChart).toBe('function');
+    expect(typeof seq.getSpec).toBe('function');
     expect(typeof seq.on).toBe('function');
     expect(typeof seq.enable.thinking).toBe('function');
   });

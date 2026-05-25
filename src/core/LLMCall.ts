@@ -18,8 +18,10 @@ import {
   type FlowChart,
   type FlowchartCheckpoint,
   type RunOptions,
+  type StructureRecorder,
   type TypedScope,
 } from 'footprintjs';
+import type { GroupMetadata, GroupTranslator } from './translator.js';
 import type { RunnerPauseOutcome } from './pause.js';
 import { SUBFLOW_IDS, STAGE_IDS } from '../conventions.js';
 import type { RunContext } from '../bridge/eventMeta.js';
@@ -63,6 +65,24 @@ export interface LLMCallOptions {
    * — consumers choose whether to abort by listening to the event.
    */
   readonly costBudget?: number;
+  /**
+   * Optional build-time recorders threaded into footprintjs's
+   * `flowChart()` factory. Each recorder observes per-node build
+   * events (`onStageAdded` / `onSubflowMounted` / etc.) for this
+   * LLMCall's internal chart (Seed + slot mounts + CallLLM). When
+   * omitted, no build-time observation is wired up.
+   */
+  readonly structureRecorders?: readonly StructureRecorder[];
+  /**
+   * Optional per-COMPOSITION translator (UI-agnostic). See
+   * `core/translator.ts`. When attached, `runner.getUIGroup()` invokes
+   * it with the LLMCall's `GroupMetadata` (kind `'LLMCall'`, id, name,
+   * empty `members[]`, plus `extra.slots` with the three slot ids —
+   * `system-prompt`, `messages`, `tools` — so Lens can render the slot
+   * cards inside an LLMCall card without inspecting `buildTimeStructure`).
+   * Returns `undefined` when omitted.
+   */
+  readonly groupTranslator?: GroupTranslator;
 }
 
 export interface LLMCallInput {
@@ -98,6 +118,8 @@ export class LLMCall extends RunnerBase<LLMCallInput, LLMCallOutput> {
   private readonly systemPromptValue: string;
   private readonly pricingTable?: PricingTable;
   private readonly costBudget?: number;
+  private readonly structureRecorders?: readonly StructureRecorder[];
+  private readonly groupTranslator?: GroupTranslator;
 
   // Run-scoped; refreshed each run().
   private currentRunContext: RunContext = {
@@ -117,14 +139,47 @@ export class LLMCall extends RunnerBase<LLMCallInput, LLMCallOutput> {
     this.systemPromptValue = systemPromptValue;
     if (opts.pricingTable) this.pricingTable = opts.pricingTable;
     if (opts.costBudget !== undefined) this.costBudget = opts.costBudget;
+    if (opts.structureRecorders) this.structureRecorders = opts.structureRecorders;
+    if (opts.groupTranslator) this.groupTranslator = opts.groupTranslator;
+    // Eager chart construction (footprintjs inventor convention): build
+    // once at constructor time so `buildTimeStructure` is a stable
+    // immutable object reference, each `StructureRecorder` fires
+    // exactly N times (N = node count) per LLMCall, and reference-equality memos
+    // on `getSpec()` work. Subsequent `getSpec()` calls return the
+    // cached chart; each `run()` reuses it in a fresh executor.
+    this.initChart(() => this.buildChart() as FlowChart);
   }
 
   static create(opts: LLMCallOptions): LLMCallBuilder {
     return new LLMCallBuilder(opts);
   }
 
-  toFlowChart(): FlowChart {
-    return this.buildChart() as FlowChart;
+  // `getSpec()` is inherited from `RunnerBase` — returns the chart
+  // cached by `initChart()` above. No subclass override needed.
+
+  // ─── UI group translation (L1b) ───────────────────────────────
+  protected override getGroupTranslator(): GroupTranslator | undefined {
+    return this.groupTranslator;
+  }
+
+  /** LLMCall has no nested-runner members (slots are subflows of
+   *  the LLMCall's own chart, not Runner instances). The 3 slot ids
+   *  are surfaced via `extra` so Lens can render the slot cards
+   *  inside an LLMCall card without inspecting `buildTimeStructure`. */
+  protected override buildUIGroupMetadata(): GroupMetadata {
+    return {
+      kind: 'LLMCall',
+      id: this.id,
+      name: this.name,
+      members: [],
+      extra: {
+        slots: [
+          SUBFLOW_IDS.SYSTEM_PROMPT,
+          SUBFLOW_IDS.MESSAGES,
+          SUBFLOW_IDS.TOOLS,
+        ] as const,
+      },
+    };
   }
 
   async run(
@@ -132,6 +187,7 @@ export class LLMCall extends RunnerBase<LLMCallInput, LLMCallOutput> {
     options?: RunOptions,
   ): Promise<LLMCallOutput | RunnerPauseOutcome> {
     const executor = this.createExecutor();
+    this.lastExecutor = executor;
     const result = await executor.run({
       input: { message: input.message },
       ...(options ?? {}),
@@ -146,6 +202,7 @@ export class LLMCall extends RunnerBase<LLMCallInput, LLMCallOutput> {
   ): Promise<LLMCallOutput | RunnerPauseOutcome> {
     this.emitPauseResume(checkpoint, input);
     const executor = this.createExecutor();
+    this.lastExecutor = executor;
     const result = await executor.resume(checkpoint, input, options);
     return this.finalizeResult(executor, result);
   }
@@ -157,8 +214,9 @@ export class LLMCall extends RunnerBase<LLMCallInput, LLMCallOutput> {
       compositionPath: [`LLMCall:${this.id}`],
     };
 
-    const chart = this.buildChart();
-    const executor = new FlowChartExecutor(chart);
+    // Reuse the cached chart built at constructor time. `getSpec()` and
+    // every `run()` share the same `FlowChart` object reference.
+    const executor = new FlowChartExecutor(this.getSpec());
 
     const dispatcher = this.getDispatcher();
     const getRunCtx = (): RunContext => this.currentRunContext;
@@ -293,7 +351,12 @@ export class LLMCall extends RunnerBase<LLMCallInput, LLMCallOutput> {
     // into Sequence / Parallel / Conditional / Loop, the parent's
     // `addSubFlowChartNext` mounts THIS chart as a single drill-in
     // unit — drill-in is free, no wrap required at this level.
-    return flowChart<LLMCallState>('Seed', seed, STAGE_IDS.SEED, undefined, 'LLMCall: one-shot')
+    return flowChart<LLMCallState>('Seed', seed, STAGE_IDS.SEED, {
+      ...(this.structureRecorders !== undefined && {
+        structureRecorders: [...this.structureRecorders],
+      }),
+      description: 'LLMCall: one-shot',
+    })
       .addSubFlowChartNext(SUBFLOW_IDS.SYSTEM_PROMPT, systemPromptSubflow, 'System Prompt', {
         inputMapper: (parent) => ({
           userMessage: parent.userMessage as string | undefined,

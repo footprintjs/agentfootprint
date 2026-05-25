@@ -26,7 +26,7 @@ Adding a third primitive would be a sign we're modelling the wrong abstraction. 
 
 Every primitive, every composition, and every pattern factory returns an object implementing `Runner<TIn, TOut>`. That means any runner composes into any other runner. No special types per pattern.
 
-`Runner` extends footprintjs's `ComposableRunner` (adds `.toFlowChart()` + `.run()`) and layers on:
+`Runner` declares `.run()` (execute) + `.getSpec()` (the design-time `FlowChart` blueprint, the same value footprintjs's `addSubFlowChart*` accepts) and layers on:
 
 - `.on() / .off() / .once()` — typed event subscription
 - `.attach(recorder)` — custom CombinedRecorder attachment
@@ -35,7 +35,7 @@ Every primitive, every composition, and every pattern factory returns an object 
 
 ### Decision 3: `RunnerBase` shares the wiring; subclasses supply structure
 
-Primitives + compositions extend `RunnerBase`. The base handles the dispatcher, recorder array, subscription API, and `.enable.*` namespace. Subclasses override `toFlowChart()` (what subflows to mount) and `run()` (how to interpret the executor result).
+Primitives + compositions extend `RunnerBase`. The base handles the dispatcher, recorder array, subscription API, and `.enable.*` namespace. Subclasses override `getSpec()` (the FlowChart they mount) and `run()` (how to interpret the executor result).
 
 Keeping the shared code in ONE base class means subscription semantics can't drift between primitives.
 
@@ -73,7 +73,7 @@ This keeps them independently evolvable. When Phase 5 adds skills to Agent, LLMC
 
 Minimum contract:
 - A builder with `.create()...build()`
-- Implementation of `toFlowChart()` — the footprintjs FlowChart it mounts
+- Implementation of `getSpec()` — the footprintjs FlowChart it mounts
 - Implementation of `run(input, options?)` — executes the chart + surfaces the result
 - Emits all applicable `agent.*` / `stream.*` events from its internal stages (via `typedEmit()`)
 - Attaches `ContextRecorder` + `StreamRecorder` + `AgentRecorder` internally so core domain events flow

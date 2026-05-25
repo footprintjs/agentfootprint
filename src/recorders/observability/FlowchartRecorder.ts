@@ -300,6 +300,16 @@ function wrapWithEmit(boundary: BoundaryRecorder, afterEach: () => void): Combin
  * Adding a new primitive: ship its `'Kind:'` description prefix at the
  * builder's `flowChart('...', ..., 'Kind: …')` call site AND add the
  * name here. Both sides are required.
+ *
+ * All four core-flow compositions (Sequence, Parallel, Conditional,
+ * Loop) mount child runners' charts DIRECTLY via `addSubFlowChart*`
+ * with `runner.getSpec()` as the subflow — no wrappers, no nested
+ * executors. Each child's `primitiveKind` flows through naturally
+ * from its own root description prefix; no wrapper-inheritance hack
+ * is required. (Earlier releases of Parallel used a `RunBranch`
+ * wrapper that ran branches in a nested executor and had to inherit
+ * the child's kind in its description; that design was retired in
+ * favour of native fork mounting — see `core-flow/README.md` decision 8.)
  */
 const KNOWN_PRIMITIVES: ReadonlySet<string> = new Set([
   'Agent',

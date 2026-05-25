@@ -120,7 +120,7 @@ describe('Agent runner-contract compliance', () => {
   it('exposes all Runner methods', () => {
     const inst = Agent.create({ provider: new MockProvider(), model: 'mock' }).system('').build();
     expect(typeof inst.run).toBe('function');
-    expect(typeof inst.toFlowChart).toBe('function');
+    expect(typeof inst.getSpec).toBe('function');
     expect(typeof inst.on).toBe('function');
     expect(typeof inst.off).toBe('function');
     expect(typeof inst.once).toBe('function');

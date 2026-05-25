@@ -12,8 +12,11 @@ outputs. Two modes:
 
 - **Strict** (default via `.mergeWithFn` / `.mergeWithLLM`) — any branch
   failure rejects the whole composition with an aggregated error.
+  The example runs strict with **2 agents** (legal + ethics).
 - **Tolerant** (`.mergeOutcomesWithFn`) — the merge fn receives the full
   `{ ok | error }` outcomes map and decides how to handle partial failure.
+  The example runs tolerant with **3 agents** (legal + ethics + cost) so
+  losing one voice doesn't tank the whole run.
 
 ## When to use
 

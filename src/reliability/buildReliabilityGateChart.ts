@@ -415,8 +415,7 @@ export function buildReliabilityGateChart(config: ReliabilityConfig): FlowChart 
       }
     },
     STAGE_IDS.INIT,
-    undefined,
-    'Reliability gate state init',
+    { description: 'Reliability gate state init' },
   )
     .addDeciderFunction(
       'PreCheck',

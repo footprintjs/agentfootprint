@@ -60,17 +60,202 @@ export abstract class RunnerBase<TIn = unknown, TOut = unknown> implements Runne
   protected readonly dispatcher = new EventDispatcher();
   protected readonly attachedRecorders: CombinedRecorder[] = [];
 
+  /**
+   * The most recently used FlowChartExecutor — set by subclasses in
+   * `run()` so consumers can read the canonical structural snapshot
+   * via `getLastSnapshot()`. Single source of structural truth: this
+   * is footprintjs's snapshot, NOT a domain re-derivation.
+   */
+  protected lastExecutor: FlowChartExecutor | undefined;
+
+  /**
+   * Cached footprintjs FlowChart, built ONCE at construction time via
+   * `initChart()`. Subsequent `getSpec()` calls return this same
+   * object — reference-stable across all consumers (Lens spec memos,
+   * footprintjs's OpenAPI/MCP caches, recorder-side correlation).
+   *
+   * Set via `initChart(builder)`, called from the subclass constructor
+   * AFTER all instance fields are populated. Read via `getSpec()`.
+   *
+   * Why eager construction: the `StructureRecorder` contract is
+   * "fires once per node at build time" — lazy construction would
+   * fire each recorder every `getSpec()` / `run()` call (2N invocations
+   * per run instead of N), break reference equality, and trigger
+   * `_mergeStageMap` false-positive collisions on second build.
+   * See `RunnerBase.initChart` for details.
+   *
+   * Visibility note: `private` (not `protected`) so subclasses cannot
+   * bypass the `initChart()` double-init guard by writing the field
+   * directly. All legitimate access goes through `getSpec()` and
+   * `initChart()`.
+   */
+  private chart: FlowChart | undefined;
+
+  /**
+   * Returns the footprintjs snapshot from the most recent run (or
+   * undefined if no run has completed). The snapshot is the CANONICAL
+   * STRUCTURE: nodes, edges, executionTree, runtimeStageId, commitLog.
+   *
+   * Domain consumers (Lens, Trace, dashboards) read this for shape
+   * and join their own per-stage payload by `runtimeStageId`. They
+   * MUST NOT re-derive structure from typed events — that's the
+   * design footprintjs's CLAUDE.md Convention 1 explicitly forbids.
+   *
+   * Returns `undefined` before the first `run()` completes. After,
+   * always returns the snapshot of the most recent run (including
+   * across multi-turn reuse of the same runner instance).
+   */
+  getLastSnapshot(): ReturnType<FlowChartExecutor['getSnapshot']> | undefined {
+    return this.lastExecutor?.getSnapshot();
+  }
+
   // ─── Subclass hooks ────────────────────────────────────────────
 
   /**
-   * Build the footprintjs FlowChart for this runner. Subclass supplies
-   * its specific structure (slot subflows, callLLM stage, routing, etc.).
+   * Return the footprintjs FlowChart for this runner — the canonical
+   * design-time blueprint. STABLE REFERENCE across calls (`getSpec()
+   * === getSpec()`). Set once at construction via `initChart()`.
+   *
+   * Pairs with the run-time getters (`getLastSnapshot`,
+   * `getCommitCount`) and matches `ExplainableShell.spec` +
+   * `specToReactFlow(spec, ...)` consumer conventions.
+   *
+   * DO NOT OVERRIDE in subclasses — the reference-identity contract
+   * (Lens / OpenAPI / MCP caches memo on this returning the same
+   * object) depends on the inherited body returning `this.chart`
+   * directly. To customise build behaviour, override `buildChart()`
+   * instead; this getter must remain a thin cache-read.
    */
-  abstract toFlowChart(): FlowChart;
+  getSpec(): FlowChart {
+    if (this.chart === undefined) {
+      throw new Error(
+        `${this.constructor.name}: chart not initialized — the subclass must call \`this.initChart(() => this.buildChart())\` in its constructor before any \`getSpec()\` / \`run()\`.`,
+      );
+    }
+    return this.chart;
+  }
+
+  /**
+   * Cached `getUIGroup()` output. Computed lazily on first read so the
+   * subclass constructor doesn't need to run the translator before all
+   * its members exist (e.g., Parallel builds its branches list mid-
+   * construction). After first invocation, subsequent calls return the
+   * same reference — reference-stable, matches the `getSpec()` contract.
+   *
+   * `null` (not `undefined`) is the explicit "computed; result was
+   * undefined" marker so we can distinguish from "not yet computed."
+   * Consumers see `undefined` when no translator was attached.
+   */
+  private uiGroupCache: { readonly value: unknown } | undefined;
+
+  /**
+   * Return the consumer-shaped UI group for this composition — produced
+   * by invoking the consumer's `groupTranslator` (if attached) with this
+   * runner's `GroupMetadata`. Returns `undefined` when no translator was
+   * attached.
+   *
+   * STABLE REFERENCE across calls. Computed on first access and cached;
+   * subsequent calls return the same value. Pairs with `getSpec()` —
+   * library shape on one side, consumer-shaped UI on the other.
+   *
+   * Subclasses MUST override `buildUIGroupMetadata()` (the next hook) to
+   * supply the `GroupMetadata` for their composition kind. This method
+   * (the public surface) is `final`-by-convention — do not override.
+   */
+  getUIGroup<T = unknown>(): T | undefined {
+    if (this.uiGroupCache !== undefined) {
+      return this.uiGroupCache.value as T | undefined;
+    }
+    const translator = this.getGroupTranslator();
+    if (translator === undefined) {
+      this.uiGroupCache = { value: undefined };
+      return undefined;
+    }
+    const metadata = this.buildUIGroupMetadata();
+    if (metadata === undefined) {
+      this.uiGroupCache = { value: undefined };
+      return undefined;
+    }
+    // SEAL THE CACHE BEFORE INVOKING THE TRANSLATOR so a throwing
+    // translator can't be re-invoked on the next `getUIGroup()` call.
+    // The `GroupTranslator` JSDoc guarantees "Runs ONCE per composition"
+    // — that invariant must hold for throwing translators too, otherwise
+    // a translator with side effects (telemetry, counters) would
+    // double-count on every re-read after a throw. Re-throws the same
+    // error so the caller still sees the failure on FIRST call; second
+    // call returns `undefined` (the sealed value).
+    this.uiGroupCache = { value: undefined };
+    const value = translator(metadata) as unknown;
+    this.uiGroupCache = { value };
+    return value as T;
+  }
+
+  /**
+   * Subclass hook — returns the consumer's translator if one was
+   * provided at construction time. Default: no translator (returns
+   * undefined). Each composition overrides to surface its own
+   * `opts.groupTranslator`.
+   */
+  protected getGroupTranslator():
+    | import('./translator.js').GroupTranslator
+    | undefined {
+    return undefined;
+  }
+
+  /**
+   * Translate this runner's group metadata with a CALLER-SUPPLIED
+   * translator that overrides the runner's own default. Used by
+   * parent compositions to apply per-method translator overrides.
+   * See the `Runner.getUIGroupWith` JSDoc for the contract.
+   */
+  getUIGroupWith<T = unknown>(
+    override: import('./translator.js').GroupTranslator,
+  ): T | undefined {
+    const metadata = this.buildUIGroupMetadata();
+    if (metadata === undefined) return undefined;
+    return override(metadata) as T;
+  }
+
+  /**
+   * Subclass hook — returns the `GroupMetadata` for this composition.
+   * Default: undefined, meaning "no group translation for this runner
+   * kind." Compositions override to supply their members + kind. Called
+   * AT MOST ONCE per runner (result is cached by `getUIGroup()`).
+   */
+  protected buildUIGroupMetadata():
+    | import('./translator.js').GroupMetadata
+    | undefined {
+    return undefined;
+  }
+
+  /**
+   * Build + cache the runner's `FlowChart` exactly once. Called by the
+   * subclass constructor AFTER all instance fields are set, so the
+   * builder lambda can close over them safely.
+   *
+   * Throws if called twice on the same instance — the chart is meant
+   * to be immutable post-construction. Each `run()` reuses the same
+   * chart in a fresh `FlowChartExecutor`.
+   *
+   * Implementation invariant (per footprintjs inventor review):
+   * each attached `StructureRecorder` fires exactly N times per
+   * construction (N = node count). Two `getSpec()` calls return the
+   * same `FlowChart` object reference. `_mergeStageMap` collision
+   * guards never see false-positives because each child runner's
+   * stage functions are created once and reused.
+   */
+  protected initChart(builder: () => FlowChart): void {
+    if (this.chart !== undefined) {
+      throw new Error(
+        `${this.constructor.name}: initChart() called twice — the chart is built once at construction and is immutable.`,
+      );
+    }
+    this.chart = builder();
+  }
 
   /**
    * Execute the runner. Subclass may override for specialized input
-   * mapping, but default invokes toFlowChart() + FlowChartExecutor.
+   * mapping, but default invokes getSpec() + FlowChartExecutor.
    */
   abstract run(input: TIn, options?: RunOptions): Promise<TOut | RunnerPauseOutcome>;
 

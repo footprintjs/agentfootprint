@@ -3,7 +3,7 @@
  *
  * Pattern: Observer (GoF) — pluggable, fire-and-forget event listeners
  *          for the agent's typed event stream.
- * Role:    Outer ring (Hexagonal). Attach via `runner.attachRecorder()`;
+ * Role:    Outer ring (Hexagonal). Attach via `runner.attachScopeRecorder()`;
  *          the runner emits events, recorders accumulate state.
  *
  * Three tiers (progressive disclosure):
@@ -45,6 +45,8 @@ export {
   boundaryRecorder,
   BoundaryRecorder,
   type BoundaryAggregate,
+  type BoundaryRecorderOptions,
+  type BoundaryRangeLabel,
   type DomainEvent,
   type DomainLLMEndEvent,
   type DomainLLMStartEvent,

@@ -144,8 +144,7 @@ export function defaultPipeline(config: DefaultPipelineConfig): MemoryPipeline {
     'LoadRecent',
     loadRecent(loadConfig),
     'load-recent',
-    undefined,
-    'Read N most-recent entries from storage into scope.loaded',
+    { description: 'Read N most-recent entries from storage into scope.loaded' },
   );
   readBuilder = pickByBudget(pickConfig)(readBuilder);
   const read = readBuilder
@@ -161,8 +160,7 @@ export function defaultPipeline(config: DefaultPipelineConfig): MemoryPipeline {
     'WriteMessages',
     writeMessages(writeConfig),
     'write-messages',
-    undefined,
-    'Persist new turn messages to storage',
+    { description: 'Persist new turn messages to storage' },
   ).build();
 
   return { read, write };

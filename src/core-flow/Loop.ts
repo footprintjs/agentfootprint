@@ -22,8 +22,14 @@ import {
   type FlowChart,
   type FlowchartCheckpoint,
   type RunOptions,
+  type StructureRecorder,
   type TypedScope,
 } from 'footprintjs';
+import type {
+  GroupMember,
+  GroupMetadata,
+  GroupTranslator,
+} from '../core/translator.js';
 import type { RunnerPauseOutcome } from '../core/pause.js';
 import type { Runner } from '../core/runner.js';
 import { RunnerBase, makeRunId } from '../core/RunnerBase.js';
@@ -37,6 +43,22 @@ import { typedEmit } from '../recorders/core/typedEmit.js';
 export interface LoopOptions {
   readonly name?: string;
   readonly id?: string;
+  /**
+   * Optional build-time recorders passed through to footprintjs's
+   * `flowChart()` factory. Each recorder observes per-node build
+   * events (`onStageAdded` / `onSubflowMounted` / etc.) for this
+   * composition's internal chart (Seed + IterationStart + body mount +
+   * Guard). When omitted, no build-time observation is wired up.
+   */
+  readonly structureRecorders?: readonly StructureRecorder[];
+  /**
+   * Optional per-COMPOSITION translator (UI-agnostic). See
+   * `core/translator.ts`. When attached, `runner.getUIGroup()` invokes
+   * it with the Loop's `GroupMetadata` (kind `'Loop'`, id, name, body
+   * as the single member, plus iteration budgets in `extra`).
+   * Returns `undefined` when omitted.
+   */
+  readonly groupTranslator?: GroupTranslator;
 }
 
 export interface LoopInput {
@@ -67,6 +89,10 @@ export class Loop extends RunnerBase<LoopInput, LoopOutput> {
   private readonly maxIterations: number;
   private readonly maxWallclockMs: number | undefined;
   private readonly until: UntilGuard | undefined;
+  private readonly opts: LoopOptions;
+  /** Per-method translator override on `.repeat()`, when set. Applies
+   *  to the body member's `uiGroup`. */
+  private readonly bodyTranslator: GroupTranslator | undefined;
 
   private currentRunContext: RunContext = {
     runStartMs: 0,
@@ -81,27 +107,65 @@ export class Loop extends RunnerBase<LoopInput, LoopOutput> {
       maxIterations: number;
       maxWallclockMs?: number;
       until?: UntilGuard;
+      bodyTranslator?: GroupTranslator;
     },
   ) {
     super();
+    this.opts = opts;
     this.name = opts.name ?? 'Loop';
     this.id = opts.id ?? 'loop';
     this.body = body;
     this.maxIterations = clampIterations(config.maxIterations);
     this.maxWallclockMs = config.maxWallclockMs;
     this.until = config.until;
+    this.bodyTranslator = config.bodyTranslator;
+    // Eager chart construction — see `RunnerBase.initChart` JSDoc.
+    this.initChart(() => this.buildChart());
   }
 
   static create(opts: LoopOptions = {}): LoopBuilder {
     return new LoopBuilder(opts);
   }
 
-  toFlowChart(): FlowChart {
-    return this.buildChart();
+  // `getSpec()` inherited from RunnerBase — returns the cached chart.
+
+  // ─── UI group translation (L1b) ───────────────────────────────
+  protected override getGroupTranslator(): GroupTranslator | undefined {
+    return this.opts.groupTranslator;
+  }
+
+  /** Loop has a single body member + iteration budgets in `extra`.
+   *  Per-method override (L1c) takes precedence over the body
+   *  runner's own translator. */
+  protected override buildUIGroupMetadata(): GroupMetadata {
+    const members: GroupMember[] = [
+      {
+        memberId: 'body',
+        runner: this.body,
+        uiGroup:
+          this.bodyTranslator !== undefined
+            ? this.body.getUIGroupWith(this.bodyTranslator)
+            : this.body.getUIGroup(),
+      },
+    ];
+    return {
+      kind: 'Loop',
+      id: this.id,
+      name: this.name,
+      members,
+      extra: {
+        maxIterations: this.maxIterations,
+        ...(this.maxWallclockMs !== undefined && {
+          maxWallclockMs: this.maxWallclockMs,
+        }),
+        hasUntilGuard: this.until !== undefined,
+      },
+    };
   }
 
   async run(input: LoopInput, options?: RunOptions): Promise<LoopOutput | RunnerPauseOutcome> {
     const executor = this.createExecutor();
+    this.lastExecutor = executor;
     const result = await executor.run({
       input: { message: input.message },
       ...(options ?? {}),
@@ -127,8 +191,8 @@ export class Loop extends RunnerBase<LoopInput, LoopOutput> {
       compositionPath: [`Loop:${this.id}`],
     };
 
-    const chart = this.buildChart();
-    const executor = new FlowChartExecutor(chart);
+    // Reuse the cached chart built at constructor time.
+    const executor = new FlowChartExecutor(this.getSpec());
 
     const dispatcher = this.getDispatcher();
     const getRunCtx = (): RunContext => this.currentRunContext;
@@ -236,9 +300,14 @@ export class Loop extends RunnerBase<LoopInput, LoopOutput> {
 
     // Root description prefix `Loop:` is the taxonomy marker — see
     // FlowchartRecorder.mapTopologyToSteps for the consumer side.
-    return flowChart<LoopState>('Seed', seed, 'seed', undefined, 'Loop: iterated body')
+    return flowChart<LoopState>('Seed', seed, 'seed', {
+      ...(this.opts.structureRecorders !== undefined && {
+        structureRecorders: [...this.opts.structureRecorders],
+      }),
+      description: 'Loop: iterated body',
+    })
       .addFunction('IterationStart', iterationStart, 'iteration-start', 'Loop iteration marker')
-      .addSubFlowChartNext('body', body.toFlowChart(), 'body', {
+      .addSubFlowChartNext('body', body.getSpec(), 'body', {
         inputMapper: (parent) => ({ message: (parent.current as string) ?? '' }),
         // Body's string return becomes next iteration's input via `current`.
         outputMapper: (sfOutput) => ({
@@ -260,9 +329,19 @@ export class Loop extends RunnerBase<LoopInput, LoopOutput> {
  * 10 iterations (hard ceiling 500). Any of .times / .forAtMost / .until
  * can fire to exit the loop.
  */
+/**
+ * Options bag accepted by `LoopBuilder.repeat()` for per-method overrides.
+ */
+export interface LoopRepeatOptions {
+  /** Per-method translator override for the body runner — overrides
+   *  the runner's own constructor-level translator for THIS loop only. */
+  readonly groupTranslator?: GroupTranslator;
+}
+
 export class LoopBuilder {
   private readonly opts: LoopOptions;
   private _body: BodyChild | undefined;
+  private _bodyTranslator: GroupTranslator | undefined;
   private _maxIterations: number | undefined;
   private _maxWallclockMs: number | undefined;
   private _until: UntilGuard | undefined;
@@ -274,12 +353,19 @@ export class LoopBuilder {
   /**
    * The runner that executes each iteration. Required.
    * Each iteration's output string becomes the next iteration's input `{ message }`.
+   *
+   * Optional second arg `opts.groupTranslator` overrides the body
+   * runner's own translator for THIS loop only — only its
+   * `member.uiGroup` flips to the override's output.
    */
-  repeat(runner: BodyChild): this {
+  repeat(runner: BodyChild, opts?: LoopRepeatOptions): this {
     if (this._body !== undefined) {
       throw new Error('Loop.repeat(): already set');
     }
     this._body = runner;
+    if (opts?.groupTranslator !== undefined) {
+      this._bodyTranslator = opts.groupTranslator;
+    }
     return this;
   }
 
@@ -319,6 +405,7 @@ export class LoopBuilder {
       maxIterations,
       ...(this._maxWallclockMs !== undefined && { maxWallclockMs: this._maxWallclockMs }),
       ...(this._until !== undefined && { until: this._until }),
+      ...(this._bodyTranslator !== undefined && { bodyTranslator: this._bodyTranslator }),
     });
   }
 }

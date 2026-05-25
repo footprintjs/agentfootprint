@@ -69,16 +69,14 @@ export function snapshotPipeline(config: SnapshotPipelineConfig): MemoryPipeline
     'LoadSnapshot',
     loadSnapshot(loadConfig),
     'load-snapshot',
-    undefined,
-    'Embed query, retrieve top-K past snapshots, project + format as system messages',
+    { description: 'Embed query, retrieve top-K past snapshots, project + format as system messages' },
   ).build();
 
   const write = flowChart<MemoryState>(
     'WriteSnapshot',
     writeSnapshot(writeConfig),
     'write-snapshot',
-    undefined,
-    'Capture (query, finalContent) from the run, embed query, persist as MemoryEntry<SnapshotEntry>',
+    { description: 'Capture (query, finalContent) from the run, embed query, persist as MemoryEntry<SnapshotEntry>' },
   ).build();
 
   return { read, write };

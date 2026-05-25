@@ -115,8 +115,7 @@ export function factPipeline(config: FactPipelineConfig): MemoryPipeline {
     'LoadFacts',
     loadFacts(loadConfig),
     'load-facts',
-    undefined,
-    'Load stored Fact entries (ids starting with `fact:`) into scope.loadedFacts',
+    { description: 'Load stored Fact entries (ids starting with `fact:`) into scope.loadedFacts' },
   )
     .addFunction(
       'FormatFacts',
@@ -133,8 +132,7 @@ export function factPipeline(config: FactPipelineConfig): MemoryPipeline {
     'LoadFacts',
     loadFacts(loadConfig),
     'load-facts-for-extract',
-    undefined,
-    'Surface existing facts to the extractor for update-awareness',
+    { description: 'Surface existing facts to the extractor for update-awareness' },
   )
     .addFunction(
       'ExtractFacts',

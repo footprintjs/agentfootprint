@@ -284,3 +284,78 @@ describe('Agent.toolProvider — security: gate honored on dispatch', () => {
     expect(lastResult.toLowerCase()).toMatch(/unknown|not found|missing|denied/);
   });
 });
+
+// ─── 7. EAGER-BUILD REGRESSION — providerToolCache across sequential runs ───
+//
+// The Agent's `providerToolCache` is now closed over at constructor
+// time (eager chart construction). Two sequential `agent.run()` calls
+// share the same cache object. This test pins the write-before-read
+// invariant: the Discover stage MUST overwrite `current` at the start
+// of each run, so run N+1 sees its OWN tool list (never run N's
+// stale cache). If this regressed silently, a long-running Agent
+// would dispatch yesterday's tools today.
+
+describe('Agent.toolProvider — eager-build regression (providerToolCache freshness)', () => {
+  it('sequential runs see THIS run\'s tools, not the previous run\'s stale cache', async () => {
+    // Capture the tool list the LLM was offered on each call.
+    const toolListPerCall: string[][] = [];
+    const provider = mock({
+      respond: (req: { tools?: readonly LLMToolSchema[] }) => {
+        toolListPerCall.push((req.tools ?? []).map((t) => t.name));
+        return { content: 'done', toolCalls: [] };
+      },
+    });
+
+    // Build TWO ToolProviders we'll swap between. We can't swap the
+    // provider mid-Agent (provider is constructor-bound), but we can
+    // verify that the cache is REFRESHED from provider.list() each
+    // run. A naive eager-build that froze the cache at construction
+    // would return the SAME list every run.
+    const toolsA: Tool[] = [fakeTool('alpha-only')];
+    const toolsB: Tool[] = [fakeTool('beta-only')];
+    let whichList: 'A' | 'B' = 'A';
+    const swappable = staticTools(toolsA);
+    const provider_listProxy: Tool[] = [];
+    // Custom ToolProvider that flips its return based on `whichList`.
+    const flipping = {
+      id: 'flipping',
+      list: async () => (whichList === 'A' ? toolsA : toolsB),
+    };
+
+    const agent = Agent.create({ provider, model: 'mock' })
+      .system('s')
+      .toolProvider(flipping)
+      .build();
+
+    // Run 1 — provider returns toolsA
+    whichList = 'A';
+    await agent.run({ message: 'run-1' });
+    // Run 2 — provider returns toolsB; cache MUST be re-populated by Discover
+    whichList = 'B';
+    await agent.run({ message: 'run-2' });
+
+    expect(toolListPerCall.length).toBeGreaterThanOrEqual(2);
+    // Run 1's LLM call sees only alpha-only.
+    expect(toolListPerCall[0]).toContain('alpha-only');
+    expect(toolListPerCall[0]).not.toContain('beta-only');
+    // Run 2's LLM call sees only beta-only — proving the cache was
+    // overwritten by Discover, not stale from run 1.
+    expect(toolListPerCall[1]).toContain('beta-only');
+    expect(toolListPerCall[1]).not.toContain('alpha-only');
+    // Silence unused-variable lints for fixtures.
+    void swappable;
+    void provider_listProxy;
+  });
+
+  it('agent.getSpec() returns the SAME reference across calls (eager-build identity invariant)', () => {
+    const provider = mock({ respond: () => ({ content: 'ok', toolCalls: [] }) });
+    const agent = Agent.create({ provider, model: 'mock' })
+      .system('s')
+      .toolProvider(staticTools([fakeTool('a')]))
+      .build();
+    const s1 = agent.getSpec();
+    const s2 = agent.getSpec();
+    // Reference equality — depends on RunnerBase's eager-build cache.
+    expect(s1).toBe(s2);
+  });
+});

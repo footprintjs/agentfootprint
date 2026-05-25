@@ -265,8 +265,7 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
     'Discover',
     discoverStage,
     'discover',
-    undefined,
-    'Discover provider tools',
+    { description: 'Discover provider tools' },
   )
     .addFunction('Compose', composeStage, 'compose', 'Compose tools slot')
     .build();

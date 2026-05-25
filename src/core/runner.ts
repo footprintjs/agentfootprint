@@ -1,10 +1,11 @@
 /**
  * Runner — consumer-facing interface for every primitive/composition/pattern.
  *
- * Pattern: Facade (GoF) over ComposableRunner + EventDispatcher.
+ * Pattern: Facade (GoF) over the footprintjs FlowChart + EventDispatcher.
  * Role:    The one object consumers hold. Exposes:
- *            - `.run()` / `.toFlowChart()` (inherited from footprintjs
- *              ComposableRunner — composition + execution)
+ *            - `.run()` (execute)
+ *            - `.getSpec()` (the design-time FlowChart blueprint —
+ *              same value footprintjs's `addSubFlowChart*` accepts)
  *            - `.on() / .off() / .once()` (listener subscription)
  *            - `.attach()` (attach custom CombinedRecorder)
  *            - `.emit()` (consumer-defined custom events on the same
@@ -15,7 +16,7 @@
 
 import type {
   CombinedRecorder,
-  ComposableRunner,
+  FlowChart,
   FlowchartCheckpoint,
   RunOptions,
 } from 'footprintjs';
@@ -94,8 +95,57 @@ export interface EnableNamespace {
  * That makes them freely nestable: any runner can be a child of any
  * composition.
  */
-export interface Runner<TIn = unknown, TOut = unknown>
-  extends Omit<ComposableRunner<TIn, TOut>, 'run'> {
+export interface Runner<TIn = unknown, TOut = unknown> {
+  /**
+   * Return the footprintjs FlowChart for this runner — the canonical
+   * design-time blueprint. Stable across calls. Pairs with the run-time
+   * accessors (`getLastSnapshot`, `getCommitCount`) and matches
+   * `ExplainableShell.spec` + `specToReactFlow(spec, ...)` consumer
+   * conventions.
+   *
+   * Subflow mounting (footprintjs `addSubFlowChart*`) accepts the
+   * `FlowChart` value directly:
+   *
+   *   parent.addSubFlowChartNext('sf-agent', child.getSpec(), 'Agent')
+   */
+  getSpec(): FlowChart;
+
+  /**
+   * Return the consumer-shaped UI group for this runner — produced by
+   * invoking the `groupTranslator` (if one was attached at constructor
+   * time) with this composition's metadata. Returns `undefined` when no
+   * translator was attached.
+   *
+   * Companion of `getSpec()`: `getSpec()` is the canonical (UI-
+   * agnostic) blueprint; `getUIGroup()` is the consumer-shaped view.
+   * Both are stable post-construction.
+   *
+   * See `core/translator.ts` for the `GroupTranslator` /
+   * `GroupMetadata` types.
+   */
+  getUIGroup<T = unknown>(): T | undefined;
+
+  /**
+   * Translate this runner's group metadata with a CALLER-SUPPLIED
+   * translator that OVERRIDES whatever translator (if any) the runner
+   * was constructed with. Used by parent compositions to apply
+   * per-method translator overrides (e.g.,
+   * `Parallel.create(...).branch('special', runner, { groupTranslator: ... })`
+   * — for the `'special'` branch only, this `override` runs against
+   * `runner`'s own `GroupMetadata` instead of the runner's default
+   * translator).
+   *
+   * NOT cached at the runner level. The caller invokes this exactly
+   * once per build (parent's `buildUIGroupMetadata`) and caches the
+   * resulting `uiGroup` via the parent's `RunnerBase.uiGroupCache`.
+   *
+   * Returns `undefined` when this runner has no group metadata to
+   * translate (i.e., `buildUIGroupMetadata()` returned `undefined`).
+   */
+  getUIGroupWith<T = unknown>(
+    override: import('./translator.js').GroupTranslator,
+  ): T | undefined;
+
   /**
    * Execute the runner. On happy-path completion, resolves with `TOut`.
    * If any stage (Agent tool via `pauseHere`, nested runner, or consumer

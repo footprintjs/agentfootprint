@@ -212,6 +212,5 @@ export const cacheDecisionSubflow: FlowChart = flowChart<CacheDecisionState>(
   'DecideCacheMarkers',
   decide,
   'decide-cache-markers',
-  undefined,
-  'CacheDecision: walk activeInjections, evaluate cache directives, emit CacheMarker[]',
+  { description: 'CacheDecision: walk activeInjections, evaluate cache directives, emit CacheMarker[]' },
 ).build();

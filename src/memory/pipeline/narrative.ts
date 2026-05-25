@@ -130,8 +130,7 @@ export function narrativePipeline(config: NarrativePipelineConfig): MemoryPipeli
     'LoadRecent',
     loadRecent(loadConfig),
     'load-recent',
-    undefined,
-    'Load N most-recent beats from storage into scope.loaded',
+    { description: 'Load N most-recent beats from storage into scope.loaded' },
   );
   readBuilder = pickByBudget(pickConfig)(readBuilder);
   const read = readBuilder
@@ -148,8 +147,7 @@ export function narrativePipeline(config: NarrativePipelineConfig): MemoryPipeli
     'ExtractBeats',
     extractBeats(extractConfig),
     'extract-beats',
-    undefined,
-    'Compress scope.newMessages into NarrativeBeat entries',
+    { description: 'Compress scope.newMessages into NarrativeBeat entries' },
   )
     .addFunction(
       'WriteBeats',

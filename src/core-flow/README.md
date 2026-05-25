@@ -23,7 +23,7 @@ These are the four control-flow primitives from programming-language theory: **s
 | Composition | Footprintjs primitive | Why |
 |---|---|---|
 | `Sequence` | `.addSubFlowChartNext(...)` chain | Linear continuation — matches the builder's `Next` idiom |
-| `Parallel` | `.addSubFlowChart(...)` siblings → `ChildrenExecutor` fork | `addSubFlowChart` (without `Next`) auto-forks siblings under a parent |
+| `Parallel` | `.addSubFlowChart(...)` siblings → `ChildrenExecutor` fork (`Promise.allSettled`). Each branch's `getSpec()` is mounted DIRECTLY — no wrapper, no nested executor. Per-branch errors surface via a `FlowRecorder.onError` listener that correlates by the engine-prefixed `stageId`. | `addSubFlowChart` (without `Next`) auto-forks siblings under a parent |
 | `Conditional` | `.addDeciderFunction(...)` + `.addSubFlowChartBranch(...)` | decider picks one branch; `setDefault` guards fallback |
 | `Loop` | outer chart + `.loopTo(...)` + `scope.$break()` | iterate body subflow; guard breaks out |
 
@@ -75,7 +75,7 @@ No type gymnastics needed to compose — the uniformity IS the composability.
 
 ### Decision 5: Output piping between steps — via `sfOutput` TraversalResult
 
-A runner's `.toFlowChart()` last-stage return becomes the subflow's TraversalResult. When mounted via `addSubFlowChart*`, the `outputMapper` receives that TraversalResult (the string directly, NOT scope state).
+A runner's `.getSpec()` last-stage return becomes the subflow's TraversalResult. When mounted via `addSubFlowChart*`, the `outputMapper` receives that TraversalResult (the string directly, NOT scope state).
 
 ```typescript
 outputMapper: (sfOutput) => ({
@@ -102,7 +102,20 @@ Every composition's `.run()` attaches all four: ContextRecorder, StreamRecorder,
 
 Consumers subscribe ONCE at the outer runner and receive events from every nested depth.
 
-### Decision 8: `core-flow/` has zero LLM dependency
+### Decision 8: Parallel branches mount the runner's chart directly (no wrapper)
+
+Each branch is mounted into the Parallel's chart via `addSubFlowChart(branch.id, branch.runner.getSpec(), branch.name, { inputMapper, outputMapper })` — the SAME pattern Sequence / Loop / Conditional use. There is no `RunBranch` stage and no nested `FlowChartExecutor` wrapping `branch.runner.run(...)`.
+
+Why this matters (regression guards in [`test/core-flow/integration/parallel-subflow-composition.test.ts`](../../test/core-flow/integration/parallel-subflow-composition.test.ts)):
+
+- **One `runtimeStageId` address space** — branch-internal stages share the parent executor's execution counter. No `#0` restart inside a branch.
+- **One snapshot tree** — branches contribute to `executor.getSnapshot().subflowResults` directly. Domain consumers (Lens, audit, custom recorders) reach branch detail without crossing an executor boundary.
+- **Recorder events flow naturally** — branch LLM/tool/stream events reach the parent's dispatcher through footprintjs's existing channels. The old `branch.runner.on('*', e => scope.$emit(...))` forwarding hack is gone.
+- **Spec faithfully reflects runtime** — `Parallel.getSpec()` returns a chart where each branch slot IS the branch runner's chart, not a synthetic shim.
+
+Per-branch error containment: footprintjs's `ChildrenExecutor` already uses `Promise.allSettled` — a failing branch does not cancel siblings. When a branch errors, footprintjs's `SubflowExecutor` swallows the error into `parentContext.addError(...)` and skips that branch's `outputMapper`. Parallel restores the per-branch error message via a small internal `CombinedRecorder` that listens for `FlowRecorder.onError` events and keys them by the first segment of `traversalContext.stageId` (e.g., `legal/call-llm` → branch `legal`). The merge stage reads from this map for both strict-mode aggregated error messages and tolerant-mode `BranchOutcome.error` strings.
+
+### Decision 9: `core-flow/` has zero LLM dependency
 
 Every file in this folder depends only on: `footprintjs`, `../core/runner.ts`, `../core/RunnerBase.ts`, `../recorders/core/*`, `../bridge/eventMeta.ts`. **Never imports from `../core/LLMCall.ts` or `../core/Agent.ts`**.
 

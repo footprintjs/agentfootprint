@@ -113,7 +113,7 @@ class IdentityRunner extends RunnerBase<{ message: string }, string> {
   readonly id = 'done';
   readonly name = 'Done';
 
-  toFlowChart(): FlowChart {
+  getSpec(): FlowChart {
     // `message` is reserved as the readonly input key  runners;
     // shadow it with `echoedMessage` inside scope to keep the identity
     // stage writable.

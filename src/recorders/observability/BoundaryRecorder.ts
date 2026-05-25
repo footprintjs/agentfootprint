@@ -76,7 +76,13 @@
  * ```
  */
 
-import { ROOT_RUNTIME_STAGE_ID, ROOT_SUBFLOW_ID, SequenceRecorder } from 'footprintjs/trace';
+import {
+  ROOT_RUNTIME_STAGE_ID,
+  ROOT_SUBFLOW_ID,
+  SequenceStore,
+  CommitRangeIndex,
+  type RangeToken,
+} from 'footprintjs/trace';
 import type {
   CombinedRecorder,
   FlowDecisionEvent,
@@ -98,6 +104,7 @@ import type { AgentfootprintEvent, AgentfootprintEventType } from '../../events/
 import type { EventDispatcher, Unsubscribe } from '../../events/dispatcher.js';
 import { SUBFLOW_IDS, STAGE_IDS, slotFromSubflowId } from '../../conventions.js';
 import type { ContextSlot } from '../../events/types.js';
+import { createRunIdObserver, type RunIdObserver } from './observeRunId.js';
 
 // ─── DomainEvent: discriminated union ────────────────────────────────
 
@@ -113,6 +120,23 @@ interface DomainEventBase {
   readonly depth: number;
   /** Wall-clock ms at capture time. */
   readonly ts: number;
+  /** Commit count when this event fired. 0 if the recorder was
+   *  constructed without `getCommitCount` (legacy mode). The boundary
+   *  RANGE for an (entry, exit) pair is `[entry.commitIdxBefore,
+   *  exit.commitIdxBefore]`. Phase 5 Layer 2 — see
+   *  `docs/design/boundary-commit-ranges.md`. */
+  readonly commitIdxBefore: number;
+  /** RESERVED for future event types that trigger engine writes.
+   *  CURRENT BEHAVIOR: always equals `commitIdxBefore` for every event
+   *  emitted by today's BoundaryRecorder. Observer events don't write
+   *  to scope, so the executor's commit count doesn't change between
+   *  the moment the event is sampled and the moment it's recorded.
+   *  Consumers should currently treat this as identical to
+   *  `commitIdxBefore`; do NOT rely on it being strictly greater.
+   *  The field exists for forward compatibility — if a future
+   *  observer pattern triggers commits during its handler, this is
+   *  where the post-effect count will land. */
+  readonly commitIdxAfter: number;
 }
 
 export interface DomainRunEvent extends DomainEventBase {
@@ -169,6 +193,34 @@ export interface DomainLoopIterationEvent extends DomainEventBase {
   readonly type: 'loop.iteration';
   readonly target: string;
   readonly iteration: number;
+}
+
+/**
+ * Composition boundary event — fired for every composition primitive
+ * (Parallel / Sequence / Loop / Conditional). Mirrors `subflow.entry/exit`
+ * but for the COMPOSITION wrapper itself (the box that contains the
+ * branches / steps / iterations / chosen-branch).
+ *
+ * This pair OPENS and CLOSES a boundary range in `boundaryIndex`. Child
+ * subflows that fire between the pair nest naturally inside the
+ * composition's range.
+ *
+ * The `runtimeStageId` is the composition's own per-execution id —
+ * SAME format as any other runtimeStageId, with `#executionIndex`. The
+ * `kind` discriminates which composition primitive this is.
+ *
+ * For the Lens compound time axis, this group is what collapses
+ * parallel branches into ONE slider position at the parent's drill
+ * level. Drill into the composition to see its children as positions.
+ */
+export interface DomainCompositionEvent extends DomainEventBase {
+  readonly type: 'composition.start' | 'composition.end';
+  readonly kind: 'Parallel' | 'Sequence' | 'Loop' | 'Conditional';
+  readonly compositionId: string;
+  readonly name: string;
+  /** On `composition.end`, the exit status reported by the composition. */
+  readonly status?: 'ok' | 'err' | 'break' | 'budget_exhausted';
+  readonly durationMs?: number;
 }
 
 /**
@@ -247,6 +299,7 @@ export interface DomainContextInjectedEvent extends DomainEventBase {
 export type DomainEvent =
   | DomainRunEvent
   | DomainSubflowEvent
+  | DomainCompositionEvent
   | DomainForkBranchEvent
   | DomainDecisionBranchEvent
   | DomainLoopIterationEvent
@@ -349,6 +402,92 @@ function isAgentInternalId(localId: string): boolean {
 
 export interface BoundaryRecorderOptions {
   readonly id?: string;
+  /**
+   * Live commit-count accessor — typically `() => executor.getCommitCount()`
+   * from footprintjs 5.1+. Inject from your runner. When provided:
+   *   - Every DomainEvent gains `commitIdxBefore` / `commitIdxAfter`.
+   *   - `recorder.boundaryIndex` is populated with open/close ranges
+   *     keyed on each subflow's entry event.
+   * When omitted (legacy / pre-5.1 footprintjs): both fields are 0 on
+   * every event; `boundaryIndex` exists but is empty. Phase 5 Layer 2.
+   */
+  readonly getCommitCount?: () => number;
+}
+
+/**
+ * Stripped projection used as the LABEL for the commit-range index.
+ * Intentionally OMITS `payload` (security panel review YELLOW #1):
+ * `boundaryIndex.enclosing()` queries should not bypass redaction by
+ * exposing raw scope payloads through the range index. Consumers
+ * needing payload can join on `runtimeStageId` with the full event
+ * stream via `getEvents()` (which IS subject to redaction policy).
+ */
+export interface BoundaryRangeLabel {
+  readonly type: 'subflow.entry' | 'run.entry' | 'composition.start';
+  readonly runtimeStageId: string;
+  readonly subflowPath: readonly string[];
+  readonly depth: number;
+  readonly ts: number;
+  /** Set on subflow entries; undefined on the synthetic run-root entry. */
+  readonly subflowId?: string;
+  readonly localSubflowId?: string;
+  readonly subflowName?: string;
+  readonly description?: string;
+  readonly primitiveKind?: string;
+  readonly slotKind?: ContextSlot;
+  readonly isAgentInternal?: boolean;
+  /** Composition primitive (Parallel/Sequence/Loop/Conditional) when the
+   *  range was opened by a `composition.start` event. */
+  readonly compositionKind?: 'Parallel' | 'Sequence' | 'Loop' | 'Conditional';
+  readonly compositionName?: string;
+}
+
+function toBoundaryLabel(e: DomainSubflowEvent | DomainRunEvent): BoundaryRangeLabel {
+  if (e.type === 'subflow.entry') {
+    return {
+      type: 'subflow.entry',
+      runtimeStageId: e.runtimeStageId,
+      subflowPath: e.subflowPath,
+      depth: e.depth,
+      ts: e.ts,
+      subflowId: e.subflowId,
+      localSubflowId: e.localSubflowId,
+      subflowName: e.subflowName,
+      ...(e.description !== undefined ? { description: e.description } : {}),
+      ...(e.primitiveKind !== undefined ? { primitiveKind: e.primitiveKind } : {}),
+      ...(e.slotKind !== undefined ? { slotKind: e.slotKind } : {}),
+      isAgentInternal: e.isAgentInternal,
+    };
+  }
+  return {
+    type: 'run.entry',
+    runtimeStageId: e.runtimeStageId,
+    subflowPath: e.subflowPath,
+    depth: e.depth,
+    ts: e.ts,
+  };
+}
+
+/** Build a BoundaryRangeLabel for the open side of a composition pair. */
+function toCompositionBoundaryLabel(e: DomainCompositionEvent): BoundaryRangeLabel {
+  return {
+    type: 'composition.start',
+    runtimeStageId: e.runtimeStageId,
+    subflowPath: e.subflowPath,
+    depth: e.depth,
+    ts: e.ts,
+    compositionKind: e.kind,
+    compositionName: e.name,
+  };
+}
+
+/** Clamp `getCommitCount()` returns to a safe non-negative integer.
+ *  Defensive against malformed injections returning NaN/Infinity/negatives
+ *  (security panel review YELLOW #2). */
+function sanitizeCommitCount(n: number): number {
+  if (!Number.isFinite(n)) return 0;
+  if (n < 0) return 0;
+  return n;
 }
 
 let _counter = 0;
@@ -363,12 +502,41 @@ export function boundaryRecorder(options: BoundaryRecorderOptions = {}): Boundar
  * attach to the executor's FlowRecorder channel; exposes `subscribe()`
  * to wire to the agentfootprint typed-event dispatcher.
  *
- * Internally stores events in a `SequenceRecorder<DomainEvent>` so the
- * usual time-travel utilities (`getEntryRanges`, `accumulate`) work
- * out of the box.
+ * v5: composes a `SequenceStore<DomainEvent>` (storage) instead of
+ * extending the deprecated `SequenceRecorder<T>` base. Time-travel
+ * utilities (`getEntryRanges`, `accumulate`) are accessed through the
+ * store via the public read API on this class.
  */
-export class BoundaryRecorder extends SequenceRecorder<DomainEvent> implements CombinedRecorder {
+export class BoundaryRecorder implements CombinedRecorder {
   readonly id: string;
+
+  /** Composition: storage shelf. */
+  private readonly store = new SequenceStore<DomainEvent>();
+
+  /**
+   * Phase 5 Layer 2 — interval index over commit indices, populated
+   * live as boundary entry/exit pairs fire. Consumers (Lens) read
+   * `enclosing(commitIdx)` for breadcrumbs and `overlapping(slice)`
+   * for time-range queries. Empty when `getCommitCount` is not
+   * injected. See `docs/design/boundary-commit-ranges.md`.
+   */
+  readonly boundaryIndex: CommitRangeIndex<BoundaryRangeLabel> =
+    new CommitRangeIndex<BoundaryRangeLabel>();
+
+  /** Open-range tokens keyed by `runtimeStageId` so the matching exit
+   *  can close the correct range. Pure side-table; cleared on runId
+   *  reset. Not exposed externally. */
+  private readonly openTokens = new Map<string, RangeToken>();
+
+  /** Live commit-count accessor injected by the runner. Sanitized
+   *  (NaN/Infinity/negative → 0) before use. */
+  private readonly getCommitCount: () => number;
+
+  /** True when `getCommitCount` was explicitly injected. In LEGACY
+   *  MODE (false), `boundaryIndex` is intentionally NOT populated —
+   *  zero-width [0,0] ranges would mislead consumers querying the
+   *  index. Multi-panel review flagged this footgun. */
+  private readonly hasCommitTracking: boolean;
 
   /**
    * Tracks whether the most recent `llm.end` had toolCalls. Used to
@@ -378,49 +546,167 @@ export class BoundaryRecorder extends SequenceRecorder<DomainEvent> implements C
    */
   private prevLLMEndHadTools = false;
 
+  /**
+   * Run-boundary observer — fires resetForNewRun() when
+   * traversalContext.runId changes between events AND no boundary is
+   * currently open. The "no open boundary" gate distinguishes:
+   *
+   *   - **Legitimate new run** — consumer reuses one recorder across
+   *     sequential `executor.run()` calls. All prior boundaries closed
+   *     before the second run began; openTokens is empty when the new
+   *     runId arrives → safe to wipe state so the second run doesn't
+   *     alias with the first.
+   *   - **Composition sub-run** — primitives like `LLMCall`, `Sequence`,
+   *     and `Parallel` internally spawn their own `FlowChartExecutor`
+   *     instances. Each sub-executor mints a NEW runId. When that
+   *     sub-executor fires events on the SHARED recorder, the recorder
+   *     is still inside the parent run — `openTokens` is non-empty.
+   *     Resetting here would wipe the parent's boundary index mid-run
+   *     (the bug Layer 4 surfaced in agentfootprint-lens fanout).
+   *
+   * The `openTokens.size === 0` check is the cleanest semantic signal:
+   * if nothing is in-flight, a runId change means "the consumer started
+   * fresh"; if something is open, the new runId is from a sub-executor
+   * nested inside the still-ongoing parent.
+   */
+  private readonly runIdGuard: RunIdObserver = createRunIdObserver(() => {
+    if (this.openTokens.size > 0) {
+      // Inside an active run — new runId is from a composition sub-
+      // executor (LLMCall / Sequence / Parallel). Do NOT reset.
+      return;
+    }
+    this.store.clear();
+    this.boundaryIndex.clear();
+    this.openTokens.clear();
+    this.prevLLMEndHadTools = false;
+  });
+
   constructor(options: BoundaryRecorderOptions = {}) {
-    super();
     this.id = options.id ?? `boundary-${++_counter}`;
+    this.hasCommitTracking = options.getCommitCount !== undefined;
+    const raw = options.getCommitCount;
+    this.getCommitCount = raw === undefined ? (() => 0) : () => sanitizeCommitCount(raw());
   }
 
-  override clear(): void {
-    super.clear();
+  /**
+   * Reset all transient state.
+   *
+   * **Composition-safe gate (Phase 5 Layer 4):** if `openTokens.size > 0`
+   * the call is a no-op. Rationale: `FlowChartExecutor.run()` calls
+   * `r.clear?.()` on every attached recorder during its pre-run loop.
+   * When agentfootprint composition primitives (LLMCall, Sequence,
+   * Parallel, etc.) propagate the parent's recorders to nested
+   * sub-executors, EACH sub-executor's pre-run clear loop calls
+   * `clear()` on the SHARED parent recorder mid-run — wiping live
+   * parent state. The `openTokens.size > 0` check distinguishes:
+   *
+   *   - **Legitimate reset** — consumer or executor calls `clear()`
+   *     when no boundary is in-flight (`openTokens` empty). Safe to
+   *     wipe; the recorder is idle.
+   *   - **Composition wipe** — sub-executor's pre-run clear fires
+   *     while the parent has open boundaries (`openTokens` non-empty).
+   *     Skip the wipe; the parent's state must be preserved.
+   *
+   * If a consumer needs to forcibly wipe state even with open tokens
+   * (e.g., manual recovery after a crashed run), pair `clear()` with
+   * an explicit `forceClear()` (TODO — add when the use case shows up;
+   * today the recorder lifecycle pattern is "one recorder per logical
+   * run" so leaked tokens shouldn't occur).
+   */
+  clear(): void {
+    if (this.openTokens.size > 0) {
+      // Mid-run wipe attempt — almost certainly a sub-executor's
+      // pre-run clear via composition propagation. Skip.
+      return;
+    }
+    this.store.clear();
+    this.boundaryIndex.clear();
+    this.openTokens.clear();
     this.prevLLMEndHadTools = false;
+    this.runIdGuard.reset();
+  }
+
+  private observeRunId(runId: string | undefined): void {
+    this.runIdGuard.observe(runId);
   }
 
   // ── FlowRecorder hooks (footprintjs side) ───────────────────────────
 
   onRunStart(event: FlowRunEvent): void {
-    this.emit(buildRunEvent('run.entry', event.payload));
+    this.observeRunId(event.traversalContext?.runId);
+    const commitIdxBefore = this.getCommitCount();
+    const e = buildRunEvent('run.entry', event.payload, commitIdxBefore);
+    // Open range BEFORE the store push so a failed push doesn't leak
+    // an unclosed range (DS+logic panel review). The label is the
+    // stripped projection (no payload) — security-panel YELLOW #1.
+    if (this.hasCommitTracking) {
+      const token = this.boundaryIndex.open(toBoundaryLabel(e), commitIdxBefore);
+      this.openTokens.set(e.runtimeStageId, token);
+    }
+    this.store.push(e);
   }
 
   onRunEnd(event: FlowRunEvent): void {
-    this.emit(buildRunEvent('run.exit', event.payload));
+    this.observeRunId(event.traversalContext?.runId);
+    const commitIdxBefore = this.getCommitCount();
+    const e = buildRunEvent('run.exit', event.payload, commitIdxBefore);
+    // Close the range BEFORE store.push so a failed push doesn't
+    // leak a permanently-open range. The range is the canonical
+    // truth; the store entry is downstream telemetry.
+    if (this.hasCommitTracking) {
+      const token = this.openTokens.get(e.runtimeStageId);
+      if (token) {
+        this.boundaryIndex.close(token, commitIdxBefore);
+        this.openTokens.delete(e.runtimeStageId);
+      }
+    }
+    this.store.push(e);
   }
 
   onSubflowEntry(event: FlowSubflowEvent): void {
-    const e = buildSubflowEvent(event, 'subflow.entry');
-    if (e) this.emit(e);
+    this.observeRunId(event.traversalContext?.runId);
+    const commitIdxBefore = this.getCommitCount();
+    const e = buildSubflowEvent(event, 'subflow.entry', commitIdxBefore);
+    if (!e) return;
+    if (this.hasCommitTracking) {
+      const token = this.boundaryIndex.open(toBoundaryLabel(e), commitIdxBefore);
+      this.openTokens.set(e.runtimeStageId, token);
+    }
+    this.store.push(e);
   }
 
   onSubflowExit(event: FlowSubflowEvent): void {
-    const e = buildSubflowEvent(event, 'subflow.exit');
-    if (e) this.emit(e);
+    this.observeRunId(event.traversalContext?.runId);
+    const commitIdxBefore = this.getCommitCount();
+    const e = buildSubflowEvent(event, 'subflow.exit', commitIdxBefore);
+    if (!e) return;
+    if (this.hasCommitTracking) {
+      const token = this.openTokens.get(e.runtimeStageId);
+      if (token) {
+        this.boundaryIndex.close(token, commitIdxBefore);
+        this.openTokens.delete(e.runtimeStageId);
+      }
+    }
+    this.store.push(e);
   }
 
   onFork(event: FlowForkEvent): void {
+    this.observeRunId(event.traversalContext?.runId);
     const ts = Date.now();
     const ctx = event.traversalContext;
     const runtimeStageId = ctx?.runtimeStageId ?? '';
     const segments = ctx?.subflowPath ? ctx.subflowPath.split('/').filter(Boolean) : [];
     const subflowPath: readonly string[] = [ROOT_SUBFLOW_ID, ...segments];
+    const commitIdxBefore = this.getCommitCount();
     for (const childName of event.children) {
-      this.emit({
+      this.store.push({
         type: 'fork.branch',
         runtimeStageId,
         subflowPath,
         depth: subflowPath.length - 1,
         ts,
+        commitIdxBefore,
+        commitIdxAfter: commitIdxBefore,
         parentSubflowId: event.parent,
         childName,
       });
@@ -428,6 +714,7 @@ export class BoundaryRecorder extends SequenceRecorder<DomainEvent> implements C
   }
 
   onDecision(event: FlowDecisionEvent): void {
+    this.observeRunId(event.traversalContext?.runId);
     const ctx = event.traversalContext;
     // Agent-internal decisions (Route picking tool-calls / final) are
     // identified by the deciding stage's stableId matching one of the
@@ -441,12 +728,15 @@ export class BoundaryRecorder extends SequenceRecorder<DomainEvent> implements C
       ? stageId.slice(stageId.lastIndexOf('/') + 1)
       : stageId;
     const isAgentInternal = isAgentInternalId(localStageId);
-    this.emit({
+    const commitIdxBefore = this.getCommitCount();
+    this.store.push({
       type: 'decision.branch',
       runtimeStageId: ctx?.runtimeStageId ?? '',
       subflowPath: pathFromCtx(ctx?.subflowPath),
       depth: ctxDepth(ctx?.subflowPath),
       ts: Date.now(),
+      commitIdxBefore,
+      commitIdxAfter: commitIdxBefore,
       decider: event.decider,
       chosen: event.chosen,
       ...(event.rationale ? { rationale: event.rationale } : {}),
@@ -455,13 +745,17 @@ export class BoundaryRecorder extends SequenceRecorder<DomainEvent> implements C
   }
 
   onLoop(event: FlowLoopEvent): void {
+    this.observeRunId(event.traversalContext?.runId);
     const ctx = event.traversalContext;
-    this.emit({
+    const commitIdxBefore = this.getCommitCount();
+    this.store.push({
       type: 'loop.iteration',
       runtimeStageId: ctx?.runtimeStageId ?? '',
       subflowPath: pathFromCtx(ctx?.subflowPath),
       depth: ctxDepth(ctx?.subflowPath),
       ts: Date.now(),
+      commitIdxBefore,
+      commitIdxAfter: commitIdxBefore,
       target: event.target,
       iteration: event.iteration,
     });
@@ -484,11 +778,22 @@ export class BoundaryRecorder extends SequenceRecorder<DomainEvent> implements C
   }
 
   private ingestTypedEvent(event: AgentfootprintEvent): void {
+    // NOTE: deliberately does NOT call observeRunId(event.meta.runId).
+    // The agentfootprint dispatcher's runId is generated by a DIFFERENT
+    // generator than footprintjs's traversalContext.runId. Mixing them
+    // would toggle lastRunId on every event and trigger a false reset.
+    // Run-boundary detection happens reliably via the FlowRecorder hooks
+    // (onRunStart fires FIRST in any new run, before any typed event).
     const meta = event.meta;
     const runtimeStageId = meta.runtimeStageId ?? '';
     const subflowPath = [ROOT_SUBFLOW_ID, ...(meta.subflowPath ?? [])];
     const depth = subflowPath.length - 1;
     const ts = meta.wallClockMs;
+    // Phase 5 Layer 2: stamp commit index on every typed event for
+    // consumers that want to join domain events with the commit log
+    // (e.g., "which LLM call happened during this commit slice?").
+    // Typed events don't write to scope themselves, so before === after.
+    const commitIdxBefore = this.getCommitCount();
 
     switch (event.type) {
       case 'agentfootprint.stream.llm_start': {
@@ -501,12 +806,14 @@ export class BoundaryRecorder extends SequenceRecorder<DomainEvent> implements C
           ? 'tool→llm'
           : 'user→llm';
         this.prevLLMEndHadTools = false;
-        this.emit({
+        this.store.push({
           type: 'llm.start',
           runtimeStageId,
           subflowPath,
           depth,
           ts,
+          commitIdxBefore,
+          commitIdxAfter: commitIdxBefore,
           model: p.model,
           provider: p.provider,
           ...(p.systemPromptChars !== undefined ? { systemPromptChars: p.systemPromptChars } : {}),
@@ -523,12 +830,14 @@ export class BoundaryRecorder extends SequenceRecorder<DomainEvent> implements C
         // terminal call (toolCallCount === 0) leaves the flag false so
         // a hypothetical follow-up call would correctly be 'user→llm'.
         this.prevLLMEndHadTools = p.toolCallCount > 0;
-        this.emit({
+        this.store.push({
           type: 'llm.end',
           runtimeStageId,
           subflowPath,
           depth,
           ts,
+          commitIdxBefore,
+          commitIdxAfter: commitIdxBefore,
           content: p.content,
           toolCallCount: p.toolCallCount,
           usage: { input: p.usage.input, output: p.usage.output },
@@ -539,12 +848,14 @@ export class BoundaryRecorder extends SequenceRecorder<DomainEvent> implements C
       }
       case 'agentfootprint.stream.tool_start': {
         const p = event.payload;
-        this.emit({
+        this.store.push({
           type: 'tool.start',
           runtimeStageId,
           subflowPath,
           depth,
           ts,
+          commitIdxBefore,
+          commitIdxAfter: commitIdxBefore,
           toolName: p.toolName,
           toolCallId: p.toolCallId,
           ...(p.args !== undefined ? { args: p.args } : {}),
@@ -553,12 +864,14 @@ export class BoundaryRecorder extends SequenceRecorder<DomainEvent> implements C
       }
       case 'agentfootprint.stream.tool_end': {
         const p = event.payload;
-        this.emit({
+        this.store.push({
           type: 'tool.end',
           runtimeStageId,
           subflowPath,
           depth,
           ts,
+          commitIdxBefore,
+          commitIdxAfter: commitIdxBefore,
           toolCallId: p.toolCallId,
           ...(p.result !== undefined ? { result: p.result } : {}),
           ...(p.durationMs !== undefined ? { durationMs: p.durationMs } : {}),
@@ -568,12 +881,14 @@ export class BoundaryRecorder extends SequenceRecorder<DomainEvent> implements C
       }
       case 'agentfootprint.context.injected': {
         const p = event.payload;
-        this.emit({
+        this.store.push({
           type: 'context.injected',
           runtimeStageId,
           subflowPath,
           depth,
           ts,
+          commitIdxBefore,
+          commitIdxAfter: commitIdxBefore,
           slot: p.slot,
           source: p.source ?? 'unknown',
           ...(p.sourceId ? { sourceId: p.sourceId } : {}),
@@ -591,11 +906,73 @@ export class BoundaryRecorder extends SequenceRecorder<DomainEvent> implements C
         });
         break;
       }
+      case 'agentfootprint.composition.enter': {
+        // Open a boundary range for the composition. The MATCHING KEY
+        // for open/close is `payload.id` (the composition's stable id),
+        // NOT `meta.runtimeStageId`. Reason: the composition's enter
+        // event fires from a different stage (entry hook) than its
+        // exit event (merge / exit hook) — different `meta.runtimeStageId`s.
+        // The composition's `id` is the only field that's the same on
+        // both. The boundary range's runtimeStageId (used as the Lens
+        // group identity) is the ENTER event's `meta.runtimeStageId`
+        // (the entry stage's id) — that's the "fork moment."
+        const p = event.payload;
+        const e: DomainCompositionEvent = {
+          type: 'composition.start',
+          runtimeStageId,
+          subflowPath,
+          depth,
+          ts,
+          commitIdxBefore,
+          commitIdxAfter: commitIdxBefore,
+          kind: p.kind as 'Parallel' | 'Sequence' | 'Loop' | 'Conditional',
+          compositionId: p.id,
+          name: p.name,
+        };
+        if (this.hasCommitTracking) {
+          const token = this.boundaryIndex.open(
+            toCompositionBoundaryLabel(e),
+            commitIdxBefore,
+          );
+          this.openTokens.set(`composition:${p.id}`, token);
+        }
+        this.store.push(e);
+        break;
+      }
+      case 'agentfootprint.composition.exit': {
+        // Close the matching composition range. Keyed by `payload.id`
+        // — see the enter handler for why this differs from
+        // meta.runtimeStageId.
+        const p = event.payload;
+        const e: DomainCompositionEvent = {
+          type: 'composition.end',
+          runtimeStageId,
+          subflowPath,
+          depth,
+          ts,
+          commitIdxBefore,
+          commitIdxAfter: commitIdxBefore,
+          kind: p.kind as 'Parallel' | 'Sequence' | 'Loop' | 'Conditional',
+          compositionId: p.id,
+          name: p.name ?? '',
+          status: p.status,
+          durationMs: p.durationMs,
+        };
+        if (this.hasCommitTracking) {
+          const key = `composition:${p.id}`;
+          const token = this.openTokens.get(key);
+          if (token) {
+            this.boundaryIndex.close(token, commitIdxBefore);
+            this.openTokens.delete(key);
+          }
+        }
+        this.store.push(e);
+        break;
+      }
       default:
-        // Other typed events (composition.*, agent.*, etc.) are not
-        // mapped to DomainEvent for now — they're either implied by
-        // FlowRecorder events (composition) or higher-level summaries
-        // (agent.turn_*) that downstream selectors derive on demand.
+        // Other typed events (agent.*, eval.*, etc.) are not mapped to
+        // DomainEvent for now — they're higher-level summaries that
+        // downstream selectors derive on demand.
         break;
     }
   }
@@ -604,13 +981,13 @@ export class BoundaryRecorder extends SequenceRecorder<DomainEvent> implements C
 
   /** All events in capture order (the canonical projection). */
   getEvents(): DomainEvent[] {
-    return this.getEntries();
+    return this.store.getAll();
   }
 
   /** Type-narrowed lookup: all events of one kind. */
   getEventsByType<T extends DomainEvent['type']>(type: T): Extract<DomainEvent, { type: T }>[] {
     const out: Extract<DomainEvent, { type: T }>[] = [];
-    for (const e of this.getEntries()) {
+    for (const e of this.store.getAll()) {
       if (e.type === type) out.push(e as Extract<DomainEvent, { type: T }>);
     }
     return out;
@@ -621,7 +998,7 @@ export class BoundaryRecorder extends SequenceRecorder<DomainEvent> implements C
   /** All boundary events (run + subflow, entry + exit interleaved). */
   getBoundaries(): (DomainRunEvent | DomainSubflowEvent)[] {
     const out: (DomainRunEvent | DomainSubflowEvent)[] = [];
-    for (const e of this.getEntries()) {
+    for (const e of this.store.getAll()) {
       if (
         e.type === 'run.entry' ||
         e.type === 'run.exit' ||
@@ -649,7 +1026,7 @@ export class BoundaryRecorder extends SequenceRecorder<DomainEvent> implements C
     entry?: DomainRunEvent | DomainSubflowEvent;
     exit?: DomainRunEvent | DomainSubflowEvent;
   } {
-    const matches = this.getEntriesForStep(runtimeStageId);
+    const matches = this.store.getByKey(runtimeStageId);
     let entry: DomainRunEvent | DomainSubflowEvent | undefined;
     let exit: DomainRunEvent | DomainSubflowEvent | undefined;
     for (const e of matches) {
@@ -683,7 +1060,7 @@ export class BoundaryRecorder extends SequenceRecorder<DomainEvent> implements C
     const systemPrompt: DomainSubflowEvent[] = [];
     const messages: DomainSubflowEvent[] = [];
     const tools: DomainSubflowEvent[] = [];
-    for (const e of this.getEntries()) {
+    for (const e of this.store.getAll()) {
       if (e.type !== 'subflow.entry' && e.type !== 'subflow.exit') continue;
       if (e.slotKind === 'system-prompt') systemPrompt.push(e);
       else if (e.slotKind === 'messages') messages.push(e);
@@ -719,7 +1096,7 @@ export class BoundaryRecorder extends SequenceRecorder<DomainEvent> implements C
    *   matches `runtimeStageId`.
    */
   aggregateForBoundary(runtimeStageId: string): BoundaryAggregate | undefined {
-    const events = this.getEntries();
+    const events = this.store.getAll();
     let entry: DomainSubflowEvent | undefined;
     let exit: DomainSubflowEvent | undefined;
     for (const e of events) {
@@ -742,7 +1119,7 @@ export class BoundaryRecorder extends SequenceRecorder<DomainEvent> implements C
    * not user-facing rollup units.
    */
   aggregateAllBoundaries(): readonly BoundaryAggregate[] {
-    const events = this.getEntries();
+    const events = this.store.getAll();
     const out: BoundaryAggregate[] = [];
     // Index exits by runtimeStageId for O(1) pair-up.
     const exitByRid = new Map<string, DomainSubflowEvent>();
@@ -773,13 +1150,19 @@ export class BoundaryRecorder extends SequenceRecorder<DomainEvent> implements C
 
 // ── Internal helpers ─────────────────────────────────────────────────
 
-function buildRunEvent(type: 'run.entry' | 'run.exit', payload: unknown): DomainRunEvent {
+function buildRunEvent(
+  type: 'run.entry' | 'run.exit',
+  payload: unknown,
+  commitIdxBefore: number,
+): DomainRunEvent {
   return {
     type,
     runtimeStageId: ROOT_RUNTIME_STAGE_ID,
     subflowPath: [ROOT_SUBFLOW_ID],
     depth: 0,
     ts: Date.now(),
+    commitIdxBefore,
+    commitIdxAfter: commitIdxBefore,
     payload,
     isRoot: true,
   };
@@ -788,6 +1171,7 @@ function buildRunEvent(type: 'run.entry' | 'run.exit', payload: unknown): Domain
 function buildSubflowEvent(
   event: FlowSubflowEvent,
   type: 'subflow.entry' | 'subflow.exit',
+  commitIdxBefore: number,
 ): DomainSubflowEvent | undefined {
   const subflowId = event.subflowId;
   if (!subflowId) return undefined;
@@ -810,6 +1194,8 @@ function buildSubflowEvent(
     subflowPath,
     depth,
     ts: Date.now(),
+    commitIdxBefore,
+    commitIdxAfter: commitIdxBefore,
     subflowId,
     localSubflowId,
     subflowName: event.name,

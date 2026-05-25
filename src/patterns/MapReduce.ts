@@ -134,7 +134,7 @@ class ShardSplitRunner extends RunnerBase<{ message: string }, string> {
     this.shardCount = shardCount;
   }
 
-  toFlowChart(): FlowChart {
+  getSpec(): FlowChart {
     const splitFn = this.splitFn;
     const shardCount = this.shardCount;
     return flowChart<{ packed: string }>(
@@ -153,7 +153,7 @@ class ShardSplitRunner extends RunnerBase<{ message: string }, string> {
   }
 
   async run(input: { message: string }): Promise<string> {
-    const executor = new FlowChartExecutor(this.toFlowChart());
+    const executor = new FlowChartExecutor(this.getSpec());
     const result = await executor.run({ input: { message: input.message } });
     if (typeof result === 'string') return result;
     throw new Error('ShardSplit: unexpected result shape');
@@ -182,12 +182,12 @@ class ShardBranchRunner extends RunnerBase<{ message: string }, string> {
     this.name = `Shard ${shardIndex}`;
   }
 
-  toFlowChart(): FlowChart {
+  getSpec(): FlowChart {
     // Build a wrapper chart that unpacks the shard and invokes the
     // inner chart. The inner LLMCall's chart runs as a subflow whose
     // input is the extracted shard.
     const shardIndex = this.shardIndex;
-    const innerChart = this.inner.toFlowChart();
+    const innerChart = this.inner.getSpec();
 
     interface WrapperState {
       shard: string;
@@ -215,7 +215,7 @@ class ShardBranchRunner extends RunnerBase<{ message: string }, string> {
   }
 
   async run(input: { message: string }): Promise<string> {
-    const executor = new FlowChartExecutor(this.toFlowChart());
+    const executor = new FlowChartExecutor(this.getSpec());
     const result = await executor.run({ input: { message: input.message } });
     if (typeof result === 'string') return result;
     throw new Error('ShardBranch: unexpected result shape');

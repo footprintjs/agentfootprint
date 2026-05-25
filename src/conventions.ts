@@ -10,6 +10,7 @@
  * Rename any ID here → both builders and recorders stay in sync.
  */
 
+import { splitStageId } from 'footprintjs/trace';
 import type { ContextSlot } from './events/types.js';
 
 /** Subflow IDs — mounted by builders, observed by recorders. */
@@ -93,8 +94,8 @@ export function slotFromSubflowId(id: string): ContextSlot | undefined {
   // (e.g., 'llm-call-internals/sf-system-prompt' when a slot subflow
   // is mounted inside a wrapper subflow). Match the LAST segment so
   // the convention works at any nesting depth.
-  const lastSegment = id.includes('/') ? id.slice(id.lastIndexOf('/') + 1) : id;
-  switch (lastSegment) {
+  const { localStageId } = splitStageId(id);
+  switch (localStageId) {
     case SUBFLOW_IDS.SYSTEM_PROMPT:
       return 'system-prompt';
     case SUBFLOW_IDS.MESSAGES:

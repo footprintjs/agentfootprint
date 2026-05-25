@@ -18,6 +18,12 @@ import {
   type RunOptions,
   type TypedScope,
 } from 'footprintjs';
+import type { StructureRecorder } from 'footprintjs';
+import type {
+  GroupMember,
+  GroupMetadata,
+  GroupTranslator,
+} from '../core/translator.js';
 import type { RunnerPauseOutcome } from '../core/pause.js';
 import type { Runner } from '../core/runner.js';
 import { RunnerBase, makeRunId } from '../core/RunnerBase.js';
@@ -33,6 +39,29 @@ export interface SequenceOptions {
   readonly name?: string;
   /** Stable id used for topology + events. Default: 'sequence'. */
   readonly id?: string;
+  /**
+   * Optional build-time recorders passed through to footprintjs's
+   * `flowChart()` factory. Each recorder observes per-node build
+   * events (`onStageAdded` / `onSubflowMounted` / etc.) for this
+   * composition's internal chart (Seed + each step mount + Finalize).
+   *
+   * Cascade: each step runner attaches its OWN recorders at its own
+   * construction time. footprintjs does NOT propagate StructureRecorders
+   * into mounted subflows — attach the same recorders to every nested
+   * composition for full coverage.
+   *
+   * When omitted, no build-time observation is wired up.
+   */
+  readonly structureRecorders?: readonly StructureRecorder[];
+  /**
+   * Optional per-COMPOSITION translator (UI-agnostic). See
+   * `core/translator.ts`. When attached, `runner.getUIGroup()` invokes
+   * it with the Sequence's `GroupMetadata` (kind `'Sequence'`, id,
+   * name, ordered steps, no extras) and returns whatever shape the
+   * translator produces. When omitted, `getUIGroup()` returns
+   * `undefined`.
+   */
+  readonly groupTranslator?: GroupTranslator;
 }
 
 export interface SequenceInput {
@@ -51,6 +80,18 @@ interface StepEntry {
   readonly runner: StepChild;
   /** Mapper applied BEFORE this step's run(). */
   readonly mapFromPrev: (prev: string) => { message: string };
+  /** Optional per-method translator override for THIS step only. */
+  readonly groupTranslator?: GroupTranslator;
+}
+
+/**
+ * Options bag accepted by `SequenceBuilder.step()` for per-method
+ * overrides. Backwards-compatible — when omitted the legacy two-arg
+ * `.step(id, runner)` signature still works.
+ */
+export interface SequenceStepOptions {
+  /** Per-method translator override. See `StepEntry.groupTranslator`. */
+  readonly groupTranslator?: GroupTranslator;
 }
 
 interface SequenceState {
@@ -61,6 +102,7 @@ export class Sequence extends RunnerBase<SequenceInput, SequenceOutput> {
   readonly name: string;
   readonly id: string;
   private readonly steps: readonly StepEntry[];
+  private readonly opts: SequenceOptions;
 
   private currentRunContext: RunContext = {
     runStartMs: 0,
@@ -70,20 +112,47 @@ export class Sequence extends RunnerBase<SequenceInput, SequenceOutput> {
 
   constructor(opts: SequenceOptions, steps: readonly StepEntry[]) {
     super();
+    this.opts = opts;
     this.name = opts.name ?? 'Sequence';
     this.id = opts.id ?? 'sequence';
     if (steps.length === 0) {
       throw new Error('Sequence: must have at least one .step()');
     }
     this.steps = steps;
+    // Eager chart construction — see `RunnerBase.initChart` JSDoc.
+    this.initChart(() => this.buildChart());
   }
 
   static create(opts: SequenceOptions = {}): SequenceBuilder {
     return new SequenceBuilder(opts);
   }
 
-  toFlowChart(): FlowChart {
-    return this.buildChart();
+  // `getSpec()` inherited from RunnerBase — returns the cached chart.
+
+  // ─── UI group translation (L1b) ───────────────────────────────
+  protected override getGroupTranslator(): GroupTranslator | undefined {
+    return this.opts.groupTranslator;
+  }
+
+  /** Sequence is a flat ordered list of steps. One member per step,
+   *  preserving definition order so the consumer can render them
+   *  linearly (default Lens UX). Per-method overrides (L1c) take
+   *  precedence over the step runner's own translator. */
+  protected override buildUIGroupMetadata(): GroupMetadata {
+    const members: GroupMember[] = this.steps.map((s) => ({
+      memberId: s.id,
+      runner: s.runner,
+      uiGroup:
+        s.groupTranslator !== undefined
+          ? s.runner.getUIGroupWith(s.groupTranslator)
+          : s.runner.getUIGroup(),
+    }));
+    return {
+      kind: 'Sequence',
+      id: this.id,
+      name: this.name,
+      members,
+    };
   }
 
   async run(
@@ -91,6 +160,7 @@ export class Sequence extends RunnerBase<SequenceInput, SequenceOutput> {
     options?: RunOptions,
   ): Promise<SequenceOutput | RunnerPauseOutcome> {
     const executor = this.createExecutor();
+    this.lastExecutor = executor;
     const result = await executor.run({
       input: { message: input.message },
       ...(options ?? {}),
@@ -116,8 +186,8 @@ export class Sequence extends RunnerBase<SequenceInput, SequenceOutput> {
       compositionPath: [`Sequence:${this.id}`],
     };
 
-    const chart = this.buildChart();
-    const executor = new FlowChartExecutor(chart);
+    // Reuse the cached chart built at constructor time.
+    const executor = new FlowChartExecutor(this.getSpec());
 
     const dispatcher = this.getDispatcher();
     const getRunCtx = (): RunContext => this.currentRunContext;
@@ -165,15 +235,19 @@ export class Sequence extends RunnerBase<SequenceInput, SequenceOutput> {
       'Seed',
       seed,
       'seed',
-      undefined,
-      `Sequence: ${steps.length}-step pipeline`,
+      {
+        ...(this.opts.structureRecorders !== undefined && {
+          structureRecorders: [...this.opts.structureRecorders],
+        }),
+        description: `Sequence: ${steps.length}-step pipeline`,
+      },
     );
 
     // Mount each step as a subflow via addSubFlowChartNext. The step's
     // input comes from parent.current (mapped via mapFromPrev); the
     // step's return becomes parent.current (via outputMapper).
     for (const step of steps) {
-      builder = builder.addSubFlowChartNext(`step-${step.id}`, step.runner.toFlowChart(), step.id, {
+      builder = builder.addSubFlowChartNext(`step-${step.id}`, step.runner.getSpec(), step.id, {
         inputMapper: (parent) => step.mapFromPrev((parent.current as string) ?? ''),
         // `sfOutput` is the subflow's TraversalResult — for Runner-backed
         // subflows whose last stage returns a string, sfOutput IS that
@@ -233,15 +307,26 @@ export class SequenceBuilder {
    * First step receives the Sequence input; subsequent steps receive the
    * previous step's output (via the default string-chain mapper, or via
    * the transformer set by a preceding `.pipeVia(fn)` call).
+   *
+   * Optional third arg `opts.groupTranslator` overrides the runner's
+   * own constructor-level translator for THIS step only — only its
+   * `member.uiGroup` flips to the override's output.
    */
-  step(id: string, runner: StepChild): this {
+  step(id: string, runner: StepChild, opts?: SequenceStepOptions): this {
     if (this.seenIds.has(id)) {
       throw new Error(`Sequence.step(): duplicate step id '${id}'`);
     }
     this.seenIds.add(id);
     const mapFromPrev = this.pendingPipe ?? defaultMapBetween;
     this.pendingPipe = undefined;
-    this.steps.push({ id, runner, mapFromPrev });
+    this.steps.push({
+      id,
+      runner,
+      mapFromPrev,
+      ...(opts?.groupTranslator !== undefined && {
+        groupTranslator: opts.groupTranslator,
+      }),
+    });
     return this;
   }
 

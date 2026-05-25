@@ -135,8 +135,7 @@ export function semanticPipeline(config: SemanticPipelineConfig): MemoryPipeline
     'LoadRelevant',
     loadRelevant(loadConfig),
     'load-relevant',
-    undefined,
-    'Embed the query + fetch top-k semantically similar entries',
+    { description: 'Embed the query + fetch top-k semantically similar entries' },
   );
   readBuilder = pickByBudget(pickConfig)(readBuilder);
   const read = readBuilder
@@ -153,8 +152,7 @@ export function semanticPipeline(config: SemanticPipelineConfig): MemoryPipeline
     'EmbedMessages',
     embedMessages(embedConfig),
     'embed-messages',
-    undefined,
-    'Embed newMessages into per-message vectors for vector search',
+    { description: 'Embed newMessages into per-message vectors for vector search' },
   )
     .addFunction(
       'WriteMessages',

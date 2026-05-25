@@ -24,7 +24,7 @@ import './cache/strategies/BedrockCacheStrategy.js';
 export type {
   // Recorder interfaces (the three observation channels)
   CombinedRecorder,
-  Recorder,
+  ScopeRecorder,
   FlowRecorder,
   EmitRecorder,
   // Scope events (data-flow channel)
@@ -138,6 +138,16 @@ export { typedEmit } from './recorders/core/typedEmit.js';
 export type { EmittedEvent, EnableNamespace, Runner } from './core/runner.js';
 export { RunnerBase, makeRunId } from './core/RunnerBase.js';
 
+// Composition-level UI translation (L1b + L1c). Consumer-facing types
+// for `Runner.getUIGroup()` and the per-composition `groupTranslator`
+// option. Lens consumes these; any other UI library can too.
+export type {
+  GroupKind,
+  GroupMember,
+  GroupMetadata,
+  GroupTranslator,
+} from './core/translator.js';
+
 // Pause/Resume primitives — consumer API for human-in-the-loop tools.
 // `PauseRequest` (the throwable signal class) stays internal; consumers
 // detect pauses via `isPauseRequest(err)` / `isPaused(outcome)`.
@@ -174,10 +184,23 @@ export {
   type StepNode,
 } from './recorders/observability/FlowchartRecorder.js';
 export {
+  buildRunSteps,
+  RunStepRecorder,
+  runStepRecorder,
+  type BuildRunStepsOptions,
+  type RunStep,
+  type RunStepGraph,
+  type RunStepKind,
+  type RunStepMeta,
+  type RunStepRecorderOptions,
+  type RunStepTransition,
+} from './recorders/observability/RunStepRecorder.js';
+export {
   BoundaryRecorder,
   boundaryRecorder,
   type ActorArrow,
   type BoundaryAggregate,
+  type BoundaryRangeLabel,
   type BoundaryRecorderOptions,
   type DomainContextInjectedEvent,
   type DomainDecisionBranchEvent,

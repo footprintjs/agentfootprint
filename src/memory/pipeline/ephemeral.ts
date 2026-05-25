@@ -86,8 +86,7 @@ export function ephemeralPipeline(config: EphemeralPipelineConfig): MemoryPipeli
     'LoadRecent',
     loadRecent(loadConfig),
     'load-recent',
-    undefined,
-    'Read N most-recent entries from storage into scope.loaded (read-only)',
+    { description: 'Read N most-recent entries from storage into scope.loaded (read-only)' },
   );
   readBuilder = pickByBudget(pickConfig)(readBuilder);
   const read = readBuilder

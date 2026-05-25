@@ -253,8 +253,7 @@ export function autoPipeline(config: AutoPipelineConfig): MemoryPipeline {
       scope.loadedBeats = [...loadedBeats].reverse();
     },
     'load-all',
-    undefined,
-    'Load facts + beats from the shared store; split by payload shape',
+    { description: 'Load facts + beats from the shared store; split by payload shape' },
   )
     .addFunction(
       'FormatAuto',
@@ -285,8 +284,7 @@ export function autoPipeline(config: AutoPipelineConfig): MemoryPipeline {
       ...(config.tiers && { tiers: config.tiers }),
     }),
     'load-facts',
-    undefined,
-    'Surface existing facts for update-awareness',
+    { description: 'Surface existing facts for update-awareness' },
   )
     .addFunction(
       'ExtractFacts',
