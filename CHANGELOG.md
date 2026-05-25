@@ -5,6 +5,69 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.0]
+
+Major release. Tracks `footprintjs@^6.0.0` and propagates the build-time
+observer rename.
+
+### Breaking changes
+
+- **API rename**: `buildTimeExtractor?: BuildTimeExtractor` removed from
+  the config of every composition primitive. Replaced by
+  `structureRecorders?: readonly StructureRecorder[]` — matching
+  footprintjs v6's options-bag shape on `flowChart()`.
+  Affected factories:
+  - `Agent.create({ buildTimeExtractor })`  →  `Agent.create({ structureRecorders: [...] })`
+  - `LLMCall.create()` — same rename
+  - `Sequence.create()` / `Parallel.create()` / `Loop.create()` /
+    `Conditional.create()` — same rename
+  - **Migration**: pass a `StructureRecorder` (event-handler interface)
+    instead of the v5 `BuildTimeExtractor` (per-node spec mutator).
+    See footprintjs `MIGRATION-6.md` Recipe 1 for the recorder shape.
+- **Peer dep**: bumped `footprintjs` from `>=4.17.2` to `^6.0.0`.
+
+### Changed
+
+- All internal `flowChart()` call sites migrated from the legacy
+  5-positional signature `(name, fn, id, undefined, 'desc')` to v6's
+  options-bag form `(name, fn, id, { description: '...' })`. Affected
+  internal builders: every composition primitive, every slot builder
+  (system-prompt / messages / tools / thinking), every memory pipeline,
+  injection-engine, cache decision, reliability gate.
+- `test/core-flow/unit/buildTimeExtractor.test.ts` — 14 tests rewritten
+  to validate the v6 observer contract (events fire with expected
+  payloads, throw isolation) instead of v5 spec-tree mutation (v6
+  explicitly removed that capability per Recipe 2). All 7 test-type
+  sections preserved.
+- Adopted `splitStageId` (new in footprintjs v6) at `conventions.ts:96`
+  and `RunStepRecorder.ts:428`. Left `eventMeta.ts:74` as
+  `parseRuntimeStageId` since it consumes full runtimeStageId strings.
+- Docstring sweeps: `translator.ts` + `RunnerBase.ts` reference v6
+  `StructureRecorder` semantics, not v5 `BuildTimeExtractor`.
+
+### CI / publish workflow
+
+- Migrated to npm **trusted publishing** (OIDC) — no `NPM_TOKEN`
+  secret required. `id-token: write` permission already present.
+  Workflow upgrades `npm@latest` after tests but before publish
+  (trusted publishing requires npm >= 11.5.1; Node 22 ships npm 10.x).
+
+### Internals (accumulated 2.14.5+ work)
+
+- New `RunStepRecorder` with structural design notes
+  (`RunStepRecorder.STRUCTURE.md`).
+- New observability internals (`observability/internal/`),
+  `observeRunId` helper.
+- Multi-run aliasing test coverage, parallel-events test fixture,
+  agent-toolprovider test coverage, snapshot/getLastSnapshot test
+  shape, BoundaryRecorder-ranges coverage.
+- `docs/design/` notes added.
+
+### Verification
+
+- Suite: 2177 / 2177 passing (175 files).
+- Build: CJS + ESM clean.
+
 ## [2.14.5]
 
 ### Added — `name` field on `CompositionExitPayload`
