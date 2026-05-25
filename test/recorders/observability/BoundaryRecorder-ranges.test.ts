@@ -131,7 +131,7 @@ describe('BoundaryRecorder ranges — unit', () => {
   });
 
   it('onFork stamps commit indices on every child event', () => {
-    let count = 10;
+    const count = 10;
     const rec = boundaryRecorder({ getCommitCount: () => count });
     const event: FlowForkEvent = {
       parent: 'seed',
@@ -256,7 +256,7 @@ describe('BoundaryRecorder ranges — runId reset (composition-safe contract)', 
   // nested parent run".
 
   it('idle recorder + new runId → resets cleanly (legitimate new run)', () => {
-    let count = 0;
+    const count = 0;
     const rec = boundaryRecorder({ getCommitCount: () => count });
     // Run 1: open the run-root + a subflow, then CLOSE both — leaving
     // openTokens empty, signaling the run finished cleanly.
@@ -279,7 +279,7 @@ describe('BoundaryRecorder ranges — runId reset (composition-safe contract)', 
   });
 
   it('nested sub-executor runId DOES NOT reset (composition case)', () => {
-    let count = 0;
+    const count = 0;
     const rec = boundaryRecorder({ getCommitCount: () => count });
     // Outer run starts.
     rec.onRunStart({ traversalContext: ctx({ rid: '__root__#0', runId: 'OUTER' }) });
@@ -301,7 +301,7 @@ describe('BoundaryRecorder ranges — runId reset (composition-safe contract)', 
     // protects the parent's state when a nested sub-executor's
     // pre-run clear loop fires `clear()` on a propagated recorder
     // (FlowChartExecutor.run() → r.clear?.() → BoundaryRecorder.clear()).
-    let count = 0;
+    const count = 0;
     const rec = boundaryRecorder({ getCommitCount: () => count });
     rec.onRunStart({ traversalContext: ctx({ rid: '__root__#0', runId: 'R1' }) });
     rec.onSubflowEntry({
