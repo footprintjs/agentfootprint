@@ -296,7 +296,7 @@ describe('Agent.toolProvider — security: gate honored on dispatch', () => {
 // would dispatch yesterday's tools today.
 
 describe('Agent.toolProvider — eager-build regression (providerToolCache freshness)', () => {
-  it('sequential runs see THIS run\'s tools, not the previous run\'s stale cache', async () => {
+  it("sequential runs see THIS run's tools, not the previous run's stale cache", async () => {
     // Capture the tool list the LLM was offered on each call.
     const toolListPerCall: string[][] = [];
     const provider = mock({

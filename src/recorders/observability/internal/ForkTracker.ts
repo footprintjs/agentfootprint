@@ -50,7 +50,11 @@ export class ForkTracker {
    * should suppress emission. Otherwise registers all child branches
    * and returns `{ fresh: true }`.
    */
-  registerFork(parent: string, runtimeStageId: string, children: readonly string[]): ForkRegistration {
+  registerFork(
+    parent: string,
+    runtimeStageId: string,
+    children: readonly string[],
+  ): ForkRegistration {
     const key = `${parent}@${runtimeStageId}`;
     if (this.emittedKeys.has(key)) return { fresh: false };
     this.emittedKeys.add(key);

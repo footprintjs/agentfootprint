@@ -111,12 +111,9 @@ export function factPipeline(config: FactPipelineConfig): MemoryPipeline {
   };
 
   // ── Read subflow: LoadFacts → FormatFacts
-  const read = flowChart<FactPipelineState>(
-    'LoadFacts',
-    loadFacts(loadConfig),
-    'load-facts',
-    { description: 'Load stored Fact entries (ids starting with `fact:`) into scope.loadedFacts' },
-  )
+  const read = flowChart<FactPipelineState>('LoadFacts', loadFacts(loadConfig), 'load-facts', {
+    description: 'Load stored Fact entries (ids starting with `fact:`) into scope.loadedFacts',
+  })
     .addFunction(
       'FormatFacts',
       formatFacts(formatConfig),

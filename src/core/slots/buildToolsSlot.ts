@@ -261,12 +261,9 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
     );
   };
 
-  return flowChart<ToolsSubflowState>(
-    'Discover',
-    discoverStage,
-    'discover',
-    { description: 'Discover provider tools' },
-  )
+  return flowChart<ToolsSubflowState>('Discover', discoverStage, 'discover', {
+    description: 'Discover provider tools',
+  })
     .addFunction('Compose', composeStage, 'compose', 'Compose tools slot')
     .build();
 }

@@ -196,9 +196,7 @@ export abstract class RunnerBase<TIn = unknown, TOut = unknown> implements Runne
    * undefined). Each composition overrides to surface its own
    * `opts.groupTranslator`.
    */
-  protected getGroupTranslator():
-    | import('./translator.js').GroupTranslator
-    | undefined {
+  protected getGroupTranslator(): import('./translator.js').GroupTranslator | undefined {
     return undefined;
   }
 
@@ -208,9 +206,7 @@ export abstract class RunnerBase<TIn = unknown, TOut = unknown> implements Runne
    * parent compositions to apply per-method translator overrides.
    * See the `Runner.getUIGroupWith` JSDoc for the contract.
    */
-  getUIGroupWith<T = unknown>(
-    override: import('./translator.js').GroupTranslator,
-  ): T | undefined {
+  getUIGroupWith<T = unknown>(override: import('./translator.js').GroupTranslator): T | undefined {
     const metadata = this.buildUIGroupMetadata();
     if (metadata === undefined) return undefined;
     return override(metadata) as T;
@@ -222,9 +218,7 @@ export abstract class RunnerBase<TIn = unknown, TOut = unknown> implements Runne
    * kind." Compositions override to supply their members + kind. Called
    * AT MOST ONCE per runner (result is cached by `getUIGroup()`).
    */
-  protected buildUIGroupMetadata():
-    | import('./translator.js').GroupMetadata
-    | undefined {
+  protected buildUIGroupMetadata(): import('./translator.js').GroupMetadata | undefined {
     return undefined;
   }
 

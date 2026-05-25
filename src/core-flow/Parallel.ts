@@ -22,11 +22,7 @@ import {
   type StructureRecorder,
   type TypedScope,
 } from 'footprintjs';
-import type {
-  GroupMember,
-  GroupMetadata,
-  GroupTranslator,
-} from '../core/translator.js';
+import type { GroupMember, GroupMetadata, GroupTranslator } from '../core/translator.js';
 import type { RunnerPauseOutcome } from '../core/pause.js';
 import type { LLMMessage, LLMProvider } from '../adapters/types.js';
 import type { Runner } from '../core/runner.js';
@@ -366,17 +362,12 @@ export class Parallel extends RunnerBase<ParallelInput, ParallelOutput> {
     // The 4th arg threads the consumer's `structureRecorders` (when set)
     // into footprintjs's builder so every node in this chart is observed
     // by them at construction time.
-    let builder = flowChart<ParallelState>(
-      'Seed',
-      seed,
-      'seed',
-      {
-        ...(this.opts.structureRecorders !== undefined && {
-          structureRecorders: [...this.opts.structureRecorders],
-        }),
-        description: `Parallel: ${branches.length}-way fanout`,
-      },
-    );
+    let builder = flowChart<ParallelState>('Seed', seed, 'seed', {
+      ...(this.opts.structureRecorders !== undefined && {
+        structureRecorders: [...this.opts.structureRecorders],
+      }),
+      description: `Parallel: ${branches.length}-way fanout`,
+    });
 
     // Fork children — each branch is mounted as a proper subflow via
     // footprintjs's native fork mode. Multiple `addSubFlowChart` calls
@@ -533,11 +524,7 @@ export class ParallelBuilder {
    * override applies ONLY to this branch's `member.uiGroup` and does
    * not affect any other branch or the runner's own translator.
    */
-  branch(
-    id: string,
-    runner: BranchChild,
-    nameOrOpts?: string | ParallelBranchOptions,
-  ): this {
+  branch(id: string, runner: BranchChild, nameOrOpts?: string | ParallelBranchOptions): this {
     if (this.seenIds.has(id)) {
       throw new Error(`Parallel.branch(): duplicate branch id '${id}'`);
     }

@@ -128,9 +128,7 @@ export class LiveLLMTracker {
   /** Composition: bracket-scoped storage primitive. */
   private readonly store = new BoundaryStateStore<LLMLiveState>();
   /** Wipes the store when a fresh run reuses identical runtimeStageId keys. */
-  private readonly runIdGuard: RunIdObserver = createRunIdObserver(() =>
-    this.store.clear(),
-  );
+  private readonly runIdGuard: RunIdObserver = createRunIdObserver(() => this.store.clear());
 
   private observeRunId(runId: string | undefined): void {
     this.runIdGuard.observe(runId);
@@ -234,9 +232,7 @@ export class LiveToolTracker {
   readonly id = 'live-tool';
 
   private readonly store = new BoundaryStateStore<ToolLiveState>();
-  private readonly runIdGuard: RunIdObserver = createRunIdObserver(() =>
-    this.store.clear(),
-  );
+  private readonly runIdGuard: RunIdObserver = createRunIdObserver(() => this.store.clear());
 
   private observeRunId(runId: string | undefined): void {
     this.runIdGuard.observe(runId);
@@ -311,9 +307,7 @@ export class LiveAgentTurnTracker {
   readonly id = 'live-agent-turn';
 
   private readonly store = new BoundaryStateStore<AgentTurnLiveState>();
-  private readonly runIdGuard: RunIdObserver = createRunIdObserver(() =>
-    this.store.clear(),
-  );
+  private readonly runIdGuard: RunIdObserver = createRunIdObserver(() => this.store.clear());
 
   private observeRunId(runId: string | undefined): void {
     this.runIdGuard.observe(runId);
@@ -452,7 +446,6 @@ export class LiveStateRecorder {
     this.active = () => offs.forEach((off) => off());
     return this.active;
   }
-
 
   /** Detach all three trackers from the current runner. Idempotent. */
   unsubscribe(): void {

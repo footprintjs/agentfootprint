@@ -21,11 +21,7 @@ import {
   type StructureRecorder,
   type TypedScope,
 } from 'footprintjs';
-import type {
-  GroupMember,
-  GroupMetadata,
-  GroupTranslator,
-} from '../core/translator.js';
+import type { GroupMember, GroupMetadata, GroupTranslator } from '../core/translator.js';
 import type { RunnerPauseOutcome } from '../core/pause.js';
 import type { Runner } from '../core/runner.js';
 import { RunnerBase, makeRunId } from '../core/RunnerBase.js';
@@ -259,17 +255,12 @@ export class Conditional extends RunnerBase<ConditionalInput, ConditionalOutput>
 
     // Root description prefix `Conditional:` is the taxonomy marker —
     // see FlowchartRecorder.mapTopologyToSteps for the consumer side.
-    const base = flowChart<ConditionalState>(
-      'Seed',
-      seed,
-      'seed',
-      {
-        ...(this.opts.structureRecorders !== undefined && {
-          structureRecorders: [...this.opts.structureRecorders],
-        }),
-        description: `Conditional: ${branches.length}-branch routing`,
-      },
-    );
+    const base = flowChart<ConditionalState>('Seed', seed, 'seed', {
+      ...(this.opts.structureRecorders !== undefined && {
+        structureRecorders: [...this.opts.structureRecorders],
+      }),
+      description: `Conditional: ${branches.length}-branch routing`,
+    });
     let decList = base.addDeciderFunction(
       'Route',
       decider,
@@ -390,11 +381,7 @@ export class ConditionalBuilder {
    * Third arg accepts a legacy `name` string OR a `ConditionalBranchOptions`
    * bag (same shape as `.when()`).
    */
-  otherwise(
-    id: string,
-    runner: BranchChild,
-    nameOrOpts?: string | ConditionalBranchOptions,
-  ): this {
+  otherwise(id: string, runner: BranchChild, nameOrOpts?: string | ConditionalBranchOptions): this {
     if (this.fallbackRegistered) {
       throw new Error('Conditional.otherwise(): already registered');
     }

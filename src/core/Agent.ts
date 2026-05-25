@@ -384,9 +384,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
   // every call, same reference the executor traces.
 
   // ─── UI group translation (L1b) ───────────────────────────────
-  protected override getGroupTranslator():
-    | import('./translator.js').GroupTranslator
-    | undefined {
+  protected override getGroupTranslator(): import('./translator.js').GroupTranslator | undefined {
     return this.agentGroupTranslator;
   }
 
@@ -407,11 +405,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       name: this.name,
       members: [],
       extra: {
-        slots: [
-          SUBFLOW_IDS.SYSTEM_PROMPT,
-          SUBFLOW_IDS.MESSAGES,
-          SUBFLOW_IDS.TOOLS,
-        ] as const,
+        slots: [SUBFLOW_IDS.SYSTEM_PROMPT, SUBFLOW_IDS.MESSAGES, SUBFLOW_IDS.TOOLS] as const,
         toolNames,
         maxIterations: this.maxIterations,
       },
@@ -917,7 +911,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       cacheDecisionSubflow,
       updateSkillHistoryStage,
       cacheGateDecide,
-      ...(this.structureRecorders !== undefined && { structureRecorders: [...this.structureRecorders] }),
+      ...(this.structureRecorders !== undefined && {
+        structureRecorders: [...this.structureRecorders],
+      }),
     });
   }
 }

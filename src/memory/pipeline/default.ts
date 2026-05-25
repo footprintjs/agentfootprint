@@ -140,12 +140,9 @@ export function defaultPipeline(config: DefaultPipelineConfig): MemoryPipeline {
   // pickByBudget is a builder-extension — it appends a decider + 3
   // branches to the pipeline so "why did / didn't we inject memory?" is
   // answerable via FlowRecorder.onDecision evidence, not just emit events.
-  let readBuilder = flowChart<MemoryState>(
-    'LoadRecent',
-    loadRecent(loadConfig),
-    'load-recent',
-    { description: 'Read N most-recent entries from storage into scope.loaded' },
-  );
+  let readBuilder = flowChart<MemoryState>('LoadRecent', loadRecent(loadConfig), 'load-recent', {
+    description: 'Read N most-recent entries from storage into scope.loaded',
+  });
   readBuilder = pickByBudget(pickConfig)(readBuilder);
   const read = readBuilder
     .addFunction(

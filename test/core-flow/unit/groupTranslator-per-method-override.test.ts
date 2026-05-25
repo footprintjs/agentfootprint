@@ -38,14 +38,13 @@ const innerLLM = () =>
 // ── Sequence ─────────────────────────────────────────────────────
 
 describe('Sequence — per-method override on .step()', () => {
-  it('override on one step replaces that step\'s uiGroup; other steps unchanged', () => {
+  it("override on one step replaces that step's uiGroup; other steps unchanged", () => {
     const overrideForB: GroupTranslator = (g) => ({
       source: 'override',
       kind: g.kind,
       id: g.id,
     });
-    const outerT: GroupTranslator = (g) =>
-      g.members.map((m) => m.uiGroup);
+    const outerT: GroupTranslator = (g) => g.members.map((m) => m.uiGroup);
     const seq = Sequence.create({ groupTranslator: outerT })
       .step('a', innerLLM())
       .step('b', innerLLM(), { groupTranslator: overrideForB })
@@ -64,7 +63,7 @@ describe('Sequence — per-method override on .step()', () => {
     expect(seq.getUIGroup()).toBeDefined();
   });
 
-  it('override sees the STEP RUNNER\'s metadata, not the Sequence\'s', () => {
+  it("override sees the STEP RUNNER's metadata, not the Sequence's", () => {
     let capturedKind: string | undefined;
     const override: GroupTranslator = (g) => {
       capturedKind = g.kind;
@@ -81,7 +80,7 @@ describe('Sequence — per-method override on .step()', () => {
 // ── Loop ─────────────────────────────────────────────────────────
 
 describe('Loop — per-method override on .repeat()', () => {
-  it('override replaces body\'s uiGroup', () => {
+  it("override replaces body's uiGroup", () => {
     const bodyOverride: GroupTranslator = (g) => ({
       source: 'override',
       kind: g.kind,
@@ -95,12 +94,9 @@ describe('Loop — per-method override on .repeat()', () => {
     expect(out.source).toBe('override');
   });
 
-  it('without override, body uses its own runner\'s translator', () => {
+  it("without override, body uses its own runner's translator", () => {
     const outerT: GroupTranslator = (g) => g.members[0]!.uiGroup;
-    const loop = Loop.create({ groupTranslator: outerT })
-      .repeat(innerLLM())
-      .times(3)
-      .build();
+    const loop = Loop.create({ groupTranslator: outerT }).repeat(innerLLM()).times(3).build();
     const out = loop.getUIGroup() as { source: string };
     expect(out.source).toBe('inner-default');
   });
@@ -124,8 +120,7 @@ describe('Conditional — per-method override on .when() + .otherwise()', () => 
       source: 'when-override',
       kind: g.kind,
     });
-    const outerT: GroupTranslator = (g) =>
-      g.members.map((m) => m.uiGroup);
+    const outerT: GroupTranslator = (g) => g.members.map((m) => m.uiGroup);
     const cond = Conditional.create({ groupTranslator: outerT })
       .when('hi', () => true, innerLLM(), { groupTranslator: whenOverride })
       .otherwise('lo', innerLLM())
@@ -140,8 +135,7 @@ describe('Conditional — per-method override on .when() + .otherwise()', () => 
       source: 'fallback-override',
       kind: g.kind,
     });
-    const outerT: GroupTranslator = (g) =>
-      g.members.map((m) => m.uiGroup);
+    const outerT: GroupTranslator = (g) => g.members.map((m) => m.uiGroup);
     const cond = Conditional.create({ groupTranslator: outerT })
       .when('hi', () => true, innerLLM())
       .otherwise('lo', innerLLM(), { groupTranslator: fallbackOverride })
@@ -161,7 +155,7 @@ describe('Conditional — per-method override on .when() + .otherwise()', () => 
     ).not.toThrow();
   });
 
-  it('override sees the BRANCH RUNNER\'s metadata, not the Conditional\'s', () => {
+  it("override sees the BRANCH RUNNER's metadata, not the Conditional's", () => {
     let capturedKind: string | undefined;
     const override: GroupTranslator = (g) => {
       capturedKind = g.kind;

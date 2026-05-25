@@ -14,12 +14,7 @@
  *          (LLMCall, Agent, Sequence, etc.) implement it.
  */
 
-import type {
-  CombinedRecorder,
-  FlowChart,
-  FlowchartCheckpoint,
-  RunOptions,
-} from 'footprintjs';
+import type { CombinedRecorder, FlowChart, FlowchartCheckpoint, RunOptions } from 'footprintjs';
 import type { RunnerPauseOutcome } from './pause.js';
 import type {
   EventListener,
@@ -142,9 +137,7 @@ export interface Runner<TIn = unknown, TOut = unknown> {
    * Returns `undefined` when this runner has no group metadata to
    * translate (i.e., `buildUIGroupMetadata()` returned `undefined`).
    */
-  getUIGroupWith<T = unknown>(
-    override: import('./translator.js').GroupTranslator,
-  ): T | undefined;
+  getUIGroupWith<T = unknown>(override: import('./translator.js').GroupTranslator): T | undefined;
 
   /**
    * Execute the runner. On happy-path completion, resolves with `TOut`.

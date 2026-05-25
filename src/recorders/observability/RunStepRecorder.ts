@@ -48,15 +48,9 @@ interface FlowRunEvent {
   readonly payload?: unknown;
   readonly traversalContext?: TraversalContext;
 }
-import type {
-  AgentfootprintEvent,
-  AgentfootprintEventType,
-} from '../../events/registry.js';
+import type { AgentfootprintEvent, AgentfootprintEventType } from '../../events/registry.js';
 import type { EventDispatcher, Unsubscribe } from '../../events/dispatcher.js';
-import type {
-  BoundaryRecorder,
-  DomainEvent,
-} from './BoundaryRecorder.js';
+import type { BoundaryRecorder, DomainEvent } from './BoundaryRecorder.js';
 import { createRunIdObserver, type RunIdObserver } from './observeRunId.js';
 import { ForkTracker } from './internal/ForkTracker.js';
 import { SequenceSiblingTracker } from './internal/SequenceSiblingTracker.js';
@@ -194,9 +188,7 @@ export class RunStepRecorder implements CombinedRecorder {
    *  changes between events. THIS IS THE FIX for the Parallel multi-run
    *  aliasing bug — without it `forkKey = ${parent}@${rid}` collides
    *  because rid resets to `seed#0` on each run. */
-  private readonly runIdGuard: RunIdObserver = createRunIdObserver(() =>
-    this.resetForNewRun(),
-  );
+  private readonly runIdGuard: RunIdObserver = createRunIdObserver(() => this.resetForNewRun());
 
   // ── Composed sub-trackers (one concern each) ─────────────────────
   /** Stack of currently-open boundaries. The recorder owns this
@@ -318,9 +310,7 @@ export class RunStepRecorder implements CombinedRecorder {
         this.push({
           seq: this.entryCount,
           kind: 'sequential',
-          transitions: [
-            { from: prevSibling, to: subflowId, via: 'next', label: 'forwards' },
-          ],
+          transitions: [{ from: prevSibling, to: subflowId, via: 'next', label: 'forwards' }],
           anchor: { runtimeStageId, subflowPath },
           label: 'forwards',
           tsMs: ts,
@@ -330,9 +320,7 @@ export class RunStepRecorder implements CombinedRecorder {
         this.push({
           seq: this.entryCount,
           kind: 'sequential',
-          transitions: [
-            { from: ACTOR_USER, to: subflowId, via: 'next', label: 'asks' },
-          ],
+          transitions: [{ from: ACTOR_USER, to: subflowId, via: 'next', label: 'asks' }],
           anchor: { runtimeStageId, subflowPath },
           label: 'asks',
           tsMs: ts,
@@ -563,9 +551,7 @@ export class RunStepRecorder implements CombinedRecorder {
       runtimeStageId: e.runtimeStageId,
       stageName: lastSegment(e.subflowPath.join('/') || ROOT_SUBFLOW_ID),
       depth: e.depth,
-      ...(e.subflowPath.length > 1
-        ? { subflowPath: e.subflowPath.slice(1).join('/') }
-        : {}),
+      ...(e.subflowPath.length > 1 ? { subflowPath: e.subflowPath.slice(1).join('/') } : {}),
     };
     switch (e.type) {
       case 'run.entry':
@@ -718,9 +704,7 @@ export class RunStepRecorder implements CombinedRecorder {
     this.push({
       seq: this.entryCount,
       kind: 'sequential',
-      transitions: [
-        { from: c.frame.subflowId, to: ACTOR_USER, via: 'next', label: 'answers' },
-      ],
+      transitions: [{ from: c.frame.subflowId, to: ACTOR_USER, via: 'next', label: 'answers' }],
       anchor: {
         runtimeStageId: c.runtimeStageId,
         subflowPath: c.frame.subflowPath,
@@ -741,12 +725,7 @@ function parsePrimitiveKind(description: string | undefined): string | undefined
   return prefix.length > 0 ? prefix : undefined;
 }
 
-const AGENT_INTERNAL_STAGES = new Set([
-  'route',
-  'tool-calls',
-  'final',
-  'merge',
-]);
+const AGENT_INTERNAL_STAGES = new Set(['route', 'tool-calls', 'final', 'merge']);
 
 function isAgentInternalStageId(localStageId: string): boolean {
   return AGENT_INTERNAL_STAGES.has(localStageId);
@@ -802,11 +781,7 @@ export function buildRunSteps(
       const children: string[] = [];
       for (let j = i; j < events.length; j++) {
         const f = events[j];
-        if (
-          f.type === 'fork.branch' &&
-          f.parentSubflowId === e.parentSubflowId &&
-          f.ts === e.ts
-        ) {
+        if (f.type === 'fork.branch' && f.parentSubflowId === e.parentSubflowId && f.ts === e.ts) {
           children.push(f.childName);
         } else if (f.ts > e.ts) {
           break;

@@ -36,13 +36,7 @@ import type { Runner } from './runner.js';
  * one of these via the literal string baked into its `buildChart()`
  * description prefix and surfaced here in `GroupMetadata`.
  */
-export type GroupKind =
-  | 'Parallel'
-  | 'Sequence'
-  | 'Loop'
-  | 'Conditional'
-  | 'Agent'
-  | 'LLMCall';
+export type GroupKind = 'Parallel' | 'Sequence' | 'Loop' | 'Conditional' | 'Agent' | 'LLMCall';
 
 /**
  * One member of a composition. Shape is uniform across composition

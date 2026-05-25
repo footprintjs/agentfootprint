@@ -82,12 +82,9 @@ export function ephemeralPipeline(config: EphemeralPipelineConfig): MemoryPipeli
     ...(config.formatFooter !== undefined && { footer: config.formatFooter }),
   };
 
-  let readBuilder = flowChart<MemoryState>(
-    'LoadRecent',
-    loadRecent(loadConfig),
-    'load-recent',
-    { description: 'Read N most-recent entries from storage into scope.loaded (read-only)' },
-  );
+  let readBuilder = flowChart<MemoryState>('LoadRecent', loadRecent(loadConfig), 'load-recent', {
+    description: 'Read N most-recent entries from storage into scope.loaded (read-only)',
+  });
   readBuilder = pickByBudget(pickConfig)(readBuilder);
   const read = readBuilder
     .addFunction(

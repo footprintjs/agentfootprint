@@ -26,7 +26,9 @@ import { isPaused, pauseHere } from '../../../src/core/pause.js';
 import type { LLMProvider, LLMResponse } from '../../../src/adapters/types.js';
 
 const ok = (reply: string) =>
-  LLMCall.create({ provider: new MockProvider({ reply }), model: 'm' }).system('').build();
+  LLMCall.create({ provider: new MockProvider({ reply }), model: 'm' })
+    .system('')
+    .build();
 
 const failing = (msg: string) => {
   const provider: LLMProvider = {
@@ -67,7 +69,7 @@ describe('Parallel — native subflow mounting', () => {
     }
   });
 
-  it('shares the parent executor\'s execution counter across branch internals', async () => {
+  it("shares the parent executor's execution counter across branch internals", async () => {
     // Architectural guarantee: footprintjs's `SubflowExecutor` inherits
     // the parent's `executionCounter` when mounting a chart via
     // `addSubFlowChart`. Branch-internal stages consume counter slots
@@ -117,12 +119,10 @@ describe('Parallel — native subflow mounting', () => {
 
     const snapshot = par.getLastSnapshot();
     expect(snapshot).toBeDefined();
-    const subflowResults = (snapshot as { subflowResults?: Record<string, unknown> })
-      .subflowResults ?? {};
+    const subflowResults =
+      (snapshot as { subflowResults?: Record<string, unknown> }).subflowResults ?? {};
     // Every branch produced a subflow result keyed by its mount id.
-    expect(Object.keys(subflowResults)).toEqual(
-      expect.arrayContaining(['legal', 'ethics']),
-    );
+    expect(Object.keys(subflowResults)).toEqual(expect.arrayContaining(['legal', 'ethics']));
   });
 
   it('forwards per-branch error messages to the merge stage (recorder-correlated)', async () => {
@@ -171,9 +171,9 @@ describe('Parallel — native subflow mounting', () => {
     // Per Decision 8 + 7-panel review: a branch id with `/` would
     // silently shadow the engine-prefixed stageId used to map errors
     // back to the originating branch. Reject at build time.
-    expect(() =>
-      Parallel.create().branch('legal/special', ok('X')),
-    ).toThrow(/must not contain '\/'/);
+    expect(() => Parallel.create().branch('legal/special', ok('X'))).toThrow(
+      /must not contain '\/'/,
+    );
   });
 });
 
@@ -190,7 +190,11 @@ describe('Parallel — merge_end event shape', () => {
       )
       .build();
 
-    const captured: Array<{ strategy: string; mergedBranchCount: number; totalBranchCount: number }> = [];
+    const captured: Array<{
+      strategy: string;
+      mergedBranchCount: number;
+      totalBranchCount: number;
+    }> = [];
     par.on('agentfootprint.composition.merge_end', (e) => {
       captured.push({
         strategy: e.payload.strategy,

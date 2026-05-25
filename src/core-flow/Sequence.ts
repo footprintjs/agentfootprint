@@ -19,11 +19,7 @@ import {
   type TypedScope,
 } from 'footprintjs';
 import type { StructureRecorder } from 'footprintjs';
-import type {
-  GroupMember,
-  GroupMetadata,
-  GroupTranslator,
-} from '../core/translator.js';
+import type { GroupMember, GroupMetadata, GroupTranslator } from '../core/translator.js';
 import type { RunnerPauseOutcome } from '../core/pause.js';
 import type { Runner } from '../core/runner.js';
 import { RunnerBase, makeRunId } from '../core/RunnerBase.js';
@@ -231,17 +227,12 @@ export class Sequence extends RunnerBase<SequenceInput, SequenceOutput> {
     // downstream consumers (Lens, FlowchartRecorder) detect composition
     // primitives via the `<Kind>:` prefix convention. See
     // FlowchartRecorder.mapTopologyToSteps for the consumer side.
-    let builder = flowChart<SequenceState>(
-      'Seed',
-      seed,
-      'seed',
-      {
-        ...(this.opts.structureRecorders !== undefined && {
-          structureRecorders: [...this.opts.structureRecorders],
-        }),
-        description: `Sequence: ${steps.length}-step pipeline`,
-      },
-    );
+    let builder = flowChart<SequenceState>('Seed', seed, 'seed', {
+      ...(this.opts.structureRecorders !== undefined && {
+        structureRecorders: [...this.opts.structureRecorders],
+      }),
+      description: `Sequence: ${steps.length}-step pipeline`,
+    });
 
     // Mount each step as a subflow via addSubFlowChartNext. The step's
     // input comes from parent.current (mapped via mapFromPrev); the

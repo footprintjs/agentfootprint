@@ -585,7 +585,7 @@ export class BoundaryRecorder implements CombinedRecorder {
     this.id = options.id ?? `boundary-${++_counter}`;
     this.hasCommitTracking = options.getCommitCount !== undefined;
     const raw = options.getCommitCount;
-    this.getCommitCount = raw === undefined ? (() => 0) : () => sanitizeCommitCount(raw());
+    this.getCommitCount = raw === undefined ? () => 0 : () => sanitizeCommitCount(raw());
   }
 
   /**
@@ -930,10 +930,7 @@ export class BoundaryRecorder implements CombinedRecorder {
           name: p.name,
         };
         if (this.hasCommitTracking) {
-          const token = this.boundaryIndex.open(
-            toCompositionBoundaryLabel(e),
-            commitIdxBefore,
-          );
+          const token = this.boundaryIndex.open(toCompositionBoundaryLabel(e), commitIdxBefore);
           this.openTokens.set(`composition:${p.id}`, token);
         }
         this.store.push(e);

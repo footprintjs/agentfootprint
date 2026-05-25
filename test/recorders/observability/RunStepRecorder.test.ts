@@ -25,9 +25,7 @@ import type {
 } from 'footprintjs';
 import type { FlowRunEvent } from 'footprintjs/dist/types/lib/engine/narrative/types.js';
 import { EventDispatcher } from '../../../src/events/dispatcher.js';
-import {
-  BoundaryRecorder,
-} from '../../../src/recorders/observability/BoundaryRecorder.js';
+import { BoundaryRecorder } from '../../../src/recorders/observability/BoundaryRecorder.js';
 import { buildRunSteps } from '../../../src/recorders/observability/RunStepRecorder.js';
 
 // ── Test harness mirroring BoundaryRecorder.test.ts ─────────────────
@@ -121,18 +119,10 @@ describe('buildRunSteps — P1: Sequence(LLMCall, LLMCall)', () => {
     const { rec } = freshRecorder();
     rec.onRunStart!(runEvt({ message: 'hi' }));
     rec.onSubflowEntry!(subEvt('sf-seq', 'Pipeline', 'seq#0', 'Sequence: pipeline'));
-    rec.onSubflowEntry!(
-      subEvt('sf-seq/sf-classify', 'classify', 'cls#0', 'LLMCall: classify'),
-    );
-    rec.onSubflowExit!(
-      subEvt('sf-seq/sf-classify', 'classify', 'cls#0'),
-    );
-    rec.onSubflowEntry!(
-      subEvt('sf-seq/sf-respond', 'respond', 'rsp#0', 'LLMCall: respond'),
-    );
-    rec.onSubflowExit!(
-      subEvt('sf-seq/sf-respond', 'respond', 'rsp#0'),
-    );
+    rec.onSubflowEntry!(subEvt('sf-seq/sf-classify', 'classify', 'cls#0', 'LLMCall: classify'));
+    rec.onSubflowExit!(subEvt('sf-seq/sf-classify', 'classify', 'cls#0'));
+    rec.onSubflowEntry!(subEvt('sf-seq/sf-respond', 'respond', 'rsp#0', 'LLMCall: respond'));
+    rec.onSubflowExit!(subEvt('sf-seq/sf-respond', 'respond', 'rsp#0'));
     rec.onSubflowExit!(subEvt('sf-seq', 'Pipeline', 'seq#0'));
     rec.onRunEnd!(runEvt({ result: 'ok' }));
 
@@ -165,13 +155,9 @@ describe('buildRunSteps — P1b: Sequence as outermost runner', () => {
     const { rec } = freshRecorder();
     rec.onRunStart!(runEvt({ message: 'hi' }));
     // No Sequence boundary — children fire directly at depth 1.
-    rec.onSubflowEntry!(
-      subEvt('step-classify', 'classify', 'cls#0', 'LLMCall: classify'),
-    );
+    rec.onSubflowEntry!(subEvt('step-classify', 'classify', 'cls#0', 'LLMCall: classify'));
     rec.onSubflowExit!(subEvt('step-classify', 'classify', 'cls#0'));
-    rec.onSubflowEntry!(
-      subEvt('step-respond', 'respond', 'rsp#0', 'LLMCall: respond'),
-    );
+    rec.onSubflowEntry!(subEvt('step-respond', 'respond', 'rsp#0', 'LLMCall: respond'));
     rec.onSubflowExit!(subEvt('step-respond', 'respond', 'rsp#0'));
     rec.onRunEnd!(runEvt({ result: 'done' }));
 
@@ -223,11 +209,7 @@ describe('buildRunSteps — P2: Parallel fan-out (3 branches)', () => {
     expect(steps).toHaveLength(2);
     expect(steps[0].kind).toBe('fork');
     expect(steps[0].transitions).toHaveLength(3);
-    expect(steps[0].transitions.map((t) => t.label)).toEqual([
-      'legal',
-      'ethics',
-      'cost',
-    ]);
+    expect(steps[0].transitions.map((t) => t.label)).toEqual(['legal', 'ethics', 'cost']);
     // Each fork transition has from=actor:user (User → branch).
     expect(steps[0].transitions.every((t) => t.from === 'actor:user')).toBe(true);
     expect(steps[1].kind).toBe('merge');
@@ -376,9 +358,7 @@ describe('buildRunSteps — P4b: Agent ReAct (2 iters + 1 tool call)', () => {
 
     const steps = buildRunSteps(rec);
     expect(steps).toHaveLength(4);
-    const arrows = steps.map((s) =>
-      s.meta?.kind === 'react' ? s.meta.actorArrow : s.kind,
-    );
+    const arrows = steps.map((s) => (s.meta?.kind === 'react' ? s.meta.actorArrow : s.kind));
     expect(arrows).toEqual(['user→llm', 'llm→tool', 'tool→llm', 'llm→user']);
   });
 });
@@ -429,9 +409,7 @@ describe('buildRunSteps — P6: drill scope filter', () => {
     const { rec } = freshRecorder();
     rec.onRunStart!(runEvt());
     rec.onSubflowEntry!(subEvt('sf-seq', 'Pipeline', 'seq#0', 'Sequence: pipeline'));
-    rec.onSubflowEntry!(
-      subEvt('sf-seq/sf-classify', 'classify', 'cls#0', 'LLMCall: classify'),
-    );
+    rec.onSubflowEntry!(subEvt('sf-seq/sf-classify', 'classify', 'cls#0', 'LLMCall: classify'));
     rec.onSubflowExit!(subEvt('sf-seq/sf-classify', 'classify', 'cls#0'));
     rec.onSubflowExit!(subEvt('sf-seq', 'Pipeline', 'seq#0'));
     rec.onRunEnd!(runEvt());

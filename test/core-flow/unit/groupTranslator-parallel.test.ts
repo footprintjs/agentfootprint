@@ -131,16 +131,14 @@ describe('Parallel — getUIGroup() reference identity', () => {
 // ── 4. Integration — nested compositions + cascade ──────────────────
 
 describe('Parallel — nested cascade', () => {
-  it('inner Parallel\'s uiGroup surfaces in outer\'s members[].uiGroup', () => {
+  it("inner Parallel's uiGroup surfaces in outer's members[].uiGroup", () => {
     const t: GroupTranslator = (g) => ({
       kind: g.kind,
       id: g.id,
       childIds: g.members.map((m) => m.memberId),
       // Drill once: each member's uiGroup is the inner translation
       // (or undefined for runners without the translator threaded).
-      innerKinds: g.members.map((m) =>
-        (m.uiGroup as { kind?: string } | undefined)?.kind,
-      ),
+      innerKinds: g.members.map((m) => (m.uiGroup as { kind?: string } | undefined)?.kind),
     });
     const inner = Parallel.create({ id: 'inner', name: 'Inner', groupTranslator: t })
       .branch('x', ok('X'))
@@ -282,7 +280,7 @@ describe('Parallel — per-method translator override (L1c)', () => {
     expect(() => par.getUIGroup()).not.toThrow();
   });
 
-  it('per-branch override replaces the branch runner\'s own translator output', () => {
+  it("per-branch override replaces the branch runner's own translator output", () => {
     const outerT: GroupTranslator = (g) => ({
       kind: g.kind,
       childUIs: g.members.map((m) => m.uiGroup),
@@ -310,7 +308,7 @@ describe('Parallel — per-method translator override (L1c)', () => {
     expect(result.childUIs[1]!.source).toBe('override');
   });
 
-  it('override gets the BRANCH RUNNER\'s GroupMetadata, not the parent\'s', () => {
+  it("override gets the BRANCH RUNNER's GroupMetadata, not the parent's", () => {
     let capturedKind: string | undefined;
     let capturedId: string | undefined;
     const override: GroupTranslator = (g) => {

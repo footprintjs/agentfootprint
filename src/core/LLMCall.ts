@@ -173,11 +173,7 @@ export class LLMCall extends RunnerBase<LLMCallInput, LLMCallOutput> {
       name: this.name,
       members: [],
       extra: {
-        slots: [
-          SUBFLOW_IDS.SYSTEM_PROMPT,
-          SUBFLOW_IDS.MESSAGES,
-          SUBFLOW_IDS.TOOLS,
-        ] as const,
+        slots: [SUBFLOW_IDS.SYSTEM_PROMPT, SUBFLOW_IDS.MESSAGES, SUBFLOW_IDS.TOOLS] as const,
       },
     };
   }

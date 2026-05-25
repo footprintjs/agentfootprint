@@ -141,12 +141,7 @@ export { RunnerBase, makeRunId } from './core/RunnerBase.js';
 // Composition-level UI translation (L1b + L1c). Consumer-facing types
 // for `Runner.getUIGroup()` and the per-composition `groupTranslator`
 // option. Lens consumes these; any other UI library can too.
-export type {
-  GroupKind,
-  GroupMember,
-  GroupMetadata,
-  GroupTranslator,
-} from './core/translator.js';
+export type { GroupKind, GroupMember, GroupMetadata, GroupTranslator } from './core/translator.js';
 
 // Pause/Resume primitives — consumer API for human-in-the-loop tools.
 // `PauseRequest` (the throwable signal class) stays internal; consumers

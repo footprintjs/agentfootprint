@@ -25,11 +25,7 @@ import {
   type StructureRecorder,
   type TypedScope,
 } from 'footprintjs';
-import type {
-  GroupMember,
-  GroupMetadata,
-  GroupTranslator,
-} from '../core/translator.js';
+import type { GroupMember, GroupMetadata, GroupTranslator } from '../core/translator.js';
 import type { RunnerPauseOutcome } from '../core/pause.js';
 import type { Runner } from '../core/runner.js';
 import { RunnerBase, makeRunId } from '../core/RunnerBase.js';

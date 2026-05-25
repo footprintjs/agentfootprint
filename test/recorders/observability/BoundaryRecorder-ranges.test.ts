@@ -369,7 +369,7 @@ describe('BoundaryRecorder ranges — loop re-entry token collision', () => {
 
     // Both ranges should be cleanly opened+closed.
     expect(rec.boundaryIndex.size).toBe(2);
-    expect(rec.boundaryIndex.enclosing(7)).toHaveLength(1);  // iter 1
+    expect(rec.boundaryIndex.enclosing(7)).toHaveLength(1); // iter 1
     expect(rec.boundaryIndex.enclosing(15)).toHaveLength(1); // iter 2
     expect(rec.boundaryIndex.enclosing(11)).toHaveLength(0); // between
   });

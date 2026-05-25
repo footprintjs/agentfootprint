@@ -65,18 +65,18 @@ export function snapshotPipeline(config: SnapshotPipelineConfig): MemoryPipeline
     ...(config.tier && { tier: config.tier }),
   };
 
-  const read = flowChart<MemoryState>(
-    'LoadSnapshot',
-    loadSnapshot(loadConfig),
-    'load-snapshot',
-    { description: 'Embed query, retrieve top-K past snapshots, project + format as system messages' },
-  ).build();
+  const read = flowChart<MemoryState>('LoadSnapshot', loadSnapshot(loadConfig), 'load-snapshot', {
+    description: 'Embed query, retrieve top-K past snapshots, project + format as system messages',
+  }).build();
 
   const write = flowChart<MemoryState>(
     'WriteSnapshot',
     writeSnapshot(writeConfig),
     'write-snapshot',
-    { description: 'Capture (query, finalContent) from the run, embed query, persist as MemoryEntry<SnapshotEntry>' },
+    {
+      description:
+        'Capture (query, finalContent) from the run, embed query, persist as MemoryEntry<SnapshotEntry>',
+    },
   ).build();
 
   return { read, write };

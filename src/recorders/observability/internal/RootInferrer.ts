@@ -37,13 +37,7 @@ const KNOWN_PRIMITIVES = new Set([
 
 const LEAF_PRIMITIVES = new Set(['Agent', 'LLMCall']);
 
-export type InferredRoot =
-  | 'leaf'
-  | 'sequence'
-  | 'parallel'
-  | 'conditional'
-  | 'loop'
-  | undefined;
+export type InferredRoot = 'leaf' | 'sequence' | 'parallel' | 'conditional' | 'loop' | undefined;
 
 export class RootInferrer {
   private inferred: InferredRoot;

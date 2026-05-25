@@ -126,12 +126,9 @@ export function narrativePipeline(config: NarrativePipelineConfig): MemoryPipeli
   };
 
   // ── Read subflow: LoadRecent → PickByBudget (decider + 3 branches) → FormatAsNarrative
-  let readBuilder = flowChart<MemoryState>(
-    'LoadRecent',
-    loadRecent(loadConfig),
-    'load-recent',
-    { description: 'Load N most-recent beats from storage into scope.loaded' },
-  );
+  let readBuilder = flowChart<MemoryState>('LoadRecent', loadRecent(loadConfig), 'load-recent', {
+    description: 'Load N most-recent beats from storage into scope.loaded',
+  });
   readBuilder = pickByBudget(pickConfig)(readBuilder);
   const read = readBuilder
     .addFunction(

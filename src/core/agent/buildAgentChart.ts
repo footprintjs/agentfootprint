@@ -148,17 +148,12 @@ export function buildAgentChart(deps: AgentChartDeps): FlowChart {
   // (Lens + FlowchartRecorder) detect Agent-primitive subflows via
   // this prefix and flag them as true agent boundaries (separate
   // from LLMCall subflows which use `LLMCall:` prefix).
-  let builder = flowChart<AgentState>(
-    'Seed',
-    deps.seed as never,
-    STAGE_IDS.SEED,
-    {
-      ...(deps.structureRecorders !== undefined && {
-        structureRecorders: [...deps.structureRecorders],
-      }),
-      description: 'Agent: ReAct loop',
-    },
-  );
+  let builder = flowChart<AgentState>('Seed', deps.seed as never, STAGE_IDS.SEED, {
+    ...(deps.structureRecorders !== undefined && {
+      structureRecorders: [...deps.structureRecorders],
+    }),
+    description: 'Agent: ReAct loop',
+  });
 
   // Memory READ subflows — mounted between Seed and InjectionEngine
   // for TURN_START timing (default). Each memory writes to its own

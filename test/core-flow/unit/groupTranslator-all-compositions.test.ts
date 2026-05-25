@@ -36,10 +36,7 @@ const llmCall = (reply: string) =>
 
 describe('Sequence — groupTranslator', () => {
   it('returns undefined without a translator', () => {
-    const seq = Sequence.create()
-      .step('a', llmCall('A'))
-      .step('b', llmCall('B'))
-      .build();
+    const seq = Sequence.create().step('a', llmCall('A')).step('b', llmCall('B')).build();
     expect(seq.getUIGroup()).toBeUndefined();
   });
 
@@ -65,10 +62,7 @@ describe('Sequence — groupTranslator', () => {
 
 describe('Loop — groupTranslator', () => {
   it('returns undefined without a translator', () => {
-    const loop = Loop.create()
-      .repeat(llmCall('body'))
-      .times(3)
-      .build();
+    const loop = Loop.create().repeat(llmCall('body')).times(3).build();
     expect(loop.getUIGroup()).toBeUndefined();
   });
 
@@ -155,9 +149,7 @@ describe('LLMCall — groupTranslator', () => {
     expect(captured!.members).toEqual([]); // slots are not Runner members
     const slots = captured!.extra?.['slots'] as readonly string[];
     expect(slots).toHaveLength(3);
-    expect(slots).toEqual(
-      expect.arrayContaining(['sf-system-prompt', 'sf-messages', 'sf-tools']),
-    );
+    expect(slots).toEqual(expect.arrayContaining(['sf-system-prompt', 'sf-messages', 'sf-tools']));
   });
 });
 
@@ -204,9 +196,7 @@ describe('Agent — groupTranslator', () => {
     expect(toolNames).toEqual(['lookup', 'calculate']);
     expect(captured!.extra?.['maxIterations']).toBe(7);
     const slots = captured!.extra?.['slots'] as readonly string[];
-    expect(slots).toEqual(
-      expect.arrayContaining(['sf-system-prompt', 'sf-messages', 'sf-tools']),
-    );
+    expect(slots).toEqual(expect.arrayContaining(['sf-system-prompt', 'sf-messages', 'sf-tools']));
   });
 });
 
@@ -218,16 +208,11 @@ describe('All compositions — getUIGroup() identity', () => {
     const checks: ReadonlyArray<{ name: string; r: { getUIGroup: () => unknown } }> = [
       {
         name: 'Sequence',
-        r: Sequence.create({ groupTranslator: t })
-          .step('s', llmCall('s'))
-          .build(),
+        r: Sequence.create({ groupTranslator: t }).step('s', llmCall('s')).build(),
       },
       {
         name: 'Loop',
-        r: Loop.create({ groupTranslator: t })
-          .repeat(llmCall('b'))
-          .times(2)
-          .build(),
+        r: Loop.create({ groupTranslator: t }).repeat(llmCall('b')).times(2).build(),
       },
       {
         name: 'Conditional',
