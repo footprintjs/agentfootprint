@@ -176,7 +176,10 @@
       "require": "./dist/status.js"
     }
   },
-  "sideEffects": false,
+  "sideEffects": [
+    "**/cache/strategies/*.js",
+    "**/cache/index.js"
+  ],
   "peerDependencies": {
     "@anthropic-ai/sdk": "*",
     "@aws-sdk/client-bedrock-agent-runtime": "*",
