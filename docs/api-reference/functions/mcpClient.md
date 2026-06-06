@@ -8,7 +8,7 @@
 
 > **mcpClient**(`opts`): `Promise`\<[`McpClient`](/agentfootprint/api/generated/interfaces/McpClient.md)\>
 
-Defined in: [agentfootprint/src/lib/mcp/mcpClient.ts:57](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/lib/mcp/mcpClient.ts#L57)
+Defined in: [src/lib/mcp/mcpClient.ts:58](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/lib/mcp/mcpClient.ts#L58)
 
 Connect to an MCP server. Returns an `McpClient` that exposes the
 server's tools as agentfootprint `Tool[]` and a `close()` to tear

@@ -6,7 +6,7 @@
 
 # Interface: LLMCallOptions
 
-Defined in: [agentfootprint/src/core/LLMCall.ts:41](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/core/LLMCall.ts#L41)
+Defined in: [src/core/LLMCall.ts:74](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/core/LLMCall.ts#L74)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [agentfootprint/src/core/LLMCall.ts:41](https://github.com/footprint
 
 > `readonly` `optional` **costBudget?**: `number`
 
-Defined in: [agentfootprint/src/core/LLMCall.ts:65](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/core/LLMCall.ts#L65)
+Defined in: [src/core/LLMCall.ts:98](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/core/LLMCall.ts#L98)
 
 Cumulative USD budget per run. When provided along with `pricingTable`,
 LLMCall emits `agentfootprint.cost.limit_hit` with `action: 'warn'`
@@ -23,11 +23,27 @@ the first time cumulative USD crosses the budget. Execution continues
 
 ***
 
+### groupTranslator?
+
+> `readonly` `optional` **groupTranslator?**: [`GroupTranslator`](/agentfootprint/api/generated/interfaces/GroupTranslator.md)\<`unknown`\>
+
+Defined in: [src/core/LLMCall.ts:116](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/core/LLMCall.ts#L116)
+
+Optional per-COMPOSITION translator (UI-agnostic). See
+`core/translator.ts`. When attached, `runner.getUIGroup()` invokes
+it with the LLMCall's `GroupMetadata` (kind `'LLMCall'`, id, name,
+empty `members[]`, plus `extra.slots` with the three slot ids —
+`system-prompt`, `messages`, `tools` — so Lens can render the slot
+cards inside an LLMCall card without inspecting `buildTimeStructure`).
+Returns `undefined` when omitted.
+
+***
+
 ### id?
 
 > `readonly` `optional` **id?**: `string`
 
-Defined in: [agentfootprint/src/core/LLMCall.ts:46](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/core/LLMCall.ts#L46)
+Defined in: [src/core/LLMCall.ts:79](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/core/LLMCall.ts#L79)
 
 Stable id used for topology + events. Default: 'llm-call'.
 
@@ -37,7 +53,7 @@ Stable id used for topology + events. Default: 'llm-call'.
 
 > `readonly` `optional` **maxTokens?**: `number`
 
-Defined in: [agentfootprint/src/core/LLMCall.ts:52](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/core/LLMCall.ts#L52)
+Defined in: [src/core/LLMCall.ts:85](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/core/LLMCall.ts#L85)
 
 Optional max output tokens.
 
@@ -47,7 +63,7 @@ Optional max output tokens.
 
 > `readonly` **model**: `string`
 
-Defined in: [agentfootprint/src/core/LLMCall.ts:48](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/core/LLMCall.ts#L48)
+Defined in: [src/core/LLMCall.ts:81](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/core/LLMCall.ts#L81)
 
 Model to request from the provider.
 
@@ -57,7 +73,7 @@ Model to request from the provider.
 
 > `readonly` `optional` **name?**: `string`
 
-Defined in: [agentfootprint/src/core/LLMCall.ts:44](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/core/LLMCall.ts#L44)
+Defined in: [src/core/LLMCall.ts:77](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/core/LLMCall.ts#L77)
 
 Human-friendly name shown in events/metrics. Default: 'LLMCall'.
 
@@ -67,7 +83,7 @@ Human-friendly name shown in events/metrics. Default: 'LLMCall'.
 
 > `readonly` `optional` **pricingTable?**: [`PricingTable`](/agentfootprint/api/generated/interfaces/PricingTable.md)
 
-Defined in: [agentfootprint/src/core/LLMCall.ts:58](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/core/LLMCall.ts#L58)
+Defined in: [src/core/LLMCall.ts:91](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/core/LLMCall.ts#L91)
 
 Pricing adapter. When set, LLMCall emits `agentfootprint.cost.tick`
 after every LLM response with per-call and cumulative USD. Run-scoped
@@ -79,7 +95,21 @@ after every LLM response with per-call and cumulative USD. Run-scoped
 
 > `readonly` **provider**: [`LLMProvider`](/agentfootprint/api/generated/interfaces/LLMProvider.md)
 
-Defined in: [agentfootprint/src/core/LLMCall.ts:42](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/core/LLMCall.ts#L42)
+Defined in: [src/core/LLMCall.ts:75](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/core/LLMCall.ts#L75)
+
+***
+
+### structureRecorders?
+
+> `readonly` `optional` **structureRecorders?**: readonly `StructureRecorder`[]
+
+Defined in: [src/core/LLMCall.ts:106](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/core/LLMCall.ts#L106)
+
+Optional build-time recorders threaded into footprintjs's
+`flowChart()` factory. Each recorder observes per-node build
+events (`onStageAdded` / `onSubflowMounted` / etc.) for this
+LLMCall's internal chart (Initialize + slot mounts + CallLLM). When
+omitted, no build-time observation is wired up.
 
 ***
 
@@ -87,6 +117,6 @@ Defined in: [agentfootprint/src/core/LLMCall.ts:42](https://github.com/footprint
 
 > `readonly` `optional` **temperature?**: `number`
 
-Defined in: [agentfootprint/src/core/LLMCall.ts:50](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/core/LLMCall.ts#L50)
+Defined in: [src/core/LLMCall.ts:83](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/core/LLMCall.ts#L83)
 
 Optional sampling temperature.

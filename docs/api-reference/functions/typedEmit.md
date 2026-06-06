@@ -8,7 +8,7 @@
 
 > **typedEmit**\<`K`\>(`scope`, `type`, `payload`): `void`
 
-Defined in: [agentfootprint/src/recorders/core/typedEmit.ts:36](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/recorders/core/typedEmit.ts#L36)
+Defined in: [src/recorders/core/typedEmit.ts:36](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/core/typedEmit.ts#L36)
 
 Emit a typed event from inside stage code.
 
@@ -42,7 +42,7 @@ Emit a typed event from inside stage code.
 typedEmit(scope, 'agentfootprint.stream.llm_start', {
     iteration: 1,
     provider: 'anthropic',
-    model: 'claude-opus-4-7',
+    model: 'claude-opus-4-8',
     systemPromptChars: 800,
     messagesCount: 2,
     toolsCount: 0,

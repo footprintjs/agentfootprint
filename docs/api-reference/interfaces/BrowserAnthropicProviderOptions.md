@@ -6,7 +6,7 @@
 
 # Interface: BrowserAnthropicProviderOptions
 
-Defined in: [agentfootprint/src/adapters/llm/BrowserAnthropicProvider.ts:74](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/adapters/llm/BrowserAnthropicProvider.ts#L74)
+Defined in: [src/adapters/llm/BrowserAnthropicProvider.ts:83](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/adapters/llm/BrowserAnthropicProvider.ts#L83)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [agentfootprint/src/adapters/llm/BrowserAnthropicProvider.ts:74](htt
 
 > `readonly` **apiKey**: `string`
 
-Defined in: [agentfootprint/src/adapters/llm/BrowserAnthropicProvider.ts:76](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/adapters/llm/BrowserAnthropicProvider.ts#L76)
+Defined in: [src/adapters/llm/BrowserAnthropicProvider.ts:85](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/adapters/llm/BrowserAnthropicProvider.ts#L85)
 
 API key. REQUIRED — browser providers don't read env vars.
 
@@ -24,7 +24,7 @@ API key. REQUIRED — browser providers don't read env vars.
 
 > `readonly` `optional` **apiUrl?**: `string`
 
-Defined in: [agentfootprint/src/adapters/llm/BrowserAnthropicProvider.ts:82](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/adapters/llm/BrowserAnthropicProvider.ts#L82)
+Defined in: [src/adapters/llm/BrowserAnthropicProvider.ts:91](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/adapters/llm/BrowserAnthropicProvider.ts#L91)
 
 Override the API URL (proxies, edge deployments, mocks).
 
@@ -34,7 +34,7 @@ Override the API URL (proxies, edge deployments, mocks).
 
 > `readonly` `optional` **defaultMaxTokens?**: `number`
 
-Defined in: [agentfootprint/src/adapters/llm/BrowserAnthropicProvider.ts:80](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/adapters/llm/BrowserAnthropicProvider.ts#L80)
+Defined in: [src/adapters/llm/BrowserAnthropicProvider.ts:89](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/adapters/llm/BrowserAnthropicProvider.ts#L89)
 
 Default max tokens. Default 4096.
 
@@ -44,6 +44,6 @@ Default max tokens. Default 4096.
 
 > `readonly` `optional` **defaultModel?**: `string`
 
-Defined in: [agentfootprint/src/adapters/llm/BrowserAnthropicProvider.ts:78](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/adapters/llm/BrowserAnthropicProvider.ts#L78)
+Defined in: [src/adapters/llm/BrowserAnthropicProvider.ts:87](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/adapters/llm/BrowserAnthropicProvider.ts#L87)
 
 Default model when `LLMRequest.model` is `'anthropic'`.

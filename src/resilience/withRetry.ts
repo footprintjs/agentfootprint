@@ -48,6 +48,9 @@ export interface WithRetryOptions {
  * Wrap a provider so its `complete()` retries transient failures.
  *
  * @example
+ *   import { withRetry } from 'agentfootprint/resilience';
+ *   import { anthropic } from 'agentfootprint/llm-providers';
+ *
  *   const robust = withRetry(anthropic({ apiKey }), {
  *     maxAttempts: 5,
  *     onRetry: (err, attempt, ms) => console.warn(`retry ${attempt} in ${ms}ms`, err),

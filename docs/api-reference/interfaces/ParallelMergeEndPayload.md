@@ -6,7 +6,7 @@
 
 # Interface: ParallelMergeEndPayload
 
-Defined in: [agentfootprint/src/events/payloads.ts:49](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/events/payloads.ts#L49)
+Defined in: [src/events/payloads.ts:57](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L57)
 
 ## Properties
 
@@ -14,7 +14,12 @@ Defined in: [agentfootprint/src/events/payloads.ts:49](https://github.com/footpr
 
 > `readonly` **mergedBranchCount**: `number`
 
-Defined in: [agentfootprint/src/events/payloads.ts:53](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/events/payloads.ts#L53)
+Defined in: [src/events/payloads.ts:72](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L72)
+
+Number of branches whose result FED the merge — i.e., succeeded
+ (or, in tolerant mode, those the merge fn actually consumed as
+ `{ok: true}`). Failing branches are counted in `totalBranchCount
+ - mergedBranchCount`.
 
 ***
 
@@ -22,7 +27,7 @@ Defined in: [agentfootprint/src/events/payloads.ts:53](https://github.com/footpr
 
 > `readonly` **parentId**: `string`
 
-Defined in: [agentfootprint/src/events/payloads.ts:50](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/events/payloads.ts#L50)
+Defined in: [src/events/payloads.ts:58](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L58)
 
 ***
 
@@ -30,12 +35,29 @@ Defined in: [agentfootprint/src/events/payloads.ts:50](https://github.com/footpr
 
 > `readonly` **resultSummary**: `string`
 
-Defined in: [agentfootprint/src/events/payloads.ts:52](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/events/payloads.ts#L52)
+Defined in: [src/events/payloads.ts:67](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L67)
 
 ***
 
 ### strategy
 
-> `readonly` **strategy**: `"llm"` \| `"fn"`
+> `readonly` **strategy**: `"llm"` \| `"fn"` \| `"outcomes-fn"`
 
-Defined in: [agentfootprint/src/events/payloads.ts:51](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/events/payloads.ts#L51)
+Defined in: [src/events/payloads.ts:66](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L66)
+
+Which merge strategy ran. `'fn'` = `mergeWithFn` (strict, plain
+results map). `'llm'` = `mergeWithLLM` (strict, LLM synthesis).
+`'outcomes-fn'` = `mergeOutcomesWithFn` (tolerant, full
+`BranchOutcome` map). Distinct values so consumers can render
+tolerant vs strict merges differently in dashboards.
+
+***
+
+### totalBranchCount
+
+> `readonly` **totalBranchCount**: `number`
+
+Defined in: [src/events/payloads.ts:75](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L75)
+
+Total number of branches declared on the Parallel — equals
+ `mergedBranchCount` on all-success runs, larger on partial.

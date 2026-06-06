@@ -6,7 +6,7 @@
 
 # Interface: DefineInstructionOptions
 
-Defined in: [agentfootprint/src/lib/injection-engine/factories/defineInstruction.ts:34](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/lib/injection-engine/factories/defineInstruction.ts#L34)
+Defined in: [src/lib/injection-engine/factories/defineInstruction.ts:36](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/lib/injection-engine/factories/defineInstruction.ts#L36)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [agentfootprint/src/lib/injection-engine/factories/defineInstruction
 
 > `readonly` `optional` **activeWhen?**: (`ctx`) => `boolean`
 
-Defined in: [agentfootprint/src/lib/injection-engine/factories/defineInstruction.ts:45](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/lib/injection-engine/factories/defineInstruction.ts#L45)
+Defined in: [src/lib/injection-engine/factories/defineInstruction.ts:47](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/lib/injection-engine/factories/defineInstruction.ts#L47)
 
 Predicate to decide activation. Synchronous; side-effect free.
 If omitted, the instruction is always active (effectively a
@@ -35,11 +35,27 @@ Predicates that throw are skipped (fail-open) and reported via
 
 ***
 
+### cache?
+
+> `readonly` `optional` **cache?**: `CachePolicy`
+
+Defined in: [src/lib/injection-engine/factories/defineInstruction.ts:79](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/lib/injection-engine/factories/defineInstruction.ts#L79)
+
+Cache policy for this instruction. Defaults to `'never'` —
+instructions are typically rule-based (volatile per-iter
+`activeWhen` predicates, on-tool-return reminders). Override to
+`'always'` only for instructions you know are stable per-turn
+(e.g., a static safety rule wrapped as `defineInstruction` for
+narrative tagging — though `defineSteering` is the cleaner choice
+for that case).
+
+***
+
 ### description?
 
 > `readonly` `optional` **description?**: `string`
 
-Defined in: [agentfootprint/src/lib/injection-engine/factories/defineInstruction.ts:36](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/lib/injection-engine/factories/defineInstruction.ts#L36)
+Defined in: [src/lib/injection-engine/factories/defineInstruction.ts:38](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/lib/injection-engine/factories/defineInstruction.ts#L38)
 
 ***
 
@@ -47,7 +63,7 @@ Defined in: [agentfootprint/src/lib/injection-engine/factories/defineInstruction
 
 > `readonly` **id**: `string`
 
-Defined in: [agentfootprint/src/lib/injection-engine/factories/defineInstruction.ts:35](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/lib/injection-engine/factories/defineInstruction.ts#L35)
+Defined in: [src/lib/injection-engine/factories/defineInstruction.ts:37](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/lib/injection-engine/factories/defineInstruction.ts#L37)
 
 ***
 
@@ -55,7 +71,7 @@ Defined in: [agentfootprint/src/lib/injection-engine/factories/defineInstruction
 
 > `readonly` **prompt**: `string`
 
-Defined in: [agentfootprint/src/lib/injection-engine/factories/defineInstruction.ts:47](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/lib/injection-engine/factories/defineInstruction.ts#L47)
+Defined in: [src/lib/injection-engine/factories/defineInstruction.ts:49](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/lib/injection-engine/factories/defineInstruction.ts#L49)
 
 Instruction text. Lands in the slot specified by `slot` (default system-prompt).
 
@@ -65,7 +81,7 @@ Instruction text. Lands in the slot specified by `slot` (default system-prompt).
 
 > `readonly` `optional` **role?**: [`ContextRole`](/agentfootprint/api/generated/type-aliases/ContextRole.md)
 
-Defined in: [agentfootprint/src/lib/injection-engine/factories/defineInstruction.ts:67](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/lib/injection-engine/factories/defineInstruction.ts#L67)
+Defined in: [src/lib/injection-engine/factories/defineInstruction.ts:69](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/lib/injection-engine/factories/defineInstruction.ts#L69)
 
 When `slot: 'messages'`, the role to use. Default `'system'`.
 `'user'` is also valid; `'assistant'` and `'tool'` work in
@@ -77,7 +93,7 @@ principle but rarely make pedagogical sense.
 
 > `readonly` `optional` **slot?**: `"system-prompt"` \| `"messages"`
 
-Defined in: [agentfootprint/src/lib/injection-engine/factories/defineInstruction.ts:61](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/lib/injection-engine/factories/defineInstruction.ts#L61)
+Defined in: [src/lib/injection-engine/factories/defineInstruction.ts:63](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/lib/injection-engine/factories/defineInstruction.ts#L63)
 
 Where the instruction lands.
 

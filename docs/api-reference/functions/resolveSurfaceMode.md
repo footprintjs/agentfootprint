@@ -8,7 +8,7 @@
 
 > **resolveSurfaceMode**(`provider`, `model?`): [`SurfaceMode`](/agentfootprint/api/generated/type-aliases/SurfaceMode.md)
 
-Defined in: [agentfootprint/src/lib/injection-engine/factories/defineSkill.ts:122](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/lib/injection-engine/factories/defineSkill.ts#L122)
+Defined in: [src/lib/injection-engine/factories/defineSkill.ts:166](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/lib/injection-engine/factories/defineSkill.ts#L166)
 
 Resolve `surfaceMode: 'auto'` to a concrete mode based on provider
 + model. The defaults match the per-provider attention profile

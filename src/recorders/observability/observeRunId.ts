@@ -20,7 +20,7 @@
  * class MyRecorder implements ScopeRecorder {
  *   private readonly runIdGuard = createRunIdObserver(() => this.reset());
  *   onWrite(e) {
- *     this.runIdGuard.observe(e.runId);
+ *     this.runIdGuard.observe(e.traversalContext?.runId);
  *     // ... handle event
  *   }
  *   private reset() { this.store.clear(); }

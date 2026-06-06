@@ -6,7 +6,7 @@
 
 # Interface: McpClient
 
-Defined in: [agentfootprint/src/lib/mcp/types.ts:96](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/lib/mcp/types.ts#L96)
+Defined in: [src/lib/mcp/types.ts:96](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/lib/mcp/types.ts#L96)
 
 What `mcpClient(opts)` returns. Connect once; call `.tools()` to
 snapshot the tool list, `.refresh()` to re-list after the server's
@@ -18,7 +18,7 @@ tools change, `.close()` when done.
 
 > `readonly` **name**: `string`
 
-Defined in: [agentfootprint/src/lib/mcp/types.ts:98](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/lib/mcp/types.ts#L98)
+Defined in: [src/lib/mcp/types.ts:98](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/lib/mcp/types.ts#L98)
 
 Logical name from options (or default `'mcp'`).
 
@@ -28,7 +28,7 @@ Logical name from options (or default `'mcp'`).
 
 > **close**(): `Promise`\<`void`\>
 
-Defined in: [agentfootprint/src/lib/mcp/types.ts:116](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/lib/mcp/types.ts#L116)
+Defined in: [src/lib/mcp/types.ts:116](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/lib/mcp/types.ts#L116)
 
 Close the underlying transport. After `close()` the client is unusable.
 
@@ -42,7 +42,7 @@ Close the underlying transport. After `close()` the client is unusable.
 
 > **refresh**(): `Promise`\<readonly [`Tool`](/agentfootprint/api/generated/interfaces/Tool.md)\<`Record`\<`string`, `unknown`\>, `unknown`\>[]\>
 
-Defined in: [agentfootprint/src/lib/mcp/types.ts:113](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/lib/mcp/types.ts#L113)
+Defined in: [src/lib/mcp/types.ts:113](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/lib/mcp/types.ts#L113)
 
 Force a refresh from the server. Use when you suspect the server
 has dynamically added/removed tools mid-session (e.g., after the
@@ -58,7 +58,7 @@ server processes a config update).
 
 > **tools**(): `Promise`\<readonly [`Tool`](/agentfootprint/api/generated/interfaces/Tool.md)\<`Record`\<`string`, `unknown`\>, `unknown`\>[]\>
 
-Defined in: [agentfootprint/src/lib/mcp/types.ts:106](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/lib/mcp/types.ts#L106)
+Defined in: [src/lib/mcp/types.ts:106](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/lib/mcp/types.ts#L106)
 
 List the server's tools as agentfootprint `Tool[]`. First call
 after `mcpClient(...)` is the snapshot used to register on the

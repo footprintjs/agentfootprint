@@ -6,7 +6,7 @@
 
 # Interface: ToolStartPayload
 
-Defined in: [agentfootprint/src/events/payloads.ts:148](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/events/payloads.ts#L148)
+Defined in: [src/events/payloads.ts:177](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L177)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [agentfootprint/src/events/payloads.ts:148](https://github.com/footp
 
 > `readonly` **args**: `Readonly`\<`Record`\<`string`, `unknown`\>\>
 
-Defined in: [agentfootprint/src/events/payloads.ts:151](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/events/payloads.ts#L151)
+Defined in: [src/events/payloads.ts:180](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L180)
 
 ***
 
@@ -22,7 +22,7 @@ Defined in: [agentfootprint/src/events/payloads.ts:151](https://github.com/footp
 
 > `readonly` `optional` **parallelCount?**: `number`
 
-Defined in: [agentfootprint/src/events/payloads.ts:152](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/events/payloads.ts#L152)
+Defined in: [src/events/payloads.ts:181](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L181)
 
 ***
 
@@ -30,7 +30,7 @@ Defined in: [agentfootprint/src/events/payloads.ts:152](https://github.com/footp
 
 > `readonly` `optional` **protocol?**: [`ToolProtocol`](/agentfootprint/api/generated/type-aliases/ToolProtocol.md)
 
-Defined in: [agentfootprint/src/events/payloads.ts:153](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/events/payloads.ts#L153)
+Defined in: [src/events/payloads.ts:182](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L182)
 
 ***
 
@@ -38,7 +38,7 @@ Defined in: [agentfootprint/src/events/payloads.ts:153](https://github.com/footp
 
 > `readonly` **toolCallId**: `string`
 
-Defined in: [agentfootprint/src/events/payloads.ts:150](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/events/payloads.ts#L150)
+Defined in: [src/events/payloads.ts:179](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L179)
 
 ***
 
@@ -46,4 +46,4 @@ Defined in: [agentfootprint/src/events/payloads.ts:150](https://github.com/footp
 
 > `readonly` **toolName**: `string`
 
-Defined in: [agentfootprint/src/events/payloads.ts:149](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/events/payloads.ts#L149)
+Defined in: [src/events/payloads.ts:178](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L178)

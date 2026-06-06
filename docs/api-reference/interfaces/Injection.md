@@ -6,7 +6,7 @@
 
 # Interface: Injection
 
-Defined in: [agentfootprint/src/lib/injection-engine/types.ts:134](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/lib/injection-engine/types.ts#L134)
+Defined in: [src/lib/injection-engine/types.ts:134](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/lib/injection-engine/types.ts#L134)
 
 THE primitive. Five fields. Four trigger kinds. Three slot targets.
 
@@ -38,7 +38,7 @@ Memory, Guardrail, …) is a sugar factory that produces one of these.
 
 > `readonly` `optional` **description?**: `string`
 
-Defined in: [agentfootprint/src/lib/injection-engine/types.ts:138](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/lib/injection-engine/types.ts#L138)
+Defined in: [src/lib/injection-engine/types.ts:138](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/lib/injection-engine/types.ts#L138)
 
 Human-readable description (Lens / docs / debug).
 
@@ -48,7 +48,7 @@ Human-readable description (Lens / docs / debug).
 
 > `readonly` **flavor**: [`ContextSource`](/agentfootprint/api/generated/type-aliases/ContextSource.md)
 
-Defined in: [agentfootprint/src/lib/injection-engine/types.ts:140](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/lib/injection-engine/types.ts#L140)
+Defined in: [src/lib/injection-engine/types.ts:140](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/lib/injection-engine/types.ts#L140)
 
 Observability tag. Drives Lens chip color + ContextRecorder source field.
 
@@ -58,7 +58,7 @@ Observability tag. Drives Lens chip color + ContextRecorder source field.
 
 > `readonly` **id**: `string`
 
-Defined in: [agentfootprint/src/lib/injection-engine/types.ts:136](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/lib/injection-engine/types.ts#L136)
+Defined in: [src/lib/injection-engine/types.ts:136](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/lib/injection-engine/types.ts#L136)
 
 Unique id. Used for observability + de-duplication + LLM-activation lookup.
 
@@ -68,7 +68,7 @@ Unique id. Used for observability + de-duplication + LLM-activation lookup.
 
 > `readonly` **inject**: [`InjectionContent`](/agentfootprint/api/generated/interfaces/InjectionContent.md)
 
-Defined in: [agentfootprint/src/lib/injection-engine/types.ts:144](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/lib/injection-engine/types.ts#L144)
+Defined in: [src/lib/injection-engine/types.ts:144](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/lib/injection-engine/types.ts#L144)
 
 WHAT to contribute (one or more slots).
 
@@ -78,7 +78,7 @@ WHAT to contribute (one or more slots).
 
 > `readonly` `optional` **metadata?**: `Readonly`\<`Record`\<`string`, `unknown`\>\>
 
-Defined in: [agentfootprint/src/lib/injection-engine/types.ts:154](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/lib/injection-engine/types.ts#L154)
+Defined in: [src/lib/injection-engine/types.ts:154](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/lib/injection-engine/types.ts#L154)
 
 Optional flavor-specific metadata. Engine ignores keys it doesn't
 recognize; flavor factories use this for opt-in fields without
@@ -94,6 +94,6 @@ Known keys:
 
 > `readonly` **trigger**: [`InjectionTrigger`](/agentfootprint/api/generated/type-aliases/InjectionTrigger.md)
 
-Defined in: [agentfootprint/src/lib/injection-engine/types.ts:142](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/lib/injection-engine/types.ts#L142)
+Defined in: [src/lib/injection-engine/types.ts:142](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/lib/injection-engine/types.ts#L142)
 
 WHEN to activate.

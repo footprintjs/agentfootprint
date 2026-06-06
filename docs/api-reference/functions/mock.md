@@ -8,7 +8,7 @@
 
 > **mock**(`options?`): [`MockProvider`](/agentfootprint/api/generated/classes/MockProvider.md)
 
-Defined in: [agentfootprint/src/adapters/llm/MockProvider.ts:249](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/adapters/llm/MockProvider.ts#L249)
+Defined in: [src/adapters/llm/MockProvider.ts:251](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/adapters/llm/MockProvider.ts#L251)
 
 Lowercase factory for `MockProvider` — matches the v1 `mock()` import
 shape so docs and quick-starts stay copy-pasteable. Equivalent to

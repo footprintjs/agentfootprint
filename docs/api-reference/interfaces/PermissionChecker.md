@@ -6,7 +6,7 @@
 
 # Interface: PermissionChecker
 
-Defined in: [agentfootprint/src/adapters/types.ts:181](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/adapters/types.ts#L181)
+Defined in: [src/adapters/types.ts:402](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/adapters/types.ts#L402)
 
 ## Properties
 
@@ -14,15 +14,15 @@ Defined in: [agentfootprint/src/adapters/types.ts:181](https://github.com/footpr
 
 > `readonly` **name**: `string`
 
-Defined in: [agentfootprint/src/adapters/types.ts:182](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/adapters/types.ts#L182)
+Defined in: [src/adapters/types.ts:403](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/adapters/types.ts#L403)
 
 ## Methods
 
 ### check()
 
-> **check**(`request`): `Promise`\<[`PermissionDecision`](/agentfootprint/api/generated/interfaces/PermissionDecision.md)\>
+> **check**(`request`): [`PermissionDecision`](/agentfootprint/api/generated/interfaces/PermissionDecision.md) \| `Promise`\<[`PermissionDecision`](/agentfootprint/api/generated/interfaces/PermissionDecision.md)\>
 
-Defined in: [agentfootprint/src/adapters/types.ts:183](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/adapters/types.ts#L183)
+Defined in: [src/adapters/types.ts:404](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/adapters/types.ts#L404)
 
 #### Parameters
 
@@ -32,4 +32,4 @@ Defined in: [agentfootprint/src/adapters/types.ts:183](https://github.com/footpr
 
 #### Returns
 
-`Promise`\<[`PermissionDecision`](/agentfootprint/api/generated/interfaces/PermissionDecision.md)\>
+[`PermissionDecision`](/agentfootprint/api/generated/interfaces/PermissionDecision.md) \| `Promise`\<[`PermissionDecision`](/agentfootprint/api/generated/interfaces/PermissionDecision.md)\>

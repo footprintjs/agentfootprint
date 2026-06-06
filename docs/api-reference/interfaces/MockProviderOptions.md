@@ -6,7 +6,7 @@
 
 # Interface: MockProviderOptions
 
-Defined in: [agentfootprint/src/adapters/llm/MockProvider.ts:36](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/adapters/llm/MockProvider.ts#L36)
+Defined in: [src/adapters/llm/MockProvider.ts:36](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/adapters/llm/MockProvider.ts#L36)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [agentfootprint/src/adapters/llm/MockProvider.ts:36](https://github.
 
 > `readonly` `optional` **chunkDelayMs?**: `LatencyMs`
 
-Defined in: [agentfootprint/src/adapters/llm/MockProvider.ts:91](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/adapters/llm/MockProvider.ts#L91)
+Defined in: [src/adapters/llm/MockProvider.ts:91](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/adapters/llm/MockProvider.ts#L91)
 
 For `stream()`: delay between successive chunks (ms). Pass a
 single number for a fixed delay or a `[min, max]` tuple for a
@@ -29,7 +29,7 @@ Has no effect on `complete()`.
 
 > `readonly` `optional` **delayMs?**: `LatencyMs`
 
-Defined in: [agentfootprint/src/adapters/llm/MockProvider.ts:82](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/adapters/llm/MockProvider.ts#L82)
+Defined in: [src/adapters/llm/MockProvider.ts:82](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/adapters/llm/MockProvider.ts#L82)
 
 Alias for `thinkingMs`. Kept for back-compat with prior revisions.
 
@@ -39,7 +39,7 @@ Alias for `thinkingMs`. Kept for back-compat with prior revisions.
 
 > `readonly` `optional` **name?**: `string`
 
-Defined in: [agentfootprint/src/adapters/llm/MockProvider.ts:37](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/adapters/llm/MockProvider.ts#L37)
+Defined in: [src/adapters/llm/MockProvider.ts:37](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/adapters/llm/MockProvider.ts#L37)
 
 ***
 
@@ -47,7 +47,7 @@ Defined in: [agentfootprint/src/adapters/llm/MockProvider.ts:37](https://github.
 
 > `readonly` `optional` **replies?**: readonly [`MockReply`](/agentfootprint/api/generated/type-aliases/MockReply.md)[]
 
-Defined in: [agentfootprint/src/adapters/llm/MockProvider.ts:62](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/adapters/llm/MockProvider.ts#L62)
+Defined in: [src/adapters/llm/MockProvider.ts:62](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/adapters/llm/MockProvider.ts#L62)
 
 Scripted replies for multi-turn / tool-using agents. Each entry
 is consumed in order — iteration 1 reads `replies[0]`, iteration
@@ -76,7 +76,7 @@ Takes precedence over `reply` and `respond` when set.
 
 > `readonly` `optional` **reply?**: `string`
 
-Defined in: [agentfootprint/src/adapters/llm/MockProvider.ts:39](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/adapters/llm/MockProvider.ts#L39)
+Defined in: [src/adapters/llm/MockProvider.ts:39](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/adapters/llm/MockProvider.ts#L39)
 
 Fixed response content. Overrides `respond` when set.
 
@@ -86,7 +86,7 @@ Fixed response content. Overrides `respond` when set.
 
 > `readonly` `optional` **respond?**: (`req`) => `string` \| `Partial`\<[`LLMResponse`](/agentfootprint/api/generated/interfaces/LLMResponse.md)\>
 
-Defined in: [agentfootprint/src/adapters/llm/MockProvider.ts:71](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/adapters/llm/MockProvider.ts#L71)
+Defined in: [src/adapters/llm/MockProvider.ts:71](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/adapters/llm/MockProvider.ts#L71)
 
 Build the response from the request. Returns either a plain
 string (renders as content with no tool calls) or a partial
@@ -111,7 +111,7 @@ Default: echoes the last user message.
 
 > `readonly` `optional` **stopReason?**: `string`
 
-Defined in: [agentfootprint/src/adapters/llm/MockProvider.ts:93](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/adapters/llm/MockProvider.ts#L93)
+Defined in: [src/adapters/llm/MockProvider.ts:93](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/adapters/llm/MockProvider.ts#L93)
 
 Fixed stop reason to return. Default 'stop'.
 
@@ -121,7 +121,7 @@ Fixed stop reason to return. Default 'stop'.
 
 > `readonly` `optional` **thinkingMs?**: `LatencyMs`
 
-Defined in: [agentfootprint/src/adapters/llm/MockProvider.ts:80](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/adapters/llm/MockProvider.ts#L80)
+Defined in: [src/adapters/llm/MockProvider.ts:80](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/adapters/llm/MockProvider.ts#L80)
 
 Simulated wall-clock delay per request (ms).
 Pass a single number for a fixed delay or a `[min, max]` tuple for
@@ -136,6 +136,6 @@ Aliased via `delayMs` for backward compatibility.
 
 > `readonly` `optional` **usage?**: `Readonly`\<\{ `cacheRead?`: `number`; `cacheWrite?`: `number`; `input?`: `number`; `output?`: `number`; \}\>
 
-Defined in: [agentfootprint/src/adapters/llm/MockProvider.ts:95](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/adapters/llm/MockProvider.ts#L95)
+Defined in: [src/adapters/llm/MockProvider.ts:95](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/adapters/llm/MockProvider.ts#L95)
 
 Override usage counts returned. Default: chars/4 heuristic.

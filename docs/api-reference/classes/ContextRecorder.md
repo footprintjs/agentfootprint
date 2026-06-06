@@ -6,11 +6,11 @@
 
 # Class: ContextRecorder
 
-Defined in: [agentfootprint/src/recorders/core/ContextRecorder.ts:41](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/recorders/core/ContextRecorder.ts#L41)
+Defined in: [src/recorders/core/ContextRecorder.ts:41](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/core/ContextRecorder.ts#L41)
 
 ## Implements
 
-- `CombinedRecorder`
+- [`CombinedRecorder`](/agentfootprint/api/generated/type-aliases/CombinedRecorder.md)
 
 ## Constructors
 
@@ -18,7 +18,7 @@ Defined in: [agentfootprint/src/recorders/core/ContextRecorder.ts:41](https://gi
 
 > **new ContextRecorder**(`options`): `ContextRecorder`
 
-Defined in: [agentfootprint/src/recorders/core/ContextRecorder.ts:54](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/recorders/core/ContextRecorder.ts#L54)
+Defined in: [src/recorders/core/ContextRecorder.ts:57](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/core/ContextRecorder.ts#L57)
 
 #### Parameters
 
@@ -36,7 +36,7 @@ Defined in: [agentfootprint/src/recorders/core/ContextRecorder.ts:54](https://gi
 
 > `readonly` **id**: `string`
 
-Defined in: [agentfootprint/src/recorders/core/ContextRecorder.ts:42](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/recorders/core/ContextRecorder.ts#L42)
+Defined in: [src/recorders/core/ContextRecorder.ts:42](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/core/ContextRecorder.ts#L42)
 
 #### Implementation of
 
@@ -48,13 +48,13 @@ Defined in: [agentfootprint/src/recorders/core/ContextRecorder.ts:42](https://gi
 
 > **onSubflowEntry**(`event`): `void`
 
-Defined in: [agentfootprint/src/recorders/core/ContextRecorder.ts:62](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/recorders/core/ContextRecorder.ts#L62)
+Defined in: [src/recorders/core/ContextRecorder.ts:65](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/core/ContextRecorder.ts#L65)
 
 #### Parameters
 
 ##### event
 
-`FlowSubflowEvent`
+[`FlowSubflowEvent`](/agentfootprint/api/generated/interfaces/FlowSubflowEvent.md)
 
 #### Returns
 
@@ -62,7 +62,7 @@ Defined in: [agentfootprint/src/recorders/core/ContextRecorder.ts:62](https://gi
 
 #### Implementation of
 
-`CombinedRecorder.onSubflowEntry`
+[`FlowRecorder`](/agentfootprint/api/generated/interfaces/FlowRecorder.md).[`onSubflowEntry`](/agentfootprint/api/generated/interfaces/FlowRecorder.md#onsubflowentry)
 
 ***
 
@@ -70,13 +70,13 @@ Defined in: [agentfootprint/src/recorders/core/ContextRecorder.ts:62](https://gi
 
 > **onSubflowExit**(`event`): `void`
 
-Defined in: [agentfootprint/src/recorders/core/ContextRecorder.ts:70](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/recorders/core/ContextRecorder.ts#L70)
+Defined in: [src/recorders/core/ContextRecorder.ts:73](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/core/ContextRecorder.ts#L73)
 
 #### Parameters
 
 ##### event
 
-`FlowSubflowEvent`
+[`FlowSubflowEvent`](/agentfootprint/api/generated/interfaces/FlowSubflowEvent.md)
 
 #### Returns
 
@@ -84,7 +84,7 @@ Defined in: [agentfootprint/src/recorders/core/ContextRecorder.ts:70](https://gi
 
 #### Implementation of
 
-`CombinedRecorder.onSubflowExit`
+[`FlowRecorder`](/agentfootprint/api/generated/interfaces/FlowRecorder.md).[`onSubflowExit`](/agentfootprint/api/generated/interfaces/FlowRecorder.md#onsubflowexit)
 
 ***
 
@@ -92,13 +92,13 @@ Defined in: [agentfootprint/src/recorders/core/ContextRecorder.ts:70](https://gi
 
 > **onWrite**(`event`): `void`
 
-Defined in: [agentfootprint/src/recorders/core/ContextRecorder.ts:83](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/recorders/core/ContextRecorder.ts#L83)
+Defined in: [src/recorders/core/ContextRecorder.ts:82](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/core/ContextRecorder.ts#L82)
 
 #### Parameters
 
 ##### event
 
-`WriteEvent`
+[`WriteEvent`](/agentfootprint/api/generated/interfaces/WriteEvent.md)
 
 #### Returns
 
@@ -106,4 +106,4 @@ Defined in: [agentfootprint/src/recorders/core/ContextRecorder.ts:83](https://gi
 
 #### Implementation of
 
-`CombinedRecorder.onWrite`
+[`ScopeRecorder`](/agentfootprint/api/generated/interfaces/ScopeRecorder.md).[`onWrite`](/agentfootprint/api/generated/interfaces/ScopeRecorder.md#onwrite)

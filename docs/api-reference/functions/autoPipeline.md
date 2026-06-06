@@ -8,7 +8,7 @@
 
 > **autoPipeline**(`config`): `MemoryPipeline`
 
-Defined in: [agentfootprint/src/memory/pipeline/auto.ts:210](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/memory/pipeline/auto.ts#L210)
+Defined in: [src/memory/pipeline/auto.ts:210](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/memory/pipeline/auto.ts#L210)
 
 ## Parameters
 

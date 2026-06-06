@@ -6,7 +6,7 @@
 
 # Interface: McpHttpTransport
 
-Defined in: [agentfootprint/src/lib/mcp/types.ts:49](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/lib/mcp/types.ts#L49)
+Defined in: [src/lib/mcp/types.ts:49](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/lib/mcp/types.ts#L49)
 
 `http` transport — speaks MCP over Streamable HTTP. Best for remote
 servers, web environments, and multi-user scenarios.
@@ -17,7 +17,7 @@ servers, web environments, and multi-user scenarios.
 
 > `readonly` `optional` **headers?**: `Readonly`\<`Record`\<`string`, `string`\>\>
 
-Defined in: [agentfootprint/src/lib/mcp/types.ts:54](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/lib/mcp/types.ts#L54)
+Defined in: [src/lib/mcp/types.ts:54](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/lib/mcp/types.ts#L54)
 
 Optional auth headers (e.g., `Authorization: Bearer ...`).
 
@@ -27,7 +27,7 @@ Optional auth headers (e.g., `Authorization: Bearer ...`).
 
 > `readonly` **transport**: `"http"`
 
-Defined in: [agentfootprint/src/lib/mcp/types.ts:50](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/lib/mcp/types.ts#L50)
+Defined in: [src/lib/mcp/types.ts:50](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/lib/mcp/types.ts#L50)
 
 ***
 
@@ -35,6 +35,6 @@ Defined in: [agentfootprint/src/lib/mcp/types.ts:50](https://github.com/footprin
 
 > `readonly` **url**: `string`
 
-Defined in: [agentfootprint/src/lib/mcp/types.ts:52](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/lib/mcp/types.ts#L52)
+Defined in: [src/lib/mcp/types.ts:52](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/lib/mcp/types.ts#L52)
 
 MCP server endpoint URL.

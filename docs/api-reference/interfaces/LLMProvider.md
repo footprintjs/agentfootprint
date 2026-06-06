@@ -6,7 +6,7 @@
 
 # Interface: LLMProvider
 
-Defined in: [agentfootprint/src/adapters/types.ts:97](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/adapters/types.ts#L97)
+Defined in: [src/adapters/types.ts:229](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/adapters/types.ts#L229)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [agentfootprint/src/adapters/types.ts:97](https://github.com/footpri
 
 > `readonly` **name**: `string`
 
-Defined in: [agentfootprint/src/adapters/types.ts:98](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/adapters/types.ts#L98)
+Defined in: [src/adapters/types.ts:230](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/adapters/types.ts#L230)
 
 ## Methods
 
@@ -22,7 +22,7 @@ Defined in: [agentfootprint/src/adapters/types.ts:98](https://github.com/footpri
 
 > **complete**(`req`): `Promise`\<[`LLMResponse`](/agentfootprint/api/generated/interfaces/LLMResponse.md)\>
 
-Defined in: [agentfootprint/src/adapters/types.ts:99](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/adapters/types.ts#L99)
+Defined in: [src/adapters/types.ts:231](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/adapters/types.ts#L231)
 
 #### Parameters
 
@@ -40,7 +40,7 @@ Defined in: [agentfootprint/src/adapters/types.ts:99](https://github.com/footpri
 
 > `optional` **stream**(`req`): `AsyncIterable`\<[`LLMChunk`](/agentfootprint/api/generated/interfaces/LLMChunk.md)\>
 
-Defined in: [agentfootprint/src/adapters/types.ts:100](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/adapters/types.ts#L100)
+Defined in: [src/adapters/types.ts:232](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/adapters/types.ts#L232)
 
 #### Parameters
 

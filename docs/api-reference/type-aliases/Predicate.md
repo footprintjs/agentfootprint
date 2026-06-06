@@ -8,7 +8,7 @@
 
 > **Predicate** = (`input`) => `boolean`
 
-Defined in: [agentfootprint/src/core-flow/Conditional.ts:46](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/core-flow/Conditional.ts#L46)
+Defined in: [src/core-flow/Conditional.ts:65](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/core-flow/Conditional.ts#L65)
 
 ## Parameters
 

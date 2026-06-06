@@ -6,7 +6,7 @@
 
 # Interface: LoopIterationExitPayload
 
-Defined in: [agentfootprint/src/events/payloads.ts:68](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/events/payloads.ts#L68)
+Defined in: [src/events/payloads.ts:90](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L90)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [agentfootprint/src/events/payloads.ts:68](https://github.com/footpr
 
 > `readonly` **iteration**: `number`
 
-Defined in: [agentfootprint/src/events/payloads.ts:70](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/events/payloads.ts#L70)
+Defined in: [src/events/payloads.ts:92](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L92)
 
 ***
 
@@ -22,7 +22,7 @@ Defined in: [agentfootprint/src/events/payloads.ts:70](https://github.com/footpr
 
 > `readonly` **loopId**: `string`
 
-Defined in: [agentfootprint/src/events/payloads.ts:69](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/events/payloads.ts#L69)
+Defined in: [src/events/payloads.ts:91](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L91)
 
 ***
 
@@ -30,4 +30,4 @@ Defined in: [agentfootprint/src/events/payloads.ts:69](https://github.com/footpr
 
 > `readonly` **reason**: `"break"` \| `"budget"` \| `"guard_false"` \| `"body_complete"`
 
-Defined in: [agentfootprint/src/events/payloads.ts:71](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/events/payloads.ts#L71)
+Defined in: [src/events/payloads.ts:93](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L93)

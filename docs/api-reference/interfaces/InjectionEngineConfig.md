@@ -6,7 +6,7 @@
 
 # Interface: InjectionEngineConfig
 
-Defined in: [agentfootprint/src/lib/injection-engine/buildInjectionEngineSubflow.ts:37](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/lib/injection-engine/buildInjectionEngineSubflow.ts#L37)
+Defined in: [src/lib/injection-engine/buildInjectionEngineSubflow.ts:38](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/lib/injection-engine/buildInjectionEngineSubflow.ts#L38)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [agentfootprint/src/lib/injection-engine/buildInjectionEngineSubflow
 
 > `readonly` **injections**: readonly [`Injection`](/agentfootprint/api/generated/interfaces/Injection.md)[]
 
-Defined in: [agentfootprint/src/lib/injection-engine/buildInjectionEngineSubflow.ts:43](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/lib/injection-engine/buildInjectionEngineSubflow.ts#L43)
+Defined in: [src/lib/injection-engine/buildInjectionEngineSubflow.ts:44](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/lib/injection-engine/buildInjectionEngineSubflow.ts#L44)
 
 The Injection list. Frozen at build time. To change at runtime,
 rebuild the agent / chart — the primitive is intentionally

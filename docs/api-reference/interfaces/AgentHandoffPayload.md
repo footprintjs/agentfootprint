@@ -6,7 +6,7 @@
 
 # Interface: AgentHandoffPayload
 
-Defined in: [agentfootprint/src/events/payloads.ts:107](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/events/payloads.ts#L107)
+Defined in: [src/events/payloads.ts:136](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L136)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [agentfootprint/src/events/payloads.ts:107](https://github.com/footp
 
 > `readonly` **fromAgentId**: `string`
 
-Defined in: [agentfootprint/src/events/payloads.ts:108](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/events/payloads.ts#L108)
+Defined in: [src/events/payloads.ts:137](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L137)
 
 ***
 
@@ -22,7 +22,7 @@ Defined in: [agentfootprint/src/events/payloads.ts:108](https://github.com/footp
 
 > `readonly` `optional` **reason?**: `string`
 
-Defined in: [agentfootprint/src/events/payloads.ts:110](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/events/payloads.ts#L110)
+Defined in: [src/events/payloads.ts:139](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L139)
 
 ***
 
@@ -30,7 +30,7 @@ Defined in: [agentfootprint/src/events/payloads.ts:110](https://github.com/footp
 
 > `readonly` **toAgentId**: `string`
 
-Defined in: [agentfootprint/src/events/payloads.ts:109](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/events/payloads.ts#L109)
+Defined in: [src/events/payloads.ts:138](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L138)
 
 ***
 
@@ -38,4 +38,4 @@ Defined in: [agentfootprint/src/events/payloads.ts:109](https://github.com/footp
 
 > `readonly` `optional` **viaProtocol?**: `"native"` \| `"mcp"` \| `"http"`
 
-Defined in: [agentfootprint/src/events/payloads.ts:111](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/events/payloads.ts#L111)
+Defined in: [src/events/payloads.ts:140](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L140)

@@ -6,7 +6,7 @@
 
 # Interface: McpSdkClient
 
-Defined in: [agentfootprint/src/lib/mcp/types.ts:130](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/lib/mcp/types.ts#L130)
+Defined in: [src/lib/mcp/types.ts:130](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/lib/mcp/types.ts#L130)
 
 Minimal structural type capturing the parts of the MCP SDK client
 we touch. Defined locally so we can:
@@ -22,7 +22,7 @@ The real SDK exports a richer surface; we narrow to what's needed.
 
 > **callTool**(`args`): `Promise`\<\{ `content`: readonly `object`[]; `isError?`: `boolean`; \}\>
 
-Defined in: [agentfootprint/src/lib/mcp/types.ts:139](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/lib/mcp/types.ts#L139)
+Defined in: [src/lib/mcp/types.ts:139](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/lib/mcp/types.ts#L139)
 
 #### Parameters
 
@@ -52,7 +52,7 @@ Forwarded from `McpClientOptions.signal` so consumers can cancel hung tool calls
 
 > **close**(): `Promise`\<`void`\>
 
-Defined in: [agentfootprint/src/lib/mcp/types.ts:151](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/lib/mcp/types.ts#L151)
+Defined in: [src/lib/mcp/types.ts:151](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/lib/mcp/types.ts#L151)
 
 #### Returns
 
@@ -64,7 +64,7 @@ Defined in: [agentfootprint/src/lib/mcp/types.ts:151](https://github.com/footpri
 
 > **connect**(`transport`): `Promise`\<`void`\>
 
-Defined in: [agentfootprint/src/lib/mcp/types.ts:131](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/lib/mcp/types.ts#L131)
+Defined in: [src/lib/mcp/types.ts:131](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/lib/mcp/types.ts#L131)
 
 #### Parameters
 
@@ -82,7 +82,7 @@ Defined in: [agentfootprint/src/lib/mcp/types.ts:131](https://github.com/footpri
 
 > **listTools**(): `Promise`\<\{ `tools`: readonly `object`[]; \}\>
 
-Defined in: [agentfootprint/src/lib/mcp/types.ts:132](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/lib/mcp/types.ts#L132)
+Defined in: [src/lib/mcp/types.ts:132](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/lib/mcp/types.ts#L132)
 
 #### Returns
 

@@ -6,7 +6,7 @@
 
 # Interface: BudgetPressureRecord
 
-Defined in: [agentfootprint/src/recorders/core/types.ts:92](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/recorders/core/types.ts#L92)
+Defined in: [src/recorders/core/types.ts:92](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/core/types.ts#L92)
 
 Budget-pressure warning — emitted before evictions fire.
 
@@ -16,7 +16,7 @@ Budget-pressure warning — emitted before evictions fire.
 
 > `readonly` **capTokens**: `number`
 
-Defined in: [agentfootprint/src/recorders/core/types.ts:94](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/recorders/core/types.ts#L94)
+Defined in: [src/recorders/core/types.ts:94](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/core/types.ts#L94)
 
 ***
 
@@ -24,7 +24,7 @@ Defined in: [agentfootprint/src/recorders/core/types.ts:94](https://github.com/f
 
 > `readonly` **overflowBy**: `number`
 
-Defined in: [agentfootprint/src/recorders/core/types.ts:96](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/recorders/core/types.ts#L96)
+Defined in: [src/recorders/core/types.ts:96](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/core/types.ts#L96)
 
 ***
 
@@ -32,7 +32,7 @@ Defined in: [agentfootprint/src/recorders/core/types.ts:96](https://github.com/f
 
 > `readonly` **planAction**: `"evict"` \| `"summarize"` \| `"abort"`
 
-Defined in: [agentfootprint/src/recorders/core/types.ts:97](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/recorders/core/types.ts#L97)
+Defined in: [src/recorders/core/types.ts:97](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/core/types.ts#L97)
 
 ***
 
@@ -40,7 +40,7 @@ Defined in: [agentfootprint/src/recorders/core/types.ts:97](https://github.com/f
 
 > `readonly` **projectedTokens**: `number`
 
-Defined in: [agentfootprint/src/recorders/core/types.ts:95](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/recorders/core/types.ts#L95)
+Defined in: [src/recorders/core/types.ts:95](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/core/types.ts#L95)
 
 ***
 
@@ -48,4 +48,4 @@ Defined in: [agentfootprint/src/recorders/core/types.ts:95](https://github.com/f
 
 > `readonly` **slot**: [`ContextSlot`](/agentfootprint/api/generated/type-aliases/ContextSlot.md)
 
-Defined in: [agentfootprint/src/recorders/core/types.ts:93](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/recorders/core/types.ts#L93)
+Defined in: [src/recorders/core/types.ts:93](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/core/types.ts#L93)

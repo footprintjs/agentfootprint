@@ -6,7 +6,7 @@
 
 # Class: SSEFormatter\<TIn, TOut\>
 
-Defined in: [agentfootprint/src/stream.ts:151](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/stream.ts#L151)
+Defined in: [src/stream.ts:153](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/stream.ts#L153)
 
 Class form for consumers who prefer `new SSEFormatter(runner).stream()`.
 Identical behavior to `toSSE(runner)` — pick by preference.
@@ -27,7 +27,7 @@ Identical behavior to `toSSE(runner)` — pick by preference.
 
 > **new SSEFormatter**\<`TIn`, `TOut`\>(`runner`, `options?`): `SSEFormatter`\<`TIn`, `TOut`\>
 
-Defined in: [agentfootprint/src/stream.ts:152](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/stream.ts#L152)
+Defined in: [src/stream.ts:154](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/stream.ts#L154)
 
 #### Parameters
 
@@ -49,7 +49,7 @@ Defined in: [agentfootprint/src/stream.ts:152](https://github.com/footprintjs/ag
 
 > **stream**(): `AsyncIterable`\<`string`\>
 
-Defined in: [agentfootprint/src/stream.ts:158](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/stream.ts#L158)
+Defined in: [src/stream.ts:160](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/stream.ts#L160)
 
 Async iterable of SSE chunks. Consume with `for await`.
 

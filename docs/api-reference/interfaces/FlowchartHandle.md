@@ -6,7 +6,7 @@
 
 # Interface: FlowchartHandle
 
-Defined in: [agentfootprint/src/recorders/observability/FlowchartRecorder.ts:176](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/recorders/observability/FlowchartRecorder.ts#L176)
+Defined in: [src/recorders/observability/FlowchartRecorder.ts:185](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/FlowchartRecorder.ts#L185)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [agentfootprint/src/recorders/observability/FlowchartRecorder.ts:176
 
 > `readonly` **boundary**: [`BoundaryRecorder`](/agentfootprint/api/generated/classes/BoundaryRecorder.md)
 
-Defined in: [agentfootprint/src/recorders/observability/FlowchartRecorder.ts:183](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/recorders/observability/FlowchartRecorder.ts#L183)
+Defined in: [src/recorders/observability/FlowchartRecorder.ts:192](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/FlowchartRecorder.ts#L192)
 
 Underlying BoundaryRecorder. Use for richer queries — slot data,
  full event log, type-narrowed lookups. The single source of truth
@@ -26,7 +26,7 @@ Underlying BoundaryRecorder. Use for richer queries — slot data,
 
 > `readonly` **getSnapshot**: () => [`StepGraph`](/agentfootprint/api/generated/interfaces/StepGraph.md)
 
-Defined in: [agentfootprint/src/recorders/observability/FlowchartRecorder.ts:179](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/recorders/observability/FlowchartRecorder.ts#L179)
+Defined in: [src/recorders/observability/FlowchartRecorder.ts:188](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/FlowchartRecorder.ts#L188)
 
 Current step graph (derived from boundary events). Safe during or
  after a run.
@@ -41,7 +41,7 @@ Current step graph (derived from boundary events). Safe during or
 
 > `readonly` **unsubscribe**: () => `void`
 
-Defined in: [agentfootprint/src/recorders/observability/FlowchartRecorder.ts:185](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/recorders/observability/FlowchartRecorder.ts#L185)
+Defined in: [src/recorders/observability/FlowchartRecorder.ts:194](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/FlowchartRecorder.ts#L194)
 
 Detach from executor + dispatcher. Subsequent events ignored.
 

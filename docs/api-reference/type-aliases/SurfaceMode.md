@@ -8,7 +8,7 @@
 
 > **SurfaceMode** = `"auto"` \| `"system-prompt"` \| `"tool-only"` \| `"both"`
 
-Defined in: [agentfootprint/src/lib/injection-engine/factories/defineSkill.ts:55](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/lib/injection-engine/factories/defineSkill.ts#L55)
+Defined in: [src/lib/injection-engine/factories/defineSkill.ts:58](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/lib/injection-engine/factories/defineSkill.ts#L58)
 
 Where the Skill's body lands when activated.
 
@@ -24,9 +24,10 @@ Where the Skill's body lands when activated.
 - `'auto'` — the library picks per provider via `resolveSurfaceMode`.
   `'both'` on Claude ≥ 3.5; `'tool-only'` everywhere else.
 
-**Today's behavior:** all four modes route through the recency-first
-path the essay describes as cross-provider-correct (the activation +
-next-iteration injection pattern). Full per-mode routing diversity
-(suppress system-prompt for `'tool-only'`, e.g.) is a v2.5 polish.
-Consumers express intent today; runtime behavior tightens later
-without API change.
+**v2.5 runtime dispatch (Block C):** modes now route differently:
+  - `'system-prompt'` → body in system slot, tool result is confirmation
+  - `'tool-only'`     → body SUPPRESSED from system slot, tool result IS the body
+  - `'both'`          → body in system slot AND in tool result
+  - `'auto'`          → keeps v2.4 behavior (body in system slot, tool result is confirmation)
+    The Block A4 cascade resolves `'auto'` against provider/model context
+    at a future runtime layer (Claude ≥ 3.5 → `'both'`; else `'tool-only'`).

@@ -6,7 +6,7 @@
 
 # Interface: ContextSlotComposedPayload
 
-Defined in: [agentfootprint/src/events/payloads.ts:191](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/events/payloads.ts#L191)
+Defined in: [src/events/payloads.ts:220](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L220)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [agentfootprint/src/events/payloads.ts:191](https://github.com/footp
 
 > `readonly` **budget**: `object`
 
-Defined in: [agentfootprint/src/events/payloads.ts:194](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/events/payloads.ts#L194)
+Defined in: [src/events/payloads.ts:223](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L223)
 
 #### cap
 
@@ -34,7 +34,7 @@ Defined in: [agentfootprint/src/events/payloads.ts:194](https://github.com/footp
 
 > `readonly` **droppedCount**: `number`
 
-Defined in: [agentfootprint/src/events/payloads.ts:203](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/events/payloads.ts#L203)
+Defined in: [src/events/payloads.ts:232](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L232)
 
 ***
 
@@ -42,7 +42,7 @@ Defined in: [agentfootprint/src/events/payloads.ts:203](https://github.com/footp
 
 > `readonly` **droppedSummaries**: readonly `string`[]
 
-Defined in: [agentfootprint/src/events/payloads.ts:204](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/events/payloads.ts#L204)
+Defined in: [src/events/payloads.ts:233](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L233)
 
 ***
 
@@ -50,7 +50,7 @@ Defined in: [agentfootprint/src/events/payloads.ts:204](https://github.com/footp
 
 > `readonly` **iteration**: `number`
 
-Defined in: [agentfootprint/src/events/payloads.ts:193](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/events/payloads.ts#L193)
+Defined in: [src/events/payloads.ts:222](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L222)
 
 ***
 
@@ -58,7 +58,7 @@ Defined in: [agentfootprint/src/events/payloads.ts:193](https://github.com/footp
 
 > `readonly` `optional` **orderingStrategy?**: `string`
 
-Defined in: [agentfootprint/src/events/payloads.ts:202](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/events/payloads.ts#L202)
+Defined in: [src/events/payloads.ts:231](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L231)
 
 ***
 
@@ -66,7 +66,7 @@ Defined in: [agentfootprint/src/events/payloads.ts:202](https://github.com/footp
 
 > `readonly` **slot**: [`ContextSlot`](/agentfootprint/api/generated/type-aliases/ContextSlot.md)
 
-Defined in: [agentfootprint/src/events/payloads.ts:192](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/events/payloads.ts#L192)
+Defined in: [src/events/payloads.ts:221](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L221)
 
 ***
 
@@ -74,4 +74,4 @@ Defined in: [agentfootprint/src/events/payloads.ts:192](https://github.com/footp
 
 > `readonly` **sourceBreakdown**: `Readonly`\<`Partial`\<`Record`\<[`ContextSource`](/agentfootprint/api/generated/type-aliases/ContextSource.md), \{ `chars`: `number`; `count`: `number`; \}\>\>\>
 
-Defined in: [agentfootprint/src/events/payloads.ts:199](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/events/payloads.ts#L199)
+Defined in: [src/events/payloads.ts:228](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L228)

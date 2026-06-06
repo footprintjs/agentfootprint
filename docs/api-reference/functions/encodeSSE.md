@@ -8,7 +8,7 @@
 
 > **encodeSSE**(`eventName`, `payload`): `string`
 
-Defined in: [agentfootprint/src/stream.ts:169](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/stream.ts#L169)
+Defined in: [src/stream.ts:171](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/stream.ts#L171)
 
 Format any JSON-able payload as a single SSE event chunk.
 

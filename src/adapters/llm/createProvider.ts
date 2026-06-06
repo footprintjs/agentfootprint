@@ -8,11 +8,12 @@
  * Emits:   N/A.
  *
  * @example
+ *   const kind = (process.env.LLM_PROVIDER ?? 'anthropic') as ProviderKind;
  *   const provider = createProvider({
- *     kind: process.env.LLM_PROVIDER ?? 'mock',
+ *     kind,
  *     apiKey: process.env.LLM_API_KEY,
  *     defaultModel: process.env.LLM_MODEL,
- *   });
+ *   } as CreateProviderOptions);
  *
  * For provider-specific options (Bedrock region, Ollama host, Browser
  * apiUrl, etc.) construct the underlying factory directly — this

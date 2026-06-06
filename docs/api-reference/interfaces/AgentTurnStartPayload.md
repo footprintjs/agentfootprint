@@ -6,7 +6,7 @@
 
 # Interface: AgentTurnStartPayload
 
-Defined in: [agentfootprint/src/events/payloads.ts:75](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/events/payloads.ts#L75)
+Defined in: [src/events/payloads.ts:97](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L97)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [agentfootprint/src/events/payloads.ts:75](https://github.com/footpr
 
 > `readonly` **turnIndex**: `number`
 
-Defined in: [agentfootprint/src/events/payloads.ts:76](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/events/payloads.ts#L76)
+Defined in: [src/events/payloads.ts:98](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L98)
 
 ***
 
@@ -22,4 +22,4 @@ Defined in: [agentfootprint/src/events/payloads.ts:76](https://github.com/footpr
 
 > `readonly` **userPrompt**: `string`
 
-Defined in: [agentfootprint/src/events/payloads.ts:77](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/events/payloads.ts#L77)
+Defined in: [src/events/payloads.ts:99](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L99)

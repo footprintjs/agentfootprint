@@ -6,7 +6,7 @@
 
 # Interface: CostTickPayload
 
-Defined in: [agentfootprint/src/events/payloads.ts:350](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/events/payloads.ts#L350)
+Defined in: [src/events/payloads.ts:472](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L472)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [agentfootprint/src/events/payloads.ts:350](https://github.com/footp
 
 > `readonly` **cumulative**: `object`
 
-Defined in: [agentfootprint/src/events/payloads.ts:355](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/events/payloads.ts#L355)
+Defined in: [src/events/payloads.ts:477](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L477)
 
 #### estimatedUsd
 
@@ -34,7 +34,7 @@ Defined in: [agentfootprint/src/events/payloads.ts:355](https://github.com/footp
 
 > `readonly` **estimatedUsd**: `number`
 
-Defined in: [agentfootprint/src/events/payloads.ts:354](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/events/payloads.ts#L354)
+Defined in: [src/events/payloads.ts:476](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L476)
 
 ***
 
@@ -42,7 +42,7 @@ Defined in: [agentfootprint/src/events/payloads.ts:354](https://github.com/footp
 
 > `readonly` **scope**: `"iteration"` \| `"turn"` \| `"run"`
 
-Defined in: [agentfootprint/src/events/payloads.ts:351](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/events/payloads.ts#L351)
+Defined in: [src/events/payloads.ts:473](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L473)
 
 ***
 
@@ -50,7 +50,7 @@ Defined in: [agentfootprint/src/events/payloads.ts:351](https://github.com/footp
 
 > `readonly` **tokensInput**: `number`
 
-Defined in: [agentfootprint/src/events/payloads.ts:352](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/events/payloads.ts#L352)
+Defined in: [src/events/payloads.ts:474](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L474)
 
 ***
 
@@ -58,4 +58,4 @@ Defined in: [agentfootprint/src/events/payloads.ts:352](https://github.com/footp
 
 > `readonly` **tokensOutput**: `number`
 
-Defined in: [agentfootprint/src/events/payloads.ts:353](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/events/payloads.ts#L353)
+Defined in: [src/events/payloads.ts:475](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L475)

@@ -6,7 +6,7 @@
 
 # Class: EventDispatcher
 
-Defined in: [agentfootprint/src/events/dispatcher.ts:93](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/events/dispatcher.ts#L93)
+Defined in: [src/events/dispatcher.ts:97](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/dispatcher.ts#L97)
 
 Central event bus. One per executable runner.
 
@@ -29,7 +29,7 @@ no wildcards, `dispatch` returns immediately without iteration.
 
 > **dispatch**(`event`): `void`
 
-Defined in: [agentfootprint/src/events/dispatcher.ts:196](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/events/dispatcher.ts#L196)
+Defined in: [src/events/dispatcher.ts:200](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/dispatcher.ts#L200)
 
 Route an event to all matching listeners (typed + domain-wildcard + all).
 
@@ -53,7 +53,7 @@ The run continues regardless.
 
 > **hasListenersFor**(`type`): `boolean`
 
-Defined in: [agentfootprint/src/events/dispatcher.ts:104](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/events/dispatcher.ts#L104)
+Defined in: [src/events/dispatcher.ts:108](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/dispatcher.ts#L108)
 
 Fast-path check. Returns true when at least one listener would fire
 for this type. Used by emitters to skip event-object allocation.
@@ -76,7 +76,7 @@ keyof [`AgentfootprintEventMap`](/agentfootprint/api/generated/interfaces/Agentf
 
 > **off**\<`K`\>(`type`, `listener`): `void`
 
-Defined in: [agentfootprint/src/events/dispatcher.ts:172](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/events/dispatcher.ts#L172)
+Defined in: [src/events/dispatcher.ts:176](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/dispatcher.ts#L176)
 
 Remove a specific listener for a type. Prefer AbortSignal for auto-cleanup.
 
@@ -107,7 +107,7 @@ WeakMap in addListener — consumers pass the original function.
 
 > **off**(`type`, `listener`): `void`
 
-Defined in: [agentfootprint/src/events/dispatcher.ts:173](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/events/dispatcher.ts#L173)
+Defined in: [src/events/dispatcher.ts:177](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/dispatcher.ts#L177)
 
 Remove a specific listener for a type. Prefer AbortSignal for auto-cleanup.
 
@@ -136,7 +136,7 @@ WeakMap in addListener — consumers pass the original function.
 
 > **on**\<`K`\>(`type`, `listener`, `options?`): [`Unsubscribe`](/agentfootprint/api/generated/type-aliases/Unsubscribe.md)
 
-Defined in: [agentfootprint/src/events/dispatcher.ts:121](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/events/dispatcher.ts#L121)
+Defined in: [src/events/dispatcher.ts:125](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/dispatcher.ts#L125)
 
 Subscribe a typed listener for a specific event type.
 
@@ -171,7 +171,7 @@ NOT awaited. See dispatch() for details.
 
 > **on**(`type`, `listener`, `options?`): [`Unsubscribe`](/agentfootprint/api/generated/type-aliases/Unsubscribe.md)
 
-Defined in: [agentfootprint/src/events/dispatcher.ts:127](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/events/dispatcher.ts#L127)
+Defined in: [src/events/dispatcher.ts:131](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/dispatcher.ts#L131)
 
 Subscribe to a domain wildcard ('agentfootprint.context.*') or '*'.
 
@@ -201,7 +201,7 @@ Subscribe to a domain wildcard ('agentfootprint.context.*') or '*'.
 
 > **once**\<`K`\>(`type`, `listener`): [`Unsubscribe`](/agentfootprint/api/generated/type-aliases/Unsubscribe.md)
 
-Defined in: [agentfootprint/src/events/dispatcher.ts:156](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/events/dispatcher.ts#L156)
+Defined in: [src/events/dispatcher.ts:160](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/dispatcher.ts#L160)
 
 Subscribe a one-shot listener. Fires at most once and then auto-removes.
 Equivalent to `on(type, listener, { once: true })`.
@@ -230,7 +230,7 @@ Equivalent to `on(type, listener, { once: true })`.
 
 > **once**(`type`, `listener`): [`Unsubscribe`](/agentfootprint/api/generated/type-aliases/Unsubscribe.md)
 
-Defined in: [agentfootprint/src/events/dispatcher.ts:157](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/events/dispatcher.ts#L157)
+Defined in: [src/events/dispatcher.ts:161](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/dispatcher.ts#L161)
 
 Subscribe a one-shot listener. Fires at most once and then auto-removes.
 Equivalent to `on(type, listener, { once: true })`.

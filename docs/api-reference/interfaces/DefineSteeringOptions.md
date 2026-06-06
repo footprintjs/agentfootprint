@@ -6,15 +6,32 @@
 
 # Interface: DefineSteeringOptions
 
-Defined in: [agentfootprint/src/lib/injection-engine/factories/defineSteering.ts:23](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/lib/injection-engine/factories/defineSteering.ts#L23)
+Defined in: [src/lib/injection-engine/factories/defineSteering.ts:25](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/lib/injection-engine/factories/defineSteering.ts#L25)
 
 ## Properties
+
+### cache?
+
+> `readonly` `optional` **cache?**: `CachePolicy`
+
+Defined in: [src/lib/injection-engine/factories/defineSteering.ts:40](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/lib/injection-engine/factories/defineSteering.ts#L40)
+
+Cache policy for this steering injection. Defaults to `'always'`
+— steering is by definition always-on stable content, ideal for
+provider-side caching. Override with `'never'` if the prompt
+contains volatile content (timestamps, per-request IDs).
+
+See `CachePolicy` in `agentfootprint/src/cache/types.ts` for all
+variants. The CacheDecision subflow reads this from
+`injection.metadata.cache` each iteration.
+
+***
 
 ### description?
 
 > `readonly` `optional` **description?**: `string`
 
-Defined in: [agentfootprint/src/lib/injection-engine/factories/defineSteering.ts:25](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/lib/injection-engine/factories/defineSteering.ts#L25)
+Defined in: [src/lib/injection-engine/factories/defineSteering.ts:27](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/lib/injection-engine/factories/defineSteering.ts#L27)
 
 ***
 
@@ -22,7 +39,7 @@ Defined in: [agentfootprint/src/lib/injection-engine/factories/defineSteering.ts
 
 > `readonly` **id**: `string`
 
-Defined in: [agentfootprint/src/lib/injection-engine/factories/defineSteering.ts:24](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/lib/injection-engine/factories/defineSteering.ts#L24)
+Defined in: [src/lib/injection-engine/factories/defineSteering.ts:26](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/lib/injection-engine/factories/defineSteering.ts#L26)
 
 ***
 
@@ -30,6 +47,6 @@ Defined in: [agentfootprint/src/lib/injection-engine/factories/defineSteering.ts
 
 > `readonly` **prompt**: `string`
 
-Defined in: [agentfootprint/src/lib/injection-engine/factories/defineSteering.ts:27](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/lib/injection-engine/factories/defineSteering.ts#L27)
+Defined in: [src/lib/injection-engine/factories/defineSteering.ts:29](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/lib/injection-engine/factories/defineSteering.ts#L29)
 
 Always-on text appended to the system-prompt slot.

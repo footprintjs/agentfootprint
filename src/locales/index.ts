@@ -47,13 +47,13 @@
  *
  * @example  Locale pack drop-in
  *   const esThinking = composeMessages(defaultThinkingMessages, {
- *     'stream.llm_start.iter1':   '{{appName}} está pensando...',
- *     'stream.tool_start':        'Llamando a {{toolName}}...',
+ *     idle: '{{appName}} está pensando…',
+ *     tool: 'Trabajando en `{{toolName}}`…',
  *   });
  *   const agent = Agent.create({...}).thinkingTemplates(esThinking).build();
  *
  * @example  Validate a locale pack against the framework's required keys
- *   import { defaultCommentaryMessages, validateMessages } from 'agentfootprint/locales';
+ *   import { defaultCommentaryMessages, composeMessages, validateMessages } from 'agentfootprint/locales';
  *
  *   const myCatalog = composeMessages(defaultCommentaryMessages, customOverrides);
  *   validateMessages(myCatalog, Object.keys(defaultCommentaryMessages));

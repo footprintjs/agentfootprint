@@ -6,15 +6,30 @@
 
 # Interface: SequenceOptions
 
-Defined in: [agentfootprint/src/core-flow/Sequence.ts:31](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/core-flow/Sequence.ts#L31)
+Defined in: [src/core-flow/Sequence.ts:33](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/core-flow/Sequence.ts#L33)
 
 ## Properties
+
+### groupTranslator?
+
+> `readonly` `optional` **groupTranslator?**: [`GroupTranslator`](/agentfootprint/api/generated/interfaces/GroupTranslator.md)\<`unknown`\>
+
+Defined in: [src/core-flow/Sequence.ts:60](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/core-flow/Sequence.ts#L60)
+
+Optional per-COMPOSITION translator (UI-agnostic). See
+`core/translator.ts`. When attached, `runner.getUIGroup()` invokes
+it with the Sequence's `GroupMetadata` (kind `'Sequence'`, id,
+name, ordered steps, no extras) and returns whatever shape the
+translator produces. When omitted, `getUIGroup()` returns
+`undefined`.
+
+***
 
 ### id?
 
 > `readonly` `optional` **id?**: `string`
 
-Defined in: [agentfootprint/src/core-flow/Sequence.ts:35](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/core-flow/Sequence.ts#L35)
+Defined in: [src/core-flow/Sequence.ts:37](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/core-flow/Sequence.ts#L37)
 
 Stable id used for topology + events. Default: 'sequence'.
 
@@ -24,6 +39,26 @@ Stable id used for topology + events. Default: 'sequence'.
 
 > `readonly` `optional` **name?**: `string`
 
-Defined in: [agentfootprint/src/core-flow/Sequence.ts:33](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/core-flow/Sequence.ts#L33)
+Defined in: [src/core-flow/Sequence.ts:35](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/core-flow/Sequence.ts#L35)
 
 Human-friendly name for events + topology. Default: 'Sequence'.
+
+***
+
+### structureRecorders?
+
+> `readonly` `optional` **structureRecorders?**: readonly `StructureRecorder`[]
+
+Defined in: [src/core-flow/Sequence.ts:51](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/core-flow/Sequence.ts#L51)
+
+Optional build-time recorders passed through to footprintjs's
+`flowChart()` factory. Each recorder observes per-node build
+events (`onStageAdded` / `onSubflowMounted` / etc.) for this
+composition's internal chart (Seed + each step mount + Finalize).
+
+Cascade: each step runner attaches its OWN recorders at its own
+construction time. footprintjs does NOT propagate StructureRecorders
+into mounted subflows — attach the same recorders to every nested
+composition for full coverage.
+
+When omitted, no build-time observation is wired up.

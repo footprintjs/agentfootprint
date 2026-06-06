@@ -6,7 +6,7 @@
 
 # Interface: SwarmAgent
 
-Defined in: [agentfootprint/src/patterns/Swarm.ts:26](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/patterns/Swarm.ts#L26)
+Defined in: [src/patterns/Swarm.ts:26](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/patterns/Swarm.ts#L26)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [agentfootprint/src/patterns/Swarm.ts:26](https://github.com/footpri
 
 > `readonly` **id**: `string`
 
-Defined in: [agentfootprint/src/patterns/Swarm.ts:28](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/patterns/Swarm.ts#L28)
+Defined in: [src/patterns/Swarm.ts:28](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/patterns/Swarm.ts#L28)
 
 Stable id used in events + routing decisions.
 
@@ -24,7 +24,7 @@ Stable id used in events + routing decisions.
 
 > `readonly` `optional` **name?**: `string`
 
-Defined in: [agentfootprint/src/patterns/Swarm.ts:30](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/patterns/Swarm.ts#L30)
+Defined in: [src/patterns/Swarm.ts:30](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/patterns/Swarm.ts#L30)
 
 Display name for topology / narrative.
 
@@ -34,6 +34,6 @@ Display name for topology / narrative.
 
 > `readonly` **runner**: [`Runner`](/agentfootprint/api/generated/interfaces/Runner.md)\<\{ `message`: `string`; \}, `string`\>
 
-Defined in: [agentfootprint/src/patterns/Swarm.ts:32](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/patterns/Swarm.ts#L32)
+Defined in: [src/patterns/Swarm.ts:32](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/patterns/Swarm.ts#L32)
 
 The runner that handles a turn when selected.

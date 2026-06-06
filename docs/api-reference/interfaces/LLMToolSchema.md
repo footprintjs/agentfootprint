@@ -6,7 +6,7 @@
 
 # Interface: LLMToolSchema
 
-Defined in: [agentfootprint/src/adapters/types.ts:42](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/adapters/types.ts#L42)
+Defined in: [src/adapters/types.ts:87](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/adapters/types.ts#L87)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [agentfootprint/src/adapters/types.ts:42](https://github.com/footpri
 
 > `readonly` **description**: `string`
 
-Defined in: [agentfootprint/src/adapters/types.ts:44](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/adapters/types.ts#L44)
+Defined in: [src/adapters/types.ts:89](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/adapters/types.ts#L89)
 
 ***
 
@@ -22,7 +22,7 @@ Defined in: [agentfootprint/src/adapters/types.ts:44](https://github.com/footpri
 
 > `readonly` **inputSchema**: `Readonly`\<`Record`\<`string`, `unknown`\>\>
 
-Defined in: [agentfootprint/src/adapters/types.ts:45](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/adapters/types.ts#L45)
+Defined in: [src/adapters/types.ts:90](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/adapters/types.ts#L90)
 
 ***
 
@@ -30,4 +30,4 @@ Defined in: [agentfootprint/src/adapters/types.ts:45](https://github.com/footpri
 
 > `readonly` **name**: `string`
 
-Defined in: [agentfootprint/src/adapters/types.ts:43](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/adapters/types.ts#L43)
+Defined in: [src/adapters/types.ts:88](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/adapters/types.ts#L88)

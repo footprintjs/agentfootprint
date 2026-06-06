@@ -8,7 +8,7 @@
 
 > `const` **SNAPSHOT\_PROJECTIONS**: `object`
 
-Defined in: [agentfootprint/src/memory/define.types.ts:104](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/memory/define.types.ts#L104)
+Defined in: [src/memory/define.types.ts:104](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/memory/define.types.ts#L104)
 
 For Causal memory only — which slice of a footprintjs snapshot to
 inject. Snapshots can run 100KB+; projecting prevents context blowup.

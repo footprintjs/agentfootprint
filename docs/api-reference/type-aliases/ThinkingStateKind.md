@@ -8,6 +8,6 @@
 
 > **ThinkingStateKind** = `"idle"` \| `"tool"` \| `"streaming"` \| `"paused"`
 
-Defined in: [agentfootprint/src/recorders/observability/thinking/thinkingTemplates.ts:47](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/recorders/observability/thinking/thinkingTemplates.ts#L47)
+Defined in: [src/recorders/observability/thinking/thinkingTemplates.ts:47](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/thinking/thinkingTemplates.ts#L47)
 
 The four mid-call states a chat bubble might render.

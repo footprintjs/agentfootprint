@@ -6,7 +6,7 @@
 
 # Interface: EmitBridgeOptions
 
-Defined in: [agentfootprint/src/recorders/core/EmitBridge.ts:18](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/recorders/core/EmitBridge.ts#L18)
+Defined in: [src/recorders/core/EmitBridge.ts:18](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/core/EmitBridge.ts#L18)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [agentfootprint/src/recorders/core/EmitBridge.ts:18](https://github.
 
 > `readonly` **dispatcher**: [`EventDispatcher`](/agentfootprint/api/generated/classes/EventDispatcher.md)
 
-Defined in: [agentfootprint/src/recorders/core/EmitBridge.ts:19](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/recorders/core/EmitBridge.ts#L19)
+Defined in: [src/recorders/core/EmitBridge.ts:19](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/core/EmitBridge.ts#L19)
 
 ***
 
@@ -22,7 +22,7 @@ Defined in: [agentfootprint/src/recorders/core/EmitBridge.ts:19](https://github.
 
 > `readonly` **getRunContext**: () => [`RunContext`](/agentfootprint/api/generated/interfaces/RunContext.md)
 
-Defined in: [agentfootprint/src/recorders/core/EmitBridge.ts:24](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/recorders/core/EmitBridge.ts#L24)
+Defined in: [src/recorders/core/EmitBridge.ts:24](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/core/EmitBridge.ts#L24)
 
 #### Returns
 
@@ -34,7 +34,7 @@ Defined in: [agentfootprint/src/recorders/core/EmitBridge.ts:24](https://github.
 
 > `readonly` **id**: `string`
 
-Defined in: [agentfootprint/src/recorders/core/EmitBridge.ts:21](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/recorders/core/EmitBridge.ts#L21)
+Defined in: [src/recorders/core/EmitBridge.ts:21](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/core/EmitBridge.ts#L21)
 
 Recorder id — must be unique among attached recorders.
 
@@ -44,6 +44,6 @@ Recorder id — must be unique among attached recorders.
 
 > `readonly` **prefix**: `string`
 
-Defined in: [agentfootprint/src/recorders/core/EmitBridge.ts:23](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/recorders/core/EmitBridge.ts#L23)
+Defined in: [src/recorders/core/EmitBridge.ts:23](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/core/EmitBridge.ts#L23)
 
 Event-name prefix this bridge forwards (e.g. 'agentfootprint.stream.').

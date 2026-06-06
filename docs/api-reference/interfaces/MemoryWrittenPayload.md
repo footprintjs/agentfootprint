@@ -6,7 +6,7 @@
 
 # Interface: MemoryWrittenPayload
 
-Defined in: [agentfootprint/src/events/payloads.ts:265](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/events/payloads.ts#L265)
+Defined in: [src/events/payloads.ts:322](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L322)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [agentfootprint/src/events/payloads.ts:265](https://github.com/footp
 
 > `readonly` `optional` **actor?**: `string`
 
-Defined in: [agentfootprint/src/events/payloads.ts:269](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/events/payloads.ts#L269)
+Defined in: [src/events/payloads.ts:326](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L326)
 
 ***
 
@@ -22,7 +22,7 @@ Defined in: [agentfootprint/src/events/payloads.ts:269](https://github.com/footp
 
 > `readonly` **contentSummary**: `string`
 
-Defined in: [agentfootprint/src/events/payloads.ts:267](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/events/payloads.ts#L267)
+Defined in: [src/events/payloads.ts:324](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L324)
 
 ***
 
@@ -30,7 +30,7 @@ Defined in: [agentfootprint/src/events/payloads.ts:267](https://github.com/footp
 
 > `readonly` **memoryId**: `string`
 
-Defined in: [agentfootprint/src/events/payloads.ts:266](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/events/payloads.ts#L266)
+Defined in: [src/events/payloads.ts:323](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L323)
 
 ***
 
@@ -38,4 +38,4 @@ Defined in: [agentfootprint/src/events/payloads.ts:266](https://github.com/footp
 
 > `readonly` **source**: `"manual"` \| `"auto"`
 
-Defined in: [agentfootprint/src/events/payloads.ts:268](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/events/payloads.ts#L268)
+Defined in: [src/events/payloads.ts:325](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L325)

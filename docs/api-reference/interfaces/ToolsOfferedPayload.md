@@ -6,7 +6,7 @@
 
 # Interface: ToolsOfferedPayload
 
-Defined in: [agentfootprint/src/events/payloads.ts:273](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/events/payloads.ts#L273)
+Defined in: [src/events/payloads.ts:330](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L330)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [agentfootprint/src/events/payloads.ts:273](https://github.com/footp
 
 > `readonly` **availableIds**: readonly `string`[]
 
-Defined in: [agentfootprint/src/events/payloads.ts:274](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/events/payloads.ts#L274)
+Defined in: [src/events/payloads.ts:331](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L331)
 
 ***
 
@@ -22,7 +22,7 @@ Defined in: [agentfootprint/src/events/payloads.ts:274](https://github.com/footp
 
 > `readonly` **reason**: `string`
 
-Defined in: [agentfootprint/src/events/payloads.ts:279](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/events/payloads.ts#L279)
+Defined in: [src/events/payloads.ts:336](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L336)
 
 ***
 
@@ -30,7 +30,7 @@ Defined in: [agentfootprint/src/events/payloads.ts:279](https://github.com/footp
 
 > `readonly` **withheldIds**: readonly `string`[]
 
-Defined in: [agentfootprint/src/events/payloads.ts:275](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/events/payloads.ts#L275)
+Defined in: [src/events/payloads.ts:332](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L332)
 
 ***
 
@@ -38,4 +38,4 @@ Defined in: [agentfootprint/src/events/payloads.ts:275](https://github.com/footp
 
 > `readonly` **withheldReasons**: `Readonly`\<`Record`\<`string`, `"permission"` \| `"skill_inactive"` \| `"gated"` \| `"cost_guard"`\>\>
 
-Defined in: [agentfootprint/src/events/payloads.ts:276](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/events/payloads.ts#L276)
+Defined in: [src/events/payloads.ts:333](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L333)

@@ -8,4 +8,4 @@
 
 > **DomainWildcard** = `"agentfootprint.composition.*"` \| `"agentfootprint.agent.*"` \| `"agentfootprint.stream.*"` \| `"agentfootprint.context.*"` \| `"agentfootprint.memory.*"` \| `"agentfootprint.tools.*"` \| `"agentfootprint.skill.*"` \| `"agentfootprint.permission.*"` \| `"agentfootprint.risk.*"` \| `"agentfootprint.fallback.*"` \| `"agentfootprint.cost.*"` \| `"agentfootprint.eval.*"` \| `"agentfootprint.error.*"` \| `"agentfootprint.pause.*"` \| `"agentfootprint.embedding.*"`
 
-Defined in: [agentfootprint/src/events/dispatcher.ts:57](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/events/dispatcher.ts#L57)
+Defined in: [src/events/dispatcher.ts:61](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/dispatcher.ts#L61)

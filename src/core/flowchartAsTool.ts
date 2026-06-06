@@ -37,13 +37,13 @@
  *
  * @example  Single-stage flowchart as a tool
  *   import { flowChart } from 'footprintjs';
- *   import { flowchartAsTool } from 'agentfootprint';
+ *   import { Agent, flowchartAsTool } from 'agentfootprint';
  *
- *   const refundChart = flowChart<{ orderId: string; reason: string }>(
+ *   const refundChart = flowChart<{ refundId: string }>(
  *     'RefundFlow',
  *     async (scope) => {
- *       const refundId = await refundService.process(scope.$getArgs().orderId);
- *       scope.refundId = refundId;
+ *       const args = scope.$getArgs<{ orderId: string; reason: string }>();
+ *       scope.refundId = await refundService.process(args.orderId);
  *     },
  *     'refund-flow',
  *   ).build();
@@ -64,7 +64,7 @@
  *       JSON.stringify({ refundId: snapshot.values.refundId, status: 'processed' }),
  *   });
  *
- *   agent.tool(refundTool);
+ *   const agent = Agent.create({ provider }).tool(refundTool).build();
  *
  * @example  Multi-stage flowchart with decide() + recorders
  *   const triageChart = flowChart<TriageState>('Triage', validateInput, 'validate')

@@ -6,23 +6,20 @@
 
 # Class: BoundaryRecorder
 
-Defined in: [agentfootprint/src/recorders/observability/BoundaryRecorder.ts:289](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/recorders/observability/BoundaryRecorder.ts#L289)
+Defined in: [src/recorders/observability/BoundaryRecorder.ts:523](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/BoundaryRecorder.ts#L523)
 
 Unified domain event recorder. Implements `CombinedRecorder` so it can
 attach to the executor's FlowRecorder channel; exposes `subscribe()`
 to wire to the agentfootprint typed-event dispatcher.
 
-Internally stores events in a `SequenceRecorder<DomainEvent>` so the
-usual time-travel utilities (`getEntryRanges`, `accumulate`) work
-out of the box.
-
-## Extends
-
-- `SequenceRecorder`\<[`DomainEvent`](/agentfootprint/api/generated/type-aliases/DomainEvent.md)\>
+v5: composes a `SequenceStore<DomainEvent>` (storage) instead of
+extending the deprecated `SequenceRecorder<T>` base. Time-travel
+utilities (`getEntryRanges`, `accumulate`) are accessed through the
+store via the public read API on this class.
 
 ## Implements
 
-- `CombinedRecorder`
+- [`CombinedRecorder`](/agentfootprint/api/generated/type-aliases/CombinedRecorder.md)
 
 ## Constructors
 
@@ -30,7 +27,7 @@ out of the box.
 
 > **new BoundaryRecorder**(`options?`): `BoundaryRecorder`
 
-Defined in: [agentfootprint/src/recorders/observability/BoundaryRecorder.ts:300](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/recorders/observability/BoundaryRecorder.ts#L300)
+Defined in: [src/recorders/observability/BoundaryRecorder.ts:597](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/BoundaryRecorder.ts#L597)
 
 #### Parameters
 
@@ -42,140 +39,97 @@ Defined in: [agentfootprint/src/recorders/observability/BoundaryRecorder.ts:300]
 
 `BoundaryRecorder`
 
-#### Overrides
-
-`SequenceRecorder<DomainEvent>.constructor`
-
 ## Properties
+
+### boundaryIndex
+
+> `readonly` **boundaryIndex**: `CommitRangeIndex`\<[`BoundaryRangeLabel`](/agentfootprint/api/generated/interfaces/BoundaryRangeLabel.md)\>
+
+Defined in: [src/recorders/observability/BoundaryRecorder.ts:536](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/BoundaryRecorder.ts#L536)
+
+Phase 5 Layer 2 — interval index over commit indices, populated
+live as boundary entry/exit pairs fire. Consumers (Lens) read
+`enclosing(commitIdx)` for breadcrumbs and `overlapping(slice)`
+for time-range queries. Empty when `getCommitCount` is not
+injected. See `docs/design/boundary-commit-ranges.md`.
+
+***
 
 ### id
 
 > `readonly` **id**: `string`
 
-Defined in: [agentfootprint/src/recorders/observability/BoundaryRecorder.ts:290](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/recorders/observability/BoundaryRecorder.ts#L290)
+Defined in: [src/recorders/observability/BoundaryRecorder.ts:524](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/BoundaryRecorder.ts#L524)
 
 #### Implementation of
 
 `CombinedRecorder.id`
 
-#### Overrides
-
-`SequenceRecorder.id`
-
-## Accessors
-
-### entryCount
-
-#### Get Signature
-
-> **get** **entryCount**(): `number`
-
-Defined in: footPrint/dist/types/lib/recorder/SequenceRecorder.d.ts:78
-
-Number of entries in the sequence.
-
-##### Returns
-
-`number`
-
-#### Inherited from
-
-`SequenceRecorder.entryCount`
-
-***
-
-### stepCount
-
-#### Get Signature
-
-> **get** **stepCount**(): `number`
-
-Defined in: footPrint/dist/types/lib/recorder/SequenceRecorder.d.ts:84
-
-Number of unique execution steps that have entries.
-
-##### Returns
-
-`number`
-
-#### Inherited from
-
-`SequenceRecorder.stepCount`
-
 ## Methods
 
-### accumulate()
+### aggregateAllBoundaries()
 
-> **accumulate**\<`R`\>(`fn`, `initial`, `keys?`): `R`
+> **aggregateAllBoundaries**(): readonly [`BoundaryAggregate`](/agentfootprint/api/generated/interfaces/BoundaryAggregate.md)[]
 
-Defined in: footPrint/dist/types/lib/recorder/SequenceRecorder.d.ts:102
+Defined in: [src/recorders/observability/BoundaryRecorder.ts:1149](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/BoundaryRecorder.ts#L1149)
 
-Reduce entries, optionally filtered by a set of runtimeStageIds.
-For time-travel progressive view: pass the runtimeStageIds visible at the current slider position.
-Entries without runtimeStageId (structural markers) are excluded when keys are provided.
-Without keys, reduces all entries (same as aggregate).
+Roll up every primitive boundary in the run into one rollup each,
+in the order their `subflow.entry` events fired. Top-level multi-
+agent UIs call this once per render to populate per-agent chips.
 
-#### Type Parameters
-
-##### R
-
-`R`
-
-#### Parameters
-
-##### fn
-
-(`acc`, `entry`) => `R`
-
-##### initial
-
-`R`
-
-##### keys?
-
-`ReadonlySet`\<`string`\>
+Filters to `primitiveKind`-tagged subflows ONLY (Agent / LLMCall /
+Sequence / Parallel / Conditional / Loop). Slot subflows
+(`sf-system-prompt` / `sf-messages` / `sf-tools`) are NOT
+boundaries in this sense — they're context-engineering machinery,
+not user-facing rollup units.
 
 #### Returns
 
-`R`
-
-#### Inherited from
-
-`SequenceRecorder.accumulate`
+readonly [`BoundaryAggregate`](/agentfootprint/api/generated/interfaces/BoundaryAggregate.md)[]
 
 ***
 
-### aggregate()
+### aggregateForBoundary()
 
-> **aggregate**\<`R`\>(`fn`, `initial`): `R`
+> **aggregateForBoundary**(`runtimeStageId`): [`BoundaryAggregate`](/agentfootprint/api/generated/interfaces/BoundaryAggregate.md) \| `undefined`
 
-Defined in: footPrint/dist/types/lib/recorder/SequenceRecorder.d.ts:95
+Defined in: [src/recorders/observability/BoundaryRecorder.ts:1126](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/BoundaryRecorder.ts#L1126)
 
-Reduce ALL entries to a single value. For dashboards, totals, summaries.
+Roll up the event stream for ONE primitive boundary (Agent /
+LLMCall / Sequence / Parallel / Conditional / Loop) into per-
+boundary totals — tokens, llm calls, tool calls, iterations,
+cache hits, duration.
 
-#### Type Parameters
+Pure projection over `getEvents()`. Events are attributed to a
+boundary when their `subflowPath` is a **prefix-match** of the
+boundary's path — so a nested `LLMCall` inside an `Agent` rolls
+up into BOTH (LLMCall total + Agent total).
 
-##### R
+Works mid-run (the boundary's `subflow.exit` may not have fired
+yet — `endedAtMs` / `durationMs` are undefined in that case).
+Works post-run.
 
-`R`
+Multi-consumer story: this is the single source of rollup truth
+for Lens, CLI live monitors, Sentry breadcrumbs, OTel exporters,
+dashboards. Domain math (what counts as an "iteration"? does
+cache hit count separately from llmCalls?) lives HERE — every
+consumer hooks up; nobody re-implements.
 
 #### Parameters
 
-##### fn
+##### runtimeStageId
 
-(`acc`, `entry`) => `R`
+`string`
 
-##### initial
-
-`R`
+The boundary's runtimeStageId (the same id
+  carried by `StepNode.runtimeStageId` for primitive subflows).
 
 #### Returns
 
-`R`
+[`BoundaryAggregate`](/agentfootprint/api/generated/interfaces/BoundaryAggregate.md) \| `undefined`
 
-#### Inherited from
-
-`SequenceRecorder.aggregate`
+The rollup, or `undefined` if no `subflow.entry` event
+  matches `runtimeStageId`.
 
 ***
 
@@ -183,9 +137,31 @@ Reduce ALL entries to a single value. For dashboards, totals, summaries.
 
 > **clear**(): `void`
 
-Defined in: [agentfootprint/src/recorders/observability/BoundaryRecorder.ts:305](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/recorders/observability/BoundaryRecorder.ts#L305)
+Defined in: [src/recorders/observability/BoundaryRecorder.ts:629](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/BoundaryRecorder.ts#L629)
 
-Clear all stored data. Called by executor before each run().
+Reset all transient state.
+
+**Composition-safe gate (Phase 5 Layer 4):** if `openTokens.size > 0`
+the call is a no-op. Rationale: `FlowChartExecutor.run()` calls
+`r.clear?.()` on every attached recorder during its pre-run loop.
+When agentfootprint composition primitives (LLMCall, Sequence,
+Parallel, etc.) propagate the parent's recorders to nested
+sub-executors, EACH sub-executor's pre-run clear loop calls
+`clear()` on the SHARED parent recorder mid-run — wiping live
+parent state. The `openTokens.size > 0` check distinguishes:
+
+  - **Legitimate reset** — consumer or executor calls `clear()`
+    when no boundary is in-flight (`openTokens` empty). Safe to
+    wipe; the recorder is idle.
+  - **Composition wipe** — sub-executor's pre-run clear fires
+    while the parent has open boundaries (`openTokens` non-empty).
+    Skip the wipe; the parent's state must be preserved.
+
+If a consumer needs to forcibly wipe state even with open tokens
+(e.g., manual recovery after a crashed run), pair `clear()` with
+an explicit `forceClear()` (TODO — add when the use case shows up;
+today the recorder lifecycle pattern is "one recorder per logical
+run" so leaked tokens shouldn't occur).
 
 #### Returns
 
@@ -195,17 +171,13 @@ Clear all stored data. Called by executor before each run().
 
 `CombinedRecorder.clear`
 
-#### Overrides
-
-`SequenceRecorder.clear`
-
 ***
 
 ### getBoundaries()
 
 > **getBoundaries**(): ([`DomainRunEvent`](/agentfootprint/api/generated/interfaces/DomainRunEvent.md) \| [`DomainSubflowEvent`](/agentfootprint/api/generated/interfaces/DomainSubflowEvent.md))[]
 
-Defined in: [agentfootprint/src/recorders/observability/BoundaryRecorder.ts:541](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/recorders/observability/BoundaryRecorder.ts#L541)
+Defined in: [src/recorders/observability/BoundaryRecorder.ts:1027](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/BoundaryRecorder.ts#L1027)
 
 All boundary events (run + subflow, entry + exit interleaved).
 
@@ -219,7 +191,7 @@ All boundary events (run + subflow, entry + exit interleaved).
 
 > **getBoundary**(`runtimeStageId`): `object`
 
-Defined in: [agentfootprint/src/recorders/observability/BoundaryRecorder.ts:567](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/recorders/observability/BoundaryRecorder.ts#L567)
+Defined in: [src/recorders/observability/BoundaryRecorder.ts:1053](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/BoundaryRecorder.ts#L1053)
 
 Entry/exit pair for one chart execution by `runtimeStageId`.
 
@@ -243,100 +215,11 @@ Entry/exit pair for one chart execution by `runtimeStageId`.
 
 ***
 
-### getEntries()
-
-> **getEntries**(): [`DomainEvent`](/agentfootprint/api/generated/type-aliases/DomainEvent.md)[]
-
-Defined in: footPrint/dist/types/lib/recorder/SequenceRecorder.d.ts:76
-
-All entries in insertion order (returns a shallow copy — entry objects are shared).
-
-#### Returns
-
-[`DomainEvent`](/agentfootprint/api/generated/type-aliases/DomainEvent.md)[]
-
-#### Inherited from
-
-`SequenceRecorder.getEntries`
-
-***
-
-### getEntriesForStep()
-
-> **getEntriesForStep**(`runtimeStageId`): [`DomainEvent`](/agentfootprint/api/generated/type-aliases/DomainEvent.md)[]
-
-Defined in: footPrint/dist/types/lib/recorder/SequenceRecorder.d.ts:82
-
-O(1) lookup: all entries for a specific execution step (returns a copy).
-
-#### Parameters
-
-##### runtimeStageId
-
-`string`
-
-#### Returns
-
-[`DomainEvent`](/agentfootprint/api/generated/type-aliases/DomainEvent.md)[]
-
-#### Inherited from
-
-`SequenceRecorder.getEntriesForStep`
-
-***
-
-### getEntriesUpTo()
-
-> **getEntriesUpTo**(`visibleIds`): [`DomainEvent`](/agentfootprint/api/generated/type-aliases/DomainEvent.md)[]
-
-Defined in: footPrint/dist/types/lib/recorder/SequenceRecorder.d.ts:109
-
-Progressive reveal: entries whose runtimeStageId is in the visible set.
-Preserves insertion order. Entries without runtimeStageId (structural markers)
-are buffered and included only when surrounded by visible steps on both sides —
-trailing markers after the last visible step are discarded.
-
-#### Parameters
-
-##### visibleIds
-
-`ReadonlySet`\<`string`\>
-
-#### Returns
-
-[`DomainEvent`](/agentfootprint/api/generated/type-aliases/DomainEvent.md)[]
-
-#### Inherited from
-
-`SequenceRecorder.getEntriesUpTo`
-
-***
-
-### getEntryRanges()
-
-> **getEntryRanges**(): `ReadonlyMap`\<`string`, \{ `endIdx`: `number`; `firstIdx`: `number`; \}\>
-
-Defined in: footPrint/dist/types/lib/recorder/SequenceRecorder.d.ts:90
-
-Pre-built range index: runtimeStageId → half-open range [firstIdx, endIdx) in entries array.
-Maintained during emit() — no rebuild needed. Use for O(1) per-step lookups during time-travel.
-endIdx includes trailing keyless entries (structural markers following a step).
-
-#### Returns
-
-`ReadonlyMap`\<`string`, \{ `endIdx`: `number`; `firstIdx`: `number`; \}\>
-
-#### Inherited from
-
-`SequenceRecorder.getEntryRanges`
-
-***
-
 ### getEvents()
 
 > **getEvents**(): [`DomainEvent`](/agentfootprint/api/generated/type-aliases/DomainEvent.md)[]
 
-Defined in: [agentfootprint/src/recorders/observability/BoundaryRecorder.ts:525](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/recorders/observability/BoundaryRecorder.ts#L525)
+Defined in: [src/recorders/observability/BoundaryRecorder.ts:1011](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/BoundaryRecorder.ts#L1011)
 
 All events in capture order (the canonical projection).
 
@@ -348,9 +231,9 @@ All events in capture order (the canonical projection).
 
 ### getEventsByType()
 
-> **getEventsByType**\<`T`\>(`type`): (`Extract`\<[`DomainRunEvent`](/agentfootprint/api/generated/interfaces/DomainRunEvent.md), \{ `type`: `T`; \}\> \| `Extract`\<[`DomainSubflowEvent`](/agentfootprint/api/generated/interfaces/DomainSubflowEvent.md), \{ `type`: `T`; \}\> \| `Extract`\<[`DomainForkBranchEvent`](/agentfootprint/api/generated/interfaces/DomainForkBranchEvent.md), \{ `type`: `T`; \}\> \| `Extract`\<[`DomainDecisionBranchEvent`](/agentfootprint/api/generated/interfaces/DomainDecisionBranchEvent.md), \{ `type`: `T`; \}\> \| `Extract`\<[`DomainLoopIterationEvent`](/agentfootprint/api/generated/interfaces/DomainLoopIterationEvent.md), \{ `type`: `T`; \}\> \| `Extract`\<[`DomainLLMStartEvent`](/agentfootprint/api/generated/interfaces/DomainLLMStartEvent.md), \{ `type`: `T`; \}\> \| `Extract`\<[`DomainLLMEndEvent`](/agentfootprint/api/generated/interfaces/DomainLLMEndEvent.md), \{ `type`: `T`; \}\> \| `Extract`\<[`DomainToolStartEvent`](/agentfootprint/api/generated/interfaces/DomainToolStartEvent.md), \{ `type`: `T`; \}\> \| `Extract`\<[`DomainToolEndEvent`](/agentfootprint/api/generated/interfaces/DomainToolEndEvent.md), \{ `type`: `T`; \}\> \| `Extract`\<[`DomainContextInjectedEvent`](/agentfootprint/api/generated/interfaces/DomainContextInjectedEvent.md), \{ `type`: `T`; \}\>)[]
+> **getEventsByType**\<`T`\>(`type`): (`Extract`\<[`DomainRunEvent`](/agentfootprint/api/generated/interfaces/DomainRunEvent.md), \{ `type`: `T`; \}\> \| `Extract`\<[`DomainSubflowEvent`](/agentfootprint/api/generated/interfaces/DomainSubflowEvent.md), \{ `type`: `T`; \}\> \| `Extract`\<`DomainCompositionEvent`, \{ `type`: `T`; \}\> \| `Extract`\<[`DomainForkBranchEvent`](/agentfootprint/api/generated/interfaces/DomainForkBranchEvent.md), \{ `type`: `T`; \}\> \| `Extract`\<[`DomainDecisionBranchEvent`](/agentfootprint/api/generated/interfaces/DomainDecisionBranchEvent.md), \{ `type`: `T`; \}\> \| `Extract`\<[`DomainLoopIterationEvent`](/agentfootprint/api/generated/interfaces/DomainLoopIterationEvent.md), \{ `type`: `T`; \}\> \| `Extract`\<[`DomainLLMStartEvent`](/agentfootprint/api/generated/interfaces/DomainLLMStartEvent.md), \{ `type`: `T`; \}\> \| `Extract`\<[`DomainLLMEndEvent`](/agentfootprint/api/generated/interfaces/DomainLLMEndEvent.md), \{ `type`: `T`; \}\> \| `Extract`\<[`DomainToolStartEvent`](/agentfootprint/api/generated/interfaces/DomainToolStartEvent.md), \{ `type`: `T`; \}\> \| `Extract`\<[`DomainToolEndEvent`](/agentfootprint/api/generated/interfaces/DomainToolEndEvent.md), \{ `type`: `T`; \}\> \| `Extract`\<[`DomainContextInjectedEvent`](/agentfootprint/api/generated/interfaces/DomainContextInjectedEvent.md), \{ `type`: `T`; \}\>)[]
 
-Defined in: [agentfootprint/src/recorders/observability/BoundaryRecorder.ts:530](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/recorders/observability/BoundaryRecorder.ts#L530)
+Defined in: [src/recorders/observability/BoundaryRecorder.ts:1016](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/BoundaryRecorder.ts#L1016)
 
 Type-narrowed lookup: all events of one kind.
 
@@ -358,7 +241,7 @@ Type-narrowed lookup: all events of one kind.
 
 ##### T
 
-`T` *extends* `"run.entry"` \| `"run.exit"` \| `"subflow.entry"` \| `"subflow.exit"` \| `"fork.branch"` \| `"decision.branch"` \| `"loop.iteration"` \| `"llm.start"` \| `"llm.end"` \| `"tool.start"` \| `"tool.end"` \| `"context.injected"`
+`T` *extends* `"run.entry"` \| `"run.exit"` \| `"subflow.entry"` \| `"subflow.exit"` \| `"composition.start"` \| `"composition.end"` \| `"fork.branch"` \| `"decision.branch"` \| `"loop.iteration"` \| `"llm.start"` \| `"llm.end"` \| `"tool.start"` \| `"tool.end"` \| `"context.injected"`
 
 #### Parameters
 
@@ -368,7 +251,7 @@ Type-narrowed lookup: all events of one kind.
 
 #### Returns
 
-(`Extract`\<[`DomainRunEvent`](/agentfootprint/api/generated/interfaces/DomainRunEvent.md), \{ `type`: `T`; \}\> \| `Extract`\<[`DomainSubflowEvent`](/agentfootprint/api/generated/interfaces/DomainSubflowEvent.md), \{ `type`: `T`; \}\> \| `Extract`\<[`DomainForkBranchEvent`](/agentfootprint/api/generated/interfaces/DomainForkBranchEvent.md), \{ `type`: `T`; \}\> \| `Extract`\<[`DomainDecisionBranchEvent`](/agentfootprint/api/generated/interfaces/DomainDecisionBranchEvent.md), \{ `type`: `T`; \}\> \| `Extract`\<[`DomainLoopIterationEvent`](/agentfootprint/api/generated/interfaces/DomainLoopIterationEvent.md), \{ `type`: `T`; \}\> \| `Extract`\<[`DomainLLMStartEvent`](/agentfootprint/api/generated/interfaces/DomainLLMStartEvent.md), \{ `type`: `T`; \}\> \| `Extract`\<[`DomainLLMEndEvent`](/agentfootprint/api/generated/interfaces/DomainLLMEndEvent.md), \{ `type`: `T`; \}\> \| `Extract`\<[`DomainToolStartEvent`](/agentfootprint/api/generated/interfaces/DomainToolStartEvent.md), \{ `type`: `T`; \}\> \| `Extract`\<[`DomainToolEndEvent`](/agentfootprint/api/generated/interfaces/DomainToolEndEvent.md), \{ `type`: `T`; \}\> \| `Extract`\<[`DomainContextInjectedEvent`](/agentfootprint/api/generated/interfaces/DomainContextInjectedEvent.md), \{ `type`: `T`; \}\>)[]
+(`Extract`\<[`DomainRunEvent`](/agentfootprint/api/generated/interfaces/DomainRunEvent.md), \{ `type`: `T`; \}\> \| `Extract`\<[`DomainSubflowEvent`](/agentfootprint/api/generated/interfaces/DomainSubflowEvent.md), \{ `type`: `T`; \}\> \| `Extract`\<`DomainCompositionEvent`, \{ `type`: `T`; \}\> \| `Extract`\<[`DomainForkBranchEvent`](/agentfootprint/api/generated/interfaces/DomainForkBranchEvent.md), \{ `type`: `T`; \}\> \| `Extract`\<[`DomainDecisionBranchEvent`](/agentfootprint/api/generated/interfaces/DomainDecisionBranchEvent.md), \{ `type`: `T`; \}\> \| `Extract`\<[`DomainLoopIterationEvent`](/agentfootprint/api/generated/interfaces/DomainLoopIterationEvent.md), \{ `type`: `T`; \}\> \| `Extract`\<[`DomainLLMStartEvent`](/agentfootprint/api/generated/interfaces/DomainLLMStartEvent.md), \{ `type`: `T`; \}\> \| `Extract`\<[`DomainLLMEndEvent`](/agentfootprint/api/generated/interfaces/DomainLLMEndEvent.md), \{ `type`: `T`; \}\> \| `Extract`\<[`DomainToolStartEvent`](/agentfootprint/api/generated/interfaces/DomainToolStartEvent.md), \{ `type`: `T`; \}\> \| `Extract`\<[`DomainToolEndEvent`](/agentfootprint/api/generated/interfaces/DomainToolEndEvent.md), \{ `type`: `T`; \}\> \| `Extract`\<[`DomainContextInjectedEvent`](/agentfootprint/api/generated/interfaces/DomainContextInjectedEvent.md), \{ `type`: `T`; \}\>)[]
 
 ***
 
@@ -376,7 +259,7 @@ Type-narrowed lookup: all events of one kind.
 
 > **getRootBoundary**(): `object`
 
-Defined in: [agentfootprint/src/recorders/observability/BoundaryRecorder.ts:585](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/recorders/observability/BoundaryRecorder.ts#L585)
+Defined in: [src/recorders/observability/BoundaryRecorder.ts:1071](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/BoundaryRecorder.ts#L1071)
 
 Convenience for the outermost `__root__` pair.
 
@@ -398,7 +281,7 @@ Convenience for the outermost `__root__` pair.
 
 > **getSlotBoundaries**(): `object`
 
-Defined in: [agentfootprint/src/recorders/observability/BoundaryRecorder.ts:597](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/recorders/observability/BoundaryRecorder.ts#L597)
+Defined in: [src/recorders/observability/BoundaryRecorder.ts:1083](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/BoundaryRecorder.ts#L1083)
 
 Subflow events grouped by the 3 input slots — for slot-row rendering.
 
@@ -424,7 +307,7 @@ Subflow events grouped by the 3 input slots — for slot-row rendering.
 
 > **getSteps**(): ([`DomainRunEvent`](/agentfootprint/api/generated/interfaces/DomainRunEvent.md) \| [`DomainSubflowEvent`](/agentfootprint/api/generated/interfaces/DomainSubflowEvent.md))[]
 
-Defined in: [agentfootprint/src/recorders/observability/BoundaryRecorder.ts:557](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/recorders/observability/BoundaryRecorder.ts#L557)
+Defined in: [src/recorders/observability/BoundaryRecorder.ts:1043](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/BoundaryRecorder.ts#L1043)
 
 Just the entry-phase boundary events — the "step list" timeline.
 
@@ -438,7 +321,7 @@ Just the entry-phase boundary events — the "step list" timeline.
 
 > **getVisibleSteps**(): ([`DomainRunEvent`](/agentfootprint/api/generated/interfaces/DomainRunEvent.md) \| [`DomainSubflowEvent`](/agentfootprint/api/generated/interfaces/DomainSubflowEvent.md))[]
 
-Defined in: [agentfootprint/src/recorders/observability/BoundaryRecorder.ts:562](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/recorders/observability/BoundaryRecorder.ts#L562)
+Defined in: [src/recorders/observability/BoundaryRecorder.ts:1048](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/BoundaryRecorder.ts#L1048)
 
 Subset of `getSteps()` excluding agent-internal routing subflows.
 
@@ -452,13 +335,13 @@ Subset of `getSteps()` excluding agent-internal routing subflows.
 
 > **onDecision**(`event`): `void`
 
-Defined in: [agentfootprint/src/recorders/observability/BoundaryRecorder.ts:349](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/recorders/observability/BoundaryRecorder.ts#L349)
+Defined in: [src/recorders/observability/BoundaryRecorder.ts:747](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/BoundaryRecorder.ts#L747)
 
 #### Parameters
 
 ##### event
 
-`FlowDecisionEvent`
+[`FlowDecisionEvent`](/agentfootprint/api/generated/interfaces/FlowDecisionEvent.md)
 
 #### Returns
 
@@ -466,7 +349,7 @@ Defined in: [agentfootprint/src/recorders/observability/BoundaryRecorder.ts:349]
 
 #### Implementation of
 
-`CombinedRecorder.onDecision`
+[`FlowRecorder`](/agentfootprint/api/generated/interfaces/FlowRecorder.md).[`onDecision`](/agentfootprint/api/generated/interfaces/FlowRecorder.md#ondecision)
 
 ***
 
@@ -474,13 +357,13 @@ Defined in: [agentfootprint/src/recorders/observability/BoundaryRecorder.ts:349]
 
 > **onFork**(`event`): `void`
 
-Defined in: [agentfootprint/src/recorders/observability/BoundaryRecorder.ts:330](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/recorders/observability/BoundaryRecorder.ts#L330)
+Defined in: [src/recorders/observability/BoundaryRecorder.ts:724](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/BoundaryRecorder.ts#L724)
 
 #### Parameters
 
 ##### event
 
-`FlowForkEvent`
+[`FlowForkEvent`](/agentfootprint/api/generated/interfaces/FlowForkEvent.md)
 
 #### Returns
 
@@ -488,7 +371,7 @@ Defined in: [agentfootprint/src/recorders/observability/BoundaryRecorder.ts:330]
 
 #### Implementation of
 
-`CombinedRecorder.onFork`
+[`FlowRecorder`](/agentfootprint/api/generated/interfaces/FlowRecorder.md).[`onFork`](/agentfootprint/api/generated/interfaces/FlowRecorder.md#onfork)
 
 ***
 
@@ -496,13 +379,13 @@ Defined in: [agentfootprint/src/recorders/observability/BoundaryRecorder.ts:330]
 
 > **onLoop**(`event`): `void`
 
-Defined in: [agentfootprint/src/recorders/observability/BoundaryRecorder.ts:376](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/recorders/observability/BoundaryRecorder.ts#L376)
+Defined in: [src/recorders/observability/BoundaryRecorder.ts:778](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/BoundaryRecorder.ts#L778)
 
 #### Parameters
 
 ##### event
 
-`FlowLoopEvent`
+[`FlowLoopEvent`](/agentfootprint/api/generated/interfaces/FlowLoopEvent.md)
 
 #### Returns
 
@@ -510,7 +393,7 @@ Defined in: [agentfootprint/src/recorders/observability/BoundaryRecorder.ts:376]
 
 #### Implementation of
 
-`CombinedRecorder.onLoop`
+[`FlowRecorder`](/agentfootprint/api/generated/interfaces/FlowRecorder.md).[`onLoop`](/agentfootprint/api/generated/interfaces/FlowRecorder.md#onloop)
 
 ***
 
@@ -518,7 +401,7 @@ Defined in: [agentfootprint/src/recorders/observability/BoundaryRecorder.ts:376]
 
 > **onRunEnd**(`event`): `void`
 
-Defined in: [agentfootprint/src/recorders/observability/BoundaryRecorder.ts:316](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/recorders/observability/BoundaryRecorder.ts#L316)
+Defined in: [src/recorders/observability/BoundaryRecorder.ts:662](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/BoundaryRecorder.ts#L662)
 
 Called once per top-level `executor.run()` AFTER traversal completes
 cleanly. Carries `event.payload = chart's return value`. NOT fired on
@@ -536,7 +419,34 @@ pause (the run didn't end) or uncaught error.
 
 #### Implementation of
 
-`CombinedRecorder.onRunEnd`
+[`FlowRecorder`](/agentfootprint/api/generated/interfaces/FlowRecorder.md).[`onRunEnd`](/agentfootprint/api/generated/interfaces/FlowRecorder.md#onrunend)
+
+***
+
+### onRunFailed()
+
+> **onRunFailed**(`event`): `void`
+
+Defined in: [src/recorders/observability/BoundaryRecorder.ts:679](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/BoundaryRecorder.ts#L679)
+
+Called once per top-level `executor.run()` when the run throws a
+non-pause error, BEFORE the exception propagates. The TERMINAL
+counterpart to `onRunEnd` — lets a monitor close the run boundary on
+failure instead of waiting forever. NOT fired on pause.
+
+#### Parameters
+
+##### event
+
+`FlowRunFailedEvent`
+
+#### Returns
+
+`void`
+
+#### Implementation of
+
+[`FlowRecorder`](/agentfootprint/api/generated/interfaces/FlowRecorder.md).[`onRunFailed`](/agentfootprint/api/generated/interfaces/FlowRecorder.md#onrunfailed)
 
 ***
 
@@ -544,7 +454,7 @@ pause (the run didn't end) or uncaught error.
 
 > **onRunStart**(`event`): `void`
 
-Defined in: [agentfootprint/src/recorders/observability/BoundaryRecorder.ts:312](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/recorders/observability/BoundaryRecorder.ts#L312)
+Defined in: [src/recorders/observability/BoundaryRecorder.ts:648](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/BoundaryRecorder.ts#L648)
 
 Called once per top-level `executor.run()` BEFORE traversal begins.
 Carries `event.payload = run({input})`. Subflow-traversers don't fire it.
@@ -561,7 +471,7 @@ Carries `event.payload = run({input})`. Subflow-traversers don't fire it.
 
 #### Implementation of
 
-`CombinedRecorder.onRunStart`
+[`FlowRecorder`](/agentfootprint/api/generated/interfaces/FlowRecorder.md).[`onRunStart`](/agentfootprint/api/generated/interfaces/FlowRecorder.md#onrunstart)
 
 ***
 
@@ -569,13 +479,13 @@ Carries `event.payload = run({input})`. Subflow-traversers don't fire it.
 
 > **onSubflowEntry**(`event`): `void`
 
-Defined in: [agentfootprint/src/recorders/observability/BoundaryRecorder.ts:320](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/recorders/observability/BoundaryRecorder.ts#L320)
+Defined in: [src/recorders/observability/BoundaryRecorder.ts:697](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/BoundaryRecorder.ts#L697)
 
 #### Parameters
 
 ##### event
 
-`FlowSubflowEvent`
+[`FlowSubflowEvent`](/agentfootprint/api/generated/interfaces/FlowSubflowEvent.md)
 
 #### Returns
 
@@ -583,7 +493,7 @@ Defined in: [agentfootprint/src/recorders/observability/BoundaryRecorder.ts:320]
 
 #### Implementation of
 
-`CombinedRecorder.onSubflowEntry`
+[`FlowRecorder`](/agentfootprint/api/generated/interfaces/FlowRecorder.md).[`onSubflowEntry`](/agentfootprint/api/generated/interfaces/FlowRecorder.md#onsubflowentry)
 
 ***
 
@@ -591,13 +501,13 @@ Defined in: [agentfootprint/src/recorders/observability/BoundaryRecorder.ts:320]
 
 > **onSubflowExit**(`event`): `void`
 
-Defined in: [agentfootprint/src/recorders/observability/BoundaryRecorder.ts:325](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/recorders/observability/BoundaryRecorder.ts#L325)
+Defined in: [src/recorders/observability/BoundaryRecorder.ts:709](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/BoundaryRecorder.ts#L709)
 
 #### Parameters
 
 ##### event
 
-`FlowSubflowEvent`
+[`FlowSubflowEvent`](/agentfootprint/api/generated/interfaces/FlowSubflowEvent.md)
 
 #### Returns
 
@@ -605,7 +515,7 @@ Defined in: [agentfootprint/src/recorders/observability/BoundaryRecorder.ts:325]
 
 #### Implementation of
 
-`CombinedRecorder.onSubflowExit`
+[`FlowRecorder`](/agentfootprint/api/generated/interfaces/FlowRecorder.md).[`onSubflowExit`](/agentfootprint/api/generated/interfaces/FlowRecorder.md#onsubflowexit)
 
 ***
 
@@ -613,7 +523,7 @@ Defined in: [agentfootprint/src/recorders/observability/BoundaryRecorder.ts:325]
 
 > **subscribe**(`dispatcher`): [`Unsubscribe`](/agentfootprint/api/generated/type-aliases/Unsubscribe.md)
 
-Defined in: [agentfootprint/src/recorders/observability/BoundaryRecorder.ts:399](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/recorders/observability/BoundaryRecorder.ts#L399)
+Defined in: [src/recorders/observability/BoundaryRecorder.ts:805](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/BoundaryRecorder.ts#L805)
 
 Subscribe to the runner's typed-event dispatcher and emit a domain
 event for each `llm.*` / `tool.*` / `context.injected` event.
@@ -638,7 +548,7 @@ recorder construction and dispose with the returned function.
 
 > **toSnapshot**(): `object`
 
-Defined in: [agentfootprint/src/recorders/observability/BoundaryRecorder.ts:616](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/recorders/observability/BoundaryRecorder.ts#L616)
+Defined in: [src/recorders/observability/BoundaryRecorder.ts:1169](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/BoundaryRecorder.ts#L1169)
 
 Snapshot bundle — included in `executor.getSnapshot()` if the
  executor implements the snapshot extension protocol.

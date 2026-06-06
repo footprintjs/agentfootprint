@@ -8,7 +8,7 @@
 
 > **attachThinking**(`dispatcher`, `options`): [`Unsubscribe`](/agentfootprint/api/generated/type-aliases/Unsubscribe.md)
 
-Defined in: [agentfootprint/src/recorders/observability/ThinkingRecorder.ts:57](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/recorders/observability/ThinkingRecorder.ts#L57)
+Defined in: [src/recorders/observability/ThinkingRecorder.ts:57](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/ThinkingRecorder.ts#L57)
 
 Attach a thinking-status subscription to the event dispatcher.
 Returns an Unsubscribe — call to detach.

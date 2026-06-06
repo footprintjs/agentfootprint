@@ -6,7 +6,7 @@
 
 # Interface: SkillActivatedPayload
 
-Defined in: [agentfootprint/src/events/payloads.ts:294](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/events/payloads.ts#L294)
+Defined in: [src/events/payloads.ts:393](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L393)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [agentfootprint/src/events/payloads.ts:294](https://github.com/footp
 
 > `readonly` `optional` **injectedSystemPromptChars?**: `number`
 
-Defined in: [agentfootprint/src/events/payloads.ts:298](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/events/payloads.ts#L298)
+Defined in: [src/events/payloads.ts:397](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L397)
 
 ***
 
@@ -22,7 +22,7 @@ Defined in: [agentfootprint/src/events/payloads.ts:298](https://github.com/footp
 
 > `readonly` `optional` **injectedTools?**: readonly `string`[]
 
-Defined in: [agentfootprint/src/events/payloads.ts:297](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/events/payloads.ts#L297)
+Defined in: [src/events/payloads.ts:396](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L396)
 
 ***
 
@@ -30,7 +30,7 @@ Defined in: [agentfootprint/src/events/payloads.ts:297](https://github.com/footp
 
 > `readonly` **reason**: `"manual"` \| `"autoActivate"` \| `"read_skill_result"`
 
-Defined in: [agentfootprint/src/events/payloads.ts:296](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/events/payloads.ts#L296)
+Defined in: [src/events/payloads.ts:395](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L395)
 
 ***
 
@@ -38,4 +38,4 @@ Defined in: [agentfootprint/src/events/payloads.ts:296](https://github.com/footp
 
 > `readonly` **skillId**: `string`
 
-Defined in: [agentfootprint/src/events/payloads.ts:295](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/events/payloads.ts#L295)
+Defined in: [src/events/payloads.ts:394](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L394)

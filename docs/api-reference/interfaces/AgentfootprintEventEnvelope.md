@@ -6,7 +6,7 @@
 
 # Interface: AgentfootprintEventEnvelope\<TType, TPayload\>
 
-Defined in: [agentfootprint/src/events/types.ts:102](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/events/types.ts#L102)
+Defined in: [src/events/types.ts:102](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/types.ts#L102)
 
 Discriminated-union envelope every event implements.
 
@@ -26,7 +26,7 @@ Discriminated-union envelope every event implements.
 
 > `readonly` **meta**: [`EventMeta`](/agentfootprint/api/generated/interfaces/EventMeta.md)
 
-Defined in: [agentfootprint/src/events/types.ts:105](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/events/types.ts#L105)
+Defined in: [src/events/types.ts:105](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/types.ts#L105)
 
 ***
 
@@ -34,7 +34,7 @@ Defined in: [agentfootprint/src/events/types.ts:105](https://github.com/footprin
 
 > `readonly` **payload**: `TPayload`
 
-Defined in: [agentfootprint/src/events/types.ts:104](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/events/types.ts#L104)
+Defined in: [src/events/types.ts:104](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/types.ts#L104)
 
 ***
 
@@ -42,4 +42,4 @@ Defined in: [agentfootprint/src/events/types.ts:104](https://github.com/footprin
 
 > `readonly` **type**: `TType`
 
-Defined in: [agentfootprint/src/events/types.ts:103](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/events/types.ts#L103)
+Defined in: [src/events/types.ts:103](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/types.ts#L103)

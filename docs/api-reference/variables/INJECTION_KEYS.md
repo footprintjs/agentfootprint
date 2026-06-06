@@ -8,7 +8,7 @@
 
 > `const` **INJECTION\_KEYS**: `object`
 
-Defined in: [agentfootprint/src/conventions.ts:99](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/conventions.ts#L99)
+Defined in: [src/conventions.ts:318](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/conventions.ts#L318)
 
 Scope-key convention for context injections.
 

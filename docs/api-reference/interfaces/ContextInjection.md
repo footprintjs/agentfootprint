@@ -6,7 +6,7 @@
 
 # Interface: ContextInjection
 
-Defined in: [agentfootprint/src/recorders/observability/FlowchartRecorder.ts:141](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/recorders/observability/FlowchartRecorder.ts#L141)
+Defined in: [src/recorders/observability/FlowchartRecorder.ts:150](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/FlowchartRecorder.ts#L150)
 
 Consumer-facing context injection (5 axes of context engineering).
 
@@ -16,7 +16,7 @@ Consumer-facing context injection (5 axes of context engineering).
 
 > `readonly` `optional` **asRole?**: `"system"` \| `"user"` \| `"assistant"` \| `"tool"`
 
-Defined in: [agentfootprint/src/recorders/observability/FlowchartRecorder.ts:143](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/recorders/observability/FlowchartRecorder.ts#L143)
+Defined in: [src/recorders/observability/FlowchartRecorder.ts:152](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/FlowchartRecorder.ts#L152)
 
 ***
 
@@ -24,7 +24,7 @@ Defined in: [agentfootprint/src/recorders/observability/FlowchartRecorder.ts:143
 
 > `readonly` `optional` **budgetFraction?**: `number`
 
-Defined in: [agentfootprint/src/recorders/observability/FlowchartRecorder.ts:153](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/recorders/observability/FlowchartRecorder.ts#L153)
+Defined in: [src/recorders/observability/FlowchartRecorder.ts:162](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/FlowchartRecorder.ts#L162)
 
 ***
 
@@ -32,7 +32,7 @@ Defined in: [agentfootprint/src/recorders/observability/FlowchartRecorder.ts:153
 
 > `readonly` `optional` **budgetTokens?**: `number`
 
-Defined in: [agentfootprint/src/recorders/observability/FlowchartRecorder.ts:152](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/recorders/observability/FlowchartRecorder.ts#L152)
+Defined in: [src/recorders/observability/FlowchartRecorder.ts:161](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/FlowchartRecorder.ts#L161)
 
 ***
 
@@ -40,7 +40,7 @@ Defined in: [agentfootprint/src/recorders/observability/FlowchartRecorder.ts:152
 
 > `readonly` `optional` **contentSummary?**: `string`
 
-Defined in: [agentfootprint/src/recorders/observability/FlowchartRecorder.ts:146](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/recorders/observability/FlowchartRecorder.ts#L146)
+Defined in: [src/recorders/observability/FlowchartRecorder.ts:155](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/FlowchartRecorder.ts#L155)
 
 ***
 
@@ -48,7 +48,7 @@ Defined in: [agentfootprint/src/recorders/observability/FlowchartRecorder.ts:146
 
 > `readonly` `optional` **rankPosition?**: `number`
 
-Defined in: [agentfootprint/src/recorders/observability/FlowchartRecorder.ts:151](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/recorders/observability/FlowchartRecorder.ts#L151)
+Defined in: [src/recorders/observability/FlowchartRecorder.ts:160](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/FlowchartRecorder.ts#L160)
 
 ***
 
@@ -56,7 +56,7 @@ Defined in: [agentfootprint/src/recorders/observability/FlowchartRecorder.ts:151
 
 > `readonly` `optional` **reason?**: `string`
 
-Defined in: [agentfootprint/src/recorders/observability/FlowchartRecorder.ts:147](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/recorders/observability/FlowchartRecorder.ts#L147)
+Defined in: [src/recorders/observability/FlowchartRecorder.ts:156](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/FlowchartRecorder.ts#L156)
 
 ***
 
@@ -64,7 +64,7 @@ Defined in: [agentfootprint/src/recorders/observability/FlowchartRecorder.ts:147
 
 > `readonly` `optional` **retrievalScore?**: `number`
 
-Defined in: [agentfootprint/src/recorders/observability/FlowchartRecorder.ts:150](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/recorders/observability/FlowchartRecorder.ts#L150)
+Defined in: [src/recorders/observability/FlowchartRecorder.ts:159](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/FlowchartRecorder.ts#L159)
 
 ***
 
@@ -72,7 +72,7 @@ Defined in: [agentfootprint/src/recorders/observability/FlowchartRecorder.ts:150
 
 > `readonly` `optional` **sectionTag?**: `string`
 
-Defined in: [agentfootprint/src/recorders/observability/FlowchartRecorder.ts:148](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/recorders/observability/FlowchartRecorder.ts#L148)
+Defined in: [src/recorders/observability/FlowchartRecorder.ts:157](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/FlowchartRecorder.ts#L157)
 
 ***
 
@@ -80,7 +80,7 @@ Defined in: [agentfootprint/src/recorders/observability/FlowchartRecorder.ts:148
 
 > `readonly` **slot**: `"system-prompt"` \| `"messages"` \| `"tools"`
 
-Defined in: [agentfootprint/src/recorders/observability/FlowchartRecorder.ts:142](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/recorders/observability/FlowchartRecorder.ts#L142)
+Defined in: [src/recorders/observability/FlowchartRecorder.ts:151](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/FlowchartRecorder.ts#L151)
 
 ***
 
@@ -88,7 +88,7 @@ Defined in: [agentfootprint/src/recorders/observability/FlowchartRecorder.ts:142
 
 > `readonly` **source**: `string`
 
-Defined in: [agentfootprint/src/recorders/observability/FlowchartRecorder.ts:144](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/recorders/observability/FlowchartRecorder.ts#L144)
+Defined in: [src/recorders/observability/FlowchartRecorder.ts:153](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/FlowchartRecorder.ts#L153)
 
 ***
 
@@ -96,7 +96,7 @@ Defined in: [agentfootprint/src/recorders/observability/FlowchartRecorder.ts:144
 
 > `readonly` `optional` **sourceId?**: `string`
 
-Defined in: [agentfootprint/src/recorders/observability/FlowchartRecorder.ts:145](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/recorders/observability/FlowchartRecorder.ts#L145)
+Defined in: [src/recorders/observability/FlowchartRecorder.ts:154](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/FlowchartRecorder.ts#L154)
 
 ***
 
@@ -104,4 +104,4 @@ Defined in: [agentfootprint/src/recorders/observability/FlowchartRecorder.ts:145
 
 > `readonly` `optional` **upstreamRef?**: `string`
 
-Defined in: [agentfootprint/src/recorders/observability/FlowchartRecorder.ts:149](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/recorders/observability/FlowchartRecorder.ts#L149)
+Defined in: [src/recorders/observability/FlowchartRecorder.ts:158](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/FlowchartRecorder.ts#L158)

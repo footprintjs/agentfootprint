@@ -13,7 +13,7 @@
  *
  * @example
  * ```ts
- * import { InMemoryStore, mockEmbedder, indexDocuments, defineRAG } from 'agentfootprint';
+ * import { Agent, InMemoryStore, mockEmbedder, indexDocuments, defineRAG } from 'agentfootprint';
  *
  * const store = new InMemoryStore();
  * const embedder = mockEmbedder();
@@ -25,7 +25,7 @@
  * ]);
  *
  * const docs = defineRAG({ id: 'product-docs', store, embedder });
- * agent.rag(docs);
+ * const agent = Agent.create({ provider }).rag(docs).build();
  * ```
  */
 

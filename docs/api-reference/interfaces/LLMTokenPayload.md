@@ -6,7 +6,7 @@
 
 # Interface: LLMTokenPayload
 
-Defined in: [agentfootprint/src/events/payloads.ts:142](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/events/payloads.ts#L142)
+Defined in: [src/events/payloads.ts:171](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L171)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [agentfootprint/src/events/payloads.ts:142](https://github.com/footp
 
 > `readonly` **content**: `string`
 
-Defined in: [agentfootprint/src/events/payloads.ts:145](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/events/payloads.ts#L145)
+Defined in: [src/events/payloads.ts:174](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L174)
 
 ***
 
@@ -22,7 +22,7 @@ Defined in: [agentfootprint/src/events/payloads.ts:145](https://github.com/footp
 
 > `readonly` **iteration**: `number`
 
-Defined in: [agentfootprint/src/events/payloads.ts:143](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/events/payloads.ts#L143)
+Defined in: [src/events/payloads.ts:172](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L172)
 
 ***
 
@@ -30,4 +30,4 @@ Defined in: [agentfootprint/src/events/payloads.ts:143](https://github.com/footp
 
 > `readonly` **tokenIndex**: `number`
 
-Defined in: [agentfootprint/src/events/payloads.ts:144](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/events/payloads.ts#L144)
+Defined in: [src/events/payloads.ts:173](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L173)

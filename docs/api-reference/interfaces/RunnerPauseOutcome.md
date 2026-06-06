@@ -6,7 +6,7 @@
 
 # Interface: RunnerPauseOutcome
 
-Defined in: [agentfootprint/src/core/pause.ts:27](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/core/pause.ts#L27)
+Defined in: [src/core/pause.ts:27](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/core/pause.ts#L27)
 
 Outcome returned by `runner.run()` / `runner.resume()` when execution
 has paused mid-flow. The shape mirrors footprintjs's `PausedResult` but
@@ -19,7 +19,7 @@ want to reach into the checkpoint.
 
 > `readonly` **checkpoint**: `FlowchartCheckpoint`
 
-Defined in: [agentfootprint/src/core/pause.ts:30](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/core/pause.ts#L30)
+Defined in: [src/core/pause.ts:30](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/core/pause.ts#L30)
 
 Serializable checkpoint — store anywhere (Redis, Postgres, localStorage).
 
@@ -29,7 +29,7 @@ Serializable checkpoint — store anywhere (Redis, Postgres, localStorage).
 
 > `readonly` **paused**: `true`
 
-Defined in: [agentfootprint/src/core/pause.ts:28](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/core/pause.ts#L28)
+Defined in: [src/core/pause.ts:28](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/core/pause.ts#L28)
 
 ***
 
@@ -37,6 +37,6 @@ Defined in: [agentfootprint/src/core/pause.ts:28](https://github.com/footprintjs
 
 > `readonly` **pauseData**: `unknown`
 
-Defined in: [agentfootprint/src/core/pause.ts:32](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/core/pause.ts#L32)
+Defined in: [src/core/pause.ts:32](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/core/pause.ts#L32)
 
 Data passed to `scope.$pause()` / `pauseHere()`. Consumer-typed.

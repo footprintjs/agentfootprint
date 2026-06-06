@@ -35,7 +35,7 @@
  * @example  Basic usage
  * ```ts
  * import {
- *   Agent, defineRAG, indexDocuments, InMemoryStore, mockEmbedder,
+ *   Agent, defineRAG, indexDocuments, InMemoryStore, mockEmbedder, mock,
  * } from 'agentfootprint';
  *
  * const embedder = mockEmbedder();
@@ -56,7 +56,9 @@
  *   threshold: 0.6,
  * });
  *
- * const agent = Agent.create({ provider }).rag(docs).build();
+ * const agent = Agent.create({ provider: mock({ reply: 'ok' }), model: 'mock' })
+ *   .rag(docs)
+ *   .build();
  * ```
  */
 

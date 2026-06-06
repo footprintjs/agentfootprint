@@ -6,7 +6,7 @@
 
 # Interface: ToolsActivatedPayload
 
-Defined in: [agentfootprint/src/events/payloads.ts:282](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/events/payloads.ts#L282)
+Defined in: [src/events/payloads.ts:339](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L339)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [agentfootprint/src/events/payloads.ts:282](https://github.com/footp
 
 > `readonly` **reason**: `"skill_activated"` \| `"autoActivate"` \| `"permission_granted"`
 
-Defined in: [agentfootprint/src/events/payloads.ts:284](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/events/payloads.ts#L284)
+Defined in: [src/events/payloads.ts:341](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L341)
 
 ***
 
@@ -22,7 +22,7 @@ Defined in: [agentfootprint/src/events/payloads.ts:284](https://github.com/footp
 
 > `readonly` `optional` **source?**: `string`
 
-Defined in: [agentfootprint/src/events/payloads.ts:285](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/events/payloads.ts#L285)
+Defined in: [src/events/payloads.ts:342](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L342)
 
 ***
 
@@ -30,4 +30,4 @@ Defined in: [agentfootprint/src/events/payloads.ts:285](https://github.com/footp
 
 > `readonly` **toolId**: `string`
 
-Defined in: [agentfootprint/src/events/payloads.ts:283](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/events/payloads.ts#L283)
+Defined in: [src/events/payloads.ts:340](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L340)

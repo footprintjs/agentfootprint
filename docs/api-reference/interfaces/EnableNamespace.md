@@ -6,7 +6,7 @@
 
 # Interface: EnableNamespace
 
-Defined in: [agentfootprint/src/core/runner.ts:43](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/core/runner.ts#L43)
+Defined in: [src/core/runner.ts:44](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/core/runner.ts#L44)
 
 High-level feature-enable methods. Each attaches a pre-built observability
 recorder and returns an Unsubscribe function. Additional methods land in
@@ -14,11 +14,33 @@ Phase 5 (lens, tracing, cost, guardrails, ...).
 
 ## Methods
 
+### cost()
+
+> **cost**(`opts?`): [`Unsubscribe`](/agentfootprint/api/generated/type-aliases/Unsubscribe.md)
+
+Defined in: [src/core/runner.ts:77](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/core/runner.ts#L77)
+
+v2.8+ — grouped strategy enabler for cost. Subscribes the strategy
+to `cost.tick` events; defaults to `inMemorySinkCost()` for
+read-back / test inspection.
+
+#### Parameters
+
+##### opts?
+
+`CostEnableOptions`
+
+#### Returns
+
+[`Unsubscribe`](/agentfootprint/api/generated/type-aliases/Unsubscribe.md)
+
+***
+
 ### flowchart()
 
 > **flowchart**(`opts?`): [`FlowchartHandle`](/agentfootprint/api/generated/interfaces/FlowchartHandle.md)
 
-Defined in: [agentfootprint/src/core/runner.ts:57](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/core/runner.ts#L57)
+Defined in: [src/core/runner.ts:64](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/core/runner.ts#L64)
 
 Live composition graph — subflow / fork-branch / decision-branch
 nodes accumulate as execution unfolds. Hook into any graph renderer
@@ -40,13 +62,34 @@ at any time (not just via onUpdate).
 
 ***
 
-### logging()
+### liveStatus()
+
+> **liveStatus**(`opts`): [`Unsubscribe`](/agentfootprint/api/generated/type-aliases/Unsubscribe.md)
+
+Defined in: [src/core/runner.ts:84](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/core/runner.ts#L84)
+
+v2.8+ — grouped strategy enabler for chat-bubble live status.
+Maintains the thinking-state machine; calls strategy.renderStatus
+each time the rendered line changes (deduped — not on every token).
+Strategy is required (consumer must wire UI).
+
+#### Parameters
+
+##### opts
+
+`LiveStatusEnableOptions`
+
+#### Returns
+
+[`Unsubscribe`](/agentfootprint/api/generated/type-aliases/Unsubscribe.md)
+
+***
+
+### ~~logging()~~
 
 > **logging**(`opts?`): [`Unsubscribe`](/agentfootprint/api/generated/type-aliases/Unsubscribe.md)
 
-Defined in: [agentfootprint/src/core/runner.ts:47](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/core/runner.ts#L47)
-
-Firehose-style structured logging of every event.
+Defined in: [src/core/runner.ts:54](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/core/runner.ts#L54)
 
 #### Parameters
 
@@ -58,15 +101,41 @@ Firehose-style structured logging of every event.
 
 [`Unsubscribe`](/agentfootprint/api/generated/type-aliases/Unsubscribe.md)
 
+#### Deprecated
+
+v2.8 — use `enable.observability({ strategy: pinoObservability({...}) })`
+or another vendor strategy. Kept for back-compat; removed in v3.0.
+
 ***
 
-### thinking()
+### observability()
+
+> **observability**(`opts?`): [`Unsubscribe`](/agentfootprint/api/generated/type-aliases/Unsubscribe.md)
+
+Defined in: [src/core/runner.ts:71](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/core/runner.ts#L71)
+
+v2.8+ — grouped strategy enabler for observability. Pipes every
+typed event into a vendor strategy (Datadog, OTel, AgentCore,
+CloudWatch, …) or the default `consoleObservability()`. See
+`agentfootprint/strategies` + `docs/inspiration/strategy-everywhere.md`.
+
+#### Parameters
+
+##### opts?
+
+`ObservabilityEnableOptions`
+
+#### Returns
+
+[`Unsubscribe`](/agentfootprint/api/generated/type-aliases/Unsubscribe.md)
+
+***
+
+### ~~thinking()~~
 
 > **thinking**(`opts`): [`Unsubscribe`](/agentfootprint/api/generated/type-aliases/Unsubscribe.md)
 
-Defined in: [agentfootprint/src/core/runner.ts:45](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/core/runner.ts#L45)
-
-Claude-Code-style live status line.
+Defined in: [src/core/runner.ts:49](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/core/runner.ts#L49)
 
 #### Parameters
 
@@ -77,3 +146,8 @@ Claude-Code-style live status line.
 #### Returns
 
 [`Unsubscribe`](/agentfootprint/api/generated/type-aliases/Unsubscribe.md)
+
+#### Deprecated
+
+v2.8 — use `enable.liveStatus({ strategy: chatBubbleLiveStatus({onLine}) })`.
+Kept for back-compat; removed in v3.0.

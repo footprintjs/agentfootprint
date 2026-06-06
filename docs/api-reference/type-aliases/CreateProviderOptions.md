@@ -6,9 +6,9 @@
 
 # Type Alias: CreateProviderOptions
 
-> **CreateProviderOptions** = `object` & [`MockProviderOptions`](/agentfootprint/api/generated/interfaces/MockProviderOptions.md) \| `object` & [`AnthropicProviderOptions`](/agentfootprint/api/generated/interfaces/AnthropicProviderOptions.md) \| `object` & [`OpenAIProviderOptions`](/agentfootprint/api/generated/interfaces/OpenAIProviderOptions.md) \| `object` & [`OpenAIProviderOptions`](/agentfootprint/api/generated/interfaces/OpenAIProviderOptions.md) & `object` \| `object` & [`BedrockProviderOptions`](/agentfootprint/api/generated/interfaces/BedrockProviderOptions.md) \| `object` & [`BrowserAnthropicProviderOptions`](/agentfootprint/api/generated/interfaces/BrowserAnthropicProviderOptions.md) \| `object` & [`BrowserOpenAIProviderOptions`](/agentfootprint/api/generated/interfaces/BrowserOpenAIProviderOptions.md)
+> **CreateProviderOptions** = `object` & [`MockProviderOptions`](/agentfootprint/api/generated/interfaces/MockProviderOptions.md) \| `object` & `AnthropicProviderOptions` \| `object` & `OpenAIProviderOptions` \| `object` & `OpenAIProviderOptions` & `object` \| `object` & `BedrockProviderOptions` \| `object` & [`BrowserAnthropicProviderOptions`](/agentfootprint/api/generated/interfaces/BrowserAnthropicProviderOptions.md) \| `object` & [`BrowserOpenAIProviderOptions`](/agentfootprint/api/generated/interfaces/BrowserOpenAIProviderOptions.md)
 
-Defined in: [agentfootprint/src/adapters/llm/createProvider.ts:49](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/adapters/llm/createProvider.ts#L49)
+Defined in: [src/adapters/llm/createProvider.ts:50](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/adapters/llm/createProvider.ts#L50)
 
 Common subset of options accepted across all built-in providers.
 Provider-specific keys (region for Bedrock, host for Ollama,

@@ -8,4 +8,4 @@
 
 > **MemoryTiming** = *typeof* [`MEMORY_TIMING`](/agentfootprint/api/generated/variables/MEMORY_TIMING.md)\[keyof *typeof* [`MEMORY_TIMING`](/agentfootprint/api/generated/variables/MEMORY_TIMING.md)\]
 
-Defined in: [agentfootprint/src/memory/define.types.ts:93](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/memory/define.types.ts#L93)
+Defined in: [src/memory/define.types.ts:93](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/memory/define.types.ts#L93)

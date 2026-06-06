@@ -6,7 +6,7 @@
 
 # Interface: ParallelBranchCompletePayload
 
-Defined in: [agentfootprint/src/events/payloads.ts:42](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/events/payloads.ts#L42)
+Defined in: [src/events/payloads.ts:50](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L50)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [agentfootprint/src/events/payloads.ts:42](https://github.com/footpr
 
 > `readonly` **branchId**: `string`
 
-Defined in: [agentfootprint/src/events/payloads.ts:44](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/events/payloads.ts#L44)
+Defined in: [src/events/payloads.ts:52](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L52)
 
 ***
 
@@ -22,7 +22,7 @@ Defined in: [agentfootprint/src/events/payloads.ts:44](https://github.com/footpr
 
 > `readonly` **durationMs**: `number`
 
-Defined in: [agentfootprint/src/events/payloads.ts:46](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/events/payloads.ts#L46)
+Defined in: [src/events/payloads.ts:54](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L54)
 
 ***
 
@@ -30,7 +30,7 @@ Defined in: [agentfootprint/src/events/payloads.ts:46](https://github.com/footpr
 
 > `readonly` **parentId**: `string`
 
-Defined in: [agentfootprint/src/events/payloads.ts:43](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/events/payloads.ts#L43)
+Defined in: [src/events/payloads.ts:51](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L51)
 
 ***
 
@@ -38,4 +38,4 @@ Defined in: [agentfootprint/src/events/payloads.ts:43](https://github.com/footpr
 
 > `readonly` **status**: `"ok"` \| `"err"`
 
-Defined in: [agentfootprint/src/events/payloads.ts:45](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/events/payloads.ts#L45)
+Defined in: [src/events/payloads.ts:53](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L53)

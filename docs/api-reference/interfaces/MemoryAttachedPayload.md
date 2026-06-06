@@ -6,7 +6,7 @@
 
 # Interface: MemoryAttachedPayload
 
-Defined in: [agentfootprint/src/events/payloads.ts:251](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/events/payloads.ts#L251)
+Defined in: [src/events/payloads.ts:308](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L308)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [agentfootprint/src/events/payloads.ts:251](https://github.com/footp
 
 > `readonly` **contentSummary**: `string`
 
-Defined in: [agentfootprint/src/events/payloads.ts:253](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/events/payloads.ts#L253)
+Defined in: [src/events/payloads.ts:310](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L310)
 
 ***
 
@@ -22,7 +22,7 @@ Defined in: [agentfootprint/src/events/payloads.ts:253](https://github.com/footp
 
 > `readonly` **memoryId**: `string`
 
-Defined in: [agentfootprint/src/events/payloads.ts:252](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/events/payloads.ts#L252)
+Defined in: [src/events/payloads.ts:309](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L309)
 
 ***
 
@@ -30,7 +30,7 @@ Defined in: [agentfootprint/src/events/payloads.ts:252](https://github.com/footp
 
 > `readonly` `optional` **rank?**: `number`
 
-Defined in: [agentfootprint/src/events/payloads.ts:255](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/events/payloads.ts#L255)
+Defined in: [src/events/payloads.ts:312](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L312)
 
 ***
 
@@ -38,7 +38,7 @@ Defined in: [agentfootprint/src/events/payloads.ts:255](https://github.com/footp
 
 > `readonly` `optional` **retriever?**: `"custom"` \| `"pinecone"` \| `"weaviate"` \| `"qdrant"` \| `"chroma"`
 
-Defined in: [agentfootprint/src/events/payloads.ts:257](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/events/payloads.ts#L257)
+Defined in: [src/events/payloads.ts:314](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L314)
 
 ***
 
@@ -46,7 +46,7 @@ Defined in: [agentfootprint/src/events/payloads.ts:257](https://github.com/footp
 
 > `readonly` `optional` **score?**: `number`
 
-Defined in: [agentfootprint/src/events/payloads.ts:254](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/events/payloads.ts#L254)
+Defined in: [src/events/payloads.ts:311](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L311)
 
 ***
 
@@ -54,4 +54,4 @@ Defined in: [agentfootprint/src/events/payloads.ts:254](https://github.com/footp
 
 > `readonly` **source**: `"store"` \| `"auto-extract"` \| `"manual"`
 
-Defined in: [agentfootprint/src/events/payloads.ts:256](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/events/payloads.ts#L256)
+Defined in: [src/events/payloads.ts:313](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L313)

@@ -8,7 +8,7 @@
 
 > **identityNamespace**(`identity`): `string`
 
-Defined in: [agentfootprint/src/memory/identity/types.ts:52](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/memory/identity/types.ts#L52)
+Defined in: [src/memory/identity/types.ts:52](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/memory/identity/types.ts#L52)
 
 Encode a MemoryIdentity as a deterministic storage namespace. Used by
 storage adapters that need a single string key (Redis, localStorage,

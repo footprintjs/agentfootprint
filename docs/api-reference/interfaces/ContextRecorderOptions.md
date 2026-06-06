@@ -6,7 +6,7 @@
 
 # Interface: ContextRecorderOptions
 
-Defined in: [agentfootprint/src/recorders/core/ContextRecorder.ts:35](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/recorders/core/ContextRecorder.ts#L35)
+Defined in: [src/recorders/core/ContextRecorder.ts:35](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/core/ContextRecorder.ts#L35)
 
 Supplies the recorder with run-level context. Passed at construction
 time (static fields) OR updated via `updateRunContext` between runs
@@ -18,7 +18,7 @@ when reusing one recorder across multiple executor runs.
 
 > `readonly` **dispatcher**: [`EventDispatcher`](/agentfootprint/api/generated/classes/EventDispatcher.md)
 
-Defined in: [agentfootprint/src/recorders/core/ContextRecorder.ts:36](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/recorders/core/ContextRecorder.ts#L36)
+Defined in: [src/recorders/core/ContextRecorder.ts:36](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/core/ContextRecorder.ts#L36)
 
 ***
 
@@ -26,7 +26,7 @@ Defined in: [agentfootprint/src/recorders/core/ContextRecorder.ts:36](https://gi
 
 > `readonly` **getRunContext**: () => [`RunContext`](/agentfootprint/api/generated/interfaces/RunContext.md)
 
-Defined in: [agentfootprint/src/recorders/core/ContextRecorder.ts:38](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/recorders/core/ContextRecorder.ts#L38)
+Defined in: [src/recorders/core/ContextRecorder.ts:38](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/core/ContextRecorder.ts#L38)
 
 #### Returns
 
@@ -38,4 +38,4 @@ Defined in: [agentfootprint/src/recorders/core/ContextRecorder.ts:38](https://gi
 
 > `readonly` `optional` **id?**: `string`
 
-Defined in: [agentfootprint/src/recorders/core/ContextRecorder.ts:37](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/recorders/core/ContextRecorder.ts#L37)
+Defined in: [src/recorders/core/ContextRecorder.ts:37](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/core/ContextRecorder.ts#L37)

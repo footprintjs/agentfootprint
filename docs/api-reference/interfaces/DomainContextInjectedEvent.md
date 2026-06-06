@@ -6,7 +6,7 @@
 
 # Interface: DomainContextInjectedEvent
 
-Defined in: [agentfootprint/src/recorders/observability/BoundaryRecorder.ts:228](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/recorders/observability/BoundaryRecorder.ts#L228)
+Defined in: [src/recorders/observability/BoundaryRecorder.ts:287](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/BoundaryRecorder.ts#L287)
 
 ## Extends
 
@@ -18,7 +18,7 @@ Defined in: [agentfootprint/src/recorders/observability/BoundaryRecorder.ts:228]
 
 > `readonly` `optional` **asRole?**: `"system"` \| `"user"` \| `"assistant"` \| `"tool"`
 
-Defined in: [agentfootprint/src/recorders/observability/BoundaryRecorder.ts:233](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/recorders/observability/BoundaryRecorder.ts#L233)
+Defined in: [src/recorders/observability/BoundaryRecorder.ts:292](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/BoundaryRecorder.ts#L292)
 
 ***
 
@@ -26,7 +26,7 @@ Defined in: [agentfootprint/src/recorders/observability/BoundaryRecorder.ts:233]
 
 > `readonly` `optional` **budgetFraction?**: `number`
 
-Defined in: [agentfootprint/src/recorders/observability/BoundaryRecorder.ts:243](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/recorders/observability/BoundaryRecorder.ts#L243)
+Defined in: [src/recorders/observability/BoundaryRecorder.ts:302](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/BoundaryRecorder.ts#L302)
 
 Fraction of slot cap consumed (from `budgetSpent.fractionOfCap`).
 
@@ -36,9 +36,50 @@ Fraction of slot cap consumed (from `budgetSpent.fractionOfCap`).
 
 > `readonly` `optional` **budgetTokens?**: `number`
 
-Defined in: [agentfootprint/src/recorders/observability/BoundaryRecorder.ts:241](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/recorders/observability/BoundaryRecorder.ts#L241)
+Defined in: [src/recorders/observability/BoundaryRecorder.ts:300](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/BoundaryRecorder.ts#L300)
 
 Tokens consumed by this injection (from `budgetSpent.tokens`).
+
+***
+
+### commitIdxAfter
+
+> `readonly` **commitIdxAfter**: `number`
+
+Defined in: [src/recorders/observability/BoundaryRecorder.ts:146](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/BoundaryRecorder.ts#L146)
+
+RESERVED for future event types that trigger engine writes.
+ CURRENT BEHAVIOR: always equals `commitIdxBefore` for every event
+ emitted by today's BoundaryRecorder. Observer events don't write
+ to scope, so the executor's commit count doesn't change between
+ the moment the event is sampled and the moment it's recorded.
+ Consumers should currently treat this as identical to
+ `commitIdxBefore`; do NOT rely on it being strictly greater.
+ The field exists for forward compatibility — if a future
+ observer pattern triggers commits during its handler, this is
+ where the post-effect count will land.
+
+#### Inherited from
+
+`DomainEventBase.commitIdxAfter`
+
+***
+
+### commitIdxBefore
+
+> `readonly` **commitIdxBefore**: `number`
+
+Defined in: [src/recorders/observability/BoundaryRecorder.ts:135](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/BoundaryRecorder.ts#L135)
+
+Commit count when this event fired. 0 if the recorder was
+ constructed without `getCommitCount` (legacy mode). The boundary
+ RANGE for an (entry, exit) pair is `[entry.commitIdxBefore,
+ exit.commitIdxBefore]`. Phase 5 Layer 2 — see
+ `docs/design/boundary-commit-ranges.md`.
+
+#### Inherited from
+
+`DomainEventBase.commitIdxBefore`
 
 ***
 
@@ -46,7 +87,7 @@ Tokens consumed by this injection (from `budgetSpent.tokens`).
 
 > `readonly` `optional` **contentSummary?**: `string`
 
-Defined in: [agentfootprint/src/recorders/observability/BoundaryRecorder.ts:234](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/recorders/observability/BoundaryRecorder.ts#L234)
+Defined in: [src/recorders/observability/BoundaryRecorder.ts:293](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/BoundaryRecorder.ts#L293)
 
 ***
 
@@ -54,7 +95,7 @@ Defined in: [agentfootprint/src/recorders/observability/BoundaryRecorder.ts:234]
 
 > `readonly` **depth**: `number`
 
-Defined in: [agentfootprint/src/recorders/observability/BoundaryRecorder.ts:113](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/recorders/observability/BoundaryRecorder.ts#L113)
+Defined in: [src/recorders/observability/BoundaryRecorder.ts:127](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/BoundaryRecorder.ts#L127)
 
 Depth in the run tree — root = 0, top-level subflow = 1, etc.
 
@@ -68,7 +109,7 @@ Depth in the run tree — root = 0, top-level subflow = 1, etc.
 
 > `readonly` `optional` **rankPosition?**: `number`
 
-Defined in: [agentfootprint/src/recorders/observability/BoundaryRecorder.ts:239](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/recorders/observability/BoundaryRecorder.ts#L239)
+Defined in: [src/recorders/observability/BoundaryRecorder.ts:298](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/BoundaryRecorder.ts#L298)
 
 ***
 
@@ -76,7 +117,7 @@ Defined in: [agentfootprint/src/recorders/observability/BoundaryRecorder.ts:239]
 
 > `readonly` `optional` **reason?**: `string`
 
-Defined in: [agentfootprint/src/recorders/observability/BoundaryRecorder.ts:235](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/recorders/observability/BoundaryRecorder.ts#L235)
+Defined in: [src/recorders/observability/BoundaryRecorder.ts:294](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/BoundaryRecorder.ts#L294)
 
 ***
 
@@ -84,7 +125,7 @@ Defined in: [agentfootprint/src/recorders/observability/BoundaryRecorder.ts:235]
 
 > `readonly` `optional` **retrievalScore?**: `number`
 
-Defined in: [agentfootprint/src/recorders/observability/BoundaryRecorder.ts:238](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/recorders/observability/BoundaryRecorder.ts#L238)
+Defined in: [src/recorders/observability/BoundaryRecorder.ts:297](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/BoundaryRecorder.ts#L297)
 
 ***
 
@@ -92,7 +133,7 @@ Defined in: [agentfootprint/src/recorders/observability/BoundaryRecorder.ts:238]
 
 > `readonly` **runtimeStageId**: `string`
 
-Defined in: [agentfootprint/src/recorders/observability/BoundaryRecorder.ts:109](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/recorders/observability/BoundaryRecorder.ts#L109)
+Defined in: [src/recorders/observability/BoundaryRecorder.ts:123](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/BoundaryRecorder.ts#L123)
 
 Stable per-execution key (footprintjs primitive). For run events it
  is `'__root__#0'`; subflow events use the parent stage's runtimeStageId
@@ -108,7 +149,7 @@ Stable per-execution key (footprintjs primitive). For run events it
 
 > `readonly` `optional` **sectionTag?**: `string`
 
-Defined in: [agentfootprint/src/recorders/observability/BoundaryRecorder.ts:236](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/recorders/observability/BoundaryRecorder.ts#L236)
+Defined in: [src/recorders/observability/BoundaryRecorder.ts:295](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/BoundaryRecorder.ts#L295)
 
 ***
 
@@ -116,7 +157,7 @@ Defined in: [agentfootprint/src/recorders/observability/BoundaryRecorder.ts:236]
 
 > `readonly` **slot**: [`ContextSlot`](/agentfootprint/api/generated/type-aliases/ContextSlot.md)
 
-Defined in: [agentfootprint/src/recorders/observability/BoundaryRecorder.ts:230](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/recorders/observability/BoundaryRecorder.ts#L230)
+Defined in: [src/recorders/observability/BoundaryRecorder.ts:289](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/BoundaryRecorder.ts#L289)
 
 ***
 
@@ -124,7 +165,7 @@ Defined in: [agentfootprint/src/recorders/observability/BoundaryRecorder.ts:230]
 
 > `readonly` **source**: `string`
 
-Defined in: [agentfootprint/src/recorders/observability/BoundaryRecorder.ts:231](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/recorders/observability/BoundaryRecorder.ts#L231)
+Defined in: [src/recorders/observability/BoundaryRecorder.ts:290](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/BoundaryRecorder.ts#L290)
 
 ***
 
@@ -132,7 +173,7 @@ Defined in: [agentfootprint/src/recorders/observability/BoundaryRecorder.ts:231]
 
 > `readonly` `optional` **sourceId?**: `string`
 
-Defined in: [agentfootprint/src/recorders/observability/BoundaryRecorder.ts:232](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/recorders/observability/BoundaryRecorder.ts#L232)
+Defined in: [src/recorders/observability/BoundaryRecorder.ts:291](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/BoundaryRecorder.ts#L291)
 
 ***
 
@@ -140,7 +181,7 @@ Defined in: [agentfootprint/src/recorders/observability/BoundaryRecorder.ts:232]
 
 > `readonly` **subflowPath**: readonly `string`[]
 
-Defined in: [agentfootprint/src/recorders/observability/BoundaryRecorder.ts:111](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/recorders/observability/BoundaryRecorder.ts#L111)
+Defined in: [src/recorders/observability/BoundaryRecorder.ts:125](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/BoundaryRecorder.ts#L125)
 
 Decomposition of `subflowId` into segments, rooted under `'__root__'`.
 
@@ -154,7 +195,7 @@ Decomposition of `subflowId` into segments, rooted under `'__root__'`.
 
 > `readonly` **ts**: `number`
 
-Defined in: [agentfootprint/src/recorders/observability/BoundaryRecorder.ts:115](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/recorders/observability/BoundaryRecorder.ts#L115)
+Defined in: [src/recorders/observability/BoundaryRecorder.ts:129](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/BoundaryRecorder.ts#L129)
 
 Wall-clock ms at capture time.
 
@@ -168,7 +209,7 @@ Wall-clock ms at capture time.
 
 > `readonly` **type**: `"context.injected"`
 
-Defined in: [agentfootprint/src/recorders/observability/BoundaryRecorder.ts:229](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/recorders/observability/BoundaryRecorder.ts#L229)
+Defined in: [src/recorders/observability/BoundaryRecorder.ts:288](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/BoundaryRecorder.ts#L288)
 
 ***
 
@@ -176,4 +217,4 @@ Defined in: [agentfootprint/src/recorders/observability/BoundaryRecorder.ts:229]
 
 > `readonly` `optional` **upstreamRef?**: `string`
 
-Defined in: [agentfootprint/src/recorders/observability/BoundaryRecorder.ts:237](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/recorders/observability/BoundaryRecorder.ts#L237)
+Defined in: [src/recorders/observability/BoundaryRecorder.ts:296](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/BoundaryRecorder.ts#L296)

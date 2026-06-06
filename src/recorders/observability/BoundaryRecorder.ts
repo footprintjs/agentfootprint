@@ -55,11 +55,12 @@
  *
  * @example
  * ```typescript
- * import { boundaryRecorder } from 'agentfootprint';
+ * import { boundaryRecorder, EventDispatcher } from 'agentfootprint';
  *
  * const boundary = boundaryRecorder();
+ * const dispatcher = new EventDispatcher();
  * executor.attachCombinedRecorder(boundary);   // wires FlowRecorder side
- * boundary.subscribe(runner.dispatcher);        // wires typed-event side
+ * boundary.subscribe(dispatcher);              // wires typed-event side
  *
  * await executor.run({ input });
  *

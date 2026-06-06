@@ -8,7 +8,7 @@
 
 > **ActorArrow** = `"user→llm"` \| `"tool→llm"` \| `"llm→tool"` \| `"llm→user"`
 
-Defined in: [agentfootprint/src/recorders/observability/BoundaryRecorder.ts:188](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/recorders/observability/BoundaryRecorder.ts#L188)
+Defined in: [src/recorders/observability/BoundaryRecorder.ts:247](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/BoundaryRecorder.ts#L247)
 
 The 4 actor arrows of a ReAct cycle. Tagged on `llm.start` / `llm.end`
 at capture time so consumers (slider, run-flow renderer) dispatch by

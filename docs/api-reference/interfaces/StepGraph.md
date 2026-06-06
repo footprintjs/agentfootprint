@@ -6,7 +6,7 @@
 
 # Interface: StepGraph
 
-Defined in: [agentfootprint/src/recorders/observability/FlowchartRecorder.ts:164](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/recorders/observability/FlowchartRecorder.ts#L164)
+Defined in: [src/recorders/observability/FlowchartRecorder.ts:173](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/FlowchartRecorder.ts#L173)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [agentfootprint/src/recorders/observability/FlowchartRecorder.ts:164
 
 > `readonly` `optional` **activeNodeId?**: `string`
 
-Defined in: [agentfootprint/src/recorders/observability/FlowchartRecorder.ts:167](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/recorders/observability/FlowchartRecorder.ts#L167)
+Defined in: [src/recorders/observability/FlowchartRecorder.ts:176](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/FlowchartRecorder.ts#L176)
 
 ***
 
@@ -22,7 +22,7 @@ Defined in: [agentfootprint/src/recorders/observability/FlowchartRecorder.ts:167
 
 > `readonly` **edges**: readonly [`StepEdge`](/agentfootprint/api/generated/interfaces/StepEdge.md)[]
 
-Defined in: [agentfootprint/src/recorders/observability/FlowchartRecorder.ts:166](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/recorders/observability/FlowchartRecorder.ts#L166)
+Defined in: [src/recorders/observability/FlowchartRecorder.ts:175](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/FlowchartRecorder.ts#L175)
 
 ***
 
@@ -30,4 +30,4 @@ Defined in: [agentfootprint/src/recorders/observability/FlowchartRecorder.ts:166
 
 > `readonly` **nodes**: readonly [`StepNode`](/agentfootprint/api/generated/interfaces/StepNode.md)[]
 
-Defined in: [agentfootprint/src/recorders/observability/FlowchartRecorder.ts:165](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/recorders/observability/FlowchartRecorder.ts#L165)
+Defined in: [src/recorders/observability/FlowchartRecorder.ts:174](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/FlowchartRecorder.ts#L174)

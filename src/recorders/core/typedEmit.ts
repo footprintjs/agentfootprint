@@ -27,7 +27,7 @@ interface EmitableScope {
  *   typedEmit(scope, 'agentfootprint.stream.llm_start', {
  *     iteration: 1,
  *     provider: 'anthropic',
- *     model: 'claude-opus-4-7',
+ *     model: 'claude-opus-4-8',
  *     systemPromptChars: 800,
  *     messagesCount: 2,
  *     toolsCount: 0,

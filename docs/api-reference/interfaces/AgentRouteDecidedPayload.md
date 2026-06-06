@@ -6,7 +6,7 @@
 
 # Interface: AgentRouteDecidedPayload
 
-Defined in: [agentfootprint/src/events/payloads.ts:100](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/events/payloads.ts#L100)
+Defined in: [src/events/payloads.ts:129](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L129)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [agentfootprint/src/events/payloads.ts:100](https://github.com/footp
 
 > `readonly` **chosen**: `"tool-calls"` \| `"final"`
 
-Defined in: [agentfootprint/src/events/payloads.ts:103](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/events/payloads.ts#L103)
+Defined in: [src/events/payloads.ts:132](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L132)
 
 ***
 
@@ -22,7 +22,7 @@ Defined in: [agentfootprint/src/events/payloads.ts:103](https://github.com/footp
 
 > `readonly` **iterIndex**: `number`
 
-Defined in: [agentfootprint/src/events/payloads.ts:102](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/events/payloads.ts#L102)
+Defined in: [src/events/payloads.ts:131](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L131)
 
 ***
 
@@ -30,7 +30,7 @@ Defined in: [agentfootprint/src/events/payloads.ts:102](https://github.com/footp
 
 > `readonly` `optional` **rationale?**: `string`
 
-Defined in: [agentfootprint/src/events/payloads.ts:104](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/events/payloads.ts#L104)
+Defined in: [src/events/payloads.ts:133](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L133)
 
 ***
 
@@ -38,4 +38,4 @@ Defined in: [agentfootprint/src/events/payloads.ts:104](https://github.com/footp
 
 > `readonly` **turnIndex**: `number`
 
-Defined in: [agentfootprint/src/events/payloads.ts:101](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/events/payloads.ts#L101)
+Defined in: [src/events/payloads.ts:130](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L130)

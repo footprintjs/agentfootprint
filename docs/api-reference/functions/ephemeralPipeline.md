@@ -8,7 +8,7 @@
 
 > **ephemeralPipeline**(`config`): `MemoryPipeline`
 
-Defined in: [agentfootprint/src/memory/pipeline/ephemeral.ts:69](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/memory/pipeline/ephemeral.ts#L69)
+Defined in: [src/memory/pipeline/ephemeral.ts:69](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/memory/pipeline/ephemeral.ts#L69)
 
 Build an ephemeral (read-only) pipeline. The returned object has
 `write: undefined`; wire helpers no-op on it.

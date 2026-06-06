@@ -119,8 +119,8 @@ function stopAll(children: readonly { stop?(): void }[]): void {
  * @example
  *   const all = composeObservability([
  *     consoleObservability(),
- *     datadogObservability({ apiKey }),
- *     otelObservability(tracer),
+ *     cloudwatchObservability({ logGroupName: '/agent/prod' }),
+ *     otelObservability({ serviceName: 'my-agent-prod' }),
  *   ]);
  */
 export function composeObservability(

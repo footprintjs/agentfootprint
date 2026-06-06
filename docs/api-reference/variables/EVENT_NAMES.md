@@ -8,7 +8,7 @@
 
 > `const` **EVENT\_NAMES**: `object`
 
-Defined in: [agentfootprint/src/events/registry.ts:71](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/events/registry.ts#L71)
+Defined in: [src/events/registry.ts:83](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/registry.ts#L83)
 
 ## Type Declaration
 
@@ -28,9 +28,17 @@ Defined in: [agentfootprint/src/events/registry.ts:71](https://github.com/footpr
 
 > `readonly` **iterationStart**: `"agentfootprint.agent.iteration_start"` = `'agentfootprint.agent.iteration_start'`
 
+#### agent.outputSchemaValidationFailed
+
+> `readonly` **outputSchemaValidationFailed**: `"agentfootprint.agent.output_schema_validation_failed"` = `'agentfootprint.agent.output_schema_validation_failed'`
+
 #### agent.routeDecided
 
 > `readonly` **routeDecided**: `"agentfootprint.agent.route_decided"` = `'agentfootprint.agent.route_decided'`
+
+#### agent.thinkingParseFailed
+
+> `readonly` **thinkingParseFailed**: `"agentfootprint.agent.thinking_parse_failed"` = `'agentfootprint.agent.thinking_parse_failed'`
 
 #### agent.turnEnd
 
@@ -83,6 +91,10 @@ Defined in: [agentfootprint/src/events/registry.ts:71](https://github.com/footpr
 #### context.budgetPressure
 
 > `readonly` **budgetPressure**: `"agentfootprint.context.budget_pressure"` = `'agentfootprint.context.budget_pressure'`
+
+#### context.evaluated
+
+> `readonly` **evaluated**: `"agentfootprint.context.evaluated"` = `'agentfootprint.context.evaluated'`
 
 #### context.evicted
 
@@ -200,6 +212,26 @@ Defined in: [agentfootprint/src/events/registry.ts:71](https://github.com/footpr
 
 > `readonly` **gateOpened**: `"agentfootprint.permission.gate_opened"` = `'agentfootprint.permission.gate_opened'`
 
+#### permission.halt
+
+> `readonly` **halt**: `"agentfootprint.permission.halt"` = `'agentfootprint.permission.halt'`
+
+### reliability
+
+> `readonly` **reliability**: `object`
+
+#### reliability.failFast
+
+> `readonly` **failFast**: `"agentfootprint.reliability.fail_fast"` = `'agentfootprint.reliability.fail_fast'`
+
+#### reliability.recovered
+
+> `readonly` **recovered**: `"agentfootprint.reliability.recovered"` = `'agentfootprint.reliability.recovered'`
+
+#### reliability.retried
+
+> `readonly` **retried**: `"agentfootprint.reliability.retried"` = `'agentfootprint.reliability.retried'`
+
 ### risk
 
 > `readonly` **risk**: `object`
@@ -232,6 +264,14 @@ Defined in: [agentfootprint/src/events/registry.ts:71](https://github.com/footpr
 
 > `readonly` **llmStart**: `"agentfootprint.stream.llm_start"` = `'agentfootprint.stream.llm_start'`
 
+#### stream.thinkingDelta
+
+> `readonly` **thinkingDelta**: `"agentfootprint.stream.thinking_delta"` = `'agentfootprint.stream.thinking_delta'`
+
+#### stream.thinkingEnd
+
+> `readonly` **thinkingEnd**: `"agentfootprint.stream.thinking_end"` = `'agentfootprint.stream.thinking_end'`
+
 #### stream.token
 
 > `readonly` **token**: `"agentfootprint.stream.token"` = `'agentfootprint.stream.token'`
@@ -255,6 +295,18 @@ Defined in: [agentfootprint/src/events/registry.ts:71](https://github.com/footpr
 #### tools.deactivated
 
 > `readonly` **deactivated**: `"agentfootprint.tools.deactivated"` = `'agentfootprint.tools.deactivated'`
+
+#### tools.discoveryCompleted
+
+> `readonly` **discoveryCompleted**: `"agentfootprint.tools.discovery_completed"` = `'agentfootprint.tools.discovery_completed'`
+
+#### tools.discoveryFailed
+
+> `readonly` **discoveryFailed**: `"agentfootprint.tools.discovery_failed"` = `'agentfootprint.tools.discovery_failed'`
+
+#### tools.discoveryStarted
+
+> `readonly` **discoveryStarted**: `"agentfootprint.tools.discovery_started"` = `'agentfootprint.tools.discovery_started'`
 
 #### tools.offered
 

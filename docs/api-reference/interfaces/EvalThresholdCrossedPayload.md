@@ -6,7 +6,7 @@
 
 # Interface: EvalThresholdCrossedPayload
 
-Defined in: [agentfootprint/src/events/payloads.ts:380](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/events/payloads.ts#L380)
+Defined in: [src/events/payloads.ts:502](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L502)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [agentfootprint/src/events/payloads.ts:380](https://github.com/footp
 
 > `readonly` `optional` **actionTaken?**: `string`
 
-Defined in: [agentfootprint/src/events/payloads.ts:385](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/events/payloads.ts#L385)
+Defined in: [src/events/payloads.ts:507](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L507)
 
 ***
 
@@ -22,7 +22,7 @@ Defined in: [agentfootprint/src/events/payloads.ts:385](https://github.com/footp
 
 > `readonly` **direction**: `"above"` \| `"below"`
 
-Defined in: [agentfootprint/src/events/payloads.ts:382](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/events/payloads.ts#L382)
+Defined in: [src/events/payloads.ts:504](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L504)
 
 ***
 
@@ -30,7 +30,7 @@ Defined in: [agentfootprint/src/events/payloads.ts:382](https://github.com/footp
 
 > `readonly` **metricId**: `string`
 
-Defined in: [agentfootprint/src/events/payloads.ts:381](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/events/payloads.ts#L381)
+Defined in: [src/events/payloads.ts:503](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L503)
 
 ***
 
@@ -38,7 +38,7 @@ Defined in: [agentfootprint/src/events/payloads.ts:381](https://github.com/footp
 
 > `readonly` **threshold**: `number`
 
-Defined in: [agentfootprint/src/events/payloads.ts:384](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/events/payloads.ts#L384)
+Defined in: [src/events/payloads.ts:506](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L506)
 
 ***
 
@@ -46,4 +46,4 @@ Defined in: [agentfootprint/src/events/payloads.ts:384](https://github.com/footp
 
 > `readonly` **value**: `number`
 
-Defined in: [agentfootprint/src/events/payloads.ts:383](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/events/payloads.ts#L383)
+Defined in: [src/events/payloads.ts:505](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L505)

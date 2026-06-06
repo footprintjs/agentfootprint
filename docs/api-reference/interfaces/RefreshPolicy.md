@@ -6,7 +6,7 @@
 
 # Interface: RefreshPolicy
 
-Defined in: [agentfootprint/src/lib/injection-engine/factories/defineSkill.ts:70](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/lib/injection-engine/factories/defineSkill.ts#L70)
+Defined in: [src/lib/injection-engine/factories/defineSkill.ts:73](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/lib/injection-engine/factories/defineSkill.ts#L73)
 
 When (if ever) to re-deliver a Skill's body in long-running runs.
 
@@ -26,7 +26,7 @@ the hook is implemented.
 
 > `readonly` **afterTokens**: `number`
 
-Defined in: [agentfootprint/src/lib/injection-engine/factories/defineSkill.ts:76](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/lib/injection-engine/factories/defineSkill.ts#L76)
+Defined in: [src/lib/injection-engine/factories/defineSkill.ts:79](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/lib/injection-engine/factories/defineSkill.ts#L79)
 
 Re-inject the Skill body once the run has consumed this many input
 tokens since the Skill was last surfaced. Recommended: 50_000 for
@@ -38,7 +38,7 @@ tokens since the Skill was last surfaced. Recommended: 50_000 for
 
 > `readonly` **via**: `"tool-result"`
 
-Defined in: [agentfootprint/src/lib/injection-engine/factories/defineSkill.ts:81](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/lib/injection-engine/factories/defineSkill.ts#L81)
+Defined in: [src/lib/injection-engine/factories/defineSkill.ts:84](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/lib/injection-engine/factories/defineSkill.ts#L84)
 
 How to re-inject. `'tool-result'` synthesizes a fresh tool result
 carrying the body text (recency-first). Other modes reserved.

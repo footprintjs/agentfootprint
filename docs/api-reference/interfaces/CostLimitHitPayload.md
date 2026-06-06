@@ -6,7 +6,7 @@
 
 # Interface: CostLimitHitPayload
 
-Defined in: [agentfootprint/src/events/payloads.ts:362](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/events/payloads.ts#L362)
+Defined in: [src/events/payloads.ts:484](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L484)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [agentfootprint/src/events/payloads.ts:362](https://github.com/footp
 
 > `readonly` **action**: `"abort"` \| `"warn"` \| `"degrade"`
 
-Defined in: [agentfootprint/src/events/payloads.ts:366](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/events/payloads.ts#L366)
+Defined in: [src/events/payloads.ts:488](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L488)
 
 ***
 
@@ -22,7 +22,7 @@ Defined in: [agentfootprint/src/events/payloads.ts:366](https://github.com/footp
 
 > `readonly` **actual**: `number`
 
-Defined in: [agentfootprint/src/events/payloads.ts:365](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/events/payloads.ts#L365)
+Defined in: [src/events/payloads.ts:487](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L487)
 
 ***
 
@@ -30,7 +30,7 @@ Defined in: [agentfootprint/src/events/payloads.ts:365](https://github.com/footp
 
 > `readonly` **kind**: `"max_tokens"` \| `"max_cost"` \| `"max_iterations"` \| `"max_wallclock"`
 
-Defined in: [agentfootprint/src/events/payloads.ts:363](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/events/payloads.ts#L363)
+Defined in: [src/events/payloads.ts:485](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L485)
 
 ***
 
@@ -38,4 +38,4 @@ Defined in: [agentfootprint/src/events/payloads.ts:363](https://github.com/footp
 
 > `readonly` **limit**: `number`
 
-Defined in: [agentfootprint/src/events/payloads.ts:364](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/events/payloads.ts#L364)
+Defined in: [src/events/payloads.ts:486](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L486)

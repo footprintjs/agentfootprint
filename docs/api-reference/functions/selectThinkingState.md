@@ -8,7 +8,7 @@
 
 > **selectThinkingState**(`events`): [`ThinkingState`](/agentfootprint/api/generated/interfaces/ThinkingState.md) \| `null`
 
-Defined in: [agentfootprint/src/recorders/observability/thinking/thinkingTemplates.ts:111](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/recorders/observability/thinking/thinkingTemplates.ts#L111)
+Defined in: [src/recorders/observability/thinking/thinkingTemplates.ts:111](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/thinking/thinkingTemplates.ts#L111)
 
 Derive the current thinking state from the event log.
 

@@ -8,7 +8,7 @@
 
 > **CostRecorderOptions** = `Omit`\<[`EmitBridgeOptions`](/agentfootprint/api/generated/interfaces/EmitBridgeOptions.md), `"id"` \| `"prefix"`\> & `object`
 
-Defined in: [agentfootprint/src/recorders/core/CostRecorder.ts:13](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/recorders/core/CostRecorder.ts#L13)
+Defined in: [src/recorders/core/CostRecorder.ts:13](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/core/CostRecorder.ts#L13)
 
 ## Type Declaration
 

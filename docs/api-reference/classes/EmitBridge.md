@@ -6,11 +6,11 @@
 
 # Class: EmitBridge
 
-Defined in: [agentfootprint/src/recorders/core/EmitBridge.ts:27](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/recorders/core/EmitBridge.ts#L27)
+Defined in: [src/recorders/core/EmitBridge.ts:27](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/core/EmitBridge.ts#L27)
 
 ## Implements
 
-- `CombinedRecorder`
+- [`CombinedRecorder`](/agentfootprint/api/generated/type-aliases/CombinedRecorder.md)
 
 ## Constructors
 
@@ -18,7 +18,7 @@ Defined in: [agentfootprint/src/recorders/core/EmitBridge.ts:27](https://github.
 
 > **new EmitBridge**(`options`): `EmitBridge`
 
-Defined in: [agentfootprint/src/recorders/core/EmitBridge.ts:33](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/recorders/core/EmitBridge.ts#L33)
+Defined in: [src/recorders/core/EmitBridge.ts:33](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/core/EmitBridge.ts#L33)
 
 #### Parameters
 
@@ -36,7 +36,7 @@ Defined in: [agentfootprint/src/recorders/core/EmitBridge.ts:33](https://github.
 
 > `readonly` **id**: `string`
 
-Defined in: [agentfootprint/src/recorders/core/EmitBridge.ts:28](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/recorders/core/EmitBridge.ts#L28)
+Defined in: [src/recorders/core/EmitBridge.ts:28](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/core/EmitBridge.ts#L28)
 
 #### Implementation of
 
@@ -48,7 +48,7 @@ Defined in: [agentfootprint/src/recorders/core/EmitBridge.ts:28](https://github.
 
 > **onEmit**(`event`): `void`
 
-Defined in: [agentfootprint/src/recorders/core/EmitBridge.ts:40](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/recorders/core/EmitBridge.ts#L40)
+Defined in: [src/recorders/core/EmitBridge.ts:40](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/core/EmitBridge.ts#L40)
 
 Fires for every `scope.$emit(name, payload)` call during a stage.
 Optional — implement only if you want to observe consumer-emitted
@@ -59,7 +59,7 @@ structured events. See `EmitRecorder` for the focused interface
 
 ##### event
 
-`EmitEvent`
+[`EmitEvent`](/agentfootprint/api/generated/interfaces/EmitEvent.md)
 
 #### Returns
 
@@ -71,4 +71,4 @@ EmitRecorder in `src/lib/recorder/EmitRecorder.ts`
 
 #### Implementation of
 
-`CombinedRecorder.onEmit`
+[`ScopeRecorder`](/agentfootprint/api/generated/interfaces/ScopeRecorder.md).[`onEmit`](/agentfootprint/api/generated/interfaces/ScopeRecorder.md#onemit)

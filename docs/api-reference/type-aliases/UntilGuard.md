@@ -8,7 +8,7 @@
 
 > **UntilGuard** = (`ctx`) => `boolean`
 
-Defined in: [agentfootprint/src/core-flow/Loop.ts:51](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/core-flow/Loop.ts#L51)
+Defined in: [src/core-flow/Loop.ts:69](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/core-flow/Loop.ts#L69)
 
 Predicate evaluated AFTER each body iteration. Return true to exit the loop.
 

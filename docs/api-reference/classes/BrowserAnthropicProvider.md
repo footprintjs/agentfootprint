@@ -6,7 +6,7 @@
 
 # Class: BrowserAnthropicProvider
 
-Defined in: [agentfootprint/src/adapters/llm/BrowserAnthropicProvider.ts:192](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/adapters/llm/BrowserAnthropicProvider.ts#L192)
+Defined in: [src/adapters/llm/BrowserAnthropicProvider.ts:344](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/adapters/llm/BrowserAnthropicProvider.ts#L344)
 
 ## Implements
 
@@ -18,7 +18,7 @@ Defined in: [agentfootprint/src/adapters/llm/BrowserAnthropicProvider.ts:192](ht
 
 > **new BrowserAnthropicProvider**(`options`): `BrowserAnthropicProvider`
 
-Defined in: [agentfootprint/src/adapters/llm/BrowserAnthropicProvider.ts:196](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/adapters/llm/BrowserAnthropicProvider.ts#L196)
+Defined in: [src/adapters/llm/BrowserAnthropicProvider.ts:348](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/adapters/llm/BrowserAnthropicProvider.ts#L348)
 
 #### Parameters
 
@@ -36,7 +36,7 @@ Defined in: [agentfootprint/src/adapters/llm/BrowserAnthropicProvider.ts:196](ht
 
 > `readonly` **name**: `"browser-anthropic"` = `'browser-anthropic'`
 
-Defined in: [agentfootprint/src/adapters/llm/BrowserAnthropicProvider.ts:193](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/adapters/llm/BrowserAnthropicProvider.ts#L193)
+Defined in: [src/adapters/llm/BrowserAnthropicProvider.ts:345](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/adapters/llm/BrowserAnthropicProvider.ts#L345)
 
 #### Implementation of
 
@@ -48,7 +48,7 @@ Defined in: [agentfootprint/src/adapters/llm/BrowserAnthropicProvider.ts:193](ht
 
 > **complete**(`req`): `Promise`\<[`LLMResponse`](/agentfootprint/api/generated/interfaces/LLMResponse.md)\>
 
-Defined in: [agentfootprint/src/adapters/llm/BrowserAnthropicProvider.ts:200](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/adapters/llm/BrowserAnthropicProvider.ts#L200)
+Defined in: [src/adapters/llm/BrowserAnthropicProvider.ts:352](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/adapters/llm/BrowserAnthropicProvider.ts#L352)
 
 #### Parameters
 
@@ -70,7 +70,7 @@ Defined in: [agentfootprint/src/adapters/llm/BrowserAnthropicProvider.ts:200](ht
 
 > **stream**(`req`): `AsyncIterable`\<[`LLMChunk`](/agentfootprint/api/generated/interfaces/LLMChunk.md)\>
 
-Defined in: [agentfootprint/src/adapters/llm/BrowserAnthropicProvider.ts:204](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/adapters/llm/BrowserAnthropicProvider.ts#L204)
+Defined in: [src/adapters/llm/BrowserAnthropicProvider.ts:356](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/adapters/llm/BrowserAnthropicProvider.ts#L356)
 
 #### Parameters
 

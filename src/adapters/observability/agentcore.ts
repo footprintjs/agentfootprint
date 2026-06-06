@@ -41,6 +41,7 @@
  * @example Test injection (skip SDK require entirely)
  * ```ts
  * agentcoreObservability({
+ *   logGroupName: '/agentfootprint/test',
  *   _client: {
  *     putLogEvents: async (input) => { capturedBatches.push(input); },
  *   },

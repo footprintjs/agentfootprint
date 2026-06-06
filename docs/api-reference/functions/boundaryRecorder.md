@@ -8,7 +8,7 @@
 
 > **boundaryRecorder**(`options?`): [`BoundaryRecorder`](/agentfootprint/api/generated/classes/BoundaryRecorder.md)
 
-Defined in: [agentfootprint/src/recorders/observability/BoundaryRecorder.ts:276](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/recorders/observability/BoundaryRecorder.ts#L276)
+Defined in: [src/recorders/observability/BoundaryRecorder.ts:509](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/BoundaryRecorder.ts#L509)
 
 Factory — matches the `inOutRecorder()` / `topologyRecorder()` style.
 

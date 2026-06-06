@@ -13,11 +13,11 @@
  *
  * @example  One skill's tools, scoped by activation
  *   const billingTools = skillScopedTools('billing', [refundTool, chargeTool]);
- *   billingTools.list({ iteration: 1, activeSkillId: 'billing', identity: ... });
+ *   billingTools.list({ iteration: 1, activeSkillId: 'billing' });
  *   // → [refundTool, chargeTool]
- *   billingTools.list({ iteration: 1, activeSkillId: 'refund', identity: ... });
+ *   billingTools.list({ iteration: 1, activeSkillId: 'refund' });
  *   // → [] (different skill active)
- *   billingTools.list({ iteration: 1, identity: ... });
+ *   billingTools.list({ iteration: 1 });
  *   // → [] (no skill active)
  *
  * @example  Compose with baseline + multiple skills

@@ -8,6 +8,6 @@
 
 > **AgentfootprintEventType** = keyof [`AgentfootprintEventMap`](/agentfootprint/api/generated/interfaces/AgentfootprintEventMap.md)
 
-Defined in: [agentfootprint/src/events/registry.ts:363](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/events/registry.ts#L363)
+Defined in: [src/events/registry.ts:438](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/registry.ts#L438)
 
 Every known event-type string, useful for runtime lookups / lints.

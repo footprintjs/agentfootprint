@@ -8,6 +8,6 @@
 
 > **AgentfootprintEvent** = [`AgentfootprintEventMap`](/agentfootprint/api/generated/interfaces/AgentfootprintEventMap.md)\[keyof [`AgentfootprintEventMap`](/agentfootprint/api/generated/interfaces/AgentfootprintEventMap.md)\]
 
-Defined in: [agentfootprint/src/events/registry.ts:360](https://github.com/footprintjs/agentfootprint/blob/d43620baff0d65a1a2782f99f5d52ab3d232af78/src/events/registry.ts#L360)
+Defined in: [src/events/registry.ts:435](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/registry.ts#L435)
 
 Union of every typed event. Consumers use this for exhaustive `switch`.
