@@ -8,7 +8,7 @@
 
 > **ContextSource** = `"rag"` \| `"skill"` \| `"memory"` \| `"instructions"` \| `"steering"` \| `"fact"` \| `"custom"` \| `"user"` \| `"tool-result"` \| `"assistant"` \| `"base"` \| `"registry"`
 
-Defined in: [src/events/types.ts:32](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/events/types.ts#L32)
+Defined in: [src/events/types.ts:32](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/events/types.ts#L32)
 
 The origin / flavor of a context injection.
 

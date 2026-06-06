@@ -5,6 +5,47 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.0.0]
+
+Major — API surface simplification (round 2). Three breaking refactors + one
+additive factory. No runtime behavior change. The lens was updated in lockstep.
+
+### Changed (BREAKING)
+
+- **Observability recorders are `agentfootprint/observe`-only.** The ~15 recorder
+  factories/classes (`ContextRecorder`, `streamRecorder`, `agentRecorder`,
+  `compositionRecorder`, `costRecorder`, `evalRecorder`, `memoryRecorder`,
+  `permissionRecorder`, `skillRecorder`, `toolsRecorder`,
+  `contextEvaluatedRecorder`, `boundaryRecorder`/`BoundaryRecorder`,
+  `liveStateRecorder` + `Live*` trackers, the `RunStep*` family,
+  `attachFlowchart`/`attachLogging`/`attachStatus`, and their option/`Domain*Event`
+  types) were removed from the main barrel — import them from
+  `agentfootprint/observe`. `enable.flowchart()` stays on the runner, so its
+  public types (`FlowchartHandle`/`FlowchartOptions`) remain on the main barrel.
+
+- **The agent status-line concept renamed `Thinking*` → `Status*`** to
+  disambiguate from the MODEL's extended-thinking reasoning (which keeps the
+  "thinking" name — `ThinkingHandler`, `thinkingBudget`, `thinking_delta`):
+  `ThinkingState`→`StatusState`, `ThinkingStateKind`→`StatusKind`,
+  `ThinkingContext`→`StatusContext`, `ThinkingTemplates`→`StatusTemplates`,
+  `selectThinkingState`→`selectStatus`, `renderThinkingLine`→`renderStatusLine`,
+  `defaultThinkingTemplates`→`defaultStatusTemplates`,
+  `ThinkingRecorder`→`StatusRecorder`, `attachThinking`→`attachStatus`,
+  `ThinkingEvent`→`StatusEvent`, `ThinkingOptions`→`StatusOptions`.
+
+- **Event payload shapes are namespaced under `Payloads`.** The ~60 `*Payload`
+  types no longer flood the top-level barrel. Reach a shape by name as
+  `Payloads.AgentRouteDecidedPayload`; `event.payload` is still typed via
+  `AgentfootprintEventMap`.
+
+### Added
+
+- **`defineInjection({ type })`** — a unified injection factory. Pass
+  `type: 'instruction' | 'skill' | 'steering' | 'fact'` and it routes to the
+  matching named factory, returning the same `Injection`. For programmatic /
+  config-driven flavor selection; the named factories remain the recommended
+  self-documenting form. Purely additive.
+
 ## [4.0.0]
 
 Major — API surface cleanup. Two breaking removals + one additive subpath. No

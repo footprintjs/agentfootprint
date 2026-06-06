@@ -8,7 +8,7 @@
 
 > **SurfaceMode** = `"auto"` \| `"system-prompt"` \| `"tool-only"` \| `"both"`
 
-Defined in: [src/lib/injection-engine/factories/defineSkill.ts:58](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/lib/injection-engine/factories/defineSkill.ts#L58)
+Defined in: [src/lib/injection-engine/factories/defineSkill.ts:58](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/lib/injection-engine/factories/defineSkill.ts#L58)
 
 Where the Skill's body lands when activated.
 

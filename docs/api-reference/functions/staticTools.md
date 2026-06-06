@@ -8,7 +8,7 @@
 
 > **staticTools**(`tools`): [`ToolProvider`](/agentfootprint/api/generated/interfaces/ToolProvider.md)
 
-Defined in: [src/tool-providers/staticTools.ts:24](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/tool-providers/staticTools.ts#L24)
+Defined in: [src/tool-providers/staticTools.ts:24](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/tool-providers/staticTools.ts#L24)
 
 ## Parameters
 

@@ -8,7 +8,7 @@
 
 > **ToolGatePredicate** = (`toolName`, `ctx`) => `boolean`
 
-Defined in: [src/tool-providers/types.ts:143](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/tool-providers/types.ts#L143)
+Defined in: [src/tool-providers/types.ts:143](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/tool-providers/types.ts#L143)
 
 Predicate for `gatedTools` — runs per tool, per iteration.
 

@@ -8,7 +8,7 @@
 
 > **toSSE**\<`TIn`, `TOut`\>(`runner`, `options?`): `AsyncIterable`\<`string`\>
 
-Defined in: [src/stream.ts:68](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/stream.ts#L68)
+Defined in: [src/stream.ts:68](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/stream.ts#L68)
 
 Subscribe to a runner's `EventDispatcher` and yield SSE-formatted
 strings until the run completes.

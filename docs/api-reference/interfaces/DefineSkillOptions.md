@@ -6,7 +6,7 @@
 
 # Interface: DefineSkillOptions
 
-Defined in: [src/lib/injection-engine/factories/defineSkill.ts:87](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/lib/injection-engine/factories/defineSkill.ts#L87)
+Defined in: [src/lib/injection-engine/factories/defineSkill.ts:87](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/lib/injection-engine/factories/defineSkill.ts#L87)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [src/lib/injection-engine/factories/defineSkill.ts:87](https://githu
 
 > `readonly` `optional` **autoActivate?**: `"currentSkill"`
 
-Defined in: [src/lib/injection-engine/factories/defineSkill.ts:129](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/lib/injection-engine/factories/defineSkill.ts#L129)
+Defined in: [src/lib/injection-engine/factories/defineSkill.ts:129](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/lib/injection-engine/factories/defineSkill.ts#L129)
 
 Per-skill tool gating intent. Block A5 / v2.5.
 
@@ -39,7 +39,7 @@ on this contract without API change.
 
 > `readonly` **body**: `string`
 
-Defined in: [src/lib/injection-engine/factories/defineSkill.ts:92](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/lib/injection-engine/factories/defineSkill.ts#L92)
+Defined in: [src/lib/injection-engine/factories/defineSkill.ts:92](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/lib/injection-engine/factories/defineSkill.ts#L92)
 
 Body appended to the system-prompt slot once activated.
 
@@ -49,7 +49,7 @@ Body appended to the system-prompt slot once activated.
 
 > `readonly` `optional` **cache?**: `CachePolicy`
 
-Defined in: [src/lib/injection-engine/factories/defineSkill.ts:143](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/lib/injection-engine/factories/defineSkill.ts#L143)
+Defined in: [src/lib/injection-engine/factories/defineSkill.ts:143](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/lib/injection-engine/factories/defineSkill.ts#L143)
 
 Cache policy for this skill's body. Defaults to `'while-active'` —
 the body caches while the skill is in `activeInjections[]` (i.e.,
@@ -69,7 +69,7 @@ See `CachePolicy` in `agentfootprint/src/cache/types.ts`.
 
 > `readonly` **description**: `string`
 
-Defined in: [src/lib/injection-engine/factories/defineSkill.ts:90](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/lib/injection-engine/factories/defineSkill.ts#L90)
+Defined in: [src/lib/injection-engine/factories/defineSkill.ts:90](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/lib/injection-engine/factories/defineSkill.ts#L90)
 
 Visible to the LLM via the activation tool's description.
 
@@ -79,7 +79,7 @@ Visible to the LLM via the activation tool's description.
 
 > `readonly` **id**: `string`
 
-Defined in: [src/lib/injection-engine/factories/defineSkill.ts:88](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/lib/injection-engine/factories/defineSkill.ts#L88)
+Defined in: [src/lib/injection-engine/factories/defineSkill.ts:88](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/lib/injection-engine/factories/defineSkill.ts#L88)
 
 ***
 
@@ -87,7 +87,7 @@ Defined in: [src/lib/injection-engine/factories/defineSkill.ts:88](https://githu
 
 > `readonly` `optional` **refreshPolicy?**: [`RefreshPolicy`](/agentfootprint/api/generated/interfaces/RefreshPolicy.md)
 
-Defined in: [src/lib/injection-engine/factories/defineSkill.ts:110](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/lib/injection-engine/factories/defineSkill.ts#L110)
+Defined in: [src/lib/injection-engine/factories/defineSkill.ts:110](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/lib/injection-engine/factories/defineSkill.ts#L110)
 
 Re-deliver the body past a token threshold to defend against
 long-context attention decay. Default: undefined (no refresh).
@@ -98,7 +98,7 @@ long-context attention decay. Default: undefined (no refresh).
 
 > `readonly` `optional` **surfaceMode?**: [`SurfaceMode`](/agentfootprint/api/generated/type-aliases/SurfaceMode.md)
 
-Defined in: [src/lib/injection-engine/factories/defineSkill.ts:105](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/lib/injection-engine/factories/defineSkill.ts#L105)
+Defined in: [src/lib/injection-engine/factories/defineSkill.ts:105](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/lib/injection-engine/factories/defineSkill.ts#L105)
 
 Where the body lands when activated. See `SurfaceMode`. Default
 `'auto'` — the library resolves per provider via `resolveSurfaceMode`.
@@ -109,7 +109,7 @@ Where the body lands when activated. See `SurfaceMode`. Default
 
 > `readonly` `optional` **tools?**: readonly [`Tool`](/agentfootprint/api/generated/interfaces/Tool.md)\<`Record`\<`string`, `unknown`\>, `unknown`\>[]
 
-Defined in: [src/lib/injection-engine/factories/defineSkill.ts:94](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/lib/injection-engine/factories/defineSkill.ts#L94)
+Defined in: [src/lib/injection-engine/factories/defineSkill.ts:94](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/lib/injection-engine/factories/defineSkill.ts#L94)
 
 Optional unlocked tools, added to the tools slot once activated.
 
@@ -119,7 +119,7 @@ Optional unlocked tools, added to the tools slot once activated.
 
 > `readonly` `optional` **viaToolName?**: `string`
 
-Defined in: [src/lib/injection-engine/factories/defineSkill.ts:100](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/lib/injection-engine/factories/defineSkill.ts#L100)
+Defined in: [src/lib/injection-engine/factories/defineSkill.ts:100](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/lib/injection-engine/factories/defineSkill.ts#L100)
 
 Override the activation tool name. Defaults to `'read_skill'`.
 Multiple Skills sharing one activation tool is the common pattern;

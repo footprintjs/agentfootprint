@@ -8,7 +8,7 @@
 
 > **buildListSkillsTool**(`skills`): [`Tool`](/agentfootprint/api/generated/interfaces/Tool.md)\<`Record`\<`string`, `unknown`\>, `unknown`\> \| `undefined`
 
-Defined in: [src/lib/injection-engine/skillTools.ts:39](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/lib/injection-engine/skillTools.ts#L39)
+Defined in: [src/lib/injection-engine/skillTools.ts:39](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/lib/injection-engine/skillTools.ts#L39)
 
 Build the `list_skills` tool — a no-arg tool that returns the
 registered skills as `{ id, description }[]`. Lets the LLM discover

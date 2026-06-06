@@ -6,7 +6,7 @@
 
 # Class: MockProvider
 
-Defined in: [src/adapters/llm/MockProvider.ts:103](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/adapters/llm/MockProvider.ts#L103)
+Defined in: [src/adapters/llm/MockProvider.ts:103](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/adapters/llm/MockProvider.ts#L103)
 
 ## Implements
 
@@ -18,7 +18,7 @@ Defined in: [src/adapters/llm/MockProvider.ts:103](https://github.com/footprintj
 
 > **new MockProvider**(`options?`): `MockProvider`
 
-Defined in: [src/adapters/llm/MockProvider.ts:114](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/adapters/llm/MockProvider.ts#L114)
+Defined in: [src/adapters/llm/MockProvider.ts:114](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/adapters/llm/MockProvider.ts#L114)
 
 #### Parameters
 
@@ -36,7 +36,7 @@ Defined in: [src/adapters/llm/MockProvider.ts:114](https://github.com/footprintj
 
 > `readonly` **name**: `string`
 
-Defined in: [src/adapters/llm/MockProvider.ts:104](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/adapters/llm/MockProvider.ts#L104)
+Defined in: [src/adapters/llm/MockProvider.ts:104](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/adapters/llm/MockProvider.ts#L104)
 
 #### Implementation of
 
@@ -48,7 +48,7 @@ Defined in: [src/adapters/llm/MockProvider.ts:104](https://github.com/footprintj
 
 > **complete**(`req`): `Promise`\<[`LLMResponse`](/agentfootprint/api/generated/interfaces/LLMResponse.md)\>
 
-Defined in: [src/adapters/llm/MockProvider.ts:156](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/adapters/llm/MockProvider.ts#L156)
+Defined in: [src/adapters/llm/MockProvider.ts:156](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/adapters/llm/MockProvider.ts#L156)
 
 #### Parameters
 
@@ -70,7 +70,7 @@ Defined in: [src/adapters/llm/MockProvider.ts:156](https://github.com/footprintj
 
 > `static` **realistic**(`options?`): `MockProvider`
 
-Defined in: [src/adapters/llm/MockProvider.ts:148](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/adapters/llm/MockProvider.ts#L148)
+Defined in: [src/adapters/llm/MockProvider.ts:148](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/adapters/llm/MockProvider.ts#L148)
 
 Convenience factory for the playground / Lens demo defaults: a
 real-feel mock with 3–8 s of "thinking" before the response and
@@ -94,7 +94,7 @@ paid API.
 
 > **resetReplies**(): `void`
 
-Defined in: [src/adapters/llm/MockProvider.ts:137](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/adapters/llm/MockProvider.ts#L137)
+Defined in: [src/adapters/llm/MockProvider.ts:137](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/adapters/llm/MockProvider.ts#L137)
 
 Reset the scripted-replies cursor. Useful when reusing one
 `MockProvider` instance across multiple test scenarios — each
@@ -111,7 +111,7 @@ again. No-op when `replies` was not supplied.
 
 > **stream**(`req`): `AsyncIterable`\<[`LLMChunk`](/agentfootprint/api/generated/interfaces/LLMChunk.md)\>
 
-Defined in: [src/adapters/llm/MockProvider.ts:167](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/adapters/llm/MockProvider.ts#L167)
+Defined in: [src/adapters/llm/MockProvider.ts:167](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/adapters/llm/MockProvider.ts#L167)
 
 Streaming mode — emits the response content word-by-word so
 consumers (Lens commentary, chat UIs) can render tokens as they

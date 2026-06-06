@@ -8,7 +8,7 @@
 
 > **browserOpenai**(`options`): [`LLMProvider`](/agentfootprint/api/generated/interfaces/LLMProvider.md)
 
-Defined in: [src/adapters/llm/BrowserOpenAIProvider.ts:112](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/adapters/llm/BrowserOpenAIProvider.ts#L112)
+Defined in: [src/adapters/llm/BrowserOpenAIProvider.ts:112](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/adapters/llm/BrowserOpenAIProvider.ts#L112)
 
 ## Parameters
 
