@@ -6,7 +6,7 @@
 
 # Interface: PermissionCheckPayload
 
-Defined in: [src/events/payloads.ts:406](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L406)
+Defined in: [src/events/payloads.ts:406](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/events/payloads.ts#L406)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [src/events/payloads.ts:406](https://github.com/footprintjs/agentfoo
 
 > `readonly` **actor**: `string`
 
-Defined in: [src/events/payloads.ts:408](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L408)
+Defined in: [src/events/payloads.ts:408](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/events/payloads.ts#L408)
 
 ***
 
@@ -22,7 +22,7 @@ Defined in: [src/events/payloads.ts:408](https://github.com/footprintjs/agentfoo
 
 > `readonly` **capability**: `"tool_call"` \| `"memory_read"` \| `"memory_write"` \| `"external_net"` \| `"user_data"`
 
-Defined in: [src/events/payloads.ts:407](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L407)
+Defined in: [src/events/payloads.ts:407](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/events/payloads.ts#L407)
 
 ***
 
@@ -30,7 +30,7 @@ Defined in: [src/events/payloads.ts:407](https://github.com/footprintjs/agentfoo
 
 > `readonly` `optional` **policyEngine?**: `"custom"` \| `"opa"` \| `"cerbos"`
 
-Defined in: [src/events/payloads.ts:411](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L411)
+Defined in: [src/events/payloads.ts:411](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/events/payloads.ts#L411)
 
 ***
 
@@ -38,7 +38,7 @@ Defined in: [src/events/payloads.ts:411](https://github.com/footprintjs/agentfoo
 
 > `readonly` `optional` **policyRuleId?**: `string`
 
-Defined in: [src/events/payloads.ts:412](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L412)
+Defined in: [src/events/payloads.ts:412](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/events/payloads.ts#L412)
 
 ***
 
@@ -46,7 +46,7 @@ Defined in: [src/events/payloads.ts:412](https://github.com/footprintjs/agentfoo
 
 > `readonly` `optional` **rationale?**: `string`
 
-Defined in: [src/events/payloads.ts:413](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L413)
+Defined in: [src/events/payloads.ts:413](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/events/payloads.ts#L413)
 
 ***
 
@@ -54,7 +54,7 @@ Defined in: [src/events/payloads.ts:413](https://github.com/footprintjs/agentfoo
 
 > `readonly` `optional` **reason?**: `string`
 
-Defined in: [src/events/payloads.ts:415](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L415)
+Defined in: [src/events/payloads.ts:415](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/events/payloads.ts#L415)
 
 v2.12 — telemetry tag carried through from PermissionDecision.reason.
 
@@ -64,7 +64,7 @@ v2.12 — telemetry tag carried through from PermissionDecision.reason.
 
 > `readonly` **result**: `"allow"` \| `"deny"` \| `"halt"` \| `"gate_open"`
 
-Defined in: [src/events/payloads.ts:410](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L410)
+Defined in: [src/events/payloads.ts:410](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/events/payloads.ts#L410)
 
 ***
 
@@ -72,4 +72,4 @@ Defined in: [src/events/payloads.ts:410](https://github.com/footprintjs/agentfoo
 
 > `readonly` `optional` **target?**: `string`
 
-Defined in: [src/events/payloads.ts:409](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L409)
+Defined in: [src/events/payloads.ts:409](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/events/payloads.ts#L409)

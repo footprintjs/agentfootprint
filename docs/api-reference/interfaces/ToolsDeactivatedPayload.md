@@ -6,7 +6,7 @@
 
 # Interface: ToolsDeactivatedPayload
 
-Defined in: [src/events/payloads.ts:345](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L345)
+Defined in: [src/events/payloads.ts:345](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/events/payloads.ts#L345)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [src/events/payloads.ts:345](https://github.com/footprintjs/agentfoo
 
 > `readonly` **reason**: `"skill_deactivated"` \| `"permission_revoked"`
 
-Defined in: [src/events/payloads.ts:347](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L347)
+Defined in: [src/events/payloads.ts:347](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/events/payloads.ts#L347)
 
 ***
 
@@ -22,4 +22,4 @@ Defined in: [src/events/payloads.ts:347](https://github.com/footprintjs/agentfoo
 
 > `readonly` **toolId**: `string`
 
-Defined in: [src/events/payloads.ts:346](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L346)
+Defined in: [src/events/payloads.ts:346](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/events/payloads.ts#L346)

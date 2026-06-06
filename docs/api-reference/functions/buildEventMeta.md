@@ -8,7 +8,7 @@
 
 > **buildEventMeta**(`origin`, `run`): [`EventMeta`](/agentfootprint/api/generated/interfaces/EventMeta.md)
 
-Defined in: [src/bridge/eventMeta.ts:59](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/bridge/eventMeta.ts#L59)
+Defined in: [src/bridge/eventMeta.ts:59](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/bridge/eventMeta.ts#L59)
 
 Build an EventMeta from a stage origin + run-level context.
 

@@ -8,7 +8,7 @@
 
 > **browserAnthropic**(`options`): [`LLMProvider`](/agentfootprint/api/generated/interfaces/LLMProvider.md)
 
-Defined in: [src/adapters/llm/BrowserAnthropicProvider.ts:96](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/adapters/llm/BrowserAnthropicProvider.ts#L96)
+Defined in: [src/adapters/llm/BrowserAnthropicProvider.ts:96](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/adapters/llm/BrowserAnthropicProvider.ts#L96)
 
 ## Parameters
 

@@ -6,14 +6,14 @@ The opt-in observability layer. Each file is ONE feature consumers enable in one
 
 ```
 recorders/observability/
-├── ThinkingRecorder.ts   enable.thinking({ onStatus }) — live status line
-├── LoggingRecorder.ts    enable.logging({ domains, logger }) — structured logging
+├── ThinkingRecorder.ts   live-status helper (attachThinking) behind enable.liveStatus
+├── LoggingRecorder.ts    structured-logging helper (attachLogging) behind enable.observability
 ├── BoundaryRecorder.ts   unified domain event log (run / subflow / llm / tool / context)
 ├── FlowchartRecorder.ts  StepGraph projection for Lens UI
 └── LiveStateRecorder.ts  O(1) "is X happening NOW" reads (LLM stream / tool / agent turn)
 ```
 
-`LiveStateRecorder` is built on the footprintjs `BoundaryStateTracker<TState>` storage primitive (v4.17.2+). Three independently-usable trackers (`LiveLLMTracker`, `LiveToolTracker`, `LiveAgentTurnTracker`) plus a façade. Use the façade when you want all three; use a single tracker when you only need one slice. State is **transient** — clears on stop. For time-travel, snapshot to a `SequenceRecorder`.
+`LiveStateRecorder` is built on the footprintjs `BoundaryStateStore<TState>` storage primitive (v4.17.2+). Three independently-usable trackers (`LiveLLMTracker`, `LiveToolTracker`, `LiveAgentTurnTracker`) plus a façade. Use the façade when you want all three; use a single tracker when you only need one slice. State is **transient** — clears on stop. For time-travel, snapshot to a `SequenceStore`.
 
 Phase 5 additions (planned): `enable.lens`, `enable.tracing`, `enable.cost`, `enable.guardrails`, `enable.eval`.
 
@@ -79,9 +79,9 @@ Replaced with **domain names** that match the event namespace consumers already 
 
 ### Decision 5: Sensible defaults — "the most useful thing without config"
 
-`agent.enable.thinking({ onStatus: updateStatus })` — consumer provides only the callback. Every other behavior is a sensible default (built-in renderer covers turn / iteration / tool / route / done).
+`agent.enable.liveStatus({ strategy: chatBubbleLiveStatus({ onLine }) })` — consumer provides only the callback inside the strategy. Every other behavior is a sensible default (built-in renderer covers turn / iteration / tool / route / done).
 
-`agent.enable.logging()` — consumer provides nothing. Default logs to console with `domains: ['context', 'stream']` — the debug core.
+`agent.enable.observability({ strategy: consoleObservability() })` — the console strategy logs every event with zero further config.
 
 Defaults matter more than options. The first-line-of-code experience should be: "enable this, it works." Config is for escalation.
 
@@ -91,13 +91,13 @@ Every feature accepts an optional `format?: (event) => string | null` callback. 
 
 ## Features shipped (Phase 3)
 
-### `enable.thinking({ onStatus, format? })`
+### `enable.liveStatus({ strategy })` (e.g. `chatBubbleLiveStatus({ onLine, format? })`)
 
-Claude-Code-style live status line. Fires `onStatus(string)` at each meaningful moment (turn start, iteration start, tool calls, route decision, done). Default renderer produces human-readable strings; override via `format`.
+Claude-Code-style live status line. Fires `onLine(string)` at each meaningful moment (turn start, iteration start, tool calls, route decision, done). Default renderer produces human-readable strings; override via `format`. The low-level `attachThinking(dispatcher, …)` helper (this folder) backs it.
 
-### `enable.logging({ domains?, logger?, format? })`
+### `enable.observability({ strategy })` (e.g. `consoleObservability({ logger?, format? })`)
 
-Structured firehose logging. Filters by domain (default: context + stream). Logger pluggable (default: console). Formatter customizable.
+Structured firehose logging. Logger pluggable (default: console). Formatter customizable. The low-level `attachLogging(dispatcher, …)` helper (this folder) backs the console case.
 
 ## When to add a new feature
 

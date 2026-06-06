@@ -6,7 +6,7 @@
 
 # Interface: ThinkingOptions
 
-Defined in: [src/recorders/observability/ThinkingRecorder.ts:20](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/ThinkingRecorder.ts#L20)
+Defined in: [src/recorders/observability/ThinkingRecorder.ts:22](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/ThinkingRecorder.ts#L22)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [src/recorders/observability/ThinkingRecorder.ts:20](https://github.
 
 > `readonly` `optional` **format?**: (`event`) => `string` \| `null`
 
-Defined in: [src/recorders/observability/ThinkingRecorder.ts:30](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/ThinkingRecorder.ts#L30)
+Defined in: [src/recorders/observability/ThinkingRecorder.ts:32](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/ThinkingRecorder.ts#L32)
 
 Custom formatter. Return `null` to skip an event; return a string
 to emit that status. Omit for the built-in renderer.
@@ -35,7 +35,7 @@ to emit that status. Omit for the built-in renderer.
 
 > `readonly` **onStatus**: (`status`) => `void`
 
-Defined in: [src/recorders/observability/ThinkingRecorder.ts:25](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/ThinkingRecorder.ts#L25)
+Defined in: [src/recorders/observability/ThinkingRecorder.ts:27](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/ThinkingRecorder.ts#L27)
 
 Called with a human-readable status string at each meaningful moment
 (iteration start, tool start/end, route decision, turn end).

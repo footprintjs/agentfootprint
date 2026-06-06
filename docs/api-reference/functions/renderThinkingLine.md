@@ -8,7 +8,7 @@
 
 > **renderThinkingLine**(`state`, `ctx`, `templates?`): `string` \| `null`
 
-Defined in: [src/recorders/observability/thinking/thinkingTemplates.ts:209](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/thinking/thinkingTemplates.ts#L209)
+Defined in: [src/recorders/observability/thinking/thinkingTemplates.ts:209](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/thinking/thinkingTemplates.ts#L209)
 
 Resolve the matched template + substitute vars.
 

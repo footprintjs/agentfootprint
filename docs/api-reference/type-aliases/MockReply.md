@@ -8,7 +8,7 @@
 
 > **MockReply** = `string` \| `Partial`\<[`LLMResponse`](/agentfootprint/api/generated/interfaces/LLMResponse.md)\>
 
-Defined in: [src/adapters/llm/MockProvider.ts:34](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/adapters/llm/MockProvider.ts#L34)
+Defined in: [src/adapters/llm/MockProvider.ts:34](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/adapters/llm/MockProvider.ts#L34)
 
 One scripted reply consumed in order from `MockProviderOptions.replies`.
 String → plain text content; Partial<LLMResponse> → can include

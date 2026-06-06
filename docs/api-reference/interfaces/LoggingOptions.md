@@ -6,7 +6,7 @@
 
 # Interface: LoggingOptions
 
-Defined in: [src/recorders/observability/LoggingRecorder.ts:77](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/LoggingRecorder.ts#L77)
+Defined in: [src/recorders/observability/LoggingRecorder.ts:80](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/LoggingRecorder.ts#L80)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [src/recorders/observability/LoggingRecorder.ts:77](https://github.c
 
 > `readonly` `optional` **domains?**: readonly [`LoggingDomain`](/agentfootprint/api/generated/type-aliases/LoggingDomain.md)[] \| `"all"`
 
-Defined in: [src/recorders/observability/LoggingRecorder.ts:85](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/LoggingRecorder.ts#L85)
+Defined in: [src/recorders/observability/LoggingRecorder.ts:88](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/LoggingRecorder.ts#L88)
 
 Domains to log. Pass `'all'` for firehose (including consumer custom
 events). Default: `['context', 'stream']` — the core debugging lens
@@ -26,7 +26,7 @@ events). Default: `['context', 'stream']` — the core debugging lens
 
 > `readonly` `optional` **format?**: (`event`) => `string`
 
-Defined in: [src/recorders/observability/LoggingRecorder.ts:87](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/LoggingRecorder.ts#L87)
+Defined in: [src/recorders/observability/LoggingRecorder.ts:90](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/LoggingRecorder.ts#L90)
 
 Custom formatter. Default: `[domain.action]`.
 
@@ -46,6 +46,6 @@ Custom formatter. Default: `[domain.action]`.
 
 > `readonly` `optional` **logger?**: [`LoggingLogger`](/agentfootprint/api/generated/interfaces/LoggingLogger.md)
 
-Defined in: [src/recorders/observability/LoggingRecorder.ts:79](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/LoggingRecorder.ts#L79)
+Defined in: [src/recorders/observability/LoggingRecorder.ts:82](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/LoggingRecorder.ts#L82)
 
 Logger sink. Defaults to console.

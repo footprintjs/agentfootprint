@@ -13,32 +13,33 @@ description: How to debug an agentfootprint agent — typed events, narrative en
 | **Narrative recorder** | Post-run human-readable trace ("what happened, in order") |
 | **Time-travel checkpoint** | Replay decisions cross-process, cross-day (Causal memory snapshot) |
 
-## Live status — `enable.thinking`
+## Live status — `enable.liveStatus`
 
 For interactive debugging in terminal:
 
 ```ts
-agent.enable.thinking({
-  onStatus: (s) => console.log(`⎈ ${s}`),
+import { chatBubbleLiveStatus } from 'agentfootprint/strategies';
+
+agent.enable.liveStatus({
+  strategy: chatBubbleLiveStatus({ onLine: (s) => console.log(`⎈ ${s}`) }),
 });
 ```
 
 Prints one line per state transition — *"calling LLM... tool weather(SF)... LLM... done"*. The Claude-Code-style live status. Drop into your dev script.
 
-## Structured logs — `enable.logging`
+## Structured logs — `enable.observability`
 
 For CI / staging environments:
 
 ```ts
-import { LoggingDomains } from 'agentfootprint';
+import { consoleObservability } from 'agentfootprint/strategies';
 
-agent.enable.logging({
-  domains: [LoggingDomains.STREAM, LoggingDomains.AGENT, LoggingDomains.CONTEXT],
-  logger: pino(),  // or console, winston, etc.
+agent.enable.observability({
+  strategy: consoleObservability(),  // or a vendor strategy: pino, OTel, CloudWatch, …
 });
 ```
 
-Filters the firehose to specific event domains; pipes to your structured logger.
+Pipes the typed event firehose to your structured logger.
 
 ## Targeted event subscription
 

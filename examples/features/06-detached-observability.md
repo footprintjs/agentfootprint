@@ -89,5 +89,5 @@ Pick by environment — see [`footprintjs/detach`](https://footprintjs.github.io
 | `workerThreadDriver` | CPU-isolated. For heavy serialization. |
 
 `enable.cost` accepts the same `detach` option for the same reasons.
-`enable.thinking` and `enable.lens` stay sync — UI render must feel
+`enable.liveStatus` and `enable.flowchart` stay sync — UI render must feel
 responsive.

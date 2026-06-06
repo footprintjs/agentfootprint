@@ -8,7 +8,7 @@
 
 > **RoleAllowlist** = `Readonly`\<`Record`\<`string`, readonly `string`[]\>\>
 
-Defined in: [src/security/PermissionPolicy.ts:64](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/security/PermissionPolicy.ts#L64)
+Defined in: [src/security/PermissionPolicy.ts:64](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/security/PermissionPolicy.ts#L64)
 
 Map of role name → list of tool ids that role is allowed to invoke.
 The shape consumers extend over time as new tools / roles arrive.

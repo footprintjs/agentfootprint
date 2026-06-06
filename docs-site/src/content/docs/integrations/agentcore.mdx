@@ -22,7 +22,7 @@ Lazy peer-dep declared in `peerDependenciesMeta` with `optional: true`. AWS cred
 import { AgentCoreStore } from 'agentfootprint/memory-providers';
 
 // Legacy alias (still exported, kept for back-compat):
-import { AgentCoreStore } from 'agentfootprint/memory-agentcore';
+import { AgentCoreStore } from 'agentfootprint/memory-providers';
 ```
 
 Subpath keeps the main barrel small + lets bundlers tree-shake when AgentCore isn't used. Prefer `agentfootprint/memory-providers` (the canonical location, shared with `RedisStore`); `agentfootprint/memory-agentcore` remains as a back-compat alias.

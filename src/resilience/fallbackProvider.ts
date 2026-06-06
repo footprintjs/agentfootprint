@@ -10,7 +10,7 @@
  * predicate. The first success wins; if all fail, the last error throws.
  *
  * @example
- *   import { anthropic, openai, mock } from 'agentfootprint/providers';
+ *   import { anthropic, openai, mock } from 'agentfootprint/llm-providers';
  *   import { fallbackProvider } from 'agentfootprint/resilience';
  *
  *   const provider = fallbackProvider(

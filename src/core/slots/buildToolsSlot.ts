@@ -84,8 +84,8 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
   // no-provider path early-returns in microseconds. When a provider IS
   // set, this stage owns the entire async-discovery boundary:
   //
-  //   • own runtimeStageId (e.g., `sf-tools/discover#7`) so KeyedRecorder
-  //     and SequenceRecorder can scope per-discovery latency / errors
+  //   • own runtimeStageId (e.g., `sf-tools/discover#7`) so KeyedStore
+  //     and SequenceStore can scope per-discovery latency / errors
   //   • own InOutRecorder boundary (entry/exit pair)
   //   • own narrative entry separating "I called the hub" from "I built
   //     the slot"

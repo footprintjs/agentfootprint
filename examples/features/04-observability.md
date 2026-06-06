@@ -1,5 +1,5 @@
 ---
-name: Observability — enable.thinking + enable.logging
+name: Observability — enable.liveStatus + enable.observability
 group: features
 guide: ../../README.md#features
 defaultInput: analyze the Q3 report
@@ -7,38 +7,41 @@ defaultInput: analyze the Q3 report
 
 # Observability — `.enable.*` namespace
 
-Every runner has an `.enable` namespace attaching pre-built Tier-3
-observability recorders. They're one-liners over the typed dispatcher:
+Every runner has an `.enable` namespace attaching Tier-3 observability via
+uniform **strategies**. They're one-liners over the typed dispatcher:
 
-- `agent.enable.thinking({ onStatus })` — Claude-Code-style terse
-  status line. Fires a human-readable status string on every
-  interesting boundary (LLM call, tool call, route decision).
-- `agent.enable.logging({ domains, logger })` — firehose structured
-  logging. Filter by event domain; wrap your existing logger
-  (console, pino, winston).
+- `agent.enable.liveStatus({ strategy })` — Claude-Code-style terse status
+  line. With `chatBubbleLiveStatus({ onLine })`, fires a human-readable
+  status string on every interesting boundary (LLM call, tool call, route
+  decision).
+- `agent.enable.observability({ strategy })` — firehose structured logging.
+  With `consoleObservability()` it prints every typed event; swap in a
+  vendor strategy (pino, OTel, CloudWatch, AgentCore) at the same call site.
 
-Both return an `Unsubscribe` — call to detach.
+Both return an `Unsubscribe` — call to detach. Import the built-in
+strategies from `agentfootprint/strategies`.
 
 ## When to use
 
-- **Live UIs** — `thinking` pushes friendly status lines to a chat
+- **Live UIs** — `liveStatus` pushes friendly status lines to a chat
   widget so users see what the agent is doing.
-- **Debug / trace** — `logging` with `'all'` gets the firehose; with
-  specific domains focuses on what's interesting.
-- **Custom dashboards** — plug your structured logger directly in.
+- **Debug / trace** — `observability` with `consoleObservability()` gets
+  the firehose; a vendor strategy ships it to your backend.
+- **Custom dashboards** — plug your structured logger into a strategy.
 
 ## Key API
 
 ```ts
+import { chatBubbleLiveStatus, consoleObservability } from 'agentfootprint/strategies';
+
 // Status line
-const stopThinking = agent.enable.thinking({
-  onStatus: (s) => chatWidget.setStatus(s),
+const stopThinking = agent.enable.liveStatus({
+  strategy: chatBubbleLiveStatus({ onLine: (s) => chatWidget.setStatus(s) }),
 });
 
-// Filtered logging
-const stopLogging = agent.enable.logging({
-  domains: [LoggingDomains.STREAM, LoggingDomains.COST],
-  logger: myPinoLogger,
+// Structured logging (swap consoleObservability for a vendor strategy)
+const stopLogging = agent.enable.observability({
+  strategy: consoleObservability({ logger: myPinoLogger }),
 });
 
 // Later:
@@ -46,11 +49,13 @@ stopThinking();
 stopLogging();
 ```
 
-## LoggingDomains
+## Migration (4.0.0)
 
-Use `LoggingDomains.*` constants for autocomplete + typo safety. Raw
-strings still work (same literal type). 13 domains map one-to-one with
-event namespaces (`agentfootprint.<domain>.*`).
+The flat `enable.thinking()` / `enable.logging()` one-liners were removed.
+Replace `enable.thinking({ onStatus })` with
+`enable.liveStatus({ strategy: chatBubbleLiveStatus({ onLine: onStatus }) })`,
+and `enable.logging()` with
+`enable.observability({ strategy: consoleObservability() })`.
 
 ## Related
 

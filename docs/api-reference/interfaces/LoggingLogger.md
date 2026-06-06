@@ -6,7 +6,7 @@
 
 # Interface: LoggingLogger
 
-Defined in: [src/recorders/observability/LoggingRecorder.ts:22](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/LoggingRecorder.ts#L22)
+Defined in: [src/recorders/observability/LoggingRecorder.ts:25](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/LoggingRecorder.ts#L25)
 
 Minimal logger shape — structurally compatible with console, winston,
 pino, etc. Consumers pass their existing logger.
@@ -17,7 +17,7 @@ pino, etc. Consumers pass their existing logger.
 
 > **log**(`message`, `data?`): `void`
 
-Defined in: [src/recorders/observability/LoggingRecorder.ts:23](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/LoggingRecorder.ts#L23)
+Defined in: [src/recorders/observability/LoggingRecorder.ts:26](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/LoggingRecorder.ts#L26)
 
 #### Parameters
 

@@ -72,8 +72,8 @@ Never commit keys. Use a secrets manager (AWS Secrets Manager, HashiCorp Vault, 
 
 Pick one per concern:
 
-- **Status line** — `agent.enable.thinking({ onStatus })` (terminal UIs, chat typing indicators)
-- **Structured logs** — `agent.enable.logging({ domains, logger })` (pino, winston, console)
+- **Status line** — `agent.enable.liveStatus({ strategy: chatBubbleLiveStatus({ onLine }) })` (terminal UIs, chat typing indicators)
+- **Structured logs** — `agent.enable.observability({ strategy: consoleObservability() })` (pino, winston, console, vendor backends)
 - **Cost tracking** — pass `pricingTable` + `costBudget` to `Agent.create()`
 - **Custom recorders** — `agent.attach(myRecorder)` for aggregation
 

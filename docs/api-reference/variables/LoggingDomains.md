@@ -8,7 +8,7 @@
 
 > `const` **LoggingDomains**: `object`
 
-Defined in: [src/recorders/observability/LoggingRecorder.ts:36](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/LoggingRecorder.ts#L36)
+Defined in: [src/recorders/observability/LoggingRecorder.ts:39](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/LoggingRecorder.ts#L39)
 
 Domain constants — one per event-registry domain. Use these instead of
 raw strings for autocomplete, typo protection, and rename safety.
@@ -110,6 +110,6 @@ Tool offered / activated / deactivated.
 ## Example
 
 ```ts
-agent.enable.logging({ domains: [LoggingDomains.CONTEXT, LoggingDomains.STREAM] });
-  agent.enable.logging({ domains: ['context', 'stream'] }); // equivalent
+attachLogging(dispatcher, { domains: [LoggingDomains.CONTEXT, LoggingDomains.STREAM] });
+  attachLogging(dispatcher, { domains: ['context', 'stream'] }); // equivalent
 ```

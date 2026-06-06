@@ -6,7 +6,7 @@
 
 # Interface: ThinkingState
 
-Defined in: [src/recorders/observability/thinking/thinkingTemplates.ts:53](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/thinking/thinkingTemplates.ts#L53)
+Defined in: [src/recorders/observability/thinking/thinkingTemplates.ts:53](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/thinking/thinkingTemplates.ts#L53)
 
 What the selector returns. The chat-bubble consumer feeds this into
 the renderer to get the final string.
@@ -17,7 +17,7 @@ the renderer to get the final string.
 
 > `readonly` **state**: [`ThinkingStateKind`](/agentfootprint/api/generated/type-aliases/ThinkingStateKind.md)
 
-Defined in: [src/recorders/observability/thinking/thinkingTemplates.ts:54](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/thinking/thinkingTemplates.ts#L54)
+Defined in: [src/recorders/observability/thinking/thinkingTemplates.ts:54](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/thinking/thinkingTemplates.ts#L54)
 
 ***
 
@@ -25,7 +25,7 @@ Defined in: [src/recorders/observability/thinking/thinkingTemplates.ts:54](https
 
 > `readonly` `optional` **toolName?**: `string`
 
-Defined in: [src/recorders/observability/thinking/thinkingTemplates.ts:59](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/thinking/thinkingTemplates.ts#L59)
+Defined in: [src/recorders/observability/thinking/thinkingTemplates.ts:59](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/thinking/thinkingTemplates.ts#L59)
 
 When `state === 'tool'`, the resolving toolName. The renderer
  uses this to look up `tool.<toolName>` before the generic `tool`.
@@ -36,6 +36,6 @@ When `state === 'tool'`, the resolving toolName. The renderer
 
 > `readonly` **vars**: `Readonly`\<`Record`\<`string`, `string`\>\>
 
-Defined in: [src/recorders/observability/thinking/thinkingTemplates.ts:56](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/thinking/thinkingTemplates.ts#L56)
+Defined in: [src/recorders/observability/thinking/thinkingTemplates.ts:56](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/thinking/thinkingTemplates.ts#L56)
 
 Vars for `{{name}}` substitution in the matched template.

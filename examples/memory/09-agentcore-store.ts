@@ -6,7 +6,7 @@
  *
  * Production usage:
  *
- *   import { AgentCoreStore } from 'agentfootprint/memory-agentcore';
+ *   import { AgentCoreStore } from 'agentfootprint/memory-providers';
  *   const store = new AgentCoreStore({
  *     memoryId: 'arn:aws:bedrock:us-east-1:...:memory/my-mem',
  *     region: 'us-east-1',

@@ -516,7 +516,7 @@ export function boundaryRecorder(options: BoundaryRecorderOptions = {}): Boundar
  * to wire to the agentfootprint typed-event dispatcher.
  *
  * v5: composes a `SequenceStore<DomainEvent>` (storage) instead of
- * extending the deprecated `SequenceRecorder<T>` base. Time-travel
+ * extending the deprecated `SequenceStore<T>` base. Time-travel
  * utilities (`getEntryRanges`, `accumulate`) are accessed through the
  * store via the public read API on this class.
  */

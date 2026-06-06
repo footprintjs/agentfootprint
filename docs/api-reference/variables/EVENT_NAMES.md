@@ -8,7 +8,7 @@
 
 > `const` **EVENT\_NAMES**: `object`
 
-Defined in: [src/events/registry.ts:83](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/registry.ts#L83)
+Defined in: [src/events/registry.ts:83](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/events/registry.ts#L83)
 
 ## Type Declaration
 

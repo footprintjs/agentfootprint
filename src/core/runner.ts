@@ -24,8 +24,6 @@ import type {
   WildcardSubscription,
 } from '../events/dispatcher.js';
 import type { AgentfootprintEvent, AgentfootprintEventType } from '../events/registry.js';
-import type { LoggingOptions } from '../recorders/observability/LoggingRecorder.js';
-import type { ThinkingOptions } from '../recorders/observability/ThinkingRecorder.js';
 import type {
   FlowchartHandle,
   FlowchartOptions,
@@ -43,22 +41,11 @@ import type {
  */
 export interface EnableNamespace {
   /**
-   * @deprecated v2.8 — use `enable.liveStatus({ strategy: chatBubbleLiveStatus({onLine}) })`.
-   * Kept for back-compat; removed in v3.0.
-   */
-  thinking(opts: ThinkingOptions): Unsubscribe;
-  /**
-   * @deprecated v2.8 — use `enable.observability({ strategy: pinoObservability({...}) })`
-   * or another vendor strategy. Kept for back-compat; removed in v3.0.
-   */
-  logging(opts?: LoggingOptions): Unsubscribe;
-  /**
    * Live composition graph — subflow / fork-branch / decision-branch
    * nodes accumulate as execution unfolds. Hook into any graph renderer
    * (React Flow, Cytoscape, D3) without touching footprintjs internals.
    *
-   * Unlike thinking/logging which return a plain Unsubscribe, this
-   * returns a handle with `getSnapshot()` so the UI can query the graph
+   * Returns a handle with `getSnapshot()` so the UI can query the graph
    * at any time (not just via onUpdate).
    */
   flowchart(opts?: FlowchartOptions): FlowchartHandle;

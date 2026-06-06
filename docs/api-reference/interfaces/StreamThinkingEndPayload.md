@@ -6,7 +6,7 @@
 
 # Interface: StreamThinkingEndPayload
 
-Defined in: [src/events/payloads.ts:721](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L721)
+Defined in: [src/events/payloads.ts:721](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/events/payloads.ts#L721)
 
 Emitted (v2.14) once per LLM call where thinking blocks were
 produced. Pairs with the leading `stream.thinking_delta` events when
@@ -41,7 +41,7 @@ here match the audit-log surface bytes-exactly.
 
 > `readonly` **blockCount**: `number`
 
-Defined in: [src/events/payloads.ts:723](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L723)
+Defined in: [src/events/payloads.ts:723](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/events/payloads.ts#L723)
 
 ***
 
@@ -49,7 +49,7 @@ Defined in: [src/events/payloads.ts:723](https://github.com/footprintjs/agentfoo
 
 > `readonly` `optional` **blocks?**: readonly `ThinkingBlock`[]
 
-Defined in: [src/events/payloads.ts:738](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L738)
+Defined in: [src/events/payloads.ts:738](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/events/payloads.ts#L738)
 
 v2.14+ — the normalized thinking blocks for this LLM call.
 
@@ -68,7 +68,7 @@ thinking or redacted_thinking block landed.
 
 > `readonly` **iteration**: `number`
 
-Defined in: [src/events/payloads.ts:722](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L722)
+Defined in: [src/events/payloads.ts:722](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/events/payloads.ts#L722)
 
 ***
 
@@ -76,7 +76,7 @@ Defined in: [src/events/payloads.ts:722](https://github.com/footprintjs/agentfoo
 
 > `readonly` `optional` **tokens?**: `number`
 
-Defined in: [src/events/payloads.ts:725](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L725)
+Defined in: [src/events/payloads.ts:725](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/events/payloads.ts#L725)
 
 ***
 
@@ -84,4 +84,4 @@ Defined in: [src/events/payloads.ts:725](https://github.com/footprintjs/agentfoo
 
 > `readonly` **totalChars**: `number`
 
-Defined in: [src/events/payloads.ts:724](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L724)
+Defined in: [src/events/payloads.ts:724](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/events/payloads.ts#L724)

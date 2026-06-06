@@ -6,7 +6,7 @@
 
 # Class: LiveLLMTracker
 
-Defined in: [src/recorders/observability/LiveStateRecorder.ts:125](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/LiveStateRecorder.ts#L125)
+Defined in: [src/recorders/observability/LiveStateRecorder.ts:125](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/LiveStateRecorder.ts#L125)
 
 Tracks the in-flight state of LLM calls. Subscribes to:
   - `agentfootprint.stream.llm_start`  → opens a boundary
@@ -33,7 +33,7 @@ keys and are tracked independently.
 
 > `readonly` **id**: `"live-llm"` = `'live-llm'`
 
-Defined in: [src/recorders/observability/LiveStateRecorder.ts:126](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/LiveStateRecorder.ts#L126)
+Defined in: [src/recorders/observability/LiveStateRecorder.ts:126](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/LiveStateRecorder.ts#L126)
 
 ## Accessors
 
@@ -43,7 +43,7 @@ Defined in: [src/recorders/observability/LiveStateRecorder.ts:126](https://githu
 
 > **get** **activeCount**(): `number`
 
-Defined in: [src/recorders/observability/LiveStateRecorder.ts:200](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/LiveStateRecorder.ts#L200)
+Defined in: [src/recorders/observability/LiveStateRecorder.ts:200](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/LiveStateRecorder.ts#L200)
 
 Number of currently-active boundaries.
 
@@ -59,7 +59,7 @@ Number of currently-active boundaries.
 
 > **get** **hasActive**(): `boolean`
 
-Defined in: [src/recorders/observability/LiveStateRecorder.ts:195](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/LiveStateRecorder.ts#L195)
+Defined in: [src/recorders/observability/LiveStateRecorder.ts:195](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/LiveStateRecorder.ts#L195)
 
 Same as `store.hasActive` — exposed for parity with the v4 API.
 
@@ -73,7 +73,7 @@ Same as `store.hasActive` — exposed for parity with the v4 API.
 
 > **clear**(): `void`
 
-Defined in: [src/recorders/observability/LiveStateRecorder.ts:184](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/LiveStateRecorder.ts#L184)
+Defined in: [src/recorders/observability/LiveStateRecorder.ts:184](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/LiveStateRecorder.ts#L184)
 
 Reset all transient state. Called by `LiveStateRecorder.clear()`.
 
@@ -87,7 +87,7 @@ Reset all transient state. Called by `LiveStateRecorder.clear()`.
 
 > **getActive**(`runtimeStageId`): [`LLMLiveState`](/agentfootprint/api/generated/interfaces/LLMLiveState.md) \| `undefined`
 
-Defined in: [src/recorders/observability/LiveStateRecorder.ts:205](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/LiveStateRecorder.ts#L205)
+Defined in: [src/recorders/observability/LiveStateRecorder.ts:205](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/LiveStateRecorder.ts#L205)
 
 Currently-active boundary state for one runtimeStageId.
 
@@ -107,7 +107,7 @@ Currently-active boundary state for one runtimeStageId.
 
 > **getAllActive**(): `ReadonlyMap`\<`string`, [`LLMLiveState`](/agentfootprint/api/generated/interfaces/LLMLiveState.md)\>
 
-Defined in: [src/recorders/observability/LiveStateRecorder.ts:210](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/LiveStateRecorder.ts#L210)
+Defined in: [src/recorders/observability/LiveStateRecorder.ts:210](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/LiveStateRecorder.ts#L210)
 
 All currently-active boundaries.
 
@@ -121,7 +121,7 @@ All currently-active boundaries.
 
 > **getLatestPartial**(): `string`
 
-Defined in: [src/recorders/observability/LiveStateRecorder.ts:217](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/LiveStateRecorder.ts#L217)
+Defined in: [src/recorders/observability/LiveStateRecorder.ts:217](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/LiveStateRecorder.ts#L217)
 
 Accumulated partial content of the MOST RECENTLY started active
  LLM call. Empty string when no call is active. Useful for the
@@ -137,7 +137,7 @@ Accumulated partial content of the MOST RECENTLY started active
 
 > **isInFlight**(): `boolean`
 
-Defined in: [src/recorders/observability/LiveStateRecorder.ts:190](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/LiveStateRecorder.ts#L190)
+Defined in: [src/recorders/observability/LiveStateRecorder.ts:190](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/LiveStateRecorder.ts#L190)
 
 True if any LLM call is currently in flight.
 
@@ -151,7 +151,7 @@ True if any LLM call is currently in flight.
 
 > **subscribe**(`runner`): [`Unsubscribe`](/agentfootprint/api/generated/type-aliases/Unsubscribe.md)
 
-Defined in: [src/recorders/observability/LiveStateRecorder.ts:138](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/LiveStateRecorder.ts#L138)
+Defined in: [src/recorders/observability/LiveStateRecorder.ts:138](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/LiveStateRecorder.ts#L138)
 
 Subscribe to a runner's dispatcher. Returns an Unsubscribe.
 

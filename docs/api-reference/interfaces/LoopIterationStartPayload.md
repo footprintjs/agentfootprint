@@ -6,7 +6,7 @@
 
 # Interface: LoopIterationStartPayload
 
-Defined in: [src/events/payloads.ts:85](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L85)
+Defined in: [src/events/payloads.ts:85](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/events/payloads.ts#L85)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [src/events/payloads.ts:85](https://github.com/footprintjs/agentfoot
 
 > `readonly` **iteration**: `number`
 
-Defined in: [src/events/payloads.ts:87](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L87)
+Defined in: [src/events/payloads.ts:87](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/events/payloads.ts#L87)
 
 ***
 
@@ -22,4 +22,4 @@ Defined in: [src/events/payloads.ts:87](https://github.com/footprintjs/agentfoot
 
 > `readonly` **loopId**: `string`
 
-Defined in: [src/events/payloads.ts:86](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L86)
+Defined in: [src/events/payloads.ts:86](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/events/payloads.ts#L86)

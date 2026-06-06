@@ -6,7 +6,7 @@
 
 # Interface: LLMChunk
 
-Defined in: [src/adapters/types.ts:192](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/adapters/types.ts#L192)
+Defined in: [src/adapters/types.ts:192](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/adapters/types.ts#L192)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [src/adapters/types.ts:192](https://github.com/footprintjs/agentfoot
 
 > `readonly` **content**: `string`
 
-Defined in: [src/adapters/types.ts:195](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/adapters/types.ts#L195)
+Defined in: [src/adapters/types.ts:195](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/adapters/types.ts#L195)
 
 Token text. Empty for the terminal chunk (`done: true`).
 
@@ -24,7 +24,7 @@ Token text. Empty for the terminal chunk (`done: true`).
 
 > `readonly` **done**: `boolean`
 
-Defined in: [src/adapters/types.ts:197](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/adapters/types.ts#L197)
+Defined in: [src/adapters/types.ts:197](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/adapters/types.ts#L197)
 
 True only for the final chunk in a stream.
 
@@ -34,7 +34,7 @@ True only for the final chunk in a stream.
 
 > `readonly` `optional` **response?**: [`LLMResponse`](/agentfootprint/api/generated/interfaces/LLMResponse.md)
 
-Defined in: [src/adapters/types.ts:210](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/adapters/types.ts#L210)
+Defined in: [src/adapters/types.ts:210](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/adapters/types.ts#L210)
 
 Authoritative response payload, populated ONLY on the final chunk
 (`done: true`). Carries `toolCalls`, `usage`, `stopReason` — the
@@ -53,7 +53,7 @@ authoritative payload in that case.
 
 > `readonly` `optional` **thinkingDelta?**: `string`
 
-Defined in: [src/adapters/types.ts:226](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/adapters/types.ts#L226)
+Defined in: [src/adapters/types.ts:226](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/adapters/types.ts#L226)
 
 v2.14 — streaming thinking-content tokens. Parallel to `content`
 but for the model's reasoning chain rather than visible output.
@@ -75,4 +75,4 @@ Consumers explicitly opt in with `enable.thinking({ stream: true })`.
 
 > `readonly` **tokenIndex**: `number`
 
-Defined in: [src/adapters/types.ts:193](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/adapters/types.ts#L193)
+Defined in: [src/adapters/types.ts:193](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/adapters/types.ts#L193)

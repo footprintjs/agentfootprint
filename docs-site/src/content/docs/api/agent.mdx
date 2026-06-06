@@ -23,8 +23,8 @@ Every type has a JSDoc with at least one example. The `MemoryStore` interface al
 
 ```ts
 import { Agent, defineMemory, mock } from 'agentfootprint';                  // top-level
-import { RedisStore } from 'agentfootprint/memory-redis';                    // Redis adapter
-import { AgentCoreStore } from 'agentfootprint/memory-agentcore';            // AgentCore adapter
+import { RedisStore } from 'agentfootprint/memory-providers';                    // Redis adapter
+import { AgentCoreStore } from 'agentfootprint/memory-providers';            // AgentCore adapter
 import { withRetry, withFallback } from 'agentfootprint/resilience';         // resilience decorators
 import { toSSE } from 'agentfootprint/stream';                               // SSE bridge
 ```

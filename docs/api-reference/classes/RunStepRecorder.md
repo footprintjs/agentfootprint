@@ -6,7 +6,7 @@
 
 # Class: RunStepRecorder
 
-Defined in: [src/recorders/observability/RunStepRecorder.ts:181](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/RunStepRecorder.ts#L181)
+Defined in: [src/recorders/observability/RunStepRecorder.ts:181](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/RunStepRecorder.ts#L181)
 
 Real-time slider-step recorder. Emits a `RunStep` whenever an event
 marks a meaningful slider transition. State persists on the instance
@@ -27,7 +27,7 @@ walking) with optional drill-scope filtering.
 
 > **new RunStepRecorder**(`options?`): `RunStepRecorder`
 
-Defined in: [src/recorders/observability/RunStepRecorder.ts:211](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/RunStepRecorder.ts#L211)
+Defined in: [src/recorders/observability/RunStepRecorder.ts:211](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/RunStepRecorder.ts#L211)
 
 #### Parameters
 
@@ -45,7 +45,7 @@ Defined in: [src/recorders/observability/RunStepRecorder.ts:211](https://github.
 
 > `readonly` **id**: `string`
 
-Defined in: [src/recorders/observability/RunStepRecorder.ts:182](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/RunStepRecorder.ts#L182)
+Defined in: [src/recorders/observability/RunStepRecorder.ts:182](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/RunStepRecorder.ts#L182)
 
 #### Implementation of
 
@@ -57,7 +57,7 @@ Defined in: [src/recorders/observability/RunStepRecorder.ts:182](https://github.
 
 > **clear**(): `void`
 
-Defined in: [src/recorders/observability/RunStepRecorder.ts:231](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/RunStepRecorder.ts#L231)
+Defined in: [src/recorders/observability/RunStepRecorder.ts:231](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/RunStepRecorder.ts#L231)
 
 #### Returns
 
@@ -73,7 +73,7 @@ Defined in: [src/recorders/observability/RunStepRecorder.ts:231](https://github.
 
 > **getSteps**(`drillPath?`): readonly [`RunStep`](/agentfootprint/api/generated/interfaces/RunStep.md)[]
 
-Defined in: [src/recorders/observability/RunStepRecorder.ts:680](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/RunStepRecorder.ts#L680)
+Defined in: [src/recorders/observability/RunStepRecorder.ts:680](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/RunStepRecorder.ts#L680)
 
 Read-only query — returns the already-built step list filtered to
 `drillPath` scope. O(1) per call when scope is empty; O(N) filter
@@ -103,7 +103,7 @@ readonly [`RunStep`](/agentfootprint/api/generated/interfaces/RunStep.md)[]
 
 > **ingestDomainEvent**(`e`): `void`
 
-Defined in: [src/recorders/observability/RunStepRecorder.ts:547](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/RunStepRecorder.ts#L547)
+Defined in: [src/recorders/observability/RunStepRecorder.ts:547](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/RunStepRecorder.ts#L547)
 
 Feed a single recorded `DomainEvent` (from BoundaryRecorder) into
 this recorder as if it had fired live. Used by `buildRunSteps`
@@ -129,7 +129,7 @@ naturally during traversal.
 
 > **onDecision**(`event`): `void`
 
-Defined in: [src/recorders/observability/RunStepRecorder.ts:410](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/RunStepRecorder.ts#L410)
+Defined in: [src/recorders/observability/RunStepRecorder.ts:410](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/RunStepRecorder.ts#L410)
 
 #### Parameters
 
@@ -151,7 +151,7 @@ Defined in: [src/recorders/observability/RunStepRecorder.ts:410](https://github.
 
 > **onFork**(`event`): `void`
 
-Defined in: [src/recorders/observability/RunStepRecorder.ts:375](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/RunStepRecorder.ts#L375)
+Defined in: [src/recorders/observability/RunStepRecorder.ts:375](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/RunStepRecorder.ts#L375)
 
 #### Parameters
 
@@ -173,7 +173,7 @@ Defined in: [src/recorders/observability/RunStepRecorder.ts:375](https://github.
 
 > **onLoop**(`event`): `void`
 
-Defined in: [src/recorders/observability/RunStepRecorder.ts:447](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/RunStepRecorder.ts#L447)
+Defined in: [src/recorders/observability/RunStepRecorder.ts:447](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/RunStepRecorder.ts#L447)
 
 #### Parameters
 
@@ -195,7 +195,7 @@ Defined in: [src/recorders/observability/RunStepRecorder.ts:447](https://github.
 
 > **onRunEnd**(`event`): `void`
 
-Defined in: [src/recorders/observability/RunStepRecorder.ts:266](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/RunStepRecorder.ts#L266)
+Defined in: [src/recorders/observability/RunStepRecorder.ts:266](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/RunStepRecorder.ts#L266)
 
 Called once per top-level `executor.run()` AFTER traversal completes
 cleanly. Carries `event.payload = chart's return value`. NOT fired on
@@ -221,7 +221,7 @@ pause (the run didn't end) or uncaught error.
 
 > **onRunStart**(`event`): `void`
 
-Defined in: [src/recorders/observability/RunStepRecorder.ts:260](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/RunStepRecorder.ts#L260)
+Defined in: [src/recorders/observability/RunStepRecorder.ts:260](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/RunStepRecorder.ts#L260)
 
 Called once per top-level `executor.run()` BEFORE traversal begins.
 Carries `event.payload = run({input})`. Subflow-traversers don't fire it.
@@ -246,7 +246,7 @@ Carries `event.payload = run({input})`. Subflow-traversers don't fire it.
 
 > **onSubflowEntry**(`event`): `void`
 
-Defined in: [src/recorders/observability/RunStepRecorder.ts:274](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/RunStepRecorder.ts#L274)
+Defined in: [src/recorders/observability/RunStepRecorder.ts:274](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/RunStepRecorder.ts#L274)
 
 #### Parameters
 
@@ -268,7 +268,7 @@ Defined in: [src/recorders/observability/RunStepRecorder.ts:274](https://github.
 
 > **onSubflowExit**(`event`): `void`
 
-Defined in: [src/recorders/observability/RunStepRecorder.ts:335](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/RunStepRecorder.ts#L335)
+Defined in: [src/recorders/observability/RunStepRecorder.ts:335](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/RunStepRecorder.ts#L335)
 
 #### Parameters
 
@@ -290,7 +290,7 @@ Defined in: [src/recorders/observability/RunStepRecorder.ts:335](https://github.
 
 > **subscribe**(`dispatcher`): [`Unsubscribe`](/agentfootprint/api/generated/type-aliases/Unsubscribe.md)
 
-Defined in: [src/recorders/observability/RunStepRecorder.ts:483](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/RunStepRecorder.ts#L483)
+Defined in: [src/recorders/observability/RunStepRecorder.ts:483](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/RunStepRecorder.ts#L483)
 
 Subscribe to the runner's typed-event dispatcher and emit a
 `react` RunStep on every `llm.start` / `llm.end`. The recorder

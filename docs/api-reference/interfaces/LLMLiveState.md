@@ -6,7 +6,7 @@
 
 # Interface: LLMLiveState
 
-Defined in: [src/recorders/observability/LiveStateRecorder.ts:83](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/LiveStateRecorder.ts#L83)
+Defined in: [src/recorders/observability/LiveStateRecorder.ts:83](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/LiveStateRecorder.ts#L83)
 
 Live transient state of one in-flight LLM call.
 
@@ -16,7 +16,7 @@ Live transient state of one in-flight LLM call.
 
 > `readonly` **iteration**: `number`
 
-Defined in: [src/recorders/observability/LiveStateRecorder.ts:89](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/LiveStateRecorder.ts#L89)
+Defined in: [src/recorders/observability/LiveStateRecorder.ts:89](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/LiveStateRecorder.ts#L89)
 
 Iteration index (from the LLMStartPayload).
 
@@ -26,7 +26,7 @@ Iteration index (from the LLMStartPayload).
 
 > `readonly` **model**: `string`
 
-Defined in: [src/recorders/observability/LiveStateRecorder.ts:93](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/LiveStateRecorder.ts#L93)
+Defined in: [src/recorders/observability/LiveStateRecorder.ts:93](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/LiveStateRecorder.ts#L93)
 
 Model id.
 
@@ -36,7 +36,7 @@ Model id.
 
 > `readonly` **partial**: `string`
 
-Defined in: [src/recorders/observability/LiveStateRecorder.ts:85](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/LiveStateRecorder.ts#L85)
+Defined in: [src/recorders/observability/LiveStateRecorder.ts:85](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/LiveStateRecorder.ts#L85)
 
 Accumulated content from `stream.token` events since `llm_start`.
 
@@ -46,7 +46,7 @@ Accumulated content from `stream.token` events since `llm_start`.
 
 > `readonly` **provider**: `string`
 
-Defined in: [src/recorders/observability/LiveStateRecorder.ts:91](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/LiveStateRecorder.ts#L91)
+Defined in: [src/recorders/observability/LiveStateRecorder.ts:91](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/LiveStateRecorder.ts#L91)
 
 Provider name (e.g., 'anthropic', 'openai').
 
@@ -56,7 +56,7 @@ Provider name (e.g., 'anthropic', 'openai').
 
 > `readonly` **startedAtMs**: `number`
 
-Defined in: [src/recorders/observability/LiveStateRecorder.ts:95](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/LiveStateRecorder.ts#L95)
+Defined in: [src/recorders/observability/LiveStateRecorder.ts:95](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/LiveStateRecorder.ts#L95)
 
 Wall-clock ms when llm_start fired.
 
@@ -66,6 +66,6 @@ Wall-clock ms when llm_start fired.
 
 > `readonly` **tokens**: `number`
 
-Defined in: [src/recorders/observability/LiveStateRecorder.ts:87](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/LiveStateRecorder.ts#L87)
+Defined in: [src/recorders/observability/LiveStateRecorder.ts:87](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/LiveStateRecorder.ts#L87)
 
 Number of tokens received so far.

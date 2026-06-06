@@ -6,7 +6,7 @@
 
 # Class: LiveStateRecorder
 
-Defined in: [src/recorders/observability/LiveStateRecorder.ts:414](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/LiveStateRecorder.ts#L414)
+Defined in: [src/recorders/observability/LiveStateRecorder.ts:414](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/LiveStateRecorder.ts#L414)
 
 One-stop façade bundling `LiveLLMTracker` + `LiveToolTracker` +
 `LiveAgentTurnTracker`. Consumers attach this once and get O(1)
@@ -22,11 +22,11 @@ runs).
 
 **What this is NOT for:**
   - Time-travel queries (Tier 1 only — live state)
-  - Aggregations (use SequenceRecorder.aggregate)
+  - Aggregations (use SequenceStore.aggregate)
   - Stage-level observation (use Recorder.onStageStart/End)
 
 **Composition over inheritance:** the façade does NOT extend
-`BoundaryStateTracker` itself — different boundary kinds need
+`BoundaryStateStore` itself — different boundary kinds need
 separate active maps to avoid key collisions between LLM and tool
 boundaries. Each sub-tracker keeps its own state.
 
@@ -36,7 +36,7 @@ boundaries. Each sub-tracker keeps its own state.
 
 > **new LiveStateRecorder**(): `LiveStateRecorder`
 
-Defined in: [src/recorders/observability/LiveStateRecorder.ts:427](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/LiveStateRecorder.ts#L427)
+Defined in: [src/recorders/observability/LiveStateRecorder.ts:427](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/LiveStateRecorder.ts#L427)
 
 #### Returns
 
@@ -48,7 +48,7 @@ Defined in: [src/recorders/observability/LiveStateRecorder.ts:427](https://githu
 
 > `readonly` **id**: `"live-state"` = `'live-state'`
 
-Defined in: [src/recorders/observability/LiveStateRecorder.ts:415](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/LiveStateRecorder.ts#L415)
+Defined in: [src/recorders/observability/LiveStateRecorder.ts:415](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/LiveStateRecorder.ts#L415)
 
 ***
 
@@ -56,7 +56,7 @@ Defined in: [src/recorders/observability/LiveStateRecorder.ts:415](https://githu
 
 > `readonly` **llm**: [`LiveLLMTracker`](/agentfootprint/api/generated/classes/LiveLLMTracker.md)
 
-Defined in: [src/recorders/observability/LiveStateRecorder.ts:418](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/LiveStateRecorder.ts#L418)
+Defined in: [src/recorders/observability/LiveStateRecorder.ts:418](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/LiveStateRecorder.ts#L418)
 
 LLM call live state.
 
@@ -66,7 +66,7 @@ LLM call live state.
 
 > `readonly` **tool**: [`LiveToolTracker`](/agentfootprint/api/generated/classes/LiveToolTracker.md)
 
-Defined in: [src/recorders/observability/LiveStateRecorder.ts:420](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/LiveStateRecorder.ts#L420)
+Defined in: [src/recorders/observability/LiveStateRecorder.ts:420](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/LiveStateRecorder.ts#L420)
 
 Tool execution live state.
 
@@ -76,7 +76,7 @@ Tool execution live state.
 
 > `readonly` **turn**: [`LiveAgentTurnTracker`](/agentfootprint/api/generated/classes/LiveAgentTurnTracker.md)
 
-Defined in: [src/recorders/observability/LiveStateRecorder.ts:422](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/LiveStateRecorder.ts#L422)
+Defined in: [src/recorders/observability/LiveStateRecorder.ts:422](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/LiveStateRecorder.ts#L422)
 
 Agent turn live state.
 
@@ -86,7 +86,7 @@ Agent turn live state.
 
 > **clear**(): `void`
 
-Defined in: [src/recorders/observability/LiveStateRecorder.ts:470](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/LiveStateRecorder.ts#L470)
+Defined in: [src/recorders/observability/LiveStateRecorder.ts:470](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/LiveStateRecorder.ts#L470)
 
 Reset transient state across all three trackers. Called by the
  executor / consumer between runs.
@@ -101,7 +101,7 @@ Reset transient state across all three trackers. Called by the
 
 > **getCurrentTurnIndex**(): `number`
 
-Defined in: [src/recorders/observability/LiveStateRecorder.ts:504](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/LiveStateRecorder.ts#L504)
+Defined in: [src/recorders/observability/LiveStateRecorder.ts:504](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/LiveStateRecorder.ts#L504)
 
 Current turn index (-1 if not in a turn).
 
@@ -115,7 +115,7 @@ Current turn index (-1 if not in a turn).
 
 > **getExecutingToolNames**(): readonly `string`[]
 
-Defined in: [src/recorders/observability/LiveStateRecorder.ts:494](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/LiveStateRecorder.ts#L494)
+Defined in: [src/recorders/observability/LiveStateRecorder.ts:494](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/LiveStateRecorder.ts#L494)
 
 Names of tools currently executing.
 
@@ -129,7 +129,7 @@ readonly `string`[]
 
 > **getPartialLLM**(): `string`
 
-Defined in: [src/recorders/observability/LiveStateRecorder.ts:484](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/LiveStateRecorder.ts#L484)
+Defined in: [src/recorders/observability/LiveStateRecorder.ts:484](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/LiveStateRecorder.ts#L484)
 
 Accumulated partial content of the most-recently started LLM call.
 
@@ -143,7 +143,7 @@ Accumulated partial content of the most-recently started LLM call.
 
 > **isAgentInTurn**(): `boolean`
 
-Defined in: [src/recorders/observability/LiveStateRecorder.ts:499](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/LiveStateRecorder.ts#L499)
+Defined in: [src/recorders/observability/LiveStateRecorder.ts:499](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/LiveStateRecorder.ts#L499)
 
 True if the agent is currently inside a turn.
 
@@ -157,7 +157,7 @@ True if the agent is currently inside a turn.
 
 > **isLLMInFlight**(): `boolean`
 
-Defined in: [src/recorders/observability/LiveStateRecorder.ts:479](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/LiveStateRecorder.ts#L479)
+Defined in: [src/recorders/observability/LiveStateRecorder.ts:479](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/LiveStateRecorder.ts#L479)
 
 True if any LLM call is currently in flight.
 
@@ -171,7 +171,7 @@ True if any LLM call is currently in flight.
 
 > **isToolExecuting**(): `boolean`
 
-Defined in: [src/recorders/observability/LiveStateRecorder.ts:489](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/LiveStateRecorder.ts#L489)
+Defined in: [src/recorders/observability/LiveStateRecorder.ts:489](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/LiveStateRecorder.ts#L489)
 
 True if any tool is currently executing.
 
@@ -185,7 +185,7 @@ True if any tool is currently executing.
 
 > **subscribe**(`runner`): [`Unsubscribe`](/agentfootprint/api/generated/type-aliases/Unsubscribe.md)
 
-Defined in: [src/recorders/observability/LiveStateRecorder.ts:442](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/LiveStateRecorder.ts#L442)
+Defined in: [src/recorders/observability/LiveStateRecorder.ts:442](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/LiveStateRecorder.ts#L442)
 
 Subscribe all three trackers to one runner. Idempotent — calling
  twice on the same recorder unsubscribes the prior subscription
@@ -213,7 +213,7 @@ Subscribe all three trackers to one runner. Idempotent — calling
 
 > **unsubscribe**(): `void`
 
-Defined in: [src/recorders/observability/LiveStateRecorder.ts:461](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/LiveStateRecorder.ts#L461)
+Defined in: [src/recorders/observability/LiveStateRecorder.ts:461](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/LiveStateRecorder.ts#L461)
 
 Detach all three trackers from the current runner. Idempotent.
 

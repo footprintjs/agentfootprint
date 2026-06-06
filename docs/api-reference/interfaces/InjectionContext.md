@@ -6,7 +6,7 @@
 
 # Interface: InjectionContext
 
-Defined in: [src/lib/injection-engine/types.ts:79](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/lib/injection-engine/types.ts#L79)
+Defined in: [src/lib/injection-engine/types.ts:79](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/lib/injection-engine/types.ts#L79)
 
 Context passed to `rule` predicates. Read-only snapshot of the
 agent's iteration state. Internal mutable state is hidden.
@@ -17,7 +17,7 @@ agent's iteration state. Internal mutable state is hidden.
 
 > `readonly` **activatedInjectionIds**: readonly `string`[]
 
-Defined in: [src/lib/injection-engine/types.ts:107](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/lib/injection-engine/types.ts#L107)
+Defined in: [src/lib/injection-engine/types.ts:107](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/lib/injection-engine/types.ts#L107)
 
 IDs of LLM-activated injections that the LLM has activated this
 turn (via their `viaToolName` tool call). Engine includes them
@@ -29,7 +29,7 @@ in the active set on subsequent iterations until turn end.
 
 > `readonly` **history**: readonly `object`[]
 
-Defined in: [src/lib/injection-engine/types.ts:88](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/lib/injection-engine/types.ts#L88)
+Defined in: [src/lib/injection-engine/types.ts:88](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/lib/injection-engine/types.ts#L88)
 
 Conversation history up to (but not including) the current
 iteration's LLM call. Includes prior iterations within the same turn.
@@ -40,7 +40,7 @@ iteration's LLM call. Includes prior iterations within the same turn.
 
 > `readonly` **iteration**: `number`
 
-Defined in: [src/lib/injection-engine/types.ts:81](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/lib/injection-engine/types.ts#L81)
+Defined in: [src/lib/injection-engine/types.ts:81](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/lib/injection-engine/types.ts#L81)
 
 Current ReAct iteration (1-based).
 
@@ -50,7 +50,7 @@ Current ReAct iteration (1-based).
 
 > `readonly` `optional` **lastToolResult?**: `object`
 
-Defined in: [src/lib/injection-engine/types.ts:98](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/lib/injection-engine/types.ts#L98)
+Defined in: [src/lib/injection-engine/types.ts:98](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/lib/injection-engine/types.ts#L98)
 
 The most recent tool result, if the previous iteration ended in a
 tool call. Used both by `rule` predicates and by `on-tool-return`
@@ -70,6 +70,6 @@ trigger evaluation.
 
 > `readonly` **userMessage**: `string`
 
-Defined in: [src/lib/injection-engine/types.ts:83](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/lib/injection-engine/types.ts#L83)
+Defined in: [src/lib/injection-engine/types.ts:83](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/lib/injection-engine/types.ts#L83)
 
 The current user message that started this turn.

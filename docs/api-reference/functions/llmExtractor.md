@@ -8,7 +8,7 @@
 
 > **llmExtractor**(`config`): `BeatExtractor`
 
-Defined in: [src/memory/beats/llmExtractor.ts:137](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/memory/beats/llmExtractor.ts#L137)
+Defined in: [src/memory/beats/llmExtractor.ts:137](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/memory/beats/llmExtractor.ts#L137)
 
 ## Parameters
 

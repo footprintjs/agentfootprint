@@ -6,7 +6,7 @@
 
 # Interface: MemoryDetachedPayload
 
-Defined in: [src/events/payloads.ts:317](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L317)
+Defined in: [src/events/payloads.ts:317](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/events/payloads.ts#L317)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [src/events/payloads.ts:317](https://github.com/footprintjs/agentfoo
 
 > `readonly` **memoryId**: `string`
 
-Defined in: [src/events/payloads.ts:318](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L318)
+Defined in: [src/events/payloads.ts:318](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/events/payloads.ts#L318)
 
 ***
 
@@ -22,4 +22,4 @@ Defined in: [src/events/payloads.ts:318](https://github.com/footprintjs/agentfoo
 
 > `readonly` **reason**: `"budget"` \| `"stale"` \| `"policy"` \| `"score_low"`
 
-Defined in: [src/events/payloads.ts:319](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L319)
+Defined in: [src/events/payloads.ts:319](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/events/payloads.ts#L319)

@@ -6,7 +6,7 @@
 
 # Interface: LLMEndPayload
 
-Defined in: [src/events/payloads.ts:156](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L156)
+Defined in: [src/events/payloads.ts:156](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/events/payloads.ts#L156)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [src/events/payloads.ts:156](https://github.com/footprintjs/agentfoo
 
 > `readonly` **content**: `string`
 
-Defined in: [src/events/payloads.ts:158](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L158)
+Defined in: [src/events/payloads.ts:158](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/events/payloads.ts#L158)
 
 ***
 
@@ -22,7 +22,7 @@ Defined in: [src/events/payloads.ts:158](https://github.com/footprintjs/agentfoo
 
 > `readonly` **durationMs**: `number`
 
-Defined in: [src/events/payloads.ts:167](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L167)
+Defined in: [src/events/payloads.ts:167](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/events/payloads.ts#L167)
 
 ***
 
@@ -30,7 +30,7 @@ Defined in: [src/events/payloads.ts:167](https://github.com/footprintjs/agentfoo
 
 > `readonly` **iteration**: `number`
 
-Defined in: [src/events/payloads.ts:157](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L157)
+Defined in: [src/events/payloads.ts:157](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/events/payloads.ts#L157)
 
 ***
 
@@ -38,7 +38,7 @@ Defined in: [src/events/payloads.ts:157](https://github.com/footprintjs/agentfoo
 
 > `readonly` `optional` **providerResponseRef?**: `string`
 
-Defined in: [src/events/payloads.ts:168](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L168)
+Defined in: [src/events/payloads.ts:168](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/events/payloads.ts#L168)
 
 ***
 
@@ -46,7 +46,7 @@ Defined in: [src/events/payloads.ts:168](https://github.com/footprintjs/agentfoo
 
 > `readonly` **stopReason**: `string`
 
-Defined in: [src/events/payloads.ts:166](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L166)
+Defined in: [src/events/payloads.ts:166](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/events/payloads.ts#L166)
 
 ***
 
@@ -54,7 +54,7 @@ Defined in: [src/events/payloads.ts:166](https://github.com/footprintjs/agentfoo
 
 > `readonly` **toolCallCount**: `number`
 
-Defined in: [src/events/payloads.ts:159](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L159)
+Defined in: [src/events/payloads.ts:159](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/events/payloads.ts#L159)
 
 ***
 
@@ -62,7 +62,7 @@ Defined in: [src/events/payloads.ts:159](https://github.com/footprintjs/agentfoo
 
 > `readonly` **usage**: `object`
 
-Defined in: [src/events/payloads.ts:160](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L160)
+Defined in: [src/events/payloads.ts:160](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/events/payloads.ts#L160)
 
 #### cacheRead?
 

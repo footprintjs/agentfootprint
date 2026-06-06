@@ -6,7 +6,7 @@
 
 # Class: SequenceBuilder
 
-Defined in: [src/core-flow/Sequence.ts:285](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/core-flow/Sequence.ts#L285)
+Defined in: [src/core-flow/Sequence.ts:285](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/core-flow/Sequence.ts#L285)
 
 Fluent builder. Reads as natural English:
   Sequence.create().step('a', A).pipeVia(fn).step('b', B).build()
@@ -22,7 +22,7 @@ next step (otherwise the default string-chain mapper is used).
 
 > **new SequenceBuilder**(`opts`): `SequenceBuilder`
 
-Defined in: [src/core-flow/Sequence.ts:292](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/core-flow/Sequence.ts#L292)
+Defined in: [src/core-flow/Sequence.ts:292](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/core-flow/Sequence.ts#L292)
 
 #### Parameters
 
@@ -40,7 +40,7 @@ Defined in: [src/core-flow/Sequence.ts:292](https://github.com/footprintjs/agent
 
 > **build**(): [`Sequence`](/agentfootprint/api/generated/classes/Sequence.md)
 
-Defined in: [src/core-flow/Sequence.ts:337](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/core-flow/Sequence.ts#L337)
+Defined in: [src/core-flow/Sequence.ts:337](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/core-flow/Sequence.ts#L337)
 
 #### Returns
 
@@ -52,7 +52,7 @@ Defined in: [src/core-flow/Sequence.ts:337](https://github.com/footprintjs/agent
 
 > **pipeVia**(`fn`): `this`
 
-Defined in: [src/core-flow/Sequence.ts:332](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/core-flow/Sequence.ts#L332)
+Defined in: [src/core-flow/Sequence.ts:332](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/core-flow/Sequence.ts#L332)
 
 Transform the previous step's string output before it reaches the
 next step. Consumed once by the next `.step()` call. Default
@@ -77,7 +77,7 @@ Reads as English: `.step('a', A).pipeVia(fn).step('b', B)`
 
 > **step**(`id`, `runner`, `opts?`): `this`
 
-Defined in: [src/core-flow/Sequence.ts:306](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/core-flow/Sequence.ts#L306)
+Defined in: [src/core-flow/Sequence.ts:306](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/core-flow/Sequence.ts#L306)
 
 Add a step. Runner must accept `{ message: string }` and return `string`.
 First step receives the Sequence input; subsequent steps receive the

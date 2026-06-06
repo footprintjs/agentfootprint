@@ -21,11 +21,7 @@
  *          knows nothing about vendor specifics.
  *
  * @example
- *   // New canonical import
  *   import { mock, AnthropicProvider } from 'agentfootprint/llm-providers';
- *
- *   // Legacy alias (still works through v2.x)
- *   import { mock, AnthropicProvider } from 'agentfootprint/providers';
  */
 
 export * from './providers.js';

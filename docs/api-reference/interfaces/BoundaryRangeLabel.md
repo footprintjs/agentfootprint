@@ -6,7 +6,7 @@
 
 # Interface: BoundaryRangeLabel
 
-Defined in: [src/recorders/observability/BoundaryRecorder.ts:438](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/BoundaryRecorder.ts#L438)
+Defined in: [src/recorders/observability/BoundaryRecorder.ts:438](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/BoundaryRecorder.ts#L438)
 
 Stripped projection used as the LABEL for the commit-range index.
 Intentionally OMITS `payload` (security panel review YELLOW #1):
@@ -21,7 +21,7 @@ stream via `getEvents()` (which IS subject to redaction policy).
 
 > `readonly` `optional` **compositionKind?**: `"Sequence"` \| `"Parallel"` \| `"Conditional"` \| `"Loop"`
 
-Defined in: [src/recorders/observability/BoundaryRecorder.ts:454](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/BoundaryRecorder.ts#L454)
+Defined in: [src/recorders/observability/BoundaryRecorder.ts:454](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/BoundaryRecorder.ts#L454)
 
 Composition primitive (Parallel/Sequence/Loop/Conditional) when the
  range was opened by a `composition.start` event.
@@ -32,7 +32,7 @@ Composition primitive (Parallel/Sequence/Loop/Conditional) when the
 
 > `readonly` `optional` **compositionName?**: `string`
 
-Defined in: [src/recorders/observability/BoundaryRecorder.ts:455](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/BoundaryRecorder.ts#L455)
+Defined in: [src/recorders/observability/BoundaryRecorder.ts:455](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/BoundaryRecorder.ts#L455)
 
 ***
 
@@ -40,7 +40,7 @@ Defined in: [src/recorders/observability/BoundaryRecorder.ts:455](https://github
 
 > `readonly` **depth**: `number`
 
-Defined in: [src/recorders/observability/BoundaryRecorder.ts:442](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/BoundaryRecorder.ts#L442)
+Defined in: [src/recorders/observability/BoundaryRecorder.ts:442](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/BoundaryRecorder.ts#L442)
 
 ***
 
@@ -48,7 +48,7 @@ Defined in: [src/recorders/observability/BoundaryRecorder.ts:442](https://github
 
 > `readonly` `optional` **description?**: `string`
 
-Defined in: [src/recorders/observability/BoundaryRecorder.ts:448](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/BoundaryRecorder.ts#L448)
+Defined in: [src/recorders/observability/BoundaryRecorder.ts:448](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/BoundaryRecorder.ts#L448)
 
 ***
 
@@ -56,7 +56,7 @@ Defined in: [src/recorders/observability/BoundaryRecorder.ts:448](https://github
 
 > `readonly` `optional` **isAgentInternal?**: `boolean`
 
-Defined in: [src/recorders/observability/BoundaryRecorder.ts:451](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/BoundaryRecorder.ts#L451)
+Defined in: [src/recorders/observability/BoundaryRecorder.ts:451](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/BoundaryRecorder.ts#L451)
 
 ***
 
@@ -64,7 +64,7 @@ Defined in: [src/recorders/observability/BoundaryRecorder.ts:451](https://github
 
 > `readonly` `optional` **localSubflowId?**: `string`
 
-Defined in: [src/recorders/observability/BoundaryRecorder.ts:446](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/BoundaryRecorder.ts#L446)
+Defined in: [src/recorders/observability/BoundaryRecorder.ts:446](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/BoundaryRecorder.ts#L446)
 
 ***
 
@@ -72,7 +72,7 @@ Defined in: [src/recorders/observability/BoundaryRecorder.ts:446](https://github
 
 > `readonly` `optional` **primitiveKind?**: `string`
 
-Defined in: [src/recorders/observability/BoundaryRecorder.ts:449](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/BoundaryRecorder.ts#L449)
+Defined in: [src/recorders/observability/BoundaryRecorder.ts:449](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/BoundaryRecorder.ts#L449)
 
 ***
 
@@ -80,7 +80,7 @@ Defined in: [src/recorders/observability/BoundaryRecorder.ts:449](https://github
 
 > `readonly` **runtimeStageId**: `string`
 
-Defined in: [src/recorders/observability/BoundaryRecorder.ts:440](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/BoundaryRecorder.ts#L440)
+Defined in: [src/recorders/observability/BoundaryRecorder.ts:440](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/BoundaryRecorder.ts#L440)
 
 ***
 
@@ -88,7 +88,7 @@ Defined in: [src/recorders/observability/BoundaryRecorder.ts:440](https://github
 
 > `readonly` `optional` **slotKind?**: [`ContextSlot`](/agentfootprint/api/generated/type-aliases/ContextSlot.md)
 
-Defined in: [src/recorders/observability/BoundaryRecorder.ts:450](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/BoundaryRecorder.ts#L450)
+Defined in: [src/recorders/observability/BoundaryRecorder.ts:450](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/BoundaryRecorder.ts#L450)
 
 ***
 
@@ -96,7 +96,7 @@ Defined in: [src/recorders/observability/BoundaryRecorder.ts:450](https://github
 
 > `readonly` `optional` **subflowId?**: `string`
 
-Defined in: [src/recorders/observability/BoundaryRecorder.ts:445](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/BoundaryRecorder.ts#L445)
+Defined in: [src/recorders/observability/BoundaryRecorder.ts:445](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/BoundaryRecorder.ts#L445)
 
 Set on subflow entries; undefined on the synthetic run-root entry.
 
@@ -106,7 +106,7 @@ Set on subflow entries; undefined on the synthetic run-root entry.
 
 > `readonly` `optional` **subflowName?**: `string`
 
-Defined in: [src/recorders/observability/BoundaryRecorder.ts:447](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/BoundaryRecorder.ts#L447)
+Defined in: [src/recorders/observability/BoundaryRecorder.ts:447](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/BoundaryRecorder.ts#L447)
 
 ***
 
@@ -114,7 +114,7 @@ Defined in: [src/recorders/observability/BoundaryRecorder.ts:447](https://github
 
 > `readonly` **subflowPath**: readonly `string`[]
 
-Defined in: [src/recorders/observability/BoundaryRecorder.ts:441](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/BoundaryRecorder.ts#L441)
+Defined in: [src/recorders/observability/BoundaryRecorder.ts:441](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/BoundaryRecorder.ts#L441)
 
 ***
 
@@ -122,7 +122,7 @@ Defined in: [src/recorders/observability/BoundaryRecorder.ts:441](https://github
 
 > `readonly` **ts**: `number`
 
-Defined in: [src/recorders/observability/BoundaryRecorder.ts:443](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/BoundaryRecorder.ts#L443)
+Defined in: [src/recorders/observability/BoundaryRecorder.ts:443](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/BoundaryRecorder.ts#L443)
 
 ***
 
@@ -130,4 +130,4 @@ Defined in: [src/recorders/observability/BoundaryRecorder.ts:443](https://github
 
 > `readonly` **type**: `"run.entry"` \| `"subflow.entry"` \| `"composition.start"`
 
-Defined in: [src/recorders/observability/BoundaryRecorder.ts:439](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/BoundaryRecorder.ts#L439)
+Defined in: [src/recorders/observability/BoundaryRecorder.ts:439](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/BoundaryRecorder.ts#L439)

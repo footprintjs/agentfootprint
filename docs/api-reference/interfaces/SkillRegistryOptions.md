@@ -6,7 +6,7 @@
 
 # Interface: SkillRegistryOptions
 
-Defined in: [src/lib/injection-engine/SkillRegistry.ts:37](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/lib/injection-engine/SkillRegistry.ts#L37)
+Defined in: [src/lib/injection-engine/SkillRegistry.ts:37](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/lib/injection-engine/SkillRegistry.ts#L37)
 
 Options for `new SkillRegistry({...})`. All fields are optional;
 the empty-object form (`new SkillRegistry()`) is the v2.4 surface.
@@ -21,7 +21,7 @@ SkillRegistry.resolveForSkill — applies the cascade
 
 > `readonly` `optional` **providerHint?**: `string`
 
-Defined in: [src/lib/injection-engine/SkillRegistry.ts:60](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/lib/injection-engine/SkillRegistry.ts#L60)
+Defined in: [src/lib/injection-engine/SkillRegistry.ts:60](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/lib/injection-engine/SkillRegistry.ts#L60)
 
 Provider name used as a hint when resolving `surfaceMode: 'auto'`
 inside this registry. Most consumers don't set this — runtime code
@@ -38,7 +38,7 @@ Match the provider's `name` field — `'anthropic'`, `'openai'`,
 
 > `readonly` `optional` **surfaceMode?**: [`SurfaceMode`](/agentfootprint/api/generated/type-aliases/SurfaceMode.md)
 
-Defined in: [src/lib/injection-engine/SkillRegistry.ts:48](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/lib/injection-engine/SkillRegistry.ts#L48)
+Defined in: [src/lib/injection-engine/SkillRegistry.ts:48](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/lib/injection-engine/SkillRegistry.ts#L48)
 
 Registry-level default `surfaceMode`. Applies to skills whose own
 `surfaceMode` is `'auto'` (the `defineSkill` default). Per-skill

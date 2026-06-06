@@ -8,7 +8,7 @@
 
 > **buildReadSkillTool**(`skills`): [`Tool`](/agentfootprint/api/generated/interfaces/Tool.md)\<`Record`\<`string`, `unknown`\>, `unknown`\> \| `undefined`
 
-Defined in: [src/lib/injection-engine/skillTools.ts:84](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/lib/injection-engine/skillTools.ts#L84)
+Defined in: [src/lib/injection-engine/skillTools.ts:84](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/lib/injection-engine/skillTools.ts#L84)
 
 Build the `read_skill` tool — activates a skill for the next
 iteration. The LLM picks WHICH skill via the `id` argument.

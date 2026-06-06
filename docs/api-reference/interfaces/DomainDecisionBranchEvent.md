@@ -6,7 +6,7 @@
 
 # Interface: DomainDecisionBranchEvent
 
-Defined in: [src/recorders/observability/BoundaryRecorder.ts:181](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/BoundaryRecorder.ts#L181)
+Defined in: [src/recorders/observability/BoundaryRecorder.ts:181](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/BoundaryRecorder.ts#L181)
 
 ## Extends
 
@@ -18,7 +18,7 @@ Defined in: [src/recorders/observability/BoundaryRecorder.ts:181](https://github
 
 > `readonly` **chosen**: `string`
 
-Defined in: [src/recorders/observability/BoundaryRecorder.ts:184](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/BoundaryRecorder.ts#L184)
+Defined in: [src/recorders/observability/BoundaryRecorder.ts:184](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/BoundaryRecorder.ts#L184)
 
 ***
 
@@ -26,7 +26,7 @@ Defined in: [src/recorders/observability/BoundaryRecorder.ts:184](https://github
 
 > `readonly` **commitIdxAfter**: `number`
 
-Defined in: [src/recorders/observability/BoundaryRecorder.ts:146](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/BoundaryRecorder.ts#L146)
+Defined in: [src/recorders/observability/BoundaryRecorder.ts:146](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/BoundaryRecorder.ts#L146)
 
 RESERVED for future event types that trigger engine writes.
  CURRENT BEHAVIOR: always equals `commitIdxBefore` for every event
@@ -49,7 +49,7 @@ RESERVED for future event types that trigger engine writes.
 
 > `readonly` **commitIdxBefore**: `number`
 
-Defined in: [src/recorders/observability/BoundaryRecorder.ts:135](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/BoundaryRecorder.ts#L135)
+Defined in: [src/recorders/observability/BoundaryRecorder.ts:135](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/BoundaryRecorder.ts#L135)
 
 Commit count when this event fired. 0 if the recorder was
  constructed without `getCommitCount` (legacy mode). The boundary
@@ -67,7 +67,7 @@ Commit count when this event fired. 0 if the recorder was
 
 > `readonly` **decider**: `string`
 
-Defined in: [src/recorders/observability/BoundaryRecorder.ts:183](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/BoundaryRecorder.ts#L183)
+Defined in: [src/recorders/observability/BoundaryRecorder.ts:183](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/BoundaryRecorder.ts#L183)
 
 ***
 
@@ -75,7 +75,7 @@ Defined in: [src/recorders/observability/BoundaryRecorder.ts:183](https://github
 
 > `readonly` **depth**: `number`
 
-Defined in: [src/recorders/observability/BoundaryRecorder.ts:127](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/BoundaryRecorder.ts#L127)
+Defined in: [src/recorders/observability/BoundaryRecorder.ts:127](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/BoundaryRecorder.ts#L127)
 
 Depth in the run tree — root = 0, top-level subflow = 1, etc.
 
@@ -89,7 +89,7 @@ Depth in the run tree — root = 0, top-level subflow = 1, etc.
 
 > `readonly` **isAgentInternal**: `boolean`
 
-Defined in: [src/recorders/observability/BoundaryRecorder.ts:196](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/BoundaryRecorder.ts#L196)
+Defined in: [src/recorders/observability/BoundaryRecorder.ts:196](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/BoundaryRecorder.ts#L196)
 
 `true` when this decision comes from one of the Agent's internal
 routing stages (e.g., the ReAct `Route` decider that picks
@@ -106,7 +106,7 @@ the routing observably (`llm→tool` vs `llm→user`).
 
 > `readonly` `optional` **rationale?**: `string`
 
-Defined in: [src/recorders/observability/BoundaryRecorder.ts:185](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/BoundaryRecorder.ts#L185)
+Defined in: [src/recorders/observability/BoundaryRecorder.ts:185](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/BoundaryRecorder.ts#L185)
 
 ***
 
@@ -114,7 +114,7 @@ Defined in: [src/recorders/observability/BoundaryRecorder.ts:185](https://github
 
 > `readonly` **runtimeStageId**: `string`
 
-Defined in: [src/recorders/observability/BoundaryRecorder.ts:123](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/BoundaryRecorder.ts#L123)
+Defined in: [src/recorders/observability/BoundaryRecorder.ts:123](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/BoundaryRecorder.ts#L123)
 
 Stable per-execution key (footprintjs primitive). For run events it
  is `'__root__#0'`; subflow events use the parent stage's runtimeStageId
@@ -130,7 +130,7 @@ Stable per-execution key (footprintjs primitive). For run events it
 
 > `readonly` **subflowPath**: readonly `string`[]
 
-Defined in: [src/recorders/observability/BoundaryRecorder.ts:125](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/BoundaryRecorder.ts#L125)
+Defined in: [src/recorders/observability/BoundaryRecorder.ts:125](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/BoundaryRecorder.ts#L125)
 
 Decomposition of `subflowId` into segments, rooted under `'__root__'`.
 
@@ -144,7 +144,7 @@ Decomposition of `subflowId` into segments, rooted under `'__root__'`.
 
 > `readonly` **ts**: `number`
 
-Defined in: [src/recorders/observability/BoundaryRecorder.ts:129](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/BoundaryRecorder.ts#L129)
+Defined in: [src/recorders/observability/BoundaryRecorder.ts:129](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/BoundaryRecorder.ts#L129)
 
 Wall-clock ms at capture time.
 
@@ -158,4 +158,4 @@ Wall-clock ms at capture time.
 
 > `readonly` **type**: `"decision.branch"`
 
-Defined in: [src/recorders/observability/BoundaryRecorder.ts:182](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/BoundaryRecorder.ts#L182)
+Defined in: [src/recorders/observability/BoundaryRecorder.ts:182](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/BoundaryRecorder.ts#L182)

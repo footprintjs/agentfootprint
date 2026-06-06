@@ -6,7 +6,7 @@
  *
  * Production usage:
  *
- *   import { RedisStore } from 'agentfootprint/memory-redis';
+ *   import { RedisStore } from 'agentfootprint/memory-providers';
  *   const store = new RedisStore({ url: 'redis://localhost:6379' });
  *
  * This example uses an injected mock Redis client (`_client`) so the

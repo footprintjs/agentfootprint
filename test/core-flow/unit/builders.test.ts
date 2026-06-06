@@ -57,7 +57,8 @@ describe('Sequence builder', () => {
     expect(typeof seq.run).toBe('function');
     expect(typeof seq.getSpec).toBe('function');
     expect(typeof seq.on).toBe('function');
-    expect(typeof seq.enable.thinking).toBe('function');
+    expect(typeof seq.enable.flowchart).toBe('function');
+    expect(typeof seq.enable.observability).toBe('function');
   });
 });
 

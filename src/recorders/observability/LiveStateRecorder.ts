@@ -1,6 +1,6 @@
 /**
  * LiveStateRecorder — domain trackers built on the footprintjs
- * `BoundaryStateTracker<TState>` storage primitive (v4.17.2+).
+ * `BoundaryStateStore<TState>` storage primitive (v4.17.2+).
  *
  * **What this answers:** "Right now, mid-run, what's happening?"
  *
@@ -14,7 +14,7 @@
  *
  * **Mental model — observers vs. bookkeepers:**
  *
- *   `BoundaryStateTracker<TState>` (footprintjs) = STORAGE shelf.
+ *   `BoundaryStateStore<TState>` (footprintjs) = STORAGE shelf.
  *   `EventDispatcher.on(...)` (agentfootprint)  = OBSERVER source.
  *
  *   Each domain tracker (`LiveLLMTracker`, `LiveToolTracker`,
@@ -24,7 +24,7 @@
  *
  * **Tier 1 (live) only.** Past states are not stored — when a boundary
  * closes, its transient state clears. For time-travel queries, snapshot
- * to a `SequenceRecorder<TState>` instead. See the BoundaryStateTracker
+ * to a `SequenceStore<TState>` instead. See the BoundaryStateStore
  * JSDoc for the rationale.
  *
  * @example Use the bundled façade — one attach, three live views:
@@ -403,11 +403,11 @@ export class LiveAgentTurnTracker {
  *
  * **What this is NOT for:**
  *   - Time-travel queries (Tier 1 only — live state)
- *   - Aggregations (use SequenceRecorder.aggregate)
+ *   - Aggregations (use SequenceStore.aggregate)
  *   - Stage-level observation (use Recorder.onStageStart/End)
  *
  * **Composition over inheritance:** the façade does NOT extend
- * `BoundaryStateTracker` itself — different boundary kinds need
+ * `BoundaryStateStore` itself — different boundary kinds need
  * separate active maps to avoid key collisions between LLM and tool
  * boundaries. Each sub-tracker keeps its own state.
  */

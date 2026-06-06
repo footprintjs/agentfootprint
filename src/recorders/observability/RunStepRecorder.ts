@@ -2,7 +2,7 @@
  * RunStepRecorder — slider-ready ordered list of RunSteps, BUILT
  * INCREMENTALLY during traversal. Real-time recorder, not a walker.
  *
- * Pattern: extends `SequenceRecorder<RunStep>` (shared storage shelf)
+ * Pattern: extends `SequenceStore<RunStep>` (shared storage shelf)
  *          and implements `CombinedRecorder` (FlowRecorder hooks).
  *          Subscribes to the agentfootprint typed-event dispatcher
  *          for actor-arrow events. Each event handler decides whether
@@ -19,7 +19,7 @@
  * the playground triggered a full walk on every flowchart update,
  * yielding O(N²) total work for a streaming run. The recorder pattern
  * is O(N) — one handler call per event — and matches BoundaryRecorder /
- * FlowchartRecorder / KeyedRecorder idioms throughout the library.
+ * FlowchartRecorder / KeyedStore idioms throughout the library.
  *
  * The `buildRunSteps(...)` function is RETAINED as a thin compatibility
  * shim that constructs a fresh recorder, replays events through it,
@@ -74,7 +74,7 @@ export interface RunStep {
   readonly kind: RunStepKind;
   readonly transitions: readonly RunStepTransition[];
   /**
-   * Per-step key — required by `SequenceRecorder<T>` for time-travel
+   * Per-step key — required by `SequenceStore<T>` for time-travel
    * utilities (`getEntriesForStep`, `getEntryRanges`). Mirrors
    * `anchor.runtimeStageId`; both fields point at the same value.
    * Top-level placement satisfies the recorder's storage contract.

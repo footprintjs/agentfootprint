@@ -6,7 +6,7 @@
 
 # Interface: BoundaryRecorderOptions
 
-Defined in: [src/recorders/observability/BoundaryRecorder.ts:416](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/BoundaryRecorder.ts#L416)
+Defined in: [src/recorders/observability/BoundaryRecorder.ts:416](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/BoundaryRecorder.ts#L416)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [src/recorders/observability/BoundaryRecorder.ts:416](https://github
 
 > `readonly` `optional` **getCommitCount?**: () => `number`
 
-Defined in: [src/recorders/observability/BoundaryRecorder.ts:427](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/BoundaryRecorder.ts#L427)
+Defined in: [src/recorders/observability/BoundaryRecorder.ts:427](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/BoundaryRecorder.ts#L427)
 
 Live commit-count accessor — typically `() => executor.getCommitCount()`
 from footprintjs 5.1+. Inject from your runner. When provided:
@@ -34,4 +34,4 @@ every event; `boundaryIndex` exists but is empty. Phase 5 Layer 2.
 
 > `readonly` `optional` **id?**: `string`
 
-Defined in: [src/recorders/observability/BoundaryRecorder.ts:417](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/BoundaryRecorder.ts#L417)
+Defined in: [src/recorders/observability/BoundaryRecorder.ts:417](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/BoundaryRecorder.ts#L417)

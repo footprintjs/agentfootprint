@@ -6,7 +6,7 @@
 
 # Interface: CompositionEnterPayload
 
-Defined in: [src/events/payloads.ts:24](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L24)
+Defined in: [src/events/payloads.ts:24](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/events/payloads.ts#L24)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [src/events/payloads.ts:24](https://github.com/footprintjs/agentfoot
 
 > `readonly` **childCount**: `number`
 
-Defined in: [src/events/payloads.ts:28](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L28)
+Defined in: [src/events/payloads.ts:28](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/events/payloads.ts#L28)
 
 ***
 
@@ -22,7 +22,7 @@ Defined in: [src/events/payloads.ts:28](https://github.com/footprintjs/agentfoot
 
 > `readonly` **id**: `string`
 
-Defined in: [src/events/payloads.ts:26](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L26)
+Defined in: [src/events/payloads.ts:26](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/events/payloads.ts#L26)
 
 ***
 
@@ -30,7 +30,7 @@ Defined in: [src/events/payloads.ts:26](https://github.com/footprintjs/agentfoot
 
 > `readonly` **kind**: [`CompositionKind`](/agentfootprint/api/generated/type-aliases/CompositionKind.md)
 
-Defined in: [src/events/payloads.ts:25](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L25)
+Defined in: [src/events/payloads.ts:25](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/events/payloads.ts#L25)
 
 ***
 
@@ -38,4 +38,4 @@ Defined in: [src/events/payloads.ts:25](https://github.com/footprintjs/agentfoot
 
 > `readonly` **name**: `string`
 
-Defined in: [src/events/payloads.ts:27](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L27)
+Defined in: [src/events/payloads.ts:27](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/events/payloads.ts#L27)

@@ -6,7 +6,7 @@
 
 # Interface: RunStepGraph
 
-Defined in: [src/recorders/observability/RunStepRecorder.ts:741](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/RunStepRecorder.ts#L741)
+Defined in: [src/recorders/observability/RunStepRecorder.ts:741](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/RunStepRecorder.ts#L741)
 
 ## Properties
 
@@ -14,4 +14,4 @@ Defined in: [src/recorders/observability/RunStepRecorder.ts:741](https://github.
 
 > `readonly` **steps**: readonly [`RunStep`](/agentfootprint/api/generated/interfaces/RunStep.md)[]
 
-Defined in: [src/recorders/observability/RunStepRecorder.ts:742](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/RunStepRecorder.ts#L742)
+Defined in: [src/recorders/observability/RunStepRecorder.ts:742](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/RunStepRecorder.ts#L742)

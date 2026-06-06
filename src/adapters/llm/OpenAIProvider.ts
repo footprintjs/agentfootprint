@@ -140,7 +140,7 @@ export interface OpenAIProviderOptions {
  *
  * @example
  *   import { Agent } from 'agentfootprint';
- *   import { openai } from 'agentfootprint/providers';
+ *   import { openai } from 'agentfootprint/llm-providers';
  *
  *   const agent = Agent.create({
  *     provider: openai({ defaultModel: 'gpt-4o' }),
@@ -259,7 +259,7 @@ export class OpenAIProvider implements LLMProvider {
  * Convenience factory for Ollama (OpenAI-compatible endpoint).
  *
  * @example
- *   import { ollama } from 'agentfootprint/providers';
+ *   import { ollama } from 'agentfootprint/llm-providers';
  *
  *   const provider = ollama({ defaultModel: 'llama3.2' });
  *   // Talks to http://localhost:11434/v1 by default.

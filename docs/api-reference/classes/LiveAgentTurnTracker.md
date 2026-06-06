@@ -6,7 +6,7 @@
 
 # Class: LiveAgentTurnTracker
 
-Defined in: [src/recorders/observability/LiveStateRecorder.ts:316](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/LiveStateRecorder.ts#L316)
+Defined in: [src/recorders/observability/LiveStateRecorder.ts:316](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/LiveStateRecorder.ts#L316)
 
 Tracks in-flight agent turns. Subscribes to:
   - `agentfootprint.agent.turn_start` → opens a boundary
@@ -31,7 +31,7 @@ across runner instances because turnIndex resets per-session.
 
 > `readonly` **id**: `"live-agent-turn"` = `'live-agent-turn'`
 
-Defined in: [src/recorders/observability/LiveStateRecorder.ts:317](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/LiveStateRecorder.ts#L317)
+Defined in: [src/recorders/observability/LiveStateRecorder.ts:317](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/LiveStateRecorder.ts#L317)
 
 ## Accessors
 
@@ -41,7 +41,7 @@ Defined in: [src/recorders/observability/LiveStateRecorder.ts:317](https://githu
 
 > **get** **activeCount**(): `number`
 
-Defined in: [src/recorders/observability/LiveStateRecorder.ts:362](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/LiveStateRecorder.ts#L362)
+Defined in: [src/recorders/observability/LiveStateRecorder.ts:362](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/LiveStateRecorder.ts#L362)
 
 ##### Returns
 
@@ -55,7 +55,7 @@ Defined in: [src/recorders/observability/LiveStateRecorder.ts:362](https://githu
 
 > **get** **hasActive**(): `boolean`
 
-Defined in: [src/recorders/observability/LiveStateRecorder.ts:358](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/LiveStateRecorder.ts#L358)
+Defined in: [src/recorders/observability/LiveStateRecorder.ts:358](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/LiveStateRecorder.ts#L358)
 
 ##### Returns
 
@@ -67,7 +67,7 @@ Defined in: [src/recorders/observability/LiveStateRecorder.ts:358](https://githu
 
 > **clear**(): `void`
 
-Defined in: [src/recorders/observability/LiveStateRecorder.ts:348](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/LiveStateRecorder.ts#L348)
+Defined in: [src/recorders/observability/LiveStateRecorder.ts:348](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/LiveStateRecorder.ts#L348)
 
 #### Returns
 
@@ -79,7 +79,7 @@ Defined in: [src/recorders/observability/LiveStateRecorder.ts:348](https://githu
 
 > **getActive**(`turnIndex`): [`AgentTurnLiveState`](/agentfootprint/api/generated/interfaces/AgentTurnLiveState.md) \| `undefined`
 
-Defined in: [src/recorders/observability/LiveStateRecorder.ts:366](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/LiveStateRecorder.ts#L366)
+Defined in: [src/recorders/observability/LiveStateRecorder.ts:366](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/LiveStateRecorder.ts#L366)
 
 #### Parameters
 
@@ -97,7 +97,7 @@ Defined in: [src/recorders/observability/LiveStateRecorder.ts:366](https://githu
 
 > **getAllActive**(): `ReadonlyMap`\<`string`, [`AgentTurnLiveState`](/agentfootprint/api/generated/interfaces/AgentTurnLiveState.md)\>
 
-Defined in: [src/recorders/observability/LiveStateRecorder.ts:370](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/LiveStateRecorder.ts#L370)
+Defined in: [src/recorders/observability/LiveStateRecorder.ts:370](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/LiveStateRecorder.ts#L370)
 
 #### Returns
 
@@ -109,7 +109,7 @@ Defined in: [src/recorders/observability/LiveStateRecorder.ts:370](https://githu
 
 > **getCurrentTurnIndex**(): `number`
 
-Defined in: [src/recorders/observability/LiveStateRecorder.ts:375](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/LiveStateRecorder.ts#L375)
+Defined in: [src/recorders/observability/LiveStateRecorder.ts:375](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/LiveStateRecorder.ts#L375)
 
 Index of the most-recently started active turn (-1 if none).
 
@@ -123,7 +123,7 @@ Index of the most-recently started active turn (-1 if none).
 
 > **isInTurn**(): `boolean`
 
-Defined in: [src/recorders/observability/LiveStateRecorder.ts:354](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/LiveStateRecorder.ts#L354)
+Defined in: [src/recorders/observability/LiveStateRecorder.ts:354](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/LiveStateRecorder.ts#L354)
 
 True if the agent is currently inside a turn.
 
@@ -137,7 +137,7 @@ True if the agent is currently inside a turn.
 
 > **subscribe**(`runner`): [`Unsubscribe`](/agentfootprint/api/generated/type-aliases/Unsubscribe.md)
 
-Defined in: [src/recorders/observability/LiveStateRecorder.ts:326](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/LiveStateRecorder.ts#L326)
+Defined in: [src/recorders/observability/LiveStateRecorder.ts:326](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/LiveStateRecorder.ts#L326)
 
 #### Parameters
 

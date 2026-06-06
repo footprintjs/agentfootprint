@@ -6,7 +6,7 @@
 
 # Interface: Embedder
 
-Defined in: [src/memory/embedding/types.ts:38](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/memory/embedding/types.ts#L38)
+Defined in: [src/memory/embedding/types.ts:38](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/memory/embedding/types.ts#L38)
 
 An Embedder turns text into a dense vector of constant dimensionality.
 Implement `embedBatch` for backends that support one-call multi-embed
@@ -19,7 +19,7 @@ N sequential `embed()` calls.
 
 > `readonly` **dimensions**: `number`
 
-Defined in: [src/memory/embedding/types.ts:40](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/memory/embedding/types.ts#L40)
+Defined in: [src/memory/embedding/types.ts:40](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/memory/embedding/types.ts#L40)
 
 Vector length. Constant per embedder instance.
 
@@ -29,7 +29,7 @@ Vector length. Constant per embedder instance.
 
 > **embed**(`args`): `Promise`\<`number`[]\>
 
-Defined in: [src/memory/embedding/types.ts:43](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/memory/embedding/types.ts#L43)
+Defined in: [src/memory/embedding/types.ts:43](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/memory/embedding/types.ts#L43)
 
 Embed a single text into a vector of length `dimensions`.
 
@@ -49,7 +49,7 @@ Embed a single text into a vector of length `dimensions`.
 
 > `optional` **embedBatch**(`args`): `Promise`\<`number`[][]\>
 
-Defined in: [src/memory/embedding/types.ts:50](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/memory/embedding/types.ts#L50)
+Defined in: [src/memory/embedding/types.ts:50](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/memory/embedding/types.ts#L50)
 
 Optional batch API. When present, pipeline stages can avoid N
 sequential round-trips for turn-level indexing. Adapter SHOULD

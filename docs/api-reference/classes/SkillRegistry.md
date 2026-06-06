@@ -6,7 +6,7 @@
 
 # Class: SkillRegistry
 
-Defined in: [src/lib/injection-engine/SkillRegistry.ts:63](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/lib/injection-engine/SkillRegistry.ts#L63)
+Defined in: [src/lib/injection-engine/SkillRegistry.ts:63](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/lib/injection-engine/SkillRegistry.ts#L63)
 
 ## Constructors
 
@@ -14,7 +14,7 @@ Defined in: [src/lib/injection-engine/SkillRegistry.ts:63](https://github.com/fo
 
 > **new SkillRegistry**(`opts?`): `SkillRegistry`
 
-Defined in: [src/lib/injection-engine/SkillRegistry.ts:72](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/lib/injection-engine/SkillRegistry.ts#L72)
+Defined in: [src/lib/injection-engine/SkillRegistry.ts:72](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/lib/injection-engine/SkillRegistry.ts#L72)
 
 Construct an empty registry. Optional `{ surfaceMode, providerHint }`
 fields set registry-level defaults; absent both, the registry is a
@@ -38,7 +38,7 @@ pure container (the v2.4 surface).
 
 > **get** **providerHint**(): `string` \| `undefined`
 
-Defined in: [src/lib/injection-engine/SkillRegistry.ts:82](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/lib/injection-engine/SkillRegistry.ts#L82)
+Defined in: [src/lib/injection-engine/SkillRegistry.ts:82](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/lib/injection-engine/SkillRegistry.ts#L82)
 
 Registry-level provider hint, or `undefined` if unset.
 
@@ -54,7 +54,7 @@ Registry-level provider hint, or `undefined` if unset.
 
 > **get** **size**(): `number`
 
-Defined in: [src/lib/injection-engine/SkillRegistry.ts:149](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/lib/injection-engine/SkillRegistry.ts#L149)
+Defined in: [src/lib/injection-engine/SkillRegistry.ts:149](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/lib/injection-engine/SkillRegistry.ts#L149)
 
 Number of registered skills.
 
@@ -70,7 +70,7 @@ Number of registered skills.
 
 > **get** **surfaceMode**(): [`SurfaceMode`](/agentfootprint/api/generated/type-aliases/SurfaceMode.md) \| `undefined`
 
-Defined in: [src/lib/injection-engine/SkillRegistry.ts:77](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/lib/injection-engine/SkillRegistry.ts#L77)
+Defined in: [src/lib/injection-engine/SkillRegistry.ts:77](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/lib/injection-engine/SkillRegistry.ts#L77)
 
 Registry-level default `surfaceMode`, or `undefined` if unset.
 
@@ -84,7 +84,7 @@ Registry-level default `surfaceMode`, or `undefined` if unset.
 
 > **clear**(): `void`
 
-Defined in: [src/lib/injection-engine/SkillRegistry.ts:154](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/lib/injection-engine/SkillRegistry.ts#L154)
+Defined in: [src/lib/injection-engine/SkillRegistry.ts:154](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/lib/injection-engine/SkillRegistry.ts#L154)
 
 Drop all registrations.
 
@@ -98,7 +98,7 @@ Drop all registrations.
 
 > **get**(`id`): [`Injection`](/agentfootprint/api/generated/interfaces/Injection.md) \| `undefined`
 
-Defined in: [src/lib/injection-engine/SkillRegistry.ts:134](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/lib/injection-engine/SkillRegistry.ts#L134)
+Defined in: [src/lib/injection-engine/SkillRegistry.ts:134](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/lib/injection-engine/SkillRegistry.ts#L134)
 
 Look up by id. Returns undefined if not registered.
 
@@ -118,7 +118,7 @@ Look up by id. Returns undefined if not registered.
 
 > **has**(`id`): `boolean`
 
-Defined in: [src/lib/injection-engine/SkillRegistry.ts:139](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/lib/injection-engine/SkillRegistry.ts#L139)
+Defined in: [src/lib/injection-engine/SkillRegistry.ts:139](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/lib/injection-engine/SkillRegistry.ts#L139)
 
 True iff a skill with the given id is registered.
 
@@ -138,7 +138,7 @@ True iff a skill with the given id is registered.
 
 > **list**(): readonly [`Injection`](/agentfootprint/api/generated/interfaces/Injection.md)[]
 
-Defined in: [src/lib/injection-engine/SkillRegistry.ts:144](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/lib/injection-engine/SkillRegistry.ts#L144)
+Defined in: [src/lib/injection-engine/SkillRegistry.ts:144](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/lib/injection-engine/SkillRegistry.ts#L144)
 
 All registered skills. Order matches registration order.
 
@@ -152,7 +152,7 @@ readonly [`Injection`](/agentfootprint/api/generated/interfaces/Injection.md)[]
 
 > **register**(`skill`): `this`
 
-Defined in: [src/lib/injection-engine/SkillRegistry.ts:91](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/lib/injection-engine/SkillRegistry.ts#L91)
+Defined in: [src/lib/injection-engine/SkillRegistry.ts:91](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/lib/injection-engine/SkillRegistry.ts#L91)
 
 Register a skill. Throws if `skill.flavor !== 'skill'` or if a
 skill with the same id is already registered (use `.replace(...)`
@@ -174,7 +174,7 @@ to overwrite intentionally).
 
 > **replace**(`id`, `skill`): `this`
 
-Defined in: [src/lib/injection-engine/SkillRegistry.ts:107](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/lib/injection-engine/SkillRegistry.ts#L107)
+Defined in: [src/lib/injection-engine/SkillRegistry.ts:107](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/lib/injection-engine/SkillRegistry.ts#L107)
 
 Replace an existing skill by id. Throws if id is not registered.
 
@@ -198,7 +198,7 @@ Replace an existing skill by id. Throws if id is not registered.
 
 > **resolveForSkill**(`skillOrId`, `provider?`, `model?`): `"system-prompt"` \| `"tool-only"` \| `"both"`
 
-Defined in: [src/lib/injection-engine/SkillRegistry.ts:219](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/lib/injection-engine/SkillRegistry.ts#L219)
+Defined in: [src/lib/injection-engine/SkillRegistry.ts:219](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/lib/injection-engine/SkillRegistry.ts#L219)
 
 Resolve the effective `surfaceMode` for a skill, applying the
 cascade:
@@ -250,7 +250,7 @@ Model name for the per-provider attention rule.
 
 > **toTools**(): [`SkillToolPair`](/agentfootprint/api/generated/interfaces/SkillToolPair.md)
 
-Defined in: [src/lib/injection-engine/SkillRegistry.ts:186](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/lib/injection-engine/SkillRegistry.ts#L186)
+Defined in: [src/lib/injection-engine/SkillRegistry.ts:186](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/lib/injection-engine/SkillRegistry.ts#L186)
 
 Materialize the LLM-facing skill discovery tools from the current
 registry contents. Returns `{ listSkills, readSkill }`:
@@ -289,7 +289,7 @@ A `SkillToolPair` (`{ listSkills, readSkill }`).
 
 > **unregister**(`id`): `this`
 
-Defined in: [src/lib/injection-engine/SkillRegistry.ts:128](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/lib/injection-engine/SkillRegistry.ts#L128)
+Defined in: [src/lib/injection-engine/SkillRegistry.ts:128](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/lib/injection-engine/SkillRegistry.ts#L128)
 
 Remove a skill by id. No-op if not registered.
 

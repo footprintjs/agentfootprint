@@ -6,7 +6,7 @@
 
 # Interface: ErrorRetriedPayload
 
-Defined in: [src/events/payloads.ts:569](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L569)
+Defined in: [src/events/payloads.ts:569](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/events/payloads.ts#L569)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [src/events/payloads.ts:569](https://github.com/footprintjs/agentfoo
 
 > `readonly` **attempt**: `number`
 
-Defined in: [src/events/payloads.ts:570](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L570)
+Defined in: [src/events/payloads.ts:570](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/events/payloads.ts#L570)
 
 ***
 
@@ -22,7 +22,7 @@ Defined in: [src/events/payloads.ts:570](https://github.com/footprintjs/agentfoo
 
 > `readonly` **backoffMs**: `number`
 
-Defined in: [src/events/payloads.ts:573](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L573)
+Defined in: [src/events/payloads.ts:573](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/events/payloads.ts#L573)
 
 ***
 
@@ -30,7 +30,7 @@ Defined in: [src/events/payloads.ts:573](https://github.com/footprintjs/agentfoo
 
 > `readonly` **lastError**: `string`
 
-Defined in: [src/events/payloads.ts:572](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L572)
+Defined in: [src/events/payloads.ts:572](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/events/payloads.ts#L572)
 
 ***
 
@@ -38,7 +38,7 @@ Defined in: [src/events/payloads.ts:572](https://github.com/footprintjs/agentfoo
 
 > `readonly` **maxAttempts**: `number`
 
-Defined in: [src/events/payloads.ts:571](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L571)
+Defined in: [src/events/payloads.ts:571](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/events/payloads.ts#L571)
 
 ***
 
@@ -46,4 +46,4 @@ Defined in: [src/events/payloads.ts:571](https://github.com/footprintjs/agentfoo
 
 > `readonly` **reason**: `string`
 
-Defined in: [src/events/payloads.ts:574](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L574)
+Defined in: [src/events/payloads.ts:574](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/events/payloads.ts#L574)

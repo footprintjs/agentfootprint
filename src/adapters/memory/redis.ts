@@ -1,14 +1,10 @@
 /**
  * RedisStore — Redis-backed `MemoryStore` adapter (peer-dep `ioredis`).
  *
- * Canonical subpath (v2.5+): `agentfootprint/memory-providers`.
- * Legacy alias (still works through v2.x): `agentfootprint/memory-redis`.
+ * Import from the canonical subpath (the `agentfootprint/memory-redis` alias
+ * was removed in 4.0.0):
  *
- *   // New canonical (v2.5+):
  *   import { RedisStore } from 'agentfootprint/memory-providers';
- *
- *   // Legacy alias (still works through v2.x; removed in v3.0):
- *   import { RedisStore } from 'agentfootprint/memory-redis';
  *
  *   const store = new RedisStore({ url: 'redis://localhost:6379' });
  *

@@ -6,7 +6,7 @@
 
 # Interface: ContextEvaluatedPayload
 
-Defined in: [src/events/payloads.ts:252](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L252)
+Defined in: [src/events/payloads.ts:252](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/events/payloads.ts#L252)
 
 Fired once per iteration by the Injection Engine after it evaluates every
 Injection's trigger — BEFORE the Context fork routes the survivors into the
@@ -21,7 +21,7 @@ reads it.
 
 > `readonly` **activeCount**: `number`
 
-Defined in: [src/events/payloads.ts:255](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L255)
+Defined in: [src/events/payloads.ts:255](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/events/payloads.ts#L255)
 
 Number of injections active this iteration.
 
@@ -31,7 +31,7 @@ Number of injections active this iteration.
 
 > `readonly` **activeIds**: readonly `string`[]
 
-Defined in: [src/events/payloads.ts:261](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L261)
+Defined in: [src/events/payloads.ts:261](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/events/payloads.ts#L261)
 
 Ids of the active injections, in evaluation order.
 
@@ -41,7 +41,7 @@ Ids of the active injections, in evaluation order.
 
 > `readonly` **evaluatedTotal**: `number`
 
-Defined in: [src/events/payloads.ts:259](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L259)
+Defined in: [src/events/payloads.ts:259](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/events/payloads.ts#L259)
 
 Total injections evaluated (the full declared list).
 
@@ -51,7 +51,7 @@ Total injections evaluated (the full declared list).
 
 > `readonly` **iteration**: `number`
 
-Defined in: [src/events/payloads.ts:253](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L253)
+Defined in: [src/events/payloads.ts:253](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/events/payloads.ts#L253)
 
 ***
 
@@ -59,7 +59,7 @@ Defined in: [src/events/payloads.ts:253](https://github.com/footprintjs/agentfoo
 
 > `readonly` **skippedCount**: `number`
 
-Defined in: [src/events/payloads.ts:257](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L257)
+Defined in: [src/events/payloads.ts:257](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/events/payloads.ts#L257)
 
 Number skipped (predicate false counts as neither — only errors/unknown land here).
 
@@ -69,7 +69,7 @@ Number skipped (predicate false counts as neither — only errors/unknown land h
 
 > `readonly` **skippedDetails**: readonly `object`[]
 
-Defined in: [src/events/payloads.ts:263](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L263)
+Defined in: [src/events/payloads.ts:263](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/events/payloads.ts#L263)
 
 Why each skipped injection was skipped (errors / unknown trigger kinds).
 
@@ -79,6 +79,6 @@ Why each skipped injection was skipped (errors / unknown trigger kinds).
 
 > `readonly` **triggerKindCounts**: `Readonly`\<`Record`\<`string`, `number`\>\>
 
-Defined in: [src/events/payloads.ts:269](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L269)
+Defined in: [src/events/payloads.ts:269](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/events/payloads.ts#L269)
 
 Count of active injections by trigger kind (always / rule / on-tool-return / llm-activated).

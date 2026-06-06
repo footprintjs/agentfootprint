@@ -6,7 +6,7 @@
 
 # Interface: AgentOptions
 
-Defined in: [src/core/agent/types.ts:29](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/core/agent/types.ts#L29)
+Defined in: [src/core/agent/types.ts:29](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/core/agent/types.ts#L29)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [src/core/agent/types.ts:29](https://github.com/footprintjs/agentfoo
 
 > `readonly` `optional` **cacheStrategy?**: `CacheStrategy`
 
-Defined in: [src/core/agent/types.ts:79](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/core/agent/types.ts#L79)
+Defined in: [src/core/agent/types.ts:79](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/core/agent/types.ts#L79)
 
 Optional explicit CacheStrategy override (v2.6+). Defaults to
 `getDefaultCacheStrategy(provider.name)` — so Anthropic/OpenAI/
@@ -27,7 +27,7 @@ once those land in Phase 7+.
 
 > `readonly` `optional` **caching?**: `"off"`
 
-Defined in: [src/core/agent/types.ts:72](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/core/agent/types.ts#L72)
+Defined in: [src/core/agent/types.ts:72](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/core/agent/types.ts#L72)
 
 Global cache kill switch (v2.6+). `'off'` disables the cache
 layer entirely — the CacheGate decider routes to `'no-markers'`
@@ -44,7 +44,7 @@ cache-write penalty isn't worth paying.
 
 > `readonly` `optional` **costBudget?**: `number`
 
-Defined in: [src/core/agent/types.ts:52](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/core/agent/types.ts#L52)
+Defined in: [src/core/agent/types.ts:52](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/core/agent/types.ts#L52)
 
 Cumulative USD budget per run. With `pricingTable`, Agent emits a
 one-shot `agentfootprint.cost.limit_hit` (`action: 'warn'`) when
@@ -57,7 +57,7 @@ choose whether to abort by listening to the event.
 
 > `readonly` `optional` **groupTranslator?**: [`GroupTranslator`](/agentfootprint/api/generated/interfaces/GroupTranslator.md)\<`unknown`\>
 
-Defined in: [src/core/agent/types.ts:106](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/core/agent/types.ts#L106)
+Defined in: [src/core/agent/types.ts:106](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/core/agent/types.ts#L106)
 
 Optional per-COMPOSITION translator (UI-agnostic). See
 `core/translator.ts`. When attached, `agent.getUIGroup()` invokes
@@ -73,7 +73,7 @@ Returns `undefined` when omitted.
 
 > `readonly` `optional` **id?**: `string`
 
-Defined in: [src/core/agent/types.ts:34](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/core/agent/types.ts#L34)
+Defined in: [src/core/agent/types.ts:34](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/core/agent/types.ts#L34)
 
 Stable id used for topology + events. Default: 'agent'.
 
@@ -83,7 +83,7 @@ Stable id used for topology + events. Default: 'agent'.
 
 > `readonly` `optional` **maxIterations?**: `number`
 
-Defined in: [src/core/agent/types.ts:39](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/core/agent/types.ts#L39)
+Defined in: [src/core/agent/types.ts:39](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/core/agent/types.ts#L39)
 
 Hard budget on ReAct iterations. Default: 10. Hard cap: 50.
 
@@ -93,7 +93,7 @@ Hard budget on ReAct iterations. Default: 10. Hard cap: 50.
 
 > `readonly` `optional` **maxTokens?**: `number`
 
-Defined in: [src/core/agent/types.ts:37](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/core/agent/types.ts#L37)
+Defined in: [src/core/agent/types.ts:37](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/core/agent/types.ts#L37)
 
 ***
 
@@ -101,7 +101,7 @@ Defined in: [src/core/agent/types.ts:37](https://github.com/footprintjs/agentfoo
 
 > `readonly` **model**: `string`
 
-Defined in: [src/core/agent/types.ts:35](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/core/agent/types.ts#L35)
+Defined in: [src/core/agent/types.ts:35](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/core/agent/types.ts#L35)
 
 ***
 
@@ -109,7 +109,7 @@ Defined in: [src/core/agent/types.ts:35](https://github.com/footprintjs/agentfoo
 
 > `readonly` `optional` **name?**: `string`
 
-Defined in: [src/core/agent/types.ts:32](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/core/agent/types.ts#L32)
+Defined in: [src/core/agent/types.ts:32](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/core/agent/types.ts#L32)
 
 Human-friendly name shown in events/metrics. Default: 'Agent'.
 
@@ -119,7 +119,7 @@ Human-friendly name shown in events/metrics. Default: 'Agent'.
 
 > `readonly` `optional` **permissionChecker?**: [`PermissionChecker`](/agentfootprint/api/generated/interfaces/PermissionChecker.md)
 
-Defined in: [src/core/agent/types.ts:61](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/core/agent/types.ts#L61)
+Defined in: [src/core/agent/types.ts:61](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/core/agent/types.ts#L61)
 
 Permission adapter. When set, the Agent calls
 `permissionChecker.check({capability: 'tool_call', ...})` BEFORE every
@@ -134,7 +134,7 @@ normally.
 
 > `readonly` `optional` **pricingTable?**: [`PricingTable`](/agentfootprint/api/generated/interfaces/PricingTable.md)
 
-Defined in: [src/core/agent/types.ts:45](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/core/agent/types.ts#L45)
+Defined in: [src/core/agent/types.ts:45](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/core/agent/types.ts#L45)
 
 Pricing adapter. When set, Agent emits `agentfootprint.cost.tick`
 after every LLM response (once per ReAct iteration) with per-call
@@ -146,7 +146,7 @@ and cumulative USD. Run-scoped — the cumulative resets each `.run()`.
 
 > `readonly` **provider**: [`LLMProvider`](/agentfootprint/api/generated/interfaces/LLMProvider.md)
 
-Defined in: [src/core/agent/types.ts:30](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/core/agent/types.ts#L30)
+Defined in: [src/core/agent/types.ts:30](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/core/agent/types.ts#L30)
 
 ***
 
@@ -154,7 +154,7 @@ Defined in: [src/core/agent/types.ts:30](https://github.com/footprintjs/agentfoo
 
 > `readonly` `optional` **reactMode?**: `"classic"` \| `"dynamic"`
 
-Defined in: [src/core/agent/types.ts:159](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/core/agent/types.ts#L159)
+Defined in: [src/core/agent/types.ts:159](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/core/agent/types.ts#L159)
 
 ReAct loop SEMANTICS — how much of the request is re-engineered each
 iteration. Default `'dynamic'`.
@@ -195,7 +195,7 @@ grouping re-seeds context every turn by design, so it stays dynamic-only).
 
 > `readonly` `optional` **reactStructure?**: `"subflow"` \| `"flat"`
 
-Defined in: [src/core/agent/types.ts:123](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/core/agent/types.ts#L123)
+Defined in: [src/core/agent/types.ts:123](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/core/agent/types.ts#L123)
 
 Chart structure for the ReAct loop. Default `'flat'` keeps the
 historical shape (`buildAgentChart`): the LLM call is a bare
@@ -218,7 +218,7 @@ once verified end-to-end. See `agent/buildDynamicAgentChart.ts`.
 
 > `readonly` `optional` **structureRecorders?**: readonly `StructureRecorder`[]
 
-Defined in: [src/core/agent/types.ts:96](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/core/agent/types.ts#L96)
+Defined in: [src/core/agent/types.ts:96](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/core/agent/types.ts#L96)
 
 Optional build-time recorders threaded into footprintjs's
 `flowChart()` factory. Each recorder fires `onStageAdded` once per
@@ -241,4 +241,4 @@ When omitted, no build-time observation is wired up.
 
 > `readonly` `optional` **temperature?**: `number`
 
-Defined in: [src/core/agent/types.ts:36](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/core/agent/types.ts#L36)
+Defined in: [src/core/agent/types.ts:36](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/core/agent/types.ts#L36)

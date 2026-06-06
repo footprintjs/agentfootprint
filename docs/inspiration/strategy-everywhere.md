@@ -204,7 +204,7 @@ The library already has `memory-agentcore` (`@aws-sdk/client-bedrock-agent-runti
 | **v2.10.x** | Non-AWS observability: Datadog, Pino | No |
 | **v2.11.x** | `cost-stripe`, `cost-webhook` | No |
 | **v2.12.x** | Lens strategies (`browser`, `cliTUI`, `jsonExport`) | No |
-| **v3.0** | Remove deprecated flat `enable.thinking` / `enable.logging` / `enable.flowchart` | **Breaking** — single-line migration via search-replace |
+| **4.0.0** | Removed deprecated flat `enable.thinking` / `enable.logging` (migrate to `enable.liveStatus` / `enable.observability`). `enable.flowchart` kept — not deprecated. | **Breaking** — single-line migration |
 
 ## Out of scope (parked)
 

@@ -6,7 +6,7 @@
 
 # Interface: Runner\<TIn, TOut\>
 
-Defined in: [src/core/runner.ts:93](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/core/runner.ts#L93)
+Defined in: [src/core/runner.ts:80](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/core/runner.ts#L80)
 
 Every primitive (LLMCall, Agent), every composition (Sequence, Parallel,
 Conditional, Loop), and every pattern factory result implements Runner.
@@ -29,7 +29,7 @@ composition.
 
 > `readonly` **enable**: [`EnableNamespace`](/agentfootprint/api/generated/interfaces/EnableNamespace.md)
 
-Defined in: [src/core/runner.ts:192](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/core/runner.ts#L192)
+Defined in: [src/core/runner.ts:179](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/core/runner.ts#L179)
 
 Enable-namespace for high-level observability features. Each method
 attaches a pre-built CombinedRecorder and returns an unsubscribe
@@ -42,7 +42,7 @@ instead of N `.on()` subscriptions.
 
 > **attach**(`recorder`): [`Unsubscribe`](/agentfootprint/api/generated/type-aliases/Unsubscribe.md)
 
-Defined in: [src/core/runner.ts:184](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/core/runner.ts#L184)
+Defined in: [src/core/runner.ts:171](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/core/runner.ts#L171)
 
 Attach a footprintjs CombinedRecorder to observe the execution.
 Returns an unsubscribe function — call it to detach the recorder
@@ -64,7 +64,7 @@ from future runs. (Already-running executions continue using it.)
 
 > **emit**(`name`, `payload`): `void`
 
-Defined in: [src/core/runner.ts:201](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/core/runner.ts#L201)
+Defined in: [src/core/runner.ts:188](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/core/runner.ts#L188)
 
 Emit a consumer-defined custom event through the same dispatcher.
 
@@ -92,7 +92,7 @@ events are reserved under the `agentfootprint.*` namespace.
 
 > **getSpec**(): `FlowChart`
 
-Defined in: [src/core/runner.ts:106](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/core/runner.ts#L106)
+Defined in: [src/core/runner.ts:93](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/core/runner.ts#L93)
 
 Return the footprintjs FlowChart for this runner — the canonical
 design-time blueprint. Stable across calls. Pairs with the run-time
@@ -115,7 +115,7 @@ Subflow mounting (footprintjs `addSubFlowChart*`) accepts the
 
 > **getUIGroup**\<`T`\>(): `T` \| `undefined`
 
-Defined in: [src/core/runner.ts:121](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/core/runner.ts#L121)
+Defined in: [src/core/runner.ts:108](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/core/runner.ts#L108)
 
 Return the consumer-shaped UI group for this runner — produced by
 invoking the `groupTranslator` (if one was attached at constructor
@@ -145,7 +145,7 @@ See `core/translator.ts` for the `GroupTranslator` /
 
 > **getUIGroupWith**\<`T`\>(`override`): `T` \| `undefined`
 
-Defined in: [src/core/runner.ts:140](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/core/runner.ts#L140)
+Defined in: [src/core/runner.ts:127](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/core/runner.ts#L127)
 
 Translate this runner's group metadata with a CALLER-SUPPLIED
 translator that OVERRIDES whatever translator (if any) the runner
@@ -187,7 +187,7 @@ translate (i.e., `buildUIGroupMetadata()` returned `undefined`).
 
 > **off**\<`K`\>(`type`, `listener`): `void`
 
-Defined in: [src/core/runner.ts:172](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/core/runner.ts#L172)
+Defined in: [src/core/runner.ts:159](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/core/runner.ts#L159)
 
 Unsubscribe a previously-registered listener.
 
@@ -215,7 +215,7 @@ Unsubscribe a previously-registered listener.
 
 > **off**(`type`, `listener`): `void`
 
-Defined in: [src/core/runner.ts:173](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/core/runner.ts#L173)
+Defined in: [src/core/runner.ts:160](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/core/runner.ts#L160)
 
 ##### Parameters
 
@@ -239,7 +239,7 @@ Defined in: [src/core/runner.ts:173](https://github.com/footprintjs/agentfootpri
 
 > **on**\<`K`\>(`type`, `listener`, `options?`): [`Unsubscribe`](/agentfootprint/api/generated/type-aliases/Unsubscribe.md)
 
-Defined in: [src/core/runner.ts:163](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/core/runner.ts#L163)
+Defined in: [src/core/runner.ts:150](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/core/runner.ts#L150)
 
 Subscribe a typed listener. Returns unsubscribe.
 
@@ -271,7 +271,7 @@ Subscribe a typed listener. Returns unsubscribe.
 
 > **on**(`type`, `listener`, `options?`): [`Unsubscribe`](/agentfootprint/api/generated/type-aliases/Unsubscribe.md)
 
-Defined in: [src/core/runner.ts:169](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/core/runner.ts#L169)
+Defined in: [src/core/runner.ts:156](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/core/runner.ts#L156)
 
 Subscribe to a domain wildcard (e.g. 'agentfootprint.context.*') or '*'.
 
@@ -301,7 +301,7 @@ Subscribe to a domain wildcard (e.g. 'agentfootprint.context.*') or '*'.
 
 > **once**\<`K`\>(`type`, `listener`): [`Unsubscribe`](/agentfootprint/api/generated/type-aliases/Unsubscribe.md)
 
-Defined in: [src/core/runner.ts:176](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/core/runner.ts#L176)
+Defined in: [src/core/runner.ts:163](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/core/runner.ts#L163)
 
 Subscribe a one-shot listener (fires once then auto-removes).
 
@@ -329,7 +329,7 @@ Subscribe a one-shot listener (fires once then auto-removes).
 
 > **once**(`type`, `listener`): [`Unsubscribe`](/agentfootprint/api/generated/type-aliases/Unsubscribe.md)
 
-Defined in: [src/core/runner.ts:177](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/core/runner.ts#L177)
+Defined in: [src/core/runner.ts:164](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/core/runner.ts#L164)
 
 ##### Parameters
 
@@ -351,7 +351,7 @@ Defined in: [src/core/runner.ts:177](https://github.com/footprintjs/agentfootpri
 
 > **resume**(`checkpoint`, `input?`, `options?`): `Promise`\<`TOut` \| [`RunnerPauseOutcome`](/agentfootprint/api/generated/interfaces/RunnerPauseOutcome.md)\>
 
-Defined in: [src/core/runner.ts:156](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/core/runner.ts#L156)
+Defined in: [src/core/runner.ts:143](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/core/runner.ts#L143)
 
 Resume a previously-paused execution from its checkpoint. `input` is
 delivered to the paused stage's resume handler. The same return shape
@@ -382,7 +382,7 @@ pauses again (e.g., a multi-step approval flow).
 
 > **run**(`input`, `options?`): `Promise`\<`TOut` \| [`RunnerPauseOutcome`](/agentfootprint/api/generated/interfaces/RunnerPauseOutcome.md)\>
 
-Defined in: [src/core/runner.ts:148](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/core/runner.ts#L148)
+Defined in: [src/core/runner.ts:135](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/core/runner.ts#L135)
 
 Execute the runner. On happy-path completion, resolves with `TOut`.
 If any stage (Agent tool via `pauseHere`, nested runner, or consumer

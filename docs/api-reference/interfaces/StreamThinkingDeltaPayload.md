@@ -6,7 +6,7 @@
 
 # Interface: StreamThinkingDeltaPayload
 
-Defined in: [src/events/payloads.ts:686](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L686)
+Defined in: [src/events/payloads.ts:686](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/events/payloads.ts#L686)
 
 Emitted (v2.14) per provider chunk that carries thinking-content
 tokens. Lives in `stream.*` domain — parallel to `stream.token` for
@@ -35,7 +35,7 @@ adapters fire. Same risk profile as `stream.token`.
 
 > `readonly` **content**: `string`
 
-Defined in: [src/events/payloads.ts:690](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L690)
+Defined in: [src/events/payloads.ts:690](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/events/payloads.ts#L690)
 
 Per-chunk delta text, NOT accumulated. ~10–50 chars typical.
 
@@ -45,7 +45,7 @@ Per-chunk delta text, NOT accumulated. ~10–50 chars typical.
 
 > `readonly` **iteration**: `number`
 
-Defined in: [src/events/payloads.ts:687](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L687)
+Defined in: [src/events/payloads.ts:687](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/events/payloads.ts#L687)
 
 ***
 
@@ -53,4 +53,4 @@ Defined in: [src/events/payloads.ts:687](https://github.com/footprintjs/agentfoo
 
 > `readonly` **tokenIndex**: `number`
 
-Defined in: [src/events/payloads.ts:688](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L688)
+Defined in: [src/events/payloads.ts:688](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/events/payloads.ts#L688)

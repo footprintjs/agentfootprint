@@ -164,16 +164,16 @@ These are the building blocks the agentfootprint Lens UI composes — see [strea
 The `enable` namespace wires a pre-built observability layer in a single call. Each returns an `Unsubscribe` (or, for `flowchart`, a handle you can query).
 
 ```typescript
+import { chatBubbleLiveStatus, consoleObservability } from 'agentfootprint/strategies';
+
 // Live status line — "what's the agent doing right now".
-const stopThinking = agent.enable.thinking({
-  onStatus: (status) => console.log(`  ⎈ ${status}`),
+const stopThinking = agent.enable.liveStatus({
+  strategy: chatBubbleLiveStatus({ onLine: (line) => console.log(`  ⎈ ${line}`) }),
 });
 
-// Firehose structured logging, filtered by domain.
-import { LoggingDomains } from 'agentfootprint';
-const stopLogging = agent.enable.logging({
-  domains: [LoggingDomains.STREAM, LoggingDomains.AGENT],
-  logger: { log: (message) => console.log(`  [log] ${message}`) },
+// Firehose structured logging via the console strategy (swap for a vendor one).
+const stopLogging = agent.enable.observability({
+  strategy: consoleObservability({ logger: { log: (...args) => console.log('  [log]', ...args) } }),
 });
 
 // Live composition graph — feed any graph renderer (React Flow, D3, …).
@@ -190,12 +190,10 @@ try {
 
 | `enable.*` method | Returns | Purpose |
 |-------------------|---------|---------|
-| `enable.thinking(opts)` | `Unsubscribe` | Terse Claude-Code-style status line (`onStatus`). *Deprecated in v2.8 in favor of `enable.liveStatus`, kept for back-compat.* |
-| `enable.logging(opts?)` | `Unsubscribe` | Firehose structured logs filtered by domain. *Deprecated in v2.8 in favor of `enable.observability`, kept for back-compat.* |
-| `enable.flowchart(opts?)` | `FlowchartHandle` | Live composition graph with `getSnapshot()` |
-| `enable.observability(opts?)` | `Unsubscribe` | Pipe every event into a vendor strategy (OTel, CloudWatch, AgentCore, …) |
+| `enable.liveStatus(opts)` | `Unsubscribe` | Terse Claude-Code-style status line via a live-status strategy (e.g. `chatBubbleLiveStatus`) |
+| `enable.observability(opts?)` | `Unsubscribe` | Pipe every event into a strategy — `consoleObservability()` or a vendor one (OTel, CloudWatch, AgentCore, …) |
 | `enable.cost(opts?)` | `Unsubscribe` | Subscribe a `CostStrategy` to `cost.tick`; defaults to an in-memory sink for read-back |
-| `enable.liveStatus(opts)` | `Unsubscribe` | Chat-bubble live-status state machine (strategy required) |
+| `enable.flowchart(opts?)` | `FlowchartHandle` | Live composition graph with `getSnapshot()` |
 
 ---
 

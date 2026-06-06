@@ -6,7 +6,7 @@
 
 # Interface: AgentTurnLiveState
 
-Defined in: [src/recorders/observability/LiveStateRecorder.ts:107](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/LiveStateRecorder.ts#L107)
+Defined in: [src/recorders/observability/LiveStateRecorder.ts:107](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/LiveStateRecorder.ts#L107)
 
 Live transient state of one in-flight agent turn.
 
@@ -16,7 +16,7 @@ Live transient state of one in-flight agent turn.
 
 > `readonly` **startedAtMs**: `number`
 
-Defined in: [src/recorders/observability/LiveStateRecorder.ts:110](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/LiveStateRecorder.ts#L110)
+Defined in: [src/recorders/observability/LiveStateRecorder.ts:110](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/LiveStateRecorder.ts#L110)
 
 ***
 
@@ -24,7 +24,7 @@ Defined in: [src/recorders/observability/LiveStateRecorder.ts:110](https://githu
 
 > `readonly` **turnIndex**: `number`
 
-Defined in: [src/recorders/observability/LiveStateRecorder.ts:108](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/LiveStateRecorder.ts#L108)
+Defined in: [src/recorders/observability/LiveStateRecorder.ts:108](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/LiveStateRecorder.ts#L108)
 
 ***
 
@@ -32,4 +32,4 @@ Defined in: [src/recorders/observability/LiveStateRecorder.ts:108](https://githu
 
 > `readonly` **userPrompt**: `string`
 
-Defined in: [src/recorders/observability/LiveStateRecorder.ts:109](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/LiveStateRecorder.ts#L109)
+Defined in: [src/recorders/observability/LiveStateRecorder.ts:109](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/LiveStateRecorder.ts#L109)

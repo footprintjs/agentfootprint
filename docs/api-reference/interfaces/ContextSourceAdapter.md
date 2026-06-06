@@ -6,7 +6,7 @@
 
 # Interface: ContextSourceAdapter
 
-Defined in: [src/adapters/types.ts:255](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/adapters/types.ts#L255)
+Defined in: [src/adapters/types.ts:255](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/adapters/types.ts#L255)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [src/adapters/types.ts:255](https://github.com/footprintjs/agentfoot
 
 > `readonly` **id**: `string`
 
-Defined in: [src/adapters/types.ts:256](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/adapters/types.ts#L256)
+Defined in: [src/adapters/types.ts:256](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/adapters/types.ts#L256)
 
 ***
 
@@ -22,7 +22,7 @@ Defined in: [src/adapters/types.ts:256](https://github.com/footprintjs/agentfoot
 
 > `readonly` **source**: [`ContextSource`](/agentfootprint/api/generated/type-aliases/ContextSource.md)
 
-Defined in: [src/adapters/types.ts:258](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/adapters/types.ts#L258)
+Defined in: [src/adapters/types.ts:258](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/adapters/types.ts#L258)
 
 ***
 
@@ -30,7 +30,7 @@ Defined in: [src/adapters/types.ts:258](https://github.com/footprintjs/agentfoot
 
 > `readonly` **targetSlot**: [`ContextSlot`](/agentfootprint/api/generated/type-aliases/ContextSlot.md)
 
-Defined in: [src/adapters/types.ts:257](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/adapters/types.ts#L257)
+Defined in: [src/adapters/types.ts:257](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/adapters/types.ts#L257)
 
 ## Methods
 
@@ -38,7 +38,7 @@ Defined in: [src/adapters/types.ts:257](https://github.com/footprintjs/agentfoot
 
 > **resolve**(`ctx`): `Promise`\<readonly [`ContextContribution`](/agentfootprint/api/generated/interfaces/ContextContribution.md)[]\>
 
-Defined in: [src/adapters/types.ts:259](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/adapters/types.ts#L259)
+Defined in: [src/adapters/types.ts:259](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/adapters/types.ts#L259)
 
 #### Parameters
 

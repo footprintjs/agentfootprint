@@ -6,7 +6,7 @@
 
 # Interface: AgentIterationEndPayload
 
-Defined in: [src/events/payloads.ts:116](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L116)
+Defined in: [src/events/payloads.ts:116](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/events/payloads.ts#L116)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [src/events/payloads.ts:116](https://github.com/footprintjs/agentfoo
 
 > `readonly` `optional` **history?**: readonly `unknown`[]
 
-Defined in: [src/events/payloads.ts:126](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L126)
+Defined in: [src/events/payloads.ts:126](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/events/payloads.ts#L126)
 
 Conversation history (LLM messages) at the END of this
  iteration. Captured by `agent.run()` for fault-tolerant
@@ -29,7 +29,7 @@ Conversation history (LLM messages) at the END of this
 
 > `readonly` **iterIndex**: `number`
 
-Defined in: [src/events/payloads.ts:118](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L118)
+Defined in: [src/events/payloads.ts:118](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/events/payloads.ts#L118)
 
 ***
 
@@ -37,7 +37,7 @@ Defined in: [src/events/payloads.ts:118](https://github.com/footprintjs/agentfoo
 
 > `readonly` **toolCallCount**: `number`
 
-Defined in: [src/events/payloads.ts:119](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L119)
+Defined in: [src/events/payloads.ts:119](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/events/payloads.ts#L119)
 
 ***
 
@@ -45,4 +45,4 @@ Defined in: [src/events/payloads.ts:119](https://github.com/footprintjs/agentfoo
 
 > `readonly` **turnIndex**: `number`
 
-Defined in: [src/events/payloads.ts:117](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L117)
+Defined in: [src/events/payloads.ts:117](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/events/payloads.ts#L117)

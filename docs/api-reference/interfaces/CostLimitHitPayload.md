@@ -6,7 +6,7 @@
 
 # Interface: CostLimitHitPayload
 
-Defined in: [src/events/payloads.ts:484](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L484)
+Defined in: [src/events/payloads.ts:484](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/events/payloads.ts#L484)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [src/events/payloads.ts:484](https://github.com/footprintjs/agentfoo
 
 > `readonly` **action**: `"abort"` \| `"warn"` \| `"degrade"`
 
-Defined in: [src/events/payloads.ts:488](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L488)
+Defined in: [src/events/payloads.ts:488](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/events/payloads.ts#L488)
 
 ***
 
@@ -22,7 +22,7 @@ Defined in: [src/events/payloads.ts:488](https://github.com/footprintjs/agentfoo
 
 > `readonly` **actual**: `number`
 
-Defined in: [src/events/payloads.ts:487](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L487)
+Defined in: [src/events/payloads.ts:487](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/events/payloads.ts#L487)
 
 ***
 
@@ -30,7 +30,7 @@ Defined in: [src/events/payloads.ts:487](https://github.com/footprintjs/agentfoo
 
 > `readonly` **kind**: `"max_tokens"` \| `"max_cost"` \| `"max_iterations"` \| `"max_wallclock"`
 
-Defined in: [src/events/payloads.ts:485](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L485)
+Defined in: [src/events/payloads.ts:485](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/events/payloads.ts#L485)
 
 ***
 
@@ -38,4 +38,4 @@ Defined in: [src/events/payloads.ts:485](https://github.com/footprintjs/agentfoo
 
 > `readonly` **limit**: `number`
 
-Defined in: [src/events/payloads.ts:486](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L486)
+Defined in: [src/events/payloads.ts:486](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/events/payloads.ts#L486)

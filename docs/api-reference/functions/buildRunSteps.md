@@ -8,7 +8,7 @@
 
 > **buildRunSteps**(`source`, `options?`): [`RunStep`](/agentfootprint/api/generated/interfaces/RunStep.md)[]
 
-Defined in: [src/recorders/observability/RunStepRecorder.ts:760](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/RunStepRecorder.ts#L760)
+Defined in: [src/recorders/observability/RunStepRecorder.ts:760](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/RunStepRecorder.ts#L760)
 
 Compatibility shim for snapshot-from-events use cases (replay,
 post-hoc analysis, tests). For LIVE use, prefer attaching a

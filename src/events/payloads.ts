@@ -674,10 +674,9 @@ export interface EmbeddingGeneratedPayload {
  * - Custom providers: fire when `ThinkingHandler.parseChunk()` returns
  *   a non-empty `thinkingDelta`.
  *
- * **Default consumer behavior:** thinking_delta events are suppressed
- * at the consumer level by `enable.thinking({ stream: false })` (Phase 3
- * default). Consumers explicitly opt in with `stream: true` for
- * reasoning-as-it-streams UIs.
+ * **Default consumer behavior:** thinking_delta events are emitted but
+ * not surfaced to end users unless a consumer explicitly subscribes to
+ * this event (e.g. for reasoning-as-it-streams UIs).
  *
  * **Sensitive data:** `content` is raw model thinking text. Use
  * `RedactionPolicy.thinkingPatterns` (Phase 3) to scrub before audit-log

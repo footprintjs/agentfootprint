@@ -6,7 +6,7 @@
 
 # Interface: RunStep
 
-Defined in: [src/recorders/observability/RunStepRecorder.ts:71](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/RunStepRecorder.ts#L71)
+Defined in: [src/recorders/observability/RunStepRecorder.ts:71](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/RunStepRecorder.ts#L71)
 
 One slider position. The smallest scrubable unit of the run.
 
@@ -21,7 +21,7 @@ details panels read `anchor.runtimeStageId`.
 
 > `readonly` **anchor**: `object`
 
-Defined in: [src/recorders/observability/RunStepRecorder.ts:84](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/RunStepRecorder.ts#L84)
+Defined in: [src/recorders/observability/RunStepRecorder.ts:84](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/RunStepRecorder.ts#L84)
 
 Anchor for commentary highlight + details pane lookup.
 
@@ -39,7 +39,7 @@ Anchor for commentary highlight + details pane lookup.
 
 > `readonly` **kind**: [`RunStepKind`](/agentfootprint/api/generated/type-aliases/RunStepKind.md)
 
-Defined in: [src/recorders/observability/RunStepRecorder.ts:74](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/RunStepRecorder.ts#L74)
+Defined in: [src/recorders/observability/RunStepRecorder.ts:74](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/RunStepRecorder.ts#L74)
 
 ***
 
@@ -47,7 +47,7 @@ Defined in: [src/recorders/observability/RunStepRecorder.ts:74](https://github.c
 
 > `readonly` **label**: `string`
 
-Defined in: [src/recorders/observability/RunStepRecorder.ts:89](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/RunStepRecorder.ts#L89)
+Defined in: [src/recorders/observability/RunStepRecorder.ts:89](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/RunStepRecorder.ts#L89)
 
 Human label — short, kind-specific.
 
@@ -57,7 +57,7 @@ Human label — short, kind-specific.
 
 > `readonly` `optional` **meta?**: [`RunStepMeta`](/agentfootprint/api/generated/type-aliases/RunStepMeta.md)
 
-Defined in: [src/recorders/observability/RunStepRecorder.ts:93](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/RunStepRecorder.ts#L93)
+Defined in: [src/recorders/observability/RunStepRecorder.ts:93](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/RunStepRecorder.ts#L93)
 
 Kind-specific decoration. Discriminate on `kind`.
 
@@ -67,9 +67,9 @@ Kind-specific decoration. Discriminate on `kind`.
 
 > `readonly` **runtimeStageId**: `string`
 
-Defined in: [src/recorders/observability/RunStepRecorder.ts:82](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/RunStepRecorder.ts#L82)
+Defined in: [src/recorders/observability/RunStepRecorder.ts:82](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/RunStepRecorder.ts#L82)
 
-Per-step key — required by `SequenceRecorder<T>` for time-travel
+Per-step key — required by `SequenceStore<T>` for time-travel
 utilities (`getEntriesForStep`, `getEntryRanges`). Mirrors
 `anchor.runtimeStageId`; both fields point at the same value.
 Top-level placement satisfies the recorder's storage contract.
@@ -80,7 +80,7 @@ Top-level placement satisfies the recorder's storage contract.
 
 > `readonly` **seq**: `number`
 
-Defined in: [src/recorders/observability/RunStepRecorder.ts:73](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/RunStepRecorder.ts#L73)
+Defined in: [src/recorders/observability/RunStepRecorder.ts:73](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/RunStepRecorder.ts#L73)
 
 0-based slider index (matches array position in `getSteps()`).
 
@@ -90,7 +90,7 @@ Defined in: [src/recorders/observability/RunStepRecorder.ts:73](https://github.c
 
 > `readonly` **transitions**: readonly [`RunStepTransition`](/agentfootprint/api/generated/interfaces/RunStepTransition.md)[]
 
-Defined in: [src/recorders/observability/RunStepRecorder.ts:75](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/RunStepRecorder.ts#L75)
+Defined in: [src/recorders/observability/RunStepRecorder.ts:75](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/RunStepRecorder.ts#L75)
 
 ***
 
@@ -98,6 +98,6 @@ Defined in: [src/recorders/observability/RunStepRecorder.ts:75](https://github.c
 
 > `readonly` **tsMs**: `number`
 
-Defined in: [src/recorders/observability/RunStepRecorder.ts:91](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/RunStepRecorder.ts#L91)
+Defined in: [src/recorders/observability/RunStepRecorder.ts:91](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/RunStepRecorder.ts#L91)
 
 Wall-clock ms at which this step occurred.

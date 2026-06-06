@@ -6,7 +6,7 @@
 
 # Interface: BuildRunStepsOptions
 
-Defined in: [src/recorders/observability/RunStepRecorder.ts:745](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/RunStepRecorder.ts#L745)
+Defined in: [src/recorders/observability/RunStepRecorder.ts:745](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/RunStepRecorder.ts#L745)
 
 ## Properties
 
@@ -14,4 +14,4 @@ Defined in: [src/recorders/observability/RunStepRecorder.ts:745](https://github.
 
 > `readonly` `optional` **drillPath?**: readonly `string`[]
 
-Defined in: [src/recorders/observability/RunStepRecorder.ts:746](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/RunStepRecorder.ts#L746)
+Defined in: [src/recorders/observability/RunStepRecorder.ts:746](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/RunStepRecorder.ts#L746)

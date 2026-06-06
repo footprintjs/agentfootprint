@@ -6,7 +6,7 @@
 
 # Interface: RiskContext
 
-Defined in: [src/adapters/types.ts:272](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/adapters/types.ts#L272)
+Defined in: [src/adapters/types.ts:272](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/adapters/types.ts#L272)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [src/adapters/types.ts:272](https://github.com/footprintjs/agentfoot
 
 > `readonly` `optional` **iterIndex?**: `number`
 
-Defined in: [src/adapters/types.ts:276](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/adapters/types.ts#L276)
+Defined in: [src/adapters/types.ts:276](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/adapters/types.ts#L276)
 
 ***
 
@@ -22,7 +22,7 @@ Defined in: [src/adapters/types.ts:276](https://github.com/footprintjs/agentfoot
 
 > `readonly` `optional` **slot?**: [`ContextSlot`](/agentfootprint/api/generated/type-aliases/ContextSlot.md)
 
-Defined in: [src/adapters/types.ts:273](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/adapters/types.ts#L273)
+Defined in: [src/adapters/types.ts:273](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/adapters/types.ts#L273)
 
 ***
 
@@ -30,7 +30,7 @@ Defined in: [src/adapters/types.ts:273](https://github.com/footprintjs/agentfoot
 
 > `readonly` `optional` **source?**: [`ContextSource`](/agentfootprint/api/generated/type-aliases/ContextSource.md)
 
-Defined in: [src/adapters/types.ts:274](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/adapters/types.ts#L274)
+Defined in: [src/adapters/types.ts:274](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/adapters/types.ts#L274)
 
 ***
 
@@ -38,4 +38,4 @@ Defined in: [src/adapters/types.ts:274](https://github.com/footprintjs/agentfoot
 
 > `readonly` `optional` **turnIndex?**: `number`
 
-Defined in: [src/adapters/types.ts:275](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/adapters/types.ts#L275)
+Defined in: [src/adapters/types.ts:275](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/adapters/types.ts#L275)

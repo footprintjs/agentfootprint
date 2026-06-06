@@ -6,7 +6,7 @@
 
 # Interface: FallbackTriggeredPayload
 
-Defined in: [src/events/payloads.ts:464](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L464)
+Defined in: [src/events/payloads.ts:464](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/events/payloads.ts#L464)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [src/events/payloads.ts:464](https://github.com/footprintjs/agentfoo
 
 > `readonly` **fallback**: `string`
 
-Defined in: [src/events/payloads.ts:467](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L467)
+Defined in: [src/events/payloads.ts:467](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/events/payloads.ts#L467)
 
 ***
 
@@ -22,7 +22,7 @@ Defined in: [src/events/payloads.ts:467](https://github.com/footprintjs/agentfoo
 
 > `readonly` **kind**: `"tool"` \| `"skill"` \| `"provider"`
 
-Defined in: [src/events/payloads.ts:465](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L465)
+Defined in: [src/events/payloads.ts:465](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/events/payloads.ts#L465)
 
 ***
 
@@ -30,7 +30,7 @@ Defined in: [src/events/payloads.ts:465](https://github.com/footprintjs/agentfoo
 
 > `readonly` **primary**: `string`
 
-Defined in: [src/events/payloads.ts:466](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L466)
+Defined in: [src/events/payloads.ts:466](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/events/payloads.ts#L466)
 
 ***
 
@@ -38,4 +38,4 @@ Defined in: [src/events/payloads.ts:466](https://github.com/footprintjs/agentfoo
 
 > `readonly` **reason**: `string`
 
-Defined in: [src/events/payloads.ts:468](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L468)
+Defined in: [src/events/payloads.ts:468](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/events/payloads.ts#L468)

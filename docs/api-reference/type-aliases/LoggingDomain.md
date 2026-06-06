@@ -8,7 +8,7 @@
 
 > **LoggingDomain** = *typeof* [`LoggingDomains`](/agentfootprint/api/generated/variables/LoggingDomains.md)\[keyof *typeof* [`LoggingDomains`](/agentfootprint/api/generated/variables/LoggingDomains.md)\]
 
-Defined in: [src/recorders/observability/LoggingRecorder.ts:75](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/LoggingRecorder.ts#L75)
+Defined in: [src/recorders/observability/LoggingRecorder.ts:78](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/LoggingRecorder.ts#L78)
 
 Domain name — the middle segment of event types
 (`agentfootprint.<domain>.<action>`). Consumers already see these in

@@ -5,6 +5,41 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.0.0]
+
+Major — API surface cleanup. Two breaking removals + one additive subpath. No
+runtime behavior change.
+
+### Removed (BREAKING)
+
+- **Three redundant subpath aliases collapsed:**
+  - `agentfootprint/providers` → use `agentfootprint/llm-providers`
+  - `agentfootprint/memory-redis` → use `agentfootprint/memory-providers`
+  - `agentfootprint/memory-agentcore` → use `agentfootprint/memory-providers`
+
+  These were back-compat aliases of the canonical subpaths (same exports). 18
+  subpaths → 15 real ones (16 with the new `./strategies` below).
+
+- **`enable.thinking()` and `enable.logging()` removed** (deprecated since v2.8;
+  the docs had promised removal). Use the uniform strategy enablers instead:
+  ```ts
+  import { chatBubbleLiveStatus, consoleObservability } from 'agentfootprint/strategies';
+
+  agent.enable.liveStatus({ strategy: chatBubbleLiveStatus({ onLine: onStatus }) }); // was enable.thinking({ onStatus })
+  agent.enable.observability({ strategy: consoleObservability() });                  // was enable.logging()
+  ```
+  `enable.flowchart` is **kept** — it is a real, non-deprecated composition-graph
+  feature. The low-level `attachThinking` / `attachLogging` helpers remain
+  available from `agentfootprint/observe`.
+
+### Added
+
+- **`agentfootprint/strategies` subpath** — the public home for the strategy
+  system (`chatBubbleLiveStatus`, `consoleObservability`, the `compose*`
+  combinators, typed strategy interfaces, and the `attach*` helpers). Previously
+  these defaults had no public import path, which made the strategy enablers
+  unusable from outside the package; that gap is now closed.
+
 ## [3.1.2]
 
 Patch — fixes a browser-load regression introduced in 3.1.1.

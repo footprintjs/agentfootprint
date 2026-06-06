@@ -11,7 +11,7 @@ Two ways to drive a "what's the agent doing right now?" line:
 
 | Surface | When to use |
 |---|---|
-| `agent.enable.thinking({ onStatus })` | One callback, opinionated formatter, zero subscriptions to wire. Use for **chat widgets** that just want strings to render. See [`04-observability.md`](./04-observability.md). |
+| `agent.enable.liveStatus({ strategy: chatBubbleLiveStatus({ onLine }) })` | One strategy, opinionated formatter, zero subscriptions to wire. Use for **chat widgets** that just want strings to render. See [`04-observability.md`](./04-observability.md). |
 | `agentfootprint/status` (this example) | Lower-level state machine + templates + renderer. Use when you need **full control** — custom formatting, per-tool overrides, locale switching, custom UI shapes. |
 
 This example shows the lower-level surface. It's what `agentfootprint-lens` and consumers like `neo-mds-triage` use to drive their custom chat-bubble status feeds.

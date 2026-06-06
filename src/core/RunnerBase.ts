@@ -30,16 +30,11 @@ import type {
   AgentfootprintEventType,
 } from '../events/registry.js';
 import type { EventMeta } from '../events/types.js';
-import { attachLogging, type LoggingOptions } from '../recorders/observability/LoggingRecorder.js';
 import {
   attachObservabilityStrategy,
   attachCostStrategy,
   attachLiveStatusStrategy,
 } from '../strategies/attach.js';
-import {
-  attachThinking,
-  type ThinkingOptions,
-} from '../recorders/observability/ThinkingRecorder.js';
 import {
   attachFlowchart,
   type FlowchartHandle,
@@ -422,8 +417,6 @@ export abstract class RunnerBase<TIn = unknown, TOut = unknown> implements Runne
   // ─── Enable namespace (Tier 3 observability features) ─────────
 
   readonly enable: EnableNamespace = {
-    thinking: (opts: ThinkingOptions): Unsubscribe => attachThinking(this.dispatcher, opts),
-    logging: (opts?: LoggingOptions): Unsubscribe => attachLogging(this.dispatcher, opts),
     flowchart: (opts?: FlowchartOptions): FlowchartHandle =>
       // Hand the recorder's attach() AND the dispatcher out as narrow
       // capabilities — no reference to `this`, no coupling to the

@@ -95,11 +95,6 @@
       "import": "./dist/esm/memory/index.js",
       "require": "./dist/memory/index.js"
     },
-    "./providers": {
-      "types": "./dist/types/providers.d.ts",
-      "import": "./dist/esm/providers.js",
-      "require": "./dist/providers.js"
-    },
     "./llm-providers": {
       "types": "./dist/types/llm-providers.d.ts",
       "import": "./dist/esm/llm-providers.js",
@@ -109,6 +104,11 @@
       "types": "./dist/types/memory-providers.d.ts",
       "import": "./dist/esm/memory-providers.js",
       "require": "./dist/memory-providers.js"
+    },
+    "./strategies": {
+      "types": "./dist/types/strategies/index.d.ts",
+      "import": "./dist/esm/strategies/index.js",
+      "require": "./dist/strategies/index.js"
     },
     "./observability-providers": {
       "types": "./dist/types/observability-providers.d.ts",
@@ -134,16 +134,6 @@
       "types": "./dist/types/injection-engine.d.ts",
       "import": "./dist/esm/injection-engine.js",
       "require": "./dist/injection-engine.js"
-    },
-    "./memory-redis": {
-      "types": "./dist/types/adapters/memory/redis.d.ts",
-      "import": "./dist/esm/adapters/memory/redis.js",
-      "require": "./dist/adapters/memory/redis.js"
-    },
-    "./memory-agentcore": {
-      "types": "./dist/types/adapters/memory/agentcore.d.ts",
-      "import": "./dist/esm/adapters/memory/agentcore.js",
-      "require": "./dist/adapters/memory/agentcore.js"
     },
     "./tool-providers": {
       "types": "./dist/types/tool-providers/index.d.ts",

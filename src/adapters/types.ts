@@ -219,9 +219,10 @@ export interface LLMChunk {
    * events when a `ThinkingHandler.parseChunk()` returns one. Consumers
    * who want to render thinking-as-it-streams subscribe to that event.
    *
-   * Default consumer behavior: thinking tokens are NOT shown to end
-   * users via `enable.thinking({ stream: false })` (the default).
-   * Consumers explicitly opt in with `enable.thinking({ stream: true })`.
+   * Default consumer behavior: thinking tokens are not surfaced to end
+   * users unless a consumer explicitly subscribes to the
+   * `agentfootprint.stream.thinking_delta` event (or renders it through a
+   * live-status strategy).
    */
   readonly thinkingDelta?: string;
 }

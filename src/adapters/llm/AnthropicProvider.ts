@@ -112,7 +112,7 @@ export interface AnthropicProviderOptions {
  *
  * @example
  *   import { Agent } from 'agentfootprint';
- *   import { anthropic } from 'agentfootprint/providers';
+ *   import { anthropic } from 'agentfootprint/llm-providers';
  *
  *   const agent = Agent.create({
  *     provider: anthropic({ defaultModel: 'claude-sonnet-4-5-20250929' }),

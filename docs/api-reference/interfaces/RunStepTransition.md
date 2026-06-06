@@ -6,7 +6,7 @@
 
 # Interface: RunStepTransition
 
-Defined in: [src/recorders/observability/RunStepRecorder.ts:105](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/RunStepRecorder.ts#L105)
+Defined in: [src/recorders/observability/RunStepRecorder.ts:105](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/RunStepRecorder.ts#L105)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [src/recorders/observability/RunStepRecorder.ts:105](https://github.
 
 > `readonly` **from**: `string`
 
-Defined in: [src/recorders/observability/RunStepRecorder.ts:106](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/RunStepRecorder.ts#L106)
+Defined in: [src/recorders/observability/RunStepRecorder.ts:106](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/RunStepRecorder.ts#L106)
 
 ***
 
@@ -22,7 +22,7 @@ Defined in: [src/recorders/observability/RunStepRecorder.ts:106](https://github.
 
 > `readonly` `optional` **label?**: `string`
 
-Defined in: [src/recorders/observability/RunStepRecorder.ts:109](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/RunStepRecorder.ts#L109)
+Defined in: [src/recorders/observability/RunStepRecorder.ts:109](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/RunStepRecorder.ts#L109)
 
 ***
 
@@ -30,7 +30,7 @@ Defined in: [src/recorders/observability/RunStepRecorder.ts:109](https://github.
 
 > `readonly` **to**: `string`
 
-Defined in: [src/recorders/observability/RunStepRecorder.ts:107](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/RunStepRecorder.ts#L107)
+Defined in: [src/recorders/observability/RunStepRecorder.ts:107](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/RunStepRecorder.ts#L107)
 
 ***
 
@@ -38,4 +38,4 @@ Defined in: [src/recorders/observability/RunStepRecorder.ts:107](https://github.
 
 > `readonly` **via**: `"next"` \| `"loop-iteration"` \| `"fork-branch"` \| `"decision-branch"` \| `"actor-arrow"`
 
-Defined in: [src/recorders/observability/RunStepRecorder.ts:108](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/RunStepRecorder.ts#L108)
+Defined in: [src/recorders/observability/RunStepRecorder.ts:108](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/RunStepRecorder.ts#L108)

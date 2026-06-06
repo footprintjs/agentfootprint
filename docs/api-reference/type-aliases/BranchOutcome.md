@@ -8,7 +8,7 @@
 
 > **BranchOutcome** = \{ `ok`: `true`; `value`: `string`; \} \| \{ `error`: `string`; `ok`: `false`; \}
 
-Defined in: [src/core-flow/Parallel.ts:91](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/core-flow/Parallel.ts#L91)
+Defined in: [src/core-flow/Parallel.ts:91](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/core-flow/Parallel.ts#L91)
 
 Outcome per branch in tolerant mode. One of:
   - `{ ok: true, value: string }` — branch succeeded; `value` is the returned string

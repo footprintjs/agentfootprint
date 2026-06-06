@@ -6,7 +6,7 @@
 
 # Interface: DefineToolOptions\<TArgs, TResult\>
 
-Defined in: [src/core/tools.ts:52](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/core/tools.ts#L52)
+Defined in: [src/core/tools.ts:52](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/core/tools.ts#L52)
 
 Convenience input for `defineTool` — flatter than `Tool` itself.
 Consumers describe the tool inline; the helper assembles `schema`.
@@ -31,7 +31,7 @@ properties: {} }` or omit and we'll default to that.
 
 > `readonly` **description**: `string`
 
-Defined in: [src/core/tools.ts:54](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/core/tools.ts#L54)
+Defined in: [src/core/tools.ts:54](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/core/tools.ts#L54)
 
 ***
 
@@ -39,7 +39,7 @@ Defined in: [src/core/tools.ts:54](https://github.com/footprintjs/agentfootprint
 
 > `readonly` `optional` **inputSchema?**: `Readonly`\<`Record`\<`string`, `unknown`\>\>
 
-Defined in: [src/core/tools.ts:55](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/core/tools.ts#L55)
+Defined in: [src/core/tools.ts:55](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/core/tools.ts#L55)
 
 ***
 
@@ -47,7 +47,7 @@ Defined in: [src/core/tools.ts:55](https://github.com/footprintjs/agentfootprint
 
 > `readonly` **name**: `string`
 
-Defined in: [src/core/tools.ts:53](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/core/tools.ts#L53)
+Defined in: [src/core/tools.ts:53](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/core/tools.ts#L53)
 
 ## Methods
 
@@ -55,7 +55,7 @@ Defined in: [src/core/tools.ts:53](https://github.com/footprintjs/agentfootprint
 
 > **execute**(`args`, `ctx`): `TResult` \| `Promise`\<`TResult`\>
 
-Defined in: [src/core/tools.ts:56](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/core/tools.ts#L56)
+Defined in: [src/core/tools.ts:56](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/core/tools.ts#L56)
 
 #### Parameters
 

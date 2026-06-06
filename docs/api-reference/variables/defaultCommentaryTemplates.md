@@ -8,7 +8,7 @@
 
 > `const` **defaultCommentaryTemplates**: [`CommentaryTemplates`](/agentfootprint/api/generated/type-aliases/CommentaryTemplates.md)
 
-Defined in: [src/recorders/observability/commentary/commentaryTemplates.ts:56](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/commentary/commentaryTemplates.ts#L56)
+Defined in: [src/recorders/observability/commentary/commentaryTemplates.ts:56](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/commentary/commentaryTemplates.ts#L56)
 
 The bundled English templates. Override per-key via the renderer's
 `templates` option — partial overrides are spread on top of these

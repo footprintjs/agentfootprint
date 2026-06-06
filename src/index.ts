@@ -374,17 +374,14 @@ export {
 // because bundlers walking these never touch optional peer-dep code.
 //
 // Vendor-SDK-backed providers (AnthropicProvider, OpenAIProvider,
-// BedrockProvider) live ONLY at `agentfootprint/llm-providers` (or
-// the legacy `agentfootprint/providers` alias). That subpath
-// segregation means bundlers walking from `agentfootprint` main
+// BedrockProvider) live ONLY at `agentfootprint/llm-providers`. That
+// subpath segregation means bundlers walking from `agentfootprint` main
 // never see the lazy peer-dep requires for `@anthropic-ai/sdk`,
 // `openai`, `@aws-sdk/client-bedrock-runtime`, etc. — automatic
 // tree-shaking, no bundler-side workarounds.
 //
-// Migration (v2.4 → v2.5):
-//   import { AnthropicProvider } from 'agentfootprint';                  // ❌ removed
+//   import { AnthropicProvider } from 'agentfootprint';                  // ❌ not exported
 //   import { AnthropicProvider } from 'agentfootprint/llm-providers';    // ✓ canonical
-//   import { AnthropicProvider } from 'agentfootprint/providers';        // ✓ legacy alias
 export {
   MockProvider,
   mock,

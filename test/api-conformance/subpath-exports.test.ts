@@ -98,11 +98,13 @@ describe('Block B — package.json exports table', () => {
     expect(exp['./security']).toBeDefined();
   });
 
-  it('legacy aliases preserved (back-compat through v2.x)', () => {
+  it('legacy alias subpaths removed in 4.0.0 (collapsed into canonical)', () => {
     const exp = loadExports();
-    expect(exp['./providers']).toBeDefined();
-    expect(exp['./memory-redis']).toBeDefined();
-    expect(exp['./memory-agentcore']).toBeDefined();
+    // ./providers collapsed into ./llm-providers; ./memory-redis +
+    // ./memory-agentcore collapsed into ./memory-providers.
+    expect(exp['./providers']).toBeUndefined();
+    expect(exp['./memory-redis']).toBeUndefined();
+    expect(exp['./memory-agentcore']).toBeUndefined();
   });
 
   it('every exports entry has types + import + require triple', () => {

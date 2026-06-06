@@ -6,7 +6,7 @@
 
 # Interface: ConditionalRouteDecidedPayload
 
-Defined in: [src/events/payloads.ts:78](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L78)
+Defined in: [src/events/payloads.ts:78](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/events/payloads.ts#L78)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [src/events/payloads.ts:78](https://github.com/footprintjs/agentfoot
 
 > `readonly` **chosen**: `string`
 
-Defined in: [src/events/payloads.ts:80](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L80)
+Defined in: [src/events/payloads.ts:80](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/events/payloads.ts#L80)
 
 ***
 
@@ -22,7 +22,7 @@ Defined in: [src/events/payloads.ts:80](https://github.com/footprintjs/agentfoot
 
 > `readonly` **conditionalId**: `string`
 
-Defined in: [src/events/payloads.ts:79](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L79)
+Defined in: [src/events/payloads.ts:79](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/events/payloads.ts#L79)
 
 ***
 
@@ -30,7 +30,7 @@ Defined in: [src/events/payloads.ts:79](https://github.com/footprintjs/agentfoot
 
 > `readonly` `optional` **evidence?**: `unknown`
 
-Defined in: [src/events/payloads.ts:82](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L82)
+Defined in: [src/events/payloads.ts:82](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/events/payloads.ts#L82)
 
 ***
 
@@ -38,4 +38,4 @@ Defined in: [src/events/payloads.ts:82](https://github.com/footprintjs/agentfoot
 
 > `readonly` `optional` **rationale?**: `string`
 
-Defined in: [src/events/payloads.ts:81](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/events/payloads.ts#L81)
+Defined in: [src/events/payloads.ts:81](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/events/payloads.ts#L81)

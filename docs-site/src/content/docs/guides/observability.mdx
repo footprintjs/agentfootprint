@@ -35,25 +35,25 @@ Every runner (`Agent`, `LLMCall`, `Sequence`, etc.) exposes the same observabili
 |---|---|---|
 | **Events** | `runner.on('agentfootprint.<domain>.<event>', fn)` | You want a typed stream — payloads are auto-completed by your IDE |
 | **Recorders** | `runner.attach(recorder)` | You want pre-built aggregation (cost totals, token counts, narrative entries) |
-| **Tier-3 helpers** | `runner.enable.thinking({...})`, `runner.enable.logging({...})` | You want a one-liner for the common case (status line, structured logs) |
+| **Tier-3 helpers** | `runner.enable.liveStatus({ strategy })`, `runner.enable.observability({ strategy })` | You want a one-liner for the common case (status line, structured logs) |
 
 There are **59 typed events across 16 domains**: `agent` (incl. `output_schema_validation_failed` for Instructor-style retry), `composition`, `context`, `stream`, `tools`, `skill`, `memory`, `cost`, `permission` (incl. `halt` for sequence governance), `eval`, `embedding`, `pause`, `error`, `reliability`, `fallback`, `risk`. Every event has a typed payload — `agentfootprint.stream.llm_start`, `agentfootprint.stream.tool_start`, `agentfootprint.cost.tick`, `agentfootprint.composition.iteration_start`, etc. The framework owns the loop and emits during DFS traversal — no instrumentation, no spans-after-the-fact.
 
-## Tier-3 — `.enable.thinking()` and `.enable.logging()`
+## Tier-3 — `.enable.liveStatus()` and `.enable.observability()`
 
-The 80% case: a live status line ("what is the agent doing right now?") and a domain-filtered log firehose. Both are one-liners.
+The 80% case: a live status line ("what is the agent doing right now?") and a domain-filtered log firehose. Both are one-liners over a **strategy** — pick a built-in (`chatBubbleLiveStatus`, `consoleObservability` from `agentfootprint/strategies`) or a vendor one.
 
-<CodeFile path="examples/features/04-observability.ts" region="enable-thinking" title="examples/features/04-observability.ts (region: enable-thinking)" />
+<CodeFile path="examples/features/04-observability.ts" region="enable-livestatus" title="examples/features/04-observability.ts (region: enable-livestatus)" />
 
-`.enable.thinking({ onStatus })` gives you a Claude-Code-style live status line — one string per agent state transition. Use for terminal UIs, CLI progress, or chat-UI typing indicators.
+`.enable.liveStatus({ strategy })` with `chatBubbleLiveStatus({ onLine })` gives you a Claude-Code-style live status line — one string per agent state transition. Use for terminal UIs, CLI progress, or chat-UI typing indicators.
 
-<CodeFile path="examples/features/04-observability.ts" region="enable-logging" title="examples/features/04-observability.ts (region: enable-logging)" />
+<CodeFile path="examples/features/04-observability.ts" region="enable-observability" title="examples/features/04-observability.ts (region: enable-observability)" />
 
-`.enable.logging({ domains, logger })` gives you structured logs filtered to specific event domains. The `logger` is any object with a `log(message, data?)` method — drop in `console`, `pino`, `winston`, or your own.
+`.enable.observability({ strategy })` with `consoleObservability()` gives you structured logs of every typed event. Swap the strategy for `pino`, `winston`, or a vendor backend — same call site.
 
 Both return a `stop()` function — call it on shutdown to detach the listener cleanly.
 
-> **Note:** `.enable.thinking()` and `.enable.logging()` are deprecated in favor of the grouped strategy enablers below — `.enable.liveStatus({ strategy })` for the status line and `.enable.observability({ strategy })` for log/telemetry shipping. They remain available for back-compat.
+> **Migration (4.0.0):** the old flat `.enable.thinking()` / `.enable.logging()` one-liners were removed in favor of these uniform strategy enablers. Replace `enable.thinking({ onStatus })` with `enable.liveStatus({ strategy: chatBubbleLiveStatus({ onLine: onStatus }) })`, and `enable.logging()` with `enable.observability({ strategy: consoleObservability() })`.
 
 ## Tier-3 — `.enable.observability()` — grouped vendor strategies
 

@@ -8,7 +8,7 @@
 
 > **mockMcpClient**(`options`): [`McpClient`](/agentfootprint/api/generated/interfaces/McpClient.md)
 
-Defined in: [src/lib/mcp/mockMcpClient.ts:70](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/lib/mcp/mockMcpClient.ts#L70)
+Defined in: [src/lib/mcp/mockMcpClient.ts:70](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/lib/mcp/mockMcpClient.ts#L70)
 
 Build an in-memory `McpClient`. Useful when you want to develop
 against MCP semantics without spawning subprocesses, hitting the

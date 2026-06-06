@@ -2,7 +2,10 @@
  * LoggingRecorder — firehose-style structured logging of every event.
  *
  * Pattern: Facade over EventDispatcher's wildcard subscription.
- * Role:    Tier 3 observability — enabled via `agent.enable.logging({...})`.
+ * Role:    Tier 3 observability — the low-level helper behind
+ *          `attachLogging(dispatcher, {...})` (exported from
+ *          `agentfootprint/observe`). For the high-level, uniform path use
+ *          `agent.enable.observability({ strategy: consoleObservability() })`.
  *          Developer debugging tool; production typically uses an OTEL
  *          recorder instead.
  * Emits:   Does NOT emit; READS the dispatcher and writes to the logger.
@@ -30,8 +33,8 @@ export interface LoggingLogger {
  * Raw strings still work (backed by the same literal union type below).
  *
  * @example
- *   agent.enable.logging({ domains: [LoggingDomains.CONTEXT, LoggingDomains.STREAM] });
- *   agent.enable.logging({ domains: ['context', 'stream'] }); // equivalent
+ *   attachLogging(dispatcher, { domains: [LoggingDomains.CONTEXT, LoggingDomains.STREAM] });
+ *   attachLogging(dispatcher, { domains: ['context', 'stream'] }); // equivalent
  */
 export const LoggingDomains = {
   /** Context-engineering events (the 3-slot model). THE DEBUG CORE. */

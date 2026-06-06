@@ -6,7 +6,7 @@
 
 # Class: LiveToolTracker
 
-Defined in: [src/recorders/observability/LiveStateRecorder.ts:241](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/LiveStateRecorder.ts#L241)
+Defined in: [src/recorders/observability/LiveStateRecorder.ts:241](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/LiveStateRecorder.ts#L241)
 
 Tracks in-flight tool calls. Subscribes to:
   - `agentfootprint.stream.tool_start` → opens a boundary
@@ -31,7 +31,7 @@ parallel tools share one calling stage but have distinct toolCallIds).
 
 > `readonly` **id**: `"live-tool"` = `'live-tool'`
 
-Defined in: [src/recorders/observability/LiveStateRecorder.ts:242](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/LiveStateRecorder.ts#L242)
+Defined in: [src/recorders/observability/LiveStateRecorder.ts:242](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/LiveStateRecorder.ts#L242)
 
 ## Accessors
 
@@ -41,7 +41,7 @@ Defined in: [src/recorders/observability/LiveStateRecorder.ts:242](https://githu
 
 > **get** **activeCount**(): `number`
 
-Defined in: [src/recorders/observability/LiveStateRecorder.ts:288](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/LiveStateRecorder.ts#L288)
+Defined in: [src/recorders/observability/LiveStateRecorder.ts:288](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/LiveStateRecorder.ts#L288)
 
 ##### Returns
 
@@ -55,7 +55,7 @@ Defined in: [src/recorders/observability/LiveStateRecorder.ts:288](https://githu
 
 > **get** **hasActive**(): `boolean`
 
-Defined in: [src/recorders/observability/LiveStateRecorder.ts:284](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/LiveStateRecorder.ts#L284)
+Defined in: [src/recorders/observability/LiveStateRecorder.ts:284](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/LiveStateRecorder.ts#L284)
 
 ##### Returns
 
@@ -67,7 +67,7 @@ Defined in: [src/recorders/observability/LiveStateRecorder.ts:284](https://githu
 
 > **clear**(): `void`
 
-Defined in: [src/recorders/observability/LiveStateRecorder.ts:274](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/LiveStateRecorder.ts#L274)
+Defined in: [src/recorders/observability/LiveStateRecorder.ts:274](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/LiveStateRecorder.ts#L274)
 
 #### Returns
 
@@ -79,7 +79,7 @@ Defined in: [src/recorders/observability/LiveStateRecorder.ts:274](https://githu
 
 > **getActive**(`toolCallId`): [`ToolLiveState`](/agentfootprint/api/generated/interfaces/ToolLiveState.md) \| `undefined`
 
-Defined in: [src/recorders/observability/LiveStateRecorder.ts:292](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/LiveStateRecorder.ts#L292)
+Defined in: [src/recorders/observability/LiveStateRecorder.ts:292](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/LiveStateRecorder.ts#L292)
 
 #### Parameters
 
@@ -97,7 +97,7 @@ Defined in: [src/recorders/observability/LiveStateRecorder.ts:292](https://githu
 
 > **getAllActive**(): `ReadonlyMap`\<`string`, [`ToolLiveState`](/agentfootprint/api/generated/interfaces/ToolLiveState.md)\>
 
-Defined in: [src/recorders/observability/LiveStateRecorder.ts:296](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/LiveStateRecorder.ts#L296)
+Defined in: [src/recorders/observability/LiveStateRecorder.ts:296](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/LiveStateRecorder.ts#L296)
 
 #### Returns
 
@@ -109,7 +109,7 @@ Defined in: [src/recorders/observability/LiveStateRecorder.ts:296](https://githu
 
 > **getExecutingToolNames**(): readonly `string`[]
 
-Defined in: [src/recorders/observability/LiveStateRecorder.ts:301](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/LiveStateRecorder.ts#L301)
+Defined in: [src/recorders/observability/LiveStateRecorder.ts:301](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/LiveStateRecorder.ts#L301)
 
 Names of tools currently executing. Empty when none.
 
@@ -123,7 +123,7 @@ readonly `string`[]
 
 > **isExecuting**(): `boolean`
 
-Defined in: [src/recorders/observability/LiveStateRecorder.ts:280](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/LiveStateRecorder.ts#L280)
+Defined in: [src/recorders/observability/LiveStateRecorder.ts:280](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/LiveStateRecorder.ts#L280)
 
 True if any tool is currently executing.
 
@@ -137,7 +137,7 @@ True if any tool is currently executing.
 
 > **subscribe**(`runner`): [`Unsubscribe`](/agentfootprint/api/generated/type-aliases/Unsubscribe.md)
 
-Defined in: [src/recorders/observability/LiveStateRecorder.ts:251](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/LiveStateRecorder.ts#L251)
+Defined in: [src/recorders/observability/LiveStateRecorder.ts:251](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/LiveStateRecorder.ts#L251)
 
 #### Parameters
 

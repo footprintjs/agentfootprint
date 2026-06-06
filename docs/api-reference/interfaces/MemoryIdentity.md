@@ -6,7 +6,7 @@
 
 # Interface: MemoryIdentity
 
-Defined in: [src/memory/identity/types.ts:22](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/memory/identity/types.ts#L22)
+Defined in: [src/memory/identity/types.ts:22](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/memory/identity/types.ts#L22)
 
 MemoryIdentity — hierarchical scoping for everything memory-related.
 
@@ -34,7 +34,7 @@ role, etc.) without breaking existing stores.
 
 > `readonly` **conversationId**: `string`
 
-Defined in: [src/memory/identity/types.ts:40](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/memory/identity/types.ts#L40)
+Defined in: [src/memory/identity/types.ts:40](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/memory/identity/types.ts#L40)
 
 Required — the conversation / session / thread id. Stable across
 multiple `agent.run()` calls so history accumulates correctly.
@@ -45,7 +45,7 @@ multiple `agent.run()` calls so history accumulates correctly.
 
 > `readonly` `optional` **principal?**: `string`
 
-Defined in: [src/memory/identity/types.ts:34](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/memory/identity/types.ts#L34)
+Defined in: [src/memory/identity/types.ts:34](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/memory/identity/types.ts#L34)
 
 Optional user / service-account identity within the tenant. Isolates
 memory per end-user inside a shared tenant.
@@ -56,7 +56,7 @@ memory per end-user inside a shared tenant.
 
 > `readonly` `optional` **tenant?**: `string`
 
-Defined in: [src/memory/identity/types.ts:28](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/memory/identity/types.ts#L28)
+Defined in: [src/memory/identity/types.ts:28](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/memory/identity/types.ts#L28)
 
 Optional organization / workspace / account boundary. Omit for
 single-tenant deploys. Storage adapters MUST refuse cross-tenant reads

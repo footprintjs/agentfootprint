@@ -55,5 +55,5 @@ agent.on('agentfootprint.cost.limit_hit', (e) => alert(`over budget: $${e.payloa
 
 ## Related
 
-- **[Observability](./04-observability.md)** — `.enable.logging` pipes
+- **[Observability](./04-observability.md)** — `.enable.observability` pipes
   cost events alongside stream events for debugging.

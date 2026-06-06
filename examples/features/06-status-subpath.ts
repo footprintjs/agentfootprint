@@ -3,8 +3,8 @@
  *
  * Two ways to drive a "what's the agent doing right now" line:
  *
- *   • HIGH-LEVEL — `agent.enable.thinking({ onStatus })`. One callback,
- *     opinionated formatter, see `examples/features/04-observability.ts`.
+ *   • HIGH-LEVEL — `agent.enable.liveStatus({ strategy: chatBubbleLiveStatus({ onLine }) })`.
+ *     One strategy, opinionated formatter, see `examples/features/04-observability.ts`.
  *   • LOW-LEVEL — this example. The state machine + templates + renderer,
  *     for consumers building custom chat UIs (Lens, embedded widgets,
  *     locale-aware bots) where they want full control over formatting,
@@ -35,7 +35,7 @@ export const meta: ExampleMeta = {
   title: 'Status subpath — selectThinkingState + renderThinkingLine + templates',
   group: 'features',
   description:
-    'Low-level chat-bubble status: derive ThinkingState from events, render via per-tool templates with var interpolation. Sister to enable.thinking; this is the primitive consumers compose into custom UIs.',
+    'Low-level chat-bubble status: derive ThinkingState from events, render via per-tool templates with var interpolation. Sister to enable.liveStatus; this is the primitive consumers compose into custom UIs.',
   defaultInput: 'check the weather in Paris',
   providerSlots: ['default'],
   tags: ['feature', 'status', 'thinking', 'chat-bubble', 'subpath'],

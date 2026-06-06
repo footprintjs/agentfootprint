@@ -6,7 +6,7 @@
 
 # Interface: BoundaryAggregate
 
-Defined in: [src/recorders/observability/BoundaryRecorder.ts:335](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/BoundaryRecorder.ts#L335)
+Defined in: [src/recorders/observability/BoundaryRecorder.ts:335](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/BoundaryRecorder.ts#L335)
 
 Per-boundary rollup returned by
 `BoundaryRecorder.aggregateForBoundary` and
@@ -27,7 +27,7 @@ In-flight boundaries (no `subflow.exit` yet) get partial values;
 
 > `readonly` `optional` **durationMs?**: `number`
 
-Defined in: [src/recorders/observability/BoundaryRecorder.ts:361](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/BoundaryRecorder.ts#L361)
+Defined in: [src/recorders/observability/BoundaryRecorder.ts:361](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/BoundaryRecorder.ts#L361)
 
 `endedAtMs - startedAtMs`. Undefined while in flight.
 
@@ -37,7 +37,7 @@ Defined in: [src/recorders/observability/BoundaryRecorder.ts:361](https://github
 
 > `readonly` `optional` **endedAtMs?**: `number`
 
-Defined in: [src/recorders/observability/BoundaryRecorder.ts:359](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/BoundaryRecorder.ts#L359)
+Defined in: [src/recorders/observability/BoundaryRecorder.ts:359](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/BoundaryRecorder.ts#L359)
 
 Wall-clock ms of `subflow.exit`. Undefined while in flight.
 
@@ -47,7 +47,7 @@ Wall-clock ms of `subflow.exit`. Undefined while in flight.
 
 > `readonly` **iterations**: `number`
 
-Defined in: [src/recorders/observability/BoundaryRecorder.ts:355](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/BoundaryRecorder.ts#L355)
+Defined in: [src/recorders/observability/BoundaryRecorder.ts:355](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/BoundaryRecorder.ts#L355)
 
 Count of `agent.iteration_start` events scoped to this boundary —
  ReAct-loop iterations. Always `0` for non-Agent primitives.
@@ -58,7 +58,7 @@ Count of `agent.iteration_start` events scoped to this boundary —
 
 > `readonly` **label**: `string`
 
-Defined in: [src/recorders/observability/BoundaryRecorder.ts:346](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/BoundaryRecorder.ts#L346)
+Defined in: [src/recorders/observability/BoundaryRecorder.ts:346](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/BoundaryRecorder.ts#L346)
 
 Subflow display name (e.g., 'Triage', 'Billing').
 
@@ -68,7 +68,7 @@ Subflow display name (e.g., 'Triage', 'Billing').
 
 > `readonly` **llmCalls**: `number`
 
-Defined in: [src/recorders/observability/BoundaryRecorder.ts:350](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/BoundaryRecorder.ts#L350)
+Defined in: [src/recorders/observability/BoundaryRecorder.ts:350](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/BoundaryRecorder.ts#L350)
 
 Count of `llm.start` events inside this boundary.
 
@@ -78,7 +78,7 @@ Count of `llm.start` events inside this boundary.
 
 > `readonly` `optional` **primitiveKind?**: `string`
 
-Defined in: [src/recorders/observability/BoundaryRecorder.ts:344](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/BoundaryRecorder.ts#L344)
+Defined in: [src/recorders/observability/BoundaryRecorder.ts:344](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/BoundaryRecorder.ts#L344)
 
 `'Agent'` / `'LLMCall'` / `'Sequence'` / `'Parallel'` /
  `'Conditional'` / `'Loop'`. Always set on rollups returned by
@@ -92,7 +92,7 @@ Defined in: [src/recorders/observability/BoundaryRecorder.ts:344](https://github
 
 > `readonly` **runtimeStageId**: `string`
 
-Defined in: [src/recorders/observability/BoundaryRecorder.ts:336](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/BoundaryRecorder.ts#L336)
+Defined in: [src/recorders/observability/BoundaryRecorder.ts:336](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/BoundaryRecorder.ts#L336)
 
 ***
 
@@ -100,7 +100,7 @@ Defined in: [src/recorders/observability/BoundaryRecorder.ts:336](https://github
 
 > `readonly` **startedAtMs**: `number`
 
-Defined in: [src/recorders/observability/BoundaryRecorder.ts:357](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/BoundaryRecorder.ts#L357)
+Defined in: [src/recorders/observability/BoundaryRecorder.ts:357](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/BoundaryRecorder.ts#L357)
 
 Wall-clock ms of `subflow.entry`.
 
@@ -110,7 +110,7 @@ Wall-clock ms of `subflow.entry`.
 
 > `readonly` **subflowId**: `string`
 
-Defined in: [src/recorders/observability/BoundaryRecorder.ts:337](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/BoundaryRecorder.ts#L337)
+Defined in: [src/recorders/observability/BoundaryRecorder.ts:337](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/BoundaryRecorder.ts#L337)
 
 ***
 
@@ -118,7 +118,7 @@ Defined in: [src/recorders/observability/BoundaryRecorder.ts:337](https://github
 
 > `readonly` **subflowPath**: readonly `string`[]
 
-Defined in: [src/recorders/observability/BoundaryRecorder.ts:338](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/BoundaryRecorder.ts#L338)
+Defined in: [src/recorders/observability/BoundaryRecorder.ts:338](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/BoundaryRecorder.ts#L338)
 
 ***
 
@@ -126,7 +126,7 @@ Defined in: [src/recorders/observability/BoundaryRecorder.ts:338](https://github
 
 > `readonly` **tokens**: `object`
 
-Defined in: [src/recorders/observability/BoundaryRecorder.ts:348](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/BoundaryRecorder.ts#L348)
+Defined in: [src/recorders/observability/BoundaryRecorder.ts:348](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/BoundaryRecorder.ts#L348)
 
 Token usage summed across every `llm.end` inside this boundary.
 
@@ -144,6 +144,6 @@ Token usage summed across every `llm.end` inside this boundary.
 
 > `readonly` **toolCalls**: `number`
 
-Defined in: [src/recorders/observability/BoundaryRecorder.ts:352](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/BoundaryRecorder.ts#L352)
+Defined in: [src/recorders/observability/BoundaryRecorder.ts:352](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/BoundaryRecorder.ts#L352)
 
 Count of `tool.start` events inside this boundary.

@@ -8,7 +8,7 @@
 
 > **defaultPipeline**(`config`): `MemoryPipeline`
 
-Defined in: [src/memory/pipeline/default.ts:116](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/memory/pipeline/default.ts#L116)
+Defined in: [src/memory/pipeline/default.ts:116](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/memory/pipeline/default.ts#L116)
 
 Build the default read + write pipelines sharing a single store.
 Returns two FlowChart subflows ready to be mounted by the wire layer.

@@ -2,10 +2,12 @@
  * ThinkingRecorder — Claude Code-style live status line for Agent runs.
  *
  * Pattern: Facade over EventDispatcher's wildcard subscription.
- * Role:    Tier 3 observability — consumers enable via
- *          `agent.enable.thinking({ onStatus })`. Zero subscriptions
- *          written by the consumer; one callback receives a human-
- *          readable status string at every meaningful moment.
+ * Role:    Tier 3 observability — the low-level helper behind
+ *          `attachThinking(dispatcher, { onStatus })` (exported from
+ *          `agentfootprint/observe`). For the high-level, uniform path use
+ *          `agent.enable.liveStatus({ strategy: chatBubbleLiveStatus({ onLine }) })`.
+ *          One callback receives a human-readable status string at every
+ *          meaningful moment.
  * Emits:   Does NOT emit; READS core events via the dispatcher and calls
  *          `onStatus`.
  */

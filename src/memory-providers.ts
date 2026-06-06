@@ -30,11 +30,7 @@
  *          actually instantiate pull their SDK in.
  *
  * @example
- *   // New canonical import
- *   import { RedisStore } from 'agentfootprint/memory-providers';
- *
- *   // Legacy per-adapter alias (still works through v2.x)
- *   import { RedisStore } from 'agentfootprint/memory-redis';
+ *   import { RedisStore, AgentCoreStore } from 'agentfootprint/memory-providers';
  */
 
 // Lazy-required peer-dep stores. Both adapters defer their vendor SDK

@@ -126,7 +126,11 @@ describe('Agent runner-contract compliance', () => {
     expect(typeof inst.once).toBe('function');
     expect(typeof inst.attach).toBe('function');
     expect(typeof inst.emit).toBe('function');
-    expect(typeof inst.enable.thinking).toBe('function');
-    expect(typeof inst.enable.logging).toBe('function');
+    expect(typeof inst.enable.flowchart).toBe('function');
+    expect(typeof inst.enable.observability).toBe('function');
+    expect(typeof inst.enable.liveStatus).toBe('function');
+    // enable.thinking / enable.logging removed in 4.0.0 (use the strategy enablers).
+    expect((inst.enable as Record<string, unknown>).thinking).toBeUndefined();
+    expect((inst.enable as Record<string, unknown>).logging).toBeUndefined();
   });
 });

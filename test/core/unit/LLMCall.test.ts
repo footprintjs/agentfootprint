@@ -65,10 +65,14 @@ describe('LLMCall runner-contract compliance', () => {
     expect(typeof inst.emit).toBe('function');
   });
 
-  it('exposes enable.thinking and enable.logging namespaces', () => {
+  it('exposes the enable.* strategy namespaces', () => {
     const inst = LLMCall.create({ provider: new MockProvider(), model: 'mock' }).system('').build();
-    expect(typeof inst.enable.thinking).toBe('function');
-    expect(typeof inst.enable.logging).toBe('function');
+    expect(typeof inst.enable.flowchart).toBe('function');
+    expect(typeof inst.enable.observability).toBe('function');
+    expect(typeof inst.enable.liveStatus).toBe('function');
+    // enable.thinking / enable.logging removed in 4.0.0.
+    expect((inst.enable as Record<string, unknown>).thinking).toBeUndefined();
+    expect((inst.enable as Record<string, unknown>).logging).toBeUndefined();
   });
 
   it('getSpec() returns a defined chart object (composable)', () => {

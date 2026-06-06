@@ -107,7 +107,7 @@ footprintjs decision-evidence snapshots so cross-run follow-ups
 | 01 | [features/01-pause-resume.ts](features/01-pause-resume.ts) | Human-in-the-loop via `pauseHere()` + `.resume()` |
 | 02 | [features/02-cost-tracking.ts](features/02-cost-tracking.ts) | `pricingTable` + `costBudget` → `cost.tick` / `cost.limit_hit` |
 | 03 | [features/03-permissions.ts](features/03-permissions.ts) | `permissionChecker` gating tool calls |
-| 04 | [features/04-observability.ts](features/04-observability.ts) | `.enable.thinking()` + `.enable.logging()` |
+| 04 | [features/04-observability.ts](features/04-observability.ts) | `.enable.liveStatus()` + `.enable.observability()` |
 | 05 | [features/05-events.ts](features/05-events.ts) | Typed `.on()` listeners, wildcards, `runner.emit()` |
 
 ## The closed taxonomy
@@ -199,11 +199,11 @@ _Run `npm run examples:readme` after adding/editing examples._
 | 01 | [`01-pause-resume.ts`](features/01-pause-resume.ts) | Pause / Resume — human-in-the-loop | Two-phase HITL: run() may pause and return a checkpoint; resume(checkpoint, answer) finishes the run from the human\'s reply. Process A and Process B can be days apart. |
 | 02 | [`02-cost-tracking.ts`](features/02-cost-tracking.ts) | Cost tracking — pricingTable + costBudget | Add a PricingTable adapter to get cost.tick after every LLM call; add costBudget to get a one-shot cost.limit_hit on threshold crossing. |
 | 03 | [`03-permissions.ts`](features/03-permissions.ts) | Permissions — tool-call gating | Supply a PermissionChecker; Agent calls check() before every tool.execute and emits permission.check events. Deny skips the tool. |
-| 04 | [`04-observability.ts`](features/04-observability.ts) | Observability — enable.thinking + enable.logging | One-liner Tier-3 observability: .enable.thinking for status line + .enable.logging for firehose structured logs. |
+| 04 | [`04-observability.ts`](features/04-observability.ts) | Observability — enable.liveStatus + enable.observability | Strategy-based Tier-3 observability: .enable.liveStatus for a status line + .enable.observability for firehose structured logs. |
 | 05 | [`05-events.ts`](features/05-events.ts) | Events — typed .on() + wildcards + runner.emit() | The 47-event typed registry: .on(type, listener) is compile-time checked; wildcards (* / domain.*) for broad subscriptions; runner.emit() for consumer events. |
 | 06 | [`06-detached-observability.ts`](features/06-detached-observability.ts) | Detached observability — non-blocking telemetry export | Wire the new  |
 | 06 | [`06-flowchart-boundary-payloads.ts`](features/06-flowchart-boundary-payloads.ts) | Flowchart — subflow boundary payloads (entry/exit) | Every subflow StepNode carries entryPayload + exitPayload sourced from footprintjs BoundaryRecorder. Bound by runtimeStageId. |
-| 06 | [`06-status-subpath.ts`](features/06-status-subpath.ts) | Status subpath — selectThinkingState + renderThinkingLine + templates | Low-level chat-bubble status: derive ThinkingState from events, render via per-tool templates with var interpolation. Sister to enable.thinking; this is the primitive consumers compose into custom UIs. |
+| 06 | [`06-status-subpath.ts`](features/06-status-subpath.ts) | Status subpath — selectThinkingState + renderThinkingLine + templates | Low-level chat-bubble status: derive ThinkingState from events, render via per-tool templates with var interpolation. Sister to enable.liveStatus; this is the primitive consumers compose into custom UIs. |
 | 07 | [`07-mock-multi-turn-replies.ts`](features/07-mock-multi-turn-replies.ts) | Mock — scripted multi-turn replies (deterministic ReAct) | mock({ replies: [...] }) drives a tool-using ReAct loop with exact,  |
 | 08 | [`08-reliability.ts`](features/08-reliability.ts) | Reliability — CircuitBreaker + outputFallback + resumeOnError | End-to-end demo of the v2.10.x Reliability subsystem: vendor-outage circuit breaker, 3-tier output-schema degradation, and fault-tolerant mid-run resume from JSON-serializable checkpoint. |
 | 09 | [`09-reliability-gate.ts`](features/09-reliability-gate.ts) | Reliability gate — rules-based retry / fallback / fail-fast around CallLLM | v2.11.5 — declarative reliability rules wrapping every LLM call inside an Agent loop. Demonstrates happy path, transient-retry recovery, and post-decide fail-fast → typed ReliabilityFailFastError. Streaming + reliability uses first-chunk arbitration: pre-first-chunk failures honor the full rule set; mid-stream failures only honor ok / fail-fast. |

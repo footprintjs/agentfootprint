@@ -8,7 +8,7 @@
 
 > **evaluateInjections**(`injections`, `ctx`): [`InjectionEvaluation`](/agentfootprint/api/generated/interfaces/InjectionEvaluation.md)
 
-Defined in: [src/lib/injection-engine/evaluator.ts:26](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/lib/injection-engine/evaluator.ts#L26)
+Defined in: [src/lib/injection-engine/evaluator.ts:26](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/lib/injection-engine/evaluator.ts#L26)
 
 ## Parameters
 

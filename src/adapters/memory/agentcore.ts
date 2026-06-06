@@ -2,14 +2,10 @@
  * AgentCoreStore — AWS Bedrock AgentCore Memory adapter (peer-dep
  * `@aws-sdk/client-bedrock-agent-runtime`).
  *
- * Canonical subpath (v2.5+): `agentfootprint/memory-providers`.
- * Legacy alias (still works through v2.x): `agentfootprint/memory-agentcore`.
+ * Import from the canonical subpath (the `agentfootprint/memory-agentcore`
+ * alias was removed in 4.0.0):
  *
- *   // New canonical (v2.5+):
  *   import { AgentCoreStore } from 'agentfootprint/memory-providers';
- *
- *   // Legacy alias (still works through v2.x; removed in v3.0):
- *   import { AgentCoreStore } from 'agentfootprint/memory-agentcore';
  *
  *   const store = new AgentCoreStore({
  *     memoryId: 'arn:aws:bedrock:us-east-1:...:memory/my-mem',

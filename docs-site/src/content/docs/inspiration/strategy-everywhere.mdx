@@ -214,7 +214,7 @@ From the 7-expert design review (AWS IAM, Datadog, OTel, Stripe, Vercel, React, 
 
 The library already has `memory-agentcore` (`@aws-sdk/client-bedrock-agent-runtime` peer dep) shipping. Established pattern. Lean into the same ecosystem for observability strategies.
 
-> **Status (v3.1):** the grouped enablers (`observability`, `cost`, `liveStatus`), the strategy slot + the 4 default sinks, the per-group `compose*` combinators, and the AWS observability adapters (`agentcoreObservability`, `cloudwatchObservability`, `xrayObservability`) plus `otelObservability` have **all shipped** — under the single `agentfootprint/observability-providers` subpath. The deprecated flat methods (`enable.thinking`, `enable.logging`, `enable.flowchart`) are still present and marked `@deprecated`; they have not yet been removed. `cost`/`lens` vendor subpaths and `enable.lens` remain planned. The version numbers below are the original plan, kept for the historical record.
+> **Status (4.0.0):** the grouped enablers (`observability`, `cost`, `liveStatus`), the strategy slot + the 4 default sinks (importable from `agentfootprint/strategies`), the per-group `compose*` combinators, and the AWS observability adapters (`agentcoreObservability`, `cloudwatchObservability`, `xrayObservability`) plus `otelObservability` have **all shipped** — under the single `agentfootprint/observability-providers` subpath. The deprecated flat methods `enable.thinking` / `enable.logging` were **removed in 4.0.0** (migrate to `enable.liveStatus` / `enable.observability`); `enable.flowchart` is **kept** (it's a real, non-deprecated composition-graph feature). `cost`/`lens` vendor subpaths and `enable.lens` remain planned. The version numbers below are the original plan, kept for the historical record.
 
 | Version | What ships | Breaking? |
 |---|---|---|
@@ -226,7 +226,7 @@ The library already has `memory-agentcore` (`@aws-sdk/client-bedrock-agent-runti
 | **v2.10.x** | Non-AWS observability: Datadog, Pino | No |
 | **v2.11.x** | `cost-stripe`, `cost-webhook` | No |
 | **v2.12.x** | Lens strategies (`browser`, `cliTUI`, `jsonExport`) | No |
-| **v3.0** | Remove deprecated flat `enable.thinking` / `enable.logging` / `enable.flowchart` | **Breaking** — single-line migration via search-replace |
+| **4.0.0** | Removed deprecated flat `enable.thinking` / `enable.logging` (migrate to `enable.liveStatus` / `enable.observability`). `enable.flowchart` kept — not deprecated. | **Breaking** — single-line migration |
 
 ## Out of scope (parked)
 

@@ -6,7 +6,7 @@
 
 # Interface: StepEdge
 
-Defined in: [src/recorders/observability/FlowchartRecorder.ts:165](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/FlowchartRecorder.ts#L165)
+Defined in: [src/recorders/observability/FlowchartRecorder.ts:165](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/FlowchartRecorder.ts#L165)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [src/recorders/observability/FlowchartRecorder.ts:165](https://githu
 
 > `readonly` **from**: `string`
 
-Defined in: [src/recorders/observability/FlowchartRecorder.ts:167](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/FlowchartRecorder.ts#L167)
+Defined in: [src/recorders/observability/FlowchartRecorder.ts:167](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/FlowchartRecorder.ts#L167)
 
 ***
 
@@ -22,7 +22,7 @@ Defined in: [src/recorders/observability/FlowchartRecorder.ts:167](https://githu
 
 > `readonly` **id**: `string`
 
-Defined in: [src/recorders/observability/FlowchartRecorder.ts:166](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/FlowchartRecorder.ts#L166)
+Defined in: [src/recorders/observability/FlowchartRecorder.ts:166](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/FlowchartRecorder.ts#L166)
 
 ***
 
@@ -30,7 +30,7 @@ Defined in: [src/recorders/observability/FlowchartRecorder.ts:166](https://githu
 
 > `readonly` `optional` **iteration?**: `number`
 
-Defined in: [src/recorders/observability/FlowchartRecorder.ts:170](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/FlowchartRecorder.ts#L170)
+Defined in: [src/recorders/observability/FlowchartRecorder.ts:170](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/FlowchartRecorder.ts#L170)
 
 ***
 
@@ -38,7 +38,7 @@ Defined in: [src/recorders/observability/FlowchartRecorder.ts:170](https://githu
 
 > `readonly` **kind**: `"next"` \| `"loop-iteration"` \| `"fork-branch"` \| `"decision-branch"`
 
-Defined in: [src/recorders/observability/FlowchartRecorder.ts:169](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/FlowchartRecorder.ts#L169)
+Defined in: [src/recorders/observability/FlowchartRecorder.ts:169](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/FlowchartRecorder.ts#L169)
 
 ***
 
@@ -46,4 +46,4 @@ Defined in: [src/recorders/observability/FlowchartRecorder.ts:169](https://githu
 
 > `readonly` **to**: `string`
 
-Defined in: [src/recorders/observability/FlowchartRecorder.ts:168](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/FlowchartRecorder.ts#L168)
+Defined in: [src/recorders/observability/FlowchartRecorder.ts:168](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/FlowchartRecorder.ts#L168)

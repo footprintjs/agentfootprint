@@ -6,7 +6,7 @@
 
 # Interface: StepNode
 
-Defined in: [src/recorders/observability/FlowchartRecorder.ts:57](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/FlowchartRecorder.ts#L57)
+Defined in: [src/recorders/observability/FlowchartRecorder.ts:57](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/FlowchartRecorder.ts#L57)
 
 One node in the step-level flowchart. Node kind drives rendering
 (actor icon, color). ReAct steps carry token + tool details; topology
@@ -20,7 +20,7 @@ Conditional, Swarm) stays visible in the graph.
 
 > `readonly` `optional` **assistantText?**: `string`
 
-Defined in: [src/recorders/observability/FlowchartRecorder.ts:103](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/FlowchartRecorder.ts#L103)
+Defined in: [src/recorders/observability/FlowchartRecorder.ts:103](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/FlowchartRecorder.ts#L103)
 
 LLM's text content. Set on `llm->tool` (the reasoning emitted with the
  tool_use blocks) and on `llm->user` (the terminal answer).
@@ -31,7 +31,7 @@ LLM's text content. Set on `llm->tool` (the reasoning emitted with the
 
 > `readonly` `optional` **endOffsetMs?**: `number`
 
-Defined in: [src/recorders/observability/FlowchartRecorder.ts:69](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/FlowchartRecorder.ts#L69)
+Defined in: [src/recorders/observability/FlowchartRecorder.ts:69](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/FlowchartRecorder.ts#L69)
 
 ***
 
@@ -39,7 +39,7 @@ Defined in: [src/recorders/observability/FlowchartRecorder.ts:69](https://github
 
 > `readonly` `optional` **entryPayload?**: `unknown`
 
-Defined in: [src/recorders/observability/FlowchartRecorder.ts:97](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/FlowchartRecorder.ts#L97)
+Defined in: [src/recorders/observability/FlowchartRecorder.ts:97](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/FlowchartRecorder.ts#L97)
 
 `inputMapper` payload at the subflow's entry. Subflow nodes only.
 
@@ -49,7 +49,7 @@ Defined in: [src/recorders/observability/FlowchartRecorder.ts:97](https://github
 
 > `readonly` `optional` **exitPayload?**: `unknown`
 
-Defined in: [src/recorders/observability/FlowchartRecorder.ts:100](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/FlowchartRecorder.ts#L100)
+Defined in: [src/recorders/observability/FlowchartRecorder.ts:100](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/FlowchartRecorder.ts#L100)
 
 Subflow shared state at exit. Subflow nodes only.
  Undefined for in-progress / paused subflows.
@@ -60,7 +60,7 @@ Subflow shared state at exit. Subflow nodes only.
 
 > `readonly` **id**: `string`
 
-Defined in: [src/recorders/observability/FlowchartRecorder.ts:58](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/FlowchartRecorder.ts#L58)
+Defined in: [src/recorders/observability/FlowchartRecorder.ts:58](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/FlowchartRecorder.ts#L58)
 
 ***
 
@@ -68,7 +68,7 @@ Defined in: [src/recorders/observability/FlowchartRecorder.ts:58](https://github
 
 > `readonly` `optional` **injections?**: readonly [`ContextInjection`](/agentfootprint/api/generated/interfaces/ContextInjection.md)[]
 
-Defined in: [src/recorders/observability/FlowchartRecorder.ts:79](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/FlowchartRecorder.ts#L79)
+Defined in: [src/recorders/observability/FlowchartRecorder.ts:79](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/FlowchartRecorder.ts#L79)
 
 Context injections attributed to this step (LLM steps only).
 
@@ -78,7 +78,7 @@ Context injections attributed to this step (LLM steps only).
 
 > `readonly` `optional` **isAgentBoundary?**: `boolean`
 
-Defined in: [src/recorders/observability/FlowchartRecorder.ts:88](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/FlowchartRecorder.ts#L88)
+Defined in: [src/recorders/observability/FlowchartRecorder.ts:88](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/FlowchartRecorder.ts#L88)
 
 True ONLY for `subflow` StepNodes whose primitiveKind is `'Agent'`.
  Narrow flag for callers that distinguish ReAct agents from other
@@ -90,7 +90,7 @@ True ONLY for `subflow` StepNodes whose primitiveKind is `'Agent'`.
 
 > `readonly` `optional` **isPrimitiveBoundary?**: `boolean`
 
-Defined in: [src/recorders/observability/FlowchartRecorder.ts:95](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/FlowchartRecorder.ts#L95)
+Defined in: [src/recorders/observability/FlowchartRecorder.ts:95](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/FlowchartRecorder.ts#L95)
 
 True for `subflow` StepNodes representing any KNOWN primitive
  (Agent / LLMCall / Sequence / Parallel / Conditional / Loop) —
@@ -102,7 +102,7 @@ True for `subflow` StepNodes representing any KNOWN primitive
 
 > `readonly` `optional` **iterationIndex?**: `number`
 
-Defined in: [src/recorders/observability/FlowchartRecorder.ts:82](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/FlowchartRecorder.ts#L82)
+Defined in: [src/recorders/observability/FlowchartRecorder.ts:82](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/FlowchartRecorder.ts#L82)
 
 1-based ReAct iteration this step belongs to. Undefined for
  topology / composition nodes.
@@ -113,7 +113,7 @@ Defined in: [src/recorders/observability/FlowchartRecorder.ts:82](https://github
 
 > `readonly` **kind**: `"fork-branch"` \| `"decision-branch"` \| `"user->llm"` \| `"llm->tool"` \| `"tool->llm"` \| `"llm->user"` \| `"subflow"`
 
-Defined in: [src/recorders/observability/FlowchartRecorder.ts:59](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/FlowchartRecorder.ts#L59)
+Defined in: [src/recorders/observability/FlowchartRecorder.ts:59](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/FlowchartRecorder.ts#L59)
 
 ***
 
@@ -121,7 +121,7 @@ Defined in: [src/recorders/observability/FlowchartRecorder.ts:59](https://github
 
 > `readonly` **label**: `string`
 
-Defined in: [src/recorders/observability/FlowchartRecorder.ts:67](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/FlowchartRecorder.ts#L67)
+Defined in: [src/recorders/observability/FlowchartRecorder.ts:67](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/FlowchartRecorder.ts#L67)
 
 ***
 
@@ -129,7 +129,7 @@ Defined in: [src/recorders/observability/FlowchartRecorder.ts:67](https://github
 
 > `readonly` `optional` **llmModel?**: `string`
 
-Defined in: [src/recorders/observability/FlowchartRecorder.ts:75](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/FlowchartRecorder.ts#L75)
+Defined in: [src/recorders/observability/FlowchartRecorder.ts:75](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/FlowchartRecorder.ts#L75)
 
 user->llm / tool->llm: the model that was invoked.
 
@@ -139,7 +139,7 @@ user->llm / tool->llm: the model that was invoked.
 
 > `readonly` `optional` **primitiveKind?**: `string`
 
-Defined in: [src/recorders/observability/FlowchartRecorder.ts:91](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/FlowchartRecorder.ts#L91)
+Defined in: [src/recorders/observability/FlowchartRecorder.ts:91](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/FlowchartRecorder.ts#L91)
 
 Primitive kind from the subflow root description prefix
  (`'Agent'` / `'LLMCall'` / `'Sequence'` / etc.).
@@ -150,7 +150,7 @@ Primitive kind from the subflow root description prefix
 
 > `readonly` `optional` **runtimeStageId?**: `string`
 
-Defined in: [src/recorders/observability/FlowchartRecorder.ts:111](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/FlowchartRecorder.ts#L111)
+Defined in: [src/recorders/observability/FlowchartRecorder.ts:111](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/FlowchartRecorder.ts#L111)
 
 Stable per-execution key — same `runtimeStageId` Trace view uses.
 
@@ -160,7 +160,7 @@ Stable per-execution key — same `runtimeStageId` Trace view uses.
 
 > `readonly` `optional` **slotBoundaries?**: `object`
 
-Defined in: [src/recorders/observability/FlowchartRecorder.ts:130](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/FlowchartRecorder.ts#L130)
+Defined in: [src/recorders/observability/FlowchartRecorder.ts:130](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/FlowchartRecorder.ts#L130)
 
 Slot boundary payloads composed for THIS LLM step.
 
@@ -197,7 +197,7 @@ access.
 
 > `readonly` `optional` **slotUpdated?**: `"system-prompt"` \| `"messages"` \| `"tools"`
 
-Defined in: [src/recorders/observability/FlowchartRecorder.ts:84](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/FlowchartRecorder.ts#L84)
+Defined in: [src/recorders/observability/FlowchartRecorder.ts:84](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/FlowchartRecorder.ts#L84)
 
 Which slot the step's input updated. ReAct steps only.
 
@@ -207,7 +207,7 @@ Which slot the step's input updated. ReAct steps only.
 
 > `readonly` **startOffsetMs**: `number`
 
-Defined in: [src/recorders/observability/FlowchartRecorder.ts:68](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/FlowchartRecorder.ts#L68)
+Defined in: [src/recorders/observability/FlowchartRecorder.ts:68](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/FlowchartRecorder.ts#L68)
 
 ***
 
@@ -215,7 +215,7 @@ Defined in: [src/recorders/observability/FlowchartRecorder.ts:68](https://github
 
 > `readonly` **subflowPath**: readonly `string`[]
 
-Defined in: [src/recorders/observability/FlowchartRecorder.ts:77](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/FlowchartRecorder.ts#L77)
+Defined in: [src/recorders/observability/FlowchartRecorder.ts:77](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/FlowchartRecorder.ts#L77)
 
 Decomposition of the underlying subflowId (rooted under '__root__').
 
@@ -225,7 +225,7 @@ Decomposition of the underlying subflowId (rooted under '__root__').
 
 > `readonly` `optional` **tokens?**: `object`
 
-Defined in: [src/recorders/observability/FlowchartRecorder.ts:71](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/FlowchartRecorder.ts#L71)
+Defined in: [src/recorders/observability/FlowchartRecorder.ts:71](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/FlowchartRecorder.ts#L71)
 
 LLM step: token usage of the call that bounded this step.
 
@@ -243,7 +243,7 @@ LLM step: token usage of the call that bounded this step.
 
 > `readonly` `optional` **toolArgs?**: `unknown`
 
-Defined in: [src/recorders/observability/FlowchartRecorder.ts:106](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/FlowchartRecorder.ts#L106)
+Defined in: [src/recorders/observability/FlowchartRecorder.ts:106](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/FlowchartRecorder.ts#L106)
 
 Tool input arguments the LLM produced. Set on `llm->tool` from the
  matching `tool.start` event payload.
@@ -254,7 +254,7 @@ Tool input arguments the LLM produced. Set on `llm->tool` from the
 
 > `readonly` `optional` **toolName?**: `string`
 
-Defined in: [src/recorders/observability/FlowchartRecorder.ts:73](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/FlowchartRecorder.ts#L73)
+Defined in: [src/recorders/observability/FlowchartRecorder.ts:73](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/FlowchartRecorder.ts#L73)
 
 llm->tool / tool->llm: the tool name.
 
@@ -264,7 +264,7 @@ llm->tool / tool->llm: the tool name.
 
 > `readonly` `optional` **toolResult?**: `unknown`
 
-Defined in: [src/recorders/observability/FlowchartRecorder.ts:109](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/FlowchartRecorder.ts#L109)
+Defined in: [src/recorders/observability/FlowchartRecorder.ts:109](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/FlowchartRecorder.ts#L109)
 
 Tool result returned to the LLM. Set on `tool->llm` from the
  preceding `tool.end` event payload.

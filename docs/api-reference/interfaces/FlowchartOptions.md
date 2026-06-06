@@ -6,7 +6,7 @@
 
 # Interface: FlowchartOptions
 
-Defined in: [src/recorders/observability/FlowchartRecorder.ts:179](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/FlowchartRecorder.ts#L179)
+Defined in: [src/recorders/observability/FlowchartRecorder.ts:179](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/FlowchartRecorder.ts#L179)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [src/recorders/observability/FlowchartRecorder.ts:179](https://githu
 
 > `readonly` `optional` **onUpdate?**: (`graph`) => `void`
 
-Defined in: [src/recorders/observability/FlowchartRecorder.ts:182](https://github.com/footprintjs/agentfootprint/blob/7ab699b43b69875e30b9726bca6c365aee3b107c/src/recorders/observability/FlowchartRecorder.ts#L182)
+Defined in: [src/recorders/observability/FlowchartRecorder.ts:182](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/FlowchartRecorder.ts#L182)
 
 Called each time the graph changes; fires synchronously on the
  driving event so the UI updates the moment the structure changes.
