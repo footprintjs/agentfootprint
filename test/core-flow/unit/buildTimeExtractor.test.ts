@@ -190,7 +190,9 @@ describe('L1a — Lego-block cascade (consumer threads the same reference)', () 
     // one of each per LLMCall. Cascade demonstrates that consumers can
     // share a recorder reference across nested compositions.
     expect(events.stageIds.filter((id) => id === 'client').length).toBeGreaterThanOrEqual(2);
-    expect(events.mountedSubflowIds.filter((id) => id === 'sf-llm-call').length).toBeGreaterThanOrEqual(2);
+    expect(
+      events.mountedSubflowIds.filter((id) => id === 'sf-llm-call').length,
+    ).toBeGreaterThanOrEqual(2);
   });
 
   it('recorder on outer Parallel only → branch internals NOT observed (cascade is opt-in)', () => {

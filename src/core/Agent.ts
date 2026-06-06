@@ -676,7 +676,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     executor.attachCombinedRecorder(new ContextRecorder({ dispatcher, getRunContext: getRunCtx }));
     // The InjectionEngine typedEmits context.evaluated; this bridge forwards it
     // to the dispatcher (ContextRecorder handles the write-derived context.*).
-    executor.attachCombinedRecorder(contextEvaluatedRecorder({ dispatcher, getRunContext: getRunCtx }));
+    executor.attachCombinedRecorder(
+      contextEvaluatedRecorder({ dispatcher, getRunContext: getRunCtx }),
+    );
     executor.attachCombinedRecorder(streamRecorder({ dispatcher, getRunContext: getRunCtx }));
     executor.attachCombinedRecorder(agentRecorder({ dispatcher, getRunContext: getRunCtx }));
     // Terminal-failure bridge: footprintjs onRunFailed → typed error.fatal,

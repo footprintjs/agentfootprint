@@ -68,20 +68,24 @@ describe('scenario — ReAct iteration with RAG + skill', () => {
     // Iteration 1: system-prompt slot composes from instructions + skill.
     rec.onSubflowEntry(sf(SUBFLOW_IDS.SYSTEM_PROMPT));
     rec.onWrite(
-      we(INJECTION_KEYS.SYSTEM_PROMPT, [
-        inj({
-          slot: 'system-prompt',
-          source: 'instructions',
-          contentHash: 'i1',
-          reason: 'base rules',
-        }),
-        inj({
-          slot: 'system-prompt',
-          source: 'skill',
-          contentHash: 's1',
-          reason: 'skill activated',
-        }),
-      ], SUBFLOW_IDS.SYSTEM_PROMPT),
+      we(
+        INJECTION_KEYS.SYSTEM_PROMPT,
+        [
+          inj({
+            slot: 'system-prompt',
+            source: 'instructions',
+            contentHash: 'i1',
+            reason: 'base rules',
+          }),
+          inj({
+            slot: 'system-prompt',
+            source: 'skill',
+            contentHash: 's1',
+            reason: 'skill activated',
+          }),
+        ],
+        SUBFLOW_IDS.SYSTEM_PROMPT,
+      ),
     );
     rec.onWrite(
       we(
@@ -105,23 +109,27 @@ describe('scenario — ReAct iteration with RAG + skill', () => {
     // Messages slot composes from user + RAG retrievals.
     rec.onSubflowEntry(sf(SUBFLOW_IDS.MESSAGES));
     rec.onWrite(
-      we(INJECTION_KEYS.MESSAGES, [
-        inj({ slot: 'messages', source: 'user', contentHash: 'u1', asRole: 'user' }),
-        inj({
-          slot: 'messages',
-          source: 'rag',
-          contentHash: 'r1',
-          asRole: 'tool',
-          retrievalScore: 0.92,
-        }),
-        inj({
-          slot: 'messages',
-          source: 'rag',
-          contentHash: 'r2',
-          asRole: 'tool',
-          retrievalScore: 0.85,
-        }),
-      ], SUBFLOW_IDS.MESSAGES),
+      we(
+        INJECTION_KEYS.MESSAGES,
+        [
+          inj({ slot: 'messages', source: 'user', contentHash: 'u1', asRole: 'user' }),
+          inj({
+            slot: 'messages',
+            source: 'rag',
+            contentHash: 'r1',
+            asRole: 'tool',
+            retrievalScore: 0.92,
+          }),
+          inj({
+            slot: 'messages',
+            source: 'rag',
+            contentHash: 'r2',
+            asRole: 'tool',
+            retrievalScore: 0.85,
+          }),
+        ],
+        SUBFLOW_IDS.MESSAGES,
+      ),
     );
     rec.onWrite(
       we(

@@ -25,7 +25,11 @@ function sf(subflowId: string): FlowSubflowEvent {
 // path — that path is how ContextRecorder attributes the write to a slot
 // (parallel-safe, no stack). Every write in this file happens inside the
 // system-prompt slot, so default the enclosing subflow to it.
-function we(key: string, value: unknown, enclosing: string = SUBFLOW_IDS.SYSTEM_PROMPT): WriteEvent {
+function we(
+  key: string,
+  value: unknown,
+  enclosing: string = SUBFLOW_IDS.SYSTEM_PROMPT,
+): WriteEvent {
   return {
     key,
     value,

@@ -105,7 +105,11 @@ describe('ContextRecorder — injection emit', () => {
 
     rec.onSubflowEntry(subflowEntry(SUBFLOW_IDS.SYSTEM_PROMPT));
     rec.onWrite(
-      writeEvent(INJECTION_KEYS.SYSTEM_PROMPT, [injection({ contentHash: 'a' })], SUBFLOW_IDS.SYSTEM_PROMPT),
+      writeEvent(
+        INJECTION_KEYS.SYSTEM_PROMPT,
+        [injection({ contentHash: 'a' })],
+        SUBFLOW_IDS.SYSTEM_PROMPT,
+      ),
     );
     rec.onWrite(
       writeEvent(
@@ -143,7 +147,11 @@ describe('ContextRecorder — injection emit', () => {
     // (write's runtimeStageId resolves to 'messages', key is TOOLS → no match).
     rec.onSubflowEntry(subflowEntry(SUBFLOW_IDS.MESSAGES));
     rec.onWrite(
-      writeEvent(INJECTION_KEYS.TOOLS, [injection({ slot: 'tools', contentHash: 'a' })], SUBFLOW_IDS.MESSAGES),
+      writeEvent(
+        INJECTION_KEYS.TOOLS,
+        [injection({ slot: 'tools', contentHash: 'a' })],
+        SUBFLOW_IDS.MESSAGES,
+      ),
     );
     expect(fn).not.toHaveBeenCalled();
   });
@@ -156,7 +164,11 @@ describe('ContextRecorder — injection emit', () => {
 
     rec.onSubflowEntry(subflowEntry(SUBFLOW_IDS.ROUTE));
     rec.onWrite(
-      writeEvent(INJECTION_KEYS.SYSTEM_PROMPT, [injection({ contentHash: 'a' })], SUBFLOW_IDS.ROUTE),
+      writeEvent(
+        INJECTION_KEYS.SYSTEM_PROMPT,
+        [injection({ contentHash: 'a' })],
+        SUBFLOW_IDS.ROUTE,
+      ),
     );
     expect(fn).not.toHaveBeenCalled();
   });
@@ -181,7 +193,11 @@ describe('ContextRecorder — parallel slot interleaving (attribution by write, 
 
     // Interleaved writes, each emitted INSIDE its own slot subflow.
     rec.onWrite(
-      writeEvent(INJECTION_KEYS.MESSAGES, [injection({ slot: 'messages', contentHash: 'm1' })], SUBFLOW_IDS.MESSAGES),
+      writeEvent(
+        INJECTION_KEYS.MESSAGES,
+        [injection({ slot: 'messages', contentHash: 'm1' })],
+        SUBFLOW_IDS.MESSAGES,
+      ),
     );
     rec.onWrite(
       writeEvent(
@@ -191,7 +207,11 @@ describe('ContextRecorder — parallel slot interleaving (attribution by write, 
       ),
     );
     rec.onWrite(
-      writeEvent(INJECTION_KEYS.TOOLS, [injection({ slot: 'tools', contentHash: 't1' })], SUBFLOW_IDS.TOOLS),
+      writeEvent(
+        INJECTION_KEYS.TOOLS,
+        [injection({ slot: 'tools', contentHash: 't1' })],
+        SUBFLOW_IDS.TOOLS,
+      ),
     );
 
     rec.onSubflowExit(subflowExit(SUBFLOW_IDS.TOOLS));
@@ -282,7 +302,11 @@ describe('ContextRecorder — listener-count fast path', () => {
     // No listener for context.injected -- dispatch should be skipped.
     rec.onSubflowEntry(subflowEntry(SUBFLOW_IDS.SYSTEM_PROMPT));
     rec.onWrite(
-      writeEvent(INJECTION_KEYS.SYSTEM_PROMPT, [injection({ contentHash: 'a' })], SUBFLOW_IDS.SYSTEM_PROMPT),
+      writeEvent(
+        INJECTION_KEYS.SYSTEM_PROMPT,
+        [injection({ contentHash: 'a' })],
+        SUBFLOW_IDS.SYSTEM_PROMPT,
+      ),
     );
     expect(dispatchSpy).not.toHaveBeenCalled();
   });
@@ -295,7 +319,9 @@ describe('ContextRecorder — shape guards (malformed input)', () => {
     dispatcher.on('agentfootprint.context.injected', fn);
     const rec = new ContextRecorder({ dispatcher, getRunContext: makeRun });
     rec.onSubflowEntry(subflowEntry(SUBFLOW_IDS.SYSTEM_PROMPT));
-    rec.onWrite(writeEvent(INJECTION_KEYS.SYSTEM_PROMPT, 'not-an-array', SUBFLOW_IDS.SYSTEM_PROMPT));
+    rec.onWrite(
+      writeEvent(INJECTION_KEYS.SYSTEM_PROMPT, 'not-an-array', SUBFLOW_IDS.SYSTEM_PROMPT),
+    );
     expect(fn).not.toHaveBeenCalled();
   });
 
@@ -305,7 +331,9 @@ describe('ContextRecorder — shape guards (malformed input)', () => {
     dispatcher.on('agentfootprint.context.injected', fn);
     const rec = new ContextRecorder({ dispatcher, getRunContext: makeRun });
     rec.onSubflowEntry(subflowEntry(SUBFLOW_IDS.SYSTEM_PROMPT));
-    rec.onWrite(writeEvent(INJECTION_KEYS.SYSTEM_PROMPT, [{ notValid: true }], SUBFLOW_IDS.SYSTEM_PROMPT));
+    rec.onWrite(
+      writeEvent(INJECTION_KEYS.SYSTEM_PROMPT, [{ notValid: true }], SUBFLOW_IDS.SYSTEM_PROMPT),
+    );
     expect(fn).not.toHaveBeenCalled();
   });
 });

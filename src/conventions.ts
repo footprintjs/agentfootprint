@@ -228,10 +228,12 @@ const BOUNDARY_LOCAL_IDS: ReadonlySet<string> = new Set([
 export function stageRole(id: string): StageRole {
   const { localStageId } = splitStageId(id);
   if (isSlotSubflow(localStageId)) return 'hero-slot';
-  if (localStageId === STAGE_IDS.CALL_LLM || localStageId === STAGE_IDS.MERGE_LLM) return 'hero-llm';
+  if (localStageId === STAGE_IDS.CALL_LLM || localStageId === STAGE_IDS.MERGE_LLM)
+    return 'hero-llm';
   // Tool execution mounts under the bare branch key 'tool-calls' in shipped
   // charts; SUBFLOW_IDS.TOOL_CALLS is the reserved prefixed form.
-  if (localStageId === 'tool-calls' || localStageId === SUBFLOW_IDS.TOOL_CALLS) return 'hero-action';
+  if (localStageId === 'tool-calls' || localStageId === SUBFLOW_IDS.TOOL_CALLS)
+    return 'hero-action';
   if (BOUNDARY_LOCAL_IDS.has(localStageId)) return 'boundary';
   if (PLUMBING_LOCAL_IDS.has(localStageId)) return 'plumbing';
   return 'boundary'; // unknown → neutral (never silently muted)

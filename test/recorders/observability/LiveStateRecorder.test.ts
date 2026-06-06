@@ -74,7 +74,11 @@ function llmStart(
   };
 }
 
-function errorFatal(rid = '__root__#0', error = 'Failed to fetch', ts?: number): AgentfootprintEvent {
+function errorFatal(
+  rid = '__root__#0',
+  error = 'Failed to fetch',
+  ts?: number,
+): AgentfootprintEvent {
   return {
     type: 'agentfootprint.error.fatal',
     payload: { error, stage: '__root__', scope: 'run' },

@@ -207,12 +207,18 @@ describe('stageRole — hero vs plumbing classification', () => {
 
 describe('milestoneFor — domain-declared time-travel scrub stops', () => {
   it('classifies the loop entry as an iteration milestone (flat + subflow loop targets)', () => {
-    expect(milestoneFor(SUBFLOW_IDS.INJECTION_ENGINE)).toEqual({ kind: 'iteration', label: 'Iteration' });
+    expect(milestoneFor(SUBFLOW_IDS.INJECTION_ENGINE)).toEqual({
+      kind: 'iteration',
+      label: 'Iteration',
+    });
     expect(milestoneFor(SUBFLOW_IDS.LLM_CALL)).toEqual({ kind: 'iteration', label: 'Iteration' });
   });
 
   it('classifies each context slot as a slot milestone (which slot got updated)', () => {
-    expect(milestoneFor(SUBFLOW_IDS.SYSTEM_PROMPT)).toEqual({ kind: 'slot', label: 'System prompt' });
+    expect(milestoneFor(SUBFLOW_IDS.SYSTEM_PROMPT)).toEqual({
+      kind: 'slot',
+      label: 'System prompt',
+    });
     expect(milestoneFor(SUBFLOW_IDS.MESSAGES)).toEqual({ kind: 'slot', label: 'Messages' });
     expect(milestoneFor(SUBFLOW_IDS.TOOLS)).toEqual({ kind: 'slot', label: 'Tools' });
   });
@@ -241,8 +247,14 @@ describe('milestoneFor — domain-declared time-travel scrub stops', () => {
 
   it('accepts runtimeStageId (#index) and path-qualified ids — only the local segment matters', () => {
     expect(milestoneFor('call-llm#17')).toEqual({ kind: 'llm-turn', label: 'LLM turn' });
-    expect(milestoneFor('sf-llm-call/call-llm#37')).toEqual({ kind: 'llm-turn', label: 'LLM turn' });
-    expect(milestoneFor('sf-injection-engine#2')).toEqual({ kind: 'iteration', label: 'Iteration' });
+    expect(milestoneFor('sf-llm-call/call-llm#37')).toEqual({
+      kind: 'llm-turn',
+      label: 'LLM turn',
+    });
+    expect(milestoneFor('sf-injection-engine#2')).toEqual({
+      kind: 'iteration',
+      label: 'Iteration',
+    });
   });
 
   it('returns null for unknown ids (not every stage is a milestone)', () => {

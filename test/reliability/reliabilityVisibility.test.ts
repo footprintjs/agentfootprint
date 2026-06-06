@@ -83,7 +83,11 @@ function retryRules(max: number) {
         then: 'retry' as const,
         kind: 'retry-on-error',
       },
-      { when: (s: { error?: unknown }) => s.error !== undefined, then: 'fail-fast' as const, kind: 'exhausted' },
+      {
+        when: (s: { error?: unknown }) => s.error !== undefined,
+        then: 'fail-fast' as const,
+        kind: 'exhausted',
+      },
     ],
   };
 }
@@ -91,7 +95,10 @@ function retryRules(max: number) {
 describe('Task 2 — reliability per-attempt visibility', () => {
   // ── Unit ───────────────────────────────────────────────────────────
   it('unit: a single same-provider retry fires reliability.retried with action:retry + from==to', async () => {
-    const agent = Agent.create({ provider: flakyProvider({ failTimes: 1, failMessage: 'boom-1' }) as never, model: 'm' })
+    const agent = Agent.create({
+      provider: flakyProvider({ failTimes: 1, failMessage: 'boom-1' }) as never,
+      model: 'm',
+    })
       .reliability(retryRules(5))
       .build();
     const retried: ReliabilityRetriedPayload[] = [];
@@ -110,7 +117,10 @@ describe('Task 2 — reliability per-attempt visibility', () => {
 
   // ── Functional ─────────────────────────────────────────────────────
   it('functional: retry→success fires reliability.retried×N then reliability.recovered', async () => {
-    const agent = Agent.create({ provider: flakyProvider({ failTimes: 2, content: 'healed' }) as never, model: 'm' })
+    const agent = Agent.create({
+      provider: flakyProvider({ failTimes: 2, content: 'healed' }) as never,
+      model: 'm',
+    })
       .reliability(retryRules(5))
       .build();
     const order: string[] = [];
@@ -131,7 +141,10 @@ describe('Task 2 — reliability per-attempt visibility', () => {
   });
 
   it('functional: a clean first-try success emits neither retried nor recovered', async () => {
-    const agent = Agent.create({ provider: flakyProvider({ failTimes: 0, content: 'clean' }) as never, model: 'm' })
+    const agent = Agent.create({
+      provider: flakyProvider({ failTimes: 0, content: 'clean' }) as never,
+      model: 'm',
+    })
       .reliability(retryRules(5))
       .build();
     let count = 0;
@@ -169,7 +182,11 @@ describe('Task 2 — reliability per-attempt visibility', () => {
             then: 'retry-other' as const,
             kind: 'failover',
           },
-          { when: (s: { error?: unknown }) => s.error !== undefined, then: 'fail-fast' as const, kind: 'exhausted' },
+          {
+            when: (s: { error?: unknown }) => s.error !== undefined,
+            then: 'fail-fast' as const,
+            kind: 'exhausted',
+          },
         ],
       })
       .build();
@@ -190,7 +207,10 @@ describe('Task 2 — reliability per-attempt visibility', () => {
   });
 
   it('integration: provider fallback fires reliability.recovered(via:fallback)', async () => {
-    const agent = Agent.create({ provider: flakyProvider({ name: 'main', failTimes: 1, failMessage: 'main-down' }) as never, model: 'm' })
+    const agent = Agent.create({
+      provider: flakyProvider({ name: 'main', failTimes: 1, failMessage: 'main-down' }) as never,
+      model: 'm',
+    })
       .reliability({
         fallback: async (_req: LLMRequest): Promise<LLMResponse> => ({
           content: 'from-fallback',
@@ -199,7 +219,11 @@ describe('Task 2 — reliability per-attempt visibility', () => {
           stopReason: 'stop',
         }),
         postDecide: [
-          { when: (s: { error?: unknown }) => s.error !== undefined, then: 'fallback' as const, kind: 'use-fallback' },
+          {
+            when: (s: { error?: unknown }) => s.error !== undefined,
+            then: 'fallback' as const,
+            kind: 'use-fallback',
+          },
         ],
       })
       .build();
@@ -216,7 +240,10 @@ describe('Task 2 — reliability per-attempt visibility', () => {
   // ── Property ───────────────────────────────────────────────────────
   it('property: failCount 0..3 → retried count == failCount; recovered iff failCount>0; priorFailures matches', async () => {
     for (let failCount = 0; failCount <= 3; failCount++) {
-      const agent = Agent.create({ provider: flakyProvider({ failTimes: failCount, content: 'done' }) as never, model: 'm' })
+      const agent = Agent.create({
+        provider: flakyProvider({ failTimes: failCount, content: 'done' }) as never,
+        model: 'm',
+      })
         .reliability(retryRules(10))
         .build();
       let retriedCount = 0;
@@ -250,7 +277,9 @@ describe('Task 2 — reliability per-attempt visibility', () => {
         return { content: 'ok', toolCalls: [], usage: { input: 1, output: 1 }, stopReason: 'stop' };
       },
     };
-    const agent = Agent.create({ provider: provider as never, model: 'm' }).reliability(retryRules(5)).build();
+    const agent = Agent.create({ provider: provider as never, model: 'm' })
+      .reliability(retryRules(5))
+      .build();
     let payload: ReliabilityRetriedPayload | undefined;
     agent.on('agentfootprint.reliability.retried', (e) => (payload = e.payload));
 

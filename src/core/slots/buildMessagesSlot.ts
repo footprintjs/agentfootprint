@@ -92,8 +92,7 @@ export function buildMessagesSlot(config: MessagesSlotConfig = {}): FlowChart {
             slot: 'messages',
             source: inj.flavor,
             sourceId: inj.id,
-            reason:
-              inj.description ?? `${inj.flavor} '${inj.id}' active`,
+            reason: inj.description ?? `${inj.flavor} '${inj.id}' active`,
             rawContent: msg.content,
             asRole: msg.role,
             asRecency: 'latest',

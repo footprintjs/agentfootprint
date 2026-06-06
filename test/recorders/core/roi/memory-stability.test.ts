@@ -23,7 +23,11 @@ function sf(subflowId: string): FlowSubflowEvent {
 // A write inside a slot subflow carries that subflow in its runtimeStageId
 // path — how ContextRecorder attributes it to a slot (parallel-safe, no
 // stack). Every write here is in the system-prompt slot.
-function we(key: string, value: unknown, enclosing: string = SUBFLOW_IDS.SYSTEM_PROMPT): WriteEvent {
+function we(
+  key: string,
+  value: unknown,
+  enclosing: string = SUBFLOW_IDS.SYSTEM_PROMPT,
+): WriteEvent {
   return {
     key,
     value,

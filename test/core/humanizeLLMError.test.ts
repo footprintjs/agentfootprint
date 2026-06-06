@@ -19,7 +19,9 @@ describe('humanizeLLMError — friendly mapping', () => {
 
   it('node network codes → reachability', () => {
     expect(humanizeLLMError(new Error('connect ECONNREFUSED'))).toMatch(/reach the ai model/i);
-    expect(humanizeLLMError(new Error('getaddrinfo EAI_AGAIN api.x.com'))).toMatch(/reach the ai model/i);
+    expect(humanizeLLMError(new Error('getaddrinfo EAI_AGAIN api.x.com'))).toMatch(
+      /reach the ai model/i,
+    );
   });
 
   it('401/403 + auth phrases → API key hint', () => {
@@ -28,7 +30,9 @@ describe('humanizeLLMError — friendly mapping', () => {
   });
 
   it('429 / rate limit → wait & retry', () => {
-    expect(humanizeLLMError({ status: 429, message: 'Too Many Requests' })).toMatch(/rate limit|busy/i);
+    expect(humanizeLLMError({ status: 429, message: 'Too Many Requests' })).toMatch(
+      /rate limit|busy/i,
+    );
     expect(humanizeLLMError(new Error('rate limit exceeded'))).toMatch(/rate limit|busy/i);
   });
 
@@ -38,7 +42,9 @@ describe('humanizeLLMError — friendly mapping', () => {
   });
 
   it('5xx → temporary provider problem', () => {
-    expect(humanizeLLMError({ status: 503, message: 'Service Unavailable' })).toMatch(/temporary problem/i);
+    expect(humanizeLLMError({ status: 503, message: 'Service Unavailable' })).toMatch(
+      /temporary problem/i,
+    );
   });
 
   it('400 / bad model → check the model', () => {

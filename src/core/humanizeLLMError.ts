@@ -63,7 +63,7 @@ export function humanizeLLMError(err: unknown): string {
 
   // Bad request — usually a model name or payload issue.
   if (status === 400 || /not found|no such model|invalid model|model.*not/i.test(lc)) {
-    return "The AI request was rejected — the model name or request may be wrong. Check the model in the code.";
+    return 'The AI request was rejected — the model name or request may be wrong. Check the model in the code.';
   }
 
   // Fallback: keep the raw text but frame it so it doesn't read as a crash.

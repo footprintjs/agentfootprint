@@ -85,7 +85,10 @@ const twoToolCallScript = () =>
 
 describe('Agent reactMode — Classic caches static slots; Dynamic re-engineers them', () => {
   it('unit (back-compat): default mode is Dynamic — tool-calls loops to the InjectionEngine', () => {
-    const agent = Agent.create({ provider: new MockProvider({ reply: 'done' }) as never, model: 'm' })
+    const agent = Agent.create({
+      provider: new MockProvider({ reply: 'done' }) as never,
+      model: 'm',
+    })
       .system('bot')
       .tool(weatherTool)
       .build();
@@ -135,7 +138,11 @@ describe('Agent reactMode — Classic caches static slots; Dynamic re-engineers 
 
   it('integration (THE difference): Classic re-runs ONLY Messages each turn; system-prompt + tools run once', async () => {
     const { recorder, counts } = subflowEntryCounter();
-    const agent = Agent.create({ provider: twoToolCallScript() as never, model: 'm', reactMode: 'classic' })
+    const agent = Agent.create({
+      provider: twoToolCallScript() as never,
+      model: 'm',
+      reactMode: 'classic',
+    })
       .system('bot')
       .tool(weatherTool)
       .build();
@@ -151,7 +158,10 @@ describe('Agent reactMode — Classic caches static slots; Dynamic re-engineers 
 
   it('integration (contrast): Dynamic re-runs ALL three slots every turn', async () => {
     const { recorder, counts } = subflowEntryCounter();
-    const agent = Agent.create({ provider: twoToolCallScript() as never, model: 'm' /* dynamic default */ })
+    const agent = Agent.create({
+      provider: twoToolCallScript() as never,
+      model: 'm' /* dynamic default */,
+    })
       .system('bot')
       .tool(weatherTool)
       .build();
@@ -173,13 +183,21 @@ describe('Agent reactMode — Classic caches static slots; Dynamic re-engineers 
         ],
       });
 
-    const classic = await Agent.create({ provider: script() as never, model: 'm', reactMode: 'classic' })
+    const classic = await Agent.create({
+      provider: script() as never,
+      model: 'm',
+      reactMode: 'classic',
+    })
       .system('bot')
       .tool(weatherTool)
       .build()
       .run({ message: 'weather?' });
 
-    const dynamic = await Agent.create({ provider: script() as never, model: 'm', reactMode: 'dynamic' })
+    const dynamic = await Agent.create({
+      provider: script() as never,
+      model: 'm',
+      reactMode: 'dynamic',
+    })
       .system('bot')
       .tool(weatherTool)
       .build()
@@ -223,7 +241,10 @@ describe('Agent reactMode — Classic caches static slots; Dynamic re-engineers 
     })
       .system('bot')
       .build();
-    const dynamic = Agent.create({ provider: new MockProvider({ reply: 'done' }) as never, model: 'm' })
+    const dynamic = Agent.create({
+      provider: new MockProvider({ reply: 'done' }) as never,
+      model: 'm',
+    })
       .system('bot')
       .build();
 

@@ -349,9 +349,7 @@ export class LLMCall extends RunnerBase<LLMCallInput, LLMCallOutput> {
     // one-shot. Threading them via inputMapper would seal them as
     // readonly input on the inner side (footprintjs convention) and
     // break `emitCostTick`'s scope writes.
-    const client = (
-      scope: TypedScope<LLMCallState>,
-    ): string | undefined => {
+    const client = (scope: TypedScope<LLMCallState>): string | undefined => {
       if (scope.answer !== undefined) {
         scope.$break('LLMCall: one-shot complete');
         return scope.answer;

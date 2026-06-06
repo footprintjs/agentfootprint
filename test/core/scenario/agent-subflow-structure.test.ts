@@ -63,7 +63,10 @@ const weatherTool = defineTool({
 describe('Agent reactStructure: subflow — sf-llm-call boundary', () => {
   // ── Functional — both shapes run + return the same answer ──────────
   it('functional: subflow + flat shapes both run to completion with the same answer', async () => {
-    const flat = Agent.create({ provider: new MockProvider({ reply: 'done' }) as never, model: 'm' })
+    const flat = Agent.create({
+      provider: new MockProvider({ reply: 'done' }) as never,
+      model: 'm',
+    })
       .system('s')
       .build();
     const sub = Agent.create({
@@ -96,7 +99,9 @@ describe('Agent reactStructure: subflow — sf-llm-call boundary', () => {
     await sub.run({ message: 'hi' });
 
     // The LLM turn is a subflow boundary.
-    const sawLlmCall = spy.entries.some((id) => id === 'sf-llm-call' || id.endsWith('/sf-llm-call'));
+    const sawLlmCall = spy.entries.some(
+      (id) => id === 'sf-llm-call' || id.endsWith('/sf-llm-call'),
+    );
     expect(sawLlmCall).toBe(true);
 
     // The 3 slot subflows fire NESTED under sf-llm-call (path-prefixed).
@@ -109,7 +114,10 @@ describe('Agent reactStructure: subflow — sf-llm-call boundary', () => {
 
   // ── Integration — flat shape does NOT produce the sf-llm-call boundary ─
   it('integration: flat run does NOT enter sf-llm-call (slots are top-level siblings)', async () => {
-    const flat = Agent.create({ provider: new MockProvider({ reply: 'done' }) as never, model: 'm' })
+    const flat = Agent.create({
+      provider: new MockProvider({ reply: 'done' }) as never,
+      model: 'm',
+    })
       .system('weather bot')
       .tool(weatherTool)
       .build();
@@ -118,7 +126,9 @@ describe('Agent reactStructure: subflow — sf-llm-call boundary', () => {
 
     await flat.run({ message: 'hi' });
 
-    const sawLlmCall = spy.entries.some((id) => id === 'sf-llm-call' || id.endsWith('/sf-llm-call'));
+    const sawLlmCall = spy.entries.some(
+      (id) => id === 'sf-llm-call' || id.endsWith('/sf-llm-call'),
+    );
     expect(sawLlmCall).toBe(false);
     // The slots still run — just as top-level siblings, not nested.
     expect(spy.entries.some((id) => id.endsWith('sf-system-prompt'))).toBe(true);
@@ -128,7 +138,10 @@ describe('Agent reactStructure: subflow — sf-llm-call boundary', () => {
   it('integration: tool loop re-enters sf-llm-call once per iteration', async () => {
     // 1st call asks for a tool; 2nd call answers → 2 LLM turns.
     const provider = new MockProvider({
-      replies: [{ toolCalls: [{ id: 't1', name: 'get_weather', args: { city: 'NYC' } }] }, { content: 'it is 72' }],
+      replies: [
+        { toolCalls: [{ id: 't1', name: 'get_weather', args: { city: 'NYC' } }] },
+        { content: 'it is 72' },
+      ],
     });
     const sub = Agent.create({ provider: provider as never, model: 'm', reactStructure: 'subflow' })
       .system('weather bot')
@@ -141,7 +154,9 @@ describe('Agent reactStructure: subflow — sf-llm-call boundary', () => {
 
     expect(out).toBe('it is 72');
     // sf-llm-call entered twice (one per ReAct iteration).
-    const llmCallEntries = spy.entries.filter((id) => id === 'sf-llm-call' || id.endsWith('/sf-llm-call'));
+    const llmCallEntries = spy.entries.filter(
+      (id) => id === 'sf-llm-call' || id.endsWith('/sf-llm-call'),
+    );
     expect(llmCallEntries.length).toBe(2);
   });
 
@@ -157,7 +172,10 @@ describe('Agent reactStructure: subflow — sf-llm-call boundary', () => {
         return replies;
       };
 
-      const flat = Agent.create({ provider: new MockProvider({ replies: script() }) as never, model: 'm' })
+      const flat = Agent.create({
+        provider: new MockProvider({ replies: script() }) as never,
+        model: 'm',
+      })
         .system('s')
         .tool(weatherTool)
         .build();
@@ -232,10 +250,17 @@ describe('Agent reactStructure: subflow — sf-llm-call boundary', () => {
     };
     // 1 tool call → 2 LLM turns, so cost accumulates across the loop.
     const script = () => [
-      { toolCalls: [{ id: 't1', name: 'get_weather', args: { city: 'X' } }], usage: { input: 100, output: 20 } },
+      {
+        toolCalls: [{ id: 't1', name: 'get_weather', args: { city: 'X' } }],
+        usage: { input: 100, output: 20 },
+      },
       { content: 'final', usage: { input: 100, output: 20 } },
     ];
-    const flat = Agent.create({ provider: new MockProvider({ replies: script() }) as never, model: 'm', pricingTable: pricing })
+    const flat = Agent.create({
+      provider: new MockProvider({ replies: script() }) as never,
+      model: 'm',
+      pricingTable: pricing,
+    })
       .system('s')
       .tool(weatherTool)
       .build();
@@ -269,7 +294,10 @@ describe('Agent reactStructure: subflow — sf-llm-call boundary', () => {
   it('observability: flat and subflow emit identical domain-event-type counts', async () => {
     const countEvents = async (shape: 'flat' | 'subflow') => {
       const provider = new MockProvider({
-        replies: [{ toolCalls: [{ id: 't1', name: 'get_weather', args: { city: 'X' } }] }, { content: 'final' }],
+        replies: [
+          { toolCalls: [{ id: 't1', name: 'get_weather', args: { city: 'X' } }] },
+          { content: 'final' },
+        ],
       });
       const agent = Agent.create({ provider: provider as never, model: 'm', reactStructure: shape })
         .system('s')
@@ -331,7 +359,11 @@ describe('Agent reactStructure: subflow — sf-llm-call boundary', () => {
         askHuman({ question: 'Approve?' });
       },
     });
-    const agent = Agent.create({ provider: provider as never, model: 'm', reactStructure: 'subflow' })
+    const agent = Agent.create({
+      provider: provider as never,
+      model: 'm',
+      reactStructure: 'subflow',
+    })
       .tool(approvalTool)
       .build();
 
@@ -476,7 +508,10 @@ describe('Agent cache subflow — grouped decision, skill-history stays outside'
   // that survives that match — else cacheRecorder's audit trail silently breaks.
   it('integration: a real run fires a cache-gate decision matchable by local stage id', async () => {
     const gateDecisions: string[] = [];
-    const agent = Agent.create({ provider: new MockProvider({ reply: 'done' }) as never, model: 'm' })
+    const agent = Agent.create({
+      provider: new MockProvider({ reply: 'done' }) as never,
+      model: 'm',
+    })
       .system('bot')
       .tool(weatherTool)
       .build();

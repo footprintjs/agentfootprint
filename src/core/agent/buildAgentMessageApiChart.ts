@@ -181,58 +181,82 @@ export function buildAgentMessageApiChart(deps: AgentMessageApiChartDeps): FlowC
 
   // ── Build ONE flat chart: Context(root) → 3 slots → messageAPI → Call-LLM
   //    → Route → [ToolCalls → loop] / Final. ──
-  return flowChartSelector<AgentMsgApiState, AgentMsgApiState>(
-    'Context',
-    contextSelector as never,
-    'context',
-    {
-      ...(deps.structureRecorders !== undefined && {
-        structureRecorders: [...deps.structureRecorders],
-      }),
-      // 'Agent:' taxonomy marker → Lens renders this as an Agent group.
-      description: 'Agent: ReAct loop',
-    },
-  )
-    // Three DIRECT context slots — all converge at messageAPI.
-    .addSubFlowChartBranch(SUBFLOW_IDS.SYSTEM_PROMPT, buildSystemPromptSlot({ prompt: systemPrompt, reason: 'agent messageAPI' }), 'System Prompt', {
-      inputMapper: (parent) => ({
-        userMessage: (parent as AgentMsgApiState).userMessage,
-        iteration: (parent as AgentMsgApiState).iteration,
-      }),
-      outputMapper: (sf) => ({ systemPromptInjections: (sf as AgentMsgApiState).systemPromptInjections }),
-    })
-    .addSubFlowChartBranch(SUBFLOW_IDS.MESSAGES, buildMessagesSlot(), 'Messages', {
-      inputMapper: (parent) => ({
-        messages: (parent as AgentMsgApiState).history,
-        iteration: (parent as AgentMsgApiState).iteration,
-      }),
-      outputMapper: (sf) => ({ messagesInjections: (sf as AgentMsgApiState).messagesInjections }),
-    })
-    .addSubFlowChartBranch(SUBFLOW_IDS.TOOLS, buildToolsSlot({ tools }), 'Tools', {
-      inputMapper: (parent) => ({ iteration: (parent as AgentMsgApiState).iteration }),
-      outputMapper: (sf) => ({ toolSchemas: (sf as AgentMsgApiState).toolSchemas }),
-      // tools is a SEPARATE Anthropic wire field — it BYPASSES messageAPI
-      // (which assembles only system+messages) and pairs with its output at
-      // Call-LLM. `convergeAt` makes the structure edge `sf-tools → call-llm`
-      // instead of the default `sf-tools → message-api`, so Call-LLM reads as a
-      // true 2-parent merge {messageAPI, tools}. (toolSchemas already rides
-      // shared scope; this only makes the diagram faithful.)
-      convergeAt: 'call-llm',
-    })
-    .end()
-    // messageAPI assembles ONLY system+messages; Call-LLM then sends that
-    // payload + the tool schemas (the 2-parent merge above).
-    .addFunction('messageAPI', messageApiStage as never, 'message-api', 'Assemble system + messages into the LLM request')
-    .addFunction('CallLLM', callLLM as never, 'call-llm', 'Send the assembled request + tools to the LLM')
-    // Route → [ToolCalls → loop back to Context] / [Final → terminate].
-    .addDeciderFunction('Route', routeDecider as never, SUBFLOW_IDS.ROUTE, 'ReAct routing')
-    .addFunctionBranch(ROUTE_TOOL_CALLS, 'ToolCalls', toolExec as never, 'Execute tool calls')
-    // ReAct: the loop is sourced from the TOOL-CALLS branch (after executing
-    // tools, re-engineer context next turn) — NOT from the Route decider. Final
-    // terminates as a leaf (its $break is the terminal boundary signal).
-    .loopTo('context')
-    .addFunctionBranch(ROUTE_FINAL, 'Final', finalStage as never, 'Terminate the ReAct loop (response)')
-    .setDefault(ROUTE_FINAL)
-    .end()
-    .build();
+  return (
+    flowChartSelector<AgentMsgApiState, AgentMsgApiState>(
+      'Context',
+      contextSelector as never,
+      'context',
+      {
+        ...(deps.structureRecorders !== undefined && {
+          structureRecorders: [...deps.structureRecorders],
+        }),
+        // 'Agent:' taxonomy marker → Lens renders this as an Agent group.
+        description: 'Agent: ReAct loop',
+      },
+    )
+      // Three DIRECT context slots — all converge at messageAPI.
+      .addSubFlowChartBranch(
+        SUBFLOW_IDS.SYSTEM_PROMPT,
+        buildSystemPromptSlot({ prompt: systemPrompt, reason: 'agent messageAPI' }),
+        'System Prompt',
+        {
+          inputMapper: (parent) => ({
+            userMessage: (parent as AgentMsgApiState).userMessage,
+            iteration: (parent as AgentMsgApiState).iteration,
+          }),
+          outputMapper: (sf) => ({
+            systemPromptInjections: (sf as AgentMsgApiState).systemPromptInjections,
+          }),
+        },
+      )
+      .addSubFlowChartBranch(SUBFLOW_IDS.MESSAGES, buildMessagesSlot(), 'Messages', {
+        inputMapper: (parent) => ({
+          messages: (parent as AgentMsgApiState).history,
+          iteration: (parent as AgentMsgApiState).iteration,
+        }),
+        outputMapper: (sf) => ({ messagesInjections: (sf as AgentMsgApiState).messagesInjections }),
+      })
+      .addSubFlowChartBranch(SUBFLOW_IDS.TOOLS, buildToolsSlot({ tools }), 'Tools', {
+        inputMapper: (parent) => ({ iteration: (parent as AgentMsgApiState).iteration }),
+        outputMapper: (sf) => ({ toolSchemas: (sf as AgentMsgApiState).toolSchemas }),
+        // tools is a SEPARATE Anthropic wire field — it BYPASSES messageAPI
+        // (which assembles only system+messages) and pairs with its output at
+        // Call-LLM. `convergeAt` makes the structure edge `sf-tools → call-llm`
+        // instead of the default `sf-tools → message-api`, so Call-LLM reads as a
+        // true 2-parent merge {messageAPI, tools}. (toolSchemas already rides
+        // shared scope; this only makes the diagram faithful.)
+        convergeAt: 'call-llm',
+      })
+      .end()
+      // messageAPI assembles ONLY system+messages; Call-LLM then sends that
+      // payload + the tool schemas (the 2-parent merge above).
+      .addFunction(
+        'messageAPI',
+        messageApiStage as never,
+        'message-api',
+        'Assemble system + messages into the LLM request',
+      )
+      .addFunction(
+        'CallLLM',
+        callLLM as never,
+        'call-llm',
+        'Send the assembled request + tools to the LLM',
+      )
+      // Route → [ToolCalls → loop back to Context] / [Final → terminate].
+      .addDeciderFunction('Route', routeDecider as never, SUBFLOW_IDS.ROUTE, 'ReAct routing')
+      .addFunctionBranch(ROUTE_TOOL_CALLS, 'ToolCalls', toolExec as never, 'Execute tool calls')
+      // ReAct: the loop is sourced from the TOOL-CALLS branch (after executing
+      // tools, re-engineer context next turn) — NOT from the Route decider. Final
+      // terminates as a leaf (its $break is the terminal boundary signal).
+      .loopTo('context')
+      .addFunctionBranch(
+        ROUTE_FINAL,
+        'Final',
+        finalStage as never,
+        'Terminate the ReAct loop (response)',
+      )
+      .setDefault(ROUTE_FINAL)
+      .end()
+      .build()
+  );
 }

@@ -163,13 +163,20 @@ export function buildMessageApiChart(deps: MessageApiChartDeps): FlowChart {
       description: 'LLMCall: messageAPI merge-tree',
     },
   )
-    .addSubFlowChartBranch(SUBFLOW_IDS.SYSTEM_PROMPT, buildSystemPromptSlot({ prompt: systemPrompt, reason: 'messageAPI proof' }), 'System Prompt', {
-      inputMapper: (parent) => ({
-        userMessage: (parent as MessageApiState).userMessage,
-        iteration: (parent as MessageApiState).iteration,
-      }),
-      outputMapper: (sf) => ({ systemPromptInjections: (sf as MessageApiState).systemPromptInjections }),
-    })
+    .addSubFlowChartBranch(
+      SUBFLOW_IDS.SYSTEM_PROMPT,
+      buildSystemPromptSlot({ prompt: systemPrompt, reason: 'messageAPI proof' }),
+      'System Prompt',
+      {
+        inputMapper: (parent) => ({
+          userMessage: (parent as MessageApiState).userMessage,
+          iteration: (parent as MessageApiState).iteration,
+        }),
+        outputMapper: (sf) => ({
+          systemPromptInjections: (sf as MessageApiState).systemPromptInjections,
+        }),
+      },
+    )
     .addSubFlowChartBranch(SUBFLOW_IDS.MESSAGES, buildMessagesSlot(), 'Messages', {
       inputMapper: (parent) => ({
         messages: (parent as MessageApiState).history,
@@ -179,7 +186,12 @@ export function buildMessageApiChart(deps: MessageApiChartDeps): FlowChart {
     })
     .end()
     // Join point — runs after the selected slot branches converge.
-    .addFunction('messageAPI', messageApiStage as never, 'message-api', 'Assemble system + messages into the LLM request')
+    .addFunction(
+      'messageAPI',
+      messageApiStage as never,
+      'message-api',
+      'Assemble system + messages into the LLM request',
+    )
     .addFunction('CallLLM', callLLM as never, 'call-llm', 'Send the assembled request to the LLM');
 
   return builder.build();

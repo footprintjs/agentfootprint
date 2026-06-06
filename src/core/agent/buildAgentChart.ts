@@ -258,7 +258,11 @@ export function buildAgentChart(deps: AgentChartDeps): FlowChart {
         const firstTurn = ((scope.iteration as number | undefined) ?? 1) <= 1;
         const includeStatic = reactMode === 'dynamic' || firstTurn;
         return select(scope, [
-          { when: () => includeStatic, then: SUBFLOW_IDS.SYSTEM_PROMPT, label: 'engineer system-prompt' },
+          {
+            when: () => includeStatic,
+            then: SUBFLOW_IDS.SYSTEM_PROMPT,
+            label: 'engineer system-prompt',
+          },
           { when: () => true, then: SUBFLOW_IDS.MESSAGES, label: 'engineer messages' },
           { when: () => includeStatic, then: SUBFLOW_IDS.TOOLS, label: 'engineer tools' },
         ]);

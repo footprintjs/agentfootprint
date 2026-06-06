@@ -138,7 +138,10 @@ describe('Task 1 — typed reliabilityFail* fields', () => {
       { kind: 'no-label-kind' }, // label omitted → reason falls back to kind
     ];
     for (const c of cases) {
-      const agent = failFastAgent({ kind: c.kind, ...(c.label !== undefined && { label: c.label }) });
+      const agent = failFastAgent({
+        kind: c.kind,
+        ...(c.label !== undefined && { label: c.label }),
+      });
       const e = (await agent.run({ message: 'hi' }).catch((x) => x)) as ReliabilityFailFastError;
       expect(e).toBeInstanceOf(ReliabilityFailFastError);
       expect(e.kind).toBe(c.kind);

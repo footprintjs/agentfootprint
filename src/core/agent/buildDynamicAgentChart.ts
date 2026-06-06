@@ -118,12 +118,17 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
   // payload, memory-write subflows persist it, BreakFinal terminates
   // the ReAct loop. Lives in the OUTER chart (the final answer is a
   // peer of the LLM turn, not part of it).
-  let finalBranchBuilder = flowChart<AgentState>('PrepareFinal', prepareFinalStage, 'prepare-final', {
-    ...(deps.structureRecorders !== undefined && {
-      structureRecorders: [...deps.structureRecorders],
-    }),
-    description: 'Capture turn payload (finalContent + newMessages)',
-  });
+  let finalBranchBuilder = flowChart<AgentState>(
+    'PrepareFinal',
+    prepareFinalStage,
+    'prepare-final',
+    {
+      ...(deps.structureRecorders !== undefined && {
+        structureRecorders: [...deps.structureRecorders],
+      }),
+      description: 'Capture turn payload (finalContent + newMessages)',
+    },
+  );
   for (const m of deps.memories) {
     if (m.write) {
       finalBranchBuilder = mountMemoryWrite(finalBranchBuilder, {
@@ -160,17 +165,23 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
     // the agent boundary (confirmed in the proposal's 7-person review).
     description: 'LLMCall: invocation internals',
   })
-    .addSubFlowChartNext(SUBFLOW_IDS.INJECTION_ENGINE, deps.injectionEngineSubflow, 'Injection Engine', {
-      inputMapper: (parent) => ({
-        iteration: parent.iteration as number | undefined,
-        userMessage: parent.userMessage as string | undefined,
-        history: parent.history as readonly LLMMessage[] | undefined,
-        lastToolResult: parent.lastToolResult as { toolName: string; result: string } | undefined,
-        activatedInjectionIds: (parent.activatedInjectionIds as readonly string[] | undefined) ?? [],
-      }),
-      outputMapper: (sf) => ({ activeInjections: sf.activeInjections }),
-      arrayMerge: ArrayMergeMode.Replace,
-    })
+    .addSubFlowChartNext(
+      SUBFLOW_IDS.INJECTION_ENGINE,
+      deps.injectionEngineSubflow,
+      'Injection Engine',
+      {
+        inputMapper: (parent) => ({
+          iteration: parent.iteration as number | undefined,
+          userMessage: parent.userMessage as string | undefined,
+          history: parent.history as readonly LLMMessage[] | undefined,
+          lastToolResult: parent.lastToolResult as { toolName: string; result: string } | undefined,
+          activatedInjectionIds:
+            (parent.activatedInjectionIds as readonly string[] | undefined) ?? [],
+        }),
+        outputMapper: (sf) => ({ activeInjections: sf.activeInjections }),
+        arrayMerge: ArrayMergeMode.Replace,
+      },
+    )
     // ── Context assembly: the 3 slots run in PARALLEL (selector fan-out) ──
     // Identical to buildAgentChart's fork, just nested inside the sf-llm-call
     // inner chart. The slots are independent (each reads only InjectionEngine's
@@ -268,14 +279,19 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
     .addFunction('CallLLM', deps.callLLM as never, STAGE_IDS.CALL_LLM, 'LLM invocation');
 
   if (deps.thinkingSubflow) {
-    inner = inner.addSubFlowChartNext(SUBFLOW_IDS.THINKING, deps.thinkingSubflow, 'NormalizeThinking', {
-      inputMapper: (parent) => ({
-        rawThinking: parent.rawThinking as unknown,
-        iteration: parent.iteration as number | undefined,
-      }),
-      outputMapper: (sf) => ({ thinkingBlocks: sf.thinkingBlocks }),
-      arrayMerge: ArrayMergeMode.Replace,
-    });
+    inner = inner.addSubFlowChartNext(
+      SUBFLOW_IDS.THINKING,
+      deps.thinkingSubflow,
+      'NormalizeThinking',
+      {
+        inputMapper: (parent) => ({
+          rawThinking: parent.rawThinking as unknown,
+          iteration: parent.iteration as number | undefined,
+        }),
+        outputMapper: (sf) => ({ thinkingBlocks: sf.thinkingBlocks }),
+        arrayMerge: ArrayMergeMode.Replace,
+      },
+    );
   }
 
   const llmCallSubflow = inner.build();
