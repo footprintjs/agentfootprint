@@ -370,6 +370,10 @@ export {
   type DefineSteeringOptions,
   defineFact,
   type DefineFactOptions,
+  // Unified factory (type-discriminant over the four named factories above)
+  defineInjection,
+  type DefineInjectionOptions,
+  type InjectionFlavor,
 } from './lib/injection-engine/index.js';
 
 // Patterns — factory functions composing primitives + core-flow into

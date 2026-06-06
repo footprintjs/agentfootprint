@@ -49,3 +49,12 @@ export { buildListSkillsTool, buildReadSkillTool, type SkillToolPair } from './s
 export { defineSteering, type DefineSteeringOptions } from './factories/defineSteering.js';
 
 export { defineFact, type DefineFactOptions } from './factories/defineFact.js';
+
+// Unified factory — a `type` discriminant routes to the four named factories
+// above. Use when the flavor is chosen programmatically; prefer the named
+// factories when you know the flavor at author time.
+export {
+  defineInjection,
+  type DefineInjectionOptions,
+  type InjectionFlavor,
+} from './factories/defineInjection.js';
