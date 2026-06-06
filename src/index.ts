@@ -54,7 +54,11 @@ export type {
 
 // Events — registry, types, payloads
 export * from './events/types.js';
-export * from './events/payloads.js';
+// The ~60 typed event payload shapes are grouped under the `Payloads`
+// namespace instead of flooding the top-level barrel. Access by event:
+// `event.payload` is already typed via `AgentfootprintEventMap`; reach a
+// shape by name as `Payloads.AgentRouteDecidedPayload` when you need it.
+export type * as Payloads from './events/payloads.js';
 export {
   EVENT_NAMES,
   ALL_EVENT_TYPES,
