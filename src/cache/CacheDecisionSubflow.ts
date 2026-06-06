@@ -25,7 +25,7 @@
  * always-active rules) follow.
  */
 
-import { flowChart, type FlowChart, type TypedScope } from 'footprintjs';
+import type { TypedScope } from 'footprintjs';
 import type { CacheMarker, CachePolicy, CachePolicyContext } from './types.js';
 import type { Injection } from '../lib/injection-engine/types.js';
 
@@ -182,10 +182,13 @@ export function computeCacheMarkers(
 }
 
 /**
- * The decision function. Thin scope-binding wrapper around
- * `computeCacheMarkers`.
+ * The decision stage function. Thin scope-binding wrapper around
+ * `computeCacheMarkers`. Exported so it can serve as the ROOT stage of
+ * the `sf-cache` subflow (a chart cannot start with a nested subflow),
+ * while `cacheDecisionSubflow` below still wraps the SAME function for
+ * standalone use — no logic duplication.
  */
-function decide(scope: TypedScope<CacheDecisionState>): void {
+export function decideCacheMarkers(scope: TypedScope<CacheDecisionState>): void {
   scope.cacheMarkers = computeCacheMarkers({
     activeInjections: scope.activeInjections,
     iteration: scope.iteration,
@@ -198,22 +201,8 @@ function decide(scope: TypedScope<CacheDecisionState>): void {
   });
 }
 
-/**
- * The cache-decision subflow. Mounted into the agent's main chart
- * after the slot subflows (System / Messages / Tools) and before
- * the CacheGate decider stage.
- *
- * Mounted via `addSubFlowChartNext(SUBFLOW_IDS.CACHE_DECISION, ...)`
- * with `arrayMerge: ArrayMergeMode.Replace` on the outputMapper —
- * `cacheMarkers` MUST replace, not concatenate, across iterations
- * (same lesson as the v2.5.1 InjectionEngine fix).
- */
-export const cacheDecisionSubflow: FlowChart = flowChart<CacheDecisionState>(
-  'DecideCacheMarkers',
-  decide,
-  'decide-cache-markers',
-  {
-    description:
-      'CacheDecision: walk activeInjections, evaluate cache directives, emit CacheMarker[]',
-  },
-).build();
+// NOTE: the cache decision is now the ROOT stage of the `sf-cache` subflow
+// (see core/agent/buildCacheSubflow.ts) via the exported `decideCacheMarkers`
+// above. The former standalone `cacheDecisionSubflow` FlowChart export was
+// removed when the agent stopped mounting it directly — `computeCacheMarkers`
+// + `decideCacheMarkers` are the reusable pieces.

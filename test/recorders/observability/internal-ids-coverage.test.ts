@@ -39,16 +39,22 @@ const SLOT_SUBFLOW_IDS: ReadonlySet<string> = new Set<string>([
  *  `AGENT_INTERNAL_LOCAL_IDS` in BoundaryRecorder.ts. */
 const EXPECTED_INTERNAL_SUBFLOW_IDS: ReadonlySet<string> = new Set<string>([
   SUBFLOW_IDS.INJECTION_ENGINE,
+  SUBFLOW_IDS.LLM_CALL, // LLMCall's inner invocation wrapper — container, not a step
   SUBFLOW_IDS.ROUTE,
   SUBFLOW_IDS.TOOL_CALLS,
   SUBFLOW_IDS.FINAL,
   SUBFLOW_IDS.MERGE,
+  SUBFLOW_IDS.CACHE, // v2.14 — per-turn cache decision wrapper; pure plumbing
   SUBFLOW_IDS.CACHE_DECISION,
   SUBFLOW_IDS.THINKING, // v2.14 — normalize-thinking mount; payload folds onto parent LLM step
 ]);
 
-/** Decider stage ids that are pure plumbing. */
-const EXPECTED_INTERNAL_STAGE_IDS: ReadonlySet<string> = new Set<string>([STAGE_IDS.CACHE_GATE]);
+/** Decider/wrapper stage ids that are pure plumbing. */
+const EXPECTED_INTERNAL_STAGE_IDS: ReadonlySet<string> = new Set<string>([
+  STAGE_IDS.CACHE_GATE,
+  STAGE_IDS.CLIENT, // LLMCall outer wrapper — User pill maps here; not a "step"
+  STAGE_IDS.EXTRACT_FINAL, // post-invocation marker for lens; not a "step" in the StepGraph
+]);
 
 describe('SUBFLOW_IDS coverage — every subflow categorized', () => {
   it('every SUBFLOW_IDS entry is either a slot OR an internal subflow', () => {

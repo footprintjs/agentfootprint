@@ -334,6 +334,7 @@ const COMMENTARY_INTERNAL_SEGMENTS = new Set<string>([
   'sf-tool-calls',
   'sf-merge',
   'sf-thinking',
+  'sf-cache', // v2.14 — cache decision wrapper (and its inner stages)
   'sf-cache-decision',
   'final', // route-decider 'final' branch — same exception as SUBFLOW_IDS.FINAL
 ]);

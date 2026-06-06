@@ -99,6 +99,16 @@ export function buildCallLLMStage(
     // observability; the LLM-wire path now reads scope.history directly.
     const iteration = scope.iteration;
 
+    // Per-iteration boundary marker (was a dedicated `IterationStart` stage —
+    // folded here since emitting is passive observability, not work that needs
+    // its own execution stage). Fires FIRST, before the LLM call, so recorders
+    // still bracket each ReAct iteration. Payload unchanged (turnIndex reserved
+    // for future multi-turn; iterIndex is the per-iteration counter).
+    typedEmit(scope, 'agentfootprint.agent.iteration_start', {
+      turnIndex: 0,
+      iterIndex: iteration,
+    });
+
     const systemPrompt = systemPromptInjections
       .map((r) => r.rawContent ?? '')
       .filter((s) => s.length > 0)
@@ -193,6 +203,8 @@ export function buildCallLLMStage(
       }
       if (!resp) {
         // No `stream()` OR stream finished without a response payload.
+        // Raw errors propagate so the reliability loop can classify them;
+        // friendly translation happens at the terminal ErrorBridge.
         resp = await deps.provider.complete(req);
       }
       return resp;

@@ -210,3 +210,64 @@ describe('cacheGateDecide — ROI: evidence captures rule + inputs', () => {
     expect(scope.skillHistory[scope.skillHistory.length - 1]).toBe('skill-x');
   });
 });
+
+// ─── 8. Regression — updateSkillHistory samples the TAIL (churn fix) ──
+//
+// `activatedInjectionIds` is cumulative + deduped per turn (read_skill
+// APPENDS new ids to the end), so the HEAD is frozen at the FIRST skill
+// activated and never changes mid-turn. Sampling the head made the rolling
+// window record one constant value, so detectSkillChurn could never fire —
+// the skill-churn cache rule was effectively dead. The fix samples the
+// most-recently activated skill (the TAIL). These tests pin that fix.
+
+describe('updateSkillHistory — samples the most-recent activation (tail)', () => {
+  function step(
+    activatedInjectionIds: readonly string[],
+    skillHistory: readonly (string | undefined)[],
+  ): readonly (string | undefined)[] {
+    const scope = { activatedInjectionIds, skillHistory };
+    updateSkillHistory(scope as never);
+    return scope.skillHistory;
+  }
+
+  it('records the TAIL, not the head, when several skills are active', () => {
+    // [a, b, c] cumulative → the skill active THIS iteration is c (newest).
+    const next = step(['a', 'b', 'c'], []);
+    expect(next[next.length - 1]).toBe('c'); // tail
+    expect(next[next.length - 1]).not.toBe('a'); // 'a' is what the old head bug recorded
+  });
+
+  it('records undefined when no skill has been activated yet', () => {
+    expect(step([], [])).toEqual([undefined]);
+  });
+
+  it('CHURN NOW FIRES across a → b → c iterations (the bug this fixes)', () => {
+    // Simulate the ReAct loop: each iteration the LLM activates one more
+    // skill, so activatedInjectionIds grows and updateSkillHistory samples it.
+    let history: readonly (string | undefined)[] = [];
+    history = step(['a'], history); // iter 1: active = a
+    history = step(['a', 'b'], history); // iter 2: active = b
+    history = step(['a', 'b', 'c'], history); // iter 3: active = c
+    expect(history).toEqual(['a', 'b', 'c']);
+    expect(detectSkillChurn(history)).toBe(true);
+    // Proof of the bug: head-sampling would have produced ['a','a','a'],
+    // and detectSkillChurn would (wrongly) return false.
+    expect(detectSkillChurn(['a', 'a', 'a'])).toBe(false);
+  });
+
+  it('no churn when the agent stays on ONE skill across iterations', () => {
+    let history: readonly (string | undefined)[] = [];
+    for (let i = 0; i < 5; i++) history = step(['a'], history);
+    expect(detectSkillChurn(history)).toBe(false);
+  });
+
+  it('KNOWN LIMITATION: multiple skills in ONE iteration record only the tail', () => {
+    // If a, b, c all activate in the SAME iteration, only the tail (c) is
+    // recorded for that iteration — churn can under-count a multi-skill burst.
+    // Documented in updateSkillHistory's JSDoc; a fully order-independent
+    // signal would read activatedInjectionIds.length in the gate instead.
+    const history = step(['a', 'b', 'c'], []);
+    expect(history).toEqual(['c']); // single entry, the tail
+    expect(detectSkillChurn(history)).toBe(false); // under-counts: 1 < threshold
+  });
+});

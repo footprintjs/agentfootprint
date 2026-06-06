@@ -45,14 +45,20 @@ function subflowExit(subflowId: string): FlowSubflowEvent {
   return { ...subflowEntry(subflowId) };
 }
 
-function writeEvent(key: string, value: unknown): WriteEvent {
+// A write inside a slot subflow carries that subflow in its runtimeStageId
+// path (`[subflowPath/]stageId#index`) — that path is how ContextRecorder
+// attributes the write to a slot (parallel-safe, no stack). Pass the
+// enclosing slot subflow id to emulate a write that happened inside it;
+// omit it for a write that happened OUTSIDE any slot (should be ignored).
+function writeEvent(key: string, value: unknown, enclosingSubflowId?: string): WriteEvent {
+  const runtimeStageId = enclosingSubflowId ? `${enclosingSubflowId}/inject#0` : `inject#0`;
   return {
     key,
     value,
     operation: 'set',
     stageName: 'inject',
     stageId: 'inject',
-    runtimeStageId: `inject#0`,
+    runtimeStageId,
     pipelineId: 'pipeline',
     timestamp: Date.now(),
   } as WriteEvent;
@@ -78,10 +84,11 @@ describe('ContextRecorder — injection emit', () => {
 
     rec.onSubflowEntry(subflowEntry(SUBFLOW_IDS.SYSTEM_PROMPT));
     rec.onWrite(
-      writeEvent(INJECTION_KEYS.SYSTEM_PROMPT, [
-        injection({ contentHash: 'a' }),
-        injection({ contentHash: 'b' }),
-      ]),
+      writeEvent(
+        INJECTION_KEYS.SYSTEM_PROMPT,
+        [injection({ contentHash: 'a' }), injection({ contentHash: 'b' })],
+        SUBFLOW_IDS.SYSTEM_PROMPT,
+      ),
     );
     rec.onSubflowExit(subflowExit(SUBFLOW_IDS.SYSTEM_PROMPT));
 
@@ -97,12 +104,18 @@ describe('ContextRecorder — injection emit', () => {
     const rec = new ContextRecorder({ dispatcher, getRunContext: makeRun });
 
     rec.onSubflowEntry(subflowEntry(SUBFLOW_IDS.SYSTEM_PROMPT));
-    rec.onWrite(writeEvent(INJECTION_KEYS.SYSTEM_PROMPT, [injection({ contentHash: 'a' })]));
     rec.onWrite(
-      writeEvent(INJECTION_KEYS.SYSTEM_PROMPT, [
-        injection({ contentHash: 'a' }), // duplicate
-        injection({ contentHash: 'b' }), // new
-      ]),
+      writeEvent(INJECTION_KEYS.SYSTEM_PROMPT, [injection({ contentHash: 'a' })], SUBFLOW_IDS.SYSTEM_PROMPT),
+    );
+    rec.onWrite(
+      writeEvent(
+        INJECTION_KEYS.SYSTEM_PROMPT,
+        [
+          injection({ contentHash: 'a' }), // duplicate
+          injection({ contentHash: 'b' }), // new
+        ],
+        SUBFLOW_IDS.SYSTEM_PROMPT,
+      ),
     );
 
     expect(fn).toHaveBeenCalledTimes(2); // a + b, not a twice
@@ -126,9 +139,12 @@ describe('ContextRecorder — injection emit', () => {
     dispatcher.on('agentfootprint.context.injected', fn);
     const rec = new ContextRecorder({ dispatcher, getRunContext: makeRun });
 
-    // Inside messages subflow, a write to the TOOLS injection key is ignored.
+    // Inside messages subflow, a write to the TOOLS injection key is ignored
+    // (write's runtimeStageId resolves to 'messages', key is TOOLS → no match).
     rec.onSubflowEntry(subflowEntry(SUBFLOW_IDS.MESSAGES));
-    rec.onWrite(writeEvent(INJECTION_KEYS.TOOLS, [injection({ slot: 'tools', contentHash: 'a' })]));
+    rec.onWrite(
+      writeEvent(INJECTION_KEYS.TOOLS, [injection({ slot: 'tools', contentHash: 'a' })], SUBFLOW_IDS.MESSAGES),
+    );
     expect(fn).not.toHaveBeenCalled();
   });
 
@@ -139,8 +155,53 @@ describe('ContextRecorder — injection emit', () => {
     const rec = new ContextRecorder({ dispatcher, getRunContext: makeRun });
 
     rec.onSubflowEntry(subflowEntry(SUBFLOW_IDS.ROUTE));
-    rec.onWrite(writeEvent(INJECTION_KEYS.SYSTEM_PROMPT, [injection({ contentHash: 'a' })]));
+    rec.onWrite(
+      writeEvent(INJECTION_KEYS.SYSTEM_PROMPT, [injection({ contentHash: 'a' })], SUBFLOW_IDS.ROUTE),
+    );
     expect(fn).not.toHaveBeenCalled();
+  });
+});
+
+describe('ContextRecorder — parallel slot interleaving (attribution by write, not stack)', () => {
+  it('attributes each write to its OWN slot when all 3 slots are open concurrently', () => {
+    // This is the regression guard for the slot-fork. Under the selector
+    // fan-out, all 3 slot subflows ENTER before any writes, then their
+    // writes interleave. A "currently-open slot" stack would resolve every
+    // write to the stack top ('tools' here) and silently DROP the messages
+    // + system-prompt injections (their key≠'tools' guard fails). Resolving
+    // the slot from each write's own runtimeStageId fixes that.
+    const dispatcher = new EventDispatcher();
+    const fn = vi.fn();
+    dispatcher.on('agentfootprint.context.injected', fn);
+    const rec = new ContextRecorder({ dispatcher, getRunContext: makeRun });
+
+    rec.onSubflowEntry(subflowEntry(SUBFLOW_IDS.SYSTEM_PROMPT));
+    rec.onSubflowEntry(subflowEntry(SUBFLOW_IDS.MESSAGES));
+    rec.onSubflowEntry(subflowEntry(SUBFLOW_IDS.TOOLS)); // stack top = 'tools'
+
+    // Interleaved writes, each emitted INSIDE its own slot subflow.
+    rec.onWrite(
+      writeEvent(INJECTION_KEYS.MESSAGES, [injection({ slot: 'messages', contentHash: 'm1' })], SUBFLOW_IDS.MESSAGES),
+    );
+    rec.onWrite(
+      writeEvent(
+        INJECTION_KEYS.SYSTEM_PROMPT,
+        [injection({ slot: 'system-prompt', contentHash: 'sp1' })],
+        SUBFLOW_IDS.SYSTEM_PROMPT,
+      ),
+    );
+    rec.onWrite(
+      writeEvent(INJECTION_KEYS.TOOLS, [injection({ slot: 'tools', contentHash: 't1' })], SUBFLOW_IDS.TOOLS),
+    );
+
+    rec.onSubflowExit(subflowExit(SUBFLOW_IDS.TOOLS));
+    rec.onSubflowExit(subflowExit(SUBFLOW_IDS.MESSAGES));
+    rec.onSubflowExit(subflowExit(SUBFLOW_IDS.SYSTEM_PROMPT));
+
+    // All 3 fire (the old stack-top model would emit only the 'tools' one).
+    expect(fn).toHaveBeenCalledTimes(3);
+    const slots = fn.mock.calls.map((c) => c[0].payload.slot).sort();
+    expect(slots).toEqual(['messages', 'system-prompt', 'tools']);
   });
 });
 
@@ -160,7 +221,7 @@ describe('ContextRecorder — slot_composed emit', () => {
       droppedCount: 1,
       droppedSummaries: ['dropped-chunk-5'],
     };
-    rec.onWrite(writeEvent(COMPOSITION_KEYS.SLOT_COMPOSED, summary));
+    rec.onWrite(writeEvent(COMPOSITION_KEYS.SLOT_COMPOSED, summary, SUBFLOW_IDS.MESSAGES));
 
     expect(fn).toHaveBeenCalledTimes(1);
     expect(fn.mock.calls[0][0].payload.slot).toBe('messages');
@@ -180,7 +241,7 @@ describe('ContextRecorder — eviction emit', () => {
       { slot: 'messages', contentHash: 'h1', reason: 'budget', survivalMs: 1200 },
       { slot: 'messages', contentHash: 'h2', reason: 'stale', survivalMs: 60000 },
     ];
-    rec.onWrite(writeEvent(COMPOSITION_KEYS.EVICTED, evictions));
+    rec.onWrite(writeEvent(COMPOSITION_KEYS.EVICTED, evictions, SUBFLOW_IDS.MESSAGES));
 
     expect(fn).toHaveBeenCalledTimes(2);
     expect(fn.mock.calls[0][0].payload.reason).toBe('budget');
@@ -205,7 +266,7 @@ describe('ContextRecorder — budget pressure emit', () => {
         planAction: 'evict',
       },
     ];
-    rec.onWrite(writeEvent(COMPOSITION_KEYS.BUDGET_PRESSURE, pressure));
+    rec.onWrite(writeEvent(COMPOSITION_KEYS.BUDGET_PRESSURE, pressure, SUBFLOW_IDS.TOOLS));
 
     expect(fn).toHaveBeenCalledTimes(1);
     expect(fn.mock.calls[0][0].payload.planAction).toBe('evict');
@@ -220,7 +281,9 @@ describe('ContextRecorder — listener-count fast path', () => {
 
     // No listener for context.injected -- dispatch should be skipped.
     rec.onSubflowEntry(subflowEntry(SUBFLOW_IDS.SYSTEM_PROMPT));
-    rec.onWrite(writeEvent(INJECTION_KEYS.SYSTEM_PROMPT, [injection({ contentHash: 'a' })]));
+    rec.onWrite(
+      writeEvent(INJECTION_KEYS.SYSTEM_PROMPT, [injection({ contentHash: 'a' })], SUBFLOW_IDS.SYSTEM_PROMPT),
+    );
     expect(dispatchSpy).not.toHaveBeenCalled();
   });
 });
@@ -232,7 +295,7 @@ describe('ContextRecorder — shape guards (malformed input)', () => {
     dispatcher.on('agentfootprint.context.injected', fn);
     const rec = new ContextRecorder({ dispatcher, getRunContext: makeRun });
     rec.onSubflowEntry(subflowEntry(SUBFLOW_IDS.SYSTEM_PROMPT));
-    rec.onWrite(writeEvent(INJECTION_KEYS.SYSTEM_PROMPT, 'not-an-array'));
+    rec.onWrite(writeEvent(INJECTION_KEYS.SYSTEM_PROMPT, 'not-an-array', SUBFLOW_IDS.SYSTEM_PROMPT));
     expect(fn).not.toHaveBeenCalled();
   });
 
@@ -242,7 +305,7 @@ describe('ContextRecorder — shape guards (malformed input)', () => {
     dispatcher.on('agentfootprint.context.injected', fn);
     const rec = new ContextRecorder({ dispatcher, getRunContext: makeRun });
     rec.onSubflowEntry(subflowEntry(SUBFLOW_IDS.SYSTEM_PROMPT));
-    rec.onWrite(writeEvent(INJECTION_KEYS.SYSTEM_PROMPT, [{ notValid: true }]));
+    rec.onWrite(writeEvent(INJECTION_KEYS.SYSTEM_PROMPT, [{ notValid: true }], SUBFLOW_IDS.SYSTEM_PROMPT));
     expect(fn).not.toHaveBeenCalled();
   });
 });

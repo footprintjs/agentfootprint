@@ -189,7 +189,7 @@ export interface ToolEndPayload {
   readonly durationMs: number;
 }
 
-// context.* (4) — THE CORE DOMAIN
+// context.* (5) — THE CORE DOMAIN
 export interface ContextInjectedPayload {
   readonly contentSummary: string;
   readonly contentHash: string;
@@ -239,6 +239,34 @@ export interface ContextBudgetPressurePayload {
   readonly projectedTokens: number;
   readonly overflowBy: number;
   readonly planAction: 'evict' | 'summarize' | 'abort';
+}
+
+/**
+ * Fired once per iteration by the Injection Engine after it evaluates every
+ * Injection's trigger — BEFORE the Context fork routes the survivors into the
+ * three slots. This is the "what was considered, what won, what was skipped
+ * and why" signal; `context.slot_composed` is its downstream counterpart
+ * ("what actually landed in each slot"). Pure observability — no flow stage
+ * reads it.
+ */
+export interface ContextEvaluatedPayload {
+  readonly iteration: number;
+  /** Number of injections active this iteration. */
+  readonly activeCount: number;
+  /** Number skipped (predicate false counts as neither — only errors/unknown land here). */
+  readonly skippedCount: number;
+  /** Total injections evaluated (the full declared list). */
+  readonly evaluatedTotal: number;
+  /** Ids of the active injections, in evaluation order. */
+  readonly activeIds: readonly string[];
+  /** Why each skipped injection was skipped (errors / unknown trigger kinds). */
+  readonly skippedDetails: readonly {
+    readonly id: string;
+    readonly reason: 'predicate-threw' | 'unknown-trigger-kind';
+    readonly error?: string;
+  }[];
+  /** Count of active injections by trigger kind (always / rule / on-tool-return / llm-activated). */
+  readonly triggerKindCounts: Readonly<Record<string, number>>;
 }
 
 // error.fatal + pause (always-on from library core)
@@ -530,6 +558,14 @@ export interface AgentOutputSchemaValidationFailedPayload {
 }
 
 // error.* (retry/recover; fatal is Tier 1)
+//
+// NOTE: error.retried / error.recovered are shaped for the standalone
+// PROVIDER DECORATORS (withRetry / withFallback / withCircuitBreaker) —
+// a decorator has a fixed `maxAttempts` + exponential `backoffMs` and a
+// wall-clock `totalDurationMs`. The rules-based reliability loop has no
+// fixed attempt cap and no backoff (rules decide dynamically), so it
+// uses the `reliability.*` family below instead. Keep the two families
+// distinct — do NOT cross-emit (see docs/MENTAL_MODEL.md §14).
 export interface ErrorRetriedPayload {
   readonly attempt: number;
   readonly maxAttempts: number;
@@ -541,6 +577,75 @@ export interface ErrorRetriedPayload {
 export interface ErrorRecoveredPayload {
   readonly attempt: number;
   readonly totalDurationMs: number;
+}
+
+// reliability.* — the RULES-BASED reliability loop's telemetry family
+// (Agent.create(...).reliability({...})). Distinct from error.* (which is
+// for the provider decorators). Pure telemetry on the emit channel; the
+// loop's control state stays in scope (reliabilityFail* on AgentState).
+//
+// `errorKind` is a plain string here (not the reliability ErrorKind
+// union) so the events contract layer does not depend on reliability
+// internals — mirrors how ErrorRetriedPayload uses `lastError: string`.
+
+/**
+ * Fired when the rules loop (or the reliability gate chart) gives up via
+ * a `fail-fast` decision. Superset shape: `phase`/`kind`/`attempt` are
+ * always present; the remaining fields are populated by whichever site
+ * emits (the loop carries `label`/`providerUsed`/`errorKind`; the gate
+ * chart carries `reason`).
+ */
+export interface ReliabilityFailFastPayload {
+  readonly phase: 'pre-check' | 'post-decide';
+  /** The matched rule's `kind` (machine-readable bucket). */
+  readonly kind: string;
+  /** 1-indexed attempt counter at the point of failure. */
+  readonly attempt: number;
+  /** Human-readable label of the matched rule (loop sites). */
+  readonly label?: string;
+  /** Free-form reason string (gate-chart sites). */
+  readonly reason?: string;
+  /** Provider in use when the loop failed fast. */
+  readonly providerUsed?: string;
+  /** Classification of the failure being failed-fast on. */
+  readonly errorKind?: string;
+  /** Originating error message, when present. */
+  readonly errorMessage?: string;
+}
+
+/**
+ * Fired each time the rules loop decides to RETRY after a failed attempt
+ * — `action` distinguishes a same-provider retry from a provider failover.
+ */
+export interface ReliabilityRetriedPayload {
+  /** 1-indexed counter of the attempt that just FAILED and is being retried. */
+  readonly attempt: number;
+  /** `retry` = same provider again; `retry-other` = switch provider. */
+  readonly action: 'retry' | 'retry-other';
+  /** Classification of the failure being retried. */
+  readonly errorKind: string;
+  /** Originating error message, when present. */
+  readonly errorMessage?: string;
+  /** Provider that just failed. */
+  readonly fromProvider: string;
+  /** Provider the NEXT attempt will use (equals `fromProvider` for `retry`). */
+  readonly toProvider: string;
+}
+
+/**
+ * Fired when the rules loop produces a successful response AFTER one or
+ * more failed attempts (self-healed). `recoveredVia` names the mechanism
+ * of the final successful step.
+ */
+export interface ReliabilityRecoveredPayload {
+  /** 1-indexed attempt number that finally succeeded. */
+  readonly attempt: number;
+  /** How recovery happened. */
+  readonly recoveredVia: 'retry' | 'retry-other' | 'fallback';
+  /** How many attempts failed before this success. */
+  readonly priorFailures: number;
+  /** Classification of the LAST failure before recovery. */
+  readonly errorKind: string;
 }
 
 // embedding.* (1)

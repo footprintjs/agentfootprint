@@ -28,6 +28,8 @@
 
 import type { CombinedRecorder } from 'footprintjs';
 import type { FlowDecisionEvent } from 'footprintjs';
+import { splitStageId } from 'footprintjs/trace';
+import { STAGE_IDS } from '../conventions.js';
 import type { AgentfootprintEvent } from '../events/registry.js';
 import type { CacheMetrics, CacheStrategy } from './types.js';
 import type { PricingTable } from '../adapters/types.js';
@@ -104,9 +106,16 @@ export function cacheRecorder(options: CacheRecorderOptions = {}): CacheRecorder
     id: 'cache-recorder',
 
     onDecision(event: FlowDecisionEvent): void {
-      // Only care about CacheGate decisions; identified by the
-      // decider's stage id (the third arg to addDeciderFunction).
-      if (event.decider !== 'cache-gate') return;
+      // Only care about CacheGate decisions, matched by the decider's LOCAL
+      // stage id. Both `event.decider` (the node NAME) and the prefixed
+      // `traversalContext.stageId` become `sf-cache/…` now that CacheGate is
+      // nested in sf-cache, so we strip the subflow path with splitStageId and
+      // compare the local id. This is id-stable (survives a display-name
+      // rename) and nesting-safe (works top-level or inside sf-cache).
+      // (The old `event.decider !== 'cache-gate'` was a no-op: event.decider is
+      // the NAME 'CacheGate', never the id 'cache-gate'.)
+      const stageId = event.traversalContext?.stageId;
+      if (!stageId || splitStageId(stageId).localStageId !== STAGE_IDS.CACHE_GATE) return;
       const matched = event.evidence?.rules.find((r) => r.matched);
       lastDecision = {
         branch: event.chosen as 'apply-markers' | 'no-markers',

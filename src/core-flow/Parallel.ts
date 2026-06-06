@@ -362,7 +362,7 @@ export class Parallel extends RunnerBase<ParallelInput, ParallelOutput> {
     // The 4th arg threads the consumer's `structureRecorders` (when set)
     // into footprintjs's builder so every node in this chart is observed
     // by them at construction time.
-    let builder = flowChart<ParallelState>('Seed', seed, 'seed', {
+    let builder = flowChart<ParallelState>('Initialize', seed, 'seed', {
       ...(this.opts.structureRecorders !== undefined && {
         structureRecorders: [...this.opts.structureRecorders],
       }),

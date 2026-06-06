@@ -74,6 +74,14 @@ function llmStart(
   };
 }
 
+function errorFatal(rid = '__root__#0', error = 'Failed to fetch', ts?: number): AgentfootprintEvent {
+  return {
+    type: 'agentfootprint.error.fatal',
+    payload: { error, stage: '__root__', scope: 'run' },
+    meta: meta(rid, ts),
+  };
+}
+
 function token(rid: string, content: string, idx = 0, ts?: number): AgentfootprintEvent {
   return {
     type: 'agentfootprint.stream.token',
@@ -152,6 +160,22 @@ describe('LiveLLMTracker — Tier 1: Unit', () => {
     expect(tr.getActive('call-llm#1')?.partial).toBe('');
 
     runner.dispatcher.dispatch(llmEnd('call-llm#1'));
+    expect(tr.isInFlight()).toBe(false);
+    expect(tr.getActive('call-llm#1')).toBeUndefined();
+  });
+
+  it('clears the in-flight boundary on error.fatal (a thrown call emits no llm_end)', () => {
+    const tr = new LiveLLMTracker();
+    const runner = makeRunner();
+    tr.subscribe(runner);
+
+    // LLM starts but the provider throws — no llm_end ever fires. Without
+    // the error.fatal handler this boundary would stay open forever
+    // (the "Chatbot is thinking…" stuck bug).
+    runner.dispatcher.dispatch(llmStart('call-llm#1'));
+    expect(tr.isInFlight()).toBe(true);
+
+    runner.dispatcher.dispatch(errorFatal());
     expect(tr.isInFlight()).toBe(false);
     expect(tr.getActive('call-llm#1')).toBeUndefined();
   });

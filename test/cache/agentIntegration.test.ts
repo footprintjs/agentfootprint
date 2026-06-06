@@ -105,14 +105,18 @@ describe('agent-chart cache integration — property', () => {
     expect(active?.length ?? 0).toBeLessThanOrEqual(4);
   });
 
-  it('skillHistory is initialized as empty array, populated by UpdateSkillHistory', async () => {
-    const agent = buildAgent();
+  it('skillHistory is initialized as an empty array (no skills → UpdateSkillHistory not mounted)', async () => {
+    const agent = buildAgent(); // steering only, NO skills registered
     await agent.run({ message: 'go' });
     const snap = agent.getLastSnapshot();
     const history = (snap?.sharedState as { skillHistory?: readonly unknown[] })?.skillHistory;
-    // Each iteration appends; should have at least 1 entry after run
+    // seed initializes it to []; with no skills the UpdateSkillHistory stage is
+    // omitted (conditional mount), so it stays empty. The population mechanism
+    // is covered by CacheGateDecider's tail-sampling unit tests + the skill-on
+    // structure tests in agent-subflow-structure.
     expect(history).toBeDefined();
     expect(Array.isArray(history)).toBe(true);
+    expect(history).toEqual([]);
   });
 });
 
@@ -151,15 +155,16 @@ describe('agent-chart cache integration — performance', () => {
 // ─── 7. ROI — full integration ────────────────────────────────────
 
 describe('agent-chart cache integration — ROI', () => {
-  it("cache stages add 4 mounted nodes to the agent flowchart but don't change final answer", async () => {
+  it("cache machinery mounts as ONE sf-cache subflow but doesn't change final answer", async () => {
     const agent = buildAgent();
     const result = await agent.run({ message: 'go' });
     expect(result).toBe('done'); // mock's terminal reply
 
-    // Spec includes the cache stages (visible to ExplainableShell):
+    // Spec includes the cache subflow (visible to ExplainableShell). v2.14:
+    // the per-turn cache decision is grouped into ONE `sf-cache` boundary
+    // (decideCacheMarkers → CacheGate → apply/skip) instead of 4 loose nodes.
     const spec = agent.getSpec() as { subflows?: Record<string, unknown> };
     expect(spec.subflows).toBeDefined();
-    // CacheDecision subflow is mounted
-    expect(spec.subflows?.['sf-cache-decision']).toBeDefined();
+    expect(spec.subflows?.['sf-cache']).toBeDefined();
   });
 });

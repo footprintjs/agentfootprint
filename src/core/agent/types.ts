@@ -22,6 +22,7 @@ import type { ActiveInjection } from '../../lib/injection-engine/types.js';
 import type { InjectionRecord } from '../../recorders/core/types.js';
 import type { MemoryIdentity } from '../../memory/identity/types.js';
 import type { ThinkingBlock } from '../../thinking/types.js';
+import type { ReliabilityScope } from '../../reliability/types.js';
 
 // ─── PUBLIC types (consumer-facing) ────────────────────────────────
 
@@ -79,8 +80,8 @@ export interface AgentOptions {
   /**
    * Optional build-time recorders threaded into footprintjs's
    * `flowChart()` factory. Each recorder fires `onStageAdded` once per
-   * node in the Agent's internal chart (Seed, IterationStart, CallLLM,
-   * Route, tool handler, slot mounts, PrepareFinal, BreakFinal), and
+   * node in the Agent's internal chart (Seed, CallLLM, Route, tool
+   * handler, slot mounts, PrepareFinal, BreakFinal), and
    * `onSubflowMounted` once per mounted subflow. Recorders own their
    * own accumulators — agentfootprint just threads them through.
    *
@@ -103,6 +104,59 @@ export interface AgentOptions {
    * Returns `undefined` when omitted.
    */
   readonly groupTranslator?: GroupTranslator;
+  /**
+   * Chart structure for the ReAct loop. Default `'flat'` keeps the
+   * historical shape (`buildAgentChart`): the LLM call is a bare
+   * `call-llm` STAGE with the slot subflows as its siblings.
+   *
+   * `'subflow'` wraps the whole LLM turn (injection engine + the 3
+   * slots + cache + the call + thinking) in a single `sf-llm-call`
+   * SUBFLOW — the SAME boundary the `LLMCall` primitive produces. This
+   * is the structurally-correct shape: the LLM invocation IS a subflow,
+   * so Lens (and any explainable-ui consumer) renders it as an LLM
+   * group with its slots inside, with zero bespoke collapsing. Behaviour
+   * is identical to `'flat'`; only the chart's nesting differs.
+   *
+   * Opt-in while the subflow shape proves out; will become the default
+   * once verified end-to-end. See `agent/buildDynamicAgentChart.ts`.
+   */
+  readonly reactStructure?: 'flat' | 'subflow';
+
+  /**
+   * ReAct loop SEMANTICS — how much of the request is re-engineered each
+   * iteration. Default `'dynamic'`.
+   *
+   * `'dynamic'` (default) — every iteration re-runs the InjectionEngine and
+   * all three slots (system-prompt ‖ messages ‖ tools), because which
+   * injections are active can change per turn (a skill activates, a rule
+   * fires, a tool-return triggers something). The loop targets the
+   * InjectionEngine. This is the right shape when the agent uses skills,
+   * rule/on-tool-return triggers, or any per-turn context steering.
+   *
+   * `'classic'` — textbook ReAct: context is engineered ONCE. The
+   * InjectionEngine, system-prompt and tools run a single time up front;
+   * the loop targets only the Messages slot, so each iteration just appends
+   * the new tool result and re-calls the LLM. Use this when the system
+   * prompt and tool set are fixed for the whole run (the common case). The
+   * chart then reads honestly — `ToolCalls → Messages` loops, the static
+   * slots sit outside the loop.
+   *
+   * Both modes produce identical LLM requests for a static agent (no dynamic
+   * triggers); `'classic'` just avoids re-computing fixed slots and shows in the
+   * chart that only the messages re-run (after turn 1 only the Messages slot
+   * lights up). Implementation-wise the chart is the SAME as Dynamic — the only
+   * difference is that the Context selector stops re-selecting the system-prompt
+   * and tools slots after the first turn, so their outputs are reused.
+   *
+   * CAVEAT: because the static slots are cached after turn 1, `'classic'` is for
+   * agents whose system-prompt + tools are FIXED. If you register skills or
+   * dynamic-trigger injections (rule / on-tool-return / llm-activated), an
+   * activation that happens mid-run would NOT surface into the cached
+   * system-prompt/tools — use `'dynamic'` (the default) for those. Currently
+   * `'classic'` uses the flat chart shape (the `reactStructure: 'subflow'`
+   * grouping re-seeds context every turn by design, so it stays dynamic-only).
+   */
+  readonly reactMode?: 'classic' | 'dynamic';
 }
 
 export interface AgentInput {
@@ -241,4 +295,20 @@ export interface AgentState {
    *  `scope.history` (ensures Anthropic signature round-trip). Empty
    *  array when no thinking present. */
   thinkingBlocks: readonly ThinkingBlock[];
+
+  // ── Reliability fail-fast state (v2.11.5) ──────────────────
+  /** Set when the rules-based reliability loop takes the fail-fast path.
+   *  `Agent.run()` reads these from the post-run snapshot and throws a
+   *  typed `ReliabilityFailFastError`. Mirrors `policyHalt*` — because the
+   *  loop stops the chart with `$break` (not a throw), durable scope is the
+   *  only courier of the structured fail context across the break to the
+   *  API boundary. (Telemetry ALSO fires via the `reliability.fail_fast`
+   *  emit event; these scope fields are the business-logic control signal.) */
+  reliabilityFailKind?: string;
+  reliabilityFailPayload?: ReliabilityScope['failPayload'];
+  reliabilityFailReason?: string;
+  /** Originating error message/name — stringified because Error objects
+   *  don't survive footprintjs's `structuredClone` of scope. */
+  reliabilityFailCauseMessage?: string;
+  reliabilityFailCauseName?: string;
 }

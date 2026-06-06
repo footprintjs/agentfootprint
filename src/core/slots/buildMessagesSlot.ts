@@ -18,7 +18,7 @@ import { INJECTION_KEYS } from '../../conventions.js';
 import type { ContextRecency, ContextRole } from '../../events/types.js';
 import type { InjectionRecord } from '../../recorders/core/types.js';
 import { COMPOSITION_KEYS } from '../../recorders/core/types.js';
-import type { Injection } from '../../lib/injection-engine/types.js';
+import type { ActiveInjection } from '../../lib/injection-engine/types.js';
 import { composeSlot, fnv1a, truncate } from './helpers.js';
 
 /**
@@ -80,7 +80,7 @@ export function buildMessagesSlot(config: MessagesSlotConfig = {}): FlowChart {
       // Active Injections targeting the messages slot. Used by `defineFact`
       // with `slot: 'messages'`, future RAG / Memory factories, etc.
       const activeInjections =
-        (scope.$getValue('activeInjections') as readonly Injection[] | undefined) ?? [];
+        (scope.$getValue('activeInjections') as readonly ActiveInjection[] | undefined) ?? [];
       let position = injections.length;
       for (const inj of activeInjections) {
         const injMessages = inj.inject.messages;
@@ -93,7 +93,7 @@ export function buildMessagesSlot(config: MessagesSlotConfig = {}): FlowChart {
             source: inj.flavor,
             sourceId: inj.id,
             reason:
-              inj.description ?? `${inj.flavor} '${inj.id}' active (trigger: ${inj.trigger.kind})`,
+              inj.description ?? `${inj.flavor} '${inj.id}' active`,
             rawContent: msg.content,
             asRole: msg.role,
             asRecency: 'latest',

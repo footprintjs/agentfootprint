@@ -52,6 +52,7 @@ import {
 } from './CircuitBreaker.js';
 import { classifyError } from './classifyError.js';
 import type { ReliabilityConfig, ReliabilityRule, ReliabilityScope } from './types.js';
+import { typedEmit } from '../recorders/core/typedEmit.js';
 
 // ─── Stage IDs (also used for narrative/topology readability) ────────
 
@@ -146,7 +147,7 @@ function matchedKindLabel(
 export function buildReliabilityGateChart(config: ReliabilityConfig): FlowChart {
   // FROZEN CONFIG captured by the factory closure. None of these mutate
   // at runtime — they're the chart's CODE, not state. Same pattern as
-  // every other footprintjs chart factory (cacheDecisionSubflow,
+  // every other footprintjs chart factory (buildCacheSubflow,
   // injectionEngineSubflow, etc.) capturing rules/directives at build.
   //
   //   • providers     — functions can't structuredClone into scope
@@ -196,7 +197,7 @@ export function buildReliabilityGateChart(config: ReliabilityConfig): FlowChart 
     const { kind, label } = matchedKindLabel(preRules, matchedIdx);
     scope.failKind = kind;
     scope.failPayload = buildFailPayload(scope, 'pre-check');
-    scope.$emit('agentfootprint.reliability.fail_fast', {
+    typedEmit(scope, 'agentfootprint.reliability.fail_fast', {
       phase: 'pre-check',
       kind,
       label,
@@ -213,10 +214,15 @@ export function buildReliabilityGateChart(config: ReliabilityConfig): FlowChart 
       // Misconfiguration — no provider at this index. Fail-fast cleanly.
       scope.failKind = 'misconfigured-provider';
       scope.failPayload = buildFailPayload(scope, 'pre-check');
-      scope.$emit('agentfootprint.reliability.fail_fast', {
+      // Conform to ReliabilityFailFastPayload — the out-of-bounds index
+      // surfaces in errorMessage (the typed payload has no providerIdx field;
+      // keeping the shape uniform across all fail_fast sites).
+      typedEmit(scope, 'agentfootprint.reliability.fail_fast', {
         phase: 'pre-check',
         kind: 'misconfigured-provider',
-        providerIdx: scope.providerIdx,
+        attempt: scope.attempt,
+        providerUsed: scope.currentProvider,
+        errorMessage: `provider index ${scope.providerIdx} out of bounds`,
       });
       scope.$break(
         `reliability-pre-check: misconfigured-provider (idx ${scope.providerIdx} out of bounds)`,

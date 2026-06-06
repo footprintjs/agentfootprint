@@ -60,6 +60,7 @@ import type {
   ReliabilityRule,
   ReliabilityScope,
 } from '../../../reliability/types.js';
+import { typedEmit } from '../../../recorders/core/typedEmit.js';
 import type { AgentState } from '../types.js';
 
 /** A single-shot LLM call function. Built once by `callLLM.ts` and
@@ -209,10 +210,13 @@ export async function executeWithReliability(
       ...(lastError?.message !== undefined && { errorMessage: lastError.message }),
     };
     const reason = `reliability-${phase}: ${label}`;
-    (scope as unknown as { reliabilityFailKind: string }).reliabilityFailKind = kind;
-    (scope as unknown as { reliabilityFailPayload: typeof payload }).reliabilityFailPayload =
-      payload;
-    (scope as unknown as { reliabilityFailReason: string }).reliabilityFailReason = reason;
+    // Typed writes via the live TypedScope<AgentState> — the
+    // reliabilityFail* fields are declared on AgentState, so no unsafe
+    // cast is needed. Durable scope is the courier across the $break to
+    // Agent.run()'s typed-error throw at the API boundary.
+    scope.reliabilityFailKind = kind;
+    scope.reliabilityFailPayload = payload;
+    scope.reliabilityFailReason = reason;
     if (lastError !== undefined) {
       // Store the originating error as plain strings — Error instances
       // don't round-trip cleanly through scope's structuredClone. The
@@ -220,12 +224,10 @@ export async function executeWithReliability(
       // ReliabilityFailFastError.cause; consumer's `instanceof` checks
       // get a stable Error subclass without us needing to preserve the
       // exact prototype.
-      (scope as unknown as { reliabilityFailCauseMessage: string }).reliabilityFailCauseMessage =
-        lastError.message;
-      (scope as unknown as { reliabilityFailCauseName: string }).reliabilityFailCauseName =
-        lastError.name;
+      scope.reliabilityFailCauseMessage = lastError.message;
+      scope.reliabilityFailCauseName = lastError.name;
     }
-    scope.$emit('agentfootprint.reliability.fail_fast', {
+    typedEmit(scope, 'agentfootprint.reliability.fail_fast', {
       phase,
       kind,
       label,
@@ -243,6 +245,13 @@ export async function executeWithReliability(
   let lastError: Error | undefined;
   let lastErrorKind: ReliabilityScope['errorKind'] = 'ok';
   let lastLatencyMs = 0;
+  // Recovery tracking (telemetry-only, closure-local like attempt/breakerStates
+  // — NOT scope, so it never enters the commitLog). Set when we retry after a
+  // failure; read on the next success to fire reliability.recovered. Counts the
+  // failures that preceded recovery for the event payload.
+  let priorFailures = 0;
+  let pendingRecoveryVia: 'retry' | 'retry-other' | 'fallback' | undefined;
+  let pendingRecoveryErrorKind: ReliabilityScope['errorKind'] = 'ok';
 
   // We DON'T use footprintjs `decide()` here — its predicates bind
   // to the active agent scope via TypedScope, but our `ReliabilityRule`
@@ -417,7 +426,19 @@ export async function executeWithReliability(
 
     if (postBranch === 'ok') {
       // Success exit. lastResponse is the committed value.
-      if (lastResponse !== undefined) return lastResponse;
+      if (lastResponse !== undefined) {
+        // Self-healed after ≥1 failed attempt → fire reliability.recovered
+        // so Lens/telemetry can show the loop recovered (vs a clean first try).
+        if (pendingRecoveryVia !== undefined) {
+          typedEmit(scope, 'agentfootprint.reliability.recovered', {
+            attempt,
+            recoveredVia: pendingRecoveryVia,
+            priorFailures,
+            errorKind: pendingRecoveryErrorKind,
+          });
+        }
+        return lastResponse;
+      }
       // 'ok' with no response is misconfiguration; fall through to
       // fail-fast as a defensive default.
       return failFast('post-decide', 'no-response', 'rule said ok but no response captured');
@@ -442,6 +463,20 @@ export async function executeWithReliability(
           reliabilityScope(),
         );
       }
+      // Per-attempt visibility: same-provider retry. fromProvider ===
+      // toProvider here (no failover). Record recovery context so the next
+      // success can fire reliability.recovered.
+      priorFailures += 1;
+      pendingRecoveryVia = 'retry';
+      pendingRecoveryErrorKind = lastErrorKind;
+      typedEmit(scope, 'agentfootprint.reliability.retried', {
+        attempt,
+        action: 'retry',
+        errorKind: lastErrorKind,
+        ...(lastError?.message !== undefined && { errorMessage: lastError.message }),
+        fromProvider: cur.name,
+        toProvider: cur.name,
+      });
       // Loop continues; attempt was already bumped in finally.
       continue;
     }
@@ -465,6 +500,18 @@ export async function executeWithReliability(
           'retry-other requested but no more providers',
         );
       }
+      // NOTE: no reliability.retried emit on this branch yet. The live
+      // inline path does NOT actually switch providers — `callFn`
+      // (singleProviderCall in callLLM.ts) closes over the agent's
+      // DEFAULT provider; `providerIdx` only feeds telemetry/breaker
+      // keying, not the real call. Emitting `toProvider: <next>` here
+      // would be MISLEADING telemetry (claiming a switch that never
+      // happens). retry-other visibility is deferred until the live-path
+      // failover bug is fixed (see docs/MENTAL_MODEL.md §14). We still
+      // track recovery so a subsequent success fires reliability.recovered.
+      priorFailures += 1;
+      pendingRecoveryVia = 'retry-other';
+      pendingRecoveryErrorKind = lastErrorKind;
       continue;
     }
 
@@ -478,7 +525,16 @@ export async function executeWithReliability(
       }
       try {
         const repaired = await fallbackFn(mutableRequest, lastError);
-        // Successful fallback — commit and exit.
+        // Successful fallback IS a recovery — the failure that triggered
+        // it counts toward priorFailures. Fire reliability.recovered then
+        // commit and exit.
+        priorFailures += 1;
+        typedEmit(scope, 'agentfootprint.reliability.recovered', {
+          attempt,
+          recoveredVia: 'fallback',
+          priorFailures,
+          errorKind: lastErrorKind,
+        });
         return repaired;
       } catch (fallbackErr) {
         // Fallback threw — re-classify and let next iteration's

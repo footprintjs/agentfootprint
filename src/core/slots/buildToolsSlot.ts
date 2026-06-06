@@ -17,7 +17,7 @@ import type { LLMToolSchema } from '../../adapters/types.js';
 import { INJECTION_KEYS } from '../../conventions.js';
 import type { InjectionRecord } from '../../recorders/core/types.js';
 import { COMPOSITION_KEYS } from '../../recorders/core/types.js';
-import type { Injection } from '../../lib/injection-engine/types.js';
+import type { ActiveInjection } from '../../lib/injection-engine/types.js';
 import { typedEmit } from '../../recorders/core/typedEmit.js';
 import type { Tool } from '../tools.js';
 import type { ToolProvider, ToolDispatchContext } from '../../tool-providers/types.js';
@@ -206,7 +206,7 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
     // Active Injections targeting the tools slot (Skills with tools=[…]).
     // Filter activeInjections by `inject.tools`.
     const activeInjections =
-      (scope.$getValue('activeInjections') as readonly Injection[] | undefined) ?? [];
+      (scope.$getValue('activeInjections') as readonly ActiveInjection[] | undefined) ?? [];
     const dynamicSchemas: LLMToolSchema[] = [];
     for (const inj of activeInjections) {
       const injTools = inj.inject.tools;

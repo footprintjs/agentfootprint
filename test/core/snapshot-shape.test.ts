@@ -5,6 +5,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
+import { getSubtreeSnapshot, listSubflowPaths } from 'footprintjs';
 import { LLMCall } from '../../src/core/LLMCall.js';
 import { Parallel } from '../../src/core-flow/Parallel.js';
 import { MockProvider } from '../../src/adapters/llm/MockProvider.js';
@@ -57,14 +58,34 @@ describe('snapshot shape — single LLMCall', () => {
     await r.run({ message: 'go' });
     const snap = r.getLastSnapshot();
     expect(snap).toBeDefined();
-    const stageIds = collectStageIds(snap?.executionTree);
-    // The LLMCall builds: a seed stage + 3 slot subflows + the call-llm
-    // stage. All MUST appear in the executionTree for Lens to render
-    // the internal structure on drill-in.
-    expect(stageIds.length).toBeGreaterThan(0);
-    // Look for any stage id mentioning the slots / call-llm.
-    const allIds = stageIds.join(' ');
-    expect(allIds).toMatch(/system-prompt|messages|tools|call-llm|seed/);
+
+    // Top-level tree: outer wrapper (client + sf-llm-call). Inner
+    // stages live in the sf-llm-call subtree — accessed via
+    // `getSubtreeSnapshot(snap, 'sf-llm-call')`. This is the natural
+    // drill-down path lens uses.
+    const topIds = collectStageIds(snap?.executionTree).join(' ');
+    expect(topIds).toMatch(/client/);
+    expect(topIds).toMatch(/sf-llm-call/);
+
+    // Subflow paths must include sf-llm-call AND its slot subflows.
+    const paths = listSubflowPaths(snap!);
+    expect(paths).toContain('sf-llm-call');
+    expect(paths).toContain('sf-llm-call/sf-system-prompt');
+    expect(paths).toContain('sf-llm-call/sf-messages');
+
+    // Drilling into sf-llm-call exposes the invocation's real stages:
+    // seed + slot subflows + call-llm + extract-final. These are what
+    // Lens shows when the user drills into the LLM card.
+    const inner = getSubtreeSnapshot(snap!, 'sf-llm-call');
+    expect(inner).toBeDefined();
+    const innerIds = collectStageIds(inner?.executionTree).join(' ');
+    expect(innerIds).toMatch(/seed/);
+    expect(innerIds).toMatch(/sf-system-prompt/);
+    expect(innerIds).toMatch(/sf-messages/);
+    expect(innerIds).toMatch(/call-llm/);
+    expect(innerIds).toMatch(/extract-final/);
+    // LLMCall does NOT have sf-tools (no tools by design).
+    expect(innerIds).not.toMatch(/sf-tools/);
   });
 
   it('snapshot.commitLog records per-stage writes', async () => {

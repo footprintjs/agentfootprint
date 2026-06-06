@@ -85,6 +85,19 @@ export {
   injectionKeyForSlot,
   isInjectionKey,
   type InjectionKey,
+  // Renderer-facing: classifies a stage's importance (hero vs plumbing) so
+  // visualisers (the lens, custom shells) can style the chart. Unlike the
+  // slot/id helpers below, this IS consumer API — it exists to be consumed
+  // by renderers.
+  stageRole,
+  type StageRole,
+  // Renderer-facing: declares which stages are time-travel MILESTONES (scrub
+  // stops) so the lens can build a stage-by-stage slider (iteration → llm-turn
+  // → tool-call → decision) instead of stopping only on structural boundaries.
+  // Consumer API — owned by the domain, consumed by renderers.
+  milestoneFor,
+  type Milestone,
+  type MilestoneKind,
 } from './conventions.js';
 // `STAGE_IDS`, `SUBFLOW_IDS`, `isSlotSubflow`, `slotFromSubflowId`,
 // `isKnownStage`, `isKnownSubflow` are intentionally NOT exported — they
@@ -119,6 +132,10 @@ export {
 export { EmitBridge, type EmitBridgeOptions } from './recorders/core/EmitBridge.js';
 export { streamRecorder, type StreamRecorderOptions } from './recorders/core/StreamRecorder.js';
 export { agentRecorder, type AgentRecorderOptions } from './recorders/core/AgentRecorder.js';
+export {
+  contextEvaluatedRecorder,
+  type ContextEvaluatedRecorderOptions,
+} from './recorders/core/ContextEvaluatedRecorder.js';
 export {
   compositionRecorder,
   type CompositionRecorderOptions,
@@ -258,6 +275,23 @@ export {
   type LLMCallOptions,
   type LLMCallOutput,
 } from './core/LLMCall.js';
+
+// messageAPI merge-tree proof chart (LLM-only) — Context-selector → slot
+// subflows → messageAPI assembly stage → Call-LLM. The locked shape that
+// will later serve both Static and Dynamic agents. See buildMessageApiChart.
+export {
+  buildMessageApiChart,
+  type MessageApiChartDeps,
+} from './core/agent/buildMessageApiChart.js';
+
+// Agent (ReAct) form of the merge-tree — Context root selector → two-stage
+// convergence: [sf-message-api (system-prompt+messages → messageAPI), sf-tools]
+// → Call-LLM → route → [tool-exec → loop] / final. tools + the loop are the
+// only additions over buildMessageApiChart. See buildAgentMessageApiChart.
+export {
+  buildAgentMessageApiChart,
+  type AgentMessageApiChartDeps,
+} from './core/agent/buildAgentMessageApiChart.js';
 export {
   Agent,
   AgentBuilder,

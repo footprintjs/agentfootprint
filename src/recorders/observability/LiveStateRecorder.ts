@@ -167,6 +167,16 @@ export class LiveLLMTracker {
         this.store.stop(event.meta.runtimeStageId);
       }),
     );
+    // Terminal failure: a thrown LLM call never emits llm_end, so the
+    // in-flight boundary would stay open forever ("Chatbot is thinking…"
+    // stuck). The ErrorBridge emits error.fatal on a failed run — clear
+    // all active boundaries so live consumers stop showing in-flight.
+    offs.push(
+      runner.on('agentfootprint.error.fatal', (event) => {
+        this.observeRunId(event.meta.runId);
+        this.store.clear();
+      }),
+    );
     return () => offs.forEach((off) => off());
   }
 

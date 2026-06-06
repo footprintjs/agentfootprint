@@ -127,7 +127,7 @@ describe('LLMCall — groupTranslator', () => {
     expect(c.getUIGroup()).toBeUndefined();
   });
 
-  it('translator sees kind=LLMCall + empty members + extra.slots (3 slot ids)', () => {
+  it('translator sees kind=LLMCall + empty members + extra.slots (2 slot ids — no tools)', () => {
     let captured: GroupMetadata | undefined;
     const t: GroupTranslator = (g) => {
       captured = g;
@@ -148,8 +148,10 @@ describe('LLMCall — groupTranslator', () => {
     expect(captured!.name).toBe('OneShot');
     expect(captured!.members).toEqual([]); // slots are not Runner members
     const slots = captured!.extra?.['slots'] as readonly string[];
-    expect(slots).toHaveLength(3);
-    expect(slots).toEqual(expect.arrayContaining(['sf-system-prompt', 'sf-messages', 'sf-tools']));
+    // LLMCall surfaces 2 slots — system-prompt + messages. No tools
+    // (LLMCall has no tools; that's Agent's affordance).
+    expect(slots).toHaveLength(2);
+    expect(slots).toEqual(expect.arrayContaining(['sf-system-prompt', 'sf-messages']));
   });
 });
 

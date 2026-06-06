@@ -39,7 +39,13 @@ const sonnetPricing: PricingTable = {
 
 function decisionEvent(branch: 'apply-markers' | 'no-markers', rule?: string): FlowDecisionEvent {
   return {
-    decider: 'cache-gate',
+    // cacheRecorder matches by the LOCAL stage id off traversalContext.stageId
+    // (NOT event.decider, which is the NAME). The real engine emits the
+    // PREFIXED id now that CacheGate is nested in sf-cache — reproduce that so
+    // splitStageId(...).localStageId === 'cache-gate' is what's exercised.
+    // (decider carries the matching prefixed NAME for realism; unused by the match.)
+    decider: 'sf-cache/CacheGate',
+    traversalContext: { stageId: 'sf-cache/cache-gate', runtimeStageId: 'sf-cache/cache-gate#0' },
     chosen: branch,
     evidence: rule
       ? {
@@ -85,11 +91,13 @@ describe('cacheRecorder — unit', () => {
     expect(rec.report().totalIterations).toBe(0);
   });
 
-  it("decision recorded only when event.decider === 'cache-gate'", () => {
+  it('decision recorded only for the cache-gate stage (other deciders ignored)', () => {
     const rec = cacheRecorder();
-    // Different decider — should be ignored
+    // A different decider (the Route decider) — should be ignored: its local
+    // stage id is 'sf-route', not 'cache-gate'.
     rec.onDecision({
-      decider: 'route',
+      decider: 'Route',
+      traversalContext: { stageId: 'sf-route', runtimeStageId: 'sf-route#0' },
       chosen: 'final',
     } as unknown as FlowDecisionEvent);
     rec.onEmit(llmEndEvent({ input_tokens: 100 }));

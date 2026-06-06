@@ -143,8 +143,22 @@ export function cacheGateDecide(scope: TypedScope<CacheGateState>): DecisionResu
 /**
  * Update the skill-history rolling window. Called as a function
  * stage BEFORE the CacheGate decider. Reads the current iteration's
- * active skill (head of `activatedInjectionIds`) and appends to the
- * `skillHistory` array.
+ * active skill (the MOST-RECENTLY activated one — the TAIL of
+ * `activatedInjectionIds`) and appends it to the `skillHistory` array.
+ *
+ * WHY THE TAIL, NOT THE HEAD: `read_skill` APPENDS each newly-activated
+ * skill to the end of `activatedInjectionIds`, and the list is cumulative
+ * + deduped per turn (reset only at seed). So the HEAD is frozen at the
+ * FIRST skill activated and never changes mid-turn — sampling it made the
+ * window record one constant value, so `detectSkillChurn` could never fire
+ * (the skill-churn cache rule was effectively dead). The tail tracks what
+ * the agent just switched to, which is the churn signal we actually want.
+ *
+ * KNOWN LIMITATION: if several skills are activated in the SAME iteration,
+ * only the last (tail) is recorded for that iteration — churn can
+ * under-count a multi-skill burst. A fully order-independent signal would
+ * read `activatedInjectionIds.length` directly in the gate; that is a
+ * larger change deferred for now.
  *
  * Window length is bounded at `SKILL_CHURN_WINDOW * 2` so the array
  * doesn't grow unboundedly across long agent runs. Old entries
@@ -156,7 +170,8 @@ export function updateSkillHistory(
     skillHistory: readonly (string | undefined)[];
   }>,
 ): void {
-  const current = scope.activatedInjectionIds?.[0];
+  const ids = scope.activatedInjectionIds ?? [];
+  const current = ids.length > 0 ? ids[ids.length - 1] : undefined;
   const prior = scope.skillHistory ?? [];
   const next = [...prior, current];
   // Bounded buffer — keep window*2 to give detectSkillChurn room

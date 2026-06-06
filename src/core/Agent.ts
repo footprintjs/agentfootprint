@@ -27,11 +27,7 @@ import type { ReliabilityConfig } from '../reliability/types.js';
 import { ReliabilityFailFastError } from '../reliability/types.js';
 import { extractSequence } from '../security/extractSequence.js';
 import { PolicyHaltError } from '../security/PolicyHaltError.js';
-import { cacheDecisionSubflow } from '../cache/CacheDecisionSubflow.js';
-import {
-  cacheGateDecide,
-  updateSkillHistory as updateSkillHistoryStage,
-} from '../cache/CacheGateDecider.js';
+import { updateSkillHistory as updateSkillHistoryStage } from '../cache/CacheGateDecider.js';
 import { getDefaultCacheStrategy } from '../cache/strategyRegistry.js';
 import { SUBFLOW_IDS } from '../conventions.js';
 import { type RunnerPauseOutcome } from './pause.js';
@@ -44,14 +40,17 @@ import type {
 } from '../adapters/types.js';
 import type { RunContext } from '../bridge/eventMeta.js';
 import { ContextRecorder } from '../recorders/core/ContextRecorder.js';
+import { contextEvaluatedRecorder } from '../recorders/core/ContextEvaluatedRecorder.js';
 import { streamRecorder } from '../recorders/core/StreamRecorder.js';
 import { agentRecorder } from '../recorders/core/AgentRecorder.js';
+import { errorBridge } from '../recorders/core/ErrorBridge.js';
 import { costRecorder } from '../recorders/core/CostRecorder.js';
 import { permissionRecorder } from '../recorders/core/PermissionRecorder.js';
 import { evalRecorder } from '../recorders/core/EvalRecorder.js';
 import { memoryRecorder } from '../recorders/core/MemoryRecorder.js';
 import { skillRecorder } from '../recorders/core/SkillRecorder.js';
 import { toolsRecorder } from '../recorders/core/ToolsRecorder.js';
+import { reliabilityRecorder } from '../recorders/core/ReliabilityRecorder.js';
 import type { MemoryDefinition } from '../memory/define.types.js';
 import { buildSystemPromptSlot } from './slots/buildSystemPromptSlot.js';
 import { buildMessagesSlot } from './slots/buildMessagesSlot.js';
@@ -76,13 +75,13 @@ import {
   validateMemoryIdUniqueness,
   validateToolNameUniqueness,
 } from './agent/validators.js';
-import type { AgentInput, AgentOptions, AgentOutput } from './agent/types.js';
-import { iterationStartStage } from './agent/stages/iterationStart.js';
+import type { AgentInput, AgentOptions, AgentOutput, AgentState } from './agent/types.js';
 import { routeDeciderStage } from './agent/stages/route.js';
 import { buildSeedStage } from './agent/stages/seed.js';
 import { buildCallLLMStage } from './agent/stages/callLLM.js';
 import { buildToolCallsHandler } from './agent/stages/toolCalls.js';
 import { buildAgentChart } from './agent/buildAgentChart.js';
+import { buildDynamicAgentChart } from './agent/buildDynamicAgentChart.js';
 import { buildToolRegistry } from './agent/buildToolRegistry.js';
 import { AgentBuilder } from './agent/AgentBuilder.js';
 import { buildThinkingSubflow } from './slots/buildThinkingSubflow.js';
@@ -241,6 +240,14 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
   /** Per-COMPOSITION translator (L1b). Set from `opts.groupTranslator`;
    *  undefined when consumer didn't attach one. */
   private readonly agentGroupTranslator?: import('./translator.js').GroupTranslator;
+  /** ReAct chart shape — 'flat' (default, bare call-llm stage) or
+   *  'subflow' (LLM turn wrapped in sf-llm-call). Set from
+   *  `opts.reactStructure`. */
+  private readonly reactStructure: 'flat' | 'subflow';
+  /** ReAct loop SEMANTICS — 'dynamic' (default, re-engineer all slots each
+   *  turn, loop→InjectionEngine) or 'classic' (engineer context once,
+   *  loop→Messages only). Set from `opts.reactMode`. See AgentOptions. */
+  private readonly reactMode: 'classic' | 'dynamic';
 
   constructor(
     opts: AgentOptions,
@@ -273,6 +280,8 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     this.maxIterations = clampIterations(opts.maxIterations ?? 10);
     this.structureRecorders = opts.structureRecorders;
     this.agentGroupTranslator = opts.groupTranslator;
+    this.reactStructure = opts.reactStructure ?? 'flat';
+    this.reactMode = opts.reactMode ?? 'dynamic';
     this.systemPromptValue = systemPromptValue;
     this.systemPromptCachePolicy = systemPromptCachePolicy;
     this.cachingDisabledValue = cachingDisabled;
@@ -665,8 +674,14 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     const getRunCtx = (): RunContext => this.currentRunContext;
 
     executor.attachCombinedRecorder(new ContextRecorder({ dispatcher, getRunContext: getRunCtx }));
+    // The InjectionEngine typedEmits context.evaluated; this bridge forwards it
+    // to the dispatcher (ContextRecorder handles the write-derived context.*).
+    executor.attachCombinedRecorder(contextEvaluatedRecorder({ dispatcher, getRunContext: getRunCtx }));
     executor.attachCombinedRecorder(streamRecorder({ dispatcher, getRunContext: getRunCtx }));
     executor.attachCombinedRecorder(agentRecorder({ dispatcher, getRunContext: getRunCtx }));
+    // Terminal-failure bridge: footprintjs onRunFailed → typed error.fatal,
+    // so a thrown run clears in-flight live state + flips monitor status.
+    executor.attachCombinedRecorder(errorBridge({ dispatcher, getRunContext: getRunCtx }));
     if (this.pricingTable) {
       executor.attachCombinedRecorder(costRecorder({ dispatcher, getRunContext: getRunCtx }));
     }
@@ -678,6 +693,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     executor.attachCombinedRecorder(memoryRecorder({ dispatcher, getRunContext: getRunCtx }));
     executor.attachCombinedRecorder(skillRecorder({ dispatcher, getRunContext: getRunCtx }));
     executor.attachCombinedRecorder(toolsRecorder({ dispatcher, getRunContext: getRunCtx }));
+    // Reliability telemetry (rules-loop fail_fast / retried / recovered).
+    // Always-on, but zero-cost when no .reliability() config fires events.
+    executor.attachCombinedRecorder(reliabilityRecorder({ dispatcher, getRunContext: getRunCtx }));
     for (const r of this.attachedRecorders) executor.attachCombinedRecorder(r);
     return executor;
   }
@@ -697,13 +715,16 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // and branch on `.kind`.
     if (this.reliabilityConfig !== undefined) {
       const snap = executor.getSnapshot();
-      const state = snap.sharedState as {
-        reliabilityFailKind?: string;
-        reliabilityFailPayload?: import('../reliability/types.js').ReliabilityScope['failPayload'];
-        reliabilityFailCauseMessage?: string;
-        reliabilityFailCauseName?: string;
-        reliabilityFailReason?: string;
-      };
+      // Read via Pick<AgentState, …> so the read shape cannot drift from
+      // the typed write side (the fields are declared once on AgentState).
+      const state = snap.sharedState as Pick<
+        AgentState,
+        | 'reliabilityFailKind'
+        | 'reliabilityFailPayload'
+        | 'reliabilityFailReason'
+        | 'reliabilityFailCauseMessage'
+        | 'reliabilityFailCauseName'
+      >;
       if (state.reliabilityFailKind !== undefined) {
         // Reconstruct the cause Error from the captured message+name —
         // see the matching note in reliabilityExecution.failFast about
@@ -849,9 +870,6 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       ...(this.externalToolProvider && { providerToolCache }),
     });
 
-    // iterationStart extracted to ./agent/stages/iterationStart.ts (v2.11.2).
-    const iterationStart = iterationStartStage;
-
     // callLLM extracted to ./agent/stages/callLLM.ts (v2.11.2). Same
     // late-binding pattern as seed for toolSchemas (computed below).
     const callLLM = buildCallLLMStage({
@@ -894,12 +912,13 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       : undefined;
 
     // Chart composition extracted to ./agent/buildAgentChart.ts (v2.11.2).
-    return buildAgentChart({
+    // The deps object is identical for both chart shapes — only the
+    // wiring differs (flat call-llm stage vs sf-llm-call subflow).
+    const chartDeps = {
       memories: this.memories,
       systemPromptCachePolicy,
       maxIterations,
       seed,
-      iterationStart,
       callLLM,
       routeDecider,
       toolCallsHandler,
@@ -908,13 +927,29 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       messagesSubflow,
       toolsSubflow,
       ...(thinkingSubflow !== undefined && { thinkingSubflow }),
-      cacheDecisionSubflow,
       updateSkillHistoryStage,
-      cacheGateDecide,
+      // Gate the UpdateSkillHistory stage on skills being registered —
+      // same idiom buildToolRegistry uses to auto-attach `read_skill`.
+      hasSkills: this.injections.some((i) => i.flavor === 'skill'),
+      reactMode: this.reactMode,
       ...(this.structureRecorders !== undefined && {
         structureRecorders: [...this.structureRecorders],
       }),
-    });
+    };
+
+    // `reactMode: 'classic'` engineers context ONCE and loops only Messages —
+    // it uses the flat builder's classic path (the subflow grouping is
+    // dynamic-only for now), so it takes precedence over reactStructure.
+    if (this.reactMode === 'classic') {
+      return buildAgentChart(chartDeps);
+    }
+    // `reactStructure: 'subflow'` (opt-in) wraps the LLM turn in an
+    // `sf-llm-call` subflow — same boundary LLMCall produces — so Lens /
+    // explainable-ui render it as an LLM group with slots inside. Default
+    // `'flat'` keeps the historical bare-stage shape. Behaviour identical.
+    return this.reactStructure === 'subflow'
+      ? buildDynamicAgentChart(chartDeps)
+      : buildAgentChart(chartDeps);
   }
 }
 

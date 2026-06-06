@@ -22,14 +22,17 @@ function sf(subflowId: string): FlowSubflowEvent {
   };
 }
 
-function we(key: string, value: unknown): WriteEvent {
+// A write inside a slot subflow carries that subflow in its runtimeStageId
+// path — how ContextRecorder attributes it to a slot (parallel-safe, no
+// stack). `enclosing` is the slot subflow the write happened inside.
+function we(key: string, value: unknown, enclosing: string): WriteEvent {
   return {
     key,
     value,
     operation: 'set',
     stageName: key,
     stageId: key,
-    runtimeStageId: `${key}#0`,
+    runtimeStageId: `${enclosing}/${key}#0`,
     pipelineId: 'p',
     timestamp: Date.now(),
   } as WriteEvent;
@@ -78,20 +81,24 @@ describe('scenario — ReAct iteration with RAG + skill', () => {
           contentHash: 's1',
           reason: 'skill activated',
         }),
-      ]),
+      ], SUBFLOW_IDS.SYSTEM_PROMPT),
     );
     rec.onWrite(
-      we(COMPOSITION_KEYS.SLOT_COMPOSED, {
-        slot: 'system-prompt',
-        iteration: 1,
-        budget: { cap: 4000, used: 800, headroomChars: 3200 },
-        sourceBreakdown: {
-          instructions: { chars: 400, count: 1 },
-          skill: { chars: 400, count: 1 },
+      we(
+        COMPOSITION_KEYS.SLOT_COMPOSED,
+        {
+          slot: 'system-prompt',
+          iteration: 1,
+          budget: { cap: 4000, used: 800, headroomChars: 3200 },
+          sourceBreakdown: {
+            instructions: { chars: 400, count: 1 },
+            skill: { chars: 400, count: 1 },
+          },
+          droppedCount: 0,
+          droppedSummaries: [],
         },
-        droppedCount: 0,
-        droppedSummaries: [],
-      }),
+        SUBFLOW_IDS.SYSTEM_PROMPT,
+      ),
     );
     rec.onSubflowExit(sf(SUBFLOW_IDS.SYSTEM_PROMPT));
 
@@ -114,31 +121,39 @@ describe('scenario — ReAct iteration with RAG + skill', () => {
           asRole: 'tool',
           retrievalScore: 0.85,
         }),
-      ]),
+      ], SUBFLOW_IDS.MESSAGES),
     );
     rec.onWrite(
-      we(COMPOSITION_KEYS.SLOT_COMPOSED, {
-        slot: 'messages',
-        iteration: 1,
-        budget: { cap: 10000, used: 3200, headroomChars: 6800 },
-        sourceBreakdown: { user: { chars: 100, count: 1 }, rag: { chars: 3100, count: 2 } },
-        droppedCount: 1,
-        droppedSummaries: ['low-score-chunk'],
-      }),
+      we(
+        COMPOSITION_KEYS.SLOT_COMPOSED,
+        {
+          slot: 'messages',
+          iteration: 1,
+          budget: { cap: 10000, used: 3200, headroomChars: 6800 },
+          sourceBreakdown: { user: { chars: 100, count: 1 }, rag: { chars: 3100, count: 2 } },
+          droppedCount: 1,
+          droppedSummaries: ['low-score-chunk'],
+        },
+        SUBFLOW_IDS.MESSAGES,
+      ),
     );
     rec.onSubflowExit(sf(SUBFLOW_IDS.MESSAGES));
 
     // Tools slot — no injections.
     rec.onSubflowEntry(sf(SUBFLOW_IDS.TOOLS));
     rec.onWrite(
-      we(COMPOSITION_KEYS.SLOT_COMPOSED, {
-        slot: 'tools',
-        iteration: 1,
-        budget: { cap: 2000, used: 500, headroomChars: 1500 },
-        sourceBreakdown: { instructions: { chars: 500, count: 3 } },
-        droppedCount: 0,
-        droppedSummaries: [],
-      }),
+      we(
+        COMPOSITION_KEYS.SLOT_COMPOSED,
+        {
+          slot: 'tools',
+          iteration: 1,
+          budget: { cap: 2000, used: 500, headroomChars: 1500 },
+          sourceBreakdown: { instructions: { chars: 500, count: 3 } },
+          droppedCount: 0,
+          droppedSummaries: [],
+        },
+        SUBFLOW_IDS.TOOLS,
+      ),
     );
     rec.onSubflowExit(sf(SUBFLOW_IDS.TOOLS));
 
@@ -167,21 +182,29 @@ describe('scenario — budget pressure + evictions', () => {
 
     rec.onSubflowEntry(sf(SUBFLOW_IDS.MESSAGES));
     rec.onWrite(
-      we(COMPOSITION_KEYS.BUDGET_PRESSURE, [
-        {
-          slot: 'messages',
-          capTokens: 10000,
-          projectedTokens: 12000,
-          overflowBy: 2000,
-          planAction: 'evict',
-        },
-      ]),
+      we(
+        COMPOSITION_KEYS.BUDGET_PRESSURE,
+        [
+          {
+            slot: 'messages',
+            capTokens: 10000,
+            projectedTokens: 12000,
+            overflowBy: 2000,
+            planAction: 'evict',
+          },
+        ],
+        SUBFLOW_IDS.MESSAGES,
+      ),
     );
     rec.onWrite(
-      we(COMPOSITION_KEYS.EVICTED, [
-        { slot: 'messages', contentHash: 'old1', reason: 'budget', survivalMs: 45000 },
-        { slot: 'messages', contentHash: 'old2', reason: 'budget', survivalMs: 60000 },
-      ]),
+      we(
+        COMPOSITION_KEYS.EVICTED,
+        [
+          { slot: 'messages', contentHash: 'old1', reason: 'budget', survivalMs: 45000 },
+          { slot: 'messages', contentHash: 'old2', reason: 'budget', survivalMs: 60000 },
+        ],
+        SUBFLOW_IDS.MESSAGES,
+      ),
     );
 
     expect(pressure).toHaveBeenCalledTimes(1);

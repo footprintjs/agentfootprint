@@ -17,7 +17,7 @@ import type { CombinedRecorder, FlowSubflowEvent, WriteEvent } from 'footprintjs
 import type { EventDispatcher } from '../../events/dispatcher.js';
 import type { AgentfootprintEventMap, AgentfootprintEventType } from '../../events/registry.js';
 import type { ContextSlot } from '../../events/types.js';
-import { INJECTION_KEYS, slotFromSubflowId } from '../../conventions.js';
+import { INJECTION_KEYS, slotFromSubflowId, slotFromRuntimeStageId } from '../../conventions.js';
 import { buildEventMeta, type RunContext } from '../../bridge/eventMeta.js';
 import type {
   BudgetPressureRecord,
@@ -43,9 +43,12 @@ export class ContextRecorder implements CombinedRecorder {
   private readonly dispatcher: EventDispatcher;
   private readonly getRunContext: () => RunContext;
 
-  // Active slot stack — stacked because a slot subflow CAN nest another
-  // (rare but possible if a custom source is a subflow itself).
-  private readonly slotStack: ContextSlot[] = [];
+  // Per-write slot attribution is resolved from each write's own
+  // runtimeStageId (see onWrite) — NOT a "currently-open slot" stack.
+  // The 3 slot subflows run in PARALLEL (selector fan-out), so their
+  // entry/write/exit events interleave and a stack top would mis-route
+  // or drop writes. onSubflowEntry/Exit only manage the per-slot
+  // seen-set lifecycle below.
   // Previously seen injections per slot, by scope key. We diff old-vs-new
   // on each write to identify NEW injections (the builder may write the
   // whole array multiple times; we only emit events for the additions).
@@ -62,8 +65,8 @@ export class ContextRecorder implements CombinedRecorder {
   onSubflowEntry(event: FlowSubflowEvent): void {
     const slot = event.subflowId ? slotFromSubflowId(event.subflowId) : undefined;
     if (!slot) return;
-    this.slotStack.push(slot);
-    // Reset the seen-set for this slot — new iteration.
+    // Reset the seen-set for this slot — new iteration. Safe under parallel
+    // entry of all 3 slots: each slot owns its own seen-set key.
     this.seenInjections.set(slot, new Set());
   }
 
@@ -71,17 +74,15 @@ export class ContextRecorder implements CombinedRecorder {
     if (!event.subflowId) return;
     const slot = slotFromSubflowId(event.subflowId);
     if (!slot) return;
-    // Pop only if this is the active top (defensive against mis-ordering).
-    if (this.slotStack[this.slotStack.length - 1] === slot) {
-      this.slotStack.pop();
-    }
     this.seenInjections.delete(slot);
   }
 
   // ─── Scope writes — the injection / eviction / pressure signals ──
 
   onWrite(event: WriteEvent): void {
-    const activeSlot = this.currentSlot();
+    // Resolve the slot from THIS write's own runtimeStageId path — correct
+    // even when the 3 slots run concurrently and their events interleave.
+    const activeSlot = slotFromRuntimeStageId(event.runtimeStageId);
     if (!activeSlot) return;
 
     const key = event.key;
@@ -120,10 +121,6 @@ export class ContextRecorder implements CombinedRecorder {
   }
 
   // ─── Internals ─────────────────────────────────────────────────
-
-  private currentSlot(): ContextSlot | undefined {
-    return this.slotStack[this.slotStack.length - 1];
-  }
 
   private handleInjectionsWrite(slot: ContextSlot, event: WriteEvent): void {
     const records = this.asInjectionArray(event.value);

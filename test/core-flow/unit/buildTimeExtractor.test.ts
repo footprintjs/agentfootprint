@@ -81,17 +81,16 @@ describe('L1a — structureRecorders option, per-composition unit', () => {
 
   it('LLMCall: with recorder, every OUTER chart node fires onStageAdded', () => {
     // L1a scope: the LLMCall's OWN builder attaches the recorder to
-    // its own nodes (Seed, slot subflow MOUNTS, CallLLM). The slot
-    // subflows themselves (sf-system-prompt / sf-messages / sf-tools)
-    // are built by internal helpers that do NOT thread the recorder —
-    // their internal nodes are not observed by THIS recorder. Slot-builder
-    // wiring is a follow-up (deferred from L1a to a separate task).
+    // its own OUTER chart nodes (Client stage + sf-llm-call subflow
+    // mount). The inner sf-llm-call subflow chart is built by an
+    // internal helper that does NOT thread the recorder — its internal
+    // nodes (seed, slot mounts, call-llm, extract-final) are not
+    // observed by THIS recorder. Inner-builder wiring is a follow-up.
     const { recorder, events } = makeCapturingRecorder();
     okLLMCall('X', [recorder]);
-    // Seed + CallLLM at minimum; subflow mounts fire onSubflowMounted.
-    expect(events.stageIds.length).toBeGreaterThanOrEqual(2);
-    expect(events.stageIds).toContain('seed');
-    expect(events.stageIds).toContain('call-llm');
+    // Outer chart: Client stage. sf-llm-call fires as a subflow mount.
+    expect(events.stageIds).toContain('client');
+    expect(events.mountedSubflowIds).toContain('sf-llm-call');
   });
 
   it('Sequence: with recorder, every OUTER node fires onStageAdded', () => {
@@ -186,9 +185,12 @@ describe('L1a — Lego-block cascade (consumer threads the same reference)', () 
     expect(events.stageIds).toContain('merge');
     expect(events.mountedSubflowIds).toContain('legal');
     expect(events.mountedSubflowIds).toContain('ethics');
-    // Inner LLMCalls' Seed + CallLLM also fire (same recorder reference).
-    expect(events.stageIds.filter((id) => id === 'seed').length).toBeGreaterThanOrEqual(2);
-    expect(events.stageIds).toContain('call-llm');
+    // Inner LLMCalls (with the same recorder threaded) emit their own
+    // OUTER chart nodes — `client` stage + `sf-llm-call` subflow mount,
+    // one of each per LLMCall. Cascade demonstrates that consumers can
+    // share a recorder reference across nested compositions.
+    expect(events.stageIds.filter((id) => id === 'client').length).toBeGreaterThanOrEqual(2);
+    expect(events.mountedSubflowIds.filter((id) => id === 'sf-llm-call').length).toBeGreaterThanOrEqual(2);
   });
 
   it('recorder on outer Parallel only → branch internals NOT observed (cascade is opt-in)', () => {

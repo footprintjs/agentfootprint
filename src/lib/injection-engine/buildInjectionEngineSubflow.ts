@@ -31,6 +31,7 @@
 
 import { flowChart } from 'footprintjs';
 import type { FlowChart, TypedScope } from 'footprintjs';
+import { typedEmit } from '../../recorders/core/typedEmit.js';
 import { evaluateInjections } from './evaluator.js';
 import { projectActiveInjection, type Injection, type InjectionContext } from './types.js';
 
@@ -75,16 +76,23 @@ export function buildInjectionEngineSubflow(config: InjectionEngineConfig): Flow
 
       const evaluation = evaluateInjections(injections, ctx);
 
-      // Two scope writes:
-      //   1. activeInjections — POJO projections (no trigger functions,
-      //      no Tool execute functions) so they survive footprintjs's
-      //      transactional scope buffer (which clones on write).
-      //      Tool schemas are preserved + tagged by injectionId so the
-      //      Agent's closure-held registry can look up the executable.
-      //   2. injectionEvaluation — aggregate metadata for observability.
+      // activeInjections — the REAL output the slot subflows read. POJO
+      // projections (no trigger functions, no Tool execute functions) so they
+      // survive footprintjs's transactional scope buffer (which clones on
+      // write). Tool schemas are preserved + tagged by injectionId so the
+      // Agent's closure-held registry can look up the executable.
       const activePOJOs = evaluation.active.map(projectActiveInjection);
       scope.$setValue('activeInjections', activePOJOs);
-      scope.$setValue('injectionEvaluation', {
+
+      // Aggregate evaluation metadata is pure OBSERVABILITY — no flow stage
+      // reads it — so it goes out the EMIT channel where a recorder/Lens can
+      // observe "what was considered, what won, what was skipped and why".
+      // This is the upstream counterpart to context.slot_composed (what landed
+      // in each slot). (Previously this was a dead `scope.$setValue(
+      // 'injectionEvaluation', …)` that nothing read and that never even left
+      // the subflow — see CHANGELOG.)
+      typedEmit(scope, 'agentfootprint.context.evaluated', {
+        iteration: ctx.iteration,
         activeCount: evaluation.active.length,
         skippedCount: evaluation.skipped.length,
         evaluatedTotal: injections.length,

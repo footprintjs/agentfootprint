@@ -100,6 +100,12 @@ interface FlowRunEvent {
   readonly payload?: unknown;
   readonly traversalContext?: TraversalContext;
 }
+// Structural shim for footprintjs's FlowRunFailedEvent (the terminal
+// run-boundary event on a thrown run). Only `.message` is needed here.
+interface FlowRunFailedEvent {
+  readonly structuredError: { readonly message: string };
+  readonly traversalContext?: TraversalContext;
+}
 import type { AgentfootprintEvent, AgentfootprintEventType } from '../../events/registry.js';
 import type { EventDispatcher, Unsubscribe } from '../../events/dispatcher.js';
 import { SUBFLOW_IDS, STAGE_IDS, slotFromSubflowId } from '../../conventions.js';
@@ -367,15 +373,21 @@ export interface BoundaryAggregate {
 const AGENT_INTERNAL_LOCAL_IDS: ReadonlySet<string> = new Set<string>([
   // Subflow ids (`sf-*`)
   SUBFLOW_IDS.INJECTION_ENGINE, // collects activeInjections; pure plumbing
+  SUBFLOW_IDS.LLM_CALL, // LLMCall's inner invocation wrapper — the meaningful step is the call-llm stage INSIDE; the wrapper itself is a chart-shape container
   SUBFLOW_IDS.ROUTE,
   SUBFLOW_IDS.TOOL_CALLS,
   SUBFLOW_IDS.FINAL,
   SUBFLOW_IDS.MERGE,
+  SUBFLOW_IDS.CACHE, // v2.14 — per-turn cache decision wrapper; pure plumbing
   SUBFLOW_IDS.CACHE_DECISION, // v2.6 — emits cacheMarkers; not a user step
   SUBFLOW_IDS.THINKING, // v2.14 — normalize result lands on parent LLM step
   // Decider stage ids (the same set is used to filter `decision.branch`
   // events whose deciding stage is plumbing rather than user-facing).
   STAGE_IDS.CACHE_GATE, // v2.6 — apply-markers / no-markers routing; plumbing
+  // LLMCall outer wrapper stage + post-invocation marker — pure chart
+  // shape, not user-meaningful steps.
+  STAGE_IDS.CLIENT,
+  STAGE_IDS.EXTRACT_FINAL,
 ] as readonly string[]);
 // Constructed as a set on a separate line so we can extend with the
 // thinking-handler inner-subflow ids below without the literal set
@@ -653,6 +665,24 @@ export class BoundaryRecorder implements CombinedRecorder {
     // Close the range BEFORE store.push so a failed push doesn't
     // leak a permanently-open range. The range is the canonical
     // truth; the store entry is downstream telemetry.
+    if (this.hasCommitTracking) {
+      const token = this.openTokens.get(e.runtimeStageId);
+      if (token) {
+        this.boundaryIndex.close(token, commitIdxBefore);
+        this.openTokens.delete(e.runtimeStageId);
+      }
+    }
+    this.store.push(e);
+  }
+
+  onRunFailed(event: FlowRunFailedEvent): void {
+    this.observeRunId(event.traversalContext?.runId);
+    const commitIdxBefore = this.getCommitCount();
+    // A failed run still TERMINATES — close the root range (mirror
+    // onRunEnd) so consumers get a terminal "Run · failed" boundary
+    // position instead of a slider that stops mid-call. The error rides
+    // as the exit payload so the WHY is reachable at that boundary.
+    const e = buildRunEvent('run.exit', { error: event.structuredError.message }, commitIdxBefore);
     if (this.hasCommitTracking) {
       const token = this.openTokens.get(e.runtimeStageId);
       if (token) {

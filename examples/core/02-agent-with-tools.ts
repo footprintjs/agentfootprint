@@ -27,6 +27,11 @@ export async function run(input: string, provider?: LLMProvider): Promise<string
     provider: provider ?? exampleProvider('feature', { respond: weatherRespond }),
     model: 'mock',
     maxIterations: 5,
+    // reactStructure: 'subflow' wraps the LLM turn in an sf-llm-call subflow,
+    // so Lens renders the agent's reasoning as an LLM group with its context
+    // slots (system-prompt / messages / tools) nested inside — the SAME shape
+    // the LLMCall primitive shows — instead of a bare "Final · RUNNER" card.
+    reactStructure: 'subflow',
   })
     .system('You answer weather questions using the `weather` tool.')
     .tool({

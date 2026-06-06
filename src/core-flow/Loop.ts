@@ -296,7 +296,7 @@ export class Loop extends RunnerBase<LoopInput, LoopOutput> {
 
     // Root description prefix `Loop:` is the taxonomy marker — see
     // FlowchartRecorder.mapTopologyToSteps for the consumer side.
-    return flowChart<LoopState>('Seed', seed, 'seed', {
+    return flowChart<LoopState>('Initialize', seed, 'seed', {
       ...(this.opts.structureRecorders !== undefined && {
         structureRecorders: [...this.opts.structureRecorders],
       }),

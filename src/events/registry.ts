@@ -26,6 +26,7 @@ import type {
   CompositionExitPayload,
   ConditionalRouteDecidedPayload,
   ContextBudgetPressurePayload,
+  ContextEvaluatedPayload,
   ContextEvictedPayload,
   ContextInjectedPayload,
   ContextSlotComposedPayload,
@@ -60,6 +61,9 @@ import type {
   PermissionGateClosedPayload,
   PermissionHaltPayload,
   PermissionGateOpenedPayload,
+  ReliabilityFailFastPayload,
+  ReliabilityRetriedPayload,
+  ReliabilityRecoveredPayload,
   RiskFlaggedPayload,
   SkillActivatedPayload,
   SkillDeactivatedPayload,
@@ -111,6 +115,7 @@ export const EVENT_NAMES = {
     evicted: 'agentfootprint.context.evicted',
     slotComposed: 'agentfootprint.context.slot_composed',
     budgetPressure: 'agentfootprint.context.budget_pressure',
+    evaluated: 'agentfootprint.context.evaluated',
   },
   memory: {
     strategyApplied: 'agentfootprint.memory.strategy_applied',
@@ -154,6 +159,11 @@ export const EVENT_NAMES = {
     retried: 'agentfootprint.error.retried',
     recovered: 'agentfootprint.error.recovered',
     fatal: 'agentfootprint.error.fatal',
+  },
+  reliability: {
+    failFast: 'agentfootprint.reliability.fail_fast',
+    retried: 'agentfootprint.reliability.retried',
+    recovered: 'agentfootprint.reliability.recovered',
   },
   pause: {
     request: 'agentfootprint.pause.request',
@@ -280,6 +290,10 @@ export interface AgentfootprintEventMap {
     'agentfootprint.context.budget_pressure',
     ContextBudgetPressurePayload
   >;
+  'agentfootprint.context.evaluated': AgentfootprintEventEnvelope<
+    'agentfootprint.context.evaluated',
+    ContextEvaluatedPayload
+  >;
   // memory
   'agentfootprint.memory.strategy_applied': AgentfootprintEventEnvelope<
     'agentfootprint.memory.strategy_applied',
@@ -388,6 +402,19 @@ export interface AgentfootprintEventMap {
     'agentfootprint.error.fatal',
     ErrorFatalPayload
   >;
+  // reliability (rules-based loop — distinct from error.* which is decorator-shaped)
+  'agentfootprint.reliability.fail_fast': AgentfootprintEventEnvelope<
+    'agentfootprint.reliability.fail_fast',
+    ReliabilityFailFastPayload
+  >;
+  'agentfootprint.reliability.retried': AgentfootprintEventEnvelope<
+    'agentfootprint.reliability.retried',
+    ReliabilityRetriedPayload
+  >;
+  'agentfootprint.reliability.recovered': AgentfootprintEventEnvelope<
+    'agentfootprint.reliability.recovered',
+    ReliabilityRecoveredPayload
+  >;
   // pause
   'agentfootprint.pause.request': AgentfootprintEventEnvelope<
     'agentfootprint.pause.request',
@@ -442,6 +469,7 @@ export const ALL_EVENT_TYPES: readonly AgentfootprintEventType[] = [
   'agentfootprint.context.evicted',
   'agentfootprint.context.slot_composed',
   'agentfootprint.context.budget_pressure',
+  'agentfootprint.context.evaluated',
   'agentfootprint.memory.strategy_applied',
   'agentfootprint.memory.attached',
   'agentfootprint.memory.detached',
@@ -467,6 +495,9 @@ export const ALL_EVENT_TYPES: readonly AgentfootprintEventType[] = [
   'agentfootprint.error.retried',
   'agentfootprint.error.recovered',
   'agentfootprint.error.fatal',
+  'agentfootprint.reliability.fail_fast',
+  'agentfootprint.reliability.retried',
+  'agentfootprint.reliability.recovered',
   'agentfootprint.pause.request',
   'agentfootprint.pause.resume',
   'agentfootprint.embedding.generated',

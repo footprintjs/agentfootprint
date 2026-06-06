@@ -26,8 +26,31 @@ observer rename.
     See footprintjs `MIGRATION-6.md` Recipe 1 for the recorder shape.
 - **Peer dep**: bumped `footprintjs` from `>=4.17.2` to `^6.0.0`.
 
+### Added
+
+- **`agentfootprint.context.evaluated` event** — the Injection Engine now
+  emits a per-iteration summary of trigger evaluation (active count, skipped
+  count + reasons, trigger-kind breakdown, active ids). It is the upstream
+  counterpart to `context.slot_composed` ("what was considered / active /
+  skipped and why" vs "what landed in each slot"). Subscribe via
+  `agent.on('agentfootprint.context.evaluated', …)`. Brought to the dispatcher
+  by a new `contextEvaluatedRecorder` (an `EmitBridge` scoped to the exact
+  event name — not the whole `context.` domain — so it never double-dispatches
+  `context.slot_composed`, which is also `typedEmit`'d in the viz chart).
+  Replaces a **dead** `injectionEvaluation` scope write that nothing read and
+  that never left the Injection Engine subflow (the documented emit had never
+  actually been wired). Event count 58 → 59.
+
 ### Changed
 
+- **Setup stage renamed `Seed` → `Initialize` (display only)** — the root
+  setup stage of every primitive (Agent, LLMCall, Parallel, Loop, Conditional)
+  now displays as **`Initialize`** in the Lens/flowchart. "Seed" read like
+  planting/growing to non-experts; "Initialize" says what it does (sets up the
+  starting state). DISPLAY-ONLY: the internal id stays `'seed'`, so
+  `runtimeStageId` `seed#0` is unchanged — no break to recorders / Lens / trace
+  / tests that key on the id. (Per the stage-naming audit; the inner dynamic
+  per-iteration `TurnSeed` is left as-is.)
 - All internal `flowChart()` call sites migrated from the legacy
   5-positional signature `(name, fn, id, undefined, 'desc')` to v6's
   options-bag form `(name, fn, id, { description: '...' })`. Affected
@@ -44,6 +67,41 @@ observer rename.
   `parseRuntimeStageId` since it consumes full runtimeStageId strings.
 - Docstring sweeps: `translator.ts` + `RunnerBase.ts` reference v6
   `StructureRecorder` semantics, not v5 `BuildTimeExtractor`.
+- **Agent chart restructure** — the context slots (system-prompt /
+  messages / tools) now run as a **parallel selector fork** and the cache
+  machinery is a single `sf-cache` subflow, so the execution tree the agent
+  runs IS the merge-tree the Lens draws. Applies to both `buildAgentChart`
+  (classic) and `buildDynamicAgentChart` (dynamic). `ContextRecorder` and
+  `cacheRecorder` made parallel- and nesting-safe (resolve slot/gate from
+  each event's own `runtimeStageId`/`stageId`).
+- **`iterationStart` stage folded into `callLLM`** — the former dedicated
+  `stages/iterationStart.ts` stage existed only to fire the per-iteration
+  `agentfootprint.agent.iteration_start` emit. Emits are passive (no business
+  logic, no scope writes), so the marker now fires from the top of `callLLM`
+  and the standalone stage is removed. No consumer depended on the stage's
+  own `runtimeStageId`; all read the `iterIndex` payload. Removed from
+  `AgentChartDeps` and both chart builders. `stages/iterationStart.ts` deleted.
+- **`UpdateSkillHistory` is now conditionally mounted** — the stage (and thus
+  the skill-churn rule) is added ONLY when ≥1 Skill is registered
+  (`injections.some(i => i.flavor === 'skill')`, the same gate that
+  auto-attaches `read_skill`). With no skills the window could never show
+  churn, so the stage was dead weight + a misleading box. Applies to both
+  builders; the dynamic chart's fan-out `convergeAt` retargets to `sf-cache`
+  when the stage is absent so the merge target always exists. Mirrors the
+  existing `NormalizeThinking` conditional-mount pattern.
+
+### Fixed
+
+- **Skill-churn detection was dead** — `updateSkillHistory` sampled the
+  **head** of `activatedInjectionIds` (`[0]`). Since `read_skill` appends new
+  ids to the END and the list is cumulative + deduped per turn, the head was
+  frozen at the first-activated skill and never changed mid-turn — so the
+  rolling window recorded one constant value and `detectSkillChurn` could
+  never fire. The cache's skill-churn rule was effectively inert. Fixed to
+  sample the **tail** (most-recently activated skill), so churn is detected
+  across A→B→C activations and the gate correctly skips caching when skills
+  thrash. Known limitation (documented): multiple skills activated in the
+  same iteration record only the tail.
 
 ### CI / publish workflow
 

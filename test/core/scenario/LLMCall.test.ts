@@ -52,7 +52,33 @@ describe('LLMCall — end-to-end', () => {
     expect(injections).toContain('messages:user');
   });
 
-  it('emits context.slot_composed once per slot (3 slots)', async () => {
+  it('emits a humanized error.fatal when the provider throws; raw error still propagates to the caller', async () => {
+    // A provider that throws mid-call (e.g. browser fetch fails). The
+    // RAW error propagates to run()'s caller untouched (so reliability +
+    // merge layers can classify on it). The ErrorBridge humanizes the
+    // terminal `error.fatal` event the live monitor renders, so a
+    // non-developer sees a plain-language sentence.
+    const throwing = {
+      name: 'boom',
+      async complete() {
+        throw new Error('Failed to fetch');
+      },
+    } as unknown as Parameters<typeof LLMCall.create>[0]['provider'];
+    const llm = LLMCall.create({ provider: throwing, model: 'mock-model' }).system('sys').build();
+
+    const fatals: Array<{ payload: { error: string; stage: string; scope: string } }> = [];
+    llm.on('agentfootprint.error.fatal', (e) => fatals.push(e as never));
+
+    // Caller still sees the RAW error (developers / "Copy for LLM").
+    await expect(llm.run({ message: 'hi' })).rejects.toThrow('Failed to fetch');
+
+    // The monitor's terminal event carries the HUMANIZED message.
+    expect(fatals).toHaveLength(1);
+    expect(fatals[0].payload.error).toMatch(/couldn't reach the ai model/i);
+    expect(fatals[0].payload.scope).toBe('run');
+  });
+
+  it('emits context.slot_composed once per slot (2 slots — LLMCall has no tools)', async () => {
     const provider = new MockProvider({ reply: 'ok' });
     const llm = LLMCall.create({ provider, model: 'mock-model' }).build();
 
@@ -61,7 +87,9 @@ describe('LLMCall — end-to-end', () => {
       composed.push(e.payload.slot);
     });
     await llm.run({ message: 'hi' });
-    expect(composed.sort()).toEqual(['messages', 'system-prompt', 'tools']);
+    // LLMCall mounts system-prompt + messages slots ONLY. Tools is
+    // Agent's affordance, not LLMCall's. See LLMCall.ts buildChart().
+    expect(composed.sort()).toEqual(['messages', 'system-prompt']);
   });
 
   it('is reusable: multiple run() calls work on the same instance', async () => {

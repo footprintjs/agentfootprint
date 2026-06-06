@@ -20,6 +20,7 @@ import {
   type Injection,
   type InjectionContext,
 } from '../../../src/lib/injection-engine/index.js';
+import type { ContextEvaluatedPayload } from '../../../src/events/payloads.js';
 
 const baseCtx: InjectionContext = {
   iteration: 1,
@@ -490,5 +491,69 @@ describe('Injection Engine — ROI (pedagogy + observability)', () => {
       expect(typeof inj.trigger.kind).toBe('string');
       expect(typeof inj.inject).toBe('object');
     }
+  });
+});
+
+// ─── context.evaluated emit — Injection Engine observability ───────
+//
+// The Injection Engine emits `agentfootprint.context.evaluated` once per
+// iteration with the active/skipped breakdown. (Previously this metadata was
+// a dead `scope.$setValue('injectionEvaluation', …)` that nothing read and
+// that never even left the subflow — now it goes out the EMIT channel where a
+// recorder/Lens can observe it. It is the upstream counterpart to
+// `context.slot_composed`, which reports what landed in each slot.)
+describe('Injection Engine — context.evaluated emit', () => {
+  it('emits context.evaluated once per iteration with the active/skipped breakdown', async () => {
+    const alwaysOn = defineInstruction({ id: 'always-on', prompt: 'always here' });
+    const boom = defineInstruction({
+      id: 'boom',
+      activeWhen: () => {
+        throw new Error('boom'); // rule trigger that throws → reported as skipped
+      },
+      prompt: 'never (predicate throws)',
+    });
+
+    const agent = Agent.create({
+      provider: mock({ respond: () => ({ content: 'done', toolCalls: [] }) }),
+      model: 'mock',
+    })
+      .system('You answer.')
+      .instruction(alwaysOn)
+      .instruction(boom)
+      .build();
+
+    const events: ContextEvaluatedPayload[] = [];
+    agent.on('agentfootprint.context.evaluated', (e) => events.push(e.payload));
+
+    await agent.run({ message: 'hi' });
+
+    // Fired (at least once — once per iteration; this run is a single turn).
+    expect(events.length).toBeGreaterThanOrEqual(1);
+    const ev = events[0];
+    expect(ev.evaluatedTotal).toBe(2); // two injections declared
+    expect(ev.activeCount).toBe(1); // only always-on is active
+    expect(ev.activeIds).toContain('always-on');
+    expect(ev.triggerKindCounts.always).toBe(1);
+    // the throwing rule is reported as skipped, with its reason
+    expect(ev.skippedCount).toBe(1);
+    expect(ev.skippedDetails[0]?.id).toBe('boom');
+    expect(ev.skippedDetails[0]?.reason).toBe('predicate-threw');
+    expect(typeof ev.iteration).toBe('number');
+  });
+
+  it('does NOT write the legacy dead `injectionEvaluation` scope key', async () => {
+    const agent = Agent.create({
+      provider: mock({ respond: () => ({ content: 'done', toolCalls: [] }) }),
+      model: 'mock',
+    })
+      .system('You answer.')
+      .instruction(defineInstruction({ id: 'i', prompt: 'p' }))
+      .build();
+
+    await agent.run({ message: 'hi' });
+    const snap = agent.getLastSnapshot();
+    const shared = (snap?.sharedState ?? {}) as Record<string, unknown>;
+    // The old observability metadata used to be written here; it's an emit now.
+    expect(shared.injectionEvaluation).toBeUndefined();
   });
 });

@@ -255,7 +255,7 @@ export class Conditional extends RunnerBase<ConditionalInput, ConditionalOutput>
 
     // Root description prefix `Conditional:` is the taxonomy marker —
     // see FlowchartRecorder.mapTopologyToSteps for the consumer side.
-    const base = flowChart<ConditionalState>('Seed', seed, 'seed', {
+    const base = flowChart<ConditionalState>('Initialize', seed, 'seed', {
       ...(this.opts.structureRecorders !== undefined && {
         structureRecorders: [...this.opts.structureRecorders],
       }),

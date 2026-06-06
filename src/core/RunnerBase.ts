@@ -109,6 +109,21 @@ export abstract class RunnerBase<TIn = unknown, TOut = unknown> implements Runne
     return this.lastExecutor?.getSnapshot();
   }
 
+  /**
+   * Alias for `getLastSnapshot()` that mirrors `FlowChartExecutor.getSnapshot()`
+   * so consumers (lens, playground, ExplainableShell) can read the live or
+   * just-completed snapshot through the same method name they'd use on a
+   * footprintjs executor — without having to know whether they're holding
+   * an agentfootprint Runner or a raw executor.
+   *
+   * During an active run, returns the live snapshot (commit log + execution
+   * tree built incrementally as stages execute). Between runs, returns the
+   * last completed run's snapshot. Undefined before any run has started.
+   */
+  getSnapshot(): ReturnType<FlowChartExecutor['getSnapshot']> | undefined {
+    return this.getLastSnapshot();
+  }
+
   // ─── Subclass hooks ────────────────────────────────────────────
 
   /**
