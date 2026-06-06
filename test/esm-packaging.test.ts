@@ -62,9 +62,26 @@ describe.skipIf(!built)('ESM packaging', () => {
     }
   });
 
-  it('lazyRequire uses createRequire (ESM adapters do not hit "require is not defined")', () => {
+  it('lazyRequire works in Node ESM AND is safe to load in the browser', () => {
     const lazy = resolve(esmDir, 'lib/lazyRequire.js');
-    expect(readFileSync(lazy, 'utf8')).toContain('createRequire(import.meta.url)');
+    const src = readFileSync(lazy, 'utf8');
+
+    // Node ESM: createRequire-based (not a bare `require`, which is undefined in ESM).
+    expect(src).toContain('createRequire(import.meta.url)');
+
+    // Browser-safe: must use a NAMESPACE import of node:module. A NAMED import
+    // (`import { createRequire }`) is compiled, under Vite's CJS interop, to a
+    // top-level `mod["createRequire"]` property read — which throws at import on
+    // the externalized node:module stub (Vite "externalized for browser
+    // compatibility" error), even though lazyRequire is never called in a browser.
+    expect(src).toMatch(/import \* as \w+ from ['"]node:module['"]/);
+    // ...and createRequire must NOT be touched at module top level — only inside
+    // the function (call-time), which a browser bundle never reaches.
+    const beforeFn = src.slice(0, src.indexOf('function lazyRequire'));
+    expect(beforeFn, 'createRequire must not be accessed at module top level').not.toContain(
+      'createRequire',
+    );
+
     // and it actually works for a builtin in true ESM
     const r = spawnSync(
       process.execPath,

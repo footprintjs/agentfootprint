@@ -34,12 +34,24 @@ if (!existsSync(lazyReqPath)) {
     `postbuild-esm: expected ${lazyReqPath} — did lib/lazyRequire.ts move? Update this script.`,
   );
 }
+// Browser-safety is subtle here. lazyRequire is only ever CALLED in Node (to
+// load an optional peer-dep adapter); in a browser bundle it is
+// imported-but-never-called. Bundlers (Vite) externalize `node:module` and throw
+// on any property access. Two traps to avoid:
+//   1. A top-level `createRequire(import.meta.url)` call — runs at import → crash.
+//   2. A NAMED import `import { createRequire }` — Vite's CJS interop compiles it
+//      to a TOP-LEVEL `const createRequire = mod["createRequire"]`, which is an
+//      eager property read on the externalized stub → also crashes at import.
+// A NAMESPACE import binds the whole module object with no property read; the
+// `.createRequire` access then happens lazily inside the function (call-time),
+// which the browser never reaches. So this loads in the browser and works in
+// Node ESM.
 writeFileSync(
   lazyReqPath,
-  `import { createRequire } from 'node:module';\n` +
-    `const require = createRequire(import.meta.url);\n` +
+  `import * as nodeModule from 'node:module';\n` +
+    `let cachedRequire;\n` +
     `export function lazyRequire(specifier) {\n` +
-    `    return require(specifier);\n` +
+    `    return (cachedRequire ??= nodeModule.createRequire(import.meta.url))(specifier);\n` +
     `}\n`,
 );
 

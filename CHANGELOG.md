@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.1.2]
+
+Patch — fixes a browser-load regression introduced in 3.1.1.
+
+### Fixed
+
+- **ESM build crashed on load in browser bundlers (Vite).** 3.1.1's ESM
+  `lazyRequire` imported `createRequire` from `node:module` with a *named* import,
+  which Vite's CJS interop compiles to a top-level property read on the
+  browser-externalized `node:module` stub — throwing `Cannot access
+  "node:module.createRequire" in client code` at import, even though
+  `lazyRequire` is never called in a browser. Switched to a namespace import with
+  the `createRequire` access deferred inside the function (call-time, never
+  reached in a browser bundle). Verified end-to-end in a Vite playground (agent
+  runs clean, zero console errors) and guarded by an ESM-packaging test. Node ESM
+  + CJS behavior unchanged.
+
 ## [3.1.1]
 
 Patch — packaging only. No API or behavior change.
