@@ -34,9 +34,10 @@ function esmTargets(): Array<[string, string]> {
       typeof e === 'string'
         ? e
         : typeof e.import === 'string'
-          ? e.import
-          : (e.import?.default ?? e.default);
-    if (typeof imp === 'string' && imp.includes('/esm/') && imp.endsWith('.js')) out.push([name, imp]);
+        ? e.import
+        : e.import?.default ?? e.default;
+    if (typeof imp === 'string' && imp.includes('/esm/') && imp.endsWith('.js'))
+      out.push([name, imp]);
   }
   return out;
 }
@@ -82,7 +83,9 @@ describe.skipIf(!built)('ESM packaging', () => {
     const { build } = await import('esbuild');
     const result = await build({
       stdin: {
-        contents: `import { defineTool } from ${JSON.stringify(resolve(esmDir, 'index.js'))};\nglobalThis.__keep = defineTool;`,
+        contents: `import { defineTool } from ${JSON.stringify(
+          resolve(esmDir, 'index.js'),
+        )};\nglobalThis.__keep = defineTool;`,
         resolveDir: esmDir,
         loader: 'js',
       },
@@ -93,8 +96,15 @@ describe.skipIf(!built)('ESM packaging', () => {
       treeShaking: true,
     });
     const out = result.outputFiles[0]!.text;
-    for (const decl of ['class Agent', 'class InjectionEngine', 'class VectorMemoryStore', 'class AnthropicProvider']) {
-      expect(out, `${decl} should be tree-shaken out of a defineTool-only import`).not.toContain(decl);
+    for (const decl of [
+      'class Agent',
+      'class InjectionEngine',
+      'class VectorMemoryStore',
+      'class AnthropicProvider',
+    ]) {
+      expect(out, `${decl} should be tree-shaken out of a defineTool-only import`).not.toContain(
+        decl,
+      );
     }
   });
 });
