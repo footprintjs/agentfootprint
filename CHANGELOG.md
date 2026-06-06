@@ -5,6 +5,35 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.1.1]
+
+Patch — packaging only. No API or behavior change.
+
+### Changed
+
+- **The ESM build now loads as true ESM.** Every relative import carries an
+  explicit `.js` extension and `dist/esm` is marked `type:module`, so Node,
+  Deno, and Bun load it as real ECMAScript Modules (not just bundlers). The ESM
+  `lazyRequire` now uses `createRequire(import.meta.url)` instead of a bare
+  `require()`, so optional peer-dep adapters (Anthropic, OpenAI, Bedrock,
+  ioredis, AgentCore, MCP, OTEL/CloudWatch/X-Ray) work for ESM consumers instead
+  of throwing `ReferenceError: require is not defined`. CJS consumers unaffected.
+
+### Fixed
+
+- **`sideEffects` now declares the cache-strategy registration files.** Those
+  files self-register prompt-caching strategies as a side effect, so listing them
+  keeps aggressive bundlers from dropping the registrations (defensive — not
+  observed dropping under esbuild).
+
+### Added
+
+- **Tree-shaking guard test + badges.** A CI smoke test bundles a minimal
+  `import { defineTool }` and asserts the Agent runtime / injection engine /
+  memory stores / providers are pruned, plus true-ESM load of the main barrel and
+  all 18 subpaths and an ESM `lazyRequire` check. README gains minzipped-size and
+  tree-shakeable badges.
+
 ## [3.1.0]
 
 Agent runtime + observability. Additive — `^3.0.0` consumers upgrade safely
