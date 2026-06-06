@@ -20,7 +20,8 @@
  * Run:  npx tsx examples/features/13-live-state.ts
  */
 
-import { Agent, liveStateRecorder } from '../../src/index.js';
+import { Agent } from '../../src/index.js';
+import { liveStateRecorder } from '../../src/observe.js';
 import { isCliEntry, printResult, type ExampleMeta } from '../helpers/cli.js';
 import { exampleProvider } from '../helpers/provider.js';
 
@@ -29,7 +30,7 @@ export const meta: ExampleMeta = {
   title: 'Live state — O(1) "is it happening NOW" reads',
   group: 'features',
   description:
-    'liveStateRecorder() bundles three trackers (LLM / tool / turn) on the BoundaryStateTracker storage primitive. Subscribe once, read O(1) at any moment.',
+    'liveStateRecorder() bundles three trackers (LLM / tool / turn) on the BoundaryStateStore storage primitive. Subscribe once, read O(1) at any moment.',
   defaultInput: "what's the weather in Seattle?",
   providerSlots: ['default'],
   tags: ['feature', 'observability', 'live-state', 'streaming'],

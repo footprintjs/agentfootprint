@@ -542,13 +542,11 @@ describe('LiveStateRecorder — Tier 6: Security & Error', () => {
 // ─── Tier 7 — ROI ──────────────────────────────────────────────────
 
 describe('LiveStateRecorder — Tier 7: ROI', () => {
-  it('exported from agentfootprint main barrel', async () => {
+  it('NOT on the main barrel — recorders moved to /observe in 5.0.0', async () => {
     const af = await import('../../../src/index.js');
-    expect((af as Record<string, unknown>).LiveStateRecorder).toBeDefined();
-    expect((af as Record<string, unknown>).liveStateRecorder).toBeDefined();
-    expect((af as Record<string, unknown>).LiveLLMTracker).toBeDefined();
-    expect((af as Record<string, unknown>).LiveToolTracker).toBeDefined();
-    expect((af as Record<string, unknown>).LiveAgentTurnTracker).toBeDefined();
+    expect((af as Record<string, unknown>).LiveStateRecorder).toBeUndefined();
+    expect((af as Record<string, unknown>).liveStateRecorder).toBeUndefined();
+    expect((af as Record<string, unknown>).LiveLLMTracker).toBeUndefined();
   });
 
   it('exported from /observe subpath', async () => {

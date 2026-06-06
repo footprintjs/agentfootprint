@@ -116,8 +116,15 @@ export {
 // Bridge helper
 export { buildEventMeta, parseSubflowPath, type RunContext } from './bridge/eventMeta.js';
 
-// Core recorders
-export { ContextRecorder, type ContextRecorderOptions } from './recorders/core/ContextRecorder.js';
+// Context-engineering + emit primitives.
+//
+// The observability recorder FACTORIES (ContextRecorder, streamRecorder,
+// agentRecorder, compositionRecorder, costRecorder, evalRecorder,
+// memoryRecorder, permissionRecorder, skillRecorder, toolsRecorder,
+// contextEvaluatedRecorder, boundaryRecorder, liveStateRecorder, the
+// RunStep* family, attachFlowchart/attachLogging/attachThinking, …) now live
+// ONLY under `agentfootprint/observe` — the dedicated observability subpath —
+// so the main barrel stays focused on the core agent API.
 export {
   contextEngineering,
   isEngineeredSource,
@@ -130,25 +137,6 @@ export {
   type ContextInjectedListener,
 } from './recorders/core/contextEngineering.js';
 export { EmitBridge, type EmitBridgeOptions } from './recorders/core/EmitBridge.js';
-export { streamRecorder, type StreamRecorderOptions } from './recorders/core/StreamRecorder.js';
-export { agentRecorder, type AgentRecorderOptions } from './recorders/core/AgentRecorder.js';
-export {
-  contextEvaluatedRecorder,
-  type ContextEvaluatedRecorderOptions,
-} from './recorders/core/ContextEvaluatedRecorder.js';
-export {
-  compositionRecorder,
-  type CompositionRecorderOptions,
-} from './recorders/core/CompositionRecorder.js';
-export { costRecorder, type CostRecorderOptions } from './recorders/core/CostRecorder.js';
-export {
-  permissionRecorder,
-  type PermissionRecorderOptions,
-} from './recorders/core/PermissionRecorder.js';
-export { evalRecorder, type EvalRecorderOptions } from './recorders/core/EvalRecorder.js';
-export { memoryRecorder, type MemoryRecorderOptions } from './recorders/core/MemoryRecorder.js';
-export { skillRecorder, type SkillRecorderOptions } from './recorders/core/SkillRecorder.js';
-export { toolsRecorder, type ToolsRecorderOptions } from './recorders/core/ToolsRecorder.js';
 export { typedEmit } from './recorders/core/typedEmit.js';
 
 // Runner interface + base
@@ -173,70 +161,12 @@ export {
   type RunnerPauseOutcome,
 } from './core/pause.js';
 
-// Tier 3 observability (enable.* namespace)
-export {
-  attachThinking,
-  type ThinkingEvent,
-  type ThinkingOptions,
-} from './recorders/observability/ThinkingRecorder.js';
-export {
-  attachLogging,
-  LoggingDomains,
-  type LoggingDomain,
-  type LoggingLogger,
-  type LoggingOptions,
-} from './recorders/observability/LoggingRecorder.js';
-export {
-  attachFlowchart,
-  type ContextInjection,
-  type FlowchartHandle,
-  type FlowchartOptions,
-  type StepEdge,
-  type StepGraph,
-  type StepNode,
-} from './recorders/observability/FlowchartRecorder.js';
-export {
-  buildRunSteps,
-  RunStepRecorder,
-  runStepRecorder,
-  type BuildRunStepsOptions,
-  type RunStep,
-  type RunStepGraph,
-  type RunStepKind,
-  type RunStepMeta,
-  type RunStepRecorderOptions,
-  type RunStepTransition,
-} from './recorders/observability/RunStepRecorder.js';
-export {
-  BoundaryRecorder,
-  boundaryRecorder,
-  type ActorArrow,
-  type BoundaryAggregate,
-  type BoundaryRangeLabel,
-  type BoundaryRecorderOptions,
-  type DomainContextInjectedEvent,
-  type DomainDecisionBranchEvent,
-  type DomainEvent,
-  type DomainForkBranchEvent,
-  type DomainLLMEndEvent,
-  type DomainLLMStartEvent,
-  type DomainLoopIterationEvent,
-  type DomainRunEvent,
-  type DomainSubflowEvent,
-  type DomainToolEndEvent,
-  type DomainToolStartEvent,
-} from './recorders/observability/BoundaryRecorder.js';
-export {
-  liveStateRecorder,
-  LiveStateRecorder,
-  LiveLLMTracker,
-  LiveToolTracker,
-  LiveAgentTurnTracker,
-  type LLMLiveState,
-  type ToolLiveState,
-  type AgentTurnLiveState,
-  type LiveStateRunnerLike,
-} from './recorders/observability/LiveStateRecorder.js';
+// `enable.flowchart()` stays on the runner, so its public types stay reachable
+// from the main barrel. The recorder machinery it (and the other observability
+// recorders) are built from — attachFlowchart, buildStepGraph, BoundaryRecorder,
+// liveStateRecorder, the RunStep* family, attachLogging, attachThinking — now
+// lives ONLY under `agentfootprint/observe`.
+export type { FlowchartHandle, FlowchartOptions } from './recorders/observability/FlowchartRecorder.js';
 
 // Commentary — bundled prose templates + engine for narrating a run.
 // Consumers ship their own JSON locale / brand voice via the same

@@ -44,17 +44,34 @@ export { agentRecorder, type AgentRecorderOptions } from './recorders/core/Agent
 export {
   boundaryRecorder,
   BoundaryRecorder,
+  type ActorArrow,
   type BoundaryAggregate,
   type BoundaryRecorderOptions,
   type BoundaryRangeLabel,
+  type DomainContextInjectedEvent,
+  type DomainDecisionBranchEvent,
   type DomainEvent,
+  type DomainForkBranchEvent,
   type DomainLLMEndEvent,
   type DomainLLMStartEvent,
+  type DomainLoopIterationEvent,
+  type DomainRunEvent,
+  type DomainSubflowEvent,
   type DomainToolStartEvent,
   type DomainToolEndEvent,
-  type DomainSubflowEvent,
-  type DomainLoopIterationEvent,
 } from './recorders/observability/BoundaryRecorder.js';
+export {
+  buildRunSteps,
+  RunStepRecorder,
+  runStepRecorder,
+  type BuildRunStepsOptions,
+  type RunStep,
+  type RunStepGraph,
+  type RunStepKind,
+  type RunStepMeta,
+  type RunStepRecorderOptions,
+  type RunStepTransition,
+} from './recorders/observability/RunStepRecorder.js';
 export {
   attachFlowchart,
   buildStepGraph,
@@ -80,6 +97,11 @@ export {
 
 // Tier 3 — domain dashboards
 export { costRecorder, type CostRecorderOptions } from './recorders/core/CostRecorder.js';
+export { toolsRecorder, type ToolsRecorderOptions } from './recorders/core/ToolsRecorder.js';
+export {
+  contextEvaluatedRecorder,
+  type ContextEvaluatedRecorderOptions,
+} from './recorders/core/ContextEvaluatedRecorder.js';
 export { evalRecorder, type EvalRecorderOptions } from './recorders/core/EvalRecorder.js';
 export { memoryRecorder, type MemoryRecorderOptions } from './recorders/core/MemoryRecorder.js';
 export {
