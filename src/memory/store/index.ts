@@ -6,5 +6,5 @@ export type {
   PutIfVersionResult,
   SearchOptions,
   ScoredEntry,
-} from './types';
-export { InMemoryStore } from './InMemoryStore';
+} from './types.js';
+export { InMemoryStore } from './InMemoryStore.js';

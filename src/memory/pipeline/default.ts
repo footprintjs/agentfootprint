@@ -49,13 +49,13 @@
  */
 import { flowChart } from 'footprintjs';
 
-import { loadRecent, type LoadRecentConfig } from '../stages/loadRecent';
-import { pickByBudget, type PickByBudgetConfig } from '../stages/pickByBudget';
-import { formatDefault, type FormatDefaultConfig } from '../stages/formatDefault';
-import { writeMessages, type WriteMessagesConfig } from '../stages/writeMessages';
-import type { MemoryState } from '../stages';
-import type { MemoryStore } from '../store';
-import type { MemoryPipeline } from './types';
+import { loadRecent, type LoadRecentConfig } from '../stages/loadRecent.js';
+import { pickByBudget, type PickByBudgetConfig } from '../stages/pickByBudget.js';
+import { formatDefault, type FormatDefaultConfig } from '../stages/formatDefault.js';
+import { writeMessages, type WriteMessagesConfig } from '../stages/writeMessages.js';
+import type { MemoryState } from '../stages/index.js';
+import type { MemoryStore } from '../store/index.js';
+import type { MemoryPipeline } from './types.js';
 
 export interface DefaultPipelineConfig {
   /** The store both subflows share. */

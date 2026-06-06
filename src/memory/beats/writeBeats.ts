@@ -10,10 +10,10 @@
  * (Redis / DynamoDB / Postgres).
  */
 import type { TypedScope } from 'footprintjs';
-import type { MemoryStore } from '../store';
-import type { MemoryEntry } from '../entry';
-import type { ExtractBeatsState } from './extractBeats';
-import type { NarrativeBeat } from './types';
+import type { MemoryStore } from '../store/index.js';
+import type { MemoryEntry } from '../entry/index.js';
+import type { ExtractBeatsState } from './extractBeats.js';
+import type { NarrativeBeat } from './types.js';
 
 export interface WriteBeatsConfig {
   /** The store to persist to. Typically the same store as the pipeline's read side. */

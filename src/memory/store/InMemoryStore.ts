@@ -13,10 +13,10 @@
  * TTL is enforced lazily on read (cheapest; no background sweeper needed).
  * Pagination cursor is a monotonic integer — entries sorted by updatedAt desc.
  */
-import type { MemoryIdentity } from '../identity';
-import { identityNamespace } from '../identity';
-import type { MemoryEntry } from '../entry';
-import { cosineSimilarity } from '../embedding/cosine';
+import type { MemoryIdentity } from '../identity/index.js';
+import { identityNamespace } from '../identity/index.js';
+import type { MemoryEntry } from '../entry/index.js';
+import { cosineSimilarity } from '../embedding/cosine.js';
 import type {
   ListOptions,
   ListResult,
@@ -24,7 +24,7 @@ import type {
   PutIfVersionResult,
   ScoredEntry,
   SearchOptions,
-} from './types';
+} from './types.js';
 
 interface NamespaceSlot {
   readonly entries: Map<string, MemoryEntry>;

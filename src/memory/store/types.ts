@@ -33,8 +33,8 @@
  *    stages signal "this entry was actually used / wasn't used" so
  *    adapters can drive their own learning / eviction (RAG-theory ask).
  */
-import type { MemoryIdentity } from '../identity';
-import type { MemoryEntry } from '../entry';
+import type { MemoryIdentity } from '../identity/index.js';
+import type { MemoryEntry } from '../entry/index.js';
 
 /** Pagination cursor — opaque string, adapter-specific encoding. */
 export type MemoryCursor = string;

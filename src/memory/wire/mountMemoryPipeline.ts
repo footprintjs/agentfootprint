@@ -34,7 +34,7 @@
  *     — memory isn't tied to Agent conceptually.
  */
 import type { FlowChartBuilder } from 'footprintjs';
-import type { MemoryPipeline } from '../pipeline/types';
+import type { MemoryPipeline } from '../pipeline/types.js';
 
 /**
  * Keys this helper reads from / writes to on the parent agent scope.

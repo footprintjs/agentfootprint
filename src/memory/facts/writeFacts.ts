@@ -10,10 +10,10 @@
  * dedup by key, unlike beats and messages which are append-only.
  */
 import type { TypedScope } from 'footprintjs';
-import type { MemoryStore } from '../store';
-import type { MemoryEntry } from '../entry';
-import type { Fact } from './types';
-import type { FactPipelineState } from './extractFacts';
+import type { MemoryStore } from '../store/index.js';
+import type { MemoryEntry } from '../entry/index.js';
+import type { Fact } from './types.js';
+import type { FactPipelineState } from './extractFacts.js';
 
 export interface WriteFactsConfig {
   /** The store to persist to. Typically the same store as the pipeline's read side. */

@@ -20,12 +20,12 @@
  * short-circuits on empty — no store round-trip.
  */
 import type { TypedScope } from 'footprintjs';
-import type { LLMMessage as Message } from '../../adapters/types';
-import type { MemoryEntry } from '../entry';
-import type { MemoryState } from '../stages';
-import type { FactExtractor } from './extractor';
-import type { Fact } from './types';
-import { factId } from './types';
+import type { LLMMessage as Message } from '../../adapters/types.js';
+import type { MemoryEntry } from '../entry/index.js';
+import type { MemoryState } from '../stages/index.js';
+import type { FactExtractor } from './extractor.js';
+import type { Fact } from './types.js';
+import { factId } from './types.js';
 
 export interface ExtractFactsConfig {
   /** The extractor to call. See `patternFactExtractor` / `llmFactExtractor`. */

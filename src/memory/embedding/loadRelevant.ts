@@ -22,10 +22,10 @@
  *   non-vector store is a config bug, not a runtime condition.
  */
 import type { TypedScope } from 'footprintjs';
-import type { LLMMessage as Message } from '../../adapters/types';
-import type { MemoryStore } from '../store';
-import type { MemoryState } from '../stages';
-import type { Embedder } from './types';
+import type { LLMMessage as Message } from '../../adapters/types.js';
+import type { MemoryStore } from '../store/index.js';
+import type { MemoryState } from '../stages/index.js';
+import type { Embedder } from './types.js';
 
 export interface LoadRelevantConfig {
   /** The vector-capable store. Must implement `search()`. */

@@ -32,9 +32,9 @@
  * This is heuristic. It will miss nuances the LLM extractor catches.
  * Swap for `llmExtractor({ provider })` when quality matters.
  */
-import type { BeatExtractor, ExtractArgs } from './extractor';
-import type { NarrativeBeat } from './types';
-import { asImportance } from './types';
+import type { BeatExtractor, ExtractArgs } from './extractor.js';
+import type { NarrativeBeat } from './types.js';
+import { asImportance } from './types.js';
 
 /** Build a stable ref id for a message at a given position in a turn. */
 function refId(turnNumber: number, index: number): string {

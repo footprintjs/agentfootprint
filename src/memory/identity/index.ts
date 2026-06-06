@@ -1,2 +1,2 @@
-export type { MemoryIdentity } from './types';
-export { identityNamespace } from './types';
+export type { MemoryIdentity } from './types.js';
+export { identityNamespace } from './types.js';

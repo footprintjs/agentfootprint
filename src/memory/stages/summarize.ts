@@ -54,9 +54,9 @@
  *   - `source.identity`: carried over from the summarized range's first entry
  */
 import type { TypedScope } from 'footprintjs';
-import type { MemoryEntry } from '../entry';
-import type { LLMMessage as Message } from '../../adapters/types';
-import type { MemoryState } from './types';
+import type { MemoryEntry } from '../entry/index.js';
+import type { LLMMessage as Message } from '../../adapters/types.js';
+import type { MemoryState } from './types.js';
 
 export interface SummarizeConfig {
   /**

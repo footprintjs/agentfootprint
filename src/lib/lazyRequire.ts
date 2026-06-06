@@ -27,6 +27,12 @@
  *   }
  */
 export function lazyRequire<T = unknown>(specifier: string): T {
+  // CJS: `require` is global, so this is correct as-is.
+  // ESM: `require` is undefined — `scripts/postbuild-esm.mjs` rewrites the
+  //      emitted dist/esm/lib/lazyRequire.js to use
+  //      `createRequire(import.meta.url)`. (We can't `import.meta` here: this
+  //      file also compiles to CJS, where import.meta is illegal.) Keep the
+  //      signature in sync with that script.
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   return require(specifier) as T;
 }

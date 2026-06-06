@@ -15,11 +15,11 @@
  * Returning an empty array is valid — not every turn produces a beat.
  */
 import type { TypedScope } from 'footprintjs';
-import type { LLMMessage as Message } from '../../adapters/types';
-import type { MemoryEntry } from '../entry';
-import type { MemoryState } from '../stages';
-import type { BeatExtractor } from './extractor';
-import type { NarrativeBeat } from './types';
+import type { LLMMessage as Message } from '../../adapters/types.js';
+import type { MemoryEntry } from '../entry/index.js';
+import type { MemoryState } from '../stages/index.js';
+import type { BeatExtractor } from './extractor.js';
+import type { NarrativeBeat } from './types.js';
 
 export interface ExtractBeatsConfig {
   /** The extractor to call. See `heuristicExtractor` / `llmExtractor`. */

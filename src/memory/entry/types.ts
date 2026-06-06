@@ -1,4 +1,4 @@
-import type { MemoryIdentity } from '../identity';
+import type { MemoryIdentity } from '../identity/index.js';
 
 /**
  * MemoryEntry — a single stored item with decay-, version-, and source-aware

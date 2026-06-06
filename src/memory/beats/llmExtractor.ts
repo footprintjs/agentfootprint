@@ -36,10 +36,10 @@
  * });
  * ```
  */
-import type { LLMProvider, LLMMessage as Message } from '../../adapters/types';
-import type { BeatExtractor, ExtractArgs } from './extractor';
-import type { NarrativeBeat } from './types';
-import { asImportance } from './types';
+import type { LLMProvider, LLMMessage as Message } from '../../adapters/types.js';
+import type { BeatExtractor, ExtractArgs } from './extractor.js';
+import type { NarrativeBeat } from './types.js';
+import { asImportance } from './types.js';
 
 export interface LLMExtractorConfig {
   /** The provider used for extraction. Typically a cheap/fast model. */

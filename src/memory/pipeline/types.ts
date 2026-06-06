@@ -12,7 +12,7 @@
  * writing to a different store than you read from.
  */
 import type { FlowChart } from 'footprintjs';
-import type { MemoryState } from '../stages';
+import type { MemoryState } from '../stages/index.js';
 
 /**
  * The two flowcharts that together form a memory pipeline. Either may be

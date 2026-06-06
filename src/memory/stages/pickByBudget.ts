@@ -44,10 +44,10 @@
 import type { TypedScope } from 'footprintjs';
 import { decide } from 'footprintjs';
 import type { FlowChartBuilder } from 'footprintjs';
-import type { MemoryEntry } from '../entry';
-import type { LLMMessage as Message } from '../../adapters/types';
-import type { MemoryState } from './types';
-import { approximateTokenCounter, countMessageTokens, type TokenCounter } from './tokenize';
+import type { MemoryEntry } from '../entry/index.js';
+import type { LLMMessage as Message } from '../../adapters/types.js';
+import type { MemoryState } from './types.js';
+import { approximateTokenCounter, countMessageTokens, type TokenCounter } from './tokenize.js';
 
 /**
  * Reusable shape for a **composable pipeline segment** — a function that

@@ -21,9 +21,9 @@
  *   naturally composes with other signals.
  */
 import type { TypedScope } from 'footprintjs';
-import type { MemoryStore } from '../store';
-import type { LLMMessage as Message } from '../../adapters/types';
-import type { MemoryState } from './types';
+import type { MemoryStore } from '../store/index.js';
+import type { LLMMessage as Message } from '../../adapters/types.js';
+import type { MemoryState } from './types.js';
 
 export interface LoadRecentConfig {
   /** The store to read from. */

@@ -46,19 +46,19 @@
  */
 import { flowChart } from 'footprintjs';
 
-import type { MemoryStore } from '../store';
-import type { MemoryPipeline } from './types';
+import type { MemoryStore } from '../store/index.js';
+import type { MemoryPipeline } from './types.js';
 
 import {
   extractFacts,
   type ExtractFactsConfig,
   type FactPipelineState,
-} from '../facts/extractFacts';
-import { writeFacts } from '../facts/writeFacts';
-import { loadFacts, type LoadFactsConfig } from '../facts/loadFacts';
-import { formatFacts, type FormatFactsConfig } from '../facts/formatFacts';
-import { patternFactExtractor } from '../facts/patternFactExtractor';
-import type { FactExtractor } from '../facts/extractor';
+} from '../facts/extractFacts.js';
+import { writeFacts } from '../facts/writeFacts.js';
+import { loadFacts, type LoadFactsConfig } from '../facts/loadFacts.js';
+import { formatFacts, type FormatFactsConfig } from '../facts/formatFacts.js';
+import { patternFactExtractor } from '../facts/patternFactExtractor.js';
+import type { FactExtractor } from '../facts/extractor.js';
 
 export interface FactPipelineConfig {
   /** The store both subflows share. */

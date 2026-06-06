@@ -13,7 +13,7 @@
  * relevance. `MAX_BOOST_MULTIPLIER` caps runaway boosting so a frequently-
  * read but old entry doesn't crowd out newer relevant entries indefinitely.
  */
-import type { DecayPolicy, MemoryEntry } from './types';
+import type { DecayPolicy, MemoryEntry } from './types.js';
 
 /**
  * Maximum compounding boost from `accessCount`. Caps the access term at

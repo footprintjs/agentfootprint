@@ -45,21 +45,21 @@
  */
 import { flowChart } from 'footprintjs';
 
-import { loadRecent, type LoadRecentConfig } from '../stages/loadRecent';
-import { pickByBudget, type PickByBudgetConfig } from '../stages/pickByBudget';
-import type { MemoryState } from '../stages';
-import type { MemoryStore } from '../store';
-import type { MemoryPipeline } from './types';
+import { loadRecent, type LoadRecentConfig } from '../stages/loadRecent.js';
+import { pickByBudget, type PickByBudgetConfig } from '../stages/pickByBudget.js';
+import type { MemoryState } from '../stages/index.js';
+import type { MemoryStore } from '../store/index.js';
+import type { MemoryPipeline } from './types.js';
 
 import {
   extractBeats,
   type ExtractBeatsConfig,
   type ExtractBeatsState,
-} from '../beats/extractBeats';
-import { writeBeats } from '../beats/writeBeats';
-import { formatAsNarrative, type FormatAsNarrativeConfig } from '../beats/formatAsNarrative';
-import { heuristicExtractor } from '../beats/heuristicExtractor';
-import type { BeatExtractor } from '../beats/extractor';
+} from '../beats/extractBeats.js';
+import { writeBeats } from '../beats/writeBeats.js';
+import { formatAsNarrative, type FormatAsNarrativeConfig } from '../beats/formatAsNarrative.js';
+import { heuristicExtractor } from '../beats/heuristicExtractor.js';
+import type { BeatExtractor } from '../beats/extractor.js';
 
 export interface NarrativePipelineConfig {
   /** The store both subflows share. */

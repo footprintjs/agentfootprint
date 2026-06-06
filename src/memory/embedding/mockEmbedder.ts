@@ -11,7 +11,7 @@
  * over beats mentioning "car"). It is NOT a real embedder — do not
  * use for anything consumer-facing.
  */
-import type { Embedder, EmbedArgs, EmbedBatchArgs } from './types';
+import type { Embedder, EmbedArgs, EmbedBatchArgs } from './types.js';
 
 const DEFAULT_DIMENSIONS = 32;
 

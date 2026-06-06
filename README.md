@@ -18,6 +18,8 @@
   <a href="https://github.com/footprintjs/agentfootprint/actions"><img src="https://github.com/footprintjs/agentfootprint/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <!-- coverage-badge --><img src="https://img.shields.io/badge/coverage-87%25-green.svg" alt="coverage: 87%"><!-- /coverage-badge -->
   <a href="https://www.npmjs.com/package/agentfootprint"><img src="https://img.shields.io/npm/v/agentfootprint.svg?style=flat" alt="npm version"></a>
+  <a href="https://bundlephobia.com/package/agentfootprint"><img src="https://img.shields.io/bundlephobia/minzip/agentfootprint?label=minzipped" alt="minzipped size"></a>
+  <a href="#tree-shakeable--esm-first"><img src="https://img.shields.io/badge/tree--shakeable-%E2%9C%93-success?style=flat" alt="tree-shakeable"></a>
   <a href="https://www.npmjs.com/package/agentfootprint"><img src="https://img.shields.io/npm/dm/agentfootprint.svg" alt="Downloads"></a>
   <a href="https://github.com/footprintjs/agentfootprint/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT"></a>
 </p>
@@ -439,6 +441,18 @@ The flowchart, recorders, and tests don't change between dev and prod.
 | Curious about design | [Inspiration docs](https://footprintjs.github.io/agentfootprint/inspiration/) |
 
 Or jump into the [examples gallery](https://github.com/footprintjs/agentfootprint/tree/main/examples) — every example is also an end-to-end CI test.
+
+---
+
+## Tree-shakeable & ESM-first
+
+Import one thing, ship one thing. agentfootprint is built so your bundle grows only with what you actually use:
+
+- **Dual build, true ESM.** Ships CommonJS (`require`) **and** real ECMAScript Modules (`import`) with TypeScript types. The ESM build is `type:module` with explicit `.js` import extensions, so it loads as true ESM under Node, Vite, Next, Deno, and Bun — no shims.
+- **Per-file modules + honest `sideEffects`.** The dist is emitted file-by-file (never pre-bundled), so bundlers drop every export you don't touch. A small `import { defineTool }` doesn't pull in the Agent runtime, injection engine, memory stores, or LLM providers.
+- **Subpath exports + lazy peer-deps.** Heavyweight integrations live behind their own subpaths and load their SDK **only when you instantiate them** — importing agentfootprint never bundles `@anthropic-ai/sdk`, `ioredis`, the AWS SDKs, or the MCP SDK unless you actually use that adapter.
+
+**Proven, not promised.** A CI smoke test bundles a minimal `import { defineTool }` and asserts the Agent runtime, injection engine, memory stores, and providers are pruned; a second test loads the main barrel and every subpath as true ESM and verifies the lazy-adapter loader works under ESM (`createRequire`, not a bare `require`). See [`test/esm-packaging.test.ts`](test/esm-packaging.test.ts).
 
 ---
 

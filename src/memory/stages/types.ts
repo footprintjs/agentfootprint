@@ -14,9 +14,9 @@
  *   - `newMessages` is the WRITE-SIDE input.
  *   - (later layers: `candidates`, `selected`, `formatted`, `saveBatch`)
  */
-import type { MemoryIdentity } from '../identity';
-import type { MemoryEntry } from '../entry';
-import type { LLMMessage as Message } from '../../adapters/types';
+import type { MemoryIdentity } from '../identity/index.js';
+import type { MemoryEntry } from '../entry/index.js';
+import type { LLMMessage as Message } from '../../adapters/types.js';
 
 export interface MemoryState {
   /**

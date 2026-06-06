@@ -31,9 +31,9 @@
  *   empty header-only block is worse than no injection at all.
  */
 import type { TypedScope } from 'footprintjs';
-import type { MemoryEntry } from '../entry';
-import type { MemoryState } from '../stages';
-import type { NarrativeBeat } from './types';
+import type { MemoryEntry } from '../entry/index.js';
+import type { MemoryState } from '../stages/index.js';
+import type { NarrativeBeat } from './types.js';
 
 export interface FormatAsNarrativeConfig {
   /**

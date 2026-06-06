@@ -27,9 +27,9 @@
  *   copy-paste this stage and wrap it with a picker.
  */
 import type { TypedScope } from 'footprintjs';
-import type { MemoryEntry } from '../entry';
-import type { Fact } from './types';
-import type { FactPipelineState } from './extractFacts';
+import type { MemoryEntry } from '../entry/index.js';
+import type { Fact } from './types.js';
+import type { FactPipelineState } from './extractFacts.js';
 
 export interface FormatFactsConfig {
   /**

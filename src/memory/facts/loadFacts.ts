@@ -22,11 +22,11 @@
  * Keeping them separate prevents format stages from misrouting entries.
  */
 import type { TypedScope } from 'footprintjs';
-import type { MemoryStore } from '../store';
-import type { MemoryEntry } from '../entry';
-import type { Fact } from './types';
-import { isFactId } from './types';
-import type { FactPipelineState } from './extractFacts';
+import type { MemoryStore } from '../store/index.js';
+import type { MemoryEntry } from '../entry/index.js';
+import type { Fact } from './types.js';
+import { isFactId } from './types.js';
+import type { FactPipelineState } from './extractFacts.js';
 
 export interface LoadFactsConfig {
   /** The store to read from. */

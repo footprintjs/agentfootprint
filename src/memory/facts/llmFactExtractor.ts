@@ -38,10 +38,10 @@
  * });
  * ```
  */
-import type { LLMProvider, LLMMessage as Message } from '../../adapters/types';
-import type { FactExtractArgs, FactExtractor } from './extractor';
-import type { Fact } from './types';
-import { asConfidence } from './types';
+import type { LLMProvider, LLMMessage as Message } from '../../adapters/types.js';
+import type { FactExtractArgs, FactExtractor } from './extractor.js';
+import type { Fact } from './types.js';
+import { asConfidence } from './types.js';
 
 export interface LLMFactExtractorConfig {
   /** The provider used for extraction. Typically a cheap/fast model. */

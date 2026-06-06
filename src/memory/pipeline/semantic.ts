@@ -37,20 +37,20 @@
  */
 import { flowChart } from 'footprintjs';
 
-import { pickByBudget, type PickByBudgetConfig } from '../stages/pickByBudget';
-import { formatDefault, type FormatDefaultConfig } from '../stages/formatDefault';
-import { writeMessages, type WriteMessagesConfig } from '../stages/writeMessages';
-import type { MemoryState } from '../stages';
-import type { MemoryStore } from '../store';
-import type { MemoryPipeline } from './types';
+import { pickByBudget, type PickByBudgetConfig } from '../stages/pickByBudget.js';
+import { formatDefault, type FormatDefaultConfig } from '../stages/formatDefault.js';
+import { writeMessages, type WriteMessagesConfig } from '../stages/writeMessages.js';
+import type { MemoryState } from '../stages/index.js';
+import type { MemoryStore } from '../store/index.js';
+import type { MemoryPipeline } from './types.js';
 
-import { loadRelevant, type LoadRelevantConfig } from '../embedding/loadRelevant';
+import { loadRelevant, type LoadRelevantConfig } from '../embedding/loadRelevant.js';
 import {
   embedMessages,
   type EmbedMessagesConfig,
   type EmbedMessagesState,
-} from '../embedding/embedMessages';
-import type { Embedder } from '../embedding/types';
+} from '../embedding/embedMessages.js';
+import type { Embedder } from '../embedding/types.js';
 
 export interface SemanticPipelineConfig {
   /** Vector-capable store. Must implement `search()`. */

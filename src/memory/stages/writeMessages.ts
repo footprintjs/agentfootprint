@@ -32,10 +32,10 @@
  *   short `ttlMs` so they age out quickly.
  */
 import type { TypedScope } from 'footprintjs';
-import type { MemoryEntry } from '../entry';
-import type { MemoryStore } from '../store';
-import type { LLMMessage as Message } from '../../adapters/types';
-import type { MemoryState } from './types';
+import type { MemoryEntry } from '../entry/index.js';
+import type { MemoryStore } from '../store/index.js';
+import type { LLMMessage as Message } from '../../adapters/types.js';
+import type { MemoryState } from './types.js';
 
 export interface WriteMessagesConfig {
   /** The store to persist to. */

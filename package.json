@@ -49,7 +49,7 @@
   },
   "scripts": {
     "clean": "rm -rf dist coverage node_modules package-lock.json",
-    "build": "tsc && tsc -p tsconfig.esm.json",
+    "build": "tsc && tsc -p tsconfig.esm.json && node scripts/postbuild-esm.mjs",
     "watch": "tsc -w",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage --coverage.reporter=json-summary --coverage.reporter=text-summary --coverage.reportsDirectory=coverage",
@@ -230,6 +230,7 @@
     "@typescript-eslint/eslint-plugin": "^5.61.0",
     "@typescript-eslint/parser": "^5.61.0",
     "@vitest/coverage-v8": "^4.1.5",
+    "esbuild": "^0.28.0",
     "eslint": "^8.44.0",
     "eslint-config-prettier": "^6.15.0",
     "footprintjs": "^6.0.0",

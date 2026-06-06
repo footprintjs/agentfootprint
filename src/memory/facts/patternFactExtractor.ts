@@ -18,10 +18,10 @@
  *   The facts the pattern extractor misses are still better-captured
  *   by beats (which run in a separate pipeline).
  */
-import type { LLMMessage as Message } from '../../adapters/types';
-import type { FactExtractArgs, FactExtractor } from './extractor';
-import type { Fact } from './types';
-import { asConfidence } from './types';
+import type { LLMMessage as Message } from '../../adapters/types.js';
+import type { FactExtractArgs, FactExtractor } from './extractor.js';
+import type { Fact } from './types.js';
+import { asConfidence } from './types.js';
 
 /** Extract plaintext from any Message content shape. */
 function textOf(message: Message): string {

@@ -19,9 +19,9 @@
  * write stage's contract.
  */
 import type { TypedScope } from 'footprintjs';
-import type { Embedder } from './types';
-import type { LLMMessage as Message } from '../../adapters/types';
-import type { MemoryState } from '../stages';
+import type { Embedder } from './types.js';
+import type { LLMMessage as Message } from '../../adapters/types.js';
+import type { MemoryState } from '../stages/index.js';
 
 /** Extend MemoryState to carry per-message embeddings for writeMessages. */
 export interface EmbedMessagesState extends MemoryState {

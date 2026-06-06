@@ -26,12 +26,12 @@
  */
 import { flowChart } from 'footprintjs';
 
-import { loadRecent, type LoadRecentConfig } from '../stages/loadRecent';
-import { pickByBudget, type PickByBudgetConfig } from '../stages/pickByBudget';
-import { formatDefault, type FormatDefaultConfig } from '../stages/formatDefault';
-import type { MemoryState } from '../stages';
-import type { MemoryStore } from '../store';
-import type { MemoryPipeline } from './types';
+import { loadRecent, type LoadRecentConfig } from '../stages/loadRecent.js';
+import { pickByBudget, type PickByBudgetConfig } from '../stages/pickByBudget.js';
+import { formatDefault, type FormatDefaultConfig } from '../stages/formatDefault.js';
+import type { MemoryState } from '../stages/index.js';
+import type { MemoryStore } from '../store/index.js';
+import type { MemoryPipeline } from './types.js';
 
 export interface EphemeralPipelineConfig {
   /** The store to read from. Writes never happen — backend can be read-only. */

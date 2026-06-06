@@ -51,11 +51,11 @@
  */
 import { flowChart, type TypedScope } from 'footprintjs';
 
-import type { LLMProvider } from '../../adapters/types';
-import type { MemoryStore } from '../store';
-import type { MemoryEntry } from '../entry';
-import type { LLMMessage as Message } from '../../adapters/types';
-import type { MemoryPipeline } from './types';
+import type { LLMProvider } from '../../adapters/types.js';
+import type { MemoryStore } from '../store/index.js';
+import type { MemoryEntry } from '../entry/index.js';
+import type { LLMMessage as Message } from '../../adapters/types.js';
+import type { MemoryPipeline } from './types.js';
 
 import {
   extractFacts,
@@ -67,7 +67,7 @@ import {
   type Fact,
   type FactPipelineState,
   type FactExtractor,
-} from '../facts';
+} from '../facts/index.js';
 import {
   extractBeats,
   writeBeats,
@@ -77,7 +77,7 @@ import {
   type NarrativeBeat,
   type BeatExtractor,
   type ExtractBeatsState,
-} from '../beats';
+} from '../beats/index.js';
 
 export interface AutoPipelineConfig {
   /** The store both extractors share. */
