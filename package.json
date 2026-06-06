@@ -52,7 +52,7 @@
     "build": "tsc && tsc -p tsconfig.esm.json",
     "watch": "tsc -w",
     "test": "vitest run",
-    "test:coverage": "vitest run --coverage",
+    "test:coverage": "vitest run --coverage --coverage.reporter=json-summary --coverage.reporter=text-summary --coverage.reportsDirectory=coverage",
     "test:examples": "tsc -p examples/tsconfig.json && bash scripts/run-all-examples.sh",
     "test:examples:typecheck": "tsc -p examples/tsconfig.json",
     "examples:readme": "node scripts/generate-examples-readme.mjs",
@@ -66,7 +66,8 @@
     "format:fix": "prettier --config .prettierrc.js --write 'src/**/*.ts' 'test/**/*.ts'",
     "release:patch": "bash scripts/release.sh patch",
     "release:minor": "bash scripts/release.sh minor",
-    "release:major": "bash scripts/release.sh major"
+    "release:major": "bash scripts/release.sh major",
+    "coverage:badge": "npm run test:coverage; node scripts/coverage-badge.mjs"
   },
   "files": [
     "dist/**/*",

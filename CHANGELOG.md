@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.1.0]
+
+Agent runtime + observability. Additive — `^3.0.0` consumers upgrade safely
+(tracks `footprintjs@^6.0.0`).
+
+### Added
+
+- **`reactMode: 'classic' | 'dynamic'`** (default `dynamic`, back-compat): classic
+  caches the static system-prompt/tools slots after turn 1 and re-selects only
+  Messages; dynamic recomposes every slot each iteration. Same chart + loop shape.
+- Runtime restructured to the merge-tree the Lens renders: context slots are a
+  parallel selector fork (`failFast`), cache grouped into one `sf-cache` subflow,
+  branch-sourced `loopTo` from ToolCalls — in both flat + dynamic agent builders.
+- **`milestoneFor(id)`** classifier (iteration / slot / llm-turn / tool-call /
+  decision) exported from conventions — drives the Lens time-travel scrub stops.
+- `ErrorBridge` (`onRunFailed` → typed `error.fatal`), `ReliabilityRecorder`,
+  `ContextEvaluatedRecorder`, `humanizeLLMError`.
+- README coverage badge from generated v8 coverage.
+
+### Fixed
+
+- `cacheRecorder` slot resolution (matched by `splitStageId` local id);
+  `buildMessages` / `buildTools` slot fixes.
+
 ## [3.0.0]
 
 Major release. Tracks `footprintjs@^6.0.0` and propagates the build-time
