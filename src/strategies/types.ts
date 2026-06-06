@@ -35,7 +35,7 @@
 
 import type { AgentfootprintEvent, AgentfootprintEventType } from '../events/registry.js';
 import type { StepGraph } from '../recorders/observability/FlowchartRecorder.js';
-import type { ThinkingState } from '../recorders/observability/thinking/thinkingTemplates.js';
+import type { StatusState } from '../recorders/observability/thinking/thinkingTemplates.js';
 
 // ─── Shared shape every strategy implements ──────────────────────────
 
@@ -180,7 +180,7 @@ export interface CostStrategy extends BaseStrategy {
 // ─── Group 3: Live status ────────────────────────────────────────────
 
 /**
- * What a status strategy receives every time `selectThinkingState`
+ * What a status strategy receives every time `selectStatus`
  * returns a new state. The renderer has already resolved templates to
  * a final string; strategies decide where to send it.
  */
@@ -189,7 +189,7 @@ export interface StatusUpdate {
   readonly line: string;
   /** Underlying state for strategies that want to format their own
    *  view (e.g., emit different colors per state in a TUI). */
-  readonly state: ThinkingState;
+  readonly state: StatusState;
 }
 
 export interface LiveStatusCapabilities {

@@ -19,7 +19,7 @@ import {
   defaultThinkingMessages,
   validateMessages,
   defaultCommentaryTemplates,
-  defaultThinkingTemplates,
+  defaultStatusTemplates,
   Agent,
   mock,
 } from '../../src/index.js';
@@ -31,8 +31,8 @@ describe('Block D — defaults alias v2.4 templates', () => {
     expect(defaultCommentaryMessages).toBe(defaultCommentaryTemplates);
   });
 
-  it('defaultThinkingMessages === defaultThinkingTemplates (symbol identity)', () => {
-    expect(defaultThinkingMessages).toBe(defaultThinkingTemplates);
+  it('defaultThinkingMessages === defaultStatusTemplates (symbol identity)', () => {
+    expect(defaultThinkingMessages).toBe(defaultStatusTemplates);
   });
 
   it('default catalogs are non-empty', () => {

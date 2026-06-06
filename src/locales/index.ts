@@ -11,7 +11,7 @@
  *     "Looking up your order…"
  *
  * v2.4 shipped these as `defaultCommentaryTemplates` and
- * `defaultThinkingTemplates` (flat `Record<string, string>` maps with
+ * `defaultStatusTemplates` (flat `Record<string, string>` maps with
  * `{{var}}` substitution). The names worked but the framing was
  * generic — "templates" collides with TypeScript / templating-engine
  * terminology, and there was no first-class place to ship locale
@@ -61,7 +61,7 @@
  */
 
 import { defaultCommentaryTemplates } from '../recorders/observability/commentary/commentaryTemplates.js';
-import { defaultThinkingTemplates } from '../recorders/observability/thinking/thinkingTemplates.js';
+import { defaultStatusTemplates } from '../recorders/observability/thinking/thinkingTemplates.js';
 
 export type { CommentaryTemplates as MessageCatalog } from '../recorders/observability/commentary/commentaryTemplates.js';
 
@@ -76,12 +76,12 @@ export const defaultCommentaryMessages = defaultCommentaryTemplates;
 
 /**
  * Canonical English thinking bundle. Alias of v2.4's
- * `defaultThinkingTemplates`.
+ * `defaultStatusTemplates`.
  *
  * Keys mirror agentfootprint event types; values may contain
  * `{{var}}` placeholders for runtime substitution.
  */
-export const defaultThinkingMessages = defaultThinkingTemplates;
+export const defaultThinkingMessages = defaultStatusTemplates;
 
 /**
  * Spread `overrides` on top of `defaults` so every key in `defaults`

@@ -307,7 +307,7 @@ describe('chatBubbleLiveStatus', () => {
   });
 
   // P7 ROI — does NOT expose internal state shape (intentionally)
-  it('P7 ChatBubble strategy does NOT expose ThinkingState directly (no onUpdate)', () => {
+  it('P7 ChatBubble strategy does NOT expose StatusState directly (no onUpdate)', () => {
     const strat = chatBubbleLiveStatus({ onLine: () => {} });
     // The interface lock — strategy ONLY surfaces .renderStatus, not raw state.
     expect(strat.renderStatus).toBeDefined();

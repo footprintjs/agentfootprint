@@ -73,7 +73,7 @@ Each group is a port; vendor integrations are adapters. `enable.<group>({ strate
 |---|---|---|---|---|
 | **`enable.observability`** | `tier: 'minimal' \| 'standard' \| 'firehose'` · `sampleRate: 0..1` | `console()` · `otel(tracer)` · `datadog(config)` · `pino(logger)` · `cloudwatch(client)` | `console()` | server log shipping (Splunk, etc.) |
 | **`enable.cost`** | `budget?` · `breakers?` | `inMemorySink({onTick})` · `stripeBilling(account)` · `webhook(url)` | `inMemorySink()` | OpenAI dashboard pipe (later) |
-| **`enable.liveStatus`** | `templates?: ThinkingTemplates` | `chatBubble(cb)` · `stdout()` · `webhook(url)` | `chatBubble(cb)` | server-sent-events helper (later) |
+| **`enable.liveStatus`** | `templates?: StatusTemplates` | `chatBubble(cb)` · `stdout()` · `webhook(url)` | `chatBubble(cb)` | server-sent-events helper (later) |
 | **`enable.lens`** | (rendering target) | `browser()` · `cliTUI(stream)` · `jsonExport(writer)` | `browser()` | Lens-as-service (later) |
 
 **Parked for later** (same pattern, different time): `audit`, `governance`, `debug`, `eval`, `reflection`.

@@ -2,11 +2,11 @@
 
 ***
 
-[agentfootprint](/agentfootprint/api/generated/README.md) / renderThinkingLine
+[agentfootprint](/agentfootprint/api/generated/README.md) / renderStatusLine
 
-# Function: renderThinkingLine()
+# Function: renderStatusLine()
 
-> **renderThinkingLine**(`state`, `ctx`, `templates?`): `string` \| `null`
+> **renderStatusLine**(`state`, `ctx`, `templates?`): `string` \| `null`
 
 Defined in: [src/recorders/observability/thinking/thinkingTemplates.ts:209](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/thinking/thinkingTemplates.ts#L209)
 
@@ -25,15 +25,15 @@ fall back to its own default).
 
 ### state
 
-[`ThinkingState`](/agentfootprint/api/generated/interfaces/ThinkingState.md) \| `null`
+[`StatusState`](/agentfootprint/api/generated/interfaces/StatusState.md) \| `null`
 
 ### ctx
 
-[`ThinkingContext`](/agentfootprint/api/generated/interfaces/ThinkingContext.md)
+[`StatusContext`](/agentfootprint/api/generated/interfaces/StatusContext.md)
 
 ### templates?
 
-[`ThinkingTemplates`](/agentfootprint/api/generated/type-aliases/ThinkingTemplates.md) = `defaultThinkingTemplates`
+[`StatusTemplates`](/agentfootprint/api/generated/type-aliases/StatusTemplates.md) = `defaultStatusTemplates`
 
 ## Returns
 

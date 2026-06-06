@@ -10,7 +10,7 @@ description: Ship the agent's voice as a locale pack. defaultCommentaryMessages 
 | Export | Purpose |
 |---|---|
 | `defaultCommentaryMessages` | Canonical English commentary bundle (alias of `defaultCommentaryTemplates`) |
-| `defaultThinkingMessages`   | Canonical English thinking bundle (alias of `defaultThinkingTemplates`) |
+| `defaultThinkingMessages`   | Canonical English thinking bundle (alias of `defaultStatusTemplates`) |
 | `composeMessages(defaults, overrides?)` | Spread overrides on defaults; missing keys fall back. Returns frozen catalog. |
 | `validateMessages(catalog, requiredKeys, opts?)` | Assert required keys are present; batches errors |
 | `MessageCatalog` (type) | `Readonly<Record<string, string>>` |
@@ -95,7 +95,7 @@ validateMessages(myCatalog, requiredKeys, {
 
 ## Why the Message Catalog name (vs "templates")
 
-v2.4 named these `defaultCommentaryTemplates` / `defaultThinkingTemplates` — accurate but generic. "Templates" overloads the term across TypeScript generics, templating-engine output, and i18n message bundles. The Message Catalog Pattern name has industry currency (Resource Bundle in Java, ICU MessageFormat, Fluent in Mozilla's i18n stack) and makes the i18n shape explicit.
+v2.4 named these `defaultCommentaryTemplates` / `defaultStatusTemplates` — accurate but generic. "Templates" overloads the term across TypeScript generics, templating-engine output, and i18n message bundles. The Message Catalog Pattern name has industry currency (Resource Bundle in Java, ICU MessageFormat, Fluent in Mozilla's i18n stack) and makes the i18n shape explicit.
 
 The v2.4 names remain symbol-identical aliases so existing code keeps working unchanged through the v2.x line.
 

@@ -27,7 +27,7 @@ import type { ThinkingHandler } from '../../thinking/types.js';
 import type { Tool, ToolRegistryEntry } from '../tools.js';
 import type { ToolProvider } from '../../tool-providers/types.js';
 import { defaultCommentaryTemplates } from '../../recorders/observability/commentary/commentaryTemplates.js';
-import { defaultThinkingTemplates } from '../../recorders/observability/thinking/thinkingTemplates.js';
+import { defaultStatusTemplates } from '../../recorders/observability/thinking/thinkingTemplates.js';
 import { Agent } from '../Agent.js';
 import type { AgentOptions } from './types.js';
 
@@ -284,7 +284,7 @@ export class AgentBuilder {
    * contract shape as commentary; different vocabulary — first-person
    * status the chat bubble shows mid-call. Per-tool overrides go via
    * `tool.<toolName>` keys (e.g., `'tool.weather': 'Looking up the
-   * weather…'`). See `defaultThinkingTemplates` for the full key list.
+   * weather…'`). See `defaultStatusTemplates` for the full key list.
    */
   thinkingTemplates(templates: Readonly<Record<string, string>>): this {
     this.thinkingOverrides = { ...this.thinkingOverrides, ...templates };
@@ -708,7 +708,7 @@ export class AgentBuilder {
     const voice = {
       appName: this.appNameValue,
       commentaryTemplates: { ...defaultCommentaryTemplates, ...this.commentaryOverrides },
-      thinkingTemplates: { ...defaultThinkingTemplates, ...this.thinkingOverrides },
+      thinkingTemplates: { ...defaultStatusTemplates, ...this.thinkingOverrides },
     };
     const opts =
       this.maxIterationsOverride !== undefined

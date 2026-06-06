@@ -44,14 +44,14 @@ import type { AgentfootprintEvent } from '../../../events/registry.js';
 // ── State machine types ────────────────────────────────────────────
 
 /** The four mid-call states a chat bubble might render. */
-export type ThinkingStateKind = 'idle' | 'tool' | 'streaming' | 'paused';
+export type StatusKind = 'idle' | 'tool' | 'streaming' | 'paused';
 
 /**
  * What the selector returns. The chat-bubble consumer feeds this into
  * the renderer to get the final string.
  */
-export interface ThinkingState {
-  readonly state: ThinkingStateKind;
+export interface StatusState {
+  readonly state: StatusKind;
   /** Vars for `{{name}}` substitution in the matched template. */
   readonly vars: Readonly<Record<string, string>>;
   /** When `state === 'tool'`, the resolving toolName. The renderer
@@ -60,10 +60,10 @@ export interface ThinkingState {
 }
 
 /** Flat template map. Keys: state kinds + per-tool overrides. */
-export type ThinkingTemplates = Readonly<Record<string, string>>;
+export type StatusTemplates = Readonly<Record<string, string>>;
 
 /** Render context — what the consumer's app config injects. */
-export interface ThinkingContext {
+export interface StatusContext {
   /** Active actor's name. Substituted as `{{appName}}` in templates. */
   readonly appName: string;
 }
@@ -75,7 +75,7 @@ export interface ThinkingContext {
  * `.thinkingTemplates({...})`. Per-tool overrides go via
  * `tool.<toolName>` keys.
  */
-export const defaultThinkingTemplates: ThinkingTemplates = {
+export const defaultStatusTemplates: StatusTemplates = {
   idle: 'Thinking…',
   streaming: '{{partial}}',
   tool: 'Working on `{{toolName}}`…',
@@ -108,7 +108,7 @@ export const defaultThinkingTemplates: ThinkingTemplates = {
  * cancels its matching opener so a completed tool.start/tool.end
  * pair leaves the state quiescent.
  */
-export function selectThinkingState(events: readonly AgentfootprintEvent[]): ThinkingState | null {
+export function selectStatus(events: readonly AgentfootprintEvent[]): StatusState | null {
   let activePause: { question: string; toolCallId?: string } | null = null;
   let activeTool: { toolName: string; toolCallId?: string } | null = null;
   let activeLlmStartIdx = -1; // -1 = no active LLM call
@@ -206,10 +206,10 @@ export function selectThinkingState(events: readonly AgentfootprintEvent[]): Thi
  * keeps the contract honest (consumer can detect "no template" and
  * fall back to its own default).
  */
-export function renderThinkingLine(
-  state: ThinkingState | null,
-  ctx: ThinkingContext,
-  templates: ThinkingTemplates = defaultThinkingTemplates,
+export function renderStatusLine(
+  state: StatusState | null,
+  ctx: StatusContext,
+  templates: StatusTemplates = defaultStatusTemplates,
 ): string | null {
   if (!state) return null;
 

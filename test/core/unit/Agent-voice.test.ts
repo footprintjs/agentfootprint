@@ -21,7 +21,7 @@ import {
   Agent,
   MockProvider,
   defaultCommentaryTemplates,
-  defaultThinkingTemplates,
+  defaultStatusTemplates,
 } from '../../../src/index.js';
 
 function mock() {
@@ -43,7 +43,7 @@ describe('Agent voice — V1: defaults', () => {
 
   it('thinkingTemplates equals the bundled defaults when not overridden', () => {
     const agent = Agent.create({ provider: mock(), model: 'm' }).system('').build();
-    expect(agent.thinkingTemplates).toEqual(defaultThinkingTemplates);
+    expect(agent.thinkingTemplates).toEqual(defaultStatusTemplates);
   });
 });
 
@@ -92,7 +92,7 @@ describe('Agent voice — V4: .thinkingTemplates() with per-tool key', () => {
     expect(agent.thinkingTemplates.idle).toBe('Pondering…');
     expect(agent.thinkingTemplates['tool.weather']).toBe('Looking up the weather…');
     // Generic fallback key still present.
-    expect(agent.thinkingTemplates.tool).toBe(defaultThinkingTemplates.tool);
+    expect(agent.thinkingTemplates.tool).toBe(defaultStatusTemplates.tool);
   });
 });
 

@@ -742,7 +742,7 @@ Override agentfootprint's bundled thinking templates. Same
 contract shape as commentary; different vocabulary — first-person
 status the chat bubble shows mid-call. Per-tool overrides go via
 `tool.<toolName>` keys (e.g., `'tool.weather': 'Looking up the
-weather…'`). See `defaultThinkingTemplates` for the full key list.
+weather…'`). See `defaultStatusTemplates` for the full key list.
 
 #### Parameters
 

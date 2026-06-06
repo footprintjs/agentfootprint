@@ -122,7 +122,7 @@ export { buildEventMeta, parseSubflowPath, type RunContext } from './bridge/even
 // agentRecorder, compositionRecorder, costRecorder, evalRecorder,
 // memoryRecorder, permissionRecorder, skillRecorder, toolsRecorder,
 // contextEvaluatedRecorder, boundaryRecorder, liveStateRecorder, the
-// RunStep* family, attachFlowchart/attachLogging/attachThinking, …) now live
+// RunStep* family, attachFlowchart/attachLogging/attachStatus, …) now live
 // ONLY under `agentfootprint/observe` — the dedicated observability subpath —
 // so the main barrel stays focused on the core agent API.
 export {
@@ -164,7 +164,7 @@ export {
 // `enable.flowchart()` stays on the runner, so its public types stay reachable
 // from the main barrel. The recorder machinery it (and the other observability
 // recorders) are built from — attachFlowchart, buildStepGraph, BoundaryRecorder,
-// liveStateRecorder, the RunStep* family, attachLogging, attachThinking — now
+// liveStateRecorder, the RunStep* family, attachLogging, attachStatus — now
 // lives ONLY under `agentfootprint/observe`.
 export type { FlowchartHandle, FlowchartOptions } from './recorders/observability/FlowchartRecorder.js';
 
@@ -181,20 +181,22 @@ export {
   type CommentaryTemplates,
 } from './recorders/observability/commentary/commentaryTemplates.js';
 
-// Thinking — chat-bubble surface (separate audience: the end user
-// chatting). State machine: idle / streaming / tool / paused. Same
-// contract shape as commentary (`Record<string, string>` with
-// `{{vars}}`, partial overrides supported, missing keys ignored)
-// but a different vocabulary — first-person status, mid-call only.
-// Per-tool keys (`tool.<toolName>`) win over the generic `tool` key.
+// Status — chat-bubble surface (separate audience: the end user
+// chatting; renamed from "thinking" in 5.0.0 to disambiguate from the
+// MODEL's extended-thinking reasoning). State machine:
+// idle / streaming / tool / paused. Same contract shape as commentary
+// (`Record<string, string>` with `{{vars}}`, partial overrides
+// supported, missing keys ignored) but a different vocabulary —
+// first-person status, mid-call only. Per-tool keys (`tool.<toolName>`)
+// win over the generic `tool` key.
 export {
-  defaultThinkingTemplates,
-  selectThinkingState,
-  renderThinkingLine,
-  type ThinkingContext,
-  type ThinkingState,
-  type ThinkingStateKind,
-  type ThinkingTemplates,
+  defaultStatusTemplates,
+  selectStatus,
+  renderStatusLine,
+  type StatusContext,
+  type StatusState,
+  type StatusKind,
+  type StatusTemplates,
 } from './recorders/observability/thinking/thinkingTemplates.js';
 
 // Primitives (core/)

@@ -33,10 +33,10 @@ import type {
   DetachOptions,
 } from './types.js';
 import {
-  selectThinkingState,
-  renderThinkingLine,
-  defaultThinkingTemplates,
-  type ThinkingTemplates,
+  selectStatus,
+  renderStatusLine,
+  defaultStatusTemplates,
+  type StatusTemplates,
 } from '../recorders/observability/thinking/thinkingTemplates.js';
 // Registry-lookup helpers (`getObservabilityStrategy` etc.) are
 // defined in `./registry.js` and used by consumers via the
@@ -281,7 +281,7 @@ export interface LiveStatusEnableOptions extends CommonStrategyOptions {
   /** Override the bundled English thinking templates with locale /
    *  per-tool / per-skill overrides. Same shape as
    *  `agent.thinkingTemplates(...)`. */
-  readonly templates?: ThinkingTemplates;
+  readonly templates?: StatusTemplates;
   /** App name woven into `{{appName}}` template var. */
   readonly appName?: string;
 }
@@ -296,7 +296,7 @@ export interface LiveStatusEnableOptions extends CommonStrategyOptions {
 /** Sliding-window cap for `attachLiveStatusStrategy`'s internal event
  *  log. Long-lived agent servers would otherwise leak memory through
  *  unbounded growth (per OTel SIG panel review). The cap is high
- *  enough that `selectThinkingState` always sees the relevant recent
+ *  enough that `selectStatus` always sees the relevant recent
  *  history. */
 const LIVE_STATUS_LOG_CAP = 1000;
 
@@ -305,7 +305,7 @@ export function attachLiveStatusStrategy(
   opts: LiveStatusEnableOptions,
 ): Unsubscribe {
   opts.strategy.validate?.();
-  const templates = { ...defaultThinkingTemplates, ...(opts.templates ?? {}) };
+  const templates = { ...defaultStatusTemplates, ...(opts.templates ?? {}) };
   const ctx = { appName: opts.appName ?? 'Agent' };
   const eventLog: AgentfootprintEvent[] = [];
   let lastLine: string | null = null;
@@ -315,12 +315,12 @@ export function attachLiveStatusStrategy(
     // Sliding-window — drop oldest when over cap. O(1) amortized
     // because shift() runs only once per overflow.
     while (eventLog.length > LIVE_STATUS_LOG_CAP) eventLog.shift();
-    const state = selectThinkingState(eventLog);
+    const state = selectStatus(eventLog);
     if (!state) {
       lastLine = null;
       return;
     }
-    const line = renderThinkingLine(state, ctx, templates);
+    const line = renderStatusLine(state, ctx, templates);
     if (line === null || line === lastLine) return;
     lastLine = line;
     try {

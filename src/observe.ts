@@ -25,7 +25,7 @@
  *     • PermissionRecorder   — permission decisions + denials
  *     • SkillRecorder        — skill activations
  *     • LoggingRecorder      — structured log lines per event
- *     • ThinkingRecorder     — chat-bubble first-person status
+ *     • StatusRecorder     — chat-bubble first-person status
  *
  * Domain-flavored consumers (Lens, Grafana, Datadog) compose Tier 1+2
  * directly; Tier 3 dashboards are opt-in.
@@ -117,10 +117,10 @@ export {
   type LoggingOptions,
 } from './recorders/observability/LoggingRecorder.js';
 export {
-  attachThinking,
-  type ThinkingEvent,
-  type ThinkingOptions,
-} from './recorders/observability/ThinkingRecorder.js';
+  attachStatus,
+  type StatusEvent,
+  type StatusOptions,
+} from './recorders/observability/StatusRecorder.js';
 
 // Emit primitive — used by every Tier-3 source-domain.
 export { typedEmit } from './recorders/core/typedEmit.js';

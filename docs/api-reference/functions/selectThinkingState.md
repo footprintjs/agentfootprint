@@ -2,11 +2,11 @@
 
 ***
 
-[agentfootprint](/agentfootprint/api/generated/README.md) / selectThinkingState
+[agentfootprint](/agentfootprint/api/generated/README.md) / selectStatus
 
-# Function: selectThinkingState()
+# Function: selectStatus()
 
-> **selectThinkingState**(`events`): [`ThinkingState`](/agentfootprint/api/generated/interfaces/ThinkingState.md) \| `null`
+> **selectStatus**(`events`): [`StatusState`](/agentfootprint/api/generated/interfaces/StatusState.md) \| `null`
 
 Defined in: [src/recorders/observability/thinking/thinkingTemplates.ts:111](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/thinking/thinkingTemplates.ts#L111)
 
@@ -41,4 +41,4 @@ readonly [`AgentfootprintEvent`](/agentfootprint/api/generated/type-aliases/Agen
 
 ## Returns
 
-[`ThinkingState`](/agentfootprint/api/generated/interfaces/ThinkingState.md) \| `null`
+[`StatusState`](/agentfootprint/api/generated/interfaces/StatusState.md) \| `null`

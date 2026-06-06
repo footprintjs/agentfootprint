@@ -2,11 +2,11 @@
 
 ***
 
-[agentfootprint](/agentfootprint/api/generated/README.md) / ThinkingOptions
+[agentfootprint](/agentfootprint/api/generated/README.md) / StatusOptions
 
-# Interface: ThinkingOptions
+# Interface: StatusOptions
 
-Defined in: [src/recorders/observability/ThinkingRecorder.ts:22](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/ThinkingRecorder.ts#L22)
+Defined in: [src/recorders/observability/StatusRecorder.ts:22](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/StatusRecorder.ts#L22)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [src/recorders/observability/ThinkingRecorder.ts:22](https://github.
 
 > `readonly` `optional` **format?**: (`event`) => `string` \| `null`
 
-Defined in: [src/recorders/observability/ThinkingRecorder.ts:32](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/ThinkingRecorder.ts#L32)
+Defined in: [src/recorders/observability/StatusRecorder.ts:32](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/StatusRecorder.ts#L32)
 
 Custom formatter. Return `null` to skip an event; return a string
 to emit that status. Omit for the built-in renderer.
@@ -23,7 +23,7 @@ to emit that status. Omit for the built-in renderer.
 
 ##### event
 
-[`ThinkingEvent`](/agentfootprint/api/generated/type-aliases/ThinkingEvent.md)
+[`StatusEvent`](/agentfootprint/api/generated/type-aliases/StatusEvent.md)
 
 #### Returns
 
@@ -35,7 +35,7 @@ to emit that status. Omit for the built-in renderer.
 
 > `readonly` **onStatus**: (`status`) => `void`
 
-Defined in: [src/recorders/observability/ThinkingRecorder.ts:27](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/ThinkingRecorder.ts#L27)
+Defined in: [src/recorders/observability/StatusRecorder.ts:27](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/StatusRecorder.ts#L27)
 
 Called with a human-readable status string at each meaningful moment
 (iteration start, tool start/end, route decision, turn end).

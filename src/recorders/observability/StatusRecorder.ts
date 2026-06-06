@@ -1,9 +1,9 @@
 /**
- * ThinkingRecorder — Claude Code-style live status line for Agent runs.
+ * StatusRecorder — Claude Code-style live status line for Agent runs.
  *
  * Pattern: Facade over EventDispatcher's wildcard subscription.
  * Role:    Tier 3 observability — the low-level helper behind
- *          `attachThinking(dispatcher, { onStatus })` (exported from
+ *          `attachStatus(dispatcher, { onStatus })` (exported from
  *          `agentfootprint/observe`). For the high-level, uniform path use
  *          `agent.enable.liveStatus({ strategy: chatBubbleLiveStatus({ onLine }) })`.
  *          One callback receives a human-readable status string at every
@@ -19,7 +19,7 @@ import type {
   AgentfootprintEventType,
 } from '../../events/registry.js';
 
-export interface ThinkingOptions {
+export interface StatusOptions {
   /**
    * Called with a human-readable status string at each meaningful moment
    * (iteration start, tool start/end, route decision, turn end).
@@ -29,13 +29,13 @@ export interface ThinkingOptions {
    * Custom formatter. Return `null` to skip an event; return a string
    * to emit that status. Omit for the built-in renderer.
    */
-  readonly format?: (event: ThinkingEvent) => string | null;
+  readonly format?: (event: StatusEvent) => string | null;
 }
 
 /**
  * Subset of events the thinking renderer formats. Discriminated on `type`.
  */
-export type ThinkingEvent =
+export type StatusEvent =
   | AgentfootprintEventMap['agentfootprint.agent.turn_start']
   | AgentfootprintEventMap['agentfootprint.agent.turn_end']
   | AgentfootprintEventMap['agentfootprint.agent.iteration_start']
@@ -56,11 +56,11 @@ const RELEVANT: ReadonlySet<AgentfootprintEventType> = new Set<AgentfootprintEve
  * Attach a thinking-status subscription to the event dispatcher.
  * Returns an Unsubscribe — call to detach.
  */
-export function attachThinking(dispatcher: EventDispatcher, options: ThinkingOptions): Unsubscribe {
+export function attachStatus(dispatcher: EventDispatcher, options: StatusOptions): Unsubscribe {
   const format = options.format ?? defaultFormatter;
   return dispatcher.on('*', (event: AgentfootprintEvent) => {
     if (!RELEVANT.has(event.type)) return;
-    const status = format(event as ThinkingEvent);
+    const status = format(event as StatusEvent);
     if (status !== null) options.onStatus(status);
   });
 }
@@ -68,7 +68,7 @@ export function attachThinking(dispatcher: EventDispatcher, options: ThinkingOpt
 /**
  * Default renderer. Humanizes each supported event into a short status line.
  */
-function defaultFormatter(event: ThinkingEvent): string | null {
+function defaultFormatter(event: StatusEvent): string | null {
   switch (event.type) {
     case 'agentfootprint.agent.turn_start':
       return 'Thinking...';

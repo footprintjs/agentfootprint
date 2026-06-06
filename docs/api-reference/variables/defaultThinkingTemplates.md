@@ -2,11 +2,11 @@
 
 ***
 
-[agentfootprint](/agentfootprint/api/generated/README.md) / defaultThinkingTemplates
+[agentfootprint](/agentfootprint/api/generated/README.md) / defaultStatusTemplates
 
-# Variable: defaultThinkingTemplates
+# Variable: defaultStatusTemplates
 
-> `const` **defaultThinkingTemplates**: [`ThinkingTemplates`](/agentfootprint/api/generated/type-aliases/ThinkingTemplates.md)
+> `const` **defaultStatusTemplates**: [`StatusTemplates`](/agentfootprint/api/generated/type-aliases/StatusTemplates.md)
 
 Defined in: [src/recorders/observability/thinking/thinkingTemplates.ts:78](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/thinking/thinkingTemplates.ts#L78)
 

@@ -1,13 +1,13 @@
 /**
  * agentfootprint/status — chat-bubble status surface.
  *
- * Pattern: pure projection. `selectThinkingState` walks the typed
+ * Pattern: pure projection. `selectStatus` walks the typed
  *          event log forward, tracking active pause / tool / LLM state,
  *          and returns the CURRENT thinking state (or null when the
  *          bubble should hide).
  * Role:    Outer ring. Consumers (Lens, custom chat UIs, embedded
  *          widgets) call this to drive a "what is the agent doing
- *          right now?" indicator. Output feeds `renderThinkingLine`
+ *          right now?" indicator. Output feeds `renderStatusLine`
  *          which resolves a template + variables to a final string.
  *
  * Why a subpath:
@@ -47,11 +47,11 @@
  */
 
 export {
-  defaultThinkingTemplates,
-  selectThinkingState,
-  renderThinkingLine,
-  type ThinkingState,
-  type ThinkingStateKind,
-  type ThinkingTemplates,
-  type ThinkingContext,
+  defaultStatusTemplates,
+  selectStatus,
+  renderStatusLine,
+  type StatusState,
+  type StatusKind,
+  type StatusTemplates,
+  type StatusContext,
 } from './recorders/observability/thinking/thinkingTemplates.js';

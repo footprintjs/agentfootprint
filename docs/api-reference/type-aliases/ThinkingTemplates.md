@@ -2,11 +2,11 @@
 
 ***
 
-[agentfootprint](/agentfootprint/api/generated/README.md) / ThinkingTemplates
+[agentfootprint](/agentfootprint/api/generated/README.md) / StatusTemplates
 
-# Type Alias: ThinkingTemplates
+# Type Alias: StatusTemplates
 
-> **ThinkingTemplates** = `Readonly`\<`Record`\<`string`, `string`\>\>
+> **StatusTemplates** = `Readonly`\<`Record`\<`string`, `string`\>\>
 
 Defined in: [src/recorders/observability/thinking/thinkingTemplates.ts:63](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/thinking/thinkingTemplates.ts#L63)
 

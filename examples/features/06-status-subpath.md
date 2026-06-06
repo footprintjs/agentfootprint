@@ -1,5 +1,5 @@
 ---
-name: Status subpath — selectThinkingState + renderThinkingLine + templates
+name: Status subpath — selectStatus + renderStatusLine + templates
 group: features
 guide: ../../README.md#features
 defaultInput: check the weather in Paris
@@ -18,7 +18,7 @@ This example shows the lower-level surface. It's what `agentfootprint-lens` and 
 
 ## The state machine
 
-`selectThinkingState(events)` walks the typed event log forward and returns the **current** state (or `null` when the bubble should hide):
+`selectStatus(events)` walks the typed event log forward and returns the **current** state (or `null` when the bubble should hide):
 
 ```
               ┌──────────┐  llm.start, no tools yet
@@ -40,40 +40,40 @@ This example shows the lower-level surface. It's what `agentfootprint-lens` and 
               (null)        run done / between calls   → bubble hidden
 ```
 
-Priority resolution: pause > tool > LLM. Whichever is active when you call `selectThinkingState` wins.
+Priority resolution: pause > tool > LLM. Whichever is active when you call `selectStatus` wins.
 
 ## The renderer
 
-`renderThinkingLine(state, ctx, templates?)` resolves the template + substitutes vars:
+`renderStatusLine(state, ctx, templates?)` resolves the template + substitutes vars:
 
 ```ts
 import {
-  selectThinkingState,
-  renderThinkingLine,
-  defaultThinkingTemplates,
-  type ThinkingTemplates,
+  selectStatus,
+  renderStatusLine,
+  defaultStatusTemplates,
+  type StatusTemplates,
 } from 'agentfootprint/status';
 
-const myTemplates: ThinkingTemplates = {
-  ...defaultThinkingTemplates,
+const myTemplates: StatusTemplates = {
+  ...defaultStatusTemplates,
   idle: 'Bot is thinking…',
   'tool.weather': 'Looking up the weather…', // per-tool override
   paused: 'Waiting on you: {{question}}',
 };
 
-const state = selectThinkingState(events);
-const line = renderThinkingLine(state, { appName: 'Bot' }, myTemplates);
+const state = selectStatus(events);
+const line = renderStatusLine(state, { appName: 'Bot' }, myTemplates);
 // → 'Bot is thinking…'   (when LLM is processing without streamed tokens yet)
 // → 'Looking up the weather…'   (when the `weather` tool is active)
 ```
 
 ## Built-in template vars
 
-Filled by `selectThinkingState`:
+Filled by `selectStatus`:
 
 | Var | Filled when |
 |---|---|
-| `{{appName}}` | Always — passed via `ThinkingContext` at render time |
+| `{{appName}}` | Always — passed via `StatusContext` at render time |
 | `{{toolName}}` | `state === 'tool'` |
 | `{{toolCallId}}` | `state === 'tool'` (when the event carried an id) |
 | `{{partial}}` | `state === 'streaming'` (accumulated tokens since `llm.start`) |
@@ -81,7 +81,7 @@ Filled by `selectThinkingState`:
 
 ## Arg-aware templates (when you need `{{switchName}}`, `{{interface}}`, etc.)
 
-`selectThinkingState` does NOT surface tool args today. For arg-aware status lines (e.g., `"Reading errors on {{switchName}} {{interface}}…"`), consumers walk the raw event stream and substitute from `event.payload.args` directly. See `neo-mds-triage/web/src/components/ChatFeed.tsx::renderToolLabel` for the reference pattern: per-tool template lookup, then `for (const [k, v] of Object.entries(args))` to pull string args into the substitution map.
+`selectStatus` does NOT surface tool args today. For arg-aware status lines (e.g., `"Reading errors on {{switchName}} {{interface}}…"`), consumers walk the raw event stream and substitute from `event.payload.args` directly. See `neo-mds-triage/web/src/components/ChatFeed.tsx::renderToolLabel` for the reference pattern: per-tool template lookup, then `for (const [k, v] of Object.entries(args))` to pull string args into the substitution map.
 
 ## When to pick `'*'` vs domain wildcard
 

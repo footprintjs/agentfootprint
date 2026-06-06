@@ -25,9 +25,9 @@
 import { describe, expect, it } from 'vitest';
 import type { AgentfootprintEvent } from '../../../src/index.js';
 import {
-  defaultThinkingTemplates,
-  renderThinkingLine,
-  selectThinkingState,
+  defaultStatusTemplates,
+  renderStatusLine,
+  selectStatus,
 } from '../../../src/recorders/observability/thinking/thinkingTemplates.js';
 
 // ── Helpers ────────────────────────────────────────────────────────
@@ -49,17 +49,17 @@ function evt(type: string, payload: Record<string, unknown> = {}): Agentfootprin
 
 // ── T1: empty event log ───────────────────────────────────────────
 
-describe('selectThinkingState — T1: no events', () => {
+describe('selectStatus — T1: no events', () => {
   it('returns null when the log is empty', () => {
-    expect(selectThinkingState([])).toBeNull();
+    expect(selectStatus([])).toBeNull();
   });
 });
 
 // ── T2: llm.start, no tokens yet ──────────────────────────────────
 
-describe('selectThinkingState — T2: llm.start without tokens', () => {
+describe('selectStatus — T2: llm.start without tokens', () => {
   it('returns "idle" state', () => {
-    const out = selectThinkingState([
+    const out = selectStatus([
       evt('agentfootprint.stream.llm_start', {
         iteration: 1,
         provider: 'm',
@@ -74,9 +74,9 @@ describe('selectThinkingState — T2: llm.start without tokens', () => {
 
 // ── T3: llm.start + tokens ────────────────────────────────────────
 
-describe('selectThinkingState — T3: streaming tokens accumulate', () => {
+describe('selectStatus — T3: streaming tokens accumulate', () => {
   it('returns "streaming" with the concatenated partial', () => {
-    const out = selectThinkingState([
+    const out = selectStatus([
       evt('agentfootprint.stream.llm_start', {}),
       evt('agentfootprint.stream.token', { tokenIndex: 0, content: 'Hello ' }),
       evt('agentfootprint.stream.token', { tokenIndex: 1, content: 'there' }),
@@ -87,9 +87,9 @@ describe('selectThinkingState — T3: streaming tokens accumulate', () => {
 
 // ── T4: tool.start active ─────────────────────────────────────────
 
-describe('selectThinkingState — T4: tool active', () => {
+describe('selectStatus — T4: tool active', () => {
   it('returns "tool" with the toolName when tool.start has no matching end', () => {
-    const out = selectThinkingState([
+    const out = selectStatus([
       evt('agentfootprint.stream.llm_start', {}),
       evt('agentfootprint.stream.llm_end', {
         toolCallCount: 1,
@@ -111,9 +111,9 @@ describe('selectThinkingState — T4: tool active', () => {
 
 // ── T5: tool.end → falls back to LLM state (or null) ──────────────
 
-describe('selectThinkingState — T5: tool.end clears tool state', () => {
+describe('selectStatus — T5: tool.end clears tool state', () => {
   it('after tool.end with no further llm.start, returns null (run quiescent between calls)', () => {
-    const out = selectThinkingState([
+    const out = selectStatus([
       evt('agentfootprint.stream.llm_start', {}),
       evt('agentfootprint.stream.llm_end', {
         toolCallCount: 1,
@@ -130,9 +130,9 @@ describe('selectThinkingState — T5: tool.end clears tool state', () => {
 
 // ── T6: llm.end → null ────────────────────────────────────────────
 
-describe('selectThinkingState — T6: llm.end terminal', () => {
+describe('selectStatus — T6: llm.end terminal', () => {
   it('returns null after llm.end with no tool active', () => {
-    const out = selectThinkingState([
+    const out = selectStatus([
       evt('agentfootprint.stream.llm_start', {}),
       evt('agentfootprint.stream.llm_end', {
         toolCallCount: 0,
@@ -147,9 +147,9 @@ describe('selectThinkingState — T6: llm.end terminal', () => {
 
 // ── T7: pause overrides everything ────────────────────────────────
 
-describe('selectThinkingState — T7: pause.request active', () => {
+describe('selectStatus — T7: pause.request active', () => {
   it('returns "paused" with question even if a tool is also "active"', () => {
-    const out = selectThinkingState([
+    const out = selectStatus([
       evt('agentfootprint.stream.tool_start', {
         toolName: 'askOperator',
         toolCallId: 'c1',
@@ -168,9 +168,9 @@ describe('selectThinkingState — T7: pause.request active', () => {
 
 // ── T8: pause + resume → falls through ────────────────────────────
 
-describe('selectThinkingState — T8: pause + resume', () => {
+describe('selectStatus — T8: pause + resume', () => {
   it('after pause.resume, no longer in "paused" state', () => {
-    const out = selectThinkingState([
+    const out = selectStatus([
       evt('agentfootprint.stream.tool_start', {
         toolName: 'askOperator',
         toolCallId: 'c1',
@@ -190,14 +190,14 @@ describe('selectThinkingState — T8: pause + resume', () => {
 
 // ── T9: renderer resolves per-tool override ───────────────────────
 
-describe('renderThinkingLine — T9: per-tool template fallback', () => {
+describe('renderStatusLine — T9: per-tool template fallback', () => {
   it('prefers `tool.<name>` over generic `tool` when present', () => {
     const state = { state: 'tool' as const, toolName: 'weather', vars: { toolName: 'weather' } };
-    const line = renderThinkingLine(
+    const line = renderStatusLine(
       state,
       { appName: 'Chatbot' },
       {
-        ...defaultThinkingTemplates,
+        ...defaultStatusTemplates,
         'tool.weather': 'Looking up the weather…',
       },
     );
@@ -206,32 +206,32 @@ describe('renderThinkingLine — T9: per-tool template fallback', () => {
 
   it('falls back to generic `tool` when no per-tool key exists', () => {
     const state = { state: 'tool' as const, toolName: 'unknown', vars: { toolName: 'unknown' } };
-    const line = renderThinkingLine(state, { appName: 'Chatbot' }, defaultThinkingTemplates);
+    const line = renderStatusLine(state, { appName: 'Chatbot' }, defaultStatusTemplates);
     expect(line).toBe('Working on `unknown`…');
   });
 });
 
 // ── Renderer: substitution + null contract ─────────────────────────
 
-describe('renderThinkingLine — substitution + null contract', () => {
+describe('renderStatusLine — substitution + null contract', () => {
   it('substitutes appName and partial in streaming template', () => {
     const state = { state: 'streaming' as const, vars: { partial: 'Hello' } };
-    const line = renderThinkingLine(state, { appName: 'Chatbot' }, defaultThinkingTemplates);
+    const line = renderStatusLine(state, { appName: 'Chatbot' }, defaultStatusTemplates);
     expect(line).toBe('Hello');
   });
 
   it('returns null when state is null (no-op for the chat bubble)', () => {
-    const line = renderThinkingLine(null, { appName: 'Chatbot' });
+    const line = renderStatusLine(null, { appName: 'Chatbot' });
     expect(line).toBeNull();
   });
 
   it('consumer can override defaults — full Spanish swap', () => {
     const state = { state: 'idle' as const, vars: {} };
-    const line = renderThinkingLine(
+    const line = renderStatusLine(
       state,
       { appName: 'Chatbot' },
       {
-        ...defaultThinkingTemplates,
+        ...defaultStatusTemplates,
         idle: 'Pensando…',
       },
     );

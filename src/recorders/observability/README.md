@@ -6,7 +6,7 @@ The opt-in observability layer. Each file is ONE feature consumers enable in one
 
 ```
 recorders/observability/
-├── ThinkingRecorder.ts   live-status helper (attachThinking) behind enable.liveStatus
+├── StatusRecorder.ts   live-status helper (attachStatus) behind enable.liveStatus
 ├── LoggingRecorder.ts    structured-logging helper (attachLogging) behind enable.observability
 ├── BoundaryRecorder.ts   unified domain event log (run / subflow / llm / tool / context)
 ├── FlowchartRecorder.ts  StepGraph projection for Lens UI
@@ -59,7 +59,7 @@ The `Runner` interface exposes an `enable` namespace. Each feature has a single 
 ```typescript
 // Runner.enable namespace — types declared in src/core/runner.ts
 interface EnableNamespace {
-  thinking(opts: ThinkingOptions): Unsubscribe;
+  thinking(opts: StatusOptions): Unsubscribe;
   logging(opts?: LoggingOptions): Unsubscribe;
   // Phase 5:
   // lens(opts): Unsubscribe;
@@ -93,7 +93,7 @@ Every feature accepts an optional `format?: (event) => string | null` callback. 
 
 ### `enable.liveStatus({ strategy })` (e.g. `chatBubbleLiveStatus({ onLine, format? })`)
 
-Claude-Code-style live status line. Fires `onLine(string)` at each meaningful moment (turn start, iteration start, tool calls, route decision, done). Default renderer produces human-readable strings; override via `format`. The low-level `attachThinking(dispatcher, …)` helper (this folder) backs it.
+Claude-Code-style live status line. Fires `onLine(string)` at each meaningful moment (turn start, iteration start, tool calls, route decision, done). Default renderer produces human-readable strings; override via `format`. The low-level `attachStatus(dispatcher, …)` helper (this folder) backs it.
 
 ### `enable.observability({ strategy })` (e.g. `consoleObservability({ logger?, format? })`)
 

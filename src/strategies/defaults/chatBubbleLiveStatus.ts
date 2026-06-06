@@ -26,10 +26,10 @@ export interface ChatBubbleLiveStatusOptions {
    * whose job is "show this line in the chat bubble."
    *
    * NOTE: this is INTENTIONALLY the only callback. If you need access
-   * to the underlying `ThinkingState` (for color-per-state, animation
+   * to the underlying `StatusState` (for color-per-state, animation
    * triggers, etc.), build your own `LiveStatusStrategy` directly OR
    * use `compose([chatBubbleLiveStatus({onLine}), customStrategy])`.
-   * We don't surface `ThinkingState` here because it's an INTERNAL
+   * We don't surface `StatusState` here because it's an INTERNAL
    * shape — exposing it would couple consumer UIs to changes in the
    * state machine.
    */

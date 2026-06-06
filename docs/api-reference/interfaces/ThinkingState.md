@@ -2,9 +2,9 @@
 
 ***
 
-[agentfootprint](/agentfootprint/api/generated/README.md) / ThinkingState
+[agentfootprint](/agentfootprint/api/generated/README.md) / StatusState
 
-# Interface: ThinkingState
+# Interface: StatusState
 
 Defined in: [src/recorders/observability/thinking/thinkingTemplates.ts:53](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/thinking/thinkingTemplates.ts#L53)
 
@@ -15,7 +15,7 @@ the renderer to get the final string.
 
 ### state
 
-> `readonly` **state**: [`ThinkingStateKind`](/agentfootprint/api/generated/type-aliases/ThinkingStateKind.md)
+> `readonly` **state**: [`StatusKind`](/agentfootprint/api/generated/type-aliases/StatusKind.md)
 
 Defined in: [src/recorders/observability/thinking/thinkingTemplates.ts:54](https://github.com/footprintjs/agentfootprint/blob/4291689137009e2faa45aef8799595736047b70f/src/recorders/observability/thinking/thinkingTemplates.ts#L54)
 
