@@ -53,7 +53,9 @@ export function defineInjection(opts: DefineInjectionOptions): Injection {
     default: {
       const exhaustive: never = opts;
       throw new Error(
-        `defineInjection: unknown injection type "${String((exhaustive as { type?: unknown }).type)}".`,
+        `defineInjection: unknown injection type "${String(
+          (exhaustive as { type?: unknown }).type,
+        )}".`,
       );
     }
   }

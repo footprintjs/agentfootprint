@@ -170,7 +170,10 @@ export {
 // recorders) are built from — attachFlowchart, buildStepGraph, BoundaryRecorder,
 // liveStateRecorder, the RunStep* family, attachLogging, attachStatus — now
 // lives ONLY under `agentfootprint/observe`.
-export type { FlowchartHandle, FlowchartOptions } from './recorders/observability/FlowchartRecorder.js';
+export type {
+  FlowchartHandle,
+  FlowchartOptions,
+} from './recorders/observability/FlowchartRecorder.js';
 
 // Commentary — bundled prose templates + engine for narrating a run.
 // Consumers ship their own JSON locale / brand voice via the same

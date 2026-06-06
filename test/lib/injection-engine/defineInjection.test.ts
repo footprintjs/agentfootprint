@@ -43,10 +43,14 @@ describe('defineInjection — Unit: equivalence to named factories', () => {
 
 describe('defineInjection — Functional: flavor tagging', () => {
   it('tags each flavor correctly', () => {
-    expect(defineInjection({ type: 'instruction', id: 'a', prompt: 'x' }).flavor).toBe('instructions');
+    expect(defineInjection({ type: 'instruction', id: 'a', prompt: 'x' }).flavor).toBe(
+      'instructions',
+    );
     expect(defineInjection({ type: 'steering', id: 'b', prompt: 'x' }).flavor).toBe('steering');
     expect(defineInjection({ type: 'fact', id: 'c', data: 'x' }).flavor).toBe('fact');
-    expect(defineInjection({ type: 'skill', id: 'd', description: 'x', body: 'y' }).flavor).toBe('skill');
+    expect(defineInjection({ type: 'skill', id: 'd', description: 'x', body: 'y' }).flavor).toBe(
+      'skill',
+    );
   });
 
   it('returns a frozen Injection', () => {
@@ -71,7 +75,9 @@ describe('defineInjection — Property: programmatic flavor selection', () => {
     ];
     for (const c of cases) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      expect(defineInjection({ type: c.type, ...(c.opts as any) })).toEqual((c.named as any)(c.opts));
+      expect(defineInjection({ type: c.type, ...(c.opts as any) })).toEqual(
+        (c.named as any)(c.opts),
+      );
     }
   });
 });

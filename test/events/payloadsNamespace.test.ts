@@ -19,7 +19,11 @@ describe('Payloads namespace', () => {
   it('a payload shape is reachable via the Payloads namespace (type-level)', () => {
     // Type-level usage — if `Payloads.AgentIterationEndPayload` did not resolve,
     // the build's tsc pass would fail. Runtime value is irrelevant (type-only).
-    const sample = { turnIndex: 0, iterIndex: 0, toolCallCount: 0 } as Payloads.AgentIterationEndPayload;
+    const sample = {
+      turnIndex: 0,
+      iterIndex: 0,
+      toolCallCount: 0,
+    } as Payloads.AgentIterationEndPayload;
     expect(sample).toBeTruthy();
   });
 });
