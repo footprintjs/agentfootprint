@@ -240,14 +240,12 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
   /** Per-COMPOSITION translator (L1b). Set from `opts.groupTranslator`;
    *  undefined when consumer didn't attach one. */
   private readonly agentGroupTranslator?: import('./translator.js').GroupTranslator;
-  /** ReAct chart shape — 'flat' (default, bare call-llm stage) or
-   *  'subflow' (LLM turn wrapped in sf-llm-call). Set from
-   *  `opts.reactStructure`. */
-  private readonly reactStructure: 'flat' | 'subflow';
-  /** ReAct loop SEMANTICS — 'dynamic' (default, re-engineer all slots each
-   *  turn, loop→InjectionEngine) or 'classic' (engineer context once,
-   *  loop→Messages only). Set from `opts.reactMode`. See AgentOptions. */
-  private readonly reactMode: 'classic' | 'dynamic';
+  /** ReAct loop mode — 'dynamic' (default, re-engineer all slots each turn,
+   *  flat chart), 'classic' (engineer context once, loop→Messages only, flat
+   *  chart), or 'dynamic-grouped' (dynamic semantics + LLM turn wrapped in an
+   *  sf-llm-call subflow for richer Lens grouping). Set from `opts.reactMode`.
+   *  See AgentOptions. */
+  private readonly reactMode: 'classic' | 'dynamic' | 'dynamic-grouped';
 
   constructor(
     opts: AgentOptions,
@@ -280,7 +278,6 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     this.maxIterations = clampIterations(opts.maxIterations ?? 10);
     this.structureRecorders = opts.structureRecorders;
     this.agentGroupTranslator = opts.groupTranslator;
-    this.reactStructure = opts.reactStructure ?? 'flat';
     this.reactMode = opts.reactMode ?? 'dynamic';
     this.systemPromptValue = systemPromptValue;
     this.systemPromptCachePolicy = systemPromptCachePolicy;
@@ -933,23 +930,21 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       // Gate the UpdateSkillHistory stage on skills being registered —
       // same idiom buildToolRegistry uses to auto-attach `read_skill`.
       hasSkills: this.injections.some((i) => i.flavor === 'skill'),
-      reactMode: this.reactMode,
+      // Builders only branch on classic-vs-dynamic SEMANTICS; the grouped
+      // chart shape is selected below by choosing buildDynamicAgentChart.
+      reactMode: (this.reactMode === 'classic' ? 'classic' : 'dynamic') as 'classic' | 'dynamic',
       ...(this.structureRecorders !== undefined && {
         structureRecorders: [...this.structureRecorders],
       }),
     };
 
-    // `reactMode: 'classic'` engineers context ONCE and loops only Messages —
-    // it uses the flat builder's classic path (the subflow grouping is
-    // dynamic-only for now), so it takes precedence over reactStructure.
-    if (this.reactMode === 'classic') {
-      return buildAgentChart(chartDeps);
-    }
-    // `reactStructure: 'subflow'` (opt-in) wraps the LLM turn in an
-    // `sf-llm-call` subflow — same boundary LLMCall produces — so Lens /
-    // explainable-ui render it as an LLM group with slots inside. Default
-    // `'flat'` keeps the historical bare-stage shape. Behaviour identical.
-    return this.reactStructure === 'subflow'
+    // `'dynamic-grouped'` wraps the whole LLM turn in an `sf-llm-call` subflow —
+    // the same boundary LLMCall produces — so Lens / explainable-ui render it as
+    // an LLM group with its slots inside. `'classic'` and `'dynamic'` use the
+    // flat chart; they differ only in `chartDeps.reactMode` (whether the Context
+    // selector re-engineers the static slots each turn). Grouping is dynamic-only
+    // (it re-seeds context every turn by design), so there is no classic-grouped.
+    return this.reactMode === 'dynamic-grouped'
       ? buildDynamicAgentChart(chartDeps)
       : buildAgentChart(chartDeps);
   }

@@ -61,7 +61,7 @@
  */
 
 import { defaultCommentaryTemplates } from '../recorders/observability/commentary/commentaryTemplates.js';
-import { defaultStatusTemplates } from '../recorders/observability/thinking/thinkingTemplates.js';
+import { defaultStatusTemplates } from '../recorders/observability/status/statusTemplates.js';
 
 export type { CommentaryTemplates as MessageCatalog } from '../recorders/observability/commentary/commentaryTemplates.js';
 

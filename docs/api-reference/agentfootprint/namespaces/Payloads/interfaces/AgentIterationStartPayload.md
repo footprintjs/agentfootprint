@@ -6,7 +6,7 @@
 
 # Interface: AgentIterationStartPayload
 
-Defined in: [src/events/payloads.ts:111](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/events/payloads.ts#L111)
+Defined in: [src/events/payloads.ts:111](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/events/payloads.ts#L111)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [src/events/payloads.ts:111](https://github.com/footprintjs/agentfoo
 
 > `readonly` **iterIndex**: `number`
 
-Defined in: [src/events/payloads.ts:113](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/events/payloads.ts#L113)
+Defined in: [src/events/payloads.ts:113](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/events/payloads.ts#L113)
 
 ***
 
@@ -22,4 +22,4 @@ Defined in: [src/events/payloads.ts:113](https://github.com/footprintjs/agentfoo
 
 > `readonly` **turnIndex**: `number`
 
-Defined in: [src/events/payloads.ts:112](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/events/payloads.ts#L112)
+Defined in: [src/events/payloads.ts:112](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/events/payloads.ts#L112)

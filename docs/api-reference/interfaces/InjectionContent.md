@@ -6,7 +6,7 @@
 
 # Interface: InjectionContent
 
-Defined in: [src/lib/injection-engine/types.ts:61](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/lib/injection-engine/types.ts#L61)
+Defined in: [src/lib/injection-engine/types.ts:61](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/lib/injection-engine/types.ts#L61)
 
 Multi-slot per Injection. A Skill for example targets BOTH
 system-prompt (the body) AND tools (the unlocked capabilities)
@@ -19,7 +19,7 @@ each slot it lands in.
 
 > `readonly` `optional` **messages?**: readonly `object`[]
 
-Defined in: [src/lib/injection-engine/types.ts:65](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/lib/injection-engine/types.ts#L65)
+Defined in: [src/lib/injection-engine/types.ts:65](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/lib/injection-engine/types.ts#L65)
 
 Messages prepended to the messages slot when active.
 
@@ -29,7 +29,7 @@ Messages prepended to the messages slot when active.
 
 > `readonly` `optional` **systemPrompt?**: `string`
 
-Defined in: [src/lib/injection-engine/types.ts:63](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/lib/injection-engine/types.ts#L63)
+Defined in: [src/lib/injection-engine/types.ts:63](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/lib/injection-engine/types.ts#L63)
 
 Text appended to the system-prompt slot when active.
 
@@ -39,6 +39,6 @@ Text appended to the system-prompt slot when active.
 
 > `readonly` `optional` **tools?**: readonly [`Tool`](/agentfootprint/api/generated/interfaces/Tool.md)\<`Record`\<`string`, `unknown`\>, `unknown`\>[]
 
-Defined in: [src/lib/injection-engine/types.ts:70](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/lib/injection-engine/types.ts#L70)
+Defined in: [src/lib/injection-engine/types.ts:70](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/lib/injection-engine/types.ts#L70)
 
 Tools added to the tools slot when active.

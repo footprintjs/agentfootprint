@@ -6,7 +6,7 @@
 
 # Interface: DefineFactOptions
 
-Defined in: [src/lib/injection-engine/factories/defineFact.ts:34](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/lib/injection-engine/factories/defineFact.ts#L34)
+Defined in: [src/lib/injection-engine/factories/defineFact.ts:34](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/lib/injection-engine/factories/defineFact.ts#L34)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [src/lib/injection-engine/factories/defineFact.ts:34](https://github
 
 > `readonly` `optional` **activeWhen?**: (`ctx`) => `boolean`
 
-Defined in: [src/lib/injection-engine/factories/defineFact.ts:53](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/lib/injection-engine/factories/defineFact.ts#L53)
+Defined in: [src/lib/injection-engine/factories/defineFact.ts:53](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/lib/injection-engine/factories/defineFact.ts#L53)
 
 Trigger control. Defaults to always-on. For conditional facts
 (e.g., "only show user profile after iteration 3"), pass a
@@ -36,7 +36,7 @@ predicate via `activeWhen`.
 
 > `readonly` `optional` **cache?**: `CachePolicy`
 
-Defined in: [src/lib/injection-engine/factories/defineFact.ts:61](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/lib/injection-engine/factories/defineFact.ts#L61)
+Defined in: [src/lib/injection-engine/factories/defineFact.ts:61](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/lib/injection-engine/factories/defineFact.ts#L61)
 
 Cache policy for this fact injection. Defaults to `'always'` —
 facts are typically static data the LLM should always have in mind.
@@ -50,7 +50,7 @@ facts.
 
 > `readonly` **data**: `string`
 
-Defined in: [src/lib/injection-engine/factories/defineFact.ts:38](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/lib/injection-engine/factories/defineFact.ts#L38)
+Defined in: [src/lib/injection-engine/factories/defineFact.ts:38](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/lib/injection-engine/factories/defineFact.ts#L38)
 
 The fact (data string) to inject.
 
@@ -60,7 +60,7 @@ The fact (data string) to inject.
 
 > `readonly` `optional` **description?**: `string`
 
-Defined in: [src/lib/injection-engine/factories/defineFact.ts:36](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/lib/injection-engine/factories/defineFact.ts#L36)
+Defined in: [src/lib/injection-engine/factories/defineFact.ts:36](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/lib/injection-engine/factories/defineFact.ts#L36)
 
 ***
 
@@ -68,7 +68,7 @@ Defined in: [src/lib/injection-engine/factories/defineFact.ts:36](https://github
 
 > `readonly` **id**: `string`
 
-Defined in: [src/lib/injection-engine/factories/defineFact.ts:35](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/lib/injection-engine/factories/defineFact.ts#L35)
+Defined in: [src/lib/injection-engine/factories/defineFact.ts:35](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/lib/injection-engine/factories/defineFact.ts#L35)
 
 ***
 
@@ -76,7 +76,7 @@ Defined in: [src/lib/injection-engine/factories/defineFact.ts:35](https://github
 
 > `readonly` `optional` **role?**: [`ContextRole`](/agentfootprint/api/generated/type-aliases/ContextRole.md)
 
-Defined in: [src/lib/injection-engine/factories/defineFact.ts:47](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/lib/injection-engine/factories/defineFact.ts#L47)
+Defined in: [src/lib/injection-engine/factories/defineFact.ts:47](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/lib/injection-engine/factories/defineFact.ts#L47)
 
 When `slot: 'messages'`, the role to use. Default `'system'`.
 
@@ -86,7 +86,7 @@ When `slot: 'messages'`, the role to use. Default `'system'`.
 
 > `readonly` `optional` **slot?**: `"system-prompt"` \| `"messages"`
 
-Defined in: [src/lib/injection-engine/factories/defineFact.ts:45](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/lib/injection-engine/factories/defineFact.ts#L45)
+Defined in: [src/lib/injection-engine/factories/defineFact.ts:45](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/lib/injection-engine/factories/defineFact.ts#L45)
 
 Which slot to land in. Default `'system-prompt'` (most common —
 facts the model should always have in mind).

@@ -6,7 +6,7 @@
 
 # Interface: ToolsDiscoveryCompletedPayload
 
-Defined in: [src/events/payloads.ts:368](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/events/payloads.ts#L368)
+Defined in: [src/events/payloads.ts:368](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/events/payloads.ts#L368)
 
 Emitted when `ToolProvider.list(ctx)` resolves successfully. The
 `durationMs` is the wall-clock between `tools.discovery_started` and
@@ -20,7 +20,7 @@ this is your observability hook for catalog-fetch latency.
 
 > `readonly` **durationMs**: `number`
 
-Defined in: [src/events/payloads.ts:371](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/events/payloads.ts#L371)
+Defined in: [src/events/payloads.ts:371](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/events/payloads.ts#L371)
 
 ***
 
@@ -28,7 +28,7 @@ Defined in: [src/events/payloads.ts:371](https://github.com/footprintjs/agentfoo
 
 > `readonly` **iteration**: `number`
 
-Defined in: [src/events/payloads.ts:370](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/events/payloads.ts#L370)
+Defined in: [src/events/payloads.ts:370](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/events/payloads.ts#L370)
 
 ***
 
@@ -36,7 +36,7 @@ Defined in: [src/events/payloads.ts:370](https://github.com/footprintjs/agentfoo
 
 > `readonly` **providerId**: `string` \| `undefined`
 
-Defined in: [src/events/payloads.ts:369](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/events/payloads.ts#L369)
+Defined in: [src/events/payloads.ts:369](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/events/payloads.ts#L369)
 
 ***
 
@@ -44,4 +44,4 @@ Defined in: [src/events/payloads.ts:369](https://github.com/footprintjs/agentfoo
 
 > `readonly` **toolCount**: `number`
 
-Defined in: [src/events/payloads.ts:372](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/events/payloads.ts#L372)
+Defined in: [src/events/payloads.ts:372](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/events/payloads.ts#L372)

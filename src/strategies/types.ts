@@ -35,7 +35,7 @@
 
 import type { AgentfootprintEvent, AgentfootprintEventType } from '../events/registry.js';
 import type { StepGraph } from '../recorders/observability/FlowchartRecorder.js';
-import type { StatusState } from '../recorders/observability/thinking/thinkingTemplates.js';
+import type { StatusState } from '../recorders/observability/status/statusTemplates.js';
 
 // ─── Shared shape every strategy implements ──────────────────────────
 

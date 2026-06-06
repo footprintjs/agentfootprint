@@ -6,7 +6,7 @@
 
 # Interface: BrowserOpenAIProviderOptions
 
-Defined in: [src/adapters/llm/BrowserOpenAIProvider.ts:97](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/adapters/llm/BrowserOpenAIProvider.ts#L97)
+Defined in: [src/adapters/llm/BrowserOpenAIProvider.ts:97](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/adapters/llm/BrowserOpenAIProvider.ts#L97)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [src/adapters/llm/BrowserOpenAIProvider.ts:97](https://github.com/fo
 
 > `readonly` **apiKey**: `string`
 
-Defined in: [src/adapters/llm/BrowserOpenAIProvider.ts:99](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/adapters/llm/BrowserOpenAIProvider.ts#L99)
+Defined in: [src/adapters/llm/BrowserOpenAIProvider.ts:99](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/adapters/llm/BrowserOpenAIProvider.ts#L99)
 
 API key. REQUIRED.
 
@@ -24,7 +24,7 @@ API key. REQUIRED.
 
 > `readonly` `optional` **apiUrl?**: `string`
 
-Defined in: [src/adapters/llm/BrowserOpenAIProvider.ts:105](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/adapters/llm/BrowserOpenAIProvider.ts#L105)
+Defined in: [src/adapters/llm/BrowserOpenAIProvider.ts:105](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/adapters/llm/BrowserOpenAIProvider.ts#L105)
 
 Override the API URL (Ollama, Together, vLLM, OpenAI proxies).
 
@@ -34,7 +34,7 @@ Override the API URL (Ollama, Together, vLLM, OpenAI proxies).
 
 > `readonly` `optional` **defaultMaxTokens?**: `number`
 
-Defined in: [src/adapters/llm/BrowserOpenAIProvider.ts:103](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/adapters/llm/BrowserOpenAIProvider.ts#L103)
+Defined in: [src/adapters/llm/BrowserOpenAIProvider.ts:103](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/adapters/llm/BrowserOpenAIProvider.ts#L103)
 
 Default max tokens.
 
@@ -44,7 +44,7 @@ Default max tokens.
 
 > `readonly` `optional` **defaultModel?**: `string`
 
-Defined in: [src/adapters/llm/BrowserOpenAIProvider.ts:101](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/adapters/llm/BrowserOpenAIProvider.ts#L101)
+Defined in: [src/adapters/llm/BrowserOpenAIProvider.ts:101](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/adapters/llm/BrowserOpenAIProvider.ts#L101)
 
 Default model when `LLMRequest.model` is `'openai'`.
 
@@ -54,6 +54,6 @@ Default model when `LLMRequest.model` is `'openai'`.
 
 > `readonly` `optional` **organization?**: `string`
 
-Defined in: [src/adapters/llm/BrowserOpenAIProvider.ts:107](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/adapters/llm/BrowserOpenAIProvider.ts#L107)
+Defined in: [src/adapters/llm/BrowserOpenAIProvider.ts:107](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/adapters/llm/BrowserOpenAIProvider.ts#L107)
 
 Optional `Organization` header.

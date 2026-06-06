@@ -37,7 +37,7 @@ import {
   renderStatusLine,
   defaultStatusTemplates,
   type StatusTemplates,
-} from '../recorders/observability/thinking/thinkingTemplates.js';
+} from '../recorders/observability/status/statusTemplates.js';
 // Registry-lookup helpers (`getObservabilityStrategy` etc.) are
 // defined in `./registry.js` and used by consumers via the
 // `enable.*({ vendor, config })` path elsewhere — not used in the

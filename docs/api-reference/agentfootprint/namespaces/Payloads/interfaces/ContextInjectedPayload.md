@@ -6,7 +6,7 @@
 
 # Interface: ContextInjectedPayload
 
-Defined in: [src/events/payloads.ts:193](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/events/payloads.ts#L193)
+Defined in: [src/events/payloads.ts:193](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/events/payloads.ts#L193)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [src/events/payloads.ts:193](https://github.com/footprintjs/agentfoo
 
 > `readonly` `optional` **asRecency?**: [`ContextRecency`](/agentfootprint/api/generated/type-aliases/ContextRecency.md)
 
-Defined in: [src/events/payloads.ts:199](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/events/payloads.ts#L199)
+Defined in: [src/events/payloads.ts:199](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/events/payloads.ts#L199)
 
 ***
 
@@ -22,7 +22,7 @@ Defined in: [src/events/payloads.ts:199](https://github.com/footprintjs/agentfoo
 
 > `readonly` `optional` **asRole?**: [`ContextRole`](/agentfootprint/api/generated/type-aliases/ContextRole.md)
 
-Defined in: [src/events/payloads.ts:198](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/events/payloads.ts#L198)
+Defined in: [src/events/payloads.ts:198](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/events/payloads.ts#L198)
 
 ***
 
@@ -30,7 +30,7 @@ Defined in: [src/events/payloads.ts:198](https://github.com/footprintjs/agentfoo
 
 > `readonly` `optional` **budgetSpent?**: `object`
 
-Defined in: [src/events/payloads.ts:209](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/events/payloads.ts#L209)
+Defined in: [src/events/payloads.ts:209](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/events/payloads.ts#L209)
 
 #### fractionOfCap
 
@@ -46,7 +46,7 @@ Defined in: [src/events/payloads.ts:209](https://github.com/footprintjs/agentfoo
 
 > `readonly` **contentHash**: `string`
 
-Defined in: [src/events/payloads.ts:195](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/events/payloads.ts#L195)
+Defined in: [src/events/payloads.ts:195](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/events/payloads.ts#L195)
 
 ***
 
@@ -54,7 +54,7 @@ Defined in: [src/events/payloads.ts:195](https://github.com/footprintjs/agentfoo
 
 > `readonly` **contentSummary**: `string`
 
-Defined in: [src/events/payloads.ts:194](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/events/payloads.ts#L194)
+Defined in: [src/events/payloads.ts:194](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/events/payloads.ts#L194)
 
 ***
 
@@ -62,7 +62,7 @@ Defined in: [src/events/payloads.ts:194](https://github.com/footprintjs/agentfoo
 
 > `readonly` `optional` **expiresAfter?**: [`ContextLifetime`](/agentfootprint/api/generated/type-aliases/ContextLifetime.md)
 
-Defined in: [src/events/payloads.ts:210](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/events/payloads.ts#L210)
+Defined in: [src/events/payloads.ts:210](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/events/payloads.ts#L210)
 
 ***
 
@@ -70,7 +70,7 @@ Defined in: [src/events/payloads.ts:210](https://github.com/footprintjs/agentfoo
 
 > `readonly` `optional` **position?**: `number`
 
-Defined in: [src/events/payloads.ts:200](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/events/payloads.ts#L200)
+Defined in: [src/events/payloads.ts:200](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/events/payloads.ts#L200)
 
 ***
 
@@ -78,7 +78,7 @@ Defined in: [src/events/payloads.ts:200](https://github.com/footprintjs/agentfoo
 
 > `readonly` `optional` **rankPosition?**: `number`
 
-Defined in: [src/events/payloads.ts:207](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/events/payloads.ts#L207)
+Defined in: [src/events/payloads.ts:207](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/events/payloads.ts#L207)
 
 ***
 
@@ -86,7 +86,7 @@ Defined in: [src/events/payloads.ts:207](https://github.com/footprintjs/agentfoo
 
 > `readonly` `optional` **rawContent?**: `string`
 
-Defined in: [src/events/payloads.ts:196](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/events/payloads.ts#L196)
+Defined in: [src/events/payloads.ts:196](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/events/payloads.ts#L196)
 
 ***
 
@@ -94,7 +94,7 @@ Defined in: [src/events/payloads.ts:196](https://github.com/footprintjs/agentfoo
 
 > `readonly` **reason**: `string`
 
-Defined in: [src/events/payloads.ts:205](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/events/payloads.ts#L205)
+Defined in: [src/events/payloads.ts:205](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/events/payloads.ts#L205)
 
 ***
 
@@ -102,7 +102,7 @@ Defined in: [src/events/payloads.ts:205](https://github.com/footprintjs/agentfoo
 
 > `readonly` `optional` **retrievalScore?**: `number`
 
-Defined in: [src/events/payloads.ts:206](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/events/payloads.ts#L206)
+Defined in: [src/events/payloads.ts:206](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/events/payloads.ts#L206)
 
 ***
 
@@ -110,7 +110,7 @@ Defined in: [src/events/payloads.ts:206](https://github.com/footprintjs/agentfoo
 
 > `readonly` `optional` **sectionTag?**: `string`
 
-Defined in: [src/events/payloads.ts:201](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/events/payloads.ts#L201)
+Defined in: [src/events/payloads.ts:201](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/events/payloads.ts#L201)
 
 ***
 
@@ -118,7 +118,7 @@ Defined in: [src/events/payloads.ts:201](https://github.com/footprintjs/agentfoo
 
 > `readonly` **slot**: [`ContextSlot`](/agentfootprint/api/generated/type-aliases/ContextSlot.md)
 
-Defined in: [src/events/payloads.ts:197](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/events/payloads.ts#L197)
+Defined in: [src/events/payloads.ts:197](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/events/payloads.ts#L197)
 
 ***
 
@@ -126,7 +126,7 @@ Defined in: [src/events/payloads.ts:197](https://github.com/footprintjs/agentfoo
 
 > `readonly` **source**: [`ContextSource`](/agentfootprint/api/generated/type-aliases/ContextSource.md)
 
-Defined in: [src/events/payloads.ts:202](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/events/payloads.ts#L202)
+Defined in: [src/events/payloads.ts:202](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/events/payloads.ts#L202)
 
 ***
 
@@ -134,7 +134,7 @@ Defined in: [src/events/payloads.ts:202](https://github.com/footprintjs/agentfoo
 
 > `readonly` `optional` **sourceId?**: `string`
 
-Defined in: [src/events/payloads.ts:203](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/events/payloads.ts#L203)
+Defined in: [src/events/payloads.ts:203](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/events/payloads.ts#L203)
 
 ***
 
@@ -142,7 +142,7 @@ Defined in: [src/events/payloads.ts:203](https://github.com/footprintjs/agentfoo
 
 > `readonly` `optional` **threshold?**: `number`
 
-Defined in: [src/events/payloads.ts:208](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/events/payloads.ts#L208)
+Defined in: [src/events/payloads.ts:208](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/events/payloads.ts#L208)
 
 ***
 
@@ -150,4 +150,4 @@ Defined in: [src/events/payloads.ts:208](https://github.com/footprintjs/agentfoo
 
 > `readonly` `optional` **upstreamRef?**: `string`
 
-Defined in: [src/events/payloads.ts:204](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/events/payloads.ts#L204)
+Defined in: [src/events/payloads.ts:204](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/events/payloads.ts#L204)

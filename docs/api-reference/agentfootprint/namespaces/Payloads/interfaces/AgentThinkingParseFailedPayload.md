@@ -6,7 +6,7 @@
 
 # Interface: AgentThinkingParseFailedPayload
 
-Defined in: [src/events/payloads.ts:757](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/events/payloads.ts#L757)
+Defined in: [src/events/payloads.ts:757](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/events/payloads.ts#L757)
 
 Emitted (v2.14) when a `ThinkingHandler.normalize()` call throws.
 The framework catches the throw, drops the thinking blocks (they
@@ -30,7 +30,7 @@ the consumer expected to be redacted. Same guidance as
 
 > `readonly` **error**: `string`
 
-Defined in: [src/events/payloads.ts:760](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/events/payloads.ts#L760)
+Defined in: [src/events/payloads.ts:760](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/events/payloads.ts#L760)
 
 ***
 
@@ -38,7 +38,7 @@ Defined in: [src/events/payloads.ts:760](https://github.com/footprintjs/agentfoo
 
 > `readonly` **errorName**: `string`
 
-Defined in: [src/events/payloads.ts:761](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/events/payloads.ts#L761)
+Defined in: [src/events/payloads.ts:761](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/events/payloads.ts#L761)
 
 ***
 
@@ -46,7 +46,7 @@ Defined in: [src/events/payloads.ts:761](https://github.com/footprintjs/agentfoo
 
 > `readonly` **iteration**: `number`
 
-Defined in: [src/events/payloads.ts:762](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/events/payloads.ts#L762)
+Defined in: [src/events/payloads.ts:762](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/events/payloads.ts#L762)
 
 ***
 
@@ -54,7 +54,7 @@ Defined in: [src/events/payloads.ts:762](https://github.com/footprintjs/agentfoo
 
 > `readonly` **providerName**: `string`
 
-Defined in: [src/events/payloads.ts:758](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/events/payloads.ts#L758)
+Defined in: [src/events/payloads.ts:758](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/events/payloads.ts#L758)
 
 ***
 
@@ -62,4 +62,4 @@ Defined in: [src/events/payloads.ts:758](https://github.com/footprintjs/agentfoo
 
 > `readonly` **subflowId**: `string`
 
-Defined in: [src/events/payloads.ts:759](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/events/payloads.ts#L759)
+Defined in: [src/events/payloads.ts:759](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/events/payloads.ts#L759)

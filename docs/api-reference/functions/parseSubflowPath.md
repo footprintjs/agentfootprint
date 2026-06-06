@@ -8,7 +8,7 @@
 
 > **parseSubflowPath**(`raw`): readonly `string`[]
 
-Defined in: [src/bridge/eventMeta.ts:97](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/bridge/eventMeta.ts#L97)
+Defined in: [src/bridge/eventMeta.ts:97](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/bridge/eventMeta.ts#L97)
 
 Parse footprintjs's `/`-separated subflow path into a readonly array.
 

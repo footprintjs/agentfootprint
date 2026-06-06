@@ -6,7 +6,7 @@
 
 # Class: InMemoryStore
 
-Defined in: [src/memory/store/InMemoryStore.ts:38](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/memory/store/InMemoryStore.ts#L38)
+Defined in: [src/memory/store/InMemoryStore.ts:38](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/memory/store/InMemoryStore.ts#L38)
 
 ## Implements
 
@@ -28,7 +28,7 @@ Defined in: [src/memory/store/InMemoryStore.ts:38](https://github.com/footprintj
 
 > **delete**(`identity`, `id`): `Promise`\<`void`\>
 
-Defined in: [src/memory/store/InMemoryStore.ts:160](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/memory/store/InMemoryStore.ts#L160)
+Defined in: [src/memory/store/InMemoryStore.ts:160](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/memory/store/InMemoryStore.ts#L160)
 
 Remove one entry. No-op if the entry doesn't exist.
 
@@ -56,7 +56,7 @@ Remove one entry. No-op if the entry doesn't exist.
 
 > **feedback**(`identity`, `id`, `usefulness`): `Promise`\<`void`\>
 
-Defined in: [src/memory/store/InMemoryStore.ts:176](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/memory/store/InMemoryStore.ts#L176)
+Defined in: [src/memory/store/InMemoryStore.ts:176](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/memory/store/InMemoryStore.ts#L176)
 
 Record usefulness feedback for an entry. `usefulness` in `[-1, 1]`:
   -1 = retrieved but harmful / misleading
@@ -95,7 +95,7 @@ they poison the aggregate. Caller should pass a finite number in
 
 > **forget**(`identity`): `Promise`\<`void`\>
 
-Defined in: [src/memory/store/InMemoryStore.ts:203](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/memory/store/InMemoryStore.ts#L203)
+Defined in: [src/memory/store/InMemoryStore.ts:203](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/memory/store/InMemoryStore.ts#L203)
 
 GDPR — remove ALL entries for the given identity.
 Must be implementable in one operation per backend (DELETE WHERE prefix).
@@ -120,7 +120,7 @@ Must be implementable in one operation per backend (DELETE WHERE prefix).
 
 > **get**\<`T`\>(`identity`, `id`): `Promise`\<`MemoryEntry`\<`T`\> \| `null`\>
 
-Defined in: [src/memory/store/InMemoryStore.ts:65](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/memory/store/InMemoryStore.ts#L65)
+Defined in: [src/memory/store/InMemoryStore.ts:65](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/memory/store/InMemoryStore.ts#L65)
 
 Fetch one entry by id within the given identity's namespace.
 Returns `null` when the entry doesn't exist OR has expired (TTL).
@@ -159,7 +159,7 @@ Side effect: adapters MAY increment `accessCount` and update
 
 > **getFeedback**(`identity`, `id`): `Promise`\<\{ `average`: `number`; `count`: `number`; \} \| `null`\>
 
-Defined in: [src/memory/store/InMemoryStore.ts:194](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/memory/store/InMemoryStore.ts#L194)
+Defined in: [src/memory/store/InMemoryStore.ts:194](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/memory/store/InMemoryStore.ts#L194)
 
 Read-side of feedback — aggregated usefulness for an entry. Returns
 `null` when no feedback has been recorded (distinct from "neutral
@@ -190,7 +190,7 @@ Retrieval stages consume this to feedback-weight rankings.
 
 > **list**\<`T`\>(`identity`, `options?`): `Promise`\<`ListResult`\<`T`\>\>
 
-Defined in: [src/memory/store/InMemoryStore.ts:131](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/memory/store/InMemoryStore.ts#L131)
+Defined in: [src/memory/store/InMemoryStore.ts:131](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/memory/store/InMemoryStore.ts#L131)
 
 Page through entries in the identity's namespace. Ordered by adapter's
 choice (usually most-recently-updated first) — consumers that care
@@ -226,7 +226,7 @@ about order should filter client-side.
 
 > **put**\<`T`\>(`identity`, `entry`): `Promise`\<`void`\>
 
-Defined in: [src/memory/store/InMemoryStore.ts:85](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/memory/store/InMemoryStore.ts#L85)
+Defined in: [src/memory/store/InMemoryStore.ts:85](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/memory/store/InMemoryStore.ts#L85)
 
 Unconditional write — overwrites any existing entry with the same id.
 Prefer `putIfVersion` in multi-writer scenarios.
@@ -261,7 +261,7 @@ Prefer `putIfVersion` in multi-writer scenarios.
 
 > **putIfVersion**\<`T`\>(`identity`, `entry`, `expectedVersion`): `Promise`\<`PutIfVersionResult`\>
 
-Defined in: [src/memory/store/InMemoryStore.ts:106](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/memory/store/InMemoryStore.ts#L106)
+Defined in: [src/memory/store/InMemoryStore.ts:106](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/memory/store/InMemoryStore.ts#L106)
 
 Optimistic-concurrency write. Writes only if the stored version equals
 `expectedVersion`, OR if no entry exists at all AND `expectedVersion`
@@ -304,7 +304,7 @@ when the caller's assumed version is stale.
 
 > **putMany**\<`T`\>(`identity`, `entries`): `Promise`\<`void`\>
 
-Defined in: [src/memory/store/InMemoryStore.ts:95](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/memory/store/InMemoryStore.ts#L95)
+Defined in: [src/memory/store/InMemoryStore.ts:95](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/memory/store/InMemoryStore.ts#L95)
 
 Batched write — resolves the slot once and writes each entry into the
 same Map. Saves N-1 slot lookups vs. calling `put()` in a loop, and
@@ -340,7 +340,7 @@ readonly `MemoryEntry`\<`T`\>[]
 
 > **recordSignature**(`identity`, `signature`): `Promise`\<`void`\>
 
-Defined in: [src/memory/store/InMemoryStore.ts:172](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/memory/store/InMemoryStore.ts#L172)
+Defined in: [src/memory/store/InMemoryStore.ts:172](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/memory/store/InMemoryStore.ts#L172)
 
 Write-side of the recognition set — adds a signature so subsequent
 `seen()` calls return `true`. Stages register signatures as entries
@@ -372,7 +372,7 @@ dedup survives garbage collection.
 
 > **search**\<`T`\>(`identity`, `query`, `options?`): `Promise`\<readonly `ScoredEntry`\<`T`\>[]\>
 
-Defined in: [src/memory/store/InMemoryStore.ts:220](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/memory/store/InMemoryStore.ts#L220)
+Defined in: [src/memory/store/InMemoryStore.ts:220](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/memory/store/InMemoryStore.ts#L220)
 
 O(n) linear scan over identity-scoped entries. Fine for dev / tests
 — for production, plug in a real vector backend (pgvector, Pinecone,
@@ -420,7 +420,7 @@ readonly `number`[]
 
 > **seen**(`identity`, `signature`): `Promise`\<`boolean`\>
 
-Defined in: [src/memory/store/InMemoryStore.ts:168](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/memory/store/InMemoryStore.ts#L168)
+Defined in: [src/memory/store/InMemoryStore.ts:168](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/memory/store/InMemoryStore.ts#L168)
 
 Cheap "have we processed this signature before?" check. Useful for
 deduplication, idempotent writes, and cognitive-arch-style recognition

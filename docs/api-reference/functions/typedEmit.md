@@ -8,7 +8,7 @@
 
 > **typedEmit**\<`K`\>(`scope`, `type`, `payload`): `void`
 
-Defined in: [src/recorders/core/typedEmit.ts:36](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/recorders/core/typedEmit.ts#L36)
+Defined in: [src/recorders/core/typedEmit.ts:36](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/recorders/core/typedEmit.ts#L36)
 
 Emit a typed event from inside stage code.
 

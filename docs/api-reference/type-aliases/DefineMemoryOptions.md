@@ -8,6 +8,6 @@
 
 > **DefineMemoryOptions** = `DefineEpisodicOptions` \| `DefineSemanticOptions` \| `DefineNarrativeOptions` \| `DefineCausalOptions`
 
-Defined in: [src/memory/define.types.ts:310](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/memory/define.types.ts#L310)
+Defined in: [src/memory/define.types.ts:310](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/memory/define.types.ts#L310)
 
 Discriminated by `type`. The factory uses this to pick the pipeline.

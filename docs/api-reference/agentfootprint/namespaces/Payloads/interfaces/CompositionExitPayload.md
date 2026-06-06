@@ -6,7 +6,7 @@
 
 # Interface: CompositionExitPayload
 
-Defined in: [src/events/payloads.ts:31](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/events/payloads.ts#L31)
+Defined in: [src/events/payloads.ts:31](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/events/payloads.ts#L31)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [src/events/payloads.ts:31](https://github.com/footprintjs/agentfoot
 
 > `readonly` **durationMs**: `number`
 
-Defined in: [src/events/payloads.ts:42](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/events/payloads.ts#L42)
+Defined in: [src/events/payloads.ts:42](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/events/payloads.ts#L42)
 
 ***
 
@@ -22,7 +22,7 @@ Defined in: [src/events/payloads.ts:42](https://github.com/footprintjs/agentfoot
 
 > `readonly` **id**: `string`
 
-Defined in: [src/events/payloads.ts:33](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/events/payloads.ts#L33)
+Defined in: [src/events/payloads.ts:33](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/events/payloads.ts#L33)
 
 ***
 
@@ -30,7 +30,7 @@ Defined in: [src/events/payloads.ts:33](https://github.com/footprintjs/agentfoot
 
 > `readonly` **kind**: [`CompositionKind`](/agentfootprint/api/generated/type-aliases/CompositionKind.md)
 
-Defined in: [src/events/payloads.ts:32](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/events/payloads.ts#L32)
+Defined in: [src/events/payloads.ts:32](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/events/payloads.ts#L32)
 
 ***
 
@@ -38,7 +38,7 @@ Defined in: [src/events/payloads.ts:32](https://github.com/footprintjs/agentfoot
 
 > `readonly` `optional` **name?**: `string`
 
-Defined in: [src/events/payloads.ts:40](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/events/payloads.ts#L40)
+Defined in: [src/events/payloads.ts:40](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/events/payloads.ts#L40)
 
 Display name supplied at composition build time (e.g., the
  `Sequence.create({ name: 'IntakePipeline' })` arg). Mirrors the
@@ -53,4 +53,4 @@ Display name supplied at composition build time (e.g., the
 
 > `readonly` **status**: `"ok"` \| `"err"` \| `"break"` \| `"budget_exhausted"`
 
-Defined in: [src/events/payloads.ts:41](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/events/payloads.ts#L41)
+Defined in: [src/events/payloads.ts:41](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/events/payloads.ts#L41)

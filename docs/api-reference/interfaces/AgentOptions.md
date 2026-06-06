@@ -6,7 +6,7 @@
 
 # Interface: AgentOptions
 
-Defined in: [src/core/agent/types.ts:29](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/core/agent/types.ts#L29)
+Defined in: [src/core/agent/types.ts:29](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/core/agent/types.ts#L29)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [src/core/agent/types.ts:29](https://github.com/footprintjs/agentfoo
 
 > `readonly` `optional` **cacheStrategy?**: `CacheStrategy`
 
-Defined in: [src/core/agent/types.ts:79](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/core/agent/types.ts#L79)
+Defined in: [src/core/agent/types.ts:79](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/core/agent/types.ts#L79)
 
 Optional explicit CacheStrategy override (v2.6+). Defaults to
 `getDefaultCacheStrategy(provider.name)` — so Anthropic/OpenAI/
@@ -27,7 +27,7 @@ once those land in Phase 7+.
 
 > `readonly` `optional` **caching?**: `"off"`
 
-Defined in: [src/core/agent/types.ts:72](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/core/agent/types.ts#L72)
+Defined in: [src/core/agent/types.ts:72](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/core/agent/types.ts#L72)
 
 Global cache kill switch (v2.6+). `'off'` disables the cache
 layer entirely — the CacheGate decider routes to `'no-markers'`
@@ -44,7 +44,7 @@ cache-write penalty isn't worth paying.
 
 > `readonly` `optional` **costBudget?**: `number`
 
-Defined in: [src/core/agent/types.ts:52](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/core/agent/types.ts#L52)
+Defined in: [src/core/agent/types.ts:52](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/core/agent/types.ts#L52)
 
 Cumulative USD budget per run. With `pricingTable`, Agent emits a
 one-shot `agentfootprint.cost.limit_hit` (`action: 'warn'`) when
@@ -57,7 +57,7 @@ choose whether to abort by listening to the event.
 
 > `readonly` `optional` **groupTranslator?**: [`GroupTranslator`](/agentfootprint/api/generated/interfaces/GroupTranslator.md)\<`unknown`\>
 
-Defined in: [src/core/agent/types.ts:106](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/core/agent/types.ts#L106)
+Defined in: [src/core/agent/types.ts:106](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/core/agent/types.ts#L106)
 
 Optional per-COMPOSITION translator (UI-agnostic). See
 `core/translator.ts`. When attached, `agent.getUIGroup()` invokes
@@ -73,7 +73,7 @@ Returns `undefined` when omitted.
 
 > `readonly` `optional` **id?**: `string`
 
-Defined in: [src/core/agent/types.ts:34](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/core/agent/types.ts#L34)
+Defined in: [src/core/agent/types.ts:34](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/core/agent/types.ts#L34)
 
 Stable id used for topology + events. Default: 'agent'.
 
@@ -83,7 +83,7 @@ Stable id used for topology + events. Default: 'agent'.
 
 > `readonly` `optional` **maxIterations?**: `number`
 
-Defined in: [src/core/agent/types.ts:39](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/core/agent/types.ts#L39)
+Defined in: [src/core/agent/types.ts:39](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/core/agent/types.ts#L39)
 
 Hard budget on ReAct iterations. Default: 10. Hard cap: 50.
 
@@ -93,7 +93,7 @@ Hard budget on ReAct iterations. Default: 10. Hard cap: 50.
 
 > `readonly` `optional` **maxTokens?**: `number`
 
-Defined in: [src/core/agent/types.ts:37](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/core/agent/types.ts#L37)
+Defined in: [src/core/agent/types.ts:37](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/core/agent/types.ts#L37)
 
 ***
 
@@ -101,7 +101,7 @@ Defined in: [src/core/agent/types.ts:37](https://github.com/footprintjs/agentfoo
 
 > `readonly` **model**: `string`
 
-Defined in: [src/core/agent/types.ts:35](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/core/agent/types.ts#L35)
+Defined in: [src/core/agent/types.ts:35](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/core/agent/types.ts#L35)
 
 ***
 
@@ -109,7 +109,7 @@ Defined in: [src/core/agent/types.ts:35](https://github.com/footprintjs/agentfoo
 
 > `readonly` `optional` **name?**: `string`
 
-Defined in: [src/core/agent/types.ts:32](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/core/agent/types.ts#L32)
+Defined in: [src/core/agent/types.ts:32](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/core/agent/types.ts#L32)
 
 Human-friendly name shown in events/metrics. Default: 'Agent'.
 
@@ -119,7 +119,7 @@ Human-friendly name shown in events/metrics. Default: 'Agent'.
 
 > `readonly` `optional` **permissionChecker?**: [`PermissionChecker`](/agentfootprint/api/generated/interfaces/PermissionChecker.md)
 
-Defined in: [src/core/agent/types.ts:61](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/core/agent/types.ts#L61)
+Defined in: [src/core/agent/types.ts:61](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/core/agent/types.ts#L61)
 
 Permission adapter. When set, the Agent calls
 `permissionChecker.check({capability: 'tool_call', ...})` BEFORE every
@@ -134,7 +134,7 @@ normally.
 
 > `readonly` `optional` **pricingTable?**: [`PricingTable`](/agentfootprint/api/generated/interfaces/PricingTable.md)
 
-Defined in: [src/core/agent/types.ts:45](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/core/agent/types.ts#L45)
+Defined in: [src/core/agent/types.ts:45](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/core/agent/types.ts#L45)
 
 Pricing adapter. When set, Agent emits `agentfootprint.cost.tick`
 after every LLM response (once per ReAct iteration) with per-call
@@ -146,71 +146,44 @@ and cumulative USD. Run-scoped — the cumulative resets each `.run()`.
 
 > `readonly` **provider**: [`LLMProvider`](/agentfootprint/api/generated/interfaces/LLMProvider.md)
 
-Defined in: [src/core/agent/types.ts:30](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/core/agent/types.ts#L30)
+Defined in: [src/core/agent/types.ts:30](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/core/agent/types.ts#L30)
 
 ***
 
 ### reactMode?
 
-> `readonly` `optional` **reactMode?**: `"classic"` \| `"dynamic"`
+> `readonly` `optional` **reactMode?**: `"classic"` \| `"dynamic"` \| `"dynamic-grouped"`
 
-Defined in: [src/core/agent/types.ts:159](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/core/agent/types.ts#L159)
+Defined in: [src/core/agent/types.ts:137](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/core/agent/types.ts#L137)
 
-ReAct loop SEMANTICS — how much of the request is re-engineered each
-iteration. Default `'dynamic'`.
+How the ReAct loop behaves — a single setting with three honest choices.
+Default `'dynamic'`. (Merged in 6.0.0 from the old `reactMode` +
+`reactStructure` pair, which had a silently-ignored combination.)
 
 `'dynamic'` (default) — every iteration re-runs the InjectionEngine and
 all three slots (system-prompt ‖ messages ‖ tools), because which
 injections are active can change per turn (a skill activates, a rule
-fires, a tool-return triggers something). The loop targets the
-InjectionEngine. This is the right shape when the agent uses skills,
-rule/on-tool-return triggers, or any per-turn context steering.
+fires, a tool-return triggers something). The right shape when the agent
+uses skills, rule/on-tool-return triggers, or any per-turn context
+steering. Flat chart shape.
 
 `'classic'` — textbook ReAct: context is engineered ONCE. The
-InjectionEngine, system-prompt and tools run a single time up front;
-the loop targets only the Messages slot, so each iteration just appends
-the new tool result and re-calls the LLM. Use this when the system
-prompt and tool set are fixed for the whole run (the common case). The
-chart then reads honestly — `ToolCalls → Messages` loops, the static
-slots sit outside the loop.
+InjectionEngine, system-prompt and tools run a single time up front; the
+loop targets only the Messages slot, so each iteration just appends the
+new tool result and re-calls the LLM. Use when the system prompt and tool
+set are FIXED for the whole run (the common case). Flat chart shape — the
+chart reads honestly: `ToolCalls → Messages` loops, static slots outside.
+CAVEAT: because static slots are cached after turn 1, do NOT use `'classic'`
+with skills or dynamic-trigger injections — a mid-run activation would not
+surface into the cached system-prompt/tools. Use `'dynamic'` for those.
 
-Both modes produce identical LLM requests for a static agent (no dynamic
-triggers); `'classic'` just avoids re-computing fixed slots and shows in the
-chart that only the messages re-run (after turn 1 only the Messages slot
-lights up). Implementation-wise the chart is the SAME as Dynamic — the only
-difference is that the Context selector stops re-selecting the system-prompt
-and tools slots after the first turn, so their outputs are reused.
-
-CAVEAT: because the static slots are cached after turn 1, `'classic'` is for
-agents whose system-prompt + tools are FIXED. If you register skills or
-dynamic-trigger injections (rule / on-tool-return / llm-activated), an
-activation that happens mid-run would NOT surface into the cached
-system-prompt/tools — use `'dynamic'` (the default) for those. Currently
-`'classic'` uses the flat chart shape (the `reactStructure: 'subflow'`
-grouping re-seeds context every turn by design, so it stays dynamic-only).
-
-***
-
-### reactStructure?
-
-> `readonly` `optional` **reactStructure?**: `"flat"` \| `"subflow"`
-
-Defined in: [src/core/agent/types.ts:123](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/core/agent/types.ts#L123)
-
-Chart structure for the ReAct loop. Default `'flat'` keeps the
-historical shape (`buildAgentChart`): the LLM call is a bare
-`call-llm` STAGE with the slot subflows as its siblings.
-
-`'subflow'` wraps the whole LLM turn (injection engine + the 3
-slots + cache + the call + thinking) in a single `sf-llm-call`
-SUBFLOW — the SAME boundary the `LLMCall` primitive produces. This
-is the structurally-correct shape: the LLM invocation IS a subflow,
-so Lens (and any explainable-ui consumer) renders it as an LLM
-group with its slots inside, with zero bespoke collapsing. Behaviour
-is identical to `'flat'`; only the chart's nesting differs.
-
-Opt-in while the subflow shape proves out; will become the default
-once verified end-to-end. See `agent/buildDynamicAgentChart.ts`.
+`'dynamic-grouped'` — same semantics as `'dynamic'`, but the whole LLM turn
+(injection engine + 3 slots + cache + call + thinking) is wrapped in a
+single `sf-llm-call` SUBFLOW — the same boundary the `LLMCall` primitive
+produces. Lens (and any explainable-ui consumer) renders it as an LLM group
+with its slots inside, with zero bespoke collapsing. Behaviour is identical
+to `'dynamic'`; only the chart's nesting differs. (Grouping is dynamic-only:
+it re-seeds context every turn by design, so there is no classic-grouped.)
 
 ***
 
@@ -218,7 +191,7 @@ once verified end-to-end. See `agent/buildDynamicAgentChart.ts`.
 
 > `readonly` `optional` **structureRecorders?**: readonly `StructureRecorder`[]
 
-Defined in: [src/core/agent/types.ts:96](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/core/agent/types.ts#L96)
+Defined in: [src/core/agent/types.ts:96](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/core/agent/types.ts#L96)
 
 Optional build-time recorders threaded into footprintjs's
 `flowChart()` factory. Each recorder fires `onStageAdded` once per
@@ -241,4 +214,4 @@ When omitted, no build-time observation is wired up.
 
 > `readonly` `optional` **temperature?**: `number`
 
-Defined in: [src/core/agent/types.ts:36](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/core/agent/types.ts#L36)
+Defined in: [src/core/agent/types.ts:36](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/core/agent/types.ts#L36)

@@ -6,7 +6,7 @@
 
 # Interface: PermissionGateOpenedPayload
 
-Defined in: [src/events/payloads.ts:418](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/events/payloads.ts#L418)
+Defined in: [src/events/payloads.ts:418](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/events/payloads.ts#L418)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [src/events/payloads.ts:418](https://github.com/footprintjs/agentfoo
 
 > `readonly` `optional` **expiresAt?**: `number`
 
-Defined in: [src/events/payloads.ts:421](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/events/payloads.ts#L421)
+Defined in: [src/events/payloads.ts:421](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/events/payloads.ts#L421)
 
 ***
 
@@ -22,7 +22,7 @@ Defined in: [src/events/payloads.ts:421](https://github.com/footprintjs/agentfoo
 
 > `readonly` **gateId**: `string`
 
-Defined in: [src/events/payloads.ts:419](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/events/payloads.ts#L419)
+Defined in: [src/events/payloads.ts:419](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/events/payloads.ts#L419)
 
 ***
 
@@ -30,4 +30,4 @@ Defined in: [src/events/payloads.ts:419](https://github.com/footprintjs/agentfoo
 
 > `readonly` **openedBy**: `string`
 
-Defined in: [src/events/payloads.ts:420](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/events/payloads.ts#L420)
+Defined in: [src/events/payloads.ts:420](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/events/payloads.ts#L420)

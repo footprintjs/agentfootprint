@@ -6,7 +6,7 @@
 
 # Interface: EvalScorePayload
 
-Defined in: [src/events/payloads.ts:492](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/events/payloads.ts#L492)
+Defined in: [src/events/payloads.ts:492](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/events/payloads.ts#L492)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [src/events/payloads.ts:492](https://github.com/footprintjs/agentfoo
 
 > `readonly` `optional` **evaluator?**: `"llm"` \| `"fn"` \| `"heuristic"`
 
-Defined in: [src/events/payloads.ts:498](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/events/payloads.ts#L498)
+Defined in: [src/events/payloads.ts:498](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/events/payloads.ts#L498)
 
 ***
 
@@ -22,7 +22,7 @@ Defined in: [src/events/payloads.ts:498](https://github.com/footprintjs/agentfoo
 
 > `readonly` `optional` **evidence?**: `Readonly`\<`Record`\<`string`, `unknown`\>\>
 
-Defined in: [src/events/payloads.ts:499](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/events/payloads.ts#L499)
+Defined in: [src/events/payloads.ts:499](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/events/payloads.ts#L499)
 
 ***
 
@@ -30,7 +30,7 @@ Defined in: [src/events/payloads.ts:499](https://github.com/footprintjs/agentfoo
 
 > `readonly` **metricId**: `string`
 
-Defined in: [src/events/payloads.ts:493](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/events/payloads.ts#L493)
+Defined in: [src/events/payloads.ts:493](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/events/payloads.ts#L493)
 
 ***
 
@@ -38,7 +38,7 @@ Defined in: [src/events/payloads.ts:493](https://github.com/footprintjs/agentfoo
 
 > `readonly` **target**: `"iteration"` \| `"turn"` \| `"run"` \| `"toolCall"`
 
-Defined in: [src/events/payloads.ts:496](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/events/payloads.ts#L496)
+Defined in: [src/events/payloads.ts:496](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/events/payloads.ts#L496)
 
 ***
 
@@ -46,7 +46,7 @@ Defined in: [src/events/payloads.ts:496](https://github.com/footprintjs/agentfoo
 
 > `readonly` **targetRef**: `string`
 
-Defined in: [src/events/payloads.ts:497](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/events/payloads.ts#L497)
+Defined in: [src/events/payloads.ts:497](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/events/payloads.ts#L497)
 
 ***
 
@@ -54,7 +54,7 @@ Defined in: [src/events/payloads.ts:497](https://github.com/footprintjs/agentfoo
 
 > `readonly` `optional` **threshold?**: `number`
 
-Defined in: [src/events/payloads.ts:495](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/events/payloads.ts#L495)
+Defined in: [src/events/payloads.ts:495](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/events/payloads.ts#L495)
 
 ***
 
@@ -62,4 +62,4 @@ Defined in: [src/events/payloads.ts:495](https://github.com/footprintjs/agentfoo
 
 > `readonly` **value**: `number`
 
-Defined in: [src/events/payloads.ts:494](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/events/payloads.ts#L494)
+Defined in: [src/events/payloads.ts:494](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/events/payloads.ts#L494)

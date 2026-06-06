@@ -6,7 +6,7 @@
 
 # Class: BrowserOpenAIProvider
 
-Defined in: [src/adapters/llm/BrowserOpenAIProvider.ts:219](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/adapters/llm/BrowserOpenAIProvider.ts#L219)
+Defined in: [src/adapters/llm/BrowserOpenAIProvider.ts:219](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/adapters/llm/BrowserOpenAIProvider.ts#L219)
 
 ## Implements
 
@@ -18,7 +18,7 @@ Defined in: [src/adapters/llm/BrowserOpenAIProvider.ts:219](https://github.com/f
 
 > **new BrowserOpenAIProvider**(`options`): `BrowserOpenAIProvider`
 
-Defined in: [src/adapters/llm/BrowserOpenAIProvider.ts:223](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/adapters/llm/BrowserOpenAIProvider.ts#L223)
+Defined in: [src/adapters/llm/BrowserOpenAIProvider.ts:223](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/adapters/llm/BrowserOpenAIProvider.ts#L223)
 
 #### Parameters
 
@@ -36,7 +36,7 @@ Defined in: [src/adapters/llm/BrowserOpenAIProvider.ts:223](https://github.com/f
 
 > `readonly` **name**: `"browser-openai"` = `'browser-openai'`
 
-Defined in: [src/adapters/llm/BrowserOpenAIProvider.ts:220](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/adapters/llm/BrowserOpenAIProvider.ts#L220)
+Defined in: [src/adapters/llm/BrowserOpenAIProvider.ts:220](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/adapters/llm/BrowserOpenAIProvider.ts#L220)
 
 #### Implementation of
 
@@ -48,7 +48,7 @@ Defined in: [src/adapters/llm/BrowserOpenAIProvider.ts:220](https://github.com/f
 
 > **complete**(`req`): `Promise`\<[`LLMResponse`](/agentfootprint/api/generated/interfaces/LLMResponse.md)\>
 
-Defined in: [src/adapters/llm/BrowserOpenAIProvider.ts:227](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/adapters/llm/BrowserOpenAIProvider.ts#L227)
+Defined in: [src/adapters/llm/BrowserOpenAIProvider.ts:227](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/adapters/llm/BrowserOpenAIProvider.ts#L227)
 
 #### Parameters
 
@@ -70,7 +70,7 @@ Defined in: [src/adapters/llm/BrowserOpenAIProvider.ts:227](https://github.com/f
 
 > **stream**(`req`): `AsyncIterable`\<[`LLMChunk`](/agentfootprint/api/generated/interfaces/LLMChunk.md)\>
 
-Defined in: [src/adapters/llm/BrowserOpenAIProvider.ts:231](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/adapters/llm/BrowserOpenAIProvider.ts#L231)
+Defined in: [src/adapters/llm/BrowserOpenAIProvider.ts:231](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/adapters/llm/BrowserOpenAIProvider.ts#L231)
 
 #### Parameters
 

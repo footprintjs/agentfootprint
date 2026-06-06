@@ -6,7 +6,7 @@
 
 # Interface: MemoryStrategyAppliedPayload
 
-Defined in: [src/events/payloads.ts:292](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/events/payloads.ts#L292)
+Defined in: [src/events/payloads.ts:292](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/events/payloads.ts#L292)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [src/events/payloads.ts:292](https://github.com/footprintjs/agentfoo
 
 > `readonly` **addedIds**: readonly `string`[]
 
-Defined in: [src/events/payloads.ts:305](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/events/payloads.ts#L305)
+Defined in: [src/events/payloads.ts:305](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/events/payloads.ts#L305)
 
 ***
 
@@ -22,7 +22,7 @@ Defined in: [src/events/payloads.ts:305](https://github.com/footprintjs/agentfoo
 
 > `readonly` **droppedIds**: readonly `string`[]
 
-Defined in: [src/events/payloads.ts:304](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/events/payloads.ts#L304)
+Defined in: [src/events/payloads.ts:304](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/events/payloads.ts#L304)
 
 ***
 
@@ -30,7 +30,7 @@ Defined in: [src/events/payloads.ts:304](https://github.com/footprintjs/agentfoo
 
 > `readonly` **inputMemoryCount**: `number`
 
-Defined in: [src/events/payloads.ts:302](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/events/payloads.ts#L302)
+Defined in: [src/events/payloads.ts:302](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/events/payloads.ts#L302)
 
 ***
 
@@ -38,7 +38,7 @@ Defined in: [src/events/payloads.ts:302](https://github.com/footprintjs/agentfoo
 
 > `readonly` **outputMemoryCount**: `number`
 
-Defined in: [src/events/payloads.ts:303](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/events/payloads.ts#L303)
+Defined in: [src/events/payloads.ts:303](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/events/payloads.ts#L303)
 
 ***
 
@@ -46,7 +46,7 @@ Defined in: [src/events/payloads.ts:303](https://github.com/footprintjs/agentfoo
 
 > `readonly` **reason**: `string`
 
-Defined in: [src/events/payloads.ts:300](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/events/payloads.ts#L300)
+Defined in: [src/events/payloads.ts:300](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/events/payloads.ts#L300)
 
 ***
 
@@ -54,7 +54,7 @@ Defined in: [src/events/payloads.ts:300](https://github.com/footprintjs/agentfoo
 
 > `readonly` `optional` **scoreEvidence?**: `Readonly`\<`Record`\<`string`, `unknown`\>\>
 
-Defined in: [src/events/payloads.ts:301](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/events/payloads.ts#L301)
+Defined in: [src/events/payloads.ts:301](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/events/payloads.ts#L301)
 
 ***
 
@@ -62,7 +62,7 @@ Defined in: [src/events/payloads.ts:301](https://github.com/footprintjs/agentfoo
 
 > `readonly` **strategyId**: `string`
 
-Defined in: [src/events/payloads.ts:293](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/events/payloads.ts#L293)
+Defined in: [src/events/payloads.ts:293](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/events/payloads.ts#L293)
 
 ***
 
@@ -70,4 +70,4 @@ Defined in: [src/events/payloads.ts:293](https://github.com/footprintjs/agentfoo
 
 > `readonly` **strategyKind**: `"sliding-window"` \| `"summarizing"` \| `"semantic"` \| `"fact-extraction"` \| `"hybrid"`
 
-Defined in: [src/events/payloads.ts:294](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/events/payloads.ts#L294)
+Defined in: [src/events/payloads.ts:294](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/events/payloads.ts#L294)

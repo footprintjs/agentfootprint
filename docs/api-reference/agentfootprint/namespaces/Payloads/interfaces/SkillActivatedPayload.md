@@ -6,7 +6,7 @@
 
 # Interface: SkillActivatedPayload
 
-Defined in: [src/events/payloads.ts:393](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/events/payloads.ts#L393)
+Defined in: [src/events/payloads.ts:393](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/events/payloads.ts#L393)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [src/events/payloads.ts:393](https://github.com/footprintjs/agentfoo
 
 > `readonly` `optional` **injectedSystemPromptChars?**: `number`
 
-Defined in: [src/events/payloads.ts:397](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/events/payloads.ts#L397)
+Defined in: [src/events/payloads.ts:397](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/events/payloads.ts#L397)
 
 ***
 
@@ -22,7 +22,7 @@ Defined in: [src/events/payloads.ts:397](https://github.com/footprintjs/agentfoo
 
 > `readonly` `optional` **injectedTools?**: readonly `string`[]
 
-Defined in: [src/events/payloads.ts:396](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/events/payloads.ts#L396)
+Defined in: [src/events/payloads.ts:396](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/events/payloads.ts#L396)
 
 ***
 
@@ -30,7 +30,7 @@ Defined in: [src/events/payloads.ts:396](https://github.com/footprintjs/agentfoo
 
 > `readonly` **reason**: `"manual"` \| `"autoActivate"` \| `"read_skill_result"`
 
-Defined in: [src/events/payloads.ts:395](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/events/payloads.ts#L395)
+Defined in: [src/events/payloads.ts:395](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/events/payloads.ts#L395)
 
 ***
 
@@ -38,4 +38,4 @@ Defined in: [src/events/payloads.ts:395](https://github.com/footprintjs/agentfoo
 
 > `readonly` **skillId**: `string`
 
-Defined in: [src/events/payloads.ts:394](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/events/payloads.ts#L394)
+Defined in: [src/events/payloads.ts:394](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/events/payloads.ts#L394)

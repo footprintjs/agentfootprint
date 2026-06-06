@@ -6,7 +6,7 @@
 
 # Interface: StatusContext
 
-Defined in: [src/recorders/observability/thinking/thinkingTemplates.ts:66](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/recorders/observability/thinking/thinkingTemplates.ts#L66)
+Defined in: [src/recorders/observability/status/statusTemplates.ts:66](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/recorders/observability/status/statusTemplates.ts#L66)
 
 Render context — what the consumer's app config injects.
 
@@ -16,6 +16,6 @@ Render context — what the consumer's app config injects.
 
 > `readonly` **appName**: `string`
 
-Defined in: [src/recorders/observability/thinking/thinkingTemplates.ts:68](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/recorders/observability/thinking/thinkingTemplates.ts#L68)
+Defined in: [src/recorders/observability/status/statusTemplates.ts:68](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/recorders/observability/status/statusTemplates.ts#L68)
 
 Active actor's name. Substituted as `{{appName}}` in templates.

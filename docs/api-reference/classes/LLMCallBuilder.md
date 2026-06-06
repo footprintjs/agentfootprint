@@ -6,7 +6,7 @@
 
 # Class: LLMCallBuilder
 
-Defined in: [src/core/LLMCall.ts:543](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/core/LLMCall.ts#L543)
+Defined in: [src/core/LLMCall.ts:543](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/core/LLMCall.ts#L543)
 
 Tiny fluent builder. Validates required fields at build() time.
 
@@ -16,7 +16,7 @@ Tiny fluent builder. Validates required fields at build() time.
 
 > **new LLMCallBuilder**(`opts`): `LLMCallBuilder`
 
-Defined in: [src/core/LLMCall.ts:547](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/core/LLMCall.ts#L547)
+Defined in: [src/core/LLMCall.ts:547](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/core/LLMCall.ts#L547)
 
 #### Parameters
 
@@ -34,7 +34,7 @@ Defined in: [src/core/LLMCall.ts:547](https://github.com/footprintjs/agentfootpr
 
 > **build**(): [`LLMCall`](/agentfootprint/api/generated/classes/LLMCall.md)
 
-Defined in: [src/core/LLMCall.ts:556](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/core/LLMCall.ts#L556)
+Defined in: [src/core/LLMCall.ts:556](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/core/LLMCall.ts#L556)
 
 #### Returns
 
@@ -46,7 +46,7 @@ Defined in: [src/core/LLMCall.ts:556](https://github.com/footprintjs/agentfootpr
 
 > **system**(`prompt`): `this`
 
-Defined in: [src/core/LLMCall.ts:551](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/core/LLMCall.ts#L551)
+Defined in: [src/core/LLMCall.ts:551](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/core/LLMCall.ts#L551)
 
 #### Parameters
 

@@ -6,7 +6,7 @@
 
 # Interface: ContextEvictedPayload
 
-Defined in: [src/events/payloads.ts:213](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/events/payloads.ts#L213)
+Defined in: [src/events/payloads.ts:213](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/events/payloads.ts#L213)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [src/events/payloads.ts:213](https://github.com/footprintjs/agentfoo
 
 > `readonly` **contentHash**: `string`
 
-Defined in: [src/events/payloads.ts:215](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/events/payloads.ts#L215)
+Defined in: [src/events/payloads.ts:215](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/events/payloads.ts#L215)
 
 ***
 
@@ -22,7 +22,7 @@ Defined in: [src/events/payloads.ts:215](https://github.com/footprintjs/agentfoo
 
 > `readonly` **reason**: `"budget"` \| `"stale"` \| `"low_score"` \| `"policy"` \| `"user_revoked"`
 
-Defined in: [src/events/payloads.ts:216](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/events/payloads.ts#L216)
+Defined in: [src/events/payloads.ts:216](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/events/payloads.ts#L216)
 
 ***
 
@@ -30,7 +30,7 @@ Defined in: [src/events/payloads.ts:216](https://github.com/footprintjs/agentfoo
 
 > `readonly` **slot**: [`ContextSlot`](/agentfootprint/api/generated/type-aliases/ContextSlot.md)
 
-Defined in: [src/events/payloads.ts:214](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/events/payloads.ts#L214)
+Defined in: [src/events/payloads.ts:214](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/events/payloads.ts#L214)
 
 ***
 
@@ -38,4 +38,4 @@ Defined in: [src/events/payloads.ts:214](https://github.com/footprintjs/agentfoo
 
 > `readonly` **survivalMs**: `number`
 
-Defined in: [src/events/payloads.ts:217](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/events/payloads.ts#L217)
+Defined in: [src/events/payloads.ts:217](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/events/payloads.ts#L217)

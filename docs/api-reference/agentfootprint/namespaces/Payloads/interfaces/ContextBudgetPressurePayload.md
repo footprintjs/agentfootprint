@@ -6,7 +6,7 @@
 
 # Interface: ContextBudgetPressurePayload
 
-Defined in: [src/events/payloads.ts:236](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/events/payloads.ts#L236)
+Defined in: [src/events/payloads.ts:236](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/events/payloads.ts#L236)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [src/events/payloads.ts:236](https://github.com/footprintjs/agentfoo
 
 > `readonly` **capTokens**: `number`
 
-Defined in: [src/events/payloads.ts:238](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/events/payloads.ts#L238)
+Defined in: [src/events/payloads.ts:238](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/events/payloads.ts#L238)
 
 ***
 
@@ -22,7 +22,7 @@ Defined in: [src/events/payloads.ts:238](https://github.com/footprintjs/agentfoo
 
 > `readonly` **overflowBy**: `number`
 
-Defined in: [src/events/payloads.ts:240](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/events/payloads.ts#L240)
+Defined in: [src/events/payloads.ts:240](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/events/payloads.ts#L240)
 
 ***
 
@@ -30,7 +30,7 @@ Defined in: [src/events/payloads.ts:240](https://github.com/footprintjs/agentfoo
 
 > `readonly` **planAction**: `"abort"` \| `"evict"` \| `"summarize"`
 
-Defined in: [src/events/payloads.ts:241](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/events/payloads.ts#L241)
+Defined in: [src/events/payloads.ts:241](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/events/payloads.ts#L241)
 
 ***
 
@@ -38,7 +38,7 @@ Defined in: [src/events/payloads.ts:241](https://github.com/footprintjs/agentfoo
 
 > `readonly` **projectedTokens**: `number`
 
-Defined in: [src/events/payloads.ts:239](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/events/payloads.ts#L239)
+Defined in: [src/events/payloads.ts:239](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/events/payloads.ts#L239)
 
 ***
 
@@ -46,4 +46,4 @@ Defined in: [src/events/payloads.ts:239](https://github.com/footprintjs/agentfoo
 
 > `readonly` **slot**: [`ContextSlot`](/agentfootprint/api/generated/type-aliases/ContextSlot.md)
 
-Defined in: [src/events/payloads.ts:237](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/events/payloads.ts#L237)
+Defined in: [src/events/payloads.ts:237](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/events/payloads.ts#L237)

@@ -6,7 +6,7 @@
 
 # Interface: ToolExecutionContext
 
-Defined in: [src/core/tools.ts:26](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/core/tools.ts#L26)
+Defined in: [src/core/tools.ts:26](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/core/tools.ts#L26)
 
 Runtime context passed to tool.execute().
 
@@ -16,7 +16,7 @@ Runtime context passed to tool.execute().
 
 > `readonly` **iteration**: `number`
 
-Defined in: [src/core/tools.ts:30](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/core/tools.ts#L30)
+Defined in: [src/core/tools.ts:30](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/core/tools.ts#L30)
 
 Current iteration number of the ReAct loop.
 
@@ -26,7 +26,7 @@ Current iteration number of the ReAct loop.
 
 > `readonly` `optional` **signal?**: `AbortSignal`
 
-Defined in: [src/core/tools.ts:32](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/core/tools.ts#L32)
+Defined in: [src/core/tools.ts:32](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/core/tools.ts#L32)
 
 Abort signal propagated from run({ env: { signal } }).
 
@@ -36,6 +36,6 @@ Abort signal propagated from run({ env: { signal } }).
 
 > `readonly` **toolCallId**: `string`
 
-Defined in: [src/core/tools.ts:28](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/core/tools.ts#L28)
+Defined in: [src/core/tools.ts:28](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/core/tools.ts#L28)
 
 Unique id of THIS tool invocation (matches stream.tool_start.toolCallId).

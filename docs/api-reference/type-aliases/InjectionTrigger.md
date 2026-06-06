@@ -8,7 +8,7 @@
 
 > **InjectionTrigger** = \{ `kind`: `"always"`; \} \| \{ `activeWhen`: (`ctx`) => `boolean`; `kind`: `"rule"`; \} \| \{ `kind`: `"on-tool-return"`; `toolName`: `string` \| `RegExp`; \} \| \{ `kind`: `"llm-activated"`; `viaToolName`: `string`; \}
 
-Defined in: [src/lib/injection-engine/types.ts:30](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/lib/injection-engine/types.ts#L30)
+Defined in: [src/lib/injection-engine/types.ts:30](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/lib/injection-engine/types.ts#L30)
 
 Discriminated union — exactly one of four kinds. Adding a new
 trigger kind is one new variant; engine evaluator + Lens chip

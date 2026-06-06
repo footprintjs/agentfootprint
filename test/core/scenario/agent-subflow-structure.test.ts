@@ -1,7 +1,7 @@
 /**
  * agent-subflow-structure.test.ts
  *
- * Proves the `reactStructure: 'subflow'` agent chart (buildDynamicAgentChart):
+ * Proves the `reactMode: 'dynamic-grouped'` agent chart (buildDynamicAgentChart):
  * the whole LLM turn is wrapped in an `sf-llm-call` SUBFLOW with the 3 slot
  * subflows nested inside — the SAME boundary the LLMCall primitive produces.
  * This is the lens-render keystone (per the wkng9ory9 verdict): once the LLM
@@ -60,7 +60,7 @@ const weatherTool = defineTool({
   execute: () => '{"temp":72}',
 });
 
-describe('Agent reactStructure: subflow — sf-llm-call boundary', () => {
+describe('Agent reactMode: dynamic-grouped — sf-llm-call boundary', () => {
   // ── Functional — both shapes run + return the same answer ──────────
   it('functional: subflow + flat shapes both run to completion with the same answer', async () => {
     const flat = Agent.create({
@@ -72,7 +72,7 @@ describe('Agent reactStructure: subflow — sf-llm-call boundary', () => {
     const sub = Agent.create({
       provider: new MockProvider({ reply: 'done' }) as never,
       model: 'm',
-      reactStructure: 'subflow',
+      reactMode: 'dynamic-grouped',
     })
       .system('s')
       .build();
@@ -88,7 +88,7 @@ describe('Agent reactStructure: subflow — sf-llm-call boundary', () => {
     const sub = Agent.create({
       provider: new MockProvider({ reply: 'done' }) as never,
       model: 'm',
-      reactStructure: 'subflow',
+      reactMode: 'dynamic-grouped',
     })
       .system('weather bot')
       .tool(weatherTool)
@@ -143,7 +143,11 @@ describe('Agent reactStructure: subflow — sf-llm-call boundary', () => {
         { content: 'it is 72' },
       ],
     });
-    const sub = Agent.create({ provider: provider as never, model: 'm', reactStructure: 'subflow' })
+    const sub = Agent.create({
+      provider: provider as never,
+      model: 'm',
+      reactMode: 'dynamic-grouped',
+    })
       .system('weather bot')
       .tool(weatherTool)
       .build();
@@ -182,7 +186,7 @@ describe('Agent reactStructure: subflow — sf-llm-call boundary', () => {
       const sub = Agent.create({
         provider: new MockProvider({ replies: script() }) as never,
         model: 'm',
-        reactStructure: 'subflow',
+        reactMode: 'dynamic-grouped',
       })
         .system('s')
         .tool(weatherTool)
@@ -230,7 +234,11 @@ describe('Agent reactStructure: subflow — sf-llm-call boundary', () => {
     const provider = new MockProvider({
       replies: [{ toolCalls: [{ id: 't1', name: 'get_weather', args: {} }] }, { content: 'ok' }],
     });
-    const sub = Agent.create({ provider: provider as never, model: 'm', reactStructure: 'subflow' })
+    const sub = Agent.create({
+      provider: provider as never,
+      model: 'm',
+      reactMode: 'dynamic-grouped',
+    })
       .system('s')
       .tool(weatherTool)
       .build();
@@ -268,7 +276,7 @@ describe('Agent reactStructure: subflow — sf-llm-call boundary', () => {
       provider: new MockProvider({ replies: script() }) as never,
       model: 'm',
       pricingTable: pricing,
-      reactStructure: 'subflow',
+      reactMode: 'dynamic-grouped',
     })
       .system('s')
       .tool(weatherTool)
@@ -291,15 +299,15 @@ describe('Agent reactStructure: subflow — sf-llm-call boundary', () => {
   // Lens renders from the EVENT stream, so "behaviour identical, only
   // nesting differs" must hold on the emit channel a consumer observes —
   // not just on returned values. Assert identical per-type event counts.
-  it('observability: flat and subflow emit identical domain-event-type counts', async () => {
-    const countEvents = async (shape: 'flat' | 'subflow') => {
+  it('observability: dynamic and dynamic-grouped emit identical domain-event-type counts', async () => {
+    const countEvents = async (mode: 'dynamic' | 'dynamic-grouped') => {
       const provider = new MockProvider({
         replies: [
           { toolCalls: [{ id: 't1', name: 'get_weather', args: { city: 'X' } }] },
           { content: 'final' },
         ],
       });
-      const agent = Agent.create({ provider: provider as never, model: 'm', reactStructure: shape })
+      const agent = Agent.create({ provider: provider as never, model: 'm', reactMode: mode })
         .system('s')
         .tool(weatherTool)
         .build();
@@ -310,8 +318,8 @@ describe('Agent reactStructure: subflow — sf-llm-call boundary', () => {
       return counts;
     };
 
-    const flat = await countEvents('flat');
-    const sub = await countEvents('subflow');
+    const flat = await countEvents('dynamic');
+    const sub = await countEvents('dynamic-grouped');
 
     // Compare as plain sorted records so the assertion is order-independent
     // and the diff is human-readable on failure. Every domain event type
@@ -343,7 +351,7 @@ describe('Agent reactStructure: subflow — sf-llm-call boundary', () => {
   // ── Review fix — pause/resume across the new boundary (confirming) ──
   // A tool's askHuman fires in the `tool-calls` branch — a PEER of sf-llm-call
   // in the outer chart, NOT nested inside it — so the pause frame matches flat.
-  // This confirms checkpoint+resume works end-to-end with reactStructure:subflow.
+  // This confirms checkpoint+resume works end-to-end with reactMode:dynamic-grouped.
   it('pause/resume: tool askHuman pauses and resumes correctly under subflow shape', async () => {
     const provider = new MockProvider({
       replies: [
@@ -362,7 +370,7 @@ describe('Agent reactStructure: subflow — sf-llm-call boundary', () => {
     const agent = Agent.create({
       provider: provider as never,
       model: 'm',
-      reactStructure: 'subflow',
+      reactMode: 'dynamic-grouped',
     })
       .tool(approvalTool)
       .build();
@@ -408,7 +416,7 @@ describe('Agent slot fork — context selector fans the 3 slots out in parallel'
       const agent = Agent.create({
         provider: new MockProvider({ reply: 'done' }) as never,
         model: 'm',
-        ...(shape === 'subflow' ? { reactStructure: 'subflow' as const } : {}),
+        ...(shape === 'subflow' ? { reactMode: 'dynamic-grouped' as const } : {}),
       })
         .system('bot')
         .tool(weatherTool)
@@ -461,7 +469,7 @@ describe('Agent cache subflow — grouped decision, skill-history stays outside'
       const agent = Agent.create({
         provider: new MockProvider({ reply: 'done' }) as never,
         model: 'm',
-        ...(shape === 'subflow' ? { reactStructure: 'subflow' as const } : {}),
+        ...(shape === 'subflow' ? { reactMode: 'dynamic-grouped' as const } : {}),
       })
         .system('bot')
         .tool(weatherTool)
@@ -485,7 +493,7 @@ describe('Agent cache subflow — grouped decision, skill-history stays outside'
       const agent = Agent.create({
         provider: new MockProvider({ reply: 'done' }) as never,
         model: 'm',
-        ...(shape === 'subflow' ? { reactStructure: 'subflow' as const } : {}),
+        ...(shape === 'subflow' ? { reactMode: 'dynamic-grouped' as const } : {}),
       })
         .system('bot')
         .tool(weatherTool)
@@ -564,7 +572,7 @@ describe('Agent ReAct loop — sourced from the tool-calls branch, not the decid
       const agent = Agent.create({
         provider: new MockProvider({ reply: 'done' }) as never,
         model: 'm',
-        ...(shape === 'subflow' ? { reactStructure: 'subflow' as const } : {}),
+        ...(shape === 'subflow' ? { reactMode: 'dynamic-grouped' as const } : {}),
       })
         .system('bot')
         .tool(weatherTool)
@@ -602,7 +610,7 @@ describe('Agent setup stage naming', () => {
         provider: new MockProvider({ reply: 'done' }) as never,
         model: 'm',
         structureRecorders: [rec],
-        ...(shape === 'subflow' ? { reactStructure: 'subflow' as const } : {}),
+        ...(shape === 'subflow' ? { reactMode: 'dynamic-grouped' as const } : {}),
       })
         .system('bot')
         .build();

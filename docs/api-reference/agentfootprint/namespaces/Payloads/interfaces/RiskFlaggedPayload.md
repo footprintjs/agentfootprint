@@ -6,7 +6,7 @@
 
 # Interface: RiskFlaggedPayload
 
-Defined in: [src/events/payloads.ts:451](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/events/payloads.ts#L451)
+Defined in: [src/events/payloads.ts:451](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/events/payloads.ts#L451)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [src/events/payloads.ts:451](https://github.com/footprintjs/agentfoo
 
 > `readonly` **action**: `"warn"` \| `"redact"` \| `"abort"`
 
-Defined in: [src/events/payloads.ts:461](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/events/payloads.ts#L461)
+Defined in: [src/events/payloads.ts:461](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/events/payloads.ts#L461)
 
 ***
 
@@ -22,7 +22,7 @@ Defined in: [src/events/payloads.ts:461](https://github.com/footprintjs/agentfoo
 
 > `readonly` **category**: `"pii"` \| `"prompt_injection"` \| `"runaway_loop"` \| `"cost_overrun"` \| `"hallucination_flag"`
 
-Defined in: [src/events/payloads.ts:453](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/events/payloads.ts#L453)
+Defined in: [src/events/payloads.ts:453](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/events/payloads.ts#L453)
 
 ***
 
@@ -30,7 +30,7 @@ Defined in: [src/events/payloads.ts:453](https://github.com/footprintjs/agentfoo
 
 > `readonly` **detector**: `"custom"` \| `"nemo_guardrails"` \| `"llama_guard"` \| `"heuristic"`
 
-Defined in: [src/events/payloads.ts:459](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/events/payloads.ts#L459)
+Defined in: [src/events/payloads.ts:459](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/events/payloads.ts#L459)
 
 ***
 
@@ -38,7 +38,7 @@ Defined in: [src/events/payloads.ts:459](https://github.com/footprintjs/agentfoo
 
 > `readonly` **evidence**: `Readonly`\<`Record`\<`string`, `unknown`\>\>
 
-Defined in: [src/events/payloads.ts:460](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/events/payloads.ts#L460)
+Defined in: [src/events/payloads.ts:460](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/events/payloads.ts#L460)
 
 ***
 
@@ -46,4 +46,4 @@ Defined in: [src/events/payloads.ts:460](https://github.com/footprintjs/agentfoo
 
 > `readonly` **severity**: `"low"` \| `"medium"` \| `"high"` \| `"critical"`
 
-Defined in: [src/events/payloads.ts:452](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/events/payloads.ts#L452)
+Defined in: [src/events/payloads.ts:452](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/events/payloads.ts#L452)

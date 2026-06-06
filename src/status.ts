@@ -54,4 +54,4 @@ export {
   type StatusKind,
   type StatusTemplates,
   type StatusContext,
-} from './recorders/observability/thinking/thinkingTemplates.js';
+} from './recorders/observability/status/statusTemplates.js';

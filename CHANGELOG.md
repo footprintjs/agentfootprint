@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.0.0]
+
+Major — one breaking API simplification. No runtime behavior change.
+
+### Changed (BREAKING)
+
+- **`reactMode` + `reactStructure` merged into a single `reactMode`.** The two
+  knobs interacted with a silently-ignored combination (`reactMode: 'classic'`
+  ignored `reactStructure: 'subflow'`). They are now one setting with three
+  honest, valid choices:
+  - `'dynamic'` (default) — re-engineer all slots each turn; flat chart.
+  - `'classic'` — engineer context once, loop only Messages; flat chart.
+  - `'dynamic-grouped'` — `'dynamic'` semantics **+** the LLM turn wrapped in an
+    `sf-llm-call` subflow for richer Lens grouping (was `reactStructure:'subflow'`).
+
+  Migration: `reactStructure: 'subflow'` → `reactMode: 'dynamic-grouped'`;
+  `reactStructure: 'flat'` → drop it (the default). `reactMode: 'classic' |
+  'dynamic'` are unchanged.
+
+### Internal
+
+- Renamed the internal `recorders/observability/thinking/` directory to
+  `status/` (its symbols became `Status*` in 5.0.0) — no public API change.
+
 ## [5.0.0]
 
 Major — API surface simplification (round 2). Three breaking refactors + one

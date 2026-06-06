@@ -6,7 +6,7 @@
 
 # Interface: PauseResumePayload
 
-Defined in: [src/events/payloads.ts:284](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/events/payloads.ts#L284)
+Defined in: [src/events/payloads.ts:284](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/events/payloads.ts#L284)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [src/events/payloads.ts:284](https://github.com/footprintjs/agentfoo
 
 > `readonly` **pausedDurationMs**: `number`
 
-Defined in: [src/events/payloads.ts:286](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/events/payloads.ts#L286)
+Defined in: [src/events/payloads.ts:286](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/events/payloads.ts#L286)
 
 ***
 
@@ -22,4 +22,4 @@ Defined in: [src/events/payloads.ts:286](https://github.com/footprintjs/agentfoo
 
 > `readonly` **resumeInput**: `Readonly`\<`Record`\<`string`, `unknown`\>\>
 
-Defined in: [src/events/payloads.ts:285](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/events/payloads.ts#L285)
+Defined in: [src/events/payloads.ts:285](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/events/payloads.ts#L285)

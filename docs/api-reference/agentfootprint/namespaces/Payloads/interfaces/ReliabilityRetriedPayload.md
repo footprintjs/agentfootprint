@@ -6,7 +6,7 @@
 
 # Interface: ReliabilityRetriedPayload
 
-Defined in: [src/events/payloads.ts:620](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/events/payloads.ts#L620)
+Defined in: [src/events/payloads.ts:620](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/events/payloads.ts#L620)
 
 Fired each time the rules loop decides to RETRY after a failed attempt
 — `action` distinguishes a same-provider retry from a provider failover.
@@ -17,7 +17,7 @@ Fired each time the rules loop decides to RETRY after a failed attempt
 
 > `readonly` **action**: `"retry"` \| `"retry-other"`
 
-Defined in: [src/events/payloads.ts:624](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/events/payloads.ts#L624)
+Defined in: [src/events/payloads.ts:624](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/events/payloads.ts#L624)
 
 `retry` = same provider again; `retry-other` = switch provider.
 
@@ -27,7 +27,7 @@ Defined in: [src/events/payloads.ts:624](https://github.com/footprintjs/agentfoo
 
 > `readonly` **attempt**: `number`
 
-Defined in: [src/events/payloads.ts:622](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/events/payloads.ts#L622)
+Defined in: [src/events/payloads.ts:622](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/events/payloads.ts#L622)
 
 1-indexed counter of the attempt that just FAILED and is being retried.
 
@@ -37,7 +37,7 @@ Defined in: [src/events/payloads.ts:622](https://github.com/footprintjs/agentfoo
 
 > `readonly` **errorKind**: `string`
 
-Defined in: [src/events/payloads.ts:626](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/events/payloads.ts#L626)
+Defined in: [src/events/payloads.ts:626](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/events/payloads.ts#L626)
 
 Classification of the failure being retried.
 
@@ -47,7 +47,7 @@ Classification of the failure being retried.
 
 > `readonly` `optional` **errorMessage?**: `string`
 
-Defined in: [src/events/payloads.ts:628](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/events/payloads.ts#L628)
+Defined in: [src/events/payloads.ts:628](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/events/payloads.ts#L628)
 
 Originating error message, when present.
 
@@ -57,7 +57,7 @@ Originating error message, when present.
 
 > `readonly` **fromProvider**: `string`
 
-Defined in: [src/events/payloads.ts:630](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/events/payloads.ts#L630)
+Defined in: [src/events/payloads.ts:630](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/events/payloads.ts#L630)
 
 Provider that just failed.
 
@@ -67,6 +67,6 @@ Provider that just failed.
 
 > `readonly` **toProvider**: `string`
 
-Defined in: [src/events/payloads.ts:632](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/events/payloads.ts#L632)
+Defined in: [src/events/payloads.ts:632](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/events/payloads.ts#L632)
 
 Provider the NEXT attempt will use (equals `fromProvider` for `retry`).

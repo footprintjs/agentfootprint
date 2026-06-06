@@ -27,7 +27,7 @@ import type { ThinkingHandler } from '../../thinking/types.js';
 import type { Tool, ToolRegistryEntry } from '../tools.js';
 import type { ToolProvider } from '../../tool-providers/types.js';
 import { defaultCommentaryTemplates } from '../../recorders/observability/commentary/commentaryTemplates.js';
-import { defaultStatusTemplates } from '../../recorders/observability/thinking/thinkingTemplates.js';
+import { defaultStatusTemplates } from '../../recorders/observability/status/statusTemplates.js';
 import { Agent } from '../Agent.js';
 import type { AgentOptions } from './types.js';
 

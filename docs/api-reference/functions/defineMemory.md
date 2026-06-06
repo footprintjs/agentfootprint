@@ -8,7 +8,7 @@
 
 > **defineMemory**(`options`): [`MemoryDefinition`](/agentfootprint/api/generated/interfaces/MemoryDefinition.md)
 
-Defined in: [src/memory/define.ts:87](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/memory/define.ts#L87)
+Defined in: [src/memory/define.ts:87](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/memory/define.ts#L87)
 
 Build a `MemoryDefinition` from a high-level `{ type, strategy, store }`
 config. Internally dispatches to one of the existing pipeline factories

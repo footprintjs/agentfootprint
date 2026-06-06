@@ -1,5 +1,5 @@
 /**
- * thinkingTemplates — selector + renderer specs.
+ * statusTemplates — selector + renderer specs.
  *
  * The thinking surface is the FIRST-PERSON status the chat UI shows
  * mid-call (different from `commentaryTemplates`, which is the
@@ -28,7 +28,7 @@ import {
   defaultStatusTemplates,
   renderStatusLine,
   selectStatus,
-} from '../../../src/recorders/observability/thinking/thinkingTemplates.js';
+} from '../../../src/recorders/observability/status/statusTemplates.js';
 
 // ── Helpers ────────────────────────────────────────────────────────
 

@@ -105,58 +105,36 @@ export interface AgentOptions {
    */
   readonly groupTranslator?: GroupTranslator;
   /**
-   * Chart structure for the ReAct loop. Default `'flat'` keeps the
-   * historical shape (`buildAgentChart`): the LLM call is a bare
-   * `call-llm` STAGE with the slot subflows as its siblings.
-   *
-   * `'subflow'` wraps the whole LLM turn (injection engine + the 3
-   * slots + cache + the call + thinking) in a single `sf-llm-call`
-   * SUBFLOW — the SAME boundary the `LLMCall` primitive produces. This
-   * is the structurally-correct shape: the LLM invocation IS a subflow,
-   * so Lens (and any explainable-ui consumer) renders it as an LLM
-   * group with its slots inside, with zero bespoke collapsing. Behaviour
-   * is identical to `'flat'`; only the chart's nesting differs.
-   *
-   * Opt-in while the subflow shape proves out; will become the default
-   * once verified end-to-end. See `agent/buildDynamicAgentChart.ts`.
-   */
-  readonly reactStructure?: 'flat' | 'subflow';
-
-  /**
-   * ReAct loop SEMANTICS — how much of the request is re-engineered each
-   * iteration. Default `'dynamic'`.
+   * How the ReAct loop behaves — a single setting with three honest choices.
+   * Default `'dynamic'`. (Merged in 6.0.0 from the old `reactMode` +
+   * `reactStructure` pair, which had a silently-ignored combination.)
    *
    * `'dynamic'` (default) — every iteration re-runs the InjectionEngine and
    * all three slots (system-prompt ‖ messages ‖ tools), because which
    * injections are active can change per turn (a skill activates, a rule
-   * fires, a tool-return triggers something). The loop targets the
-   * InjectionEngine. This is the right shape when the agent uses skills,
-   * rule/on-tool-return triggers, or any per-turn context steering.
+   * fires, a tool-return triggers something). The right shape when the agent
+   * uses skills, rule/on-tool-return triggers, or any per-turn context
+   * steering. Flat chart shape.
    *
    * `'classic'` — textbook ReAct: context is engineered ONCE. The
-   * InjectionEngine, system-prompt and tools run a single time up front;
-   * the loop targets only the Messages slot, so each iteration just appends
-   * the new tool result and re-calls the LLM. Use this when the system
-   * prompt and tool set are fixed for the whole run (the common case). The
-   * chart then reads honestly — `ToolCalls → Messages` loops, the static
-   * slots sit outside the loop.
+   * InjectionEngine, system-prompt and tools run a single time up front; the
+   * loop targets only the Messages slot, so each iteration just appends the
+   * new tool result and re-calls the LLM. Use when the system prompt and tool
+   * set are FIXED for the whole run (the common case). Flat chart shape — the
+   * chart reads honestly: `ToolCalls → Messages` loops, static slots outside.
+   * CAVEAT: because static slots are cached after turn 1, do NOT use `'classic'`
+   * with skills or dynamic-trigger injections — a mid-run activation would not
+   * surface into the cached system-prompt/tools. Use `'dynamic'` for those.
    *
-   * Both modes produce identical LLM requests for a static agent (no dynamic
-   * triggers); `'classic'` just avoids re-computing fixed slots and shows in the
-   * chart that only the messages re-run (after turn 1 only the Messages slot
-   * lights up). Implementation-wise the chart is the SAME as Dynamic — the only
-   * difference is that the Context selector stops re-selecting the system-prompt
-   * and tools slots after the first turn, so their outputs are reused.
-   *
-   * CAVEAT: because the static slots are cached after turn 1, `'classic'` is for
-   * agents whose system-prompt + tools are FIXED. If you register skills or
-   * dynamic-trigger injections (rule / on-tool-return / llm-activated), an
-   * activation that happens mid-run would NOT surface into the cached
-   * system-prompt/tools — use `'dynamic'` (the default) for those. Currently
-   * `'classic'` uses the flat chart shape (the `reactStructure: 'subflow'`
-   * grouping re-seeds context every turn by design, so it stays dynamic-only).
+   * `'dynamic-grouped'` — same semantics as `'dynamic'`, but the whole LLM turn
+   * (injection engine + 3 slots + cache + call + thinking) is wrapped in a
+   * single `sf-llm-call` SUBFLOW — the same boundary the `LLMCall` primitive
+   * produces. Lens (and any explainable-ui consumer) renders it as an LLM group
+   * with its slots inside, with zero bespoke collapsing. Behaviour is identical
+   * to `'dynamic'`; only the chart's nesting differs. (Grouping is dynamic-only:
+   * it re-seeds context every turn by design, so there is no classic-grouped.)
    */
-  readonly reactMode?: 'classic' | 'dynamic';
+  readonly reactMode?: 'classic' | 'dynamic' | 'dynamic-grouped';
 }
 
 export interface AgentInput {

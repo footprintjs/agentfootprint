@@ -6,7 +6,7 @@
 
 # Interface: SkillDeactivatedPayload
 
-Defined in: [src/events/payloads.ts:400](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/events/payloads.ts#L400)
+Defined in: [src/events/payloads.ts:400](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/events/payloads.ts#L400)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [src/events/payloads.ts:400](https://github.com/footprintjs/agentfoo
 
 > `readonly` **reason**: `string`
 
-Defined in: [src/events/payloads.ts:402](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/events/payloads.ts#L402)
+Defined in: [src/events/payloads.ts:402](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/events/payloads.ts#L402)
 
 ***
 
@@ -22,4 +22,4 @@ Defined in: [src/events/payloads.ts:402](https://github.com/footprintjs/agentfoo
 
 > `readonly` **skillId**: `string`
 
-Defined in: [src/events/payloads.ts:401](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/events/payloads.ts#L401)
+Defined in: [src/events/payloads.ts:401](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/events/payloads.ts#L401)

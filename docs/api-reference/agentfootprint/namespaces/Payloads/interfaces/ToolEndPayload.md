@@ -6,7 +6,7 @@
 
 # Interface: ToolEndPayload
 
-Defined in: [src/events/payloads.ts:185](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/events/payloads.ts#L185)
+Defined in: [src/events/payloads.ts:185](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/events/payloads.ts#L185)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [src/events/payloads.ts:185](https://github.com/footprintjs/agentfoo
 
 > `readonly` **durationMs**: `number`
 
-Defined in: [src/events/payloads.ts:189](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/events/payloads.ts#L189)
+Defined in: [src/events/payloads.ts:189](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/events/payloads.ts#L189)
 
 ***
 
@@ -22,7 +22,7 @@ Defined in: [src/events/payloads.ts:189](https://github.com/footprintjs/agentfoo
 
 > `readonly` `optional` **error?**: `boolean`
 
-Defined in: [src/events/payloads.ts:188](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/events/payloads.ts#L188)
+Defined in: [src/events/payloads.ts:188](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/events/payloads.ts#L188)
 
 ***
 
@@ -30,7 +30,7 @@ Defined in: [src/events/payloads.ts:188](https://github.com/footprintjs/agentfoo
 
 > `readonly` **result**: `unknown`
 
-Defined in: [src/events/payloads.ts:187](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/events/payloads.ts#L187)
+Defined in: [src/events/payloads.ts:187](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/events/payloads.ts#L187)
 
 ***
 
@@ -38,4 +38,4 @@ Defined in: [src/events/payloads.ts:187](https://github.com/footprintjs/agentfoo
 
 > `readonly` **toolCallId**: `string`
 
-Defined in: [src/events/payloads.ts:186](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/events/payloads.ts#L186)
+Defined in: [src/events/payloads.ts:186](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/events/payloads.ts#L186)

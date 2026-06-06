@@ -6,7 +6,7 @@
 
 # Interface: ToolsOfferedPayload
 
-Defined in: [src/events/payloads.ts:330](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/events/payloads.ts#L330)
+Defined in: [src/events/payloads.ts:330](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/events/payloads.ts#L330)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [src/events/payloads.ts:330](https://github.com/footprintjs/agentfoo
 
 > `readonly` **availableIds**: readonly `string`[]
 
-Defined in: [src/events/payloads.ts:331](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/events/payloads.ts#L331)
+Defined in: [src/events/payloads.ts:331](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/events/payloads.ts#L331)
 
 ***
 
@@ -22,7 +22,7 @@ Defined in: [src/events/payloads.ts:331](https://github.com/footprintjs/agentfoo
 
 > `readonly` **reason**: `string`
 
-Defined in: [src/events/payloads.ts:336](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/events/payloads.ts#L336)
+Defined in: [src/events/payloads.ts:336](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/events/payloads.ts#L336)
 
 ***
 
@@ -30,7 +30,7 @@ Defined in: [src/events/payloads.ts:336](https://github.com/footprintjs/agentfoo
 
 > `readonly` **withheldIds**: readonly `string`[]
 
-Defined in: [src/events/payloads.ts:332](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/events/payloads.ts#L332)
+Defined in: [src/events/payloads.ts:332](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/events/payloads.ts#L332)
 
 ***
 
@@ -38,4 +38,4 @@ Defined in: [src/events/payloads.ts:332](https://github.com/footprintjs/agentfoo
 
 > `readonly` **withheldReasons**: `Readonly`\<`Record`\<`string`, `"permission"` \| `"skill_inactive"` \| `"gated"` \| `"cost_guard"`\>\>
 
-Defined in: [src/events/payloads.ts:333](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/events/payloads.ts#L333)
+Defined in: [src/events/payloads.ts:333](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/events/payloads.ts#L333)

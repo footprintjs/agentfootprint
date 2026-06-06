@@ -204,7 +204,7 @@ export {
   type StatusState,
   type StatusKind,
   type StatusTemplates,
-} from './recorders/observability/thinking/thinkingTemplates.js';
+} from './recorders/observability/status/statusTemplates.js';
 
 // Primitives (core/)
 export {

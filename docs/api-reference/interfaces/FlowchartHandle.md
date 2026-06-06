@@ -6,7 +6,7 @@
 
 # Interface: FlowchartHandle
 
-Defined in: [src/recorders/observability/FlowchartRecorder.ts:185](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/recorders/observability/FlowchartRecorder.ts#L185)
+Defined in: [src/recorders/observability/FlowchartRecorder.ts:185](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/recorders/observability/FlowchartRecorder.ts#L185)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [src/recorders/observability/FlowchartRecorder.ts:185](https://githu
 
 > `readonly` **boundary**: `BoundaryRecorder`
 
-Defined in: [src/recorders/observability/FlowchartRecorder.ts:192](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/recorders/observability/FlowchartRecorder.ts#L192)
+Defined in: [src/recorders/observability/FlowchartRecorder.ts:192](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/recorders/observability/FlowchartRecorder.ts#L192)
 
 Underlying BoundaryRecorder. Use for richer queries — slot data,
  full event log, type-narrowed lookups. The single source of truth
@@ -26,7 +26,7 @@ Underlying BoundaryRecorder. Use for richer queries — slot data,
 
 > `readonly` **getSnapshot**: () => `StepGraph`
 
-Defined in: [src/recorders/observability/FlowchartRecorder.ts:188](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/recorders/observability/FlowchartRecorder.ts#L188)
+Defined in: [src/recorders/observability/FlowchartRecorder.ts:188](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/recorders/observability/FlowchartRecorder.ts#L188)
 
 Current step graph (derived from boundary events). Safe during or
  after a run.
@@ -41,7 +41,7 @@ Current step graph (derived from boundary events). Safe during or
 
 > `readonly` **unsubscribe**: () => `void`
 
-Defined in: [src/recorders/observability/FlowchartRecorder.ts:194](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/recorders/observability/FlowchartRecorder.ts#L194)
+Defined in: [src/recorders/observability/FlowchartRecorder.ts:194](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/recorders/observability/FlowchartRecorder.ts#L194)
 
 Detach from executor + dispatcher. Subsequent events ignored.
 

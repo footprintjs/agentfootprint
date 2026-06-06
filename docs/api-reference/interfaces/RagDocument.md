@@ -6,7 +6,7 @@
 
 # Interface: RagDocument
 
-Defined in: [src/lib/rag/indexDocuments.ts:38](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/lib/rag/indexDocuments.ts#L38)
+Defined in: [src/lib/rag/indexDocuments.ts:38](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/lib/rag/indexDocuments.ts#L38)
 
 A document to index. `id` must be unique within the store + identity.
 
@@ -16,7 +16,7 @@ A document to index. `id` must be unique within the store + identity.
 
 > `readonly` **content**: `string`
 
-Defined in: [src/lib/rag/indexDocuments.ts:40](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/lib/rag/indexDocuments.ts#L40)
+Defined in: [src/lib/rag/indexDocuments.ts:40](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/lib/rag/indexDocuments.ts#L40)
 
 ***
 
@@ -24,7 +24,7 @@ Defined in: [src/lib/rag/indexDocuments.ts:40](https://github.com/footprintjs/ag
 
 > `readonly` **id**: `string`
 
-Defined in: [src/lib/rag/indexDocuments.ts:39](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/lib/rag/indexDocuments.ts#L39)
+Defined in: [src/lib/rag/indexDocuments.ts:39](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/lib/rag/indexDocuments.ts#L39)
 
 ***
 
@@ -32,4 +32,4 @@ Defined in: [src/lib/rag/indexDocuments.ts:39](https://github.com/footprintjs/ag
 
 > `readonly` `optional` **metadata?**: `Readonly`\<`Record`\<`string`, `unknown`\>\>
 
-Defined in: [src/lib/rag/indexDocuments.ts:41](https://github.com/footprintjs/agentfootprint/blob/ce5c708227cccb85e3e861d928c5c8ca4dbc2054/src/lib/rag/indexDocuments.ts#L41)
+Defined in: [src/lib/rag/indexDocuments.ts:41](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/lib/rag/indexDocuments.ts#L41)
