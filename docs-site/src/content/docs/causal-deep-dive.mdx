@@ -25,7 +25,7 @@ This is the differentiator no other framework on the market has today. Other fra
 
 ## What gets persisted
 
-When you configure `defineMemory({ type: CAUSAL, ... })`, every `agent.run()` records a `RunSnapshot` to the configured store. The snapshot is the agent's flowchart traversal frozen as JSON — every `decide()` value, every `select()` evidence, every commit-log entry, the narrative entries, the timing.
+When you configure `defineMemory({ type: MEMORY_TYPES.CAUSAL, ... })`, every `agent.run()` records a `SnapshotEntry` to the configured store. The snapshot captures the agent's run frozen as JSON — the `(query, finalContent)` pair, the `decisions` collected via `decide()`/`select()`, the `toolCalls` trajectory, an optional rendered `narrative`, plus timing and token usage.
 
 The snapshot is the THING. Subsequent retrievals load it back into context; the LLM reads it on a follow-up turn; the answer is grounded in WHAT THE AGENT ACTUALLY DID, not in what an LLM thinks it probably did.
 
@@ -35,78 +35,60 @@ The snapshot maps directly onto the four backtrack questions every agentfootprin
 
 | Question | Where in the snapshot |
 |---|---|
-| **What** was injected? | `commitLog` entries — every value the agent wrote to scope at every stage |
-| **Who** triggered it? | `decideLog` entries — which rule fired, with the values it evaluated |
-| **When** it fired? | `runtimeStageId` (e.g., `loan-decide#3`) + iteration index in the commit log |
-| **How** it landed? | `subflowPath` + `selectLog` (which branch / option / cache strategy was chosen) |
+| **What** happened? | `finalContent` — the answer the agent produced for the `query` |
+| **Who/why** decided it? | `decisions[]` — each `DecisionRecord`: the `stageId`, the `chosen` branch, the matched `rule`, and the `evidence` values that satisfied it |
+| **What** did it call? | `toolCalls[]` — each `ToolCallRecord`: tool `name`, `args`, truncated `resultPreview`, `errored` flag |
+| **How long / how much?** | `iterations`, `durationMs`, `tokenUsage` |
 
-Causal memory persists all four. Reading the snapshot back IS asking the four backtrack questions — without re-running the agent.
+Causal memory persists all of these. Reading the snapshot back IS asking the four backtrack questions — without re-running the agent.
 
 ## The shape (annotated)
 
-A `RunSnapshot` looks like this when serialized:
+A `SnapshotEntry` looks like this when serialized:
 
 ```json
 {
-  "runtimeStageId": "loan-decide#3",
-  "subflowPath": ["__root__", "sf-decide-tier"],
-  "depth": 2,
-  "phase": "exit",
+  "query": "Should we approve loan #42? Credit: 580. Income: 95k. Amount: 50k.",
+  "finalContent": "Application #42: REJECTED. Credit (580) below floor (600). Suggest manual review.",
+  "iterations": 1,
 
-  "scope": {
-    "applicationId": "42",
-    "creditScore": 580,
-    "amount": 50000,
-    "tier": "tier-3-rejected"
-  },
-
-  "decideLog": [
+  "decisions": [
     {
-      "stageId": "ClassifyRisk",
+      "stageId": "classify-risk",
+      "chosen": "rejected",
       "rule": "Marginal credit",
-      "values": { "creditScore": 580, "threshold": 600 },
-      "outcome": "rejected",
-      "predicate": "creditScore >= 600",
-      "matched": false,
-      "at": 1730308473000
-    }
-  ],
-
-  "selectLog": [
+      "evidence": { "creditScore": 580, "threshold": 600 }
+    },
     {
-      "stageId": "PickReason",
-      "options": ["credit-too-low", "income-too-low", "manual-review"],
+      "stageId": "pick-reason",
       "chosen": "credit-too-low",
-      "rationale": "Credit (580) below floor (600); income above floor",
-      "at": 1730308473123
+      "rule": "Credit below floor",
+      "evidence": { "creditScore": 580, "incomeAboveFloor": true }
     }
   ],
 
-  "commitLog": [
-    { "stage": "Seed", "stageId": "seed", "runtimeStageId": "seed#0", "updates": { "applicationId": "42" }, "trace": [] },
-    { "stage": "ClassifyRisk", "stageId": "classify-risk", "runtimeStageId": "classify-risk#1", "updates": { "tier": "tier-3-rejected" }, "trace": [...] },
-    { "stage": "PickReason", "stageId": "pick-reason", "runtimeStageId": "pick-reason#2", "updates": { "rejectionReason": "credit-too-low" }, "trace": [...] }
+  "toolCalls": [
+    {
+      "name": "lookupCreditBureau",
+      "args": { "applicationId": "42" },
+      "resultPreview": "{ \"score\": 580, \"bureau\": \"experian\" }",
+      "errored": false
+    }
   ],
 
-  "narrative": [
-    "[Seed] application #42 received",
-    "[ClassifyRisk] credit 580 < threshold 600 → rejected",
-    "[PickReason] chose credit-too-low (income above floor)"
-  ],
+  "narrative": "[Seed] application #42 received\n[ClassifyRisk] credit 580 < threshold 600 → rejected\n[PickReason] chose credit-too-low (income above floor)",
 
-  "metadata": {
-    "query": "Should we approve loan #42?",
-    "timestamp": 1730308473000,
-    "embedderId": "openai-text-embedding-3-small",
-    "queryEmbedding": [0.012, -0.045, ...]
-  }
+  "durationMs": 1840,
+  "tokenUsage": { "input": 1200, "output": 180 }
 }
 ```
 
+The store wraps this value in a `MemoryEntry<SnapshotEntry>` that carries retrieval metadata (`id`, `embedding`, `embeddingModel`, `createdAt`, `ttl`, …) — the query embedding lives on the wrapper's `embedding` field, not on the snapshot itself.
+
 Three fields are load-bearing:
-1. **`decideLog`** — every rule the agent's `decide(...)` call evaluated, with the values that fed the predicate
-2. **`selectLog`** — every `select(...)` choice with the options + chosen + rationale
-3. **`commitLog`** — every commit to shared scope, stage by stage
+1. **`decisions`** — every `decide()`/`select()` choice: the `stageId`, the `chosen` branch, the matched `rule`, and the `evidence` values that fed the predicate
+2. **`finalContent`** — the agent's answer, paired with `query` for retrieval and for SFT/DPO export
+3. **`toolCalls`** — the tool-use trajectory, each with `name` / `args` / truncated `resultPreview`
 
 Together they ARE the agent's reasoning, byte-for-byte.
 
@@ -116,12 +98,14 @@ When a snapshot is RETRIEVED for a follow-up turn, you don't always want the who
 
 | Projection | What lands in the prompt | Use when |
 |---|---|---|
-| `SNAPSHOT_PROJECTIONS.DECISIONS` | `decideLog` + `selectLog` only | "Why did the agent decide X?" follow-ups (cheapest) |
-| `SNAPSHOT_PROJECTIONS.COMMITS` | `commitLog` only | "What state did the agent reach?" |
-| `SNAPSHOT_PROJECTIONS.NARRATIVE` | `narrative` array (rendered prose) | Human-readable replay |
-| `SNAPSHOT_PROJECTIONS.FULL` | Everything (largest, most expensive) | Forensic-grade audit |
+| `SNAPSHOT_PROJECTIONS.DECISIONS` (default) | the `decisions[]` evidence — each `stageId → chosen` with `rule` + `evidence` | "Why did the agent decide X?" follow-ups (cheapest) |
+| `SNAPSHOT_PROJECTIONS.COMMITS` | a per-stage `stageId: chose "X"` summary derived from `decisions[]` | "What state did the agent reach?" |
+| `SNAPSHOT_PROJECTIONS.NARRATIVE` | the rendered `narrative` string | Human-readable replay |
+| `SNAPSHOT_PROJECTIONS.FULL` | the whole serialized snapshot (largest, most expensive) | Forensic-grade audit |
 
-Most apps use `DECISIONS` — it's the smallest projection that answers the "why" question, and it's what cheap-model triage works best with.
+Most apps use `DECISIONS` — it's the default, the smallest projection that answers the "why" question, and what cheap-model triage works best with.
+
+> **Note:** a full footprintjs `commitLog` isn't yet captured in `SnapshotEntry`, so `COMMITS` currently projects a compact summary of the `decisions[]` array as a stand-in. The field set is intentionally minimal today; richer commit/narrative capture is a follow-up FlowRecorder integration.
 
 ## Define the memory
 
@@ -134,6 +118,9 @@ Most apps use `DECISIONS` — it's the smallest projection that answers the "why
 ## A worked replay
 
 ```ts
+import { Agent, defineMemory, MEMORY_TYPES, MEMORY_STRATEGIES, SNAPSHOT_PROJECTIONS } from 'agentfootprint';
+import { anthropic } from 'agentfootprint/llm-providers'; // vendor-SDK providers live on this subpath
+
 // Monday — production decision
 const monday = Agent.create({ provider: anthropic({...}), model: 'claude-sonnet-4-5-20250929' })
   .system('You decide loan applications based on credit + income + amount.')
@@ -164,7 +151,7 @@ await friday.run({
 //    the threshold of 600. The decision was made on Monday at 2:14 PM."
 ```
 
-The Friday agent's prompt includes the projected `decideLog` entries from Monday's run — the LLM sees, verbatim, that `creditScore: 580` was checked against `threshold: 600` and the predicate matched=false. The follow-up answer is grounded in EXACT past facts, not reconstruction.
+The Friday agent's prompt includes the projected `decisions[]` entries from Monday's run — the LLM sees, verbatim, the `classify-risk → "rejected"` choice with `evidence: { creditScore: 580, threshold: 600 }`. The follow-up answer is grounded in EXACT past facts, not reconstruction.
 
 ## Why this works — the cheap-model triage economic argument
 

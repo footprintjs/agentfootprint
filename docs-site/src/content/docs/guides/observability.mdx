@@ -1,6 +1,6 @@
 ---
 title: Observability
-description: Typed event streams, recorders, and tier-3 enable.* helpers — observe what the agent did without shaping what it does. 57+ events emitted during DFS traversal, no instrumentation.
+description: Typed event streams, recorders, and tier-3 enable.* helpers — observe what the agent did without shaping what it does. 59 events emitted during DFS traversal, no instrumentation.
 ---
 
 import CodeFile from '@/components/CodeFile.astro';
@@ -37,7 +37,7 @@ Every runner (`Agent`, `LLMCall`, `Sequence`, etc.) exposes the same observabili
 | **Recorders** | `runner.attach(recorder)` | You want pre-built aggregation (cost totals, token counts, narrative entries) |
 | **Tier-3 helpers** | `runner.enable.thinking({...})`, `runner.enable.logging({...})` | You want a one-liner for the common case (status line, structured logs) |
 
-There are **60+ typed events across 18 domains**: `agent` (incl. `output_schema_validation_failed` for Instructor-style retry), `composition`, `context`, `stream`, `tools`, `skill`, `memory`, `cache`, `cost`, `permission` (incl. `halt` for sequence governance), `eval`, `embedding`, `pause`, `error`, `fallback`, `resilience`, `reliability`, `risk`. Every event has a typed payload — `gen_ai.chat`, `tool.start`, `cost.tick`, `composition.iteration_start`, etc. The framework owns the loop and emits during DFS traversal — no instrumentation, no spans-after-the-fact.
+There are **59 typed events across 16 domains**: `agent` (incl. `output_schema_validation_failed` for Instructor-style retry), `composition`, `context`, `stream`, `tools`, `skill`, `memory`, `cost`, `permission` (incl. `halt` for sequence governance), `eval`, `embedding`, `pause`, `error`, `reliability`, `fallback`, `risk`. Every event has a typed payload — `agentfootprint.stream.llm_start`, `agentfootprint.stream.tool_start`, `agentfootprint.cost.tick`, `agentfootprint.composition.iteration_start`, etc. The framework owns the loop and emits during DFS traversal — no instrumentation, no spans-after-the-fact.
 
 ## Tier-3 — `.enable.thinking()` and `.enable.logging()`
 
@@ -52,6 +52,8 @@ The 80% case: a live status line ("what is the agent doing right now?") and a do
 `.enable.logging({ domains, logger })` gives you structured logs filtered to specific event domains. The `logger` is any object with a `log(message, data?)` method — drop in `console`, `pino`, `winston`, or your own.
 
 Both return a `stop()` function — call it on shutdown to detach the listener cleanly.
+
+> **Note:** `.enable.thinking()` and `.enable.logging()` are deprecated in favor of the grouped strategy enablers below — `.enable.liveStatus({ strategy })` for the status line and `.enable.observability({ strategy })` for log/telemetry shipping. They remain available for back-compat.
 
 ## Tier-3 — `.enable.observability()` — grouped vendor strategies
 
@@ -90,8 +92,10 @@ Pick by environment — see [`footprintjs/detach`](https://footprintjs.github.io
 | `microtaskBatchDriver` | Default. Cross-runtime. Lowest latency. |
 | `setImmediateDriver` | Node only. Yields to I/O before flushing. |
 | `setTimeoutDriver` | Cross-runtime, configurable delay. |
-| `sendBeaconDriver` | Browser. Survives page-unload (analytics). |
-| `workerThreadDriver` | CPU-isolated. For heavy serialization. |
+| `createSendBeaconDriver({ url })` | Browser. Survives page-unload (analytics). Factory — requires a target URL. |
+| `createWorkerThreadDriver({ ... })` | CPU-isolated. For heavy serialization. Factory — requires worker config. |
+
+`microtaskBatchDriver`, `setImmediateDriver`, and `setTimeoutDriver` ship as ready-to-use singletons. `createSendBeaconDriver` and `createWorkerThreadDriver` are factories (no default singleton) because they need required options — call the factory and pass the result as `driver`.
 
 ### Graceful shutdown
 
@@ -121,7 +125,7 @@ Vendor strategies ship under one grouped subpath (parallel-providers pattern, mi
 
 All peer deps are declared **optional** — consumers who never call a particular factory don't need to install its SDK. Each adapter lazy-imports its SDK at first use.
 
-`enable.cost(...)` accepts the same `detach` option for the same reasons. `enable.thinking` and `enable.lens` deliberately stay sync — UI render must feel responsive.
+`enable.cost(...)` accepts the same `detach` option for the same reasons. `enable.liveStatus` and `enable.flowchart` deliberately stay sync — UI render must feel responsive.
 
 ## Cost tracking
 
@@ -137,14 +141,13 @@ agentfootprint.<domain>.<event>
 
 | Domain | Sample events | What it covers |
 |---|---|---|
-| `agent` | `turn_start` · `turn_end` · `iteration_start` · `iteration_end` · `route_decided` · `handoff` · `output_schema_validation_failed` | ReAct loop boundaries; `output_schema_validation_failed` fires inside the reliability gate when the LLM's final answer fails the agent's `outputSchema` (v2.13+) |
+| `agent` | `turn_start` · `turn_end` · `iteration_start` · `iteration_end` · `route_decided` · `handoff` · `output_schema_validation_failed` · `thinking_parse_failed` | ReAct loop boundaries; `output_schema_validation_failed` fires inside the reliability gate when the LLM's final answer fails the agent's `outputSchema` (v2.13+) |
 | `composition` | `enter` · `exit` · `iteration_start` · `iteration_exit` · `fork_start` · `branch_complete` · `merge_end` · `route_decided` | Sequence / Parallel / Conditional / Loop lifecycles |
-| `context` | `injected` · `evaluated` · `evicted` · `slot_composed` · `budget_pressure` · `memory` | Context engineering — every injection's full lifecycle |
-| `stream` | `llm_start` · `llm_end` · `token` · `tool_start` · `tool_end` | Token-by-token + tool-call lifecycle |
+| `context` | `injected` · `evaluated` · `evicted` · `slot_composed` · `budget_pressure` | Context engineering — every injection's full lifecycle |
+| `stream` | `llm_start` · `llm_end` · `token` · `tool_start` · `tool_end` · `thinking_delta` · `thinking_end` | Token-by-token + tool-call + thinking lifecycle |
 | `tools` | `offered` · `activated` · `deactivated` · `discovery_started` · `discovery_completed` · `discovery_failed` | ToolProvider activation per iteration (skills, gating); async-provider lifecycle (start/complete/fail with `durationMs`) |
 | `skill` | `activated` · `deactivated` | LLM-activated skill resolution |
 | `memory` | `attached` · `detached` · `written` · `strategy_applied` | Memory pipeline subflows |
-| `cache` | `applied` · `metrics` | Provider cache marker placement + hit-rate |
 | `cost` | `tick` · `limit_hit` | Per-call USD + budget threshold crossings |
 | `permission` | `check` · `gate_opened` · `gate_closed` · `halt` | PermissionChecker decisions; `halt` fires when a checker terminates the run via sequence governance (v2.12+) |
 | `eval` | `score` · `threshold_crossed` | Custom quality / guardrail signals |
@@ -152,31 +155,37 @@ agentfootprint.<domain>.<event>
 | `pause` | `request` · `resume` | Human-in-the-loop checkpoints |
 | `error` | `fatal` · `recovered` · `retried` | Stage-level error events |
 | `fallback` | `triggered` | Schema-validation fallback chain |
-| `resilience` | `circuit_state_changed` · `retry` · `fallback` · `output_fallback_triggered` · `output_canned_used` | v2.10.x reliability primitives |
-| `reliability` | `fail_fast` | v2.11.5 reliability gate fail-fast events |
+| `reliability` | `fail_fast` · `retried` · `recovered` | Reliability-gate primitives (rules-based loop, distinct from decorator-shaped `error.*`) |
 | `risk` | `flagged` | Eval guardrails flagging suspect output |
 
 Every event is exhaustively typed via `AgentfootprintEvent` (a discriminated union); your IDE autocompletes the payload shape based on the event name. **No string-parsing logs.** No "I think this means the tool was called."
 
-## Custom recorders
+## Custom aggregations
 
-For aggregations the built-ins don't cover, write your own. A recorder is just an object with `on*` methods matching the event names:
+For aggregations the built-ins don't cover, subscribe to the typed events directly. `runner.on(type, fn)` returns an unsubscribe — the payload is fully typed by the event name:
 
 ```ts
-const myRecorder = {
-  id: 'my-recorder',
-  onContextInjected: (e) => {
-    // e.payload is fully typed — { source, slot, role?, content?, ... }
-  },
-  onAgentTurnEnd: (e) => {
-    // e.payload — { iterationCount, totalInputTokens, totalOutputTokens, ... }
-  },
-};
+let injections = 0;
+let totalOutputTokens = 0;
 
-runner.attach(myRecorder);
+const stopA = runner.on('agentfootprint.context.injected', (e) => {
+  // e.payload — { slot, source, contentSummary, asRole?, ... }
+  injections++;
+});
+
+const stopB = runner.on('agentfootprint.agent.turn_end', (e) => {
+  // e.payload — { turnIndex, finalContent, iterationCount, totalInputTokens, totalOutputTokens, durationMs }
+  totalOutputTokens += e.payload.totalOutputTokens;
+});
+
+// Or subscribe to a whole domain with a wildcard:
+const stopC = runner.on('agentfootprint.context.*', (e) => { /* every context.* event */ });
+
+// On shutdown:
+stopA(); stopB(); stopC();
 ```
 
-The recorder discovers handler methods via runtime method-shape detection — implement only the events you care about; ignore the rest.
+`runner.attach(recorder)` is the lower-level path: it accepts a footprintjs `CombinedRecorder` that observes the **raw** footprintjs stream (`onWrite`, `onSubflowEntry`, `onDecision`, …) — not the grouped `agentfootprint.*` events. For agentfootprint's typed event taxonomy, prefer `runner.on(...)`. A `CombinedRecorder` discovers its handler methods via runtime method-shape detection — implement only the hooks you care about; ignore the rest.
 
 ## OpenTelemetry
 
@@ -184,6 +193,7 @@ The recorder discovers handler methods via runtime method-shape detection — im
 
 ```ts
 import { otelObservability } from 'agentfootprint/observability-providers';
+import { microtaskBatchDriver } from 'footprintjs/detach';
 import { trace } from '@opentelemetry/api';
 
 const stop = agent.enable.observability({
@@ -196,7 +206,7 @@ const stop = agent.enable.observability({
 
 ## Anti-patterns
 
-- ❌ **Don't log every event** — 57+ typed events × N iterations × M agents = your log infra hates you. Filter to the domains you actually need.
+- ❌ **Don't log every event** — 59 typed events × N iterations × M agents = your log infra hates you. Filter to the domains you actually need.
 - ❌ **Don't subscribe in a hot loop** — `runner.on(...)` returns an unsubscribe; call it on shutdown. Forgotten subscriptions leak listeners across runs.
 - ❌ **Don't use `getNarrative()` as a log sink** — it's structured trace data, not log lines. Pass the entries to a real log/trace backend if you need to ship them.
 

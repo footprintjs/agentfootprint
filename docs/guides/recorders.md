@@ -1,337 +1,284 @@
-# Recorders
+# Recorders & Events
 
-> **An agent that can't be measured can't be improved.** Recorders are agentfootprint's measurement layer.
+> **An agent that can't be measured can't be improved.** Events and recorders are agentfootprint's measurement layer.
 
-Recorders are passive observers that watch agent execution without changing behavior. They collect metrics, track costs, evaluate quality, surface grounding evidence, and enforce guardrails — all during traversal, never as a post-processing step.
+Observation in agentfootprint is passive — it watches agent execution without changing behavior. It collects metrics, tracks costs, evaluates quality, surfaces grounding evidence, and feeds dashboards — all during traversal, never as a post-processing step.
 
-Attach recorders to any concept via the `.recorder()` builder method:
+There are **two observation surfaces**, and you pick based on how much structure you want:
+
+1. **Typed events** — `agent.on(type, listener)`. Subscribe to the typed event stream. Lowest-level, zero ceremony, compile-time-checked payloads.
+2. **Recorders** — `agent.attach(recorder)` (or the fluent `.recorder(rec)` at build time). Attach a footprintjs `CombinedRecorder` that accumulates across many events.
+
+On top of those, the **`.enable.*` namespace** bundles ready-made observability layers (cost, logging, live status, flowchart) into one-liners.
 
 ```typescript
-const tokens = new TokenRecorder();
-const agent = Agent.create({ provider })
+import { Agent } from 'agentfootprint';
+
+const agent = Agent.create({ provider, model: 'claude-sonnet-4-20250514' })
   .system('Be helpful.')
-  .recorder(tokens)   // ← attach during build
   .build();
 
-await agent.run('Hello');
-console.log(tokens.getStats());
+// Surface 1 — typed event subscription
+agent.on('agentfootprint.stream.llm_end', (e) => {
+  console.log(`${e.payload.usage.input}in / ${e.payload.usage.output}out`);
+});
+
+await agent.run({ message: 'Hello' });
 ```
 
 ---
 
-## AgentRecorder Interface
+## Surface 1 — Typed Events
 
-All recorders implement the same interface. Every hook is optional — implement only what you need.
+Every runner (Agent, LLMCall, every composition and pattern) exposes a typed dispatcher:
 
 ```typescript
-interface AgentRecorder {
-  readonly id: string;
-  onTurnStart?(event: TurnStartEvent): void;
-  onLLMCall?(event: LLMCallEvent): void;
-  onToolCall?(event: ToolCallEvent): void;
-  onTurnComplete?(event: TurnCompleteEvent): void;
-  onError?(event: AgentErrorEvent): void;
-  clear?(): void;
+agent.on(type, listener, options?)   // subscribe; returns an Unsubscribe fn
+agent.once(type, listener)           // subscribe once, then auto-detach
+agent.off(type, listener)            // detach
+agent.emit(name, payload)            // emit a consumer-defined event
+```
+
+`.on()` is **compile-time checked** — the listener's `e.payload` is typed to the event you subscribed to.
+
+```typescript
+// Specific typed subscription — payload type is known.
+agent.on('agentfootprint.stream.llm_start', (e) => {
+  console.log(`llm_start: iter=${e.payload.iteration} model=${e.payload.model}`);
+});
+
+// Domain wildcard — every `stream.*` event.
+agent.on('agentfootprint.stream.*', (e) => {
+  console.log(`[stream.*] ${e.type}`);
+});
+
+// Global wildcard — every event (debugging).
+agent.on('*', () => { totalEvents++; });
+```
+
+Every event is an envelope: `{ type, payload, meta }`. The `meta` (`EventMeta`) carries `runtimeStageId`, `subflowPath`, `turnIndex`, `iterIndex`, `runId`, and timing — so you can correlate any event back to the exact execution step that produced it.
+
+### Common event types
+
+Event names are hierarchical dotted strings under `agentfootprint.<domain>.<event>`. The most useful for measurement:
+
+| Event type | When it fires | Key payload fields |
+|------------|--------------|--------------------|
+| `agentfootprint.agent.turn_start` | A turn begins | `turnIndex`, `userPrompt` |
+| `agentfootprint.agent.turn_end` | A turn produces its final answer | `turnIndex`, `finalContent`, `totalInputTokens`, `totalOutputTokens`, `iterationCount`, `durationMs` |
+| `agentfootprint.agent.iteration_start` / `iteration_end` | Each ReAct loop iteration | `turnIndex`, `iterIndex`, `toolCallCount` |
+| `agentfootprint.agent.route_decided` | The loop chooses tool-calls vs final | `chosen` (`'tool-calls' \| 'final'`), `rationale?` |
+| `agentfootprint.stream.llm_start` | Before each LLM invocation | `iteration`, `provider`, `model`, `messagesCount`, `toolsCount` |
+| `agentfootprint.stream.llm_end` | After each LLM invocation | `iteration`, `content`, `toolCallCount`, `usage` (`{ input, output, cacheRead?, cacheWrite? }`), `stopReason`, `durationMs` |
+| `agentfootprint.stream.tool_start` / `tool_end` | Each tool execution | `toolName`, `toolCallId`, `args` / `result`, `error?`, `durationMs` |
+| `agentfootprint.cost.tick` | After each costed LLM call (needs a `pricingTable`) | `scope`, `estimatedUsd`, `cumulative` |
+| `agentfootprint.cost.limit_hit` | Cumulative cost crosses `costBudget` | `kind`, `limit`, `actual`, `action` |
+| `agentfootprint.eval.score` | A consumer/eval recorder scores output | `metricId`, `value`, `target`, `targetRef` |
+| `agentfootprint.context.injected` | Context lands in a slot | `slot`, `source`, `contentSummary`, `reason` |
+| `agentfootprint.error.fatal` | An unrecovered error ends the run | `error`, `stage`, `scope` |
+| `agentfootprint.pause.request` / `pause.resume` | Human-in-the-loop pause boundary | `reason`, `questionPayload` / `resumeInput` |
+
+The full registry (`EVENT_NAMES`, `ALL_EVENT_TYPES`, and the `AgentfootprintEventMap` type) is exported from the main `agentfootprint` barrel. There are dozens more domains — `memory.*`, `tools.*`, `skill.*`, `permission.*`, `reliability.*`, `composition.*`, `embedding.*` — all subscribable the same way.
+
+### Consumer-owned events
+
+Domains like `eval`, `memory`, and `skill` are partly consumer-driven — emit your own with `agent.emit()`. If the name matches a registered type it routes through the typed map; otherwise it reaches `'*'` listeners as an opaque event.
+
+```typescript
+agent.on('agentfootprint.eval.score', (e) => {
+  console.log(`eval.score: ${e.payload.metricId}=${e.payload.value}`);
+});
+
+agent.emit('agentfootprint.eval.score', {
+  metricId: 'response-quality',
+  value: 0.85,
+  target: 'run',
+  targetRef: 'this-run',
+  evaluator: 'heuristic',
+});
+```
+
+---
+
+## Surface 2 — Recorders
+
+A **recorder** is a footprintjs `CombinedRecorder` — one object that hooks the scope, control-flow, and emit channels, with a stable `id`. Attach it to a built agent, or fluently at build time:
+
+```typescript
+import { Agent } from 'agentfootprint';
+import type { CombinedRecorder } from 'agentfootprint';
+
+const audit: CombinedRecorder = {
+  id: 'audit',
+  onWrite: (e) => log('scope write', e.key),
+};
+
+// Post-build:
+const detach = agent.attach(audit);   // returns an Unsubscribe
+// detach();                          // remove it later
+
+// Or fluently at build time (sugar over agent.attach):
+const agent2 = Agent.create({ provider })
+  .system('Be helpful.')
+  .recorder(audit)   // ← attach during build
+  .build();
+```
+
+`.attach()` / `.recorder()` is **idempotent by `id`** (a recorder with the same id replaces the previous one; different ids coexist) — agentfootprint inherits this contract from footprintjs.
+
+### Built-in recorder bridges
+
+agentfootprint auto-attaches a set of internal **emit-bridge recorders** when you call `.build()` — they translate footprintjs scope/flow events into the typed `agentfootprint.*` event stream you subscribe to in Surface 1. You normally don't construct them yourself; the agent wires them. They're exported as factory functions for advanced cases (e.g. attaching to a bare footprintjs executor):
+
+| Factory | Bridges into | Subpath |
+|---------|--------------|---------|
+| `agentRecorder(opts)` | `agentfootprint.agent.*` | `agentfootprint`, `agentfootprint/observe` |
+| `streamRecorder(opts)` | `agentfootprint.stream.*` | `agentfootprint`, `agentfootprint/observe` |
+| `costRecorder(opts)` | `agentfootprint.cost.*` | `agentfootprint`, `agentfootprint/observe` |
+| `evalRecorder(opts)` | `agentfootprint.eval.*` | `agentfootprint`, `agentfootprint/observe` |
+| `memoryRecorder(opts)` | `agentfootprint.memory.*` | `agentfootprint`, `agentfootprint/observe` |
+| `skillRecorder(opts)` | `agentfootprint.skill.*` | `agentfootprint`, `agentfootprint/observe` |
+| `toolsRecorder(opts)` | `agentfootprint.tools.*` | `agentfootprint`, `agentfootprint/observe` |
+| `permissionRecorder(opts)` | `agentfootprint.permission.*` | `agentfootprint`, `agentfootprint/observe` |
+| `compositionRecorder(opts)` | `agentfootprint.composition.*` | `agentfootprint`, `agentfootprint/observe` |
+| `ContextRecorder` (class) | `agentfootprint.context.*` | `agentfootprint`, `agentfootprint/observe` |
+
+Each factory takes `{ dispatcher, getRunContext, id? }`. Because the agent already attaches them, the way you *consume* their output is by subscribing with `agent.on(...)` (Surface 1) — not by reading methods off the recorder.
+
+### Recorders that accumulate (for UI / dashboards)
+
+Some recorders aggregate the event stream into a queryable structure. These are the ones you attach and then read back:
+
+| Factory / class | What it accumulates | Subpath |
+|-----------------|---------------------|---------|
+| `boundaryRecorder()` / `BoundaryRecorder` | Chart in/out boundaries (entry/exit pairs at every subflow) | `agentfootprint`, `agentfootprint/observe` |
+| `liveStateRecorder()` / `LiveStateRecorder` | Live LLM / tool / turn state for streaming dashboards | `agentfootprint`, `agentfootprint/observe` |
+| `runStepRecorder()` / `buildRunSteps(...)` | A step graph (`RunStep[]`) over the whole run | `agentfootprint` |
+
+These are the building blocks the agentfootprint Lens UI composes — see [streaming.md](streaming.md) for the full lifecycle-event timeline.
+
+---
+
+## `.enable.*` — One-Liner Observability Layers
+
+The `enable` namespace wires a pre-built observability layer in a single call. Each returns an `Unsubscribe` (or, for `flowchart`, a handle you can query).
+
+```typescript
+// Live status line — "what's the agent doing right now".
+const stopThinking = agent.enable.thinking({
+  onStatus: (status) => console.log(`  ⎈ ${status}`),
+});
+
+// Firehose structured logging, filtered by domain.
+import { LoggingDomains } from 'agentfootprint';
+const stopLogging = agent.enable.logging({
+  domains: [LoggingDomains.STREAM, LoggingDomains.AGENT],
+  logger: { log: (message) => console.log(`  [log] ${message}`) },
+});
+
+// Live composition graph — feed any graph renderer (React Flow, D3, …).
+const flow = agent.enable.flowchart();
+// flow.getSnapshot()  → query the graph any time
+
+try {
+  await agent.run({ message: 'analyze the Q3 report' });
+} finally {
+  stopThinking();
+  stopLogging();
 }
 ```
 
-### Event Types
-
-| Event | When it fires | Key fields |
-|-------|--------------|------------|
-| `TurnStartEvent` | User message received | `turnNumber`, `message` |
-| `LLMCallEvent` | After each LLM invocation | `model`, `usage`, `latencyMs`, `turnNumber`, `loopIteration`, `finishReason` |
-| `ToolCallEvent` | After each tool execution | `toolName`, `args`, `result`, `latencyMs` |
-| `TurnCompleteEvent` | Agent produces final response | `turnNumber`, `content`, `messageCount`, `totalLoopIterations` |
-| `AgentErrorEvent` | Error occurs | `phase` (`prompt`/`llm`/`tool`/`message`), `error`, `turnNumber` |
-
-### Event Ordering
-
-```
-1. onTurnStart        — user message received
-2. onLLMCall          — each LLM invocation (may repeat in tool loops)
-3. onToolCall         — each tool execution (may repeat)
-4. onTurnComplete     — agent produces final response
-   (or onError        — if something fails)
-```
+| `enable.*` method | Returns | Purpose |
+|-------------------|---------|---------|
+| `enable.thinking(opts)` | `Unsubscribe` | Terse Claude-Code-style status line (`onStatus`). *Deprecated in v2.8 in favor of `enable.liveStatus`, kept for back-compat.* |
+| `enable.logging(opts?)` | `Unsubscribe` | Firehose structured logs filtered by domain. *Deprecated in v2.8 in favor of `enable.observability`, kept for back-compat.* |
+| `enable.flowchart(opts?)` | `FlowchartHandle` | Live composition graph with `getSnapshot()` |
+| `enable.observability(opts?)` | `Unsubscribe` | Pipe every event into a vendor strategy (OTel, CloudWatch, AgentCore, …) |
+| `enable.cost(opts?)` | `Unsubscribe` | Subscribe a `CostStrategy` to `cost.tick`; defaults to an in-memory sink for read-back |
+| `enable.liveStatus(opts)` | `Unsubscribe` | Chat-bubble live-status state machine (strategy required) |
 
 ---
 
-## Built-in Recorders
+## Worked Example: Cost & Tokens
 
-### TokenRecorder
-
-Tracks token usage across all LLM calls.
+Cost and token data flow through the typed event stream. Supply a `PricingTable` so `cost.tick` events carry USD, then subscribe:
 
 ```typescript
-import { TokenRecorder } from 'agentfootprint';
+import { Agent, type PricingTable } from 'agentfootprint';
 
-const tokens = new TokenRecorder();
-agent.recorder(tokens);
-await agent.run('Hello');
-
-const stats = tokens.getStats();
-// {
-//   totalCalls: 2,
-//   totalInputTokens: 150,
-//   totalOutputTokens: 45,
-//   totalLatencyMs: 823,
-//   averageLatencyMs: 412,
-//   calls: [{ model, inputTokens, outputTokens, latencyMs, turnNumber, loopIteration }]
-// }
-
-tokens.getTotalTokens(); // 195 (input + output)
-tokens.clear();          // Reset
-```
-
-### CostRecorder
-
-Calculates USD cost per model using a configurable pricing table.
-
-```typescript
-import { CostRecorder } from 'agentfootprint';
-
-const cost = new CostRecorder({
-  pricingTable: {
-    'claude-sonnet-4-20250514': { input: 3, output: 15 },   // per 1M tokens
-    'gpt-4o': { input: 2.5, output: 10 },
+const pricing: PricingTable = {
+  name: 'demo-pricing',
+  pricePerToken: (_model, kind) => {
+    if (kind === 'input') return 0.00001;  // $0.01 / 1k input
+    if (kind === 'output') return 0.00003; // $0.03 / 1k output
+    return 0;
   },
-});
-agent.recorder(cost);
-await agent.run('Hello');
+};
 
-cost.getTotalCost();  // 0.00045 (USD)
-cost.getEntries();    // [{ model, inputTokens, outputTokens, inputCost, outputCost, totalCost }]
-cost.clear();
-```
-
-Models not in the pricing table get $0 cost (no error).
-
-### TurnRecorder
-
-Tracks turn lifecycle: start, complete, or error.
-
-```typescript
-import { TurnRecorder } from 'agentfootprint';
-
-const turns = new TurnRecorder();
-agent.recorder(turns);
-await agent.run('Hello');
-
-turns.getTurns();
-// [{ turnNumber: 1, message: 'Hello', content: '...', messageCount: 3, status: 'completed' }]
-
-turns.getCompletedCount(); // 1
-turns.getErrorCount();     // 0
-turns.clear();
-```
-
-### ToolUsageRecorder
-
-Tracks which tools are called, how often, latency, and errors.
-
-```typescript
-import { ToolUsageRecorder } from 'agentfootprint';
-
-const toolUsage = new ToolUsageRecorder();
-agent.recorder(toolUsage);
-await agent.run('Search for AI trends');
-
-const stats = toolUsage.getStats();
-// {
-//   totalCalls: 3,
-//   totalErrors: 0,
-//   byTool: {
-//     web_search: { calls: 2, errors: 0, totalLatencyMs: 450, averageLatencyMs: 225 },
-//     calculator: { calls: 1, errors: 0, totalLatencyMs: 12, averageLatencyMs: 12 },
-//   }
-// }
-
-toolUsage.getToolNames(); // ['web_search', 'calculator']
-toolUsage.clear();
-```
-
-### ExplainRecorder
-
-The differentiator: collects **per-iteration grounding evidence** during traversal. Each loop iteration becomes a self-contained evaluation unit — what context the LLM had, what tools it chose to call, what those tools returned, and the LLM's claim. An external evaluator can then verify each claim against its sources without re-running the agent.
-
-```typescript
-import { ExplainRecorder } from 'agentfootprint/explain';
-
-const explain = new ExplainRecorder();
-const agent = Agent.create({ provider }).tool(lookupOrder).recorder(explain).build();
-await agent.run('Check order ORD-1003');
-
-const report = explain.explain();
-report.iterations;  // EvalIteration[] — { context, decisions, sources, claim } per loop
-report.sources;     // ToolSource[]    — flat: every tool result
-report.claims;      // LLMClaim[]      — flat: every LLM response
-report.decisions;   // AgentDecision[] — flat: every tool call
-report.context;     // LLMContext      — last context snapshot
-report.summary;     // string          — human-readable summary
-```
-
-Per-iteration shape (the "connected data" the rest of the library is structured around):
-
-```typescript
-interface EvalIteration {
-  iteration: number;            // 0-based loop index
-  runtimeStageId?: string;      // links to commit log + execution tree
-  context: LLMContext;          // system prompt, available tools, messages, model
-  decisions: AgentDecision[];   // tool calls made this iteration
-  sources: ToolSource[];        // tool results returned
-  claim: LLMClaim | null;       // LLM response (null on tool-calling iterations)
-}
-```
-
-**Why this matters:** the connected shape lets a follow-up LLM (or a human reviewer) trace every claim back to the tool result that supports it. Most observability stacks log events; `ExplainRecorder` produces *evidence*. This is what `agentObservability().explain()` returns under the hood.
-
-### QualityRecorder
-
-Evaluates output quality via a custom judge function. The judge runs on each turn completion.
-
-> **LLM-as-judge caveat:** when the judge is itself an LLM, you inherit the well-documented biases of LLM-as-judge evaluation (Zheng et al. 2023 — "LLM as a Judge"): position bias, verbosity bias, self-preference. Validate judge output against a small human-labeled set before trusting averages.
-
-```typescript
-import { QualityRecorder } from 'agentfootprint';
-
-const quality = new QualityRecorder((event) => {
-  // Simple rule-based judge (could also call an LLM)
-  const score = event.content.length > 50 ? 0.9 : 0.3;
-  return { score, label: score > 0.5 ? 'good' : 'poor', turnNumber: event.turnNumber };
-});
-agent.recorder(quality);
-await agent.run('Explain quantum computing');
-
-quality.getScores();       // [{ score: 0.9, label: 'good', turnNumber: 1 }]
-quality.getAverageScore(); // 0.9
-quality.clear();
-```
-
-The judge function can be async (for LLM-as-judge patterns). Async judges fire-and-forget to avoid blocking execution.
-
-```typescript
-const llmJudge = new QualityRecorder(async (event) => {
-  const score = await myJudgeLLM.evaluate(event.content);
-  return { score, turnNumber: event.turnNumber };
-});
-```
-
-### GuardrailRecorder
-
-Checks safety and policy constraints on each turn completion. Returns violations or null.
-
-```typescript
-import { GuardrailRecorder } from 'agentfootprint';
-
-const guardrail = new GuardrailRecorder((event) => {
-  if (event.content.includes('CONFIDENTIAL')) {
-    return {
-      rule: 'pii-leak',
-      message: 'Output contains confidential data',
-      severity: 'error',
-      turnNumber: event.turnNumber,
-    };
-  }
-  return null;
-});
-agent.recorder(guardrail);
-await agent.run('Summarize the report');
-
-guardrail.hasViolations();           // true/false
-guardrail.getViolations();           // [{ rule, message, severity, turnNumber }]
-guardrail.getViolationsByRule('pii-leak');
-guardrail.clear();
-```
-
-Severity levels: `'info'`, `'warning'`, `'error'`. Defaults to `'warning'`.
-
-### CompositeRecorder
-
-Fans out events to multiple recorders. Error isolation: one recorder failing does not affect others.
-
-```typescript
-import {
-  CompositeRecorder,
-  TokenRecorder,
-  CostRecorder,
-  TurnRecorder,
-  ToolUsageRecorder,
-  QualityRecorder,
-  GuardrailRecorder,
-} from 'agentfootprint';
-
-const tokens = new TokenRecorder();
-const cost = new CostRecorder();
-const turns = new TurnRecorder();
-const toolUsage = new ToolUsageRecorder();
-
-const all = new CompositeRecorder([tokens, cost, turns, toolUsage]);
-
-const agent = Agent.create({ provider })
+const agent = Agent.create({
+  provider,
+  model: 'claude-sonnet-4-20250514',
+  pricingTable: pricing,
+  costBudget: 0.0001,   // optional — fires cost.limit_hit on crossing
+})
   .system('Be helpful.')
-  .recorder(all)     // Single attachment, all 4 recorders receive events
   .build();
 
-await agent.run('Hello');
+let inputTokens = 0;
+let outputTokens = 0;
+agent.on('agentfootprint.stream.llm_end', (e) => {
+  inputTokens += e.payload.usage.input;
+  outputTokens += e.payload.usage.output;
+});
 
-// Access each recorder's data independently
-console.log(tokens.getStats());
-console.log(cost.getTotalCost());
-console.log(turns.getCompletedCount());
-console.log(toolUsage.getStats());
+agent.on('agentfootprint.cost.tick', (e) => {
+  console.log(`[tick] +$${e.payload.estimatedUsd.toFixed(6)} — cumulative $${e.payload.cumulative.estimatedUsd.toFixed(6)}`);
+});
 
-// Access child recorders
-all.getRecorders(); // [tokens, cost, turns, toolUsage]
-all.clear();        // Clears all children
+agent.on('agentfootprint.cost.limit_hit', (e) => {
+  console.log(`⚠  budget ${e.payload.limit} crossed — actual ${e.payload.actual} (${e.payload.action})`);
+});
+
+await agent.run({ message: 'do the thing' });
+console.log(`tokens: ${inputTokens}in / ${outputTokens}out`);
 ```
 
----
-
-## Summary Table
-
-| Recorder | Hooks Used | Key Methods |
-|----------|-----------|-------------|
-| `TokenRecorder` | `onLLMCall` | `getStats()`, `getTotalTokens()`, `clear()` |
-| `CostRecorder` | `onLLMCall` | `getTotalCost()`, `getEntries()`, `clear()` |
-| `TurnRecorder` | `onTurnStart`, `onTurnComplete`, `onError` | `getTurns()`, `getCompletedCount()`, `getErrorCount()`, `clear()` |
-| `ToolUsageRecorder` | `onToolCall` | `getStats()`, `getToolNames()`, `clear()` |
-| `ExplainRecorder` | `onTurnStart`, `onLLMCall`, `onToolCall`, `onTurnComplete` | `explain()` → `{ iterations, sources, claims, decisions, context, summary }` |
-| `QualityRecorder` | `onTurnComplete` | `getScores()`, `getAverageScore()`, `clear()` |
-| `GuardrailRecorder` | `onTurnComplete` | `getViolations()`, `hasViolations()`, `getViolationsByRule()`, `clear()` |
-| `PermissionRecorder` | `onToolCall` + `onBlocked` (wired via `gatedTools`) | `getSummary()`, `getBlocked()`, `getDenied()`, `getAllowed()` — see [security.md](security.md) |
-| `CompositeRecorder` | All (fans out) | `getRecorders()`, `clear()` |
-| `agentObservability()` | All — bundles Token + Cost + Tool + Explain | `.tokens()`, `.tools()`, `.cost()`, `.explain()` |
-
-> **Recorder ID & idempotency:** `attachRecorder` is idempotent by `id` — attaching a recorder with the same id replaces the previous one. Different ids coexist. Built-ins use auto-incremented defaults (`metrics-1`, `cost-1`, ...) so multiple instances don't accidentally collide. If a framework auto-attaches a recorder, override it by attaching your own with the same id.
+The library never auto-aborts on budget — `cost.limit_hit` is advisory; the consumer decides what to do.
 
 ---
 
 ## Custom Recorder
 
-Implement only the hooks you need:
+A recorder is any object with a stable `id` plus the footprintjs `CombinedRecorder` hooks you care about (`onWrite`, `onCommit`, `onStageExecuted`, `onDecision`, `onEmit`, `onError`, …). Implement only what you need:
 
 ```typescript
-import type { AgentRecorder, LLMCallEvent, TurnCompleteEvent } from 'agentfootprint';
+import type { CombinedRecorder } from 'agentfootprint';
 
-class AuditRecorder implements AgentRecorder {
+class AuditRecorder implements CombinedRecorder {
   readonly id = 'audit';
   private log: string[] = [];
 
-  onLLMCall(event: LLMCallEvent): void {
-    this.log.push(`LLM call to ${event.model}: ${event.usage?.inputTokens}in/${event.usage?.outputTokens}out`);
+  // Scope channel — fires during stage execution.
+  onWrite(e): void {
+    this.log.push(`write ${e.key}`);
   }
 
-  onTurnComplete(event: TurnCompleteEvent): void {
-    this.log.push(`Turn ${event.turnNumber} complete: ${event.content.slice(0, 50)}...`);
+  // Emit channel — fires for agentfootprint.* events routed through emit.
+  onEmit(e): void {
+    this.log.push(`emit ${e.name}`);
   }
 
   getLog(): string[] {
     return [...this.log];
   }
-
-  clear(): void {
-    this.log = [];
-  }
 }
+
+const rec = new AuditRecorder();
+agent.attach(rec);
+await agent.run({ message: 'Hello' });
+console.log(rec.getLog());
 ```
+
+For a recorder that observes a *specific* agentfootprint domain (cost, eval, tools, …) the simplest path is to subscribe with `agent.on('agentfootprint.<domain>.*', listener)` and accumulate in a closure — no class needed.
+
+> **Compose, don't duplicate.** Building a domain-shaped view (a step graph, a cost ledger, a quality scoreboard)? Consume the typed event stream or wrap one of the accumulating recorders above — don't re-walk the execution tree. See [streaming.md](streaming.md).

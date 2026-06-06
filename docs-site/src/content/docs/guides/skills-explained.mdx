@@ -7,7 +7,7 @@ import { Aside } from '@astrojs/starlight/components';
 import CodeFile from '@/components/CodeFile.astro';
 
 <Aside type="note" title="What ships today">
-Every API surface this essay describes — `defineSkill({ id, description, body, tools, surfaceMode, refreshPolicy })`, `resolveSurfaceMode(provider, model)`, and `SkillRegistry` — is shipped and runnable. The runtime polish for fully-divergent per-mode behavior (suppressing the system-prompt slot for `'tool-only'`, etc.) lands in v2.5; today's runtime treats every mode as the cross-provider-correct path the essay calls right. Consumers express intent today; behavior tightens silently.
+Every API surface this essay describes — `defineSkill({ id, description, body, tools, surfaceMode, refreshPolicy })`, `resolveSurfaceMode(provider, model)`, and `SkillRegistry` — is shipped and runnable. Per-mode runtime dispatch is live: `surfaceMode: 'tool-only'` now suppresses the body from the system slot and delivers it via the `read_skill` tool result; `'both'` does both. The one field still reserved is `refreshPolicy` — the option is typed and non-breaking today, but the long-context re-injection hook is not yet wired into the engine.
 </Aside>
 
 ## In one line
@@ -24,7 +24,7 @@ That's the whole thing. The rest of this doc is why that's the right frame, what
 
 | Kind of content | The named abstraction | Example |
 |---|---|---|
-| **Instructions** — how to do something | **Skills** (+ `AgentInstruction`) | "When investigating port errors, fetch metrics first." |
+| **Instructions** — how to do something | **Skills** (+ `defineInstruction`) | "When investigating port errors, fetch metrics first." |
 | **Data** — what the world looks like | RAG, retrieval | "Here are the 5 most-similar past tickets." |
 | **History** — what has happened so far | Memory | "The user said earlier that their name is Alice." |
 | **Capabilities** — what can be done | Tools | "You may call `getMetrics(interface)`." |
@@ -65,11 +65,11 @@ Before the anatomy, clear up a frequent conflation:
 |---|---|---|---|
 | **Skills** (Claude Agent SDK) | Anthropic | A folder convention — `SKILL.md` + YAML frontmatter (`name`, `description`) loaded progressively on demand. | Descriptions advertised upfront; body fetched via tool call, returned as tool result. |
 | **Steering Docs** (AWS Strands) | AWS | Always-on behavioral priors attached to the agent. | Static injection into the system prompt. |
-| **`AgentInstruction`** (agentfootprint) | agentfootprint | A conditional rule: `{activeWhen, prompt?, tools?, onToolResult?}`. Per-turn predicate decides inclusion. | Can inject into all three positions — system prompt, tools list, tool-result stream. |
+| **`Injection`** (agentfootprint) | agentfootprint | The one primitive every flavor reduces to: `{ trigger, inject, flavor }`. A per-iteration `trigger` decides inclusion; `inject` carries content to one or more slots. | `inject` can target all three slots — `systemPrompt`, `tools`, `messages`. |
 
-These are not equivalent primitives. Skills is a discovery-and-dispatch pattern. Steering Docs are always-on context. `AgentInstruction` is a predicate-gated rule.
+These are not equivalent primitives. Skills is a discovery-and-dispatch pattern. Steering Docs are always-on context. An `Injection` (via `defineInstruction`) is a predicate-gated rule.
 
-**A Skill, in our library, is composed from `AgentInstruction`s. It is not a peer.** That hierarchy keeps the primitive count honest.
+**A Skill, in our library, is just an `Injection` with an `llm-activated` trigger — built by `defineSkill`. It is not a peer of the primitive.** That hierarchy keeps the primitive count honest.
 
 ### What ships today (the runnable surface)
 
@@ -77,7 +77,7 @@ These are not equivalent primitives. Skills is a discovery-and-dispatch pattern.
 
 <CodeFile path="examples/context-engineering/02-skill.ts" region="define-skill" title="examples/context-engineering/02-skill.ts (region: define-skill)" />
 
-That's the foundation. The rest of this essay explains *why* this design + what we're building on top of it (`surfaceMode`, `refreshPolicy`, `SkillRegistry` — all v2.4 Phase 4).
+That's the foundation. The rest of this essay explains *why* this design + what's built on top of it (`surfaceMode`, `refreshPolicy`, `SkillRegistry`).
 
 ## The actual anatomy — three stages over Messages API
 
@@ -164,7 +164,7 @@ This is what makes Skills a **correctness concern for a framework** — not just
 
 ## What agentfootprint does differently
 
-Given the above, our Skills implementation makes four choices. All of them fit in ~200 LOC of sugar on top of primitives we already had (`AgentInstruction`, `onToolResult`, tool registry).
+Given the above, our Skills implementation makes four choices. All of them fit in ~200 LOC of sugar on top of primitives we already had (the `Injection` primitive, the `on-tool-return` trigger, tool registry).
 
 ### 1. `surfaceMode: 'auto'` — the library picks per provider
 
@@ -182,15 +182,15 @@ Four modes: `'system-prompt'`, `'tool-only'`, `'both'`, `'auto'`. On Claude ≥ 
 
 This is the difference between a Skills pattern that happens to work on Claude and one that is correct across every provider the library supports, `mock()` included (evals match production).
 
-### 2. `AgentInstruction.onToolResult` as the recency-first injection point
+### 2. The `on-tool-return` trigger as the recency-first injection point
 
-agentfootprint already shipped `AgentInstruction` with an `onToolResult` hook — the cross-provider-correct path. Skills ride on top of it:
+agentfootprint already shipped the `Injection` primitive with an `on-tool-return` trigger (`{ kind: 'on-tool-return', toolName }`, built via `defineInstruction({ activeWhen: (ctx) => ctx.lastToolResult?.toolName === '…' })`) — the cross-provider-correct path. Skills ride on top of it:
 
-- A tool result lands in the message stream.
-- `onToolResult` rules evaluate on that result.
-- Matched rules inject text into the **same tool-result payload** the model is about to read.
+- A tool result lands in the message stream and is exposed as `ctx.lastToolResult`.
+- `on-tool-return` triggers (and `rule` predicates inspecting `ctx.lastToolResult`) evaluate on that result.
+- Matched injections deliver text in the freshest position the model is about to read.
 
-That text lands in the freshest possible position by protocol, not by training. Skills inherit this for free because every `Skill` IS-A `AgentInstruction` and inherits `onToolResult`.
+That text lands in the freshest possible position by protocol, not by training. Skills inherit this for free because every `Skill` IS-A `Injection` and shares the same trigger machinery.
 
 ### 3. Refresh policy for long contexts
 
@@ -203,7 +203,7 @@ defineSkill({
 });
 ```
 
-Belt-and-suspenders: even if system-prompt anchoring was honored at turn 1, by turn 40 on a non-Claude provider it's drifted out of effective attention. Re-inject the registry as a fresh tool result past a token threshold. The API surface is shipped today; the runtime hook lands in v2.5 as part of the long-context attention work — specifying `refreshPolicy` today is non-breaking.
+Belt-and-suspenders: even if system-prompt anchoring was honored at turn 1, by turn 40 on a non-Claude provider it's drifted out of effective attention. Re-inject the body as a fresh tool result past a token threshold. The API surface is shipped today; the runtime hook is still reserved (the engine accepts but ignores `refreshPolicy` until the long-context attention work lands) — so specifying it today is non-breaking.
 
 ### 4. Auto-generated loader tools + centralized governance
 
@@ -237,29 +237,30 @@ User turn arrives
          │
          ▼
 ┌────────────────────────────────────────────────────────┐
-│ registry.toPromptFragment(provider)                    │
+│ registry.resolveForSkill(skill, provider, model)       │
 │   surfaceMode 'system-prompt' | 'both'                 │
-│     → embed {id, title, description} list in system   │
+│     → body lands in the system slot next iteration     │
 │   surfaceMode 'tool-only'                              │
-│     → no system-prompt block                          │
+│     → body suppressed from system; tool result IS body │
 └────────────────────────────────────────────────────────┘
          │
          ▼
 ┌────────────────────────────────────────────────────────┐
-│ registry.toTools()                                     │
-│   always: list_skills, read_skill                      │
+│ registry.toTools() → { listSkills, readSkill }         │
+│   list_skills + read_skill                              │
 │   these are advertised in `tools` on every turn        │
 └────────────────────────────────────────────────────────┘
          │
          ▼
-  LLM turn 1 → recognizes match → tool_use: read_skill({id})
+  LLM turn 1 → recognizes match → tool_use: read_skill({ id })
          │
          ▼
 ┌────────────────────────────────────────────────────────┐
-│ read_skill handler                                     │
-│   registry.getById(id) → renderSkillBody()             │
-│   → "You are now following skill: {id} ({version})."   │
-│   delivered as tool_result (recency-first by protocol) │
+│ read_skill handler (buildReadSkillTool)                │
+│   registry.get(id) → confirmation OR body (per mode)   │
+│   tool-only/both → returns body (recency-first)        │
+│   system-prompt/auto → "Skill '{id}' activated…"       │
+│   id appended to scope.activatedInjectionIds           │
 └────────────────────────────────────────────────────────┘
          │
          ▼
@@ -270,22 +271,22 @@ User turn arrives
          │
          ▼
 ┌────────────────────────────────────────────────────────┐
-│ AgentInstruction.onToolResult fires per skill rule     │
+│ on-tool-return / rule injections fire per result       │
 │   • tool X fails → inject "when X fails…" snippet      │
 │   • trigger match → inject relevant skill hints        │
 │   → same tool-result payload, same recency window      │
 └────────────────────────────────────────────────────────┘
          │
          ▼
-  [ phase-2: after N tokens, refreshPolicy re-injects ]
-  [ the registry into a fresh tool_result breadcrumb  ]
+  [ reserved: after N tokens, refreshPolicy re-injects ]
+  [ the body into a fresh tool_result breadcrumb        ]
 ```
 
 No primitive is invented. Every step uses a field the Messages API has always had. The library's work is packaging — putting the right descriptions in the right surface for the right provider, with recency guarantees where provider training can't carry them.
 
 ## The one-line takeaway
 
-> Skills are **context engineering for instructions**, abstracted so you don't do it by hand and get it wrong. The protocol layer stays the Messages API's existing `system` + `tools` + `tool_result` fields — nothing new there. The framework layer's job is deciding where each instruction lives **on every turn, per provider, per context length**, so the model actually follows it. The Agent SDK's Claude-first answer is right for Claude; `agentfootprint`'s `surfaceMode: 'auto'` + `onToolResult` delivery is right for every provider, `mock()` included.
+> Skills are **context engineering for instructions**, abstracted so you don't do it by hand and get it wrong. The protocol layer stays the Messages API's existing `system` + `tools` + `tool_result` fields — nothing new there. The framework layer's job is deciding where each instruction lives **on every turn, per provider, per context length**, so the model actually follows it. The Agent SDK's Claude-first answer is right for Claude; `agentfootprint`'s `surfaceMode: 'auto'` + `on-tool-return` delivery is right for every provider, `mock()` included.
 
 ## When this understanding matters
 
@@ -293,11 +294,11 @@ If you're:
 
 - **Building a Skills-style system without Claude in the stack** — the Agent SDK pattern degrades. Use `surfaceMode: 'tool-only'` and put skill content in tool results, not the system prompt.
 - **Writing evals on `mock()` that should predict production** — `surfaceMode: 'auto'` resolves to `'tool-only'` on `mock()`, matching the behavior you'll see on any provider whose training you can't bank on. If you'd coded descriptions into the system prompt yourself, `mock()` would trivially follow them and production would drift.
-- **Running agents for 6+ hours with large contexts** — even on Claude, system-prompt anchoring decays past ~100K dense tokens. This is why `refreshPolicy` exists (Phase 2). Design your Skill bodies to be re-surfaceable via tool result, not just discoverable via system prompt.
-- **Wondering why your framework's "Skills" feature doesn't compose with your instruction system** — because they're the same thing. Skills are `AgentInstruction`s with a discovery layer bolted on. If your framework treats them as separate primitives, you're paying for parallel abstractions.
+- **Running agents for 6+ hours with large contexts** — even on Claude, system-prompt anchoring decays past ~100K dense tokens. This is why `refreshPolicy` exists (its runtime hook is still reserved). Design your Skill bodies to be re-surfaceable via tool result, not just discoverable via system prompt.
+- **Wondering why your framework's "Skills" feature doesn't compose with your instruction system** — because they're the same thing. Skills are `Injection`s (the same primitive `defineInstruction` builds) with a discovery layer bolted on. If your framework treats them as separate primitives, you're paying for parallel abstractions.
 
 ## See also
 
 - [Skills](/agentfootprint/guides/skills) — the API reference
-- [Instructions & decisions](/agentfootprint/guides/instructions) — the `AgentInstruction` primitive Skills compose over
+- [Instructions & decisions](/agentfootprint/guides/instructions) — the `Injection` primitive (via `defineInstruction`) Skills compose over
 - [Tool use](/agentfootprint/guides/tools) — the protocol Skills ride on

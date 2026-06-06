@@ -55,9 +55,9 @@ Pull a whole MCP server's tool surface into the agent in one call:
 
 <CodeFile path="examples/context-engineering/08-mcp.ts" region="connect-and-attach" title="examples/context-engineering/08-mcp.ts (region: connect-and-attach)" />
 
-`agent.tools(arr)` is the bulk-register companion to `agent.tool(t)`. Tool-name uniqueness is validated at `.build()` time — if an MCP-imported tool collides with a manually-defined tool, the build throws with a clear error.
+`agent.tools(arr)` is the bulk-register companion to `agent.tool(t)`. Tool-name uniqueness is validated at registration time — `.tool()` (and `.tools()`, which calls it per entry) throws `Agent.tool(): duplicate tool name '<name>'` the moment a collision is registered, so an MCP-imported tool clashing with a manually-defined one fails fast. (Collisions between static tools and Skill-injected tools are caught later, at `.build()`.)
 
-For mock-first development of MCP integrations without spawning a subprocess, use `mockMcpClient({ tools })` — same `McpClient` interface, in-memory implementation. See [MCP integration](/agentfootprint/integrations/) for the full surface.
+For mock-first development of MCP integrations without spawning a subprocess, use `mockMcpClient({ tools })` — same `McpClient` interface, in-memory implementation. See [Tool discovery](/agentfootprint/guides/tool-discovery/) for the full MCP surface.
 
 ## Tool errors
 
@@ -65,12 +65,13 @@ When `execute` throws, the framework catches it, reports it to the LLM as a tool
 
 ## Anti-patterns
 
-- Don't make `execute` synchronous — it must return a Promise. The agent loop is async end-to-end.
+- Don't reach outside the args + `ctx` your tool is given. `execute(args, ctx)` receives the LLM-supplied args plus a `ToolExecutionContext` (`{ toolCallId, iteration, signal? }`) — use `ctx.signal` to honor cancellation, not ambient globals. (`execute` may return a value OR a Promise; the loop `await`s either, so sync handlers are fine.)
 - Don't put validation logic in `execute` for things JSON Schema can express (`type`, `required`, `enum`). The LLM honors well-formed schemas; redundant runtime checks are noise.
 - Don't make tool descriptions ambiguous. "Get data" is bad. "Look up an order by ID; returns status + amount" is good. The LLM picks tools by description.
 
 ## Next steps
 
-- [MCP integration](/agentfootprint/integrations/) — connect to any MCP server with `mcpClient({ transport })`
+- [Tool discovery](/agentfootprint/guides/tool-discovery/) — connect to any MCP server with `mcpClient({ transport })`
+- [Tool providers](/agentfootprint/guides/tool-providers/) — dynamic per-iteration tool catalogs (`staticTools`, `gatedTools`, `skillScopedTools`)
 - [Skills, explained](/agentfootprint/guides/skills-explained/) — LLM-activated tool bundles
 - [Permission gating](/agentfootprint/guides/security/) — restrict which tools an agent can call

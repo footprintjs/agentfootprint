@@ -50,15 +50,15 @@ Properties the cache layer demonstrated and v2.8 generalizes:
 
 ## AWS adapter map — first ecosystem to support
 
-Library already ships `memory-agentcore` (`@aws-sdk/client-bedrock-agent-runtime` peer dep). The AWS pattern is established. v2.8 lights up AWS-side observability + cost in priority order:
+Library already ships `memory-agentcore` (`@aws-sdk/client-bedrock-agent-runtime` peer dep). The AWS pattern is established. The AWS-side observability adapters below **shipped in v3.1** — all under the single grouped `agentfootprint/observability-providers` subpath (one factory per vendor, never a new subpath):
 
-| Subpath | AWS service | Peer dep | What it does | When |
+| Factory (in `observability-providers`) | AWS service | Peer dep | What it does | Status |
 |---|---|---|---|---|
-| **`agentfootprint/observability-agentcore`** | AWS Bedrock **AgentCore Observability** | `@aws-sdk/client-bedrock-agent-runtime` (already a peer for `memory-agentcore`) | Pipe events into AgentCore's native observability surface. Consumers already integrated with AgentCore Memory get observability for free — same peer dep, same SDK client, same auth. | **v2.8.1 — AWS-first priority** |
-| **`agentfootprint/observability-cloudwatch`** | AWS CloudWatch Logs / Metrics | `@aws-sdk/client-cloudwatch-logs`, `@aws-sdk/client-cloudwatch` | Generic structured logging + custom metrics. Standard AWS observability sink. | **v2.8.2** |
-| **`agentfootprint/observability-xray`** | AWS X-Ray | `@aws-sdk/client-xray` | Distributed tracing — spans per LLM call / tool call / iteration. Auto-derives parent-child from `runtimeStageId`. | **v2.8.3** |
-| **`agentfootprint/audit-cloudtrail`** *(future)* | AWS CloudTrail | `@aws-sdk/client-cloudtrail` | Tamper-evident audit log for permission decisions, denied tools, capability inventory. | v2.9+ when `enable.audit` ships |
-| **`agentfootprint/cost-cloudwatch-billing`** *(future)* | AWS Cost & Billing | `@aws-sdk/client-cost-explorer` | Pipe agentfootprint cost ticks into Cost Explorer for org-level dashboards. | v2.10+ |
+| **`agentcoreObservability(opts)`** | AWS Bedrock **AgentCore Observability** | `@aws-sdk/client-cloudwatch-logs` (+ `@aws-sdk/client-bedrock-agent-runtime`, already a peer for `memory-agentcore`) | Pipe events into AgentCore's native observability surface. Consumers already integrated with AgentCore Memory get observability with the same auth pattern. | **Shipped (v3.1)** |
+| **`cloudwatchObservability(opts)`** | AWS CloudWatch Logs | `@aws-sdk/client-cloudwatch-logs` | Generic structured logging. Standard AWS observability sink. | **Shipped (v3.1)** |
+| **`xrayObservability(opts)`** | AWS X-Ray | `@aws-sdk/client-xray` | Distributed tracing — spans per LLM call / tool call / iteration. Derives parent-child from `runtimeStageId`. | **Shipped (v3.1)** |
+| **`audit` (CloudTrail)** *(future)* | AWS CloudTrail | — | Tamper-evident audit log for permission decisions, denied tools, capability inventory. | future, when `enable.audit` ships |
+| **`cost` (Cost Explorer)** *(future)* | AWS Cost & Billing | — | Pipe agentfootprint cost ticks into Cost Explorer for org-level dashboards. | future |
 
 Why AWS-first:
 1. **Existing precedent** — `memory-agentcore` already ships, same peer-dep auth pattern reused
@@ -72,12 +72,12 @@ After AWS lands, OTel + Datadog + Pino follow in v2.9.x (vendor-neutral / non-AW
 
 Each group is a port; vendor integrations are adapters. `enable.<group>({ strategy, ...opts })` plumbs events to the chosen strategy.
 
-| Group | DSL options | Strategies (initial set) | Default | Out-of-scope per memo |
+| Group | DSL options | Strategies (shipped / planned) | Default when no `strategy` given | Out-of-scope per memo |
 |---|---|---|---|---|
-| **`enable.observability`** | `tier: 'minimal' \| 'standard' \| 'firehose'` · `sampleRate: 0..1` | `console()` · `otel(tracer)` · `datadog(config)` · `pino(logger)` · `cloudwatch(client)` | `console()` | server log shipping (Splunk, etc.) |
-| **`enable.cost`** | `budget?` · `breakers?` | `inMemorySink({onTick})` · `stripeBilling(account)` · `webhook(url)` | `inMemorySink()` | OpenAI dashboard pipe (later) |
-| **`enable.liveStatus`** | `templates?: ThinkingTemplates` | `chatBubble(cb)` · `stdout()` · `webhook(url)` | `chatBubble(cb)` | server-sent-events helper (later) |
-| **`enable.lens`** | (rendering target) | `browser()` · `cliTUI(stream)` · `jsonExport(writer)` | `browser()` | Lens-as-service (later) |
+| **`enable.observability`** | `strategy?` · `sampleRate: 0..1` · `detach?` | `consoleObservability()` · `otelObservability(tracer)` · `agentcoreObservability(opts)` · `cloudwatchObservability(opts)` · `xrayObservability(opts)` | no-op (no auto-default) | server log shipping (Splunk, etc.) |
+| **`enable.cost`** | `strategy?` · `budget?` | `inMemorySinkCost({onTick})` · *(stripeCost — planned)* | `inMemorySinkCost()` | OpenAI dashboard pipe (later) |
+| **`enable.liveStatus`** | `strategy` (required) · `templates?: ThinkingTemplates` | `chatBubbleLiveStatus(cb)` | none — `strategy` is required | server-sent-events helper (later) |
+| **`enable.lens`** *(planned)* | (rendering target) | `noopLens()` · *(browserLens / cliLens — planned)* | `noopLens()` | Lens-as-service (later) |
 
 **Parked for later** (same pattern, different time): `audit`, `governance`, `debug`, `eval`, `reflection`.
 
@@ -86,65 +86,72 @@ Each group is a port; vendor integrations are adapters. `enable.<group>({ strate
 Per group, a typed interface (small, focused, no inheritance):
 
 ```typescript
-// Generic shape — each group has its own concrete version
-interface ObservabilityStrategy {
-  readonly name: string;                  // registry key
-  readonly capabilities: {
+// As shipped — src/strategies/types.ts. Each group has its own concrete version.
+interface BaseStrategy {
+  readonly name: string;                       // registry key
+  flush?(): void | Promise<void>;              // batch exporters
+  stop?(): void;                               // teardown (idempotent)
+  readonly relevantEventTypes?: readonly AgentfootprintEventType[];  // optional event filter
+  validate?(): void;                           // config check at registration
+  _onError?(error: Error, event?: AgentfootprintEvent): void;
+}
+
+interface ObservabilityStrategy extends BaseStrategy {
+  readonly capabilities: {                     // OTel's 4-signal model
+    events?: boolean;
+    logs?: boolean;
     traces?: boolean;
     metrics?: boolean;
-    logs?: boolean;
   };
-  onEvent(event: AgentfootprintEvent): void;  // hot path; sync, side-effect-only
-  flush?(): Promise<void>;                    // batch exporters
-  stop?(): void;                              // teardown
+  exportEvent(event: AgentfootprintEvent): void;  // hot path; sync, side-effect-only
 }
 ```
 
-Three properties enforced at the interface level:
+Properties enforced at the interface level:
 
 1. **Idempotent registration** — registering the same `name` twice replaces, doesn't duplicate
-2. **Side-effect-free `onEvent`** — must not throw, must not block. Errors logged + swallowed (otherwise one bad exporter kills the agent loop)
+2. **Side-effect-free, non-throwing hot path** — the per-group hot-path method (`exportEvent`) must not throw, must not block. Errors caught at the dispatch layer and routed to `_onError` (otherwise one bad exporter kills the agent loop)
 3. **Optional `stop` / `flush`** — strategies that batch can flush on stop; strategies that don't need it don't implement
 
-Same shape for `CostStrategy`, `LiveStatusStrategy`, `LensStrategy`. Symmetry is the point.
+Same `BaseStrategy` shape for `CostStrategy` (`recordCost`), `LiveStatusStrategy` (`renderStatus`), `LensStrategy` (`renderGraph`) — only the hot-path method name and capability bag differ per group. Symmetry is the point.
 
 ## The composite combinator
 
 Multi-vendor fan-out comes free:
 
 ```typescript
-import { compose } from 'agentfootprint/strategies';
+import { otelObservability } from 'agentfootprint/observability-providers';
+import { composeObservability, consoleObservability } from 'agentfootprint/observability-providers';
 
 agent.enable.observability({
-  strategy: compose([
-    datadog({ apiKey }),
-    otel(tracer),
-    console(), // local dev visibility
+  strategy: composeObservability([
+    otelObservability(tracer),  // ship to your OTel collector (Datadog via OTLP, etc.)
+    consoleObservability(),     // local dev visibility
   ]),
 });
 ```
 
-`compose` returns a strategy whose `onEvent` fan-outs to every child. Errors per-child isolated; one bad exporter doesn't break others. Same pattern as `withRetry` / `withFallback` in the resilience subsystem.
+> **Shipped as of v3.1:** vendor strategies live under the single grouped subpath `agentfootprint/observability-providers` (`agentcoreObservability`, `cloudwatchObservability`, `xrayObservability`, `otelObservability`) — *not* per-vendor subpaths. The default sinks (`consoleObservability`, `inMemorySinkCost`, `chatBubbleLiveStatus`, `noopLens`) and the per-group combinators (`composeObservability`, `composeCost`, `composeLiveStatus`, `composeLens`) are exported from the same place. There is **no single `compose`** — each group has its own typed combinator. Datadog ships no native adapter; point an OTel SDK at Datadog's OTLP endpoint and use `otelObservability`.
+
+`composeObservability` returns a strategy whose `exportEvent` fans out to every child. Errors per-child isolated; one bad exporter doesn't break others. Same pattern as `withRetry` / `withFallback` in the resilience subsystem.
 
 ## Package structure
 
-Mirrors the existing memory-adapter layout (`memory-redis`, `memory-agentcore`):
+Mirrors the existing **grouped** parallel-providers layout (`llm-providers`, `tool-providers`, `memory-providers`). One subpath per group; adding a vendor adds a factory export, not a new subpath:
 
 ```
-agentfootprint                          ← core, ships default strategies
-  /observability-otel                   ← peer: @opentelemetry/api
-  /observability-datadog                ← peer: @datadog/browser-rum
-  /observability-pino                   ← peer: pino
-  /observability-cloudwatch             ← peer: @aws-sdk/client-cloudwatch-logs
-  /cost-stripe                          ← peer: stripe
-  /lens-cli                             ← peer: blessed | ink
+agentfootprint                          ← core, ships the 4 default strategies
+  /observability-providers              ← SHIPPED (v3.1): agentcore, cloudwatch, xray, otel
+      peers: @aws-sdk/client-cloudwatch-logs, @aws-sdk/client-xray,
+             @aws-sdk/client-bedrock-agent-runtime, @opentelemetry/api
+  /cost-providers                       ← planned: stripeCost
+  /lens-providers                       ← planned: browserLens, cliLens
 ```
 
-Each:
-- Lazy-imported (zero bundle weight when unused)
+Each vendor factory:
+- Lazy-imports its vendor SDK via `lib/lazyRequire.ts` (zero bundle weight when unused)
 - Peer-dep on vendor SDK (consumer brings their version)
 - `peerDependenciesMeta.optional: true` so missing peers don't break install
-- Self-registers on import via side-effect
 
 ## Why this matters more than "shipping integrations"
 
@@ -154,10 +161,10 @@ Three architectural wins:
 
 ```typescript
 // Before
-agent.enable.observability({ strategy: datadog({ apiKey }) });
+agent.enable.observability({ strategy: cloudwatchObservability({ region, logGroupName }) });
 
 // After (vendor migration)
-agent.enable.observability({ strategy: otel(tracer) });
+agent.enable.observability({ strategy: otelObservability(tracer) });
 ```
 
 Agent code is untouched. The DSL is the contract; the vendor is the implementation. Same one-line property the cache layer offers (`provider: anthropic()` → `provider: openai()`) and the memory layer (`store: new InMemoryStore()` → `store: new RedisStore()`).
@@ -168,13 +175,23 @@ Production observability is rarely single-vendor. Teams pipe to Datadog AND OTel
 
 ### 3. CI-testable without vendor accounts
 
-Every strategy ships a mock variant:
+Because a strategy is just an object implementing the typed interface, CI can plug in a capture-only strategy and assert on what was exported — no vendor account or network needed:
+
 ```typescript
-import { mockDatadog } from 'agentfootprint/observability-datadog/test';
-agent.enable.observability({ strategy: mockDatadog() });
+import type { ObservabilityStrategy } from 'agentfootprint';
+
+const captured: AgentfootprintEvent[] = [];
+const captureStrategy: ObservabilityStrategy = {
+  name: 'capture',
+  capabilities: { events: true },
+  exportEvent: (e) => { captured.push(e); },
+};
+
+agent.enable.observability({ strategy: captureStrategy });
+// ... run the agent, then assert on `captured`
 ```
 
-CI runs the full pipeline against the mock; production swaps in `datadog()`. **Mocks first, prod second** — the same architectural rule as `mock()` LLM provider, `InMemoryStore`, `mockMcpClient`.
+For cost, `inMemorySinkCost()` already buffers ticks for read-back. CI runs the full pipeline against the in-memory/capture strategy; production swaps in `otelObservability()` / `cloudwatchObservability()`. **Mocks first, prod second** — the same architectural rule as the `mock()` LLM provider, `InMemoryStore`, and `mockMcpClient`.
 
 ## What survives the panel review (locked-in design decisions)
 
@@ -196,6 +213,8 @@ From the 7-expert design review (AWS IAM, Datadog, OTel, Stripe, Vercel, React, 
 ## Migration plan — **AWS-first vendor priority**
 
 The library already has `memory-agentcore` (`@aws-sdk/client-bedrock-agent-runtime` peer dep) shipping. Established pattern. Lean into the same ecosystem for observability strategies.
+
+> **Status (v3.1):** the grouped enablers (`observability`, `cost`, `liveStatus`), the strategy slot + the 4 default sinks, the per-group `compose*` combinators, and the AWS observability adapters (`agentcoreObservability`, `cloudwatchObservability`, `xrayObservability`) plus `otelObservability` have **all shipped** — under the single `agentfootprint/observability-providers` subpath. The deprecated flat methods (`enable.thinking`, `enable.logging`, `enable.flowchart`) are still present and marked `@deprecated`; they have not yet been removed. `cost`/`lens` vendor subpaths and `enable.lens` remain planned. The version numbers below are the original plan, kept for the historical record.
 
 | Version | What ships | Breaking? |
 |---|---|---|
@@ -226,23 +245,23 @@ Each of these is well-understood structurally; they're parked because v2.8.0 sho
 Every strategy is a behavioral subtype of its interface:
 
 ```
-ObservabilityStrategy       (the supertype — the contract)
-├── ConsoleStrategy         (substitutable: prints events to stdout)
-├── OTelStrategy            (substitutable: forwards to OTel tracer)
-├── DatadogStrategy         (substitutable: ships to Datadog API)
-├── PinoStrategy            (substitutable: pipes through pino)
-└── ComposeStrategy         (substitutable: fan-outs to N children)
+ObservabilityStrategy           (the supertype — the contract)
+├── consoleObservability()      (substitutable: prints structured events)
+├── otelObservability(tracer)   (substitutable: forwards to OTel tracer)
+├── cloudwatchObservability()   (substitutable: ships to CloudWatch Logs)
+├── agentcoreObservability()    (substitutable: pipes to AgentCore)
+└── composeObservability([...]) (substitutable: fans out to N children)
 ```
 
-Agent code calls `strategy.onEvent(event)` knowing only the interface. Swap any in, agent works. **That's LSP enforced at runtime, not just at type-check.** Same property as `LLMProvider`, `MemoryStore`, `CacheStrategy`, `ToolProvider`.
+Agent code calls `strategy.exportEvent(event)` knowing only the interface. Swap any in, agent works. **That's LSP enforced at runtime, not just at type-check.** Same property as `LLMProvider`, `MemoryStore`, the cache strategies, and `ToolProvider`.
 
 The library has *one architectural pattern*, applied recursively. Strategy + LSP + side-effect-import auto-registration is the spine. Cache was the first instance; v2.8 makes it the universal principle.
 
 ## Pairing with other inspiration pages
 
-- [`modularity-liskov.md`](./modularity-liskov.md) — *why* substitutability is sound (the abstraction theory)
-- [`connected-data-palantir.md`](./connected-data-palantir.md) — *why* connected data matters (the user value)
-- **`strategy-everywhere.md`** (this) — *how* the library scales to N vendor integrations without architectural drift
+- [Modularity — the Liskov lineage](/inspiration/modularity-liskov/) — *why* substitutability is sound (the abstraction theory)
+- [Connected data — the Palantir lineage](/inspiration/connected-data-palantir/) — *why* connected data matters (the user value)
+- **Strategy everywhere** (this page) — *how* the library scales to N vendor integrations without architectural drift
 
 The three together form the load-bearing architecture: connected data inside clean boundaries, with vendor integrations as substitutable adapters. **Adapter substitutability is what keeps the data-connection guarantees from leaking across vendor boundaries.**
 
@@ -251,8 +270,8 @@ The three together form the load-bearing architecture: connected data inside cle
 Before v2.8.0 implementation starts:
 
 1. ✅ Design memo (this document) committed and reviewed
-2. 🔲 Strategy interface signatures locked in `src/recorders/strategies/types.ts` (skeleton only)
-3. 🔲 1 vendor adapter PROTOTYPED end-to-end (suggest: OTel — SIG offered) before scaling to N
+2. ✅ Strategy interface signatures locked in `src/strategies/types.ts`
+3. ✅ Vendor adapters shipped end-to-end (AgentCore, CloudWatch, X-Ray, OTel) under `observability-providers`
 4. 🔲 Mock-strategy contract test — validates that ANY strategy implementing the interface plugs in cleanly
 5. 🔲 Performance baseline — `compose([...])` of 5 children must add ≤ 5% overhead vs single strategy
 

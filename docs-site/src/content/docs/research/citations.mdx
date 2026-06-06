@@ -13,7 +13,7 @@ Every pattern in `examples/patterns/` is a recipe over the 2-primitive + 4-compo
 
 > Yao, Zhao, Yu, Du, Shafran, Narasimhan, Cao. **"ReAct: Synergizing Reasoning and Acting in Language Models."** *ICLR 2023*. [arXiv:2210.03629](https://arxiv.org/abs/2210.03629)
 
-Recipe: the `Agent` primitive itself. No separate file — `Agent.create({ provider, model }).tool(...).build()` IS ReAct. The framework owns the loop (think → act → observe → repeat).
+Recipe: the `Agent` primitive itself. No separate file — `Agent.create({ provider, model }).tools([...]).build()` IS ReAct. The framework owns the loop (think → act → observe → repeat).
 
 Deviation: none — this is the canonical loop, with tool dispatch + result feedback identical to the paper.
 
@@ -96,7 +96,7 @@ The unifying mental model — "Skills, RAG, Memory, Instructions, Tools are all 
 
 > Mialon, Dessì, Lomeli, Nalmpantis, Pasunuru, Raileanu, Rozière, Schick, Dwivedi-Yu, Celikyilmaz, Grave, LeCun, Scialom. **"Augmented Language Models: a Survey."** *TMLR 2023*. [arXiv:2302.07842](https://arxiv.org/abs/2302.07842)
 
-This survey's framing — every external input as an augmentation — is the conceptual root of our Injection primitive. We just gave it a concrete shape (`{ trigger, slot, content }`) and a typed event channel.
+This survey's framing — every external input as an augmentation — is the conceptual root of our Injection primitive. We just gave it a concrete shape (`{ trigger, inject, flavor }` — *when* to activate, *what* to contribute across slots, and an observability tag) and a typed event channel.
 
 ## How to cite agentfootprint
 

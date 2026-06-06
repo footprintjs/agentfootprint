@@ -29,24 +29,26 @@ Most production apps use **`pattern`** for the noisy 80% (zero cost) and reach f
 ## What gets stored
 
 Each fact is a `MemoryEntry<Fact>` with:
-- `id` — derived from the canonicalized fact (so re-extracting the same fact is idempotent)
-- `value` — the fact text + structured fields when extractor produces them
-- `metadata` — confidence score, extractor version, source turn id
+- `id` — `fact:${fact.key}`, derived from the fact's `key` (so re-asserting the same key is idempotent)
+- `value` — the `Fact` itself: `{ key, value, confidence?, category?, refs? }`
+- `source` — provenance: `{ turn, identity }` (the turn that produced the fact and the identity it belongs to)
 - Multi-tenant identity scope (every store call takes `MemoryIdentity`)
 
-Re-running the agent doesn't re-extract facts already in the store. The dedup happens via `recordSignature` on the canonicalized form.
+Re-running the agent doesn't accumulate duplicate facts. Facts dedup by `key`: each entry's id is `fact:${key}`, and the store's `putMany` overwrites on id collision — so a later turn asserting the same key REPLACES the prior entry rather than appending. (This is the opposite of episodic messages and narrative beats, which are append-only.)
 
 ## Read-side: facts as injected context
 
-By default the read subflow loads the most-recent-by-update-time facts (capped to a token budget) and renders them as a system message:
+By default the read subflow loads the stored facts (a bounded `list` filtered to the `fact:` id prefix) and renders them as a system message:
 
 ```
 Known facts about the user:
-- name = Alice
-- plan = Pro
-- timezone = Europe/Berlin
-- pet:cat:name = Mochi
+- user.name = Alice
+- user.email = alice@acme.com
+- user.location = Berlin
+- user.preferences = dark mode
 ```
+
+(Keys use the dotted-path convention the built-in extractors emit — `user.name`, `user.email`, `user.location`, `user.preferences`. An LLM extractor can define its own key namespaces.)
 
 The LLM sees this as fresh context every turn. No replay of original conversations — just the distilled signal.
 

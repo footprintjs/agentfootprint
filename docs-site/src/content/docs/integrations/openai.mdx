@@ -15,8 +15,11 @@ Peer dep, lazy-required, optional in `peerDependenciesMeta`. Friendly install hi
 
 ## Use
 
+`openai()` is a vendor-SDK provider, so it lives at the `agentfootprint/llm-providers` subpath (this keeps the lazy `openai` peer-dep require out of the main barrel). `Agent` comes from the main barrel as usual:
+
 ```ts
-import { Agent, openai } from 'agentfootprint';
+import { Agent } from 'agentfootprint';
+import { openai } from 'agentfootprint/llm-providers';
 
 const provider = openai({
   apiKey: process.env.OPENAI_API_KEY!,
@@ -45,12 +48,12 @@ const groq = openai({
 });
 ```
 
-For Ollama specifically, the convenience factory:
+For Ollama specifically, the convenience factory (also from `agentfootprint/llm-providers`). It defaults `baseURL` to `http://localhost:11434/v1` and names the provider `ollama`; set the model via `defaultModel` (or pass a custom `host`):
 
 ```ts
-import { ollama } from 'agentfootprint';
+import { ollama } from 'agentfootprint/llm-providers';
 
-const provider = ollama({ model: 'llama3.1' });
+const provider = ollama({ defaultModel: 'llama3.1' });
 ```
 
 ## Tools (function calling)

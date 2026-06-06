@@ -19,7 +19,7 @@ If the predicate returns true, the prompt text is appended to the system slot fo
 
 ## Defining an Instruction
 
-`defineInstruction` takes an `id`, a `prompt`, and an `activeWhen` predicate. The predicate receives an `InjectionContext` with the current `userMessage`, `iteration` count, `lastToolResult`, activated `skills`, and conversation `history`:
+`defineInstruction` takes an `id`, a `prompt`, and an `activeWhen` predicate. The predicate receives an `InjectionContext` with the current `userMessage`, `iteration` count, `lastToolResult`, `activatedInjectionIds` (ids of skills/injections the LLM activated this turn), and conversation `history`:
 
 <CodeFile path="examples/context-engineering/01-instruction.ts" region="define" title="examples/context-engineering/01-instruction.ts (region: define)" />
 
@@ -31,7 +31,7 @@ Once defined, attach with `.instruction(...)`. Multiple instructions stack — e
 
 <CodeFile path="examples/context-engineering/01-instruction.ts" region="attach" title="examples/context-engineering/01-instruction.ts (region: attach)" />
 
-The agent doesn't know there are "instructions" attached — it just sees a system prompt that varies by turn. The `agentfootprint.context.injected` event fires with `source: 'instruction'` and the matching `id` so observability surfaces can show which rules fired when.
+The agent doesn't know there are "instructions" attached — it just sees a system prompt that varies by turn. The `agentfootprint.context.injected` event fires with `source: 'instructions'` and the matching `id` so observability surfaces can show which rules fired when.
 
 ## The on-tool-return trigger (Dynamic ReAct)
 
@@ -57,8 +57,8 @@ defineInstruction({
 ```
 
 When to use which:
-- `slot: 'system'` (default) — baseline behavior shaping (tone, format, persona). Provider attention to system prompts varies but is reliable on Claude/GPT-4.
-- `slot: 'messages'` — recency-first. Use when the rule MUST be honored and you suspect long-context attention decay would weaken a system-prompt placement.
+- `slot: 'system-prompt'` (default) — baseline behavior shaping (tone, format, persona). Provider attention to system prompts varies but is reliable on Claude/GPT-4.
+- `slot: 'messages'` — recency-first. Use when the rule MUST be honored and you suspect long-context attention decay would weaken a system-prompt placement. The injected text lands as a synthetic message with `role: 'system'` by default; pass `role: 'user'` (the other commonly-useful `ContextRole`) to land it as a user-turn message instead.
 
 ## Anti-patterns
 
@@ -71,4 +71,4 @@ When to use which:
 
 - [Skills, explained](/agentfootprint/guides/skills-explained/) — context engineering for instructions, taken further (LLM-activated skills + tools)
 - [Memory guide](/agentfootprint/guides/memory/) — for stateful context across runs (Instructions are per-iteration; Memory is cross-run)
-- [Where to land an injection](/agentfootprint/guides/where-to-land-an-injection/) — slot × trigger × per-provider attention guidance (coming in v2.4)
+- [Key concepts](/agentfootprint/getting-started/key-concepts/) — the Injection primitive (`slot × trigger × cache`) and how every flavor reduces to it

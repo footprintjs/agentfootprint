@@ -54,15 +54,15 @@ That's the whole model: `Injection = slot × trigger × cache`.
 
 ### The 4 triggers
 
-| Trigger | Flavor | Fires when | Builder example | Default slot |
+| Trigger | Flavor | Fires when | Illustration | Default slot |
 |---|---|---|---|---|
-| `always` | static | Every iteration | `.steering('You are a triage agent…')` | `system` |
-| `rule` | runtime — predicate | Your rule returns true | `.rag({ when: s => /price\|refund/.test(s.userQuery) })` | `messages` |
-| `on-tool-return` | runtime — lifecycle | After a specific tool returns | `.instruction({ after: 'search_db', text: 'Cite source IDs.' })` | `messages` |
-| `llm-activated` | runtime — agent-driven | LLM calls `read_skill('id')` | `.skill({ id: 'refund-policy', activatedBy: 'read_skill' })` | `messages` (body) |
+| `always` | static | Every iteration | `.steering(defineSteering({ id, prompt: 'You are a triage agent…' }))` | `system` |
+| `rule` | runtime — predicate | Your rule returns true | `.instruction(defineInstruction({ id, activeWhen: s => /price\|refund/.test(s.userQuery), prompt }))` | `system` |
+| `on-tool-return` | runtime — lifecycle | After a specific tool returns | `.instruction(defineInstruction({ id, slot: 'messages', activeWhen, prompt: 'Cite source IDs.' }))` | `messages` |
+| `llm-activated` | runtime — agent-driven | LLM calls `read_skill('id')` | `.skill(defineSkill({ id: 'refund-policy', description, body, viaToolName: 'read_skill' }))` | `messages` (body) |
 
 > [!NOTE]
-> Slot is a default, not a coupling — the same `Skill` can live in `tools` (schema only, discovered via `read_skill`), `messages` (body injected on activation), or `system` (baked into the prompt as steering).
+> The "Illustration" column shows the shape of each flavor — the typed builder methods (`.steering` / `.instruction` / `.skill` / `.fact` / `.rag`) take an `Injection` (or `MemoryDefinition` for `.rag`) produced by the matching `defineSteering` / `defineInstruction` / `defineSkill` / `defineFact` / `defineRAG` factory. Slot is a default, not a coupling — the same `Skill` can live in `tools` (schema only, discovered via `read_skill`), `messages` (body injected on activation), or `system` (baked into the prompt as steering).
 
 **3 slots × 4 triggers × N flavors = the entire context-engineering surface.**
 
@@ -204,8 +204,8 @@ const fan = Parallel.create()
 import { Conditional } from 'agentfootprint';
 
 const router = Conditional.create()
-  .when('billing', s => s.intent === 'billing', billingAgent)
-  .when('tech',    s => s.intent === 'tech',    techAgent)
+  .when('billing', s => /bill|invoice|refund/.test(s.message), billingAgent)
+  .when('tech',    s => /error|bug|crash/.test(s.message),     techAgent)
   .otherwise('default', defaultAgent)
   .build();
 ```
@@ -227,7 +227,7 @@ import { Loop } from 'agentfootprint';
 
 const reflexion = Loop.create()
   .repeat(thinkAgent)
-  .until(s => s.satisfied)
+  .until(({ latestOutput }) => latestOutput.includes('DONE'))
   .build();
 ```
 
@@ -270,7 +270,8 @@ Pick the flows that match your problem. Chain them. **That's your Agentic Applic
 ```typescript
 const research = Loop.create()
   .repeat(Sequence.create().step('plan', plan).step('search', searchAll).build())
-  .until(s => s.satisfied).build();
+  .until(({ iteration, latestOutput }) => iteration >= 3 || latestOutput.includes('DONE'))
+  .build();
 ```
 
 Same `.create().method().build()` shape as the four rows above — just composed.
@@ -367,7 +368,7 @@ const result = await agent.run({ message: 'Weather in Paris?' });
 console.log(result);  // → "I checked: it is 72°F and sunny."
 ```
 
-Swap `mock(...)` for `anthropic(...)` / `openai(...)` / `bedrock(...)` / `ollama(...)` for production. Nothing else changes.
+For production, import a real provider from `agentfootprint/llm-providers` and swap it in — `anthropic(...)` / `openai(...)` / `bedrock(...)` / `ollama(...)`. Only the import line changes; the agent code stays the same. (The vendor-SDK providers live on the `agentfootprint/llm-providers` subpath so the main `agentfootprint` barrel stays free of optional peer-dep requires; `mock`, `browserAnthropic`, and `browserOpenai` are on the main barrel.)
 
 ---
 
@@ -393,7 +394,7 @@ The flowchart, recorders, and tests don't change between dev and prod.
 - 4 control flows — `Sequence`, `Parallel`, `Conditional`, `Loop`
 - 1 Injection primitive — `defineSkill` / `defineSteering` / `defineInstruction` / `defineFact`
 - 1 reliability gate — `.reliability({ preCheck, postDecide, providers, circuitBreaker, fallback })`
-- 1 tool dispatch primitive — `ToolProvider` (sync OR async) — `staticTools` · `gatedTools` · `skillScopedTools` · custom `discoveryProvider` over hubs / MCP / per-tenant catalogs
+- 1 tool dispatch primitive — `ToolProvider` (sync OR async) — `staticTools` · `gatedTools` · `skillScopedTools` · or a custom `ToolProvider` that discovers over hubs / MCP / per-tenant catalogs
 
 **LLM providers** (7)
 

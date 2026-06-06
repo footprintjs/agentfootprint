@@ -24,6 +24,7 @@ The architectural rationale behind agentfootprint, organized into two pillars.
 |---|---|---|
 | **THE WHY** | [Connected data — the Palantir lineage](/inspiration/connected-data-palantir/) | Palantir's 2003 thesis (connect data, not analysts) returns at agent runtime. Disconnected state burns iterations and tokens. agentfootprint connects four classes of agent data (state · decisions · execution · memory). |
 | **THE HOW** | [Modularity — the Liskov lineage](/inspiration/modularity-liskov/) | Liskov's ADT + LSP work, applied to flowcharts. Subflows are CLU clusters. CacheStrategy / LLMProvider / ToolProvider are LSP-substitutable. Locality of reasoning is enforced as a runtime invariant. |
+| **THE SPINE** | [Strategy everywhere — the port/adapter lineage](/inspiration/strategy-everywhere/) | The cache layer's strategy-registry shape (one DSL, N vendor strategies, swap by config) generalized into the library's scaling spine for every observability / cost / status / lens vendor integration — Strategy / Bridge / Ports & Adapters / Provider model / algebraic effects, one pattern in five traditions. |
 
 Future entries (planned): the ReAct paper · Parnas information hiding · Hewitt actors · Anthropic Skills · flow-based programming.
 

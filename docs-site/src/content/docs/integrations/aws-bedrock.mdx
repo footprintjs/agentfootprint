@@ -16,7 +16,8 @@ Peer dep, lazy-required, optional. AWS credentials resolved via the SDK's normal
 ## Use
 
 ```ts
-import { Agent, bedrock } from 'agentfootprint';
+import { Agent } from 'agentfootprint';
+import { bedrock } from 'agentfootprint/llm-providers';
 
 const provider = bedrock({
   region: 'us-east-1',
@@ -41,14 +42,17 @@ Converse API's tool_use / tool_result blocks map cleanly to agentfootprint's `To
 ## Production patterns
 
 - AWS SDK handles credential refresh + region routing automatically.
-- Wrap with `withRetry` for transient throttling. AWS-specific status codes are normalized to `LLMError.code`.
-- Pass an existing `client` to share a configured Bedrock client across the host app:
+- Wrap with `withRetry` (from `agentfootprint/resilience`) for transient throttling. The provider rethrows a `BedrockProviderError` whose `.status` carries the AWS HTTP status code (`err.$metadata.httpStatusCode`).
+- Tune the default model and token budget on the factory:
 
 ```ts
-import { BedrockRuntimeClient } from '@aws-sdk/client-bedrock-runtime';
+import { bedrock } from 'agentfootprint/llm-providers';
 
-const sharedClient = new BedrockRuntimeClient({ region: 'us-east-1' });
-const provider = bedrock({ client: sharedClient });
+const provider = bedrock({
+  region: 'us-east-1',
+  defaultModel: 'anthropic.claude-sonnet-4-5-20250929-v1:0', // used when LLMRequest.model is the shorthand 'bedrock'
+  defaultMaxTokens: 4096,
+});
 ```
 
 ## Limitations

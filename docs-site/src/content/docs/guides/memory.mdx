@@ -72,7 +72,7 @@ const identity = { tenant: 'acme', principal: 'alice', conversationId: 'thread-4
 await agent.run({ message: '...', identity });
 ```
 
-For a deeper dive on how identity flows through the store + RAG indexing footgun, see [Adapter caveats](#) (TODO link in v2.4 Phase 3).
+For a deeper dive on how identity flows through the store + RAG indexing footgun, see [Memory store adapters](/agentfootprint/integrations/memory-stores/).
 
 ## Stores
 
@@ -94,5 +94,5 @@ Both production adapters lazy-require their SDK and accept `_client` for test in
 ## Next steps
 
 - [Skills, explained](/agentfootprint/guides/skills-explained/) — context engineering for instructions, the cousin pattern to memory
-- [Causal deep-dive](/agentfootprint/guides/causal-deep-dive/) — exact snapshot shape + projection rules + worked replay (coming in v2.4)
+- [Auto memory (Hybrid)](/agentfootprint/guides/auto-memory/) — stack recent window + extracted facts + causal snapshots, each its own `.memory()` call
 - [Memory store adapters](/agentfootprint/integrations/memory-stores/) — Redis · AgentCore · planned backends

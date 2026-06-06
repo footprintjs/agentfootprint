@@ -18,10 +18,14 @@ Lazy peer-dep declared in `peerDependenciesMeta` with `optional: true`. AWS cred
 ## Subpath import
 
 ```ts
+// Canonical subpath:
+import { AgentCoreStore } from 'agentfootprint/memory-providers';
+
+// Legacy alias (still exported, kept for back-compat):
 import { AgentCoreStore } from 'agentfootprint/memory-agentcore';
 ```
 
-Subpath keeps the main barrel small + lets bundlers tree-shake when AgentCore isn't used.
+Subpath keeps the main barrel small + lets bundlers tree-shake when AgentCore isn't used. Prefer `agentfootprint/memory-providers` (the canonical location, shared with `RedisStore`); `agentfootprint/memory-agentcore` remains as a back-compat alias.
 
 ## Use
 
@@ -54,7 +58,7 @@ These are documented in the JSDoc; promoted here for visibility:
 
 3. **`seen` / `feedback` are in-process** — they don't survive process restart. For durable recognition, use `RedisStore` instead (or layer Redis on top of AgentCore).
 
-4. **`search()` not exposed** — AgentCore's retrieval API is opaque (server-side retrieval pipeline). Mapping it to `MemoryStore.search` (cosine + threshold) would be a leaky abstraction. A separate `agentcoreRetrieve()` helper is planned for v2.5.
+4. **`search()` not exposed** — AgentCore's retrieval API is opaque (server-side retrieval pipeline). Mapping it to `MemoryStore.search` (cosine + threshold) would be a leaky abstraction. A separate read-side retrieve helper may land in a future release; until then, use a vector-capable store (e.g. `InMemoryStore` with an embedder, or Redis) when you need `search()`.
 
 5. **AWS rate limits apply** — production deployments should wrap with `withRetry` and budget calls per session. AWS SDK has built-in retry; tune via the SDK's `maxAttempts` config.
 

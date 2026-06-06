@@ -32,8 +32,8 @@ This is the same arithmetic Palantir was attacking in 2003. Different decade, di
 |---|---|---|
 | **State** | Tool calls return JSON; if the agent needs that JSON later it has to rederive it from messages | **`TypedScope<S>`** — single typed shared state, every read/write tracked; later stages access by key, not by re-parsing messages |
 | **Decisions** | LLM picks a branch, reasoning lost; debugging means re-running with logging | **`decide()` evidence** — every branch carries the inputs that triggered it (`FunctionRuleEvidence.inputs[]`); replayable, diff-able |
-| **Execution** | Stages run, outputs scattered across messages and tool results; no time-correlation | **`commitLog` + `runtimeStageId`** — every state mutation keyed to its writing stage; backtracking ("who last wrote `systemPrompt`?") is O(log n) lookup, not log search |
-| **Memory** | Memory stores the LAST message; new sessions can't see the prior session's reasoning | **Causal memory** (`defineMemory({ type: CAUSAL })`) — stores full footprintjs snapshots: every key, every decision, every commit. Cosine-matched on follow-up runs |
+| **Execution** | Stages run, outputs scattered across messages and tool results; no time-correlation | **`commitLog` + `runtimeStageId`** — every state mutation keyed to its writing stage; backtracking ("who last wrote `systemPrompt`?") is a `findLastWriter` scan over the structured commit log, not a text-log grep |
+| **Memory** | Memory stores the LAST message; new sessions can't see the prior session's reasoning | **Causal memory** (`defineMemory({ type: MEMORY_TYPES.CAUSAL })`) — stores full footprintjs snapshots: every key, every decision, every commit. Cosine-matched on follow-up runs |
 
 The four are **interconnected by design**: `runtimeStageId` is the glue. It connects:
 

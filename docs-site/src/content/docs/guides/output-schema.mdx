@@ -38,7 +38,8 @@ Three things happen at runtime:
 | Method | When to use |
 |---|---|
 | `agent.runTyped<T>({...})` | Default — runs + parses + narrows in one call |
-| `agent.parseOutput<T>(rawString)` | Already have a raw answer (replay, log inspection, custom retry) |
+| `agent.parseOutput<T>(rawString)` | Already have a raw answer (replay, log inspection, custom retry). Sync; always throws on failure |
+| `agent.parseOutputAsync<T>(rawString)` | Same as `parseOutput`, but engages `.outputFallback()` recovery when configured |
 
 `runTyped` throws if the run pauses — typed mode does not support pauses. Use `agent.run()` + `agent.parseOutput()` after resume when pauses are expected.
 
@@ -76,8 +77,38 @@ try {
 }
 ```
 
-- **`'json-parse'`** — the LLM emitted prose, markdown fences, or otherwise non-JSON. Tighten the instruction or switch to `'tool-only'` surface mode for the schema.
+- **`'json-parse'`** — the LLM emitted prose, markdown fences, or otherwise non-JSON. Tighten the instruction (via `outputSchema(parser, { instruction })`), or wire `.outputFallback({...})` to recover gracefully instead of throwing.
 - **`'schema-validate'`** — the LLM produced valid JSON but the shape is wrong (missing field, wrong enum, etc.). The error.cause carries the validator's detailed failure (Zod's `ZodError.issues`, etc.).
+
+## Graceful recovery: `outputFallback`
+
+When throwing on a bad answer is too harsh for production, pair `outputSchema` with `.outputFallback({...})` — a 3-tier degradation chain so the caller gets a typed value either way instead of an exception:
+
+```ts
+import { z } from 'zod';
+
+const Refund = z.object({ amount: z.number(), reason: z.string() });
+
+const agent = Agent.create({ provider, model })
+  .system('You decide refund amounts.')
+  .outputSchema(Refund)
+  .outputFallback({
+    // Tier 2: runs when validation throws. Its return is re-validated.
+    fallback: async (err, raw) => ({ amount: 0, reason: 'manual review' }),
+    // Tier 3: static safety net. NEVER throws when set. Validated at build time.
+    canned: { amount: 0, reason: 'unable to process' },
+  })
+  .build();
+
+// Caller never sees OutputSchemaError — gets a typed Refund.
+const refund = await agent.runTyped({ message: '...' });
+```
+
+- The three tiers: **primary** (LLM emitted schema-valid JSON), **fallback** (`fallback(err, raw)` runs, its return re-validated), **canned** (static value, guaranteed valid because it's checked at builder time).
+- `outputFallback` only engages through the ASYNC path — `runTyped()` and `parseOutputAsync()`. The sync `parseOutput()` always throws on failure (back-compat).
+- Calling `.outputFallback()` without `.outputSchema()` first throws — the fallback has nothing to validate.
+
+For re-prompting the model on a validation failure *within the same turn* (the Instructor pattern) rather than substituting a fallback value, see the [Strict output guide](/agentfootprint/guides/strict-output/).
 
 ## Duck-typed parser
 
@@ -132,6 +163,7 @@ const agent = Agent.create({ provider, model })
 
 ## Next steps
 
+- [Strict output guide](/agentfootprint/guides/strict-output/) — re-prompt the model on a validation failure within the same turn (Instructor-style retry), and the `outputFallback` 3-tier degradation chain
 - [Tools guide](/agentfootprint/guides/tools/) — input-schema typing for individual tools (the inverse direction)
 - [Instructions guide](/agentfootprint/guides/instructions/) — the broader Injection primitive `outputSchema` composes with
 - [Dynamic ReAct guide](/agentfootprint/guides/dynamic-react/) — why per-iteration recomposition lets `outputSchema` always be present without special-casing

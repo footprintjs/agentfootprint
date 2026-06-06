@@ -10,8 +10,10 @@ description: Where memory lives. InMemoryStore for dev; RedisStore + AgentCoreSt
 | Store | Subpath | Peer-dep | Vector search | When to use |
 |---|---|---|---|---|
 | `InMemoryStore` | (top-level) | — | ✅ | Dev, tests, single-process scenarios |
-| `RedisStore` | `agentfootprint/memory-redis` | `ioredis` | ❌ (RedisSearch later) | Hot recent memory + signatures + feedback aggregation |
-| `AgentCoreStore` | `agentfootprint/memory-agentcore` | `@aws-sdk/client-bedrock-agent-runtime` | ❌ (server-side retrieve later) | Bedrock-native session + event memory |
+| `RedisStore` | `agentfootprint/memory-providers` | `ioredis` | ❌ (RedisSearch later) | Hot recent memory + signatures + feedback aggregation |
+| `AgentCoreStore` | `agentfootprint/memory-providers` | `@aws-sdk/client-bedrock-agent-runtime` | ❌ (server-side retrieve later) | Bedrock-native session + event memory |
+
+Both store adapters live on the canonical `agentfootprint/memory-providers` subpath. Per-adapter aliases (`agentfootprint/memory-redis`, `agentfootprint/memory-agentcore`) still resolve for back-compat, but new code should import from `agentfootprint/memory-providers`.
 
 All three implement the same `MemoryStore` interface — `defineMemory({ store })` doesn't care which one you pass. Drop-in.
 
@@ -31,7 +33,7 @@ Resets on process restart. Per-process — multi-instance deploys lose state.
 Subpath import keeps the main barrel small. Lazy-required `ioredis`:
 
 ```ts
-import { RedisStore } from 'agentfootprint/memory-redis';
+import { RedisStore } from 'agentfootprint/memory-providers';
 
 const store = new RedisStore({ url: 'redis://localhost:6379' });
 // or share an existing client:
@@ -40,14 +42,14 @@ const store = new RedisStore({ url: 'redis://localhost:6379' });
 
 Implements every `MemoryStore` method except `search()`. `putIfVersion` uses an atomic Lua compare-and-swap; `putMany` uses pipelining; `forget()` uses SCAN (never KEYS — KEYS blocks Redis). Tested with mock-injected `_client`; CI doesn't need a live Redis.
 
-**Vector search NOT included.** RedisSearch is a separate Redis module with its own API. A `RedisSearchStore` is planned for v2.6.
+**Vector search NOT included.** RedisSearch is a separate Redis module with its own API. A `RedisSearchStore` may ship in a future release.
 
 ## AgentCoreStore
 
 AWS Bedrock AgentCore Memory adapter. Subpath import; lazy-required AWS SDK:
 
 ```ts
-import { AgentCoreStore } from 'agentfootprint/memory-agentcore';
+import { AgentCoreStore } from 'agentfootprint/memory-providers';
 
 const store = new AgentCoreStore({
   memoryId: 'arn:aws:bedrock:us-east-1:...:memory/my-mem',
@@ -67,8 +69,7 @@ In hybrid memory setups (multiple `.memory(...)` calls on one agent), each layer
 
 ```ts
 import { defineMemory, MEMORY_TYPES, MEMORY_STRATEGIES } from 'agentfootprint';
-import { RedisStore } from 'agentfootprint/memory-redis';
-import { AgentCoreStore } from 'agentfootprint/memory-agentcore';
+import { RedisStore, AgentCoreStore } from 'agentfootprint/memory-providers';
 
 const recent = defineMemory({
   id: 'recent',
@@ -89,7 +90,7 @@ agent.memory(recent).memory(causal);
 
 See [Auto memory (hybrid)](/agentfootprint/guides/auto-memory/) for the layered pattern.
 
-## Planned (v2.6)
+## Planned
 
 | Store | Why it's planned |
 |---|---|

@@ -63,7 +63,7 @@ const cite = defineInstruction({
 
 const summarizeOnLargeResult = defineInstruction({
   id: 'summarize-large',
-  activeWhen: (ctx) => (ctx.lastToolResult?.content?.length ?? 0) > 5000,
+  activeWhen: (ctx) => (ctx.lastToolResult?.result?.length ?? 0) > 5000,
   prompt: 'The tool returned a large result. Summarize before responding.',
 });
 
@@ -92,17 +92,19 @@ defineInstruction({
 
 The LLM activates `billing` via `read_skill('billing')` → next iteration's tool list flips from "all 25 tools" to "the 7 tools billing actually uses". 3× context-budget reduction + sharper LLM tool-choice. Powered by `defineSkill({ autoActivate: 'currentSkill' })` + `skillScopedTools(id, tools)` from `agentfootprint/tool-providers` (Block A1 + A5 shipped in v2.5; auto-runtime wiring lands Block C).
 
-### 3. Cost guardrails
+### 3. Length guardrails
 
-Accumulated turn cost crosses a threshold → next iteration's system prompt adds *"be concise; final answer in 2 sentences"*. Pure predicate over scope state; no separate cost-management subsystem needed.
+The loop runs long → next iteration's system prompt adds *"be concise; final answer in 2 sentences"*. Pure predicate over the read-only `InjectionContext` (`iteration` / `history` / `lastToolResult` / `userMessage` / `activatedInjectionIds`); no separate management subsystem needed.
 
 ```ts
 defineInstruction({
   id: 'be-concise',
-  activeWhen: (ctx) => ctx.accumulatedCostUsd > 0.50,
-  prompt: 'You are over budget for this turn. Final answer in 2 sentences.',
+  activeWhen: (ctx) => ctx.iteration > 5,
+  prompt: 'This turn is running long. Wrap up — final answer in 2 sentences.',
 });
 ```
+
+For true cost-based guardrails, track spend with `costRecorder()` from `agentfootprint` and gate the run outside the predicate — the `InjectionContext` does not expose accumulated cost.
 
 ### 4. Iterative format refinement
 

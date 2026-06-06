@@ -54,7 +54,7 @@ await agent.run({ message: 'How long does a refund take?' });
 
 | Boundary | Mock for development | Production swap |
 |---|---|---|
-| LLM provider | `mock({ reply })` · `mock({ replies })` for scripted ReAct | `anthropic()` · `openai()` · `bedrock()` · `ollama()` |
+| LLM provider | `mock({ reply })` · `mock({ replies })` for scripted ReAct | `anthropic()` · `openai()` · `bedrock()` · `ollama()` (from `agentfootprint/llm-providers`) |
 | Embedder | `mockEmbedder()` | OpenAI / Cohere / Bedrock embedder factory |
 | Memory store | `InMemoryStore` | `RedisStore` (`agentfootprint/memory-redis`) · `AgentCoreStore` (`agentfootprint/memory-agentcore`) · DynamoDB / Postgres / Pinecone (planned) |
 | MCP server | `mockMcpClient({ tools })` — in-memory, no SDK | `mcpClient({ transport })` to a real server |
@@ -148,7 +148,8 @@ agent.rag(docs);
 ### Agent (ReAct primitive)
 
 ```typescript
-import { Agent, defineTool, anthropic } from 'agentfootprint';
+import { Agent, defineTool } from 'agentfootprint';
+import { anthropic } from 'agentfootprint/llm-providers';
 
 const agent = Agent.create({
   provider: anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! }),
@@ -172,7 +173,8 @@ Builder methods:
 ### LLMCall (one-shot primitive)
 
 ```typescript
-import { LLMCall, anthropic } from 'agentfootprint';
+import { LLMCall } from 'agentfootprint';
+import { anthropic } from 'agentfootprint/llm-providers';
 
 const call = LLMCall.create({ provider: anthropic(...), model: 'claude-sonnet-4-5-20250929' })
   .system('You are a terse assistant.')
@@ -330,33 +332,35 @@ There is **no** `MultiAgentSystem` class. Multi-agent = compositions of single A
 ```typescript
 import { Sequence, Parallel, Conditional, Loop } from 'agentfootprint';
 
-// Output flows downstream
+// Output flows downstream — each step takes an id + a runner (Agent / LLMCall / runner)
 const pipeline = Sequence.create()
-  .step(researcher)        // each step is itself an Agent / LLMCall / runner
-  .step(writer)
-  .step(editor)
+  .step('research', researcher)
+  .step('write', writer)
+  .step('edit', editor)
   .build();
 
-// Multi-perspective with merge
+// Multi-perspective with LLM merge — each branch takes an id + a runner
 const tot = Parallel.create()
-  .branch(thoughtAgent)
-  .branch(thoughtAgent)
-  .branch(thoughtAgent)
-  .merge(rankerLLM)
+  .branch('t1', thoughtAgent)
+  .branch('t2', thoughtAgent)
+  .branch('t3', thoughtAgent)
+  .mergeWithLLM({ provider, model: 'claude-sonnet-4-5-20250929', prompt: 'Rank and synthesize.' })
   .build();
 
-// Predicate-based routing
+// Predicate-based routing — .when(id, predicate, runner); exactly one .otherwise(id, runner).
+// predicate receives ConditionalInput { message }.
 const triage = Conditional.create()
-  .when((ctx) => ctx.intent === 'billing', billingAgent)
-  .when((ctx) => ctx.intent === 'tech', techAgent)
-  .otherwise(generalAgent)
+  .when('billing', (input) => /refund|invoice/i.test(input.message), billingAgent)
+  .when('tech', (input) => /error|bug/i.test(input.message), techAgent)
+  .otherwise('general', generalAgent)
   .build();
 
-// Iterate with budget
+// Iterate with budget — .repeat(runner) sets the body, .times(n) caps iterations.
+// until() guard receives { iteration, latestOutput, startMs }.
 const refine = Loop.create()
-  .body(critiqueAgent)
-  .untilGuard((ctx) => ctx.qualityScore > 0.9)
-  .maxIterations(5)
+  .repeat(critiqueAgent)
+  .until((ctx) => /done/i.test(ctx.latestOutput))
+  .times(5)
   .build();
 ```
 
@@ -377,7 +381,8 @@ Browse [`examples/patterns/`](examples/patterns/) — every pattern is a runnabl
 ### Providers
 
 ```typescript
-import { anthropic, openai, bedrock, ollama, mock } from 'agentfootprint';
+import { mock } from 'agentfootprint';                          // zero-peer-dep, on the main barrel
+import { anthropic, openai, bedrock, ollama } from 'agentfootprint/llm-providers';  // vendor-SDK-backed
 
 // Adapter-swap testing: same agent, different provider, $0 in CI
 const provider = process.env.NODE_ENV === 'production'
@@ -385,7 +390,7 @@ const provider = process.env.NODE_ENV === 'production'
   : mock({ reply: 'test response' });
 ```
 
-Every provider implements the same `LLMProvider` interface. Browser variants exist for client-side use.
+Every provider implements the same `LLMProvider` interface. The vendor-SDK providers (`anthropic`, `openai`, `bedrock`, `ollama`, plus their `*Provider` classes) live ONLY at `agentfootprint/llm-providers` (legacy alias `agentfootprint/providers`) — kept off the main barrel so bundlers never walk the lazy peer-dep requires. The main barrel exports the zero-peer-dep providers: `mock`, `browserAnthropic`, `browserOpenai`, and `createProvider`.
 
 ### Pause / Resume (Human-in-the-Loop)
 
@@ -394,7 +399,12 @@ import { askHuman, pauseHere, isPaused } from 'agentfootprint';
 
 const approveTool = defineTool({
   schema: { name: 'approve', description: 'Ask a human.', inputSchema: { ... } },
-  execute: askHuman({ severity: 'high' }),
+  // askHuman()/pauseHere() THROW a PauseRequest — call them INSIDE execute,
+  // do not assign them as the execute function.
+  execute: async (args) => {
+    askHuman({ question: `Approve this action?`, risk: 'high' });
+    return ''; // unreachable — askHuman always throws
+  },
 });
 
 const result = await agent.run({ message: 'Refund $500?' });
@@ -408,14 +418,17 @@ if (isPaused(result)) {
 ### Resilience
 
 ```typescript
-import { withRetry, withFallback, resilientProvider } from 'agentfootprint';
+import { withRetry, withFallback, fallbackProvider } from 'agentfootprint/resilience';
+import { anthropic, openai, ollama } from 'agentfootprint/llm-providers';
 
-const reliable = withRetry(provider, { maxRetries: 3 });
+const reliable = withRetry(provider, { maxAttempts: 3 });
 const resilient = withFallback(primary, fallback);
-const chain = resilientProvider([anthropic({...}), openai({...}), ollama({...})]);
+const chain = fallbackProvider(anthropic({...}), openai({...}), ollama({...}));
 ```
 
-### Observability — 47 typed events × 13 domains
+Also available: `withCircuitBreaker(provider, opts?)`. The resilience decorators live ONLY at `agentfootprint/resilience` (not the main barrel).
+
+### Observability — 59 typed events × 16 domains
 
 ```typescript
 agent.on('agentfootprint.context.injected', (e) =>
@@ -440,7 +453,7 @@ Recorders (auto-attached when relevant builder method is called):
 
 - ❌ **Don't ship a `ReflexionAgent` class.** Compose `Sequence(Agent, critique-LLM, Agent)`.
 - ❌ **Don't use `agent.run('string')`** — use `agent.run({ message: '...', identity? })`.
-- ❌ **Don't import from stale subpaths** like `'agentfootprint/instructions'`, `'agentfootprint/observe'`, `'agentfootprint/security'`. Top-level barrel covers it: `from 'agentfootprint'`.
+- ❌ **Don't import from removed subpaths** like `'agentfootprint/instructions'` — the injection factories are on the main barrel (or `'agentfootprint/injection-engine'`). NOTE: `'agentfootprint/observe'`, `'agentfootprint/security'`, `'agentfootprint/resilience'`, `'agentfootprint/llm-providers'` ARE real, current subpaths — some symbols (e.g. `buildStepGraph`, `extractSequence`, the resilience decorators, the vendor-SDK providers) are intentionally subpath-only, NOT on the main barrel.
 - ❌ **Don't use `.memoryPipeline(pipeline)`** — that's the v1 API. Use `.memory(defineMemory({...}))`.
 - ❌ **Don't fall back when TopK threshold returns nothing.** Strict semantics: garbage past context > none is wrong.
 - ❌ **Don't store closures or class instances in scope** — TransactionBuffer can't clone functions. Memory-store entries serialize to JSON.
@@ -472,9 +485,9 @@ Recorders (auto-attached when relevant builder method is called):
 
 ```bash
 npm install agentfootprint footprintjs
-npm test                           # vitest run — 1100+ tests
+npm test                           # vitest run — 2000+ tests
 npm run example examples/...       # run a single example end-to-end
-npm run examples:run-all           # run every example (33 of them)
+npm run test:examples              # typecheck + run every example end-to-end
 ```
 
 ## Package layout
@@ -489,10 +502,10 @@ src/
 ├── memory/       — defineMemory + 4 types × 7 strategies + InMemoryStore + Causal
 ├── adapters/llm/ — Anthropic, OpenAI, Bedrock, Ollama, Browser variants, Mock
 ├── recorders/    — context, stream, agent, cost, skill, permission, eval, memory
-├── resilience/   — withRetry, withFallback, resilientProvider
+├── resilience/   — withRetry, withFallback, fallbackProvider, withCircuitBreaker
 └── stream.ts     — SSE formatter
 
-examples/        — 33 runnable end-to-end tests organized by DNA layer
+examples/        — 47 runnable end-to-end tests organized by DNA layer
   ├── core/                — primitives
   ├── core-flow/           — compositions
   ├── patterns/            — canonical recipes
@@ -503,10 +516,7 @@ examples/        — 33 runnable end-to-end tests organized by DNA layer
 
 ## Roadmap (informs what to defer)
 
-- **v2.0 (current)** — primitives + compositions + InjectionEngine + Memory (incl. Causal) + 6 providers + 33 examples
-- **v2.1** — RAG flavor (`defineRAG`) · Redis memory adapter · MCP integration · CircuitBreaker · 3-tier output fallback
-- **v2.2** — Governance (Policy + BudgetTracker) · DynamoDB / Postgres / Pinecone adapters
-- **v2.3** — Causal training-data exports (SFT / DPO / process-RL)
-- **v2.4+** — Deep Agents · A2A protocol · Lens UI integration
+- **Shipped (v3.x current)** — primitives + compositions + InjectionEngine + Memory (incl. Causal) + providers (vendor-SDK + browser + mock) + RAG (`defineRAG`) + MCP (`mcpClient`) + Redis/AgentCore memory adapters + resilience (`withRetry` / `withFallback` / `fallbackProvider` / `withCircuitBreaker`) + reliability subsystem + governance (`PermissionPolicy`) + observability subpaths (`/observe`, `/thinking`, `/locales`, `/status`)
+- **Planned** — BudgetTracker · DynamoDB / Postgres / Pinecone memory adapters · Causal training-data exports (SFT / DPO / process-RL) · Deep Agents · A2A protocol · Lens UI integration
 
 When in doubt — read [`examples/`](examples/), every file is a runnable spec.

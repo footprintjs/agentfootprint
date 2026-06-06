@@ -12,8 +12,8 @@ If you developed against the [mocks-first stack](/agentfootprint/getting-started
 | Boundary | Dev (mock) | Prod (one-line swap) |
 |---|---|---|
 | LLM provider | `mock({ reply })` | `anthropic({...})` · `openai({...})` · `bedrock({...})` |
-| Embedder | `mockEmbedder()` | OpenAI / Cohere / Bedrock embedder factory (planned v2.6) |
-| Memory store | `InMemoryStore` | `RedisStore` (`agentfootprint/memory-redis`) · `AgentCoreStore` (`agentfootprint/memory-agentcore`) |
+| Embedder | `mockEmbedder()` | OpenAI / Cohere / Bedrock embedder factory (on the roadmap) |
+| Memory store | `InMemoryStore` | `RedisStore` · `AgentCoreStore` (both from `agentfootprint/memory-providers`) |
 | MCP server | `mockMcpClient({ tools })` | `mcpClient({ transport })` |
 | Tool execute | inline closure | real implementation |
 
@@ -23,7 +23,7 @@ The flowchart, recorders, narrative, tests don't change. **Ship the patterns fir
 
 ### 1. Multi-tenant identity at every `agent.run()`
 
-Every memory call namespaces by `MemoryIdentity`. The default `{ conversationId: '_global' }` is fine for prototypes — DANGEROUS in production multi-tenant apps. Pass per-tenant identity at every call site:
+Every memory call namespaces by `MemoryIdentity`. When you omit `identity`, the agent defaults to `{ conversationId: '<runId>' }` — fine for prototypes, but it isolates by run rather than by tenant, so it's DANGEROUS in production multi-tenant apps. Pass per-tenant identity at every call site:
 
 ```ts
 const identity = {
@@ -52,6 +52,12 @@ npm install @modelcontextprotocol/sdk                    # if using mcpClient()
 
 Lazy-required at first call with friendly install hints. `npm install agentfootprint` on its own works for mocks-first dev.
 
+The vendor-SDK provider factories live on the `agentfootprint/llm-providers` subpath — the main barrel only exports the zero-peer-dep providers (`mock`, `browserAnthropic`, `browserOpenai`, `createProvider`):
+
+```ts
+import { anthropic, openai, bedrock } from 'agentfootprint/llm-providers';
+```
+
 ### 3. Secrets in env, not code
 
 Provider factories accept `apiKey` as a constructor arg — pass via `process.env`:
@@ -78,6 +84,8 @@ See [Observability guide](/agentfootprint/guides/observability/) for the full su
 Production providers should be wrapped:
 
 ```ts
+import { withRetry, withFallback } from 'agentfootprint/resilience';
+
 const provider = withRetry(
   withFallback(
     anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! }),
@@ -87,7 +95,7 @@ const provider = withRetry(
 );
 ```
 
-See [Resilience guide](/agentfootprint/guides/resilience/) for `withRetry` / `withFallback` / `resilientProvider` decorators.
+See [Resilience guide](/agentfootprint/guides/resilience/) for the `withRetry` / `withFallback` / `fallbackProvider` / `withCircuitBreaker` decorators.
 
 ### 6. Pause/resume infrastructure
 
@@ -111,16 +119,24 @@ See [Pause/Resume guide](/agentfootprint/guides/pausable/).
 
 ## Multi-instance considerations
 
-- **CircuitBreaker state** is per-process today. Multi-instance deploys won't share circuit state. Acceptable for v2.4; v2.5 adds shared-state options. (Reliability subsystem.)
+- **CircuitBreaker state** is per-process today. Each `withCircuitBreaker(...)` (from `agentfootprint/resilience`) holds its own counters, so multi-instance deploys won't share circuit state. No distributed/shared-state option yet — acceptable when each instance trips independently.
 - **Memory stores** are inherently multi-instance friendly when backed by Redis / AgentCore / external DBs.
 - **Pause/resume checkpoints** are JSON; any instance can resume any pause given the checkpoint.
 
+## Now shipped
+
+The reliability + governance surfaces that were once roadmap items are live:
+
+- **Cost-budget enforcement** — pass `pricingTable` + `costBudget` to `Agent.create()`; the agent emits cost ticks and halts when the per-run USD budget is hit.
+- **Output fallback** — `OutputFallbackOptions` / `OutputFallbackFn` recover from schema-parse failures (see the [Output Schema guide](/agentfootprint/guides/output-schema/)).
+- **Permission policy** — `PermissionPolicy.fromRoles(...)` (from `agentfootprint/security`) gates tool calls IAM-style; see the [Security guide](/agentfootprint/guides/security/).
+- **Circuit breaker** — `withCircuitBreaker(...)` from `agentfootprint/resilience`.
+
 ## What's NOT here yet
 
-- Rate-limit budget enforcement → Reliability subsystem v2.5
-- 3-tier output fallback → Reliability subsystem v2.5
-- Per-agent IAM-style policy → Governance subsystem v2.6
-- DynamoDB / Postgres / Pinecone memory adapters → v2.6
+- Distributed/shared CircuitBreaker state across instances
+- OpenAI / Cohere / Bedrock embedder factories (only `mockEmbedder` ships today)
+- DynamoDB / Postgres / Pinecone memory adapters (only `RedisStore` + `AgentCoreStore` ship)
 
 ## Anti-patterns
 

@@ -11,10 +11,11 @@ import CodeFile from '@/components/CodeFile.astro';
 
 A `ToolProvider` answers ONE question per iteration: *"what tools should the LLM see right now?"* It's pure compute — given the current iteration context, return the visible tool set.
 
-Two implementations ship:
+Three implementations ship:
 
 - **`staticTools(arr)`** — the 90% case. Wraps a fixed `Tool[]` list. What `agent.tools(arr)` does today, made composable.
 - **`gatedTools(inner, predicate)`** — the DECORATOR. Wraps any provider with an additional per-tool filter. Composes freely.
+- **`skillScopedTools(skillId, arr)`** — exposes a tool subset only while `ctx.activeSkillId === skillId`. Returns `[]` when a different skill (or no skill) is active. Compose with `staticTools` for the always-on baseline.
 
 Plus tool sources from the same subpath:
 - **`mcpClient(opts)`** — connect to a real MCP server
@@ -60,6 +61,24 @@ Reads as: *"static list of all tools, filtered by readonly policy, then further 
 
 When the LLM is on a billing turn (`ctx.activeSkillId === 'billing'`), the visible tool set becomes `['read_billing']` — both gates pass. When no skill is active, the read-only gate alone applies.
 
+## Wiring a provider into an agent
+
+Pass the provider to `.toolProvider(...)` on the builder. The agent consults it every iteration via `provider.list(ctx)`, with `ctx = { iteration, activeSkillId, identity }`. Each agent has at most one external provider — calling `.toolProvider()` twice throws.
+
+```ts
+import { Agent } from 'agentfootprint';
+import { gatedTools, staticTools } from 'agentfootprint/tool-providers';
+
+const provider = gatedTools(staticTools(allTools), (name) => name.startsWith('read_'));
+
+const agent = Agent.create({ provider: llm, model })
+  .system('You answer.')
+  .toolProvider(provider)
+  .build();
+```
+
+Tools the provider emits flow into the Tools slot alongside any static tools registered via `.tool()` / `.tools()`, and the tool-call dispatcher consults the provider too — so dynamic chains (`gatedTools`, `skillScopedTools`) dispatch correctly when their visible set changes mid-turn.
+
 ## ToolDispatchContext — what predicates can inspect
 
 Predicates receive a read-only context per iteration:
@@ -69,6 +88,7 @@ Predicates receive a read-only context per iteration:
 | `iteration` | Current ReAct iteration (1-based) |
 | `activeSkillId?` | The id of the currently-activated Skill, if any. Set by `read_skill(id)` |
 | `identity?` | Caller identity tuple — `{ tenant?, principal?, conversationId }` for role checks |
+| `signal?` | Optional `AbortSignal` propagated from `run({ env })`. Async (discovery) providers MUST honor it; sync providers ignore it |
 
 Predicates MUST be pure — no side effects, no async. They run dozens of times per `agent.run()`.
 
@@ -78,8 +98,9 @@ Predicates MUST be pure — no side effects, no async. They run dozens of times 
 |---|---|
 | All tools always visible | `agent.tools(arr)` (top-level builder) |
 | Permission filtering needed | `gatedTools(staticTools(arr), permissionPredicate)` |
-| Per-skill tool gating (autoActivate) | `gatedTools(staticTools(arr), skillPredicate)` |
+| Per-skill tool gating (autoActivate) | `skillScopedTools(skillId, arr)`, or `gatedTools(staticTools(arr), skillPredicate)` |
 | Both stacked | Layer two `gatedTools` calls — each one concern |
+| Wire any of the above into an agent | `Agent.create(...).toolProvider(provider)` |
 
 ## Anti-patterns
 
@@ -93,4 +114,4 @@ Predicates MUST be pure — no side effects, no async. They run dozens of times 
 - [Tool discovery (async)](/agentfootprint/guides/tool-discovery/) — the async `Promise<Tool[]>` path for runtime catalogs (Rube / MCP / per-tenant)
 - [Permission policy](/agentfootprint/guides/security/) — the natural consumer of `gatedTools` (data-driven role-based gating)
 - [Skills](/agentfootprint/guides/skills/) — `autoActivate` uses the same `gatedTools` pattern under the hood
-- [MCP integration](/agentfootprint/integrations/) — `mcpClient` ships in the same `tool-providers` subpath
+- [Tools](/agentfootprint/guides/tools/) — `mcpClient` / `mockMcpClient` ship in the same `tool-providers` subpath

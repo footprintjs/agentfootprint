@@ -16,7 +16,7 @@ npm test
 
 ```bash
 npm run build      # CJS + ESM
-npm test           # vitest (1347 tests)
+npm test           # vitest (2273 tests)
 npm run lint       # eslint
 npm run format     # prettier check
 npm run test:watch # watch mode
@@ -26,21 +26,31 @@ npm run test:watch # watch mode
 
 ```
 src/
-├── concepts/     → LLMCall, Agent, RAG, FlowChart, Swarm, Parallel
-├── lib/          → Instructions, narrative, loop, call stages
-├── adapters/     → LLM adapters (Anthropic, OpenAI, Bedrock, Mock) + memory stores
-├── providers/    → Prompt/tool/message strategies
-├── recorders/    → AgentRecorders (Token, Cost, OTel, Explain, etc.)
-├── streaming/    → AgentStreamEvent, StreamEmitter, SSEFormatter
-├── tools/        → ToolRegistry, defineTool, zodToJsonSchema
-├── compositions/ → withRetry, withFallback, withCircuitBreaker
-└── types/        → All type definitions
+├── core/            → LLMCall, Agent, RunnerBase, defineTool, flowchartAsTool, outputSchema, pause
+├── core-flow/       → Sequence, Parallel, Conditional, Loop compositions
+├── patterns/        → selfConsistency, reflection, debate, mapReduce, tot, swarm
+├── lib/             → injection-engine, mcp, rag, lazyRequire
+├── adapters/        → LLM providers (Anthropic, OpenAI, Bedrock, Mock, Browser*) + memory + observability + port types
+├── recorders/       → core (Context, Cost, Agent, Composition, Eval, …) + observability (Boundary, Flowchart, LiveState, Logging, Thinking) recorders
+├── events/          → typed event vocabulary, payloads, registry, EventDispatcher
+├── memory/          → defineMemory, stores, pipelines, beats/facts/causal/embedding strategies
+├── strategies/      → grouped-enabler strategy interfaces + default sinks (observability, cost, live-status, lens)
+├── cache/           → prompt/response caching
+├── bridge/          → event meta + run-context bridge to footprintjs
+├── resilience/      → withRetry, withFallback, withCircuitBreaker
+├── reliability/     → reliability rules, circuit breaker, validation
+├── security/        → PermissionPolicy, permission checking, redaction
+├── tool-providers/  → staticTools, gatedTools, skillScopedTools
+├── thinking/        → provider thinking-block handlers
+├── locales/         → message catalogs (commentary + thinking)
+├── conventions.ts   → renderer-facing keys (stageRole, milestoneFor, injection keys)
+└── *.ts             → subpath barrels (providers, llm-providers, observe, stream, status, …)
 ```
 
 ## Pull Request Checklist
 
 - [ ] `npm run build` passes
-- [ ] `npm test` passes (all 1347+ tests)
+- [ ] `npm test` passes (all 2273+ tests)
 - [ ] `npm run lint` passes
 - [ ] No `any` casts unless unavoidable (document why)
 - [ ] New features have tests (5+ patterns)

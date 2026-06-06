@@ -22,11 +22,12 @@ npm install openai
 ## Use
 
 ```ts
-import { Agent, ollama } from 'agentfootprint';
+import { Agent } from 'agentfootprint';
+import { ollama } from 'agentfootprint/llm-providers';
 
 const provider = ollama({
-  model: 'llama3.1',
-  baseURL: 'http://localhost:11434/v1',  // default
+  defaultModel: 'llama3.1',         // used when the request model is the 'ollama' shorthand
+  host: 'http://localhost:11434',   // default — talks to http://localhost:11434/v1
 });
 
 const agent = Agent.create({
@@ -34,6 +35,8 @@ const agent = Agent.create({
   model: 'llama3.1',
 }).build();
 ```
+
+`ollama()` is a thin convenience over `openai()` — it lives on the `agentfootprint/llm-providers` subpath (vendor-SDK-backed providers are kept off the main barrel for tree-shaking). Options: `host` (defaults to `http://localhost:11434`), `baseURL` (overrides `host`), `apiKey` (Ollama ignores it; defaults to `'ollama'`), `defaultModel` (defaults to `llama3.2`), and `defaultMaxTokens`.
 
 ## When to use Ollama
 
@@ -53,9 +56,11 @@ const agent = Agent.create({
 Same agent code; swap the provider one line:
 
 ```ts
+import { anthropic, ollama } from 'agentfootprint/llm-providers';
+
 const provider = process.env.NODE_ENV === 'production'
   ? anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
-  : ollama({ model: 'llama3.1' });
+  : ollama({ defaultModel: 'llama3.1' });
 ```
 
 ## Next steps

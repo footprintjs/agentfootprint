@@ -64,4 +64,4 @@ Build the agent fresh in Process B — same factory function, NOT the same insta
 
 - [Error handling](/agentfootprint/guides/error-handling/) — what's recoverable via retry vs what needs human escalation
 - [Security guide](/agentfootprint/guides/security/) — permission-gated pauses for sensitive operations
-- v2.5 will add `agent.resumeOnError(checkpoint, input)` — auto-checkpointing on uncaught errors so any failure becomes resumable, not just intentional pauses. See the roadmap.
+- [Reliability guide](/agentfootprint/guides/reliability/) — `agent.resumeOnError(checkpoint)` auto-checkpoints on an uncaught mid-run error (the failure throws a `RunCheckpointError` carrying a JSON-serializable checkpoint), so any failure becomes resumable, not just intentional pauses.

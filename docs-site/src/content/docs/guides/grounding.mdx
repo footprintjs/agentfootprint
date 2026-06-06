@@ -41,9 +41,11 @@ Subscribe to `agentfootprint.context.injected` to capture every injection in rea
 
 ```ts
 agent.on('agentfootprint.context.injected', (e) => {
-  // e.payload — { source, slot, role?, content, id, ... }
-  // source: 'steering' | 'instruction' | 'skill' | 'fact' | 'memory' | 'rag'
-  audit.log({ when: Date.now(), source: e.payload.source, content: e.payload.content });
+  // e.payload — { source, slot, contentSummary, rawContent?, asRole?, sourceId?, reason, ... }
+  // source: 'steering' | 'instructions' | 'skill' | 'fact' | 'memory' | 'rag' | ...
+  // rawContent is the full injected source (may be redacted); contentSummary is always present.
+  const content = e.payload.rawContent ?? e.payload.contentSummary;
+  audit.log({ when: Date.now(), source: e.payload.source, content });
 });
 ```
 
@@ -51,12 +53,12 @@ Every flavor of context engineering routes through the SAME event channel — th
 
 ## Recording what the LLM produced
 
-`agentfootprint.stream.llm_end` carries the full `LLMResponse` — content, toolCalls, usage, stopReason. Pair with `context.injected` events to produce grounding triplets:
+`agentfootprint.stream.llm_end` carries the `LLMEndPayload` — `content`, `toolCallCount`, `usage`, `stopReason`, `durationMs`, `iteration`. Pair with `context.injected` events to produce grounding triplets:
 
 ```
 For each turn:
-  injected_chunks = events.filter(e => e.type === 'context.injected')
-  llm_output       = events.find(e => e.type === 'stream.llm_end')
+  injected_chunks = events.filter(e => e.type === 'agentfootprint.context.injected')
+  llm_output       = events.find(e => e.type === 'agentfootprint.stream.llm_end')
   triplet           = { question, injected_chunks, llm_output }
 ```
 
@@ -72,4 +74,4 @@ That triplet IS the grounding evidence. Persist it (S3, Postgres, your audit tra
 
 - [RAG guide](/agentfootprint/guides/rag/) — the strict-threshold retrieval pattern
 - [Memory guide](/agentfootprint/guides/memory/) — Causal memory for cross-run grounding
-- [Observability guide](/agentfootprint/guides/observability/) — the full 47-event taxonomy
+- [Observability guide](/agentfootprint/guides/observability/) — the full 59-event taxonomy

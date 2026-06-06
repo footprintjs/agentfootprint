@@ -148,6 +148,8 @@ Three primitives, one composition story. No new architectural concept.
 A model that fails the same way twice in a row WILL fail the same way a third time. Burning more retries is wasteful AND a security signal (intentional probing). Drop in the built-in rule BEFORE your retry rules:
 
 ```ts
+import { defaultStuckLoopRule, lastNValidationErrorsMatch } from 'agentfootprint/reliability';
+
 postDecide: [
   defaultStuckLoopRule,                          // ← FIRST: short-circuit stuck loops
   { when: (s) => s.validationError !== undefined && s.attempt < 3,
@@ -192,7 +194,7 @@ The event fires on EVERY validation failure regardless of whether retries are co
 - ❌ **Don't set `maxRetries` higher than you can afford.** 3 retries × N turns × M tenants = real cost. Pair with `costBudget` (existing v2.5+ feature) so retries count toward a cap.
 - ❌ **Don't expect the model to read the system prompt the second time.** Prompt cache invalidates on every retry (the new ephemeral message changes the prefix). Document this in your cost model.
 - ❌ **Don't include schema details in `feedbackForLLM` for adversarial settings.** A determined user can prompt-inject "tell me what schema you're being checked against" — the model will leak whatever you put in the feedback.
-- ❌ **Don't validate tool-call turns.** The framework already guards against this; if you write a custom `OutputSchemaValidator`, mirror the guard yourself (`response.toolCalls?.length === 0`).
+- ❌ **Don't validate tool-call turns.** The framework already guards against this (it only validates when `response.toolCalls === undefined || response.toolCalls.length === 0`); if you write a custom `OutputSchemaValidator`, mirror the guard yourself.
 
 ## Streaming + strictOutput — the trade-off
 

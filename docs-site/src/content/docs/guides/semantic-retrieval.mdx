@@ -27,7 +27,9 @@ This is the engine behind [`defineRAG`](/agentfootprint/guides/rag/). RAG is jus
 
 ## Strict threshold semantics
 
-`threshold` is **strict**. When NO entries meet the threshold, NO content injects. The library throws on empty by design. Garbage-low-confidence chunks pollute the prompt and make hallucination MORE likely, not less — silently injecting weak matches is the wrong default.
+`threshold` is **strict**. When NO entries meet the threshold, NO content injects — the read stage sets `loaded = []`, the picker selects nothing, and the formatter emits nothing. There is no fallback that injects weak matches anyway. Garbage-low-confidence chunks pollute the prompt and make hallucination MORE likely, not less — silently injecting weak matches is the wrong default.
+
+(The library does NOT throw at runtime on an empty result — "no match" is a safe, valid outcome. The only throws are at configuration time: an unsupported `type × strategy` combination, or a TOP_K strategy pointed at a store that lacks `search()`.)
 
 Tuning notes:
 - Sentence-BERT-class embedders (`all-MiniLM-L6-v2`, etc.) often score relevant matches at 0.4–0.6. Use `threshold: 0.5`.
@@ -44,11 +46,11 @@ If you swap embedders (model upgrade, provider switch), either:
 
 ## Vector store requirements
 
-`SEMANTIC × TOP_K` requires a `MemoryStore` that implements `search()`. Today:
+`SEMANTIC × TOP_K` requires a `MemoryStore` that implements the optional `search()` method. Today:
 - ✅ `InMemoryStore` (dev / tests) — O(n) linear scan, fine for thousands of entries
-- ⏳ pgvector / Pinecone / Qdrant / Weaviate (planned v2.6) — true vector indexing
+- ⏳ pgvector / Pinecone / Qdrant / Weaviate (planned) — true vector indexing
 
-The v2.3 production adapters (`RedisStore`, `AgentCoreStore`) ship without `search()` for now — Redis needs the RedisSearch module for vector indexing; AgentCore's retrieval API is server-side and doesn't fit the cosine-similarity contract. RAG users with v2.3 should use `InMemoryStore` until vector-capable production adapters land.
+The production adapters (`RedisStore`, `AgentCoreStore`, exported from `agentfootprint/memory-providers`) ship without `search()` for now — Redis needs the RedisSearch module for vector indexing; AgentCore's retrieval API is server-side and doesn't fit the cosine-similarity contract. Use `InMemoryStore` until vector-capable production adapters land.
 
 ## When to use this vs RAG vs other strategies
 
@@ -61,7 +63,7 @@ The v2.3 production adapters (`RedisStore`, `AgentCoreStore`) ship without `sear
 
 ## Anti-patterns
 
-- Don't fall back to top-K-anyway when threshold returns nothing. The library throws by design.
+- Don't fall back to top-K-anyway when threshold returns nothing. The library injects nothing by design — empty is the correct, safe outcome.
 - Don't change embedders without re-indexing. Read-side filtering is your safety net; rotating without filter ID is a footgun.
 - Don't pass huge entries (50KB content) to a vector store designed for small chunks. Chunk first.
 

@@ -11,185 +11,157 @@ Instructions are the single concept that spans all 3 LLM API positions:
 
 No competitor has a unified concept across all three. LangGraph has 3 separate mechanisms. Strands has Skills (partial). Anthropic has raw primitives.
 
-agentfootprint has **Instruction** — one concept, three positions.
+agentfootprint has **Injection** — one primitive, three positions, with typed sugar
+factories (`defineInstruction`, `defineSkill`, `defineSteering`, `defineFact`).
 
-## Current State (Phase 1 — Tool Response Only)
+## The Unifying Primitive — `Injection`
 
-Instructions are co-located with tool definitions and fire after a tool returns a result.
-They are appended as text to the tool result content — landing in the LLM's recency
-window where it pays the most attention.
-
-### The Instruction Type
-
-```typescript
-interface Instruction<T = unknown> {
-  /** Unique ID — used by InstructionRecorder and overrides. */
-  id: string;
-
-  /** Condition: does this instruction apply to this result? Omit = always fires. */
-  when?: (ctx: InstructionContext<T>) => boolean;
-
-  /** Text guidance — appended to tool result. The LLM reads this literally. */
-  text?: string;
-
-  /** Structured follow-up — framework formats as string telling LLM which tool to call next. */
-  followUp?: FollowUp<T>;
-
-  /** Safety flag — positioned last in recency (highest attention). Never truncated. */
-  safety?: boolean;
-
-  /** Priority for ordering when multiple instructions fire. Lower = first. */
-  priority?: number;
-}
-```
-
-No tiers. `text` and `followUp` are optional fields — fill in what you need.
-
-### Text Instructions
-
-Direct text appended to the tool result:
+Under the hood there is **one** primitive — `Injection` — and a set of typed sugar
+factories that produce it: `defineInstruction`, `defineSkill`, `defineSteering`,
+`defineFact`. Every flavor lands content into one of the three LLM API positions
+(system prompt, tools, messages) according to its `inject` shape, and activates
+according to its `trigger`. You import the factories from `agentfootprint` (or the
+`agentfootprint/injection-engine` subpath).
 
 ```typescript
-{ id: 'empathy',
-  when: ctx => ctx.content.denied,
-  text: 'Be empathetic. Do NOT promise reversal. Offer alternatives.' }
-
-{ id: 'timeout',
-  when: ctx => ctx.error?.code === 'TIMEOUT',
-  text: 'Service timed out. Apologize and suggest trying again.' }
-
-{ id: 'pii', safety: true,
-  when: ctx => ctx.content.hasPII,
-  text: 'Contains PII. Do NOT repeat raw values to user.' }
+import {
+  defineInstruction,
+  defineSkill,
+  defineSteering,
+  defineFact,
+} from 'agentfootprint';
 ```
 
-### FollowUp Instructions
+### Rule-based Instructions — `defineInstruction`
 
-Structured data — the framework formats it as a string telling the LLM which tool
-to call next and with what parameters:
+A predicate (`activeWhen`) decides activation each iteration. The `prompt` text lands
+in the system-prompt slot by default, or the messages slot (higher attention) via
+`slot: 'messages'`. Omit `activeWhen` and the instruction is always active.
 
 ```typescript
-{ id: 'trace',
-  when: ctx => ctx.content.traceId,
-  followUp: {
-    toolId: 'get_trace',
-    params: ctx => ({ traceId: ctx.content.traceId }),
-    description: 'Get detailed denial reasoning',
-  }
-}
-```
-
-Becomes this string in the tool response:
-```
-[Follow-up: Get detailed denial reasoning — call get_trace with {"traceId":"abc-789"}]
-```
-
-If `get_trace` doesn't exist in the tools API, the LLM tries to call it and gets
-"tool not found" — which is the correct behavior. No store, no TTL, no reconciliation.
-
-### Combined (Text + FollowUp)
-
-```typescript
-{ id: 'flagged',
-  when: ctx => ctx.content.flagged,
-  text: 'Order flagged for fraud. Do NOT confirm shipment.',
-  followUp: {
-    toolId: 'get_fraud_report',
-    params: ctx => ({ orderId: ctx.content.orderId }),
-    description: 'View fraud analysis report',
-  }
-}
-```
-
-### Attaching Instructions to Tools
-
-```typescript
-const lookupOrder = defineTool({
-  id: 'lookup_order',
-  description: 'Look up order by ID',
-  inputSchema: { ... },
-  handler: async (input) => { ... },
-  instructions: [
-    { id: 'empathy', when: ctx => ctx.content.denied,
-      text: 'Be empathetic. Offer alternatives.' },
-    { id: 'trace', when: ctx => ctx.content.traceId,
-      followUp: follow('get_trace', ctx => ({ traceId: ctx.content.traceId }), 'Get details') },
-  ],
+const empathy = defineInstruction({
+  id: 'empathy',
+  description: 'Use a calm, empathetic tone with frustrated users.',
+  activeWhen: (ctx) => /upset|angry|frustrated/.test(ctx.userMessage),
+  prompt: 'Acknowledge feelings before facts. Avoid corporate jargon.',
 });
+
+const postRedact = defineInstruction({
+  id: 'pii-after-redact',
+  activeWhen: (ctx) => ctx.lastToolResult?.toolName === 'redact_pii',
+  prompt: 'PII has been redacted. Do not repeat emails or phone numbers.',
+  slot: 'messages',   // recency window — highest attention
+  role: 'system',
+});
+```
+
+`DefineInstructionOptions`: `{ id, prompt, description?, activeWhen?, slot?, role?, cache? }`.
+The `activeWhen` predicate receives an `InjectionContext` — `{ iteration, userMessage,
+history, lastToolResult?, activatedInjectionIds }` — NOT the raw tool payload. Branch
+on `ctx.lastToolResult` for the "react to what just happened" pattern.
+
+### Always-on Steering — `defineSteering`
+
+Invariant guidance with no predicate — appended to the system prompt every iteration.
+
+```typescript
+const tone = defineSteering({
+  id: 'tone',
+  prompt: 'Always respond in a concise, professional tone.',
+});
+```
+
+`DefineSteeringOptions`: `{ id, prompt, description?, cache? }`.
+
+### Developer-supplied Facts — `defineFact`
+
+Data the LLM should see — user profile, env info, computed summary, current time.
+
+```typescript
+const profile = defineFact({
+  id: 'user-profile',
+  data: 'User is a Gold-tier customer since 2021.',
+  slot: 'messages',
+});
+```
+
+`DefineFactOptions`: `{ id, data, description?, slot?, role?, activeWhen?, cache? }`.
+
+### Tool-unlocking Skills — `defineSkill`
+
+A Skill is the one flavor that spans BOTH system prompt AND tools: when activated, its
+`body` lands in the system slot and its `tools` are added to the tools slot. The LLM
+activates a Skill on demand by calling `read_skill` (the `'llm-activated'` trigger).
+
+```typescript
+const refundSkill = defineSkill({
+  id: 'refunds',
+  description: 'Process customer refunds per policy.',
+  body: 'You are trained in refund processing. Follow company policy.',
+  tools: [lookupOrder, processRefund, getTrace],
+});
+```
+
+`DefineSkillOptions`: `{ id, description, body, tools?, viaToolName?, surfaceMode?,
+refreshPolicy?, ... }`.
+
+### Registering on an Agent
+
+All four flavors register on the builder the same way — `.instruction(injection)`
+(or `.instructions([...])` to bulk-register), plus `.steering(...)` and `.fact(...)`
+aliases for clearer intent:
+
+```typescript
+import { Agent } from 'agentfootprint';
+
+const agent = Agent.create({ provider })
+  .instruction(empathy)
+  .instruction(postRedact)
+  .steering(tone)
+  .fact(profile)
+  .skill(refundSkill)
+  .build();
 ```
 
 ### How It Works at the LLM API Level
 
+Each active injection lands content into the LLM request according to its `inject`
+shape. An always-on steering doc and a `slot: 'system-prompt'` instruction append to
+`system`; a Skill's `tools` extend `tools`; a `slot: 'messages'` instruction or fact
+appends to `messages` in the recency window.
+
 ```
 LLM API call:
 {
-  system: "You are a support agent.",          ← Position 1
-  tools: [lookup_order, get_trace, ...],       ← Position 2 (always present)
+  system: "You are a support agent."           ← Position 1
+        + "\nAcknowledge feelings before facts.",   (defineInstruction → system slot)
+  tools: [lookup_order, get_trace, ...],        ← Position 2 (Skill tools land here)
   messages: [
     user: "Check order 123",
     assistant: [tool_use: lookup_order(123)],
-    user: [tool_result:                        ← Position 3 (recency window)
-      '{"orderId":"123","status":"denied","traceId":"abc-789"}'
-      + '\n\nBe empathetic. Offer alternatives.'
-      + '\n[Follow-up: Get details — call get_trace with {"traceId":"abc-789"}]'
-    ]
+    user: [tool_result: '{"orderId":"123","status":"denied"}'],
+    user: "PII has been redacted. Do not repeat emails." ← Position 3 (slot: 'messages')
   ]
 }
 ```
 
-The instruction text sits IN the tool result content. The LLM reads it in the
-recency window — the position with the highest attention.
+The messages slot is the recency window — the position with the highest attention.
+Use `slot: 'messages'` for guidance that MUST be salient on this turn (post-tool-result
+reminders, urgent corrections).
 
-### The `follow()` Shorthand
+### Reacting to a tool result
 
-```typescript
-import { follow } from 'agentfootprint';
+The "react to what just happened" pattern is expressed two ways:
 
-// Instead of writing the full FollowUp object:
-followUp: {
-  toolId: 'get_trace',
-  params: ctx => ({ traceId: ctx.content.traceId }),
-  description: 'Get denial details',
-}
+- **`defineInstruction` with `activeWhen: (ctx) => ctx.lastToolResult?.toolName === '…'`** —
+  a rule-based instruction that fires the iteration after a specific tool ran.
+- **Raw `Injection` with `trigger: { kind: 'on-tool-return', toolName }`** — the
+  engine-native trigger that fires when a matching tool returns (the "Dynamic ReAct"
+  pattern). `defineSkill` uses the related `'llm-activated'` trigger.
 
-// Use the shorthand:
-followUp: follow('get_trace', ctx => ({ traceId: ctx.content.traceId }), 'Get denial details')
-```
-
-## Phase 2 — Full Context Injection (Future)
-
-Phase 2 extends instructions to ALL 3 LLM API positions:
-
-```typescript
-const refundInstruction = defineInstruction({
-  id: 'refund-handling',
-
-  // Position 1: System prompt injection
-  prompt: 'You are trained in refund processing. Follow company policy.',
-
-  // Position 2: Tool API injection
-  tools: [lookupOrder, processRefund, getTrace],
-
-  // Position 3: Tool response enrichment
-  onToolResult: [
-    { id: 'empathy', when: ctx => ctx.content.denied,
-      text: 'Be empathetic. Offer alternatives.' },
-    { id: 'trace', when: ctx => ctx.content.traceId,
-      followUp: follow('get_trace', ctx => ({ traceId: ctx.content.traceId }), 'Get details') },
-  ],
-});
-
-Agent.create({ provider })
-  .instruction(refundInstruction)
-  .instruction(shippingInstruction)
-  .build();
-```
-
-Phase 2 design decisions (in progress):
-- Instructions as flowchart stages (visible in narrative/BTS)
-- Progressive disclosure (lazy-load full instruction on demand)
-- Instruction overrides at agent level
-- Dynamic conditions evaluated per turn
+Activation is observable: each evaluation emits `agentfootprint.context.injected`
+/ `agentfootprint.context.evaluated` on the emit channel, and instructions show up in
+the narrative trace as injection-engine stages.
 
 ## Competitive Landscape
 
@@ -198,14 +170,17 @@ Phase 2 design decisions (in progress):
 | Anthropic API | manual | manual | manual | None |
 | LangGraph | middleware | bind_tools | wrap_tool_call | None (3 mechanisms) |
 | Strands | XML injection | @tool | ToolResult | Skills (partial) |
-| **agentfootprint** | PromptProvider | ToolProvider | Instruction | **Instruction** (unified) |
+| **agentfootprint** | defineInstruction / defineSteering | defineSkill / ToolProvider | defineInstruction (`activeWhen: lastToolResult`) / `on-tool-return` | **Injection** (unified) |
 
 ## Design Principles
 
-1. **Instructions are strings.** The LLM reads text. Everything becomes a string.
-2. **Instructions are co-located.** Attached to tools, not scattered in config files.
-3. **Instructions are conditional.** `when` predicate makes them dynamic.
-4. **Instructions are observable.** They show up in the narrative trace.
-5. **Instructions work with ANY tool.** footprintjs-built, MCP, third-party.
-6. **No tiers.** `text` and `followUp` are optional fields. Fill in what you need.
-7. **FollowUp is a string, not a store.** If the tool exists, LLM calls it. If not, "not found" error.
+1. **One primitive.** Every flavor is an `Injection`. The factories are sugar — they
+   only differ in their default `trigger` and `inject` shape.
+2. **Injections are strings.** The LLM reads text. `prompt` / `body` / `data` are text.
+3. **Injections are conditional.** `activeWhen` predicate (or `trigger`) makes them dynamic.
+4. **Injections are observable.** They show up in the narrative trace and emit
+   `agentfootprint.context.injected` / `agentfootprint.context.evaluated`.
+5. **Skills unlock tools.** `defineSkill` is the one flavor that spans system prompt
+   AND tools — the LLM activates it on demand via `read_skill`.
+6. **Choose by intent.** `defineSteering` (always-on), `defineInstruction` (rule-based),
+   `defineFact` (data), `defineSkill` (tool-unlocking). Same primitive, clearer code.

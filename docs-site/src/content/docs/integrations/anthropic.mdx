@@ -13,10 +13,13 @@ npm install @anthropic-ai/sdk
 
 The SDK is a peer dependency declared in `peerDependenciesMeta` with `optional: true` — npm doesn't auto-install it. Lazy-required at first call; friendly install hint if missing.
 
+`anthropic()` is imported from the `agentfootprint/llm-providers` subpath (the `agentfootprint/providers` alias also works), NOT the main `agentfootprint` barrel. Vendor-SDK-backed providers live on that subpath so bundlers walking the main entry never touch the optional peer-dep requires — automatic tree-shaking. (The main barrel only re-exports the zero-peer-dep providers: `mock`, `browserAnthropic`, `browserOpenai`, `createProvider`.)
+
 ## Use
 
 ```ts
-import { Agent, anthropic } from 'agentfootprint';
+import { Agent } from 'agentfootprint';
+import { anthropic } from 'agentfootprint/llm-providers';
 
 const provider = anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY!,
@@ -44,7 +47,8 @@ Anthropic's Messages API has native tool_use blocks. The provider translates the
 Wrap with resilience decorators for production:
 
 ```ts
-import { withRetry, withFallback, anthropic, openai } from 'agentfootprint';
+import { withRetry, withFallback } from 'agentfootprint/resilience';
+import { anthropic, openai } from 'agentfootprint/llm-providers';
 
 const provider = withRetry(
   withFallback(

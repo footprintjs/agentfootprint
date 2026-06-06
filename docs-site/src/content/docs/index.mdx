@@ -86,7 +86,7 @@ Each one alone is good. Together they multiply — the cache amplifies Dynamic R
 Every other ReAct framework runs `prompt → llm → tool` in a loop where the prompt is *frozen at iteration 1*. agentfootprint **recomposes all three slots every iteration** based on the latest tool result. That makes possible:
 
 - **Tool-output-driven steering** — `on-tool-return` injection adds "the user has admin privileges" the moment a permission-check tool returns yes
-- **Per-iteration tool gating** — `gatedTools(inner, scope.role === 'admin')` exposes a different tool set per iteration based on what the agent has learned
+- **Per-iteration tool gating** — `gatedTools(inner, (name, ctx) => ctx.identity?.principal === 'admin')` exposes a different tool set per iteration based on caller identity and what the agent has learned
 - **Skills that load themselves** — model uses `listSkills` to discover, then `readSkill` to load only the Skills it needs (zero token cost for unused Skills)
 - **Output-schema validation per iteration** — re-prompt with the schema-violation message until structured output validates
 - **Loop-target redirection** — `loopTo()` an earlier stage when validation fails, with a fresh injection cycle each retry
@@ -95,14 +95,14 @@ This is what *"the framework owns the loop"* unlocks — see [Dynamic ReAct guid
 
 ### 2. The cache layer — provider-agnostic prompt caching
 
-Per-iteration recomposition would burn tokens (everything re-builds every iteration) without caching. v2.6 ships a **provider-agnostic cache layer** — declare `cache: 'persistent'` on a Skill / Steering / Instruction and the framework picks the right cache mechanism per provider:
+Per-iteration recomposition would burn tokens (everything re-builds every iteration) without caching. v2.6 ships a **provider-agnostic cache layer** — declare a `cache` policy (`'always'`, `'while-active'`, `'never'`, or a `{ until }` predicate) on a Skill / Steering / Instruction / Fact and the framework picks the right cache mechanism per provider:
 
-| Provider | Mechanism | Activated by `cache: 'persistent'` |
+| Provider | Mechanism | Honors the `cache` policy |
 |---|---|---|
 | Anthropic | `cache_control: { type: 'ephemeral' }` blocks | ✅ |
 | OpenAI | Automatic (cached prefix discount) | ✅ (no-op — OpenAI handles internally) |
 | Bedrock | Same as Anthropic via Claude on Bedrock | ✅ |
-| All | `noOp` fallback for providers without prompt caching | ✅ |
+| All | `NoOp` fallback for providers without prompt caching | ✅ |
 
 **Real Sonnet result with v2.6 cache layer:** a Dynamic ReAct workload dropped **36,322 → 6,535 input tokens (−82%)** end-to-end. The cache compounds with Dynamic ReAct: iteration 2+ replays the cached system prompt + Skills, only the new tool result is uncached.
 
@@ -153,7 +153,7 @@ Three example shapes, all runnable end-to-end with `npm run example examples/<fi
 | LLM provider | `mock({ replies })` | `anthropic()` · `openai()` · `bedrock()` · `ollama()` |
 | Embedder | `mockEmbedder()` | OpenAI / Cohere / Bedrock embedder (planned) |
 | Memory store | `InMemoryStore` | `RedisStore` · `AgentCoreStore` (planned: pgvector / Pinecone) |
-| Cache strategy | `noOpCache()` | `anthropicCache()` · `openaiCache()` · `bedrockCache()` (v2.6) |
+| Cache strategy | `cache: 'never'` | `cache: 'always'` / `'while-active'` — provider strategy auto-selected (v2.6) |
 | Observability | sync inline | `agentcoreObservability()` + `detach: { driver }` (v2.8.1) |
 | MCP server | `mockMcpClient({ tools })` | `mcpClient({ transport })` |
 | Tool execute | inline closure | real implementation |
@@ -162,7 +162,7 @@ Ship the patterns first; pay for tokens last.
 
 ## What ships today
 
-- **47 typed events across 13 domains** — context, stream, agent, cost, permission, eval, memory, skill, composition, cache, and more
+- **59 typed events across 16 domains** — context, stream, agent, cost, permission, eval, memory, skill, composition, tools, reliability, error, and more
 - **6 detach drivers** for non-blocking observability (microtask, immediate, setImmediate, setTimeout, sendBeacon, worker-thread)
 - **Provider-agnostic prompt cache** — Anthropic + OpenAI + Bedrock + NoOp, with a strategy registry for vendor-specific subpaths
 - **4 observability vendor adapters** (v2.8.1 → v2.9.0) — `agentcoreObservability`, `cloudwatchObservability`, `xrayObservability` (hierarchical AWS X-Ray traces), `otelObservability` (OpenTelemetry — unlocks Honeycomb / Datadog / Splunk / etc. via OTLP). All under `agentfootprint/observability-providers`.

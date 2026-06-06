@@ -20,11 +20,11 @@ In agentfootprint, RAG is **the same plumbing as `defineMemory({ type: SEMANTIC,
 
 ## Define a retriever, attach to an agent
 
-`defineRAG({ id, store, embedder, topK?, threshold?, asRole? })` returns a definition. `agent.rag(definition)` attaches it (alias for `.memory(definition)` — same plumbing, clearer intent):
+`defineRAG({ id, store, embedder, description?, embedderId?, topK?, threshold?, asRole? })` returns a `MemoryDefinition`. `agent.rag(definition)` attaches it (alias for `.memory(definition)` — same plumbing, clearer intent). It throws at construction time if `store` lacks `search()`. Pair `embedderId` here with the same value passed to `indexDocuments` so a later embedder swap is filtered out of results:
 
 <CodeFile path="examples/context-engineering/07-rag.ts" region="define-and-attach" title="examples/context-engineering/07-rag.ts (region: define-and-attach)" />
 
-The store is a `MemoryStore` with vector-search support. `InMemoryStore` works for dev. Production options: pgvector / Pinecone / Qdrant / Weaviate (planned for v2.6 — track on roadmap).
+The store is a `MemoryStore` with vector-search support (it must implement `search()` — `defineRAG` throws at construction time if it doesn't). `InMemoryStore` works for dev. Production vector backends (pgvector / Pinecone / Qdrant / Weaviate) are not yet shipped — wire your own `MemoryStore` adapter against `src/memory/store/types.ts` until then.
 
 ## Strict threshold semantics
 
@@ -34,18 +34,28 @@ If your threshold is too high and you see frequent zero-result skips, lower to ~
 
 ## Indexing — `indexDocuments`
 
-Before queries can return chunks, the store needs documents. `indexDocuments(store, embedder, docs)` is the seeding helper — embeds each doc, batches into `store.putMany()`. Caps concurrency at 8 by default to avoid embedder rate limits:
+Before queries can return chunks, the store needs documents. `indexDocuments(store, embedder, docs, options?)` is the seeding helper — embeds each doc (via `embedder.embedBatch` when available, else capped-concurrency single calls), then batches into `store.putMany()`. Returns the number of docs indexed. Each `RagDocument` is `{ id, content, metadata? }`:
 
 ```ts
 import { indexDocuments } from 'agentfootprint';
 
-await indexDocuments(store, embedder, [
+const count = await indexDocuments(store, embedder, [
   { id: 'doc1', content: 'Refund policy: 14 days from delivery for full refund.' },
-  { id: 'doc2', content: 'Pro plan costs $20/month and includes priority support.' },
+  { id: 'doc2', content: 'Pro plan costs $20/month and includes priority support.', metadata: { topic: 'plans' } },
 ]);
 ```
 
-Identity defaults to `{ conversationId: '_global' }`. **Multi-tenant footgun:** if you index under `_global` but query under `{ tenant: 'acme' }`, you'll get zero results silently. Either index per-tenant OR query under the same identity. JSDoc spells out the resolution patterns.
+The optional fourth argument is an `IndexDocumentsOptions` bag: `identity`, `embedderId`, `tier`, `ttlMs`, `signal`, and `maxConcurrency` (caps concurrent embed calls at 8 by default to avoid embedder rate limits; ignored when the embedder implements `embedBatch`):
+
+```ts
+await indexDocuments(store, embedder, docs, {
+  identity: { tenant: 'acme' },   // scope the corpus to one tenant
+  embedderId: 'openai-3-small',   // tag entries so a later embedder swap is filtered out
+  maxConcurrency: 4,
+});
+```
+
+Identity defaults to `{ conversationId: '_global' }`. **Multi-tenant footgun:** if you index under `_global` but query under `{ tenant: 'acme' }`, you'll get zero results silently. Either index per-tenant (pass `options.identity`) OR query under the same identity. JSDoc spells out the resolution patterns.
 
 ## Mocks-first development
 
@@ -53,11 +63,11 @@ For dev, use `mockEmbedder()` — deterministic vectors, zero API cost. Swap to 
 
 ```ts
 const embedder = process.env.NODE_ENV === 'production'
-  ? openaiEmbedder({ model: 'text-embedding-3-small' })  // planned v2.6
+  ? myOpenAIEmbedder({ model: 'text-embedding-3-small' })  // your Embedder shim
   : mockEmbedder();
 ```
 
-Production embedder factories (`openaiEmbedder` / `cohereEmbedder` / `bedrockEmbedder`) are on the v2.6 roadmap. Until then, wire your provider's embedding API into a small `Embedder` shim — see `src/memory/embedding/types.ts` for the interface.
+There are no built-in production embedder factories yet (`mockEmbedder` is the only shipped `Embedder`). Wire your provider's embedding API into a small `Embedder` shim — see `src/memory/embedding/types.ts` for the interface.
 
 ## Anti-patterns
 
@@ -68,4 +78,4 @@ Production embedder factories (`openaiEmbedder` / `cohereEmbedder` / `bedrockEmb
 ## Next steps
 
 - [Memory guide](/agentfootprint/guides/memory/) — `defineMemory` covers all 4 types × 7 strategies including RAG
-- [Memory store adapters](/agentfootprint/integrations/memory-stores/) — Redis · AgentCore · planned vector-capable backends
+- [Memory store adapters](/agentfootprint/integrations/memory-stores/) — `RedisStore` · `AgentCoreStore` · planned vector-capable backends

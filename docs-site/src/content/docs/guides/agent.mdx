@@ -33,7 +33,7 @@ Because the framework owns the loop, observability is just attaching listeners �
 
 <CodeFile path="examples/core/02-agent-with-tools.ts" region="observe" title="examples/core/02-agent-with-tools.ts (region: observe)" />
 
-47 typed events fire across 13 domains during a single `agent.run()`. See the [Observability guide](/agentfootprint/guides/observability/) for the full taxonomy.
+59 typed events fire across 16 domains during a single `agent.run()`. See the [Observability guide](/agentfootprint/guides/observability/) for the full taxonomy.
 
 ## maxIterations
 
@@ -42,7 +42,7 @@ Every Agent has a `maxIterations` cap (default 10). The loop exits when:
 1. The LLM returns text with no tool calls (normal completion)
 2. `maxIterations` is reached (forced exit; final iteration's text becomes the result)
 3. A tool throws (propagates as an error; subject to `withRetry` if wrapped)
-4. The agent pauses via `askHuman` / `pauseHere` (returns a `PauseResult` instead of a string)
+4. The agent pauses via `askHuman` / `pauseHere` (`run()` returns a `RunnerPauseOutcome` instead of a string — narrow it with the `isPaused()` guard)
 
 Tune `maxIterations` to your tool budget. Tool-heavy agents (research, code-gen) commonly run 15–30; chat agents 3–5.
 

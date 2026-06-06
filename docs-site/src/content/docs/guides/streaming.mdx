@@ -33,7 +33,30 @@ The event taxonomy:
 
 ## SSE for browser clients
 
-Pipe stream events to Server-Sent Events for browser delivery. Wire your HTTP framework's response writer to the events:
+The fastest path is the built-in `toSSE()` helper from `agentfootprint/stream`. Hand it the runner and it yields SSE-formatted strings (`event: <name>\ndata: <json>\n\n`) until the run finishes — drop it into any HTTP framework that accepts an async-iterable body:
+
+```ts
+import { toSSE } from 'agentfootprint/stream';
+
+// Express
+app.post('/agent', async (req, res) => {
+  res.setHeader('content-type', 'text/event-stream');
+  // Run in parallel so events flow while the iterable drains.
+  const running = agent.run({ message: req.body.message });
+  for await (const chunk of toSSE(agent, {
+    // token-only feed; omit `filter` to forward every event
+    filter: (e) => e.type.startsWith('agentfootprint.stream.'),
+  })) {
+    res.write(chunk);
+  }
+  await running;
+  res.end();
+});
+```
+
+`toSSE(runner, options?)` accepts `filter` (skip events), `format: 'full' | 'text'` (`'text'` yields raw token content only — pipe straight into a chat UI), `eventName` (rename events), and `heartbeatMs` (keep-alive `: ping` comments for proxies). The class form `new SSEFormatter(agent).stream()` is identical. `encodeSSE(name, payload)` formats a one-off frame for app-level events outside the typed registry.
+
+If you'd rather wire the events by hand, subscribe and write each frame yourself:
 
 ```ts
 // Express / Hono / Fastify
@@ -67,5 +90,5 @@ The browser consumes via `EventSource` and renders tokens into the UI as they ar
 
 ## Next steps
 
-- [Observability guide](/agentfootprint/guides/observability/) — the full 47-event taxonomy + recorders
-- [Mock provider](/agentfootprint/integrations/) — `mock({ reply })` streams word-by-word for $0 dev
+- [Observability guide](/agentfootprint/guides/observability/) — the full 59-event taxonomy + recorders
+- [Quick start](/agentfootprint/getting-started/quick-start/) — `mock({ reply })` streams word-by-word for $0 dev

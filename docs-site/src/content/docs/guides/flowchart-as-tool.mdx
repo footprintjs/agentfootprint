@@ -90,12 +90,13 @@ try {
   const err = e as Error & { checkpoint?: unknown };
   if (err.checkpoint) {
     // Persist the checkpoint; resume the inner flowchart later.
-    // Polished agent-side pause integration lands in v2.6.
+    // (Reconstruct the inner FlowChartExecutor and call
+    //  executor.resume(checkpoint, humanInput) to continue.)
   }
 }
 ```
 
-Today: the pause surfaces as a thrown error so the consumer can persist the inner chart's checkpoint manually. **Block C / v2.6** ships an integrated path where the agent's outer run pauses cleanly with the inner checkpoint included in the agent's checkpoint envelope.
+Today: the pause surfaces as a thrown error so the consumer can persist the inner chart's checkpoint manually. An integrated path — where the agent's outer run pauses cleanly with the inner checkpoint folded into the agent's own checkpoint envelope — is not yet wired into `flowchartAsTool`. For agent-native human-in-the-loop, use `askHuman` / `pauseHere` inside a stage and the `Agent`'s own pause/resume (`RunCheckpointError` + `agent.resumeOnError(checkpoint)`).
 
 ## Why this matters
 
@@ -107,7 +108,7 @@ Today: the pause surfaces as a thrown error so the consumer can persist the inne
 | Decision evidence (`decide()`) is invisible to the agent | `resultMapper` can surface it directly |
 | Pre-existing flowchart code requires rewrite | Existing code unchanged |
 
-## Composition with other v2.5 primitives
+## Composition with other primitives
 
 `flowchartAsTool` produces a regular `Tool` — it composes with everything tool-side:
 
@@ -133,7 +134,7 @@ const refundSkill = defineSkill({
   description: 'Refund processing capabilities',
   body: 'When the user asks to refund, call process_refund with the order id.',
   tools: [refundTool],  // The flowchart-backed tool
-  autoActivate: 'currentSkill',  // Hide it until billing is active
+  autoActivate: 'currentSkill',  // Narrow the tool list to this skill's tools while it's the active skill
 });
 ```
 

@@ -103,31 +103,39 @@ The library's resilience decorators (`withRetry`, `withFallback`) wrap your cust
 Drop into the standard composition:
 
 ```ts
-import { withRetry } from 'agentfootprint';
+import { withRetry } from 'agentfootprint/resilience';
 
 const provider = withRetry(new MyCustomProvider({ apiKey: '...' }), {
   maxAttempts: 5,
 });
 ```
 
-If your provider throws errors that should be retryable, wrap them in `LLMError` with `retryable: true` so the standard retry policy catches them:
+`withRetry` classifies retryability by HTTP status: it reads `err.status` (or `err.statusCode`) off the thrown error, skips `AbortError` and 4xx client errors — except `429 Too Many Requests`, which IS retried — and retries 5xx, network errors, and unknown shapes. So if your provider throws errors that should be retryable, surface the upstream HTTP status on the error:
 
 ```ts
-import { LLMError } from 'agentfootprint';
+async complete(req: LLMRequest): Promise<LLMResponse> {
+  const res = await fetch(url, { signal: req.signal /* ... */ });
+  if (!res.ok) {
+    const err = new Error(`${res.status} from upstream`) as Error & { status: number };
+    err.status = res.status; // withRetry reads this to decide retryability
+    throw err;
+  }
+  // ...
+}
+```
 
-throw new LLMError({
-  code: 'rate_limit',
-  provider: 'my-custom',
-  message: '429 from upstream',
-  statusCode: 429,
-  retryable: true,
+Need a custom rule (e.g. retry a specific provider-defined code)? Pass `shouldRetry`:
+
+```ts
+withRetry(new MyCustomProvider({ apiKey: '...' }), {
+  shouldRetry: (err, attempt) => (err as { status?: number }).status === 503,
 });
 ```
 
 ## Anti-patterns
 
 - Don't bake retry logic into `complete`. Let `withRetry` handle it; your provider should be a thin SDK wrapper.
-- Don't return raw API errors. Wrap in `LLMError` so the framework's classification works (retryable vs terminal).
+- Don't swallow the upstream HTTP status. Surface it on the thrown error (`err.status` / `err.statusCode`) so `withRetry`'s default classification works (4xx terminal vs 5xx/429 retryable).
 - Don't omit usage from the response — recorders depend on it for cost tracking.
 
 ## Next steps

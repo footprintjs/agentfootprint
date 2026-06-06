@@ -25,16 +25,19 @@ The simplest concept — a single LLM invocation with no tools or loops.
 ```typescript
 import { LLMCall, mock } from 'agentfootprint';
 
-const call = LLMCall.create({ provider: mock([{ content: 'Paris.' }]) })
+const call = LLMCall.create({
+  provider: mock({ reply: 'Paris.' }),
+  model: 'mock',
+})
   .system('You are a geography expert.')
   .build();
 
-const result = await call.run('What is the capital of France?');
-console.log(result.content); // "Paris."
+// run() takes an input object; the result IS the answer string
+const result = await call.run({ message: 'What is the capital of France?' });
+console.log(result); // "Paris."
 
-// Every run produces a human-readable trace
-console.log(call.getNarrative());
-// ["Entered SeedScope.", "Entered CallLLM.", "Entered ParseResponse.", ...]
+// Every run produces a footprintjs snapshot for time-travel + structured narrative entries
+console.log(call.getSnapshot()?.sharedState);
 ```
 
 ---
@@ -49,33 +52,40 @@ Add tools and the agent runs a **ReAct loop** (*reasoning + acting* interleaved 
 import { Agent, mock, defineTool } from 'agentfootprint';
 
 // Deterministic tool — easy to verify the agent's grounding
-const addTool = defineTool({
-  id: 'add',
+const addTool = defineTool<{ a: number; b: number }, string>({
+  name: 'add',
   description: 'Add two integers and return the sum.',
   inputSchema: {
     type: 'object',
     properties: { a: { type: 'number' }, b: { type: 'number' } },
     required: ['a', 'b'],
   },
-  handler: async ({ a, b }) => ({ content: String(a + b) }),
+  execute: async ({ a, b }) => String(a + b),
 });
 
 const agent = Agent.create({
-  provider: mock([
-    {
-      content: 'Let me compute that.',
-      toolCalls: [{ id: 'tc1', name: 'add', arguments: { a: 17, b: 25 } }],
-    },
-    { content: 'The sum of 17 and 25 is 42.' },
-  ]),
+  provider: mock({
+    replies: [
+      {
+        content: 'Let me compute that.',
+        toolCalls: [{ id: 'tc1', name: 'add', args: { a: 17, b: 25 } }],
+      },
+      { content: 'The sum of 17 and 25 is 42.' },
+    ],
+  }),
+  model: 'mock',
 })
   .system('You are a math assistant. Use the add tool for arithmetic.')
   .tool(addTool)
   .build();
 
-const result = await agent.run('What is 17 + 25?');
-console.log(result.content);    // "The sum of 17 and 25 is 42."
-console.log(result.iterations); // 2 (one tool call + one final response)
+const result = await agent.run({ message: 'What is 17 + 25?' });
+console.log(result); // "The sum of 17 and 25 is 42." (the result IS the answer string)
+
+// Iteration count + token totals arrive on the turn_end event
+agent.on('agentfootprint.agent.turn_end', (e) =>
+  console.log(`${e.payload.iterationCount} iterations`),
+);
 ```
 
 ---
@@ -85,59 +95,75 @@ console.log(result.iterations); // 2 (one tool call + one final response)
 The killer feature: write tests with `mock()`, deploy with real providers. Zero code changes.
 
 ```typescript
-import { Agent, mock, createProvider, anthropic, defineTool } from 'agentfootprint';
+import { Agent, mock, defineTool } from 'agentfootprint';
+import { anthropic } from 'agentfootprint/llm-providers';
 
 // Define tools once
-const searchTool = defineTool({
-  id: 'search',
+const searchTool = defineTool<{ q: string }, string>({
+  name: 'search',
   description: 'Search for information.',
   inputSchema: { type: 'object', properties: { q: { type: 'string' } }, required: ['q'] },
-  handler: async ({ q }) => ({ content: `Results for: ${q}` }),
+  execute: async ({ q }) => `Results for: ${q}`,
 });
 
 // test.ts — $0, instant, deterministic
-const testProvider = mock([
-  { content: 'Searching...', toolCalls: [{ id: 't1', name: 'search', arguments: { q: 'test' } }] },
-  { content: 'Found it.' },
-]);
+const testProvider = mock({
+  replies: [
+    { content: 'Searching...', toolCalls: [{ id: 't1', name: 'search', args: { q: 'test' } }] },
+    { content: 'Found it.' },
+  ],
+});
 
-// production.ts — swap one line
-const prodProvider = createProvider(anthropic('claude-sonnet-4-20250514'));
+// production.ts — swap one line. The provider factory takes options;
+// `model: 'anthropic'` resolves to the provider's `defaultModel`.
+const prodProvider = anthropic({ defaultModel: 'claude-sonnet-4-5-20250929' });
 
 // Same agent code — only the provider changes
 function buildAgent(provider) {
-  return Agent.create({ provider })
+  return Agent.create({ provider, model: 'anthropic' })
     .system('You are a research assistant.')
     .tool(searchTool)
     .build();
 }
 ```
 
+> `mock` / `createProvider` / `browserAnthropic` / `browserOpenai` are on the
+> main barrel; the vendor-SDK factories (`anthropic`, `openai`, `ollama`,
+> `bedrock`) live on the `agentfootprint/llm-providers` subpath.
+
 ---
 
 ## Observability
 
-Attach recorders to track tokens, cost, and turn lifecycle.
+Track tokens, cost, and turn lifecycle by subscribing to typed events. Every
+runner is an event emitter — call `.on(eventName, listener)`.
 
 ```typescript
-import { Agent, mock, TokenRecorder, CostRecorder, CompositeRecorder } from 'agentfootprint';
+import { Agent, mock } from 'agentfootprint';
 
-const tokens = new TokenRecorder();
-const cost = new CostRecorder();
-const all = new CompositeRecorder([tokens, cost]);
-
-const agent = Agent.create({ provider: mock([{ content: 'Hello!' }]) })
+const agent = Agent.create({ provider: mock({ reply: 'Hello!' }), model: 'mock' })
   .system('Be helpful.')
-  .recorder(all)
   .build();
 
-await agent.run('Hi');
+// Subscribe to typed events — fully type-checked payloads
+agent.on('agentfootprint.stream.llm_end', (e) =>
+  console.log(`tokens: ${e.payload.usage.input + e.payload.usage.output}`),
+);
+agent.on('agentfootprint.agent.turn_end', (e) =>
+  console.log(`${e.payload.iterationCount} iterations`),
+);
 
-console.log(tokens.getStats());   // { totalCalls: 1, totalInputTokens: ..., ... }
-console.log(cost.getTotalCost()); // 0
+await agent.run({ message: 'Hi' });
 ```
 
-See [Recorders Guide](recorders.md) for all 7 recorder types.
+For richer, grouped observability there's the `enable.*` namespace — e.g.
+`agent.enable.cost({ ... })`, `agent.enable.observability({ strategy })`,
+`agent.enable.liveStatus({ ... })`. To plug in your own collector, implement a
+footprintjs `CombinedRecorder` and attach it via `.recorder(rec)` (on the
+builder) or `agent.attach(rec)` (post-build).
+
+See [Recorders Guide](recorders.md) for the recorder interfaces and built-in
+factory recorders (`costRecorder`, `agentRecorder`, `permissionRecorder`, …).
 
 ---
 
@@ -147,25 +173,25 @@ Every concept produces three outputs after execution:
 
 | Method | Returns | Purpose |
 |--------|---------|---------|
-| `getNarrative()` | `string[]` | Human-readable trace of what happened |
-| `getSnapshot()` | `RuntimeSnapshot` | Full execution state for time-travel debugging |
-| `getSpec()` | Stage graph metadata | Flowchart visualization |
+| `getLastNarrativeEntries()` | `readonly CombinedNarrativeEntry[]` | Structured trace of what happened |
+| `getSnapshot()` | `RuntimeSnapshot \| undefined` | Full execution state for time-travel debugging |
+| `getSpec()` | `FlowChart` | Stage graph metadata for flowchart visualization |
 
 ```typescript
-const agent = Agent.create({ provider: mock([{ content: 'Done.' }]) })
+const agent = Agent.create({ provider: mock({ reply: 'Done.' }), model: 'mock' })
   .system('Be helpful.')
   .build();
 
-await agent.run('Hello');
+await agent.run({ message: 'Hello' });
 
-// What happened (human-readable)
-agent.getNarrative().forEach((line) => console.log(line));
+// What happened (structured narrative entries)
+agent.getLastNarrativeEntries().forEach((entry) => console.log(entry.text));
 
-// Full state (machine-readable)
+// Full state (machine-readable; undefined before the first run completes)
 const snapshot = agent.getSnapshot();
 console.log(snapshot?.sharedState);
 
-// Stage graph (for UI visualization)
+// Stage graph (for UI visualization) — stable reference, built once
 const spec = agent.getSpec();
 ```
 
@@ -177,12 +203,12 @@ The examples above use `mock()` for clarity. Before deploying anything for real:
 
 | Concern | What to add |
 |---|---|
-| **Real provider** | `createProvider(anthropic('claude-sonnet-4-20250514'))` instead of `mock()` |
-| **Cost / token caps** | Pass `maxTokens` to the model factory; attach `TokenRecorder` + `CostRecorder` |
-| **Cancellation** | Pass `signal: abortController.signal` to `.run()` so users can cancel |
-| **Retry on rate limits** | Wrap the runner with `withRetry({ shouldRetry: (e) => e.retryable })` — see [orchestration.md](orchestration.md) |
-| **Tool authorization** | Wrap tools with `gatedTools(...)` — see [security.md](security.md) |
-| **Audit trail** | Attach `agentObservability()` for tokens + tools + cost + grounding in one call |
+| **Real provider** | `anthropic({ defaultModel: '...' })` (from `agentfootprint/llm-providers`) with `model: 'anthropic'` — or `createProvider({ kind: 'anthropic', defaultModel: '...' })` — instead of `mock()` |
+| **Cost / token caps** | Pass `maxTokens` to `Agent.create({ ... })`; pass a `pricingTable` + `costBudget` to emit `agentfootprint.cost.*` events |
+| **Cancellation** | Pass `env: { signal: abortController.signal }` to `.run()` so users can cancel |
+| **Retry on rate limits** | Wrap the **provider** with `withRetry(provider, { shouldRetry })` (from `agentfootprint/resilience`) — see [orchestration.md](orchestration.md) |
+| **Tool authorization** | Gate the tool source with `gatedTools(...)` (from `agentfootprint/tool-providers`) and wire it via `.toolProvider(...)` — see [security.md](security.md) |
+| **Audit trail** | Subscribe to typed events, or use the `agent.enable.observability({ strategy })` grouped strategy |
 
 Treat the move from `mock()` to a real provider as a deployment milestone, not a one-line swap.
 

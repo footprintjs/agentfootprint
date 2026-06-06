@@ -15,11 +15,12 @@ COMPOSITIONS (3 — how primitives arrange)
 PATTERNS (N — named configurations; every named paper is a recipe)
   ReAct              = Agent (default)
   Dynamic ReAct      = Agent with slots re-evaluating per iter
-  Hierarchy (Swarm)  = Agent with specialist-Agents as tools
-  Reflexion          = Sequence(Agent, LLM-critique, Agent)
-  Tree-of-Thoughts   = Parallel(Agent × N) + LLM-rank
-  Plan-Execute       = LLM-plan + Sequence(Agent per step)
-  Map-Reduce         = Parallel(Agent × N) + LLM-merge
+  Swarm (hand-off)   = Loop(Conditional(route-to-agent))         swarm()
+  Reflection         = Sequence(Agent, LLM-critique, revise)     reflection()
+  Tree-of-Thoughts   = Parallel(Agent × N) + LLM-rank            tot()
+  Self-Consistency   = Parallel(Agent × N) + vote                selfConsistency()
+  Debate             = Parallel(Agent × N) + LLM-judge           debate()
+  Map-Reduce         = Parallel(Agent × N) + LLM-merge           mapReduce()
 
 CONTEXT ENGINEERING (cross-cutting — what you inject into Agent slots)
   RAG          → messages
@@ -36,15 +37,15 @@ FEATURES (infrastructure)
 **Two theses to hold in your head:**
 
 1. **Agent = ReAct.** If it doesn't loop-with-tools, it isn't an Agent — it's an LLM call. Don't call something an Agent unless there's a loop.
-2. **Every named pattern in the literature = a composition of the 2 primitives + 3 compositions.** Reflexion isn't a new Agent class; it's `Sequence(Agent, critique-LLM, Agent)`. Tree-of-Thoughts isn't a new runtime; it's `Parallel(Agent × N) + rank`. Hierarchy/Swarm is an Agent whose tools happen to be other Agents.
+2. **Every named pattern in the literature = a composition of the 2 primitives + 3 compositions.** `reflection()` isn't a new Agent class; it's `Sequence(Agent, critique-LLM, revise)`. `tot()` isn't a new runtime; it's `Parallel(Agent × N) + rank`. `swarm()` is `Loop(Conditional(route-to-agent))`.
 
-**Paper citations tie each pattern to its source:** ReAct (Yao 2022), Reflexion (Shinn 2023), Tree-of-Thoughts (Yao 2023), Swarm (OpenAI 2024). We express those papers as compositions of the 5 primitives — not as new class names per paper.
+**Paper citations tie each pattern to its source:** ReAct (Yao 2022), Reflection (Shinn 2023), Tree-of-Thoughts (Yao 2023), Swarm (OpenAI 2024). We express those papers as factory functions composing the 5 primitives — not as new class names per paper.
 
-All runners share the same interface — that's what makes composition work:
+All runners share the same `Runner` interface — that's what makes composition work:
 
 ```typescript
-// Builder: .create() → .system() → .recorder() → .build()
-// Runner:  .run() → .getNarrative() → .getSnapshot() → .getSpec()
+// Builder: .create({...}) → .system() → .build()
+// Runner:  .run(input) → .getSnapshot() → .getSpec()  (+ .on()/.attach()/.enable for observation)
 ```
 
 ---
@@ -57,38 +58,40 @@ All runners share the same interface — that's what makes composition work:
 
 The simplest concept: one prompt in, one response out. No tools, no loops.
 
-**Internal flowchart:** `SeedScope → CallLLM → ParseResponse → Finalize`
+**Internal flowchart:** `Client → sf-llm-call (Initialize → SystemPrompt → Messages → CallLLM → ExtractFinal) → loopTo(Client)` (the loop fires once — LLMCall is one-shot)
 
 ```typescript
 import { LLMCall, mock } from 'agentfootprint';
 
-const call = LLMCall.create({ provider: mock([{ content: 'Positive sentiment.' }]) })
+const call = LLMCall.create({
+  provider: mock({ replies: ['Positive sentiment.'] }),
+  model: 'mock',
+})
   .system('Classify the sentiment of the input as positive, negative, or neutral.')
   .build();
 
-const result = await call.run('I love this product!');
-console.log(result.content); // "Positive sentiment."
+const content = await call.run({ message: 'I love this product!' });
+console.log(content); // "Positive sentiment." — run() resolves to the answer string
 ```
 
 **Builder API:**
 
 | Method | Description |
 |--------|-------------|
-| `LLMCall.create({ provider })` | Create builder with an LLM provider |
+| `LLMCall.create({ provider, model, name?, ... })` | Create builder — `provider` and `model` are required |
 | `.system(prompt)` | Set system prompt |
-| `.recorder(rec)` | Attach an AgentRecorder |
-| `.build()` | Returns `LLMCallRunner` |
+| `.build()` | Returns an `LLMCall` runner |
 
-**Runner API:**
+**Runner API:** (every runner implements the shared `Runner` interface)
 
 | Method | Returns | Description |
 |--------|---------|-------------|
-| `.run(message, options?)` | `{ content, messages }` | Execute the LLM call |
-| `.getNarrative()` | `string[]` | Human-readable trace |
-| `.getSnapshot()` | `RuntimeSnapshot` | Full execution state |
-| `.getSpec()` | Stage graph | Flowchart metadata |
+| `.run({ message }, options?)` | `Promise<string \| RunnerPauseOutcome>` | Execute the LLM call; resolves to the answer string |
+| `.getSnapshot()` | `RuntimeSnapshot \| undefined` | Full execution state of the last run |
+| `.getSpec()` | `FlowChart` | Design-time flowchart blueprint |
+| `.attach(recorder)` / `.on(event, fn)` | `Unsubscribe` | Observe execution events |
 
-**Failure modes:** provider call throws → propagates as `LLMError` (use `withRetry`). Provider returns empty content → returned as `{ content: '' }`. No tool support — if your prompt asks the LLM to "search", you'll get refusal text, not a search.
+**Failure modes:** provider call throws → the error propagates out of `run()` (wrap the provider with `withRetry` from `agentfootprint/resilience`). Provider returns empty content → `run()` resolves to `''`. No tool support — if your prompt asks the LLM to "search", you'll get refusal text, not a search.
 
 ---
 
@@ -98,30 +101,34 @@ console.log(result.content); // "Positive sentiment."
 
 **Agent = ReAct.** This is the definition, not a default. The Agent primitive IS the ReAct loop (Yao et al. 2022, ICLR — "Reasoning + Acting" interleaved). If it doesn't loop-with-tools, it isn't an Agent.
 
-**Internal flowchart:** `SeedScope → PromptAssembly → CallLLM → ParseResponse → HandleResponse → loopTo(CallLLM)`
+**Internal flowchart:** `Initialize → InjectionEngine → [Context: SystemPrompt ‖ Messages ‖ Tools] → CallLLM → Route → { tool-calls → loopTo(InjectionEngine) | Final }`
 
 ```typescript
 import { Agent, mock, defineTool } from 'agentfootprint';
 
 const calculator = defineTool({
-  id: 'calculate',
+  name: 'calculate',
   description: 'Evaluate a math expression.',
   inputSchema: {
     type: 'object',
     properties: { expression: { type: 'string' } },
     required: ['expression'],
   },
-  handler: async ({ expression }) => ({ content: String(eval(expression)) }),
+  // execute() receives the parsed args and returns the tool result.
+  execute: async ({ expression }) => String(eval(expression)),
 });
 
 const agent = Agent.create({
-  provider: mock([
-    {
-      content: 'Let me calculate that.',
-      toolCalls: [{ id: 'tc1', name: 'calculate', arguments: { expression: '2 + 2' } }],
-    },
-    { content: 'The answer is 4.' },
-  ]),
+  provider: mock({
+    replies: [
+      {
+        content: 'Let me calculate that.',
+        toolCalls: [{ id: 'tc1', name: 'calculate', args: { expression: '2 + 2' } }],
+      },
+      { content: 'The answer is 4.' },
+    ],
+  }),
+  model: 'mock',
   name: 'math-agent',
 })
   .system('You are a math assistant. Use the calculator tool.')
@@ -129,50 +136,37 @@ const agent = Agent.create({
   .maxIterations(5)
   .build();
 
-const result = await agent.run('What is 2 + 2?');
-console.log(result.content);    // "The answer is 4."
-console.log(result.iterations); // 2
+const answer = await agent.run({ message: 'What is 2 + 2?' });
+console.log(answer); // "The answer is 4." — run() resolves to the final answer string
 ```
 
-**Builder API (extends LLMCall):**
+**Builder API:**
 
 | Method | Description |
 |--------|-------------|
-| `Agent.create({ provider, name? })` | Create builder |
-| `.system(prompt)` | Set system prompt |
-| `.tool(toolDef)` | Register a single tool |
-| `.tools(toolDefs)` | Register multiple tools |
-| `.maxIterations(n)` | Max ReAct loop iterations (default: 10) |
-| `.recorder(rec)` | Attach an AgentRecorder |
-| `.build()` | Returns `AgentRunner` |
+| `Agent.create({ provider, model, name?, maxIterations?, ... })` | Create builder — `provider` and `model` are required |
+| `.system(prompt, opts?)` | Set system prompt |
+| `.tool(toolDef)` | Register a single tool (`defineTool(...)`) |
+| `.tools(toolDefs)` | Register multiple tools at once |
+| `.maxIterations(n)` | Override the ReAct loop cap (default: 10, hard cap 50) |
+| `.outputSchema(parser, opts?)` | Declare a terminal JSON contract; enables `.runTyped()` |
+| `.memory(def)` / `.rag(def)` / `.skill(inj)` / `.instruction(inj)` | Context-engineering injections |
+| `.recorder(rec)` | Attach a `CombinedRecorder` |
+| `.build()` | Returns an `Agent` runner |
 
-**Runner API (extends LLMCallRunner):**
+**Runner API:**
 
 | Method | Returns | Description |
 |--------|---------|-------------|
-| `.run(message, options?)` | `{ content, messages, iterations }` | Execute the agent loop |
-| `.getMessages()` | `Message[]` | Conversation history (for multi-turn) |
-| `.resetConversation()` | `void` | Clear conversation history |
-| `.toFlowChart()` | `FlowChart` | Expose internal flowchart for subflow composition |
-| `.getNarrative()` | `string[]` | Human-readable trace |
-| `.getNarrativeEntries()` | `NarrativeEntry[]` | Structured narrative entries |
-| `.getSnapshot()` | `RuntimeSnapshot` | Full execution state |
-| `.getSpec()` | Stage graph | Flowchart metadata |
+| `.run({ message, identity? }, options?)` | `Promise<string \| RunnerPauseOutcome>` | Execute the ReAct loop; resolves to the final answer string |
+| `.runTyped({ message }, options?)` | `Promise<T>` | Run + parse + validate against `.outputSchema()` |
+| `.getNarrativeEntries()` | `CombinedNarrativeEntry[]` | Structured narrative entries from the last run |
+| `.getSnapshot()` | `RuntimeSnapshot \| undefined` | Full execution state of the last run |
+| `.getSpec()` | `FlowChart` | Design-time flowchart blueprint (mount as a subflow with `getSpec()`) |
 
-**Failure modes:** tool throws → result becomes `{ error: true, content: errorMessage }` and flows into the conversation; LLM may retry or apologize. Hits `maxIterations` → loop terminates with whatever the LLM last said. Tool result too large → may exceed model context window; consider summarizing tool output.
+**Failure modes:** tool throws → the error is converted to a synthetic tool-result string the LLM sees and may recover from; LLM may retry or apologize. Hits `maxIterations` → loop terminates with whatever the LLM last said. Tool result too large → may exceed model context window; consider summarizing tool output.
 
-**Multi-turn conversations:**
-
-```typescript
-const agent = Agent.create({ provider, name: 'chat' })
-  .system('You are a helpful assistant.')
-  .build();
-
-await agent.run('My name is Alice.');
-const result = await agent.run('What is my name?');
-// Agent remembers — conversation history persists across runs
-agent.resetConversation(); // Clear when done
-```
+> **Conversation memory:** each `agent.run(...)` is independent by default. To carry context across turns, attach a memory subsystem via `.memory(defineMemory({...}))` (see [Memory](../../docs-site/src/content/docs/guides/memory.mdx)). Multi-tenant isolation flows through the `identity` field on the run input.
 
 ---
 
@@ -180,57 +174,57 @@ agent.resetConversation(); // Clear when done
 
 The three ways primitives arrange into bigger shapes. Every named pattern below is some arrangement of these three.
 
-### 1. Sequence — one after another (`FlowChart`)
+### 1. Sequence — one after another (`Sequence`)
 
 > **Like:** an assembly line — each station does one thing, output of one feeds the next.
 
-Composes multiple runners (LLMs, Agents, or other compositions) into a sequential pipeline. Each runner feeds into the next.
+Composes multiple runners (LLMs, Agents, or other compositions) into a sequential pipeline. Each step's string output becomes the next step's input.
 
-**Internal flowchart:** `Seed → Runner1 (subflow) → Runner2 (subflow) → ... → RunnerN (subflow)`
+**Internal flowchart:** `Seed → step1 (subflow) → step2 (subflow) → ... → stepN (subflow) → Finalize`
 
-Runners with `.toFlowChart()` (LLMCallRunner, AgentRunner, RAGRunner) are mounted as subflows, enabling UI drill-down via `getSubtreeSnapshot()`.
+Each step is mounted as a subflow via the runner's `getSpec()`, enabling UI drill-down via `getSubtreeSnapshot()`.
 
 ```typescript
-import { FlowChart, Agent, LLMCall, mock } from 'agentfootprint';
+import { Sequence, Agent, LLMCall, mock } from 'agentfootprint';
 
 const researcher = Agent.create({
-  provider: mock([{ content: 'Key findings: AI is growing in healthcare.' }]),
+  provider: mock({ replies: ['Key findings: AI is growing in healthcare.'] }),
+  model: 'mock',
   name: 'researcher',
 })
   .system('Research the given topic thoroughly.')
   .build();
 
 const writer = LLMCall.create({
-  provider: mock([{ content: 'Article: The Rise of AI in Healthcare...' }]),
+  provider: mock({ replies: ['Article: The Rise of AI in Healthcare...'] }),
+  model: 'mock',
 })
   .system('Write a polished article based on the research provided.')
   .build();
 
-const pipeline = FlowChart.create()
-  .agent('research', 'Research', researcher)
-  .agent('write', 'Write', writer)
+const pipeline = Sequence.create({ name: 'research-then-write' })
+  .step('research', researcher)
+  .step('write', writer)
   .build();
 
-const result = await pipeline.run('AI trends in healthcare');
-console.log(result.content); // Final output from the last runner
-console.log(result.agents);  // Per-agent results: [{ id, name, content, latencyMs }]
-console.log(result.totalLatencyMs);
+const content = await pipeline.run({ message: 'AI trends in healthcare' });
+console.log(content); // Final output string from the last step
 ```
 
 **Builder API:**
 
 | Method | Description |
 |--------|-------------|
-| `FlowChart.create()` | Create empty pipeline builder |
-| `.agent(id, name, runner, options?)` | Add a runner to the pipeline |
-| `.recorder(rec)` | Attach an AgentRecorder |
-| `.build()` | Returns `FlowChartRunner` |
+| `Sequence.create(opts?)` | Create a pipeline builder (`{ name?, id? }`) |
+| `.step(id, runner, opts?)` | Add a runner as a sequential step |
+| `.pipeVia(fn)` | Transform the previous step's output before the next step |
+| `.build()` | Returns a `Sequence` runner |
 
-The `.agent()` options support `inputMapper` and `outputMapper` for custom data flow between stages.
+By default a step's string output feeds the next step as `{ message }`; use `.pipeVia(fn)` to customize that mapping.
 
-**Runner result:** `{ content, agents, totalLatencyMs }`
+**Runner result:** `run({ message })` resolves to the final step's output **string**.
 
-**Failure modes:** any runner throws → entire pipeline fails (no partial-success). Wrap individual runners with `withRetry`/`withFallback` if upstream stages must survive downstream failures. Latency is **sum** of all stages — no parallelism.
+**Failure modes:** any step throws → the entire pipeline fails (no partial-success). Wrap individual runners with `withRetry`/`withFallback` (from `agentfootprint/resilience`) if upstream stages must survive downstream failures. Latency is **sum** of all steps — no parallelism.
 
 ---
 
@@ -238,46 +232,51 @@ The `.agent()` options support `inputMapper` and `outputMapper` for custom data 
 
 > **Like:** asking three colleagues the same question, then merging their answers.
 
-Fan out N runners concurrently, then merge their results either via an LLM call or a custom function. Capped at 10 branches as a safety guard.
+Fan out N runners concurrently (minimum 2 branches), then merge their results either via an LLM call or a custom function.
 
-**Internal flowchart:** `Seed → [fork] → branch-A | branch-B | branch-C → Merge → Finalize`
+**Internal flowchart:** `Initialize → [fork] → branch-A | branch-B | branch-C → Merge`
 
 ```typescript
 import { Parallel, Agent, mock } from 'agentfootprint';
 
-const ethicsReviewer = Agent.create({ provider, name: 'ethics' })
+const provider = mock({ replies: ['review text'] });
+
+const ethicsReviewer = Agent.create({ provider, model: 'mock', name: 'ethics' })
   .system('Review the proposal from an ethics perspective.').build();
-const costReviewer = Agent.create({ provider, name: 'cost' })
+const costReviewer = Agent.create({ provider, model: 'mock', name: 'cost' })
   .system('Review the proposal from a cost perspective.').build();
-const techReviewer = Agent.create({ provider, name: 'tech' })
+const techReviewer = Agent.create({ provider, model: 'mock', name: 'tech' })
   .system('Review the proposal from a technical feasibility perspective.').build();
 
-const review = Parallel.create({ provider, name: 'panel-review' })
-  .agent('ethics', ethicsReviewer, 'Ethics review')
-  .agent('cost',   costReviewer,   'Cost review')
-  .agent('tech',   techReviewer,   'Technical review')
-  .mergeWithLLM('Synthesize the three reviews into a single recommendation.')
+const review = Parallel.create({ name: 'panel-review' })
+  .branch('ethics', ethicsReviewer, 'Ethics review')
+  .branch('cost',   costReviewer,   'Cost review')
+  .branch('tech',   techReviewer,   'Technical review')
+  .mergeWithLLM({
+    provider,
+    model: 'mock',
+    prompt: 'Synthesize the three reviews into a single recommendation.',
+  })
   .build();
 
-const result = await review.run('Build an internal LLM proxy.');
-console.log(result.content);   // merged recommendation
-console.log(result.branches);  // per-reviewer outputs with status: 'fulfilled' | 'rejected'
+const content = await review.run({ message: 'Build an internal LLM proxy.' });
+console.log(content); // merged recommendation string
 ```
 
 **Builder API:**
 
 | Method | Description |
 |--------|-------------|
-| `Parallel.create({ provider, name? })` | Create builder |
-| `.agent(id, runner, description)` | Add a parallel branch |
-| `.mergeWithLLM(prompt)` | Merge results via an LLM call |
-| `.merge(fn)` | Merge results via a pure function (no LLM call) |
-| `.recorder(rec)` | Attach an AgentRecorder |
-| `.build()` | Returns `ParallelRunner` |
+| `Parallel.create(opts?)` | Create builder (`{ name?, id? }`) |
+| `.branch(id, runner, name?)` | Add a parallel branch (≥ 2 required) |
+| `.mergeWithLLM({ provider, model, prompt, ... })` | Merge results via an LLM call |
+| `.mergeWithFn(fn)` | Merge `{ [branchId]: string }` via a pure function (no LLM call) |
+| `.mergeOutcomesWithFn(fn)` | Tolerant merge — receives `{ [branchId]: BranchOutcome }` (successes + failures) |
+| `.build()` | Returns a `Parallel` runner |
 
-**Runner result:** `{ content, branches: BranchResult[], messages }` where each `BranchResult` carries `{ id, status, content, error? }`.
+**Runner result:** `run({ message })` resolves to the merged output **string**.
 
-**Failure modes:** one branch throws → the failed branch surfaces as `{ status: 'rejected', error }`; the LLM merge step still runs over the remaining branches (so reduce keeps going). The `.merge(fn)` callback receives all branches including failures — you decide how to handle them. Cap at 10 branches; raise via raw footprintjs if you genuinely need more.
+**Failure modes:** with the strict merges (`.mergeWithFn` / `.mergeWithLLM`), one branch throwing makes the whole Parallel **reject** with an aggregated error listing the failed branches. Use `.mergeOutcomesWithFn(fn)` for tolerant partial-failure handling — its callback receives a `BranchOutcome` (`{ ok: true, value }` or `{ ok: false, error }`) per branch, and you decide how to proceed.
 
 ---
 
@@ -285,34 +284,33 @@ console.log(result.branches);  // per-reviewer outputs with status: 'fulfilled' 
 
 > **Like:** a triage nurse — look at the request, route to the right specialist.
 
-`if/else` routing between runners. Predicates run in `.when()` order, first match wins; no match runs `.otherwise()`. A predicate that throws is treated as a miss (fail-open).
+`if/else` routing between runners. Predicates run in `.when()` order, first match wins; no match runs `.otherwise()`. Each predicate is a sync function of the input `{ message }`.
 
 ```typescript
 import { Conditional } from 'agentfootprint';
 
 const triage = Conditional.create({ name: 'triage' })
-  .when((input) => input.toLowerCase().includes('refund'), refundAgent)
-  .when((input) => input.length > 500,                      ragRunner)
-  .otherwise(generalAgent)
+  .when('refund', (input) => input.message.toLowerCase().includes('refund'), refundAgent)
+  .when('long',   (input) => input.message.length > 500,                     ragRunner)
+  .otherwise('general', generalAgent)
   .build();
 
-const result = await triage.run('I want a refund please');
-// Narrative: "[triage] Chose refundAgent — predicate 0 matched"
+const content = await triage.run({ message: 'I want a refund please' });
+// Emits agentfootprint.composition.route_decided with { chosen: 'refund', rationale }
 ```
 
 **Builder API:**
 
 | Method | Description |
 |--------|-------------|
-| `Conditional.create({ name? })` | Create builder |
-| `.when(predicate, runner)` | Add a branch (predicate: `(input, state) => boolean`) |
-| `.otherwise(runner)` | Default branch (required) |
-| `.recorder(rec)` | Attach an AgentRecorder |
-| `.build()` | Returns `ConditionalRunner` |
+| `Conditional.create(opts?)` | Create builder (`{ name?, id? }`) |
+| `.when(id, predicate, runner, name?)` | Add a branch — `predicate: (input: { message }) => boolean` |
+| `.otherwise(id, runner, name?)` | Default branch (required) |
+| `.build()` | Returns a `Conditional` runner |
 
-**Difference from `Agent.route()`:** `Conditional` is a top-level routing decision between runners. `Agent.route()` branches **inside** a ReAct loop. Use `Conditional` when the shape is "pick one runner and return its result" (triage, classification). Use `Agent.route()` when the routing happens mid-loop based on tool results.
+`Conditional` is a top-level routing decision between runners — "pick one runner and return its result" (triage, classification). For mid-loop routing inside a ReAct loop, register tools on an `Agent` and let the LLM choose; for dynamic specialist hand-offs, use the `swarm()` pattern factory.
 
-**Failure modes:** all predicates miss AND no `.otherwise()` → build error. Predicate throws → silent miss (intentional fail-open); enable dev mode to see warnings on suspicious predicates.
+**Failure modes:** no `.otherwise()` registered → build error (every Conditional requires a fallback). A predicate that throws propagates out of `run()` (predicates should be pure and total).
 
 ---
 
@@ -320,75 +318,72 @@ const result = await triage.run('I want a refund please');
 
 Every paper in the agent literature is a composition of 2 primitives + 3 compositions. We ship a handful as factories; see the [Patterns guide](patterns.md) for the full set with source papers. A sample:
 
-| Pattern | Built from | Paper |
-|---|---|---|
-| **ReAct** | Agent (default) | Yao et al. 2022 |
-| **Dynamic ReAct** | Agent with slots re-evaluating per iter | — (this library) |
-| **Hierarchy (Swarm)** | Agent with specialist-Agents as tools | OpenAI Swarm 2024 |
-| **Reflexion** | Sequence(Agent, LLM-critique, Agent) | Shinn et al. 2023 |
-| **Tree-of-Thoughts** | Parallel(Agent × N) + LLM-rank | Yao et al. 2023 |
-| **Plan-Execute** | LLM-plan + Sequence(Agent per step) | Wang et al. 2023 |
-| **Map-Reduce** | Parallel(Agent × N) + LLM-merge | Dean & Ghemawat 2004 |
+| Pattern | Factory | Built from | Paper |
+|---|---|---|---|
+| **ReAct** | `Agent` (default) | Agent primitive | Yao et al. 2022 |
+| **Dynamic ReAct** | `Agent` (`reactMode: 'dynamic'`, default) | Agent with slots re-evaluating per iter | — (this library) |
+| **Swarm (hand-off)** | `swarm()` | `Loop(Conditional(route-to-agent))` | OpenAI Swarm 2024 |
+| **Reflection** | `reflection()` | Sequence(Agent, LLM-critique, revise) | Shinn et al. 2023 |
+| **Tree-of-Thoughts** | `tot()` | Parallel(Agent × N) + LLM-rank | Yao et al. 2023 |
+| **Self-Consistency** | `selfConsistency()` | Parallel(Agent × N) + vote | Wang et al. 2022 |
+| **Debate** | `debate()` | Parallel(Agent × N) + LLM-judge | Du et al. 2023 |
+| **Map-Reduce** | `mapReduce()` | Parallel(Agent × N) + LLM-merge | Dean & Ghemawat 2004 |
 
-> **Display-name note.** Runtime class names (`SwarmRunner`, `LLMCallRunner`, `FlowChartRunner`) don't change. In prose we use display labels: "LLM", "Agent", "Sequence", "Hierarchy (Swarm)". Don't invent a new primitive class for each pattern — that's LangChain's mistake. Hierarchy is an Agent whose tools happen to be other Agents.
+> **Display-name note.** Don't invent a new primitive class for each pattern — that's LangChain's mistake. Each pattern ships as a **factory function** (`swarm()`, `reflection()`, `tot()`, …) that returns a plain `Runner` built from the 2 primitives + 3 compositions. The factory composes; it doesn't introduce a new runtime.
 
-### Hierarchy (Swarm) — worked example
+### Swarm (hand-off) — worked example
 
-> **Like:** a project manager who reads each request and assigns it to the right specialist on the team.
+> **Like:** a front desk that reads each request and hands it to the right specialist on the team.
 
-Dynamic LLM-driven delegation. An orchestrator Agent decides which specialist to call based on the conversation.
+Multi-agent hand-off. At each step a routing function picks which specialist handles the next turn; the chosen agent's output becomes the next iteration's input.
 
-**Built from:** Agent, with specialist-Agents exposed as tools (via `agentAsTool`). Not a new primitive — an Agent with a specific tool shape.
-
-Unlike Sequence (static), Hierarchy lets the LLM decide routing at runtime by converting specialists into tools.
+**Built from:** `Loop(Conditional(route-to-agent))`. Not a new primitive — a composition over `Loop` + `Conditional`. The agent roster is fixed at build time; the routing decision is made at runtime by a consumer-supplied `route(input)` function.
 
 ```typescript
-import { Swarm, mock } from 'agentfootprint';
-import type { RunnerLike } from 'agentfootprint';
+import { swarm, Agent, mock } from 'agentfootprint';
+import type { Runner } from 'agentfootprint';
 
-const researcher: RunnerLike = {
-  run: async (msg) => ({ content: `Research on ${msg}: findings here.` }),
-};
-const coder: RunnerLike = {
-  run: async (msg) => ({ content: `Code: function solve() { /* ${msg} */ }` }),
-};
+const researcher: Runner<{ message: string }, string> = Agent.create({
+  provider: mock({ replies: ['Research findings: ...'] }),
+  model: 'mock',
+  name: 'researcher',
+}).system('Deep research on any topic.').build();
 
-const swarm = Swarm.create({
-  provider: mock([
-    {
-      content: 'This needs research first.',
-      toolCalls: [{ id: 'tc1', name: 'research', arguments: { message: 'quantum computing' } }],
-    },
-    { content: 'Here is a summary of quantum computing research.' },
-  ]),
-  name: 'project-manager',
-})
-  .system('You are a project manager. Delegate tasks to the right specialist.')
-  .specialist('research', 'Deep research on any topic.', researcher)
-  .specialist('code', 'Write code to solve problems.', coder)
-  .maxIterations(10)
-  .build();
+const coder: Runner<{ message: string }, string> = Agent.create({
+  provider: mock({ replies: ['function solve() { /* ... */ }'] }),
+  model: 'mock',
+  name: 'coder',
+}).system('Write code to solve problems.').build();
 
-const result = await swarm.run('Explain quantum computing');
-console.log(result.content); // Orchestrator's final response
-console.log(result.agents);  // Which specialists were called
+const team = swarm({
+  name: 'project-team',
+  agents: [
+    { id: 'research', name: 'Researcher', runner: researcher },
+    { id: 'code',     name: 'Coder',      runner: coder },
+  ],
+  // Pure sync routing — pick the next agent by id, or return undefined / 'done' to halt.
+  route: (input) => (input.message.includes('code') ? 'code' : 'research'),
+  maxHandoffs: 10,
+});
+
+const content = await team.run({ message: 'Explain quantum computing' });
+console.log(content); // final hand-off output string
 ```
 
-**Builder API:**
+**Factory options (`SwarmOptions`):**
 
-| Method | Description |
+| Field | Description |
 |--------|-------------|
-| `Swarm.create({ provider, name? })` | Create builder with orchestrator LLM |
-| `.system(prompt)` | Set orchestrator system prompt |
-| `.specialist(id, description, runner, options?)` | Register a specialist agent |
-| `.tool(toolDef)` | Add a non-agent tool to the orchestrator |
-| `.maxIterations(n)` | Max orchestrator loop iterations |
-| `.recorder(rec)` | Attach an AgentRecorder |
-| `.build()` | Returns `SwarmRunner` |
+| `agents` | Fixed roster: `{ id, name?, runner }[]` (≥ 2 required) |
+| `route(input)` | Sync function returning the next agent id, or `undefined` / `'done'` to halt |
+| `maxHandoffs?` | Max hand-offs before the loop halts (default: 10) |
+| `name?` / `id?` | Display name + stable id for topology/events |
 
-**Runner result:** `{ content, agents, totalLatencyMs }`
+**Runner result:** `run({ message })` resolves to the final hand-off output **string**. (`'done'` is reserved as the halt branch id — don't name an agent `done`.)
 
-**Failure modes:** orchestrator hallucinates a specialist name → call returns `{ error: true }` and orchestrator sees the error, may recover or loop. Specialist throws → flows back as a tool error message; orchestrator decides what to do. Hits `maxIterations` → returns whatever the orchestrator last said. **Cost note:** every specialist invocation is also wrapped as an LLM tool call → orchestrator pays its own LLM cost on top of each specialist's cost.
+**Failure modes:** `route()` returns an unknown id → falls to the halt branch and the loop exits. A specialist throws → the error propagates (wrap the specialist runner with `withRetry` / `withFallback` if needed). Hits `maxHandoffs` → loop terminates with the latest output.
+
+> **LLM-driven routing:** for the classic Swarm style where the LLM picks the next agent, compose a "router" `LLMCall` as a step and parse its response inside your `route()` function.
 
 ---
 
@@ -405,7 +400,7 @@ These are **not primitives.** They're injection patterns — what you put into a
 | **Tools** | tools slot | Actions the Agent can invoke |
 | **Grounding** | system-prompt | Style / citation / safety rules |
 
-> **Callout: RAG is context engineering, not a primitive.** `RAG.create(...)` in this library is a convenience helper that builds an LLM call with a retriever wired into its messages slot. It isn't a new kind of thing — it's a worked example of "inject retrieved chunks into the messages slot." You can do the same thing by hand in any Agent via a `MessageStrategy` that calls a retriever. *Retrieval-Augmented Generation* is the technique (Lewis et al. 2020, NeurIPS); the helper is the packaging.
+> **Callout: RAG is context engineering, not a primitive.** `defineRAG(...)` in this library returns a `MemoryDefinition` you attach to any Agent via `.rag(def)` (an alias of `.memory(def)`). It isn't a new kind of runner — it's a worked example of "inject retrieved chunks into the slots." *Retrieval-Augmented Generation* is the technique (Lewis et al. 2020, NeurIPS); the helper is the packaging. See [RAG](../../docs-site/src/content/docs/guides/rag.mdx).
 
 Individual guides: [RAG](../../docs-site/src/content/docs/guides/rag.mdx), [Memory](../../docs-site/src/content/docs/guides/memory.mdx), [Skills](../../docs-site/src/content/docs/guides/skills.mdx), [Instructions](instructions.md), [Tools](../../docs-site/src/content/docs/guides/tools.mdx), [Grounding](../../docs-site/src/content/docs/guides/grounding.mdx).
 
@@ -415,27 +410,32 @@ Individual guides: [RAG](../../docs-site/src/content/docs/guides/rag.mdx), [Memo
 
 Cross-cutting infrastructure that every primitive and composition uses. See:
 
-- [Providers](providers.md) — LLM adapters, PromptProvider, MessageStrategy, ToolProvider
-- [Recorders](recorders.md) — observability (Token, Cost, Turn, ToolUsage, Quality, Guardrail, Composite)
-- [Orchestration](orchestration.md) — `withRetry`, `withFallback`, `withCircuitBreaker`
-- [Security](security.md) — tool gating, permission policy, audit trail
-- [Streaming](streaming.md) — real-time lifecycle events
+- [Providers](providers.md) — LLM adapters (`mock`, `anthropic`, `openai`, `bedrock`, …) and `ToolProvider` (`staticTools`, `gatedTools`, `skillScopedTools`)
+- [Recorders](recorders.md) — observability factories (`costRecorder`, `evalRecorder`, `memoryRecorder`, `skillRecorder`, `toolsRecorder`, `permissionRecorder`, …) plus `CombinedNarrativeRecorder`
+- [Orchestration](orchestration.md) — `withRetry`, `withFallback`, `withCircuitBreaker` (from `agentfootprint/resilience`)
+- [Security](security.md) — tool gating, `PermissionPolicy`, audit trail
+- [Streaming](streaming.md) — `toSSE`, real-time lifecycle events
 
 ---
 
-## RunnerLike Interface
+## Runner Interface
 
-All runners — primitives, compositions, and pattern factories — conform to the `RunnerLike` interface. That's what makes composition work:
+All runners — primitives, compositions, and pattern factories — conform to the `Runner` interface. That's what makes composition work:
 
 ```typescript
-interface RunnerLike {
-  run(message: string, options?: { signal?: AbortSignal; timeoutMs?: number }): Promise<{ content: string }>;
-  getNarrative?(): string[];
-  getSnapshot?(): unknown;
+interface Runner<TIn = unknown, TOut = unknown> {
+  run(input: TIn, options?: RunOptions): Promise<TOut | RunnerPauseOutcome>;
+  resume(checkpoint: FlowchartCheckpoint, input?: unknown, options?: RunOptions): Promise<TOut | RunnerPauseOutcome>;
+  getSpec(): FlowChart;                 // design-time blueprint (mount as a subflow)
+  getSnapshot(): RuntimeSnapshot | undefined;
+  on(type, listener, options?): Unsubscribe;   // typed event subscription
+  attach(recorder: CombinedRecorder): Unsubscribe;
+  readonly enable: EnableNamespace;     // .enable.flowchart() / .observability() / ...
+  // ...emit(), off(), once(), getUIGroup()
 }
 ```
 
-Any object implementing `run(message) => { content }` plugs into any composition (Sequence / Parallel / Conditional) or any pattern factory. External services, A2A agents, and plain functions all compose naturally.
+The compositions and primitives use `{ message: string }` as their `TIn` and a `string` as their `TOut`. Any runner plugs into any composition (Sequence / Parallel / Conditional) or any pattern factory — that uniform `run()/getSpec()` shape is what lets them nest freely.
 
 ---
 
@@ -445,14 +445,14 @@ Any object implementing `run(message) => { content }` plugs into any composition
 |------|-----|
 | Summarization, classification, extraction | **LLM** (`LLMCall`) |
 | Research, code generation, multi-step reasoning | **Agent** |
-| Q&A over documents or knowledge bases | Agent + RAG context (or `RAG` helper) |
-| Ordered multi-step pipelines (research then write) | **Sequence** (`FlowChart`) |
+| Q&A over documents or knowledge bases | Agent + `.rag(defineRAG(...))` |
+| Ordered multi-step pipelines (research then write) | **Sequence** (`Sequence`) |
 | Independent perspectives merged together | **Parallel** |
 | Static if/else routing (triage, content classification) | **Conditional** |
-| Dynamic LLM-driven routing across specialists | **Hierarchy (Swarm)** |
-| Draft → critique → improve | Pattern: `reflexion` |
-| Multiple attempts, judge picks best | Pattern: `treeOfThoughts` |
-| Plan first, execute per step | Pattern: `planExecute` |
-| Fan-out across N inputs, reduce | Pattern: `mapReduce` |
+| Multi-agent hand-off across specialists | Pattern: `swarm()` |
+| Draft → critique → improve | Pattern: `reflection()` |
+| Multiple attempts, rank picks best | Pattern: `tot()` |
+| Sample N answers, take the majority vote | Pattern: `selfConsistency()` |
+| Fan-out across N inputs, reduce | Pattern: `mapReduce()` |
 
-For the named patterns (Dynamic ReAct / Plan-Execute / Reflexion / Tree-of-Thoughts / Map-Reduce / Hierarchy), see the [Patterns guide](patterns.md).
+For the named patterns (`swarm` / `reflection` / `tot` / `selfConsistency` / `debate` / `mapReduce`), see the [Patterns guide](patterns.md).

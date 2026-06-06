@@ -1,130 +1,147 @@
 # Instructions — Conditional Context Injection
 
-> **The hook:** some rules should only apply *sometimes*. An instruction lets you say "when X is true, tell the LLM Y, and give it tools Z." Plain prompts can't do that — they're always on. Instructions are the conditional layer.
+> **The hook:** some rules should only apply *sometimes*. An instruction lets you say "when X is true, tell the LLM Y." Plain prompts can't do that — they're always on. Instructions are the conditional layer.
 
-Instructions inject the right context at the right position at the right time into the LLM's context window. A single instruction can inject into all 3 LLM API positions: system prompt, tools, and tool-result recency window.
+An instruction is a rule-based **Injection**: a predicate (`activeWhen`) runs once per ReAct iteration, and when it matches, the instruction's `prompt` text is added to that iteration's context. By default it lands in the **system prompt**; set `slot: 'messages'` to land it in the recent-messages window instead (higher attention weight). Instructions are one flavor of the unified Injection primitive — siblings include `defineSteering` (always-on), `defineSkill` (LLM-activated, can unlock tools), and `defineFact` (developer-supplied data).
 
-**Background:** the activate-when-condition-holds pattern is essentially **production rules** (forward-chaining rule systems — Newell 1973, OPS5, Rete networks) applied to LLM context. The "Decision Scope" is a bounded **belief state** (the dialog-state-tracking literature — Williams et al. 2016 — uses the same idea). What's specific here is the three-position injection: a single rule fires, but its consequences land in three different LLM API slots.
+**Background:** the activate-when-condition-holds pattern is essentially **production rules** (forward-chaining rule systems — Newell 1973, OPS5, Rete networks) applied to LLM context. The predicate reads an **`InjectionContext`** — a bounded, read-only snapshot of the iteration state (`iteration`, `userMessage`, `history`, `lastToolResult`, `activatedInjectionIds`) — which is the **belief state** the dialog-state-tracking literature (Williams et al. 2016) uses the same idea for.
 
 ## Defining an Instruction
 
 ```typescript
-import { defineInstruction, Agent, AgentPattern } from 'agentfootprint';
+import { defineInstruction } from 'agentfootprint';
 
-interface MyDecision {
-  orderStatus: 'pending' | 'denied' | null;
-  riskLevel: 'low' | 'high' | 'unknown';
-}
-
-const refundInstruction = defineInstruction<MyDecision>({
+const refundInstruction = defineInstruction({
   id: 'refund-handling',
+  description: 'Empathetic guidance once an order is denied.',
 
-  // Activate when decision scope matches
-  activeWhen: (d) => d.orderStatus === 'denied',
+  // Predicate runs once per iteration against the InjectionContext snapshot.
+  // Fires on the iteration AFTER the LLM called lookup_order. Inspect
+  // ctx.lastToolResult.result to branch on the returned content.
+  activeWhen: (ctx) => ctx.lastToolResult?.toolName === 'lookup_order',
 
-  // Position 1: Inject into system prompt
-  prompt: 'Handle denied orders with empathy. Follow refund policy.',
+  // The text appended when the predicate matches.
+  prompt: 'Handle denied orders with empathy. Follow refund policy. Do NOT promise reversal.',
 
-  // Position 2: Inject tools into the tools list
-  tools: [processRefund, getTrace],
-
-  // Position 3: Rules evaluated against tool results (recency window)
-  onToolResult: [
-    { id: 'empathy', text: 'Do NOT promise reversal.' },
-  ],
+  // Default slot is 'system-prompt'. Use 'messages' for higher-attention,
+  // turn-salient reminders (post-tool-result corrections, urgent nudges).
+  slot: 'messages',
+  role: 'system', // role used only when slot === 'messages' (default 'system')
 });
 ```
+
+`activeWhen` receives an `InjectionContext` — a read-only snapshot of the current iteration:
+
+| Field | Meaning |
+|-------|---------|
+| `iteration` | 1-based ReAct iteration count |
+| `userMessage` | the message that started this turn |
+| `history` | conversation so far (role / content / optional `toolName`) |
+| `lastToolResult` | `{ toolName, result }` from the previous iteration, if it ended in a tool call |
+| `activatedInjectionIds` | ids of Skills the LLM has activated this turn |
+
+A predicate that **throws is fail-OPEN** — the instruction is skipped (does not fire) and the miss is reported on the `agentfootprint.context.evaluated` event.
+
+> **Instructions inject text only.** To give the model *tools* conditionally, use `defineSkill({ tools })` (LLM-activated) or attach them up front with `agent.tool()`. `defineInstruction` has no `tools` field — keeping the "what fires" (a rule) separate from "what's unlocked" (a capability).
 
 ## Attaching to an Agent
 
 ```typescript
-const agent = Agent.create({ provider })
+import { Agent } from 'agentfootprint';
+
+const agent = Agent.create({
+  provider,
+  model: 'claude-sonnet-4-5',
+  reactMode: 'dynamic', // default — re-evaluate every instruction each iteration
+})
   .system('You are a customer support agent.')
   .tool(lookupOrder)
-  .instruction(refundInstruction)           // singular
-  .instructions([compliance, adminAccess])  // plural
-  .decision<MyDecision>({ orderStatus: null, riskLevel: 'unknown' })
-  .pattern(AgentPattern.Dynamic)            // re-evaluate each iteration
+  .instruction(refundInstruction)           // singular — takes one Injection
+  .instructions([compliance, adminAccess])  // plural — takes an Injection[]
   .build();
 ```
+
+`reactMode` lives in `Agent.create({ ... })`, not as a builder method:
+
+- **`'dynamic'`** (default) — the InjectionEngine and all three slots (system-prompt ‖ messages ‖ tools) re-run every iteration, so `activeWhen` predicates are re-evaluated each turn. Use this whenever any instruction's outcome can change mid-run.
+- **`'classic'`** — context is engineered once; only the messages slot loops. Use only when the system prompt and tool set are fixed for the whole run.
 
 ## How It Works
 
 ```
-Seed (initializes decision scope)
-  → [InstructionsToLLM]     evaluates activeWhen(decision) → outputs 3 injections
-  → [SystemPrompt]          base prompt + promptInjections
-  → [Messages]              unchanged
-  → [Tools]                 base tools + toolInjections
-  → AssemblePrompt → CallLLM → ParseResponse → RouteResponse
-      └── tool-calls → [ExecuteTools] applies onToolResult rules
-  → loopTo (Dynamic: back to InstructionsToLLM)
+Seed
+  → [InjectionEngine]   evaluates each Injection's trigger against InjectionContext
+  → [SystemPrompt]      base prompt + active system-prompt injections
+  → [Messages]          base messages + active 'messages'-slot injections
+  → [Tools]             base tools + tools from active Skills
+  → CallLLM → ParseResponse → RouteResponse
+      └── tool-calls → [ToolCalls] runs tools; result becomes next ctx.lastToolResult
+  → loopTo (dynamic: back to InjectionEngine)
 ```
 
-Each iteration in Dynamic mode:
-1. **InstructionsToLLM** subflow evaluates all instructions against the current Decision Scope
-2. Matched instructions inject their `prompt`, `tools`, and `onToolResult` rules
-3. The 3 API slots consume the injections
-4. Tool results can update the Decision Scope via `decide()`
+Each iteration in `reactMode: 'dynamic'`:
+1. The **InjectionEngine** subflow evaluates every Injection's trigger against the current `InjectionContext`
+2. Matched instructions append their `prompt` text to the system-prompt slot (or messages slot, per `slot`)
+3. The three API slots consume the active injections (Skills also contribute tools)
+4. Tool results land in `ctx.lastToolResult`, which the next iteration's predicates can read
 
-## Decision Scope
+## Reacting to tool results
 
-The Decision Scope is a bounded set of variables that drive instruction activation. Tools update it via the `decide` field:
+There is no separate "decision scope" to mutate — predicates read the live `InjectionContext`, and the most recent tool result is right there on `ctx.lastToolResult`. An instruction that should fire *after* a specific tool runs simply checks it:
 
 ```typescript
-const classifyInstruction = defineInstruction({
-  id: 'classifier',
-  onToolResult: [{
-    id: 'classify-order',
-    decide: (decision, ctx) => {
-      decision.orderStatus = ctx.content.status;
-      decision.riskLevel = ctx.content.amount > 1000 ? 'high' : 'low';
-    },
-  }],
+// Fires on the iteration AFTER the LLM called redact_pii — naturally
+// one-shot, since the next iteration's lastToolResult is different.
+const postPii = defineInstruction({
+  id: 'post-pii',
+  description: 'Reminder to use the redacted text, not the original.',
+  activeWhen: (ctx) => ctx.lastToolResult?.toolName === 'redact_pii',
+  prompt: 'Use the redacted text in your reply. Do not paraphrase the original.',
 });
 ```
 
 The flow:
-1. Tool returns `{ status: 'denied', amount: 5000 }`
-2. `decide()` sets `decision.orderStatus = 'denied'`
-3. Next iteration: `refund-handling` instruction activates (orderStatus is 'denied')
-4. System prompt now includes empathy guidance, refund tools become available
+1. The LLM calls `redact_pii`; its result lands in `ctx.lastToolResult`
+2. Next iteration: `post-pii` activates because `ctx.lastToolResult.toolName === 'redact_pii'`
+3. That iteration's system prompt now includes the reminder
 
-## Safety Instructions — Fail-Closed Rules
+> **Triggering on a tool by name?** You can also build the Injection directly with an `on-tool-return` trigger (`{ kind: 'on-tool-return', toolName }`, where `toolName` is a string or `RegExp`) — that's the lower-level form of the `lastToolResult` predicate above.
 
-For compliance, content policy, and other rules that **must** fire even when something goes wrong, mark an instruction as `safety: true`.
+## Always-on rules — use Steering, not a conditional instruction
+
+For compliance, content policy, and other rules that **must** fire on every iteration, don't write a predicate at all — use `defineSteering`, which is always-on:
 
 ```typescript
-defineInstruction({
+import { defineSteering } from 'agentfootprint';
+
+const compliance = defineSteering({
   id: 'compliance',
-  safety: true,  // fail-closed: fires when activeWhen throws
-  activeWhen: (d) => d.region === 'eu',
-  prompt: 'GDPR compliance required.',
+  prompt: 'GDPR compliance required. Never expose raw PII in your final answer.',
 });
+
+agent.steering(compliance);
 ```
 
-Safety instructions:
-- Cannot be suppressed by overrides
-- Predicate throws → instruction fires (fail-closed) — **the opposite of regular instructions, which silently miss on a throw**
-- Sorted LAST in the output list, which gives them the highest priority position in the assembled prompt
+A conditional instruction fires only when its `activeWhen` returns `true`, and **a predicate that throws is fail-OPEN** — the instruction is *skipped*, not forced on. So a rule you can never afford to miss should not depend on a predicate that could throw; making it always-on (Steering, or `defineInstruction` with no `activeWhen`) is the safe choice.
 
-> **Audit which safety instructions fired:** attach `InstructionRecorder` (from `agentfootprint/instructions`). It records every instruction evaluation — which fired, which were suppressed, which threw. This is what auditors will ask for; wire it before you ship.
+> **Audit which injections fired:** attach `ContextRecorder` (or call `contextEngineering(agent)`) and listen for the `agentfootprint.context.evaluated` event. It reports, per iteration, which injections were active and which were `skipped` (with `reason: 'predicate-threw'` and the error). This is what auditors will ask for; wire it before you ship.
 
-## Three Naming Conventions
+## One predicate, four trigger kinds
 
-Three predicate hooks with three different names — chosen so the signatures don't collide and so it's obvious from the call site what each one reads:
+There's a single predicate hook — `activeWhen(ctx)` — reading the read-only `InjectionContext`. The factory translates your options into one of the four underlying `InjectionTrigger` kinds:
 
-| Level | Predicate | Reads | Lives on |
-|-------|-----------|-------|---|
-| Agent-level | `activeWhen(decision)` | Decision Scope | `defineInstruction({ activeWhen })` |
-| Tool-level | `when(ctx)` | Tool result context | `onToolResult: [{ when }]` |
-| Bridge | `decide(decision, ctx)` | Both — writes Decision Scope from tool ctx | `onToolResult: [{ decide }]` |
+| You write | Underlying trigger | Activates when |
+|-----------|--------------------|----------------|
+| `defineInstruction({ activeWhen })` | `{ kind: 'rule', activeWhen }` | predicate returns `true` this iteration |
+| `defineInstruction({})` (no `activeWhen`) | `{ kind: 'always' }` | every iteration (consider `defineSteering` instead) |
+| direct `Injection` with `on-tool-return` | `{ kind: 'on-tool-return', toolName }` | a tool matching `toolName` (string/RegExp) just returned |
+| `defineSkill(...)` | `{ kind: 'llm-activated', viaToolName }` | the LLM called the skill's activation tool |
 
-A single shared name would force readers to remember which signature applies where. Keeping the three names lets the signature tell you what's available.
+Keeping one predicate name means the signature is always `(ctx: InjectionContext) => boolean` — you never have to remember which shape applies where.
 
 ## Key Design Decisions
 
-- **One concept, three positions** — a single instruction spans system prompt, tools, and tool results
-- **Decision Scope, not full scope** — bounded variables for clarity, debug, and eval
-- **Visible in narrative** — InstructionsToLLM is a footprintjs subflow, appears in BTS
-- **No tiers** — `prompt`, `tools`, `onToolResult` are optional fields, fill in what you need
+- **Text injection, two slots** — an instruction lands in the system-prompt slot (default) or the messages slot (`slot: 'messages'`); use `defineSkill` to unlock tools
+- **InjectionContext, not full scope** — bounded read-only iteration state for clarity, debug, and eval
+- **Visible in narrative** — the InjectionEngine is a footprintjs subflow, so it appears in the trace
+- **Sugar over one primitive** — `defineInstruction` / `defineSteering` / `defineSkill` / `defineFact` all produce the same `Injection` shape

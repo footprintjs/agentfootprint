@@ -64,7 +64,7 @@ resolveSurfaceMode('openai', 'gpt-4o');                         // → 'tool-onl
 
 Four modes: `'system-prompt'`, `'tool-only'`, `'both'`, `'auto'`. See [Skills, explained](/agentfootprint/guides/skills-explained/) for the full per-provider attention argument.
 
-### Per-mode runtime dispatch (v2.5+)
+### Per-mode runtime dispatch
 
 What each mode actually does at runtime when the LLM activates the skill via `read_skill('id')`:
 
@@ -78,7 +78,7 @@ What each mode actually does at runtime when the LLM activates the skill via `re
 Two consequences worth knowing:
 
 1. **`'tool-only'` is recency-first by protocol.** The LLM sees the body as the most recent tool result on the next iteration — providers' attention to the latest message is consistently strong. No reliance on system-prompt training adherence.
-2. **`'auto'` preserves v2.4 behavior** so existing consumers see no surprises. The Block A4 cascade resolves `'auto'` against provider/model context (Claude ≥ 3.5 → `'both'`; everything else → `'tool-only'`); that runtime resolution lands in a future v2.5.x — for v2.5 today, `'auto'` is treated as `'system-prompt'` at the dispatch layer.
+2. **`'auto'` keeps the body in the system slot** so existing consumers see no surprises. To get provider-aware resolution (Claude ≥ 3.5 → `'both'`; everything else → `'tool-only'`), call `resolveSurfaceMode(provider, model)` yourself and pass the concrete mode, or set a registry-level default via `new SkillRegistry({ surfaceMode })`.
 
 ## Long-context refresh (`refreshPolicy`)
 
@@ -91,7 +91,7 @@ defineSkill({
 });
 ```
 
-Re-injects the body via tool result past a token threshold. The runtime hook lands in v2.5 (long-context attention work); the API surface ships in v2.4 + is non-breaking.
+Re-injects the body via tool result past a token threshold. The field is reserved + typed today — the engine ignores it until the long-context refresh hook is implemented, so specifying `refreshPolicy` is non-breaking.
 
 ## SkillRegistry — centralized governance
 
@@ -144,7 +144,7 @@ registry.resolveForSkill('billing', 'anthropic', 'claude-sonnet-4-5');
 // → returns 'system-prompt' | 'tool-only' | 'both' (never 'auto')
 ```
 
-Forward-compat: Block C (v2.5+) wires this cascade into the runtime so per-mode routing diversity (suppressing system-prompt for `'tool-only'`, etc.) takes effect. Today consumers express intent; runtime tightens later without API change.
+Per-mode routing is live at runtime — `'tool-only'` suppresses the body from the system slot and delivers it via the `read_skill` tool result, `'both'` does both, and `'system-prompt'` / `'auto'` keep the body in the system slot (see [Per-mode runtime dispatch](#per-mode-runtime-dispatch)). `resolveForSkill(...)` lets you inspect the resolved mode at design time.
 
 ### `registry.toTools()` — explicit composition (v2.5)
 
@@ -174,30 +174,39 @@ Two reasons to choose `toTools()` over the auto-attach:
 
 `toTools()` returns `{ listSkills: undefined, readSkill: undefined }` for an empty registry — filter with `.filter(Boolean)` before adding to a tool list.
 
-## Per-skill tool gating — `autoActivate` (v2.5)
+## Per-skill tool gating — `autoActivate`
 
 By default, a Skill's `tools` array is ADDED to the agent's tool registry on activation. With ~3 skills and ~5 tools each, that's fine. With 20 skills and 100+ tools, the LLM's choice space gets noisy — every iteration's tool list pays the cost.
 
-`autoActivate: 'currentSkill'` declares intent: when this skill is active, ONLY this skill's tools should be visible (plus whatever baseline you compose alongside).
+`autoActivate: 'currentSkill'` narrows the choice space: when you set it, the skill's tools are EXCLUDED from the static tool list and surface to the LLM ONLY on iterations after the skill is activated by `read_skill('id')`. Skills WITHOUT `autoActivate` keep the additive behavior (their tools are always visible).
 
 ```ts
-import { defineSkill } from 'agentfootprint';
-import { skillScopedTools, staticTools, type ToolProvider } from 'agentfootprint/tool-providers';
-
-const billingTools = [refundTool, chargeTool];
+import { Agent, defineSkill } from 'agentfootprint';
 
 const billingSkill = defineSkill({
   id: 'billing',
   description: 'Billing assistance',
   body: '...',
-  tools: billingTools,
+  tools: [refundTool, chargeTool],
   autoActivate: 'currentSkill',
 });
 
-// Materialize the gate manually today (Block C v2.5 wires this from
-// skill.metadata.autoActivate automatically):
+// The Agent reads skill.metadata.autoActivate and wires the gate for you —
+// billing's tools stay hidden until the LLM calls read_skill('billing').
+const agent = Agent.create({ provider })
+  .tool(lookupOrderTool)   // always-visible baseline
+  .skill(billingSkill)
+  .skill(refundSkill)      // also autoActivate: 'currentSkill'
+  .build();
+```
+
+For a tool chain you compose yourself (outside the Agent's auto-attach — e.g., a `gatedTools` permission layer), materialize the same gate with `skillScopedTools(id, tools)`, reading `ctx.activeSkillId` per iteration:
+
+```ts
+import { skillScopedTools, staticTools, type ToolProvider } from 'agentfootprint/tool-providers';
+
 const baseline = staticTools([lookupOrderTool, listSkills, readSkill]);
-const billingScope = skillScopedTools('billing', billingTools);
+const billingScope = skillScopedTools('billing', [refundTool, chargeTool]);
 const refundScope = skillScopedTools('refund', [reverseTool]);
 
 const provider: ToolProvider = {
@@ -220,7 +229,7 @@ What the LLM sees per iteration:
 
 This is a [Dynamic ReAct](/agentfootprint/guides/dynamic-react/) payoff: the next iteration's tool list reshapes based on what just happened. 3× context-budget reduction in large catalogs + sharper LLM tool-choice.
 
-**Today:** the `autoActivate` field is stored on `skill.metadata.autoActivate`; consumers wire `skillScopedTools(...)` manually. **Block C (v2.5+):** the runtime reads `skill.metadata.autoActivate` and wires the scope automatically when you `agent.skills(registry)`.
+The `autoActivate` field is also stored on `skill.metadata.autoActivate`, so custom `ToolProvider` chains can read it to drive their own composition.
 
 ## When to use Skills vs Steering vs Instruction
 

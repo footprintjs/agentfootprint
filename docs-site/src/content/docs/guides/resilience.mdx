@@ -1,24 +1,28 @@
 ---
 title: Resilience
-description: withRetry + withFallback + resilientProvider — composable decorators that wrap any LLMProvider with retry-on-transient + cross-provider failover. Compose freely.
+description: withRetry + withFallback + fallbackProvider + withCircuitBreaker — composable decorators that wrap any LLMProvider with retry-on-transient, cross-provider failover, and fail-fast breaking. Compose freely.
 ---
 
 import CodeFile from '@/components/CodeFile.astro';
 
 > Production traffic peaks Monday morning. Anthropic returns 429s for the next 90 seconds. **Your support agent has 200 concurrent users and zero patience for a backoff loop.** The framework's resilience decorators wrap any provider with retry + fallback so your agent degrades gracefully instead of throwing user-visible errors.
 
-## Three composable decorators
+## Four composable decorators
+
+All resilience decorators are exported from the `agentfootprint/resilience` subpath. Provider factories (`anthropic`, `openai`, `bedrock`, …) live at `agentfootprint/llm-providers`.
 
 | Decorator | What it does |
 |---|---|
-| `withRetry(provider, opts)` | Wraps a provider with retry-on-retryable-error. Honors `LLMError.retryable` classification. AbortSignal-aware sleep. |
-| `withFallback(primary, fallback)` | If primary throws a fallback-eligible error, retry on fallback. Stream pinning prevents provider-flip mid-stream. |
-| `fallbackProvider([providers])` / `resilientProvider({...})` | Convenience composers — chain N fallbacks + retry in one factory call. |
+| `withRetry(provider, opts?)` | Wraps a provider with retry-on-transient-error. Default policy skips `AbortError` + HTTP 4xx (except 429); retries 5xx, network errors, and unknown shapes. Exponential backoff with AbortSignal-aware sleep. |
+| `withFallback(primary, fallback, opts?)` | If primary throws a fallback-eligible error, retry on fallback. Stream pinning prevents provider-flip mid-stream. |
+| `fallbackProvider(...providers)` | Convenience composer — chains N providers into one fallback chain (right-fold of `withFallback`). |
+| `withCircuitBreaker(provider, opts?)` | Fails fast after N consecutive failures: opens for a cooldown, half-open probes before re-closing. Prevents thundering-herd retry on a downed provider. |
 
-All three preserve the `LLMProvider` interface — drop-in replacements for the underlying provider. They compose freely:
+All four preserve the `LLMProvider` interface — drop-in replacements for the underlying provider. They compose freely:
 
 ```ts
-import { withRetry, withFallback, anthropic, openai } from 'agentfootprint';
+import { withRetry, withFallback } from 'agentfootprint/resilience';
+import { anthropic, openai } from 'agentfootprint/llm-providers';
 
 const provider = withRetry(
   withFallback(
@@ -31,70 +35,106 @@ const provider = withRetry(
 
 Reads as: *try anthropic; on failure fall back to openai; the whole chain is wrapped in retry with 5 attempts.* Right-fold of `withFallback` + outer `withRetry` is the standard production composition.
 
-## Convenience: `resilientProvider`
+## Convenience: `fallbackProvider`
 
-For the common 1-primary-N-fallbacks-with-retry shape, use the factory:
+For the common N-providers-in-a-chain shape, use the variadic factory. It is sugar over repeated `withFallback` — tries each provider in order, advancing on errors that match the (optional) `shouldFallback` predicate; the first success wins, and if all fail the last error throws. Wrap the whole chain in `withRetry` for retries:
 
 ```ts
-import { resilientProvider, anthropic, openai, bedrock } from 'agentfootprint';
+import { fallbackProvider, withRetry } from 'agentfootprint/resilience';
+import { anthropic, openai, bedrock } from 'agentfootprint/llm-providers';
 
-const provider = resilientProvider({
-  primary: anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! }),
-  fallbacks: [
+const provider = withRetry(
+  fallbackProvider(
+    anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! }),
     openai({ apiKey: process.env.OPENAI_API_KEY! }),
     bedrock({ region: 'us-west-2' }),
-  ],
-  retry: { maxAttempts: 3, backoff: 'exponential' },
-});
+  ),
+  { maxAttempts: 3, initialDelayMs: 200, backoffFactor: 2 },
+);
 ```
 
-## Honoring the `LLMError.retryable` contract
-
-Every provider adapter wraps SDK errors in `LLMError` with `retryable` flagging. The default `withRetry` policy retries when `err.retryable === true` AND `attempt < maxAttempts`. Override `shouldRetry` to implement custom policies:
+Pass an options object as the FIRST argument to customize the chain (shared `shouldFallback`/`onFallback`, or an explicit `name`):
 
 ```ts
+const provider = fallbackProvider(
+  { name: 'llm-chain', onFallback: (err) => console.warn('falling back', err) },
+  anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! }),
+  openai({ apiKey: process.env.OPENAI_API_KEY! }),
+);
+```
+
+## The default retry policy (and overriding it)
+
+By default `withRetry` skips `AbortError` and HTTP 4xx client errors (those don't benefit from retry) — except `429 Too Many Requests`, which IS retried — and retries everything else (5xx, network errors, unknown shapes) while `attempt < maxAttempts`. It reads `err.status` (or `err.statusCode`) when present, and retries when the status is unknown. Override `shouldRetry` to implement a custom policy:
+
+```ts
+import { withRetry } from 'agentfootprint/resilience';
+
 withRetry(provider, {
   maxAttempts: 5,
   shouldRetry: (err, attempt) => {
-    if (err.code === 'rate_limit') return true;       // always retry rate limits
-    if (err.code === 'server') return attempt < 3;    // cap server errors at 3
+    const status = (err as { status?: number }).status;
+    if (status === 429) return true;            // always retry rate limits
+    if (status && status >= 500) return attempt < 3; // cap server errors at 3
     return false;
   },
 });
 ```
 
-`shouldFallback` works the same way for `withFallback`.
+`shouldFallback(err)` works the same way for `withFallback` — its default falls back on every error except `AbortError`.
 
 ## Hooks for observability
 
-Both decorators call optional hooks so your recorders can log retry attempts + provider switches:
+Both decorators call optional hooks so your recorders can log retry attempts + provider switches. `onRetry` receives the upcoming attempt number and the computed backoff delay in ms:
 
 ```ts
+import { withRetry, withFallback } from 'agentfootprint/resilience';
+
 withRetry(provider, {
   maxAttempts: 5,
-  onRetry: (err, attempt) => console.log(`retry ${attempt}: ${err.message}`),
+  onRetry: (err, attempt, delayMs) =>
+    console.log(`retry ${attempt} in ${delayMs}ms: ${(err as Error).message}`),
 });
 
 withFallback(primary, fallback, {
-  onFallback: (err) => console.log(`falling back: ${err.message}`),
+  onFallback: (err) => console.log(`falling back: ${(err as Error).message}`),
 });
 ```
 
-Both also fire typed events through the standard event dispatcher — listen to `agentfootprint.cost.tick` to see cost across both primary and fallback providers.
+The `withCircuitBreaker` decorator exposes an `onStateChange(state, reason)` hook for the same purpose. Listen to `agentfootprint.cost.tick` on the event dispatcher to see cost accrue across both primary and fallback providers.
 
-## What's NOT here yet (Reliability subsystem — v2.5)
+## Fail fast on a downed provider: `withCircuitBreaker`
 
-The deferred Reliability subsystem adds three more primitives that compose ON TOP of these decorators:
+When a vendor has a multi-minute outage, `withRetry` alone keeps hammering it — every request burns its full retry budget before failing over. `withCircuitBreaker` short-circuits that: after `failureThreshold` consecutive failures (default 5) the breaker OPENS and `complete()` throws `CircuitOpenError` immediately — no network round-trip — which the surrounding `withFallback` catches and routes elsewhere. After `cooldownMs` (default 30s) it half-opens and probes; `halfOpenSuccessThreshold` successes (default 2) re-close it.
 
-- **`CircuitBreaker`** — trip after N consecutive failures, open for cooldown period, half-open probe before re-closing. Prevents thundering-herd retry on a downed provider.
-- **3-tier output fallback** — `outputFallback(primary, fallback, canned)`. If both providers fail, return a canned response (or escalate).
+```ts
+import { withCircuitBreaker, withFallback, CircuitOpenError } from 'agentfootprint/resilience';
+import { anthropic, openai } from 'agentfootprint/llm-providers';
+
+const provider = withFallback(
+  withCircuitBreaker(anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! }), {
+    failureThreshold: 5,
+    cooldownMs: 30_000,
+    onStateChange: (state, reason) => console.warn(`anthropic breaker → ${state}: ${reason}`),
+  }),
+  withCircuitBreaker(openai({ apiKey: process.env.OPENAI_API_KEY! })),
+);
+```
+
+The breaker is **per-instance, not distributed** — each `withCircuitBreaker(...)` call holds its own state in process memory. For cluster-wide coordination, layer your own Redis-backed counter on top via the `onStateChange` hook + `shouldCount` predicate.
+
+## What's NOT here yet (Reliability subsystem)
+
+Two more primitives are deferred to the dedicated `agentfootprint/reliability` subsystem and compose ON TOP of these decorators:
+
+- **3-tier output fallback** — if both providers fail, return a canned response (or escalate).
 - **`agent.resumeOnError(checkpoint, input)`** — auto-checkpoint at iteration boundaries; resume from the failure point with corrected input.
 
-The current decorators cover the production-critical 80%. The Reliability subsystem covers the long tail.
+The four provider decorators above cover the production-critical 80%. The Reliability subsystem covers the long tail.
 
 ## Anti-patterns
 
-- Don't retry non-retryable errors. `err.retryable` is the contract; honor it.
+- Don't retry non-transient errors. The default policy skips `AbortError` + 4xx (except 429) for a reason; if you override `shouldRetry`, keep that distinction.
 - Don't put `withRetry` BELOW `withFallback`. Wrong order: every retry on the primary delays the fallback. Right order: outer `withRetry` retries the WHOLE fallback chain.
 - Don't compose decorators inside the provider's hot path. Build the chain ONCE at app startup; pass the composed provider into every `Agent.create({ provider })`.
 

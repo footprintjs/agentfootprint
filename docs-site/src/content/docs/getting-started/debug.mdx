@@ -50,8 +50,8 @@ agent.on('agentfootprint.context.injected', (e) => {
   console.log(`[ctx] ${e.payload.source} → ${e.payload.slot}`);
 });
 
-agent.on('agentfootprint.permission.denied', (e) => {
-  console.log(`[BLOCKED] ${e.payload.toolName}: ${e.payload.reason}`);
+agent.on('agentfootprint.permission.halt', (e) => {
+  console.log(`[BLOCKED] ${e.payload.target}: ${e.payload.reason}`);
 });
 
 agent.on('agentfootprint.cost.tick', (e) => {
@@ -59,7 +59,7 @@ agent.on('agentfootprint.cost.tick', (e) => {
 });
 ```
 
-47 typed events across 13 domains. Your IDE auto-completes payload shapes per event name. See [Observability guide](/agentfootprint/guides/observability/) for the full taxonomy.
+59 typed events across 16 domains. Your IDE auto-completes payload shapes per event name. See [Observability guide](/agentfootprint/guides/observability/) for the full taxonomy.
 
 ## Cross-run replay — Causal memory
 
@@ -83,7 +83,7 @@ Every run persists its decision evidence as a snapshot. Two weeks later, when th
 
 ## Agent playground (visual time-travel)
 
-Coming in v2.4 Phase 3 — a deep-link from any recorded trace into the [agent playground](https://footprintjs.github.io/agent-playground/) for visual time-travel debugging. Until then, the typed events + Causal memory are the textual equivalents.
+A deep-link from any recorded trace into the [agent playground](https://footprintjs.github.io/agent-playground/) for visual time-travel debugging is on the roadmap. Until then, the typed events + Causal memory are the textual equivalents.
 
 ## Anti-patterns
 

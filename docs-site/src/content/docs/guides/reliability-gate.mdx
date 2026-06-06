@@ -99,7 +99,7 @@ The gate handles in-loop transient failures. `outputFallback` handles end-of-tur
 
 - **Tee'd buffer mode** — internal buffer + atomic-deliver-on-success. Makes mid-stream retry safe at the cost of first-token latency. Opt-in config flag.
 - **Token idempotency keys** — moot until LLM providers expose them.
-- **Stage-level granularity** — every retry attempt as a separate stage in the trace (currently one stage execution, internal loop). Trades streaming compatibility for richer trace; available today via the `buildReliabilityGateChart` chart-builder for consumers composing raw `LLMCall + gate` patterns.
+- **Stage-level granularity** — every retry attempt as a separate stage in the trace (currently one stage execution, internal loop). Trades streaming compatibility for richer trace. The framework has an internal `buildReliabilityGateChart` builder that composes raw `LLMCall + gate` this way, but it is not yet part of the public surface — `.reliability(config)` is the supported entry point today.
 
 ## End-to-end example
 
@@ -112,4 +112,5 @@ The single example below exercises happy / retry / fail-fast scenarios. The docs
 - `Agent.create({...}).reliability(config)` — fluent builder method
 - `ReliabilityConfig` — the rule list shape (see [`agentfootprint/reliability` types](https://github.com/footprintjs/agentfootprint/blob/main/src/reliability/types.ts))
 - `ReliabilityFailFastError` — thrown at `agent.run()` on `fail-fast` decisions; carries `kind`, `reason`, `cause`, `payload`, `snapshot`
-- `CircuitBreaker` pure functions — exported from `agentfootprint/reliability` for consumers hydrating breaker state from a persistence store
+- `initialBreakerState`, `CircuitOpenError`, and the `BreakerState` / `CircuitState` types — circuit-breaker primitives exported from `agentfootprint/reliability` for consumers hydrating breaker state from a persistence store
+- Schema-retry helpers (v2.13) — `ValidationFailure`, `lastNValidationErrorsMatch`, `defaultStuckLoopRule`, and the `OutputSchemaValidator` type, also from `agentfootprint/reliability`. Pair with a rule's `feedbackForLLM` to run Instructor-style retry that tells the model what to fix, and short-circuit stuck loops where it keeps making the same mistake.

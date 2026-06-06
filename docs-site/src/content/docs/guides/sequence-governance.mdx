@@ -102,8 +102,8 @@ const agent = Agent.create({ provider, model, permissionChecker: policy })
   .build();
 
 try {
-  const result = await agent.run({ message: 'help me with order #42' });
-  console.log(result.content);
+  const result = await agent.run({ message: 'help me with order #42' }); // AgentOutput is a string
+  console.log(result);
 } catch (e) {
   if (e instanceof PolicyHaltError) {
     console.log(`HALT: rule='${e.reason}' iteration=${e.iteration}`);

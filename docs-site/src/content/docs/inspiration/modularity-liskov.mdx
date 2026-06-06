@@ -34,9 +34,10 @@ The v2.6 cache layer is built on this exactly:
 
 ```typescript
 interface CacheStrategy {
-  capabilities: CacheCapabilities;
-  prepareRequest(req, markers, ctx): Promise<{ request }>;
-  extractMetrics(response): CacheMetrics;
+  readonly providerName: string;
+  readonly capabilities: CacheCapabilities;
+  prepareRequest(req, candidates, ctx): Promise<{ request; markersApplied }>;
+  extractMetrics(usage): CacheMetrics | undefined;
 }
 
 // Subtypes — all behaviorally substitutable:
@@ -48,7 +49,7 @@ NoOpCacheStrategy        // wildcard fallback
 
 `Agent.ts` calls `strategy.prepareRequest(...)` knowing only the interface. Swap Anthropic for OpenAI for NoOp — agent code unchanged. The contract isn't just "same shape" — it's *behavioral*: every strategy returns a request that's a valid LLM input. That's LSP enforced at runtime, not just at type-check.
 
-The same pattern holds for `LLMProvider`, `ToolProvider`, `MemoryStore`, `Recorder`, `FlowRecorder`, `EmitRecorder`, `CombinedRecorder`. **Every framework boundary is an LSP-substitutable interface.**
+The same pattern holds for `LLMProvider`, `ToolProvider`, `MemoryStore`, `ScopeRecorder`, `FlowRecorder`, `EmitRecorder`, `CombinedRecorder`. **Every framework boundary is an LSP-substitutable interface.**
 
 ### 3. Specification vs implementation separation
 
@@ -79,7 +80,7 @@ This is locality of reasoning operationalized as a runtime invariant. It's why a
 A few places we go beyond what 1987 ADT theory cleanly covers:
 
 - **Dynamic substitution** — Skills runtime: tools and system content recompose every iteration based on `activeInjections`. Liskov's ADTs were static; ours are activation-gated. Substitutability still holds (every active skill must satisfy the Skill interface) but *which* changes per iter.
-- **Three observer channels with method-shape detection** — `Recorder` / `FlowRecorder` / `EmitRecorder` route by which methods you implement, not by class hierarchy. That's structural typing rather than nominal — closer to Cardelli/Wegner's later work, but still in the Liskov spirit (clients depend on what's *callable*, not on inheritance).
+- **Three observer channels with method-shape detection** — `ScopeRecorder` / `FlowRecorder` / `EmitRecorder` route by which methods you implement, not by class hierarchy. That's structural typing rather than nominal — closer to Cardelli/Wegner's later work, but still in the Liskov spirit (clients depend on what's *callable*, not on inheritance).
 - **Decision evidence on top of the contract** — `decide()` and `select()` capture *why* a substitutable choice was made. ADT theory says "operations have specifications"; we add "and they record which spec rule fired."
 
 ## The deeper takeaway

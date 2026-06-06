@@ -36,9 +36,11 @@ You CAN make `route` call an LLM internally — it's just a function. But the st
 
 If you need LLM-driven routing, use [Conditional](/agentfootprint/getting-started/key-concepts/#3-conditional--branch-on-a-decider) with an LLM-based predicate — different shape, same outcome.
 
-## Multi-tenant identity propagates
+## Multi-tenant identity
 
-Every specialist's call inherits the orchestrator's `identity` automatically. Memory, observability, cost tracking — all scoped per-tenant across the entire handoff chain.
+A swarm runner's input is `{ message: string }` — and that single `message` is the *only* thing that flows from one specialist to the next (each agent's `string` output becomes the next iteration's `{ message }`). `swarm()` does **not** carry a `MemoryIdentity` through the handoff chain for you.
+
+If specialists need per-tenant memory, give each agent its `identity` directly. `Agent.run({ message, identity })` accepts an optional `MemoryIdentity` on its input; bind the tenant scope when you build/run each specialist (e.g. via a closure that injects it), so memory reads/writes stay isolated even though the swarm only relays the message.
 
 ## When to use Swarm vs Conditional vs Sequence
 

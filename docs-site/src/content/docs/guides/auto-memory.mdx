@@ -35,7 +35,15 @@ A single store optimized for one cadence is wrong for the other two. RedisStore 
 
 ## Per-layer scope keys prevent collision
 
-Multiple memories on the same agent each get their own scope key — `memoryInjection_${id}` — so they layer cleanly. The unique IDs (`recent`, `facts`, `causal` above) become observability event identifiers; you can filter `agentfootprint.context.injected` by `e.payload.source === 'memory:facts'` to see exactly which layer fired when.
+Multiple memories on the same agent each get their own scope key — `memoryInjection_${id}` — so they layer cleanly. The unique IDs (`recent`, `facts`, `causal` above) become observability event identifiers. Every layer emits `agentfootprint.context.injected` with `payload.source === 'memory'` and `payload.sourceId` set to the layer's id, so you can filter by the specific layer:
+
+```ts
+agent.on('agentfootprint.context.injected', (e) => {
+  if (e.payload.source === 'memory' && e.payload.sourceId === 'facts') {
+    // the `facts` layer fired — inspect e.payload.contentSummary, etc.
+  }
+});
+```
 
 ## Anti-patterns
 
@@ -46,5 +54,5 @@ Multiple memories on the same agent each get their own scope key — `memoryInje
 ## Next steps
 
 - [Memory guide](/agentfootprint/guides/memory/) — single-layer fundamentals + the 4-types × 7-strategies matrix
-- [Causal deep-dive](/agentfootprint/guides/causal-deep-dive/) — snapshot shape, projection, replay (coming v2.4)
+- [Causal deep-dive](/agentfootprint/causal-deep-dive/) — snapshot shape, projection, replay
 - [Memory store adapters](/agentfootprint/integrations/memory-stores/) — Redis · AgentCore · planned backends
