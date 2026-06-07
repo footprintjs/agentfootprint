@@ -29,7 +29,10 @@ import {
   type Injection,
   type InjectionContext,
 } from '../../../src/lib/injection-engine/index.js';
-import { projectActiveInjection, type ActiveInjection } from '../../../src/lib/injection-engine/types.js';
+import {
+  projectActiveInjection,
+  type ActiveInjection,
+} from '../../../src/lib/injection-engine/types.js';
 
 // ── helpers ──────────────────────────────────────────────────────────────
 
@@ -147,7 +150,9 @@ describe('injection-engine subflow — functional', () => {
     ];
     const subflow = buildInjectionEngineSubflow({ injections });
     const ex = new FlowChartExecutor(subflow);
-    await ex.run({ input: { iteration: 1, userMessage: 'hi', history: [], activatedInjectionIds: [] } });
+    await ex.run({
+      input: { iteration: 1, userMessage: 'hi', history: [], activatedInjectionIds: [] },
+    });
 
     const shared = (ex.getSnapshot()?.sharedState ?? {}) as Record<string, unknown>;
     expect(Array.isArray(shared.activeInjections)).toBe(true);
@@ -184,7 +189,9 @@ describe('injection-engine subflow — skill catalog emit', () => {
         }
       },
     });
-    await ex.run({ input: { iteration: 1, userMessage: 'x', history: [], activatedInjectionIds: [] } });
+    await ex.run({
+      input: { iteration: 1, userMessage: 'x', history: [], activatedInjectionIds: [] },
+    });
 
     expect(captured.length).toBe(1);
     expect(captured[0].skillCatalog).toEqual([
@@ -197,17 +204,25 @@ describe('injection-engine subflow — skill catalog emit', () => {
     // defineSkill REQUIRES a description, so the fallback is only reachable via
     // a raw Injection (power-user construction). That's what we exercise here.
     const injections: Injection[] = [
-      { id: 'mystery', flavor: 'skill', trigger: { kind: 'always' }, inject: { systemPrompt: 'x' } } as Injection,
+      {
+        id: 'mystery',
+        flavor: 'skill',
+        trigger: { kind: 'always' },
+        inject: { systemPrompt: 'x' },
+      } as Injection,
     ];
     const captured: Array<Record<string, unknown>> = [];
     const ex = new FlowChartExecutor(buildInjectionEngineSubflow({ injections }));
     ex.attachEmitRecorder({
       id: 'cap2',
       onEmit: (e: { name: string; payload?: unknown }) => {
-        if (e.name === 'agentfootprint.context.evaluated') captured.push(e.payload as Record<string, unknown>);
+        if (e.name === 'agentfootprint.context.evaluated')
+          captured.push(e.payload as Record<string, unknown>);
       },
     });
-    await ex.run({ input: { iteration: 1, userMessage: 'x', history: [], activatedInjectionIds: [] } });
+    await ex.run({
+      input: { iteration: 1, userMessage: 'x', history: [], activatedInjectionIds: [] },
+    });
     expect(captured[0].skillCatalog).toEqual([{ id: 'mystery', description: '(no description)' }]);
   });
 });
@@ -248,7 +263,10 @@ describe('injection-engine subflow — integration (Agent)', () => {
     });
     const agent = Agent.create({
       provider: mock({
-        replies: [{ toolCalls: [{ id: 'c1', name: 'echo', args: { m: 'a' } }] }, { content: 'done' }],
+        replies: [
+          { toolCalls: [{ id: 'c1', name: 'echo', args: { m: 'a' } }] },
+          { content: 'done' },
+        ],
       }),
       model: 'mock',
       maxIterations: 4,
@@ -334,7 +352,9 @@ describe('injection-engine subflow — security', () => {
       }),
     ];
     const ex = new FlowChartExecutor(buildInjectionEngineSubflow({ injections }));
-    await ex.run({ input: { iteration: 1, userMessage: 'x', history: [], activatedInjectionIds: [] } });
+    await ex.run({
+      input: { iteration: 1, userMessage: 'x', history: [], activatedInjectionIds: [] },
+    });
     const shared = (ex.getSnapshot()?.sharedState as Record<string, unknown>) ?? {};
     const byslot = shared.activeByslot as ActiveBySlot;
     // 'ok' present; 'bad' skipped (predicate threw); no crash

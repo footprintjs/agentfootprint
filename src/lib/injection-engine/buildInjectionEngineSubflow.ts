@@ -134,7 +134,8 @@ export function buildInjectionEngineSubflow(config: InjectionEngineConfig): Flow
   const injections = config.injections;
 
   return flowChart<InjectionEngineState>('Gather', gatherStage, 'gather', {
-    description: "Snapshot this turn's injection inputs (iteration, history, last tool, LLM-activated)",
+    description:
+      "Snapshot this turn's injection inputs (iteration, history, last tool, LLM-activated)",
   })
     .addFunction(
       'Evaluate',
