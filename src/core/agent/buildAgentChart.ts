@@ -44,6 +44,10 @@ import type { FlowChart, StructureRecorder, TypedScope } from 'footprintjs';
 import type { LLMMessage } from '../../adapters/types.js';
 import type { CachePolicy } from '../../cache/types.js';
 import { STAGE_IDS, SUBFLOW_IDS } from '../../conventions.js';
+import {
+  EMPTY_ACTIVE_BY_SLOT,
+  type ActiveBySlot,
+} from '../../lib/injection-engine/buildInjectionEngineSubflow.js';
 import type { ActiveInjection, Injection } from '../../lib/injection-engine/types.js';
 import type { MemoryDefinition } from '../../memory/define.types.js';
 import { memoryInjectionKey } from '../../memory/define.types.js';
@@ -218,8 +222,18 @@ export function buildAgentChart(deps: AgentChartDeps): FlowChart {
           lastToolResult: parent.lastToolResult as { toolName: string; result: string } | undefined,
           activatedInjectionIds:
             (parent.activatedInjectionIds as readonly string[] | undefined) ?? [],
+          // Last turn's per-slot active set so the engine's Delta stage can
+          // diff "what changed per slot". Persists across the ReAct loop in
+          // the (flat) parent scope; empty on turn 1.
+          priorActiveByslot:
+            (parent.activeByslot as ActiveBySlot | undefined) ?? EMPTY_ACTIVE_BY_SLOT,
         }),
-        outputMapper: (sf) => ({ activeInjections: sf.activeInjections }),
+        // Carry activeByslot back to parent so next turn's inputMapper can
+        // feed it as priorActiveByslot (the Delta round-trip).
+        outputMapper: (sf) => ({
+          activeInjections: sf.activeInjections,
+          activeByslot: sf.activeByslot,
+        }),
         // CRITICAL: footprintjs's default `applyOutputMapping`
         // CONCATENATES arrays from subflow output with the parent's
         // existing array values. Without `Replace`, the parent's

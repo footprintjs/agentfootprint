@@ -7,9 +7,31 @@
  *          three slot subflows in any primitive (Agent, LLMCall) that
  *          uses Injections. Evaluates every Injection's trigger once
  *          per iteration.
- * Emits:   `agentfootprint.context.evaluated` at exit, with
- *          aggregate metadata. The slot subflows that follow emit
- *          `agentfootprint.context.injected` per InjectionRecord placed.
+ *
+ * Four small, readable stages (was one monolithic `evaluate`):
+ *   1. Gather   — snapshot the turn's inputs (iteration, history size,
+ *                 last tool, LLM-activated count). Observability only.
+ *   2. Evaluate — run every trigger → `activeInjections` (the REAL output
+ *                 the slot subflows read). Logic is UNCHANGED from the old
+ *                 single stage: `activeInjections` is byte-identical, so the
+ *                 slots are 100% unaffected. (Safety invariant.)
+ *   3. Route    — partition `activeInjections` into per-slot buckets
+ *                 (`activeByslot`), mirroring how the slots filter. Pure
+ *                 annotation — the slots still do their own filtering.
+ *   4. Delta    — diff this turn's buckets vs last turn's (`slotDelta`):
+ *                 per slot, what activated / deactivated / stayed. The
+ *                 explainability win ("tools +skill X, system-prompt
+ *                 unchanged"). Reads last turn via `priorActiveByslot`
+ *                 carried by the mount's input/output mappers.
+ *
+ * Nothing here SKIPS a slot — Route/Delta only annotate. See
+ * docs (injection-algorithm blog) + memory agentfootprint_slot_plan_review
+ * for why per-turn skip was deferred.
+ *
+ * Emits:   `agentfootprint.context.evaluated` at the Evaluate stage, with
+ *          aggregate metadata. The per-slot route/delta ride visible stage
+ *          STATE (`activeByslot` / `slotDelta`) so the lens reads them from
+ *          the commit log without a new event-type contract.
  *
  * Mount with:
  *   builder.addSubFlowChartNext(
@@ -23,8 +45,12 @@
  *         history: parent.history,
  *         lastToolResult: parent.lastToolResult,
  *         activatedInjectionIds: parent.activatedInjectionIds ?? [],
+ *         priorActiveByslot: parent.activeByslot ?? EMPTY_ACTIVE_BY_SLOT,
  *       }),
- *       outputMapper: (sf) => ({ activeInjections: sf.activeInjections }),
+ *       outputMapper: (sf) => ({
+ *         activeInjections: sf.activeInjections,
+ *         activeByslot: sf.activeByslot, // carried so next turn's Delta can diff
+ *       }),
  *     },
  *   )
  */
@@ -33,7 +59,12 @@ import { flowChart } from 'footprintjs';
 import type { FlowChart, TypedScope } from 'footprintjs';
 import { typedEmit } from '../../recorders/core/typedEmit.js';
 import { evaluateInjections } from './evaluator.js';
-import { projectActiveInjection, type Injection, type InjectionContext } from './types.js';
+import {
+  projectActiveInjection,
+  type ActiveInjection,
+  type Injection,
+  type InjectionContext,
+} from './types.js';
 
 export interface InjectionEngineConfig {
   /**
@@ -44,66 +75,225 @@ export interface InjectionEngineConfig {
   readonly injections: readonly Injection[];
 }
 
+// ── Route / Delta shapes (visible stage state; no new event contract) ────
+
+/** One routed entry per (active injection × slot it contributes to). */
+export interface RoutedInjection {
+  readonly id: string;
+  readonly source: ActiveInjection['flavor'];
+  readonly reason: string;
+}
+
+/** Active injections partitioned by the slot they contribute to. */
+export interface ActiveBySlot {
+  readonly systemPrompt: readonly RoutedInjection[];
+  readonly messages: readonly RoutedInjection[];
+  readonly tools: readonly RoutedInjection[];
+}
+
+/** Per-slot change since last turn. */
+export interface SlotDeltaEntry {
+  readonly added: readonly string[];
+  readonly removed: readonly string[];
+  readonly kept: readonly string[];
+}
+
+/** Per-slot delta across the whole context. */
+export interface SlotDelta {
+  readonly systemPrompt: SlotDeltaEntry;
+  readonly messages: SlotDeltaEntry;
+  readonly tools: SlotDeltaEntry;
+}
+
+/** Empty buckets — turn-1 prior, and the safe default for the mappers. */
+export const EMPTY_ACTIVE_BY_SLOT: ActiveBySlot = {
+  systemPrompt: [],
+  messages: [],
+  tools: [],
+};
+
 interface InjectionEngineState {
   [k: string]: unknown;
 }
 
+/** Subflow input (boundary inputMapper) shape, shared by all four stages. */
+interface InjectionEngineArgs {
+  iteration?: number;
+  userMessage?: string;
+  history?: InjectionContext['history'];
+  lastToolResult?: InjectionContext['lastToolResult'];
+  activatedInjectionIds?: readonly string[];
+  /** Last turn's per-slot active set, carried by the mount mappers. */
+  priorActiveByslot?: ActiveBySlot;
+}
+
 /**
- * Build the Injection Engine subflow. One stage: `evaluate`.
- * Pure function over the injection list + the iteration context.
+ * Build the Injection Engine subflow — Gather → Evaluate → Route → Delta.
  */
 export function buildInjectionEngineSubflow(config: InjectionEngineConfig): FlowChart {
   const injections = config.injections;
 
-  return flowChart<InjectionEngineState>(
-    'Evaluate',
-    (scope: TypedScope<InjectionEngineState>) => {
-      const args = scope.$getArgs<{
-        iteration?: number;
-        userMessage?: string;
-        history?: InjectionContext['history'];
-        lastToolResult?: InjectionContext['lastToolResult'];
-        activatedInjectionIds?: readonly string[];
-      }>();
+  return flowChart<InjectionEngineState>('Gather', gatherStage, 'gather', {
+    description: "Snapshot this turn's injection inputs (iteration, history, last tool, LLM-activated)",
+  })
+    .addFunction(
+      'Evaluate',
+      makeEvaluateStage(injections),
+      'evaluate',
+      'Evaluate every Injection trigger; produce activeInjections + metadata',
+    )
+    .addFunction(
+      'Route',
+      routeStage,
+      'route',
+      'Partition active injections into per-slot buckets (system-prompt / messages / tools)',
+    )
+    .addFunction(
+      'Delta',
+      deltaStage,
+      'delta',
+      'Per-slot delta vs last turn: what activated / deactivated / stayed',
+    )
+    .build();
+}
 
-      const ctx: InjectionContext = {
-        iteration: args.iteration ?? 1,
-        userMessage: args.userMessage ?? '',
-        history: args.history ?? [],
-        ...(args.lastToolResult && { lastToolResult: args.lastToolResult }),
-        activatedInjectionIds: args.activatedInjectionIds ?? [],
-      };
+// ── Stage 1: Gather ──────────────────────────────────────────────────────
 
-      const evaluation = evaluateInjections(injections, ctx);
+/** Observability-only: record what this turn is being evaluated against. */
+function gatherStage(scope: TypedScope<InjectionEngineState>): void {
+  const args = scope.$getArgs<InjectionEngineArgs>();
+  scope.$setValue('injectionContextSummary', {
+    iteration: args.iteration ?? 1,
+    historyLength: args.history?.length ?? 0,
+    lastToolName: args.lastToolResult?.toolName,
+    activatedInjectionCount: args.activatedInjectionIds?.length ?? 0,
+  });
+}
 
-      // activeInjections — the REAL output the slot subflows read. POJO
-      // projections (no trigger functions, no Tool execute functions) so they
-      // survive footprintjs's transactional scope buffer (which clones on
-      // write). Tool schemas are preserved + tagged by injectionId so the
-      // Agent's closure-held registry can look up the executable.
-      const activePOJOs = evaluation.active.map(projectActiveInjection);
-      scope.$setValue('activeInjections', activePOJOs);
+// ── Stage 2: Evaluate (logic identical to the old single stage) ──────────
 
-      // Aggregate evaluation metadata is pure OBSERVABILITY — no flow stage
-      // reads it — so it goes out the EMIT channel where a recorder/Lens can
-      // observe "what was considered, what won, what was skipped and why".
-      // This is the upstream counterpart to context.slot_composed (what landed
-      // in each slot). (Previously this was a dead `scope.$setValue(
-      // 'injectionEvaluation', …)` that nothing read and that never even left
-      // the subflow — see CHANGELOG.)
-      typedEmit(scope, 'agentfootprint.context.evaluated', {
-        iteration: ctx.iteration,
-        activeCount: evaluation.active.length,
-        skippedCount: evaluation.skipped.length,
-        evaluatedTotal: injections.length,
-        activeIds: evaluation.active.map((i) => i.id),
-        skippedDetails: evaluation.skipped,
-        triggerKindCounts: countTriggerKinds(evaluation.active),
-      });
-    },
-    'evaluate',
-    { description: 'Evaluate every Injection trigger; produce activeInjections + metadata' },
-  ).build();
+function makeEvaluateStage(injections: readonly Injection[]) {
+  return (scope: TypedScope<InjectionEngineState>): void => {
+    const args = scope.$getArgs<InjectionEngineArgs>();
+
+    const ctx: InjectionContext = {
+      iteration: args.iteration ?? 1,
+      userMessage: args.userMessage ?? '',
+      history: args.history ?? [],
+      ...(args.lastToolResult && { lastToolResult: args.lastToolResult }),
+      activatedInjectionIds: args.activatedInjectionIds ?? [],
+    };
+
+    const evaluation = evaluateInjections(injections, ctx);
+
+    // activeInjections — the REAL output the slot subflows read. POJO
+    // projections (no trigger functions, no Tool execute functions) so they
+    // survive footprintjs's transactional scope buffer (which clones on
+    // write). Tool schemas are preserved + tagged by injectionId so the
+    // Agent's closure-held registry can look up the executable.
+    const activePOJOs = evaluation.active.map(projectActiveInjection);
+    scope.$setValue('activeInjections', activePOJOs);
+
+    // Aggregate evaluation metadata is pure OBSERVABILITY — no flow stage
+    // reads it — so it goes out the EMIT channel where a recorder/Lens can
+    // observe "what was considered, what won, what was skipped and why".
+    typedEmit(scope, 'agentfootprint.context.evaluated', {
+      iteration: ctx.iteration,
+      activeCount: evaluation.active.length,
+      skippedCount: evaluation.skipped.length,
+      evaluatedTotal: injections.length,
+      activeIds: evaluation.active.map((i) => i.id),
+      skippedDetails: evaluation.skipped,
+      triggerKindCounts: countTriggerKinds(evaluation.active),
+      // The Skill menu the LLM was offered (same text as the read_skill tool
+      // description) — pair "offered" with "chosen" (activatedInjectionIds) to
+      // debug a missed/wrong read_skill call.
+      skillCatalog: skillCatalogOf(injections),
+    });
+  };
+}
+
+// ── Stage 3: Route ───────────────────────────────────────────────────────
+
+/** Partition active injections by the slot(s) each contributes to. Mirrors
+ *  the slot subflows' own filters so this view matches what they compose.
+ *  Pure — exported for unit tests + reuse (e.g. the lens). */
+export function routeActiveInjections(active: readonly ActiveInjection[]): ActiveBySlot {
+  const systemPrompt: RoutedInjection[] = [];
+  const messages: RoutedInjection[] = [];
+  const tools: RoutedInjection[] = [];
+
+  for (const inj of active) {
+    const entry: RoutedInjection = {
+      id: inj.id,
+      source: inj.flavor,
+      reason: inj.description ?? `${inj.flavor} '${inj.id}' active`,
+    };
+    // system-prompt: has prompt content AND not a tool-only Skill
+    // (mirrors buildSystemPromptSlot's Block C suppression).
+    if (
+      inj.inject.systemPrompt &&
+      inj.inject.systemPrompt.length > 0 &&
+      !(inj.flavor === 'skill' && inj.surfaceMode === 'tool-only')
+    ) {
+      systemPrompt.push(entry);
+    }
+    if (inj.inject.messages && inj.inject.messages.length > 0) messages.push(entry);
+    if (inj.inject.tools && inj.inject.tools.length > 0) tools.push(entry);
+  }
+
+  return { systemPrompt, messages, tools };
+}
+
+function routeStage(scope: TypedScope<InjectionEngineState>): void {
+  const active =
+    (scope.$getValue('activeInjections') as readonly ActiveInjection[] | undefined) ?? [];
+  scope.$setValue('activeByslot', routeActiveInjections(active));
+}
+
+// ── Stage 4: Delta ───────────────────────────────────────────────────────
+
+/** Diff this turn's per-slot buckets against last turn's (carried via the
+ *  mount mappers as `priorActiveByslot`). Turn 1 / unwired → all "added". */
+function deltaStage(scope: TypedScope<InjectionEngineState>): void {
+  const current =
+    (scope.$getValue('activeByslot') as ActiveBySlot | undefined) ?? EMPTY_ACTIVE_BY_SLOT;
+  const prior = scope.$getArgs<InjectionEngineArgs>().priorActiveByslot ?? EMPTY_ACTIVE_BY_SLOT;
+  scope.$setValue('slotDelta', diffActiveBySlot(prior, current));
+}
+
+/** Diff two per-slot snapshots into a per-slot delta. Pure — exported for
+ *  unit tests + reuse. */
+export function diffActiveBySlot(prior: ActiveBySlot, current: ActiveBySlot): SlotDelta {
+  return {
+    systemPrompt: diffSlot(prior.systemPrompt, current.systemPrompt),
+    messages: diffSlot(prior.messages, current.messages),
+    tools: diffSlot(prior.tools, current.tools),
+  };
+}
+
+/** added = now-not-before, removed = before-not-now, kept = both. */
+function diffSlot(
+  prior: readonly RoutedInjection[],
+  current: readonly RoutedInjection[],
+): SlotDeltaEntry {
+  const priorIds = new Set(prior.map((e) => e.id));
+  const currentIds = new Set(current.map((e) => e.id));
+  return {
+    added: [...currentIds].filter((id) => !priorIds.has(id)),
+    removed: [...priorIds].filter((id) => !currentIds.has(id)),
+    kept: [...currentIds].filter((id) => priorIds.has(id)),
+  };
+}
+
+/** The Skill catalog the LLM was offered — id + description for every Skill
+ *  injection, mirroring buildReadSkillTool's `(no description)` fallback. */
+function skillCatalogOf(
+  injections: readonly Injection[],
+): readonly { id: string; description: string }[] {
+  return injections
+    .filter((i) => i.flavor === 'skill')
+    .map((i) => ({ id: i.id, description: i.description ?? '(no description)' }));
 }
 
 /** Count active injections by trigger kind (observability metric). */

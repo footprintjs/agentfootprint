@@ -309,6 +309,15 @@ export function extractCommentaryVars(
       };
     }
 
+    case 'agentfootprint.context.injected': {
+      const p = event.payload;
+      // Feed the injection's content summary into `descClause` so an
+      // instruction/rule line reads "added a rule: <summary>" instead of an
+      // empty ": .". (The instructions/onToolReturn/alwaysOn templates all use
+      // {{descClause}}.) Empty summary → empty clause, handled by the templates.
+      return { ...base, descClause: (p.contentSummary ?? '').trim() };
+    }
+
     // Most templates only need {{appName}} / {{agentName}} — no token
     // counts, no IDs, no durations make it into prose. Those live in
     // DETAILS.

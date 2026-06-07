@@ -54,6 +54,10 @@ import { flowChart, select } from 'footprintjs';
 import type { FlowChart, TypedScope } from 'footprintjs';
 import type { LLMMessage } from '../../adapters/types.js';
 import { STAGE_IDS, SUBFLOW_IDS } from '../../conventions.js';
+import {
+  EMPTY_ACTIVE_BY_SLOT,
+  type ActiveBySlot,
+} from '../../lib/injection-engine/buildInjectionEngineSubflow.js';
 import type { ActiveInjection, Injection } from '../../lib/injection-engine/types.js';
 import { memoryInjectionKey } from '../../memory/define.types.js';
 import { unwrapMemoryFlowChart } from '../../memory/define.js';
@@ -177,8 +181,17 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
           lastToolResult: parent.lastToolResult as { toolName: string; result: string } | undefined,
           activatedInjectionIds:
             (parent.activatedInjectionIds as readonly string[] | undefined) ?? [],
+          // Last turn's per-slot active set for the engine's Delta stage. In the
+          // grouped chart the sf-llm-call scope re-seeds each turn, so this is
+          // not yet carried across turns — Delta degrades to "all added" here
+          // (the flat/default chart carries it via the persistent parent scope).
+          priorActiveByslot:
+            (parent.activeByslot as ActiveBySlot | undefined) ?? EMPTY_ACTIVE_BY_SLOT,
         }),
-        outputMapper: (sf) => ({ activeInjections: sf.activeInjections }),
+        outputMapper: (sf) => ({
+          activeInjections: sf.activeInjections,
+          activeByslot: sf.activeByslot,
+        }),
         arrayMerge: ArrayMergeMode.Replace,
       },
     )

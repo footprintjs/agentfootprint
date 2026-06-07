@@ -267,6 +267,14 @@ export interface ContextEvaluatedPayload {
   }[];
   /** Count of active injections by trigger kind (always / rule / on-tool-return / llm-activated). */
   readonly triggerKindCounts: Readonly<Record<string, number>>;
+  /**
+   * The Skill CATALOG the LLM was offered this turn — every registered Skill's
+   * `id` + `description` (the same text that lands in the `read_skill` tool
+   * description). Lets observers pair "what was offered" against "what the LLM
+   * chose" (`read_skill` → `activatedInjectionIds`) when debugging a missed or
+   * wrong activation. Empty when no Skills are registered. Static across turns.
+   */
+  readonly skillCatalog: readonly { readonly id: string; readonly description: string }[];
 }
 
 // error.fatal + pause (always-on from library core)
