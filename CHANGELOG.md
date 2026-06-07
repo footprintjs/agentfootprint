@@ -5,6 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.1.0]
+
+Minor — a self-explaining injection engine and clearer commentary. Additive; the
+`activeInjections` result is byte-identical to 6.0.0.
+
+### Changed
+
+- **The injection engine runs as a readable `Gather → Evaluate → Route → Delta`
+  subflow.** `buildInjectionEngineSubflow` is decomposed into four named stages so
+  a run narrates *how* context was assembled (which injections were gathered,
+  evaluated, routed to a slot, and what changed) instead of one opaque step. The
+  computed `activeInjections` is unchanged.
+- **`Evaluate` emits `agentfootprint.context.evaluated`** carrying the offered
+  skill catalog and a typed payload, so observers can narrate the decision.
+
+### Fixed
+
+- **Commentary for instruction injections now shows the rule content** (the
+  injected text) instead of an empty `": ."`. The raw `context.evaluated` emit is
+  no longer surfaced as prose — it is structured signal, not human narration.
+
+### Tests
+
+- `InjectionEngineSubflow` (the four-stage decomposition + emit) and commentary
+  cases.
+
 ## [6.0.0]
 
 Major — one breaking API simplification. No runtime behavior change.
