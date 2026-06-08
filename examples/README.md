@@ -212,6 +212,7 @@ _Run `npm run examples:readme` after adding/editing examples._
 | 12 | [`12-strict-output.ts`](features/12-strict-output.ts) | Strict output — Instructor-style schema-retry on the reliability gate | v2.13 — outputSchema validation now runs INSIDE the reliability gate. When validation fails, postDecide rules can retry with feedbackForLLM (an ephemeral user message describing the validation error). New helpers: defaultStuckLoopRule fail-fasts after 2 identical errors. ValidationFailure sentinel. lastNValidationErrorsMatch helper. Demonstrates happy / retry-with-feedback / stuck-loop paths. |
 | 13 | [`13-live-state.ts`](features/13-live-state.ts) | Live state — O(1)  | liveStateRecorder() bundles three trackers (LLM / tool / turn) on the BoundaryStateStore storage primitive. Subscribe once, read O(1) at any moment. |
 | 14 | [`14-tool-lineage.ts`](features/14-tool-lineage.ts) | Tool lineage — auto-derive the tool→tool data-flow graph | Attach toolLineageRecorder() to reconstruct which tool RESULT fed which later tool CALL, by value provenance — the data-flow graph causalChain can |
+| 15 | [`15-skill-graph.ts`](features/15-skill-graph.ts) | Skill graph — declarative, token-efficient skill routing | Declare an entry skill + routing edges; each edge compiles to an injection trigger so skills load just-in-time. Deterministic, drawable (toMermaid), zero engine change. |
 
 ### [`canonical/`](canonical/) — end-to-end patterns
 

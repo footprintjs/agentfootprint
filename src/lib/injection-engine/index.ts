@@ -58,3 +58,15 @@ export {
   type DefineInjectionOptions,
   type InjectionFlavor,
 } from './factories/defineInjection.js';
+
+// Declarative skill graph (proposal 002) — declare skills + routing edges →
+// graph-derived triggers + a drawable topology. Sugar over the trigger model.
+export {
+  skillGraph,
+  type SkillGraph,
+  type SkillGraphBuilder,
+  type SkillRouteOptions,
+  type SkillEntryOptions,
+  type SkillEdge,
+  type SkillEdgeKind,
+} from './skillGraph.js';

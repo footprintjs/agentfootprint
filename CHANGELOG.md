@@ -5,6 +5,43 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.4.0]
+
+Minor — `skillGraph()`: a declarative, visualizable, token-efficient skill graph
+(proposal 002, v1). Additive; zero engine change.
+
+### Added
+
+- **`skillGraph()`** — declare an **entry** skill + routing **edges**; each edge
+  compiles to the target skill's injection **trigger**, so a skill (its body +
+  tools) loads **just-in-time**, only when its edge fires — fewer tokens, sharper
+  reasoning, and the topology **draws itself**.
+  - `.entry(skill, { when? })` → `always` (persistent base) or `rule` (intent-
+    conditional).
+  - `.route(from, to, { onToolReturn })` → `on-tool-return` trigger on `to`.
+  - `.route(from, to, { when })` → `rule` trigger over `ctx.lastToolResult` on `to`
+    (the deterministic "predicate on tool result → next skill" edge).
+  - a bare `.route(from, to)` keeps `to`'s default `llm-activated` trigger (still
+    reachable via `read_skill`; drawn as a dashed "model" edge).
+  - **`graph.toMermaid()`** renders the declared graph (declared === drawn).
+  - **`Agent.create().skillGraph(graph)`** mounts it (sugar over `.injection()`).
+
+  v1 is pure sugar over the existing trigger model — the generic evaluator already
+  activates a `'skill'`-flavor Injection by any trigger kind, so **no engine
+  change**. Scoped `read_skill` (gating the model-reachable set by graph position)
+  is deferred to v2. See `docs/proposals/002-skill-graph.md`.
+
+  New exports: `skillGraph`, `SkillGraph`, `SkillGraphBuilder`, `SkillRouteOptions`,
+  `SkillEntryOptions`, `SkillEdge`, `SkillEdgeKind`.
+
+### Tests / Examples
+
+- `test/skillGraph` — edge→trigger compilation, activation through the REAL
+  evaluator (entry active at start; routed skill activates only when its predicate
+  fires; body lands in the slot; dormant otherwise), `toMermaid`, guardrails.
+- `examples/features/15-skill-graph` — triage entry + sfp-diagnostics routed on
+  `CRC > 0`, with the Mermaid + just-in-time load shown.
+
 ## [6.3.0]
 
 Minor — `agentThinkingTrace` now surfaces the model's extended-thinking

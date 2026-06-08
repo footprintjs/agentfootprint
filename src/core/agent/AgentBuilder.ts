@@ -336,6 +336,25 @@ export class AgentBuilder {
   }
 
   /**
+   * Mount a declarative **skill graph** (proposal 002) — each skill carries a
+   * graph-derived trigger (entry → always/rule, deterministic route → rule /
+   * on-tool-return), so dynamic token-efficient loading becomes *declared* and
+   * *drawable*. Pure sugar over `.injection()` — `graph.toMermaid()` renders the
+   * topology.
+   *
+   * @example
+   *   const graph = skillGraph()
+   *     .entry(triage)
+   *     .route(triage, sfp, { when: (r) => r.toolName === 'get_counters' && JSON.parse(r.result).crc > 0 })
+   *     .build();
+   *   Agent.create({ provider }).skillGraph(graph).build();
+   */
+  skillGraph(graph: { skills: readonly Injection[] }): this {
+    for (const skill of graph.skills) this.injection(skill);
+    return this;
+  }
+
+  /**
    * Register a Steering doc — always-on system-prompt rule.
    * Use for invariant guidance: output format, persona, safety policies.
    */
