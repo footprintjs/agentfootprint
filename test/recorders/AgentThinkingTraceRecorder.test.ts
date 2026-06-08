@@ -138,7 +138,12 @@ describe('agentThinkingTrace — commentary engine fills every beat', () => {
             usage: { input: 40, output: 10 },
             stopReason: 'tool_use',
           };
-        return { content: 'Done — found-it.', toolCalls: [], usage: { input: 50, output: 12 }, stopReason: 'stop' };
+        return {
+          content: 'Done — found-it.',
+          toolCalls: [],
+          usage: { input: 50, output: 12 },
+          stopReason: 'stop',
+        };
       },
     });
     return Agent.create({ provider, model: 'mock', maxIterations: 5 })
