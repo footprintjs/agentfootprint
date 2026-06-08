@@ -121,6 +121,27 @@ export {
   type StatusEvent,
   type StatusOptions,
 } from './recorders/observability/StatusRecorder.js';
+// Tool→tool DATA-FLOW graph, derived by value provenance from the tool emit
+// stream (see finding 2: causalChain can't see LLM-mediated tool dependencies).
+export {
+  toolLineageRecorder,
+  type ToolLineageRecorderHandle,
+  type ToolLineageOptions,
+  type ToolLineageGraph,
+  type ToolLineageEdge,
+  type ToolCallRef,
+} from './recorders/observability/ToolLineageRecorder.js';
+// AgentThinkingUI Trace (run → the "watch it think" beat list, collected during
+// traversal). Lets any agentfootprint run drive AgentThinkingUI / domain views.
+export {
+  agentThinkingTrace,
+  type AgentThinkingTraceHandle,
+  type AgentThinkingTraceOptions,
+  type AttTrace,
+  type AttStep,
+  type AttCost,
+  type AttAnswer,
+} from './recorders/observability/AgentThinkingTraceRecorder.js';
 
 // Emit primitive — used by every Tier-3 source-domain.
 export { typedEmit } from './recorders/core/typedEmit.js';

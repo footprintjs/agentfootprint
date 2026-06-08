@@ -5,6 +5,36 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.2.0]
+
+Minor — auto-derive the tool→tool data-flow graph. Additive.
+
+### Added
+
+- **`toolLineageRecorder()`** (from `agentfootprint/observe`) — reconstructs the
+  tool→tool **data-flow graph** of a run that footprintjs `causalChain` cannot
+  see. In a ReAct loop a tool's output goes back to the LLM as text and the LLM
+  picks the next tool's args, so the dependency never touches the shared scope.
+  This recorder rebuilds it by **value provenance**: when a distinctive value an
+  earlier iteration's tool RESULT produced reappears in a later tool's ARGS, it
+  records an edge (producer → consumer). Attach via
+  `.recorder(toolLineageRecorder())` and read `getLineage()`.
+
+  Conservative by design: short/common values are ignored (`minValueLength`,
+  default 4), numbers are off by default (`matchNumbers`), and same-iteration
+  (parallel) tool calls never link to each other. Run-scoped (resets per run).
+
+  New exports: `toolLineageRecorder`, `ToolLineageRecorderHandle`,
+  `ToolLineageOptions`, `ToolLineageGraph`, `ToolLineageEdge`, `ToolCallRef`.
+
+### Tests / Examples
+
+- `test/recorders/ToolLineageRecorder` — unit (synthetic emits: cross-iteration
+  edge, same-iteration gating, short-value/number filtering, run-scope reset)
+  plus a functional real-agent `lookup → fetch` recovery.
+- `examples/features/14-tool-lineage` — the FLOGI→FCID→io_profile chain, with
+  the derived lineage printed.
+
 ## [6.1.0]
 
 Minor — a self-explaining injection engine and clearer commentary. Additive; the
