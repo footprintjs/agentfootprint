@@ -193,3 +193,104 @@ describe('agentThinkingTrace — commentary engine fills every beat', () => {
     expect(ask!.brain).toBe('Looking it up.');
   });
 });
+
+/**
+ * Extended thinking — Claude's chain-of-thought (`stream.thinking_end` blocks)
+ * is attached to the beat so AgentThinkingUI can render it in the callout.
+ * Driven with synthetic emits (the real path needs a thinking-capable provider).
+ */
+describe('agentThinkingTrace — extended thinking on the beat', () => {
+  type Ev = Parameters<ReturnType<typeof agentThinkingTrace>['onEmit']>[0];
+  const ev = (name: string, payload: unknown): Ev =>
+    ({
+      name,
+      payload,
+      pipelineId: 'p1',
+      subflowPath: '',
+      stageName: '',
+      runtimeStageId: 'x#0',
+      timestamp: 0,
+    } as unknown as Ev);
+
+  it("attaches the iteration's reasoning to its first ask", () => {
+    const att = agentThinkingTrace({ agent: 'Neo' });
+    att.onEmit(
+      ev('agentfootprint.stream.llm_end', {
+        content: 'I will look it up.',
+        toolCallCount: 1,
+        usage: { input: 10, output: 5 },
+        durationMs: 100,
+      }),
+    );
+    att.onEmit(
+      ev('agentfootprint.stream.thinking_end', {
+        iteration: 1,
+        blockCount: 1,
+        totalChars: 30,
+        blocks: [{ type: 'thinking', content: 'Reason: check fc1/3 counters first.' }],
+      }),
+    );
+    att.onEmit(
+      ev('agentfootprint.stream.tool_start', {
+        toolName: 'get_status',
+        toolCallId: 't1',
+        args: { port: 'fc1/3' },
+      }),
+    );
+    att.onEmit(
+      ev('agentfootprint.stream.tool_end', {
+        toolCallId: 't1',
+        result: { ok: true },
+        durationMs: 5,
+      }),
+    );
+
+    const ask = att.getTrace({ task: 'q' }).steps.find((s) => s.kind === 'ask') as
+      | { thinking?: string }
+      | undefined;
+    expect(ask?.thinking).toContain('check fc1/3 counters first');
+  });
+
+  it('back-fills reasoning onto a terminal answer (thinking_end fires after llm_end)', () => {
+    const att = agentThinkingTrace({ agent: 'Neo' });
+    att.onEmit(
+      ev('agentfootprint.stream.llm_end', {
+        content: 'Done.',
+        toolCallCount: 0,
+        usage: { input: 10, output: 5 },
+        durationMs: 100,
+      }),
+    );
+    att.onEmit(
+      ev('agentfootprint.stream.thinking_end', {
+        iteration: 1,
+        blockCount: 1,
+        totalChars: 12,
+        blocks: [{ type: 'thinking', content: 'Final reasoning before answering.' }],
+      }),
+    );
+
+    const answer = att.getTrace({ task: 'q' }).steps.find((s) => s.kind === 'answer') as
+      | { thinking?: string }
+      | undefined;
+    expect(answer?.thinking).toContain('Final reasoning');
+  });
+
+  it('leaves `thinking` undefined when no reasoning blocks are emitted', () => {
+    const att = agentThinkingTrace({ agent: 'Neo' });
+    att.onEmit(
+      ev('agentfootprint.stream.llm_end', {
+        content: 'go',
+        toolCallCount: 1,
+        usage: { input: 1, output: 1 },
+      }),
+    );
+    att.onEmit(
+      ev('agentfootprint.stream.tool_start', { toolName: 't', toolCallId: 't1', args: {} }),
+    );
+    const ask = att.getTrace({ task: 'q' }).steps.find((s) => s.kind === 'ask') as
+      | { thinking?: string }
+      | undefined;
+    expect(ask?.thinking).toBeUndefined();
+  });
+});

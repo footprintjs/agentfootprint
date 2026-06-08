@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.3.0]
+
+Minor — `agentThinkingTrace` now surfaces the model's extended-thinking
+chain-of-thought. Additive.
+
+### Added
+
+- **Extended thinking on the beat.** `agentThinkingTrace` consumes
+  `stream.thinking_end` and attaches the iteration's reasoning (the joined
+  `blocks[].content`) to that iteration's first `ask` beat — or back-fills it
+  onto a terminal `answer` beat (`thinking_end` fires just after `llm_end`, which
+  already pushed the answer). Exposed as a new optional **`thinking`** field on
+  the `AttStep` `ask`/`answer` shapes, so AgentThinkingUI ≥ 0.9 can render
+  Claude's chain-of-thought in its callout. Empty/absent when the provider
+  produced no reasoning (thinking disabled, or a mock). Enable it on the agent
+  with `.thinking({ budget })`.
+
+### Tests
+
+- `test/recorders/AgentThinkingTraceRecorder` — synthetic-emit coverage: reasoning
+  rides the first ask; terminal answers are back-filled; `thinking` stays
+  undefined with no blocks.
+
 ## [6.2.0]
 
 Minor — two new observability recorders (tool→tool data-flow graph; the

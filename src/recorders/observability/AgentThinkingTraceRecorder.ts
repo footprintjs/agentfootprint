@@ -59,6 +59,9 @@ export type AttStep =
       input: Record<string, unknown>;
       brain: string;
       cost: AttCost;
+      /** Model's extended-thinking chain-of-thought for this iteration (when the
+       *  provider emitted reasoning blocks). Rendered as the "thinking" callout. */
+      thinking?: string;
     }
   | {
       kind: 'return';
@@ -72,7 +75,16 @@ export type AttStep =
       skill?: string;
       error?: string;
     }
-  | { kind: 'answer'; to: string; brain: string; answer: AttAnswer; cost: AttCost; error?: string };
+  | {
+      kind: 'answer';
+      to: string;
+      brain: string;
+      answer: AttAnswer;
+      cost: AttCost;
+      error?: string;
+      /** Model's extended-thinking chain-of-thought before the final answer. */
+      thinking?: string;
+    };
 export interface AttTrace {
   task: string;
   title?: string;
@@ -109,6 +121,7 @@ export interface AgentThinkingTraceHandle extends EmitRecorder {
 const LLM_END = 'agentfootprint.stream.llm_end';
 const TOOL_START = 'agentfootprint.stream.tool_start';
 const TOOL_END = 'agentfootprint.stream.tool_end';
+const THINKING_END = 'agentfootprint.stream.thinking_end';
 
 function asObject(x: unknown): Record<string, unknown> {
   if (x != null && typeof x === 'object' && !Array.isArray(x)) return x as Record<string, unknown>;
@@ -136,6 +149,10 @@ export function agentThinkingTrace(
   let pendingBrain = '';
   let pendingCost: AttCost = { ms: 0, tokens: 0 };
   let pendingCostUsed = false;
+  // Model's extended-thinking chain-of-thought for the current iteration (joined
+  // from the iteration's reasoning blocks); attached to the iteration's first ask
+  // (or back-filled onto the answer beat). '' when thinking is off / empty.
+  let pendingThinking = '';
   const byId = new Map<string, { toolName: string; isSkill: boolean; skillId?: string }>();
 
   // Commentary engine — the SAME one the Lens uses. Merged once: consumer
@@ -167,6 +184,7 @@ export function agentThinkingTrace(
     pendingBrain = '';
     pendingCost = { ms: 0, tokens: 0 };
     pendingCostUsed = false;
+    pendingThinking = '';
     byId.clear();
   }
 
@@ -210,6 +228,20 @@ export function agentThinkingTrace(
         return;
       }
 
+      if (e.name === THINKING_END) {
+        // Extended-thinking blocks for this iteration. `thinking_end` fires just
+        // AFTER `llm_end`, so a terminal answer is already on `steps` — back-fill
+        // its reasoning; an upcoming ask picks `pendingThinking` up below.
+        const p = e.payload as { blocks?: ReadonlyArray<{ content?: string }> };
+        pendingThinking = (p.blocks ?? [])
+          .map((b) => (b.content ?? '').trim())
+          .filter(Boolean)
+          .join('\n\n');
+        const last = steps[steps.length - 1];
+        if (last && last.kind === 'answer' && pendingThinking) last.thinking = pendingThinking;
+        return;
+      }
+
       if (e.name === TOOL_START) {
         const p = e.payload as { toolName?: string; toolCallId?: string; args?: unknown };
         if (!p?.toolCallId) return;
@@ -228,6 +260,8 @@ export function agentThinkingTrace(
           // the Notepad never shows a blank line.
           brain: pendingCostUsed ? narrate(e) : pendingBrain || narrate(e),
           cost: pendingCostUsed ? { ms: 0, tokens: 0 } : pendingCost, // attribute the LLM cost to the first ask of the iteration
+          // The iteration's chain-of-thought rides on its FIRST ask only.
+          ...(!pendingCostUsed && pendingThinking ? { thinking: pendingThinking } : {}),
         });
         pendingCostUsed = true;
         return;
