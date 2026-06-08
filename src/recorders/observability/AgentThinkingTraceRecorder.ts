@@ -17,10 +17,25 @@
  *   stream.tool_end               → `return` (read_skill → replyType:'instruction'
  *                                   + skill; any other tool → replyType:'data').
  *
+ * Commentary (each beat's `brain`): filled from agentfootprint's OWN commentary
+ * engine — the SAME `selectCommentaryKey`/`extractCommentaryVars`/`renderCommentary`
+ * the Lens uses — so AgentThinkingUI's Notepad / bottom caption read identically
+ * to the Lens commentary panel (one engine, consumer-overridable via
+ * `commentaryTemplates`). The LLM's own reasoning still wins on the first ask of
+ * an iteration; the engine fills every other beat so no line is ever blank.
+ *
  * Convention 1 (one purpose) + Convention 4 (run-scoped — resets per run).
  */
 
 import type { EmitEvent, EmitRecorder } from 'footprintjs';
+import type { AgentfootprintEvent } from '../../events/registry.js';
+import {
+  defaultCommentaryTemplates,
+  selectCommentaryKey,
+  extractCommentaryVars,
+  renderCommentary,
+  type CommentaryTemplates,
+} from './commentary/commentaryTemplates.js';
 
 // ── The AgentThinkingUI Trace contract (kept inline so agentfootprint does NOT
 //    depend on the agentThinkingui package — it emits the documented JSON shape).
@@ -72,6 +87,14 @@ export interface AgentThinkingTraceOptions {
   readonly agent?: string;
   readonly model?: string;
   readonly asker?: string;
+  /**
+   * Override agentfootprint's bundled commentary templates — the SAME shape as
+   * the Lens's `commentaryTemplates` prop (partial; spread over the defaults).
+   * Drives each beat's `brain` narration, so AgentThinkingUI's Notepad / bottom
+   * caption read like the Lens commentary panel — one engine, one voice,
+   * consumer-overridable. Omit to use the bundled English defaults.
+   */
+  readonly commentaryTemplates?: Partial<CommentaryTemplates>;
 }
 
 export interface AgentThinkingTraceHandle extends EmitRecorder {
@@ -95,6 +118,13 @@ function headlineOf(s: string): string {
   const line = (s ?? '').split('\n').find((l) => l.trim().length > 0) ?? '';
   return line.length > 140 ? line.slice(0, 140) + '…' : line || 'Done';
 }
+/** `EmitEvent.subflowPath` may arrive as a `/`-joined string or already split;
+ *  normalize to the array shape the commentary engine's `extractAgentName` reads. */
+function splitPath(p: unknown): string[] {
+  if (Array.isArray(p)) return p as string[];
+  if (typeof p === 'string' && p.length > 0) return p.split('/');
+  return [];
+}
 
 export function agentThinkingTrace(
   options: AgentThinkingTraceOptions = {},
@@ -107,6 +137,29 @@ export function agentThinkingTrace(
   let pendingCost: AttCost = { ms: 0, tokens: 0 };
   let pendingCostUsed = false;
   const byId = new Map<string, { toolName: string; isSkill: boolean; skillId?: string }>();
+
+  // Commentary engine — the SAME one the Lens uses. Merged once: consumer
+  // overrides spread over the bundled defaults.
+  const templates: CommentaryTemplates = options.commentaryTemplates
+    ? ({ ...defaultCommentaryTemplates, ...options.commentaryTemplates } as CommentaryTemplates)
+    : defaultCommentaryTemplates;
+  const appName = options.agent ?? 'Agent';
+
+  /** Narrate one emit event into a prose `brain` line via agentfootprint's
+   *  commentary engine. The raw `EmitEvent` is adapted to the typed
+   *  `AgentfootprintEvent` shape the engine reads (`type`/`payload`/`meta`).
+   *  Returns '' for events the engine deliberately skips. */
+  function narrate(e: EmitEvent): string {
+    const ev = {
+      type: e.name,
+      payload: e.payload,
+      meta: { subflowPath: splitPath(e.subflowPath) },
+    } as unknown as AgentfootprintEvent;
+    const key = selectCommentaryKey(ev);
+    if (!key) return '';
+    const vars = extractCommentaryVars(ev, { appName }, templates);
+    return renderCommentary(templates[key] ?? '', vars);
+  }
 
   function reset(): void {
     task = '';
@@ -170,7 +223,10 @@ export function agentThinkingTrace(
           tool: isSkill ? skillId ?? 'skill' : p.toolName ?? '(tool)',
           toolName: p.toolName,
           input: asObject(p.args),
-          brain: pendingCostUsed ? '' : pendingBrain,
+          // First ask of the iteration carries the LLM's own reasoning; later
+          // asks (and the reasoning-less ones) fall back to engine commentary so
+          // the Notepad never shows a blank line.
+          brain: pendingCostUsed ? narrate(e) : pendingBrain || narrate(e),
           cost: pendingCostUsed ? { ms: 0, tokens: 0 } : pendingCost, // attribute the LLM cost to the first ask of the iteration
         });
         pendingCostUsed = true;
@@ -193,7 +249,9 @@ export function agentThinkingTrace(
           toolName: started.toolName,
           replyType: started.isSkill ? 'instruction' : 'data',
           output: asObject(p!.result),
-          brain: '',
+          // The tool-result beat has no LLM reasoning of its own — narrate the
+          // mechanics via the commentary engine (matches the Lens).
+          brain: narrate(e),
           brainMode: started.isSkill ? 'act' : 'reason',
           ...(started.isSkill && started.skillId ? { skill: started.skillId } : {}),
           cost: { ms: p!.durationMs ?? 0, tokens: 0 },

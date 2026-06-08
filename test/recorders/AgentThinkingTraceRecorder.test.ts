@@ -112,3 +112,79 @@ describe('agentThinkingTrace — functional (real agent run)', () => {
     expect(trace.steps.filter((s) => s.kind === 'answer')).toHaveLength(1);
   });
 });
+
+/**
+ * Commentary engine — each beat's `brain` is filled from agentfootprint's OWN
+ * commentary engine (the same one the Lens uses), so AgentThinkingUI's Notepad /
+ * caption never show a blank line, and the prose is consumer-overridable via
+ * `commentaryTemplates`.
+ */
+describe('agentThinkingTrace — commentary engine fills every beat', () => {
+  function buildLookupAgent(att: ReturnType<typeof agentThinkingTrace>) {
+    const lookup = defineTool({
+      name: 'lookup',
+      description: 'returns a value',
+      inputSchema: { type: 'object', properties: { q: { type: 'string' } } },
+      execute: async () => ({ value: 'found-it' }),
+    });
+    let i = 0;
+    const provider: LLMProvider = mock({
+      respond: () => {
+        i++;
+        if (i === 1)
+          return {
+            content: 'Looking it up.',
+            toolCalls: [{ id: 't1', name: 'lookup', args: { q: 'x' } }],
+            usage: { input: 40, output: 10 },
+            stopReason: 'tool_use',
+          };
+        return { content: 'Done — found-it.', toolCalls: [], usage: { input: 50, output: 12 }, stopReason: 'stop' };
+      },
+    });
+    return Agent.create({ provider, model: 'mock', maxIterations: 5 })
+      .system('')
+      .tool(lookup)
+      .recorder(att)
+      .build();
+  }
+
+  it('return beats carry engine prose (never blank) with the agent as the actor', async () => {
+    const att = agentThinkingTrace({ agent: 'Neo', model: 'mock' });
+    await buildLookupAgent(att).run({ message: 'q' });
+    const trace = att.getTrace({ task: 'q' });
+
+    const dataReturn = trace.steps.find(
+      (s) => s.kind === 'return' && (s as { toolName?: string }).toolName === 'lookup',
+    ) as { brain?: string } | undefined;
+    expect(dataReturn, 'lookup return beat exists').toBeTruthy();
+    // Default 'stream.tool_end' template, with appName ('Neo') as the actor.
+    expect(dataReturn!.brain).toContain('returned its result');
+    expect(dataReturn!.brain).toContain('Neo');
+    expect(dataReturn!.brain!.length).toBeGreaterThan(0);
+  });
+
+  it('commentaryTemplates override changes the prose (one engine, consumer voice)', async () => {
+    const att = agentThinkingTrace({
+      agent: 'Neo',
+      commentaryTemplates: { 'stream.tool_end': 'TOOL DONE ✓' },
+    });
+    await buildLookupAgent(att).run({ message: 'q' });
+    const trace = att.getTrace({ task: 'q' });
+
+    const dataReturn = trace.steps.find(
+      (s) => s.kind === 'return' && (s as { toolName?: string }).toolName === 'lookup',
+    ) as { brain?: string } | undefined;
+    expect(dataReturn!.brain).toBe('TOOL DONE ✓');
+  });
+
+  it("the LLM's own reasoning still wins on the first ask of an iteration", async () => {
+    const att = agentThinkingTrace({ agent: 'Neo' });
+    await buildLookupAgent(att).run({ message: 'q' });
+    const trace = att.getTrace({ task: 'q' });
+    const ask = trace.steps.find(
+      (s) => s.kind === 'ask' && (s as { toolName?: string }).toolName === 'lookup',
+    ) as { brain?: string } | undefined;
+    // The model said "Looking it up." — that wins over the generic engine line.
+    expect(ask!.brain).toBe('Looking it up.');
+  });
+});

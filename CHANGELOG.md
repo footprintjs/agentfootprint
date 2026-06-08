@@ -7,7 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [6.2.0]
 
-Minor — auto-derive the tool→tool data-flow graph. Additive.
+Minor — two new observability recorders (tool→tool data-flow graph; the
+"watch it think" Trace, now narrated through one commentary engine). Additive.
 
 ### Added
 
@@ -27,11 +28,36 @@ Minor — auto-derive the tool→tool data-flow graph. Additive.
   New exports: `toolLineageRecorder`, `ToolLineageRecorderHandle`,
   `ToolLineageOptions`, `ToolLineageGraph`, `ToolLineageEdge`, `ToolCallRef`.
 
+- **`agentThinkingTrace()`** (from `agentfootprint/observe`) — builds an
+  [AgentThinkingUI](https://github.com/footprintjs/agentThinkingUI) `Trace`
+  (`prompt → ask → return → answer` beats) from the emit stream as the run
+  traverses, so any agentfootprint agent drives the "watch it think" player for
+  free. The `Trace` contract is kept inline, so agentfootprint does NOT depend on
+  AgentThinkingUI. Attach via `.recorder(agentThinkingTrace({ agent, model }))`
+  and read `getTrace({ task })` — it returns the run **so far**, so consumers can
+  tail it live.
+
+  **Commentary through one engine.** Each beat's `brain` (what AgentThinkingUI's
+  Notepad / bottom caption render) is filled from agentfootprint's OWN commentary
+  engine — the same `selectCommentaryKey` / `extractCommentaryVars` /
+  `renderCommentary` the Lens uses — so the "watch it think" view and the Lens
+  commentary panel read identically, from one source, consumer-overridable via a
+  new **`commentaryTemplates`** option (same shape as the Lens's prop). The LLM's
+  own reasoning still wins on the first ask of each iteration; the engine fills
+  every other beat so no Notepad line is ever blank (previously tool-result and
+  follow-up-ask beats had an empty `brain`).
+
+  New exports: `agentThinkingTrace`, `AgentThinkingTraceHandle`,
+  `AgentThinkingTraceOptions`, `AttTrace`, `AttStep`, `AttCost`, `AttAnswer`.
+
 ### Tests / Examples
 
 - `test/recorders/ToolLineageRecorder` — unit (synthetic emits: cross-iteration
   edge, same-iteration gating, short-value/number filtering, run-scope reset)
   plus a functional real-agent `lookup → fetch` recovery.
+- `test/recorders/AgentThinkingTraceRecorder` — functional (real skill-then-tool
+  run → beat classification) plus the commentary engine (return beats carry
+  engine prose, `commentaryTemplates` override, LLM reasoning wins on first ask).
 - `examples/features/14-tool-lineage` — the FLOGI→FCID→io_profile chain, with
   the derived lineage printed.
 
