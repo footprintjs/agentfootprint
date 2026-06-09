@@ -5,6 +5,53 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **Required parallel branches** (backlog #10):
+  `Parallel.create().branch(id, runner, { required: true })` marks a branch
+  whose failure must reject the WHOLE run — even under a tolerant
+  `.mergeOutcomesWithFn()` merge — with an error naming the branch
+  (`Parallel 'x': required branch 'y' failed: <reason>`). When EVERY branch
+  is required, footprintjs's fork-level `failFast` is engaged
+  (`Promise.all`): the first failure aborts the fan-out immediately —
+  no waiting on slow siblings, no merge — and a synthetic
+  `composition.exit` (`status: 'err'`) preserves enter/exit pairing for
+  dashboards, carrying the same real `runId` as the paired
+  `composition.enter` (Convention 4 run-scoping). Fail-fast
+  re-attribution correlates by error IDENTITY: the branch-error recorder
+  stores the ORIGINAL error object (footprintjs
+  `FlowErrorEvent.structuredError.raw`) per branch and matches the raw
+  rejection by reference first, bare message second — so attribution
+  works for ANY error class (`TypeError`, provider-SDK subclasses like
+  `RateLimitError`), not just bare `new Error(...)`. The per-branch error
+  map is epoch-scoped per run: late failures from a rejected run's
+  abandoned fail-fast siblings are dropped instead of contaminating the
+  next run's attribution. With a MIXED required/optional set the fan-out
+  stays best-effort (fork-level `failFast` is all-or-nothing, so engaging
+  it would wrongly abort when an *optional* sibling throws); required
+  failures are enforced at the Merge join instead. Default behavior
+  (no `required` flags) is unchanged. Documented limitations (README
+  Decision 8 + `ParallelBranchOptions.required` JSDoc): under all-required
+  fail-fast the first PAUSE pre-empts siblings, and a Parallel chart
+  MOUNTED into an outer composition (e.g. a Sequence step) rejects raw —
+  attribution + the synthetic exit only engage on the `run()`/`resume()`
+  path (behavior pinned by test). `ParallelBranchOptions` is exported
+  from the package barrel.
+
+### Fixed
+
+- **Parallel `outputMapper` failures are now attributed to their branch**
+  instead of surfacing as `unknown error`. footprintjs swallows mapper
+  throws without firing `FlowRecorder.onError` (they route to
+  `addError('outputMapperError', ...)`), so Parallel's branch-error
+  recorder never saw them. Every branch mount now wraps its
+  `outputMapper` (`wrapBranchOutputMapper`) to record the throw against
+  the branch id — first error per branch wins — before rethrowing along
+  footprintjs's existing path. Strict aggregates and tolerant
+  `BranchOutcome.error` strings now carry the real message.
+
 ## [6.12.0]
 
 Minor — **the evidence bridge (backlog #5)**: causal-memory snapshots now persist

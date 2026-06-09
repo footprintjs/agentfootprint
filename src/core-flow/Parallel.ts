@@ -27,7 +27,7 @@ import type { RunnerPauseOutcome } from '../core/pause.js';
 import type { LLMMessage, LLMProvider } from '../adapters/types.js';
 import type { Runner } from '../core/runner.js';
 import { RunnerBase, makeRunId } from '../core/RunnerBase.js';
-import type { RunContext } from '../bridge/eventMeta.js';
+import { buildEventMeta, type RunContext } from '../bridge/eventMeta.js';
 import { ContextRecorder } from '../recorders/core/ContextRecorder.js';
 import { streamRecorder } from '../recorders/core/StreamRecorder.js';
 import { agentRecorder } from '../recorders/core/AgentRecorder.js';
@@ -115,6 +115,8 @@ interface BranchEntry {
    * runner's own constructor-level translator).
    */
   readonly groupTranslator?: GroupTranslator;
+  /** This branch's failure rejects the whole run. See `ParallelBranchOptions.required`. */
+  readonly required?: boolean;
 }
 
 /**
@@ -128,6 +130,63 @@ export interface ParallelBranchOptions {
   readonly name?: string;
   /** Per-method translator override. See `BranchEntry.groupTranslator`. */
   readonly groupTranslator?: GroupTranslator;
+  /**
+   * Mark this branch as REQUIRED: its failure rejects the whole Parallel
+   * run — even under a tolerant `.mergeOutcomesWithFn()` merge — with an
+   * error that names the branch. Default `false` (existing semantics:
+   * strict merges aggregate failures at the join; tolerant merges receive
+   * them as `BranchOutcome` entries).
+   *
+   * Fail-fast wiring: when EVERY branch is required, footprintjs's
+   * fork-level `failFast` is engaged (`Promise.all`) so the first failure
+   * aborts the fan-out immediately — siblings are not awaited and the
+   * Merge stage never runs. When only SOME branches are required, the
+   * fan-out stays best-effort (`Promise.allSettled`) and required
+   * failures are enforced at the Merge join instead — footprintjs's
+   * `failFast` is all-or-nothing per fork node, so engaging it for a
+   * mixed set would wrongly abort the run when an OPTIONAL sibling
+   * throws. See `docs/guides/concepts.md` (Parallel).
+   *
+   * Pause semantics under fail-fast: with every branch required, a branch
+   * that PAUSES (`pauseHere()`) pre-empts its siblings the same way a
+   * failure does — `Promise.all` settles on the first non-success, so
+   * still-running siblings are not awaited before the run surfaces the
+   * `RunnerPauseOutcome`. The checkpoint reflects the paused branch;
+   * `resume()` continues from there and re-attributes any post-resume
+   * required-branch failure just like `run()` does. Under the default
+   * best-effort fork, a pause is only surfaced after every sibling
+   * settles.
+   *
+   * Nested-mounting limitation: required-branch attribution and the
+   * synthetic `composition.exit` are wired through `Parallel.run()` /
+   * `Parallel.resume()`. When the Parallel's chart is instead MOUNTED
+   * into an outer composition (e.g. `Sequence.step('s', parallel)`), the
+   * outer runner's executor runs the chart — the fork-level `failFast`
+   * still aborts the fan-out, but the rejection surfaces RAW (no
+   * `required branch 'x' failed` wrapping) and the nested Parallel's
+   * `composition.enter` is left without a matching `exit`. See README
+   * Decision 8.
+   */
+  readonly required?: boolean;
+}
+
+/**
+ * Per-branch first-error record captured during a run.
+ *
+ * `raw` is the ORIGINAL thrown value (footprintjs's
+ * `FlowErrorEvent.structuredError.raw`) — the identity key used by
+ * `rethrowWithBranchAttribution()` to correlate a fail-fast rejection back
+ * to its branch regardless of the error's class name. `message` is the
+ * BARE message (no `TypeError:` / `RateLimitError:` prefix) used in merge
+ * aggregates, tolerant `BranchOutcome.error` strings, and the attributed
+ * error text.
+ *
+ * @internal Exported only for `wrapBranchOutputMapper`'s signature — not
+ * part of the public API (not re-exported from the package barrel).
+ */
+export interface BranchErrorRecord {
+  readonly message: string;
+  readonly raw: unknown;
 }
 
 type MergeStrategy =
@@ -153,7 +212,7 @@ export class Parallel extends RunnerBase<ParallelInput, ParallelOutput> {
   };
 
   /**
-   * Per-branch first-error messages captured during the current run.
+   * Per-branch first-error records captured during the current run.
    *
    * Filled by an internal CombinedRecorder attached in `createExecutor()`
    * that observes footprintjs `FlowErrorEvent`s. Errors are keyed by the
@@ -162,10 +221,36 @@ export class Parallel extends RunnerBase<ParallelInput, ParallelOutput> {
    * `try/catch` semantics that preceded the v0.x architectural refactor.
    *
    * Read by the Merge stage to populate strict-mode error messages and
-   * tolerant-mode `BranchOutcome.error` strings. Cleared at the start of
-   * every `run()` / `resume()`.
+   * tolerant-mode `BranchOutcome.error` strings, and by
+   * `rethrowWithBranchAttribution()` to correlate fail-fast rejections by
+   * error IDENTITY (`record.raw`). Cleared at the start of every `run()` /
+   * `resume()`; writes are epoch-guarded (see `runEpoch`) so abandoned
+   * fail-fast stragglers from a dead run cannot contaminate the live one.
    */
-  private readonly branchErrors = new Map<string, string>();
+  private readonly branchErrors = new Map<string, BranchErrorRecord>();
+
+  /**
+   * Monotonic run token — incremented at every `createExecutor()` (i.e.
+   * each `run()` / `resume()`). The branch-error recorder captures the
+   * epoch current at attach time and only writes while it is STILL
+   * current. Under fail-fast, abandoned siblings of a rejected run keep
+   * executing in the background; without this guard a late failure from
+   * run N would land in run N+1's `branchErrors` (first-error-wins would
+   * then block run N+1's real error).
+   */
+  private runEpoch = 0;
+
+  /** Ids of branches declared `{ required: true }`. See `ParallelBranchOptions.required`. */
+  private readonly requiredIds: ReadonlySet<string>;
+
+  /**
+   * True when EVERY branch is required — the fork node carries
+   * footprintjs's `failFast` flag, so the first branch failure rejects
+   * `executor.run()` with the RAW branch error before the Merge stage
+   * can attribute it. `run()`/`resume()` re-attribute via
+   * `rethrowWithBranchAttribution()`.
+   */
+  private readonly failFastEngaged: boolean;
 
   constructor(opts: ParallelOptions, branches: readonly BranchEntry[], merge: MergeStrategy) {
     super();
@@ -177,6 +262,9 @@ export class Parallel extends RunnerBase<ParallelInput, ParallelOutput> {
     }
     this.branches = branches;
     this.merge = merge;
+    // Set BEFORE initChart — buildChart reads both fields.
+    this.requiredIds = new Set(branches.filter((b) => b.required === true).map((b) => b.id));
+    this.failFastEngaged = branches.every((b) => b.required === true);
     // Eager chart construction — see `RunnerBase.initChart` JSDoc.
     // Safe: the merge stage's closure captures `this.branchErrors`
     // (an instance field initialized at declaration time, line 130),
@@ -233,10 +321,15 @@ export class Parallel extends RunnerBase<ParallelInput, ParallelOutput> {
   ): Promise<ParallelOutput | RunnerPauseOutcome> {
     const executor = this.createExecutor();
     this.lastExecutor = executor;
-    const result = await executor.run({
-      input: { message: input.message },
-      ...(options ?? {}),
-    });
+    let result: unknown;
+    try {
+      result = await executor.run({
+        input: { message: input.message },
+        ...(options ?? {}),
+      });
+    } catch (err) {
+      this.rethrowWithBranchAttribution(err);
+    }
     return this.finalizeResult(executor, result);
   }
 
@@ -247,8 +340,96 @@ export class Parallel extends RunnerBase<ParallelInput, ParallelOutput> {
   ): Promise<ParallelOutput | RunnerPauseOutcome> {
     this.emitPauseResume(checkpoint, input);
     const executor = this.createExecutor();
-    const result = await executor.resume(checkpoint, input, options);
+    let result: unknown;
+    try {
+      result = await executor.resume(checkpoint, input, options);
+    } catch (err) {
+      this.rethrowWithBranchAttribution(err);
+    }
     return this.finalizeResult(executor, result);
+  }
+
+  /**
+   * Re-attribute a fail-fast abort to its originating branch.
+   *
+   * When `failFastEngaged` (every branch required), a failing branch
+   * rejects `executor.run()` with the RAW branch error — the Merge stage,
+   * which normally attributes failures by branch id, never runs. The
+   * internal `parallel-branch-errors` recorder DID see the failure
+   * (FlowRecorder.onError fires before the fork rejects), so correlate
+   * the rejection against that map and wrap it in a branch-naming error.
+   * Also emit the `composition.exit` (status `'err'`) the aborted Merge
+   * stage could not, preserving enter/exit pairing for dashboards.
+   *
+   * Correlation is by error IDENTITY first (`record.raw === err` — the
+   * recorder stores the ORIGINAL error object from
+   * `FlowErrorEvent.structuredError.raw`), with bare-message equality as
+   * a fallback for throws whose identity doesn't survive an engine
+   * boundary (e.g. non-Error values). Identity matching is what makes
+   * attribution work for ANY named Error subclass — `TypeError`, provider
+   * SDK errors like `RateLimitError`, etc. — where message-only matching
+   * would silently fail against name-prefixed strings.
+   *
+   * Rejections that don't correlate (engine errors, merge-stage errors,
+   * non-fail-fast runs) are rethrown untouched.
+   *
+   * Only engaged on the `run()` / `resume()` path — a Parallel chart
+   * MOUNTED into an outer composition rejects raw (see
+   * `ParallelBranchOptions.required` JSDoc, "Nested-mounting limitation").
+   */
+  private rethrowWithBranchAttribution(err: unknown): never {
+    if (this.failFastEngaged) {
+      const match = this.correlateBranchError(err);
+      if (match !== undefined) {
+        const [branchId, recorded] = match;
+        this.emitFailFastAbortExit();
+        throw new Error(
+          `Parallel '${this.id}': required branch '${branchId}' failed: ${recorded.message}`,
+          {
+            cause: err,
+          },
+        );
+      }
+    }
+    throw err;
+  }
+
+  /**
+   * Find the branch whose recorded first error corresponds to `err`:
+   * identity match on the original thrown value first, bare-message
+   * equality second. Returns `undefined` when nothing correlates.
+   */
+  private correlateBranchError(err: unknown): readonly [string, BranchErrorRecord] | undefined {
+    for (const entry of this.branchErrors) {
+      if (entry[1].raw === err) return entry;
+    }
+    const message = err instanceof Error ? err.message : String(err);
+    for (const entry of this.branchErrors) {
+      if (entry[1].message === message) return entry;
+    }
+    return undefined;
+  }
+
+  /**
+   * Synthetic `composition.exit` for fail-fast aborts (no stage scope to
+   * emit from). Meta is built from the SAME run context the paired
+   * `composition.enter` used (`buildEventMeta` + `currentRunContext`), so
+   * the pair shares one real `runId` — Convention 4 run-scoping. Only the
+   * `runtimeStageId` degrades (`'unknown#0'`): the abort happens outside
+   * any stage, so there is no stage origin to attach.
+   */
+  private emitFailFastAbortExit(): void {
+    this.dispatcher.dispatch({
+      type: 'agentfootprint.composition.exit',
+      payload: {
+        kind: 'Parallel',
+        id: this.id,
+        name: this.name,
+        status: 'err',
+        durationMs: Date.now() - this.currentRunContext.runStartMs,
+      },
+      meta: buildEventMeta(undefined, this.currentRunContext),
+    });
   }
 
   private createExecutor(): FlowChartExecutor {
@@ -261,6 +442,10 @@ export class Parallel extends RunnerBase<ParallelInput, ParallelOutput> {
     // Reset per-run branch-error capture. Fork children now mount the
     // branch runner's own chart (no try/catch wrapper); errors are
     // captured via FlowRecorder.onError correlation by subflow path.
+    // The epoch bump invalidates recorders of any PREVIOUS run whose
+    // abandoned fail-fast siblings are still executing — their late
+    // errors must not land in this run's map.
+    this.runEpoch += 1;
     this.branchErrors.clear();
 
     // Reuse the cached chart built at constructor time.
@@ -273,7 +458,7 @@ export class Parallel extends RunnerBase<ParallelInput, ParallelOutput> {
     executor.attachCombinedRecorder(streamRecorder({ dispatcher, getRunContext: getRunCtx }));
     executor.attachCombinedRecorder(agentRecorder({ dispatcher, getRunContext: getRunCtx }));
     executor.attachCombinedRecorder(compositionRecorder({ dispatcher, getRunContext: getRunCtx }));
-    executor.attachCombinedRecorder(this.makeBranchErrorRecorder());
+    executor.attachCombinedRecorder(this.makeBranchErrorRecorder(this.runEpoch));
     for (const r of this.attachedRecorders) executor.attachCombinedRecorder(r);
     return executor;
   }
@@ -290,12 +475,19 @@ export class Parallel extends RunnerBase<ParallelInput, ParallelOutput> {
    *
    * Only the FIRST error per branch is kept. Errors fired outside any
    * branch (e.g., a Merge-stage error) are ignored.
+   *
+   * `epoch` is the run token current at attach time. Under fail-fast, a
+   * rejected run's abandoned siblings keep executing in the background —
+   * THIS recorder (attached to that dead run's executor) may still
+   * receive their late `onError` events while a NEW run is live. The
+   * epoch check drops those writes so the live run's map stays clean.
    */
-  private makeBranchErrorRecorder(): CombinedRecorder {
+  private makeBranchErrorRecorder(epoch: number): CombinedRecorder {
     const branchIds = new Set(this.branches.map((b) => b.id));
     return {
       id: 'parallel-branch-errors',
       onError: (event) => {
+        if (epoch !== this.runEpoch) return; // straggler from a dead run
         if (!isFlowEvent(event)) return;
         const ctx = event.traversalContext;
         if (!ctx) return;
@@ -310,15 +502,20 @@ export class Parallel extends RunnerBase<ParallelInput, ParallelOutput> {
         const branchId = slash >= 0 ? stageId.slice(0, slash) : undefined;
         if (branchId === undefined || !branchIds.has(branchId)) return;
         if (!this.branchErrors.has(branchId)) {
-          // Strip the leading "Error: " that `error.toString()` adds
-          // for standard `Error` instances so the captured message
-          // matches the original `throw new Error(msg)` reason exactly
-          // (consumers expect the bare message). Non-Error throws
-          // never carry this prefix, so the strip is a no-op there.
-          const m = event.message.startsWith('Error: ')
-            ? event.message.slice('Error: '.length)
-            : event.message;
-          this.branchErrors.set(branchId, m);
+          // `structuredError` preserves both the BARE message (no
+          // `TypeError:` / `RateLimitError:` name prefix — consumers
+          // expect the original `throw new X(msg)` reason exactly) and
+          // the ORIGINAL error object (`raw`) used for identity-based
+          // fail-fast re-attribution. Fall back to the flat
+          // `event.message` (stripping the standard `Error: ` prefix)
+          // only if a future footprintjs shape omits `structuredError`.
+          const structured = event.structuredError;
+          const message =
+            structured?.message ??
+            (event.message.startsWith('Error: ')
+              ? event.message.slice('Error: '.length)
+              : event.message);
+          this.branchErrors.set(branchId, { message, raw: structured?.raw });
         }
       },
     };
@@ -387,14 +584,18 @@ export class Parallel extends RunnerBase<ParallelInput, ParallelOutput> {
     // detects this via `branches.map(b => b.id) \ keys(branchResults)`
     // and either throws (strict mode) or synthesizes `BranchOutcome`
     // entries for the tolerant `outcomes-fn` merge.
+    //
+    // The outputMapper itself is wrapped (`wrapBranchOutputMapper`) so a
+    // MAPPER throw is also attributed to its branch — see the helper's
+    // JSDoc for why footprintjs can't attribute that class on its own.
     for (const branch of branches) {
       builder = builder.addSubFlowChart(branch.id, branch.runner.getSpec(), branch.name, {
         inputMapper: (parent) => ({ message: (parent.userMessage as string) ?? '' }),
-        outputMapper: (sfOutput) => ({
+        outputMapper: wrapBranchOutputMapper(branch.id, this.branchErrors, (sfOutput) => ({
           branchResults: {
             [branch.id]: typeof sfOutput === 'string' ? sfOutput : '',
           },
-        }),
+        })),
       });
     }
 
@@ -403,6 +604,7 @@ export class Parallel extends RunnerBase<ParallelInput, ParallelOutput> {
     // `parallel-branch-errors` recorder) so per-branch error messages
     // survive subflow boundary swallowing in footprintjs.
     const branchErrors = this.branchErrors;
+    const requiredIds = this.requiredIds;
     const mergeStage = async (scope: TypedScope<ParallelState>): Promise<string> => {
       const results = (scope.branchResults as Record<string, string>) ?? {};
 
@@ -411,18 +613,19 @@ export class Parallel extends RunnerBase<ParallelInput, ParallelOutput> {
       // fire — i.e., one whose subflow errored. The specific error
       // message comes from the recorder-captured `branchErrors` map.
       //
-      // Caveat: footprintjs does NOT fire `FlowRecorder.onError` for
-      // errors thrown INSIDE `applyOutputMapping` (those are caught
-      // separately in `SubflowExecutor` and routed to
-      // `parentContext.addError('outputMapperError', ...)`). A branch
-      // whose subflow completed cleanly but whose outputMapper threw
-      // will therefore show up here as a missing id with no entry in
-      // `branchErrors` — strict-mode aggregation prints `unknown
-      // error` for it and tolerant-mode synthesizes the same string.
-      // This is a known gap; see `core-flow/README.md` Decision 8.
+      // footprintjs does NOT fire `FlowRecorder.onError` for errors
+      // thrown INSIDE `applyOutputMapping` (those are caught separately
+      // in `SubflowExecutor` and routed to
+      // `parentContext.addError('outputMapperError', ...)`), so the
+      // recorder alone would miss mapper-class failures. The
+      // `wrapBranchOutputMapper` wrapper on every branch mount records
+      // those into `branchErrors` before rethrowing, so both strict-mode
+      // aggregation and tolerant-mode `BranchOutcome.error` print the
+      // real message instead of `unknown error`.
       const failedIds = branches.map((b) => b.id).filter((id) => !(id in results));
       const isTolerant = merge.kind === 'outcomes-fn';
-      if (failedIds.length > 0 && !isTolerant) {
+      const failedRequired = failedIds.filter((id) => requiredIds.has(id));
+      if (failedIds.length > 0 && (!isTolerant || failedRequired.length > 0)) {
         typedEmit(scope, 'agentfootprint.composition.exit', {
           kind: 'Parallel',
           id: compositionId,
@@ -430,8 +633,20 @@ export class Parallel extends RunnerBase<ParallelInput, ParallelOutput> {
           status: 'err',
           durationMs: Date.now() - this.currentRunContext.runStartMs,
         });
+        // A REQUIRED branch failed under a tolerant merge: required
+        // overrides tolerance — reject the run, naming the branch(es).
+        // (Strict merges below already reject on ANY failure, required
+        // or not, with the pre-existing aggregate message.)
+        if (isTolerant) {
+          const details = failedRequired
+            .map((id) => `  ${id}: ${branchErrors.get(id)?.message ?? 'unknown error'}`)
+            .join('\n');
+          throw new Error(
+            `Parallel '${compositionId}': ${failedRequired.length} required branch(es) failed:\n${details}`,
+          );
+        }
         const details = failedIds
-          .map((id) => `  ${id}: ${branchErrors.get(id) ?? 'unknown error'}`)
+          .map((id) => `  ${id}: ${branchErrors.get(id)?.message ?? 'unknown error'}`)
           .join('\n');
         throw new Error(
           `Parallel '${compositionId}': ${failedIds.length} branch(es) failed:\n${details}\n` +
@@ -459,7 +674,7 @@ export class Parallel extends RunnerBase<ParallelInput, ParallelOutput> {
             } else {
               outcomes[b.id] = {
                 ok: false,
-                error: branchErrors.get(b.id) ?? 'unknown error',
+                error: branchErrors.get(b.id)?.message ?? 'unknown error',
               };
             }
           }
@@ -500,8 +715,68 @@ export class Parallel extends RunnerBase<ParallelInput, ParallelOutput> {
 
     builder = builder.addFunction('Merge', mergeStage, 'merge', 'Parallel merge');
 
-    return builder.build();
+    const chart = builder.build();
+
+    // Required-branch fail-fast: when EVERY branch is required, engage
+    // footprintjs's fork-level `failFast` (`Promise.all` — first branch
+    // error rejects the whole run, aborting before the Merge join).
+    //
+    // The fan-out node here is the SEED node — stacked `addSubFlowChart`
+    // calls fork from the builder cursor, which is the chart root.
+    // footprintjs only exposes a `failFast` option on its selector/list
+    // builders, so for a plain stacked-subflow fork we stamp the public
+    // `StageNode.failFast` field on the built chart's root directly
+    // (the exact field `ChildrenExecutor.executeNodeChildren` reads).
+    //
+    // Deliberately NOT engaged for a MIXED required/optional set:
+    // fork-level failFast is all-or-nothing, so an OPTIONAL sibling's
+    // throw would also abort the run. Mixed sets are enforced at the
+    // Merge join instead (see `mergeStage`).
+    if (this.failFastEngaged) {
+      chart.root.failFast = true;
+    }
+
+    return chart;
   }
+}
+
+/**
+ * Wrap a branch's `outputMapper` so a mapper throw is ATTRIBUTED to its
+ * branch before footprintjs swallows it.
+ *
+ * footprintjs's `SubflowExecutor` catches outputMapper errors into
+ * `parentContext.addError('outputMapperError', ...)` WITHOUT firing
+ * `FlowRecorder.onError` — so Parallel's internal `parallel-branch-errors`
+ * recorder never sees them, and the Merge stage would fall back to
+ * `'unknown error'` for the missing branch id. Recording into the
+ * branch-error map here (first error per branch wins, mirroring the
+ * recorder's semantics) closes that attribution gap. The error is then
+ * RETHROWN so footprintjs's existing bookkeeping stays untouched: the
+ * `outputMapperError` debug entry is still written and the branch id is
+ * still absent from `branchResults` (which is how the Merge stage detects
+ * the failure).
+ *
+ * @internal Exported for direct unit testing — not part of the public API
+ * (not re-exported from the package barrel).
+ */
+export function wrapBranchOutputMapper(
+  branchId: string,
+  branchErrors: Map<string, BranchErrorRecord>,
+  inner: (sfOutput: unknown) => Record<string, unknown>,
+): (sfOutput: unknown) => Record<string, unknown> {
+  return (sfOutput) => {
+    try {
+      return inner(sfOutput);
+    } catch (err) {
+      if (!branchErrors.has(branchId)) {
+        branchErrors.set(branchId, {
+          message: err instanceof Error ? err.message : String(err),
+          raw: err,
+        });
+      }
+      throw err;
+    }
+  };
 }
 
 /** Fluent builder. Requires at least 2 branches + one merge strategy. */
@@ -550,6 +825,7 @@ export class ParallelBuilder {
       ...(opts.groupTranslator !== undefined && {
         groupTranslator: opts.groupTranslator,
       }),
+      ...(opts.required !== undefined && { required: opts.required }),
     };
     this.branches.push(entry);
     return this;

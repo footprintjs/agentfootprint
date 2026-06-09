@@ -424,6 +424,9 @@ stage returns the chart's TraversalResult.
 - **Parallel** — `.branch(id,runner)` + `.mergeWithFn`/`.mergeWithLLM` (STRICT: any branch failure
   throws) or `.mergeOutcomesWithFn` (TOLERANT: `BranchOutcome` map). `Promise.allSettled`; branch ids
   must not contain `/`. (Pre-v2-Phase5 silently swallowed failures — fixed to strict-default.)
+  `.branch(id, runner, { required: true })` makes that branch's failure reject the whole run (named
+  after the branch) even under a tolerant merge; all-required engages footprintjs fork-level
+  `failFast` (`Promise.all`, first failure aborts before the merge).
 - **Conditional** — `.when(id,predicate,runner)` + `.otherwise(id,runner)`; first match wins; one branch runs.
 - **Loop** — `.repeat(runner).times(n).forAtMost(ms).until(guard)`; `loopTo` + Guard; HARD cap 500.
 

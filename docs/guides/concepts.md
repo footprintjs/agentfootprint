@@ -268,7 +268,7 @@ console.log(content); // merged recommendation string
 | Method | Description |
 |--------|-------------|
 | `Parallel.create(opts?)` | Create builder (`{ name?, id? }`) |
-| `.branch(id, runner, name?)` | Add a parallel branch (≥ 2 required) |
+| `.branch(id, runner, nameOrOpts?)` | Add a parallel branch (≥ 2 needed). Third arg: a `name` string, or `{ name?, required?, groupTranslator? }` |
 | `.mergeWithLLM({ provider, model, prompt, ... })` | Merge results via an LLM call |
 | `.mergeWithFn(fn)` | Merge `{ [branchId]: string }` via a pure function (no LLM call) |
 | `.mergeOutcomesWithFn(fn)` | Tolerant merge — receives `{ [branchId]: BranchOutcome }` (successes + failures) |
@@ -277,6 +277,8 @@ console.log(content); // merged recommendation string
 **Runner result:** `run({ message })` resolves to the merged output **string**.
 
 **Failure modes:** with the strict merges (`.mergeWithFn` / `.mergeWithLLM`), one branch throwing makes the whole Parallel **reject** with an aggregated error listing the failed branches. Use `.mergeOutcomesWithFn(fn)` for tolerant partial-failure handling — its callback receives a `BranchOutcome` (`{ ok: true, value }` or `{ ok: false, error }`) per branch, and you decide how to proceed.
+
+**Required branches:** `.branch(id, runner, { required: true })` marks a branch whose failure must reject the WHOLE run — even under a tolerant `.mergeOutcomesWithFn()` merge — with an error naming the branch. When EVERY branch is required, footprintjs's fork-level `failFast` is engaged (`Promise.all`): the first failure aborts immediately, without waiting for slow siblings or running the merge. With a MIXED required/optional set, the fan-out stays best-effort and required failures are enforced at the merge join instead (fork-level `failFast` is all-or-nothing, so engaging it would wrongly abort the run when an *optional* sibling throws); optional siblings' failures keep their normal strict/tolerant handling.
 
 ---
 
