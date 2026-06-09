@@ -141,6 +141,7 @@ export {
   type AttStep,
   type AttCost,
   type AttAnswer,
+  type AttToolSeen,
 } from './recorders/observability/AgentThinkingTraceRecorder.js';
 
 // Emit primitive — used by every Tier-3 source-domain.

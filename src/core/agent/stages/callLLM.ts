@@ -122,23 +122,31 @@ export function buildCallLLMStage(
     // `toolCalls` intact so tool_use → tool_result correlation survives.
     const messages = (scope.history as readonly LLMMessage[] | undefined) ?? [];
 
+    // Dynamic schemas — registry tools + injection-supplied tools (Skills'
+    // `inject.tools` when their Injection is active). Falls back to the static
+    // schemas at startup before the tools slot has run. Computed BEFORE the
+    // llm_start emit so the event reports what the model ACTUALLY saw this call
+    // (count + the name/description catalog), not the static startup set.
+    const activeToolSchemas =
+      (scope.dynamicToolSchemas as readonly LLMToolSchema[] | undefined) ?? deps.toolSchemas;
+
     typedEmit(scope, 'agentfootprint.stream.llm_start', {
       iteration,
       provider: deps.provider.name,
       model: deps.model,
       systemPromptChars: systemPrompt.length,
       messagesCount: messages.length,
-      toolsCount: deps.toolSchemas.length,
+      toolsCount: activeToolSchemas.length,
+      ...(activeToolSchemas.length > 0 && {
+        tools: activeToolSchemas.map((t) => ({
+          name: t.name,
+          ...(t.description ? { description: t.description } : {}),
+        })),
+      }),
       ...(deps.temperature !== undefined && { temperature: deps.temperature }),
     });
 
     const startMs = Date.now();
-    // Use dynamic schemas — registry tools + injection-supplied tools
-    // (Skills' `inject.tools` when their Injection is active). Falls
-    // back to the static schemas at startup before the tools slot has
-    // run for the first time.
-    const activeToolSchemas =
-      (scope.dynamicToolSchemas as readonly LLMToolSchema[] | undefined) ?? deps.toolSchemas;
     const baseRequest = {
       ...(systemPrompt.length > 0 && { systemPrompt }),
       messages,

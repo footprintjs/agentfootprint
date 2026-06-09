@@ -5,6 +5,41 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.6.0]
+
+Minor — capture **"what the model saw"**: the tool catalog (name + description)
+available to the model at each LLM call, for debugging tool selection. Additive;
+behavior-safe.
+
+### Added
+
+- **`stream.llm_start.tools`** — the tool CATALOG the model saw for the call:
+  `{ name, description }` per tool sent to the provider, in request order (absent
+  when the call had no tools). The structured "what was at the model's disposal
+  when it chose" payload — pair it with the iteration's reasoning to debug WHY a
+  tool was (or wasn't) picked. (Skills already have the equivalent `skillCatalog`
+  on `context.evaluated`.)
+- **`AttToolSeen` + `toolsSeen` on `agentThinkingTrace` beats.** The recorder now
+  attaches the tool menu to the iteration's first `ask` (and the terminal
+  `answer`) — `toolsSeen: { name, description }[]` — so AgentThinkingUI ≥ 0.10 can
+  render an expandable "Tools the model saw (N)" next to the reasoning. New export
+  `AttToolSeen` from `agentfootprint/observe`.
+
+### Fixed
+
+- **`stream.llm_start.toolsCount` now reflects the DYNAMIC tool set** actually sent
+  (registry + skill-unlocked `inject.tools`), not the static startup schemas. The
+  count is computed from `activeToolSchemas` (the same list the request uses), so
+  it matches `tools.length` and what the model truly saw. Previously it reported
+  the startup `deps.toolSchemas.length`, which undercounted once a Skill unlocked
+  tools mid-run.
+
+### Tests / Examples
+
+- `test/recorders/AgentThinkingTraceRecorder` — `toolsSeen` on the answer beat
+  (name + description), on a tool-calling iteration's first ask, and absent when
+  the agent has no tools.
+
 ## [6.5.0]
 
 Minor — skill-graph **routing provenance**: capture *why* a skill was reached

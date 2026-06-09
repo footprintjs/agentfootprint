@@ -148,6 +148,15 @@ export interface LLMStartPayload {
   readonly systemPromptChars: number;
   readonly messagesCount: number;
   readonly toolsCount: number;
+  /**
+   * The tool CATALOG the model saw for this call — what was at its disposal when
+   * it chose (the menu behind its tool-selection reasoning). One `{ name,
+   * description }` per tool sent to the provider, in request order. Absent when
+   * the call had no tools. The structured "what the model saw" payload: pair it
+   * with the iteration's reasoning to debug WHY a tool was (or wasn't) picked.
+   * Names + descriptions only — full input schemas live in the snapshot.
+   */
+  readonly tools?: readonly { readonly name: string; readonly description?: string }[];
   readonly estimatedPromptTokens?: number;
   readonly temperature?: number;
   readonly providerRequestRef?: string;

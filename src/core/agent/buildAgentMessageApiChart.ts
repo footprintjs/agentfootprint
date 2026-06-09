@@ -122,6 +122,12 @@ export function buildAgentMessageApiChart(deps: AgentMessageApiChartDeps): FlowC
       systemPromptChars: system.length,
       messagesCount: messages.length,
       toolsCount: toolSchemas.length,
+      ...(toolSchemas.length > 0 && {
+        tools: toolSchemas.map((t) => ({
+          name: t.name,
+          ...(t.description ? { description: t.description } : {}),
+        })),
+      }),
     });
     const startMs = Date.now();
     const response = await provider.complete({

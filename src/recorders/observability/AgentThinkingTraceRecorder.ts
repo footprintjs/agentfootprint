@@ -50,6 +50,13 @@ export interface AttAnswer {
   headline: string;
   [key: string]: unknown;
 }
+/** One tool the model had at its disposal for an LLM call — what it "saw" when it
+ *  decided. Lets a domain expert expand and read the menu next to the model's
+ *  reasoning, to debug WHY it chose (or skipped) a tool. */
+export interface AttToolSeen {
+  readonly name: string;
+  readonly description?: string;
+}
 export type AttStep =
   | { kind: 'prompt'; brain: string; cost: AttCost }
   | {
@@ -62,6 +69,9 @@ export type AttStep =
       /** Model's extended-thinking chain-of-thought for this iteration (when the
        *  provider emitted reasoning blocks). Rendered as the "thinking" callout. */
       thinking?: string;
+      /** The tools the model saw (name + description) for this iteration's call —
+       *  the menu it chose from. On the iteration's first ask only. */
+      toolsSeen?: readonly AttToolSeen[];
     }
   | {
       kind: 'return';
@@ -84,6 +94,8 @@ export type AttStep =
       error?: string;
       /** Model's extended-thinking chain-of-thought before the final answer. */
       thinking?: string;
+      /** The tools the model saw (name + description) for the final call. */
+      toolsSeen?: readonly AttToolSeen[];
     };
 export interface AttTrace {
   task: string;
@@ -118,6 +130,7 @@ export interface AgentThinkingTraceHandle extends EmitRecorder {
   clear(): void;
 }
 
+const LLM_START = 'agentfootprint.stream.llm_start';
 const LLM_END = 'agentfootprint.stream.llm_end';
 const TOOL_START = 'agentfootprint.stream.tool_start';
 const TOOL_END = 'agentfootprint.stream.tool_end';
@@ -162,6 +175,10 @@ export function agentThinkingTrace(
   // iteration with the SAME routing while a skill stays active, so we narrate it
   // ONCE (on first route / when the routed skill changes), not every turn.
   let lastRoutingLine = '';
+  // The tools the model saw for the current iteration's call (from `llm_start`,
+  // which fires before the call) — attached to the iteration's first ask / its
+  // answer so an expert can expand "what was on the menu". undefined when none.
+  let pendingToolsSeen: readonly AttToolSeen[] | undefined;
   const byId = new Map<string, { toolName: string; isSkill: boolean; skillId?: string }>();
 
   // Commentary engine — the SAME one the Lens uses. Merged once: consumer
@@ -205,6 +222,7 @@ export function agentThinkingTrace(
     pendingThinking = '';
     pendingRouting = '';
     lastRoutingLine = '';
+    pendingToolsSeen = undefined;
     byId.clear();
   }
 
@@ -214,6 +232,20 @@ export function agentThinkingTrace(
     onEmit(e: EmitEvent): void {
       if (lastPipelineId !== undefined && e.pipelineId !== lastPipelineId) reset();
       lastPipelineId = e.pipelineId;
+
+      if (e.name === LLM_START) {
+        // Fires as the call begins — capture the tool menu the model saw, to
+        // attach to this iteration's first beat. Empty/absent when no tools.
+        const p = e.payload as { tools?: readonly AttToolSeen[] };
+        pendingToolsSeen =
+          p.tools && p.tools.length > 0
+            ? p.tools.map((t) => ({
+                name: t.name,
+                ...(t.description ? { description: t.description } : {}),
+              }))
+            : undefined;
+        return;
+      }
 
       if (e.name === CONTEXT_EVALUATED) {
         // Fires before the LLM call — narrate the skill-graph routing (which skill
@@ -253,6 +285,7 @@ export function agentThinkingTrace(
             brain: leadWithRouting(content),
             answer: { headline: headlineOf(content), text: content },
             cost,
+            ...(pendingToolsSeen ? { toolsSeen: pendingToolsSeen } : {}),
           });
         } else {
           // Reasoning that will drive the upcoming ask step(s) this iteration.
@@ -296,8 +329,9 @@ export function agentThinkingTrace(
           // line. `leadWithRouting` self-clears, so only the first ask leads.
           brain: leadWithRouting(pendingCostUsed ? narrate(e) : pendingBrain || narrate(e)),
           cost: pendingCostUsed ? { ms: 0, tokens: 0 } : pendingCost, // attribute the LLM cost to the first ask of the iteration
-          // The iteration's chain-of-thought rides on its FIRST ask only.
+          // The iteration's chain-of-thought + tool menu ride on its FIRST ask only.
           ...(!pendingCostUsed && pendingThinking ? { thinking: pendingThinking } : {}),
+          ...(!pendingCostUsed && pendingToolsSeen ? { toolsSeen: pendingToolsSeen } : {}),
         });
         pendingCostUsed = true;
         return;

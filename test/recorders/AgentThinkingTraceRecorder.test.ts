@@ -378,3 +378,83 @@ describe('agentThinkingTrace — skill-graph routing leads the iteration', () =>
     expect(brains.filter((b) => b.includes('routed to'))).toHaveLength(1);
   });
 });
+
+/**
+ * Tool catalog ("what the model saw"): each LLM call's `stream.llm_start` carries
+ * the tool menu (name + description) the model had at its disposal; the recorder
+ * attaches it to that iteration's first beat so an expert can expand it next to
+ * the model's reasoning to debug tool selection.
+ */
+describe('agentThinkingTrace — tools the model saw', () => {
+  it('attaches the tool menu (name + description) to the answer beat', async () => {
+    const peek = defineTool({
+      name: 'peek',
+      description: 'Peek at a stored value',
+      inputSchema: { type: 'object', properties: {} },
+      execute: async () => ({ ok: true }),
+    });
+    const provider: LLMProvider = mock({ reply: 'all good' });
+    const att = agentThinkingTrace({ agent: 'Neo' });
+    const agent = Agent.create({ provider, model: 'mock', maxIterations: 3 })
+      .system('')
+      .tool(peek)
+      .recorder(att)
+      .build();
+    await agent.run({ message: 'q' });
+
+    const answer = att.getTrace({ task: 'q' }).steps.find((s) => s.kind === 'answer') as
+      | { toolsSeen?: { name: string; description?: string }[] }
+      | undefined;
+    expect(answer?.toolsSeen).toBeTruthy();
+    const peekSeen = answer!.toolsSeen!.find((t) => t.name === 'peek');
+    expect(peekSeen).toBeTruthy();
+    expect(peekSeen!.description).toBe('Peek at a stored value');
+  });
+
+  it('attaches the tool menu to the first ask of a tool-calling iteration', async () => {
+    const peek = defineTool({
+      name: 'peek',
+      description: 'Peek at a stored value',
+      inputSchema: { type: 'object', properties: {} },
+      execute: async () => ({ ok: true }),
+    });
+    let i = 0;
+    const provider: LLMProvider = mock({
+      respond: () => {
+        i++;
+        return i === 1
+          ? {
+              content: 'peeking',
+              toolCalls: [{ id: 't1', name: 'peek', args: {} }],
+              stopReason: 'tool_use',
+            }
+          : { content: 'done', toolCalls: [], stopReason: 'stop' };
+      },
+    });
+    const att = agentThinkingTrace({ agent: 'Neo' });
+    const agent = Agent.create({ provider, model: 'mock', maxIterations: 4 })
+      .system('')
+      .tool(peek)
+      .recorder(att)
+      .build();
+    await agent.run({ message: 'q' });
+
+    const ask = att.getTrace({ task: 'q' }).steps.find((s) => s.kind === 'ask') as
+      | { toolsSeen?: { name: string; description?: string }[] }
+      | undefined;
+    expect(
+      ask?.toolsSeen?.some((t) => t.name === 'peek' && t.description === 'Peek at a stored value'),
+    ).toBe(true);
+  });
+
+  it('no tools → no toolsSeen on the beat', async () => {
+    const provider: LLMProvider = mock({ reply: 'hi' });
+    const att = agentThinkingTrace({ agent: 'Neo' });
+    const agent = Agent.create({ provider, model: 'mock' }).system('').recorder(att).build();
+    await agent.run({ message: 'q' });
+    const answer = att.getTrace({ task: 'q' }).steps.find((s) => s.kind === 'answer') as
+      | { toolsSeen?: unknown }
+      | undefined;
+    expect(answer?.toolsSeen).toBeUndefined();
+  });
+});
