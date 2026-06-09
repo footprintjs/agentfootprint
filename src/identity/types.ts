@@ -76,7 +76,16 @@ export interface CredentialAuthorizationRequired {
 
 export type CredentialResult = CredentialIssued | CredentialAuthorizationRequired;
 
-/** The port. An adapter implements this against a specific identity backend. */
+/**
+ * The port. An adapter implements this against a specific identity backend.
+ *
+ * **Security contract for implementers:** a thrown error's `message` is surfaced
+ * to the LLM (as the tool result) AND emitted on `agentfootprint.credential.failed`
+ * — so a provider MUST NOT include the secret/token (or an `Authorization` header)
+ * in thrown error messages. (Some OAuth/HTTP SDKs echo request details into 401/403
+ * text — scrub those before throwing.) Defence in depth: consumers can also apply
+ * footprintjs `RedactionPolicy.emitPatterns: [/credential\.failed/]`.
+ */
 export interface CredentialProvider {
   /** Stable id (for logging / "which provider vended this"). */
   readonly id: string;
@@ -86,4 +95,40 @@ export interface CredentialProvider {
 /** Narrow a {@link CredentialResult} to the issued-credential branch. */
 export function isCredentialIssued(r: CredentialResult): r is CredentialIssued {
   return r.status === 'issued';
+}
+
+/**
+ * What a tool DECLARES it needs (declare-and-push). The framework resolves this
+ * with the attached provider BEFORE invoking the tool, and injects the result as
+ * `ctx.credential`. `credential` is the service id the provider understands.
+ */
+export interface CredentialNeed {
+  readonly credential: string;
+  readonly scopes?: readonly string[];
+  /** `machine` = 2-legged/M2M; `user` = 3-legged on-behalf-of-user (consent).
+   *  **Omitted → `machine`** — declare `mode: 'user'` explicitly for delegated
+   *  access, or you'll silently get a machine token. */
+  readonly mode?: 'machine' | 'user';
+}
+
+/**
+ * A fail-closed {@link CredentialProvider} used when none is attached. Every call
+ * throws loudly — so `ctx.credentials` is never `undefined` (no silent
+ * optional-chaining bypass), and a tool that needs a credential without one
+ * configured fails LOUD, not open. Use `ctx.hasCredentials` to branch when a tool
+ * intentionally supports a no-credential (degraded) mode.
+ */
+export function unconfiguredCredentialProvider(): CredentialProvider {
+  return {
+    id: 'unconfigured',
+    getCredential(req: CredentialRequest): Promise<CredentialResult> {
+      return Promise.reject(
+        new Error(
+          `No credential provider configured, but a credential for '${req.service}' was ` +
+            `requested. Pass \`credentials\` to Agent.create({ ..., credentials }) ` +
+            `(e.g. agentCoreIdentity({ region }) or staticTokens({ ... })).`,
+        ),
+      );
+    },
+  };
 }

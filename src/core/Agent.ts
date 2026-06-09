@@ -38,6 +38,7 @@ import type {
   PermissionChecker,
   PricingTable,
 } from '../adapters/types.js';
+import type { CredentialProvider } from '../identity/types.js';
 import type { RunContext } from '../bridge/eventMeta.js';
 import { ContextRecorder } from '../recorders/core/ContextRecorder.js';
 import { contextEvaluatedRecorder } from '../recorders/core/ContextEvaluatedRecorder.js';
@@ -140,6 +141,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
   private readonly pricingTable?: PricingTable;
   private readonly costBudget?: number;
   private readonly permissionChecker?: PermissionChecker;
+  private readonly credentialProvider?: CredentialProvider;
 
   /**
    * Voice config — shared by viewers (Lens, ChatThinkKit, CLI tail).
@@ -302,6 +304,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     if (opts.pricingTable) this.pricingTable = opts.pricingTable;
     if (opts.costBudget !== undefined) this.costBudget = opts.costBudget;
     if (opts.permissionChecker) this.permissionChecker = opts.permissionChecker;
+    if (opts.credentials) this.credentialProvider = opts.credentials;
     if (reliabilityConfig !== undefined) this.reliabilityConfig = reliabilityConfig;
     // v2.14 — Resolve thinking handler. Three states:
     //   - thinkingHandlerValue === undefined → auto-wire by provider.name
@@ -809,6 +812,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     const pricingTable = this.pricingTable;
     const costBudget = this.costBudget;
     const permissionChecker = this.permissionChecker;
+    const credentialProvider = this.credentialProvider;
     // Cache layer (v2.6) — capture for the seed + chart-build closures.
     // `systemPromptCachePolicy` is fed into the CacheDecision subflow's
     // inputMapper. `cacheStrategy` is consulted by BuildLLMRequest at
@@ -899,6 +903,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       ...(this.externalToolProvider && { externalToolProvider: this.externalToolProvider }),
       ...(this.externalToolProvider && { providerToolCache }),
       ...(permissionChecker && { permissionChecker }),
+      ...(credentialProvider && { credentialProvider }),
     });
 
     // v2.14 — Build the NormalizeThinking sub-subflow only when a

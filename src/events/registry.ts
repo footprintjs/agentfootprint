@@ -61,6 +61,10 @@ import type {
   PermissionGateClosedPayload,
   PermissionHaltPayload,
   PermissionGateOpenedPayload,
+  CredentialRequestedPayload,
+  CredentialAcquiredPayload,
+  CredentialAuthorizationRequiredPayload,
+  CredentialFailedPayload,
   ReliabilityFailFastPayload,
   ReliabilityRetriedPayload,
   ReliabilityRecoveredPayload,
@@ -140,6 +144,12 @@ export const EVENT_NAMES = {
     gateOpened: 'agentfootprint.permission.gate_opened',
     gateClosed: 'agentfootprint.permission.gate_closed',
     halt: 'agentfootprint.permission.halt',
+  },
+  credential: {
+    requested: 'agentfootprint.credential.requested',
+    acquired: 'agentfootprint.credential.acquired',
+    authorizationRequired: 'agentfootprint.credential.authorization_required',
+    failed: 'agentfootprint.credential.failed',
   },
   risk: {
     flagged: 'agentfootprint.risk.flagged',
@@ -362,6 +372,23 @@ export interface AgentfootprintEventMap {
     'agentfootprint.permission.halt',
     PermissionHaltPayload
   >;
+  // credential (declare-and-push)
+  'agentfootprint.credential.requested': AgentfootprintEventEnvelope<
+    'agentfootprint.credential.requested',
+    CredentialRequestedPayload
+  >;
+  'agentfootprint.credential.acquired': AgentfootprintEventEnvelope<
+    'agentfootprint.credential.acquired',
+    CredentialAcquiredPayload
+  >;
+  'agentfootprint.credential.authorization_required': AgentfootprintEventEnvelope<
+    'agentfootprint.credential.authorization_required',
+    CredentialAuthorizationRequiredPayload
+  >;
+  'agentfootprint.credential.failed': AgentfootprintEventEnvelope<
+    'agentfootprint.credential.failed',
+    CredentialFailedPayload
+  >;
   // risk + fallback
   'agentfootprint.risk.flagged': AgentfootprintEventEnvelope<
     'agentfootprint.risk.flagged',
@@ -486,6 +513,10 @@ export const ALL_EVENT_TYPES: readonly AgentfootprintEventType[] = [
   'agentfootprint.permission.gate_opened',
   'agentfootprint.permission.gate_closed',
   'agentfootprint.permission.halt',
+  'agentfootprint.credential.requested',
+  'agentfootprint.credential.acquired',
+  'agentfootprint.credential.authorization_required',
+  'agentfootprint.credential.failed',
   'agentfootprint.risk.flagged',
   'agentfootprint.fallback.triggered',
   'agentfootprint.cost.tick',

@@ -8,6 +8,7 @@
  */
 
 import type { LLMToolSchema } from '../adapters/types.js';
+import type { Credential, CredentialNeed, CredentialProvider } from '../identity/types.js';
 
 /**
  * One executable tool the Agent can call.
@@ -19,6 +20,10 @@ import type { LLMToolSchema } from '../adapters/types.js';
  */
 export interface Tool<TArgs = Record<string, unknown>, TResult = unknown> {
   readonly schema: LLMToolSchema;
+  /** Declare-and-push: a credential this tool needs. The framework resolves it
+   *  BEFORE invoking and injects `ctx.credential`; it is NOT in `schema`, so the
+   *  LLM never sees or fills it. */
+  readonly needs?: CredentialNeed;
   execute(args: TArgs, ctx: ToolExecutionContext): Promise<TResult> | TResult;
 }
 
@@ -30,6 +35,19 @@ export interface ToolExecutionContext {
   readonly iteration: number;
   /** Abort signal propagated from run({ env: { signal } }). */
   readonly signal?: AbortSignal;
+  /**
+   * The bound credential provider — the PULL escape hatch for dynamic needs.
+   * Always present: when none is attached it's a fail-closed provider that
+   * THROWS, so it never silently no-ops via optional chaining. Prefer the
+   * declarative `needs` + `ctx.credential` for the common case.
+   */
+  readonly credentials: CredentialProvider;
+  /** True when a real provider is attached. Branch on this for intentional
+   *  degraded (no-credential) mode instead of relying on `undefined`. */
+  readonly hasCredentials: boolean;
+  /** The credential resolved for this tool's declared `needs` (declare-and-push).
+   *  Present only when the tool declared a need and it resolved successfully. */
+  readonly credential?: Credential;
 }
 
 /**
@@ -53,6 +71,9 @@ export interface DefineToolOptions<TArgs, TResult> {
   readonly name: string;
   readonly description: string;
   readonly inputSchema?: Readonly<Record<string, unknown>>;
+  /** Declare a credential this tool needs (declare-and-push). Resolved by the
+   *  framework before `execute` and injected as `ctx.credential`. */
+  readonly needs?: CredentialNeed;
   execute(args: TArgs, ctx: ToolExecutionContext): Promise<TResult> | TResult;
 }
 
@@ -84,6 +105,7 @@ export function defineTool<TArgs = Record<string, unknown>, TResult = unknown>(
       description: options.description,
       inputSchema: options.inputSchema ?? { type: 'object', properties: {} },
     },
+    ...(options.needs && { needs: options.needs }),
     execute: options.execute,
   };
 }

@@ -99,6 +99,11 @@ export function agentCoreIdentity(options: AgentCoreIdentityOptions = {}): Crede
   return {
     id: options.id ?? 'agentcore-identity',
     async getCredential(req: CredentialRequest): Promise<CredentialResult> {
+      // NOTE: `req.identity` (principal/tenant) is intentionally NOT forwarded
+      // yet — tenant isolation here derives solely from `workloadIdentityToken`
+      // (the AgentCore-injected workload identity). Don't assume the threaded
+      // principal/tenant is enforced at the IdP until a future release maps it
+      // onto the user-federation subject.
       const res = await getClient().getResourceOauth2Token({
         resourceCredentialProviderName: req.service,
         scopes: req.scopes ?? [],

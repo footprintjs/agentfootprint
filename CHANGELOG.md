@@ -5,6 +5,69 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.11.0]
+
+Minor — **declare-and-push credentials**: a tool DECLARES the credential it needs;
+the framework RESOLVES it before invoking and INJECTS `ctx.credential`. This adds
+the consumption half that `agentfootprint/identity` (6.10.0) was missing, and
+reshapes the credential as a generic, extensible protocol.
+
+> **⚠️ Breaking to the `agentfootprint/identity` subpath only** (shipped 6.10.0,
+> one week ago, pre-adoption). Versioned as a minor since that surface has no
+> released consumers yet; the rename is small and mechanical — see Migrate below.
+
+### BREAKING (vs the 6.10.0 `agentfootprint/identity` subpath)
+
+- A credential is now a **`Credential` protocol** (`{ kind, toHeaders() }`), not a
+  bare token. `CredentialResult`'s success branch is `{ status: 'issued', credential }`
+  (was `{ status: 'token', token }`); `isCredentialToken` → **`isCredentialIssued`**;
+  `CredentialToken` type → **`CredentialIssued`**.
+  - **Migrate:** `if (isCredentialIssued(r)) useHeaders(r.credential.toHeaders())`
+    instead of `if (isCredentialToken(r)) useToken(r.token)`.
+  - `staticTokens({ svc })` now accepts a `string` (→ `bearer`) **or** a `Credential`;
+    `agentCoreIdentity` issues `bearer(accessToken)`.
+
+### Added
+
+- **`defineTool({ needs: { credential, scopes?, mode? } })`** — declare a credential.
+  Resolved before `execute`, injected as `ctx.credential`; it is NOT in `inputSchema`,
+  so the LLM never sees it.
+- **`Agent.create({ credentials })`** — attach a `CredentialProvider` (swap
+  `staticTokens` ↔ `agentCoreIdentity` in one line; tool code unchanged).
+- **`ToolExecutionContext`** gains `credentials` (fail-closed pull escape — an
+  unconfigured provider THROWS, never `undefined`), `hasCredentials`, and the pushed
+  `credential`.
+- **Built-in credential kinds** — `bearer` / `apiKey` / `basic` / `headers` (the
+  universal escape) from `agentfootprint/identity`; custom kinds plug in via the
+  protocol with no library change.
+- **4 typed events** — `agentfootprint.credential.{requested,acquired,authorization_required,failed}`
+  (carry kind/service/reason only — **never the token**).
+- **Failure ladder:** issued → inject; `authorization-required` → surface the URL to
+  the LLM + skip the tool; throw → surface the reason + skip (a denial is **not**
+  retried). Resolution happens before `execute` (fail-closed — never half-authed).
+
+### Security
+
+- The vended token lives only in the tool-call closure + `ctx`, never in tracked
+  scope / commit log / recorders / emit payloads / `inputSchema`. Tested. Provider
+  implementers MUST NOT echo secrets in thrown error messages (documented on the
+  port). `agentCoreIdentity` does not yet forward `req.identity` (tenant isolation
+  derives from the workload token — documented).
+
+### Deferred (documented follow-ups)
+
+- **Transient-retry via `reliability`** — the failure ladder currently surfaces
+  transient failures (not auto-retried); wiring `withRetry` is a follow-up.
+- **A dedicated `sf-credential` subflow node** — resolution is inline-with-emit for
+  v1 (observable via the `credential.*` events; no hidden control flow since it
+  returns a value); promote to a node when auto-pause-on-3LO is wanted.
+
+### Tests / Examples
+
+- `test/identity/declare-and-push` (inject / fail-closed / no-leak incl. emit /
+  LLM-never-sees / denial-not-retried) + updated `identity` (kinds + 7 types);
+  `examples/features/17-identity` rewritten to declare-and-push.
+
 ## [6.10.0]
 
 Minor — **AWS Bedrock AgentCore integration**: make agentfootprint easy to run on

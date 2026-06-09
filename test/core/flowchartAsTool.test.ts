@@ -17,6 +17,7 @@ import { describe, expect, it } from 'vitest';
 import { flowChart } from 'footprintjs';
 import type { PausableHandler } from 'footprintjs';
 import { Agent, flowchartAsTool, mock, type FlowchartToolSnapshot } from '../../src/index.js';
+import { unconfiguredCredentialProvider } from '../../src/identity/types.js';
 
 // ─── Fixtures ─────────────────────────────────────────────────────
 
@@ -46,7 +47,12 @@ const refundInputSchema = {
   required: ['orderId', 'reason'],
 } as const;
 
-const baseToolCtx = { toolCallId: 't-1', iteration: 1 };
+const baseToolCtx = {
+  toolCallId: 't-1',
+  iteration: 1,
+  credentials: unconfiguredCredentialProvider(),
+  hasCredentials: false,
+};
 
 // ─── 1. UNIT — schema construction + defaults ─────────────────────
 

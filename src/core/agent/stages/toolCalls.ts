@@ -31,6 +31,8 @@ import type { ContextRole } from '../../../events/types.js';
 import { typedEmit } from '../../../recorders/core/typedEmit.js';
 import { extractSequence } from '../../../security/extractSequence.js';
 import type { ToolProvider } from '../../../tool-providers/types.js';
+import type { Credential, CredentialProvider } from '../../../identity/types.js';
+import { unconfiguredCredentialProvider } from '../../../identity/types.js';
 import { isPauseRequest } from '../../pause.js';
 import type { ProviderToolCache } from '../../slots/buildToolsSlot.js';
 import type { Tool } from '../../tools.js';
@@ -57,6 +59,10 @@ export interface ToolCallsHandlerDeps {
    *  awaits `check({capability: 'tool_call', ...})` BEFORE executing.
    *  Throwing checkers are treated as deny-by-default. */
   readonly permissionChecker?: PermissionChecker;
+  /** Optional credential provider (declare-and-push). When present, a tool's
+   *  declared `needs` is resolved BEFORE execute and injected as `ctx.credential`;
+   *  `ctx.credentials` exposes it for the pull escape hatch. */
+  readonly credentialProvider?: CredentialProvider;
 }
 
 /**
@@ -66,6 +72,10 @@ export function buildToolCallsHandler(
   deps: ToolCallsHandlerDeps,
 ): PausableHandler<TypedScope<AgentState>> {
   const { registryByName, externalToolProvider, providerToolCache, permissionChecker } = deps;
+  // Fail-closed: when no provider is attached, `ctx.credentials` is a provider
+  // that THROWS on use (never undefined) — so a tool can't silently no-op.
+  const credentials = deps.credentialProvider ?? unconfiguredCredentialProvider();
+  const hasCredentials = deps.credentialProvider !== undefined;
 
   return {
     execute: async (scope) => {
@@ -222,31 +232,88 @@ export function buildToolCallsHandler(
           }
         }
         if (!denied) {
-          try {
-            if (!tool) throw new Error(`Unknown tool: ${tc.name}`);
-            result = await tool.execute(tc.args, {
-              toolCallId: tc.id,
-              iteration,
+          // Declare-and-push: resolve the tool's declared credential BEFORE
+          // invoking, and inject it as ctx.credential. On consent-required or
+          // failure, surface the reason to the LLM (tool result) + emit; the
+          // tool does NOT run (fail-closed — never half-authed; a denial that
+          // throws is surfaced, not retried).
+          let resolvedCredential: Credential | undefined;
+          let credentialBlocked = false;
+          const need = tool?.needs;
+          if (need) {
+            typedEmit(scope, 'agentfootprint.credential.requested', {
+              service: need.credential,
+              ...(need.mode && { mode: need.mode }),
             });
-          } catch (err) {
-            if (isPauseRequest(err)) {
-              // Commit partial state so resume() can find history intact.
-              scope.history = newHistory;
-              scope.pausedToolCallId = tc.id;
-              scope.pausedToolName = tc.name;
-              scope.pausedToolStartMs = startMs;
-              // Returning a defined value triggers footprintjs pause —
-              // the returned object becomes the checkpoint's pauseData.
-              return {
-                toolCallId: tc.id,
-                toolName: tc.name,
-                ...(typeof err.data === 'object' && err.data !== null
-                  ? (err.data as Record<string, unknown>)
-                  : { data: err.data }),
-              };
+            try {
+              const cred = await credentials.getCredential({
+                service: need.credential,
+                ...(need.scopes && { scopes: need.scopes }),
+                ...(need.mode && { mode: need.mode }),
+                ...(runIdentity && {
+                  identity: {
+                    ...(runIdentity.principal && { principal: runIdentity.principal }),
+                    ...(runIdentity.tenant && { tenant: runIdentity.tenant }),
+                  },
+                }),
+              });
+              if (cred.status === 'issued') {
+                resolvedCredential = cred.credential;
+                typedEmit(scope, 'agentfootprint.credential.acquired', {
+                  service: need.credential,
+                  kind: cred.credential.kind,
+                  ...(cred.expiresAt !== undefined && { expiresAt: cred.expiresAt }),
+                });
+              } else {
+                credentialBlocked = true;
+                typedEmit(scope, 'agentfootprint.credential.authorization_required', {
+                  service: need.credential,
+                  sessionId: cred.sessionId,
+                });
+                result = `authorization required for '${need.credential}': ${cred.authorizationUrl}`;
+              }
+            } catch (credErr) {
+              credentialBlocked = true;
+              error = true;
+              const reason = credErr instanceof Error ? credErr.message : String(credErr);
+              typedEmit(scope, 'agentfootprint.credential.failed', {
+                service: need.credential,
+                reason,
+              });
+              result = `credential error for '${need.credential}': ${reason}`;
             }
-            error = true;
-            result = err instanceof Error ? err.message : String(err);
+          }
+          if (!credentialBlocked) {
+            try {
+              if (!tool) throw new Error(`Unknown tool: ${tc.name}`);
+              result = await tool.execute(tc.args, {
+                toolCallId: tc.id,
+                iteration,
+                ...(env.signal && { signal: env.signal }),
+                credentials,
+                hasCredentials,
+                ...(resolvedCredential && { credential: resolvedCredential }),
+              });
+            } catch (err) {
+              if (isPauseRequest(err)) {
+                // Commit partial state so resume() can find history intact.
+                scope.history = newHistory;
+                scope.pausedToolCallId = tc.id;
+                scope.pausedToolName = tc.name;
+                scope.pausedToolStartMs = startMs;
+                // Returning a defined value triggers footprintjs pause —
+                // the returned object becomes the checkpoint's pauseData.
+                return {
+                  toolCallId: tc.id,
+                  toolName: tc.name,
+                  ...(typeof err.data === 'object' && err.data !== null
+                    ? (err.data as Record<string, unknown>)
+                    : { data: err.data }),
+                };
+              }
+              error = true;
+              result = err instanceof Error ? err.message : String(err);
+            }
           }
         }
         const durationMs = Date.now() - startMs;

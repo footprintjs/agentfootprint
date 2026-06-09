@@ -17,7 +17,7 @@
  */
 
 import { Agent, mock, defineTool, type LLMProvider } from '../../src/index.js';
-import { staticTokens, isCredentialIssued, type CredentialProvider } from '../../src/identity.js';
+import { staticTokens, type CredentialProvider } from '../../src/identity.js';
 import { isCliEntry, printResult, type ExampleMeta } from '../helpers/cli.js';
 
 export const meta: ExampleMeta = {
@@ -37,23 +37,21 @@ export async function run(input: string, provider?: LLMProvider): Promise<unknow
   // Dev: canned token. Prod: `agentCoreIdentity({ region: 'us-east-1' })` — same port.
   const credentials: CredentialProvider = staticTokens({ github: SECRET });
 
+  // DECLARE-AND-PUSH: the tool declares `needs`; the framework resolves it BEFORE
+  // execute and injects `ctx.credential`. No fetching, no globals, no boilerplate
+  // — and the credential is NOT in inputSchema, so the LLM never sees it.
   let usedHeader = '';
   const listRepos = defineTool({
     name: 'list_repos',
     description: "List the user's GitHub repositories.",
     inputSchema: { type: 'object', properties: {} },
-    execute: async () => {
-      const cred = await credentials.getCredential({
-        service: 'github',
-        mode: 'user',
-        scopes: ['repo'],
-      });
-      if (!isCredentialIssued(cred)) {
-        // 3LO: hand the URL to the user (in a real app, pause the run here).
-        return `Please authorize access: ${cred.authorizationUrl}`;
-      }
-      // Apply the credential LOCALLY via the universal toHeaders() — never store it.
-      usedHeader = `${cred.credential.kind} (${Object.keys(cred.credential.toHeaders())[0]})`;
+    needs: { credential: 'github', mode: 'user', scopes: ['repo'] }, // ← declare
+    execute: async (_args, ctx) => {
+      // `ctx.credential` was pushed in by the framework. Apply it LOCALLY via the
+      // universal toHeaders() — never store it in scope.
+      usedHeader = ctx.credential
+        ? `${ctx.credential.kind} (${Object.keys(ctx.credential.toHeaders())[0]})`
+        : '(none)';
       return 'repos: agentfootprint, neo-agentfootprint';
     },
   });
@@ -67,7 +65,8 @@ export async function run(input: string, provider?: LLMProvider): Promise<unknow
       ],
     });
 
-  const agent = Agent.create({ provider: picked, model: 'mock', maxIterations: 3 })
+  // Attach the provider once; swap staticTokens → agentCoreIdentity in one line.
+  const agent = Agent.create({ provider: picked, model: 'mock', maxIterations: 3, credentials })
     .tools([listRepos])
     .build();
   const answer = await agent.run({ message: input });

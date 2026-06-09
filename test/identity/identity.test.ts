@@ -18,10 +18,7 @@ import {
   basic,
   headers,
 } from '../../src/identity.js';
-import type {
-  AgentCoreIdentityClientLike,
-  AgentCoreOauthResponse,
-} from '../../src/identity.js';
+import type { AgentCoreIdentityClientLike, AgentCoreOauthResponse } from '../../src/identity.js';
 
 function fakeClient(resp: AgentCoreOauthResponse): {
   client: AgentCoreIdentityClientLike;
@@ -189,7 +186,9 @@ describe('identity — Property', () => {
     const services = ['a', 'GitHub', 'svc.with.dots', 'x-y_z', '🦄', 'a'.repeat(200)];
     for (const s of services) {
       const r = await staticTokens({ [s]: `tok::${s}` }).getCredential({ service: s });
-      expect(isCredentialIssued(r) && r.credential.toHeaders().authorization).toBe(`Bearer tok::${s}`);
+      expect(isCredentialIssued(r) && r.credential.toHeaders().authorization).toBe(
+        `Bearer tok::${s}`,
+      );
     }
   });
 

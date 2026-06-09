@@ -21,6 +21,7 @@ import type { CacheMarker, CacheStrategy } from '../../cache/types.js';
 import type { ActiveInjection } from '../../lib/injection-engine/types.js';
 import type { InjectionRecord } from '../../recorders/core/types.js';
 import type { MemoryIdentity } from '../../memory/identity/types.js';
+import type { CredentialProvider } from '../../identity/types.js';
 import type { ThinkingBlock } from '../../thinking/types.js';
 import type { ReliabilityScope } from '../../reliability/types.js';
 
@@ -59,6 +60,14 @@ export interface AgentOptions {
    * normally.
    */
   readonly permissionChecker?: PermissionChecker;
+  /**
+   * Credential provider for downstream OAuth (declare-and-push). When set, a
+   * tool that declares `needs: { credential }` has it resolved BEFORE `execute`
+   * and injected as `ctx.credential`; tools can also pull via `ctx.credentials`.
+   * From `agentfootprint/identity` (`agentCoreIdentity({ region })`,
+   * `staticTokens({ ... })`, or any `CredentialProvider`).
+   */
+  readonly credentials?: CredentialProvider;
   /**
    * Global cache kill switch (v2.6+). `'off'` disables the cache
    * layer entirely — the CacheGate decider routes to `'no-markers'`

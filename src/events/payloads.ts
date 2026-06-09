@@ -463,6 +463,30 @@ export interface PermissionGateOpenedPayload {
   readonly expiresAt?: number;
 }
 
+// ─── credential (declare-and-push; NEVER carries the secret) ──────────
+/** A tool's declared credential is being resolved before invocation. */
+export interface CredentialRequestedPayload {
+  readonly service: string;
+  readonly mode?: 'machine' | 'user';
+}
+/** A credential was issued. Carries the `kind` only — NEVER the token/secret. */
+export interface CredentialAcquiredPayload {
+  readonly service: string;
+  readonly kind: string;
+  readonly expiresAt?: number;
+}
+/** 3-legged consent is required (the tool is not run until the user authorizes).
+ *  Carries `sessionId` for correlation, NOT the authorization URL. */
+export interface CredentialAuthorizationRequiredPayload {
+  readonly service: string;
+  readonly sessionId: string;
+}
+/** Credential resolution failed (the tool is not run). Carries the reason only. */
+export interface CredentialFailedPayload {
+  readonly service: string;
+  readonly reason: string;
+}
+
 export interface PermissionGateClosedPayload {
   readonly gateId: string;
   readonly reason: string;
