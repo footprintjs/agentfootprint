@@ -287,6 +287,14 @@ graph.nodes; graph.edges;                // the drawn shape (for a custom render
   (model-reachable via `read_skill`, drawn dashed). `.tree(decide(...))` compiles each
   leaf to the conjunction of its root→leaf predicates (with sibling negation → exactly
   one leaf).
+- **On-demand tools (the headline win):** because a `.tree()` routes to exactly ONE leaf
+  per turn, each leaf is stamped `autoActivate: 'currentSkill'` **by default** — so a
+  skill's `inject.tools` reach the LLM ONLY when the tree routes there, instead of every
+  skill's tools landing in the always-on static registry on every call. (`read_skill`
+  stays as the escape hatch.) Opt out with `.tree(root, { scopeTools: false })`; a leaf
+  that sets its own `autoActivate` in `defineSkill(...)` is always respected. Flat
+  `.entry()`/`.route()` graphs are **not** auto-scoped (multiple may be active) — set
+  `autoActivate: 'currentSkill'` on those skills yourself if you want per-skill gating.
 - **Routing provenance:** each compiled skill carries `metadata.skillGraph` (a
   `SkillRouting` — `via` + decision `path`). At run time it rides out on
   `context.evaluated.routing` (per active skill: id, path, edge label, unlocked tools),

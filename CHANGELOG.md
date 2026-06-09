@@ -5,6 +5,37 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.9.0]
+
+Minor — **`skillGraph().tree()` scopes tools to the routed leaf by default** —
+turning the library's on-demand-tools promise into the default, not a trick you
+have to know.
+
+### Changed
+
+- **`.tree()` now stamps `autoActivate: 'currentSkill'` on every leaf.** A decision
+  tree routes to exactly ONE skill per turn, so each leaf's `inject.tools` now reach
+  the LLM **only when the tree routes there** — instead of every skill's tools
+  landing in the always-on static registry on every call. `read_skill` remains the
+  escape hatch to reach another skill mid-run. This is what makes a routed skill
+  graph token-efficient out of the box (and sharpens tool selection — fewer choices
+  per call).
+  - **Opt out:** `.tree(root, { scopeTools: false })` restores the legacy additive
+    behavior (all leaves' tools always visible).
+  - A leaf that sets its **own** `autoActivate` in `defineSkill(...)` is always
+    respected — the tree only fills the default.
+  - Flat `.entry()` / `.route()` graphs are **unchanged** (not auto-scoped, since
+    several skills may be active at once) — set `autoActivate` on those yourself.
+  - **Migration:** if you relied on a `.tree()` exposing every leaf's tools every
+    call, add `{ scopeTools: false }`. New export: `TreeOptions`.
+
+### Tests / Examples
+
+- `test/skillGraph` — default leaf scoping, `scopeTools: false` opt-out, explicit
+  per-leaf `autoActivate` preserved, flat graphs not auto-scoped.
+- `examples/features/15-skill-graph` — surfaces `treeToolScoping` (every leaf →
+  `'currentSkill'`).
+
 ## [6.8.0]
 
 Minor — **Azure OpenAI in the browser** (`browserAzureOpenai()`) + **env-driven

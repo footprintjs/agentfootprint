@@ -43,6 +43,24 @@ export interface SkillEntryOptions {
   readonly label?: string;
 }
 
+/** Options for a decision `tree()`. */
+export interface TreeOptions {
+  /**
+   * Scope the tool list to the routed leaf (the on-demand-tools default).
+   *
+   * A decision tree routes to EXACTLY ONE skill per iteration, so each leaf is
+   * stamped `autoActivate: 'currentSkill'` — its `inject.tools` reach the LLM
+   * ONLY when the tree routes there, instead of every skill's tools landing in
+   * the always-on static registry on every call. `read_skill` stays available as
+   * the escape hatch to reach another skill mid-run.
+   *
+   * Default `true`. Set `false` for the legacy additive behavior (all leaves'
+   * tools always visible). A leaf that sets its OWN `autoActivate` in
+   * `defineSkill(...)` is always respected — this only fills the default.
+   */
+  readonly scopeTools?: boolean;
+}
+
 export type SkillEdgeKind = 'entry' | 'predicate' | 'on-tool-return' | 'model';
 
 export interface SkillEdge {
@@ -142,8 +160,10 @@ export interface SkillGraphBuilder {
   /** Declare an edge: after `from`'s work, `to` activates when the edge fires. */
   route(from: Injection, to: Injection, opts?: SkillRouteOptions): SkillGraphBuilder;
   /** Declare a decision TREE (v3): predicate nodes → skill leaves. Compiles each
-   *  leaf to a path-conjunction trigger; renders as diamonds → boxes. */
-  tree(root: DecisionNode | Injection): SkillGraphBuilder;
+   *  leaf to a path-conjunction trigger; renders as diamonds → boxes. By default
+   *  each leaf is tool-scoped (`autoActivate: 'currentSkill'`) so only the routed
+   *  skill's tools reach the LLM — opt out with `{ scopeTools: false }`. */
+  tree(root: DecisionNode | Injection, opts?: TreeOptions): SkillGraphBuilder;
   build(): SkillGraph;
 }
 
@@ -174,6 +194,7 @@ export function skillGraph(): SkillGraphBuilder {
   const entries: EntryDecl[] = [];
   const routes: RouteDecl[] = [];
   let treeRoot: DecisionNode | Injection | undefined;
+  let treeScopeTools = true;
 
   const remember = (skill: Injection): string => {
     if (skill.flavor !== 'skill') {
@@ -206,8 +227,9 @@ export function skillGraph(): SkillGraphBuilder {
       });
       return builder;
     },
-    tree(root) {
+    tree(root, opts) {
       treeRoot = root;
+      if (opts?.scopeTools === false) treeScopeTools = false;
       return builder;
     },
     build() {
@@ -217,7 +239,15 @@ export function skillGraph(): SkillGraphBuilder {
 
       if (treeRoot) {
         // Decision-tree mode (v3): compile each leaf to a path-conjunction trigger.
-        compileTree(treeRoot, () => true, { skills, nodes, edges }, null, { n: 0 }, []);
+        compileTree(
+          treeRoot,
+          () => true,
+          { skills, nodes, edges },
+          null,
+          { n: 0 },
+          [],
+          treeScopeTools,
+        );
       } else {
         // Flat entry/route mode (v1).
         for (const [id, skill] of skillsById) {
@@ -301,6 +331,7 @@ function compileTree(
   parent: { id: string; branch: string } | null,
   counter: { n: number },
   path: readonly SkillRoutingStep[],
+  scopeTools: boolean,
 ): void {
   if (isDecisionNode(node)) {
     const id = `d${counter.n++}`;
@@ -319,6 +350,7 @@ function compileTree(
       { id, branch: 'yes' },
       counter,
       [...path, { label, branch: 'yes' }],
+      scopeTools,
     );
     compileTree(
       node.whenFalse,
@@ -327,6 +359,7 @@ function compileTree(
       { id, branch: 'no' },
       counter,
       [...path, { label, branch: 'no' }],
+      scopeTools,
     );
   } else {
     if (node.flavor !== 'skill') {
@@ -335,10 +368,19 @@ function compileTree(
       );
     }
     const routing: SkillRouting = { via: 'tree', path };
+    // On-demand tools: a tree routes to exactly one leaf per iteration, so scope
+    // each leaf's tools to itself (`autoActivate: 'currentSkill'`) unless the user
+    // opted out (`scopeTools: false`) or the skill already declared its own mode.
+    const existingAuto = (node.metadata as { autoActivate?: string } | undefined)?.autoActivate;
+    const autoActivate = existingAuto ?? (scopeTools ? 'currentSkill' : undefined);
     out.skills.push({
       ...node,
       trigger: { kind: 'rule', activeWhen: pathCond },
-      metadata: { ...node.metadata, [SKILL_GRAPH_METADATA_KEY]: routing },
+      metadata: {
+        ...node.metadata,
+        [SKILL_GRAPH_METADATA_KEY]: routing,
+        ...(autoActivate && { autoActivate }),
+      },
     });
     out.nodes.push({ id: node.id, kind: 'skill', label: node.id });
     out.edges.push({

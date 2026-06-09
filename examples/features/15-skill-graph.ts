@@ -169,6 +169,12 @@ export async function run(input: string, provider?: LLMProvider): Promise<unknow
       'check sfp optic': routeOf('check sfp optic'), // ['sfp-diagnostics']
       'port flapping': routeOf('port flapping'), // ['mds-interface-issues'] (default leaf)
     },
+    // v3 default: a tree routes to ONE leaf per turn, so each leaf is tool-scoped
+    // (`autoActivate: 'currentSkill'`) — its tools reach the LLM only when routed,
+    // not in every call's static tool list. Opt out with `.tree(root, { scopeTools: false })`.
+    treeToolScoping: Object.fromEntries(
+      intentTree.skills.map((s) => [s.id, s.metadata?.autoActivate ?? '(none)']),
+    ), // every leaf → 'currentSkill'
     // Structured routing PROVENANCE captured off the live run's emit stream —
     // per turn, which skill-graph injection activated + why (edge / decision path
     // + tools). This is what the lens renders; the `context.routed` commentary is

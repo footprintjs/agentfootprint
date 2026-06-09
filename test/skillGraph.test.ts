@@ -200,6 +200,53 @@ describe('skillGraph — decision tree (v3): predicate nodes route', () => {
   });
 });
 
+describe('skillGraph — tree tool-scoping (on-demand tools)', () => {
+  const has = (re: RegExp) => (c: InjectionContext) => re.test(c.userMessage);
+  const autoOf = (inj: { metadata?: Record<string, unknown> }) => inj.metadata?.autoActivate;
+
+  it('every tree leaf is tool-scoped (autoActivate=currentSkill) by default', () => {
+    const io = skill('io');
+    const sfp = skill('sfp');
+    const triage = skill('triage');
+    const g = skillGraph()
+      .tree(decide(has(/io/), io, decide(has(/sfp/), sfp, triage, 'sfp?'), 'io?'))
+      .build();
+    expect(g.skills.map(autoOf)).toEqual(['currentSkill', 'currentSkill', 'currentSkill']);
+  });
+
+  it('scopeTools:false restores the legacy additive behavior (no autoActivate)', () => {
+    const io = skill('io');
+    const triage = skill('triage');
+    const g = skillGraph()
+      .tree(decide(has(/io/), io, triage, 'io?'), { scopeTools: false })
+      .build();
+    expect(g.skills.map(autoOf)).toEqual([undefined, undefined]);
+  });
+
+  it("respects a leaf's explicit autoActivate even when scopeTools:false", () => {
+    const io = defineSkill({
+      id: 'io',
+      description: 'io',
+      body: 'b',
+      autoActivate: 'currentSkill',
+    });
+    const triage = skill('triage');
+    const g = skillGraph()
+      .tree(decide(has(/io/), io, triage, 'io?'), { scopeTools: false })
+      .build();
+    const byId = Object.fromEntries(g.skills.map((s) => [s.id, autoOf(s)]));
+    expect(byId.io).toBe('currentSkill'); // explicit choice preserved
+    expect(byId.triage).toBeUndefined(); // opt-out applies to the rest
+  });
+
+  it('flat entry/route graphs are NOT auto-scoped (back-compat)', () => {
+    const a = skill('a');
+    const b = skill('b');
+    const g = skillGraph().entry(a).route(a, b, { onToolReturn: 'x' }).build();
+    expect(g.skills.map(autoOf)).toEqual([undefined, undefined]);
+  });
+});
+
 describe('skillGraph — routing provenance (metadata.skillGraph)', () => {
   const has = (re: RegExp) => (c: InjectionContext) => re.test(c.userMessage);
   type Routing = {

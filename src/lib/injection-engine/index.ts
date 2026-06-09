@@ -69,6 +69,7 @@ export {
   type SkillGraphBuilder,
   type SkillRouteOptions,
   type SkillEntryOptions,
+  type TreeOptions,
   type SkillEdge,
   type SkillEdgeKind,
   type SkillNode,
