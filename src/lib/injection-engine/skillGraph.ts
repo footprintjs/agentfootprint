@@ -53,12 +53,53 @@ export interface SkillEdge {
   readonly label?: string;
 }
 
+/**
+ * A decision-tree node (v3): a predicate that branches to a subtree (or a skill
+ * LEAF) on each side. The tree compiles to per-skill triggers — each leaf's
+ * trigger is the conjunction of the predicates on its root→leaf path (with
+ * earlier-sibling negation for if/else exclusivity), evaluated per iteration. So
+ * "predicate nodes that route" needs NO engine change — same evaluator.
+ */
+export interface DecisionNode {
+  readonly kind: 'decision';
+  readonly predicate: (ctx: InjectionContext) => boolean;
+  readonly whenTrue: DecisionNode | Injection;
+  readonly whenFalse: DecisionNode | Injection;
+  /** Caption for the predicate node when drawn (e.g. "io intent?"). */
+  readonly label?: string;
+}
+
+/** Build a decision node. Leaves are skills (an `Injection`); internal nodes are
+ *  other `decide(...)` results. */
+export function decide(
+  predicate: (ctx: InjectionContext) => boolean,
+  whenTrue: DecisionNode | Injection,
+  whenFalse: DecisionNode | Injection,
+  label?: string,
+): DecisionNode {
+  return { kind: 'decision', predicate, whenTrue, whenFalse, label };
+}
+
+function isDecisionNode(n: DecisionNode | Injection): n is DecisionNode {
+  return (n as DecisionNode).kind === 'decision';
+}
+
+/** A node in the drawn graph — a `predicate` diamond or a `skill` box. */
+export interface SkillNode {
+  readonly id: string;
+  readonly kind: 'predicate' | 'skill';
+  readonly label?: string;
+}
+
 export interface SkillGraph {
   /** Skills with graph-derived triggers — feed to the Agent (`.skillGraph()` or
    *  `.skills({ list: () => graph.skills })`). */
   readonly skills: readonly Injection[];
   /** The declared edges (for tooling, overlays, tests). */
   readonly edges: readonly SkillEdge[];
+  /** Drawn nodes: skill boxes for the flat entry/route model; predicate diamonds
+   *  + skill leaves for a decision `tree`. Always present. */
+  readonly nodes: readonly SkillNode[];
   /** A Mermaid flowchart of the declared graph — declared === drawn. */
   toMermaid(): string;
 }
@@ -68,6 +109,9 @@ export interface SkillGraphBuilder {
   entry(skill: Injection, opts?: SkillEntryOptions): SkillGraphBuilder;
   /** Declare an edge: after `from`'s work, `to` activates when the edge fires. */
   route(from: Injection, to: Injection, opts?: SkillRouteOptions): SkillGraphBuilder;
+  /** Declare a decision TREE (v3): predicate nodes → skill leaves. Compiles each
+   *  leaf to a path-conjunction trigger; renders as diamonds → boxes. */
+  tree(root: DecisionNode | Injection): SkillGraphBuilder;
   build(): SkillGraph;
 }
 
@@ -97,6 +141,7 @@ export function skillGraph(): SkillGraphBuilder {
   const skillsById = new Map<string, Injection>();
   const entries: EntryDecl[] = [];
   const routes: RouteDecl[] = [];
+  let treeRoot: DecisionNode | Injection | undefined;
 
   const remember = (skill: Injection): string => {
     if (skill.flavor !== 'skill') {
@@ -129,31 +174,45 @@ export function skillGraph(): SkillGraphBuilder {
       });
       return builder;
     },
+    tree(root) {
+      treeRoot = root;
+      return builder;
+    },
     build() {
-      // Derive each skill's trigger from its declared edges.
       const skills: Injection[] = [];
-      for (const [id, skill] of skillsById) {
-        const trigger = deriveTrigger(id, skill, entries, routes);
-        skills.push(trigger ? { ...skill, trigger } : skill);
-      }
+      const nodes: SkillNode[] = [];
+      const edges: SkillEdge[] = [];
 
-      // Declared edges for drawing/overlays.
-      const edges: SkillEdge[] = [
-        ...entries.map((e): SkillEdge => ({ from: null, to: e.id, kind: 'entry', label: e.label })),
-        ...routes.map(
-          (r): SkillEdge => ({
-            from: r.fromId,
-            to: r.toId,
-            kind: r.onToolReturn ? 'on-tool-return' : r.when ? 'predicate' : 'model',
-            label: r.label ?? (r.onToolReturn ? `on ${String(r.onToolReturn)}` : undefined),
-          }),
-        ),
-      ];
+      if (treeRoot) {
+        // Decision-tree mode (v3): compile each leaf to a path-conjunction trigger.
+        compileTree(treeRoot, () => true, { skills, nodes, edges }, null, { n: 0 });
+      } else {
+        // Flat entry/route mode (v1).
+        for (const [id, skill] of skillsById) {
+          const trigger = deriveTrigger(id, skill, entries, routes);
+          skills.push(trigger ? { ...skill, trigger } : skill);
+          nodes.push({ id, kind: 'skill', label: id });
+        }
+        edges.push(
+          ...entries.map(
+            (e): SkillEdge => ({ from: null, to: e.id, kind: 'entry', label: e.label }),
+          ),
+          ...routes.map(
+            (r): SkillEdge => ({
+              from: r.fromId,
+              to: r.toId,
+              kind: r.onToolReturn ? 'on-tool-return' : r.when ? 'predicate' : 'model',
+              label: r.label ?? (r.onToolReturn ? `on ${String(r.onToolReturn)}` : undefined),
+            }),
+          ),
+        );
+      }
 
       return {
         skills,
         edges,
-        toMermaid: () => renderMermaid([...skillsById.keys()], edges),
+        nodes,
+        toMermaid: () => renderMermaid(nodes, edges),
       };
     },
   };
@@ -195,14 +254,72 @@ function deriveTrigger(
   return { kind: 'rule', activeWhen: (ctx) => matchers.some((m) => m(ctx)) };
 }
 
-function renderMermaid(ids: readonly string[], edges: readonly SkillEdge[]): string {
+/** Walk a decision tree → push each leaf skill (with its path-conjunction trigger,
+ *  earlier-sibling negation baked into the path) plus predicate/skill nodes +
+ *  branch edges for drawing. */
+function compileTree(
+  node: DecisionNode | Injection,
+  pathCond: (ctx: InjectionContext) => boolean,
+  out: { skills: Injection[]; nodes: SkillNode[]; edges: SkillEdge[] },
+  parent: { id: string; branch: string } | null,
+  counter: { n: number },
+): void {
+  if (isDecisionNode(node)) {
+    const id = `d${counter.n++}`;
+    out.nodes.push({ id, kind: 'predicate', label: node.label ?? 'decide' });
+    out.edges.push({
+      from: parent ? parent.id : null,
+      to: id,
+      kind: 'predicate',
+      label: parent?.branch,
+    });
+    compileTree(
+      node.whenTrue,
+      (ctx) => pathCond(ctx) && node.predicate(ctx),
+      out,
+      { id, branch: 'yes' },
+      counter,
+    );
+    compileTree(
+      node.whenFalse,
+      (ctx) => pathCond(ctx) && !node.predicate(ctx),
+      out,
+      { id, branch: 'no' },
+      counter,
+    );
+  } else {
+    if (node.flavor !== 'skill') {
+      throw new Error(
+        `skillGraph.tree: leaf "${node.id}" is not a skill (flavor='${node.flavor}').`,
+      );
+    }
+    out.skills.push({ ...node, trigger: { kind: 'rule', activeWhen: pathCond } });
+    out.nodes.push({ id: node.id, kind: 'skill', label: node.id });
+    out.edges.push({
+      from: parent ? parent.id : null,
+      to: node.id,
+      kind: 'predicate',
+      label: parent?.branch,
+    });
+  }
+}
+
+function renderMermaid(nodes: readonly SkillNode[], edges: readonly SkillEdge[]): string {
+  const kindById = new Map(nodes.map((n) => [n.id, n.kind] as const));
+  const ref = (id: string) => (kindById.get(id) === 'predicate' ? id : nodeId(id));
   const lines = ['flowchart TD', '  __start__([▶ start])'];
-  for (const id of ids) lines.push(`  ${nodeId(id)}["${id}"]`);
+  for (const n of nodes) {
+    lines.push(
+      n.kind === 'predicate'
+        ? `  ${n.id}{"${n.label ?? n.id}"}` // predicate → diamond
+        : `  ${nodeId(n.id)}["${n.label ?? n.id}"]`, // skill → box
+    );
+  }
   for (const e of edges) {
-    const from = e.from === null ? '__start__' : nodeId(e.from);
+    const from = e.from === null ? '__start__' : ref(e.from);
     const arrow = e.kind === 'model' ? '-.->' : '-->'; // model edges dashed
     const label = e.label ? `|${e.label}|` : '';
-    lines.push(`  ${from} ${arrow}${label} ${nodeId(e.to)}`);
+    lines.push(`  ${from} ${arrow}${label} ${ref(e.to)}`);
   }
   return lines.join('\n');
 }

@@ -63,10 +63,13 @@ export {
 // graph-derived triggers + a drawable topology. Sugar over the trigger model.
 export {
   skillGraph,
+  decide,
   type SkillGraph,
   type SkillGraphBuilder,
   type SkillRouteOptions,
   type SkillEntryOptions,
   type SkillEdge,
   type SkillEdgeKind,
+  type SkillNode,
+  type DecisionNode,
 } from './skillGraph.js';

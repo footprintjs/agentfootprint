@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [6.4.0]
 
 Minor — `skillGraph()`: a declarative, visualizable, token-efficient skill graph
-(proposal 002, v1). Additive; zero engine change.
+(proposal 002, v1 + v3 decision tree). Additive; zero engine change.
 
 ### Added
 
@@ -31,16 +31,31 @@ Minor — `skillGraph()`: a declarative, visualizable, token-efficient skill gra
   change**. Scoped `read_skill` (gating the model-reachable set by graph position)
   is deferred to v2. See `docs/proposals/002-skill-graph.md`.
 
-  New exports: `skillGraph`, `SkillGraph`, `SkillGraphBuilder`, `SkillRouteOptions`,
-  `SkillEntryOptions`, `SkillEdge`, `SkillEdgeKind`.
+- **`skillGraph().tree(...)` + `decide(...)`** (v3) — a **decision tree** whose
+  **predicate nodes actually route**. `decide(predicate, whenTrue, whenFalse,
+  label?)` builds a branching node; leaves are skills. The compiler walks the tree
+  and gives each leaf a `rule` trigger equal to the **conjunction of the predicates
+  on its root→leaf path** (with earlier-sibling negation, so exactly one `if/else`
+  leaf fires) — evaluated per iteration by the same generic evaluator, so still
+  **zero engine change**. `toMermaid()` draws predicate **diamonds** → skill
+  **boxes** with `yes`/`no` branch captions, and `graph.nodes` exposes the drawn
+  shape (`{ id, kind: 'predicate' | 'skill', label? }`) for richer renderers.
+
+  New exports: `skillGraph`, `decide`, `SkillGraph`, `SkillGraphBuilder`,
+  `SkillRouteOptions`, `SkillEntryOptions`, `SkillEdge`, `SkillEdgeKind`,
+  `SkillNode`, `DecisionNode`.
 
 ### Tests / Examples
 
 - `test/skillGraph` — edge→trigger compilation, activation through the REAL
   evaluator (entry active at start; routed skill activates only when its predicate
-  fires; body lands in the slot; dormant otherwise), `toMermaid`, guardrails.
+  fires; body lands in the slot; dormant otherwise), `toMermaid`, guardrails; **v3
+  decision tree** — each leaf compiles to a path-conjunction `rule`, exactly one
+  leaf fires per question through the real evaluator, single-skill tree, non-skill
+  leaf guard, and the diamond/box/`yes`-`no` Mermaid.
 - `examples/features/15-skill-graph` — triage entry + sfp-diagnostics routed on
-  `CRC > 0`, with the Mermaid + just-in-time load shown.
+  `CRC > 0`, with the Mermaid + just-in-time load shown; **plus a `decide(...)`
+  intent tree** routing `iops`/`sfp`/default to one leaf each.
 
 ## [6.3.0]
 

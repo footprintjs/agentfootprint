@@ -10,10 +10,22 @@
  * Here: `triage` is the entry; `sfp-diagnostics` activates ONLY after
  * `get_interface_counters` returns CRC > 0 — a deterministic, drawable edge.
  *
+ * v3 also shows a `tree(...)` of `decide(...)` PREDICATE nodes that route by
+ * intent to skill leaves — compiled to per-leaf path-conjunction triggers (still
+ * zero engine change) and drawn as diamonds → boxes.
+ *
  * Run:  npx tsx examples/features/15-skill-graph.ts
  */
 
-import { Agent, defineTool, defineSkill, mock, skillGraph, type LLMProvider } from '../../src/index.js';
+import {
+  Agent,
+  defineTool,
+  defineSkill,
+  decide,
+  mock,
+  skillGraph,
+  type LLMProvider,
+} from '../../src/index.js';
 import { evaluateInjections } from '../../src/lib/injection-engine/index.js';
 import { isCliEntry, printResult, type ExampleMeta } from '../helpers/cli.js';
 
@@ -32,13 +44,21 @@ export async function run(input: string, provider?: LLMProvider): Promise<unknow
   const counters = defineTool({
     name: 'get_interface_counters',
     description: 'CRC / link-failure counters for an interface.',
-    inputSchema: { type: 'object', properties: { interface: { type: 'string' } }, required: ['interface'] },
+    inputSchema: {
+      type: 'object',
+      properties: { interface: { type: 'string' } },
+      required: ['interface'],
+    },
     execute: async () => ({ interface: 'fc1/3', crc: 892, link_failures: 47 }),
   });
   const showTech = defineTool({
     name: 'load_show_tech',
     description: 'SFP Rx/Tx diagnostics from show-tech (the deep dive).',
-    inputSchema: { type: 'object', properties: { interface: { type: 'string' } }, required: ['interface'] },
+    inputSchema: {
+      type: 'object',
+      properties: { interface: { type: 'string' } },
+      required: ['interface'],
+    },
     execute: async () => ({ interface: 'fc1/3', rx_power_dbm: -14.8, verdict: 'degraded SFP' }),
   });
 
@@ -86,7 +106,11 @@ export async function run(input: string, provider?: LLMProvider): Promise<unknow
             toolCalls: [{ id: 'c1', name: 'get_interface_counters', args: { interface: 'fc1/3' } }],
             stopReason: 'tool_use',
           };
-        return { content: 'CRC 892 + link failures → degraded SFP on fc1/3.', toolCalls: [], stopReason: 'stop' };
+        return {
+          content: 'CRC 892 + link failures → degraded SFP on fc1/3.',
+          toolCalls: [],
+          stopReason: 'stop',
+        };
       },
     });
 
@@ -96,11 +120,38 @@ export async function run(input: string, provider?: LLMProvider): Promise<unknow
     .build();
   const answer = await agent.run({ message: input });
 
+  // ── v3: a DECISION TREE that routes by intent to one skill leaf ──────────────
+  // io? → io-profile : (sfp? → sfp-diagnostics : triage). Each leaf compiles to
+  // the conjunction of predicates on its root→leaf path — exactly one fires.
+  const ioProfile = defineSkill({
+    id: 'io-profile',
+    description: 'IO profile',
+    body: 'Profile the IO/IOPS pattern.',
+  });
+  const intentTree = skillGraph()
+    .tree(
+      decide(
+        (c) => /io|iops/.test(c.userMessage),
+        ioProfile,
+        decide((c) => /sfp|optic/.test(c.userMessage), sfp, triage, 'sfp intent?'),
+        'io intent?',
+      ),
+    )
+    .build();
+  const routeOf = (msg: string) =>
+    evaluateInjections(intentTree.skills, { ...base, userMessage: msg }).active.map((s) => s.id);
+
   return {
     answer,
     mermaid: graph.toMermaid(),
     loadedAtStart: atStart.active.map((s) => s.id), // ['mds-interface-issues'] — sfp NOT loaded yet
     loadedAfterCrc: afterCrc.active.map((s) => s.id), // adds 'sfp-diagnostics' — just-in-time
+    treeMermaid: intentTree.toMermaid(), // diamonds (predicates) → boxes (skills)
+    treeRoutes: {
+      'iops spike': routeOf('iops spike'), // ['io-profile']
+      'check sfp optic': routeOf('check sfp optic'), // ['sfp-diagnostics']
+      'port flapping': routeOf('port flapping'), // ['mds-interface-issues'] (default leaf)
+    },
   };
 }
 

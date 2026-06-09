@@ -6,7 +6,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { skillGraph, defineSkill, defineInstruction } from '../src/index.js';
+import { skillGraph, decide, defineSkill, defineInstruction } from '../src/index.js';
 import { evaluateInjections } from '../src/lib/injection-engine/index.js';
 import type { InjectionContext } from '../src/lib/injection-engine/types.js';
 
@@ -120,5 +120,82 @@ describe('skillGraph — toMermaid (declared === drawn)', () => {
     expect(m).toContain('|CRC>0|'); // edge caption
     expect(m).toContain('-->'); // deterministic edge solid
     expect(m).toContain('-.->'); // model edge dashed
+  });
+});
+
+describe('skillGraph — decision tree (v3): predicate nodes route', () => {
+  const has = (re: RegExp) => (c: InjectionContext) => re.test(c.userMessage);
+
+  // tree: io? → io-profile : (sfp? → sfp-audit : triage)
+  const buildTree = () => {
+    const io = skill('io-profile', 'IO PROFILE');
+    const sfp = skill('sfp-audit', 'SFP AUDIT');
+    const triage = skill('triage', 'TRIAGE');
+    const g = skillGraph()
+      .tree(
+        decide(
+          has(/io|iops/),
+          io,
+          decide(has(/sfp|optic/), sfp, triage, 'sfp intent?'),
+          'io intent?',
+        ),
+      )
+      .build();
+    return { g, io, sfp, triage };
+  };
+
+  it('each leaf compiles to a rule trigger (path conjunction)', () => {
+    const { g } = buildTree();
+    expect(g.skills.map((s) => s.id).sort()).toEqual(['io-profile', 'sfp-audit', 'triage']);
+    for (const s of g.skills) expect(s.trigger.kind).toBe('rule');
+  });
+
+  it('exactly one leaf activates per question, through the real evaluator', () => {
+    const { g } = buildTree();
+    const fired = (msg: string) =>
+      evaluateInjections(g.skills, ctx({ userMessage: msg }))
+        .active.map((i) => i.id)
+        .sort();
+
+    expect(fired('what is the io profile of fc1/5?')).toEqual(['io-profile']); // true branch
+    expect(fired('check the sfp optic power')).toEqual(['sfp-audit']); // false→true
+    expect(fired('port is flapping')).toEqual(['triage']); // false→false (default)
+  });
+
+  it('the chosen leaf carries its body into the slot; the others stay dormant', () => {
+    const { g } = buildTree();
+    const e = evaluateInjections(g.skills, ctx({ userMessage: 'iops spike' }));
+    expect(e.active).toHaveLength(1);
+    expect(e.active[0]!.inject.systemPrompt).toContain('IO PROFILE');
+  });
+
+  it('toMermaid draws predicate diamonds, skill boxes and yes/no branch labels', () => {
+    const { g } = buildTree();
+    const m = g.toMermaid();
+    expect(m).toContain('flowchart TD');
+    expect(m).toContain('{"io intent?"}'); // root predicate diamond
+    expect(m).toContain('{"sfp intent?"}'); // nested predicate diamond
+    expect(m).toContain('["io-profile"]'); // skill leaf box
+    expect(m).toContain('|yes|'); // true-branch caption
+    expect(m).toContain('|no|'); // false-branch caption
+  });
+
+  it('a single-skill tree (no predicate) compiles to one always-true rule leaf', () => {
+    const only = skill('only');
+    const g = skillGraph().tree(only).build();
+    expect(g.skills).toHaveLength(1);
+    expect(g.skills[0]!.trigger.kind).toBe('rule');
+    expect(evaluateInjections(g.skills, ctx({})).active.map((i) => i.id)).toEqual(['only']);
+    expect(g.nodes).toEqual([{ id: 'only', kind: 'skill', label: 'only' }]);
+  });
+
+  it('guard: a non-skill leaf throws', () => {
+    const instr = defineInstruction({ id: 'i', prompt: 'p', activeWhen: () => true });
+    const ok = skill('ok');
+    expect(() =>
+      skillGraph()
+        .tree(decide(() => true, ok, instr as never))
+        .build(),
+    ).toThrow(/not a skill/);
   });
 });

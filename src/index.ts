@@ -385,12 +385,15 @@ export {
   type InjectionFlavor,
   // Declarative skill graph (proposal 002)
   skillGraph,
+  decide,
   type SkillGraph,
   type SkillGraphBuilder,
   type SkillRouteOptions,
   type SkillEntryOptions,
   type SkillEdge,
   type SkillEdgeKind,
+  type SkillNode,
+  type DecisionNode,
 } from './lib/injection-engine/index.js';
 
 // Patterns — factory functions composing primitives + core-flow into

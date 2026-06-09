@@ -136,4 +136,70 @@ The **graph object** (`{ entry, edges: [{ from, to, kind, label }] }`) is what `
 
 ---
 
-*This memo is the agreed north star. Implementation is gated on an explicit green-light from here.*
+## Addendum — v3: decision-tree routing + interactive renderer (green-lit)
+
+**Status:** v1 + v3 tree/compiler shipped (6.4.0); Neo ported to 11 skills. The
+`<SkillGraphFlow>` interactive renderer (piece 3) is next.
+
+### The de-risk: a decision tree compiles to the per-skill triggers we already have
+Predicate **nodes** → skill **leaves** does NOT require an engine change. Each leaf
+skill's trigger is the conjunction of the predicates on its root→leaf path, with
+earlier-sibling negation for if/else exclusivity:
+
+```
+◇io? ─yes─▶ ◇per-LUN? ─yes─▶ lun-iops-breakdown
+                        ─no──▶ io-profile
+      ─no──▶ ◇interface? ─yes─▶ mds-interface-issues
+```
+compiles to:
+```
+lun-iops-breakdown.trigger   = rule(ctx => isIo(ctx)  && isPerLun(ctx))
+io-profile.trigger           = rule(ctx => isIo(ctx)  && !isPerLun(ctx))
+mds-interface-issues.trigger = rule(ctx => !isIo(ctx) && isInterface(ctx))
+```
+Runtime stays the **per-iteration trigger eval** (evaluator.ts) — which is exactly
+why escalation / re-evaluation is correct (the tree is "re-walked" each turn via
+the compiled triggers; it is NOT a one-shot traversal to a leaf). So v3 is a
+**builder + compiler + renderer**, zero engine rewrite. `on-tool-return` edges
+between skills layer on top (a leaf can route onward when a tool returns).
+
+### v3 = three pieces
+1. **Tree-declaration API** — `decide(...)` builds a plain **data node**; `.tree(root)`
+   mounts it. The open "nested-builder vs data literal" question resolved toward the
+   **data literal** — `decide` returns a value you compose and reuse, which is the
+   cleanest to read AND the easiest to render (the renderer walks the same `nodes`):
+   ```ts
+   skillGraph()
+     .tree(
+       decide(isIoIntent,
+         decide(isPerLun, lunSkill, ioSkill, 'per-LUN?'),
+         decide(isInterface, interfaceSkill, healthSkill, 'interface?'),
+         'io intent?'),
+     )
+     .build();
+   ```
+   Leaves are skills (`Injection`s); internal nodes are other `decide(...)` results.
+   `decide(predicate, whenTrue, whenFalse, label?)` — `label` is the diamond caption.
+   *(Shipped 6.4.0.)*
+2. **Compiler** — `compileTree()` walks the tree and emits each leaf's
+   path-conjunction `rule` trigger (with sibling negation), plus `graph.nodes`
+   (`{ id, kind: 'predicate' | 'skill', label? }`) and branch edges for drawing.
+   Pure; reuses the existing evaluator. Verified: each leaf compiles to a `rule`,
+   and exactly one leaf fires per question **through the real evaluator**. *(Shipped
+   6.4.0.)*
+3. **Interactive renderer** — a `<SkillGraphFlow>` component (agentfootprint-lens,
+   reusing its **React Flow / xyflow** stack — the same one the Lens chart uses):
+   predicate **diamond** nodes + skill **leaf** nodes, two-panel (graph │ details),
+   **click a node → see the skill** (body + tools) or the predicate. It consumes
+   `graph.nodes` + `graph.edges` directly. This is the richer UX over the mermaid
+   modal. `toMermaid()` stays as the lightweight/portable view. *(Next.)*
+
+### Build order
+(i) ✅ tree API (`decide` + `.tree`) + compiler + tests (routing model, no engine change) →
+(ii) `<SkillGraphFlow>` xyflow renderer (clickable nodes → skill) →
+(iii) point Neo's "Skill Graph" modal at `<SkillGraphFlow>` (replaces the mermaid
+img with the interactive two-panel view).
+
+---
+
+*This memo is the agreed north star. v1 + v3 tree/compiler shipped; renderer next.*
