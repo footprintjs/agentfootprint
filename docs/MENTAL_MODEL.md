@@ -366,10 +366,10 @@ write persists `newMessages`. Identity = `{tenant?, principal?, conversationId}`
 
 **Causal memory** stores `SnapshotEntry{query, finalContent, decisions[], toolCalls[], narrative?}`,
 embeds `query` for cosine recall, projects the stored run back as a system message for
-"why did you decide X?" follow-ups. STATUS: today `decisions[]`/`toolCalls[]` persist EMPTY —
-only query + finalContent are wired; the decision-evidence bridge is backlog #5. *The design
-is the capability no other library has* (footprintjs captures WHY, not just WHAT).
-`exportForTraining` (snapshots as RL/SFT data) is the v2.1 hook.
+"why did you decide X?" follow-ups. `decisions[]`/`toolCalls[]`/tokens/duration are harvested
+automatically by `causalEvidenceRecorder` (the #5 evidence bridge). *This is the capability no
+other library has* (footprintjs captures WHY, not just WHAT). Not yet captured: commitLog,
+narrative. `exportForTraining` (snapshots as RL/SFT data) is the v2.1 hook.
 
 > **⚠ LATENT GAP (verified):** the Agent chart does **not** merge `memoryInjection_${id}` into
 > `scope.history`/the LLM request. The read pipeline runs and writes the scope key, but nothing

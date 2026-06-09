@@ -139,6 +139,10 @@ function formatProjection(
       // Tool evidence is part of the "why": in LLM-decided flows the
       // operator-level facts (creditScore=580, dti=0.45) arrive as tool
       // results, so the decisions projection includes them.
+      // SECURITY: this replays STORED TOOL OUTPUT into a future prompt — a
+      // persisted prompt-injection surface if tools ingest untrusted content.
+      // Treat snapshot stores as prompt-trusted; sanitize tool output at the
+      // tool boundary when it carries third-party text.
       const toolLines =
         snap.toolCalls.length === 0
           ? ''

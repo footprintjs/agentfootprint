@@ -29,7 +29,7 @@ The discipline is captured in two orthogonal axes:
 | `NARRATIVE` | Beats / summaries of prior runs | Long-running session summaries; cross-session highlights |
 | **`CAUSAL`** ⭐ | footprintjs decision-evidence snapshots | Cross-run "why" replay — answer follow-up questions from the SOURCE, not from reconstruction |
 
-Causal memory is the differentiator. Other libraries' memory remembers what was said. agentfootprint's `defineMemory({ type: CAUSAL })` remembers the run itself, not just the messages. New questions cosine-match past queries; the matching stored run injects into the next prompt; the LLM answers from what actually happened rather than re-deriving. *(Status: today the snapshot stores the query + final outcome; wiring the operator-level decision evidence into the snapshot is in progress — every `decide()` condition, tool call, and token count lands in the snapshot when the evidence bridge ships.)*
+Causal memory is the differentiator. Other libraries' memory remembers what was said. agentfootprint's `defineMemory({ type: CAUSAL })` remembers the run itself, not just the messages. New questions cosine-match past queries; the matching stored run injects into the next prompt; the LLM answers from what actually happened rather than re-deriving. *(Decisions, tool calls, iterations, and token usage are harvested automatically by the evidence bridge; commitLog/narrative capture is still on the roadmap.)*
 
 ## The seven strategies
 

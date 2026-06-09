@@ -51,8 +51,8 @@ import type { MemoryStore } from './store/index.js';
  * - `SEMANTIC`  — extracted structured facts, deduped on key
  * - `NARRATIVE` — beats / summaries of prior runs (append-only)
  * - `CAUSAL`    — footprintjs execution snapshots, the differentiator
- *                 (replays stored run outcomes for "why?" follow-ups;
- *                 operator-level decision-evidence wiring in progress)
+ *                 (replays stored decisions + tool evidence for "why?"
+ *                 follow-ups — harvested automatically per run)
  */
 export const MEMORY_TYPES = {
   EPISODIC: 'episodic',

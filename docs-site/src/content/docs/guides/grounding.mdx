@@ -31,7 +31,7 @@ When chunks DO match, they land in the messages slot tagged with `source: 'rag'`
 
 ## Causal memory as grounding for follow-ups
 
-For *cross-run* grounding (the customer asks "why did you tell me that earlier?"), [Causal memory](/agentfootprint/guides/memory/) persists snapshots of past runs. New questions cosine-match past queries; matching snapshots inject the stored run. The follow-up answer is grounded in what actually happened, not reconstruction. *(Status: today the snapshot stores the query + final outcome; wiring the operator-level decision evidence into the snapshot is in progress — see the roadmap.)*
+For *cross-run* grounding (the customer asks "why did you tell me that earlier?"), [Causal memory](/agentfootprint/guides/memory/) persists snapshots of past runs. New questions cosine-match past queries; matching snapshots inject the stored run. The follow-up answer is grounded in what actually happened, not reconstruction.
 
 This is the differentiator no other framework has. See [Memory guide § Causal memory](/agentfootprint/guides/memory/#causal-memory--replay-decisions-not-just-messages).
 

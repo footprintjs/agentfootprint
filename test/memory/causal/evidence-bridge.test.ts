@@ -178,21 +178,73 @@ describe('evidence bridge — causalEvidenceRecorder unit', () => {
     });
   });
 
-  it('onDecision maps footprintjs evidence into DecisionRecord', () => {
+  it('onDecision maps the REAL FlowDecisionEvent shape (decider + traversalContext)', () => {
     const rec = causalEvidenceRecorder();
+    // The real engine event: { decider, chosen, evidence?, traversalContext? } —
+    // no stageId/stageName at the top level (the panel caught a fabricated-shape test).
     rec.onDecision({
-      stageName: 'ClassifyRisk',
-      stageId: 'classify-risk',
+      decider: 'ClassifyRisk',
       chosen: 'rejected',
       evidence: {
         label: 'Good credit',
         conditions: [{ key: 'creditScore', op: 'gt', value: 700 }],
-      },
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } as any);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      } as any,
+      traversalContext: {
+        runId: 'r1',
+        stageId: 'classify-risk',
+        runtimeStageId: 'classify-risk#3',
+        stageName: 'ClassifyRisk',
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      } as any,
+    });
     const d = rec.collect().decisions[0]!;
     expect(d).toMatchObject({ stageId: 'classify-risk', chosen: 'rejected', rule: 'Good credit' });
     expect(d.evidence).toBeTruthy();
+    // without traversalContext, the decider display name is the fallback
+    rec.onDecision({ decider: 'Route', chosen: 'Final' });
+    expect(rec.collect().decisions[1]).toMatchObject({ stageId: 'Route', chosen: 'Final' });
+  });
+
+  it('onSelected maps select() evidence; cache + context-fork plumbing filtered', () => {
+    const rec = causalEvidenceRecorder();
+    rec.onSelected({
+      parent: 'PickStrategy',
+      selected: ['aggressive'],
+      total: 3,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      evidence: { chosen: ['aggressive'] } as any,
+    });
+    rec.onSelected({ parent: 'context', selected: ['sf-system-prompt', 'sf-messages'], total: 3 });
+    const ds = rec.collect().decisions;
+    expect(ds.length).toBe(1); // the context slot-fork was filtered
+    expect(ds[0]).toMatchObject({ stageId: 'PickStrategy', chosen: 'aggressive' });
+  });
+
+  it('oversized tool args are bounded (PII cap)', () => {
+    const rec = causalEvidenceRecorder({ maxFieldChars: 100 });
+    rec.onEmit({ name: 'agentfootprint.agent.turn_start', payload: {} });
+    rec.onEmit({
+      name: 'agentfootprint.stream.tool_start',
+      payload: { toolCallId: 'b', toolName: 't', args: { blob: 'x'.repeat(500) } },
+    });
+    rec.onEmit({
+      name: 'agentfootprint.stream.tool_end',
+      payload: { toolCallId: 'b', result: 'ok' },
+    });
+    const args = rec.collect().toolCalls[0]!.args;
+    expect(JSON.stringify(args).length).toBeLessThan(200);
+    expect(args.__truncated).toBeTruthy();
+  });
+
+  it('integration: a persisted DecisionRecord carries a REAL stageId (not "decider")', async () => {
+    const store = new InMemoryStore();
+    await loanAgent(store).run({ message: 'underwrite loan #42 for $50K', identity: IDENTITY });
+    const snaps = await snapshotsIn(store);
+    expect(snaps[0]!.decisions.length).toBeGreaterThan(0);
+    for (const d of snaps[0]!.decisions) {
+      expect(d.stageId).not.toBe('decider'); // the fabricated-shape bug, pinned
+    }
   });
 });
 

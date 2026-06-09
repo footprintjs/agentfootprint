@@ -5,6 +5,52 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.12.0]
+
+Minor — **the evidence bridge (backlog #5)**: causal-memory snapshots now persist
+REAL run evidence, and the causal READ works inside an Agent for the first time.
+The flagship "agent reads its own trace" claim is now true end-to-end.
+
+### Added
+
+- **`causalEvidenceRecorder`** (`agentfootprint/memory` causal) — harvests during
+  the run: tool calls (name / bounded args / result preview / errored), token
+  usage + iterations, duration, skill-graph routing provenance, and footprintjs
+  `decide()`/`select()` operator-level evidence (`onDecision`/`onSelected`;
+  internal cache-gate deciders filtered, incl. the double-prefixed
+  `dynamic-grouped` shape). Auto-attached by the Agent when a CAUSAL memory is
+  mounted; `mountMemoryWrite` gains `evidenceSource` and `writeSnapshot`
+  populates the previously-TODO fields (zeros when absent — back-compat).
+- The DECISIONS projection now includes **tool evidence** + the final answer —
+  in LLM-decided flows the operator facts (creditScore=580) arrive as tool
+  results.
+
+### Fixed
+
+- **Causal READ inside an Agent never fired** (pre-existing): the read mount
+  looked for `parentState.messages`, but agents carry `history` — retrieval
+  silently injected nothing. Fallback added.
+- Panel-found bridge bugs fixed before release: `DecisionRecord.stageId` now
+  uses the real `FlowDecisionEvent` fields (`traversalContext.stageId` /
+  `decider` — was always the literal `'decider'`); the mid-run runId reset that
+  wiped iteration-1 skill decisions and pause/resume evidence is removed
+  (per-turn reset anchors on `turn_start`); skill-routing reads `injectionId`.
+
+### Security notes
+
+- Tool args + decision evidence persist into snapshots **bounded**
+  (`maxFieldChars`, default 2000; result previews 200 chars). The Agent does not
+  configure a RedactionPolicy by default — treat the snapshot store as
+  PII-bearing. The DECISIONS projection replays stored tool output into future
+  prompts — a persisted prompt-injection surface if tools ingest untrusted
+  content (documented at the projection).
+
+### Docs
+
+- Causal claims across CLAUDE.md / AGENTS.md / SKILL.md / README / MENTAL_MODEL /
+  docs-site / examples restored to the now-true state (decisions + tool evidence
+  real; commitLog/narrative capture still on the roadmap).
+
 ## [6.11.1]
 
 Patch — **truth-in-docs sweep** (backlog Phase-0 #4, panel-reviewed). No runtime

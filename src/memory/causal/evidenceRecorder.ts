@@ -12,17 +12,22 @@
  *   context.evaluated routing   → DecisionRecord per skill the graph routed to
  *
  * Pattern: CombinedRecorder (Convention 1 — single purpose: evidence
- *          accumulation) with runId-keyed reset (Convention 4).
- * Redaction: payloads arrive AFTER footprintjs `RedactionPolicy` (the emit
- *          channel redacts before recorders see events); previews are
- *          additionally truncated to `maxPreviewChars`.
+ *          accumulation); per-turn reset anchored on `agent.turn_start`
+ *          (Convention 4 — executor `clear()` resets between runs; same-
+ *          executor pause/resume PRESERVES pre-pause evidence by design).
+ * PII note: tool args/results and decide() evidence persist into snapshots.
+ *          footprintjs `RedactionPolicy.emitPatterns` redacts the emit channel
+ *          BEFORE this recorder IF the consumer configures one on the executor
+ *          — the Agent does NOT configure one by default. Values are bounded
+ *          (`maxPreviewChars` for results, `maxFieldChars` for args/evidence);
+ *          treat the snapshot store as PII-bearing and protect it accordingly.
  *
  * The Agent attaches this automatically when a CAUSAL memory is mounted and
  * threads `collect` into the memory write mount (`evidenceSource`) — so
  * `writeSnapshot` persists real evidence instead of zeros.
  */
 
-import type { FlowDecisionEvent } from 'footprintjs';
+import type { FlowDecisionEvent, FlowSelectedEvent } from 'footprintjs';
 import type { DecisionRecord, ToolCallRecord } from './types.js';
 
 /** What the bridge delivers to `writeSnapshot` for one run. */
@@ -39,6 +44,10 @@ export interface CausalEvidenceRecorderOptions {
   readonly id?: string;
   /** Max chars kept of each tool result preview. Default 200. */
   readonly maxPreviewChars?: number;
+  /** Max serialized chars kept of tool ARGS and decision EVIDENCE (the
+   *  PII-dense fields). Oversized values are replaced by a truncated
+   *  preview marker. Default 2000. */
+  readonly maxFieldChars?: number;
 }
 
 export interface CausalEvidenceRecorderHandle {
@@ -49,6 +58,7 @@ export interface CausalEvidenceRecorderHandle {
   // CombinedRecorder hooks (routed by method-shape detection):
   onEmit(event: { name: string; payload: unknown }): void;
   onDecision(event: FlowDecisionEvent): void;
+  onSelected(event: FlowSelectedEvent): void;
 }
 
 function preview(value: unknown, max: number): string {
@@ -64,15 +74,33 @@ function preview(value: unknown, max: number): string {
   return s.length > max ? `${s.slice(0, max)}…` : s;
 }
 
+/** Bound a record-ish value: oversized serializations become a truncated
+ *  preview marker so snapshots can't grow unbounded (and PII exposure is
+ *  capped). Small values pass through untouched. */
+function bounded(
+  value: Readonly<Record<string, unknown>> | undefined,
+  max: number,
+): Readonly<Record<string, unknown>> | undefined {
+  if (value === undefined) return undefined;
+  try {
+    const s = JSON.stringify(value);
+    if (s.length <= max) return value;
+    return { __truncated: `${s.slice(0, max)}…` };
+  } catch {
+    return { __truncated: String(value).slice(0, max) };
+  }
+}
+
 /** Build the evidence-harvesting recorder. Attach via `.recorder(rec)` (the
  *  Agent does this automatically for CAUSAL memories). */
 export function causalEvidenceRecorder(
   options: CausalEvidenceRecorderOptions = {},
 ): CausalEvidenceRecorderHandle {
   const maxPreview = options.maxPreviewChars ?? 200;
+  const maxField = options.maxFieldChars ?? 2000;
 
-  // ── run-scoped accumulators (reset when a new runId is observed) ──
-  let lastRunId: string | undefined;
+  // ── per-turn accumulators (reset on agent.turn_start; executor clear()
+  //    resets between runs; pause/resume keeps pre-pause evidence) ──
   let decisions: DecisionRecord[] = [];
   let toolCalls: ToolCallRecord[] = [];
   let pendingTools = new Map<string, { name: string; args: Readonly<Record<string, unknown>> }>();
@@ -93,14 +121,6 @@ export function causalEvidenceRecorder(
     authoritative = undefined;
   };
 
-  const observeRunId = (event: unknown): void => {
-    const runId = (event as { traversalContext?: { runId?: string } })?.traversalContext?.runId;
-    if (runId && runId !== lastRunId) {
-      lastRunId = runId;
-      reset(); // Convention 4 — new run, fresh evidence
-    }
-  };
-
   return {
     id: options.id ?? 'causal-evidence',
 
@@ -116,7 +136,8 @@ export function causalEvidenceRecorder(
           const id = String(payload.toolCallId ?? '');
           pendingTools.set(id, {
             name: String(payload.toolName ?? 'unknown'),
-            args: (payload.args ?? {}) as Readonly<Record<string, unknown>>,
+            args:
+              bounded((payload.args ?? {}) as Readonly<Record<string, unknown>>, maxField) ?? {},
           });
           break;
         }
@@ -145,13 +166,19 @@ export function causalEvidenceRecorder(
         case 'agentfootprint.context.evaluated': {
           // Skill-graph routing provenance → one DecisionRecord per routed skill.
           const routing = payload.routing as
-            | ReadonlyArray<{ id?: string; via?: string; label?: string; path?: unknown }>
+            | ReadonlyArray<{
+                injectionId?: string;
+                id?: string;
+                via?: string;
+                label?: string;
+                path?: unknown;
+              }>
             | undefined;
           if (Array.isArray(routing)) {
             for (const r of routing) {
               decisions.push({
                 stageId: 'skill-graph',
-                chosen: String(r.id ?? 'unknown'),
+                chosen: String(r.injectionId ?? r.id ?? 'unknown'),
                 ...(r.label !== undefined || r.via !== undefined
                   ? { rule: r.label ?? `via ${r.via}` }
                   : {}),
@@ -178,26 +205,48 @@ export function causalEvidenceRecorder(
       }
     },
 
-    /** footprintjs FlowRecorder channel — decide()/select() evidence. */
+    /** footprintjs FlowRecorder channel — decide() decision evidence.
+     *  FlowDecisionEvent carries `decider` (display name), `chosen`, optional
+     *  `evidence` from decide(), and `traversalContext.stageId` (the stable,
+     *  subflow-prefixed stage id — preferred for DecisionRecord.stageId). */
     onDecision(event: FlowDecisionEvent): void {
-      observeRunId(event);
-      const e = event as unknown as Record<string, unknown>;
-      const chosen = e.chosen ?? e.selected;
+      const stageId = event.traversalContext?.stageId ?? event.decider;
       // Internal agent plumbing (the cache-gate decider) is not domain
-      // decision evidence — keep snapshots focused on consumer-meaningful
-      // decisions (route, skill graph, consumer decide()/select()).
-      if (String(chosen ?? '').startsWith('sf-cache/')) return;
-      const evidence = e.evidence as
+      // decision evidence. `includes` (not startsWith): in reactMode
+      // 'dynamic-grouped' the names are double-prefixed
+      // ('sf-llm-call/sf-cache/…').
+      if (String(event.chosen ?? '').includes('sf-cache/') || String(stageId).includes('sf-cache'))
+        return;
+      const evidence = event.evidence as
         | { rule?: string; label?: string; conditions?: unknown }
         | undefined;
       decisions.push({
-        stageId: String(e.stageId ?? e.stageName ?? e.stage ?? 'decider'),
-        chosen: String(chosen ?? 'unknown'),
+        stageId: String(stageId),
+        chosen: String(event.chosen ?? 'unknown'),
         ...(evidence?.label !== undefined || evidence?.rule !== undefined
           ? { rule: String(evidence.label ?? evidence.rule) }
           : {}),
         ...(evidence !== undefined && {
-          evidence: evidence as Readonly<Record<string, unknown>>,
+          evidence: bounded(evidence as Readonly<Record<string, unknown>>, maxField),
+        }),
+      });
+    },
+
+    /** footprintjs FlowRecorder channel — select() selection evidence. */
+    onSelected(event: FlowSelectedEvent): void {
+      const stageId = event.traversalContext?.stageId ?? event.parent;
+      if (String(stageId).includes('sf-cache')) return;
+      // The agent's own Context slot-fork is a selector — plumbing, not domain.
+      if (String(stageId).includes('context') && event.selected.every((s) => s.startsWith('sf-')))
+        return;
+      decisions.push({
+        stageId: String(stageId),
+        chosen: event.selected.join(', '),
+        ...(event.evidence !== undefined && {
+          evidence: bounded(
+            event.evidence as unknown as Readonly<Record<string, unknown>>,
+            maxField,
+          ),
         }),
       });
     },
@@ -218,7 +267,6 @@ export function causalEvidenceRecorder(
 
     clear(): void {
       reset();
-      lastRunId = undefined;
     },
   };
 }

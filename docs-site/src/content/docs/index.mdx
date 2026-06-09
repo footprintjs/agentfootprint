@@ -110,7 +110,7 @@ Per-iteration recomposition would burn tokens (everything re-builds every iterat
 
 Every run exports as one JSON checkpoint. Persist it (Redis, Postgres, S3); resume on a different process, day, or server. `defineMemory({ type: CAUSAL })` stores the agent's **decision evidence** — every `decide()` value the flowchart captured.
 
-New questions cosine-match past queries; matching snapshots inject the stored past run; the LLM answers from what actually happened instead of re-deriving. *(Status: today the snapshot stores the query + final outcome; wiring the operator-level decision evidence into the snapshot is in progress — see the roadmap.)* See [Memory guide § Causal](/agentfootprint/guides/memory/#causal-memory--replay-decisions-not-just-messages).
+New questions cosine-match past queries; matching snapshots inject the stored past run; the LLM answers from what actually happened instead of re-deriving. See [Memory guide § Causal](/agentfootprint/guides/memory/#causal-memory--replay-decisions-not-just-messages).
 
 The same JSON shape feeds SFT / DPO / process-RL training pipelines (`exportForTraining({ format })` on the roadmap).
 

@@ -80,7 +80,7 @@ const causal = defineMemory({
 agent.memory(causal);
 ```
 
-Every run persists a snapshot. Two weeks later, when the customer comes back asking why, the matching snapshot loads into the next prompt — the follow-up answers from the stored run, not a rerun. *(Status: today the snapshot stores the query + final outcome; wiring the operator-level decision evidence into the snapshot is in progress — see the roadmap.)* See [Memory guide § Causal](/agentfootprint/guides/memory/#causal-memory--replay-decisions-not-just-messages).
+Every run persists a snapshot. Two weeks later, when the customer comes back asking why, the matching snapshot loads into the next prompt — the follow-up answers from the stored run, not a rerun. See [Memory guide § Causal](/agentfootprint/guides/memory/#causal-memory--replay-decisions-not-just-messages).
 
 ## Agent playground (visual time-travel)
 

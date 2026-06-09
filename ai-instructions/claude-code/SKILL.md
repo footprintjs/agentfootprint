@@ -193,10 +193,9 @@ const facts = defineMemory({
 
 // Causal — UNIQUE TO AGENTFOOTPRINT.
 // Persists run snapshots so cross-run "why was X rejected?" follow-ups
-// answer from stored past runs instead of re-running. HONEST STATUS:
-// today the snapshot stores the query + final outcome; operator-level
-// decision evidence (decide() conditions, tool calls, token usage) is
-// scaffolded but NOT yet wired — the evidence bridge is backlog #5.
+// answer from the STORED run: decisions (decide()/select() evidence +
+// route/skill provenance), tool calls, iterations, duration, tokens —
+// harvested automatically when a CAUSAL memory is mounted.
 const causal = defineMemory({
   id: 'causal',
   type: MEMORY_TYPES.CAUSAL,

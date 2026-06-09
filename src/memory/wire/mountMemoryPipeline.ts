@@ -176,8 +176,9 @@ export function mountMemoryWrite<ParentState>(
       contextTokensRemaining: parentState[contextTokensKey] ?? 0,
       newMessages: parentState[newMessagesKey] ?? [],
       // Evidence bridge (#5): harvested run evidence for causal writeSnapshot.
-      // Closure-delivered (not tracked parent scope) — the evidence is already
-      // observable as events; this is just the hand-off to the write stage.
+      // Closure-delivered (no PARENT-scope write) — note it DOES land in the
+      // write subflow's own tracked scope/commit log, like newMessages; the
+      // values are already observable as events, so no new exposure class.
       ...(config.evidenceSource && { runEvidence: config.evidenceSource() }),
     }),
     // No outputMapper — write has no parent-visible output.

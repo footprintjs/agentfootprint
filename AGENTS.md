@@ -289,12 +289,11 @@ const facts = defineMemory({
 });
 
 // Causal — UNIQUE TO AGENTFOOTPRINT. Persists run snapshots so cross-run
-// "why was X rejected?" follow-ups answer from stored past runs instead of
-// re-running. HONEST STATUS: today the snapshot stores the query + final
-// outcome; the operator-level decision evidence (decide() conditions, tool
-// calls, token usage) is scaffolded but NOT yet wired into the snapshot —
-// the evidence bridge is backlog Phase-1 #5. Don't claim "zero hallucination
-// evidence replay" until it lands.
+// "why was X rejected?" follow-ups answer from the STORED run: decisions
+// (footprintjs decide()/select() evidence + route/skill-graph provenance),
+// tool calls (args + result previews), iterations, duration, token usage —
+// harvested automatically by causalEvidenceRecorder when a CAUSAL memory is
+// mounted. (commitLog/narrative capture: not yet — see SnapshotEntry.)
 const causal = defineMemory({
   id: 'causal',
   type: MEMORY_TYPES.CAUSAL,
