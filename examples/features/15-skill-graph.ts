@@ -24,6 +24,7 @@ import {
   decide,
   mock,
   skillGraph,
+  type CombinedRecorder,
   type LLMProvider,
 } from '../../src/index.js';
 import { evaluateInjections } from '../../src/lib/injection-engine/index.js';
@@ -114,9 +115,25 @@ export async function run(input: string, provider?: LLMProvider): Promise<unknow
       },
     });
 
+  // Capture the routing PROVENANCE the engine emits each turn. Every iteration's
+  // `context.evaluated` carries `routing` — which skill-graph injection activated
+  // and why (the edge / decision path) — the structured payload behind the
+  // `context.routed` commentary line. A consumer (the lens) reads this off emit.
+  const runtimeRouting: unknown[] = [];
+  const captureRouting: CombinedRecorder = {
+    id: 'capture-routing',
+    onEmit: (e) => {
+      if (e.name === 'agentfootprint.context.evaluated') {
+        const p = e.payload as { routing?: unknown };
+        if (p.routing) runtimeRouting.push(p.routing);
+      }
+    },
+  };
+
   const agent = Agent.create({ provider: scripted, model: 'mock', maxIterations: 5 })
     .system('You are a read-only SAN triage assistant.')
     .skillGraph(graph)
+    .recorder(captureRouting)
     .build();
   const answer = await agent.run({ message: input });
 
@@ -152,6 +169,11 @@ export async function run(input: string, provider?: LLMProvider): Promise<unknow
       'check sfp optic': routeOf('check sfp optic'), // ['sfp-diagnostics']
       'port flapping': routeOf('port flapping'), // ['mds-interface-issues'] (default leaf)
     },
+    // Structured routing PROVENANCE captured off the live run's emit stream —
+    // per turn, which skill-graph injection activated + why (edge / decision path
+    // + tools). This is what the lens renders; the `context.routed` commentary is
+    // the prose layer on top.
+    runtimeRouting,
   };
 }
 

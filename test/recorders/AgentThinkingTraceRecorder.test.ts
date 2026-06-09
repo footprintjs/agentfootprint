@@ -8,7 +8,7 @@
 
 import { describe, it, expect } from 'vitest';
 import type { LLMProvider } from 'footprintjs';
-import { Agent, defineTool, defineSkill, mock } from '../../src/index.js';
+import { Agent, defineTool, defineSkill, mock, skillGraph, decide } from '../../src/index.js';
 import { agentThinkingTrace } from '../../src/observe.js';
 
 describe('agentThinkingTrace — functional (real agent run)', () => {
@@ -292,5 +292,89 @@ describe('agentThinkingTrace — extended thinking on the beat', () => {
       | { thinking?: string }
       | undefined;
     expect(ask?.thinking).toBeUndefined();
+  });
+});
+
+/**
+ * Skill-graph routing (proposal 002 — full root fix): when a `skillGraph()` routes
+ * a skill, the iteration's first beat LEADS with the routing decision (which skill
+ * + why), so the Notepad opens with the "semantic dataflow", then the reasoning.
+ */
+describe('agentThinkingTrace — skill-graph routing leads the iteration', () => {
+  it('a tree route prepends the routing narration to the first beat brain', async () => {
+    const probe = defineSkill({ id: 'probe-skill', description: 'd', body: 'b' });
+    const fallback = defineSkill({ id: 'fallback-skill', description: 'd', body: 'b' });
+    const graph = skillGraph()
+      .tree(decide((c) => /probe/.test(c.userMessage), probe, fallback, 'probe intent?'))
+      .build();
+    const provider: LLMProvider = mock({ reply: 'All good.' });
+    const att = agentThinkingTrace({ agent: 'Neo' });
+    const agent = Agent.create({ provider, model: 'mock', maxIterations: 3 })
+      .system('')
+      .skillGraph(graph)
+      .recorder(att)
+      .build();
+
+    await agent.run({ message: 'please probe it' });
+    const answer = att
+      .getTrace({ task: 'please probe it' })
+      .steps.find((s) => s.kind === 'answer') as { brain?: string } | undefined;
+
+    expect(answer?.brain).toContain('routed to'); // the routing lead-in
+    expect(answer?.brain).toContain('probe-skill'); // the chosen skill
+    expect(answer?.brain).toContain('probe intent?'); // the matched predicate
+    expect(answer?.brain).toContain('All good.'); // LLM content preserved after the lead
+  });
+
+  it('no skillGraph routing → no lead-in (brain is just the LLM content)', async () => {
+    const provider: LLMProvider = mock({ reply: 'Plain answer.' });
+    const att = agentThinkingTrace({ agent: 'Neo' });
+    const agent = Agent.create({ provider, model: 'mock' }).system('').recorder(att).build();
+    await agent.run({ message: 'hi' });
+    const answer = att.getTrace({ task: 'hi' }).steps.find((s) => s.kind === 'answer') as
+      | { brain?: string }
+      | undefined;
+    expect(answer?.brain).toBe('Plain answer.'); // unchanged — no routing prepended
+  });
+
+  it('narrates the routing ONCE across iterations (context.evaluated re-fires each turn)', async () => {
+    const peek = defineTool({
+      name: 'peek',
+      description: 'p',
+      inputSchema: { type: 'object', properties: {} },
+      execute: async () => ({ ok: true }),
+    });
+    const probe = defineSkill({ id: 'probe-skill', description: 'd', body: 'b', tools: [peek] });
+    const fallback = defineSkill({ id: 'fallback-skill', description: 'd', body: 'b' });
+    const graph = skillGraph()
+      .tree(decide((c) => /probe/.test(c.userMessage), probe, fallback, 'probe intent?'))
+      .build();
+    let i = 0;
+    const provider: LLMProvider = mock({
+      respond: () => {
+        i++;
+        return i === 1
+          ? {
+              content: 'peeking',
+              toolCalls: [{ id: 't1', name: 'peek', args: {} }],
+              stopReason: 'tool_use',
+            }
+          : { content: 'done', toolCalls: [], stopReason: 'stop' };
+      },
+    });
+    const att = agentThinkingTrace({ agent: 'Neo' });
+    const agent = Agent.create({ provider, model: 'mock', maxIterations: 4 })
+      .system('')
+      .skillGraph(graph)
+      .recorder(att)
+      .build();
+    await agent.run({ message: 'please probe it' });
+
+    const brains = att
+      .getTrace({ task: 'x' })
+      .steps.map((s) => (s as { brain?: string }).brain ?? '');
+    // The skill stays active across both iterations, so context.evaluated re-fires
+    // with the SAME routing — but the lead-in appears exactly once.
+    expect(brains.filter((b) => b.includes('routed to'))).toHaveLength(1);
   });
 });

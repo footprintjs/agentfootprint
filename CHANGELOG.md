@@ -5,6 +5,52 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.5.0]
+
+Minor — skill-graph **routing provenance**: capture *why* a skill was reached
+(the decision path / edge) as structured JSON, narrate it richly. Additive; zero
+engine change; behavior-safe (routing logic is unchanged — we only record it).
+
+### Added
+
+- **Routing receipt on every compiled skill.** `skillGraph().build()` now stamps
+  each skill's `metadata.skillGraph` with a `SkillRouting`: how it's reached
+  (`via: 'tree' | 'entry' | 'route' | 'model'`), and for a decision tree the full
+  root→leaf **decision path** (each predicate's caption + the `yes`/`no` branch
+  taken). The compiler is the only thing that knows the routing semantics, so it's
+  the right place to record them. New exports: `SkillRouting`, `SkillRoutingStep`,
+  `SKILL_GRAPH_METADATA_KEY`.
+- **`context.evaluated` carries `routing`.** The Injection Engine's per-iteration
+  `agentfootprint.context.evaluated` event now includes a `routing` array — one
+  entry per active skill-graph injection (`injectionId`, `via`, `path`, `label`,
+  `from`, `triggerKind`, unlocked `tools`). The structured "what routed this turn,
+  and why" payload for the lens. Absent when no active injection came from a
+  `skillGraph()` (non-skill-graph runs are unchanged).
+- **`context.routed` commentary.** A new template narrates the routing in prose —
+  *"Neo routed to the `powermax-performance` skill (matched “array latency /
+  cache?”) — 4 tools now available."* Names the skill, the matched predicate (the
+  deciding `yes`; an all-`no` path reads "no specific intent — default"), and the
+  tool count. Silent when no skill-graph routing happened (no regression to other
+  runs). The full path + every route ride the event payload; the prose stays
+  concise (the COMMENTARY/DETAILS split).
+- **`agentThinkingTrace` leads the iteration with the routing.** The Notepad's
+  first beat each iteration now opens with the routing decision (then the LLM's
+  reasoning), so AgentThinkingUI shows *why this skill* before *what it did*.
+
+### Tests / Examples
+
+- `test/skillGraph` — routing provenance: tree leaf path (root→leaf with
+  sibling-negated branches), existing metadata preserved (surfaceMode/cache),
+  flat entry/route/model `via`.
+- `test/recorders/observability/commentary/routing` — the three commentary fns
+  over a `context.evaluated` payload: silent without routing, named skill + matched
+  predicate + tool grammar (singular/plural), default-leaf clause, route-edge label.
+- `test/recorders/AgentThinkingTraceRecorder` — the iteration's first beat leads
+  with the routing line (and stays plain when no skill-graph routed).
+- `examples/features/15-skill-graph` — captures the live run's `context.evaluated`
+  `routing` off the emit stream (`runtimeRouting`), showing the per-turn provenance
+  end-to-end (entry turn 1; the `CRC > 0` route edge turn 2).
+
 ## [6.4.0]
 
 Minor — `skillGraph()`: a declarative, visualizable, token-efficient skill graph

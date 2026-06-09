@@ -64,6 +64,7 @@ export {
 export {
   skillGraph,
   decide,
+  SKILL_GRAPH_METADATA_KEY,
   type SkillGraph,
   type SkillGraphBuilder,
   type SkillRouteOptions,
@@ -72,4 +73,6 @@ export {
   type SkillEdgeKind,
   type SkillNode,
   type DecisionNode,
+  type SkillRouting,
+  type SkillRoutingStep,
 } from './skillGraph.js';

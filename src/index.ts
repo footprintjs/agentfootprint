@@ -386,6 +386,7 @@ export {
   // Declarative skill graph (proposal 002)
   skillGraph,
   decide,
+  SKILL_GRAPH_METADATA_KEY,
   type SkillGraph,
   type SkillGraphBuilder,
   type SkillRouteOptions,
@@ -394,6 +395,8 @@ export {
   type SkillEdgeKind,
   type SkillNode,
   type DecisionNode,
+  type SkillRouting,
+  type SkillRoutingStep,
 } from './lib/injection-engine/index.js';
 
 // Patterns — factory functions composing primitives + core-flow into

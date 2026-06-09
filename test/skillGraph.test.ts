@@ -199,3 +199,94 @@ describe('skillGraph — decision tree (v3): predicate nodes route', () => {
     ).toThrow(/not a skill/);
   });
 });
+
+describe('skillGraph — routing provenance (metadata.skillGraph)', () => {
+  const has = (re: RegExp) => (c: InjectionContext) => re.test(c.userMessage);
+  type Routing = {
+    via: string;
+    path?: { label: string; branch: string }[];
+    label?: string;
+    from?: string;
+    triggerKind?: string;
+  };
+  const routingOf = (inj: { metadata?: Record<string, unknown> }) =>
+    inj.metadata?.skillGraph as Routing | undefined;
+
+  it('a tree leaf carries via:tree + the full root→leaf decision path', () => {
+    const io = skill('io-profile');
+    const sfp = skill('sfp-audit');
+    const triage = skill('triage');
+    const g = skillGraph()
+      .tree(decide(has(/io/), io, decide(has(/sfp/), sfp, triage, 'sfp intent?'), 'io intent?'))
+      .build();
+
+    expect(routingOf(g.skills.find((s) => s.id === 'io-profile')!)).toEqual({
+      via: 'tree',
+      path: [{ label: 'io intent?', branch: 'yes' }],
+    });
+    expect(routingOf(g.skills.find((s) => s.id === 'sfp-audit')!)).toEqual({
+      via: 'tree',
+      path: [
+        { label: 'io intent?', branch: 'no' },
+        { label: 'sfp intent?', branch: 'yes' },
+      ],
+    });
+    expect(routingOf(g.skills.find((s) => s.id === 'triage')!)).toEqual({
+      via: 'tree',
+      path: [
+        { label: 'io intent?', branch: 'no' },
+        { label: 'sfp intent?', branch: 'no' },
+      ],
+    });
+  });
+
+  it('preserves the skill’s existing metadata (surfaceMode/cache) alongside skillGraph', () => {
+    const only = skill('only');
+    const g = skillGraph().tree(only).build();
+    const meta = g.skills[0]!.metadata!;
+    expect(meta.skillGraph).toEqual({ via: 'tree', path: [] }); // single-skill tree = empty path
+    // defineSkill stamps surfaceMode + cache; routing must not clobber them.
+    expect(meta).toHaveProperty('surfaceMode');
+    expect(meta).toHaveProperty('cache');
+  });
+
+  it('flat entry → via:entry with the entry label', () => {
+    const a = skill('a');
+    const g = skillGraph()
+      .entry(a, { when: () => true, label: 'always on' })
+      .build();
+    expect(routingOf(g.skills.find((s) => s.id === 'a')!)).toEqual({
+      via: 'entry',
+      label: 'always on',
+    });
+  });
+
+  it('flat route (onToolReturn / when) → via:route with from + triggerKind', () => {
+    const a = skill('a');
+    const b = skill('b');
+    const c = skill('c');
+    const g = skillGraph()
+      .entry(a)
+      .route(a, b, { onToolReturn: 'lookup', label: 'after lookup' })
+      .route(a, c, { when: (r) => r.toolName === 'probe' })
+      .build();
+    expect(routingOf(g.skills.find((s) => s.id === 'b')!)).toEqual({
+      via: 'route',
+      from: 'a',
+      label: 'after lookup',
+      triggerKind: 'on-tool-return',
+    });
+    expect(routingOf(g.skills.find((s) => s.id === 'c')!)).toEqual({
+      via: 'route',
+      from: 'a',
+      triggerKind: 'rule',
+    });
+  });
+
+  it('a bare route (model-reachable) → via:model', () => {
+    const a = skill('a');
+    const c = skill('c');
+    const g = skillGraph().entry(a).route(a, c).build();
+    expect(routingOf(g.skills.find((s) => s.id === 'c')!)).toEqual({ via: 'model' });
+  });
+});

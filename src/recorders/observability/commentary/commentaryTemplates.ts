@@ -108,6 +108,15 @@ export const defaultCommentaryTemplates: CommentaryTemplates = {
     '{{appName}} turned on a skill — its tools and instructions are now available.',
   'skill.deactivated': '{{appName}} turned off a skill.',
 
+  // Skill-GRAPH routing (proposal 002): a decision tree or declared edge picked a
+  // skill this turn. Narrates WHICH skill + WHY (the matched decision) + what it
+  // unlocked. The full decision path + tool list rides the `context.evaluated`
+  // event payload (`routing`) for the lens; this prose stays concise.
+  'context.routed':
+    '{{appName}} routed to the `{{skillId}}` skill{{matchClause}} — {{toolClause}} now available.',
+  'context.routed.matched': ' (matched “{{matchedLabel}}”)',
+  'context.routed.default': ' (no specific intent — default)',
+
   'composition.fork_start': '{{appName}} fanned out into parallel branches.',
   'composition.merge_end': '{{appName}} merged the parallel branches back into one.',
 
@@ -202,6 +211,12 @@ export function selectCommentaryKey(event: AgentfootprintEvent): string | null |
       return 'skill.activated';
     case 'agentfootprint.skill.deactivated':
       return 'skill.deactivated';
+
+    case 'agentfootprint.context.evaluated':
+      // Narrate ONLY when a skillGraph() routed a skill this turn (decision tree
+      // or declared edge). Otherwise stay silent — bare injection evaluation is
+      // plumbing, not pedagogy (matches the slot-mechanics skips below).
+      return event.payload.routing && event.payload.routing.length > 0 ? 'context.routed' : null;
 
     case 'agentfootprint.agent.iteration_start':
     case 'agentfootprint.agent.iteration_end':
@@ -316,6 +331,25 @@ export function extractCommentaryVars(
       // empty ": .". (The instructions/onToolReturn/alwaysOn templates all use
       // {{descClause}}.) Empty summary → empty clause, handled by the templates.
       return { ...base, descClause: (p.contentSummary ?? '').trim() };
+    }
+
+    case 'agentfootprint.context.evaluated': {
+      // Narrate the first skill-graph route (a decision tree activates exactly
+      // one leaf). The matched predicate = the deciding `yes` on the path; for an
+      // all-`no` path (the default leaf) there's none → "default" clause. The
+      // full path + every route ride the event payload for richer consumers.
+      const r = event.payload.routing?.[0];
+      if (!r) return base;
+      const toolCount = r.tools?.length ?? 0;
+      const toolClause =
+        toolCount > 0 ? `${toolCount} tool${toolCount === 1 ? '' : 's'}` : 'no new tools';
+      const matchedLabel = r.path?.find((s) => s.branch === 'yes')?.label ?? r.label;
+      const matchClause = matchedLabel
+        ? renderCommentary(templates['context.routed.matched'] ?? '', { matchedLabel })
+        : r.via === 'tree'
+        ? templates['context.routed.default'] ?? ''
+        : '';
+      return { ...base, skillId: r.injectionId, toolClause, matchClause };
     }
 
     // Most templates only need {{appName}} / {{agentName}} — no token

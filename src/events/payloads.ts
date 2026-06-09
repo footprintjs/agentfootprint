@@ -275,6 +275,31 @@ export interface ContextEvaluatedPayload {
    * wrong activation. Empty when no Skills are registered. Static across turns.
    */
   readonly skillCatalog: readonly { readonly id: string; readonly description: string }[];
+  /**
+   * Routing PROVENANCE for the active injections that came from a `skillGraph()`
+   * — *why* each was reached. One entry per active skill-graph injection (a
+   * decision-tree leaf, a flat entry, or a route edge); absent when no active
+   * injection carries skill-graph metadata. The structured counterpart to the
+   * `context.routed` commentary line — lets the lens show the decision path, the
+   * matched predicate, and the tools a route unlocked. Structural shape (mirrors
+   * `SkillRouting` from the injection engine; events stay decoupled from it).
+   */
+  readonly routing?: readonly {
+    readonly injectionId: string;
+    readonly flavor: string;
+    /** `'tree' | 'entry' | 'route' | 'model'`. */
+    readonly via: string;
+    /** Decision path (tree only): predicates root→leaf + branch taken. */
+    readonly path?: readonly { readonly label: string; readonly branch: string }[];
+    /** Entry/route edge caption. */
+    readonly label?: string;
+    /** Source skill id (route only). */
+    readonly from?: string;
+    /** Compiled trigger kind for a route. */
+    readonly triggerKind?: string;
+    /** Tool names this injection unlocked. */
+    readonly tools?: readonly string[];
+  }[];
 }
 
 // error.fatal + pause (always-on from library core)

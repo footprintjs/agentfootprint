@@ -91,6 +91,38 @@ export interface SkillNode {
   readonly label?: string;
 }
 
+/** One predicate on a skill's root→leaf decision path, and the branch taken. */
+export interface SkillRoutingStep {
+  /** The predicate's caption (the `decide(...)` label). */
+  readonly label: string;
+  /** Which side of the predicate leads to this skill. */
+  readonly branch: 'yes' | 'no';
+}
+
+/**
+ * The routing PROVENANCE stamped onto a compiled skill's `metadata.skillGraph`
+ * — *why* this skill is reachable. It rides through to the `context.evaluated`
+ * event when the skill activates, so commentary + the lens can narrate the real
+ * routing (not just "a skill activated"). Observability only; the trigger logic
+ * is unchanged.
+ */
+export interface SkillRouting {
+  /** How the skill is reached: a decision `tree` leaf, a flat `entry`, a
+   *  deterministic `route` edge, or `model` (read_skill-reachable). */
+  readonly via: 'tree' | 'entry' | 'route' | 'model';
+  /** Decision path (tree only): the predicates from root→leaf + branch taken. */
+  readonly path?: readonly SkillRoutingStep[];
+  /** Entry/route edge caption. */
+  readonly label?: string;
+  /** Source skill id (route only). */
+  readonly from?: string;
+  /** The compiled trigger kind for a route (`rule` / `on-tool-return`). */
+  readonly triggerKind?: string;
+}
+
+/** The metadata key carrying a skill's routing provenance. */
+export const SKILL_GRAPH_METADATA_KEY = 'skillGraph' as const;
+
 export interface SkillGraph {
   /** Skills with graph-derived triggers — feed to the Agent (`.skillGraph()` or
    *  `.skills({ list: () => graph.skills })`). */
@@ -185,12 +217,17 @@ export function skillGraph(): SkillGraphBuilder {
 
       if (treeRoot) {
         // Decision-tree mode (v3): compile each leaf to a path-conjunction trigger.
-        compileTree(treeRoot, () => true, { skills, nodes, edges }, null, { n: 0 });
+        compileTree(treeRoot, () => true, { skills, nodes, edges }, null, { n: 0 }, []);
       } else {
         // Flat entry/route mode (v1).
         for (const [id, skill] of skillsById) {
           const trigger = deriveTrigger(id, skill, entries, routes);
-          skills.push(trigger ? { ...skill, trigger } : skill);
+          const routing = routingFor(id, entries, routes);
+          skills.push({
+            ...skill,
+            ...(trigger && { trigger }),
+            metadata: { ...skill.metadata, [SKILL_GRAPH_METADATA_KEY]: routing },
+          });
           nodes.push({ id, kind: 'skill', label: id });
         }
         edges.push(
@@ -263,10 +300,12 @@ function compileTree(
   out: { skills: Injection[]; nodes: SkillNode[]; edges: SkillEdge[] },
   parent: { id: string; branch: string } | null,
   counter: { n: number },
+  path: readonly SkillRoutingStep[],
 ): void {
   if (isDecisionNode(node)) {
     const id = `d${counter.n++}`;
-    out.nodes.push({ id, kind: 'predicate', label: node.label ?? 'decide' });
+    const label = node.label ?? 'decide';
+    out.nodes.push({ id, kind: 'predicate', label });
     out.edges.push({
       from: parent ? parent.id : null,
       to: id,
@@ -279,6 +318,7 @@ function compileTree(
       out,
       { id, branch: 'yes' },
       counter,
+      [...path, { label, branch: 'yes' }],
     );
     compileTree(
       node.whenFalse,
@@ -286,6 +326,7 @@ function compileTree(
       out,
       { id, branch: 'no' },
       counter,
+      [...path, { label, branch: 'no' }],
     );
   } else {
     if (node.flavor !== 'skill') {
@@ -293,7 +334,12 @@ function compileTree(
         `skillGraph.tree: leaf "${node.id}" is not a skill (flavor='${node.flavor}').`,
       );
     }
-    out.skills.push({ ...node, trigger: { kind: 'rule', activeWhen: pathCond } });
+    const routing: SkillRouting = { via: 'tree', path };
+    out.skills.push({
+      ...node,
+      trigger: { kind: 'rule', activeWhen: pathCond },
+      metadata: { ...node.metadata, [SKILL_GRAPH_METADATA_KEY]: routing },
+    });
     out.nodes.push({ id: node.id, kind: 'skill', label: node.id });
     out.edges.push({
       from: parent ? parent.id : null,
@@ -302,6 +348,28 @@ function compileTree(
       label: parent?.branch,
     });
   }
+}
+
+/** Routing provenance for a flat entry/route skill (the v1 model). */
+function routingFor(
+  id: string,
+  entries: readonly EntryDecl[],
+  routes: readonly RouteDecl[],
+): SkillRouting {
+  const entry = entries.find((e) => e.id === id);
+  if (entry) return { via: 'entry', ...(entry.label && { label: entry.label }) };
+
+  const incoming = routes.filter((r) => r.toId === id && (r.when || r.onToolReturn));
+  const first = incoming[0];
+  if (first) {
+    return {
+      via: 'route',
+      from: first.fromId,
+      ...(first.label && { label: first.label }),
+      triggerKind: first.onToolReturn ? 'on-tool-return' : 'rule',
+    };
+  }
+  return { via: 'model' }; // model-reachable via read_skill
 }
 
 function renderMermaid(nodes: readonly SkillNode[], edges: readonly SkillEdge[]): string {

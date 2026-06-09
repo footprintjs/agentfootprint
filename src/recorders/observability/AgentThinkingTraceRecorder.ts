@@ -122,6 +122,7 @@ const LLM_END = 'agentfootprint.stream.llm_end';
 const TOOL_START = 'agentfootprint.stream.tool_start';
 const TOOL_END = 'agentfootprint.stream.tool_end';
 const THINKING_END = 'agentfootprint.stream.thinking_end';
+const CONTEXT_EVALUATED = 'agentfootprint.context.evaluated';
 
 function asObject(x: unknown): Record<string, unknown> {
   if (x != null && typeof x === 'object' && !Array.isArray(x)) return x as Record<string, unknown>;
@@ -153,6 +154,14 @@ export function agentThinkingTrace(
   // from the iteration's reasoning blocks); attached to the iteration's first ask
   // (or back-filled onto the answer beat). '' when thinking is off / empty.
   let pendingThinking = '';
+  // Skill-graph routing narration to lead the next beat (from `context.evaluated`,
+  // which fires before the LLM call) — so the Notepad opens with WHY this skill was
+  // chosen. '' when nothing new to say.
+  let pendingRouting = '';
+  // The last routing line narrated this run. `context.evaluated` re-fires every
+  // iteration with the SAME routing while a skill stays active, so we narrate it
+  // ONCE (on first route / when the routed skill changes), not every turn.
+  let lastRoutingLine = '';
   const byId = new Map<string, { toolName: string; isSkill: boolean; skillId?: string }>();
 
   // Commentary engine — the SAME one the Lens uses. Merged once: consumer
@@ -178,6 +187,15 @@ export function agentThinkingTrace(
     return renderCommentary(templates[key] ?? '', vars);
   }
 
+  /** Prepend this iteration's skill-graph routing line (if any) to a beat's
+   *  brain, then consume it so only the iteration's FIRST beat leads with it. */
+  function leadWithRouting(brain: string): string {
+    if (!pendingRouting) return brain;
+    const lead = pendingRouting;
+    pendingRouting = '';
+    return brain ? `${lead}\n\n${brain}` : lead;
+  }
+
   function reset(): void {
     task = '';
     steps = [];
@@ -185,6 +203,8 @@ export function agentThinkingTrace(
     pendingCost = { ms: 0, tokens: 0 };
     pendingCostUsed = false;
     pendingThinking = '';
+    pendingRouting = '';
+    lastRoutingLine = '';
     byId.clear();
   }
 
@@ -194,6 +214,19 @@ export function agentThinkingTrace(
     onEmit(e: EmitEvent): void {
       if (lastPipelineId !== undefined && e.pipelineId !== lastPipelineId) reset();
       lastPipelineId = e.pipelineId;
+
+      if (e.name === CONTEXT_EVALUATED) {
+        // Fires before the LLM call — narrate the skill-graph routing (which skill
+        // + why) and stash it to lead the next beat. Empty when no skillGraph()
+        // routed. Narrate ONCE per distinct routing (it re-fires identically each
+        // iteration while a skill stays active).
+        const line = narrate(e);
+        if (line && line !== lastRoutingLine) {
+          pendingRouting = line;
+          lastRoutingLine = line;
+        }
+        return;
+      }
 
       if (e.name === LLM_END) {
         const p = e.payload as {
@@ -215,7 +248,9 @@ export function agentThinkingTrace(
           steps.push({
             kind: 'answer',
             to: options.asker ?? 'you',
-            brain: content,
+            // Single-iteration terminal answer → this is the iteration's first
+            // beat, so lead with the routing decision if one happened.
+            brain: leadWithRouting(content),
             answer: { headline: headlineOf(content), text: content },
             cost,
           });
@@ -255,10 +290,11 @@ export function agentThinkingTrace(
           tool: isSkill ? skillId ?? 'skill' : p.toolName ?? '(tool)',
           toolName: p.toolName,
           input: asObject(p.args),
-          // First ask of the iteration carries the LLM's own reasoning; later
-          // asks (and the reasoning-less ones) fall back to engine commentary so
-          // the Notepad never shows a blank line.
-          brain: pendingCostUsed ? narrate(e) : pendingBrain || narrate(e),
+          // First ask of the iteration carries the LLM's own reasoning (and leads
+          // with the routing decision); later asks (and the reasoning-less ones)
+          // fall back to engine commentary so the Notepad never shows a blank
+          // line. `leadWithRouting` self-clears, so only the first ask leads.
+          brain: leadWithRouting(pendingCostUsed ? narrate(e) : pendingBrain || narrate(e)),
           cost: pendingCostUsed ? { ms: 0, tokens: 0 } : pendingCost, // attribute the LLM cost to the first ask of the iteration
           // The iteration's chain-of-thought rides on its FIRST ask only.
           ...(!pendingCostUsed && pendingThinking ? { thinking: pendingThinking } : {}),

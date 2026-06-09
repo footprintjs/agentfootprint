@@ -65,6 +65,7 @@ import {
   type Injection,
   type InjectionContext,
 } from './types.js';
+import { SKILL_GRAPH_METADATA_KEY, type SkillRouting } from './skillGraph.js';
 
 export interface InjectionEngineConfig {
   /**
@@ -195,6 +196,8 @@ function makeEvaluateStage(injections: readonly Injection[]) {
     const activePOJOs = evaluation.active.map(projectActiveInjection);
     scope.$setValue('activeInjections', activePOJOs);
 
+    const routing = routingEntriesOf(evaluation.active);
+
     // Aggregate evaluation metadata is pure OBSERVABILITY — no flow stage
     // reads it — so it goes out the EMIT channel where a recorder/Lens can
     // observe "what was considered, what won, what was skipped and why".
@@ -210,8 +213,38 @@ function makeEvaluateStage(injections: readonly Injection[]) {
       // description) — pair "offered" with "chosen" (activatedInjectionIds) to
       // debug a missed/wrong read_skill call.
       skillCatalog: skillCatalogOf(injections),
+      // Routing PROVENANCE for active skill-graph injections — the decision path
+      // / edge that reached each. Undefined when none came from a skillGraph().
+      ...(routing && { routing }),
     });
   };
+}
+
+/** Per active skill-graph injection: its routing provenance + unlocked tools.
+ *  Returns undefined when no active injection carries skill-graph metadata, so
+ *  the emit payload omits `routing` entirely for non-skill-graph runs. */
+function routingEntriesOf(active: readonly Injection[]) {
+  const entries = active.flatMap((inj) => {
+    const routing = (inj.metadata as { [SKILL_GRAPH_METADATA_KEY]?: SkillRouting } | undefined)?.[
+      SKILL_GRAPH_METADATA_KEY
+    ];
+    if (!routing) return [];
+    return [
+      {
+        injectionId: inj.id,
+        flavor: inj.flavor,
+        via: routing.via,
+        ...(routing.path && {
+          path: routing.path.map((s) => ({ label: s.label, branch: s.branch })),
+        }),
+        ...(routing.label && { label: routing.label }),
+        ...(routing.from && { from: routing.from }),
+        ...(routing.triggerKind && { triggerKind: routing.triggerKind }),
+        tools: (inj.inject.tools ?? []).map((t) => t.schema.name),
+      },
+    ];
+  });
+  return entries.length > 0 ? entries : undefined;
 }
 
 // ── Stage 3: Route ───────────────────────────────────────────────────────

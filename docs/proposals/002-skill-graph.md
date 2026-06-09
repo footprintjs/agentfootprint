@@ -196,9 +196,27 @@ between skills layer on top (a leaf can route onward when a tool returns).
 
 ### Build order
 (i) ✅ tree API (`decide` + `.tree`) + compiler + tests (routing model, no engine change) →
-(ii) `<SkillGraphFlow>` xyflow renderer (clickable nodes → skill) →
-(iii) point Neo's "Skill Graph" modal at `<SkillGraphFlow>` (replaces the mermaid
+(ii) ✅ `<SkillGraphFlow>` xyflow renderer (clickable nodes → skill) →
+(iii) ✅ point Neo's "Skill Graph" modal at `<SkillGraphFlow>` (replaces the mermaid
 img with the interactive two-panel view).
+
+## Addendum — routing provenance (6.5.0): capture *why* a skill was reached
+
+The compiler knew the routing semantics but **compiled them away** into opaque
+`activeWhen` closures — so when a skill activated, "why" (the decision path) was
+gone. Fix: the compiler now stamps each skill's `metadata.skillGraph` with a
+`SkillRouting` receipt (`via` + the root→leaf decision `path`). It's
+observability-only — the trigger logic is unchanged.
+
+- **Runtime:** the receipt rides out on `context.evaluated.routing` (structured
+  JSON, per active skill-graph injection + unlocked tools); a `context.routed`
+  commentary line narrates it ("routed to X, matched Y, N tools"); `agentThinkingTrace`
+  leads each iteration's first Notepad beat with it.
+- **Design-time:** the lens `<SkillGraphFlow>` shows the same path ("REACHED WHEN")
+  in its detail panel, derived from the drawn edges (`routingPathTo`).
+
+Zero engine change; non-skill-graph runs are byte-identical. Shipped: agentfootprint
+6.5.0 + agentfootprint-lens 0.19.0.
 
 ---
 
