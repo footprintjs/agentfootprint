@@ -285,6 +285,7 @@ export {
   type MergeFn,
   type MergeOutcomesFn,
   type MergeWithLLMOptions,
+  type ParallelBranchOptions,
   type ParallelInput,
   type ParallelOptions,
   type ParallelOutput,
