@@ -38,11 +38,31 @@ export interface CredentialRequest {
   readonly forceReauth?: boolean;
 }
 
-/** A ready-to-use credential. `token` is a SECRET — see the security invariant. */
-export interface CredentialToken {
-  readonly status: 'token';
-  readonly token: string;
-  /** Unix seconds when the token expires, if known. */
+/**
+ * A credential, ready to apply to a downstream request. It carries its `kind`
+ * (so you can read the raw value when you must) AND a **universal applicator**
+ * `toHeaders()` — the way to USE it without switching on `kind`. Built-in kinds
+ * (`bearer`/`apiKey`/`basic`/`headers`) live in `./kinds`; a custom kind is any
+ * object implementing this protocol — so new credential types plug in with no
+ * library change.
+ *
+ * **SECRET.** Use it locally (e.g. `headers: cred.toHeaders()`) inside a tool;
+ * never write it to tracked scope. It is a live object (carries `toHeaders`),
+ * so it is intentionally NOT serializable — credentials are used immediately
+ * and never persisted/traced.
+ */
+export interface Credential {
+  /** Discriminator: 'bearer' | 'apiKey' | 'basic' | 'headers' | <your kind>. */
+  readonly kind: string;
+  /** The auth header(s) to add to a downstream HTTP request. Universal across kinds. */
+  toHeaders(): Record<string, string>;
+}
+
+/** The provider issued a credential (the 2-legged / refreshed-3-legged happy path). */
+export interface CredentialIssued {
+  readonly status: 'issued';
+  readonly credential: Credential;
+  /** Unix seconds when it expires, if known. */
   readonly expiresAt?: number;
 }
 
@@ -54,7 +74,7 @@ export interface CredentialAuthorizationRequired {
   readonly sessionId: string;
 }
 
-export type CredentialResult = CredentialToken | CredentialAuthorizationRequired;
+export type CredentialResult = CredentialIssued | CredentialAuthorizationRequired;
 
 /** The port. An adapter implements this against a specific identity backend. */
 export interface CredentialProvider {
@@ -63,7 +83,7 @@ export interface CredentialProvider {
   getCredential(req: CredentialRequest): Promise<CredentialResult>;
 }
 
-/** Narrow a {@link CredentialResult} to the token branch. */
-export function isCredentialToken(r: CredentialResult): r is CredentialToken {
-  return r.status === 'token';
+/** Narrow a {@link CredentialResult} to the issued-credential branch. */
+export function isCredentialIssued(r: CredentialResult): r is CredentialIssued {
+  return r.status === 'issued';
 }

@@ -130,7 +130,7 @@ const listRepos = defineTool({
       // run via pause/resume — then retry after they authorize.
       return `Please authorize: ${cred.authorizationUrl}`;
     }
-    return callGitHub({ headers: { authorization: `Bearer ${cred.token}` } }); // used locally
+    return callGitHub({ headers: cred.credential.toHeaders() }); // used locally (universal applicator)
   },
 });
 ```

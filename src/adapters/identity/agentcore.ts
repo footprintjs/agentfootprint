@@ -9,7 +9,7 @@
  * `GetResourceOauth2Token` (the SDK's `@requires_access_token` underneath):
  *   - request.mode 'machine' → `M2M`; 'user' → `USER_FEDERATION`
  *   - request.service        → the configured OAuth2 credential-provider name
- *   - a returned access token → `{ status: 'token' }`
+ *   - a returned access token → `{ status: 'issued', credential: bearer(token) }`
  *   - a returned auth URL     → `{ status: 'authorization-required' }` (3LO consent)
  *
  * The token vault + refresh-token handling live in AgentCore, so repeat calls
@@ -29,6 +29,7 @@ import type {
   CredentialRequest,
   CredentialResult,
 } from '../../identity/types.js';
+import { bearer } from '../../identity/kinds.js';
 
 /** Raw result shape we consume from the AgentCore identity client. */
 export interface AgentCoreOauthResponse {
@@ -109,9 +110,10 @@ export function agentCoreIdentity(options: AgentCoreIdentityOptions = {}): Crede
       });
 
       if (res.accessToken) {
+        // AgentCore Identity vends OAuth access tokens → a bearer credential.
         return {
-          status: 'token',
-          token: res.accessToken,
+          status: 'issued',
+          credential: bearer(res.accessToken),
           ...(res.expiresAt !== undefined && { expiresAt: res.expiresAt }),
         };
       }

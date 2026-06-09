@@ -17,7 +17,7 @@
  */
 
 import { Agent, mock, defineTool, type LLMProvider } from '../../src/index.js';
-import { staticTokens, isCredentialToken, type CredentialProvider } from '../../src/identity.js';
+import { staticTokens, isCredentialIssued, type CredentialProvider } from '../../src/identity.js';
 import { isCliEntry, printResult, type ExampleMeta } from '../helpers/cli.js';
 
 export const meta: ExampleMeta = {
@@ -48,12 +48,12 @@ export async function run(input: string, provider?: LLMProvider): Promise<unknow
         mode: 'user',
         scopes: ['repo'],
       });
-      if (cred.status === 'authorization-required') {
+      if (!isCredentialIssued(cred)) {
         // 3LO: hand the URL to the user (in a real app, pause the run here).
         return `Please authorize access: ${cred.authorizationUrl}`;
       }
-      // Use the token LOCALLY — never `scope.setValue(...)` it.
-      usedHeader = `Bearer ${cred.token.slice(0, 4)}…`;
+      // Apply the credential LOCALLY via the universal toHeaders() — never store it.
+      usedHeader = `${cred.credential.kind} (${Object.keys(cred.credential.toHeaders())[0]})`;
       return 'repos: agentfootprint, neo-agentfootprint';
     },
   });
