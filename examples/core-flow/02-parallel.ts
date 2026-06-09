@@ -6,6 +6,12 @@
  * merges (e.g., "combine whatever succeeded"), opt into tolerant mode
  * with `.mergeOutcomesWithFn()` — receives typed `{ ok, value | error }`.
  *
+ * REQUIRED branches: `.branch(id, runner, { required: true })` marks a
+ * branch whose failure must reject the WHOLE run (named after the
+ * branch) — even under a tolerant merge. When EVERY branch is required,
+ * footprintjs's fork-level `failFast` kicks in: the first failure aborts
+ * immediately instead of waiting for slow siblings.
+ *
  * Run:  npx tsx examples/04-parallel.ts
  */
 
@@ -17,14 +23,17 @@ export const meta: ExampleMeta = {
   id: 'core-flow/02-parallel',
   title: 'Parallel — fan-out + merge (strict / tolerant)',
   group: 'core-flow',
-  description: 'Fan out to N branches and merge. Fail-loud by default; opt into tolerant mode with .mergeOutcomesWithFn().',
+  description:
+    'Fan out to N branches and merge. Fail-loud by default; opt into tolerant mode with .mergeOutcomesWithFn().',
   defaultInput: 'Can we ship feature X?',
   providerSlots: ['default'],
   tags: ['composition', 'Parallel', 'merge', 'tolerant'],
 };
 
-
-export async function run(input: string, provider?: import("../../src/index.js").LLMProvider): Promise<unknown> {
+export async function run(
+  input: string,
+  provider?: import('../../src/index.js').LLMProvider,
+): Promise<unknown> {
   // The LLMCall's `id` matches the branch member id (the `tag`) so
   // the runtime engine subflowId (`legal`, `ethics`) lines up with
   // the chart node's composition id. That alignment lets Lens's
@@ -51,9 +60,13 @@ export async function run(input: string, provider?: import("../../src/index.js")
   if (mode === 'strict') {
     // STRICT (default), 2 BRANCHES: any branch failure → whole Parallel throws.
     // The smaller committee is the most common shape — two specialists vote.
+    // Both votes are REQUIRED (losing 1 of 2 is not fine), so each branch
+    // is marked `{ required: true }`: with every branch required, the
+    // fan-out runs fail-fast — the first failure rejects the whole run
+    // immediately, naming the branch, without waiting on the sibling.
     const committee = Parallel.create({ name: 'Committee' })
-      .branch('legal', brief('legal'))
-      .branch('ethics', brief('ethics'))
+      .branch('legal', brief('legal'), { required: true })
+      .branch('ethics', brief('ethics'), { required: true })
       .mergeWithFn((results) =>
         Object.entries(results)
           .map(([id, r]) => `  ${id}: ${r}`)
@@ -91,5 +104,7 @@ export async function run(input: string, provider?: import("../../src/index.js")
 }
 
 if (isCliEntry(import.meta.url)) {
-  run(meta.defaultInput ?? '').then(printResult).catch(console.error);
+  run(meta.defaultInput ?? '')
+    .then(printResult)
+    .catch(console.error);
 }
