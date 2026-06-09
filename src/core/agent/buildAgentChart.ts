@@ -67,6 +67,12 @@ export interface AgentChartDeps {
   /** Memory READ/WRITE pipeline definitions (one per `.memory()`). */
   readonly memories: readonly MemoryDefinition[];
 
+  /** Evidence bridge (#5): `causalEvidenceRecorder().collect`, threaded into
+   *  CAUSAL memories' write mounts so snapshots persist real evidence
+   *  (decisions/toolCalls/iterations/duration/tokens) instead of zeros.
+   *  Set by the Agent when any mounted memory is CAUSAL. */
+  readonly causalEvidenceSource?: () => import('../../memory/causal/evidenceRecorder.js').RunEvidence;
+
   /** Cache policy for the system-prompt slot, threaded into
    *  CacheDecision's inputMapper so its decision rules can match. */
   readonly systemPromptCachePolicy: CachePolicy;
@@ -164,6 +170,9 @@ export function buildAgentChart(deps: AgentChartDeps): FlowChart {
         contextTokensKey: 'contextTokensRemaining',
         newMessagesKey: 'newMessages',
         writeSubflowId: `sf-memory-write-${m.id}`,
+        // Evidence bridge (#5): only CAUSAL pipelines consume run evidence.
+        ...(m.type === 'causal' &&
+          deps.causalEvidenceSource && { evidenceSource: deps.causalEvidenceSource }),
       });
     }
   }

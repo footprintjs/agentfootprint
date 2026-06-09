@@ -91,14 +91,18 @@ export function writeSnapshot(config: WriteSnapshotConfig) {
     const now = Date.now();
     const ttl = config.ttlMs ? now + config.ttlMs : undefined;
 
+    // Evidence bridge (#5): the wire layer delivers run evidence harvested by
+    // `causalEvidenceRecorder` via the write mount's `evidenceSource`. Absent
+    // (non-agent hosts, no recorder attached) → zeros, as before.
+    const evidence = scope.runEvidence;
     const snapshot: SnapshotEntry = {
       query,
       finalContent,
-      iterations: 0, // TODO: capture from scope when wire helper exposes it
-      decisions: [], // Populated by a follow-up FlowRecorder integration
-      toolCalls: [], // Populated by a follow-up FlowRecorder integration
-      durationMs: 0,
-      tokenUsage: { input: 0, output: 0 },
+      iterations: evidence?.iterations ?? 0,
+      decisions: evidence?.decisions ?? [],
+      toolCalls: evidence?.toolCalls ?? [],
+      durationMs: evidence?.durationMs ?? 0,
+      tokenUsage: evidence?.tokenUsage ?? { input: 0, output: 0 },
     };
 
     const entry: MemoryEntry<SnapshotEntry> = {

@@ -135,18 +135,32 @@ function formatProjection(
 
   let body: string;
   switch (projection) {
-    case SNAPSHOT_PROJECTIONS.DECISIONS:
+    case SNAPSHOT_PROJECTIONS.DECISIONS: {
+      // Tool evidence is part of the "why": in LLM-decided flows the
+      // operator-level facts (creditScore=580, dti=0.45) arrive as tool
+      // results, so the decisions projection includes them.
+      const toolLines =
+        snap.toolCalls.length === 0
+          ? ''
+          : `\nTool evidence:\n${snap.toolCalls
+              .map(
+                (t) =>
+                  `- ${t.name}(${JSON.stringify(t.args)}) → ${t.resultPreview}` +
+                  (t.errored ? ' [ERROR]' : ''),
+              )
+              .join('\n')}`;
       body =
-        snap.decisions.length === 0
+        snap.decisions.length === 0 && snap.toolCalls.length === 0
           ? `(no decision evidence captured)\nFinal answer: ${snap.finalContent}`
-          : snap.decisions
+          : `${snap.decisions
               .map(
                 (d) =>
                   `- ${d.stageId} → "${d.chosen}"${d.rule ? ` (rule: ${d.rule})` : ''}` +
                   (d.evidence ? `; evidence: ${JSON.stringify(d.evidence)}` : ''),
               )
-              .join('\n');
+              .join('\n')}${toolLines}\nFinal answer: ${snap.finalContent}`;
       break;
+    }
 
     case SNAPSHOT_PROJECTIONS.NARRATIVE:
       body = snap.narrative ?? `(no narrative captured)\nFinal answer: ${snap.finalContent}`;

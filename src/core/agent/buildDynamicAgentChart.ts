@@ -145,6 +145,9 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
         contextTokensKey: 'contextTokensRemaining',
         newMessagesKey: 'newMessages',
         writeSubflowId: `sf-memory-write-${m.id}`,
+        // Evidence bridge (#5): only CAUSAL pipelines consume run evidence.
+        ...(m.type === 'causal' &&
+          deps.causalEvidenceSource && { evidenceSource: deps.causalEvidenceSource }),
       });
     }
   }

@@ -80,6 +80,16 @@ export interface MountMemoryPipelineConfig<ParentState> {
 
   /** Subflow id for the write mount. Default `'sf-memory-write'`. */
   readonly writeSubflowId?: string;
+
+  /**
+   * Evidence source for CAUSAL pipelines (the evidence bridge, backlog #5).
+   * Called by the write mount's inputMapper at write time; its result lands on
+   * `MemoryState.runEvidence` so `writeSnapshot` persists real decisions /
+   * tool calls / iterations / duration / token usage instead of zeros. The
+   * Agent threads `causalEvidenceRecorder().collect` here automatically when a
+   * CAUSAL memory is mounted. Omit for non-causal pipelines.
+   */
+  readonly evidenceSource?: () => import('../causal/evidenceRecorder.js').RunEvidence;
 }
 
 // NOTE on stage ordering:
@@ -130,7 +140,11 @@ export function mountMemoryRead<ParentState>(
       // like `loadRelevant` derive the query from the last user
       // message here. The write-side `newMessages` field is empty
       // during read; these are two different concerns.
-      messages: parentState.messages ?? [],
+      // Agents carry the conversation as `history`; bare hosts may use
+      // `messages`. Without this fallback, read stages that derive the query
+      // from the last user message (loadSnapshot/loadRelevant) saw [] inside
+      // an Agent and silently injected nothing — the causal READ never fired.
+      messages: parentState.messages ?? parentState.history ?? [],
       newMessages: [], // write side unused in read subflow
     }),
     outputMapper: (subflowState: Record<string, unknown>) => ({
@@ -161,6 +175,10 @@ export function mountMemoryWrite<ParentState>(
       turnNumber: parentState[turnNumberKey],
       contextTokensRemaining: parentState[contextTokensKey] ?? 0,
       newMessages: parentState[newMessagesKey] ?? [],
+      // Evidence bridge (#5): harvested run evidence for causal writeSnapshot.
+      // Closure-delivered (not tracked parent scope) — the evidence is already
+      // observable as events; this is just the hand-off to the write stage.
+      ...(config.evidenceSource && { runEvidence: config.evidenceSource() }),
     }),
     // No outputMapper — write has no parent-visible output.
   });

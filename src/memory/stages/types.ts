@@ -71,6 +71,14 @@ export interface MemoryState {
    */
   newMessages: Message[];
 
+  /**
+   * Write-side input (CAUSAL pipelines): evidence harvested during the run by
+   * `causalEvidenceRecorder` — decisions, tool calls, iterations, duration,
+   * token usage. Populated by the wire layer via the mount's `evidenceSource`;
+   * undefined for non-causal pipelines (writeSnapshot falls back to zeros).
+   */
+  runEvidence?: import('../causal/evidenceRecorder.js').RunEvidence;
+
   /** Escape hatch for pipeline-specific fields. Typed per-pipeline as needed. */
   [key: string]: unknown;
 }

@@ -7,6 +7,12 @@ export type {
 } from './types.js';
 export { DEFAULT_TOOL_RESULT_PREVIEW_LEN } from './types.js';
 
+export {
+  causalEvidenceRecorder,
+  type CausalEvidenceRecorderHandle,
+  type CausalEvidenceRecorderOptions,
+  type RunEvidence,
+} from './evidenceRecorder.js';
 export { writeSnapshot, type WriteSnapshotConfig } from './writeSnapshot.js';
 export { loadSnapshot, type LoadSnapshotConfig } from './loadSnapshot.js';
 export { snapshotPipeline, type SnapshotPipelineConfig } from './snapshotPipeline.js';

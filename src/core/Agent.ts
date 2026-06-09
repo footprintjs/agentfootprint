@@ -53,6 +53,10 @@ import { skillRecorder } from '../recorders/core/SkillRecorder.js';
 import { toolsRecorder } from '../recorders/core/ToolsRecorder.js';
 import { reliabilityRecorder } from '../recorders/core/ReliabilityRecorder.js';
 import type { MemoryDefinition } from '../memory/define.types.js';
+import {
+  causalEvidenceRecorder,
+  type CausalEvidenceRecorderHandle,
+} from '../memory/causal/evidenceRecorder.js';
 import { buildSystemPromptSlot } from './slots/buildSystemPromptSlot.js';
 import { buildMessagesSlot } from './slots/buildMessagesSlot.js';
 import { buildToolsSlot, type ProviderToolCache } from './slots/buildToolsSlot.js';
@@ -142,6 +146,8 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
   private readonly costBudget?: number;
   private readonly permissionChecker?: PermissionChecker;
   private readonly credentialProvider?: CredentialProvider;
+  /** Evidence bridge (#5) — present iff a CAUSAL memory is mounted. */
+  private readonly causalEvidence?: CausalEvidenceRecorderHandle;
 
   /**
    * Voice config — shared by viewers (Lens, ChatThinkKit, CLI tail).
@@ -301,6 +307,12 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // Eager validation: memory ids must be unique so per-id scope keys
     // (`memoryInjection_${id}`) don't collide.
     validateMemoryIdUniqueness(memories);
+    // Evidence bridge (#5): a CAUSAL memory gets a run-scoped harvest recorder
+    // (decisions/toolCalls/iterations/duration/tokens). Attached per run below;
+    // its `collect` is threaded into the write mount via chartDeps.
+    if (memories.some((m) => m.type === 'causal')) {
+      this.causalEvidence = causalEvidenceRecorder();
+    }
     if (opts.pricingTable) this.pricingTable = opts.pricingTable;
     if (opts.costBudget !== undefined) this.costBudget = opts.costBudget;
     if (opts.permissionChecker) this.permissionChecker = opts.permissionChecker;
@@ -674,6 +686,8 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     const getRunCtx = (): RunContext => this.currentRunContext;
 
     executor.attachCombinedRecorder(new ContextRecorder({ dispatcher, getRunContext: getRunCtx }));
+    // Evidence bridge (#5): harvest decisions/toolCalls/tokens for causal snapshots.
+    if (this.causalEvidence) executor.attachCombinedRecorder(this.causalEvidence);
     // The InjectionEngine typedEmits context.evaluated; this bridge forwards it
     // to the dispatcher (ContextRecorder handles the write-derived context.*).
     executor.attachCombinedRecorder(
@@ -920,6 +934,8 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // wiring differs (flat call-llm stage vs sf-llm-call subflow).
     const chartDeps = {
       memories: this.memories,
+      // Evidence bridge (#5): closure hand-off to the CAUSAL write mounts.
+      ...(this.causalEvidence && { causalEvidenceSource: this.causalEvidence.collect }),
       systemPromptCachePolicy,
       maxIterations,
       seed,
