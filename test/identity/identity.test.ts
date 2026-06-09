@@ -203,6 +203,18 @@ describe('identity — Property', () => {
 
 // ─── Security (the blocking requirement) ─────────────────────────────
 describe('identity — Security', () => {
+  it('accidental JSON.stringify of a credential never emits the raw secret', () => {
+    // Defence in depth: secret fields are non-enumerable, so a tool that
+    // accidentally returns/logs ctx.credential serializes WITHOUT the secret.
+    expect(JSON.stringify(bearer('SECRET_TOK'))).toBe('{"kind":"bearer"}');
+    expect(JSON.stringify(apiKey('SECRET_KEY'))).toBe('{"kind":"apiKey","headerName":"x-api-key"}');
+    expect(JSON.stringify(basic('u', 'SECRET_PW'))).toBe('{"kind":"basic","username":"u"}');
+    expect(JSON.stringify(headers({ authorization: 'Bearer SECRET' }))).toBe('{"kind":"headers"}');
+    // …while direct reads and the applicator still work:
+    expect(bearer('SECRET_TOK').token).toBe('SECRET_TOK');
+    expect(headers({ 'x-a': '1' }).toHeaders()).toEqual({ 'x-a': '1' });
+  });
+
   it('a vended credential used locally in a tool never reaches the snapshot or narrative', async () => {
     const SECRET = 'ghp_super_secret_value_should_never_be_traced_9876543210';
     const credentials = staticTokens({ github: SECRET });

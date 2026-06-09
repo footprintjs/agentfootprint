@@ -17,7 +17,7 @@ import { describe, expect, it } from 'vitest';
 import { flowChart } from 'footprintjs';
 import type { PausableHandler } from 'footprintjs';
 import { Agent, flowchartAsTool, mock, type FlowchartToolSnapshot } from '../../src/index.js';
-import { unconfiguredCredentialProvider } from '../../src/identity/types.js';
+import { unconfiguredCredentialProvider } from '../../src/identity.js';
 
 // ─── Fixtures ─────────────────────────────────────────────────────
 

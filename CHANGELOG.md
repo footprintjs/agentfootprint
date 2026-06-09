@@ -53,6 +53,18 @@ reshapes the credential as a generic, extensible protocol.
   implementers MUST NOT echo secrets in thrown error messages (documented on the
   port). `agentCoreIdentity` does not yet forward `req.identity` (tenant isolation
   derives from the workload token — documented).
+- **Secret fields are non-enumerable** on the built-in kinds: accidentally
+  serializing a credential (returning `ctx.credential` from a tool, logging it)
+  emits only the non-secret fields — `JSON.stringify(bearer(t))` is
+  `{"kind":"bearer"}`, never the token. Direct reads (`cred.token`) still work.
+
+### Migration note for test fixtures
+
+- `ToolExecutionContext` gained two non-optional fields. If you construct ctx
+  literals in your own tests, add them:
+  `{ ..., credentials: unconfiguredCredentialProvider(), hasCredentials: false }`
+  — both `unconfiguredCredentialProvider` and `CredentialNeed` are exported from
+  `agentfootprint/identity`.
 
 ### Deferred (documented follow-ups)
 

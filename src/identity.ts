@@ -31,8 +31,9 @@ export type {
   CredentialResult,
   CredentialIssued,
   CredentialAuthorizationRequired,
+  CredentialNeed,
 } from './identity/types.js';
-export { isCredentialIssued } from './identity/types.js';
+export { isCredentialIssued, unconfiguredCredentialProvider } from './identity/types.js';
 export {
   bearer,
   apiKey,

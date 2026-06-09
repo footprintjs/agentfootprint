@@ -25,7 +25,7 @@ export const meta: ExampleMeta = {
   title: 'Identity — a tool vends a downstream OAuth credential (AgentCore)',
   group: 'features',
   description:
-    'CredentialProvider port: a tool calls getCredential() for a downstream service. staticTokens() offline; agentCoreIdentity() in prod. 2LO returns a token; 3LO surfaces a consent URL. The token is used locally and never enters the trace.',
+    'Declare-and-push: the tool declares needs:{credential}; the framework resolves it BEFORE execute and injects ctx.credential. staticTokens() offline; agentCoreIdentity() in prod (one-line swap). 3LO consent surfaces a URL; the credential never enters the trace.',
   defaultInput: 'list my repos',
   providerSlots: ['default'],
   tags: ['feature', 'identity', 'agentcore', 'credentials', 'security', 'oauth'],

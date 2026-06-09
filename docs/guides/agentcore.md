@@ -110,45 +110,52 @@ const agent = Agent.create({ provider, model }).toolProvider(gateway).build();
 ## Identity — downstream OAuth (`agentCoreIdentity`)
 
 When a tool needs to call GitHub/Slack/Google **on behalf of the user**, AgentCore
-Identity vends the token. agentfootprint exposes a `CredentialProvider` port
-(`agentfootprint/identity`); a tool asks it for a token and uses it locally:
+Identity vends the token. The recommended pattern is **declare-and-push**: the
+tool *declares* the credential it needs, and the framework resolves it **before**
+invoking and injects it as `ctx.credential` — no fetching inside the tool, and the
+credential is never in `inputSchema`, so the LLM never sees it:
 
 ```ts
-import { defineTool } from 'agentfootprint';
+import { Agent, defineTool } from 'agentfootprint';
 import { agentCoreIdentity } from 'agentfootprint/identity'; // or staticTokens({...}) for dev
-
-const credentials = agentCoreIdentity({ region: 'us-east-1' });
 
 const listRepos = defineTool({
   name: 'list_repos',
   description: "List the user's GitHub repos.",
   inputSchema: { type: 'object', properties: {} },
-  execute: async () => {
-    const cred = await credentials.getCredential({ service: 'github', mode: 'user', scopes: ['repo'] });
-    if (cred.status === 'authorization-required') {
-      // 3LO consent: surface cred.authorizationUrl to the user — e.g. pause the
-      // run via pause/resume — then retry after they authorize.
-      return `Please authorize: ${cred.authorizationUrl}`;
-    }
-    return callGitHub({ headers: cred.credential.toHeaders() }); // used locally (universal applicator)
-  },
+  needs: { credential: 'github', mode: 'user', scopes: ['repo'] }, // ← DECLARE
+  execute: async (_args, ctx) =>
+    callGitHub({ headers: ctx.credential!.toHeaders() }),          // ← pushed in
 });
+
+const agent = Agent.create({
+  provider, model,
+  credentials: agentCoreIdentity({ region: 'us-east-1' }),         // attach ONCE
+}).tools([listRepos]).build();
 ```
 
-- **2LO** (`mode:'machine'`) → token returned inline.
-- **3LO** (`mode:'user'`) → may return `authorization-required` with a consent
-  URL; surface it to the user (pause/resume fits naturally), then retry. AgentCore
-  caches refresh tokens, so consent usually happens once.
-- **🔒 Secrets never enter the trace.** Use the token **locally** inside `execute`
-  (as a header); **never** write it to tracked scope (`setValue`) — tracked writes
-  flow to the commit log / recorders / observability export. Pair with
-  `RedactionPolicy` for defence in depth. ([`examples/features/17-identity.ts`](../../examples/features/17-identity.ts)
+- **Resolve-before-invoke**: issued → injected as `ctx.credential`; 3LO consent
+  needed → the consent URL is surfaced to the LLM (the tool is skipped) and
+  `agentfootprint.credential.authorization_required` is emitted; provider failure
+  → the reason is surfaced + emitted, and the tool **never runs half-authed**.
+  AgentCore caches refresh tokens, so consent usually happens once.
+- **`mode`**: omitted → `machine` (2-legged/M2M). Declare `mode: 'user'`
+  explicitly for on-behalf-of-user (3-legged) delegation.
+- **🔒 Secrets never enter the trace.** The credential lives only in `ctx`; the
+  `credential.*` events carry kind/service/reason — never the token; secret
+  fields are non-enumerable, so even an accidental `JSON.stringify` of the
+  credential emits no secret. Never write it to tracked scope (`setValue`).
+  ([`examples/features/17-identity.ts`](../../examples/features/17-identity.ts)
   asserts the vended token never reaches the snapshot.)
-- Dev/test without AWS: `staticTokens({ github: '...' })`.
+- Dev/test without AWS: `staticTokens({ github: '...' })` — swap to
+  `agentCoreIdentity` in one line; the tool never changes.
+- **Escape hatch (dynamic needs):** `ctx.credentials.getCredential({ service })`
+  pulls on demand — fail-closed (it throws when no provider is attached; check
+  `ctx.hasCredentials` for an intentional degraded mode).
 
-> A first-class credential *subflow* + `scope.$getCredential(...)` sugar (so 3LO
-> consent auto-pauses the run) is a planned follow-up — the port + adapters above
-> are the stable foundation.
+> A first-class credential *subflow* node (so 3LO consent auto-pauses the run)
+> is a planned follow-up — the port + declare-and-push above are the stable
+> foundation.
 
 ---
 

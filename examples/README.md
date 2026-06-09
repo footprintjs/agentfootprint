@@ -214,7 +214,7 @@ _Run `npm run examples:readme` after adding/editing examples._
 | 14 | [`14-tool-lineage.ts`](features/14-tool-lineage.ts) | Tool lineage — auto-derive the tool→tool data-flow graph | Attach toolLineageRecorder() to reconstruct which tool RESULT fed which later tool CALL, by value provenance — the data-flow graph causalChain can |
 | 15 | [`15-skill-graph.ts`](features/15-skill-graph.ts) | Skill graph — declarative, token-efficient skill routing | Declare an entry skill + routing edges; each edge compiles to an injection trigger so skills load just-in-time. Deterministic, drawable (toMermaid), zero engine change. |
 | 16 | [`16-providers.ts`](features/16-providers.ts) | LLM providers — pick by env (Azure OpenAI / Anthropic / OpenAI / mock) | One agent, swappable provider. Azure OpenAI via azureOpenai(); OpenAI-compatible company endpoints via openai({ baseURL }); mock for $0 offline runs. Same LLMProvider interface. |
-| 17 | [`17-identity.ts`](features/17-identity.ts) | Identity — a tool vends a downstream OAuth credential (AgentCore) | CredentialProvider port: a tool calls getCredential() for a downstream service. staticTokens() offline; agentCoreIdentity() in prod. 2LO returns a token; 3LO surfaces a consent URL. The token is used locally and never enters the trace. |
+| 17 | [`17-identity.ts`](features/17-identity.ts) | Identity — a tool vends a downstream OAuth credential (AgentCore) |  |
 
 ### [`canonical/`](canonical/) — end-to-end patterns
 

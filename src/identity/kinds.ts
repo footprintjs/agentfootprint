@@ -18,13 +18,37 @@ function base64(s: string): string {
   throw new Error('basic(): no base64 encoder available in this runtime.');
 }
 
+/**
+ * Redefine secret-bearing fields as NON-ENUMERABLE — defence in depth: if a
+ * consumer accidentally serializes a credential (returns `ctx.credential` from
+ * a tool, logs it, embeds it in a result object), `JSON.stringify` emits only
+ * the non-secret fields (e.g. `{"kind":"bearer"}`), never the raw secret. The
+ * fields still READ normally (`cred.token` works); `toHeaders()` is the
+ * intended applicator either way. (`structuredClone` rejects the credential
+ * outright — `toHeaders` is a function — so it can't enter tracked scope.)
+ */
+function hideSecrets<T extends object>(cred: T, fields: readonly (keyof T)[]): T {
+  for (const f of fields) {
+    Object.defineProperty(cred, f, {
+      value: cred[f],
+      enumerable: false,
+      writable: false,
+      configurable: false,
+    });
+  }
+  return cred;
+}
+
 export interface BearerCredential extends Credential {
   readonly kind: 'bearer';
   readonly token: string;
 }
 /** OAuth / bearer token → `Authorization: Bearer <token>`. */
 export function bearer(token: string): BearerCredential {
-  return { kind: 'bearer', token, toHeaders: () => ({ authorization: `Bearer ${token}` }) };
+  return hideSecrets(
+    { kind: 'bearer', token, toHeaders: () => ({ authorization: `Bearer ${token}` }) },
+    ['token'],
+  );
 }
 
 export interface ApiKeyCredential extends Credential {
@@ -34,7 +58,10 @@ export interface ApiKeyCredential extends Credential {
 }
 /** API key → a single header (default `x-api-key`). */
 export function apiKey(key: string, headerName = 'x-api-key'): ApiKeyCredential {
-  return { kind: 'apiKey', key, headerName, toHeaders: () => ({ [headerName]: key }) };
+  return hideSecrets(
+    { kind: 'apiKey', key, headerName, toHeaders: () => ({ [headerName]: key }) },
+    ['key'],
+  );
 }
 
 export interface BasicCredential extends Credential {
@@ -45,12 +72,15 @@ export interface BasicCredential extends Credential {
 /** HTTP Basic auth → `Authorization: Basic base64(user:pass)`. */
 export function basic(username: string, password: string): BasicCredential {
   const encoded = base64(`${username}:${password}`);
-  return {
-    kind: 'basic',
-    username,
-    password,
-    toHeaders: () => ({ authorization: `Basic ${encoded}` }),
-  };
+  return hideSecrets(
+    {
+      kind: 'basic',
+      username,
+      password,
+      toHeaders: () => ({ authorization: `Basic ${encoded}` }),
+    },
+    ['password'],
+  );
 }
 
 export interface HeadersCredential extends Credential {
@@ -61,5 +91,8 @@ export interface HeadersCredential extends Credential {
  *  a provider with no matching typed kind can always return `headers(...)`. */
 export function headers(map: Readonly<Record<string, string>>): HeadersCredential {
   const copy = { ...map };
-  return { kind: 'headers', headers: copy, toHeaders: () => ({ ...copy }) };
+  // The header map IS the secret here — hide it like the other kinds' raw fields.
+  return hideSecrets({ kind: 'headers', headers: copy, toHeaders: () => ({ ...copy }) }, [
+    'headers',
+  ]);
 }
