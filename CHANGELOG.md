@@ -5,6 +5,53 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.10.0]
+
+Minor — **AWS Bedrock AgentCore integration**: make agentfootprint easy to run on
+AgentCore. A deploy template, a complete integration guide, and a new `./identity`
+port for downstream OAuth. Additive.
+
+### Added
+
+- **`agentfootprint/identity`** — the `CredentialProvider` port for OUTBOUND auth
+  (vend a token so a tool can call GitHub/Slack/Google on the user's behalf;
+  distinct from `agentfootprint/security` authorization). Two flows mirroring
+  AgentCore Identity: `mode:'machine'` (2LO, token inline) and `mode:'user'`
+  (3LO — may return `authorization-required` with a consent URL). Adapters:
+  - **`agentCoreIdentity({ region })`** — wraps AgentCore Identity's
+    `GetResourceOauth2Token` (lazy `@aws-sdk/client-bedrock-agentcore`; `_client`
+    test seam). Maps `mode`→`M2M`/`USER_FEDERATION`, `service`→credential-provider
+    name, response→`token`/`authorization-required`.
+  - **`staticTokens({ service: token })`** — dev/test, no network.
+  - Exports: `CredentialProvider`, `CredentialRequest`, `CredentialResult`,
+    `CredentialToken`, `CredentialAuthorizationRequired`, `isCredentialToken`.
+  - **Security invariant:** vended tokens are used locally inside a tool's
+    `execute` and MUST NOT be written to tracked scope — so they never reach the
+    commit log / recorders / observability export. Enforced by convention +
+    proven by a test (token never appears in the snapshot/narrative).
+- **AgentCore Runtime deploy template** — `examples/deploy/`: the HTTP contract
+  handler (`POST /invocations` + `GET /ping` on `:8080`), ARM64 Dockerfile, and
+  README. The example self-tests the contract then exits; `AGENTCORE_SERVE=1`
+  listens forever (the container's mode).
+
+### Docs
+
+- **`docs/guides/agentcore.md`** — coverage matrix + verified setup for the
+  primitives agentfootprint supports: Runtime (template), Memory (`AgentCoreStore`),
+  Observability (`agentcoreObservability`/`otel`), Gateway (MCP via `mcpClient` +
+  `toolProvider`), Bedrock model, Identity, and code-interpreter/browser as
+  `defineTool` examples. Linked from the guides index.
+
+### Tests / Examples
+
+- `test/identity` — the 7 test types (unit/functional/integration/property/
+  **security**/performance/load); the security test proves a vended token used
+  locally never reaches the snapshot or narrative.
+- `test/deploy` — Runtime handler contract + error paths (bad JSON / throw → 500,
+  no stack-trace leak).
+- `examples/features/17-identity` (CredentialProvider; asserts `tokenInSnapshot:
+  false`) + `examples/deploy/agentcore-runtime` (the contract, self-testing).
+
 ## [6.9.0]
 
 Minor — **`skillGraph().tree()` scopes tools to the routed leaf by default** —

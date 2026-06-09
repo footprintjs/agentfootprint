@@ -145,6 +145,11 @@
       "import": "./dist/esm/security/index.js",
       "require": "./dist/security/index.js"
     },
+    "./identity": {
+      "types": "./dist/types/identity.d.ts",
+      "import": "./dist/esm/identity.js",
+      "require": "./dist/identity.js"
+    },
     "./reliability": {
       "types": "./dist/types/reliability/index.d.ts",
       "import": "./dist/esm/reliability/index.js",

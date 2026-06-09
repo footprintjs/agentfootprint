@@ -20,7 +20,7 @@ onto AgentCore.
 | **Observability** | ✅ adapter | `agentcoreObservability` (CloudWatch) / `otelObservability` (OTLP) — `agentfootprint/observability-providers` |
 | **Gateway** (tools) | ✅ via MCP | Gateway exposes tools as MCP; consume them via `agentfootprint/tool-providers` |
 | **Runtime models** | ✅ provider | `bedrock()` (Nova/Claude) + `BedrockCacheStrategy` — `agentfootprint/llm-providers` |
-| **Identity** (downstream OAuth) | ✅ adapter | `agentCoreIdentity()` + the credential subflow — `agentfootprint/identity` |
+| **Identity** (downstream OAuth) | ✅ adapter | `agentCoreIdentity()` / `staticTokens()` (the `CredentialProvider` port) — `agentfootprint/identity` |
 | **Code Interpreter / Browser** | 📋 example | wrap as a `defineTool` calling the AgentCore SDK (snippets below) |
 | **Policy** | ✅ overlaps | use `gatedTools` (`agentfootprint/security`) for action control |
 | **Evaluations** | ✅ overlaps | emit `$eval` + `QualityRecorder`; export via the observability adapter |
@@ -110,31 +110,45 @@ const agent = Agent.create({ provider, model }).toolProvider(gateway).build();
 ## Identity — downstream OAuth (`agentCoreIdentity`)
 
 When a tool needs to call GitHub/Slack/Google **on behalf of the user**, AgentCore
-Identity vends the token. agentfootprint models this as a `CredentialProvider`
-port + an observable **credential subflow** that pauses for 3-legged consent:
+Identity vends the token. agentfootprint exposes a `CredentialProvider` port
+(`agentfootprint/identity`); a tool asks it for a token and uses it locally:
 
 ```ts
-import { agentCoreIdentity } from 'agentfootprint/identity';
+import { defineTool } from 'agentfootprint';
+import { agentCoreIdentity } from 'agentfootprint/identity'; // or staticTokens({...}) for dev
 
 const credentials = agentCoreIdentity({ region: 'us-east-1' });
-const agent = Agent.create({ provider, model, credentials }).build();
 
-// inside a tool: ask for a token; machine-to-machine (2LO) returns directly,
-// user-delegated (3LO) pauses the run with a consent URL, resumes after consent.
-const token = await scope.$getCredential({ service: 'github', mode: 'user', scopes: ['repo'] });
+const listRepos = defineTool({
+  name: 'list_repos',
+  description: "List the user's GitHub repos.",
+  inputSchema: { type: 'object', properties: {} },
+  execute: async () => {
+    const cred = await credentials.getCredential({ service: 'github', mode: 'user', scopes: ['repo'] });
+    if (cred.status === 'authorization-required') {
+      // 3LO consent: surface cred.authorizationUrl to the user — e.g. pause the
+      // run via pause/resume — then retry after they authorize.
+      return `Please authorize: ${cred.authorizationUrl}`;
+    }
+    return callGitHub({ headers: { authorization: `Bearer ${cred.token}` } }); // used locally
+  },
+});
 ```
 
 - **2LO** (`mode:'machine'`) → token returned inline.
-- **3LO** (`mode:'user'`) → if consent is needed, the run **pauses** with an
-  `authorizationUrl` (the existing pause/resume + checkpoint); after the user
-  authorizes, `resume()` continues and the token is retrieved (AgentCore caches
-  refresh tokens, so this usually happens once).
-- **Secrets never enter tracked memory** — vended tokens bypass the commit log /
-  recorders / observability export and are redaction-protected, so they can't leak
-  into a trace.
+- **3LO** (`mode:'user'`) → may return `authorization-required` with a consent
+  URL; surface it to the user (pause/resume fits naturally), then retry. AgentCore
+  caches refresh tokens, so consent usually happens once.
+- **🔒 Secrets never enter the trace.** Use the token **locally** inside `execute`
+  (as a header); **never** write it to tracked scope (`setValue`) — tracked writes
+  flow to the commit log / recorders / observability export. Pair with
+  `RedactionPolicy` for defence in depth. ([`examples/features/17-identity.ts`](../../examples/features/17-identity.ts)
+  asserts the vended token never reaches the snapshot.)
+- Dev/test without AWS: `staticTokens({ github: '...' })`.
 
-See the credential subflow in the trace as `sf-credential`. Dev/test without AWS:
-`staticTokens({ github: '...' })`.
+> A first-class credential *subflow* + `scope.$getCredential(...)` sugar (so 3LO
+> consent auto-pauses the run) is a planned follow-up — the port + adapters above
+> are the stable foundation.
 
 ---
 
