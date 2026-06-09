@@ -256,6 +256,45 @@ agent
   .fact(userProfile);
 ```
 
+### Skill graph — declarative, drawable skill routing (`skillGraph`)
+
+`skillGraph()` is NOT a flavor — it's a builder that sets the **trigger** on a set
+of **skills** (and draws the routing). It throws on a non-skill. Sugar over the
+trigger model; zero engine change.
+
+```typescript
+import { skillGraph, decide, type CombinedRecorder } from 'agentfootprint';
+
+// Flat: entry skills + routing edges
+const graph = skillGraph()
+  .entry(triage)                                            // trigger: always / rule
+  .route(triage, sfp, { when: (r) => JSON.parse(r.result).crc > 0, label: 'CRC>0' })
+  .route(triage, lookup, { onToolReturn: 'get_fcns' })     // trigger: on-tool-return
+  .build();
+
+// Decision tree: predicate nodes route to skill leaves (exactly one fires)
+const tree = skillGraph()
+  .tree(decide(isIo, ioSkill, decide(isSfp, sfpSkill, triage, 'sfp?'), 'io intent?'))
+  .build();
+
+agent.skillGraph(graph);                 // mount (sugar over .injection per skill)
+graph.toMermaid();                       // draws itself (predicate diamonds → skill boxes)
+graph.nodes; graph.edges;                // the drawn shape (for a custom renderer)
+```
+
+- `.entry(skill, { when? })` → `always` / `rule`; `.route(a, b, { when | onToolReturn })`
+  → `rule` / `on-tool-return`; a bare `.route` keeps the skill's default `llm-activated`
+  (model-reachable via `read_skill`, drawn dashed). `.tree(decide(...))` compiles each
+  leaf to the conjunction of its root→leaf predicates (with sibling negation → exactly
+  one leaf).
+- **Routing provenance:** each compiled skill carries `metadata.skillGraph` (a
+  `SkillRouting` — `via` + decision `path`). At run time it rides out on
+  `context.evaluated.routing` (per active skill: id, path, edge label, unlocked tools),
+  narrated by the `context.routed` commentary line. The lens `<SkillGraphFlow>` shows the
+  same path ("REACHED WHEN").
+- Lens viewer: `import { SkillGraphFlow } from 'agentfootprint-lens'` — interactive
+  two-panel (graph │ click-to-inspect skill detail + decision path).
+
 ### Memory — `defineMemory({ type, strategy, store })`
 
 ONE factory dispatches `type × strategy.kind` onto the right pipeline. Multiple memories layer cleanly via per-id scope keys (`memoryInjection_${id}`).
@@ -440,6 +479,14 @@ agent.on('agentfootprint.agent.turn_end', (e) =>
 ```
 
 Wildcards: `.on('*', ...)` for every event, or `.on('agentfootprint.<domain>.*', ...)` per-domain (`agent`, `stream`, `context`, `tools`, `memory`, `cost`, `error`, …). `'agentfootprint.*'` is NOT a valid pattern — the dispatcher accepts `'*'` or `'agentfootprint.<DOMAIN>.*'` only. All events typed via `AgentfootprintEventMap`.
+
+**"What the model saw" (debugging tool/skill selection):**
+- `stream.llm_start.tools` — the tool CATALOG (`{ name, description }[]`) the model saw
+  for the call (its menu); `toolsCount` reflects the dynamic set actually sent.
+- `context.evaluated.skillCatalog` — the skill menu offered; `.routing` — which
+  skill-graph injection activated + why (decision path / edge + unlocked tools).
+- `agentThinkingTrace` surfaces both: `toolsSeen` on the ask/answer beat (AgentThinkingUI
+  ≥0.10 renders "Tools the model saw (N)") + the `context.routed` lead-in.
 
 Recorders (auto-attached when relevant builder method is called):
 - `ContextRecorder` — `context.evaluated` / `context.injected` / `context.slot_composed`
