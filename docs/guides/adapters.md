@@ -29,7 +29,14 @@ providers are also re-exported from the top-level `agentfootprint` barrel.
 | AWS Bedrock | `bedrock()` | `agentfootprint/llm-providers` | `@aws-sdk/client-bedrock-runtime` | AWS IAM |
 | Anthropic via `fetch` (browser/edge) | `browserAnthropic()` | `agentfootprint` (main) | none | key |
 | OpenAI via `fetch` (browser/edge) | `browserOpenai()` | `agentfootprint` (main) | none | key |
+| **Azure OpenAI** via `fetch` (browser/edge) | **`browserAzureOpenai()`** | `agentfootprint` (main) | none | `api-key` (Azure) |
 | Mock (tests, no network) | `mock()` | `agentfootprint` (main) | none | none |
+
+> **Don't want to pick by hand? Let the env decide.** `providerFromEnv()` reads
+> your `.env` and returns the right provider — no `if`/`switch` in your code. See
+> [Env-driven: `providerFromEnv()`](#env-driven-providerfromenv) below. Ideal when
+> "many small companies show up with an API key" — they fill in `.env`, you ship
+> one code path.
 
 **Connecting a company endpoint** — three buckets:
 1. **OpenAI-compatible** (a base URL + key + `Bearer`): most gateways and "we expose
@@ -99,6 +106,46 @@ const provider = createProvider({
 provider-specific keys (Bedrock region, Ollama host, browser `apiUrl`), call the
 underlying factory directly.
 
+### Env-driven: `providerFromEnv()`
+
+The fastest path when the credentials live in a `.env` file (a company hands you
+an API key + endpoint, or a teammate runs the app on their own keys).
+`providerFromEnv()` **reads the environment, detects which provider is configured,
+and returns it** — your code has no branching:
+
+```typescript
+import { Agent, providerFromEnv } from 'agentfootprint';
+
+const { provider, model } = providerFromEnv({ fallbackToMock: true });
+const agent = Agent.create({ provider, model }).build();
+```
+
+Detection order (first match wins):
+
+| If these env vars are set | Resolves to | `model` returned |
+|---|---|---|
+| `AZURE_OPENAI_API_KEY` + (`AZURE_OPENAI_ENDPOINT` \| `OPENAI_BASE_URL`) | `azureOpenai()` | `'azure'` (→ the deployment) |
+| `ANTHROPIC_API_KEY` | `anthropic()` | `LLM_MODEL` ?? `'anthropic'` |
+| `OPENAI_API_KEY` | `openai()` | `LLM_MODEL` ?? `'openai'` |
+| *(none)* | throws — or the mock with `{ fallbackToMock: true }` | `'mock'` |
+
+For Azure it also reads `AZURE_OPENAI_API_VERSION` and `AZURE_OPENAI_DEPLOYMENT`
+(or `MODEL_NAME` as the deployment). A typical company `.env`:
+
+```bash
+OPENAI_BASE_URL=https://your-co.openai.azure.com
+AZURE_OPENAI_API_KEY=...
+AZURE_OPENAI_API_VERSION=2024-12-01-preview
+MODEL_NAME=gpt-4o-128k          # the Azure DEPLOYMENT name
+```
+
+`providerFromEnv()` is **Node-only** (it reads `process.env`); it lazy-loads only
+the SDK for the detected provider, so the others stay optional. In the browser,
+read `import.meta.env` yourself and call `browserAzureOpenai()` /
+`browserAnthropic()` directly. Returns `{ provider, model, kind }` where `kind` is
+`'azure-openai' | 'anthropic' | 'openai' | 'mock'`. See
+[examples/features/16-providers.ts](../../examples/features/16-providers.ts).
+
 ### Direct Class Construction
 
 For advanced use cases, construct the provider classes directly:
@@ -119,10 +166,15 @@ const provider = new AnthropicProvider({
 | `OpenAIProvider` | `openai()` / `ollama()` / `azureOpenai()` | `openai` |
 | `BedrockProvider` | `bedrock()` | `@aws-sdk/client-bedrock-runtime` |
 
-> **Browser providers:** `browserAnthropic()` / `browserOpenai()` (and their
-> `BrowserAnthropicProvider` / `BrowserOpenAIProvider` classes) talk to the
+> **Browser providers:** `browserAnthropic()` / `browserOpenai()` /
+> `browserAzureOpenai()` (and their `BrowserAnthropicProvider` /
+> `BrowserOpenAIProvider` / `BrowserAzureOpenAIProvider` classes) talk to the
 > vendor REST APIs over `fetch` with no Node SDK dependency — use them in
 > browser/edge runtimes. They are re-exported from the top-level barrel.
+> `browserAzureOpenai({ endpoint, apiKey, apiVersion, deployment })` builds the
+> deployment-scoped Azure URL and uses the `api-key` header. **CORS:** browsers
+> block direct calls to many vendor APIs — point `endpoint`/`apiUrl` at a
+> same-origin proxy (e.g. a Vite dev proxy) when the browser blocks the call.
 
 ### Mock Adapter
 

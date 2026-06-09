@@ -336,11 +336,16 @@ export {
   browserOpenai,
   BrowserOpenAIProvider,
   type BrowserOpenAIProviderOptions,
+  browserAzureOpenai,
+  BrowserAzureOpenAIProvider,
+  type BrowserAzureOpenAIProviderOptions,
 } from './adapters/llm/BrowserOpenAIProvider.js';
 export {
   createProvider,
+  providerFromEnv,
   type ProviderKind,
   type CreateProviderOptions,
+  type ProviderFromEnv,
 } from './adapters/llm/createProvider.js';
 
 // Streaming helpers — agent events → SSE for browser delivery.

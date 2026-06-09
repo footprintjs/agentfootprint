@@ -438,9 +438,14 @@ const azure = azureOpenai({
   deployment: process.env.MODEL_NAME,               // gpt-4o-128k (the deployment)
 });  // Agent.create({ provider: azure, model: 'azure' })
 //  3. Anything else: implement the LLMProvider interface (~30 lines).
+
+// Env-driven (no branching): reads .env, detects the provider, returns it.
+import { providerFromEnv } from 'agentfootprint';
+const { provider: p, model } = providerFromEnv({ fallbackToMock: true });
+// Azure (AZURE_OPENAI_API_KEY + endpoint) → anthropic (ANTHROPIC_API_KEY) → openai (OPENAI_API_KEY) → mock
 ```
 
-Every provider implements the same `LLMProvider` interface. The vendor-SDK providers (`anthropic`, `openai`, `azureOpenai`, `bedrock`, `ollama`, plus their `*Provider` classes) live ONLY at `agentfootprint/llm-providers` (legacy alias `agentfootprint/providers`) — kept off the main barrel so bundlers never walk the lazy peer-dep requires. The main barrel exports the zero-peer-dep providers: `mock`, `browserAnthropic`, `browserOpenai`, and `createProvider`. **Azure is NOT OpenAI-compatible** — use `azureOpenai()`, not `openai({ baseURL })`. Full list + the "connect a company endpoint" buckets: [docs/guides/adapters.md](docs/guides/adapters.md).
+Every provider implements the same `LLMProvider` interface. The vendor-SDK providers (`anthropic`, `openai`, `azureOpenai`, `bedrock`, `ollama`, plus their `*Provider` classes) live ONLY at `agentfootprint/llm-providers` (legacy alias `agentfootprint/providers`) — kept off the main barrel so bundlers never walk the lazy peer-dep requires. The main barrel exports the zero-peer-dep providers: `mock`, `browserAnthropic`, `browserOpenai`, `browserAzureOpenai`, plus the resolvers `createProvider` (by `kind`) and `providerFromEnv` (env auto-detect, Node-only). **Azure is NOT OpenAI-compatible** — use `azureOpenai()` (Node) / `browserAzureOpenai()` (browser, `api-key` header, deployment-scoped URL), not `openai({ baseURL })`. Full list + the "connect a company endpoint" buckets + `providerFromEnv()` table: [docs/guides/adapters.md](docs/guides/adapters.md).
 
 ### Pause / Resume (Human-in-the-Loop)
 

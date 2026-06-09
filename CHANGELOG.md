@@ -5,6 +5,50 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.8.0]
+
+Minor — **Azure OpenAI in the browser** (`browserAzureOpenai()`) + **env-driven
+provider resolver** (`providerFromEnv()`), so "a company shows up with an API key"
+is a `.env` edit, not a code change. Additive.
+
+### Added
+
+- **`browserAzureOpenai({ endpoint, apiKey, apiVersion, deployment })`** (main
+  barrel) — drives an **Azure OpenAI** endpoint from the browser/edge over
+  `fetch`, no Node SDK. Builds the deployment-scoped URL
+  (`{endpoint}/openai/deployments/{deployment}/chat/completions?api-version=…`)
+  and authenticates with the **`api-key` header** (not `Authorization: Bearer`).
+  Reuses `browserOpenai`'s request/response/streaming logic. The request's
+  `model` is the deployment; the shorthand `'azure'` resolves to the configured
+  `deployment`. New exports: `BrowserAzureOpenAIProvider`,
+  `BrowserAzureOpenAIProviderOptions`. **CORS:** point `endpoint` at a
+  same-origin proxy when the browser blocks the direct call.
+- **`browserOpenai({ authScheme })`** — new `authScheme?: 'bearer' | 'api-key'`
+  option (default `'bearer'`); `'api-key'` sends the `api-key` header (the Azure
+  shape). Backward-compatible — existing callers default to Bearer.
+- **`providerFromEnv({ fallbackToMock? })`** (main barrel, **Node-only**) — reads
+  `process.env`, detects which provider is configured, and returns
+  `{ provider, model, kind }` with no branching in your code. Detection order:
+  **Azure** (`AZURE_OPENAI_API_KEY` + `AZURE_OPENAI_ENDPOINT`|`OPENAI_BASE_URL`)
+  → **Anthropic** (`ANTHROPIC_API_KEY`) → **OpenAI** (`OPENAI_API_KEY`) →
+  throws, or the mock with `{ fallbackToMock: true }`. Lazy-loads only the
+  detected provider's SDK. New export: `ProviderFromEnv`.
+
+### Docs
+
+- `docs/guides/adapters.md` — `browserAzureOpenai` in the providers table + an
+  **Env-driven: `providerFromEnv()`** section (detection table + a typical
+  company `.env`) + a browser-providers CORS note. CLAUDE.md providers section
+  updated (env-driven snippet + barrel exports).
+
+### Tests / Examples
+
+- `test/adapters/unit/AzureBrowserAndEnv` — `browserAzureOpenai` URL / `api-key`
+  header / deployment routing / validation via a recording fake `fetch`;
+  `providerFromEnv` detection order + mock fallback + the no-creds error.
+- `examples/features/16-providers` — now uses `providerFromEnv({ fallbackToMock })`
+  (dogfoods the resolver); runs offline on the mock.
+
 ## [6.7.0]
 
 Minor — **Azure OpenAI provider** (`azureOpenai()`), for the common "company with

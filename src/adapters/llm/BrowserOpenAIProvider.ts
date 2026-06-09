@@ -105,6 +105,9 @@ export interface BrowserOpenAIProviderOptions {
   readonly apiUrl?: string;
   /** Optional `Organization` header. */
   readonly organization?: string;
+  /** Auth header scheme. `'bearer'` (default) → `Authorization: Bearer <key>`;
+   *  `'api-key'` → the `api-key` header (Azure OpenAI). */
+  readonly authScheme?: 'bearer' | 'api-key';
   /** @internal Custom fetch implementation for tests. */
   readonly _fetch?: typeof fetch;
 }
@@ -120,10 +123,12 @@ export function browserOpenai(options: BrowserOpenAIProviderOptions): LLMProvide
   const defaultMaxTokens = options.defaultMaxTokens;
   const fetchImpl = options._fetch ?? fetch;
 
-  const headers: Record<string, string> = {
-    'content-type': 'application/json',
-    authorization: `Bearer ${options.apiKey}`,
-  };
+  const headers: Record<string, string> = { 'content-type': 'application/json' };
+  if (options.authScheme === 'api-key') {
+    headers['api-key'] = options.apiKey; // Azure OpenAI
+  } else {
+    headers['authorization'] = `Bearer ${options.apiKey}`;
+  }
   if (options.organization) headers['openai-organization'] = options.organization;
 
   const provider: LLMProvider = {
@@ -222,6 +227,108 @@ export class BrowserOpenAIProvider implements LLMProvider {
 
   constructor(options: BrowserOpenAIProviderOptions) {
     this.inner = browserOpenai(options);
+  }
+
+  complete(req: LLMRequest): Promise<LLMResponse> {
+    return this.inner.complete(req);
+  }
+
+  stream(req: LLMRequest): AsyncIterable<LLMChunk> {
+    if (!this.inner.stream) throw new Error('stream() unavailable');
+    return this.inner.stream(req);
+  }
+}
+
+// ─── Browser Azure OpenAI ───────────────────────────────────────────
+
+export interface BrowserAzureOpenAIProviderOptions {
+  /** Resource endpoint, e.g. `https://my-co.openai.azure.com` (or a same-origin
+   *  proxy path like `/azure` to sidestep CORS in dev). REQUIRED. */
+  readonly endpoint: string;
+  /** API key (Azure `api-key`). REQUIRED. */
+  readonly apiKey: string;
+  /** Azure API version, e.g. `2024-12-01-preview`. REQUIRED. */
+  readonly apiVersion: string;
+  /** The DEPLOYMENT name (Azure's "model"), e.g. `gpt-4o-128k`. REQUIRED. */
+  readonly deployment: string;
+  /** Default max tokens. */
+  readonly defaultMaxTokens?: number;
+  /** @internal Custom fetch implementation for tests. */
+  readonly _fetch?: typeof fetch;
+}
+
+const AZURE_BROWSER_SHORTHANDS = new Set([
+  'azure',
+  'browser-azure-openai',
+  'azure-openai',
+  'openai',
+]);
+
+/**
+ * Fetch-based **Azure OpenAI** provider for the browser/edge — no SDK, no Node.
+ *
+ * The browser can't use the Node `azureOpenai()` (it needs the `openai` SDK), so
+ * use this in a browser "bring your own (company) key" flow. Builds the
+ * deployment-scoped Azure URL + `api-key` header + `api-version`, and reuses all
+ * of `browserOpenai()`'s body/streaming/tool logic. The request `model` is the
+ * deployment; `'azure'` resolves to the configured `deployment`.
+ *
+ * **CORS:** an `*.openai.azure.com` resource may not allow direct browser calls;
+ * if blocked, point `endpoint` at a same-origin proxy (e.g. a Vite `/azure`
+ * proxy) or a backend. Same trade-off as `browserOpenai`.
+ *
+ * @example
+ *   import { browserAzureOpenai } from 'agentfootprint';
+ *   const provider = browserAzureOpenai({
+ *     endpoint: 'https://my-co.openai.azure.com',
+ *     apiKey: userKey, apiVersion: '2024-12-01-preview', deployment: 'gpt-4o-128k',
+ *   });
+ *   // Agent.create({ provider, model: 'azure' })
+ */
+export function browserAzureOpenai(options: BrowserAzureOpenAIProviderOptions): LLMProvider {
+  if (!options.apiKey) throw new Error('browserAzureOpenai requires `apiKey`.');
+  if (!options.endpoint) {
+    throw new Error(
+      'browserAzureOpenai requires `endpoint` (https://<resource>.openai.azure.com).',
+    );
+  }
+  if (!options.apiVersion) {
+    throw new Error('browserAzureOpenai requires `apiVersion` (e.g. 2024-12-01-preview).');
+  }
+  if (!options.deployment) {
+    throw new Error('browserAzureOpenai requires `deployment` (the Azure deployment name).');
+  }
+  const base = options.endpoint.replace(/\/+$/, '');
+  const apiUrl =
+    `${base}/openai/deployments/${encodeURIComponent(options.deployment)}` +
+    `/chat/completions?api-version=${encodeURIComponent(options.apiVersion)}`;
+
+  const inner = browserOpenai({
+    apiKey: options.apiKey,
+    apiUrl,
+    authScheme: 'api-key',
+    defaultModel: options.deployment,
+    ...(options.defaultMaxTokens !== undefined && { defaultMaxTokens: options.defaultMaxTokens }),
+    ...(options._fetch && { _fetch: options._fetch }),
+  });
+  const withDeployment = (req: LLMRequest): LLMRequest =>
+    AZURE_BROWSER_SHORTHANDS.has(req.model) ? { ...req, model: options.deployment } : req;
+
+  return {
+    name: 'browser-azure-openai',
+    complete: (req) => inner.complete(withDeployment(req)),
+    ...(inner.stream && {
+      stream: (req: LLMRequest) => inner.stream!(withDeployment(req)),
+    }),
+  };
+}
+
+export class BrowserAzureOpenAIProvider implements LLMProvider {
+  readonly name = 'browser-azure-openai';
+  private readonly inner: LLMProvider;
+
+  constructor(options: BrowserAzureOpenAIProviderOptions) {
+    this.inner = browserAzureOpenai(options);
   }
 
   complete(req: LLMRequest): Promise<LLMResponse> {
