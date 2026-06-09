@@ -335,10 +335,13 @@ const facts = defineMemory({
   store: new InMemoryStore(),
 });
 
-// Causal — UNIQUE TO AGENTFOOTPRINT. Persists footprintjs decision-evidence
-// snapshots so cross-run "why was X rejected?" follow-ups answer from
-// EXACT past facts (zero hallucination). Same data shape feeds SFT/DPO
-// training-data exports in v2.1+.
+// Causal — UNIQUE TO AGENTFOOTPRINT. Persists run snapshots so cross-run
+// "why was X rejected?" follow-ups answer from stored past runs instead of
+// re-running. HONEST STATUS: today the snapshot stores the query + final
+// outcome; the operator-level decision evidence (decide() conditions, tool
+// calls, token usage) is scaffolded but NOT yet wired into the snapshot —
+// the evidence bridge is backlog Phase-1 #5. Don't claim "zero hallucination
+// evidence replay" until it lands.
 const causal = defineMemory({
   id: 'causal',
   type: MEMORY_TYPES.CAUSAL,
@@ -491,7 +494,7 @@ const chain = fallbackProvider(anthropic({...}), openai({...}), ollama({...}));
 
 Also available: `withCircuitBreaker(provider, opts?)`. The resilience decorators live ONLY at `agentfootprint/resilience` (not the main barrel).
 
-### Observability — 59 typed events × 16 domains
+### Observability — 63 typed events × 17 domains
 
 ```typescript
 agent.on('agentfootprint.context.injected', (e) =>
@@ -547,7 +550,7 @@ Recorders (auto-attached when relevant builder method is called):
 | Inject user profile / current time / env data | `defineFact` |
 | Remember last N turns of conversation | `defineMemory({ type: EPISODIC, strategy: WINDOW })` |
 | Semantic recall via embeddings | `defineMemory({ type: SEMANTIC, strategy: TOP_K })` |
-| Cross-run "why?" replay | `defineMemory({ type: CAUSAL, strategy: TOP_K })` ⭐ |
+| Cross-run "what happened?" replay (decision-evidence wiring in progress — backlog #5) | `defineMemory({ type: CAUSAL, strategy: TOP_K })` ⭐ |
 | Long conversation overflows context | `defineMemory({ type: EPISODIC, strategy: SUMMARIZE })` |
 | Retrieve from a document corpus | `defineRAG({ store, embedder, topK, threshold })` |
 | Use tools from an external MCP server | `mcpClient({ transport, ... })` + `agent.tools(await c.tools())` |

@@ -98,7 +98,7 @@ discipline) since strategies are universal across types.
 
 ⭐ Causal memory is the differentiator no other library has — persists
 footprintjs decision-evidence snapshots so cross-run follow-ups
-("why did you reject X last week?") get EXACT past facts.
+("why did you reject X last week?") answer from the stored run (evidence wiring in progress — backlog #5).
 
 ## [`features/`](features/) — runtime features
 

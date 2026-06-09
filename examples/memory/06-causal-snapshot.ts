@@ -4,7 +4,8 @@
  * THE differentiator. Persists `(query, finalContent)` snapshots of
  * past agent runs, embedded for retrieval. New questions match against
  * past queries via cosine similarity → inject the prior decision
- * evidence → LLM answers from EXACT past facts (zero hallucination).
+ * snapshot → LLM answers from the stored run (today: query + final answer;
+ * operator-level decision evidence lands with the evidence bridge, backlog #5).
  *
  * Bonus: the snapshot data shape doubles as SFT/DPO training data.
  * Every successful production run becomes a labeled trajectory.
@@ -30,7 +31,7 @@ export const meta: ExampleMeta = {
   description:
     'The differentiator: persist past run snapshots tagged with the ' +
     'original query, retrieve via cosine similarity, inject decision ' +
-    'evidence so follow-up questions get EXACT past facts (zero hallucination).',
+    'snapshots so follow-up questions answer from the stored run (evidence wiring in progress).',
   defaultInput: 'Why was my application rejected last week?',
   providerSlots: ['default'],
   tags: ['memory', 'causal', 'snapshot', 'cross-run', 'differentiator'],

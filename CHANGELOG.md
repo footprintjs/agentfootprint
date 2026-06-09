@@ -5,6 +5,33 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.11.1]
+
+Patch — **truth-in-docs sweep** (backlog Phase-0 #4, panel-reviewed). No runtime
+behavior change.
+
+### Fixed (docs/claims that a reader could falsify against source)
+
+- **Causal-memory claims calibrated to what ships today.** The "answers from
+  EXACT past facts (zero hallucination)" claim assumed operator-level decision
+  evidence in snapshots — today `decisions[]`/`toolCalls[]` persist **empty**
+  (only query + final outcome are wired; the evidence bridge is backlog
+  Phase-1 #5). Softened with an honest status note — keeping the vision, not
+  overstating the present — in: CLAUDE.md, AGENTS.md, README,
+  `ai-instructions/claude-code/SKILL.md` (what AI IDEs load), 5 docs-site pages
+  (causal-deep-dive now explicitly narrates the *target design*),
+  MENTAL_MODEL.md, the public `defineMemory`/`SnapshotEntry` JSDoc (ships in IDE
+  tooltips) + generated api-reference, and the causal examples.
+- **Event/domain counts mechanized.** Docs said "59 typed events × 16 domains"
+  (SKILL.md said 47×13; the registry's own header said 45×13) — the registry
+  has **63 events / 17 domains**. All stated counts fixed; hard numbers
+  **stripped** from non-doc locations; a new **anti-drift test** derives both
+  counts from `EVENT_NAMES` and asserts them across **9 docs** (CLAUDE.md,
+  AGENTS.md, MENTAL_MODEL.md, SKILL.md, 5 docs-site pages) so this can't
+  silently drift again.
+- Removed the stale `MIGRATION_PLAN.md` (completed historical work plan;
+  preserved in git history).
+
 ## [6.11.0]
 
 Minor — **declare-and-push credentials**: a tool DECLARES the credential it needs;

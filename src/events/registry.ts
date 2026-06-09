@@ -1,5 +1,7 @@
 /**
- * Event registry — 45 typed events across 13 domains.
+ * Event registry — every typed `agentfootprint.*` event (see ALL_EVENT_TYPES;
+ * the event/domain counts in the docs are asserted against this file by
+ * test/events/unit/registry.test.ts, so don't hardcode counts here).
  *
  * Pattern: Discriminated Union + Typed Factory (Gang of Four adapted for TS).
  * Role:    The stable public event contract — the "ports" of the hexagonal
@@ -82,7 +84,7 @@ import type {
 } from './payloads.js';
 
 // ─── Event type constants ─────────────────────────────────────────────
-// Single source of truth for every event name. Low cardinality (~45),
+// Single source of truth for every event name. Low cardinality,
 // all under the `agentfootprint.` namespace, three-segment dotted form.
 export const EVENT_NAMES = {
   composition: {

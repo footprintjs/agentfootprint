@@ -365,9 +365,11 @@ and `mountMemoryWrite` (in the final branch). Read writes `memoryInjection_${id}
 write persists `newMessages`. Identity = `{tenant?, principal?, conversationId}` → `identityNamespace`.
 
 **Causal memory** stores `SnapshotEntry{query, finalContent, decisions[], toolCalls[], narrative?}`,
-embeds `query` for cosine recall, projects `decisions` back as a system message → zero-hallucination
-"why did you decide X?" follow-ups. *This is the capability no other library has* (footprintjs
-captures WHY, not just WHAT). `exportForTraining` (snapshots as RL/SFT data) is the v2.1 hook.
+embeds `query` for cosine recall, projects the stored run back as a system message for
+"why did you decide X?" follow-ups. STATUS: today `decisions[]`/`toolCalls[]` persist EMPTY —
+only query + finalContent are wired; the decision-evidence bridge is backlog #5. *The design
+is the capability no other library has* (footprintjs captures WHY, not just WHAT).
+`exportForTraining` (snapshots as RL/SFT data) is the v2.1 hook.
 
 > **⚠ LATENT GAP (verified):** the Agent chart does **not** merge `memoryInjection_${id}` into
 > `scope.history`/the LLM request. The read pipeline runs and writes the scope key, but nothing
@@ -435,10 +437,10 @@ Swarm — see §1 for their recipes. None add primitives.
 **Pipeline:** footprintjs 3 channels → recorder bridges → **`EventDispatcher`** (one per Runner,
 O(1) hash-dispatch, typed `on/off/once` + domain-wildcards + `'*'`, error-isolated) → consumers/Lens.
 
-**59 typed events / 16 domains**, all `agentfootprint.*`: `composition.*`(8) `agent.*`(8)
+**63 typed events / 17 domains**, all `agentfootprint.*`: `composition.*`(8) `agent.*`(8)
 `stream.*`(7) `context.*`(5 — the thesis) `memory.*`(4) `tools.*`(6) `skill.*`(2) `permission.*`(4)
-`cost.*`(2) `eval.*`(2) `error.*`(3) `reliability.*`(3) `pause.*`(2) `embedding.*`(1) `risk.*`(1)
-`fallback.*`(1).
+`credential.*`(4) `cost.*`(2) `eval.*`(2) `error.*`(3) `reliability.*`(3) `pause.*`(2)
+`embedding.*`(1) `risk.*`(1) `fallback.*`(1).
 Emitted via `typedEmit(scope,name,payload)` (compile-time-safe) → EmitRecorder →
 **`EmitBridge`** (prefix-match per domain) → `buildEventMeta` enriches
 (`runtimeStageId, subflowPath, runId, wallClockMs, compositionPath, turnIndex, iterIndex`) → dispatch.

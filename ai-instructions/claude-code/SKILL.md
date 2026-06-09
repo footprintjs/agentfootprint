@@ -192,10 +192,11 @@ const facts = defineMemory({
 });
 
 // Causal — UNIQUE TO AGENTFOOTPRINT.
-// Persists footprintjs decision-evidence snapshots so cross-run
-// "why was X rejected?" follow-ups answer from EXACT past facts
-// (zero hallucination). Same data shape feeds SFT/DPO training-data
-// exports in v2.1+.
+// Persists run snapshots so cross-run "why was X rejected?" follow-ups
+// answer from stored past runs instead of re-running. HONEST STATUS:
+// today the snapshot stores the query + final outcome; operator-level
+// decision evidence (decide() conditions, tool calls, token usage) is
+// scaffolded but NOT yet wired — the evidence bridge is backlog #5.
 const causal = defineMemory({
   id: 'causal',
   type: MEMORY_TYPES.CAUSAL,
@@ -357,7 +358,7 @@ if (isPaused(result)) {
 }
 ```
 
-## Observability — 47 typed events × 13 domains
+## Observability — 63 typed events × 17 domains
 
 ```typescript
 agent.on('agentfootprint.context.injected', (e) =>

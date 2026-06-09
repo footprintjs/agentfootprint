@@ -13,7 +13,8 @@
  *   Friday. A "customer service" agent (powered by a CHEAP Haiku-class
  *   model) handles a follow-up question from the same applicant. It
  *   loads the prior decision evidence from causal memory and answers
- *   from EXACT past facts — no re-derivation, no hallucination,
+ *   from the stored run — no re-derivation (operator-level evidence
+ *   replay lands with the evidence bridge, backlog #5),
  *   ~10× lower cost.
  *
  * What this proves:

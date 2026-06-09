@@ -16,7 +16,8 @@ What shape of memory you're keeping.
 - `SEMANTIC`  — extracted structured facts, deduped on key
 - `NARRATIVE` — beats / summaries of prior runs (append-only)
 - `CAUSAL`    — footprintjs execution snapshots, the differentiator
-                (zero-hallucination follow-ups via decision-evidence replay)
+                (replays stored run outcomes for "why?" follow-ups;
+                operator-level decision-evidence wiring in progress)
 
 ## Type Declaration
 

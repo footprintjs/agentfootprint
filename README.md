@@ -139,7 +139,7 @@ Same trace, three workflows:
 - **Offline — monitor what shipped.** Replay any past run from its trace. Alert on drift. Attribute cost per injection.
 - **Detailed — improve via export.** Every successful trajectory is labeled training data for SFT, DPO, or RL — no separate data-collection phase.
 
-And a fourth, novel: **the agent can read its own trace.** Six months after the agent rejected loan #42, *"why did you reject it?"* answers from the recorded evidence (`creditScore=580`, `threshold=600`), not a rerun. Causal memory turns the trace into the agent's working memory.
+And a fourth, novel: **the agent can read its own trace.** Six months after the agent rejected loan #42, *"why did you reject it?"* answers from the stored run — not a rerun. Causal memory turns the trace into the agent's working memory. *(Today the snapshot stores the question + final outcome; wiring the operator-level decision evidence — `creditScore=580 < threshold 600` — into the snapshot is in progress.)*
 
 ---
 

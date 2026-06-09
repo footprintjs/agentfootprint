@@ -51,9 +51,9 @@ export interface SnapshotEntry {
   /**
    * Decision records collected via `decide()`/`select()` during the
    * run. Empty when the agent's flowchart didn't use any decision
-   * primitives. THE killer field: each entry carries the rule that
-   * matched + the evidence values that satisfied it, enabling
-   * zero-hallucination "why" follow-ups.
+   * primitives. THE killer field (by design): each entry carries the rule
+   * that matched + the evidence values that satisfied it. STATUS: persisted
+   * EMPTY today — the evidence bridge (backlog #5) wires it.
    */
   readonly decisions: ReadonlyArray<DecisionRecord>;
 

@@ -6,6 +6,8 @@
  */
 
 import { describe, it, expect, expectTypeOf } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import {
   ALL_EVENT_TYPES,
   EVENT_NAMES,
@@ -13,6 +15,48 @@ import {
   type AgentfootprintEventMap,
   type AgentfootprintEventType,
 } from '../../../src/events/registry.js';
+
+describe('event registry — docs stay in sync with the registry (anti-drift)', () => {
+  // The "<N> typed events × <D> domains" claim appears in three docs. Derive
+  // N and D from EVENT_NAMES so adding an event/domain without updating the
+  // docs fails THIS test instead of shipping stale numbers (the 59-vs-63
+  // drift happened exactly this way — backlog Phase-0 #4).
+  it('every doc stating "<N> typed events … <D> domains" matches the derived counts', () => {
+    const eventCount = ALL_EVENT_TYPES.length;
+    const domainCount = Object.keys(EVENT_NAMES).length;
+    const root = join(__dirname, '../../..');
+    const DOCS = [
+      'CLAUDE.md',
+      'AGENTS.md',
+      'docs/MENTAL_MODEL.md',
+      'ai-instructions/claude-code/SKILL.md',
+      'docs-site/src/content/docs/index.mdx',
+      'docs-site/src/content/docs/getting-started/debug.mdx',
+      'docs-site/src/content/docs/architecture/dependency-graph.mdx',
+      'docs-site/src/content/docs/guides/observability.mdx',
+      'docs-site/src/content/docs/guides/agent.mdx',
+    ];
+    for (const doc of DOCS) {
+      const text = readFileSync(join(root, doc), 'utf8');
+      // tolerate the phrasings in use: "× ", " across ", " / ", "fire across"
+      const matches = [...text.matchAll(/(\d+) typed events\D{1,15}?(\d+) domains/g)];
+      expect(
+        matches.length,
+        `${doc} has no "<N> typed events … <D> domains" claim`,
+      ).toBeGreaterThan(0);
+      for (const m of matches) {
+        expect(
+          Number(m[1]),
+          `${doc} says ${m[1]} events; registry has ${eventCount} — update the doc`,
+        ).toBe(eventCount);
+        expect(
+          Number(m[2]),
+          `${doc} says ${m[2]} domains; registry has ${domainCount} — update the doc`,
+        ).toBe(domainCount);
+      }
+    }
+  });
+});
 
 describe('event registry — names + exhaustiveness', () => {
   it('every EVENT_NAMES entry is in the agentfootprint.<domain>.<action> form', () => {

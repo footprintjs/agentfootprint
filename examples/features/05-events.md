@@ -58,7 +58,7 @@ off();
 `composition · agent · stream · context · memory · tools · skill ·
 permission · risk · fallback · cost · eval · error · pause · embedding`
 
-47 typed events total. See `src/events/registry.ts` for the full list.
+See `src/events/registry.ts` (ALL_EVENT_TYPES) for the full list.
 
 ## Related
 

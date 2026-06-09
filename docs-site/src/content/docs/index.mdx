@@ -110,7 +110,7 @@ Per-iteration recomposition would burn tokens (everything re-builds every iterat
 
 Every run exports as one JSON checkpoint. Persist it (Redis, Postgres, S3); resume on a different process, day, or server. `defineMemory({ type: CAUSAL })` stores the agent's **decision evidence** — every `decide()` value the flowchart captured.
 
-New questions cosine-match past queries; matching snapshots inject the prior decision evidence; the LLM answers from EXACT past facts, not reconstruction. See [Memory guide § Causal](/agentfootprint/guides/memory/#causal-memory--replay-decisions-not-just-messages).
+New questions cosine-match past queries; matching snapshots inject the stored past run; the LLM answers from what actually happened instead of re-deriving. *(Status: today the snapshot stores the query + final outcome; wiring the operator-level decision evidence into the snapshot is in progress — see the roadmap.)* See [Memory guide § Causal](/agentfootprint/guides/memory/#causal-memory--replay-decisions-not-just-messages).
 
 The same JSON shape feeds SFT / DPO / process-RL training pipelines (`exportForTraining({ format })` on the roadmap).
 
@@ -162,7 +162,7 @@ Ship the patterns first; pay for tokens last.
 
 ## What ships today
 
-- **59 typed events across 16 domains** — context, stream, agent, cost, permission, eval, memory, skill, composition, tools, reliability, error, and more
+- **63 typed events across 17 domains** — context, stream, agent, cost, permission, credential, eval, memory, skill, composition, tools, reliability, error, and more
 - **6 detach drivers** for non-blocking observability (microtask, immediate, setImmediate, setTimeout, sendBeacon, worker-thread)
 - **Provider-agnostic prompt cache** — Anthropic + OpenAI + Bedrock + NoOp, with a strategy registry for vendor-specific subpaths
 - **4 observability vendor adapters** (v2.8.1 → v2.9.0) — `agentcoreObservability`, `cloudwatchObservability`, `xrayObservability` (hierarchical AWS X-Ray traces), `otelObservability` (OpenTelemetry — unlocks Honeycomb / Datadog / Splunk / etc. via OTLP). All under `agentfootprint/observability-providers`.

@@ -151,7 +151,7 @@ await friday.run({
 //    the threshold of 600. The decision was made on Monday at 2:14 PM."
 ```
 
-The Friday agent's prompt includes the projected `decisions[]` entries from Monday's run — the LLM sees, verbatim, the `classify-risk → "rejected"` choice with `evidence: { creditScore: 580, threshold: 600 }`. The follow-up answer is grounded in EXACT past facts, not reconstruction.
+This walkthrough narrates the **target design**: the Friday agent's prompt includes the projected `decisions[]` entries from Monday's run — the LLM sees the `classify-risk → "rejected"` choice with `evidence: { creditScore: 580, threshold: 600 }`, grounding the follow-up in stored past facts rather than reconstruction. *(Status: today the snapshot stores the query + final outcome; wiring the operator-level decision evidence into the snapshot is in progress — see the roadmap.)*
 
 ## Why this works — the cheap-model triage economic argument
 

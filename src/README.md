@@ -40,7 +40,7 @@ Everything downstream (the `.on()` API, the `.enable.*` features, patterns, Lens
 5. Primitives                  LLMCall · Agent
 4. Compositions                Sequence · Parallel · Conditional · Loop
 3. Context Engineering (3-slot) SystemPrompt · Messages · Tools
-2. Event Registry              47 typed events + dispatcher
+2. Event Registry              typed events + dispatcher (counts asserted in test/events)
 1. footprintjs                 execution engine (unchanged)
 ```
 
