@@ -13,17 +13,37 @@ Adapters bridge external systems to agentfootprint's interfaces. There are two c
 
 ## LLM Adapters
 
-The vendor-SDK providers (Anthropic, OpenAI, Ollama, Bedrock) live in the
-`agentfootprint/llm-providers` subpath — they lazy-load their respective SDKs as
-peer dependencies. The browser-safe and mock providers are also re-exported from
-the top-level `agentfootprint` barrel.
+The vendor-SDK providers live in the `agentfootprint/llm-providers` subpath — they
+lazy-load their respective SDKs as peer dependencies. The browser-safe and mock
+providers are also re-exported from the top-level `agentfootprint` barrel.
+
+### Supported providers
+
+| Provider | Factory | Subpath | Peer SDK | Auth |
+|---|---|---|---|---|
+| Anthropic (Claude) | `anthropic()` | `agentfootprint/llm-providers` | `@anthropic-ai/sdk` | `ANTHROPIC_API_KEY` |
+| OpenAI (GPT) | `openai()` | `agentfootprint/llm-providers` | `openai` | `OPENAI_API_KEY` |
+| **Azure OpenAI** | **`azureOpenai()`** | `agentfootprint/llm-providers` | `openai` | `api-key` (Azure) |
+| OpenAI-compatible (Together, Groq, OpenRouter, vLLM, LM Studio, LiteLLM gateway, …) | `openai({ baseURL })` | `agentfootprint/llm-providers` | `openai` | `Bearer` |
+| Ollama (local) | `ollama()` | `agentfootprint/llm-providers` | `openai` | none |
+| AWS Bedrock | `bedrock()` | `agentfootprint/llm-providers` | `@aws-sdk/client-bedrock-runtime` | AWS IAM |
+| Anthropic via `fetch` (browser/edge) | `browserAnthropic()` | `agentfootprint` (main) | none | key |
+| OpenAI via `fetch` (browser/edge) | `browserOpenai()` | `agentfootprint` (main) | none | key |
+| Mock (tests, no network) | `mock()` | `agentfootprint` (main) | none | none |
+
+**Connecting a company endpoint** — three buckets:
+1. **OpenAI-compatible** (a base URL + key + `Bearer`): most gateways and "we expose
+   an OpenAI-compatible API" setups → `openai({ baseURL, apiKey })`. No new code.
+2. **Azure OpenAI** (`*.openai.azure.com`, `api-key` header, `api-version`,
+   deployment-as-model): → `azureOpenai({ endpoint, apiKey, apiVersion, deployment })`.
+3. **Anything else** → implement the `LLMProvider` interface (below) — ~30 lines.
 
 ### Provider Factories
 
 Each provider has a lowercase factory that takes an options object:
 
 ```typescript
-import { anthropic, openai, ollama, bedrock } from 'agentfootprint/llm-providers';
+import { anthropic, openai, azureOpenai, ollama, bedrock } from 'agentfootprint/llm-providers';
 
 // Anthropic Claude
 const claude = anthropic({ model: 'claude-sonnet-4-20250514', apiKey: process.env.ANTHROPIC_API_KEY });
@@ -31,12 +51,30 @@ const claude = anthropic({ model: 'claude-sonnet-4-20250514', apiKey: process.en
 // OpenAI GPT-4o
 const gpt = openai({ model: 'gpt-4o', apiKey: process.env.OPENAI_API_KEY });
 
+// Azure OpenAI — a company resource. The request's `model` is the DEPLOYMENT name;
+// the shorthand 'azure' resolves to the configured `deployment`.
+const azure = azureOpenai({
+  endpoint: process.env.OPENAI_BASE_URL,            // https://my-co.openai.azure.com
+  apiKey: process.env.AZURE_OPENAI_API_KEY,
+  apiVersion: process.env.AZURE_OPENAI_API_VERSION, // e.g. 2024-12-01-preview
+  deployment: process.env.MODEL_NAME,               // e.g. gpt-4o-128k
+});
+// Agent.create({ provider: azure, model: 'azure' })
+
+// OpenAI-compatible (Together, Groq, OpenRouter, vLLM, LiteLLM gateway, …)
+const groq = openai({ baseURL: 'https://api.groq.com/openai/v1', apiKey: process.env.GROQ_API_KEY, defaultModel: 'llama-3.3-70b-versatile' });
+
 // Ollama (local, OpenAI-compatible)
 const llama = ollama({ model: 'llama3' });
 
 // AWS Bedrock
 const bedrockClaude = bedrock({ model: 'anthropic.claude-3-sonnet-20240229-v1:0' });
 ```
+
+> **Azure ≠ OpenAI-compatible.** Don't point `openai({ baseURL })` at an
+> `*.openai.azure.com` URL — Azure uses a deployment-scoped path, `api-key` header
+> auth, and an `api-version` param. Use `azureOpenai(...)`, which wraps the SDK's
+> `AzureOpenAI` client and reuses the same completion/streaming/tool logic.
 
 Each factory returns an `LLMProvider` directly — ready to pass to
 `Agent.create({ provider })` or `LLMCall.create({ provider })`.
@@ -78,7 +116,7 @@ const provider = new AnthropicProvider({
 | Class | Factory | Required peer SDK |
 |---------|---------|-------------|
 | `AnthropicProvider` | `anthropic()` | `@anthropic-ai/sdk` |
-| `OpenAIProvider` | `openai()` / `ollama()` | `openai` |
+| `OpenAIProvider` | `openai()` / `ollama()` / `azureOpenai()` | `openai` |
 | `BedrockProvider` | `bedrock()` | `@aws-sdk/client-bedrock-runtime` |
 
 > **Browser providers:** `browserAnthropic()` / `browserOpenai()` (and their

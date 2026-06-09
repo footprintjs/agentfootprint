@@ -255,6 +255,137 @@ export class OpenAIProvider implements LLMProvider {
   }
 }
 
+// ─── Azure OpenAI ───────────────────────────────────────────────────
+
+export interface AzureOpenAIProviderOptions {
+  /** Resource endpoint, e.g. `https://my-co.openai.azure.com`. Env fallbacks:
+   *  `AZURE_OPENAI_ENDPOINT`, then `OPENAI_BASE_URL`. */
+  readonly endpoint?: string;
+  /** API key. Env fallbacks: `AZURE_OPENAI_API_KEY`, then `OPENAI_API_KEY`. */
+  readonly apiKey?: string;
+  /** Azure API version, e.g. `2024-12-01-preview`. Env fallback:
+   *  `AZURE_OPENAI_API_VERSION`. Required. */
+  readonly apiVersion?: string;
+  /** The DEPLOYMENT name (Azure's "model"), e.g. `gpt-4o-128k`. Env fallbacks:
+   *  `AZURE_OPENAI_DEPLOYMENT`, then `MODEL_NAME`. Required. */
+  readonly deployment?: string;
+  /** Default max tokens when the request doesn't set it. Optional. */
+  readonly defaultMaxTokens?: number;
+  /** @internal Pre-built client for testing. Skips SDK import. */
+  readonly _client?: OpenAIClient;
+}
+
+/** Shorthand model ids that resolve to the configured deployment. */
+const AZURE_MODEL_SHORTHANDS = new Set(['azure', 'azure-openai', 'openai']);
+
+/**
+ * Build an `LLMProvider` for **Azure OpenAI**.
+ *
+ * Azure is NOT a drop-in OpenAI-compatible URL — it uses a deployment-scoped
+ * path, `api-key` header auth, and an `api-version` query param. This wraps the
+ * `openai` SDK's `AzureOpenAI` client (which handles all that) and reuses the
+ * exact same completion/streaming/tool-call logic as `openai()`.
+ *
+ * The request's `model` is the Azure **deployment** name. Pass a deployment id
+ * to target it; the shorthands `'azure'` / `'azure-openai'` resolve to the
+ * configured default `deployment`.
+ *
+ * @example
+ *   import { azureOpenai } from 'agentfootprint/llm-providers';
+ *
+ *   const agent = Agent.create({
+ *     provider: azureOpenai({
+ *       endpoint: process.env.OPENAI_BASE_URL,            // *.openai.azure.com
+ *       apiKey: process.env.AZURE_OPENAI_API_KEY,
+ *       apiVersion: process.env.AZURE_OPENAI_API_VERSION, // 2024-12-01-preview
+ *       deployment: process.env.MODEL_NAME,               // gpt-4o-128k
+ *     }),
+ *     model: 'azure',
+ *   }).build();
+ */
+export function azureOpenai(options: AzureOpenAIProviderOptions = {}): LLMProvider {
+  const client = resolveAzureClient(options);
+  const deployment =
+    options.deployment ?? process.env.AZURE_OPENAI_DEPLOYMENT ?? process.env.MODEL_NAME;
+  if (!deployment) {
+    throw new Error(
+      'azureOpenai: a `deployment` is required (or set AZURE_OPENAI_DEPLOYMENT / MODEL_NAME).',
+    );
+  }
+  // Reuse ALL of openai()'s logic via the injected client; defaultModel is the
+  // deployment so shorthand model ids resolve to it.
+  const inner = openai({
+    _client: client,
+    defaultModel: deployment,
+    ...(options.defaultMaxTokens !== undefined && { defaultMaxTokens: options.defaultMaxTokens }),
+  });
+  // Azure's "model" IS the deployment — rewrite shorthand ids to it; a concrete
+  // deployment id passes through (so you can target multiple deployments).
+  const withDeployment = (req: LLMRequest): LLMRequest =>
+    AZURE_MODEL_SHORTHANDS.has(req.model) ? { ...req, model: deployment } : req;
+
+  return {
+    name: 'azure-openai',
+    complete: (req) => inner.complete(withDeployment(req)),
+    ...(inner.stream && {
+      stream: (req: LLMRequest) => inner.stream!(withDeployment(req)),
+    }),
+  };
+}
+
+function resolveAzureClient(options: AzureOpenAIProviderOptions): OpenAIClient {
+  if (options._client) return options._client;
+  let AzureOpenAI: new (opts: {
+    endpoint: string;
+    apiKey?: string;
+    apiVersion: string;
+    deployment?: string;
+  }) => OpenAIClient;
+  try {
+    const mod = lazyRequire<{ AzureOpenAI?: unknown; default?: { AzureOpenAI?: unknown } }>(
+      'openai',
+    );
+    AzureOpenAI = (mod.AzureOpenAI ?? mod.default?.AzureOpenAI) as new (opts: {
+      endpoint: string;
+      apiKey?: string;
+      apiVersion: string;
+      deployment?: string;
+    }) => OpenAIClient;
+  } catch {
+    throw new Error(
+      'azureOpenai requires the `openai` package.\n' +
+        '  Install:  npm install openai\n' +
+        '  Or pass `_client` for test injection.',
+    );
+  }
+  if (!AzureOpenAI) {
+    throw new Error('azureOpenai needs `openai` >= 4.x (no `AzureOpenAI` export found).');
+  }
+  const endpoint =
+    options.endpoint ?? process.env.AZURE_OPENAI_ENDPOINT ?? process.env.OPENAI_BASE_URL;
+  const apiKey = options.apiKey ?? process.env.AZURE_OPENAI_API_KEY ?? process.env.OPENAI_API_KEY;
+  const apiVersion = options.apiVersion ?? process.env.AZURE_OPENAI_API_VERSION;
+  const deployment =
+    options.deployment ?? process.env.AZURE_OPENAI_DEPLOYMENT ?? process.env.MODEL_NAME;
+  if (!endpoint) {
+    throw new Error(
+      'azureOpenai: `endpoint` is required (or set AZURE_OPENAI_ENDPOINT / OPENAI_BASE_URL), ' +
+        'e.g. https://my-co.openai.azure.com',
+    );
+  }
+  if (!apiVersion) {
+    throw new Error(
+      'azureOpenai: `apiVersion` is required (or set AZURE_OPENAI_API_VERSION), e.g. 2024-12-01-preview.',
+    );
+  }
+  return new AzureOpenAI({
+    endpoint,
+    ...(apiKey && { apiKey }),
+    apiVersion,
+    ...(deployment && { deployment }),
+  });
+}
+
 /**
  * Convenience factory for Ollama (OpenAI-compatible endpoint).
  *

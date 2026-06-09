@@ -5,6 +5,40 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.7.0]
+
+Minor — **Azure OpenAI provider** (`azureOpenai()`), for the common "company with
+an Azure resource + API key" case. Additive.
+
+### Added
+
+- **`azureOpenai({ endpoint, apiKey, apiVersion, deployment })`** (from
+  `agentfootprint/llm-providers`) — drives an **Azure OpenAI** endpoint. Azure is
+  NOT OpenAI-compatible (deployment-scoped path, `api-key` header auth, an
+  `api-version` param, deployment-as-model), so `openai({ baseURL })` can't reach
+  it. This wraps the `openai` SDK's `AzureOpenAI` client and **reuses all of the
+  OpenAI provider's** completion / streaming / tool-call logic. The request's
+  `model` is the Azure **deployment**; the shorthands `'azure'` / `'azure-openai'`
+  resolve to the configured `deployment` (pass a concrete deployment id to target
+  another). Env fallbacks: `AZURE_OPENAI_ENDPOINT`/`OPENAI_BASE_URL`,
+  `AZURE_OPENAI_API_KEY`/`OPENAI_API_KEY`, `AZURE_OPENAI_API_VERSION`,
+  `AZURE_OPENAI_DEPLOYMENT`/`MODEL_NAME`. New export: `AzureOpenAIProviderOptions`.
+
+### Docs
+
+- `docs/guides/adapters.md` — a **supported-providers table** + the "connect a
+  company endpoint" 3-bucket guide (OpenAI-compatible → `openai({ baseURL })`;
+  Azure → `azureOpenai()`; anything else → the `LLMProvider` interface). CLAUDE.md
+  providers section updated.
+
+### Tests / Examples
+
+- `test/adapters/unit/AzureOpenAIProvider` — deployment routing (shorthands → the
+  configured deployment; concrete ids pass through), streaming delegation, the
+  `deployment`-required guard (fake `_client`, no network).
+- `examples/features/16-providers` — one agent, provider picked from the env
+  (Azure / Anthropic / OpenAI / mock); runs offline on the mock.
+
 ## [6.6.0]
 
 Minor — capture **"what the model saw"**: the tool catalog (name + description)

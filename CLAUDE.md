@@ -421,15 +421,26 @@ Browse [`examples/patterns/`](examples/patterns/) — every pattern is a runnabl
 
 ```typescript
 import { mock } from 'agentfootprint';                          // zero-peer-dep, on the main barrel
-import { anthropic, openai, bedrock, ollama } from 'agentfootprint/llm-providers';  // vendor-SDK-backed
+import { anthropic, openai, azureOpenai, bedrock, ollama } from 'agentfootprint/llm-providers';  // vendor-SDK-backed
 
 // Adapter-swap testing: same agent, different provider, $0 in CI
 const provider = process.env.NODE_ENV === 'production'
   ? anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
   : mock({ reply: 'test response' });
+
+// Company endpoints (3 buckets):
+//  1. OpenAI-compatible (Together/Groq/OpenRouter/vLLM/LiteLLM): openai({ baseURL, apiKey })
+//  2. Azure OpenAI (*.openai.azure.com — deployment-as-model, api-key, api-version):
+const azure = azureOpenai({
+  endpoint: process.env.OPENAI_BASE_URL,            // *.openai.azure.com
+  apiKey: process.env.AZURE_OPENAI_API_KEY,
+  apiVersion: process.env.AZURE_OPENAI_API_VERSION, // 2024-12-01-preview
+  deployment: process.env.MODEL_NAME,               // gpt-4o-128k (the deployment)
+});  // Agent.create({ provider: azure, model: 'azure' })
+//  3. Anything else: implement the LLMProvider interface (~30 lines).
 ```
 
-Every provider implements the same `LLMProvider` interface. The vendor-SDK providers (`anthropic`, `openai`, `bedrock`, `ollama`, plus their `*Provider` classes) live ONLY at `agentfootprint/llm-providers` (legacy alias `agentfootprint/providers`) — kept off the main barrel so bundlers never walk the lazy peer-dep requires. The main barrel exports the zero-peer-dep providers: `mock`, `browserAnthropic`, `browserOpenai`, and `createProvider`.
+Every provider implements the same `LLMProvider` interface. The vendor-SDK providers (`anthropic`, `openai`, `azureOpenai`, `bedrock`, `ollama`, plus their `*Provider` classes) live ONLY at `agentfootprint/llm-providers` (legacy alias `agentfootprint/providers`) — kept off the main barrel so bundlers never walk the lazy peer-dep requires. The main barrel exports the zero-peer-dep providers: `mock`, `browserAnthropic`, `browserOpenai`, and `createProvider`. **Azure is NOT OpenAI-compatible** — use `azureOpenai()`, not `openai({ baseURL })`. Full list + the "connect a company endpoint" buckets: [docs/guides/adapters.md](docs/guides/adapters.md).
 
 ### Pause / Resume (Human-in-the-Loop)
 

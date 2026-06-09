@@ -41,7 +41,9 @@ export {
   openai,
   OpenAIProvider,
   ollama,
+  azureOpenai,
   type OpenAIProviderOptions,
+  type AzureOpenAIProviderOptions,
 } from './adapters/llm/OpenAIProvider.js';
 
 export {
