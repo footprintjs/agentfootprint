@@ -312,9 +312,11 @@ export class EventDispatcher {
     const domainKey = this.domainKey(event.type);
     const domain = this.domainWildcards.get(domainKey);
     this.fireBucket(typed, event);
-    if (typed) this.pruneBucket(event.type, typed); // once-listeners may have emptied it
+    // Prune only when once-listeners actually emptied the bucket — keeps the
+    // hot path free of per-event work (incl. the `${domainKey}.*` string build).
+    if (typed && typed.size === 0) this.pruneBucket(event.type, typed);
     this.fireBucket(domain, event);
-    if (domain) this.pruneBucket(`${domainKey}.*`, domain);
+    if (domain && domain.size === 0) this.pruneBucket(`${domainKey}.*`, domain);
     this.fireBucket(this.allWildcards, event);
   }
 
