@@ -10,7 +10,13 @@
  *     stream.llm_start          ↦  push leaf subsegment (model call)
  *     stream.llm_end            ↦  close llm subsegment
  *     stream.tool_start         ↦  push leaf subsegment (tool call)
- *     stream.tool_end           ↦  close tool subsegment
+ *     stream.tool_end           ↦  close tool subsegment (correlated
+ *                                  by toolCallId — parallel-safe)
+ *     error.fatal               ↦  fault on root + close the whole
+ *                                  tree (turn_end never arrives)
+ *
+ * Events are anchored on `meta.runId` (the dispatcher envelope),
+ * with a `payload.runId` fallback for hand-built events.
  *
  * The result in the X-Ray Trace Map: a hierarchical timeline of every
  * agent run — turn → iteration → llm-call/tool-call — queryable in
@@ -127,8 +133,8 @@ export function xrayObservability(opts: XrayObservabilityOptions): Observability
   const flushIntervalMs = opts.flushIntervalMs ?? 1000;
 
   // Per-turn state. agentfootprint events arrive interleaved across
-  // multiple in-flight turns; we key the active stack by `runId`
-  // (every event payload carries it after enrichment).
+  // multiple in-flight turns; we key the active stack by the run
+  // anchor (`meta.runId` — see anchorRunId).
   const activeTurns = new Map<
     string,
     {
@@ -136,6 +142,10 @@ export function xrayObservability(opts: XrayObservabilityOptions): Observability
       readonly stack: XraySegment[]; // root at [0], deepest at [length-1]
       readonly closed: XraySegment[]; // segments awaiting flush
       readonly sampled: boolean;
+      /** toolCallId → live tool segment. tool_end carries ONLY
+       *  toolCallId at runtime (`ToolEndPayload`), and parallel tool
+       *  calls interleave — LIFO popping would close the wrong one. */
+      readonly toolSegments: Map<string, XraySegment>;
     }
   >();
 
@@ -222,11 +232,38 @@ export function xrayObservability(opts: XrayObservabilityOptions): Observability
   function closeSegment(
     turnState: NonNullable<ReturnType<typeof activeTurns.get>>,
     expectedName: string | undefined,
-    extra?: { error?: boolean; annotations?: XrayAnnotations; metadata?: Record<string, unknown> },
+    extra?: {
+      error?: boolean;
+      fault?: boolean;
+      annotations?: XrayAnnotations;
+      metadata?: Record<string, unknown>;
+    },
   ): void {
     const seg = popSegment(turnState, expectedName);
     if (!seg) return;
+    finishSegment(turnState, seg, extra);
+  }
+
+  /** Seal an already-popped segment and graduate the turn to the
+   *  outbox once its stack is empty. */
+  function finishSegment(
+    turnState: NonNullable<ReturnType<typeof activeTurns.get>>,
+    seg: XraySegment,
+    extra?: {
+      error?: boolean;
+      fault?: boolean;
+      annotations?: XrayAnnotations;
+      metadata?: Record<string, unknown>;
+    },
+  ): void {
+    // Idempotent seal — popSegment stamps end_time; segments removed
+    // from the stack by identity (toolCallId correlation) arrive raw.
+    if (seg.end_time === undefined) {
+      seg.end_time = nowSeconds();
+      delete seg.in_progress;
+    }
     if (extra?.error) seg.error = true;
+    if (extra?.fault) seg.fault = true;
     if (extra?.annotations) seg.annotations = { ...seg.annotations, ...extra.annotations };
     if (extra?.metadata)
       seg.metadata = { default: { ...(seg.metadata?.default ?? {}), ...extra.metadata } };
@@ -246,9 +283,24 @@ export function xrayObservability(opts: XrayObservabilityOptions): Observability
 
   // ─── Event-to-segment dispatch ─────────────────────────────────────
 
+  /**
+   * Resolve the run anchor for an event.
+   *
+   * Real runtime events are dispatcher envelopes — the run id lives on
+   * `event.meta.runId` (built by `bridge/eventMeta.ts`). The legacy
+   * `payload.runId` read is kept as a fallback for consumers feeding
+   * hand-built events (the pre-fix shape this adapter's own tests
+   * used). Without the meta read, NO segment ever opened on a real
+   * agent run — the bug the fabricated test shapes masked.
+   */
+  function anchorRunId(event: AgentfootprintEvent): string | undefined {
+    const meta = (event as { meta?: { runId?: string } }).meta;
+    return meta?.runId ?? (event.payload as { runId?: string } | undefined)?.runId;
+  }
+
   function handleEvent(event: AgentfootprintEvent): void {
     if (stopped) return;
-    const runId = (event.payload as { runId?: string } | undefined)?.runId;
+    const runId = anchorRunId(event);
     if (!runId) return; // Events without a turn anchor — skip.
 
     switch (event.type) {
@@ -259,6 +311,7 @@ export function xrayObservability(opts: XrayObservabilityOptions): Observability
           stack: [] as XraySegment[],
           closed: [] as XraySegment[],
           sampled,
+          toolSegments: new Map<string, XraySegment>(),
         };
         activeTurns.set(runId, turnState);
         if (sampled) pushSegment(turnState, opts.serviceName);
@@ -277,8 +330,14 @@ export function xrayObservability(opts: XrayObservabilityOptions): Observability
 
       case 'agentfootprint.agent.iteration_start': {
         const t = activeTurns.get(runId);
-        if (t?.sampled)
-          pushSegment(t, `iteration:${(event.payload as { iteration?: number }).iteration ?? '?'}`);
+        if (t?.sampled) {
+          // Runtime shape: `iterIndex` (AgentIterationStartPayload).
+          // Legacy fallback `iteration` keeps hand-fed events working.
+          const iteration =
+            (event.payload as { iterIndex?: number; iteration?: number }).iterIndex ??
+            (event.payload as { iteration?: number }).iteration;
+          pushSegment(t, `iteration:${iteration ?? '?'}`);
+        }
         break;
       }
 
@@ -309,19 +368,57 @@ export function xrayObservability(opts: XrayObservabilityOptions): Observability
       case 'agentfootprint.stream.tool_start': {
         const t = activeTurns.get(runId);
         if (!t?.sampled) break;
-        const toolName = (event.payload as { toolName?: string }).toolName ?? 'tool';
+        const p = event.payload as { toolName?: string; toolCallId?: string };
+        const toolName = p.toolName ?? 'tool';
         const seg = pushSegment(t, `tool:${toolName}`);
         seg.annotations = { toolName };
+        if (p.toolCallId !== undefined) t.toolSegments.set(p.toolCallId, seg);
         break;
       }
 
       case 'agentfootprint.stream.tool_end': {
         const t = activeTurns.get(runId);
         if (!t?.sampled) break;
-        const toolName = (event.payload as { toolName?: string }).toolName;
-        closeSegment(t, toolName ? `tool:${toolName}` : undefined, {
-          error: (event.payload as { error?: unknown }).error !== undefined,
+        const p = event.payload as { toolCallId?: string; toolName?: string; error?: unknown };
+        const errored = p.error !== undefined && p.error !== false;
+        // Correlate by toolCallId — the only identity ToolEndPayload
+        // carries at runtime (it has NO toolName), and parallel tool
+        // calls end out of LIFO order. Fallback chain keeps legacy
+        // hand-fed events (toolName) working.
+        const byId = p.toolCallId === undefined ? undefined : t.toolSegments.get(p.toolCallId);
+        if (byId !== undefined && p.toolCallId !== undefined) {
+          t.toolSegments.delete(p.toolCallId);
+          // Remove from the stack by identity so the LIFO unwind stays clean.
+          const idx = t.stack.indexOf(byId);
+          if (idx >= 0) t.stack.splice(idx, 1);
+          finishSegment(t, byId, { error: errored });
+        } else {
+          closeSegment(t, p.toolName !== undefined ? `tool:${p.toolName}` : undefined, {
+            error: errored,
+          });
+        }
+        break;
+      }
+
+      // A fatal run error: the turn will never see turn_end, so close
+      // the segment tree here (fault on the root — X-Ray's marker for
+      // unhandled exceptions) instead of leaking it in activeTurns,
+      // where the closed segments would never graduate to the outbox.
+      case 'agentfootprint.error.fatal': {
+        const t = activeTurns.get(runId);
+        if (!t) break;
+        while (t.stack.length > 1) closeSegment(t, undefined);
+        const p = event.payload as { stage?: string; scope?: string };
+        // Stage + scope only — error MESSAGES can echo PII.
+        const annotations: XrayAnnotations = {
+          ...(p.stage !== undefined && { errorStage: p.stage }),
+          ...(p.scope !== undefined && { errorScope: p.scope }),
+        };
+        closeSegment(t, undefined, {
+          fault: true,
+          ...(Object.keys(annotations).length > 0 && { annotations }),
         });
+        activeTurns.delete(runId);
         break;
       }
 
@@ -332,11 +429,17 @@ export function xrayObservability(opts: XrayObservabilityOptions): Observability
         const top = t?.stack[t.stack.length - 1];
         if (!t?.sampled || !top) break;
         // Annotate cost ticks specially so they're queryable in
-        // X-Ray Insights.
+        // X-Ray Insights. Runtime shape: `cumulative.estimatedUsd`
+        // (CostTickPayload); legacy fallback `cumulativeCostUsd`
+        // keeps hand-fed events working.
         if (event.type === 'agentfootprint.cost.tick') {
-          const p = event.payload as { cumulativeCostUsd?: number };
-          if (typeof p.cumulativeCostUsd === 'number') {
-            top.annotations = { ...top.annotations, cumulativeCostUsd: p.cumulativeCostUsd };
+          const p = event.payload as {
+            cumulative?: { estimatedUsd?: number };
+            cumulativeCostUsd?: number;
+          };
+          const usd = p.cumulative?.estimatedUsd ?? p.cumulativeCostUsd;
+          if (typeof usd === 'number') {
+            top.annotations = { ...top.annotations, cumulativeCostUsd: usd };
           }
         }
         break;

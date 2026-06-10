@@ -60,6 +60,37 @@ built from — EU AI Act Art. 12 record-keeping is the target shape).
   verify OK → flip one byte → verification names the record → drained
   segments re-verify concatenated. Zero new typed events.
 
+### Fixed
+
+- **`xrayObservability` produced no segments on real runs — same
+  dead-field bug class as the 6.17.0 otel fix** (masked by fabricated
+  test event shapes; no new features, pure correctness):
+  - read `payload.runId` — real dispatcher envelopes carry the run
+    anchor on `meta.runId` (built by `bridge/eventMeta.ts`), so EVERY
+    event was skipped and ZERO segments shipped. Now anchored on
+    `meta.runId` with the `payload.runId` fallback kept for hand-fed
+    events.
+  - `agent.iteration_start` read `payload.iteration` — the real field
+    is `iterIndex`, so every iteration segment was named `iteration:?`.
+  - `stream.tool_end` read `payload.toolName` — `ToolEndPayload`
+    carries only `toolCallId`, so the close fell back to "pop topmost"
+    and parallel tool calls closed the WRONG segment. Tool segments are
+    now correlated by `toolCallId` (parallel-safe); the toolName-based
+    match remains as the legacy fallback. An explicit `error: false`
+    on `tool_end` no longer marks the segment as errored.
+  - `cost.tick` read `payload.cumulativeCostUsd` — the real shape is
+    `cumulative.estimatedUsd` (`CostTickPayload`), so cost annotations
+    never appeared. Legacy field kept as fallback; the annotation key
+    stays `cumulativeCostUsd` for existing X-Ray Insights queries.
+  - `error.fatal` now closes the segment tree (`fault` on the root,
+    PII-safe `errorStage`/`errorScope` annotations only) instead of
+    leaking the turn in `activeTurns`, where its segments never
+    graduated to the outbox.
+  - New integration test drives a REAL Agent run (MockProvider +
+    scripted tool call) through `xrayObservability` with an injected
+    client and asserts segments are actually produced — the test style
+    whose absence masked the bug class.
+
 ## [6.17.0] - 2026-06-10
 
 Minor — **#19: `otelObservability` speaks OTel GenAI semantic conventions +
