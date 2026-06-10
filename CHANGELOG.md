@@ -5,6 +5,58 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+- **Deferred observer delivery — `AgentOptions.observerDelivery: 'inline' |
+  'deferred'` (RFC-001 Block 10; closes RFC-001).** Opting in routes the
+  Agent's internal bridge recorders (Context, stream, agent, error, cost,
+  permission, eval/memory/skill/tools, validation, reliability) AND consumer
+  `.recorder()` / `agent.attach()` recorders through footprintjs 9.6.0's
+  bounded capture queue: capture inline (≈ µs/event, `'clone'` payloads —
+  the same event shape as inline), delivery one beat behind at the next
+  microtask checkpoint, synchronous terminal drain at run resolve / reject /
+  pause. Compatibility bar tested hard: `agent.on()` listeners receive
+  deep-equal typed events (type + payload + stage anchor, same order) vs
+  inline; crash `RunCheckpointError` history and `error.fatal` stay complete;
+  pause returns with the pre-pause record delivered. Default `'inline'` is
+  byte-identical to 6.22.0 — no queue allocated, `observerStats` absent.
+  - **Kept inline for correctness:** the causal-evidence recorder (CAUSAL
+    memories) — the memory write stage consumes `collect()` MID-run, so it
+    never rides the queue (pinned by test: snapshots persist real evidence
+    under `'deferred'`).
+  - **Per-recorder override:** a consumer recorder declaring its own
+    `delivery` field keeps it; the agent option is the default tier for
+    recorders that don't declare one.
+  - **`AgentOptions.observerDeliveryOptions`** (`capture` / `maxQueue` /
+    `overflow` / `sampleEvery` / `flushBudgetMs`) forwards the queue dials;
+    setting it without `observerDelivery: 'deferred'` throws at build time
+    (no silently-ignored combinations).
+  - **`agent.drainObservers({ timeoutMs })`** — settle async listener
+    continuations before serverless freeze / shutdown (RFC-001 §11); zeros
+    before the first run. `ObserverDeliveryOptions`, `ObserverDrainResult`,
+    `ObserverStats` exported from the main barrel.
+  - **The bench number** (50-iteration full-feature agent, 3 747 events,
+    deliberately slow 5 ms-per-event wildcard listener, 100 ms mock LLM
+    latency; `examples/features/21-deferred-observers.ts`): no-listener
+    floor 5.6 s · inline 24.5 s · deferred 24.0 s at back-to-back streaming
+    (`chunkDelayMs: 0`, worst case for overlap); at a realistic 20 ms
+    streaming cadence inline 34.8 s · deferred **32.1 s (−2.7 s wall, −8%;
+    p95/iter 926 → 868 ms)** with `drops: 0`, `terminalStranded: 0`. Honest
+    mechanism documented: single-thread work is conserved; deferral recovers
+    the wait-ADJACENT share (llm_start/tool_start/token events), and the
+    guarantees that don't depend on shape are the bounded queue, error
+    isolation, per-listener stats, and terminal completeness.
+- **Fixed: typed event payloads carried live scope proxies.**
+  `agentfootprint.agent.iteration_end` embedded `scope.history` (a TypedScope
+  deep-Proxy view) and the tool-calls handler embedded the
+  `scope.llmLatestToolCalls` proxy into history messages and `tool_start`
+  args. Live proxies are not structured-clone-safe — under `'deferred'` the
+  'clone' capture degraded to a summary and the EmitBridge dropped the typed
+  event; inline consumers were silently handed a mutable view of engine
+  state. Payloads now use the plain local arrays (value-identical), and
+  `typedEmit` gained a dev-mode (`enableDevMode()`) guard that warns once per
+  event type when a payload is not structured-clone-safe.
+
 ## [6.22.0] - 2026-06-11
 
 - **`agentCoreIdentity` forwards per-request identity (workload identity

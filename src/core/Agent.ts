@@ -16,9 +16,12 @@
 
 import {
   FlowChartExecutor,
+  type AttachRecorderOptions,
   type CombinedNarrativeEntry,
+  type CombinedRecorder,
   type FlowChart,
   type FlowchartCheckpoint,
+  type ObserverDrainResult,
   type ReadTrackingMode,
   type RunOptions,
   type RuntimeSnapshot,
@@ -82,7 +85,13 @@ import {
   validateMemoryIdUniqueness,
   validateToolNameUniqueness,
 } from './agent/validators.js';
-import type { AgentInput, AgentOptions, AgentOutput, AgentState } from './agent/types.js';
+import type {
+  AgentInput,
+  AgentOptions,
+  AgentOutput,
+  AgentState,
+  ObserverDeliveryOptions,
+} from './agent/types.js';
 import { routeDeciderStage } from './agent/stages/route.js';
 import { buildSeedStage } from './agent/stages/seed.js';
 import { buildCallLLMStage } from './agent/stages/callLLM.js';
@@ -101,7 +110,7 @@ export { AgentBuilder };
 // (e.g., `import { type AgentInput } from '../core/Agent.js'`) keep
 // working while implementation gradually moves into `./agent/*`.
 // Public types canonically live in `./agent/types.ts` (v2.11.1).
-export type { AgentInput, AgentOptions, AgentOutput };
+export type { AgentInput, AgentOptions, AgentOutput, ObserverDeliveryOptions };
 
 // Public types (AgentOptions, AgentInput, AgentOutput) extracted to
 // ./agent/types.ts and re-exported above (v2.11.1).
@@ -156,6 +165,14 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
   private readonly credentialProvider?: CredentialProvider;
   /** Evidence bridge (#5) — present iff a CAUSAL memory is mounted. */
   private readonly causalEvidence?: CausalEvidenceRecorderHandle;
+  /** Observer delivery tier (RFC-001 Block 10). `'inline'` (default) is
+   *  byte-identical to pre-10 releases; `'deferred'` routes the bridge
+   *  recorders + consumer attachments through footprintjs's bounded
+   *  capture queue. See AgentOptions.observerDelivery. */
+  private readonly observerDelivery: 'inline' | 'deferred';
+  /** Queue dials forwarded on every deferred attach (first attach
+   *  configures the executor's single dispatcher). */
+  private readonly observerDeliveryOptions?: ObserverDeliveryOptions;
 
   /**
    * Voice config — shared by viewers (Lens, ChatThinkKit, CLI tail).
@@ -329,6 +346,17 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // zero consumers across af/lens/eui, and 'full' clones ~18MB of unread
     // data per 200 iterations. Consumers opt into 'full' explicitly.
     this.readTracking = opts.readTracking ?? 'summary';
+    // RFC-001 Block 10 — observer delivery tier. Fail fast on the dials
+    // without the switch (no silently-ignored combinations; same policy
+    // that merged reactMode/reactStructure in 6.0.0).
+    this.observerDelivery = opts.observerDelivery ?? 'inline';
+    if (opts.observerDeliveryOptions !== undefined && this.observerDelivery !== 'deferred') {
+      throw new Error(
+        "Agent: observerDeliveryOptions requires observerDelivery: 'deferred' — " +
+          'the dials configure the deferred capture queue and have no meaning inline.',
+      );
+    }
+    this.observerDeliveryOptions = opts.observerDeliveryOptions;
     if (opts.credentials) this.credentialProvider = opts.credentials;
     if (reliabilityConfig !== undefined) this.reliabilityConfig = reliabilityConfig;
     // v2.14 — Resolve thinking handler. Three states:
@@ -724,38 +752,96 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     const dispatcher = this.getDispatcher();
     const getRunCtx = (): RunContext => this.currentRunContext;
 
-    executor.attachCombinedRecorder(new ContextRecorder({ dispatcher, getRunContext: getRunCtx }));
+    // RFC-001 Block 10 — observer delivery tier. With 'deferred', every
+    // bridge below is attached onto footprintjs's bounded capture queue
+    // ("one beat behind": capture inline ≈ microseconds, delivery at the
+    // next microtask checkpoint, terminal flush before run()/resume()
+    // returns). Default 'inline' attaches with no options bag —
+    // byte-identical to every prior release.
+    const deferredOpts: AttachRecorderOptions | undefined =
+      this.observerDelivery === 'deferred'
+        ? { delivery: 'deferred', ...this.observerDeliveryOptions }
+        : undefined;
+    const attachObserver = (rec: CombinedRecorder): void => {
+      if (deferredOpts) executor.attachCombinedRecorder(rec, deferredOpts);
+      else executor.attachCombinedRecorder(rec);
+    };
+
+    attachObserver(new ContextRecorder({ dispatcher, getRunContext: getRunCtx }));
     // Evidence bridge (#5): harvest decisions/toolCalls/tokens for causal snapshots.
+    // ALWAYS INLINE — never routed through the deferred queue: the memory
+    // write stage consumes its accumulators MID-run (`collect()` via
+    // `evidenceSource`, mountMemoryPipeline). Deferred delivery would run
+    // `collect()` before the queue flushed the turn's tool/token/decision
+    // events, persisting an incomplete causal snapshot.
     if (this.causalEvidence) executor.attachCombinedRecorder(this.causalEvidence);
     // The InjectionEngine typedEmits context.evaluated; this bridge forwards it
     // to the dispatcher (ContextRecorder handles the write-derived context.*).
-    executor.attachCombinedRecorder(
-      contextEvaluatedRecorder({ dispatcher, getRunContext: getRunCtx }),
-    );
-    executor.attachCombinedRecorder(streamRecorder({ dispatcher, getRunContext: getRunCtx }));
-    executor.attachCombinedRecorder(agentRecorder({ dispatcher, getRunContext: getRunCtx }));
+    attachObserver(contextEvaluatedRecorder({ dispatcher, getRunContext: getRunCtx }));
+    attachObserver(streamRecorder({ dispatcher, getRunContext: getRunCtx }));
+    // agentRecorder feeds the run-checkpoint tracker (iteration_end →
+    // history snapshot), which is read ONLY in run()'s catch — after the
+    // engine's terminal flush at the reject boundary — so deferral is safe
+    // (pinned by test: crash checkpoints stay complete under 'deferred').
+    attachObserver(agentRecorder({ dispatcher, getRunContext: getRunCtx }));
     // Terminal-failure bridge: footprintjs onRunFailed → typed error.fatal,
     // so a thrown run clears in-flight live state + flips monitor status.
-    executor.attachCombinedRecorder(errorBridge({ dispatcher, getRunContext: getRunCtx }));
+    // Deferral-safe: the reject-boundary terminal flush delivers error.fatal
+    // before the rejection reaches the caller.
+    attachObserver(errorBridge({ dispatcher, getRunContext: getRunCtx }));
     if (this.pricingTable) {
-      executor.attachCombinedRecorder(costRecorder({ dispatcher, getRunContext: getRunCtx }));
+      attachObserver(costRecorder({ dispatcher, getRunContext: getRunCtx }));
     }
     if (this.permissionChecker) {
-      executor.attachCombinedRecorder(permissionRecorder({ dispatcher, getRunContext: getRunCtx }));
+      attachObserver(permissionRecorder({ dispatcher, getRunContext: getRunCtx }));
     }
     // Always-on bridges for consumer-emitted domain events.
-    executor.attachCombinedRecorder(evalRecorder({ dispatcher, getRunContext: getRunCtx }));
-    executor.attachCombinedRecorder(memoryRecorder({ dispatcher, getRunContext: getRunCtx }));
-    executor.attachCombinedRecorder(skillRecorder({ dispatcher, getRunContext: getRunCtx }));
-    executor.attachCombinedRecorder(toolsRecorder({ dispatcher, getRunContext: getRunCtx }));
+    attachObserver(evalRecorder({ dispatcher, getRunContext: getRunCtx }));
+    attachObserver(memoryRecorder({ dispatcher, getRunContext: getRunCtx }));
+    attachObserver(skillRecorder({ dispatcher, getRunContext: getRunCtx }));
+    attachObserver(toolsRecorder({ dispatcher, getRunContext: getRunCtx }));
     // Tool-args validation events (#9) — always-on; zero-cost when no
     // validation event fires.
-    executor.attachCombinedRecorder(validationRecorder({ dispatcher, getRunContext: getRunCtx }));
+    attachObserver(validationRecorder({ dispatcher, getRunContext: getRunCtx }));
     // Reliability telemetry (rules-loop fail_fast / retried / recovered).
     // Always-on, but zero-cost when no .reliability() config fires events.
-    executor.attachCombinedRecorder(reliabilityRecorder({ dispatcher, getRunContext: getRunCtx }));
-    for (const r of this.attachedRecorders) executor.attachCombinedRecorder(r);
+    attachObserver(reliabilityRecorder({ dispatcher, getRunContext: getRunCtx }));
+    for (const r of this.attachedRecorders) {
+      // A recorder's OWN `delivery` field is more specific than the
+      // agent-level default — footprintjs's options bag would override the
+      // field, so recorders that declare a tier are attached bare (their
+      // field rules). This gives consumers a per-recorder escape hatch:
+      // `{ id, delivery: 'inline', ...hooks }` stays inline under an
+      // observerDelivery: 'deferred' agent, and vice versa.
+      if (r.delivery !== undefined) executor.attachCombinedRecorder(r);
+      else attachObserver(r);
+    }
     return executor;
+  }
+
+  /**
+   * Flush the deferred-observer backlog of the most recent run's executor,
+   * then await async listener completions under a deadline (RFC-001 §11 —
+   * the serverless / graceful-shutdown pattern). Resolves immediately with
+   * zeros before the first run or when `observerDelivery` is `'inline'`
+   * and no recorder opted into `'deferred'` itself.
+   *
+   * `pending === 0` means a full drain; non-zero honestly reports
+   * continuations still outstanding at the deadline — never silent loss.
+   *
+   * @example Lambda-style handler
+   * ```ts
+   * export const handler = async (event) => {
+   *   const reply = await agent.run({ message: event.message });
+   *   // settle "one beat behind" observer work BEFORE the freeze:
+   *   await agent.drainObservers({ timeoutMs: 5_000 });
+   *   return reply;
+   * };
+   * ```
+   */
+  drainObservers(opts?: { timeoutMs?: number }): Promise<ObserverDrainResult> {
+    if (!this.lastExecutor) return Promise.resolve({ done: 0, failed: 0, pending: 0 });
+    return this.lastExecutor.drainObservers(opts);
   }
 
   private finalizeResult(

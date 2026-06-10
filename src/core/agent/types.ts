@@ -8,7 +8,7 @@
  * for back-compat (the 28+ existing import sites continue to work).
  */
 
-import type { ReadTrackingMode, StructureRecorder } from 'footprintjs';
+import type { AttachRecorderOptions, ReadTrackingMode, StructureRecorder } from 'footprintjs';
 import type { GroupTranslator } from '../translator.js';
 import type {
   LLMMessage,
@@ -27,6 +27,17 @@ import type { ThinkingBlock } from '../../thinking/types.js';
 import type { ReliabilityScope } from '../../reliability/types.js';
 
 // ─── PUBLIC types (consumer-facing) ────────────────────────────────
+
+/**
+ * Dials for the deferred observer queue (RFC-001) — only meaningful with
+ * `observerDelivery: 'deferred'` (passing them without it throws at
+ * construction). Same vocabulary as footprintjs's `AttachRecorderOptions`
+ * minus `delivery` (the Agent option IS the delivery switch):
+ * `capture` (default `'clone'` — hooks receive the same event shape as
+ * inline), `maxQueue` (default 10 000), `overflow` (default
+ * `'drop-oldest'`), `sampleEvery`, `flushBudgetMs` (default 2).
+ */
+export type ObserverDeliveryOptions = Omit<AttachRecorderOptions, 'delivery'>;
 
 export interface AgentOptions {
   readonly provider: LLMProvider;
@@ -181,6 +192,42 @@ export interface AgentOptions {
    * it re-seeds context every turn by design, so there is no classic-grouped.)
    */
   readonly reactMode?: 'classic' | 'dynamic' | 'dynamic-grouped';
+  /**
+   * Observer delivery tier (RFC-001 Block 10). Default `'inline'` —
+   * byte-identical to every prior release: the Agent's bridge recorders
+   * (and your `.recorder()` attachments) run synchronously inside the
+   * producing statement, so a slow `agent.on()` listener taxes every
+   * stage of every iteration.
+   *
+   * `'deferred'` moves observation off the hot path: every observer event
+   * is captured into footprintjs's bounded queue (≈ microseconds) and
+   * delivered at the next microtask checkpoint — "one beat behind", with
+   * listener work overlapping the LLM/tool await windows instead of
+   * serializing with the loop. Same events, same payloads, same order;
+   * only the timing meta (`wallClockMs` / `runOffsetMs`) reflects the
+   * later delivery. Terminal boundaries (run resolve, reject, pause)
+   * drain the queue synchronously BEFORE control returns, so crash
+   * reports / checkpoints always carry the complete record.
+   *
+   * Exception kept inline for correctness: the causal-evidence harvest
+   * recorder (mounted with CAUSAL memories) — the memory write stage
+   * reads its accumulators MID-run, so it cannot run one beat behind.
+   *
+   * Per-recorder override: a consumer recorder that declares its own
+   * `delivery` field keeps it — the agent-level option is the default
+   * tier for recorders that don't declare one.
+   *
+   * For serverless / graceful shutdown, settle async listener work with
+   * `await agent.drainObservers({ timeoutMs })` before the process exits.
+   * Queue stats surface on `agent.getLastSnapshot()?.observerStats`.
+   */
+  readonly observerDelivery?: 'inline' | 'deferred';
+  /**
+   * Queue dials for `observerDelivery: 'deferred'` — see
+   * `ObserverDeliveryOptions`. Throws at construction when set without
+   * `observerDelivery: 'deferred'` (no silently-ignored combinations).
+   */
+  readonly observerDeliveryOptions?: ObserverDeliveryOptions;
 }
 
 export interface AgentInput {

@@ -532,6 +532,23 @@ Recorders (auto-attached when relevant builder method is called):
 - `permissionRecorder` — `permission.check` (when `permissionChecker` supplied)
 - `evalRecorder` · `memoryRecorder` · `skillRecorder`
 
+**Observer delivery tier (RFC-001 Block 10):** `Agent.create({ observerDelivery:
+'deferred' })` routes the bridge recorders above + consumer `.recorder()` /
+`agent.attach()` recorders through footprintjs's bounded capture queue —
+capture inline (≈ µs), deliver one beat behind, drain synchronously at run
+resolve / reject / pause. Default `'inline'` = byte-identical attach path, no
+queue allocated. `agent.on()` listeners receive deep-equal typed events either
+way (parity-tested). EXCEPTION kept inline: the causal-evidence recorder — the
+memory write stage reads `collect()` MID-run. A recorder's own `delivery`
+field beats the agent default (per-recorder override). Dials via
+`observerDeliveryOptions` (throws without `'deferred'`); shutdown via
+`agent.drainObservers({ timeoutMs })`; stats on
+`getLastSnapshot()?.observerStats`. CONTRACT: typed event payloads must be
+detached plain data — never pass a TypedScope read (e.g. `scope.history`, a
+live deep-Proxy) into `typedEmit`; use the plain local value (`typedEmit`
+dev-warns on unclonable payloads). Bench:
+`examples/features/21-deferred-observers.ts`.
+
 ## Anti-Patterns — Don't
 
 - ❌ **Don't ship a `ReflexionAgent` class.** Compose `Sequence(Agent, critique-LLM, Agent)`.

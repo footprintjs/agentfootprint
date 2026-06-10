@@ -237,7 +237,13 @@ export {
   type AgentInput,
   type AgentOptions,
   type AgentOutput,
+  type ObserverDeliveryOptions,
 } from './core/Agent.js';
+// RFC-001 Block 10 — deferred observer delivery: the result shape of
+// `agent.drainObservers()` + the `snapshot.observerStats` payload
+// (re-exported from footprintjs so Agent consumers don't need a direct
+// footprintjs import to type them — same precedent as ReadTrackingMode).
+export type { ObserverDrainResult, ObserverStats } from 'footprintjs';
 // #9 — tool-args validation: the mode for AgentOptions.toolArgValidation.
 // (The validator itself is internal; the payload ships as
 // Payloads.ValidationArgsInvalidPayload.)
