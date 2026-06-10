@@ -5,6 +5,57 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+**#18/#14: `AgentOptions.readTracking` — the snapshot observability-cost
+lever, exposed from the Agent** (+ long-run memory re-measured against
+footprintjs 9.3.0's #13b staging-release).
+
+- **`AgentOptions.readTracking: 'full' | 'summary' | 'off'`** — forwarded
+  to the Agent's internal `FlowChartExecutor` (which previously received
+  no options, leaving footprintjs's #14 lever unreachable from the
+  Agent). Controls how `getSnapshot()` records per-stage reads in
+  `StageSnapshot.stageReads`: cloned values (`'full'`), cheap
+  `ReadSummaryMarker`s (`'summary'`), or nothing (`'off'`).
+  `ReadTrackingMode` + `ReadSummaryMarker` re-exported from the main
+  barrel so consumers don't need a direct footprintjs import.
+- **⚠ Behavior change (default `'summary'`)**: the Agent's executor now
+  defaults to `'summary'` — NOT footprintjs's own `'full'` default. In
+  `agent.getSnapshot()`, `stageReads` entries are now
+  `{ __readSummary: true, type, size?, preview? }` markers instead of
+  cloned values. Measurement-gated decision (#18): `stageReads` values
+  have ZERO consumers across agentfootprint, agentfootprint-lens, and
+  explainable-ui (re-verified by grep at change time), while `'full'`
+  retains ~28MB@200 / ~170MB@500 iterations of unread clones. Narrative,
+  recorder events (`onRead` payloads), commit log, and shared state are
+  IDENTICAL in every mode — only the snapshot's `stageReads` payload
+  changes shape. If you inspect read VALUES from snapshots, opt back in:
+  `Agent.create({ ..., readTracking: 'full' })`.
+- **footprintjs floor: `^9.0.0` → `^9.1.0`** (peer + dev) —
+  `readTracking` ships in footprintjs 9.1.0.
+- **Long-run memory re-measured** (#18 replication, full-feature agent —
+  steering + fact + skill + tool, mock provider `chunkDelayMs: 0`,
+  heapUsed after `global.gc()`, 2GB heap cap, footprintjs 9.3.0):
+
+  | Config | N=200 | N=500 | N=1000 |
+  |---|---|---|---|
+  | #18 baseline (fp 9.0.0-era, `'full'`) | 563.8MB | OOM @2GB | — |
+  | fp 9.3.0 + `'full'` | 159.7MB | 917.7MB | — |
+  | fp 9.3.0 + `'summary'` (new default) | 132.2MB | 747.6MB | OOM @2GB |
+  | fp 9.3.0 + `'off'` | 131.9MB | 747.1MB | — |
+
+  The #13b staging-release is the dominant win (563.8 → 159.7MB @200,
+  3.5×; N=500 now completes instead of OOM). `readTracking: 'summary'`
+  saves a further ~17% @200 / ~19% @500 on top. `'off'` ≈ `'summary'`
+  (markers are near-free). Growth remains quadratic (#13c residual:
+  commitLog + `_stageWrites` clones) — N=1000 still exceeds a 2GB heap
+  (~3GB projected), and per-iteration latency still climbs (≈4ms
+  first-10 → ≈110ms last-10 @500). Wall @200 ≈ 4.8s.
+- **`iterations-unlocked` RSS budget tightened 1500 → 350MB** — worst
+  observed RSS delta over 5 local runs post-#13b + `'summary'` default
+  is 210MB; budget = 1.6× worst ≈ 335MB, rounded up for CI variance.
+  The budget is now a real regression tripwire instead of a 7× ceiling.
+
 ## [6.19.0] - 2026-06-10
 
 **#21: the compliance-wedge lighthouse example** — completes the wedge

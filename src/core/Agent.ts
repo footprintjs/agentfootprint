@@ -19,6 +19,7 @@ import {
   type CombinedNarrativeEntry,
   type FlowChart,
   type FlowchartCheckpoint,
+  type ReadTrackingMode,
   type RunOptions,
   type RuntimeSnapshot,
 } from 'footprintjs';
@@ -148,6 +149,10 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
   private readonly costBudget?: number;
   private readonly permissionChecker?: PermissionChecker;
   private readonly toolArgValidation?: ToolArgValidationMode;
+  /** Snapshot read-tracking policy (#18/#14) — forwarded to the internal
+   *  executor. Agent default is `'summary'` (cheap markers), NOT
+   *  footprintjs's `'full'`. See AgentOptions.readTracking. */
+  private readonly readTracking: ReadTrackingMode;
   private readonly credentialProvider?: CredentialProvider;
   /** Evidence bridge (#5) — present iff a CAUSAL memory is mounted. */
   private readonly causalEvidence?: CausalEvidenceRecorderHandle;
@@ -320,6 +325,10 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     if (opts.costBudget !== undefined) this.costBudget = opts.costBudget;
     if (opts.permissionChecker) this.permissionChecker = opts.permissionChecker;
     if (opts.toolArgValidation !== undefined) this.toolArgValidation = opts.toolArgValidation;
+    // Default 'summary' — measurement-gated (#18): stageReads values have
+    // zero consumers across af/lens/eui, and 'full' clones ~18MB of unread
+    // data per 200 iterations. Consumers opt into 'full' explicitly.
+    this.readTracking = opts.readTracking ?? 'summary';
     if (opts.credentials) this.credentialProvider = opts.credentials;
     if (reliabilityConfig !== undefined) this.reliabilityConfig = reliabilityConfig;
     // v2.14 — Resolve thinking handler. Three states:
@@ -684,7 +693,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     };
 
     // Reuse the cached chart built at constructor time.
-    const executor = new FlowChartExecutor(this.getSpec());
+    // readTracking is the only executor option the Agent sets — the
+    // observability-cost lever for snapshot stageReads (#18/#14).
+    const executor = new FlowChartExecutor(this.getSpec(), { readTracking: this.readTracking });
     // Enable structured narrative so `getLastNarrativeEntries()` can
     // hand a populated array to consumer Trace views (ExplainableShell).
     // Cheap when no consumer reads it; the recorder accumulates only.

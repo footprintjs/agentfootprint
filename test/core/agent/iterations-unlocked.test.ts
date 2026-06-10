@@ -79,8 +79,15 @@ describe('#16 — maxIterations unlocked (footprintjs 9 trampoline)', () => {
     expect(String(answer)).toContain('done after 200');
     expect(toolRuns).toBe(199);
     expect(calls).toBe(200);
-    // Memory budget: generous ceiling (commit-log growth is the known O(N²)
-    // bound — backlog #13/#14). Flag-don't-flake: 1.5GB.
-    expect(rssDeltaMb).toBeLessThan(1500);
+    // Memory budget, re-derived 2026-06-10 against footprintjs 9.3.0
+    // (#13b staging-release) + the Agent's readTracking 'summary' default:
+    // worst observed RSS delta over 5 local runs was 210MB (was ~560MB+
+    // retained heap pre-#13b, hence the old 1.5GB ceiling). Budget =
+    // 1.6× worst observed ≈ 335MB, rounded up to 350MB for CI variance.
+    // Residual growth is the #13c quadratic (commitLog + _stageWrites
+    // clones) — if this trips after a footprintjs bump, re-measure with
+    // a fresh bench run (see the readTracking measurement table in the
+    // CHANGELOG) before raising.
+    expect(rssDeltaMb).toBeLessThan(350);
   }, 60_000);
 });

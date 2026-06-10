@@ -242,6 +242,10 @@ export {
 // (The validator itself is internal; the payload ships as
 // Payloads.ValidationArgsInvalidPayload.)
 export type { ToolArgValidationMode } from './core/agent/toolArgsValidation.js';
+// #18/#14 — snapshot read-tracking: the mode for AgentOptions.readTracking
+// (re-exported from footprintjs so Agent consumers don't need a direct
+// footprintjs import to type the option).
+export type { ReadSummaryMarker, ReadTrackingMode } from 'footprintjs';
 export {
   OutputSchemaError,
   applyOutputSchema,

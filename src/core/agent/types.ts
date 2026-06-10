@@ -8,7 +8,7 @@
  * for back-compat (the 28+ existing import sites continue to work).
  */
 
-import type { StructureRecorder } from 'footprintjs';
+import type { ReadTrackingMode, StructureRecorder } from 'footprintjs';
 import type { GroupTranslator } from '../translator.js';
 import type {
   LLMMessage,
@@ -74,6 +74,29 @@ export interface AgentOptions {
    * are ignored, never false-rejecting.
    */
   readonly toolArgValidation?: ToolArgValidationMode;
+  /**
+   * Read-tracking policy for the snapshot's per-stage read view
+   * (footprintjs `StageSnapshot.stageReads`) — the observability-cost
+   * lever for LONG runs. Forwarded to the Agent's internal
+   * `FlowChartExecutor` as `{ readTracking }`.
+   *
+   * - `'summary'` (Agent default) — each tracked read records a cheap
+   *   `ReadSummaryMarker` (type + size proxy + short preview) instead of
+   *   a `structuredClone` of the value. Measured at N=200 full-feature
+   *   iterations, `'full'` clones ~18MB of read values that nothing in
+   *   the agentfootprint/lens/explainable-ui stack consumes.
+   * - `'full'` — footprintjs's own default: every tracked read clones the
+   *   value into `stageReads`. Set explicitly if you inspect
+   *   `agent.getSnapshot()` read VALUES (not just keys/shapes).
+   * - `'off'` — reads are not recorded; `stageReads` is absent.
+   *
+   * Narrative, recorder events (`onRead` payloads), and commit history are
+   * IDENTICAL in every mode — the policy scopes ONLY the snapshot's
+   * `stageReads` payload. Note the Agent default (`'summary'`) is
+   * deliberately cheaper than footprintjs's (`'full'`); see CHANGELOG
+   * behavior-change callout.
+   */
+  readonly readTracking?: ReadTrackingMode;
   /**
    * Credential provider for downstream OAuth (declare-and-push). When set, a
    * tool that declares `needs: { credential }` has it resolved BEFORE `execute`
