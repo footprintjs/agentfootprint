@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [6.14.0]
+
 ### Added
 
 - **Listener/recorder lifecycle** (backlog #11a): long-lived runners
