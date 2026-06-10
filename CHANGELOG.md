@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+- **B11 — `skillGraph.tree()` dev-mode "exactly one leaf fires" monitor**:
+  in dev mode (footprintjs `enableDevMode()`), compiled tree-leaf triggers
+  tally fires per evaluation pass and `console.warn` when 0 or ≥2 leaves
+  fire — the symptom of an impure/non-deterministic `decide()` predicate
+  (the tree is exhaustive by construction; predicates are re-evaluated per
+  leaf). Production behavior unchanged (one `isDevMode()` check per
+  evaluation; the monitor observes, never alters activation).
+
 ## [6.20.0] - 2026-06-10
 
 **#18/#14: `AgentOptions.readTracking` — the snapshot observability-cost

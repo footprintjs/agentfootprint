@@ -5,7 +5,8 @@
  * evaluator (integration), the `toMermaid()` drawing, and guardrails.
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
+import { enableDevMode, disableDevMode } from 'footprintjs';
 import { skillGraph, decide, defineSkill, defineInstruction, Agent, mock } from '../src/index.js';
 import { evaluateInjections } from '../src/lib/injection-engine/index.js';
 import type { InjectionContext } from '../src/lib/injection-engine/types.js';
@@ -384,5 +385,139 @@ describe('tree() — the same skill as MULTIPLE leaves (shared-leaf merge)', () 
         .skillGraph(graph)
         .build(),
     ).not.toThrow();
+  });
+});
+
+describe('tree() — dev-mode "exactly one leaf fires" monitor (B11)', () => {
+  // The tree is exhaustive by construction; the invariant only breaks when a
+  // decide() predicate is impure (answers differently across the per-leaf
+  // re-evaluations). The monitor tallies fires per evaluator pass in dev mode.
+  const a = skill('leaf-a');
+  const b = skill('leaf-b');
+
+  /** decide() predicate that returns a scripted sequence of answers. */
+  const scripted = (answers: boolean[]) => {
+    let i = 0;
+    return () => answers[i++ % answers.length]!;
+  };
+
+  const withDevWarnSpy = async (fn: (warn: ReturnType<typeof vi.spyOn>) => void) => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    enableDevMode();
+    try {
+      fn(warn);
+    } finally {
+      disableDevMode();
+      warn.mockRestore();
+    }
+  };
+
+  it('warns when an impure predicate fires BOTH leaves (overlap)', async () => {
+    // leaf-a evaluates p()=true, leaf-b evaluates ¬p() with p()=false → both fire
+    const g = skillGraph()
+      .tree(decide(scripted([true, false]), a, b, 'flaky?'))
+      .build();
+    await withDevWarnSpy((warn) => {
+      const { active } = evaluateInjections(g.skills, ctx({}));
+      expect(active.map((s) => s.id)).toEqual(['leaf-a', 'leaf-b']);
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(warn.mock.calls[0]![0]).toMatch(/2 leaves fired simultaneously/);
+      expect(warn.mock.calls[0]![0]).toContain('leaf-a');
+      expect(warn.mock.calls[0]![0]).toContain('leaf-b');
+    });
+  });
+
+  it('warns when an impure predicate fires NO leaf (gap)', async () => {
+    // leaf-a evaluates p()=false, leaf-b evaluates ¬p() with p()=true → neither fires
+    const g = skillGraph()
+      .tree(decide(scripted([false, true]), a, b, 'flaky?'))
+      .build();
+    await withDevWarnSpy((warn) => {
+      const { active } = evaluateInjections(g.skills, ctx({}));
+      expect(active).toEqual([]);
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(warn.mock.calls[0]![0]).toMatch(/NO leaf fired/);
+    });
+  });
+
+  it('stays silent for pure predicates (exactly one leaf fires)', async () => {
+    const g = skillGraph()
+      .tree(decide((c) => c.userMessage.includes('io'), a, b, 'io?'))
+      .build();
+    await withDevWarnSpy((warn) => {
+      evaluateInjections(g.skills, ctx({ userMessage: 'io trend' }));
+      evaluateInjections(g.skills, ctx({ userMessage: 'something else' }));
+      expect(warn).not.toHaveBeenCalled();
+    });
+  });
+
+  it('stays silent (and costs nothing) in production mode, even for impure predicates', () => {
+    const g = skillGraph()
+      .tree(decide(scripted([true, false]), a, b))
+      .build();
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const { active } = evaluateInjections(g.skills, ctx({}));
+      expect(active.length).toBe(2); // behavior unchanged — monitor observes, never alters
+      expect(warn).not.toHaveBeenCalled();
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it('does not double-report a THROWING predicate (the evaluator already reports it)', async () => {
+    const g = skillGraph()
+      .tree(
+        decide(
+          () => {
+            throw new Error('boom');
+          },
+          a,
+          b,
+        ),
+      )
+      .build();
+    await withDevWarnSpy((warn) => {
+      const { active, skipped } = evaluateInjections(g.skills, ctx({}));
+      expect(active).toEqual([]);
+      expect(skipped.map((s) => s.reason)).toEqual(['predicate-threw', 'predicate-threw']);
+      expect(warn).not.toHaveBeenCalled(); // pass never completes — no gap false-positive
+    });
+  });
+
+  it('a merged shared leaf counts ONCE — no false warn', async () => {
+    const sharedLeaf = skill('shared');
+    const other = skill('other');
+    const g = skillGraph()
+      .tree(
+        decide(
+          (c) => c.userMessage.includes('esxi'),
+          sharedLeaf,
+          decide((c) => c.userMessage.includes('io'), sharedLeaf, other, 'io?'),
+          'esxi?',
+        ),
+      )
+      .build();
+    await withDevWarnSpy((warn) => {
+      const viaEsxi = evaluateInjections(g.skills, ctx({ userMessage: 'esxi host?' }));
+      const viaIo = evaluateInjections(g.skills, ctx({ userMessage: 'io trend' }));
+      const viaNeither = evaluateInjections(g.skills, ctx({ userMessage: 'hello' }));
+      expect(viaEsxi.active.map((s) => s.id)).toEqual(['shared']);
+      expect(viaIo.active.map((s) => s.id)).toEqual(['shared']);
+      expect(viaNeither.active.map((s) => s.id)).toEqual(['other']);
+      expect(warn).not.toHaveBeenCalled();
+    });
+  });
+
+  it('a reused ctx object starts a fresh pass (warns per pass, not once)', async () => {
+    const g = skillGraph()
+      .tree(decide(scripted([true, false]), a, b))
+      .build();
+    await withDevWarnSpy((warn) => {
+      const sameCtx = ctx({});
+      evaluateInjections(g.skills, sameCtx);
+      evaluateInjections(g.skills, sameCtx);
+      expect(warn).toHaveBeenCalledTimes(2);
+    });
   });
 });

@@ -21,6 +21,8 @@
  * is NOT enforced — matching the engine's per-iteration evaluation model.
  */
 
+import { isDevMode } from 'footprintjs';
+
 import type { Injection, InjectionContext, InjectionTrigger } from './types.js';
 
 /** Deterministic routing into a skill, keyed on the last tool result. */
@@ -254,6 +256,7 @@ export function skillGraph(): SkillGraphBuilder {
           [],
           treeScopeTools,
         );
+        attachExactlyOneLeafMonitor(skills);
       } else {
         // Flat entry/route mode (v1).
         for (const [id, skill] of skillsById) {
@@ -433,6 +436,70 @@ function compileTree(
       kind: 'predicate',
       label: parent?.branch,
     });
+  }
+}
+
+/**
+ * Dev-mode "exactly one leaf fires" monitor (backlog B11).
+ *
+ * A binary decision tree is exhaustive and non-overlapping BY CONSTRUCTION
+ * (each leaf's trigger conjoins its root→leaf predicates with earlier-sibling
+ * negation), so static analysis has nothing to check. The invariant breaks at
+ * RUNTIME only — when a predicate is impure/non-deterministic: the evaluator
+ * re-runs each `decide(...)` predicate once per leaf trigger, so a predicate
+ * that answers differently across those calls can fire 0 or ≥2 leaves.
+ *
+ * In dev mode (footprintjs `enableDevMode()`), each compiled leaf trigger is
+ * wrapped to tally fires per evaluation pass (keyed on the shared `ctx`
+ * identity — `evaluateInjections` passes one ctx object to every trigger in a
+ * pass). When all leaves have been evaluated for one ctx and the fired count
+ * is not exactly 1, a console.warn names the leaves. Production pays one
+ * `isDevMode()` check per evaluation; a throwing predicate is excluded here
+ * because the evaluator already reports it (`skipped: 'predicate-threw'`).
+ */
+function attachExactlyOneLeafMonitor(skills: Injection[]): void {
+  const total = skills.length;
+  if (total < 2) return; // single leaf — trivially exactly-one
+  const passes = new WeakMap<InjectionContext, { evaluated: number; fired: string[] }>();
+  for (let i = 0; i < skills.length; i++) {
+    const skill = skills[i]!;
+    const inner = (skill.trigger as { activeWhen: (ctx: InjectionContext) => boolean }).activeWhen;
+    skills[i] = {
+      ...skill,
+      trigger: {
+        kind: 'rule',
+        activeWhen: (ctx: InjectionContext): boolean => {
+          if (!isDevMode()) return inner(ctx);
+          const fired = inner(ctx); // may throw → evaluator reports 'predicate-threw'
+          let pass = passes.get(ctx);
+          if (!pass) {
+            pass = { evaluated: 0, fired: [] };
+            passes.set(ctx, pass);
+          }
+          pass.evaluated += 1;
+          if (fired) pass.fired.push(skill.id);
+          if (pass.evaluated === total) {
+            passes.delete(ctx); // reset so a reused ctx object starts a fresh pass
+            if (pass.fired.length !== 1) {
+              // eslint-disable-next-line no-console
+              console.warn(
+                pass.fired.length === 0
+                  ? `agentfootprint skillGraph.tree: NO leaf fired this iteration (expected exactly one). ` +
+                      `The tree is exhaustive by construction, so a decide() predicate likely returned ` +
+                      `different answers across leaf evaluations — predicates must be pure and deterministic. ` +
+                      `Leaves: ${skills.map((s) => s.id).join(', ')}.`
+                  : `agentfootprint skillGraph.tree: ${pass.fired.length} leaves fired simultaneously ` +
+                      `(expected exactly one): ${pass.fired.join(
+                        ', ',
+                      )}. Each decide() predicate is ` +
+                      `re-evaluated per leaf, so impure/non-deterministic predicates break if/else exclusivity.`,
+              );
+            }
+          }
+          return fired;
+        },
+      },
+    };
   }
 }
 
