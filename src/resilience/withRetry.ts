@@ -37,9 +37,11 @@ export interface WithRetryOptions {
    */
   readonly shouldRetry?: (error: unknown, attempt: number) => boolean;
   /**
-   * Hook invoked before each retry. Useful for logging or
-   * `agentfootprint.resilience.retry` emit. Receives the attempt
-   * number that's about to start (so attempt 2 = first retry).
+   * Hook invoked before each retry. Useful for logging or an
+   * `agentfootprint.error.retried` emit (the event family reserved for
+   * the standalone provider decorators — see events/payloads.ts).
+   * Receives the attempt number that's about to start (so attempt 2 =
+   * first retry).
    */
   readonly onRetry?: (error: unknown, attempt: number, delayMs: number) => void;
 }
@@ -105,8 +107,13 @@ export function withRetry(provider: LLMProvider, options: WithRetryOptions = {})
  * surface HTTP status should set `error.status` for this to work; the
  * predicate falls back to retrying when status is unknown (better to
  * retry once than to surface a flaky failure).
+ *
+ * Exported (module-level, NOT on the resilience barrel) as the single
+ * source of truth for the decorators' transience policy — shared by
+ * `withCredentialRetry` (identity) so "what counts as transient" never
+ * drifts between the LLM and credential retry wrappers.
  */
-function defaultShouldRetry(err: unknown, _attempt: number): boolean {
+export function defaultShouldRetry(err: unknown, _attempt: number): boolean {
   if (isAbortError(err)) return false;
   const status =
     (err as { status?: number; statusCode?: number })?.status ??

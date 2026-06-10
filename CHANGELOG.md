@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+- **`withCredentialRetry` — transient credential failures retry before
+  failing closed** (`agentfootprint/identity`): a `CredentialProvider`
+  decorator mirroring the LLM-provider `withRetry` — same option vocabulary
+  (`maxAttempts`/`initialDelayMs`/`backoffFactor`/`maxDelayMs`/`shouldRetry`/
+  `onRetry`) and the same shared default transience policy (retry 5xx/429/
+  network/unknown; never AbortError or other 4xx — AgentCore's documented
+  retryable errors, `InternalServerException` 500 + `ThrottlingException`
+  429, retry out of the box). Only THROWN errors retry: `issued` and
+  `authorization-required` (3LO consent is a human flow, not a fault) return
+  immediately. After retries exhaust, the last error is rethrown — fail-closed
+  behavior at the tool-dispatch site is byte-identical to an unwrapped
+  provider (`credential.failed` + error tool result; the tool never runs).
+  Per-attempt visibility is consumer-wired via `onRetry` (the established
+  decorator contract; the `error.*` event family stays reserved for
+  decorators — NO new event types). Design note: the rules-based reliability
+  subsystem is LLM-call-scoped (`ReliabilityScope.request: LLMRequest`; gate
+  chart around CallLLM) — extending its rule vocabulary to credential
+  resolution is the deferred `sf-credential` gate node, an M+ change; the
+  decorator is the honest transport-level home for retry until then.
+  13 tests (Convention 3); `examples/features/17-identity.ts` now simulates a
+  vault blip and shows `credentialRetries: 1`.
+
 ## [6.21.0] - 2026-06-11
 
 - **B16 — circuit-breaker scope design choice documented (feature

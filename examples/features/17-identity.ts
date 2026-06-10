@@ -13,11 +13,16 @@
  * written to tracked scope — so it stays out of the snapshot / narrative. This
  * example proves it: `tokenInSnapshot` is `false`.
  *
+ * RESILIENCE: production identity backends blip (AgentCore documents 500/429
+ * as retryable). `withCredentialRetry` wraps the provider so transient failures
+ * retry with backoff BEFORE failing closed — same vocabulary as the LLM-provider
+ * `withRetry`. This example simulates one blip; `credentialRetries` is `1`.
+ *
  * Run:  npx tsx examples/features/17-identity.ts
  */
 
 import { Agent, mock, defineTool, type LLMProvider } from '../../src/index.js';
-import { staticTokens, type CredentialProvider } from '../../src/identity.js';
+import { staticTokens, withCredentialRetry, type CredentialProvider } from '../../src/identity.js';
 import { isCliEntry, printResult, type ExampleMeta } from '../helpers/cli.js';
 
 export const meta: ExampleMeta = {
@@ -25,7 +30,7 @@ export const meta: ExampleMeta = {
   title: 'Identity — a tool vends a downstream OAuth credential (AgentCore)',
   group: 'features',
   description:
-    'Declare-and-push: the tool declares needs:{credential}; the framework resolves it BEFORE execute and injects ctx.credential. staticTokens() offline; agentCoreIdentity() in prod (one-line swap). 3LO consent surfaces a URL; the credential never enters the trace.',
+    'Declare-and-push: the tool declares needs:{credential}; the framework resolves it BEFORE execute and injects ctx.credential. staticTokens() offline; agentCoreIdentity() in prod (one-line swap). withCredentialRetry() retries transient vault blips before failing closed. 3LO consent surfaces a URL; the credential never enters the trace.',
   defaultInput: 'list my repos',
   providerSlots: ['default'],
   tags: ['feature', 'identity', 'agentcore', 'credentials', 'security', 'oauth'],
@@ -35,7 +40,28 @@ const SECRET = 'ghp_demo_token_value';
 
 export async function run(input: string, provider?: LLMProvider): Promise<unknown> {
   // Dev: canned token. Prod: `agentCoreIdentity({ region: 'us-east-1' })` — same port.
-  const credentials: CredentialProvider = staticTokens({ github: SECRET });
+  const vault: CredentialProvider = staticTokens({ github: SECRET });
+
+  // TRANSIENT-RETRY: simulate one network blip on the way to the vault, then
+  // wrap with `withCredentialRetry`. 3LO consent and 4xx are never retried;
+  // exhausted retries fail closed exactly like an unwrapped provider.
+  let vaultCalls = 0;
+  const flakyVault: CredentialProvider = {
+    id: 'flaky-vault',
+    getCredential: (req) => {
+      vaultCalls++;
+      if (vaultCalls === 1) {
+        return Promise.reject(Object.assign(new Error('ETIMEDOUT: vault blip'), { status: 503 }));
+      }
+      return vault.getCredential(req);
+    },
+  };
+  const retriesObserved: number[] = [];
+  const credentials = withCredentialRetry(flakyVault, {
+    maxAttempts: 3,
+    initialDelayMs: 5,
+    onRetry: (_err, attempt) => retriesObserved.push(attempt), // per-attempt visibility
+  });
 
   // DECLARE-AND-PUSH: the tool declares `needs`; the framework resolves it BEFORE
   // execute and injects `ctx.credential`. No fetching, no globals, no boilerplate
@@ -77,6 +103,7 @@ export async function run(input: string, provider?: LLMProvider): Promise<unknow
     answer,
     usedHeader, // proves the tool actually used the token
     tokenInSnapshot, // false — the vended token never reached the trace
+    credentialRetries: retriesObserved.length, // 1 — the blip was retried, not failed closed
   };
 }
 

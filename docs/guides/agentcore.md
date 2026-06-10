@@ -149,6 +149,12 @@ const agent = Agent.create({
   asserts the vended token never reaches the snapshot.)
 - Dev/test without AWS: `staticTokens({ github: '...' })` — swap to
   `agentCoreIdentity` in one line; the tool never changes.
+- **Transient retry:** wrap the provider with
+  `withCredentialRetry(agentCoreIdentity({ region }), { maxAttempts: 3 })` so
+  network blips to the vault (AgentCore documents 500/429 as retryable) retry
+  with backoff BEFORE failing closed. Same option vocabulary as the LLM-provider
+  `withRetry`; 3LO consent and 4xx are never retried; exhausted retries behave
+  exactly like an unwrapped provider (per-attempt visibility via `onRetry`).
 - **Escape hatch (dynamic needs):** `ctx.credentials.getCredential({ service })`
   pulls on demand — fail-closed (it throws when no provider is attached; check
   `ctx.hasCredentials` for an intentional degraded mode).

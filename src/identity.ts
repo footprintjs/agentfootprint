@@ -46,6 +46,10 @@ export {
 } from './identity/kinds.js';
 export { staticTokens, type StaticTokensOptions } from './identity/staticTokens.js';
 export {
+  withCredentialRetry,
+  type WithCredentialRetryOptions,
+} from './identity/withCredentialRetry.js';
+export {
   agentCoreIdentity,
   type AgentCoreIdentityOptions,
   type AgentCoreIdentityClientLike,
