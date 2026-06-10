@@ -128,8 +128,14 @@ export interface SkillRouting {
   /** How the skill is reached: a decision `tree` leaf, a flat `entry`, a
    *  deterministic `route` edge, or `model` (read_skill-reachable). */
   readonly via: 'tree' | 'entry' | 'route' | 'model';
-  /** Decision path (tree only): the predicates from root→leaf + branch taken. */
+  /** Decision path (tree only): the predicates from root→leaf + branch taken.
+   *  For a skill used as MULTIPLE tree leaves this is the FIRST path; all
+   *  paths are in `paths`. */
   readonly path?: readonly SkillRoutingStep[];
+  /** All decision paths reaching this skill (tree only; present when the same
+   *  skill is the leaf of more than one branch — the compiler merges repeated
+   *  leaves into ONE injection whose trigger ORs the path predicates). */
+  readonly paths?: ReadonlyArray<readonly SkillRoutingStep[]>;
   /** Entry/route edge caption. */
   readonly label?: string;
   /** Source skill id (route only). */
@@ -366,6 +372,44 @@ function compileTree(
       throw new Error(
         `skillGraph.tree: leaf "${node.id}" is not a skill (flavor='${node.flavor}').`,
       );
+    }
+    // The SAME skill may be the leaf of several branches ("ESXi questions" and
+    // "io questions" both route to the io-profile bundle). Compile it ONCE:
+    // merge repeated leaves into one injection whose trigger ORs the path
+    // predicates — pushing a second same-id injection would explode in
+    // Agent.injection()'s duplicate-id guard.
+    const existingIdx = out.skills.findIndex((skill) => skill.id === node.id);
+    if (existingIdx >= 0) {
+      const prev = out.skills[existingIdx]!;
+      const prevWhen = (prev.trigger as { activeWhen: (ctx: InjectionContext) => boolean })
+        .activeWhen;
+      const prevRouting = (prev.metadata as Record<string, unknown>)[
+        SKILL_GRAPH_METADATA_KEY
+      ] as SkillRouting;
+      const allPaths = [
+        ...(prevRouting.paths ?? (prevRouting.path ? [prevRouting.path] : [])),
+        path,
+      ];
+      out.skills[existingIdx] = {
+        ...prev,
+        trigger: {
+          kind: 'rule',
+          activeWhen: (ctx: InjectionContext) => prevWhen(ctx) || pathCond(ctx),
+        },
+        metadata: {
+          ...prev.metadata,
+          [SKILL_GRAPH_METADATA_KEY]: { ...prevRouting, paths: allPaths },
+        },
+      };
+      // Node already exists — add only the second parent edge (the drawing
+      // correctly shows two predicate diamonds converging on one leaf).
+      out.edges.push({
+        from: parent ? parent.id : null,
+        to: node.id,
+        kind: 'predicate',
+        label: parent?.branch,
+      });
+      return;
     }
     const routing: SkillRouting = { via: 'tree', path };
     // On-demand tools: a tree routes to exactly one leaf per iteration, so scope

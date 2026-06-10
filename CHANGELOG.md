@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [6.14.1]
+
+Patch — **`skillGraph.tree()` merges repeated leaves.** Using the SAME skill as
+the leaf of more than one branch ("ESXi questions" and "io questions" both
+route to the io-profile bundle) compiled into two same-id injections and
+exploded in `Agent.injection()`'s duplicate-id guard at build time. The
+compiler now merges repeated leaves into ONE injection whose trigger ORs the
+path predicates; routing provenance gains `paths` (all root→leaf paths — the
+existing `path` stays as the first); the graph keeps one node with an edge per
+converging branch (the drawing shows both diamonds reaching the shared leaf).
+
 ## [6.14.0]
 
 ### Added

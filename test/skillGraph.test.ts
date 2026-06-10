@@ -6,7 +6,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { skillGraph, decide, defineSkill, defineInstruction } from '../src/index.js';
+import { skillGraph, decide, defineSkill, defineInstruction, Agent, mock } from '../src/index.js';
 import { evaluateInjections } from '../src/lib/injection-engine/index.js';
 import type { InjectionContext } from '../src/lib/injection-engine/types.js';
 
@@ -335,5 +335,54 @@ describe('skillGraph — routing provenance (metadata.skillGraph)', () => {
     const c = skill('c');
     const g = skillGraph().entry(a).route(a, c).build();
     expect(routingOf(g.skills.find((s) => s.id === 'c')!)).toEqual({ via: 'model' });
+  });
+});
+
+describe('tree() — the same skill as MULTIPLE leaves (shared-leaf merge)', () => {
+  // Neo's regression: an intent tree routed BOTH "ESXi questions" and "io
+  // questions" to the same io-profile skill — two leaves, one injection id.
+  // The compiler must merge them (OR'd predicates), not emit a duplicate that
+  // explodes in Agent.injection()'s duplicate-id guard.
+  const shared = defineSkill({
+    id: 'io-profile',
+    description: 'io profile bundle',
+    body: 'profile the io',
+  });
+  const other = defineSkill({ id: 'triage', description: 'default', body: 'triage it' });
+  const tree = decide(
+    (ctx) => /esxi/.test(ctx.userMessage),
+    shared,
+    decide((ctx) => /\bio\b/.test(ctx.userMessage), shared, other, 'io?'),
+    'esxi?',
+  );
+
+  it('compiles the shared leaf ONCE, with OR-of-paths activation', () => {
+    const graph = skillGraph().tree(tree).build();
+    const ids = graph.skills.map((s) => s.id);
+    expect(ids.filter((id) => id === 'io-profile').length).toBe(1);
+
+    const compiled = graph.skills.find((s) => s.id === 'io-profile')!;
+    const activeWhen = (compiled.trigger as { activeWhen: (ctx: unknown) => boolean }).activeWhen;
+    const ctx = (msg: string) => ({ userMessage: msg } as never);
+    expect(activeWhen(ctx('which esxi host owns this wwpn?'))).toBe(true); // path 1
+    expect(activeWhen(ctx('io trend for the port'))).toBe(true); // path 2
+    expect(activeWhen(ctx('something else entirely'))).toBe(false);
+
+    // provenance: both paths recorded; node deduped; both edges kept
+    const routing = (compiled.metadata as Record<string, never>)['skillGraph'] as unknown as {
+      paths?: unknown[];
+    };
+    expect(routing.paths?.length).toBe(2);
+    expect(graph.nodes.filter((n) => n.id === 'io-profile').length).toBe(1);
+    expect(graph.edges.filter((e) => e.to === 'io-profile').length).toBe(2);
+  });
+
+  it('builds into an Agent without the duplicate-id throw', () => {
+    const graph = skillGraph().tree(tree).build();
+    expect(() =>
+      Agent.create({ provider: mock({ reply: 'x' }), model: 'mock' })
+        .skillGraph(graph)
+        .build(),
+    ).not.toThrow();
   });
 });
