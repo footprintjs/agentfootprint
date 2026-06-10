@@ -90,11 +90,19 @@ export function buildToolCallsHandler(
 
   return {
     execute: async (scope) => {
-      const toolCalls = scope.llmLatestToolCalls as readonly {
-        readonly id: string;
-        readonly name: string;
-        readonly args: Readonly<Record<string, unknown>>;
-      }[];
+      // Materialize ONCE — `scope.llmLatestToolCalls` is a live TypedScope
+      // deep-Proxy view; spreading yields the raw (plain, structured-clone-
+      // safe) elements. This array is embedded into the assistant history
+      // message and into typed event payloads (tool_start args,
+      // iteration_end history), which must be detached plain data
+      // (RFC-001 'clone' capture under observerDelivery: 'deferred').
+      const toolCalls = [
+        ...(scope.llmLatestToolCalls as readonly {
+          readonly id: string;
+          readonly name: string;
+          readonly args: Readonly<Record<string, unknown>>;
+        }[]),
+      ];
       const iteration = scope.iteration as number;
       const newHistory: LLMMessage[] = [...(scope.history as readonly LLMMessage[])];
       // ALWAYS push the assistant turn when there are tool calls — even
@@ -114,7 +122,8 @@ export function buildToolCallsHandler(
           role: 'assistant' as ContextRole,
           content: scope.llmLatestContent ?? '',
           ...(toolCalls.length > 0 && { toolCalls }),
-          ...(hasThinking && { thinkingBlocks: thinkingBlocks as never }),
+          // Spread = materialize the proxy view (see toolCalls above).
+          ...(hasThinking && { thinkingBlocks: [...thinkingBlocks] as never }),
         });
       }
       // Resolve a tool by name. The Tools slot already invoked
@@ -426,7 +435,12 @@ export function buildToolCallsHandler(
         turnIndex: 0,
         iterIndex: iteration,
         toolCallCount: toolCalls.length,
-        history: scope.history,
+        // The PLAIN local array, not `scope.history` — a TypedScope array
+        // read returns a live deep-Proxy view, which is not structured-
+        // clone-safe. Event payloads must be detached plain data so they
+        // survive RFC-001 'clone' capture (observerDelivery: 'deferred')
+        // and never hand consumers a mutable view of engine state.
+        history: newHistory,
       });
       scope.iteration = iteration + 1;
       return undefined; // explicit: no pause, flow continues to loopTo
@@ -462,7 +476,8 @@ export function buildToolCallsHandler(
         turnIndex: 0,
         iterIndex: iteration,
         toolCallCount: 1,
-        history: scope.history,
+        // Plain local array — see the matching note on the execute path.
+        history: newHistory,
       });
       scope.iteration = iteration + 1;
       // Clear pause checkpoint fields.
