@@ -19,6 +19,7 @@ import {
   type AttachRecorderOptions,
   type CombinedNarrativeEntry,
   type CombinedRecorder,
+  type CommitValuesMode,
   type FlowChart,
   type FlowchartCheckpoint,
   type ObserverDrainResult,
@@ -162,6 +163,12 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    *  executor. Agent default is `'summary'` (cheap markers), NOT
    *  footprintjs's `'full'`. See AgentOptions.readTracking. */
   private readonly readTracking: ReadTrackingMode;
+  /** Commit-log value encoding (#13c-B) — forwarded to the internal
+   *  executor. Agent default is `'delta'` (append/delete verbs; growing
+   *  arrays like `history` record only their tails — lossless, linear
+   *  retained memory), NOT footprintjs's `'full'`. See
+   *  AgentOptions.commitValues. */
+  private readonly commitValues: CommitValuesMode;
   private readonly credentialProvider?: CredentialProvider;
   /** Evidence bridge (#5) — present iff a CAUSAL memory is mounted. */
   private readonly causalEvidence?: CausalEvidenceRecorderHandle;
@@ -346,6 +353,10 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // zero consumers across af/lens/eui, and 'full' clones ~18MB of unread
     // data per 200 iterations. Consumers opt into 'full' explicitly.
     this.readTracking = opts.readTracking ?? 'summary';
+    // Default 'delta' — the accepted #13c-B design: agentfootprint opts in
+    // immediately (the agent's history-append workload is exactly the case
+    // the verb exists for; reconstruction stays lossless via commitValueAt).
+    this.commitValues = opts.commitValues ?? 'delta';
     // RFC-001 Block 10 — observer delivery tier. Fail fast on the dials
     // without the switch (no silently-ignored combinations; same policy
     // that merged reactMode/reactStructure in 6.0.0).
@@ -740,9 +751,12 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     };
 
     // Reuse the cached chart built at constructor time.
-    // readTracking is the only executor option the Agent sets — the
-    // observability-cost lever for snapshot stageReads (#18/#14).
-    const executor = new FlowChartExecutor(this.getSpec(), { readTracking: this.readTracking });
+    // The Agent's executor dials: readTracking (#18/#14, snapshot stageReads)
+    // and commitValues (#13c-B, commit-log value encoding).
+    const executor = new FlowChartExecutor(this.getSpec(), {
+      readTracking: this.readTracking,
+      commitValues: this.commitValues,
+    });
     // Enable structured narrative so `getLastNarrativeEntries()` can
     // hand a populated array to consumer Trace views (ExplainableShell).
     // Cheap when no consumer reads it; the recorder accumulates only.

@@ -8,7 +8,12 @@
  * for back-compat (the 28+ existing import sites continue to work).
  */
 
-import type { AttachRecorderOptions, ReadTrackingMode, StructureRecorder } from 'footprintjs';
+import type {
+  AttachRecorderOptions,
+  ReadTrackingMode,
+  StructureRecorder,
+  CommitValuesMode,
+} from 'footprintjs';
 import type { GroupTranslator } from '../translator.js';
 import type {
   LLMMessage,
@@ -108,6 +113,20 @@ export interface AgentOptions {
    * behavior-change callout.
    */
   readonly readTracking?: ReadTrackingMode;
+  /**
+   * Commit-log value encoding (#13c-B) — forwarded to the internal
+   * executor as `{ commitValues }`. Agent default is **`'delta'`**: a
+   * stage whose net change to a tracked array is "the old array plus a
+   * tail" (the agent's `history` every iteration) records ONLY the tail
+   * (`append` verb); key removals record a `delete` verb. LOSSLESS — any
+   * step's full value reconstructs by replay (`commitValueAt` from
+   * `footprintjs/trace`), which is why this is safe for audit trails.
+   * Retained commit-log memory becomes linear instead of quadratic.
+   * Set `'full'` for footprintjs's default encoding (every changed key
+   * stores its full final value) if a downstream consumer reads
+   * `bundle.overwrite[key]` as the complete value.
+   */
+  readonly commitValues?: CommitValuesMode;
   /**
    * Credential provider for downstream OAuth (declare-and-push). When set, a
    * tool that declares `needs: { credential }` has it resolved BEFORE `execute`
