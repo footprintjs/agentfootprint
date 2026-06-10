@@ -42,6 +42,20 @@ This is enforced four ways: TypeScript `(event) => void` signature, ESLint `no-m
 
 `hasListenersFor(type)` returns `false` when nothing subscribes; emitters skip event-object construction entirely. The dispatcher adds no cost to runs without subscribers.
 
+### Decision 6: Listener lifecycle is caller-owned, with bounded retention
+
+Subscriptions never auto-expire per-run — a listener added to a long-lived runner observes every later run until released. Three release paths:
+
+```typescript
+const unsub = agent.on('agentfootprint.agent.turn_end', fn); // 1. Unsubscribe handle
+agent.on('*', fn, { signal: controller.signal });             // 2. AbortSignal (DOM addEventListener parity; also on once())
+agent.removeAllListeners();                                   // 3. bulk escape hatch for servers
+```
+
+Bounded-leak guarantee: every removal path (unsubscribe, `off()`, signal abort, once-fire, `removeAllListeners()`) prunes emptied internal buckets AND detaches the abort handler from the consumer's signal — dispatcher storage is bounded by LIVE subscriptions, never subscription history. `listenerCount()` is the diagnostic: no-arg = total retained (watch this on servers), with a key = that exact subscription bucket.
+
+Per-run pattern on a reused server runner: subscribe with a per-request `AbortSignal`, abort after the run. Property + load tests enforce the guarantee (`test/events/property/lifecycle-invariants.test.ts`, `test/events/roi/memory-stability.test.ts` — 1,000 sequential `agent.run()` calls hold the count at baseline).
+
 ## What the contract promises
 
 - **Additive within a major version.** Adding a new event is non-breaking.

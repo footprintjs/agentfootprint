@@ -393,19 +393,79 @@ export abstract class RunnerBase<TIn = unknown, TOut = unknown> implements Runne
     )(type, listener);
   }
 
-  once<K extends AgentfootprintEventType>(type: K, listener: EventListener<K>): Unsubscribe;
-  once(type: WildcardSubscription, listener: WildcardListener): Unsubscribe;
-  once(type: string, listener: (event: AgentfootprintEvent) => void): Unsubscribe {
+  once<K extends AgentfootprintEventType>(
+    type: K,
+    listener: EventListener<K>,
+    options?: Omit<ListenOptions, 'once'>,
+  ): Unsubscribe;
+  once(
+    type: WildcardSubscription,
+    listener: WildcardListener,
+    options?: Omit<ListenOptions, 'once'>,
+  ): Unsubscribe;
+  once(
+    type: string,
+    listener: (event: AgentfootprintEvent) => void,
+    options?: Omit<ListenOptions, 'once'>,
+  ): Unsubscribe {
     return (
       this.dispatcher.once as unknown as (
         type: string,
         listener: (event: AgentfootprintEvent) => void,
+        options?: Omit<ListenOptions, 'once'>,
       ) => Unsubscribe
-    )(type, listener);
+    )(type, listener, options);
+  }
+
+  /**
+   * Lifecycle escape hatch — drop EVERY event listener on this runner in
+   * one call (typed, domain-wildcard, and `'*'`). Delegates to
+   * `EventDispatcher.removeAllListeners()`.
+   *
+   * For long-lived runners on servers: when you can't thread an
+   * AbortSignal or keep every Unsubscribe handle, call this between
+   * requests to guarantee zero residual subscriptions. Note it also
+   * removes listeners wired by `enable.*` strategies — re-enable after
+   * calling if you still want them. Does NOT touch attached recorders
+   * (see `attach()` — recorders have their own Unsubscribe).
+   */
+  removeAllListeners(): void {
+    this.dispatcher.removeAllListeners();
+  }
+
+  /**
+   * Diagnostic — how many event listeners this runner currently retains.
+   * No argument = total across all buckets (the leak-detection number);
+   * with a subscription key = that bucket only. Delegates to
+   * `EventDispatcher.listenerCount()`.
+   */
+  listenerCount(type?: AgentfootprintEventType | WildcardSubscription): number {
+    return this.dispatcher.listenerCount(type);
   }
 
   // ─── Recorder attach ───────────────────────────────────────────
 
+  /**
+   * Attach a footprintjs CombinedRecorder to observe every subsequent run.
+   *
+   * LIFECYCLE CONTRACT (who owns cleanup):
+   * - Attached recorders live for the RUNNER's lifetime, not a run's.
+   *   NOTHING auto-expires per-run — a recorder attached once observes
+   *   every later `run()` until you call the returned Unsubscribe.
+   * - The CALLER owns cleanup. Keep the Unsubscribe and call it when the
+   *   observer's life ends (request scope, UI unmount, test teardown).
+   * - Event listeners (`on()` / `once()`) follow the same rule, with two
+   *   extra outs: pass `{ signal }` for AbortSignal auto-cleanup, or call
+   *   `removeAllListeners()` to bulk-drop listeners (listeners ONLY —
+   *   recorders are not affected).
+   * - `once()` listeners are the only self-expiring subscription.
+   *
+   * attach() is NOT idempotent: every call pushes another entry. (At run
+   * time footprintjs's executor dedupes recorders by ID, so same-ID
+   * duplicates won't double-fire — but the runner-side array still
+   * grows.) Attaching in a per-run loop without detaching is the classic
+   * server leak; attach once, or detach per-run.
+   */
   attach(recorder: CombinedRecorder): Unsubscribe {
     this.attachedRecorders.push(recorder);
     return () => {
