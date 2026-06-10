@@ -11,13 +11,18 @@
  *   - Pause inside flowchart → throw with checkpoint attached
  *   - Errors thrown from flowchart propagate (Agent layer envelopes)
  *   - Composes with the Agent's tool-dispatch path (smoke integration)
+ *   - `recorders` option: attached CombinedRecorders observe the INTERNAL
+ *     executor — decide() evidence fires onDecision; one array routes all
+ *     three channels; shared instances accumulate across invocations with
+ *     a fresh runId per invocation (Convention 4)
  */
 
 import { describe, expect, it } from 'vitest';
-import { flowChart } from 'footprintjs';
-import type { PausableHandler } from 'footprintjs';
+import { decide, flowChart } from 'footprintjs';
+import type { CombinedRecorder, FlowDecisionEvent, PausableHandler } from 'footprintjs';
 import { Agent, flowchartAsTool, mock, type FlowchartToolSnapshot } from '../../src/index.js';
 import { unconfiguredCredentialProvider } from '../../src/identity.js';
+import { causalEvidenceRecorder } from '../../src/memory/causal/evidenceRecorder.js';
 
 // ─── Fixtures ─────────────────────────────────────────────────────
 
@@ -331,5 +336,209 @@ describe('flowchartAsTool — ROI: composition over rewrite', () => {
     const b = await tool.execute({ priority: 'low' }, baseToolCtx);
     expect(a).toBe('escalated');
     expect(b).toBe('queued');
+  });
+});
+
+// ─── 8. RECORDERS OPTION — observe the internal executor ──────────
+//
+// The #21-lighthouse gap: flowchartAsTool builds its executor internally,
+// so decide()/select() evidence inside a tool-mounted chart could not
+// reach the agent's evidence recorders (causal #5 bridge, OTel #19
+// decisionEvidenceRecorder). The `recorders` option closes it.
+
+interface PolicyState {
+  creditScore: number;
+  outcome?: 'approve' | 'decline';
+  pings?: number;
+}
+
+/** Chart with a labeled decide() rule — the evidence-bearing fixture. */
+function buildPolicyChart() {
+  return flowChart<PolicyState>(
+    'Seed',
+    async (scope) => {
+      const args = scope.$getArgs<{ credit_score: number }>();
+      scope.creditScore = args.credit_score;
+      scope.$emit('test.policy.seeded', { creditScore: args.credit_score });
+    },
+    'seed',
+  )
+    .addDeciderFunction(
+      'Adjudicate',
+      (scope) =>
+        decide(
+          scope as unknown as PolicyState,
+          [
+            {
+              when: { creditScore: { lt: 580 } },
+              then: 'decline',
+              label: 'Credit score below the 580 floor',
+            },
+          ],
+          'approve',
+        ),
+      'adjudicate',
+    )
+    .addFunctionBranch('decline', 'Decline', async (scope) => {
+      scope.outcome = 'decline';
+    })
+    .addFunctionBranch('approve', 'Approve', async (scope) => {
+      scope.outcome = 'approve';
+    })
+    .end()
+    .build();
+}
+
+describe('flowchartAsTool — recorders option (unit: plumbing)', () => {
+  it('attached CombinedRecorder.onDecision fires with decide() evidence', async () => {
+    const decisions: FlowDecisionEvent[] = [];
+    const recorder: CombinedRecorder = {
+      id: 'evidence-probe',
+      onDecision: (e) => decisions.push(e),
+    };
+    const tool = flowchartAsTool({
+      name: 'adjudicate_loan',
+      description: 'Apply the lending policy',
+      flowchart: buildPolicyChart(),
+      recorders: [recorder],
+    });
+
+    const out = await tool.execute({ credit_score: 500 }, baseToolCtx);
+    expect(JSON.parse(out as string).outcome).toBe('decline');
+
+    expect(decisions).toHaveLength(1);
+    // FlowDecisionEvent.chosen carries the chosen branch's display NAME;
+    // the branch ID lives in evidence.chosen.
+    expect(decisions[0].chosen).toBe('Decline');
+    expect(decisions[0].evidence).toBeDefined();
+    expect(decisions[0].evidence!.chosen).toBe('decline');
+    const matched = decisions[0].evidence!.rules.find((r) => r.matched);
+    expect(matched?.label).toBe('Credit score below the 580 floor');
+  });
+
+  it('one array routes one recorder across all three channels (scope/flow/emit)', async () => {
+    const writes: string[] = [];
+    const decisions: string[] = [];
+    const emits: string[] = [];
+    const recorder: CombinedRecorder = {
+      id: 'tri-channel',
+      onWrite: (e) => writes.push(e.key),
+      onDecision: (e) => decisions.push(e.chosen),
+      onEmit: (e) => emits.push(e.name),
+    };
+    const tool = flowchartAsTool({
+      name: 'adjudicate_loan',
+      description: 'Apply the lending policy',
+      flowchart: buildPolicyChart(),
+      recorders: [recorder],
+    });
+
+    await tool.execute({ credit_score: 720 }, baseToolCtx);
+
+    expect(writes).toContain('creditScore'); // ScopeRecorder channel
+    expect(decisions).toEqual(['Approve']); // FlowRecorder channel
+    expect(emits).toContain('test.policy.seeded'); // EmitRecorder channel
+  });
+
+  it('multiple recorders in the array all attach', async () => {
+    const seenA: string[] = [];
+    const seenB: string[] = [];
+    const a: CombinedRecorder = { id: 'rec-a', onDecision: (e) => seenA.push(e.chosen) };
+    const b: CombinedRecorder = { id: 'rec-b', onDecision: (e) => seenB.push(e.chosen) };
+    const tool = flowchartAsTool({
+      name: 'adjudicate_loan',
+      description: 'Apply the lending policy',
+      flowchart: buildPolicyChart(),
+      recorders: [a, b],
+    });
+
+    await tool.execute({ credit_score: 500 }, baseToolCtx);
+
+    expect(seenA).toEqual(['Decline']);
+    expect(seenB).toEqual(['Decline']);
+  });
+});
+
+describe('flowchartAsTool — recorders option (multi-invocation)', () => {
+  it('a shared stateful recorder sees events from EVERY invocation, each with a fresh runId', async () => {
+    const decisions: FlowDecisionEvent[] = [];
+    const recorder: CombinedRecorder = {
+      id: 'accumulator',
+      onDecision: (e) => decisions.push(e),
+    };
+    const tool = flowchartAsTool({
+      name: 'adjudicate_loan',
+      description: 'Apply the lending policy',
+      flowchart: buildPolicyChart(),
+      recorders: [recorder],
+    });
+
+    await tool.execute({ credit_score: 500 }, baseToolCtx);
+    await tool.execute({ credit_score: 720 }, baseToolCtx);
+    await tool.execute({ credit_score: 410 }, baseToolCtx);
+
+    // The instance is the consumer's: it accumulates across invocations.
+    expect(decisions.map((d) => d.chosen)).toEqual(['Decline', 'Approve', 'Decline']);
+
+    // Each invocation is a fresh executor → a fresh runId (Convention 4).
+    const runIds = decisions.map((d) => d.traversalContext?.runId);
+    expect(runIds.every((id) => typeof id === 'string' && id.length > 0)).toBe(true);
+    expect(new Set(runIds).size).toBe(3);
+  });
+});
+
+describe('flowchartAsTool — recorders option (integration: Agent end-to-end)', () => {
+  it('decide() evidence inside a tool-mounted chart reaches the causal-evidence recorder DURING the agent run', async () => {
+    const evidence = causalEvidenceRecorder();
+    const tool = flowchartAsTool({
+      name: 'adjudicate_loan',
+      description: 'Apply the lending policy and return the outcome.',
+      inputSchema: {
+        type: 'object',
+        properties: { credit_score: { type: 'number' } },
+        required: ['credit_score'],
+      },
+      flowchart: buildPolicyChart(),
+      recorders: [evidence],
+    });
+
+    let calls = 0;
+    let decisionsSeenMidRun = -1;
+    const provider = mock({
+      respond: () => {
+        calls++;
+        if (calls === 1) {
+          return {
+            content: '',
+            toolCalls: [{ id: 'tc-1', name: 'adjudicate_loan', args: { credit_score: 500 } }],
+          };
+        }
+        // Second LLM call happens AFTER the tool ran but BEFORE the run
+        // ends — proof the evidence was captured during the agent run.
+        decisionsSeenMidRun = evidence.collect().decisions.length;
+        return { content: 'Application declined.', toolCalls: [] };
+      },
+    });
+
+    const agent = Agent.create({ provider, model: 'mock', maxIterations: 5 })
+      .system('You adjudicate loan applications.')
+      .tool(tool)
+      .build();
+
+    const result = await agent.run({ message: 'adjudicate applicant with score 500' });
+    expect(result).toBe('Application declined.');
+    expect(decisionsSeenMidRun).toBe(1);
+
+    const { decisions } = evidence.collect();
+    expect(decisions).toHaveLength(1);
+    expect(decisions[0].stageId).toBe('adjudicate');
+    expect(decisions[0].chosen).toBe('Decline'); // branch display name (event contract)
+    // The full DecisionEvidence (rules + conditions) survived the bridge.
+    const captured = decisions[0].evidence as
+      | { rules?: ReadonlyArray<{ matched: boolean; label?: string }> }
+      | undefined;
+    expect(
+      captured?.rules?.some((r) => r.matched && r.label === 'Credit score below the 580 floor'),
+    ).toBe(true);
   });
 });

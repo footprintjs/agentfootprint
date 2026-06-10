@@ -18,7 +18,11 @@
  *   2. **Observability stays free.** Every flowchart stage emits typed
  *      events. The Agent's recorders see the wrapping tool call;
  *      footprintjs's recorders see everything inside. Two layers,
- *      one observation tree.
+ *      one observation tree. The `recorders` option bridges them:
+ *      attach agent-layer observers (the causal-evidence bridge,
+ *      `otel.decisionEvidenceRecorder()`, your own CombinedRecorder)
+ *      to the tool's INTERNAL executor so decide()/select() evidence
+ *      inside the flowchart reaches them too.
  *
  *   3. **Pause/resume composes.** A pausable handler inside the
  *      flowchart pauses the inner executor; the outer agent treats
@@ -74,15 +78,21 @@
  *       .end()
  *     .build();
  *
+ *   // decide() evidence inside the chart fires `onDecision` on each
+ *   // attached recorder — wire the agent's evidence consumers straight
+ *   // into the tool instead of hand-mounting the chart.
+ *   const evidence = causalEvidenceRecorder();
+ *
  *   const triageTool = flowchartAsTool({
  *     name: 'triage_request',
  *     description: 'Triage an incoming request and return the decision.',
  *     inputSchema: { ... },
  *     flowchart: triageChart,
+ *     recorders: [evidence],
  *   });
  */
 
-import { FlowChartExecutor, type FlowChart } from 'footprintjs';
+import { FlowChartExecutor, type CombinedRecorder, type FlowChart } from 'footprintjs';
 import { defineTool } from './tools.js';
 import type { Tool, ToolExecutionContext } from './tools.js';
 
@@ -141,6 +151,32 @@ export interface FlowchartAsToolOptions {
    * Errors throw into the tool's `[mapper-error: ...]` envelope.
    */
   readonly resultMapper?: FlowchartResultMapper;
+  /**
+   * Observers to attach to the tool's INTERNAL `FlowChartExecutor`
+   * before each run. This is the hook that lets decide()/select()
+   * evidence (and every other footprintjs event) inside a tool-mounted
+   * flowchart reach agent-layer evidence consumers — e.g. the causal
+   * `causalEvidenceRecorder()` bridge or `otel.decisionEvidenceRecorder()`.
+   * Without it, the internal executor is unobservable from outside.
+   *
+   * Each entry is a footprintjs `CombinedRecorder`, attached via
+   * `executor.attachCombinedRecorder` and routed by runtime
+   * method-shape detection — so ONE array covers all three observer
+   * channels (scope data-flow `onRead`/`onWrite`/`onCommit`/…,
+   * control-flow `onDecision`/`onSelected`/`onLoop`/…, and emit
+   * `onEmit`). Implement only the hooks you care about.
+   *
+   * **Per-invocation semantics:** the tool builds a FRESH executor per
+   * call (flowchart state never leaks between invocations) and attaches
+   * every recorder in this array to EACH invocation's executor before
+   * `run()`. The recorder INSTANCES are yours and are shared across
+   * invocations — a stateful recorder therefore accumulates events from
+   * EVERY invocation of the tool. Each invocation is a distinct run
+   * with a fresh `runId`; recorders needing per-invocation bookkeeping
+   * detect the boundary via `event.traversalContext.runId !== lastRunId`
+   * (Convention 4) rather than assuming one run per recorder lifetime.
+   */
+  readonly recorders?: ReadonlyArray<CombinedRecorder>;
 }
 
 /**
@@ -149,14 +185,18 @@ export interface FlowchartAsToolOptions {
  * On execute:
  *   1. Constructs a fresh `FlowChartExecutor(flowchart)` per call (so
  *      consecutive invocations don't share state).
- *   2. Calls `executor.run({ input: args, env: { signal } })` with the
+ *   2. Attaches each `opts.recorders` entry via
+ *      `executor.attachCombinedRecorder` — the SAME recorder instances
+ *      attach to every invocation's fresh executor (see the option's
+ *      JSDoc for the shared-state / runId implications).
+ *   3. Calls `executor.run({ input: args, env: { signal } })` with the
  *      LLM-supplied args + the agent's abort signal.
- *   3. If the run paused, throws an Error with the checkpoint attached
+ *   4. If the run paused, throws an Error with the checkpoint attached
  *      (`error.checkpoint`) so the agent loop can surface it. Polished
  *      agent-side pause integration is v2.6 work.
- *   4. If the run completed, calls `resultMapper(snapshot)` (or the
+ *   5. If the run completed, calls `resultMapper(snapshot)` (or the
  *      default JSON.stringify) and returns the string.
- *   5. If the run threw, the error propagates — the Agent's
+ *   6. If the run threw, the error propagates — the Agent's
  *      tool-call handler converts it to a synthetic error string for
  *      the LLM to see + recover from.
  */
@@ -180,6 +220,9 @@ export function flowchartAsTool(opts: FlowchartAsToolOptions): Tool {
     inputSchema: opts.inputSchema,
     execute: async (args, ctx: ToolExecutionContext) => {
       const executor = new FlowChartExecutor(opts.flowchart);
+      for (const recorder of opts.recorders ?? []) {
+        executor.attachCombinedRecorder(recorder);
+      }
       const env: { signal?: AbortSignal } = {};
       if (ctx.signal) env.signal = ctx.signal;
       await executor.run({ input: args, env });

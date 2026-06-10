@@ -97,12 +97,13 @@ name the exact record that broke.
    silently replacing the earlier snapshot. The example still exports per
    turn — pairing each audit segment with its turn's snapshot is the
    cleaner evidence layout anyway.
-2. **No recorder hook on `flowchartAsTool`** — a flowchart-as-tool builds
-   its executor internally, so decide() evidence inside it can't reach the
-   agent's causal-evidence recorder or the OTel bridge. The example mounts
-   the policy chart by hand to attach `otel.decisionEvidenceRecorder()` and
-   the ledger tap; a `recorders` option on `flowchartAsTool` (or
-   agent-level fan-in of tool-internal FlowRecorder events) would make the
-   ledger file unnecessary.
+2. **No recorder hook on `flowchartAsTool`** — ✅ SHIPPED since this was
+   written: `flowchartAsTool` now takes
+   `recorders?: ReadonlyArray<CombinedRecorder>` and attaches each entry
+   to the tool's internal executor before every run, so decide() evidence
+   reaches `otel.decisionEvidenceRecorder()` / the causal-evidence bridge
+   directly. This example keeps its hand-mounted policy chart on purpose —
+   it shows the manual wiring and the evidence-ledger tap end to end — but
+   new code should pass `recorders` instead of hand-mounting.
 
 Run: `npm run example -- examples/features/20-regulated-decisioning.ts`

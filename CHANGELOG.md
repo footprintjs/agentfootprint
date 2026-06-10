@@ -92,6 +92,26 @@ footprintjs 9.3.0's #13b staging-release).
     still exists and remains a follow-up for the other write-side stages
     (`msg-{turn}-{index}` ids share the same latent class).
 
+### Added
+
+- **`flowchartAsTool` `recorders` option** — closes the #21-lighthouse
+  observability gap: the tool builds its `FlowChartExecutor` internally,
+  so decide()/select() evidence inside a tool-mounted flowchart could not
+  reach the agent's evidence recorders (the #5 causal
+  `causalEvidenceRecorder()` bridge, the #19
+  `otel.decisionEvidenceRecorder()`). New
+  `recorders?: ReadonlyArray<CombinedRecorder>` attaches each entry to
+  the internal executor via `attachCombinedRecorder` before every run —
+  routed by method-shape detection, so one array covers all three
+  observer channels (scope data-flow, control-flow, emit).
+  Per-invocation semantics: the tool constructs a FRESH executor per
+  call and attaches the SAME recorder instances to each one — a shared
+  stateful recorder accumulates events from every invocation; each
+  invocation carries a fresh `runId` (Convention 4) for per-invocation
+  bookkeeping. The `20-regulated-decisioning` example keeps its
+  hand-mounted chart (it predates the hook and demonstrates the manual
+  wiring); new code should pass `recorders` instead.
+
 ## [6.19.0] - 2026-06-10
 
 **#21: the compliance-wedge lighthouse example** — completes the wedge
