@@ -655,6 +655,30 @@ export function verifyAuditBundle(input: AuditBundle | readonly AuditBundle[]): 
         expectedFirstSeq,
       );
     }
+    // Head-truncation invariant (adversarial-review finding): a segment
+    // claiming to be the chain START (firstSeq 0) MUST anchor on the zero
+    // hash, and a segment anchored on the zero hash MUST claim seq 0 —
+    // both directions. Without this, an attacker could drop the first K
+    // records (genesis included — agent identity, versions, payload-mode
+    // declaration) and forge `chainHead` from the survivor's prevHash;
+    // `finalHash` is untouched by that attack, so external finalHash
+    // anchoring alone would NOT catch it. With the invariant, a head-
+    // truncated forgery must declare firstSeq > 0 — visibly NOT a chain
+    // start — and auditors reject leading segments missing seq 0.
+    if (header.firstSeq === 0 && header.chainHead !== AUDIT_ZERO_HASH) {
+      return fail(
+        `head-truncation guard — firstSeq 0 requires chainHead to be the zero hash${where}`,
+        0,
+      );
+    }
+    if (header.chainHead === AUDIT_ZERO_HASH && header.firstSeq !== 0) {
+      return fail(
+        `head-truncation guard — zero-hash chainHead requires firstSeq 0, got ${String(
+          header.firstSeq,
+        )}${where}`,
+        header.firstSeq,
+      );
+    }
 
     let prevHash = header.chainHead;
     for (let i = 0; i < records.length; i++) {

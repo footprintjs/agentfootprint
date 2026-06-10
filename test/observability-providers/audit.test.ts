@@ -225,6 +225,13 @@ describe('verifyAuditBundle — unit: tamper detection names the exact record', 
       mutate: (r) => ((r.payload as Record<string, unknown>).tokensInput = 999),
     },
     {
+      // Bare prevHash clobber (stored hash untouched) — caught by the
+      // LINKAGE check, not the per-record hash check. Named so the
+      // deterministic table is complete audit evidence (review finding).
+      name: 'prevHash clobbered',
+      mutate: (r) => (r.prevHash = 'f'.repeat(64)),
+    },
+    {
       name: 'payload field added',
       mutate: (r) => ((r.payload as Record<string, unknown>).injected = true),
     },
@@ -281,6 +288,48 @@ describe('verifyAuditBundle — unit: tamper detection names the exact record', 
     const result = verifyAuditBundle(tampered as unknown as AuditBundle);
     expect(result.valid).toBe(false);
     expect(result.reason).toMatch(/finalHash/);
+  });
+
+  // Head-truncation guard (adversarial-review finding): finalHash anchoring
+  // alone cannot catch dropping the FIRST K records — the verifier instead
+  // enforces `firstSeq 0 ⟺ zero-hash chainHead` in BOTH directions, so a
+  // head-truncated forgery must visibly claim firstSeq > 0.
+  it('rejects head truncation that keeps firstSeq 0 with a forged chainHead', () => {
+    const tampered = mutable(smallChain(3));
+    const survivor = tampered.records[2] as Record<string, unknown>;
+    tampered.records.splice(0, 2); // drop genesis + first event
+    const header = tampered.header as Record<string, unknown>;
+    header.chainHead = survivor.prevHash; // forge: chain now "starts" at the survivor
+    header.recordCount = tampered.records.length;
+    // firstSeq left at 0 — the naive forgery
+    const result = verifyAuditBundle(tampered as unknown as AuditBundle);
+    expect(result.valid).toBe(false);
+    expect(result.reason).toMatch(/head-truncation guard/);
+  });
+
+  it('rejects a zero-hash chainHead claiming firstSeq > 0', () => {
+    const tampered = mutable(smallChain(2));
+    (tampered.header as Record<string, unknown>).firstSeq = 5;
+    const result = verifyAuditBundle(tampered as unknown as AuditBundle);
+    expect(result.valid).toBe(false);
+    expect(result.reason).toMatch(/head-truncation guard/);
+  });
+
+  it('a legit non-first segment (firstSeq > 0, nonzero chainHead) still verifies standalone', () => {
+    // Build via drain: segment 2 starts mid-chain by construction.
+    const audit = auditExport();
+    audit.exportEvent(
+      envelope('agentfootprint.agent.turn_start', { turnIndex: 0, userPrompt: 'q' }),
+    );
+    const seg1 = audit.drain();
+    audit.exportEvent(
+      envelope('agentfootprint.agent.iteration_start', { turnIndex: 0, iterIndex: 0 }),
+    );
+    const seg2 = audit.drain();
+    expect(seg2.header.firstSeq).toBeGreaterThan(0);
+    expect(seg2.header.chainHead).toBe(seg1.finalHash);
+    expect(verifyAuditBundle(seg2).valid).toBe(true); // standalone mid-segment is fine
+    expect(verifyAuditBundle([seg1, seg2]).valid).toBe(true);
   });
 
   it('detects header tampering: recordCount, chainHead, format, canonicalization', () => {
