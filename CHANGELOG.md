@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **B16 — circuit-breaker scope design choice documented (feature
+  deferred)**: `withCircuitBreaker` is provider-level, not per-tool, by
+  design — a provider outage is every run's heartbeat at full QPS, while
+  tool throws are caught and fed back to the model as tool results, so the
+  ReAct loop absorbs and adapts within the iteration budget. The
+  `withCircuitBreaker` module header and orchestration guide now state the
+  rationale plus today's escape hatches (wrap a tool's `execute` yourself;
+  hide a failing tool mid-run via a `gatedTools` predicate). First-class
+  per-tool breakers remain a possible future enhancement. Docs-only.
 - **B15 — `Loop.until` string contract documented (feature deferred)**:
   the guard's `latestOutput: string` is by design — the core-flow layer
   composes `Runner<{message: string}, string>` and the Loop chart coerces

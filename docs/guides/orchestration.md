@@ -145,6 +145,8 @@ const result = await agent.run({ message: 'Hello' });
 
 > **Scope: per-instance, NOT distributed.** Each `withCircuitBreaker(...)` call holds its own breaker state in process memory — one server replica can be CLOSED while another is OPEN. For cluster-wide coordination, layer a shared counter on top via the `onStateChange` hook + `shouldCount` predicate.
 
+> **Scope: provider-level, not per-tool — by design.** The breaker wraps `LLMProvider` because a provider outage has unbounded blast radius: the LLM call is every run's heartbeat, fired once per iteration at your full QPS, and a failure aborts the call path. Tool failures don't share that shape — tool dispatch catches a tool throw and feeds the error message back to the model as the tool result, so the ReAct loop itself absorbs and adapts (retry, alternate tool, give up), serialized and bounded by the iteration budget. For the rare tool that needs a breaker today, wrap its `execute` (a plain async function) with any breaker yourself, or hide it dynamically via a `gatedTools` predicate — the visible-tool list is recomputed every iteration, so a predicate backed by your own failure counter takes effect mid-run. First-class per-tool breakers are a possible future enhancement.
+
 ### Circuit States
 
 ```

@@ -61,6 +61,22 @@
  * default behavior. For cluster-wide coordination, layer your own
  * Redis-backed counter on top via the `onStateChange` hook +
  * `shouldCount` predicate.
+ *
+ * **Scope: PROVIDER-level, not per-tool — by design (B16).** The breaker
+ * wraps `LLMProvider` because a provider outage has unbounded blast
+ * radius: the LLM call is every run's heartbeat, fired once per
+ * iteration at your full QPS, and a failure aborts the call path. Tool
+ * failures don't share that shape — the agent's tool dispatch catches a
+ * tool throw and feeds the error message back to the model as the tool
+ * result (see `core/agent/stages/toolCalls.ts`), so the ReAct loop
+ * itself absorbs and adapts (retry, alternate tool, give up), serialized
+ * and bounded by the iteration budget. A flaky tool can't hammer
+ * anything the way provider QPS can. For the rare tool that needs a
+ * breaker today: its `execute` is a plain async function — wrap it with
+ * any breaker yourself, or hide it dynamically via a `gatedTools`
+ * predicate (the visible-tool list is recomputed every iteration).
+ * First-class per-tool breakers (state keyed by tool name; run-scoped
+ * vs process-scoped TBD) are a possible future enhancement.
  */
 
 import type { LLMChunk, LLMProvider, LLMRequest, LLMResponse } from '../adapters/types.js';
