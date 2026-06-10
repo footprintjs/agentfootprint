@@ -47,6 +47,10 @@
  *                                PARALLEL tool calls close the right span.
  *   cost.tick                 ↦  setAttribute on topmost active span
  *   error.fatal               ↦  ERROR status on root + defensive unwind
+ *   context.evaluated         ↦  N span events `agentfootprint.skill.routing`
+ *                                — SYNTHESIZED name (one per routing entry),
+ *                                not a registry-verbatim forward; all other
+ *                                span events use the registry name verbatim
  *
  * ## Decisions = SPAN EVENTS, not attributes (design decision)
  *
@@ -232,6 +236,22 @@ export interface OtelObservabilityStrategy extends ObservabilityStrategy {
    * Decisions WITHOUT structured evidence are skipped — they already
    * arrive via the `agent.route_decided` / `composition.route_decided`
    * typed events, so forwarding them here would double-report.
+   *
+   * @remarks PII: attaching this recorder EXPORTS bounded actual scope
+   * values to your OTel collector — each condition renders as
+   * `key op threshold → actualSummary (bool)`, where `actualSummary` is
+   * the engine's redaction-aware ≤80-char value summary (e.g.
+   * `creditScore gt 700 → 750 (true)`). Keys covered by a footprintjs
+   * `RedactionPolicy` render `[REDACTED]`; everything else leaves the
+   * process. For compliance record-keeping that disclosure is usually
+   * the point — but treat the collector as PII-bearing, or redact the
+   * relevant keys upstream, before attaching.
+   *
+   * @remarks Attach ONCE per executor. Every instance carries the
+   * well-known id `'otel-decision-evidence'`, so re-attaching is
+   * idempotent-by-ID (the replacement prevents double-reported span
+   * events); instances from the same strategy share its turn state by
+   * design.
    */
   decisionEvidenceRecorder(): OtelDecisionEvidenceRecorder;
 }
