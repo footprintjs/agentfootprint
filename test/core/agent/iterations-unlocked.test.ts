@@ -6,7 +6,14 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { Agent, mock, defineTool } from '../../../src/index.js';
+import {
+  Agent,
+  mock,
+  defineTool,
+  defineSkill,
+  defineSteering,
+  defineFact,
+} from '../../../src/index.js';
 import { clampIterations } from '../../../src/core/agent/validators.js';
 
 describe('#16 — maxIterations unlocked (footprintjs 9 trampoline)', () => {
@@ -48,12 +55,32 @@ describe('#16 — maxIterations unlocked (footprintjs 9 trampoline)', () => {
         };
       },
     });
+    // #17 — the cross-repo limits test: a FULL-FEATURE agent (all three
+    // context slots populated: steering→system-prompt, fact→system-prompt,
+    // skill→tools) sustained for 200 iterations against the PINNED
+    // footprintjs version. This test runs in CI on every build, so the two
+    // libraries' limits stay co-engineered instead of drifting apart.
     const agent = Agent.create({ provider, model: 'mock', maxIterations: 250 })
-      .tools([tick])
+      .system('You are a counting agent.')
+      .steering(defineSteering({ id: 'terse', prompt: 'Be terse.' }))
+      .fact(defineFact({ id: 'env', data: 'Environment: test rig.' }))
+      .skill(
+        defineSkill({
+          id: 'counting',
+          description: 'How to count.',
+          body: 'Use the tick tool repeatedly.',
+          tools: [tick],
+        }),
+      )
       .build();
+    const rssBefore = process.memoryUsage().rss;
     const answer = await agent.run({ message: 'count to 200' });
+    const rssDeltaMb = (process.memoryUsage().rss - rssBefore) / 1024 / 1024;
     expect(String(answer)).toContain('done after 200');
     expect(toolRuns).toBe(199);
     expect(calls).toBe(200);
+    // Memory budget: generous ceiling (commit-log growth is the known O(N²)
+    // bound — backlog #13/#14). Flag-don't-flake: 1.5GB.
+    expect(rssDeltaMb).toBeLessThan(1500);
   }, 60_000);
 });

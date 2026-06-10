@@ -25,6 +25,10 @@ Minor — **#16: footprintjs 9 adoption + iterations unlocked.**
   loop-iteration limit (default 1000) can never fire below the agent's budget —
   the two libraries' limits are now co-engineered. Consumer-provided run options
   still win.
+- **#17 — cross-repo limits test in CI:** the 200-iteration run is a FULL-FEATURE
+  agent (steering + fact + skill-with-tools, all three context slots) with an RSS
+  budget assertion, running against the pinned footprintjs on every build — the
+  boundary between the two libraries is pinned, not assumed.
 
 ## [6.14.1]
 
