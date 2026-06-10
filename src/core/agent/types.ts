@@ -22,6 +22,7 @@ import type { ActiveInjection } from '../../lib/injection-engine/types.js';
 import type { InjectionRecord } from '../../recorders/core/types.js';
 import type { MemoryIdentity } from '../../memory/identity/types.js';
 import type { CredentialProvider } from '../../identity/types.js';
+import type { ToolArgValidationMode } from './toolArgsValidation.js';
 import type { ThinkingBlock } from '../../thinking/types.js';
 import type { ReliabilityScope } from '../../reliability/types.js';
 
@@ -60,6 +61,19 @@ export interface AgentOptions {
    * normally.
    */
   readonly permissionChecker?: PermissionChecker;
+  /**
+   * Tool-args validation mode (#9). Default `'enforce'`: LLM-produced args
+   * are validated against the tool's declared `inputSchema` BEFORE dispatch.
+   * On mismatch the tool is NOT executed — the model receives a structured
+   * retry message as the tool result (paths + expected shapes + received
+   * TYPES, never the supplied values) and corrects itself on the next
+   * iteration. Emits `agentfootprint.validation.args_invalid`.
+   * `'warn'` emits the event but executes anyway; `'off'` disables.
+   * Validation is an honest JSON-Schema subset (type/required/properties/
+   * items/enum/explicit additionalProperties:false) — unsupported keywords
+   * are ignored, never false-rejecting.
+   */
+  readonly toolArgValidation?: ToolArgValidationMode;
   /**
    * Credential provider for downstream OAuth (declare-and-push). When set, a
    * tool that declares `needs: { credential }` has it resolved BEFORE `execute`

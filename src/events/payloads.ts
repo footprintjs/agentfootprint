@@ -431,6 +431,28 @@ export interface ToolsDiscoveryFailedPayload {
   readonly durationMs: number;
 }
 
+// validation.* (1)
+/**
+ * Emitted when LLM-produced tool args fail validation against the tool's
+ * declared `inputSchema` (backlog #9). Fires for BOTH modes that validate:
+ * `enforced: true` means the call was rejected before dispatch and the
+ * model received a structured retry message as the tool result;
+ * `enforced: false` ('warn' mode) means the tool executed anyway.
+ * `issues` name paths, expectations, and received TYPES — never the
+ * supplied values (they can carry PII / injection payloads).
+ */
+export interface ValidationArgsInvalidPayload {
+  readonly toolName: string;
+  readonly toolCallId: string;
+  readonly iteration: number;
+  readonly issues: ReadonlyArray<{
+    readonly path: string;
+    readonly expected: string;
+    readonly got: string;
+  }>;
+  readonly enforced: boolean;
+}
+
 // skill.* (2)
 export interface SkillActivatedPayload {
   readonly skillId: string;

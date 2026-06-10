@@ -36,6 +36,11 @@ import { unconfiguredCredentialProvider } from '../../../identity/types.js';
 import { isPauseRequest } from '../../pause.js';
 import type { ProviderToolCache } from '../../slots/buildToolsSlot.js';
 import type { Tool } from '../../tools.js';
+import {
+  formatToolArgIssues,
+  validateToolArgs,
+  type ToolArgValidationMode,
+} from '../toolArgsValidation.js';
 import { safeStringify } from '../validators.js';
 import type { AgentState } from '../types.js';
 
@@ -63,6 +68,11 @@ export interface ToolCallsHandlerDeps {
    *  declared `needs` is resolved BEFORE execute and injected as `ctx.credential`;
    *  `ctx.credentials` exposes it for the pull escape hatch. */
   readonly credentialProvider?: CredentialProvider;
+  /** Tool-args validation mode (#9). Default 'enforce': LLM-produced args
+   *  are checked against the tool's `inputSchema` BEFORE dispatch; a
+   *  mismatch rejects the call with a model-visible retry message.
+   *  'warn' emits the event but executes anyway; 'off' skips validation. */
+  readonly toolArgValidation?: ToolArgValidationMode;
 }
 
 /**
@@ -72,6 +82,7 @@ export function buildToolCallsHandler(
   deps: ToolCallsHandlerDeps,
 ): PausableHandler<TypedScope<AgentState>> {
   const { registryByName, externalToolProvider, providerToolCache, permissionChecker } = deps;
+  const toolArgValidation = deps.toolArgValidation ?? 'enforce';
   // Fail-closed: when no provider is attached, `ctx.credentials` is a provider
   // that THROWS on use (never undefined) — so a tool can't silently no-op.
   const credentials = deps.credentialProvider ?? unconfiguredCredentialProvider();
@@ -231,7 +242,33 @@ export function buildToolCallsHandler(
             result = `[permission denied: checker error: ${msg}]`;
           }
         }
-        if (!denied) {
+        // Tool-args validation (#9) — AFTER the permission gate (policy must
+        // see every attempted call, valid or not) and BEFORE credential
+        // resolution (never acquire credentials for a call that won't run).
+        // On 'enforce' mismatch the tool is NOT executed; the model gets a
+        // structured retry message as the tool result and corrects its args
+        // on the next ReAct iteration. Unknown tools keep the existing
+        // "Unknown tool" path below — validation only applies to resolved
+        // tools (their inputSchema is the contract the LLM was shown).
+        let argsRejected = false;
+        if (!denied && tool && toolArgValidation !== 'off') {
+          const verdict = validateToolArgs(tc.args, tool.schema.inputSchema);
+          if (!verdict.ok) {
+            typedEmit(scope, 'agentfootprint.validation.args_invalid', {
+              toolName: tc.name,
+              toolCallId: tc.id,
+              iteration,
+              issues: verdict.issues,
+              enforced: toolArgValidation === 'enforce',
+            });
+            if (toolArgValidation === 'enforce') {
+              argsRejected = true;
+              error = true;
+              result = formatToolArgIssues(tc.name, verdict.issues);
+            }
+          }
+        }
+        if (!denied && !argsRejected) {
           // Declare-and-push: resolve the tool's declared credential BEFORE
           // invoking, and inject it as ctx.credential. On consent-required or
           // failure, surface the reason to the LLM (tool result) + emit; the

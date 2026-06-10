@@ -238,6 +238,10 @@ export {
   type AgentOptions,
   type AgentOutput,
 } from './core/Agent.js';
+// #9 — tool-args validation: the mode for AgentOptions.toolArgValidation.
+// (The validator itself is internal; the payload ships as
+// Payloads.ValidationArgsInvalidPayload.)
+export type { ToolArgValidationMode } from './core/agent/toolArgsValidation.js';
 export {
   OutputSchemaError,
   applyOutputSchema,

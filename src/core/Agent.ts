@@ -50,6 +50,7 @@ import { permissionRecorder } from '../recorders/core/PermissionRecorder.js';
 import { evalRecorder } from '../recorders/core/EvalRecorder.js';
 import { memoryRecorder } from '../recorders/core/MemoryRecorder.js';
 import { skillRecorder } from '../recorders/core/SkillRecorder.js';
+import { validationRecorder } from '../recorders/core/ValidationRecorder.js';
 import { toolsRecorder } from '../recorders/core/ToolsRecorder.js';
 import { reliabilityRecorder } from '../recorders/core/ReliabilityRecorder.js';
 import type { MemoryDefinition } from '../memory/define.types.js';
@@ -85,6 +86,7 @@ import { routeDeciderStage } from './agent/stages/route.js';
 import { buildSeedStage } from './agent/stages/seed.js';
 import { buildCallLLMStage } from './agent/stages/callLLM.js';
 import { buildToolCallsHandler } from './agent/stages/toolCalls.js';
+import type { ToolArgValidationMode } from './agent/toolArgsValidation.js';
 import { buildAgentChart } from './agent/buildAgentChart.js';
 import { buildDynamicAgentChart } from './agent/buildDynamicAgentChart.js';
 import { buildToolRegistry } from './agent/buildToolRegistry.js';
@@ -145,6 +147,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
   private readonly pricingTable?: PricingTable;
   private readonly costBudget?: number;
   private readonly permissionChecker?: PermissionChecker;
+  private readonly toolArgValidation?: ToolArgValidationMode;
   private readonly credentialProvider?: CredentialProvider;
   /** Evidence bridge (#5) — present iff a CAUSAL memory is mounted. */
   private readonly causalEvidence?: CausalEvidenceRecorderHandle;
@@ -316,6 +319,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     if (opts.pricingTable) this.pricingTable = opts.pricingTable;
     if (opts.costBudget !== undefined) this.costBudget = opts.costBudget;
     if (opts.permissionChecker) this.permissionChecker = opts.permissionChecker;
+    if (opts.toolArgValidation) this.toolArgValidation = opts.toolArgValidation;
     if (opts.credentials) this.credentialProvider = opts.credentials;
     if (reliabilityConfig !== undefined) this.reliabilityConfig = reliabilityConfig;
     // v2.14 — Resolve thinking handler. Three states:
@@ -714,6 +718,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     executor.attachCombinedRecorder(memoryRecorder({ dispatcher, getRunContext: getRunCtx }));
     executor.attachCombinedRecorder(skillRecorder({ dispatcher, getRunContext: getRunCtx }));
     executor.attachCombinedRecorder(toolsRecorder({ dispatcher, getRunContext: getRunCtx }));
+    // Tool-args validation events (#9) — always-on; zero-cost when no
+    // validation event fires.
+    executor.attachCombinedRecorder(validationRecorder({ dispatcher, getRunContext: getRunCtx }));
     // Reliability telemetry (rules-loop fail_fast / retried / recovered).
     // Always-on, but zero-cost when no .reliability() config fires events.
     executor.attachCombinedRecorder(reliabilityRecorder({ dispatcher, getRunContext: getRunCtx }));
@@ -923,6 +930,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       ...(this.externalToolProvider && { providerToolCache }),
       ...(permissionChecker && { permissionChecker }),
       ...(credentialProvider && { credentialProvider }),
+      ...(this.toolArgValidation && { toolArgValidation: this.toolArgValidation }),
     });
 
     // v2.14 — Build the NormalizeThinking sub-subflow only when a

@@ -81,6 +81,7 @@ import type {
   ToolsDiscoveryFailedPayload,
   ToolsOfferedPayload,
   ToolStartPayload,
+  ValidationArgsInvalidPayload,
 } from './payloads.js';
 
 // ─── Event type constants ─────────────────────────────────────────────
@@ -140,6 +141,9 @@ export const EVENT_NAMES = {
   skill: {
     activated: 'agentfootprint.skill.activated',
     deactivated: 'agentfootprint.skill.deactivated',
+  },
+  validation: {
+    argsInvalid: 'agentfootprint.validation.args_invalid',
   },
   permission: {
     check: 'agentfootprint.permission.check',
@@ -357,6 +361,11 @@ export interface AgentfootprintEventMap {
     'agentfootprint.skill.deactivated',
     SkillDeactivatedPayload
   >;
+  // validation
+  'agentfootprint.validation.args_invalid': AgentfootprintEventEnvelope<
+    'agentfootprint.validation.args_invalid',
+    ValidationArgsInvalidPayload
+  >;
   // permission
   'agentfootprint.permission.check': AgentfootprintEventEnvelope<
     'agentfootprint.permission.check',
@@ -509,6 +518,7 @@ export const ALL_EVENT_TYPES: readonly AgentfootprintEventType[] = [
   'agentfootprint.tools.discovery_started',
   'agentfootprint.tools.discovery_completed',
   'agentfootprint.tools.discovery_failed',
+  'agentfootprint.validation.args_invalid',
   'agentfootprint.skill.activated',
   'agentfootprint.skill.deactivated',
   'agentfootprint.permission.check',

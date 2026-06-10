@@ -7,6 +7,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+Minor — **#9: tool-args validation with model-visible retry.**
+
+LLM-produced tool args were dispatched to `tool.execute` unvalidated; a
+malformed call surfaced as a deep tool stack trace (or silent misbehavior).
+Now they are validated against the tool's declared `inputSchema` BEFORE
+dispatch.
+
+- **`AgentOptions.toolArgValidation: 'enforce' | 'warn' | 'off'`** — default
+  `'enforce'`: a mismatch rejects the call (the tool never runs), the model
+  receives a structured retry message as the tool result, and corrects its
+  args on the next ReAct iteration. `'warn'` emits the event but executes
+  anyway; `'off'` disables. Exported `ToolArgValidationMode`.
+- **Honest JSON-Schema subset** — enforces `type` (incl. unions),
+  `required`, nested `properties`/`items`, primitive `enum`, and
+  `additionalProperties: false` only when explicitly set. Everything else
+  (`pattern`, `oneOf`, `$ref`, …) is IGNORED — a schema using them still
+  validates the supported core, never false-rejects. Total function: a
+  malformed schema can only under-validate, never throw or block.
+- **Security: issues name paths, expectations, and received TYPES — never
+  the supplied values** (they flow to history/LLM/trace and can carry PII
+  or injection payloads). Enum expectations echo schema values only
+  (already LLM-visible). Issues capped at 10 per call.
+- **Ordering** — the permission gate still sees every attempted call
+  (deny/halt precede validation); a rejected call never resolves
+  credentials and never activates `read_skill`.
+- **New event** `agentfootprint.validation.args_invalid`
+  (`Payloads.ValidationArgsInvalidPayload`: toolName, toolCallId,
+  iteration, issues, enforced) — 64 typed events / 18 domains. Bridged to
+  `agent.on(...)` via the new always-on `validationRecorder`.
+- Example: `examples/features/06-tool-args-validation.ts` — deterministic
+  bad-args → rejection → self-correction → success, no API key needed.
+- `read_skill` benefits automatically: a hallucinated skill id now fails
+  the schema's `enum` with the valid ids in the retry message, before
+  execute.
+
+
 ## [6.15.0]
 
 Minor — **#16: footprintjs 9 adoption + iterations unlocked.**

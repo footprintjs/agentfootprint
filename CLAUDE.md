@@ -493,7 +493,7 @@ const chain = fallbackProvider(anthropic({...}), openai({...}), ollama({...}));
 
 Also available: `withCircuitBreaker(provider, opts?)`. The resilience decorators live ONLY at `agentfootprint/resilience` (not the main barrel).
 
-### Observability — 63 typed events × 17 domains
+### Observability — 64 typed events × 18 domains
 
 ```typescript
 agent.on('agentfootprint.context.injected', (e) =>

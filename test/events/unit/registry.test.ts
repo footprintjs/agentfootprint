@@ -82,7 +82,9 @@ describe('event registry — names + exhaustiveness', () => {
     //     write became a real emit — see CHANGELOG.)
     //    (credential.* added with declare-and-push — the agentfootprint/identity
     //     consumption seam; see CHANGELOG.)
-    expect(ALL_EVENT_TYPES.length).toBe(63);
+    //    (validation.args_invalid added with #9 tool-args validation —
+    //     model-visible retry; see CHANGELOG.)
+    expect(ALL_EVENT_TYPES.length).toBe(64);
   });
 
   it('every entry in ALL_EVENT_TYPES is a key of AgentfootprintEventMap', () => {
