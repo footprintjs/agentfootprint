@@ -90,11 +90,13 @@ name the exact record that broke.
 
 ## Library follow-ups found while building this (reported, not hacked)
 
-1. **Causal snapshots overwrite across turns** — the agent seeds
-   `turnNumber = 1` on every `run()`, and `writeSnapshot` uses id
-   `snap-{turn}`, so a later turn in the same conversation overwrites the
-   earlier snapshot. The example exports the snapshot per turn as a
-   workaround.
+1. **Causal snapshots overwrite across turns** — FIXED since this example
+   was built: `writeSnapshot` now derives the turn from the store
+   (`max(turnNumber, maxStoredTurn + 1)`), so consecutive turns of one
+   conversation persist `snap-1`, `snap-2`, … instead of a later turn
+   silently replacing the earlier snapshot. The example still exports per
+   turn — pairing each audit segment with its turn's snapshot is the
+   cleaner evidence layout anyway.
 2. **No recorder hook on `flowchartAsTool`** — a flowchart-as-tool builds
    its executor internally, so decide() evidence inside it can't reach the
    agent's causal-evidence recorder or the OTel bridge. The example mounts

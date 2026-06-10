@@ -14,6 +14,23 @@
  *   Causal memory captures TURN outcomes — "user asked X, agent said Y."
  *   Mid-iteration state isn't useful for cross-run replay.
  *
+ * Turn derivation — collisions are impossible by construction:
+ *   The effective turn is `max(scope.turnNumber, maxStoredTurn + 1)` where
+ *   `maxStoredTurn` is the highest `snap-{n}` already live in THIS
+ *   conversation's namespace (`identityNamespace(identity)` — the durable
+ *   conversation anchor across `run()` calls, Agent instances, and
+ *   processes). Rationale:
+ *     - Hosts that track `turnNumber` correctly keep their numbering
+ *       (`turnNumber: 5` → `snap-5`, gaps preserved).
+ *     - Hosts with a stale counter (the Agent seeds `turnNumber = 1` on
+ *       every run) still get a fresh, ordered id — turn 2 of the same
+ *       conversation lands `snap-2` instead of silently replacing
+ *       `snap-1`.
+ *   Causal snapshots are decision evidence (audit/replay data): when
+ *   "stale counter" and "deliberate same-turn rewrite" are
+ *   indistinguishable, never destroying a prior turn's evidence wins.
+ *   TTL-expired snapshots are ignored by the scan (same as every read).
+ *
  * Empty-newMessages handling:
  *   When `newMessages` is empty (no final answer produced — e.g.
  *   pause-resume mid-flight), the stage no-ops. Re-runs after resume
@@ -28,8 +45,43 @@ import type { LLMMessage } from '../../adapters/types.js';
 import type { MemoryEntry } from '../entry/index.js';
 import type { MemoryStore } from '../store/index.js';
 import type { Embedder } from '../embedding/index.js';
+import type { MemoryIdentity } from '../identity/index.js';
 import type { MemoryState } from '../stages/index.js';
 import type { SnapshotEntry } from './types.js';
+
+/** Ids written by this stage: `snap-{turn}`. Used to find the highest
+ *  turn already persisted for a conversation (other entry kinds sharing
+ *  the store — `msg-{turn}-{idx}`, beats, facts — never match). */
+const SNAPSHOT_ID_PATTERN = /^snap-(\d+)$/;
+
+/**
+ * Highest turn number among the LIVE snapshots already stored for this
+ * conversation. 0 when none. One paged `list()` scan per turn-write —
+ * snapshot writes happen once per turn, and the namespace is a single
+ * conversation, so the scan stays small.
+ */
+async function maxStoredSnapshotTurn(
+  store: MemoryStore,
+  identity: MemoryIdentity,
+): Promise<number> {
+  let max = 0;
+  let cursor: string | undefined;
+  do {
+    const page = await store.list(identity, {
+      limit: 1000,
+      ...(cursor !== undefined && { cursor }),
+    });
+    for (const entry of page.entries) {
+      const match = SNAPSHOT_ID_PATTERN.exec(entry.id);
+      if (match) {
+        const turn = Number(match[1]);
+        if (turn > max) max = turn;
+      }
+    }
+    cursor = page.cursor;
+  } while (cursor !== undefined);
+  return max;
+}
 
 export interface WriteSnapshotConfig {
   /** The store to persist the snapshot to. */
@@ -69,7 +121,6 @@ export function writeSnapshot(config: WriteSnapshotConfig) {
 
   return async (scope: TypedScope<MemoryState>): Promise<void> => {
     const identity = scope.identity;
-    const turn = scope.turnNumber;
     const newMessages = (scope.newMessages ?? []) as readonly LLMMessage[];
     if (newMessages.length === 0) return;
 
@@ -81,6 +132,17 @@ export function writeSnapshot(config: WriteSnapshotConfig) {
     const finalContent = (assistantMsg?.content as string | undefined) ?? '';
 
     if (query.length === 0) return; // No query → no useful snapshot.
+
+    // Effective turn — anchored on the store, not the host's counter
+    // (see header: "Turn derivation"). Guarantees distinct, ordered ids
+    // for consecutive turns of one conversation even when the host
+    // re-seeds `turnNumber = 1` on every run.
+    const hostTurn =
+      typeof scope.turnNumber === 'number' && Number.isFinite(scope.turnNumber)
+        ? Math.max(1, Math.floor(scope.turnNumber))
+        : 1;
+    const storedMax = await maxStoredSnapshotTurn(store, identity);
+    const turn = Math.max(hostTurn, storedMax + 1);
 
     const signal = scope.$getEnv?.()?.signal;
     const queryVec = (await embedder.embed({

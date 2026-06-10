@@ -56,6 +56,42 @@ footprintjs 9.3.0's #13b staging-release).
   is 210MB; budget = 1.6× worst ≈ 335MB, rounded up for CI variance.
   The budget is now a real regression tripwire instead of a 7× ceiling.
 
+### Fixed
+
+- **Causal snapshots no longer overwrite across turns of one
+  conversation.** Previously, every `agent.run()` re-seeded
+  `turnNumber = 1` and `writeSnapshot` used the id `snap-{turnNumber}`
+  verbatim, so turn 2 of the SAME conversation silently replaced turn 1's
+  snapshot — the earlier turn's decision evidence was destroyed. This
+  affected every multi-turn causal-memory conversation (including the
+  canonical loan-officer example and `examples/memory/06`); the #21
+  lighthouse example worked around it by exporting per turn.
+  `writeSnapshot` now derives the effective turn from the store:
+  `max(scope.turnNumber, maxStoredSnapshotTurn + 1)`, where
+  `maxStoredSnapshotTurn` is the highest live `snap-{n}` in the
+  conversation's namespace. Consequences:
+  - consecutive turns persist distinct, ordered snapshots
+    (`snap-1`, `snap-2`, …) — within one Agent instance, across Agent
+    instances sharing a store, and across processes (the store namespace
+    `identityNamespace(identity)` is the durable conversation anchor;
+    an in-process counter could not have fixed the cross-instance /
+    cross-process cases);
+  - hosts that track `turnNumber` correctly keep their numbering
+    (`turnNumber: 5` → `snap-5`, gaps preserved) — the derivation only
+    overrides a counter that is provably stale against the store;
+  - single-turn consumers are unchanged (`snap-1`, byte-identical ids);
+    no existing test needed changes;
+  - trade-off, on purpose: a host that deliberately re-runs an
+    already-snapshotted turn N with `turnNumber = N` now appends
+    `snap-{N+1}` instead of overwriting `snap-{N}`. Causal snapshots are
+    decision evidence (audit/replay data) — when a stale counter and a
+    deliberate rewrite are indistinguishable, never destroying a prior
+    turn's evidence wins. (`writeSnapshot` never documented overwrite
+    semantics; `writeMessages`' idempotent-id contract is untouched.)
+  - note: the underlying `turnNumber` re-seed in the Agent's seed stage
+    still exists and remains a follow-up for the other write-side stages
+    (`msg-{turn}-{index}` ids share the same latent class).
+
 ## [6.19.0] - 2026-06-10
 
 **#21: the compliance-wedge lighthouse example** — completes the wedge

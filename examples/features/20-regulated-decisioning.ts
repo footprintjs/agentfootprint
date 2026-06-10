@@ -625,10 +625,10 @@ export async function run(
     // segment and export the turn's causal snapshot together.
     declineAnswer = await agent.run({ message: input, identity });
     segment1 = audit.drain(); // the chain survives drains
-    // Export now, not after turn 2: the agent seeds `turnNumber = 1` on
-    // every run, so a later turn in the SAME conversation overwrites the
-    // snapshot id `snap-1`. (Reported as a library follow-up — see the
-    // paired .md.)
+    // Export per turn so each audit segment ships with ITS turn's causal
+    // snapshot. (Turns no longer overwrite each other — `writeSnapshot`
+    // derives the turn from the store, so turn 2 lands `snap-2` — but
+    // pairing segment and snapshot per turn is still the cleaner layout.)
     snapshots = (await store.list(identity)).entries;
 
     // TURN 2 — a follow-up on the same case (shows per-turn segmentation;
