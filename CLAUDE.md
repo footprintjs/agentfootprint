@@ -506,6 +506,16 @@ agent.on('agentfootprint.agent.turn_end', (e) =>
 
 Wildcards: `.on('*', ...)` for every event, or `.on('agentfootprint.<domain>.*', ...)` per-domain (`agent`, `stream`, `context`, `tools`, `memory`, `cost`, `error`, …). `'agentfootprint.*'` is NOT a valid pattern — the dispatcher accepts `'*'` or `'agentfootprint.<DOMAIN>.*'` only. All events typed via `AgentfootprintEventMap`.
 
+**Listener lifecycle (long-lived runners / servers):** subscriptions and attached recorders live for the RUNNER's lifetime — NOTHING auto-expires per-run; the caller owns cleanup. Three release paths for listeners:
+
+```typescript
+const unsub = agent.on('agentfootprint.agent.turn_end', fn);  // 1. keep + call the Unsubscribe
+agent.on('*', fn, { signal: requestController.signal });       // 2. AbortSignal — auto-unsubscribes on abort (also on .once())
+agent.removeAllListeners();                                    // 3. bulk escape hatch (listeners ONLY — attach()ed recorders untouched)
+```
+
+`agent.listenerCount()` is the leak diagnostic — no-arg = total retained; `listenerCount(key)` = that exact subscription bucket (wildcards not folded in; "would anything fire" is the dispatcher's `hasListenersFor`). Bounded-leak guarantee: every removal path (unsubscribe, `off()`, signal abort, once-fire, `removeAllListeners()`) prunes emptied buckets AND detaches the abort handler from the consumer's signal, so dispatcher storage is bounded by LIVE subscriptions — never subscription history. Per-run pattern on a reused server agent: subscribe with a per-request `AbortSignal`, abort after the run. Recorders via `attach()` follow rule 1 only — keep the returned Unsubscribe (`removeAllListeners()` does not detach them; `enable.*` strategy listeners DO get dropped by it, so re-enable afterwards if needed).
+
 **"What the model saw" (debugging tool/skill selection):**
 - `stream.llm_start.tools` — the tool CATALOG (`{ name, description }[]`) the model saw
   for the call (its menu); `toolsCount` reflects the dynamic set actually sent.

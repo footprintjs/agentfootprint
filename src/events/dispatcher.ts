@@ -15,6 +15,12 @@
  *   - Dispatch is O(1) hash lookup by event type.
  *   - Zero allocation when no listener for an event type AND no wildcard.
  *   - Dev-mode wraps listeners to warn on async listener Promise return.
+ *   - Lifecycle: subscriptions release via the returned Unsubscribe or an
+ *     AbortSignal (`{ signal }`); `removeAllListeners()` is the bulk
+ *     escape hatch for long-lived server consumers; `listenerCount()` is
+ *     the leak diagnostic. Every removal path prunes emptied buckets and
+ *     detaches abort handlers, so listener storage is bounded by LIVE
+ *     subscriptions — never by subscription history.
  */
 
 import { isDevMode } from 'footprintjs';
@@ -84,6 +90,24 @@ export type WildcardSubscription = DomainWildcard | AllWildcard;
 interface StoredListener {
   readonly fn: (event: AgentfootprintEvent) => void;
   readonly once: boolean;
+  /**
+   * Detaches the abort-handler this subscription registered on the
+   * consumer's AbortSignal. Set after registration when `{ signal }`
+   * was passed. Called on EVERY removal path (manual unsubscribe,
+   * `off()`, once-auto-removal, `removeAllListeners()`) so long-lived
+   * signals don't accumulate abort handlers — full DOM
+   * `addEventListener` parity.
+   */
+  cleanup?: () => void;
+}
+
+/**
+ * Empty a bucket, detaching each subscription's abort handler from its
+ * AbortSignal first. Used by removeAllListeners().
+ */
+function drainBucket(bucket: Set<StoredListener>): void {
+  for (const stored of bucket) stored.cleanup?.();
+  bucket.clear();
 }
 
 // ─── Dispatcher ──────────────────────────────────────────────────────
@@ -134,7 +158,44 @@ export class EventDispatcher {
     listener: (event: AgentfootprintEvent) => void,
     options?: ListenOptions,
   ): Unsubscribe {
-    if (options?.signal?.aborted) {
+    return this.subscribe(type, listener, options);
+  }
+
+  /**
+   * Subscribe a one-shot listener. Fires at most once and then auto-removes.
+   * Equivalent to `on(type, listener, { once: true })`. Accepts `{ signal }`
+   * for AbortSignal auto-cleanup, same as `on()`.
+   */
+  once<K extends AgentfootprintEventType>(
+    type: K,
+    listener: EventListener<K>,
+    options?: Omit<ListenOptions, 'once'>,
+  ): Unsubscribe;
+  once(
+    type: WildcardSubscription,
+    listener: WildcardListener,
+    options?: Omit<ListenOptions, 'once'>,
+  ): Unsubscribe;
+  once(
+    type: string,
+    listener: (event: AgentfootprintEvent) => void,
+    options?: Omit<ListenOptions, 'once'>,
+  ): Unsubscribe {
+    return this.subscribe(type, listener, { ...options, once: true });
+  }
+
+  /**
+   * Shared subscribe path for on()/once(). The public overloads constrain
+   * `type` to either typed keys or wildcards; internally the dispatcher's
+   * bucket logic accepts any string and classifies by shape.
+   */
+  private subscribe(
+    type: string,
+    listener: (event: AgentfootprintEvent) => void,
+    options?: ListenOptions,
+  ): Unsubscribe {
+    const signal = options?.signal;
+    if (signal?.aborted) {
       // Already aborted; register nothing — return a no-op unsubscribe.
       return noopUnsubscribe;
     }
@@ -144,27 +205,26 @@ export class EventDispatcher {
       once: options?.once === true,
     };
 
-    const unsubscribe = this.addListener(type, wrapped);
+    const remove = this.addListener(type, wrapped);
 
-    if (options?.signal) {
-      options.signal.addEventListener('abort', unsubscribe, { once: true });
-    }
+    if (!signal) return remove;
 
-    return unsubscribe;
-  }
+    // DOM-parity AbortSignal wiring: abort → unsubscribe, AND every other
+    // removal path (manual unsubscribe, off(), once-auto-removal,
+    // removeAllListeners()) → detach the abort handler from the signal,
+    // so a long-lived, never-aborted signal doesn't accumulate handlers.
+    const onAbort = (): void => {
+      remove();
+    };
+    signal.addEventListener('abort', onAbort, { once: true });
+    wrapped.cleanup = () => {
+      signal.removeEventListener('abort', onAbort);
+    };
 
-  /**
-   * Subscribe a one-shot listener. Fires at most once and then auto-removes.
-   * Equivalent to `on(type, listener, { once: true })`.
-   */
-  once<K extends AgentfootprintEventType>(type: K, listener: EventListener<K>): Unsubscribe;
-  once(type: WildcardSubscription, listener: WildcardListener): Unsubscribe;
-  once(type: string, listener: (event: AgentfootprintEvent) => void): Unsubscribe {
-    // Internal listener-add — the public `on()` overloads constrain `type`
-    // to either typed keys or wildcards, but internally the dispatcher's
-    // bucket logic accepts any string and classifies by shape.
-    const wrapped: StoredListener = { fn: wrapForDev(listener, type), once: true };
-    return this.addListener(type, wrapped);
+    return () => {
+      wrapped.cleanup?.();
+      remove();
+    };
   }
 
   /**
@@ -183,9 +243,59 @@ export class EventDispatcher {
       const storedOriginal = originalsMap.get(stored.fn as object) ?? stored.fn;
       if (storedOriginal === originalFn) {
         bucket.delete(stored);
+        stored.cleanup?.();
+        this.pruneBucket(type, bucket);
         return;
       }
     }
+  }
+
+  /**
+   * Lifecycle escape hatch — drop EVERY listener (typed, domain-wildcard,
+   * and `'*'`) in one call. For long-lived server consumers that reuse one
+   * runner across many requests: when you can't thread an AbortSignal or
+   * keep every Unsubscribe handle, call this between requests to guarantee
+   * the dispatcher holds zero subscriptions.
+   *
+   * Safe to call mid-dispatch: the bucket currently being iterated
+   * finishes its already-taken snapshot (same semantics as `off()` during
+   * dispatch), buckets the in-flight dispatch has NOT yet reached deliver
+   * nothing (DOM-like "stop now"), and every SUBSEQUENT event sees no
+   * listeners. Abort handlers registered on consumer AbortSignals via
+   * `{ signal }` are detached too. Previously returned Unsubscribe
+   * handles become harmless no-ops.
+   */
+  removeAllListeners(): void {
+    for (const bucket of this.byType.values()) drainBucket(bucket);
+    this.byType.clear();
+    for (const bucket of this.domainWildcards.values()) drainBucket(bucket);
+    this.domainWildcards.clear();
+    drainBucket(this.allWildcards);
+  }
+
+  /**
+   * Diagnostic — how many listeners the dispatcher currently retains.
+   *
+   * - `listenerCount()` — TOTAL across every bucket (typed + domain
+   *   wildcards + `'*'`). The number long-lived consumers watch to verify
+   *   per-run subscriptions are being released (leak detection).
+   * - `listenerCount(type)` — listeners registered under that exact
+   *   subscription key (`'agentfootprint.agent.turn_start'`,
+   *   `'agentfootprint.context.*'`, or `'*'`). NOTE: counts the bucket
+   *   only — a typed count does NOT include wildcard listeners that would
+   *   also fire for that type. "Would anything fire?" is
+   *   `hasListenersFor()`.
+   */
+  listenerCount(type?: AgentfootprintEventType | WildcardSubscription): number;
+  listenerCount(type?: string): number {
+    if (type !== undefined) {
+      const bucket = this.bucketFor(type);
+      return bucket ? bucket.size : 0;
+    }
+    let total = this.allWildcards.size;
+    for (const bucket of this.byType.values()) total += bucket.size;
+    for (const bucket of this.domainWildcards.values()) total += bucket.size;
+    return total;
   }
 
   // ─── Dispatch ─────────────────────────────────────────────────────
@@ -198,8 +308,15 @@ export class EventDispatcher {
    * The run continues regardless.
    */
   dispatch(event: AgentfootprintEvent): void {
-    this.fireBucket(this.byType.get(event.type), event);
-    this.fireBucket(this.domainWildcards.get(this.domainKey(event.type)), event);
+    const typed = this.byType.get(event.type);
+    const domainKey = this.domainKey(event.type);
+    const domain = this.domainWildcards.get(domainKey);
+    this.fireBucket(typed, event);
+    // Prune only when once-listeners actually emptied the bucket — keeps the
+    // hot path free of per-event work (incl. the `${domainKey}.*` string build).
+    if (typed && typed.size === 0) this.pruneBucket(event.type, typed);
+    this.fireBucket(domain, event);
+    if (domain && domain.size === 0) this.pruneBucket(`${domainKey}.*`, domain);
     this.fireBucket(this.allWildcards, event);
   }
 
@@ -210,7 +327,27 @@ export class EventDispatcher {
     bucket.add(stored);
     return () => {
       bucket.delete(stored);
+      this.pruneBucket(type, bucket);
     };
+  }
+
+  /**
+   * Bounded-leak guarantee: a bucket emptied by ANY removal path is
+   * deleted from its Map so `byType` / `domainWildcards` never retain
+   * empty Sets for event types subscribed once and released. The
+   * identity check (`get(...) === bucket`) guards stale Unsubscribe
+   * closures — they must never delete a NEWER bucket re-created under
+   * the same key after this one was pruned. (`allWildcards` is a stable
+   * field, not a Map entry — nothing to prune.)
+   */
+  private pruneBucket(type: string, bucket: Set<StoredListener>): void {
+    if (bucket.size > 0 || type === '*') return;
+    if (type.endsWith('.*')) {
+      const key = type.slice(0, -2);
+      if (this.domainWildcards.get(key) === bucket) this.domainWildcards.delete(key);
+      return;
+    }
+    if (this.byType.get(type) === bucket) this.byType.delete(type);
   }
 
   private ensureBucket(type: string): Set<StoredListener> {
@@ -240,10 +377,15 @@ export class EventDispatcher {
 
   private fireBucket(bucket: Set<StoredListener> | undefined, event: AgentfootprintEvent): void {
     if (!bucket || bucket.size === 0) return;
-    // Snapshot to allow self-removal during iteration (once-listeners).
+    // Snapshot to allow removal during iteration (once-listeners, off(),
+    // removeAllListeners()). Removal mid-dispatch takes effect for
+    // SUBSEQUENT events; the in-flight snapshot completes delivery.
     const snapshot = [...bucket];
     for (const stored of snapshot) {
-      if (stored.once) bucket.delete(stored);
+      if (stored.once) {
+        bucket.delete(stored);
+        stored.cleanup?.(); // detach abort handler from the consumer's signal
+      }
       try {
         stored.fn(event);
       } catch (err) {

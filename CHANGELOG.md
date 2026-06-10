@@ -7,6 +7,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Listener/recorder lifecycle** (backlog #11a): long-lived runners
+  (servers reusing one Agent across requests) get a complete,
+  bounded-leak subscription lifecycle.
+  - `removeAllListeners()` on `EventDispatcher` and every `Runner` —
+    bulk escape hatch that drops all typed, domain-wildcard, and `'*'`
+    listeners in one call (listeners ONLY; recorders added via
+    `attach()` keep their own Unsubscribe). Safe mid-dispatch.
+  - `listenerCount(type?)` diagnostic on `EventDispatcher` and every
+    `Runner` — no-arg returns the total retained listener count (the
+    number servers watch for leaks); with a subscription key returns
+    that exact bucket.
+  - `once(type, listener, { signal })` — one-shot subscriptions now
+    accept AbortSignal auto-cleanup, same as `on()`.
+  - Bounded-leak guarantee: EVERY removal path (manual unsubscribe,
+    `off()`, signal abort, once-fire, `removeAllListeners()`) now
+    prunes emptied internal listener buckets from the dispatcher's maps
+    AND detaches the abort handler from the consumer's AbortSignal
+    (previously a manual unsubscribe left the abort handler on the
+    signal — long-lived, never-aborted server signals accumulated one
+    handler per subscription cycle). Dispatcher storage is bounded by
+    LIVE subscriptions, never subscription history. Enforced by
+    property tests (randomized op interleavings vs a reference model)
+    and a load test: 1,000 sequential `agent.run()` calls with per-run
+    `{ signal }` subscriptions hold `listenerCount()` at the pre-loop
+    baseline after every run.
+  - Documented the lifecycle contract (who owns cleanup, what
+    auto-expires): `Runner.attach()`/`on()` JSDoc, `CLAUDE.md`
+    observability section, `src/events/README.md` Decision 6. Summary:
+    listeners and recorders live for the RUNNER's lifetime — nothing
+    auto-expires per-run; `once()` is the only self-expiring
+    subscription; the caller owns cleanup via Unsubscribe handles,
+    AbortSignals, or `removeAllListeners()`.
+
 ## [6.13.0]
 
 ### Added

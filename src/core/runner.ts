@@ -146,7 +146,15 @@ export interface Runner<TIn = unknown, TOut = unknown> {
     options?: RunOptions,
   ): Promise<TOut | RunnerPauseOutcome>;
 
-  /** Subscribe a typed listener. Returns unsubscribe. */
+  /**
+   * Subscribe a typed listener. Returns unsubscribe.
+   *
+   * Lifecycle: the subscription lives until you call the returned
+   * Unsubscribe, the `{ signal }` you passed aborts, or
+   * `removeAllListeners()` runs. Nothing auto-expires per-run — pass a
+   * per-run AbortSignal for request-scoped listeners on long-lived
+   * runners (servers).
+   */
   on<K extends AgentfootprintEventType>(
     type: K,
     listener: EventListener<K>,
@@ -159,14 +167,43 @@ export interface Runner<TIn = unknown, TOut = unknown> {
   off<K extends AgentfootprintEventType>(type: K, listener: EventListener<K>): void;
   off(type: WildcardSubscription, listener: WildcardListener): void;
 
-  /** Subscribe a one-shot listener (fires once then auto-removes). */
-  once<K extends AgentfootprintEventType>(type: K, listener: EventListener<K>): Unsubscribe;
-  once(type: WildcardSubscription, listener: WildcardListener): Unsubscribe;
+  /** Subscribe a one-shot listener (fires once then auto-removes). Accepts `{ signal }`. */
+  once<K extends AgentfootprintEventType>(
+    type: K,
+    listener: EventListener<K>,
+    options?: Omit<ListenOptions, 'once'>,
+  ): Unsubscribe;
+  once(
+    type: WildcardSubscription,
+    listener: WildcardListener,
+    options?: Omit<ListenOptions, 'once'>,
+  ): Unsubscribe;
+
+  /**
+   * Drop every event listener on this runner in one call (typed,
+   * domain-wildcard, and `'*'`). Lifecycle escape hatch for server
+   * consumers that can't keep Unsubscribe handles. Also removes
+   * listeners wired by `enable.*` strategies; does NOT detach recorders
+   * added via `attach()`.
+   */
+  removeAllListeners(): void;
+
+  /**
+   * Diagnostic — listeners currently retained. No argument = total
+   * (the leak-detection number); with a subscription key = that exact
+   * bucket only (wildcards not folded in — use the dispatcher's
+   * `hasListenersFor` semantics for "would anything fire").
+   */
+  listenerCount(type?: AgentfootprintEventType | WildcardSubscription): number;
 
   /**
    * Attach a footprintjs CombinedRecorder to observe the execution.
    * Returns an unsubscribe function — call it to detach the recorder
    * from future runs. (Already-running executions continue using it.)
+   *
+   * Recorders live for the RUNNER's lifetime: nothing auto-expires
+   * per-run, and `removeAllListeners()` does not touch them. The caller
+   * owns cleanup via the returned Unsubscribe.
    */
   attach(recorder: CombinedRecorder): Unsubscribe;
 
