@@ -65,7 +65,26 @@ export type LoopOutput = string;
 
 type BodyChild = Runner<{ message: string }, string>;
 
-/** Predicate evaluated AFTER each body iteration. Return true to exit the loop. */
+/**
+ * Predicate evaluated AFTER each body iteration. Return true to exit the loop.
+ *
+ * `latestOutput` is the body's STRING output — by design (B15): the whole
+ * core-flow layer composes `Runner<{ message: string }, string>`, and the
+ * Loop chart's outputMapper coerces any non-string body output to `''`.
+ * For structured exit conditions today, have the body emit JSON (e.g. an
+ * Agent with `.outputSchema(...)`) and parse inside the guard:
+ *
+ * ```ts
+ * .until(({ latestOutput }) => {
+ *   try { return (JSON.parse(latestOutput) as { done: boolean }).done; }
+ *   catch { return false; } // not JSON (yet) — keep looping
+ * })
+ * ```
+ *
+ * A typed guard (`Loop<T>` with a structured body output) would require
+ * genericizing the Runner output contract shared by Sequence / Parallel /
+ * Conditional — tracked as a future enhancement, not in core today.
+ */
 export type UntilGuard = (ctx: {
   readonly iteration: number;
   readonly latestOutput: string;
@@ -386,6 +405,10 @@ export class LoopBuilder {
   /**
    * Exit predicate evaluated after each iteration. Return `true` to exit.
    * Receives `{ iteration, latestOutput, startMs }`.
+   *
+   * `latestOutput` is the body's string output. For structured exit
+   * conditions, emit JSON from the body and parse it inside the guard —
+   * see the `UntilGuard` JSDoc for the pattern and the design rationale.
    */
   until(guard: UntilGuard): this {
     this._until = guard;

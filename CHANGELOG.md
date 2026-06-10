@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **B15 — `Loop.until` string contract documented (feature deferred)**:
+  the guard's `latestOutput: string` is by design — the core-flow layer
+  composes `Runner<{message: string}, string>` and the Loop chart coerces
+  non-string body output to `''`. JSDoc on `UntilGuard` / `.until()` now
+  documents the contract, the structured-exit workaround (body emits JSON,
+  guard parses), and why a typed `Loop<T>` guard is deferred (it requires
+  genericizing the Runner output contract shared by Sequence / Parallel /
+  Conditional — an M+ design change, out of scope for a minor).
 - **B13 — prompt-injection security guide**
   ([docs/guides/prompt-injection.md](docs/guides/prompt-injection.md)):
   documents the honest posture — core does NOT detect prompt injection;
