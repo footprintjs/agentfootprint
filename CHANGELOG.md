@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **B14 — `humanizeLLMError` per-provider-SDK fallthrough tests** (+2 regex
+  gaps fixed): pinned the real error formats of `@anthropic-ai/sdk` /
+  `openai` v4-v5 (Stainless) / `@aws-sdk/client-bedrock-runtime` v3 / the
+  in-repo browser adapter `wrapStatus` shape — 16 new tests so an SDK-major
+  message-format drift surfaces as a test diff, not a silent UX regression.
+  Two real misses fixed while pinning: Stainless `APIConnectionError`
+  ("Connection error.", no status) now maps to the network bucket, and
+  Bedrock `AccessDeniedException` ("You don't have access to the model…",
+  status only under `$metadata`) now maps to the auth bucket — both
+  previously fell through to the generic message. Deliberate fallthroughs
+  (Bedrock `ValidationException`/`ServiceUnavailableException`, user abort)
+  are pinned as raw-preserving generic.
 - **B12 — resume idempotency documented (accuracy-vs-source pass)**:
   `agent.resumeOnError()` docs now state the replay semantics prominently —
   resume restores ONLY conversation history; the failed iteration's tool

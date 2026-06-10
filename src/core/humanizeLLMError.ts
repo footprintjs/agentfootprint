@@ -29,19 +29,25 @@ export function humanizeLLMError(err: unknown): string {
   const lc = raw.toLowerCase();
 
   // Network / unreachable — the most common "Failed to fetch" case.
+  // "connection error" is the Stainless SDKs' APIConnectionError message
+  // (@anthropic-ai/sdk, openai v4/v5) — it carries NO status code.
   if (
-    /failed to fetch|fetch failed|network ?error|enotfound|eai_again|econnrefused|econnreset|socket hang up|load failed/i.test(
+    /failed to fetch|fetch failed|network ?error|connection error|enotfound|eai_again|econnrefused|econnreset|socket hang up|load failed/i.test(
       raw,
     )
   ) {
     return "Couldn't reach the AI model. Check your internet connection, and that the provider/API key is set up correctly.";
   }
 
-  // Auth — missing/invalid API key.
+  // Auth — missing/invalid API key (or, for Bedrock, IAM/model access:
+  // AccessDeniedException says "You don't have access to the model..."
+  // with the status only under $metadata, which we never see).
   if (
     status === 401 ||
     status === 403 ||
-    /unauthorized|forbidden|api[ _-]?key|authentication|invalid x-api-key|permission/i.test(lc)
+    /unauthorized|forbidden|api[ _-]?key|authentication|invalid x-api-key|permission|access denied|don.?t have access/i.test(
+      lc,
+    )
   ) {
     return 'The AI provider rejected the request — the API key looks missing or invalid. Add or fix it in Settings.';
   }
