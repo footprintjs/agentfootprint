@@ -9,6 +9,8 @@ Production agent systems face two problems that infrastructure alone can't solve
 agentfootprint solves both at the agent level — where the LLM decision happens, not at the infrastructure level where it's too late.
 
 > **Background on tool visibility as an attack surface:** Greshake et al. 2023 ("Not what you've signed up for: Compromising Real-World LLM-Integrated Applications with Indirect Prompt Injection") showed that any tool description an LLM can read becomes part of its attack surface — a malicious tool description can hijack the agent. Filtering tools at *resolve* time (not just at *execute* time) is a defense, not just a UX nicety.
+>
+> For the full prompt-injection threat model — what core contains vs. what it deliberately delegates (there is NO injection detection in core) — see **[prompt-injection.md](prompt-injection.md)**.
 
 Here's how each problem is solved in the library.
 

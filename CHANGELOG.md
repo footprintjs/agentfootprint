@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **B13 — prompt-injection security guide**
+  ([docs/guides/prompt-injection.md](docs/guides/prompt-injection.md)):
+  documents the honest posture — core does NOT detect prompt injection;
+  `PermissionPolicy` gates *which* tools, not *why* the model called them.
+  Maps the untrusted-text entry points (user message, tool results,
+  persisted causal-memory replay, `on-tool-return` trigger predicates,
+  `read_skill`), the containment layers that exist in source (visibility
+  gating, fail-closed execute-time checker with sequence awareness, #9
+  args validation's never-echo-values property, declare-and-push
+  credential scoping, evidence events + audit export), what core
+  deliberately does not do (no classifier/scanner; redaction is opt-in),
+  and recommended external guards. Cross-linked from security.md and the
+  guides index. Every claim grounded in source at write time.
 - **B14 — `humanizeLLMError` per-provider-SDK fallthrough tests** (+2 regex
   gaps fixed): pinned the real error formats of `@anthropic-ai/sdk` /
   `openai` v4-v5 (Stainless) / `@aws-sdk/client-bedrock-runtime` v3 / the
