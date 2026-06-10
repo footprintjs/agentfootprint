@@ -175,6 +175,47 @@ describe("#9 — 'warn' and 'off' modes", () => {
   });
 });
 
+describe('#9 — parallel batch: invalid call must not poison valid siblings', () => {
+  it('rejects only the bad call; the valid sibling in the same batch executes', async () => {
+    const executions: unknown[] = [];
+    const events: { toolCallId: string }[] = [];
+    let llmCalls = 0;
+    const provider = mock({
+      respond: () => {
+        llmCalls++;
+        return llmCalls === 1
+          ? {
+              content: '',
+              // One invalid + one valid call in a SINGLE batch.
+              toolCalls: [
+                { id: 'bad', name: 'echo', args: { times: 'three' } as never },
+                { id: 'good', name: 'echo', args: { text: 'hi', times: 1 } },
+              ],
+              usage: { input: 1, output: 1 },
+              stopReason: 'tool_use' as const,
+            }
+          : {
+              content: 'done',
+              toolCalls: [],
+              usage: { input: 1, output: 1 },
+              stopReason: 'end_turn' as const,
+            };
+      },
+    });
+    const agent = Agent.create({ provider, model: 'mock' }).tool(buildEchoTool(executions)).build();
+    agent.on('agentfootprint.validation.args_invalid' as never, (event) => {
+      events.push((event as { payload: (typeof events)[0] }).payload);
+    });
+
+    await agent.run({ message: 'go' });
+
+    // Only the valid sibling ran; the rejection is per-call, not per-batch.
+    expect(executions).toEqual([{ text: 'hi', times: 1 }]);
+    expect(events).toHaveLength(1);
+    expect(events[0].toolCallId).toBe('bad');
+  });
+});
+
 describe('#9 — ordering against permission + credentials', () => {
   it('a permission-DENIED call is never validated (no validation event)', async () => {
     let validationEvents = 0;

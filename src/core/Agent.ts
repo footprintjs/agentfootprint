@@ -319,7 +319,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     if (opts.pricingTable) this.pricingTable = opts.pricingTable;
     if (opts.costBudget !== undefined) this.costBudget = opts.costBudget;
     if (opts.permissionChecker) this.permissionChecker = opts.permissionChecker;
-    if (opts.toolArgValidation) this.toolArgValidation = opts.toolArgValidation;
+    if (opts.toolArgValidation !== undefined) this.toolArgValidation = opts.toolArgValidation;
     if (opts.credentials) this.credentialProvider = opts.credentials;
     if (reliabilityConfig !== undefined) this.reliabilityConfig = reliabilityConfig;
     // v2.14 — Resolve thinking handler. Three states:
