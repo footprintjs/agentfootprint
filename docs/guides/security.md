@@ -201,7 +201,7 @@ Key properties:
 - **Tamper-evident, not tamper-proof** — an adversary holding the only copy can recompute the whole suffix; anchoring `finalHash` alone also does NOT catch **head truncation** (dropping the first K records — genesis included — leaves `finalHash` untouched). The verifier hard-rejects the naive forgery (`firstSeq 0 ⟺ zero-hash chainHead`, both directions), so a head-truncated bundle must visibly claim `firstSeq > 0`; auditors must reject a leading segment that doesn't start at seq 0. For non-repudiation anchor BOTH ends externally (WORM store, signed log, timestamping): `finalHash` plus the genesis identity (`meta.runId` + `records[0].hash`).
 - **Runtime** — SHA-256 via `node:crypto` (lazy; zero new dependencies). Works on Node ≥ 20 / Bun / Deno / edge Node-compat; browsers have no sync SHA-256 — capture and verify server-side.
 
-See [`examples/features/19-audit-export.ts`](../../examples/features/19-audit-export.ts) for the full capture → verify → tamper → drain walkthrough.
+See [`examples/features/19-audit-export.ts`](../../examples/features/19-audit-export.ts) for the full capture → verify → tamper → drain walkthrough. For the end-to-end compliance story — audit chain + OTel spans + causal memory from one run, an offline auditor reconstructing a loan decline from the persisted files (with BOTH chain ends anchored), and a named-record tamper demo — see [`examples/features/20-regulated-decisioning.ts`](../../examples/features/20-regulated-decisioning.ts).
 
 ---
 

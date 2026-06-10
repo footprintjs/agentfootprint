@@ -221,6 +221,8 @@ const agent = Agent.create({ provider, model })
 
 Runnable demo: [`examples/features/18-otel-genai.ts`](https://github.com/footprintjs/agentfootprint/blob/main/examples/features/18-otel-genai.ts).
 
+End-to-end compliance lighthouse — spans + tamper-evident audit export + causal memory feeding an OFFLINE auditor that explains a loan decline weeks later from persisted JSON alone: [`examples/features/20-regulated-decisioning.ts`](https://github.com/footprintjs/agentfootprint/blob/main/examples/features/20-regulated-decisioning.ts).
+
 ## Anti-patterns
 
 - ❌ **Don't log every event** — dozens of typed events × N iterations × M agents = your log infra hates you. Filter to the domains you actually need.

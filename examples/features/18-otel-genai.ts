@@ -142,7 +142,7 @@ export async function run(
       'ClassifyRisk',
       (scope) =>
         decide(
-          scope as never,
+          scope as unknown as { creditScore: number },
           [{ when: { creditScore: { gt: 700 } }, then: 'approved', label: 'Good credit' }],
           'rejected',
         ),

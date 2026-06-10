@@ -5,6 +5,46 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+**#21: the compliance-wedge lighthouse example** — completes the wedge
+(#19 GenAI spans, #20 tamper-evident audit export, #5 causal memory).
+Example-only; no library code changes.
+
+- **`examples/features/20-regulated-decisioning.ts` (+ paired `.md`)** —
+  a regulated loan-decisioning agent that answers *"why was applicant
+  A-1043 declined three weeks ago?"* from stored evidence, offline. One
+  run, three compliance artifacts from the same typed event stream:
+  - the agent declines an application under **labeled footprintjs
+    `decide()` rules** (the lending policy is a flowchart mounted inside
+    the `adjudicate_application` tool; per-rule evidence —
+    `dti gt 0.43 → 0.52 (true)` — is captured during traversal), with a
+    **permission denial** (data-minimization policy) and a **#9
+    validation rejection + model self-correction** in the same chain;
+  - `auditExport` + `otelObservability` attach in parallel (multi-
+    strategy), the audit bundle is **drained per turn** and persisted
+    with an **external anchor of BOTH chain ends** (finalHash + genesis
+    identity) per the documented threat model;
+  - an exported AUDITOR function loads ONLY the persisted JSON (no
+    agent, no provider, no LLM), re-verifies the chain, cross-checks the
+    anchor, and reconstructs the decision story as a human-readable
+    audit narrative — then a flipped byte in the stored permission
+    denial is caught and **named by record seq**.
+- **Fix**: `examples/features/18-otel-genai.ts` no longer fails
+  `tsc -p examples/tsconfig.json` (the `decide(scope as never, …)` cast
+  inferred `WhereFilter<never>` and rejected the filter literal; now
+  casts to the chart's state shape).
+- **Library follow-ups found (reported, not hacked around in src/)**:
+  (1) causal snapshots overwrite across turns — the agent seeds
+  `turnNumber = 1` every `run()` and `writeSnapshot` ids are
+  `snap-{turn}`, so a conversation's later turn replaces the earlier
+  snapshot (the example exports the snapshot per turn as a workaround);
+  (2) `flowchartAsTool` has no recorder hook, so decide() evidence
+  inside a tool-mounted flowchart can't reach the agent's causal
+  evidence recorder or the OTel decision-evidence bridge — the example
+  mounts the policy chart by hand and ships an example-level evidence
+  ledger file instead.
+
 ## [6.18.0] - 2026-06-10
 
 Minor — **#20: tamper-evident audit export** (second item of the

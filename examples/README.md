@@ -218,6 +218,7 @@ _Run `npm run examples:readme` after adding/editing examples._
 | 17 | [`17-identity.ts`](features/17-identity.ts) | Identity — a tool vends a downstream OAuth credential (AgentCore) |  |
 | 18 | [`18-otel-genai.ts`](features/18-otel-genai.ts) | OTel GenAI conventions — gen_ai.* spans + decision-evidence span events | otelObservability emits GenAI-semconv spans (invoke_agent / chat / execute_tool) plus explainability span events: route decisions, decide() evidence, validation, permission, credential. |
 | 19 | [`19-audit-export.ts`](features/19-audit-export.ts) | Tamper-evident audit export — hash-chained bundle + offline verification | auditExport() hash-chains every typed event (decisions, tool calls, validation rejections) into a JSON AuditBundle; verifyAuditBundle() recomputes the chain offline and names the exact record any tamper broke. |
+| 20 | [`20-regulated-decisioning.ts`](features/20-regulated-decisioning.ts) | Regulated decisioning — one run, three compliance artifacts, offline auditor | A loan-decisioning agent declines an application under labeled decide() rules while auditExport (hash chain), otelObservability (GenAI spans) and causal memory capture the same event stream; an offline auditor then answers  |
 
 ### [`canonical/`](canonical/) — end-to-end patterns
 
