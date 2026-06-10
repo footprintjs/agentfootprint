@@ -55,7 +55,10 @@ export {
 export {
   otelObservability,
   type OtelObservabilityOptions,
+  type OtelObservabilityStrategy,
+  type OtelDecisionEvidenceRecorder,
   type OtelTracerLike,
   type OtelSpanLike,
   type OtelSpanOptions,
+  type OtelAttributeValue,
 } from './adapters/observability/otel.js';

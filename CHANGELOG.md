@@ -5,6 +5,68 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+Minor — **#19: `otelObservability` speaks OTel GenAI semantic conventions +
+explainability span events** (first item of the compliance wedge; #20
+tamper-evident export builds on this span/event stream).
+
+- **GenAI semconv attributes (`gen_ai.*`) — ON by default** (purely
+  additive attribute names; current spec, `gen_ai.provider.name` era):
+  - turn span → `gen_ai.operation.name: 'invoke_agent'`,
+    `gen_ai.agent.name`, turn-total `gen_ai.usage.input_tokens` /
+    `output_tokens`, `agentfootprint.run.id`, `agentfootprint.turn.index`;
+    provider + model back-filled from the first LLM call.
+  - llm span → `gen_ai.operation.name: 'chat'`, `gen_ai.provider.name`,
+    `gen_ai.request.model`, `gen_ai.request.temperature`,
+    `gen_ai.usage.input_tokens`/`output_tokens`/`cache_read.input_tokens`/
+    `cache_creation.input_tokens`, `gen_ai.response.finish_reasons`,
+    `gen_ai.response.id`.
+  - tool span → `gen_ai.operation.name: 'execute_tool'`,
+    `gen_ai.tool.name`, `gen_ai.tool.call.id`,
+    `agentfootprint.tool.protocol`, `agentfootprint.tool.args.keys`
+    (key NAMES only), `agentfootprint.tool.result.type` (type only),
+    `error.type` on failure.
+- **Explainability span events — ON by default** (`explainability: false`
+  to opt out): route decisions (`agent.route_decided` /
+  `composition.route_decided` incl. decide()-shaped `evidence`), skill
+  routing provenance (`agentfootprint.skill.routing` per routed
+  injection: decision path, route edge, unlocked tools),
+  `skill.activated`, validation rejections (#9, type-level issues),
+  permission checks/halts, credential lifecycle. Span EVENTS (not
+  attributes) because decisions have per-span multiplicity + ordering;
+  attribute fallback when the injected tracer lacks `addEvent`.
+- **`decisionEvidenceRecorder()`** on the returned strategy — a
+  footprintjs CombinedRecorder bridging decide()/select() operator-level
+  evidence (rule label + `key op threshold → actual (result)` conditions)
+  from the FlowRecorder channel into span events
+  (`agentfootprint.decision.evidence`). Attach via
+  `Agent.create(...).recorder(...)` or `executor.attachCombinedRecorder`.
+  Skips evidence-less decisions (already on the typed channel) and
+  sf-cache / slot-fork plumbing.
+- **`genAiSpanNames: true` (opt-in)** — spec span names
+  (`invoke_agent {service}`, `chat {model}`, `execute_tool {tool}`).
+  Off by default: existing dashboards key on the legacy span names
+  (`{service}` / `llm` / `tool:{name}`); all `gen_ai.*` ATTRIBUTES are
+  emitted regardless, so semconv-aware backends work without the rename.
+- **Fixed (latent — masked by fabricated test event shapes):** the
+  adapter read `payload.runId` / `payload.cumulativeCostUsd` /
+  `tool_end.toolName`, none of which exist on real dispatcher envelopes —
+  on a REAL agent run it produced ZERO spans. Now anchors on
+  `meta.runId` (payload fallback kept for hand-fed events), reads
+  `cumulative.estimatedUsd`, and correlates tool spans by `toolCallId`
+  (parallel tool calls close the right span). `error.fatal` now closes
+  the span tree (ERROR status on root) instead of leaking until `stop()`.
+- **PII discipline (mirrors the #9 contract):** prompts, LLM content,
+  tool arg/result VALUES, and error messages are never emitted as
+  attributes; evidence value summaries are redaction-aware upstream and
+  re-capped here (256 chars / 20 list items).
+- New: `examples/features/18-otel-genai.ts`,
+  `test/observability-providers/otel-genai.test.ts` (24 tests — unit /
+  functional / integration on a REAL Agent run + REAL decide() chart /
+  security). Exported types: `OtelObservabilityStrategy`,
+  `OtelDecisionEvidenceRecorder`, `OtelAttributeValue`.
+
 ## [6.16.0] - 2026-06-10
 
 Minor — **#9: tool-args validation with model-visible retry.**

@@ -189,20 +189,37 @@ stopA(); stopB(); stopC();
 
 ## OpenTelemetry
 
-`otelObservability` ships in `agentfootprint/observability-providers`. It maps agentfootprint events onto OTel spans + attributes via your own `@opentelemetry/api` tracer. Pair with `@opentelemetry/sdk-node` and your favorite exporter (Jaeger, Tempo, Datadog OTel collector, etc.):
+`otelObservability` ships in `agentfootprint/observability-providers`. It maps agentfootprint events onto OTel spans following the [GenAI semantic conventions](https://opentelemetry.io/docs/specs/semconv/gen-ai/) (`gen_ai.*` attributes) via your own `@opentelemetry/api` tracer. Pair with `@opentelemetry/sdk-node` and your favorite exporter (Jaeger, Tempo, Datadog OTel collector, etc.):
 
 ```ts
 import { otelObservability } from 'agentfootprint/observability-providers';
 import { microtaskBatchDriver } from 'footprintjs/detach';
 import { trace } from '@opentelemetry/api';
 
+const otel = otelObservability({
+  serviceName: 'my-agent',
+  tracer: trace.getTracer('my-agent', '1.0.0'),
+  // genAiSpanNames: true,  // opt-in spec span names ('chat gpt-4', 'execute_tool search', …)
+});
 const stop = agent.enable.observability({
-  strategy: otelObservability({
-    tracer: trace.getTracer('my-agent', '1.0.0'),
-  }),
+  strategy: otel,
   detach: { driver: microtaskBatchDriver, mode: 'forget' },
 });
 ```
+
+**Span tree** — one trace per turn: `invoke_agent` root (agent name, turn-total `gen_ai.usage.*` tokens) → `iteration:N` → `chat` spans per LLM call (`gen_ai.provider.name`, `gen_ai.request.model`, usage incl. cache tokens, `gen_ai.response.finish_reasons`) and `execute_tool` spans per tool call (`gen_ai.tool.name`, `gen_ai.tool.call.id`, parallel-safe correlation).
+
+**Explainability span events** (on by default; `explainability: false` to opt out) carry the decision trail a compliance reviewer needs: route decisions, skill-routing provenance (decision path + unlocked tools), tool-arg validation rejections, permission checks/halts, credential lifecycle. PII discipline mirrors the validation contract — tool args appear as key *names*, results as a *type*, prompts and LLM content never.
+
+For operator-level decide()/select() evidence (`creditScore gt 700 → 750 (true)`), attach the strategy's FlowRecorder bridge too:
+
+```ts
+const agent = Agent.create({ provider, model })
+  .recorder(otel.decisionEvidenceRecorder()) // decide()/select() evidence → span events
+  .build();
+```
+
+Runnable demo: [`examples/features/18-otel-genai.ts`](https://github.com/footprintjs/agentfootprint/blob/main/examples/features/18-otel-genai.ts).
 
 ## Anti-patterns
 
