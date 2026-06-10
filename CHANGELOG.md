@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **B12 — resume idempotency documented (accuracy-vs-source pass)**:
+  `agent.resumeOnError()` docs now state the replay semantics prominently —
+  resume restores ONLY conversation history; the failed iteration's tool
+  calls may be re-issued by the model and re-execute (mutating tools must
+  be idempotent, keyed on stable call content). Fixed three doc-lies found
+  against source: there is NO "v2.10.3+ toolCallId dedup"
+  (runCheckpoint.ts header), `checkpoint.runId` is NOT reused on resume
+  (fresh `runId` per resumed run), and the resumed run re-seeds
+  `iteration = 1` with a full budget (`lastCompletedIteration` is
+  diagnostic-only). Docs-only; no behavior change.
 - **B11 — `skillGraph.tree()` dev-mode "exactly one leaf fires" monitor**:
   in dev mode (footprintjs `enableDevMode()`), compiled tree-leaf triggers
   tally fires per evaluation pass and `console.warn` when 0 or ≥2 leaves

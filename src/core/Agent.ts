@@ -613,6 +613,25 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    * with the latest provider state (circuit breaker may have
    * closed, vendor may have recovered, etc.).
    *
+   * **Resume = REPLAY from the last completed iteration boundary,
+   * not exact-state restore.** Only the conversation history is
+   * restored; everything else re-seeds fresh:
+   *
+   *   - **Tool re-execution / idempotency**: tool side effects from
+   *     the FAILED iteration are not in the checkpoint. The model
+   *     re-decides from the restored history and may re-issue those
+   *     tool calls — they WILL execute again (there is no built-in
+   *     toolCallId dedup). Mutating tools (payments, emails, DB
+   *     writes) must be idempotent — key on stable call content, not
+   *     `ctx.toolCallId` (a re-issued call gets a new id).
+   *   - **Fresh `runId`**: the resumed run's events carry a new
+   *     `runId`; use `checkpoint.runId` to correlate back to the
+   *     failing run.
+   *   - **Iteration counter + budget reset**: the resumed run starts
+   *     at iteration 1 with a full `maxIterations` budget
+   *     (`checkpoint.lastCompletedIteration` is diagnostic only).
+   *     Token/cost accumulators also restart at zero.
+   *
    * @example
    * ```ts
    * try {

@@ -34,9 +34,19 @@
  *   ✅ No footprintjs core changes
  *   ⚠️  Loses mid-iteration partial state (acceptable — iterations
  *       are atomic; we resume from the last completed boundary)
- *   ⚠️  Tool calls inside the failed iteration re-execute (consumer
- *       must idempotency-key their tool implementations OR use
- *       v2.10.3+ tool-result dedup via toolCallId).
+ *   ⚠️  TOOL RE-EXECUTION (idempotency requirement): anything the
+ *       failed iteration did after the last completed boundary —
+ *       including tool side effects — is NOT in the checkpoint. On
+ *       resume the model re-decides from the restored history and may
+ *       re-issue those tool calls; they WILL execute again. There is
+ *       NO built-in toolCallId-based dedup. Mutating tools (payments,
+ *       emails, DB writes) must be idempotent — derive an idempotency
+ *       key from stable call content, not from `ctx.toolCallId` (fresh
+ *       per issued call, so a re-issued call gets a NEW id). Note the
+ *       same requirement exists WITHOUT resume: a tool that performs
+ *       its side effect and then throws reports the error message back
+ *       to the model as the tool result, and the model typically
+ *       retries the call on the next iteration.
  *
  * Pattern: Memento (GoF) — snapshot of an object's internal state
  *          for later restoration. Same shape as `FlowchartCheckpoint`
@@ -59,15 +69,18 @@ import type { LLMMessage } from '../adapters/types.js';
 export interface AgentRunCheckpoint {
   /** Schema version. v1 = conversation-history-based. */
   readonly version: 1;
-  /** Original `runId` from the failing run. Reused on resume so
-   *  observability + cost tracking correlates the resumed iterations
-   *  back to the original run. */
+  /** `runId` of the FAILING run — lets the consumer correlate a
+   *  persisted checkpoint back to the original run's observability.
+   *  NOT reused on resume: `resumeOnError` starts a fresh run with a
+   *  fresh `runId` (only the conversation history is restored). */
   readonly runId: string;
   /** Conversation history at the LAST completed iteration boundary
    *  (LLM messages). The next iteration retries from here. */
   readonly history: readonly LLMMessage[];
-  /** Index of the last completed iteration (0-based). The resumed
-   *  run starts at iteration `lastCompletedIteration + 1`. */
+  /** Index of the last completed iteration in the FAILING run
+   *  (diagnostic — not consumed on resume). The resumed run restores
+   *  this history but re-seeds its own iteration counter at 1 with a
+   *  full `maxIterations` budget. */
   readonly lastCompletedIteration: number;
   /** Original input message. Surfaces in observability + lets the
    *  consumer correlate checkpoint to the user's request. */

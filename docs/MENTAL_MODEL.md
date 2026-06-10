@@ -500,6 +500,10 @@ no-op there; Bedrock model-aware). **CacheGate** decider: kill-switch / hit-rate
 history, `agent.run()` throws `RunCheckpointError{cause,checkpoint}`. `agent.resumeOnError(checkpoint)`
 reloads history via the seed side-channel and replays from the failed iteration. *Distinct from*
 `agent.resume(FlowchartCheckpoint)` (intentional `askHuman` pause, exact mid-flowchart resume).
+Resume = REPLAY, not exact-state restore: only history is restored — the resumed run gets a fresh
+`runId`, re-seeds `iteration = 1` with a full `maxIterations` budget, and the failed iteration's
+tool calls may be re-issued by the model and re-execute (no built-in toolCallId dedup) — mutating
+tools must be idempotent, keyed on stable call content.
 
 ---
 
