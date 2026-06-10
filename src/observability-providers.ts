@@ -62,3 +62,20 @@ export {
   type OtelSpanOptions,
   type OtelAttributeValue,
 } from './adapters/observability/otel.js';
+// Tamper-evident audit export (#20) — the one vendor-free strategy in
+// this subpath (its only runtime requirement is `node:crypto`, lazily
+// imported the same way the vendor SDKs are).
+export {
+  auditExport,
+  verifyAuditBundle,
+  AUDIT_BUNDLE_FORMAT,
+  AUDIT_GENESIS_EVENT_TYPE,
+  AUDIT_ZERO_HASH,
+  type AuditBundle,
+  type AuditBundleHeader,
+  type AuditExportOptions,
+  type AuditExportStrategy,
+  type AuditRecord,
+  type AuditVerifyResult,
+} from './adapters/observability/audit.js';
+export { canonicalJson, CANONICAL_JSON_VERSION } from './lib/canonicalJson.js';

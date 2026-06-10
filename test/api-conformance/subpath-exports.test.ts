@@ -111,6 +111,14 @@ describe('Block B — package.json exports table', () => {
     const exp = loadExports();
     for (const [key, entry] of Object.entries(exp)) {
       if (key === '.') continue; // root
+      // The package.json self-reference is a plain string by Node
+      // convention — it lets the library read its own version at
+      // runtime (auditExport genesis records) and lets tooling
+      // deep-import the manifest.
+      if (key === './package.json') {
+        expect(entry).toBe('./package.json');
+        continue;
+      }
       expect(entry.types, `missing types for ${key}`).toBeDefined();
       expect(entry.import, `missing import for ${key}`).toBeDefined();
       expect(entry.require, `missing require for ${key}`).toBeDefined();

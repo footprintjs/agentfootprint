@@ -217,6 +217,7 @@ _Run `npm run examples:readme` after adding/editing examples._
 | 16 | [`16-providers.ts`](features/16-providers.ts) | LLM providers — pick by env (Azure OpenAI / Anthropic / OpenAI / mock) | One agent, swappable provider. Azure OpenAI via azureOpenai(); OpenAI-compatible company endpoints via openai({ baseURL }); mock for $0 offline runs. Same LLMProvider interface. |
 | 17 | [`17-identity.ts`](features/17-identity.ts) | Identity — a tool vends a downstream OAuth credential (AgentCore) |  |
 | 18 | [`18-otel-genai.ts`](features/18-otel-genai.ts) | OTel GenAI conventions — gen_ai.* spans + decision-evidence span events | otelObservability emits GenAI-semconv spans (invoke_agent / chat / execute_tool) plus explainability span events: route decisions, decide() evidence, validation, permission, credential. |
+| 19 | [`19-audit-export.ts`](features/19-audit-export.ts) | Tamper-evident audit export — hash-chained bundle + offline verification | auditExport() hash-chains every typed event (decisions, tool calls, validation rejections) into a JSON AuditBundle; verifyAuditBundle() recomputes the chain offline and names the exact record any tamper broke. |
 
 ### [`canonical/`](canonical/) — end-to-end patterns
 

@@ -5,6 +5,61 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+Minor — **#20: tamper-evident audit export** (second item of the
+compliance wedge; consumes the same typed event stream #19's spans are
+built from — EU AI Act Art. 12 record-keeping is the target shape).
+
+- **`auditExport()`** (`agentfootprint/observability-providers`) — an
+  ObservabilityStrategy that hash-chains every typed event into an
+  append-only audit log: one `AuditRecord` per event
+  (`{ seq, timestamp, eventType, payload, meta, prevHash, hash }`,
+  `hash` = SHA-256 over the canonical serialization of the record minus
+  `hash`), plus a per-run GENESIS record (`audit.genesis`) carrying
+  runId + agent identity + library/app versions. Runs chain
+  back-to-back in one log, so silently dropping a whole run breaks the
+  chain. Attach via
+  `agent.enable.observability({ strategy: auditExport() })`.
+- **`verifyAuditBundle()`** — pure OFFLINE verification (no agent, no
+  strategy): recomputes the chain and names the exact record any tamper
+  broke (`{ valid, brokenAt, reason }`). Accepts one bundle or an array
+  of consecutive drained segments.
+- **`bundle()` / `drain()`** — the export surface. Bundles are plain
+  JSON (persistence is the consumer's job); `drain()` returns the
+  records since the last drain while keeping the chain intact across
+  segments (`header.chainHead` = previous segment's `finalHash`, so
+  concatenated segments re-verify end-to-end).
+- **`canonicalJson()` (`afp-cjson/1`)** — the documented byte contract
+  under the hashes (sorted keys by UTF-16 code unit, no whitespace,
+  JSON.stringify number/string semantics, toJSON honored, bigint/cycles
+  throw). Exported so independent verifiers can re-implement.
+- **PII discipline mirrors #19** (`payloadMode: 'bounded'`, default):
+  tool args → key NAMES, results → TYPE, prompts / LLM content /
+  thinking / history / content previews (`contentSummary`,
+  `rawContent`, `droppedSummaries`, `resultSummary`) → `[N chars]`
+  markers, error MESSAGE strings → `[N chars]`, free-form Records
+  (pause payloads, risk/eval evidence) → `[keys: …]`. `contentHash`
+  stays verbatim (links identical content without echoing it).
+  `payloadMode: 'verbatim'` embeds full payloads for access-controlled
+  stores (documented disclosure). `stream.token` /
+  `stream.thinking_delta` excluded by default (`includeTokenEvents`).
+- **Zero new dependencies** — SHA-256 via `node:crypto`, lazily
+  imported with the same gating as the optional vendor SDKs (importing
+  the module stays browser-safe; capture/verify need a runtime with
+  `node:crypto`: Node ≥ 20, Bun, Deno, edge Node-compat).
+- **Honesty note:** the chain is tamper-EVIDENT, not tamper-PROOF — an
+  adversary holding the only copy can recompute the whole suffix.
+  Anchor `finalHash` externally (write-once store, signed log,
+  timestamping service) for non-repudiation; documented on the API.
+- `package.json` now exports `"./package.json"` (standard
+  self-reference; lets the genesis record carry the real library
+  version).
+- Example: `examples/features/19-audit-export.ts` — agent run with
+  route decisions + a tool call + a #9 validation rejection → export →
+  verify OK → flip one byte → verification names the record → drained
+  segments re-verify concatenated. Zero new typed events.
+
 ## [6.17.0] - 2026-06-10
 
 Minor — **#19: `otelObservability` speaks OTel GenAI semantic conventions +

@@ -175,6 +175,36 @@ console.log(audit);
 
 ---
 
+## Tamper-Evident Audit Export — `auditExport` + `verifyAuditBundle`
+
+The events above tell you *what happened*; for compliance record-keeping (EU AI Act Art. 12 shape) you also need to show the log *hasn't been modified since capture*. `auditExport()` (on `agentfootprint/observability-providers`) hash-chains every typed event — decisions, tool calls, validation rejections, permission verdicts, credential lifecycle, costs — into an append-only `AuditBundle`: each record carries the SHA-256 of its canonical serialization plus the previous record's hash, anchored per run by a genesis record (runId + agent identity + library versions).
+
+```typescript
+import { auditExport, verifyAuditBundle } from 'agentfootprint/observability-providers';
+
+const audit = auditExport({ agent: 'ledger-auditor' });
+const stop = agent.enable.observability({ strategy: audit });
+await agent.run({ message: 'audit account ACCT-1142' });
+stop();
+
+const bundle = audit.bundle();              // plain JSON — store anywhere
+const check = verifyAuditBundle(bundle);    // offline: no agent, no strategy
+// { valid: true, recordsChecked: 50 }
+// flip one byte anywhere → { valid: false, brokenAt: 13, reason: 'hash mismatch — …' }
+```
+
+Key properties:
+
+- **Offline verification** — `verifyAuditBundle` is a pure function over the JSON; it recomputes the chain and names the exact record any tamper broke. The canonicalization rules (`afp-cjson/1`, exported as `canonicalJson`) are documented so independent verifiers can re-implement.
+- **PII-bounded by default** — payloads mirror the OTel adapter's discipline: tool args as key NAMES, results as a TYPE, prompts/content/previews as `[N chars]` markers. `payloadMode: 'verbatim'` opts into full payloads for access-controlled stores.
+- **Long runs** — `drain()` returns the records since the last drain; consecutive segments re-verify end-to-end (`verifyAuditBundle([seg1, seg2])`) because each segment's `chainHead` is the previous `finalHash`.
+- **Tamper-evident, not tamper-proof** — an adversary holding the only copy can recompute the whole suffix. Anchor `finalHash` externally (WORM store, signed log, timestamping) for non-repudiation.
+- **Runtime** — SHA-256 via `node:crypto` (lazy; zero new dependencies). Works on Node ≥ 20 / Bun / Deno / edge Node-compat; browsers have no sync SHA-256 — capture and verify server-side.
+
+See [`examples/features/19-audit-export.ts`](../../examples/features/19-audit-export.ts) for the full capture → verify → tamper → drain walkthrough.
+
+---
+
 ## Provider Fallback — `fallbackProvider`
 
 Wraps multiple `LLMProvider` instances into one. Tries providers in order. On failure, falls through to the next. It lives on the `agentfootprint/resilience` subpath, and the vendor providers come from `agentfootprint/llm-providers`.
