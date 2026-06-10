@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **`agentCoreIdentity` forwards per-request identity (workload identity
+  scoping)** — closes the deferred 6.11.0 gap where the AgentCore adapter
+  ignored `req.identity` (the `runIdentity` that toolCalls already threads
+  into every `getCredential`). Verified against the AWS API reference:
+  `GetResourceOauth2Token` carries NO user/tenant field — AgentCore binds the
+  user at workload-token acquisition — so the adapter now exchanges
+  `(workloadName, userId)` via `GetWorkloadAccessTokenForUserId` for a
+  USER-SCOPED workload access token and vends `mode: 'user'` requests with it
+  (AgentCore keys its token vault + 3LO grants per workload+user). Opt-in via
+  the new `workloadName` option; default `userId` = `identity.principal`,
+  overridable via `userIdFor` (e.g. tenant-qualified `${tenant}:${principal}`
+  — `tenant` has no native AgentCore field and is not forwarded by default).
+  Fail-closed: configuring `workloadName` with a client lacking
+  `getWorkloadAccessTokenForUserId`, or an exchange returning no token,
+  throws — never silently degrades to workload-level tokens. Without
+  `workloadName` the static `workloadIdentityToken` flows byte-identically to
+  before (no behavior change for existing configs). `_client` test seam
+  extended with the optional second method; 8 tests including an end-to-end
+  `agent.run({ identity })` → declare-and-push → AgentCore-receives-userId
+  chain.
+
 - **`withCredentialRetry` — transient credential failures retry before
   failing closed** (`agentfootprint/identity`): a `CredentialProvider`
   decorator mirroring the LLM-provider `withRetry` — same option vocabulary

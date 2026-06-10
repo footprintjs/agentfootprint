@@ -141,6 +141,18 @@ const agent = Agent.create({
   AgentCore caches refresh tokens, so consent usually happens once.
 - **`mode`**: omitted → `machine` (2-legged/M2M). Declare `mode: 'user'`
   explicitly for on-behalf-of-user (3-legged) delegation.
+- **Per-request identity scoping** (opt-in via `workloadName`): pass
+  `agent.run({ message, identity: { tenant, principal, conversationId } })` and
+  configure `agentCoreIdentity({ region, workloadName: 'my-agent' })`. AgentCore's
+  `GetResourceOauth2Token` has no user field — the user is bound at
+  workload-token acquisition — so for `mode: 'user'` requests the adapter
+  exchanges `(workloadName, userId)` via `GetWorkloadAccessTokenForUserId` for a
+  USER-SCOPED workload token and vends with it: AgentCore then keys its token
+  vault + 3LO grants per (workload, user). Default `userId` is
+  `identity.principal`; `tenant` has no native AgentCore field — encode it via
+  `userIdFor: ({ tenant, principal }) => `` `${tenant}:${principal}` `` if you
+  need tenant-scoped vault entries. Without `workloadName`, the static
+  `workloadIdentityToken` flows unchanged.
 - **🔒 Secrets never enter the trace.** The credential lives only in `ctx`; the
   `credential.*` events carry kind/service/reason — never the token; secret
   fields are non-enumerable, so even an accidental `JSON.stringify` of the

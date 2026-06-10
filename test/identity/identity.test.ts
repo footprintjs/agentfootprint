@@ -180,6 +180,165 @@ describe('identity — Integration', () => {
   });
 });
 
+// ─── Per-request identity forwarding (workload identity scoping) ─────
+//
+// `GetResourceOauth2Token` has NO user/tenant field — AgentCore binds the
+// user at workload-token acquisition (`GetWorkloadAccessTokenForUserId`),
+// and keys its token vault + 3LO grants per (workload, user). These tests
+// pin the honest forwarding: `req.identity` → per-user workload token →
+// vend with it. Opt-in via `workloadName`.
+describe('identity — per-request identity forwarding (agentCoreIdentity)', () => {
+  function fakeWorkloadClient(resp: AgentCoreOauthResponse, userToken = 'user-scoped-token') {
+    const oauthCalls: Array<Record<string, unknown>> = [];
+    const workloadCalls: Array<Record<string, unknown>> = [];
+    const client: AgentCoreIdentityClientLike = {
+      getResourceOauth2Token: (input) => {
+        oauthCalls.push(input as Record<string, unknown>);
+        return Promise.resolve(resp);
+      },
+      getWorkloadAccessTokenForUserId: (input) => {
+        workloadCalls.push(input as Record<string, unknown>);
+        return Promise.resolve({ workloadAccessToken: userToken });
+      },
+    };
+    return { client, oauthCalls, workloadCalls };
+  }
+
+  it("mode 'user' + identity.principal + workloadName → per-user workload token vends the request", async () => {
+    const { client, oauthCalls, workloadCalls } = fakeWorkloadClient({ accessToken: 'tok' });
+    await agentCoreIdentity({
+      _client: client,
+      workloadIdentityToken: 'static-wit',
+      workloadName: 'my-agent',
+    }).getCredential({
+      service: 'github',
+      mode: 'user',
+      identity: { principal: 'alice', tenant: 'acme' },
+    });
+
+    // The user is bound at workload-token acquisition…
+    expect(workloadCalls).toEqual([{ workloadName: 'my-agent', userId: 'alice' }]);
+    // …and the vend uses the USER-SCOPED token, not the static one.
+    expect(oauthCalls[0]!.workloadIdentityToken).toBe('user-scoped-token');
+    expect(oauthCalls[0]!.oauth2Flow).toBe('USER_FEDERATION');
+  });
+
+  it("mode 'machine' (M2M is the workload's own identity) → identity NOT user-scoped", async () => {
+    const { client, oauthCalls, workloadCalls } = fakeWorkloadClient({ accessToken: 'tok' });
+    await agentCoreIdentity({
+      _client: client,
+      workloadIdentityToken: 'static-wit',
+      workloadName: 'my-agent',
+    }).getCredential({ service: 's', mode: 'machine', identity: { principal: 'alice' } });
+
+    expect(workloadCalls).toEqual([]);
+    expect(oauthCalls[0]!.workloadIdentityToken).toBe('static-wit');
+  });
+
+  it('no workloadName (the opt-in) → pre-forwarding behavior: static token, no per-user call', async () => {
+    const { client, oauthCalls, workloadCalls } = fakeWorkloadClient({ accessToken: 'tok' });
+    await agentCoreIdentity({
+      _client: client,
+      workloadIdentityToken: 'static-wit',
+    }).getCredential({ service: 's', mode: 'user', identity: { principal: 'alice' } });
+
+    expect(workloadCalls).toEqual([]);
+    expect(oauthCalls[0]!.workloadIdentityToken).toBe('static-wit');
+  });
+
+  it('no identity on the request → no per-user call even with workloadName configured', async () => {
+    const { client, oauthCalls, workloadCalls } = fakeWorkloadClient({ accessToken: 'tok' });
+    await agentCoreIdentity({
+      _client: client,
+      workloadIdentityToken: 'static-wit',
+      workloadName: 'my-agent',
+    }).getCredential({ service: 's', mode: 'user' });
+
+    expect(workloadCalls).toEqual([]);
+    expect(oauthCalls[0]!.workloadIdentityToken).toBe('static-wit');
+  });
+
+  it('userIdFor override → tenant-qualified userId (tenant has no native AgentCore field)', async () => {
+    const { client, workloadCalls } = fakeWorkloadClient({ accessToken: 'tok' });
+    await agentCoreIdentity({
+      _client: client,
+      workloadName: 'my-agent',
+      userIdFor: ({ tenant, principal }) =>
+        tenant && principal ? `${tenant}:${principal}` : principal,
+    }).getCredential({
+      service: 's',
+      mode: 'user',
+      identity: { principal: 'alice', tenant: 'acme' },
+    });
+
+    expect(workloadCalls).toEqual([{ workloadName: 'my-agent', userId: 'acme:alice' }]);
+  });
+
+  it('fail-closed: workloadName configured but the client lacks getWorkloadAccessTokenForUserId → throws (no silent degrade)', async () => {
+    const { client } = fakeClient({ accessToken: 'tok' }); // oauth-only client
+    await expect(
+      agentCoreIdentity({ _client: client, workloadName: 'my-agent' }).getCredential({
+        service: 's',
+        mode: 'user',
+        identity: { principal: 'alice' },
+      }),
+    ).rejects.toThrow(/getWorkloadAccessTokenForUserId/);
+  });
+
+  it('fail-closed: per-user exchange returns no workloadAccessToken → throws', async () => {
+    const oauthOnly = fakeClient({ accessToken: 'tok' });
+    const client: AgentCoreIdentityClientLike = {
+      getResourceOauth2Token: oauthOnly.client.getResourceOauth2Token,
+      getWorkloadAccessTokenForUserId: () => Promise.resolve({}),
+    };
+    await expect(
+      agentCoreIdentity({ _client: client, workloadName: 'my-agent' }).getCredential({
+        service: 's',
+        mode: 'user',
+        identity: { principal: 'alice' },
+      }),
+    ).rejects.toThrow(/no workloadAccessToken/);
+  });
+
+  it('END-TO-END: agent.run({ identity }) → declare-and-push threads it → AgentCore receives userId', async () => {
+    const { client, oauthCalls, workloadCalls } = fakeWorkloadClient({ accessToken: 'e2e-tok' });
+    let applied = '';
+    const tool = defineTool({
+      name: 'list_drive',
+      description: 'list drive files',
+      inputSchema: { type: 'object', properties: {} },
+      needs: { credential: 'google', mode: 'user', scopes: ['drive'] },
+      execute: async (_args, ctx) => {
+        applied = ctx.credential ? ctx.credential.toHeaders().authorization! : '(none)';
+        return 'files: 3';
+      },
+    });
+    const agent = Agent.create({
+      provider: mock({
+        replies: [
+          { content: 'listing', toolCalls: [{ id: 'c1', name: 'list_drive', args: {} }] },
+          { content: 'You have 3 files.', toolCalls: [] },
+        ],
+      }),
+      model: 'mock',
+      maxIterations: 3,
+      credentials: agentCoreIdentity({ _client: client, workloadName: 'my-agent' }),
+    })
+      .tools([tool])
+      .build();
+
+    await agent.run({
+      message: 'list my files',
+      identity: { tenant: 'acme', principal: 'alice', conversationId: 'conv-1' },
+    });
+
+    // runIdentity flowed: toolCalls → req.identity → per-user workload token → vend.
+    expect(workloadCalls).toEqual([{ workloadName: 'my-agent', userId: 'alice' }]);
+    expect(oauthCalls[0]!.workloadIdentityToken).toBe('user-scoped-token');
+    expect(applied).toBe('Bearer e2e-tok');
+  });
+});
+
 // ─── Property ────────────────────────────────────────────────────────
 describe('identity — Property', () => {
   it('staticTokens issues the configured token verbatim for any service id', async () => {
