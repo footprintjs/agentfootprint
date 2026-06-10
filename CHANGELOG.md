@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [6.15.0]
+
+Minor — **#16: footprintjs 9 adoption + iterations unlocked.**
+
+### Changed
+
+- **Peer/dev dependency: footprintjs `^9.0.0`** (was `^7 || ^8`). The 9.0.0
+  trampoline runs linear chains and loops on a flat stack — the depth wall that
+  capped agents around iteration 71 is gone. Full suite (2462) green against 9.
+- **`clampIterations` no longer silently caps at 50.** The cap existed only to
+  stay under the old engine wall. `maxIterations` is now an honest COST budget
+  (each iteration = one LLM call): lower bound 1 kept; dev mode warns above 100.
+  A 200-iteration agent run is tested end-to-end.
+- **Engine loop-limit headroom:** `agent.run()` passes
+  `maxIterations: agentBudget × 2 + 10` to the executor so footprintjs's own
+  loop-iteration limit (default 1000) can never fire below the agent's budget —
+  the two libraries' limits are now co-engineered. Consumer-provided run options
+  still win.
+
 ## [6.14.1]
 
 Patch — **`skillGraph.tree()` merges repeated leaves.** Using the SAME skill as

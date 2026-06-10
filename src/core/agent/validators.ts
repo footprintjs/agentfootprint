@@ -10,6 +10,7 @@
  * its constructor and stage handlers.
  */
 
+import { isDevMode } from 'footprintjs';
 import type { MemoryDefinition } from '../../memory/define.types.js';
 import type { Injection } from '../../lib/injection-engine/types.js';
 import type { Tool, ToolRegistryEntry } from '../tools.js';
@@ -35,13 +36,25 @@ export function validateMemoryIdUniqueness(memories: readonly MemoryDefinition[]
 }
 
 /**
- * Clamp `maxIterations` to a safe range. The lower bound (1) prevents
- * a 0-iteration agent (no LLM calls = no work); the upper bound (50)
- * prevents runaway loops in misconfigured agents.
+ * Validate `maxIterations`. The historical silent clamp to 50 existed because
+ * footprintjs's recursive traversal hit its depth wall around iteration 71 —
+ * footprintjs 9.0.0's trampoline removed that wall (loops run on a flat
+ * stack), so the cap is gone. The lower bound (1) still prevents a
+ * 0-iteration agent; large values are the consumer's COST choice (each
+ * iteration is an LLM call) — a dev-mode warning flags budgets above 100.
+ * The Agent passes matching headroom to the engine's own loop-iteration
+ * limit so it can never fire below the agent's budget.
  */
 export function clampIterations(n: number): number {
   if (!Number.isInteger(n) || n < 1) return 1;
-  if (n > 50) return 50;
+  if (n > 100 && isDevMode()) {
+    // eslint-disable-next-line no-console
+    console.warn(
+      `agentfootprint: maxIterations=${n} — each iteration is one LLM call; ` +
+        'this is a cost budget, not a perf limit (footprintjs 9 runs loops flat). ' +
+        'Set deliberately.',
+    );
+  }
   return n;
 }
 

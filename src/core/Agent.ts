@@ -552,6 +552,11 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
           message: input.message,
           ...(input.identity !== undefined && { identity: input.identity }),
         },
+        // Co-engineered boundary (#16): the engine's loop-iteration limit
+        // (footprintjs 9 default 1000) must never fire BELOW the agent's own
+        // budget — give it headroom (×2 + 10 covers double-hop loop shapes).
+        // Consumer-provided options win.
+        maxIterations: this.maxIterations * 2 + 10,
         ...(options ?? {}),
       });
       return this.finalizeResult(executor, result);
