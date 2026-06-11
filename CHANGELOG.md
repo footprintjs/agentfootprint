@@ -5,6 +5,49 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+- **`influence-core` — the ONE embedding-based scoring engine (RFC-002/003
+  block D6).** New leaf module `src/lib/influence-core/`, exported from
+  `agentfootprint/observe`. Extracts the Visible Reasoning paper's FDL
+  influence scoring (Eq. 1–6) into named, individually-exported scorers so
+  three consumers share one engine and one embedding cache: RFC-002's
+  tool-catalog lint (C1) + margin recorder (C4/C5), RFC-003 Part B's
+  LLM-edge weigher (D7), and the FDL paper pipeline itself. Extraction +
+  module design only — no RFC-002/003 features ship yet.
+  - **Four signal scorers + composite** (`finalAnswerSimilarity`,
+    `averageRelevancy`, `persistence`, `structuralProximity`,
+    `compositeScore`, `adaptWeights`) — the paper's FA/AVG/PERSIST/DEPTH
+    with default priors 0.40/0.30/0.20/0.10 and per-item Eq. 6 adaptive
+    redistribution (no-ancestor items → α′=0.80/δ′=0.20). `scoreInfluence`
+    orchestrates embed → score → rank in one deduplicated pass.
+  - **`EmbeddingCache`** — content-hash-keyed (`contentHash`, FNV-1a)
+    transparent `Embedder` decorator: bounded LRU (`maxEntries`, default
+    1024) with VISIBLE eviction/hit/miss counts via `stats()` (the
+    bounded-honesty convention), single-flight coalescing for concurrent
+    embeds, batch-aware partial misses; rejections never cached. One cache
+    instance threads through lint + margins + influence weights (RFC-002
+    §3).
+  - **`pairwiseSimilarity`** (RFC-002 C1's core) — text set → symmetric
+    cosine matrix (diagonal exactly 1 by definition) + ranked pairs.
+  - **`scoreMargin`** (RFC-002 C4's core) — (candidates, contextText,
+    chosen) → ranked scores, `margin` = score(best chosen) − score(best
+    non-chosen), `narrow` / `proxyDisagreement` flags (default threshold
+    0.05). Pure function; recorder wiring is C5, later.
+  - **Honest-claim discipline (RFC-002 §2)** documented on every scorer:
+    all scores are deterministic embedding-geometry PROXIES — semantic
+    alignment, never model internals, never causal attribution, not
+    additive across items.
+  - **One embedder contract:** re-exports the existing
+    `Embedder`/`mockEmbedder` adapter interface from `memory/embedding` —
+    no second embedder type. Leaf module: zero agent/runtime imports.
+  - **D6 parity acceptance:** goldens created FROM an independent
+    transcription of paper Eq. 1–6 (the pipeline previously existed as the
+    published equations + the embedder machinery; no executable goldens);
+    the module reproduces them to 1e-12 and matches a live in-test
+    reference recomputation, including fractional-PERSIST and
+    adaptive-weight cases. Example: `examples/features/22-influence-core.ts`.
+
 ## [6.23.0] - 2026-06-11
 
 - **Deferred observer delivery — `AgentOptions.observerDelivery: 'inline' |

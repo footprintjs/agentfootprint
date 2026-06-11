@@ -146,3 +146,44 @@ export {
 
 // Emit primitive — used by every Tier-3 source-domain.
 export { typedEmit } from './recorders/core/typedEmit.js';
+
+// influence-core — the ONE embedding-based scoring engine (RFC-002/003
+// block D6). Not a recorder: pure, embedder-injected scoring functions
+// + the shared bounded embedding cache. Future /observe features build
+// on it (RFC-002 C1 catalog lint, C4/C5 margin recorder, RFC-003 D7
+// edge weigher). Honest claim: every score is an embedding-geometry
+// PROXY — semantic alignment, never model internals, never causal
+// attribution.
+export {
+  adaptWeights,
+  averageRelevancy,
+  compositeScore,
+  contentHash,
+  DEFAULT_INFLUENCE_WEIGHTS,
+  DEFAULT_MARGIN_THRESHOLD,
+  DEFAULT_PERSISTENCE_THRESHOLD,
+  EmbeddingCache,
+  embeddingCache,
+  finalAnswerSimilarity,
+  pairwiseSimilarity,
+  persistence,
+  scoreInfluence,
+  scoreMargin,
+  structuralProximity,
+  type CandidateScore,
+  type Embedder,
+  type EmbeddingCacheOptions,
+  type EmbeddingCacheStats,
+  type EvidenceInput,
+  type InfluenceScore,
+  type InfluenceWeights,
+  type MarginCandidate,
+  type MarginResult,
+  type PairwiseSimilarityArgs,
+  type PairwiseSimilarityResult,
+  type ScoreInfluenceArgs,
+  type ScoreMarginArgs,
+  type SignalScores,
+  type SimilarityItem,
+  type SimilarityPair,
+} from './lib/influence-core/index.js';

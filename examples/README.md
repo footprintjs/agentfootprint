@@ -220,6 +220,7 @@ _Run `npm run examples:readme` after adding/editing examples._
 | 19 | [`19-audit-export.ts`](features/19-audit-export.ts) | Tamper-evident audit export — hash-chained bundle + offline verification | auditExport() hash-chains every typed event (decisions, tool calls, validation rejections) into a JSON AuditBundle; verifyAuditBundle() recomputes the chain offline and names the exact record any tamper broke. |
 | 20 | [`20-regulated-decisioning.ts`](features/20-regulated-decisioning.ts) | Regulated decisioning — one run, three compliance artifacts, offline auditor | A loan-decisioning agent declines an application under labeled decide() rules while auditExport (hash chain), otelObservability (GenAI spans) and causal memory capture the same event stream; an offline auditor then answers  |
 | 21 | [`21-deferred-observers.ts`](features/21-deferred-observers.ts) | Deferred observers — non-blocking agent.on() (RFC-001) | observerDelivery: deferred moves slow agent.on() listeners off the ReAct hot path — capture inline, deliver one beat behind, drain before run() returns. Benches inline vs deferred vs no-listener. |
+| 22 | [`22-influence-core.ts`](features/22-influence-core.ts) | influence-core — four-signal evidence scoring, one shared embedding cache | The shared scoring engine under the FDL evidence ranking, the tool-catalog  |
 
 ### [`canonical/`](canonical/) — end-to-end patterns
 
