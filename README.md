@@ -3,7 +3,7 @@
 <h1 align="center">Agentfootprint</h1>
 
 <p align="center">
-  <strong>Your agent picked the wrong tool, gave a wrong answer — and the logs can't tell you why.<br/>Agentfootprint can.</strong>
+  <strong>Your agent gave an answer that <em>looks</em> right — and it's wrong.<br/>The logs can't tell you who influenced it. Agentfootprint can.</strong>
 </p>
 
 <p align="center">
@@ -43,10 +43,20 @@ domain knowledge to fix either:
 | **Business logic** — wrong branch, wrong math | the code | stack trace, debugger, `console.log` |
 | **Contextual** — wrong tool chosen, wrong fact believed, stale memory trusted | **what the model was given** | **nothing. Until now.** |
 
-Agents introduced the third class. The code is correct, the infra is healthy — and
-the run is still wrong, because two tool descriptions read alike, or an injected
-fact was misleading, or memory carried last week's truth. Classical logs can't
-explain it: **they record what the code did, never what the context did.**
+Agents introduced the third class. The code is correct, the infra is healthy, the
+answer even reads well — and the run is still wrong, because something influenced
+the model:
+
+| The model… | because… |
+|---|---|
+| picked the wrong tool | two descriptions read nearly alike — it chose between twins |
+| believed a wrong "fact" | a tool returned it, or an injected fact planted it |
+| followed the wrong instruction | the wrong skill / steering fired — or fired one iteration too early |
+| answered from the past | a previous turn or stale memory bled into this one |
+
+Classical logs can't explain any of it: **they record what the code did, never
+what the context did.** The debugging question changed — no longer *"what did my
+code do?"* but **"who influenced the model?"**
 
 ## The idea
 
@@ -333,46 +343,6 @@ So we used the budget those abstractions would have cost us to invest deeply in 
 > **We abstract context engineering — and hand back the trace.**
 > Live to develop · offline to monitor · detailed to improve.
 
-### The reason — agents have a new class of bug
-
-For fifty years, software bugs have been **logic errors**. A wrong condition, a missed edge case, an off-by-one. You step through the code until you find the bad branch.
-
-LLM-powered apps add a second class of bug: **contextual errors.** The code is correct. The model is correct. The answer is wrong because **the LLM's decision rests on context that was ambiguous, confusing, or misleading at the moment of inference.**
-
-Tracking *which content the model actually saw, and why,* is the entire debugging job. Without it, the failure mode is invisible:
-
-| What got injected wrong | What the model did |
-|---|---|
-| Wrong instruction landed in the `system` slot | Followed the wrong rule |
-| Predicate fired one iteration too early | Reasoned with stale assumptions |
-| Skill body missing when the LLM called `read_skill` | Invented its own |
-| Cache prefix invalidated mid-iteration | Saw a silently rewritten stale version |
-| Tool returned but the `on-tool-return` injection didn't fire | Couldn't interpret the result |
-
-> [!IMPORTANT]
-> **The model doesn't tell you which of these went wrong. It just gives you the wrong answer.**
-
-You can't step through that with a debugger. By the time you read the response, the context that produced it is gone unless something recorded it.
-
-That's the gap agentfootprint fills. A framework that owns the control flow can debug logic errors. A framework that owns the *injection* can debug contextual errors — because every injection is a typed event with a where, when, why, and how-it-cached.
-
-### What that buys you
-
-Because we own the injection, every LLM call backtracks to four typed answers:
-
-- **What** was injected
-- **Who** triggered it (which rule)
-- **When** it fired
-- **How** it landed — slot, position, cache
-
-Same trace, three workflows:
-
-- **Live — debug as you build.** See exactly which injection produced which token, which predicate fired this iteration, which prefix actually got cached.
-- **Offline — monitor what shipped.** Replay any past run from its trace. Alert on drift. Attribute cost per injection.
-- **Detailed — improve via export.** Every successful trajectory is labeled training data for SFT, DPO, or RL — no separate data-collection phase.
-
-And a fourth, novel: **the agent can read its own trace.** Six months after the agent rejected loan #42, *"why did you reject it?"* answers from the recorded evidence — the tool calls (`credit_score_check → 580`), the decisions, the rules that fired — not a rerun. Causal memory turns the trace into the agent's working memory.
-
 ---
 
 ## How do I design my agent or system of agents?
@@ -531,7 +501,7 @@ The patterns the field knows reduce to the same alphabet:
 | **Router** | `Conditional → Agent_A \| Agent_B \| Agent_C` |
 | **Hierarchical** | `Agent_planner → Sequence( Agent_worker×N ) → synth` |
 
-Same trick as Beat 1: instead of N libraries for N patterns, we found the M building blocks all N patterns are made of.
+Same trick as the injection model: instead of N libraries for N patterns, we found the M building blocks all N patterns are made of.
 
 > 📖 Compare: [hand-rolled vs declarative](https://footprintjs.github.io/agentfootprint/getting-started/why/) · [migration from LangChain / CrewAI / LangGraph](https://footprintjs.github.io/agentfootprint/getting-started/vs/)
 
@@ -546,15 +516,7 @@ Same trick as Beat 1: instead of N libraries for N patterns, we found the M buil
   <sub>One real run, fully explained — the <a href="https://github.com/footprintjs/agentfootprint-lens"><b>Lens</b></a> (<code>npm i agentfootprint-lens</code>): conversation · executed path · per-step timeline · stats, every pixel from the trace.</sub>
 </p>
 
-Because we own the loop (Beat 2), every decision and execution is captured during traversal — not bolted on. The default capture is the **causal trace**: every stage, read, write, and decision evidence, as a JSON-portable, scrubbable, queryable, exportable artifact. Beyond the default, wire custom recorders for cost, latency, or quality scoring — any observation hook fires on the same stream.
-
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/causal-memory-dark.svg">
-    <source media="(prefers-color-scheme: light)" srcset="docs/assets/causal-memory-light.svg">
-    <img alt="agentfootprint causal memory — Each agent run produces a JSON-portable causal trace: a scrubbable timeline of every stage with reads, writes, and captured decision evidence. The trace card shows a time-travel slider (Step 5 of 17, Live), an execution timeline with stage-duration bars, and the captured decision evidence pill (riskTier eq high → reject). Two built-in lenses view it: Lens (agent-centric) and Explainable Trace (structural). Three programmatic consumers fan out from it: audit replay (GDPR Article 22 adverse-action notice answered from chain, no LLM call, $15/1M to $0.25/1M tokens), cheap-model triage (Sonnet trace fed to Haiku for follow-ups), and training data export (every chain is a labeled trajectory ready for SFT/DPO/process-RL). One recording, two lenses, three consumers, zero extra instrumentation. Powered by footprintjs causalChain()." src="docs/assets/causal-memory-light.svg" width="100%"/>
-  </picture>
-</p>
+Because we own the loop, every decision and execution is captured during traversal — not bolted on. The default capture is the **causal trace**: every stage, read, write, and decision evidence as a JSON-portable, scrubbable, queryable, exportable artifact — and every LLM call backtracks to four typed answers: **what** was injected, **who** triggered it (which rule), **when** it fired, **how** it landed (slot · position · cache). Beyond the default, wire custom recorders for cost, latency, or quality scoring — any observation hook fires on the same stream.
 
 The same trace serves three downstream consumers — no extra instrumentation:
 
@@ -564,11 +526,13 @@ The same trace serves three downstream consumers — no extra instrumentation:
 
 3. **Training data — the substrate is already there.** Every successful chain is a labeled trajectory. SFT pairs (`{prompt, completion}`) fall out of the snapshot's history field; the export wrapper is roadmap work tracked in [GitHub issues](https://github.com/footprintjs/agentfootprint/issues). DPO and process-RL need additional collection layers (preference feedback, per-step reward annotation) that don't ship today.
 
-Two built-in lenses view the same trace:
+Four views, one trace — pick by question:
 
-| Lens | View | When to use |
+| View | Shows | When to use |
 |---|---|---|
-| **Lens** | Agent-centric — User/Agent[3 slots]/Tool flowchart with iteration scrubber and round commentary | Live debugging, "what did Neo see at step 5?" |
+| **AgentThinkingUI** (the hero up top) | The run replayed as an animated, scrubbable story — the brain, the tools, the reasoning | Show anyone *what the agent did* |
+| **BacktrackView** ([the board above](#one-contextual-error-walked-end-to-end)) | A decision walked backwards — suspects, influence meters, ablation stamps, custody rewind | Answer *why it decided that* |
+| **Lens** | Agent-centric — User/Agent[3 slots]/Tool flowchart with iteration scrubber and round commentary | Live debugging, "what did the agent see at step 5?" |
 | **Explainable Trace** | Structural — subflow tree, full flowchart, memory inspector, per-stage execution timeline | Architecture review, root-cause analysis |
 
 > 📖 Powered by [footprintjs `causalChain()`](https://footprintjs.github.io/footPrint/blog/backward-causal-chain/) — backward thin-slicing on the commit log. [Causal memory deep dive](https://footprintjs.github.io/agentfootprint/causal-deep-dive/) · [Explainability & compliance](https://footprintjs.github.io/footPrint/blog/explainability-compliance/)
@@ -713,7 +677,15 @@ The flowchart, recorders, and tests don't change between dev and prod.
 - Resilience primitives — `withRetry`, `withFallback`, `withCircuitBreaker`, `.outputFallback`, `agent.resumeOnError`
 - 60+ typed observability events — `agent` · `composition` · `context` · `stream` · `tools` · `skill` · `memory` · `cache` · `cost` · `permission` · `eval` · `embedding` · `pause` · `error` · `fallback` · `resilience` · `reliability` · `risk`
 
+**Debugging & compliance** (`agentfootprint/observe`)
+- Tool-catalog lint — `npx agentfootprint-lint-tools` (any framework's tool list) + runtime `toolChoiceRecorder` margins
+- Contextual-bug localizer — `localizeContextBug` (causal slice → influence ranking → counterfactual ablation) + `bisectCulprits`
+- `toBacktrackTrace` — render any decision as the BacktrackView "why?" board
+- Trace toolpack — 6 bounded, LLM-callable tools so a debugger model walks the trace by id
+- OTel GenAI span export · hash-chained tamper-evident audit bundles with an offline verifier
+
 **Tooling**
+- **AgentThinkingUI** — animated run player + BacktrackView why-board (separate `agentthinkingui` package)
 - **Lens** · **Explainable Trace** — two visual replays of the causal trace (separate `agentfootprint-lens` package)
 - AI-coding-tool support — Claude Code · Cursor · Windsurf · Cline · Kiro · Copilot
 
