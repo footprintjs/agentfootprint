@@ -11,9 +11,14 @@
   <strong>connected evidence</strong> as your agent runs. When something goes wrong, you don't grep logs — you ask.
 </p>
 
-<!-- HERO: record a short GIF of AgentThinkingUI rendering a live run and place it here.
-     Caption: "rendered with AgentThinkingUI (npm i agentthinkingui) — every frame generated
-     from the run's own trace." Until then the proof block below carries the hook. -->
+<p align="center">
+  <a href="https://footprintjs.github.io/agentThinkingUI/">
+    <img src="docs/assets/hero-atui.png" alt="An agent run replayed in AgentThinkingUI — the LLM 'brain' calls the Flight-search tool, the step inspector shows the tool's raw output and the brain's reasoning about it, and the timeline scrubs every step of the run." width="100%">
+  </a>
+</p>
+<p align="center">
+  <sub>A real run, replayed — rendered with <a href="https://github.com/footprintjs/agentThinkingUI"><b>AgentThinkingUI</b></a> (<code>npm i agentthinkingui</code>). Every frame is generated from the run's own trace; <a href="https://footprintjs.github.io/agentThinkingUI/">▶ watch it live</a>.</sub>
+</p>
 
 <p align="center">
   <a href="https://github.com/footprintjs/agentfootprint/actions"><img src="https://github.com/footprintjs/agentfootprint/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
@@ -59,6 +64,14 @@ memory, guardrails are all the same move: `Injection = slot × trigger × cache`
 **Because the framework owns that injection point, every piece of context is born
 tracked.** Tracking isn't an add-on you wire up — it's a consequence of the
 abstraction. [The full model ↓](#the-model--what-we-abstract)
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/hero-dark.svg">
+    <source media="(prefers-color-scheme: light)" srcset="docs/assets/hero-light.svg">
+    <img alt="agentfootprint mascot composing context flavors (Skills, Steering, Guardrails, RAG, Tool APIs, Memory) into three structured LLM slots (system, messages, tools) — the central abstraction, visualized." src="docs/assets/hero-light.svg" width="100%"/>
+  </picture>
+</p>
 
 ## What tracking buys you
 
@@ -135,13 +148,6 @@ For production, import a real provider from `agentfootprint/llm-providers` and s
 
 ## The model — what we abstract
 
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/hero-dark.svg">
-    <source media="(prefers-color-scheme: light)" srcset="docs/assets/hero-light.svg">
-    <img alt="agentfootprint mascot composing context flavors (Skills, Steering, Guardrails, RAG, Tool APIs, Memory) into three structured LLM slots (system, messages, tools) — the central abstraction, visualized." src="docs/assets/hero-light.svg" width="100%"/>
-  </picture>
-</p>
 
 
 When you build an Agentic Application, you collect domain-specific data and instructions, then wire them up based on what your system receives.
