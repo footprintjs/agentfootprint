@@ -1,0 +1,352 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 700" width="1400" height="700" role="img"
+     aria-label="Your agent is the event loop. Left zone: your code — the agent flowchart (Context, Call LLM, Tool Calls) with its own loop-back edge, separated by a vertical dotted divider from the right zone: the event loop runtime. On the right, the event loop spins as two bold curved arrows with a traveling arrowhead cursor and two stops. Stop one, the call stack: the current stage steps on and runs as a frame; while it runs, feed arrows emit four faded trace events — structure, data, control, emit — into the trace queue at the center of the loop. The frame pops, and the cursor rides the bold arrow down to stop two, idle time — the dispatcher: the four events brighten and fly through the dispatcher into TRACE MEMORY, one beat behind, and every listener receives every event: onStageAdded, onCommit, onDecision, onEmit. Then the cursor laps back for the next stage. Watching never blocks the run.">
+
+  <rect width="1400" height="700" fill="#0d1117"/>
+
+  <defs>
+    <!-- dark palette (GitHub #0d1117) · structure #94A3B8 · data #38BDF8 · control #A78BFA · emit #F59E0B
+         agent ink #F0F6FC · muted #8B949E · store green #3FB950 · stack accent #F0883E -->
+    <marker id="lp-hot" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0 0 L10 5 L0 10 z" fill="#8B949E"/>
+    </marker>
+    <marker id="lp-hand" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7.5" markerHeight="7.5" orient="auto">
+      <path d="M0 0 L10 5 L0 10 z" fill="#BB8009"/>
+    </marker>
+    <marker id="lp-drop" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto">
+      <path d="M0 0 L10 5 L0 10 z" fill="#3FB950"/>
+    </marker>
+    <marker id="lp-loop" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7.5" markerHeight="7.5" orient="auto">
+      <path d="M0 0 L10 5 L0 10 z" fill="#6E7681"/>
+    </marker>
+    <!-- big-arrow head: markerUnits=strokeWidth, so it scales with the fat arc stroke -->
+    <marker id="lp-arc" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="1.7" markerHeight="1.7" orient="auto">
+      <path d="M0 0 L10 5 L0 10 z" fill="#8B949E"/>
+    </marker>
+    <marker id="lp-feed" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M0 0 L10 5 L0 10 z" fill="#3FB950"/>
+    </marker>
+    <clipPath id="lp-stack"><rect x="434" y="180" width="232" height="126" rx="10"/></clipPath>
+  </defs>
+
+  <style>
+    text { font-family: 'Hanken Grotesque', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif; }
+    .t-title { font-size: 27px; font-weight: 700; fill: #F0F6FC; }
+    .t-sub   { font-size: 13.5px; fill: #8B949E; }
+    .t-leg   { font-size: 12px; fill: #8B949E; }
+    .t-sect  { font-size: 11px; font-weight: 600; fill: #7D8590; letter-spacing: 1.6px; }
+    .t-box   { font-size: 16px; font-weight: 600; }
+    .t-gap   { font-size: 11px; font-style: italic; fill: #7D8590; }
+    .t-mem   { font-size: 12.5px; font-weight: 700; fill: #56D364; letter-spacing: 1.2px; }
+    .t-cap   { font-size: 12px; font-style: italic; fill: #8B949E; }
+    .t-say   { font-size: 17px; fill: #F0F6FC; }
+    .t-wink  { font-size: 11px; font-style: italic; fill: #7D8590; }
+    .t-chip  { font-size: 12.5px; font-weight: 600; fill: #ffffff; }
+    .t-cue   { font-size: 12.5px; font-weight: 700; fill: #56D364; }
+    .t-code  { font-size: 13px; font-weight: 600; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    .beat    { font-weight: 700; fill: #3FB950; }
+
+    /* ONE 18s master cycle = three laps of the event loop, ~6s per lap.
+       Each lap: dwell at CALL STACK (stage runs) → travel → dwell at IDLE TIME
+       (the dispatcher delivers, trace lands in memory) → lap back for the next
+       stage. Everything is pure CSS — no SMIL, no JS.                          */
+
+    /* left zone: which stage of YOUR CODE is running */
+    @keyframes hA { 0%{opacity:0} 2%{opacity:1} 31%{opacity:1} 35%{opacity:0} 100%{opacity:0} }
+    @keyframes hB { 0%{opacity:0} 33%{opacity:0} 36%{opacity:1} 64%{opacity:1} 68%{opacity:0} 100%{opacity:0} }
+    @keyframes hC { 0%{opacity:0} 66%{opacity:0} 69%{opacity:1} 90%{opacity:1} 94%{opacity:0} 100%{opacity:0} }
+    .hA { animation: hA 18s linear infinite; }
+    .hB { animation: hB 18s linear infinite; }
+    .hC { animation: hC 18s linear infinite; }
+
+    /* right zone: the same stage as a CALL STACK frame — pushes on, runs, pops off */
+    @keyframes frA { 0%{transform:translateY(80px);opacity:0} 3%{transform:translateY(80px);opacity:0}
+      6%{transform:translateY(0);opacity:1} 28%{transform:translateY(0);opacity:1}
+      31%{transform:translateY(80px);opacity:0} 100%{transform:translateY(80px);opacity:0} }
+    @keyframes frB { 0%{transform:translateY(80px);opacity:0} 36%{transform:translateY(80px);opacity:0}
+      39%{transform:translateY(0);opacity:1} 61%{transform:translateY(0);opacity:1}
+      64%{transform:translateY(80px);opacity:0} 100%{transform:translateY(80px);opacity:0} }
+    @keyframes frC { 0%{transform:translateY(80px);opacity:0} 69%{transform:translateY(80px);opacity:0}
+      72%{transform:translateY(0);opacity:1} 88%{transform:translateY(0);opacity:1}
+      91%{transform:translateY(80px);opacity:0} 100%{transform:translateY(80px);opacity:0} }
+    .frA { animation: frA 18s linear infinite; }
+    .frB { animation: frB 18s linear infinite; }
+    .frC { animation: frC 18s linear infinite; }
+
+    /* the loop cursor rides the full loop ellipse:
+       dwell at the call-stack stop (0%) while the stage runs, travel to the
+       idle stop (50%) for the flush, then lap to 100% (= 0%, closed path)
+       and snap back for the next stage. Pure CSS — no SMIL, no JS.        */
+    .cursor {
+      offset-path: path('M 550 180 A 150 120 0 0 1 700 300 A 150 120 0 0 1 550 420 A 150 120 0 0 1 400 300 A 150 120 0 0 1 550 180 Z');
+      offset-rotate: auto;
+      animation: cursor 18s linear infinite;
+    }
+    @keyframes cursor {
+      0%     { offset-distance: 0%; }
+      31%    { offset-distance: 0%; }
+      34%    { offset-distance: 50%; }
+      37.5%  { offset-distance: 50%; }
+      39.5%  { offset-distance: 100%; }
+      39.51% { offset-distance: 0%; }
+      64%    { offset-distance: 0%; }
+      66.5%  { offset-distance: 50%; }
+      70.5%  { offset-distance: 50%; }
+      72%    { offset-distance: 100%; }
+      72.01% { offset-distance: 0%; }
+      91%    { offset-distance: 0%; }
+      93%    { offset-distance: 50%; }
+      98.5%  { offset-distance: 50%; }
+      100%   { offset-distance: 100%; }
+    }
+
+    /* the big loop arrows: dim while a stage holds the stack (attention is on
+       the stop), brighten under the cursor while it travels between stops    */
+    @keyframes arcR { 0%{opacity:.2} 30.5%{opacity:.2} 31.5%{opacity:.7} 33.5%{opacity:.7} 35.5%{opacity:.2}
+      63.5%{opacity:.2} 64.5%{opacity:.7} 66.5%{opacity:.7} 68%{opacity:.2}
+      90.5%{opacity:.2} 91.5%{opacity:.7} 93%{opacity:.7} 94.5%{opacity:.2} 100%{opacity:.2} }
+    .arcR { animation: arcR 18s linear infinite; }
+    @keyframes arcL { 0%{opacity:.7} 2%{opacity:.2}
+      37%{opacity:.2} 38%{opacity:.7} 39.5%{opacity:.7} 41.5%{opacity:.2}
+      70%{opacity:.2} 71%{opacity:.7} 72.5%{opacity:.7} 74%{opacity:.2}
+      98%{opacity:.2} 99%{opacity:.7} 100%{opacity:.7} }
+    .arcL { animation: arcL 18s linear infinite; }
+
+    /* the orange feed fan: the RUNNING frame emits its four events into the
+       trace queue — visible only while a stage holds the stack              */
+    @keyframes feed { 0%{opacity:0} 4%{opacity:0} 7%{opacity:1} 28%{opacity:1} 31%{opacity:0}
+      37%{opacity:0} 40%{opacity:1} 61%{opacity:1} 64%{opacity:0}
+      69%{opacity:0} 72%{opacity:1} 88%{opacity:1} 91%{opacity:0} 100%{opacity:0} }
+    .feed { animation: feed 18s linear infinite; }
+
+    /* the idle stop lights up when the cursor parks on it */
+    @keyframes idlepulse { 0%{opacity:.25} 30%{opacity:.25} 33%{opacity:1} 42%{opacity:1} 46%{opacity:.25}
+      63%{opacity:.25} 66%{opacity:1} 75%{opacity:1} 79%{opacity:.25}
+      89%{opacity:.25} 92%{opacity:1} 99%{opacity:1} 100%{opacity:.25} }
+    .idlepulse { animation: idlepulse 18s linear infinite; }
+    @keyframes cue { 0%{opacity:0} 30%{opacity:0} 33%{opacity:1} 37%{opacity:1} 39%{opacity:0}
+      63%{opacity:0} 66%{opacity:1} 70%{opacity:1} 72%{opacity:0}
+      89%{opacity:0} 92%{opacity:1} 99%{opacity:1} 100%{opacity:0} }
+    .cue { animation: cue 18s linear infinite; }
+
+    /* four trace events per stage: queue faded below the stack while it runs,
+       then — idle time — brighten and fly the trace-flush curve into memory  */
+    @keyframes gA {
+      0%    { opacity:0;   transform: translate(0,0); }
+      6%    { opacity:.45; transform: translate(0,0); }
+      31%   { opacity:.45; transform: translate(0,0); }
+      33.5% { opacity:1;   transform: translate(0,58px); }
+      36.5% { opacity:1;   transform: translate(120px,108px); }
+      40%   { opacity:1;   transform: translate(250px,133px); }
+      56%   { opacity:1;   transform: translate(250px,133px); }
+      62%   { opacity:0;   transform: translate(250px,133px); }
+      100%  { opacity:0;   transform: translate(250px,133px); }
+    }
+    @keyframes gB {
+      0%    { opacity:0;   transform: translate(0,0); }
+      33%   { opacity:0;   transform: translate(0,0); }
+      39%   { opacity:.45; transform: translate(0,0); }
+      64%   { opacity:.45; transform: translate(0,0); }
+      66.5% { opacity:1;   transform: translate(0,58px); }
+      69.5% { opacity:1;   transform: translate(170px,108px); }
+      73%   { opacity:1;   transform: translate(350px,133px); }
+      85%   { opacity:1;   transform: translate(350px,133px); }
+      91%   { opacity:0;   transform: translate(350px,133px); }
+      100%  { opacity:0;   transform: translate(350px,133px); }
+    }
+    @keyframes gC {
+      0%    { opacity:0;   transform: translate(0,0); }
+      66%   { opacity:0;   transform: translate(0,0); }
+      71%   { opacity:.45; transform: translate(0,0); }
+      90%   { opacity:.45; transform: translate(0,0); }
+      92.5% { opacity:1;   transform: translate(0,58px); }
+      95.5% { opacity:1;   transform: translate(230px,103px); }
+      99%   { opacity:1;   transform: translate(450px,133px); }
+      100%  { opacity:0;   transform: translate(450px,133px); }
+    }
+    .gA { animation: gA 18s linear infinite; }
+    .gB { animation: gB 18s linear infinite; }
+    .gC { animation: gC 18s linear infinite; }
+
+    /* dispatch: your listeners light up right after each flush lands */
+    @keyframes disp { 0%{opacity:1} 6%{opacity:1} 12%{opacity:.45}
+      40%{opacity:.45} 43%{opacity:1} 54%{opacity:1} 60%{opacity:.45}
+      70%{opacity:.45} 73%{opacity:1} 84%{opacity:1} 90%{opacity:.45}
+      98%{opacity:.45} 100%{opacity:1} }
+    .disp { animation: disp 18s linear infinite; }
+
+    /* the agent's own loop made visible: dashes march along the loop-back edge */
+    @keyframes march { from { stroke-dashoffset: 0; } to { stroke-dashoffset: -80; } }
+    .march { animation: march 18s linear infinite; }
+  </style>
+
+  <!-- ───────── header ───────── -->
+  <text class="t-title" x="700" y="38" text-anchor="middle">Your agent <tspan fill="#F0883E">is</tspan> the event loop</text>
+  <text class="t-sub" x="700" y="63" text-anchor="middle">your code on the left — on the right the event loop spins: a stage runs on the call stack; in the idle time its trace flushes and dispatches to your listeners, <tspan class="beat" font-size="13.5">one beat behind</tspan></text>
+
+  <!-- legend: the four trace channels -->
+  <text class="t-leg" x="648" y="90" text-anchor="end">every step emits four trace events:</text>
+  <circle cx="662" cy="86" r="5" fill="#94A3B8"/><text class="t-leg" x="672" y="90" font-weight="600" fill="#94A3B8">structure</text>
+  <circle cx="748" cy="86" r="5" fill="#38BDF8"/><text class="t-leg" x="758" y="90" font-weight="600" fill="#38BDF8">data</text>
+  <circle cx="812" cy="86" r="5" fill="#A78BFA"/><text class="t-leg" x="822" y="90" font-weight="600" fill="#A78BFA">control</text>
+  <circle cx="892" cy="86" r="5" fill="#F59E0B"/><text class="t-leg" x="902" y="90" font-weight="600" fill="#F59E0B">emit</text>
+
+  <!-- ───────── the divider: your code | the runtime ───────── -->
+  <line x1="370" y1="118" x2="370" y2="660" stroke="#30363D" stroke-width="1.5" stroke-dasharray="2 8" stroke-linecap="round"/>
+
+  <!-- ╔════════════ LEFT ZONE — YOUR CODE ════════════╗ -->
+  <text class="t-sect" x="60" y="130">YOUR CODE — THE AGENT</text>
+
+  <rect x="90" y="146" width="120" height="30" rx="8" fill="#30363D"/>
+  <text class="t-chip" x="150" y="166" text-anchor="middle">run(input)</text>
+  <path d="M 150 178 L 150 186" fill="none" stroke="#3FB950" stroke-width="1.6" marker-end="url(#lp-drop)"/>
+
+  <rect x="90" y="190" width="200" height="50" rx="12" fill="#0C2235" stroke="#38BDF8" stroke-width="1.6"/>
+  <rect x="90" y="190" width="200" height="50" rx="12" fill="none" stroke="#38BDF8" stroke-width="3.5" class="hA"/>
+  <text class="t-box" x="190" y="220" text-anchor="middle" fill="#38BDF8">Context</text>
+
+  <path d="M 190 242 L 190 282" fill="none" stroke="#8B949E" stroke-width="1.5" marker-end="url(#lp-hot)"/>
+
+  <rect x="90" y="290" width="200" height="50" rx="12" fill="#1A1530" stroke="#A78BFA" stroke-width="1.6"/>
+  <rect x="90" y="290" width="200" height="50" rx="12" fill="none" stroke="#A78BFA" stroke-width="3.5" class="hB"/>
+  <text class="t-box" x="190" y="320" text-anchor="middle" fill="#A78BFA">Call LLM</text>
+
+  <path d="M 190 342 L 190 382" fill="none" stroke="#8B949E" stroke-width="1.5" marker-end="url(#lp-hot)"/>
+
+  <rect x="90" y="390" width="200" height="50" rx="12" fill="#2A1E0B" stroke="#F59E0B" stroke-width="1.6"/>
+  <rect x="90" y="390" width="200" height="50" rx="12" fill="none" stroke="#F59E0B" stroke-width="3.5" class="hC"/>
+  <text class="t-box" x="190" y="420" text-anchor="middle" fill="#F59E0B">Tool Calls</text>
+
+  <!-- the agent's own loop: Tool Calls back up to Context, dashes marching -->
+  <path class="march" d="M 90 423 C 46 418 40 360 40 315 C 40 268 48 222 84 213"
+        fill="none" stroke="#6E7681" stroke-width="1.6" stroke-dasharray="5 5" opacity="0.85" marker-end="url(#lp-loop)"/>
+  <text class="t-gap" x="92" y="466">loop — next turn</text>
+
+  <!-- each stage steps across the divider onto the loop's call-stack stop -->
+  <path d="M 295 208 C 350 190 450 178 530 180" fill="none" stroke="#BB8009" stroke-width="1.5" stroke-dasharray="4 4" marker-end="url(#lp-hand)"/>
+  <text class="t-gap" x="402" y="166" text-anchor="middle">await — steps on</text>
+
+  <!-- ╔════════════ RIGHT ZONE — THE EVENT LOOP ════════════╗ -->
+  <text class="t-sect" x="430" y="130">THE EVENT LOOP — THE RUNTIME</text>
+
+  <!-- the loop itself: two bold curved arrows (JS-native grey), always spinning.
+       Dim while a stage holds a stop, bright under the traveling cursor.
+       Drawn BEFORE the stack panel so they pass behind the machinery. -->
+  <path class="arcR" d="M 671.4 229.5 A 150 120 0 0 1 650.4 389.2" fill="none" stroke="#8B949E" stroke-width="18" marker-end="url(#lp-arc)"/>
+  <path class="arcL" d="M 449.6 389.2 A 150 120 0 0 1 422.8 236.4" fill="none" stroke="#8B949E" stroke-width="18" marker-end="url(#lp-arc)"/>
+  <text class="t-cap" x="722" y="296">the event loop</text>
+  <text class="t-wink" x="722" y="314">the browser spins one of these every 16ms</text>
+
+  <!-- stop 1: the call stack (JS-native grey — the runtime owns it). The box
+       IS the stop: the left loop arrow points into it, the right one departs
+       from its right side, and the cursor parks on its roof-line. -->
+  <rect x="432" y="178" width="236" height="130" rx="12" fill="#161B22" stroke="#8B949E" stroke-width="1.6"/>
+  <text class="t-sect" x="550" y="200" text-anchor="middle">CALL STACK</text>
+  <text class="t-cue cue" x="550" y="226" text-anchor="middle">stack empty ↘ flush</text>
+  <g clip-path="url(#lp-stack)">
+    <g class="frA">
+      <rect x="455" y="246" width="190" height="40" rx="10" fill="#0C2235" stroke="#38BDF8" stroke-width="1.6"/>
+      <text class="t-code" x="550" y="271" text-anchor="middle" fill="#38BDF8">Context()</text>
+    </g>
+    <g class="frB">
+      <rect x="455" y="246" width="190" height="40" rx="10" fill="#1A1530" stroke="#A78BFA" stroke-width="1.6"/>
+      <text class="t-code" x="550" y="271" text-anchor="middle" fill="#A78BFA">CallLLM()</text>
+    </g>
+    <g class="frC">
+      <rect x="455" y="246" width="190" height="40" rx="10" fill="#2A1E0B" stroke="#F59E0B" stroke-width="1.6"/>
+      <text class="t-code" x="550" y="271" text-anchor="middle" fill="#F59E0B">ToolCalls()</text>
+    </g>
+  </g>
+
+  <!-- the trace queue at the loop's center (footprintjs green): the running
+       frame feeds its four events in through the fan while it executes -->
+  <g class="feed">
+    <path d="M 526 312 L 515 350" fill="none" stroke="#3FB950" stroke-width="1.5" marker-end="url(#lp-feed)"/>
+    <path d="M 542 312 L 537 350" fill="none" stroke="#3FB950" stroke-width="1.5" marker-end="url(#lp-feed)"/>
+    <path d="M 558 312 L 561 350" fill="none" stroke="#3FB950" stroke-width="1.5" marker-end="url(#lp-feed)"/>
+    <path d="M 574 312 L 585 350" fill="none" stroke="#3FB950" stroke-width="1.5" marker-end="url(#lp-feed)"/>
+  </g>
+  <rect x="496" y="346" width="108" height="32" rx="9" fill="#0F2417" stroke="#3FB950" stroke-width="1.2" opacity="0.85"/>
+  <text class="t-gap" x="486" y="366" text-anchor="end">trace queue</text>
+
+  <!-- stop 2: idle time — the dispatcher. Same width as the call stack and
+       sitting ON the loop, mirroring it: the right arrow plunges into it, the
+       left arrow departs from it, the cursor parks inside, and the queued
+       events pass through it on their way out to memory. -->
+  <rect x="432" y="396" width="236" height="96" rx="12" fill="#0F2417" stroke="#3FB950" stroke-width="1.5"/>
+  <rect x="432" y="396" width="236" height="96" rx="12" fill="none" stroke="#3FB950" stroke-width="3" class="idlepulse"/>
+  <text class="t-sect" x="550" y="455" text-anchor="middle">IDLE TIME</text>
+  <text class="t-gap" x="550" y="472" text-anchor="middle" style="fill:#56D364">the dispatcher</text>
+
+  <!-- the cursor (the JS loop's attention): dwells at the call stack while the
+       stage runs, dwells at idle time while the dispatcher delivers, then laps
+       on. Drawn after both stops so it rides ON them, not under. -->
+  <path class="cursor" d="M -9 -6.5 L 12 0 L -9 6.5 Z" fill="#E6EDF3" stroke="#0d1117" stroke-width="1.5"/>
+
+  <!-- trace flush: the dispatcher files the records into memory -->
+  <path d="M 670 468 C 685 478 696 488 706 497" fill="none" stroke="#3FB950" stroke-width="1.6" stroke-dasharray="2 7" stroke-linecap="round" opacity="0.38" marker-end="url(#lp-drop)"/>
+  <text class="t-gap" x="668" y="512" text-anchor="middle">trace flush</text>
+
+  <!-- trace memory -->
+  <rect x="720" y="430" width="360" height="170" rx="44" fill="#0F2417" stroke="#3FB950" stroke-width="1.7"/>
+  <text class="t-mem" x="900" y="462" text-anchor="middle">TRACE MEMORY</text>
+  <line x1="760" y1="535" x2="1040" y2="535" stroke="#1F3A28" stroke-width="2"/>
+  <g opacity="0.75">
+    <circle cx="780" cy="535" r="4.5" fill="#94A3B8"/><circle cx="796" cy="535" r="4.5" fill="#38BDF8"/><circle cx="812" cy="535" r="4.5" fill="#A78BFA"/><circle cx="828" cy="535" r="4.5" fill="#F59E0B"/>
+    <circle cx="876" cy="535" r="4.5" fill="#94A3B8"/><circle cx="892" cy="535" r="4.5" fill="#38BDF8"/><circle cx="908" cy="535" r="4.5" fill="#A78BFA"/><circle cx="924" cy="535" r="4.5" fill="#F59E0B"/>
+    <circle cx="972" cy="535" r="4.5" fill="#94A3B8"/><circle cx="988" cy="535" r="4.5" fill="#38BDF8"/><circle cx="1004" cy="535" r="4.5" fill="#A78BFA"/><circle cx="1020" cy="535" r="4.5" fill="#F59E0B"/>
+  </g>
+  <text class="t-cap" x="900" y="577" text-anchor="middle">the captured run — scrub it, query it, ask it</text>
+
+  <!-- ───────── dispatch: your listeners, called back ───────── -->
+  <text class="t-sect" x="1150" y="428">DISPATCH — YOUR LISTENERS</text>
+  <path d="M 1082 470 C 1105 464 1122 460 1142 458" fill="none" stroke="#3FB950" stroke-width="1.3" stroke-dasharray="2 6" opacity="0.45" marker-end="url(#lp-drop)"/>
+  <path d="M 1082 500 L 1142 500" fill="none" stroke="#3FB950" stroke-width="1.3" stroke-dasharray="2 6" opacity="0.45" marker-end="url(#lp-drop)"/>
+  <path d="M 1082 530 C 1105 536 1122 540 1142 542" fill="none" stroke="#3FB950" stroke-width="1.3" stroke-dasharray="2 6" opacity="0.45" marker-end="url(#lp-drop)"/>
+  <path d="M 1082 558 C 1108 568 1124 578 1142 583" fill="none" stroke="#3FB950" stroke-width="1.3" stroke-dasharray="2 6" opacity="0.45" marker-end="url(#lp-drop)"/>
+  <g class="disp">
+    <rect x="1150" y="440" width="200" height="34" rx="10" fill="#161B22" stroke="#94A3B8" stroke-width="1.4"/>
+    <circle cx="1166" cy="457" r="4.5" fill="#94A3B8"/>
+    <text class="t-code" x="1178" y="462" fill="#94A3B8">onStageAdded(e)</text>
+    <rect x="1150" y="482" width="200" height="34" rx="10" fill="#161B22" stroke="#38BDF8" stroke-width="1.4"/>
+    <circle cx="1166" cy="499" r="4.5" fill="#38BDF8"/>
+    <text class="t-code" x="1178" y="504" fill="#38BDF8">onCommit(e)</text>
+    <rect x="1150" y="524" width="200" height="34" rx="10" fill="#161B22" stroke="#A78BFA" stroke-width="1.4"/>
+    <circle cx="1166" cy="541" r="4.5" fill="#A78BFA"/>
+    <text class="t-code" x="1178" y="546" fill="#A78BFA">onDecision(e)</text>
+    <rect x="1150" y="566" width="200" height="34" rx="10" fill="#161B22" stroke="#F59E0B" stroke-width="1.4"/>
+    <circle cx="1166" cy="583" r="4.5" fill="#F59E0B"/>
+    <text class="t-code" x="1178" y="588" fill="#F59E0B">onEmit(e)</text>
+  </g>
+  <text class="t-cap" x="1250" y="612" text-anchor="middle">every listener gets every event —</text>
+  <text class="t-cap" x="1250" y="630" text-anchor="middle">basically an event-listener call,</text>
+  <text class="t-cap" x="1250" y="648" text-anchor="middle">your code, called back</text>
+
+  <!-- ───────── the four trace events per stage ─────────
+       drawn AFTER the bubble so a landed flight sits ON the memory, not under it -->
+  <g class="gA">
+    <circle cx="514" cy="362" r="7.5" fill="#94A3B8"/>
+    <circle cx="538" cy="362" r="7.5" fill="#38BDF8"/>
+    <circle cx="562" cy="362" r="7.5" fill="#A78BFA"/>
+    <circle cx="586" cy="362" r="7.5" fill="#F59E0B"/>
+  </g>
+  <g class="gB">
+    <circle cx="514" cy="362" r="7.5" fill="#94A3B8"/>
+    <circle cx="538" cy="362" r="7.5" fill="#38BDF8"/>
+    <circle cx="562" cy="362" r="7.5" fill="#A78BFA"/>
+    <circle cx="586" cy="362" r="7.5" fill="#F59E0B"/>
+  </g>
+  <g class="gC">
+    <circle cx="514" cy="362" r="7.5" fill="#94A3B8"/>
+    <circle cx="538" cy="362" r="7.5" fill="#38BDF8"/>
+    <circle cx="562" cy="362" r="7.5" fill="#A78BFA"/>
+    <circle cx="586" cy="362" r="7.5" fill="#F59E0B"/>
+  </g>
+
+  <!-- ───────── the promise ───────── -->
+  <text class="t-say" x="545" y="615" text-anchor="middle">Watching never sits on the hot path.</text>
+  <text class="t-say" x="545" y="643" text-anchor="middle">It drains in the idle time — <tspan class="beat" font-size="17">one beat behind</tspan>.</text>
+
+  <!-- ownership legend: one color per owner — the diagram's reading rule -->
+  <text class="t-wink" x="60" y="688"><tspan fill="#8B949E" font-weight="600">grey</tspan> = JavaScript's own machinery · <tspan fill="#56D364" font-weight="600">green</tspan> = footprintjs · <tspan fill="#A78BFA" font-weight="600">colors</tspan> = your code &amp; its trace events</text>
+  <text class="t-wink" x="1350" y="688" text-anchor="end">the requestIdleCallback trick, applied to agent tracing</text>
+</svg>

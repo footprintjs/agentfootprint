@@ -107,6 +107,16 @@ A: verifyAuditBundle → valid: false, brokenAt: #16 — the tampered record, na
 
 And you don't have to read the trace yourself — **we provide the tools for an LLM to track it for you**: the trace toolpack let a debugger model find a planted bug while reading **9.5% of the trace** ([guide](docs/guides/trace-debugging.md)).
 
+**And all this watching costs the run nothing.** Your agent *is* the event loop: a stage runs on the call stack and feeds its trace events into a queue; in the idle beat the dispatcher delivers them to your listeners and files them in trace memory — **one beat behind**, never blocking the hot path:
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/event-loop-dark.svg">
+    <source media="(prefers-color-scheme: light)" srcset="docs/assets/event-loop-light.svg">
+    <img alt="Your agent is the event loop — animated. Left: your agent code (Context, Call LLM, Tool Calls) looping turn after turn. Right: the JS event loop drawn as two bold curved arrows with a traveling cursor and two stops — the call stack, where each stage runs as a frame and feeds four trace events (structure, data, control, emit) into the trace queue at the loop's center; and idle time, where the dispatcher flies the queued events into TRACE MEMORY and every listener (onStageAdded, onCommit, onDecision, onEmit) receives every event, one beat behind. Grey is JavaScript's own machinery, green is footprintjs, colors are your code and its trace." src="docs/assets/event-loop-light.svg" width="100%"/>
+  </picture>
+</p>
+
 ## One contextual error, walked end to end
 
 The third question above, in full — every value below is the captured output of
