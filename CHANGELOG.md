@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+footprintjs floor raised to ^9.8.0 (the toolpack consumes RFC-003 Part A: controlDepRecorder, control edges, honesty markers, commitValueAt).
+
 - **`influence-core` — the ONE embedding-based scoring engine (RFC-002/003
   block D6).** New leaf module `src/lib/influence-core/`, exported from
   `agentfootprint/observe`. Extracts the Visible Reasoning paper's FDL
