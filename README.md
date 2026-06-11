@@ -184,7 +184,7 @@ board is a `runtimeStageId` a debugger LLM can drill with the
 | 🔧 Building an agent? | 🐛 Agent misbehaving? | 🏛️ Need audit / compliance? |
 |---|---|---|
 | Typed agents with skills, steering, RAG, memory, guardrails — and the trace for free. | Lint your tool catalog in 5 minutes — works on **any** framework's tool list (plain JSON / MCP / OpenAI / Anthropic shapes). Then causal slices, context bisection, and the debugger-LLM toolpack. | Hash-chained, tamper-evident run records with an offline verifier — record-keeping in the EU-AI-Act shape. |
-| [→ Quick start](#quick-start--runs-offline-no-api-key) | [→ Tool-catalog lint](docs/guides/tool-catalog-lint.md) · [→ Trace debugging](docs/guides/trace-debugging.md) | [→ Tamper-evident audit](docs/guides/security.md) |
+| [→ Quick start](#quick-start--runs-offline-no-api-key) · [→ Build ↓](#-build--design-your-agent-or-system-of-agents) | [→ Debug ↓](#-debug--see-what-your-agent-did) · [→ Tool-catalog lint](docs/guides/tool-catalog-lint.md) · [→ Trace debugging](docs/guides/trace-debugging.md) | [→ Audit ↓](#-audit--prove-what-happened) · [→ Security guide](docs/guides/security.md) |
 
 ---
 
@@ -275,7 +275,7 @@ const pipeline = Sequence.create()
 await pipeline.run({ message: 'URGENT: refund dispute on order #4411' });
 ```
 
-The fourth primitive is `Loop` — `Loop.repeat(agent).until(guard).times(5)`, with a mandatory budget guard. And the named patterns from the research literature ship pre-composed from the same four: `selfConsistency` · `reflection` · `debate` · `mapReduce` · `tot` · `swarm`. Because every composition is a flowchart, the structure you wrote is the structure you see in the UI — and the trace spans the whole pipeline, not one agent at a time. [Designing systems of agents ↓](#how-do-i-design-my-agent-or-system-of-agents)
+The fourth primitive is `Loop` — `Loop.repeat(agent).until(guard).times(5)`, with a mandatory budget guard. And the named patterns from the research literature ship pre-composed from the same four: `selfConsistency` · `reflection` · `debate` · `mapReduce` · `tot` · `swarm`. Because every composition is a flowchart, the structure you wrote is the structure you see in the UI — and the trace spans the whole pipeline, not one agent at a time. [Designing systems of agents ↓](#-build--design-your-agent-or-system-of-agents)
 
 ---
 
@@ -358,7 +358,7 @@ So we used the budget those abstractions would have cost us to invest deeply in 
 
 ---
 
-## How do I design my agent or system of agents?
+## 🔧 Build — design your agent or system of agents
 
 Two scales — same alphabet. Four control flows are the entire vocabulary.
 
@@ -520,7 +520,7 @@ Same trick as the injection model: instead of N libraries for N patterns, we fou
 
 ---
 
-## How do I see what my agent did?
+## 🐛 Debug — see what your agent did
 
 <p align="center">
   <img src="docs/assets/lens-run.png" alt="A real agent run in the Lens: the conversation (with live PII redaction), the executed path lit on the merge-tree flowchart, the WHAT-HAPPENED timeline of every iteration/context/LLM turn/route, run stats, and the step inspector — all generated from the run's own trace." width="100%">
@@ -625,6 +625,31 @@ off the hot path.
 > [`examples/observability/02`](examples/observability/02-lint-confusable-catalog.ts) ·
 > [`03`](examples/observability/03-lint-fix-and-pass.ts) ·
 > [`04`](examples/observability/04-tool-choice-margins.ts)
+
+---
+
+## 🏛️ Audit — prove what happened
+
+Answering *"why was the loan rejected?"* from captured evidence is the [debug door above](#-debug--see-what-your-agent-did). The audit door adds the integrity layer: prove the **record itself** hasn't been edited since capture. `auditExport()` hash-chains every typed event — decisions, tool calls, validation rejections, permission verdicts, costs — into an append-only bundle (EU AI Act Art. 12 record-keeping shape); `verifyAuditBundle()` re-checks it **offline** — no agent, no LLM — and names the exact record any tamper broke.
+
+```ts
+import { auditExport, verifyAuditBundle } from 'agentfootprint/observability-providers';
+
+const audit = auditExport({ agent: 'ledger-auditor' });
+const stop = agent.enable.observability({ strategy: audit });
+await agent.run({ message: 'audit account ACCT-1142' });
+stop();
+
+const bundle = audit.bundle();           // plain JSON — store anywhere
+verifyAuditBundle(bundle);               // { valid: true, recordsChecked: 50 }
+// flip one byte anywhere → { valid: false, brokenAt: 13, reason: 'hash mismatch — …' }
+```
+
+Payloads are PII-bounded by default (tool args as key names, results as a type, content as `[N chars]` markers). And it's honest about its limits: tamper-**evident**, not tamper-proof — for non-repudiation, anchor both chain ends in external storage (WORM store, signed log).
+
+> 📖 **[Tamper-evident audit guide](docs/guides/security.md#tamper-evident-audit-export--auditexport--verifyauditbundle)** ·
+> [`examples/features/19-audit-export.ts`](examples/features/19-audit-export.ts) — capture → verify → tamper → drain ·
+> [`20-regulated-decisioning.ts`](examples/features/20-regulated-decisioning.ts) — an offline auditor reconstructs a loan decline from persisted files, both chain ends anchored
 
 ---
 
