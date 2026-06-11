@@ -135,6 +135,28 @@ describe('bisectCulprits — honest exits', () => {
     expect(result.probes).toHaveLength(1); // stopped right after the baseline
   });
 
+  it('a 1-in-3-flaky baseline is ZERO-TOLERANCE inconclusive — never a confirmed causal verdict (review Finding 1)', async () => {
+    // The majority-rule gate would pass a 33%-flaky baseline through to a
+    // 'confirmed' verdict; the §B2 discipline forbids it. One un-ablated
+    // flip = the scenario can't support causal claims.
+    const suspects = [injectionSuspect('a', 1)];
+    let baselineCalls = 0;
+    const { runner } = makeRunner((ablated) => {
+      if (ablated.length === 0) {
+        baselineCalls += 1;
+        return baselineCalls === 2; // flips exactly once in the baseline probes
+      }
+      return true; // the ablation would "flip" — must never be reached as confirmed
+    });
+    const result = await bisectCulprits({
+      suspects,
+      rerun: rerunWith(runner),
+      embedder: toyEmbedder,
+    });
+    expect(result.verdict).toBe('inconclusive');
+    expect(result.culprits).toHaveLength(0);
+  });
+
   it('probe budget exhausted → inconclusive, probes capped, no dressed-up partial claim', async () => {
     const suspects = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'].map((id, i) =>
       injectionSuspect(id, 1 - i * 0.05),

@@ -148,8 +148,19 @@ export async function bisectCulprits(options: BisectCulpritsOptions): Promise<Bi
 
   try {
     // Baseline: an unstable scenario invalidates everything downstream.
-    if (await probe([])) {
-      return { verdict: 'inconclusive', culprits: [], probes, runsUsed };
+    // ZERO-TOLERANCE (review Finding 1): a single un-ablated flip marks the
+    // scenario unstable — the majority-rule probeFlipped() gate would let a
+    // 1-in-3-flaky scenario through to a 'confirmed' CAUSAL verdict, which
+    // violates the §B2 honest-claims discipline. Same gate localize.ts uses.
+    {
+      const baselineStats = await runAblationProbe(config, []);
+      runsUsed += baselineStats.samples;
+      const unstable = baselineStats.flips > 0;
+      probes.push({ ablated: [], stats: baselineStats, flipped: unstable });
+      cache.set(keyOf([]), probeFlipped(baselineStats));
+      if (unstable) {
+        return { verdict: 'inconclusive', culprits: [], probes, runsUsed };
+      }
     }
     // Reproduction gate: the full ranked set must flip at all.
     if (candidates.length === 0 || !(await probe(candidates))) {

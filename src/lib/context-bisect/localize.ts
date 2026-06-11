@@ -470,6 +470,7 @@ export async function localizeContextBug(
         score,
         structuralScore: draft.structuralScore,
         ...(draft.semanticScore !== undefined ? { semanticScore: draft.semanticScore } : {}),
+        hasContentEvidence: draft.semanticScore !== undefined,
         edgePath: draft.edgePath,
       };
       const ablation = ablationForSuspect(suspect);

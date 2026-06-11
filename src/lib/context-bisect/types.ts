@@ -199,6 +199,14 @@ export interface Suspect {
    * content text. The same proxy disclaimers as D6 apply.
    */
   readonly semanticScore?: number;
+  /**
+   * TRUE when `score` includes a content signal (semanticScore present).
+   * FALSE = path-only structural score — an UPPER BOUND that can reach 1.0
+   * through control-edge paths alone; rank such suspects with care and
+   * prefer ablation verdicts to disambiguate. (Machine-readable twin of
+   * the "path only — no content signal" report marking.)
+   */
+  readonly hasContentEvidence: boolean;
   /** Evidence path, trigger → … → suspect, control edges labeled. */
   readonly edgePath: readonly EdgePathStep[];
   /** The counterfactual to run — absent for kind 'stage'. */
