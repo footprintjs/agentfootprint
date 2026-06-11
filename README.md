@@ -1,18 +1,19 @@
 
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/hero-dark.svg">
-    <source media="(prefers-color-scheme: light)" srcset="docs/assets/hero-light.svg">
-    <img alt="agentfootprint mascot composing context flavors (Skills, Steering, Guardrails, RAG, Tool APIs, Memory) into three structured LLM slots (system, messages, tools) — the central abstraction, visualized." src="docs/assets/hero-light.svg" width="100%"/>
-  </picture>
-</p>
 
 <h1 align="center">Agentfootprint</h1>
 
 <p align="center">
-  <strong>We abstract context engineering — and hand back the trace.</strong><br/>
-  <strong>Live</strong> to develop · <strong>offline</strong> to monitor · <strong>detailed</strong> to improve.
+  <strong>Your agent picked the wrong tool, gave a wrong answer — and the logs can't tell you why.<br/>Agentfootprint can.</strong>
 </p>
+
+<p align="center">
+  The explainable agent framework: every read, write, decision, and tool call becomes
+  <strong>connected evidence</strong> as your agent runs. When something goes wrong, you don't grep logs — you ask.
+</p>
+
+<!-- HERO: record a short GIF of AgentThinkingUI rendering a live run and place it here.
+     Caption: "rendered with AgentThinkingUI (npm i agentthinkingui) — every frame generated
+     from the run's own trace." Until then the proof block below carries the hook. -->
 
 <p align="center">
   <a href="https://github.com/footprintjs/agentfootprint/actions"><img src="https://github.com/footprintjs/agentfootprint/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
@@ -26,7 +27,87 @@
 
 ---
 
-## 1. What we abstract
+**See it in 30 seconds** — four questions logs can't answer, each answered by code in this repo from a real run:
+
+```text
+Q: Why did the model pick refund_full instead of refund_partial?
+A: margin 0.02 — ⚠ NARROW: the two tool descriptions read nearly identical
+   (toolChoiceRecorder — and the catalog lint flags the pair before you ever run)
+
+Q: Why was this loan declined?
+A: decision ← [control: "DTI above the 0.43 affordability ceiling"] ← dti 0.52 ← monthlyDebt / income
+   (decide() evidence + the causal slice — every hop is a real recorded edge)
+
+Q: Which piece of context made the answer wrong?
+A: CAUSAL: ablating fact 'vip-override' flipped the outcome in 3/3 seeded reruns
+   (localizeContextBug — ranked proxies, counterfactual proof)
+
+Q: Prove nobody edited this run's record.
+A: verifyAuditBundle → valid: false, brokenAt: #16 — the tampered record, named
+   (hash-chained audit export, offline verification)
+```
+
+And when you'd rather not read traces yourself: hand the run to a **debugger LLM** — the trace toolpack let a model find a planted bug while reading **9.5% of the trace** (`docs/guides/trace-debugging.md`).
+
+---
+
+## Pick your door
+
+| 🔧 Building an agent? | 🐛 Agent misbehaving? | 🏛️ Need audit / compliance? |
+|---|---|---|
+| Typed agents with skills, steering, RAG, memory, guardrails — and the trace for free. | Lint your tool catalog in 5 minutes — works on **any** framework's tool list (plain JSON / MCP / OpenAI / Anthropic shapes). Then causal slices, context bisection, and the debugger-LLM toolpack. | Hash-chained, tamper-evident run records with an offline verifier — record-keeping in the EU-AI-Act shape. |
+| [→ Quick start](#quick-start--runs-offline-no-api-key) | [→ Tool-catalog lint](docs/guides/tool-catalog-lint.md) · [→ Trace debugging](docs/guides/trace-debugging.md) | [→ Tamper-evident audit](docs/guides/security.md) |
+
+---
+
+## Quick start — runs offline, no API key
+
+```bash
+npm install agentfootprint footprintjs
+```
+
+```typescript
+import { Agent, defineTool, mock } from 'agentfootprint';
+
+const weather = defineTool({
+  name: 'weather',
+  description: 'Get current weather for a city.',
+  inputSchema: {
+    type: 'object',
+    properties: { city: { type: 'string' } },
+    required: ['city'],
+  },
+  execute: async ({ city }: { city: string }) => `${city}: 72°F, sunny`,
+});
+
+const agent = Agent.create({
+  provider: mock({ reply: 'I checked: it is 72°F and sunny.' }),
+  model: 'mock',
+})
+  .system('You answer weather questions using the weather tool.')
+  .tool(weather)
+  .build();
+
+const result = await agent.run({ message: 'Weather in Paris?' });
+console.log(result);  // → "I checked: it is 72°F and sunny."
+```
+
+For production, import a real provider from `agentfootprint/llm-providers` and swap it in — `anthropic(...)` / `openai(...)` / `bedrock(...)` / `ollama(...)`. Only the import line changes; the agent code stays the same. (The vendor-SDK providers live on the `agentfootprint/llm-providers` subpath so the main `agentfootprint` barrel stays free of optional peer-dep requires; `mock`, `browserAnthropic`, and `browserOpenai` are on the main barrel.)
+
+---
+
+---
+
+## The model — what we abstract
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/hero-dark.svg">
+    <source media="(prefers-color-scheme: light)" srcset="docs/assets/hero-light.svg">
+    <img alt="agentfootprint mascot composing context flavors (Skills, Steering, Guardrails, RAG, Tool APIs, Memory) into three structured LLM slots (system, messages, tools) — the central abstraction, visualized." src="docs/assets/hero-light.svg" width="100%"/>
+  </picture>
+</p>
+
 
 When you build an Agentic Application, you collect domain-specific data and instructions, then wire them up based on what your system receives.
 
@@ -70,7 +151,7 @@ That's the whole model: `Injection = slot × trigger × cache`.
 
 ---
 
-## 2. Why we chose this abstraction
+## Why we chose this abstraction
 
 The agent space has many credible primary abstractions:
 
@@ -143,7 +224,7 @@ And a fourth, novel: **the agent can read its own trace.** Six months after the 
 
 ---
 
-## 3. How do I design my agent or system of agents?
+## How do I design my agent or system of agents?
 
 Two scales — same alphabet. Four control flows are the entire vocabulary.
 
@@ -305,7 +386,7 @@ Same trick as Beat 1: instead of N libraries for N patterns, we found the M buil
 
 ---
 
-## 4. How do I see what my agent did?
+## How do I see what my agent did?
 
 Because we own the loop (Beat 2), every decision and execution is captured during traversal — not bolted on. The default capture is the **causal trace**: every stage, read, write, and decision evidence, as a JSON-portable, scrubbable, queryable, exportable artifact. Beyond the default, wire custom recorders for cost, latency, or quality scoring — any observation hook fires on the same stream.
 
@@ -424,42 +505,6 @@ off the hot path.
 > [`examples/observability/02`](examples/observability/02-lint-confusable-catalog.ts) ·
 > [`03`](examples/observability/03-lint-fix-and-pass.ts) ·
 > [`04`](examples/observability/04-tool-choice-margins.ts)
-
----
-
-## Quick start — runs offline, no API key
-
-```bash
-npm install agentfootprint footprintjs
-```
-
-```typescript
-import { Agent, defineTool, mock } from 'agentfootprint';
-
-const weather = defineTool({
-  name: 'weather',
-  description: 'Get current weather for a city.',
-  inputSchema: {
-    type: 'object',
-    properties: { city: { type: 'string' } },
-    required: ['city'],
-  },
-  execute: async ({ city }: { city: string }) => `${city}: 72°F, sunny`,
-});
-
-const agent = Agent.create({
-  provider: mock({ reply: 'I checked: it is 72°F and sunny.' }),
-  model: 'mock',
-})
-  .system('You answer weather questions using the weather tool.')
-  .tool(weather)
-  .build();
-
-const result = await agent.run({ message: 'Weather in Paris?' });
-console.log(result);  // → "I checked: it is 72°F and sunny."
-```
-
-For production, import a real provider from `agentfootprint/llm-providers` and swap it in — `anthropic(...)` / `openai(...)` / `bedrock(...)` / `ollama(...)`. Only the import line changes; the agent code stays the same. (The vendor-SDK providers live on the `agentfootprint/llm-providers` subpath so the main `agentfootprint` barrel stays free of optional peer-dep requires; `mock`, `browserAnthropic`, and `browserOpenai` are on the main barrel.)
 
 ---
 
