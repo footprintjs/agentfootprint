@@ -75,11 +75,13 @@
     "!dist/**/test-barrel*",
     "!dist/esm/**/test-barrel*",
     "ai-instructions/**/*",
+    "bin/**/*",
     "CLAUDE.md",
     "AGENTS.md"
   ],
   "bin": {
-    "agentfootprint-setup": "ai-instructions/setup.sh"
+    "agentfootprint-setup": "ai-instructions/setup.sh",
+    "agentfootprint-lint-tools": "bin/agentfootprint-lint-tools.mjs"
   },
   "main": "dist/index.js",
   "module": "dist/esm/index.js",

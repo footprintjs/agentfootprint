@@ -197,3 +197,43 @@ export {
   type TraceToolpackArtifacts,
   type TraceToolpackOptions,
 } from './lib/trace-toolpack/index.js';
+// Tool-catalog confusability lint (RFC-002 tier 1, C1–C3) — build-time,
+// CI-gateable, framework-agnostic: plain { name, description?, inputSchema? }
+// tools in (OpenAI/Anthropic/MCP lists coerce via coerceCatalog; the
+// library's Tool[] via catalogFromTools), a report with a gateable `ok`
+// out. Pluggable structural rule pack; thresholds + embedder consumer-
+// injected with our defaults. Bin: `agentfootprint-lint-tools`.
+// Front door: docs/guides/tool-catalog-lint.md.
+export {
+  analyzeToolCatalog,
+  catalogFromTools,
+  coerceCatalog,
+  confusabilityText,
+  DEFAULT_CONFUSABILITY_THRESHOLD,
+  DEFAULT_OMISSION_CUES,
+  DEFAULT_WATCH_BAND,
+  DEFAULT_WHEN_CUES,
+  defaultStructuralRules,
+  descriptionRule,
+  differentiationHint,
+  enumInProseRule,
+  formatToolCatalogReport,
+  MOCK_EMBEDDER_CALIBRATION,
+  optionalParamRule,
+  runToolLintCli,
+  saysWhatNotWhenRule,
+  type AnalyzeToolCatalogOptions,
+  type CatalogTool,
+  type ConfusablePairFinding,
+  type DescriptionRuleOptions,
+  type FormatReportOptions,
+  type LintRule,
+  type LintSeverity,
+  type OptionalParamRuleOptions,
+  type PairVerdict,
+  type SaysWhatNotWhenRuleOptions,
+  type SimilarityReport,
+  type StructuralFinding,
+  type ToolCatalogReport,
+  type ToolLintCliIO,
+} from './lib/tool-lint/index.js';

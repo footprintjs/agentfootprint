@@ -394,6 +394,37 @@ allocates no queue.
 > 📖 Full semantics (capture policies, backpressure, `'block'` overflow):
 > [footprintjs deferred-observers guide](https://github.com/footprintjs/footPrint/blob/main/docs/guides/observers-deferred.md)
 
+### Lint your tool catalog — before the model picks the wrong twin
+
+Tool routing is an LLM decision driven by names + descriptions — so lint the
+catalog like code and gate it in CI. **Zero stack buy-in**: works on any
+OpenAI / Anthropic / MCP / plain tool list, no agentfootprint runtime needed.
+
+```bash
+npx agentfootprint-lint-tools tools.json --threshold 0.94 --strict
+```
+
+```
+✗ CONFUSABLE 0.9445  get_fcns_database <> influx_get_fcns_database
+    hint: names differ only by 'influx' — make the descriptions say WHEN to choose each
+~ warn  [enum-in-prose] influx_get_port_ranking.metric
+    suggest: "enum": ["avg_iops","peak_iops","mbps"]
+```
+
+Pairwise confusability over what the model reads (embedder pluggable,
+content-hash cached) plus a pluggable structural rule pack
+(missing/short descriptions, says-WHAT-not-WHEN, enums hiding in prose,
+undocumented optional params). The runtime counterpart, `toolChoiceRecorder`
+(`agentfootprint/observe`), scores each live LLM call's tool choice against
+the same geometry and flags narrow margins and proxy disagreements — lazily,
+off the hot path.
+
+> 📖 **[Tool-catalog lint guide](docs/guides/tool-catalog-lint.md)** — 5 minutes
+> from a tools.json to a gated CI check ·
+> [`examples/observability/02`](examples/observability/02-lint-confusable-catalog.ts) ·
+> [`03`](examples/observability/03-lint-fix-and-pass.ts) ·
+> [`04`](examples/observability/04-tool-choice-margins.ts)
+
 ---
 
 ## Quick start — runs offline, no API key
