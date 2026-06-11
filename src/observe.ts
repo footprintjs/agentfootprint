@@ -237,3 +237,17 @@ export {
   type ToolCatalogReport,
   type ToolLintCliIO,
 } from './lib/tool-lint/index.js';
+// Tool-choice margin recorder (RFC-002 tier 2, C4–C6) — per LLM call,
+// ranks the OFFERED catalog against the choice context (user message +
+// latest assistant reasoning) via influence-core scoreMargin; embeds
+// LAZILY on first read; flags narrow margins + proxy disagreements.
+export {
+  buildChoiceContext,
+  toolChoiceRecorder,
+  type OfferedTool,
+  type ToolChoiceCall,
+  type ToolChoiceRecorderHandle,
+  type ToolChoiceRecorderOptions,
+  type ToolChoiceSkipReason,
+  type ToolChoiceSummary,
+} from './recorders/observability/ToolChoiceRecorder.js';
