@@ -246,5 +246,8 @@ _Run `npm run examples:readme` after adding/editing examples._
 | # | File | Title | Description |
 |---|---|---|---|
 | 01 | [`01-trace-debug-session.ts`](observability/01-trace-debug-session.ts) | Trace debug session — the introspection toolpack (RFC-003 Part C) | A planted wrong value (DTI computed against annual income) flows through a decide()  |
+| 02 | [`02-lint-confusable-catalog.ts`](observability/02-lint-confusable-catalog.ts) | Tool-catalog confusability lint — the Neo twins (RFC-002 C1/C2) | analyzeToolCatalog lints a real 16-tool SAN catalog (zero stack buy-in: plain  |
+| 03 | [`03-lint-fix-and-pass.ts`](observability/03-lint-fix-and-pass.ts) | Lint → fix descriptions → gate passes (RFC-002 C3) | The remediation loop: a 3-tool catalog fails the lint (confusable fcns twins, missing  |
+| 04 | [`04-tool-choice-margins.ts`](observability/04-tool-choice-margins.ts) | Runtime tool-choice margins + flags (RFC-002 C4–C6) | toolChoiceRecorder watches a scripted agent walk into the Neo fcns-twin trap: per LLM  |
 
 <!-- AUTO-GENERATED:examples:end -->

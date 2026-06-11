@@ -5,6 +5,115 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+RFC-002 tiers 1–2 (blocks C1–C6): the tool-catalog confusability LINT
+(build-time, CI-gateable, framework-agnostic — the adoption front door) +
+the runtime tool-choice MARGIN RECORDER. Both are policy layers over the
+6.24.0 `influence-core` engine (`pairwiseSimilarity` / `scoreMargin` /
+`EmbeddingCache`); tier 3 (choice-entropy proxy validation) remains
+specified-only.
+
+- **C1 — `analyzeToolCatalog(tools, opts)`** (`agentfootprint/observe`,
+  `src/lib/tool-lint/`). Input is a plain
+  `{ name, description?, inputSchema? }[]` — ZERO stack buy-in
+  (`coerceCatalog` normalizes OpenAI / Anthropic / MCP `tools/list` /
+  plain shapes; `catalogFromTools` adapts the library's own `Tool[]`).
+  Pairwise cosine over `confusabilityText` (tokenized name + description —
+  what the model actually reads) via influence-core: pairs ≥
+  `confusabilityThreshold` → `confusable` (fail the gate), pairs within
+  `watchBand` below → `watch` (advisory). Each flagged pair carries a
+  heuristic `hint` naming the differentiating axis (twin-name qualifier,
+  or each side's distinct description terms). The report carries the FULL
+  ranked pair list — the relative-ordering view that stays meaningful
+  under any embedder. Duplicate tool names are a built-in structural
+  error (deduped before similarity).
+  **Calibration honesty (RFC-002 §3):** `DEFAULT_CONFUSABILITY_THRESHOLD`
+  (0.85) is a real-embedder starting point; the test/demo `mockEmbedder`
+  compresses prose into ~0.85–0.97, so `MOCK_EMBEDDER_CALIBRATION`
+  (0.94/0.02) applies with the mock and only RELATIVE ordering is
+  trustworthy — acceptance fixtures assert ordering, never absolute
+  scores (the Neo fcns twins are each other's mutual top-1 partner and
+  flag confusable; a known-false-positive pin documents the mock's floor).
+- **C2 — pluggable structural rule pack** (`defaultStructuralRules` +
+  factories `descriptionRule` / `saysWhatNotWhenRule` / `enumInProseRule`
+  / `optionalParamRule`; rules are plain `{ id, check }` objects —
+  add/remove/re-tune freely). Four field findings from the Neo catalog:
+  missing/short description (<40 chars; missing = the only default
+  `error`), says-WHAT-not-WHEN (no `for/when/after/first/fallback/only`
+  cue), enum-in-prose (`"avg_iops | peak_iops | mbps"` → suggests the
+  JSON-Schema `enum`; comma lists only behind an explicit "one of"-style
+  marker so `e.g. 1h, 24h` examples don't flag), and
+  optional-param-undocumented (omission has meaning, nothing says so).
+  One fixture catalog per rule in `test/lib/tool-lint/rules.test.ts`.
+- **C3 — CI gate.** `report.ok` (no confusable pairs + no structural
+  findings at/above `failOn`, default `'error'`) + new bin
+  **`agentfootprint-lint-tools`** (`bin/agentfootprint-lint-tools.mjs`,
+  humble shell over the unit-tested `runToolLintCli`): reads ONE JSON
+  file of tools, prints the report, exits 0/1/2 (ok / gate failed /
+  usage error). Flags: `--threshold` (similarity gating is OPT-IN — the
+  CLI's built-in mock embedder is rank-trustworthy, not
+  verdict-trustworthy; without the flag similarity is report-only),
+  `--watch-band`, `--strict`, `--no-similarity`, `--top`, `--json`.
+  Embedding cost on re-lints: wrap your embedder in `embeddingCache`
+  (content-hash keyed, from influence-core). FRONT DOOR:
+  `docs/guides/tool-catalog-lint.md` (written for non-footprintjs users
+  — 5 minutes from a `tools.json` to a gated CI check) + a README
+  section.
+- **C4 — choice-context construction** (`buildChoiceContext`, exported).
+  The margin scorer embeds exactly the two slots the model's
+  tool-selection reasoning ran on: the current turn's user message
+  (head-capped) + the latest assistant reasoning text of the turn
+  (tail-capped; absent on iteration 1). Deliberately EXCLUDED and
+  documented: system prompt (constant per run — dilutes without
+  discriminating), older history turns (recency dominates choice), raw
+  tool results (their distilled effect is the included assistant text),
+  tool schemas (those are the candidates, not the context). Candidate
+  text per offered tool = the SAME `confusabilityText` the lint embeds,
+  so build-time confusability and runtime margins measure one geometry.
+- **C5 — `toolChoiceRecorder({ embedder })`** (`agentfootprint/observe`,
+  `src/recorders/observability/ToolChoiceRecorder.ts`). A normal
+  CombinedRecorder (Convention 1: owns a `KeyedStore<ToolChoiceEntry>`
+  keyed by the LLM call's `runtimeStageId`) — attach via
+  `Agent.create(...).recorder(...)`; deferred-tier friendly
+  (`{ delivery: 'deferred' }` works unchanged). Per LLM call that
+  OFFERED tools: menu from `stream.llm_start.tools`, chosen from the
+  `stream.tool_start` events of that call (parallel + repeat calls
+  visible via `toolCallIds`; `chosen` dedupes by name), context from
+  `agent.turn_start` + the previous `stream.llm_end`. **Embeds LAZILY on
+  first read** (`getCalls()` / `getFlagged()` / `getSummary()`) — the
+  hot path only records strings; scores memoize; open entries (mid-run)
+  stay unscored until they close. Convention-4 runId reset via
+  `onRunStart`; same-executor `resume()` preserves pre-pause entries by
+  design. Unscorable entries carry `skipped`:
+  `'nothing-chosen'` (final-answer calls) or `'chosen-not-offered'`
+  (wiring anomaly, surfaced not massaged).
+- **C6 — `getFlagged()` + run summary.** Flagged = `narrow`
+  (margin < `marginThreshold`, default 0.05) OR `proxyDisagreement`
+  (top-scored candidate not among the chosen — ALWAYS flagged).
+  `getSummary()` → `{ llmCallsWithTools, choices, scored, flagged,
+  narrow, proxyDisagreement, skipped }`.
+- **Examples (Convention 2)** — all offline/deterministic, pinned by
+  `test/lib/tool-lint/examples.test.ts`:
+  `examples/observability/02-lint-confusable-catalog.ts` (the real
+  16-tool Neo fixture in `examples/helpers/neoToolCatalog.ts`; the fcns
+  twin pair flagged with its hint + the metric/optional structural
+  findings), `03-lint-fix-and-pass.ts` (fail → rewrite descriptions to
+  lead with WHEN + real enum + documented optionals → `ok` under the
+  SAME thresholds in strict mode), `04-tool-choice-margins.ts` (scripted
+  agent walks into the twin trap; margins/flags printed; counting
+  embedder proves 0 embeds during `run()`).
+- **Tests:** 85 new (rule fixtures, verdict policy via exact-geometry
+  planted embedders, Neo relative-ordering acceptance, CLI exit codes +
+  shape coercion, property fuzz over report invariants, security
+  (hostile/giant descriptions; tool results never reach the embedder),
+  performance (100-tool lint < 2 s; record-only hot path), load
+  (300 tools / 44 850 pairs), recorder unit tests on REAL engine event
+  shapes, lazy-embed + memoization proof, runId reset, parallel tool
+  calls, real-Agent functional run).
+- NO new typed events (anti-drift): the recorder consumes the existing
+  emit stream; the lint is build-time only.
+
 ## [6.24.0] - 2026-06-11
 
 footprintjs floor raised to ^9.8.0 (the toolpack consumes RFC-003 Part A: controlDepRecorder, control edges, honesty markers, commitValueAt).
