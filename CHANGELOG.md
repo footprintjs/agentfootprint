@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.27.0] - 2026-06-11
+
+### Added
+- **`toBacktrackTrace(report, opts)`** (`agentfootprint/observe`,
+  `src/lib/context-bisect/toBacktrackTrace.ts`) — serialize a
+  `localizeContextBug` report into the `BacktrackTrace` contract that
+  agentThinkingUI's `<BacktrackView>`/`<BacktrackOverlay>` render (the
+  "why?" board: suspects → influence meters → ablation stamps →
+  chain-of-custody rewind). Pure mapping, no UI dependency; the
+  interfaces mirror agentthinkingui's `types/index.d.ts` and both sides
+  stay framework-agnostic JSON. Honesty preserved, never added: cards
+  carry TRUE report ranks even as a subset (default selection prefers
+  content-evidence suspects; the rest fold into one fully-disclosed
+  line), path-only scores carry `upperBound` (hatched meter + starred
+  value), `inconclusive` ablations map to NO verdict, honesty flags ride
+  verbatim with the claims-discipline lines. The caller supplies the two
+  things the report can't know: the decision's `answer` text (required)
+  and optional `custody` panes of recorded state for the rewind player.
+  Example: `examples/observability/06-backtrack-trace.ts`. README: "One
+  contextual error, walked end to end".
+
 ## [6.26.1] - 2026-06-11
 
 ### Fixed

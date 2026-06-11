@@ -36,6 +36,16 @@ export {
 } from './localize.js';
 
 export {
+  toBacktrackTrace,
+  type BacktrackCustodyHop,
+  type BacktrackHop,
+  type BacktrackSuspectCard,
+  type BacktrackTrace,
+  type BacktrackTrail,
+  type ToBacktrackTraceOptions,
+} from './toBacktrackTrace.js';
+
+export {
   ablationForSuspect,
   applyAblations,
   defaultOutcomeComparator,

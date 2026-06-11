@@ -97,6 +97,63 @@ A: verifyAuditBundle → valid: false, brokenAt: #16 — the tampered record, na
 
 And you don't have to read the trace yourself — **we provide the tools for an LLM to track it for you**: the trace toolpack let a debugger model find a planted bug while reading **9.5% of the trace** ([guide](docs/guides/trace-debugging.md)).
 
+## One contextual error, walked end to end
+
+The third question above, in full — every value below is the captured output of
+[`examples/observability/05-context-bisect.ts`](examples/observability/05-context-bisect.ts)
+and [`06-backtrack-trace.ts`](examples/observability/06-backtrack-trace.ts), runnable offline.
+
+**The bug.** A refunds agent carries a poisoned customer-profile fact. It answers:
+
+> *"Refund APPROVED: Dana Reyes holds VIP tier override status, so the 47-day-old
+> order qualifies for a refund beyond the 30-day window."*
+
+The policy says 30 days. The logs look fine — the model was *given* bad context,
+and classical logging has no row for that.
+
+**The walk.** Because context here is state, the decision backtracks like a
+variable: who read it, who wrote it, who let it in, where it was born —
+
+```text
+ANSWER   "Refund APPROVED…"                                   ← the bug
+READ     call-llm#40 assembled the system prompt              ← exactly what the model saw
+LANDED   context#6 wrote systemPromptInjections               ← who mutated state
+ALLOWED  trigger { kind: 'always' } — active every iteration  ← why it was let in
+BORN     defineFact('vip-override-fact')                      ← who wrote it
+```
+
+That chain gives the **complete, provable candidate set** — every piece of
+context that demonstrably reached the call, and nothing else. Influence scoring
+then *ranks* inside it (the two facts sit 0.01 apart — proxies can't separate
+them), and counterfactual **ablation proves**: removing `vip-override-fact`
+flips APPROVED → DECLINED in **3/3 seeded reruns**; the benign style fact and
+the lookup tool come back not-confirmed, 0/3. Scores are proxies; only the
+ablation verdict makes a causal claim — the report says so itself.
+
+**The same walk, visual.** One call serializes the report for
+[AgentThinkingUI](https://github.com/footprintjs/agentThinkingUI)'s
+`<BacktrackView>` — the "why?" board, triggerable from **any** decision point
+(final answer, a mid-loop tool choice, a deterministic `decide()` rule):
+
+```typescript
+import { localizeContextBug, toBacktrackTrace } from 'agentfootprint/observe';
+
+const report = await localizeContextBug({ artifacts, embedder, atStep, rerun });
+const trace = toBacktrackTrace(report, {
+  claim: 'The agent approved a refund 47 days past the 30-day window — why?',
+  answer: { text: buggyAnswer, label: 'the wrong answer' },
+});
+// <BacktrackView trace={trace}/> — or <BacktrackOverlay/> from any decision point
+```
+
+<img alt="The BacktrackView board: the wrong answer, the suspects with influence meters, the CAUSAL 3/3 ablation stamp on the planted fact, and the chain-of-custody rewind showing the exact system prompt the model saw with the culprit sentence highlighted." src="docs/assets/backtrack-board.png" width="100%"/>
+
+The rewind pane at the bottom is the killer view: **the exact system prompt the
+model saw**, with the culprit sentence highlighted — recorded state, not a
+reconstruction. And the same chain feeds the machine door: every id on the
+board is a `runtimeStageId` a debugger LLM can drill with the
+[trace toolpack](docs/guides/trace-debugging.md), token-cheaply.
+
 ---
 
 ## Pick your door
