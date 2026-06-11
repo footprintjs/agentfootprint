@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [6.26.0] - 2026-06-11
 
 RFC-003 Part B (blocks D7–D9): the contextual-bug LOCALIZER — "git bisect
 for context" (`agentfootprint/observe`, `src/lib/context-bisect/`). Pure
