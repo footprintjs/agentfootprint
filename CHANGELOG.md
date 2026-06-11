@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.28.1] - 2026-06-11
+
+### Docs
+- README: the BacktrackView board and the conversational-doors section now
+  link to the dedicated live playground page
+  (`agentThinkingUI/demo/backtrack.html`) instead of the generic homepage,
+  which only redirected to the runtime player. The doors are code-only (no
+  UI page); their link is labeled as the *same evidence the board
+  visualizes*, alongside the runnable `06`/`07`/`08` examples.
+
 ## [6.28.0] - 2026-06-11
 
 ### Added

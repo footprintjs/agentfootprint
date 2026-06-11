@@ -157,6 +157,9 @@ const trace = toBacktrackTrace(report, {
 ```
 
 <img alt="The BacktrackView board: the wrong answer, the suspects with influence meters, the CAUSAL 3/3 ablation stamp on the planted fact, and the chain-of-custody rewind showing the exact system prompt the model saw with the culprit sentence highlighted." src="docs/assets/backtrack-board.png" width="100%"/>
+<p align="center">
+  <sub><a href="https://footprintjs.github.io/agentThinkingUI/demo/backtrack.html"><b>▶ Try the why-board live</b></a> — or run <a href="examples/observability/06-backtrack-trace.ts"><code>examples/observability/06-backtrack-trace.ts</code></a> offline.</sub>
+</p>
 
 The rewind pane at the bottom is the killer view: **the exact system prompt the
 model saw**, with the culprit sentence highlighted — recorded state, not a
@@ -553,7 +556,8 @@ it, evidence binds only to **completed** runs (never in-flight), and `delegate`
 answers at the cheap model's price inside the expensive conversation.
 [Guide](docs/guides/trace-debugging.md) · examples
 [`07`](examples/observability/07-trace-debug-agent.ts) ·
-[`08`](examples/observability/08-self-explain.ts).
+[`08`](examples/observability/08-self-explain.ts) · the doors walk the
+[**same evidence the board visualizes ▶**](https://footprintjs.github.io/agentThinkingUI/demo/backtrack.html).
 
 > 📖 Powered by [footprintjs `causalChain()`](https://footprintjs.github.io/footPrint/blog/backward-causal-chain/) — backward thin-slicing on the commit log. [Causal memory deep dive](https://footprintjs.github.io/agentfootprint/causal-deep-dive/) · [Explainability & compliance](https://footprintjs.github.io/footPrint/blog/explainability-compliance/)
 
