@@ -5,6 +5,92 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+RFC-003 Part B (blocks D7–D9): the contextual-bug LOCALIZER — "git bisect
+for context" (`agentfootprint/observe`, `src/lib/context-bisect/`). Pure
+ASSEMBLY over shipped pieces: footprintjs 9.8.0's complete causal DAG
+(control edges D3, honesty markers A2, `EdgeWeigher` hook A3, truncation
+flags A4) × influence-core scoring (D6) × consumer-run counterfactual
+ablation. No new typed events; no engine changes.
+
+- **D7 — `llmEdgeWeigher({ embedder, llmCallIds, commitLog })`.** Turns an
+  LLM call's parent hairball into a RANKED shortlist: each DATA edge whose
+  child is an LLM call is weighted by influence-core's composite of the
+  parent's WRITTEN content (the edge key's committed value) vs the child's
+  OUTPUT (everything it committed). Two-pass adapter over footprintjs's
+  synchronous `EdgeWeigher` hook: `prime(dag)` embeds in deduplicated
+  batches and memoizes; `weigh` then answers synchronously — re-run
+  `causalChain({ weigh })` to stamp the weights. Control edges and non-LLM
+  children stay at the engine default 1.0 (a routing decision is not a
+  content question). Deterministic: same artifacts + deterministic
+  embedder → same ranking, ties keep slice (BFS) order; texts come ONLY
+  from the commit log, so policy-redacted values reach the embedder as
+  placeholders, never secrets. Acceptance pinned: a 12-parent hairball
+  ranks verbatim-reuse first, digit noise last, identically across fresh
+  handles.
+- **D8 — `localizeContextBug({ artifacts, embedder, atStep?, trigger?,
+  rerun? })`.** The five-stage pipeline: (1) TRIGGER — explicit `atStep`,
+  a custom strategy, or the `QualityRecorder`'s lowest-scoring step;
+  (2) SLICE — `causalChain` with `controlDepRecorder` lookups (labeled
+  `[control: rule]` hops) + A2/A4 honesty markers; (3) WEIGH — D7;
+  (4) RANK — slice nodes classified into ablatable context sources
+  (default classifier reads the agent chart's committed shapes:
+  `*Injections` records → per-`Injection.id` suspects, `lastToolResult` →
+  tool suspect, A2 `args` marker → arg suspect; pluggable `classify` for
+  other charts) and scored `structural × semantic` (max-product path
+  weight × per-item influence composite vs the trigger's output);
+  (5) ABLATE — optional: a consumer-supplied `AblationRunner` re-runs the
+  scenario without each top suspect, N seeded times each, against a
+  baseline probe. **WITHOUT `rerun` the report stops at the ranking,
+  marked `mode: 'correlational'`** — no causal claim anywhere (§B2).
+  Report shape: `{ step, suspects: [{ source, kind, score, edgePath,
+  ablation?, verdict?, runs? }], sliceStats, honestyFlags, baseline? }` —
+  every id is a plain runtimeStageId, drillable with the Part C
+  trace-toolpack over the same artifacts bag. Honesty flags surface ⚠
+  truncated slices, untracked sources, missing control-deps/read-tracking/
+  llm-call-ids, and unstable baselines. `formatContextBugReport` prints
+  the claim tiers in the output itself.
+- **THE ABLATION SEAM (documented because it did not exist):**
+  `AgentOptions` has no `ignoredTools` runtime kill-switch — tools,
+  injections, and memory entries enter an agent at CONSTRUCTION. The
+  counterfactual therefore rebuilds the agent from
+  `applyAblations(specs, { tools, injections, memoryEntries })`-filtered
+  inputs inside the consumer's runner. Per-kind adapters
+  (`ablationForSuspect`): tool → `ignoredTools`, injection/fact/skill →
+  `excludeInjectionIds`, memory → `excludeMemoryIds`, arg → consumer
+  override note (run input cannot be filtered by the library).
+- **D9 — `bisectCulprits({ suspects, rerun, embedder })`.** Multi-culprit
+  bisection over the ranked set (two-way ddmin with interference
+  handling + an independent-culprit loop): finds MINIMAL suspect sets
+  whose joint ablation flips the outcome. Every probe = N seeded reruns
+  (`samples` clamps to ≥ 2 — never single-run verdicts) with similarity
+  mean ± stdev ALWAYS reported; probes are cached by spec-set and
+  budgeted (`maxProbes`); honest exits: `'not-reproducible'` (the full
+  ranked set never flips), `'inconclusive'` (unstable baseline or budget
+  exhausted). Verdicts/culprits are the ONLY causal claims — the ranking
+  merely chooses the search order.
+- **Honest-claims discipline (§B2), spelled out on every type:** weights
+  and scores are deterministic embedding-geometry PROXIES (semantic
+  alignment, never model internals, never causal attribution); slice
+  completeness is bounded by tracking and the report SAYS so; ablation
+  verdicts are the only causal tier. Falsifiable validation pinned in
+  `test/lib/context-bisect/validation.test.ts`: across three planted-bug
+  scenarios, ablating the top-ranked suspect flips the outcome strictly
+  more often than the bottom-ranked (3 vs 0 with the fixtures).
+  Calibration note: `mockEmbedder` compresses prose to ~0.85–0.97 cosine —
+  use a DOMAIN `outcomeChanged` comparator with it; absolute similarity
+  thresholds only with real embedders.
+- Example: `examples/observability/05-context-bisect.ts` — a planted
+  misleading FACT injection ('VIP tier override') makes a refunds agent
+  approve a 47-day-old refund; the localizer finds it as the top ablatable
+  suspect and CONFIRMS it via ablation (3/3 seeded reruns flip
+  APPROVED → DECLINED; benign fact + lookup tool come back
+  not-confirmed). Part 2: the credit fixture — labeled control edges on a
+  plain decide() chart in honest correlational mode. 47 new tests across
+  unit/functional/integration/property/security/performance/load +
+  falsifiable validation.
+
 ## [6.25.0] - 2026-06-11
 
 RFC-002 tiers 1–2 (blocks C1–C6): the tool-catalog confusability LINT

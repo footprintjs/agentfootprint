@@ -249,5 +249,6 @@ _Run `npm run examples:readme` after adding/editing examples._
 | 02 | [`02-lint-confusable-catalog.ts`](observability/02-lint-confusable-catalog.ts) | Tool-catalog confusability lint — the Neo twins (RFC-002 C1/C2) | analyzeToolCatalog lints a real 16-tool SAN catalog (zero stack buy-in: plain  |
 | 03 | [`03-lint-fix-and-pass.ts`](observability/03-lint-fix-and-pass.ts) | Lint → fix descriptions → gate passes (RFC-002 C3) | The remediation loop: a 3-tool catalog fails the lint (confusable fcns twins, missing  |
 | 04 | [`04-tool-choice-margins.ts`](observability/04-tool-choice-margins.ts) | Runtime tool-choice margins + flags (RFC-002 C4–C6) | toolChoiceRecorder watches a scripted agent walk into the Neo fcns-twin trap: per LLM  |
+| 05 | [`05-context-bisect.ts`](observability/05-context-bisect.ts) | Context bisect — the contextual-bug localizer (RFC-003 Part B) | A planted misleading FACT injection makes a refunds agent approve a 47-day-old refund;  |
 
 <!-- AUTO-GENERATED:examples:end -->
