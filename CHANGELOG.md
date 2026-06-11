@@ -47,6 +47,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     the module reproduces them to 1e-12 and matches a live in-test
     reference recomputation, including fractional-PERSIST and
     adaptive-weight cases. Example: `examples/features/22-influence-core.ts`.
+- **Introspection toolpack — `traceToolpack(artifacts)` (RFC-003 Part C,
+  `agentfootprint/observe`).** footprintjs trace evidence exposed as TOOLS an
+  LLM calls: a debugging model (cheap, in a SEPARATE session) navigates a
+  COMPLETED run's evidence by `runtimeStageId`s instead of reading dumps —
+  feed the slice, not the trace. Factory over frozen artifacts
+  (`executor.getSnapshot()` + optional `controlDepRecorder().asLookup()` +
+  optional narrative lines); returns plain `Tool[]` — mount on any Agent or
+  drive scripted via the new `callTraceTool` (the offline auditor pattern,
+  mirroring the #9 validation boundary).
+  - **The tools:** `run_overview` (the entry point: stages with id + name +
+    description, loops, error locations, honesty notes) · `trace_node`
+    (one step: writes with verb + bounded preview + true size, reads,
+    parents with the routing decision's rule label) · `trace_slice` (the
+    backward causal chain with `[control: rule]` edges, as an indented tree
+    of drillable ids) · `who_wrote` (last writer of a key, optionally
+    before a step) · `get_value` (the explicit full fetch, capped +
+    truncation-marked) · `read_narrative` (paginated story; only when
+    narrative provided).
+  - **Bounded by default, honest always:** every output capped; per-call
+    params clamp to `TOOLPACK_HARD_CAPS`; truncated slices, untracked
+    sources (args/env/silent), missing read tracking / controlDeps, and
+    values outside the commit log are ⚠-marked, never silent. Redacted
+    payloads pass through verbatim and are flagged `(redacted by policy)`.
+  - **#9 synergy:** small runs embed an `enum` of every real step id in the
+    schemas (garbage ids rejected before dispatch, model self-corrects);
+    key params deliberately carry NO enum so "key outside the commit log"
+    gets its honest answer. Bad ids that get through return corrective
+    messages naming the real executions.
+  - **The demo** (`examples/observability/01-trace-debug-session.ts`): a
+    planted wrong value (DTI computed against annual income) flows through
+    a decide() decision; a scripted debugger session finds the culprit in
+    8 tool calls — ~2.7K chars served vs a ~29K-char full dump (~9%).
+  - **Security posture (B13):** serve to a separate debug session over a
+    completed run, not the production agent mid-run — trace content can
+    carry adversarial text; see docs/guides/trace-debugging.md.
 
 ## [6.23.0] - 2026-06-11
 

@@ -30,6 +30,7 @@ Two theses:
 | Features | **[Orchestration](orchestration.md)** | `withRetry`, `withFallback`, `withCircuitBreaker` — reliability wrappers |
 | Features | **[Security](security.md)** | Tool gating, permission policy, provider fallback, resilient providers, audit trail |
 | Features | **[Prompt Injection](prompt-injection.md)** | Honest posture: core does NOT detect injection — containment (gating, args validation, halts, credential scoping) + evidence, and what to add yourself |
+| Features | **[Trace Debugging](trace-debugging.md)** | The introspection toolpack (RFC-003 Part C): `traceToolpack(artifacts)` — trace evidence as tools a debugging LLM calls; bounded, honest (⚠), redaction-respecting, id-navigable |
 | Features | **[Streaming](streaming.md)** | Real-time lifecycle events via the typed event bus (`.on()`), SSE (`toSSE` / `SSEFormatter`), token streaming |
 | Features | **[Caching](caching.md)** | v2.6+ — provider-agnostic cache layer with per-injection policies; 77% token reduction on Dynamic ReAct |
 | Deploy | **[AgentCore](agentcore.md)** | Run on AWS Bedrock AgentCore: Runtime deploy template + Memory / Observability / Gateway(MCP) / Bedrock / Identity adapters |

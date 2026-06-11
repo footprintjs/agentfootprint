@@ -187,3 +187,13 @@ export {
   type SimilarityItem,
   type SimilarityPair,
 } from './lib/influence-core/index.js';
+// Introspection toolpack (RFC-003 Part C) — footprintjs trace evidence
+// exposed as TOOLS a debugging LLM calls over a COMPLETED run's artifacts.
+// Bounded, honest (⚠ markers), redaction-respecting, id-navigable.
+export {
+  callTraceTool,
+  TOOLPACK_HARD_CAPS,
+  traceToolpack,
+  type TraceToolpackArtifacts,
+  type TraceToolpackOptions,
+} from './lib/trace-toolpack/index.js';
