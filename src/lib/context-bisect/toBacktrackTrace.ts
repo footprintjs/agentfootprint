@@ -24,10 +24,7 @@
  * ablation produced one ('inconclusive' maps to NO stamp, not a verdict).
  */
 
-import type {
-  ContextBugReport,
-  Suspect,
-} from './types.js';
+import type { ContextBugReport, Suspect } from './types.js';
 
 /* ── the agentthinkingui contract (mirrored, dependency-free) ─────────── */
 
@@ -59,7 +56,11 @@ export interface BacktrackSuspectCard {
   /** score is a path-only upper bound — no content signal */
   readonly upperBound?: boolean;
   /** the hop adjacent to the suspect (what fed the decision side) */
-  readonly edge?: { readonly key?: string; readonly weight?: number; readonly kind?: 'data' | 'control' };
+  readonly edge?: {
+    readonly key?: string;
+    readonly weight?: number;
+    readonly kind?: 'data' | 'control';
+  };
   /** the full hop chain, decision → suspect (multi-hop paths only) */
   readonly path?: readonly BacktrackHop[];
   readonly bornAt?: { readonly id: string; readonly label?: string; readonly via?: string };
@@ -84,8 +85,16 @@ export interface BacktrackTrace {
   readonly modeLabel?: string;
   readonly agent?: string;
   readonly model?: string;
-  readonly answer: { readonly text: string; readonly label?: string; readonly tone?: 'error' | 'question' };
-  readonly decidedAt: { readonly id: string; readonly label?: string; readonly kind?: 'llm' | 'rule' };
+  readonly answer: {
+    readonly text: string;
+    readonly label?: string;
+    readonly tone?: 'error' | 'question';
+  };
+  readonly decidedAt: {
+    readonly id: string;
+    readonly label?: string;
+    readonly kind?: 'llm' | 'rule';
+  };
   readonly suspects: readonly BacktrackSuspectCard[];
   readonly trail?: BacktrackTrail;
   readonly folded?: string;
@@ -98,7 +107,11 @@ export interface BacktrackTrace {
 
 export interface ToBacktrackTraceOptions {
   /** The decision's output text — the report doesn't hold it. */
-  readonly answer: { readonly text: string; readonly label?: string; readonly tone?: 'error' | 'question' };
+  readonly answer: {
+    readonly text: string;
+    readonly label?: string;
+    readonly tone?: 'error' | 'question';
+  };
   /** Headline question. Default: derived from the trigger step. */
   readonly claim?: string;
   /** 'rule' renders the decision diamond instead of the brain. Default 'llm'. */
@@ -119,7 +132,10 @@ export interface ToBacktrackTraceOptions {
    */
   readonly preferContentEvidence?: boolean;
   /** Enrich a suspect's chain of custody with recorded-state panes. */
-  readonly custody?: (suspect: Suspect, trueRank: number) => readonly BacktrackCustodyHop[] | undefined;
+  readonly custody?: (
+    suspect: Suspect,
+    trueRank: number,
+  ) => readonly BacktrackCustodyHop[] | undefined;
   /** Exact recorded hops for deterministic decisions (no ablation verdict). */
   readonly trail?: BacktrackTrail;
   /** Override the auto score note (top-2 margin tie warning). */
@@ -217,9 +233,7 @@ export function toBacktrackTrace(
     dropped.length > 0
       ? `${dropped.length} more suspect${dropped.length === 1 ? '' : 's'} folded — ` +
         dropped.map((e) => `#${e.trueRank} ${e.s.source}`).join(' · ') +
-        (dropped.every((e) => !e.s.hasContentEvidence)
-          ? ' (path-only upper bounds)'
-          : '') +
+        (dropped.every((e) => !e.s.hasContentEvidence) ? ' (path-only upper bounds)' : '') +
         ' — every id drillable with the trace toolpack'
       : undefined;
 
@@ -234,10 +248,7 @@ export function toBacktrackTrace(
     }
   }
 
-  const honesty = [
-    ...report.honestyFlags.map((f) => `⚠ ${f.flag}: ${f.note}`),
-    ...CLAIMS_LINES,
-  ];
+  const honesty = [...report.honestyFlags.map((f) => `⚠ ${f.flag}: ${f.note}`), ...CLAIMS_LINES];
 
   return {
     claim: opts.claim ?? `Why did ${report.stepName} (${report.step}) decide this?`,

@@ -41,7 +41,15 @@ function report(partial: Partial<ContextBugReport> = {}): ContextBugReport {
     triggerSource: 'explicit',
     mode: 'causal',
     suspects: [],
-    sliceStats: { nodes: 1, dataEdges: 0, controlEdges: 0, weightedEdges: 0, incompleteNodes: 0, maxDepth: 12, maxNodes: 80 },
+    sliceStats: {
+      nodes: 1,
+      dataEdges: 0,
+      controlEdges: 0,
+      weightedEdges: 0,
+      incompleteNodes: 0,
+      maxDepth: 12,
+      maxNodes: 80,
+    },
     honestyFlags: [],
     ...partial,
   } as ContextBugReport;
@@ -58,7 +66,11 @@ describe('toBacktrackTrace — unit: field mapping', () => {
     expect(t.claim).toContain('CallLLM');
     expect(t.claim).toContain('call-llm#40');
     expect(t.answer).toEqual(ANSWER);
-    const rule = toBacktrackTrace(report(), { answer: ANSWER, claim: 'why?', decidedAtKind: 'rule' });
+    const rule = toBacktrackTrace(report(), {
+      answer: ANSWER,
+      claim: 'why?',
+      decidedAtKind: 'rule',
+    });
     expect(rule.decidedAt.kind).toBe('rule');
     expect(rule.claim).toBe('why?');
   });
@@ -66,8 +78,16 @@ describe('toBacktrackTrace — unit: field mapping', () => {
   it('names a suspect by injectionId, then toolName, then source', () => {
     const r = report({
       suspects: [
-        suspect({ kind: 'injection', detail: { injectionId: 'vip-fact', flavor: 'fact', text: 'planted' }, hasContentEvidence: true }),
-        suspect({ kind: 'tool', detail: { toolName: 'lookup_order', text: 'data' }, hasContentEvidence: true }),
+        suspect({
+          kind: 'injection',
+          detail: { injectionId: 'vip-fact', flavor: 'fact', text: 'planted' },
+          hasContentEvidence: true,
+        }),
+        suspect({
+          kind: 'tool',
+          detail: { toolName: 'lookup_order', text: 'data' },
+          hasContentEvidence: true,
+        }),
         suspect({ kind: 'stage', source: 'normalize#1' }),
       ],
     });
@@ -82,22 +102,52 @@ describe('toBacktrackTrace — unit: field mapping', () => {
           kind: 'stage',
           source: 'normalize#1',
           edgePath: [
-            { from: 'approve#3', fromName: 'Approve', to: 'adjudicate#2', toName: 'Adjudicate', kind: 'control', key: 'Prime credit', weight: 1 },
-            { from: 'adjudicate#2', fromName: 'Adjudicate', to: 'normalize#1', toName: 'Normalize', kind: 'data', key: 'dti', weight: 1 },
+            {
+              from: 'approve#3',
+              fromName: 'Approve',
+              to: 'adjudicate#2',
+              toName: 'Adjudicate',
+              kind: 'control',
+              key: 'Prime credit',
+              weight: 1,
+            },
+            {
+              from: 'adjudicate#2',
+              fromName: 'Adjudicate',
+              to: 'normalize#1',
+              toName: 'Normalize',
+              kind: 'data',
+              key: 'dti',
+              weight: 1,
+            },
           ],
         }),
         suspect({
           kind: 'injection',
           detail: { injectionId: 'i1' },
           hasContentEvidence: true,
-          edgePath: [{ from: 'call-llm#40', fromName: 'CallLLM', to: 'context#6', toName: 'Context', kind: 'data', key: 'systemPromptInjections', weight: 0.92 }],
+          edgePath: [
+            {
+              from: 'call-llm#40',
+              fromName: 'CallLLM',
+              to: 'context#6',
+              toName: 'Context',
+              kind: 'data',
+              key: 'systemPromptInjections',
+              weight: 0.92,
+            },
+          ],
         }),
       ],
     });
     const [multi, single] = toBacktrackTrace(r, { answer: ANSWER }).suspects;
     expect(multi.edge).toEqual({ key: 'dti', weight: 1, kind: 'data' });
     expect(multi.path).toHaveLength(2);
-    expect(multi.path?.[0]).toEqual({ key: 'Prime credit', kind: 'control', via: 'approve#3 ← adjudicate#2' });
+    expect(multi.path?.[0]).toEqual({
+      key: 'Prime credit',
+      kind: 'control',
+      via: 'approve#3 ← adjudicate#2',
+    });
     expect(single.edge?.key).toBe('systemPromptInjections');
     expect(single.path).toBeUndefined(); // single hop — the edge chip already says it
   });
@@ -119,13 +169,32 @@ describe('toBacktrackTrace — unit: field mapping', () => {
   it('maps confirmed/not-confirmed verdicts with runs; INCONCLUSIVE maps to NO verdict (no stamp)', () => {
     const r = report({
       suspects: [
-        suspect({ kind: 'injection', detail: { injectionId: 'a' }, verdict: { verdict: 'confirmed', claim: 'CAUSAL: flipped 3/3' }, runs: { samples: 3, flips: 3, similarity: { mean: 0.9, min: 0.9, max: 0.9, stdev: 0 } } }),
-        suspect({ kind: 'injection', detail: { injectionId: 'b' }, verdict: { verdict: 'not-confirmed', claim: 'no flip' }, runs: { samples: 3, flips: 0, similarity: { mean: 1, min: 1, max: 1, stdev: 0 } } }),
-        suspect({ kind: 'injection', detail: { injectionId: 'c' }, verdict: { verdict: 'inconclusive', claim: 'mixed' } }),
+        suspect({
+          kind: 'injection',
+          detail: { injectionId: 'a' },
+          verdict: { verdict: 'confirmed', claim: 'CAUSAL: flipped 3/3' },
+          runs: { samples: 3, flips: 3, similarity: { mean: 0.9, min: 0.9, max: 0.9, stdev: 0 } },
+        }),
+        suspect({
+          kind: 'injection',
+          detail: { injectionId: 'b' },
+          verdict: { verdict: 'not-confirmed', claim: 'no flip' },
+          runs: { samples: 3, flips: 0, similarity: { mean: 1, min: 1, max: 1, stdev: 0 } },
+        }),
+        suspect({
+          kind: 'injection',
+          detail: { injectionId: 'c' },
+          verdict: { verdict: 'inconclusive', claim: 'mixed' },
+        }),
       ],
     });
     const [a, b, c] = toBacktrackTrace(r, { answer: ANSWER }).suspects;
-    expect(a.verdict).toEqual({ kind: 'confirmed', flips: 3, samples: 3, claim: 'CAUSAL: flipped 3/3' });
+    expect(a.verdict).toEqual({
+      kind: 'confirmed',
+      flips: 3,
+      samples: 3,
+      claim: 'CAUSAL: flipped 3/3',
+    });
     expect(b.verdict?.kind).toBe('not-confirmed');
     expect(c.verdict).toBeUndefined(); // never invent a causal-tier signal from a mixed result
   });
@@ -137,7 +206,9 @@ describe('toBacktrackTrace — unit: field mapping', () => {
     });
     const t = toBacktrackTrace(r, { answer: ANSWER });
     expect(t.honesty?.[0]).toBe('⚠ untracked-sources: 1 node consumed args/env.');
-    expect(t.honesty?.some((h) => h.includes('only ablation verdicts make causal claims'))).toBe(true);
+    expect(t.honesty?.some((h) => h.includes('only ablation verdicts make causal claims'))).toBe(
+      true,
+    );
     expect(t.baseline).toBe('0/3 flipped with no ablation');
   });
 });
@@ -152,9 +223,24 @@ describe('toBacktrackTrace — functional: selection + folding', () => {
         suspect({ kind: 'stage', source: 'call-llm#18', score: 1 }),
         suspect({ kind: 'stage', source: 'sf-route#21', score: 1 }),
         suspect({ kind: 'stage', source: 'sf-cache#14', score: 0.88 }),
-        suspect({ kind: 'injection', detail: { injectionId: 'vip' }, score: 0.85, hasContentEvidence: true }),
-        suspect({ kind: 'injection', detail: { injectionId: 'style' }, score: 0.84, hasContentEvidence: true }),
-        suspect({ kind: 'tool', detail: { toolName: 'lookup' }, score: 0.71, hasContentEvidence: true }),
+        suspect({
+          kind: 'injection',
+          detail: { injectionId: 'vip' },
+          score: 0.85,
+          hasContentEvidence: true,
+        }),
+        suspect({
+          kind: 'injection',
+          detail: { injectionId: 'style' },
+          score: 0.84,
+          hasContentEvidence: true,
+        }),
+        suspect({
+          kind: 'tool',
+          detail: { toolName: 'lookup' },
+          score: 0.71,
+          hasContentEvidence: true,
+        }),
       ],
     });
 
@@ -168,7 +254,11 @@ describe('toBacktrackTrace — functional: selection + folding', () => {
   });
 
   it('preferContentEvidence:false takes strictly the top-N', () => {
-    const t = toBacktrackTrace(seven(), { answer: ANSWER, maxSuspects: 3, preferContentEvidence: false });
+    const t = toBacktrackTrace(seven(), {
+      answer: ANSWER,
+      maxSuspects: 3,
+      preferContentEvidence: false,
+    });
     expect(t.suspects.map((s) => s.rank)).toEqual([1, 2, 3]);
     expect(t.folded).toContain('4 more suspects folded');
   });
@@ -198,7 +288,9 @@ describe('toBacktrackTrace — functional: selection + folding', () => {
       answer: ANSWER,
       trail,
       custody: (s, rank) =>
-        s.detail?.injectionId === 'vip' ? [{ step: 'read', detail: `rank ${rank} saw it` }] : undefined,
+        s.detail?.injectionId === 'vip'
+          ? [{ step: 'read', detail: `rank ${rank} saw it` }]
+          : undefined,
     });
     const vip = t.suspects.find((s) => s.name === 'vip');
     expect(vip?.custody?.[0].detail).toBe('rank 5 saw it');
@@ -215,7 +307,11 @@ describe('toBacktrackTrace — integration: real planted-fact run', () => {
     const embedder = embeddingCache(mockEmbedder());
     const llmIds = llmCallIdsFromEvents(original.events);
     const reportReal = await localizeContextBug({
-      artifacts: { snapshot: original.snapshot, controlDeps: original.controlDeps, events: original.events },
+      artifacts: {
+        snapshot: original.snapshot,
+        controlDeps: original.controlDeps,
+        events: original.events,
+      },
       embedder,
       atStep: llmIds[llmIds.length - 1],
       rerun: {
@@ -285,17 +381,39 @@ describe('toBacktrackTrace — property: rank/bound invariants under fuzz', () =
 describe('toBacktrackTrace — security: no field invention, redaction preserved', () => {
   it('suspect text passes through EXACTLY as the report carries it (already-redacted stays redacted)', () => {
     const r = report({
-      suspects: [suspect({ kind: 'injection', detail: { injectionId: 'i', text: 'user [REDACTED] window' }, hasContentEvidence: true })],
+      suspects: [
+        suspect({
+          kind: 'injection',
+          detail: { injectionId: 'i', text: 'user [REDACTED] window' },
+          hasContentEvidence: true,
+        }),
+      ],
     });
     expect(toBacktrackTrace(r, { answer: ANSWER }).suspects[0].text).toBe('user [REDACTED] window');
   });
 
   it('emits no fields beyond the BacktrackTrace contract and never fabricates custody/verdict/trail', () => {
-    const t = toBacktrackTrace(report({ suspects: [suspect({ kind: 'stage' })] }), { answer: ANSWER });
+    const t = toBacktrackTrace(report({ suspects: [suspect({ kind: 'stage' })] }), {
+      answer: ANSWER,
+    });
     expect(t.suspects[0].custody).toBeUndefined();
     expect(t.suspects[0].verdict).toBeUndefined();
     expect(t.trail).toBeUndefined();
-    const allowed = new Set(['claim', 'mode', 'modeLabel', 'agent', 'model', 'answer', 'decidedAt', 'suspects', 'trail', 'folded', 'scoreNote', 'baseline', 'honesty']);
+    const allowed = new Set([
+      'claim',
+      'mode',
+      'modeLabel',
+      'agent',
+      'model',
+      'answer',
+      'decidedAt',
+      'suspects',
+      'trail',
+      'folded',
+      'scoreNote',
+      'baseline',
+      'honesty',
+    ]);
     for (const k of Object.keys(t)) expect(allowed.has(k)).toBe(true);
   });
 });
@@ -306,7 +424,12 @@ describe('toBacktrackTrace — performance/load', () => {
   it('serializes a 5k-suspect report well under 200ms and survives 1k repeated calls', () => {
     const big = report({
       suspects: Array.from({ length: 5000 }, (_, i) =>
-        suspect({ kind: 'stage', source: `s#${i}`, score: 1 - i / 5000, hasContentEvidence: i % 3 === 0 }),
+        suspect({
+          kind: 'stage',
+          source: `s#${i}`,
+          score: 1 - i / 5000,
+          hasContentEvidence: i % 3 === 0,
+        }),
       ),
     });
     const t0 = performance.now();
