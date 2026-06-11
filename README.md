@@ -27,6 +27,41 @@
 
 ---
 
+## The new error class
+
+For decades, software had two kinds of errors — and developers never needed deep
+domain knowledge to fix either:
+
+| Error class | Where the bug lives | How you find it |
+|---|---|---|
+| **Infrastructure** — crash, timeout, 500 | the system | infra logs, monitoring |
+| **Business logic** — wrong branch, wrong math | the code | stack trace, debugger, `console.log` |
+| **Contextual** — wrong tool chosen, wrong fact believed, stale memory trusted | **what the model was given** | **nothing. Until now.** |
+
+Agents introduced the third class. The code is correct, the infra is healthy — and
+the run is still wrong, because two tool descriptions read alike, or an injected
+fact was misleading, or memory carried last week's truth. Classical logs can't
+explain it: **they record what the code did, never what the context did.**
+
+## The idea
+
+If contextual errors live in what the model was given, then the run itself must be
+structured so context is **evidence** — every injection, read, write, decision, and
+tool call recorded *connected*, the moment it happens. Not logs you grep. Evidence
+you ask.
+
+## How — we abstract context engineering
+
+Every piece of context enters the LLM through one of **3 slots** (`system` ·
+`messages` · `tools`), under one of **4 triggers** — skills, steering, RAG, facts,
+memory, guardrails are all the same move: `Injection = slot × trigger × cache`.
+
+**Because the framework owns that injection point, every piece of context is born
+tracked.** Tracking isn't an add-on you wire up — it's a consequence of the
+abstraction. [The full model ↓](#the-model--what-we-abstract)
+
+## What tracking buys you
+
 **See it in 30 seconds** — four questions logs can't answer, each answered by code in this repo from a real run:
 
 ```text
@@ -47,7 +82,7 @@ A: verifyAuditBundle → valid: false, brokenAt: #16 — the tampered record, na
    (hash-chained audit export, offline verification)
 ```
 
-And when you'd rather not read traces yourself: hand the run to a **debugger LLM** — the trace toolpack let a model find a planted bug while reading **9.5% of the trace** (`docs/guides/trace-debugging.md`).
+And you don't have to read the trace yourself — **we provide the tools for an LLM to track it for you**: the trace toolpack let a debugger model find a planted bug while reading **9.5% of the trace** ([guide](docs/guides/trace-debugging.md)).
 
 ---
 
