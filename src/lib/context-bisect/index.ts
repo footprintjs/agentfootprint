@@ -7,6 +7,7 @@
  * scoring (D6) × consumer-run counterfactual ablation.
  *
  *   D7 — `llmEdgeWeigher`     influence-weighted LLM-call slice edges
+ *   D8 — `localizeContextBug` trigger → slice → ranked suspects → ablation
  *
  * §B2 claim tiers (spelled out on every type): weights/scores are
  * embedding-geometry PROXIES; ablation verdicts are the ONLY causal
@@ -20,6 +21,29 @@ export {
   type LlmEdgeWeigherOptions,
   type RankedParentEdge,
 } from './llmEdgeWeigher.js';
+
+export {
+  defaultSuspectClassifier,
+  formatContextBugReport,
+  llmCallIdsFromEvents,
+  localizeContextBug,
+  suspectLabel,
+  type ClassifyContext,
+  type LocalizeContextBugOptions,
+  type SuspectClassifier,
+  type SuspectSeed,
+} from './localize.js';
+
+export {
+  ablationForSuspect,
+  applyAblations,
+  defaultOutcomeComparator,
+  probeFlipped,
+  runAblationProbe,
+  verdictFor,
+  type AblationTargets,
+  type ProbeConfig,
+} from './ablation.js';
 
 export {
   CONTEXT_BISECT_DEFAULTS,

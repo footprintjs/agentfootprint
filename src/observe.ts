@@ -197,6 +197,55 @@ export {
   type TraceToolpackArtifacts,
   type TraceToolpackOptions,
 } from './lib/trace-toolpack/index.js';
+// Contextual-bug localizer (RFC-003 Part B, D7–D8) — "git bisect for
+// context". Assembly: footprintjs causal DAG (control edges + honesty
+// markers + EdgeWeigher) × influence-core scoring (D6) × consumer-run
+// counterfactual ablation. §B2 claim tiers: scores/weights are
+// embedding-geometry PROXIES; ablation verdicts are the ONLY causal
+// claims; slice completeness is bounded by tracking — and says so.
+export {
+  ablationForSuspect,
+  applyAblations,
+  CONTEXT_BISECT_DEFAULTS,
+  defaultOutcomeComparator,
+  defaultSuspectClassifier,
+  formatContextBugReport,
+  llmCallIdsFromEvents,
+  llmEdgeWeigher,
+  localizeContextBug,
+  probeFlipped,
+  runAblationProbe,
+  stepOutputText,
+  suspectLabel,
+  verdictFor,
+  type AblationRerun,
+  type AblationRunner,
+  type AblationRunStats,
+  type AblationSpec,
+  type AblationTargets,
+  type AblationVerdict,
+  type AblationVerdictKind,
+  type CapturedEventLike,
+  type ClassifyContext,
+  type ContextBugArtifacts,
+  type ContextBugReport,
+  type EdgePathStep,
+  type HonestyFlag,
+  type HonestyFlagKind,
+  type LlmEdgeWeigherHandle,
+  type LlmEdgeWeigherOptions,
+  type LocalizeContextBugOptions,
+  type OutcomeComparator,
+  type QualityTriggerLookup,
+  type RankedParentEdge,
+  type SimilarityStats,
+  type SliceStats,
+  type Suspect,
+  type SuspectClassifier,
+  type SuspectDetail,
+  type SuspectKind,
+  type SuspectSeed,
+} from './lib/context-bisect/index.js';
 // Tool-catalog confusability lint (RFC-002 tier 1, C1–C3) — build-time,
 // CI-gateable, framework-agnostic: plain { name, description?, inputSchema? }
 // tools in (OpenAI/Anthropic/MCP lists coerce via coerceCatalog; the
