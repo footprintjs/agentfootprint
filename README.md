@@ -142,7 +142,60 @@ console.log(result);  // → "I checked: it is 72°F and sunny."
 
 For production, import a real provider from `agentfootprint/llm-providers` and swap it in — `anthropic(...)` / `openai(...)` / `bedrock(...)` / `ollama(...)`. Only the import line changes; the agent code stays the same. (The vendor-SDK providers live on the `agentfootprint/llm-providers` subpath so the main `agentfootprint` barrel stays free of optional peer-dep requires; `mock`, `browserAnthropic`, and `browserOpenai` are on the main barrel.)
 
----
+### Then add context
+
+A real agent carries more than one prompt and one tool: facts about the user, always-on rules, skills that unlock on demand. Declare each piece — the framework decides **when** it fires and **which slot** it lands in, and every piece is born tracked:
+
+```typescript
+import { defineFact, defineSteering, defineSkill } from 'agentfootprint';
+
+const agent = Agent.create({ provider, model })
+  .system('You are a support agent.')
+  .fact(defineFact({                    // data the model should know — always on
+    id: 'user-profile',
+    data: 'Name: Maya · Plan: Pro · Customer since 2022',
+  }))
+  .steering(defineSteering({            // rules the model must follow — always on
+    id: 'refund-policy',
+    prompt: 'Never promise a refund before checking the policy tool.',
+  }))
+  .skill(defineSkill({                  // guidance + tools — unlocks when the LLM asks
+    id: 'billing',
+    description: 'Use for refunds, charges, billing questions.',
+    body: 'When handling billing: confirm identity first, then…',
+    tools: [refundTool],
+  }))
+  .build();
+```
+
+Same shape for `.instruction()` / `.memory()` / `.rag()` / raw `.injection()` — they're all the one primitive, `Injection = slot × trigger × cache`. [The full model ↓](#the-model--what-we-abstract)
+
+### Then compose control flow
+
+One agent is a `Runner`. So is every composition of agents — four control-flow primitives, and anything that runs composes into anything else:
+
+```typescript
+import { Sequence, Parallel, Conditional } from 'agentfootprint';
+
+const pipeline = Sequence.create()
+  .step('classify', classifyAgent)                  // sequence: step → step
+  .step('review',
+    Parallel.create()                               // parallel: fan out, then merge
+      .branch('legal', legalAgent)
+      .branch('ethics', ethicsAgent)
+      .mergeWithLLM({ provider, model, prompt: 'Synthesize:' })
+      .build())
+  .step('respond',
+    Conditional.create()                            // conditional: one branch runs
+      .when('urgent', (i) => i.message.startsWith('URGENT'), urgentAgent)
+      .otherwise('normal', normalAgent)
+      .build())
+  .build();
+
+await pipeline.run({ message: 'URGENT: refund dispute on order #4411' });
+```
+
+The fourth primitive is `Loop` — `Loop.repeat(agent).until(guard).times(5)`, with a mandatory budget guard. And the named patterns from the research literature ship pre-composed from the same four: `selfConsistency` · `reflection` · `debate` · `mapReduce` · `tot` · `swarm`. Because every composition is a flowchart, the structure you wrote is the structure you see in the UI — and the trace spans the whole pipeline, not one agent at a time. [Designing systems of agents ↓](#how-do-i-design-my-agent-or-system-of-agents)
 
 ---
 
