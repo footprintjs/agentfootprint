@@ -539,63 +539,27 @@ Four views, one trace — pick by question:
 
 **One recording. Two lenses. Three consumers. Zero extra instrumentation.**
 
-### Non-blocking observers — `observerDelivery: 'deferred'` (RFC-001)
+### Observers stay off the hot path
 
-By default every `agent.on()` listener runs **synchronously inside the
-producing statement** — a slow exporter or pretty-printer taxes every
-iteration of the ReAct loop. One option moves observation off the hot path:
+By default every `agent.on()` listener runs synchronously inside the producing
+statement. One option moves observation off the hot path:
 
 ```ts
-const agent = Agent.create({
-  provider,
-  model,
-  observerDelivery: 'deferred', // default 'inline' — byte-identical to prior releases
-})
-  .system('…')
-  .build();
-
-await agent.run({ message });
+Agent.create({ provider, model, observerDelivery: 'deferred' }) // default 'inline'
 // serverless / shutdown: settle async listener work before the freeze
 await agent.drainObservers({ timeoutMs: 5_000 });
 ```
 
-Every event is **captured** into footprintjs's bounded queue (≈ microseconds
-on the hot path) and **delivered one beat behind** at the next microtask
-checkpoint — same typed events, same payloads, same order (a drop-in port,
-deep-equal tested). Terminal boundaries (resolve, crash, pause) drain the
-queue synchronously **before control returns**, so crash checkpoints and
-pause records are always complete. Queue stats land on
-`agent.getLastSnapshot()?.observerStats` (drops, flushes, per-listener time —
-"name the hog"). The causal-evidence recorder stays inline by design (the
-memory write stage reads it mid-run); a recorder declaring its own `delivery`
-field keeps it — a per-recorder override for free.
+Events are captured into a bounded queue (≈ microseconds on the hot path) and
+delivered one beat behind — same typed events, same order, zero loss, a throwing
+listener can't kill the run, and per-listener stats land on
+`getLastSnapshot()?.observerStats` to name the hog. Terminal boundaries (resolve,
+crash, pause) drain synchronously first, so checkpoints are always complete.
+Measured: −8% wall on a 50-iteration agent with a deliberately slow listener
+([example 21](examples/features/21-deferred-observers.ts)).
 
-**The measured deal** — 50-iteration full-feature agent, 3 747 events, a
-deliberately slow 5 ms-per-event wildcard listener, 100 ms mock LLM latency
-([`examples/features/21-deferred-observers.ts`](examples/features/21-deferred-observers.ts)):
-
-| Streaming cadence | Mode | Wall | p95 / iteration | Drops |
-|---|---|---|---|---|
-| — | no listener (the floor) | 5.6 s | 115 ms | — |
-| 0 ms (back-to-back chunks) | inline + listener | 24.5 s | 727 ms | — |
-| 0 ms (back-to-back chunks) | **deferred** + listener | 24.0 s | 710 ms | 0 |
-| 20 ms (realistic streaming) | inline + listener | 34.8 s | 926 ms | — |
-| 20 ms (realistic streaming) | **deferred** + listener | **32.1 s (−2.7 s, −8%)** | **868 ms** | 0 |
-
-Honest mechanism: on a single thread a CPU-burning listener's total work is
-conserved — deferral recovers wall time where waits sit **adjacent** to the
-producing events (`llm_start` before the provider wait, `tool_start` before
-tool I/O, tokens between stream chunks). Back-to-back streaming
-(`chunkDelayMs: 0`) is the worst case (~2% wall saved); realistic streaming
-cadence makes token events wait-adjacent and the saving grows several-fold.
-What never depends on shape: the **bounded** queue (no OOM), **error
-isolation** (a throwing listener can't kill the run), **per-listener stats**,
-**zero loss** (`drops: 0`, gap-detectable), and **terminal completeness**.
-Not opting in costs nothing — the default path attaches exactly as before and
-allocates no queue.
-
-> 📖 Full semantics (capture policies, backpressure, `'block'` overflow):
-> [footprintjs deferred-observers guide](https://github.com/footprintjs/footPrint/blob/main/docs/guides/observers-deferred.md)
+> 📖 Full semantics (capture policies, backpressure, overflow):
+> [deferred-observers guide](https://github.com/footprintjs/footPrint/blob/main/docs/guides/observers-deferred.md)
 
 ### Lint your tool catalog — before the model picks the wrong twin
 
