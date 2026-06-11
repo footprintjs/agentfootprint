@@ -26,7 +26,6 @@
  * `agentfootprint/observe` in a small script instead.
  */
 
-import { readFile } from 'node:fs/promises';
 import { mockEmbedder } from '../../memory/embedding/mockEmbedder.js';
 import { analyzeToolCatalog, MOCK_EMBEDDER_CALIBRATION } from './analyze.js';
 import { formatToolCatalogReport } from './format.js';
@@ -174,6 +173,12 @@ export async function runToolLintCli(
 
   let catalog: readonly CatalogTool[];
   try {
+    // Lazy node:fs import (browser-compat): `agentfootprint/observe`
+    // re-exports this module, and a TOP-LEVEL node:fs/promises import
+    // detonates any browser bundle at module-eval (found by the
+    // agent-playground; same lazy-gating pattern as audit's node:crypto).
+    // The CLI path is the only consumer that touches the filesystem.
+    const { readFile } = await import('node:fs/promises');
     catalog = coerceCatalog(JSON.parse(await readFile(args.file, 'utf8')));
   } catch (error) {
     io.stderr(`agentfootprint-lint-tools: ${args.file}: ${(error as Error).message}`);

@@ -429,6 +429,13 @@ Same trick as Beat 1: instead of N libraries for N patterns, we found the M buil
 
 ## How do I see what my agent did?
 
+<p align="center">
+  <img src="docs/assets/lens-run.png" alt="A real agent run in the Lens: the conversation (with live PII redaction), the executed path lit on the merge-tree flowchart, the WHAT-HAPPENED timeline of every iteration/context/LLM turn/route, run stats, and the step inspector — all generated from the run's own trace." width="100%">
+</p>
+<p align="center">
+  <sub>One real run, fully explained — the <a href="https://github.com/footprintjs/agentfootprint-lens"><b>Lens</b></a> (<code>npm i agentfootprint-lens</code>): conversation · executed path · per-step timeline · stats, every pixel from the trace.</sub>
+</p>
+
 Because we own the loop (Beat 2), every decision and execution is captured during traversal — not bolted on. The default capture is the **causal trace**: every stage, read, write, and decision evidence, as a JSON-portable, scrubbable, queryable, exportable artifact. Beyond the default, wire custom recorders for cost, latency, or quality scoring — any observation hook fires on the same stream.
 
 <p align="center">

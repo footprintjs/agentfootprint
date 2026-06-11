@@ -52,11 +52,15 @@ export const meta: ExampleMeta = {
 //   AF_BENCH_ITERS=10 AF_BENCH_CHUNK_MS=20 npx tsx examples/features/21-deferred-observers.ts
 const num = (env: string | undefined, fallback: number) =>
   env !== undefined && Number.isFinite(Number(env)) ? Number(env) : fallback;
-const ITERATIONS = num(process.env.AF_BENCH_ITERS, 50); // ReAct iterations (N-1 tool calls + final)
-const LISTENER_MS = num(process.env.AF_BENCH_LISTENER_MS, 5); // sync cost per delivered event
-const LLM_MS = num(process.env.AF_BENCH_LLM_MS, 100); // simulated provider latency per call
-const TOOL_MS = num(process.env.AF_BENCH_TOOL_MS, 3); // simulated tool I/O per call
-const CHUNK_MS = num(process.env.AF_BENCH_CHUNK_MS, 0); // streaming cadence (0 = back-to-back)
+// Env-tunable in Node; browser bundles (the playground imports examples as
+// modules) have no `process` global — guard so module-eval never throws.
+const ENV: Record<string, string | undefined> =
+  typeof process !== 'undefined' ? process.env : {};
+const ITERATIONS = num(ENV.AF_BENCH_ITERS, 50); // ReAct iterations (N-1 tool calls + final)
+const LISTENER_MS = num(ENV.AF_BENCH_LISTENER_MS, 5); // sync cost per delivered event
+const LLM_MS = num(ENV.AF_BENCH_LLM_MS, 100); // simulated provider latency per call
+const TOOL_MS = num(ENV.AF_BENCH_TOOL_MS, 3); // simulated tool I/O per call
+const CHUNK_MS = num(ENV.AF_BENCH_CHUNK_MS, 0); // streaming cadence (0 = back-to-back)
 
 function busyWait(ms: number): void {
   const end = performance.now() + ms;
