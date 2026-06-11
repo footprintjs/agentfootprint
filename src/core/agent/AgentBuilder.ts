@@ -28,6 +28,12 @@ import type { Tool, ToolRegistryEntry } from '../tools.js';
 import type { ToolProvider } from '../../tool-providers/types.js';
 import { defaultCommentaryTemplates } from '../../recorders/observability/commentary/commentaryTemplates.js';
 import { defaultStatusTemplates } from '../../recorders/observability/status/statusTemplates.js';
+import {
+  buildSelfExplainSkill,
+  buildSelfExplainToolProvider,
+  SelfExplainBinding,
+  type SelfExplainOptions,
+} from '../../lib/trace-toolpack/selfExplain.js';
 import { Agent } from '../Agent.js';
 import type { AgentOptions } from './types.js';
 
@@ -125,6 +131,7 @@ export class AgentBuilder {
    * `.thinkingHandler()` (response-side normalization choice).
    */
   private thinkingBudgetValue?: number;
+  private selfExplainConfig?: SelfExplainOptions;
 
   constructor(opts: AgentOptions) {
     this.opts = opts;
@@ -720,6 +727,47 @@ export class AgentBuilder {
     return this;
   }
 
+  /**
+   * Let this agent answer why-questions about its OWN previous completed
+   * turn, from its recorded trace. Mounts one skill: day to day the tool
+   * catalog carries only the skill's activation row; when the user asks
+   * "why did you…", the LLM activates it and that iteration alone gets
+   * the trace tools (inline mode) or a single `explain_run` tool that
+   * runs a nested trace debugger on a cheaper model (delegate mode).
+   *
+   * Evidence binds LATE — always to the previous COMPLETED run, never
+   * the in-flight one — and includes control edges (a per-run
+   * control-dependence recorder is attached automatically).
+   *
+   * @example
+   *   Agent.create({ provider, model })
+   *     .system('You are a refunds assistant.')
+   *     .tool(lookupOrder)
+   *     .selfExplain()                                 // inline, zero config
+   *     .build();
+   *
+   * @example
+   *   .selfExplain({ delegate: { provider: anthropic(), model: 'claude-haiku-4-5' } })
+   */
+  selfExplain(opts: SelfExplainOptions = {}): this {
+    if (this.selfExplainConfig !== undefined) {
+      throw new Error('AgentBuilder.selfExplain: already enabled.');
+    }
+    if (this.opts.reactMode === 'classic') {
+      // Classic ReAct caches the tools slot on turn 1 — a mid-turn skill
+      // activation could never surface the trace tools. Fail loud at
+      // build-time rather than silently never answering why-questions.
+      throw new Error(
+        'AgentBuilder.selfExplain: requires per-iteration slot recomposition — ' +
+          "reactMode 'classic' caches the tools slot, so the activated trace tools " +
+          "would never reach the model. Use the default 'dynamic' mode (or " +
+          "'dynamic-grouped'), or use traceDebugAgent() as a separate session instead.",
+      );
+    }
+    this.selfExplainConfig = opts;
+    return this;
+  }
+
   build(): Agent {
     // Resolve the voice config: bundled defaults + consumer overrides.
     // Templates flow through the same barrel exports the rest of the
@@ -733,15 +781,49 @@ export class AgentBuilder {
       this.maxIterationsOverride !== undefined
         ? { ...this.opts, maxIterations: this.maxIterationsOverride }
         : this.opts;
+    // .selfExplain(): a fresh binding per build() — two built agents never
+    // share evidence. One mounted skill (methodology body only) + the trace
+    // tools on a skill-scoped ToolProvider composed with the consumer's own,
+    // so the catalog gains them ONLY on the activated iteration.
+    //
+    // Name reservation (mirrors the read_skill rule): the tools slot dedupes
+    // by name with first-occurrence-wins and the static registry merges
+    // FIRST — a consumer tool named like a trace tool would silently shadow
+    // it, and the skill body would instruct the model into the wrong tool.
+    if (this.selfExplainConfig) {
+      const reserved = this.selfExplainConfig.delegate
+        ? ['explain_run']
+        : ['run_overview', 'trace_node', 'trace_slice', 'who_wrote', 'get_value'];
+      const clash = this.registry.find((entry) => reserved.includes(entry.name));
+      if (clash) {
+        throw new Error(
+          `AgentBuilder.selfExplain: tool name '${clash.name}' is reserved by .selfExplain() ` +
+            `(${this.selfExplainConfig.delegate ? 'delegate' : 'inline'} mode). The tools slot ` +
+            `dedupes by name (first wins), so your tool would silently shadow the trace tool. ` +
+            `Rename it, or reserved names: ${reserved.join(', ')}.`,
+        );
+      }
+    }
+    const selfExplainBinding = this.selfExplainConfig ? new SelfExplainBinding() : undefined;
+    const injections = selfExplainBinding
+      ? [...this.injectionList, buildSelfExplainSkill(this.selfExplainConfig!)]
+      : this.injectionList;
+    const toolProvider = selfExplainBinding
+      ? buildSelfExplainToolProvider(
+          selfExplainBinding,
+          this.selfExplainConfig!,
+          this.toolProviderRef,
+        )
+      : this.toolProviderRef;
     const agent = new Agent(
       opts,
       this.systemPromptValue,
       this.registry,
       voice,
-      this.injectionList,
+      injections,
       this.memoryList,
       this.outputSchemaParser,
-      this.toolProviderRef,
+      toolProvider,
       this.systemPromptCachePolicy,
       this.cachingDisabledValue,
       this.cacheStrategyOverride,
@@ -755,6 +837,12 @@ export class AgentBuilder {
     // via `agent.attach(rec)`; the builder method is purely sugar.
     for (const rec of this.recorderList) {
       agent.attach(rec);
+    }
+    if (selfExplainBinding) {
+      // Late binding: capture fires at each run's terminal flush, when
+      // getLastSnapshot() IS the just-completed run (never in-flight).
+      selfExplainBinding.bindTo(() => agent.getLastSnapshot());
+      agent.attach(selfExplainBinding.recorder());
     }
     return agent;
   }

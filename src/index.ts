@@ -239,6 +239,10 @@ export {
   type AgentOutput,
   type ObserverDeliveryOptions,
 } from './core/Agent.js';
+// `.selfExplain()` — the in-conversation door over the agent's own trace.
+// The options type lives with the other builder-method option types; the
+// machinery (traceDebugAgent, toolpack) is on `agentfootprint/observe`.
+export type { SelfExplainOptions } from './lib/trace-toolpack/selfExplain.js';
 // RFC-001 Block 10 — deferred observer delivery: the result shape of
 // `agent.drainObservers()` + the `snapshot.observerStats` payload
 // (re-exported from footprintjs so Agent consumers don't need a direct

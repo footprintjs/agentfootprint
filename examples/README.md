@@ -251,5 +251,7 @@ _Run `npm run examples:readme` after adding/editing examples._
 | 04 | [`04-tool-choice-margins.ts`](observability/04-tool-choice-margins.ts) | Runtime tool-choice margins + flags (RFC-002 C4–C6) | toolChoiceRecorder watches a scripted agent walk into the Neo fcns-twin trap: per LLM  |
 | 05 | [`05-context-bisect.ts`](observability/05-context-bisect.ts) | Context bisect — the contextual-bug localizer (RFC-003 Part B) | A planted misleading FACT injection makes a refunds agent approve a 47-day-old refund;  |
 | 06 | [`06-backtrack-trace.ts`](observability/06-backtrack-trace.ts) | toBacktrackTrace — serialize a localizer report for the why-board UI | Serializes the example-05 causal localizer report into the BacktrackTrace contract that  |
+| 07 | [`07-trace-debug-agent.ts`](observability/07-trace-debug-agent.ts) | traceDebugAgent — the dedicated conversational trace debugger | One call turns a completed run into a debuggable conversation: traceDebugAgent() returns  |
+| 08 | [`08-self-explain.ts`](observability/08-self-explain.ts) | .selfExplain() — in-conversation why-questions over the agent’s own trace | One builder call lets the main agent answer follow-up why-questions from its own previous  |
 
 <!-- AUTO-GENERATED:examples:end -->

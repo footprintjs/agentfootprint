@@ -91,3 +91,72 @@ plants a wrong value (DTI computed against annual income) that flows through a `
 decision; a scripted debugger session finds the culprit in 8 tool calls, serving **~2.7K chars
 vs a ~29K-char full dump (~9%)** — and the gap widens with run size, because the session cost
 scales with what the model *opens*, not with what the run *produced*.
+
+## The conversational doors — ask the trace instead of reading it
+
+Two packaged ways to put a model on the other side of the toolpack
+(`examples/observability/07` and `08` run both offline):
+
+### `traceDebugAgent` — the dedicated debugger
+
+One call returns a ready Agent: toolpack mounted, the proven methodology
+(overview → drill by id → cite evidence → respect ⚠) as its system prompt.
+A separate session over a completed run — the security posture above, packaged.
+
+```ts
+import { traceDebugAgent } from 'agentfootprint/observe';
+
+const debuggerAi = traceDebugAgent({
+  artifacts: { snapshot: agent.getLastSnapshot()!, controlDeps: ctrl.asLookup() },
+  provider: anthropic(),
+  model: 'claude-haiku-4-5',   // cheap model, expensive run — that's the point
+});
+await debuggerAi.run({ message: 'Why was loan APP-7 approved?' });
+```
+
+### `.selfExplain()` — why-questions inside the main conversation
+
+Most why-questions are follow-ups. One builder call lets the main agent answer
+them from its own previous completed run:
+
+```ts
+Agent.create({ provider, model })
+  .system('You are a refunds assistant.')
+  .tool(lookupOrder)
+  .selfExplain()   // optional: { instruction, delegate: { provider, model } }
+  .build();
+```
+
+- **One skill is mounted.** Day to day the catalog carries only the activation
+  row; the iteration after the LLM activates it, the catalog gains the trace
+  tools — delivered via a `skillScopedTools` provider composed with yours, so
+  your production tool list is never touched.
+- **Evidence binds late, and only to COMPLETED runs.** Capture happens at each
+  run's terminal flush, so the tools can never see the in-flight turn. A failed
+  run still captures — "why did you fail?" works.
+- **`delegate` switches the model at that point:** the skill unlocks a single
+  `explain_run` tool whose investigation runs on a nested `traceDebugAgent`
+  at the delegate's (cheaper) price; the main conversation pays one tool call.
+
+When the main agent already carries many domain tools, prefer `delegate` (or
+route why-questions to a dedicated `traceDebugAgent` with a `Conditional`) —
+it keeps the production catalog at exactly one extra tool and the trace WALK
+out of the production context (only the bounded, evidence-cited answer
+returns as a tool result — treat it as data like any other).
+
+Two boundary notes, honestly: a turn that PAUSES (human-in-the-loop) has not
+completed — during the pause, "previous completed run" remains the older one;
+and after a resume, the explainable run covers the post-resume portion only
+(footprintjs Convention-4: control chains don't survive a pause/resume).
+Tool names `run_overview` · `trace_node` · `trace_slice` · `who_wrote` ·
+`get_value` (inline) and `explain_run` (delegate) are reserved at build time;
+a composed ToolProvider emitting those names would win the slot's
+first-occurrence dedup and shadow the trace tools — don't.
+
+### The tool boundary, named honestly
+
+`trace_node` on the agent's tool-execution step now carries an explicit marker:
+the trace records what went INTO a tool and what came BACK; what happened
+inside the consumer's system is not traced — unless the tool returns its own
+diagnostic refs (a request id, a log link), which flow through the trace like
+any other result data.

@@ -192,10 +192,24 @@ export {
 // Bounded, honest (⚠ markers), redaction-respecting, id-navigable.
 export {
   callTraceTool,
+  lazyTraceToolpack,
+  NO_COMPLETED_RUN_MESSAGE,
   TOOLPACK_HARD_CAPS,
   traceToolpack,
   type TraceToolpackArtifacts,
   type TraceToolpackOptions,
+} from './lib/trace-toolpack/index.js';
+// The two conversational doors over the toolpack: a DEDICATED debugger
+// agent (separate session, any provider — cheap models welcome), and the
+// in-conversation `.selfExplain()` builder option's types. Same evidence,
+// same honesty discipline as the UI doors (BacktrackView / Lens).
+export {
+  buildSelfExplainSkill,
+  buildSelfExplainToolProvider,
+  SelfExplainBinding,
+  traceDebugAgent,
+  type SelfExplainOptions,
+  type TraceDebugAgentOptions,
 } from './lib/trace-toolpack/index.js';
 // Contextual-bug localizer (RFC-003 Part B, D7–D9) — "git bisect for
 // context". Assembly: footprintjs causal DAG (control edges + honesty

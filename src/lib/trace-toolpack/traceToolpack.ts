@@ -557,6 +557,22 @@ function buildTraceNode(
         );
       }
 
+      // The tool boundary, named honestly: the agent chart's tool-execution
+      // stage runs CONSUMER code (DB calls, services). The trace records the
+      // envelope — args in, results out — never the internals. Gated on the
+      // agent-chart signature (a call-llm stage exists) so a generic chart
+      // with a coincidental 'tool-calls' stage gets no false marker.
+      const isAgentChart = [...index.idsByStagePart.keys()].some(
+        (part) => part.split('/').pop() === 'call-llm',
+      );
+      if (isAgentChart && stagePartOf(runtimeStageId).split('/').pop() === 'tool-calls') {
+        lines.push(
+          '⚠ boundary: tool execution happens in consumer systems — the trace records ' +
+            'arguments in / results out; tool internals are not traced unless the tool ' +
+            'returns its own diagnostic refs.',
+        );
+      }
+
       const errorKeys = Object.keys(node?.errors ?? {});
       if (errorKeys.length > 0) {
         lines.push(`errors (${errorKeys.length}):`);

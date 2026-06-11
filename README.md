@@ -535,6 +535,26 @@ Four views, one trace — pick by question:
 | **Lens** | Agent-centric — User/Agent[3 slots]/Tool flowchart with iteration scrubber and round commentary | Live debugging, "what did the agent see at step 5?" |
 | **Explainable Trace** | Structural — subflow tree, full flowchart, memory inspector, per-stage execution timeline | Architecture review, root-cause analysis |
 
+And two **conversational** doors over the same evidence — ask instead of look:
+
+```ts
+// dedicated: a cheap model debugs an expensive run by id — pays for what it opens
+const debuggerAi = traceDebugAgent({ artifacts, provider: anthropic(), model: 'claude-haiku-4-5' });
+await debuggerAi.run({ message: 'Why was loan APP-7 approved?' });
+
+// in-conversation: the agent answers "why did you…?" from its OWN previous turn
+Agent.create({ provider, model }).tool(lookupOrder)
+  .selfExplain({ delegate: { provider: anthropic(), model: 'claude-haiku-4-5' } })
+  .build();
+```
+
+`.selfExplain()` mounts one skill: the catalog stays clean until the LLM activates
+it, evidence binds only to **completed** runs (never in-flight), and `delegate`
+answers at the cheap model's price inside the expensive conversation.
+[Guide](docs/guides/trace-debugging.md) · examples
+[`07`](examples/observability/07-trace-debug-agent.ts) ·
+[`08`](examples/observability/08-self-explain.ts).
+
 > 📖 Powered by [footprintjs `causalChain()`](https://footprintjs.github.io/footPrint/blog/backward-causal-chain/) — backward thin-slicing on the commit log. [Causal memory deep dive](https://footprintjs.github.io/agentfootprint/causal-deep-dive/) · [Explainability & compliance](https://footprintjs.github.io/footPrint/blog/explainability-compliance/)
 
 **One recording. Two lenses. Three consumers. Zero extra instrumentation.**
@@ -646,6 +666,7 @@ The flowchart, recorders, and tests don't change between dev and prod.
 - Contextual-bug localizer — `localizeContextBug` (causal slice → influence ranking → counterfactual ablation) + `bisectCulprits`
 - `toBacktrackTrace` — render any decision as the BacktrackView "why?" board
 - Trace toolpack — 6 bounded, LLM-callable tools so a debugger model walks the trace by id
+- `traceDebugAgent` (dedicated debugger session) · `.selfExplain()` (in-conversation why-questions, skill-gated, with a cheap-model `delegate` switch)
 - OTel GenAI span export · hash-chained tamper-evident audit bundles with an offline verifier
 
 **Tooling**

@@ -5,6 +5,41 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.28.0] - 2026-06-11
+
+### Added
+- **The conversational doors over the trace toolpack** — ask the trace
+  instead of reading it (`agentfootprint/observe` + the Agent builder):
+  - **`traceDebugAgent({ artifacts, provider, model })`** — one call returns
+    a ready dedicated debugger: toolpack mounted, the proven methodology
+    (overview → drill by id → cite evidence → respect ⚠) as its system
+    prompt. A separate session over a completed run — the B13 security
+    posture, packaged — and the cheap-model story made real (a Haiku-priced
+    session debugging a Sonnet run, paying only for what it opens, by id —
+    ~9% of the trace in the example-01 fixture, widening with run size).
+  - **`.selfExplain()`** on the Agent builder — the agent answers follow-up
+    why-questions from its OWN previous completed run. Mounts one skill
+    (methodology body only) + a `skillScopedTools` provider composed with
+    the consumer's own, so the production catalog carries only the
+    activation row until the LLM activates the skill — then the next
+    iteration gains the trace tools. Evidence binds LATE at each run's
+    terminal flush (a fresh per-run control-dep recorder is rotated so
+    captured control edges survive Convention-4 resets) and can never see
+    the in-flight run; failed runs capture too ("why did you fail?" works).
+    `delegate: { provider, model }` switches the model at the why-point:
+    one `explain_run` tool runs a nested `traceDebugAgent` at the
+    delegate's price.
+  - **`lazyTraceToolpack(resolve)`** — the toolpack with late-bound
+    artifacts (template schemas pre-run, real index memoized per snapshot,
+    honest model-visible answer before the first completed run).
+  - **Tool-boundary honesty**: `trace_node` on the tool-execution step now
+    marks the consumer-system boundary explicitly (args in / results out;
+    internals not traced unless the tool returns its own diagnostic refs).
+  - 16 tests across Convention-3 tiers; examples
+    `07-trace-debug-agent.ts` + `08-self-explain.ts` (offline, with the
+    per-call catalog transcript as the on-demand proof); guide section
+    "The conversational doors".
+
 ## [6.27.0] - 2026-06-11
 
 ### Added
