@@ -197,7 +197,7 @@ export {
   type TraceToolpackArtifacts,
   type TraceToolpackOptions,
 } from './lib/trace-toolpack/index.js';
-// Contextual-bug localizer (RFC-003 Part B, D7–D8) — "git bisect for
+// Contextual-bug localizer (RFC-003 Part B, D7–D9) — "git bisect for
 // context". Assembly: footprintjs causal DAG (control edges + honesty
 // markers + EdgeWeigher) × influence-core scoring (D6) × consumer-run
 // counterfactual ablation. §B2 claim tiers: scores/weights are
@@ -206,6 +206,7 @@ export {
 export {
   ablationForSuspect,
   applyAblations,
+  bisectCulprits,
   CONTEXT_BISECT_DEFAULTS,
   defaultOutcomeComparator,
   defaultSuspectClassifier,
@@ -225,6 +226,9 @@ export {
   type AblationTargets,
   type AblationVerdict,
   type AblationVerdictKind,
+  type BisectCulpritsOptions,
+  type BisectionProbe,
+  type BisectionResult,
   type CapturedEventLike,
   type ClassifyContext,
   type ContextBugArtifacts,

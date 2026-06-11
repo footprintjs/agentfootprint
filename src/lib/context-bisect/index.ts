@@ -8,6 +8,7 @@
  *
  *   D7 — `llmEdgeWeigher`     influence-weighted LLM-call slice edges
  *   D8 — `localizeContextBug` trigger → slice → ranked suspects → ablation
+ *   D9 — `bisectCulprits`     seeded multi-culprit bisection + variance
  *
  * §B2 claim tiers (spelled out on every type): weights/scores are
  * embedding-geometry PROXIES; ablation verdicts are the ONLY causal
@@ -44,6 +45,13 @@ export {
   type AblationTargets,
   type ProbeConfig,
 } from './ablation.js';
+
+export {
+  bisectCulprits,
+  type BisectCulpritsOptions,
+  type BisectionProbe,
+  type BisectionResult,
+} from './bisect.js';
 
 export {
   CONTEXT_BISECT_DEFAULTS,
