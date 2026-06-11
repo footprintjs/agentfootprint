@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.26.1] - 2026-06-11
+
+### Fixed
+- **`agentfootprint/observe` was browser-broken since 6.25.0.** The tool-lint
+  CLI (`src/lib/tool-lint/cli.ts`) had a top-level `import { readFile } from
+  'node:fs/promises'` and is re-exported by the `/observe` barrel, so any
+  browser bundle importing `agentfootprint/observe` crashed at load. The
+  import is now a lazy `await import('node:fs/promises')` at the one use
+  site (file-reading only happens in the Node CLI path) — same pattern the
+  audit exporter uses for `node:crypto`. Found by loading the playground in
+  a browser; example 21's module-top `process.env` reads got the same guard.
+
 ## [6.26.0] - 2026-06-11
 
 RFC-003 Part B (blocks D7–D9): the contextual-bug LOCALIZER — "git bisect
