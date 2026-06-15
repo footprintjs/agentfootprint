@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.29.0] - 2026-06-11
+
+### Added — three interfaces for identifying a context error (`agentfootprint/observe`)
+- **`rankingConfidence`** — honesty marker for an influence ranking. When no
+  source clearly dominates (the signature of an absence/crowding bug
+  output-similarity is blind to), it returns `clearWinner: false` with a
+  `shortlist` to confirm by ablation, instead of a confident-but-wrong rank-1.
+  Guarantees the lead — and, when there's no clear winner, the runner-up — are
+  in the shortlist; robust to malformed scores.
+- **Pluggable `ConfidenceStrategy`** — the decisiveness rule is swappable:
+  `marginStrategy` (default, absolute gap) and `ratioStrategy` (scale-invariant,
+  transfers across embedders), plus bring-your-own. Framework invariants hold
+  under any strategy.
+- **`findDroppedContext`** — missing-context finder (interface #3). Finds context
+  that was available but never reached the model (`available − sent`, an exact
+  O(n) id diff — no embeddings, no LLM); confirm a candidate by RESTORATION (the
+  mirror of ablation). Closes the gap influence-ranking + ablation are blind to
+  (a key unit truncated out of the window has nothing to ablate).
+
+Each interface is ship-a-default + bring-your-own. New guides:
+`docs/guides/ranking-confidence.md`, `docs/guides/missing-context.md`; examples
+09–10. New tests across all 7 Convention-3 types; full suite 2967 green.
+
 ## [6.28.1] - 2026-06-11
 
 ### Docs
