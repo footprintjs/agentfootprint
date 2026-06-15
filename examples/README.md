@@ -254,5 +254,6 @@ _Run `npm run examples:readme` after adding/editing examples._
 | 07 | [`07-trace-debug-agent.ts`](observability/07-trace-debug-agent.ts) | traceDebugAgent — the dedicated conversational trace debugger | One call turns a completed run into a debuggable conversation: traceDebugAgent() returns  |
 | 08 | [`08-self-explain.ts`](observability/08-self-explain.ts) | .selfExplain() — in-conversation why-questions over the agent’s own trace | One builder call lets the main agent answer follow-up why-questions from its own previous  |
 | 09 | [`09-attributability-marker.ts`](observability/09-attributability-marker.ts) | rankingConfidence — honesty marker on influence rankings | When no source clearly dominates an influence ranking (the signature of an  |
+| 10 | [`10-missing-context.ts`](observability/10-missing-context.ts) | _no meta_ | — |
 
 <!-- AUTO-GENERATED:examples:end -->

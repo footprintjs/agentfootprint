@@ -166,6 +166,20 @@ if (!c.clearWinner) ablate(c.shortlist); // too flat to trust → escalate to tr
 // (scale-invariant) · bring-your-own. See docs/guides/ranking-confidence.md
 ```
 
+**Three interfaces, one for each shape of the bug** — ship-a-default, bring-your-own:
+
+| interface | finds the culprit when it is… | confirm by |
+|---|---|---|
+| **influence ranking** (`scoreInfluence` + `rankingConfidence`) | **present** — orders suspects, says when it can't | — |
+| **ablation** (`localizeContextBug`) | **present** — *remove* it, see the outcome flip | removal |
+| **missing-context finder** (`findDroppedContext`) | **absent** — available but never reached the model (`available − sent`) | restoration |
+
+The third closes the gap the first two are blind to — a key instruction truncated
+out of the window has nothing to ablate. `findDroppedContext` is a cheap, exact id
+diff (no embeddings, no LLM); confirm by *restoration* — add the dropped unit back,
+see if the outcome flips. [Guide](docs/guides/missing-context.md) ·
+[example](examples/observability/10-missing-context.ts).
+
 **The same walk, visual.** One call serializes the report for
 [AgentThinkingUI](https://github.com/footprintjs/agentThinkingUI)'s
 `<BacktrackView>` — the "why?" board, triggerable from **any** decision point

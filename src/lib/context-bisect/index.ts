@@ -23,6 +23,14 @@ export {
   type RankedParentEdge,
 } from './llmEdgeWeigher.js';
 
+// Interface #3 — missing-context finder (available − sent; confirm by restoration).
+export {
+  findDroppedContext,
+  type ContextUnit,
+  type DroppedUnit,
+  type MissingContextResult,
+} from './missingContext.js';
+
 export {
   defaultSuspectClassifier,
   formatContextBugReport,
