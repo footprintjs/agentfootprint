@@ -30,6 +30,12 @@ export {
   type DroppedUnit,
   type MissingContextResult,
 } from './missingContext.js';
+export {
+  runRestorationProbe,
+  type RestorationRerun,
+  type RestorationRunner,
+  type RestorationProbeConfig,
+} from './restoration.js';
 
 export {
   defaultSuspectClassifier,
@@ -87,6 +93,7 @@ export {
   type HonestyFlagKind,
   type OutcomeComparator,
   type QualityTriggerLookup,
+  type RestoredCandidate,
   type SimilarityStats,
   type SliceStats,
   type Suspect,

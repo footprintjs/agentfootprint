@@ -143,7 +143,7 @@ export function applyAblations<
 
 // ─── The probe engine (D9 stats) ─────────────────────────────────────
 
-function similarityStats(values: readonly number[]): SimilarityStats {
+export function similarityStats(values: readonly number[]): SimilarityStats {
   if (values.length === 0) return { mean: 0, min: 0, max: 0, stdev: 0 };
   const mean = values.reduce((sum, v) => sum + v, 0) / values.length;
   const variance = values.reduce((sum, v) => sum + (v - mean) ** 2, 0) / values.length;
@@ -218,20 +218,27 @@ export function verdictFor(
   label: string,
   stats: AblationRunStats,
   baselineStable: boolean,
+  /** The counterfactual intervention. `'ablating'` (default) for present
+   *  suspects; `'restoring'` for missing-context candidates (interface #3).
+   *  Default keeps every claim string byte-identical to before. */
+  action: 'ablating' | 'restoring' = 'ablating',
 ): AblationVerdict {
+  const verb = action; // 'ablating' | 'restoring'
+  const baselineWord = action === 'ablating' ? 'un-ablated' : 'un-restored';
+  const tierWord = action === 'ablating' ? 'ablation' : 'restoration';
   if (!baselineStable) {
     return {
       verdict: 'inconclusive',
       claim:
-        `INCONCLUSIVE: the un-ablated baseline itself changed outcome across seeded reruns — ` +
-        `no ablation verdict for ${label} is trustworthy on an unstable scenario.`,
+        `INCONCLUSIVE: the ${baselineWord} baseline itself changed outcome across seeded reruns — ` +
+        `no ${tierWord} verdict for ${label} is trustworthy on an unstable scenario.`,
     };
   }
   if (probeFlipped(stats)) {
     return {
       verdict: 'confirmed',
       claim:
-        `CAUSAL: ablating ${label} flipped the outcome in ${stats.flips}/${stats.samples} ` +
+        `CAUSAL: ${verb} ${label} flipped the outcome in ${stats.flips}/${stats.samples} ` +
         `seeded reruns (mean similarity to original ${stats.similarity.mean.toFixed(3)} ` +
         `± ${stats.similarity.stdev.toFixed(3)}).`,
     };
@@ -240,14 +247,14 @@ export function verdictFor(
     return {
       verdict: 'inconclusive',
       claim:
-        `INCONCLUSIVE: ablating ${label} flipped only ${stats.flips}/${stats.samples} seeded ` +
+        `INCONCLUSIVE: ${verb} ${label} flipped only ${stats.flips}/${stats.samples} seeded ` +
         `reruns — below majority; raise samples or check scenario stability.`,
     };
   }
   return {
     verdict: 'not-confirmed',
     claim:
-      `NOT CONFIRMED: ablating ${label} did not change the outcome in ${stats.samples} seeded ` +
+      `NOT CONFIRMED: ${verb} ${label} did not change the outcome in ${stats.samples} seeded ` +
       `reruns — its ranking remains a correlational proxy only.`,
   };
 }

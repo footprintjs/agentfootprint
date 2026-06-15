@@ -165,6 +165,22 @@ export interface AblationVerdict {
   readonly claim: string;
 }
 
+/**
+ * A missing-context candidate (interface #3): a unit that was available for the
+ * turn but never reached the model. The mirror of a `Suspect`'s ablation
+ * verdict — `confirmed` here means RESTORING the unit flipped the outcome in a
+ * majority of seeded reruns on a stable baseline. Without a restoration runner
+ * it carries only `id`/`content` (a candidate, not a causal claim).
+ */
+export interface RestoredCandidate {
+  readonly id: string;
+  readonly content?: string;
+  /** Seeded restoration-probe stats (causal tier only). */
+  readonly runs?: AblationRunStats;
+  /** Restoration verdict (causal tier only). */
+  readonly verdict?: AblationVerdict;
+}
+
 /** One ranked suspect. */
 export interface Suspect {
   /**
@@ -339,6 +355,13 @@ export interface ContextBugReport {
   readonly mode: 'correlational' | 'causal';
   /** Ranked suspects, best (most aligned + upstream) first. */
   readonly suspects: readonly Suspect[];
+  /**
+   * Missing-context candidates (interface #3): units that were available for
+   * the turn but never reached the model. Each carries a RESTORATION verdict
+   * when a restoration runner was supplied (causal tier — restoring it flipped
+   * the outcome). Absent when no `missingContext` option was passed.
+   */
+  readonly dropped?: readonly RestoredCandidate[];
   readonly sliceStats: SliceStats;
   /** ⚠ everything that bounds what this report can honestly claim. */
   readonly honestyFlags: readonly HonestyFlag[];

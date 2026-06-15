@@ -62,6 +62,8 @@ is *correctly* dropped. Confirm causally the same way ablation does, mirrored:
 consumer-owned (the library doesn't own your agent loop), exactly like the
 ablation runner.
 
+You can drive this yourself with `findDroppedContext` + your own re-run loop:
+
 ```typescript
 const { dropped } = findDroppedContext(assembled, sentToModel);
 for (const unit of dropped) {
@@ -72,6 +74,39 @@ for (const unit of dropped) {
   }
 }
 ```
+
+### …or as a first-class tier in `localizeContextBug`
+
+The localizer integrates this directly: pass `missingContext` with what was
+`available` and `sent`, plus a `rerun` runner, and the report gains a `dropped`
+list — each candidate with a **restoration verdict** (the same seeded,
+majority-flip, baseline-checked discipline as ablation; `verdictFor(...,
+'restoring')`). With a verdict present the report is `mode: 'causal'`.
+
+```typescript
+import { localizeContextBug, type RestorationRunner } from 'agentfootprint/observe';
+
+// re-run the agent with `units` added back ([] = baseline). Mirror of AblationRunner.
+const runner: RestorationRunner = async (units, { seed }) => rebuildAndRun({ restore: units, seed });
+
+const report = await localizeContextBug({
+  artifacts, embedder, atStep,
+  rerun,                                  // interface #2 — present suspects (optional)
+  missingContext: {                       // interface #3 — absent suspects
+    available: assembledUnits,
+    sent: sentToModel,
+    rerun: { runner, originalOutput: buggyAnswer, samples: 3 },
+  },
+});
+
+for (const c of report.dropped ?? []) {
+  if (c.verdict?.verdict === 'confirmed') console.log('missing-context culprit:', c.id, c.verdict.claim);
+}
+```
+
+`RestoredCandidate` mirrors a `Suspect`'s ablation verdict: `{ id, content?,
+runs?, verdict? }`. Omit `missingContext.rerun` to list candidates without
+verdicts (correlational — the finder only).
 
 Optional speed-up: order the dropped units by relevance (embedding similarity of
 each to the task) before restoration-testing, so you re-run fewer times — the

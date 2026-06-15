@@ -36,12 +36,15 @@ import { causalChain, commitValueAt } from 'footprintjs/trace';
 import { scoreInfluence, type Embedder, type EvidenceInput } from '../influence-core/index.js';
 import { ablationForSuspect, runAblationProbe, verdictFor } from './ablation.js';
 import { llmEdgeWeigher, stepOutputText } from './llmEdgeWeigher.js';
+import { findDroppedContext, type ContextUnit } from './missingContext.js';
+import { runRestorationProbe, type RestorationRerun } from './restoration.js';
 import type {
   AblationRerun,
   ContextBugArtifacts,
   ContextBugReport,
   EdgePathStep,
   HonestyFlag,
+  RestoredCandidate,
   SliceStats,
   Suspect,
   SuspectDetail,
@@ -297,6 +300,18 @@ export interface LocalizeContextBugOptions {
    * ranking, marked `mode: 'correlational'`.
    */
   readonly rerun?: AblationRerun;
+  /**
+   * Interface #3 — the MISSING-context tier. Supply what was `available` for
+   * the turn and what was `sent` to the model; the report's `dropped` lists the
+   * units that never reached the model (`available − sent`). Add a `rerun` and
+   * each dropped candidate gets a RESTORATION verdict (the mirror of ablation:
+   * restoring it flips the outcome → causal). Absent → no `dropped` section.
+   */
+  readonly missingContext?: {
+    readonly available: readonly ContextUnit[];
+    readonly sent: readonly ContextUnit[];
+    readonly rerun?: RestorationRerun;
+  };
   /** Slice depth budget. Default 12. */
   readonly maxDepth?: number;
   /** Slice node budget. Default 80. */
@@ -483,6 +498,15 @@ export async function localizeContextBug(
   const sliceStats = buildSliceStats(root, nodes, maxDepth, maxNodes);
   const honestyFlags = buildHonestyFlags(artifacts, index, sliceStats, llmCallIds.length);
 
+  // ── 5b. Missing-context tier (interface #3) ─────────────────────────
+  // Independent of ablation: finds what was available but never sent, and —
+  // with a restoration runner — confirms each by restoration (the causal mirror).
+  const dropped = options.missingContext
+    ? await runMissingContextTier(options.missingContext, embedder)
+    : undefined;
+  // A restoration verdict (even not-confirmed) is a causal-tier statement.
+  const restorationRan = dropped?.some((d) => d.verdict !== undefined) ?? false;
+
   // ── 5. Ablate (the causal tier) ─────────────────────────────────────
   if (options.rerun === undefined) {
     return {
@@ -490,8 +514,9 @@ export async function localizeContextBug(
       stepName: root.stageName,
       triggerSource,
       ...(triggerScore !== undefined ? { triggerScore } : {}),
-      mode: 'correlational',
+      mode: restorationRan ? 'causal' : 'correlational',
       suspects: ranked,
+      ...(dropped ? { dropped } : {}),
       sliceStats,
       honestyFlags,
     };
@@ -539,10 +564,47 @@ export async function localizeContextBug(
     ...(triggerScore !== undefined ? { triggerScore } : {}),
     mode: 'causal',
     suspects: withVerdicts,
+    ...(dropped ? { dropped } : {}),
     sliceStats,
     honestyFlags: flags,
     baseline,
   };
+}
+
+/**
+ * Interface #3 tier: find context available but not sent, and — with a
+ * restoration runner — confirm each by restoration (the mirror of ablation).
+ * Without a runner, returns the dropped units as candidates (no verdicts).
+ */
+async function runMissingContextTier(
+  missing: NonNullable<LocalizeContextBugOptions['missingContext']>,
+  embedder: Embedder,
+): Promise<readonly RestoredCandidate[]> {
+  const { dropped } = findDroppedContext(missing.available, missing.sent);
+  const asCandidate = (u: ContextUnit): RestoredCandidate =>
+    u.content === undefined ? { id: u.id } : { id: u.id, content: u.content };
+
+  if (missing.rerun === undefined) return dropped.map(asCandidate);
+
+  const config = { rerun: missing.rerun, embedder };
+  const maxCandidates = missing.rerun.maxCandidates ?? 5;
+  // Baseline: restoring nothing must reproduce the buggy output (stable).
+  const baseline = await runRestorationProbe(config, []);
+  const baselineStable = baseline.flips === 0;
+
+  const out: RestoredCandidate[] = [];
+  let restored = 0;
+  for (const unit of dropped) {
+    if (restored >= maxCandidates) {
+      out.push(asCandidate(unit));
+      continue;
+    }
+    restored++;
+    const runs = await runRestorationProbe(config, [unit]);
+    const verdict = verdictFor(`dropped "${unit.id}"`, runs, baselineStable, 'restoring');
+    out.push({ ...asCandidate(unit), runs, verdict });
+  }
+  return out;
 }
 
 // ─── Internals ───────────────────────────────────────────────────────
