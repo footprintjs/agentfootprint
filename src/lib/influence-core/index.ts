@@ -36,15 +36,20 @@ export type {
   MarginCandidate,
   MarginResult,
   PairwiseSimilarityResult,
+  RankingConfidence,
   SignalScores,
   SimilarityItem,
   SimilarityPair,
 } from './types.js';
 export {
+  DEFAULT_CLEAR_WINNER_MARGIN,
   DEFAULT_INFLUENCE_WEIGHTS,
   DEFAULT_MARGIN_THRESHOLD,
   DEFAULT_PERSISTENCE_THRESHOLD,
+  DEFAULT_SHORTLIST_BAND,
 } from './types.js';
+
+export { rankingConfidence, type RankingConfidenceOptions } from './attributability.js';
 
 export {
   contentHash,

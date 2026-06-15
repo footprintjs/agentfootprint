@@ -253,5 +253,6 @@ _Run `npm run examples:readme` after adding/editing examples._
 | 06 | [`06-backtrack-trace.ts`](observability/06-backtrack-trace.ts) | toBacktrackTrace — serialize a localizer report for the why-board UI | Serializes the example-05 causal localizer report into the BacktrackTrace contract that  |
 | 07 | [`07-trace-debug-agent.ts`](observability/07-trace-debug-agent.ts) | traceDebugAgent — the dedicated conversational trace debugger | One call turns a completed run into a debuggable conversation: traceDebugAgent() returns  |
 | 08 | [`08-self-explain.ts`](observability/08-self-explain.ts) | .selfExplain() — in-conversation why-questions over the agent’s own trace | One builder call lets the main agent answer follow-up why-questions from its own previous  |
+| 09 | [`09-attributability-marker.ts`](observability/09-attributability-marker.ts) | rankingConfidence — honesty marker on influence rankings | When no source clearly dominates an influence ranking (the signature of an  |
 
 <!-- AUTO-GENERATED:examples:end -->

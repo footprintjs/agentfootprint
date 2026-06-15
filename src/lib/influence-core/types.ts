@@ -60,6 +60,79 @@ export const DEFAULT_PERSISTENCE_THRESHOLD = 0.3;
 /** RFC-002 §4 default: margins below this flag the choice as `narrow`. */
 export const DEFAULT_MARGIN_THRESHOLD = 0.05;
 
+/**
+ * RFC-003 default: an influence ranking whose top-1 vs top-2 score margin is
+ * below this has NO clear winner — a shortlist, not a verdict. Escalate to
+ * ablation.
+ *
+ * UNCALIBRATED proxy starting point, chosen for interpretability. `margin`
+ * is an ABSOLUTE difference on the same scale as `scoreInfluence`'s composite
+ * (S ∈ ≈[−0.7, 1]), so this threshold is EMBEDDER-RELATIVE — recalibrate by
+ * sweeping clear-winner vs flat rankings on your embedder. The numeric
+ * coincidence with `DEFAULT_MARGIN_THRESHOLD` is NOT a shared derivation: that
+ * one measures `scoreMargin`'s chosen-vs-not-chosen distribution, a different
+ * statistic.
+ */
+export const DEFAULT_CLEAR_WINNER_MARGIN = 0.05;
+
+/**
+ * RFC-003 default: when there is no clear winner, suspects scoring within this
+ * band of the top form the shortlist ablation should COVER (the culprit may be
+ * any of them — or, for absence bugs, none). UNCALIBRATED proxy; embedder-
+ * relative (see `DEFAULT_CLEAR_WINNER_MARGIN`).
+ */
+export const DEFAULT_SHORTLIST_BAND = 0.1;
+
+/**
+ * Confidence in an influence ranking (`scoreInfluence` output) — the honesty
+ * companion to the scorer.
+ *
+ * Output-similarity influence is a PROXY: it ranks sources by how much they
+ * resemble the final answer. It is structurally BLIND to absence/crowding bugs
+ * — a culprit that caused the error by *displacing* context (history
+ * truncation, context dilution) need not resemble the answer at all, so it can
+ * rank low or off the top. This result makes that honesty explicit: when no
+ * source clearly dominates, the ranking is a SHORTLIST to confirm by ablation,
+ * never a verdict. Mirrors the causal slice's incompleteness markers — the
+ * library says what its proxy cannot see.
+ */
+export interface RankingConfidence {
+  /**
+   * True when one source clearly dominates (`margin >= clearWinnerMargin`),
+   * so the ranking can be trusted as a LEAD. False = treat as shortlist +
+   * ablate. (A single suspect is trivially a clear winner — by absence of
+   * alternatives, not strength of signal.) NOTE: this is the inverse of the
+   * sibling `MarginResult.flags.narrow`. Honesty: a clear winner means the
+   * proxy has a clear top, NOT that the top is the cause — a high-similarity
+   * innocent the answer rationalizes over can win; ablation is the only causal
+   * confirmation in either branch.
+   */
+  readonly clearWinner: boolean;
+  /**
+   * `score(#1) − score(#2)`, an ABSOLUTE difference on the composite-score
+   * scale (embedder-relative). `undefined` when fewer than 2 suspects, when
+   * all scores are malformed, or when the runner-up score is unavailable
+   * (a clean top over a malformed #2). Read `clearWinner` to disambiguate.
+   */
+  readonly margin: number | undefined;
+  /** Id of the top-ranked suspect (the lead). `undefined` only when there are
+   *  none. Under an exact top tie this is the input-order first and not
+   *  meaningful (there is no clear winner anyway). */
+  readonly lead: string | undefined;
+  /**
+   * Suspects within the band of the top score — the set ablation should COVER.
+   * CONSUME ONLY WHEN `clearWinner` IS FALSE; when there is a clear winner this
+   * is informational (the band near the top), not an ablation worklist. Always
+   * includes `lead` when present, and — when no clear winner with ≥2 suspects —
+   * the runner-up too. De-duplicated.
+   */
+  readonly shortlist: readonly string[];
+  /** Human-readable explanation for narratives / reports. PRESENTATION ONLY —
+   *  read `clearWinner` / `margin` / `shortlist` as data, never parse this
+   *  string. */
+  readonly reason: string;
+}
+
 /** The four signal values for one evidence item (paper Eq. 1–4). */
 export interface SignalScores {
   /** FA — cosine(evidence, finalAnswer). Range [-1, 1]. */
