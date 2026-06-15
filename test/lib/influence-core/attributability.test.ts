@@ -15,9 +15,12 @@ import { describe, expect, it } from 'vitest';
 import { mockEmbedder } from '../../../src/memory/embedding/mockEmbedder';
 import {
   rankingConfidence,
+  marginStrategy,
+  ratioStrategy,
   DEFAULT_CLEAR_WINNER_MARGIN,
   DEFAULT_INFLUENCE_WEIGHTS,
   scoreInfluence,
+  type ConfidenceStrategy,
   type InfluenceScore,
 } from '../../../src/lib/influence-core';
 // Public-surface re-export — proves the observe barrel wiring (not a dead export).
@@ -234,9 +237,10 @@ describe('rankingConfidence — security & robustness', () => {
   });
 
   it('negative or NaN thresholds fail loud with a prefixed message', () => {
-    expect(() => rankingConfidence([mk('a', 0.5)], { clearWinnerMargin: -1 })).toThrow(/rankingConfidence/);
+    // clearWinnerMargin builds the default margin strategy → its throw is prefixed there.
+    expect(() => rankingConfidence([mk('a', 0.5)], { clearWinnerMargin: -1 })).toThrow(/marginStrategy/);
+    expect(() => rankingConfidence([mk('a', 0.5)], { clearWinnerMargin: NaN })).toThrow(/marginStrategy/);
     expect(() => rankingConfidence([mk('a', 0.5)], { shortlistBand: -0.1 })).toThrow(/rankingConfidence/);
-    expect(() => rankingConfidence([mk('a', 0.5)], { clearWinnerMargin: NaN })).toThrow(/rankingConfidence/);
   });
 
   it('does not mutate the caller’s array', () => {
@@ -250,6 +254,66 @@ describe('rankingConfidence — security & robustness', () => {
     const r = rankingConfidence([mk('__proto__', 0.9), mk('constructor', 0.4)]);
     expect(r.lead).toBe('__proto__');
     expect(({} as Record<string, unknown>).polluted).toBeUndefined();
+  });
+});
+
+// ─── PLUGGABLE STRATEGY (seam + shipped strategies) ──────────────────
+describe('rankingConfidence — pluggable strategy', () => {
+  it('marginStrategy is the default (explicit == implicit)', () => {
+    const scores = [mk('a', 0.82), mk('b', 0.8)];
+    const implicit = rankingConfidence(scores);
+    const explicit = rankingConfidence(scores, { strategy: marginStrategy(DEFAULT_CLEAR_WINNER_MARGIN) });
+    expect(explicit.clearWinner).toBe(implicit.clearWinner);
+  });
+
+  it('strategy WINS over clearWinnerMargin when both are passed', () => {
+    // margin 0.02; clearWinnerMargin 0.01 would say clear, but the strategy says not.
+    const scores = [mk('a', 0.82), mk('b', 0.8)];
+    const r = rankingConfidence(scores, { clearWinnerMargin: 0.01, strategy: marginStrategy(0.05) });
+    expect(r.clearWinner).toBe(false);
+    expect(r.reason).toContain('margin>=0.05');
+  });
+
+  it('ratioStrategy is scale-invariant where absolute margin is not', () => {
+    // SAME relative gap (10%) at two different scales:
+    const small = [mk('a', 0.1), mk('b', 0.09)]; // abs gap 0.01, ratio 0.10
+    const large = [mk('a', 1.0), mk('b', 0.9)]; // abs gap 0.10, ratio 0.10
+    // absolute margin (0.05) FLIPS its verdict with scale:
+    expect(rankingConfidence(small, { clearWinnerMargin: 0.05 }).clearWinner).toBe(false);
+    expect(rankingConfidence(large, { clearWinnerMargin: 0.05 }).clearWinner).toBe(true);
+    // ratio (0.05) is INVARIANT — both are clear winners:
+    const ratio = ratioStrategy(0.05);
+    expect(rankingConfidence(small, { strategy: ratio }).clearWinner).toBe(true);
+    expect(rankingConfidence(large, { strategy: ratio }).clearWinner).toBe(true);
+  });
+
+  it('ratioStrategy separates a B6-like flat ranking from a content-bug lead', () => {
+    const ratio = ratioStrategy(0.05);
+    const b6 = [mk('innocent', 0.828), mk('filler', 0.799), mk('f2', 0.767)]; // ratio ~3.5%
+    const content = [mk('culprit', 0.85), mk('x', 0.6)]; // ratio ~29%
+    expect(rankingConfidence(b6, { strategy: ratio }).clearWinner).toBe(false);
+    expect(rankingConfidence(content, { strategy: ratio }).clearWinner).toBe(true);
+  });
+
+  it('a custom strategy plugs in and its name surfaces in the reason', () => {
+    const alwaysClear: ConfidenceStrategy = { name: 'always', isClearWinner: () => true };
+    const r = rankingConfidence([mk('a', 0.5), mk('b', 0.49)], { strategy: alwaysClear });
+    expect(r.clearWinner).toBe(true);
+    expect(r.reason).toContain('always');
+  });
+
+  it('framework invariants hold under ANY strategy (malformed + single suspect)', () => {
+    const alwaysClear: ConfidenceStrategy = { name: 'always', isClearWinner: () => true };
+    // all-malformed must stay not-clear regardless of strategy:
+    expect(rankingConfidence([mk('a', NaN), mk('b', NaN)], { strategy: alwaysClear }).clearWinner).toBe(false);
+    // single suspect is clear regardless:
+    const neverClear: ConfidenceStrategy = { name: 'never', isClearWinner: () => false };
+    expect(rankingConfidence([mk('only', 0.3)], { strategy: neverClear }).clearWinner).toBe(true);
+  });
+
+  it('strategy factories reject negative/NaN thresholds', () => {
+    expect(() => marginStrategy(-1)).toThrow(/marginStrategy/);
+    expect(() => ratioStrategy(NaN)).toThrow(/ratioStrategy/);
   });
 });
 

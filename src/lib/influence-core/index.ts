@@ -27,6 +27,7 @@
 
 export type {
   CandidateScore,
+  ConfidenceStrategy,
   EmbedArgs,
   EmbedBatchArgs,
   Embedder,
@@ -43,13 +44,19 @@ export type {
 } from './types.js';
 export {
   DEFAULT_CLEAR_WINNER_MARGIN,
+  DEFAULT_CLEAR_WINNER_RATIO,
   DEFAULT_INFLUENCE_WEIGHTS,
   DEFAULT_MARGIN_THRESHOLD,
   DEFAULT_PERSISTENCE_THRESHOLD,
   DEFAULT_SHORTLIST_BAND,
 } from './types.js';
 
-export { rankingConfidence, type RankingConfidenceOptions } from './attributability.js';
+export {
+  marginStrategy,
+  rankingConfidence,
+  ratioStrategy,
+  type RankingConfidenceOptions,
+} from './attributability.js';
 
 export {
   contentHash,

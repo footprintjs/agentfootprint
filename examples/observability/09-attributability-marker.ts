@@ -73,7 +73,27 @@ show('Crowding bug — truncation filler (too close to call → ablate)', [
   mk('fact-override', 0.726),
 ]);
 
+// C — pluggable strategy: the decisiveness rule is swappable. The default
+// `marginStrategy` uses the ABSOLUTE top-2 gap (embedder-relative); `ratioStrategy`
+// uses the gap as a FRACTION of the top score, so it transfers across embedders.
+// Same flat ranking, judged by the scale-invariant rule:
+import { ratioStrategy } from '../../src/observe';
+show2('Crowding bug — judged by ratioStrategy (scale-invariant)', ratioStrategy(0.05), [
+  mk('fact-credit', 0.828),
+  mk('plant-filler', 0.799),
+  mk('fact-dti', 0.767),
+]);
+
 console.log(
   '\nTakeaway: the marker turns a silent blind spot into an honest "I cannot ' +
-    'attribute this from the output — confirm the shortlist by ablation."',
+    'attribute this from the output — confirm the shortlist by ablation." The ' +
+    'decisiveness rule is pluggable (margin / ratio / bring-your-own), so the ' +
+    'benchmark can pick the best default per embedder.',
 );
+
+function show2(title: string, strategy: import('../../src/observe').ConfidenceStrategy, scores: InfluenceScore[]) {
+  const r = rankingConfidence(scores, { strategy });
+  console.log(`\n── ${title} ──`);
+  console.log(`   clearWinner: ${r.clearWinner}   shortlist: [${r.shortlist.join(', ')}]`);
+  console.log(`   → ${r.reason}`);
+}

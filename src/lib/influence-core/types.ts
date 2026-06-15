@@ -84,6 +84,33 @@ export const DEFAULT_CLEAR_WINNER_MARGIN = 0.05;
 export const DEFAULT_SHORTLIST_BAND = 0.1;
 
 /**
+ * RFC-003 default for `ratioStrategy`: the top-2 gap as a FRACTION of the top
+ * score `(s0 − s1) / |s0|`. Unlike the absolute margin this is scale-invariant,
+ * so it transfers across embedders / answer lengths. UNCALIBRATED proxy.
+ */
+export const DEFAULT_CLEAR_WINNER_RATIO = 0.05;
+
+/**
+ * Pluggable rule for "does one source clearly win this ranking?" — the
+ * decisiveness test inside `rankingConfidence`. The library ships
+ * `marginStrategy` (default, absolute gap) and `ratioStrategy` (scale-
+ * invariant); consumers may bring their own (e.g. entropy / dispersion). The
+ * framework around it — always shortlisting the lead, covering the runner-up
+ * when there is no clear winner, malformed-score robustness — is NOT the
+ * strategy's concern; the strategy only judges the clean, all-finite case.
+ */
+export interface ConfidenceStrategy {
+  /** Identifies the rule — shown in `reason`, and the key on a benchmark
+   *  leaderboard of strategies. */
+  readonly name: string;
+  /**
+   * Given the FINITE scores sorted DESCENDING (length >= 2), decide whether
+   * one source clearly dominates. Pure and deterministic.
+   */
+  isClearWinner(rankedScores: readonly number[]): boolean;
+}
+
+/**
  * Confidence in an influence ranking (`scoreInfluence` output) — the honesty
  * companion to the scorer.
  *

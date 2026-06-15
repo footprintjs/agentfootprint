@@ -150,6 +150,22 @@ flips APPROVED → DECLINED in **3/3 seeded reruns**; the benign style fact and
 the lookup tool come back not-confirmed, 0/3. Scores are proxies; only the
 ablation verdict makes a causal claim — the report says so itself.
 
+**And when the proxy *can't* rank — it says so.** Output-similarity scoring is
+structurally blind to **absence/crowding** bugs (a key instruction truncated out
+of the window, context diluted by filler): the culprit doesn't resemble the
+answer, so it ranks low under an innocent. `rankingConfidence` is the honesty
+marker for that — when no source clearly wins, it returns a **shortlist to
+confirm by ablation** instead of a confident, wrong #1:
+
+```typescript
+import { rankingConfidence, ratioStrategy } from 'agentfootprint/observe';
+
+const c = rankingConfidence(scores); // over a scoreInfluence() result
+if (!c.clearWinner) ablate(c.shortlist); // too flat to trust → escalate to truth
+// decisiveness rule is pluggable: marginStrategy (default) · ratioStrategy
+// (scale-invariant) · bring-your-own. See docs/guides/ranking-confidence.md
+```
+
 **The same walk, visual.** One call serializes the report for
 [AgentThinkingUI](https://github.com/footprintjs/agentThinkingUI)'s
 `<BacktrackView>` — the "why?" board, triggerable from **any** decision point

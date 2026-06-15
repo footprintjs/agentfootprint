@@ -24,12 +24,56 @@
  * still be an innocent the answer rationalizes over — only ablation makes
  * causal claims.
  */
-import type { InfluenceScore, RankingConfidence } from './types.js';
-import { DEFAULT_CLEAR_WINNER_MARGIN, DEFAULT_SHORTLIST_BAND } from './types.js';
+import type { ConfidenceStrategy, InfluenceScore, RankingConfidence } from './types.js';
+import { DEFAULT_CLEAR_WINNER_MARGIN, DEFAULT_CLEAR_WINNER_RATIO, DEFAULT_SHORTLIST_BAND } from './types.js';
+
+const nonNegative = (label: string, x: number): number => {
+  // `!(x >= 0)` rejects negatives AND NaN (a plain `< 0` would let NaN through).
+  if (!(x >= 0)) throw new Error(`${label} must be >= 0 (got ${x})`);
+  return x;
+};
+
+/**
+ * Default strategy: ABSOLUTE top-2 gap `s0 − s1 >= threshold`. Simple and
+ * interpretable, but embedder-relative (the gap scale depends on the embedding
+ * geometry). Use `ratioStrategy` for cross-embedder transfer.
+ */
+export function marginStrategy(threshold: number = DEFAULT_CLEAR_WINNER_MARGIN): ConfidenceStrategy {
+  nonNegative('marginStrategy: threshold', threshold);
+  return {
+    name: `margin>=${threshold}`,
+    isClearWinner: (s) => s.length >= 2 && s[0] - s[1] >= threshold,
+  };
+}
+
+/**
+ * Scale-invariant strategy: top-2 gap as a FRACTION of the top score,
+ * `(s0 − s1) / |s0| >= threshold`. Transfers across embedders / answer lengths
+ * where the absolute margin does not. A zero (or all-equal) top is never a
+ * clear winner.
+ */
+export function ratioStrategy(threshold: number = DEFAULT_CLEAR_WINNER_RATIO): ConfidenceStrategy {
+  nonNegative('ratioStrategy: threshold', threshold);
+  return {
+    name: `ratio>=${threshold}`,
+    isClearWinner: (s) => {
+      if (s.length < 2) return false;
+      const denom = Math.abs(s[0]);
+      if (denom === 0) return false; // flat at zero → no clear winner (avoid div-by-zero)
+      return (s[0] - s[1]) / denom >= threshold;
+    },
+  };
+}
 
 export interface RankingConfidenceOptions {
-  /** Top-1 vs top-2 margin below which there is no clear winner.
-   *  Default: `DEFAULT_CLEAR_WINNER_MARGIN` (0.05). */
+  /**
+   * The decisiveness rule. Default: `marginStrategy(clearWinnerMargin)`.
+   * When set, it WINS — `clearWinnerMargin` is ignored. Bring your own
+   * (e.g. entropy / dispersion) or use the shipped `ratioStrategy`.
+   */
+  readonly strategy?: ConfidenceStrategy;
+  /** Threshold for the DEFAULT margin strategy (ignored when `strategy` is
+   *  set). Default: `DEFAULT_CLEAR_WINNER_MARGIN` (0.05). */
   readonly clearWinnerMargin?: number;
   /** Score band below the top defining the shortlist to double-check.
    *  Default: `DEFAULT_SHORTLIST_BAND` (0.1). Recommended >=
@@ -70,14 +114,10 @@ export function rankingConfidence(
   scores: readonly InfluenceScore[],
   options: RankingConfidenceOptions = {},
 ): RankingConfidence {
-  const clearWinnerMargin = options.clearWinnerMargin ?? DEFAULT_CLEAR_WINNER_MARGIN;
-  const shortlistBand = options.shortlistBand ?? DEFAULT_SHORTLIST_BAND;
-  // `!(x >= 0)` rejects negatives AND NaN (a plain `< 0` would let NaN through).
-  if (!(clearWinnerMargin >= 0) || !(shortlistBand >= 0)) {
-    throw new Error(
-      `rankingConfidence: clearWinnerMargin and shortlistBand must be >= 0 (got ${clearWinnerMargin}, ${shortlistBand})`,
-    );
-  }
+  // strategy WINS over clearWinnerMargin; the default builds a margin strategy
+  // (which validates its own threshold).
+  const strategy = options.strategy ?? marginStrategy(options.clearWinnerMargin ?? DEFAULT_CLEAR_WINNER_MARGIN);
+  const shortlistBand = nonNegative('rankingConfidence: shortlistBand', options.shortlistBand ?? DEFAULT_SHORTLIST_BAND);
 
   if (scores.length === 0) {
     return { clearWinner: false, margin: undefined, lead: undefined, shortlist: [], reason: 'No suspects to rank.' };
@@ -99,11 +139,12 @@ export function rankingConfidence(
 
   const secondScore = finiteScore(ranked[1]);
 
-  // Clear winner, robust to malformed scores:
+  // Clear winner, robust to malformed scores (framework invariants, NOT the
+  // strategy's concern):
   //  - top itself malformed (e.g. all-malformed) → no clear winner, no margin.
   //  - clean finite top, malformed runner-up → unambiguous lead → clear winner
   //    (the inverse of suppressing it); no meaningful finite gap to report.
-  //  - both finite → compare the gap to the margin.
+  //  - both finite → the pluggable STRATEGY decides, over all finite scores.
   let clearWinner: boolean;
   let margin: number | undefined;
   if (!Number.isFinite(topScore)) {
@@ -114,7 +155,8 @@ export function rankingConfidence(
     margin = undefined;
   } else {
     margin = topScore - secondScore;
-    clearWinner = margin >= clearWinnerMargin;
+    const finiteRanked = ranked.map(finiteScore).filter((x) => Number.isFinite(x));
+    clearWinner = strategy.isClearWinner(finiteRanked);
   }
 
   // Shortlist = the band of FINITE scores within shortlistBand of a finite top.
@@ -137,11 +179,12 @@ export function rankingConfidence(
   add(top.id); // guarantee: lead always in the shortlist
   if (!clearWinner) add(ranked[1].id); // guarantee: no-clear-winner shortlist covers the runner-up
 
+  const gap = margin === undefined ? 'n/a' : margin.toFixed(3);
   const reason = clearWinner
     ? margin === undefined
-      ? `Clear winner: "${top.id}" leads clearly (runner-up score unavailable). A clear lead is a similarity PROXY, not a proven cause — confirm by ablation.`
-      : `Clear winner: "${top.id}" leads by ${margin.toFixed(3)} (>= ${clearWinnerMargin}). A clear lead is a similarity PROXY, not a proven cause — confirm by ablation.`
-    : `Too close to call: top margin ${margin === undefined ? 'n/a' : margin.toFixed(3)} < ${clearWinnerMargin} — no suspect stands out by output similarity. Double-check the ${shortlist.length} shortlisted suspect(s) by ABLATION. Similarity scoring is blind to absence/crowding bugs (history truncation, context dilution), where the culprit need not resemble the answer; a flat top can also mean genuinely co-equal sources.`;
+      ? `Clear winner [${strategy.name}]: "${top.id}" leads clearly (runner-up score unavailable). A clear lead is a similarity PROXY, not a proven cause — confirm by ablation.`
+      : `Clear winner [${strategy.name}]: "${top.id}" leads (top-2 margin ${gap}). A clear lead is a similarity PROXY, not a proven cause — confirm by ablation.`
+    : `Too close to call [${strategy.name}]: top-2 margin ${gap} — no suspect stands out by output similarity. Double-check the ${shortlist.length} shortlisted suspect(s) by ABLATION. Similarity scoring is blind to absence/crowding bugs (history truncation, context dilution), where the culprit need not resemble the answer; a flat top can also mean genuinely co-equal sources.`;
 
   return { clearWinner, margin, lead: top.id, shortlist, reason };
 }
