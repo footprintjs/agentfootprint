@@ -181,7 +181,73 @@ The contribution is **not** "our scorer beats theirs." It is: **footprint.js mak
 
 ## Library finding surfaced by this design pass (library-first)
 
-The adversarial panel verified a real defect while grounding the mechanism in source: **`TraversalContext.loopIteration` is declared but never populated by the engine** — it is computed only inside one narrative renderer and is absent from `CommitBundle`. Any consumer bucketing by it is reading a phantom field. **Decision to make (gated):** either (a) stamp `loopIteration` on the emitted `TraversalContext` / `CommitBundle` (a one-field engine change that makes the trajectory assembler honest and trivial), or (b) keep "zero new capture" and derive loop buckets from `runtimeStageId` + `parentRuntimeStageId` (a fragile reconstruction). This is a footprint.js-level call independent of the scorer.
+The adversarial panel verified a real defect while grounding the mechanism in source: **`TraversalContext.loopIteration` was declared but never populated by the engine** — it was computed only inside one narrative renderer and is absent from `CommitBundle`. Any consumer bucketing by it was reading a phantom field.
+
+**RESOLVED (footprintjs, 2026-06-16) — option (a), TraversalContext half.** The traverser now stamps `loopIteration` on every emitted context: a run-scoped visit-count map keyed by `stageId`, owned by the executor as the twin of `_executionCounter` (reset on fresh `run()`, **preserved across `resume()`**), shared across subflow re-mounts, `loopIteration = visitCount > 1 ? visitCount − 1 : undefined`, populated for every stage kind. Conditional-spread → byte-identical events on non-looping charts; the narrative recorder keeps its own count → narrative output unchanged. 8-test coverage (sequence, byte-stability, narrative agreement, run-scoping, looped decider, property, resume-continuity, load); full suite 3202 green.
+
+**Still gated (CommitBundle half + `forkBranch`):** putting `loopIteration` on `CommitBundle` would let the *commit-log-based* assembler read it directly instead of deriving from `runtimeStageId` — but that widens the public trace schema, so it's a separate decision. `TraversalContext.forkBranch` is the same kind of declared phantom (which fork/decider branch a stage ran under) — not fixed here. Both deferred until the assembler is built.
+
+## Decision-node scoring — separating a wrong decision's CAUSE (context vs model)
+
+The per-loop scorer above attributes influence to **context sources**. But in an
+LLM agent the **error points are the per-loop DECISIONS** — and a wrong decision
+needs its *cause* localized, not just its existence flagged. Two error shapes:
+
+1. **Tool-selection decision** — each loop the LLM picks *which tool* to call from
+   the prior state (the user's question, or a previous tool's output). A wrong
+   pick is the error.
+2. **Skill-instruction-driven decision** — if a prior tool returned a *skill
+   instruction*, the LLM acts on it. A **wrong skill instruction → wrong tool
+   call**: the error is *caused upstream* (bad instruction) but *manifests* as a
+   wrong decision.
+
+**Why this matters: it separates a context bug from a model bug.** A wrong
+decision at loop N is either (a) **context bug** — the decision was fed something
+wrong (bad skill instruction, misleading prior tool output) → fix the context; or
+(b) **model bug** — the context was fine, the model still chose wrong → fix the
+model/prompt. Final-answer similarity cannot tell these apart; **scoring the
+decision and what it read** can. This is the paper's thesis pushed down to the
+per-loop decision.
+
+### The three primitives already exist — this is wiring, not new capture
+
+1. **`decide()` / `select()` evidence capture** — a decider's choice already
+   records *which values led to it* (rides on `onDecision`/`onSelected` as
+   `evidence`). For a wrong tool pick, we can see exactly what it read —
+   *including the skill instruction*.
+2. **Control-dependency edges** (`controlDepRecorder`, D5) — answers "which
+   decision allowed this stage to run?"; `ctrl.asLookup()` is the `controlDeps`
+   option to `causalChain`, so a wrong downstream action links back to the
+   governing loop-N decision as a `kind:'control'` edge.
+3. **The per-loop trajectory scorer** (above) — with `loopIteration` now
+   populated by the engine, loops are groupable and a bad answer is attributable
+   to a specific loop's decision.
+
+### The localization chain
+
+```
+wrong final answer
+  → governing DECISION at loop N        (control-dependency edge)
+  → the EVIDENCE that decision read      (decide()/select() capture)
+  → is a culprit among it?               (per-loop contrast over the evidence)
+      • a skill instruction / prior tool output ranks high → CONTEXT bug at loop N
+      • nothing in the evidence ranks    → MODEL bug at loop N (reasoning, not input)
+  → PROVE it (truth tier)                (ablate/replace just that skill instruction
+                                          at loop N, re-run, watch the decision flip)
+```
+
+The scorer therefore emits, per loop, not only context-source scores but a
+**decision verdict**: `{ loopIndex, decision, topEvidence, cause: 'context' |
+'model' | 'inconclusive' }`. `cause:'context'` names the specific instruction /
+tool-output to fix; `cause:'model'` says the inputs were clean — escalate to the
+prompt/model. Honesty ladder unchanged: the proxy *ranks* the decision's evidence;
+only the ablation rung *proves* a skill instruction caused the wrong pick.
+
+> Open design point (gated): a decision's evidence is captured on the
+> `onDecision`/`onSelected` event, not in the commit log. The decision-scoring
+> tier therefore reads the **flow event stream** (or `controlDepRecorder`'s
+> lookup), where the per-loop *context-source* tier reads the **commit log** —
+> the assembler must join the two by `runtimeStageId`. Specify that join.
 
 ---
 
