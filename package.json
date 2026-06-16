@@ -1,6 +1,6 @@
 {
   "name": "agentfootprint",
-  "version": "6.31.0",
+  "version": "6.32.0",
   "description": "The explainable agent framework — build AI agents you can explain, audit, and trust. Built on footprintjs.",
   "license": "MIT",
   "author": "Sanjay Krishna Anbalagan",
@@ -186,7 +186,7 @@
     "@aws-sdk/client-xray": "*",
     "@modelcontextprotocol/sdk": "*",
     "@opentelemetry/api": "*",
-    "footprintjs": "^9.8.0",
+    "footprintjs": "^9.9.0",
     "ioredis": "*",
     "openai": "*",
     "zod": "*"
@@ -231,7 +231,7 @@
     "esbuild": "^0.28.0",
     "eslint": "^8.44.0",
     "eslint-config-prettier": "^6.15.0",
-    "footprintjs": "^9.8.0",
+    "footprintjs": "^9.9.0",
     "prettier": "^2.8.1",
     "typedoc": "^0.28.19",
     "typedoc-plugin-markdown": "^4.11.0",

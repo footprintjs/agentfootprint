@@ -37,6 +37,7 @@ import { scoreInfluence, type Embedder, type EvidenceInput } from '../influence-
 import { ablationForSuspect, runAblationProbe, verdictFor } from './ablation.js';
 import { assignCostVerdicts, classifySuspect } from './cost.js';
 import { llmEdgeWeigher, stepOutputText } from './llmEdgeWeigher.js';
+import type { LoopRecallShortlist } from './loop-recall.js';
 import { findDroppedContext, type ContextUnit } from './missingContext.js';
 import { runRestorationProbe, type RestorationRerun } from './restoration.js';
 import type {
@@ -322,6 +323,31 @@ export interface LocalizeContextBugOptions {
   readonly maxSuspects?: number;
   /** Override / extend the suspect classifier. */
   readonly classify?: SuspectClassifier;
+  /**
+   * L3 narrowing (proposal 006): a per-loop recall shortlist from `shortlistEarlyCulprits`.
+   * When supplied, suspects are REORDERED (never filtered) so high-recall candidates float to the
+   * top and survive the `maxSuspects` slice → ablation targets them first. Joined on the suspect
+   * identity (`detail.injectionId`/`detail.toolName`). Default off (back-compat).
+   */
+  readonly shortlist?: LoopRecallShortlist;
+}
+
+/** REORDER-only narrowing: shortlisted suspects first (by recallScore desc), the rest unchanged. */
+function reorderByShortlist(suspects: readonly Suspect[], shortlist?: LoopRecallShortlist): Suspect[] {
+  if (shortlist === undefined || shortlist.candidates.length === 0) return [...suspects];
+  const recallOf = new Map(shortlist.candidates.map((c) => [c.suspectId, c.recallScore]));
+  const idOf = (s: Suspect): string | undefined => s.detail?.injectionId ?? s.detail?.toolName;
+  // Stable: Array.prototype.sort is stable, so non-shortlisted pairs keep their incoming order.
+  return [...suspects].sort((a, b) => {
+    const ra = recallOf.get(idOf(a) ?? '');
+    const rb = recallOf.get(idOf(b) ?? '');
+    const aIn = ra !== undefined;
+    const bIn = rb !== undefined;
+    if (aIn && bIn) return rb! - ra!; // both shortlisted → by recall
+    if (aIn) return -1; // shortlisted before non-shortlisted
+    if (bIn) return 1;
+    return 0; // neither shortlisted → keep proxy-score order (stable)
+  });
 }
 
 // ─── The localizer ───────────────────────────────────────────────────
@@ -473,7 +499,7 @@ export async function localizeContextBug(
     }
   }
 
-  const ranked: Suspect[] = drafts
+  const scored: Suspect[] = drafts
     .map((draft) => {
       const score =
         draft.semanticScore !== undefined
@@ -493,8 +519,15 @@ export async function localizeContextBug(
       const ablation = ablationForSuspect(suspect);
       return ablation !== undefined ? { ...suspect, ablation } : suspect;
     })
-    .sort((a, b) => b.score - a.score) // stable: ties keep slice order
-    .slice(0, maxSuspects);
+    .sort((a, b) => b.score - a.score); // stable: ties keep slice order
+
+  // L3 narrowing (proposal 006): REORDER-ONLY by the per-loop recall shortlist (joined on the
+  // suspect identity injectionId/toolName) so high-recall candidates float to the top and survive
+  // the maxSuspects slice → ablation targets them first. NEVER intersect/drop (that risks losing a
+  // true suspect L3 missed — the absence/crowding blind spot). Non-shortlisted suspects keep their
+  // proxy-score order (stable). narrow (recall), then convict (causal).
+  const reordered = reorderByShortlist(scored, options.shortlist);
+  const ranked: Suspect[] = reordered.slice(0, maxSuspects);
 
   // ── Slice stats + honesty flags ─────────────────────────────────────
   const sliceStats = buildSliceStats(root, nodes, maxDepth, maxNodes);

@@ -75,6 +75,26 @@ export {
 // Two-score localization (proposal 004): the COST score + the 2×2 classifier.
 export { assignCostVerdicts, classifySuspect, MIN_LOOPS_SAVED } from './cost.js';
 
+// Per-loop recall shortlist (proposal 006, L3): rescue early culprits → narrow before ablation.
+export {
+  shortlistEarlyCulprits,
+  DEFAULT_RECENCY_DECAY,
+  type LoopCandidate,
+  type LoopRecallShortlist,
+  type ShortlistEarlyCulpritsOptions,
+} from './loop-recall.js';
+
+// Root-cause backtracking debugger (proposal 007, L4): walk symptom → root (narrow → hop → convict).
+export {
+  walkToRoot,
+  walkTrajectory,
+  buildWriterFrameIndex,
+  type RootCauseHop,
+  type RootCauseNote,
+  type RootCausePath,
+  type WalkToRootOptions,
+} from './walk-to-root.js';
+
 // Per-loop trajectory assembler (proposal 005): segmentation core (phase 1)
 // + the agent-flavored projection (phase 2).
 export {

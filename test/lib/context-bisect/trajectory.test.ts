@@ -270,6 +270,83 @@ describe('integration — assembleTrajectory over a real flat-agent run', () => 
   });
 });
 
+// ─── 7b. INTEGRATION — a REAL GROUPED agent run (reactMode 'dynamic-grouped') ──
+describe('integration — assembleTrajectory over a real GROUPED agent run', () => {
+  /** A grouped agent: the LLM turn runs inside sf-llm-call; 2 tool turns + final → 3 loops. */
+  async function runThreeLoopGroupedAgent() {
+    const echo = defineTool({
+      name: 'echo',
+      description: 'echo',
+      inputSchema: { type: 'object', properties: {} },
+      execute: async () => 'echoed',
+    });
+    let calls = 0;
+    const provider = mock({
+      chunkDelayMs: 0,
+      respond: () => {
+        calls++;
+        if (calls <= 2)
+          return {
+            content: `step ${calls}`,
+            toolCalls: [{ id: `c${calls}`, name: 'echo', args: {} }],
+            usage: { input: 1, output: 1 },
+            stopReason: 'tool_use',
+          };
+        return { content: 'final answer', toolCalls: [], usage: { input: 1, output: 1 }, stopReason: 'end_turn' };
+      },
+    });
+    const agent = Agent.create({ provider, model: 'mock', readTracking: 'full', reactMode: 'dynamic-grouped' })
+      .system('test')
+      .tool(echo)
+      .build();
+    await agent.run({ message: 'go' });
+    return agent.getSnapshot()!;
+  }
+
+  it('segments the grouped run PER-SCOPE: one frame per sf-llm-call loop, with its inner call-llm + sources', async () => {
+    const snapshot = await runThreeLoopGroupedAgent();
+    // NOTE: pass the FULL snapshot — grouped reads subflowResults (not just commitLog).
+    const traj = assembleTrajectory({ snapshot } as unknown as ContextBugArtifacts);
+
+    expect(traj.frames.length).toBe(3); // one frame per sf-llm-call iteration
+    expect(traj.honestyFlags).toEqual([]); // grouped is supported now — no degrade
+
+    traj.frames.forEach((frame, i) => {
+      expect(frame.loopIndex).toBe(i);
+      // grouped frames carry subflowScope (their indices are inner-log-relative)
+      expect(frame.subflowScope).toBeDefined();
+      expect(frame.subflowScope!.split('#')[0].split('/').pop()).toBe('sf-llm-call');
+      // the inner call-llm of THIS loop
+      expect(frame.llmCallId).toBeDefined();
+      expect(frame.llmCallId!.split('#')[0].split('/').pop()).toBe('call-llm');
+      expect(frame.bodyIds).toContain(frame.llmCallId);
+    });
+
+    // distinct inner call-llm per loop (per-iteration, not the last-loop dupe the bug produced)
+    const llmIds = traj.frames.map((f) => f.llmCallId);
+    expect(new Set(llmIds).size).toBe(3);
+    // and distinct subflow scopes (sf-llm-call#1 / #25 / #49)
+    expect(new Set(traj.frames.map((f) => f.subflowScope)).size).toBe(3);
+  });
+
+  it('captures each grouped loop’s live contextSources from its OWN inner commit log', async () => {
+    const snapshot = await runThreeLoopGroupedAgent();
+    const traj = assembleTrajectory({ snapshot } as unknown as ContextBugArtifacts);
+
+    const f0 = traj.frames[0];
+    expect(f0.contextSources.length).toBeGreaterThan(0);
+    expect(f0.contextSources.map((s) => s.key)).toContain('systemPromptInjections');
+
+    const resolved = f0.contextSources.filter((s) => s.writerId !== undefined);
+    expect(resolved.length).toBeGreaterThan(0);
+    for (const s of resolved) {
+      // writerArrayIdx is relative to THIS loop's inner log, before its call-llm
+      expect(s.writerArrayIdx!).toBeLessThan(f0.llmCallArrayIdx!);
+      expect(s.evidence.id).toBe(`${f0.llmCallId}::${s.key}`);
+    }
+  });
+});
+
 // ─── 8. UNIT / EDGE — degenerate + degrade-never-throw ───────────────
 describe('unit — assembleTrajectory edge cases', () => {
   it('empty run → empty frames, empty prelude, no honesty flags', () => {
@@ -280,13 +357,15 @@ describe('unit — assembleTrajectory edge cases', () => {
     expect(traj.truncated).toBeUndefined();
   });
 
-  it('grouped chart (sf-llm-call) is DETECTED and degraded with an honesty flag, never mis-bucketed', () => {
+  it('grouped is detected via subflowResults sf-llm-call mount keys (NOT a prefixed run-log commit)', () => {
+    // A run-log commit that merely LOOKS grouped (sf-llm-call/ prefix) but has no
+    // subflowResults mount keys is NOT grouped — the real grouped run carries sf-llm-call
+    // MOUNT results in subflowResults. Without them, it's the flat path: no heads → all prelude.
     const log = [mk('seed', 'seed#0'), mk('sf-llm-call/call-llm', 'sf-llm-call/call-llm#1')];
     const traj = assembleTrajectory(artifactsOf(log, undefined));
-    // findLoopHeads sees no injection-engine entry → no frames, all prelude
     expect(traj.frames).toEqual([]);
     expect(traj.prelude).toEqual(['seed#0', 'sf-llm-call/call-llm#1']);
-    expect(traj.honestyFlags.map((f) => f.flag)).toContain('untracked-sources');
+    expect(traj.honestyFlags).toEqual([]); // grouped is supported now — no degrade flag anywhere
   });
 
   it('maxFrames truncates and flags it', () => {

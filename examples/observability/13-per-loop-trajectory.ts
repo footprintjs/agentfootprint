@@ -16,10 +16,14 @@
  * This is the per-loop substrate the two-score localizer (L2), the recall scorer (L3),
  * and the backtracking debugger (L4) all read instead of a flattened bag.
  *
- * Honest scope (printed below): v1 segments the FLAT agent chart. The grouped chart
- * (sf-llm-call) keeps slot keys in the subflow scope — detected and degraded with an
- * honesty flag, never silently mis-bucketed. Standing caveat: contextSources show only
- * sources re-committed to tracked state; context the model retained internally is NOT here.
+ * Works for BOTH chart shapes (this example runs both):
+ *   - FLAT (default `reactMode: 'dynamic'`): frames bucketed over the run commit log.
+ *   - GROUPED (`reactMode: 'dynamic-grouped'`): the LLM turn runs inside an sf-llm-call
+ *     subflow; each loop is projected PER-SCOPE over its own inner commit log (retained
+ *     per-iteration by footprintjs subflow-commit-visibility). Grouped frames carry
+ *     `subflowScope`.
+ * Standing caveat: contextSources show only sources re-committed to tracked state; context
+ * the model retained internally is NOT here.
  *
  * Offline + deterministic: a scripted mock provider does two tool turns then a final
  * answer → three loops, no model required.
@@ -38,15 +42,14 @@ export const meta = {
     'live contextSources (prior writer of every key it read). The per-loop substrate for L2/L3/L4.',
 };
 
-async function main(): Promise<void> {
-  // A lookup tool the agent calls twice before answering → 3 ReAct loops.
+/** Build + run an agent (2 tool turns then a final answer → 3 ReAct loops) in the given mode. */
+async function runAgent(reactMode: 'dynamic' | 'dynamic-grouped') {
   const lookup = defineTool({
     name: 'lookup',
     description: 'look a value up',
     inputSchema: { type: 'object', properties: { q: { type: 'string' } } },
     execute: async () => 'looked up',
   });
-
   let turn = 0;
   const provider = mock({
     chunkDelayMs: 0,
@@ -59,50 +62,48 @@ async function main(): Promise<void> {
           usage: { input: 100, output: 20 },
           stopReason: 'tool_use',
         };
-      return {
-        content: 'Final answer: approved.',
-        toolCalls: [],
-        usage: { input: 120, output: 30 },
-        stopReason: 'end_turn',
-      };
+      return { content: 'Final answer: approved.', toolCalls: [], usage: { input: 120, output: 30 }, stopReason: 'end_turn' };
     },
   });
-
-  const agent = Agent.create({ provider, model: 'mock', readTracking: 'full' })
+  const agent = Agent.create({ provider, model: 'mock', readTracking: 'full', reactMode })
     .system('You are a careful policy assistant.')
     .tool(lookup)
     .build();
-
   await agent.run({ message: 'Should this refund be approved?' });
+  return agent.getSnapshot()!;
+}
 
-  // The localizer's own artifacts bag — assembleTrajectory takes the SAME input.
-  const artifacts = { snapshot: agent.getSnapshot()! } as ContextBugArtifacts;
-  const traj = assembleTrajectory(artifacts);
-
-  console.log(`Per-loop trajectory — ${traj.frames.length} ReAct iterations\n`);
-  console.log(`prelude (run setup, before the first loop): ${traj.prelude.length} commits\n`);
-
+function printTrajectory(label: string, snapshot: unknown): void {
+  // assembleTrajectory takes the localizer's OWN artifacts bag — pass the full snapshot
+  // (grouped reads subflowResults, not just commitLog).
+  const traj = assembleTrajectory({ snapshot } as ContextBugArtifacts);
+  console.log(`\n══ ${label} — ${traj.frames.length} ReAct iterations (prelude: ${traj.prelude.length} commits) ══`);
   for (const frame of traj.frames) {
-    console.log(`── loop ${frame.loopIndex}  (call-llm: ${frame.llmCallId}) ──`);
-    console.log(`   produced: ${JSON.stringify(frame.intermediateText)?.slice(0, 80) ?? '(none)'}`);
+    const scope = frame.subflowScope ? `  [scope ${frame.subflowScope}]` : '';
+    console.log(`── loop ${frame.loopIndex}  (call-llm: ${frame.llmCallId})${scope} ──`);
+    console.log(`   produced: ${JSON.stringify(frame.intermediateText)?.slice(0, 70) ?? '(none)'}`);
     const fed = frame.contextSources.filter((s) => s.writerId !== undefined);
     console.log(`   fed by ${fed.length} live context sources (prior writers):`);
     for (const s of fed.slice(0, 4)) {
-      const preview = String(s.value ?? '').replace(/\s+/g, ' ').slice(0, 40);
+      const preview = String(s.value ?? '').replace(/\s+/g, ' ').slice(0, 36);
       console.log(`     • ${s.key.padEnd(22)} ← ${s.writerId}   "${preview}…"`);
     }
-    if (frame.untrackedReadsPresent)
-      console.log(`   ⚠ this step also read untracked sources (${frame.incompleteSources?.join(', ')})`);
-    console.log();
   }
+}
 
-  if (traj.honestyFlags.length > 0)
-    for (const f of traj.honestyFlags) console.log(`⚠ honesty flag [${f.flag}]: ${f.note}`);
+async function main(): Promise<void> {
+  // FLAT (default): call-llm is a parent-level stage; frames bucketed over the run commit log.
+  printTrajectory('FLAT chart (reactMode: dynamic)', await runAgent('dynamic'));
+
+  // GROUPED: the LLM turn runs inside sf-llm-call; each loop projected PER-SCOPE over its
+  // own inner commit log — note the per-loop `subflowScope` and the distinct inner call-llm ids.
+  printTrajectory('GROUPED chart (reactMode: dynamic-grouped)', await runAgent('dynamic-grouped'));
 
   console.log(
-    'Takeaway: the bug-hunt now starts at a LOOP, not a flat bag. Each frame says exactly\n' +
-      'which context fed which iteration\'s decision — so L3 can score per-loop recall and L4\n' +
-      'can backtrack from the final answer to the loop that went wrong.',
+    '\nTakeaway: the bug-hunt starts at a LOOP, not a flat bag — for BOTH chart shapes. Each frame\n' +
+      'says which context fed which iteration\'s decision, so L3 can score per-loop recall and L4 can\n' +
+      'backtrack from the final answer to the loop that went wrong. Grouped frames carry subflowScope\n' +
+      '(indices relative to that loop\'s own sf-llm-call commit log).',
   );
 }
 

@@ -5,6 +5,33 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.32.0] - 2026-06-16
+
+Per-loop context-bug localization: the trajectory now segments the GROUPED agent too, plus
+two new pluggable localizer stages — L3 (recall shortlist) and L4 (the backtracking walk).
+Requires **footprintjs ≥ 9.9.0** (the per-loop subflow commit retention).
+
+### Added
+
+- **`shortlistEarlyCulprits(trajectory, { embedder, recencyDecay })` (L3 — proposal 006)** — a
+  per-loop RECALL shortlist that surfaces culprits the final answer buries (each source scored
+  against the loop it fed, recency-weighted), to NARROW before ablation. It is a recall booster,
+  **NOT a #1 ranker** (H2 measured the ranker as a loss). **Gate-validated**: the real scorer
+  reproduces top-3 recall 10/10 vs plain 9/10 on the CTXBUG benchmark at the default
+  `recencyDecay` 0.5. Joins 1:1 with a localizer `Suspect`; feeds `localizeContextBug({ shortlist })`
+  as a REORDER-only narrowing hook. `localizeContextBug` gains the optional `shortlist` option.
+- **`assembleTrajectory` now handles the GROUPED chart** (`reactMode: 'dynamic-grouped'`): each
+  loop is projected PER-SCOPE over its own `sf-llm-call` inner commit log (retained per-iteration
+  by footprintjs 9.9.0). Grouped frames carry `subflowScope`.
+- **`walkToRoot(artifacts, { embedder, rerun })` (L4 — proposal 007)** — an influence-guided
+  backtracking debugger: narrow (per-loop influence) → hop along `writerId` provenance → isolate
+  with run-wide ablation, walking symptom → root for decision bugs. **Honest scope:** the walk
+  ALGORITHM is validated synthetically (the deterministic decision-bug gate passes), but the
+  multi-hop cross-loop DESCENT does NOT yet fire on a real agent — today's trajectory surfaces only
+  injection suspects (the `call-llm` reads `history`, not `lastToolResult`), so on a real run it
+  convicts the injection root at the symptom. Promoting the real-agent descent is gated on enriching
+  the trajectory's tool-output provenance (follow-up). Exported with this limitation documented.
+
 ## [6.31.0] - 2026-06-15
 
 ### Added — contrastive influence: cancel the topical-innocent confound
