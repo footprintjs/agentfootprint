@@ -440,6 +440,36 @@ the model's *actual path*, not an outsider's guess.
   "cracks" a decision because it is interventional. Pair internal attribution **with**
   ablation; never treat attention alone as proof.
 
+### The logit / softmax decision distribution — the model's own ambiguity signal
+
+A model decides via a 3-layer chain: **embedding** (encodes *meaning*) → **logit**
+(the raw score it gives each candidate) → **softmax** (those scores as
+*probabilities* — the decision distribution). **Today's scorer uses only the
+embedding layer** (cosine of meaning); it does **not** read logits or softmax. This
+is a real gap, because the §2 "ambiguity = flat top" is currently measured over an
+*embedding-similarity ranking of the context* — an outsider's proxy — when the **most
+direct** ambiguity signal is the model's **own softmax over the candidate tools**: a
+near-tie in the top-two tool probabilities *is* the model being uncertain. That is
+the genuine slip, not a proxy of it, and confirming the embedding flat-top agrees
+with the softmax flat-top is exactly the §2 synthesis hypothesis.
+
+Three ambiguity signals, by directness and access:
+
+| signal | measures | access |
+|---|---|---|
+| embedding-similarity flatness (`rankingConfidence` today) | outsider: which context *looks* co-equal | any model |
+| **softmax / logprob flatness over candidate tools** | the model's **own** uncertainty at the decision | logprobs (API partial) / full (local) |
+| semantic entropy (Kuhn, Gal & Farquhar 2023) | sample N times, entropy over meaning-clusters | sampling, no logits needed |
+
+Access mirrors the white-box caveat: full softmax over the tool tokens needs open
+weights — our **Qwen3-4B via llama.cpp exposes logprobs**, so it is free there; API
+models give only partial top-k. **Plan:** capture the model's softmax/logprobs over
+the tool choice in the same fixture runs as the embedding scores — Paper A uses the
+embedding signal (no white-box); Paper B compares embedding-flatness *vs* the model's
+own softmax-flatness at predicting the slip (the local stack makes it ~$0). Honesty
+ladder unchanged: softmax flatness is a *more direct* uncertainty signal, still a
+proxy for *which* content caused it — only ablation proves cause.
+
 ## Paper split (decided 2026-06-16)
 
 - **Paper A — external-proxy ladder on CTXBUG → the AAAI-27 submission.**
