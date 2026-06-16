@@ -58,6 +58,8 @@ export {
   type RankingConfidenceOptions,
 } from './attributability.js';
 
+export { scoreContrastiveInfluence, type ScoreContrastiveInfluenceArgs } from './contrastive.js';
+
 export {
   contentHash,
   EmbeddingCache,

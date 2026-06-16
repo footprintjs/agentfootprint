@@ -255,5 +255,6 @@ _Run `npm run examples:readme` after adding/editing examples._
 | 08 | [`08-self-explain.ts`](observability/08-self-explain.ts) | .selfExplain() — in-conversation why-questions over the agent’s own trace | One builder call lets the main agent answer follow-up why-questions from its own previous  |
 | 09 | [`09-attributability-marker.ts`](observability/09-attributability-marker.ts) | rankingConfidence — honesty marker on influence rankings | When no source clearly dominates an influence ranking (the signature of an  |
 | 10 | [`10-missing-context.ts`](observability/10-missing-context.ts) | _no meta_ | — |
+| 11 | [`11-contrastive-influence.ts`](observability/11-contrastive-influence.ts) | scoreContrastiveInfluence — cancel the topical-innocent confound | Output-similarity influence is fooled by a topically-central innocent (the  |
 
 <!-- AUTO-GENERATED:examples:end -->

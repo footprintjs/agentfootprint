@@ -245,7 +245,7 @@ export async function scoreInfluence(args: ScoreInfluenceArgs): Promise<Influenc
 }
 
 /** Embed distinct texts via batch API when available, else sequentially. */
-async function embedAll(
+export async function embedAll(
   embedder: Embedder,
   texts: readonly string[],
   signal?: AbortSignal,
@@ -270,16 +270,21 @@ async function sequentialEmbed(
   return out;
 }
 
-function assertValidWeights(weights: InfluenceWeights): void {
+/**
+ * Validate composite weights: every weight finite & non-negative, and not all
+ * zero. Shared by `scoreInfluence` and `scoreContrastiveInfluence` — `fnName`
+ * attributes the error to the actual caller.
+ */
+export function assertValidWeights(weights: InfluenceWeights, fnName = 'scoreInfluence'): void {
   for (const [name, value] of Object.entries(weights)) {
     if (!Number.isFinite(value) || value < 0) {
       throw new Error(
-        `scoreInfluence: weight '${name}' must be a finite non-negative number (got ${value})`,
+        `${fnName}: weight '${name}' must be a finite non-negative number (got ${value})`,
       );
     }
   }
   if (weights.fa + weights.avg + weights.persist + weights.depth === 0) {
-    throw new Error('scoreInfluence: all weights are zero — the composite would always be 0');
+    throw new Error(`${fnName}: all weights are zero — the composite would always be 0`);
   }
 }
 
