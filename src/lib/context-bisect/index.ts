@@ -75,11 +75,14 @@ export {
 // Two-score localization (proposal 004): the COST score + the 2×2 classifier.
 export { assignCostVerdicts, classifySuspect, MIN_LOOPS_SAVED } from './cost.js';
 
-// Per-loop trajectory assembler (proposal 005): segmentation core (phase 1).
+// Per-loop trajectory assembler (proposal 005): segmentation core (phase 1)
+// + the agent-flavored projection (phase 2).
 export {
+  assembleTrajectory,
   bucketByAnchors,
   findLoopHeads,
   type AnchorBucket,
+  type AssembleTrajectoryOptions,
   type ContextSource,
   type LoopFrame,
   type SyntheticQuestionNode,

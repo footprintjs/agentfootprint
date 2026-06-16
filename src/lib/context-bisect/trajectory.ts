@@ -15,17 +15,21 @@
  * findLastWriter/commitValueAt + stepOutputText + honesty flags) layers on these
  * and lands next, calibrated against a real flat-agent commit log.
  *
- * v1 scope: the FLAT agent chart (`buildAgentChart`). The grouped chart
- * (`buildDynamicAgentChart`) keeps slot keys in the `sf-llm-call` subflow scope,
- * not the parent log — detected and degraded with an honesty flag, never
- * silently mis-bucketed (grouped subtree-join is a v2 follow-up).
+ * v1 scope: the FLAT agent chart (`buildAgentChart`) — the DEFAULT reactMode. The
+ * grouped chart (`buildDynamicAgentChart`, opt-in `reactMode: 'dynamic-grouped'`) runs
+ * each LLM turn in a NESTED traverser whose inner commits never merge into the run commit
+ * log, and `subflowResults` keeps only the last loop (re-entry overwrites) — so per-loop
+ * contextSources are unrecoverable from a grouped snapshot. Detected and degraded with an
+ * honesty flag, never silently mis-bucketed. Full grouped support needs a footprintjs root
+ * fix (aggregate nested commit logs into the run log) — tracked as a follow-up proposal.
  */
-import type { CommitBundle } from 'footprintjs/advanced';
-import { splitStageId } from 'footprintjs/trace';
+import type { CommitBundle, StageSnapshot } from 'footprintjs/advanced';
+import { commitValueAt, findLastWriter, splitStageId } from 'footprintjs/trace';
 import type { UntrackedSource } from 'footprintjs/trace';
-import { SUBFLOW_IDS } from '../../conventions.js';
+import { STAGE_IDS, SUBFLOW_IDS } from '../../conventions.js';
 import type { EvidenceInput } from '../influence-core/index.js';
-import type { HonestyFlag } from './types.js';
+import { stepOutputText } from './llmEdgeWeigher.js';
+import { CONTEXT_BISECT_DEFAULTS, type ContextBugArtifacts, type HonestyFlag } from './types.js';
 
 // ─── Types ───────────────────────────────────────────────────────────
 
@@ -101,6 +105,11 @@ export interface AnchorBucket {
  * the first head are the `prelude`. TOTAL: every commit lands in exactly one frame OR
  * the prelude. Heads not found in the log are ignored; ordering follows the log, not the
  * input list (an out-of-order or duplicate head list cannot reorder/duplicate commits).
+ *
+ * A head is anchored at the FIRST commit bearing its runtimeStageId — a single stage
+ * execution can flush MORE THAN ONE commit bundle under one runtimeStageId (parallel
+ * fork merges, multi-flush stages), and those repeats stay INSIDE the frame they open
+ * rather than each spawning a spurious one-commit frame.
  */
 export function bucketByAnchors(
   commitLog: readonly CommitBundle[],
@@ -108,8 +117,13 @@ export function bucketByAnchors(
 ): { frames: AnchorBucket[]; prelude: string[] } {
   const headSet = new Set(headRuntimeStageIds);
   const headIdx: number[] = [];
+  const anchored = new Set<string>();
   for (let i = 0; i < commitLog.length; i++) {
-    if (headSet.has(commitLog[i].runtimeStageId)) headIdx.push(i);
+    const id = commitLog[i].runtimeStageId;
+    if (headSet.has(id) && !anchored.has(id)) {
+      headIdx.push(i);
+      anchored.add(id); // later commits sharing this id belong to the frame it opened
+    }
   }
   if (headIdx.length === 0) {
     return { frames: [], prelude: commitLog.map((b) => b.runtimeStageId) };
@@ -152,4 +166,135 @@ export function findLoopHeads(commitLog: readonly CommitBundle[]): string[] {
     wasIn = isIn;
   }
   return heads;
+}
+
+// ─── assembleTrajectory — the agent-flavored projection ──────────────
+
+export interface AssembleTrajectoryOptions {
+  /** Chars of each source value / intermediate text embedded. Default 2000. */
+  readonly maxTextChars?: number;
+  /** Keep only the first N frames (honesty-flagged via `truncated`). */
+  readonly maxFrames?: number;
+}
+
+/** Build the per-runtimeStageId read-key map from the snapshot execution tree
+ *  (same walk as the localizer's `buildArtifactIndex`). */
+function buildReadsOf(executionTree: StageSnapshot | undefined): Map<string, string[]> {
+  const readsOf = new Map<string, string[]>();
+  const visit = (node: StageSnapshot | undefined): void => {
+    if (!node) return;
+    const id = node.runtimeStageId;
+    if (id && !readsOf.has(id)) readsOf.set(id, node.stageReads ? Object.keys(node.stageReads) : []);
+    for (const child of node.children ?? []) visit(child);
+    visit(node.next);
+  };
+  visit(executionTree);
+  return readsOf;
+}
+
+function safeStringify(value: unknown): string {
+  if (typeof value === 'string') return value;
+  try {
+    return JSON.stringify(value) ?? String(value);
+  } catch {
+    return String(value);
+  }
+}
+
+/**
+ * Slice a recorded flat-agent run into a {@link Trajectory} — one {@link LoopFrame}
+ * per ReAct iteration, each carrying its `call-llm` pointer, the call's output text,
+ * and the live {@link ContextSource}s that fed it (traced via `findLastWriter` +
+ * `commitValueAt` from the SAME commit log — zero new capture).
+ *
+ * Takes the SAME `ContextBugArtifacts` bag the localizer takes (commitLog, lastIdxOf,
+ * readsOf all derived from `artifacts.snapshot` internally — adopter call is just
+ * `assembleTrajectory(artifacts)`).
+ *
+ * Honest scope: FLAT chart only. The grouped chart (`sf-llm-call`) keeps slot keys in
+ * the subflow scope — detected and degraded with an honesty flag, never mis-bucketed.
+ * Standing caveat on every result: contextSources show only sources re-committed to
+ * tracked state; context the model retained internally is NOT represented.
+ */
+export function assembleTrajectory(
+  artifacts: ContextBugArtifacts,
+  opts: AssembleTrajectoryOptions = {},
+): Trajectory {
+  const maxTextChars = opts.maxTextChars ?? CONTEXT_BISECT_DEFAULTS.maxTextChars;
+  const commitLog = (artifacts.snapshot.commitLog ?? []) as CommitBundle[];
+  const lastIdxOf = new Map<string, number>();
+  for (let i = 0; i < commitLog.length; i++) lastIdxOf.set(commitLog[i].runtimeStageId, i);
+  const readsOf = buildReadsOf(artifacts.snapshot.executionTree as StageSnapshot | undefined);
+
+  const honestyFlags: HonestyFlag[] = [];
+  const grouped = commitLog.some((b) => {
+    const sp = splitStageId(b.stageId).subflowPath;
+    return sp === SUBFLOW_IDS.LLM_CALL || (sp?.split('/').includes(SUBFLOW_IDS.LLM_CALL) ?? false);
+  });
+  if (grouped) {
+    honestyFlags.push({
+      flag: 'untracked-sources',
+      note:
+        'grouped chart (sf-llm-call): the LLM turn runs in a nested traverser whose inner commits ' +
+        '(call-llm + slot writes) are NOT merged into the run commit log, and subflowResults retains ' +
+        'only the LAST loop (re-entry overwrites). Per-loop contextSources are unrecoverable from the ' +
+        'snapshot — use the default flat chart (reactMode "dynamic") for per-loop backtracking.',
+    });
+  }
+
+  const heads = findLoopHeads(commitLog);
+  const { frames: buckets, prelude } = bucketByAnchors(commitLog, heads);
+  const kept = opts.maxFrames !== undefined ? buckets.slice(0, opts.maxFrames) : buckets;
+  const truncated = opts.maxFrames !== undefined && buckets.length > opts.maxFrames;
+
+  const frames: LoopFrame[] = kept.map((bucket, loopIndex) => {
+    // Locate the call-llm commit WITHIN this frame's body (the LLM-step pointer).
+    let llmCallId: string | undefined;
+    let llmCallArrayIdx: number | undefined;
+    let llmBundle: CommitBundle | undefined;
+    for (let i = bucket.headArrayIdx; i < bucket.headArrayIdx + bucket.bodyIds.length; i++) {
+      if (splitStageId(commitLog[i].stageId).localStageId === STAGE_IDS.CALL_LLM) {
+        llmCallId = commitLog[i].runtimeStageId;
+        llmCallArrayIdx = i;
+        llmBundle = commitLog[i];
+        break;
+      }
+    }
+
+    const intermediateText =
+      llmCallId !== undefined ? stepOutputText(commitLog, lastIdxOf, llmCallId, maxTextChars) : undefined;
+
+    const keys = llmCallId !== undefined ? (readsOf.get(llmCallId) ?? []) : [];
+    const contextSources: ContextSource[] = keys.map((key) => {
+      // EXCLUSIVE beforeIdx — finds the PRIOR writer, never call-llm's own write-back.
+      const writer = llmCallArrayIdx !== undefined ? findLastWriter(commitLog, key, llmCallArrayIdx) : undefined;
+      const writerId = writer?.runtimeStageId;
+      const writerArrayIdx = writerId !== undefined ? lastIdxOf.get(writerId) : undefined;
+      const value = writerArrayIdx !== undefined ? commitValueAt(commitLog, writerArrayIdx, key) : undefined;
+      const text = value === undefined ? '' : safeStringify(value).slice(0, maxTextChars);
+      return {
+        key,
+        writerId,
+        writerArrayIdx,
+        value,
+        evidence: { id: `${llmCallId}::${key}`, text, ancestorTexts: [] },
+      };
+    });
+
+    const incompleteSources = llmBundle?.untrackedSources;
+    const untrackedReadsPresent = incompleteSources !== undefined && incompleteSources.length > 0;
+    return {
+      loopIndex,
+      llmCallId,
+      llmCallArrayIdx,
+      headArrayIdx: bucket.headArrayIdx,
+      bodyIds: bucket.bodyIds,
+      intermediateText,
+      contextSources,
+      ...(untrackedReadsPresent ? { incompleteSources } : {}),
+      untrackedReadsPresent,
+    };
+  });
+
+  return { frames, prelude, honestyFlags, ...(truncated ? { truncated: { byFrames: true } } : {}) };
 }

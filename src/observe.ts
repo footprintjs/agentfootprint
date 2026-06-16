@@ -231,6 +231,7 @@ export {
 export {
   ablationForSuspect,
   applyAblations,
+  assembleTrajectory,
   assignCostVerdicts,
   bisectCulprits,
   bucketByAnchors,
@@ -258,6 +259,7 @@ export {
   type AblationVerdict,
   type AblationVerdictKind,
   type AnchorBucket,
+  type AssembleTrajectoryOptions,
   type BisectCulpritsOptions,
   type BisectionProbe,
   type BisectionResult,
