@@ -795,6 +795,23 @@ This is the *use* layer over the flowchart scorer: the scorer (built as a
 self-explaining flowchart) produces the per-step rankings; the backtracking debugger
 consumes them to walk a user — or itself, automatically — to the root cause.
 
+**Backlog (UI, not now):** a **tree-of-scores chart** — root = the final answer,
+children = the highest-influence pieces at each step back, rendered as a clickable
+tree; clicking a node navigates to that content in the current Lens / agentThinkingUI
+view. It is the *visual* form of this backtracking trail (the guided walk drawn as a
+tree), downstream of the scorer's per-step rankings. Logged as a future task per the
+inventor; not in scope for the scorer build.
+
+**Backlog (library DX, not now): a `ScorerRecorder`.** A first-class recorder you
+attach once (twin of `MetricRecorder` / `InOutRecorder`) that captures per-step
+influence/score data **live during the run** — so the per-loop scores and the
+backtracking trail come out for free, instead of being recomputed post-hoc from the
+commit log. Fits the recorder model exactly (Convention 1: one concern; composes a
+`SequenceStore<ScoreEntry>` keyed by `runtimeStageId`), is callable + composable, and
+feeds both the backtracking debugger and the tree-of-scores UI above. Build it when
+the scorer is promoted into the library; it is the "make the whole thing easy" DX
+investment. Logged per the inventor; not in scope for the first scorer build.
+
 ---
 
 *Gated: no code until an explicit "yes." This memo is the artifact to react to.*
