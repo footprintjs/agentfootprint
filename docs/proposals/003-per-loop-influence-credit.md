@@ -510,6 +510,291 @@ weights-only Paper B reference; their agreement is the hypothesis.
   *not* rushed into the AAAI deadline.
 
 
+## The flagship scorer, built as a footprint.js flowchart (design)
+
+> From the 15-agent design pass (`influence-scorer-as-flowchart`): 3 layouts (linear · decider-driven · per-loop-subflow), each adversarially judged on faithful-to-LLM-decision / buildable-on-real-primitives / honest-and-self-explaining. Recommended = a **hybrid**.
+
+### Recommended shape
+
+FLAGSHIP = the PER-LOOP-SUBFLOW spine (Design 3) with the HONESTY LADDER drawn as control flow (Design 2), and three adversarial corrections grafted in. It is a HYBRID scorer-flowchart.
+
+WHY THIS SHAPE: The per-loop subflow + branch-sourced loopTo is the only angle that structurally mirrors the agent it scores (same loop, same back-edge) AND makes every iteration independently addressable by runtimeStageId (the linear angle CANNOT — judges proved its "per-loop addressable" claim false, because a JS for-loop inside one addFunction commits once). Design 2's contribution is that the honesty ladder is literally the tail topology, not a convention. We take both.
+
+THE ORDERED STAGES (one runnable chart):
+1. seed-assemble-loopframes (function) — pure-read. Loads { commitLog, finalAnswerText, referenceText?, embedder, keysReadMap, rerun? } via $getArgs. Buckets commitLog into LoopFrame[] by repeated local stageId + ascending #executionIndex (parseRuntimeStageId) — NEVER forkBranch (confirmed phantom). Wraps embedder ONCE in embeddingCache. Flattens scope.hasRerun, scope.hasLocalModel as top-level booleans NOW (so later filter-form deciders work — see Honesty Ladder).
+2. score-one-decision (subflow, mounted addSubFlowChartNext, arrayMerge: Replace) — the per-loop heart, run once per iteration. Its children:
+   2a. compute-signals (single function — NOT a 4-way selector; see CTXBUG/net-new) — calls scoreContrastiveInfluence when referenceText present, else scoreInfluence. ONE batched embed pass computes all four signals + adaptWeights + compositeScore.
+   2b. recency-weight-depth (function) — applies recencyWeight as a POST-MULTIPLIER on the DEPTH term only, AFTER adaptWeights has run on the true ancestorCount (the corrected wiring — see Math).
+   2c. softmax-confidence (function) — softmax(scores, T) → P_ext; per-loop rankingConfidence({strategy: entropyStrategy(T)}).
+3. more-loops-decider (decider) — FUNCTION-form rule (s)=>s.cursor < s.loopCount-1 (the {lt:'loopCount-1'} filter is INVALID — confirmed). 'continue' branch carries loopTo:'score-one-decision' and advances cursor; 'finalize' is terminal.
+4. forward-propagation-aggregate (function, in PARENT after the loop — NOT inside the subflow, so it can read the parent commitLog) — λ-eligibility sum gated by causalChain reachability built from the persisted keysReadMap; degrades to λ=0 when the map is absent.
+5. confidence-ambiguity-decider (decider) — THE SPINE. Flattens scope.clearWinner = rc.clearWinner FIRST, then decide([{ when:{clearWinner:{eq:true}}, then:'report-correlational-lead' }], 'run-ablation').
+6. report-correlational-lead (plain function branch) — proxy report, {causal:false}, degenerate band marked. Structurally cannot reach a "because" leaf.
+7. run-ablation (subflow branch) — routes here ONLY when clearWinner===false AND scope.hasRerun (a nested decider degrades to an honest "ambiguous, no rerun harness — cannot escalate" leaf when the runner is absent). runAblationProbe → verdictFor (sole causal emitter, forced inconclusive on unstable baseline).
+8. optional whitebox-validate (subflow branch behind {hasLocalModel:{eq:true}}) — fits T against Qwen3-4B P_model; skipped when absent. This is the ONLY branch licensed to say "approximates the model's distribution."
+9. contract-and-build — toSpec/toMermaid/narrative for free.
+
+### Builder skeleton (illustrative — real API, real influence-core calls)
+
+```ts
+// ── NET-NEW combinators (tiny pure fns) ──────────────────────────────────
+// softmax(scores, T): shift-invariant — exp((s_i - max)/T)/Σ ; handles negative composites.
+// recencyWeight(loopIndex, n, halfLife): (0,1]; 1.0 for most-recent.
+// entropyStrategy(T): ConfidenceStrategy { name:'entropy', isClearWinner(ranked){ return entropy(softmax(ranked,T)) < bar } }  // drops into the seam, zero rankingConfidence change.
+
+import { flowChart, FlowChartExecutor, decide, ArrayMergeMode } from 'footprintjs';
+import { parseRuntimeStageId, causalChain, flattenCausalDAG } from 'footprintjs/trace';
+import {
+  scoreInfluence, scoreContrastiveInfluence, compositeScore, adaptWeights,
+  rankingConfidence, marginStrategy, embeddingCache,
+} from 'agentfootprint/influence-core';
+import { runAblationProbe, resolveSamples, similarityStats, verdictFor } from 'agentfootprint/context-bisect';
+
+// ── PER-LOOP SUBFLOW: score ONE agent decision ───────────────────────────
+const scoreOneDecision = flowChart<LoopState>('Score one decision', async (scope) => {
+  const f = scope.$getArgs<LoopFrame & { embedder; refText?; persistT; }>();
+  const scored = f.refText
+    ? await scoreContrastiveInfluence({ evidence: f.evidence, answerText: f.intermediateAnswerText,
+        referenceText: f.refText, embedder: f.embedder, persistenceThreshold: f.persistT, signal: scope.$getEnv().signal })
+    : await scoreInfluence({ evidence: f.evidence, finalAnswerText: f.intermediateAnswerText,
+        embedder: f.embedder, persistenceThreshold: f.persistT, signal: scope.$getEnv().signal });
+  scope.scored = scored;  // tracked → narrative
+}, 'compute-signals', { description: 'Fold four proxy signals into one contrastive score per piece (PROXY, never causal).' })
+  .addFunction('Recency-weight depth', (scope) => {
+    // POST-MULTIPLIER on DEPTH only, AFTER adaptWeights saw the true ancestorCount.
+    scope.scored = scope.scored.map((item) => {
+      const r = recencyWeight(scope.loopIndex, scope.loopCount, scope.halfLife); // (0,1]
+      const eff = adaptWeights(scope.weights, item.ancestorCount).weights;        // ratio invariant intact
+      const depthTerm = eff.delta * item.signals.depth * r;                        // r rides δ as a multiplier
+      return { ...item, composite: item.composite - eff.delta*item.signals.depth + depthTerm };
+    });
+  }, 'recency-weight-depth', 'Content-blind position prior — DEPTH slot ONLY, never FA/AVG/PERSIST.')
+  .addFunction('Softmax confidence', (scope) => {
+    scope.dist = softmax(scope.scored.map(s => s.composite), scope.softmaxT);     // P_ext
+    scope.conf = rankingConfidence(scope.scored, { strategy: entropyStrategy(scope.softmaxT) });
+  }, 'softmax-confidence', 'Confidence/dispersion of OUR ranking (NOT the model distribution).')
+  .build();
+
+// ── ABLATION SUBFLOW (causal tier) — needs an injected rerun runner ──────
+const ablationChart = flowChart<AblState>('Run seeded ablation', async (scope) => {
+  const { shortlist, rerun, embedder } = scope.$getArgs<{ shortlist; rerun; embedder }>();
+  const specs = buildAblationSpecs(shortlist);  // NET-NEW loop-scoped contract (gated, see CTXBUG)
+  const stats = await runAblationProbe({ rerun, embedder }, specs);  // resolveSamples clamps ≥2
+  scope.verdict = verdictFor('shortlist', stats, stats.baselineStable);  // FORCED inconclusive if unstable
+  scope.band = similarityStats(stats.reruns);  // genuine variance band — ONLY here
+}, 'ablate').build();
+
+// ── ROOT: per-loop spine + honesty ladder tail ───────────────────────────
+const scorer = flowChart<ScorerState>('Assemble loop frames', (scope) => {
+  const a = scope.$getArgs<{ commitLog; finalAnswerText; referenceText?; embedder; keysReadMap?; rerun? }>();
+  scope.loopFrames = assembleLoopFrames(a.commitLog);  // bucket by runtimeStageId, ascending #idx
+  scope.embedder   = embeddingCache(a.embedder);       // wrapped ONCE, shared
+  scope.cursor = 0; scope.loopCount = scope.loopFrames.length;
+  scope.hasRerun = !!a.rerun; scope.hasLocalModel = !!a.localModel; // FLATTEN for filter deciders
+}, 'seed-assemble-loopframes')
+  .addSubFlowChartNext('score-one-decision', scoreOneDecision, 'Score one decision', {
+    inputMapper: (s) => ({ ...s.loopFrames[s.cursor], embedder: s.embedder, refText: s.referenceText,
+                           loopIndex: s.cursor, loopCount: s.loopCount, weights: s.weights,
+                           halfLife: s.halfLife, softmaxT: s.softmaxT, persistT: s.persistT }),
+    outputMapper: (sub) => ({ perLoopScored: [sub.scored], perLoopConf: [sub.conf] }),
+    arrayMerge: ArrayMergeMode.Replace,
+  })
+  .addDeciderFunction('More loops?', (scope) =>
+      decide(scope, [{ when: (s) => s.cursor < s.loopCount - 1, then: 'continue', label: 'More loops to score' }],
+             'finalize').branch, 'more-loops-decider')
+    .addFunctionBranch('continue', 'Advance to next loop', (s) => { s.cursor += 1; },
+                       'Score loop N+1', { loopTo: 'score-one-decision' })
+    .addFunctionBranch('finalize', 'Finalize')
+    .setDefault('finalize')
+    .end()
+  .addFunction('Forward-propagation aggregate', (scope) => {
+    const a = scope.$getArgs<{ keysReadMap?: Record<string,string[]> }>();
+    const getKeysRead = a.keysReadMap ? (id) => a.keysReadMap[id] ?? [] : undefined;
+    if (!getKeysRead) { scope.aggregateScores = aggregateLambdaZero(scope.perLoopScored); }  // honest fallback
+    else {
+      const reach = forwardReachability(scope.commitLog, getKeysRead, causalChain, flattenCausalDAG); // invert backward slice
+      scope.aggregateScores = eligibilitySum(scope.perLoopScored, scope.lambda, reach); // contribution_N = score_N + λ·carry_{N-1}, gated
+    }
+    const rc = rankingConfidence(scope.aggregateScores, { strategy: marginStrategy() }); // recalibrated boolean
+    scope.clearWinner = rc.clearWinner; scope.margin = rc.margin;  // FLATTEN for the filter decider
+    scope.lead = rc.lead; scope.shortlist = rc.shortlist; scope.reason = rc.reason;
+  }, 'forward-propagation-aggregate', 'Sum per-loop credit, recency-decayed, GATED by real dependency edges.')
+  .addDeciderFunction('Confidence / ambiguity', (scope) =>
+      decide(scope, [{ when: { clearWinner: { eq: true } }, then: 'report-correlational-lead',
+                       label: 'Clear winner — trust the proxy lead, never claim cause' }],
+             'route-ambiguous').branch, 'confidence-ambiguity-decider')
+    .addFunctionBranch('report-correlational-lead', 'Report correlational lead', (s) => {
+        s.report = { kind: 'correlational-lead', lead: s.lead, margin: s.margin, reason: s.reason,
+                     dist: s.perLoopConf, causal: false, band: 'degenerate' };
+      }, 'Proxy lead only — structurally cannot claim cause')
+    .addDeciderFunctionBranch('route-ambiguous', /* nested: hasRerun ? ablation : honest-stop */)
+    .setDefault('route-ambiguous')
+    .end()
+  .contract({ output: RankedInfluenceReportSchema, mapper: (s) => s.report })
+  .build();
+
+// run: await new FlowChartExecutor(scorer).run({ input, env: { signal } });
+// draw: scorer.toMermaid()  /  scorer.toSpec()
+```
+
+### Math wiring (existing functions, composed)
+
+EXISTING influence-core composed verbatim; only the wiring + 3 small combinators are new.
+
+PER-LOOP (inside score-one-decision):
+- compute-signals: ONE call to scoreContrastiveInfluence (refText present) or scoreInfluence (fallback). Both already do a single deduplicated batch embed over a Set of distinct texts, then a per-item .map computing finalAnswerSimilarity (FA, or faContrast = sim(e,answer)−sim(e,reference)) + averageRelevancy + persistence(T) + structuralProximity, folded by compositeScore under adaptWeights. The four signals are NOT fanned as parallel branches — doing so would re-embed per branch (destroying the dedup + shared EmbeddingCache) or duplicate work scoreContrastiveInfluence already does (confirmed signals.ts batched-map; contrastive.ts:80 unconditional referenceText embed). Removing the fan-out also makes the failFast footgun moot here.
+- recency-weight-depth: THE CORRECTED WIRING. structuralProximity is computed first; adaptWeights sees the TRUE per-item ancestorCount (it only redistributes when ancestorCount===0 — confirmed signals.ts:143). recencyWeight then applies as a MULTIPLIER on the depth TERM after the fold: composite' = composite − δ·depth + δ·depth·r, where r∈(0,1]. This NEVER overwrites signals.depth before adaptWeights, so the 4:1 FA:DEPTH ratio invariant (signals.ts:130) holds for no-ancestor items. Recency rides δ as a post-multiplier, never touches FA/AVG/PERSIST.
+- softmax-confidence: softmax(composites, T) → P_ext. Because composites can be NEGATIVE (FA / faContrast cosines), softmax is shift-invariant: exp((s_i−max)/T)/Σ. entropyStrategy(T) plugs the ConfidenceStrategy seam (isClearWinner(rankedScores) = entropy below a bar) — the codebase comment at types.ts:97 and attributability.ts:72 explicitly names "entropy / dispersion" as the anticipated consumer strategy, so this is a clean zero-change sibling of marginStrategy/ratioStrategy.
+
+ACROSS LOOPS: the continue branch loopTo:'score-one-decision' carries carry_{N-1} forward in TypedScope (decision N built from N-1). The carry MUST be plain data (number-keyed source-id → number) — structuredClone-safe across the back-edge.
+
+CONVERGENCE (forward-propagation-aggregate, in the PARENT so it can read the full commitLog):
+- contribution_N(src) = score_N(src) + λ·carry_{N-1}(src), carry zeroed when src leaves the window.
+- GATE: causalChain is BACKWARD slicing (backtrack.ts:4) rooted at one startId, needing a KeysReadLookup. Forward reachability does NOT fall out for free — you invert: for each loop-N node, run causalChain rooted there, flattenCausalDAG, and src reaches loop N iff src's runtimeStageId is in that backward slice. No-double-count over the MERGING DAG (diamond S→A→C, S→B→C: S counted once) is reverse-topological / ascending executionIndex — must be PROPERTY-tested before wiring.
+- The KeysReadLookup is the load-bearing dependency: CommitBundle does NOT serialize keysRead (backtrack.ts:13 — supplied by a recorder during the ORIGINAL run). The seed stage loads a persisted keysReadMap; absent it, λ→0 (per-loop only) honestly, never an ungated similarity carry masquerading as a gated feature.
+
+HONESTY GATE: rankingConfidence(aggregate, {strategy: marginStrategy()}) — recalibrated, does NOT inherit the eligibility-summed distribution's 0.05 margin. Ablation: runAblationProbe (resolveSamples ≥2) → verdictFor (forced inconclusive on unstable baseline, ablation.ts:235; majority-flip for confirmed).
+
+### How it stays faithful — and honest about it
+
+The chart biases toward the model's decision SHAPE through five wirings, each grounded in a real symbol — but the headline claim is DEMOTED to what is defensible, with the strongest faithful primitive PROMOTED.
+
+(1) SOFTMAX over our composite scores (softmax-confidence) — DEMOTED honestly. P_ext is the confidence/dispersion of OUR proxy ranking, NOT "the model's decision distribution." The model's softmax is over its own logits; ours is over cosine geometry, a different sample space (evidence-pieces vs token/tool choices). Cosines occupy a narrow band, so T does most of the discriminating work — without calibration, flat-vs-peaked is a T artifact. So "approximates the model's distribution" is reserved STRICTLY for the optional whitebox-validate branch where P_model comes from real Qwen3-4B logits, fitting T by minimizing KL(P_ext‖P_model). entropyStrategy is presented as a peer decisiveness rule (margin/ratio/entropy), not a model emulator.
+
+(2) RECENCY (recency-weight-depth) mimics positional lean — admitted strictly as an ordering/weighting prior in the content-blind DEPTH slot, never a content claim, never a causal claim. Direction (recency vs primacy) is per-model-configurable; a single half-life geometric kernel cannot express the U-shaped lost-in-the-middle bias, so this is a tunable prior, not validated mimicry.
+
+(3) PER-LOOP scoring (the score-one-decision subflow re-entered by the loopTo back-edge) literally mirrors the agent loop — one decision per iteration scored against THAT loop's outcome, the scorer's loop shape echoing the agent's. This is the structurally strongest faithfulness lever and the whole reason for the per-loop angle over linear.
+
+(4) CONTRASTIVE FA (faContrast = sim(e,answer)−sim(e,reference)) removes the topical-innocent confound: a refund-policy piece resembles ANY refund output, right or wrong; subtracting the reference leaves the piece resembling the WRONG output specifically — biasing toward the actual driver, not the topic.
+
+(5) FORWARD PROPAGATION (contribution_N = score_N + λ·carry_{N-1}) mirrors that decision N is built from N-1 — gated by REAL reachability (causalChain over the commitLog) so credit flows only where data could, not by multiplying two proxies.
+
+PROMOTION: scoreMargin is the genuinely decision-faithful primitive (it ranks the OFFERED candidate set — the actual tool catalog the model chose among — with margin = best-chosen − best-non-chosen). The design exposes it as an optional per-loop tool-choice stage feeding a SECOND ambiguity signal (prospective margin.narrow alongside retrospective clearWinner), because that scores the real choice set rather than a retrospective evidence blend.
+
+OVERARCHING HONEST FRAME: all five are correlational BIASES toward plausible decision shape. Fidelity to the real decision is ESTABLISHED only by the optional white-box P_model branch and ultimately the ablation tier — and every faithfulness CLAIM (not just the λ implementation) is gated on the multi-loop CTXBUG fixture. Until then softmax/recency are admitted as ranking priors.
+
+### The honesty ladder IS the control flow
+
+The ladder IS the control-flow graph, provable from the trace — not a comment anyone has to honor.
+
+PROXY TIER = every stage from seed through forward-propagation-aggregate: the four signals, contrastive composite, recency, softmax, eligibility, rankingConfidence — all cosine geometry, deterministic, free, each carrying influence-core's verbatim "similarity PROXY, not a proven cause" claim.
+
+THE SINGLE BRANCH POINT = confidence-ambiguity-decider. Encoded with the FILTER form of decide() so the threshold is captured as FilterCondition evidence on onDecision + the narrative — BUT this only works because the design FLATTENS rc.clearWinner onto top-level scope.clearWinner first (confirmed bug: WhereFilter is flat-keys-only, decide/types.ts:31; a {when:{clearWinner:{eq:true}}} read against a nested rankingConfidence object would read undefined and silently route everything to default). The flatten is a typed write, so it ALSO appears in the narrative — the recorded "clearWinner eq true → report-correlational-lead" is the audit proof a proxy score routed to the proxy branch.
+
+TWO STRUCTURALLY DISTINCT DESTINATIONS:
+- report-correlational-lead is a PLAIN function branch wired to NO ablation symbol — it writes {causal:false} and is physically incapable of reaching a "context-bug confirmed" leaf. That leaf is graph-unreachable from here, not policy-forbidden.
+- run-ablation is a subflow branch — the ONLY path wired to runAblationProbe/verdictFor. verdictFor (ablation.ts:224) is the sole causal-claim emitter and FORCES 'inconclusive' when baselineStable===false (a second structural guard) plus requires a majority flip for 'confirmed' (the causal floor is solid).
+
+THREE ADVERSARIAL HONESTY FIXES baked into the topology:
+- The causal arm is NOT self-contained. runAblationProbe needs an injected AblationRunner (types.ts:281) that re-runs the whole agent N≥2× — confirmed required, NOT manufacturable inside the scorer. So a NESTED decider gates run-ablation on the flattened scope.hasRerun: absent the runner, flow routes to an honest "ambiguous, but no rerun harness supplied — cannot escalate to causal tier" leaf. The ladder degrades honestly instead of dead-ending on a stub.
+- The degenerate band: with a deterministic embedder the proxy variance band is zero-width; report-correlational-lead marks band:'degenerate' and the genuine seed-variance band is surfaced ONLY on the ablation arm — never present a zero proxy band as "measured stability."
+- whitebox-validate sits behind {hasLocalModel:{eq:true}} and simply skips when absent — model-agnostic by construction; white-box validation is visibly OPTIONAL, and it is the ONLY arm licensed to use the words "the model's distribution."
+
+A reviewer can SEE in the drawn chart that causation hangs off exactly one edge, gated by a recorded threshold, and that no proxy stage ever touches a "because" leaf.
+
+### It explains and draws itself
+
+Because the scorer IS a footprint.js flowchart, it explains and draws itself with zero extra code — the whole payoff of expressing it this way.
+
+DRAWS ITSELF: toSpec()/toMermaid() emit the drawable structure — you SEE the per-loop subflow, the back-edge mirroring the agent loop, compute-signals → recency → softmax inside it, the more-loops decider with its looping vs terminal branch, the forward-propagation aggregator, and the confidence decider splitting into the proxy-lead leaf vs the ablation sub-pipeline. The honesty ladder is a visible fork.
+
+NARRATES EVERY SCORE: getNarrativeEntries() gives the stage-by-stage story because every typed write is tracked. To make the per-piece DERIVATION actually visible (judges correctly noted narrative records WRITES, not internal computation), each math stage writes its intermediate as a tracked typed property OR $emits a structured per-piece breakdown — so the trace reads "piece #3: FA 0.71 → contrast dropped it to 0.12 → recency ×0.97 → forward-carry +0.05 from loop 2 → final 0.20." Crucially, compute-signals keeps BOTH the raw and contrast-corrected arrays (perLoopScoredRaw + perLoopScored) instead of overwriting, so the before/after the walkthrough advertises is real.
+
+SELF-EXPLAINING ROUTING: the decide() evidence on the confidence decider records WHICH flattened boolean/threshold produced the proxy-vs-ablation routing — queryable on onDecision, the audit proof of honest routing.
+
+LIVE + TIME-TRAVELABLE + PER-LOOP ADDRESSABLE: topologyRecorder() reconstructs the live composition graph mid-run (each loop re-entry as id#n); inOutRecorder() captures each score-one-decision boundary's entry/exit payload keyed by runtimeStageId. Because the loop is a REAL loopTo back-edge (not a JS for-loop), every iteration commits with a fresh runtimeStageId (same stageId, ascending #executionIndex) — so each agent-loop iteration is genuinely independently addressable and you can scrub to loop 3 and see exactly the evidence in and the InfluenceScore[] out. (This is the concrete advantage over the linear angle, whose "per-loop addressable" claim the judges proved false.)
+
+The scorer explains itself the same way it explains the agent it scores — and you can lay the two flowcharts side by side because they share the loop shape.
+
+### Plain walkthrough
+
+Imagine a detective figuring out which clue made a suspect (the AI) reach its conclusion — and the AI thinks in ROUNDS, one decision per round. We build an assembly line that copies the AI's own round-by-round shape, and the whole assembly line draws itself on a whiteboard and writes its own step-by-step story.
+
+ROUND BY ROUND: for each round we run the SAME little workstation ("score one decision"). At that workstation we rate every clue four ways at once — how much it sounds like THIS round's answer, how steadily it matched the AI's thinking, in how many thinking-steps it kept showing up, and where it sat (pure position, no reading). We combine these with a clever twist: we SUBTRACT out clues that look like ANY answer — the topic everyone's talking about — so only the clue that looks like THIS PARTICULAR (possibly wrong) answer stands out. We give a small, honest nudge to RECENT clues (the AI leans on recent stuff) — but ONLY on the "where it sat" rating, never on the "what it says" ratings, because position shouldn't fake meaning. Then we turn the round's scores into betting odds (a sharp spread = the AI was decisive that round; a flat spread = nearly a coin-flip).
+
+THE LOOP: a gate asks "more rounds?" If yes, an arrow loops back to the SAME workstation for the next round — exactly like the AI's own loop — carrying forward what we learned (this round built on the last). When rounds end, we ADD UP every round's findings, fading older rounds, and — this is important — we only let a clue's early credit carry forward if the actual wiring of the run shows it COULD have flowed forward. We check the real connections, not just looks. (And if we don't have a record of those connections, we honestly turn carry-forward OFF rather than fake it.)
+
+THE HONEST FORK (the crucial part): we ask "is there a clear front-runner clue?" If ONE clue clearly leads, we just SAY SO — "this clue correlates most, here's the gap" — and we explicitly DO NOT claim it caused anything. That branch is physically wired so it CANNOT say "because." If it's TOO CLOSE TO CALL — which is exactly the dangerous case where the real culprit hid by NOT resembling the answer — we escalate to the only thing that proves cause: re-running the AI several times with that clue REMOVED to see if the answer flips. Only THAT re-run path may say "because" — and if the re-runs are themselves shaky, it honestly says "inconclusive."
+
+Two honest caveats built in: (a) the re-run experiment needs someone to hand us a "re-run the whole scenario" button — if nobody does, the close-call case stops at "ambiguous, can't prove it" instead of pretending. (b) The "betting odds" are OUR guess of the AI's confidence, not the AI's real confidence — we only claim to read the AI's real mind in one optional side-check, when we happen to have a copy of its brain (a local model) on hand. Everything else works with any off-the-shelf meaning-ruler, no peeking inside the AI required.
+
+### Net-new to build (small) vs reused
+
+- softmax(scores, temperature) — tiny pure fn forming P_ext; shift-invariant (exp((s_i−max)/T)/Σ) because composite scores can be negative (grep confirms no softmax symbol exists in influence-core)
+- entropyStrategy(temperature) — a ConfidenceStrategy { name, isClearWinner(rankedScores) } that drops into the EXISTING seam (types.ts:102) with ZERO change to rankingConfidence; the codebase comment already names 'entropy / dispersion' as the anticipated consumer strategy
+- recencyWeight(index, n, halfLife) → (0,1] — tiny pure fn applied as a POST-MULTIPLIER on the DEPTH term only, AFTER adaptWeights (grep confirms only LRU 'recency', no recencyWeight symbol)
+- the λ-eligibility forward-propagation combinator contribution_N = score_N + λ·carry_{N-1} — the one genuinely new MATH; wraps (never replaces) per-loop compositeScore, gated by REAL reachability; requires a forwardReachability helper that INVERTS the backward causalChain slice (causalChain is backward-only — confirmed), plus a no-double-count reverse-topological reduction that MUST be property-tested in isolation first
+- the LoopFrame assembler — must specify HOW per-loop context-window membership is derived from the commitLog (bucket by repeated local stageId + ascending #executionIndex via parseRuntimeStageId; NEVER forkBranch); 'leaves the window' has no existing substrate
+- a persisted keysReadMap requirement on the ORIGINAL agent run (attach a QualityRecorder / keys-read store serialized alongside the commitLog) — CommitBundle does NOT serialize keysRead; without it the λ gate degenerates and the design falls back to λ=0
+- a LOOP-SCOPED AblationSpec + partial-rerun contract — shipped AblationSpec is RUN-scoped (tool/injection/memory/arg construction inputs, types.ts:252) and runAblationProbe re-runs the whole agent; per-loop counterfactual replay (e.g. resume-from-loop-N-checkpoint with the piece removed) is a MAJOR net-new harness, NOT a thin contract — gate it, ship v1 with run-scoped ablation over the shortlist
+- the flowchart WIRING itself: seed assembler, score-one-decision subflow, branch-sourced loopTo, the flatten-then-decide confidence gate, the nested hasRerun degrade-honestly branch, the optional whitebox branch
+
+### CTXBUG validation (the gate)
+
+The multi-loop CTXBUG fixture is the GATE for every uncalibrated claim — the design is a yes-to-build only with this validation plan attached (library-first: the benchmark exists to find and fix library weakness).
+
+WHAT THE FIXTURE NEEDS: a multi-loop agent scenario with a KNOWN planted context bug (a piece that causes a wrong decision at a specific loop), where the planted ground-truth is the culprit source AND the loop at which it bit. Build it with the proven local Tier-A stack (llama.cpp + Qwen3-4B-Q4_K_M, determinism PASS per memory) so the white-box P_model branch is available for calibration. The fixture run MUST persist BOTH the commitLog AND a keysReadMap (attach a read-tracking recorder) — without that the λ gate cannot be validated.
+
+THE DECISION × ANSWER CORRELATION (the core validation): the faithfulness claim is that the scorer's per-loop ambiguity/decisiveness tracks the model's ACTUAL decisiveness. Validate by correlating, per loop:
+- OUR P_ext entropy (and clearWinner from entropyStrategy) AGAINST the model's real P_model entropy over tool logits (whitebox branch). Report KL(P_ext‖P_model) and rank-correlation per loop; fit T to minimize it; report the residual. If P_ext entropy does NOT correlate with P_model entropy, the softmax faithfulness claim FAILS and we keep entropyStrategy only as a peer decisiveness rule (margin/ratio), never as a model proxy.
+- The DECISION the model made (which tool/answer at each loop) AGAINST the scorer's top-ranked influence piece at that loop. The correlation we want: at loops where the model's answer was DRIVEN by the planted piece, the scorer ranks that piece first (clearWinner) and routes to proxy-report; at loops where the bug hid by ABSENCE (flat top), the scorer routes to ablation and ablation CONFIRMS the planted culprit.
+
+PER-PIECE VALIDATION GATES:
+- softmax T: calibrated (not free-knob) only after the KL-fit above produces a stable T with bounded residual. Until then ship entropyStrategy gated/off-by-default; default to marginStrategy.
+- recency halfLife: ship at ∞ (weight 1.0, reduces to plain structuralProximity) as the DEFAULT; enable decay only when a per-model fit shows it IMPROVES localization accuracy on the fixture (does the bug rank higher with recency on?). Validate direction (recency vs primacy) — wrong direction must not silently invert.
+- λ: ship λ=0 (per-loop only) as the shippable v1 default. Enable forward-propagation only when the fixture shows multi-loop credit-carry IMPROVES culprit-loop localization vs λ=0. Property-test the no-double-count invariant (diamond DAG) BEFORE this stage is wired.
+- run-scoped ablation: validate verdictFor confirms the planted culprit and returns inconclusive when the baseline is intentionally destabilized. Loop-scoped ablation stays OUT of v1 until the partial-replay harness exists.
+
+OUTCOME METRIC: localization accuracy (did the scorer + ablation identify the planted culprit source and loop?) and honest-routing rate (did clear cases stop at proxy, ambiguous cases reach ablation, no proxy ever claim cause?) — both read directly off the self-drawn trace.
+
+### Open questions
+
+- Forward reachability: causalChain is backward-only — is per-loop-node backward slicing + membership test (O(loops × slice)) acceptable, or do we build one inverted DAG at the deepest loop? The cost and the no-double-count proof differ between the two; needs a decision before the λ stage is designed.
+- keysReadMap persistence: which recorder owns it on the ORIGINAL agent run (QualityRecorder already tracks keysRead per step per backtrack.ts:13), and what is the serialization format alongside commitLog? If the common agent path doesn't attach it, forward-propagation is permanently λ=0 in practice — is that acceptable for v1?
+- Does the analyzed agent's real cross-loop data flow even APPEAR in the commitLog? Agents carrying state via message history / provider memory (not scope.setValue) leave no read→write edges — causalChain returns a near-empty DAG and the gate zeroes everything. The CTXBUG fixture must measure how many cross-loop edges actually exist; if ~0 for real agents, the gate is decorative.
+- Loop-scoped ablation: the pause/resume checkpoint is the natural partial-replay mechanism (re-run from the score-one-decision boundary with the piece removed) — but is replaying ONE loop of a stateful agent in isolation even semantically well-defined, or does forward state make it incoherent? This may be unbuildable on the existing ablation tier without a new replay contract.
+- scoreMargin promotion: the design exposes it as an optional second ambiguity signal, but should the prospective margin.narrow flag be a co-equal input to the confidence decider (prospective AND retrospective ambiguity), or kept diagnostic? Co-equal raises faithfulness but complicates the honest-routing audit.
+- Recency kernel shape: a single geometric half-life cannot express U-shaped lost-in-the-middle bias. Is a two-term (primacy + recency) kernel worth the extra knob, or do we accept geometric-recency as a deliberately simple, per-model-configurable prior?
+- Temperature for a model-agnostic deployment: when NO local model is available, T cannot be calibrated against P_model. Do we ship a per-embedder default T (calibrated once on a reference embedder) and label it 'uncalibrated for your embedder', or refuse entropyStrategy entirely without a local model?
+
+## How it's used — the influence-guided backtracking debugger (the purpose)
+
+The scorer is not the product; **finding the bug is**. The influence score exists to
+*guide a backward walk* from the wrong answer to its root cause. The workflow:
+
+1. **Start at the wrong final answer.** The influence score at the last step ranks the
+   context pieces; the top one (say 80) is the prime suspect for that step.
+2. **Jump back to the decision that produced that piece** (an earlier tool call / loop).
+3. **Re-rank at that step**; follow the new top piece.
+4. **Repeat** — *top piece → the decision that made it → its top piece → …* — until the
+   root: the original bad piece (a wrong skill instruction, a misleading fact). That is
+   the bug.
+
+**Automated, the debugger hands the user the chain, root-first:**
+
+> "wrong answer leans most on **X** (80) → X came from the **search at loop 2** → that
+> search leaned most on the instruction *'always call refund first'* (90) → **that
+> instruction is the bug.**"
+
+**What's reused vs what the score adds.** The backward walk already exists —
+`causalChain` ("who wrote this value, and who fed *that*"), the BacktrackView "why?"
+board, and the conversational `traceDebugAgent` / `.selfExplain()`. Without a score,
+that walk **branches into every source it read**. The influence score's job here is
+**path selection**: it *ranks* the pieces at each step so the debugger follows the
+single most-influential trail instead of exploding combinatorially. The per-loop
+score + the §"score tracing" propagation give a *trail*, not a flat list — exactly
+what a guided backtrack needs.
+
+**Honesty (unchanged).** The score **guides** (a fast, strong hint, never proof); to
+**prove** a piece is the bug, ablate it (change it, re-run, watch the answer flip).
+The guide reaches the suspect fast; ablation convicts it. So the debugger surfaces a
+**ranked trail to the suspect** and offers a **one-click ablation** to confirm the
+root — never asserting cause from the proxy alone.
+
+This is the *use* layer over the flowchart scorer: the scorer (built as a
+self-explaining flowchart) produces the per-step rankings; the backtracking debugger
+consumes them to walk a user — or itself, automatically — to the root cause.
+
 ---
 
 *Gated: no code until an explicit "yes." This memo is the artifact to react to.*
