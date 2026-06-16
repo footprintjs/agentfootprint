@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.30.0] - 2026-06-11
+
+### Added — restoration: the causal tier for the missing-context finder (interface #3)
+- **`localizeContextBug({ missingContext })`** — pass what was `available` for the
+  turn and what was `sent`; the report's new `dropped` lists units that never
+  reached the model. Add a restoration `rerun` and each candidate gets a
+  **restoration verdict** — the mirror of ablation: add the unit back, seeded
+  re-runs, majority-flip on a stable baseline = `confirmed` (causal). Report gains
+  `dropped` + `restorationBaseline`; an unstable un-restored baseline raises a
+  `baseline-unstable` honesty flag. `formatContextBugReport` renders a MISSING
+  CONTEXT section symmetric with SUSPECTS.
+- New surface from `agentfootprint/observe`: `runRestorationProbe`,
+  `RestorationRunner`, `RestorationRerun`, `RestorationProbeConfig`,
+  `RestoredCandidate`. `verdictFor` gained an `action` param ('ablating' default,
+  'restoring') — ablation claim strings unchanged.
+
+The localizer now identifies a context error whether the culprit is PRESENT
+(rank → ablate) or ABSENT (find → restore), each ship-a-default + bring-your-own.
+Cost note: restoration confirmation calls your model `samples × (K+1)` times.
+Example 10 extended; missing-context guide updated. 7-lens panel review; full
+suite 2985 green.
+
 ## [6.29.0] - 2026-06-11
 
 ### Added — three interfaces for identifying a context error (`agentfootprint/observe`)
