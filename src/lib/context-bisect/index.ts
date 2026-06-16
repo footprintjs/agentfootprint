@@ -75,6 +75,17 @@ export {
 // Two-score localization (proposal 004): the COST score + the 2×2 classifier.
 export { assignCostVerdicts, classifySuspect, MIN_LOOPS_SAVED } from './cost.js';
 
+// Per-loop trajectory assembler (proposal 005): segmentation core (phase 1).
+export {
+  bucketByAnchors,
+  findLoopHeads,
+  type AnchorBucket,
+  type ContextSource,
+  type LoopFrame,
+  type SyntheticQuestionNode,
+  type Trajectory,
+} from './trajectory.js';
+
 export {
   bisectCulprits,
   type BisectCulpritsOptions,
