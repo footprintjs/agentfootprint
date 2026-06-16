@@ -101,6 +101,88 @@ The report found **no published method** for "how stable is a per-step attributi
 
 Steps 1–3 are the minimum viable per-loop scorer; 4–5 are the causal + paper-grade extension.
 
+
+---
+
+## Cross-loop propagation mechanism (v1.1 refinement)
+
+This section answers three questions raised about cross-loop influence and specifies the mechanism precisely enough to implement later. It is a **design pass only** — no implementation code.
+
+### The three questions, answered plainly
+
+**1. Do we contrast per loop today?** No. The shipped contrastive scorer (`scoreContrastiveInfluence`) runs **once**, at the end of a run, scoring every source against **one** final answer minus **one** reference. Nothing calls it per loop iteration. The good news: per-loop contrasting needs **no scorer rewrite** — the function only needs a different answer/reference text pair, which a thin per-loop driver supplies.
+
+**2. Do we have a cross-loop mechanism today?** No. The library *records* everything needed (per-stage write log in the commit log, a unique `runtimeStageId` per iteration, the runtime parent link `parentRuntimeStageId`, the backward causal-chain DAG, and control-dependency edges), but there is **no assembler** that groups records into ordered loop iterations, **no propagator** that carries one loop's influence into the next, and **no per-loop weigher**. The one shipped aggregator (`computePathScores`) walks **backward only** and uses **max-product** (a "strongest single path" rule) — the wrong shape for "a source's total = its own influence **plus** what it carried forward."
+
+> **Substrate correction (verified in source).** The engine field `TraversalContext.loopIteration` is *declared* but **never populated by the engine** — it is computed only inside one narrative renderer and is **absent from `CommitBundle`**. Loop grouping must therefore be **derived** from `runtimeStageId`: a repeated loop-anchor `stageId` with an ascending `#executionIndex` *is* the loop counter (use the exported `parseRuntimeStageId`), chained across iterations by `parentRuntimeStageId`. Any design that buckets by `loopIteration` is built on a phantom field.
+
+**3. How should previous-loop influence flow?** Anchor on the **user's question**; score **each loop**; **propagate** the prior loop's accumulated influence forward into the next loop; **aggregate** to one score per source. A source entering at loop 1 earns credit there *and* a fading share of credit at every later loop it helped enable, because each loop is literally built from the previous loop's output.
+
+### Recommended mechanism — `scoreTrajectoryInfluence`
+
+A **question-anchored forward eligibility trace**, gated by real causal reachability, with a per-loop contrast and an opt-in causal rung. Forward is the user-facing direction; one backward construction step is reused only to obtain real dependency edges.
+
+**Step 0 — Assemble the trajectory (new, pure read; zero new capture).** Walk `getSnapshot().commitLog`; derive loop iterations from `runtimeStageId` (`parseRuntimeStageId` → repeated stage id + ascending execution index), chained by `parentRuntimeStageId`. Emit per loop a `LoopFrame { loopIndex, llmCallId, intermediateText (stepOutputText), contextUnits[] (live sources via findLastWriter + commitValueAt) }`. Specify and unit-test a loop-segmentation rule for multi-stage bodies and nested subflows.
+
+**Step 1 — Anchor on the question.** Embed the run input once (`getArgs()` / root `InOutEntry.payload`, `__root__#0`). Inject it as a synthetic reference node. Because `args` reads are **untracked** (`untrackedSources: 'args'`), stamp `incompleteSources:['args']` on every consuming node and a slice-level **`forward-anchor:injected`** flag — the question→first-source link is a proxy, never a recorded dependency.
+
+**Step 2 — One backward slice for real edges (reuse `causalChain` verbatim).** Root at the answer step; pass `controlDeps = controlDepRecorder().asLookup()` so a loop's tool-choice decision enters as a `kind:'control'` edge (the "wrong early tool pick is the whole cause" case). Inherit `truncated` / `incompleteSources` honesty (OR `truncated` across all loop slices). If `controlDeps` is absent, surface a `no-control-deps` flag — never degrade early-source attribution silently.
+
+**Step 3 — Derive a forward reachability GATE.** `flattenCausalDAG` enumerates each node once; reverse `parentEdges` into a writer→reader adjacency. A source whose forward reach touches no later loop is gated to ~0 regardless of question-similarity. **This fixes the backward-only blind spot by structural reachability — not by multiplying two similarity proxies** (the rejected `forward × backward` form amplifies topical look-alikes).
+
+**Step 4 — Per-loop contrast (the speed-tier weight).** Per `LoopFrame`, call `scoreContrastiveInfluence(answerText = loopN-intermediate, referenceText = question | aligned-reference-run-loopN)` over live, reachable sources. `FA_N(e) = sim(e, loopN-state) − sim(e, reference)` isolates what each source added to **this loop's** progress beyond restating the question. Keep the sign (a source the loop contradicts is informative); clamp only at final normalization.
+
+**Step 5 — EdgeWeigher bridge (optional).** To expose a weighted forward DAG, stamp `score_N` via the `EdgeWeigher` seam — but it is **synchronous** and the scorer is **async**, so use the proven **prime-then-reslice** two-pass (`await weigher.prime(unweightedSlice)` to batch-embed, then re-slice with the sync `weigh`), exactly as `llmEdgeWeigher` does. A throwing weigher degrades to 1.0 (engine-isolated).
+
+**Step 6 — Forward eligibility propagation (the one new combinator).** Running per-source eligibility: `contribution_N(src) = score_N(src) + λ · carry_{N-1}(src)`, carry decaying at λ and **zeroed** when a source leaves the context window. `λ=0` → per-loop only; `λ=1` → full forward flow; default `λ≈0.7` (**uncalibrated until the fixture below exists**). Because the slice is a **merging DAG**, the additive sum must finalize each node before any parent consumes it and count each edge **exactly once** (reverse-topological, ascending execution index) to avoid double-counting — this invariant must be written down and unit-proven on a re-convergent fixture. Reset on new `runId` (Convention 4).
+
+**Step 7 — Aggregate to `InfluenceScore[]`.** `final(src)` = normalized eligibility sum (combinator pluggable: `eligibility` default | `max` | `last`). Emit the **same `InfluenceScore[]` shape** plus a per-source forward track and `reachedAnswer`, so `rankingConfidence` and the ablation tier compose unchanged. **Scale honesty:** eligibility-summed scores do **not** inherit the calibrated `clearWinner` margin (0.05, tuned for raw composite scores) — trust the **ranking**, and recalibrate the margin for this estimator.
+
+**Step 8 — Honesty + stability.** Default `mode:'correlational'` (embedding geometry, never causal); surface `incompleteSources:['args']`, `forward-anchor:injected`, `no-control-deps`, `truncated`. Opt-in **causal** rung: per-loop ablation re-runs the chain forward N seeded times with the source removed at its loop, measuring flip-rate on **both** the per-loop intermediate **and** the final answer (`verdictFor`, forced inconclusive on an unstable baseline). Note honestly that per-loop ablation needs a **loop-scoped ablation contract** (the shipped `AblationSpec` excludes a source for the whole run and returns one output) — real net-new work. Stability: seeded re-runs (`resolveSamples` clamps ≥2) → per-loop flip-rate + stdev (`similarityStats`), aggregated to a per-source confidence; rank-flippers demoted to shortlist. **A deterministic embedder gives a degenerate band at the speed tier — the genuine variance band is a causal-tier artifact.**
+
+### Honesty ladder (unchanged identity)
+
+| Tier | Buys | How |
+|---|---|---|
+| **Correlational (default)** | Speed | Per-loop contrast + reachability gate + eligibility sum over an injected embedder. "Plausible forward influence path", never "because." |
+| **Causal (opt-in)** | Truth | Per-loop seeded ablation (`runAblationProbe`/`verdictFor`); re-run forward with the source removed; the only tier that says "because." |
+
+Non-determinism is handled, not pretended away: ≥2 seeded re-runs, variance/flip bands, inconclusive on unstable baselines.
+
+### Real substrate primitives this builds on
+
+`causalChain`, `CausalEdge.weight` + `EdgeWeigher` (sync; throw-isolated to 1.0), `controlDeps` + `ControlDepRecorder.asLookup()`, `flattenCausalDAG`, `commitLog`/`CommitBundle` + `findLastWriter` + `commitValueAt`, `parseRuntimeStageId` + `runtimeStageId` + `parentRuntimeStageId` (**derive** loop buckets — `loopIteration` is unpopulated), `stepOutputText`, `scoreContrastiveInfluence` (per-loop driver), `InfluenceScore`/`EvidenceInput.ancestorTexts`, `runAblationProbe`/`similarityStats`/`verdictFor`/`resolveSamples`, `rankingConfidence`, the root `InOutEntry` payload for the question anchor. **Genuinely new:** the trajectory assembler, the reachability gate, the additive λ-eligibility combinator (with the merging-DAG no-double-count invariant), the per-loop contrast driver, and a loop-scoped ablation contract.
+
+### Gating step (library-first): the validation fixture
+
+Before trusting `λ`, the combinator, or the "forward beats position-based" claim, build the **multi-loop CTXBUG fixture** with a plantable early-vs-late culprit (wrong tool pick at loop 1 vs wrong reasoning at loop K). It does not exist yet. Per project priority, **this fixture precedes implementation** and calibrates the defaults.
+
+## Strategy menu — pluggable influence/credit, each grounded in a published method
+
+> **The library's pitch (consumer-facing): we record the real per-loop agent trajectory and expose ONE honest, pluggable influence/credit slot. You pick the strategy — ours or a published one — and you don't have to know in advance which helps; the benchmark (CTXBUG) measures it for your setting. The optionality is the feature.**
+
+Every strategy returns the same `InfluenceScore[]` shape, so `rankingConfidence` and the ablation tier compose on all of them unchanged. Each is labeled by **tier** on the honesty ladder (proxy = fast/correlational; causal = real seeded re-runs).
+
+| Strategy (pluggable) | Grounding paper(s) | Tier | Status |
+|---|---|---|---|
+| **four-signal embedding** (FA/AVG/PERSIST/DEPTH) | Visible Reasoning / FDL influence | proxy | shipped (`scoreInfluence`) |
+| **contrastive** (sim-to-answer − sim-to-reference) | our confound fix; baseline-subtraction shape, cf. advantage `A=Q−V` | proxy | shipped 6.31.0 (`scoreContrastiveInfluence`) |
+| **per-loop contrastive trajectory** (this proposal, default) | Thought Anchors / Thought Branches (per-step contrast); CUE-R (per-evidence perturbation; *relevance ≠ utility*); FlowTracer (question-virtual-source, forward conservation) | proxy | proposed |
+| **context-attribution** | ContextCite (Cohen-Wang et al.); TracLLM | causal-surrogate | adapter |
+| **scaled ablation** | AttriBoT (>300× LOO speedup); CAMAB (Thompson-sampling budget) | causal | partial (`localizeContextBug`) |
+| **per-step credit** | AgentPRM (promise/progress, `A=Q−V`); GRPO-λ (eligibility-trace λ-return) | causal, inference-time-estimable | proposed (the λ-eligibility core above) |
+| **turn-credit** | C3 (counterfactual LOO); SCAR (Shapley over reasoning segments) | causal | adapter |
+
+Deliberately **rejected** as a default: QAFlow's `forward × backward` *multiply* of two cosine proxies — the adversarial panel flagged it amplifies topical look-alikes. We **gate** by forward reachability and **weigh** by per-loop contrast instead; we never multiply two similarity proxies.
+
+## Paper positioning
+
+The contribution is **not** "our scorer beats theirs." It is: **footprint.js makes these published influence/credit methods *pluggable and runnable on real, recorded agent trajectories*, behind one honest interface with a clear proxy-vs-causal ladder — and CTXBUG lets you measure which strategy wins for *your* agent.** This is generous (it cites and hosts the field's methods rather than competing with them), defensible (the substrate + the honest interface + the benchmark are the novelty, not a single number), and matches the design intent: the consumer picks the strategy of their choice; the library supplies the trajectory, the slot, the honesty markers, and the measuring instrument.
+
+## Library finding surfaced by this design pass (library-first)
+
+The adversarial panel verified a real defect while grounding the mechanism in source: **`TraversalContext.loopIteration` is declared but never populated by the engine** — it is computed only inside one narrative renderer and is absent from `CommitBundle`. Any consumer bucketing by it is reading a phantom field. **Decision to make (gated):** either (a) stamp `loopIteration` on the emitted `TraversalContext` / `CommitBundle` (a one-field engine change that makes the trajectory assembler honest and trivial), or (b) keep "zero new capture" and derive loop buckets from `runtimeStageId` + `parentRuntimeStageId` (a fragile reconstruction). This is a footprint.js-level call independent of the scorer.
+
 ---
 
 *Gated: no code until an explicit "yes." This memo is the artifact to react to.*
