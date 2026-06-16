@@ -1,6 +1,6 @@
 /**
- * restoration — the causal tier for the missing-context finder (interface #3),
- * the MIRROR of ablation.
+ * restoration — RFC-003 Part B: the causal tier for the missing-context finder
+ * (interface #3), the MIRROR of ablation (D8's restoration half).
  *
  * Ablation confirms a PRESENT culprit by removing it and watching the outcome
  * flip. Restoration confirms an ABSENT culprit (a unit `findDroppedContext`
@@ -14,7 +14,7 @@
  */
 import { cosineSimilarity } from '../../memory/embedding/cosine.js';
 import type { Embedder } from '../influence-core/index.js';
-import { defaultOutcomeComparator, similarityStats } from './ablation.js';
+import { defaultOutcomeComparator, resolveSamples, similarityStats } from './ablation.js';
 import type { ContextUnit } from './missingContext.js';
 import type { AblationRunStats, OutcomeComparator } from './types.js';
 import { CONTEXT_BISECT_DEFAULTS } from './types.js';
@@ -39,7 +39,12 @@ export interface RestorationRerun {
   readonly outcomeChanged?: OutcomeComparator;
   /** Similarity floor for the DEFAULT comparator. Default 0.8. */
   readonly flipThreshold?: number;
-  /** Restore only the top-K dropped candidates. Default 5. */
+  /**
+   * Restore only the first K dropped candidates. Default 5. COST: confirmation
+   * calls your model `samples × (K + 1)` times (the +1 is the baseline) — real,
+   * seeded re-runs. Keep `maxCandidates`/`samples` low, or pre-rank candidates,
+   * to bound spend. Candidates beyond K are listed without a verdict.
+   */
   readonly maxCandidates?: number;
 }
 
@@ -57,7 +62,7 @@ export async function runRestorationProbe(
   config: RestorationProbeConfig,
   units: readonly ContextUnit[],
 ): Promise<AblationRunStats> {
-  const samples = Math.max(2, config.rerun.samples ?? CONTEXT_BISECT_DEFAULTS.samples);
+  const samples = resolveSamples(config.rerun.samples);
   const flipThreshold = config.rerun.flipThreshold ?? CONTEXT_BISECT_DEFAULTS.flipThreshold;
   const outcomeChanged =
     config.rerun.outcomeChanged ?? defaultOutcomeComparator(config.embedder, flipThreshold);

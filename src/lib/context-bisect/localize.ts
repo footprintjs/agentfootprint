@@ -40,6 +40,7 @@ import { findDroppedContext, type ContextUnit } from './missingContext.js';
 import { runRestorationProbe, type RestorationRerun } from './restoration.js';
 import type {
   AblationRerun,
+  AblationRunStats,
   ContextBugArtifacts,
   ContextBugReport,
   EdgePathStep,
@@ -501,11 +502,26 @@ export async function localizeContextBug(
   // ── 5b. Missing-context tier (interface #3) ─────────────────────────
   // Independent of ablation: finds what was available but never sent, and —
   // with a restoration runner — confirms each by restoration (the causal mirror).
-  const dropped = options.missingContext
+  const missing = options.missingContext
     ? await runMissingContextTier(options.missingContext, embedder)
     : undefined;
+  const dropped = missing?.candidates;
   // A restoration verdict (even not-confirmed) is a causal-tier statement.
   const restorationRan = dropped?.some((d) => d.verdict !== undefined) ?? false;
+  // Mirror ablation's honesty: an unstable un-restored baseline (the buggy
+  // output itself not reproducing) invalidates every restoration verdict —
+  // surface it as a machine-readable flag, not just inside each claim string.
+  const restorationFlags: HonestyFlag[] =
+    missing?.baseline !== undefined && !missing.baselineStable
+      ? [
+          {
+            flag: 'baseline-unstable',
+            note:
+              `the un-restored baseline changed outcome in ${missing.baseline.flips}/${missing.baseline.samples} ` +
+              'seeded reruns — all restoration verdicts are inconclusive.',
+          },
+        ]
+      : [];
 
   // ── 5. Ablate (the causal tier) ─────────────────────────────────────
   if (options.rerun === undefined) {
@@ -518,7 +534,8 @@ export async function localizeContextBug(
       suspects: ranked,
       ...(dropped ? { dropped } : {}),
       sliceStats,
-      honestyFlags,
+      honestyFlags: [...honestyFlags, ...restorationFlags],
+      ...(missing?.baseline !== undefined ? { restorationBaseline: missing.baseline } : {}),
     };
   }
 
@@ -566,25 +583,42 @@ export async function localizeContextBug(
     suspects: withVerdicts,
     ...(dropped ? { dropped } : {}),
     sliceStats,
-    honestyFlags: flags,
+    honestyFlags: [...flags, ...restorationFlags],
     baseline,
+    ...(missing?.baseline !== undefined ? { restorationBaseline: missing.baseline } : {}),
   };
+}
+
+/** Result of the missing-context tier — candidates plus the restoration
+ *  baseline (mirrors how the ablation tier surfaces `baseline` + stability). */
+interface MissingContextTierResult {
+  readonly candidates: readonly RestoredCandidate[];
+  /** The un-restored baseline probe (only when a runner ran). */
+  readonly baseline?: AblationRunStats;
+  /** False only when the baseline ran and was unstable. */
+  readonly baselineStable: boolean;
 }
 
 /**
  * Interface #3 tier: find context available but not sent, and — with a
  * restoration runner — confirm each by restoration (the mirror of ablation).
  * Without a runner, returns the dropped units as candidates (no verdicts).
+ * Only the first `maxCandidates` dropped units are probed (REAL LLM re-runs);
+ * the rest are listed as bare candidates (`verdict`/`runs` undefined), exactly
+ * like the ablation tier leaves over-budget suspects verdict-less.
  */
 async function runMissingContextTier(
   missing: NonNullable<LocalizeContextBugOptions['missingContext']>,
   embedder: Embedder,
-): Promise<readonly RestoredCandidate[]> {
+): Promise<MissingContextTierResult> {
   const { dropped } = findDroppedContext(missing.available, missing.sent);
   const asCandidate = (u: ContextUnit): RestoredCandidate =>
     u.content === undefined ? { id: u.id } : { id: u.id, content: u.content };
 
-  if (missing.rerun === undefined) return dropped.map(asCandidate);
+  // Nothing dropped → no candidates and NO baseline probe (don't spend real
+  // model calls confirming an empty set — the common healthy case).
+  if (dropped.length === 0) return { candidates: [], baselineStable: true };
+  if (missing.rerun === undefined) return { candidates: dropped.map(asCandidate), baselineStable: true };
 
   const config = { rerun: missing.rerun, embedder };
   const maxCandidates = missing.rerun.maxCandidates ?? 5;
@@ -596,7 +630,7 @@ async function runMissingContextTier(
   let restored = 0;
   for (const unit of dropped) {
     if (restored >= maxCandidates) {
-      out.push(asCandidate(unit));
+      out.push(asCandidate(unit)); // over budget — listed, not probed (no verdict)
       continue;
     }
     restored++;
@@ -604,7 +638,7 @@ async function runMissingContextTier(
     const verdict = verdictFor(`dropped "${unit.id}"`, runs, baselineStable, 'restoring');
     out.push({ ...asCandidate(unit), runs, verdict });
   }
-  return out;
+  return { candidates: out, baseline, baselineStable };
 }
 
 // ─── Internals ───────────────────────────────────────────────────────
@@ -779,6 +813,25 @@ export function formatContextBugReport(report: ContextBugReport): string {
     }
   });
 
+  // Missing-context tier (interface #3) — symmetric with the SUSPECTS block.
+  if (report.dropped !== undefined && report.dropped.length > 0) {
+    lines.push('', `MISSING CONTEXT (${report.dropped.length} dropped — available but never sent to the model):`);
+    report.dropped.forEach((c, i) => {
+      lines.push(`${String(i + 1).padStart(2)}. [dropped '${c.id}']`);
+      if (c.verdict !== undefined && c.runs !== undefined) {
+        lines.push(`    verdict: ${c.verdict.claim}`);
+        lines.push(
+          `    runs: ${c.runs.flips}/${c.runs.samples} flipped on restore · similarity to original ` +
+            `${c.runs.similarity.mean.toFixed(3)} ± ${c.runs.similarity.stdev.toFixed(3)}`,
+        );
+      } else {
+        lines.push(
+          '    verdict: (none — candidate only; supply missingContext.rerun to confirm by restoration)',
+        );
+      }
+    });
+  }
+
   if (report.baseline !== undefined) {
     lines.push(
       '',
@@ -786,6 +839,13 @@ export function formatContextBugReport(report: ContextBugReport): string {
         `similarity ${report.baseline.similarity.mean.toFixed(
           3,
         )} ± ${report.baseline.similarity.stdev.toFixed(3)}`,
+    );
+  }
+
+  if (report.restorationBaseline !== undefined) {
+    lines.push(
+      `baseline (no restoration): ${report.restorationBaseline.flips}/${report.restorationBaseline.samples} flipped · ` +
+        `similarity ${report.restorationBaseline.similarity.mean.toFixed(3)} ± ${report.restorationBaseline.similarity.stdev.toFixed(3)}`,
     );
   }
 

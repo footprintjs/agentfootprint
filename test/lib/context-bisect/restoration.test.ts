@@ -109,6 +109,113 @@ describe('restoration tier — via localizeContextBug', () => {
     expect(report.dropped?.map((d) => d.id)).toEqual(['b']);
     expect(report.dropped?.[0].verdict).toBeUndefined();
   });
+
+  const baseReport = async (mc: object) => {
+    const { localizeContextBug } = await import('../../../src/lib/context-bisect/localize');
+    return localizeContextBug({
+      artifacts: { snapshot: { commitLog: [{ runtimeStageId: 'call#0', stageId: 'call', idx: 0, trace: [], overwrite: {}, updates: {} }] } as never },
+      embedder,
+      atStep: 'call#0',
+      missingContext: mc as never,
+    });
+  };
+
+  it('unstable un-restored baseline → every candidate inconclusive + a report-level honesty flag', async () => {
+    // a runner that flips REGARDLESS of units (even baseline []), i.e. the scenario doesn't reproduce
+    const flaky: RestorationRunner = async () => 'totally different text every time';
+    const report = await baseReport({
+      available: [u('override'), u('credit')], sent: [u('credit')],
+      rerun: { runner: flaky, originalOutput: 'DECLINE DECLINE DECLINE', samples: 3 },
+    });
+    const c = report.dropped?.find((d) => d.id === 'override');
+    expect(c?.verdict?.verdict).toBe('inconclusive');
+    expect(c?.verdict?.claim).toContain('un-restored');
+    expect(c?.verdict?.claim).toContain('restoration');
+    expect(report.honestyFlags.some((f) => f.flag === 'baseline-unstable' && /un-restored/.test(f.note))).toBe(true);
+    expect(report.restorationBaseline).toBeDefined();
+  });
+
+  it('maxCandidates: first K probed (verdicts), the rest listed bare', async () => {
+    const buggy = 'DECLINE DECLINE DECLINE';
+    const report = await baseReport({
+      available: [u('d1'), u('d2'), u('d3')], sent: [], // all 3 dropped
+      rerun: { runner: flipOnRestore('never', buggy), originalOutput: buggy, samples: 2, maxCandidates: 2 },
+    });
+    expect(report.dropped?.[0].verdict).toBeDefined();
+    expect(report.dropped?.[1].verdict).toBeDefined();
+    expect(report.dropped?.[2].verdict).toBeUndefined(); // over budget — listed, not probed
+    expect(report.dropped?.[2].id).toBe('d3'); // still present
+  });
+
+  it('empty dropped + runner supplied → NO baseline probe is spent (runner never called)', async () => {
+    let calls = 0;
+    const counting: RestorationRunner = async () => { calls++; return 'x'; };
+    const report = await baseReport({
+      available: [u('a')], sent: [u('a')], // nothing dropped
+      rerun: { runner: counting, originalOutput: 'x', samples: 3 },
+    });
+    expect(calls).toBe(0); // short-circuited before the baseline probe
+    expect(report.dropped ?? []).toEqual([]);
+  });
+
+  it('content is carried through onto a candidate that ALSO has a verdict', async () => {
+    const buggy = 'DECLINE DECLINE DECLINE';
+    const report = await baseReport({
+      available: [{ id: 'override', content: 'the committee note' }, u('credit')], sent: [u('credit')],
+      rerun: { runner: flipOnRestore('override', buggy), originalOutput: buggy, samples: 2 },
+    });
+    const c = report.dropped?.find((d) => d.id === 'override');
+    expect(c?.content).toBe('the committee note');
+    expect(c?.verdict?.verdict).toBe('confirmed');
+  });
+
+  it('both tiers in one call: suspects carry ablation verdicts AND dropped carry restoration verdicts', async () => {
+    const { localizeContextBug } = await import('../../../src/lib/context-bisect/localize');
+    const buggy = 'DECLINE DECLINE DECLINE';
+    const report = await localizeContextBug({
+      artifacts: { snapshot: { commitLog: [{ runtimeStageId: 'call#0', stageId: 'call', idx: 0, trace: [], overwrite: {}, updates: {} }] } as never },
+      embedder,
+      atStep: 'call#0',
+      rerun: { runner: async () => buggy, originalOutput: buggy, samples: 2 }, // ablation tier (stable baseline)
+      missingContext: {
+        available: [u('override'), u('credit')], sent: [u('credit')],
+        rerun: { runner: flipOnRestore('override', buggy), originalOutput: buggy, samples: 2 },
+      },
+    });
+    expect(report.mode).toBe('causal');
+    expect(report.baseline).toBeDefined(); // ablation baseline present
+    expect(report.restorationBaseline).toBeDefined(); // restoration baseline present
+    expect(report.dropped?.find((d) => d.id === 'override')?.verdict?.verdict).toBe('confirmed');
+  });
+
+  it('formatContextBugReport renders the MISSING CONTEXT section', async () => {
+    const { formatContextBugReport } = await import('../../../src/lib/context-bisect/localize');
+    const buggy = 'DECLINE DECLINE DECLINE';
+    const report = await baseReport({
+      available: [u('override'), u('credit')], sent: [u('credit')],
+      rerun: { runner: flipOnRestore('override', buggy), originalOutput: buggy, samples: 2 },
+    });
+    const text = formatContextBugReport(report);
+    expect(text).toContain('MISSING CONTEXT');
+    expect(text).toContain("dropped 'override'");
+    expect(text).toMatch(/CAUSAL: restoring/);
+  });
+
+  it('a throwing runner rejects the probe (fail-loud, no partial state)', async () => {
+    const boom: RestorationRunner = async () => { throw new Error('runner exploded'); };
+    await expect(
+      runRestorationProbe({ rerun: { runner: boom, originalOutput: 'x' }, embedder }, [u('a')]),
+    ).rejects.toThrow('runner exploded');
+  });
+
+  it('samples: NaN falls back to the default (no NaN leaking into the verdict)', async () => {
+    const stats = await runRestorationProbe(
+      { rerun: { runner: async () => 'x', originalOutput: 'x', samples: NaN as number }, embedder },
+      [],
+    );
+    expect(Number.isFinite(stats.samples)).toBe(true);
+    expect(stats.samples).toBe(3); // CONTEXT_BISECT_DEFAULTS.samples
+  });
 });
 
 // ─── 4. PROPERTY ─────────────────────────────────────────────────────

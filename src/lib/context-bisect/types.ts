@@ -365,8 +365,12 @@ export interface ContextBugReport {
   readonly sliceStats: SliceStats;
   /** ⚠ everything that bounds what this report can honestly claim. */
   readonly honestyFlags: readonly HonestyFlag[];
-  /** Baseline probe stats (causal mode only). */
+  /** Ablation baseline probe stats (causal mode only). */
   readonly baseline?: AblationRunStats;
+  /** Restoration baseline probe stats — the missing-context tier's twin of
+   *  `baseline` (present only when a restoration runner ran). An unstable one
+   *  also raises a `baseline-unstable` honesty flag. */
+  readonly restorationBaseline?: AblationRunStats;
 }
 
 // ─── Defaults ────────────────────────────────────────────────────────

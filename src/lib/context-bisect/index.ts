@@ -32,9 +32,9 @@ export {
 } from './missingContext.js';
 export {
   runRestorationProbe,
+  type RestorationProbeConfig,
   type RestorationRerun,
   type RestorationRunner,
-  type RestorationProbeConfig,
 } from './restoration.js';
 
 export {

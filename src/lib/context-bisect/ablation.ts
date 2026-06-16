@@ -143,6 +143,13 @@ export function applyAblations<
 
 // ─── The probe engine (D9 stats) ─────────────────────────────────────
 
+/** Resolve the seeded-rerun count: default on non-finite, floor, clamp to >= 2
+ *  (no single-run verdicts — D9). Shared by the ablation + restoration probes. */
+export function resolveSamples(samples: number | undefined): number {
+  const raw = samples ?? CONTEXT_BISECT_DEFAULTS.samples;
+  return Math.max(2, Number.isFinite(raw) ? Math.floor(raw) : CONTEXT_BISECT_DEFAULTS.samples);
+}
+
 export function similarityStats(values: readonly number[]): SimilarityStats {
   if (values.length === 0) return { mean: 0, min: 0, max: 0, stdev: 0 };
   const mean = values.reduce((sum, v) => sum + v, 0) / values.length;
@@ -186,7 +193,7 @@ export async function runAblationProbe(
   config: ProbeConfig,
   specs: readonly AblationSpec[],
 ): Promise<AblationRunStats> {
-  const samples = Math.max(2, config.rerun.samples ?? CONTEXT_BISECT_DEFAULTS.samples);
+  const samples = resolveSamples(config.rerun.samples);
   const flipThreshold = config.rerun.flipThreshold ?? CONTEXT_BISECT_DEFAULTS.flipThreshold;
   const outcomeChanged =
     config.rerun.outcomeChanged ?? defaultOutcomeComparator(config.embedder, flipThreshold);
@@ -223,7 +230,6 @@ export function verdictFor(
    *  Default keeps every claim string byte-identical to before. */
   action: 'ablating' | 'restoring' = 'ablating',
 ): AblationVerdict {
-  const verb = action; // 'ablating' | 'restoring'
   const baselineWord = action === 'ablating' ? 'un-ablated' : 'un-restored';
   const tierWord = action === 'ablating' ? 'ablation' : 'restoration';
   if (!baselineStable) {
@@ -238,7 +244,7 @@ export function verdictFor(
     return {
       verdict: 'confirmed',
       claim:
-        `CAUSAL: ${verb} ${label} flipped the outcome in ${stats.flips}/${stats.samples} ` +
+        `CAUSAL: ${action} ${label} flipped the outcome in ${stats.flips}/${stats.samples} ` +
         `seeded reruns (mean similarity to original ${stats.similarity.mean.toFixed(3)} ` +
         `± ${stats.similarity.stdev.toFixed(3)}).`,
     };
@@ -247,14 +253,14 @@ export function verdictFor(
     return {
       verdict: 'inconclusive',
       claim:
-        `INCONCLUSIVE: ${verb} ${label} flipped only ${stats.flips}/${stats.samples} seeded ` +
+        `INCONCLUSIVE: ${action} ${label} flipped only ${stats.flips}/${stats.samples} seeded ` +
         `reruns — below majority; raise samples or check scenario stability.`,
     };
   }
   return {
     verdict: 'not-confirmed',
     claim:
-      `NOT CONFIRMED: ${verb} ${label} did not change the outcome in ${stats.samples} seeded ` +
+      `NOT CONFIRMED: ${action} ${label} did not change the outcome in ${stats.samples} seeded ` +
       `reruns — its ranking remains a correlational proxy only.`,
   };
 }
