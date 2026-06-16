@@ -251,4 +251,208 @@ only the ablation rung *proves* a skill instruction caused the wrong pick.
 
 ---
 
+## The decision-under-ambiguity model (research foundation)
+
+> **Citation discipline.** This section follows the CTXBUG paper's convention: every external citation carries a `[CITE: … — VERIFY]` tag and is *positioning*, not *proof*, until pulled from its primary source. Two were read directly in this pass and are marked `[VERIFIED-PRIMARY]`; the rest are anchored to the peer-reviewed core. The load-bearing claims rest on **code-verified internal anchors** (file:line into the shipped library), so the argument survives even if half the external literature is re-tagged on review. Numeric figures from recent or future-dated preprints have been removed, not paraphrased.
+
+### 1. The object of study: a content-driven decision, taken under ambiguity, mid-loop
+
+We model one iteration of an LLM agent loop as a **content-driven decision**. At loop *N* the agent holds a context *C_N* — an ordered sequence of content units (the user message, intermediate reasoning, prior tool outputs, role and system text) — and from a set of candidate actions *A_N = {a₁, …, a_k}* (the tools it may call) it selects one, *a\*_N*. The chosen tool runs and appends its output to the context, producing *C_{N+1}*. The loop is the recurrence
+
+> *C₀ = q* (the question); &nbsp; *a\*_N = decide(C_N, A_N)*; &nbsp; *o_N = tool(a\*_N)*; &nbsp; *C_{N+1} = C_N ‖ o_N*,
+
+terminating when the agent emits an answer instead of a tool call. **The tool exists to fetch more content** — that is what makes the loop a content-acquisition process, and it is why the decision at each step is the unit that matters.
+
+In plain language: each turn, the agent looks at everything it has so far and guesses which tool will get it closer to an answer; the tool's result becomes new "everything it has so far" for the next guess. Three modelling commitments, each faithful to how the underlying mechanism actually operates, fix the rest of the formalism.
+
+**(C-content) Everything the decision reads is content.** There is no privileged non-content input to *a\*_N*. A message, a role marker, and a prior tool output all sit in one positional token stream and are governed by the same position machinery; the position curve and rotary-encoding decay act on *sequence position*, not on semantic role `[CITE: Lost in the Middle, Liu et al. 2023/TACL 2024 — VERIFY]`. This is the inventor's "everything-is-content" claim, and it is faithful to the mechanism rather than a simplification. The library represents the decision's inputs exactly this way: `decide()`/`select()` capture *every value the decider read* as decision evidence (`footPrint/src/lib/decide/`), and the four-signal scorer models each readable piece uniformly as an `EvidenceInput { id, text, ancestorTexts }` (`agentfootprint/src/lib/influence-core/types.ts:177`, `:187`). A tool result, a message, and a skill instruction are all "text + id"; there is no second channel the scorer special-cases.
+*The one honest hole:* `getArgs()`/`getEnv()` reads are **untracked** by the commit log, so a question read directly via `getArgs()` is invisible to the trajectory assembler and must be re-injected as a synthetic node flagged `incompleteSources:['args']` (proposal-003:127). The "no input that is not content" model is true semantically, but the substrate has untracked content paths the scorer must **flag, not silently miss**.
+
+**(C-recency) Position is a prior over influence, never a measurement of it.** The inventor's "recency dominates" is a genuine architectural tendency, with a mechanism: rotary positional encodings make the query–key dot product decay with token distance, softmax turns that into smaller attention mass on distant tokens, and causal masking biases deeper layers toward earlier positions; the aggregate is the lost-in-the-middle U-shape with a dominant recency end `[CITE: position-bias-emergence analyses, arXiv:2502.01951; Found in the Middle, arXiv:2406.16008 — VERIFY (preprint, supporting intuition only)]`. Crucially, because this bias is *content-independent*, it is a **structural prior over where the deciding content probably sits — never a per-instance measurement of what drove a given decision.** Two caveats the model must carry, both load-bearing for honesty:
+- *Direction is model-specific.* Recency is the dominant case but not universal — some models skew primacy `[CITE: serial-position studies, arXiv:2406.15981 — VERIFY]`. So the recency prior is a measured, **per-model-configurable weight**, not a constant.
+- *Attention ≠ influence.* "Recent content gets more attention mass" is one inferential step removed from "recent content caused *this* decision"; high attention to first-token attention sinks is often a near-no-op. The architectural grounding is suggestive, not a per-decision causal measurement.
+
+We therefore admit recency strictly as a search-ordering and weighting prior, never as a value inside an influence score (§5).
+
+### 2. Ambiguity as flatness, made precise — the central connection
+
+When several pieces of content are similar and competing, the model cannot cleanly separate a winner and must **guess which to act on**. That guess-under-similarity is the error moment. The claim this section advances is that *this moment has a measurable, already-shipped signature*: a **flat top** in the library's `rankingConfidence`.
+
+Let a scoring function assign each candidate *aᵢ* (or each read source) a real score *sᵢ*, ordered *s₍₁₎ ≥ s₍₂₎ ≥ …*. Define the **margin** and the **ambiguity indicator**:
+
+> *m = s₍₁₎ − s₍₂₎*, &nbsp;&nbsp; *𝒜_τ = 𝟙[ m < τ ]*.
+
+*𝒜_τ = 1* — a flat top — is the formal statement of "several pieces of content competed and the model had to guess." This is not a metaphor: the library computes exactly this predicate. `rankingConfidence` sorts the scores descending and reports `margin = score(#1) − score(#2)` (`attributability.ts:157`), delegating the decisiveness test to a pluggable `ConfidenceStrategy`; the default `marginStrategy(τ)` returns `s[0] − s[1] >= τ` (`attributability.ts:45`), so **`clearWinner === false  ⇔  𝒜_τ = 1`**. The scale-invariant `ratioStrategy` replaces the absolute gap with *(s₍₁₎ − s₍₂₎)/|s₍₁₎|* (`attributability.ts:59`), transferring across embedders where the absolute margin does not; a consumer may inject an entropy/dispersion strategy through the same seam (`types.ts:74`) — the bridge to *semantic entropy*, where ambiguity is entropy over meaning-clusters of the model's own samples `[CITE: Kuhn, Gal & Farquhar, ICLR 2023, arXiv:2302.09664 — VERIFY]`.
+
+The library already names this object in its own words. The `clearWinner:false` reason string ends: *"a flat top can also mean genuinely co-equal sources"* (`attributability.ts:187`). **"Genuinely co-equal sources" is precisely the inventor's "several similar/competing pieces."** The slip is therefore the existing `clearWinner:false` branch — *measured, not invented*.
+
+That flatness is, in the literature, the recognized trigger for the slip across three independent domains. Option-order sensitivity *"arises when LLMs are uncertain about the prediction between the top-2/3 choices, and specific options placements may favor certain prediction between those top choices"* `[CITE: Pezeshkpour & Hruschka, NAACL 2024 Findings, arXiv:2308.11483 — VERIFIED-PRIMARY]` — when no candidate clearly wins, the tie-break collapses onto position. A flat/multi-modal action distribution predicts robot-policy failure without failure labels `[CITE: FiPER, arXiv:2510.09459 — VERIFY (preprint, corroborating)]`. Selective prediction abstains on a small top-1−top-2 margin `[CITE: Know Your Limits, TACL 2024 — VERIFY]`.
+
+**The disciplined cross-domain statement (and its honesty boundary).** What these literatures *agree on* is that **low separation among competing candidates = ambiguity, and the signal is flatness (no dominant mode), explicitly not a low absolute score.** They do **not** all show "flatness predicts failure": only the methods that read the model's *own output/action/sample distribution* show that. `rankingConfidence` reads flatness over a **different distribution** — an embedding-similarity ranking over context. That flatness in the *context-influence* ranking has the same predictive relationship to error as flatness in the *output* distribution is the **synthesis hypothesis this work makes**, to be *tested* on the CTXBUG benchmark, not a transferred result. This is the genuinely novel ground, and we state it as a hypothesis throughout.
+
+A second hypothesis, also CTXBUG-testable, sits under the central connection: *that similar content actually produces a flat top.* When several sources are topically co-equal, their embedding-geometry signals cluster — similar content embeds to similar cosines — and a tight cluster at the top is a sub-threshold margin. But the **composite** folds AVG/PERSIST/DEPTH alongside FA (`signals.ts:18–25`), and two topical twins can diverge sharply on PERSIST (breadth of reference) or DEPTH (trace position). So "similar content ⇒ flat top" is the central *empirical expectation* this section advances, not a definitional identity — which is exactly why contrast (§3) and ablation (§6) are required backstops.
+
+### 3. Contrastive scoring cancels the similar-content confound
+
+A flat top is ambiguous between two readings: co-equal *because everything is topically relevant* (an innocent flat top) versus co-equal *because there are genuinely competing culprits* (the real slip). The confound is real: surface topical similarity is a strong driver of tool selection `[CITE: BiasBusters, arXiv:2510.00307 — VERIFIED-PRIMARY]`, and relevant-vs-irrelevant tool-description embeddings can have overlapping cosine distributions, so cosine alone cannot separate them `[CITE: Tool2Vec, arXiv:2409.02141 — VERIFY]`; the RAG twin is the distracting effect, where passages similar-but-irrelevant to the query degrade accuracy `[CITE: The Distracting Effect, ACL 2025, arXiv:2505.06914 — VERIFY]`.
+
+`scoreContrastiveInfluence` is the library's de-confounder. It replaces only the FA term with *FA(e) = sim(e, answer) − sim(e, reference)* (`contrastive.ts:94`), keeping AVG/PERSIST/DEPTH and the composite verbatim so `rankingConfidence` composes on it unchanged (`contrastive.ts:6`). A topical innocent the decision is merely *about* resembles **both** a good and a bad output, so it cancels to ~0; the piece similar to the *wrong* output specifically survives. This is what disambiguates the two flat-top readings.
+
+**Honesty rung (proxy) and scope.** Contrast removes a confound; it does not prove causation — *"still an embedding-geometry PROXY, never causal — the contrast removes a confound, it does not prove causation. Ablation is the causal tier"* (`contrastive.ts:26`). It is also **opt-in**: it needs a reference output (a known-good / expected / prior-good run), so it serves regression/eval debugging, not cold localization (`contrastive.ts:28–30`). The field's own corroboration is sharp: reducing competing candidates by *similarity alone* under-resolves wrong picks, while *causal* (precondition/effect-aware) filtering resolves them — the external endorsement of this library's proxy→ablation discipline `[CITE: ToolChoiceConfusion, arXiv:2606.06284 — UNVERIFIED future-dated preprint; illustration only, no numbers]`.
+
+### 4. The loop, the two error modes, and the slip predicate
+
+The flat top in §2–3 is, *as shipped today*, computed over a **whole run's** sources against **one** final answer (`scoreInfluence`'s FA term is retrospective). The slip, however, happens at a *specific loop's* decision over the content the model was choosing from *at that moment* (prospective). Recovering the loop is what makes "recent vs distant" meaningful — without ordered loops there is no recency.
+
+**The prospective surface already exists.** Decision-time flatness over the *offered* candidates is the shipped `scoreMargin`: *margin = score(best chosen) − score(best non-chosen)* over the candidate set, with a `narrow` flag when `margin < marginThreshold` (default 0.05) and a `proxyDisagreement` flag when the top-scored candidate was not chosen (`margin.ts:60`, `:92`, `:101`). `narrow` is the prospective *𝒜_τ = 1*. One honest subtlety the reviews surfaced: `scoreMargin`'s choice context is *"what the model saw — user message + latest reasoning"* (`margin.ts:13`) — a **recency-truncated slice**. So on the *prospective* surface, recency is already baked into the context window the candidates are ranked against; the off-the-score recency discipline of §5 applies to the *retrospective* influence score, while the prospective scorer approximates the ideal full-context choice with a recency window by construction. We name this rather than double-count it.
+
+**The loop substrate.** Proposal-003 specifies an assembler that recovers the trajectory with *no new capture*: walk `getSnapshot().commitLog`, derive loop iterations from `runtimeStageId` (a repeated loop-anchor `stageId` with ascending `#executionIndex` *is* the loop counter, via `parseRuntimeStageId`, chained by `parentRuntimeStageId`), and emit one `LoopFrame { loopIndex, llmCallId, intermediateText, contextUnits[] }` per loop (proposal-003:125). A library finding made this real: `TraversalContext.loopIteration` was a declared-but-unpopulated phantom; the engine now stamps it on every emitted context (`footPrint/.../FlowchartTraverser.ts:829`; proposal-003:186), so loops are groupable for real. Running `rankingConfidence` over *each loop's* evidence — ideally with per-loop contrast, *FA_N(e) = sim(e, loopN-state) − sim(e, reference)* (proposal-003:133) — makes a flat top mean "the competing pieces the model actually read *this loop* were near-indistinguishable": the true ambiguity slip, localized.
+
+**The two error modes fall out of crossing flatness with wrongness.** Let *W = 𝟙[the decision was wrong]*. The **ambiguity-slip** is *𝒜_τ ∧ W*. Crossing the indicator with wrongness — and crossing prospective flatness with the *retrospective presence of an ablatable culprit* — separates the inventor's two error sources within the existing primitives:
+
+| | content well-separated (*𝒜 = 0*) | content flat (*𝒜 = 1*) |
+|---|---|---|
+| **a present, high-ranking ablatable suspect in the read evidence** | suspect leads a clear ranking → **context-bug candidate** — *but a sharp rank is model commitment, not correctness: a clear lead is a similarity PROXY, not a proven cause; confirm by ablation* (`attributability.ts:185`) | flat + a surviving contrastive culprit → **context-shaped slip**: the read content was ambiguous and one piece tipped it wrong — ablate the shortlist (the runner-up is guaranteed in it, `attributability.ts:180`) |
+| **clean evidence, no surviving suspect** | clear winner existed, model chose against it → **model-bug** candidate — *fix the prompt/model prior, not the context* | flat with nothing standing out → **inconclusive / absence-or-model**: either the model could not decide, or an *absence/crowding* culprit displaced the right content and does not resemble the answer |
+
+This is proposal-003's decision verdict `{ loopIndex, decision, topEvidence, cause: 'context' | 'model' | 'inconclusive' }` (proposal-003:240) stated as a 2×2. The split is empirically attested: presentation effects (the model leaning on *order*) are separable from provider fixation (a bad prior with clean inputs) `[CITE: BiasBusters, arXiv:2510.00307 — VERIFIED-PRIMARY]` — though that study is a *single* pick over a *static* catalog, so it confirms the modes **exist** at tool-pick time without validating the per-iteration claim. The library can make the split *only because* `rankingConfidence` reports flatness honestly instead of always emitting a confident rank-1.
+
+**Why per-loop and not flat depth-decay.** Uncertainty at a *critical junction* matters far more than equal uncertainty elsewhere, and intermediate uncertainty predicts final failure before completion `[CITE: UProp, arXiv:2506.17419 — VERIFY (preprint, corroborating)]` — the empirical case against crediting a step by its position in the trace, and for influence-based per-loop credit.
+
+**Three honesty guards bound the table.** *(i)* Cancel the topical innocent (§3) before trusting any cell. *(ii)* The bottom-right cell is the **absence/crowding blind spot**: a culprit that acts by *displacing* content (history truncation, dilution) need not resemble the answer or be recent, so it ranks low — *"similarity scoring is blind to absence/crowding bugs … where the culprit need not resemble the answer"* (`attributability.ts:187`). Hence **`'inconclusive'` is the default**, never `'model'`, on a flat-with-nothing reading; absence bugs need the separate available-vs-sent diff, not the influence ranking. *(iii)* Flatness catches only the **ambiguity subclass** of decision errors. A sharp, non-flat ranking is the model's *commitment*, not its correctness — the confident-and-wrong failure mode (high stated confidence at low accuracy) `[CITE: Know Your Limits, TACL 2024 — VERIFY]` is invisible to flatness and must be carried by contrast and ablation.
+
+### 5. Recency enters only as a prior — wired to the one content-blind slot
+
+The library has exactly one content-blind signal in which a position prior can honestly live: `DEPTH = structuralProximity = 1/(1+ancestorCount)` (`signals.ts:110`), documented as *"the only content-blind signal: pure trace structure"* (`signals.ts:108`). Recency is, by the inventor's own definition, a content-blind position prior, so it belongs in the DEPTH slot — and **never inside FA/AVG/PERSIST**, which are cosine geometry; folding a position prior into a similarity term would corrupt the honest "this is embedding geometry" claim (`signals.ts:13–25`). Two disciplined attachment sites:
+
+- **Per-loop temporal kernel** (single-call fallback): replace or blend DEPTH with a recency decay over loop position, *r(e) = ρ^(N − ℓ_e)*, normalized to (0,1] so it shares DEPTH's range, where *ℓ_e* is the loop a source entered. This rides the δ weight (default 0.10, `types.ts:50`). One care: the adaptive-weight path that redistributes mass for no-ancestor items must keep DEPTH defined (1.0 for the most-recent item) or the ratio preservation breaks (`signals.ts:119`).
+- **Eligibility-trace λ** (preferred, the loop case): in proposal-003's forward combinator *contribution_N(e) = score_N(e) + λ · carry_{N-1}(e)*, the λ-decay *is* recency-dominance expressed temporally — a source's influence fades by λ per loop and is **zeroed when it leaves the context window** (directly encoding "content available at this moment"). This is the temporal generalization of DEPTH and a direct echo of RL eligibility traces, here carrying *influence scores* rather than reward. Default *λ ≈ 0.7* is **uncalibrated** (proposal-003:137).
+
+**Honesty rung (prior — the strictest).** Recency *orders and weights* proxies; it is never reported as evidence that the recent piece *caused* the choice. A recency-favored top-1 with a thin margin still earns the same `clearWinner:false → ablation` escalation. Recency changes the *order*, never the causal verdict — mirroring the field's own causal move, where position bias becomes a causal claim only by *swapping and re-running* `[CITE: LLM-as-judge position bias, Zheng et al., NeurIPS 2023, arXiv:2306.05685 — VERIFY]`.
+
+### 6. The causal tier, and what is shipped vs. hypothesis
+
+Every proxy above **screens** for the slip; only **ablation** confirms it. Confirming an ambiguity slip causally means re-running with one competing piece removed or disambiguated *at its loop* and watching the flat top resolve and the decision flip. The library's ablation tier already enforces the right discipline: `runAblationProbe` re-runs N seeded times (`ablation.ts:192`), `resolveSamples` clamps to ≥2 — *no single-run verdicts* (`ablation.ts:148`), and `verdictFor` returns **INCONCLUSIVE when the un-ablated baseline itself flips across seeds** (`ablation.ts:224`, `:235`). Without a consumer-supplied runner, the localizer stops at `mode: 'correlational'` — explicitly a ranking of proxies, no causal claim (`localize.ts:24`, `:533`).
+
+The honest gap is precise: the shipped `AblationSpec` excludes a source for the **whole run** and returns **one** output; a **loop-scoped** contract (exclude a source at loop N, re-decide, measure flip-rate on both the per-loop intermediate and the final answer) is *"real net-new work"* (proposal-003:141, :154). So the proxy screen (a per-loop flat top) has, today, no matching per-loop causal confirmer.
+
+**Stability caveat — the least-grounded rung.** Ablation is causal only if the baseline is stable across seeds; for stochastic decisions a single ablation can flip from sampling noise. The seed-variance band is the right mitigation, and the *run-scoped* tier already implements the seeded-rerun discipline (≥2 seeds, inconclusive-on-unstable-baseline). A deterministic embedder gives a degenerate (zero-width) band at the speed tier; the genuine variance band is a **causal-tier artifact** (proposal-003:141). The novelty is the *loop-scoped* band, not inventing seed discipline from scratch — and no off-the-shelf method exists for attribution stability under non-determinism, which is both the honest limit and the open opening.
+
+**Build-status ledger (so "designed" is precise).**
+
+| Layer | Status | Honesty tier |
+|---|---|---|
+| `scoreInfluence` (four-signal), `scoreContrastiveInfluence`, `rankingConfidence` flat-top, `scoreMargin` prospective `narrow` | **Shipped** (`influence-core`) | correlational **proxy** |
+| weighted causal slice: `causalChain` backward program slice `[CITE: Weiser 1984; thin slicing, Sridharan et al. 2007 — VERIFY]` + control edges + `llmEdgeWeigher` | **Shipped** (`footPrint/.../backtrack.ts:4,:121`; `context-bisect/llmEdgeWeigher.ts:26`) | proxy weights, provable slice structure |
+| run-scoped ablation tier: `runAblationProbe` / `verdictFor` / `resolveSamples`; `localizeContextBug` 5-stage pipeline | **Shipped**; stops at `mode:'correlational'` without an `AblationRunner` | **causal** only at the ablation stage |
+| `TraversalContext.loopIteration` engine population | **Shipped** (`FlowchartTraverser.ts:829`) | substrate (the prerequisite that landed) |
+| LoopFrame trajectory assembler, per-loop contrast driver, λ-eligibility combinator, decision-node `{cause}` verdict | **Designed, gated, not built** | designed; calibration gated on the multi-loop fixture |
+| loop-scoped `AblationSpec`; the commit-log ↔ flow-event join by `runtimeStageId` | **Net-new contract** (open design point, proposal-003:250) | causal (loop-scoped), unspecified |
+
+### 7. The model, assembled
+
+A per-loop decision *a\*_N = decide(C_N, A_N)* over content-only inputs **slips** when the candidate set is **flat**, *𝒜_τ(C_N, A_N) = 1*, among content weighted by a *measured-not-assumed, per-model* recency prior, and the chosen action is wrong. The slip is a **context bug** when a contrastively-isolated, ablation-confirmed culprit sits in the read evidence; a **model bug** when the evidence is clean (a clear winner or no surviving suspect) yet the pick is wrong; and **inconclusive** — *defaulting here, never to "model"* — whenever the proxy is flat with nothing surviving (the absence/crowding case) or the ablation baseline is unstable. In one line:
+
+> **Flatness screens; contrast de-confounds; recency orders; ablation confirms.**
+
+CTXBUG is the measuring instrument, not the contribution: a benchmark of agent runs with **plantable early-vs-late context culprits across loop iterations** (wrong tool pick at loop 1 vs. wrong reasoning at loop K), on which the four claims become falsifiable — ablating the top-ranked suspect should flip the outcome significantly more often than ablating the bottom-ranked, *reported with seed variance*. Calibration of τ (flat-top threshold), the shortlist band, and λ (recency) is **uncalibrated and embedder/model-relative** — the 0.05 margin is *"an ABSOLUTE difference … EMBEDDER-RELATIVE"* and its numeric coincidence with the `scoreMargin` threshold is *"NOT a shared derivation"* (`types.ts:70–74`), and eligibility-summed trajectory scores do not inherit the calibrated margin (proposal-003:139). So: **trust the ranking order; recalibrate the boolean on the target embedder via CTXBUG**; never import the cited papers' numeric thresholds as defaults. Per the project's library-first priority, this multi-loop fixture **precedes** implementation — it both calibrates the defaults and reveals where the *library* underperforms (proposal-003:158).
+
+A final scope honesty matching the framing of this as novel ground: the strongest external evidence is single-shot retrieval, multiple-choice, or pairwise-judge; the closest agent-tool-selection result is a single pick over a static catalog. That the *same* flat-top/position mechanism governs *each loop iteration* of the content→decide→tool→content loop is a well-motivated extrapolation this work formalizes and CTXBUG must test — not a result already in hand.
+
+## Score tracing — the model-agnostic propagation engine
+
+The decision-under-ambiguity model scores **one** decision. *Tracing* turns those
+per-decision scores into a final-answer attribution — and the load-bearing property
+is that **tracing is model-agnostic**: it takes each leaf score `d_N(e)` ("how much
+content piece `e` influenced loop N's decision") as a **black box**, however it was
+produced — external cosine, API logprob shift, white-box attention, or ablation
+flip-rate — and propagates it the same way. One tracer, many score sources; this is
+the pluggable-strategy design made concrete.
+
+**The propagation.** A piece `e`'s influence on the final answer (loop K) is its
+direct influence plus everything it carried forward through the decision chain:
+
+```
+F(e) = d_K(e)                                       ← direct: e still live at the answer
+     + Σ over loops N (e live & forward-reachable):
+              d_N(e) · w(N → K)                      ← mediated: e drove loop N's decision,
+                                                       which shaped loop N+1 … → the answer
+```
+
+`w(N → K)` — how strongly loop N's decision carries to the final answer — is the one
+design knob, with two honest settings:
+
+- **recency decay** `w = λ^(K−N)` — the §5 eligibility-trace λ; the inventor's
+  "recent content dominates" expressed temporally. A *prior*, cheap.
+- **measured per-hop carry** `w = Π (hop carries)` — measure how much each decision's
+  output actually influenced the *next* decision and multiply along the chain.
+  Faithful (reflects the real chain), costlier; a weak hop (the agent ignored a tool
+  result) correctly kills the carry.
+
+The forward **reachability gate** (§Step 3) zeroes any `e` no later loop read, so a
+topical look-alike that went nowhere cannot accumulate.
+
+**The decision×answer diagnostic — the inventor's "highly correlated" insight, made
+usable.** Per-decision influence `d_N(e)` and final-answer influence `F(e)` are
+tightly linked because the answer is *built through* the decisions. That linkage is
+usable two ways:
+
+1. **Shortcut** — if they correlate, the cheap per-decision scores are a faithful
+   proxy for the expensive final-answer influence (no need to re-derive it).
+2. **Diagnostic** — place each piece on a 2-D map, *decision-axis* (did it drive a
+   decision?) × *answer-axis* (did it reach the answer?):
+
+| | drove a decision | didn't drive a decision |
+|---|---|---|
+| **reached the answer** | **prime suspect** — drove a decision AND stuck → the context bug | echoed-in-answer fact (content bug, no tool path) |
+| **didn't reach the answer** | a decision the agent later recovered from (not the bug) | innocent |
+
+The **correlation coefficient itself is a measurable result**: high → the agent is
+*decision-driven* (per-decision scores *are* the explanation); low → something
+overrides decisions downstream (the model ignored its own picks, or late content
+dominated). This is computable **today on the external-embedder tier — no white-box
+needed** — so it is a **Paper A experiment** (below).
+
+Honesty: every leaf `d_N(e)` and the traced `F(e)` are **proxy**. The tracer's job is
+to hand ablation a *short, well-ordered* suspect list; only loop-scoped ablation
+(change `e` at its loop, re-run, watch the decision flip) proves cause.
+
+## The white-box tier — "the model's own formula" (adds a third row to the strategy menu)
+
+The strategy menu's leaf score `d_N(e)` can come from the model's **own internal
+similarity** instead of an outside embedder. A transformer decides via attention
+(query·key dot-product), so the most faithful `d_N(e)` is the model's own attention /
+logit-attribution over the content present when it emitted the decision token(s) —
+the model's *actual path*, not an outsider's guess.
+
+| Tier | Path | Works on | Faithfulness |
+|---|---|---|---|
+| external embedder | outsider cosine similarity | any model (API) | proxy — cheapest |
+| **internal / white-box** | the model's **own** attention / logit attribution | **open / local only** (our Qwen3-4B) | **most faithful proxy** |
+| ablation | change input, re-run | any model | **causal** — the truth |
+
+- **Access caveat:** white-box only — needs attention/logits (open/local models; our
+  Tier-A **Qwen3-4B via llama.cpp** qualifies). API models give at most logprobs.
+- **Honesty:** attention is *not (fully) explanation* (Jain & Wallace 2019 vs
+  Wiegreffe & Pinter 2019) — a *more faithful* proxy, still not causal. Stronger
+  internal methods: attention-rollout, grad×input / integrated gradients, logit
+  attribution, **causal tracing / activation patching** (ROME) — the last genuinely
+  "cracks" a decision because it is interventional. Pair internal attribution **with**
+  ablation; never treat attention alone as proof.
+
+## Paper split (decided 2026-06-16)
+
+- **Paper A — external-proxy ladder on CTXBUG → the AAAI-27 submission.**
+  `scoreInfluence` + contrastive + `rankingConfidence` flat-top + per-loop **score
+  tracing** + ablation; model-agnostic; ready now. Includes the **decision×answer
+  correlation experiment** (external tier, no white-box).
+- **Paper B — "the model's own formula": white-box decision attribution → flagship
+  follow-on.** The internal-attention tier above, compared head-to-head with the
+  external embedder and ablation on CTXBUG's local stack (~$0). Needs the white-box
+  infra (attention extraction from llama.cpp); deserves its own runway, so it is
+  *not* rushed into the AAAI deadline.
+
+
+---
+
 *Gated: no code until an explicit "yes." This memo is the artifact to react to.*
