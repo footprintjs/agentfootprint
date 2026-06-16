@@ -256,5 +256,6 @@ _Run `npm run examples:readme` after adding/editing examples._
 | 09 | [`09-attributability-marker.ts`](observability/09-attributability-marker.ts) | rankingConfidence — honesty marker on influence rankings | When no source clearly dominates an influence ranking (the signature of an  |
 | 10 | [`10-missing-context.ts`](observability/10-missing-context.ts) | _no meta_ | — |
 | 11 | [`11-contrastive-influence.ts`](observability/11-contrastive-influence.ts) | scoreContrastiveInfluence — cancel the topical-innocent confound | Output-similarity influence is fooled by a topically-central innocent (the  |
+| 12 | [`12-two-score-localization.ts`](observability/12-two-score-localization.ts) | two-score localization — quality + cost from one ablation | One ablation re-run, two independent scores: QUALITY (answer flipped?) and COST  |
 
 <!-- AUTO-GENERATED:examples:end -->

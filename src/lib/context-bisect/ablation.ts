@@ -32,6 +32,8 @@ import type {
   AblationRunStats,
   AblationSpec,
   AblationVerdict,
+  CostRange,
+  CostStats,
   OutcomeComparator,
   SimilarityStats,
   Suspect,
@@ -150,6 +152,33 @@ export function resolveSamples(samples: number | undefined): number {
   return Math.max(2, Number.isFinite(raw) ? Math.floor(raw) : CONTEXT_BISECT_DEFAULTS.samples);
 }
 
+/** Median of a numeric sample (mean of the two middles for even length). */
+export function median(values: readonly number[]): number {
+  if (values.length === 0) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = sorted.length >> 1;
+  return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+}
+
+function costRange(values: readonly number[]): CostRange {
+  return { median: median(values), min: Math.min(...values), max: Math.max(...values) };
+}
+
+/** Build a probe's CostStats from per-seed loop/token samples — undefined when
+ *  the runner reported no cost (keeps quality-only behavior byte-identical). */
+export function costStatsFrom(
+  samples: number,
+  loops: readonly number[],
+  tokens: readonly number[],
+): CostStats | undefined {
+  if (loops.length === 0 && tokens.length === 0) return undefined;
+  return {
+    samples,
+    ...(loops.length > 0 ? { loops: costRange(loops) } : {}),
+    ...(tokens.length > 0 ? { tokens: costRange(tokens) } : {}),
+  };
+}
+
 export function similarityStats(values: readonly number[]): SimilarityStats {
   if (values.length === 0) return { mean: 0, min: 0, max: 0, stdev: 0 };
   const mean = values.reduce((sum, v) => sum + v, 0) / values.length;
@@ -199,15 +228,29 @@ export async function runAblationProbe(
     config.rerun.outcomeChanged ?? defaultOutcomeComparator(config.embedder, flipThreshold);
 
   const similarities: number[] = [];
+  const loopsPerSeed: number[] = [];
+  const tokensPerSeed: number[] = [];
   let flips = 0;
   const originalVec = await config.embedder.embed({ text: config.rerun.originalOutput });
   for (let seed = 0; seed < samples; seed++) {
-    const output = await config.rerun.runner(specs, { seed });
+    // Normalize string | { output, cost } — backward-compatible (one ablation,
+    // two readouts: output for the flip, cost for the second score).
+    const raw = await config.rerun.runner(specs, { seed });
+    const output = typeof raw === 'string' ? raw : raw.output;
+    const cost = typeof raw === 'string' ? undefined : raw.cost;
+    if (cost?.loops !== undefined) loopsPerSeed.push(cost.loops);
+    if (cost?.tokens !== undefined) tokensPerSeed.push(cost.tokens);
     const outputVec = await config.embedder.embed({ text: output });
     similarities.push(cosineSimilarity(originalVec, outputVec));
     if (await outcomeChanged(config.rerun.originalOutput, output)) flips++;
   }
-  return { samples, flips, similarity: similarityStats(similarities) };
+  const cost = costStatsFrom(samples, loopsPerSeed, tokensPerSeed);
+  return {
+    samples,
+    flips,
+    similarity: similarityStats(similarities),
+    ...(cost !== undefined ? { cost } : {}),
+  };
 }
 
 /** Majority-flip rule shared by D8 verdicts and D9 probes. */

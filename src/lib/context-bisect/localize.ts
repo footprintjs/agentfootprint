@@ -35,6 +35,7 @@ import { causalChain, commitValueAt } from 'footprintjs/trace';
 
 import { scoreInfluence, type Embedder, type EvidenceInput } from '../influence-core/index.js';
 import { ablationForSuspect, runAblationProbe, verdictFor } from './ablation.js';
+import { assignCostVerdicts, classifySuspect } from './cost.js';
 import { llmEdgeWeigher, stepOutputText } from './llmEdgeWeigher.js';
 import { findDroppedContext, type ContextUnit } from './missingContext.js';
 import { runRestorationProbe, type RestorationRerun } from './restoration.js';
@@ -574,13 +575,18 @@ export async function localizeContextBug(
     withVerdicts.push({ ...suspect, runs: stats, verdict });
   }
 
+  // Two-score localization (proposal 004): when the runner reported cost, read
+  // the SECOND score (loops/tokens saved on removal) from the same reruns, with
+  // a leave-one-out placebo control. No-op when no cost was reported.
+  const withCost = assignCostVerdicts(withVerdicts, baseline);
+
   return {
     step,
     stepName: root.stageName,
     triggerSource,
     ...(triggerScore !== undefined ? { triggerScore } : {}),
     mode: 'causal',
-    suspects: withVerdicts,
+    suspects: withCost,
     ...(dropped ? { dropped } : {}),
     sliceStats,
     honestyFlags: [...flags, ...restorationFlags],
@@ -806,6 +812,15 @@ export function formatContextBugReport(report: ContextBugReport): string {
           )} ` +
           `[${suspect.runs.similarity.min.toFixed(3)}, ${suspect.runs.similarity.max.toFixed(3)}]`,
       );
+      if (suspect.cost !== undefined) {
+        const c = suspect.cost;
+        const detail = c.reducedCostOnRemoval
+          ? `REDUCED on removal — −${c.loopsSaved} loop(s), −${c.tokensSaved} tok (beats placebo, stable)`
+          : `no cost effect (loops ${c.loopsSaved >= 0 ? '−' : '+'}${Math.abs(c.loopsSaved)}${
+              c.stable ? '' : '; no placebo band / unstable'
+            })`;
+        lines.push(`    cost: ${detail} → class: ${classifySuspect(suspect)}`);
+      }
     } else if (report.mode === 'correlational') {
       lines.push(
         '    verdict: (none — correlational ranking only; supply an AblationRunner to test causally)',

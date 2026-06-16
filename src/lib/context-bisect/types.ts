@@ -139,6 +139,24 @@ export interface SimilarityStats {
   readonly stdev: number;
 }
 
+/** Min/median/max of a cost metric across a probe's seeded reruns. */
+export interface CostRange {
+  readonly median: number;
+  readonly min: number;
+  readonly max: number;
+}
+
+/**
+ * Per-probe COST (loops/tokens) across its seeded reruns — the second readout
+ * (proposal 004). Present on `AblationRunStats` ONLY when the runner reported
+ * `RunCost`. Absent otherwise (quality-only, byte-identical to before).
+ */
+export interface CostStats {
+  readonly samples: number;
+  readonly loops?: CostRange;
+  readonly tokens?: CostRange;
+}
+
 /** Evidence from N seeded ablation reruns of one probe. */
 export interface AblationRunStats {
   /** Seeded reruns performed (the consumer's runner was called N times). */
@@ -147,6 +165,9 @@ export interface AblationRunStats {
   readonly flips: number;
   /** Embedding similarity of each ablated output to the original. */
   readonly similarity: SimilarityStats;
+  /** COST readout across the same reruns — present only when the runner
+   *  reported `RunCost` (proposal 004). */
+  readonly cost?: CostStats;
 }
 
 export type AblationVerdictKind = 'confirmed' | 'not-confirmed' | 'inconclusive';
@@ -231,7 +252,37 @@ export interface Suspect {
   readonly verdict?: AblationVerdict;
   /** The rerun evidence behind `verdict`. */
   readonly runs?: AblationRunStats;
+  /** The COST readout (proposal 004) — present only when the runner reported
+   *  `RunCost`. A WEAKER tier than `verdict`: it shows removal reduced cost
+   *  beyond a placebo band, NOT that the work was "wasted". */
+  readonly cost?: CostVerdict;
 }
+
+/**
+ * The COST verdict for a suspect — a context bug's second cost (proposal 004).
+ * A WEAKER, gated tier than the flip `verdict`: it shows removing the suspect
+ * REDUCED cost (loops/tokens) beyond a length-matched placebo band with a stable
+ * sign — **necessity for the cost, NOT proof the work was "wasted".**
+ */
+export interface CostVerdict {
+  /** Removing the suspect reduced cost beyond the placebo band, stably. */
+  readonly reducedCostOnRemoval: boolean;
+  /** Loops saved by removal (baseline median − suspect median). */
+  readonly loopsSaved: number;
+  /** Tokens saved by removal. */
+  readonly tokensSaved: number;
+  /** Sign stable across seeds AND a placebo band existed to clear. When false,
+   *  `reducedCostOnRemoval` is not trustworthy (treat as no cost evidence). */
+  readonly stable: boolean;
+}
+
+/**
+ * The 2×2 class a suspect falls in, derived by `classifySuspect` from its flip
+ * `verdict` (quality) and its `cost` verdict. The no-bug cell is
+ * `'no-detected-effect'` — never "innocent": a piece can matter in ways neither
+ * axis sees (overdetermination, same-loops-different-path).
+ */
+export type SuspectClass = 'content-bug' | 'cost-cause' | 'both' | 'no-detected-effect';
 
 // ─── Ablation (the counterfactual seam) ──────────────────────────────
 
@@ -278,10 +329,28 @@ export type AblationSpec =
  * - Build a FRESH agent/provider per call — scripted mock providers are
  *   stateful (replies consume in order).
  */
+/**
+ * The COST of one re-run — the second readout the two-score localizer reads
+ * from the SAME ablation (proposal 004). Both optional; cost scoring is opt-in
+ * by a runner that reports them. `loops` = agent loop iterations the run took;
+ * `tokens` = total tokens it consumed.
+ */
+export interface RunCost {
+  readonly loops?: number;
+  readonly tokens?: number;
+}
+
+/**
+ * Consumer-supplied counterfactual runner (above). Returns the run's output
+ * text — OR, to ALSO unlock the cost score (proposal 004), `{ output, cost }`
+ * from the SAME re-run (one ablation, two readouts). Backward-compatible:
+ * `runAblationProbe` normalizes both shapes, so a bare-string runner keeps
+ * quality-only behavior unchanged.
+ */
 export type AblationRunner = (
   specs: readonly AblationSpec[],
   run: { readonly seed: number },
-) => Promise<string>;
+) => Promise<string | { readonly output: string; readonly cost?: RunCost }>;
 
 /**
  * Did the ablated output mean something DIFFERENT from the original?

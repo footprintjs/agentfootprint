@@ -62,13 +62,18 @@ export {
 export {
   ablationForSuspect,
   applyAblations,
+  costStatsFrom,
   defaultOutcomeComparator,
+  median,
   probeFlipped,
   runAblationProbe,
   verdictFor,
   type AblationTargets,
   type ProbeConfig,
 } from './ablation.js';
+
+// Two-score localization (proposal 004): the COST score + the 2×2 classifier.
+export { assignCostVerdicts, classifySuspect, MIN_LOOPS_SAVED } from './cost.js';
 
 export {
   bisectCulprits,
@@ -88,15 +93,20 @@ export {
   type CapturedEventLike,
   type ContextBugArtifacts,
   type ContextBugReport,
+  type CostRange,
+  type CostStats,
+  type CostVerdict,
   type EdgePathStep,
   type HonestyFlag,
   type HonestyFlagKind,
   type OutcomeComparator,
   type QualityTriggerLookup,
   type RestoredCandidate,
+  type RunCost,
   type SimilarityStats,
   type SliceStats,
   type Suspect,
+  type SuspectClass,
   type SuspectDetail,
   type SuspectKind,
 } from './types.js';
