@@ -470,6 +470,33 @@ own softmax-flatness at predicting the slip (the local stack makes it ~$0). Hone
 ladder unchanged: softmax flatness is a *more direct* uncertainty signal, still a
 proxy for *which* content caused it — only ablation proves cause.
 
+#### Two softmaxes — and only one needs open weights
+
+A crucial clarification (it shrinks the open-weights dependency to a validation
+check, not the method):
+
+- **Softmax over OUR scores — no weights needed, always available.** We already hold
+  the content the model saw. Embed each candidate, take our similarity scores `s_i`,
+  and apply softmax: `P_ext(i) = exp(s_i/T) / Σ exp(s_j/T)`. A real distribution built
+  entirely from embeddings; flat `P_ext` (high entropy) = our scorer says the
+  candidates are co-equally relevant = *predicted* ambiguity. Works on **any** model,
+  including the large API models we cannot open. This is also a **richer flat-top
+  measure than the shipped top-1−top-2 margin** — entropy over the *whole*
+  distribution, scale-invariant — so it drops into the `ConfidenceStrategy` seam as an
+  **entropy strategy** (one knob: a temperature `1/T`, since cosines occupy a narrow
+  range; `T` calibrates like `τ`).
+- **Softmax over the MODEL's logits — needs open weights.** `P_model(i) =
+  exp(logit_i/T) / Σ exp(logit_j/T)` over the actual tool tokens — the model's *own*
+  decision distribution. Flat `P_model` = the *model itself* was uncertain.
+
+These are different objects: `P_ext` is our proxy's confidence; `P_model` is the
+model's actual computation. The model's softmax is therefore **not required by the
+method** — it is the **reference we validate the proxy against**: Paper B asks whether
+external softmax-flatness *agrees* with the model's own softmax-flatness. If yes, the
+proxy is validated and production never needs open weights; if no, the gap is the
+finding. So `P_ext` is the always-available Paper A signal; `P_model` is the
+weights-only Paper B reference; their agreement is the hypothesis.
+
 ## Paper split (decided 2026-06-16)
 
 - **Paper A — external-proxy ladder on CTXBUG → the AAAI-27 submission.**
