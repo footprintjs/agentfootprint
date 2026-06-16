@@ -5,6 +5,34 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.31.0] - 2026-06-15
+
+### Added — contrastive influence: cancel the topical-innocent confound
+
+- **`scoreContrastiveInfluence({ evidence, answerText, referenceText, embedder })`**
+  — a SEPARATE, opt-in second stage over the four-signal scorer. Identical to
+  `scoreInfluence` except the FA term contrasts answer-similarity against a
+  reference output: `FA(e) = sim(e, answer) − sim(e, reference)`. A
+  topically-central innocent (the policy a refund decision quotes) resembles BOTH
+  the wrong and the right output, so it cancels (~0); the true culprit resembles
+  the wrong output specifically, so it surfaces. Same `InfluenceScore[]` shape, so
+  `rankingConfidence` + ablation compose unchanged.
+- Honest scope: still an embedding-geometry PROXY, never causal — the contrast
+  removes a confound, it does not prove causation (ablation is the causal tier).
+  Opt-in: it needs a reference output, so it is for regression / eval debugging,
+  not cold localization. Helps the CONTENT-class confound only — absence/crowding
+  bugs stay `rankingConfidence` + `findDroppedContext` + ablation territory.
+- New surface from `agentfootprint/observe`: `scoreContrastiveInfluence`,
+  `ScoreContrastiveInfluenceArgs`. `assertValidWeights` is now shared by both
+  scorers (caller-attributed errors) so contrastive enforces the same
+  weight-validation contract as `scoreInfluence`.
+- Benchmark result (CTXBUG, bge-small embedder): top-1 culprit accuracy on the
+  content-bug classes (B1–B5) **87% → 100%**, recovering 2 topical-innocent cases
+  with 0 regressions; full set incl. B6 absence bugs 76% → 88%.
+
+13 tests (7-type coverage), example 11, `docs/guides/contrastive-influence.md`.
+Focused review + fix; full suite 2997 green.
+
 ## [6.30.0] - 2026-06-11
 
 ### Added — restoration: the causal tier for the missing-context finder (interface #3)
