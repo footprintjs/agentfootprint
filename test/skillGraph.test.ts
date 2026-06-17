@@ -785,3 +785,181 @@ describe('tree() — dev-mode "exactly one leaf fires" monitor (B11)', () => {
     });
   });
 });
+
+describe('skillGraph — reachableSkills (the read_skill gate allowed set)', () => {
+  it('cold start (no cursor) → the entry skills', () => {
+    const a = skill('a');
+    const b = skill('b');
+    const c = skill('c');
+    const g = skillGraph().entry(a).entry(b).route(a, c, { onToolReturn: 'x' }).build();
+    expect([...g.reachableSkills(undefined)].sort()).toEqual(['a', 'b']);
+  });
+
+  it('from a skill → its direct successors ∪ entries, minus itself', () => {
+    const a = skill('a');
+    const b = skill('b');
+    const c = skill('c');
+    const d = skill('d');
+    const g = skillGraph()
+      .entry(a)
+      .route(a, b, { onToolReturn: 'x' })
+      .route(a, c, { when: (r) => r.result.includes('y') })
+      .route(b, d, { onToolReturn: 'z' })
+      .build();
+    expect([...g.reachableSkills('a')].sort()).toEqual(['b', 'c']); // successors b,c (+entry a, minus a)
+    expect([...g.reachableSkills('b')].sort()).toEqual(['a', 'd']); // successor d + entry a
+    expect([...g.reachableSkills('c')].sort()).toEqual(['a']); // no successors → entry a only
+  });
+
+  it('includes bare (model) route targets as successors', () => {
+    const a = skill('a');
+    const c = skill('c');
+    const g = skillGraph().entry(a).route(a, c).build(); // bare model edge a→c
+    expect([...g.reachableSkills('a')].sort()).toEqual(['c']);
+  });
+
+  it('excludes the current skill (a deliberate stay is the ReAct stop, not self-read_skill)', () => {
+    const a = skill('a');
+    const b = skill('b');
+    const g = skillGraph()
+      .entry(a)
+      .route(a, b, { onToolReturn: 'x' })
+      .route(b, a, { onToolReturn: 'y' })
+      .build();
+    expect(g.reachableSkills('a')).not.toContain('a');
+    expect([...g.reachableSkills('b')].sort()).toEqual(['a']); // b→a successor (= entry a, deduped)
+  });
+
+  it('de-duplicates (a successor that is also an entry appears once)', () => {
+    const a = skill('a');
+    const b = skill('b');
+    const g = skillGraph().entry(a).entry(b).route(a, b, { onToolReturn: 'x' }).build();
+    expect([...g.reachableSkills('a')].sort()).toEqual(['b']); // successor b + entries a,b minus a → [b]
+  });
+
+  it('tree mode → all leaf skills (read_skill stays a full escape hatch)', () => {
+    const io = skill('io');
+    const sfp = skill('sfp');
+    const tri = skill('tri');
+    const g = skillGraph()
+      .tree(
+        decide((c) => /io/.test(c.userMessage), io, decide((c) => /sfp/.test(c.userMessage), sfp, tri, 's?'), 'i?'),
+      )
+      .build();
+    expect([...g.reachableSkills('io')].sort()).toEqual(['io', 'sfp', 'tri']);
+    expect([...g.reachableSkills(undefined)].sort()).toEqual(['io', 'sfp', 'tri']);
+  });
+
+  it('property: for ANY cursor, reachableSkills excludes the cursor and is a subset of declared skills', () => {
+    const a = skill('a');
+    const b = skill('b');
+    const c = skill('c');
+    const d = skill('d');
+    const g = skillGraph()
+      .entry(a)
+      .entry(b)
+      .route(a, b, { onToolReturn: 'x' })
+      .route(a, c, { when: (r) => r.result.length > 0 })
+      .route(b, c)
+      .route(c, d, { onToolReturn: 'y' })
+      .route(d, a, { onToolReturn: 'z' })
+      .build();
+    const declared = new Set(g.skills.map((s) => s.id));
+    for (const cur of [undefined, 'a', 'b', 'c', 'd', 'phantom']) {
+      const reach = g.reachableSkills(cur);
+      if (cur !== undefined) expect(reach).not.toContain(cur); // never self
+      for (const id of reach) expect(declared.has(id)).toBe(true); // subset of declared
+    }
+  });
+});
+
+describe('skillGraph — scoped read_skill gate (real Agent loop)', () => {
+  // From entry `a`, reachable = its successors {b (route), m (bare model edge)}.
+  // `x` is reachable only from `b` (b→x), so a read_skill('x') while the cursor is
+  // on `a` must be REJECTED. read_skill('m') (a model-reachable bare edge from a)
+  // is ALLOWED and actually activates (m keeps its llm-activated trigger).
+  const mkGraph = () => {
+    const a = skill('a');
+    const b = skill('b', 'B BODY');
+    const m = skill('m', 'M BODY');
+    const x = skill('x', 'X BODY');
+    return skillGraph()
+      .entry(a)
+      .route(a, b, { onToolReturn: 'go' }) // deterministic → cursor-gated
+      .route(a, m) //                          bare model edge → read_skill-reachable from a
+      .route(b, x, { onToolReturn: 'go2' }) //  x reachable only from b, NOT from a
+      .build();
+  };
+
+  const capture = () => {
+    const activeIds: string[][] = [];
+    const rejected: Array<{ requestedId: string; currentSkillId?: string; allowed: readonly string[] }> = [];
+    const recorder = {
+      id: 'cap',
+      onEmit: (e: { name: string; payload?: Record<string, unknown> }) => {
+        if (e.name === 'agentfootprint.context.evaluated') {
+          activeIds.push([...((e.payload?.activeIds as string[]) ?? [])].sort());
+        }
+        if (e.name === 'agentfootprint.skill.rejected') {
+          rejected.push(e.payload as never);
+        }
+      },
+    };
+    return { activeIds, rejected, recorder };
+  };
+
+  it('rejects a read_skill jump outside the reachable set; accepts an in-set one', async () => {
+    const graph = mkGraph();
+    const { activeIds, rejected, recorder } = capture();
+    let i = 0;
+    const provider = mock({
+      respond: () => {
+        i++;
+        if (i === 1)
+          return { content: 'jump to x', toolCalls: [{ id: 't1', name: 'read_skill', args: { id: 'x' } }], stopReason: 'tool_use' as const };
+        if (i === 2)
+          return { content: 'jump to m', toolCalls: [{ id: 't2', name: 'read_skill', args: { id: 'm' } }], stopReason: 'tool_use' as const };
+        return { content: 'done', toolCalls: [], stopReason: 'stop' as const };
+      },
+    });
+    const agent = Agent.create({ provider, model: 'mock', maxIterations: 6 })
+      .system('')
+      .skillGraph(graph)
+      .recorder(recorder)
+      .build();
+    await agent.run({ message: 'go' });
+
+    // 'x' was rejected — cursor on 'a', reachable = {b, m}
+    expect(rejected).toHaveLength(1);
+    expect(rejected[0]!.requestedId).toBe('x');
+    expect(rejected[0]!.currentSkillId).toBe('a');
+    expect([...rejected[0]!.allowed].sort()).toEqual(['b', 'm']);
+
+    const everActive = new Set(activeIds.flat());
+    expect(everActive.has('x')).toBe(false); // rejected jump never activated
+    expect(everActive.has('m')).toBe(true); // in-set model jump activated
+  });
+
+  it('plain read_skill agent (no skillGraph) is ungated — any skill activates', async () => {
+    const billing = defineSkill({ id: 'billing', description: 'billing', body: 'BILLING' });
+    const { activeIds, rejected, recorder } = capture();
+    let i = 0;
+    const provider = mock({
+      respond: () => {
+        i++;
+        if (i === 1)
+          return { content: 'use billing', toolCalls: [{ id: 't1', name: 'read_skill', args: { id: 'billing' } }], stopReason: 'tool_use' as const };
+        return { content: 'done', toolCalls: [], stopReason: 'stop' as const };
+      },
+    });
+    const agent = Agent.create({ provider, model: 'mock', maxIterations: 4 })
+      .system('')
+      .skills({ list: () => [billing] }) // skills but NO skillGraph → gate off
+      .recorder(recorder)
+      .build();
+    await agent.run({ message: 'go' });
+
+    expect(rejected).toHaveLength(0); // gate off → no rejection
+    expect(new Set(activeIds.flat()).has('billing')).toBe(true); // activates normally
+  });
+});

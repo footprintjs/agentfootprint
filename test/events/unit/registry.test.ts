@@ -72,9 +72,10 @@ describe('event registry — names + exhaustiveness', () => {
     expect(fromNames).toEqual(fromList);
   });
 
-  it('ALL_EVENT_TYPES has exactly 63 entries (Tier 1+2+3 combined)', () => {
-    // 63 = 8 composition + 8 agent + 7 stream + 5 context + 4 memory
-    //    + 6 tools + 2 skill + 4 permission + 4 credential + 1 risk + 1 fallback
+  it('ALL_EVENT_TYPES has exactly 65 entries (Tier 1+2+3 combined)', () => {
+    // 65 = 8 composition + 8 agent + 7 stream + 5 context + 4 memory
+    //    + 6 tools + 3 skill (skill.rejected added with the read_skill gate)
+    //    + 4 permission + 4 credential + 1 risk + 1 fallback
     //    + 2 cost + 2 eval + 3 error + 3 reliability + 2 pause + 1 embedding
     //    (reliability.* added in the v2 scope↔emit cleanup: fail_fast was
     //     previously a raw unregistered emit; retried/recovered are new.)
@@ -84,7 +85,7 @@ describe('event registry — names + exhaustiveness', () => {
     //     consumption seam; see CHANGELOG.)
     //    (validation.args_invalid added with #9 tool-args validation —
     //     model-visible retry; see CHANGELOG.)
-    expect(ALL_EVENT_TYPES.length).toBe(64);
+    expect(ALL_EVENT_TYPES.length).toBe(65);
   });
 
   it('every entry in ALL_EVENT_TYPES is a key of AgentfootprintEventMap', () => {

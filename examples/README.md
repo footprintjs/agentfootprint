@@ -221,6 +221,7 @@ _Run `npm run examples:readme` after adding/editing examples._
 | 20 | [`20-regulated-decisioning.ts`](features/20-regulated-decisioning.ts) | Regulated decisioning — one run, three compliance artifacts, offline auditor | A loan-decisioning agent declines an application under labeled decide() rules while auditExport (hash chain), otelObservability (GenAI spans) and causal memory capture the same event stream; an offline auditor then answers  |
 | 21 | [`21-deferred-observers.ts`](features/21-deferred-observers.ts) | Deferred observers — non-blocking agent.on() (RFC-001) | observerDelivery: deferred moves slow agent.on() listeners off the ReAct hot path — capture inline, deliver one beat behind, drain before run() returns. Benches inline vs deferred vs no-listener. |
 | 22 | [`22-influence-core.ts`](features/22-influence-core.ts) | influence-core — four-signal evidence scoring, one shared embedding cache | The shared scoring engine under the FDL evidence ranking, the tool-catalog  |
+| 23 | [`23-skill-graph-scoped-read-skill.ts`](features/23-skill-graph-scoped-read-skill.ts) | Skill graph — scoped read_skill (stay on the trail) | The read_skill gate bounds the model to skills reachable from the current cursor; an out-of-graph jump is rejected with a re-prompt naming the allowed skills. Plain read_skill agents are unaffected. |
 
 ### [`canonical/`](canonical/) — end-to-end patterns
 

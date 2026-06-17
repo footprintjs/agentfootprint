@@ -95,10 +95,10 @@ const c      = scoreContrastiveInfluence({ evidence, answerText, referenceText, 
 > ✅ **The keystone SHIPPED (2026-06-17, panel-reviewed *SHIP WITH NITS*):**
 > 1. the **keystone** `currentSkillId` on `InjectionContext` + **`from`-gating** — an edge `A→B on get_wwn` now fires **only while the cursor is on A**, so the cross-skill edge bleed is gone. The cursor is a sticky state machine: you stay in a skill until a `from`-gated edge moves you out, with a clean handoff (the leaving skill deactivates the same step the next one activates). Driven by one pure resolver `graph.nextSkill(ctx)`.
 > 2. **per-matcher try/catch** — a throwing route predicate is isolated (no-match, dev-warned), never kills the loop or sibling edges.
+> 3. the **scoped `read_skill` gate** (✅ shipped) — `read_skill('id')` is now rejected when `id` is not reachable from the current cursor (`graph.reachableSkills(cur)` = direct successors ∪ entries \ {cur}; tree mode = all leaves). The model gets a re-prompt naming the allowed skills; the cursor stays put; an `agentfootprint.skill.rejected` event fires. Plain `read_skill` agents (no skillGraph) are unaffected.
 >
 > 🔶 **Still proposed on top (gated, NOT built):**
-> 3. the **scoped `read_skill` gate** at `toolCalls.ts` (no `allowedSet` runtime enforcement yet — a rejected/out-of-set skill id is still appended).
-> 4. the **`'score-match'`** entry strategy (embedding-softmax) — entry today is `when`-predicate / `always`.
+> 4. the **`entryByRelevance`** entry strategy (embedding-softmax) — entry today is `when`-predicate / `always` / `read_skill`.
 > 5. the **grey-area governors** (oscillation / fallback-retry caps), the **`RouteDecisionRecorder`**, **build-time validation**, and (per §6.1) an optional **object-literal façade** for validation.
 
 **v1 API (works today):**
@@ -152,7 +152,8 @@ const graph = skillGraph({
 | LLM-free influence scoring (proxy + contrastive + confidence + ablation) | ✅ 6.31.0 | `agentfootprint/observe` |
 | Why-panel **% confidence** via softmax | 🔶 proposed | `agentthinkingui` (relevance scorer) |
 | `skillGraph()` v1 — fluent `.entry/.route/.tree/.build`, predicate-on-tool-result routes, decision trees, `toMermaid` | ✅ **exists** | `agentfootprint` `lib/injection-engine/skillGraph.ts` |
-| v2 **keystone** — `currentSkillId` + `from`-gating (sticky cursor, clean handoff, no edge bleed), per-matcher try/catch, `graph.nextSkill(ctx)` | ✅ **shipped** (2026-06-17) | `agentfootprint` `skillGraph.ts` + Injection Engine + chart mappers |
-| v2 remainder — scoped `read_skill` gate, `'score-match'` entry, grey-area governors, `RouteDecisionRecorder`, build validation, object façade | 🔶 proposed, gated | `agentfootprint` — design in `skill-graph.md` |
+| v2 **keystone** — `currentSkillId` + `from`-gating (sticky cursor, clean handoff, no edge bleed), per-matcher try/catch, `graph.nextSkill(ctx)` | ✅ **shipped** (6.34.0) | `agentfootprint` `skillGraph.ts` + Injection Engine + chart mappers |
+| **scoped `read_skill` gate** — `graph.reachableSkills(cur)` + the runtime reject at `toolCalls.ts` + `skill.rejected` event | ✅ **shipped** (6.35.0) | `agentfootprint` `skillGraph.ts` + `toolCalls.ts` |
+| v2 remainder — `entryByRelevance` entry, grey-area governors, `RouteDecisionRecorder`, build validation, object façade | 🔶 proposed, gated | `agentfootprint` — design in `skill-graph.md` |
 
 **Gate:** everything marked 🔶 is a proposal. No code ships for it until an explicit "yes" for the specific change. Keep this file + the per-repo `AGENTS.md` in sync when any 🔶 becomes ✅.

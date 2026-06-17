@@ -73,6 +73,7 @@ import type {
   RiskFlaggedPayload,
   SkillActivatedPayload,
   SkillDeactivatedPayload,
+  SkillRejectedPayload,
   ToolEndPayload,
   ToolsActivatedPayload,
   ToolsDeactivatedPayload,
@@ -141,6 +142,7 @@ export const EVENT_NAMES = {
   skill: {
     activated: 'agentfootprint.skill.activated',
     deactivated: 'agentfootprint.skill.deactivated',
+    rejected: 'agentfootprint.skill.rejected',
   },
   validation: {
     argsInvalid: 'agentfootprint.validation.args_invalid',
@@ -361,6 +363,10 @@ export interface AgentfootprintEventMap {
     'agentfootprint.skill.deactivated',
     SkillDeactivatedPayload
   >;
+  'agentfootprint.skill.rejected': AgentfootprintEventEnvelope<
+    'agentfootprint.skill.rejected',
+    SkillRejectedPayload
+  >;
   // validation
   'agentfootprint.validation.args_invalid': AgentfootprintEventEnvelope<
     'agentfootprint.validation.args_invalid',
@@ -521,6 +527,7 @@ export const ALL_EVENT_TYPES: readonly AgentfootprintEventType[] = [
   'agentfootprint.validation.args_invalid',
   'agentfootprint.skill.activated',
   'agentfootprint.skill.deactivated',
+  'agentfootprint.skill.rejected',
   'agentfootprint.permission.check',
   'agentfootprint.permission.gate_opened',
   'agentfootprint.permission.gate_closed',

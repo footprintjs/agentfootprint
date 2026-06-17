@@ -466,6 +466,23 @@ export interface SkillDeactivatedPayload {
   readonly reason: string;
 }
 
+/**
+ * Fired by the skill-graph read_skill GATE when the model tries to `read_skill`
+ * a skill that is NOT reachable from the current cursor. The jump is rejected
+ * (cursor/activations unchanged); the model gets a synthetic re-prompt naming
+ * `allowed`. Powers the lens / Why-panel "it tried to leave the graph here".
+ */
+export interface SkillRejectedPayload {
+  /** The skill id the model requested via `read_skill`. */
+  readonly requestedId: string;
+  /** The cursor it was at (undefined = cold start, before any entry resolved). */
+  readonly currentSkillId?: string;
+  /** The reachable set it was bounded to (what the re-prompt offered). */
+  readonly allowed: readonly string[];
+  /** The ReAct iteration the rejection fired on. */
+  readonly iteration: number;
+}
+
 // permission.* (4)
 export interface PermissionCheckPayload {
   readonly capability: 'tool_call' | 'memory_read' | 'memory_write' | 'external_net' | 'user_data';

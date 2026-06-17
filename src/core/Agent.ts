@@ -159,6 +159,10 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    *  `.skillGraph(graph)`. Plumbed into the Injection Engine so route triggers
    *  are `from`-gated against the persisted `currentSkillId`. */
   private readonly skillGraphNextSkill?: (ctx: InjectionContext) => string | undefined;
+  /** Skill-graph reachable-set resolver (`graph.reachableSkills`), set when built
+   *  via `.skillGraph(graph)`. Plumbed into the tool-calls handler so `read_skill`
+   *  is gated to in-graph jumps. Undefined → gate off. */
+  private readonly skillGraphReachable?: (currentSkillId?: string) => readonly string[];
   private readonly pricingTable?: PricingTable;
   private readonly costBudget?: number;
   private readonly permissionChecker?: PermissionChecker;
@@ -312,6 +316,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     thinkingHandlerValue?: ThinkingHandler | null,
     thinkingBudgetValue?: number,
     skillGraphNextSkill?: (ctx: InjectionContext) => string | undefined,
+    skillGraphReachable?: (currentSkillId?: string) => readonly string[],
   ) {
     super();
     this.provider = opts.provider;
@@ -333,6 +338,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     this.registry = registry;
     this.injections = injections;
     this.skillGraphNextSkill = skillGraphNextSkill;
+    this.skillGraphReachable = skillGraphReachable;
     this.memories = memories;
     this.outputSchemaParser = outputSchemaParser;
     this.outputFallbackCfg = outputFallbackCfg;
@@ -1068,6 +1074,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       ...(permissionChecker && { permissionChecker }),
       ...(credentialProvider && { credentialProvider }),
       ...(this.toolArgValidation && { toolArgValidation: this.toolArgValidation }),
+      // Skill-graph read_skill gate: bound the model's read_skill jumps to the
+      // reachable set from the current cursor. Undefined → gate off (back-compat).
+      ...(this.skillGraphReachable && { allowedSkillIds: this.skillGraphReachable }),
     });
 
     // v2.14 — Build the NormalizeThinking sub-subflow only when a

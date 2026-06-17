@@ -70,6 +70,10 @@ export class AgentBuilder {
    *  Engine uses to `from`-gate route triggers. Undefined unless a graph with
    *  route edges was mounted. */
   private skillGraphNextSkill?: (ctx: InjectionContext) => string | undefined;
+  /** Captured from `.skillGraph(graph)` — the reachable-set resolver the
+   *  read_skill gate uses to reject out-of-set skill jumps. Undefined → the gate
+   *  is off (plain read_skill agents are unaffected). */
+  private skillGraphReachable?: (currentSkillId?: string) => readonly string[];
   private readonly memoryList: MemoryDefinition[] = [];
   /**
    * Optional terminal contract — see `outputSchema()`. Stored on the
@@ -363,6 +367,7 @@ export class AgentBuilder {
   skillGraph(graph: {
     skills: readonly Injection[];
     nextSkill: (ctx: InjectionContext) => string | undefined;
+    reachableSkills?: (currentSkillId?: string) => readonly string[];
   }): this {
     for (const skill of graph.skills) this.injection(skill);
     // Capture the cursor resolver so the Injection Engine can `from`-gate route
@@ -372,6 +377,9 @@ export class AgentBuilder {
     // gating the second graph's topology. Pass the full `build()` result here;
     // for a bare skill list use `.skills({ list })` instead.
     this.skillGraphNextSkill = graph.nextSkill;
+    // The reachable-set resolver gates read_skill to in-graph jumps (optional for
+    // forward-compat with graphs built before reachableSkills existed).
+    this.skillGraphReachable = graph.reachableSkills;
     return this;
   }
 
@@ -846,6 +854,7 @@ export class AgentBuilder {
       this.thinkingHandlerValue,
       this.thinkingBudgetValue,
       this.skillGraphNextSkill,
+      this.skillGraphReachable,
     );
     // Attach builder-collected recorders so they receive events from
     // the very first run. Mirrors what consumers would do post-build

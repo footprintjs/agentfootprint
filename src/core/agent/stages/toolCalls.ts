@@ -73,6 +73,14 @@ export interface ToolCallsHandlerDeps {
    *  mismatch rejects the call with a model-visible retry message.
    *  'warn' emits the event but executes anyway; 'off' skips validation. */
   readonly toolArgValidation?: ToolArgValidationMode;
+  /**
+   * Skill-graph read_skill GATE (`graph.reachableSkills`). When present, a
+   * `read_skill('id')` whose `id` is not reachable from the current cursor is
+   * REJECTED — the model gets a synthetic re-prompt naming the allowed ids and
+   * the cursor/activations stay unchanged, so it can't leave the graph mid-run.
+   * Undefined → no gate (plain read_skill agents append as before).
+   */
+  readonly allowedSkillIds?: (currentSkillId?: string) => readonly string[];
 }
 
 /**
@@ -362,6 +370,35 @@ export function buildToolCallsHandler(
             }
           }
         }
+        // ── Skill-graph read_skill GATE ────────────────────────
+        // Reject a read_skill jump OUTSIDE the reachable set from the current
+        // cursor: replace the result with a re-prompt naming the allowed ids (so
+        // the model re-picks) and skip the activation below — cursor + activations
+        // stay unchanged. Off when no skillGraph (deps.allowedSkillIds undefined),
+        // so plain read_skill agents are byte-for-byte unaffected.
+        let skillRejected = false;
+        if (deps.allowedSkillIds && tc.name === 'read_skill' && !error && !denied) {
+          const reqId = (tc.args as { id?: unknown }).id;
+          if (typeof reqId === 'string' && reqId.length > 0) {
+            const currentSkillId = scope.currentSkillId as string | undefined;
+            const allowed = deps.allowedSkillIds(currentSkillId);
+            if (!allowed.includes(reqId)) {
+              skillRejected = true;
+              result =
+                `read_skill("${reqId}") is not reachable from here. ` +
+                (allowed.length
+                  ? `Reachable skills: ${allowed.join(', ')}. Pick one of these, or finish.`
+                  : 'No skills are reachable from here — answer with the current skill, or finish.');
+              typedEmit(scope, 'agentfootprint.skill.rejected', {
+                requestedId: reqId,
+                ...(currentSkillId !== undefined && { currentSkillId }),
+                allowed,
+                iteration,
+              });
+            }
+          }
+        }
+
         const durationMs = Date.now() - startMs;
         typedEmit(scope, 'agentfootprint.stream.tool_end', {
           toolCallId: tc.id,
@@ -389,7 +426,7 @@ export function buildToolCallsHandler(
         //     to `activatedInjectionIds` so the InjectionEngine's
         //     NEXT pass activates that Skill (lifetime: turn — stays
         //     active until the turn ends).
-        if (tc.name === 'read_skill' && !error && !denied) {
+        if (tc.name === 'read_skill' && !error && !denied && !skillRejected) {
           const requestedId = (tc.args as { id?: unknown }).id;
           if (typeof requestedId === 'string' && requestedId.length > 0) {
             const current = scope.activatedInjectionIds as readonly string[];

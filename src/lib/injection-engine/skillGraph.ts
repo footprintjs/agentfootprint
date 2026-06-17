@@ -179,6 +179,17 @@ export interface SkillGraph {
    * by predicate (no cursor) and returns the unchanged `ctx.currentSkillId`.
    */
   nextSkill(ctx: InjectionContext): string | undefined;
+  /**
+   * The REACHABLE set — which skills the model may `read_skill`-jump to from the
+   * current cursor. The agent's runtime gate rejects any `read_skill('id')` whose
+   * `id` is not in this set (so the model can't leave the graph mid-run).
+   *   • cold start (`currentSkillId` undefined) → the entry skills;
+   *   • otherwise → the current skill's direct successors ∪ the entry skills, minus
+   *     the current skill itself (deliberate "stay" is the no-tool-call ReAct stop).
+   * Pure + deterministic. A decision `tree()` has no cursor, so it returns ALL leaf
+   * skills — `read_skill` stays a full escape hatch there.
+   */
+  reachableSkills(currentSkillId?: string): readonly string[];
 }
 
 export interface SkillGraphBuilder {
@@ -269,6 +280,9 @@ export function skillGraph(): SkillGraphBuilder {
       // for the loop's cursor-update stage. Tree mode has no cursor (per-iteration
       // predicate routing), so it stays a no-op there.
       let nextSkill: (ctx: InjectionContext) => string | undefined = (ctx) => ctx.currentSkillId;
+      // The reachable-set resolver — what `read_skill` may jump to from the cursor
+      // (the runtime gate enforces it). Default empty; set per mode below.
+      let reachableSkills: (currentSkillId?: string) => readonly string[] = () => [];
 
       if (treeRoot) {
         // Decision-tree mode (v3): compile each leaf to a path-conjunction trigger.
@@ -282,10 +296,14 @@ export function skillGraph(): SkillGraphBuilder {
           treeScopeTools,
         );
         attachExactlyOneLeafMonitor(skills);
+        // Tree mode has no cursor — `read_skill` stays a full escape hatch (all leaves).
+        const leafIds = skills.map((s) => s.id);
+        reachableSkills = () => leafIds;
       } else {
         // Flat entry/route mode (v1 + v2 keystone). `from`-gating + sticky cursor
         // both derive from one pure resolver so they can never diverge.
         nextSkill = makeNextSkill(entries, routes);
+        reachableSkills = makeReachableSkills(entries, routes);
         for (const [id, skill] of skillsById) {
           const trigger = deriveTrigger(id, skill, entries, routes, nextSkill);
           const routing = routingFor(id, entries, routes);
@@ -317,10 +335,40 @@ export function skillGraph(): SkillGraphBuilder {
         nodes,
         toMermaid: () => renderMermaid(nodes, edges),
         nextSkill: (ctx: InjectionContext) => nextSkill(ctx),
+        reachableSkills: (currentSkillId?: string) => reachableSkills(currentSkillId),
       };
     },
   };
   return builder;
+}
+
+/**
+ * The reachable-set resolver (the read_skill gate's allowed set). Pure +
+ * deterministic over the build-time entries/routes:
+ *   • cold start (cursor undefined) → the entry skills (you enter via entries);
+ *   • otherwise → the cursor's direct successors (ANY declared edge out of it,
+ *     deterministic OR bare/model) ∪ the entry skills, minus the cursor itself
+ *     (a deliberate "stay" is the no-tool-call ReAct stop, not a self-`read_skill`).
+ * Declaration order preserved; ids de-duplicated.
+ */
+function makeReachableSkills(
+  entries: readonly EntryDecl[],
+  routes: readonly RouteDecl[],
+): (currentSkillId?: string) => readonly string[] {
+  const entryIds = entries.map((e) => e.id);
+  return (cur) => {
+    const ids = cur === undefined ? [...entryIds] : [...successorsOf(cur, routes), ...entryIds];
+    return dedupe(cur === undefined ? ids : ids.filter((id) => id !== cur));
+  };
+}
+
+/** Direct successors of `from` — every declared route edge out of it (any kind). */
+function successorsOf(from: string, routes: readonly RouteDecl[]): string[] {
+  return routes.filter((r) => r.fromId === from).map((r) => r.toId);
+}
+
+function dedupe(ids: readonly string[]): string[] {
+  return [...new Set(ids)];
 }
 
 /** Does a single route edge fire for this context? Reads the previous
