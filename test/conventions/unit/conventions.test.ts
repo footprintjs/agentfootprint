@@ -49,11 +49,13 @@ describe('SUBFLOW_IDS — single source of truth', () => {
 });
 
 describe('STAGE_IDS — single source of truth', () => {
-  it('has the 14 known stage IDs', () => {
+  it('has the 15 known stage IDs', () => {
     const actual = Object.values(STAGE_IDS).sort();
     expect(actual).toEqual(
       [
         'seed',
+        // Relevance entry router (entryByRelevance):
+        'pick-entry',
         // Parallel context-assembly selector (slot fan-out):
         'context',
         // LLMCall outer wrapper + post-invocation marker:

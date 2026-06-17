@@ -360,6 +360,10 @@ export interface AgentState {
    *  turn re-enters via the entry router). `from`-gates the route triggers.
    *  Undefined for agents without a skill graph. */
   currentSkillId?: string;
+  /** The relevance ranking of entry candidates from `entryByRelevance()` — written
+   *  by the PickEntry stage once per turn (the "Why this skill?" relevance %).
+   *  Absent unless the graph was built with `.entryByRelevance(embedder)`. */
+  entryScores?: ReadonlyArray<{ readonly id: string; readonly cosine: number; readonly relevance: number }>;
 
   // ── Policy halt state (v2.12) ───────────────────────────────
   /** Set when a `PermissionChecker` returns `{ result: 'halt', ... }`.

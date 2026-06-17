@@ -68,6 +68,8 @@ import { buildMessagesSlot } from './slots/buildMessagesSlot.js';
 import { buildToolsSlot, type ProviderToolCache } from './slots/buildToolsSlot.js';
 import { buildInjectionEngineSubflow } from '../lib/injection-engine/buildInjectionEngineSubflow.js';
 import type { Injection, InjectionContext } from '../lib/injection-engine/types.js';
+import type { EntryScoring } from '../lib/injection-engine/skillGraph.js';
+import { makePickEntryStage } from './agent/stages/pickEntry.js';
 import { applyOutputFallback, type ResolvedOutputFallback } from './outputFallback.js';
 import {
   buildCheckpoint,
@@ -163,6 +165,13 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    *  via `.skillGraph(graph)`. Plumbed into the tool-calls handler so `read_skill`
    *  is gated to in-graph jumps. Undefined → gate off. */
   private readonly skillGraphReachable?: (currentSkillId?: string) => readonly string[];
+  /** Skill-graph relevance entry scorer (`graph.scoreEntries`), set when built via
+   *  `.skillGraph(graph)` with `.entryByRelevance()`. Drives the PickEntry stage.
+   *  Undefined → no relevance entry routing (cold-start entry as before). */
+  private readonly skillGraphScoreEntries?: (
+    ctx: InjectionContext,
+    signal?: AbortSignal,
+  ) => Promise<EntryScoring>;
   private readonly pricingTable?: PricingTable;
   private readonly costBudget?: number;
   private readonly permissionChecker?: PermissionChecker;
@@ -317,6 +326,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     thinkingBudgetValue?: number,
     skillGraphNextSkill?: (ctx: InjectionContext) => string | undefined,
     skillGraphReachable?: (currentSkillId?: string) => readonly string[],
+    skillGraphScoreEntries?: (ctx: InjectionContext, signal?: AbortSignal) => Promise<EntryScoring>,
   ) {
     super();
     this.provider = opts.provider;
@@ -339,6 +349,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     this.injections = injections;
     this.skillGraphNextSkill = skillGraphNextSkill;
     this.skillGraphReachable = skillGraphReachable;
+    this.skillGraphScoreEntries = skillGraphScoreEntries;
     this.memories = memories;
     this.outputSchemaParser = outputSchemaParser;
     this.outputFallbackCfg = outputFallbackCfg;
@@ -1024,6 +1035,12 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       injections: this.injections,
       ...(this.skillGraphNextSkill && { nextSkill: this.skillGraphNextSkill }),
     });
+    // Relevance entry router — a once-per-turn stage (off the ReAct loop) that
+    // picks the starting skill by embedding similarity. Only built (and mounted)
+    // when the graph was created with `.entryByRelevance()`.
+    const pickEntryStage = this.skillGraphScoreEntries
+      ? makePickEntryStage(this.skillGraphScoreEntries)
+      : undefined;
     const systemPromptSubflow = buildSystemPromptSlot({
       prompt: systemPromptValue,
       reason: 'Agent.system()',
@@ -1102,6 +1119,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       routeDecider,
       toolCallsHandler,
       injectionEngineSubflow,
+      ...(pickEntryStage && { pickEntryStage }),
       systemPromptSubflow,
       messagesSubflow,
       toolsSubflow,

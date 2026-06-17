@@ -39,6 +39,7 @@ export const meta: ExampleMeta = {
     'The read_skill gate bounds the model to skills reachable from the current cursor; an out-of-graph jump is rejected with a re-prompt naming the allowed skills. Plain read_skill agents are unaffected.',
   defaultInput: 'look up the volume behind wwn 50:06',
   providerSlots: ['default'],
+  tags: ['feature', 'skills', 'routing', 'graph', 'read_skill'],
 };
 
 export async function run(input: string, provider?: LLMProvider): Promise<unknown> {

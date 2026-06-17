@@ -15,7 +15,9 @@ import {
   defineTool,
   Agent,
   mock,
+  mockEmbedder,
 } from '../src/index.js';
+import { softmax } from '../src/lib/injection-engine/softmax.js';
 import { evaluateInjections } from '../src/lib/injection-engine/index.js';
 import type { InjectionContext } from '../src/lib/injection-engine/types.js';
 
@@ -870,6 +872,120 @@ describe('skillGraph — reachableSkills (the read_skill gate allowed set)', () 
       if (cur !== undefined) expect(reach).not.toContain(cur); // never self
       for (const id of reach) expect(declared.has(id)).toBe(true); // subset of declared
     }
+  });
+});
+
+describe('softmax', () => {
+  it('sums to 1 and preserves the ranking order', () => {
+    const out = softmax([1, 2, 3]);
+    expect(out.reduce((a, b) => a + b, 0)).toBeCloseTo(1, 10);
+    expect(out[2]!).toBeGreaterThan(out[1]!);
+    expect(out[1]!).toBeGreaterThan(out[0]!);
+  });
+  it('empty → empty; uniform input → uniform output', () => {
+    expect(softmax([])).toEqual([]);
+    softmax([5, 5, 5]).forEach((v) => expect(v).toBeCloseTo(1 / 3, 10));
+  });
+  it('higher temperature flattens the distribution', () => {
+    const sharp = softmax([1, 5], 0.5);
+    const flat = softmax([1, 5], 5);
+    expect(flat[0]!).toBeGreaterThan(sharp[0]!); // the loser keeps more share when flatter
+  });
+  it('is numerically stable for large values', () => {
+    const out = softmax([1000, 1001]);
+    expect(out.every(Number.isFinite)).toBe(true);
+    expect(out.reduce((a, b) => a + b, 0)).toBeCloseTo(1, 10);
+  });
+});
+
+describe('skillGraph — entryByRelevance / scoreEntries (LLM-free relevance entry)', () => {
+  const emb = mockEmbedder(); // deterministic char-frequency embedding
+
+  it('picks the entry whose description best matches the message; relevance sums to ~1', async () => {
+    const billing = defineSkill({ id: 'billing', description: 'payments and refunds', body: 'b' });
+    const incident = defineSkill({ id: 'incident', description: 'zzz qqq', body: 'b' });
+    const g = skillGraph().entry(billing).entry(incident).entryByRelevance(emb).build();
+    expect(g.scoreEntries).toBeDefined();
+
+    const res = await g.scoreEntries!(ctx({ userMessage: 'i need a refund for my payment' }));
+    expect(res.chosen).toBe('billing'); // shares far more characters with the message
+    expect(res.ranked.map((r) => r.id).sort()).toEqual(['billing', 'incident']);
+    expect(res.ranked.reduce((s, r) => s + r.relevance, 0)).toBeCloseTo(1, 5);
+  });
+
+  it('only when-passing entries are candidates', async () => {
+    const a = defineSkill({ id: 'a', description: 'alpha', body: 'b' });
+    const b = defineSkill({ id: 'b', description: 'beta', body: 'b' });
+    const g = skillGraph().entry(a, { when: () => false }).entry(b).entryByRelevance(emb).build();
+    const res = await g.scoreEntries!(ctx({ userMessage: 'anything' }));
+    expect(res.ranked.map((r) => r.id)).toEqual(['b']); // a gated out by its when
+    expect(res.chosen).toBe('b');
+  });
+
+  it('no candidates → chosen undefined + empty ranked (agent falls back to cold-start)', async () => {
+    const a = defineSkill({ id: 'a', description: 'alpha', body: 'b' });
+    const g = skillGraph().entry(a, { when: () => false }).entryByRelevance(emb).build();
+    expect(await g.scoreEntries!(ctx({ userMessage: 'x' }))).toEqual({ chosen: undefined, ranked: [] });
+  });
+
+  it('scoreEntries is absent without .entryByRelevance(), and on tree-mode graphs', () => {
+    const a = defineSkill({ id: 'a', description: 'alpha', body: 'b' });
+    expect(skillGraph().entry(a).build().scoreEntries).toBeUndefined();
+    const t = skillGraph()
+      .tree(decide((c) => /x/.test(c.userMessage), skill('p'), skill('q')))
+      .entryByRelevance(emb)
+      .build();
+    expect(t.scoreEntries).toBeUndefined();
+  });
+});
+
+describe('skillGraph — entryByRelevance through the REAL Agent loop (PickEntry mount)', () => {
+  const emb = mockEmbedder();
+
+  for (const reactMode of ['dynamic', 'dynamic-grouped'] as const) {
+    it(`[${reactMode}] picks the relevant entry as the start skill; the others stay dormant`, async () => {
+      // Under entryByRelevance the entries are EXCLUSIVE — only the relevance pick
+      // (here billing, which shares characters with the message) should activate.
+      const billing = defineSkill({ id: 'billing', description: 'payments and refunds', body: 'BILLING' });
+      const incident = defineSkill({ id: 'incident', description: 'zzz qqq outage', body: 'INCIDENT' });
+      const graph = skillGraph().entry(billing).entry(incident).entryByRelevance(emb).build();
+
+      const activeIds: string[][] = [];
+      const recorder = {
+        id: 'cap',
+        onEmit: (e: { name: string; payload?: { activeIds?: string[] } }) => {
+          if (e.name === 'agentfootprint.context.evaluated') {
+            activeIds.push([...(e.payload?.activeIds ?? [])].sort());
+          }
+        },
+      };
+      const agent = Agent.create({ provider: mock({ reply: 'done' }), model: 'mock', maxIterations: 3, reactMode })
+        .system('')
+        .skillGraph(graph)
+        .recorder(recorder)
+        .build();
+      await agent.run({ message: 'i need a refund for my payment' });
+
+      const everActive = new Set(activeIds.flat());
+      expect(everActive.has('billing')).toBe(true); // the relevance pick activated
+      expect(everActive.has('incident')).toBe(false); // dormant — entries are exclusive here
+    });
+  }
+
+  it('exposes the relevance ranking on the snapshot (entryScores)', async () => {
+    const billing = defineSkill({ id: 'billing', description: 'payments and refunds', body: 'b' });
+    const incident = defineSkill({ id: 'incident', description: 'zzz qqq outage', body: 'b' });
+    const graph = skillGraph().entry(billing).entry(incident).entryByRelevance(emb).build();
+    const agent = Agent.create({ provider: mock({ reply: 'done' }), model: 'mock', maxIterations: 2 })
+      .system('')
+      .skillGraph(graph)
+      .build();
+    await agent.run({ message: 'i need a refund for my payment' });
+
+    const scores = (agent.getLastSnapshot()?.sharedState as { entryScores?: Array<{ id: string; relevance: number }> })
+      ?.entryScores;
+    expect(scores?.map((s) => s.id).sort()).toEqual(['billing', 'incident']);
+    expect(scores!.reduce((sum, s) => sum + s.relevance, 0)).toBeCloseTo(1, 5);
   });
 });
 

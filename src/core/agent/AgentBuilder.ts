@@ -20,6 +20,7 @@ import {
 } from '../outputFallback.js';
 import type { CachePolicy, CacheStrategy } from '../../cache/types.js';
 import type { Injection, InjectionContext } from '../../lib/injection-engine/types.js';
+import type { EntryScoring } from '../../lib/injection-engine/skillGraph.js';
 import { defineInstruction } from '../../lib/injection-engine/factories/defineInstruction.js';
 import type { MemoryDefinition } from '../../memory/define.types.js';
 import type { ReliabilityConfig } from '../../reliability/types.js';
@@ -74,6 +75,13 @@ export class AgentBuilder {
    *  read_skill gate uses to reject out-of-set skill jumps. Undefined → the gate
    *  is off (plain read_skill agents are unaffected). */
   private skillGraphReachable?: (currentSkillId?: string) => readonly string[];
+  /** Captured from `.skillGraph(graph)` — the relevance entry scorer
+   *  (`graph.scoreEntries`), present only with `.entryByRelevance()`. When set, the
+   *  PickEntry stage picks the starting skill by relevance once per turn. */
+  private skillGraphScoreEntries?: (
+    ctx: InjectionContext,
+    signal?: AbortSignal,
+  ) => Promise<EntryScoring>;
   private readonly memoryList: MemoryDefinition[] = [];
   /**
    * Optional terminal contract — see `outputSchema()`. Stored on the
@@ -368,6 +376,7 @@ export class AgentBuilder {
     skills: readonly Injection[];
     nextSkill: (ctx: InjectionContext) => string | undefined;
     reachableSkills?: (currentSkillId?: string) => readonly string[];
+    scoreEntries?: (ctx: InjectionContext, signal?: AbortSignal) => Promise<EntryScoring>;
   }): this {
     for (const skill of graph.skills) this.injection(skill);
     // Capture the cursor resolver so the Injection Engine can `from`-gate route
@@ -380,6 +389,8 @@ export class AgentBuilder {
     // The reachable-set resolver gates read_skill to in-graph jumps (optional for
     // forward-compat with graphs built before reachableSkills existed).
     this.skillGraphReachable = graph.reachableSkills;
+    // The relevance entry scorer (present only with `.entryByRelevance()`).
+    this.skillGraphScoreEntries = graph.scoreEntries;
     return this;
   }
 
@@ -855,6 +866,7 @@ export class AgentBuilder {
       this.thinkingBudgetValue,
       this.skillGraphNextSkill,
       this.skillGraphReachable,
+      this.skillGraphScoreEntries,
     );
     // Attach builder-collected recorders so they receive events from
     // the very first run. Mirrors what consumers would do post-build

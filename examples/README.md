@@ -222,6 +222,7 @@ _Run `npm run examples:readme` after adding/editing examples._
 | 21 | [`21-deferred-observers.ts`](features/21-deferred-observers.ts) | Deferred observers — non-blocking agent.on() (RFC-001) | observerDelivery: deferred moves slow agent.on() listeners off the ReAct hot path — capture inline, deliver one beat behind, drain before run() returns. Benches inline vs deferred vs no-listener. |
 | 22 | [`22-influence-core.ts`](features/22-influence-core.ts) | influence-core — four-signal evidence scoring, one shared embedding cache | The shared scoring engine under the FDL evidence ranking, the tool-catalog  |
 | 23 | [`23-skill-graph-scoped-read-skill.ts`](features/23-skill-graph-scoped-read-skill.ts) | Skill graph — scoped read_skill (stay on the trail) | The read_skill gate bounds the model to skills reachable from the current cursor; an out-of-graph jump is rejected with a re-prompt naming the allowed skills. Plain read_skill agents are unaffected. |
+| 24 | [`24-skill-graph-entry-relevance.ts`](features/24-skill-graph-entry-relevance.ts) | Skill graph — relevance entry routing (entryByRelevance) | Pick the starting skill by embedding-similarity to the message (softmax over each entry description) instead of regex — LLM-free, reproducible, with relevance % for the Why-panel. Only the picked entry loads. |
 
 ### [`canonical/`](canonical/) — end-to-end patterns
 

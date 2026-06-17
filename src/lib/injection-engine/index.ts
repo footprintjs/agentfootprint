@@ -76,4 +76,6 @@ export {
   type DecisionNode,
   type SkillRouting,
   type SkillRoutingStep,
+  type EntryScore,
+  type EntryScoring,
 } from './skillGraph.js';

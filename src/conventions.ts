@@ -67,6 +67,10 @@ export type SubflowId = (typeof SUBFLOW_IDS)[keyof typeof SUBFLOW_IDS];
 /** Stage IDs — plain function stages that builders mount. */
 export const STAGE_IDS = {
   SEED: 'seed',
+  /** Relevance entry router (`entryByRelevance`). A once-per-turn function stage
+   *  mounted between Initialize and InjectionEngine (off the ReAct loop) that
+   *  picks the starting skill by embedding similarity → sets `currentSkillId`. */
+  PICK_ENTRY: 'pick-entry',
   /** Context-assembly selector stage. Runs AFTER InjectionEngine and
    *  fans the 3 slot subflows (system-prompt / messages / tools) out in
    *  PARALLEL (selector picks all 3 every iteration; failFast so a

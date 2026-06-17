@@ -347,6 +347,18 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
     });
   }
 
+  // Relevance entry router (`entryByRelevance`) — once per turn on the OUTER scope,
+  // before the sf-llm-call loop (its loop target), so the chosen cursor is set on
+  // the parent before the boundary inputMapper carries `currentSkillId` inward.
+  if (deps.pickEntryStage) {
+    builder = builder.addFunction(
+      'PickEntry',
+      deps.pickEntryStage as never,
+      STAGE_IDS.PICK_ENTRY,
+      'Pick the starting skill by relevance to the message (entryByRelevance)',
+    );
+  }
+
   builder = builder
     .addSubFlowChartNext(SUBFLOW_IDS.LLM_CALL, llmCallSubflow, 'LLM', {
       inputMapper: (parent) => {

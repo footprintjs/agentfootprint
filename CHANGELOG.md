@@ -5,6 +5,45 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.35.0] - 2026-06-17
+
+### Added — skill-graph follow-ons: scoped `read_skill` + relevance entry routing (proposal 002 v2)
+
+**Scoped `read_skill` (stay on the trail).** `read_skill('id')` is now rejected when `id` is not
+reachable from the current cursor — closing the hole where the model could silently jump out of the
+`from`-gated graph.
+
+- New `graph.reachableSkills(currentSkillId)` (sibling to `nextSkill`): cold start → entry skills;
+  otherwise → the cursor's direct successors ∪ entries \ {cursor}; a decision `tree()` returns all
+  leaves (`read_skill` stays a full escape hatch there).
+- Runtime gate at `toolCalls.ts`: an out-of-set `read_skill` is rejected with a re-prompt naming the
+  allowed skills, the cursor + activations stay unchanged (the model re-picks), and an
+  `agentfootprint.skill.rejected` event fires. **Plain `read_skill` agents (no skillGraph) are
+  byte-for-byte unaffected** (the gate is off when no graph is mounted).
+
+**`entryByRelevance(embedder)` — pick the starting skill by meaning.** Route the *entry* by
+embedding-similarity to the user's message instead of regex.
+
+- Embeds the message + each `when`-passing entry's `description`, cosine-scores, softmaxes into a
+  `relevance` share → starts at the best match. **LLM-free** (an embedder, no extra model call),
+  reproducible given the embedder. Reuses the existing `Embedder` + `cosineSimilarity` + `mockEmbedder`.
+- The ranking lands on `scope.entryScores` (snapshot / commit-log — the "Why this skill?" relevance %).
+  New public types `EntryScore` / `EntryScoring`.
+- Under `entryByRelevance` the entries are **exclusive** — only the picked one loads (token-efficient).
+- The async embedder runs in a once-per-turn **`PickEntry`** stage mounted *off* the ReAct loop (before
+  the Injection Engine), so `nextSkill` and the route triggers stay synchronous (no async leak into the
+  hot loop). Wired in both the flat and grouped charts.
+
+Both features ride **optional** plumbing — agents without the relevant `.skillGraph()` calls are
+unchanged. Designed + adversarially reviewed (panel), then built tests-first: `reachableSkills` unit +
+property, the gate's real-loop functional/integration + back-compat regression, `softmax` + `scoreEntries`
+units, and `entryByRelevance` real-loop tests across reactModes; examples 23 + 24. Full suite 3099 green.
+
+### Still proposed (NOT in this release)
+
+- Grey-area governors (oscillation / fallback-retry caps), the `RouteDecisionRecorder`, build-time graph
+  validation, and the object-literal façade. See `docs/design/skill-graph.md`.
+
 ## [6.34.0] - 2026-06-17
 
 ### Added — skillGraph() `from`-gating keystone: a sticky-cursor skill state machine (proposal 002 v2)

@@ -422,6 +422,8 @@ export {
   type DecisionNode,
   type SkillRouting,
   type SkillRoutingStep,
+  type EntryScore,
+  type EntryScoring,
 } from './lib/injection-engine/index.js';
 
 // Patterns — factory functions composing primitives + core-flow into

@@ -31,6 +31,27 @@
 import { isDevMode } from 'footprintjs';
 
 import type { Injection, InjectionContext, InjectionTrigger } from './types.js';
+import type { Embedder } from '../../memory/embedding/types.js';
+import { cosineSimilarity } from '../../memory/embedding/cosine.js';
+import { softmax } from './softmax.js';
+
+/** One entry candidate's relevance to the user's message. */
+export interface EntryScore {
+  /** The entry skill id. */
+  readonly id: string;
+  /** Raw cosine similarity (message ↔ the skill's description), -1..1. */
+  readonly cosine: number;
+  /** Softmax share across the candidates, 0..1 — the surfaced relevance %. */
+  readonly relevance: number;
+}
+
+/** Result of `graph.scoreEntries(ctx)` — the picked entry + the full ranking. */
+export interface EntryScoring {
+  /** The winning entry id (argmax cosine), or undefined if no candidate. */
+  readonly chosen: string | undefined;
+  /** Every scored candidate, in declaration order. */
+  readonly ranked: readonly EntryScore[];
+}
 
 /** Deterministic routing into a skill, keyed on the last tool result. */
 export interface SkillRouteOptions {
@@ -190,6 +211,14 @@ export interface SkillGraph {
    * skills — `read_skill` stays a full escape hatch there.
    */
   reachableSkills(currentSkillId?: string): readonly string[];
+  /**
+   * Score the entry candidates by relevance to the user's message — present ONLY
+   * when the graph was built with `.entryByRelevance(embedder)`. Embeds
+   * `ctx.userMessage` and each `when`-passing entry's `description`, cosine-scores
+   * them, and softmaxes into a `relevance` share. The agent's PickEntry stage uses
+   * `chosen` as the starting cursor (LLM-free, off the hot loop). Flat graphs only.
+   */
+  scoreEntries?(ctx: InjectionContext, signal?: AbortSignal): Promise<EntryScoring>;
 }
 
 export interface SkillGraphBuilder {
@@ -202,6 +231,15 @@ export interface SkillGraphBuilder {
    *  each leaf is tool-scoped (`autoActivate: 'currentSkill'`) so only the routed
    *  skill's tools reach the LLM — opt out with `{ scopeTools: false }`. */
   tree(root: DecisionNode | Injection, opts?: TreeOptions): SkillGraphBuilder;
+  /**
+   * Pick the STARTING entry by relevance to the user's message — embed the message
+   * + each entry skill's `description`, cosine-score, softmax → start at the best
+   * match. LLM-free (an embedder, no extra model call), reproducible given the
+   * embedder. The surfaced `relevance` % powers the "Why this skill?" panel.
+   * Use INSTEAD of regex `.entry(skill, { when })` for natural-language routing.
+   * Flat graphs only (a decision `tree()` already routes by predicate).
+   */
+  entryByRelevance(embedder: Embedder): SkillGraphBuilder;
   build(): SkillGraph;
 }
 
@@ -233,6 +271,7 @@ export function skillGraph(): SkillGraphBuilder {
   const routes: RouteDecl[] = [];
   let treeRoot: DecisionNode | Injection | undefined;
   let treeScopeTools = true;
+  let entryEmbedder: Embedder | undefined;
 
   const remember = (skill: Injection): string => {
     if (skill.flavor !== 'skill') {
@@ -270,6 +309,10 @@ export function skillGraph(): SkillGraphBuilder {
       if (opts?.scopeTools === false) treeScopeTools = false;
       return builder;
     },
+    entryByRelevance(embedder) {
+      entryEmbedder = embedder;
+      return builder;
+    },
     build() {
       const skills: Injection[] = [];
       const nodes: SkillNode[] = [];
@@ -283,6 +326,10 @@ export function skillGraph(): SkillGraphBuilder {
       // The reachable-set resolver — what `read_skill` may jump to from the cursor
       // (the runtime gate enforces it). Default empty; set per mode below.
       let reachableSkills: (currentSkillId?: string) => readonly string[] = () => [];
+      // The relevance entry scorer — present only with `.entryByRelevance()` (flat).
+      let scoreEntries:
+        | ((ctx: InjectionContext, signal?: AbortSignal) => Promise<EntryScoring>)
+        | undefined;
 
       if (treeRoot) {
         // Decision-tree mode (v3): compile each leaf to a path-conjunction trigger.
@@ -304,8 +351,9 @@ export function skillGraph(): SkillGraphBuilder {
         // both derive from one pure resolver so they can never diverge.
         nextSkill = makeNextSkill(entries, routes);
         reachableSkills = makeReachableSkills(entries, routes);
+        if (entryEmbedder) scoreEntries = makeScoreEntries(entries, skillsById, entryEmbedder);
         for (const [id, skill] of skillsById) {
-          const trigger = deriveTrigger(id, skill, entries, routes, nextSkill);
+          const trigger = deriveTrigger(id, skill, entries, routes, nextSkill, entryEmbedder !== undefined);
           const routing = routingFor(id, entries, routes);
           skills.push({
             ...skill,
@@ -336,6 +384,7 @@ export function skillGraph(): SkillGraphBuilder {
         toMermaid: () => renderMermaid(nodes, edges),
         nextSkill: (ctx: InjectionContext) => nextSkill(ctx),
         reachableSkills: (currentSkillId?: string) => reachableSkills(currentSkillId),
+        ...(scoreEntries && { scoreEntries }),
       };
     },
   };
@@ -369,6 +418,51 @@ function successorsOf(from: string, routes: readonly RouteDecl[]): string[] {
 
 function dedupe(ids: readonly string[]): string[] {
   return [...new Set(ids)];
+}
+
+/**
+ * The relevance entry scorer (`graph.scoreEntries`). Embeds the user's message +
+ * each `when`-passing entry's `description`, cosine-scores them, and softmaxes
+ * into a `relevance` share; `chosen` is the argmax (declaration order breaks ties).
+ * Async (the embedder is async) — runs once per turn in the OFF-LOOP PickEntry
+ * stage, never in the sync route triggers, so `nextSkill` stays synchronous. An
+ * empty candidate set yields `{ chosen: undefined, ranked: [] }` so the agent
+ * falls back to the normal cold-start entry. A throwing embedder is caught by the
+ * PickEntry stage (same fallback).
+ */
+function makeScoreEntries(
+  entries: readonly EntryDecl[],
+  skillsById: ReadonlyMap<string, Injection>,
+  embedder: Embedder,
+): (ctx: InjectionContext, signal?: AbortSignal) => Promise<EntryScoring> {
+  return async (ctx, signal) => {
+    const candidates = entries.filter((e) => {
+      if (!e.when) return true;
+      try {
+        return e.when(ctx);
+      } catch (err) {
+        warnMatcherThrew(`entry "${e.id}"`, err);
+        return false;
+      }
+    });
+    if (candidates.length === 0) return { chosen: undefined, ranked: [] };
+    const qVec = await embedder.embed({ text: ctx.userMessage, ...(signal && { signal }) });
+    const cosines: number[] = [];
+    for (const e of candidates) {
+      const description = skillsById.get(e.id)?.description ?? e.id;
+      const dVec = await embedder.embed({ text: description, ...(signal && { signal }) });
+      cosines.push(cosineSimilarity(qVec, dVec));
+    }
+    const relevances = softmax(cosines);
+    const ranked: EntryScore[] = candidates.map((e, i) => ({
+      id: e.id,
+      cosine: cosines[i]!,
+      relevance: relevances[i]!,
+    }));
+    // argmax by cosine; reduce keeps the FIRST on ties (declaration order).
+    const chosen = ranked.reduce((best, r) => (r.cosine > best.cosine ? r : best)).id;
+    return { chosen, ranked };
+  };
 }
 
 /** Does a single route edge fire for this context? Reads the previous
@@ -454,12 +548,19 @@ function deriveTrigger(
   entries: readonly EntryDecl[],
   routes: readonly RouteDecl[],
   nextSkill: (ctx: InjectionContext) => string | undefined,
+  entryByRelevance: boolean,
 ): InjectionTrigger | null {
-  // Entry wins: a persistent base (always) or intent-conditional (rule).
-  // UNCHANGED from v1 — `currentSkillId` tracks the latest transitioned-into
-  // skill, orthogonal to an always-on base, so entry semantics are non-breaking.
   const entry = entries.find((e) => e.id === id);
   if (entry) {
+    // `.entryByRelevance()` makes the entries EXCLUSIVE candidates: PickEntry picks
+    // ONE (the best match) as the cursor, so only that entry loads (token-efficient).
+    // The same cursor-gated trigger as a route target delivers that.
+    if (entryByRelevance) {
+      return { kind: 'rule', activeWhen: (ctx) => nextSkill(ctx) === id };
+    }
+    // Default (v1): a persistent base (always) or intent-conditional (rule).
+    // `currentSkillId` tracks the latest transitioned-into skill, orthogonal to an
+    // always-on base, so entry semantics are non-breaking without entryByRelevance.
     return entry.when ? { kind: 'rule', activeWhen: entry.when } : { kind: 'always' };
   }
 

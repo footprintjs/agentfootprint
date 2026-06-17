@@ -89,6 +89,10 @@ export interface AgentChartDeps {
 
   // ─ Slot subflows ───────────────────────────────────────────────
   readonly injectionEngineSubflow: FlowChart;
+  /** Relevance entry router (`entryByRelevance`) — a once-per-turn function stage
+   *  mounted before the InjectionEngine (off the ReAct loop). Present only when the
+   *  skill graph was built with a relevance scorer. */
+  readonly pickEntryStage?: (scope: never) => Promise<void>;
   readonly systemPromptSubflow: FlowChart;
   readonly messagesSubflow: FlowChart;
   readonly toolsSubflow: FlowChart;
@@ -211,6 +215,19 @@ export function buildAgentChart(deps: AgentChartDeps): FlowChart {
       injectionKey: memoryInjectionKey(m.id),
       readSubflowId: `sf-memory-read-${m.id}`,
     });
+  }
+
+  // Relevance entry router (`entryByRelevance`) — picks the starting skill by
+  // embedding similarity ONCE per turn, here (before the InjectionEngine, which is
+  // the ReAct loop target), so the async embedder is off the hot loop and the
+  // chosen cursor is set before the engine reads `currentSkillId`.
+  if (deps.pickEntryStage) {
+    builder = builder.addFunction(
+      'PickEntry',
+      deps.pickEntryStage as never,
+      STAGE_IDS.PICK_ENTRY,
+      'Pick the starting skill by relevance to the message (entryByRelevance)',
+    );
   }
 
   builder = builder
