@@ -63,6 +63,13 @@ export interface LoopFrame {
   /** One per key call-llm#k read. */
   readonly contextSources: readonly ContextSource[];
   /**
+   * WALK-ONLY (proposal 008): the proximate tool result for this loop — the most recent
+   * `lastToolResult` committed before this loop's call-llm, with the PRODUCING loop's tool-calls
+   * stage as its `writerId` (the cross-loop provenance edge L4's `walkToRoot` descends along). NOT
+   * in `contextSources` — L3's narrow never scores it. Absent on loop 0 / grouped frames.
+   */
+  readonly proximateToolSource?: ProximateToolSource;
+  /**
    * GROUPED chart only: the `sf-llm-call` mount runtimeStageId this frame was projected from.
    * When set, ALL array indices on this frame (`headArrayIdx`, `llmCallArrayIdx`,
    * `bodyIds`, each `contextSource.writerArrayIdx`) are relative to that subflow's OWN inner
@@ -75,6 +82,16 @@ export interface LoopFrame {
   /** True when incompleteSources is non-empty — "this step read untracked; slice may be
    *  incomplete here". NOT a model-internalized claim (that is undetectable — see Trajectory). */
   readonly untrackedReadsPresent: boolean;
+}
+
+/** The proximate tool result a loop's decision was conditioned on — L4's cross-loop hop edge (proposal 008). */
+export interface ProximateToolSource {
+  /** The committed `{ toolName, result }` (redaction-scrubbed, via commitValueAt). */
+  readonly value: unknown;
+  /** The producing loop's tool-calls stage runtimeStageId — resolves to an EARLIER frame. */
+  readonly writerId: string | undefined;
+  /** Honesty: the call-llm read `history`, NOT this key — an INFERRED proximate, not a direct read. */
+  readonly proximate: true;
 }
 
 /** The run input, re-injected as a synthetic node — a PROXY (args is untracked), never a recorded edge. */
@@ -265,6 +282,22 @@ function projectFrame(
     };
   });
 
+  // Proximate tool source (proposal 008) — the most recent `lastToolResult` committed BEFORE this
+  // loop's call-llm, surfaced WALK-ONLY (NOT in contextSources, so L3's narrow is untouched). Its
+  // writer is the PRODUCING loop's tool-calls stage — the cross-loop provenance edge L4's descent
+  // hops along. FLAT only: in the grouped chart `lastToolResult` lives in the run log outside the
+  // per-scope inner log, so the inner findLastWriter can't reach it (deferred). Honesty: the call-llm
+  // read `history` (the aggregate), NOT this key — so it's an INFERRED proximate (`proximate: true`).
+  let proximateToolSource: ProximateToolSource | undefined;
+  if (subflowScope === undefined && llmCallArrayIdx !== undefined) {
+    const w = findLastWriter(log, 'lastToolResult', llmCallArrayIdx);
+    const wIdx = w !== undefined ? lastIdxOf.get(w.runtimeStageId) : undefined;
+    const v = wIdx !== undefined ? commitValueAt(log, wIdx, 'lastToolResult') : undefined;
+    if (w !== undefined && v !== undefined) {
+      proximateToolSource = { value: v, writerId: w.runtimeStageId, proximate: true };
+    }
+  }
+
   const incompleteSources = llmBundle?.untrackedSources;
   const untrackedReadsPresent = incompleteSources !== undefined && incompleteSources.length > 0;
   return {
@@ -275,6 +308,7 @@ function projectFrame(
     bodyIds,
     intermediateText,
     contextSources,
+    ...(proximateToolSource ? { proximateToolSource } : {}),
     ...(subflowScope !== undefined ? { subflowScope } : {}),
     ...(untrackedReadsPresent ? { incompleteSources } : {}),
     untrackedReadsPresent,

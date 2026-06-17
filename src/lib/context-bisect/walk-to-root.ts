@@ -21,17 +21,15 @@
  * - Three first-class honest stops (never silent): `unseparated-siblings`, `overdetermined-or-incomplete`,
  *   `untracked-origin`.
  *
- * VALIDATION + KNOWN LIMITATION (measure-before-promote — the gate is RED on real agents today):
- * The walk ALGORITHM is validated on a synthetic decision-bug trajectory (the test proves the
- * proximate→root descent works WHEN the trajectory surfaces a tool-output proximate suspect). BUT on a
- * REAL flat agent the `call-llm` reads `history` (the aggregate), NOT `lastToolResult` — so the
- * trajectory surfaces ONLY injection suspects (root-seeded), no hoppable tool proximate. The multi-hop
- * cross-loop DESCENT (L4's novelty) therefore does NOT fire on a real agent yet: the walk narrows to the
- * injection and convicts it at the symptom loop (correct, but equivalent to single-trigger localize for
- * injection roots). The descent's promotion is BLOCKED until the trajectory surfaces tool-output
- * provenance as suspects (a follow-up — enrich the classifier/`assembleTrajectory` to extract per-tool
- * results from `history`/the tool-calls stage). Until then, do NOT claim L4 solves real-agent decision
- * bugs via the descent — only that the algorithm is sound and it convicts the injection root honestly.
+ * VALIDATION (the descent edge is now populated on real agents — proposal 008): `assembleTrajectory`
+ * surfaces each loop's proximate `lastToolResult` on the WALK-ONLY `LoopFrame.proximateToolSource`
+ * field (writer = the PRODUCING loop's tool-calls stage — a cross-loop edge). `writtenByOf` reads it,
+ * so on a real flat agent with tool calls the cross-loop DESCENT fires (proven at the component level:
+ * the enrichment populates the edge on a real trajectory + the algorithm descends on it). It is
+ * WALK-ONLY — not in `contextSources` — so L3's narrow + its measured recall are untouched.
+ * REMAINING: an end-to-end model-based gate (realistic embeddings on a real misdirect agent, root =
+ * the planted instruction) is the final promotion measurement. FLAT only — grouped's run-level
+ * `lastToolResult` lives outside the per-scope inner logs (deferred, degrade-flagged below).
  */
 import type { Embedder } from '../influence-core/index.js';
 import { ablationForSuspect, runAblationProbe, probeFlipped, verdictFor } from './ablation.js';
@@ -129,6 +127,13 @@ function writtenByOf(frame: LoopFrame): Map<string, string | undefined> {
       if (!map.has(tool)) map.set(tool, src.writerId);
     }
   }
+  // The WALK-ONLY proximate tool source (proposal 008) — the cross-loop descent edge. NOT in
+  // contextSources (L3 never scored it); walkTrajectory adds it as a hop candidate.
+  const tool = frame.proximateToolSource;
+  if (tool && typeof (tool.value as { toolName?: unknown })?.toolName === 'string') {
+    const name = (tool.value as { toolName: string }).toolName;
+    if (!map.has(name)) map.set(name, tool.writerId);
+  }
   return map;
 }
 
@@ -211,8 +216,9 @@ export async function walkTrajectory(
     const unseparated =
       beam.length >= 2 && Math.abs(beam[0].recallScore - beam[1].recallScore) < UNSEPARATED_MARGIN;
 
-    // ISOLATE: run-wide ablation of each beam candidate; ablation is the only discriminator.
-    let chosen = beam[0];
+    // ISOLATE: run-wide ablation of each NARROWED injection candidate; ablation is the only
+    // discriminator (a wrong-branch narrow that doesn't flip is never the root).
+    let chosen: { suspectId: string; kind: SuspectKind } = beam[0];
     let chosenVerdict: AblationVerdict | undefined;
     let convicted = false;
     if (opts.rerun) {
@@ -222,26 +228,32 @@ export async function walkTrajectory(
         if (spec === undefined) continue;
         const stats = await runAblationProbe({ embedder: opts.embedder, rerun: opts.rerun }, [spec]);
         ablationsUsed++;
-        const flipped = baselineStable && probeFlipped(stats);
-        if (flipped) {
+        if (baselineStable && probeFlipped(stats)) {
           chosen = cand;
           chosenVerdict = verdictFor(`ablate ${cand.suspectId}`, stats, baselineStable);
           convicted = true;
-          break; // ablation picked this hop's culprit
+          break; // ablation picked this loop's root
         }
       }
     }
 
+    // The proximate tool source (walk-only, proposal 008) is the cross-loop DESCENT edge. When this
+    // loop did NOT convict, follow it back to the loop that PRODUCED the tool output the decision was
+    // conditioned on — that's where a buried root (e.g. the misdirecting instruction) scores + convicts.
+    const toolName =
+      !convicted && frame.proximateToolSource && typeof (frame.proximateToolSource.value as { toolName?: unknown })?.toolName === 'string'
+        ? (frame.proximateToolSource.value as { toolName: string }).toolName
+        : undefined;
+    if (toolName !== undefined) chosen = { suspectId: toolName, kind: 'tool' };
+
     const writer = writtenBy.get(chosen.suspectId);
     const nextFrameIdx = writer !== undefined ? writerFrame.get(writer) : undefined;
-    // Cross-loop only: descend strictly backward to an unvisited earlier frame.
-    const descendIdx = nextFrameIdx !== undefined && nextFrameIdx < frameIdx ? nextFrameIdx : undefined;
+    const descendIdx = nextFrameIdx !== undefined && nextFrameIdx < frameIdx ? nextFrameIdx : undefined; // strictly backward
 
-    const note: RootCauseNote | undefined =
-      writer === undefined ? 'untracked-origin'
-      : opts.rerun && !convicted ? 'overdetermined-or-incomplete'
-      : unseparated ? 'unseparated-siblings'
-      : undefined;
+    // Per-hop honest note: untracked-origin (structural — no provenance writer to descend) is set
+    // regardless of a rerun; unseparated-siblings flags a narrow that couldn't separate the top-2.
+    const inlineNote: RootCauseNote | undefined =
+      writer === undefined ? 'untracked-origin' : unseparated && !convicted ? 'unseparated-siblings' : undefined;
 
     hops.push({
       loopIndex: frame.loopIndex,
@@ -251,19 +263,28 @@ export async function walkTrajectory(
       ...(chosenVerdict ? { verdict: chosenVerdict } : {}),
       ...(writer !== undefined ? { writtenBy: writer } : {}),
       ...(descendIdx !== undefined ? { cameFrom: trajectory.frames[descendIdx].loopIndex } : {}),
-      ...(note ? { note } : {}),
+      ...(inlineNote ? { note: inlineNote } : {}),
     });
 
-    // Stop conditions: root-seeded origin, no earlier frame, or a visited cycle.
+    if (convicted) break; // root found at this loop (injections are same-loop-seeded — terminal)
     const visitKey = `${chosen.suspectId}@${frame.loopIndex}`;
-    if (descendIdx === undefined || visited.has(visitKey)) break;
+    if (descendIdx === undefined || visited.has(visitKey)) break; // dead end / cycle
     visited.add(visitKey);
     frameIdx = descendIdx;
   }
 
-  // root = the DEEPEST (last-walked) hop convicted by ablation.
+  // root = the ablation-convicted hop (the walk breaks there).
   let root: RootCauseHop | undefined;
   for (const hop of hops) if (hop.verdict?.verdict === 'confirmed') root = hop;
+
+  // Terminal honesty note: a rerun ran but the walk ended without a causal root, AND the last hop
+  // had a descendable provenance writer (so it's "could-not-convict", not "untracked-origin").
+  if (opts.rerun && root === undefined && hops.length > 0) {
+    const last = hops[hops.length - 1];
+    if (last.note === undefined && last.writtenBy !== undefined) {
+      hops[hops.length - 1] = { ...last, note: 'overdetermined-or-incomplete' };
+    }
+  }
 
   return {
     hops,

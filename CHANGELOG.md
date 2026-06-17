@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.33.0] - 2026-06-16
+
+### Added — tool-output provenance unblocks L4's cross-loop descent (proposal 008)
+
+- **`assembleTrajectory` now surfaces each loop's proximate tool result** on a new WALK-ONLY
+  `LoopFrame.proximateToolSource` field — the most recent `lastToolResult` committed before that
+  loop's `call-llm`, with the PRODUCING loop's tool-calls stage as its `writerId` (the cross-loop
+  provenance edge `walkToRoot` descends along). FLAT charts only; `proximate: true` marks it as an
+  INFERRED edge (the call-llm read `history`, not this key — honest two-tier claim preserved).
+- **`walkToRoot`'s descent now fires on a real flat agent.** Previously the trajectory surfaced only
+  injection suspects, so the multi-hop cross-loop descent never fired; now it hops along the
+  proximate tool edge from the symptom to the loop that produced it. Component-validated (the real
+  trajectory carries the edge AND the algorithm descends on it; +2 tests). The end-to-end
+  model-based misdirect gate (realistic embeddings) remains the final promotion measurement.
+- **L3 is provably untouched.** The source is WALK-ONLY (NOT in `contextSources`), so
+  `shortlistEarlyCulprits`'s narrow + its measured top-3 10/10 recall are unchanged.
+
 ## [6.32.0] - 2026-06-16
 
 Per-loop context-bug localization: the trajectory now segments the GROUPED agent too, plus

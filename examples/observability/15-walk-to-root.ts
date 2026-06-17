@@ -27,9 +27,10 @@ export const meta = {
     'tool output. The narrow is a proxy; only ablation convicts the root.',
 };
 
-// Controllable embedder: the plant matches the loop-1 DECISION; the tool output matches the ANSWER.
+// Controllable embedder: the plant matches the loop-1 DECISION; the innocent + tool output match the
+// final ANSWER (so at the symptom the plant is BURIED and only the tool output looks relevant).
 const TABLE: Record<string, number[]> = {
-  DECISION: [0, 0, 1], ANSWER: [1, 0, 0], PLANT_TEXT: [0, 0, 1], PROMO_TEXT: [1, 0, 0],
+  DECISION: [0, 0, 1], ANSWER: [1, 0, 0], PLANT_TEXT: [0, 0, 1], ANSWER_TEXT: [1, 0, 0],
 };
 const embedder: Embedder = { dimensions: 3, async embed({ text }) { return TABLE[text] ?? [0, 0, 0]; } };
 
@@ -38,22 +39,22 @@ const inj = (id: string, text: string, writerId: string) => ({
   value: [{ source: 'instructions', sourceId: id, rawContent: text }],
   evidence: { id: `e:${id}`, text: '', ancestorTexts: [] },
 });
-const tool = (name: string, result: string, writerId: string) => ({
-  key: 'lastToolResult', writerId, writerArrayIdx: 0,
-  value: { toolName: name, result },
-  evidence: { id: `e:${name}`, text: '', ancestorTexts: [] },
-});
 const frame = (loopIndex: number, anchor: string, bodyIds: string[], sources: unknown[]) => ({
   loopIndex, llmCallId: `call-llm#${loopIndex}`, llmCallArrayIdx: loopIndex, headArrayIdx: 0,
   bodyIds, intermediateText: anchor, contextSources: sources, untrackedReadsPresent: false,
 });
 
-// loop1 (wrong choice) reads the plant; loop2 (symptom) reads getPromo, written by loop1's tool-calls.
+// loop1 (wrong choice) reads the plant; loop2 (symptom) buries the plant under an innocent, and the
+// proximate tool output `getPromo` (written by loop1's tool-calls tc#1) is the WALK-ONLY descent edge
+// `proximateToolSource` (proposal 008 populates exactly this field from a real agent's commit log).
 const trajectory = {
   frames: [
     frame(0, 'SETUP', ['ie#0'], [inj('plant', 'PLANT_TEXT', 'ie#0')]),
     frame(1, 'DECISION', ['ie#1', 'tc#1'], [inj('plant', 'PLANT_TEXT', 'ie#1')]),
-    frame(2, 'ANSWER', ['ie#2', 'tc#2'], [inj('plant', 'PLANT_TEXT', 'ie#2'), tool('getPromo', 'PROMO_TEXT', 'tc#1')]),
+    {
+      ...frame(2, 'ANSWER', ['ie#2', 'tc#2'], [inj('plant', 'PLANT_TEXT', 'ie#2'), inj('innocent', 'ANSWER_TEXT', 'ie#2')]),
+      proximateToolSource: { value: { toolName: 'getPromo', result: 'ANSWER_TEXT' }, writerId: 'tc#1', proximate: true },
+    },
   ],
   prelude: [], honestyFlags: [],
 } as never;
