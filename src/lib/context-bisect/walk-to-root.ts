@@ -27,8 +27,11 @@
  * so on a real flat agent with tool calls the cross-loop DESCENT fires (proven at the component level:
  * the enrichment populates the edge on a real trajectory + the algorithm descends on it). It is
  * WALK-ONLY — not in `contextSources` — so L3's narrow + its measured recall are untouched.
- * REMAINING: an end-to-end model-based gate (realistic embeddings on a real misdirect agent, root =
- * the planted instruction) is the final promotion measurement. FLAT only — grouped's run-level
+ * END-TO-END VALIDATED (ctxbug/harness/eval-l4-walk.mjs): on a REAL agentfootprint misdirect agent
+ * with a realistic embedder (bge) for the narrow and a REAL causal ablation (rebuild the agent WITHOUT
+ * the planted fact → the outcome flips), the walk BURIES the plant at the symptom, DESCENDS via the
+ * proximate tool edge to the wrong-decision loop, and ablation convicts `root = the planted
+ * instruction` — where flat single-trigger localize does not. FLAT only — grouped's run-level
  * `lastToolResult` lives outside the per-scope inner logs (deferred, degrade-flagged below).
  */
 import type { Embedder } from '../influence-core/index.js';

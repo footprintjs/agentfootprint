@@ -5,9 +5,11 @@ then built per the walk-only design: `LoopFrame.proximateToolSource` (flat-only,
 + `writtenByOf` reads it + the walk descends via the proximate edge. 13 walk tests + the enrichment +
 L3-unchanged tests + example 15; af suite 3064 green. **L4's real-agent descent is UNBLOCKED**, proven
 at the COMPONENT level (the enrichment populates the cross-loop edge on a REAL trajectory — `writerId =
-tool-calls#k` — AND the algorithm descends on it). L3 is provably untouched (walk-only). REMAINING: an
-end-to-end model-based gate (a real misdirect agent with realistic embeddings, root = the planted
-instruction) is the final promotion measurement — deferred (needs a real-agent misdirect harness).
+tool-calls#k` — AND the algorithm descends on it). L3 is provably untouched (walk-only). **END-TO-END
+GATE PASSES** (`ctxbug/harness/eval-l4-walk.mjs`): on a real agentfootprint misdirect agent with the bge
+embedder + a real causal ablation (rebuild without the plant → flip), the walk buries the plant at the
+symptom, DESCENDS via the proximate tool edge to the wrong-decision loop, and ablation convicts `root =
+the planted instruction` — where flat localize does not. **L4 PROMOTED.**
 
 > **Review outcome (2026-06-16, two-lens, source-verified).** Mechanism CONFIRMED correct
 > (`findLastWriter` exclusive-`llmCallArrayIdx` → the prior-loop `tool-calls#k` writer; `commitValueAt`
