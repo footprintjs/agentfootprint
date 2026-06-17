@@ -6,19 +6,26 @@
  * token-efficient loading the engine already does becomes *declared* and *drawn*.
  *
  *   .entry(skill, { when? })              → trigger: `always` (or `rule` if when)
- *   .route(a, b, { onToolReturn })        → trigger on b: `on-tool-return`
- *   .route(a, b, { when })                → trigger on b: `rule` over ctx.lastToolResult
+ *   .route(a, b, { onToolReturn | when }) → b compiles to a CURSOR-GATED `rule`
  *   (a skill with no declared incoming edge keeps its default `llm-activated`
  *    trigger — still reachable via `read_skill`, drawn as a dashed "model" edge)
  *
- * v1 is **zero engine change**: the generic evaluator (evaluator.ts) already
- * activates a `'skill'`-flavor Injection by ANY trigger kind. `toMermaid()`
- * renders the declared graph (declared === drawn). Scoped `read_skill` (gating the
- * model-reachable set by graph position) is deferred to v2 — see proposal 002.
+ * **v2 keystone — `from` IS enforced (a sticky cursor state machine).** A skill
+ * graph is a state machine over skills; the engine tracks which node it is in via
+ * `InjectionContext.currentSkillId` (the cursor). One pure resolver — `nextSkill(ctx)`
+ * (see `makeNextSkill`) — is the single source of truth: each route target B
+ * compiles to the trigger `nextSkill(ctx) === B`, which delivers `from`-gating
+ * (an edge `A→B` fires only while the cursor is on A — no cross-skill edge bleed),
+ * stickiness (the cursor stays on B until an edge leaves B), and a clean handoff
+ * (B deactivates the same iteration C activates). The Injection Engine's Evaluate
+ * stage advances the cursor with the SAME ctx (`currentSkillId = nextSkill(ctx)`),
+ * so the active set and the persisted cursor never disagree. The DRAWN edge kind
+ * (`on-tool-return` vs `predicate`) is preserved for rendering even though the
+ * compiled trigger is always a `rule`. `toMermaid()` renders declared === drawn.
  *
- * Edges are model-additive + stateless: each target's trigger is self-contained
- * (it reads `ctx.lastToolResult`), so `from` is informational for the drawing and
- * is NOT enforced — matching the engine's per-iteration evaluation model.
+ * A decision `tree()` routes per-iteration by stable `ctx` predicates (no cursor)
+ * and is unaffected by `from`-gating. Scoped `read_skill` (bounding the
+ * model-reachable set by graph position) remains deferred — see proposal 002.
  */
 
 import { isDevMode } from 'footprintjs';
@@ -160,6 +167,18 @@ export interface SkillGraph {
   readonly nodes: readonly SkillNode[];
   /** A Mermaid flowchart of the declared graph — declared === drawn. */
   toMermaid(): string;
+  /**
+   * The CURSOR resolver — given an iteration context, where is the graph next?
+   * Returns the skill id the graph should be *in* after this iteration:
+   *   • cold start (`ctx.currentSkillId` unset) → the first matching `entry`;
+   *   • a `from`-gated route whose predicate matches `ctx.lastToolResult` → its target;
+   *   • otherwise the current cursor unchanged (sticky stay).
+   * Pure + deterministic — the single source of truth shared by the compiled
+   * route triggers and the agent loop's cursor-update stage, so the two can never
+   * disagree. Flat entry/route graphs only; a decision `tree()` routes per-iteration
+   * by predicate (no cursor) and returns the unchanged `ctx.currentSkillId`.
+   */
+  nextSkill(ctx: InjectionContext): string | undefined;
 }
 
 export interface SkillGraphBuilder {
@@ -245,6 +264,12 @@ export function skillGraph(): SkillGraphBuilder {
       const nodes: SkillNode[] = [];
       const edges: SkillEdge[] = [];
 
+      // The cursor resolver — the single source of truth for `from`-gated, sticky
+      // routing. Flat mode wires it into each route target's trigger AND returns it
+      // for the loop's cursor-update stage. Tree mode has no cursor (per-iteration
+      // predicate routing), so it stays a no-op there.
+      let nextSkill: (ctx: InjectionContext) => string | undefined = (ctx) => ctx.currentSkillId;
+
       if (treeRoot) {
         // Decision-tree mode (v3): compile each leaf to a path-conjunction trigger.
         compileTree(
@@ -258,9 +283,11 @@ export function skillGraph(): SkillGraphBuilder {
         );
         attachExactlyOneLeafMonitor(skills);
       } else {
-        // Flat entry/route mode (v1).
+        // Flat entry/route mode (v1 + v2 keystone). `from`-gating + sticky cursor
+        // both derive from one pure resolver so they can never diverge.
+        nextSkill = makeNextSkill(entries, routes);
         for (const [id, skill] of skillsById) {
-          const trigger = deriveTrigger(id, skill, entries, routes);
+          const trigger = deriveTrigger(id, skill, entries, routes, nextSkill);
           const routing = routingFor(id, entries, routes);
           skills.push({
             ...skill,
@@ -289,45 +316,110 @@ export function skillGraph(): SkillGraphBuilder {
         edges,
         nodes,
         toMermaid: () => renderMermaid(nodes, edges),
+        nextSkill: (ctx: InjectionContext) => nextSkill(ctx),
       };
     },
   };
   return builder;
 }
 
+/** Does a single route edge fire for this context? Reads the previous
+ *  iteration's tool result; `onToolReturn` matches the tool NAME, `when` runs
+ *  the predicate over the result. No match (and no tool result) → false. */
+function routeMatches(r: RouteDecl, ctx: InjectionContext): boolean {
+  const ltr = ctx.lastToolResult;
+  if (!ltr) return false;
+  if (r.onToolReturn) return toolMatcher(r.onToolReturn)(ltr.toolName);
+  return r.when ? r.when(ltr) : false;
+}
+
+/**
+ * The cursor resolver (the keystone). Pure + deterministic. Given the iteration
+ * context, returns the skill the graph should be *in* after this iteration:
+ *   • cold start (`currentSkillId` unset) → first `entry` whose `when` passes
+ *     (an `always`-entry — no `when` — matches unconditionally);
+ *   • a `from`-gated route (`fromId === currentSkillId`) whose predicate matches
+ *     `lastToolResult`, first by declaration order → its target (the transition);
+ *   • otherwise the current cursor unchanged (sticky stay).
+ *
+ * Each candidate predicate runs in its OWN try/catch so one throwing edge can't
+ * block its siblings or crash the loop — a throw is treated as "no match" and,
+ * in dev mode, warned. This is the design's `routeForResult` pin-table target.
+ */
+function makeNextSkill(
+  entries: readonly EntryDecl[],
+  routes: readonly RouteDecl[],
+): (ctx: InjectionContext) => string | undefined {
+  return (ctx) => {
+    const cur = ctx.currentSkillId;
+    if (cur === undefined) {
+      // Cold start: declaration-order first entry whose intent predicate passes.
+      for (const e of entries) {
+        if (!e.when) return e.id;
+        try {
+          if (e.when(ctx)) return e.id;
+        } catch (err) {
+          warnMatcherThrew(`entry "${e.id}"`, err);
+        }
+      }
+      return undefined;
+    }
+    // Transition: first from-gated deterministic edge that fires.
+    for (const r of routes) {
+      if (r.fromId !== cur) continue;
+      if (!r.when && !r.onToolReturn) continue; // model edges don't auto-fire
+      try {
+        if (routeMatches(r, ctx)) return r.toId;
+      } catch (err) {
+        warnMatcherThrew(`route ${r.fromId}→${r.toId}`, err);
+      }
+    }
+    return cur; // sticky stay — no edge out of the current skill fired
+  };
+}
+
+function warnMatcherThrew(edge: string, err: unknown): void {
+  if (!isDevMode()) return;
+  // eslint-disable-next-line no-console
+  console.warn(
+    `agentfootprint skillGraph: ${edge} predicate threw — treated as no-match. ` +
+      `Predicates must be pure + total. ${err instanceof Error ? err.message : String(err)}`,
+  );
+}
+
 /** Compile a skill's incoming edges → one injection trigger (or null = keep the
- *  skill's default `llm-activated` trigger, i.e. model-reachable via read_skill). */
+ *  skill's default `llm-activated` trigger, i.e. model-reachable via read_skill).
+ *
+ *  A route target B is active iff `nextSkill(ctx) === B`. That single expression
+ *  delivers all three keystone properties from ONE source of truth:
+ *    • `from`-gating  — `nextSkill` only fires an edge `A→B` while the cursor is
+ *      on A, so the edge no longer bleeds into an unrelated skill D (the v1 bug);
+ *    • stickiness     — when the cursor is on B and no edge leaves B, `nextSkill`
+ *      returns B (sticky stay), so B re-activates each iteration;
+ *    • clean handoff  — the iteration a `B→C` edge fires, `nextSkill` returns C,
+ *      so B deactivates the SAME step C activates — no double-active overlap.
+ *  Because the loop's cursor-update stage is ALSO `currentSkillId = nextSkill(ctx)`,
+ *  the trigger and the cursor can never disagree. */
 function deriveTrigger(
   id: string,
   _skill: Injection,
   entries: readonly EntryDecl[],
   routes: readonly RouteDecl[],
+  nextSkill: (ctx: InjectionContext) => string | undefined,
 ): InjectionTrigger | null {
   // Entry wins: a persistent base (always) or intent-conditional (rule).
+  // UNCHANGED from v1 — `currentSkillId` tracks the latest transitioned-into
+  // skill, orthogonal to an always-on base, so entry semantics are non-breaking.
   const entry = entries.find((e) => e.id === id);
   if (entry) {
     return entry.when ? { kind: 'rule', activeWhen: entry.when } : { kind: 'always' };
   }
 
-  // Deterministic incoming edges (when / onToolReturn).
+  // Deterministic incoming edges (when / onToolReturn) → cursor-gated + sticky.
   const incoming = routes.filter((r) => r.toId === id && (r.when || r.onToolReturn));
   if (incoming.length === 0) return null; // model-reachable — keep default trigger
 
-  // A single bare on-tool-return → the clean native trigger.
-  if (incoming.length === 1 && incoming[0]!.onToolReturn && !incoming[0]!.when) {
-    return { kind: 'on-tool-return', toolName: incoming[0]!.onToolReturn };
-  }
-
-  // Otherwise OR all matchers into one rule over the last tool result.
-  const matchers = incoming.map((r) => {
-    if (r.onToolReturn) {
-      const test = toolMatcher(r.onToolReturn);
-      return (ctx: InjectionContext) => !!ctx.lastToolResult && test(ctx.lastToolResult.toolName);
-    }
-    const when = r.when!;
-    return (ctx: InjectionContext) => !!ctx.lastToolResult && when(ctx.lastToolResult);
-  });
-  return { kind: 'rule', activeWhen: (ctx) => matchers.some((m) => m(ctx)) };
+  return { kind: 'rule', activeWhen: (ctx) => nextSkill(ctx) === id };
 }
 
 /** Walk a decision tree → push each leaf skill (with its path-conjunction trigger,

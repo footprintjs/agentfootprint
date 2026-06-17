@@ -5,6 +5,45 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.34.0] - 2026-06-17
+
+### Added — skillGraph() `from`-gating keystone: a sticky-cursor skill state machine (proposal 002 v2)
+
+- **`skillGraph()` route edges are now `from`-gated.** A skill graph is a state machine over skills; the
+  engine tracks which node it is in via a persisted cursor `InjectionContext.currentSkillId`. An edge
+  `A → B on tool X` now fires **only while the cursor is on A** — killing the v1 cross-skill "edge bleed"
+  where the same edge also fired while in an unrelated skill D that produced X. (v1 documented `from` as
+  informational and NOT enforced; this enforces it.)
+- **One pure resolver is the single source of truth: `graph.nextSkill(ctx)`.** Cold start → the first
+  matching `entry`; a `from`-gated route whose predicate matches `lastToolResult` → its target; else the
+  current cursor (sticky stay). Each route target compiles to the trigger `nextSkill(ctx) === id`, which
+  delivers `from`-gating + stickiness (you stay in a skill until an edge leaves it) + a clean handoff
+  (the leaving skill deactivates the same iteration the next one activates). Each candidate predicate runs
+  in its own try/catch (a throw = no-match, dev-warned) so one bad edge can't crash the loop.
+- **The cursor advances inside the Injection Engine** with the SAME ctx the route triggers gate on, so the
+  active set and the persisted cursor can never disagree (no off-by-one). Threaded across the flat
+  (`buildAgentChart`) and grouped (`buildDynamicAgentChart` + `sf-llm-call`) mount mappers; reset per turn
+  at seed (each turn re-enters via the entry router). Plumbed via `Agent` + `AgentBuilder.skillGraph()`.
+- **Decision `tree()` graphs are unaffected** (they route per-iteration by stable `ctx` predicates, no
+  cursor). Agents without a `skillGraph()` are unchanged (`currentSkillId` stays undefined).
+- Reviewed by a 3-lens panel (verdict: SHIP WITH NITS — both high-risk properties confirmed against
+  source); covered by per-reactMode (`dynamic` / `classic` / `dynamic-grouped`) real-loop e2e tests
+  asserting route-firing AND edge-bleed prevention via the `agentfootprint.context.evaluated` emit.
+
+### Changed
+
+- **`AgentBuilder.skillGraph(graph)` now requires `graph.nextSkill`** (every `skillGraph().build()` supplies
+  it). Pass the full `build()` result; for a bare skill list use `.skills({ list })`. Removes a stale-resolver
+  footgun when two graphs are mounted.
+- Route targets now compile to a cursor-gated `rule` trigger; the drawn edge kind (`on-tool-return` /
+  `predicate`) is preserved for `toMermaid()`.
+
+### Still proposed (NOT in this release)
+
+- The runtime activation gate at `toolCalls.ts` (no `allowedSet` enforcement yet), the scoped `read_skill`
+  enum, the `'score-match'` entry strategy, grey-area governors, the `RouteDecisionRecorder`, build-time
+  validation, and the object-literal façade. See `docs/design/skill-graph.md`.
+
 ## [6.33.0] - 2026-06-16
 
 ### Added — tool-output provenance unblocks L4's cross-loop descent (proposal 008)

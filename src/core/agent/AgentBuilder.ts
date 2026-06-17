@@ -19,7 +19,7 @@ import {
   type ResolvedOutputFallback,
 } from '../outputFallback.js';
 import type { CachePolicy, CacheStrategy } from '../../cache/types.js';
-import type { Injection } from '../../lib/injection-engine/types.js';
+import type { Injection, InjectionContext } from '../../lib/injection-engine/types.js';
 import { defineInstruction } from '../../lib/injection-engine/factories/defineInstruction.js';
 import type { MemoryDefinition } from '../../memory/define.types.js';
 import type { ReliabilityConfig } from '../../reliability/types.js';
@@ -66,6 +66,10 @@ export class AgentBuilder {
   private cacheStrategyOverride?: CacheStrategy;
   private readonly registry: ToolRegistryEntry[] = [];
   private readonly injectionList: Injection[] = [];
+  /** Captured from `.skillGraph(graph)` — the cursor resolver the Injection
+   *  Engine uses to `from`-gate route triggers. Undefined unless a graph with
+   *  route edges was mounted. */
+  private skillGraphNextSkill?: (ctx: InjectionContext) => string | undefined;
   private readonly memoryList: MemoryDefinition[] = [];
   /**
    * Optional terminal contract — see `outputSchema()`. Stored on the
@@ -356,8 +360,18 @@ export class AgentBuilder {
    *     .build();
    *   Agent.create({ provider }).skillGraph(graph).build();
    */
-  skillGraph(graph: { skills: readonly Injection[] }): this {
+  skillGraph(graph: {
+    skills: readonly Injection[];
+    nextSkill: (ctx: InjectionContext) => string | undefined;
+  }): this {
     for (const skill of graph.skills) this.injection(skill);
+    // Capture the cursor resolver so the Injection Engine can `from`-gate route
+    // triggers against the persisted `currentSkillId`. `nextSkill` is REQUIRED
+    // (every `skillGraph().build()` supplies it) — assigned directly so two
+    // `.skillGraph()` calls can't leave a stale resolver from the first graph
+    // gating the second graph's topology. Pass the full `build()` result here;
+    // for a bare skill list use `.skills({ list })` instead.
+    this.skillGraphNextSkill = graph.nextSkill;
     return this;
   }
 
@@ -831,6 +845,7 @@ export class AgentBuilder {
       this.reliabilityConfig,
       this.thinkingHandlerValue,
       this.thinkingBudgetValue,
+      this.skillGraphNextSkill,
     );
     // Attach builder-collected recorders so they receive events from
     // the very first run. Mirrors what consumers would do post-build

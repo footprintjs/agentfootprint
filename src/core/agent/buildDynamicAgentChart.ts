@@ -190,10 +190,17 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
           // (the flat/default chart carries it via the persistent parent scope).
           priorActiveByslot:
             (parent.activeByslot as ActiveBySlot | undefined) ?? EMPTY_ACTIVE_BY_SLOT,
+          // Skill-graph cursor from the previous iteration (carried into sf-llm-call
+          // by its outer boundary below). The `from`-gate for the route triggers.
+          currentSkillId: parent.currentSkillId as string | undefined,
         }),
         outputMapper: (sf) => ({
           activeInjections: sf.activeInjections,
           activeByslot: sf.activeByslot,
+          // Advanced cursor — bubbled up under its own key (sf-llm-call's
+          // `currentSkillId` is a readonly input here), then mapped onto the
+          // ReAct parent's mutable currentSkillId by the outer outputMapper.
+          nextSkillCursor: sf.nextSkillCursor,
         }),
         arrayMerge: ArrayMergeMode.Replace,
       },
@@ -361,6 +368,9 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
           recentHitRate: p.recentHitRate,
           activatedInjectionIds: p.activatedInjectionIds,
           lastToolResult: p.lastToolResult,
+          // Skill-graph cursor carried into sf-llm-call (like activatedInjectionIds
+          // / lastToolResult — a direct cross-iteration read, not a prior* alias).
+          currentSkillId: p.currentSkillId,
           ...memoryKeys,
           // Cross-iteration accumulators under prior* aliases — frozen
           // here, copied to writable working keys by dynamicTurnSeed.
@@ -392,6 +402,9 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
           cumEstimatedUsd: s.cumEstimatedUsd,
           costBudgetHit: s.costBudgetHit,
           skillHistory: s.skillHistory,
+          // Advanced skill-graph cursor bubbled back for the next iteration
+          // (the inner injection engine wrote it under nextSkillCursor).
+          currentSkillId: s.nextSkillCursor,
         };
       },
       // llmLatestToolCalls / thinkingBlocks / skillHistory are arrays —

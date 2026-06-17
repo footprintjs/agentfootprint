@@ -241,6 +241,14 @@ const billing = defineSkill({
   body: 'Confirm identity before processing refunds.',
   tools: [refundTool],
 });
+// A declarative `skillGraph()` EXISTS + is usable (lib/injection-engine/skillGraph.ts,
+// proposal 002 v1): a fluent builder — .entry(skill,{when?}) .route(from,to,{when|onToolReturn})
+// .tree(decide(...)) .build() + toMermaid(). Predicate-on-tool-result routes + decision trees
+// work today. GATED v2 hardening (NOT built): `from`-gating via a new `currentSkillId` on
+// InjectionContext (v1 does NOT enforce `from` → cross-skill edge bleed), per-matcher try/catch
+// (skillGraph.ts:330 ORs via .some()), scoped read_skill gate at toolCalls.ts, a 'score-match'
+// entry strategy, grey-area governors, RouteDecisionRecorder, build-time validation.
+// Spec + how-to-use: docs/design/skill-graph-spec.md; full v2 design: docs/design/skill-graph.md.
 
 // Developer-supplied data (not behavior)
 const userProfile = defineFact({

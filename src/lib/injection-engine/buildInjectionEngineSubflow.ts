@@ -74,6 +74,13 @@ export interface InjectionEngineConfig {
    * declarative.
    */
   readonly injections: readonly Injection[];
+  /**
+   * The skill-graph CURSOR resolver (`graph.nextSkill`), present only when the
+   * agent was built with `.skillGraph()`. The Evaluate stage advances the cursor
+   * with the SAME `ctx` the triggers gate on, so trigger ↔ cursor never diverge
+   * (the keystone). Absent → `currentSkillId` is never written (no graph routing).
+   */
+  readonly nextSkill?: (ctx: InjectionContext) => string | undefined;
 }
 
 // ── Route / Delta shapes (visible stage state; no new event contract) ────
@@ -126,6 +133,10 @@ interface InjectionEngineArgs {
   activatedInjectionIds?: readonly string[];
   /** Last turn's per-slot active set, carried by the mount mappers. */
   priorActiveByslot?: ActiveBySlot;
+  /** The skill-graph cursor as of the previous iteration (the `from`-gate the
+   *  route triggers compare against). Carried by the mount mappers; undefined
+   *  on cold start and for non-skillGraph agents. */
+  currentSkillId?: string;
 }
 
 /**
@@ -140,7 +151,7 @@ export function buildInjectionEngineSubflow(config: InjectionEngineConfig): Flow
   })
     .addFunction(
       'Evaluate',
-      makeEvaluateStage(injections),
+      makeEvaluateStage(injections, config.nextSkill),
       'evaluate',
       'Evaluate every Injection trigger; produce activeInjections + metadata',
     )
@@ -174,7 +185,10 @@ function gatherStage(scope: TypedScope<InjectionEngineState>): void {
 
 // ── Stage 2: Evaluate (logic identical to the old single stage) ──────────
 
-function makeEvaluateStage(injections: readonly Injection[]) {
+function makeEvaluateStage(
+  injections: readonly Injection[],
+  nextSkill?: (ctx: InjectionContext) => string | undefined,
+) {
   return (scope: TypedScope<InjectionEngineState>): void => {
     const args = scope.$getArgs<InjectionEngineArgs>();
 
@@ -184,7 +198,18 @@ function makeEvaluateStage(injections: readonly Injection[]) {
       history: args.history ?? [],
       ...(args.lastToolResult && { lastToolResult: args.lastToolResult }),
       activatedInjectionIds: args.activatedInjectionIds ?? [],
+      ...(args.currentSkillId !== undefined && { currentSkillId: args.currentSkillId }),
     };
+
+    // KEYSTONE cursor advance — derive the next cursor from the SAME ctx the
+    // route triggers gate on (`nextSkill(ctx) === id`), so the active set and the
+    // stored cursor can never disagree. Written to a DISTINCT output key
+    // (`nextSkillCursor`) because `currentSkillId` arrives as a readonly INPUT
+    // here; the mount's outputMapper maps it onto the parent's mutable
+    // `currentSkillId` for the next iteration. Skill-graph agents only.
+    if (nextSkill) {
+      scope.$setValue('nextSkillCursor', nextSkill(ctx));
+    }
 
     const evaluation = evaluateInjections(injections, ctx);
 

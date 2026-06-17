@@ -353,6 +353,13 @@ export interface AgentState {
    *  Maintained by the UpdateSkillHistory function stage; consumed
    *  by CacheGate's skill-churn rule. */
   skillHistory: readonly (string | undefined)[];
+  /** The skill-graph CURSOR — which skill node a `skillGraph()` agent is
+   *  currently *in*, persisted across ReAct iterations. Advanced each iteration
+   *  by the Injection Engine (`currentSkillId = graph.nextSkill(ctx)`) and
+   *  carried by the mount mappers; reset to `undefined` per turn at seed (each
+   *  turn re-enters via the entry router). `from`-gates the route triggers.
+   *  Undefined for agents without a skill graph. */
+  currentSkillId?: string;
 
   // ── Policy halt state (v2.12) ───────────────────────────────
   /** Set when a `PermissionChecker` returns `{ result: 'halt', ... }`.

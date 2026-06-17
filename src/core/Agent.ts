@@ -67,7 +67,7 @@ import { buildSystemPromptSlot } from './slots/buildSystemPromptSlot.js';
 import { buildMessagesSlot } from './slots/buildMessagesSlot.js';
 import { buildToolsSlot, type ProviderToolCache } from './slots/buildToolsSlot.js';
 import { buildInjectionEngineSubflow } from '../lib/injection-engine/buildInjectionEngineSubflow.js';
-import type { Injection } from '../lib/injection-engine/types.js';
+import type { Injection, InjectionContext } from '../lib/injection-engine/types.js';
 import { applyOutputFallback, type ResolvedOutputFallback } from './outputFallback.js';
 import {
   buildCheckpoint,
@@ -155,6 +155,10 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    * InjectionEngine subflow; active set is filtered by slot subflows.
    */
   private readonly injections: readonly Injection[];
+  /** Skill-graph cursor resolver (`graph.nextSkill`), set when built via
+   *  `.skillGraph(graph)`. Plumbed into the Injection Engine so route triggers
+   *  are `from`-gated against the persisted `currentSkillId`. */
+  private readonly skillGraphNextSkill?: (ctx: InjectionContext) => string | undefined;
   private readonly pricingTable?: PricingTable;
   private readonly costBudget?: number;
   private readonly permissionChecker?: PermissionChecker;
@@ -307,6 +311,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     reliabilityConfig?: ReliabilityConfig,
     thinkingHandlerValue?: ThinkingHandler | null,
     thinkingBudgetValue?: number,
+    skillGraphNextSkill?: (ctx: InjectionContext) => string | undefined,
   ) {
     super();
     this.provider = opts.provider;
@@ -327,6 +332,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     this.cacheStrategy = cacheStrategy ?? getDefaultCacheStrategy(opts.provider.name);
     this.registry = registry;
     this.injections = injections;
+    this.skillGraphNextSkill = skillGraphNextSkill;
     this.memories = memories;
     this.outputSchemaParser = outputSchemaParser;
     this.outputFallbackCfg = outputFallbackCfg;
@@ -1010,6 +1016,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
 
     const injectionEngineSubflow = buildInjectionEngineSubflow({
       injections: this.injections,
+      ...(this.skillGraphNextSkill && { nextSkill: this.skillGraphNextSkill }),
     });
     const systemPromptSubflow = buildSystemPromptSlot({
       prompt: systemPromptValue,

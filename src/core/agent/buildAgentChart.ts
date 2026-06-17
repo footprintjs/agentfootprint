@@ -236,12 +236,17 @@ export function buildAgentChart(deps: AgentChartDeps): FlowChart {
           // the (flat) parent scope; empty on turn 1.
           priorActiveByslot:
             (parent.activeByslot as ActiveBySlot | undefined) ?? EMPTY_ACTIVE_BY_SLOT,
+          // Skill-graph cursor as of the previous iteration — the `from`-gate the
+          // route triggers compare against. Undefined on cold start / no graph.
+          currentSkillId: parent.currentSkillId as string | undefined,
         }),
         // Carry activeByslot back to parent so next turn's inputMapper can
-        // feed it as priorActiveByslot (the Delta round-trip).
+        // feed it as priorActiveByslot (the Delta round-trip). currentSkillId is
+        // the advanced cursor for the next iteration (scalar → always replaced).
         outputMapper: (sf) => ({
           activeInjections: sf.activeInjections,
           activeByslot: sf.activeByslot,
+          currentSkillId: sf.nextSkillCursor,
         }),
         // CRITICAL: footprintjs's default `applyOutputMapping`
         // CONCATENATES arrays from subflow output with the parent's

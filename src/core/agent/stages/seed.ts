@@ -119,6 +119,10 @@ export function buildSeedStage(deps: SeedStageDeps): (scope: TypedScope<AgentSta
     scope.cachingDisabled = deps.cachingDisabled;
     scope.recentHitRate = undefined;
     scope.skillHistory = [];
+    // Skill-graph cursor — reset per turn so each new user message re-enters the
+    // graph through the entry router (cold start). The Injection Engine advances
+    // it each iteration; undefined for agents without a skillGraph().
+    scope.currentSkillId = undefined;
 
     typedEmit(scope, 'agentfootprint.agent.turn_start', {
       turnIndex: 0,

@@ -105,6 +105,18 @@ export interface InjectionContext {
    * in the active set on subsequent iterations until turn end.
    */
   readonly activatedInjectionIds: readonly string[];
+  /**
+   * The skill-graph CURSOR — which skill node the graph is currently
+   * *in*, persisted across iterations. Undefined before the first entry
+   * (cold start). `skillGraph()` route edges are `from`-gated against it:
+   * an edge `A → B` only fires while `currentSkillId === 'A'`, which kills
+   * cross-skill edge bleed (an edge firing while in an unrelated skill).
+   *
+   * Set by the loop's cursor-update stage to `graph.nextSkill(ctx)` each
+   * iteration; absent for agents that don't use `skillGraph()`. Plain
+   * `rule`/`always`/`on-tool-return` predicates may ignore it.
+   */
+  readonly currentSkillId?: string;
 }
 
 // ─── The primitive ─────────────────────────────────────────────────

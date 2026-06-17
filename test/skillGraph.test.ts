@@ -7,7 +7,15 @@
 
 import { describe, it, expect, vi } from 'vitest';
 import { enableDevMode, disableDevMode } from 'footprintjs';
-import { skillGraph, decide, defineSkill, defineInstruction, Agent, mock } from '../src/index.js';
+import {
+  skillGraph,
+  decide,
+  defineSkill,
+  defineInstruction,
+  defineTool,
+  Agent,
+  mock,
+} from '../src/index.js';
 import { evaluateInjections } from '../src/lib/injection-engine/index.js';
 import type { InjectionContext } from '../src/lib/injection-engine/types.js';
 
@@ -34,26 +42,44 @@ describe('skillGraph — edge → trigger compilation', () => {
     expect(g.skills.find((s) => s.id === 'b')!.trigger.kind).toBe('rule');
   });
 
-  it('route onToolReturn → on-tool-return trigger; route when → rule over lastToolResult', () => {
+  it('route compiles to a cursor-gated rule (onToolReturn matches the tool name)', () => {
+    // v2 keystone: route targets are `from`-gated against the cursor, so a single
+    // bare onToolReturn is no longer the native `on-tool-return` trigger — it must
+    // also check the cursor. The EDGE is still drawn as on-tool-return (provenance
+    // unchanged); only the compiled trigger is a cursor-gated rule.
     const a = skill('a');
     const b = skill('b');
+    const g = skillGraph().entry(a).route(a, b, { onToolReturn: 'lookup' }).build();
+
+    const tb = g.skills.find((s) => s.id === 'b')!.trigger;
+    expect(tb.kind).toBe('rule');
+    const fire = (tb as { activeWhen: (c: InjectionContext) => boolean }).activeWhen;
+    // from-gated: only fires while the cursor is on the edge's source 'a'
+    expect(fire(ctx({ currentSkillId: 'a', lastToolResult: { toolName: 'lookup', result: 'x' } }))).toBe(true);
+    // cross-skill edge bleed PREVENTED: same tool result, cursor elsewhere
+    expect(fire(ctx({ currentSkillId: 'd', lastToolResult: { toolName: 'lookup', result: 'x' } }))).toBe(false);
+    // sticky: stays active while it IS the cursor, even with no matching result
+    expect(fire(ctx({ currentSkillId: 'b' }))).toBe(true);
+    // right source, wrong tool name → no fire
+    expect(fire(ctx({ currentSkillId: 'a', lastToolResult: { toolName: 'other', result: 'x' } }))).toBe(false);
+  });
+
+  it('route when → cursor-gated rule over lastToolResult', () => {
+    const a = skill('a');
     const c = skill('c');
     const g = skillGraph()
       .entry(a)
-      .route(a, b, { onToolReturn: 'lookup' })
       .route(a, c, { when: (r) => r.toolName === 'probe' && r.result.includes('hit') })
       .build();
-
-    const tb = g.skills.find((s) => s.id === 'b')!.trigger;
-    expect(tb.kind).toBe('on-tool-return');
-    expect((tb as { toolName: string }).toolName).toBe('lookup');
 
     const tc = g.skills.find((s) => s.id === 'c')!.trigger;
     expect(tc.kind).toBe('rule');
     const fire = (tc as { activeWhen: (c: InjectionContext) => boolean }).activeWhen;
-    expect(fire(ctx({ lastToolResult: { toolName: 'probe', result: 'a hit' } }))).toBe(true);
-    expect(fire(ctx({ lastToolResult: { toolName: 'probe', result: 'miss' } }))).toBe(false);
-    expect(fire(ctx({}))).toBe(false); // no tool result yet
+    expect(fire(ctx({ currentSkillId: 'a', lastToolResult: { toolName: 'probe', result: 'a hit' } }))).toBe(true);
+    expect(fire(ctx({ currentSkillId: 'a', lastToolResult: { toolName: 'probe', result: 'miss' } }))).toBe(false);
+    expect(fire(ctx({ currentSkillId: 'a' }))).toBe(false); // no tool result yet
+    // edge bleed prevented even when the predicate would match
+    expect(fire(ctx({ currentSkillId: 'x', lastToolResult: { toolName: 'probe', result: 'a hit' } }))).toBe(false);
   });
 
   it('a skill with no deterministic incoming edge keeps its default llm-activated trigger', () => {
@@ -73,7 +99,7 @@ describe('skillGraph — edge → trigger compilation', () => {
 });
 
 describe('skillGraph — activation through the real evaluator', () => {
-  it('entry active at start; routed skill activates only when its predicate fires', () => {
+  it('entry active at start; routed skill activates only when its from-gated predicate fires', () => {
     const triage = skill('triage');
     const sfp = skill('sfp', 'SFP DEEP DIVE');
     const g = skillGraph()
@@ -81,14 +107,16 @@ describe('skillGraph — activation through the real evaluator', () => {
       .route(triage, sfp, { when: (r) => r.toolName === 'probe' && JSON.parse(r.result).crc > 0 })
       .build();
 
-    // iteration 1, no tool result → only the entry is active
+    // iteration 1, cold start (no cursor, no tool result) → only the entry is active
     const e1 = evaluateInjections(g.skills, ctx({ iteration: 1 }));
     expect(e1.active.map((i) => i.id)).toEqual(['triage']);
 
-    // after probe returns crc>0 → entry (always) + sfp (rule fired)
+    // cursor on triage + probe returns crc>0 → entry (always) + sfp (from-gated rule fired).
+    // The cursor is set by the loop's cursor-update stage (Stage 2); here we thread it
+    // directly to exercise the evaluator's new contract in isolation.
     const e2 = evaluateInjections(
       g.skills,
-      ctx({ iteration: 2, lastToolResult: { toolName: 'probe', result: '{"crc":5}' } }),
+      ctx({ iteration: 2, currentSkillId: 'triage', lastToolResult: { toolName: 'probe', result: '{"crc":5}' } }),
     );
     expect(e2.active.map((i) => i.id).sort()).toEqual(['sfp', 'triage']);
     // the activated skill carries its body into the slot
@@ -97,10 +125,246 @@ describe('skillGraph — activation through the real evaluator', () => {
     // crc==0 → sfp stays dormant (token-efficient: not loaded)
     const e3 = evaluateInjections(
       g.skills,
-      ctx({ iteration: 2, lastToolResult: { toolName: 'probe', result: '{"crc":0}' } }),
+      ctx({ iteration: 2, currentSkillId: 'triage', lastToolResult: { toolName: 'probe', result: '{"crc":0}' } }),
     );
     expect(e3.active.map((i) => i.id)).toEqual(['triage']);
+
+    // EDGE BLEED PREVENTED: identical crc>0 result, but the cursor is on another
+    // skill → sfp must NOT activate (the v1 bug this keystone fixes).
+    const e4 = evaluateInjections(
+      g.skills,
+      ctx({ iteration: 3, currentSkillId: 'other', lastToolResult: { toolName: 'probe', result: '{"crc":5}' } }),
+    );
+    expect(e4.active.map((i) => i.id)).toEqual(['triage']); // only the always-on entry base
   });
+});
+
+describe('skillGraph — nextSkill cursor resolver (the keystone, pin-table)', () => {
+  const probe = (toolName: string, result = '') => ({ toolName, result });
+
+  it('cold start → the first entry whose when passes (always-entry matches unconditionally)', () => {
+    const a = skill('a');
+    const b = skill('b');
+    const c = skill('c');
+    const g = skillGraph()
+      .entry(b, { when: (x) => x.userMessage.includes('beta') })
+      .entry(c, { when: (x) => x.userMessage.includes('gamma') })
+      .entry(a) // always-entry, declared last
+      .route(a, b, { onToolReturn: 'x' })
+      .build();
+    // declaration order: b(when) miss, c(when) hit
+    expect(g.nextSkill(ctx({ userMessage: 'gamma path' }))).toBe('c');
+    // no when-entry matches → fall through to the always-entry
+    expect(g.nextSkill(ctx({ userMessage: 'nothing here' }))).toBe('a');
+    // first matching when-entry wins
+    expect(g.nextSkill(ctx({ userMessage: 'beta and gamma' }))).toBe('b');
+  });
+
+  it('transition: a from-gated edge whose predicate matches moves the cursor', () => {
+    const a = skill('a');
+    const b = skill('b');
+    const g = skillGraph().entry(a).route(a, b, { onToolReturn: 'lookup' }).build();
+    expect(g.nextSkill(ctx({ currentSkillId: 'a', lastToolResult: probe('lookup') }))).toBe('b');
+  });
+
+  it('sticky stay: no edge out of the current skill fires → cursor unchanged', () => {
+    const a = skill('a');
+    const b = skill('b');
+    const g = skillGraph().entry(a).route(a, b, { onToolReturn: 'lookup' }).build();
+    // cursor on b, b has no outgoing edge → stay on b regardless of the tool result
+    expect(g.nextSkill(ctx({ currentSkillId: 'b', lastToolResult: probe('lookup') }))).toBe('b');
+    // cursor on a but the tool didn't match → stay on a
+    expect(g.nextSkill(ctx({ currentSkillId: 'a', lastToolResult: probe('other') }))).toBe('a');
+  });
+
+  it('edge bleed prevented: an edge a→b does NOT fire while the cursor is elsewhere', () => {
+    const a = skill('a');
+    const b = skill('b');
+    const d = skill('d');
+    const g = skillGraph().entry(a).entry(d).route(a, b, { onToolReturn: 'lookup' }).build();
+    // cursor on d, the exact 'lookup' result a→b keys on → must NOT route to b
+    expect(g.nextSkill(ctx({ currentSkillId: 'd', lastToolResult: probe('lookup') }))).toBe('d');
+  });
+
+  it('first-match by declaration order when two edges share a from', () => {
+    const a = skill('a');
+    const b = skill('b');
+    const c = skill('c');
+    const g = skillGraph()
+      .entry(a)
+      .route(a, b, { when: (r) => r.result.includes('x') })
+      .route(a, c, { when: (r) => r.result.includes('x') }) // both match; b declared first
+      .build();
+    expect(g.nextSkill(ctx({ currentSkillId: 'a', lastToolResult: probe('t', 'has x') }))).toBe('b');
+  });
+
+  it('a throwing edge predicate is isolated (treated as no-match; siblings still evaluated)', () => {
+    const a = skill('a');
+    const b = skill('b');
+    const c = skill('c');
+    const g = skillGraph()
+      .entry(a)
+      .route(a, b, {
+        when: () => {
+          throw new Error('boom');
+        },
+      }) // throws — must not block c
+      .route(a, c, { when: (r) => r.result.includes('ok') })
+      .build();
+    expect(g.nextSkill(ctx({ currentSkillId: 'a', lastToolResult: probe('t', 'ok') }))).toBe('c');
+  });
+
+  it('tree-mode graphs have no cursor — nextSkill returns the unchanged currentSkillId', () => {
+    const io = skill('io');
+    const tri = skill('tri');
+    const g = skillGraph().tree(decide((c) => c.userMessage.includes('io'), io, tri)).build();
+    expect(g.nextSkill(ctx({ currentSkillId: undefined }))).toBeUndefined();
+    expect(g.nextSkill(ctx({ currentSkillId: 'io' }))).toBe('io');
+  });
+});
+
+describe('skillGraph — sticky lifecycle through the evaluator (enter, stay, clean handoff)', () => {
+  it('enter B, stay in B across unrelated work, then hand off to C (B deactivates)', () => {
+    const a = skill('a'); // always-on base entry
+    const b = skill('b', 'B BODY');
+    const c = skill('c', 'C BODY');
+    const g = skillGraph()
+      .entry(a)
+      .route(a, b, { onToolReturn: 'toB' })
+      .route(b, c, { onToolReturn: 'toC' })
+      .build();
+
+    // Simulate the real loop: evaluate with the current cursor, then advance the
+    // cursor exactly as Stage 2's cursor-update stage will (currentSkillId = nextSkill).
+    let cursor: string | undefined;
+    const step = (over: Partial<InjectionContext>) => {
+      const c0 = ctx({ ...over, currentSkillId: cursor });
+      const active = evaluateInjections(g.skills, c0)
+        .active.map((i) => i.id)
+        .sort();
+      cursor = g.nextSkill(c0);
+      return { active, cursor };
+    };
+
+    // iter 1 — cold start: only the base entry, cursor lands on a
+    expect(step({})).toEqual({ active: ['a'], cursor: 'a' });
+    // a's tool returns toB → move to b; a (base) stays, b enters
+    expect(step({ lastToolResult: { toolName: 'toB', result: '' } })).toEqual({
+      active: ['a', 'b'],
+      cursor: 'b',
+    });
+    // b does unrelated work → STICKY: stay in b
+    expect(step({ lastToolResult: { toolName: 'other', result: '' } })).toEqual({
+      active: ['a', 'b'],
+      cursor: 'b',
+    });
+    // b's tool returns toC → CLEAN HANDOFF: c enters, b deactivates the same step
+    expect(step({ lastToolResult: { toolName: 'toC', result: '' } })).toEqual({
+      active: ['a', 'c'],
+      cursor: 'c',
+    });
+  });
+});
+
+describe('skillGraph — cursor round-trip through the REAL Agent loop (mount mappers, per chart)', () => {
+  // The Convention-2 integration tests the keystone needs. The unit tests above
+  // thread `currentSkillId` into a hand-built ctx (or re-implement the cursor
+  // advance manually), so they bypass the MOUNT MAPPERS that carry the cursor
+  // across iterations. A broken mapper would reset the cursor every iteration →
+  // every route behaves as cold-start → the v1 cross-skill edge-bleed bug returns
+  // SILENTLY (full suite still green). These run the real loop and assert via the
+  // `agentfootprint.context.evaluated` emit's `activeIds`, exercising the flat
+  // (buildAgentChart) AND grouped (buildDynamicAgentChart + sf-llm-call) mappers.
+  const probe = defineTool({
+    name: 'probe',
+    description: 'probe the thing',
+    inputSchema: { type: 'object', properties: {} },
+    execute: async () => ({ crc: 5 }),
+  });
+
+  /** A provider that calls `probe` on turn 1, then stops — drives two iterations. */
+  const callThenStop = () => {
+    let i = 0;
+    return mock({
+      respond: () => {
+        i++;
+        return i === 1
+          ? {
+              content: 'probing',
+              toolCalls: [{ id: 't1', name: 'probe', args: {} }],
+              stopReason: 'tool_use' as const,
+            }
+          : { content: 'done', toolCalls: [], stopReason: 'stop' as const };
+      },
+    });
+  };
+
+  /** Capture activeIds per `context.evaluated` emit (one per ReAct iteration). */
+  const captureActiveIds = () => {
+    const perIteration: string[][] = [];
+    const recorder = {
+      id: 'capture-active',
+      onEmit: (e: { name: string; payload?: { activeIds?: readonly string[] } }) => {
+        if (e.name === 'agentfootprint.context.evaluated') {
+          perIteration.push([...(e.payload?.activeIds ?? [])].sort());
+        }
+      },
+    };
+    return { perIteration, recorder };
+  };
+
+  // 'dynamic' (default) and 'classic' share the flat chart (buildAgentChart) — its
+  // mappers; 'dynamic-grouped' is the grouped chart (buildDynamicAgentChart) with
+  // the extra sf-llm-call boundary. All three carry the cursor in the Injection
+  // Engine (which runs every iteration in every mode, before any slot caching), so
+  // the activeIds assertion is on the cursor mechanism, independent of the classic
+  // slot-cache footgun.
+  const MODES = ['dynamic', 'classic', 'dynamic-grouped'] as const;
+
+  for (const reactMode of MODES) {
+    it(`[${reactMode}] a route fires only after its from-gated tool returns`, async () => {
+      const a = skill('a');
+      const b = skill('b', 'B BODY');
+      const graph = skillGraph().entry(a).route(a, b, { onToolReturn: 'probe' }).build();
+      const { perIteration, recorder } = captureActiveIds();
+      const agent = Agent.create({ provider: callThenStop(), model: 'mock', maxIterations: 4, reactMode })
+        .system('')
+        .tool(probe)
+        .skillGraph(graph)
+        .recorder(recorder)
+        .build();
+
+      await agent.run({ message: 'go' });
+
+      expect(perIteration.length).toBeGreaterThanOrEqual(2);
+      expect(perIteration[0]).toEqual(['a']); // cold start: entry only, b dormant
+      expect(perIteration[1]).toContain('b'); // post-probe: the route fired, b active
+      expect(perIteration[1]).toContain('a'); // the always-on entry base persists
+    });
+
+    it(`[${reactMode}] EDGE BLEED prevented: a→b stays dormant while the cursor is parked on an unrelated entry`, async () => {
+      const d = skill('d'); // the cold-start cursor (the only entry)
+      const a = skill('a');
+      const b = skill('b');
+      // a→b keys on 'probe', but the graph never ENTERS 'a' — the cursor stays on d.
+      const graph = skillGraph().entry(d).route(a, b, { onToolReturn: 'probe' }).build();
+      const { perIteration, recorder } = captureActiveIds();
+      const agent = Agent.create({ provider: callThenStop(), model: 'mock', maxIterations: 4, reactMode })
+        .system('')
+        .tool(probe)
+        .skillGraph(graph)
+        .recorder(recorder)
+        .build();
+
+      await agent.run({ message: 'go' });
+
+      expect(perIteration.length).toBeGreaterThanOrEqual(2);
+      // 'probe' returns on iteration 2, matching a→b's predicate — but the cursor is
+      // on d, not a, so b MUST stay dormant. v1 (un-gated) would have lit b here.
+      for (const ids of perIteration) expect(ids).not.toContain('b');
+      expect(perIteration[0]).toEqual(['d']);
+    });
+  }
 });
 
 describe('skillGraph — toMermaid (declared === drawn)', () => {
