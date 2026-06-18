@@ -39,7 +39,13 @@ import {
   persistence,
   structuralProximity,
 } from './signals.js';
-import type { Embedder, EvidenceInput, InfluenceScore, InfluenceWeights, SignalScores } from './types.js';
+import type {
+  Embedder,
+  EvidenceInput,
+  InfluenceScore,
+  InfluenceWeights,
+  SignalScores,
+} from './types.js';
 import { DEFAULT_INFLUENCE_WEIGHTS, DEFAULT_PERSISTENCE_THRESHOLD } from './types.js';
 
 export interface ScoreContrastiveInfluenceArgs {
@@ -91,7 +97,8 @@ export async function scoreContrastiveInfluence(
     const ancestorVecs = item.ancestorTexts.map((t) => vectorByText.get(t) as readonly number[]);
 
     // The only contrastive term: answer-similarity MINUS reference-similarity.
-    const faContrast = cosineSimilarity(evidenceVec, answerVec) - cosineSimilarity(evidenceVec, referenceVec);
+    const faContrast =
+      cosineSimilarity(evidenceVec, answerVec) - cosineSimilarity(evidenceVec, referenceVec);
     const signals: SignalScores = {
       fa: faContrast,
       avg: averageRelevancy(evidenceVec, ancestorVecs),
@@ -114,7 +121,8 @@ export async function scoreContrastiveInfluence(
 function assertUniqueIds(evidence: readonly EvidenceInput[]): void {
   const seen = new Set<string>();
   for (const e of evidence) {
-    if (seen.has(e.id)) throw new Error(`scoreContrastiveInfluence: duplicate evidence id "${e.id}"`);
+    if (seen.has(e.id))
+      throw new Error(`scoreContrastiveInfluence: duplicate evidence id "${e.id}"`);
     seen.add(e.id);
   }
 }

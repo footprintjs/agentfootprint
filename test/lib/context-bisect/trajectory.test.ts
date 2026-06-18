@@ -20,17 +20,31 @@ import {
   findLoopHeads,
   type ContextBugArtifacts,
 } from '../../../src/lib/context-bisect/index';
-import { bucketByAnchors as viaObserve, assembleTrajectory as assembleViaObserve } from '../../../src/observe';
+import {
+  bucketByAnchors as viaObserve,
+  assembleTrajectory as assembleViaObserve,
+} from '../../../src/observe';
 
 /** Minimal CommitBundle for partition tests (only stageId + runtimeStageId matter here). */
 function mk(stageId: string, runtimeStageId: string): CommitBundle {
-  return { stage: stageId, stageId, runtimeStageId, trace: [], redactedPaths: [], overwrite: {}, updates: {} } as CommitBundle;
+  return {
+    stage: stageId,
+    stageId,
+    runtimeStageId,
+    trace: [],
+    redactedPaths: [],
+    overwrite: {},
+    updates: {},
+  } as CommitBundle;
 }
 
 /** A synthetic flat-agent commit log: a prelude + `loops` ReAct iterations, each
  *  injection-engine (head) → context → call-llm → route → tool-calls. */
 function flatAgentLog(loops: number): CommitBundle[] {
-  const log: CommitBundle[] = [mk('seed', 'seed#0'), mk('sf-memory-read/get', 'sf-memory-read/get#1')];
+  const log: CommitBundle[] = [
+    mk('seed', 'seed#0'),
+    mk('sf-memory-read/get', 'sf-memory-read/get#1'),
+  ];
   let idx = 2;
   for (let k = 0; k < loops; k++) {
     log.push(mk('sf-injection-engine/resolve', `sf-injection-engine/resolve#${idx++}`)); // HEAD
@@ -154,7 +168,9 @@ describe('security & robustness', () => {
       'call-llm#18',
     ]);
     // totality preserved across duplicate-id heads
-    expect([...prelude, ...frames.flatMap((f) => f.bodyIds)]).toEqual(log.map((b) => b.runtimeStageId));
+    expect([...prelude, ...frames.flatMap((f) => f.bodyIds)]).toEqual(
+      log.map((b) => b.runtimeStageId),
+    );
   });
   it('observe re-export is the same function', () => {
     expect(viaObserve).toBe(bucketByAnchors);
@@ -207,7 +223,12 @@ describe('integration — assembleTrajectory over a real flat-agent run', () => 
             usage: { input: 1, output: 1 },
             stopReason: 'tool_use',
           };
-        return { content: 'final answer', toolCalls: [], usage: { input: 1, output: 1 }, stopReason: 'end_turn' };
+        return {
+          content: 'final answer',
+          toolCalls: [],
+          usage: { input: 1, output: 1 },
+          stopReason: 'end_turn',
+        };
       },
     });
     const agent = Agent.create({ provider, model: 'mock', readTracking: 'full' })
@@ -292,10 +313,20 @@ describe('integration — assembleTrajectory over a real GROUPED agent run', () 
             usage: { input: 1, output: 1 },
             stopReason: 'tool_use',
           };
-        return { content: 'final answer', toolCalls: [], usage: { input: 1, output: 1 }, stopReason: 'end_turn' };
+        return {
+          content: 'final answer',
+          toolCalls: [],
+          usage: { input: 1, output: 1 },
+          stopReason: 'end_turn',
+        };
       },
     });
-    const agent = Agent.create({ provider, model: 'mock', readTracking: 'full', reactMode: 'dynamic-grouped' })
+    const agent = Agent.create({
+      provider,
+      model: 'mock',
+      readTracking: 'full',
+      reactMode: 'dynamic-grouped',
+    })
       .system('test')
       .tool(echo)
       .build();

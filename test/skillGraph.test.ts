@@ -59,13 +59,19 @@ describe('skillGraph — edge → trigger compilation', () => {
     expect(tb.kind).toBe('rule');
     const fire = (tb as { activeWhen: (c: InjectionContext) => boolean }).activeWhen;
     // from-gated: only fires while the cursor is on the edge's source 'a'
-    expect(fire(ctx({ currentSkillId: 'a', lastToolResult: { toolName: 'lookup', result: 'x' } }))).toBe(true);
+    expect(
+      fire(ctx({ currentSkillId: 'a', lastToolResult: { toolName: 'lookup', result: 'x' } })),
+    ).toBe(true);
     // cross-skill edge bleed PREVENTED: same tool result, cursor elsewhere
-    expect(fire(ctx({ currentSkillId: 'd', lastToolResult: { toolName: 'lookup', result: 'x' } }))).toBe(false);
+    expect(
+      fire(ctx({ currentSkillId: 'd', lastToolResult: { toolName: 'lookup', result: 'x' } })),
+    ).toBe(false);
     // sticky: stays active while it IS the cursor, even with no matching result
     expect(fire(ctx({ currentSkillId: 'b' }))).toBe(true);
     // right source, wrong tool name → no fire
-    expect(fire(ctx({ currentSkillId: 'a', lastToolResult: { toolName: 'other', result: 'x' } }))).toBe(false);
+    expect(
+      fire(ctx({ currentSkillId: 'a', lastToolResult: { toolName: 'other', result: 'x' } })),
+    ).toBe(false);
   });
 
   it('route when → cursor-gated rule over lastToolResult', () => {
@@ -79,11 +85,17 @@ describe('skillGraph — edge → trigger compilation', () => {
     const tc = g.skills.find((s) => s.id === 'c')!.trigger;
     expect(tc.kind).toBe('rule');
     const fire = (tc as { activeWhen: (c: InjectionContext) => boolean }).activeWhen;
-    expect(fire(ctx({ currentSkillId: 'a', lastToolResult: { toolName: 'probe', result: 'a hit' } }))).toBe(true);
-    expect(fire(ctx({ currentSkillId: 'a', lastToolResult: { toolName: 'probe', result: 'miss' } }))).toBe(false);
+    expect(
+      fire(ctx({ currentSkillId: 'a', lastToolResult: { toolName: 'probe', result: 'a hit' } })),
+    ).toBe(true);
+    expect(
+      fire(ctx({ currentSkillId: 'a', lastToolResult: { toolName: 'probe', result: 'miss' } })),
+    ).toBe(false);
     expect(fire(ctx({ currentSkillId: 'a' }))).toBe(false); // no tool result yet
     // edge bleed prevented even when the predicate would match
-    expect(fire(ctx({ currentSkillId: 'x', lastToolResult: { toolName: 'probe', result: 'a hit' } }))).toBe(false);
+    expect(
+      fire(ctx({ currentSkillId: 'x', lastToolResult: { toolName: 'probe', result: 'a hit' } })),
+    ).toBe(false);
   });
 
   it('a skill with no deterministic incoming edge keeps its default llm-activated trigger', () => {
@@ -120,7 +132,11 @@ describe('skillGraph — activation through the real evaluator', () => {
     // directly to exercise the evaluator's new contract in isolation.
     const e2 = evaluateInjections(
       g.skills,
-      ctx({ iteration: 2, currentSkillId: 'triage', lastToolResult: { toolName: 'probe', result: '{"crc":5}' } }),
+      ctx({
+        iteration: 2,
+        currentSkillId: 'triage',
+        lastToolResult: { toolName: 'probe', result: '{"crc":5}' },
+      }),
     );
     expect(e2.active.map((i) => i.id).sort()).toEqual(['sfp', 'triage']);
     // the activated skill carries its body into the slot
@@ -129,7 +145,11 @@ describe('skillGraph — activation through the real evaluator', () => {
     // crc==0 → sfp stays dormant (token-efficient: not loaded)
     const e3 = evaluateInjections(
       g.skills,
-      ctx({ iteration: 2, currentSkillId: 'triage', lastToolResult: { toolName: 'probe', result: '{"crc":0}' } }),
+      ctx({
+        iteration: 2,
+        currentSkillId: 'triage',
+        lastToolResult: { toolName: 'probe', result: '{"crc":0}' },
+      }),
     );
     expect(e3.active.map((i) => i.id)).toEqual(['triage']);
 
@@ -137,7 +157,11 @@ describe('skillGraph — activation through the real evaluator', () => {
     // skill → sfp must NOT activate (the v1 bug this keystone fixes).
     const e4 = evaluateInjections(
       g.skills,
-      ctx({ iteration: 3, currentSkillId: 'other', lastToolResult: { toolName: 'probe', result: '{"crc":5}' } }),
+      ctx({
+        iteration: 3,
+        currentSkillId: 'other',
+        lastToolResult: { toolName: 'probe', result: '{"crc":5}' },
+      }),
     );
     expect(e4.active.map((i) => i.id)).toEqual(['triage']); // only the always-on entry base
   });
@@ -199,7 +223,9 @@ describe('skillGraph — nextSkill cursor resolver (the keystone, pin-table)', (
       .route(a, b, { when: (r) => r.result.includes('x') })
       .route(a, c, { when: (r) => r.result.includes('x') }) // both match; b declared first
       .build();
-    expect(g.nextSkill(ctx({ currentSkillId: 'a', lastToolResult: probe('t', 'has x') }))).toBe('b');
+    expect(g.nextSkill(ctx({ currentSkillId: 'a', lastToolResult: probe('t', 'has x') }))).toBe(
+      'b',
+    );
   });
 
   it('a throwing edge predicate is isolated (treated as no-match; siblings still evaluated)', () => {
@@ -221,7 +247,9 @@ describe('skillGraph — nextSkill cursor resolver (the keystone, pin-table)', (
   it('tree-mode graphs have no cursor — nextSkill returns the unchanged currentSkillId', () => {
     const io = skill('io');
     const tri = skill('tri');
-    const g = skillGraph().tree(decide((c) => c.userMessage.includes('io'), io, tri)).build();
+    const g = skillGraph()
+      .tree(decide((c) => c.userMessage.includes('io'), io, tri))
+      .build();
     expect(g.nextSkill(ctx({ currentSkillId: undefined }))).toBeUndefined();
     expect(g.nextSkill(ctx({ currentSkillId: 'io' }))).toBe('io');
   });
@@ -331,7 +359,12 @@ describe('skillGraph — cursor round-trip through the REAL Agent loop (mount ma
       const b = skill('b', 'B BODY');
       const graph = skillGraph().entry(a).route(a, b, { onToolReturn: 'probe' }).build();
       const { perIteration, recorder } = captureActiveIds();
-      const agent = Agent.create({ provider: callThenStop(), model: 'mock', maxIterations: 4, reactMode })
+      const agent = Agent.create({
+        provider: callThenStop(),
+        model: 'mock',
+        maxIterations: 4,
+        reactMode,
+      })
         .system('')
         .tool(probe)
         .skillGraph(graph)
@@ -353,7 +386,12 @@ describe('skillGraph — cursor round-trip through the REAL Agent loop (mount ma
       // a→b keys on 'probe', but the graph never ENTERS 'a' — the cursor stays on d.
       const graph = skillGraph().entry(d).route(a, b, { onToolReturn: 'probe' }).build();
       const { perIteration, recorder } = captureActiveIds();
-      const agent = Agent.create({ provider: callThenStop(), model: 'mock', maxIterations: 4, reactMode })
+      const agent = Agent.create({
+        provider: callThenStop(),
+        model: 'mock',
+        maxIterations: 4,
+        reactMode,
+      })
         .system('')
         .tool(probe)
         .skillGraph(graph)
@@ -847,7 +885,12 @@ describe('skillGraph — reachableSkills (the read_skill gate allowed set)', () 
     const tri = skill('tri');
     const g = skillGraph()
       .tree(
-        decide((c) => /io/.test(c.userMessage), io, decide((c) => /sfp/.test(c.userMessage), sfp, tri, 's?'), 'i?'),
+        decide(
+          (c) => /io/.test(c.userMessage),
+          io,
+          decide((c) => /sfp/.test(c.userMessage), sfp, tri, 's?'),
+          'i?',
+        ),
       )
       .build();
     expect([...g.reachableSkills('io')].sort()).toEqual(['io', 'sfp', 'tri']);
@@ -918,7 +961,11 @@ describe('skillGraph — entryByRelevance / scoreEntries (LLM-free relevance ent
   it('only when-passing entries are candidates', async () => {
     const a = defineSkill({ id: 'a', description: 'alpha', body: 'b' });
     const b = defineSkill({ id: 'b', description: 'beta', body: 'b' });
-    const g = skillGraph().entry(a, { when: () => false }).entry(b).entryByRelevance(emb).build();
+    const g = skillGraph()
+      .entry(a, { when: () => false })
+      .entry(b)
+      .entryByRelevance(emb)
+      .build();
     const res = await g.scoreEntries!(ctx({ userMessage: 'anything' }));
     expect(res.ranked.map((r) => r.id)).toEqual(['b']); // a gated out by its when
     expect(res.chosen).toBe('b');
@@ -926,8 +973,14 @@ describe('skillGraph — entryByRelevance / scoreEntries (LLM-free relevance ent
 
   it('no candidates → chosen undefined + empty ranked (agent falls back to cold-start)', async () => {
     const a = defineSkill({ id: 'a', description: 'alpha', body: 'b' });
-    const g = skillGraph().entry(a, { when: () => false }).entryByRelevance(emb).build();
-    expect(await g.scoreEntries!(ctx({ userMessage: 'x' }))).toEqual({ chosen: undefined, ranked: [] });
+    const g = skillGraph()
+      .entry(a, { when: () => false })
+      .entryByRelevance(emb)
+      .build();
+    expect(await g.scoreEntries!(ctx({ userMessage: 'x' }))).toEqual({
+      chosen: undefined,
+      ranked: [],
+    });
   });
 
   it('scoreEntries is absent without .entryByRelevance(), and on tree-mode graphs', () => {
@@ -948,8 +1001,16 @@ describe('skillGraph — entryByRelevance through the REAL Agent loop (PickEntry
     it(`[${reactMode}] picks the relevant entry as the start skill; the others stay dormant`, async () => {
       // Under entryByRelevance the entries are EXCLUSIVE — only the relevance pick
       // (here billing, which shares characters with the message) should activate.
-      const billing = defineSkill({ id: 'billing', description: 'payments and refunds', body: 'BILLING' });
-      const incident = defineSkill({ id: 'incident', description: 'zzz qqq outage', body: 'INCIDENT' });
+      const billing = defineSkill({
+        id: 'billing',
+        description: 'payments and refunds',
+        body: 'BILLING',
+      });
+      const incident = defineSkill({
+        id: 'incident',
+        description: 'zzz qqq outage',
+        body: 'INCIDENT',
+      });
       const graph = skillGraph().entry(billing).entry(incident).entryByRelevance(emb).build();
 
       const activeIds: string[][] = [];
@@ -961,7 +1022,12 @@ describe('skillGraph — entryByRelevance through the REAL Agent loop (PickEntry
           }
         },
       };
-      const agent = Agent.create({ provider: mock({ reply: 'done' }), model: 'mock', maxIterations: 3, reactMode })
+      const agent = Agent.create({
+        provider: mock({ reply: 'done' }),
+        model: 'mock',
+        maxIterations: 3,
+        reactMode,
+      })
         .system('')
         .skillGraph(graph)
         .recorder(recorder)
@@ -978,14 +1044,21 @@ describe('skillGraph — entryByRelevance through the REAL Agent loop (PickEntry
     const billing = defineSkill({ id: 'billing', description: 'payments and refunds', body: 'b' });
     const incident = defineSkill({ id: 'incident', description: 'zzz qqq outage', body: 'b' });
     const graph = skillGraph().entry(billing).entry(incident).entryByRelevance(emb).build();
-    const agent = Agent.create({ provider: mock({ reply: 'done' }), model: 'mock', maxIterations: 2 })
+    const agent = Agent.create({
+      provider: mock({ reply: 'done' }),
+      model: 'mock',
+      maxIterations: 2,
+    })
       .system('')
       .skillGraph(graph)
       .build();
     await agent.run({ message: 'i need a refund for my payment' });
 
-    const scores = (agent.getLastSnapshot()?.sharedState as { entryScores?: Array<{ id: string; relevance: number }> })
-      ?.entryScores;
+    const scores = (
+      agent.getLastSnapshot()?.sharedState as {
+        entryScores?: Array<{ id: string; relevance: number }>;
+      }
+    )?.entryScores;
     expect(scores?.map((s) => s.id).sort()).toEqual(['billing', 'incident']);
     expect(scores!.reduce((sum, s) => sum + s.relevance, 0)).toBeCloseTo(1, 5);
   });
@@ -1019,7 +1092,9 @@ describe('skillGraph — checkup (build-time validation)', () => {
       .route(c, d, { onToolReturn: 'y' })
       .build({ check: 'off' })
       .checkup();
-    const unreachable = ck.problems.filter((p) => p.code === 'unreachable-skill').map((p) => p.skill);
+    const unreachable = ck.problems
+      .filter((p) => p.code === 'unreachable-skill')
+      .map((p) => p.skill);
     expect(unreachable).toContain('c');
     expect(ck.ok).toBe(true); // warnings don't fail ok
   });
@@ -1048,8 +1123,12 @@ describe('skillGraph — checkup (build-time validation)', () => {
   it('build({check:"throw"}) throws on an error; build({check:"off"}) never throws', () => {
     const a = skill('a');
     const b = skill('b');
-    expect(() => skillGraph().route(a, b, { onToolReturn: 'x' }).build({ check: 'throw' })).toThrow(/no-entry/);
-    expect(() => skillGraph().route(a, b, { onToolReturn: 'x' }).build({ check: 'off' })).not.toThrow();
+    expect(() => skillGraph().route(a, b, { onToolReturn: 'x' }).build({ check: 'throw' })).toThrow(
+      /no-entry/,
+    );
+    expect(() =>
+      skillGraph().route(a, b, { onToolReturn: 'x' }).build({ check: 'off' }),
+    ).not.toThrow();
   });
 
   it('build({check:"warn"}) warns in dev mode, silent otherwise', () => {
@@ -1057,7 +1136,10 @@ describe('skillGraph — checkup (build-time validation)', () => {
     const b = skill('b');
     const c = skill('c');
     const mk = () =>
-      skillGraph().entry(a).route(a, b, { when: () => true }).route(a, c, { when: () => true });
+      skillGraph()
+        .entry(a)
+        .route(a, b, { when: () => true })
+        .route(a, c, { when: () => true });
 
     const warn1 = vi.spyOn(console, 'warn').mockImplementation(() => {});
     try {
@@ -1082,7 +1164,9 @@ describe('skillGraph — checkup (build-time validation)', () => {
   it('tree-mode graph → ok (exhaustive by construction)', () => {
     const io = skill('io');
     const tri = skill('tri');
-    const g = skillGraph().tree(decide((c) => /io/.test(c.userMessage), io, tri)).build();
+    const g = skillGraph()
+      .tree(decide((c) => /io/.test(c.userMessage), io, tri))
+      .build();
     expect(g.checkup().ok).toBe(true);
   });
 });
@@ -1091,10 +1175,16 @@ describe('skillGraph — object-literal config form', () => {
   it('builds a graph equivalent to the fluent form', () => {
     const a = skill('a');
     const b = skill('b');
-    const g = skillGraph({ skills: [a, b], start: 'a', steps: [{ from: 'a', to: 'b', onToolReturn: 'x' }] });
+    const g = skillGraph({
+      skills: [a, b],
+      start: 'a',
+      steps: [{ from: 'a', to: 'b', onToolReturn: 'x' }],
+    });
     expect(g.skills.map((s) => s.id).sort()).toEqual(['a', 'b']);
     expect([...g.reachableSkills('a')]).toEqual(['b']);
-    expect(g.nextSkill(ctx({ currentSkillId: 'a', lastToolResult: { toolName: 'x', result: '' } }))).toBe('b');
+    expect(
+      g.nextSkill(ctx({ currentSkillId: 'a', lastToolResult: { toolName: 'x', result: '' } })),
+    ).toBe('b');
   });
 
   it("the check-up flags a listed-but-unwired skill (the object form's value)", () => {
@@ -1107,7 +1197,10 @@ describe('skillGraph — object-literal config form', () => {
       steps: [{ from: 'a', to: 'b', onToolReturn: 'x' }],
       check: 'off',
     });
-    const unreachable = g.checkup().problems.filter((p) => p.code === 'unreachable-skill').map((p) => p.skill);
+    const unreachable = g
+      .checkup()
+      .problems.filter((p) => p.code === 'unreachable-skill')
+      .map((p) => p.skill);
     expect(unreachable).toContain('orphan');
   });
 
@@ -1123,7 +1216,12 @@ describe('skillGraph — object-literal config form', () => {
     const b = defineSkill({ id: 'b', description: 'beta', body: 'b' });
     const ruled = skillGraph({
       skills: [a, b],
-      start: { rules: [{ when: (c) => /b/.test(c.userMessage), use: 'b' }, { when: () => true, use: 'a' }] },
+      start: {
+        rules: [
+          { when: (c) => /b/.test(c.userMessage), use: 'b' },
+          { when: () => true, use: 'a' },
+        ],
+      },
       check: 'off',
     });
     expect([...ruled.reachableSkills(undefined)].sort()).toEqual(['a', 'b']); // both are entries
@@ -1139,7 +1237,10 @@ describe('skillGraph — object-literal config form', () => {
   it('tree config compiles', () => {
     const io = skill('io');
     const tri = skill('tri');
-    const g = skillGraph({ skills: [io, tri], tree: decide((c) => /io/.test(c.userMessage), io, tri) });
+    const g = skillGraph({
+      skills: [io, tri],
+      tree: decide((c) => /io/.test(c.userMessage), io, tri),
+    });
     expect(g.skills.map((s) => s.id).sort()).toEqual(['io', 'tri']);
     expect(g.checkup().ok).toBe(true);
   });
@@ -1180,10 +1281,15 @@ describe('defineRelevanceHint — advisory note on an ambiguous entry', () => {
     const recorder = {
       id: 'cap',
       onEmit: (e: { name: string; payload?: { activeIds?: string[] } }) => {
-        if (e.name === 'agentfootprint.context.evaluated') activeIds.push([...(e.payload?.activeIds ?? [])]);
+        if (e.name === 'agentfootprint.context.evaluated')
+          activeIds.push([...(e.payload?.activeIds ?? [])]);
       },
     };
-    const agent = Agent.create({ provider: mock({ reply: 'done' }), model: 'mock', maxIterations: 2 })
+    const agent = Agent.create({
+      provider: mock({ reply: 'done' }),
+      model: 'mock',
+      maxIterations: 2,
+    })
       .system('')
       .skillGraph(graph)
       .instruction(defineRelevanceHint())
@@ -1215,7 +1321,11 @@ describe('skillGraph — scoped read_skill gate (real Agent loop)', () => {
 
   const capture = () => {
     const activeIds: string[][] = [];
-    const rejected: Array<{ requestedId: string; currentSkillId?: string; allowed: readonly string[] }> = [];
+    const rejected: Array<{
+      requestedId: string;
+      currentSkillId?: string;
+      allowed: readonly string[];
+    }> = [];
     const recorder = {
       id: 'cap',
       onEmit: (e: { name: string; payload?: Record<string, unknown> }) => {
@@ -1238,9 +1348,17 @@ describe('skillGraph — scoped read_skill gate (real Agent loop)', () => {
       respond: () => {
         i++;
         if (i === 1)
-          return { content: 'jump to x', toolCalls: [{ id: 't1', name: 'read_skill', args: { id: 'x' } }], stopReason: 'tool_use' as const };
+          return {
+            content: 'jump to x',
+            toolCalls: [{ id: 't1', name: 'read_skill', args: { id: 'x' } }],
+            stopReason: 'tool_use' as const,
+          };
         if (i === 2)
-          return { content: 'jump to m', toolCalls: [{ id: 't2', name: 'read_skill', args: { id: 'm' } }], stopReason: 'tool_use' as const };
+          return {
+            content: 'jump to m',
+            toolCalls: [{ id: 't2', name: 'read_skill', args: { id: 'm' } }],
+            stopReason: 'tool_use' as const,
+          };
         return { content: 'done', toolCalls: [], stopReason: 'stop' as const };
       },
     });
@@ -1270,7 +1388,11 @@ describe('skillGraph — scoped read_skill gate (real Agent loop)', () => {
       respond: () => {
         i++;
         if (i === 1)
-          return { content: 'use billing', toolCalls: [{ id: 't1', name: 'read_skill', args: { id: 'billing' } }], stopReason: 'tool_use' as const };
+          return {
+            content: 'use billing',
+            toolCalls: [{ id: 't1', name: 'read_skill', args: { id: 'billing' } }],
+            stopReason: 'tool_use' as const,
+          };
         return { content: 'done', toolCalls: [], stopReason: 'stop' as const };
       },
     });

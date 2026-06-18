@@ -20,7 +20,11 @@ const u = (id: string): ContextUnit => ({ id });
 
 /** A runner whose output flips to a DIFFERENT string only when `flipId` is restored. */
 const flipOnRestore =
-  (flipId: string, buggy = 'DECLINE DECLINE DECLINE', fixed = 'totally different APPROVED text'): RestorationRunner =>
+  (
+    flipId: string,
+    buggy = 'DECLINE DECLINE DECLINE',
+    fixed = 'totally different APPROVED text',
+  ): RestorationRunner =>
   async (units) =>
     units.some((x) => x.id === flipId) ? fixed : buggy;
 
@@ -39,7 +43,10 @@ describe('runRestorationProbe — unit', () => {
   it('restoring the culprit flips the outcome in every seeded rerun', async () => {
     const buggy = 'DECLINE DECLINE DECLINE';
     const stats = await runRestorationProbe(
-      { rerun: { runner: flipOnRestore('override', buggy), originalOutput: buggy, samples: 3 }, embedder },
+      {
+        rerun: { runner: flipOnRestore('override', buggy), originalOutput: buggy, samples: 3 },
+        embedder,
+      },
       [u('override')],
     );
     expect(stats.flips).toBe(3);
@@ -75,7 +82,18 @@ describe('restoration tier — via localizeContextBug', () => {
     const report = await localizeContextBug({
       // minimal artifacts: an explicit trigger over a tiny commit log
       artifacts: {
-        snapshot: { commitLog: [{ runtimeStageId: 'call#0', stageId: 'call', idx: 0, trace: [], overwrite: {}, updates: {} }] } as never,
+        snapshot: {
+          commitLog: [
+            {
+              runtimeStageId: 'call#0',
+              stageId: 'call',
+              idx: 0,
+              trace: [],
+              overwrite: {},
+              updates: {},
+            },
+          ],
+        } as never,
       },
       embedder,
       atStep: 'call#0',
@@ -99,7 +117,18 @@ describe('restoration tier — via localizeContextBug', () => {
     const { localizeContextBug } = await import('../../../src/lib/context-bisect/localize');
     const report = await localizeContextBug({
       artifacts: {
-        snapshot: { commitLog: [{ runtimeStageId: 'call#0', stageId: 'call', idx: 0, trace: [], overwrite: {}, updates: {} }] } as never,
+        snapshot: {
+          commitLog: [
+            {
+              runtimeStageId: 'call#0',
+              stageId: 'call',
+              idx: 0,
+              trace: [],
+              overwrite: {},
+              updates: {},
+            },
+          ],
+        } as never,
       },
       embedder,
       atStep: 'call#0',
@@ -113,7 +142,20 @@ describe('restoration tier — via localizeContextBug', () => {
   const baseReport = async (mc: object) => {
     const { localizeContextBug } = await import('../../../src/lib/context-bisect/localize');
     return localizeContextBug({
-      artifacts: { snapshot: { commitLog: [{ runtimeStageId: 'call#0', stageId: 'call', idx: 0, trace: [], overwrite: {}, updates: {} }] } as never },
+      artifacts: {
+        snapshot: {
+          commitLog: [
+            {
+              runtimeStageId: 'call#0',
+              stageId: 'call',
+              idx: 0,
+              trace: [],
+              overwrite: {},
+              updates: {},
+            },
+          ],
+        } as never,
+      },
       embedder,
       atStep: 'call#0',
       missingContext: mc as never,
@@ -124,22 +166,31 @@ describe('restoration tier — via localizeContextBug', () => {
     // a runner that flips REGARDLESS of units (even baseline []), i.e. the scenario doesn't reproduce
     const flaky: RestorationRunner = async () => 'totally different text every time';
     const report = await baseReport({
-      available: [u('override'), u('credit')], sent: [u('credit')],
+      available: [u('override'), u('credit')],
+      sent: [u('credit')],
       rerun: { runner: flaky, originalOutput: 'DECLINE DECLINE DECLINE', samples: 3 },
     });
     const c = report.dropped?.find((d) => d.id === 'override');
     expect(c?.verdict?.verdict).toBe('inconclusive');
     expect(c?.verdict?.claim).toContain('un-restored');
     expect(c?.verdict?.claim).toContain('restoration');
-    expect(report.honestyFlags.some((f) => f.flag === 'baseline-unstable' && /un-restored/.test(f.note))).toBe(true);
+    expect(
+      report.honestyFlags.some((f) => f.flag === 'baseline-unstable' && /un-restored/.test(f.note)),
+    ).toBe(true);
     expect(report.restorationBaseline).toBeDefined();
   });
 
   it('maxCandidates: first K probed (verdicts), the rest listed bare', async () => {
     const buggy = 'DECLINE DECLINE DECLINE';
     const report = await baseReport({
-      available: [u('d1'), u('d2'), u('d3')], sent: [], // all 3 dropped
-      rerun: { runner: flipOnRestore('never', buggy), originalOutput: buggy, samples: 2, maxCandidates: 2 },
+      available: [u('d1'), u('d2'), u('d3')],
+      sent: [], // all 3 dropped
+      rerun: {
+        runner: flipOnRestore('never', buggy),
+        originalOutput: buggy,
+        samples: 2,
+        maxCandidates: 2,
+      },
     });
     expect(report.dropped?.[0].verdict).toBeDefined();
     expect(report.dropped?.[1].verdict).toBeDefined();
@@ -149,9 +200,13 @@ describe('restoration tier — via localizeContextBug', () => {
 
   it('empty dropped + runner supplied → NO baseline probe is spent (runner never called)', async () => {
     let calls = 0;
-    const counting: RestorationRunner = async () => { calls++; return 'x'; };
+    const counting: RestorationRunner = async () => {
+      calls++;
+      return 'x';
+    };
     const report = await baseReport({
-      available: [u('a')], sent: [u('a')], // nothing dropped
+      available: [u('a')],
+      sent: [u('a')], // nothing dropped
       rerun: { runner: counting, originalOutput: 'x', samples: 3 },
     });
     expect(calls).toBe(0); // short-circuited before the baseline probe
@@ -161,7 +216,8 @@ describe('restoration tier — via localizeContextBug', () => {
   it('content is carried through onto a candidate that ALSO has a verdict', async () => {
     const buggy = 'DECLINE DECLINE DECLINE';
     const report = await baseReport({
-      available: [{ id: 'override', content: 'the committee note' }, u('credit')], sent: [u('credit')],
+      available: [{ id: 'override', content: 'the committee note' }, u('credit')],
+      sent: [u('credit')],
       rerun: { runner: flipOnRestore('override', buggy), originalOutput: buggy, samples: 2 },
     });
     const c = report.dropped?.find((d) => d.id === 'override');
@@ -173,12 +229,26 @@ describe('restoration tier — via localizeContextBug', () => {
     const { localizeContextBug } = await import('../../../src/lib/context-bisect/localize');
     const buggy = 'DECLINE DECLINE DECLINE';
     const report = await localizeContextBug({
-      artifacts: { snapshot: { commitLog: [{ runtimeStageId: 'call#0', stageId: 'call', idx: 0, trace: [], overwrite: {}, updates: {} }] } as never },
+      artifacts: {
+        snapshot: {
+          commitLog: [
+            {
+              runtimeStageId: 'call#0',
+              stageId: 'call',
+              idx: 0,
+              trace: [],
+              overwrite: {},
+              updates: {},
+            },
+          ],
+        } as never,
+      },
       embedder,
       atStep: 'call#0',
       rerun: { runner: async () => buggy, originalOutput: buggy, samples: 2 }, // ablation tier (stable baseline)
       missingContext: {
-        available: [u('override'), u('credit')], sent: [u('credit')],
+        available: [u('override'), u('credit')],
+        sent: [u('credit')],
         rerun: { runner: flipOnRestore('override', buggy), originalOutput: buggy, samples: 2 },
       },
     });
@@ -192,7 +262,8 @@ describe('restoration tier — via localizeContextBug', () => {
     const { formatContextBugReport } = await import('../../../src/lib/context-bisect/localize');
     const buggy = 'DECLINE DECLINE DECLINE';
     const report = await baseReport({
-      available: [u('override'), u('credit')], sent: [u('credit')],
+      available: [u('override'), u('credit')],
+      sent: [u('credit')],
       rerun: { runner: flipOnRestore('override', buggy), originalOutput: buggy, samples: 2 },
     });
     const text = formatContextBugReport(report);
@@ -202,7 +273,9 @@ describe('restoration tier — via localizeContextBug', () => {
   });
 
   it('a throwing runner rejects the probe (fail-loud, no partial state)', async () => {
-    const boom: RestorationRunner = async () => { throw new Error('runner exploded'); };
+    const boom: RestorationRunner = async () => {
+      throw new Error('runner exploded');
+    };
     await expect(
       runRestorationProbe({ rerun: { runner: boom, originalOutput: 'x' }, embedder }, [u('a')]),
     ).rejects.toThrow('runner exploded');
@@ -224,7 +297,10 @@ describe('runRestorationProbe — property', () => {
     for (let i = 0; i < 30; i++) {
       const samples = 2 + (i % 4);
       const stats = await runRestorationProbe(
-        { rerun: { runner: flipOnRestore('z'), originalOutput: 'DECLINE DECLINE DECLINE', samples }, embedder },
+        {
+          rerun: { runner: flipOnRestore('z'), originalOutput: 'DECLINE DECLINE DECLINE', samples },
+          embedder,
+        },
         i % 2 === 0 ? [u('z')] : [u('other')],
       );
       expect(stats.flips).toBeGreaterThanOrEqual(0);

@@ -90,11 +90,15 @@ export function formatRouteHop(hop: RouteHop): string {
     case 'entry':
       return `entered "${hop.toSkill}"`;
     case 'route':
-      return `"${hop.fromSkill}" → "${hop.toSkill}"${hop.edgeLabel ? ` (${hop.edgeLabel})` : ''}${hop.lastTool ? ` on ${hop.lastTool}` : ''}`;
+      return `"${hop.fromSkill}" → "${hop.toSkill}"${hop.edgeLabel ? ` (${hop.edgeLabel})` : ''}${
+        hop.lastTool ? ` on ${hop.lastTool}` : ''
+      }`;
     case 'stay':
       return `stayed in "${hop.toSkill}"`;
     case 'rejected':
-      return `read_skill("${hop.requestedSkill}") rejected from "${hop.fromSkill ?? 'cold start'}" — reachable: ${(hop.reachable ?? []).join(', ') || '(none)'}`;
+      return `read_skill("${hop.requestedSkill}") rejected from "${
+        hop.fromSkill ?? 'cold start'
+      }" — reachable: ${(hop.reachable ?? []).join(', ') || '(none)'}`;
   }
 }
 
@@ -246,7 +250,8 @@ export function routeRecorder(options: RouteRecorderOptions = {}): RouteRecorder
     getPath(): readonly string[] {
       const path: string[] = [];
       for (const hop of store.getAll()) {
-        if (hop.toSkill !== undefined && hop.toSkill !== path[path.length - 1]) path.push(hop.toSkill);
+        if (hop.toSkill !== undefined && hop.toSkill !== path[path.length - 1])
+          path.push(hop.toSkill);
       }
       return path;
     },

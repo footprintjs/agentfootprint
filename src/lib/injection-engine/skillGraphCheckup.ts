@@ -122,7 +122,8 @@ export function checkupGraph(input: CheckupInput): GraphCheckup {
   //    no priority field (there is none yet), so the first by declaration order wins.
   const deterministicByFrom = new Map<string, number>();
   for (const r of routes) {
-    if (r.deterministic) deterministicByFrom.set(r.fromId, (deterministicByFrom.get(r.fromId) ?? 0) + 1);
+    if (r.deterministic)
+      deterministicByFrom.set(r.fromId, (deterministicByFrom.get(r.fromId) ?? 0) + 1);
   }
   for (const [from, count] of deterministicByFrom) {
     if (count >= 2) {
@@ -153,7 +154,5 @@ export function checkupGraph(input: CheckupInput): GraphCheckup {
 
 /** Format a check-up for a thrown error / console warning. */
 export function formatCheckup(checkup: GraphCheckup): string {
-  return checkup.problems
-    .map((p) => `  [${p.kind}] ${p.code}: ${p.message}`)
-    .join('\n');
+  return checkup.problems.map((p) => `  [${p.kind}] ${p.code}: ${p.message}`).join('\n');
 }

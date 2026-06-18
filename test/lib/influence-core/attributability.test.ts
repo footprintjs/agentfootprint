@@ -38,7 +38,7 @@ const mk = (id: string, score: number): InfluenceScore => ({
 /** Deterministic LCG so property/load tiers are reproducible. */
 function lcg(seed: number) {
   let s = seed >>> 0;
-  return () => ((s = (s * 1664525 + 1013904223) >>> 0) / 0xffffffff);
+  return () => (s = (s * 1664525 + 1013904223) >>> 0) / 0xffffffff;
 }
 
 // ─── 1. UNIT ─────────────────────────────────────────────────────────
@@ -58,7 +58,9 @@ describe('rankingConfidence — unit', () => {
   });
 
   it('shortlist covers the cluster within epsilon of the top (and always includes topId)', () => {
-    const r = rankingConfidence([mk('a', 0.82), mk('b', 0.8), mk('c', 0.6)], { shortlistBand: 0.1 });
+    const r = rankingConfidence([mk('a', 0.82), mk('b', 0.8), mk('c', 0.6)], {
+      shortlistBand: 0.1,
+    });
     expect(r.shortlist).toContain('a');
     expect(r.shortlist).toContain('b'); // 0.82-0.80=0.02 <= 0.1
     expect(r.shortlist).not.toContain('c'); // 0.82-0.60=0.22 > 0.1
@@ -66,8 +68,13 @@ describe('rankingConfidence — unit', () => {
 
   it('boundary: margin EXACTLY at threshold is decisive (>= is inclusive)', () => {
     // 0.10 and 0.05 differ by exactly 0.05 (representable); just-below is not.
-    expect(rankingConfidence([mk('a', 0.1), mk('b', 0.05)], { clearWinnerMargin: 0.05 }).clearWinner).toBe(true);
-    expect(rankingConfidence([mk('a', 0.1), mk('b', 0.05)], { clearWinnerMargin: 0.0500001 }).clearWinner).toBe(false);
+    expect(
+      rankingConfidence([mk('a', 0.1), mk('b', 0.05)], { clearWinnerMargin: 0.05 }).clearWinner,
+    ).toBe(true);
+    expect(
+      rankingConfidence([mk('a', 0.1), mk('b', 0.05)], { clearWinnerMargin: 0.0500001 })
+        .clearWinner,
+    ).toBe(false);
   });
 
   it('pure tie (all-equal scores) → not decisive, margin 0, whole cluster shortlisted', () => {
@@ -230,7 +237,10 @@ describe('rankingConfidence — security & robustness', () => {
 
   it('shortlistBand < clearWinnerMargin still covers the runner-up when not decisive', () => {
     // pathological config that previously collapsed the shortlist to one item.
-    const r = rankingConfidence([mk('a', 0.82), mk('b', 0.8)], { clearWinnerMargin: 0.05, shortlistBand: 0.01 });
+    const r = rankingConfidence([mk('a', 0.82), mk('b', 0.8)], {
+      clearWinnerMargin: 0.05,
+      shortlistBand: 0.01,
+    });
     expect(r.clearWinner).toBe(false);
     expect(r.shortlist).toContain('a');
     expect(r.shortlist).toContain('b'); // the would-be culprit must not be dropped
@@ -238,9 +248,15 @@ describe('rankingConfidence — security & robustness', () => {
 
   it('negative or NaN thresholds fail loud with a prefixed message', () => {
     // clearWinnerMargin builds the default margin strategy → its throw is prefixed there.
-    expect(() => rankingConfidence([mk('a', 0.5)], { clearWinnerMargin: -1 })).toThrow(/marginStrategy/);
-    expect(() => rankingConfidence([mk('a', 0.5)], { clearWinnerMargin: NaN })).toThrow(/marginStrategy/);
-    expect(() => rankingConfidence([mk('a', 0.5)], { shortlistBand: -0.1 })).toThrow(/rankingConfidence/);
+    expect(() => rankingConfidence([mk('a', 0.5)], { clearWinnerMargin: -1 })).toThrow(
+      /marginStrategy/,
+    );
+    expect(() => rankingConfidence([mk('a', 0.5)], { clearWinnerMargin: NaN })).toThrow(
+      /marginStrategy/,
+    );
+    expect(() => rankingConfidence([mk('a', 0.5)], { shortlistBand: -0.1 })).toThrow(
+      /rankingConfidence/,
+    );
   });
 
   it('does not mutate the caller’s array', () => {
@@ -262,14 +278,19 @@ describe('rankingConfidence — pluggable strategy', () => {
   it('marginStrategy is the default (explicit == implicit)', () => {
     const scores = [mk('a', 0.82), mk('b', 0.8)];
     const implicit = rankingConfidence(scores);
-    const explicit = rankingConfidence(scores, { strategy: marginStrategy(DEFAULT_CLEAR_WINNER_MARGIN) });
+    const explicit = rankingConfidence(scores, {
+      strategy: marginStrategy(DEFAULT_CLEAR_WINNER_MARGIN),
+    });
     expect(explicit.clearWinner).toBe(implicit.clearWinner);
   });
 
   it('strategy WINS over clearWinnerMargin when both are passed', () => {
     // margin 0.02; clearWinnerMargin 0.01 would say clear, but the strategy says not.
     const scores = [mk('a', 0.82), mk('b', 0.8)];
-    const r = rankingConfidence(scores, { clearWinnerMargin: 0.01, strategy: marginStrategy(0.05) });
+    const r = rankingConfidence(scores, {
+      clearWinnerMargin: 0.01,
+      strategy: marginStrategy(0.05),
+    });
     expect(r.clearWinner).toBe(false);
     expect(r.reason).toContain('margin>=0.05');
   });
@@ -305,7 +326,9 @@ describe('rankingConfidence — pluggable strategy', () => {
   it('framework invariants hold under ANY strategy (malformed + single suspect)', () => {
     const alwaysClear: ConfidenceStrategy = { name: 'always', isClearWinner: () => true };
     // all-malformed must stay not-clear regardless of strategy:
-    expect(rankingConfidence([mk('a', NaN), mk('b', NaN)], { strategy: alwaysClear }).clearWinner).toBe(false);
+    expect(
+      rankingConfidence([mk('a', NaN), mk('b', NaN)], { strategy: alwaysClear }).clearWinner,
+    ).toBe(false);
     // single suspect is clear regardless:
     const neverClear: ConfidenceStrategy = { name: 'never', isClearWinner: () => false };
     expect(rankingConfidence([mk('only', 0.3)], { strategy: neverClear }).clearWinner).toBe(true);

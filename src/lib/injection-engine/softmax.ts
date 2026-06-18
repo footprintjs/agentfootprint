@@ -16,5 +16,7 @@ export function softmax(scores: readonly number[], temperature = 1): number[] {
   const exps = scores.map((s) => Math.exp((s - max) / t));
   const sum = exps.reduce((a, b) => a + b, 0);
   // Degenerate guard (all -Infinity / NaN): fall back to a uniform distribution.
-  return sum > 0 && Number.isFinite(sum) ? exps.map((e) => e / sum) : scores.map(() => 1 / scores.length);
+  return sum > 0 && Number.isFinite(sum)
+    ? exps.map((e) => e / sum)
+    : scores.map(() => 1 / scores.length);
 }

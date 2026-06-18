@@ -50,7 +50,10 @@ import type {
 } from './types.js';
 
 /** One honest stop reason when the walk cannot cleanly descend/convict. */
-export type RootCauseNote = 'unseparated-siblings' | 'overdetermined-or-incomplete' | 'untracked-origin';
+export type RootCauseNote =
+  | 'unseparated-siblings'
+  | 'overdetermined-or-incomplete'
+  | 'untracked-origin';
 
 /** One hop of the symptom→root walk. */
 export interface RootCauseHop {
@@ -124,7 +127,11 @@ function writtenByOf(frame: LoopFrame): Map<string, string | undefined> {
         const id = typeof rec.sourceId === 'string' ? rec.sourceId : undefined;
         if (id !== undefined && !map.has(id)) map.set(id, src.writerId);
       }
-    } else if (v !== null && typeof v === 'object' && typeof (v as { toolName?: unknown }).toolName === 'string') {
+    } else if (
+      v !== null &&
+      typeof v === 'object' &&
+      typeof (v as { toolName?: unknown }).toolName === 'string'
+    ) {
       // lastToolResult: a { toolName, result } object → the tool suspect
       const tool = (v as { toolName: string }).toolName;
       if (!map.has(tool)) map.set(tool, src.writerId);
@@ -144,8 +151,14 @@ function writtenByOf(frame: LoopFrame): Map<string, string | undefined> {
 function suspectFor(suspectId: string, kind: SuspectKind): Suspect {
   const detail = kind === 'tool' ? { toolName: suspectId } : { injectionId: suspectId };
   return {
-    source: suspectId, stageName: suspectId, kind, detail,
-    score: 0, structuralScore: 0, hasContentEvidence: false, edgePath: [],
+    source: suspectId,
+    stageName: suspectId,
+    kind,
+    detail,
+    score: 0,
+    structuralScore: 0,
+    hasContentEvidence: false,
+    edgePath: [],
   } as Suspect;
 }
 
@@ -200,7 +213,10 @@ export async function walkTrajectory(
   let byAblations = false;
 
   while (frameIdx >= 0) {
-    if (hops.length >= maxHops) { byHops = true; break; }
+    if (hops.length >= maxHops) {
+      byHops = true;
+      break;
+    }
     const frame = trajectory.frames[frameIdx];
 
     // NARROW: rank THIS loop's suspects by per-loop influence (single-frame sub-trajectory).
@@ -226,10 +242,15 @@ export async function walkTrajectory(
     let convicted = false;
     if (opts.rerun) {
       for (const cand of beam) {
-        if (ablationsUsed >= maxAblations) { byAblations = true; break; }
+        if (ablationsUsed >= maxAblations) {
+          byAblations = true;
+          break;
+        }
         const spec = ablationForSuspect(suspectFor(cand.suspectId, cand.kind));
         if (spec === undefined) continue;
-        const stats = await runAblationProbe({ embedder: opts.embedder, rerun: opts.rerun }, [spec]);
+        const stats = await runAblationProbe({ embedder: opts.embedder, rerun: opts.rerun }, [
+          spec,
+        ]);
         ablationsUsed++;
         if (baselineStable && probeFlipped(stats)) {
           chosen = cand;
@@ -244,19 +265,26 @@ export async function walkTrajectory(
     // loop did NOT convict, follow it back to the loop that PRODUCED the tool output the decision was
     // conditioned on — that's where a buried root (e.g. the misdirecting instruction) scores + convicts.
     const toolName =
-      !convicted && frame.proximateToolSource && typeof (frame.proximateToolSource.value as { toolName?: unknown })?.toolName === 'string'
+      !convicted &&
+      frame.proximateToolSource &&
+      typeof (frame.proximateToolSource.value as { toolName?: unknown })?.toolName === 'string'
         ? (frame.proximateToolSource.value as { toolName: string }).toolName
         : undefined;
     if (toolName !== undefined) chosen = { suspectId: toolName, kind: 'tool' };
 
     const writer = writtenBy.get(chosen.suspectId);
     const nextFrameIdx = writer !== undefined ? writerFrame.get(writer) : undefined;
-    const descendIdx = nextFrameIdx !== undefined && nextFrameIdx < frameIdx ? nextFrameIdx : undefined; // strictly backward
+    const descendIdx =
+      nextFrameIdx !== undefined && nextFrameIdx < frameIdx ? nextFrameIdx : undefined; // strictly backward
 
     // Per-hop honest note: untracked-origin (structural — no provenance writer to descend) is set
     // regardless of a rerun; unseparated-siblings flags a narrow that couldn't separate the top-2.
     const inlineNote: RootCauseNote | undefined =
-      writer === undefined ? 'untracked-origin' : unseparated && !convicted ? 'unseparated-siblings' : undefined;
+      writer === undefined
+        ? 'untracked-origin'
+        : unseparated && !convicted
+        ? 'unseparated-siblings'
+        : undefined;
 
     hops.push({
       loopIndex: frame.loopIndex,

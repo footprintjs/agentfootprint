@@ -34,7 +34,11 @@
  */
 import type { Embedder, EvidenceInput, InfluenceWeights } from '../influence-core/index.js';
 import { scoreInfluence } from '../influence-core/index.js';
-import { defaultSuspectClassifier, type ClassifyContext, type SuspectClassifier } from './localize.js';
+import {
+  defaultSuspectClassifier,
+  type ClassifyContext,
+  type SuspectClassifier,
+} from './localize.js';
 import type { LoopFrame, Trajectory } from './trajectory.js';
 import type { HonestyFlag, SuspectKind } from './types.js';
 
@@ -152,7 +156,11 @@ export async function shortlistEarlyCulprits(
     // Per-loop relevance: each suspect's content vs THIS loop's output (one batched call).
     let scoreById = new Map<string, number>();
     if (suspects.length > 0) {
-      const evidence: EvidenceInput[] = suspects.map((s) => ({ id: s.suspectId, text: s.text, ancestorTexts: [] }));
+      const evidence: EvidenceInput[] = suspects.map((s) => ({
+        id: s.suspectId,
+        text: s.text,
+        ancestorTexts: [],
+      }));
       const scored = await scoreInfluence({
         evidence,
         finalAnswerText: frame.intermediateText ?? '',
@@ -183,17 +191,24 @@ export async function shortlistEarlyCulprits(
 
   const max = Math.max(0, ...score.values());
   const candidates: LoopCandidate[] = [...score.entries()]
-    .map(([suspectId, sum]): LoopCandidate => ({
-      suspectId,
-      kind: kindOf.get(suspectId) ?? 'stage',
-      recallScore: max > 0 ? sum / max : 0,
-      eligibility: sum,
-      enteredLoop: enteredLoop.get(suspectId) ?? 0,
-      perLoop: perLoop.get(suspectId) ?? [],
-      incomplete: incomplete.get(suspectId) ?? false,
-    }))
+    .map(
+      ([suspectId, sum]): LoopCandidate => ({
+        suspectId,
+        kind: kindOf.get(suspectId) ?? 'stage',
+        recallScore: max > 0 ? sum / max : 0,
+        eligibility: sum,
+        enteredLoop: enteredLoop.get(suspectId) ?? 0,
+        perLoop: perLoop.get(suspectId) ?? [],
+        incomplete: incomplete.get(suspectId) ?? false,
+      }),
+    )
     // recall-first; ties keep earlier-entered first, then suspectId for stable determinism.
-    .sort((a, b) => b.recallScore - a.recallScore || a.enteredLoop - b.enteredLoop || a.suspectId.localeCompare(b.suspectId))
+    .sort(
+      (a, b) =>
+        b.recallScore - a.recallScore ||
+        a.enteredLoop - b.enteredLoop ||
+        a.suspectId.localeCompare(b.suspectId),
+    )
     .slice(0, k);
 
   return { candidates, k, recencyDecay, honestyFlags: trajectory.honestyFlags };

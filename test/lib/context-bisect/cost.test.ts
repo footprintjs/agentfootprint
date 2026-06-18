@@ -51,7 +51,10 @@ function mkSuspect(
     hasContentEvidence: true,
     edgePath: [],
     ablation: { kind: 'injection' as const, excludeInjectionIds: [source] },
-    verdict: { verdict: opts.flipped ? ('confirmed' as const) : ('not-confirmed' as const), claim: '' },
+    verdict: {
+      verdict: opts.flipped ? ('confirmed' as const) : ('not-confirmed' as const),
+      claim: '',
+    },
   };
   const sim = { mean: 0, min: 0, max: 0, stdev: 0 };
   if (opts.noCost) return { ...base, runs: { samples: 2, flips, similarity: sim } };
@@ -66,7 +69,9 @@ function mkSuspect(
         samples: 2,
         loops: { median: lm, min: lm, max: opts.loopsMax ?? lm },
         ...(opts.tokensMedian !== undefined
-          ? { tokens: { median: opts.tokensMedian, min: opts.tokensMedian, max: opts.tokensMedian } }
+          ? {
+              tokens: { median: opts.tokensMedian, min: opts.tokensMedian, max: opts.tokensMedian },
+            }
           : {}),
       },
     },
@@ -124,7 +129,10 @@ describe('functional — cost capture in runAblationProbe', () => {
       {
         embedder: toyEmbedder,
         rerun: {
-          runner: async (_s, run) => ({ output: 'A same', cost: { loops: 3 + run.seed, tokens: 100 } }),
+          runner: async (_s, run) => ({
+            output: 'A same',
+            cost: { loops: 3 + run.seed, tokens: 100 },
+          }),
           originalOutput: 'A original',
           samples: 3,
         },
@@ -138,7 +146,10 @@ describe('functional — cost capture in runAblationProbe', () => {
 
   it('a bare-string runner reports NO cost (quality-only, unchanged)', async () => {
     const stats = await runAblationProbe(
-      { embedder: toyEmbedder, rerun: { runner: async () => 'A same', originalOutput: 'A original', samples: 2 } },
+      {
+        embedder: toyEmbedder,
+        rerun: { runner: async () => 'A same', originalOutput: 'A original', samples: 2 },
+      },
       [],
     );
     expect(stats.cost).toBeUndefined();
@@ -196,7 +207,10 @@ describe('integration — assignCostVerdicts + the 2×2', () => {
   });
 
   it('NO placebo band (the only non-flipper is the candidate) → stable false', () => {
-    const out = assignCostVerdicts([mkSuspect('lonely', { flipped: false, loopsMedian: 2, loopsMax: 2 })], baseline(5));
+    const out = assignCostVerdicts(
+      [mkSuspect('lonely', { flipped: false, loopsMedian: 2, loopsMax: 2 })],
+      baseline(5),
+    );
     expect(out[0].cost!.stable).toBe(false);
     expect(out[0].cost!.reducedCostOnRemoval).toBe(false);
   });
@@ -211,14 +225,23 @@ describe('property', () => {
           ...mkSuspect('p', { flipped }),
           cost: { reducedCostOnRemoval: reduced, loopsSaved: 1, tokensSaved: 0, stable: reduced },
         });
-        const expected = flipped ? (reduced ? 'both' : 'content-bug') : reduced ? 'cost-cause' : 'no-detected-effect';
+        const expected = flipped
+          ? reduced
+            ? 'both'
+            : 'content-bug'
+          : reduced
+          ? 'cost-cause'
+          : 'no-detected-effect';
         expect(c).toBe(expected);
       }
     }
   });
 
   it('assignCostVerdicts never adds cost to a suspect with no rerun cost', () => {
-    const out = assignCostVerdicts([mkSuspect('q', { noCost: true }), mkSuspect('r', { loopsMedian: 1 })], baseline(3));
+    const out = assignCostVerdicts(
+      [mkSuspect('q', { noCost: true }), mkSuspect('r', { loopsMedian: 1 })],
+      baseline(3),
+    );
     expect(out.find((s) => s.source === 'q')!.cost).toBeUndefined();
     expect(out.find((s) => s.source === 'r')!.cost).toBeDefined();
   });
@@ -227,8 +250,18 @@ describe('property', () => {
 // ─── 5. SECURITY / robustness ────────────────────────────────────────
 describe('security & robustness', () => {
   it('baseline without loop cost → loopsSaved 0, not a cost cause (no false positive)', () => {
-    const noLoopBaseline: AblationRunStats = { samples: 2, flips: 0, similarity: { mean: 1, min: 1, max: 1, stdev: 0 } };
-    const out = assignCostVerdicts([mkSuspect('x', { flipped: false, loopsMedian: 2 }), mkSuspect('y', { flipped: false, loopsMedian: 5 })], noLoopBaseline);
+    const noLoopBaseline: AblationRunStats = {
+      samples: 2,
+      flips: 0,
+      similarity: { mean: 1, min: 1, max: 1, stdev: 0 },
+    };
+    const out = assignCostVerdicts(
+      [
+        mkSuspect('x', { flipped: false, loopsMedian: 2 }),
+        mkSuspect('y', { flipped: false, loopsMedian: 5 }),
+      ],
+      noLoopBaseline,
+    );
     for (const s of out) expect(s.cost!.reducedCostOnRemoval).toBe(false);
   });
 
@@ -254,7 +287,10 @@ describe('performance & load', () => {
   });
 
   it('sustains many classify calls', () => {
-    const s = { ...mkSuspect('z', { flipped: true }), cost: { reducedCostOnRemoval: true, loopsSaved: 2, tokensSaved: 9, stable: true } };
+    const s = {
+      ...mkSuspect('z', { flipped: true }),
+      cost: { reducedCostOnRemoval: true, loopsSaved: 2, tokensSaved: 9, stable: true },
+    };
     for (let i = 0; i < 5000; i++) expect(classifySuspect(s)).toBe('both');
   });
 });

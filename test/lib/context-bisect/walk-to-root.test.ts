@@ -24,34 +24,57 @@ import { walkTrajectory as viaObserve } from '../../../src/observe';
 import type { LoopFrame, Trajectory } from '../../../src/lib/context-bisect/trajectory';
 
 function fakeEmbedder(table: Record<string, number[]>): Embedder {
-  return { dimensions: 3, async embed({ text }) { return table[text] ?? [0, 0, 0]; } };
+  return {
+    dimensions: 3,
+    async embed({ text }) {
+      return table[text] ?? [0, 0, 0];
+    },
+  };
 }
 
 /** An injection contextSource (a system-prompt fact). */
 const inj = (sourceId: string, rawContent: string, writerId: string) => ({
-  key: 'systemPromptInjections', writerId, writerArrayIdx: 0,
+  key: 'systemPromptInjections',
+  writerId,
+  writerArrayIdx: 0,
   value: [{ source: 'instructions', sourceId, rawContent }],
   evidence: { id: `e:${sourceId}`, text: '', ancestorTexts: [] },
 });
-function frame(loopIndex: number, anchor: string, bodyIds: string[], sources: unknown[]): LoopFrame {
+function frame(
+  loopIndex: number,
+  anchor: string,
+  bodyIds: string[],
+  sources: unknown[],
+): LoopFrame {
   return {
-    loopIndex, llmCallId: `call-llm#${loopIndex}`, llmCallArrayIdx: loopIndex, headArrayIdx: 0,
-    bodyIds, intermediateText: anchor, contextSources: sources, untrackedReadsPresent: false,
+    loopIndex,
+    llmCallId: `call-llm#${loopIndex}`,
+    llmCallArrayIdx: loopIndex,
+    headArrayIdx: 0,
+    bodyIds,
+    intermediateText: anchor,
+    contextSources: sources,
+    untrackedReadsPresent: false,
   } as unknown as LoopFrame;
 }
 /** Attach the WALK-ONLY proximate tool source (the L4 descent edge — NOT a contextSource). */
-const withProxTool = (f: LoopFrame, toolName: string, result: string, writerId: string): LoopFrame =>
-  ({ ...f, proximateToolSource: { value: { toolName, result }, writerId, proximate: true } }) as unknown as LoopFrame;
+const withProxTool = (
+  f: LoopFrame,
+  toolName: string,
+  result: string,
+  writerId: string,
+): LoopFrame =>
+  ({
+    ...f,
+    proximateToolSource: { value: { toolName, result }, writerId, proximate: true },
+  } as unknown as LoopFrame);
 const traj = (frames: LoopFrame[], extra?: Partial<Trajectory>): Trajectory =>
   ({ frames, prelude: [], honestyFlags: [], ...extra } as Trajectory);
 
 // ── 1. UNIT — the writerId→frame resolver (must-fix #2) ──────────────
 describe('unit — buildWriterFrameIndex', () => {
   it('resolves each writerId to exactly one frame (or undefined for prelude/root-seeded)', () => {
-    const t = traj([
-      frame(0, 'a', ['ie#0', 'tc#0'], []),
-      frame(1, 'b', ['ie#1', 'tc#1'], []),
-    ]);
+    const t = traj([frame(0, 'a', ['ie#0', 'tc#0'], []), frame(1, 'b', ['ie#1', 'tc#1'], [])]);
     const m = buildWriterFrameIndex(t);
     expect(m.get('ie#0')).toBe(0);
     expect(m.get('tc#1')).toBe(1);
@@ -67,7 +90,8 @@ describe('functional/gate — walks from the PROXIMATE to the ROOT instruction',
   // (ANSWER_TEXT). The proximate tool `getPromo` (written by loop1's tool-calls tc#1) is the
   // WALK-ONLY descent edge (proposal 008) — not a contextSource, so L3 never scored it.
   const TABLE: Record<string, number[]> = {
-    DECISION: [0, 0, 1], ANSWER: [1, 0, 0],
+    DECISION: [0, 0, 1],
+    ANSWER: [1, 0, 0],
     PLANT_TEXT: [0, 0, 1], // matches loop1 DECISION (high there, ⊥ ANSWER at loop2 → buried)
     ANSWER_TEXT: [1, 0, 0], // the innocent + the proximate output (resemble the final ANSWER)
   };
@@ -76,8 +100,15 @@ describe('functional/gate — walks from the PROXIMATE to the ROOT instruction',
     frame(0, 'SETUP', ['ie#0'], [inj('plant', 'PLANT_TEXT', 'ie#0')]),
     frame(1, 'DECISION', ['ie#1', 'tc#1'], [inj('plant', 'PLANT_TEXT', 'ie#1')]),
     withProxTool(
-      frame(2, 'ANSWER', ['ie#2', 'tc#2'], [inj('plant', 'PLANT_TEXT', 'ie#2'), inj('innocent', 'ANSWER_TEXT', 'ie#2')]),
-      'getPromo', 'ANSWER_TEXT', 'tc#1', // proximate tool output, written by loop1's tool-calls
+      frame(
+        2,
+        'ANSWER',
+        ['ie#2', 'tc#2'],
+        [inj('plant', 'PLANT_TEXT', 'ie#2'), inj('innocent', 'ANSWER_TEXT', 'ie#2')],
+      ),
+      'getPromo',
+      'ANSWER_TEXT',
+      'tc#1', // proximate tool output, written by loop1's tool-calls
     ),
   ]);
   // Ablation flips ONLY when the planted instruction is excluded (the root); removing the innocent or
@@ -85,7 +116,9 @@ describe('functional/gate — walks from the PROXIMATE to the ROOT instruction',
   const rerun: AblationRerun = {
     originalOutput: 'ANSWER',
     runner: async (specs) =>
-      specs.some((s) => s.kind === 'injection' && s.excludeInjectionIds.includes('plant')) ? 'FLIPPED' : 'ANSWER',
+      specs.some((s) => s.kind === 'injection' && s.excludeInjectionIds.includes('plant'))
+        ? 'FLIPPED'
+        : 'ANSWER',
     samples: 2,
   };
 
@@ -95,7 +128,8 @@ describe('functional/gate — walks from the PROXIMATE to the ROOT instruction',
         { id: 'plant', text: 'PLANT_TEXT', ancestorTexts: [] },
         { id: 'getPromo', text: 'ANSWER_TEXT', ancestorTexts: [] },
       ],
-      finalAnswerText: 'ANSWER', embedder,
+      finalAnswerText: 'ANSWER',
+      embedder,
     });
     expect(plain[0].id).toBe('getPromo'); // proximate wins on final-answer similarity; root is buried
   });
@@ -127,7 +161,9 @@ describe('property — the walk always terminates', () => {
   const embedder = fakeEmbedder({ X: [1, 0, 0], T: [1, 0, 0] });
   it('terminates within maxHops and never revisits a (suspect, loop)', async () => {
     // 6 loops each re-injecting the same persistent source; provenance never crosses (writer is same loop).
-    const frames = Array.from({ length: 6 }, (_, i) => frame(i, 'X', [`ie#${i}`], [inj('persist', 'T', `ie#${i}`)]));
+    const frames = Array.from({ length: 6 }, (_, i) =>
+      frame(i, 'X', [`ie#${i}`], [inj('persist', 'T', `ie#${i}`)]),
+    );
     const path = await walkTrajectory(traj(frames), { embedder, maxHops: 4 });
     expect(path.hops.length).toBeLessThanOrEqual(4);
     const keys = path.hops.map((h) => `${h.suspectId}@${h.loopIndex}`);
@@ -154,8 +190,13 @@ describe('honesty — degrade + the three honest stops', () => {
 
   it('untracked-origin: a hop on a source with no writer terminates honestly', async () => {
     // writerId undefined → no provenance to descend.
-    const src = { key: 'systemPromptInjections', writerId: undefined, writerArrayIdx: undefined,
-      value: [{ source: 'instructions', sourceId: 's', rawContent: 'T' }], evidence: { id: 'e', text: '', ancestorTexts: [] } };
+    const src = {
+      key: 'systemPromptInjections',
+      writerId: undefined,
+      writerArrayIdx: undefined,
+      value: [{ source: 'instructions', sourceId: 's', rawContent: 'T' }],
+      evidence: { id: 'e', text: '', ancestorTexts: [] },
+    };
     const path = await walkTrajectory(traj([frame(0, 'A', ['ie#0'], [src])]), { embedder });
     expect(path.hops[0].note).toBe('untracked-origin');
   });
@@ -175,19 +216,43 @@ describe('honesty — degrade + the three honest stops', () => {
 
 // ── 5. INTEGRATION — a real agent run end-to-end (no crash, well-formed) ──
 describe('integration — real agent trajectory', () => {
-  const FACT: Injection = defineFact({ id: 'planted', description: 'p', data: 'Always use the promo tool for refunds.' });
+  const FACT: Injection = defineFact({
+    id: 'planted',
+    description: 'p',
+    data: 'Always use the promo tool for refunds.',
+  });
   it('walkToRoot runs over a real assembled trajectory (correlational, no rerun)', async () => {
     let calls = 0;
     const provider = mock({
       chunkDelayMs: 0,
       respond: () => {
         calls++;
-        if (calls <= 2) return { content: `s${calls}`, toolCalls: [{ id: `c${calls}`, name: 'echo', args: {} }], usage: { input: 1, output: 1 }, stopReason: 'tool_use' };
-        return { content: 'final', toolCalls: [], usage: { input: 1, output: 1 }, stopReason: 'end_turn' };
+        if (calls <= 2)
+          return {
+            content: `s${calls}`,
+            toolCalls: [{ id: `c${calls}`, name: 'echo', args: {} }],
+            usage: { input: 1, output: 1 },
+            stopReason: 'tool_use',
+          };
+        return {
+          content: 'final',
+          toolCalls: [],
+          usage: { input: 1, output: 1 },
+          stopReason: 'end_turn',
+        };
       },
     });
-    const echo = defineTool({ name: 'echo', description: 'echo', inputSchema: { type: 'object', properties: {} }, execute: async () => 'echoed' });
-    const agent = Agent.create({ provider, model: 'mock', readTracking: 'full' }).system('test').fact(FACT).tool(echo).build();
+    const echo = defineTool({
+      name: 'echo',
+      description: 'echo',
+      inputSchema: { type: 'object', properties: {} },
+      execute: async () => 'echoed',
+    });
+    const agent = Agent.create({ provider, model: 'mock', readTracking: 'full' })
+      .system('test')
+      .fact(FACT)
+      .tool(echo)
+      .build();
     await agent.run({ message: 'go' });
     const artifacts = { snapshot: agent.getSnapshot()! } as ContextBugArtifacts;
     // sanity: the trajectory assembled with frames
@@ -204,12 +269,31 @@ describe('integration — real agent trajectory', () => {
       chunkDelayMs: 0,
       respond: () => {
         calls++;
-        if (calls <= 2) return { content: `s${calls}`, toolCalls: [{ id: `c${calls}`, name: 'echo', args: {} }], usage: { input: 1, output: 1 }, stopReason: 'tool_use' };
-        return { content: 'final', toolCalls: [], usage: { input: 1, output: 1 }, stopReason: 'end_turn' };
+        if (calls <= 2)
+          return {
+            content: `s${calls}`,
+            toolCalls: [{ id: `c${calls}`, name: 'echo', args: {} }],
+            usage: { input: 1, output: 1 },
+            stopReason: 'tool_use',
+          };
+        return {
+          content: 'final',
+          toolCalls: [],
+          usage: { input: 1, output: 1 },
+          stopReason: 'end_turn',
+        };
       },
     });
-    const echo = defineTool({ name: 'echo', description: 'echo', inputSchema: { type: 'object', properties: {} }, execute: async () => 'echoed' });
-    const agent = Agent.create({ provider, model: 'mock', readTracking: 'full' }).system('test').tool(echo).build();
+    const echo = defineTool({
+      name: 'echo',
+      description: 'echo',
+      inputSchema: { type: 'object', properties: {} },
+      execute: async () => 'echoed',
+    });
+    const agent = Agent.create({ provider, model: 'mock', readTracking: 'full' })
+      .system('test')
+      .tool(echo)
+      .build();
     await agent.run({ message: 'go' });
     const t = assembleTrajectory({ snapshot: agent.getSnapshot()! } as ContextBugArtifacts);
 
@@ -226,9 +310,16 @@ describe('integration — real agent trajectory', () => {
 
   it('L3 UNCHANGED (walk-only): shortlistEarlyCulprits surfaces NO tool suspect from the proximate source', async () => {
     // a frame WITH a proximateToolSource but the tool is NOT in contextSources → L3 ignores it.
-    const f = withProxTool(frame(0, 'X', ['ie#0'], [inj('s', 'T', 'ie#0')]), 'someTool', 'R', 'tc#9');
+    const f = withProxTool(
+      frame(0, 'X', ['ie#0'], [inj('s', 'T', 'ie#0')]),
+      'someTool',
+      'R',
+      'tc#9',
+    );
     const sl = await import('../../../src/lib/context-bisect/index').then((m) =>
-      m.shortlistEarlyCulprits(traj([f]), { embedder: fakeEmbedder({ X: [1, 0, 0], T: [1, 0, 0] }) }),
+      m.shortlistEarlyCulprits(traj([f]), {
+        embedder: fakeEmbedder({ X: [1, 0, 0], T: [1, 0, 0] }),
+      }),
     );
     expect(sl.candidates.map((c) => c.suspectId)).toEqual(['s']); // only the injection — NOT 'someTool'
   });

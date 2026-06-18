@@ -29,11 +29,21 @@ import type { LoopFrame, Trajectory } from '../../../src/lib/context-bisect/traj
 
 /** Controllable embedder: each text → a fixed vector, so FA = cosine is engineered exactly. */
 function fakeEmbedder(table: Record<string, number[]>): Embedder {
-  return { dimensions: 3, async embed({ text }) { return table[text] ?? [0, 0, 0]; } };
+  return {
+    dimensions: 3,
+    async embed({ text }) {
+      return table[text] ?? [0, 0, 0];
+    },
+  };
 }
 
 /** One synthetic loop frame whose systemPromptInjections holds the given suspects. */
-function frame(loopIndex: number, anchor: string, injections: { id: string; content: string }[], untracked = false): LoopFrame {
+function frame(
+  loopIndex: number,
+  anchor: string,
+  injections: { id: string; content: string }[],
+  untracked = false,
+): LoopFrame {
   return {
     loopIndex,
     llmCallId: `call-llm#${loopIndex}`,
@@ -46,7 +56,11 @@ function frame(loopIndex: number, anchor: string, injections: { id: string; cont
         key: 'systemPromptInjections',
         writerId: 'w',
         writerArrayIdx: 0,
-        value: injections.map((inj) => ({ source: 'fact', sourceId: inj.id, rawContent: inj.content })),
+        value: injections.map((inj) => ({
+          source: 'fact',
+          sourceId: inj.id,
+          rawContent: inj.content,
+        })),
         evidence: { id: `e#${loopIndex}`, text: '', ancestorTexts: [] },
       },
     ],
@@ -59,7 +73,9 @@ const traj = (frames: LoopFrame[], extra?: Partial<Trajectory>): Trajectory =>
 
 // Orthogonal axes: a source matches exactly one loop's anchor.
 const TABLE: Record<string, number[]> = {
-  EARLY: [1, 0, 0], MID: [0, 1, 0], LATE: [0, 0, 1],
+  EARLY: [1, 0, 0],
+  MID: [0, 1, 0],
+  LATE: [0, 0, 1],
   matchMid: [0, 1, 0], // resembles the MID loop's output only
   matchLate: [0, 0, 1], // resembles the LATE/final output
   nothing: [0, 0, 0], // resembles no loop
@@ -69,7 +85,10 @@ const embedder = fakeEmbedder(TABLE);
 // ─── 1. UNIT ─────────────────────────────────────────────────────────
 describe('unit — shortlistEarlyCulprits', () => {
   it('one loop, one suspect → one candidate joinable by suspectId (recallScore normalized to 1)', async () => {
-    const out = await shortlistEarlyCulprits(traj([frame(0, 'MID', [{ id: 'cul', content: 'matchMid' }])]), { embedder });
+    const out = await shortlistEarlyCulprits(
+      traj([frame(0, 'MID', [{ id: 'cul', content: 'matchMid' }])]),
+      { embedder },
+    );
     expect(out.candidates.length).toBe(1);
     expect(out.candidates[0].suspectId).toBe('cul'); // the classifier identity, NOT the slot key
     expect(out.candidates[0].kind).toBe('injection');
@@ -86,9 +105,18 @@ describe('unit — shortlistEarlyCulprits', () => {
 describe('functional — surfaces a culprit the FINAL ANSWER buries', () => {
   // culprit resembles the MID loop's decision (not the final LATE answer); filler resembles nothing.
   const frames = [
-    frame(0, 'EARLY', [{ id: 'cul', content: 'matchMid' }, { id: 'flr', content: 'nothing' }]),
-    frame(1, 'MID', [{ id: 'cul', content: 'matchMid' }, { id: 'flr', content: 'nothing' }]),
-    frame(2, 'LATE', [{ id: 'cul', content: 'matchMid' }, { id: 'flr', content: 'nothing' }]),
+    frame(0, 'EARLY', [
+      { id: 'cul', content: 'matchMid' },
+      { id: 'flr', content: 'nothing' },
+    ]),
+    frame(1, 'MID', [
+      { id: 'cul', content: 'matchMid' },
+      { id: 'flr', content: 'nothing' },
+    ]),
+    frame(2, 'LATE', [
+      { id: 'cul', content: 'matchMid' },
+      { id: 'flr', content: 'nothing' },
+    ]),
   ];
 
   it('PLAIN final-answer influence cannot distinguish them (both orthogonal to the final answer)', async () => {
@@ -124,7 +152,10 @@ describe('property — recency-weighted sum invariants', () => {
   it('recencyDecay=1 ⇒ eligibility is the UNIFORM sum of the per-loop scores', async () => {
     const out = await shortlistEarlyCulprits(traj(threeLoop), { embedder, recencyDecay: 1 });
     const cul = out.candidates[0];
-    expect(cul.eligibility).toBeCloseTo(cul.perLoop.reduce((a, p) => a + p.recallScore, 0), 9);
+    expect(cul.eligibility).toBeCloseTo(
+      cul.perLoop.reduce((a, p) => a + p.recallScore, 0),
+      9,
+    );
   });
 
   it('recencyDecay=0 ⇒ only the LAST loop counts', async () => {
@@ -142,7 +173,9 @@ describe('property — recency-weighted sum invariants', () => {
       frame(2, 'EARLY', [{ id: 'late', content: 'nothing' }]),
     ];
     const elig = async (rd: number) =>
-      (await shortlistEarlyCulprits(traj(f), { embedder, recencyDecay: rd, k: 9 })).candidates.find((c) => c.suspectId === 'early')!.eligibility;
+      (await shortlistEarlyCulprits(traj(f), { embedder, recencyDecay: rd, k: 9 })).candidates.find(
+        (c) => c.suspectId === 'early',
+      )!.eligibility;
     const [e1, e05, e0] = [await elig(1), await elig(0.5), await elig(0)];
     expect(e1).toBeGreaterThan(e05); // uniform keeps full early weight
     expect(e05).toBeGreaterThan(e0); // recency fades it; at 0 the early-only source is gone
@@ -155,7 +188,9 @@ describe('property — recency-weighted sum invariants', () => {
   });
 
   it('deterministic + k-bounded', async () => {
-    const many = Array.from({ length: 8 }, (_, i) => frame(i, 'MID', [{ id: `s${i}`, content: 'matchMid' }]));
+    const many = Array.from({ length: 8 }, (_, i) =>
+      frame(i, 'MID', [{ id: `s${i}`, content: 'matchMid' }]),
+    );
     const a = await shortlistEarlyCulprits(traj(many), { embedder, k: 3 });
     const b = await shortlistEarlyCulprits(traj(many), { embedder, k: 3 });
     expect(a.candidates.length).toBe(3);
@@ -166,18 +201,27 @@ describe('property — recency-weighted sum invariants', () => {
 // ─── 4. SECURITY / robustness ────────────────────────────────────────
 describe('security & robustness', () => {
   it('reads ONLY the trajectory — a redacted source value passes through, no crash', async () => {
-    const out = await shortlistEarlyCulprits(traj([frame(0, 'MID', [{ id: 'cul', content: '[REDACTED]' }])]), { embedder });
+    const out = await shortlistEarlyCulprits(
+      traj([frame(0, 'MID', [{ id: 'cul', content: '[REDACTED]' }])]),
+      { embedder },
+    );
     expect(out.candidates[0].suspectId).toBe('cul'); // identity survives; content already scrubbed upstream
   });
 
   it('honesty: a frame with untracked reads flags the candidate incomplete', async () => {
-    const out = await shortlistEarlyCulprits(traj([frame(0, 'MID', [{ id: 'cul', content: 'matchMid' }], true)]), { embedder });
+    const out = await shortlistEarlyCulprits(
+      traj([frame(0, 'MID', [{ id: 'cul', content: 'matchMid' }], true)]),
+      { embedder },
+    );
     expect(out.candidates[0].incomplete).toBe(true);
   });
 
   it('passes the trajectory honestyFlags through literally', async () => {
     const flags = [{ flag: 'untracked-sources' as const, note: 'x' }];
-    const out = await shortlistEarlyCulprits(traj([frame(0, 'MID', [{ id: 'cul', content: 'matchMid' }])], { honestyFlags: flags }), { embedder });
+    const out = await shortlistEarlyCulprits(
+      traj([frame(0, 'MID', [{ id: 'cul', content: 'matchMid' }])], { honestyFlags: flags }),
+      { embedder },
+    );
     expect(out.honestyFlags).toEqual(flags);
   });
 
@@ -190,7 +234,11 @@ describe('security & robustness', () => {
 describe('performance & load', () => {
   it('a 50-loop trajectory with 3 suspects/loop shortlists promptly', async () => {
     const frames = Array.from({ length: 50 }, (_, i) =>
-      frame(i, 'MID', [{ id: 'a', content: 'matchMid' }, { id: 'b', content: 'matchLate' }, { id: 'c', content: 'nothing' }]),
+      frame(i, 'MID', [
+        { id: 'a', content: 'matchMid' },
+        { id: 'b', content: 'matchLate' },
+        { id: 'c', content: 'nothing' },
+      ]),
     );
     const t0 = performance.now();
     const out = await shortlistEarlyCulprits(traj(frames), { embedder, k: 5 });
@@ -201,8 +249,16 @@ describe('performance & load', () => {
 
 // ─── 6. INTEGRATION — real agent runs + localizeContextBug reorder ───
 describe('integration — real agent trajectory + localizer narrowing', () => {
-  const FACT_A: Injection = defineFact({ id: 'fact-a', description: 'A', data: 'Alpha fact about refunds and policy windows.' });
-  const FACT_B: Injection = defineFact({ id: 'fact-b', description: 'B', data: 'Beta fact about VIP override tiers.' });
+  const FACT_A: Injection = defineFact({
+    id: 'fact-a',
+    description: 'A',
+    data: 'Alpha fact about refunds and policy windows.',
+  });
+  const FACT_B: Injection = defineFact({
+    id: 'fact-b',
+    description: 'B',
+    data: 'Beta fact about VIP override tiers.',
+  });
 
   async function runAgent(reactMode: 'dynamic' | 'dynamic-grouped') {
     let calls = 0;
@@ -211,13 +267,32 @@ describe('integration — real agent trajectory + localizer narrowing', () => {
       respond: () => {
         calls++;
         if (calls <= 2)
-          return { content: `step ${calls}`, toolCalls: [{ id: `c${calls}`, name: 'echo', args: {} }], usage: { input: 1, output: 1 }, stopReason: 'tool_use' };
-        return { content: 'final answer', toolCalls: [], usage: { input: 1, output: 1 }, stopReason: 'end_turn' };
+          return {
+            content: `step ${calls}`,
+            toolCalls: [{ id: `c${calls}`, name: 'echo', args: {} }],
+            usage: { input: 1, output: 1 },
+            stopReason: 'tool_use',
+          };
+        return {
+          content: 'final answer',
+          toolCalls: [],
+          usage: { input: 1, output: 1 },
+          stopReason: 'end_turn',
+        };
       },
     });
-    const echo = defineTool({ name: 'echo', description: 'echo', inputSchema: { type: 'object', properties: {} }, execute: async () => 'echoed' });
+    const echo = defineTool({
+      name: 'echo',
+      description: 'echo',
+      inputSchema: { type: 'object', properties: {} },
+      execute: async () => 'echoed',
+    });
     const agent = Agent.create({ provider, model: 'mock', readTracking: 'full', reactMode })
-      .system('test').fact(FACT_A).fact(FACT_B).tool(echo).build();
+      .system('test')
+      .fact(FACT_A)
+      .fact(FACT_B)
+      .tool(echo)
+      .build();
     await agent.run({ message: 'go' });
     return agent.getSnapshot()!;
   }
@@ -232,9 +307,13 @@ describe('integration — real agent trajectory + localizer narrowing', () => {
   });
 
   it('GROUPED: real grouped run → per-scope shortlist still joins on the injection ids', async () => {
-    const t = assembleTrajectory({ snapshot: await runAgent('dynamic-grouped') } as ContextBugArtifacts);
+    const t = assembleTrajectory({
+      snapshot: await runAgent('dynamic-grouped'),
+    } as ContextBugArtifacts);
     const out = await shortlistEarlyCulprits(t, { embedder: embeddingCache(mockEmbedder()) });
-    expect(out.candidates.map((c) => c.suspectId)).toEqual(expect.arrayContaining(['fact-a', 'fact-b']));
+    expect(out.candidates.map((c) => c.suspectId)).toEqual(
+      expect.arrayContaining(['fact-a', 'fact-b']),
+    );
   });
 
   it('localizeContextBug({shortlist}) REORDERS suspects (never drops) so the boosted suspect rises', async () => {
@@ -248,8 +327,20 @@ describe('integration — real agent trajectory + localizer narrowing', () => {
     if (ablatable.length < 2) return; // need ≥2 to observe a reorder
     const lastId = ablatable[ablatable.length - 1].detail!.injectionId!;
     const shortlist: LoopRecallShortlist = {
-      candidates: [{ suspectId: lastId, kind: 'injection', recallScore: 1, eligibility: 1, enteredLoop: 0, perLoop: [], incomplete: false }],
-      k: 5, recencyDecay: 0.5, honestyFlags: [],
+      candidates: [
+        {
+          suspectId: lastId,
+          kind: 'injection',
+          recallScore: 1,
+          eligibility: 1,
+          enteredLoop: 0,
+          perLoop: [],
+          incomplete: false,
+        },
+      ],
+      k: 5,
+      recencyDecay: 0.5,
+      honestyFlags: [],
     };
     const reordered = await localizeContextBug({ artifacts, embedder: emb, atStep, shortlist });
     expect(reordered.suspects.length).toBe(base.suspects.length); // REORDER-only, no drop

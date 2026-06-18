@@ -11,12 +11,30 @@ import { skillGraph, defineSkill, defineTool, Agent, mock } from '../../src/inde
 // ── synthetic event helpers ────────────────────────────────────────────────
 type Routing = { injectionId: string; via: string; from?: string; label?: string };
 const ctxEval = (rt: string, iteration: number, routing: Routing[]) =>
-  ({ name: 'agentfootprint.context.evaluated', runtimeStageId: rt, payload: { iteration, routing } }) as never;
-const rejected = (rt: string, iteration: number, requestedId: string, currentSkillId: string, allowed: string[]) =>
-  ({ name: 'agentfootprint.skill.rejected', runtimeStageId: rt, payload: { iteration, requestedId, currentSkillId, allowed } }) as never;
+  ({
+    name: 'agentfootprint.context.evaluated',
+    runtimeStageId: rt,
+    payload: { iteration, routing },
+  } as never);
+const rejected = (
+  rt: string,
+  iteration: number,
+  requestedId: string,
+  currentSkillId: string,
+  allowed: string[],
+) =>
+  ({
+    name: 'agentfootprint.skill.rejected',
+    runtimeStageId: rt,
+    payload: { iteration, requestedId, currentSkillId, allowed },
+  } as never);
 const toolStart = (rt: string, toolName: string) =>
-  ({ name: 'agentfootprint.stream.tool_start', runtimeStageId: rt, payload: { toolName } }) as never;
-const runStart = (runId: string) => ({ traversalContext: { runId } }) as never;
+  ({
+    name: 'agentfootprint.stream.tool_start',
+    runtimeStageId: rt,
+    payload: { toolName },
+  } as never);
+const runStart = (runId: string) => ({ traversalContext: { runId } } as never);
 
 describe('routeRecorder — path + hop derivation', () => {
   it('derives the route path: entry → stay → transition', () => {
@@ -39,7 +57,12 @@ describe('routeRecorder — path + hop derivation', () => {
   it('prefers a transitioned-into route over a co-active entry base', () => {
     const r = routeRecorder();
     // both an always-base entry AND a routed skill active this iteration → cursor is the route
-    r.onEmit(ctxEval('s#1', 1, [{ injectionId: 'base', via: 'entry' }, { injectionId: 'b', via: 'route', from: 'base' }]));
+    r.onEmit(
+      ctxEval('s#1', 1, [
+        { injectionId: 'base', via: 'entry' },
+        { injectionId: 'b', via: 'route', from: 'base' },
+      ]),
+    );
     expect(r.getPath()).toEqual(['b']);
   });
 });
@@ -112,7 +135,11 @@ describe('routeRecorder — through the real Agent loop (wiring)', () => {
       respond: () => {
         i++;
         return i === 1
-          ? { content: 'probing', toolCalls: [{ id: 't1', name: 'probe', args: {} }], stopReason: 'tool_use' as const }
+          ? {
+              content: 'probing',
+              toolCalls: [{ id: 't1', name: 'probe', args: {} }],
+              stopReason: 'tool_use' as const,
+            }
           : { content: 'done', toolCalls: [], stopReason: 'stop' as const };
       },
     });

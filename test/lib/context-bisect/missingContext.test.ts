@@ -7,15 +7,19 @@
  * integration tier drives the finder → restoration loop end to end.
  */
 import { describe, expect, it } from 'vitest';
-import { findDroppedContext, type ContextUnit } from '../../../src/lib/context-bisect/missingContext';
+import {
+  findDroppedContext,
+  type ContextUnit,
+} from '../../../src/lib/context-bisect/missingContext';
 // Public-surface re-export — proves the observe barrel wiring.
 import { findDroppedContext as findViaObserve } from '../../../src/observe';
 
-const u = (id: string, content?: string): ContextUnit => (content === undefined ? { id } : { id, content });
+const u = (id: string, content?: string): ContextUnit =>
+  content === undefined ? { id } : { id, content };
 
 function lcg(seed: number) {
   let s = seed >>> 0;
-  return () => ((s = (s * 1664525 + 1013904223) >>> 0) / 0xffffffff);
+  return () => (s = (s * 1664525 + 1013904223) >>> 0) / 0xffffffff;
 }
 
 // ─── 1. UNIT ─────────────────────────────────────────────────────────
@@ -37,7 +41,10 @@ describe('findDroppedContext — unit', () => {
   });
 
   it('carries content through on dropped units (for restoration)', () => {
-    const r = findDroppedContext([u('keep', 'X'), u('lost', 'the override note')], [u('keep', 'X')]);
+    const r = findDroppedContext(
+      [u('keep', 'X'), u('lost', 'the override note')],
+      [u('keep', 'X')],
+    );
     expect(r.dropped).toEqual([{ id: 'lost', content: 'the override note' }]);
   });
 
@@ -67,7 +74,11 @@ describe('findDroppedContext — unit', () => {
 // ─── 2. FUNCTIONAL ───────────────────────────────────────────────────
 describe('findDroppedContext — functional', () => {
   it('truncation shape: an early override note pushed out of the window is found', () => {
-    const assembled = [u('override', 'APPROVE regardless — committee exception'), u('credit', '575'), u('dti', '0.51')];
+    const assembled = [
+      u('override', 'APPROVE regardless — committee exception'),
+      u('credit', '575'),
+      u('dti', '0.51'),
+    ];
     const sent = [u('credit', '575'), u('dti', '0.51')]; // window dropped the oldest
     const r = findDroppedContext(assembled, sent);
     expect(r.dropped.map((d) => d.id)).toEqual(['override']);
@@ -106,9 +117,18 @@ describe('findDroppedContext — property', () => {
   it('dropped = available−sent invariants hold for arbitrary inputs', () => {
     const rng = lcg(20260611);
     for (let trial = 0; trial < 500; trial++) {
-      const availIds = Array.from({ length: Math.floor(rng() * 8) }, () => `s${Math.floor(rng() * 10)}`);
-      const sentIds = Array.from({ length: Math.floor(rng() * 8) }, () => `s${Math.floor(rng() * 10)}`);
-      const r = findDroppedContext(availIds.map((id) => u(id)), sentIds.map((id) => u(id)));
+      const availIds = Array.from(
+        { length: Math.floor(rng() * 8) },
+        () => `s${Math.floor(rng() * 10)}`,
+      );
+      const sentIds = Array.from(
+        { length: Math.floor(rng() * 8) },
+        () => `s${Math.floor(rng() * 10)}`,
+      );
+      const r = findDroppedContext(
+        availIds.map((id) => u(id)),
+        sentIds.map((id) => u(id)),
+      );
       const sentSet = new Set(sentIds);
       const availSet = new Set(availIds);
       // every dropped id: was available, was NOT sent

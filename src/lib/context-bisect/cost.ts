@@ -37,10 +37,12 @@ function effectOf(suspect: Suspect, baseline: AblationRunStats): Effect | undefi
   if (c === undefined) return undefined;
   const baseLoops = baseline.cost?.loops?.median;
   const baseTokens = baseline.cost?.tokens?.median;
-  const loopsSaved = baseLoops !== undefined && c.loops !== undefined ? baseLoops - c.loops.median : 0;
+  const loopsSaved =
+    baseLoops !== undefined && c.loops !== undefined ? baseLoops - c.loops.median : 0;
   const tokensSaved =
     baseTokens !== undefined && c.tokens !== undefined ? baseTokens - c.tokens.median : 0;
-  const consistent = baseLoops !== undefined && c.loops !== undefined ? c.loops.max <= baseLoops : false;
+  const consistent =
+    baseLoops !== undefined && c.loops !== undefined ? c.loops.max <= baseLoops : false;
   return { loopsSaved, tokensSaved, consistent };
 }
 
@@ -70,7 +72,8 @@ export function assignCostVerdicts(
     const placeboMax = placeboExists ? Math.max(...band) : 0;
 
     const stable = placeboExists && e.consistent;
-    const reducedCostOnRemoval = stable && e.loopsSaved >= MIN_LOOPS_SAVED && e.loopsSaved > placeboMax;
+    const reducedCostOnRemoval =
+      stable && e.loopsSaved >= MIN_LOOPS_SAVED && e.loopsSaved > placeboMax;
     const cost: CostVerdict = {
       reducedCostOnRemoval,
       loopsSaved: e.loopsSaved,

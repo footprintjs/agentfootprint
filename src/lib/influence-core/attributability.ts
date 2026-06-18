@@ -25,7 +25,11 @@
  * causal claims.
  */
 import type { ConfidenceStrategy, InfluenceScore, RankingConfidence } from './types.js';
-import { DEFAULT_CLEAR_WINNER_MARGIN, DEFAULT_CLEAR_WINNER_RATIO, DEFAULT_SHORTLIST_BAND } from './types.js';
+import {
+  DEFAULT_CLEAR_WINNER_MARGIN,
+  DEFAULT_CLEAR_WINNER_RATIO,
+  DEFAULT_SHORTLIST_BAND,
+} from './types.js';
 
 const nonNegative = (label: string, x: number): number => {
   // `!(x >= 0)` rejects negatives AND NaN (a plain `< 0` would let NaN through).
@@ -38,7 +42,9 @@ const nonNegative = (label: string, x: number): number => {
  * interpretable, but embedder-relative (the gap scale depends on the embedding
  * geometry). Use `ratioStrategy` for cross-embedder transfer.
  */
-export function marginStrategy(threshold: number = DEFAULT_CLEAR_WINNER_MARGIN): ConfidenceStrategy {
+export function marginStrategy(
+  threshold: number = DEFAULT_CLEAR_WINNER_MARGIN,
+): ConfidenceStrategy {
   nonNegative('marginStrategy: threshold', threshold);
   return {
     name: `margin>=${threshold}`,
@@ -116,11 +122,21 @@ export function rankingConfidence(
 ): RankingConfidence {
   // strategy WINS over clearWinnerMargin; the default builds a margin strategy
   // (which validates its own threshold).
-  const strategy = options.strategy ?? marginStrategy(options.clearWinnerMargin ?? DEFAULT_CLEAR_WINNER_MARGIN);
-  const shortlistBand = nonNegative('rankingConfidence: shortlistBand', options.shortlistBand ?? DEFAULT_SHORTLIST_BAND);
+  const strategy =
+    options.strategy ?? marginStrategy(options.clearWinnerMargin ?? DEFAULT_CLEAR_WINNER_MARGIN);
+  const shortlistBand = nonNegative(
+    'rankingConfidence: shortlistBand',
+    options.shortlistBand ?? DEFAULT_SHORTLIST_BAND,
+  );
 
   if (scores.length === 0) {
-    return { clearWinner: false, margin: undefined, lead: undefined, shortlist: [], reason: 'No suspects to rank.' };
+    return {
+      clearWinner: false,
+      margin: undefined,
+      lead: undefined,
+      shortlist: [],
+      reason: 'No suspects to rank.',
+    };
   }
 
   const ranked = [...scores].sort(byScoreDesc);

@@ -84,7 +84,8 @@ export function findDroppedContext(
   for (const u of available) {
     if (seenAvailable.has(u.id)) continue; // de-dup by id, first wins
     seenAvailable.add(u.id);
-    if (!sentIds.has(u.id)) dropped.push(u.content === undefined ? { id: u.id } : { id: u.id, content: u.content });
+    if (!sentIds.has(u.id))
+      dropped.push(u.content === undefined ? { id: u.id } : { id: u.id, content: u.content });
   }
 
   const availableCount = seenAvailable.size;

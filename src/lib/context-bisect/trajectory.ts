@@ -23,7 +23,12 @@
  *     primitives run correctly over the isolated log. Such frames carry `subflowScope`.
  */
 import type { CommitBundle, StageSnapshot } from 'footprintjs/advanced';
-import { commitValueAt, findLastWriter, parseRuntimeStageId, splitStageId } from 'footprintjs/trace';
+import {
+  commitValueAt,
+  findLastWriter,
+  parseRuntimeStageId,
+  splitStageId,
+} from 'footprintjs/trace';
 import type { UntrackedSource } from 'footprintjs/trace';
 import { STAGE_IDS, SUBFLOW_IDS } from '../../conventions.js';
 import type { EvidenceInput } from '../influence-core/index.js';
@@ -168,7 +173,10 @@ function inInjectionEngine(bundle: CommitBundle): boolean {
   if (localStageId === SUBFLOW_IDS.INJECTION_ENGINE) return true; // the mount commit, if any
   if (subflowPath === undefined) return false;
   // a commit nested anywhere under sf-injection-engine (handles nested subflow prefixes)
-  return subflowPath === SUBFLOW_IDS.INJECTION_ENGINE || subflowPath.startsWith(SUBFLOW_IDS.INJECTION_ENGINE + '/');
+  return (
+    subflowPath === SUBFLOW_IDS.INJECTION_ENGINE ||
+    subflowPath.startsWith(SUBFLOW_IDS.INJECTION_ENGINE + '/')
+  );
 }
 
 /**
@@ -208,7 +216,8 @@ function buildReadsOf(executionTree: StageSnapshot | undefined): Map<string, str
   const visit = (node: StageSnapshot | undefined): void => {
     if (!node) return;
     const id = node.runtimeStageId;
-    if (id && !readsOf.has(id)) readsOf.set(id, node.stageReads ? Object.keys(node.stageReads) : []);
+    if (id && !readsOf.has(id))
+      readsOf.set(id, node.stageReads ? Object.keys(node.stageReads) : []);
     for (const child of node.children ?? []) visit(child);
     visit(node.next);
   };
@@ -265,13 +274,15 @@ function projectFrame(
   const intermediateText =
     llmCallId !== undefined ? stepOutputText(log, lastIdxOf, llmCallId, maxTextChars) : undefined;
 
-  const keys = llmCallId !== undefined ? (readsOf.get(llmCallId) ?? []) : [];
+  const keys = llmCallId !== undefined ? readsOf.get(llmCallId) ?? [] : [];
   const contextSources: ContextSource[] = keys.map((key) => {
     // EXCLUSIVE beforeIdx — finds the PRIOR writer, never call-llm's own write-back.
-    const writer = llmCallArrayIdx !== undefined ? findLastWriter(log, key, llmCallArrayIdx) : undefined;
+    const writer =
+      llmCallArrayIdx !== undefined ? findLastWriter(log, key, llmCallArrayIdx) : undefined;
     const writerId = writer?.runtimeStageId;
     const writerArrayIdx = writerId !== undefined ? lastIdxOf.get(writerId) : undefined;
-    const value = writerArrayIdx !== undefined ? commitValueAt(log, writerArrayIdx, key) : undefined;
+    const value =
+      writerArrayIdx !== undefined ? commitValueAt(log, writerArrayIdx, key) : undefined;
     const text = value === undefined ? '' : safeStringify(value).slice(0, maxTextChars);
     return {
       key,
@@ -318,7 +329,9 @@ function projectFrame(
 /** The sf-llm-call mount keys in `subflowResults`, in loop order (by execution index). */
 function llmCallMountKeys(subflowResults: Record<string, unknown>): string[] {
   return Object.keys(subflowResults)
-    .filter((k) => k.includes('#') && splitStageId(k.split('#')[0]).localStageId === SUBFLOW_IDS.LLM_CALL)
+    .filter(
+      (k) => k.includes('#') && splitStageId(k.split('#')[0]).localStageId === SUBFLOW_IDS.LLM_CALL,
+    )
     .sort((a, b) => parseRuntimeStageId(a).executionIndex - parseRuntimeStageId(b).executionIndex);
 }
 
@@ -340,21 +353,38 @@ function assembleGroupedTrajectory(
 
   // Run-level prelude: commits before the first sf-llm-call mount (seed / memory-read setup).
   const firstMountRunIdx = runLog.findIndex((b) => b.runtimeStageId === mountKeys[0]);
-  const prelude = firstMountRunIdx > 0 ? runLog.slice(0, firstMountRunIdx).map((b) => b.runtimeStageId) : [];
+  const prelude =
+    firstMountRunIdx > 0 ? runLog.slice(0, firstMountRunIdx).map((b) => b.runtimeStageId) : [];
 
   const kept = maxFrames !== undefined ? mountKeys.slice(0, maxFrames) : mountKeys;
   const truncated = maxFrames !== undefined && mountKeys.length > maxFrames;
 
   const frames: LoopFrame[] = kept.map((key, loopIndex) => {
     const innerLog = (sr[key]?.treeContext?.history ?? []) as CommitBundle[];
-    const innerReadsOf = buildReadsOf(sr[key]?.treeContext?.stageContexts as StageSnapshot | undefined);
+    const innerReadsOf = buildReadsOf(
+      sr[key]?.treeContext?.stageContexts as StageSnapshot | undefined,
+    );
     const innerLastIdxOf = new Map<string, number>();
     for (let i = 0; i < innerLog.length; i++) innerLastIdxOf.set(innerLog[i].runtimeStageId, i);
     const bodyIds = innerLog.map((b) => b.runtimeStageId);
-    return projectFrame(loopIndex, innerLog, innerLastIdxOf, innerReadsOf, 0, bodyIds, maxTextChars, key);
+    return projectFrame(
+      loopIndex,
+      innerLog,
+      innerLastIdxOf,
+      innerReadsOf,
+      0,
+      bodyIds,
+      maxTextChars,
+      key,
+    );
   });
 
-  return { frames, prelude, honestyFlags: [], ...(truncated ? { truncated: { byFrames: true } } : {}) };
+  return {
+    frames,
+    prelude,
+    honestyFlags: [],
+    ...(truncated ? { truncated: { byFrames: true } } : {}),
+  };
 }
 
 /**
@@ -385,7 +415,9 @@ export function assembleTrajectory(
   const maxTextChars = opts.maxTextChars ?? CONTEXT_BISECT_DEFAULTS.maxTextChars;
 
   // Grouped agent ⟺ the LLM turn is wrapped in sf-llm-call (its mounts appear in subflowResults).
-  const mountKeys = llmCallMountKeys((artifacts.snapshot.subflowResults ?? {}) as Record<string, unknown>);
+  const mountKeys = llmCallMountKeys(
+    (artifacts.snapshot.subflowResults ?? {}) as Record<string, unknown>,
+  );
   if (mountKeys.length > 0) {
     return assembleGroupedTrajectory(artifacts, mountKeys, maxTextChars, opts.maxFrames);
   }
@@ -402,8 +434,21 @@ export function assembleTrajectory(
   const truncated = opts.maxFrames !== undefined && buckets.length > opts.maxFrames;
 
   const frames: LoopFrame[] = kept.map((bucket, loopIndex) =>
-    projectFrame(loopIndex, commitLog, lastIdxOf, readsOf, bucket.headArrayIdx, bucket.bodyIds, maxTextChars),
+    projectFrame(
+      loopIndex,
+      commitLog,
+      lastIdxOf,
+      readsOf,
+      bucket.headArrayIdx,
+      bucket.bodyIds,
+      maxTextChars,
+    ),
   );
 
-  return { frames, prelude, honestyFlags: [], ...(truncated ? { truncated: { byFrames: true } } : {}) };
+  return {
+    frames,
+    prelude,
+    honestyFlags: [],
+    ...(truncated ? { truncated: { byFrames: true } } : {}),
+  };
 }

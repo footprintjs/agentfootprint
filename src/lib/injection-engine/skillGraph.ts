@@ -426,7 +426,14 @@ export function skillGraph(config?: SkillGraphConfig): SkillGraphBuilder | Skill
         reachableSkills = makeReachableSkills(entries, routes);
         if (entryEmbedder) scoreEntries = makeScoreEntries(entries, skillsById, entryEmbedder);
         for (const [id, skill] of skillsById) {
-          const trigger = deriveTrigger(id, skill, entries, routes, nextSkill, entryEmbedder !== undefined);
+          const trigger = deriveTrigger(
+            id,
+            skill,
+            entries,
+            routes,
+            nextSkill,
+            entryEmbedder !== undefined,
+          );
           const routing = routingFor(id, entries, routes);
           skills.push({
             ...skill,
@@ -493,7 +500,8 @@ export function skillGraph(config?: SkillGraphConfig): SkillGraphBuilder | Skill
       const start = config.start;
       if (typeof start === 'string') builder.entry(resolve(start));
       else if ('use' in start) builder.entry(resolve(start.use));
-      else if ('rules' in start) for (const r of start.rules) builder.entry(resolve(r.use), { when: r.when });
+      else if ('rules' in start)
+        for (const r of start.rules) builder.entry(resolve(r.use), { when: r.when });
       else {
         for (const id of start.entries) builder.entry(resolve(id));
         builder.entryByRelevance(start.byRelevance);
