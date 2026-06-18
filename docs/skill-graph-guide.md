@@ -2,9 +2,14 @@
 
 A complete, copy-pasteable reference to the declarative **skill-graph routing** in
 agentfootprint. Written so a coding agent can build with it without inventing APIs.
-Current as of **`agentfootprint@6.35.0`**. Companion reference: [`skill-graph-spec.md`](./design/skill-graph-spec.md).
-Runnable demos in the package: `examples/features/15-skill-graph.ts`,
-`23-skill-graph-scoped-read-skill.ts`, `24-skill-graph-entry-relevance.ts`.
+Current as of **`agentfootprint@6.36.0`**. Companion reference: [`skill-graph-spec.md`](./design/skill-graph-spec.md).
+
+**Every snippet below has a runnable, tested counterpart** under `examples/features/` (they run in the
+`test:examples` suite, so they can't silently drift from the API): `15-skill-graph.ts` (basics),
+`23-skill-graph-scoped-read-skill.ts`, `24-skill-graph-entry-relevance.ts`, `25-skill-graph-checkup.ts`,
+`26-skill-graph-route-recorder.ts`, `27-skill-graph-relevance-hint.ts`. Run any with
+`npx tsx examples/features/<file>` — and prefer reading those (they carry a "why" header) over trusting
+the prose here if the two ever disagree.
 
 ## 1. Mental model
 
@@ -138,6 +143,7 @@ const graph = skillGraph({
   check:  'throw',                                   // default 'throw' for the object form
 });
 ```
+→ runnable + tested: **`examples/features/25-skill-graph-checkup.ts`** (check-up + object form).
 
 **`routeRecorder()`** (`agentfootprint/observe`) — record the path the run actually took.
 ```ts
@@ -150,6 +156,7 @@ routes.getHops();        // per-hop: { fromSkill, toSkill, outcome:'entry'|'rout
 routes.getRejections();  // out-of-reach read_skill attempts
 routes.getTrips();       // governor trips: oscillation (A→B→A→B) + a run of rejected jumps
 ```
+→ runnable + tested: **`examples/features/26-skill-graph-route-recorder.ts`** (path + governor trips).
 
 **`defineRelevanceHint()`** — an advisory note when `entryByRelevance`'s top entries are a near-tie.
 ```ts
@@ -158,6 +165,7 @@ Agent.create({ provider, model }).skillGraph(graph).instruction(defineRelevanceH
 // at turn start, IF the top two entry skills are within `threshold`, drops a NON-binding note into the
 // system prompt ("a keyword scorer ranked these close — use your judgment"). A hint, never an order.
 ```
+→ runnable + tested: **`examples/features/27-skill-graph-relevance-hint.ts`**.
 
 ## 9. Honest status (so your agent doesn't invent APIs)
 
