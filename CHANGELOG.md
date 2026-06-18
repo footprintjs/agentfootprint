@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.37.1] - 2026-06-18
+
+### Fixed — a `decide()` rule no longer trips the `no-llm-call-ids` warning
+
+`toBacktrackTrace` emitted the `no-llm-call-ids` honesty flag — *"pass llmCallIds or captured
+events … the ranking is structure-only"* — whenever a slice had zero LLM-call ids. For a
+deterministic `decide()` rule that wording is misleading: a rule makes **no** LLM calls, so
+structure-only ranking is the *correct, expected* mode, not a missing input. The localizer can't
+tell that case from "an LLM chart whose `llmCallIds` weren't passed" (both have
+`llmCallIdCount === 0`) — only the consumer's `decidedAtKind` disambiguates. So when
+`decidedAtKind: 'rule'`, that one flag is reframed into a neutral, non-`⚠` note:
+
+> *"this decision is a deterministic rule — it makes no LLM calls, so scores rank recorded operands
+> by structure (no influence weighting applies)."*
+
+LLM decisions are unchanged — a genuine "forgot to pass `llmCallIds`" still surfaces as a `⚠`
+warning. Visible on the backtrack-board demo's `decide()` rule pill, where the warning previously
+read as alarming in exactly the spot the categorization calls "the clean, fully-recorded kind".
+
 ## [6.37.0] - 2026-06-18
 
 ### Added — pluggable influence scorer for `localizeContextBug` (the RANK extension point)
