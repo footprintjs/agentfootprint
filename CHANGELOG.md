@@ -5,6 +5,47 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.36.0] - 2026-06-17
+
+### Added — skill-graph v2 remainder: check-up, object form, route recorder, governors, relevance hint
+
+**Build-time check-up.** `graph.checkup()` → `{ ok, problems }` inspects the declared graph
+for wiring mistakes — an unreachable skill, an edge/entry to an unknown id, two un-prioritized
+edges from one skill, no entry, a self-loop — *before* you run. `.build({ check: 'throw' | 'warn'
+| 'off' })` runs it at build (default `'warn'`: dev-mode console, silent in prod). Pure, no engine
+change. New `skillGraphCheckup.ts`.
+
+**Object-literal form.** `skillGraph({ skills, start, steps, tree?, check? })` — an alternative to
+the fluent builder that lists `skills` INDEPENDENTLY of the wiring, so the check-up can catch a
+listed-but-unwired skill (the fluent form only sees skills that appear in an edge). `start` is
+`'id'` / `{ use }` / `{ rules }` / `{ entries, byRelevance }`. Translate-then-delegate; defaults
+`check` to `'throw'`. New public types `SkillGraphConfig`, `BuildOptions`, `GraphCheckMode`,
+`GraphCheckup`, `GraphProblem`, `GraphProblemCode`.
+
+**`routeRecorder()`** (`agentfootprint/observe`) — records the skill path a run took, hop by hop
+with a human-readable reason, by COMPOSING the shipped `context.evaluated` + `skill.rejected`
+events (no engine change). `getPath()` / `getHops()` / `getRejections()`. New types `RouteHop`,
+`RouteOutcome`, `RouteTrip`; `formatRouteHop`. Powers the lens / "Why this skill?" panel / route figures.
+
+**Grey-area governors** (folded into the route recorder) — `getTrips()` reports oscillation
+(`A→B→A→B` within `pingPongWindow`, default 4) and a run of consecutive rejected `read_skill`
+jumps (`maxRejectedRetries`, default 3). Observability (`onTrip:'stay'`); a runtime force-stop is
+a deferred follow-on (the iteration cap remains the hard stop).
+
+**`defineRelevanceHint()`** — an advisory, anti-anchoring system-prompt note that fires at turn
+start ONLY when `entryByRelevance`'s top entries are a near-tie ("a keyword scorer ranked these
+close; it can't see the conversation — use your judgment"). Reads `ctx.entryScores` (now threaded
+onto `InjectionContext`); rides `context.evaluated` (no new event). Add it explicitly via
+`.instruction(defineRelevanceHint())`.
+
+Designed + adversarially reviewed (panel), built tests-first (25 new); full suite 3123 green.
+
+### Still proposed (NOT in this release)
+
+- The agentThinkingUI **Description Doctor** (the red/green description-diff view) and two minor
+  enrichments (a runtime governor force-stop; a `cursorBefore`/`cursorAfter` field on
+  `context.evaluated`). See `docs/design/skill-graph.md`.
+
 ## [6.35.0] - 2026-06-17
 
 ### Added — skill-graph follow-ons: scoped `read_skill` + relevance entry routing (proposal 002 v2)

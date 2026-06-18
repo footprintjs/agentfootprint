@@ -119,14 +119,54 @@ Agent.create({ provider, model }).skillGraph(graph).recorder(rec).build();
 // NOTE: a raw recorder's onEmit event uses `e.name` (+ `e.payload`), not `e.type`.
 ```
 
-## 8. Honest status (so your agent doesn't invent APIs)
+## 8. Validate, observe, nudge (6.36.0)
 
-**✅ Shipped + usable (6.35.0):** `defineSkill`; `skillGraph()` with `.entry` /
-`.route` / `.tree` / `.entryByRelevance` / `.build`; tool-result `from`-gated routing;
-scoped `read_skill` + `skill.rejected`; `toMermaid()`; `read_skill` as the model-picks
-entry/fallback; `graph.nextSkill(ctx)` / `graph.reachableSkills(cur)` /
-`graph.scoreEntries(ctx)`.
+**Build-time check-up** — catch wiring mistakes before you run.
+```ts
+const result = graph.checkup();   // { ok, problems: [{ kind:'error'|'warning', code, message, skill? }] }
+//   codes: unknown-skill (error), no-entry (error), unreachable-skill, ambiguous-routes, self-loop (warnings)
+skillGraph().entry(a).route(a, b, { onToolReturn: 'x' }).build({ check: 'throw' }); // throw on error
+//   check: 'warn' (default — dev-mode console) | 'throw' | 'off'
+```
 
-**🔶 NOT built yet — don't call these:** grey-area governors (oscillation / retry
-caps), a `RouteDecisionRecorder`, build-time graph validation, and an object-literal
-`skillGraph({...})` façade. Today's API is the **fluent builder** above.
+**Object-literal form** — list skills *separately* from the wiring, so the check-up can flag a listed-but-unwired skill.
+```ts
+const graph = skillGraph({
+  skills: [triage, billing, volumeLookup],
+  start:  'triage',                                  // | { use } | { rules:[{when,use}] } | { entries:[...], byRelevance: embedder }
+  steps:  [{ from: 'triage', to: 'billing', onToolReturn: 'get_invoice', label: 'invoice' }],
+  check:  'throw',                                   // default 'throw' for the object form
+});
+```
+
+**`routeRecorder()`** (`agentfootprint/observe`) — record the path the run actually took.
+```ts
+import { routeRecorder } from 'agentfootprint/observe';
+const routes = routeRecorder();                       // { pingPongWindow?, maxRejectedRetries? }
+Agent.create({ provider, model }).skillGraph(graph).recorder(routes).build();
+// after a run:
+routes.getPath();        // ['triage','billing']  — the skill sequence
+routes.getHops();        // per-hop: { fromSkill, toSkill, outcome:'entry'|'route'|'stay'|'rejected', why, edgeLabel, lastTool }
+routes.getRejections();  // out-of-reach read_skill attempts
+routes.getTrips();       // governor trips: oscillation (A→B→A→B) + a run of rejected jumps
+```
+
+**`defineRelevanceHint()`** — an advisory note when `entryByRelevance`'s top entries are a near-tie.
+```ts
+import { defineRelevanceHint } from 'agentfootprint';
+Agent.create({ provider, model }).skillGraph(graph).instruction(defineRelevanceHint({ threshold: 0.15 })).build();
+// at turn start, IF the top two entry skills are within `threshold`, drops a NON-binding note into the
+// system prompt ("a keyword scorer ranked these close — use your judgment"). A hint, never an order.
+```
+
+## 9. Honest status (so your agent doesn't invent APIs)
+
+**✅ Shipped + usable (6.36.0):** `defineSkill`; `skillGraph()` fluent **and** object-literal
+forms with `.entry` / `.route` / `.tree` / `.entryByRelevance` / `.build({check})`; tool-result
+`from`-gated routing; scoped `read_skill` + `skill.rejected`; `toMermaid()`; `read_skill` as the
+model-picks entry/fallback; `graph.nextSkill` / `graph.reachableSkills` / `graph.scoreEntries` /
+`graph.checkup`; `routeRecorder()` (path + governor trips); `defineRelevanceHint()`.
+
+**🔶 NOT built yet — don't call these:** a runtime governor *force-stop* (today `getTrips()` only
+*labels* a spinning run; the iteration cap is the hard stop), `cursorBefore`/`cursorAfter` fields on
+`context.evaluated`, and the agentThinkingUI **Description Doctor** (the description-diff view).
