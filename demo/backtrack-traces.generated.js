@@ -4,7 +4,7 @@
  * Regenerate: TSX_TSCONFIG_PATH=examples/runtime.tsconfig.json npx tsx demo/gen-backtrack-board.ts */
 window.BACKTRACK_TRACES = {
   "rank": {
-    "pick": "1 · backtrack — ranking only",
+    "pick": "the wrong answer · ranking only",
     "order": 1,
     "claim": "The agent approved a refund 47 days past the 30-day window — why?",
     "mode": "correlational",
@@ -215,7 +215,7 @@ window.BACKTRACK_TRACES = {
     ]
   },
   "answer": {
-    "pick": "2 · + ablation — the proof",
+    "pick": "the wrong answer · + ablation ✓",
     "order": 2,
     "claim": "The agent approved a refund 47 days past the 30-day window — why?",
     "mode": "causal",
@@ -445,7 +445,7 @@ window.BACKTRACK_TRACES = {
     ]
   },
   "tool": {
-    "pick": "tool choice — first call",
+    "pick": "a tool choice · earlier in the run",
     "order": 3,
     "claim": "Iteration 1 — the agent chose lookup_order. What was it given?",
     "mode": "correlational",
@@ -599,7 +599,7 @@ window.BACKTRACK_TRACES = {
     ]
   },
   "rule": {
-    "pick": "rule decision — decide()",
+    "pick": "a loan approval · decide()",
     "order": 4,
     "claim": "The pipeline approved an unaffordable loan — why?",
     "mode": "correlational",
@@ -613,7 +613,7 @@ window.BACKTRACK_TRACES = {
     "decidedAt": {
       "id": "approve#3",
       "label": "Approve",
-      "kind": "llm"
+      "kind": "rule"
     },
     "suspects": [
       {

@@ -116,7 +116,7 @@ async function main() {
 
   const traces = {
     rank: {
-      pick: '1 · backtrack — ranking only',
+      pick: 'the wrong answer · ranking only',
       order: 1,
       ...toBacktrackTrace(rankReport, {
         claim: sharedClaim,
@@ -127,7 +127,7 @@ async function main() {
       }),
     },
     answer: {
-      pick: '2 · + ablation — the proof',
+      pick: 'the wrong answer · + ablation ✓',
       order: 2,
       ...toBacktrackTrace(part1Report, {
         claim: sharedClaim,
@@ -138,7 +138,7 @@ async function main() {
       }),
     },
     tool: {
-      pick: 'tool choice — first call',
+      pick: 'a tool choice · earlier in the run',
       order: 3,
       ...toBacktrackTrace(toolReport, {
         claim: 'Iteration 1 — the agent chose lookup_order. What was it given?',
@@ -149,13 +149,14 @@ async function main() {
       }),
     },
     rule: {
-      pick: 'rule decision — decide()',
+      pick: 'a loan approval · decide()',
       order: 4,
       ...toBacktrackTrace(part2Report, {
         claim: 'The pipeline approved an unaffordable loan — why?',
         answer: { text: 'decision = approve (DTI computed against ANNUAL income — should be DECLINE)', label: 'the rule decision', tone: 'question' },
         agent: 'loan-pipeline',
         model: 'decide()',
+        decidedAtKind: 'rule', // a deterministic decide() rule — renders the decision diamond, groups under "decide() rule"
       }),
     },
   };

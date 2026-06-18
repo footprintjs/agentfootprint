@@ -20,18 +20,21 @@
     .bt-gen { display: inline-block; font-size: 11.5px; font-weight: 700; color: #15803D;
       background: #F0FDF4; border: 1px solid #BBF7D0; border-radius: 999px; padding: 3px 10px; margin: 6px 0 14px; }
     .bt-gen code { font-family: "Space Mono", monospace; font-size: 10.5px; }
-    .bt-pick { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
-    .bt-pick button { font-family: "Bricolage Grotesque", sans-serif; font-weight: 700; font-size: 12.5px;
+    .bt-pick { display: flex; flex-direction: column; gap: 12px; margin-bottom: 18px; }
+    .bt-cat { font-size: 11px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; color: #95380F; margin-bottom: 6px; }
+    .bt-cat span { font-weight: 500; letter-spacing: 0; text-transform: none; font-style: italic; color: #9A8B78; }
+    .bt-row { display: flex; gap: 8px; flex-wrap: wrap; }
+    .bt-row button { font-family: "Bricolage Grotesque", sans-serif; font-weight: 700; font-size: 12.5px;
       padding: 7px 14px; border-radius: 999px; border: 1.5px solid #D9C8B2; background: #FFFDFA; color: #6E5C49; cursor: pointer; }
-    .bt-pick button.on { background: #C0531F; border-color: #95380F; color: #fff; }
+    .bt-row button.on { background: #C0531F; border-color: #95380F; color: #fff; }
   </style>
 </head>
 <body>
   <div class="bt-page">
     <h1 class="bt-page-head">The backtrack board — <em>real</em> data</h1>
-    <p class="bt-page-sub">A decision walked backwards to the piece of context that caused it. Two steps on the SAME case:
-      <b>ranking only</b> (a proxy orders the suspects — and the top two are tied) → <b>+ ablation</b> (remove each, re-run,
-      <b>the flip is the proof</b>). Plus a first-call tool choice and a deterministic <code>decide()</code> rule.</p>
+    <p class="bt-page-sub">A decision walked backwards to the piece of context that caused it. There are only
+      <b>two kinds of decision point</b> — an <b>LLM decision</b> (the model chose from what it was shown) or a
+      deterministic <b>decide() rule</b> — and backtracking works on both. Pick any one below to walk it back.</p>
     <span class="bt-gen">✓ GENERATED — every score, rank, verdict, honesty line &amp; custody pane computed from a real
       <code>localizeContextBug → toBacktrackTrace</code> run. Nothing hand-authored. (<code>demo/gen-backtrack-board.ts</code>)</span>
     <div class="bt-pick" id="pick"></div>
@@ -46,23 +49,42 @@
     integrity="sha384-DbGupWG+sGkP7+I/6n5rIn1g+NIYlEh5JqCvCQBFvqZJhwwlfZw+WXmpo+cizJ+e" crossorigin="anonymous"></script>
   <script src="backtrack-traces.generated.js"></script>
   <script>
-    // data-driven picker — labels + order come from each generated trace (pick / order).
-    const SCENARIOS = Object.entries(window.BACKTRACK_TRACES)
-      .sort((a, b) => (a[1].order ?? 99) - (b[1].order ?? 99))
-      .map(([key, t]) => [key, t.pick || key]);
+    // labels + order come from each generated trace; the CATEGORY is the trace's
+    // own decidedAt.kind (llm vs rule) — derived from the data, not hard-coded.
+    const KIND = {
+      llm:  ["LLM decision",  "the model chose from what it was shown"],
+      rule: ["decide() rule", "a deterministic rule chose — recorded fact, no proxy"],
+    };
+    const KIND_ORDER = ["llm", "rule"];
+    const entries = Object.entries(window.BACKTRACK_TRACES).sort((a, b) => (a[1].order ?? 99) - (b[1].order ?? 99));
+    const groups = {};
+    for (const [key, t] of entries) ((groups[(t.decidedAt && t.decidedAt.kind) || "llm"] ??= []).push([key, t.pick || key]));
     const params = new URLSearchParams(location.search);
     const play = params.has("play");
-    let current = SCENARIOS.some(([k]) => k === params.get("trace")) ? params.get("trace") : SCENARIOS[0][0];
+    let current = entries.some(([k]) => k === params.get("trace")) ? params.get("trace") : entries[0][0];
     const root = ReactDOM.createRoot(document.getElementById("root"));
     const pick = document.getElementById("pick");
     function render() {
       pick.innerHTML = "";
-      for (const [key, label] of SCENARIOS) {
-        const b = document.createElement("button");
-        b.textContent = label;
-        b.className = key === current ? "on" : "";
-        b.onclick = () => { current = key; render(); };
-        pick.appendChild(b);
+      for (const kind of KIND_ORDER) {
+        if (!groups[kind]) continue;
+        const wrap = document.createElement("div");
+        const cat = document.createElement("div");
+        cat.className = "bt-cat";
+        const [head, sub] = KIND[kind] || [kind, ""];
+        cat.innerHTML = head + (sub ? ' <span>· ' + sub + '</span>' : '');
+        wrap.appendChild(cat);
+        const row = document.createElement("div");
+        row.className = "bt-row";
+        for (const [key, label] of groups[kind]) {
+          const b = document.createElement("button");
+          b.textContent = label;
+          b.className = key === current ? "on" : "";
+          b.onclick = () => { current = key; render(); };
+          row.appendChild(b);
+        }
+        wrap.appendChild(row);
+        pick.appendChild(wrap);
       }
       root.render(React.createElement(BacktrackView, {
         key: current,
