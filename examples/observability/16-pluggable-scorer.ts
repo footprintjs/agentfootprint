@@ -76,8 +76,13 @@ const BENIGN_FACT: Injection = defineFact({
 const LOOKUP_ORDER: Tool = defineTool<{ orderId: string }, string>({
   name: 'lookup_order',
   description: 'Look up an order by id',
-  inputSchema: { type: 'object', properties: { orderId: { type: 'string' } }, required: ['orderId'] },
-  execute: ({ orderId }) => `Order ${orderId}: purchased 47 days ago, price $480, category electronics.`,
+  inputSchema: {
+    type: 'object',
+    properties: { orderId: { type: 'string' } },
+    required: ['orderId'],
+  },
+  execute: ({ orderId }) =>
+    `Order ${orderId}: purchased 47 days ago, price $480, category electronics.`,
 });
 
 const WRONG_ANSWER =
@@ -134,7 +139,8 @@ export interface PluggableScorerResult {
 export async function run(_input?: string | null): Promise<PluggableScorerResult> {
   const out: string[] = [];
   const original = await runRefundsAgent();
-  if (!original.content.includes('APPROVED')) throw new Error('expected the planted fact to APPROVE');
+  if (!original.content.includes('APPROVED'))
+    throw new Error('expected the planted fact to APPROVE');
   const llmIds = llmCallIdsFromEvents(original.events);
   const atStep = llmIds[llmIds.length - 1];
   const artifacts = { snapshot: original.snapshot, events: original.events };
@@ -144,11 +150,20 @@ export async function run(_input?: string | null): Promise<PluggableScorerResult
   // ── (1) DEFAULT scorer — omitting `scorer` uses scoreInfluence ───────────
   // (The mock embedder is a crude char-frequency proxy → near-ties; absolute
   //  values aren't meaningful here, see ex 05. The seam's proof is below.)
-  const def = await localizeContextBug({ artifacts, embedder: embeddingCache(mockEmbedder()), atStep });
-  const defaultOrder = { vip: semanticOf(def, 'vip-override-fact'), style: semanticOf(def, 'style-fact') };
+  const def = await localizeContextBug({
+    artifacts,
+    embedder: embeddingCache(mockEmbedder()),
+    atStep,
+  });
+  const defaultOrder = {
+    vip: semanticOf(def, 'vip-override-fact'),
+    style: semanticOf(def, 'style-fact'),
+  };
   out.push(
     '(1) DEFAULT (scoreInfluence): semanticScore  ' +
-      `vip-override-fact=${defaultOrder.vip?.toFixed(3)}  style-fact=${defaultOrder.style?.toFixed(3)} ` +
+      `vip-override-fact=${defaultOrder.vip?.toFixed(3)}  style-fact=${defaultOrder.style?.toFixed(
+        3,
+      )} ` +
       '(the FDL composite over the embedder).',
   );
 
@@ -167,10 +182,15 @@ export async function run(_input?: string | null): Promise<PluggableScorerResult
     atStep,
     scorer: demoteVip,
   });
-  const customOrder = { vip: semanticOf(custom, 'vip-override-fact'), style: semanticOf(custom, 'style-fact') };
+  const customOrder = {
+    vip: semanticOf(custom, 'vip-override-fact'),
+    style: semanticOf(custom, 'style-fact'),
+  };
   out.push(
     '(2) CUSTOM (demote-VIP):     semanticScore  ' +
-      `vip-override-fact=${customOrder.vip?.toFixed(3)}  style-fact=${customOrder.style?.toFixed(3)} ` +
+      `vip-override-fact=${customOrder.vip?.toFixed(3)}  style-fact=${customOrder.style?.toFixed(
+        3,
+      )} ` +
       '→ the swapped scorer DROVE semanticScore directly (0.1/0.9, overriding the embedding proxy). ' +
       'This toy scorer is intentionally wrong — ablation would still convict the VIP fact.',
   );
@@ -191,7 +211,9 @@ export async function run(_input?: string | null): Promise<PluggableScorerResult
     atStep,
     scorer: contrastive,
   });
-  const contrastiveRanked = contra.suspects.some((s) => s.detail?.injectionId === 'vip-override-fact');
+  const contrastiveRanked = contra.suspects.some(
+    (s) => s.detail?.injectionId === 'vip-override-fact',
+  );
   out.push(
     '(3) CONTRASTIVE (opt-in):    plugged in via one-arg remap + reference output → ' +
       `ranked ${contra.suspects.length} suspects (the previously localizer-incompatible scorer now drops straight in).`,
@@ -218,7 +240,13 @@ export async function run(_input?: string | null): Promise<PluggableScorerResult
 
   const transcript = out.join('\n');
   console.log(transcript);
-  return { buggyAnswer: original.content, defaultOrder, customOrder, contrastiveRanked, transcript };
+  return {
+    buggyAnswer: original.content,
+    defaultOrder,
+    customOrder,
+    contrastiveRanked,
+    transcript,
+  };
 }
 
 if (isCliEntry(import.meta.url)) {

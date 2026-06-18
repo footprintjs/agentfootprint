@@ -348,7 +348,10 @@ export interface LocalizeContextBugOptions {
 }
 
 /** REORDER-only narrowing: shortlisted suspects first (by recallScore desc), the rest unchanged. */
-function reorderByShortlist(suspects: readonly Suspect[], shortlist?: LoopRecallShortlist): Suspect[] {
+function reorderByShortlist(
+  suspects: readonly Suspect[],
+  shortlist?: LoopRecallShortlist,
+): Suspect[] {
   if (shortlist === undefined || shortlist.candidates.length === 0) return [...suspects];
   const recallOf = new Map(shortlist.candidates.map((c) => [c.suspectId, c.recallScore]));
   const idOf = (s: Suspect): string | undefined => s.detail?.injectionId ?? s.detail?.toolName;
@@ -673,7 +676,8 @@ async function runMissingContextTier(
   // Nothing dropped → no candidates and NO baseline probe (don't spend real
   // model calls confirming an empty set — the common healthy case).
   if (dropped.length === 0) return { candidates: [], baselineStable: true };
-  if (missing.rerun === undefined) return { candidates: dropped.map(asCandidate), baselineStable: true };
+  if (missing.rerun === undefined)
+    return { candidates: dropped.map(asCandidate), baselineStable: true };
 
   const config = { rerun: missing.rerun, embedder };
   const maxCandidates = missing.rerun.maxCandidates ?? 5;
@@ -879,7 +883,10 @@ export function formatContextBugReport(report: ContextBugReport): string {
 
   // Missing-context tier (interface #3) — symmetric with the SUSPECTS block.
   if (report.dropped !== undefined && report.dropped.length > 0) {
-    lines.push('', `MISSING CONTEXT (${report.dropped.length} dropped — available but never sent to the model):`);
+    lines.push(
+      '',
+      `MISSING CONTEXT (${report.dropped.length} dropped — available but never sent to the model):`,
+    );
     report.dropped.forEach((c, i) => {
       lines.push(`${String(i + 1).padStart(2)}. [dropped '${c.id}']`);
       if (c.verdict !== undefined && c.runs !== undefined) {
@@ -909,7 +916,9 @@ export function formatContextBugReport(report: ContextBugReport): string {
   if (report.restorationBaseline !== undefined) {
     lines.push(
       `baseline (no restoration): ${report.restorationBaseline.flips}/${report.restorationBaseline.samples} flipped · ` +
-        `similarity ${report.restorationBaseline.similarity.mean.toFixed(3)} ± ${report.restorationBaseline.similarity.stdev.toFixed(3)}`,
+        `similarity ${report.restorationBaseline.similarity.mean.toFixed(
+          3,
+        )} ± ${report.restorationBaseline.similarity.stdev.toFixed(3)}`,
     );
   }
 

@@ -418,7 +418,13 @@ describe('localizeContextBug — pluggable scorer (scorer?:)', () => {
     });
 
     const shape = (report: ContextBugReport) =>
-      report.suspects.map((s) => [s.source, s.kind, s.detail?.injectionId, s.semanticScore, s.score]);
+      report.suspects.map((s) => [
+        s.source,
+        s.kind,
+        s.detail?.injectionId,
+        s.semanticScore,
+        s.score,
+      ]);
     expect(shape(def)).toEqual(shape(explicit));
   });
 
