@@ -1,0 +1,182 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 700" width="1400" height="700" role="img"
+     aria-label="How the backtrack finds the root cause. A left-to-right trajectory of five LLM decision points (loop 1 to loop 5); loop 1 carries a planted misdirecting instruction (the root, red), and loop 5 emits the wrong answer (the symptom). A dark walker starts at the symptom on the right and hops backward, loop by loop, riding the recorded provenance edges (blue — what each step actually read). At every loop it does two things: a faint proxy narrow (amber — which suspect to try first, speed only) and an ablation probe (remove the suspect and re-run — did the answer flip?). At loops 5,4,3,2 the ablation does NOT flip the outcome (grey, no flip). At loop 1 it DOES flip — APPROVED turns to DECLINED — so the walker stops: ROOT FOUND, proven by the counterfactual. The legend: follow provenance (recorded), narrow with a proxy (speed), prove with ablation (truth).">
+
+  <defs>
+    <!-- palette · provenance/data #0284C7 · proxy/amber #B45309 · proof/green #16A534
+         root/red #DC2626 · ink #2A121B · muted #6B7280 · grey machinery #64748B -->
+    <marker id="bt-fwd" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="#CBD5E1"/></marker>
+    <marker id="bt-prov" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="#0284C7"/></marker>
+    <marker id="bt-drop" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="#DC2626"/></marker>
+  </defs>
+
+  <style>
+    text { font-family: 'Hanken Grotesque', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif; }
+    .t-title { font-size: 27px; font-weight: 700; fill: #2A121B; }
+    .t-sub   { font-size: 13.5px; fill: #6B7280; }
+    .t-leg   { font-size: 12px; font-weight: 600; }
+    .t-sect  { font-size: 11px; font-weight: 600; fill: #9CA3AF; letter-spacing: 1.6px; }
+    .t-box   { font-size: 14px; font-weight: 600; fill: #475569; }
+    .t-code  { font-size: 12px; font-weight: 600; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; fill: #64748B; }
+    .t-cap   { font-size: 12px; font-style: italic; fill: #6B7280; }
+    .t-tag   { font-size: 12.5px; font-weight: 700; }
+    .t-say   { font-size: 17px; fill: #2A121B; }
+    .t-wink  { font-size: 11px; font-style: italic; fill: #9CA3AF; }
+    .t-stamp { font-size: 14px; font-weight: 800; letter-spacing: .5px; }
+    .green   { font-weight: 700; fill: #16A534; }
+    .red     { font-weight: 700; fill: #DC2626; }
+
+    /* ONE 16s master cycle. Setup → the walker starts at the wrong answer (loop 5)
+       and hops backward, trying ablation at each loop (no flip), until loop 1 where
+       removing the plant FLIPS the answer → ROOT. Pure CSS — no SMIL, no JS. */
+
+    /* the walker rides a right-to-left path through the 5 loop centers; it dwells at
+       each loop (ablation probe) then hops to the previous one. 0%=loop5 … 100%=loop1 */
+    .walker {
+      offset-path: path('M 1190 392 L 930 392 L 670 392 L 410 392 L 150 392');
+      offset-rotate: 0deg;
+      animation: walk 16s linear infinite, walkfade 16s linear infinite;
+    }
+    @keyframes walk {
+      0%,9%   { offset-distance: 0%; }      /* loop 5 — the symptom */
+      14%     { offset-distance: 25%; }      /* hop → loop 4 */
+      20%     { offset-distance: 25%; }
+      25%     { offset-distance: 50%; }      /* hop → loop 3 */
+      31%     { offset-distance: 50%; }
+      36%     { offset-distance: 75%; }      /* hop → loop 2 */
+      42%     { offset-distance: 75%; }
+      47%     { offset-distance: 100%; }     /* hop → loop 1, the root */
+      92%     { offset-distance: 100%; }
+      100%    { offset-distance: 100%; }
+    }
+    @keyframes walkfade { 0%,6%{opacity:0} 8%{opacity:1} 93%{opacity:1} 98%{opacity:0} 100%{opacity:0} }
+
+    /* per-loop "ablate → did it flip?" probe — visible only while the walker dwells there */
+    @keyframes p5 { 0%,8%{opacity:0} 10%{opacity:1} 13%{opacity:1} 15%{opacity:0} 100%{opacity:0} }
+    @keyframes p4 { 0%,15%{opacity:0} 17%{opacity:1} 20%{opacity:1} 22%{opacity:0} 100%{opacity:0} }
+    @keyframes p3 { 0%,26%{opacity:0} 28%{opacity:1} 31%{opacity:1} 33%{opacity:0} 100%{opacity:0} }
+    @keyframes p2 { 0%,37%{opacity:0} 39%{opacity:1} 42%{opacity:1} 44%{opacity:0} 100%{opacity:0} }
+    .p5{animation:p5 16s linear infinite}.p4{animation:p4 16s linear infinite}
+    .p3{animation:p3 16s linear infinite}.p2{animation:p2 16s linear infinite}
+    /* loop 1: the flip — appears at the root and STAYS (the proof) */
+    @keyframes p1 { 0%,47%{opacity:0} 50%{opacity:1} 92%{opacity:1} 98%{opacity:0} 100%{opacity:0} }
+    .p1{animation:p1 16s linear infinite}
+
+    /* the amber proxy-narrow glow on each loop box as the walker arrives */
+    @keyframes n5 { 0%,8%{opacity:0} 10%{opacity:.9} 14%{opacity:0} 100%{opacity:0} }
+    @keyframes n4 { 0%,15%{opacity:0} 17%{opacity:.9} 21%{opacity:0} 100%{opacity:0} }
+    @keyframes n3 { 0%,26%{opacity:0} 28%{opacity:.9} 32%{opacity:0} 100%{opacity:0} }
+    @keyframes n2 { 0%,37%{opacity:0} 39%{opacity:.9} 43%{opacity:0} 100%{opacity:0} }
+    @keyframes n1 { 0%,47%{opacity:0} 49%{opacity:.9} 52%{opacity:0} 100%{opacity:0} }
+    .n5{animation:n5 16s linear infinite}.n4{animation:n4 16s linear infinite}
+    .n3{animation:n3 16s linear infinite}.n2{animation:n2 16s linear infinite}.n1{animation:n1 16s linear infinite}
+
+    /* the backward provenance edges glow blue under the walker as it hops */
+    @keyframes e54 { 0%,11%{opacity:.25} 13%{opacity:1} 15%{opacity:.25} 100%{opacity:.25} }
+    @keyframes e43 { 0%,22%{opacity:.25} 24%{opacity:1} 26%{opacity:.25} 100%{opacity:.25} }
+    @keyframes e32 { 0%,33%{opacity:.25} 35%{opacity:1} 37%{opacity:.25} 100%{opacity:.25} }
+    @keyframes e21 { 0%,44%{opacity:.25} 46%{opacity:1} 48%{opacity:.25} 100%{opacity:.25} }
+    .e54{animation:e54 16s linear infinite}.e43{animation:e43 16s linear infinite}
+    .e32{animation:e32 16s linear infinite}.e21{animation:e21 16s linear infinite}
+
+    /* the answer box: WRONG (red) until the root is ablated at loop 1, then it FLIPS to RIGHT (green) */
+    @keyframes ansWrong { 0%,47%{opacity:1} 50%{opacity:0} 92%{opacity:0} 96%{opacity:1} 100%{opacity:1} }
+    @keyframes ansRight { 0%,47%{opacity:0} 50%{opacity:1} 92%{opacity:1} 96%{opacity:0} 100%{opacity:0} }
+    .ansWrong{animation:ansWrong 16s linear infinite}.ansRight{animation:ansRight 16s linear infinite}
+
+    /* the ROOT stamp at loop 1, after the flip */
+    @keyframes stamp { 0%,49%{opacity:0} 52%{opacity:1} 92%{opacity:1} 97%{opacity:0} 100%{opacity:0} }
+    .stamp{animation:stamp 16s linear infinite}
+  </style>
+
+  <!-- ───────── header ───────── -->
+  <text class="t-title" x="700" y="40" text-anchor="middle">How the backtrack finds the <tspan fill="#16A534">root</tspan></text>
+  <text class="t-sub" x="700" y="65" text-anchor="middle">start at the wrong answer · walk back along what each step actually read · stop where removing it <tspan class="green" font-size="13.5">flips</tspan> the answer</text>
+
+  <!-- the three signals (the reading rule) -->
+  <g transform="translate(0,0)">
+    <circle cx="300" cy="96" r="6" fill="#0284C7"/><text class="t-leg" x="312" y="100" fill="#0284C7">follow provenance</text><text class="t-cap" x="312" y="115">what each step read · recorded</text>
+    <circle cx="640" cy="96" r="6" fill="#B45309"/><text class="t-leg" x="652" y="100" fill="#B45309">narrow with a proxy</text><text class="t-cap" x="652" y="115">which suspect first · speed only</text>
+    <circle cx="980" cy="96" r="6" fill="#16A534"/><text class="t-leg" x="992" y="100" fill="#16A534">prove with ablation</text><text class="t-cap" x="992" y="115">remove &amp; re-run · the truth</text>
+  </g>
+
+  <!-- ───────── the trajectory: 5 decision points, loop 1 (root) → loop 5 (symptom) ───────── -->
+  <text class="t-sect" x="340" y="158" text-anchor="middle">THE RUN — ONE DECISION POINT PER LOOP (forward ▸)</text>
+
+  <!-- faint forward edges (the run already happened, left → right) -->
+  <path d="M 270 250 L 320 250" fill="none" stroke="#CBD5E1" stroke-width="1.6" marker-end="url(#bt-fwd)"/>
+  <path d="M 530 250 L 580 250" fill="none" stroke="#CBD5E1" stroke-width="1.6" marker-end="url(#bt-fwd)"/>
+  <path d="M 790 250 L 840 250" fill="none" stroke="#CBD5E1" stroke-width="1.6" marker-end="url(#bt-fwd)"/>
+  <path d="M 1050 250 L 1100 250" fill="none" stroke="#CBD5E1" stroke-width="1.6" marker-end="url(#bt-fwd)"/>
+
+  <!-- backward provenance edges (the walker rides these right → left); curved below the boxes -->
+  <path class="e21" d="M 410 300 C 410 360 270 360 270 304" fill="none" stroke="#0284C7" stroke-width="2.4" marker-end="url(#bt-prov)"/>
+  <path class="e32" d="M 670 300 C 670 360 530 360 530 304" fill="none" stroke="#0284C7" stroke-width="2.4" marker-end="url(#bt-prov)"/>
+  <path class="e43" d="M 930 300 C 930 360 790 360 790 304" fill="none" stroke="#0284C7" stroke-width="2.4" marker-end="url(#bt-prov)"/>
+  <path class="e54" d="M 1190 300 C 1190 360 1050 360 1050 304" fill="none" stroke="#0284C7" stroke-width="2.4" marker-end="url(#bt-prov)"/>
+
+  <!-- loop 1 — THE ROOT (red): the planted misdirecting instruction -->
+  <rect x="150" y="224" width="120" height="56" rx="12" fill="#FEF2F2" stroke="#DC2626" stroke-width="2"/>
+  <rect class="n1" x="150" y="224" width="120" height="56" rx="12" fill="none" stroke="#B45309" stroke-width="4"/>
+  <text class="t-box" x="210" y="248" text-anchor="middle" fill="#DC2626">loop 1</text>
+  <text class="t-code" x="210" y="266" text-anchor="middle" fill="#DC2626">call-llm#0</text>
+  <path d="M 210 200 L 210 222" fill="none" stroke="#DC2626" stroke-width="1.6" marker-end="url(#bt-drop)"/>
+  <rect x="120" y="172" width="180" height="28" rx="8" fill="#DC2626"/>
+  <text class="t-tag" x="210" y="191" text-anchor="middle" fill="#fff">misdirecting instruction</text>
+
+  <!-- loops 2–4 — the middle of the trajectory -->
+  <g>
+    <rect x="410" y="224" width="120" height="56" rx="12" fill="#F8FAFC" stroke="#94A3B8" stroke-width="1.6"/>
+    <rect class="n2" x="410" y="224" width="120" height="56" rx="12" fill="none" stroke="#B45309" stroke-width="4"/>
+    <text class="t-box" x="470" y="248" text-anchor="middle">loop 2</text><text class="t-code" x="470" y="266" text-anchor="middle">call-llm#1</text>
+  </g>
+  <g>
+    <rect x="670" y="224" width="120" height="56" rx="12" fill="#F8FAFC" stroke="#94A3B8" stroke-width="1.6"/>
+    <rect class="n3" x="670" y="224" width="120" height="56" rx="12" fill="none" stroke="#B45309" stroke-width="4"/>
+    <text class="t-box" x="730" y="248" text-anchor="middle">loop 3</text><text class="t-code" x="730" y="266" text-anchor="middle">call-llm#2</text>
+  </g>
+  <g>
+    <rect x="930" y="224" width="120" height="56" rx="12" fill="#F8FAFC" stroke="#94A3B8" stroke-width="1.6"/>
+    <rect class="n4" x="930" y="224" width="120" height="56" rx="12" fill="none" stroke="#B45309" stroke-width="4"/>
+    <text class="t-box" x="990" y="248" text-anchor="middle">loop 4</text><text class="t-code" x="990" y="266" text-anchor="middle">call-llm#3</text>
+  </g>
+
+  <!-- loop 5 — THE SYMPTOM: the wrong answer comes out here -->
+  <rect x="1190" y="224" width="120" height="56" rx="12" fill="#F8FAFC" stroke="#94A3B8" stroke-width="1.6"/>
+  <rect class="n5" x="1190" y="224" width="120" height="56" rx="12" fill="none" stroke="#B45309" stroke-width="4"/>
+  <text class="t-box" x="1250" y="248" text-anchor="middle">loop 5</text><text class="t-code" x="1250" y="266" text-anchor="middle">call-llm#4</text>
+  <text class="t-cap" x="1250" y="205" text-anchor="middle" fill="#DC2626">symptom ▸ start here</text>
+
+  <!-- ───────── the walker + per-loop ablation probes ───────── -->
+  <text class="t-sect" x="80" y="424">THE BACKTRACK — WALK BACKWARD ◂ TRY ABLATION AT EACH LOOP</text>
+
+  <!-- per-loop "ablate → did it flip?" probes (under each loop) -->
+  <g class="p5"><rect x="1182" y="436" width="136" height="26" rx="8" fill="#F1F5F9" stroke="#94A3B8" stroke-width="1.2"/><text class="t-code" x="1250" y="453" text-anchor="middle" fill="#64748B">ablate → ✗ no flip</text></g>
+  <g class="p4"><rect x="922" y="436" width="136" height="26" rx="8" fill="#F1F5F9" stroke="#94A3B8" stroke-width="1.2"/><text class="t-code" x="990" y="453" text-anchor="middle" fill="#64748B">ablate → ✗ no flip</text></g>
+  <g class="p3"><rect x="662" y="436" width="136" height="26" rx="8" fill="#F1F5F9" stroke="#94A3B8" stroke-width="1.2"/><text class="t-code" x="730" y="453" text-anchor="middle" fill="#64748B">ablate → ✗ no flip</text></g>
+  <g class="p2"><rect x="402" y="436" width="136" height="26" rx="8" fill="#F1F5F9" stroke="#94A3B8" stroke-width="1.2"/><text class="t-code" x="470" y="453" text-anchor="middle" fill="#64748B">ablate → ✗ no flip</text></g>
+  <!-- loop 1: the FLIP — proof -->
+  <g class="p1"><rect x="142" y="436" width="136" height="26" rx="8" fill="#F0FDF4" stroke="#16A534" stroke-width="1.6"/><text class="t-code green" x="210" y="453" text-anchor="middle">ablate → ✓ FLIP</text></g>
+
+  <!-- the ROOT stamp -->
+  <g class="stamp" transform="translate(150,478)">
+    <rect x="0" y="0" width="120" height="30" rx="9" fill="#16A534"/>
+    <text class="t-stamp" x="60" y="20" text-anchor="middle" fill="#fff">ROOT ✓</text>
+  </g>
+  <text class="t-cap stamp" x="290" y="498">proven by the flip — not a guess</text>
+
+  <!-- the walker (rides the provenance path, right → left) -->
+  <path class="walker" d="M -10 -7 L 13 0 L -10 7 Z" fill="#1F2937" stroke="#fff" stroke-width="1.5"/>
+
+  <!-- ───────── the answer: WRONG until the root is ablated, then it FLIPS ───────── -->
+  <text class="t-sect" x="80" y="556">THE OUTCOME</text>
+  <g class="ansWrong"><rect x="150" y="568" width="430" height="40" rx="12" fill="#FEF2F2" stroke="#DC2626" stroke-width="1.6"/><text class="t-say" x="365" y="594" text-anchor="middle"><tspan class="red">APPROVED</tspan> — the wrong answer (misdirected)</text></g>
+  <g class="ansRight"><rect x="150" y="568" width="430" height="40" rx="12" fill="#F0FDF4" stroke="#16A534" stroke-width="1.6"/><text class="t-say" x="365" y="594" text-anchor="middle"><tspan class="green">DECLINED</tspan> — remove loop 1, and it flips back</text></g>
+
+  <!-- ───────── the promise ───────── -->
+  <text class="t-say" x="840" y="582" text-anchor="middle">The score only picks what to try first.</text>
+  <text class="t-say" x="840" y="610" text-anchor="middle">The <tspan class="green">flip</tspan> is what proves the root.</text>
+
+  <!-- reading rule -->
+  <text class="t-wink" x="80" y="652"><tspan fill="#0284C7" font-weight="600">blue</tspan> = recorded provenance (the hop) · <tspan fill="#B45309" font-weight="600">amber</tspan> = proxy narrow (speed) · <tspan fill="#16A534" font-weight="600">green</tspan> = ablation flip (truth) · <tspan fill="#DC2626" font-weight="600">red</tspan> = the planted root</text>
+  <text class="t-wink" x="1320" y="652" text-anchor="end">git bisect for context — the cause is where removing it changes the answer</text>
+</svg>

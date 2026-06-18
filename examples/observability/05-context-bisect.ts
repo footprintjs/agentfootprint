@@ -61,6 +61,7 @@ import {
   localizeContextBug,
   type AblationSpec,
   type CapturedEventLike,
+  type ContextBugArtifacts,
   type ContextBugReport,
 } from '../../src/observe.js';
 import { isCliEntry, type ExampleMeta } from '../helpers/cli.js';
@@ -256,6 +257,11 @@ export interface ContextBisectResult {
   part1Report: ContextBugReport;
   part2Report: ContextBugReport;
   transcript: string;
+  /** Part 1 artifacts — re-localizable at ANY step (the backtrack-board demo
+   *  generator points the localizer at the final call, the first call, etc.). */
+  part1Artifacts: ContextBugArtifacts & { llmIds: readonly string[] };
+  /** Part 2 artifacts — the deterministic loan decide() chart + control deps. */
+  part2Artifacts: ContextBugArtifacts & { approveId: string };
 }
 
 export async function run(_input?: string | null): Promise<ContextBisectResult> {
@@ -348,6 +354,13 @@ export async function run(_input?: string | null): Promise<ContextBisectResult> 
     part1Report,
     part2Report,
     transcript,
+    part1Artifacts: {
+      snapshot: original.snapshot,
+      events: original.events,
+      controlDeps: original.controlDeps,
+      llmIds,
+    },
+    part2Artifacts: { snapshot, controlDeps: ctrl.asLookup(), approveId },
   };
 }
 

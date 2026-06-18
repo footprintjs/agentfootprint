@@ -1,0 +1,199 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 760" width="1400" height="760" role="img"
+     aria-label="Backtracking to the root, the algorithm run on a worked example. Left panel: the algorithm in four steps — (1) start at the wrong answer, (2) narrow with the proxy to pick a suspect, (3) ablate: remove it and re-run, (4) flipped? no means hop back to the loop that wrote it and repeat; yes means stop, that is the root. A glowing highlight moves down the steps as the example runs. Right panel: a worked example, a refund agent with three decision loops — loop 1 holds a planted misdirecting instruction (the root, red), loop 3 emits the wrong answer APPROVED (the symptom). A walker starts at loop 3 and hops left. Below, an ablation test bench shows each test concretely. Test loop 3: remove the promo result, re-run, output APPROVED, not flipped, hop back. Test loop 2: remove the gathered note, re-run, APPROVED, not flipped, hop back. Test loop 1: remove the misdirecting instruction, re-run, output DECLINED, FLIPPED — that is the root, proven by the flip.">
+
+  <defs>
+    <marker id="s-fwd" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="#CBD5E1"/></marker>
+    <marker id="s-prov" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="#0284C7"/></marker>
+    <marker id="s-hop" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="#94A3B8"/></marker>
+    <marker id="s-red" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="#DC2626"/></marker>
+  </defs>
+
+  <style>
+    text { font-family: 'Hanken Grotesque', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif; }
+    .t-title { font-size: 26px; font-weight: 700; fill: #2A121B; }
+    .t-sub   { font-size: 13px; fill: #6B7280; }
+    .t-sect  { font-size: 11px; font-weight: 600; fill: #9CA3AF; letter-spacing: 1.6px; }
+    .t-step  { font-size: 14.5px; font-weight: 700; fill: #334155; }
+    .t-stepd { font-size: 12px; fill: #64748B; }
+    .t-num   { font-size: 13px; font-weight: 800; fill: #fff; }
+    .t-box   { font-size: 13px; font-weight: 600; fill: #475569; }
+    .t-code  { font-size: 12.5px; font-weight: 600; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    .t-cap   { font-size: 12px; font-style: italic; fill: #6B7280; }
+    .t-tag   { font-size: 12px; font-weight: 700; fill: #fff; }
+    .t-bench { font-size: 14px; font-weight: 600; }
+    .t-wink  { font-size: 11px; font-style: italic; fill: #9CA3AF; }
+    .green { fill:#16A534; font-weight:700 } .red { fill:#DC2626; font-weight:700 }
+
+    /* 18s master cycle: intro → test loop 3 (no flip) → test loop 2 (no flip) →
+       test loop 1 (FLIP → root). Left step-highlight + right example move together.
+       Pure CSS — no SMIL, no JS. */
+
+    /* left: the glowing ring on the ACTIVE algorithm step */
+    @keyframes s1 { 0%,2%{opacity:0} 4%{opacity:1} 10%{opacity:1} 12%{opacity:0} 100%{opacity:0} }
+    /* step 2 (narrow) lights at the start of each of the 3 tests */
+    @keyframes s2 { 0%,12%{opacity:0} 14%{opacity:1} 17%{opacity:0}
+      35%{opacity:0} 37%{opacity:1} 40%{opacity:0}
+      58%{opacity:0} 60%{opacity:1} 63%{opacity:0} 100%{opacity:0} }
+    /* step 3 (ablate) lights during each test's re-run */
+    @keyframes s3 { 0%,17%{opacity:0} 19%{opacity:1} 25%{opacity:0}
+      40%{opacity:0} 42%{opacity:1} 48%{opacity:0}
+      63%{opacity:0} 65%{opacity:1} 73%{opacity:0} 100%{opacity:0} }
+    /* step 4 (flipped?) lights at each verdict */
+    @keyframes s4 { 0%,25%{opacity:0} 27%{opacity:1} 32%{opacity:0}
+      48%{opacity:0} 50%{opacity:1} 55%{opacity:0}
+      73%{opacity:0} 75%{opacity:1} 90%{opacity:1} 92%{opacity:0} 100%{opacity:0} }
+    .s1{animation:s1 18s linear infinite}.s2{animation:s2 18s linear infinite}
+    .s3{animation:s3 18s linear infinite}.s4{animation:s4 18s linear infinite}
+    /* the ROOT terminal lights at the end */
+    @keyframes sRoot { 0%,76%{opacity:0} 79%{opacity:1} 90%{opacity:1} 95%{opacity:0} 100%{opacity:0} }
+    .sRoot{animation:sRoot 18s linear infinite}
+    /* the "no → hop, repeat" loop arrow pulses after the two no-flip verdicts */
+    @keyframes sHop { 0%,30%{opacity:.3} 32%{opacity:1} 34%{opacity:.3} 53%{opacity:1} 55%{opacity:.3} 100%{opacity:.3} }
+    .sHop{animation:sHop 18s linear infinite}
+
+    /* right: the walker hops loop3 → loop2 → loop1 (0% → 50% → 100%) */
+    .walker { offset-path: path('M 1230 372 L 940 372 L 650 372'); offset-rotate: 0deg;
+      animation: walk 18s linear infinite, wfade 18s linear infinite; }
+    @keyframes walk { 0%,31%{offset-distance:0%} 34%{offset-distance:50%} 54%{offset-distance:50%}
+      57%{offset-distance:100%} 100%{offset-distance:100%} }
+    @keyframes wfade { 0%,5%{opacity:0} 7%{opacity:1} 92%{opacity:1} 97%{opacity:0} 100%{opacity:0} }
+    /* the loop box under test glows */
+    @keyframes g3 { 0%,12%{opacity:0} 14%{opacity:.9} 31%{opacity:.9} 33%{opacity:0} 100%{opacity:0} }
+    @keyframes g2 { 0%,35%{opacity:0} 37%{opacity:.9} 54%{opacity:.9} 56%{opacity:0} 100%{opacity:0} }
+    @keyframes g1 { 0%,58%{opacity:0} 60%{opacity:.9} 90%{opacity:.9} 95%{opacity:0} 100%{opacity:0} }
+    .g3{animation:g3 18s linear infinite}.g2{animation:g2 18s linear infinite}.g1{animation:g1 18s linear infinite}
+    /* provenance edges glow under the walker as it hops */
+    @keyframes pe32 { 0%,31%{opacity:.25} 33%{opacity:1} 35%{opacity:.25} 100%{opacity:.25} }
+    @keyframes pe21 { 0%,54%{opacity:.25} 56%{opacity:1} 58%{opacity:.25} 100%{opacity:.25} }
+    .pe32{animation:pe32 18s linear infinite}.pe21{animation:pe21 18s linear infinite}
+
+    /* the ablation TEST BENCH — three states fade in/out per loop */
+    @keyframes b3 { 0%,13%{opacity:0} 16%{opacity:1} 31%{opacity:1} 33%{opacity:0} 100%{opacity:0} }
+    @keyframes b2 { 0%,36%{opacity:0} 39%{opacity:1} 54%{opacity:1} 56%{opacity:0} 100%{opacity:0} }
+    @keyframes b1 { 0%,59%{opacity:0} 62%{opacity:1} 92%{opacity:1} 97%{opacity:0} 100%{opacity:0} }
+    .b3{animation:b3 18s linear infinite}.b2{animation:b2 18s linear infinite}.b1{animation:b1 18s linear infinite}
+    /* inside each bench the verdict appears a beat after the re-run */
+    @keyframes v3 { 0%,24%{opacity:0} 27%{opacity:1} 31%{opacity:1} 33%{opacity:0} 100%{opacity:0} }
+    @keyframes v2 { 0%,47%{opacity:0} 50%{opacity:1} 54%{opacity:1} 56%{opacity:0} 100%{opacity:0} }
+    @keyframes v1 { 0%,72%{opacity:0} 76%{opacity:1} 92%{opacity:1} 97%{opacity:0} 100%{opacity:0} }
+    .v3{animation:v3 18s linear infinite}.v2{animation:v2 18s linear infinite}.v1{animation:v1 18s linear infinite}
+    @keyframes rootstamp { 0%,77%{opacity:0} 80%{opacity:1} 92%{opacity:1} 97%{opacity:0} 100%{opacity:0} }
+    .rootstamp{animation:rootstamp 18s linear infinite}
+  </style>
+
+  <!-- header -->
+  <text class="t-title" x="700" y="40" text-anchor="middle">Backtracking — the algorithm, run on an example</text>
+  <text class="t-sub" x="700" y="63" text-anchor="middle">the steps on the left · a worked example running through them on the right · the bench shows each <tspan class="green" font-size="13">flip</tspan> test</text>
+
+  <!-- divider -->
+  <line x1="540" y1="92" x2="540" y2="720" stroke="#E2E8F0" stroke-width="1.5" stroke-dasharray="2 7"/>
+
+  <!-- ╔═══════════ LEFT — THE ALGORITHM ═══════════╗ -->
+  <text class="t-sect" x="60" y="120">THE ALGORITHM</text>
+
+  <!-- step 1 -->
+  <rect x="60" y="138" width="440" height="58" rx="12" fill="#F8FAFC" stroke="#CBD5E1" stroke-width="1.5"/>
+  <rect class="s1" x="60" y="138" width="440" height="58" rx="12" fill="none" stroke="#0284C7" stroke-width="3.5"/>
+  <circle cx="90" cy="167" r="14" fill="#334155"/><text class="t-num" x="90" y="172" text-anchor="middle">1</text>
+  <text class="t-step" x="118" y="163">Start at the wrong answer</text>
+  <text class="t-stepd" x="118" y="182">the symptom — the final decision that came out wrong</text>
+
+  <!-- step 2 -->
+  <rect x="60" y="208" width="440" height="58" rx="12" fill="#FFF7EC" stroke="#FBD9A8" stroke-width="1.5"/>
+  <rect class="s2" x="60" y="208" width="440" height="58" rx="12" fill="none" stroke="#B45309" stroke-width="3.5"/>
+  <circle cx="90" cy="237" r="14" fill="#B45309"/><text class="t-num" x="90" y="242" text-anchor="middle">2</text>
+  <text class="t-step" x="118" y="233">Narrow — pick a suspect (proxy)</text>
+  <text class="t-stepd" x="118" y="252">the score hints which thing this step read to try first · speed only</text>
+
+  <!-- step 3 -->
+  <rect x="60" y="278" width="440" height="58" rx="12" fill="#F0FDF4" stroke="#A7F3C0" stroke-width="1.5"/>
+  <rect class="s3" x="60" y="278" width="440" height="58" rx="12" fill="none" stroke="#16A534" stroke-width="3.5"/>
+  <circle cx="90" cy="307" r="14" fill="#16A534"/><text class="t-num" x="90" y="312" text-anchor="middle">3</text>
+  <text class="t-step" x="118" y="303">Ablate — remove it &amp; re-run</text>
+  <text class="t-stepd" x="118" y="322">take the suspect out, run the agent again, read the new answer</text>
+
+  <!-- step 4 -->
+  <rect x="60" y="348" width="440" height="66" rx="12" fill="#F8FAFC" stroke="#CBD5E1" stroke-width="1.5"/>
+  <rect class="s4" x="60" y="348" width="440" height="66" rx="12" fill="none" stroke="#7C3AED" stroke-width="3.5"/>
+  <circle cx="90" cy="381" r="14" fill="#7C3AED"/><text class="t-num" x="90" y="386" text-anchor="middle">4</text>
+  <text class="t-step" x="118" y="375">Flipped?</text>
+  <text class="t-stepd" x="118" y="394"><tspan class="red">no</tspan> → not the cause; hop back to the loop that wrote it (provenance)</text>
+  <text class="t-stepd" x="118" y="409"><tspan class="green">yes</tspan> → STOP. this is the root — proven by the flip</text>
+
+  <!-- the loop: no → hop, repeat (step 4 back up to step 2) -->
+  <path class="sHop" d="M 512 381 C 530 381 530 237 512 237" fill="none" stroke="#94A3B8" stroke-width="1.8" stroke-dasharray="5 5" marker-end="url(#s-hop)"/>
+  <text class="t-cap sHop" x="524" y="312" transform="rotate(90 524 312)" text-anchor="middle">no → hop, repeat</text>
+
+  <!-- the terminal: yes → ROOT -->
+  <path d="M 280 416 L 280 446" fill="none" stroke="#16A534" stroke-width="1.8" marker-end="url(#s-prov)"/>
+  <rect x="170" y="450" width="220" height="46" rx="12" fill="#16A534"/>
+  <rect class="sRoot" x="166" y="446" width="228" height="54" rx="14" fill="none" stroke="#16A534" stroke-width="3"/>
+  <text class="t-step" x="280" y="479" text-anchor="middle" fill="#fff">ROOT — proven ✓</text>
+
+  <!-- ╔═══════════ RIGHT — THE WORKED EXAMPLE ═══════════╗ -->
+  <text class="t-sect" x="600" y="120">RUN IT ON AN EXAMPLE — a refund agent</text>
+
+  <!-- the three loops: loop 1 (root) … loop 3 (symptom) -->
+  <!-- forward edges -->
+  <path d="M 710 252 L 760 252" fill="none" stroke="#CBD5E1" stroke-width="1.6" marker-end="url(#s-fwd)"/>
+  <path d="M 1000 252 L 1050 252" fill="none" stroke="#CBD5E1" stroke-width="1.6" marker-end="url(#s-fwd)"/>
+  <!-- backward provenance edges -->
+  <path class="pe21" d="M 940 300 C 940 350 710 350 710 304" fill="none" stroke="#0284C7" stroke-width="2.4" marker-end="url(#s-prov)"/>
+  <path class="pe32" d="M 1230 300 C 1230 350 1000 350 1000 304" fill="none" stroke="#0284C7" stroke-width="2.4" marker-end="url(#s-prov)"/>
+
+  <!-- loop 1 — the root (red) -->
+  <rect x="590" y="224" width="120" height="56" rx="12" fill="#FEF2F2" stroke="#DC2626" stroke-width="2"/>
+  <rect class="g1" x="590" y="224" width="120" height="56" rx="12" fill="none" stroke="#B45309" stroke-width="4"/>
+  <text class="t-box" x="650" y="248" text-anchor="middle" fill="#DC2626">loop 1</text><text class="t-code" x="650" y="266" text-anchor="middle" fill="#DC2626">call-llm#0</text>
+  <rect x="560" y="180" width="180" height="26" rx="8" fill="#DC2626"/><text class="t-tag" x="650" y="198" text-anchor="middle">misdirecting instruction</text>
+  <path d="M 650 206 L 650 222" fill="none" stroke="#DC2626" stroke-width="1.6" marker-end="url(#s-red)"/>
+
+  <!-- loop 2 -->
+  <rect x="880" y="224" width="120" height="56" rx="12" fill="#F8FAFC" stroke="#94A3B8" stroke-width="1.6"/>
+  <rect class="g2" x="880" y="224" width="120" height="56" rx="12" fill="none" stroke="#B45309" stroke-width="4"/>
+  <text class="t-box" x="940" y="248" text-anchor="middle">loop 2</text><text class="t-code" x="940" y="266" text-anchor="middle" fill="#64748B">call-llm#1</text>
+
+  <!-- loop 3 — the symptom -->
+  <rect x="1170" y="224" width="120" height="56" rx="12" fill="#F8FAFC" stroke="#94A3B8" stroke-width="1.6"/>
+  <rect class="g3" x="1170" y="224" width="120" height="56" rx="12" fill="none" stroke="#B45309" stroke-width="4"/>
+  <text class="t-box" x="1230" y="248" text-anchor="middle">loop 3</text><text class="t-code" x="1230" y="266" text-anchor="middle" fill="#64748B">call-llm#2</text>
+  <text class="t-cap" x="1230" y="205" text-anchor="middle" fill="#DC2626">symptom ▸ start here</text>
+
+  <!-- the walker -->
+  <path class="walker" d="M -10 -7 L 13 0 L -10 7 Z" fill="#1F2937" stroke="#fff" stroke-width="1.5"/>
+
+  <!-- ── the ABLATION TEST BENCH (the heart of it) ── -->
+  <text class="t-sect" x="600" y="446">THE ABLATION TEST BENCH</text>
+  <rect x="600" y="458" width="740" height="150" rx="16" fill="#FCFCFD" stroke="#CBD5E1" stroke-width="1.6"/>
+
+  <!-- bench: test loop 3 (no flip) -->
+  <g class="b3">
+    <text class="t-bench" x="628" y="496"><tspan fill="#64748B">remove </tspan><tspan fill="#334155" font-weight="700">the promo lookup result</tspan><tspan fill="#9CA3AF"> (loop 3)</tspan></text>
+    <text class="t-bench" x="628" y="528"><tspan fill="#64748B">re-run → </tspan><tspan class="red" font-size="16">APPROVED</tspan><tspan fill="#9CA3AF"> (still wrong)</tspan></text>
+    <g class="v3"><rect x="628" y="552" width="320" height="34" rx="9" fill="#F1F5F9" stroke="#94A3B8" stroke-width="1.3"/>
+      <text class="t-bench" x="648" y="575"><tspan fill="#64748B">flipped? </tspan><tspan fill="#64748B" font-weight="800">✗ NO</tspan><tspan fill="#9CA3AF"> — not the cause, hop back</tspan></text></g>
+  </g>
+  <!-- bench: test loop 2 (no flip) -->
+  <g class="b2">
+    <text class="t-bench" x="628" y="496"><tspan fill="#64748B">remove </tspan><tspan fill="#334155" font-weight="700">the gathered note</tspan><tspan fill="#9CA3AF"> (loop 2)</tspan></text>
+    <text class="t-bench" x="628" y="528"><tspan fill="#64748B">re-run → </tspan><tspan class="red" font-size="16">APPROVED</tspan><tspan fill="#9CA3AF"> (still wrong)</tspan></text>
+    <g class="v2"><rect x="628" y="552" width="320" height="34" rx="9" fill="#F1F5F9" stroke="#94A3B8" stroke-width="1.3"/>
+      <text class="t-bench" x="648" y="575"><tspan fill="#64748B">flipped? </tspan><tspan fill="#64748B" font-weight="800">✗ NO</tspan><tspan fill="#9CA3AF"> — not the cause, hop back</tspan></text></g>
+  </g>
+  <!-- bench: test loop 1 (FLIP → ROOT) -->
+  <g class="b1">
+    <text class="t-bench" x="628" y="496"><tspan fill="#64748B">remove </tspan><tspan class="red" font-weight="700">the misdirecting instruction</tspan><tspan fill="#9CA3AF"> (loop 1)</tspan></text>
+    <text class="t-bench" x="628" y="528"><tspan fill="#64748B">re-run → </tspan><tspan class="green" font-size="16">DECLINED</tspan><tspan fill="#9CA3AF"> (correct now!)</tspan></text>
+    <g class="v1"><rect x="628" y="552" width="430" height="34" rx="9" fill="#F0FDF4" stroke="#16A534" stroke-width="1.6"/>
+      <text class="t-bench" x="648" y="575"><tspan fill="#64748B">flipped? </tspan><tspan class="green" font-weight="800">✓ YES</tspan><tspan fill="#334155"> — removing it changed the answer</tspan></text></g>
+    <g class="rootstamp" transform="translate(1080,552)"><rect x="0" y="0" width="170" height="34" rx="9" fill="#16A534"/>
+      <text class="t-bench" x="85" y="23" text-anchor="middle" fill="#fff" font-weight="800">THE ROOT ✓</text></g>
+  </g>
+
+  <!-- the takeaway -->
+  <text class="t-sub" x="970" y="648" text-anchor="middle" font-size="15">The proxy said where to look first. The <tspan class="green" font-size="15">flip</tspan> is what proved it.</text>
+
+  <!-- reading rule -->
+  <text class="t-wink" x="60" y="712"><tspan fill="#B45309" font-weight="600">amber</tspan> = narrow (proxy, speed) · <tspan fill="#16A534" font-weight="600">green</tspan> = ablate &amp; flip (proof) · <tspan fill="#0284C7" font-weight="600">blue</tspan> = provenance hop · <tspan fill="#DC2626" font-weight="600">red</tspan> = the planted root</text>
+  <text class="t-wink" x="1340" y="712" text-anchor="end">remove a suspect · re-run · the cause is the one whose removal flips the answer</text>
+</svg>
