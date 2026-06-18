@@ -248,7 +248,21 @@ export function toBacktrackTrace(
     }
   }
 
-  const honesty = [...report.honestyFlags.map((f) => `⚠ ${f.flag}: ${f.note}`), ...CLAIMS_LINES];
+  // When the decision being walked back is a deterministic rule (decidedAtKind:
+  // 'rule'), having no LLM-call ids is EXPECTED, not a missing input: a rule makes
+  // no model calls, so "structure-only ranking" is the correct mode. The localizer
+  // can't tell that case from "an LLM chart whose llmCallIds weren't passed" — only
+  // the consumer's decidedAtKind disambiguates — so we reframe that one flag here,
+  // at the layer that knows. It becomes a neutral note (no ⚠), never a warning.
+  const decidedAtKind = opts.decidedAtKind ?? 'llm';
+  const honesty = [
+    ...report.honestyFlags.map((f) =>
+      decidedAtKind === 'rule' && f.flag === 'no-llm-call-ids'
+        ? 'this decision is a deterministic rule — it makes no LLM calls, so scores rank recorded operands by structure (no influence weighting applies).'
+        : `⚠ ${f.flag}: ${f.note}`,
+    ),
+    ...CLAIMS_LINES,
+  ];
 
   return {
     claim: opts.claim ?? `Why did ${report.stepName} (${report.step}) decide this?`,
@@ -257,7 +271,7 @@ export function toBacktrackTrace(
     agent: opts.agent,
     model: opts.model,
     answer: opts.answer,
-    decidedAt: { id: report.step, label: report.stepName, kind: opts.decidedAtKind ?? 'llm' },
+    decidedAt: { id: report.step, label: report.stepName, kind: decidedAtKind },
     suspects: selected.map((e) => toCard(e.s, e.trueRank, opts.custody)),
     trail: opts.trail,
     folded,

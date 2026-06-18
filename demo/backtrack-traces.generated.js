@@ -694,7 +694,7 @@ window.BACKTRACK_TRACES = {
     ],
     "scoreNote": "top-2 margin 0.00 — proxy scores alone cannot separate them.",
     "honesty": [
-      "⚠ no-llm-call-ids: no LLM-call step ids (pass llmCallIds or captured events) — no edge received an influence weight; the ranking is structure-only.",
+      "this decision is a deterministic rule — it makes no LLM calls, so scores rank recorded operands by structure (no influence weighting applies).",
       "scores/weights are deterministic embedding-geometry proxies — semantic alignment, not model internals.",
       "only ablation verdicts make causal claims."
     ]

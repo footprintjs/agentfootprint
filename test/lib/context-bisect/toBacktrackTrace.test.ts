@@ -211,6 +211,39 @@ describe('toBacktrackTrace — unit: field mapping', () => {
     );
     expect(t.baseline).toBe('0/3 flipped with no ablation');
   });
+
+  it('reframes the no-llm-call-ids flag as a neutral note (no ⚠) when the decision is a rule', () => {
+    const r = report({
+      mode: 'correlational',
+      honestyFlags: [
+        {
+          flag: 'no-llm-call-ids',
+          note: 'no LLM-call step ids (pass llmCallIds or captured events) — no edge received an influence weight; the ranking is structure-only.',
+        },
+      ],
+    });
+    const ruleTrace = toBacktrackTrace(r, { answer: ANSWER, decidedAtKind: 'rule' });
+    // the ⚠ "you forgot to wire something" wording is gone…
+    expect(ruleTrace.honesty?.some((h) => h.startsWith('⚠ no-llm-call-ids'))).toBe(false);
+    expect(ruleTrace.honesty?.some((h) => h.includes('pass llmCallIds'))).toBe(false);
+    // …replaced by the neutral "a rule makes no LLM calls" note, and the claims lines still ride along
+    expect(
+      ruleTrace.honesty?.some((h) => h.includes('deterministic rule — it makes no LLM calls')),
+    ).toBe(true);
+    expect(
+      ruleTrace.honesty?.some((h) => h.includes('only ablation verdicts make causal claims')),
+    ).toBe(true);
+  });
+
+  it('keeps the no-llm-call-ids ⚠ verbatim for an LLM decision (the reframe is rule-only)', () => {
+    const r = report({
+      mode: 'correlational',
+      honestyFlags: [{ flag: 'no-llm-call-ids', note: 'no LLM-call step ids — structure-only.' }],
+    });
+    // default kind === 'llm': a genuine "you forgot to pass llmCallIds" warning stays a ⚠
+    const llmTrace = toBacktrackTrace(r, { answer: ANSWER });
+    expect(llmTrace.honesty?.[0]).toBe('⚠ no-llm-call-ids: no LLM-call step ids — structure-only.');
+  });
 });
 
 /* ── functional — selection, folding, score note ──────────────────────── */
