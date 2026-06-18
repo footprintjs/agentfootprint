@@ -12,11 +12,13 @@ import {
   decide,
   defineSkill,
   defineInstruction,
+  defineRelevanceHint,
   defineTool,
   Agent,
   mock,
   mockEmbedder,
 } from '../src/index.js';
+import type { Injection } from '../src/index.js';
 import { softmax } from '../src/lib/injection-engine/softmax.js';
 import { evaluateInjections } from '../src/lib/injection-engine/index.js';
 import type { InjectionContext } from '../src/lib/injection-engine/types.js';
@@ -1140,6 +1142,56 @@ describe('skillGraph — object-literal config form', () => {
     const g = skillGraph({ skills: [io, tri], tree: decide((c) => /io/.test(c.userMessage), io, tri) });
     expect(g.skills.map((s) => s.id).sort()).toEqual(['io', 'tri']);
     expect(g.checkup().ok).toBe(true);
+  });
+});
+
+describe('defineRelevanceHint — advisory note on an ambiguous entry', () => {
+  const fire = (hint: Injection, over: Partial<InjectionContext>) =>
+    (hint.trigger as { activeWhen: (c: InjectionContext) => boolean }).activeWhen(ctx(over));
+
+  it('fires only on turn start (iteration 1) when the top entries are a near-tie', () => {
+    const hint = defineRelevanceHint({ threshold: 0.15 });
+    const nearTie = [
+      { id: 'a', cosine: 0.5, relevance: 0.34 },
+      { id: 'b', cosine: 0.49, relevance: 0.33 },
+      { id: 'c', cosine: 0.4, relevance: 0.33 },
+    ];
+    expect(fire(hint, { iteration: 1, entryScores: nearTie })).toBe(true);
+    expect(fire(hint, { iteration: 2, entryScores: nearTie })).toBe(false); // only turn start
+    const clear = [
+      { id: 'a', cosine: 0.9, relevance: 0.8 },
+      { id: 'b', cosine: 0.2, relevance: 0.2 },
+    ];
+    expect(fire(hint, { iteration: 1, entryScores: clear })).toBe(false); // not a tie
+    expect(fire(hint, { iteration: 1 })).toBe(false); // no scores (no entryByRelevance)
+  });
+
+  it('the note is advisory (anti-anchoring), not an instruction', () => {
+    const hint = defineRelevanceHint();
+    expect(hint.inject.systemPrompt).toMatch(/weak hint|judgment|not an instruction/i);
+    expect(hint.flavor).toBe('instructions');
+  });
+
+  it('activates in a real entryByRelevance run when the entries tie (mockEmbedder is flat)', async () => {
+    const a = defineSkill({ id: 'a', description: 'alpha topic', body: 'a' });
+    const b = defineSkill({ id: 'b', description: 'beta topic', body: 'b' });
+    const graph = skillGraph().entry(a).entry(b).entryByRelevance(mockEmbedder()).build();
+    const activeIds: string[][] = [];
+    const recorder = {
+      id: 'cap',
+      onEmit: (e: { name: string; payload?: { activeIds?: string[] } }) => {
+        if (e.name === 'agentfootprint.context.evaluated') activeIds.push([...(e.payload?.activeIds ?? [])]);
+      },
+    };
+    const agent = Agent.create({ provider: mock({ reply: 'done' }), model: 'mock', maxIterations: 2 })
+      .system('')
+      .skillGraph(graph)
+      .instruction(defineRelevanceHint())
+      .recorder(recorder)
+      .build();
+    await agent.run({ message: 'something genuinely ambiguous' });
+
+    expect(activeIds[0]).toContain('relevance-hint'); // fired at turn start on the tie
   });
 });
 

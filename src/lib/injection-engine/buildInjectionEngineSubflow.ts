@@ -137,6 +137,8 @@ interface InjectionEngineArgs {
    *  route triggers compare against). Carried by the mount mappers; undefined
    *  on cold start and for non-skillGraph agents. */
   currentSkillId?: string;
+  /** The relevance entry ranking (entryByRelevance) — read by defineRelevanceHint. */
+  entryScores?: InjectionContext['entryScores'];
 }
 
 /**
@@ -199,6 +201,7 @@ function makeEvaluateStage(
       ...(args.lastToolResult && { lastToolResult: args.lastToolResult }),
       activatedInjectionIds: args.activatedInjectionIds ?? [],
       ...(args.currentSkillId !== undefined && { currentSkillId: args.currentSkillId }),
+      ...(args.entryScores !== undefined && { entryScores: args.entryScores }),
     };
 
     // KEYSTONE cursor advance — derive the next cursor from the SAME ctx the

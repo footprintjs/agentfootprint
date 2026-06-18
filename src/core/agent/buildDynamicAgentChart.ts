@@ -193,6 +193,10 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
           // Skill-graph cursor from the previous iteration (carried into sf-llm-call
           // by its outer boundary below). The `from`-gate for the route triggers.
           currentSkillId: parent.currentSkillId as string | undefined,
+          // Relevance entry ranking (entryByRelevance) — read by defineRelevanceHint.
+          entryScores: parent.entryScores as
+            | ReadonlyArray<{ id: string; cosine: number; relevance: number }>
+            | undefined,
         }),
         outputMapper: (sf) => ({
           activeInjections: sf.activeInjections,
@@ -383,6 +387,8 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
           // Skill-graph cursor carried into sf-llm-call (like activatedInjectionIds
           // / lastToolResult — a direct cross-iteration read, not a prior* alias).
           currentSkillId: p.currentSkillId,
+          // Relevance entry ranking — carried in so defineRelevanceHint can read it.
+          entryScores: p.entryScores,
           ...memoryKeys,
           // Cross-iteration accumulators under prior* aliases — frozen
           // here, copied to writable working keys by dynamicTurnSeed.

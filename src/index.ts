@@ -388,6 +388,8 @@ export {
   // Sugar factories — one per injection flavor
   defineInstruction,
   type DefineInstructionOptions,
+  defineRelevanceHint,
+  type RelevanceHintOptions,
   defineSkill,
   resolveSurfaceMode,
   SkillRegistry,

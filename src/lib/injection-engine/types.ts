@@ -117,6 +117,16 @@ export interface InjectionContext {
    * `rule`/`always`/`on-tool-return` predicates may ignore it.
    */
   readonly currentSkillId?: string;
+  /**
+   * The relevance ranking of entry candidates from `entryByRelevance()` — written
+   * by the PickEntry stage at turn start. `defineRelevanceHint()` reads it to detect
+   * a near-tie at the entry. Absent unless the graph used `.entryByRelevance()`.
+   */
+  readonly entryScores?: ReadonlyArray<{
+    readonly id: string;
+    readonly cosine: number;
+    readonly relevance: number;
+  }>;
 }
 
 // ─── The primitive ─────────────────────────────────────────────────

@@ -28,6 +28,7 @@ export {
 
 // Sugar factories — Ships four; more flavors planned (RAG / Memory / Guardrail)
 export { defineInstruction, type DefineInstructionOptions } from './factories/defineInstruction.js';
+export { defineRelevanceHint, type RelevanceHintOptions } from './factories/defineRelevanceHint.js';
 
 export {
   defineSkill,

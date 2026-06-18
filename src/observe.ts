@@ -378,3 +378,14 @@ export {
   type ToolChoiceSkipReason,
   type ToolChoiceSummary,
 } from './recorders/observability/ToolChoiceRecorder.js';
+
+export {
+  routeRecorder,
+  formatRouteHop,
+  type RouteRecorderHandle,
+  type RouteRecorderOptions,
+  type RouteHop,
+  type RouteOutcome,
+  type RouteTrip,
+  type RouteTripKind,
+} from './recorders/observability/RouteRecorder.js';
