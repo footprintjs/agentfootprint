@@ -33,7 +33,12 @@ import type { CommitBundle, StageSnapshot } from 'footprintjs/advanced';
 import type { CausalNode } from 'footprintjs/trace';
 import { causalChain, commitValueAt } from 'footprintjs/trace';
 
-import { scoreInfluence, type Embedder, type EvidenceInput } from '../influence-core/index.js';
+import {
+  scoreInfluence,
+  type Embedder,
+  type EvidenceInput,
+  type InfluenceScorer,
+} from '../influence-core/index.js';
 import { ablationForSuspect, runAblationProbe, verdictFor } from './ablation.js';
 import { assignCostVerdicts, classifySuspect } from './cost.js';
 import { llmEdgeWeigher, stepOutputText } from './llmEdgeWeigher.js';
@@ -324,6 +329,16 @@ export interface LocalizeContextBugOptions {
   /** Override / extend the suspect classifier. */
   readonly classify?: SuspectClassifier;
   /**
+   * The RANK stage's pluggable influence scorer (the suspect-ordering
+   * extension point). Default `scoreInfluence` — the FDL four-signal
+   * composite. Bring your own `InfluenceScorer` — e.g.
+   * `scoreContrastiveInfluence` wrapped with a `referenceText`, or a
+   * scorer of your own — to change the ranking ORDER, never causality:
+   * a scorer only changes how FAST §B2 ablation confirms a culprit;
+   * ablation alone makes the causal claim.
+   */
+  readonly scorer?: InfluenceScorer;
+  /**
    * L3 narrowing (proposal 006): a per-loop recall shortlist from `shortlistEarlyCulprits`.
    * When supplied, suspects are REORDERED (never filtered) so high-recall candidates float to the
    * top and survive the `maxSuspects` slice → ablation targets them first. Joined on the suspect
@@ -488,7 +503,8 @@ export async function localizeContextBug(
       evidenceDraft.push(draft);
     });
     if (evidence.length > 0) {
-      const scores = await scoreInfluence({ evidence, finalAnswerText: triggerOutput, embedder });
+      const scorer = options.scorer ?? scoreInfluence;
+      const scores = await scorer({ evidence, finalAnswerText: triggerOutput, embedder });
       const byId = new Map(scores.map((s) => [s.id, s.score]));
       evidence.forEach((item, i) => {
         const composite = byId.get(item.id);

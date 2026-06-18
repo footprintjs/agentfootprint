@@ -265,5 +265,6 @@ _Run `npm run examples:readme` after adding/editing examples._
 | 13 | [`13-per-loop-trajectory.ts`](observability/13-per-loop-trajectory.ts) | per-loop trajectory — one frame per ReAct iteration | assembleTrajectory slices a flat-agent run into LoopFrames (one per iteration) from  |
 | 14 | [`14-loop-recall-shortlist.ts`](observability/14-loop-recall-shortlist.ts) | per-loop recall shortlist — rescue early culprits before ablation | shortlistEarlyCulprits aggregates per-loop influence with a recency weight so a culprit that  |
 | 15 | [`15-walk-to-root.ts`](observability/15-walk-to-root.ts) | walk to root — narrow → hop → convict, symptom to root | walkToRoot walks a decision bug backward (per-loop narrow → writerId provenance hop → run-wide  |
+| 16 | [`16-pluggable-scorer.ts`](observability/16-pluggable-scorer.ts) | Pluggable influence scorer — swap the RANK stage, never causality | localizeContextBug({ scorer }) makes the suspect-ranking scorer a swappable slot. The default  |
 
 <!-- AUTO-GENERATED:examples:end -->

@@ -244,6 +244,24 @@ export async function scoreInfluence(args: ScoreInfluenceArgs): Promise<Influenc
   return scored.sort((a, b) => b.score - a.score);
 }
 
+/**
+ * A pluggable influence scorer — the RANK stage's extension point.
+ *
+ * It takes the same `ScoreInfluenceArgs` the localizer assembles for a
+ * slice (the evidence items, the wrong-output text, an embedder) and
+ * returns one `InfluenceScore` per item, ranked descending. The shipped
+ * default is `scoreInfluence` (the FDL four-signal composite); pass your
+ * own to `localizeContextBug({ scorer })` to change the ranking ORDER —
+ * e.g. `scoreContrastiveInfluence` (wrap it to supply a `referenceText`),
+ * or a non-embedding scorer of your own that ignores `args.embedder`.
+ *
+ * Claim-ladder guarantee: a scorer only reorders suspects (how FAST
+ * ablation finds a culprit), never whether a claim counts as causal —
+ * ablation alone convicts. So any scorer is safe to swap in; the worst a
+ * bad one does is make confirmation slower, never wrong.
+ */
+export type InfluenceScorer = (args: ScoreInfluenceArgs) => Promise<InfluenceScore[]>;
+
 /** Embed distinct texts via batch API when available, else sequentially. */
 export async function embedAll(
   embedder: Embedder,

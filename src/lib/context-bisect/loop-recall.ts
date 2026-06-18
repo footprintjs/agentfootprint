@@ -53,9 +53,9 @@ export interface LoopCandidate {
   readonly suspectId: string;
   /** Suspect kind (injection / memory / tool) — from the classifier. */
   readonly kind: SuspectKind;
-  /** Normalized eligibility in [0, 1] (= eligibility / max across candidates) — the display/threshold headline. */
+  /** Normalized recall score in [0, 1] (= eligibility / max across candidates) — the display/threshold headline. */
   readonly recallScore: number;
-  /** RAW forward-eligibility sum (pre-normalization) — the actual computed proxy magnitude. */
+  /** RAW backward recency-weighted sum (pre-normalization) — `Σ_N recencyDecay^(lastLoop−N)·perLoop_N`, the actual computed proxy magnitude. (Field name kept for back-compat; the shipped mechanism is the BACKWARD sum, not the original forward-eligibility proposal — see module doc.) */
   readonly eligibility: number;
   /** First loop index this suspect fed — why recall rescues early-entered culprits. */
   readonly enteredLoop: number;

@@ -76,6 +76,7 @@ export {
   persistence,
   scoreInfluence,
   structuralProximity,
+  type InfluenceScorer,
   type ScoreInfluenceArgs,
 } from './signals.js';
 

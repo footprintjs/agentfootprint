@@ -83,9 +83,35 @@ console.log(scores[0].id, c.clearWinner);
   mean anything. If `answer == reference`, every contrastive `FA` is ~0 (no
   contrast, no signal) — by design.
 
+## Plug it into the localizer (the `scorer` slot)
+
+`localizeContextBug` ranks suspects with a **pluggable `InfluenceScorer`** — the
+default is `scoreInfluence`; pass your own to change the ranking ORDER (never
+causality — ablation alone convicts). The contrastive scorer drops straight in,
+remapping its one differently-named field (`answerText` ← `finalAnswerText`) and
+supplying the reference:
+
+```ts
+import { localizeContextBug, scoreContrastiveInfluence, type InfluenceScorer } from 'agentfootprint/observe';
+
+const contrastive: InfluenceScorer = (args) =>
+  scoreContrastiveInfluence({
+    evidence: args.evidence,
+    answerText: args.finalAnswerText, // the localizer calls it finalAnswerText
+    referenceText: expectedOutput,    // the confound canceller
+    embedder: args.embedder,
+  });
+
+const report = await localizeContextBug({ artifacts, embedder, atStep, scorer: contrastive });
+```
+
+A scorer only narrows; the causal claim still comes from supplying a `rerun` so
+ablation can confirm the lead.
+
 ## See also
 
 - Runnable: [`examples/observability/11-contrastive-influence.ts`](../../examples/observability/11-contrastive-influence.ts)
+- The scorer slot end-to-end: [`examples/observability/16-pluggable-scorer.ts`](../../examples/observability/16-pluggable-scorer.ts)
 - The plain scorer it extends: `scoreInfluence` (influence-core, D6)
 - The honesty marker that composes on it: [`ranking-confidence.md`](./ranking-confidence.md)
 - The causal tier to confirm with: `localizeContextBug` (ablation, RFC-003 Part B)

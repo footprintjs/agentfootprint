@@ -12,7 +12,13 @@ import { decide, flowChart, FlowChartExecutor } from 'footprintjs';
 import { controlDepRecorder } from 'footprintjs/trace';
 
 import { mockEmbedder } from '../../../src/memory/embedding/mockEmbedder';
-import { embeddingCache, type Embedder } from '../../../src/lib/influence-core';
+import {
+  embeddingCache,
+  scoreContrastiveInfluence,
+  scoreInfluence,
+  type Embedder,
+  type InfluenceScorer,
+} from '../../../src/lib/influence-core';
 import {
   formatContextBugReport,
   localizeContextBug,
@@ -388,5 +394,110 @@ describe('localizeContextBug — security (redaction respected end-to-end)', () 
 
     expect(seen.length).toBeGreaterThan(0);
     expect(seen.join('\n')).not.toContain(SECRET);
+  });
+});
+
+// ── Pluggable influence scorer (the RANK extension point) ────────────
+
+describe('localizeContextBug — pluggable scorer (scorer?:)', () => {
+  it('defaults to scoreInfluence: omitting scorer === passing scoreInfluence explicitly', async () => {
+    const scenario = plantedScenario();
+    const original = await runPlantedScenario(scenario);
+    const artifacts = { snapshot: original.snapshot, events: original.events };
+
+    const def = await localizeContextBug({
+      artifacts,
+      embedder: embedder(),
+      atStep: original.lastLlmCallId,
+    });
+    const explicit = await localizeContextBug({
+      artifacts,
+      embedder: embedder(),
+      atStep: original.lastLlmCallId,
+      scorer: scoreInfluence,
+    });
+
+    const shape = (report: ContextBugReport) =>
+      report.suspects.map((s) => [s.source, s.kind, s.detail?.injectionId, s.semanticScore, s.score]);
+    expect(shape(def)).toEqual(shape(explicit));
+  });
+
+  it('routes ranking through a custom scorer — its scores drive semanticScore, inverting the default order', async () => {
+    const scenario = plantedScenario();
+    const original = await runPlantedScenario(scenario);
+    const artifacts = { snapshot: original.snapshot, events: original.events };
+
+    // Default ranking: the planted VIP fact out-scores the benign style fact.
+    const natural = await localizeContextBug({
+      artifacts,
+      embedder: embedder(),
+      atStep: original.lastLlmCallId,
+    });
+    const naturalVip = findSuspect(natural, 'vip-override-fact')?.semanticScore;
+    const naturalStyle = findSuspect(natural, 'style-fact')?.semanticScore;
+    expect(naturalVip).toBeGreaterThan(naturalStyle!); // proxy ranks the plant high
+
+    // A custom scorer that INVERTS it: anything mentioning "vip" scores low.
+    const seen = { evidenceCount: 0, hasEmbedder: false, finalAnswerText: '' };
+    const inverting: InfluenceScorer = async (args) => {
+      seen.evidenceCount = args.evidence.length;
+      seen.hasEmbedder = typeof args.embedder?.embed === 'function';
+      seen.finalAnswerText = args.finalAnswerText;
+      return args.evidence.map((item) => ({
+        id: item.id,
+        signals: { fa: 0, avg: 0, persist: 0, depth: 0 },
+        weights: { fa: 1, avg: 0, persist: 0, depth: 0 },
+        adapted: false,
+        score: item.text.toLowerCase().includes('vip') ? 0.1 : 0.9,
+      }));
+    };
+
+    const custom = await localizeContextBug({
+      artifacts,
+      embedder: embedder(),
+      atStep: original.lastLlmCallId,
+      scorer: inverting,
+    });
+
+    // The seam handed the scorer the localizer-assembled slice evidence,
+    // the wrong-output text, and an embedder.
+    expect(seen.evidenceCount).toBeGreaterThan(0);
+    expect(seen.hasEmbedder).toBe(true);
+    expect(seen.finalAnswerText).toContain('APPROVED');
+
+    // The custom scores land verbatim as semanticScore — order inverted.
+    expect(findSuspect(custom, 'vip-override-fact')?.semanticScore).toBeCloseTo(0.1);
+    expect(findSuspect(custom, 'style-fact')?.semanticScore).toBeCloseTo(0.9);
+    expect(findSuspect(custom, 'style-fact')!.semanticScore!).toBeGreaterThan(
+      findSuspect(custom, 'vip-override-fact')!.semanticScore!,
+    );
+  });
+
+  it('accepts scoreContrastiveInfluence wrapped with a referenceText (bring-your-own)', async () => {
+    const scenario = plantedScenario();
+    const original = await runPlantedScenario(scenario);
+
+    // scoreContrastiveInfluence names the wrong-output field `answerText`
+    // (vs ScoreInfluenceArgs.finalAnswerText) and needs a reference output —
+    // so the wrap remaps that one field and supplies the reference.
+    const contrastive: InfluenceScorer = (args) =>
+      scoreContrastiveInfluence({
+        evidence: args.evidence,
+        answerText: args.finalAnswerText,
+        referenceText: scenario.rightAnswer,
+        embedder: args.embedder,
+      });
+
+    const report = await localizeContextBug({
+      artifacts: { snapshot: original.snapshot, events: original.events },
+      embedder: embedder(),
+      atStep: original.lastLlmCallId,
+      scorer: contrastive,
+    });
+
+    // The previously-unusable contrastive scorer now plugs into the localizer.
+    expect(report.mode).toBe('correlational');
+    expect(report.suspects.length).toBeGreaterThan(0);
+    expect(findSuspect(report, 'vip-override-fact')?.hasContentEvidence).toBe(true);
   });
 });

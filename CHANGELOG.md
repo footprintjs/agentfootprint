@@ -5,6 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.37.0] - 2026-06-18
+
+### Added — pluggable influence scorer for `localizeContextBug` (the RANK extension point)
+
+**`scorer?:` slot + `InfluenceScorer` type.** The context-bug localizer's suspect-ranking step is now
+a swappable slot: `localizeContextBug({ scorer })` accepts any `InfluenceScorer` —
+`(ScoreInfluenceArgs) => Promise<InfluenceScore[]>` — and defaults to the shipped FDL four-signal
+composite (`scoreInfluence`). Bring your own to change the ranking ORDER: `scoreContrastiveInfluence`
+(wrap it to remap `answerText` ← `finalAnswerText` and supply a `referenceText`), or a scorer of your
+own. New `InfluenceScorer` type exported from `agentfootprint/observe`.
+
+**Claim-ladder guarantee.** A scorer only reorders suspects (how *fast* ablation reaches a culprit),
+never *whether* a claim is causal — ablation alone convicts. Its output flows into `semanticScore` /
+ranking only, never into any verdict path. So any scorer is safe to swap; the worst a bad one does is
+make confirmation slower, never wrong.
+
+**Additive, fully back-compat.** Omitting `scorer` reproduces the exact prior behaviour (default ===
+`scoreInfluence`, identical args). No existing caller is affected. Runnable + tested example
+`examples/observability/16-pluggable-scorer.ts`; new guide section in `docs/guides/contrastive-influence.md`.
+
+### Fixed
+
+- `loop-recall.ts`: corrected a stale field comment — `LoopCandidate.eligibility` documented a
+  "forward-eligibility sum" but the shipped mechanism is the BACKWARD recency-weighted sum
+  (`Σ_N recencyDecay^(lastLoop−N)·perLoop_N`). Comment-only; the field name is kept for back-compat.
+
 ## [6.36.0] - 2026-06-17
 
 ### Added — skill-graph v2 remainder: check-up, object form, route recorder, governors, relevance hint

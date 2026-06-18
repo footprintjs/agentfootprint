@@ -184,6 +184,7 @@ export {
   type EmbeddingCacheStats,
   type EvidenceInput,
   type InfluenceScore,
+  type InfluenceScorer,
   type InfluenceWeights,
   type MarginCandidate,
   type MarginResult,
