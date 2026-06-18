@@ -424,6 +424,12 @@ export {
   type SkillRoutingStep,
   type EntryScore,
   type EntryScoring,
+  type SkillGraphConfig,
+  type BuildOptions,
+  type GraphCheckMode,
+  type GraphCheckup,
+  type GraphProblem,
+  type GraphProblemCode,
 } from './lib/injection-engine/index.js';
 
 // Patterns — factory functions composing primitives + core-flow into

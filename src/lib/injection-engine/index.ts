@@ -78,4 +78,10 @@ export {
   type SkillRoutingStep,
   type EntryScore,
   type EntryScoring,
+  type SkillGraphConfig,
+  type BuildOptions,
+  type GraphCheckMode,
+  type GraphCheckup,
+  type GraphProblem,
+  type GraphProblemCode,
 } from './skillGraph.js';

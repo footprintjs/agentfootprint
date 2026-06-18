@@ -34,6 +34,57 @@ import type { Injection, InjectionContext, InjectionTrigger } from './types.js';
 import type { Embedder } from '../../memory/embedding/types.js';
 import { cosineSimilarity } from '../../memory/embedding/cosine.js';
 import { softmax } from './softmax.js';
+import { checkupGraph, formatCheckup, type GraphCheckup } from './skillGraphCheckup.js';
+export type { GraphCheckup, GraphProblem, GraphProblemCode } from './skillGraphCheckup.js';
+
+/** How `.build({ check })` reacts to the graph check-up. */
+export type GraphCheckMode = 'throw' | 'warn' | 'off';
+
+/** Options for `.build()`. */
+export interface BuildOptions {
+  /**
+   * Run the build-time check-up (see `graph.checkup()`):
+   *   • `'throw'` — throw if any ERROR-level problem (unknown-skill / no-entry);
+   *   • `'warn'`  — console.warn every problem in dev mode (`enableDevMode()`), silent otherwise;
+   *   • `'off'`   — skip it entirely.
+   * Default `'warn'`. `graph.checkup()` is always available regardless.
+   */
+  readonly check?: GraphCheckMode;
+}
+
+/**
+ * Object-literal form of a skill graph — an alternative to the fluent builder.
+ * Listing `skills` INDEPENDENTLY of the wiring is the point: the check-up can then
+ * flag a skill that was listed but never wired (the fluent builder only ever sees
+ * skills that appear in an edge). Compiles to the SAME `SkillGraph`. `check`
+ * defaults to `'throw'` here (a new surface, fail-loud).
+ */
+export interface SkillGraphConfig {
+  /** Every skill in the graph (wired or not). */
+  readonly skills: readonly Injection[];
+  /** Where a turn starts. Omit when using `tree`. */
+  readonly start?:
+    | string
+    | { readonly use: string }
+    | {
+        readonly rules: ReadonlyArray<{
+          readonly when: (ctx: InjectionContext) => boolean;
+          readonly use: string;
+        }>;
+      }
+    | { readonly entries: readonly string[]; readonly byRelevance: Embedder };
+  /** Tool-result transitions; `from`/`to` are skill ids resolved against `skills`. */
+  readonly steps?: ReadonlyArray<{
+    readonly from: string;
+    readonly to: string;
+    readonly when?: SkillRouteOptions['when'];
+    readonly onToolReturn?: string | RegExp;
+    readonly label?: string;
+  }>;
+  /** A decision tree (instead of `start` + `steps`). */
+  readonly tree?: DecisionNode | Injection;
+  readonly check?: GraphCheckMode;
+}
 
 /** One entry candidate's relevance to the user's message. */
 export interface EntryScore {
@@ -219,6 +270,13 @@ export interface SkillGraph {
    * `chosen` as the starting cursor (LLM-free, off the hot loop). Flat graphs only.
    */
   scoreEntries?(ctx: InjectionContext, signal?: AbortSignal): Promise<EntryScoring>;
+  /**
+   * Build-time check-up — inspect the declared graph for wiring mistakes (a skill
+   * nobody can reach, an edge to an unknown skill, two un-prioritized edges from one
+   * skill, no entry, a self-loop). Pure + side-effect-free; call it whenever.
+   * `ok` is false iff there's an error-level problem (`unknown-skill` / `no-entry`).
+   */
+  checkup(): GraphCheckup;
 }
 
 export interface SkillGraphBuilder {
@@ -240,7 +298,7 @@ export interface SkillGraphBuilder {
    * Flat graphs only (a decision `tree()` already routes by predicate).
    */
   entryByRelevance(embedder: Embedder): SkillGraphBuilder;
-  build(): SkillGraph;
+  build(opts?: BuildOptions): SkillGraph;
 }
 
 interface EntryDecl {
@@ -265,7 +323,9 @@ function toolMatcher(toolName: string | RegExp): (name: string) => boolean {
   return typeof toolName === 'string' ? (n) => n === toolName : (n) => toolName.test(n);
 }
 
-export function skillGraph(): SkillGraphBuilder {
+export function skillGraph(): SkillGraphBuilder;
+export function skillGraph(config: SkillGraphConfig): SkillGraph;
+export function skillGraph(config?: SkillGraphConfig): SkillGraphBuilder | SkillGraph {
   const skillsById = new Map<string, Injection>();
   const entries: EntryDecl[] = [];
   const routes: RouteDecl[] = [];
@@ -313,10 +373,23 @@ export function skillGraph(): SkillGraphBuilder {
       entryEmbedder = embedder;
       return builder;
     },
-    build() {
+    build(opts: BuildOptions = {}) {
       const skills: Injection[] = [];
       const nodes: SkillNode[] = [];
       const edges: SkillEdge[] = [];
+
+      // The build-time check-up — pure over the declared entries/routes/skills.
+      const checkup = (): GraphCheckup =>
+        checkupGraph({
+          skillIds: new Set(skillsById.keys()),
+          entryIds: entries.map((e) => e.id),
+          routes: routes.map((r) => ({
+            fromId: r.fromId,
+            toId: r.toId,
+            deterministic: !!(r.when || r.onToolReturn),
+          })),
+          isTree: treeRoot !== undefined,
+        });
 
       // The cursor resolver — the single source of truth for `from`-gated, sticky
       // routing. Flat mode wires it into each route target's trigger AND returns it
@@ -377,6 +450,20 @@ export function skillGraph(): SkillGraphBuilder {
         );
       }
 
+      // Run the check-up per the `check` mode (default 'warn'): 'throw' fails loud on
+      // an error; 'warn' prints in dev mode only (quiet in prod / tests); 'off' skips.
+      const check = opts.check ?? 'warn';
+      if (check !== 'off') {
+        const result = checkup();
+        if (check === 'throw' && !result.ok) {
+          throw new Error(`skillGraph: build-time check-up failed:\n${formatCheckup(result)}`);
+        }
+        if (result.problems.length > 0 && isDevMode()) {
+          // eslint-disable-next-line no-console
+          console.warn(`skillGraph: build-time check-up found problems:\n${formatCheckup(result)}`);
+        }
+      }
+
       return {
         skills,
         edges,
@@ -384,10 +471,44 @@ export function skillGraph(): SkillGraphBuilder {
         toMermaid: () => renderMermaid(nodes, edges),
         nextSkill: (ctx: InjectionContext) => nextSkill(ctx),
         reachableSkills: (currentSkillId?: string) => reachableSkills(currentSkillId),
+        checkup,
         ...(scoreEntries && { scoreEntries }),
       };
     },
   };
+
+  // Object-literal form → translate to the fluent calls + build. Listing skills
+  // independently of the wiring is what lets the check-up flag a listed-but-unwired
+  // skill (every config skill is registered, even if no edge references it).
+  if (config) {
+    for (const s of config.skills) remember(s);
+    const resolve = (id: string): Injection => {
+      const s = skillsById.get(id);
+      if (!s) throw new Error(`skillGraph: config references skill "${id}" not in skills[].`);
+      return s;
+    };
+    if (config.tree) {
+      builder.tree(config.tree);
+    } else if (config.start !== undefined) {
+      const start = config.start;
+      if (typeof start === 'string') builder.entry(resolve(start));
+      else if ('use' in start) builder.entry(resolve(start.use));
+      else if ('rules' in start) for (const r of start.rules) builder.entry(resolve(r.use), { when: r.when });
+      else {
+        for (const id of start.entries) builder.entry(resolve(id));
+        builder.entryByRelevance(start.byRelevance);
+      }
+    }
+    for (const step of config.steps ?? []) {
+      builder.route(resolve(step.from), resolve(step.to), {
+        ...(step.when && { when: step.when }),
+        ...(step.onToolReturn && { onToolReturn: step.onToolReturn }),
+        ...(step.label && { label: step.label }),
+      });
+    }
+    return builder.build({ check: config.check ?? 'throw' });
+  }
+
   return builder;
 }
 

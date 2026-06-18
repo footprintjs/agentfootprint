@@ -989,6 +989,160 @@ describe('skillGraph — entryByRelevance through the REAL Agent loop (PickEntry
   });
 });
 
+describe('skillGraph — checkup (build-time validation)', () => {
+  it('a clean flat graph → ok, no problems', () => {
+    const a = skill('a');
+    const b = skill('b');
+    const g = skillGraph().entry(a).route(a, b, { onToolReturn: 'x' }).build();
+    expect(g.checkup()).toEqual({ ok: true, problems: [] });
+  });
+
+  it('no entry → ERROR (ok:false)', () => {
+    const a = skill('a');
+    const b = skill('b');
+    const c = skillGraph().route(a, b, { onToolReturn: 'x' }).build({ check: 'off' }).checkup();
+    expect(c.ok).toBe(false);
+    expect(c.problems.map((p) => p.code)).toContain('no-entry');
+  });
+
+  it('unreachable skill → WARNING (not an error)', () => {
+    const a = skill('a');
+    const b = skill('b');
+    const c = skill('c');
+    const d = skill('d');
+    // a→b is reachable; c→d is a separate island unreachable from the entry `a`.
+    const ck = skillGraph()
+      .entry(a)
+      .route(a, b, { onToolReturn: 'x' })
+      .route(c, d, { onToolReturn: 'y' })
+      .build({ check: 'off' })
+      .checkup();
+    const unreachable = ck.problems.filter((p) => p.code === 'unreachable-skill').map((p) => p.skill);
+    expect(unreachable).toContain('c');
+    expect(ck.ok).toBe(true); // warnings don't fail ok
+  });
+
+  it('ambiguous routes (≥2 predicates from one skill) → WARNING', () => {
+    const a = skill('a');
+    const b = skill('b');
+    const c = skill('c');
+    const amb = skillGraph()
+      .entry(a)
+      .route(a, b, { when: () => true })
+      .route(a, c, { when: () => true })
+      .build({ check: 'off' })
+      .checkup()
+      .problems.filter((p) => p.code === 'ambiguous-routes');
+    expect(amb).toHaveLength(1);
+    expect(amb[0]!.from).toBe('a');
+  });
+
+  it('self-loop → WARNING', () => {
+    const a = skill('a');
+    const g = skillGraph().entry(a).route(a, a, { onToolReturn: 'x' }).build({ check: 'off' });
+    expect(g.checkup().problems.some((p) => p.code === 'self-loop')).toBe(true);
+  });
+
+  it('build({check:"throw"}) throws on an error; build({check:"off"}) never throws', () => {
+    const a = skill('a');
+    const b = skill('b');
+    expect(() => skillGraph().route(a, b, { onToolReturn: 'x' }).build({ check: 'throw' })).toThrow(/no-entry/);
+    expect(() => skillGraph().route(a, b, { onToolReturn: 'x' }).build({ check: 'off' })).not.toThrow();
+  });
+
+  it('build({check:"warn"}) warns in dev mode, silent otherwise', () => {
+    const a = skill('a');
+    const b = skill('b');
+    const c = skill('c');
+    const mk = () =>
+      skillGraph().entry(a).route(a, b, { when: () => true }).route(a, c, { when: () => true });
+
+    const warn1 = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      mk().build({ check: 'warn' });
+      expect(warn1).not.toHaveBeenCalled(); // silent without dev mode
+    } finally {
+      warn1.mockRestore();
+    }
+
+    const warn2 = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    enableDevMode();
+    try {
+      mk().build({ check: 'warn' });
+      expect(warn2).toHaveBeenCalledTimes(1);
+      expect(warn2.mock.calls[0]![0]).toMatch(/ambiguous-routes/);
+    } finally {
+      disableDevMode();
+      warn2.mockRestore();
+    }
+  });
+
+  it('tree-mode graph → ok (exhaustive by construction)', () => {
+    const io = skill('io');
+    const tri = skill('tri');
+    const g = skillGraph().tree(decide((c) => /io/.test(c.userMessage), io, tri)).build();
+    expect(g.checkup().ok).toBe(true);
+  });
+});
+
+describe('skillGraph — object-literal config form', () => {
+  it('builds a graph equivalent to the fluent form', () => {
+    const a = skill('a');
+    const b = skill('b');
+    const g = skillGraph({ skills: [a, b], start: 'a', steps: [{ from: 'a', to: 'b', onToolReturn: 'x' }] });
+    expect(g.skills.map((s) => s.id).sort()).toEqual(['a', 'b']);
+    expect([...g.reachableSkills('a')]).toEqual(['b']);
+    expect(g.nextSkill(ctx({ currentSkillId: 'a', lastToolResult: { toolName: 'x', result: '' } }))).toBe('b');
+  });
+
+  it("the check-up flags a listed-but-unwired skill (the object form's value)", () => {
+    const a = skill('a');
+    const b = skill('b');
+    const orphan = skill('orphan');
+    const g = skillGraph({
+      skills: [a, b, orphan],
+      start: 'a',
+      steps: [{ from: 'a', to: 'b', onToolReturn: 'x' }],
+      check: 'off',
+    });
+    const unreachable = g.checkup().problems.filter((p) => p.code === 'unreachable-skill').map((p) => p.skill);
+    expect(unreachable).toContain('orphan');
+  });
+
+  it('default check "throw" rejects a step to an unknown skill id', () => {
+    const a = skill('a');
+    expect(() =>
+      skillGraph({ skills: [a], start: 'a', steps: [{ from: 'a', to: 'b', onToolReturn: 'x' }] }),
+    ).toThrow(/not in skills/);
+  });
+
+  it('start: { rules } → conditional entries; start: { entries, byRelevance } → relevance entry', () => {
+    const a = defineSkill({ id: 'a', description: 'alpha', body: 'b' });
+    const b = defineSkill({ id: 'b', description: 'beta', body: 'b' });
+    const ruled = skillGraph({
+      skills: [a, b],
+      start: { rules: [{ when: (c) => /b/.test(c.userMessage), use: 'b' }, { when: () => true, use: 'a' }] },
+      check: 'off',
+    });
+    expect([...ruled.reachableSkills(undefined)].sort()).toEqual(['a', 'b']); // both are entries
+
+    const rel = skillGraph({
+      skills: [a, b],
+      start: { entries: ['a', 'b'], byRelevance: mockEmbedder() },
+      check: 'off',
+    });
+    expect(rel.scoreEntries).toBeDefined();
+  });
+
+  it('tree config compiles', () => {
+    const io = skill('io');
+    const tri = skill('tri');
+    const g = skillGraph({ skills: [io, tri], tree: decide((c) => /io/.test(c.userMessage), io, tri) });
+    expect(g.skills.map((s) => s.id).sort()).toEqual(['io', 'tri']);
+    expect(g.checkup().ok).toBe(true);
+  });
+});
+
 describe('skillGraph — scoped read_skill gate (real Agent loop)', () => {
   // From entry `a`, reachable = its successors {b (route), m (bare model edge)}.
   // `x` is reachable only from `b` (b→x), so a read_skill('x') while the cursor is
