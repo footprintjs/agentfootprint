@@ -17,6 +17,12 @@ import { join, relative } from 'path';
 // Types allowed to appear in more than one file.
 // Each entry explains WHY it's exempt.
 const ALLOWLIST = new Set([
+  'ContextSource',
+  // events/types.ts = a string-union of context-source FLAVORS ('rag' | 'skill' | …)
+  // for the Lens UI. lib/context-bisect/trajectory.ts = a structural trace interface
+  // ({ key, writerId, value, … }) for one loop-read source. Same name, different
+  // domains and shapes; not consolidatable.
+
   'LLMClaim',
   // explain.barrel.ts re-exports from ExplainRecorder (recorder-level type).
   // Now only one definition exists; allowlisted defensively.
