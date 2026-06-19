@@ -277,7 +277,7 @@ export type {
   ToolRegistryEntry,
   DefineToolOptions,
 } from './core/tools.js';
-export { defineTool } from './core/tools.js';
+export { defineTool, assertValidToolName, warnIfInvalidToolName } from './core/tools.js';
 
 // Slot subflow builders are intentionally NOT exported. They are
 // internal helpers used only by `Agent.buildChart()` and

@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.38.1] - 2026-06-18
+
+### Added — tool-name guardrail (catch the silent "my tool vanished" 400)
+
+OpenAI, Azure OpenAI, and Anthropic all require tool names to match
+`^[a-zA-Z0-9_-]{1,64}$`. A name with a dot, space, slash, colon, or >64 chars makes
+the provider **400-reject the whole request — so EVERY tool disappears**, not just the
+bad one, which reads as "my tool isn't visible." The library never validated this.
+
+- **`warnIfInvalidToolName(name)`** — the new default guard. `defineTool` and the
+  agent's tool-registry build call it for every tool name (including `autoActivate`
+  skill-scoped tools and raw `{schema,execute}` literals). **Dev-mode warning only**
+  (`enableDevMode()`), never a throw — so mock providers, name-sanitizing custom
+  providers, and namespaced names (`server.tool`) keep working. Production pays nothing.
+- **`assertValidToolName(name)`** — strict variant that **throws** a clear, actionable
+  error (names the tool, the rule, and the fix). For consumers who want a hard failure
+  in a build step or test.
+
+Both exported from the main barrel. No behavior change at run time unless dev mode is
+on (then you get a heads-up instead of an opaque provider 400 later).
+
 ## [6.38.0] - 2026-06-18
 
 ### Added — `.entryByRead()`: the LLM picks the skill-graph entry, no embedder

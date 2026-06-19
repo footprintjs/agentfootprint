@@ -40,7 +40,7 @@
 import { buildReadSkillTool } from '../../lib/injection-engine/skillTools.js';
 import type { Injection } from '../../lib/injection-engine/types.js';
 import type { LLMToolSchema } from '../../adapters/types.js';
-import type { Tool, ToolRegistryEntry } from '../tools.js';
+import { warnIfInvalidToolName, type Tool, type ToolRegistryEntry } from '../tools.js';
 
 export interface ToolRegistryArtifacts {
   /** All tools the LLM sees in the static portion of its tool list
@@ -81,6 +81,11 @@ export function buildToolRegistry(
     const toolsFromSkill = skill.inject.tools ?? [];
     for (const tool of toolsFromSkill) {
       const name = tool.schema.name;
+      // Check EVERY skill tool — including autoActivate ones, which `continue`
+      // below and never reach the static registry's gate. (This is the common
+      // case: all of Neo's skills are autoActivate, so their scoped tools would
+      // otherwise skip the check entirely.) Dev-mode warn only — non-breaking.
+      warnIfInvalidToolName(name);
       const existing = sharedSkillTools.get(name);
       if (existing) {
         if (existing !== (tool as unknown as Tool)) {
@@ -119,6 +124,12 @@ export function buildToolRegistry(
   // sources (e.g., a static .tool('foo') colliding with a Skill's foo).
   const seenNames = new Set<string>();
   for (const entry of augmentedRegistry) {
+    // Charset check at the array boundary: EVERY tool name the LLM will see — from
+    // .tool()/.tools() arrays, read_skill, and every skill's tools:[] bundle — is
+    // checked here, so a raw `{schema,execute}` literal that bypassed defineTool is
+    // caught too. A bad name 400-rejects the whole provider request (all tools
+    // vanish); dev-mode warn flags it at build, naming the offending tool.
+    warnIfInvalidToolName(entry.name);
     if (seenNames.has(entry.name)) {
       throw new Error(
         `Agent: duplicate tool name '${entry.name}'. Tool names must be unique ` +
