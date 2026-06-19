@@ -375,7 +375,8 @@ interface BuildConfig {
 }
 
 function buildBody(req: LLMRequest, cfg: BuildConfig): OpenAIRequestBody {
-  const model = req.model === 'openai' || req.model === 'browser-openai' ? cfg.defaultModel : req.model;
+  const model =
+    req.model === 'openai' || req.model === 'browser-openai' ? cfg.defaultModel : req.model;
   const reasoning = cfg.reasoning || isReasoningModel(model);
   const body: OpenAIRequestBody = {
     model,

@@ -27,7 +27,11 @@ export async function compareFinders(
     try {
       rows.push({ finder: f.name, result: await f.find(input) });
     } catch (e) {
-      rows.push({ finder: f.name, result: null, error: e instanceof Error ? e.message : String(e) });
+      rows.push({
+        finder: f.name,
+        result: null,
+        error: e instanceof Error ? e.message : String(e),
+      });
     }
   }
   return rows;

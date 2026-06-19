@@ -18,7 +18,11 @@ export const rankSuspects: Finder = {
   },
   async find(input: FindInput): Promise<FindResult> {
     if (!input.embedder) throw new Error('rankSuspects needs input.embedder');
-    const evidence = input.suspects.map((s) => ({ id: s.id, text: s.text, ancestorTexts: [] as string[] }));
+    const evidence = input.suspects.map((s) => ({
+      id: s.id,
+      text: s.text,
+      ancestorTexts: [] as string[],
+    }));
     const scores = await scoreInfluence({
       evidence,
       finalAnswerText: input.wrongOutput,

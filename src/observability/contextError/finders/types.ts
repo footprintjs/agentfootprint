@@ -42,7 +42,9 @@ export interface FindInput {
   /** Embedder for similarity-ranking finders. */
   readonly embedder?: Embedder;
   /** Re-run with the given pieces removed; `recovered` = the outcome flipped back. */
-  readonly rerun?: (removedIds: readonly string[]) => Promise<{ recovered: boolean; outcome?: string }>;
+  readonly rerun?: (
+    removedIds: readonly string[],
+  ) => Promise<{ recovered: boolean; outcome?: string }>;
   /** The agent's steps, for step-granularity finders. */
   readonly steps?: readonly StepInput[];
   /** For testManyCombos: how many on/off combinations to sample (default ~4×#suspects). */

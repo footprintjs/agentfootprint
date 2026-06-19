@@ -45,7 +45,11 @@ const baseInput = (over: Partial<FindInput> = {}): FindInput => ({
 
 const STEPS = [
   { id: 'step-lookup', label: 'lookup@L0', text: 'looked up the account balance, all normal' },
-  { id: 'step-promo', label: 'promo@L1', text: 'DENIED loan high risk subprime credit default applied' },
+  {
+    id: 'step-promo',
+    label: 'promo@L1',
+    text: 'DENIED loan high risk subprime credit default applied',
+  },
 ];
 
 // ── UNIT — each finder's contract in isolation ───────────────────────
@@ -137,7 +141,10 @@ describe('finders — functional', () => {
 // ── INTEGRATION — finders cooperate through compareFinders ───────────
 describe('finders — integration', () => {
   it('compareFinders runs several finders and returns one row each', async () => {
-    const rows = await compareFinders([rankSuspects, removeAndRetry, traceSteps], baseInput({ steps: STEPS }));
+    const rows = await compareFinders(
+      [rankSuspects, removeAndRetry, traceSteps],
+      baseInput({ steps: STEPS }),
+    );
     expect(rows.map((r) => r.finder)).toEqual(['rankSuspects', 'removeAndRetry', 'traceSteps']);
     expect(rows.every((r) => r.result !== null)).toBe(true);
   });
@@ -204,7 +211,9 @@ describe('finders — testManyCombos + shrinkToCause', () => {
     const suspects = Array.from({ length: 8 }, (_, i) => ({ id: `p${i}`, text: `piece ${i}` }));
     const c1 = 'p2';
     const c2 = 'p6';
-    const rerun = async (rm: readonly string[]) => ({ recovered: rm.includes(c1) && rm.includes(c2) });
+    const rerun = async (rm: readonly string[]) => ({
+      recovered: rm.includes(c1) && rm.includes(c2),
+    });
     const r = await shrinkToCause.find({ suspects, wrongOutput: 'bad', rerun });
     expect([...r.shortlist].sort()).toEqual([c1, c2].sort());
     expect((await rerun(r.shortlist)).recovered).toBe(true); // the returned set really recovers
@@ -213,7 +222,9 @@ describe('finders — testManyCombos + shrinkToCause', () => {
 
   it('testManyCombos degrades to a GUESS when no single piece flips alone (co-necessary)', async () => {
     const suspects = Array.from({ length: 6 }, (_, i) => ({ id: `p${i}`, text: `piece ${i}` }));
-    const rerun = async (rm: readonly string[]) => ({ recovered: rm.includes('p1') && rm.includes('p4') });
+    const rerun = async (rm: readonly string[]) => ({
+      recovered: rm.includes('p1') && rm.includes('p4'),
+    });
     const r = await testManyCombos.find({ suspects, wrongOutput: 'bad', rerun, samples: 24 });
     expect(r.evidence).toBe('guessed'); // honest: no single-piece cause to confirm
   });
@@ -259,7 +270,11 @@ describe('finders — property', () => {
     const emb = mockEmbedder();
     for (const n of [1, 3, 8]) {
       const suspects = ids(n).map((id) => ({ id, text: `context piece number ${id} content` }));
-      const r = await rankSuspects.find({ suspects, wrongOutput: 'some wrong answer', embedder: emb });
+      const r = await rankSuspects.find({
+        suspects,
+        wrongOutput: 'some wrong answer',
+        embedder: emb,
+      });
       expect(r.suspects.map((s) => s.id).sort()).toEqual(suspects.map((s) => s.id).sort());
       expect(r.evidence).toBe('guessed');
       expect(['piece', 'step']).toContain(r.granularity);
@@ -270,8 +285,12 @@ describe('finders — property', () => {
 // ── SECURITY / robustness — adversarial + missing-dependency inputs ──
 describe('finders — security/robustness', () => {
   it('finders throw a clear error (not a crash) when a needed dependency is missing', async () => {
-    await expect(rankSuspects.find({ suspects: SUSPECTS, wrongOutput: WRONG })).rejects.toThrow(/embedder/);
-    await expect(removeAndRetry.find({ suspects: SUSPECTS, wrongOutput: WRONG })).rejects.toThrow(/rerun/);
+    await expect(rankSuspects.find({ suspects: SUSPECTS, wrongOutput: WRONG })).rejects.toThrow(
+      /embedder/,
+    );
+    await expect(removeAndRetry.find({ suspects: SUSPECTS, wrongOutput: WRONG })).rejects.toThrow(
+      /rerun/,
+    );
     await expect(traceSteps.find(baseInput({ steps: undefined }))).rejects.toThrow(/steps/);
   });
 
@@ -304,7 +323,10 @@ describe('finders — security/robustness', () => {
 // ── PERFORMANCE — within a budget on a non-trivial case ──────────────
 describe('finders — performance', () => {
   it('rankSuspects scores 50 pieces under budget', async () => {
-    const suspects = Array.from({ length: 50 }, (_, i) => ({ id: `p${i}`, text: `policy clause ${i} about credit and risk` }));
+    const suspects = Array.from({ length: 50 }, (_, i) => ({
+      id: `p${i}`,
+      text: `policy clause ${i} about credit and risk`,
+    }));
     const t0 = performance.now();
     const r = await rankSuspects.find({ suspects, wrongOutput: WRONG, embedder: mockEmbedder() });
     expect(r.suspects).toHaveLength(50);
@@ -332,7 +354,11 @@ describe('finders — load', () => {
   it('compareFinders sustains a large finder list + suspect set', async () => {
     const finders: Finder[] = Array.from({ length: 20 }, () => removeAndRetry);
     const suspects = Array.from({ length: 40 }, (_, i) => ({ id: `p${i}`, text: `c${i}` }));
-    const rows = await compareFinders(finders, { suspects, wrongOutput: 'bad', rerun: async () => ({ recovered: false }) });
+    const rows = await compareFinders(finders, {
+      suspects,
+      wrongOutput: 'bad',
+      rerun: async () => ({ recovered: false }),
+    });
     expect(rows).toHaveLength(20);
     expect(rows.every((r) => r.result?.checks === 40)).toBe(true);
   });

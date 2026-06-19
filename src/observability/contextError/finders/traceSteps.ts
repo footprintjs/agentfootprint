@@ -18,8 +18,13 @@ export const traceSteps: Finder = {
     paper: 'FALAT, Rafi et al. 2026 (arXiv:2606.00765)',
   },
   async find(input: FindInput): Promise<FindResult> {
-    if (!input.steps || !input.embedder) throw new Error('traceSteps needs input.steps and input.embedder');
-    const evidence = input.steps.map((s) => ({ id: s.id, text: s.text, ancestorTexts: [] as string[] }));
+    if (!input.steps || !input.embedder)
+      throw new Error('traceSteps needs input.steps and input.embedder');
+    const evidence = input.steps.map((s) => ({
+      id: s.id,
+      text: s.text,
+      ancestorTexts: [] as string[],
+    }));
     const ranked = await scoreInfluence({
       evidence,
       finalAnswerText: input.wrongOutput,
@@ -37,7 +42,9 @@ export const traceSteps: Finder = {
     const explanation = [
       `traceSteps: backward dependency search over ${input.steps.length} agent steps.`,
       `Most suspicious step: ${step?.label ?? topId ?? '(none)'}.`,
-      recovers === undefined ? '' : `Correcting that step ${recovers ? 'recovered' : 'did NOT recover'} the outcome.`,
+      recovers === undefined
+        ? ''
+        : `Correcting that step ${recovers ? 'recovered' : 'did NOT recover'} the outcome.`,
       `Granularity is the STEP — if the root cause is a context element, it is outside this finder's vocabulary.`,
     ]
       .filter(Boolean)

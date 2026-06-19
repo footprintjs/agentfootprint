@@ -77,8 +77,12 @@ export const shrinkToCause: Finder = {
     const rest = ids.filter((id) => !candidates.includes(id));
     const explanation = [
       `shrinkToCause: delta-debugging minimization over ${ids.length} pieces in ${checks} checks.`,
-      `Minimal recovering set: ${candidates.join(', ')} (removing it flips the outcome; nothing smaller does).`,
-      checks < ids.length ? `Reached the cause in fewer checks than leave-one-out (${checks} vs ${ids.length}).` : '',
+      `Minimal recovering set: ${candidates.join(
+        ', ',
+      )} (removing it flips the outcome; nothing smaller does).`,
+      checks < ids.length
+        ? `Reached the cause in fewer checks than leave-one-out (${checks} vs ${ids.length}).`
+        : '',
     ]
       .filter(Boolean)
       .join('\n');

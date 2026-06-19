@@ -5,6 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.41.0] - 2026-06-19
+
+### Fixed — OpenAI/Azure adapters use the current Chat Completions params
+
+The `openai` / `azureOpenai` / `browserOpenai` / `browserAzureOpenai` adapters sent
+deprecated params that break on current models:
+
+- **`max_tokens` → `max_completion_tokens`** on OpenAI/Azure. `max_tokens` is deprecated
+  and **rejected by o-series reasoning models** (o1/o3/o4-mini, Azure reasoning
+  deployments); the new param is accepted by all current chat models (incl. gpt-4o).
+  Custom OpenAI-compatible endpoints (Ollama/vLLM/Together/Groq — detected via `baseURL`
+  / non-`api-key` auth) keep `max_tokens`.
+- **Streaming token usage was always 0** — the adapters never sent
+  `stream_options: { include_usage: true }`, so OpenAI/Azure emitted no usage chunk.
+  Now requested on OpenAI/Azure streams (`usage.input/output` are populated).
+
+### Added — `reasoning` option for o-series models
+
+`openai({ reasoning })` / `azureOpenai({ reasoning })` (and the browser variants). When
+set — or auto-detected from a standard o-series model id (`o1`/`o3`/`o4-…`) — the adapter
+omits the explicit `temperature` (rejected by reasoning models) and sends the
+**`developer`** role in place of `system`. Set it explicitly for Azure deployments whose
+name does not reveal the underlying model.
+
+The Tools API format was already current (modern `tools` / `tool_calls`) and is unchanged.
+
 ## [6.40.0] - 2026-06-18
 
 ### Added — `toolContractCheckup`: diff agent tool schemas vs a tool-server catalog
