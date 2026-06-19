@@ -122,6 +122,11 @@
       "import": "./dist/esm/observe.js",
       "require": "./dist/observe.js"
     },
+    "./observability/contextError/finders": {
+      "types": "./dist/types/observability/contextError/finders/index.d.ts",
+      "import": "./dist/esm/observability/contextError/finders/index.js",
+      "require": "./dist/observability/contextError/finders/index.js"
+    },
     "./resilience": {
       "types": "./dist/types/resilience/index.d.ts",
       "import": "./dist/esm/resilience/index.js",
