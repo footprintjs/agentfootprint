@@ -45,14 +45,20 @@ interface OpenAICreateParams {
   model: string;
   messages: OpenAIMessage[];
   tools?: OpenAITool[];
+  /** Legacy token cap — DEPRECATED by OpenAI and REJECTED by o-series reasoning
+   *  models. Kept only for custom OpenAI-compatible endpoints (Ollama/vLLM/…). */
   max_tokens?: number;
+  /** Current token cap — accepted by all OpenAI/Azure chat models incl. o-series. */
+  max_completion_tokens?: number;
   temperature?: number;
   stop?: string[];
   stream?: boolean;
+  /** Ask OpenAI/Azure to emit a final usage chunk while streaming. */
+  stream_options?: { include_usage: boolean };
 }
 
 interface OpenAIMessage {
-  role: 'system' | 'user' | 'assistant' | 'tool';
+  role: 'system' | 'developer' | 'user' | 'assistant' | 'tool';
   content: string | null;
   tool_calls?: OpenAIToolCall[];
   tool_call_id?: string;
@@ -131,6 +137,14 @@ export interface OpenAIProviderOptions {
   readonly defaultModel?: string;
   /** Default max tokens when the request doesn't set it. Optional. */
   readonly defaultMaxTokens?: number;
+  /**
+   * Treat the target as a **reasoning model** (o-series: o1 / o3 / o4-mini, or an
+   * Azure reasoning deployment). Reasoning models reject `max_tokens` and an explicit
+   * `temperature`, and use the `developer` role in place of `system`. Standard o-series
+   * model ids are auto-detected; set this explicitly for Azure deployments whose name
+   * does not reveal the underlying model.
+   */
+  readonly reasoning?: boolean;
   /** @internal Pre-built client for testing. Skips SDK import. */
   readonly _client?: OpenAIClient;
 }
@@ -153,11 +167,18 @@ export function openai(options: OpenAIProviderOptions = {}): LLMProvider {
   const client = resolveClient(options);
   const defaultModel = options.defaultModel ?? 'gpt-4o-mini';
   const defaultMaxTokens = options.defaultMaxTokens;
+  // A custom baseURL means an OpenAI-COMPATIBLE endpoint (Ollama/vLLM/Together/Groq),
+  // which may only accept the legacy `max_tokens` and may not support `stream_options`.
+  // Real OpenAI (no baseURL) and Azure (via injected _client, also no baseURL) get the
+  // modern params. Reasoning detection is per-request (model id) OR the explicit flag.
+  const legacyEndpoint = !!options.baseURL;
+  const reasoning = options.reasoning ?? false;
+  const cfg = { defaultModel, defaultMaxTokens, legacyEndpoint, reasoning };
 
   const provider: LLMProvider = {
     name: 'openai',
     async complete(req: LLMRequest): Promise<LLMResponse> {
-      const params = buildParams(req, defaultModel, defaultMaxTokens, false);
+      const params = buildParams(req, { ...cfg, stream: false });
       try {
         const response = (await client.chat.completions.create(params)) as OpenAIChatCompletion;
         return fromOpenAIResponse(response);
@@ -166,7 +187,7 @@ export function openai(options: OpenAIProviderOptions = {}): LLMProvider {
       }
     },
     async *stream(req: LLMRequest): AsyncIterable<LLMChunk> {
-      const params = buildParams(req, defaultModel, defaultMaxTokens, true);
+      const params = buildParams(req, { ...cfg, stream: true });
       let stream: AsyncIterable<OpenAIStreamChunk>;
       try {
         stream = client.chat.completions.create(params) as AsyncIterable<OpenAIStreamChunk>;
@@ -271,6 +292,13 @@ export interface AzureOpenAIProviderOptions {
   readonly deployment?: string;
   /** Default max tokens when the request doesn't set it. Optional. */
   readonly defaultMaxTokens?: number;
+  /**
+   * Set when the Azure DEPLOYMENT is a **reasoning model** (o1/o3/o4-mini). Azure
+   * deployment names are arbitrary, so this cannot be auto-detected — declare it to
+   * omit `temperature` and send the `developer` role. (`max_completion_tokens` is used
+   * for all Azure deployments regardless.)
+   */
+  readonly reasoning?: boolean;
   /** @internal Pre-built client for testing. Skips SDK import. */
   readonly _client?: OpenAIClient;
 }
@@ -317,6 +345,7 @@ export function azureOpenai(options: AzureOpenAIProviderOptions = {}): LLMProvid
   const inner = openai({
     _client: client,
     defaultModel: deployment,
+    ...(options.reasoning !== undefined && { reasoning: options.reasoning }),
     ...(options.defaultMaxTokens !== undefined && { defaultMaxTokens: options.defaultMaxTokens }),
   });
   // Azure's "model" IS the deployment — rewrite shorthand ids to it; a concrete
@@ -433,21 +462,46 @@ function resolveClient(options: OpenAIProviderOptions): OpenAIClient {
   return new OpenAI({ apiKey, ...(options.baseURL && { baseURL: options.baseURL }) });
 }
 
-function buildParams(
-  req: LLMRequest,
-  defaultModel: string,
-  defaultMaxTokens: number | undefined,
-  stream: boolean,
-): OpenAICreateParams {
+/** o-series reasoning ids (o1, o1-mini, o3, o3-mini, o4-mini, o5, …). `gpt-4o`
+ *  starts with `g`, so it is correctly NOT matched. */
+function isReasoningModel(model: string): boolean {
+  return /^o\d/i.test(model);
+}
+
+interface BuildConfig {
+  readonly defaultModel: string;
+  readonly defaultMaxTokens: number | undefined;
+  readonly stream: boolean;
+  /** Custom OpenAI-compatible endpoint → keep legacy `max_tokens`, no `stream_options`. */
+  readonly legacyEndpoint: boolean;
+  /** Consumer-declared reasoning model (combined with model-id auto-detection). */
+  readonly reasoning: boolean;
+}
+
+function buildParams(req: LLMRequest, cfg: BuildConfig): OpenAICreateParams {
+  const model = req.model === 'openai' || req.model === 'ollama' ? cfg.defaultModel : req.model;
+  const reasoning = cfg.reasoning || isReasoningModel(model);
   const params: OpenAICreateParams = {
-    model: req.model === 'openai' || req.model === 'ollama' ? defaultModel : req.model,
-    messages: toOpenAIMessages(req.messages, req.systemPrompt),
+    model,
+    messages: toOpenAIMessages(req.messages, req.systemPrompt, reasoning),
   };
-  if (stream) params.stream = true;
+  if (cfg.stream) {
+    params.stream = true;
+    // OpenAI/Azure only emit usage while streaming when asked; without this the
+    // synthesized response reports 0 tokens. Compatible endpoints may not support it.
+    if (!cfg.legacyEndpoint) params.stream_options = { include_usage: true };
+  }
   if (req.tools && req.tools.length > 0) params.tools = req.tools.map(toOpenAITool);
-  const maxTokens = req.maxTokens ?? defaultMaxTokens;
-  if (maxTokens !== undefined) params.max_tokens = maxTokens;
-  if (req.temperature !== undefined) params.temperature = req.temperature;
+  const maxTokens = req.maxTokens ?? cfg.defaultMaxTokens;
+  if (maxTokens !== undefined) {
+    // `max_tokens` is deprecated and REJECTED by o-series; `max_completion_tokens` is
+    // the current param (accepted by all OpenAI/Azure chat models). Custom compatible
+    // endpoints may only accept `max_tokens`, so keep it there.
+    if (cfg.legacyEndpoint) params.max_tokens = maxTokens;
+    else params.max_completion_tokens = maxTokens;
+  }
+  // Reasoning models reject an explicit `temperature` (only the default is allowed).
+  if (req.temperature !== undefined && !reasoning) params.temperature = req.temperature;
   if (req.stop && req.stop.length > 0) params.stop = [...req.stop];
   return params;
 }
@@ -455,25 +509,27 @@ function buildParams(
 /**
  * messages → OpenAI messages.
  *
- * Roles map 1:1: system/user/assistant/tool. Assistant turns with
- * `toolCalls` get those serialized into `message.tool_calls` (args
- * JSON-stringified per OpenAI's contract). Tool messages map to
- * `role: 'tool'` with `tool_call_id`.
+ * Roles map 1:1: system/user/assistant/tool. For reasoning models the system role
+ * becomes `developer` (its replacement). Assistant turns with `toolCalls` get those
+ * serialized into `message.tool_calls` (args JSON-stringified per OpenAI's contract).
+ * Tool messages map to `role: 'tool'` with `tool_call_id`.
  */
 function toOpenAIMessages(
   messages: readonly LLMMessage[],
   systemPrompt: string | undefined,
+  reasoning: boolean,
 ): OpenAIMessage[] {
+  const systemRole: 'system' | 'developer' = reasoning ? 'developer' : 'system';
   const result: OpenAIMessage[] = [];
-  // OpenAI accepts system role IN the messages array (unlike Anthropic's
-  // separate `system` field). Prepend systemPrompt as the first system
-  // message; subsequent in-message system entries pass through.
+  // OpenAI accepts the system/developer role IN the messages array (unlike Anthropic's
+  // separate `system` field). Prepend systemPrompt as the first such message; subsequent
+  // in-message system entries pass through.
   if (systemPrompt) {
-    result.push({ role: 'system', content: systemPrompt });
+    result.push({ role: systemRole, content: systemPrompt });
   }
   for (const m of messages) {
     if (m.role === 'system') {
-      result.push({ role: 'system', content: m.content });
+      result.push({ role: systemRole, content: m.content });
       continue;
     }
     if (m.role === 'user') {

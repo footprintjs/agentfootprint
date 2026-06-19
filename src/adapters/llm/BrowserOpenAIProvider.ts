@@ -34,14 +34,19 @@ interface OpenAIRequestBody {
   model: string;
   messages: OpenAIMessage[];
   tools?: OpenAITool[];
+  /** Legacy token cap — deprecated; rejected by o-series. Kept for compatible endpoints. */
   max_tokens?: number;
+  /** Current token cap — accepted by all OpenAI/Azure chat models incl. o-series. */
+  max_completion_tokens?: number;
   temperature?: number;
   stop?: string[];
   stream?: boolean;
+  /** Ask OpenAI/Azure to emit a final usage chunk while streaming. */
+  stream_options?: { include_usage: boolean };
 }
 
 interface OpenAIMessage {
-  role: 'system' | 'user' | 'assistant' | 'tool';
+  role: 'system' | 'developer' | 'user' | 'assistant' | 'tool';
   content: string | null;
   tool_calls?: OpenAIToolCall[];
   tool_call_id?: string;
@@ -108,6 +113,10 @@ export interface BrowserOpenAIProviderOptions {
   /** Auth header scheme. `'bearer'` (default) → `Authorization: Bearer <key>`;
    *  `'api-key'` → the `api-key` header (Azure OpenAI). */
   readonly authScheme?: 'bearer' | 'api-key';
+  /** Treat the target as a **reasoning model** (o-series): omit `temperature` and send
+   *  the `developer` role. Standard o-series ids are auto-detected; set for arbitrary
+   *  Azure deployment names. */
+  readonly reasoning?: boolean;
   /** @internal Custom fetch implementation for tests. */
   readonly _fetch?: typeof fetch;
 }
@@ -122,6 +131,11 @@ export function browserOpenai(options: BrowserOpenAIProviderOptions): LLMProvide
   const defaultModel = options.defaultModel ?? 'gpt-4o-mini';
   const defaultMaxTokens = options.defaultMaxTokens;
   const fetchImpl = options._fetch ?? fetch;
+  // OpenAI (default URL) and Azure (`api-key` auth) get the modern params; a custom
+  // bearer endpoint (Ollama/vLLM/…) keeps legacy `max_tokens` and no `stream_options`.
+  const legacyEndpoint = apiUrl !== OPENAI_API_URL && options.authScheme !== 'api-key';
+  const reasoningOpt = options.reasoning ?? false;
+  const cfg = { defaultModel, defaultMaxTokens, legacyEndpoint, reasoning: reasoningOpt };
 
   const headers: Record<string, string> = { 'content-type': 'application/json' };
   if (options.authScheme === 'api-key') {
@@ -134,7 +148,7 @@ export function browserOpenai(options: BrowserOpenAIProviderOptions): LLMProvide
   const provider: LLMProvider = {
     name: 'browser-openai',
     async complete(req: LLMRequest): Promise<LLMResponse> {
-      const body: OpenAIRequestBody = buildBody(req, defaultModel, defaultMaxTokens, false);
+      const body: OpenAIRequestBody = buildBody(req, { ...cfg, stream: false });
       let response: Response;
       try {
         response = await fetchImpl(apiUrl, {
@@ -151,7 +165,7 @@ export function browserOpenai(options: BrowserOpenAIProviderOptions): LLMProvide
       return fromOpenAIResponse(json);
     },
     async *stream(req: LLMRequest): AsyncIterable<LLMChunk> {
-      const body: OpenAIRequestBody = buildBody(req, defaultModel, defaultMaxTokens, true);
+      const body: OpenAIRequestBody = buildBody(req, { ...cfg, stream: true });
       let response: Response;
       try {
         response = await fetchImpl(apiUrl, {
@@ -253,6 +267,9 @@ export interface BrowserAzureOpenAIProviderOptions {
   readonly deployment: string;
   /** Default max tokens. */
   readonly defaultMaxTokens?: number;
+  /** Set when the Azure deployment is a **reasoning model** (o1/o3/o4-mini) — omits
+   *  `temperature` and sends the `developer` role. */
+  readonly reasoning?: boolean;
   /** @internal Custom fetch implementation for tests. */
   readonly _fetch?: typeof fetch;
 }
@@ -308,6 +325,7 @@ export function browserAzureOpenai(options: BrowserAzureOpenAIProviderOptions): 
     apiUrl,
     authScheme: 'api-key',
     defaultModel: options.deployment,
+    ...(options.reasoning !== undefined && { reasoning: options.reasoning }),
     ...(options.defaultMaxTokens !== undefined && { defaultMaxTokens: options.defaultMaxTokens }),
     ...(options._fetch && { _fetch: options._fetch }),
   });
@@ -343,21 +361,41 @@ export class BrowserAzureOpenAIProvider implements LLMProvider {
 
 // ─── Internals ──────────────────────────────────────────────────────
 
-function buildBody(
-  req: LLMRequest,
-  defaultModel: string,
-  defaultMaxTokens: number | undefined,
-  stream: boolean,
-): OpenAIRequestBody {
+/** o-series reasoning ids (o1, o3, o4-mini, …). `gpt-4o` starts with `g` — not matched. */
+function isReasoningModel(model: string): boolean {
+  return /^o\d/i.test(model);
+}
+
+interface BuildConfig {
+  readonly defaultModel: string;
+  readonly defaultMaxTokens: number | undefined;
+  readonly stream: boolean;
+  readonly legacyEndpoint: boolean;
+  readonly reasoning: boolean;
+}
+
+function buildBody(req: LLMRequest, cfg: BuildConfig): OpenAIRequestBody {
+  const model = req.model === 'openai' || req.model === 'browser-openai' ? cfg.defaultModel : req.model;
+  const reasoning = cfg.reasoning || isReasoningModel(model);
   const body: OpenAIRequestBody = {
-    model: req.model === 'openai' || req.model === 'browser-openai' ? defaultModel : req.model,
-    messages: toOpenAIMessages(req.messages, req.systemPrompt),
+    model,
+    messages: toOpenAIMessages(req.messages, req.systemPrompt, reasoning),
   };
-  if (stream) body.stream = true;
+  if (cfg.stream) {
+    body.stream = true;
+    // Without this OpenAI/Azure send no usage while streaming → 0-token accounting.
+    if (!cfg.legacyEndpoint) body.stream_options = { include_usage: true };
+  }
   if (req.tools && req.tools.length > 0) body.tools = req.tools.map(toOpenAITool);
-  const max = req.maxTokens ?? defaultMaxTokens;
-  if (max !== undefined) body.max_tokens = max;
-  if (req.temperature !== undefined) body.temperature = req.temperature;
+  const max = req.maxTokens ?? cfg.defaultMaxTokens;
+  if (max !== undefined) {
+    // `max_tokens` is deprecated and rejected by o-series; `max_completion_tokens` is
+    // current. Keep `max_tokens` only for custom compatible endpoints.
+    if (cfg.legacyEndpoint) body.max_tokens = max;
+    else body.max_completion_tokens = max;
+  }
+  // Reasoning models reject an explicit temperature.
+  if (req.temperature !== undefined && !reasoning) body.temperature = req.temperature;
   if (req.stop && req.stop.length > 0) body.stop = [...req.stop];
   return body;
 }
@@ -365,12 +403,14 @@ function buildBody(
 function toOpenAIMessages(
   messages: readonly LLMMessage[],
   systemPrompt: string | undefined,
+  reasoning: boolean,
 ): OpenAIMessage[] {
+  const systemRole: 'system' | 'developer' = reasoning ? 'developer' : 'system';
   const result: OpenAIMessage[] = [];
-  if (systemPrompt) result.push({ role: 'system', content: systemPrompt });
+  if (systemPrompt) result.push({ role: systemRole, content: systemPrompt });
   for (const m of messages) {
     if (m.role === 'system') {
-      result.push({ role: 'system', content: m.content });
+      result.push({ role: systemRole, content: m.content });
       continue;
     }
     if (m.role === 'user') {

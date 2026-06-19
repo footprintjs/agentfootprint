@@ -174,6 +174,92 @@ describe('OpenAIProvider — unit', () => {
   });
 });
 
+// ─── Current-API params (max_completion_tokens / stream_options / reasoning) ──
+describe('OpenAIProvider — current API params', () => {
+  const rec = () => ({ params: [] as unknown[] });
+  const paramOf = (r: { params: unknown[] }) =>
+    r.params[0] as {
+      max_tokens?: number;
+      max_completion_tokens?: number;
+      temperature?: number;
+      stream_options?: { include_usage: boolean };
+      messages: Array<{ role: string }>;
+    };
+
+  it('uses max_completion_tokens (not deprecated max_tokens) on OpenAI/Azure', async () => {
+    const r = rec();
+    const p = openai({ defaultModel: 'gpt-4o', _client: makeFakeClient(baseResponse, r) });
+    await p.complete({ ...baseRequest, maxTokens: 128 });
+    expect(paramOf(r).max_completion_tokens).toBe(128);
+    expect(paramOf(r).max_tokens).toBeUndefined();
+  });
+
+  it('keeps legacy max_tokens for custom compatible endpoints (baseURL set)', async () => {
+    const r = rec();
+    const p = openai({
+      baseURL: 'http://localhost:11434/v1',
+      defaultModel: 'llama3.2',
+      _client: makeFakeClient(baseResponse, r),
+    });
+    await p.complete({ ...baseRequest, maxTokens: 64 });
+    expect(paramOf(r).max_tokens).toBe(64);
+    expect(paramOf(r).max_completion_tokens).toBeUndefined();
+  });
+
+  it('streaming asks for usage via stream_options.include_usage on OpenAI/Azure', async () => {
+    const r = rec();
+    const p = openai({ defaultModel: 'gpt-4o', _client: makeFakeClient(baseResponse, r) });
+    for await (const _chunk of p.stream!(baseRequest)) void _chunk;
+    expect(paramOf(r).stream_options).toEqual({ include_usage: true });
+  });
+
+  it('does NOT send stream_options to custom compatible endpoints', async () => {
+    const r = rec();
+    const p = openai({
+      baseURL: 'http://localhost:11434/v1',
+      defaultModel: 'llama3.2',
+      _client: makeFakeClient(baseResponse, r),
+    });
+    for await (const _chunk of p.stream!(baseRequest)) void _chunk;
+    expect(paramOf(r).stream_options).toBeUndefined();
+  });
+
+  it('reasoning model (o-series id): max_completion_tokens, no temperature, developer role', async () => {
+    const r = rec();
+    const p = openai({ _client: makeFakeClient(baseResponse, r) });
+    await p.complete({
+      model: 'o3-mini',
+      messages: [{ role: 'user', content: 'hi' }],
+      systemPrompt: 'Be terse.',
+      temperature: 0.7,
+      maxTokens: 100,
+    });
+    expect(paramOf(r).temperature).toBeUndefined(); // o-series reject explicit temperature
+    expect(paramOf(r).max_completion_tokens).toBe(100);
+    expect(paramOf(r).messages[0].role).toBe('developer'); // system → developer
+  });
+
+  it('explicit reasoning:true (arbitrary Azure deployment name) omits temperature + developer role', async () => {
+    const r = rec();
+    const p = openai({
+      reasoning: true,
+      defaultModel: 'my-reasoning-deploy',
+      _client: makeFakeClient(baseResponse, r),
+    });
+    await p.complete({ ...baseRequest, systemPrompt: 'Be terse.', temperature: 0.3 });
+    expect(paramOf(r).temperature).toBeUndefined();
+    expect(paramOf(r).messages[0].role).toBe('developer');
+  });
+
+  it('standard model keeps temperature + the system role', async () => {
+    const r = rec();
+    const p = openai({ defaultModel: 'gpt-4o', _client: makeFakeClient(baseResponse, r) });
+    await p.complete({ ...baseRequest, systemPrompt: 'Be terse.', temperature: 0.5 });
+    expect(paramOf(r).temperature).toBe(0.5);
+    expect(paramOf(r).messages[0].role).toBe('system');
+  });
+});
+
 // ─── Scenario — multi-turn tool round-trip ─────────────────────────
 
 describe('OpenAIProvider — scenario (tool round-trip)', () => {
