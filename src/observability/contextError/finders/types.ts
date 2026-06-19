@@ -45,6 +45,8 @@ export interface FindInput {
   readonly rerun?: (removedIds: readonly string[]) => Promise<{ recovered: boolean; outcome?: string }>;
   /** The agent's steps, for step-granularity finders. */
   readonly steps?: readonly StepInput[];
+  /** For testManyCombos: how many on/off combinations to sample (default ~4×#suspects). */
+  readonly samples?: number;
 }
 
 /** One suspect in the finder's ranked output. */

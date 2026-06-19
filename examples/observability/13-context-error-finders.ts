@@ -30,6 +30,8 @@ import {
   compareFinders,
   rankSuspects,
   removeAndRetry,
+  shrinkToCause,
+  testManyCombos,
   type FindInput,
 } from '../../src/observability/contextError/finders/index.js';
 
@@ -74,16 +76,28 @@ async function main(): Promise<void> {
   // 2) Proof by re-running.
   show('removeAndRetry (proof)', await removeAndRetry.find(input));
 
-  // 3) Side by side.
+  // 3) All five, side by side — the cost spectrum (cheap guess → minimal proof → exhaustive).
   console.log('\n── compareFinders (leaderboard) ──');
-  const rows = await compareFinders([rankSuspects, removeAndRetry], input);
+  const rows = await compareFinders(
+    [rankSuspects, shrinkToCause, removeAndRetry, testManyCombos],
+    input,
+  );
   for (const row of rows) {
     const r = row.result;
     console.log(
       `${row.finder.padEnd(16)} ${r ? `lead=${r.lead} (${r.evidence}, ${r.checks} checks)` : `ERROR: ${row.error}`}`,
     );
   }
-  console.log('\nrankSuspects is free but a guess; removeAndRetry proves it at the cost of N re-runs.');
+  console.log(
+    '\nAll five agree on the culprit, at different cost: rankSuspects guesses for FREE (0 checks); the three',
+  );
+  console.log(
+    'counterfactual finders PROVE it by re-running — removeAndRetry exhaustively (one per piece),',
+  );
+  console.log(
+    'shrinkToCause by minimization (which pulls ahead of exhaustive as the suspect set grows),',
+  );
+  console.log('testManyCombos by sampling many combinations. Free guess vs proof: pick your budget.');
 }
 
 void main();

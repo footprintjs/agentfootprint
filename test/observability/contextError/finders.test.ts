@@ -12,6 +12,8 @@ import {
   compareFinders,
   rankSuspects,
   removeAndRetry,
+  shrinkToCause,
+  testManyCombos,
   traceSteps,
   type FindInput,
   type Finder,
@@ -145,6 +147,57 @@ describe('finders — integration', () => {
     const proven = await removeAndRetry.find(baseInput());
     expect(proven.lead).toBe(CULPRIT);
     expect(ranked.suspects[0]?.id).toBe(CULPRIT); // mock embedder favors the shared-character culprit
+  });
+});
+
+// ── testManyCombos (ContextCite) + shrinkToCause (BugDoc) ────────────
+describe('finders — testManyCombos + shrinkToCause', () => {
+  it('shrinkToCause finds the minimal recovering set = the culprit (proven)', async () => {
+    const r = await shrinkToCause.find(baseInput());
+    expect(r.finder).toBe('shrinkToCause');
+    expect(r.evidence).toBe('proven');
+    expect(r.shortlist).toEqual([CULPRIT]);
+    expect(r.lead).toBe(CULPRIT);
+  });
+
+  it('shrinkToCause reaches the cause in FEWER checks than leave-one-out', async () => {
+    const n = 12;
+    const culprit = 'p7';
+    const suspects = Array.from({ length: n }, (_, i) => ({ id: `p${i}`, text: `piece ${i}` }));
+    const r = await shrinkToCause.find({
+      suspects,
+      wrongOutput: 'bad',
+      rerun: async (rm) => ({ recovered: rm.includes(culprit) }),
+    });
+    expect(r.lead).toBe(culprit);
+    expect(r.shortlist).toEqual([culprit]);
+    expect(r.checks).toBeLessThan(n); // ddmin beats exhaustive leave-one-out
+  });
+
+  it('shrinkToCause: removing all and not recovering → no removable cause (guessed, empty)', async () => {
+    const r = await shrinkToCause.find({
+      suspects: SUSPECTS,
+      wrongOutput: WRONG,
+      rerun: async () => ({ recovered: false }),
+    });
+    expect(r.evidence).toBe('guessed');
+    expect(r.shortlist).toEqual([]);
+    expect(r.lead).toBeUndefined();
+  });
+
+  it('testManyCombos learns the culprit from sampled combinations and confirms it', async () => {
+    const r = await testManyCombos.find(baseInput({ samples: 24 }));
+    expect(r.finder).toBe('testManyCombos');
+    expect(r.lead).toBe(CULPRIT);
+    expect(r.evidence).toBe('proven'); // confirmed by the single follow-up ablation
+    expect(r.checks).toBe(24 + 1);
+  });
+
+  it('testManyCombos is deterministic (reproducible masking → same result twice)', async () => {
+    const a = await testManyCombos.find(baseInput({ samples: 16 }));
+    const b = await testManyCombos.find(baseInput({ samples: 16 }));
+    expect(a.suspects).toEqual(b.suspects);
+    expect(a.lead).toBe(b.lead);
   });
 });
 
