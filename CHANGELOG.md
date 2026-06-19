@@ -5,6 +5,36 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.40.0] - 2026-06-18
+
+### Added — `toolContractCheckup`: diff agent tool schemas vs a tool-server catalog
+
+The server-boundary extension of proposal 009. When an agent's tools call a remote
+tool-server (an MCP-ish sidecar, a function gateway), the agent's `inputSchema` and the
+server's real contract can drift — the model then calls a tool that 404s, or omits an
+arg the server REQUIRES and gets a "doesn't work." Servers usually publish a catalog
+(`GET /tools` → `[{ name, inputSchema }]`), so the drift is **checkable at build/CI
+time** instead of surfacing as a runtime error.
+
+**`toolContractCheckup(agentTools, serverCatalog)`** — a PURE diff (no I/O; you fetch
+the catalog and pass it). Accepts `Tool[]` or `{name, inputSchema}[]` on either side.
+Flags:
+
+- **`required-divergence`** (error) — server REQUIRES an arg the agent marks optional/omits → the model omits it → server rejects.
+- **`optional-drift`** (warning) — server accepts an arg the agent never surfaces → the model can't use that filter ("tool ignores my narrowing").
+- **`arg-divergence`** (warning) — the agent declares an arg the server doesn't know (a rename/typo).
+- **`missing-on-server`** (error) — an agent tool not in the catalog → would 404.
+- **`dead-endpoint`** (warning) — a server tool no agent tool calls.
+
+New exports (main barrel): `toolContractCheckup`, `formatToolContractCheckup`, types
+`ToolContractCheckup` / `ToolContractProblem` / `ToolContractCode` / `ServerToolEntry`.
+New example `30-tool-contract-checkup.ts`.
+
+Motivation: a real adopter (Neo) hit "tools don't work" against an MCP-ish Python
+sidecar. Running this against the sidecar's `/tools` catalog proves the schemas are
+**already aligned** (the failures were a deployment `MOCK`/env config issue, not a
+contract drift) — exactly the kind of fast, honest verdict a static check gives.
+
 ## [6.39.0] - 2026-06-18
 
 ### Added — skill-body ↔ tool-contract check (proposal 009, Tier 1)

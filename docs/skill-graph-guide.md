@@ -164,6 +164,16 @@ Both are WARNINGS — they never fail `.build()`. (The *semantic* contradiction 
 see — a body calling an OPTIONAL arg "required" — is Tier 2, LLM-advisory, not yet built.)
 → runnable + tested: **`examples/features/29-skill-contract-check.ts`**.
 
+**Agent ↔ tool-server contract (6.40.0)** — if your tools call a remote tool-server (an
+MCP-ish sidecar) that publishes a catalog (`GET /tools`), diff your schemas against it:
+```ts
+import { toolContractCheckup } from 'agentfootprint';
+const catalog = await (await fetch(`${base}/tools`)).json();      // [{ name, inputSchema }]
+const { ok, problems } = toolContractCheckup(myTools, catalog);   // required-divergence (error),
+//   optional-drift / arg-divergence / missing-on-server / dead-endpoint — catch "tool 404s /
+//   omits a required arg / ignores my filter" at build/CI time. → example 30.
+```
+
 **Object-literal form** — list skills *separately* from the wiring, so the check-up can flag a listed-but-unwired skill.
 ```ts
 const graph = skillGraph({
