@@ -74,6 +74,36 @@ describe('finders — unit', () => {
     expect(r.suspects.map((s) => s.id).sort()).toEqual(STEPS.map((s) => s.id).sort());
   });
 
+  it('traceSteps: guesses without rerun, proves (1 check) with rerun', async () => {
+    const guessed = await traceSteps.find({
+      suspects: SUSPECTS,
+      wrongOutput: WRONG,
+      embedder: mockEmbedder(),
+      steps: STEPS,
+    });
+    expect(guessed.evidence).toBe('guessed');
+    expect(guessed.checks).toBe(0);
+
+    const proven = await traceSteps.find(baseInput({ steps: STEPS }));
+    expect(proven.evidence).toBe('proven');
+    expect(proven.checks).toBe(1);
+    expect(proven.explanation).toMatch(/recover/i);
+  });
+
+  it('rankSuspects: escalates (no clear winner → shortlist of ≥2) on a tie', async () => {
+    // identical texts → identical scores → no clear winner → cover the runner-up
+    const r = await rankSuspects.find({
+      suspects: [
+        { id: 'a', text: 'same content' },
+        { id: 'b', text: 'same content' },
+      ],
+      wrongOutput: 'same content',
+      embedder: mockEmbedder(),
+    });
+    expect(r.shortlist.length).toBeGreaterThanOrEqual(2);
+    expect(r.explanation).toMatch(/escalate/i);
+  });
+
   it('every finder carries plain meta with the academic attribution off the name', () => {
     for (const f of [rankSuspects, removeAndRetry, traceSteps]) {
       expect(f.meta.label.length).toBeGreaterThan(0);
