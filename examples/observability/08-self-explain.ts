@@ -54,8 +54,8 @@ const lookupOrder = defineTool<{ orderId: string }, string>({
 });
 
 interface Req {
-  messages: { role: string; content?: unknown }[];
-  tools?: { name: string }[];
+  messages: readonly { role: string; content?: unknown }[];
+  tools?: readonly { name: string }[];
 }
 const names = (req: Req): string[] => (req.tools ?? []).map((t) => t.name);
 const lastTool = (req: Req): string =>

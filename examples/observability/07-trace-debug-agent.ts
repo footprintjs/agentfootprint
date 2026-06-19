@@ -137,7 +137,7 @@ export async function run(_input?: string | null): Promise<TraceDebugAgentResult
   executor.attachCombinedRecorder(ctrl);
   await executor.run({});
   const snapshot = executor.getSnapshot();
-  out.push('═══ THE RUN ═══', `letter: ${String((snapshot.sharedState as LoanState).letter)}`, '');
+  out.push('═══ THE RUN ═══', `letter: ${String((snapshot.sharedState as unknown as LoanState).letter)}`, '');
 
   // 2 — the dedicated debugger: a scripted "cheap model" walks the evidence.
   //     A real session swaps `provider` for anthropic()/openai() + a small model.
