@@ -34,7 +34,9 @@ const sentToModel: ContextUnit[] = [
 const result = findDroppedContext(assembled, sentToModel);
 
 console.log('── what reached the model vs what was available ──');
-console.log(`   available: ${result.availableCount}   sent: ${result.sentCount}   anyDropped: ${result.anyDropped}`);
+console.log(
+  `   available: ${result.availableCount}   sent: ${result.sentCount}   anyDropped: ${result.anyDropped}`,
+);
 console.log(`   dropped (candidates): [${result.dropped.map((d) => d.id).join(', ')}]`);
 console.log(`   → ${result.reason}`);
 
@@ -48,7 +50,9 @@ let confirmed: string | undefined;
 for (const unit of result.dropped) {
   const outcome = rerunWithRestored(unit.id);
   const flipped = outcome !== wrongOutcome;
-  console.log(`   restore "${unit.id}" → ${outcome}${flipped ? '  ✓ FLIP — causal proof' : '  (no change)'}`);
+  console.log(
+    `   restore "${unit.id}" → ${outcome}${flipped ? '  ✓ FLIP — causal proof' : '  (no change)'}`,
+  );
   if (flipped && confirmed === undefined) confirmed = unit.id;
 }
 
@@ -62,29 +66,62 @@ console.log(
 // The same thing as a first-class tier in the localizer: pass available + sent +
 // a restoration runner; the report's `dropped` carries the restoration verdicts
 // (mirror of the ablation tier). COST: each candidate = samples real re-runs.
-import { localizeContextBug, formatContextBugReport, type RestorationRunner } from '../../src/observe';
+import {
+  localizeContextBug,
+  formatContextBugReport,
+  type RestorationRunner,
+} from '../../src/observe';
 import { mockEmbedder } from '../../src/memory/embedding/mockEmbedder';
 
 const buggy = 'DECISION: DECLINE — subprime credit, high DTI';
 // real agents rebuild + re-run here; this mock returns the corrected outcome only
 // when the override is restored (units contains it).
 const restorationRunner: RestorationRunner = async (units) =>
-  units.some((u) => u.id === 'override') ? 'DECISION: APPROVE — committee exception applies' : buggy;
+  units.some((u) => u.id === 'override')
+    ? 'DECISION: APPROVE — committee exception applies'
+    : buggy;
 
-const report = await localizeContextBug({
-  // minimal artifacts + explicit trigger; the missing-context tier is independent of the slice
-  artifacts: { snapshot: { commitLog: [{ runtimeStageId: 'call#0', stageId: 'call', idx: 0, trace: [], overwrite: {}, updates: {} }] } as never },
-  embedder: mockEmbedder(),
-  atStep: 'call#0',
-  missingContext: {
-    available: assembled,
-    sent: sentToModel,
-    rerun: { runner: restorationRunner, originalOutput: buggy, samples: 3 },
-  },
-});
+async function main(): Promise<void> {
+  const report = await localizeContextBug({
+    // minimal artifacts + explicit trigger; the missing-context tier is independent of the slice
+    artifacts: {
+      snapshot: {
+        commitLog: [
+          {
+            runtimeStageId: 'call#0',
+            stageId: 'call',
+            idx: 0,
+            trace: [],
+            overwrite: {},
+            updates: {},
+          },
+        ],
+      } as never,
+    },
+    embedder: mockEmbedder(),
+    atStep: 'call#0',
+    missingContext: {
+      available: assembled,
+      sent: sentToModel,
+      rerun: { runner: restorationRunner, originalOutput: buggy, samples: 3 },
+    },
+  });
 
-console.log('\n── via localizeContextBug (report.dropped) ──');
-for (const c of report.dropped ?? []) {
-  console.log(`   ${c.id}: ${c.verdict?.verdict ?? 'candidate-only'}${c.verdict ? ` — ${c.verdict.claim}` : ''}`);
+  console.log('\n── via localizeContextBug (report.dropped) ──');
+  for (const c of report.dropped ?? []) {
+    console.log(
+      `   ${c.id}: ${c.verdict?.verdict ?? 'candidate-only'}${
+        c.verdict ? ` — ${c.verdict.claim}` : ''
+      }`,
+    );
+  }
+  console.log(
+    '\n' +
+      formatContextBugReport(report)
+        .split('\n')
+        .filter((l) => /MISSING CONTEXT|dropped|restoring/i.test(l))
+        .join('\n'),
+  );
 }
-console.log('\n' + formatContextBugReport(report).split('\n').filter((l) => /MISSING CONTEXT|dropped|restoring/i.test(l)).join('\n'));
+
+void main();
