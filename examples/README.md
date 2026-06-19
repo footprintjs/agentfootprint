@@ -265,6 +265,7 @@ _Run `npm run examples:readme` after adding/editing examples._
 | 10 | [`10-missing-context.ts`](observability/10-missing-context.ts) | _no meta_ | — |
 | 11 | [`11-contrastive-influence.ts`](observability/11-contrastive-influence.ts) | scoreContrastiveInfluence — cancel the topical-innocent confound | Output-similarity influence is fooled by a topically-central innocent (the  |
 | 12 | [`12-two-score-localization.ts`](observability/12-two-score-localization.ts) | two-score localization — quality + cost from one ablation | One ablation re-run, two independent scores: QUALITY (answer flipped?) and COST  |
+| 13 | [`13-context-error-finders.ts`](observability/13-context-error-finders.ts) | _no meta_ | — |
 | 13 | [`13-per-loop-trajectory.ts`](observability/13-per-loop-trajectory.ts) | per-loop trajectory — one frame per ReAct iteration | assembleTrajectory slices a flat-agent run into LoopFrames (one per iteration) from  |
 | 14 | [`14-loop-recall-shortlist.ts`](observability/14-loop-recall-shortlist.ts) | per-loop recall shortlist — rescue early culprits before ablation | shortlistEarlyCulprits aggregates per-loop influence with a recency weight so a culprit that  |
 | 15 | [`15-walk-to-root.ts`](observability/15-walk-to-root.ts) | walk to root — narrow → hop → convict, symptom to root | walkToRoot walks a decision bug backward (per-loop narrow → writerId provenance hop → run-wide  |
