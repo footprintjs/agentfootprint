@@ -199,6 +199,40 @@ describe('finders — testManyCombos + shrinkToCause', () => {
     expect(a.suspects).toEqual(b.suspects);
     expect(a.lead).toBe(b.lead);
   });
+
+  it('shrinkToCause returns BOTH co-necessary culprits (minimal set), verified to recover', async () => {
+    const suspects = Array.from({ length: 8 }, (_, i) => ({ id: `p${i}`, text: `piece ${i}` }));
+    const c1 = 'p2';
+    const c2 = 'p6';
+    const rerun = async (rm: readonly string[]) => ({ recovered: rm.includes(c1) && rm.includes(c2) });
+    const r = await shrinkToCause.find({ suspects, wrongOutput: 'bad', rerun });
+    expect([...r.shortlist].sort()).toEqual([c1, c2].sort());
+    expect((await rerun(r.shortlist)).recovered).toBe(true); // the returned set really recovers
+    expect(r.evidence).toBe('proven');
+  });
+
+  it('testManyCombos degrades to a GUESS when no single piece flips alone (co-necessary)', async () => {
+    const suspects = Array.from({ length: 6 }, (_, i) => ({ id: `p${i}`, text: `piece ${i}` }));
+    const rerun = async (rm: readonly string[]) => ({ recovered: rm.includes('p1') && rm.includes('p4') });
+    const r = await testManyCombos.find({ suspects, wrongOutput: 'bad', rerun, samples: 24 });
+    expect(r.evidence).toBe('guessed'); // honest: no single-piece cause to confirm
+  });
+
+  it('testManyCombos does NOT falsely convict when every subset recovers (no signal)', async () => {
+    const r = await testManyCombos.find({
+      suspects: SUSPECTS,
+      wrongOutput: WRONG,
+      rerun: async () => ({ recovered: true }),
+      samples: 16,
+    });
+    expect(r.evidence).toBe('guessed'); // M1 regression: all scores 0 → never 'proven'
+  });
+
+  it('testManyCombos throws without a rerun', async () => {
+    await expect(
+      testManyCombos.find({ suspects: SUSPECTS, wrongOutput: WRONG, embedder: mockEmbedder() }),
+    ).rejects.toThrow(/rerun/);
+  });
 });
 
 // ── PROPERTY — invariants over randomized inputs ─────────────────────

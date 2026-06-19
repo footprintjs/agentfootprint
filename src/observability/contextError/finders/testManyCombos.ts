@@ -75,7 +75,10 @@ export const testManyCombos: Finder = {
     if (lead) {
       const r = await rerun([lead]);
       checks++;
-      evidence = r.recovered ? 'proven' : 'guessed';
+      // 'proven' requires BOTH a positive learned contrast AND the lead flipping alone —
+      // guards against a degenerate rerun that recovers for every subset (no real signal,
+      // every score 0), which would otherwise falsely convict an arbitrary innocent.
+      evidence = r.recovered && (scored[0]?.score ?? 0) > 0 ? 'proven' : 'guessed';
     }
     const cutoff = Math.max(0.25, (scored[0]?.score ?? 0) / 2);
     const shortlist = scored.filter((s) => s.score >= cutoff).map((s) => s.id);

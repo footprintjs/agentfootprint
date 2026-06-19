@@ -1,8 +1,9 @@
 /**
  * shrinkToCause — keeps cutting the suspect set down until the smallest subset whose
- * removal still fixes the answer. Converges to the minimal cause in fewer re-runs than
- * leave-one-out (delta-debugging minimization), and the minimal set is verified to
- * recover by construction.
+ * removal still fixes the answer. For a single dominant cause it converges in fewer
+ * re-runs than leave-one-out (delta-debugging minimization); for co-necessary causes it
+ * still returns the minimal recovering set, but may cost more probes than leave-one-out.
+ * The returned set is verified to recover by construction.
  *
  * Method: delta-debugging minimization (ddmin) over the removal set that recovers.
  */
