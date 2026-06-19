@@ -54,7 +54,7 @@ graph.toMermaid();   // draws the topology (declared === drawn)
 reachableSkills(cur?), scoreEntries?(ctx) }`. Always pass the **whole** `build()`
 result to `.skillGraph(...)`.
 
-## 4. Pick how a turn ENTERS — four strategies
+## 4. Pick how a turn ENTERS — five strategies
 
 ```ts
 // (a) regex / predicate — deterministic, pinnable, brittle. `when` gets the full InjectionContext.
@@ -67,15 +67,29 @@ skillGraph().tree(
   'billing?')
 )
 
-// (c) read_skill — the MODEL picks. NOT a method: it's the default. Declare no
-//     deterministic entry and the LLM calls read_skill('<id>') on turn 1.
+// (c) read_skill (bare) — the MODEL picks, no method. Declare ONE entry as a base;
+//     extra skills with no incoming edge are read_skill-reachable, and the LLM jumps
+//     to them ad-hoc. (For a clean exclusive entry menu, prefer (e).)
 
 // (d) entryByRelevance — pick by MEANING (6.35.0). Embeds the message + each entry's
 //     description, cosine → softmax → best match. LLM-free, reproducible. Entries
 //     become EXCLUSIVE (only the picked one loads). Needs an embedder.
 import { mockEmbedder } from 'agentfootprint';   // swap for a real embedder in prod
 skillGraph().entry(triage).entry(billing).entry(incident).entryByRelevance(mockEmbedder())
+
+// (e) entryByRead — the agent's OWN LLM reads the menu and picks (6.38.0). Like (d),
+//     entries are EXCLUSIVE (only the pick loads) — but NO embedder and NO extra model
+//     call: on turn 1 no entry body loads, the agent is offered the entries via
+//     read_skill, and its choice becomes the cursor. Use when you have no embedder, or
+//     embeddings route poorly for your domain's language. Mutually exclusive with (d).
+skillGraph().entry(billing).entry(incident).entryByRead()
 ```
+
+> **(d) vs (e):** both make entries exclusive and token-efficient. `entryByRelevance`
+> ranks the menu with an **embedder** (reproducible, off the hot loop). `entryByRead`
+> lets the **agent's LLM** pick by reading descriptions (no embedder, routes on real
+> intent). Object form: `{ start: { entries } }` → entryByRead; add `byRelevance: embedder`
+> → entryByRelevance. See [example 28](../examples/features/28-skill-graph-entry-read.ts).
 
 An embedder is `{ dimensions: number; embed({ text, signal? }): Promise<number[]> }`.
 After a turn the ranking is on `agent.getLastSnapshot()?.sharedState.entryScores`
@@ -169,10 +183,10 @@ Agent.create({ provider, model }).skillGraph(graph).instruction(defineRelevanceH
 
 ## 9. Honest status (so your agent doesn't invent APIs)
 
-**✅ Shipped + usable (6.36.0):** `defineSkill`; `skillGraph()` fluent **and** object-literal
-forms with `.entry` / `.route` / `.tree` / `.entryByRelevance` / `.build({check})`; tool-result
-`from`-gated routing; scoped `read_skill` + `skill.rejected`; `toMermaid()`; `read_skill` as the
-model-picks entry/fallback; `graph.nextSkill` / `graph.reachableSkills` / `graph.scoreEntries` /
+**✅ Shipped + usable (6.38.0):** `defineSkill`; `skillGraph()` fluent **and** object-literal
+forms with `.entry` / `.route` / `.tree` / `.entryByRelevance` / `.entryByRead` / `.build({check})`;
+tool-result `from`-gated routing; scoped `read_skill` + `skill.rejected`; `toMermaid()`; `read_skill`
+as the model-picks entry/fallback; `graph.nextSkill` / `graph.reachableSkills` / `graph.scoreEntries` /
 `graph.checkup`; `routeRecorder()` (path + governor trips); `defineRelevanceHint()`.
 
 **🔶 NOT built yet — don't call these:** a runtime governor *force-stop* (today `getTrips()` only

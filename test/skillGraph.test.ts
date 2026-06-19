@@ -1064,6 +1064,130 @@ describe('skillGraph — entryByRelevance through the REAL Agent loop (PickEntry
   });
 });
 
+describe('skillGraph — entryByRead (LLM picks the entry, no embedder)', () => {
+  it('makes the entries EXCLUSIVE (rule triggers), like entryByRelevance — not always-on', () => {
+    const billing = skill('billing');
+    const incident = skill('incident');
+    const g = skillGraph().entry(billing).entry(incident).entryByRead().build();
+    // default multi-entry would be `always`; entryByRead makes each cursor-gated.
+    expect(g.skills.find((s) => s.id === 'billing')!.trigger.kind).toBe('rule');
+    expect(g.skills.find((s) => s.id === 'incident')!.trigger.kind).toBe('rule');
+    // no embedder ⇒ no scoreEntries (the LLM reads the menu instead).
+    expect(g.scoreEntries).toBeUndefined();
+  });
+
+  it('nextSkill cold-start: undefined until the model picks; then the activated entry (respecting when)', () => {
+    const billing = skill('billing');
+    const incident = skill('incident');
+    const g = skillGraph().entry(billing).entry(incident).entryByRead().build();
+    // nothing chosen yet → NO auto-pick (no entry body loads on the first turn)
+    expect(
+      g.nextSkill(ctx({ currentSkillId: undefined, activatedInjectionIds: [] })),
+    ).toBeUndefined();
+    // the model read_skill('incident') → that becomes the cursor (NOT first-declared billing)
+    expect(g.nextSkill(ctx({ activatedInjectionIds: ['incident'] }))).toBe('incident');
+    // a when-gated entry the model picked but whose intent fails → still no cursor
+    const gated = skillGraph()
+      .entry(billing, { when: () => false })
+      .entry(incident)
+      .entryByRead()
+      .build();
+    expect(gated.nextSkill(ctx({ activatedInjectionIds: ['billing'] }))).toBeUndefined();
+  });
+
+  it('through the evaluator: cold start loads NO entry; the read_skill choice loads exactly that one', () => {
+    const billing = skill('billing', 'BILLING BODY');
+    const incident = skill('incident', 'INCIDENT BODY');
+    const g = skillGraph().entry(billing).entry(incident).entryByRead().build();
+    // first turn, nothing picked → token-efficient: neither entry body is injected
+    const e1 = evaluateInjections(g.skills, ctx({ iteration: 1, activatedInjectionIds: [] }));
+    expect(e1.active.map((i) => i.id)).toEqual([]);
+    // model picked incident via read_skill → ONLY incident activates (billing dormant)
+    const e2 = evaluateInjections(
+      g.skills,
+      ctx({ iteration: 2, activatedInjectionIds: ['incident'] }),
+    );
+    expect(e2.active.map((i) => i.id)).toEqual(['incident']);
+    expect(e2.active[0]!.inject.systemPrompt).toContain('INCIDENT BODY');
+  });
+
+  it('guardrails: entryByRead + entryByRelevance throws; entryByRead + tree throws', () => {
+    const a = skill('a');
+    expect(() =>
+      skillGraph().entry(a).entryByRead().entryByRelevance(mockEmbedder()).build(),
+    ).toThrow(/pick one of \.entryByRead\(\) or \.entryByRelevance\(\)/);
+    expect(() =>
+      skillGraph()
+        .tree(decide((c) => /x/.test(c.userMessage), skill('p'), skill('q')))
+        .entryByRead()
+        .build(),
+    ).toThrow(/entryByRead\(\) is for flat entry\/route graphs/);
+  });
+
+  it('object form: { entries } without byRelevance → entryByRead (exclusive, no scorer)', () => {
+    const billing = defineSkill({ id: 'billing', description: 'payments', body: 'b' });
+    const incident = defineSkill({ id: 'incident', description: 'outage', body: 'b' });
+    const g = skillGraph({
+      skills: [billing, incident],
+      start: { entries: ['billing', 'incident'] },
+    });
+    expect(g.skills.find((s) => s.id === 'billing')!.trigger.kind).toBe('rule');
+    expect(g.scoreEntries).toBeUndefined();
+  });
+
+  for (const reactMode of ['dynamic', 'dynamic-grouped'] as const) {
+    it(`[${reactMode}] through the REAL loop: the model's read_skill pick becomes the entry; the other stays dormant`, async () => {
+      const billing = defineSkill({
+        id: 'billing',
+        description: 'payments and refunds',
+        body: 'BILLING',
+      });
+      const incident = defineSkill({
+        id: 'incident',
+        description: 'outage triage',
+        body: 'INCIDENT',
+      });
+      // billing is declared FIRST — under the old default it would auto-load. Here the
+      // model picks `incident`, proving the entry is the model's choice, not first-declared.
+      const graph = skillGraph().entry(billing).entry(incident).entryByRead().build();
+
+      const activeIds: string[][] = [];
+      const recorder = {
+        id: 'cap',
+        onEmit: (e: { name: string; payload?: { activeIds?: string[] } }) => {
+          if (e.name === 'agentfootprint.context.evaluated') {
+            activeIds.push([...(e.payload?.activeIds ?? [])]);
+          }
+        },
+      };
+      let i = 0;
+      const scripted = mock({
+        respond: () => {
+          i++;
+          if (i === 1)
+            return {
+              content: 'Reading the incident skill.',
+              toolCalls: [{ id: 'c1', name: 'read_skill', args: { id: 'incident' } }],
+              stopReason: 'tool_use' as const,
+            };
+          return { content: 'done', toolCalls: [], stopReason: 'stop' as const };
+        },
+      });
+      const agent = Agent.create({ provider: scripted, model: 'mock', maxIterations: 4, reactMode })
+        .system('')
+        .skillGraph(graph)
+        .recorder(recorder)
+        .build();
+      await agent.run({ message: 'the database is down' });
+
+      const everActive = new Set(activeIds.flat());
+      expect(everActive.has('incident')).toBe(true); // the model's pick activated
+      expect(everActive.has('billing')).toBe(false); // first-declared, but NOT auto-loaded
+      expect(activeIds[0]).toEqual([]); // first turn: no entry body (the menu, not a pick)
+    });
+  }
+});
+
 describe('skillGraph — checkup (build-time validation)', () => {
   it('a clean flat graph → ok, no problems', () => {
     const a = skill('a');

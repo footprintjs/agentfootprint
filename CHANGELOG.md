@@ -5,6 +5,38 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.38.0] - 2026-06-18
+
+### Added — `.entryByRead()`: the LLM picks the skill-graph entry, no embedder
+
+A flat `skillGraph()` with multiple `.entry()` skills needs to choose where a turn
+starts. Until now that was either an embedder (`.entryByRelevance(embedder)`) or the
+silent fallback of loading **every** entry's body each turn. For setups with no
+embedder — or where embeddings route poorly for the domain's language — neither fits.
+
+**`.entryByRead()`** makes the agent's **own LLM** pick the entry by reading the menu:
+
+```ts
+skillGraph().entry(billing).entry(incident).entryByRead().build();
+```
+
+- **Exclusive, like `entryByRelevance`** — only the chosen entry's body loads
+  (token-efficient); the others stay dormant.
+- **No embedder, no extra model call** — on the first turn **no** entry body is
+  injected; the agent is offered the entries through the existing `read_skill` gate
+  (`reachableSkills(undefined)` already returns the entries), and its pick becomes the
+  cursor. The chosen entry's exclusive trigger (`nextSkill(ctx) === id`) then fires and
+  the normal `from`-gated routing takes over — reuses the `read_skill → activatedInjectionIds`
+  path, so no engine/runtime change was needed.
+- **Object form:** `{ start: { entries: [...] } }` now defaults to `entryByRead`; add
+  `byRelevance: embedder` to opt into the embedder ranking instead.
+- Guardrails: mutually exclusive with `.entryByRelevance()` (throws); flat-graph only,
+  not `.tree()` (throws).
+
+Existing graphs are unchanged — `.entry()` without `.entryByRead()`/`.entryByRelevance()`
+keeps its v1 always-on semantics. New: example `28-skill-graph-entry-read.ts`, guide
+section 4 (now five entry strategies).
+
 ## [6.37.1] - 2026-06-18
 
 ### Fixed — a `decide()` rule no longer trips the `no-llm-call-ids` warning

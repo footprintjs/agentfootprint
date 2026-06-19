@@ -226,6 +226,7 @@ _Run `npm run examples:readme` after adding/editing examples._
 | 25 | [`25-skill-graph-checkup.ts`](features/25-skill-graph-checkup.ts) | Skill graph — build-time check-up + object form | graph.checkup() / .build({ check }) flags unreachable skills, unknown ids, ambiguous routes, no-entry, and self-loops before you run. The object-literal form lists skills independently of the wiring so the check-up catches a listed-but-unwired skill. |
 | 26 | [`26-skill-graph-route-recorder.ts`](features/26-skill-graph-route-recorder.ts) | Skill graph — routeRecorder + governors | routeRecorder() records the skill path a run took (getPath/getHops) + rejected read_skill jumps (getRejections) + governor trips (getTrips: oscillation / rejected-cap), by composing the shipped context.evaluated + skill.rejected events. No engine change. |
 | 27 | [`27-skill-graph-relevance-hint.ts`](features/27-skill-graph-relevance-hint.ts) | Skill graph — defineRelevanceHint (advisory entry note) | When entryByRelevance picks the start skill but its top entries are a near-tie, defineRelevanceHint injects a non-binding, anti-anchoring note for that turn ( |
+| 28 | [`28-skill-graph-entry-read.ts`](features/28-skill-graph-entry-read.ts) | Skill graph — LLM-read entry routing (entryByRead, no embedder) | With multiple entry skills and no embedder, .entryByRead() lets the agent’s own LLM read the entry menu and pick the start skill via read_skill. Entries stay exclusive (only the pick loads); the first turn injects no entry body. |
 
 ### [`canonical/`](canonical/) — end-to-end patterns
 

@@ -72,7 +72,12 @@ export interface SkillGraphConfig {
           readonly use: string;
         }>;
       }
-    | { readonly entries: readonly string[]; readonly byRelevance: Embedder };
+    | {
+        readonly entries: readonly string[];
+        /** Rank the entries with an embedder (cosine/softmax). Omit → the LLM reads
+         *  the menu and picks (`.entryByRead()`) — no embedder, no extra model call. */
+        readonly byRelevance?: Embedder;
+      };
   /** Tool-result transitions; `from`/`to` are skill ids resolved against `skills`. */
   readonly steps?: ReadonlyArray<{
     readonly from: string;
@@ -298,6 +303,22 @@ export interface SkillGraphBuilder {
    * Flat graphs only (a decision `tree()` already routes by predicate).
    */
   entryByRelevance(embedder: Embedder): SkillGraphBuilder;
+  /**
+   * Let the LLM pick the STARTING entry by reading the menu — no embedder, no extra
+   * model call. Like `.entryByRelevance()`, the entries become EXCLUSIVE (only the
+   * chosen one loads, token-efficient), but the choice is the model's: on the first
+   * turn no entry auto-loads, the agent is offered the entries via `read_skill`, and
+   * its pick becomes the cursor. Use this when you have NO embedder (or embeddings
+   * route poorly for your domain) — the agent's own LLM understands the request.
+   * Flat graphs only; mutually exclusive with `.entryByRelevance()`.
+   *
+   * Caveat: prefer UNCONDITIONAL entries here. A `when`-gated entry may still be
+   * offered in the read_skill menu (the cold-start gate can't evaluate `when`), but
+   * if the model picks it while its `when` is false it won't load — the turn wastes
+   * an iteration with no skill. For intent-gating, use `.entryByRelevance()` or plain
+   * `.entry(s, { when })` (v1 always-on) instead.
+   */
+  entryByRead(): SkillGraphBuilder;
   build(opts?: BuildOptions): SkillGraph;
 }
 
@@ -332,6 +353,7 @@ export function skillGraph(config?: SkillGraphConfig): SkillGraphBuilder | Skill
   let treeRoot: DecisionNode | Injection | undefined;
   let treeScopeTools = true;
   let entryEmbedder: Embedder | undefined;
+  let entryByReadFlag = false;
 
   const remember = (skill: Injection): string => {
     if (skill.flavor !== 'skill') {
@@ -373,7 +395,23 @@ export function skillGraph(config?: SkillGraphConfig): SkillGraphBuilder | Skill
       entryEmbedder = embedder;
       return builder;
     },
+    entryByRead() {
+      entryByReadFlag = true;
+      return builder;
+    },
     build(opts: BuildOptions = {}) {
+      if (entryByReadFlag && entryEmbedder) {
+        throw new Error(
+          'skillGraph: pick one of .entryByRead() or .entryByRelevance() — not both ' +
+            '(the LLM reads the menu, OR an embedder ranks it).',
+        );
+      }
+      if (entryByReadFlag && treeRoot) {
+        throw new Error(
+          'skillGraph: .entryByRead() is for flat entry/route graphs; a .tree() already ' +
+            'routes by predicate (no entry menu).',
+        );
+      }
       const skills: Injection[] = [];
       const nodes: SkillNode[] = [];
       const edges: SkillEdge[] = [];
@@ -422,7 +460,11 @@ export function skillGraph(config?: SkillGraphConfig): SkillGraphBuilder | Skill
       } else {
         // Flat entry/route mode (v1 + v2 keystone). `from`-gating + sticky cursor
         // both derive from one pure resolver so they can never diverge.
-        nextSkill = makeNextSkill(entries, routes);
+        // `.entryByRead()` makes the entries EXCLUSIVE (like `.entryByRelevance()`),
+        // but the cold-start pick is the model's: no entry auto-loads — the LLM picks
+        // one via `read_skill`, and that choice becomes the cursor (see makeNextSkill).
+        const llmReadEntry = entryByReadFlag;
+        nextSkill = makeNextSkill(entries, routes, llmReadEntry);
         reachableSkills = makeReachableSkills(entries, routes);
         if (entryEmbedder) scoreEntries = makeScoreEntries(entries, skillsById, entryEmbedder);
         for (const [id, skill] of skillsById) {
@@ -432,7 +474,7 @@ export function skillGraph(config?: SkillGraphConfig): SkillGraphBuilder | Skill
             entries,
             routes,
             nextSkill,
-            entryEmbedder !== undefined,
+            entryEmbedder !== undefined || llmReadEntry,
           );
           const routing = routingFor(id, entries, routes);
           skills.push({
@@ -504,7 +546,9 @@ export function skillGraph(config?: SkillGraphConfig): SkillGraphBuilder | Skill
         for (const r of start.rules) builder.entry(resolve(r.use), { when: r.when });
       else {
         for (const id of start.entries) builder.entry(resolve(id));
-        builder.entryByRelevance(start.byRelevance);
+        // byRelevance present → embedder ranks the menu; omitted → the LLM reads it.
+        if (start.byRelevance) builder.entryByRelevance(start.byRelevance);
+        else builder.entryByRead();
       }
     }
     for (const step of config.steps ?? []) {
@@ -620,10 +664,31 @@ function routeMatches(r: RouteDecl, ctx: InjectionContext): boolean {
 function makeNextSkill(
   entries: readonly EntryDecl[],
   routes: readonly RouteDecl[],
+  llmReadEntry = false,
 ): (ctx: InjectionContext) => string | undefined {
   return (ctx) => {
     const cur = ctx.currentSkillId;
     if (cur === undefined) {
+      if (llmReadEntry) {
+        // LLM-read entry (`.entryByRead()`): the library does NOT auto-pick. The
+        // cursor is whichever entry the model has chosen via `read_skill` (so it's
+        // in `activatedInjectionIds`) and whose intent predicate passes — the first
+        // such in declaration order. Until the model picks, there is NO current skill
+        // (so no entry body loads), and `read_skill`'s cold-start gate offers exactly
+        // the entries (see makeReachableSkills). This reuses the existing
+        // read_skill → activatedInjectionIds path; the chosen entry's EXCLUSIVE
+        // trigger (`nextSkill(ctx) === id`) then fires and the cursor takes over.
+        for (const e of entries) {
+          if (!ctx.activatedInjectionIds.includes(e.id)) continue;
+          if (!e.when) return e.id;
+          try {
+            if (e.when(ctx)) return e.id;
+          } catch (err) {
+            warnMatcherThrew(`entry "${e.id}"`, err);
+          }
+        }
+        return undefined;
+      }
       // Cold start: declaration-order first entry whose intent predicate passes.
       for (const e of entries) {
         if (!e.when) return e.id;
@@ -677,14 +742,15 @@ function deriveTrigger(
   entries: readonly EntryDecl[],
   routes: readonly RouteDecl[],
   nextSkill: (ctx: InjectionContext) => string | undefined,
-  entryByRelevance: boolean,
+  exclusiveEntries: boolean,
 ): InjectionTrigger | null {
   const entry = entries.find((e) => e.id === id);
   if (entry) {
-    // `.entryByRelevance()` makes the entries EXCLUSIVE candidates: PickEntry picks
-    // ONE (the best match) as the cursor, so only that entry loads (token-efficient).
-    // The same cursor-gated trigger as a route target delivers that.
-    if (entryByRelevance) {
+    // `.entryByRelevance()` / `.entryByRead()` make the entries EXCLUSIVE candidates:
+    // exactly ONE loads — the best match (embedder) or the model's pick (read_skill) —
+    // as the cursor, so only that entry's body lands (token-efficient). The same
+    // cursor-gated trigger as a route target delivers that for both modes.
+    if (exclusiveEntries) {
       return { kind: 'rule', activeWhen: (ctx) => nextSkill(ctx) === id };
     }
     // Default (v1): a persistent base (always) or intent-conditional (rule).
