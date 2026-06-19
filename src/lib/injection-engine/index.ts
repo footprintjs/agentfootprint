@@ -86,3 +86,4 @@ export {
   type GraphProblem,
   type GraphProblemCode,
 } from './skillGraph.js';
+export { checkSkillContract, checkSkillContracts, skillToolNames } from './skillContract.js';

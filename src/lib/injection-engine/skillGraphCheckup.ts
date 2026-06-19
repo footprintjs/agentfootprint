@@ -19,7 +19,10 @@ export type GraphProblemCode =
   | 'no-entry'
   | 'unreachable-skill'
   | 'ambiguous-routes'
-  | 'self-loop';
+  | 'self-loop'
+  // Proposal 009 Tier 1 — skill-body ↔ tool-contract consistency (WARNINGS):
+  | 'body-foreign-tool' // body names a tool that belongs to another skill (not callable here)
+  | 'body-unknown-tool'; // body has a `tool_name(` reference to a tool that exists nowhere
 
 /** One issue found by the check-up. `kind: 'error'` fails `ok` (and `'throw'`). */
 export interface GraphProblem {

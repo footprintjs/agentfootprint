@@ -5,6 +5,34 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.39.0] - 2026-06-18
+
+### Added — skill-body ↔ tool-contract check (proposal 009, Tier 1)
+
+A skill's `body` (prose injected into the system prompt) can quietly contradict the tools
+it actually unlocks — and the model then **refuses a tool that is right there**, or is told
+about one it can't call. This was the core of a real adopter (Neo) tool-visibility report.
+The library already knows each skill's real tool set, so it now flags the mismatch at
+authoring time.
+
+`graph.checkup()` runs a new **deterministic, no-LLM** pass over each skill's body vs its
+`tools[]` and adds two WARNING codes (never errors — they never fail `.build()`):
+
+- **`body-foreign-tool`** — the body names a tool that belongs to **another** skill (not
+  callable on this turn). Usually an intentional `read_skill` handoff — confirm it, add the
+  tool, or reword.
+- **`body-unknown-tool`** — the body has a `tool_name(` call to a tool that exists **nowhere**
+  (a typo, or a renamed/removed tool).
+
+New exports (main barrel): `checkSkillContract(skill, knownToolNames?)` (check ONE skill
+standalone), `checkSkillContracts(skills)`, `skillToolNames(skill)`. New example
+`29-skill-contract-check.ts`; guide section 8.
+
+Honest scope: Tier 1 is deterministic and catches the *adjacent* class. The **semantic**
+contradiction it can't see — a body calling an OPTIONAL tool arg "required" (the exact
+shape of the originating bug) — is **Tier 2 (LLM-advisory)**, designed in proposal 009 but
+not yet built.
+
 ## [6.38.1] - 2026-06-18
 
 ### Added — tool-name guardrail (catch the silent "my tool vanished" 400)

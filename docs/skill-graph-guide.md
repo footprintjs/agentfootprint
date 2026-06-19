@@ -143,10 +143,26 @@ Agent.create({ provider, model }).skillGraph(graph).recorder(rec).build();
 **Build-time check-up** — catch wiring mistakes before you run.
 ```ts
 const result = graph.checkup();   // { ok, problems: [{ kind:'error'|'warning', code, message, skill? }] }
-//   codes: unknown-skill (error), no-entry (error), unreachable-skill, ambiguous-routes, self-loop (warnings)
+//   wiring codes: unknown-skill (error), no-entry (error), unreachable-skill, ambiguous-routes, self-loop (warnings)
+//   contract codes (6.39.0): body-foreign-tool, body-unknown-tool (warnings) — see below
 skillGraph().entry(a).route(a, b, { onToolReturn: 'x' }).build({ check: 'throw' }); // throw on error
 //   check: 'warn' (default — dev-mode console) | 'throw' | 'off'
 ```
+
+**Body ↔ tool-contract check (6.39.0)** — `checkup()` also runs a deterministic, no-LLM
+pass over each skill's `body` vs the tools it unlocks (proposal 009 Tier 1). It catches
+the "the model refuses a tool that's right there / is told about one it can't call" class:
+```ts
+//   body-foreign-tool  — the body names a tool that belongs to ANOTHER skill (not callable
+//                        here; usually an intentional read_skill handoff — confirm it).
+//   body-unknown-tool  — the body has a `tool_name(` call to a tool that exists NOWHERE
+//                        (a typo or a renamed/removed tool).
+import { checkSkillContract } from 'agentfootprint';
+checkSkillContract(skill, knownToolNames?);   // check ONE skill standalone (outside a graph)
+```
+Both are WARNINGS — they never fail `.build()`. (The *semantic* contradiction Tier 1 can't
+see — a body calling an OPTIONAL arg "required" — is Tier 2, LLM-advisory, not yet built.)
+→ runnable + tested: **`examples/features/29-skill-contract-check.ts`**.
 
 **Object-literal form** — list skills *separately* from the wiring, so the check-up can flag a listed-but-unwired skill.
 ```ts

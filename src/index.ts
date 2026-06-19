@@ -432,6 +432,10 @@ export {
   type GraphCheckup,
   type GraphProblem,
   type GraphProblemCode,
+  // Proposal 009 Tier 1 — skill-body ↔ tool-contract consistency check
+  checkSkillContract,
+  checkSkillContracts,
+  skillToolNames,
 } from './lib/injection-engine/index.js';
 
 // Patterns — factory functions composing primitives + core-flow into

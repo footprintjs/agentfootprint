@@ -35,6 +35,7 @@ import type { Embedder } from '../../memory/embedding/types.js';
 import { cosineSimilarity } from '../../memory/embedding/cosine.js';
 import { softmax } from './softmax.js';
 import { checkupGraph, formatCheckup, type GraphCheckup } from './skillGraphCheckup.js';
+import { checkSkillContracts } from './skillContract.js';
 export type { GraphCheckup, GraphProblem, GraphProblemCode } from './skillGraphCheckup.js';
 
 /** How `.build({ check })` reacts to the graph check-up. */
@@ -416,9 +417,10 @@ export function skillGraph(config?: SkillGraphConfig): SkillGraphBuilder | Skill
       const nodes: SkillNode[] = [];
       const edges: SkillEdge[] = [];
 
-      // The build-time check-up — pure over the declared entries/routes/skills.
-      const checkup = (): GraphCheckup =>
-        checkupGraph({
+      // The build-time check-up — pure over the declared entries/routes/skills,
+      // PLUS the proposal-009 Tier-1 skill-body ↔ tool-contract checks (warnings).
+      const checkup = (): GraphCheckup => {
+        const wiring = checkupGraph({
           skillIds: new Set(skillsById.keys()),
           entryIds: entries.map((e) => e.id),
           routes: routes.map((r) => ({
@@ -428,6 +430,10 @@ export function skillGraph(config?: SkillGraphConfig): SkillGraphBuilder | Skill
           })),
           isTree: treeRoot !== undefined,
         });
+        const contract = checkSkillContracts([...skillsById.values()]);
+        const problems = [...wiring.problems, ...contract];
+        return { ok: !problems.some((p) => p.kind === 'error'), problems };
+      };
 
       // The cursor resolver — the single source of truth for `from`-gated, sticky
       // routing. Flat mode wires it into each route target's trigger AND returns it
