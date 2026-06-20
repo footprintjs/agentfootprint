@@ -4,7 +4,7 @@ title: EventMeta
 
 # Interface: EventMeta
 
-Defined in: [src/events/types.ts:76](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/types.ts#L76)
+Defined in: [src/events/types.ts:76](https://github.com/footprintjs/agentfootprint/blob/main/src/events/types.ts#L76)
 
 Metadata attached by the dispatcher to every event. Consumers never
 construct this manually — the dispatcher fills it in.
@@ -15,7 +15,7 @@ construct this manually — the dispatcher fills it in.
 
 > `readonly` **compositionPath**: readonly `string`[]
 
-Defined in: [src/events/types.ts:86](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/types.ts#L86)
+Defined in: [src/events/types.ts:86](https://github.com/footprintjs/agentfootprint/blob/main/src/events/types.ts#L86)
 
 Composition ancestry — e.g. ['Sequence:pipeline','Agent:ethics'].
 
@@ -25,7 +25,7 @@ Composition ancestry — e.g. ['Sequence:pipeline','Agent:ethics'].
 
 > `readonly` `optional` **correlationId?**: `string`
 
-Defined in: [src/events/types.ts:96](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/types.ts#L96)
+Defined in: [src/events/types.ts:96](https://github.com/footprintjs/agentfootprint/blob/main/src/events/types.ts#L96)
 
 Domain correlation id — ties retrieval → injection → LLM.
 
@@ -35,7 +35,7 @@ Domain correlation id — ties retrieval → injection → LLM.
 
 > `readonly` `optional` **iterIndex?**: `number`
 
-Defined in: [src/events/types.ts:90](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/types.ts#L90)
+Defined in: [src/events/types.ts:90](https://github.com/footprintjs/agentfootprint/blob/main/src/events/types.ts#L90)
 
 Iteration index (Agent context only).
 
@@ -45,7 +45,7 @@ Iteration index (Agent context only).
 
 > `readonly` **runId**: `string`
 
-Defined in: [src/events/types.ts:98](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/types.ts#L98)
+Defined in: [src/events/types.ts:98](https://github.com/footprintjs/agentfootprint/blob/main/src/events/types.ts#L98)
 
 Run id — demultiplex concurrent runs sharing one dispatcher.
 
@@ -55,7 +55,7 @@ Run id — demultiplex concurrent runs sharing one dispatcher.
 
 > `readonly` **runOffsetMs**: `number`
 
-Defined in: [src/events/types.ts:80](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/types.ts#L80)
+Defined in: [src/events/types.ts:80](https://github.com/footprintjs/agentfootprint/blob/main/src/events/types.ts#L80)
 
 ms since run start — deterministic replay.
 
@@ -65,7 +65,7 @@ ms since run start — deterministic replay.
 
 > `readonly` **runtimeStageId**: `string`
 
-Defined in: [src/events/types.ts:82](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/types.ts#L82)
+Defined in: [src/events/types.ts:82](https://github.com/footprintjs/agentfootprint/blob/main/src/events/types.ts#L82)
 
 footprintjs universal stage key.
 
@@ -75,7 +75,7 @@ footprintjs universal stage key.
 
 > `readonly` `optional` **spanId?**: `string`
 
-Defined in: [src/events/types.ts:94](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/types.ts#L94)
+Defined in: [src/events/types.ts:94](https://github.com/footprintjs/agentfootprint/blob/main/src/events/types.ts#L94)
 
 OTEL span id for the current composition boundary.
 
@@ -85,7 +85,7 @@ OTEL span id for the current composition boundary.
 
 > `readonly` **subflowPath**: readonly `string`[]
 
-Defined in: [src/events/types.ts:84](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/types.ts#L84)
+Defined in: [src/events/types.ts:84](https://github.com/footprintjs/agentfootprint/blob/main/src/events/types.ts#L84)
 
 Subflow path parsed from runtimeStageId.
 
@@ -95,7 +95,7 @@ Subflow path parsed from runtimeStageId.
 
 > `readonly` `optional` **traceId?**: `string`
 
-Defined in: [src/events/types.ts:92](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/types.ts#L92)
+Defined in: [src/events/types.ts:92](https://github.com/footprintjs/agentfootprint/blob/main/src/events/types.ts#L92)
 
 OTEL trace id (when env.traceId is set).
 
@@ -105,7 +105,7 @@ OTEL trace id (when env.traceId is set).
 
 > `readonly` `optional` **turnIndex?**: `number`
 
-Defined in: [src/events/types.ts:88](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/types.ts#L88)
+Defined in: [src/events/types.ts:88](https://github.com/footprintjs/agentfootprint/blob/main/src/events/types.ts#L88)
 
 Turn index (Agent context only).
 
@@ -115,6 +115,6 @@ Turn index (Agent context only).
 
 > `readonly` **wallClockMs**: `number`
 
-Defined in: [src/events/types.ts:78](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/types.ts#L78)
+Defined in: [src/events/types.ts:78](https://github.com/footprintjs/agentfootprint/blob/main/src/events/types.ts#L78)
 
 Wall-clock ms — for external correlation / dashboards.

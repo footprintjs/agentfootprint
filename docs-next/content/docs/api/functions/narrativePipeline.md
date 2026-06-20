@@ -6,7 +6,7 @@ title: narrativePipeline
 
 > **narrativePipeline**(`config`): `MemoryPipeline`
 
-Defined in: [src/memory/pipeline/narrative.ts:103](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/memory/pipeline/narrative.ts#L103)
+Defined in: [src/memory/pipeline/narrative.ts:103](https://github.com/footprintjs/agentfootprint/blob/main/src/memory/pipeline/narrative.ts#L103)
 
 Build the narrative read + write pipelines sharing a single store.
 Returns `{ read, write }` ready to be passed to `Agent.memory()` via the appropriate `defineMemory` config (or used directly via `mountMemoryRead`/`mountMemoryWrite`).

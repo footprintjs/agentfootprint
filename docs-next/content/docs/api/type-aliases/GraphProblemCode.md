@@ -6,7 +6,7 @@ title: GraphProblemCode
 
 > **GraphProblemCode** = `"unknown-skill"` \| `"no-entry"` \| `"unreachable-skill"` \| `"ambiguous-routes"` \| `"self-loop"` \| `"body-foreign-tool"` \| `"body-unknown-tool"`
 
-Defined in: [src/lib/injection-engine/skillGraphCheckup.ts:17](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/lib/injection-engine/skillGraphCheckup.ts#L17)
+Defined in: [src/lib/injection-engine/skillGraphCheckup.ts:17](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/injection-engine/skillGraphCheckup.ts#L17)
 
 skillGraph check-up — build-time validation of a declared graph.
 

@@ -4,7 +4,7 @@ title: SkillGraphBuilder
 
 # Interface: SkillGraphBuilder
 
-Defined in: [src/lib/injection-engine/skillGraph.ts:288](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/lib/injection-engine/skillGraph.ts#L288)
+Defined in: [src/lib/injection-engine/skillGraph.ts:288](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/injection-engine/skillGraph.ts#L288)
 
 ## Methods
 
@@ -12,7 +12,7 @@ Defined in: [src/lib/injection-engine/skillGraph.ts:288](https://github.com/foot
 
 > **build**(`opts?`): [`SkillGraph`](/docs/api/interfaces/SkillGraph)
 
-Defined in: [src/lib/injection-engine/skillGraph.ts:323](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/lib/injection-engine/skillGraph.ts#L323)
+Defined in: [src/lib/injection-engine/skillGraph.ts:323](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/injection-engine/skillGraph.ts#L323)
 
 #### Parameters
 
@@ -30,7 +30,7 @@ Defined in: [src/lib/injection-engine/skillGraph.ts:323](https://github.com/foot
 
 > **entry**(`skill`, `opts?`): `SkillGraphBuilder`
 
-Defined in: [src/lib/injection-engine/skillGraph.ts:290](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/lib/injection-engine/skillGraph.ts#L290)
+Defined in: [src/lib/injection-engine/skillGraph.ts:290](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/injection-engine/skillGraph.ts#L290)
 
 Mark a skill as reachable at turn start (optionally intent-conditional).
 
@@ -54,7 +54,7 @@ Mark a skill as reachable at turn start (optionally intent-conditional).
 
 > **entryByRead**(): `SkillGraphBuilder`
 
-Defined in: [src/lib/injection-engine/skillGraph.ts:322](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/lib/injection-engine/skillGraph.ts#L322)
+Defined in: [src/lib/injection-engine/skillGraph.ts:322](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/injection-engine/skillGraph.ts#L322)
 
 Let the LLM pick the STARTING entry by reading the menu — no embedder, no extra
 model call. Like `.entryByRelevance()`, the entries become EXCLUSIVE (only the
@@ -80,7 +80,7 @@ an iteration with no skill. For intent-gating, use `.entryByRelevance()` or plai
 
 > **entryByRelevance**(`embedder`): `SkillGraphBuilder`
 
-Defined in: [src/lib/injection-engine/skillGraph.ts:306](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/lib/injection-engine/skillGraph.ts#L306)
+Defined in: [src/lib/injection-engine/skillGraph.ts:306](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/injection-engine/skillGraph.ts#L306)
 
 Pick the STARTING entry by relevance to the user's message — embed the message
 + each entry skill's `description`, cosine-score, softmax → start at the best
@@ -105,7 +105,7 @@ Flat graphs only (a decision `tree()` already routes by predicate).
 
 > **route**(`from`, `to`, `opts?`): `SkillGraphBuilder`
 
-Defined in: [src/lib/injection-engine/skillGraph.ts:292](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/lib/injection-engine/skillGraph.ts#L292)
+Defined in: [src/lib/injection-engine/skillGraph.ts:292](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/injection-engine/skillGraph.ts#L292)
 
 Declare an edge: after `from`'s work, `to` activates when the edge fires.
 
@@ -133,7 +133,7 @@ Declare an edge: after `from`'s work, `to` activates when the edge fires.
 
 > **tree**(`root`, `opts?`): `SkillGraphBuilder`
 
-Defined in: [src/lib/injection-engine/skillGraph.ts:297](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/lib/injection-engine/skillGraph.ts#L297)
+Defined in: [src/lib/injection-engine/skillGraph.ts:297](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/injection-engine/skillGraph.ts#L297)
 
 Declare a decision TREE (v3): predicate nodes → skill leaves. Compiles each
  leaf to a path-conjunction trigger; renders as diamonds → boxes. By default

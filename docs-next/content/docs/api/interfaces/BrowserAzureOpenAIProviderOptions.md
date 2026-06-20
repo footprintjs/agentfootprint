@@ -4,7 +4,7 @@ title: BrowserAzureOpenAIProviderOptions
 
 # Interface: BrowserAzureOpenAIProviderOptions
 
-Defined in: [src/adapters/llm/BrowserOpenAIProvider.ts:258](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/adapters/llm/BrowserOpenAIProvider.ts#L258)
+Defined in: [src/adapters/llm/BrowserOpenAIProvider.ts:258](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/llm/BrowserOpenAIProvider.ts#L258)
 
 ## Properties
 
@@ -12,7 +12,7 @@ Defined in: [src/adapters/llm/BrowserOpenAIProvider.ts:258](https://github.com/f
 
 > `readonly` **apiKey**: `string`
 
-Defined in: [src/adapters/llm/BrowserOpenAIProvider.ts:263](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/adapters/llm/BrowserOpenAIProvider.ts#L263)
+Defined in: [src/adapters/llm/BrowserOpenAIProvider.ts:263](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/llm/BrowserOpenAIProvider.ts#L263)
 
 API key (Azure `api-key`). REQUIRED.
 
@@ -22,7 +22,7 @@ API key (Azure `api-key`). REQUIRED.
 
 > `readonly` **apiVersion**: `string`
 
-Defined in: [src/adapters/llm/BrowserOpenAIProvider.ts:265](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/adapters/llm/BrowserOpenAIProvider.ts#L265)
+Defined in: [src/adapters/llm/BrowserOpenAIProvider.ts:265](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/llm/BrowserOpenAIProvider.ts#L265)
 
 Azure API version, e.g. `2024-12-01-preview`. REQUIRED.
 
@@ -32,7 +32,7 @@ Azure API version, e.g. `2024-12-01-preview`. REQUIRED.
 
 > `readonly` `optional` **defaultMaxTokens?**: `number`
 
-Defined in: [src/adapters/llm/BrowserOpenAIProvider.ts:269](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/adapters/llm/BrowserOpenAIProvider.ts#L269)
+Defined in: [src/adapters/llm/BrowserOpenAIProvider.ts:269](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/llm/BrowserOpenAIProvider.ts#L269)
 
 Default max tokens.
 
@@ -42,7 +42,7 @@ Default max tokens.
 
 > `readonly` **deployment**: `string`
 
-Defined in: [src/adapters/llm/BrowserOpenAIProvider.ts:267](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/adapters/llm/BrowserOpenAIProvider.ts#L267)
+Defined in: [src/adapters/llm/BrowserOpenAIProvider.ts:267](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/llm/BrowserOpenAIProvider.ts#L267)
 
 The DEPLOYMENT name (Azure's "model"), e.g. `gpt-4o-128k`. REQUIRED.
 
@@ -52,7 +52,7 @@ The DEPLOYMENT name (Azure's "model"), e.g. `gpt-4o-128k`. REQUIRED.
 
 > `readonly` **endpoint**: `string`
 
-Defined in: [src/adapters/llm/BrowserOpenAIProvider.ts:261](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/adapters/llm/BrowserOpenAIProvider.ts#L261)
+Defined in: [src/adapters/llm/BrowserOpenAIProvider.ts:261](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/llm/BrowserOpenAIProvider.ts#L261)
 
 Resource endpoint, e.g. `https://my-co.openai.azure.com` (or a same-origin
  proxy path like `/azure` to sidestep CORS in dev). REQUIRED.
@@ -63,7 +63,7 @@ Resource endpoint, e.g. `https://my-co.openai.azure.com` (or a same-origin
 
 > `readonly` `optional` **reasoning?**: `boolean`
 
-Defined in: [src/adapters/llm/BrowserOpenAIProvider.ts:272](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/adapters/llm/BrowserOpenAIProvider.ts#L272)
+Defined in: [src/adapters/llm/BrowserOpenAIProvider.ts:272](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/llm/BrowserOpenAIProvider.ts#L272)
 
 Set when the Azure deployment is a **reasoning model** (o1/o3/o4-mini) — omits
  `temperature` and sends the `developer` role.

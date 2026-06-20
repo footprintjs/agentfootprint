@@ -8,7 +8,7 @@ title: skillGraph
 
 > **skillGraph**(): [`SkillGraphBuilder`](/docs/api/interfaces/SkillGraphBuilder)
 
-Defined in: [src/lib/injection-engine/skillGraph.ts:348](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/lib/injection-engine/skillGraph.ts#L348)
+Defined in: [src/lib/injection-engine/skillGraph.ts:348](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/injection-engine/skillGraph.ts#L348)
 
 ### Returns
 
@@ -18,7 +18,7 @@ Defined in: [src/lib/injection-engine/skillGraph.ts:348](https://github.com/foot
 
 > **skillGraph**(`config`): [`SkillGraph`](/docs/api/interfaces/SkillGraph)
 
-Defined in: [src/lib/injection-engine/skillGraph.ts:349](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/lib/injection-engine/skillGraph.ts#L349)
+Defined in: [src/lib/injection-engine/skillGraph.ts:349](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/injection-engine/skillGraph.ts#L349)
 
 ### Parameters
 

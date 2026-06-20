@@ -4,7 +4,7 @@ title: SkillRejectedPayload
 
 # Interface: SkillRejectedPayload
 
-Defined in: [src/events/payloads.ts:475](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L475)
+Defined in: [src/events/payloads.ts:475](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L475)
 
 Fired by the skill-graph read_skill GATE when the model tries to `read_skill`
 a skill that is NOT reachable from the current cursor. The jump is rejected
@@ -17,7 +17,7 @@ a skill that is NOT reachable from the current cursor. The jump is rejected
 
 > `readonly` **allowed**: readonly `string`[]
 
-Defined in: [src/events/payloads.ts:481](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L481)
+Defined in: [src/events/payloads.ts:481](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L481)
 
 The reachable set it was bounded to (what the re-prompt offered).
 
@@ -27,7 +27,7 @@ The reachable set it was bounded to (what the re-prompt offered).
 
 > `readonly` `optional` **currentSkillId?**: `string`
 
-Defined in: [src/events/payloads.ts:479](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L479)
+Defined in: [src/events/payloads.ts:479](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L479)
 
 The cursor it was at (undefined = cold start, before any entry resolved).
 
@@ -37,7 +37,7 @@ The cursor it was at (undefined = cold start, before any entry resolved).
 
 > `readonly` **iteration**: `number`
 
-Defined in: [src/events/payloads.ts:483](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L483)
+Defined in: [src/events/payloads.ts:483](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L483)
 
 The ReAct iteration the rejection fired on.
 
@@ -47,6 +47,6 @@ The ReAct iteration the rejection fired on.
 
 > `readonly` **requestedId**: `string`
 
-Defined in: [src/events/payloads.ts:477](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L477)
+Defined in: [src/events/payloads.ts:477](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L477)
 
 The skill id the model requested via `read_skill`.

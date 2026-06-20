@@ -4,7 +4,7 @@ title: AgentOutputSchemaValidationFailedPayload
 
 # Interface: AgentOutputSchemaValidationFailedPayload
 
-Defined in: [src/events/payloads.ts:641](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L641)
+Defined in: [src/events/payloads.ts:641](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L641)
 
 Emitted (v2.13) when the agent's final answer fails the agent's
 configured `outputSchema` (the parser passed to
@@ -37,7 +37,7 @@ failure even if a buggy rule routes to fail-fast or swallows it.
 
 > `readonly` **attempt**: `number`
 
-Defined in: [src/events/payloads.ts:657](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L657)
+Defined in: [src/events/payloads.ts:657](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L657)
 
 1-indexed attempt counter. `1` for the first failure, `2` for the
  retry that also failed, etc.
@@ -48,7 +48,7 @@ Defined in: [src/events/payloads.ts:657](https://github.com/footprintjs/agentfoo
 
 > `readonly` **cumulativeRetries**: `number`
 
-Defined in: [src/events/payloads.ts:662](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L662)
+Defined in: [src/events/payloads.ts:662](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L662)
 
 Total output-schema failures in this gate execution. Same as
  `validationErrorHistory.length`. Distinct from `attempt` because a
@@ -61,7 +61,7 @@ Total output-schema failures in this gate execution. Same as
 
 > `readonly` **message**: `string`
 
-Defined in: [src/events/payloads.ts:643](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L643)
+Defined in: [src/events/payloads.ts:643](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L643)
 
 Validation error message (from Zod / parser).
 
@@ -71,7 +71,7 @@ Validation error message (from Zod / parser).
 
 > `readonly` `optional` **path?**: `string`
 
-Defined in: [src/events/payloads.ts:651](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L651)
+Defined in: [src/events/payloads.ts:651](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L651)
 
 Failing field path when the parser exposes one (e.g. `'amount.currency'`).
  Only set when `stage === 'schema-validate'`.
@@ -82,7 +82,7 @@ Failing field path when the parser exposes one (e.g. `'amount.currency'`).
 
 > `readonly` `optional` **rawOutput?**: `string`
 
-Defined in: [src/events/payloads.ts:654](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L654)
+Defined in: [src/events/payloads.ts:654](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L654)
 
 The raw string output that failed — useful for narrative entries showing
  "what the model actually said" alongside the validation error.
@@ -93,7 +93,7 @@ The raw string output that failed — useful for narrative entries showing
 
 > `readonly` **stage**: `"json-parse"` \| `"schema-validate"`
 
-Defined in: [src/events/payloads.ts:648](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L648)
+Defined in: [src/events/payloads.ts:648](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L648)
 
 Validation stage — JSON parse vs schema validate. Lets dashboards
  distinguish "model emitted prose" (`json-parse`) from "model emitted

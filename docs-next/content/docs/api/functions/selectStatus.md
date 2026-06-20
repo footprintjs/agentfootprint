@@ -6,7 +6,7 @@ title: selectStatus
 
 > **selectStatus**(`events`): [`StatusState`](/docs/api/interfaces/StatusState) \| `null`
 
-Defined in: [src/recorders/observability/status/statusTemplates.ts:111](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/recorders/observability/status/statusTemplates.ts#L111)
+Defined in: [src/recorders/observability/status/statusTemplates.ts:111](https://github.com/footprintjs/agentfootprint/blob/main/src/recorders/observability/status/statusTemplates.ts#L111)
 
 Derive the current thinking state from the event log.
 

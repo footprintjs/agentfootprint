@@ -4,7 +4,7 @@ title: EvalThresholdCrossedPayload
 
 # Interface: EvalThresholdCrossedPayload
 
-Defined in: [src/events/payloads.ts:607](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L607)
+Defined in: [src/events/payloads.ts:607](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L607)
 
 ## Properties
 
@@ -12,7 +12,7 @@ Defined in: [src/events/payloads.ts:607](https://github.com/footprintjs/agentfoo
 
 > `readonly` `optional` **actionTaken?**: `string`
 
-Defined in: [src/events/payloads.ts:612](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L612)
+Defined in: [src/events/payloads.ts:612](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L612)
 
 ***
 
@@ -20,7 +20,7 @@ Defined in: [src/events/payloads.ts:612](https://github.com/footprintjs/agentfoo
 
 > `readonly` **direction**: `"above"` \| `"below"`
 
-Defined in: [src/events/payloads.ts:609](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L609)
+Defined in: [src/events/payloads.ts:609](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L609)
 
 ***
 
@@ -28,7 +28,7 @@ Defined in: [src/events/payloads.ts:609](https://github.com/footprintjs/agentfoo
 
 > `readonly` **metricId**: `string`
 
-Defined in: [src/events/payloads.ts:608](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L608)
+Defined in: [src/events/payloads.ts:608](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L608)
 
 ***
 
@@ -36,7 +36,7 @@ Defined in: [src/events/payloads.ts:608](https://github.com/footprintjs/agentfoo
 
 > `readonly` **threshold**: `number`
 
-Defined in: [src/events/payloads.ts:611](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L611)
+Defined in: [src/events/payloads.ts:611](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L611)
 
 ***
 
@@ -44,4 +44,4 @@ Defined in: [src/events/payloads.ts:611](https://github.com/footprintjs/agentfoo
 
 > `readonly` **value**: `number`
 
-Defined in: [src/events/payloads.ts:610](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L610)
+Defined in: [src/events/payloads.ts:610](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L610)

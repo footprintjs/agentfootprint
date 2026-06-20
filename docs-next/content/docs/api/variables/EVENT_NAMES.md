@@ -6,7 +6,7 @@ title: EVENT_NAMES
 
 > `const` **EVENT\_NAMES**: `object`
 
-Defined in: [src/events/registry.ts:91](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/registry.ts#L91)
+Defined in: [src/events/registry.ts:91](https://github.com/footprintjs/agentfootprint/blob/main/src/events/registry.ts#L91)
 
 ## Type Declaration
 

@@ -4,7 +4,7 @@ title: PermissionHaltPayload
 
 # Interface: PermissionHaltPayload
 
-Defined in: [src/events/payloads.ts:546](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L546)
+Defined in: [src/events/payloads.ts:546](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L546)
 
 Emitted (v2.12) when a `PermissionChecker.check()` returns
 `{ result: 'halt', ... }`. Pairs with the typed `PolicyHaltError`
@@ -23,7 +23,7 @@ audit/replay.
 
 > `readonly` `optional` **checkerId?**: `string`
 
-Defined in: [src/events/payloads.ts:547](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L547)
+Defined in: [src/events/payloads.ts:547](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L547)
 
 ***
 
@@ -31,7 +31,7 @@ Defined in: [src/events/payloads.ts:547](https://github.com/footprintjs/agentfoo
 
 > `readonly` **iteration**: `number`
 
-Defined in: [src/events/payloads.ts:551](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L551)
+Defined in: [src/events/payloads.ts:551](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L551)
 
 ***
 
@@ -39,7 +39,7 @@ Defined in: [src/events/payloads.ts:551](https://github.com/footprintjs/agentfoo
 
 > `readonly` **reason**: `string`
 
-Defined in: [src/events/payloads.ts:549](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L549)
+Defined in: [src/events/payloads.ts:549](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L549)
 
 ***
 
@@ -47,7 +47,7 @@ Defined in: [src/events/payloads.ts:549](https://github.com/footprintjs/agentfoo
 
 > `readonly` **sequenceLength**: `number`
 
-Defined in: [src/events/payloads.ts:552](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L552)
+Defined in: [src/events/payloads.ts:552](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L552)
 
 ***
 
@@ -55,7 +55,7 @@ Defined in: [src/events/payloads.ts:552](https://github.com/footprintjs/agentfoo
 
 > `readonly` **target**: `string`
 
-Defined in: [src/events/payloads.ts:548](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L548)
+Defined in: [src/events/payloads.ts:548](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L548)
 
 ***
 
@@ -63,4 +63,4 @@ Defined in: [src/events/payloads.ts:548](https://github.com/footprintjs/agentfoo
 
 > `readonly` `optional` **tellLLM?**: `string`
 
-Defined in: [src/events/payloads.ts:550](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L550)
+Defined in: [src/events/payloads.ts:550](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L550)

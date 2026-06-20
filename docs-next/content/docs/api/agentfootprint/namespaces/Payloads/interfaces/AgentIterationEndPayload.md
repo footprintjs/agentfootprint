@@ -4,7 +4,7 @@ title: AgentIterationEndPayload
 
 # Interface: AgentIterationEndPayload
 
-Defined in: [src/events/payloads.ts:116](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L116)
+Defined in: [src/events/payloads.ts:116](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L116)
 
 ## Properties
 
@@ -12,7 +12,7 @@ Defined in: [src/events/payloads.ts:116](https://github.com/footprintjs/agentfoo
 
 > `readonly` `optional` **history?**: readonly `unknown`[]
 
-Defined in: [src/events/payloads.ts:126](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L126)
+Defined in: [src/events/payloads.ts:126](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L126)
 
 Conversation history (LLM messages) at the END of this
  iteration. Captured by `agent.run()` for fault-tolerant
@@ -27,7 +27,7 @@ Conversation history (LLM messages) at the END of this
 
 > `readonly` **iterIndex**: `number`
 
-Defined in: [src/events/payloads.ts:118](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L118)
+Defined in: [src/events/payloads.ts:118](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L118)
 
 ***
 
@@ -35,7 +35,7 @@ Defined in: [src/events/payloads.ts:118](https://github.com/footprintjs/agentfoo
 
 > `readonly` **toolCallCount**: `number`
 
-Defined in: [src/events/payloads.ts:119](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L119)
+Defined in: [src/events/payloads.ts:119](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L119)
 
 ***
 
@@ -43,4 +43,4 @@ Defined in: [src/events/payloads.ts:119](https://github.com/footprintjs/agentfoo
 
 > `readonly` **turnIndex**: `number`
 
-Defined in: [src/events/payloads.ts:117](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L117)
+Defined in: [src/events/payloads.ts:117](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L117)

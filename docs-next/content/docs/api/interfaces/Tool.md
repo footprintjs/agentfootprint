@@ -4,7 +4,7 @@ title: Tool<TArgs, TResult>
 
 # Interface: Tool\<TArgs, TResult\>
 
-Defined in: [src/core/tools.ts:23](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/core/tools.ts#L23)
+Defined in: [src/core/tools.ts:23](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L23)
 
 One executable tool the Agent can call.
 
@@ -29,7 +29,7 @@ One executable tool the Agent can call.
 
 > `readonly` `optional` **needs?**: `CredentialNeed`
 
-Defined in: [src/core/tools.ts:28](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/core/tools.ts#L28)
+Defined in: [src/core/tools.ts:28](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L28)
 
 Declare-and-push: a credential this tool needs. The framework resolves it
  BEFORE invoking and injects `ctx.credential`; it is NOT in `schema`, so the
@@ -41,7 +41,7 @@ Declare-and-push: a credential this tool needs. The framework resolves it
 
 > `readonly` **schema**: [`LLMToolSchema`](/docs/api/interfaces/LLMToolSchema)
 
-Defined in: [src/core/tools.ts:24](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/core/tools.ts#L24)
+Defined in: [src/core/tools.ts:24](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L24)
 
 ## Methods
 
@@ -49,7 +49,7 @@ Defined in: [src/core/tools.ts:24](https://github.com/footprintjs/agentfootprint
 
 > **execute**(`args`, `ctx`): `TResult` \| `Promise`\<`TResult`\>
 
-Defined in: [src/core/tools.ts:29](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/core/tools.ts#L29)
+Defined in: [src/core/tools.ts:29](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L29)
 
 #### Parameters
 

@@ -4,7 +4,7 @@ title: PolicyHaltError
 
 # Class: PolicyHaltError
 
-Defined in: [src/security/PolicyHaltError.ts:59](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/security/PolicyHaltError.ts#L59)
+Defined in: [src/security/PolicyHaltError.ts:59](https://github.com/footprintjs/agentfootprint/blob/main/src/security/PolicyHaltError.ts#L59)
 
 ## Extends
 
@@ -16,7 +16,7 @@ Defined in: [src/security/PolicyHaltError.ts:59](https://github.com/footprintjs/
 
 > **new PolicyHaltError**(`ctx`): `PolicyHaltError`
 
-Defined in: [src/security/PolicyHaltError.ts:69](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/security/PolicyHaltError.ts#L69)
+Defined in: [src/security/PolicyHaltError.ts:69](https://github.com/footprintjs/agentfootprint/blob/main/src/security/PolicyHaltError.ts#L69)
 
 #### Parameters
 
@@ -50,7 +50,7 @@ Defined in: node\_modules/typescript/lib/lib.es2022.error.d.ts:24
 
 > `readonly` `optional` **checkerId?**: `string`
 
-Defined in: [src/security/PolicyHaltError.ts:67](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/security/PolicyHaltError.ts#L67)
+Defined in: [src/security/PolicyHaltError.ts:67](https://github.com/footprintjs/agentfootprint/blob/main/src/security/PolicyHaltError.ts#L67)
 
 ***
 
@@ -58,7 +58,7 @@ Defined in: [src/security/PolicyHaltError.ts:67](https://github.com/footprintjs/
 
 > `readonly` **code**: `"ERR_POLICY_HALT"`
 
-Defined in: [src/security/PolicyHaltError.ts:60](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/security/PolicyHaltError.ts#L60)
+Defined in: [src/security/PolicyHaltError.ts:60](https://github.com/footprintjs/agentfootprint/blob/main/src/security/PolicyHaltError.ts#L60)
 
 ***
 
@@ -66,7 +66,7 @@ Defined in: [src/security/PolicyHaltError.ts:60](https://github.com/footprintjs/
 
 > `readonly` **history**: readonly [`LLMMessage`](/docs/api/interfaces/LLMMessage)[]
 
-Defined in: [src/security/PolicyHaltError.ts:65](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/security/PolicyHaltError.ts#L65)
+Defined in: [src/security/PolicyHaltError.ts:65](https://github.com/footprintjs/agentfootprint/blob/main/src/security/PolicyHaltError.ts#L65)
 
 ***
 
@@ -74,7 +74,7 @@ Defined in: [src/security/PolicyHaltError.ts:65](https://github.com/footprintjs/
 
 > `readonly` **iteration**: `number`
 
-Defined in: [src/security/PolicyHaltError.ts:64](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/security/PolicyHaltError.ts#L64)
+Defined in: [src/security/PolicyHaltError.ts:64](https://github.com/footprintjs/agentfootprint/blob/main/src/security/PolicyHaltError.ts#L64)
 
 ***
 
@@ -106,7 +106,7 @@ Defined in: node\_modules/typescript/lib/lib.es5.d.ts:1076
 
 > `readonly` **proposed**: `object`
 
-Defined in: [src/security/PolicyHaltError.ts:66](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/security/PolicyHaltError.ts#L66)
+Defined in: [src/security/PolicyHaltError.ts:66](https://github.com/footprintjs/agentfootprint/blob/main/src/security/PolicyHaltError.ts#L66)
 
 #### args
 
@@ -122,7 +122,7 @@ Defined in: [src/security/PolicyHaltError.ts:66](https://github.com/footprintjs/
 
 > `readonly` **reason**: `string`
 
-Defined in: [src/security/PolicyHaltError.ts:61](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/security/PolicyHaltError.ts#L61)
+Defined in: [src/security/PolicyHaltError.ts:61](https://github.com/footprintjs/agentfootprint/blob/main/src/security/PolicyHaltError.ts#L61)
 
 ***
 
@@ -130,7 +130,7 @@ Defined in: [src/security/PolicyHaltError.ts:61](https://github.com/footprintjs/
 
 > `readonly` **sequence**: readonly [`ToolCallEntry`](/docs/api/interfaces/ToolCallEntry)[]
 
-Defined in: [src/security/PolicyHaltError.ts:63](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/security/PolicyHaltError.ts#L63)
+Defined in: [src/security/PolicyHaltError.ts:63](https://github.com/footprintjs/agentfootprint/blob/main/src/security/PolicyHaltError.ts#L63)
 
 ***
 
@@ -172,7 +172,7 @@ not capture any frames.
 
 > `readonly` `optional` **tellLLM?**: `string`
 
-Defined in: [src/security/PolicyHaltError.ts:62](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/security/PolicyHaltError.ts#L62)
+Defined in: [src/security/PolicyHaltError.ts:62](https://github.com/footprintjs/agentfootprint/blob/main/src/security/PolicyHaltError.ts#L62)
 
 ## Methods
 

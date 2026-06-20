@@ -4,7 +4,7 @@ title: McpSdkClient
 
 # Interface: McpSdkClient
 
-Defined in: [src/lib/mcp/types.ts:130](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/lib/mcp/types.ts#L130)
+Defined in: [src/lib/mcp/types.ts:130](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/mcp/types.ts#L130)
 
 Minimal structural type capturing the parts of the MCP SDK client
 we touch. Defined locally so we can:
@@ -20,7 +20,7 @@ The real SDK exports a richer surface; we narrow to what's needed.
 
 > **callTool**(`args`): `Promise`\<\{ `content`: readonly `object`[]; `isError?`: `boolean`; \}\>
 
-Defined in: [src/lib/mcp/types.ts:139](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/lib/mcp/types.ts#L139)
+Defined in: [src/lib/mcp/types.ts:139](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/mcp/types.ts#L139)
 
 #### Parameters
 
@@ -50,7 +50,7 @@ Forwarded from `McpClientOptions.signal` so consumers can cancel hung tool calls
 
 > **close**(): `Promise`\<`void`\>
 
-Defined in: [src/lib/mcp/types.ts:151](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/lib/mcp/types.ts#L151)
+Defined in: [src/lib/mcp/types.ts:151](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/mcp/types.ts#L151)
 
 #### Returns
 
@@ -62,7 +62,7 @@ Defined in: [src/lib/mcp/types.ts:151](https://github.com/footprintjs/agentfootp
 
 > **connect**(`transport`): `Promise`\<`void`\>
 
-Defined in: [src/lib/mcp/types.ts:131](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/lib/mcp/types.ts#L131)
+Defined in: [src/lib/mcp/types.ts:131](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/mcp/types.ts#L131)
 
 #### Parameters
 
@@ -80,7 +80,7 @@ Defined in: [src/lib/mcp/types.ts:131](https://github.com/footprintjs/agentfootp
 
 > **listTools**(): `Promise`\<\{ `tools`: readonly `object`[]; \}\>
 
-Defined in: [src/lib/mcp/types.ts:132](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/lib/mcp/types.ts#L132)
+Defined in: [src/lib/mcp/types.ts:132](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/mcp/types.ts#L132)
 
 #### Returns
 

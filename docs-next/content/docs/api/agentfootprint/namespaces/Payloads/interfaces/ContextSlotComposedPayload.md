@@ -4,7 +4,7 @@ title: ContextSlotComposedPayload
 
 # Interface: ContextSlotComposedPayload
 
-Defined in: [src/events/payloads.ts:229](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L229)
+Defined in: [src/events/payloads.ts:229](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L229)
 
 ## Properties
 
@@ -12,7 +12,7 @@ Defined in: [src/events/payloads.ts:229](https://github.com/footprintjs/agentfoo
 
 > `readonly` **budget**: `object`
 
-Defined in: [src/events/payloads.ts:232](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L232)
+Defined in: [src/events/payloads.ts:232](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L232)
 
 #### cap
 
@@ -32,7 +32,7 @@ Defined in: [src/events/payloads.ts:232](https://github.com/footprintjs/agentfoo
 
 > `readonly` **droppedCount**: `number`
 
-Defined in: [src/events/payloads.ts:241](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L241)
+Defined in: [src/events/payloads.ts:241](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L241)
 
 ***
 
@@ -40,7 +40,7 @@ Defined in: [src/events/payloads.ts:241](https://github.com/footprintjs/agentfoo
 
 > `readonly` **droppedSummaries**: readonly `string`[]
 
-Defined in: [src/events/payloads.ts:242](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L242)
+Defined in: [src/events/payloads.ts:242](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L242)
 
 ***
 
@@ -48,7 +48,7 @@ Defined in: [src/events/payloads.ts:242](https://github.com/footprintjs/agentfoo
 
 > `readonly` **iteration**: `number`
 
-Defined in: [src/events/payloads.ts:231](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L231)
+Defined in: [src/events/payloads.ts:231](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L231)
 
 ***
 
@@ -56,7 +56,7 @@ Defined in: [src/events/payloads.ts:231](https://github.com/footprintjs/agentfoo
 
 > `readonly` `optional` **orderingStrategy?**: `string`
 
-Defined in: [src/events/payloads.ts:240](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L240)
+Defined in: [src/events/payloads.ts:240](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L240)
 
 ***
 
@@ -64,7 +64,7 @@ Defined in: [src/events/payloads.ts:240](https://github.com/footprintjs/agentfoo
 
 > `readonly` **slot**: [`ContextSlot`](/docs/api/type-aliases/ContextSlot)
 
-Defined in: [src/events/payloads.ts:230](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L230)
+Defined in: [src/events/payloads.ts:230](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L230)
 
 ***
 
@@ -72,4 +72,4 @@ Defined in: [src/events/payloads.ts:230](https://github.com/footprintjs/agentfoo
 
 > `readonly` **sourceBreakdown**: `Readonly`\<`Partial`\<`Record`\<[`ContextSource`](/docs/api/type-aliases/ContextSource), \{ `chars`: `number`; `count`: `number`; \}\>\>\>
 
-Defined in: [src/events/payloads.ts:237](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L237)
+Defined in: [src/events/payloads.ts:237](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L237)

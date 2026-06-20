@@ -6,7 +6,7 @@ title: browserAzureOpenai
 
 > **browserAzureOpenai**(`options`): [`LLMProvider`](/docs/api/interfaces/LLMProvider)
 
-Defined in: [src/adapters/llm/BrowserOpenAIProvider.ts:305](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/adapters/llm/BrowserOpenAIProvider.ts#L305)
+Defined in: [src/adapters/llm/BrowserOpenAIProvider.ts:305](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/llm/BrowserOpenAIProvider.ts#L305)
 
 Fetch-based **Azure OpenAI** provider for the browser/edge — no SDK, no Node.
 

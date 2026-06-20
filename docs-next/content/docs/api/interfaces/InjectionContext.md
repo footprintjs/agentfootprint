@@ -4,7 +4,7 @@ title: InjectionContext
 
 # Interface: InjectionContext
 
-Defined in: [src/lib/injection-engine/types.ts:79](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/lib/injection-engine/types.ts#L79)
+Defined in: [src/lib/injection-engine/types.ts:79](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/injection-engine/types.ts#L79)
 
 Context passed to `rule` predicates. Read-only snapshot of the
 agent's iteration state. Internal mutable state is hidden.
@@ -15,7 +15,7 @@ agent's iteration state. Internal mutable state is hidden.
 
 > `readonly` **activatedInjectionIds**: readonly `string`[]
 
-Defined in: [src/lib/injection-engine/types.ts:107](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/lib/injection-engine/types.ts#L107)
+Defined in: [src/lib/injection-engine/types.ts:107](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/injection-engine/types.ts#L107)
 
 IDs of LLM-activated injections that the LLM has activated this
 turn (via their `viaToolName` tool call). Engine includes them
@@ -27,7 +27,7 @@ in the active set on subsequent iterations until turn end.
 
 > `readonly` `optional` **currentSkillId?**: `string`
 
-Defined in: [src/lib/injection-engine/types.ts:119](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/lib/injection-engine/types.ts#L119)
+Defined in: [src/lib/injection-engine/types.ts:119](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/injection-engine/types.ts#L119)
 
 The skill-graph CURSOR — which skill node the graph is currently
 *in*, persisted across iterations. Undefined before the first entry
@@ -45,7 +45,7 @@ iteration; absent for agents that don't use `skillGraph()`. Plain
 
 > `readonly` `optional` **entryScores?**: readonly `object`[]
 
-Defined in: [src/lib/injection-engine/types.ts:125](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/lib/injection-engine/types.ts#L125)
+Defined in: [src/lib/injection-engine/types.ts:125](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/injection-engine/types.ts#L125)
 
 The relevance ranking of entry candidates from `entryByRelevance()` — written
 by the PickEntry stage at turn start. `defineRelevanceHint()` reads it to detect
@@ -57,7 +57,7 @@ a near-tie at the entry. Absent unless the graph used `.entryByRelevance()`.
 
 > `readonly` **history**: readonly `object`[]
 
-Defined in: [src/lib/injection-engine/types.ts:88](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/lib/injection-engine/types.ts#L88)
+Defined in: [src/lib/injection-engine/types.ts:88](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/injection-engine/types.ts#L88)
 
 Conversation history up to (but not including) the current
 iteration's LLM call. Includes prior iterations within the same turn.
@@ -68,7 +68,7 @@ iteration's LLM call. Includes prior iterations within the same turn.
 
 > `readonly` **iteration**: `number`
 
-Defined in: [src/lib/injection-engine/types.ts:81](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/lib/injection-engine/types.ts#L81)
+Defined in: [src/lib/injection-engine/types.ts:81](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/injection-engine/types.ts#L81)
 
 Current ReAct iteration (1-based).
 
@@ -78,7 +78,7 @@ Current ReAct iteration (1-based).
 
 > `readonly` `optional` **lastToolResult?**: `object`
 
-Defined in: [src/lib/injection-engine/types.ts:98](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/lib/injection-engine/types.ts#L98)
+Defined in: [src/lib/injection-engine/types.ts:98](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/injection-engine/types.ts#L98)
 
 The most recent tool result, if the previous iteration ended in a
 tool call. Used both by `rule` predicates and by `on-tool-return`
@@ -98,6 +98,6 @@ trigger evaluation.
 
 > `readonly` **userMessage**: `string`
 
-Defined in: [src/lib/injection-engine/types.ts:83](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/lib/injection-engine/types.ts#L83)
+Defined in: [src/lib/injection-engine/types.ts:83](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/injection-engine/types.ts#L83)
 
 The current user message that started this turn.

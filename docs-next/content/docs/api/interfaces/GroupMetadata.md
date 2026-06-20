@@ -4,7 +4,7 @@ title: GroupMetadata
 
 # Interface: GroupMetadata
 
-Defined in: [src/core/translator.ts:72](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/core/translator.ts#L72)
+Defined in: [src/core/translator.ts:72](https://github.com/footprintjs/agentfootprint/blob/main/src/core/translator.ts#L72)
 
 What a composition hands to its `groupTranslator` at build time.
 All composition kinds emit the same shape — the `kind` discriminator
@@ -16,7 +16,7 @@ All composition kinds emit the same shape — the `kind` discriminator
 
 > `readonly` `optional` **extra?**: `Readonly`\<`Record`\<`string`, `unknown`\>\>
 
-Defined in: [src/core/translator.ts:84](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/core/translator.ts#L84)
+Defined in: [src/core/translator.ts:84](https://github.com/footprintjs/agentfootprint/blob/main/src/core/translator.ts#L84)
 
 Composition-specific extras. Carried verbatim from the
 composition's own state — `Parallel` puts the merge strategy
@@ -30,7 +30,7 @@ can switch on `kind` to read it safely.
 
 > `readonly` **id**: `string`
 
-Defined in: [src/core/translator.ts:74](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/core/translator.ts#L74)
+Defined in: [src/core/translator.ts:74](https://github.com/footprintjs/agentfootprint/blob/main/src/core/translator.ts#L74)
 
 ***
 
@@ -38,7 +38,7 @@ Defined in: [src/core/translator.ts:74](https://github.com/footprintjs/agentfoot
 
 > `readonly` **kind**: [`GroupKind`](/docs/api/type-aliases/GroupKind)
 
-Defined in: [src/core/translator.ts:73](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/core/translator.ts#L73)
+Defined in: [src/core/translator.ts:73](https://github.com/footprintjs/agentfootprint/blob/main/src/core/translator.ts#L73)
 
 ***
 
@@ -46,7 +46,7 @@ Defined in: [src/core/translator.ts:73](https://github.com/footprintjs/agentfoot
 
 > `readonly` **members**: readonly [`GroupMember`](/docs/api/interfaces/GroupMember)[]
 
-Defined in: [src/core/translator.ts:76](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/core/translator.ts#L76)
+Defined in: [src/core/translator.ts:76](https://github.com/footprintjs/agentfootprint/blob/main/src/core/translator.ts#L76)
 
 ***
 
@@ -54,4 +54,4 @@ Defined in: [src/core/translator.ts:76](https://github.com/footprintjs/agentfoot
 
 > `readonly` **name**: `string`
 
-Defined in: [src/core/translator.ts:75](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/core/translator.ts#L75)
+Defined in: [src/core/translator.ts:75](https://github.com/footprintjs/agentfootprint/blob/main/src/core/translator.ts#L75)

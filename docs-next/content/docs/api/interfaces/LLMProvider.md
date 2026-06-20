@@ -4,7 +4,7 @@ title: LLMProvider
 
 # Interface: LLMProvider
 
-Defined in: [src/adapters/types.ts:230](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/adapters/types.ts#L230)
+Defined in: [src/adapters/types.ts:230](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L230)
 
 ## Properties
 
@@ -12,7 +12,7 @@ Defined in: [src/adapters/types.ts:230](https://github.com/footprintjs/agentfoot
 
 > `readonly` **name**: `string`
 
-Defined in: [src/adapters/types.ts:231](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/adapters/types.ts#L231)
+Defined in: [src/adapters/types.ts:231](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L231)
 
 ## Methods
 
@@ -20,7 +20,7 @@ Defined in: [src/adapters/types.ts:231](https://github.com/footprintjs/agentfoot
 
 > **complete**(`req`): `Promise`\<[`LLMResponse`](/docs/api/interfaces/LLMResponse)\>
 
-Defined in: [src/adapters/types.ts:232](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/adapters/types.ts#L232)
+Defined in: [src/adapters/types.ts:232](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L232)
 
 #### Parameters
 
@@ -38,7 +38,7 @@ Defined in: [src/adapters/types.ts:232](https://github.com/footprintjs/agentfoot
 
 > `optional` **stream**(`req`): `AsyncIterable`\<[`LLMChunk`](/docs/api/interfaces/LLMChunk)\>
 
-Defined in: [src/adapters/types.ts:233](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/adapters/types.ts#L233)
+Defined in: [src/adapters/types.ts:233](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L233)
 
 #### Parameters
 

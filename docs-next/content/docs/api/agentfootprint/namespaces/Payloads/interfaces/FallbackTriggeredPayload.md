@@ -4,7 +4,7 @@ title: FallbackTriggeredPayload
 
 # Interface: FallbackTriggeredPayload
 
-Defined in: [src/events/payloads.ts:569](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L569)
+Defined in: [src/events/payloads.ts:569](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L569)
 
 ## Properties
 
@@ -12,7 +12,7 @@ Defined in: [src/events/payloads.ts:569](https://github.com/footprintjs/agentfoo
 
 > `readonly` **fallback**: `string`
 
-Defined in: [src/events/payloads.ts:572](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L572)
+Defined in: [src/events/payloads.ts:572](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L572)
 
 ***
 
@@ -20,7 +20,7 @@ Defined in: [src/events/payloads.ts:572](https://github.com/footprintjs/agentfoo
 
 > `readonly` **kind**: `"tool"` \| `"skill"` \| `"provider"`
 
-Defined in: [src/events/payloads.ts:570](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L570)
+Defined in: [src/events/payloads.ts:570](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L570)
 
 ***
 
@@ -28,7 +28,7 @@ Defined in: [src/events/payloads.ts:570](https://github.com/footprintjs/agentfoo
 
 > `readonly` **primary**: `string`
 
-Defined in: [src/events/payloads.ts:571](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L571)
+Defined in: [src/events/payloads.ts:571](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L571)
 
 ***
 
@@ -36,4 +36,4 @@ Defined in: [src/events/payloads.ts:571](https://github.com/footprintjs/agentfoo
 
 > `readonly` **reason**: `string`
 
-Defined in: [src/events/payloads.ts:573](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L573)
+Defined in: [src/events/payloads.ts:573](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L573)

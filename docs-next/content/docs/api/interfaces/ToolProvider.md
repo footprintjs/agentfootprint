@@ -4,7 +4,7 @@ title: ToolProvider
 
 # Interface: ToolProvider
 
-Defined in: [src/tool-providers/types.ts:121](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/tool-providers/types.ts#L121)
+Defined in: [src/tool-providers/types.ts:121](https://github.com/footprintjs/agentfootprint/blob/main/src/tool-providers/types.ts#L121)
 
 The provider interface. A `ToolProvider` answers ONE question per
 iteration: "what tools should the LLM see right now?"
@@ -42,7 +42,7 @@ crash.
 
 > `readonly` `optional` **id?**: `string`
 
-Defined in: [src/tool-providers/types.ts:139](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/tool-providers/types.ts#L139)
+Defined in: [src/tool-providers/types.ts:139](https://github.com/footprintjs/agentfootprint/blob/main/src/tool-providers/types.ts#L139)
 
 Optional: stable id for observability / debugging. Defaults to
 `'static'` for `staticTools`, `'gated'` for `gatedTools`. Custom
@@ -56,7 +56,7 @@ can route alerts to the right hub adapter.
 
 > **list**(`ctx`): readonly [`Tool`](/docs/api/interfaces/Tool)\<`Record`\<`string`, `unknown`\>, `unknown`\>[] \| `Promise`\<readonly [`Tool`](/docs/api/interfaces/Tool)\<`Record`\<`string`, `unknown`\>, `unknown`\>[]\>
 
-Defined in: [src/tool-providers/types.ts:130](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/tool-providers/types.ts#L130)
+Defined in: [src/tool-providers/types.ts:130](https://github.com/footprintjs/agentfootprint/blob/main/src/tool-providers/types.ts#L130)
 
 Return the tool list visible to the LLM for the current iteration.
 Sync return is the fast path; Promise return is supported for

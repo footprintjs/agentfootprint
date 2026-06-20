@@ -4,7 +4,7 @@ title: PermissionPolicy
 
 # Class: PermissionPolicy
 
-Defined in: [src/security/PermissionPolicy.ts:86](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/security/PermissionPolicy.ts#L86)
+Defined in: [src/security/PermissionPolicy.ts:86](https://github.com/footprintjs/agentfootprint/blob/main/src/security/PermissionPolicy.ts#L86)
 
 Data-driven role-based permission policy. Satisfies the v2.4
 `PermissionChecker` interface AND exposes a sync `isAllowed` method
@@ -20,7 +20,7 @@ for use with `gatedTools` from `agentfootprint/tool-providers`.
 
 > `readonly` **name**: `"PermissionPolicy"` = `'PermissionPolicy'`
 
-Defined in: [src/security/PermissionPolicy.ts:87](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/security/PermissionPolicy.ts#L87)
+Defined in: [src/security/PermissionPolicy.ts:87](https://github.com/footprintjs/agentfootprint/blob/main/src/security/PermissionPolicy.ts#L87)
 
 #### Implementation of
 
@@ -34,7 +34,7 @@ Defined in: [src/security/PermissionPolicy.ts:87](https://github.com/footprintjs
 
 > **get** **activeRole**(): `string`
 
-Defined in: [src/security/PermissionPolicy.ts:159](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/security/PermissionPolicy.ts#L159)
+Defined in: [src/security/PermissionPolicy.ts:159](https://github.com/footprintjs/agentfootprint/blob/main/src/security/PermissionPolicy.ts#L159)
 
 The role name currently active. Useful for observability.
 
@@ -50,7 +50,7 @@ The role name currently active. Useful for observability.
 
 > **get** **roles**(): readonly `string`[]
 
-Defined in: [src/security/PermissionPolicy.ts:164](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/security/PermissionPolicy.ts#L164)
+Defined in: [src/security/PermissionPolicy.ts:164](https://github.com/footprintjs/agentfootprint/blob/main/src/security/PermissionPolicy.ts#L164)
 
 All defined role names. Stable order = registration order.
 
@@ -64,7 +64,7 @@ readonly `string`[]
 
 > **allowedToolIds**(): readonly `string`[]
 
-Defined in: [src/security/PermissionPolicy.ts:169](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/security/PermissionPolicy.ts#L169)
+Defined in: [src/security/PermissionPolicy.ts:169](https://github.com/footprintjs/agentfootprint/blob/main/src/security/PermissionPolicy.ts#L169)
 
 All tool ids allowed under the current active role.
 
@@ -78,7 +78,7 @@ readonly `string`[]
 
 > **check**(`request`): `Promise`\<[`PermissionDecision`](/docs/api/interfaces/PermissionDecision)\>
 
-Defined in: [src/security/PermissionPolicy.ts:132](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/security/PermissionPolicy.ts#L132)
+Defined in: [src/security/PermissionPolicy.ts:132](https://github.com/footprintjs/agentfootprint/blob/main/src/security/PermissionPolicy.ts#L132)
 
 Async check matching the `PermissionChecker` interface — consumed
 by `Agent.create({ permissionChecker })`. Wraps `isAllowed` with
@@ -109,7 +109,7 @@ the role allowlist is widened to capability-by-id.
 
 > `static` **fromRoles**(`roles`, `activeRole`): `PermissionPolicy`
 
-Defined in: [src/security/PermissionPolicy.ts:106](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/security/PermissionPolicy.ts#L106)
+Defined in: [src/security/PermissionPolicy.ts:106](https://github.com/footprintjs/agentfootprint/blob/main/src/security/PermissionPolicy.ts#L106)
 
 Factory: build a role-based policy from a role → tool-ids map and
 the role active for this instance.
@@ -137,7 +137,7 @@ config time, not at first denied call.
 
 > **isAllowed**(`toolId`): `boolean`
 
-Defined in: [src/security/PermissionPolicy.ts:118](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/security/PermissionPolicy.ts#L118)
+Defined in: [src/security/PermissionPolicy.ts:118](https://github.com/footprintjs/agentfootprint/blob/main/src/security/PermissionPolicy.ts#L118)
 
 Sync allowlist check. Use as a predicate with `gatedTools`:
 
@@ -162,7 +162,7 @@ Closes-fail by design: missing role membership = denied.
 
 > **withActiveRole**(`activeRole`): `PermissionPolicy`
 
-Defined in: [src/security/PermissionPolicy.ts:154](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/security/PermissionPolicy.ts#L154)
+Defined in: [src/security/PermissionPolicy.ts:154](https://github.com/footprintjs/agentfootprint/blob/main/src/security/PermissionPolicy.ts#L154)
 
 Derive a sibling policy with a different active role. Same role
 map; different active role. Useful for per-identity routing

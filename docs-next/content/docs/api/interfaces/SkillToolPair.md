@@ -4,7 +4,7 @@ title: SkillToolPair
 
 # Interface: SkillToolPair
 
-Defined in: [src/lib/injection-engine/skillTools.ts:149](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/lib/injection-engine/skillTools.ts#L149)
+Defined in: [src/lib/injection-engine/skillTools.ts:149](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/injection-engine/skillTools.ts#L149)
 
 The pair returned by `SkillRegistry.toTools()`. Either entry may be
 undefined when the registry is empty. Consumers typically destructure:
@@ -18,7 +18,7 @@ undefined when the registry is empty. Consumers typically destructure:
 
 > `readonly` **listSkills**: [`Tool`](/docs/api/interfaces/Tool)\<`Record`\<`string`, `unknown`\>, `unknown`\> \| `undefined`
 
-Defined in: [src/lib/injection-engine/skillTools.ts:151](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/lib/injection-engine/skillTools.ts#L151)
+Defined in: [src/lib/injection-engine/skillTools.ts:151](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/injection-engine/skillTools.ts#L151)
 
 The `list_skills` tool, or `undefined` if registry is empty.
 
@@ -28,6 +28,6 @@ The `list_skills` tool, or `undefined` if registry is empty.
 
 > `readonly` **readSkill**: [`Tool`](/docs/api/interfaces/Tool)\<`Record`\<`string`, `unknown`\>, `unknown`\> \| `undefined`
 
-Defined in: [src/lib/injection-engine/skillTools.ts:153](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/lib/injection-engine/skillTools.ts#L153)
+Defined in: [src/lib/injection-engine/skillTools.ts:153](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/injection-engine/skillTools.ts#L153)
 
 The `read_skill` tool, or `undefined` if registry is empty.

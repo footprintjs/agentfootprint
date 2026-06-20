@@ -4,7 +4,7 @@ title: ErrorRetriedPayload
 
 # Interface: ErrorRetriedPayload
 
-Defined in: [src/events/payloads.ts:674](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L674)
+Defined in: [src/events/payloads.ts:674](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L674)
 
 ## Properties
 
@@ -12,7 +12,7 @@ Defined in: [src/events/payloads.ts:674](https://github.com/footprintjs/agentfoo
 
 > `readonly` **attempt**: `number`
 
-Defined in: [src/events/payloads.ts:675](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L675)
+Defined in: [src/events/payloads.ts:675](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L675)
 
 ***
 
@@ -20,7 +20,7 @@ Defined in: [src/events/payloads.ts:675](https://github.com/footprintjs/agentfoo
 
 > `readonly` **backoffMs**: `number`
 
-Defined in: [src/events/payloads.ts:678](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L678)
+Defined in: [src/events/payloads.ts:678](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L678)
 
 ***
 
@@ -28,7 +28,7 @@ Defined in: [src/events/payloads.ts:678](https://github.com/footprintjs/agentfoo
 
 > `readonly` **lastError**: `string`
 
-Defined in: [src/events/payloads.ts:677](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L677)
+Defined in: [src/events/payloads.ts:677](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L677)
 
 ***
 
@@ -36,7 +36,7 @@ Defined in: [src/events/payloads.ts:677](https://github.com/footprintjs/agentfoo
 
 > `readonly` **maxAttempts**: `number`
 
-Defined in: [src/events/payloads.ts:676](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L676)
+Defined in: [src/events/payloads.ts:676](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L676)
 
 ***
 
@@ -44,4 +44,4 @@ Defined in: [src/events/payloads.ts:676](https://github.com/footprintjs/agentfoo
 
 > `readonly` **reason**: `string`
 
-Defined in: [src/events/payloads.ts:679](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L679)
+Defined in: [src/events/payloads.ts:679](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L679)

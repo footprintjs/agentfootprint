@@ -4,7 +4,7 @@ title: MemoryWrittenPayload
 
 # Interface: MemoryWrittenPayload
 
-Defined in: [src/events/payloads.ts:364](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L364)
+Defined in: [src/events/payloads.ts:364](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L364)
 
 ## Properties
 
@@ -12,7 +12,7 @@ Defined in: [src/events/payloads.ts:364](https://github.com/footprintjs/agentfoo
 
 > `readonly` `optional` **actor?**: `string`
 
-Defined in: [src/events/payloads.ts:368](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L368)
+Defined in: [src/events/payloads.ts:368](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L368)
 
 ***
 
@@ -20,7 +20,7 @@ Defined in: [src/events/payloads.ts:368](https://github.com/footprintjs/agentfoo
 
 > `readonly` **contentSummary**: `string`
 
-Defined in: [src/events/payloads.ts:366](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L366)
+Defined in: [src/events/payloads.ts:366](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L366)
 
 ***
 
@@ -28,7 +28,7 @@ Defined in: [src/events/payloads.ts:366](https://github.com/footprintjs/agentfoo
 
 > `readonly` **memoryId**: `string`
 
-Defined in: [src/events/payloads.ts:365](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L365)
+Defined in: [src/events/payloads.ts:365](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L365)
 
 ***
 
@@ -36,4 +36,4 @@ Defined in: [src/events/payloads.ts:365](https://github.com/footprintjs/agentfoo
 
 > `readonly` **source**: `"manual"` \| `"auto"`
 
-Defined in: [src/events/payloads.ts:367](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L367)
+Defined in: [src/events/payloads.ts:367](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L367)

@@ -4,7 +4,7 @@ title: LLMStartPayload
 
 # Interface: LLMStartPayload
 
-Defined in: [src/events/payloads.ts:144](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L144)
+Defined in: [src/events/payloads.ts:144](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L144)
 
 ## Properties
 
@@ -12,7 +12,7 @@ Defined in: [src/events/payloads.ts:144](https://github.com/footprintjs/agentfoo
 
 > `readonly` `optional` **estimatedPromptTokens?**: `number`
 
-Defined in: [src/events/payloads.ts:160](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L160)
+Defined in: [src/events/payloads.ts:160](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L160)
 
 ***
 
@@ -20,7 +20,7 @@ Defined in: [src/events/payloads.ts:160](https://github.com/footprintjs/agentfoo
 
 > `readonly` **iteration**: `number`
 
-Defined in: [src/events/payloads.ts:145](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L145)
+Defined in: [src/events/payloads.ts:145](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L145)
 
 ***
 
@@ -28,7 +28,7 @@ Defined in: [src/events/payloads.ts:145](https://github.com/footprintjs/agentfoo
 
 > `readonly` **messagesCount**: `number`
 
-Defined in: [src/events/payloads.ts:149](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L149)
+Defined in: [src/events/payloads.ts:149](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L149)
 
 ***
 
@@ -36,7 +36,7 @@ Defined in: [src/events/payloads.ts:149](https://github.com/footprintjs/agentfoo
 
 > `readonly` **model**: `string`
 
-Defined in: [src/events/payloads.ts:147](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L147)
+Defined in: [src/events/payloads.ts:147](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L147)
 
 ***
 
@@ -44,7 +44,7 @@ Defined in: [src/events/payloads.ts:147](https://github.com/footprintjs/agentfoo
 
 > `readonly` **provider**: [`LLMProviderName`](/docs/api/type-aliases/LLMProviderName)
 
-Defined in: [src/events/payloads.ts:146](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L146)
+Defined in: [src/events/payloads.ts:146](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L146)
 
 ***
 
@@ -52,7 +52,7 @@ Defined in: [src/events/payloads.ts:146](https://github.com/footprintjs/agentfoo
 
 > `readonly` `optional` **providerRequestRef?**: `string`
 
-Defined in: [src/events/payloads.ts:162](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L162)
+Defined in: [src/events/payloads.ts:162](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L162)
 
 ***
 
@@ -60,7 +60,7 @@ Defined in: [src/events/payloads.ts:162](https://github.com/footprintjs/agentfoo
 
 > `readonly` **systemPromptChars**: `number`
 
-Defined in: [src/events/payloads.ts:148](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L148)
+Defined in: [src/events/payloads.ts:148](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L148)
 
 ***
 
@@ -68,7 +68,7 @@ Defined in: [src/events/payloads.ts:148](https://github.com/footprintjs/agentfoo
 
 > `readonly` `optional` **temperature?**: `number`
 
-Defined in: [src/events/payloads.ts:161](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L161)
+Defined in: [src/events/payloads.ts:161](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L161)
 
 ***
 
@@ -76,7 +76,7 @@ Defined in: [src/events/payloads.ts:161](https://github.com/footprintjs/agentfoo
 
 > `readonly` `optional` **tools?**: readonly `object`[]
 
-Defined in: [src/events/payloads.ts:159](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L159)
+Defined in: [src/events/payloads.ts:159](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L159)
 
 The tool CATALOG the model saw for this call — what was at its disposal when
 it chose (the menu behind its tool-selection reasoning). One `{ name,
@@ -91,4 +91,4 @@ Names + descriptions only — full input schemas live in the snapshot.
 
 > `readonly` **toolsCount**: `number`
 
-Defined in: [src/events/payloads.ts:150](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L150)
+Defined in: [src/events/payloads.ts:150](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L150)

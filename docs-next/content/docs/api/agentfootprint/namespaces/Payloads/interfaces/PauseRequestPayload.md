@@ -4,7 +4,7 @@ title: PauseRequestPayload
 
 # Interface: PauseRequestPayload
 
-Defined in: [src/events/payloads.ts:321](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L321)
+Defined in: [src/events/payloads.ts:321](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L321)
 
 ## Properties
 
@@ -12,7 +12,7 @@ Defined in: [src/events/payloads.ts:321](https://github.com/footprintjs/agentfoo
 
 > `readonly` **questionPayload**: `Readonly`\<`Record`\<`string`, `unknown`\>\>
 
-Defined in: [src/events/payloads.ts:323](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L323)
+Defined in: [src/events/payloads.ts:323](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L323)
 
 ***
 
@@ -20,4 +20,4 @@ Defined in: [src/events/payloads.ts:323](https://github.com/footprintjs/agentfoo
 
 > `readonly` **reason**: `string`
 
-Defined in: [src/events/payloads.ts:322](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L322)
+Defined in: [src/events/payloads.ts:322](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L322)

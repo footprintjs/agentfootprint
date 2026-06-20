@@ -6,7 +6,7 @@ title: renderStatusLine
 
 > **renderStatusLine**(`state`, `ctx`, `templates?`): `string` \| `null`
 
-Defined in: [src/recorders/observability/status/statusTemplates.ts:209](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/recorders/observability/status/statusTemplates.ts#L209)
+Defined in: [src/recorders/observability/status/statusTemplates.ts:209](https://github.com/footprintjs/agentfootprint/blob/main/src/recorders/observability/status/statusTemplates.ts#L209)
 
 Resolve the matched template + substitute vars.
 

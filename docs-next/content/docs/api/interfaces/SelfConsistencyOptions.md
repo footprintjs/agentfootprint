@@ -4,7 +4,7 @@ title: SelfConsistencyOptions
 
 # Interface: SelfConsistencyOptions
 
-Defined in: [src/patterns/SelfConsistency.ts:21](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/patterns/SelfConsistency.ts#L21)
+Defined in: [src/patterns/SelfConsistency.ts:21](https://github.com/footprintjs/agentfootprint/blob/main/src/patterns/SelfConsistency.ts#L21)
 
 patterns/ — factory functions that compose primitives + core-flow
 into well-known agent patterns from the research literature.
@@ -27,7 +27,7 @@ is a separate (not-yet-shipped) feature and would need a
 
 > `readonly` `optional` **extract?**: (`response`) => `string`
 
-Defined in: [src/patterns/SelfConsistency.ts:35](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/patterns/SelfConsistency.ts#L35)
+Defined in: [src/patterns/SelfConsistency.ts:35](https://github.com/footprintjs/agentfootprint/blob/main/src/patterns/SelfConsistency.ts#L35)
 
 Consumer-provided extractor: given a full LLM response, return the
 "vote token" (e.g., the final answer stripped of the chain-of-thought
@@ -49,7 +49,7 @@ preamble). Defaults to returning the trimmed string.
 
 > `readonly` `optional` **id?**: `string`
 
-Defined in: [src/patterns/SelfConsistency.ts:37](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/patterns/SelfConsistency.ts#L37)
+Defined in: [src/patterns/SelfConsistency.ts:37](https://github.com/footprintjs/agentfootprint/blob/main/src/patterns/SelfConsistency.ts#L37)
 
 ***
 
@@ -57,7 +57,7 @@ Defined in: [src/patterns/SelfConsistency.ts:37](https://github.com/footprintjs/
 
 > `readonly` `optional` **maxTokens?**: `number`
 
-Defined in: [src/patterns/SelfConsistency.ts:29](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/patterns/SelfConsistency.ts#L29)
+Defined in: [src/patterns/SelfConsistency.ts:29](https://github.com/footprintjs/agentfootprint/blob/main/src/patterns/SelfConsistency.ts#L29)
 
 ***
 
@@ -65,7 +65,7 @@ Defined in: [src/patterns/SelfConsistency.ts:29](https://github.com/footprintjs/
 
 > `readonly` **model**: `string`
 
-Defined in: [src/patterns/SelfConsistency.ts:23](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/patterns/SelfConsistency.ts#L23)
+Defined in: [src/patterns/SelfConsistency.ts:23](https://github.com/footprintjs/agentfootprint/blob/main/src/patterns/SelfConsistency.ts#L23)
 
 ***
 
@@ -73,7 +73,7 @@ Defined in: [src/patterns/SelfConsistency.ts:23](https://github.com/footprintjs/
 
 > `readonly` `optional` **name?**: `string`
 
-Defined in: [src/patterns/SelfConsistency.ts:36](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/patterns/SelfConsistency.ts#L36)
+Defined in: [src/patterns/SelfConsistency.ts:36](https://github.com/footprintjs/agentfootprint/blob/main/src/patterns/SelfConsistency.ts#L36)
 
 ***
 
@@ -81,7 +81,7 @@ Defined in: [src/patterns/SelfConsistency.ts:36](https://github.com/footprintjs/
 
 > `readonly` **provider**: [`LLMProvider`](/docs/api/interfaces/LLMProvider)
 
-Defined in: [src/patterns/SelfConsistency.ts:22](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/patterns/SelfConsistency.ts#L22)
+Defined in: [src/patterns/SelfConsistency.ts:22](https://github.com/footprintjs/agentfootprint/blob/main/src/patterns/SelfConsistency.ts#L22)
 
 ***
 
@@ -89,7 +89,7 @@ Defined in: [src/patterns/SelfConsistency.ts:22](https://github.com/footprintjs/
 
 > `readonly` **samples**: `number`
 
-Defined in: [src/patterns/SelfConsistency.ts:26](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/patterns/SelfConsistency.ts#L26)
+Defined in: [src/patterns/SelfConsistency.ts:26](https://github.com/footprintjs/agentfootprint/blob/main/src/patterns/SelfConsistency.ts#L26)
 
 Number of parallel samples. 3 / 5 are typical; paper uses up to 40.
 
@@ -99,7 +99,7 @@ Number of parallel samples. 3 / 5 are typical; paper uses up to 40.
 
 > `readonly` **systemPrompt**: `string`
 
-Defined in: [src/patterns/SelfConsistency.ts:24](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/patterns/SelfConsistency.ts#L24)
+Defined in: [src/patterns/SelfConsistency.ts:24](https://github.com/footprintjs/agentfootprint/blob/main/src/patterns/SelfConsistency.ts#L24)
 
 ***
 
@@ -107,6 +107,6 @@ Defined in: [src/patterns/SelfConsistency.ts:24](https://github.com/footprintjs/
 
 > `readonly` `optional` **temperature?**: `number`
 
-Defined in: [src/patterns/SelfConsistency.ts:28](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/patterns/SelfConsistency.ts#L28)
+Defined in: [src/patterns/SelfConsistency.ts:28](https://github.com/footprintjs/agentfootprint/blob/main/src/patterns/SelfConsistency.ts#L28)
 
 Sampling temperature. Defaults to a higher value (0.7) to get diverse samples.

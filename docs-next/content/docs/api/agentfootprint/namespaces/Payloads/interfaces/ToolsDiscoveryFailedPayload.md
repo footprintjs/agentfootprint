@@ -4,7 +4,7 @@ title: ToolsDiscoveryFailedPayload
 
 # Interface: ToolsDiscoveryFailedPayload
 
-Defined in: [src/events/payloads.ts:426](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L426)
+Defined in: [src/events/payloads.ts:426](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L426)
 
 Emitted when a custom `ToolProvider.list(ctx)` throws or rejects.
 The iteration is aborted; a configured `reliability` rule decides
@@ -20,7 +20,7 @@ distinguishable.
 
 > `readonly` **durationMs**: `number`
 
-Defined in: [src/events/payloads.ts:431](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L431)
+Defined in: [src/events/payloads.ts:431](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L431)
 
 ***
 
@@ -28,7 +28,7 @@ Defined in: [src/events/payloads.ts:431](https://github.com/footprintjs/agentfoo
 
 > `readonly` **error**: `string`
 
-Defined in: [src/events/payloads.ts:428](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L428)
+Defined in: [src/events/payloads.ts:428](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L428)
 
 ***
 
@@ -36,7 +36,7 @@ Defined in: [src/events/payloads.ts:428](https://github.com/footprintjs/agentfoo
 
 > `readonly` **errorName**: `string`
 
-Defined in: [src/events/payloads.ts:429](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L429)
+Defined in: [src/events/payloads.ts:429](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L429)
 
 ***
 
@@ -44,7 +44,7 @@ Defined in: [src/events/payloads.ts:429](https://github.com/footprintjs/agentfoo
 
 > `readonly` **iteration**: `number`
 
-Defined in: [src/events/payloads.ts:430](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L430)
+Defined in: [src/events/payloads.ts:430](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L430)
 
 ***
 
@@ -52,4 +52,4 @@ Defined in: [src/events/payloads.ts:430](https://github.com/footprintjs/agentfoo
 
 > `readonly` **providerId**: `string` \| `undefined`
 
-Defined in: [src/events/payloads.ts:427](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L427)
+Defined in: [src/events/payloads.ts:427](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L427)

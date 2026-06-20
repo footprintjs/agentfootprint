@@ -4,7 +4,7 @@ title: ToTOptions
 
 # Interface: ToTOptions
 
-Defined in: [src/patterns/ToT.ts:26](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/patterns/ToT.ts#L26)
+Defined in: [src/patterns/ToT.ts:26](https://github.com/footprintjs/agentfootprint/blob/main/src/patterns/ToT.ts#L26)
 
 ## Properties
 
@@ -12,7 +12,7 @@ Defined in: [src/patterns/ToT.ts:26](https://github.com/footprintjs/agentfootpri
 
 > `readonly` `optional` **beamWidth?**: `number`
 
-Defined in: [src/patterns/ToT.ts:42](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/patterns/ToT.ts#L42)
+Defined in: [src/patterns/ToT.ts:42](https://github.com/footprintjs/agentfootprint/blob/main/src/patterns/ToT.ts#L42)
 
 Beam width — how many thoughts survive after each level. Default 1 (greedy).
 
@@ -22,7 +22,7 @@ Beam width — how many thoughts survive after each level. Default 1 (greedy).
 
 > `readonly` **branchingFactor**: `number`
 
-Defined in: [src/patterns/ToT.ts:34](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/patterns/ToT.ts#L34)
+Defined in: [src/patterns/ToT.ts:34](https://github.com/footprintjs/agentfootprint/blob/main/src/patterns/ToT.ts#L34)
 
 Branching factor — K thoughts generated per frontier node per iteration.
 
@@ -32,7 +32,7 @@ Branching factor — K thoughts generated per frontier node per iteration.
 
 > `readonly` **depth**: `number`
 
-Defined in: [src/patterns/ToT.ts:32](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/patterns/ToT.ts#L32)
+Defined in: [src/patterns/ToT.ts:32](https://github.com/footprintjs/agentfootprint/blob/main/src/patterns/ToT.ts#L32)
 
 Depth of the tree (number of expansion iterations).
 
@@ -42,7 +42,7 @@ Depth of the tree (number of expansion iterations).
 
 > `readonly` `optional` **id?**: `string`
 
-Defined in: [src/patterns/ToT.ts:46](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/patterns/ToT.ts#L46)
+Defined in: [src/patterns/ToT.ts:46](https://github.com/footprintjs/agentfootprint/blob/main/src/patterns/ToT.ts#L46)
 
 ***
 
@@ -50,7 +50,7 @@ Defined in: [src/patterns/ToT.ts:46](https://github.com/footprintjs/agentfootpri
 
 > `readonly` `optional` **maxTokens?**: `number`
 
-Defined in: [src/patterns/ToT.ts:44](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/patterns/ToT.ts#L44)
+Defined in: [src/patterns/ToT.ts:44](https://github.com/footprintjs/agentfootprint/blob/main/src/patterns/ToT.ts#L44)
 
 ***
 
@@ -58,7 +58,7 @@ Defined in: [src/patterns/ToT.ts:44](https://github.com/footprintjs/agentfootpri
 
 > `readonly` **model**: `string`
 
-Defined in: [src/patterns/ToT.ts:28](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/patterns/ToT.ts#L28)
+Defined in: [src/patterns/ToT.ts:28](https://github.com/footprintjs/agentfootprint/blob/main/src/patterns/ToT.ts#L28)
 
 ***
 
@@ -66,7 +66,7 @@ Defined in: [src/patterns/ToT.ts:28](https://github.com/footprintjs/agentfootpri
 
 > `readonly` `optional` **name?**: `string`
 
-Defined in: [src/patterns/ToT.ts:45](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/patterns/ToT.ts#L45)
+Defined in: [src/patterns/ToT.ts:45](https://github.com/footprintjs/agentfootprint/blob/main/src/patterns/ToT.ts#L45)
 
 ***
 
@@ -74,7 +74,7 @@ Defined in: [src/patterns/ToT.ts:45](https://github.com/footprintjs/agentfootpri
 
 > `readonly` **provider**: [`LLMProvider`](/docs/api/interfaces/LLMProvider)
 
-Defined in: [src/patterns/ToT.ts:27](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/patterns/ToT.ts#L27)
+Defined in: [src/patterns/ToT.ts:27](https://github.com/footprintjs/agentfootprint/blob/main/src/patterns/ToT.ts#L27)
 
 ***
 
@@ -82,7 +82,7 @@ Defined in: [src/patterns/ToT.ts:27](https://github.com/footprintjs/agentfootpri
 
 > `readonly` **score**: (`thought`) => `number`
 
-Defined in: [src/patterns/ToT.ts:40](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/patterns/ToT.ts#L40)
+Defined in: [src/patterns/ToT.ts:40](https://github.com/footprintjs/agentfootprint/blob/main/src/patterns/ToT.ts#L40)
 
 Scorer: given a thought, return a numeric score. Higher is better.
 The top `beamWidth` thoughts survive each level; the rest are pruned.
@@ -104,7 +104,7 @@ Synchronous so pruning is deterministic.
 
 > `readonly` `optional` **temperature?**: `number`
 
-Defined in: [src/patterns/ToT.ts:43](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/patterns/ToT.ts#L43)
+Defined in: [src/patterns/ToT.ts:43](https://github.com/footprintjs/agentfootprint/blob/main/src/patterns/ToT.ts#L43)
 
 ***
 
@@ -112,6 +112,6 @@ Defined in: [src/patterns/ToT.ts:43](https://github.com/footprintjs/agentfootpri
 
 > `readonly` **thoughtPrompt**: `string`
 
-Defined in: [src/patterns/ToT.ts:30](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/patterns/ToT.ts#L30)
+Defined in: [src/patterns/ToT.ts:30](https://github.com/footprintjs/agentfootprint/blob/main/src/patterns/ToT.ts#L30)
 
 System prompt for the thought-generation LLMCall.

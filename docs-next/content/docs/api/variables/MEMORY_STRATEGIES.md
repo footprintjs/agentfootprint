@@ -6,7 +6,7 @@ title: MEMORY_STRATEGIES
 
 > `const` **MEMORY\_STRATEGIES**: `object`
 
-Defined in: [src/memory/define.types.ts:72](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/memory/define.types.ts#L72)
+Defined in: [src/memory/define.types.ts:72](https://github.com/footprintjs/agentfootprint/blob/main/src/memory/define.types.ts#L72)
 
 How content is selected / compressed for the next LLM call.
 

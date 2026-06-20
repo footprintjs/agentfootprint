@@ -4,7 +4,7 @@ title: ValidationArgsInvalidPayload
 
 # Interface: ValidationArgsInvalidPayload
 
-Defined in: [src/events/payloads.ts:444](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L444)
+Defined in: [src/events/payloads.ts:444](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L444)
 
 Emitted when LLM-produced tool args fail validation against the tool's
 declared `inputSchema` (backlog #9). Fires for BOTH modes that validate:
@@ -20,7 +20,7 @@ supplied values (they can carry PII / injection payloads).
 
 > `readonly` **enforced**: `boolean`
 
-Defined in: [src/events/payloads.ts:453](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L453)
+Defined in: [src/events/payloads.ts:453](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L453)
 
 ***
 
@@ -28,7 +28,7 @@ Defined in: [src/events/payloads.ts:453](https://github.com/footprintjs/agentfoo
 
 > `readonly` **issues**: readonly `object`[]
 
-Defined in: [src/events/payloads.ts:448](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L448)
+Defined in: [src/events/payloads.ts:448](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L448)
 
 ***
 
@@ -36,7 +36,7 @@ Defined in: [src/events/payloads.ts:448](https://github.com/footprintjs/agentfoo
 
 > `readonly` **iteration**: `number`
 
-Defined in: [src/events/payloads.ts:447](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L447)
+Defined in: [src/events/payloads.ts:447](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L447)
 
 ***
 
@@ -44,7 +44,7 @@ Defined in: [src/events/payloads.ts:447](https://github.com/footprintjs/agentfoo
 
 > `readonly` **toolCallId**: `string`
 
-Defined in: [src/events/payloads.ts:446](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L446)
+Defined in: [src/events/payloads.ts:446](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L446)
 
 ***
 
@@ -52,4 +52,4 @@ Defined in: [src/events/payloads.ts:446](https://github.com/footprintjs/agentfoo
 
 > `readonly` **toolName**: `string`
 
-Defined in: [src/events/payloads.ts:445](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L445)
+Defined in: [src/events/payloads.ts:445](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L445)

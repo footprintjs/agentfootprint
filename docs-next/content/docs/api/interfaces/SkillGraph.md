@@ -4,7 +4,7 @@ title: SkillGraph
 
 # Interface: SkillGraph
 
-Defined in: [src/lib/injection-engine/skillGraph.ts:237](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/lib/injection-engine/skillGraph.ts#L237)
+Defined in: [src/lib/injection-engine/skillGraph.ts:237](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/injection-engine/skillGraph.ts#L237)
 
 ## Properties
 
@@ -12,7 +12,7 @@ Defined in: [src/lib/injection-engine/skillGraph.ts:237](https://github.com/foot
 
 > `readonly` **edges**: readonly [`SkillEdge`](/docs/api/interfaces/SkillEdge)[]
 
-Defined in: [src/lib/injection-engine/skillGraph.ts:242](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/lib/injection-engine/skillGraph.ts#L242)
+Defined in: [src/lib/injection-engine/skillGraph.ts:242](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/injection-engine/skillGraph.ts#L242)
 
 The declared edges (for tooling, overlays, tests).
 
@@ -22,7 +22,7 @@ The declared edges (for tooling, overlays, tests).
 
 > `readonly` **nodes**: readonly [`SkillNode`](/docs/api/interfaces/SkillNode)[]
 
-Defined in: [src/lib/injection-engine/skillGraph.ts:245](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/lib/injection-engine/skillGraph.ts#L245)
+Defined in: [src/lib/injection-engine/skillGraph.ts:245](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/injection-engine/skillGraph.ts#L245)
 
 Drawn nodes: skill boxes for the flat entry/route model; predicate diamonds
  + skill leaves for a decision `tree`. Always present.
@@ -33,7 +33,7 @@ Drawn nodes: skill boxes for the flat entry/route model; predicate diamonds
 
 > `readonly` **skills**: readonly [`Injection`](/docs/api/interfaces/Injection)[]
 
-Defined in: [src/lib/injection-engine/skillGraph.ts:240](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/lib/injection-engine/skillGraph.ts#L240)
+Defined in: [src/lib/injection-engine/skillGraph.ts:240](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/injection-engine/skillGraph.ts#L240)
 
 Skills with graph-derived triggers — feed to the Agent (`.skillGraph()` or
  `.skills({ list: () => graph.skills })`).
@@ -44,7 +44,7 @@ Skills with graph-derived triggers — feed to the Agent (`.skillGraph()` or
 
 > **checkup**(): [`GraphCheckup`](/docs/api/interfaces/GraphCheckup)
 
-Defined in: [src/lib/injection-engine/skillGraph.ts:285](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/lib/injection-engine/skillGraph.ts#L285)
+Defined in: [src/lib/injection-engine/skillGraph.ts:285](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/injection-engine/skillGraph.ts#L285)
 
 Build-time check-up — inspect the declared graph for wiring mistakes (a skill
 nobody can reach, an edge to an unknown skill, two un-prioritized edges from one
@@ -61,7 +61,7 @@ skill, no entry, a self-loop). Pure + side-effect-free; call it whenever.
 
 > **nextSkill**(`ctx`): `string` \| `undefined`
 
-Defined in: [src/lib/injection-engine/skillGraph.ts:259](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/lib/injection-engine/skillGraph.ts#L259)
+Defined in: [src/lib/injection-engine/skillGraph.ts:259](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/injection-engine/skillGraph.ts#L259)
 
 The CURSOR resolver — given an iteration context, where is the graph next?
 Returns the skill id the graph should be *in* after this iteration:
@@ -89,7 +89,7 @@ by predicate (no cursor) and returns the unchanged `ctx.currentSkillId`.
 
 > **reachableSkills**(`currentSkillId?`): readonly `string`[]
 
-Defined in: [src/lib/injection-engine/skillGraph.ts:270](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/lib/injection-engine/skillGraph.ts#L270)
+Defined in: [src/lib/injection-engine/skillGraph.ts:270](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/injection-engine/skillGraph.ts#L270)
 
 The REACHABLE set — which skills the model may `read_skill`-jump to from the
 current cursor. The agent's runtime gate rejects any `read_skill('id')` whose
@@ -116,7 +116,7 @@ readonly `string`[]
 
 > `optional` **scoreEntries**(`ctx`, `signal?`): `Promise`\<[`EntryScoring`](/docs/api/interfaces/EntryScoring)\>
 
-Defined in: [src/lib/injection-engine/skillGraph.ts:278](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/lib/injection-engine/skillGraph.ts#L278)
+Defined in: [src/lib/injection-engine/skillGraph.ts:278](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/injection-engine/skillGraph.ts#L278)
 
 Score the entry candidates by relevance to the user's message — present ONLY
 when the graph was built with `.entryByRelevance(embedder)`. Embeds
@@ -144,7 +144,7 @@ them, and softmaxes into a `relevance` share. The agent's PickEntry stage uses
 
 > **toMermaid**(): `string`
 
-Defined in: [src/lib/injection-engine/skillGraph.ts:247](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/lib/injection-engine/skillGraph.ts#L247)
+Defined in: [src/lib/injection-engine/skillGraph.ts:247](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/injection-engine/skillGraph.ts#L247)
 
 A Mermaid flowchart of the declared graph — declared === drawn.
 

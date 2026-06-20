@@ -4,7 +4,7 @@ title: ListenOptions
 
 # Interface: ListenOptions
 
-Defined in: [src/events/dispatcher.ts:45](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/dispatcher.ts#L45)
+Defined in: [src/events/dispatcher.ts:45](https://github.com/footprintjs/agentfootprint/blob/main/src/events/dispatcher.ts#L45)
 
 ## Properties
 
@@ -12,7 +12,7 @@ Defined in: [src/events/dispatcher.ts:45](https://github.com/footprintjs/agentfo
 
 > `readonly` `optional` **once?**: `boolean`
 
-Defined in: [src/events/dispatcher.ts:46](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/dispatcher.ts#L46)
+Defined in: [src/events/dispatcher.ts:46](https://github.com/footprintjs/agentfootprint/blob/main/src/events/dispatcher.ts#L46)
 
 ***
 
@@ -20,4 +20,4 @@ Defined in: [src/events/dispatcher.ts:46](https://github.com/footprintjs/agentfo
 
 > `readonly` `optional` **signal?**: `AbortSignal`
 
-Defined in: [src/events/dispatcher.ts:47](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/dispatcher.ts#L47)
+Defined in: [src/events/dispatcher.ts:47](https://github.com/footprintjs/agentfootprint/blob/main/src/events/dispatcher.ts#L47)

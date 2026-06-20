@@ -6,5 +6,6 @@
   "entryFileName": "index",
   "readme": "none",
   "hidePageHeader": true,
-  "hideBreadcrumbs": true
+  "hideBreadcrumbs": true,
+  "gitRevision": "main"
 }

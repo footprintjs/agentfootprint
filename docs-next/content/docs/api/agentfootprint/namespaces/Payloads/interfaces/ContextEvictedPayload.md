@@ -4,7 +4,7 @@ title: ContextEvictedPayload
 
 # Interface: ContextEvictedPayload
 
-Defined in: [src/events/payloads.ts:222](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L222)
+Defined in: [src/events/payloads.ts:222](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L222)
 
 ## Properties
 
@@ -12,7 +12,7 @@ Defined in: [src/events/payloads.ts:222](https://github.com/footprintjs/agentfoo
 
 > `readonly` **contentHash**: `string`
 
-Defined in: [src/events/payloads.ts:224](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L224)
+Defined in: [src/events/payloads.ts:224](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L224)
 
 ***
 
@@ -20,7 +20,7 @@ Defined in: [src/events/payloads.ts:224](https://github.com/footprintjs/agentfoo
 
 > `readonly` **reason**: `"budget"` \| `"stale"` \| `"low_score"` \| `"policy"` \| `"user_revoked"`
 
-Defined in: [src/events/payloads.ts:225](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L225)
+Defined in: [src/events/payloads.ts:225](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L225)
 
 ***
 
@@ -28,7 +28,7 @@ Defined in: [src/events/payloads.ts:225](https://github.com/footprintjs/agentfoo
 
 > `readonly` **slot**: [`ContextSlot`](/docs/api/type-aliases/ContextSlot)
 
-Defined in: [src/events/payloads.ts:223](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L223)
+Defined in: [src/events/payloads.ts:223](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L223)
 
 ***
 
@@ -36,4 +36,4 @@ Defined in: [src/events/payloads.ts:223](https://github.com/footprintjs/agentfoo
 
 > `readonly` **survivalMs**: `number`
 
-Defined in: [src/events/payloads.ts:226](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L226)
+Defined in: [src/events/payloads.ts:226](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L226)

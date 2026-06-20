@@ -4,7 +4,7 @@ title: PermissionDecision
 
 # Interface: PermissionDecision
 
-Defined in: [src/adapters/types.ts:371](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/adapters/types.ts#L371)
+Defined in: [src/adapters/types.ts:371](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L371)
 
 ## Properties
 
@@ -12,7 +12,7 @@ Defined in: [src/adapters/types.ts:371](https://github.com/footprintjs/agentfoot
 
 > `readonly` `optional` **gateId?**: `string`
 
-Defined in: [src/adapters/types.ts:386](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/adapters/types.ts#L386)
+Defined in: [src/adapters/types.ts:386](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L386)
 
 ***
 
@@ -20,7 +20,7 @@ Defined in: [src/adapters/types.ts:386](https://github.com/footprintjs/agentfoot
 
 > `readonly` `optional` **policyRuleId?**: `string`
 
-Defined in: [src/adapters/types.ts:384](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/adapters/types.ts#L384)
+Defined in: [src/adapters/types.ts:384](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L384)
 
 ***
 
@@ -28,7 +28,7 @@ Defined in: [src/adapters/types.ts:384](https://github.com/footprintjs/agentfoot
 
 > `readonly` `optional` **rationale?**: `string`
 
-Defined in: [src/adapters/types.ts:385](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/adapters/types.ts#L385)
+Defined in: [src/adapters/types.ts:385](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L385)
 
 ***
 
@@ -36,7 +36,7 @@ Defined in: [src/adapters/types.ts:385](https://github.com/footprintjs/agentfoot
 
 > `readonly` `optional` **reason?**: `string`
 
-Defined in: [src/adapters/types.ts:393](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/adapters/types.ts#L393)
+Defined in: [src/adapters/types.ts:393](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L393)
 
 v2.12 — telemetry tag (machine-readable, stable across versions).
 Surfaces on `agentfootprint.permission.halt.reason` for routing
@@ -49,7 +49,7 @@ alerts (e.g. `'security:exfiltration'` → PagerDuty,
 
 > `readonly` **result**: `"allow"` \| `"deny"` \| `"halt"` \| `"gate_open"`
 
-Defined in: [src/adapters/types.ts:383](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/adapters/types.ts#L383)
+Defined in: [src/adapters/types.ts:383](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L383)
 
 v2.12 — `'halt'` is NEW. Terminates the run cleanly with a typed
 `PolicyHaltError`. The framework writes a synthetic `tool_result`
@@ -67,7 +67,7 @@ continues and can pick differently.
 
 > `readonly` `optional` **tellLLM?**: `string`
 
-Defined in: [src/adapters/types.ts:400](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/adapters/types.ts#L400)
+Defined in: [src/adapters/types.ts:400](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L400)
 
 v2.12 — content delivered to the LLM as the synthetic `tool_result`
 on `'deny'` and `'halt'`. When omitted, defaults to a deliberately

@@ -4,7 +4,7 @@ title: AgentfootprintEventMap
 
 # Interface: AgentfootprintEventMap
 
-Defined in: [src/events/registry.ts:198](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/registry.ts#L198)
+Defined in: [src/events/registry.ts:198](https://github.com/footprintjs/agentfootprint/blob/main/src/events/registry.ts#L198)
 
 ## Properties
 
@@ -12,7 +12,7 @@ Defined in: [src/events/registry.ts:198](https://github.com/footprintjs/agentfoo
 
 > **agentfootprint.agent.handoff**: [`AgentfootprintEventEnvelope`](/docs/api/interfaces/AgentfootprintEventEnvelope)\<`"agentfootprint.agent.handoff"`, [`AgentHandoffPayload`](/docs/api/agentfootprint/namespaces/Payloads/interfaces/AgentHandoffPayload)\>
 
-Defined in: [src/events/registry.ts:253](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/registry.ts#L253)
+Defined in: [src/events/registry.ts:253](https://github.com/footprintjs/agentfootprint/blob/main/src/events/registry.ts#L253)
 
 ***
 
@@ -20,7 +20,7 @@ Defined in: [src/events/registry.ts:253](https://github.com/footprintjs/agentfoo
 
 > **agentfootprint.agent.iteration\_end**: [`AgentfootprintEventEnvelope`](/docs/api/interfaces/AgentfootprintEventEnvelope)\<`"agentfootprint.agent.iteration_end"`, [`AgentIterationEndPayload`](/docs/api/agentfootprint/namespaces/Payloads/interfaces/AgentIterationEndPayload)\>
 
-Defined in: [src/events/registry.ts:245](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/registry.ts#L245)
+Defined in: [src/events/registry.ts:245](https://github.com/footprintjs/agentfootprint/blob/main/src/events/registry.ts#L245)
 
 ***
 
@@ -28,7 +28,7 @@ Defined in: [src/events/registry.ts:245](https://github.com/footprintjs/agentfoo
 
 > **agentfootprint.agent.iteration\_start**: [`AgentfootprintEventEnvelope`](/docs/api/interfaces/AgentfootprintEventEnvelope)\<`"agentfootprint.agent.iteration_start"`, [`AgentIterationStartPayload`](/docs/api/agentfootprint/namespaces/Payloads/interfaces/AgentIterationStartPayload)\>
 
-Defined in: [src/events/registry.ts:241](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/registry.ts#L241)
+Defined in: [src/events/registry.ts:241](https://github.com/footprintjs/agentfootprint/blob/main/src/events/registry.ts#L241)
 
 ***
 
@@ -36,7 +36,7 @@ Defined in: [src/events/registry.ts:241](https://github.com/footprintjs/agentfoo
 
 > **agentfootprint.agent.output\_schema\_validation\_failed**: [`AgentfootprintEventEnvelope`](/docs/api/interfaces/AgentfootprintEventEnvelope)\<`"agentfootprint.agent.output_schema_validation_failed"`, [`AgentOutputSchemaValidationFailedPayload`](/docs/api/agentfootprint/namespaces/Payloads/interfaces/AgentOutputSchemaValidationFailedPayload)\>
 
-Defined in: [src/events/registry.ts:257](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/registry.ts#L257)
+Defined in: [src/events/registry.ts:257](https://github.com/footprintjs/agentfootprint/blob/main/src/events/registry.ts#L257)
 
 ***
 
@@ -44,7 +44,7 @@ Defined in: [src/events/registry.ts:257](https://github.com/footprintjs/agentfoo
 
 > **agentfootprint.agent.route\_decided**: [`AgentfootprintEventEnvelope`](/docs/api/interfaces/AgentfootprintEventEnvelope)\<`"agentfootprint.agent.route_decided"`, [`AgentRouteDecidedPayload`](/docs/api/agentfootprint/namespaces/Payloads/interfaces/AgentRouteDecidedPayload)\>
 
-Defined in: [src/events/registry.ts:249](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/registry.ts#L249)
+Defined in: [src/events/registry.ts:249](https://github.com/footprintjs/agentfootprint/blob/main/src/events/registry.ts#L249)
 
 ***
 
@@ -52,7 +52,7 @@ Defined in: [src/events/registry.ts:249](https://github.com/footprintjs/agentfoo
 
 > **agentfootprint.agent.thinking\_parse\_failed**: [`AgentfootprintEventEnvelope`](/docs/api/interfaces/AgentfootprintEventEnvelope)\<`"agentfootprint.agent.thinking_parse_failed"`, [`AgentThinkingParseFailedPayload`](/docs/api/agentfootprint/namespaces/Payloads/interfaces/AgentThinkingParseFailedPayload)\>
 
-Defined in: [src/events/registry.ts:261](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/registry.ts#L261)
+Defined in: [src/events/registry.ts:261](https://github.com/footprintjs/agentfootprint/blob/main/src/events/registry.ts#L261)
 
 ***
 
@@ -60,7 +60,7 @@ Defined in: [src/events/registry.ts:261](https://github.com/footprintjs/agentfoo
 
 > **agentfootprint.agent.turn\_end**: [`AgentfootprintEventEnvelope`](/docs/api/interfaces/AgentfootprintEventEnvelope)\<`"agentfootprint.agent.turn_end"`, [`AgentTurnEndPayload`](/docs/api/agentfootprint/namespaces/Payloads/interfaces/AgentTurnEndPayload)\>
 
-Defined in: [src/events/registry.ts:237](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/registry.ts#L237)
+Defined in: [src/events/registry.ts:237](https://github.com/footprintjs/agentfootprint/blob/main/src/events/registry.ts#L237)
 
 ***
 
@@ -68,7 +68,7 @@ Defined in: [src/events/registry.ts:237](https://github.com/footprintjs/agentfoo
 
 > **agentfootprint.agent.turn\_start**: [`AgentfootprintEventEnvelope`](/docs/api/interfaces/AgentfootprintEventEnvelope)\<`"agentfootprint.agent.turn_start"`, [`AgentTurnStartPayload`](/docs/api/agentfootprint/namespaces/Payloads/interfaces/AgentTurnStartPayload)\>
 
-Defined in: [src/events/registry.ts:233](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/registry.ts#L233)
+Defined in: [src/events/registry.ts:233](https://github.com/footprintjs/agentfootprint/blob/main/src/events/registry.ts#L233)
 
 ***
 
@@ -76,7 +76,7 @@ Defined in: [src/events/registry.ts:233](https://github.com/footprintjs/agentfoo
 
 > **agentfootprint.composition.branch\_complete**: [`AgentfootprintEventEnvelope`](/docs/api/interfaces/AgentfootprintEventEnvelope)\<`"agentfootprint.composition.branch_complete"`, [`ParallelBranchCompletePayload`](/docs/api/agentfootprint/namespaces/Payloads/interfaces/ParallelBranchCompletePayload)\>
 
-Defined in: [src/events/registry.ts:212](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/registry.ts#L212)
+Defined in: [src/events/registry.ts:212](https://github.com/footprintjs/agentfootprint/blob/main/src/events/registry.ts#L212)
 
 ***
 
@@ -84,7 +84,7 @@ Defined in: [src/events/registry.ts:212](https://github.com/footprintjs/agentfoo
 
 > **agentfootprint.composition.enter**: [`AgentfootprintEventEnvelope`](/docs/api/interfaces/AgentfootprintEventEnvelope)\<`"agentfootprint.composition.enter"`, [`CompositionEnterPayload`](/docs/api/agentfootprint/namespaces/Payloads/interfaces/CompositionEnterPayload)\>
 
-Defined in: [src/events/registry.ts:200](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/registry.ts#L200)
+Defined in: [src/events/registry.ts:200](https://github.com/footprintjs/agentfootprint/blob/main/src/events/registry.ts#L200)
 
 ***
 
@@ -92,7 +92,7 @@ Defined in: [src/events/registry.ts:200](https://github.com/footprintjs/agentfoo
 
 > **agentfootprint.composition.exit**: [`AgentfootprintEventEnvelope`](/docs/api/interfaces/AgentfootprintEventEnvelope)\<`"agentfootprint.composition.exit"`, [`CompositionExitPayload`](/docs/api/agentfootprint/namespaces/Payloads/interfaces/CompositionExitPayload)\>
 
-Defined in: [src/events/registry.ts:204](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/registry.ts#L204)
+Defined in: [src/events/registry.ts:204](https://github.com/footprintjs/agentfootprint/blob/main/src/events/registry.ts#L204)
 
 ***
 
@@ -100,7 +100,7 @@ Defined in: [src/events/registry.ts:204](https://github.com/footprintjs/agentfoo
 
 > **agentfootprint.composition.fork\_start**: [`AgentfootprintEventEnvelope`](/docs/api/interfaces/AgentfootprintEventEnvelope)\<`"agentfootprint.composition.fork_start"`, [`ParallelForkStartPayload`](/docs/api/agentfootprint/namespaces/Payloads/interfaces/ParallelForkStartPayload)\>
 
-Defined in: [src/events/registry.ts:208](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/registry.ts#L208)
+Defined in: [src/events/registry.ts:208](https://github.com/footprintjs/agentfootprint/blob/main/src/events/registry.ts#L208)
 
 ***
 
@@ -108,7 +108,7 @@ Defined in: [src/events/registry.ts:208](https://github.com/footprintjs/agentfoo
 
 > **agentfootprint.composition.iteration\_exit**: [`AgentfootprintEventEnvelope`](/docs/api/interfaces/AgentfootprintEventEnvelope)\<`"agentfootprint.composition.iteration_exit"`, [`LoopIterationExitPayload`](/docs/api/agentfootprint/namespaces/Payloads/interfaces/LoopIterationExitPayload)\>
 
-Defined in: [src/events/registry.ts:228](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/registry.ts#L228)
+Defined in: [src/events/registry.ts:228](https://github.com/footprintjs/agentfootprint/blob/main/src/events/registry.ts#L228)
 
 ***
 
@@ -116,7 +116,7 @@ Defined in: [src/events/registry.ts:228](https://github.com/footprintjs/agentfoo
 
 > **agentfootprint.composition.iteration\_start**: [`AgentfootprintEventEnvelope`](/docs/api/interfaces/AgentfootprintEventEnvelope)\<`"agentfootprint.composition.iteration_start"`, [`LoopIterationStartPayload`](/docs/api/agentfootprint/namespaces/Payloads/interfaces/LoopIterationStartPayload)\>
 
-Defined in: [src/events/registry.ts:224](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/registry.ts#L224)
+Defined in: [src/events/registry.ts:224](https://github.com/footprintjs/agentfootprint/blob/main/src/events/registry.ts#L224)
 
 ***
 
@@ -124,7 +124,7 @@ Defined in: [src/events/registry.ts:224](https://github.com/footprintjs/agentfoo
 
 > **agentfootprint.composition.merge\_end**: [`AgentfootprintEventEnvelope`](/docs/api/interfaces/AgentfootprintEventEnvelope)\<`"agentfootprint.composition.merge_end"`, [`ParallelMergeEndPayload`](/docs/api/agentfootprint/namespaces/Payloads/interfaces/ParallelMergeEndPayload)\>
 
-Defined in: [src/events/registry.ts:216](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/registry.ts#L216)
+Defined in: [src/events/registry.ts:216](https://github.com/footprintjs/agentfootprint/blob/main/src/events/registry.ts#L216)
 
 ***
 
@@ -132,7 +132,7 @@ Defined in: [src/events/registry.ts:216](https://github.com/footprintjs/agentfoo
 
 > **agentfootprint.composition.route\_decided**: [`AgentfootprintEventEnvelope`](/docs/api/interfaces/AgentfootprintEventEnvelope)\<`"agentfootprint.composition.route_decided"`, [`ConditionalRouteDecidedPayload`](/docs/api/agentfootprint/namespaces/Payloads/interfaces/ConditionalRouteDecidedPayload)\>
 
-Defined in: [src/events/registry.ts:220](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/registry.ts#L220)
+Defined in: [src/events/registry.ts:220](https://github.com/footprintjs/agentfootprint/blob/main/src/events/registry.ts#L220)
 
 ***
 
@@ -140,7 +140,7 @@ Defined in: [src/events/registry.ts:220](https://github.com/footprintjs/agentfoo
 
 > **agentfootprint.context.budget\_pressure**: [`AgentfootprintEventEnvelope`](/docs/api/interfaces/AgentfootprintEventEnvelope)\<`"agentfootprint.context.budget_pressure"`, [`ContextBudgetPressurePayload`](/docs/api/agentfootprint/namespaces/Payloads/interfaces/ContextBudgetPressurePayload)\>
 
-Defined in: [src/events/registry.ts:307](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/registry.ts#L307)
+Defined in: [src/events/registry.ts:307](https://github.com/footprintjs/agentfootprint/blob/main/src/events/registry.ts#L307)
 
 ***
 
@@ -148,7 +148,7 @@ Defined in: [src/events/registry.ts:307](https://github.com/footprintjs/agentfoo
 
 > **agentfootprint.context.evaluated**: [`AgentfootprintEventEnvelope`](/docs/api/interfaces/AgentfootprintEventEnvelope)\<`"agentfootprint.context.evaluated"`, [`ContextEvaluatedPayload`](/docs/api/agentfootprint/namespaces/Payloads/interfaces/ContextEvaluatedPayload)\>
 
-Defined in: [src/events/registry.ts:311](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/registry.ts#L311)
+Defined in: [src/events/registry.ts:311](https://github.com/footprintjs/agentfootprint/blob/main/src/events/registry.ts#L311)
 
 ***
 
@@ -156,7 +156,7 @@ Defined in: [src/events/registry.ts:311](https://github.com/footprintjs/agentfoo
 
 > **agentfootprint.context.evicted**: [`AgentfootprintEventEnvelope`](/docs/api/interfaces/AgentfootprintEventEnvelope)\<`"agentfootprint.context.evicted"`, [`ContextEvictedPayload`](/docs/api/agentfootprint/namespaces/Payloads/interfaces/ContextEvictedPayload)\>
 
-Defined in: [src/events/registry.ts:299](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/registry.ts#L299)
+Defined in: [src/events/registry.ts:299](https://github.com/footprintjs/agentfootprint/blob/main/src/events/registry.ts#L299)
 
 ***
 
@@ -164,7 +164,7 @@ Defined in: [src/events/registry.ts:299](https://github.com/footprintjs/agentfoo
 
 > **agentfootprint.context.injected**: [`AgentfootprintEventEnvelope`](/docs/api/interfaces/AgentfootprintEventEnvelope)\<`"agentfootprint.context.injected"`, [`ContextInjectedPayload`](/docs/api/agentfootprint/namespaces/Payloads/interfaces/ContextInjectedPayload)\>
 
-Defined in: [src/events/registry.ts:295](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/registry.ts#L295)
+Defined in: [src/events/registry.ts:295](https://github.com/footprintjs/agentfootprint/blob/main/src/events/registry.ts#L295)
 
 ***
 
@@ -172,7 +172,7 @@ Defined in: [src/events/registry.ts:295](https://github.com/footprintjs/agentfoo
 
 > **agentfootprint.context.slot\_composed**: [`AgentfootprintEventEnvelope`](/docs/api/interfaces/AgentfootprintEventEnvelope)\<`"agentfootprint.context.slot_composed"`, [`ContextSlotComposedPayload`](/docs/api/agentfootprint/namespaces/Payloads/interfaces/ContextSlotComposedPayload)\>
 
-Defined in: [src/events/registry.ts:303](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/registry.ts#L303)
+Defined in: [src/events/registry.ts:303](https://github.com/footprintjs/agentfootprint/blob/main/src/events/registry.ts#L303)
 
 ***
 
@@ -180,7 +180,7 @@ Defined in: [src/events/registry.ts:303](https://github.com/footprintjs/agentfoo
 
 > **agentfootprint.cost.limit\_hit**: [`AgentfootprintEventEnvelope`](/docs/api/interfaces/AgentfootprintEventEnvelope)\<`"agentfootprint.cost.limit_hit"`, [`CostLimitHitPayload`](/docs/api/agentfootprint/namespaces/Payloads/interfaces/CostLimitHitPayload)\>
 
-Defined in: [src/events/registry.ts:423](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/registry.ts#L423)
+Defined in: [src/events/registry.ts:423](https://github.com/footprintjs/agentfootprint/blob/main/src/events/registry.ts#L423)
 
 ***
 
@@ -188,7 +188,7 @@ Defined in: [src/events/registry.ts:423](https://github.com/footprintjs/agentfoo
 
 > **agentfootprint.cost.tick**: [`AgentfootprintEventEnvelope`](/docs/api/interfaces/AgentfootprintEventEnvelope)\<`"agentfootprint.cost.tick"`, [`CostTickPayload`](/docs/api/agentfootprint/namespaces/Payloads/interfaces/CostTickPayload)\>
 
-Defined in: [src/events/registry.ts:419](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/registry.ts#L419)
+Defined in: [src/events/registry.ts:419](https://github.com/footprintjs/agentfootprint/blob/main/src/events/registry.ts#L419)
 
 ***
 
@@ -196,7 +196,7 @@ Defined in: [src/events/registry.ts:419](https://github.com/footprintjs/agentfoo
 
 > **agentfootprint.credential.acquired**: [`AgentfootprintEventEnvelope`](/docs/api/interfaces/AgentfootprintEventEnvelope)\<`"agentfootprint.credential.acquired"`, [`CredentialAcquiredPayload`](/docs/api/agentfootprint/namespaces/Payloads/interfaces/CredentialAcquiredPayload)\>
 
-Defined in: [src/events/registry.ts:397](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/registry.ts#L397)
+Defined in: [src/events/registry.ts:397](https://github.com/footprintjs/agentfootprint/blob/main/src/events/registry.ts#L397)
 
 ***
 
@@ -204,7 +204,7 @@ Defined in: [src/events/registry.ts:397](https://github.com/footprintjs/agentfoo
 
 > **agentfootprint.credential.authorization\_required**: [`AgentfootprintEventEnvelope`](/docs/api/interfaces/AgentfootprintEventEnvelope)\<`"agentfootprint.credential.authorization_required"`, [`CredentialAuthorizationRequiredPayload`](/docs/api/agentfootprint/namespaces/Payloads/interfaces/CredentialAuthorizationRequiredPayload)\>
 
-Defined in: [src/events/registry.ts:401](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/registry.ts#L401)
+Defined in: [src/events/registry.ts:401](https://github.com/footprintjs/agentfootprint/blob/main/src/events/registry.ts#L401)
 
 ***
 
@@ -212,7 +212,7 @@ Defined in: [src/events/registry.ts:401](https://github.com/footprintjs/agentfoo
 
 > **agentfootprint.credential.failed**: [`AgentfootprintEventEnvelope`](/docs/api/interfaces/AgentfootprintEventEnvelope)\<`"agentfootprint.credential.failed"`, [`CredentialFailedPayload`](/docs/api/agentfootprint/namespaces/Payloads/interfaces/CredentialFailedPayload)\>
 
-Defined in: [src/events/registry.ts:405](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/registry.ts#L405)
+Defined in: [src/events/registry.ts:405](https://github.com/footprintjs/agentfootprint/blob/main/src/events/registry.ts#L405)
 
 ***
 
@@ -220,7 +220,7 @@ Defined in: [src/events/registry.ts:405](https://github.com/footprintjs/agentfoo
 
 > **agentfootprint.credential.requested**: [`AgentfootprintEventEnvelope`](/docs/api/interfaces/AgentfootprintEventEnvelope)\<`"agentfootprint.credential.requested"`, [`CredentialRequestedPayload`](/docs/api/agentfootprint/namespaces/Payloads/interfaces/CredentialRequestedPayload)\>
 
-Defined in: [src/events/registry.ts:393](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/registry.ts#L393)
+Defined in: [src/events/registry.ts:393](https://github.com/footprintjs/agentfootprint/blob/main/src/events/registry.ts#L393)
 
 ***
 
@@ -228,7 +228,7 @@ Defined in: [src/events/registry.ts:393](https://github.com/footprintjs/agentfoo
 
 > **agentfootprint.embedding.generated**: [`AgentfootprintEventEnvelope`](/docs/api/interfaces/AgentfootprintEventEnvelope)\<`"agentfootprint.embedding.generated"`, [`EmbeddingGeneratedPayload`](/docs/api/agentfootprint/namespaces/Payloads/interfaces/EmbeddingGeneratedPayload)\>
 
-Defined in: [src/events/registry.ts:472](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/registry.ts#L472)
+Defined in: [src/events/registry.ts:472](https://github.com/footprintjs/agentfootprint/blob/main/src/events/registry.ts#L472)
 
 ***
 
@@ -236,7 +236,7 @@ Defined in: [src/events/registry.ts:472](https://github.com/footprintjs/agentfoo
 
 > **agentfootprint.error.fatal**: [`AgentfootprintEventEnvelope`](/docs/api/interfaces/AgentfootprintEventEnvelope)\<`"agentfootprint.error.fatal"`, [`ErrorFatalPayload`](/docs/api/agentfootprint/namespaces/Payloads/interfaces/ErrorFatalPayload)\>
 
-Defined in: [src/events/registry.ts:445](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/registry.ts#L445)
+Defined in: [src/events/registry.ts:445](https://github.com/footprintjs/agentfootprint/blob/main/src/events/registry.ts#L445)
 
 ***
 
@@ -244,7 +244,7 @@ Defined in: [src/events/registry.ts:445](https://github.com/footprintjs/agentfoo
 
 > **agentfootprint.error.recovered**: [`AgentfootprintEventEnvelope`](/docs/api/interfaces/AgentfootprintEventEnvelope)\<`"agentfootprint.error.recovered"`, [`ErrorRecoveredPayload`](/docs/api/agentfootprint/namespaces/Payloads/interfaces/ErrorRecoveredPayload)\>
 
-Defined in: [src/events/registry.ts:441](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/registry.ts#L441)
+Defined in: [src/events/registry.ts:441](https://github.com/footprintjs/agentfootprint/blob/main/src/events/registry.ts#L441)
 
 ***
 
@@ -252,7 +252,7 @@ Defined in: [src/events/registry.ts:441](https://github.com/footprintjs/agentfoo
 
 > **agentfootprint.error.retried**: [`AgentfootprintEventEnvelope`](/docs/api/interfaces/AgentfootprintEventEnvelope)\<`"agentfootprint.error.retried"`, [`ErrorRetriedPayload`](/docs/api/agentfootprint/namespaces/Payloads/interfaces/ErrorRetriedPayload)\>
 
-Defined in: [src/events/registry.ts:437](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/registry.ts#L437)
+Defined in: [src/events/registry.ts:437](https://github.com/footprintjs/agentfootprint/blob/main/src/events/registry.ts#L437)
 
 ***
 
@@ -260,7 +260,7 @@ Defined in: [src/events/registry.ts:437](https://github.com/footprintjs/agentfoo
 
 > **agentfootprint.eval.score**: [`AgentfootprintEventEnvelope`](/docs/api/interfaces/AgentfootprintEventEnvelope)\<`"agentfootprint.eval.score"`, [`EvalScorePayload`](/docs/api/agentfootprint/namespaces/Payloads/interfaces/EvalScorePayload)\>
 
-Defined in: [src/events/registry.ts:428](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/registry.ts#L428)
+Defined in: [src/events/registry.ts:428](https://github.com/footprintjs/agentfootprint/blob/main/src/events/registry.ts#L428)
 
 ***
 
@@ -268,7 +268,7 @@ Defined in: [src/events/registry.ts:428](https://github.com/footprintjs/agentfoo
 
 > **agentfootprint.eval.threshold\_crossed**: [`AgentfootprintEventEnvelope`](/docs/api/interfaces/AgentfootprintEventEnvelope)\<`"agentfootprint.eval.threshold_crossed"`, [`EvalThresholdCrossedPayload`](/docs/api/agentfootprint/namespaces/Payloads/interfaces/EvalThresholdCrossedPayload)\>
 
-Defined in: [src/events/registry.ts:432](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/registry.ts#L432)
+Defined in: [src/events/registry.ts:432](https://github.com/footprintjs/agentfootprint/blob/main/src/events/registry.ts#L432)
 
 ***
 
@@ -276,7 +276,7 @@ Defined in: [src/events/registry.ts:432](https://github.com/footprintjs/agentfoo
 
 > **agentfootprint.fallback.triggered**: [`AgentfootprintEventEnvelope`](/docs/api/interfaces/AgentfootprintEventEnvelope)\<`"agentfootprint.fallback.triggered"`, [`FallbackTriggeredPayload`](/docs/api/agentfootprint/namespaces/Payloads/interfaces/FallbackTriggeredPayload)\>
 
-Defined in: [src/events/registry.ts:414](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/registry.ts#L414)
+Defined in: [src/events/registry.ts:414](https://github.com/footprintjs/agentfootprint/blob/main/src/events/registry.ts#L414)
 
 ***
 
@@ -284,7 +284,7 @@ Defined in: [src/events/registry.ts:414](https://github.com/footprintjs/agentfoo
 
 > **agentfootprint.memory.attached**: [`AgentfootprintEventEnvelope`](/docs/api/interfaces/AgentfootprintEventEnvelope)\<`"agentfootprint.memory.attached"`, [`MemoryAttachedPayload`](/docs/api/agentfootprint/namespaces/Payloads/interfaces/MemoryAttachedPayload)\>
 
-Defined in: [src/events/registry.ts:320](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/registry.ts#L320)
+Defined in: [src/events/registry.ts:320](https://github.com/footprintjs/agentfootprint/blob/main/src/events/registry.ts#L320)
 
 ***
 
@@ -292,7 +292,7 @@ Defined in: [src/events/registry.ts:320](https://github.com/footprintjs/agentfoo
 
 > **agentfootprint.memory.detached**: [`AgentfootprintEventEnvelope`](/docs/api/interfaces/AgentfootprintEventEnvelope)\<`"agentfootprint.memory.detached"`, [`MemoryDetachedPayload`](/docs/api/agentfootprint/namespaces/Payloads/interfaces/MemoryDetachedPayload)\>
 
-Defined in: [src/events/registry.ts:324](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/registry.ts#L324)
+Defined in: [src/events/registry.ts:324](https://github.com/footprintjs/agentfootprint/blob/main/src/events/registry.ts#L324)
 
 ***
 
@@ -300,7 +300,7 @@ Defined in: [src/events/registry.ts:324](https://github.com/footprintjs/agentfoo
 
 > **agentfootprint.memory.strategy\_applied**: [`AgentfootprintEventEnvelope`](/docs/api/interfaces/AgentfootprintEventEnvelope)\<`"agentfootprint.memory.strategy_applied"`, [`MemoryStrategyAppliedPayload`](/docs/api/agentfootprint/namespaces/Payloads/interfaces/MemoryStrategyAppliedPayload)\>
 
-Defined in: [src/events/registry.ts:316](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/registry.ts#L316)
+Defined in: [src/events/registry.ts:316](https://github.com/footprintjs/agentfootprint/blob/main/src/events/registry.ts#L316)
 
 ***
 
@@ -308,7 +308,7 @@ Defined in: [src/events/registry.ts:316](https://github.com/footprintjs/agentfoo
 
 > **agentfootprint.memory.written**: [`AgentfootprintEventEnvelope`](/docs/api/interfaces/AgentfootprintEventEnvelope)\<`"agentfootprint.memory.written"`, [`MemoryWrittenPayload`](/docs/api/agentfootprint/namespaces/Payloads/interfaces/MemoryWrittenPayload)\>
 
-Defined in: [src/events/registry.ts:328](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/registry.ts#L328)
+Defined in: [src/events/registry.ts:328](https://github.com/footprintjs/agentfootprint/blob/main/src/events/registry.ts#L328)
 
 ***
 
@@ -316,7 +316,7 @@ Defined in: [src/events/registry.ts:328](https://github.com/footprintjs/agentfoo
 
 > **agentfootprint.pause.request**: [`AgentfootprintEventEnvelope`](/docs/api/interfaces/AgentfootprintEventEnvelope)\<`"agentfootprint.pause.request"`, [`PauseRequestPayload`](/docs/api/agentfootprint/namespaces/Payloads/interfaces/PauseRequestPayload)\>
 
-Defined in: [src/events/registry.ts:463](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/registry.ts#L463)
+Defined in: [src/events/registry.ts:463](https://github.com/footprintjs/agentfootprint/blob/main/src/events/registry.ts#L463)
 
 ***
 
@@ -324,7 +324,7 @@ Defined in: [src/events/registry.ts:463](https://github.com/footprintjs/agentfoo
 
 > **agentfootprint.pause.resume**: [`AgentfootprintEventEnvelope`](/docs/api/interfaces/AgentfootprintEventEnvelope)\<`"agentfootprint.pause.resume"`, [`PauseResumePayload`](/docs/api/agentfootprint/namespaces/Payloads/interfaces/PauseResumePayload)\>
 
-Defined in: [src/events/registry.ts:467](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/registry.ts#L467)
+Defined in: [src/events/registry.ts:467](https://github.com/footprintjs/agentfootprint/blob/main/src/events/registry.ts#L467)
 
 ***
 
@@ -332,7 +332,7 @@ Defined in: [src/events/registry.ts:467](https://github.com/footprintjs/agentfoo
 
 > **agentfootprint.permission.check**: [`AgentfootprintEventEnvelope`](/docs/api/interfaces/AgentfootprintEventEnvelope)\<`"agentfootprint.permission.check"`, [`PermissionCheckPayload`](/docs/api/agentfootprint/namespaces/Payloads/interfaces/PermissionCheckPayload)\>
 
-Defined in: [src/events/registry.ts:376](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/registry.ts#L376)
+Defined in: [src/events/registry.ts:376](https://github.com/footprintjs/agentfootprint/blob/main/src/events/registry.ts#L376)
 
 ***
 
@@ -340,7 +340,7 @@ Defined in: [src/events/registry.ts:376](https://github.com/footprintjs/agentfoo
 
 > **agentfootprint.permission.gate\_closed**: [`AgentfootprintEventEnvelope`](/docs/api/interfaces/AgentfootprintEventEnvelope)\<`"agentfootprint.permission.gate_closed"`, [`PermissionGateClosedPayload`](/docs/api/agentfootprint/namespaces/Payloads/interfaces/PermissionGateClosedPayload)\>
 
-Defined in: [src/events/registry.ts:384](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/registry.ts#L384)
+Defined in: [src/events/registry.ts:384](https://github.com/footprintjs/agentfootprint/blob/main/src/events/registry.ts#L384)
 
 ***
 
@@ -348,7 +348,7 @@ Defined in: [src/events/registry.ts:384](https://github.com/footprintjs/agentfoo
 
 > **agentfootprint.permission.gate\_opened**: [`AgentfootprintEventEnvelope`](/docs/api/interfaces/AgentfootprintEventEnvelope)\<`"agentfootprint.permission.gate_opened"`, [`PermissionGateOpenedPayload`](/docs/api/agentfootprint/namespaces/Payloads/interfaces/PermissionGateOpenedPayload)\>
 
-Defined in: [src/events/registry.ts:380](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/registry.ts#L380)
+Defined in: [src/events/registry.ts:380](https://github.com/footprintjs/agentfootprint/blob/main/src/events/registry.ts#L380)
 
 ***
 
@@ -356,7 +356,7 @@ Defined in: [src/events/registry.ts:380](https://github.com/footprintjs/agentfoo
 
 > **agentfootprint.permission.halt**: [`AgentfootprintEventEnvelope`](/docs/api/interfaces/AgentfootprintEventEnvelope)\<`"agentfootprint.permission.halt"`, [`PermissionHaltPayload`](/docs/api/agentfootprint/namespaces/Payloads/interfaces/PermissionHaltPayload)\>
 
-Defined in: [src/events/registry.ts:388](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/registry.ts#L388)
+Defined in: [src/events/registry.ts:388](https://github.com/footprintjs/agentfootprint/blob/main/src/events/registry.ts#L388)
 
 ***
 
@@ -364,7 +364,7 @@ Defined in: [src/events/registry.ts:388](https://github.com/footprintjs/agentfoo
 
 > **agentfootprint.reliability.fail\_fast**: [`AgentfootprintEventEnvelope`](/docs/api/interfaces/AgentfootprintEventEnvelope)\<`"agentfootprint.reliability.fail_fast"`, [`ReliabilityFailFastPayload`](/docs/api/agentfootprint/namespaces/Payloads/interfaces/ReliabilityFailFastPayload)\>
 
-Defined in: [src/events/registry.ts:450](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/registry.ts#L450)
+Defined in: [src/events/registry.ts:450](https://github.com/footprintjs/agentfootprint/blob/main/src/events/registry.ts#L450)
 
 ***
 
@@ -372,7 +372,7 @@ Defined in: [src/events/registry.ts:450](https://github.com/footprintjs/agentfoo
 
 > **agentfootprint.reliability.recovered**: [`AgentfootprintEventEnvelope`](/docs/api/interfaces/AgentfootprintEventEnvelope)\<`"agentfootprint.reliability.recovered"`, [`ReliabilityRecoveredPayload`](/docs/api/agentfootprint/namespaces/Payloads/interfaces/ReliabilityRecoveredPayload)\>
 
-Defined in: [src/events/registry.ts:458](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/registry.ts#L458)
+Defined in: [src/events/registry.ts:458](https://github.com/footprintjs/agentfootprint/blob/main/src/events/registry.ts#L458)
 
 ***
 
@@ -380,7 +380,7 @@ Defined in: [src/events/registry.ts:458](https://github.com/footprintjs/agentfoo
 
 > **agentfootprint.reliability.retried**: [`AgentfootprintEventEnvelope`](/docs/api/interfaces/AgentfootprintEventEnvelope)\<`"agentfootprint.reliability.retried"`, [`ReliabilityRetriedPayload`](/docs/api/agentfootprint/namespaces/Payloads/interfaces/ReliabilityRetriedPayload)\>
 
-Defined in: [src/events/registry.ts:454](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/registry.ts#L454)
+Defined in: [src/events/registry.ts:454](https://github.com/footprintjs/agentfootprint/blob/main/src/events/registry.ts#L454)
 
 ***
 
@@ -388,7 +388,7 @@ Defined in: [src/events/registry.ts:454](https://github.com/footprintjs/agentfoo
 
 > **agentfootprint.risk.flagged**: [`AgentfootprintEventEnvelope`](/docs/api/interfaces/AgentfootprintEventEnvelope)\<`"agentfootprint.risk.flagged"`, [`RiskFlaggedPayload`](/docs/api/agentfootprint/namespaces/Payloads/interfaces/RiskFlaggedPayload)\>
 
-Defined in: [src/events/registry.ts:410](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/registry.ts#L410)
+Defined in: [src/events/registry.ts:410](https://github.com/footprintjs/agentfootprint/blob/main/src/events/registry.ts#L410)
 
 ***
 
@@ -396,7 +396,7 @@ Defined in: [src/events/registry.ts:410](https://github.com/footprintjs/agentfoo
 
 > **agentfootprint.skill.activated**: [`AgentfootprintEventEnvelope`](/docs/api/interfaces/AgentfootprintEventEnvelope)\<`"agentfootprint.skill.activated"`, [`SkillActivatedPayload`](/docs/api/agentfootprint/namespaces/Payloads/interfaces/SkillActivatedPayload)\>
 
-Defined in: [src/events/registry.ts:358](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/registry.ts#L358)
+Defined in: [src/events/registry.ts:358](https://github.com/footprintjs/agentfootprint/blob/main/src/events/registry.ts#L358)
 
 ***
 
@@ -404,7 +404,7 @@ Defined in: [src/events/registry.ts:358](https://github.com/footprintjs/agentfoo
 
 > **agentfootprint.skill.deactivated**: [`AgentfootprintEventEnvelope`](/docs/api/interfaces/AgentfootprintEventEnvelope)\<`"agentfootprint.skill.deactivated"`, [`SkillDeactivatedPayload`](/docs/api/agentfootprint/namespaces/Payloads/interfaces/SkillDeactivatedPayload)\>
 
-Defined in: [src/events/registry.ts:362](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/registry.ts#L362)
+Defined in: [src/events/registry.ts:362](https://github.com/footprintjs/agentfootprint/blob/main/src/events/registry.ts#L362)
 
 ***
 
@@ -412,7 +412,7 @@ Defined in: [src/events/registry.ts:362](https://github.com/footprintjs/agentfoo
 
 > **agentfootprint.skill.rejected**: [`AgentfootprintEventEnvelope`](/docs/api/interfaces/AgentfootprintEventEnvelope)\<`"agentfootprint.skill.rejected"`, [`SkillRejectedPayload`](/docs/api/agentfootprint/namespaces/Payloads/interfaces/SkillRejectedPayload)\>
 
-Defined in: [src/events/registry.ts:366](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/registry.ts#L366)
+Defined in: [src/events/registry.ts:366](https://github.com/footprintjs/agentfootprint/blob/main/src/events/registry.ts#L366)
 
 ***
 
@@ -420,7 +420,7 @@ Defined in: [src/events/registry.ts:366](https://github.com/footprintjs/agentfoo
 
 > **agentfootprint.stream.llm\_end**: [`AgentfootprintEventEnvelope`](/docs/api/interfaces/AgentfootprintEventEnvelope)\<`"agentfootprint.stream.llm_end"`, [`LLMEndPayload`](/docs/api/agentfootprint/namespaces/Payloads/interfaces/LLMEndPayload)\>
 
-Defined in: [src/events/registry.ts:270](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/registry.ts#L270)
+Defined in: [src/events/registry.ts:270](https://github.com/footprintjs/agentfootprint/blob/main/src/events/registry.ts#L270)
 
 ***
 
@@ -428,7 +428,7 @@ Defined in: [src/events/registry.ts:270](https://github.com/footprintjs/agentfoo
 
 > **agentfootprint.stream.llm\_start**: [`AgentfootprintEventEnvelope`](/docs/api/interfaces/AgentfootprintEventEnvelope)\<`"agentfootprint.stream.llm_start"`, [`LLMStartPayload`](/docs/api/agentfootprint/namespaces/Payloads/interfaces/LLMStartPayload)\>
 
-Defined in: [src/events/registry.ts:266](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/registry.ts#L266)
+Defined in: [src/events/registry.ts:266](https://github.com/footprintjs/agentfootprint/blob/main/src/events/registry.ts#L266)
 
 ***
 
@@ -436,7 +436,7 @@ Defined in: [src/events/registry.ts:266](https://github.com/footprintjs/agentfoo
 
 > **agentfootprint.stream.thinking\_delta**: [`AgentfootprintEventEnvelope`](/docs/api/interfaces/AgentfootprintEventEnvelope)\<`"agentfootprint.stream.thinking_delta"`, [`StreamThinkingDeltaPayload`](/docs/api/agentfootprint/namespaces/Payloads/interfaces/StreamThinkingDeltaPayload)\>
 
-Defined in: [src/events/registry.ts:286](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/registry.ts#L286)
+Defined in: [src/events/registry.ts:286](https://github.com/footprintjs/agentfootprint/blob/main/src/events/registry.ts#L286)
 
 ***
 
@@ -444,7 +444,7 @@ Defined in: [src/events/registry.ts:286](https://github.com/footprintjs/agentfoo
 
 > **agentfootprint.stream.thinking\_end**: [`AgentfootprintEventEnvelope`](/docs/api/interfaces/AgentfootprintEventEnvelope)\<`"agentfootprint.stream.thinking_end"`, [`StreamThinkingEndPayload`](/docs/api/agentfootprint/namespaces/Payloads/interfaces/StreamThinkingEndPayload)\>
 
-Defined in: [src/events/registry.ts:290](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/registry.ts#L290)
+Defined in: [src/events/registry.ts:290](https://github.com/footprintjs/agentfootprint/blob/main/src/events/registry.ts#L290)
 
 ***
 
@@ -452,7 +452,7 @@ Defined in: [src/events/registry.ts:290](https://github.com/footprintjs/agentfoo
 
 > **agentfootprint.stream.token**: [`AgentfootprintEventEnvelope`](/docs/api/interfaces/AgentfootprintEventEnvelope)\<`"agentfootprint.stream.token"`, [`LLMTokenPayload`](/docs/api/agentfootprint/namespaces/Payloads/interfaces/LLMTokenPayload)\>
 
-Defined in: [src/events/registry.ts:274](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/registry.ts#L274)
+Defined in: [src/events/registry.ts:274](https://github.com/footprintjs/agentfootprint/blob/main/src/events/registry.ts#L274)
 
 ***
 
@@ -460,7 +460,7 @@ Defined in: [src/events/registry.ts:274](https://github.com/footprintjs/agentfoo
 
 > **agentfootprint.stream.tool\_end**: [`AgentfootprintEventEnvelope`](/docs/api/interfaces/AgentfootprintEventEnvelope)\<`"agentfootprint.stream.tool_end"`, [`ToolEndPayload`](/docs/api/agentfootprint/namespaces/Payloads/interfaces/ToolEndPayload)\>
 
-Defined in: [src/events/registry.ts:282](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/registry.ts#L282)
+Defined in: [src/events/registry.ts:282](https://github.com/footprintjs/agentfootprint/blob/main/src/events/registry.ts#L282)
 
 ***
 
@@ -468,7 +468,7 @@ Defined in: [src/events/registry.ts:282](https://github.com/footprintjs/agentfoo
 
 > **agentfootprint.stream.tool\_start**: [`AgentfootprintEventEnvelope`](/docs/api/interfaces/AgentfootprintEventEnvelope)\<`"agentfootprint.stream.tool_start"`, [`ToolStartPayload`](/docs/api/agentfootprint/namespaces/Payloads/interfaces/ToolStartPayload)\>
 
-Defined in: [src/events/registry.ts:278](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/registry.ts#L278)
+Defined in: [src/events/registry.ts:278](https://github.com/footprintjs/agentfootprint/blob/main/src/events/registry.ts#L278)
 
 ***
 
@@ -476,7 +476,7 @@ Defined in: [src/events/registry.ts:278](https://github.com/footprintjs/agentfoo
 
 > **agentfootprint.tools.activated**: [`AgentfootprintEventEnvelope`](/docs/api/interfaces/AgentfootprintEventEnvelope)\<`"agentfootprint.tools.activated"`, [`ToolsActivatedPayload`](/docs/api/agentfootprint/namespaces/Payloads/interfaces/ToolsActivatedPayload)\>
 
-Defined in: [src/events/registry.ts:337](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/registry.ts#L337)
+Defined in: [src/events/registry.ts:337](https://github.com/footprintjs/agentfootprint/blob/main/src/events/registry.ts#L337)
 
 ***
 
@@ -484,7 +484,7 @@ Defined in: [src/events/registry.ts:337](https://github.com/footprintjs/agentfoo
 
 > **agentfootprint.tools.deactivated**: [`AgentfootprintEventEnvelope`](/docs/api/interfaces/AgentfootprintEventEnvelope)\<`"agentfootprint.tools.deactivated"`, [`ToolsDeactivatedPayload`](/docs/api/agentfootprint/namespaces/Payloads/interfaces/ToolsDeactivatedPayload)\>
 
-Defined in: [src/events/registry.ts:341](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/registry.ts#L341)
+Defined in: [src/events/registry.ts:341](https://github.com/footprintjs/agentfootprint/blob/main/src/events/registry.ts#L341)
 
 ***
 
@@ -492,7 +492,7 @@ Defined in: [src/events/registry.ts:341](https://github.com/footprintjs/agentfoo
 
 > **agentfootprint.tools.discovery\_completed**: [`AgentfootprintEventEnvelope`](/docs/api/interfaces/AgentfootprintEventEnvelope)\<`"agentfootprint.tools.discovery_completed"`, [`ToolsDiscoveryCompletedPayload`](/docs/api/agentfootprint/namespaces/Payloads/interfaces/ToolsDiscoveryCompletedPayload)\>
 
-Defined in: [src/events/registry.ts:349](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/registry.ts#L349)
+Defined in: [src/events/registry.ts:349](https://github.com/footprintjs/agentfootprint/blob/main/src/events/registry.ts#L349)
 
 ***
 
@@ -500,7 +500,7 @@ Defined in: [src/events/registry.ts:349](https://github.com/footprintjs/agentfoo
 
 > **agentfootprint.tools.discovery\_failed**: [`AgentfootprintEventEnvelope`](/docs/api/interfaces/AgentfootprintEventEnvelope)\<`"agentfootprint.tools.discovery_failed"`, [`ToolsDiscoveryFailedPayload`](/docs/api/agentfootprint/namespaces/Payloads/interfaces/ToolsDiscoveryFailedPayload)\>
 
-Defined in: [src/events/registry.ts:353](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/registry.ts#L353)
+Defined in: [src/events/registry.ts:353](https://github.com/footprintjs/agentfootprint/blob/main/src/events/registry.ts#L353)
 
 ***
 
@@ -508,7 +508,7 @@ Defined in: [src/events/registry.ts:353](https://github.com/footprintjs/agentfoo
 
 > **agentfootprint.tools.discovery\_started**: [`AgentfootprintEventEnvelope`](/docs/api/interfaces/AgentfootprintEventEnvelope)\<`"agentfootprint.tools.discovery_started"`, [`ToolsDiscoveryStartedPayload`](/docs/api/agentfootprint/namespaces/Payloads/interfaces/ToolsDiscoveryStartedPayload)\>
 
-Defined in: [src/events/registry.ts:345](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/registry.ts#L345)
+Defined in: [src/events/registry.ts:345](https://github.com/footprintjs/agentfootprint/blob/main/src/events/registry.ts#L345)
 
 ***
 
@@ -516,7 +516,7 @@ Defined in: [src/events/registry.ts:345](https://github.com/footprintjs/agentfoo
 
 > **agentfootprint.tools.offered**: [`AgentfootprintEventEnvelope`](/docs/api/interfaces/AgentfootprintEventEnvelope)\<`"agentfootprint.tools.offered"`, [`ToolsOfferedPayload`](/docs/api/agentfootprint/namespaces/Payloads/interfaces/ToolsOfferedPayload)\>
 
-Defined in: [src/events/registry.ts:333](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/registry.ts#L333)
+Defined in: [src/events/registry.ts:333](https://github.com/footprintjs/agentfootprint/blob/main/src/events/registry.ts#L333)
 
 ***
 
@@ -524,4 +524,4 @@ Defined in: [src/events/registry.ts:333](https://github.com/footprintjs/agentfoo
 
 > **agentfootprint.validation.args\_invalid**: [`AgentfootprintEventEnvelope`](/docs/api/interfaces/AgentfootprintEventEnvelope)\<`"agentfootprint.validation.args_invalid"`, [`ValidationArgsInvalidPayload`](/docs/api/agentfootprint/namespaces/Payloads/interfaces/ValidationArgsInvalidPayload)\>
 
-Defined in: [src/events/registry.ts:371](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/registry.ts#L371)
+Defined in: [src/events/registry.ts:371](https://github.com/footprintjs/agentfootprint/blob/main/src/events/registry.ts#L371)

@@ -4,7 +4,7 @@ title: MemoryDefinition<T>
 
 # Interface: MemoryDefinition\<T\>
 
-Defined in: [src/memory/define.types.ts:235](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/memory/define.types.ts#L235)
+Defined in: [src/memory/define.types.ts:235](https://github.com/footprintjs/agentfootprint/blob/main/src/memory/define.types.ts#L235)
 
 The opaque value `defineMemory()` returns. `Agent.memory()` consumes
 one of these per memory the consumer registers; multiple definitions
@@ -26,7 +26,7 @@ causal. The factory infers `T` from `type`.
 
 > `readonly` **asRole**: [`ContextRole`](/docs/api/type-aliases/ContextRole)
 
-Defined in: [src/memory/define.types.ts:255](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/memory/define.types.ts#L255)
+Defined in: [src/memory/define.types.ts:255](https://github.com/footprintjs/agentfootprint/blob/main/src/memory/define.types.ts#L255)
 
 Role to use when injecting formatted content into the messages slot.
 
@@ -36,7 +36,7 @@ Role to use when injecting formatted content into the messages slot.
 
 > `readonly` `optional` **description?**: `string`
 
-Defined in: [src/memory/define.types.ts:240](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/memory/define.types.ts#L240)
+Defined in: [src/memory/define.types.ts:240](https://github.com/footprintjs/agentfootprint/blob/main/src/memory/define.types.ts#L240)
 
 Surfaces in narrative / Lens hover.
 
@@ -46,7 +46,7 @@ Surfaces in narrative / Lens hover.
 
 > `readonly` **id**: `string`
 
-Defined in: [src/memory/define.types.ts:237](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/memory/define.types.ts#L237)
+Defined in: [src/memory/define.types.ts:237](https://github.com/footprintjs/agentfootprint/blob/main/src/memory/define.types.ts#L237)
 
 Stable identifier. Becomes the scope-key suffix and the Lens label.
 
@@ -56,7 +56,7 @@ Stable identifier. Becomes the scope-key suffix and the Lens label.
 
 > `readonly` `optional` **projection?**: [`SnapshotProjection`](/docs/api/type-aliases/SnapshotProjection)
 
-Defined in: [src/memory/define.types.ts:261](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/memory/define.types.ts#L261)
+Defined in: [src/memory/define.types.ts:261](https://github.com/footprintjs/agentfootprint/blob/main/src/memory/define.types.ts#L261)
 
 Snapshot projection — only meaningful when `type === CAUSAL`.
 
@@ -66,7 +66,7 @@ Snapshot projection — only meaningful when `type === CAUSAL`.
 
 > `readonly` **read**: `ReadonlyMemoryFlowChart`\<`T`\>
 
-Defined in: [src/memory/define.types.ts:246](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/memory/define.types.ts#L246)
+Defined in: [src/memory/define.types.ts:246](https://github.com/footprintjs/agentfootprint/blob/main/src/memory/define.types.ts#L246)
 
 Compiled read subflow (built by the factory from type × strategy).
 
@@ -76,7 +76,7 @@ Compiled read subflow (built by the factory from type × strategy).
 
 > `readonly` `optional` **redact?**: `MemoryRedactionPolicy`
 
-Defined in: [src/memory/define.types.ts:258](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/memory/define.types.ts#L258)
+Defined in: [src/memory/define.types.ts:258](https://github.com/footprintjs/agentfootprint/blob/main/src/memory/define.types.ts#L258)
 
 Reserved for a future release — patterns to redact before write.
 
@@ -86,7 +86,7 @@ Reserved for a future release — patterns to redact before write.
 
 > `readonly` **timing**: [`MemoryTiming`](/docs/api/type-aliases/MemoryTiming)
 
-Defined in: [src/memory/define.types.ts:252](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/memory/define.types.ts#L252)
+Defined in: [src/memory/define.types.ts:252](https://github.com/footprintjs/agentfootprint/blob/main/src/memory/define.types.ts#L252)
 
 When `read` runs. Default `TURN_START`.
 
@@ -96,7 +96,7 @@ When `read` runs. Default `TURN_START`.
 
 > `readonly` **type**: [`MemoryType`](/docs/api/type-aliases/MemoryType)
 
-Defined in: [src/memory/define.types.ts:243](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/memory/define.types.ts#L243)
+Defined in: [src/memory/define.types.ts:243](https://github.com/footprintjs/agentfootprint/blob/main/src/memory/define.types.ts#L243)
 
 Which TYPE shape — gates legal STRATEGY combinations.
 
@@ -106,6 +106,6 @@ Which TYPE shape — gates legal STRATEGY combinations.
 
 > `readonly` `optional` **write?**: `ReadonlyMemoryFlowChart`\<`T`\>
 
-Defined in: [src/memory/define.types.ts:249](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/memory/define.types.ts#L249)
+Defined in: [src/memory/define.types.ts:249](https://github.com/footprintjs/agentfootprint/blob/main/src/memory/define.types.ts#L249)
 
 Compiled write subflow. Optional — `EPHEMERAL`-style configs omit.

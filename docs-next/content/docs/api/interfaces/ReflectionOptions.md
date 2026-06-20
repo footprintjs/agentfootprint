@@ -4,7 +4,7 @@ title: ReflectionOptions
 
 # Interface: ReflectionOptions
 
-Defined in: [src/patterns/Reflection.ts:20](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/patterns/Reflection.ts#L20)
+Defined in: [src/patterns/Reflection.ts:20](https://github.com/footprintjs/agentfootprint/blob/main/src/patterns/Reflection.ts#L20)
 
 ## Properties
 
@@ -12,7 +12,7 @@ Defined in: [src/patterns/Reflection.ts:20](https://github.com/footprintjs/agent
 
 > `readonly` **criticPrompt**: `string`
 
-Defined in: [src/patterns/Reflection.ts:31](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/patterns/Reflection.ts#L31)
+Defined in: [src/patterns/Reflection.ts:31](https://github.com/footprintjs/agentfootprint/blob/main/src/patterns/Reflection.ts#L31)
 
 System prompt for the critic. Should instruct the critic to return
 "DONE" (or a consumer-chosen sentinel) when the proposal is good
@@ -25,7 +25,7 @@ the refinement loop.
 
 > `readonly` `optional` **id?**: `string`
 
-Defined in: [src/patterns/Reflection.ts:43](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/patterns/Reflection.ts#L43)
+Defined in: [src/patterns/Reflection.ts:43](https://github.com/footprintjs/agentfootprint/blob/main/src/patterns/Reflection.ts#L43)
 
 ***
 
@@ -33,7 +33,7 @@ Defined in: [src/patterns/Reflection.ts:43](https://github.com/footprintjs/agent
 
 > `readonly` `optional` **maxIterations?**: `number`
 
-Defined in: [src/patterns/Reflection.ts:39](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/patterns/Reflection.ts#L39)
+Defined in: [src/patterns/Reflection.ts:39](https://github.com/footprintjs/agentfootprint/blob/main/src/patterns/Reflection.ts#L39)
 
 Max refinement iterations. Default 3.
 
@@ -43,7 +43,7 @@ Max refinement iterations. Default 3.
 
 > `readonly` `optional` **maxTokens?**: `number`
 
-Defined in: [src/patterns/Reflection.ts:41](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/patterns/Reflection.ts#L41)
+Defined in: [src/patterns/Reflection.ts:41](https://github.com/footprintjs/agentfootprint/blob/main/src/patterns/Reflection.ts#L41)
 
 ***
 
@@ -51,7 +51,7 @@ Defined in: [src/patterns/Reflection.ts:41](https://github.com/footprintjs/agent
 
 > `readonly` **model**: `string`
 
-Defined in: [src/patterns/Reflection.ts:22](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/patterns/Reflection.ts#L22)
+Defined in: [src/patterns/Reflection.ts:22](https://github.com/footprintjs/agentfootprint/blob/main/src/patterns/Reflection.ts#L22)
 
 ***
 
@@ -59,7 +59,7 @@ Defined in: [src/patterns/Reflection.ts:22](https://github.com/footprintjs/agent
 
 > `readonly` `optional` **name?**: `string`
 
-Defined in: [src/patterns/Reflection.ts:42](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/patterns/Reflection.ts#L42)
+Defined in: [src/patterns/Reflection.ts:42](https://github.com/footprintjs/agentfootprint/blob/main/src/patterns/Reflection.ts#L42)
 
 ***
 
@@ -67,7 +67,7 @@ Defined in: [src/patterns/Reflection.ts:42](https://github.com/footprintjs/agent
 
 > `readonly` **proposerPrompt**: `string`
 
-Defined in: [src/patterns/Reflection.ts:24](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/patterns/Reflection.ts#L24)
+Defined in: [src/patterns/Reflection.ts:24](https://github.com/footprintjs/agentfootprint/blob/main/src/patterns/Reflection.ts#L24)
 
 System prompt for the initial / revision proposer.
 
@@ -77,7 +77,7 @@ System prompt for the initial / revision proposer.
 
 > `readonly` **provider**: [`LLMProvider`](/docs/api/interfaces/LLMProvider)
 
-Defined in: [src/patterns/Reflection.ts:21](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/patterns/Reflection.ts#L21)
+Defined in: [src/patterns/Reflection.ts:21](https://github.com/footprintjs/agentfootprint/blob/main/src/patterns/Reflection.ts#L21)
 
 ***
 
@@ -85,7 +85,7 @@ Defined in: [src/patterns/Reflection.ts:21](https://github.com/footprintjs/agent
 
 > `readonly` `optional` **temperature?**: `number`
 
-Defined in: [src/patterns/Reflection.ts:40](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/patterns/Reflection.ts#L40)
+Defined in: [src/patterns/Reflection.ts:40](https://github.com/footprintjs/agentfootprint/blob/main/src/patterns/Reflection.ts#L40)
 
 ***
 
@@ -93,7 +93,7 @@ Defined in: [src/patterns/Reflection.ts:40](https://github.com/footprintjs/agent
 
 > `readonly` `optional` **untilCritiqueContains?**: `string`
 
-Defined in: [src/patterns/Reflection.ts:37](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/patterns/Reflection.ts#L37)
+Defined in: [src/patterns/Reflection.ts:37](https://github.com/footprintjs/agentfootprint/blob/main/src/patterns/Reflection.ts#L37)
 
 Stop string the critic should emit when satisfied. When the critic's
 response contains this substring, the loop exits and the last

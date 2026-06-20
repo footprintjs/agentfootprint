@@ -4,7 +4,7 @@ title: ToSSEOptions
 
 # Interface: ToSSEOptions
 
-Defined in: [src/stream.ts:36](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/stream.ts#L36)
+Defined in: [src/stream.ts:36](https://github.com/footprintjs/agentfootprint/blob/main/src/stream.ts#L36)
 
 Hand the runner this iterable's caller before calling `runner.run()`.
 Yields SSE-formatted strings until the run finishes (success, error,
@@ -34,7 +34,7 @@ or pause). Each event becomes:
 
 > `readonly` `optional` **eventName?**: (`event`) => `string`
 
-Defined in: [src/stream.ts:55](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/stream.ts#L55)
+Defined in: [src/stream.ts:55](https://github.com/footprintjs/agentfootprint/blob/main/src/stream.ts#L55)
 
 Custom event name extractor. By default `event.type` is used.
 Useful for SSE consumers that want their own naming.
@@ -55,7 +55,7 @@ Useful for SSE consumers that want their own naming.
 
 > `readonly` `optional` **filter?**: (`event`) => `boolean`
 
-Defined in: [src/stream.ts:42](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/stream.ts#L42)
+Defined in: [src/stream.ts:42](https://github.com/footprintjs/agentfootprint/blob/main/src/stream.ts#L42)
 
 Filter predicate — return false to skip an event. Default: all events.
 Common: `event => event.type.startsWith('agentfootprint.stream.')`
@@ -77,7 +77,7 @@ for a token-only feed.
 
 > `readonly` `optional` **format?**: `"full"` \| `"text"`
 
-Defined in: [src/stream.ts:50](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/stream.ts#L50)
+Defined in: [src/stream.ts:50](https://github.com/footprintjs/agentfootprint/blob/main/src/stream.ts#L50)
 
 Output shape:
   - 'full' (default) — each event is JSON-serialized verbatim.
@@ -91,7 +91,7 @@ Output shape:
 
 > `readonly` `optional` **heartbeatMs?**: `number`
 
-Defined in: [src/stream.ts:61](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/stream.ts#L61)
+Defined in: [src/stream.ts:61](https://github.com/footprintjs/agentfootprint/blob/main/src/stream.ts#L61)
 
 Heartbeat interval in ms. SSE connections through proxies/load
 balancers often die after ~30s of silence; emit `: ping` comments

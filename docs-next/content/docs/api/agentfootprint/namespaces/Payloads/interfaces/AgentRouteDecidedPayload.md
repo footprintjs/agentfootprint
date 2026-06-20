@@ -4,7 +4,7 @@ title: AgentRouteDecidedPayload
 
 # Interface: AgentRouteDecidedPayload
 
-Defined in: [src/events/payloads.ts:129](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L129)
+Defined in: [src/events/payloads.ts:129](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L129)
 
 ## Properties
 
@@ -12,7 +12,7 @@ Defined in: [src/events/payloads.ts:129](https://github.com/footprintjs/agentfoo
 
 > `readonly` **chosen**: `"tool-calls"` \| `"final"`
 
-Defined in: [src/events/payloads.ts:132](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L132)
+Defined in: [src/events/payloads.ts:132](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L132)
 
 ***
 
@@ -20,7 +20,7 @@ Defined in: [src/events/payloads.ts:132](https://github.com/footprintjs/agentfoo
 
 > `readonly` **iterIndex**: `number`
 
-Defined in: [src/events/payloads.ts:131](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L131)
+Defined in: [src/events/payloads.ts:131](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L131)
 
 ***
 
@@ -28,7 +28,7 @@ Defined in: [src/events/payloads.ts:131](https://github.com/footprintjs/agentfoo
 
 > `readonly` `optional` **rationale?**: `string`
 
-Defined in: [src/events/payloads.ts:133](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L133)
+Defined in: [src/events/payloads.ts:133](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L133)
 
 ***
 
@@ -36,4 +36,4 @@ Defined in: [src/events/payloads.ts:133](https://github.com/footprintjs/agentfoo
 
 > `readonly` **turnIndex**: `number`
 
-Defined in: [src/events/payloads.ts:130](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L130)
+Defined in: [src/events/payloads.ts:130](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L130)

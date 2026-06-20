@@ -4,7 +4,7 @@ title: ParallelBranchOptions
 
 # Interface: ParallelBranchOptions
 
-Defined in: [src/core-flow/Parallel.ts:128](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/core-flow/Parallel.ts#L128)
+Defined in: [src/core-flow/Parallel.ts:128](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Parallel.ts#L128)
 
 Options bag accepted by `ParallelBuilder.branch()` for per-method
 overrides. Backwards-compatible with the legacy
@@ -17,7 +17,7 @@ string it's still treated as `name`.
 
 > `readonly` `optional` **groupTranslator?**: [`GroupTranslator`](/docs/api/interfaces/GroupTranslator)\<`unknown`\>
 
-Defined in: [src/core-flow/Parallel.ts:132](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/core-flow/Parallel.ts#L132)
+Defined in: [src/core-flow/Parallel.ts:132](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Parallel.ts#L132)
 
 Per-method translator override. See `BranchEntry.groupTranslator`.
 
@@ -27,7 +27,7 @@ Per-method translator override. See `BranchEntry.groupTranslator`.
 
 > `readonly` `optional` **name?**: `string`
 
-Defined in: [src/core-flow/Parallel.ts:130](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/core-flow/Parallel.ts#L130)
+Defined in: [src/core-flow/Parallel.ts:130](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Parallel.ts#L130)
 
 Human-friendly name for this branch. Default: the branch id.
 
@@ -37,7 +37,7 @@ Human-friendly name for this branch. Default: the branch id.
 
 > `readonly` `optional` **required?**: `boolean`
 
-Defined in: [src/core-flow/Parallel.ts:170](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/core-flow/Parallel.ts#L170)
+Defined in: [src/core-flow/Parallel.ts:170](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Parallel.ts#L170)
 
 Mark this branch as REQUIRED: its failure rejects the whole Parallel
 run — even under a tolerant `.mergeOutcomesWithFn()` merge — with an

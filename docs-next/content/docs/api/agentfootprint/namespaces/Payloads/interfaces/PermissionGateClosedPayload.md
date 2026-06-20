@@ -4,7 +4,7 @@ title: PermissionGateClosedPayload
 
 # Interface: PermissionGateClosedPayload
 
-Defined in: [src/events/payloads.ts:529](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L529)
+Defined in: [src/events/payloads.ts:529](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L529)
 
 ## Properties
 
@@ -12,7 +12,7 @@ Defined in: [src/events/payloads.ts:529](https://github.com/footprintjs/agentfoo
 
 > `readonly` **gateId**: `string`
 
-Defined in: [src/events/payloads.ts:530](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L530)
+Defined in: [src/events/payloads.ts:530](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L530)
 
 ***
 
@@ -20,4 +20,4 @@ Defined in: [src/events/payloads.ts:530](https://github.com/footprintjs/agentfoo
 
 > `readonly` **reason**: `string`
 
-Defined in: [src/events/payloads.ts:531](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L531)
+Defined in: [src/events/payloads.ts:531](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L531)

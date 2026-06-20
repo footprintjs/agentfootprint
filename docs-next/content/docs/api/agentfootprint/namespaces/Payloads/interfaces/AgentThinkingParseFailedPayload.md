@@ -4,7 +4,7 @@ title: AgentThinkingParseFailedPayload
 
 # Interface: AgentThinkingParseFailedPayload
 
-Defined in: [src/events/payloads.ts:862](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L862)
+Defined in: [src/events/payloads.ts:862](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L862)
 
 Emitted (v2.14) when a `ThinkingHandler.normalize()` call throws.
 The framework catches the throw, drops the thinking blocks (they
@@ -28,7 +28,7 @@ the consumer expected to be redacted. Same guidance as
 
 > `readonly` **error**: `string`
 
-Defined in: [src/events/payloads.ts:865](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L865)
+Defined in: [src/events/payloads.ts:865](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L865)
 
 ***
 
@@ -36,7 +36,7 @@ Defined in: [src/events/payloads.ts:865](https://github.com/footprintjs/agentfoo
 
 > `readonly` **errorName**: `string`
 
-Defined in: [src/events/payloads.ts:866](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L866)
+Defined in: [src/events/payloads.ts:866](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L866)
 
 ***
 
@@ -44,7 +44,7 @@ Defined in: [src/events/payloads.ts:866](https://github.com/footprintjs/agentfoo
 
 > `readonly` **iteration**: `number`
 
-Defined in: [src/events/payloads.ts:867](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L867)
+Defined in: [src/events/payloads.ts:867](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L867)
 
 ***
 
@@ -52,7 +52,7 @@ Defined in: [src/events/payloads.ts:867](https://github.com/footprintjs/agentfoo
 
 > `readonly` **providerName**: `string`
 
-Defined in: [src/events/payloads.ts:863](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L863)
+Defined in: [src/events/payloads.ts:863](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L863)
 
 ***
 
@@ -60,4 +60,4 @@ Defined in: [src/events/payloads.ts:863](https://github.com/footprintjs/agentfoo
 
 > `readonly` **subflowId**: `string`
 
-Defined in: [src/events/payloads.ts:864](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L864)
+Defined in: [src/events/payloads.ts:864](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L864)

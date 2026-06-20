@@ -4,7 +4,7 @@ title: ErrorFatalPayload
 
 # Interface: ErrorFatalPayload
 
-Defined in: [src/events/payloads.ts:315](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L315)
+Defined in: [src/events/payloads.ts:315](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L315)
 
 ## Properties
 
@@ -12,7 +12,7 @@ Defined in: [src/events/payloads.ts:315](https://github.com/footprintjs/agentfoo
 
 > `readonly` **error**: `string`
 
-Defined in: [src/events/payloads.ts:316](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L316)
+Defined in: [src/events/payloads.ts:316](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L316)
 
 ***
 
@@ -20,7 +20,7 @@ Defined in: [src/events/payloads.ts:316](https://github.com/footprintjs/agentfoo
 
 > `readonly` **scope**: `string`
 
-Defined in: [src/events/payloads.ts:318](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L318)
+Defined in: [src/events/payloads.ts:318](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L318)
 
 ***
 
@@ -28,4 +28,4 @@ Defined in: [src/events/payloads.ts:318](https://github.com/footprintjs/agentfoo
 
 > `readonly` **stage**: `string`
 
-Defined in: [src/events/payloads.ts:317](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L317)
+Defined in: [src/events/payloads.ts:317](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L317)

@@ -6,7 +6,7 @@ title: MEMORY_TYPES
 
 > `const` **MEMORY\_TYPES**: `object`
 
-Defined in: [src/memory/define.types.ts:57](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/memory/define.types.ts#L57)
+Defined in: [src/memory/define.types.ts:57](https://github.com/footprintjs/agentfootprint/blob/main/src/memory/define.types.ts#L57)
 
 What shape of memory you're keeping.
 

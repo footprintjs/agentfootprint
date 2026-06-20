@@ -6,7 +6,7 @@ title: validateMessages
 
 > **validateMessages**(`catalog`, `requiredKeys`, `opts?`): `void`
 
-Defined in: [src/locales/index.ts:146](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/locales/index.ts#L146)
+Defined in: [src/locales/index.ts:146](https://github.com/footprintjs/agentfootprint/blob/main/src/locales/index.ts#L146)
 
 Assert that every key in `requiredKeys` is present in `catalog`.
 Throws an Error listing every missing key — batched so consumers

@@ -4,7 +4,7 @@ title: PermissionCheckPayload
 
 # Interface: PermissionCheckPayload
 
-Defined in: [src/events/payloads.ts:487](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L487)
+Defined in: [src/events/payloads.ts:487](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L487)
 
 ## Properties
 
@@ -12,7 +12,7 @@ Defined in: [src/events/payloads.ts:487](https://github.com/footprintjs/agentfoo
 
 > `readonly` **actor**: `string`
 
-Defined in: [src/events/payloads.ts:489](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L489)
+Defined in: [src/events/payloads.ts:489](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L489)
 
 ***
 
@@ -20,7 +20,7 @@ Defined in: [src/events/payloads.ts:489](https://github.com/footprintjs/agentfoo
 
 > `readonly` **capability**: `"tool_call"` \| `"memory_read"` \| `"memory_write"` \| `"external_net"` \| `"user_data"`
 
-Defined in: [src/events/payloads.ts:488](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L488)
+Defined in: [src/events/payloads.ts:488](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L488)
 
 ***
 
@@ -28,7 +28,7 @@ Defined in: [src/events/payloads.ts:488](https://github.com/footprintjs/agentfoo
 
 > `readonly` `optional` **policyEngine?**: `"custom"` \| `"opa"` \| `"cerbos"`
 
-Defined in: [src/events/payloads.ts:492](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L492)
+Defined in: [src/events/payloads.ts:492](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L492)
 
 ***
 
@@ -36,7 +36,7 @@ Defined in: [src/events/payloads.ts:492](https://github.com/footprintjs/agentfoo
 
 > `readonly` `optional` **policyRuleId?**: `string`
 
-Defined in: [src/events/payloads.ts:493](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L493)
+Defined in: [src/events/payloads.ts:493](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L493)
 
 ***
 
@@ -44,7 +44,7 @@ Defined in: [src/events/payloads.ts:493](https://github.com/footprintjs/agentfoo
 
 > `readonly` `optional` **rationale?**: `string`
 
-Defined in: [src/events/payloads.ts:494](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L494)
+Defined in: [src/events/payloads.ts:494](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L494)
 
 ***
 
@@ -52,7 +52,7 @@ Defined in: [src/events/payloads.ts:494](https://github.com/footprintjs/agentfoo
 
 > `readonly` `optional` **reason?**: `string`
 
-Defined in: [src/events/payloads.ts:496](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L496)
+Defined in: [src/events/payloads.ts:496](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L496)
 
 v2.12 — telemetry tag carried through from PermissionDecision.reason.
 
@@ -62,7 +62,7 @@ v2.12 — telemetry tag carried through from PermissionDecision.reason.
 
 > `readonly` **result**: `"allow"` \| `"deny"` \| `"halt"` \| `"gate_open"`
 
-Defined in: [src/events/payloads.ts:491](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L491)
+Defined in: [src/events/payloads.ts:491](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L491)
 
 ***
 
@@ -70,4 +70,4 @@ Defined in: [src/events/payloads.ts:491](https://github.com/footprintjs/agentfoo
 
 > `readonly` `optional` **target?**: `string`
 
-Defined in: [src/events/payloads.ts:490](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L490)
+Defined in: [src/events/payloads.ts:490](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L490)

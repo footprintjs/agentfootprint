@@ -4,7 +4,7 @@ title: ContextEvaluatedPayload
 
 # Interface: ContextEvaluatedPayload
 
-Defined in: [src/events/payloads.ts:261](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L261)
+Defined in: [src/events/payloads.ts:261](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L261)
 
 Fired once per iteration by the Injection Engine after it evaluates every
 Injection's trigger — BEFORE the Context fork routes the survivors into the
@@ -19,7 +19,7 @@ reads it.
 
 > `readonly` **activeCount**: `number`
 
-Defined in: [src/events/payloads.ts:264](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L264)
+Defined in: [src/events/payloads.ts:264](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L264)
 
 Number of injections active this iteration.
 
@@ -29,7 +29,7 @@ Number of injections active this iteration.
 
 > `readonly` **activeIds**: readonly `string`[]
 
-Defined in: [src/events/payloads.ts:270](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L270)
+Defined in: [src/events/payloads.ts:270](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L270)
 
 Ids of the active injections, in evaluation order.
 
@@ -39,7 +39,7 @@ Ids of the active injections, in evaluation order.
 
 > `readonly` **evaluatedTotal**: `number`
 
-Defined in: [src/events/payloads.ts:268](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L268)
+Defined in: [src/events/payloads.ts:268](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L268)
 
 Total injections evaluated (the full declared list).
 
@@ -49,7 +49,7 @@ Total injections evaluated (the full declared list).
 
 > `readonly` **iteration**: `number`
 
-Defined in: [src/events/payloads.ts:262](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L262)
+Defined in: [src/events/payloads.ts:262](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L262)
 
 ***
 
@@ -57,7 +57,7 @@ Defined in: [src/events/payloads.ts:262](https://github.com/footprintjs/agentfoo
 
 > `readonly` `optional` **routing?**: readonly `object`[]
 
-Defined in: [src/events/payloads.ts:296](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L296)
+Defined in: [src/events/payloads.ts:296](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L296)
 
 Routing PROVENANCE for the active injections that came from a `skillGraph()`
 — *why* each was reached. One entry per active skill-graph injection (a
@@ -73,7 +73,7 @@ matched predicate, and the tools a route unlocked. Structural shape (mirrors
 
 > `readonly` **skillCatalog**: readonly `object`[]
 
-Defined in: [src/events/payloads.ts:286](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L286)
+Defined in: [src/events/payloads.ts:286](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L286)
 
 The Skill CATALOG the LLM was offered this turn — every registered Skill's
 `id` + `description` (the same text that lands in the `read_skill` tool
@@ -87,7 +87,7 @@ wrong activation. Empty when no Skills are registered. Static across turns.
 
 > `readonly` **skippedCount**: `number`
 
-Defined in: [src/events/payloads.ts:266](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L266)
+Defined in: [src/events/payloads.ts:266](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L266)
 
 Number skipped (predicate false counts as neither — only errors/unknown land here).
 
@@ -97,7 +97,7 @@ Number skipped (predicate false counts as neither — only errors/unknown land h
 
 > `readonly` **skippedDetails**: readonly `object`[]
 
-Defined in: [src/events/payloads.ts:272](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L272)
+Defined in: [src/events/payloads.ts:272](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L272)
 
 Why each skipped injection was skipped (errors / unknown trigger kinds).
 
@@ -107,6 +107,6 @@ Why each skipped injection was skipped (errors / unknown trigger kinds).
 
 > `readonly` **triggerKindCounts**: `Readonly`\<`Record`\<`string`, `number`\>\>
 
-Defined in: [src/events/payloads.ts:278](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L278)
+Defined in: [src/events/payloads.ts:278](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L278)
 
 Count of active injections by trigger kind (always / rule / on-tool-return / llm-activated).

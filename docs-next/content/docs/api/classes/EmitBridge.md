@@ -4,7 +4,7 @@ title: EmitBridge
 
 # Class: EmitBridge
 
-Defined in: [src/recorders/core/EmitBridge.ts:27](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/recorders/core/EmitBridge.ts#L27)
+Defined in: [src/recorders/core/EmitBridge.ts:27](https://github.com/footprintjs/agentfootprint/blob/main/src/recorders/core/EmitBridge.ts#L27)
 
 ## Implements
 
@@ -16,7 +16,7 @@ Defined in: [src/recorders/core/EmitBridge.ts:27](https://github.com/footprintjs
 
 > **new EmitBridge**(`options`): `EmitBridge`
 
-Defined in: [src/recorders/core/EmitBridge.ts:33](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/recorders/core/EmitBridge.ts#L33)
+Defined in: [src/recorders/core/EmitBridge.ts:33](https://github.com/footprintjs/agentfootprint/blob/main/src/recorders/core/EmitBridge.ts#L33)
 
 #### Parameters
 
@@ -34,7 +34,7 @@ Defined in: [src/recorders/core/EmitBridge.ts:33](https://github.com/footprintjs
 
 > `readonly` **id**: `string`
 
-Defined in: [src/recorders/core/EmitBridge.ts:28](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/recorders/core/EmitBridge.ts#L28)
+Defined in: [src/recorders/core/EmitBridge.ts:28](https://github.com/footprintjs/agentfootprint/blob/main/src/recorders/core/EmitBridge.ts#L28)
 
 #### Implementation of
 
@@ -46,7 +46,7 @@ Defined in: [src/recorders/core/EmitBridge.ts:28](https://github.com/footprintjs
 
 > **onEmit**(`event`): `void`
 
-Defined in: [src/recorders/core/EmitBridge.ts:40](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/recorders/core/EmitBridge.ts#L40)
+Defined in: [src/recorders/core/EmitBridge.ts:40](https://github.com/footprintjs/agentfootprint/blob/main/src/recorders/core/EmitBridge.ts#L40)
 
 Fires for every `scope.$emit(name, payload)` call during a stage.
 Optional — implement only if you want to observe consumer-emitted

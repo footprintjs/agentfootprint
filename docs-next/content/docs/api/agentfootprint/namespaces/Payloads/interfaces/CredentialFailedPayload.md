@@ -4,7 +4,7 @@ title: CredentialFailedPayload
 
 # Interface: CredentialFailedPayload
 
-Defined in: [src/events/payloads.ts:524](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L524)
+Defined in: [src/events/payloads.ts:524](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L524)
 
 Credential resolution failed (the tool is not run). Carries the reason only.
 
@@ -14,7 +14,7 @@ Credential resolution failed (the tool is not run). Carries the reason only.
 
 > `readonly` **reason**: `string`
 
-Defined in: [src/events/payloads.ts:526](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L526)
+Defined in: [src/events/payloads.ts:526](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L526)
 
 ***
 
@@ -22,4 +22,4 @@ Defined in: [src/events/payloads.ts:526](https://github.com/footprintjs/agentfoo
 
 > `readonly` **service**: `string`
 
-Defined in: [src/events/payloads.ts:525](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L525)
+Defined in: [src/events/payloads.ts:525](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L525)

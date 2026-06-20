@@ -4,7 +4,7 @@ title: ToolsDiscoveryCompletedPayload
 
 # Interface: ToolsDiscoveryCompletedPayload
 
-Defined in: [src/events/payloads.ts:410](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L410)
+Defined in: [src/events/payloads.ts:410](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L410)
 
 Emitted when `ToolProvider.list(ctx)` resolves successfully. The
 `durationMs` is the wall-clock between `tools.discovery_started` and
@@ -18,7 +18,7 @@ this is your observability hook for catalog-fetch latency.
 
 > `readonly` **durationMs**: `number`
 
-Defined in: [src/events/payloads.ts:413](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L413)
+Defined in: [src/events/payloads.ts:413](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L413)
 
 ***
 
@@ -26,7 +26,7 @@ Defined in: [src/events/payloads.ts:413](https://github.com/footprintjs/agentfoo
 
 > `readonly` **iteration**: `number`
 
-Defined in: [src/events/payloads.ts:412](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L412)
+Defined in: [src/events/payloads.ts:412](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L412)
 
 ***
 
@@ -34,7 +34,7 @@ Defined in: [src/events/payloads.ts:412](https://github.com/footprintjs/agentfoo
 
 > `readonly` **providerId**: `string` \| `undefined`
 
-Defined in: [src/events/payloads.ts:411](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L411)
+Defined in: [src/events/payloads.ts:411](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L411)
 
 ***
 
@@ -42,4 +42,4 @@ Defined in: [src/events/payloads.ts:411](https://github.com/footprintjs/agentfoo
 
 > `readonly` **toolCount**: `number`
 
-Defined in: [src/events/payloads.ts:414](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L414)
+Defined in: [src/events/payloads.ts:414](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L414)

@@ -4,7 +4,7 @@ title: AgentTurnEndPayload
 
 # Interface: AgentTurnEndPayload
 
-Defined in: [src/events/payloads.ts:102](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L102)
+Defined in: [src/events/payloads.ts:102](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L102)
 
 ## Properties
 
@@ -12,7 +12,7 @@ Defined in: [src/events/payloads.ts:102](https://github.com/footprintjs/agentfoo
 
 > `readonly` **durationMs**: `number`
 
-Defined in: [src/events/payloads.ts:108](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L108)
+Defined in: [src/events/payloads.ts:108](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L108)
 
 ***
 
@@ -20,7 +20,7 @@ Defined in: [src/events/payloads.ts:108](https://github.com/footprintjs/agentfoo
 
 > `readonly` **finalContent**: `string`
 
-Defined in: [src/events/payloads.ts:104](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L104)
+Defined in: [src/events/payloads.ts:104](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L104)
 
 ***
 
@@ -28,7 +28,7 @@ Defined in: [src/events/payloads.ts:104](https://github.com/footprintjs/agentfoo
 
 > `readonly` **iterationCount**: `number`
 
-Defined in: [src/events/payloads.ts:107](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L107)
+Defined in: [src/events/payloads.ts:107](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L107)
 
 ***
 
@@ -36,7 +36,7 @@ Defined in: [src/events/payloads.ts:107](https://github.com/footprintjs/agentfoo
 
 > `readonly` **totalInputTokens**: `number`
 
-Defined in: [src/events/payloads.ts:105](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L105)
+Defined in: [src/events/payloads.ts:105](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L105)
 
 ***
 
@@ -44,7 +44,7 @@ Defined in: [src/events/payloads.ts:105](https://github.com/footprintjs/agentfoo
 
 > `readonly` **totalOutputTokens**: `number`
 
-Defined in: [src/events/payloads.ts:106](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L106)
+Defined in: [src/events/payloads.ts:106](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L106)
 
 ***
 
@@ -52,4 +52,4 @@ Defined in: [src/events/payloads.ts:106](https://github.com/footprintjs/agentfoo
 
 > `readonly` **turnIndex**: `number`
 
-Defined in: [src/events/payloads.ts:103](https://github.com/footprintjs/agentfootprint/blob/cb725c3951ce2b7c0bf075ce35f889af1e57aaba/src/events/payloads.ts#L103)
+Defined in: [src/events/payloads.ts:103](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L103)
