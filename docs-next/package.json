@@ -1,0 +1,31 @@
+{
+  "name": "agentfootprint-docs",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "gen:api": "node ../scripts/gen-fumadocs-api.mjs",
+    "check:api": "node ../scripts/gen-fumadocs-api.mjs && git -C .. diff --exit-code -- docs-next/content/docs/api",
+    "predev": "node ../scripts/gen-fumadocs-api.mjs",
+    "dev": "next dev",
+    "prebuild": "node ../scripts/gen-fumadocs-api.mjs",
+    "build": "next build",
+    "start": "next start",
+    "postinstall": "fumadocs-mdx"
+  },
+  "dependencies": {
+    "@tailwindcss/postcss": "^4.3.1",
+    "@types/mdx": "^2.0.14",
+    "@types/node": "^26.0.0",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "fumadocs-core": "^16.10.5",
+    "fumadocs-mdx": "^15.0.12",
+    "fumadocs-ui": "^16.10.5",
+    "next": "^16.2.9",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
+    "tailwindcss": "^4.3.1",
+    "typescript": "^6.0.3"
+  }
+}

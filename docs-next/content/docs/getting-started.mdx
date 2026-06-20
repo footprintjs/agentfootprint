@@ -1,0 +1,152 @@
+---
+title: Quick Start
+description: Build your first agent in a few lines — mock-first, no API key — and add memory in a few more.
+---
+
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+import { Callout } from 'fumadocs-ui/components/callout';
+
+## What is an AI agent?
+
+An LLM that can **take actions**, not just generate text. It calls tools, reads
+the results, decides what to do next, and loops until done. agentfootprint makes
+every step of that loop **inspectable** — what landed in which slot, which tool ran
+with what args, why a decision branched the way it did.
+
+```text
+User question → LLM thinks → calls a tool → reads result → thinks again → responds
+```
+
+## Install
+
+<Tabs items={['npm', 'pnpm', 'yarn']}>
+  <Tab value="npm">
+
+```bash
+npm install agentfootprint
+```
+
+  </Tab>
+  <Tab value="pnpm">
+
+```bash
+pnpm add agentfootprint
+```
+
+  </Tab>
+  <Tab value="yarn">
+
+```bash
+yarn add agentfootprint
+```
+
+  </Tab>
+</Tabs>
+
+## Your first agent
+
+```ts
+import { Agent, defineTool, mock } from 'agentfootprint';
+
+const weather = defineTool({
+  name: 'weather',
+  description: 'Get current weather for a city.',
+  inputSchema: {
+    type: 'object',
+    properties: { city: { type: 'string' } },
+    required: ['city'],
+  },
+  execute: async (args) => `${(args as { city: string }).city}: 72°F, sunny`,
+});
+
+const agent = Agent.create({
+  provider: mock({ reply: 'Paris is 72°F and sunny today.' }),
+  model: 'mock',
+  maxIterations: 5,
+})
+  .system('You answer weather questions using the `weather` tool.')
+  .tool(weather)
+  .build();
+
+const result = await agent.run({ message: 'Weather in Paris?' });
+console.log(result);
+// → "Paris is 72°F and sunny today."
+```
+
+The `mock` provider returns a scripted reply — perfect for `$0` testing. Swap to
+`anthropic` / `openai` / `bedrock` / `ollama` for real LLMs — the only change is the
+`provider:` line. The real-LLM factories ship from a separate subpath so the main
+bundle stays free of vendor-SDK peer deps:
+
+```ts
+import { anthropic } from 'agentfootprint/llm-providers';
+// ...
+provider: anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! }),
+```
+
+## Add memory in a few more lines
+
+agentfootprint ships a single `defineMemory({ type, strategy, store })` factory.
+Pick a TYPE (what shape you keep), a STRATEGY (how you fit it in), and a STORE.
+
+```ts
+import {
+  Agent, defineMemory, MEMORY_TYPES, MEMORY_STRATEGIES, InMemoryStore, mock,
+} from 'agentfootprint';
+
+const memory = defineMemory({
+  id: 'short-term',
+  type: MEMORY_TYPES.EPISODIC,
+  strategy: { kind: MEMORY_STRATEGIES.WINDOW, size: 10 }, // last 10 turns
+  store: new InMemoryStore(),
+});
+
+const agent = Agent.create({ provider: mock({ reply: 'Hi Alice!' }), model: 'mock' })
+  .memory(memory)
+  .build();
+
+// Pass an `identity` so memory accumulates per conversation.
+const id = { conversationId: 'alice-session' };
+await agent.run({ message: 'My name is Alice', identity: id });
+const result = await agent.run({ message: 'What did I just say?', identity: id });
+// → memory subflow loaded the prior turn; the agent answered from context
+```
+
+See the [memory examples](https://github.com/footprintjs/agentfootprint/tree/main/examples/memory)
+for all 7 strategies (window / budget / summarize / topK / extract / **causal** / hybrid).
+
+## See what happened
+
+```ts
+// Structured execution trace — every stage, every decision, every tool call,
+// every memory injection. Each entry has a human-readable `.text` plus a stable
+// per-step id for time-travel.
+for (const entry of agent.getLastNarrativeEntries()) {
+  console.log(entry.text);
+}
+```
+
+Or attach typed event listeners:
+
+```ts
+agent.on('agentfootprint.context.injected', (e) => {
+  console.log(`[${e.payload.source}] landed in ${e.payload.slot} slot`);
+});
+agent.on('agentfootprint.stream.tool_start', (e) => {
+  console.log(`→ tool ${e.payload.toolName}(${JSON.stringify(e.payload.args)})`);
+});
+```
+
+Every event is typed, across domains like context, agent, stream, tools, skill,
+permission, eval, cost, and memory.
+
+<Callout title="Tip">
+Run any example end-to-end with `npm run example examples/<path>.ts` inside a clone
+of the repo. Every example is also an end-to-end test in CI — so the code you copy
+here can't silently rot.
+</Callout>
+
+## Next steps
+
+- **[GitHub examples](https://github.com/footprintjs/agentfootprint/tree/main/examples)** — runnable, CI-tested patterns
+- More guides (key concepts, the Agent API, memory, skills) are being ported into this site.

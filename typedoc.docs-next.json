@@ -1,0 +1,10 @@
+{
+  "$schema": "https://typedoc.org/schema.json",
+  "extends": "./typedoc.json",
+  "out": "docs-next/content/docs/api",
+  "publicPath": "/docs/api/",
+  "entryFileName": "index",
+  "readme": "none",
+  "hidePageHeader": true,
+  "hideBreadcrumbs": true
+}

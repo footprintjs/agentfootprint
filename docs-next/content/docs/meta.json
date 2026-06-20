@@ -1,0 +1,5 @@
+{
+  "title": "agentfootprint",
+  "root": true,
+  "pages": ["index", "getting-started", "api", "..."]
+}
