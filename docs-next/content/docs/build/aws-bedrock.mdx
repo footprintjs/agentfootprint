@@ -1,0 +1,66 @@
+---
+title: AWS Bedrock
+description: bedrock() — model-agnostic provider via AWS Bedrock's Converse API. One adapter covers Claude, Llama, Mistral, Titan, Mixtral on Bedrock.
+---
+
+> AWS Bedrock's Converse API is model-agnostic — same wire format whether you're calling Claude, Llama, Mistral, Titan, or Mixtral. agentfootprint's `bedrock()` factory wraps it as one `LLMProvider`. No format-specific code per model family.
+
+## Install
+
+```bash
+npm install @aws-sdk/client-bedrock-runtime
+```
+
+Peer dep, lazy-required, optional. AWS credentials resolved via the SDK's normal chain (env, profile, IAM role).
+
+## Use
+
+```ts
+import { Agent } from 'agentfootprint';
+import { bedrock } from 'agentfootprint/llm-providers';
+
+const provider = bedrock({
+  region: 'us-east-1',
+});
+
+const agent = Agent.create({
+  provider,
+  model: 'anthropic.claude-sonnet-4-5-20250929-v1:0',  // Bedrock-namespaced model id
+}).build();
+```
+
+The model id is Bedrock's, not the upstream provider's. Cross-region inference profiles work as-is — just pass the profile id.
+
+## Tools (Converse tool_use blocks)
+
+Converse API's tool_use / tool_result blocks map cleanly to agentfootprint's `Tool[]` + `LLMMessage.toolCalls`. ReAct correctness preserved.
+
+## Streaming
+
+`provider.stream(req)` uses ConverseStream — chunks land as they arrive, final chunk carries authoritative `LLMResponse`.
+
+## Production patterns
+
+- AWS SDK handles credential refresh + region routing automatically.
+- Wrap with `withRetry` (from `agentfootprint/resilience`) for transient throttling. The provider rethrows a `BedrockProviderError` whose `.status` carries the AWS HTTP status code (`err.$metadata.httpStatusCode`).
+- Tune the default model and token budget on the factory:
+
+```ts
+import { bedrock } from 'agentfootprint/llm-providers';
+
+const provider = bedrock({
+  region: 'us-east-1',
+  defaultModel: 'anthropic.claude-sonnet-4-5-20250929-v1:0', // used when LLMRequest.model is the shorthand 'bedrock'
+  defaultMaxTokens: 4096,
+});
+```
+
+## Limitations
+
+- Multi-modal not exposed yet (text content only).
+- Bedrock Guardrails not exposed in the wrapper — pass via the SDK client directly if you need them.
+
+## Next steps
+
+- [Resilience](doc:resilience) — wrap with `withRetry` / `withFallback`
+- [AgentCore Memory](doc:agentcore) — paired Bedrock memory adapter

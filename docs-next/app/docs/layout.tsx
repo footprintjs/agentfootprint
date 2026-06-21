@@ -1,5 +1,8 @@
 import { source } from '@/lib/source';
-import { DocsLayout } from 'fumadocs-ui/layouts/docs';
+// Notebook layout = full-width top nav (matching the homepage) + sidebar below it.
+// It spreads the SAME baseOptions as the homepage, so the header is identical and
+// the layout manages its own sticky offsets — no custom header or CSS overrides.
+import { DocsLayout } from 'fumadocs-ui/layouts/notebook';
 import { baseOptions } from '@/lib/layout.shared';
 import type { ReactNode } from 'react';
 import { BookText, Braces } from 'lucide-react';

@@ -1,0 +1,17 @@
+{
+  "title": "Reference",
+  "icon": "Library",
+  "pages": [
+    "---[Network]Architecture---",
+    "dependency-graph",
+    "---[Lightbulb]Design lineage---",
+    "inspiration",
+    "connected-data-palantir",
+    "modularity-liskov",
+    "strategy-everywhere",
+    "---[BookMarked]Papers---",
+    "citations",
+    "---[Braces]Full API---",
+    "[API Reference](/docs/api)"
+  ]
+}

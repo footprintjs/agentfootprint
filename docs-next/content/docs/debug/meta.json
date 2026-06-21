@@ -1,0 +1,5 @@
+{
+  "title": "Debug",
+  "icon": "Bug",
+  "pages": ["manifesto", "debug", "causal-deep-dive", "testing", "error-handling"]
+}

@@ -49,21 +49,21 @@ So we used the budget those abstractions would have cost us to invest deeply in 
 
 | Claim | Where it shows |
 |---|---|
-| Context engineering as a first-class runtime layer | [Why agentfootprint?](/agentfootprint/getting-started/why/#the-new-class-of-bug) — Injection primitive |
-| Every LLM call backtracks to *what / who / when / how* | [4 backtrack questions](/agentfootprint/getting-started/why/#the-four-backtrack-questions) |
+| Context engineering as a first-class runtime layer | [Why agentfootprint?](doc:why#the-new-class-of-bug) — Injection primitive |
+| Every LLM call backtracks to *what / who / when / how* | [4 backtrack questions](doc:why#the-four-backtrack-questions) |
 | Every code block in our docs is a real, runnable file in CI | The Phase 1 CodeFile + region marker infrastructure |
-| Causal memory — the trace is a cache of the agent's thinking | [Causal deep dive](/agentfootprint/causal-deep-dive/) |
-| Every named pattern is a recipe, not a class | [Patterns](/agentfootprint/getting-started/key-concepts/#patterns--named-compositions) |
-| Mocks-first dev → real-infra prod is a one-line swap per boundary | [Quick Start](/agentfootprint/getting-started/quick-start/) |
-| Multi-tenant isolation enforced at the storage boundary | [Memory guide](/agentfootprint/guides/memory/) |
-| Rules-based reliability gate around every LLM call | [Reliability gate](/agentfootprint/guides/reliability-gate/) (v2.11.5+) |
+| Causal memory — the trace is a cache of the agent's thinking | [Causal deep dive](doc:causal-deep-dive) |
+| Every named pattern is a recipe, not a class | [Patterns](doc:key-concepts#patterns--named-compositions) |
+| Mocks-first dev → real-infra prod is a one-line swap per boundary | [Quick Start](doc:quick-start) |
+| Multi-tenant isolation enforced at the storage boundary | [Memory guide](doc:memory) |
+| Rules-based reliability gate around every LLM call | [Reliability gate](doc:reliability-gate) (v2.11.5+) |
 
 ## What agentfootprint does NOT claim
 
 - We are not the only framework with multi-agent. CrewAI / LangGraph / AutoGen / Inngest all have it. Ours has a smaller surface; pick on taste.
-- We are not the only framework with memory. Most have some flavor. Ours is the only one with **Causal** type (decision-evidence persistence) — see [Memory guide](/agentfootprint/guides/memory/#the-four-types).
+- We are not the only framework with memory. Most have some flavor. Ours is the only one with **Causal** type (decision-evidence persistence) — see [Memory guide](doc:memory#the-four-types).
 - We are not the only framework with observability. Most ship spans / events. Ours is **typed** + **emitted during DFS traversal** so it's structured + complete by construction, not collected after the fact.
-- We are not the only framework with reliability primitives. LangGraph's Pregel does retry; LangChain's `with_retry`/`with_fallbacks` exist. Ours adds **first-chunk arbitration** (streaming-aware) and routes via declarative rules — see [Reliability gate](/agentfootprint/guides/reliability-gate/).
+- We are not the only framework with reliability primitives. LangGraph's Pregel does retry; LangChain's `with_retry`/`with_fallbacks` exist. Ours adds **first-chunk arbitration** (streaming-aware) and routes via declarative rules — see [Reliability gate](doc:reliability-gate).
 
 ## When NOT to use agentfootprint
 
@@ -94,7 +94,7 @@ So we used the budget those abstractions would have cost us to invest deeply in 
 
 ## Next steps
 
-- [Quick Start](/agentfootprint/getting-started/quick-start/) — first agent in 5 minutes
-- [Why agentfootprint?](/agentfootprint/getting-started/why/) — the bug-class argument with worked examples
-- [Key Concepts](/agentfootprint/getting-started/key-concepts/) — the 5-layer taxonomy
-- [Causal memory deep dive](/agentfootprint/causal-deep-dive/) — the differentiator
+- [Quick Start](doc:quick-start) — first agent in 5 minutes
+- [Why agentfootprint?](doc:why) — the bug-class argument with worked examples
+- [Key Concepts](doc:key-concepts) — the 5-layer taxonomy
+- [Causal memory deep dive](doc:causal-deep-dive) — the differentiator

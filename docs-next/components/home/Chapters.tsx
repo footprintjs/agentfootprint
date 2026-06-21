@@ -1,17 +1,42 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, type ComponentType } from 'react';
+import { BacktrackStory } from './chapters/BacktrackStory';
+import { WhyThisTool } from './chapters/WhyThisTool';
+import { ContextEngineering } from './chapters/ContextEngineering';
+import { CoreEngine } from './chapters/CoreEngine';
+
+// Chapter 2 = context engineering (slots × triggers) + "Why this tool?" — forward tool
+// selection by description lives here, where building the context is the subject.
+function ContextChapter() {
+  return (
+    <>
+      <ContextEngineering />
+      <WhyThisTool />
+    </>
+  );
+}
 
 /**
- * The three homepage chapters. Each has a sticky bar that pins under the nav as you
- * scroll; a scroll-spy highlights the in-view chapter's bar in the brand yellow.
- * (Chapter bodies are stubs until Phases 2–4 port the real animations.)
+ * The three homepage chapters = the interactive storyboard (what → how → how-it's-
+ * implemented). Each is a full-bleed section with a yellow "category" pill, an
+ * alternating background, and a sticky bar that highlights in brand yellow when active.
  */
-const CHAPTERS = [
-  { id: 'af-ch-problem', ix: '01', ti: 'The problem', sub: 'watch a run break', stub: 'backtrack-story → React component (Phase 2)' },
-  { id: 'af-ch-context', ix: '02', ti: 'Context engineering', sub: 'build the context', stub: 'context-engineering → React component (Phase 3)' },
-  { id: 'af-ch-core', ix: '03', ti: 'The engine', sub: 'record · reverse · prove', stub: 'core-engine → React component (Phase 4)' },
-] as const;
+type Chapter = {
+  id: string;
+  ix: string;
+  cat: string;
+  ti: string;
+  sub: string;
+  Body?: ComponentType;
+  stub?: string;
+};
+
+const CHAPTERS: Chapter[] = [
+  { id: 'af-ch-problem', ix: '01', cat: 'What we solve', ti: 'The problem', sub: 'watch a run break', Body: BacktrackStory },
+  { id: 'af-ch-context', ix: '02', cat: 'How you build context', ti: 'Context engineering', sub: 'slots × triggers', Body: ContextChapter },
+  { id: 'af-ch-core', ix: '03', cat: "How it's implemented", ti: 'The engine', sub: 'React Fiber for agents', Body: CoreEngine },
+];
 
 export function Chapters() {
   const ref = useRef<HTMLDivElement>(null);
@@ -26,7 +51,6 @@ export function Chapters() {
           e.target.classList.toggle('is-active', e.isIntersecting);
         }
       },
-      // "active" while the chapter's upper band sits in the viewport
       { rootMargin: '-18% 0px -62% 0px', threshold: 0 },
     );
     sections.forEach((s) => io.observe(s));
@@ -35,14 +59,17 @@ export function Chapters() {
 
   return (
     <div ref={ref}>
-      {CHAPTERS.map((c) => (
-        <section className="af-chapter" id={c.id} key={c.id}>
-          <div className="af-chapter-bar">
-            <span className="ix">{c.ix}</span>
-            <span className="ti">{c.ti}</span>
-            <span className="sub">{c.sub}</span>
+      {CHAPTERS.map((c, i) => (
+        <section className={`af-chapter${i % 2 === 1 ? ' alt' : ''}`} id={c.id} key={c.id}>
+          <div className="af-chapter-inner">
+            <div className="af-chapter-bar">
+              <span className="ix">{c.ix}</span>
+              <span className="af-cat">{c.cat}</span>
+              <span className="ti">{c.ti}</span>
+              <span className="sub">{c.sub}</span>
+            </div>
+            {c.Body ? <c.Body /> : <div className="af-chapter-stub">{c.stub}</div>}
           </div>
-          <div className="af-chapter-stub">{c.stub}</div>
         </section>
       ))}
     </div>

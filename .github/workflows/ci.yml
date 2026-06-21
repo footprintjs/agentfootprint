@@ -75,6 +75,24 @@ jobs:
         working-directory: docs-site
         run: npm run build
 
+  # Doc-links gate — every internal cross-reference in docs-next must resolve.
+  # Hand-written guides link by stable id (doc:<id>, resolved at build by
+  # lib/remark-doc-links.mjs); this re-derives the id->route index from the
+  # filesystem and fails on any dead id or stale #anchor. A page moved between
+  # taxonomy folders, or a reworded heading, can therefore never ship a broken
+  # link. Self-contained: github-slugger is the script's only external dep.
+  docs-links:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - run: npm install --no-save github-slugger
+      - run: node scripts/check-doc-links.mjs --strict
+
   # Coverage gate — runs vitest with v8 coverage; uploads lcov to Codecov.
   # No threshold enforcement (per design memo); badge surfaces the number
   # so it stays visible without becoming a hostage to chasing the metric.

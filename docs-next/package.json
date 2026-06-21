@@ -6,6 +6,7 @@
   "scripts": {
     "gen:api": "node ../scripts/gen-fumadocs-api.mjs",
     "check:api": "node ../scripts/gen-fumadocs-api.mjs && git -C .. diff --exit-code -- docs-next/content/docs/api",
+    "check:links": "node ../scripts/check-doc-links.mjs --strict",
     "predev": "node ../scripts/gen-fumadocs-api.mjs",
     "dev": "next dev",
     "prebuild": "node ../scripts/gen-fumadocs-api.mjs",

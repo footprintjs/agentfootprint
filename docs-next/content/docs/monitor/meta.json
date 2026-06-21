@@ -1,0 +1,18 @@
+{
+  "title": "Monitor",
+  "icon": "Activity",
+  "pages": [
+    "---[BarChart3]Observability---",
+    "observability",
+    "context-engineering-recorder",
+    "streaming",
+    "locales",
+    "---[Factory]Production---",
+    "deployment",
+    "pausable",
+    "resilience",
+    "reliability",
+    "reliability-gate",
+    "security"
+  ]
+}

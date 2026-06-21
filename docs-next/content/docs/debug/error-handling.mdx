@@ -1,0 +1,221 @@
+---
+title: Error handling
+description: Tool failure recovery, retry/fallback/circuit-breaker decorators, resume-on-error. Build agents that degrade gracefully instead of crashing on the first 429.
+---
+
+> Your production agent makes 50,000 LLM calls a day. One in a thousand gets a 429. One in ten thousand gets a 500. **At that volume, "throw and crash" is not a strategy** — it's a paging incident waiting to happen. The library ships retry + fallback + circuit-breaker decorators, rules-based reliability, and resume-on-error so you can compose graceful degradation without writing per-provider error glue.
+
+## Errors at the boundary
+
+Provider adapters surface the underlying SDK error — there is no wrapper `LLMError` class with `err.code`/`err.retryable` fields. A failed `agent.run(...)` rejects with the raw error, and observability captures it (the run-failed boundary fires so a monitor shows a humanized, actionable message rather than a stuck "thinking" state):
+
+```ts
+try {
+  await agent.run({ message: 'Hello' });
+} catch (err) {
+  // `err` is the underlying provider/SDK error (or a wrapped one carrying
+  // `.cause`). Inspect `err.status` / `err.statusCode` / `err.message` to
+  // classify it yourself, or let the decorators below do it for you.
+  console.error(err);
+}
+```
+
+The retry/fallback decorators carry their OWN classification heuristics (HTTP 4xx vs 5xx vs `AbortError`), which you can override per call via `shouldRetry` / `shouldFallback`.
+
+## Tool errors
+
+When a tool's `execute` function throws, the error becomes a tool-result message tagged as an error. The LLM sees it and can decide to retry, try a different tool, or surface it to the user:
+
+```ts
+import { defineTool } from 'agentfootprint';
+
+const riskyTool = defineTool({
+  name: 'fetch_data',
+  description: 'Fetch text from a URL',
+  inputSchema: {
+    type: 'object',
+    properties: { url: { type: 'string' } },
+    required: ['url'],
+  },
+  execute: async ({ url }: { url: string }) => {
+    const res = await fetch(url);
+    if (!res.ok) {
+      // Throw to surface as tool-error to the LLM:
+      throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+    }
+    return await res.text();
+  },
+});
+```
+
+The agent's narrative captures the error event (`agentfootprint.stream.tool_end` with the error payload) so observability shows exactly which tool failed when. No silent swallowing.
+
+## Retry decorator
+
+`withRetry(provider, options?)` wraps any `LLMProvider` with retry-on-transient-error and exponential backoff, and respects an `AbortSignal`. It lives at the `agentfootprint/resilience` subpath; the vendor-SDK providers (`anthropic`, `openai`, `bedrock`) live at `agentfootprint/providers`:
+
+```ts
+import { withRetry } from 'agentfootprint/resilience';
+import { anthropic } from 'agentfootprint/llm-providers';
+
+const provider = withRetry(anthropic({ apiKey }), {
+  maxAttempts: 5,         // total attempts incl. the first (default 3)
+  initialDelayMs: 200,    // delay before first retry (default 200)
+  backoffFactor: 2,       // multiplier per attempt (default 2 → 200ms, 400ms, 800ms)
+  maxDelayMs: 10_000,     // cap on backoff delay (default 10s)
+  // Override the default heuristic (skip AbortError + 4xx except 429):
+  shouldRetry: (err, attempt) =>
+    (err as { status?: number }).status !== 401 && attempt < 5,
+  onRetry: (err, attempt, delayMs) =>
+    console.warn(`retry ${attempt} in ${delayMs}ms`, err),
+});
+```
+
+The default `shouldRetry` skips `AbortError` and HTTP 4xx (client mistakes don't benefit from retry) — except `429 Too Many Requests`, which IS retried — and retries everything else (5xx, network errors, unknown shapes). Override it to implement per-error policies.
+
+## Fallback decorator
+
+`withFallback(primary, fallback, options?)` swaps providers when the primary fails. Useful for cross-provider resilience — try Anthropic; if it's down, try OpenAI:
+
+```ts
+import { withFallback } from 'agentfootprint/resilience';
+import { anthropic, openai } from 'agentfootprint/llm-providers';
+
+const provider = withFallback(
+  anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! }),
+  openai({ apiKey: process.env.OPENAI_API_KEY! }),
+  { onFallback: (err) => console.warn('primary failed, falling back:', err) },
+);
+```
+
+The fallback activates when the primary throws an error meeting the fallback predicate. The default `shouldFallback` falls back on **every** error except `AbortError` — override it to gate on specific status codes. Successful streams pin to the active provider: once the primary's stream has yielded a chunk, an error after that re-throws rather than restarting on the fallback (no provider-flip mid-stream).
+
+For chaining three or more providers, use `fallbackProvider(p1, p2, p3, ...)` — sugar for nested `withFallback` that tries each in order, first success wins:
+
+```ts
+import { fallbackProvider } from 'agentfootprint/resilience';
+import { anthropic, openai, mock } from 'agentfootprint/llm-providers';
+
+const provider = fallbackProvider(
+  anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! }),
+  openai({ apiKey: process.env.OPENAI_API_KEY! }),
+  mock({ reply: '[degraded] all upstream providers failed' }),
+);
+```
+
+## Compose: retry + fallback together
+
+Decorators stack — each preserves the `LLMProvider` interface, so they're drop-in. Build a chain — *try anthropic; on failure fall back to openai; the whole chain wrapped in retry*:
+
+```ts
+import { withRetry, withFallback } from 'agentfootprint/resilience';
+import { anthropic, openai } from 'agentfootprint/llm-providers';
+
+const provider = withRetry(
+  withFallback(
+    anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! }),
+    openai({ apiKey: process.env.OPENAI_API_KEY! }),
+  ),
+  { maxAttempts: 5 },
+);
+```
+
+Add a circuit breaker per provider so retries stop hammering a downed vendor — once it trips, `complete()` fails fast with `CircuitOpenError`, which `withFallback` catches and routes onward:
+
+```ts
+import {
+  withRetry,
+  withFallback,
+  withCircuitBreaker,
+} from 'agentfootprint/resilience';
+import { anthropic, openai } from 'agentfootprint/llm-providers';
+
+const provider = withRetry(
+  withFallback(
+    withCircuitBreaker(anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! }), {
+      failureThreshold: 5,
+      cooldownMs: 30_000,
+    }),
+    withCircuitBreaker(openai({ apiKey: process.env.OPENAI_API_KEY! })),
+  ),
+  { maxAttempts: 3 },
+);
+```
+
+Pass the composed provider to the agent: `Agent.create({ provider, ... })`.
+
+## Circuit breaker
+
+`withCircuitBreaker(provider, options?)` (from `agentfootprint/resilience`) trips after N consecutive failures, opens for a cooldown, then half-open probes. It prevents thundering-herd retry on a downed provider — once OPEN, `complete()` throws `CircuitOpenError` in `<1ms` with no network round-trip:
+
+```ts
+import { withCircuitBreaker, CircuitOpenError } from 'agentfootprint/resilience';
+import { anthropic } from 'agentfootprint/llm-providers';
+
+const provider = withCircuitBreaker(anthropic({ apiKey }), {
+  failureThreshold: 5,            // open after 5 consecutive failures (default 5)
+  cooldownMs: 30_000,             // stay open this long before probing (default 30s)
+  halfOpenSuccessThreshold: 1,    // probe successes needed to close (default 1)
+});
+```
+
+The breaker is per-instance, in-process (no Redis dependency). See [the resilience guide](doc:resilience) for composing it with retry + fallback.
+
+## Resume from the failure point
+
+`agent.run()` rejects with `RunCheckpointError` when a fault occurs mid-run, carrying both the `.cause` (the underlying error) and a JSON-serializable `.checkpoint` (the last-known-good conversation history). Persist it and call `agent.resumeOnError(checkpoint)` to replay the run with that history restored — the next iteration retries the call that originally failed:
+
+```ts
+import { Agent, RunCheckpointError } from 'agentfootprint';
+
+try {
+  const result = await agent.run({ message: 'long task' });
+} catch (err) {
+  if (err instanceof RunCheckpointError) {
+    await checkpointStore.put(sessionId, err.checkpoint);
+    // hours / restart later, after the vendor recovers:
+    const checkpoint = await checkpointStore.get(sessionId);
+    const result = await agent.resumeOnError(checkpoint);
+  } else {
+    throw err; // not a recoverable fault — propagate
+  }
+}
+```
+
+## Rules-based reliability
+
+For declarative retry/fail-fast policies inside the agent loop, configure `Agent.create({...}).reliability({...})` with rules evaluated each iteration. A matching rule decides `'retry'` vs `'fail-fast'`; on fail-fast the run throws `ReliabilityFailFastError` (from `agentfootprint/reliability`):
+
+```ts
+import { Agent } from 'agentfootprint';
+import { ReliabilityFailFastError } from 'agentfootprint/reliability';
+
+const agent = Agent.create({ provider, model })
+  .reliability({
+    postDecide: [
+      { when: (s) => s.errorKind === '5xx-transient' && s.attempt < 3,
+        then: 'retry', kind: 'transient-retry' },
+      { when: (s) => s.error !== undefined,
+        then: 'fail-fast', kind: 'unrecoverable' },
+    ],
+  })
+  .build();
+
+try {
+  await agent.run({ message: '...' });
+} catch (e) {
+  if (e instanceof ReliabilityFailFastError) console.log(e.kind, e.reason);
+}
+```
+
+## Anti-patterns
+
+- Don't catch a provider error and swallow it. Always re-throw or take a deliberate action (fallback, log, escalate).
+- Don't retry terminal errors. The decorators' default heuristic skips 4xx (except 429) and `AbortError` for a reason — retrying an auth error will not magically produce a key. If you override `shouldRetry`, keep that contract.
+- Don't put retry logic in the tool's `execute`. Tool errors are agent-visible by design — let the LLM decide whether to retry. If the tool itself needs retry on a flaky API, that's the tool's internal concern.
+
+## Next steps
+
+- [Resilience guide](doc:resilience) — the full decorator surface
+- [Reliability guide](doc:reliability) — rules-based retry / fail-fast inside the agent loop
+- [Pause / resume](doc:pausable) — JSON-checkpointed human-in-the-loop

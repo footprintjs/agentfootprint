@@ -9,20 +9,39 @@ function GitHubIcon() {
   );
 }
 
+// Brand wordmark: the binary-footprint mark · "agent" muted · "footprint" bold.
+// Rendered as the Fumadocs nav title, so it appears identically on every layout
+// (homepage + docs) and Fumadocs wraps it in the home link automatically.
+function Wordmark() {
+  return (
+    <span className="af-wordmark">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src="/footprint-logo.png" alt="" className="af-wordmark-icon" aria-hidden="true" />
+      <span className="lo">agent</span>
+      <span className="hi">footprint</span>
+    </span>
+  );
+}
+
 /**
- * Shared layout options. Nav title + an icon link to the repo.
- * (Docs navigation lives in the sidebar tab switcher, not a nav link.)
+ * Shared layout options — the single source of truth for the site header.
+ * Both the homepage (HomeLayout) and the docs (notebook DocsLayout) spread
+ * these, so the nav (wordmark, links, built-in search + theme toggle) is the
+ * same everywhere. No custom header markup or Fumadocs-internal CSS overrides.
  */
 export function baseOptions(): BaseLayoutProps {
   return {
     nav: {
-      title: 'agentfootprint',
+      title: <Wordmark />,
     },
     links: [
       {
         text: 'Docs',
         url: '/docs',
         active: 'nested-url',
+        // secondary → right-aligned, so the link sits in the same place on both
+        // the HomeLayout nav and the notebook docs nav.
+        secondary: true,
       },
       {
         type: 'icon',

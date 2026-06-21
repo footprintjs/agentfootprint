@@ -5,7 +5,7 @@ description: The 5-layer taxonomy. 2 primitives, 4 compositions, N patterns, the
 
 > This page is the model. **2 primitives, 4 compositions, N named patterns, the Injection cross-cut, the infrastructure layer underneath.** Once these are in your head, every agent paper, every framework, every system you encounter can be located on the grid — including yours.
 
-If you haven't yet, read [Why agentfootprint?](/agentfootprint/getting-started/why/) first. It's the *why*. This page is the *what*.
+If you haven't yet, read [Why agentfootprint?](doc:why) first. It's the *why*. This page is the *what*.
 
 ## Key terms
 
@@ -106,7 +106,7 @@ agentfootprint's Agent loops back to `SystemPrompt` every iteration, not just `C
 | 2 | 12 tools shown | **5 tools** (skill activated) |
 | 3 | 12 tools shown | 5 tools |
 
-> 📖 [Dynamic ReAct guide](/agentfootprint/guides/dynamic-react/) for the full taxonomy of what this unlocks.
+> 📖 [Dynamic ReAct guide](doc:dynamic-react) for the full taxonomy of what this unlocks.
 
 ---
 
@@ -234,7 +234,7 @@ Because the framework owns the injection, every LLM call backtracks to four type
 | **When** it fired? | Which iteration of the ReAct loop, after which event |
 | **How** it landed? | Which slot, what position, what cache strategy |
 
-Those four answers are why contextual errors stop being invisible. See [Why agentfootprint?](/agentfootprint/getting-started/why/#the-four-backtrack-questions) for the full bug-class argument.
+Those four answers are why contextual errors stop being invisible. See [Why agentfootprint?](doc:why#the-four-backtrack-questions) for the full bug-class argument.
 
 ### RAG (worked example)
 
@@ -242,7 +242,7 @@ Those four answers are why contextual errors stop being invisible. See [Why agen
 
 <CodeFile path="examples/context-engineering/07-rag.ts" region="define-and-attach" title="examples/context-engineering/07-rag.ts (region: define-and-attach)" />
 
-See dedicated guides: [Memory](/agentfootprint/guides/memory/), [Skills](/agentfootprint/guides/skills/), [Instructions](/agentfootprint/guides/instructions/), [RAG](/agentfootprint/guides/rag/), [Tools](/agentfootprint/guides/tools/).
+See dedicated guides: [Memory](doc:memory), [Skills](doc:skills), [Instructions](doc:instructions), [RAG](doc:rag), [Tools](doc:tools).
 
 ---
 
@@ -261,8 +261,8 @@ Every primitive and composition supports:
 
 ## Next steps
 
-- [Quick Start](/agentfootprint/getting-started/quick-start/) — first agent runs in 5 minutes
-- [Memory guide](/agentfootprint/guides/memory/) — defineMemory across 4 types × 7 strategies
-- [Skills guide](/agentfootprint/guides/skills-explained/) — context engineering for instructions
-- [Reliability gate](/agentfootprint/guides/reliability-gate/) — rules-based retry / fallback / fail-fast
-- [Observability guide](/agentfootprint/guides/observability/) — recorders, event taxonomy
+- [Quick Start](doc:quick-start) — first agent runs in 5 minutes
+- [Memory guide](doc:memory) — defineMemory across 4 types × 7 strategies
+- [Skills guide](doc:skills-explained) — context engineering for instructions
+- [Reliability gate](doc:reliability-gate) — rules-based retry / fallback / fail-fast
+- [Observability guide](doc:observability) — recorders, event taxonomy
