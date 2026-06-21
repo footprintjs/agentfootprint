@@ -1,5 +1,5 @@
 ---
-title: vs other agent frameworks
+title: vs Other Frameworks
 description: How agentfootprint sits relative to LangChain, LangGraph, CrewAI, AutoGen, Mastra, Genkit, Pydantic AI, DSPy, and Inngest AgentKit. We didn't have to choose between them.
 ---
 
@@ -28,13 +28,7 @@ We didn't have to choose between them. agentfootprint is built on **[footprintjs
 
 So we used the budget those abstractions would have cost us to invest deeply in something they all leave to the developer: **the injection loop.**
 
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="/agentfootprint/assets/triggers-dark.svg" />
-    <source media="(prefers-color-scheme: light)" srcset="/agentfootprint/assets/triggers-light.svg" />
-    <img alt="Every LLM call has 3 fixed slots (system, messages, tools); every flavor lands in one slot under one of 4 fixed triggers. The grid is the entire context-engineering surface — the layer every other framework leaves to the developer." src="/agentfootprint/assets/triggers-light.svg" width="100%" />
-  </picture>
-</p>
+<Diagram name="triggers" alt="Every LLM call has 3 fixed slots (system, messages, tools); every flavor lands in one slot under one of 4 fixed triggers. The grid is the entire context-engineering surface — the layer every other framework leaves to the developer." />
 
 ## In one sentence per framework
 
@@ -62,7 +56,7 @@ So we used the budget those abstractions would have cost us to invest deeply in 
 
 - We are not the only framework with multi-agent. CrewAI / LangGraph / AutoGen / Inngest all have it. Ours has a smaller surface; pick on taste.
 - We are not the only framework with memory. Most have some flavor. Ours is the only one with **Causal** type (decision-evidence persistence) — see [Memory guide](doc:memory#the-four-types).
-- We are not the only framework with observability. Most ship spans / events. Ours is **typed** + **emitted during DFS traversal** so it's structured + complete by construction, not collected after the fact.
+- We are not the only framework with observability. Most ship spans / events. Ours is **typed** + **emitted during the run itself** so it's structured + complete by construction, not collected after the fact.
 - We are not the only framework with reliability primitives. LangGraph's Pregel does retry; LangChain's `with_retry`/`with_fallbacks` exist. Ours adds **first-chunk arbitration** (streaming-aware) and routes via declarative rules — see [Reliability gate](doc:reliability-gate).
 
 ## When NOT to use agentfootprint

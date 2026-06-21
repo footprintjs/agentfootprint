@@ -1,5 +1,5 @@
 {
   "title": "Get Started",
   "icon": "Rocket",
-  "pages": ["quick-start", "key-concepts", "why", "vs"]
+  "pages": ["quick-start", "why", "key-concepts", "vs"]
 }

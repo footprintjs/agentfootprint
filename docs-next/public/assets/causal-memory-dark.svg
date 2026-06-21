@@ -1,0 +1,326 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 720" role="img"
+     aria-label="agentfootprint causal memory — Each agent run produces a JSON-portable causal trace: a scrubbable timeline of every stage with reads, writes, and captured decision evidence. The trace card shows a time-travel slider (Step 5 of 17, Live), an execution timeline with stage-duration bars (seed, resolve-prompt, call-llm, assess-credit, route-decision active, generate-adverse), and the captured decision evidence pill (riskTier eq high → reject). Two built-in lenses view it: Lens (agent-centric) and Explainable Trace (structural). Three programmatic consumers fan out from it: audit replay (GDPR Article 22 adverse-action notice answered from chain, no LLM call, $15/1M to $0.25/1M tokens), cheap-model triage (Sonnet trace fed to Haiku for follow-ups), and training data export (every chain is a labeled trajectory ready for SFT/DPO/process-RL). One recording, two lenses, three consumers, zero extra instrumentation. Powered by footprintjs causalChain().">
+
+  <defs>
+    <radialGradient id="cm-glow-d" cx="50%" cy="50%" r="55%">
+      <stop offset="0%" stop-color="#C4B5FD" stop-opacity="0.10"/>
+      <stop offset="100%" stop-color="#C4B5FD" stop-opacity="0"/>
+    </radialGradient>
+
+    <style>
+      .flow { stroke-dasharray: 0.5 8; stroke-linecap: round; animation: cm-mv 1.4s linear infinite; fill: none; }
+      @keyframes cm-mv { from { stroke-dashoffset: 0 } to { stroke-dashoffset: -24 } }
+
+      .pulse  { animation: cm-p 2.8s ease-in-out infinite; transform-origin: center; transform-box: fill-box; }
+      .pulse2 { animation: cm-p 2.8s ease-in-out infinite; animation-delay: 0.5s; transform-origin: center; transform-box: fill-box; }
+      .pulse3 { animation: cm-p 2.8s ease-in-out infinite; animation-delay: 1.0s; transform-origin: center; transform-box: fill-box; }
+      .pulse4 { animation: cm-p 2.8s ease-in-out infinite; animation-delay: 1.5s; transform-origin: center; transform-box: fill-box; }
+      @keyframes cm-p { 0%,100% { opacity: 1 } 50% { opacity: 0.6 } }
+
+      .breath { animation: cm-b 4s ease-in-out infinite; transform-origin: center; transform-box: fill-box; }
+      @keyframes cm-b { 0%,100% { opacity: 0.94 } 50% { opacity: 1 } }
+
+      /* live dot pulse on the slider */
+      .liveDot { animation: cm-live 1.6s ease-in-out infinite; transform-origin: center; transform-box: fill-box; }
+      @keyframes cm-live { 0%,100% { opacity: 1 } 50% { opacity: 0.45 } }
+
+      /* active stage bar shimmer */
+      .activeBar { animation: cm-shim 2.2s ease-in-out infinite; transform-origin: center; transform-box: fill-box; }
+      @keyframes cm-shim { 0%,100% { opacity: 1 } 50% { opacity: 0.78 } }
+
+      .h1     { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif; font-size: 28px; font-weight: 800; fill: #E5E7EB; }
+      .h1Acc  { fill: #C4B5FD; }
+      .sub    { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif; font-size: 15px; fill: #9CA3AF; }
+
+      .zoneL  { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 11px; letter-spacing: 0.18em; font-weight: 800; fill: #6B7280; }
+      .iterL  { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 13px; font-weight: 700; fill: #9CA3AF; }
+      .iterAcc { fill: #C4B5FD; }
+
+      .traceTitle { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 12px; letter-spacing: 0.16em; font-weight: 800; fill: #C4B5FD; }
+      .traceMeta  { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 10px; letter-spacing: 0.08em; font-weight: 700; fill: #6B7280; }
+
+      .stageL     { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 11.5px; fill: #9CA3AF; }
+      .stageLActive { fill: #FCD34D; font-weight: 700; }
+      .stageLDone   { fill: #C4B5FD; }
+      .stageLPend   { fill: #4B5563; }
+
+      .sliderL    { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 10.5px; font-weight: 700; fill: #9CA3AF; }
+      .liveTxt    { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 9.5px; letter-spacing: 0.14em; font-weight: 800; fill: #0d1117; }
+
+      .evCondL  { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 10px; letter-spacing: 0.16em; font-weight: 800; fill: #6B7280; }
+      .evChip   { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 12px; font-weight: 700; }
+
+      .lensL    { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 10.5px; fill: #6B7280; }
+      .lensName { fill: #C4B5FD; font-weight: 700; }
+      .powered  { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 9.5px; letter-spacing: 0.10em; fill: #4B5563; }
+
+      .consTitle { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 11px; letter-spacing: 0.20em; font-weight: 800; }
+      .consHead  { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif; font-size: 14px; font-weight: 700; fill: #E5E7EB; }
+      .consL     { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 11px; fill: #9CA3AF; }
+      .consA     { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 11px; font-weight: 700; }
+
+      .tag       { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif; font-size: 16px; }
+    </style>
+  </defs>
+
+  <!-- ─────────────── HEADLINE ─────────────── -->
+  <g class="h1" text-anchor="middle">
+    <text x="700" y="42">The trace is a <tspan class="h1Acc">cache of the agent's thinking</tspan>.</text>
+  </g>
+  <text class="sub" x="700" y="70" text-anchor="middle">
+    Captured during the run · scrubbable · queryable · exportable — for free.
+  </text>
+
+  <!-- ════════════════════════════════════════════════════════════
+       AGENT RUN ZONE — left, muted (the source)
+       ════════════════════════════════════════════════════════════ -->
+  <g transform="translate(60,160)">
+    <text class="zoneL" x="120" y="0" text-anchor="middle">AGENT RUN</text>
+
+    <g transform="translate(0,28)">
+      <rect width="240" height="38" rx="8" fill="rgba(229,231,235,0.04)" stroke="rgba(229,231,235,0.14)" stroke-width="0.8"/>
+      <text class="iterL" x="20" y="24">iter 1 · think → tool</text>
+      <circle cx="220" cy="19" r="3" fill="#6B7280"/>
+    </g>
+    <g transform="translate(0,76)">
+      <rect width="240" height="38" rx="8" fill="rgba(229,231,235,0.04)" stroke="rgba(229,231,235,0.14)" stroke-width="0.8"/>
+      <text class="iterL" x="20" y="24">iter 2 · think → tool</text>
+      <circle cx="220" cy="19" r="3" fill="#6B7280"/>
+    </g>
+    <g class="pulse" transform="translate(0,124)">
+      <rect width="240" height="38" rx="8" fill="rgba(196,181,253,0.10)" stroke="rgba(196,181,253,0.38)" stroke-width="0.8"/>
+      <text class="iterL iterAcc" x="20" y="24">iter 3 · decide → done</text>
+      <circle cx="220" cy="19" r="3" fill="#C4B5FD"/>
+    </g>
+
+    <!-- loop arrow on the right -->
+    <path d="M 250 47 C 290 47, 290 105, 250 105" stroke="rgba(229,231,235,0.18)" stroke-width="1.2" fill="none" stroke-linecap="round"/>
+    <polygon points="250,103 256,109 250,109" fill="rgba(229,231,235,0.40)"/>
+
+    <text class="stageL" x="120" y="200" text-anchor="middle" fill="#6B7280" font-style="italic">no extra hooks · no separate eval pass</text>
+    <text class="stageL" x="120" y="218" text-anchor="middle" fill="#6B7280" font-style="italic">— evidence collected in the loop</text>
+  </g>
+
+  <!-- ════════════════════════════════════════════════════════════
+       CAPTURE STREAM: agent → trace card
+       ════════════════════════════════════════════════════════════ -->
+  <g stroke-width="2.4">
+    <path class="flow" d="M 320 240 C 360 240, 400 240, 440 240" stroke="#C4B5FD"/>
+  </g>
+
+  <!-- ════════════════════════════════════════════════════════════
+       TRACE CARD — focal centerpiece (looks like the real product UI)
+       ════════════════════════════════════════════════════════════ -->
+  <ellipse cx="640" cy="380" rx="270" ry="240" fill="url(#cm-glow-d)"/>
+
+  <g class="breath" transform="translate(440,130)">
+
+    <!-- Card frame -->
+    <rect width="400" height="490" rx="16" fill="rgba(196,181,253,0.05)" stroke="rgba(196,181,253,0.40)" stroke-width="1"/>
+
+    <!-- ═══ Slider strip (top) ═══ -->
+    <rect width="400" height="44" rx="16" fill="rgba(196,181,253,0.10)"/>
+    <rect y="28" width="400" height="16" fill="rgba(196,181,253,0.10)"/>
+
+    <!-- transport buttons -->
+    <g transform="translate(14,12)">
+      <rect width="20" height="20" rx="5" fill="rgba(229,231,235,0.08)"/>
+      <polygon points="14,5 14,15 7,10" fill="#9CA3AF"/>
+    </g>
+    <g transform="translate(40,12)">
+      <rect width="20" height="20" rx="5" fill="rgba(252,211,77,0.18)" stroke="rgba(252,211,77,0.50)" stroke-width="0.8"/>
+      <polygon points="7,5 7,15 15,10" fill="#FCD34D"/>
+    </g>
+    <g transform="translate(66,12)">
+      <rect width="20" height="20" rx="5" fill="rgba(229,231,235,0.08)"/>
+      <polygon points="6,5 6,15 11,10" fill="#9CA3AF"/>
+      <polygon points="11,5 11,15 16,10" fill="#9CA3AF"/>
+    </g>
+
+    <!-- slider track + filled progress + scrubber -->
+    <rect x="98" y="20" width="156" height="4" rx="2" fill="rgba(229,231,235,0.10)"/>
+    <rect x="98" y="20" width="42" height="4" rx="2" fill="#FCD34D"/>
+    <circle cx="142" cy="22" r="5" fill="#FCD34D" stroke="#0d1117" stroke-width="1.2"/>
+
+    <text x="263" y="26" class="sliderL">Step 5/17</text>
+
+    <!-- LIVE pill -->
+    <g class="liveDot" transform="translate(338,11)">
+      <rect width="50" height="22" rx="11" fill="#FCD34D"/>
+      <circle cx="11" cy="11" r="3" fill="#0d1117"/>
+      <text x="20" y="15" class="liveTxt">LIVE</text>
+    </g>
+
+    <!-- ═══ Title row ═══ -->
+    <g transform="translate(20,68)">
+      <text class="traceTitle">CAUSAL TRACE  ·  loan-42</text>
+      <text class="traceMeta" x="360" text-anchor="end">17 STAGES  ·  3.2 MB JSON</text>
+    </g>
+
+    <line x1="20" y1="80" x2="380" y2="80" stroke="rgba(196,181,253,0.18)" stroke-width="0.6"/>
+
+    <!-- ═══ Execution timeline section header ═══ -->
+    <text class="evCondL" x="20" y="104">EXECUTION TIMELINE</text>
+
+    <!-- ═══ Stage rows (6 stages) ═══
+         Layout per row:
+           x=20  : stage label (~150 wide)
+           x=180 : timeline track (200 wide)
+           durations:  seed 12 · resolve 28 · call-llm 200 (largest, completed) ·
+                       assess 40 · route-decision 60 (ACTIVE) · generate-adverse 32 (pending)
+         Row pitch: 22px
+         ═══ -->
+    <g transform="translate(0,114)">
+
+      <!-- Row 1: seed#0 — completed -->
+      <g transform="translate(0,16)">
+        <text class="stageL stageLDone" x="20">seed#0</text>
+        <rect x="180" y="-7" width="12" height="9" rx="2" fill="#C4B5FD" opacity="0.55"/>
+      </g>
+
+      <!-- Row 2: resolve-prompt#1 — completed -->
+      <g transform="translate(0,38)">
+        <text class="stageL stageLDone" x="20">resolve-prompt#1</text>
+        <rect x="180" y="-7" width="28" height="9" rx="2" fill="#C4B5FD" opacity="0.55"/>
+      </g>
+
+      <!-- Row 3: call-llm#2 — completed (longest) -->
+      <g transform="translate(0,60)">
+        <text class="stageL stageLDone" x="20">call-llm#2</text>
+        <rect x="180" y="-7" width="200" height="9" rx="2" fill="#C4B5FD" opacity="0.55"/>
+      </g>
+
+      <!-- Row 4: assess-credit#3 — completed -->
+      <g transform="translate(0,82)">
+        <text class="stageL stageLDone" x="20">assess-credit#3</text>
+        <rect x="180" y="-7" width="40" height="9" rx="2" fill="#C4B5FD" opacity="0.55"/>
+      </g>
+
+      <!-- Row 5: route-decision#4 — ACTIVE (decision happens here) -->
+      <g transform="translate(0,104)">
+        <text class="stageL stageLActive" x="20">route-decision#4</text>
+        <rect class="activeBar" x="180" y="-7" width="60" height="9" rx="2" fill="#FCD34D"/>
+        <text class="sliderL" x="248" y="0" fill="#FCD34D">◀ active</text>
+      </g>
+
+      <!-- Row 6: generate-adverse#5 — pending -->
+      <g transform="translate(0,126)">
+        <text class="stageL stageLPend" x="20">generate-adverse#5</text>
+        <rect x="180" y="-7" width="32" height="9" rx="2" fill="rgba(229,231,235,0.14)" stroke-dasharray="2 2" stroke="rgba(229,231,235,0.20)" stroke-width="0.6"/>
+      </g>
+    </g>
+
+    <line x1="20" y1="270" x2="380" y2="270" stroke="rgba(196,181,253,0.18)" stroke-width="0.6" stroke-dasharray="2 3"/>
+
+    <!-- ═══ Decision evidence chip ═══ -->
+    <text class="evCondL" x="20" y="290">DECISION EVIDENCE  @  route-decision#4</text>
+
+    <g transform="translate(20,300)">
+      <rect width="360" height="44" rx="10" fill="rgba(252,211,77,0.08)" stroke="rgba(252,211,77,0.35)" stroke-width="0.8"/>
+      <!-- chip 1: riskTier -->
+      <g transform="translate(12,10)">
+        <rect width="74" height="24" rx="6" fill="rgba(196,181,253,0.18)"/>
+        <text class="evChip" x="37" y="16" text-anchor="middle" fill="#C4B5FD">riskTier</text>
+      </g>
+      <!-- value 1 -->
+      <text class="evChip" x="98" y="28" fill="#E5E7EB">"high"</text>
+      <!-- operator -->
+      <text class="evChip" x="148" y="28" fill="#9CA3AF">eq</text>
+      <!-- value 2 -->
+      <text class="evChip" x="178" y="28" fill="#E5E7EB">"high"</text>
+      <!-- check -->
+      <text class="evChip" x="226" y="28" fill="#4ADE80" font-size="14" font-weight="800">✓</text>
+      <!-- arrow -->
+      <text class="evChip" x="248" y="28" fill="#9CA3AF">→</text>
+      <!-- chosen branch -->
+      <g transform="translate(268,10)">
+        <rect width="80" height="24" rx="6" fill="rgba(248,113,113,0.18)"/>
+        <text class="evChip" x="40" y="16" text-anchor="middle" fill="#F87171">reject</text>
+      </g>
+    </g>
+
+    <!-- ═══ Multi-lens line + attribution (footer) ═══ -->
+    <g transform="translate(20,400)">
+      <text class="lensL">view in:</text>
+
+      <!-- Lens chip -->
+      <g transform="translate(50,-12)">
+        <rect width="58" height="18" rx="4" fill="rgba(196,181,253,0.12)" stroke="rgba(196,181,253,0.30)" stroke-width="0.6"/>
+        <text class="evChip" x="29" y="13" text-anchor="middle" fill="#C4B5FD" font-size="10">Lens</text>
+      </g>
+
+      <!-- Explainable Trace chip -->
+      <g transform="translate(116,-12)">
+        <rect width="120" height="18" rx="4" fill="rgba(196,181,253,0.12)" stroke="rgba(196,181,253,0.30)" stroke-width="0.6"/>
+        <text class="evChip" x="60" y="13" text-anchor="middle" fill="#C4B5FD" font-size="10">Explainable Trace</text>
+      </g>
+
+      <!-- query API chip -->
+      <g transform="translate(244,-12)">
+        <rect width="80" height="18" rx="4" fill="rgba(196,181,253,0.12)" stroke="rgba(196,181,253,0.30)" stroke-width="0.6"/>
+        <text class="evChip" x="40" y="13" text-anchor="middle" fill="#C4B5FD" font-size="10">query API</text>
+      </g>
+    </g>
+
+    <text class="powered" x="20" y="442">POWERED BY  footprintjs causalChain()</text>
+
+    <!-- subtle bottom signature stripe (matches snapshot card aesthetic) -->
+    <line x1="20" y1="460" x2="380" y2="460" stroke="rgba(196,181,253,0.10)" stroke-width="0.6"/>
+    <text class="evCondL" x="200" y="478" text-anchor="middle" fill="#C4B5FD">REPLAYABLE  ·  QUERYABLE  ·  EXPORTABLE</text>
+  </g>
+
+  <!-- ════════════════════════════════════════════════════════════
+       FAN-OUT STREAMS: trace → 3 consumers
+       ════════════════════════════════════════════════════════════ -->
+  <g stroke-width="2.4">
+    <!-- → audit (top) -->
+    <path class="flow" d="M 840 280 C 870 240, 880 220, 900 200" stroke="#FCD34D" style="animation-delay:0.2s"/>
+    <!-- → triage (middle) -->
+    <path class="flow" d="M 840 380 C 870 380, 880 380, 900 380" stroke="#4ADE80" style="animation-delay:0.5s"/>
+    <!-- → training (bottom) -->
+    <path class="flow" d="M 840 480 C 870 510, 880 530, 900 540" stroke="#7DD3FC" style="animation-delay:0.8s"/>
+  </g>
+
+  <!-- ════════════════════════════════════════════════════════════
+       3 CONSUMER CARDS — right
+       ════════════════════════════════════════════════════════════ -->
+
+  <!-- Card 1: Audit / replay -->
+  <g class="pulse2" transform="translate(900,140)">
+    <rect width="440" height="120" rx="14" fill="rgba(252,211,77,0.05)" stroke="rgba(252,211,77,0.32)" stroke-width="1"/>
+    <rect width="4" height="120" rx="2" fill="#FCD34D"/>
+    <text x="22" y="26" class="consTitle" fill="#FCD34D">01  ·  AUDIT  /  COMPLIANCE</text>
+    <text x="22" y="50" class="consHead">"Why was loan #42 rejected?"</text>
+    <text x="22" y="70" class="consL">creditScore <tspan font-weight="700" fill="#E5E7EB">580</tspan> &lt; 620  ∧  dti <tspan font-weight="700" fill="#E5E7EB">0.6</tspan> &gt; 0.43</text>
+    <text x="22" y="88" class="consA" fill="#FCD34D">→ riskTier=high → REJECTED</text>
+    <text x="22" y="106" class="consL" font-style="italic" fill="#6B7280">GDPR Art. 22 / ECOA · answered from chain · no LLM call</text>
+  </g>
+
+  <!-- Card 2: Cheap-model triage -->
+  <g class="pulse3" transform="translate(900,290)">
+    <rect width="440" height="120" rx="14" fill="rgba(74,222,128,0.05)" stroke="rgba(74,222,128,0.32)" stroke-width="1"/>
+    <rect width="4" height="120" rx="2" fill="#4ADE80"/>
+    <text x="22" y="26" class="consTitle" fill="#4ADE80">02  ·  CHEAP-MODEL  TRIAGE</text>
+    <text x="22" y="50" class="consHead">Sonnet's trace → Haiku for follow-ups</text>
+    <text x="22" y="70" class="consL">"Would creditScore <tspan font-weight="700" fill="#E5E7EB">620</tspan> have been approved?"</text>
+    <text x="22" y="88" class="consA" fill="#4ADE80">~200 tok @ any model  vs  ~2,500 tok @ reasoning</text>
+    <text x="22" y="106" class="consL" font-style="italic" fill="#6B7280">$15 / 1M  →  $0.25 / 1M tokens · no agent rerun</text>
+  </g>
+
+  <!-- Card 3: Training data export -->
+  <g class="pulse4" transform="translate(900,440)">
+    <rect width="440" height="120" rx="14" fill="rgba(125,211,252,0.05)" stroke="rgba(125,211,252,0.32)" stroke-width="1"/>
+    <rect width="4" height="120" rx="2" fill="#7DD3FC"/>
+    <text x="22" y="26" class="consTitle" fill="#7DD3FC">03  ·  TRAINING  DATA  EXPORT</text>
+    <text x="22" y="50" class="consHead">Every chain is a labeled trajectory</text>
+    <text x="22" y="70" class="consL"><tspan font-weight="700" fill="#7DD3FC">causalMemory.exportForTraining</tspan>({ format:</text>
+    <text x="22" y="88" class="consA" fill="#7DD3FC">'sft'  |  'dpo'  |  'process-rl' })</text>
+    <text x="22" y="106" class="consL" font-style="italic" fill="#6B7280">chain provides per-step rewards · process-RL ready</text>
+  </g>
+
+  <!-- ─────────────── TAGLINE ─────────────── -->
+  <g class="tag" transform="translate(700,690)" text-anchor="middle">
+    <text fill="#9CA3AF"><tspan font-family="ui-monospace, monospace" fill="#C4B5FD" font-weight="700">One recording</tspan>  ·  <tspan font-family="ui-monospace, monospace" fill="#C4B5FD" font-weight="700">two lenses</tspan>  ·  <tspan font-family="ui-monospace, monospace" fill="#C4B5FD" font-weight="700">three consumers</tspan>  ·  <tspan fill="#E5E7EB" font-weight="700">zero extra instrumentation</tspan></text>
+  </g>
+
+</svg>

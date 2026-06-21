@@ -92,13 +92,7 @@ The atom. One prompt in, one response out. No tools, no loop.
 
 agentfootprint's Agent loops back to `SystemPrompt` every iteration, not just `CallLLM`. Slots **recompose** every pass — injections that fired on the previous tool result get a chance to recompose the next prompt. Classic ReAct freezes the slots at the top of the turn.
 
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="/agentfootprint/assets/dynamic-vs-classic-dark.svg" />
-    <source media="(prefers-color-scheme: light)" srcset="/agentfootprint/assets/dynamic-vs-classic-light.svg" />
-    <img alt="Classic ReAct loops back to CallLLM (slots frozen, 12 tools every iteration). Dynamic ReAct loops back to SystemPrompt (slots recompose, tools shrink from 1 to 5 as skills activate)." src="/agentfootprint/assets/dynamic-vs-classic-light.svg" width="100%" />
-  </picture>
-</p>
+<Diagram name="dynamic-vs-classic" alt="Classic ReAct loops back to CallLLM (slots frozen, 12 tools every iteration). Dynamic ReAct loops back to SystemPrompt (slots recompose, tools shrink from 1 to 5 as skills activate)." />
 
 | Iteration | Classic ReAct | Dynamic ReAct (agentfootprint) |
 |---|---|---|
@@ -114,13 +108,7 @@ agentfootprint's Agent loops back to `SystemPrompt` every iteration, not just `C
 
 The four ways primitives arrange. **Every named pattern is built from these.**
 
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="/agentfootprint/assets/control-flows-dark.svg" />
-    <source media="(prefers-color-scheme: light)" srcset="/agentfootprint/assets/control-flows-light.svg" />
-    <img alt="The 4 control flows: Sequence (linear chain A → B → C), Parallel (fan-out + fan-in), Conditional (diamond branch), Loop (cycle back)." src="/agentfootprint/assets/control-flows-light.svg" width="100%" />
-  </picture>
-</p>
+<Diagram name="control-flows" alt="The 4 control flows: Sequence (linear chain A → B → C), Parallel (fan-out + fan-in), Conditional (diamond branch), Loop (cycle back)." />
 
 ### 1. Sequence — one after another
 
@@ -128,7 +116,7 @@ Chains multiple runners into a sequential pipeline. Each step's output flows int
 
 <CodeFile path="examples/core-flow/01-sequence.ts" region="build" title="examples/core-flow/01-sequence.ts (region: build)" />
 
-**Use for:** multi-step workflows, classify-then-respond, ETL pipelines.
+**Use for:** multi-step workflows, classify-then-respond, data (ETL) pipelines.
 
 ### 2. Parallel — at the same time
 
@@ -158,13 +146,7 @@ See [`examples/core-flow/04-loop.ts`](https://github.com/footprintjs/agentfootpr
 
 Every paper in the agent literature is a composition of 2 primitives + 4 compositions. **Same alphabet, different word.**
 
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="/agentfootprint/assets/patterns-dark.svg" />
-    <source media="(prefers-color-scheme: light)" srcset="/agentfootprint/assets/patterns-light.svg" />
-    <img alt="6 named multi-agent patterns reduce to compositions of the same 4 control flows: Swarm = Loop(Parallel(Agent×N) → merge); Tree-of-Thoughts = Loop(Parallel(Agent×N) → Conditional(score)); Reflexion = Loop(Agent → Conditional(critique) → Agent); Debate = Parallel(Agent_pro, Agent_con) → Agent_judge; Router = Conditional → Agent_A | Agent_B | Agent_C; Hierarchical = Agent_planner → Sequence(Agent_worker×N) → synth." src="/agentfootprint/assets/patterns-light.svg" width="100%" />
-  </picture>
-</p>
+<Diagram name="patterns" alt="6 named multi-agent patterns reduce to compositions of the same 4 control flows: Swarm = Loop(Parallel(Agent×N) → merge); Tree-of-Thoughts = Loop(Parallel(Agent×N) → Conditional(score)); Reflexion = Loop(Agent → Conditional(critique) → Agent); Debate = Parallel(Agent_pro, Agent_con) → Agent_judge; Router = Conditional → Agent_A | Agent_B | Agent_C; Hierarchical = Agent_planner → Sequence(Agent_worker×N) → synth." />
 
 | Pattern | Built from | Paper |
 |---|---|---|
@@ -202,13 +184,7 @@ These are **not primitives.** They're flavors of the **Injection** primitive —
 Injection = slot × trigger × cache
 ```
 
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="/agentfootprint/assets/triggers-dark.svg" />
-    <source media="(prefers-color-scheme: light)" srcset="/agentfootprint/assets/triggers-light.svg" />
-    <img alt="Every LLM call has 3 fixed slots (system, messages, tools); every flavor lands in one slot under one of 4 fixed triggers. The grid is the entire context-engineering surface." src="/agentfootprint/assets/triggers-light.svg" width="100%" />
-  </picture>
-</p>
+<Diagram name="triggers" alt="Every LLM call has 3 fixed slots (system, messages, tools); every flavor lands in one slot under one of 4 fixed triggers. The grid is the entire context-engineering surface." />
 
 | Flavor | Slot | Trigger | Purpose |
 |---|---|---|---|
@@ -219,9 +195,9 @@ Injection = slot × trigger × cache
 | **Memory** | `messages` | rule | Persist conversation / facts across turns |
 | **RAG** | `messages` | rule + score | Retrieve relevant chunks at query time |
 
-:::note[Slot is a default, not a coupling]
+<Callout type="info" title="Slot is a default, not a coupling">
 The same `Skill` can live in `tools` (schema only, discovered via `read_skill`), `messages` (body injected on activation), or `system` (baked into the prompt as steering). Strategy is config; flavor is independent of (slot, trigger).
-:::
+</Callout>
 
 ### Why this grid matters — four backtrack questions
 

@@ -1,6 +1,6 @@
 ---
 title: Why agentfootprint?
-description: Agents introduce a class of bug debuggers can't see — contextual errors. agentfootprint is the framework that makes them visible by owning the injection loop and handing back the trace.
+description: AI agents fail in a way classic debuggers can't see — the code is right, but the answer is wrong because of the context the model saw. agentfootprint records that context so you can trace any wrong answer back to its cause.
 ---
 
 > Your support agent told a customer their refund was processed. Six weeks later they come back and ask *"why did you tell me my refund was processed when it wasn't?"* You go to look. The agent is gone. Logs are scattered across three services. The decision evidence is not there. **This is the gap agentfootprint exists to close.**
@@ -21,19 +21,13 @@ Tracking *which content the model actually saw, and why,* is the entire debuggin
 | Cache prefix invalidated mid-iteration | Saw a silently rewritten stale version |
 | Tool returned but `on-tool-return` injection didn't fire | Couldn't interpret the result |
 
-:::caution[The model doesn't tell you which of these went wrong]
+<Callout type="warn" title="The model doesn't tell you which of these went wrong">
 It just gives you the wrong answer. You can't step through it with a debugger. By the time you read the response, the context that produced it is gone — *unless something recorded it*.
-:::
+</Callout>
 
 A framework that owns the control flow can debug logic errors. A framework that owns the **injection** can debug contextual errors — because every injection is a typed event with a where, when, why, and how-it-cached.
 
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="/agentfootprint/assets/triggers-dark.svg" />
-    <source media="(prefers-color-scheme: light)" srcset="/agentfootprint/assets/triggers-light.svg" />
-    <img alt="Every LLM call has 3 fixed slots (system, messages, tools); every flavor lands in one slot under one of 4 fixed triggers. The grid is the entire context-engineering surface." src="/agentfootprint/assets/triggers-light.svg" width="100%" />
-  </picture>
-</p>
+<Diagram name="triggers" alt="Every LLM call has 3 fixed slots (system, messages, tools); every flavor lands in one slot under one of 4 fixed triggers. The grid is the entire context-engineering surface." />
 
 ## The four backtrack questions
 
@@ -50,7 +44,7 @@ These aren't logged alongside the call. They're the **structural output** of the
 
 ## Connected evidence — built declaratively
 
-agentfootprint gives you **connected evidence** — grounded, auditable, LLM-readable. Every iteration of the ReAct loop, every tool call with its args + result, every context injection, every decision branch is captured as a typed event during one DFS traversal — no instrumentation, no post-processing.
+agentfootprint gives you **connected evidence** — grounded, auditable, LLM-readable. Every iteration of the ReAct loop, every tool call with its args + result, every context injection, every decision branch is captured as a typed event in a single pass over the run — no instrumentation, no post-processing.
 
 The agent + tool registration is built declaratively. The framework owns the loop, so it can record everything that happens inside it:
 
@@ -70,29 +64,17 @@ The same trace serves three workflows:
 |---|---|---|
 | **Live** | Debug as you build | Exactly which injection produced which token; which predicate fired this iteration; which prefix actually got cached |
 | **Offline** | Monitor what shipped | Replay any past run from its trace. Alert on drift. Attribute cost per injection. |
-| **Detailed** | Improve via export | Every successful trajectory is labeled training data for SFT, DPO, or process-RL — no separate data-collection phase |
+| **Detailed** | Improve via export | Every successful trajectory is labeled training data for fine-tuning or reinforcement learning — no separate data-collection phase |
 
 And a fourth, novel: **the agent can read its own trace.** Six months after the agent rejected loan #42, *"why did you reject it?"* answers from the recorded evidence (`creditScore=580`, `threshold=600`), not a rerun. Causal memory turns the trace into the agent's working memory.
 
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="/agentfootprint/assets/causal-memory-dark.svg" />
-    <source media="(prefers-color-scheme: light)" srcset="/agentfootprint/assets/causal-memory-light.svg" />
-    <img alt="One agent run produces a JSON-portable causal trace. Three downstream consumers fan out: audit replay, cheap-model triage, training data export." src="/agentfootprint/assets/causal-memory-light.svg" width="100%" />
-  </picture>
-</p>
+<Diagram name="causal-memory" alt="One agent run produces a JSON-portable causal trace. Three downstream consumers fan out: audit replay, cheap-model triage, training data export." />
 
 ## Dynamic ReAct — context recomposes every iteration
 
 The corollary that makes "context engineering" worth the name. Other frameworks assemble the prompt once per turn; agentfootprint re-runs every Injection trigger every iteration. Tool schemas, system prompts, skill bodies, memory recall — all recompute against the freshest state.
 
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="/agentfootprint/assets/dynamic-vs-classic-dark.svg" />
-    <source media="(prefers-color-scheme: light)" srcset="/agentfootprint/assets/dynamic-vs-classic-light.svg" />
-    <img alt="Classic ReAct loops back to CallLLM (slots frozen). Dynamic ReAct loops back to SystemPrompt (slots recompose every iteration)." src="/agentfootprint/assets/dynamic-vs-classic-light.svg" width="100%" />
-  </picture>
-</p>
+<Diagram name="dynamic-vs-classic" alt="Classic ReAct loops back to CallLLM (slots frozen). Dynamic ReAct loops back to SystemPrompt (slots recompose every iteration)." />
 
 | Iteration | Classic ReAct | Dynamic ReAct (agentfootprint) |
 |---|---|---|

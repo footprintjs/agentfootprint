@@ -1,0 +1,265 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 660" role="img"
+     aria-label="agentfootprint named patterns — Every multi-agent pattern in the literature reduces to a composition of the same 4 control flows. 6 pattern cards in a 2×3 grid, each with a mini diagram (yellow control-flow edges, violet Agent nodes) and the composition formula: Swarm = Loop(Parallel(Agent×N) → merge); Tree-of-Thoughts = Loop(Parallel(Agent×N) → Conditional(score)); Reflexion = Loop(Agent → Conditional(critique) → Agent); Debate = Parallel(Agent_pro, Agent_con) → Agent_judge; Router = Conditional → Agent_A | Agent_B | Agent_C; Hierarchical = Agent_planner → Sequence(Agent_worker×N) → synth.">
+
+  <defs>
+    <style>
+      .flow { stroke-dasharray: 0.5 8; stroke-linecap: round; animation: cmp-mv 1.4s linear infinite; fill: none; }
+      @keyframes cmp-mv { from { stroke-dashoffset: 0 } to { stroke-dashoffset: -24 } }
+
+      .pulse  { animation: cmp-p 2.8s ease-in-out infinite; transform-origin: center; transform-box: fill-box; }
+      .pulse2 { animation: cmp-p 2.8s ease-in-out infinite; animation-delay: 0.4s; transform-origin: center; transform-box: fill-box; }
+      .pulse3 { animation: cmp-p 2.8s ease-in-out infinite; animation-delay: 0.8s; transform-origin: center; transform-box: fill-box; }
+      @keyframes cmp-p { 0%,100% { opacity: 1 } 50% { opacity: 0.55 } }
+
+      .breath { animation: cmp-b 4s ease-in-out infinite; transform-origin: center; transform-box: fill-box; }
+      @keyframes cmp-b { 0%,100% { opacity: 0.94 } 50% { opacity: 1 } }
+
+      .h1     { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif; font-size: 26px; font-weight: 800; fill: #E5E7EB; }
+      .h1Acc  { fill: #FCD34D; }
+      .sub    { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif; font-size: 14px; fill: #9CA3AF; }
+
+      .pName    { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 13px; letter-spacing: 0.10em; font-weight: 800; fill: #FCD34D; }
+      .pFormula { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 11.5px; fill: #9CA3AF; }
+
+      .nodeT    { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif; font-size: 11px; font-weight: 800; fill: #C4B5FD; }
+      .nodeS    { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 9.5px; fill: #9CA3AF; }
+
+      .tag      { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif; font-size: 14px; }
+    </style>
+  </defs>
+
+  <!-- ─────────────── HEADLINE ─────────────── -->
+  <g class="h1" text-anchor="middle">
+    <text x="700" y="40">Named patterns reduce to <tspan class="h1Acc">compositions</tspan> of the same 4.</text>
+  </g>
+  <text class="sub" x="700" y="66" text-anchor="middle">
+    The patterns the field knows · written in the alphabet you already learned
+  </text>
+
+  <!-- ════════════════════════════════════════════════════════════
+       2×3 grid · cell 420×240 · Row 1 y=100 · Row 2 y=360 · Cols x=40, 490, 940
+       ════════════════════════════════════════════════════════════ -->
+
+  <!-- ──────────── PATTERN 1: SWARM (2 agents) ──────────── -->
+  <g class="breath" transform="translate(40,100)">
+    <rect width="420" height="240" rx="14" fill="rgba(252,211,77,0.04)" stroke="rgba(252,211,77,0.22)" stroke-width="0.8"/>
+    <text x="20" y="28" class="pName">SWARM</text>
+
+    <g transform="translate(60,60)">
+      <!-- input dot at (0, 60) -->
+      <circle cx="0" cy="60" r="4" fill="#9CA3AF"/>
+
+      <!-- fan-out to 2 agents (above + below center) -->
+      <line x1="4" y1="60" x2="60" y2="34" stroke="#FCD34D" stroke-width="2" stroke-linecap="round"/>
+      <line x1="4" y1="60" x2="60" y2="86" stroke="#FCD34D" stroke-width="2" stroke-linecap="round"/>
+
+      <!-- 2 agents -->
+      <g transform="translate(60,22)"><rect width="50" height="24" rx="6" fill="rgba(196,181,253,0.18)" stroke="rgba(196,181,253,0.55)" stroke-width="0.8"/><text x="25" y="16" text-anchor="middle" class="nodeT">Agent</text></g>
+      <g transform="translate(60,74)"><rect width="50" height="24" rx="6" fill="rgba(196,181,253,0.18)" stroke="rgba(196,181,253,0.55)" stroke-width="0.8"/><text x="25" y="16" text-anchor="middle" class="nodeT">Agent</text></g>
+
+      <!-- fan-in from agent right edges -->
+      <line x1="110" y1="34" x2="170" y2="60" stroke="#FCD34D" stroke-width="2" stroke-linecap="round"/>
+      <line x1="110" y1="86" x2="170" y2="60" stroke="#FCD34D" stroke-width="2" stroke-linecap="round"/>
+
+      <!-- merge box -->
+      <g class="pulse" transform="translate(170,46)"><rect width="64" height="28" rx="6" fill="rgba(196,181,253,0.16)" stroke="rgba(196,181,253,0.50)" stroke-width="0.8"/><text x="32" y="18" text-anchor="middle" class="nodeT">merge</text></g>
+
+      <!-- output arrow to dot -->
+      <line x1="234" y1="60" x2="282" y2="60" stroke="#FCD34D" stroke-width="2" stroke-linecap="round"/>
+      <polygon points="280,56 286,60 280,64" fill="#FCD34D"/>
+      <circle cx="290" cy="60" r="3" fill="#9CA3AF"/>
+
+      <!-- loop arc: from below merge back to input dot from below -->
+      <path class="flow" d="M 202 76 C 202 130, 0 130, 0 70" stroke="#FCD34D" stroke-width="2"/>
+      <polygon points="-4,72 4,72 0,62" fill="#FCD34D"/>
+    </g>
+
+    <text x="20" y="220" class="pFormula">Loop( Parallel( Agent×N ) → merge )</text>
+  </g>
+
+  <!-- ──────────── PATTERN 2: TREE-OF-THOUGHTS (3 agents) ──────────── -->
+  <g class="breath" transform="translate(490,100)">
+    <rect width="420" height="240" rx="14" fill="rgba(252,211,77,0.04)" stroke="rgba(252,211,77,0.22)" stroke-width="0.8"/>
+    <text x="20" y="28" class="pName">TREE-OF-THOUGHTS</text>
+
+    <g transform="translate(40,60)">
+      <circle cx="10" cy="60" r="4" fill="#9CA3AF"/>
+      <line x1="14" y1="60" x2="60" y2="22" stroke="#FCD34D" stroke-width="2" stroke-linecap="round"/>
+      <line x1="14" y1="60" x2="60" y2="60" stroke="#FCD34D" stroke-width="2" stroke-linecap="round"/>
+      <line x1="14" y1="60" x2="60" y2="98" stroke="#FCD34D" stroke-width="2" stroke-linecap="round"/>
+
+      <g transform="translate(60,10)"><rect width="44" height="24" rx="6" fill="rgba(196,181,253,0.18)" stroke="rgba(196,181,253,0.55)" stroke-width="0.8"/><text x="22" y="16" text-anchor="middle" class="nodeT">A</text></g>
+      <g transform="translate(60,48)"><rect width="44" height="24" rx="6" fill="rgba(196,181,253,0.18)" stroke="rgba(196,181,253,0.55)" stroke-width="0.8"/><text x="22" y="16" text-anchor="middle" class="nodeT">A</text></g>
+      <g transform="translate(60,86)"><rect width="44" height="24" rx="6" fill="rgba(196,181,253,0.18)" stroke="rgba(196,181,253,0.55)" stroke-width="0.8"/><text x="22" y="16" text-anchor="middle" class="nodeT">A</text></g>
+
+      <line x1="104" y1="22" x2="160" y2="60" stroke="#FCD34D" stroke-width="2" stroke-linecap="round"/>
+      <line x1="104" y1="60" x2="160" y2="60" stroke="#FCD34D" stroke-width="2" stroke-linecap="round"/>
+      <line x1="104" y1="98" x2="160" y2="60" stroke="#FCD34D" stroke-width="2" stroke-linecap="round"/>
+
+      <!-- decide diamond -->
+      <g class="pulse2" transform="translate(160,42)">
+        <polygon points="36,18 0,36 36,54 72,36" fill="rgba(252,211,77,0.14)" stroke="#FCD34D" stroke-width="1.6" stroke-linejoin="round"/>
+        <text x="36" y="40" text-anchor="middle" class="nodeT" fill="#FCD34D">score</text>
+      </g>
+
+      <!-- diamond right vertex (232, 78) → output -->
+      <line x1="232" y1="78" x2="276" y2="78" stroke="#FCD34D" stroke-width="2" stroke-linecap="round"/>
+      <polygon points="274,74 280,78 274,82" fill="#FCD34D"/>
+      <circle cx="284" cy="78" r="3" fill="#9CA3AF"/>
+
+      <!-- loop: from below diamond back to input dot -->
+      <path class="flow" d="M 196 96 C 196 140, 10 140, 10 70" stroke="#FCD34D" stroke-width="2"/>
+      <polygon points="6,72 14,72 10,62" fill="#FCD34D"/>
+    </g>
+
+    <text x="20" y="220" class="pFormula">Loop( Parallel( Agent×N ) → Conditional(score) )</text>
+  </g>
+
+  <!-- ──────────── PATTERN 3: REFLEXION ──────────── -->
+  <g class="breath" transform="translate(940,100)">
+    <rect width="420" height="240" rx="14" fill="rgba(252,211,77,0.04)" stroke="rgba(252,211,77,0.22)" stroke-width="0.8"/>
+    <text x="20" y="28" class="pName">REFLEXION</text>
+
+    <g transform="translate(36,60)">
+      <circle cx="0" cy="60" r="4" fill="#9CA3AF"/>
+
+      <!-- input → Agent 1 -->
+      <line x1="4" y1="60" x2="40" y2="60" stroke="#FCD34D" stroke-width="2" stroke-linecap="round"/>
+      <g transform="translate(40,46)"><rect width="56" height="28" rx="6" fill="rgba(196,181,253,0.18)" stroke="rgba(196,181,253,0.55)" stroke-width="0.8"/><text x="28" y="18" text-anchor="middle" class="nodeT">Agent</text></g>
+
+      <!-- Agent 1 → Conditional -->
+      <line x1="96" y1="60" x2="120" y2="60" stroke="#FCD34D" stroke-width="2" stroke-linecap="round"/>
+
+      <g class="pulse2" transform="translate(120,38)">
+        <polygon points="40,22 0,42 40,62 80,42" fill="rgba(252,211,77,0.14)" stroke="#FCD34D" stroke-width="1.6" stroke-linejoin="round"/>
+        <text x="40" y="46" text-anchor="middle" class="nodeT" fill="#FCD34D">critique</text>
+      </g>
+
+      <!-- Conditional → Agent 2 -->
+      <line x1="200" y1="80" x2="220" y2="80" stroke="#FCD34D" stroke-width="2" stroke-linecap="round"/>
+
+      <g transform="translate(220,66)"><rect width="56" height="28" rx="6" fill="rgba(196,181,253,0.18)" stroke="rgba(196,181,253,0.55)" stroke-width="0.8"/><text x="28" y="18" text-anchor="middle" class="nodeT">Agent</text></g>
+
+      <!-- output -->
+      <line x1="276" y1="80" x2="316" y2="80" stroke="#FCD34D" stroke-width="2" stroke-linecap="round"/>
+      <polygon points="314,76 320,80 314,84" fill="#FCD34D"/>
+      <circle cx="324" cy="80" r="3" fill="#9CA3AF"/>
+
+      <!-- loop: from below Agent 2 back to Agent 1 left -->
+      <path class="flow" d="M 248 100 C 248 140, 40 140, 40 70" stroke="#FCD34D" stroke-width="2"/>
+      <polygon points="36,72 44,72 40,62" fill="#FCD34D"/>
+    </g>
+
+    <text x="20" y="220" class="pFormula">Loop( Agent → Conditional(critique) → Agent )</text>
+  </g>
+
+  <!-- ──────────── PATTERN 4: DEBATE ──────────── -->
+  <g class="breath" transform="translate(40,360)">
+    <rect width="420" height="240" rx="14" fill="rgba(252,211,77,0.04)" stroke="rgba(252,211,77,0.22)" stroke-width="0.8"/>
+    <text x="20" y="28" class="pName">DEBATE</text>
+
+    <g transform="translate(40,60)">
+      <circle cx="10" cy="60" r="4" fill="#9CA3AF"/>
+
+      <!-- fan-out -->
+      <line x1="14" y1="60" x2="50" y2="32" stroke="#FCD34D" stroke-width="2" stroke-linecap="round"/>
+      <line x1="14" y1="60" x2="50" y2="88" stroke="#FCD34D" stroke-width="2" stroke-linecap="round"/>
+
+      <g transform="translate(50,18)"><rect width="74" height="28" rx="6" fill="rgba(196,181,253,0.18)" stroke="rgba(196,181,253,0.55)" stroke-width="0.8"/><text x="37" y="14" text-anchor="middle" class="nodeT">Agent</text><text x="37" y="25" text-anchor="middle" class="nodeS">pro</text></g>
+      <g transform="translate(50,74)"><rect width="74" height="28" rx="6" fill="rgba(196,181,253,0.18)" stroke="rgba(196,181,253,0.55)" stroke-width="0.8"/><text x="37" y="14" text-anchor="middle" class="nodeT">Agent</text><text x="37" y="25" text-anchor="middle" class="nodeS">con</text></g>
+
+      <!-- fan-in to judge -->
+      <line x1="124" y1="32" x2="170" y2="60" stroke="#FCD34D" stroke-width="2" stroke-linecap="round"/>
+      <line x1="124" y1="88" x2="170" y2="60" stroke="#FCD34D" stroke-width="2" stroke-linecap="round"/>
+
+      <g class="pulse" transform="translate(170,46)"><rect width="84" height="28" rx="6" fill="rgba(196,181,253,0.20)" stroke="rgba(196,181,253,0.55)" stroke-width="0.8"/><text x="42" y="14" text-anchor="middle" class="nodeT">Agent</text><text x="42" y="25" text-anchor="middle" class="nodeS">judge</text></g>
+
+      <!-- output -->
+      <line x1="254" y1="60" x2="296" y2="60" stroke="#FCD34D" stroke-width="2" stroke-linecap="round"/>
+      <polygon points="294,56 300,60 294,64" fill="#FCD34D"/>
+      <circle cx="304" cy="60" r="3" fill="#9CA3AF"/>
+    </g>
+
+    <text x="20" y="220" class="pFormula">Parallel( Agent_pro, Agent_con ) → Agent_judge</text>
+  </g>
+
+  <!-- ──────────── PATTERN 5: ROUTER ──────────── -->
+  <g class="breath" transform="translate(490,360)">
+    <rect width="420" height="240" rx="14" fill="rgba(252,211,77,0.04)" stroke="rgba(252,211,77,0.22)" stroke-width="0.8"/>
+    <text x="20" y="28" class="pName">ROUTER</text>
+
+    <g transform="translate(36,60)">
+      <circle cx="0" cy="60" r="4" fill="#9CA3AF"/>
+      <line x1="4" y1="60" x2="28" y2="60" stroke="#FCD34D" stroke-width="2" stroke-linecap="round"/>
+
+      <g class="pulse2" transform="translate(28,38)">
+        <polygon points="36,18 0,42 36,62 72,42" fill="rgba(252,211,77,0.14)" stroke="#FCD34D" stroke-width="1.6" stroke-linejoin="round"/>
+        <text x="36" y="46" text-anchor="middle" class="nodeT" fill="#FCD34D">route</text>
+      </g>
+
+      <!-- branches to 3 agents -->
+      <line x1="100" y1="60" x2="160" y2="20" stroke="#FCD34D" stroke-width="2" stroke-linecap="round"/>
+      <line x1="100" y1="80" x2="160" y2="80" stroke="#FCD34D" stroke-width="2" stroke-linecap="round"/>
+      <line x1="100" y1="100" x2="160" y2="140" stroke="#FCD34D" stroke-width="2" stroke-linecap="round"/>
+
+      <g transform="translate(160,8)"><rect width="74" height="24" rx="6" fill="rgba(196,181,253,0.18)" stroke="rgba(196,181,253,0.55)" stroke-width="0.8"/><text x="37" y="16" text-anchor="middle" class="nodeT">Agent_A</text></g>
+      <g transform="translate(160,68)"><rect width="74" height="24" rx="6" fill="rgba(196,181,253,0.18)" stroke="rgba(196,181,253,0.55)" stroke-width="0.8"/><text x="37" y="16" text-anchor="middle" class="nodeT">Agent_B</text></g>
+      <g transform="translate(160,128)"><rect width="74" height="24" rx="6" fill="rgba(196,181,253,0.18)" stroke="rgba(196,181,253,0.55)" stroke-width="0.8"/><text x="37" y="16" text-anchor="middle" class="nodeT">Agent_C</text></g>
+
+      <!-- merge dotted -->
+      <line x1="234" y1="20" x2="288" y2="60" stroke="#9CA3AF" stroke-width="1.4" stroke-linecap="round" stroke-dasharray="2 3" opacity="0.5"/>
+      <line x1="234" y1="80" x2="288" y2="60" stroke="#9CA3AF" stroke-width="1.4" stroke-linecap="round" stroke-dasharray="2 3" opacity="0.5"/>
+      <line x1="234" y1="140" x2="288" y2="60" stroke="#9CA3AF" stroke-width="1.4" stroke-linecap="round" stroke-dasharray="2 3" opacity="0.5"/>
+      <circle cx="292" cy="60" r="3" fill="#9CA3AF"/>
+    </g>
+
+    <text x="20" y="220" class="pFormula">Conditional → Agent_A | Agent_B | Agent_C</text>
+  </g>
+
+  <!-- ──────────── PATTERN 6: HIERARCHICAL (2 workers) ──────────── -->
+  <g class="breath" transform="translate(940,360)">
+    <rect width="420" height="240" rx="14" fill="rgba(252,211,77,0.04)" stroke="rgba(252,211,77,0.22)" stroke-width="0.8"/>
+    <text x="20" y="28" class="pName">HIERARCHICAL</text>
+
+    <g transform="translate(36,60)">
+      <circle cx="0" cy="60" r="4" fill="#9CA3AF"/>
+      <line x1="4" y1="60" x2="24" y2="60" stroke="#FCD34D" stroke-width="2" stroke-linecap="round"/>
+
+      <!-- planner -->
+      <g class="pulse" transform="translate(24,46)"><rect width="68" height="28" rx="6" fill="rgba(196,181,253,0.20)" stroke="rgba(196,181,253,0.55)" stroke-width="0.8"/><text x="34" y="14" text-anchor="middle" class="nodeT">Agent</text><text x="34" y="25" text-anchor="middle" class="nodeS">planner</text></g>
+
+      <!-- planner → worker1 -->
+      <line x1="92" y1="60" x2="116" y2="60" stroke="#FCD34D" stroke-width="2" stroke-linecap="round"/>
+      <polygon points="114,56 120,60 114,64" fill="#FCD34D"/>
+
+      <!-- worker1 -->
+      <g transform="translate(120,46)"><rect width="64" height="28" rx="6" fill="rgba(196,181,253,0.16)" stroke="rgba(196,181,253,0.50)" stroke-width="0.8"/><text x="32" y="14" text-anchor="middle" class="nodeT">Agent</text><text x="32" y="25" text-anchor="middle" class="nodeS">worker</text></g>
+
+      <!-- worker1 → worker2 -->
+      <line x1="184" y1="60" x2="208" y2="60" stroke="#FCD34D" stroke-width="2" stroke-linecap="round"/>
+      <polygon points="206,56 212,60 206,64" fill="#FCD34D"/>
+
+      <!-- worker2 -->
+      <g transform="translate(212,46)"><rect width="64" height="28" rx="6" fill="rgba(196,181,253,0.16)" stroke="rgba(196,181,253,0.50)" stroke-width="0.8"/><text x="32" y="14" text-anchor="middle" class="nodeT">Agent</text><text x="32" y="25" text-anchor="middle" class="nodeS">worker</text></g>
+
+      <!-- worker2 → synth -->
+      <line x1="276" y1="60" x2="300" y2="60" stroke="#FCD34D" stroke-width="2" stroke-linecap="round"/>
+      <polygon points="298,56 304,60 298,64" fill="#FCD34D"/>
+
+      <!-- synth -->
+      <g transform="translate(304,46)"><rect width="56" height="28" rx="6" fill="rgba(196,181,253,0.18)" stroke="rgba(196,181,253,0.55)" stroke-width="0.8"/><text x="28" y="18" text-anchor="middle" class="nodeT">synth</text></g>
+
+      <!-- Sequence brace under workers -->
+      <path d="M 120 90 L 120 96 L 276 96 L 276 90" stroke="rgba(252,211,77,0.55)" stroke-width="0.8" fill="none"/>
+      <text x="198" y="112" text-anchor="middle" font-family="ui-monospace, monospace" font-size="9" fill="#FCD34D" letter-spacing="0.10em" font-weight="700">Sequence</text>
+    </g>
+
+    <text x="20" y="220" class="pFormula">Agent_planner → Sequence( Agent_worker×N ) → synth</text>
+  </g>
+
+  <!-- ─────────────── TAGLINE ─────────────── -->
+  <g class="tag" transform="translate(700,640)" text-anchor="middle">
+    <text fill="#9CA3AF"><tspan fill="#FCD34D" font-weight="700">Same 4 letters.</tspan>  Compose the words the field knows. Compose the ones it doesn't.</text>
+  </g>
+
+</svg>

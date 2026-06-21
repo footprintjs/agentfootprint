@@ -11,9 +11,9 @@ description: Compress long conversations into beats. Older turns are LLM-summari
 
 Cheaper than infinite raw retention. More semantic than truncation.
 
-:::caution[Current shipped behavior]
+<Callout type="warn" title="Current shipped behavior">
 In the published release, the `SUMMARIZE` strategy compiles to the same read pipeline as `WINDOW` with `loadCount: recent` — it loads the `recent` most-recent turns and the `llm` summarizer is **not yet invoked automatically** by `defineMemory`. The compression-of-older-turns wiring is planned. To run real summarization today, compose the `summarize` read-side stage yourself via `mountMemoryRead` (see [Compose it manually](#compose-it-manually-today)).
-:::
+</Callout>
 
 ## Define a summarizing memory
 

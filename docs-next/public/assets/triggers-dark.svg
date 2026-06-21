@@ -1,0 +1,189 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 660" role="img"
+     aria-label="agentfootprint — Every LLM call has 3 slots. Every flavor lands in one under 1 of 4 triggers. Four trigger lanes (always, rule, on-tool-return, llm-activated) feed sparkle streams down into a single LLM call container with system, messages, tools slots. Each pill inside the slots is colored by its firing trigger — visualizing the many-to-many mapping between triggers and slots.">
+
+  <defs>
+    <radialGradient id="tr-glow-d" cx="50%" cy="50%" r="55%">
+      <stop offset="0%" stop-color="#FCD34D" stop-opacity="0.08"/>
+      <stop offset="100%" stop-color="#FCD34D" stop-opacity="0"/>
+    </radialGradient>
+
+    <style>
+      /* Sparkle streams (round dots flowing down trigger lanes) */
+      .flow { stroke-dasharray: 0.5 8; stroke-linecap: round; animation: tr-mv 1.4s linear infinite; fill: none; }
+      @keyframes tr-mv { from { stroke-dashoffset: 0 } to { stroke-dashoffset: -24 } }
+
+      /* Pulse for active pills inside the LLM call */
+      .pulse  { animation: tr-p 2.4s ease-in-out infinite; transform-origin: center; transform-box: fill-box; }
+      .pulse2 { animation: tr-p 2.4s ease-in-out infinite; animation-delay: 0.4s; transform-origin: center; transform-box: fill-box; }
+      .pulse3 { animation: tr-p 2.4s ease-in-out infinite; animation-delay: 0.8s; transform-origin: center; transform-box: fill-box; }
+      .pulse4 { animation: tr-p 2.4s ease-in-out infinite; animation-delay: 1.2s; transform-origin: center; transform-box: fill-box; }
+      @keyframes tr-p { 0%,100% { opacity: 1 } 50% { opacity: 0.55 } }
+
+      /* Subtle "breath" on the LLM call container */
+      .breath { animation: tr-b 4s ease-in-out infinite; transform-origin: center; transform-box: fill-box; }
+      @keyframes tr-b { 0%,100% { opacity: 0.92 } 50% { opacity: 1 } }
+
+      .h1     { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif; font-size: 26px; font-weight: 800; fill: #E5E7EB; }
+      .h1Acc  { fill: #FCD34D; }
+      .trigName { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 16px; font-weight: 800; letter-spacing: 0.06em; }
+      .trigDesc { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 11px; fill: #9CA3AF; }
+      .pillTxt  { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif; font-size: 13px; font-weight: 700; }
+      .slotL    { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 12px; letter-spacing: 0.16em; font-weight: 800; fill: #9CA3AF; }
+      .llmL     { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 11px; letter-spacing: 0.18em; font-weight: 800; fill: #9CA3AF; }
+      .tag      { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif; font-size: 16px; }
+    </style>
+  </defs>
+
+  <!-- ───────────────────── HEADLINE ───────────────────── -->
+  <g class="h1" text-anchor="middle">
+    <text x="700" y="50">Every LLM call has <tspan class="h1Acc">3 slots</tspan>.</text>
+    <text x="700" y="86">Every flavor lands in one under 1 of <tspan class="h1Acc">4 triggers</tspan>.</text>
+  </g>
+
+  <!-- ═════════════════════════════════════════════════════════════════
+       4 TRIGGER LANES — top tier
+       ═════════════════════════════════════════════════════════════════ -->
+
+  <!-- Trigger 1: always · sky -->
+  <g transform="translate(160,160)" text-anchor="middle">
+    <text class="trigName" fill="#7DD3FC">always</text>
+    <text class="trigDesc" y="20">every iteration</text>
+    <g transform="translate(-60,38)">
+      <rect width="120" height="32" rx="16" fill="rgba(125,211,252,0.14)"/>
+      <text class="pillTxt" x="60" y="21" text-anchor="middle" fill="#7DD3FC">Steering</text>
+    </g>
+  </g>
+
+  <!-- Trigger 2: rule · emerald -->
+  <g transform="translate(540,160)" text-anchor="middle">
+    <text class="trigName" fill="#4ADE80">rule</text>
+    <text class="trigDesc" y="20">predicate fires</text>
+    <g transform="translate(-60,38)">
+      <rect width="120" height="32" rx="16" fill="rgba(74,222,128,0.14)"/>
+      <text class="pillTxt" x="60" y="21" text-anchor="middle" fill="#4ADE80">RAG</text>
+    </g>
+  </g>
+
+  <!-- Trigger 3: on-tool-return · amber -->
+  <g transform="translate(880,160)" text-anchor="middle">
+    <text class="trigName" fill="#FCD34D">on-tool-return</text>
+    <text class="trigDesc" y="20">after tool result</text>
+    <g transform="translate(-66,38)">
+      <rect width="132" height="32" rx="16" fill="rgba(252,211,77,0.14)"/>
+      <text class="pillTxt" x="66" y="21" text-anchor="middle" fill="#FCD34D">Instruction</text>
+    </g>
+  </g>
+
+  <!-- Trigger 4: llm-activated · violet -->
+  <g transform="translate(1240,160)" text-anchor="middle">
+    <text class="trigName" fill="#C4B5FD">llm-activated</text>
+    <text class="trigDesc" y="20">read_skill('id')</text>
+    <g transform="translate(-50,38)">
+      <rect width="100" height="32" rx="16" fill="rgba(196,181,253,0.16)"/>
+      <text class="pillTxt" x="50" y="21" text-anchor="middle" fill="#C4B5FD">Skill</text>
+    </g>
+  </g>
+
+  <!-- ═════════════════════════════════════════════════════════════════
+       SPARKLE STREAMS — 4 trigger lanes flow down into LLM call
+       Each stream targets the slot where THAT trigger's example pill lands.
+         always → system   (Steering)
+         rule → messages   (RAG)
+         on-tool-return → messages (Instruction)
+         llm-activated → tools (Skill)
+       ═════════════════════════════════════════════════════════════════ -->
+
+  <g stroke-width="2.4" stroke-linecap="round">
+    <!-- always (160) → Steering pill in SYSTEM (200, 455) -->
+    <path class="flow" d="M160 234 C 160 300, 180 380, 200 455" stroke="#7DD3FC"/>
+    <!-- rule (540) → RAG pill in MESSAGES (490, 455) -->
+    <path class="flow" d="M540 234 C 540 300, 510 380, 490 455" stroke="#4ADE80" style="animation-delay:0.2s"/>
+    <!-- on-tool-return (880) → Instruction pill in MESSAGES (622, 455) — same slot, different pill -->
+    <path class="flow" d="M880 234 C 880 300, 720 380, 622 455" stroke="#FCD34D" style="animation-delay:0.4s"/>
+    <!-- llm-activated (1240) → Skill pill in TOOLS (890, 455) -->
+    <path class="flow" d="M1240 234 C 1240 300, 1050 380, 890 455" stroke="#C4B5FD" style="animation-delay:0.6s"/>
+  </g>
+
+  <!-- ═════════════════════════════════════════════════════════════════
+       LLM CALL CONTAINER — bottom tier
+       ═════════════════════════════════════════════════════════════════ -->
+
+  <ellipse cx="700" cy="480" rx="640" ry="180" fill="url(#tr-glow-d)"/>
+
+  <g class="breath">
+    <rect x="60" y="370" width="1280" height="220" rx="20" fill="rgba(229,231,235,0.04)"/>
+
+    <!-- LLM call legend (top-left notch) -->
+    <rect x="80" y="356" width="100" height="26" rx="6" fill="#0d1117"/>
+    <text x="130" y="374" font-family="ui-monospace, monospace" font-size="11" font-weight="800"
+          letter-spacing="0.18em" fill="#9CA3AF" text-anchor="middle">LLM CALL</text>
+
+    <!-- ─── Slot 1: system ─── -->
+    <g transform="translate(120,400)">
+      <rect width="280" height="170" rx="14" fill="rgba(125,211,252,0.06)"/>
+      <text class="slotL" x="20" y="28">SYSTEM</text>
+      <line x1="20" y1="40" x2="260" y2="40" stroke="rgba(125,211,252,0.20)" stroke-width="0.8"/>
+      <!-- Pills inside (active flavors) -->
+      <g class="pulse">
+        <rect x="20" y="60" width="120" height="32" rx="16" fill="rgba(125,211,252,0.20)"/>
+        <text class="pillTxt" x="80" y="81" text-anchor="middle" fill="#7DD3FC">Steering</text>
+      </g>
+      <g class="pulse2">
+        <rect x="20" y="100" width="100" height="32" rx="16" fill="rgba(196,181,253,0.20)"/>
+        <text class="pillTxt" x="70" y="121" text-anchor="middle" fill="#C4B5FD">Skill</text>
+      </g>
+      <g>
+        <rect x="20" y="140" width="160" height="22" rx="11" fill="rgba(167,139,250,0.10)" stroke="rgba(167,139,250,0.20)" stroke-width="0.6" stroke-dasharray="2 3"/>
+        <text font-family="ui-monospace, monospace" font-size="10" x="100" y="156" text-anchor="middle" fill="#9CA3AF">+ Constitutional</text>
+      </g>
+    </g>
+
+    <!-- ─── Slot 2: messages ─── -->
+    <g transform="translate(420,400)">
+      <rect width="380" height="170" rx="14" fill="rgba(74,222,128,0.06)"/>
+      <text class="slotL" x="20" y="28">MESSAGES</text>
+      <line x1="20" y1="40" x2="360" y2="40" stroke="rgba(74,222,128,0.20)" stroke-width="0.8"/>
+      <g class="pulse2">
+        <rect x="20" y="60" width="100" height="32" rx="16" fill="rgba(74,222,128,0.20)"/>
+        <text class="pillTxt" x="70" y="81" text-anchor="middle" fill="#4ADE80">RAG</text>
+      </g>
+      <g class="pulse3">
+        <rect x="135" y="60" width="135" height="32" rx="16" fill="rgba(252,211,77,0.20)"/>
+        <text class="pillTxt" x="202" y="81" text-anchor="middle" fill="#FCD34D">Instruction</text>
+      </g>
+      <g>
+        <rect x="20" y="100" width="180" height="22" rx="11" fill="rgba(167,139,250,0.10)" stroke="rgba(167,139,250,0.20)" stroke-width="0.6" stroke-dasharray="2 3"/>
+        <text font-family="ui-monospace, monospace" font-size="10" x="110" y="116" text-anchor="middle" fill="#9CA3AF">+ Short-term memory</text>
+      </g>
+      <g>
+        <rect x="20" y="130" width="180" height="22" rx="11" fill="rgba(167,139,250,0.10)" stroke="rgba(167,139,250,0.20)" stroke-width="0.6" stroke-dasharray="2 3"/>
+        <text font-family="ui-monospace, monospace" font-size="10" x="110" y="146" text-anchor="middle" fill="#9CA3AF">+ Long-term memory</text>
+      </g>
+    </g>
+
+    <!-- ─── Slot 3: tools ─── -->
+    <g transform="translate(820,400)">
+      <rect width="500" height="170" rx="14" fill="rgba(196,181,253,0.06)"/>
+      <text class="slotL" x="20" y="28">TOOLS</text>
+      <line x1="20" y1="40" x2="480" y2="40" stroke="rgba(196,181,253,0.20)" stroke-width="0.8"/>
+      <g class="pulse4">
+        <rect x="20" y="60" width="100" height="32" rx="16" fill="rgba(196,181,253,0.20)"/>
+        <text class="pillTxt" x="70" y="81" text-anchor="middle" fill="#C4B5FD">Skill</text>
+      </g>
+      <g>
+        <rect x="135" y="60" width="180" height="32" rx="16" fill="rgba(196,181,253,0.10)" stroke="rgba(196,181,253,0.18)" stroke-width="0.6"/>
+        <text class="pillTxt" x="225" y="81" text-anchor="middle" fill="#A78BFA" opacity="0.8">Tool schemas</text>
+      </g>
+      <g>
+        <rect x="20" y="100" width="180" height="22" rx="11" fill="rgba(167,139,250,0.10)" stroke="rgba(167,139,250,0.20)" stroke-width="0.6" stroke-dasharray="2 3"/>
+        <text font-family="ui-monospace, monospace" font-size="10" x="110" y="116" text-anchor="middle" fill="#9CA3AF">+ Skill-scoped tools</text>
+      </g>
+    </g>
+  </g>
+
+  <!-- ─────────────────── TAGLINE ─────────────────── -->
+  <g class="tag" transform="translate(700,630)" text-anchor="middle">
+    <text fill="#9CA3AF"><tspan font-family="ui-monospace, monospace" fill="#FCD34D" font-weight="700">slot × trigger × cache</tspan> = <tspan fill="#E5E7EB" font-weight="700">Injection</tspan></text>
+  </g>
+
+</svg>
