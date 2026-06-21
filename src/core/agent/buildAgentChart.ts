@@ -53,6 +53,7 @@ import type { MemoryDefinition } from '../../memory/define.types.js';
 import { memoryInjectionKey } from '../../memory/define.types.js';
 import { unwrapMemoryFlowChart } from '../../memory/define.js';
 import { mountMemoryRead, mountMemoryWrite } from '../../memory/wire/mountMemoryPipeline.js';
+import { withMemoryRecall } from './memoryRecallInjections.js';
 import { breakFinalStage } from './stages/breakFinal.js';
 import { prepareFinalStage } from './stages/prepareFinal.js';
 import { buildCacheSubflow } from './buildCacheSubflow.js';
@@ -146,6 +147,10 @@ export function buildAgentChart(deps: AgentChartDeps): FlowChart {
   // system-prompt + tools only on the first turn); 'dynamic' (default)
   // re-engineers all 3 slots every turn. Drives the Context selector below.
   const reactMode = deps.reactMode ?? 'dynamic';
+
+  // Memory ids whose recall must be bridged into the slot composers (see
+  // memoryRecallInjections). Empty → withMemoryRecall is a no-op.
+  const memoryIds = deps.memories.map((m) => m.id);
 
   // ── Final-branch subflow ─────────────────────────────────────
   // Split so memory-write subflows can mount BETWEEN setting
@@ -329,7 +334,11 @@ export function buildAgentChart(deps: AgentChartDeps): FlowChart {
       inputMapper: (parent) => ({
         userMessage: parent.userMessage as string | undefined,
         iteration: parent.iteration as number | undefined,
-        activeInjections: parent.activeInjections as readonly ActiveInjection[] | undefined,
+        activeInjections: withMemoryRecall(
+          parent.activeInjections as readonly ActiveInjection[] | undefined,
+          parent,
+          memoryIds,
+        ),
       }),
       outputMapper: (sf) => ({ systemPromptInjections: sf.systemPromptInjections }),
       arrayMerge: ArrayMergeMode.Replace,
@@ -338,7 +347,11 @@ export function buildAgentChart(deps: AgentChartDeps): FlowChart {
       inputMapper: (parent) => ({
         messages: parent.history as readonly LLMMessage[] | undefined,
         iteration: parent.iteration as number | undefined,
-        activeInjections: parent.activeInjections as readonly ActiveInjection[] | undefined,
+        activeInjections: withMemoryRecall(
+          parent.activeInjections as readonly ActiveInjection[] | undefined,
+          parent,
+          memoryIds,
+        ),
       }),
       outputMapper: (sf) => ({ messagesInjections: sf.messagesInjections }),
       arrayMerge: ArrayMergeMode.Replace,

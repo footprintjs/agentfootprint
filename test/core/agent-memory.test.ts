@@ -195,4 +195,48 @@ describe('Agent.memory() — integration', () => {
     expect(r1.entries.length).toBeGreaterThanOrEqual(2);
     expect(r2.entries.length).toBeGreaterThanOrEqual(2);
   });
+
+  // Regression: memory recall must be COMPOSED INTO THE PROMPT on the Agent path, not
+  // just read+formatted+persisted. The read subflow writes `memoryInjection_<id>`; the
+  // slot composers read `activeInjections` — so without the bridge (memoryRecallInjections)
+  // the recall was a dead-end key and turn-2 never saw turn-1's facts. We capture the exact
+  // LLMRequest the provider receives on turn 2 and assert the prior fact is present.
+  it.each(['classic', 'dynamic', 'dynamic-grouped'] as const)(
+    'recalls prior-turn memory INTO the turn-2 prompt (reactMode: %s)',
+    async (reactMode) => {
+      const captured: string[] = [];
+      const provider = mock({
+        respond: (req) => {
+          captured.push(
+            JSON.stringify({
+              system: req.systemPrompt ?? '',
+              messages: req.messages.map((m) => ({ role: m.role, content: m.content })),
+            }),
+          );
+          return { content: 'Acknowledged.' };
+        },
+      });
+
+      const agent = Agent.create({ provider, model: 'mock', maxIterations: 5, reactMode })
+        .memory(
+          defineMemory({
+            id: 'conv',
+            type: MEMORY_TYPES.EPISODIC,
+            strategy: { kind: MEMORY_STRATEGIES.WINDOW, size: 20 },
+            store: new InMemoryStore(),
+          }),
+        )
+        .build();
+
+      const identity = { conversationId: 'recall-1' };
+      await agent.run({ message: 'My codename is Bluefin and my lucky number is 42.', identity });
+      captured.length = 0; // drop turn-1 capture
+      await agent.run({ message: 'What is my codename?', identity });
+
+      const turn2 = captured[0] ?? '';
+      // The recalled facts from turn 1 must be present in what the model saw on turn 2.
+      expect(turn2).toContain('Bluefin');
+      expect(turn2).toContain('42');
+    },
+  );
 });
