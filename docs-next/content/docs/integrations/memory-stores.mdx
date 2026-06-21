@@ -1,0 +1,112 @@
+---
+title: Memory store adapters
+description: Where memory lives. InMemoryStore for dev; RedisStore + AgentCoreStore production-ready; DynamoDB / Postgres / Pinecone planned.
+---
+
+> Memory's TYPE × STRATEGY combinations are agnostic about WHERE the bytes live. **The store is the third axis** — the persistence boundary that turns memory from "ephemeral local state" into "production multi-tenant state with GDPR forget + multi-instance access". Pick by access pattern + durability needs.
+
+## What ships today
+
+| Store | Subpath | Peer-dep | Vector search | When to use |
+|---|---|---|---|---|
+| `InMemoryStore` | (top-level) | — | ✅ | Dev, tests, single-process scenarios |
+| `RedisStore` | `agentfootprint/memory-providers` | `ioredis` | ❌ (RedisSearch later) | Hot recent memory + signatures + feedback aggregation |
+| `AgentCoreStore` | `agentfootprint/memory-providers` | `@aws-sdk/client-bedrock-agent-runtime` | ❌ (server-side retrieve later) | Bedrock-native session + event memory |
+
+Both store adapters live on the canonical `agentfootprint/memory-providers` subpath. Per-adapter aliases (`agentfootprint/memory-redis`, `agentfootprint/memory-agentcore`) still resolve for back-compat, but new code should import from `agentfootprint/memory-providers`.
+
+All three implement the same `MemoryStore` interface — `defineMemory({ store })` doesn't care which one you pass. Drop-in.
+
+## InMemoryStore
+
+The default for dev / tests. O(n) linear scan for `search()`; fine for thousands of entries; bounded by process memory:
+
+```ts
+import { InMemoryStore } from 'agentfootprint';
+const store = new InMemoryStore();
+```
+
+Resets on process restart. Per-process — multi-instance deploys lose state.
+
+## RedisStore
+
+Subpath import keeps the main barrel small. Lazy-required `ioredis`:
+
+```ts
+import { RedisStore } from 'agentfootprint/memory-providers';
+
+const store = new RedisStore({ url: 'redis://localhost:6379' });
+// or share an existing client:
+// const store = new RedisStore({ client: existingIoredisClient });
+```
+
+Implements every `MemoryStore` method except `search()`. `putIfVersion` uses an atomic Lua compare-and-swap; `putMany` uses pipelining; `forget()` uses SCAN (never KEYS — KEYS blocks Redis). Tested with mock-injected `_client`; CI doesn't need a live Redis.
+
+**Vector search NOT included.** RedisSearch is a separate Redis module with its own API. A `RedisSearchStore` may ship in a future release.
+
+## AgentCoreStore
+
+AWS Bedrock AgentCore Memory adapter. Subpath import; lazy-required AWS SDK:
+
+```ts
+import { AgentCoreStore } from 'agentfootprint/memory-providers';
+
+const store = new AgentCoreStore({
+  memoryId: 'arn:aws:bedrock:us-east-1:...:memory/my-mem',
+  region: 'us-east-1',
+});
+```
+
+Maps `MemoryStore` calls onto AgentCore's session/event model. **Caveats** (also documented in JSDoc):
+
+- `putIfVersion` is emulated client-side (read+write). Adequate for single-writer-per-session deploys; weaker for multi-writer.
+- `seen` / `feedback` use in-process shadow state — don't survive process restart. Use Redis for durable recognition.
+- `search()` not exposed today. AgentCore has a server-side retrieve API; mapping it to `MemoryStore.search` would be a leaky abstraction. A separate `agentcoreRetrieve()` helper is planned.
+
+## Choosing per layer
+
+In hybrid memory setups (multiple `.memory(...)` calls on one agent), each layer can use a different store optimized for its access pattern:
+
+```ts
+import { defineMemory, MEMORY_TYPES, MEMORY_STRATEGIES } from 'agentfootprint';
+import { RedisStore, AgentCoreStore } from 'agentfootprint/memory-providers';
+
+const recent = defineMemory({
+  id: 'recent',
+  type: MEMORY_TYPES.EPISODIC,
+  strategy: { kind: MEMORY_STRATEGIES.WINDOW, size: 10 },
+  store: new RedisStore({ url: redisUrl }),  // sub-ms hot reads, TTL
+});
+
+const causal = defineMemory({
+  id: 'causal',
+  type: MEMORY_TYPES.CAUSAL,
+  strategy: { kind: MEMORY_STRATEGIES.TOP_K, topK: 1, threshold: 0.7, embedder },
+  store: new AgentCoreStore({ memoryId, region }),  // managed durability
+});
+
+agent.memory(recent).memory(causal);
+```
+
+See [Auto memory (hybrid)](/agentfootprint/guides/auto-memory/) for the layered pattern.
+
+## Planned
+
+| Store | Why it's planned |
+|---|---|
+| **DynamoDB** | AWS-native, globally distributed, serverless-friendly |
+| **Postgres** (with pgvector) | Vector search built-in; queryable + joinable with app data |
+| **Pinecone** / **Qdrant** / **Weaviate** | Vector-first; serious-scale RAG / semantic-retrieval workloads |
+| **`RedisSearchStore`** | Vector search via the RedisSearch module |
+
+All four follow the same peer-dep + subpath import pattern as RedisStore + AgentCoreStore.
+
+## Multi-tenant identity is enforced at the store
+
+Every `MemoryStore` method takes `MemoryIdentity` as the first arg. Adapters MUST namespace internal keys by the full tuple. A bug passing the wrong identity surfaces as "no data" — not as a cross-tenant leak.
+
+## Next steps
+
+- [Memory guide](/agentfootprint/guides/memory/) — types × strategies × stores
+- [Auto memory (hybrid)](/agentfootprint/guides/auto-memory/) — layer multiple stores per their access pattern
+- [Deployment](/agentfootprint/guides/deployment/) — production checklist

@@ -1,0 +1,158 @@
+---
+title: Dynamic ReAct
+description: Context that adapts mid-loop. The on-tool-return trigger fires the iteration after a specific tool ran — recency-first injection without hand-rolled state.
+---
+
+> An agent calls `redact_pii(text)` and gets back the redacted version. On the next iteration, the LLM ignores the redaction and paraphrases the original anyway. **The fix isn't a bigger system prompt** — it's an instruction that fires AT THE EXACT MOMENT the LLM is about to read the redacted output, telling it: *"use the redacted text. Don't paraphrase the original."* That's Dynamic ReAct.
+
+## What "dynamic" means here
+
+A regular Instruction has an `activeWhen(ctx)` predicate that runs every iteration. A **Dynamic ReAct** Instruction is just an Instruction whose predicate inspects `ctx.lastToolResult` — naturally one-shot because the next iteration's `lastToolResult` will be from a different (or no) tool.
+
+This is the **on-tool-return** trigger from the [4-trigger taxonomy](/agentfootprint/getting-started/key-concepts/#context-engineering-cross-cutting). It's the recency-first injection point: the LLM's attention is freshest on the most recent message, and a tool result IS a recent message.
+
+### How "every iteration" actually works
+
+The agent's flowchart loops through a sequence of stages: **InjectionEngine → System Prompt → Messages → Tools → CallLLM → Route**. Each iteration starts at InjectionEngine — every trigger re-evaluates against the freshest context (the just-appended tool result, the new iteration count, any newly-activated skill). Then the slot subflows recompose the system prompt, the messages, and the tools list from the active injection set. The LLM sees a freshly-composed prompt + tool list every iteration.
+
+This means tool results reshape the next iteration's prompt + tool list + active skills. **That's the differentiator** vs frameworks that compose context once and reuse it across iterations.
+
+> **v2.5 fix note:** v2.4 had a regression where the loop target skipped InjectionEngine on iter 2+, quietly disabling per-iteration re-evaluation. v2.5 (commit pending) restored the v1 behavior. Tests added at `test/core/dynamic-react-loop.test.ts` pin the per-iteration evaluation contract — `on-tool-return` predicates now fire on iter 2+, `autoActivate` per-skill tool gating becomes feasible (lands in v2.5 Block A5), and skill bodies inject on the iteration after `read_skill('X')` activation.
+
+## The pattern
+
+<CodeFile path="examples/context-engineering/05-dynamic-react.ts" region="on-tool-return" title="examples/context-engineering/05-dynamic-react.ts (region: on-tool-return)" />
+
+The reminder lands ONLY on the iteration where the LLM is about to read the redacted output. Without it, the LLM sometimes paraphrases the original (defeating the redaction). With it, the LLM is told *"use the redacted text"* at the exact moment it needs to hear it.
+
+This is structurally better than baking the same advice into the always-on system prompt:
+- System prompt advice has to compete with everything else in the prompt for attention
+- Most providers' attention to system-prompt content decays past long contexts
+- The reminder fires only when needed (not on every iteration), so token cost is minimal
+
+## Why on-tool-return is recency-first by design
+
+The Messages API position structure looks like:
+
+```
+[ system ] [ msg1 ] [ msg2 ] ... [ msgN-1 ] [ msgN: latest tool result ]
+```
+
+The model reads top-to-bottom but its attention isn't uniform — recent positions consistently get stronger attention than the system prompt across every modern provider. By placing your "use the redacted text" instruction **on the iteration where the redacted text is the latest tool result**, you're injecting at the highest-attention slot the protocol offers.
+
+This is a protocol-level guarantee, not a training-level one. It works on Claude, GPT, Llama, Mistral, and `mock()` identically.
+
+## Composing multiple on-tool-return rules
+
+Stack them. Each rule's predicate runs independently; matches all land in their target slot in registration order:
+
+```ts
+const useRedacted = defineInstruction({
+  id: 'use-redacted',
+  activeWhen: (ctx) => ctx.lastToolResult?.toolName === 'redact_pii',
+  prompt: 'Use the redacted text. Do not paraphrase the original.',
+});
+
+const cite = defineInstruction({
+  id: 'cite-after-search',
+  activeWhen: (ctx) => ctx.lastToolResult?.toolName === 'search',
+  prompt: 'Cite each fact with the source URL the search returned.',
+});
+
+const summarizeOnLargeResult = defineInstruction({
+  id: 'summarize-large',
+  activeWhen: (ctx) => (ctx.lastToolResult?.result?.length ?? 0) > 5000,
+  prompt: 'The tool returned a large result. Summarize before responding.',
+});
+
+agent.instruction(useRedacted).instruction(cite).instruction(summarizeOnLargeResult);
+```
+
+Each one fires on its specific tool/condition. Together they form a recency-first behavior layer that the LLM sees per-iteration as the situation calls for.
+
+## What this unlocks — use cases that emerge from per-iteration evaluation
+
+Dynamic ReAct isn't a feature; it's the substrate that makes a whole class of agent behaviors expressible without hand-rolled state machines. The use cases below all share the same shape: *"the agent's NEXT iteration sees a different prompt / tool list / active skill because of what just happened in THIS iteration."*
+
+### 1. Tool-by-tool LLM steering
+
+The hero use case. Agent calls `redact_pii` → next iteration's system prompt acquires *"use the redacted text. Don't paraphrase the original."* The instruction fires only on iter N+1; on iter N+2 (different `lastToolResult`), it stops firing.
+
+```ts
+defineInstruction({
+  id: 'use-redacted',
+  activeWhen: (ctx) => ctx.lastToolResult?.toolName === 'redact_pii',
+  prompt: 'Use the redacted text. Do not paraphrase the original.',
+});
+```
+
+### 2. Adaptive tool exposure (per-skill gating)
+
+The LLM activates `billing` via `read_skill('billing')` → next iteration's tool list flips from "all 25 tools" to "the 7 tools billing actually uses". 3× context-budget reduction + sharper LLM tool-choice. Powered by `defineSkill({ autoActivate: 'currentSkill' })` + `skillScopedTools(id, tools)` from `agentfootprint/tool-providers` (Block A1 + A5 shipped in v2.5; auto-runtime wiring lands Block C).
+
+### 3. Length guardrails
+
+The loop runs long → next iteration's system prompt adds *"be concise; final answer in 2 sentences"*. Pure predicate over the read-only `InjectionContext` (`iteration` / `history` / `lastToolResult` / `userMessage` / `activatedInjectionIds`); no separate management subsystem needed.
+
+```ts
+defineInstruction({
+  id: 'be-concise',
+  activeWhen: (ctx) => ctx.iteration > 5,
+  prompt: 'This turn is running long. Wrap up — final answer in 2 sentences.',
+});
+```
+
+For true cost-based guardrails, track spend with `costRecorder()` from `agentfootprint` and gate the run outside the predicate — the `InjectionContext` does not expose accumulated cost.
+
+### 4. Iterative format refinement
+
+Iter 1 prompt has *"output a JSON object with these fields"*; iter 2 sees *"continue this format"* (because iter 1's output established it); iter 5 drops it entirely (pattern is locked in). All driven by predicates over `ctx.iteration` + `ctx.history`.
+
+### 5. Failure adaptation — self-correcting agent without retraining
+
+Tool X returned an error → next iteration's prompt adds *"don't try X again; use Y as fallback"*. The agent learns from THIS run's failures without external coordination.
+
+```ts
+defineInstruction({
+  id: 'avoid-failed-tool',
+  activeWhen: (ctx) =>
+    ctx.lastToolResult?.toolName === 'flaky_api' &&
+    typeof ctx.lastToolResult.result === 'string' &&
+    ctx.lastToolResult.result.includes('error'),
+  prompt: 'flaky_api is unavailable; use cached_lookup instead.',
+});
+```
+
+### 6. Few-shot example evolution
+
+Iter 1 prompt has an example showing the rare edge case → iter 2 drops it because the agent has emitted the right format → iter 4 re-injects it because the agent regressed. Predicates that track which examples have already done their job.
+
+### 7. Skill body refresh on long-context runs
+
+System-prompt skill body decays past long contexts (~50K tokens on most providers) → re-inject via tool result so the LLM sees it fresh again. Powered by `defineSkill({ refreshPolicy: { afterTokens: 50_000, via: 'tool-result' } })` (v2.5+).
+
+---
+
+These all share one structural property: **per-iteration re-evaluation of every Injection trigger.** Without that, none of them work. With it, all seven are one-line predicates.
+
+That's why Dynamic ReAct is the framework's load-bearing claim — it's not a feature, it's the substrate that makes context engineering compositional.
+
+## When to use dynamic ReAct vs steering vs skill
+
+| Use case | Use |
+|---|---|
+| *"Always be friendly"* (every turn) | `defineSteering` — always-on system prompt |
+| *"If user wrote 'urgent', prioritize speed"* (any turn matching the predicate) | `defineInstruction` with rule trigger |
+| *"After redact_pii ran, use redacted text"* (the iteration after a specific tool) | `defineInstruction` with on-tool-return predicate (this guide) |
+| *"When the LLM asks for billing help, load the billing playbook + tools"* (LLM-activated) | `defineSkill` |
+
+## Anti-patterns
+
+- Don't put SLOW logic in the predicate. It runs every iteration. `ctx.lastToolResult?.toolName === 'X'` is fine; `await db.query(...)` is not.
+- Don't use Dynamic ReAct for state that lives across runs. Use Memory for that.
+- Don't write one giant predicate that covers many tools. Write multiple small ones — easier to reason about, easier to observe (one event per matching id).
+
+## Next steps
+
+- [Instructions guide](/agentfootprint/guides/instructions/) — the broader Instruction primitive (rule + on-tool-return + always)
+- [Skills, explained](/agentfootprint/guides/skills-explained/) — LLM-activated body + tools (the cousin pattern)

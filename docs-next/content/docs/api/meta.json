@@ -1,5 +1,7 @@
 {
   "title": "API Reference",
+  "root": true,
+  "description": "Auto-generated from TypeScript source.",
   "pages": [
     "index",
     "..."

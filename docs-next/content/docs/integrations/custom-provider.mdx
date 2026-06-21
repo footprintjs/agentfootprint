@@ -1,0 +1,145 @@
+---
+title: Custom provider
+description: Implement the LLMProvider interface to wrap any LLM API. Two methods (complete, stream) — that's the whole contract.
+---
+
+> Your team uses an internal model serving cluster, or a provider not yet shipped as a built-in adapter. **You don't need agentfootprint to support it explicitly** — you just implement two methods. The library treats your custom provider identically to `anthropic()` or `openai()`.
+
+## The contract
+
+```ts
+import type { LLMProvider, LLMRequest, LLMResponse, LLMChunk } from 'agentfootprint';
+
+interface LLMProvider {
+  readonly name: string;
+
+  complete(req: LLMRequest): Promise<LLMResponse>;
+
+  stream?(req: LLMRequest): AsyncIterable<LLMChunk>;
+}
+```
+
+That's the whole interface. `complete` is required; `stream` is optional (the library falls back to `complete` if absent).
+
+## A minimal custom provider
+
+```ts
+class MyCustomProvider implements LLMProvider {
+  readonly name = 'my-custom';
+  private apiKey: string;
+
+  constructor(opts: { apiKey: string }) {
+    this.apiKey = opts.apiKey;
+  }
+
+  async complete(req: LLMRequest): Promise<LLMResponse> {
+    const res = await fetch('https://my-llm-api.example.com/v1/chat', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${this.apiKey}` },
+      body: JSON.stringify(toMyApiFormat(req)),
+    });
+    const json = await res.json();
+    return fromMyApiFormat(json);
+  }
+}
+```
+
+The two converters (`toMyApiFormat`, `fromMyApiFormat`) are the only API-specific code. The agent loop, recorders, memory, skills — all work unchanged.
+
+## Stream implementation
+
+For UI-streaming support:
+
+```ts
+async *stream(req: LLMRequest): AsyncIterable<LLMChunk> {
+  const res = await fetch('https://my-llm-api.example.com/v1/stream', { ... });
+  const reader = res.body!.getReader();
+  let tokenIndex = 0;
+  let accumulated = '';
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    const text = new TextDecoder().decode(value);
+    accumulated += text;
+    yield { tokenIndex: tokenIndex++, content: text, done: false };
+  }
+
+  // Final chunk MUST carry the authoritative LLMResponse
+  yield {
+    tokenIndex,
+    content: '',
+    done: true,
+    response: {
+      content: accumulated,
+      toolCalls: [],   // populate from API's terminal payload
+      usage: { input: 0, output: 0 },
+      stopReason: 'stop',
+    },
+  };
+}
+```
+
+The agent reads `response` off the final chunk to drive ReAct decisioning. UI consumers read intermediate `content` chunks for token streaming. One round-trip, two consumers.
+
+## AbortSignal support
+
+Honor `req.signal` so consumers can cancel mid-stream:
+
+```ts
+async complete(req: LLMRequest): Promise<LLMResponse> {
+  const res = await fetch(url, {
+    signal: req.signal,
+    // ...
+  });
+  // ...
+}
+```
+
+The library's resilience decorators (`withRetry`, `withFallback`) wrap your custom provider transparently — no special integration needed.
+
+## Wrapping with resilience
+
+Drop into the standard composition:
+
+```ts
+import { withRetry } from 'agentfootprint/resilience';
+
+const provider = withRetry(new MyCustomProvider({ apiKey: '...' }), {
+  maxAttempts: 5,
+});
+```
+
+`withRetry` classifies retryability by HTTP status: it reads `err.status` (or `err.statusCode`) off the thrown error, skips `AbortError` and 4xx client errors — except `429 Too Many Requests`, which IS retried — and retries 5xx, network errors, and unknown shapes. So if your provider throws errors that should be retryable, surface the upstream HTTP status on the error:
+
+```ts
+async complete(req: LLMRequest): Promise<LLMResponse> {
+  const res = await fetch(url, { signal: req.signal /* ... */ });
+  if (!res.ok) {
+    const err = new Error(`${res.status} from upstream`) as Error & { status: number };
+    err.status = res.status; // withRetry reads this to decide retryability
+    throw err;
+  }
+  // ...
+}
+```
+
+Need a custom rule (e.g. retry a specific provider-defined code)? Pass `shouldRetry`:
+
+```ts
+withRetry(new MyCustomProvider({ apiKey: '...' }), {
+  shouldRetry: (err, attempt) => (err as { status?: number }).status === 503,
+});
+```
+
+## Anti-patterns
+
+- Don't bake retry logic into `complete`. Let `withRetry` handle it; your provider should be a thin SDK wrapper.
+- Don't swallow the upstream HTTP status. Surface it on the thrown error (`err.status` / `err.statusCode`) so `withRetry`'s default classification works (4xx terminal vs 5xx/429 retryable).
+- Don't omit usage from the response — recorders depend on it for cost tracking.
+
+## Next steps
+
+- [Anthropic](/agentfootprint/integrations/anthropic/) — reference adapter implementation
+- [OpenAI](/agentfootprint/integrations/openai/) — reference adapter implementation
+- [Resilience](/agentfootprint/guides/resilience/) — your custom provider gets retry + fallback for free

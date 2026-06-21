@@ -102,7 +102,17 @@ walk(OUT);
 // 4. sidebar meta.json (root + per declaration-kind folder)
 writeFileSync(
   join(OUT, 'meta.json'),
-  JSON.stringify({ title: 'API Reference', pages: ['index', '...'] }, null, 2) + '\n',
+  JSON.stringify(
+    {
+      title: 'API Reference',
+      // own sidebar tab (Fumadocs "root") — switcher: Docs | API Reference
+      root: true,
+      description: 'Auto-generated from TypeScript source.',
+      pages: ['index', '...'],
+    },
+    null,
+    2,
+  ) + '\n',
 );
 for (const [folder, title] of Object.entries(FOLDER_TITLES)) {
   const fdir = join(OUT, folder);

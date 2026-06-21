@@ -1,0 +1,73 @@
+---
+title: Fact extraction (Semantic memory)
+description: Distill structured facts from raw conversation. Pattern-based (free, regex) or LLM-based (richer). The right shape when you want to remember "what's true about this user" without replaying every word.
+---
+
+> A user mentions in turn 4 that they're on the Pro plan, in turn 12 that they live in Berlin, in turn 27 that their cat is called Mochi. Six months later they ask *"do you remember anything about me?"* You don't want to replay 80 messages — you want the **facts**. That's what Semantic memory with the EXTRACT strategy gives you.
+
+## What fact extraction is
+
+`defineMemory({ type: SEMANTIC, strategy: { kind: EXTRACT, ... } })` — every turn, an extractor scans the latest messages and writes structured facts to a SEMANTIC store. On future runs, the read subflow loads relevant facts (not raw messages) into the messages slot.
+
+Two extractor modes:
+
+| Extractor | Cost | Quality |
+|---|---|---|
+| `'pattern'` | Free (regex heuristics) | Catches structured statements ("My name is X", "I live in Y") |
+| `'llm'` (with `llm: provider`) | One LLM call per write | Richer extraction, handles paraphrase + indirect statements |
+
+Most production apps use **`pattern`** for the noisy 80% (zero cost) and reach for `'llm'` selectively — sometimes by stacking two SEMANTIC memories.
+
+## Define a fact-extracting memory
+
+<CodeFile path="examples/memory/05-extract-strategy.ts" region="define" title="examples/memory/05-extract-strategy.ts (region: define)" />
+
+`minConfidence` drops weak extractions (the pattern extractor returns a confidence score per match). `maxPerTurn` caps how many facts one turn can produce — prevents an unusually long user message from flooding the store with junk.
+
+## What gets stored
+
+Each fact is a `MemoryEntry<Fact>` with:
+- `id` — `fact:${fact.key}`, derived from the fact's `key` (so re-asserting the same key is idempotent)
+- `value` — the `Fact` itself: `{ key, value, confidence?, category?, refs? }`
+- `source` — provenance: `{ turn, identity }` (the turn that produced the fact and the identity it belongs to)
+- Multi-tenant identity scope (every store call takes `MemoryIdentity`)
+
+Re-running the agent doesn't accumulate duplicate facts. Facts dedup by `key`: each entry's id is `fact:${key}`, and the store's `putMany` overwrites on id collision — so a later turn asserting the same key REPLACES the prior entry rather than appending. (This is the opposite of episodic messages and narrative beats, which are append-only.)
+
+## Read-side: facts as injected context
+
+By default the read subflow loads the stored facts (a bounded `list` filtered to the `fact:` id prefix) and renders them as a system message:
+
+```
+Known facts about the user:
+- user.name = Alice
+- user.email = alice@acme.com
+- user.location = Berlin
+- user.preferences = dark mode
+```
+
+(Keys use the dotted-path convention the built-in extractors emit — `user.name`, `user.email`, `user.location`, `user.preferences`. An LLM extractor can define its own key namespaces.)
+
+The LLM sees this as fresh context every turn. No replay of original conversations — just the distilled signal.
+
+For **retrieval-style** reads (only inject facts relevant to the current query), wrap with `kind: TOP_K` instead — same SEMANTIC type, different read strategy. Hybrid configs are common: facts for context, TOP_K for query-relevant retrieval.
+
+## When to use this vs episodic vs causal
+
+| You want | Use |
+|---|---|
+| Last N raw messages | EPISODIC × WINDOW |
+| All known facts about the user | SEMANTIC × EXTRACT (this guide) |
+| Query-relevant retrieved chunks | SEMANTIC × TOP_K (or `defineRAG`) |
+| Decision evidence from past runs | CAUSAL × TOP_K |
+
+## Anti-patterns
+
+- Don't use `'llm'` extractor at high write volume — every turn is an extra LLM call. Cache, batch, or fall back to `'pattern'` for the long tail.
+- Don't trust pattern extraction blindly — review the stored facts during dev (they end up in the store, queryable). Tune `minConfidence` upward if you see junk.
+- Don't extract sensitive facts you don't want persisted. Add a redaction hook before write — `MemoryRedactionPolicy` (in development) or a custom write-side filter.
+
+## Next steps
+
+- [Memory guide](/agentfootprint/guides/memory/) — the full type × strategy matrix
+- [Auto memory (hybrid)](/agentfootprint/guides/auto-memory/) — stack EXTRACT + WINDOW + CAUSAL into a production stack

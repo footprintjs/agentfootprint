@@ -5,3 +5,28 @@
 
 /* Tailwind 4 needs to scan fumadocs-ui's compiled classes */
 @source '../node_modules/fumadocs-ui/dist/**/*.js';
+
+/* ── Boxed layout (docs.llmgateway.io style): soft grey page + sidebar,
+      content floats in a centered, elevated card ── */
+:root {
+  --color-fd-background: hsl(240 5% 96%);
+}
+.dark {
+  --color-fd-background: hsl(240 6% 8%);
+}
+
+/* the content article becomes a centered, elevated card on the grey page */
+#nd-page {
+  background: var(--color-fd-card);
+  border: 1px solid var(--color-fd-border);
+  border-radius: 14px;
+  box-shadow:
+    0 1px 3px rgb(0 0 0 / 0.04),
+    0 14px 36px -10px rgb(0 0 0 / 0.1);
+  margin-block: 1.25rem;
+}
+
+/* sidebar + TOC sit directly on the grey page, not their own card */
+#nd-sidebar {
+  background: var(--color-fd-background);
+}

@@ -1,0 +1,90 @@
+---
+title: AgentCore Memory
+description: AWS Bedrock AgentCore Memory adapter — session/event-based managed memory. Lazy-required @aws-sdk/client-bedrock-agent-runtime peer-dep.
+---
+
+> AWS Bedrock AgentCore is a managed memory service — sessions, events, retrieval, summarization all server-side. agentfootprint's `AgentCoreStore` maps the `MemoryStore` interface onto AgentCore's session/event model so you can use it as a drop-in for `InMemoryStore` in production.
+
+## Install
+
+```bash
+npm install @aws-sdk/client-bedrock-agent-runtime
+```
+
+Lazy peer-dep declared in `peerDependenciesMeta` with `optional: true`. AWS credentials resolved via the standard SDK chain (env, profile, IAM role).
+
+## Subpath import
+
+```ts
+// Canonical subpath:
+import { AgentCoreStore } from 'agentfootprint/memory-providers';
+
+// Legacy alias (still exported, kept for back-compat):
+import { AgentCoreStore } from 'agentfootprint/memory-providers';
+```
+
+Subpath keeps the main barrel small + lets bundlers tree-shake when AgentCore isn't used. Prefer `agentfootprint/memory-providers` (the canonical location, shared with `RedisStore`); `agentfootprint/memory-agentcore` remains as a back-compat alias.
+
+## Use
+
+<CodeFile path="examples/memory/09-agentcore-store.ts" region="define" title="examples/memory/09-agentcore-store.ts (excerpt — see full example)" />
+
+The store implements every `MemoryStore` method except `search()`. Pair with `defineMemory({ store, ... })` like any other adapter.
+
+## Mapping to AgentCore primitives
+
+| `MemoryStore` call | AgentCore mapping |
+|---|---|
+| `MemoryIdentity` tuple | AgentCore `sessionId` (derived deterministically from identity) |
+| `MemoryEntry` | AgentCore `event` payload (JSON envelope keyed by entry id) |
+| `put` / `putMany` | `PutMemoryEvent` (sequentialized — no batch API) |
+| `get` | `GetMemoryEvent` |
+| `list` | `ListMemoryEvents` (cursor via `nextToken`) |
+| `delete` | `DeleteMemoryEvent` |
+| `forget` | `DeleteMemorySession` |
+| `seen` / `recordSignature` | In-process shadow Map (NOT durable — see caveats) |
+| `feedback` / `getFeedback` | In-process shadow Map (NOT durable) |
+| `search` | NOT exposed — see caveats |
+
+## Caveats (call out before adopting)
+
+These are documented in the JSDoc; promoted here for visibility:
+
+1. **`putIfVersion` is emulated** — AgentCore's `PutMemoryEvent` overwrites unconditionally. The adapter does read-then-write inside a JS critical section. Adequate for single-writer-per-session deploys; weaker for multi-writer.
+
+2. **Built-in summarization may double-compress** — AgentCore has its own server-side summarization. Mixing `defineMemory({ strategy: SUMMARIZE })` on top will double-compress. Pick one summarizer.
+
+3. **`seen` / `feedback` are in-process** — they don't survive process restart. For durable recognition, use `RedisStore` instead (or layer Redis on top of AgentCore).
+
+4. **`search()` not exposed** — AgentCore's retrieval API is opaque (server-side retrieval pipeline). Mapping it to `MemoryStore.search` (cosine + threshold) would be a leaky abstraction. A separate read-side retrieve helper may land in a future release; until then, use a vector-capable store (e.g. `InMemoryStore` with an embedder, or Redis) when you need `search()`.
+
+5. **AWS rate limits apply** — production deployments should wrap with `withRetry` and budget calls per session. AWS SDK has built-in retry; tune via the SDK's `maxAttempts` config.
+
+## Test injection
+
+`AgentCoreStore({ _client: ... })` accepts a mock-injected client for tests — no live AWS account needed for CI:
+
+```ts
+const mockClient = {
+  putEvent: async () => ({}),
+  getEvent: async () => ({ payload: '...' }),
+  listEvents: async () => ({ events: [] }),
+  deleteEvent: async () => ({}),
+  deleteSession: async () => ({}),
+};
+
+const store = new AgentCoreStore({ memoryId: 'test', _client: mockClient });
+```
+
+## When to use AgentCore vs Redis vs InMemory
+
+- **Production AWS-native deployment** — AgentCore is the natural choice if you're already on Bedrock.
+- **Production multi-tenant with low latency + durable feedback** — Redis (RedisStore).
+- **Dev / test / single-process** — InMemoryStore.
+- **Hybrid** — combine: AgentCore for causal snapshots; Redis for hot recent + feedback.
+
+## Next steps
+
+- [Memory store adapters](/agentfootprint/integrations/memory-stores/) — full adapter matrix
+- [Memory guide](/agentfootprint/guides/memory/) — types × strategies that pair with this store
+- [AWS Bedrock provider](/agentfootprint/integrations/aws-bedrock/) — paired LLM provider

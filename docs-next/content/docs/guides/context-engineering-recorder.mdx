@@ -1,0 +1,147 @@
+---
+title: Context engineering recorder
+description: Filter the firehose of context.injected events into engineered (RAG / Skills / Memory / Instructions / Steering / Facts) vs baseline (user / tool-result / assistant). The first-class handle on what your context engineering is actually doing.
+---
+
+> Your agent emits a `context.injected` event every time content lands in any slot — including the user's message, every tool result, the static system prompt anchor. For Lens UIs, evals, cost attribution, debug logging, **the baseline flow is noise**. `contextEngineering(agent)` gives you two filtered subscriptions: just-engineered + just-baseline. Same events, cleaner streams.
+
+## What it does
+
+```ts
+import { Agent, contextEngineering } from 'agentfootprint';
+
+const agent = Agent.create({...})
+  .system('You answer questions.')
+  .instruction(beFriendly)
+  .skills(supportRegistry)
+  .memory(recentMemory)
+  .build();
+
+const ce = contextEngineering(agent);
+
+// Just the engineered injections
+ce.onEngineered((e) => {
+  console.log(`[${e.payload.source}] ${e.payload.contentSummary}`);
+  // → [skill] billing skill body
+  // → [memory] last 3 user turns
+  // → [instructions] be-friendly rule
+});
+
+// Just the baseline message-history flow
+ce.onBaseline((e) => {
+  console.log(`[baseline:${e.payload.source}]`);
+  // → [baseline:user]
+  // → [baseline:tool-result]
+});
+
+await agent.run({ message: 'help me with a refund' });
+ce.detach(); // remove all subscriptions when done
+```
+
+## The engineered / baseline split
+
+`agentfootprint.context.injected` events carry a `source: ContextSource` field. The library classifies sources into two disjoint sets:
+
+| Engineered (the context-engineering work) | Baseline (the message flow) |
+|---|---|
+| `'rag'` — retrieval-augmented chunks | `'user'` — user input |
+| `'skill'` — activated skill bodies | `'tool-result'` — tool returns |
+| `'memory'` — memory subsystem injections | `'assistant'` — prior LLM turns |
+| `'instructions'` — rule-based guidance | `'base'` — static system prompt anchor |
+| `'steering'` — always-on policy | `'registry'` — static tool catalog |
+| `'fact'` — developer-supplied facts | |
+| `'custom'` — consumer-defined | |
+
+Two filter helpers expose the classifier as pure functions for ad-hoc use without the wrapper:
+
+```ts
+import { isEngineeredSource, isBaselineSource, ENGINEERED_SOURCES } from 'agentfootprint';
+
+isEngineeredSource('rag');       // → true
+isEngineeredSource('user');      // → false
+isBaselineSource('tool-result'); // → true
+
+[...ENGINEERED_SOURCES];         // → ['rag','skill','memory','instructions','steering','fact','custom']
+```
+
+## Use cases
+
+### 1. Lens UI — render engineered injections in the "context bin"
+
+Lens shows the engineered set as cards on the agent's iteration timeline; the baseline flow appears as edges between iterations. Without `contextEngineering`, the UI would conflate "the user said hello" with "RAG retrieved 4 product-doc chunks" — visually noisy, semantically different.
+
+### 2. Eval pipelines — what entered the prompt for this query?
+
+```ts
+const counts: Record<string, number> = {};
+const ce = contextEngineering(agent);
+ce.onEngineered((e) => {
+  counts[e.payload.source] = (counts[e.payload.source] ?? 0) + 1;
+});
+await agent.run({ message: evalQuery });
+ce.detach();
+// counts: { rag: 3, skill: 1, instructions: 2 } — eval row
+```
+
+### 3. Cost attribution — token spend per engineered source
+
+```ts
+const tokensBySource: Record<string, number> = {};
+ce.onEngineered((e) => {
+  const t = e.payload.budgetSpent?.tokens ?? 0;
+  tokensBySource[e.payload.source] = (tokensBySource[e.payload.source] ?? 0) + t;
+});
+```
+
+Pair with `costRecorder` to know what fraction of spend was engineered vs baseline.
+
+### 4. Debug logging — tail engineered signals during dev
+
+```ts
+ce.onEngineered((e) => {
+  console.log(`[${e.payload.slot}/${e.payload.source}/${e.payload.sourceId}] ${e.payload.reason}`);
+});
+```
+
+Spot surprising activations without drowning in user-message noise.
+
+## Forward-compat behavior — unknown sources
+
+The `ContextSource` union is open-extensible (new flavors can be added as a non-breaking change). When an event arrives with a source that's in NEITHER `ENGINEERED_SOURCES` nor `BASELINE_SOURCES`, the wrapper routes it to NEITHER stream — preferring under-fire over miscategorization.
+
+If your agent uses a forward-future source the library doesn't yet know about, subscribe to the raw event for completeness:
+
+```ts
+agent.on('agentfootprint.context.injected', (e) => {
+  if (!isEngineeredSource(e.payload.source) && !isBaselineSource(e.payload.source)) {
+    // forward-future source — handle as you wish
+  }
+});
+```
+
+## API
+
+| | |
+|---|---|
+| `contextEngineering(agent)` | Returns a `ContextEngineeringHandle` |
+| `handle.onEngineered(cb)` | Subscribe to engineered injections; returns unsub |
+| `handle.onBaseline(cb)` | Subscribe to baseline injections; returns unsub |
+| `handle.detach()` | Unsubscribes ALL listeners registered through the handle (idempotent) |
+| `isEngineeredSource(source)` | Pure classifier |
+| `isBaselineSource(source)` | Pure classifier |
+| `ENGINEERED_SOURCES` | `ReadonlySet<ContextSource>` |
+| `BASELINE_SOURCES` | `ReadonlySet<ContextSource>` |
+
+The wrapper accepts any runner that implements `agent.on('agentfootprint.context.injected', cb)` — `Agent`, `LLMCall`, `Sequence`, `Parallel`, `Conditional`, `Loop`. Each runner emits its own context events; pass the right one.
+
+## Anti-patterns
+
+- **Don't subscribe via `contextEngineering` AND raw `agent.on('agentfootprint.context.injected', ...)` for the same purpose.** The raw subscription fires for ALL sources; layering breaks the filter intent. Pick one.
+- **Don't forget to `detach()` long-lived handles.** Each `onEngineered` / `onBaseline` registers a listener on the agent; without detach, listeners accumulate across runs and leak memory.
+- **Don't classify raw `ContextSource` strings yourself.** Use `isEngineeredSource` / `isBaselineSource` so future additions to the union are routed consistently across consumers.
+
+## Next steps
+
+- [Observability guide](/agentfootprint/guides/observability/) — the broader event taxonomy
+- [Dynamic ReAct guide](/agentfootprint/guides/dynamic-react/) — what makes per-iteration recomposition produce a stream of engineered injections
+- [RAG](/agentfootprint/guides/rag/), [Memory](/agentfootprint/guides/memory/), [Skills](/agentfootprint/guides/skills/), [Instructions](/agentfootprint/guides/instructions/) — the engineered-source primitives

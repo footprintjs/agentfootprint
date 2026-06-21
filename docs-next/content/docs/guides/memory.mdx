@@ -1,0 +1,96 @@
+---
+title: Memory
+description: One factory, four types, seven strategies. Persistent context across agent runs — observable, swappable, multi-tenant.
+---
+
+> Your support agent told a customer their refund was processed last Monday. Six weeks later they ask *"why did you tell me that when it wasn't true?"* You go to look. The agent is gone. Logs are scattered. The decision evidence is not there. **Memory in agentfootprint exists to close that gap** — and the **Causal** type goes one step further by persisting *the decision evidence itself*, not just the conversation.
+
+## What memory is
+
+A **Memory** is one flavor of the [Injection primitive](/agentfootprint/getting-started/key-concepts/) that operates *across runs*: a paired read+write subflow that loads relevant past content into the messages slot before the LLM call, then persists the new turn back to a store after the turn finalizes.
+
+The discipline is captured in two orthogonal axes:
+
+| Axis | What it is | Choose by |
+|---|---|---|
+| **Type** | What shape of memory you're keeping | Episodic / Semantic / Narrative / **Causal** ⭐ |
+| **Strategy** | How content is selected for the next call | Window / Budget / Summarize / TopK / Extract / Decay / Hybrid |
+
+`type × strategy × store` combinations cover almost every memory pattern in the agent literature, including ones the literature hasn't named yet. The store layer is where multi-tenant isolation lives — every read and write is namespaced by the identity tuple `{ tenant, principal, conversationId }`.
+
+## The four types
+
+| Type | Stores | When to use |
+|---|---|---|
+| `EPISODIC` | Raw conversation messages | Default for chat — "what was said earlier" |
+| `SEMANTIC` | Extracted structured facts | "What does the agent know about this customer?" |
+| `NARRATIVE` | Beats / summaries of prior runs | Long-running session summaries; cross-session highlights |
+| **`CAUSAL`** ⭐ | footprintjs decision-evidence snapshots | Cross-run "why" replay — answer follow-up questions from the SOURCE, not from reconstruction |
+
+Causal memory is the differentiator. Other libraries' memory remembers what was said. agentfootprint's `defineMemory({ type: CAUSAL })` remembers the run itself, not just the messages. New questions cosine-match past queries; the matching stored run injects into the next prompt; the LLM answers from what actually happened rather than re-deriving. *(Decisions, tool calls, iterations, and token usage are harvested automatically by the evidence bridge; commitLog/narrative capture is still on the roadmap.)*
+
+## The seven strategies
+
+| Strategy | How content is selected | Cost |
+|---|---|---|
+| `WINDOW` | Last N entries (rule, no LLM, no embeddings) | Free |
+| `BUDGET` | Fit-to-tokens via decider | Free |
+| `SUMMARIZE` | LLM compresses older turns into beats | One LLM call per write |
+| `TOP_K` | Score-threshold semantic retrieval | Embedding call per query |
+| `EXTRACT` | LLM distills structured facts on write | One LLM call per write |
+| `DECAY` | Recency-weighted relevance | Free; needs `decayPolicy` per entry |
+| `HYBRID` | Compose multiple strategies | Sum of constituents |
+
+A `WINDOW` strategy on an Episodic store keeps the last N messages. The same `WINDOW` on a Causal store keeps the last N decision-evidence snapshots. Mix and match.
+
+## Quick start — sliding window
+
+The simplest memory: last N turns, no LLM, no embeddings, near-zero cost. Good default for short-to-medium chats.
+
+<CodeFile path="examples/memory/01-window-strategy.ts" region="define" title="examples/memory/01-window-strategy.ts (region: define)" />
+
+`InMemoryStore` is for dev. Production swaps to `RedisStore` (`agentfootprint/memory-redis`), `AgentCoreStore` (`agentfootprint/memory-agentcore`), or another adapter — same `MemoryStore` interface, drop-in.
+
+## Causal memory — replay decisions, not just messages
+
+The `CAUSAL` type stores footprintjs decision-evidence snapshots tagged with the user's original query. On follow-up runs, the read subflow embeds the new query, cosine-searches the snapshot store, and (when above threshold) injects the matching past snapshot's decision evidence into the next LLM call. The LLM answers about past behavior from the actual recorded reasoning, not by hallucinating consistency.
+
+<CodeFile path="examples/memory/06-causal-snapshot.ts" region="define-causal" title="examples/memory/06-causal-snapshot.ts (region: define-causal)" />
+
+`projection: SNAPSHOT_PROJECTIONS.DECISIONS` says "when injecting, include only the `decide()` and `select()` evidence — not the full snapshot." Other projections: `COMMITS` (commit-log only), `NARRATIVE` (rendered narrative entries), `FULL` (everything).
+
+The same snapshot data shape feeds SFT / DPO / process-RL training pipelines (`exportForTraining({ format })` is on the v2.5+ roadmap). One recording, three downstream consumers (audit / cheap-model triage / training data) — see the README's "differentiator" section for the full economic argument.
+
+## Multi-tenant identity
+
+Every store call takes a `MemoryIdentity` tuple — `{ tenant?, principal?, conversationId }`. Adapters MUST namespace internal keys by the full tuple. A bug passing the wrong tenant surfaces as "no data" not as a cross-tenant leak.
+
+```ts
+const identity = { tenant: 'acme', principal: 'alice', conversationId: 'thread-42' };
+await agent.run({ message: '...', identity });
+```
+
+For a deeper dive on how identity flows through the store + RAG indexing footgun, see [Memory store adapters](/agentfootprint/integrations/memory-stores/).
+
+## Stores
+
+| Store | Subpath | Production-ready |
+|---|---|---|
+| `InMemoryStore` | (top-level) | Dev / tests / single-process scenarios |
+| `RedisStore` | `agentfootprint/memory-redis` | ✅ — peer-dep `ioredis`, atomic Lua CAS, pipelined writes, GDPR forget |
+| `AgentCoreStore` | `agentfootprint/memory-agentcore` | ✅ — peer-dep `@aws-sdk/client-bedrock-agent-runtime`, session/event mapping |
+| DynamoDB / Postgres / Pinecone | (planned) | v2.6+ |
+
+Both production adapters lazy-require their SDK and accept `_client` for test injection. See [memory-stores](/agentfootprint/integrations/memory-stores/) for the full integration matrix.
+
+## Anti-patterns
+
+- ❌ **Don't fall back when TopK threshold returns nothing** — strict semantics. Garbage past context is worse than no context. The library throws on empty by design; don't catch + ignore.
+- ❌ **Don't change `embedderId` between writes and reads** — stored entries are tagged with the embedder used at write time. Reading with a different embedder silently corrupts retrieval. Use the same embedder or filter `embedderId` at search.
+- ❌ **Don't use `_global` identity in production multi-tenant apps** — defaults are dev-friendly footguns. Pass per-tenant identity at every `agent.run()` call.
+
+## Next steps
+
+- [Skills, explained](/agentfootprint/guides/skills-explained/) — context engineering for instructions, the cousin pattern to memory
+- [Auto memory (Hybrid)](/agentfootprint/guides/auto-memory/) — stack recent window + extracted facts + causal snapshots, each its own `.memory()` call
+- [Memory store adapters](/agentfootprint/integrations/memory-stores/) — Redis · AgentCore · planned backends

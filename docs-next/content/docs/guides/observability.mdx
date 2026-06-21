@@ -1,0 +1,234 @@
+---
+title: Observability
+description: Typed event streams, recorders, and tier-3 enable.* helpers — observe what the agent did without shaping what it does. 59 events emitted during DFS traversal, no instrumentation.
+---
+
+> Logs that say *"agent ran"* are useless. Logs that say *"agent called `redact_pii({text: '...'})` and then injected the result into the messages slot before iteration 3, costing $0.0042"* let you debug a hallucination at 2 AM. The difference is whether observability is **structured + typed at the source** or **string-formatted at the sink**.
+
+## Three workflows from one trace
+
+agentfootprint's observability isn't bolted on. The framework owns the loop, so every decision and execution is recorded *during* DFS traversal — not collected after the fact via spans. That single artifact serves three workflows:
+
+| Mode | What you do | What the trace gives you |
+|---|---|---|
+| **Live** | Debug as you build | Exactly which injection produced which token; which predicate fired this iteration; which prefix actually got cached |
+| **Offline** | Monitor what shipped | Replay any past run from its trace. Alert on drift. Attribute cost per injection. |
+| **Detailed** | Improve via export | Every successful trajectory is labeled training data for SFT, DPO, or process-RL — no separate data-collection phase |
+
+And a fourth, novel: **the agent can read its own trace.** Six months after the agent rejected loan #42, *"why did you reject it?"* answers from the recorded evidence (`creditScore=580`, `threshold=600`), not a rerun. Causal memory turns the trace into the agent's working memory.
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="/agentfootprint/assets/causal-memory-dark.svg" />
+    <source media="(prefers-color-scheme: light)" srcset="/agentfootprint/assets/causal-memory-light.svg" />
+    <img alt="One agent run produces a JSON-portable causal trace. Three downstream consumers fan out: audit replay, cheap-model triage, training data export. The fourth, novel: the agent can read its own trace." src="/agentfootprint/assets/causal-memory-light.svg" width="100%" />
+  </picture>
+</p>
+
+## The model
+
+Every runner (`Agent`, `LLMCall`, `Sequence`, etc.) exposes the same observability surface, in three layers:
+
+| Layer | API | When to use |
+|---|---|---|
+| **Events** | `runner.on('agentfootprint.<domain>.<event>', fn)` | You want a typed stream — payloads are auto-completed by your IDE |
+| **Recorders** | `runner.attach(recorder)` | You want pre-built aggregation (cost totals, token counts, narrative entries) |
+| **Tier-3 helpers** | `runner.enable.liveStatus({ strategy })`, `runner.enable.observability({ strategy })` | You want a one-liner for the common case (status line, structured logs) |
+
+There are **65 typed events across 18 domains**: `agent` (incl. `output_schema_validation_failed` for Instructor-style retry), `composition`, `context`, `stream`, `tools`, `skill`, `memory`, `cost`, `permission` (incl. `halt` for sequence governance), `credential` (declare-and-push resolution), `eval`, `embedding`, `pause`, `error`, `reliability`, `fallback`, `risk`. Every event has a typed payload — `agentfootprint.stream.llm_start`, `agentfootprint.stream.tool_start`, `agentfootprint.cost.tick`, `agentfootprint.composition.iteration_start`, etc. The framework owns the loop and emits during DFS traversal — no instrumentation, no spans-after-the-fact.
+
+## Tier-3 — `.enable.liveStatus()` and `.enable.observability()`
+
+The 80% case: a live status line ("what is the agent doing right now?") and a domain-filtered log firehose. Both are one-liners over a **strategy** — pick a built-in (`chatBubbleLiveStatus`, `consoleObservability` from `agentfootprint/strategies`) or a vendor one.
+
+<CodeFile path="examples/features/04-observability.ts" region="enable-livestatus" title="examples/features/04-observability.ts (region: enable-livestatus)" />
+
+`.enable.liveStatus({ strategy })` with `chatBubbleLiveStatus({ onLine })` gives you a Claude-Code-style live status line — one string per agent state transition. Use for terminal UIs, CLI progress, or chat-UI typing indicators.
+
+<CodeFile path="examples/features/04-observability.ts" region="enable-observability" title="examples/features/04-observability.ts (region: enable-observability)" />
+
+`.enable.observability({ strategy })` with `consoleObservability()` gives you structured logs of every typed event. Swap the strategy for `pino`, `winston`, or a vendor backend — same call site.
+
+Both return a `stop()` function — call it on shutdown to detach the listener cleanly.
+
+> **Migration (4.0.0):** the old flat `.enable.thinking()` / `.enable.logging()` one-liners were removed in favor of these uniform strategy enablers. Replace `enable.thinking({ onStatus })` with `enable.liveStatus({ strategy: chatBubbleLiveStatus({ onLine: onStatus }) })`, and `enable.logging()` with `enable.observability({ strategy: consoleObservability() })`.
+
+## Tier-3 — `.enable.observability()` — grouped vendor strategies
+
+For shipping events to a vendor backend (CloudWatch, X-Ray, OTel, AgentCore), `.enable.observability(...)` accepts a typed strategy + optional `detach` driver. The strategy is the WHERE; the detach is the HOW (sync inline vs fire-and-forget):
+
+```ts
+import { agentcoreObservability } from 'agentfootprint/observability-providers';
+import { microtaskBatchDriver } from 'footprintjs/detach';
+
+const stop = agent.enable.observability({
+  strategy: agentcoreObservability({
+    region: 'us-east-1',
+    logGroupName: '/agentfootprint/my-agent',
+  }),
+  // Recommended for production — slow exporters never block the agent loop.
+  // The strategy's `exportEvent(event)` runs on the driver's schedule
+  // instead of inline on the dispatcher's hot path.
+  detach: { driver: microtaskBatchDriver, mode: 'forget' },
+});
+```
+
+### Detach modes
+
+| `detach.mode` | Returns | Use when |
+|---|---|---|
+| omitted (no `detach`) | sync | Strategy is fast (< 100µs). Default, back-compat. |
+| `'forget'` (default when `detach` set) | `void` | Pure fire-and-forget telemetry. |
+| `'join-later'` | `onHandle(h)` callback fires per event | You want to `await` exports later (tests, backpressure). |
+
+### Drivers
+
+Pick by environment — see [`footprintjs/detach`](https://footprintjs.github.io/footPrint/guides/patterns/detach/) for the full list. All exported from `'footprintjs/detach'`:
+
+| Driver | Best for |
+|---|---|
+| `microtaskBatchDriver` | Default. Cross-runtime. Lowest latency. |
+| `setImmediateDriver` | Node only. Yields to I/O before flushing. |
+| `setTimeoutDriver` | Cross-runtime, configurable delay. |
+| `createSendBeaconDriver({ url })` | Browser. Survives page-unload (analytics). Factory — requires a target URL. |
+| `createWorkerThreadDriver({ ... })` | CPU-isolated. For heavy serialization. Factory — requires worker config. |
+
+`microtaskBatchDriver`, `setImmediateDriver`, and `setTimeoutDriver` ship as ready-to-use singletons. `createSendBeaconDriver` and `createWorkerThreadDriver` are factories (no default singleton) because they need required options — call the factory and pass the result as `driver`.
+
+### Graceful shutdown
+
+`flushAllDetached()` (from `'footprintjs/detach'`) drains every in-flight handle process-wide:
+
+```ts
+import { flushAllDetached } from 'footprintjs/detach';
+
+process.on('SIGTERM', async () => {
+  const stats = await flushAllDetached({ timeoutMs: 10_000 });
+  console.log(`Drained ${stats.done}, failed ${stats.failed}, pending ${stats.pending}`);
+  process.exit(stats.pending === 0 ? 0 : 1);
+});
+```
+
+### Vendor adapters — `agentfootprint/observability-providers`
+
+Vendor strategies ship under one grouped subpath (parallel-providers pattern, mirrors `llm-providers` / `tool-providers` / `memory-providers`):
+
+| Adapter | Status | Peer dep (optional) |
+|---|---|---|
+| `agentcoreObservability` | ✅ shipped | `@aws-sdk/client-cloudwatch-logs` |
+| `cloudwatchObservability` | ✅ shipped | `@aws-sdk/client-cloudwatch-logs` |
+| `xrayObservability` | ✅ shipped | `@aws-sdk/client-xray` |
+| `otelObservability` | ✅ shipped | `@opentelemetry/api` + `@opentelemetry/sdk-node` |
+| `datadogObservability` | roadmap | `dd-trace` (use `otelObservability` with Datadog OTel collector for now) |
+
+All peer deps are declared **optional** — consumers who never call a particular factory don't need to install its SDK. Each adapter lazy-imports its SDK at first use.
+
+`enable.cost(...)` accepts the same `detach` option for the same reasons. `enable.liveStatus` and `enable.flowchart` deliberately stay sync — UI render must feel responsive.
+
+## Cost tracking
+
+Pass a `pricingTable` to the Agent constructor and the framework emits `agentfootprint.cost.tick` after every LLM call with per-call and cumulative USD. Add a `costBudget` and you also get a one-shot `cost.limit_hit` the first time cumulative crosses the budget. The library never auto-aborts — *you* decide what to do (cancel via signal, escalate, log, etc.):
+
+<CodeFile path="examples/features/02-cost-tracking.ts" region="cost-tracking" title="examples/features/02-cost-tracking.ts (region: cost-tracking)" />
+
+## Event taxonomy
+
+```
+agentfootprint.<domain>.<event>
+```
+
+| Domain | Sample events | What it covers |
+|---|---|---|
+| `agent` | `turn_start` · `turn_end` · `iteration_start` · `iteration_end` · `route_decided` · `handoff` · `output_schema_validation_failed` · `thinking_parse_failed` | ReAct loop boundaries; `output_schema_validation_failed` fires inside the reliability gate when the LLM's final answer fails the agent's `outputSchema` (v2.13+) |
+| `composition` | `enter` · `exit` · `iteration_start` · `iteration_exit` · `fork_start` · `branch_complete` · `merge_end` · `route_decided` | Sequence / Parallel / Conditional / Loop lifecycles |
+| `context` | `injected` · `evaluated` · `evicted` · `slot_composed` · `budget_pressure` | Context engineering — every injection's full lifecycle |
+| `stream` | `llm_start` · `llm_end` · `token` · `tool_start` · `tool_end` · `thinking_delta` · `thinking_end` | Token-by-token + tool-call + thinking lifecycle |
+| `tools` | `offered` · `activated` · `deactivated` · `discovery_started` · `discovery_completed` · `discovery_failed` | ToolProvider activation per iteration (skills, gating); async-provider lifecycle (start/complete/fail with `durationMs`) |
+| `skill` | `activated` · `deactivated` | LLM-activated skill resolution |
+| `memory` | `attached` · `detached` · `written` · `strategy_applied` | Memory pipeline subflows |
+| `cost` | `tick` · `limit_hit` | Per-call USD + budget threshold crossings |
+| `permission` | `check` · `gate_opened` · `gate_closed` · `halt` | PermissionChecker decisions; `halt` fires when a checker terminates the run via sequence governance (v2.12+) |
+| `eval` | `score` · `threshold_crossed` | Custom quality / guardrail signals |
+| `embedding` | `generated` | Embedder calls (RAG / semantic memory) |
+| `pause` | `request` · `resume` | Human-in-the-loop checkpoints |
+| `error` | `fatal` · `recovered` · `retried` | Stage-level error events |
+| `fallback` | `triggered` | Schema-validation fallback chain |
+| `reliability` | `fail_fast` · `retried` · `recovered` | Reliability-gate primitives (rules-based loop, distinct from decorator-shaped `error.*`) |
+| `risk` | `flagged` | Eval guardrails flagging suspect output |
+
+Every event is exhaustively typed via `AgentfootprintEvent` (a discriminated union); your IDE autocompletes the payload shape based on the event name. **No string-parsing logs.** No "I think this means the tool was called."
+
+## Custom aggregations
+
+For aggregations the built-ins don't cover, subscribe to the typed events directly. `runner.on(type, fn)` returns an unsubscribe — the payload is fully typed by the event name:
+
+```ts
+let injections = 0;
+let totalOutputTokens = 0;
+
+const stopA = runner.on('agentfootprint.context.injected', (e) => {
+  // e.payload — { slot, source, contentSummary, asRole?, ... }
+  injections++;
+});
+
+const stopB = runner.on('agentfootprint.agent.turn_end', (e) => {
+  // e.payload — { turnIndex, finalContent, iterationCount, totalInputTokens, totalOutputTokens, durationMs }
+  totalOutputTokens += e.payload.totalOutputTokens;
+});
+
+// Or subscribe to a whole domain with a wildcard:
+const stopC = runner.on('agentfootprint.context.*', (e) => { /* every context.* event */ });
+
+// On shutdown:
+stopA(); stopB(); stopC();
+```
+
+`runner.attach(recorder)` is the lower-level path: it accepts a footprintjs `CombinedRecorder` that observes the **raw** footprintjs stream (`onWrite`, `onSubflowEntry`, `onDecision`, …) — not the grouped `agentfootprint.*` events. For agentfootprint's typed event taxonomy, prefer `runner.on(...)`. A `CombinedRecorder` discovers its handler methods via runtime method-shape detection — implement only the hooks you care about; ignore the rest.
+
+## OpenTelemetry
+
+`otelObservability` ships in `agentfootprint/observability-providers`. It maps agentfootprint events onto OTel spans following the [GenAI semantic conventions](https://opentelemetry.io/docs/specs/semconv/gen-ai/) (`gen_ai.*` attributes) via your own `@opentelemetry/api` tracer. Pair with `@opentelemetry/sdk-node` and your favorite exporter (Jaeger, Tempo, Datadog OTel collector, etc.):
+
+```ts
+import { otelObservability } from 'agentfootprint/observability-providers';
+import { microtaskBatchDriver } from 'footprintjs/detach';
+import { trace } from '@opentelemetry/api';
+
+const otel = otelObservability({
+  serviceName: 'my-agent',
+  tracer: trace.getTracer('my-agent', '1.0.0'),
+  // genAiSpanNames: true,  // opt-in spec span names ('chat gpt-4', 'execute_tool search', …)
+});
+const stop = agent.enable.observability({
+  strategy: otel,
+  detach: { driver: microtaskBatchDriver, mode: 'forget' },
+});
+```
+
+**Span tree** — one trace per turn: `invoke_agent` root (agent name, turn-total `gen_ai.usage.*` tokens) → `iteration:N` → `chat` spans per LLM call (`gen_ai.provider.name`, `gen_ai.request.model`, usage incl. cache tokens, `gen_ai.response.finish_reasons`) and `execute_tool` spans per tool call (`gen_ai.tool.name`, `gen_ai.tool.call.id`, parallel-safe correlation).
+
+**Explainability span events** (on by default; `explainability: false` to opt out) carry the decision trail a compliance reviewer needs: route decisions, skill-routing provenance (decision path + unlocked tools), tool-arg validation rejections, permission checks/halts, credential lifecycle. PII discipline mirrors the validation contract — tool args appear as key *names*, results as a *type*, prompts and LLM content never.
+
+For operator-level decide()/select() evidence (`creditScore gt 700 → 750 (true)`), attach the strategy's FlowRecorder bridge too:
+
+```ts
+const agent = Agent.create({ provider, model })
+  .recorder(otel.decisionEvidenceRecorder()) // decide()/select() evidence → span events
+  .build();
+```
+
+Runnable demo: [`examples/features/18-otel-genai.ts`](https://github.com/footprintjs/agentfootprint/blob/main/examples/features/18-otel-genai.ts).
+
+End-to-end compliance lighthouse — spans + tamper-evident audit export + causal memory feeding an OFFLINE auditor that explains a loan decline weeks later from persisted JSON alone: [`examples/features/20-regulated-decisioning.ts`](https://github.com/footprintjs/agentfootprint/blob/main/examples/features/20-regulated-decisioning.ts).
+
+## Anti-patterns
+
+- ❌ **Don't log every event** — dozens of typed events × N iterations × M agents = your log infra hates you. Filter to the domains you actually need.
+- ❌ **Don't subscribe in a hot loop** — `runner.on(...)` returns an unsubscribe; call it on shutdown. Forgotten subscriptions leak listeners across runs.
+- ❌ **Don't use `getNarrative()` as a log sink** — it's structured trace data, not log lines. Pass the entries to a real log/trace backend if you need to ship them.
+
+## Next steps
+
+- [Causal memory deep dive](/agentfootprint/causal-deep-dive/) — the trace as the agent's working memory
+- [Reliability gate](/agentfootprint/guides/reliability-gate/) — `agentfootprint.reliability.fail_fast` event semantics
+- [Streaming guide](/agentfootprint/guides/streaming/) — token-by-token rendering via `provider.stream()`

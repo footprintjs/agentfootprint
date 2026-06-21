@@ -1,11 +1,20 @@
 import defaultMdxComponents from 'fumadocs-ui/mdx';
 import * as Twoslash from 'fumadocs-twoslash/ui';
+import { CodeFile } from '@/components/CodeFile';
+import { Aside, Card, CardGrid, Tabs, TabItem } from '@/components/starlight-shims';
 import type { MDXComponents } from 'mdx/types';
 
 export function getMDXComponents(components?: MDXComponents): MDXComponents {
   return {
     ...defaultMdxComponents,
     ...Twoslash,
+    // code-from-source (anti-drift) + Starlight component shims for ported pages
+    CodeFile,
+    Aside,
+    Card,
+    CardGrid,
+    Tabs,
+    TabItem,
     ...components,
   };
 }

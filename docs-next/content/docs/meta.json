@@ -1,5 +1,4 @@
 {
-  "title": "agentfootprint",
-  "root": true,
-  "pages": ["index", "getting-started", "api", "..."]
+  "title": "Docs",
+  "pages": ["index", "getting-started", "..."]
 }

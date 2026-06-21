@@ -1,0 +1,151 @@
+---
+title: Deployment
+description: Multi-tenant identity at every store call, peer-dep declarations, mocks-first dev → real-infra prod swap. The patterns that take an agentfootprint app from laptop to production.
+---
+
+> Friday afternoon, 4:50 PM. You're about to push your agent service to production for the first time. **What's the checklist?** Not "did the tests pass" (CI proved that) — the higher-stakes things: tenant isolation, peer-dep installed, observability hooks wired, secrets out of the codebase. This guide is the checklist.
+
+## The mocks-first → prod-swap workflow
+
+If you developed against the [mocks-first stack](/agentfootprint/getting-started/quick-start/), the deployment is mechanical:
+
+| Boundary | Dev (mock) | Prod (one-line swap) |
+|---|---|---|
+| LLM provider | `mock({ reply })` | `anthropic({...})` · `openai({...})` · `bedrock({...})` |
+| Embedder | `mockEmbedder()` | OpenAI / Cohere / Bedrock embedder factory (on the roadmap) |
+| Memory store | `InMemoryStore` | `RedisStore` · `AgentCoreStore` (both from `agentfootprint/memory-providers`) |
+| MCP server | `mockMcpClient({ tools })` | `mcpClient({ transport })` |
+| Tool execute | inline closure | real implementation |
+
+The flowchart, recorders, narrative, tests don't change. **Ship the patterns first; pay for tokens last.**
+
+## Production checklist
+
+### 1. Multi-tenant identity at every `agent.run()`
+
+Every memory call namespaces by `MemoryIdentity`. When you omit `identity`, the agent defaults to `{ conversationId: '<runId>' }` — fine for prototypes, but it isolates by run rather than by tenant, so it's DANGEROUS in production multi-tenant apps. Pass per-tenant identity at every call site:
+
+```ts
+const identity = {
+  tenant: req.tenantId,
+  principal: req.userId,
+  conversationId: req.threadId,
+};
+await agent.run({ message: req.body.message, identity });
+```
+
+A bug that omits `tenant` surfaces as "no data found" — never as a cross-tenant leak. Adapters refuse cross-tenant reads at the storage boundary.
+
+### 2. Peer-dep SDKs installed
+
+agentfootprint declares optional SDKs in `peerDependenciesMeta`. Install only what you use:
+
+```bash
+npm install agentfootprint footprintjs   # core (always)
+npm install @anthropic-ai/sdk            # if using anthropic()
+npm install openai                       # if using openai()
+npm install @aws-sdk/client-bedrock-runtime              # if using bedrock()
+npm install ioredis                                      # if using RedisStore
+npm install @aws-sdk/client-bedrock-agent-runtime        # if using AgentCoreStore
+npm install @modelcontextprotocol/sdk                    # if using mcpClient()
+```
+
+Lazy-required at first call with friendly install hints. `npm install agentfootprint` on its own works for mocks-first dev.
+
+The vendor-SDK provider factories live on the `agentfootprint/llm-providers` subpath — the main barrel only exports the zero-peer-dep providers (`mock`, `browserAnthropic`, `browserOpenai`, `createProvider`):
+
+```ts
+import { anthropic, openai, bedrock } from 'agentfootprint/llm-providers';
+```
+
+### 3. Secrets in env, not code
+
+Provider factories accept `apiKey` as a constructor arg — pass via `process.env`:
+
+```ts
+const provider = anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
+```
+
+Never commit keys. Use a secrets manager (AWS Secrets Manager, HashiCorp Vault, Doppler, etc.) for production.
+
+### 4. Observability hooks wired
+
+Pick one per concern:
+
+- **Status line** — `agent.enable.liveStatus({ strategy: chatBubbleLiveStatus({ onLine }) })` (terminal UIs, chat typing indicators)
+- **Structured logs** — `agent.enable.observability({ strategy: consoleObservability() })` (pino, winston, console, vendor backends)
+- **Cost tracking** — pass `pricingTable` + `costBudget` to `Agent.create()`
+- **Custom recorders** — `agent.attach(myRecorder)` for aggregation
+
+See [Observability guide](/agentfootprint/guides/observability/) for the full surface.
+
+### 5. Resilience decorators wrapping the provider
+
+Production providers should be wrapped:
+
+```ts
+import { withRetry, withFallback } from 'agentfootprint/resilience';
+
+const provider = withRetry(
+  withFallback(
+    anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! }),
+    openai({ apiKey: process.env.OPENAI_API_KEY! }),
+  ),
+  { maxAttempts: 5 },
+);
+```
+
+See [Resilience guide](/agentfootprint/guides/resilience/) for the `withRetry` / `withFallback` / `fallbackProvider` / `withCircuitBreaker` decorators.
+
+### 6. Pause/resume infrastructure
+
+If your agent uses `pauseHere` or `askHuman`, wire the checkpoint persistence + resume path:
+
+```ts
+// On pause
+const result = await agent.run({...});
+if (isPaused(result)) {
+  await db.save('pause:' + sessionId, JSON.stringify(result.checkpoint));
+  triggerHumanWorkflow(result.pauseData);
+  return; // request done
+}
+
+// On human reply (different process / day)
+const checkpoint = JSON.parse(await db.get('pause:' + sessionId));
+const finalResult = await agent.resume(checkpoint, humanAnswer);
+```
+
+See [Pause/Resume guide](/agentfootprint/guides/pausable/).
+
+## Multi-instance considerations
+
+- **CircuitBreaker state** is per-process today. Each `withCircuitBreaker(...)` (from `agentfootprint/resilience`) holds its own counters, so multi-instance deploys won't share circuit state. No distributed/shared-state option yet — acceptable when each instance trips independently.
+- **Memory stores** are inherently multi-instance friendly when backed by Redis / AgentCore / external DBs.
+- **Pause/resume checkpoints** are JSON; any instance can resume any pause given the checkpoint.
+
+## Now shipped
+
+The reliability + governance surfaces that were once roadmap items are live:
+
+- **Cost-budget enforcement** — pass `pricingTable` + `costBudget` to `Agent.create()`; the agent emits cost ticks and halts when the per-run USD budget is hit.
+- **Output fallback** — `OutputFallbackOptions` / `OutputFallbackFn` recover from schema-parse failures (see the [Output Schema guide](/agentfootprint/guides/output-schema/)).
+- **Permission policy** — `PermissionPolicy.fromRoles(...)` (from `agentfootprint/security`) gates tool calls IAM-style; see the [Security guide](/agentfootprint/guides/security/).
+- **Circuit breaker** — `withCircuitBreaker(...)` from `agentfootprint/resilience`.
+
+## What's NOT here yet
+
+- Distributed/shared CircuitBreaker state across instances
+- OpenAI / Cohere / Bedrock embedder factories (only `mockEmbedder` ships today)
+- DynamoDB / Postgres / Pinecone memory adapters (only `RedisStore` + `AgentCoreStore` ship)
+
+## Anti-patterns
+
+- Don't wire production keys into your test suite. Use `mock(...)` for tests; reserve real keys for staged env.
+- Don't omit identity in production. Default-global is a footgun.
+- Don't cache the agent instance across requests when memory is involved. Build fresh per request; the memory layer handles state.
+
+## Next steps
+
+- [Quick Start](/agentfootprint/getting-started/quick-start/) — the mocks-first workflow
+- [Memory store adapters](/agentfootprint/integrations/memory-stores/) — production backend matrix
+- [Resilience guide](/agentfootprint/guides/resilience/) — production-grade decorators
