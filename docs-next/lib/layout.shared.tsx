@@ -1,4 +1,5 @@
 import type { BaseLayoutProps } from 'fumadocs-ui/layouts/shared';
+import { asset } from './site';
 
 // Inline GitHub mark — lucide-react dropped brand icons, so we ship our own.
 function GitHubIcon() {
@@ -16,7 +17,7 @@ function Wordmark() {
   return (
     <span className="af-wordmark">
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src="/footprint-logo.png" alt="" className="af-wordmark-icon" aria-hidden="true" />
+      <img src={asset('/footprint-logo.png')} alt="" className="af-wordmark-icon" aria-hidden="true" />
       <span className="lo">agent</span>
       <span className="hi">footprint</span>
     </span>

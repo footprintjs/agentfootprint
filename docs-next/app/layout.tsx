@@ -2,7 +2,7 @@ import './global.css';
 import { RootProvider } from 'fumadocs-ui/provider/next';
 import type { ReactNode } from 'react';
 import type { Metadata } from 'next';
-import { SITE } from '@/lib/site';
+import { SITE, asset } from '@/lib/site';
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE.url),
@@ -34,9 +34,10 @@ export const metadata: Metadata = {
     images: [`${SITE.url}/opengraph-image`],
   },
   icons: {
-    icon: '/footprint-logo.png',
-    shortcut: '/footprint-logo.png',
-    apple: '/mascot.png',
+    // asset() adds the deploy basePath — Next does NOT prefix metadata icon URLs.
+    icon: asset('/footprint-logo.png'),
+    shortcut: asset('/footprint-logo.png'),
+    apple: asset('/mascot.png'),
   },
   robots: {
     index: true,
@@ -55,7 +56,12 @@ export default function Layout({ children }: { children: ReactNode }) {
   return (
     <html lang="en" suppressHydrationWarning>
       <body className="flex flex-col min-h-screen">
-        <RootProvider>{children}</RootProvider>
+        {/* Static (client-side Orama) search over the prerendered /static.json index.
+            `from` is basePath-aware: the static client uses a raw fetch() that Next does
+            NOT prefix, so we build the URL via asset() for the GitHub-Pages sub-path. */}
+        <RootProvider search={{ options: { type: 'static', api: asset('/static.json') } }}>
+          {children}
+        </RootProvider>
       </body>
     </html>
   );

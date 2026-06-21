@@ -2,7 +2,7 @@ import Link from 'next/link';
 import type { Metadata } from 'next';
 import { Chapters } from '@/components/home/Chapters';
 import { HeroTrace } from '@/components/home/HeroTrace';
-import { SITE } from '@/lib/site';
+import { SITE, asset } from '@/lib/site';
 
 const HOME_TITLE = 'agentfootprint — Find the context that made your agent answer wrong';
 const HOME_DESC =
@@ -93,7 +93,7 @@ export default function HomePage() {
       <section className="af-hero">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
-          src="/mascot.png"
+          src={asset('/mascot.png')}
           alt="agentfootprint mascot — it pulls scattered context in and hands back clean, traceable slots"
           className="af-hero-mascot"
         />
@@ -186,7 +186,7 @@ export default function HomePage() {
         </p>
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
-          src="/system-overview.webp"
+          src={asset('/system-overview.webp')}
           alt="agentfootprint system overview: context sources compose through the agent into the system, messages, and tools slots, then the LLM produces a structured answer"
           className="af-overview-img"
         />
@@ -231,7 +231,7 @@ export default function HomePage() {
           >
             Built on
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/footprintjs-icon.png" alt="" className="af-fpjs-icon" />
+            <img src={asset('/footprintjs-icon.png')} alt="" className="af-fpjs-icon" />
             <span className="af-fpjs-word">
               footprint<em>js</em>
             </span>

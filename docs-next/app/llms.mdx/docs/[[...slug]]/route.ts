@@ -20,5 +20,15 @@ export async function GET(
 }
 
 export function generateStaticParams() {
-  return source.generateParams();
+  const params = source.generateParams();
+  // Static export writes each route handler to a FILE at out/<path>. A page whose path is
+  // also the parent of other pages (a folder-index, e.g. /docs or /docs/api) would need to
+  // be both a file and a directory → EISDIR. Skip those here; their content is still served
+  // whole by /llms.txt + /llms-full.txt. Leaf pages (the vast majority) keep per-page .mdx.
+  const keys = params.map((p) => (p.slug ?? []).join('/'));
+  return params.filter((p) => {
+    const k = (p.slug ?? []).join('/');
+    const prefix = k === '' ? '' : `${k}/`;
+    return !keys.some((other) => other !== k && other.startsWith(prefix));
+  });
 }

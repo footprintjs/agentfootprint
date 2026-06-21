@@ -40,3 +40,12 @@ export const SITE = {
 
 /** Build an absolute site URL from a root-relative path (`/docs/...`). */
 export const abs = (path: string) => `${SITE.url}${path.startsWith('/') ? path : `/${path}`}`;
+
+/**
+ * Deploy base path (GitHub-Pages project sub-path). Empty in local dev. Set via
+ * NEXT_PUBLIC_BASE_PATH at the static-export build. Next prepends basePath to
+ * <Link>/<Image>, but NOT to raw <img src> or client `fetch()` — so use `asset()`
+ * for public/ assets and prefix any hand-built fetch URL (e.g. the static search index).
+ */
+export const BASE_PATH = process.env.NEXT_PUBLIC_BASE_PATH ?? '';
+export const asset = (path: string) => `${BASE_PATH}${path.startsWith('/') ? path : `/${path}`}`;

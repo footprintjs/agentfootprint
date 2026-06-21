@@ -1,10 +1,15 @@
 name: Deploy Docs
 
+# Builds the docs-next site (homepage + Fumadocs docs) as a static export and deploys
+# it to GitHub Pages at https://footprintjs.github.io/agentfootprint/.
 on:
   push:
     branches: [main]
     paths:
-      - 'docs-site/**'
+      - 'docs-next/**'
+      - 'src/**' # API reference is generated from source
+      - 'scripts/gen-fumadocs-api.mjs'
+      - '.github/workflows/docs.yml'
   workflow_dispatch:
 
 permissions:
@@ -25,21 +30,36 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
-          cache-dependency-path: docs-site/package-lock.json
 
-      - name: Install docs-site dependencies
-        run: npm ci
-        working-directory: docs-site
-
-      - name: Build Starlight site
+      # The library itself: docs-next's twoslash code-checks and the generated API
+      # reference both resolve against agentfootprint's built types (dist/), so build it.
+      - name: Install library deps
+        run: npm install
+      - name: Build library (dist types for twoslash + API gen)
         run: npm run build
-        working-directory: docs-site
+
+      - name: Install docs-next deps
+        working-directory: docs-next
+        run: npm install
+
+      # Static export with the GitHub-Pages project base path. EXPORT=true flips
+      # next.config to output:'export'; NEXT_PUBLIC_BASE_PATH feeds both the router
+      # basePath and lib/site.ts asset() so every URL is correctly prefixed.
+      - name: Build static export
+        working-directory: docs-next
+        env:
+          EXPORT: 'true'
+          NEXT_PUBLIC_BASE_PATH: '/agentfootprint'
+        run: npm run build
+
+      # GitHub Pages must not run Jekyll (it would drop the _next/ underscore dir).
+      - name: Disable Jekyll
+        run: touch docs-next/out/.nojekyll
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: docs-site/dist
+          path: docs-next/out
 
   deploy:
     needs: build
