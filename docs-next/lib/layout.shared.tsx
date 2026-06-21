@@ -20,6 +20,11 @@ export function baseOptions(): BaseLayoutProps {
     },
     links: [
       {
+        text: 'Docs',
+        url: '/docs',
+        active: 'nested-url',
+      },
+      {
         type: 'icon',
         icon: <GitHubIcon />,
         text: 'GitHub',

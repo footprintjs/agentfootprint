@@ -6,27 +6,212 @@
 /* Tailwind 4 needs to scan fumadocs-ui's compiled classes */
 @source '../node_modules/fumadocs-ui/dist/**/*.js';
 
-/* ── Boxed layout (docs.llmgateway.io style): soft grey page + sidebar,
-      content floats in a centered, elevated card ── */
+/* ============================================================
+   agentfootprint identity — WHITE background + YELLOW accent
+   (palette from the hexavisage site). Shared by homepage + docs.
+   Yellow is an ACCENT FILL (CTA, highlighter, active states) on a
+   clean white site with near-black ink — NOT low-contrast yellow text.
+   ============================================================ */
 :root {
-  --color-fd-background: hsl(240 5% 96%);
+  --bg: #ffffff;
+  --bg-elev: #ffffff;
+  --fg: #18181b;
+  --fg-muted: #737373;
+  --fg-faint: #a3a3a3;
+  --border: #e7e7e4;
+  --border-strong: #d4d4d0;
+  --yellow: #ffc700;
+  --yellow-dark: #e6b400;
+  --yellow-light: #ffd333;
 }
 .dark {
-  --color-fd-background: hsl(240 6% 8%);
+  --bg: #0a0a0b;
+  --bg-elev: #141416;
+  --fg: #fafafa;
+  --fg-muted: #a1a1a1;
+  --fg-faint: #6b6b6b;
+  --border: #262628;
+  --border-strong: #3a3a3d;
+  --yellow: #ffc700;
+  --yellow-dark: #e6b400;
+  --yellow-light: #ffd333;
+}
+/* map the brand onto Fumadocs so the docs wear the same skin */
+:root,
+.dark {
+  --color-fd-background: var(--bg);
+  --color-fd-foreground: var(--fg);
+  --color-fd-muted-foreground: var(--fg-muted);
+  --color-fd-border: var(--border);
+  --color-fd-card: var(--bg-elev);
 }
 
-/* the content article becomes a centered, elevated card on the grey page */
+/* docs: boxed content card floating on the page */
 #nd-page {
   background: var(--color-fd-card);
   border: 1px solid var(--color-fd-border);
   border-radius: 14px;
   box-shadow:
     0 1px 3px rgb(0 0 0 / 0.04),
-    0 14px 36px -10px rgb(0 0 0 / 0.1);
+    0 14px 36px -12px rgb(0 0 0 / 0.08);
   margin-block: 1.25rem;
 }
-
-/* sidebar + TOC sit directly on the grey page, not their own card */
 #nd-sidebar {
-  background: var(--color-fd-background);
+  background: var(--bg);
+}
+
+/* ============================================================
+   Homepage. Header/footer come from Fumadocs HomeLayout.
+   ============================================================ */
+.af-home {
+  background: var(--bg);
+  color: var(--fg);
+}
+.af-hero {
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 96px 28px 64px;
+  text-align: center;
+}
+.af-hero h1 {
+  font-weight: 600;
+  font-size: clamp(38px, 6.4vw, 76px);
+  line-height: 1.08;
+  letter-spacing: -0.035em;
+  margin: 0 0 26px;
+  text-wrap: balance;
+}
+/* yellow highlighter behind the key phrase — readable + unmistakably the brand */
+.af-hero h1 em {
+  font-style: normal;
+  color: var(--fg);
+  background: linear-gradient(
+    transparent 58%,
+    color-mix(in oklab, var(--yellow) 85%, transparent) 58%
+  );
+  padding: 0 0.04em;
+}
+.af-hero .lede {
+  font-size: 19px;
+  line-height: 1.55;
+  color: var(--fg-muted);
+  max-width: 56ch;
+  margin: 0 auto 28px;
+  text-wrap: pretty;
+}
+.af-hero .tagline {
+  font-family: var(--fd-font-mono, "JetBrains Mono", ui-monospace, monospace);
+  font-size: 15px;
+  color: var(--fg-muted);
+}
+.af-hero .tagline em {
+  font-style: normal;
+  color: var(--fg);
+  box-shadow: inset 0 -0.42em 0 color-mix(in oklab, var(--yellow) 70%, transparent);
+}
+
+/* Chapters — sticky bar under the nav, highlights in brand yellow when active */
+.af-chapter {
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 0 28px 28px;
+}
+.af-chapter-bar {
+  position: sticky;
+  top: var(--fd-nav-height, 56px);
+  z-index: 20;
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  padding: 14px 0;
+  background: color-mix(in oklab, var(--bg) 88%, transparent);
+  backdrop-filter: saturate(140%) blur(8px);
+  -webkit-backdrop-filter: saturate(140%) blur(8px);
+  border-top: 1px solid var(--border);
+  box-shadow: inset 0 -2px 0 transparent;
+  transition: box-shadow 0.2s ease;
+}
+.af-chapter.is-active .af-chapter-bar {
+  box-shadow: inset 0 -2px 0 var(--yellow);
+}
+.af-chapter-bar .ix {
+  font-family: var(--fd-font-mono, monospace);
+  font-size: 12px;
+  color: var(--fg-faint);
+  transition: color 0.2s ease;
+}
+.af-chapter.is-active .af-chapter-bar .ix {
+  color: var(--fg);
+}
+.af-chapter-bar .ti {
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--fg-muted);
+  transition: color 0.2s ease;
+}
+.af-chapter.is-active .af-chapter-bar .ti {
+  color: var(--fg);
+}
+.af-chapter-bar .sub {
+  font-family: var(--fd-font-mono, monospace);
+  font-size: 12px;
+  color: var(--fg-faint);
+  margin-left: auto;
+}
+.af-chapter-stub {
+  min-height: 200px;
+  margin-top: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px dashed var(--border-strong);
+  border-radius: 14px;
+  color: var(--fg-faint);
+  font-family: var(--fd-font-mono, monospace);
+  font-size: 13px;
+}
+.af-endcap {
+  margin-top: 48px;
+  padding: 72px 22px;
+  text-align: center;
+  border-top: 1px solid var(--border);
+  background: var(--bg-elev);
+}
+/* the signature yellow button */
+.af-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  height: 44px;
+  padding: 0 22px;
+  border-radius: 9px;
+  background: var(--yellow);
+  color: #18181b;
+  font-size: 14px;
+  font-weight: 700;
+  transition: background 0.15s ease;
+}
+.af-cta:hover {
+  background: var(--yellow-dark);
+}
+.af-install {
+  display: inline-flex;
+  gap: 8px;
+  margin-top: 24px;
+  padding: 9px 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-family: var(--fd-font-mono, monospace);
+  font-size: 13px;
+  color: var(--fg);
+}
+.af-install .pr {
+  color: var(--yellow-dark);
+}
+.af-legal {
+  margin-top: 18px;
+  font-family: var(--fd-font-mono, monospace);
+  font-size: 11.5px;
+  color: var(--fg-faint);
 }
