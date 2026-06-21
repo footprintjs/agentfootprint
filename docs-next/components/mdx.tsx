@@ -3,6 +3,7 @@ import * as Twoslash from 'fumadocs-twoslash/ui';
 import { CodeFile } from '@/components/CodeFile';
 import { Aside, Card, CardGrid, Tabs, TabItem } from '@/components/starlight-shims';
 import { Diagram } from '@/components/Diagram';
+import { AgentFlowchart } from '@/components/AgentFlowchart';
 import type { MDXComponents } from 'mdx/types';
 
 export function getMDXComponents(components?: MDXComponents): MDXComponents {
@@ -17,6 +18,7 @@ export function getMDXComponents(components?: MDXComponents): MDXComponents {
     Tabs,
     TabItem,
     Diagram,
+    AgentFlowchart,
     ...components,
   };
 }
