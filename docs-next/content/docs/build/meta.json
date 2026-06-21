@@ -33,6 +33,7 @@
     "custom-provider",
     "---[HardDrive]Memory stores---",
     "memory-stores",
-    "agentcore"
+    "agentcore",
+    "infra"
   ]
 }

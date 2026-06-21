@@ -1,0 +1,144 @@
+---
+title: AWS Bedrock AgentCore
+description: agentfootprint's AgentCore adapter set — Memory, Identity, and Observability over the AgentCore data plane, tools over a Gateway's MCP endpoint, and Bedrock as the LLM. What's shipped, what you bridge yourself, and the one gotcha to know.
+---
+
+[Amazon Bedrock AgentCore](https://aws.amazon.com/bedrock/agentcore/) is AWS's managed
+runtime + primitives for agents (Memory, Identity, Gateway, Observability, Code Interpreter,
+Browser). agentfootprint is **framework-side** — it ships **adapters for the data-plane
+primitives** and consumes a Gateway over **MCP**. You bring the **control plane**
+(provisioning) and the **runtime host**; everything else is a [port](doc:adapters) you fill
+with an AgentCore adapter.
+
+<Callout type="info" title="Two AgentCore surfaces">
+**Control plane** (`bedrock-agentcore-control`) *creates* resources (`CreateMemory`,
+`CreateGateway`, `CreateWorkloadIdentity`, `CreateAgentRuntime`, …) — do this with the AWS
+SDK / CDK. **Data plane** (`bedrock-agentcore`) *uses* them at runtime — this is what
+agentfootprint's adapters wrap.
+</Callout>
+
+## Capability → adapter map
+
+| Capability | AgentCore API (plane → op) | agentfootprint | Status |
+|---|---|---|---|
+| **Memory — events** | data → `CreateEvent` / `GetEvent` / `ListEvents` / `DeleteEvent` | `AgentCoreStore` (`agentfootprint/memory-providers`) + `defineMemory({ store })` | ✅ shipped |
+| **Memory — semantic retrieve** | data → `RetrieveMemoryRecords` | *not wrapped yet (`agentcoreRetrieve()` planned)* | 🔴 bridge |
+| **Identity — workload token** | data → `GetWorkloadAccessToken[ForUserId]` | `agentCoreIdentity({ workloadName, userIdFor })` (`agentfootprint/identity`) | ✅ shipped |
+| **Identity — OAuth2 / API key** | data → `GetResourceOauth2Token` / `GetResourceApiKey` | `agentCoreIdentity()` | ✅ shipped |
+| **Gateway — consume tools** | Gateway exposes an **MCP** endpoint | `mcpClient(url).tools()` (`agentfootprint/tool-providers`) → `.toolProvider()` | ✅ shipped |
+| **Observability** | CloudWatch GenAI Observability + X-Ray (OTEL spans) | `agentcoreObservability()` (`agentfootprint/observability-providers`) | ✅ shipped |
+| **LLM** | Bedrock **Converse** | `bedrock()` (`agentfootprint/llm-providers`) | ✅ shipped |
+| **Control plane** (all `Create*`) | control → `Create*` | *use AWS SDK / CDK* | 🔴 bridge |
+| **Runtime harness** | Runtime HTTP contract (`/ping`, `/invocations`) | *no TS harness — host the agent yourself* | 🔴 bridge |
+| **Code Interpreter / Browser** | data → `Start*Session` | *wrap as a `defineTool` or MCP tool* | 🔴 bridge |
+
+## Memory — `AgentCoreStore`
+
+The store is just the **Memory-store port** pointed at an AgentCore Memory resource. Its
+methods map 1:1 to data-plane events; the agent code is identical to the in-memory version.
+
+```ts
+import { defineMemory, MEMORY_TYPES, MEMORY_STRATEGIES } from 'agentfootprint/memory';
+import { AgentCoreStore } from 'agentfootprint/memory-providers';
+
+const store = new AgentCoreStore({
+  memoryId: process.env.AGENTCORE_MEMORY_ID!,
+  region: 'us-west-2',
+});
+
+const memory = defineMemory({
+  id: 'conversation',
+  type: MEMORY_TYPES.EPISODIC,
+  strategy: { kind: MEMORY_STRATEGIES.WINDOW, size: 10 },
+  store,
+});
+
+Agent.create({ provider }).memory(memory).build();
+```
+
+- `put → CreateEvent`, `get → GetEvent`, `list → ListEvents`, `delete → DeleteEvent`,
+  `forget → DeleteSession`. The memory `identity` (`conversationId`) maps to the AgentCore
+  **sessionId**.
+- The full memory deep-dive lives in **[Memory store adapters](doc:agentcore)**.
+- `search()` (server-side semantic retrieval over `RetrieveMemoryRecords`) isn't wrapped
+  yet — use the `WINDOW` / `TOP_K` strategies until `agentcoreRetrieve()` lands.
+
+## Identity — `agentCoreIdentity`
+
+```ts
+import { agentCoreIdentity } from 'agentfootprint/identity';
+
+const credentials = agentCoreIdentity({
+  region: 'us-west-2',
+  workloadName: 'workflow_assistant_agent',
+  userIdFor: ({ principal }) => principal, // per-(workload, user) token vault
+});
+
+Agent.create({ provider, model, credentials }).build();
+```
+
+Resolves `GetWorkloadAccessTokenForUserId` / `GetResourceOauth2Token` at runtime. Swapping
+from dev static credentials to managed AgentCore identity is this one line — **no tool-code
+change**. Provisioning the providers (`CreateWorkloadIdentity`, `CreateOauth2CredentialProvider`)
+is control-plane → SDK / CDK.
+
+## Gateway — tools over MCP
+
+An AgentCore **Gateway** turns a Lambda / OpenAPI / Smithy / MCP target into a single **MCP**
+endpoint with Identity-brokered egress auth. agentfootprint *consumes* it through the
+Tools/Gateway port:
+
+```ts
+import { mcpClient, staticTools, gatedTools } from 'agentfootprint/tool-providers';
+
+const gateway = mcpClient(process.env.GATEWAY_MCP_URL!);
+const tools = gatedTools(gateway, (name) => allowed.has(name)); // optional RBAC
+
+Agent.create({ provider }).toolProvider(tools).build();
+```
+
+agentfootprint does **not** create Gateways (no control-plane client) — `CreateGateway` /
+`CreateGatewayTarget` are SDK / CDK.
+
+## Observability — `agentcoreObservability`
+
+```ts
+import { agentcoreObservability } from 'agentfootprint/observability-providers';
+import { microtaskBatchDriver } from 'footprintjs/detach';
+
+agent.enable.observability({
+  strategy: agentcoreObservability({ region: 'us-west-2', logGroupName: '/agentfootprint/assistant' }),
+  detach: { driver: microtaskBatchDriver, mode: 'forget' }, // keep the loop unblocked
+});
+```
+
+Ships the typed `AgentfootprintEvent` stream to CloudWatch in AgentCore's GenAI-Observability
+schema. `otelObservability()` / `cloudwatchObservability()` / `xrayObservability()` are the
+other adapters behind the same port.
+
+## The one gotcha — streaming + tool calls
+
+<Callout type="warn" title="bedrock().stream() drops tool calls">
+In **streaming** mode, `bedrock().stream()` returns `toolCalls: []` (it streams text but does
+not reconstruct `tool_use` from the deltas) — so a tool-using agent in streaming mode gets
+`stopReason: "tool_use"` with zero tool calls and finalizes empty. The provider's own
+fallback is to recover via `complete()`. Until reconstruction lands, route the streaming path
+through `complete()` for tool-using agents, or use `complete()` directly.
+</Callout>
+
+## What you bridge yourself
+
+agentfootprint is runtime-only, so these are yours (the AgentCore toolkit is Python; there is
+no JS harness):
+
+- **Control plane** — every `Create*` (Runtime, Memory, Gateway, WorkloadIdentity) via SDK / CDK.
+- **Runtime host** — the `:8080` `/ping` + `/invocations` HTTP contract around `agent.run()`
+  (e.g. a small Fastify/Express service or container).
+- **`RetrieveMemoryRecords`**, **Code Interpreter**, **Browser** — wrap as tools (`defineTool`
+  or an MCP server) for now.
+
+## Next steps
+
+- **[Ports & adapters](doc:adapters)** — the pattern this page is one instance of.
+- **[Memory store adapters](doc:agentcore)** — the AgentCore memory deep-dive.
+- **[Tool providers](doc:tool-providers)** · **[Observability](doc:observability)** · **[AWS Bedrock](doc:aws-bedrock)** (the LLM provider).

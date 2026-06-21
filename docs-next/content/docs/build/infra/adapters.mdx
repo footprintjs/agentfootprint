@@ -1,0 +1,70 @@
+---
+title: Ports & adapters — run on any infra
+description: agentfootprint is framework-side. Everything that touches your infrastructure — memory, identity, observability, tools — is a PORT with swappable ADAPTERS, so the same agent runs on AWS, GCP, Azure, or your own stack with a one-line change.
+---
+
+The agent loop is infrastructure-agnostic on purpose. agentfootprint owns the
+*reasoning* (context engineering + the ReAct loop) and exposes a small set of **ports**
+for everything that touches your infrastructure. An **adapter** implements one port for
+one backend. Swap the adapter, keep the agent — that's how the *same* agent runs on AWS,
+GCP, Azure, or a single box.
+
+<Callout type="info" title="This is the classic ports-&-adapters pattern">
+Core stays free of vendor SDKs; each adapter is a thin shim around one provider. The agent
+depends on the **interface**, never the implementation — so a vendor swap never reaches your
+agent code.
+</Callout>
+
+## The four infra ports
+
+| Port | What it abstracts | Dev adapter | Prod adapters (examples) | Subpath |
+|---|---|---|---|---|
+| **Memory store** | where conversation + facts persist | `InMemoryStore` | `RedisStore`, `AgentCoreStore` | `agentfootprint/memory-providers` |
+| **Identity / credentials** | who the agent acts as + how it gets tokens | static creds | `agentCoreIdentity()` (workload + OAuth2) | `agentfootprint/identity` |
+| **Observability** | where the typed-event trace goes | console / recorder | `agentcoreObservability()`, `otelObservability()`, `cloudwatchObservability()` | `agentfootprint/observability-providers` |
+| **Tools / Gateway** | external capabilities the agent can call | `defineTool` (in-process) | `mcpClient(url)` over MCP (e.g. an AgentCore Gateway) | `agentfootprint/tool-providers` |
+| **LLM provider** | the model backend | `mock()` | `anthropic()`, `openai()`, `bedrock()`, `ollama()` | `agentfootprint/llm-providers` |
+
+The agent wires ports, not vendors:
+
+```ts
+const agent = Agent.create({ provider, model })   // LLM port
+  .memory(defineMemory({ store }))                  // Memory-store port
+  .toolProvider(toolProvider)                       // Tools/Gateway port
+  .build();
+```
+
+## One line per port, dev → prod
+
+The promise: **mock-first locally, real infra in prod — a one-line swap per port**, and the
+agent code in between never changes.
+
+```ts
+// dev — $0, offline, deterministic
+const store = new InMemoryStore();
+const provider = mock({ replies: [/* scripted */] });
+
+// prod — same agent, real infra (just these two lines change)
+const store = new AgentCoreStore({ memoryId: process.env.AGENTCORE_MEMORY_ID! });
+const provider = bedrock({ model: 'us.anthropic.claude-sonnet-4-5-20250929-v1:0' });
+```
+
+Because the core never imports a vendor SDK, each adapter declares its AWS/cloud SDK as an
+**optional peer dependency** — you install only the ones you use, and the main bundle stays
+lean.
+
+## Why this matters
+
+- **No lock-in.** Your agent isn't written against AWS or any cloud — it's written against
+  four interfaces. Moving clouds is an adapter change, not a rewrite.
+- **Testable by construction.** The dev adapters (`InMemoryStore`, `mock`, static creds) make
+  every agent runnable offline for `$0` — the same code path you ship.
+- **Composable.** Mix adapters freely: an AgentCore memory store with an Anthropic LLM and an
+  OTEL exporter is just three independent choices.
+
+## Concrete adapter sets
+
+- **[AWS Bedrock AgentCore](doc:bedrock-agentcore)** — the data-plane adapters (Memory,
+  Identity, Observability) + Gateway-over-MCP, what's shipped vs. what you bridge yourself.
+
+More clouds plug in the same way — each is a set of adapters behind the same four ports.
