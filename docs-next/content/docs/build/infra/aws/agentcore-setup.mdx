@@ -1,0 +1,219 @@
+---
+title: 'AgentCore: step by step'
+description: A hands-on walkthrough — build the agent mock-first, then swap one adapter at a time (Bedrock, AgentCore Memory, Identity, Gateway, Observability), host the Runtime contract, and deploy. The agent code never changes; only the adapters do.
+---
+
+This is the practical companion to the [AWS Bedrock AgentCore](doc:bedrock-agentcore)
+overview. The through-line is the [adapter pattern](doc:adapters): you build and prove the
+agent **locally with mock adapters**, then swap to AgentCore **one line at a time** — the
+agent logic in between never changes.
+
+<Callout type="info" title="What's agentfootprint vs. what's you">
+agentfootprint owns the **agent + the data-plane adapters** (steps 1–7). AWS provisioning
+(**control plane**) and the **Runtime host** are yours (steps 8–9) — there is no JS harness,
+so those steps are wiring, not library calls.
+</Callout>
+
+## Prerequisites
+
+- An AWS account with **Bedrock model access** (e.g. `us.anthropic.claude-sonnet-4-5`), a region (`us-west-2` here).
+- The AgentCore **resources provisioned** (control plane — Memory, WorkloadIdentity, Gateway). Do this with the AWS SDK or CDK; you'll reference them by id/ARN below.
+- Node 20+.
+
+## Step 1 — Install
+
+```bash
+npm install agentfootprint
+# optional AWS SDK peers — install only the adapters you use:
+npm install @aws-sdk/client-bedrock-runtime          # bedrock() LLM (Converse)
+npm install @aws-sdk/client-bedrock-agent-runtime     # AgentCoreStore (memory)
+npm install @aws-sdk/client-bedrock-agentcore         # agentCoreIdentity
+npm install @aws-sdk/client-cloudwatch-logs           # agentcoreObservability
+```
+
+The core never imports a vendor SDK — each adapter declares its AWS client as an **optional
+peer**, so the bundle stays lean and you pull only what you wire.
+
+## Step 2 — Build it mock-first ($0, offline)
+
+Prove the whole agent with **dev adapters** before touching AWS. This is the exact code path
+you ship — only the adapters change later.
+
+```ts
+import { Agent, mock, defineTool, defineMemory, MEMORY_TYPES, MEMORY_STRATEGIES, InMemoryStore } from 'agentfootprint';
+
+const weather = defineTool({
+  name: 'weather',
+  description: 'Get current weather for a city.',
+  inputSchema: { type: 'object', properties: { city: { type: 'string' } }, required: ['city'] },
+  execute: async (a) => `${(a as { city: string }).city}: sunny, 72°F`,
+});
+
+const memory = defineMemory({
+  id: 'conversation',
+  type: MEMORY_TYPES.EPISODIC,
+  strategy: { kind: MEMORY_STRATEGIES.WINDOW, size: 10 },
+  store: new InMemoryStore(),                         // ← dev adapter
+});
+
+export function buildAgent(provider = mock({ replies: [
+  { toolCalls: [{ id: '1', name: 'weather', args: { city: 'San Francisco' } }] },
+  { content: 'San Francisco: sunny, 72°F.' },
+]}) ) {
+  return Agent.create({ provider, model: 'mock', maxIterations: 8 })
+    .system('You answer weather questions using the `weather` tool.')
+    .tool(weather)
+    .memory(memory)
+    .build();
+}
+```
+
+```ts
+const agent = buildAgent();
+console.log(await agent.run({ message: 'Weather in SF?', identity: { conversationId: 'c1' } }));
+```
+
+## Step 3 — Real model: Bedrock
+
+Swap `mock()` → `bedrock()`. **One line.**
+
+```ts
+import { bedrock } from 'agentfootprint/llm-providers';
+
+const provider = bedrock({ region: 'us-west-2', model: 'us.anthropic.claude-sonnet-4-5-20250929-v1:0' });
+const agent = buildAgent(provider);
+```
+
+<Callout type="warn" title="Streaming + tools">
+`bedrock().stream()` returns `toolCalls: []` (it streams text but doesn't reconstruct
+`tool_use` from deltas). For a tool-using agent, use `complete()` (non-streaming) until
+delta reconstruction lands, or your first tool call will be dropped. See the
+[overview](doc:bedrock-agentcore) gotcha.
+</Callout>
+
+## Step 4 — Memory on AgentCore
+
+Swap `InMemoryStore` → `AgentCoreStore` pointed at your Memory resource. **One line** — the
+`defineMemory(...)` strategy and the agent are unchanged.
+
+```ts
+import { AgentCoreStore } from 'agentfootprint/memory-providers';
+
+const memory = defineMemory({
+  id: 'conversation',
+  type: MEMORY_TYPES.EPISODIC,
+  strategy: { kind: MEMORY_STRATEGIES.WINDOW, size: 10 },
+  store: new AgentCoreStore({ memoryId: process.env.AGENTCORE_MEMORY_ID!, region: 'us-west-2' }),
+});
+```
+
+`put/get/list/delete/forget` map to `CreateEvent/GetEvent/ListEvents/DeleteEvent/DeleteSession`;
+the `identity.conversationId` is the AgentCore **sessionId**. (Server-side semantic retrieve,
+`RetrieveMemoryRecords`, isn't wrapped yet — use `WINDOW` / `TOP_K`.) Deep dive:
+[Memory store adapters](doc:agentcore).
+
+## Step 5 — Identity
+
+Swap dev credentials → managed AgentCore identity. **One line**, no tool-code change.
+
+```ts
+import { agentCoreIdentity } from 'agentfootprint/identity';
+
+const credentials = agentCoreIdentity({
+  region: 'us-west-2',
+  workloadName: 'workflow_assistant_agent',
+  userIdFor: ({ principal }) => principal,
+});
+
+Agent.create({ provider, model, credentials }) /* … */ .build();
+```
+
+## Step 6 — Tools via a Gateway
+
+If your tools live behind an AgentCore **Gateway** (Lambda / OpenAPI / MCP target), consume
+its MCP endpoint through the Tools port:
+
+```ts
+import { mcpClient, gatedTools } from 'agentfootprint/tool-providers';
+
+const gateway = mcpClient(process.env.GATEWAY_MCP_URL!);
+Agent.create({ provider }).toolProvider(gatedTools(gateway, (n) => allowed.has(n))).build();
+```
+
+## Step 7 — Observability
+
+```ts
+import { agentcoreObservability } from 'agentfootprint/observability-providers';
+import { microtaskBatchDriver } from 'footprintjs/detach';
+
+agent.enable.observability({
+  strategy: agentcoreObservability({ region: 'us-west-2', logGroupName: '/agentfootprint/assistant' }),
+  detach: { driver: microtaskBatchDriver, mode: 'forget' },
+});
+```
+
+## Step 8 — Host the Runtime contract (the bridge)
+
+AgentCore Runtime calls a container over a fixed HTTP contract: `GET /ping` (health) and
+`POST /invocations` (run) on port `8080`. There's **no JS harness**, so you write a tiny host
+around `agent.run()`:
+
+```ts
+import { createServer } from 'node:http';
+
+const agent = buildAgent(provider);
+
+createServer(async (req, res) => {
+  if (req.method === 'GET' && req.url === '/ping') {
+    res.writeHead(200).end('OK');
+    return;
+  }
+  if (req.method === 'POST' && req.url === '/invocations') {
+    let body = '';
+    for await (const chunk of req) body += chunk;
+    const { message, sessionId } = JSON.parse(body || '{}');
+    const result = await agent.run({ message, identity: { conversationId: sessionId ?? 'default' } });
+    res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ result }));
+    return;
+  }
+  res.writeHead(404).end();
+}).listen(8080);
+```
+
+(Use Fastify/Express if you prefer — the contract is just those two routes.)
+
+## Step 9 — Provision & deploy (control plane — your CDK/SDK)
+
+This part is AWS, not agentfootprint: package the host as a container, then
+`CreateAgentRuntime` / `UpdateAgentRuntime` to point AgentCore at it (and create the Memory,
+WorkloadIdentity, and Gateway resources you referenced above). Use the AWS SDK
+(`@aws-sdk/client-bedrock-agentcore-control`) or CDK. See the
+[AgentCore docs](https://docs.aws.amazon.com/bedrock-agentcore/).
+
+## Step 10 — Verify
+
+Invoke the deployed runtime (`InvokeAgentRuntime`, SigV4) — or hit your host directly while
+testing — and confirm a two-turn conversation **recalls** across turns (memory) and that the
+tool fires. Locally:
+
+```ts
+const a = buildAgent(provider);
+const id = { conversationId: 'verify-1' };
+await a.run({ message: 'My order id is 4471.', identity: id });
+console.log(await a.run({ message: 'What was my order id?', identity: id })); // → recalls 4471
+```
+
+## Recap — what changed vs. what didn't
+
+| Step | What you swapped | Lines changed |
+|---|---|---|
+| 3 | LLM → `bedrock()` | 1 |
+| 4 | store → `AgentCoreStore` | 1 |
+| 5 | creds → `agentCoreIdentity()` | 1 |
+| 6 | tools → `mcpClient()` gateway | 1 |
+| 7 | observability → `agentcoreObservability()` | 1 |
+| 8–9 | **host + deploy** (the bridge) | yours |
+
+The agent's logic — system prompt, tools, memory strategy, ReAct loop — **never changed**.
+That's the [adapter pattern](doc:adapters) paying off: the same agent runs on `mock` +
+`InMemoryStore` locally and on Bedrock + AgentCore in production.
