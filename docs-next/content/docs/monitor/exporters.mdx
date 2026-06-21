@@ -1,0 +1,134 @@
+---
+title: 'Exporters: AgentCore & OTEL'
+description: Step-by-step — ship the agent's typed event trace to AWS AgentCore Observability (CloudWatch GenAI) and to OpenTelemetry. Observability is a port; pick an exporter strategy and mount it with agent.enable.observability().
+---
+
+agentfootprint emits a typed `AgentfootprintEvent` stream for every run. **Where that stream
+goes is a [port](doc:adapters)** — you pick an *exporter strategy* and mount it. The agent
+doesn't change; only the destination does.
+
+```ts
+const stop = agent.enable.observability({ strategy /* , detach */ });
+// … run the agent …
+stop(); // unsubscribe (the call returns a stop fn)
+```
+
+Multi-exporter is just multiple calls — each subscribes independently:
+
+```ts
+agent.enable.observability({ strategy: agentcore });
+agent.enable.observability({ strategy: otel });
+```
+
+| Exporter | Strategy factory | Ships to |
+|---|---|---|
+| **AgentCore Observability** | `agentcoreObservability()` | CloudWatch Logs, **GenAI Observability** schema |
+| **OpenTelemetry** | `otelObservability()` | any OTLP backend (Collector → X-Ray / AgentCore / Honeycomb / …) |
+| CloudWatch (generic) | `cloudwatchObservability()` | CloudWatch Logs |
+| X-Ray | `xrayObservability()` | AWS X-Ray traces |
+| Audit bundle | `auditExport()` + `verifyAuditBundle()` | tamper-evident hash-chained file |
+
+All ship from `agentfootprint/observability-providers`. This is the Monitoring-side how-to;
+for the full AgentCore picture see **[AWS Bedrock AgentCore](doc:bedrock-agentcore)** and the
+[adapter pattern](doc:adapters); for the event taxonomy + recorders see
+**[Observability](doc:observability)**.
+
+<Callout type="info" title="Keep the loop unblocked">
+Exporters that do network I/O (CloudWatch, OTLP) should be **detached** so a slow backend
+never stalls the agent: pass `detach: { driver: microtaskBatchDriver, mode: 'forget' }`, and
+drain on shutdown with `flushAllDetached()`.
+</Callout>
+
+## Connect AWS AgentCore Observability
+
+Ships the trace to CloudWatch Logs in AgentCore's **GenAI Observability** schema (the
+dashboard + X-Ray correlation light up from there).
+
+### 1. Install the peer
+
+```bash
+npm install @aws-sdk/client-cloudwatch-logs   # optional peer for the CloudWatch exporters
+```
+
+### 2. Mount the strategy
+
+```ts
+import { agentcoreObservability } from 'agentfootprint/observability-providers';
+import { microtaskBatchDriver } from 'footprintjs/detach';
+
+const agentcore = agentcoreObservability({
+  region: 'us-west-2',
+  logGroupName: '/agentfootprint/workflow-assistant',
+  logStreamName: `${process.env.HOSTNAME ?? 'local'}/${Date.now()}`,
+});
+
+const stop = agent.enable.observability({
+  strategy: agentcore,
+  detach: { driver: microtaskBatchDriver, mode: 'forget' }, // non-blocking
+});
+```
+
+### 3. See it
+
+The run's events land in the log group; the **CloudWatch GenAI Observability** dashboard
+renders the agent/tool/LLM spans over them. The log group must exist (or the role must allow
+`logs:CreateLogGroup`) — provisioning is control-plane (CDK/SDK), same as the rest of the
+[AgentCore setup](doc:agentcore-setup).
+
+## Connect OpenTelemetry
+
+`otelObservability()` turns the event stream into a GenAI **span tree** on a tracer **you
+provide** (so you control the OTLP exporter + backend — Collector, X-Ray, AgentCore
+Observability's OTEL ingestion, Honeycomb, …).
+
+### 1. Install OTEL
+
+```bash
+npm install @opentelemetry/api @opentelemetry/sdk-trace-node @opentelemetry/exporter-trace-otlp-http
+```
+
+### 2. Stand up a tracer (once, at process start)
+
+```ts
+import { NodeTracerProvider, BatchSpanProcessor } from '@opentelemetry/sdk-trace-node';
+import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
+import { trace } from '@opentelemetry/api';
+
+const provider = new NodeTracerProvider();
+provider.addSpanProcessor(new BatchSpanProcessor(new OTLPTraceExporter({ url: process.env.OTLP_ENDPOINT })));
+provider.register();
+const tracer = trace.getTracer('workflow-assistant');
+```
+
+### 3. Mount the strategy
+
+```ts
+import { otelObservability } from 'agentfootprint/observability-providers';
+
+const otel = otelObservability({
+  serviceName: 'workflow-assistant',
+  tracer,
+  genAiSpanNames: true, // spec span names ('invoke_agent …', 'chat …', 'execute_tool …') + gen_ai.* attributes
+});
+
+const stop = agent.enable.observability({ strategy: otel });
+```
+
+Spans then flow wherever your OTLP pipeline points — including AWS X-Ray and AgentCore
+Observability, both of which ingest OTEL.
+
+## Both at once
+
+You don't have to choose — attach as many exporters as you want; each is independent:
+
+```ts
+agent.enable.observability({ strategy: agentcore, detach: { driver: microtaskBatchDriver, mode: 'forget' } });
+agent.enable.observability({ strategy: otel });
+agent.enable.observability({ strategy: auditExport({ /* … */ }) }); // tamper-evident copy for compliance
+```
+
+## Next steps
+
+- **[Observability](doc:observability)** — the typed event taxonomy + recorders the exporters consume.
+- **[AWS Bedrock AgentCore](doc:bedrock-agentcore)** · **[AgentCore: step by step](doc:agentcore-setup)** — the full AgentCore integration (this is Step 7 of it).
+- **[Ports & adapters](doc:adapters)** — why "where the trace goes" is a one-line swap.

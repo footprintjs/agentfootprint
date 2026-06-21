@@ -5,6 +5,12 @@ description: Typed event streams, recorders, and tier-3 enable.* helpers — obs
 
 > Logs that say *"agent ran"* are useless. Logs that say *"agent called `redact_pii({text: '...'})` and then injected the result into the messages slot before iteration 3, costing $0.0042"* let you debug a hallucination at 2 AM. The difference is whether observability is **structured + typed at the source** or **string-formatted at the sink**.
 
+<Callout type="info" title="Shipping it somewhere?">
+This page is the event taxonomy + recorders. To export the trace to a backend — **AWS
+AgentCore Observability (CloudWatch GenAI)** or **OpenTelemetry** — see
+**[Exporters: AgentCore & OTEL](doc:exporters)**.
+</Callout>
+
 ## Three workflows from one trace
 
 agentfootprint's observability isn't bolted on. The framework owns the loop, so every decision and execution is recorded *during* DFS traversal — not collected after the fact via spans. That single artifact serves three workflows:

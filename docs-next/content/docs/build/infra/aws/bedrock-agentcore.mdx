@@ -119,7 +119,8 @@ agent.enable.observability({
 
 Ships the typed `AgentfootprintEvent` stream to CloudWatch in AgentCore's GenAI-Observability
 schema. `otelObservability()` / `cloudwatchObservability()` / `xrayObservability()` are the
-other adapters behind the same port.
+other adapters behind the same port. Full step-by-step (AgentCore Observability **and** OTEL,
+multi-exporter, detach): **[Exporters: AgentCore & OTEL](doc:exporters)**.
 
 ## The one gotcha — streaming + tool calls
 
