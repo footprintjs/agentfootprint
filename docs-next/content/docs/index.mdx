@@ -1,17 +1,20 @@
 ---
 title: agentfootprint
-description: The explainable agent framework — build AI agents you can explain, audit, and trust. Built on footprintjs.
+description: Find the context that made your agent answer wrong.
 ---
 
 import { Cards, Card } from 'fumadocs-ui/components/card';
 
-**agentfootprint** is the explainable agent framework. You build agents from a few
-small primitives, and every run produces a **causal trace** you can inspect, replay,
-and reason over — by construction, not by bolting on logging after the fact.
+The **explainable agent framework**. Every run records its own **causal trace** —
+context, decisions, tool calls — as connected evidence. So when an answer is wrong,
+you **backtrack from the output to the exact piece of context that caused it**,
+confirmed by re-running without it.
+
+**Why is a query, not a guess.**
 
 It's built on [footprintjs](https://github.com/footprintjs/footPrint), runs
 **mock-first** (no API key, `$0`) for local development, and integrates Anthropic,
-OpenAI, and Bedrock when you're ready to go live.
+OpenAI, and Bedrock when you're ready to ship.
 
 ## The shape of it
 
@@ -26,7 +29,9 @@ OpenAI, and Bedrock when you're ready to go live.
 ## Start here
 
 <Cards>
-  <Card title="Getting started" href="/docs/getting-started" description="Your first agent in a few lines — mock-first, no API key." />
+  <Card title="Getting started" href="/docs/getting-started/quick-start" description="Your first agent in a few lines — mock-first, no API key." />
+  <Card title="Why is a query, not a guess" href="/docs/manifesto" description="The thesis: backtrack a wrong answer to its cause, with evidence." />
+  <Card title="API Reference" href="/docs/api" description="The full typed surface, auto-generated from source." />
   <Card title="GitHub" href="https://github.com/footprintjs/agentfootprint" description="Source, examples, and the issue tracker." />
 </Cards>
 
