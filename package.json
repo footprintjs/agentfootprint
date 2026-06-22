@@ -49,7 +49,7 @@
   },
   "scripts": {
     "clean": "rm -rf dist coverage node_modules package-lock.json",
-    "build": "tsc && tsc -p tsconfig.esm.json && node scripts/postbuild-esm.mjs",
+    "build": "rm -rf dist && tsc && tsc -p tsconfig.esm.json && node scripts/postbuild-esm.mjs",
     "watch": "tsc -w",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage --coverage.reporter=json-summary --coverage.reporter=text-summary --coverage.reportsDirectory=coverage",
@@ -88,96 +88,241 @@
   "types": "dist/types/index.d.ts",
   "exports": {
     ".": {
-      "types": "./dist/types/index.d.ts",
-      "import": "./dist/esm/index.js",
-      "require": "./dist/index.js"
+      "import": {
+        "types": "./dist/esm/index.d.ts",
+        "default": "./dist/esm/index.js"
+      },
+      "require": {
+        "types": "./dist/types/index.d.ts",
+        "default": "./dist/index.js"
+      }
     },
     "./memory": {
-      "types": "./dist/types/memory/index.d.ts",
-      "import": "./dist/esm/memory/index.js",
-      "require": "./dist/memory/index.js"
+      "import": {
+        "types": "./dist/esm/memory/index.d.ts",
+        "default": "./dist/esm/memory/index.js"
+      },
+      "require": {
+        "types": "./dist/types/memory/index.d.ts",
+        "default": "./dist/memory/index.js"
+      }
     },
     "./llm-providers": {
-      "types": "./dist/types/llm-providers.d.ts",
-      "import": "./dist/esm/llm-providers.js",
-      "require": "./dist/llm-providers.js"
+      "import": {
+        "types": "./dist/esm/llm-providers.d.ts",
+        "default": "./dist/esm/llm-providers.js"
+      },
+      "require": {
+        "types": "./dist/types/llm-providers.d.ts",
+        "default": "./dist/llm-providers.js"
+      }
     },
     "./memory-providers": {
-      "types": "./dist/types/memory-providers.d.ts",
-      "import": "./dist/esm/memory-providers.js",
-      "require": "./dist/memory-providers.js"
+      "import": {
+        "types": "./dist/esm/memory-providers.d.ts",
+        "default": "./dist/esm/memory-providers.js"
+      },
+      "require": {
+        "types": "./dist/types/memory-providers.d.ts",
+        "default": "./dist/memory-providers.js"
+      }
     },
     "./strategies": {
-      "types": "./dist/types/strategies/index.d.ts",
-      "import": "./dist/esm/strategies/index.js",
-      "require": "./dist/strategies/index.js"
+      "import": {
+        "types": "./dist/esm/strategies/index.d.ts",
+        "default": "./dist/esm/strategies/index.js"
+      },
+      "require": {
+        "types": "./dist/types/strategies/index.d.ts",
+        "default": "./dist/strategies/index.js"
+      }
     },
     "./observability-providers": {
-      "types": "./dist/types/observability-providers.d.ts",
-      "import": "./dist/esm/observability-providers.js",
-      "require": "./dist/observability-providers.js"
+      "import": {
+        "types": "./dist/esm/observability-providers.d.ts",
+        "default": "./dist/esm/observability-providers.js"
+      },
+      "require": {
+        "types": "./dist/types/observability-providers.d.ts",
+        "default": "./dist/observability-providers.js"
+      }
     },
     "./observe": {
-      "types": "./dist/types/observe.d.ts",
-      "import": "./dist/esm/observe.js",
-      "require": "./dist/observe.js"
+      "import": {
+        "types": "./dist/esm/observe.d.ts",
+        "default": "./dist/esm/observe.js"
+      },
+      "require": {
+        "types": "./dist/types/observe.d.ts",
+        "default": "./dist/observe.js"
+      }
     },
     "./observability/contextError/finders": {
-      "types": "./dist/types/observability/contextError/finders/index.d.ts",
-      "import": "./dist/esm/observability/contextError/finders/index.js",
-      "require": "./dist/observability/contextError/finders/index.js"
+      "import": {
+        "types": "./dist/esm/observability/contextError/finders/index.d.ts",
+        "default": "./dist/esm/observability/contextError/finders/index.js"
+      },
+      "require": {
+        "types": "./dist/types/observability/contextError/finders/index.d.ts",
+        "default": "./dist/observability/contextError/finders/index.js"
+      }
     },
     "./resilience": {
-      "types": "./dist/types/resilience/index.d.ts",
-      "import": "./dist/esm/resilience/index.js",
-      "require": "./dist/resilience/index.js"
+      "import": {
+        "types": "./dist/esm/resilience/index.d.ts",
+        "default": "./dist/esm/resilience/index.js"
+      },
+      "require": {
+        "types": "./dist/types/resilience/index.d.ts",
+        "default": "./dist/resilience/index.js"
+      }
     },
     "./stream": {
-      "types": "./dist/types/stream.d.ts",
-      "import": "./dist/esm/stream.js",
-      "require": "./dist/stream.js"
+      "import": {
+        "types": "./dist/esm/stream.d.ts",
+        "default": "./dist/esm/stream.js"
+      },
+      "require": {
+        "types": "./dist/types/stream.d.ts",
+        "default": "./dist/stream.js"
+      }
     },
     "./injection-engine": {
-      "types": "./dist/types/injection-engine.d.ts",
-      "import": "./dist/esm/injection-engine.js",
-      "require": "./dist/injection-engine.js"
+      "import": {
+        "types": "./dist/esm/injection-engine.d.ts",
+        "default": "./dist/esm/injection-engine.js"
+      },
+      "require": {
+        "types": "./dist/types/injection-engine.d.ts",
+        "default": "./dist/injection-engine.js"
+      }
     },
     "./tool-providers": {
-      "types": "./dist/types/tool-providers/index.d.ts",
-      "import": "./dist/esm/tool-providers/index.js",
-      "require": "./dist/tool-providers/index.js"
+      "import": {
+        "types": "./dist/esm/tool-providers/index.d.ts",
+        "default": "./dist/esm/tool-providers/index.js"
+      },
+      "require": {
+        "types": "./dist/types/tool-providers/index.d.ts",
+        "default": "./dist/tool-providers/index.js"
+      }
     },
     "./security": {
-      "types": "./dist/types/security/index.d.ts",
-      "import": "./dist/esm/security/index.js",
-      "require": "./dist/security/index.js"
+      "import": {
+        "types": "./dist/esm/security/index.d.ts",
+        "default": "./dist/esm/security/index.js"
+      },
+      "require": {
+        "types": "./dist/types/security/index.d.ts",
+        "default": "./dist/security/index.js"
+      }
     },
     "./identity": {
-      "types": "./dist/types/identity.d.ts",
-      "import": "./dist/esm/identity.js",
-      "require": "./dist/identity.js"
+      "import": {
+        "types": "./dist/esm/identity.d.ts",
+        "default": "./dist/esm/identity.js"
+      },
+      "require": {
+        "types": "./dist/types/identity.d.ts",
+        "default": "./dist/identity.js"
+      }
     },
     "./reliability": {
-      "types": "./dist/types/reliability/index.d.ts",
-      "import": "./dist/esm/reliability/index.js",
-      "require": "./dist/reliability/index.js"
+      "import": {
+        "types": "./dist/esm/reliability/index.d.ts",
+        "default": "./dist/esm/reliability/index.js"
+      },
+      "require": {
+        "types": "./dist/types/reliability/index.d.ts",
+        "default": "./dist/reliability/index.js"
+      }
     },
     "./thinking": {
-      "types": "./dist/types/thinking/index.d.ts",
-      "import": "./dist/esm/thinking/index.js",
-      "require": "./dist/thinking/index.js"
+      "import": {
+        "types": "./dist/esm/thinking/index.d.ts",
+        "default": "./dist/esm/thinking/index.js"
+      },
+      "require": {
+        "types": "./dist/types/thinking/index.d.ts",
+        "default": "./dist/thinking/index.js"
+      }
     },
     "./locales": {
-      "types": "./dist/types/locales/index.d.ts",
-      "import": "./dist/esm/locales/index.js",
-      "require": "./dist/locales/index.js"
+      "import": {
+        "types": "./dist/esm/locales/index.d.ts",
+        "default": "./dist/esm/locales/index.js"
+      },
+      "require": {
+        "types": "./dist/types/locales/index.d.ts",
+        "default": "./dist/locales/index.js"
+      }
     },
     "./status": {
-      "types": "./dist/types/status.d.ts",
-      "import": "./dist/esm/status.js",
-      "require": "./dist/status.js"
+      "import": {
+        "types": "./dist/esm/status.d.ts",
+        "default": "./dist/esm/status.js"
+      },
+      "require": {
+        "types": "./dist/types/status.d.ts",
+        "default": "./dist/status.js"
+      }
     },
     "./package.json": "./package.json"
+  },
+  "typesVersions": {
+    "*": {
+      "memory": [
+        "./dist/types/memory/index.d.ts"
+      ],
+      "llm-providers": [
+        "./dist/types/llm-providers.d.ts"
+      ],
+      "memory-providers": [
+        "./dist/types/memory-providers.d.ts"
+      ],
+      "strategies": [
+        "./dist/types/strategies/index.d.ts"
+      ],
+      "observability-providers": [
+        "./dist/types/observability-providers.d.ts"
+      ],
+      "observe": [
+        "./dist/types/observe.d.ts"
+      ],
+      "observability/contextError/finders": [
+        "./dist/types/observability/contextError/finders/index.d.ts"
+      ],
+      "resilience": [
+        "./dist/types/resilience/index.d.ts"
+      ],
+      "stream": [
+        "./dist/types/stream.d.ts"
+      ],
+      "injection-engine": [
+        "./dist/types/injection-engine.d.ts"
+      ],
+      "tool-providers": [
+        "./dist/types/tool-providers/index.d.ts"
+      ],
+      "security": [
+        "./dist/types/security/index.d.ts"
+      ],
+      "identity": [
+        "./dist/types/identity.d.ts"
+      ],
+      "reliability": [
+        "./dist/types/reliability/index.d.ts"
+      ],
+      "thinking": [
+        "./dist/types/thinking/index.d.ts"
+      ],
+      "locales": [
+        "./dist/types/locales/index.d.ts"
+      ],
+      "status": [
+        "./dist/types/status.d.ts"
+      ]
+    }
   },
   "sideEffects": [
     "**/cache/strategies/*.js",
@@ -233,6 +378,7 @@
     }
   },
   "devDependencies": {
+    "@arethetypeswrong/cli": "^0.18.1",
     "@types/node": "^25.5.2",
     "@typescript-eslint/eslint-plugin": "^5.61.0",
     "@typescript-eslint/parser": "^5.61.0",
@@ -242,6 +388,7 @@
     "eslint-config-prettier": "^6.15.0",
     "footprintjs": "^9.9.0",
     "prettier": "^2.8.1",
+    "publint": "^0.3.0",
     "typedoc": "^0.28.19",
     "typedoc-plugin-markdown": "^4.11.0",
     "typescript": "~5.4.5",

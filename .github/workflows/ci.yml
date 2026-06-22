@@ -33,6 +33,9 @@ jobs:
       # with "Failed to resolve entry for package 'agentfootprint'".
       - run: npm run build
       - run: npm test
+      # Packaging-correctness gate: dual CJS/ESM types resolve in every consumer mode.
+      - run: npx publint
+      - run: npx @arethetypeswrong/cli --pack
 
   lint:
     runs-on: ubuntu-latest

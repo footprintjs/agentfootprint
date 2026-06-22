@@ -28,6 +28,10 @@ jobs:
       - run: npm run build
       - run: npm test
 
+      # Packaging-correctness gate — block a publish that would ship broken/masquerading types.
+      - run: npx publint
+      - run: npx @arethetypeswrong/cli --pack
+
       # Stage the EXACT publishable package, files-agnostically: npm computes the tarball
       # (honoring the complex `files` globs/negations), then we extract it. The staged dir
       # is byte-identical to what `npm pack` produces, so the publish job re-packs the same.

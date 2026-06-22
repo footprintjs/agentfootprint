@@ -107,10 +107,9 @@ describe('Block B — package.json exports table', () => {
     expect(exp['./memory-agentcore']).toBeUndefined();
   });
 
-  it('every exports entry has types + import + require triple', () => {
+  it('every exports entry serves per-condition types (import→ESM, require→CJS)', () => {
     const exp = loadExports();
     for (const [key, entry] of Object.entries(exp)) {
-      if (key === '.') continue; // root
       // The package.json self-reference is a plain string by Node
       // convention — it lets the library read its own version at
       // runtime (auditExport genesis records) and lets tooling
@@ -119,17 +118,26 @@ describe('Block B — package.json exports table', () => {
         expect(entry).toBe('./package.json');
         continue;
       }
-      expect(entry.types, `missing types for ${key}`).toBeDefined();
-      expect(entry.import, `missing import for ${key}`).toBeDefined();
-      expect(entry.require, `missing require for ${key}`).toBeDefined();
+      // Each condition carries its OWN context-correct types: the `import`
+      // (ESM) condition points at ESM-context declarations, the `require`
+      // (CJS) condition at CJS-context ones. A single flat `types` field
+      // masquerades one module system's types as the other's (attw 🎭/👺).
+      expect(entry.import?.types, `missing import.types for ${key}`).toBeDefined();
+      expect(entry.import?.default, `missing import.default for ${key}`).toBeDefined();
+      expect(entry.require?.types, `missing require.types for ${key}`).toBeDefined();
+      expect(entry.require?.default, `missing require.default for ${key}`).toBeDefined();
     }
   });
 
   it('canonical subpath dist paths follow predictable conventions', () => {
     const exp = loadExports();
-    expect(exp['./llm-providers'].types).toBe('./dist/types/llm-providers.d.ts');
-    expect(exp['./llm-providers'].import).toBe('./dist/esm/llm-providers.js');
-    expect(exp['./memory-providers'].types).toBe('./dist/types/memory-providers.d.ts');
-    expect(exp['./memory-providers'].import).toBe('./dist/esm/memory-providers.js');
+    // import → ESM build (dist/esm), require → CJS build (dist), each with
+    // its matching-context .d.ts.
+    expect(exp['./llm-providers'].import.types).toBe('./dist/esm/llm-providers.d.ts');
+    expect(exp['./llm-providers'].import.default).toBe('./dist/esm/llm-providers.js');
+    expect(exp['./llm-providers'].require.types).toBe('./dist/types/llm-providers.d.ts');
+    expect(exp['./llm-providers'].require.default).toBe('./dist/llm-providers.js');
+    expect(exp['./memory-providers'].import.types).toBe('./dist/esm/memory-providers.d.ts');
+    expect(exp['./memory-providers'].require.default).toBe('./dist/memory-providers.js');
   });
 });
