@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.44.0] - 2026-06-22
+
+### Added — `enable.localObservability()` + offline-replay `Trace`
+
+Tier-3 (Debug) observability: **retain** a live run model, render it live via the
+lens, and snapshot it for **offline replay** — no agent re-run.
+
+- **`agent.enable.localObservability({ onLive?, onRecorded?, redact? })`** → a handle
+  that is `<Lens>`-renderable live (`onLive` per event) and `getTrace()`-serializable.
+  `onRecorded` fires once at run exit with the finalized `Trace`.
+- **`Trace`** (UI-free, JSON-lossless) — the `BoundaryRecorder` domain-event log + the
+  serialized static chart `structure`. The step graph is always a derived projection
+  (never stored), so redaction reaches the rendered flowchart with no second content
+  surface. `serializeTrace`, `traceToStepGraph`, `buildStepGraphFromEvents`, and the
+  ready-made `redactContent` ship from `agentfootprint/observe`.
+- **Redaction at the serialize boundary** — `getTrace({ redact })` runs once per event
+  so PII never enters the `Trace`; the result is self-describing via `trace.redaction`.
+  The engine's `RedactionPolicy` already propagates to subflows; the flat event log
+  means one `redact` pass covers the whole tree.
+
+Pairs with `agentfootprint-lens`'s `<Replay trace>` (offline) and `<Lens>` (live). See
+`docs/design/local-observability-and-pii.md`. Also adds design notes for governance
+(`docs/design/governance.md`). Library is UI-free and browser-bundleable unchanged.
+
 ## [6.43.0] - 2026-06-22
 
 ### Added — `BedrockAgentMemory` reader for legacy Bedrock Agents memory

@@ -43,7 +43,12 @@
 import type { CombinedRecorder } from 'footprintjs';
 import type { AgentfootprintEvent, AgentfootprintEventType } from '../../events/registry.js';
 import type { EventDispatcher } from '../../events/dispatcher.js';
-import { BoundaryRecorder, boundaryRecorder, type DomainSubflowEvent } from './BoundaryRecorder.js';
+import {
+  BoundaryRecorder,
+  boundaryRecorder,
+  type DomainEvent,
+  type DomainSubflowEvent,
+} from './BoundaryRecorder.js';
 
 // ─── Public types (preserved shape — Lens consumes these today) ─────
 
@@ -339,7 +344,16 @@ const KNOWN_PRIMITIVES: ReadonlySet<string> = new Set([
  *   - `runStartTs`: wall-clock at run start, for relative offsets.
  */
 export function buildStepGraph(boundary: BoundaryRecorder): StepGraph {
-  const events = boundary.getEvents();
+  return buildStepGraphFromEvents(boundary.getEvents());
+}
+
+/**
+ * Pure events → StepGraph fold. Same projection as `buildStepGraph`, but from a
+ * flat `DomainEvent[]` rather than a live `BoundaryRecorder` — so an offline
+ * `Trace` (which stores only events) can be rebuilt into a graph for `<Replay>`
+ * without re-running the agent. The graph is always derived, never stored.
+ */
+export function buildStepGraphFromEvents(events: readonly DomainEvent[]): StepGraph {
   const nodes: StepNode[] = [];
   const edges: StepEdge[] = [];
 

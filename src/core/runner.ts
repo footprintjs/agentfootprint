@@ -29,6 +29,10 @@ import type {
   FlowchartOptions,
 } from '../recorders/observability/FlowchartRecorder.js';
 import type {
+  LocalObservabilityHandle,
+  LocalObservabilityOptions,
+} from '../recorders/observability/localObservability.js';
+import type {
   ObservabilityEnableOptions,
   CostEnableOptions,
   LiveStatusEnableOptions,
@@ -49,6 +53,17 @@ export interface EnableNamespace {
    * at any time (not just via onUpdate).
    */
   flowchart(opts?: FlowchartOptions): FlowchartHandle;
+  /**
+   * Tier-3 / Debug — RETAIN a live run model: render it live via
+   * `<Lens recorder={handle} />` (the handle's `onUpdate` drives the UI) AND
+   * snapshot it for OFFLINE replay via `handle.getTrace()` / `onComplete`.
+   *
+   * Contrast `observability({ strategy })` below (Tier-4 / Monitor), which
+   * ships each event to a vendor and forgets. `localObservability` keeps the
+   * model so you can look at it — locally, with full content. The serialized
+   * `Trace` is redactable at the serialize boundary (`redact` / `getTrace`).
+   */
+  localObservability(opts?: LocalObservabilityOptions): LocalObservabilityHandle;
   /**
    * v2.8+ — grouped strategy enabler for observability. Pipes every
    * typed event into a vendor strategy (Datadog, OTel, AgentCore,

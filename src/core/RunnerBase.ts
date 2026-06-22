@@ -40,6 +40,11 @@ import {
   type FlowchartHandle,
   type FlowchartOptions,
 } from '../recorders/observability/FlowchartRecorder.js';
+import {
+  attachLocalObservability,
+  type LocalObservabilityHandle,
+  type LocalObservabilityOptions,
+} from '../recorders/observability/localObservability.js';
 import type { EnableNamespace, Runner } from './runner.js';
 
 let _runIdSeq = 0;
@@ -484,6 +489,19 @@ export abstract class RunnerBase<TIn = unknown, TOut = unknown> implements Runne
       // via the attach path AND subscribes to the event dispatcher
       // for ReAct step transitions (stream.llm_* / stream.tool_*).
       attachFlowchart((r) => this.attach(r), this.dispatcher, opts),
+    localObservability: (opts?: LocalObservabilityOptions): LocalObservabilityHandle =>
+      attachLocalObservability(
+        (r) => this.attach(r),
+        this.dispatcher,
+        opts,
+        Date.now,
+        () => {
+          // The serialized STATIC chart — lets the offline Trace rebuild the
+          // flowchart (Replay Option A). Captured lazily; spec is reference-stable.
+          const spec = this.getSpec() as { buildTimeStructure?: unknown };
+          return spec.buildTimeStructure;
+        },
+      ),
     // v2.8 grouped strategy enablers — see
     // `docs/inspiration/strategy-everywhere.md`.
     observability: (opts) => attachObservabilityStrategy(this.dispatcher, opts),

@@ -75,6 +75,7 @@ export {
 export {
   attachFlowchart,
   buildStepGraph,
+  buildStepGraphFromEvents,
   type StepGraph,
   type StepNode,
   type StepEdge,
@@ -83,6 +84,27 @@ export {
   type FlowchartOptions,
   type FlowchartHandle,
 } from './recorders/observability/FlowchartRecorder.js';
+
+// Offline replay: freeze a live run model into a UI-free, JSON-lossless Trace
+// (redaction applied at the serialize boundary). agentfootprint-lens's <Replay>
+// rehydrates it. See docs/design/local-observability-and-pii.md.
+export {
+  serializeTrace,
+  redactContent,
+  traceToStepGraph,
+  type Trace,
+  type TraceSummary,
+  type TraceRedaction,
+  type SerializeTraceOptions,
+} from './recorders/observability/trace.js';
+
+// localObservability — Tier-3 retain: live <Lens> + offline getTrace()/onComplete.
+export {
+  attachLocalObservability,
+  type LocalObservabilityHandle,
+  type LocalObservabilityOptions,
+} from './recorders/observability/localObservability.js';
+
 export {
   liveStateRecorder,
   LiveStateRecorder,
