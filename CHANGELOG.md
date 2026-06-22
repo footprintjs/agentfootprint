@@ -5,6 +5,38 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.42.0] - 2026-06-22
+
+### Fixed — `.memory()` now injects recall into the prompt on the Agent path
+
+`.memory()` on an **Agent** read, formatted, and persisted recall but never composed it into
+the prompt — the memory READ subflow wrote `memoryInjection_<id>`, while the slot composers
+only read `activeInjections`, with nothing bridging the two. So turn N never saw turn N-1's
+facts (and the uninformed reply then self-polluted the store). `memoryRecallInjections` now
+turns each recall into a `'memory'`-flavored `ActiveInjection` (system-role content → system
+slot, the rest → messages slot), folded in by the slot-fork inputMappers in `buildAgentChart`
++ `buildDynamicAgentChart`. No new stage, no structure change, a no-op without memories.
+
+This **changes runtime behavior** (an Agent with `.memory()` now sends prior-turn context to
+the model) — hence a minor. Regression test asserts recall reaches turn-2's prompt across
+classic / dynamic / dynamic-grouped (the coverage gap that let it ship).
+
+### Fixed — `AgentCoreStore` targeted the wrong AWS service
+
+`AgentCoreStore` imported `@aws-sdk/client-bedrock-agent-runtime` (the **old Bedrock Agents**
+API) and dispatched `PutMemoryEventCommand` / `GetMemoryEventCommand` / … — commands that
+**do not exist in any package**. It only passed because tests injected a mock, so it would
+throw the moment a real `memoryId` was wired. It now targets **`@aws-sdk/client-bedrock-agentcore`**
+(`BedrockAgentCoreClient` + `CreateEvent` / `ListEvents` / `DeleteEvent`).
+
+AgentCore Memory is an **append-only event log**, so the adapter is mapped accordingly: `put`
+appends (the entry is stored as a `blob` document; `actorId` from the identity tuple,
+`sessionId` from the conversation); `list` is `ListEvents` (window / episodic memory is the
+natural fit); `get`/`delete` by id are list-then-find (server-assigned event ids); `forget`
+lists + deletes each event (AgentCore has no `DeleteSession`). New optional peer
+`@aws-sdk/client-bedrock-agentcore` (the old `…-agent-runtime` peer is retained for future
+adapters). A new test pins the **real command names** so the wrong-service bug cannot recur.
+
 ## [6.41.0] - 2026-06-19
 
 ### Fixed — OpenAI/Azure adapters use the current Chat Completions params

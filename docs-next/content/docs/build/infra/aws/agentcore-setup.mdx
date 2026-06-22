@@ -26,9 +26,8 @@ so those steps are wiring, not library calls.
 npm install agentfootprint
 # optional AWS SDK peers — install only the adapters you use:
 npm install @aws-sdk/client-bedrock-runtime          # bedrock() LLM (Converse)
-npm install @aws-sdk/client-bedrock-agent-runtime     # AgentCoreStore (memory)
-npm install @aws-sdk/client-bedrock-agentcore         # agentCoreIdentity
-npm install @aws-sdk/client-cloudwatch-logs           # agentcoreObservability
+npm install @aws-sdk/client-bedrock-agentcore        # AgentCoreStore (memory) + agentCoreIdentity
+npm install @aws-sdk/client-cloudwatch-logs          # agentcoreObservability
 ```
 
 The core never imports a vendor SDK — each adapter declares its AWS client as an **optional
@@ -107,10 +106,12 @@ const memory = defineMemory({
 });
 ```
 
-`put/get/list/delete/forget` map to `CreateEvent/GetEvent/ListEvents/DeleteEvent/DeleteSession`;
-the `identity.conversationId` is the AgentCore **sessionId**. (Server-side semantic retrieve,
-`RetrieveMemoryRecords`, isn't wrapped yet — use `WINDOW` / `TOP_K`.) Deep dive:
-[Memory store adapters](doc:agentcore).
+AgentCore Memory is an **append-only event log**: `put` appends a `CreateEvent`, `list` is
+`ListEvents`, and `get`/`delete` by id are list-then-find (there's no `DeleteSession`, so
+`forget` lists + deletes each event). The identity maps to AgentCore's `actorId`
+(tenant/principal) + `sessionId` (conversationId). **`WINDOW` / episodic memory is the natural
+fit** (append + list recent); server-side semantic retrieve (`RetrieveMemoryRecords`) isn't
+wrapped yet. Deep dive: [Memory store adapters](doc:agentcore).
 
 ## Step 5 — Identity
 

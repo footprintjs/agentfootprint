@@ -11,7 +11,7 @@ description: Where memory lives. InMemoryStore for dev; RedisStore + AgentCoreSt
 |---|---|---|---|---|
 | `InMemoryStore` | (top-level) | — | ✅ | Dev, tests, single-process scenarios |
 | `RedisStore` | `agentfootprint/memory-providers` | `ioredis` | ❌ (RedisSearch later) | Hot recent memory + signatures + feedback aggregation |
-| `AgentCoreStore` | `agentfootprint/memory-providers` | `@aws-sdk/client-bedrock-agent-runtime` | ❌ (server-side retrieve later) | Bedrock-native session + event memory |
+| `AgentCoreStore` | `agentfootprint/memory-providers` | `@aws-sdk/client-bedrock-agentcore` | ❌ (server-side retrieve later) | Bedrock-native session + event memory |
 
 Both store adapters live on the canonical `agentfootprint/memory-providers` subpath. Per-adapter aliases (`agentfootprint/memory-redis`, `agentfootprint/memory-agentcore`) still resolve for back-compat, but new code should import from `agentfootprint/memory-providers`.
 

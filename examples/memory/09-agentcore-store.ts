@@ -1,26 +1,25 @@
 /**
  * 09 — AgentCoreStore: AWS Bedrock AgentCore Memory adapter.
  *
- * Subpath import: `agentfootprint/memory-agentcore`. Lazy-required
- * `@aws-sdk/client-bedrock-agent-runtime` peer-dep.
+ * Lazy-required `@aws-sdk/client-bedrock-agentcore` peer-dep — maps the MemoryStore
+ * onto AgentCore's event API (CreateEvent / ListEvents / DeleteEvent).
  *
  * Production usage:
  *
  *   import { AgentCoreStore } from 'agentfootprint/memory-providers';
  *   const store = new AgentCoreStore({
- *     memoryId: 'arn:aws:bedrock:us-east-1:...:memory/my-mem',
- *     region: 'us-east-1',
+ *     memoryId: 'arn:aws:bedrock-agentcore:us-west-2:...:memory/my-mem',
+ *     region: 'us-west-2',
  *   });
  *
  * This example uses an injected mock client so it runs offline.
  *
- * Caveats vs InMemoryStore (also documented at the adapter level):
- *   - `putIfVersion` is emulated client-side (read+write) — fine for
- *     single-writer-per-session deploys, weaker for multi-writer.
- *   - `seen` / `feedback` use in-process shadow state (don't survive
- *     process restart). Use Redis for durable recognition.
- *   - `search()` is NOT implemented in v2.3 — AgentCore's native
- *     retrieve API will surface as `agentcoreRetrieve()` later.
+ * Caveats (AgentCore is an append-only event log, not a key-value store):
+ *   - `put` appends; `get`/`delete` by id are list-then-find (O(events in session)).
+ *     Window / episodic memory (append + list recent) is the natural fit.
+ *   - `putIfVersion` is emulated client-side; `seen` / `feedback` are in-process
+ *     shadow state (don't survive process restart) — use Redis for durable recognition.
+ *   - `search()` is not wired — AgentCore's `RetrieveMemoryRecords` lands later.
  */
 
 import {
@@ -35,6 +34,7 @@ import {
   AgentCoreStore,
   type AgentCoreLikeClient,
 } from '../../src/adapters/memory/agentcore.js';
+import type { MemoryEntry } from '../../src/memory/entry/index.js';
 import { isCliEntry, printResult, type ExampleMeta } from '../helpers/cli.js';
 
 export const meta: ExampleMeta = {
@@ -53,7 +53,7 @@ export async function run(input: string, provider?: LLMProvider): Promise<string
   const fakeClient = makeFakeAgentCore();
   // #region define
   const store = new AgentCoreStore({
-    memoryId: 'arn:aws:bedrock:us-east-1:000000000000:memory/demo',
+    memoryId: 'arn:aws:bedrock-agentcore:us-west-2:000000000000:memory/demo',
     _client: fakeClient,
   });
 
@@ -87,38 +87,31 @@ export async function run(input: string, provider?: LLMProvider): Promise<string
   return result;
 }
 
+// Offline stand-in for the AgentCore event API: an append-log keyed by actor+session,
+// mirroring CreateEvent (append, server-assigns the id) / ListEvents / DeleteEvent.
 function makeFakeAgentCore(): AgentCoreLikeClient {
-  const sessions = new Map<string, Map<string, string>>();
+  const log = new Map<string, { eventId: string; entry: MemoryEntry }[]>();
+  let seq = 0;
+  const key = (actorId: string, sessionId: string) => `${actorId}|${sessionId}`;
   return {
-    async putEvent(input) {
-      const session = sessions.get(input.sessionId) ?? new Map<string, string>();
-      session.set(input.eventId, input.payload);
-      sessions.set(input.sessionId, session);
-      return {};
+    async createEvent({ actorId, sessionId, entry }) {
+      const k = key(actorId, sessionId);
+      const arr = log.get(k) ?? [];
+      arr.push({ eventId: `ev-${seq++}`, entry });
+      log.set(k, arr);
     },
-    async getEvent(input) {
-      const payload = sessions.get(input.sessionId)?.get(input.eventId);
-      return payload ? { payload } : null;
-    },
-    async listEvents(input) {
-      const s = sessions.get(input.sessionId);
-      if (!s) return { events: [] };
-      const all = [...s.entries()].map(([eventId, payload]) => ({ eventId, payload }));
-      const start = input.nextToken ? parseInt(input.nextToken, 10) : 0;
-      const max = input.maxResults ?? all.length;
-      const page = all.slice(start, start + max);
+    async listEvents({ actorId, sessionId, maxResults, nextToken }) {
+      const arr = log.get(key(actorId, sessionId)) ?? [];
+      const start = nextToken ? parseInt(nextToken, 10) : 0;
+      const max = maxResults ?? arr.length;
+      const page = arr.slice(start, start + max);
       const next = start + max;
-      return next < all.length
-        ? { events: page, nextToken: String(next) }
-        : { events: page };
+      return next < arr.length ? { events: page, nextToken: String(next) } : { events: page };
     },
-    async deleteEvent(input) {
-      sessions.get(input.sessionId)?.delete(input.eventId);
-      return {};
-    },
-    async deleteSession(input) {
-      sessions.delete(input.sessionId);
-      return {};
+    async deleteEvent({ actorId, sessionId, eventId }) {
+      const k = key(actorId, sessionId);
+      const arr = log.get(k);
+      if (arr) log.set(k, arr.filter((e) => e.eventId !== eventId));
     },
   };
 }

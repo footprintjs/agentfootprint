@@ -1,6 +1,6 @@
 ---
 title: AgentCore Memory
-description: AWS Bedrock AgentCore Memory adapter — session/event-based managed memory. Lazy-required @aws-sdk/client-bedrock-agent-runtime peer-dep.
+description: AWS Bedrock AgentCore Memory adapter — session/event-based managed memory. Lazy-required @aws-sdk/client-bedrock-agentcore peer-dep.
 ---
 
 > AWS Bedrock AgentCore is a managed memory service — sessions, events, retrieval, summarization all server-side. agentfootprint's `AgentCoreStore` maps the `MemoryStore` interface onto AgentCore's session/event model so you can use it as a drop-in for `InMemoryStore` in production.
@@ -8,7 +8,7 @@ description: AWS Bedrock AgentCore Memory adapter — session/event-based manage
 ## Install
 
 ```bash
-npm install @aws-sdk/client-bedrock-agent-runtime
+npm install @aws-sdk/client-bedrock-agentcore
 ```
 
 Lazy peer-dep declared in `peerDependenciesMeta` with `optional: true`. AWS credentials resolved via the standard SDK chain (env, profile, IAM role).

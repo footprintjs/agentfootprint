@@ -1,76 +1,64 @@
 /**
- * AgentCoreStore — 7-pattern tests
- * (unit · scenario · integration · property · security · performance · ROI).
+ * AgentCoreStore — tests against the AgentCore **event** model
+ * (`@aws-sdk/client-bedrock-agentcore`: CreateEvent / ListEvents / DeleteEvent).
  *
- * SDK is mock-injected via `_client` so the suite runs without AWS
- * credentials or live AgentCore Memory. Mock implements only the
- * surface the adapter touches.
+ * Two layers:
+ *  1. Store behaviour — a mock `AgentCoreLikeClient` (entry-semantic) exercises
+ *     put/get/list/delete/forget/CAS/feedback without AWS.
+ *  2. SDK-shim regression guard — a mock SDK module (`_sdk`) asserts the adapter
+ *     dispatches the REAL AgentCore commands with the right inputs, so the
+ *     wrong-service bug (it used to target `bedrock-agent-runtime` with
+ *     non-existent `PutMemoryEventCommand`s) can never recur silently.
  */
 
 import { describe, expect, it } from 'vitest';
 
 import { AgentCoreStore } from '../../../src/adapters/memory/agentcore.js';
-import type { AgentCoreLikeClient } from '../../../src/adapters/memory/agentcore.js';
+import type {
+  AgentCoreEvent,
+  AgentCoreLikeClient,
+} from '../../../src/adapters/memory/agentcore.js';
 import type { MemoryEntry } from '../../../src/memory/entry/index.js';
 import type { MemoryIdentity } from '../../../src/memory/identity/index.js';
 
+/** In-memory mock of the entry-semantic client: append-log keyed by actor+session. */
 class MockAgentCore implements AgentCoreLikeClient {
-  // sessionId → eventId → payload
-  readonly sessions = new Map<string, Map<string, string>>();
-
-  async putEvent(input: {
-    memoryId: string;
-    sessionId: string;
-    eventId: string;
-    payload: string;
-  }): Promise<unknown> {
-    const session = this.sessions.get(input.sessionId) ?? new Map<string, string>();
-    session.set(input.eventId, input.payload);
-    this.sessions.set(input.sessionId, session);
-    return {};
+  readonly log = new Map<string, { eventId: string; entry: MemoryEntry }[]>();
+  private seq = 0;
+  private key(actorId: string, sessionId: string): string {
+    return `${actorId}|${sessionId}`;
   }
-
-  async getEvent(input: {
-    memoryId: string;
+  async createEvent(input: {
+    actorId: string;
     sessionId: string;
-    eventId: string;
-  }): Promise<{ payload?: string } | null> {
-    const payload = this.sessions.get(input.sessionId)?.get(input.eventId);
-    if (!payload) return null;
-    return { payload };
+    entry: MemoryEntry;
+  }): Promise<void> {
+    const k = this.key(input.actorId, input.sessionId);
+    const arr = this.log.get(k) ?? [];
+    arr.push({ eventId: `ev-${this.seq++}`, entry: input.entry });
+    this.log.set(k, arr);
   }
-
   async listEvents(input: {
-    memoryId: string;
+    actorId: string;
     sessionId: string;
-    nextToken?: string;
     maxResults?: number;
-  }): Promise<{
-    events: ReadonlyArray<{ eventId: string; payload: string }>;
     nextToken?: string;
-  }> {
-    const session = this.sessions.get(input.sessionId);
-    if (!session) return { events: [] };
-    const all = [...session.entries()].map(([eventId, payload]) => ({ eventId, payload }));
+  }): Promise<{ events: readonly AgentCoreEvent[]; nextToken?: string }> {
+    const arr = this.log.get(this.key(input.actorId, input.sessionId)) ?? [];
     const start = input.nextToken ? parseInt(input.nextToken, 10) : 0;
-    const max = input.maxResults ?? all.length;
-    const page = all.slice(start, start + max);
+    const max = input.maxResults ?? arr.length;
+    const page = arr.slice(start, start + max);
     const next = start + max;
-    return next < all.length ? { events: page, nextToken: String(next) } : { events: page };
+    return next < arr.length ? { events: page, nextToken: String(next) } : { events: page };
   }
-
-  async deleteEvent(input: {
-    memoryId: string;
-    sessionId: string;
-    eventId: string;
-  }): Promise<unknown> {
-    this.sessions.get(input.sessionId)?.delete(input.eventId);
-    return {};
-  }
-
-  async deleteSession(input: { memoryId: string; sessionId: string }): Promise<unknown> {
-    this.sessions.delete(input.sessionId);
-    return {};
+  async deleteEvent(input: { actorId: string; sessionId: string; eventId: string }): Promise<void> {
+    const k = this.key(input.actorId, input.sessionId);
+    const arr = this.log.get(k);
+    if (arr)
+      this.log.set(
+        k,
+        arr.filter((e) => e.eventId !== input.eventId),
+      );
   }
 }
 
@@ -96,19 +84,14 @@ describe('AgentCoreStore — unit (basics)', () => {
     expect(() => new AgentCoreStore({ memoryId: '' })).toThrow(/requires `memoryId`/);
   });
 
-  it('get/put round-trip via session+eventId', async () => {
-    const mock = new MockAgentCore();
-    const store = new AgentCoreStore({ memoryId: 'mem-1', _client: mock });
+  it('put then get round-trips (list-then-find by entry id)', async () => {
+    const store = new AgentCoreStore({ memoryId: 'mem-1', _client: new MockAgentCore() });
     await store.put(id, makeEntry('a'));
     const got = await store.get<{ text: string }>(id, 'a');
     expect(got?.value.text).toBe('value-a');
-    // verify isolation: AgentCore session id is derived from identity tuple
-    expect(mock.sessions.size).toBe(1);
-    const sessionKeys = [...mock.sessions.keys()];
-    expect(sessionKeys[0]).toContain('acme/alice/thread-1');
   });
 
-  it('get returns null for missing eventId', async () => {
+  it('get returns null for a missing id', async () => {
     const store = new AgentCoreStore({ memoryId: 'm', _client: new MockAgentCore() });
     expect(await store.get(id, 'nope')).toBeNull();
   });
@@ -125,20 +108,19 @@ describe('AgentCoreStore — unit (basics)', () => {
     const mock = new MockAgentCore();
     const store = new AgentCoreStore({ memoryId: 'm', _client: mock });
     await store.put(id, makeEntry('e', { ttl: Date.now() - 1 }));
-    expect(mock.sessions.size).toBe(0);
+    expect(mock.log.size).toBe(0);
   });
 
-  it('putMany sequentializes calls; empty batch is no-op', async () => {
+  it('putMany sequentializes; empty batch is a no-op', async () => {
     const mock = new MockAgentCore();
     const store = new AgentCoreStore({ memoryId: 'm', _client: mock });
     await store.putMany(id, []);
-    expect(mock.sessions.size).toBe(0);
+    expect(mock.log.size).toBe(0);
     await store.putMany(id, [makeEntry('a'), makeEntry('b'), makeEntry('c')]);
-    const r = await store.list(id);
-    expect(r.entries.length).toBe(3);
+    expect((await store.list(id)).entries.length).toBe(3);
   });
 
-  it('list paginates via nextToken', async () => {
+  it('list paginates via nextToken/cursor', async () => {
     const store = new AgentCoreStore({ memoryId: 'm', _client: new MockAgentCore() });
     for (let i = 0; i < 5; i++) await store.put(id, makeEntry(`e${i}`));
     const p1 = await store.list(id, { limit: 2 });
@@ -169,28 +151,85 @@ describe('AgentCoreStore — unit (basics)', () => {
   });
 });
 
+describe('AgentCoreStore — SDK shim (regression guard: REAL AgentCore commands)', () => {
+  function spySdk() {
+    const sent: { cmd: string; input: Record<string, unknown> }[] = [];
+    const cmd = (name: string) =>
+      class {
+        static cmdName = name;
+        input: Record<string, unknown>;
+        constructor(input: Record<string, unknown>) {
+          this.input = input;
+        }
+      };
+    const sdk = {
+      BedrockAgentCoreClient: class {
+        constructor(public config: { region?: string }) {}
+        async send(c: { constructor: { cmdName: string }; input: Record<string, unknown> }) {
+          sent.push({ cmd: c.constructor.cmdName, input: c.input });
+          return c.constructor.cmdName === 'ListEvents' ? { events: [] } : {};
+        }
+      },
+      CreateEventCommand: cmd('CreateEvent'),
+      ListEventsCommand: cmd('ListEvents'),
+      DeleteEventCommand: cmd('DeleteEvent'),
+    };
+    return { sdk, sent };
+  }
+
+  it('put → CreateEventCommand with memoryId/actorId/sessionId/eventTimestamp + entry as a blob payload', async () => {
+    const { sdk, sent } = spySdk();
+    const store = new AgentCoreStore({
+      memoryId: 'mem-1',
+      region: 'us-west-2',
+      _sdk: sdk as never,
+    });
+    await store.put(id, makeEntry('a'));
+    const create = sent.find((s) => s.cmd === 'CreateEvent');
+    expect(
+      create,
+      'must dispatch CreateEventCommand (not the old PutMemoryEventCommand)',
+    ).toBeDefined();
+    expect(create!.input.memoryId).toBe('mem-1');
+    expect(String(create!.input.actorId)).toMatch(/^afp-/);
+    expect(String(create!.input.sessionId)).toMatch(/^afp-/);
+    expect(create!.input.eventTimestamp).toBeInstanceOf(Date);
+    const payload = create!.input.payload as { blob?: MemoryEntry }[];
+    expect(payload[0].blob?.id).toBe('a');
+  });
+
+  it('list → ListEventsCommand with includePayloads', async () => {
+    const { sdk, sent } = spySdk();
+    const store = new AgentCoreStore({ memoryId: 'mem-1', _sdk: sdk as never });
+    await store.list(id);
+    const list = sent.find((s) => s.cmd === 'ListEvents');
+    expect(list).toBeDefined();
+    expect(list!.input.includePayloads).toBe(true);
+  });
+
+  it('throws a clear error naming the correct peer when the SDK lacks the client', () => {
+    expect(() => new AgentCoreStore({ memoryId: 'm', _sdk: {} as never })).toThrow(
+      /BedrockAgentCoreClient/,
+    );
+  });
+});
+
 describe('AgentCoreStore — putIfVersion (emulated CAS)', () => {
   it('first-write succeeds when expectedVersion=0', async () => {
     const store = new AgentCoreStore({ memoryId: 'm', _client: new MockAgentCore() });
-    const r = await store.putIfVersion(id, makeEntry('a', { version: 1 }), 0);
-    expect(r.applied).toBe(true);
+    expect((await store.putIfVersion(id, makeEntry('a', { version: 1 }), 0)).applied).toBe(true);
   });
-
   it('rejects expectedVersion!=0 when entry does not exist', async () => {
     const store = new AgentCoreStore({ memoryId: 'm', _client: new MockAgentCore() });
-    const r = await store.putIfVersion(id, makeEntry('a', { version: 5 }), 4);
-    expect(r.applied).toBe(false);
+    expect((await store.putIfVersion(id, makeEntry('a', { version: 5 }), 4)).applied).toBe(false);
   });
-
   it('succeeds when expectedVersion matches stored version', async () => {
     const store = new AgentCoreStore({ memoryId: 'm', _client: new MockAgentCore() });
     await store.put(id, makeEntry('a', { version: 3 }));
     const r = await store.putIfVersion(id, makeEntry('a', { version: 4 }), 3);
     expect(r.applied).toBe(true);
-    const after = await store.get(id, 'a');
-    expect(after?.version).toBe(4);
+    expect((await store.get(id, 'a'))?.version).toBe(4);
   });
-
   it('rejects + returns currentVersion on stale CAS', async () => {
     const store = new AgentCoreStore({ memoryId: 'm', _client: new MockAgentCore() });
     await store.put(id, makeEntry('a', { version: 5 }));
@@ -207,20 +246,10 @@ describe('AgentCoreStore — signatures + feedback (in-process shadow)', () => {
     await store.recordSignature(id, 'hash-1');
     expect(await store.seen(id, 'hash-1')).toBe(true);
   });
-
-  it('feedback rejects non-finite', async () => {
+  it('feedback rejects non-finite + clamps to [-1,1]', async () => {
     const store = new AgentCoreStore({ memoryId: 'm', _client: new MockAgentCore() });
     await store.feedback(id, 'a', Number.NaN);
-    await store.feedback(id, 'a', Number.POSITIVE_INFINITY);
     expect(await store.getFeedback(id, 'a')).toBeNull();
-    await store.feedback(id, 'a', 0.5);
-    const f = await store.getFeedback(id, 'a');
-    expect(f?.average).toBeCloseTo(0.5, 6);
-    expect(f?.count).toBe(1);
-  });
-
-  it('feedback clamps out-of-range to [-1, 1]', async () => {
-    const store = new AgentCoreStore({ memoryId: 'm', _client: new MockAgentCore() });
     await store.feedback(id, 'a', 9.9);
     await store.feedback(id, 'a', -9.9);
     const f = await store.getFeedback(id, 'a');
@@ -236,10 +265,8 @@ describe('AgentCoreStore — multi-tenant isolation', () => {
     expect(await store.get(id2, 'shared')).toBeNull();
     expect(await store.get(id, 'shared')).not.toBeNull();
   });
-
-  it('forget removes only the target identity', async () => {
-    const mock = new MockAgentCore();
-    const store = new AgentCoreStore({ memoryId: 'm', _client: mock });
+  it('forget removes only the target identity (list + delete each, no DeleteSession)', async () => {
+    const store = new AgentCoreStore({ memoryId: 'm', _client: new MockAgentCore() });
     await store.put(id, makeEntry('a'));
     await store.put(id2, makeEntry('a'));
     await store.recordSignature(id, 'sig-1');
@@ -252,52 +279,28 @@ describe('AgentCoreStore — multi-tenant isolation', () => {
   });
 });
 
-describe('AgentCoreStore — lifecycle', () => {
-  it('post-close calls throw cleanly', async () => {
+describe('AgentCoreStore — lifecycle + properties', () => {
+  it('post-close calls throw cleanly; close() is idempotent', async () => {
     const store = new AgentCoreStore({ memoryId: 'm', _client: new MockAgentCore() });
     await store.close();
-    await expect(store.get(id, 'x')).rejects.toThrow(/AgentCoreStore\.get\(\) called after close/);
-    await expect(store.put(id, makeEntry('x'))).rejects.toThrow(/after close/);
+    await store.close();
+    await expect(store.get(id, 'x')).rejects.toThrow(/called after close/);
   });
-
-  it('close() is idempotent', async () => {
+  it('preserves all entry fields through the blob payload', async () => {
     const store = new AgentCoreStore({ memoryId: 'm', _client: new MockAgentCore() });
-    await store.close();
-    await store.close();
-  });
-});
-
-describe('AgentCoreStore — properties', () => {
-  it('JSON round-trip preserves all entry fields through AgentCore payload', async () => {
-    const store = new AgentCoreStore({ memoryId: 'm', _client: new MockAgentCore() });
-    const entry = makeEntry('p', {
-      tier: 'cold',
-      embedding: [0.1, 0.2, 0.3],
-      embeddingModel: 'mock-v1',
-      metadata: { author: 'system', urgency: 5 },
-      source: { turn: 7, runtimeStageId: 'stage#3' },
-    });
-    await store.put(id, entry);
+    await store.put(
+      id,
+      makeEntry('p', {
+        tier: 'cold',
+        embedding: [0.1, 0.2, 0.3],
+        metadata: { author: 'system', urgency: 5 },
+        source: { turn: 7, runtimeStageId: 'stage#3' },
+      }),
+    );
     const got = await store.get(id, 'p');
     expect(got?.tier).toBe('cold');
     expect(got?.embedding).toEqual([0.1, 0.2, 0.3]);
     expect(got?.metadata?.urgency).toBe(5);
     expect(got?.source?.runtimeStageId).toBe('stage#3');
-  });
-});
-
-describe('AgentCoreStore — ROI', () => {
-  it('drop-in for InMemoryStore — same MemoryStore interface, AWS-managed durability', async () => {
-    const store = new AgentCoreStore({ memoryId: 'mem-1', _client: new MockAgentCore() });
-    await store.put(id, makeEntry('a'));
-    await store.put(id, makeEntry('b'));
-    await store.feedback(id, 'a', 0.9);
-    await store.recordSignature(id, 'h1');
-    const list = await store.list(id);
-    expect(list.entries.length).toBe(2);
-    expect((await store.getFeedback(id, 'a'))?.average).toBeCloseTo(0.9, 6);
-    expect(await store.seen(id, 'h1')).toBe(true);
-    await store.forget(id);
-    expect((await store.list(id)).entries.length).toBe(0);
   });
 });

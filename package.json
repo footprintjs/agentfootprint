@@ -185,6 +185,7 @@
   ],
   "peerDependencies": {
     "@anthropic-ai/sdk": "*",
+    "@aws-sdk/client-bedrock-agentcore": "*",
     "@aws-sdk/client-bedrock-agent-runtime": "*",
     "@aws-sdk/client-bedrock-runtime": "*",
     "@aws-sdk/client-cloudwatch-logs": "*",
@@ -204,6 +205,9 @@
       "optional": true
     },
     "@aws-sdk/client-bedrock-runtime": {
+      "optional": true
+    },
+    "@aws-sdk/client-bedrock-agentcore": {
       "optional": true
     },
     "@aws-sdk/client-bedrock-agent-runtime": {

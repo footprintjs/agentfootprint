@@ -78,7 +78,7 @@ For a deeper dive on how identity flows through the store + RAG indexing footgun
 |---|---|---|
 | `InMemoryStore` | (top-level) | Dev / tests / single-process scenarios |
 | `RedisStore` | `agentfootprint/memory-redis` | ✅ — peer-dep `ioredis`, atomic Lua CAS, pipelined writes, GDPR forget |
-| `AgentCoreStore` | `agentfootprint/memory-agentcore` | ✅ — peer-dep `@aws-sdk/client-bedrock-agent-runtime`, session/event mapping |
+| `AgentCoreStore` | `agentfootprint/memory-agentcore` | ✅ — peer-dep `@aws-sdk/client-bedrock-agentcore`, session/event mapping |
 | DynamoDB / Postgres / Pinecone | (planned) | v2.6+ |
 
 Both production adapters lazy-require their SDK and accept `_client` for test injection. See [memory-stores](doc:memory-stores) for the full integration matrix.

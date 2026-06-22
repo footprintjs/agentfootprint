@@ -1,51 +1,38 @@
 /**
- * AgentCoreStore — AWS Bedrock AgentCore Memory adapter (peer-dep
- * `@aws-sdk/client-bedrock-agent-runtime`).
- *
- * Import from the canonical subpath (the `agentfootprint/memory-agentcore`
- * alias was removed in 4.0.0):
+ * AgentCoreStore — AWS Bedrock **AgentCore Memory** adapter
+ * (peer-dep `@aws-sdk/client-bedrock-agentcore`).
  *
  *   import { AgentCoreStore } from 'agentfootprint/memory-providers';
  *
  *   const store = new AgentCoreStore({
- *     memoryId: 'arn:aws:bedrock:us-east-1:...:memory/my-mem',
- *     region: 'us-east-1',
+ *     memoryId: 'arn:aws:bedrock-agentcore:us-west-2:...:memory/my-mem',
+ *     region: 'us-west-2',
  *   });
  *
- * Pattern: Adapter (GoF) — translates the `MemoryStore` interface onto
- *          AgentCore Memory's session/event model:
- *            MemoryIdentity     ↔  AgentCore session (sessionId derived
- *                                  from the identity tuple)
- *            MemoryEntry        ↔  AgentCore event payload (JSON
- *                                  envelope keyed by entry id)
- *            putIfVersion       ↔  unsupported by AgentCore natively;
- *                                  emulated via list+CAS at adapter level
- *            seen / signatures  ↔  in-process LRU shadow (AgentCore has
- *                                  no built-in dedup primitive)
- *            feedback           ↔  in-process accumulator (AgentCore
- *                                  doesn't expose a feedback metric API)
- *            search             ↔  NOT exposed in v2.3 — AgentCore's
- *                                  retrieve API is opaque (server-side
- *                                  retrieval pipeline). Will land as
- *                                  `agentcoreRetrieve()` in a later release.
+ * Pattern: Adapter (GoF) — maps the `MemoryStore` interface onto AgentCore Memory's
+ *          data-plane **event** model (`CreateEvent` / `GetEvent` / `ListEvents` /
+ *          `DeleteEvent`, `@aws-sdk/client-bedrock-agentcore`):
+ *            MemoryIdentity.{tenant,principal}  ↔  AgentCore `actorId`
+ *            MemoryIdentity.conversationId      ↔  AgentCore `sessionId`
+ *            MemoryEntry                        ↔  one event whose `payload` is a single
+ *                                                  `blob` document holding the entry
  *
- * Role:    Outer ring. Lazy-requires the AWS SDK; no runtime cost when
- *          another adapter is in use.
- * Emits:   N/A (storage adapters don't emit; recorders observe the
- *          memory pipeline that calls them).
+ * **AgentCore Memory is an append-only event log, not a key-value store.** The server
+ * assigns each event's `eventId` on `CreateEvent` (you cannot choose it), and there is no
+ * "delete the whole session" call. This shapes the adapter:
  *
- * **Caveats** — call out before adopting:
- *   1. AgentCore is session/event-based with built-in summarization.
- *      Mixing `defineMemory({ strategy: SUMMARIZE })` on top will
- *      double-compress. Pick one summarizer.
- *   2. Optimistic-concurrency `putIfVersion` is emulated; under high
- *      concurrent write rates the CAS window is wider than RedisStore.
- *      Single-writer scenarios (one server process per session) are
- *      fine.
- *   3. seen/feedback are in-process — they don't survive process restart.
- *      For durable recognition, implement at a higher layer or use Redis.
- *   4. AWS rate limits apply. Production deployments should wrap with
- *      `withRetry` and budget calls per session.
+ *   • `put`  → `CreateEvent` (append; `actorId` + `eventTimestamp` are required).  O(1)
+ *   • `list` → `ListEvents` (paginated, `includePayloads`).  ← window / episodic memory.  O(page)
+ *   • `get(id)` / `delete(id)` → list-then-find by the entry id stored in the blob, since
+ *     AgentCore's ids are server-assigned.  **O(events in session)** — fine for typical
+ *     window sizes; if you need O(1) keyed access at scale, use RedisStore.
+ *   • `forget` → `ListEvents` + `DeleteEvent` per event (no `DeleteSession` on AgentCore).
+ *   • `search` → still unwired (AgentCore's `RetrieveMemoryRecords` lands as a later helper).
+ *   • `putIfVersion` / `seen` / `feedback` → in-process emulation (AgentCore has no native
+ *     CAS / dedup / feedback primitive; these don't survive process restart).
+ *
+ * Role:    Outer ring. Lazy-requires the AWS SDK; zero runtime cost when another adapter is
+ *          in use.  Emits: N/A (storage adapters don't emit).
  */
 
 import type {
@@ -56,69 +43,77 @@ import type {
 } from '../../memory/store/types.js';
 import type { MemoryEntry } from '../../memory/entry/index.js';
 import type { MemoryIdentity } from '../../memory/identity/index.js';
-import { identityNamespace } from '../../memory/identity/index.js';
 import { lazyRequire } from '../../lib/lazyRequire.js';
 
+/** One event as the adapter cares about it: AgentCore's id + the decoded entry. */
+export interface AgentCoreEvent {
+  /** AgentCore server-assigned event id (needed to delete it). */
+  readonly eventId: string;
+  /** The MemoryEntry decoded from the event's blob payload (null if unparseable). */
+  readonly entry: MemoryEntry | null;
+}
+
 /**
- * Minimal surface over `@aws-sdk/client-bedrock-agent-runtime` that
- * AgentCoreStore touches. Defined locally so we don't take a hard
- * import on the AWS SDK and tests can inject a mock via `_client`.
+ * Minimal, entry-semantic surface the store uses. The real implementation
+ * (`createAgentCoreClient`) maps these onto `CreateEvent` / `ListEvents` /
+ * `DeleteEvent`; tests inject a mock via `_client`.
  */
 export interface AgentCoreLikeClient {
-  putEvent(input: {
+  /** Append one entry as an event (server assigns the eventId). */
+  createEvent(input: {
     memoryId: string;
+    actorId: string;
     sessionId: string;
-    eventId: string;
-    payload: string;
-  }): Promise<unknown>;
-  getEvent(input: {
-    memoryId: string;
-    sessionId: string;
-    eventId: string;
-  }): Promise<{ payload?: string } | null>;
+    entry: MemoryEntry;
+  }): Promise<void>;
+  /** One page of the session's events (newest-first is AgentCore's default). */
   listEvents(input: {
     memoryId: string;
+    actorId: string;
     sessionId: string;
-    nextToken?: string;
     maxResults?: number;
-  }): Promise<{
-    events: ReadonlyArray<{ eventId: string; payload: string }>;
     nextToken?: string;
-  }>;
-  deleteEvent(input: { memoryId: string; sessionId: string; eventId: string }): Promise<unknown>;
-  deleteSession(input: { memoryId: string; sessionId: string }): Promise<unknown>;
+  }): Promise<{ events: readonly AgentCoreEvent[]; nextToken?: string }>;
+  /** Delete one event by its AgentCore eventId. */
+  deleteEvent(input: {
+    memoryId: string;
+    actorId: string;
+    sessionId: string;
+    eventId: string;
+  }): Promise<void>;
 }
 
 export interface AgentCoreStoreOptions {
   /** AgentCore Memory ARN or id. Required. */
   readonly memoryId: string;
-
   /** AWS region. Required when constructing the SDK client internally. */
   readonly region?: string;
-
-  /**
-   * Pre-built AgentCore client. Use this to share a single SDK
-   * configuration (credentials, retry policy) across the host app.
-   * Adapter does NOT call any close lifecycle on a borrowed client.
-   */
+  /** Pre-built AgentCore client (shares one SDK config across the host app). */
   readonly client?: AgentCoreLikeClient;
-
-  /** Page size for `listEvents` calls. Default 50. */
+  /** Page size for `listEvents`. Default 100. */
   readonly pageSize?: number;
-
-  /**
-   * @internal Test injection point. Skips SDK require entirely.
-   */
+  /** @internal Test injection — skips the SDK require entirely. */
   readonly _client?: AgentCoreLikeClient;
+  /** @internal Test injection — the AWS SDK module (to exercise the real shim with a mock SDK). */
+  readonly _sdk?: BedrockAgentCoreSdkModule;
+}
+
+const ID_MAX = 99;
+
+/** Build an AgentCore-safe id from arbitrary identity parts (`[A-Za-z0-9_-]`, bounded). */
+function safeId(prefix: string, raw: string): string {
+  const slug = raw.replace(/[^A-Za-z0-9_-]/g, '-');
+  if (slug.length <= ID_MAX - prefix.length) return `${prefix}${slug}`;
+  // too long → keep a readable head + a stable hash tail so distinct inputs stay distinct
+  const head = slug.slice(0, ID_MAX - prefix.length - 9);
+  return `${prefix}${head}-${fnv1a(raw)}`;
 }
 
 /**
- * AgentCore Memory-backed `MemoryStore`. Implements every method
- * except `search()`. Vector retrieval via AgentCore's native API
- * lands as a separate read-side helper in a later release.
+ * AgentCore Memory-backed `MemoryStore`. Implements every method except `search()`.
  *
- * @throws when `@aws-sdk/client-bedrock-agent-runtime` is not
- *         installed and no `_client` is supplied.
+ * @throws when `@aws-sdk/client-bedrock-agentcore` is not installed and no `_client`/`_sdk`
+ *         is supplied.
  */
 export class AgentCoreStore implements MemoryStore {
   private readonly client: AgentCoreLikeClient;
@@ -126,65 +121,76 @@ export class AgentCoreStore implements MemoryStore {
   private readonly pageSize: number;
   private closed = false;
 
-  // In-process shadow state for things AgentCore doesn't surface
-  // natively — see file-level docstring for caveats.
+  // In-process shadow state for things AgentCore doesn't surface natively.
   private readonly signatures = new Map<string, Set<string>>();
   private readonly feedbackBag = new Map<string, { sum: number; count: number }>();
 
   constructor(options: AgentCoreStoreOptions) {
-    if (!options.memoryId) {
-      throw new Error('AgentCoreStore requires `memoryId`.');
-    }
+    if (!options.memoryId) throw new Error('AgentCoreStore requires `memoryId`.');
     this.memoryId = options.memoryId;
-    this.pageSize = options.pageSize ?? 50;
+    this.pageSize = options.pageSize ?? 100;
 
-    if (options._client) {
-      this.client = options._client;
-    } else if (options.client) {
-      this.client = options.client;
-    } else {
-      this.client = createAgentCoreClient(options.region);
-    }
+    if (options._client) this.client = options._client;
+    else if (options.client) this.client = options.client;
+    else this.client = createAgentCoreClient(options.region, options._sdk);
   }
 
-  // Identity → AgentCore session id. Stable, deterministic, isolating.
+  // MemoryIdentity → AgentCore (actorId, sessionId). The actor is the user/tenant; the
+  // session is the conversation. Both are derived deterministically + id-safe.
+  private actorId(identity: MemoryIdentity): string {
+    return safeId('afp-', `${identity.tenant || '_'}_${identity.principal || '_'}`);
+  }
   private sessionId(identity: MemoryIdentity): string {
-    return `afp:${identityNamespace(identity)}`;
+    return safeId('afp-', identity.conversationId);
   }
-
-  // Shadow-state keys (in-process Maps)
+  private scope(identity: MemoryIdentity) {
+    return {
+      memoryId: this.memoryId,
+      actorId: this.actorId(identity),
+      sessionId: this.sessionId(identity),
+    };
+  }
   private shadowKey(identity: MemoryIdentity): string {
-    return identityNamespace(identity);
+    return `${identity.tenant || '_'}/${identity.principal || '_'}/${identity.conversationId}`;
   }
   private feedbackKey(identity: MemoryIdentity, id: string): string {
-    return `${identityNamespace(identity)}::${id}`;
+    return `${this.shadowKey(identity)}::${id}`;
+  }
+
+  /** Walk every event in the session (paginated). */
+  private async *eachEvent(identity: MemoryIdentity): AsyncGenerator<AgentCoreEvent> {
+    let nextToken: string | undefined;
+    do {
+      const page = await this.client.listEvents({
+        ...this.scope(identity),
+        maxResults: this.pageSize,
+        ...(nextToken !== undefined && { nextToken }),
+      });
+      for (const ev of page.events) yield ev;
+      nextToken = page.nextToken;
+    } while (nextToken);
   }
 
   // ── MemoryStore implementation ──────────────────────────────────
 
   async get<T = unknown>(identity: MemoryIdentity, id: string): Promise<MemoryEntry<T> | null> {
     this.ensureOpen('get');
-    const r = await this.client.getEvent({
-      memoryId: this.memoryId,
-      sessionId: this.sessionId(identity),
-      eventId: id,
-    });
-    if (!r || !r.payload) return null;
-    const entry = parseEntry<T>(r.payload);
-    if (!entry) return null;
-    if (entry.ttl !== undefined && entry.ttl <= Date.now()) return null;
-    return entry;
+    // Append-log: an id may have several events (each update appends one). Last write wins —
+    // pick the highest version (ties → last seen), independent of AgentCore's list order.
+    let found: MemoryEntry<T> | null = null;
+    for await (const ev of this.eachEvent(identity)) {
+      if (ev.entry?.id !== id) continue;
+      const entry = ev.entry as MemoryEntry<T>;
+      if (found === null || (entry.version ?? 0) >= (found.version ?? 0)) found = entry;
+    }
+    if (found && found.ttl !== undefined && found.ttl <= Date.now()) return null;
+    return found;
   }
 
   async put<T = unknown>(identity: MemoryIdentity, entry: MemoryEntry<T>): Promise<void> {
     this.ensureOpen('put');
     if (entry.ttl !== undefined && entry.ttl <= Date.now()) return;
-    await this.client.putEvent({
-      memoryId: this.memoryId,
-      sessionId: this.sessionId(identity),
-      eventId: entry.id,
-      payload: JSON.stringify(entry),
-    });
+    await this.client.createEvent({ ...this.scope(identity), entry: entry as MemoryEntry });
   }
 
   async putMany<T = unknown>(
@@ -192,21 +198,14 @@ export class AgentCoreStore implements MemoryStore {
     entries: readonly MemoryEntry<T>[],
   ): Promise<void> {
     this.ensureOpen('putMany');
-    if (entries.length === 0) return;
-    // AgentCore has no batch-write API; sequentialize and let AWS SDK
-    // retry policy handle backoff. Production callers should set a
-    // sane `maxConcurrency` upstream rather than parallelizing here
-    // (per-session events are conceptually ordered).
-    for (const entry of entries) {
-      await this.put(identity, entry);
-    }
+    // AgentCore has no batch-write API; per-session events are conceptually ordered, so
+    // sequentialize and let the SDK retry policy handle backoff.
+    for (const entry of entries) await this.put(identity, entry);
   }
 
   /**
-   * Emulated optimistic concurrency. AgentCore's PutEvent overwrites
-   * unconditionally. We read-then-write inside a JS critical section
-   * — adequate for single-writer-per-session deployments. For multi-
-   * writer correctness on AgentCore, layer your own coordination.
+   * Emulated optimistic concurrency. AgentCore appends unconditionally; we read-then-write
+   * inside a JS critical section — adequate for single-writer-per-session deployments.
    */
   async putIfVersion<T = unknown>(
     identity: MemoryIdentity,
@@ -230,14 +229,13 @@ export class AgentCoreStore implements MemoryStore {
   ): Promise<ListResult<T>> {
     this.ensureOpen('list');
     const page = await this.client.listEvents({
-      memoryId: this.memoryId,
-      sessionId: this.sessionId(identity),
-      ...(options.cursor !== undefined && { nextToken: options.cursor }),
+      ...this.scope(identity),
       maxResults: options.limit ?? this.pageSize,
+      ...(options.cursor !== undefined && { nextToken: options.cursor }),
     });
     const out: MemoryEntry<T>[] = [];
     for (const ev of page.events) {
-      const entry = parseEntry<T>(ev.payload);
+      const entry = ev.entry as MemoryEntry<T> | null;
       if (!entry) continue;
       if (entry.ttl !== undefined && entry.ttl <= Date.now()) continue;
       if (options.tiers && (!entry.tier || !options.tiers.includes(entry.tier))) continue;
@@ -248,11 +246,11 @@ export class AgentCoreStore implements MemoryStore {
 
   async delete(identity: MemoryIdentity, id: string): Promise<void> {
     this.ensureOpen('delete');
-    await this.client.deleteEvent({
-      memoryId: this.memoryId,
-      sessionId: this.sessionId(identity),
-      eventId: id,
-    });
+    for await (const ev of this.eachEvent(identity)) {
+      if (ev.entry?.id === id) {
+        await this.client.deleteEvent({ ...this.scope(identity), eventId: ev.eventId });
+      }
+    }
     this.feedbackBag.delete(this.feedbackKey(identity, id));
   }
 
@@ -288,14 +286,12 @@ export class AgentCoreStore implements MemoryStore {
     return { average: cur.sum / cur.count, count: cur.count };
   }
 
+  /** GDPR "everything for this identity, gone." No DeleteSession on AgentCore → delete every event. */
   async forget(identity: MemoryIdentity): Promise<void> {
     this.ensureOpen('forget');
-    await this.client.deleteSession({
-      memoryId: this.memoryId,
-      sessionId: this.sessionId(identity),
-    });
-    // Drop shadow state too — the GDPR contract is "everything for
-    // this identity, gone."
+    const ids: string[] = [];
+    for await (const ev of this.eachEvent(identity)) ids.push(ev.eventId);
+    for (const eventId of ids) await this.client.deleteEvent({ ...this.scope(identity), eventId });
     const shadowKey = this.shadowKey(identity);
     this.signatures.delete(shadowKey);
     for (const key of [...this.feedbackBag.keys()]) {
@@ -303,104 +299,126 @@ export class AgentCoreStore implements MemoryStore {
     }
   }
 
-  /**
-   * Mark the store closed. Subsequent calls throw cleanly. Idempotent.
-   * AgentCore is stateless from the client perspective so there's no
-   * connection to tear down — the close gate is purely defensive.
-   */
   async close(): Promise<void> {
     if (this.closed) return;
     this.closed = true;
   }
 
   private ensureOpen(op: string): void {
-    if (this.closed) {
-      throw new Error(`AgentCoreStore.${op}() called after close().`);
-    }
+    if (this.closed) throw new Error(`AgentCoreStore.${op}() called after close().`);
   }
 }
 
-// Helpers
+// ── Helpers ─────────────────────────────────────────────────────────
 
-function parseEntry<T>(raw: string): MemoryEntry<T> | null {
-  try {
-    return JSON.parse(raw) as MemoryEntry<T>;
-  } catch {
-    return null;
+function fnv1a(s: string): string {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
   }
+  return (h >>> 0).toString(36);
 }
 
-// Lazy SDK loader
+/** The slice of `@aws-sdk/client-bedrock-agentcore` the shim touches. */
+export interface BedrockAgentCoreSdkModule {
+  readonly BedrockAgentCoreClient?: new (config: { region?: string }) => {
+    send(cmd: unknown): Promise<unknown>;
+  };
+  readonly CreateEventCommand?: new (input: unknown) => unknown;
+  readonly ListEventsCommand?: new (input: unknown) => unknown;
+  readonly DeleteEventCommand?: new (input: unknown) => unknown;
+}
 
-interface BedrockSdkModule {
-  readonly BedrockAgentRuntimeClient?: new (config: { region?: string }) => unknown;
-  readonly PutMemoryEventCommand?: new (input: unknown) => unknown;
-  readonly GetMemoryEventCommand?: new (input: unknown) => unknown;
-  readonly ListMemoryEventsCommand?: new (input: unknown) => unknown;
-  readonly DeleteMemoryEventCommand?: new (input: unknown) => unknown;
-  readonly DeleteMemorySessionCommand?: new (input: unknown) => unknown;
+/** Pull the MemoryEntry out of an AgentCore event's `payload` (a single `blob` document). */
+function entryFromPayload(payload: unknown): MemoryEntry | null {
+  if (!Array.isArray(payload)) return null;
+  for (const p of payload) {
+    const blob = (p as { blob?: unknown })?.blob;
+    if (blob && typeof blob === 'object') return blob as MemoryEntry;
+  }
+  return null;
 }
 
 /**
- * Build a thin shim over the AWS SDK that conforms to AgentCoreLikeClient.
- *
- * Note on SDK API stability: AgentCore Memory's command names may
- * evolve. The shim depends only on the request/response shapes our
- * adapter needs; if AWS renames commands, only this function needs
- * an update.
+ * Map the entry-semantic `AgentCoreLikeClient` onto the real AgentCore SDK commands.
+ * If AWS renames commands, only this function changes.
  */
-function createAgentCoreClient(region: string | undefined): AgentCoreLikeClient {
-  let mod: BedrockSdkModule;
-  try {
-    mod = lazyRequire<BedrockSdkModule>('@aws-sdk/client-bedrock-agent-runtime');
-  } catch {
-    throw new Error(
-      'AgentCoreStore requires the `@aws-sdk/client-bedrock-agent-runtime` peer dependency.\n' +
-        '  Install:  npm install @aws-sdk/client-bedrock-agent-runtime\n' +
-        '  Or pass `_client` for test injection.',
-    );
-  }
-  if (!mod.BedrockAgentRuntimeClient) {
-    throw new Error(
-      'AgentCoreStore: `@aws-sdk/client-bedrock-agent-runtime` is installed but ' +
-        '`BedrockAgentRuntimeClient` was not found. Update the SDK to a version that ' +
-        'exports the AgentCore Memory commands.',
-    );
-  }
-  const sdkClient = new mod.BedrockAgentRuntimeClient({ ...(region && { region }) }) as {
-    send(cmd: unknown): Promise<unknown>;
-  };
-
-  const dispatch = async (CommandCtor: unknown, input: unknown): Promise<unknown> => {
-    if (!CommandCtor) {
+function createAgentCoreClient(
+  region: string | undefined,
+  injected?: BedrockAgentCoreSdkModule,
+): AgentCoreLikeClient {
+  let mod: BedrockAgentCoreSdkModule;
+  if (injected) {
+    mod = injected;
+  } else {
+    try {
+      mod = lazyRequire<BedrockAgentCoreSdkModule>('@aws-sdk/client-bedrock-agentcore');
+    } catch {
       throw new Error(
-        'AgentCoreStore: this version of `@aws-sdk/client-bedrock-agent-runtime` ' +
-          'does not expose the required Memory command. Upgrade the SDK.',
+        'AgentCoreStore requires the `@aws-sdk/client-bedrock-agentcore` peer dependency.\n' +
+          '  Install:  npm install @aws-sdk/client-bedrock-agentcore\n' +
+          '  Or pass `client` / `_client` for a pre-built or mock client.',
       );
     }
-    const cmd = new (CommandCtor as new (i: unknown) => unknown)(input);
-    return await sdkClient.send(cmd);
+  }
+  if (!mod.BedrockAgentCoreClient) {
+    throw new Error(
+      'AgentCoreStore: `@aws-sdk/client-bedrock-agentcore` is installed but ' +
+        '`BedrockAgentCoreClient` was not found. Update the SDK.',
+    );
+  }
+  const sdk = new mod.BedrockAgentCoreClient({ ...(region && { region }) });
+
+  const send = async (
+    Ctor: (new (i: unknown) => unknown) | undefined,
+    name: string,
+    input: unknown,
+  ) => {
+    if (!Ctor) {
+      throw new Error(
+        `AgentCoreStore: \`@aws-sdk/client-bedrock-agentcore\` is missing ${name}. Upgrade the SDK.`,
+      );
+    }
+    return sdk.send(new Ctor(input));
   };
 
   return {
-    async putEvent(input) {
-      await dispatch(mod.PutMemoryEventCommand, input);
+    async createEvent({ memoryId, actorId, sessionId, entry }) {
+      // The entry is stored as a single `blob` document (PayloadType.blob = __DocumentType).
+      await send(mod.CreateEventCommand, 'CreateEventCommand', {
+        memoryId,
+        actorId,
+        sessionId,
+        eventTimestamp: new Date(),
+        payload: [{ blob: entry }],
+      });
     },
-    async getEvent(input) {
-      const r = (await dispatch(mod.GetMemoryEventCommand, input)) as { payload?: string } | null;
-      return r ?? null;
-    },
-    async listEvents(input) {
-      return (await dispatch(mod.ListMemoryEventsCommand, input)) as {
-        events: ReadonlyArray<{ eventId: string; payload: string }>;
+    async listEvents({ memoryId, actorId, sessionId, maxResults, nextToken }) {
+      const r = (await send(mod.ListEventsCommand, 'ListEventsCommand', {
+        memoryId,
+        actorId,
+        sessionId,
+        includePayloads: true,
+        ...(maxResults !== undefined && { maxResults }),
+        ...(nextToken !== undefined && { nextToken }),
+      })) as {
+        events?: ReadonlyArray<{ eventId?: string; payload?: unknown }>;
         nextToken?: string;
-      };
+      } | null;
+      const events: AgentCoreEvent[] = (r?.events ?? []).map((ev) => ({
+        eventId: ev.eventId ?? '',
+        entry: entryFromPayload(ev.payload),
+      }));
+      return r?.nextToken ? { events, nextToken: r.nextToken } : { events };
     },
-    async deleteEvent(input) {
-      await dispatch(mod.DeleteMemoryEventCommand, input);
-    },
-    async deleteSession(input) {
-      await dispatch(mod.DeleteMemorySessionCommand, input);
+    async deleteEvent({ memoryId, actorId, sessionId, eventId }) {
+      await send(mod.DeleteEventCommand, 'DeleteEventCommand', {
+        memoryId,
+        actorId,
+        sessionId,
+        eventId,
+      });
     },
   };
 }
