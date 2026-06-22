@@ -27,9 +27,15 @@ const FORBIDDEN = new Set([
   'footprint-explainable-ui',
   'agentfootprint-lens',
 ]);
-const FORBIDDEN_PATTERNS = [/^@xyflow\//, /^fumadocs/, /^footprint-explainable-ui\//, /^agentfootprint-lens\//];
+const FORBIDDEN_PATTERNS = [
+  /^@xyflow\//,
+  /^fumadocs/,
+  /^footprint-explainable-ui\//,
+  /^agentfootprint-lens\//,
+];
 
-const isForbidden = (name: string) => FORBIDDEN.has(name) || FORBIDDEN_PATTERNS.some((re) => re.test(name));
+const isForbidden = (name: string) =>
+  FORBIDDEN.has(name) || FORBIDDEN_PATTERNS.some((re) => re.test(name));
 
 describe('architecture boundary: the library is UI-free', () => {
   // dependencies / peerDependencies / optionalDependencies are the SHIPPED contract — a UI
@@ -39,7 +45,9 @@ describe('architecture boundary: the library is UI-free', () => {
       const offenders = Object.keys(pkg[field] ?? {}).filter(isForbidden);
       expect(
         offenders,
-        `${field} must stay UI-free — these belong in docs-next/ or the lens, not the published library: ${offenders.join(', ')}`,
+        `${field} must stay UI-free — these belong in docs-next/ or the lens, not the published library: ${offenders.join(
+          ', ',
+        )}`,
       ).toEqual([]);
     });
   }
