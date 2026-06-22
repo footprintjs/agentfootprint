@@ -24,7 +24,7 @@
     "@types/react-dom": "^19.2.3",
     "@xyflow/react": "^12.11.0",
     "agentfootprint": "file:..",
-    "agentfootprint-lens": "file:./vendor/agentfootprint-lens",
+    "agentfootprint-lens": "^0.23.6",
     "footprint-explainable-ui": "^0.25.0",
     "footprintjs": "^9.9.0",
     "fumadocs-core": "^16.10.5",
