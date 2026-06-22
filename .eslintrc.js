@@ -31,6 +31,42 @@ module.exports = {
   },
   overrides: [
     {
+      // ARCHITECTURE GUARDRAIL — the agentfootprint LIBRARY is UI-free. It must never import
+      // a UI/render package. Those belong in the docs app (docs-next/) or the lens, which
+      // consume agentfootprint — not the other way round. Keeping the library free of
+      // React/flowchart deps is what lets docs-next import the lens render-only entry WITHOUT
+      // pulling the engine into a browser bundle, and prevents an accidental dependency
+      // inversion as more people contribute. See docs/design/ui-boundary.md.
+      // Belt-and-suspenders: the package.json side is gated by
+      // test/conventions/unit/no-ui-deps.test.ts (catches a forbidden *declared* dep).
+      files: ['src/**/*.ts'],
+      rules: {
+        'no-restricted-imports': [
+          'error',
+          {
+            paths: [
+              'react',
+              'react-dom',
+              'next',
+              'dagre',
+              '@xyflow/react',
+              'footprint-explainable-ui',
+              'agentfootprint-lens',
+            ].map((name) => ({
+              name,
+              message: `'${name}' is a UI/render dependency — the agentfootprint library is UI-free. Put UI code in docs-next/ or the lens; the library must not depend on it.`,
+            })),
+            patterns: [
+              {
+                group: ['react/*', 'react-dom/*', '@xyflow/*', 'footprint-explainable-ui/*', 'agentfootprint-lens/*', 'fumadocs*'],
+                message: 'UI/render package — the agentfootprint library is UI-free (keep this in docs-next/ or the lens).',
+              },
+            ],
+          },
+        ],
+      },
+    },
+    {
       files: ['test/**/*.ts', '**/*.test.ts'],
       rules: {
         '@typescript-eslint/no-empty-function': 'off',
