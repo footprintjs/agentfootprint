@@ -84,6 +84,8 @@ The corollary that makes "context engineering" worth the name. Other frameworks 
 
 Per-iteration recomposition is also the structural prerequisite for the cache layer — cache markers can't track active injections in lockstep without it.
 
+**The deeper point — your harness *is* your application.** Because context recomposes every iteration, you declare **rules** (an `instruction`'s `activeWhen`, a `skill`, a `steering` doc), not a state machine. Which tool is exposed, which reminder fires, which skill is active — the behavior *emerges* from the runtime re-evaluating those rules against the freshest state each loop. **The harness's context-loop is your application logic** — no hand-rolled coordination — and the same loop emits the trace you later interrogate. That's the whole stack in one line: **context engineering** (what the model sees) · **the harness** (the runtime that recomposes it every iteration) · **explainability** (the trace it hands back).
+
 > 📖 [Dynamic ReAct guide](doc:dynamic-react) for the full taxonomy of what this unlocks (tool-by-tool steering, adaptive tool exposure, cost guardrails, iterative format refinement, failure adaptation).
 
 ## $0 test runs — scripted ReAct

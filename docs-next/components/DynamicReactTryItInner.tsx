@@ -2,74 +2,150 @@
 
 import '@xyflow/react/dist/style.css';
 import { useState } from 'react';
-import { Agent, mock } from 'agentfootprint';
+import {
+  Agent,
+  mock,
+  defineTool,
+  defineSteering,
+  defineInstruction,
+  defineSkill,
+  defineFact,
+} from 'agentfootprint';
 import { Lens, LensRecorder } from 'agentfootprint-lens';
 
 /**
- * LIVE in-browser "Try it" for Dynamic ReAct. Clicking Run builds and runs the REAL
- * agentfootprint agent **in the browser** with a mock LLM (no network, no server) and
- * renders the live <Lens> as the ReAct loop traces, step by step. The mock adapts to
- * the typed input (it reads the city out of the question), so the trace responds to
- * what you ask. Latency is added so the loop is visibly live.
- *
- * Runs client-side because the agent is pure JS once the LLM is mocked — see the
- * `node:module` Turbopack alias in next.config (the only browser blocker).
+ * LIVE in-browser "Try it" for Dynamic ReAct — runs the SAME agent as
+ * examples/context-engineering/05-dynamic-react.ts, right here in the browser
+ * (mock LLM, no network, no server). Clicking Run traces the real ReAct loop
+ * live: read_skill(billing) → redact_pii → (on-tool-return reminder fires) →
+ * process_refund → final answer. Rendered light-mode, fitting the container.
  */
 
-function parseCity(text: string): string {
-  const m = text.match(/in\s+([A-Za-z .'-]+?)\s*[?.!]*$/i);
-  const fallback = text.replace(/[?.!]/g, '').replace(/weather/i, '').trim() || 'San Francisco';
-  return (m?.[1] ?? fallback).trim();
-}
+function buildExampleAgent() {
+  // ── the example's tools / context controls (verbatim shape) ──
+  const redactPii = defineTool({
+    name: 'redact_pii',
+    description: 'Redact personally-identifiable info (emails, phones).',
+    inputSchema: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'] },
+    execute: ({ text }: { text: string }) =>
+      text.replace(/[\w.-]+@[\w.-]+/g, '[EMAIL]').replace(/\d{3}-\d{4}/g, '[PHONE]'),
+  });
 
-function buildAgent() {
-  let turn = 0;
-  let city = 'your city';
+  const safety = defineSteering({
+    id: 'safety',
+    prompt: 'Never expose raw PII (emails, phone numbers) in your final answer.',
+  });
+
+  // The on-tool-return Instruction — fires ONLY the iteration after redact_pii ran.
+  const postPii = defineInstruction({
+    id: 'post-pii',
+    description: 'Brief reminder to use the redacted text, not the original.',
+    activeWhen: (ctx) => ctx.lastToolResult?.toolName === 'redact_pii',
+    prompt: 'Use the redacted text in your reply. Do not paraphrase the original.',
+  });
+
+  const billingSkill = defineSkill({
+    id: 'billing',
+    description: 'Read for refunds / charges. Unlocks process_refund.',
+    body: 'When refunding: redact PII first using redact_pii, THEN call process_refund.',
+    tools: [
+      defineTool({
+        name: 'process_refund',
+        description: 'Issue a refund. Args: { amount: number }.',
+        inputSchema: { type: 'object', properties: { amount: { type: 'number' } } },
+        execute: ({ amount }: { amount: number }) => `Refund of $${amount} issued.`,
+      }),
+    ],
+  });
+
+  const focusReminder = defineInstruction({
+    id: 'focus',
+    activeWhen: (ctx) => ctx.iteration >= 3,
+    prompt: 'You have been working on this turn for several iterations. Wrap up the response now.',
+  });
+
+  const userProfile = defineFact({ id: 'user-profile', data: 'User: Alice Chen. Plan: Pro.' });
+
+  // The example's scripted 4-iteration Dynamic ReAct flow (latency added so it
+  // traces visibly live in the browser).
+  let iter = 0;
   const provider = mock({
-    thinkingMs: 450, // visible "thinking" latency so the loop traces live
-    respond: (req) => {
-      turn += 1;
-      if (turn === 1) {
-        const lastUser = [...req.messages].reverse().find((m) => m.role === 'user');
-        const text = typeof lastUser?.content === 'string' ? lastUser.content : '';
-        city = parseCity(text);
-        return { toolCalls: [{ id: 'w1', name: 'weather', args: { city } }] };
+    thinkingMs: 420,
+    respond: () => {
+      iter += 1;
+      switch (iter) {
+        case 1:
+          return {
+            content: 'Loading billing skill.',
+            toolCalls: [{ id: 'c1', name: 'read_skill', args: { id: 'billing' } }],
+            usage: { input: 30, output: 8 },
+          };
+        case 2:
+          return {
+            content: 'Redacting PII first.',
+            toolCalls: [
+              { id: 'c2', name: 'redact_pii', args: { text: 'alice@example.com refund $42' } },
+            ],
+            usage: { input: 60, output: 8 },
+          };
+        case 3:
+          return {
+            content: 'Issuing refund.',
+            toolCalls: [{ id: 'c3', name: 'process_refund', args: { amount: 42 } }],
+            usage: { input: 90, output: 6 },
+          };
+        default:
+          return {
+            content:
+              'Done. Refund of $42 issued for [EMAIL]. You should see it in 3-5 business days.',
+            toolCalls: [],
+            usage: { input: 100, output: 22 },
+          };
       }
-      return { content: `${city}: sunny, 72°F — fetched live via the weather tool.` };
     },
   });
 
-  return Agent.create({ provider, model: 'mock-llm', maxIterations: 4, reactMode: 'dynamic' })
-    .system('You answer weather questions using the `weather` tool.')
-    .tool({
-      schema: {
-        name: 'weather',
-        description: 'Get current weather for a city.',
-        inputSchema: { type: 'object', properties: { city: { type: 'string' } }, required: ['city'] },
-      },
-      execute: async (args) => {
-        await new Promise((r) => setTimeout(r, 400)); // visible tool latency
-        return `${(args as { city: string }).city}: sunny, 72°F`;
-      },
-    })
+  return Agent.create({ provider, model: 'mock', maxIterations: 6 })
+    .system('You are a customer support assistant.')
+    .tool(redactPii)
+    .steering(safety)
+    .skill(billingSkill)
+    .instruction(postPii)
+    .instruction(focusReminder)
+    .fact(userProfile)
     .build();
 }
 
+// Light-mode override of the lens design tokens (CSS variables). The lens reads
+// these `--fp-*` vars (dark defaults); setting light values themes it light, with
+// no lens change needed.
+const LIGHT_THEME: React.CSSProperties = {
+  ['--fp-bg-primary' as string]: '#ffffff',
+  ['--fp-bg-secondary' as string]: '#f8fafc',
+  ['--fp-bg-tertiary' as string]: '#eef2f7',
+  ['--fp-bg-elevated' as string]: '#ffffff',
+  ['--fp-text-primary' as string]: '#0f172a',
+  ['--fp-text-secondary' as string]: '#475569',
+  ['--fp-text-muted' as string]: '#94a3b8',
+  ['--fp-border' as string]: '#e2e8f0',
+  ['--fp-color-primary' as string]: '#6366f1',
+};
+
 export default function DynamicReactTryItInner() {
-  const [input, setInput] = useState('Weather in Tokyo?');
+  const [input, setInput] = useState('My account is alice@example.com — please refund $42');
   const [recorder, setRecorder] = useState<LensRecorder | null>(null);
-  const [agentInst, setAgentInst] = useState<ReturnType<typeof buildAgent> | null>(null);
+  const [agentInst, setAgentInst] = useState<ReturnType<typeof buildExampleAgent> | null>(null);
   const [running, setRunning] = useState(false);
   const [answer, setAnswer] = useState<string | null>(null);
 
   async function run() {
     setRunning(true);
     setAnswer(null);
-    const agent = buildAgent();
+    const agent = buildExampleAgent();
     const rec = new LensRecorder();
-    rec.observe(agent); // attaches the live flowchart recorder
-    setAgentInst(agent); // pass the runner so <Lens> renders the composition flowchart
-    setRecorder(rec); // mount <Lens> now → it re-renders as events fire
+    rec.observe(agent);
+    setAgentInst(agent);
+    setRecorder(rec);
     try {
       const result = await agent.run({ message: input });
       setAnswer(typeof result === 'string' ? result : '(no answer)');
@@ -85,7 +161,7 @@ export default function DynamicReactTryItInner() {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           disabled={running}
-          placeholder="Ask a weather question…"
+          placeholder="A customer support message…"
           onKeyDown={(e) => e.key === 'Enter' && !running && run()}
           style={{
             flex: 1,
@@ -103,9 +179,9 @@ export default function DynamicReactTryItInner() {
           style={{
             padding: '8px 16px',
             borderRadius: 8,
-            border: '1px solid var(--af-accent, #d97706)',
-            background: running ? 'var(--af-bg-elev, #f3f3f3)' : 'var(--af-accent, #d97706)',
-            color: running ? 'var(--af-fg-muted, #8c887e)' : '#fff',
+            border: '1px solid #6366f1',
+            background: running ? '#eef2f7' : '#6366f1',
+            color: running ? '#94a3b8' : '#fff',
             fontSize: 14,
             fontWeight: 600,
             cursor: running ? 'default' : 'pointer',
@@ -119,11 +195,14 @@ export default function DynamicReactTryItInner() {
       {recorder && (
         <div
           style={{
-            height: 520,
+            ...LIGHT_THEME,
+            height: 600,
+            width: '100%',
             borderRadius: 12,
             overflow: 'hidden',
-            border: '1px solid var(--af-border, #2a2a32)',
-            background: 'var(--af-bg-elev, #fff)',
+            border: '1px solid #e2e8f0',
+            background: '#ffffff',
+            colorScheme: 'light',
           }}
         >
           <Lens recorder={recorder} {...(agentInst ? { runner: agentInst } : {})} view="engineer" />
@@ -144,8 +223,9 @@ export default function DynamicReactTryItInner() {
       )}
       {!recorder && (
         <div style={{ fontSize: 13, color: 'var(--af-fg-muted, #8c887e)' }}>
-          ↑ Edit the question and hit <strong>Run</strong> — the real agent runs here in your
-          browser (mock LLM, no network) and traces live.
+          ↑ This runs <code>examples/context-engineering/05-dynamic-react.ts</code> live in your
+          browser (mock LLM, no network). Hit <strong>Run</strong> and watch the on-tool-return
+          reminder fire after <code>redact_pii</code>.
         </div>
       )}
     </div>

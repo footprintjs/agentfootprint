@@ -7,7 +7,7 @@ description: Context that adapts mid-loop. The on-tool-return trigger fires the 
 
 ## Try it live
 
-Edit the question and hit **Run** — the **real agent runs right here in your browser** (with a mock LLM, no network, no server) and traces live, iteration by iteration. The mock reads the city out of your question, so the trace responds to what you ask.
+This runs the **exact example below** (`examples/context-engineering/05-dynamic-react.ts`) **right in your browser** — a mock LLM, no network, no server. Hit **Run** and watch the real ReAct loop trace live, iteration by iteration: `read_skill(billing)` → `redact_pii` → the on-tool-return reminder fires → `process_refund` → a final answer with the email redacted to `[EMAIL]`.
 
 <DynamicReactTryIt />
 
