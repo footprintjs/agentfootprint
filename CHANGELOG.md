@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.43.0] - 2026-06-22
+
+### Added — `BedrockAgentMemory` reader for legacy Bedrock Agents memory
+
+AWS has two memory systems: the newer **AgentCore** (`AgentCoreStore` — a read/write event
+store, the go-forward path) and the prior-generation **Bedrock Agents** product, whose memory
+is **read-only** (the agent auto-generates `SESSION_SUMMARY` records). `BedrockAgentMemory` is a
+small, honestly-scoped **reader** for the latter — `readSummaries()` / `readText()` / `forget()`
+over `GetAgentMemory` / `DeleteAgentMemory` (peer-dep `@aws-sdk/client-bedrock-agent-runtime`).
+
+It is intentionally **not a `MemoryStore`** (Bedrock owns the writes — there's no `put`); wrapping
+it as `defineMemory({ store })` would be a "store that can't store." Use it to surface Bedrock's
+built-in memory in an agentfootprint agent (e.g. inject `readText()` as a Fact). Exported from
+`agentfootprint/memory-providers`; a command-name test pins the real SDK commands. Prefer
+`AgentCoreStore` for a real read/write store — this exists mainly for teams migrating off
+Bedrock Agents.
+
 ## [6.42.0] - 2026-06-22
 
 ### Fixed — `.memory()` now injects recall into the prompt on the Agent path

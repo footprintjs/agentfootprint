@@ -52,16 +52,39 @@ AWS Bedrock AgentCore Memory adapter. Subpath import; lazy-required AWS SDK:
 import { AgentCoreStore } from 'agentfootprint/memory-providers';
 
 const store = new AgentCoreStore({
-  memoryId: 'arn:aws:bedrock:us-east-1:...:memory/my-mem',
-  region: 'us-east-1',
+  memoryId: 'arn:aws:bedrock-agentcore:us-west-2:...:memory/my-mem',
+  region: 'us-west-2',
 });
 ```
 
-Maps `MemoryStore` calls onto AgentCore's session/event model. **Caveats** (also documented in JSDoc):
+Maps `MemoryStore` onto AgentCore's **append-only event log** (`CreateEvent` / `ListEvents` /
+`DeleteEvent` on `@aws-sdk/client-bedrock-agentcore`). **Caveats** (also in JSDoc):
 
-- `putIfVersion` is emulated client-side (read+write). Adequate for single-writer-per-session deploys; weaker for multi-writer.
-- `seen` / `feedback` use in-process shadow state — don't survive process restart. Use Redis for durable recognition.
-- `search()` not exposed today. AgentCore has a server-side retrieve API; mapping it to `MemoryStore.search` would be a leaky abstraction. A separate `agentcoreRetrieve()` helper is planned.
+- `put` appends; `list` is `ListEvents` (**window / episodic memory is the natural fit**); `get`/`delete` by id are list-then-find (server-assigned event ids); `forget` lists + deletes each event (no `DeleteSession`).
+- `putIfVersion` is emulated client-side; `seen` / `feedback` are in-process shadow state — don't survive process restart. Use Redis for durable recognition.
+- `search()` not wired today — AgentCore's `RetrieveMemoryRecords` lands as a separate helper.
+
+## BedrockAgentMemory (legacy Bedrock Agents — read-only)
+
+AWS has **two** memory systems. `AgentCoreStore` above targets the newer **AgentCore** platform
+(the go-forward path). The prior-generation **Bedrock Agents** product has its own memory — but
+it's **read-only**: the agent auto-generates `SESSION_SUMMARY` records; you can read and delete
+them, but you can't `put` arbitrary entries. So it's **not a `MemoryStore`** (that would be a
+"store that can't store") — it's a small **reader**:
+
+```ts
+import { BedrockAgentMemory } from 'agentfootprint/memory-providers';
+
+const mem = new BedrockAgentMemory({ agentId, agentAliasId, region: 'us-west-2' });
+
+const summaries = await mem.readSummaries(userMemoryId); // the summaries Bedrock generated
+const text = await mem.readText(userMemoryId);           // joined, ready to inject as a Fact
+await mem.forget(userMemoryId);                          // DeleteAgentMemory
+```
+
+Use it to **surface Bedrock's built-in memory** in an agentfootprint agent (e.g. inject `text`
+as a Fact). Peer-dep `@aws-sdk/client-bedrock-agent-runtime`. **Prefer `AgentCoreStore` for a
+real read/write store** — `BedrockAgentMemory` exists mainly for teams migrating off Bedrock Agents.
 
 ## Choosing per layer
 
