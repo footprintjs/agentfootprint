@@ -6,11 +6,12 @@
   "scripts": {
     "gen:api": "node ../scripts/gen-fumadocs-api.mjs",
     "gen:flowchart": "node scripts/gen-agent-flowchart.mjs",
+    "gen:replay": "node scripts/gen-replay-trace.mjs",
     "check:api": "node ../scripts/gen-fumadocs-api.mjs && git -C .. diff --exit-code -- docs-next/content/docs/api",
     "check:links": "node ../scripts/check-doc-links.mjs --strict",
-    "predev": "node ../scripts/gen-fumadocs-api.mjs && node scripts/gen-agent-flowchart.mjs",
+    "predev": "node ../scripts/gen-fumadocs-api.mjs && node scripts/gen-agent-flowchart.mjs && node scripts/gen-replay-trace.mjs",
     "dev": "next dev",
-    "prebuild": "node ../scripts/gen-fumadocs-api.mjs && node scripts/gen-agent-flowchart.mjs",
+    "prebuild": "node ../scripts/gen-fumadocs-api.mjs && node scripts/gen-agent-flowchart.mjs && node scripts/gen-replay-trace.mjs",
     "build": "next build",
     "start": "next start",
     "postinstall": "fumadocs-mdx"
@@ -23,6 +24,7 @@
     "@types/react-dom": "^19.2.3",
     "@xyflow/react": "^12.11.0",
     "agentfootprint": "file:..",
+    "agentfootprint-lens": "file:./vendor/agentfootprint-lens",
     "footprint-explainable-ui": "^0.25.0",
     "footprintjs": "^9.9.0",
     "fumadocs-core": "^16.10.5",

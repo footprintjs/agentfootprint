@@ -1,0 +1,55 @@
+---
+title: Offline replay
+description: Capture a run as a JSON-lossless Trace, then replay the flowchart anywhere — no re-run, redaction at the boundary.
+---
+
+Local observability has two outputs from one handle: a **live** view while the agent
+runs, and an offline **`Trace`** you can persist and replay later — in a bug report, in
+these docs, on another machine — without re-running the agent.
+
+```ts
+import { redactContent } from 'agentfootprint/observe';
+
+const dev = agent.enable.localObservability();   // retains the run model
+await agent.run({ message: 'Weather in San Francisco?' });
+
+// Serialize is the trust boundary — redact here so PII never enters the Trace:
+const trace = dev.getTrace({ redact: redactContent });
+fs.writeFileSync('run.trace.json', JSON.stringify(trace));
+```
+
+The flowchart below is the **real `<Replay>` component** rendering a `Trace` captured from
+that exact run (`scripts/gen-replay-trace.mjs`) — **offline, with no runner**. The Trace
+carries the event timeline plus the serialized chart structure, so the replay matches the
+live `<Lens>` shape.
+
+<ReplayEmbed />
+
+```tsx
+import { Replay } from 'agentfootprint-lens';
+
+const trace = JSON.parse(fs.readFileSync('run.trace.json', 'utf8'));
+return <Replay trace={trace} />;   // rebuilds the flowchart from trace.structure — no agent re-run
+```
+
+## Redaction travels with the Trace
+
+A live, in-process model is fine to hold raw, but **serializing is a trust-boundary
+crossing** — the Trace can travel. So redaction runs at `getTrace()`, and the result is
+**self-describing**: `trace.redaction` is `'pii'` when a `redact` ran, `'none'` when it
+didn't. When a Trace carries raw content, `<Replay>` shows a banner so a shared trace is
+never mistaken for safe.
+
+| You want… | Call |
+|---|---|
+| Best-practice redaction | `getTrace({ redact: redactContent })` |
+| Custom scrub (write-once fn) | `getTrace({ redact: (e) => myScrub(e) })` |
+| Raw content (trusted, local) | `getTrace()` → `redaction: 'none'` (banner shown) |
+
+The graph is **always derived** from the (already-redacted) events — it is never stored —
+so redaction reaches the rendered flowchart with no second content surface to leak.
+
+## Next steps
+
+- [Debugging](doc:debug) — backtrack a wrong answer to the context that caused it
+- [Monitoring exporters](doc:exporters) — ship runs to OTEL / AWS / Datadog (Tier-4)

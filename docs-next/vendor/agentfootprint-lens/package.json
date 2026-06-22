@@ -1,0 +1,92 @@
+{
+  "name": "agentfootprint-lens",
+  "version": "0.23.0",
+  "description": "See through your agent's decisions. React components for debugging agentfootprint runs — messages, prompts, tool calls, decision scope, cost.",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    },
+    "./core": {
+      "types": "./dist/core.d.ts",
+      "import": "./dist/core.js",
+      "require": "./dist/core.cjs"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "clean": "rm -rf dist",
+    "test:coverage": "vitest run --coverage --coverage.reporter=json-summary --coverage.reporter=text-summary --coverage.reportsDirectory=coverage",
+    "coverage:badge": "npm run test:coverage; node scripts/coverage-badge.mjs"
+  },
+  "keywords": [
+    "agentfootprint",
+    "footprintjs",
+    "agent",
+    "llm",
+    "observability",
+    "debugger",
+    "explainable-ai",
+    "react",
+    "time-travel"
+  ],
+  "author": "Sanjay Krishna Anbalagan",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/footprintjs/agentfootprint-lens.git"
+  },
+  "homepage": "https://github.com/footprintjs/agentfootprint-lens#readme",
+  "bugs": {
+    "url": "https://github.com/footprintjs/agentfootprint-lens/issues"
+  },
+  "peerDependencies": {
+    "@xyflow/react": "^12.0.0",
+    "agentfootprint": "^6.0.0",
+    "footprint-explainable-ui": "^0.22.0",
+    "footprintjs": "^8.0.0 || ^9.0.0",
+    "react": "^18.0.0 || ^19.0.0",
+    "react-dom": "^18.0.0 || ^19.0.0"
+  },
+  "devDependencies": {
+    "@testing-library/dom": "^10.4.1",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.6.1",
+    "@types/dagre": "^0.7.54",
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.7",
+    "@vitest/coverage-v8": "^4.1.8",
+    "@xyflow/react": "^12.10.2",
+    "agentfootprint": "^6.0.0",
+    "footprint-explainable-ui": "^0.22.0",
+    "footprintjs": "^8.0.0 || ^9.0.0",
+    "jsdom": "^29.0.2",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "tsup": "^8.0.0",
+    "typescript": "~5.4.5",
+    "vitest": "^4.1.4",
+    "zod": "^4.4.3"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "dependencies": {
+    "dagre": "^0.8.5"
+  }
+}

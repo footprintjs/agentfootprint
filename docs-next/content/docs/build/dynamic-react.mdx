@@ -5,6 +5,12 @@ description: Context that adapts mid-loop. The on-tool-return trigger fires the 
 
 > An agent calls `redact_pii(text)` and gets back the redacted version. On the next iteration, the LLM ignores the redaction and paraphrases the original anyway. **The fix isn't a bigger system prompt** — it's an instruction that fires AT THE EXACT MOMENT the LLM is about to read the redacted output, telling it: *"use the redacted text. Don't paraphrase the original."* That's Dynamic ReAct.
 
+## Try it live
+
+Edit the question and hit **Run** — the **real agent runs right here in your browser** (with a mock LLM, no network, no server) and traces live, iteration by iteration. The mock reads the city out of your question, so the trace responds to what you ask.
+
+<DynamicReactTryIt />
+
 ## What "dynamic" means here
 
 A regular Instruction has an `activeWhen(ctx)` predicate that runs every iteration. A **Dynamic ReAct** Instruction is just an Instruction whose predicate inspects `ctx.lastToolResult` — naturally one-shot because the next iteration's `lastToolResult` will be from a different (or no) tool.
