@@ -4,12 +4,15 @@ on:
   release:
     types: [published]
 
+# Least privilege: NO id-token at the top level. OIDC publish power is granted ONLY to the
+# `publish` job, which consumes the build job's pre-built artifact and does ZERO dependency
+# resolution — so the unpinned `npm install` (in `build`) never shares a runtime with the
+# registry token or `npm publish --provenance`.
 permissions:
   contents: read
-  id-token: write
 
 jobs:
-  publish:
+  build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -17,25 +20,49 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          # no cache — lockfile not committed (platform-specific native deps)
-          registry-url: https://registry.npmjs.org
 
+      # No committed lockfile (platform-specific native deps). Build BEFORE test: examples
+      # import from the package name 'agentfootprint', resolved via the local package's
+      # exports → dist/, so they need an upstream build. This job has NO publish power.
       - run: npm install
-      # Build BEFORE test. Examples in test/examples-smoke.test.ts import
-      # from the package name 'agentfootprint', resolved via the local
-      # package's main/exports → dist/. Without an upstream build those
-      # imports fail. (Same fix as in ci.yml.)
       - run: npm run build
       - run: npm test
 
-      # Trusted publishing requires npm >= 11.5.1, but newer npm
-      # changes optional peer-dep resolution in ways that can break
-      # the test suite. Upgrade ONLY for the publish step, AFTER tests.
+      # Stage the EXACT publishable package, files-agnostically: npm computes the tarball
+      # (honoring the complex `files` globs/negations), then we extract it. The staged dir
+      # is byte-identical to what `npm pack` produces, so the publish job re-packs the same.
+      - name: Stage published package
+        run: |
+          npm pack
+          mkdir -p pkg
+          tar -xzf ./*.tgz -C pkg --strip-components=1
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: package
+          path: pkg/
+          retention-days: 1
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # OIDC trusted publishing — granted to THIS job only
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: package
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+
+      # Upgrade npm ITSELF (trusted publishing needs >= 11.5.1) — not the project's deps.
       - run: npm install -g npm@latest
 
-      # Trusted publishing: no NODE_AUTH_TOKEN set. npm CLI authenticates
-      # to the registry via the GitHub OIDC token (granted by id-token:
-      # write permission above). npm verifies the publish is from a
-      # trusted GitHub workflow per the package's trusted-publisher config.
+      # Publishes the pre-built artifact. No node_modules, no dependency resolution.
+      # Trusted publishing: no NODE_AUTH_TOKEN — npm authenticates via the GitHub OIDC token.
       - name: Publish to npm
         run: npm publish --provenance --access public
