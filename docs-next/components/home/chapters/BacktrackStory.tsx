@@ -60,7 +60,7 @@ const CAPS = [
   <>The run ended wrong — at <b>step 14.</b> Every step was recorded as this loop. <b>Scroll to rewind it.</b></>,
   <>Retrace the decision: <b>Final ← Route.</b> Which branch fired, and why.</>,
   <><b>← CallLLM.</b> The model’s pick — replay the exact request that produced it.</>,
-  <><b>← Context.</b> Open the slot it was assembled from — and find <i>when</i> it entered.</>,
+  <><b>← messageAPI.</b> The step that assembled that request from the context slots — trace each one back to <i>when</i> it entered.</>,
   <><b>Step 4:</b> a retrieval wrote the wrong doc into <b>System Prompt.</b> It rode along, untouched, to step 14.</>,
   <>Remove it, re-run from step 4 → <b>denied.</b> <span className="stamp">● CAUSAL</span> — proven by replay, not guessed.</>,
 ];
