@@ -338,8 +338,8 @@ export function ContextEngineering() {
         </h1>
         <p className="af-ctx-lede-hero">
           Skills, steering, RAG, facts, memory, guardrails — every name for context does the same
-          move: it injects into one of three LLM slots, under one of four triggers. So we abstracted
-          the injection itself.
+          move: it injects into one of three LLM slots, under one of four triggers — and the
+          framework caches it for you. So we abstracted the injection itself.
         </p>
         <div className="af-ctx-formula">
           <span>Injection</span>

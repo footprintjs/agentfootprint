@@ -35,9 +35,9 @@ const ROWS: { id: ToolId; name: string; picked?: boolean }[] = [
   { id: 'flights', name: 'search_flights' },
 ];
 const SCORER_OPTS: { id: ScorerId; label: string; sub: string; phase: number }[] = [
-  { id: 'embed', label: 'embedding', sub: 'cheap · default', phase: 1 },
-  { id: 'attn', label: 'attention', sub: 'model-internal', phase: 3 },
-  { id: 'learned', label: 'learned-probe', sub: 'BYO scorer', phase: 4 },
+  { id: 'embed', label: 'embedding', sub: 'cheap · default', phase: 3 },
+  { id: 'attn', label: 'attention', sub: 'model-internal', phase: 4 },
+  { id: 'learned', label: 'learned-probe', sub: 'BYO scorer', phase: 5 },
 ];
 const NAME: Record<ToolId, string> = {
   hold: 'book_hold',
@@ -46,7 +46,7 @@ const NAME: Record<ToolId, string> = {
   flights: 'search_flights',
 };
 
-// 5 scroll beats: 0 prompt, 1 embedding (tie), 2 sharpen (tie broken), 3 attention, 4 learned-probe.
+// 6 scroll beats: 0 prompt, 1 scores (tie), 2 sharpen, 3 scorer menu, 4 attention, 5 learned-probe.
 const CAPS: ReactNode[] = [
   <>
     The agent picked <b>search_hotels</b> by its description. So — <b>why this tool?</b>
@@ -60,7 +60,11 @@ const CAPS: ReactNode[] = [
     <b>load_skill</b> 0.20. agentfootprint only flagged the tie.
   </>,
   <>
-    Or swap the scorer: <b>attention</b> reads the model&rsquo;s own internals — re-ranks decisively.
+    Or fix it another way: <b>what scores them?</b> The cheap <b>embedding</b> proxy is what tied them
+    — and you can swap it.
+  </>,
+  <>
+    Swap to <b>attention</b> — it reads the model&rsquo;s own internals and re-ranks decisively.
   </>,
   <>
     Or a <b>learned probe</b> trained on your model — <b>bring your own</b> scorer.
@@ -106,9 +110,11 @@ export function WhyThisTool() {
     window.scrollTo({ top: top + p * total, behavior: 'smooth' });
   };
 
-  // fully scroll-driven: 1 = embedding tie, 2 = sharpened (tie broken), 3 = attention, 4 = learned-probe
+  // fully scroll-driven, progressive panels:
+  // 1 = scores (tie), 2 = sharpen (tie broken), 3 = scorer menu (embedding baseline),
+  // 4 = swap to attention, 5 = learned-probe
   const revealed = phase >= 1;
-  const scorer: ScorerId = phase >= 4 ? 'learned' : phase === 3 ? 'attn' : 'embed';
+  const scorer: ScorerId = phase >= 5 ? 'learned' : phase === 4 ? 'attn' : 'embed';
   const sharpened = phase === 2;
   const canFix = scorer === 'embed';
   const vals = sharpened ? SHARPENED : SCORERS[scorer];
@@ -185,7 +191,7 @@ export function WhyThisTool() {
                 )}
               </div>
 
-              {phase >= 2 && (
+              {phase === 2 && (
                 <div className={`af-why-fix${!canFix ? ' dim' : ''}`}>
                   <span className="af-ctrl-q">search_hotels — its description</span>
                   <div className={`af-desc-cur${sharpened ? ' struck' : ''}`}>
