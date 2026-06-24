@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added — Context-bug localizer documented (Beta)
+
+The contextual-bug **localizer** (`localizeContextBug`, "git bisect for context") is now
+documented as a **beta** feature: trigger → causal slice → influence-weighted ranking →
+counterfactual ablation. Honesty model held throughout — the ranking is a proxy; only
+ablation verdicts are causal claims.
+
+- **New guide:** _Localize a context bug_ (`guides/localize-context-bug`), debugging-framed,
+  in the 📊 Observability section.
+- **New tested example:** `examples/observability/17-localize-quickstart.ts` — single-sourced
+  into the guide via `<CodeFile>` regions, so the shown code can't drift from what runs.
+- **`@beta` markers** on the `context-bisect` module + `localizeContextBug`. The API (exported
+  from `agentfootprint/observe`) is unchanged — now labeled beta.
+
 ## [6.44.0] - 2026-06-22
 
 ### Added — `enable.localObservability()` + offline-replay `Trace`

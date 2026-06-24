@@ -13,6 +13,9 @@
  * §B2 claim tiers (spelled out on every type): weights/scores are
  * embedding-geometry PROXIES; ablation verdicts are the ONLY causal
  * claims; slice completeness is bounded by tracking — and says so.
+ *
+ * @beta Beta feature (RFC-003 Part B). The API works and is tested, but
+ * may change before GA.
  */
 
 export {

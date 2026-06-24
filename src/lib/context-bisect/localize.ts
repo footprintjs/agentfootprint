@@ -375,6 +375,8 @@ function reorderByShortlist(
  * ranking → (optional) counterfactual ablation. See module docs for the
  * pipeline and the §B2 claim tiers.
  *
+ * @beta Beta feature — the API may change before GA.
+ *
  * @throws when no trigger can be resolved (no `atStep`, no custom
  *         strategy hit, no `artifacts.quality`), or when the trigger step
  *         is not in the commit log.

@@ -114,6 +114,7 @@ export default defineConfig({
           label: '📊 Observability',
           items: [
             { label: 'Observability', slug: 'guides/observability' },
+            { label: 'Localize a context bug (Beta)', slug: 'guides/localize-context-bug' },
             { label: 'Context engineering recorder', slug: 'guides/context-engineering-recorder' },
             { label: 'Streaming', slug: 'guides/streaming' },
             { label: 'Locales (Message Catalog)', slug: 'guides/locales' },
