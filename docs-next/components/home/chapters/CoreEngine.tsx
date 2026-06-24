@@ -469,7 +469,7 @@ function EventLoopView({ prog }: { prog: number }) {
           the event loop
         </text>
         <text className="af-el-wink" x="722" y="318">
-          one tick every 16ms
+          drains at every stage boundary
         </text>
 
         {/* stop 1 — CALL STACK (grey, the runtime owns it) */}
@@ -511,7 +511,7 @@ function EventLoopView({ prog }: { prog: number }) {
         {/* stop 2 — IDLE TIME (footprintjs green, the dispatcher) */}
         <rect className="af-el-greenbox" x="432" y="396" width="236" height="96" rx="12" strokeWidth={flushing ? 3 : 1.5} />
         <text className="af-el-sect af-el-ginks" x="550" y="448" textAnchor="middle">
-          IDLE TIME
+          NEXT MICROTASK
         </text>
         <text className="af-el-gap af-el-ginks" x="550" y="466" textAnchor="middle">
           the dispatcher
@@ -697,7 +697,7 @@ export function CoreEngine() {
     <>
       <b>{`Stage ${stageName2} (${stepNow2}/${STEPS.length})`}</b>
       {flushing2
-        ? ' — the idle beat flushes its trace events to memory and every listener, one beat behind.'
+        ? ' — the next microtask flushes its trace events to memory and every listener, one beat behind.'
         : ' — runs on the call stack and feeds its trace events into the queue, on the hot path.'}
     </>
   );
@@ -944,9 +944,9 @@ export function CoreEngine() {
             Your agent <em>is</em> the event loop.
           </h2>
           <p className="af-eng-block-lede">
-            Same recorded run &mdash; one lens over. A stage runs on the <b>call stack</b>, feeds its
-            trace events into the queue; the <b>idle beat</b> flushes them to trace memory and your
-            listeners, <b>one beat behind</b>, never blocking the hot path.
+            Same recorded run, viewed from the runtime side. A stage runs on the <b>call stack</b> and
+            feeds its trace events into a queue. Opt into <b>deferred delivery</b> and the engine drains them
+            at the next <b>microtask</b> &mdash; at each stage boundary, <b>one beat behind</b>, off the hot path.
           </p>
         </header>
         <div className="af-eng-pin af-eng-pin-wide" ref={pinB}>
@@ -990,8 +990,9 @@ export function CoreEngine() {
                 </div>
                 <EventLoopView prog={progB} />
                 <div className="af-eng-rec-foot">
-                  ↳ <b>grey</b> is JavaScript&rsquo;s own machinery · <b>green</b> is footprintjs · the
-                  watching drains in the <b>idle time</b>, off the hot path. <b>Zero added latency.</b>
+                  ↳ <b>grey</b> is JavaScript&rsquo;s own machinery · <b>green</b> is footprintjs · in
+                  <b> deferred mode</b> the watching drains on the next <b>microtask</b>, off the hot path —
+                  near-zero overhead on the critical path.
                 </div>
               </div>
             </div>

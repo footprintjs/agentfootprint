@@ -145,16 +145,16 @@ export default function HomePage() {
         </p>
         <div className="af-valuestrip">
           <div className="af-vs">
-            <b>Lower token cost</b>
-            <span>context shrinks to what the step needs</span>
-          </div>
-          <div className="af-vs">
             <b>Faster debugging</b>
             <span>trace any answer to its exact cause</span>
           </div>
           <div className="af-vs">
-            <b>Trusted answers</b>
+            <b>Provable cause</b>
             <span>proven by replay, not guessed</span>
+          </div>
+          <div className="af-vs">
+            <b>Lower token cost</b>
+            <span>context shrinks to what the step needs</span>
           </div>
         </div>
       </section>

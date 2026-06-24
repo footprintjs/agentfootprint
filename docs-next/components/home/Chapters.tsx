@@ -35,7 +35,7 @@ type Chapter = {
 const CHAPTERS: Chapter[] = [
   { id: 'af-ch-problem', ix: '01', cat: 'What we solve', ti: 'The problem', sub: 'It approved a refund it should have denied — why?', Body: BacktrackStory },
   { id: 'af-ch-context', ix: '02', cat: 'How you build context', ti: 'Context engineering', sub: 'slots × triggers', Body: ContextChapter },
-  { id: 'af-ch-core', ix: '03', cat: "How it's implemented", ti: 'The engine', sub: 'React Fiber for agents', Body: CoreEngine },
+  { id: 'af-ch-core', ix: '03', cat: "How it's implemented", ti: 'The engine', sub: 'Records every step, so you can walk it back', Body: CoreEngine },
 ];
 
 export function Chapters() {

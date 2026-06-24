@@ -88,7 +88,7 @@ const CAPS = [
   <>Retrace the decision: <b>Final ← Route.</b> Which branch fired, and why.</>,
   <><b>← CallLLM.</b> The model’s pick — replay the exact request that produced it.</>,
   <><b>← messageAPI.</b> The step that assembled that request from the context slots.</>,
-  <><b>← System Prompt.</b> messageAPI pulled from this slot — the suspect. But <i>when</i> did it get there?</>,
+  <><b>← System Prompt.</b> messageAPI pulled from this slot — the suspect. But <i>when</i> did the wrong doc get there?</>,
   <><b>Step 4:</b> a search pulled in the wrong document and put it in the <b>System Prompt.</b> Nothing removed it — so it was still there at <b>step 14.</b></>,
   <>Remove it, re-run from step 4 → <b>denied.</b> <span className="stamp">● CAUSAL</span> — proven by replay, not guessed.</>,
   <><b>The fix:</b> put the right document in and replay <b>forward</b> — every step, same path, now it lands on <b>denied ✓.</b></>,
@@ -146,7 +146,7 @@ export function BacktrackStory() {
     <div className="af-bt">
       <p className="af-bt-head">It approved a refund it should have denied.</p>
       <p className="af-bt-sub">
-        Somewhere in the context you fed it, something flipped the decision. Which one?
+        Somewhere in the context you fed it, one piece flipped the decision. Which one?
       </p>
 
       <div className="af-bt-grid">

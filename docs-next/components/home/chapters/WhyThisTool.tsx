@@ -35,9 +35,9 @@ const ROWS: { id: ToolId; name: string; picked?: boolean }[] = [
   { id: 'flights', name: 'search_flights' },
 ];
 const SCORER_OPTS: { id: ScorerId; label: string; sub: string; phase: number }[] = [
-  { id: 'embed', label: 'embedding', sub: 'cheap · default', phase: 3 },
-  { id: 'attn', label: 'attention', sub: 'model-internal', phase: 4 },
-  { id: 'learned', label: 'learned-probe', sub: 'BYO scorer', phase: 5 },
+  { id: 'embed', label: 'embedding', sub: 'cheap · in the box', phase: 3 },
+  { id: 'attn', label: 'attention', sub: 'model-internal · BYO', phase: 4 },
+  { id: 'learned', label: 'learned-probe', sub: 'trained · BYO', phase: 5 },
 ];
 const NAME: Record<ToolId, string> = {
   hold: 'book_hold',
@@ -64,7 +64,8 @@ const CAPS: ReactNode[] = [
     — and you can swap it.
   </>,
   <>
-    Swap to <b>attention</b> — it reads the model&rsquo;s own internals and re-ranks decisively.
+    Plug in an <b>attention</b> scorer that reads your model&rsquo;s internals — any scorer fits; the
+    embedding proxy is the only one <b>in the box</b>.
   </>,
   <>
     Or a <b>learned probe</b> trained on your model — <b>bring your own</b> scorer.
