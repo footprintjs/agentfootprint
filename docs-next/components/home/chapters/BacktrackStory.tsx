@@ -23,7 +23,7 @@ const NODES: Node[] = [
   { n: 'llm', nt: 'CallLLM', ns: 'send request', x: 50, y: 64 },
   { n: 'route', nt: 'Route', x: 50, y: 83, cls: 'diamond' },
   { n: 'final', nt: '→ approved ✗', x: 21, y: 96, cls: 'end' },
-  { n: 'tc', nt: 'ToolCalls', ns: 'execute', x: 79, y: 96 },
+  { n: 'tc', nt: 'ToolCalls', ns: '↻ loop again', x: 79, y: 96 },
 ];
 
 // viewBox 0 0 100 100 over a square flow. Edges run node-center → node-center; the opaque
