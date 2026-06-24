@@ -31,8 +31,16 @@ const ctx = (over: Partial<InjectionContext>): InjectionContext => ({
   ...over,
 });
 
-const billing = defineSkill({ id: 'billing', description: 'refunds and charges for payments', body: 'B' });
-const incident = defineSkill({ id: 'incident', description: 'outages errors and crashes', body: 'I' });
+const billing = defineSkill({
+  id: 'billing',
+  description: 'refunds and charges for payments',
+  body: 'B',
+});
+const incident = defineSkill({
+  id: 'incident',
+  description: 'outages errors and crashes',
+  body: 'I',
+});
 
 // ─── Unit ──────────────────────────────────────────────────────────────
 
@@ -80,16 +88,25 @@ describe('entryScorer — unit: keywordScorer', () => {
   });
 
   it('is case- and punctuation-insensitive', () => {
-    const a = scorer.score({ userMessage: 'REFUND!! payment.', candidates: [{ id: 'billing', description: billing.description! }] });
-    const b = scorer.score({ userMessage: 'refund payment', candidates: [{ id: 'billing', description: billing.description! }] });
+    const a = scorer.score({
+      userMessage: 'REFUND!! payment.',
+      candidates: [{ id: 'billing', description: billing.description! }],
+    });
+    const b = scorer.score({
+      userMessage: 'refund payment',
+      candidates: [{ id: 'billing', description: billing.description! }],
+    });
     expect(a.ranked[0]!.score).toBeCloseTo(b.ranked[0]!.score, 10);
   });
 
   it('is deterministic (same input → identical output)', () => {
-    const input = { userMessage: 'refund my payment', candidates: [
-      { id: 'billing', description: billing.description! },
-      { id: 'incident', description: incident.description! },
-    ] };
+    const input = {
+      userMessage: 'refund my payment',
+      candidates: [
+        { id: 'billing', description: billing.description! },
+        { id: 'incident', description: incident.description! },
+      ],
+    };
     expect(scorer.score(input)).toEqual(scorer.score(input));
   });
 });
@@ -225,10 +242,15 @@ describe('entryScorer — integration: through the REAL Agent loop', () => {
     const recorder = {
       id: 'cap',
       onEmit: (e: { name: string; payload?: { activeIds?: string[] } }) => {
-        if (e.name === 'agentfootprint.context.evaluated') activeIds.push([...(e.payload?.activeIds ?? [])]);
+        if (e.name === 'agentfootprint.context.evaluated')
+          activeIds.push([...(e.payload?.activeIds ?? [])]);
       },
     };
-    const agent = Agent.create({ provider: mock({ reply: 'done' }), model: 'mock', maxIterations: 3 })
+    const agent = Agent.create({
+      provider: mock({ reply: 'done' }),
+      model: 'mock',
+      maxIterations: 3,
+    })
       .system('')
       .skillGraph(graph)
       .recorder(recorder)
@@ -242,7 +264,11 @@ describe('entryScorer — integration: through the REAL Agent loop', () => {
 
   it('exposes the ranking AND the scorer name on the snapshot', async () => {
     const graph = skillGraph().entry(billing).entry(incident).entryBy(keywordScorer()).build();
-    const agent = Agent.create({ provider: mock({ reply: 'done' }), model: 'mock', maxIterations: 2 })
+    const agent = Agent.create({
+      provider: mock({ reply: 'done' }),
+      model: 'mock',
+      maxIterations: 2,
+    })
       .system('')
       .skillGraph(graph)
       .build();
@@ -262,7 +288,18 @@ describe('entryScorer — integration: through the REAL Agent loop', () => {
 
 describe('entryScorer — property: invariants over random input', () => {
   const scorer = keywordScorer();
-  const words = ['refund', 'payment', 'outage', 'crash', 'login', 'invoice', 'error', 'ticket', 'order', 'bug'];
+  const words = [
+    'refund',
+    'payment',
+    'outage',
+    'crash',
+    'login',
+    'invoice',
+    'error',
+    'ticket',
+    'order',
+    'bug',
+  ];
   const pick = (n: number, seed: number) =>
     Array.from({ length: n }, (_, i) => words[(seed * 7 + i * 13) % words.length]).join(' ');
 
@@ -282,7 +319,10 @@ describe('entryScorer — property: invariants over random input', () => {
 
   it('is a pure function of its input', () => {
     for (let seed = 0; seed < 25; seed++) {
-      const input = { userMessage: pick(3, seed), candidates: [{ id: 'a', description: pick(4, seed + 1) }] };
+      const input = {
+        userMessage: pick(3, seed),
+        candidates: [{ id: 'a', description: pick(4, seed + 1) }],
+      };
       expect(scorer.score(input)).toEqual(scorer.score(input));
     }
   });
@@ -307,7 +347,10 @@ describe('entryScorer — security: hostile input is contained', () => {
 
   it('a very long description does not blow up (bounded by tokenization)', () => {
     const huge = 'refund '.repeat(100_000);
-    const out = scorer.score({ userMessage: 'refund', candidates: [{ id: 'a', description: huge }] });
+    const out = scorer.score({
+      userMessage: 'refund',
+      candidates: [{ id: 'a', description: huge }],
+    });
     expect(out.chosen).toBe('a');
     expect(Number.isFinite(out.ranked[0]!.score)).toBe(true);
   });
@@ -320,7 +363,11 @@ describe('entryScorer — security: hostile input is contained', () => {
       },
     };
     const graph = skillGraph().entry(billing).entry(incident).entryBy(boom).build();
-    const agent = Agent.create({ provider: mock({ reply: 'done' }), model: 'mock', maxIterations: 2 })
+    const agent = Agent.create({
+      provider: mock({ reply: 'done' }),
+      model: 'mock',
+      maxIterations: 2,
+    })
       .system('')
       .skillGraph(graph)
       .build();
