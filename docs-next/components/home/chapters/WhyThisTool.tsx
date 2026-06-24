@@ -52,15 +52,15 @@ const CAPS: ReactNode[] = [
     The agent picked <b>search_hotels</b> by its description. So — <b>why this tool?</b>
   </>,
   <>
-    The cheap <b>embedding</b> proxy ties <b>search_hotels</b> and <b>load_skill</b> at 0.50. Sharpen
-    the description, or swap the scorer.
+    Relevance scores them by term-match — but <b>search_hotels</b> ties <b>load_skill</b> at 0.50. An
+    ambiguous tie, a misfire waiting to happen.
   </>,
   <>
     Tie broken — your LLM&rsquo;s <b>rewrite</b> pushes <b>search_hotels</b> to 0.90 over{' '}
     <b>load_skill</b> 0.20. agentfootprint only flagged the tie.
   </>,
   <>
-    <b>Attention</b> reads the model&rsquo;s own internals and re-ranks decisively.
+    Or swap the scorer: <b>attention</b> reads the model&rsquo;s own internals — re-ranks decisively.
   </>,
   <>
     Or a <b>learned probe</b> trained on your model — <b>bring your own</b> scorer.
@@ -185,7 +185,7 @@ export function WhyThisTool() {
                 )}
               </div>
 
-              {revealed && (
+              {phase >= 2 && (
                 <div className={`af-why-fix${!canFix ? ' dim' : ''}`}>
                   <span className="af-ctrl-q">search_hotels — its description</span>
                   <div className={`af-desc-cur${sharpened ? ' struck' : ''}`}>
@@ -216,8 +216,9 @@ export function WhyThisTool() {
               )}
             </div>
 
-            {/* RIGHT — the Step Inspector, revealed on click then scroll-driven */}
+            {/* RIGHT — progressive reveal: scores (beat 1) → scorer pills (beat 3) */}
             <div className="af-score-pane">
+              {phase >= 3 && (
               <div className="af-ctrl">
                 <span className="af-ctrl-q">What scores them?</span>
                 <div className="af-scorer-row">
@@ -239,7 +240,9 @@ export function WhyThisTool() {
                   <b>You plug your own.</b>
                 </p>
               </div>
+              )}
 
+              {phase >= 1 && (
               <div className="af-relpanel">
                 <div className="insp-head">
                   <span className="insp-q">🔍 why this tool?</span>
@@ -268,6 +271,7 @@ export function WhyThisTool() {
                 </p>
                 <p className={`af-ambiguity${!isTie ? ' resolved' : ''}`}>{ambiguity}</p>
               </div>
+              )}
             </div>
           </div>
 
