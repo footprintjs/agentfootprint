@@ -253,6 +253,31 @@ const HOP_ARROWS: Record<string, { x: number; y: number; a: number }> = {
   loop: { x: 62, y: 7, a: 180 }, // left into Context (the result loops back)
 };
 
+// plain-language narration of what THIS beat is doing — shown under the animation, per step
+function beatNote(step: Step | undefined): string {
+  if (!step) return 'Scroll to step through the recorded run.';
+  switch (step.kind) {
+    case 'prompt':
+      return 'The turn begins — Context is assembled.';
+    case 'inject':
+      if (step.label.startsWith('skill')) return 'A skill unlocks a tool — injected into Tools.';
+      if (step.label.startsWith('result')) return 'The tool result is appended to Messages.';
+      return 'A rule injects context into a slot.';
+    case 'assemble':
+      return 'messageAPI assembles System Prompt + Messages into the request.';
+    case 'ask':
+      return 'CallLLM sends the request — messageAPI and Tools converge here.';
+    case 'route':
+      return 'Route sends the model to ToolCalls — a tool call, not the answer.';
+    case 'ret':
+      return 'The tool runs; its result loops back to Context for the next turn.';
+    case 'answer':
+      return 'Route reaches Final — the answer.';
+    default:
+      return '';
+  }
+}
+
 // ---- shared flowchart state, computed for a given number of revealed steps ----
 type FlowState = {
   litNodes: Set<NodeId>;
@@ -644,17 +669,17 @@ export function CoreEngine() {
   // the shared flowchart state for animation 1 (driven by progA)
   const state1 = computeFlowState(emitted);
 
+  // bottom caption narrates THIS beat — updates every step as you scroll
   const capA = done1 ? (
     <>
-      {'Full run recorded. '}
-      <b>Scrub back and forth</b>
-      {' — you’re time-travelling the footprint, every node a row.'}
+      {'Full run recorded — '}
+      <b>scrub back and forth</b>
+      {' to time-travel the footprint, every node a row.'}
     </>
   ) : (
     <>
-      {'Scroll the recorded run — each step '}
-      <b>emits to the recorder</b>
-      {' and lights its node, one row at a time.'}
+      <b>{`Step ${Math.max(1, stepNow)} / ${totalSteps}`}</b>
+      {` — ${beatNote(state1.curStep)} It emits to the recorder as it happens.`}
     </>
   );
 
@@ -664,13 +689,16 @@ export function CoreEngine() {
   const curStep2 = state2.curStep;
   const stageName2 = curStep2 ? (NODES.find((n) => n.id === curStep2.node)?.nt ?? curStep2.label) : '—';
   const stepNow2 = STEPS.slice(0, emitted2).length;
+  const beatFrac2 = Math.min(1, Math.max(0, progB * STEPS.length - (emitted2 - 1)));
+  const flushing2 = beatFrac2 >= 0.5;
 
+  // bottom caption narrates THIS beat AND its phase (run on the stack vs idle-beat flush)
   const capB = (
     <>
-      {'Stage '}
-      <b>{stageName2}</b>
-      {' runs on the call stack → emits its trace events; the idle beat flushes them to your recorders — '}
-      <b>one beat behind.</b>
+      <b>{`Stage ${stageName2} (${stepNow2}/${STEPS.length})`}</b>
+      {flushing2
+        ? ' — the idle beat flushes its trace events to memory and every listener, one beat behind.'
+        : ' — runs on the call stack and feeds its trace events into the queue, on the hot path.'}
     </>
   );
 
@@ -817,20 +845,21 @@ export function CoreEngine() {
 
       {/* ================= ANIMATION 1 — the loop records itself ================= */}
       <section className="af-eng-block" data-narrative="records itself">
+        {/* header scrolls past normally — only the animation below pins (the global nav is
+            already the sticky header; pinning the section header too is redundant) */}
+        <header className="af-eng-ahead">
+          <h2 className="af-eng-h2">
+            The loop <em>records itself.</em>
+          </h2>
+          <p className="af-eng-block-lede">
+            As the agent runs, every event drains into a typed log &mdash;{' '}
+            <b>prompt · ask · return · answer</b> &mdash; with its own cost. Scroll to{' '}
+            <b>time-travel</b>
+            {' the footprint you’ll later walk backward.'}
+          </p>
+        </header>
         <div className="af-eng-pin" ref={pinA}>
           <div className="af-eng-sticky">
-            <header className="af-eng-ahead">
-              <h2 className="af-eng-h2">
-                The loop <em>records itself.</em>
-              </h2>
-              <p className="af-eng-block-lede">
-                As the agent runs, every event drains into a typed log &mdash;{' '}
-                <b>prompt · ask · return · answer</b> &mdash; with its own cost. Scroll to{' '}
-                <b>time-travel</b>
-                {' the footprint you’ll later walk backward.'}
-              </p>
-            </header>
-
             {/* shared time-travel transport — sits ABOVE both containers and drives them in
                 sync: one scroll position → the arrow flows on the left AND the row appears right */}
             <div className="af-eng-timetravel" aria-hidden="true">
@@ -909,19 +938,19 @@ export function CoreEngine() {
 
       {/* ================= ANIMATION 2 — your agent IS the event loop ================= */}
       <section className="af-eng-block alt2" data-narrative="costs the run nothing">
+        {/* header scrolls past; only the animation pins below */}
+        <header className="af-eng-ahead">
+          <h2 className="af-eng-h2">
+            Your agent <em>is</em> the event loop.
+          </h2>
+          <p className="af-eng-block-lede">
+            Same recorded run &mdash; one lens over. A stage runs on the <b>call stack</b>, feeds its
+            trace events into the queue; the <b>idle beat</b> flushes them to trace memory and your
+            listeners, <b>one beat behind</b>, never blocking the hot path.
+          </p>
+        </header>
         <div className="af-eng-pin af-eng-pin-wide" ref={pinB}>
           <div className="af-eng-sticky">
-            <header className="af-eng-ahead">
-              <h2 className="af-eng-h2">
-                Your agent <em>is</em> the event loop.
-              </h2>
-              <p className="af-eng-block-lede">
-                Same recorded run &mdash; one lens over. A stage runs on the <b>call stack</b>, feeds its
-                trace events into the queue; the <b>idle beat</b> flushes them to trace memory and your
-                listeners, <b>one beat behind</b>, never blocking the hot path.
-              </p>
-            </header>
-
             {/* shared transport — drives the flowchart AND the event loop together */}
             <div className="af-eng-timetravel af-eng-timetravel-wide" aria-hidden="true">
               <div className="af-eng-tt-head">
