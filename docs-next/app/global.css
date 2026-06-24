@@ -1786,7 +1786,70 @@
 /* scroll-pinned cross-fade stage */
 .af-eng-pin {
   position: relative;
-  height: 240vh;
+  height: 300vh;
+}
+/* per-beat headline (replaces the 2-state cross-fade); min-height steadies the swap */
+.af-eng-headline2 {
+  margin-bottom: 30px;
+  min-height: 104px;
+}
+/* beat 0 — the one-line attach */
+.af-eng-attach-code {
+  font-family: var(--fd-font-mono, monospace);
+  font-size: 12.5px;
+  line-height: 1.65;
+  white-space: pre-wrap;
+  background: #1b1b1f;
+  color: #e8e8e4;
+  border-radius: 10px;
+  padding: 14px 16px;
+  margin: 14px 0 0;
+  overflow-x: auto;
+}
+/* beat 1 — what tracking buys you (the four Q&A) */
+.af-eng-buys {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  margin-top: 12px;
+}
+.af-eng-qa {
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--border-strong);
+  border-radius: 10px;
+  background: var(--bg);
+  padding: 9px 12px;
+}
+.af-eng-buys .af-eng-qa:nth-child(1) {
+  border-left-color: var(--coral);
+}
+.af-eng-buys .af-eng-qa:nth-child(2) {
+  border-left-color: var(--purple);
+}
+.af-eng-buys .af-eng-qa:nth-child(3) {
+  border-left-color: var(--teal);
+}
+.af-eng-buys .af-eng-qa:nth-child(4) {
+  border-left-color: var(--amber);
+}
+.af-eng-qa-q {
+  margin: 0 0 3px;
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--fg);
+}
+.af-eng-qa-a {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--fg-muted);
+}
+.af-eng-qa-src {
+  display: inline-block;
+  margin-top: 5px;
+  font-family: var(--fd-font-mono, monospace);
+  font-size: 10px;
+  color: var(--fg-faint);
 }
 .af-eng-sticky {
   position: sticky;

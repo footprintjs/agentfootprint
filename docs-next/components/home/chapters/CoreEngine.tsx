@@ -3,23 +3,14 @@
 import { useEffect, useRef, useState } from 'react';
 
 /**
- * Chapter 3 — "The engine". The deep "how it's implemented" beat: a ReAct loop that
- * RECORDS ITSELF. Two halves, scroll-pinned + cross-faded:
- *
- *  Layer A (the live drain log) — the loop runs on a timer; each recorded step
- *  (prompt · inject · ask · return · answer · loop) appends to a typed log and lights
- *  the matching node + edge on the constant left-hand flowchart. A running ms/tok/steps
- *  tally accumulates. (IntersectionObserver-gated; reduced-motion shows the final state.)
- *
- *  Layer B (the idle-beat dispatch runtime) — as you scroll the pin, the right side
- *  cross-fades from the log to a vertical event-loop diagram: the stage queues trace
- *  events (onStageAdded · onCommit · onDecision · onEmit) on the hot path; the IDLE BEAT
- *  flushes them to listeners + trace memory ONE BEAT BEHIND — collect during traversal,
- *  off the critical path, zero added latency. The headline cross-fades too:
- *  "The loop records itself." → "And it costs the run nothing."
+ * Chapter 3 — "The engine". A clean flowchart scrollytelling (like the backtrack chapter): the same
+ * ReAct loop that RECORDS ITSELF, walked in three discrete scroll beats —
+ *   0  attach a recorder (born tracked, no instrumentation)
+ *   1  what tracking buys you — four questions plain logs can't answer (real recorded runs)
+ *   2  …and it costs the run nothing — idle-beat dispatch, one beat behind, off the hot path
+ * The hero mental-model SVG and the event-loop dispatch visual are preserved.
  */
 
-type StepKind = 'prompt' | 'inject' | 'ask' | 'ret' | 'answer' | 'loop';
 type NodeId = 'ctx' | 'sys' | 'msg' | 'tool' | 'api' | 'llm' | 'route' | 'final' | 'tc';
 type EdgeId =
   | 'ctx-sys'
@@ -34,130 +25,6 @@ type EdgeId =
   | 'route-tc'
   | 'loop';
 
-type Step = {
-  kind: StepKind;
-  label: string;
-  text: React.ReactNode;
-  ms: number;
-  tok: number;
-  node: NodeId;
-  edge?: EdgeId;
-};
-
-// One ReAct iteration, as recorded steps.
-const STEPS: Step[] = [
-  { kind: 'prompt', label: 'prompt', text: 'assemble context for the call', ms: 180, tok: 90, node: 'ctx' },
-  {
-    kind: 'inject',
-    label: 'rule ↳',
-    text: (
-      <>
-        <b>always</b> &rarr; steering into <b>system</b>
-      </>
-    ),
-    ms: 60,
-    tok: 40,
-    node: 'sys',
-    edge: 'ctx-sys',
-  },
-  {
-    kind: 'inject',
-    label: 'rule ↳',
-    text: (
-      <>
-        memory rule fires &rarr; <b>messages</b>
-      </>
-    ),
-    ms: 80,
-    tok: 120,
-    node: 'msg',
-    edge: 'ctx-msg',
-  },
-  {
-    kind: 'ask',
-    label: 'ask',
-    text: (
-      <>
-        call <b>search_hotels</b>({'{ city: "Lisbon" }'})
-      </>
-    ),
-    ms: 260,
-    tok: 120,
-    node: 'llm',
-    edge: 'api-llm',
-  },
-  {
-    kind: 'ret',
-    label: 'return',
-    text: (
-      <>
-        <b>data</b> &larr; 6 hotels · reason
-      </>
-    ),
-    ms: 600,
-    tok: 320,
-    node: 'tool',
-    edge: 'tool-llm',
-  },
-  {
-    kind: 'inject',
-    label: 'skill ↳',
-    text: (
-      <>
-        skill activates &rarr; adds <b>book_hold</b> tool
-      </>
-    ),
-    ms: 90,
-    tok: 70,
-    node: 'tool',
-    edge: 'ctx-tool',
-  },
-  {
-    kind: 'ask',
-    label: 'ask',
-    text: (
-      <>
-        call <b>book_hold</b>({'{ id: "baixa" }'})
-      </>
-    ),
-    ms: 240,
-    tok: 150,
-    node: 'llm',
-    edge: 'api-llm',
-  },
-  {
-    kind: 'ret',
-    label: 'return',
-    text: (
-      <>
-        <b>instruction</b> &larr; needs sign-off · act
-      </>
-    ),
-    ms: 520,
-    tok: 210,
-    node: 'tool',
-    edge: 'tool-llm',
-  },
-  {
-    kind: 'answer',
-    label: 'answer',
-    text: <>&ldquo;Hotel Baixa held &mdash; pending approval.&rdquo;</>,
-    ms: 240,
-    tok: 160,
-    node: 'final',
-    edge: 'route-final',
-  },
-  {
-    kind: 'loop',
-    label: 'loop ↻',
-    text: 'every inject decision recorded to the footprint',
-    ms: 0,
-    tok: 0,
-    node: 'tc',
-    edge: 'loop',
-  },
-];
-
 type FlowNode = { id: NodeId; nt: string; ns?: string; x: number; y: number; cls?: string; flavor?: string };
 const NODES: FlowNode[] = [
   { id: 'ctx', nt: 'Context', ns: 'ReAct loop', x: 50, y: 11 },
@@ -170,7 +37,6 @@ const NODES: FlowNode[] = [
   { id: 'final', nt: 'Final', ns: 'answer', x: 25, y: 92 },
   { id: 'tc', nt: 'ToolCalls', ns: 'execute', x: 75, y: 92 },
 ];
-
 const EDGES: { id: EdgeId; d: string; loop?: boolean }[] = [
   { id: 'ctx-sys', d: 'M50,11 L20.2,11 Q18,11 18,15.5 L18,30' },
   { id: 'ctx-msg', d: 'M50,11 L50,30' },
@@ -185,7 +51,7 @@ const EDGES: { id: EdgeId; d: string; loop?: boolean }[] = [
   { id: 'loop', d: 'M75,92 L96,92 L96,7 L52,7', loop: true },
 ];
 
-// Trace-event chips (layer B queue).
+// Trace-event chips — the idle-beat dispatch queue.
 const CHIPS: { name: string; flavor: string }[] = [
   { name: 'onStageAdded', flavor: 'coral' },
   { name: 'onCommit', flavor: 'purple' },
@@ -193,120 +59,84 @@ const CHIPS: { name: string; flavor: string }[] = [
   { name: 'onEmit', flavor: 'amber' },
 ];
 
-// Scroll-phase captions under the card.
-const PHASES: React.ReactNode[] = [
+// ---- beat content ----
+const ATTACH_CODE = `agent
+  .attach(recorder())   // one line — it rides along
+  .run({ message });    // every step captured, born tracked`;
+
+type QA = { q: React.ReactNode; a: React.ReactNode; src: string };
+// "What tracking buys you" — README's four questions logs can't answer, each from a real recorded run.
+const QUESTIONS: QA[] = [
+  {
+    q: (
+      <>
+        Why <b>this</b> tool, not that one?
+      </>
+    ),
+    a: (
+      <>
+        margin <b>0.02</b> &middot; <b>⚠ NARROW</b> — the two descriptions read nearly identical
+      </>
+    ),
+    src: 'toolChoiceRecorder',
+  },
+  {
+    q: <>Why was this loan declined?</>,
+    a: (
+      <>
+        decision ← <b>dti 0.52</b> ← monthlyDebt / income — every hop a real recorded edge
+      </>
+    ),
+    src: 'decide() + causal slice',
+  },
+  {
+    q: <>Which context made the answer wrong?</>,
+    a: (
+      <>
+        <b>CAUSAL</b>: ablating <b>vip-override</b> flipped the outcome in 3/3 reruns
+      </>
+    ),
+    src: 'localizeContextBug',
+  },
+  {
+    q: <>Prove nobody edited this record.</>,
+    a: (
+      <>
+        verifyAuditBundle → <b>brokenAt #16</b> — the tampered row, named
+      </>
+    ),
+    src: 'hash-chained audit',
+  },
+];
+
+const CAPTIONS: React.ReactNode[] = [
   <>
-    The agent runs &mdash; every event drains into a typed log, <b>one row per step.</b>
+    Your agent <b>is</b> the event loop. Attach a recorder — one line — and every step is captured as
+    it runs, <b>born tracked.</b>
   </>,
   <>
-    Same recorded run, <b>other lens</b> &rarr; the stage queues its trace events as it executes.
+    Four questions plain logs can&rsquo;t answer — each the captured output of a real run in this repo,
+    each a real recorded edge.
   </>,
   <>
-    In the <b>idle beat</b> the dispatcher flushes the queue &mdash; <b>off the hot path.</b>
-  </>,
-  <>
-    Listeners &amp; trace memory fill <b>one beat behind</b> &mdash; the run pays <b>nothing.</b>
+    And the watching is <b>free</b>: events queue on the hot path, the <b>idle beat</b> flushes them —{' '}
+    <b>one beat behind</b>, never blocking.
   </>,
 ];
 
 export function CoreEngine() {
-  // Layer A — live drain log state.
-  const [emitted, setEmitted] = useState<number>(0); // count of STEPS appended so far
-  const [tally, setTally] = useState({ ms: 0, tok: 0, steps: 0 });
-  const logScrollRef = useRef<HTMLDivElement>(null);
-
-  // Layer B — scroll-driven cross-fade + dispatch state.
-  const [prog, setProg] = useState(0); // 0..1 progress through the pin
+  const [phase, setPhase] = useState(0);
   const pinRef = useRef<HTMLDivElement>(null);
+  const LAST = 2; // 0 attach · 1 what tracking buys you · 2 costs nothing
 
   const reduced =
     typeof window !== 'undefined' && window.matchMedia
       ? window.matchMedia('(prefers-reduced-motion: reduce)').matches
       : false;
 
-  // ---- Layer A: replay the recorded run on a timer, gated by IntersectionObserver ----
-  useEffect(() => {
-    const host = logScrollRef.current;
-    if (!host) return;
-
-    if (reduced) {
-      // Final state: show the full footprint, no timers.
-      setEmitted(STEPS.length);
-      const tot = STEPS.reduce(
-        (a, s) => (s.kind === 'loop' ? a : { ms: a.ms + s.ms, tok: a.tok + s.tok, steps: a.steps + 1 }),
-        { ms: 0, tok: 0, steps: 0 },
-      );
-      setTally(tot);
-      return;
-    }
-
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    let started = false;
-    let i = 0;
-    let acc = { ms: 0, tok: 0, steps: 0 };
-
-    const step = () => {
-      const s = STEPS[i];
-      i += 1;
-      setEmitted(i);
-      if (s.kind !== 'loop') {
-        acc = { ms: acc.ms + s.ms, tok: acc.tok + s.tok, steps: acc.steps + 1 };
-        setTally({ ...acc });
-      }
-      // auto-scroll the log to the newest row
-      const el = logScrollRef.current;
-      if (el) el.scrollTop = el.scrollHeight;
-
-      if (i >= STEPS.length) {
-        // hold the full footprint, then reset for the next loop
-        timer = setTimeout(() => {
-          i = 0;
-          acc = { ms: 0, tok: 0, steps: 0 };
-          setEmitted(0);
-          setTally({ ms: 0, tok: 0, steps: 0 });
-          timer = setTimeout(step, 700);
-        }, 2600);
-        return;
-      }
-      timer = setTimeout(step, 700);
-    };
-
-    const start = () => {
-      if (started) return;
-      started = true;
-      timer = setTimeout(step, 400);
-    };
-
-    let io: IntersectionObserver | undefined;
-    try {
-      io = new IntersectionObserver(
-        (entries) => {
-          entries.forEach((e) => {
-            if (e.isIntersecting) {
-              start();
-              io?.disconnect();
-            }
-          });
-        },
-        { threshold: 0.3 },
-      );
-      io.observe(host);
-    } catch {
-      /* no IO support — fall through to the fallback timer */
-    }
-    const fallback = setTimeout(start, 1500);
-
-    return () => {
-      if (timer) clearTimeout(timer);
-      clearTimeout(fallback);
-      io?.disconnect();
-    };
-  }, [reduced]);
-
-  // ---- Layer B: scroll-driven progress through the pin ----
   useEffect(() => {
     if (reduced) {
-      setProg(1);
+      setPhase(LAST);
       return;
     }
     let raf = 0;
@@ -318,7 +148,7 @@ export function CoreEngine() {
         const rect = pin.getBoundingClientRect();
         const total = pin.offsetHeight - window.innerHeight;
         const p = total > 0 ? Math.min(1, Math.max(0, -rect.top / total)) : 0;
-        setProg(p);
+        setPhase(Math.min(LAST, Math.floor(p * (LAST + 1))));
       });
     };
     onScroll();
@@ -331,29 +161,10 @@ export function CoreEngine() {
     };
   }, [reduced]);
 
-  // ---- derive view state from progress ----
-  const toEvt = prog > 0.48;
-  // sub-progress within the dispatch half (after the cross-fade)
-  const sub = prog < 0.55 ? 0 : Math.min(1, (prog - 0.55) / 0.45);
-  const phaseIdx = prog < 0.42 ? 0 : prog < 0.55 ? 1 : sub < 0.5 ? 2 : 3;
-
-  // dispatch animation: queue fills first, then flushes; listeners light one beat behind.
-  const dp = toEvt ? sub : 0;
-  const nQueued = Math.min(CHIPS.length, Math.floor(dp * 6));
-  const nFlushed = Math.max(0, Math.min(CHIPS.length, Math.floor((dp - 0.45) * 8)));
-  const beating = dp > 0.4;
-  const memLit = nFlushed >= CHIPS.length;
-
-  // which nodes/edges are lit, and per-node hit counts (from the drain log)
-  const litNodes = new Set<NodeId>();
-  const litEdges = new Set<EdgeId>();
-  const counts: Partial<Record<NodeId, number>> = {};
-  for (let k = 0; k < emitted; k++) {
-    const s = STEPS[k];
-    litNodes.add(s.node);
-    counts[s.node] = (counts[s.node] ?? 0) + 1;
-    if (s.edge) litEdges.add(s.edge);
-  }
+  // the recorded loop is a constant lit backdrop on every beat
+  const litNodes = new Set<NodeId>(NODES.map((n) => n.id));
+  const litEdges = new Set<EdgeId>(EDGES.map((e) => e.id));
+  const onEvt = phase >= 2;
 
   return (
     <div className="af-eng">
@@ -496,36 +307,47 @@ export function CoreEngine() {
         </div>
       </section>
 
-      {/* ---------- THE RECORDING BLOCK (scroll-pinned cross-fade) ---------- */}
-      <section className="af-eng-block">
+      {/* ---------- THE FOOTPRINT (scroll-pinned, 3 beats) ---------- */}
+      <section className="af-eng-block" data-narrative="what tracking buys you">
         <div className="af-eng-pin" ref={pinRef}>
           <div className="af-eng-sticky">
-            {/* sticky headline cross-fade */}
-            <div className={`af-eng-headline${toEvt ? ' to-evt' : ''}`}>
-              <div className="af-eng-hl-a">
-                <h2 className="af-eng-h2">
-                  The loop <em>records itself.</em>
-                </h2>
-                <p className="af-eng-block-lede">
-                  As the agent runs, every event drains into a typed log &mdash;{' '}
-                  <b>prompt · ask · return · answer</b> &mdash; with its own cost. This is the footprint
-                  you&rsquo;ll later walk backward.
-                </p>
-              </div>
-              <div className="af-eng-hl-b">
-                <h2 className="af-eng-h2">
-                  And it costs the run <em>nothing.</em>
-                </h2>
-                <p className="af-eng-block-lede">
-                  Same recorded run &mdash; your agent <b>is</b> the event loop. The stage queues its
-                  trace events; the <b>idle beat</b> flushes them to your listeners and trace memory,{' '}
-                  <b>one beat behind</b>, never blocking the hot path.
-                </p>
-              </div>
+            <div className="af-eng-headline2">
+              {phase === 0 ? (
+                <>
+                  <h2 className="af-eng-h2">
+                    The loop <em>records itself.</em>
+                  </h2>
+                  <p className="af-eng-block-lede">
+                    No instrumentation: attach a recorder and every stage, decision, write and emit is
+                    captured as the loop runs — the footprint you&rsquo;ll later walk backward.
+                  </p>
+                </>
+              ) : phase === 1 ? (
+                <>
+                  <h2 className="af-eng-h2">
+                    What tracking <em>buys you.</em>
+                  </h2>
+                  <p className="af-eng-block-lede">
+                    Four questions plain logs can&rsquo;t answer — each the captured output of a real
+                    run in this repo.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <h2 className="af-eng-h2">
+                    And it costs the run <em>nothing.</em>
+                  </h2>
+                  <p className="af-eng-block-lede">
+                    Your agent <b>is</b> the event loop. The stage queues its trace events; the{' '}
+                    <b>idle beat</b> flushes them to your listeners and trace memory, <b>one beat
+                    behind</b>, never blocking the hot path.
+                  </p>
+                </>
+              )}
             </div>
 
             <div className="af-eng-split af-eng-flowwrap">
-              {/* LEFT — the constant execution flowchart */}
+              {/* LEFT — the constant recorded flowchart */}
               <div className="af-eng-exec-card">
                 <div className="af-eng-card-head">
                   <span className="af-eng-card-label">execution</span>
@@ -544,7 +366,6 @@ export function CoreEngine() {
                     </svg>
                     {NODES.map((nd) => {
                       const lit = litNodes.has(nd.id);
-                      const c = counts[nd.id];
                       const cls = ['af-eng-fnode', nd.cls || '', lit ? 'lit' : ''].join(' ').trim();
                       return (
                         <div
@@ -564,7 +385,6 @@ export function CoreEngine() {
                               {nd.ns && <span>{nd.ns}</span>}
                             </>
                           )}
-                          {lit && c ? <i className="af-eng-fcount">{c}</i> : null}
                         </div>
                       );
                     })}
@@ -573,109 +393,114 @@ export function CoreEngine() {
                 </div>
               </div>
 
-              {/* RIGHT — log (layer A) cross-fades to dispatch (layer B) */}
+              {/* RIGHT — per beat: attach · what tracking buys you · idle-beat dispatch */}
               <div className="af-eng-rec-card">
-                <div className="af-eng-rec-head">
-                  <span className="af-eng-live">
-                    <span className="af-eng-blink-dot" />
-                    recording
-                  </span>
-                  <span className="af-eng-rec-tally">
-                    <b>{tally.ms.toLocaleString()}</b> ms · <b>{tally.tok.toLocaleString()}</b> tok ·{' '}
-                    <b>{tally.steps}</b> steps
-                  </span>
-                </div>
-
-                <div className={`af-eng-rec-right${toEvt ? ' to-evt' : ''}`}>
-                  {/* layer A — the drain log */}
-                  <div className="af-eng-rec-log" ref={logScrollRef}>
-                    {STEPS.slice(0, emitted).map((s, idx) => {
-                      // running 1-based index that skips the loop pseudo-row
-                      const nodeNum = STEPS.slice(0, idx + 1).filter((x) => x.kind !== 'loop').length;
-                      return (
-                        <div key={idx} className={`af-eng-ln ${s.kind}`}>
-                          <span className="af-eng-ln-node">{s.kind === 'loop' ? '↻' : nodeNum}</span>
-                          <span className="af-eng-ln-kind">{s.label}</span>
-                          <span className="af-eng-ln-txt">{s.text}</span>
-                          {s.ms ? (
-                            <span className="af-eng-ln-meta">
-                              {s.ms}ms · {s.tok}tok
-                            </span>
-                          ) : null}
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  {/* layer B — the idle-beat dispatch runtime */}
-                  <div className="af-eng-dispatch" aria-hidden={!toEvt}>
-                    <div className="af-eng-dsp-cap">the runtime · idle-beat dispatch</div>
-                    <div className="af-eng-dsp-stack">
-                      <span className={`af-eng-dsp-ring${toEvt ? ' spin' : ''}`} aria-hidden="true" />
-                      <span className="af-eng-tagi">call stack</span>
-                      <span className="af-eng-dsp-stack-sub">stage runs — hot path · 16ms tick</span>
+                {phase === 0 ? (
+                  <>
+                    <div className="af-eng-rec-head">
+                      <span className="af-eng-live">
+                        <span className="af-eng-blink-dot" />
+                        recording
+                      </span>
+                      <span className="af-eng-rec-tally">attach · 1 line</span>
                     </div>
-                    <div className="af-eng-dsp-rail">
-                      <span className={`af-eng-dsp-drop${toEvt ? ' run' : ''}`} />
+                    <pre className="af-eng-attach-code">{ATTACH_CODE}</pre>
+                    <div className="af-eng-rec-foot">
+                      ↳ <b>born tracked</b> — no manual logging, no decorators. The footprint is a side
+                      effect of the run.
                     </div>
-                    <div className="af-eng-dsp-queue">
-                      {CHIPS.map((chip, idx) => (
-                        <div
-                          key={chip.name}
-                          className={`af-eng-dsp-chip${idx < nQueued ? ' queued' : ''}${
-                            idx < nFlushed ? ' flushed' : ''
-                          }`}
-                          data-flavor={chip.flavor}
-                        >
-                          <span className="af-eng-ev" />
-                          <b>{chip.name}</b>
+                  </>
+                ) : phase === 1 ? (
+                  <>
+                    <div className="af-eng-rec-head">
+                      <span className="af-eng-live">
+                        <span className="af-eng-blink-dot" />
+                        why &gt; what
+                      </span>
+                      <span className="af-eng-rec-tally">4 answers logs can&rsquo;t give</span>
+                    </div>
+                    <div className="af-eng-buys">
+                      {QUESTIONS.map((it, i) => (
+                        <div className="af-eng-qa" key={i}>
+                          <p className="af-eng-qa-q">{it.q}</p>
+                          <p className="af-eng-qa-a">{it.a}</p>
+                          <span className="af-eng-qa-src">{it.src}</span>
                         </div>
                       ))}
                     </div>
-                    <div className={`af-eng-dsp-idle${beating ? ' beating' : ''}`}>
-                      <span className="af-eng-spin">⟳</span> idle beat flushes the queue
+                  </>
+                ) : (
+                  <>
+                    <div className="af-eng-rec-head">
+                      <span className="af-eng-live">
+                        <span className="af-eng-blink-dot" />
+                        recording
+                      </span>
+                      <span className="af-eng-rec-tally">one beat behind · 0ms added</span>
                     </div>
-                    <div className="af-eng-dsp-fan" aria-hidden="true">
-                      <span />
-                      <span />
-                    </div>
-                    <div className="af-eng-dsp-out">
-                      <div className="af-eng-dsp-listeners">
-                        {CHIPS.map((chip, idx) => (
-                          <div
-                            key={chip.name}
-                            className={`af-eng-dsp-lst${idx < Math.max(0, nFlushed - 1) ? ' lit' : ''}`}
-                          >
-                            <i className={`af-eng-dot-${chip.flavor}`} />
-                            listener
+                    <div className="af-eng-rec-right to-evt">
+                      <div className="af-eng-dispatch">
+                        <div className="af-eng-dsp-cap">the runtime · idle-beat dispatch</div>
+                        <div className="af-eng-dsp-stack">
+                          <span className={`af-eng-dsp-ring${onEvt ? ' spin' : ''}`} aria-hidden="true" />
+                          <span className="af-eng-tagi">call stack</span>
+                          <span className="af-eng-dsp-stack-sub">stage runs — hot path · 16ms tick</span>
+                        </div>
+                        <div className="af-eng-dsp-rail">
+                          <span className={`af-eng-dsp-drop${onEvt ? ' run' : ''}`} />
+                        </div>
+                        <div className="af-eng-dsp-queue">
+                          {CHIPS.map((chip) => (
+                            <div
+                              key={chip.name}
+                              className={`af-eng-dsp-chip${onEvt ? ' queued flushed' : ''}`}
+                              data-flavor={chip.flavor}
+                            >
+                              <span className="af-eng-ev" />
+                              <b>{chip.name}</b>
+                            </div>
+                          ))}
+                        </div>
+                        <div className={`af-eng-dsp-idle${onEvt ? ' beating' : ''}`}>
+                          <span className="af-eng-spin">⟳</span> idle beat flushes the queue
+                        </div>
+                        <div className="af-eng-dsp-fan" aria-hidden="true">
+                          <span />
+                          <span />
+                        </div>
+                        <div className="af-eng-dsp-out">
+                          <div className="af-eng-dsp-listeners">
+                            {CHIPS.map((chip) => (
+                              <div key={chip.name} className={`af-eng-dsp-lst${onEvt ? ' lit' : ''}`}>
+                                <i className={`af-eng-dot-${chip.flavor}`} />
+                                listener
+                              </div>
+                            ))}
                           </div>
-                        ))}
-                      </div>
-                      <div className={`af-eng-dsp-mem${memLit ? ' lit' : ''}`}>
-                        <span className="af-eng-dsp-mem-t">trace memory</span>
-                        <span className="af-eng-dsp-mem-tl">
-                          <i />
-                          <i />
-                          <i />
-                          <i />
-                          <i />
-                          <i />
-                        </span>
+                          <div className={`af-eng-dsp-mem${onEvt ? ' lit' : ''}`}>
+                            <span className="af-eng-dsp-mem-t">trace memory</span>
+                            <span className="af-eng-dsp-mem-tl">
+                              <i />
+                              <i />
+                              <i />
+                              <i />
+                              <i />
+                              <i />
+                            </span>
+                          </div>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                </div>
-
-                <div className="af-eng-rec-foot">
-                  ↳ logs collect <b>as we run</b> and connect <b>as they execute</b> &mdash; and it&rsquo;s{' '}
-                  <b>free</b>: the footprint drains on the event loop&rsquo;s <b>idle time</b>, off the
-                  agent&rsquo;s critical path. Zero added latency.
-                </div>
+                    <div className="af-eng-rec-foot">
+                      ↳ collect during traversal, off the agent&rsquo;s critical path. Zero added latency.
+                    </div>
+                  </>
+                )}
               </div>
             </div>
 
             <p className="af-eng-rec-phase">
-              <span className="a">{PHASES[phaseIdx]}</span>
+              <span className="a">{CAPTIONS[phase]}</span>
             </p>
           </div>
         </div>
