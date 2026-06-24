@@ -509,8 +509,15 @@
 /* a bright dash that travels backward (downstream → upstream) along the hop being traced */
 .af-flow .fe-pulse { fill: none; stroke: var(--coral); stroke-width: 1.4; stroke-linecap: round; stroke-dasharray: 0.16 0.84; filter: drop-shadow(0 0 1.1px var(--coral)); pointer-events: none; animation: af-pulse-back 0.62s ease-out both; }
 @keyframes af-pulse-back { from { stroke-dashoffset: -0.84; opacity: 0; } 25% { opacity: 1; } to { stroke-dashoffset: 0.16; opacity: 0; } }
+/* forward replay (the fix): teal, draws downstream in causal order (staggered inline), mirroring the hunt */
+.af-flow .fe.fwd { stroke: var(--teal); stroke-width: 0.72; opacity: 1; animation: af-draw 0.5s ease both; }
+.af-flow .fe-arrow.fwd { fill: var(--teal); opacity: 0.92; animation: af-arrow-pop 0.4s ease both; }
+.af-flow .fnode.fwd-lit { border-color: var(--teal); box-shadow: 0 0 0 3px color-mix(in oklab, var(--teal) 18%, transparent); }
+.af-flow .fnode.diamond.fwd-lit { background: var(--teal); box-shadow: none; }
+.af-flow .fnode.slot.fixed { border-color: var(--teal); box-shadow: 0 0 0 3px color-mix(in oklab, var(--teal) 22%, transparent); }
+.af-flow .fnode.fixed .ns { color: var(--teal); text-decoration: none; }
 @media (prefers-reduced-motion: reduce) {
-  .af-flow .fe.lit, .af-flow .fe.loop.lit, .af-flow .fe-arrow.head { animation: none; }
+  .af-flow .fe.lit, .af-flow .fe.loop.lit, .af-flow .fe-arrow.head, .af-flow .fe.fwd, .af-flow .fe-arrow.fwd { animation: none; }
   .af-flow .fe-pulse { display: none; }
 }
 /* nodes light ~0.2s AFTER the hop's edge starts drawing, so each step reads arrow → node */
@@ -537,7 +544,7 @@
 .af-tl-cap .stamp { color: var(--teal); font-weight: 700; font-family: var(--fd-font-mono, monospace); }
 
 /* scroll-pinned scrollytelling: the flowchart stays put while the rewind scrubs to scroll */
-.af-pin-track { position: relative; height: 420vh; }
+.af-pin-track { position: relative; height: 480vh; }
 .af-pin-stage {
   position: sticky;
   top: calc(var(--fd-nav-height, 56px) + 52px);
@@ -569,6 +576,10 @@
 .af-replay-seg.on { background: color-mix(in oklab, var(--coral) 55%, var(--border)); }
 .af-replay-seg.cul { background: var(--yellow); }
 .af-replay-head { position: absolute; top: -4px; width: 3px; height: 22px; background: var(--coral); border-radius: 2px; transform: translateX(-50%); transition: left 0.5s cubic-bezier(0.4, 0, 0.2, 1); }
+/* forward replay recolors the scrubber teal (the corrected run) */
+.af-replay-label .rw.fwd { color: var(--teal); }
+.af-replay-seg.fwd.on { background: color-mix(in oklab, var(--teal) 60%, var(--border)); }
+.af-replay-head.fwd { background: var(--teal); }
 
 .af-flow-aside { position: relative; flex: none; width: 320px; padding-left: 30px; display: flex; flex-direction: column; justify-content: center; }
 .af-aside-prog { position: absolute; left: 0; top: 0; bottom: 0; width: 2px; background: var(--border); border-radius: 2px; overflow: hidden; }
@@ -585,7 +596,7 @@
   .af-tl-cap { min-height: 88px; }
 }
 @media (max-width: 760px) {
-  .af-pin-track { height: 380vh; }
+  .af-pin-track { height: 440vh; }
   .af-pin-stage .af-flow { width: 320px; height: 320px; }
   .af-replay { width: 320px; }
 }

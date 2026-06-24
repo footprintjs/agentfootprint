@@ -9,8 +9,9 @@ import { useEffect, useRef, useState } from 'react';
  * one hop at a time, each hop drawing BACKWARD (downstream→upstream) with a reversed
  * arrowhead + a traveling rewind pulse, then the node lights:
  * Final ← Route ← CallLLM ← messageAPI ← System Prompt (suspect) → revealed at step 4
- * (the loop carried it untouched to step 14) → ablation flips the outcome to denied.
- * CAUSAL. Why is a query, not a guess.
+ * (the loop carried it untouched to step 14) → ablation flips the outcome to denied (CAUSAL).
+ * Then a final FORWARD beat replays the corrected run downstream in teal — same path, right
+ * answer (denied ✓) — the mirror of the hunt. Why is a query, not a guess.
  */
 
 type Node = { n: string; nt: string; ns?: string; x: number; y: number; cls?: string };
@@ -51,12 +52,13 @@ const LIT_EDGES: string[][] = [
   ['route-final', 'llm-route', 'api-llm', 'sys-api'],
   ['route-final', 'llm-route', 'api-llm', 'sys-api', 'ctx-sys'],
   ['route-final', 'llm-route', 'api-llm', 'sys-api', 'ctx-sys'],
+  [], // phase 7: forward replay — backward coral is off, the teal forward path is rendered separately
 ];
 // NB: the ReAct loop edge is deliberately NOT lit — it's iteration control-flow, NOT on the
 // backward causal slice of the final decision (step 14 EXITED the loop to Final). The value's
 // persistence across iterations 4→14 is shown by the replay scrubber, not by lighting the loop.
 // the ONE edge newly traced at each phase — gets the backward draw-in + the traveling rewind pulse.
-const HEAD_EDGE: (string | null)[] = [null, 'route-final', 'llm-route', 'api-llm', 'sys-api', 'ctx-sys', null];
+const HEAD_EDGE: (string | null)[] = [null, 'route-final', 'llm-route', 'api-llm', 'sys-api', 'ctx-sys', null, null];
 const LIT_NODES: string[][] = [
   [],
   ['route'],
@@ -65,6 +67,7 @@ const LIT_NODES: string[][] = [
   ['route', 'llm', 'api'],
   ['route', 'llm', 'api', 'ctx'],
   ['route', 'llm', 'api', 'ctx'],
+  [], // phase 7: forward replay — nodes handled separately (teal)
 ];
 // backward arrowhead per hop: a mid-edge point (viewBox units) + rotation pointing toward the UPSTREAM node.
 const HOP_ARROWS: Record<string, { x: number; y: number; a: number }> = {
@@ -75,6 +78,11 @@ const HOP_ARROWS: Record<string, { x: number; y: number; a: number }> = {
   'ctx-sys': { x: 18, y: 18, a: -90 },
 };
 const EDGE_D: Record<string, string> = Object.fromEntries(EDGES.map((e) => [e.e, e.d]));
+// forward replay (final beat, phase 7): the corrected run plays the causal path FORWARD, in causal
+// order, in teal — the mirror of the backward hunt. Staggered draw makes it read step-by-step.
+const FWD_PHASE = 7;
+const FWD_EDGES = ['ctx-sys', 'sys-api', 'api-llm', 'llm-route', 'route-final']; // upstream → downstream
+const FWD_NODES = ['ctx', 'sys', 'api', 'llm', 'route', 'final'];
 const CAPS = [
   <>The run ended wrong — at <b>step 14.</b> Every step was recorded as this loop. <b>Scroll to rewind it.</b></>,
   <>Retrace the decision: <b>Final ← Route.</b> Which branch fired, and why.</>,
@@ -83,8 +91,9 @@ const CAPS = [
   <><b>← System Prompt.</b> messageAPI pulled from this slot — the suspect. But <i>when</i> did it get there?</>,
   <><b>Step 4:</b> a search pulled in the wrong document and put it in the <b>System Prompt.</b> Nothing removed it — so it was still there at <b>step 14.</b></>,
   <>Remove it, re-run from step 4 → <b>denied.</b> <span className="stamp">● CAUSAL</span> — proven by replay, not guessed.</>,
+  <><b>The fix:</b> put the right document in and replay <b>forward</b> — every step, same path, now it lands on <b>denied ✓.</b></>,
 ];
-const LAST = 6;
+const LAST = 7;
 const headStep = (p: number) => (p <= 2 ? 14 : p <= 4 ? 9 : 4);
 
 export function BacktrackStory() {
@@ -129,8 +138,9 @@ export function BacktrackStory() {
   const litE = new Set(LIT_EDGES[phase]);
   const litN = new Set(LIT_NODES[phase]);
   const headEdge = HEAD_EDGE[phase];
+  const forward = phase >= FWD_PHASE;
   const step = headStep(phase);
-  const headLeft = ((step - 0.5) / 14) * 100;
+  const headLeft = (((forward ? 14 : step) - 0.5) / 14) * 100;
 
   return (
     <div className="af-bt">
@@ -163,51 +173,72 @@ export function BacktrackStory() {
             <div className="af-bt-left">
               <div className="af-flow">
                 <svg className="edges" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
-                  {EDGES.map((ed) => (
-                    <path
-                      key={ed.e}
-                      d={ed.d}
-                      pathLength={1}
-                      className={`fe${ed.loop ? ' loop' : ''}${litE.has(ed.e) ? ' lit' : ''}`}
-                    />
-                  ))}
-                  {/* backward arrowheads — persist for every traced hop; the active one pops in */}
-                  {[...litE]
-                    .filter((e) => HOP_ARROWS[e])
-                    .map((e) => {
-                      const a = HOP_ARROWS[e];
-                      return (
-                        <path
-                          key={`ah-${e}`}
-                          className={`fe-arrow${e === headEdge ? ' head' : ''}`}
-                          d="M-1.7,-1.5 L1.9,0 L-1.7,1.5 Z"
-                          transform={`translate(${a.x} ${a.y}) rotate(${a.a})`}
-                        />
-                      );
-                    })}
-                  {/* traveling rewind pulse on the hop being traced (remounts per phase to replay it) */}
-                  {headEdge && (
+                  {EDGES.map((ed) => {
+                    const fwdIdx = forward ? FWD_EDGES.indexOf(ed.e) : -1;
+                    return (
+                      <path
+                        key={ed.e}
+                        d={ed.d}
+                        pathLength={1}
+                        className={`fe${ed.loop ? ' loop' : ''}${!forward && litE.has(ed.e) ? ' lit' : ''}${fwdIdx >= 0 ? ' fwd' : ''}`}
+                        style={fwdIdx >= 0 ? { animationDelay: `${fwdIdx * 0.18}s` } : undefined}
+                      />
+                    );
+                  })}
+                  {/* arrowheads: backward (coral, per traced hop) during the hunt; forward (teal, downstream) on the replay */}
+                  {forward
+                    ? FWD_EDGES.map((e, i) => {
+                        const a = HOP_ARROWS[e];
+                        return (
+                          <path
+                            key={`fa-${e}`}
+                            className="fe-arrow fwd"
+                            d="M-1.7,-1.5 L1.9,0 L-1.7,1.5 Z"
+                            transform={`translate(${a.x} ${a.y}) rotate(${a.a + 180})`}
+                            style={{ animationDelay: `${i * 0.18 + 0.12}s` }}
+                          />
+                        );
+                      })
+                    : [...litE]
+                        .filter((e) => HOP_ARROWS[e])
+                        .map((e) => {
+                          const a = HOP_ARROWS[e];
+                          return (
+                            <path
+                              key={`ah-${e}`}
+                              className={`fe-arrow${e === headEdge ? ' head' : ''}`}
+                              d="M-1.7,-1.5 L1.9,0 L-1.7,1.5 Z"
+                              transform={`translate(${a.x} ${a.y}) rotate(${a.a})`}
+                            />
+                          );
+                        })}
+                  {/* traveling rewind pulse on the hop being traced (backward hunt only) */}
+                  {!forward && headEdge && (
                     <path key={`pulse-${phase}-${headEdge}`} className="fe-pulse" d={EDGE_D[headEdge]} pathLength={1} />
                   )}
                 </svg>
                 {NODES.map((nd) => {
-                  const suspect = nd.n === 'sys' && phase === 4;
-                  const culprit = nd.n === 'sys' && phase >= 5;
-                  const ablated = nd.n === 'sys' && phase >= 6;
+                  const suspect = !forward && nd.n === 'sys' && phase === 4;
+                  const culprit = !forward && nd.n === 'sys' && phase >= 5;
+                  const ablated = !forward && nd.n === 'sys' && phase === 6;
                   const denied = nd.n === 'final' && phase >= 6;
+                  const fwdLit = forward && FWD_NODES.includes(nd.n);
+                  const fixed = forward && nd.n === 'sys'; // the corrected slot on the forward replay
                   const cls = [
                     'fnode',
                     nd.cls || '',
-                    litN.has(nd.n) ? 'lit' : '',
+                    !forward && litN.has(nd.n) ? 'lit' : '',
                     suspect ? 'suspect' : '',
                     culprit ? 'culprit' : '',
                     ablated ? 'ablated' : '',
                     denied ? 'denied' : '',
+                    fwdLit ? 'fwd-lit' : '',
+                    fixed ? 'fixed' : '',
                   ].join(' ');
-                  // the System Prompt slot tags its bad content once it's the culprit; ablation
-                  // strikes the DOC (this sub-label), NOT the slot name — you remove the retrieved
-                  // doc, not the system prompt.
-                  const subLabel = nd.n === 'sys' && culprit ? 'wrong doc' : nd.ns;
+                  // System Prompt sub-label: the wrong doc during the backward hunt; the corrected
+                  // doc on the forward replay. Ablation strikes the DOC, never the slot name.
+                  const subLabel =
+                    nd.n === 'sys' ? (forward ? 'right doc' : culprit ? 'wrong doc' : nd.ns) : nd.ns;
                   return (
                     <div key={nd.n} className={cls} style={{ left: `${nd.x}%`, top: `${nd.y}%` }}>
                       <span className="nt">{denied ? '→ denied ✓' : nd.nt}</span>
@@ -230,7 +261,11 @@ export function BacktrackStory() {
                     ◂
                   </button>
                   <span className="af-replay-label">
-                    <span className="rw">↩ rewinding</span> step <b>{step}</b> <span className="of">/ 14</span>
+                    {forward ? (
+                      <><span className="rw fwd">▶ replaying</span> step <b>4 → 14</b></>
+                    ) : (
+                      <><span className="rw">↩ rewinding</span> step <b>{step}</b> <span className="of">/ 14</span></>
+                    )}
                   </span>
                   <button
                     type="button"
@@ -245,11 +280,13 @@ export function BacktrackStory() {
                 <div className="af-replay-track">
                   {Array.from({ length: 14 }, (_, i) => {
                     const s = i + 1;
-                    const on = s >= step;
-                    const cul = s === 4 && phase >= 5;
-                    return <span key={i} className={`af-replay-seg${on ? ' on' : ''}${cul ? ' cul' : ''}`} />;
+                    const on = forward ? s >= 4 : s >= step;
+                    const cul = !forward && s === 4 && phase >= 5;
+                    return (
+                      <span key={i} className={`af-replay-seg${on ? ' on' : ''}${cul ? ' cul' : ''}${forward ? ' fwd' : ''}`} />
+                    );
                   })}
-                  <span className="af-replay-head" style={{ left: `${headLeft}%` }} />
+                  <span className={`af-replay-head${forward ? ' fwd' : ''}`} style={{ left: `${headLeft}%` }} />
                 </div>
               </div>
             </div>
@@ -260,7 +297,11 @@ export function BacktrackStory() {
               </span>
               <p className="af-flow-kicker">So how do you actually know?</p>
               <p className="af-flow-head">
-                Rewind the run — <em>backward.</em>
+                {forward ? (
+                  <>Replay the fix — <em>forward.</em></>
+                ) : (
+                  <>Rewind the run — <em>backward.</em></>
+                )}
               </p>
               <p className="af-tl-cap">{CAPS[phase]}</p>
             </aside>
