@@ -706,7 +706,7 @@ export function CoreEngine() {
     <div className="af-eng">
       {/* ---------- HERO ---------- */}
       <section className="af-eng-hero">
-        <p className="af-eng-eyebrow">03 · the core engine</p>
+        <p className="af-eng-eyebrow">04 · how it works</p>
         <h1 className="af-eng-h1">
           The brain thinks, asks a tool, <em>loops to the answer.</em>
         </h1>

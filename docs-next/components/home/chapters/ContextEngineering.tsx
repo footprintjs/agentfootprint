@@ -210,9 +210,10 @@ const TRIG_BEATS: TrigBeat[] = [
     code: 'defineInstruction({ activeWhen: c => c.lastToolResult, prompt })',
     aside: (
       <>
-        <b>on-tool-return</b> — after a specific tool returns, the <b>loop</b> carries a note into the
-        next prompt: <b>system</b> by default, or <b>messages</b> for recency/higher attention. In
-        practice a <code>rule</code> predicate on <code>ctx.lastToolResult</code>.{' '}
+        <b>on-tool-return</b> — after a specific tool returns, an injection fires for the next prompt:
+        <b> system</b> by default, or <b>messages</b> for recency. It&rsquo;s a dedicated trigger kind that
+        matches the returned <code>toolName</code>; with <code>defineInstruction</code> you author it as a
+        rule on <code>ctx.lastToolResult</code>.{' '}
         <span className="src">evaluator matches toolName; inject decides the slot</span>
       </>
     ),
@@ -265,7 +266,7 @@ const STEPS: Step[] = [
         <code>read_skill(&apos;billing&apos;)</code>
       </>
     ),
-    loop: '↻ loop returns to SystemPrompt — the read_skill result will recompose the next prompt.',
+    loop: '↻ loop re-runs the injection step — all three slots recompose for the next turn.',
     footHead: 'Iteration 1',
     footRest: 'the catalog stays clean. The model sees one tool: a door to ask for more.',
   },
@@ -866,9 +867,10 @@ function DynamicReactBlock() {
       </h2>
       <p className="af-ctx-lede">
         The model reasons, decides which skill it needs, and the framework{' '}
-        <b>re-assembles the system prompt and the tool list</b> around that decision. Tools the model
-        can&apos;t use yet never enter the window — so the context shrinks to what the step needs, and
-        the token bill drops with it. <b>Scroll</b> to walk the three iterations.
+        <b>re-engineers all three slots</b> — system, messages, and tools — around that decision. Tools
+        the model can&apos;t use yet never enter the window, so the context shrinks to what each step needs
+        — for tool-heavy agents, that&rsquo;s where the savings come from. <b>Scroll</b> to walk the three
+        iterations.
       </p>
 
       <div className="af-dyn-track" ref={trackRef}>
@@ -971,18 +973,19 @@ function DynamicReactBlock() {
         <div className="af-ctx-cc classic">
           <h4>Classic ReAct</h4>
           <p>
-            The loop returns to <b>CallLLM</b>. Slots freeze after iteration 1 — all 12 tools ride
-            along every turn, whether the step needs them or not.
+            The loop re-runs the injection step, but only the <b>Messages</b> slot recomposes — System
+            Prompt and Tools are cached after turn 1. So all 12 tools ride along every turn, whether the
+            step needs them or not.
           </p>
-          <p className="loopnote">loop edge &rarr; CallLLM · 12 tools &times; every iteration</p>
+          <p className="loopnote">loop &rarr; re-engineer · only Messages recomposes · system + 12 tools cached</p>
         </div>
         <div className="af-ctx-cc dynamic">
           <h4>Dynamic ReAct — agentfootprint</h4>
           <p>
-            The loop returns to <b>SystemPrompt</b>. Every turn recomposes: injections that fired on
-            the last tool result rewrite the next prompt, tools appear only once unlocked.
+            Same loop — but <b>all three slots</b> recompose every turn. Injections that fired on the
+            last tool result rewrite the next prompt; tools appear only once unlocked.
           </p>
-          <p className="loopnote">loop edge &rarr; SystemPrompt · 1 &rarr; 5 tools, on demand</p>
+          <p className="loopnote">loop &rarr; re-engineer · all 3 slots recompose · 1 &rarr; 5 tools, on demand</p>
         </div>
       </div>
     </section>
