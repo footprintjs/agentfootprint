@@ -2059,13 +2059,40 @@
     0 0 0 3px color-mix(in oklab, var(--teal) 34%, transparent),
     0 0 14px color-mix(in oklab, var(--teal) 45%, transparent);
 }
+/* Route is a decision diamond. clip-path clips the border, so the outline is a 2-layer trick:
+   the node bg IS the rim color, ::before (inset) is the fill. Lit/answer recolor the rim. */
 .af-eng-fnode.diamond {
-  clip-path: polygon(50% -4%, 104% 50%, 50% 104%, -4% 50%);
-  padding: 15px 28px;
-  border-radius: 2px;
+  width: 92px;
+  height: 46px;
+  min-width: 0;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: var(--border-strong);
+  clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%);
+  display: grid;
+  place-items: center;
+}
+.af-eng-fnode.diamond::before {
+  content: '';
+  position: absolute;
+  inset: 1.8px;
+  z-index: 0;
+  background: var(--bg-elev);
+  clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%);
+}
+.af-eng-fnode.diamond b {
+  position: relative;
+  z-index: 1;
 }
 .af-eng-fnode.diamond span {
   display: none;
+}
+.af-eng-fnode.diamond.lit {
+  background: var(--coral);
+}
+.af-eng-fnode.diamond.lit.answer {
+  background: var(--teal);
 }
 .af-eng-fnode.pill {
   border-radius: 999px;

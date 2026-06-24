@@ -41,6 +41,7 @@ type Step = {
   ms: number;
   tok: number;
   node: NodeId;
+  nodes?: NodeId[]; // extra waypoint nodes this beat lights (e.g. the Route diamond), beyond `node`
   edge?: EdgeId; // the primary hop (gets the head pulse); also the one the arrowhead pops on
   edges?: EdgeId[]; // a step may traverse several edges at once (e.g. assemble pulls all 3 slots)
   tone?: 'teal'; // a second-iteration / answer beat — rendered teal so it reads apart from the coral first pass
@@ -130,6 +131,7 @@ const STEPS: Step[] = [
     ms: 30,
     tok: 0,
     node: 'tc',
+    nodes: ['route'],
     edge: 'route-tc',
     edges: ['llm-route', 'route-tc'],
   },
@@ -146,32 +148,63 @@ const STEPS: Step[] = [
     node: 'ctx',
     edge: 'loop',
   },
+  // ── second iteration (teal): only the path the tool result CHANGED re-runs ──
+  {
+    kind: 'inject',
+    label: 'result ↳',
+    text: (
+      <>
+        tool result &rarr; appended to <b>messages</b>
+      </>
+    ),
+    ms: 50,
+    tok: 300,
+    node: 'msg',
+    edge: 'ctx-msg',
+    tone: 'teal',
+  },
+  {
+    kind: 'assemble',
+    label: 'assemble',
+    text: (
+      <>
+        <b>messageAPI</b> re-assembles · with the result
+      </>
+    ),
+    ms: 40,
+    tok: 0,
+    node: 'api',
+    edge: 'msg-api',
+    tone: 'teal',
+  },
   {
     kind: 'ask',
     label: 'ask',
     text: (
       <>
-        re-assembled · <b>CallLLM</b> answers with the results
+        <b>CallLLM</b> again &rarr; now it can answer
       </>
     ),
     ms: 240,
     tok: 160,
     node: 'llm',
     edge: 'api-llm',
-    edges: ['api-llm', 'tool-llm'],
+    tone: 'teal',
   },
   {
     kind: 'answer',
     label: 'answer',
     text: (
       <>
-        2nd pass · Route &rarr; <b>Final</b> &mdash; &ldquo;6 options in Lisbon.&rdquo;
+        Route &rarr; <b>Final</b> &mdash; &ldquo;6 options in Lisbon.&rdquo;
       </>
     ),
     ms: 50,
     tok: 0,
     node: 'final',
+    nodes: ['route'],
     edge: 'route-final',
+    edges: ['llm-route', 'route-final'],
     tone: 'teal',
   },
 ];
@@ -184,9 +217,9 @@ const NODES: FlowNode[] = [
   { id: 'tool', nt: 'Tools', x: 82, y: 30, cls: 'pill', flavor: 'teal' },
   { id: 'api', nt: 'messageAPI', ns: 'assemble', x: 50, y: 50.5 },
   { id: 'llm', nt: 'CallLLM', ns: 'send request', x: 50, y: 69.5 },
-  { id: 'route', nt: 'Route', ns: 'route', x: 50, y: 86.5, cls: 'diamond' },
-  { id: 'final', nt: 'Final', ns: 'answer', x: 25, y: 92 },
-  { id: 'tc', nt: 'ToolCalls', ns: 'execute', x: 75, y: 92 },
+  { id: 'route', nt: 'Route', ns: 'route', x: 50, y: 84, cls: 'diamond' },
+  { id: 'final', nt: 'Final', ns: 'answer', x: 24, y: 94 },
+  { id: 'tc', nt: 'ToolCalls', ns: 'execute', x: 76, y: 94 },
 ];
 
 const EDGES: { id: EdgeId; d: string; loop?: boolean }[] = [
@@ -197,10 +230,10 @@ const EDGES: { id: EdgeId; d: string; loop?: boolean }[] = [
   { id: 'msg-api', d: 'M50,30 L50,50.5' },
   { id: 'api-llm', d: 'M50,50.5 L50,69.5' },
   { id: 'tool-llm', d: 'M82,30 L82,65 Q82,69.5 79.8,69.5 L50,69.5' },
-  { id: 'llm-route', d: 'M50,69.5 L50,86.5' },
-  { id: 'route-final', d: 'M50,86.5 L25,92' },
-  { id: 'route-tc', d: 'M50,86.5 L75,92' },
-  { id: 'loop', d: 'M75,92 L96,92 L96,7 L52,7', loop: true },
+  { id: 'llm-route', d: 'M50,69.5 L50,84' },
+  { id: 'route-final', d: 'M50,84 L24,94' },
+  { id: 'route-tc', d: 'M50,84 L76,94' },
+  { id: 'loop', d: 'M76,94 L96,94 L96,7 L52,7', loop: true },
 ];
 
 // Forward arrowhead per hop: a mid-edge point (viewBox units) + rotation pointing toward the
@@ -214,9 +247,9 @@ const HOP_ARROWS: Record<string, { x: number; y: number; a: number }> = {
   'msg-api': { x: 50, y: 44, a: 90 }, // down into messageAPI
   'api-llm': { x: 50, y: 61, a: 90 }, // down into CallLLM (messageAPI → CallLLM)
   'tool-llm': { x: 66, y: 69.5, a: 180 }, // left into CallLLM (tools join the call)
-  'llm-route': { x: 50, y: 80, a: 90 }, // down into Route
-  'route-tc': { x: 63, y: 90, a: 12 }, // down-right into ToolCalls
-  'route-final': { x: 37, y: 89, a: 168 }, // down-left into Final
+  'llm-route': { x: 50, y: 75, a: 90 }, // down into Route
+  'route-tc': { x: 64, y: 90, a: 22 }, // down-right into ToolCalls
+  'route-final': { x: 36, y: 90, a: 158 }, // down-left into Final
   loop: { x: 62, y: 7, a: 180 }, // left into Context (the result loops back)
 };
 
@@ -298,10 +331,15 @@ export function CoreEngine() {
     const s = STEPS[k];
     litNodes.add(s.node);
     counts[s.node] = (counts[s.node] ?? 0) + 1;
+    s.nodes?.forEach((n) => {
+      litNodes.add(n);
+      counts[n] = (counts[n] ?? 0) + 1;
+    });
     if (s.edge) litEdges.add(s.edge);
     s.edges?.forEach((e) => litEdges.add(e));
     if (s.tone === 'teal') {
       tealNodes.add(s.node);
+      s.nodes?.forEach((n) => tealNodes.add(n));
       if (s.edge) tealEdges.add(s.edge);
       s.edges?.forEach((e) => tealEdges.add(e));
     }
@@ -620,7 +658,7 @@ export function CoreEngine() {
                               {nd.ns && <span>{nd.ns}</span>}
                             </>
                           )}
-                          {lit && c ? <i className="af-eng-fcount">{c}</i> : null}
+                          {lit && c && nd.cls !== 'diamond' ? <i className="af-eng-fcount">{c}</i> : null}
                         </div>
                       );
                     })}
