@@ -12,6 +12,7 @@ import {
   defineFact,
 } from 'agentfootprint';
 import { Lens, LensRecorder } from 'agentfootprint-lens';
+import { DynamicCodeBlock } from 'fumadocs-ui/components/dynamic-codeblock';
 
 /**
  * LIVE in-browser "Try it" for Dynamic ReAct. Shows the example's CODE inline,
@@ -226,46 +227,25 @@ export default function DynamicReactTryItInner() {
 
   return (
     <div className="tryit">
-      {/* ── The code, embedded inline — this is exactly what Run executes. ── */}
+      {/* ── The code, embedded inline + SYNTAX-HIGHLIGHTED — exactly what Run
+            executes. DynamicCodeBlock = Fumadocs' client-side shiki highlighter,
+            so it's real TS highlighting AND theme-aware (light/dark) for free. ── */}
       <div
         style={{
-          borderRadius: 12,
-          border: `1px solid ${c.border}`,
-          overflow: 'hidden',
-          marginBottom: 10,
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'baseline',
+          gap: 8,
+          margin: '0 2px 6px',
+          fontSize: 12,
+          color: c.chip,
         }}
       >
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            padding: '7px 12px',
-            borderBottom: `1px solid ${c.border}`,
-            fontSize: 12,
-            color: c.chip,
-            background: isDark ? '#121218' : '#f8fafc',
-          }}
-        >
-          <span>examples/context-engineering/05-dynamic-react.ts</span>
-          <span>mock LLM · no network · runs in your browser</span>
-        </div>
-        <pre
-          style={{
-            margin: 0,
-            padding: '14px 16px',
-            maxHeight: 360,
-            overflow: 'auto',
-            background: c.codeBg,
-            color: c.codeFg,
-            fontSize: 12.5,
-            lineHeight: 1.55,
-            fontFamily:
-              'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace',
-          }}
-        >
-          <code>{EXAMPLE_CODE}</code>
-        </pre>
+        <span>examples/context-engineering/05-dynamic-react.ts</span>
+        <span>mock LLM · no network · runs in your browser</span>
+      </div>
+      <div style={{ marginBottom: 10, maxHeight: 380, overflow: 'auto', borderRadius: 12 }}>
+        <DynamicCodeBlock lang="ts" code={EXAMPLE_CODE} />
       </div>
 
       {/* ── Run lives directly BELOW the code (+ an editable message). ── */}
