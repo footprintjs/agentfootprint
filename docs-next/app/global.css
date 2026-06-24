@@ -619,7 +619,7 @@
 .af-why-lede i { font-style: italic; }
 
 /* scroll-pinned: left canvas stays put while the right inspector re-scores per scroll beat */
-.af-why-track { position: relative; height: 300vh; }
+.af-why-track { position: relative; height: 360vh; }
 .af-why-stage {
   position: sticky;
   top: calc(var(--fd-nav-height, 56px) + 52px);

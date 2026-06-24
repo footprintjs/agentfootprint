@@ -36,8 +36,8 @@ const ROWS: { id: ToolId; name: string; picked?: boolean }[] = [
 ];
 const SCORER_OPTS: { id: ScorerId; label: string; sub: string; phase: number }[] = [
   { id: 'embed', label: 'embedding', sub: 'cheap · default', phase: 1 },
-  { id: 'attn', label: 'attention', sub: 'model-internal', phase: 2 },
-  { id: 'learned', label: 'learned-probe', sub: 'BYO scorer', phase: 3 },
+  { id: 'attn', label: 'attention', sub: 'model-internal', phase: 3 },
+  { id: 'learned', label: 'learned-probe', sub: 'BYO scorer', phase: 4 },
 ];
 const NAME: Record<ToolId, string> = {
   hold: 'book_hold',
@@ -46,14 +46,18 @@ const NAME: Record<ToolId, string> = {
   flights: 'search_flights',
 };
 
-// 4 scroll beats: 0 the prompt (button), then embedding → attention → learned-probe.
+// 5 scroll beats: 0 prompt, 1 embedding (tie), 2 sharpen (tie broken), 3 attention, 4 learned-probe.
 const CAPS: ReactNode[] = [
   <>
     The agent picked <b>search_hotels</b> by its description. So — <b>why this tool?</b>
   </>,
   <>
-    The cheap <b>embedding</b> proxy ties <b>search_hotels</b> and <b>load_skill</b> at 0.50. Swap the
-    scorer, or sharpen the description.
+    The cheap <b>embedding</b> proxy ties <b>search_hotels</b> and <b>load_skill</b> at 0.50. Sharpen
+    the description, or swap the scorer.
+  </>,
+  <>
+    Tie broken — your LLM&rsquo;s <b>rewrite</b> pushes <b>search_hotels</b> to 0.90 over{' '}
+    <b>load_skill</b> 0.20. agentfootprint only flagged the tie.
   </>,
   <>
     <b>Attention</b> reads the model&rsquo;s own internals and re-ranks decisively.
@@ -66,8 +70,6 @@ const LAST = CAPS.length - 1;
 
 export function WhyThisTool() {
   const [phase, setPhase] = useState(0);
-  const [clicked, setClicked] = useState(false);
-  const [sharpened, setSharpened] = useState(false);
   const trackRef = useRef<HTMLDivElement>(null);
 
   // scroll-driven scrubbing
@@ -94,11 +96,6 @@ export function WhyThisTool() {
     };
   }, []);
 
-  // a fresh scorer beat re-opens the question — drop any rewrite
-  useEffect(() => {
-    setSharpened(false);
-  }, [phase]);
-
   const goToPhase = (k: number) => {
     const track = trackRef.current;
     if (!track) return;
@@ -109,11 +106,12 @@ export function WhyThisTool() {
     window.scrollTo({ top: top + p * total, behavior: 'smooth' });
   };
 
-  // step 1 = the button. Reveal on click, or once the reader scrolls past the prompt beat.
-  const revealed = clicked || phase >= 1;
-  const scorer: ScorerId = phase >= 3 ? 'learned' : phase === 2 ? 'attn' : 'embed';
+  // fully scroll-driven: 1 = embedding tie, 2 = sharpened (tie broken), 3 = attention, 4 = learned-probe
+  const revealed = phase >= 1;
+  const scorer: ScorerId = phase >= 4 ? 'learned' : phase === 3 ? 'attn' : 'embed';
+  const sharpened = phase === 2;
   const canFix = scorer === 'embed';
-  const vals = canFix && sharpened ? SHARPENED : SCORERS[scorer];
+  const vals = sharpened ? SHARPENED : SCORERS[scorer];
   const isTie = canFix && !sharpened;
   const lead: ToolId = sharpened
     ? 'hotels'
@@ -125,13 +123,7 @@ export function WhyThisTool() {
       ? '✓ tie broken — search_hotels 0.90 vs load_skill 0.20 after the rewrite.'
       : `✓ decisive — ${NAME[lead]} leads clearly under this scorer.`;
 
-  const cap = sharpened ? (
-    <>
-      Tie broken — the rewrite pushes <b>search_hotels</b> to 0.90 over <b>load_skill</b> 0.20.
-    </>
-  ) : (
-    CAPS[phase]
-  );
+  const cap = CAPS[phase];
 
   return (
     <section className={`af-why af-flowwrap${revealed ? ' is-revealed' : ''}`}>
@@ -140,7 +132,7 @@ export function WhyThisTool() {
       <p className="af-why-lede">
         Backtracking proved <i>why a past run broke.</i> The same recorded panel works <b>forward</b>{' '}
         too — a travel agent picks one of <b>4 tools</b> by their <b>descriptions.</b>{' '}
-        <b>Click &ldquo;Why this tool?&rdquo;, then scroll to swap scorers.</b>
+        <b>Scroll to reveal the scores, sharpen the tie, then swap scorers.</b>
       </p>
 
       <div className="af-why-track" ref={trackRef}>
@@ -182,7 +174,7 @@ export function WhyThisTool() {
                 </div>
 
                 {!revealed && (
-                  <button type="button" className="af-why-btn" onClick={() => setClicked(true)}>
+                  <button type="button" className="af-why-btn" onClick={() => goToPhase(1)}>
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} aria-hidden="true">
                       <circle cx="11" cy="11" r="7" />
                       <path d="m21 21-4.3-4.3" strokeLinecap="round" />
@@ -205,7 +197,7 @@ export function WhyThisTool() {
                   </div>
                   <div className="af-fix-foot">
                     {canFix && !sharpened ? (
-                      <button type="button" className="af-sharpen-btn" onClick={() => setSharpened(true)}>
+                      <button type="button" className="af-sharpen-btn" onClick={() => goToPhase(2)}>
                         Sharpen &amp; re-score
                         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} aria-hidden="true">
                           <path d="M5 12h14M13 5l7 7-7 7" strokeLinecap="round" strokeLinejoin="round" />
