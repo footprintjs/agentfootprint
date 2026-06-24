@@ -306,11 +306,17 @@
 .af-chapter.is-active .af-chapter-bar .ti {
   color: var(--fg);
 }
+/* the sub slot carries the chapter's continuity sentence — kept to ONE line so the bar height
+   (and the pinned stage's sticky offset that depends on it) never changes; truncates if narrow */
 .af-chapter-bar .sub {
   font-family: var(--fd-font-mono, monospace);
   font-size: 12px;
-  color: var(--fg-faint);
+  color: var(--fg-muted);
   margin-left: auto;
+  max-width: 48%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .af-chapter-stub {
   min-height: 200px;
