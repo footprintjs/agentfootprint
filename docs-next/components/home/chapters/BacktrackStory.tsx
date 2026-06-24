@@ -49,9 +49,12 @@ const LIT_EDGES: string[][] = [
   ['route-final', 'llm-route'],
   ['route-final', 'llm-route', 'api-llm'],
   ['route-final', 'llm-route', 'api-llm', 'sys-api'],
-  ['route-final', 'llm-route', 'api-llm', 'sys-api', 'ctx-sys', 'loop'],
-  ['route-final', 'llm-route', 'api-llm', 'sys-api', 'ctx-sys', 'loop'],
+  ['route-final', 'llm-route', 'api-llm', 'sys-api', 'ctx-sys'],
+  ['route-final', 'llm-route', 'api-llm', 'sys-api', 'ctx-sys'],
 ];
+// NB: the ReAct loop edge is deliberately NOT lit — it's iteration control-flow, NOT on the
+// backward causal slice of the final decision (step 14 EXITED the loop to Final). The value's
+// persistence across iterations 4→14 is shown by the replay scrubber, not by lighting the loop.
 // the ONE edge newly traced at each phase — gets the backward draw-in + the traveling rewind pulse.
 const HEAD_EDGE: (string | null)[] = [null, 'route-final', 'llm-route', 'api-llm', 'sys-api', 'ctx-sys', null];
 const LIT_NODES: string[][] = [
@@ -201,10 +204,14 @@ export function BacktrackStory() {
                     ablated ? 'ablated' : '',
                     denied ? 'denied' : '',
                   ].join(' ');
+                  // the System Prompt slot tags its bad content once it's the culprit; ablation
+                  // strikes the DOC (this sub-label), NOT the slot name — you remove the retrieved
+                  // doc, not the system prompt.
+                  const subLabel = nd.n === 'sys' && culprit ? 'wrong doc' : nd.ns;
                   return (
                     <div key={nd.n} className={cls} style={{ left: `${nd.x}%`, top: `${nd.y}%` }}>
                       <span className="nt">{denied ? '→ denied ✓' : nd.nt}</span>
-                      {nd.ns && <span className="ns">{nd.ns}</span>}
+                      {subLabel && <span className="ns">{subLabel}</span>}
                     </div>
                   );
                 })}

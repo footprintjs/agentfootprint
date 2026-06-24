@@ -522,7 +522,8 @@
 .af-flow .fnode.slot { border-radius: 999px; }
 .af-flow .fnode.slot.suspect { border-color: var(--yellow); border-style: dashed; box-shadow: 0 0 0 3px color-mix(in oklab, var(--yellow) 16%, transparent); }
 .af-flow .fnode.slot.culprit { border-color: var(--yellow); box-shadow: 0 0 0 4px color-mix(in oklab, var(--yellow) 32%, transparent); }
-.af-flow .fnode.slot.ablated .nt { text-decoration: line-through; opacity: 0.55; }
+/* ablation removes the wrongly-retrieved DOC (the 'wrong doc' sub-label), not the slot name */
+.af-flow .fnode.slot.ablated .ns { text-decoration: line-through; opacity: 0.6; }
 /* Route is a decision diamond: clip-path diamond fill + a 2-layer border (outer = border color, ::before = bg) so the outline shows. Box-shadow can't follow a clip, so lit/culprit recolor the outer fill. */
 .af-flow .fnode.diamond { width: 116px; height: 64px; padding: 0; border: none; border-radius: 0; background: var(--border-strong); clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%); display: grid; place-items: center; }
 .af-flow .fnode.diamond::before { content: ''; position: absolute; inset: 1.6px; z-index: 0; background: var(--bg-elev); clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%); }
