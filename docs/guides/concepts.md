@@ -166,7 +166,7 @@ console.log(answer); // "The answer is 4." — run() resolves to the final answe
 
 **Failure modes:** tool throws → the error is converted to a synthetic tool-result string the LLM sees and may recover from; LLM may retry or apologize. Hits `maxIterations` → loop terminates with whatever the LLM last said. Tool result too large → may exceed model context window; consider summarizing tool output.
 
-> **Conversation memory:** each `agent.run(...)` is independent by default. To carry context across turns, attach a memory subsystem via `.memory(defineMemory({...}))` (see [Memory](../../docs-site/src/content/docs/guides/memory.mdx)). Multi-tenant isolation flows through the `identity` field on the run input.
+> **Conversation memory:** each `agent.run(...)` is independent by default. To carry context across turns, attach a memory subsystem via `.memory(defineMemory({...}))` (see [Memory](https://footprintjs.github.io/agentfootprint/docs/build/memory)). Multi-tenant isolation flows through the `identity` field on the run input.
 
 ---
 
@@ -402,9 +402,9 @@ These are **not primitives.** They're injection patterns — what you put into a
 | **Tools** | tools slot | Actions the Agent can invoke |
 | **Grounding** | system-prompt | Style / citation / safety rules |
 
-> **Callout: RAG is context engineering, not a primitive.** `defineRAG(...)` in this library returns a `MemoryDefinition` you attach to any Agent via `.rag(def)` (an alias of `.memory(def)`). It isn't a new kind of runner — it's a worked example of "inject retrieved chunks into the slots." *Retrieval-Augmented Generation* is the technique (Lewis et al. 2020, NeurIPS); the helper is the packaging. See [RAG](../../docs-site/src/content/docs/guides/rag.mdx).
+> **Callout: RAG is context engineering, not a primitive.** `defineRAG(...)` in this library returns a `MemoryDefinition` you attach to any Agent via `.rag(def)` (an alias of `.memory(def)`). It isn't a new kind of runner — it's a worked example of "inject retrieved chunks into the slots." *Retrieval-Augmented Generation* is the technique (Lewis et al. 2020, NeurIPS); the helper is the packaging. See [RAG](https://footprintjs.github.io/agentfootprint/docs/build/rag).
 
-Individual guides: [RAG](../../docs-site/src/content/docs/guides/rag.mdx), [Memory](../../docs-site/src/content/docs/guides/memory.mdx), [Skills](../../docs-site/src/content/docs/guides/skills.mdx), [Instructions](instructions.md), [Tools](../../docs-site/src/content/docs/guides/tools.mdx), [Grounding](../../docs-site/src/content/docs/guides/grounding.mdx).
+Individual guides: [RAG](https://footprintjs.github.io/agentfootprint/docs/build/rag), [Memory](https://footprintjs.github.io/agentfootprint/docs/build/memory), [Skills](https://footprintjs.github.io/agentfootprint/docs/build/skills), [Instructions](instructions.md), [Tools](https://footprintjs.github.io/agentfootprint/docs/build/tools), [Grounding](https://footprintjs.github.io/agentfootprint/docs/build/grounding).
 
 ---
 

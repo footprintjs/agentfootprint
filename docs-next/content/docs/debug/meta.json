@@ -1,5 +1,5 @@
 {
   "title": "Debug",
   "icon": "Bug",
-  "pages": ["manifesto", "debug", "offline-replay", "causal-deep-dive", "testing", "error-handling"]
+  "pages": ["manifesto", "debug", "localize-context-bug", "offline-replay", "causal-deep-dive", "testing", "error-handling"]
 }

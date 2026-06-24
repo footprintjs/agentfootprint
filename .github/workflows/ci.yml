@@ -51,13 +51,10 @@ jobs:
       - run: npm run lint
       - run: npm run format
 
-  # Docs gate (option-(a) enforcement): builds the docs-site, which
-  # reads every <CodeFile path="..." region="..." /> at build time via
-  # Node fs + regionExtractor. A missing file -> ENOENT. A missing region
-  # -> RegionNotFoundError. Either kills the build. Drift becomes
-  # structurally impossible: docs and examples can't diverge because
-  # there is no docs code, only imports of code that already exists in
-  # examples/ (which the test job already proves compiles + runs).
+  # Docs gate: builds docs-next (Fumadocs), which twoslash-compiles every
+  # "ts twoslash" code block against the real agentfootprint types at build.
+  # A snippet using a renamed/removed API fails the build -> hand-written doc
+  # code can't drift from the library (the test job proves examples/ run).
   docs:
     runs-on: ubuntu-latest
     steps:
@@ -67,15 +64,15 @@ jobs:
         with:
           node-version: 22
 
-      - name: Install root deps (so docs-site can resolve imports)
+      - name: Install root deps (docs-next resolves agentfootprint via a local dep)
         run: npm install
 
-      - name: Install docs-site deps
-        working-directory: docs-site
+      - name: Install docs-next deps
+        working-directory: docs-next
         run: npm install
 
-      - name: Build docs-site (gates every CodeFile import)
-        working-directory: docs-site
+      - name: Build docs-next (twoslash-gates every code block)
+        working-directory: docs-next
         run: npm run build
 
   # Doc-links gate — every internal cross-reference in docs-next must resolve.

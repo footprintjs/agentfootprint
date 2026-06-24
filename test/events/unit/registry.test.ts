@@ -30,11 +30,10 @@ describe('event registry — docs stay in sync with the registry (anti-drift)', 
       'AGENTS.md',
       'docs/MENTAL_MODEL.md',
       'ai-instructions/claude-code/SKILL.md',
-      'docs-site/src/content/docs/index.mdx',
-      'docs-site/src/content/docs/getting-started/debug.mdx',
-      'docs-site/src/content/docs/architecture/dependency-graph.mdx',
-      'docs-site/src/content/docs/guides/observability.mdx',
-      'docs-site/src/content/docs/guides/agent.mdx',
+      'docs-next/content/docs/debug/debug.mdx',
+      'docs-next/content/docs/reference/dependency-graph.mdx',
+      'docs-next/content/docs/monitor/observability.mdx',
+      'docs-next/content/docs/build/agent.mdx',
     ];
     for (const doc of DOCS) {
       const text = readFileSync(join(root, doc), 'utf8');

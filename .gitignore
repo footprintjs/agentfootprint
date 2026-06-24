@@ -19,8 +19,6 @@ coverage/
 npm-debug.log*
 
 # Docs build output
-docs-site/dist/
-docs-site/.astro/
 api-docs/
 
 # Claude Code

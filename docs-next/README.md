@@ -1,9 +1,9 @@
-# agentfootprint docs — Fumadocs pilot
+# agentfootprint docs
 
 A Next.js 16 + [Fumadocs](https://fumadocs.dev) (React-native, AI-native) documentation
-site for **agentfootprint**. This is the **pilot** that runs alongside the existing
-Astro/Starlight site in [`../docs-site/`](../docs-site) — the Starlight site stays the
-published docs until this pilot is proven, then we cut over.
+site for **agentfootprint** — the published docs at
+https://footprintjs.github.io/agentfootprint/. (Migrated from a former Astro/Starlight
+site, now removed.)
 
 ## Why Fumadocs (vs the Starlight site)
 
@@ -28,7 +28,7 @@ npm run build    # static/server build
 
 | Path | What |
 |---|---|
-| `content/docs/**.mdx` | the documentation content (ported from `../docs-site`) |
+| `content/docs/**.mdx` | the documentation content |
 | `source.config.ts` | Fumadocs content config (frontmatter schema, dir) |
 | `lib/source.ts` | the content-source loader (`/docs` base) |
 | `app/docs/[[...slug]]/page.tsx` | the docs route |
@@ -38,13 +38,12 @@ npm run build    # static/server build
 ## Migration status
 
 - [x] Scaffold (Next 16 + Fumadocs 16 + Tailwind 4) — **builds**
-- [x] First content ported (index + quick-start)
+- [x] Content ported (the former Starlight `docs-site` is removed)
 - [x] **In-site API reference, auto-generated & never-stale** — see below
-- [ ] Port remaining content from `docs-site/src/content/docs/**`
-- [ ] Twoslash + code-from-source (anti-drift for hand-written snippets)
+- [x] Twoslash (anti-drift compile-checks for hand-written snippets)
+- [x] CI + deploy — this is the published site; the CI docs gate builds docs-next
 - [ ] `llms.txt` / raw `.md` (AI-readiness) + Context7 registration
 - [ ] Runnable examples (port `footprint-playground` runner + `explainable-ui`)
-- [ ] CI + deploy, then cut over from Starlight
 
 ## Auto-generated API reference (anti-stale infra)
 

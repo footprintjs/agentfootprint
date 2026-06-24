@@ -14,12 +14,18 @@ documented as a **beta** feature: trigger → causal slice → influence-weighte
 counterfactual ablation. Honesty model held throughout — the ranking is a proxy; only
 ablation verdicts are causal claims.
 
-- **New guide:** _Localize a context bug_ (`guides/localize-context-bug`), debugging-framed,
-  in the 📊 Observability section.
-- **New tested example:** `examples/observability/17-localize-quickstart.ts` — single-sourced
-  into the guide via `<CodeFile>` regions, so the shown code can't drift from what runs.
+- **New guide:** _Localize a context bug_ (`debug/localize-context-bug`), debugging-framed,
+  in the Debug section. Its code block is twoslash-compiled against the real types (anti-drift).
+- **New tested example:** `examples/observability/17-localize-quickstart.ts` — runs `$0` and
+  proves the planted fact is the confirmed causal root cause (3/3 ablation flips).
 - **`@beta` markers** on the `context-bisect` module + `localizeContextBug`. The API (exported
   from `agentfootprint/observe`) is unchanged — now labeled beta.
+
+### Removed — legacy Astro/Starlight `docs-site/`
+
+The old `docs-site/` (Starlight) is **removed** — `docs-next/` (Next.js + Fumadocs) is the sole,
+deployed docs site. All content had already migrated; the CI "docs gate" now builds docs-next
+(twoslash-compiling every code block in place of the former `<CodeFile>` transclusion).
 
 ## [6.44.0] - 2026-06-22
 

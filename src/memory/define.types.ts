@@ -33,7 +33,7 @@
  *          when its read subflow places content into the messages slot.
  *
  * @see ./define.ts          for the `defineMemory()` factory itself
- * @see ../../docs-site      for guides + the 7 strategy examples
+ * @see ../../docs-next      for guides + the 7 strategy examples
  * @see MEMORY.md            for the load-bearing design memory
  */
 
