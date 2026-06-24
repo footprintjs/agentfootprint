@@ -363,12 +363,13 @@ function FlowChartView({ state, emitted }: { state: FlowState; emitted: number }
   );
 }
 
-// the four trace channels every stage emits (color = the trace event's owner)
+// the four trace channels every stage emits (color = the trace event's owner). Each color is a
+// theme var so the diagram adapts to light AND dark (defined on .af-el / .dark .af-el in CSS).
 const EL_EVENTS = [
-  { c: '#475569', name: 'onStageAdded', label: 'structure' },
-  { c: '#0284C7', name: 'onCommit', label: 'data' },
-  { c: '#7C3AED', name: 'onDecision', label: 'control' },
-  { c: '#B45309', name: 'onEmit', label: 'emit' },
+  { v: 'var(--el-struct)', name: 'onStageAdded' },
+  { v: 'var(--el-data)', name: 'onCommit' },
+  { v: 'var(--el-control)', name: 'onDecision' },
+  { v: 'var(--el-emit)', name: 'onEmit' },
 ];
 // a point (+ tangent rotation) at fraction f around the loop ellipse: top = call stack (f=0),
 // bottom = idle time (f=0.5). center (550,300), rx 150, ry 120 — matches the reference SVG.
@@ -405,17 +406,28 @@ function EventLoopView({ prog }: { prog: number }) {
 
   return (
     <div className="af-el">
-      <svg className="af-el-svg" viewBox="392 116 968 408" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+      <svg className="af-el-svg" viewBox="392 116 968 462" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+        <defs>
+          <marker id="elArc" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="1.7" markerHeight="1.7" orient="auto">
+            <path d="M0 0 L10 5 L0 10 z" style={{ fill: 'var(--el-grey)' }} />
+          </marker>
+          <marker id="elFeed" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+            <path d="M0 0 L10 5 L0 10 z" style={{ fill: 'var(--el-green)' }} />
+          </marker>
+          <marker id="elDrop" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto">
+            <path d="M0 0 L10 5 L0 10 z" style={{ fill: 'var(--el-green)' }} />
+          </marker>
+        </defs>
+
         <text className="af-el-sect" x="430" y="150">
           THE EVENT LOOP — THE RUNTIME
         </text>
 
-        {/* the loop: two bold grey arrows (JS-native machinery), brighter on the side the cursor rides */}
+        {/* the loop: two bold arrows (JS-native machinery), brighter on the side the cursor rides */}
         <path
           className="af-el-arc"
           d="M 671.4 229.5 A 150 120 0 0 1 650.4 389.2"
           fill="none"
-          stroke="#64748B"
           strokeWidth="18"
           markerEnd="url(#elArc)"
           opacity={running ? 0.22 : 0.6}
@@ -424,16 +436,10 @@ function EventLoopView({ prog }: { prog: number }) {
           className="af-el-arc"
           d="M 449.6 389.2 A 150 120 0 0 1 422.8 236.4"
           fill="none"
-          stroke="#64748B"
           strokeWidth="18"
           markerEnd="url(#elArc)"
           opacity={running ? 0.6 : 0.22}
         />
-        <defs>
-          <marker id="elArc" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="1.7" markerHeight="1.7" orient="auto">
-            <path d="M0 0 L10 5 L0 10 z" fill="#64748B" />
-          </marker>
-        </defs>
         <text className="af-el-cap" x="722" y="300">
           the event loop
         </text>
@@ -442,7 +448,7 @@ function EventLoopView({ prog }: { prog: number }) {
         </text>
 
         {/* stop 1 — CALL STACK (grey, the runtime owns it) */}
-        <rect x="432" y="178" width="236" height="130" rx="12" fill="#FCFCFD" stroke="#64748B" strokeWidth="1.6" />
+        <rect className="af-el-greybox" x="432" y="178" width="236" height="130" rx="12" strokeWidth="1.6" />
         <text className="af-el-sect" x="550" y="200" textAnchor="middle">
           CALL STACK
         </text>
@@ -450,11 +456,8 @@ function EventLoopView({ prog }: { prog: number }) {
           stack empty ↘ flush
         </text>
         {/* the running stage as a frame — pushes on while it runs, pops at flush */}
-        <g
-          key={`frame-${emitted2}`}
-          style={{ opacity: beatFrac < 0.55 ? 1 : 0, transition: 'opacity 0.2s' }}
-        >
-          <rect x="455" y="246" width="190" height="40" rx="10" fill="#fff" stroke={accent} strokeWidth="1.8" />
+        <g key={`frame-${emitted2}`} style={{ opacity: beatFrac < 0.55 ? 1 : 0, transition: 'opacity 0.2s' }}>
+          <rect className="af-el-framebox" x="455" y="246" width="190" height="40" rx="10" stroke={accent} strokeWidth="1.8" />
           <text className="af-el-frame-t" x="550" y="271" textAnchor="middle" fill={accent}>
             {stageName}()
           </text>
@@ -465,89 +468,103 @@ function EventLoopView({ prog }: { prog: number }) {
           {[526, 542, 558, 574].map((x, i) => (
             <path
               key={i}
+              className="af-el-feed"
               d={`M ${x} 312 L ${[515, 537, 561, 585][i]} 350`}
               fill="none"
-              stroke="#16A534"
               strokeWidth="1.5"
               markerEnd="url(#elFeed)"
             />
           ))}
-          <defs>
-            <marker id="elFeed" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="6" markerHeight="6" orient="auto">
-              <path d="M0 0 L10 5 L0 10 z" fill="#16A534" />
-            </marker>
-          </defs>
         </g>
 
         {/* trace queue at the loop's center */}
-        <rect x="496" y="346" width="108" height="32" rx="9" fill="#F7FDF8" stroke="#16A534" strokeWidth="1.2" opacity="0.85" />
+        <rect className="af-el-greenbox" x="496" y="346" width="108" height="32" rx="9" strokeWidth="1.2" opacity="0.9" />
         <text className="af-el-gap" x="550" y="392" textAnchor="middle">
           trace queue
         </text>
 
         {/* stop 2 — IDLE TIME (footprintjs green, the dispatcher) */}
-        <rect
-          x="432"
-          y="396"
-          width="236"
-          height="96"
-          rx="12"
-          fill="#F7FDF8"
-          stroke="#16A534"
-          strokeWidth={flushing ? 3 : 1.5}
-        />
-        <text className="af-el-sect" x="550" y="448" textAnchor="middle" style={{ fill: '#15803D' }}>
+        <rect className="af-el-greenbox" x="432" y="396" width="236" height="96" rx="12" strokeWidth={flushing ? 3 : 1.5} />
+        <text className="af-el-sect af-el-ginks" x="550" y="448" textAnchor="middle">
           IDLE TIME
         </text>
-        <text className="af-el-gap" x="550" y="466" textAnchor="middle" style={{ fill: '#15803D' }}>
+        <text className="af-el-gap af-el-ginks" x="550" y="466" textAnchor="middle">
           the dispatcher
         </text>
 
-        {/* the four trace events: at the queue while the stage runs, flying to memory on flush */}
+        {/* the four trace events: held in the queue while the stage runs; on the idle beat the
+            dispatcher flushes them — they fly from the queue, THROUGH idle time, into memory */}
         {EL_EVENTS.map((ev, i) => {
           const qx = 514 + i * 24;
-          const mx = 832 + i * 16;
+          const mx = 770 + i * 18;
           const x = qx + (mx - qx) * flushProg;
-          const y = 362 + (524 - 362) * flushProg;
-          return <circle key={ev.name} cx={x} cy={y} r="7.5" fill={ev.c} opacity={running && beatFrac < 0.06 ? 0 : 1} />;
+          const y = 362 + (470 - 362) * flushProg;
+          return (
+            <circle key={ev.name} cx={x} cy={y} r="7.5" style={{ fill: ev.v }} opacity={running && beatFrac < 0.06 ? 0 : 1} />
+          );
         })}
 
         {/* the cursor — the loop's attention, riding the ellipse as you scroll */}
         <path
+          className="af-el-cursor"
           d="M -9 -6.5 L 12 0 L -9 6.5 Z"
-          fill="#1F2937"
-          stroke="#fff"
           strokeWidth="1.5"
           transform={`translate(${cur.x} ${cur.y}) rotate(${cur.rot})`}
         />
 
-        {/* TRACE MEMORY — the captured run lands here */}
-        <rect x="720" y="430" width="360" height="86" rx="30" fill="#F4FBF5" stroke="#16A534" strokeWidth="1.7" />
-        <text className="af-el-mem" x="900" y="462" textAnchor="middle">
+        {/* flush #1 — the dispatcher FILES the records into trace memory (deferred) */}
+        <path
+          className="af-el-flush"
+          d="M 668 452 C 690 460 702 462 716 462"
+          fill="none"
+          strokeWidth="2"
+          strokeDasharray="2 7"
+          markerEnd="url(#elDrop)"
+          style={{ opacity: flushing ? 0.95 : 0.14 }}
+        />
+        <text className="af-el-gap af-el-ginks" x="694" y="430" textAnchor="middle" style={{ opacity: flushing ? 1 : 0.35 }}>
+          files records
+        </text>
+
+        {/* TRACE MEMORY — the captured run accumulates here, append-only */}
+        <rect className="af-el-greenbox" x="720" y="430" width="300" height="80" rx="26" strokeWidth="1.7" />
+        <text className="af-el-mem" x="870" y="460" textAnchor="middle">
           TRACE MEMORY
         </text>
-        <g opacity="0.8">
+        <g opacity="0.85">
           {Array.from({ length: memRows }).map((_, r) =>
             EL_EVENTS.map((ev, i) => (
-              <circle key={`${r}-${i}`} cx={812 + r * 44 + i * 11} cy="492" r="4.5" fill={ev.c} />
+              <circle key={`${r}-${i}`} cx={772 + r * 40 + i * 10} cy="488" r="4.3" style={{ fill: ev.v }} />
             )),
           )}
         </g>
 
-        {/* DISPATCH — your listeners, each gets every event, one beat behind */}
-        <text className="af-el-sect" x="1108" y="180">
+        {/* flush #2 — the dispatcher ALSO calls every listener back (one beat behind) */}
+        {EL_EVENTS.map((ev, i) => (
+          <path
+            key={`disp-${i}`}
+            className="af-el-flush"
+            d={`M 1022 ${450 + (i - 1.5) * 5} L 1098 ${410 + i * 38}`}
+            fill="none"
+            strokeWidth="1.4"
+            strokeDasharray="2 6"
+            markerEnd="url(#elDrop)"
+            style={{ opacity: flushing ? 0.85 : 0.12 }}
+          />
+        ))}
+        <text className="af-el-sect" x="1102" y="392">
           YOUR LISTENERS
         </text>
         {EL_EVENTS.map((ev, i) => (
           <g key={ev.name} style={{ opacity: flushing ? 1 : 0.4, transition: 'opacity 0.2s' }}>
-            <rect x="1108" y={196 + i * 40} width="240" height="32" rx="9" fill="#fff" stroke={ev.c} strokeWidth="1.4" />
-            <circle cx="1126" cy={212 + i * 40} r="4.5" fill={ev.c} />
-            <text className="af-el-code" x="1140" y={217 + i * 40} fill={ev.c}>
+            <rect className="af-el-framebox" x="1102" y={400 + i * 38} width="236" height="30" rx="9" strokeWidth="1.4" style={{ stroke: ev.v }} />
+            <circle cx="1118" cy={415 + i * 38} r="4.5" style={{ fill: ev.v }} />
+            <text className="af-el-code" x="1132" y={420 + i * 38} style={{ fill: ev.v }}>
               {ev.name}(e)
             </text>
           </g>
         ))}
-        <text className="af-el-cap" x="1228" y={196 + 4 * 40 + 18} textAnchor="middle">
+        <text className="af-el-cap" x="1220" y={400 + 4 * 38 + 14} textAnchor="middle">
           every listener gets every event
         </text>
       </svg>

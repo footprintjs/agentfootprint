@@ -2733,11 +2733,62 @@
   place-items: center;
   padding: 12px 14px 4px;
   min-height: 0;
+  /* theme-adaptive palette: structural shapes follow the page theme; the four trace
+     channels keep their hues but brighten in dark so they read on a dark canvas */
+  --el-box: var(--bg-elev);
+  --el-line: var(--border-strong);
+  --el-grey: #64748b;
+  --el-green: #16a534;
+  --el-green-ink: #15803d;
+  --el-green-soft: color-mix(in oklab, #16a534 7%, var(--bg-elev));
+  --el-ink: var(--fg);
+  --el-struct: #475569;
+  --el-data: #0284c7;
+  --el-control: #7c3aed;
+  --el-emit: #b45309;
+}
+.dark .af-el {
+  --el-grey: #8b98a9;
+  --el-green: #34d399;
+  --el-green-ink: #6dd1ab;
+  --el-green-soft: color-mix(in oklab, #34d399 13%, var(--bg-elev));
+  --el-struct: #9aa7b8;
+  --el-data: #4fb6f0;
+  --el-control: #a78bfa;
+  --el-emit: #f0b65e;
 }
 .af-el-svg {
   width: 100%;
   height: auto;
   overflow: visible;
+}
+/* structural shapes — theme-aware fills/strokes (CSS beats SVG presentation attrs) */
+.af-el-greybox {
+  fill: var(--el-box);
+  stroke: var(--el-grey);
+}
+.af-el-framebox {
+  fill: var(--el-box);
+}
+.af-el-arc {
+  stroke: var(--el-grey);
+}
+.af-el-greenbox {
+  fill: var(--el-green-soft);
+  stroke: var(--el-green);
+}
+.af-el-feed {
+  stroke: var(--el-green);
+}
+.af-el-flush {
+  stroke: var(--el-green);
+}
+.af-el-cursor {
+  fill: var(--el-ink);
+  stroke: var(--el-box);
+}
+.af-el .af-el-ginks {
+  fill: var(--el-green-ink);
 }
 .af-el-sect {
   font-size: 13px;
@@ -2762,13 +2813,13 @@
 .af-el-cue {
   font-size: 14px;
   font-weight: 700;
-  fill: #15803d;
+  fill: var(--el-green-ink);
   transition: opacity 0.25s ease;
 }
 .af-el-mem {
   font-size: 15px;
   font-weight: 700;
-  fill: #15803d;
+  fill: var(--el-green-ink);
   letter-spacing: 1.2px;
 }
 .af-el-frame-t {
