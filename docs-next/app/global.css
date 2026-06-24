@@ -317,6 +317,18 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  animation: af-sub-fade 0.35s ease;
+}
+@keyframes af-sub-fade {
+  from {
+    opacity: 0;
+    transform: translateY(-3px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .af-chapter-bar .sub {
+    animation: none;
+  }
 }
 .af-chapter-stub {
   min-height: 200px;

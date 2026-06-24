@@ -401,7 +401,7 @@ function AbstractionBlock() {
   const activeFlavor = active >= 0 ? FLAVOR_MAP[active] : null;
 
   return (
-    <section className="af-ctx-block">
+    <section className="af-ctx-block" data-narrative="flavors → 3 slots">
       <p className="af-ctx-kicker">The model — what we abstract</p>
       <h2>
         Many flavors. <em>Three slots.</em>
@@ -561,7 +561,7 @@ function TriggersBlock() {
   };
 
   return (
-    <section className="af-ctx-block">
+    <section className="af-ctx-block" data-narrative="4 triggers → when">
       <p className="af-ctx-kicker">When each one fires</p>
       <h2>
         Four triggers decide <em>when.</em>
@@ -663,7 +663,7 @@ function TriggersBlock() {
 // ============ (c) CODE PANEL ============
 function CodeBlock() {
   return (
-    <section className="af-ctx-block">
+    <section className="af-ctx-block" data-narrative="declare the flavor">
       <p className="af-ctx-kicker">In your code</p>
       <h2>
         Declare the flavor. <em>Not the prompt string.</em>
@@ -858,7 +858,7 @@ function DynamicReactBlock() {
   const litE = new Set(f.litEdges);
 
   return (
-    <section className="af-ctx-block">
+    <section className="af-ctx-block" data-narrative="recomposes every turn">
       <p className="af-ctx-kicker">How the assembly runs</p>
       <h2>
         The prompt <em>recomposes</em> every iteration.

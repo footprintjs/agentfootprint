@@ -132,7 +132,7 @@ export function WhyThisTool() {
   const cap = CAPS[phase];
 
   return (
-    <section className={`af-why af-flowwrap${revealed ? ' is-revealed' : ''}`}>
+    <section data-narrative="why this tool?" className={`af-why af-flowwrap${revealed ? ' is-revealed' : ''}`}>
       <p className="af-why-kicker">Same machinery, a different agent</p>
       <h2 className="af-why-head">Why this tool?</h2>
       <p className="af-why-lede">

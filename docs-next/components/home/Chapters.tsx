@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, type ComponentType } from 'react';
+import { useEffect, useRef, useState, type ComponentType } from 'react';
 import { BacktrackStory } from './chapters/BacktrackStory';
 import { WhyThisTool } from './chapters/WhyThisTool';
 import { ContextEngineering } from './chapters/ContextEngineering';
@@ -40,6 +40,9 @@ const CHAPTERS: Chapter[] = [
 
 export function Chapters() {
   const ref = useRef<HTMLDivElement>(null);
+  // the sticky bar's sub-line follows the section you're scrolling: any [data-narrative]
+  // sub-section whose box holds the viewport center sets its chapter's sub (falls back to c.sub).
+  const [activeSubs, setActiveSubs] = useState<Record<string, string>>({});
 
   useEffect(() => {
     const root = ref.current;
@@ -54,24 +57,68 @@ export function Chapters() {
       { rootMargin: '-18% 0px -62% 0px', threshold: 0 },
     );
     sections.forEach((s) => io.observe(s));
-    return () => io.disconnect();
+
+    // per-section narrative — center-of-viewport test (robust for the tall pinned tracks)
+    const narrEls = Array.from(root.querySelectorAll<HTMLElement>('[data-narrative]'));
+    let raf = 0;
+    const onScroll = () => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => {
+        const center = window.innerHeight / 2;
+        const found: Record<string, string> = {};
+        for (const el of narrEls) {
+          const r = el.getBoundingClientRect();
+          if (r.top <= center && r.bottom >= center) {
+            const cid = el.closest('.af-chapter')?.id;
+            const label = el.dataset.narrative;
+            if (cid && label) found[cid] = label;
+          }
+        }
+        setActiveSubs((prev) => {
+          let changed = false;
+          const next = { ...prev };
+          for (const cid in found) {
+            if (next[cid] !== found[cid]) {
+              next[cid] = found[cid];
+              changed = true;
+            }
+          }
+          return changed ? next : prev;
+        });
+      });
+    };
+    onScroll();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('resize', onScroll);
+
+    return () => {
+      io.disconnect();
+      window.removeEventListener('scroll', onScroll);
+      window.removeEventListener('resize', onScroll);
+      cancelAnimationFrame(raf);
+    };
   }, []);
 
   return (
     <div ref={ref}>
-      {CHAPTERS.map((c, i) => (
-        <section className={`af-chapter${i % 2 === 1 ? ' alt' : ''}`} id={c.id} key={c.id}>
-          <div className="af-chapter-inner">
-            <div className="af-chapter-bar">
-              <span className="ix">{c.ix}</span>
-              <span className="af-cat">{c.cat}</span>
-              <span className="ti">{c.ti}</span>
-              <span className="sub">{c.sub}</span>
+      {CHAPTERS.map((c, i) => {
+        const sub = activeSubs[c.id] ?? c.sub;
+        return (
+          <section className={`af-chapter${i % 2 === 1 ? ' alt' : ''}`} id={c.id} key={c.id}>
+            <div className="af-chapter-inner">
+              <div className="af-chapter-bar">
+                <span className="ix">{c.ix}</span>
+                <span className="af-cat">{c.cat}</span>
+                <span className="ti">{c.ti}</span>
+                <span className="sub" key={sub}>
+                  {sub}
+                </span>
+              </div>
+              {c.Body ? <c.Body /> : <div className="af-chapter-stub">{c.stub}</div>}
             </div>
-            {c.Body ? <c.Body /> : <div className="af-chapter-stub">{c.stub}</div>}
-          </div>
-        </section>
-      ))}
+          </section>
+        );
+      })}
     </div>
   );
 }
