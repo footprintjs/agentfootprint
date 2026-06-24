@@ -81,7 +81,7 @@ const CAPS = [
   <><b>← CallLLM.</b> The model’s pick — replay the exact request that produced it.</>,
   <><b>← messageAPI.</b> The step that assembled that request from the context slots.</>,
   <><b>← System Prompt.</b> messageAPI pulled from this slot — the suspect. But <i>when</i> did it get there?</>,
-  <><b>Step 4:</b> a retrieval wrote the wrong doc into <b>System Prompt.</b> It rode the loop, untouched, to step 14.</>,
+  <><b>Step 4:</b> a search pulled in the wrong document and put it in the <b>System Prompt.</b> Nothing removed it — so it was still there at <b>step 14.</b></>,
   <>Remove it, re-run from step 4 → <b>denied.</b> <span className="stamp">● CAUSAL</span> — proven by replay, not guessed.</>,
 ];
 const LAST = 6;
