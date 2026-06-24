@@ -253,13 +253,307 @@ const HOP_ARROWS: Record<string, { x: number; y: number; a: number }> = {
   loop: { x: 62, y: 7, a: 180 }, // left into Context (the result loops back)
 };
 
-// Trace-event chips (animation 2 queue).
-const CHIPS: { name: string; flavor: string }[] = [
-  { name: 'onStageAdded', flavor: 'coral' },
-  { name: 'onCommit', flavor: 'purple' },
-  { name: 'onDecision', flavor: 'teal' },
-  { name: 'onEmit', flavor: 'amber' },
+// ---- shared flowchart state, computed for a given number of revealed steps ----
+type FlowState = {
+  litNodes: Set<NodeId>;
+  litEdges: Set<EdgeId>;
+  tealNodes: Set<NodeId>;
+  tealEdges: Set<EdgeId>;
+  counts: Partial<Record<NodeId, number>>;
+  curStep?: Step;
+  flowEdge?: { id: EdgeId; d: string; loop?: boolean };
+};
+function computeFlowState(emitted: number): FlowState {
+  const litNodes = new Set<NodeId>();
+  const litEdges = new Set<EdgeId>();
+  const tealNodes = new Set<NodeId>();
+  const tealEdges = new Set<EdgeId>();
+  const counts: Partial<Record<NodeId, number>> = {};
+  for (let k = 0; k < emitted; k++) {
+    const s = STEPS[k];
+    litNodes.add(s.node);
+    counts[s.node] = (counts[s.node] ?? 0) + 1;
+    s.nodes?.forEach((n) => {
+      litNodes.add(n);
+      counts[n] = (counts[n] ?? 0) + 1;
+    });
+    if (s.edge) litEdges.add(s.edge);
+    s.edges?.forEach((e) => litEdges.add(e));
+    if (s.tone === 'teal') {
+      tealNodes.add(s.node);
+      s.nodes?.forEach((n) => tealNodes.add(n));
+      if (s.edge) tealEdges.add(s.edge);
+      s.edges?.forEach((e) => tealEdges.add(e));
+    }
+  }
+  const curStep = emitted > 0 ? STEPS[emitted - 1] : undefined;
+  const flowEdge = curStep?.edge ? EDGES.find((e) => e.id === curStep.edge) : undefined;
+  return { litNodes, litEdges, tealNodes, tealEdges, counts, curStep, flowEdge };
+}
+
+// The constant ReAct flowchart — reused by BOTH animations (it lights per scroll step).
+function FlowChartView({ state, emitted }: { state: FlowState; emitted: number }) {
+  const { litNodes, litEdges, tealNodes, tealEdges, counts, curStep, flowEdge } = state;
+  return (
+    <div className="af-eng-flow">
+      <svg className="af-eng-fedges" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+        {EDGES.map((ed) => (
+          <path
+            key={ed.id}
+            d={ed.d}
+            pathLength={1}
+            className={`af-eng-fe${ed.loop ? ' loop' : ''}${litEdges.has(ed.id) ? ' lit' : ''}${
+              tealEdges.has(ed.id) ? ' answer' : ''
+            }`}
+          />
+        ))}
+        {[...litEdges]
+          .filter((e) => HOP_ARROWS[e])
+          .map((e) => {
+            const a = HOP_ARROWS[e];
+            return (
+              <path
+                key={`ah-${e}`}
+                className={`af-eng-fe-arrow${e === curStep?.edge ? ' head' : ''}${tealEdges.has(e) ? ' answer' : ''}`}
+                d="M-1.7,-1.5 L1.9,0 L-1.7,1.5 Z"
+                transform={`translate(${a.x} ${a.y}) rotate(${a.a})`}
+              />
+            );
+          })}
+        {flowEdge && (
+          <path
+            key={`pulse-${emitted}`}
+            className={`af-eng-fe-pulse${curStep?.tone === 'teal' ? ' answer' : ''}`}
+            d={flowEdge.d}
+            pathLength={1}
+          />
+        )}
+      </svg>
+      {NODES.map((nd) => {
+        const lit = litNodes.has(nd.id);
+        const c = counts[nd.id];
+        const isCur = curStep?.node === nd.id;
+        const cls = [
+          'af-eng-fnode',
+          nd.cls || '',
+          lit ? 'lit' : '',
+          isCur ? 'cur' : '',
+          tealNodes.has(nd.id) ? 'answer' : '',
+        ]
+          .join(' ')
+          .trim();
+        return (
+          <div key={nd.id} className={cls} data-flavor={nd.flavor} style={{ left: `${nd.x}%`, top: `${nd.y}%` }}>
+            {nd.cls === 'pill' ? (
+              <>
+                <span className="af-eng-dot" />
+                {nd.nt}
+              </>
+            ) : (
+              <>
+                <b>{nd.nt}</b>
+                {nd.ns && <span>{nd.ns}</span>}
+              </>
+            )}
+            {lit && c && nd.cls !== 'diamond' ? <i className="af-eng-fcount">{c}</i> : null}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// the four trace channels every stage emits (color = the trace event's owner)
+const EL_EVENTS = [
+  { c: '#475569', name: 'onStageAdded', label: 'structure' },
+  { c: '#0284C7', name: 'onCommit', label: 'data' },
+  { c: '#7C3AED', name: 'onDecision', label: 'control' },
+  { c: '#B45309', name: 'onEmit', label: 'emit' },
 ];
+// a point (+ tangent rotation) at fraction f around the loop ellipse: top = call stack (f=0),
+// bottom = idle time (f=0.5). center (550,300), rx 150, ry 120 — matches the reference SVG.
+function loopPoint(f: number) {
+  const th = f * 2 * Math.PI;
+  return {
+    x: 550 + 150 * Math.sin(th),
+    y: 300 - 120 * Math.cos(th),
+    rot: (Math.atan2(120 * Math.sin(th), 150 * Math.cos(th)) * 180) / Math.PI,
+  };
+}
+
+// The right side of animation 2: the browser-engine EVENT LOOP, faithful to the README
+// reference (docs/assets/event-loop-light.svg) but SCROLL-DRIVEN per stage instead of the
+// 18s CSS timeline. Each beat: the stage runs as a CALL STACK frame and feeds four trace
+// events into the trace queue; then the cursor rides to IDLE TIME and the dispatcher flushes
+// them to TRACE MEMORY + every listener — one beat behind, never blocking the hot path.
+function EventLoopView({ prog }: { prog: number }) {
+  const total = STEPS.length;
+  const p2 = Math.min(total, Math.max(0, prog) * total);
+  const emitted2 = Math.min(total, Math.max(1, Math.ceil(p2)));
+  const curStep = STEPS[emitted2 - 1];
+  const beatFrac = Math.min(1, Math.max(0, p2 - (emitted2 - 1))); // 0..1 within the current beat
+  const teal = curStep?.tone === 'teal';
+  const accent = teal ? '#0E8A82' : '#C2410C';
+  const stageName = curStep ? (NODES.find((n) => n.id === curStep.node)?.nt ?? curStep.label) : '—';
+
+  const cur = loopPoint(beatFrac); // the cursor rides the loop as you scroll the beat
+  const running = beatFrac < 0.5; // stage holds the stack (hot path)
+  const flushProg = Math.min(1, Math.max(0, (beatFrac - 0.5) / 0.4)); // events fly to memory
+  const flushing = flushProg > 0;
+  const drained = Math.max(0, emitted2 - 1) + (beatFrac >= 0.95 ? 1 : 0); // recorded, one beat behind
+  const memRows = Math.min(6, Math.round((drained / total) * 6));
+
+  return (
+    <div className="af-el">
+      <svg className="af-el-svg" viewBox="392 116 968 408" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+        <text className="af-el-sect" x="430" y="150">
+          THE EVENT LOOP — THE RUNTIME
+        </text>
+
+        {/* the loop: two bold grey arrows (JS-native machinery), brighter on the side the cursor rides */}
+        <path
+          className="af-el-arc"
+          d="M 671.4 229.5 A 150 120 0 0 1 650.4 389.2"
+          fill="none"
+          stroke="#64748B"
+          strokeWidth="18"
+          markerEnd="url(#elArc)"
+          opacity={running ? 0.22 : 0.6}
+        />
+        <path
+          className="af-el-arc"
+          d="M 449.6 389.2 A 150 120 0 0 1 422.8 236.4"
+          fill="none"
+          stroke="#64748B"
+          strokeWidth="18"
+          markerEnd="url(#elArc)"
+          opacity={running ? 0.6 : 0.22}
+        />
+        <defs>
+          <marker id="elArc" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="1.7" markerHeight="1.7" orient="auto">
+            <path d="M0 0 L10 5 L0 10 z" fill="#64748B" />
+          </marker>
+        </defs>
+        <text className="af-el-cap" x="722" y="300">
+          the event loop
+        </text>
+        <text className="af-el-wink" x="722" y="318">
+          one tick every 16ms
+        </text>
+
+        {/* stop 1 — CALL STACK (grey, the runtime owns it) */}
+        <rect x="432" y="178" width="236" height="130" rx="12" fill="#FCFCFD" stroke="#64748B" strokeWidth="1.6" />
+        <text className="af-el-sect" x="550" y="200" textAnchor="middle">
+          CALL STACK
+        </text>
+        <text className="af-el-cue" x="550" y="226" textAnchor="middle" style={{ opacity: flushing ? 1 : 0.25 }}>
+          stack empty ↘ flush
+        </text>
+        {/* the running stage as a frame — pushes on while it runs, pops at flush */}
+        <g
+          key={`frame-${emitted2}`}
+          style={{ opacity: beatFrac < 0.55 ? 1 : 0, transition: 'opacity 0.2s' }}
+        >
+          <rect x="455" y="246" width="190" height="40" rx="10" fill="#fff" stroke={accent} strokeWidth="1.8" />
+          <text className="af-el-frame-t" x="550" y="271" textAnchor="middle" fill={accent}>
+            {stageName}()
+          </text>
+        </g>
+
+        {/* feed: the running frame emits its four events into the trace queue */}
+        <g style={{ opacity: running && beatFrac > 0.06 ? 1 : 0, transition: 'opacity 0.15s' }}>
+          {[526, 542, 558, 574].map((x, i) => (
+            <path
+              key={i}
+              d={`M ${x} 312 L ${[515, 537, 561, 585][i]} 350`}
+              fill="none"
+              stroke="#16A534"
+              strokeWidth="1.5"
+              markerEnd="url(#elFeed)"
+            />
+          ))}
+          <defs>
+            <marker id="elFeed" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+              <path d="M0 0 L10 5 L0 10 z" fill="#16A534" />
+            </marker>
+          </defs>
+        </g>
+
+        {/* trace queue at the loop's center */}
+        <rect x="496" y="346" width="108" height="32" rx="9" fill="#F7FDF8" stroke="#16A534" strokeWidth="1.2" opacity="0.85" />
+        <text className="af-el-gap" x="550" y="392" textAnchor="middle">
+          trace queue
+        </text>
+
+        {/* stop 2 — IDLE TIME (footprintjs green, the dispatcher) */}
+        <rect
+          x="432"
+          y="396"
+          width="236"
+          height="96"
+          rx="12"
+          fill="#F7FDF8"
+          stroke="#16A534"
+          strokeWidth={flushing ? 3 : 1.5}
+        />
+        <text className="af-el-sect" x="550" y="448" textAnchor="middle" style={{ fill: '#15803D' }}>
+          IDLE TIME
+        </text>
+        <text className="af-el-gap" x="550" y="466" textAnchor="middle" style={{ fill: '#15803D' }}>
+          the dispatcher
+        </text>
+
+        {/* the four trace events: at the queue while the stage runs, flying to memory on flush */}
+        {EL_EVENTS.map((ev, i) => {
+          const qx = 514 + i * 24;
+          const mx = 832 + i * 16;
+          const x = qx + (mx - qx) * flushProg;
+          const y = 362 + (524 - 362) * flushProg;
+          return <circle key={ev.name} cx={x} cy={y} r="7.5" fill={ev.c} opacity={running && beatFrac < 0.06 ? 0 : 1} />;
+        })}
+
+        {/* the cursor — the loop's attention, riding the ellipse as you scroll */}
+        <path
+          d="M -9 -6.5 L 12 0 L -9 6.5 Z"
+          fill="#1F2937"
+          stroke="#fff"
+          strokeWidth="1.5"
+          transform={`translate(${cur.x} ${cur.y}) rotate(${cur.rot})`}
+        />
+
+        {/* TRACE MEMORY — the captured run lands here */}
+        <rect x="720" y="430" width="360" height="86" rx="30" fill="#F4FBF5" stroke="#16A534" strokeWidth="1.7" />
+        <text className="af-el-mem" x="900" y="462" textAnchor="middle">
+          TRACE MEMORY
+        </text>
+        <g opacity="0.8">
+          {Array.from({ length: memRows }).map((_, r) =>
+            EL_EVENTS.map((ev, i) => (
+              <circle key={`${r}-${i}`} cx={812 + r * 44 + i * 11} cy="492" r="4.5" fill={ev.c} />
+            )),
+          )}
+        </g>
+
+        {/* DISPATCH — your listeners, each gets every event, one beat behind */}
+        <text className="af-el-sect" x="1108" y="180">
+          YOUR LISTENERS
+        </text>
+        {EL_EVENTS.map((ev, i) => (
+          <g key={ev.name} style={{ opacity: flushing ? 1 : 0.4, transition: 'opacity 0.2s' }}>
+            <rect x="1108" y={196 + i * 40} width="240" height="32" rx="9" fill="#fff" stroke={ev.c} strokeWidth="1.4" />
+            <circle cx="1126" cy={212 + i * 40} r="4.5" fill={ev.c} />
+            <text className="af-el-code" x="1140" y={217 + i * 40} fill={ev.c}>
+              {ev.name}(e)
+            </text>
+          </g>
+        ))}
+        <text className="af-el-cap" x="1228" y={196 + 4 * 40 + 18} textAnchor="middle">
+          every listener gets every event
+        </text>
+      </svg>
+    </div>
+  );
+}
 
 // scroll-driven 0..1 progress through a pinned track (the only driver — no timers).
 // NOTE: progress always starts at 0 on both server and client first render, so there is
@@ -319,35 +613,8 @@ export function CoreEngine() {
   const totalSteps = STEPS.filter((s) => s.kind !== 'loop').length;
   const stepNow = STEPS.slice(0, emitted).filter((s) => s.kind !== 'loop').length;
 
-  // which nodes/edges are lit, + per-node hit counts (from the time-traveled run)
-  const litNodes = new Set<NodeId>();
-  const litEdges = new Set<EdgeId>();
-  const counts: Partial<Record<NodeId, number>> = {};
-  // second-iteration / answer beats render teal so the answer pass reads apart from the coral
-  // first (tool-calling) pass — the two-color Route fork: coral → ToolCalls, teal → Final.
-  const tealEdges = new Set<EdgeId>();
-  const tealNodes = new Set<NodeId>();
-  for (let k = 0; k < emitted; k++) {
-    const s = STEPS[k];
-    litNodes.add(s.node);
-    counts[s.node] = (counts[s.node] ?? 0) + 1;
-    s.nodes?.forEach((n) => {
-      litNodes.add(n);
-      counts[n] = (counts[n] ?? 0) + 1;
-    });
-    if (s.edge) litEdges.add(s.edge);
-    s.edges?.forEach((e) => litEdges.add(e));
-    if (s.tone === 'teal') {
-      tealNodes.add(s.node);
-      s.nodes?.forEach((n) => tealNodes.add(n));
-      if (s.edge) tealEdges.add(s.edge);
-      s.edges?.forEach((e) => tealEdges.add(e));
-    }
-  }
-  // the CURRENT step's edge gets the traveling coral arrow (like the backtrack arrows);
-  // the keyed re-mount restarts the draw animation each time you step forward.
-  const curStep = emitted > 0 ? STEPS[emitted - 1] : undefined;
-  const flowEdge = curStep?.edge ? EDGES.find((e) => e.id === curStep.edge) : undefined;
+  // the shared flowchart state for animation 1 (driven by progA)
+  const state1 = computeFlowState(emitted);
 
   const capA = done1 ? (
     <>
@@ -363,41 +630,21 @@ export function CoreEngine() {
     </>
   );
 
-  // ---- animation 2: the idle-beat dispatch runtime ----
-  const dp = progB;
-  // queue fills over the first ~40%, then the idle beat flushes it by ~90% (leaving a
-  // beat of settled "done" state at the end of the track).
-  const nQueued = Math.min(CHIPS.length, Math.floor((dp / 0.4) * CHIPS.length));
-  const nFlushed = Math.max(0, Math.min(CHIPS.length, Math.floor(((dp - 0.5) / 0.4) * CHIPS.length)));
-  const beating = dp > 0.45;
-  const running = dp > 0.04;
-  const memLit = nFlushed >= CHIPS.length;
+  // ---- animation 2: the SAME flowchart (left, stepped per stage) beside the event loop (right) ----
+  const emitted2 = Math.min(STEPS.length, Math.max(1, Math.ceil(progB * STEPS.length)));
+  const state2 = computeFlowState(emitted2);
+  const curStep2 = state2.curStep;
+  const stageName2 = curStep2 ? (NODES.find((n) => n.id === curStep2.node)?.nt ?? curStep2.label) : '—';
+  const stepNow2 = STEPS.slice(0, emitted2).length;
 
-  const capB =
-    nFlushed >= CHIPS.length ? (
-      <>
-        {'The '}
-        <b>idle beat</b>
-        {' flushed the queue — listeners & trace memory filled '}
-        <b>one beat behind.</b>
-        {' The run paid '}
-        <b>nothing.</b>
-      </>
-    ) : nQueued > 0 ? (
-      <>
-        {'The stage '}
-        <b>queues</b>
-        {' its trace events as it executes — on the hot path, non-blocking.'}
-      </>
-    ) : (
-      <>
-        {'Same recorded run, '}
-        <b>other lens</b>
-        {' — your agent '}
-        <b>is</b>
-        {' the event loop.'}
-      </>
-    );
+  const capB = (
+    <>
+      {'Stage '}
+      <b>{stageName2}</b>
+      {' runs on the call stack → emits its trace events; the idle beat flushes them to your recorders — '}
+      <b>one beat behind.</b>
+    </>
+  );
 
   return (
     <div className="af-eng">
@@ -588,82 +835,7 @@ export function CoreEngine() {
                   <span className="af-eng-card-sub">ReAct loop · the hot path</span>
                 </div>
                 <div className="af-eng-flow-host">
-                  <div className="af-eng-flow">
-                    <svg className="af-eng-fedges" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
-                      {EDGES.map((ed) => (
-                        <path
-                          key={ed.id}
-                          d={ed.d}
-                          pathLength={1}
-                          className={`af-eng-fe${ed.loop ? ' loop' : ''}${litEdges.has(ed.id) ? ' lit' : ''}${
-                            tealEdges.has(ed.id) ? ' answer' : ''
-                          }`}
-                        />
-                      ))}
-                      {/* forward arrowhead at each traced hop's midpoint; the active hop's pops in
-                          after its line draws — exactly BacktrackStory's technique, forward direction */}
-                      {[...litEdges]
-                        .filter((e) => HOP_ARROWS[e])
-                        .map((e) => {
-                          const a = HOP_ARROWS[e];
-                          return (
-                            <path
-                              key={`ah-${e}`}
-                              className={`af-eng-fe-arrow${e === curStep?.edge ? ' head' : ''}${
-                                tealEdges.has(e) ? ' answer' : ''
-                              }`}
-                              d="M-1.7,-1.5 L1.9,0 L-1.7,1.5 Z"
-                              transform={`translate(${a.x} ${a.y}) rotate(${a.a})`}
-                            />
-                          );
-                        })}
-                      {/* traveling pulse on the hop being traced (node → next node); teal on the answer */}
-                      {flowEdge && (
-                        <path
-                          key={`pulse-${emitted}`}
-                          className={`af-eng-fe-pulse${curStep?.tone === 'teal' ? ' answer' : ''}`}
-                          d={flowEdge.d}
-                          pathLength={1}
-                        />
-                      )}
-                    </svg>
-                    {NODES.map((nd) => {
-                      const lit = litNodes.has(nd.id);
-                      const c = counts[nd.id];
-                      const isCur = curStep?.node === nd.id;
-                      const cls = [
-                        'af-eng-fnode',
-                        nd.cls || '',
-                        lit ? 'lit' : '',
-                        isCur ? 'cur' : '',
-                        tealNodes.has(nd.id) ? 'answer' : '',
-                      ]
-                        .join(' ')
-                        .trim();
-                      return (
-                        <div
-                          key={nd.id}
-                          className={cls}
-                          data-flavor={nd.flavor}
-                          style={{ left: `${nd.x}%`, top: `${nd.y}%` }}
-                        >
-                          {nd.cls === 'pill' ? (
-                            <>
-                              <span className="af-eng-dot" />
-                              {nd.nt}
-                            </>
-                          ) : (
-                            <>
-                              <b>{nd.nt}</b>
-                              {nd.ns && <span>{nd.ns}</span>}
-                            </>
-                          )}
-                          {lit && c && nd.cls !== 'diamond' ? <i className="af-eng-fcount">{c}</i> : null}
-                        </div>
-                      );
-                    })}
-                    <i className="af-eng-loop-arrow" aria-hidden="true" />
-                  </div>
+                  <FlowChartView state={state1} emitted={emitted} />
                 </div>
               </div>
 
@@ -707,85 +879,63 @@ export function CoreEngine() {
         </div>
       </section>
 
-      {/* ================= ANIMATION 2 — and it costs the run nothing ================= */}
+      {/* ================= ANIMATION 2 — your agent IS the event loop ================= */}
       <section className="af-eng-block alt2" data-narrative="costs the run nothing">
-        <div className="af-eng-pin" ref={pinB}>
+        <div className="af-eng-pin af-eng-pin-wide" ref={pinB}>
           <div className="af-eng-sticky">
             <header className="af-eng-ahead">
               <h2 className="af-eng-h2">
-                And it costs the run <em>nothing.</em>
+                Your agent <em>is</em> the event loop.
               </h2>
               <p className="af-eng-block-lede">
-                Same recorded run &mdash; your agent <b>is</b> the event loop. The stage queues its trace
-                events; the <b>idle beat</b> flushes them to your listeners and trace memory,{' '}
-                <b>one beat behind</b>, never blocking the hot path.
+                Same recorded run &mdash; one lens over. A stage runs on the <b>call stack</b>, feeds its
+                trace events into the queue; the <b>idle beat</b> flushes them to trace memory and your
+                listeners, <b>one beat behind</b>, never blocking the hot path.
               </p>
             </header>
 
-            {/* dedicated event-loop container */}
-            <div className="af-eng-loop-card">
-              <div className="af-eng-card-head">
-                <span className="af-eng-card-label hot">the runtime</span>
-                <span className="af-eng-card-sub">idle-beat dispatch · zero added latency</span>
+            {/* shared transport — drives the flowchart AND the event loop together */}
+            <div className="af-eng-timetravel af-eng-timetravel-wide" aria-hidden="true">
+              <div className="af-eng-tt-head">
+                <span className="af-eng-live">
+                  <span className="af-eng-blink-dot" />
+                  running
+                </span>
+                <span className="af-eng-tt-step">
+                  <span className="rw">stage</span> <b>{stageName2}</b> · {stepNow2} / {STEPS.length}
+                </span>
+                <span className="af-eng-rec-tally">your code → call stack → idle-beat flush</span>
               </div>
-              <div className="af-eng-dispatch">
-                <div className="af-eng-dsp-stack">
-                  <span className={`af-eng-dsp-ring${running ? ' spin' : ''}`} aria-hidden="true" />
-                  <span className="af-eng-tagi">call stack</span>
-                  <span className="af-eng-dsp-stack-sub">stage runs — hot path · 16ms tick</span>
+              <div className="af-eng-scrub-track">
+                {Array.from({ length: STEPS.length }, (_, i) => (
+                  <span key={i} className={`af-eng-scrub-seg${i < stepNow2 ? ' on' : ''}`} />
+                ))}
+              </div>
+            </div>
+
+            <div className="af-eng-elwrap af-eng-flowwrap">
+              {/* LEFT — the SAME flowchart, stepped per stage */}
+              <div className="af-eng-exec-card af-eng-el-left">
+                <div className="af-eng-card-head">
+                  <span className="af-eng-card-label">your code</span>
+                  <span className="af-eng-card-sub">the agent · stepping per stage</span>
                 </div>
-                <div className="af-eng-dsp-rail">
-                  <span className={`af-eng-dsp-drop${running ? ' run' : ''}`} />
-                </div>
-                <div className="af-eng-dsp-queue">
-                  {CHIPS.map((chip, idx) => (
-                    <div
-                      key={chip.name}
-                      className={`af-eng-dsp-chip${idx < nQueued ? ' queued' : ''}${
-                        idx < nFlushed ? ' flushed' : ''
-                      }`}
-                      data-flavor={chip.flavor}
-                    >
-                      <span className="af-eng-ev" />
-                      <b>{chip.name}</b>
-                    </div>
-                  ))}
-                </div>
-                <div className={`af-eng-dsp-idle${beating ? ' beating' : ''}`}>
-                  <span className="af-eng-spin">⟳</span> idle beat flushes the queue
-                </div>
-                <div className="af-eng-dsp-fan" aria-hidden="true">
-                  <span />
-                  <span />
-                </div>
-                <div className="af-eng-dsp-out">
-                  <div className="af-eng-dsp-listeners">
-                    {CHIPS.map((chip, idx) => (
-                      <div
-                        key={chip.name}
-                        className={`af-eng-dsp-lst${idx < nFlushed ? ' lit' : ''}`}
-                      >
-                        <i className={`af-eng-dot-${chip.flavor}`} />
-                        listener
-                      </div>
-                    ))}
-                  </div>
-                  <div className={`af-eng-dsp-mem${memLit ? ' lit' : ''}`}>
-                    <span className="af-eng-dsp-mem-t">trace memory</span>
-                    <span className="af-eng-dsp-mem-tl">
-                      <i />
-                      <i />
-                      <i />
-                      <i />
-                      <i />
-                      <i />
-                    </span>
-                  </div>
+                <div className="af-eng-flow-host">
+                  <FlowChartView state={state2} emitted={emitted2} />
                 </div>
               </div>
-              <div className="af-eng-rec-foot">
-                ↳ the footprint drains on the event loop&rsquo;s <b>idle time</b>, off the agent&rsquo;s
-                critical path. <b>Zero added latency.</b>
+
+              {/* RIGHT — the browser-engine event loop (SVG), scroll-driven per beat */}
+              <div className="af-eng-loop-card af-eng-el-right">
+                <div className="af-eng-card-head">
+                  <span className="af-eng-card-label hot">the runtime</span>
+                  <span className="af-eng-card-sub">the event loop · one beat behind</span>
+                </div>
+                <EventLoopView prog={progB} />
+                <div className="af-eng-rec-foot">
+                  ↳ <b>grey</b> is JavaScript&rsquo;s own machinery · <b>green</b> is footprintjs · the
+                  watching drains in the <b>idle time</b>, off the hot path. <b>Zero added latency.</b>
+                </div>
               </div>
             </div>
 

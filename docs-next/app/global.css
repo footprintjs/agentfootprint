@@ -2707,6 +2707,80 @@
   display: flex;
   flex-direction: column;
 }
+
+/* animation 2 = full-width: the SAME flowchart (left) beside the event loop (right) */
+.af-eng-pin-wide {
+  height: 300vh;
+}
+.af-eng-timetravel-wide {
+  max-width: 1120px;
+}
+.af-eng-elwrap {
+  display: grid;
+  grid-template-columns: 0.62fr 1.38fr;
+  gap: 26px;
+  align-items: stretch;
+  max-width: 1120px;
+  margin: 0 auto;
+}
+.af-eng-el-right {
+  max-width: none;
+  margin: 0;
+}
+.af-el {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  padding: 12px 14px 4px;
+  min-height: 0;
+}
+.af-el-svg {
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+.af-el-sect {
+  font-size: 13px;
+  font-weight: 600;
+  fill: var(--fg-faint);
+  letter-spacing: 1.4px;
+}
+.af-el-cap {
+  font-size: 14px;
+  fill: var(--fg-faint);
+}
+.af-el-wink {
+  font-size: 12px;
+  font-style: italic;
+  fill: var(--fg-faint);
+}
+.af-el-gap {
+  font-size: 13px;
+  font-style: italic;
+  fill: var(--fg-faint);
+}
+.af-el-cue {
+  font-size: 14px;
+  font-weight: 700;
+  fill: #15803d;
+  transition: opacity 0.25s ease;
+}
+.af-el-mem {
+  font-size: 15px;
+  font-weight: 700;
+  fill: #15803d;
+  letter-spacing: 1.2px;
+}
+.af-el-frame-t {
+  font-size: 16px;
+  font-weight: 600;
+  font-family: var(--fd-font-mono, ui-monospace, monospace);
+}
+.af-el-code {
+  font-size: 14px;
+  font-weight: 600;
+  font-family: var(--fd-font-mono, ui-monospace, monospace);
+}
 .af-eng-card-label.hot,
 .af-eng-card-label.rec {
   color: var(--coral);
