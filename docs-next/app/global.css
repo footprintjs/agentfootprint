@@ -494,20 +494,33 @@
 .af-flow svg.edges { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
 /* stroke-width is in viewBox user units (no non-scaling-stroke — it breaks pathLength dash normalization and fragments curves). pathLength=1 makes dasharray:1 == the whole path, so the lit draw-in is clean. */
 .af-flow .fe { fill: none; stroke: var(--border-strong); stroke-width: 0.5; opacity: 0.75; stroke-dasharray: 1; stroke-dashoffset: 0; transition: stroke 0.3s ease, stroke-width 0.3s ease, opacity 0.3s ease; }
-.af-flow .fe.lit { stroke: var(--coral); stroke-width: 0.72; opacity: 1; animation: af-draw 0.55s ease both; }
-.af-flow .fe.loop { stroke-dasharray: 0.02 0.02; opacity: 0.5; }
+/* lit hops draw in the REWIND direction: from the downstream end back toward the upstream node */
+.af-flow .fe.lit { stroke: var(--coral); stroke-width: 0.72; opacity: 1; animation: af-draw-back 0.5s ease both; }
+/* the ReAct loop edge — a light-grey structural separator, distinct from the traced hops */
+.af-flow .fe.loop { stroke: var(--border); stroke-dasharray: 0.02 0.02; opacity: 0.4; }
 .af-flow .fe.loop.lit { stroke: var(--coral); opacity: 1; animation: af-march 0.9s linear infinite; }
 @keyframes af-draw { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
+@keyframes af-draw-back { from { stroke-dashoffset: -1; } to { stroke-dashoffset: 0; } }
 @keyframes af-march { to { stroke-dashoffset: -0.04; } }
+/* reversed arrowhead at each traced hop's midpoint; the active hop's pops in after its line draws */
+.af-flow .fe-arrow { fill: var(--coral); stroke: none; opacity: 0.92; }
+.af-flow .fe-arrow.head { animation: af-arrow-pop 0.5s ease both; }
+@keyframes af-arrow-pop { from { opacity: 0; } 45% { opacity: 0; } to { opacity: 0.92; } }
+/* a bright dash that travels backward (downstream → upstream) along the hop being traced */
+.af-flow .fe-pulse { fill: none; stroke: var(--coral); stroke-width: 1.4; stroke-linecap: round; stroke-dasharray: 0.16 0.84; filter: drop-shadow(0 0 1.1px var(--coral)); pointer-events: none; animation: af-pulse-back 0.62s ease-out both; }
+@keyframes af-pulse-back { from { stroke-dashoffset: -0.84; opacity: 0; } 25% { opacity: 1; } to { stroke-dashoffset: 0.16; opacity: 0; } }
 @media (prefers-reduced-motion: reduce) {
-  .af-flow .fe.lit, .af-flow .fe.loop.lit { animation: none; }
+  .af-flow .fe.lit, .af-flow .fe.loop.lit, .af-flow .fe-arrow.head { animation: none; }
+  .af-flow .fe-pulse { display: none; }
 }
-.af-flow .fnode { position: absolute; transform: translate(-50%, -50%); font-family: var(--fd-font-mono, monospace); background: var(--bg-elev); border: 1px solid var(--border-strong); border-radius: 9px; padding: 7px 12px; text-align: center; white-space: nowrap; transition: border-color 0.3s ease, box-shadow 0.3s ease, opacity 0.3s ease; z-index: 1; }
+/* nodes light ~0.2s AFTER the hop's edge starts drawing, so each step reads arrow → node */
+.af-flow .fnode { position: absolute; transform: translate(-50%, -50%); font-family: var(--fd-font-mono, monospace); background: var(--bg-elev); border: 1px solid var(--border-strong); border-radius: 9px; padding: 7px 12px; text-align: center; white-space: nowrap; transition: border-color 0.3s ease 0.2s, box-shadow 0.3s ease 0.2s, opacity 0.3s ease; z-index: 1; }
 .af-flow .fnode .nt { font-weight: 600; font-size: 12.5px; color: var(--fg); display: block; }
 .af-flow .fnode .ns { font-size: 9.5px; color: var(--fg-faint); }
 .af-flow .fnode.dim { opacity: 0.5; }
 .af-flow .fnode.lit { border-color: var(--coral); box-shadow: 0 0 0 3px color-mix(in oklab, var(--coral) 18%, transparent); }
 .af-flow .fnode.slot { border-radius: 999px; }
+.af-flow .fnode.slot.suspect { border-color: var(--yellow); border-style: dashed; box-shadow: 0 0 0 3px color-mix(in oklab, var(--yellow) 16%, transparent); }
 .af-flow .fnode.slot.culprit { border-color: var(--yellow); box-shadow: 0 0 0 4px color-mix(in oklab, var(--yellow) 32%, transparent); }
 .af-flow .fnode.slot.ablated .nt { text-decoration: line-through; opacity: 0.55; }
 /* Route is a decision diamond: clip-path diamond fill + a 2-layer border (outer = border color, ::before = bg) so the outline shows. Box-shadow can't follow a clip, so lit/culprit recolor the outer fill. */
@@ -523,7 +536,7 @@
 .af-tl-cap .stamp { color: var(--teal); font-weight: 700; font-family: var(--fd-font-mono, monospace); }
 
 /* scroll-pinned scrollytelling: the flowchart stays put while the rewind scrubs to scroll */
-.af-pin-track { position: relative; height: 360vh; }
+.af-pin-track { position: relative; height: 420vh; }
 .af-pin-stage {
   position: sticky;
   top: calc(var(--fd-nav-height, 56px) + 52px);
@@ -571,7 +584,7 @@
   .af-tl-cap { min-height: 88px; }
 }
 @media (max-width: 760px) {
-  .af-pin-track { height: 340vh; }
+  .af-pin-track { height: 380vh; }
   .af-pin-stage .af-flow { width: 320px; height: 320px; }
   .af-replay { width: 320px; }
 }

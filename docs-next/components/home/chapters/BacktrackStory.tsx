@@ -5,9 +5,12 @@ import { useEffect, useRef, useState } from 'react';
 /**
  * Chapter 1 — "The problem". An agent approved a refund it shouldn't; asking a model
  * gives unfalsifiable guesses; so we REWIND the recorded ReAct loop — SCROLL-DRIVEN
- * and PINNED: as you scroll the flowchart stays put and the backward path draws in
- * (Final ← Route ← CallLLM ← messageAPI ← System Prompt culprit), then ablation flips
- * the outcome to denied. CAUSAL. Why is a query, not a guess.
+ * and PINNED: as you scroll the flowchart stays put and the backward path is traced
+ * one hop at a time, each hop drawing BACKWARD (downstream→upstream) with a reversed
+ * arrowhead + a traveling rewind pulse, then the node lights:
+ * Final ← Route ← CallLLM ← messageAPI ← System Prompt (suspect) → revealed at step 4
+ * (the loop carried it untouched to step 14) → ablation flips the outcome to denied.
+ * CAUSAL. Why is a query, not a guess.
  */
 
 type Node = { n: string; nt: string; ns?: string; x: number; y: number; cls?: string };
@@ -45,27 +48,41 @@ const LIT_EDGES: string[][] = [
   ['route-final'],
   ['route-final', 'llm-route'],
   ['route-final', 'llm-route', 'api-llm'],
+  ['route-final', 'llm-route', 'api-llm', 'sys-api'],
   ['route-final', 'llm-route', 'api-llm', 'sys-api', 'ctx-sys', 'loop'],
   ['route-final', 'llm-route', 'api-llm', 'sys-api', 'ctx-sys', 'loop'],
 ];
+// the ONE edge newly traced at each phase — gets the backward draw-in + the traveling rewind pulse.
+const HEAD_EDGE: (string | null)[] = [null, 'route-final', 'llm-route', 'api-llm', 'sys-api', 'ctx-sys', null];
 const LIT_NODES: string[][] = [
   [],
   ['route'],
   ['route', 'llm'],
   ['route', 'llm', 'api'],
   ['route', 'llm', 'api'],
-  ['route', 'llm', 'api'],
+  ['route', 'llm', 'api', 'ctx'],
+  ['route', 'llm', 'api', 'ctx'],
 ];
+// backward arrowhead per hop: a mid-edge point (viewBox units) + rotation pointing toward the UPSTREAM node.
+const HOP_ARROWS: Record<string, { x: number; y: number; a: number }> = {
+  'route-final': { x: 33, y: 96, a: 0 },
+  'llm-route': { x: 50, y: 74, a: -90 },
+  'api-llm': { x: 50, y: 55, a: -90 },
+  'sys-api': { x: 34, y: 46, a: 180 },
+  'ctx-sys': { x: 18, y: 18, a: -90 },
+};
+const EDGE_D: Record<string, string> = Object.fromEntries(EDGES.map((e) => [e.e, e.d]));
 const CAPS = [
   <>The run ended wrong — at <b>step 14.</b> Every step was recorded as this loop. <b>Scroll to rewind it.</b></>,
   <>Retrace the decision: <b>Final ← Route.</b> Which branch fired, and why.</>,
   <><b>← CallLLM.</b> The model’s pick — replay the exact request that produced it.</>,
-  <><b>← messageAPI.</b> The step that assembled that request from the context slots — trace each one back to <i>when</i> it entered.</>,
-  <><b>Step 4:</b> a retrieval wrote the wrong doc into <b>System Prompt.</b> It rode along, untouched, to step 14.</>,
+  <><b>← messageAPI.</b> The step that assembled that request from the context slots.</>,
+  <><b>← System Prompt.</b> messageAPI pulled from this slot — the suspect. But <i>when</i> did it get there?</>,
+  <><b>Step 4:</b> a retrieval wrote the wrong doc into <b>System Prompt.</b> It rode the loop, untouched, to step 14.</>,
   <>Remove it, re-run from step 4 → <b>denied.</b> <span className="stamp">● CAUSAL</span> — proven by replay, not guessed.</>,
 ];
-const LAST = 5;
-const headStep = (p: number) => (p <= 2 ? 14 : p === 3 ? 9 : 4);
+const LAST = 6;
+const headStep = (p: number) => (p <= 2 ? 14 : p <= 4 ? 9 : 4);
 
 export function BacktrackStory() {
   const [phase, setPhase] = useState(0);
@@ -108,6 +125,7 @@ export function BacktrackStory() {
 
   const litE = new Set(LIT_EDGES[phase]);
   const litN = new Set(LIT_NODES[phase]);
+  const headEdge = HEAD_EDGE[phase];
   const step = headStep(phase);
   const headLeft = ((step - 0.5) / 14) * 100;
 
@@ -150,16 +168,36 @@ export function BacktrackStory() {
                       className={`fe${ed.loop ? ' loop' : ''}${litE.has(ed.e) ? ' lit' : ''}`}
                     />
                   ))}
+                  {/* backward arrowheads — persist for every traced hop; the active one pops in */}
+                  {[...litE]
+                    .filter((e) => HOP_ARROWS[e])
+                    .map((e) => {
+                      const a = HOP_ARROWS[e];
+                      return (
+                        <path
+                          key={`ah-${e}`}
+                          className={`fe-arrow${e === headEdge ? ' head' : ''}`}
+                          d="M-1.7,-1.5 L1.9,0 L-1.7,1.5 Z"
+                          transform={`translate(${a.x} ${a.y}) rotate(${a.a})`}
+                        />
+                      );
+                    })}
+                  {/* traveling rewind pulse on the hop being traced (remounts per phase to replay it) */}
+                  {headEdge && (
+                    <path key={`pulse-${phase}-${headEdge}`} className="fe-pulse" d={EDGE_D[headEdge]} pathLength={1} />
+                  )}
                 </svg>
                 {NODES.map((nd) => {
-                  const isSlotCulprit = nd.n === 'sys' && phase >= 4;
-                  const ablated = nd.n === 'sys' && phase >= 5;
-                  const denied = nd.n === 'final' && phase >= 5;
+                  const suspect = nd.n === 'sys' && phase === 4;
+                  const culprit = nd.n === 'sys' && phase >= 5;
+                  const ablated = nd.n === 'sys' && phase >= 6;
+                  const denied = nd.n === 'final' && phase >= 6;
                   const cls = [
                     'fnode',
                     nd.cls || '',
-                    litN.has(nd.n) || (nd.n === 'ctx' && phase >= 4) ? 'lit' : '',
-                    isSlotCulprit ? 'culprit' : '',
+                    litN.has(nd.n) ? 'lit' : '',
+                    suspect ? 'suspect' : '',
+                    culprit ? 'culprit' : '',
                     ablated ? 'ablated' : '',
                     denied ? 'denied' : '',
                   ].join(' ');
@@ -201,7 +239,7 @@ export function BacktrackStory() {
                   {Array.from({ length: 14 }, (_, i) => {
                     const s = i + 1;
                     const on = s >= step;
-                    const cul = s === 4 && phase >= 4;
+                    const cul = s === 4 && phase >= 5;
                     return <span key={i} className={`af-replay-seg${on ? ' on' : ''}${cul ? ' cul' : ''}`} />;
                   })}
                   <span className="af-replay-head" style={{ left: `${headLeft}%` }} />
