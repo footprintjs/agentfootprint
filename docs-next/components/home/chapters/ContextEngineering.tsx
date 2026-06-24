@@ -163,6 +163,7 @@ type TrigBeat = {
   litEdges: string[];
   weakNodes?: string[]; // secondary slot this trigger CAN also land in (dashed)
   weakEdges?: string[];
+  code: string; // the one-line define* call for this trigger (shown in the aside)
   aside: ReactNode;
 };
 // slot routing verified against the engine (evaluator.ts + buildSystemPromptSlot.ts), not the README.
@@ -173,6 +174,7 @@ const TRIG_BEATS: TrigBeat[] = [
     tagNode: 'sys',
     litNodes: ['sys'],
     litEdges: ['ctx-sys'],
+    code: 'defineSteering({ id, prompt })',
     aside: (
       <>
         <b>always</b> — re-injected into <b>system</b> on <i>every</i> iteration: the invariants
@@ -188,6 +190,7 @@ const TRIG_BEATS: TrigBeat[] = [
     litEdges: ['ctx-sys'],
     weakNodes: ['msg'],
     weakEdges: ['ctx-msg'],
+    code: 'defineInstruction({ id, activeWhen, prompt })',
     aside: (
       <>
         <b>rule</b> — a predicate runs each iteration; true → the text lands in <b>system</b> (or{' '}
@@ -204,6 +207,7 @@ const TRIG_BEATS: TrigBeat[] = [
     litEdges: ['ctx-sys'],
     weakNodes: ['msg'],
     weakEdges: ['ctx-msg'],
+    code: 'defineInstruction({ activeWhen: c => c.lastToolResult, prompt })',
     aside: (
       <>
         <b>on-tool-return</b> — after a specific tool returns, the <b>loop</b> carries a note into the
@@ -221,6 +225,7 @@ const TRIG_BEATS: TrigBeat[] = [
     litEdges: ['ctx-sys', 'ctx-tool'],
     weakNodes: ['msg'],
     weakEdges: ['ctx-msg'],
+    code: 'defineSkill({ id, description, body, tools })',
     aside: (
       <>
         <b>llm-activated</b> — the model unlocks it by calling <code>read_skill</code> at{' '}
@@ -642,6 +647,11 @@ function TriggersBlock() {
                   </>
                 )}
               </p>
+              {beat && (
+                <code className="af-trig-code" style={{ borderLeftColor: beat.hl } as CSSProperties}>
+                  {beat.code}
+                </code>
+              )}
             </aside>
           </div>
         </div>
