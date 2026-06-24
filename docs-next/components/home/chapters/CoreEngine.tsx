@@ -19,7 +19,7 @@ import { useEffect, useRef, useState } from 'react';
  *  off the critical path, zero added latency.
  */
 
-type StepKind = 'prompt' | 'inject' | 'ask' | 'ret' | 'answer' | 'loop';
+type StepKind = 'prompt' | 'inject' | 'assemble' | 'ask' | 'route' | 'ret' | 'answer' | 'loop';
 type NodeId = 'ctx' | 'sys' | 'msg' | 'tool' | 'api' | 'llm' | 'route' | 'final' | 'tc';
 type EdgeId =
   | 'ctx-sys'
@@ -41,18 +41,22 @@ type Step = {
   ms: number;
   tok: number;
   node: NodeId;
-  edge?: EdgeId;
+  edge?: EdgeId; // the primary hop (gets the head pulse); also the one the arrowhead pops on
+  edges?: EdgeId[]; // a step may traverse several edges at once (e.g. assemble pulls all 3 slots)
 };
 
-// One ReAct iteration, as recorded steps.
+// One ReAct iteration + the answer, as recorded steps. The request is ASSEMBLED, never skipped:
+// System Prompt + Messages converge at messageAPI; then messageAPI together with Tools all reach
+// CallLLM. A tool call routes CallLLM → Route → ToolCalls, and the result LOOPS BACK to Context
+// for the next turn (it does not snap straight back to CallLLM).
 const STEPS: Step[] = [
-  { kind: 'prompt', label: 'prompt', text: 'assemble context for the call', ms: 180, tok: 90, node: 'ctx' },
+  { kind: 'prompt', label: 'prompt', text: 'assemble the context for this turn', ms: 180, tok: 90, node: 'ctx' },
   {
     kind: 'inject',
     label: 'rule ↳',
     text: (
       <>
-        <b>always</b> &rarr; steering into <b>system</b>
+        <b>steering</b> · always &rarr; <b>system</b>
       </>
     ),
     ms: 60,
@@ -65,7 +69,7 @@ const STEPS: Step[] = [
     label: 'rule ↳',
     text: (
       <>
-        memory rule fires &rarr; <b>messages</b>
+        memory recall &rarr; <b>messages</b>
       </>
     ),
     ms: 80,
@@ -74,37 +78,11 @@ const STEPS: Step[] = [
     edge: 'ctx-msg',
   },
   {
-    kind: 'ask',
-    label: 'ask',
-    text: (
-      <>
-        call <b>search_hotels</b>({'{ city: "Lisbon" }'})
-      </>
-    ),
-    ms: 260,
-    tok: 120,
-    node: 'llm',
-    edge: 'api-llm',
-  },
-  {
-    kind: 'ret',
-    label: 'return',
-    text: (
-      <>
-        <b>data</b> &larr; 6 hotels · reason
-      </>
-    ),
-    ms: 600,
-    tok: 320,
-    node: 'tool',
-    edge: 'tool-llm',
-  },
-  {
     kind: 'inject',
     label: 'skill ↳',
     text: (
       <>
-        skill activates &rarr; adds <b>book_hold</b> tool
+        skill unlocks &rarr; <b>search_hotels</b> tool
       </>
     ),
     ms: 90,
@@ -113,48 +91,87 @@ const STEPS: Step[] = [
     edge: 'ctx-tool',
   },
   {
+    kind: 'assemble',
+    label: 'assemble',
+    text: (
+      <>
+        <b>system</b> + <b>messages</b> converge &rarr; <b>messageAPI</b>
+      </>
+    ),
+    ms: 40,
+    tok: 0,
+    node: 'api',
+    edge: 'msg-api',
+    edges: ['sys-api', 'msg-api'],
+  },
+  {
     kind: 'ask',
     label: 'ask',
     text: (
       <>
-        call <b>book_hold</b>({'{ id: "baixa" }'})
+        <b>messageAPI</b> + <b>tools</b> &rarr; <b>CallLLM</b> wants search_hotels
       </>
     ),
-    ms: 240,
-    tok: 150,
+    ms: 260,
+    tok: 120,
     node: 'llm',
     edge: 'api-llm',
+    edges: ['api-llm', 'tool-llm'],
+  },
+  {
+    kind: 'route',
+    label: 'route',
+    text: (
+      <>
+        Route &rarr; <b>ToolCalls</b> — a tool call, not the answer
+      </>
+    ),
+    ms: 30,
+    tok: 0,
+    node: 'tc',
+    edge: 'route-tc',
+    edges: ['llm-route', 'route-tc'],
   },
   {
     kind: 'ret',
     label: 'return',
     text: (
       <>
-        <b>instruction</b> &larr; needs sign-off · act
+        <b>search_hotels</b> &rarr; 6 hotels · <b>loops back</b>
       </>
     ),
-    ms: 520,
-    tok: 210,
-    node: 'tool',
-    edge: 'tool-llm',
+    ms: 600,
+    tok: 320,
+    node: 'ctx',
+    edge: 'loop',
+  },
+  {
+    kind: 'ask',
+    label: 'ask',
+    text: (
+      <>
+        re-assembled · <b>CallLLM</b> answers with the results
+      </>
+    ),
+    ms: 240,
+    tok: 160,
+    node: 'llm',
+    edge: 'api-llm',
+    edges: ['api-llm', 'tool-llm'],
   },
   {
     kind: 'answer',
     label: 'answer',
-    text: <>&ldquo;Hotel Baixa held &mdash; pending approval.&rdquo;</>,
-    ms: 240,
-    tok: 160,
+    text: (
+      <>
+        Route &rarr; <b>Final</b> &mdash; &ldquo;6 options in Lisbon.&rdquo;
+      </>
+    ),
+    ms: 50,
+    tok: 0,
     node: 'final',
     edge: 'route-final',
-  },
-  {
-    kind: 'loop',
-    label: 'loop ↻',
-    text: 'every inject decision recorded to the footprint',
-    ms: 0,
-    tok: 0,
-    node: 'tc',
-    edge: 'loop',
+    edges: ['llm-route', 'route-final'],
   },
 ];
 
@@ -192,9 +209,14 @@ const HOP_ARROWS: Record<string, { x: number; y: number; a: number }> = {
   'ctx-sys': { x: 18, y: 22, a: 90 }, // down into System Prompt
   'ctx-msg': { x: 50, y: 19, a: 90 }, // down into Messages
   'ctx-tool': { x: 82, y: 22, a: 90 }, // down into Tools
-  'api-llm': { x: 50, y: 61, a: 90 }, // down into CallLLM
-  'tool-llm': { x: 66, y: 69.5, a: 180 }, // left into CallLLM (the return)
+  'sys-api': { x: 40, y: 50.5, a: 0 }, // right into messageAPI
+  'msg-api': { x: 50, y: 44, a: 90 }, // down into messageAPI
+  'api-llm': { x: 50, y: 61, a: 90 }, // down into CallLLM (messageAPI → CallLLM)
+  'tool-llm': { x: 66, y: 69.5, a: 180 }, // left into CallLLM (tools join the call)
+  'llm-route': { x: 50, y: 80, a: 90 }, // down into Route
+  'route-tc': { x: 63, y: 90, a: 12 }, // down-right into ToolCalls
   'route-final': { x: 37, y: 89, a: 168 }, // down-left into Final
+  loop: { x: 62, y: 7, a: 180 }, // left into Context (the result loops back)
 };
 
 // Trace-event chips (animation 2 queue).
@@ -272,6 +294,7 @@ export function CoreEngine() {
     litNodes.add(s.node);
     counts[s.node] = (counts[s.node] ?? 0) + 1;
     if (s.edge) litEdges.add(s.edge);
+    s.edges?.forEach((e) => litEdges.add(e));
   }
   // the CURRENT step's edge gets the traveling coral arrow (like the backtrack arrows);
   // the keyed re-mount restarts the draw animation each time you step forward.
@@ -524,9 +547,7 @@ export function CoreEngine() {
                           key={ed.id}
                           d={ed.d}
                           pathLength={1}
-                          className={`af-eng-fe${ed.loop ? ' loop' : ''}${
-                            litEdges.has(ed.id) && !ed.loop ? ' lit' : ''
-                          }`}
+                          className={`af-eng-fe${ed.loop ? ' loop' : ''}${litEdges.has(ed.id) ? ' lit' : ''}`}
                         />
                       ))}
                       {/* forward arrowhead at each traced hop's midpoint; the active hop's pops in

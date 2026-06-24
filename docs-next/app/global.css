@@ -1951,12 +1951,19 @@
   opacity: 1;
   animation: af-draw 0.5s ease both;
 }
-/* the ReAct loop edge — a light structural separator, NOT on the causal path */
+/* the ReAct loop edge — a light structural separator until it's actually traversed */
 .af-eng-fe.loop {
   stroke: color-mix(in oklab, var(--amber) 55%, var(--border-strong));
   stroke-dasharray: 0.02 0.02;
   stroke-width: 0.5;
   opacity: 0.5;
+}
+/* when the tool result loops back, the loop edge becomes active flow (coral, marching) */
+.af-eng-fe.loop.lit {
+  stroke: var(--coral);
+  stroke-width: 0.6;
+  opacity: 1;
+  animation: af-march 0.9s linear infinite;
 }
 /* per-hop forward arrowhead at the edge midpoint (coral); the active hop's pops in after its line draws */
 .af-eng-fe-arrow {
@@ -2240,6 +2247,10 @@
 }
 .af-eng-ln.inject .af-eng-ln-kind {
   color: var(--yellow-dark);
+}
+.af-eng-ln.assemble .af-eng-ln-kind,
+.af-eng-ln.route .af-eng-ln-kind {
+  color: var(--fg-muted);
 }
 .af-eng-ln.loop {
   opacity: 0.7;
