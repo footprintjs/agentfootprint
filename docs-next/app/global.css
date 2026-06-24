@@ -1131,6 +1131,22 @@
 }
 @media (max-width: 760px) { .af-trig-track { height: 280vh; } }
 
+/* ---- (d) dynamic ReAct — scroll-driven flowchart traversal (keeps the token punchline) ---- */
+.af-dyn-track { position: relative; height: 320vh; }
+.af-dyn-top { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; margin-bottom: 18px; }
+.af-dyn-aside { width: 360px; }
+.af-dyn-cap { min-height: 0; margin-top: 14px; }
+/* the recomposition, shown on the chart: tool count (1→5) + the growing system prompt */
+.af-flow .fnode .af-dyn-count { position: absolute; top: -11px; right: -11px; min-width: 20px; height: 20px; padding: 0 5px; display: inline-flex; align-items: center; justify-content: center; font-family: var(--fd-font-mono, monospace); font-size: 11px; font-weight: 700; color: #fff; background: var(--coral); border-radius: 999px; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2); animation: af-dyn-pop 0.4s ease both; }
+.af-flow .fnode .af-dyn-sysbadge { position: absolute; top: -13px; left: 50%; transform: translateX(-50%); font-family: var(--fd-font-mono, monospace); font-size: 9px; font-weight: 700; white-space: nowrap; padding: 1.5px 7px; border-radius: 999px; color: var(--coral); background: color-mix(in oklab, var(--coral) 14%, var(--bg-elev)); border: 1px solid color-mix(in oklab, var(--coral) 45%, transparent); animation: af-dyn-pop 0.4s ease both; }
+@keyframes af-dyn-pop { from { opacity: 0; } }
+.af-dyn-track .af-flow .fe.lit { animation: af-ctx-wire-in 0.4s ease both; }
+@media (prefers-reduced-motion: reduce) {
+  .af-flow .fnode .af-dyn-count, .af-flow .fnode .af-dyn-sysbadge, .af-dyn-track .af-flow .fe.lit { animation: none; }
+}
+@media (max-width: 880px) { .af-dyn-aside { width: 100%; max-width: 480px; } }
+@media (max-width: 760px) { .af-dyn-track { height: 300vh; } }
+
 /* ============ (b) TRIGGERS TABLE ============ */
 .af-ctx-trigtable {
   border: 1px solid var(--border);

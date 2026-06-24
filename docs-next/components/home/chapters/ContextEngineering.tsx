@@ -790,42 +790,72 @@ function CodeBlock() {
   );
 }
 
-// ============ (d) DYNAMIC REACT STEPPER ============
+// ============ (d) DYNAMIC REACT — scroll-driven flowchart traversal ============
+// Same ReAct flowchart; scrolling walks iterations 1→3. Each iter lights the path taken and the
+// slot contents recompose (system grows, tools 1→5). The token punchline (5 vs 12) stays in the aside.
+type StepFlow = { litNodes: string[]; litEdges: string[] };
+const STEP_FLOW: StepFlow[] = [
+  // iter 1 — steering only; model calls read_skill, then loops
+  {
+    litNodes: ['ctx', 'sys', 'api', 'llm', 'route', 'tc'],
+    litEdges: ['ctx-sys', 'sys-api', 'api-llm', 'llm-route', 'route-tc', 'loop'],
+  },
+  // iter 2 — skill body in system, 5 tools unlocked; model calls a tool, loops
+  {
+    litNodes: ['ctx', 'sys', 'tool', 'api', 'llm', 'route', 'tc'],
+    litEdges: ['ctx-sys', 'ctx-tool', 'sys-api', 'tool-llm', 'api-llm', 'llm-route', 'route-tc', 'loop'],
+  },
+  // iter 3 — refund done; model answers (Route → answer), no loop
+  {
+    litNodes: ['ctx', 'sys', 'tool', 'api', 'llm', 'route', 'final'],
+    litEdges: ['ctx-sys', 'ctx-tool', 'sys-api', 'tool-llm', 'api-llm', 'llm-route', 'route-final'],
+  },
+];
+
 function DynamicReactBlock() {
+  const trackRef = useRef<HTMLDivElement>(null);
   const [i, setI] = useState(0);
-  const [auto, setAuto] = useState(true);
-  const dynRef = useRef<HTMLDivElement>(null);
-  const autoRef = useRef(auto);
-  autoRef.current = auto;
+  const LAST = STEPS.length - 1; // iterations 0..2
 
   useEffect(() => {
-    if (prefersReducedMotion()) return;
-
-    let started = false;
-    let timer: ReturnType<typeof setInterval> | undefined;
-    const io = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((e) => {
-          if (e.isIntersecting && !started) {
-            started = true;
-            timer = setInterval(() => {
-              if (!autoRef.current) return;
-              setI((prev) => (prev + 1) % STEPS.length);
-            }, 2600);
-          }
-        });
-      },
-      { threshold: 0.4 },
-    );
-    if (dynRef.current) io.observe(dynRef.current);
-
-    return () => {
-      io.disconnect();
-      if (timer) clearInterval(timer);
+    if (prefersReducedMotion()) {
+      setI(LAST);
+      return;
+    }
+    let raf = 0;
+    const onScroll = () => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => {
+        const track = trackRef.current;
+        if (!track) return;
+        const rect = track.getBoundingClientRect();
+        const total = rect.height - window.innerHeight;
+        const p = total > 0 ? Math.min(1, Math.max(0, -rect.top / total)) : 0;
+        setI(Math.min(LAST, Math.floor(p * (LAST + 1))));
+      });
     };
-  }, []);
+    onScroll();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('resize', onScroll);
+    return () => {
+      window.removeEventListener('scroll', onScroll);
+      window.removeEventListener('resize', onScroll);
+      cancelAnimationFrame(raf);
+    };
+  }, [LAST]);
+
+  const goToIter = (k: number) => {
+    const track = trackRef.current;
+    if (!track) return;
+    const total = track.offsetHeight - window.innerHeight;
+    const trackTop = track.getBoundingClientRect().top + window.scrollY;
+    window.scrollTo({ top: trackTop + ((k + 0.5) / (LAST + 1)) * total, behavior: 'smooth' });
+  };
 
   const s = STEPS[i];
+  const f = STEP_FLOW[i];
+  const litN = new Set(f.litNodes);
+  const litE = new Set(f.litEdges);
 
   return (
     <section className="af-ctx-block">
@@ -834,94 +864,105 @@ function DynamicReactBlock() {
         The prompt <em>recomposes</em> every iteration.
       </h2>
       <p className="af-ctx-lede">
-        This is the engineering: the model reasons, decides which skill it needs, and on the next turn
-        the framework <b>re-assembles the system prompt and the tool list</b> around that decision.
-        Tools the model can&apos;t use yet never enter the window — so the context shrinks to what the
-        step needs, and the token bill drops with it.
+        The model reasons, decides which skill it needs, and the framework{' '}
+        <b>re-assembles the system prompt and the tool list</b> around that decision. Tools the model
+        can&apos;t use yet never enter the window — so the context shrinks to what the step needs, and
+        the token bill drops with it. <b>Scroll</b> to walk the three iterations.
       </p>
 
-      <div className="af-ctx-dyn" ref={dynRef}>
-        <div className="af-ctx-dyn-top">
-          <p className="af-ctx-dyn-q">
-            Task: <b>&ldquo;Refund my last charge.&rdquo;</b>
-          </p>
-          <div className="af-ctx-iters">
-            {STEPS.map((_, k) => (
-              <button
-                key={k}
-                type="button"
-                className={k === i ? 'on' : ''}
-                onClick={() => {
-                  setI(k);
-                  setAuto(false);
-                }}
-              >
-                iter&nbsp;{k + 1}
-              </button>
-            ))}
+      <div className="af-dyn-track" ref={trackRef}>
+        <div className="af-pin-stage af-flowwrap">
+          <div className="af-dyn-top">
+            <p className="af-ctx-dyn-q">
+              Task: <b>&ldquo;Refund my last charge.&rdquo;</b>
+            </p>
+            <div className="af-ctx-iters">
+              {STEPS.map((_, k) => (
+                <button key={k} type="button" className={k === i ? 'on' : ''} onClick={() => goToIter(k)}>
+                  iter&nbsp;{k + 1}
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
 
-        <div className="af-ctx-dyn-body">
-          <div className="af-ctx-dyn-call">
-            <p className="af-ctx-lab">system prompt + tools, assembled for this iteration</p>
-            <div className="af-ctx-reqslot">
-              <p className="h">
-                system <span className={`badge${i > 0 ? ' grow' : ''}`}>{s.sysBadge}</span>
-              </p>
-              <div className="af-ctx-chips">
-                {s.sys.map((c, n) => (
-                  <span
-                    key={`${i}-sys-${c.label}`}
-                    className={`af-ctx-chip ${c.color}`}
-                    style={{ animationDelay: `${n * 60}ms` } as CSSProperties}
-                  >
-                    {c.label}
+          <div className="af-bt-row">
+            <div className="af-bt-left">
+              <div className="af-flow">
+                <svg className="edges" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+                  {TRIG_EDGES.map((ed) => (
+                    <path
+                      key={ed.e}
+                      d={ed.d}
+                      pathLength={1}
+                      className={`fe${ed.loop ? ' loop' : ''}${litE.has(ed.e) ? ' lit' : ''}`}
+                    />
+                  ))}
+                </svg>
+                {TRIG_NODES.map((nd) => {
+                  const cls = ['fnode', nd.cls || '', litN.has(nd.n) ? 'lit' : ''].join(' ');
+                  return (
+                    <div key={nd.n} className={cls} style={{ left: `${nd.x}%`, top: `${nd.y}%` }}>
+                      {/* the recomposition, on the chart: tool count (1→5) + the growing system */}
+                      {nd.n === 'tool' && (
+                        <span key={`tc-${i}`} className="af-dyn-count">
+                          {s.toolCount}
+                        </span>
+                      )}
+                      {nd.n === 'sys' && (
+                        <span key={`sb-${i}`} className="af-dyn-sysbadge">
+                          {s.sysBadge}
+                        </span>
+                      )}
+                      <span className="nt">{nd.nt}</span>
+                      {nd.ns && <span className="ns">{nd.ns}</span>}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            <aside className="af-flow-aside af-dyn-aside">
+              <span className="af-aside-prog" aria-hidden="true">
+                <span className="af-aside-fill" style={{ height: `${(i / LAST) * 100}%` }} />
+              </span>
+              <p className="af-flow-kicker">iteration {i + 1} of 3</p>
+              <div className="af-ctx-decision">
+                <p className="dh">the model decides</p>
+                <p className="dt">{s.decision}</p>
+              </div>
+              <div className="af-ctx-reqslot">
+                <p className="h">
+                  tools <span className={`badge${i === 1 ? ' grow' : ''}`}>{s.toolBadge}</span>
+                </p>
+                <div className="af-ctx-chips">
+                  {s.tools.map((c, n) => (
+                    <span
+                      key={`${i}-tool-${c.label}`}
+                      className={`af-ctx-chip ${c.color}`}
+                      style={{ animationDelay: `${n * 50}ms` } as CSSProperties}
+                    >
+                      {c.label}
+                    </span>
+                  ))}
+                </div>
+              </div>
+              <div className="af-ctx-tokenbar">
+                <div className="tlab">
+                  <span>tools in window</span>
+                  <span>
+                    <b>{s.toolCount}</b> vs 12 classic
                   </span>
-                ))}
+                </div>
+                <div className="af-ctx-track">
+                  <div className="classic" />
+                  <div className="dynamic" style={{ width: `${s.track}%` }} />
+                </div>
               </div>
-            </div>
-            <div className="af-ctx-reqslot">
-              <p className="h">
-                tools <span className={`badge${i === 1 ? ' grow' : ''}`}>{s.toolBadge}</span>
+              <p className="af-tl-cap af-dyn-cap">
+                <b>{s.footHead}</b> — {s.footRest}
               </p>
-              <div className="af-ctx-chips">
-                {s.tools.map((c, n) => (
-                  <span
-                    key={`${i}-tool-${c.label}`}
-                    className={`af-ctx-chip ${c.color}`}
-                    style={{ animationDelay: `${n * 60}ms` } as CSSProperties}
-                  >
-                    {c.label}
-                  </span>
-                ))}
-              </div>
-            </div>
+            </aside>
           </div>
-
-          <div className="af-ctx-dyn-side">
-            <div className="af-ctx-decision">
-              <p className="dh">the model decides</p>
-              <p className="dt">{s.decision}</p>
-            </div>
-            <div className="af-ctx-loopback">{s.loop}</div>
-            <div className="af-ctx-tokenbar">
-              <div className="tlab">
-                <span>tools in window</span>
-                <span>
-                  <b>{s.toolCount}</b> vs 12 classic
-                </span>
-              </div>
-              <div className="af-ctx-track">
-                <div className="classic" />
-                <div className="dynamic" style={{ width: `${s.track}%` }} />
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="af-ctx-dyn-foot">
-          <b>{s.footHead}</b> — {s.footRest}
         </div>
       </div>
 
