@@ -9,6 +9,7 @@
     "gen:replay": "node scripts/gen-replay-trace.mjs",
     "check:api": "node ../scripts/gen-fumadocs-api.mjs && git -C .. diff --exit-code -- docs-next/content/docs/api",
     "check:links": "node ../scripts/check-doc-links.mjs --strict",
+    "check:tryit": "tsx scripts/check-tryit-demo.mts",
     "predev": "node ../scripts/gen-fumadocs-api.mjs && node scripts/gen-agent-flowchart.mjs && node scripts/gen-replay-trace.mjs",
     "dev": "next dev",
     "prebuild": "node ../scripts/gen-fumadocs-api.mjs && node scripts/gen-agent-flowchart.mjs && node scripts/gen-replay-trace.mjs",
@@ -24,7 +25,7 @@
     "@types/react-dom": "^19.2.3",
     "@xyflow/react": "^12.11.0",
     "agentfootprint": "file:..",
-    "agentfootprint-lens": "^0.23.10",
+    "agentfootprint-lens": "^0.24.0",
     "footprint-explainable-ui": "^0.25.5",
     "footprintjs": "^9.9.0",
     "fumadocs-core": "^16.10.5",
@@ -38,5 +39,8 @@
     "twoslash": "^0.3.8",
     "typescript": "^6.0.3",
     "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.2"
   }
 }

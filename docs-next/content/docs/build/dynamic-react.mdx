@@ -9,7 +9,11 @@ description: Context that adapts mid-loop. The on-tool-return trigger fires the 
 
 **Read the code, hit Run, watch it trace.** The exact agent below runs **right in your browser** — a mock LLM, no network, no server. You'll see the real ReAct loop live, iteration by iteration: `read_skill(billing)` → `redact_pii` → the on-tool-return reminder fires → `process_refund` → a final answer with the email redacted to `[EMAIL]`.
 
-<DynamicReactTryIt />
+<DynamicReactTryIt>
+  <CodeFile path="docs-next/components/demos/dynamicReactDemo.ts" region="demo" />
+</DynamicReactTryIt>
+
+> **What to watch.** The flowchart's *shape* is identical on every iteration — the agent is a fixed set of stages, so no new boxes appear as it loops. The dynamism is two things: **(1)** which boxes *light up* as the cursor advances, and **(2)** the **Context engineering** list in the right-hand panel. Scrub to the iteration right after `redact_pii` returns and you'll see the `post-pii` reminder show up in the system-prompt slot — *with the reason it fired* — and nowhere else. Same boxes, different context.
 
 ## What "dynamic" means here
 
@@ -22,6 +26,10 @@ This is the **on-tool-return** trigger from the [4-trigger taxonomy](doc:key-con
 The agent's flowchart loops through a sequence of stages: **InjectionEngine → System Prompt → Messages → Tools → CallLLM → Route**. Each iteration starts at InjectionEngine — every trigger re-evaluates against the freshest context (the just-appended tool result, the new iteration count, any newly-activated skill). Then the slot subflows recompose the system prompt, the messages, and the tools list from the active injection set. The LLM sees a freshly-composed prompt + tool list every iteration.
 
 This means tool results reshape the next iteration's prompt + tool list + active skills. **That's the differentiator** vs frameworks that compose context once and reuse it across iterations.
+
+Here is that same agent drawn as **raw footprintjs subflows** — no agent vocabulary, just the plain stages the executor traverses. The three context slots (`sf-system-prompt` ∥ `sf-messages` ∥ `sf-tools`) are a real parallel fan-out; `sf-injection-engine` decides what each one composes. Drill into a box to see its internals. This is the "library of libraries" layer underneath the agent — the agent abstraction is *built on* these footprintjs subflows.
+
+<SubflowLensTryIt />
 
 > **v2.5 fix note:** v2.4 had a regression where the loop target skipped InjectionEngine on iter 2+, quietly disabling per-iteration re-evaluation. v2.5 (commit pending) restored the v1 behavior. Tests added at `test/core/dynamic-react-loop.test.ts` pin the per-iteration evaluation contract — `on-tool-return` predicates now fire on iter 2+, `autoActivate` per-skill tool gating becomes feasible (lands in v2.5 Block A5), and skill bodies inject on the iteration after `read_skill('X')` activation.
 

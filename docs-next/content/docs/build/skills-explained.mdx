@@ -281,6 +281,18 @@ User turn arrives
 
 No primitive is invented. Every step uses a field the Messages API has always had. The library's work is packaging — putting the right descriptions in the right surface for the right provider, with recency guarantees where provider training can't carry them.
 
+## Routing between skills — the skill graph
+
+A single skill is one playbook. Real agents have several — a front desk that hands off to billing or to tech support — and you want the handoffs to be **declared and drawable**, not buried in prompt prose. `skillGraph()` is that: a fluent builder where `.entry()` marks where a turn starts and `.route(from, to, { when })` declares a deterministic handoff. The SAME built object feeds the agent (`Agent.create()....skillGraph(graph)`) **and** draws as a graph — declared is drawn.
+
+The picture below is built from the exact `skillGraph()` builder shown above it — its boxes and edges are a build product of these `.entry()` / `.route()` calls, not a hand-drawn diagram. Click a skill to see its playbook and the tools it unlocks.
+
+<SkillGraphTryIt>
+  <CodeFile path="docs-next/components/demos/skillGraphDemo.ts" region="demo" />
+</SkillGraphTryIt>
+
+Solid edges are the `route()` transitions you declared; dashed edges are skills the model can still reach on its own with `read_skill`. The graph is also the single source of two runtime guarantees: `graph.nextSkill(ctx)` advances the cursor exactly as the drawn routes say, and `graph.reachableSkills(ctx)` is the gate that stops the model from `read_skill`-jumping outside the graph. One object — the agent runs it, the docs draw it.
+
 ## The one-line takeaway
 
 > Skills are **context engineering for instructions**, abstracted so you don't do it by hand and get it wrong. The protocol layer stays the Messages API's existing `system` + `tools` + `tool_result` fields — nothing new there. The framework layer's job is deciding where each instruction lives **on every turn, per provider, per context length**, so the model actually follows it. The Agent SDK's Claude-first answer is right for Claude; `agentfootprint`'s `surfaceMode: 'auto'` + `on-tool-return` delivery is right for every provider, `mock()` included.

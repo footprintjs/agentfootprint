@@ -1,5 +1,6 @@
 'use client';
 
+import type { ReactNode } from 'react';
 import dynamic from 'next/dynamic';
 
 // Load client-side only — the agent + lens touch the DOM (xyflow) and run live in
@@ -24,8 +25,13 @@ const Inner = dynamic(() => import('./DynamicReactTryItInner'), {
   ),
 });
 
-export function DynamicReactTryIt() {
-  return <Inner />;
+/**
+ * `children` is the server-rendered <CodeFile region="demo"> block from the MDX
+ * page (the real builder source, read at build time). We forward it into the
+ * client island as `code` so the shown bytes are the same file Run executes.
+ */
+export function DynamicReactTryIt({ children }: { children?: ReactNode }) {
+  return <Inner code={children} />;
 }
 
 export default DynamicReactTryIt;

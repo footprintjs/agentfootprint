@@ -6,6 +6,8 @@ import { Diagram } from '@/components/Diagram';
 import { AgentFlowchart } from '@/components/AgentFlowchart';
 import { ReplayEmbed } from '@/components/ReplayEmbed';
 import { DynamicReactTryIt } from '@/components/DynamicReactTryIt';
+import { SkillGraphTryIt } from '@/components/SkillGraphTryIt';
+import { SubflowLensTryIt } from '@/components/SubflowLensTryIt';
 import type { MDXComponents } from 'mdx/types';
 
 export function getMDXComponents(components?: MDXComponents): MDXComponents {
@@ -23,6 +25,8 @@ export function getMDXComponents(components?: MDXComponents): MDXComponents {
     AgentFlowchart,
     ReplayEmbed,
     DynamicReactTryIt,
+    SkillGraphTryIt,
+    SubflowLensTryIt,
     ...components,
   };
 }
