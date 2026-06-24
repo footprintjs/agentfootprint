@@ -4,7 +4,7 @@ title: TreeOptions
 
 # Interface: TreeOptions
 
-Defined in: [src/lib/injection-engine/skillGraph.ts:134](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/injection-engine/skillGraph.ts#L134)
+Defined in: [src/lib/injection-engine/skillGraph.ts:124](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/injection-engine/skillGraph.ts#L124)
 
 Options for a decision `tree()`.
 
@@ -14,7 +14,7 @@ Options for a decision `tree()`.
 
 > `readonly` `optional` **scopeTools?**: `boolean`
 
-Defined in: [src/lib/injection-engine/skillGraph.ts:148](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/injection-engine/skillGraph.ts#L148)
+Defined in: [src/lib/injection-engine/skillGraph.ts:138](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/injection-engine/skillGraph.ts#L138)
 
 Scope the tool list to the routed leaf (the on-demand-tools default).
 

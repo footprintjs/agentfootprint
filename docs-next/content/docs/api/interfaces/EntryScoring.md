@@ -4,9 +4,10 @@ title: EntryScoring
 
 # Interface: EntryScoring
 
-Defined in: [src/lib/injection-engine/skillGraph.ts:106](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/injection-engine/skillGraph.ts#L106)
+Defined in: src/lib/injection-engine/entryScorer.ts:36
 
-Result of `graph.scoreEntries(ctx)` — the picked entry + the full ranking.
+Result of scoring the entries — the picked entry, the full ranking, and which
+ scorer produced it.
 
 ## Properties
 
@@ -14,9 +15,9 @@ Result of `graph.scoreEntries(ctx)` — the picked entry + the full ranking.
 
 > `readonly` **chosen**: `string` \| `undefined`
 
-Defined in: [src/lib/injection-engine/skillGraph.ts:108](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/injection-engine/skillGraph.ts#L108)
+Defined in: src/lib/injection-engine/entryScorer.ts:41
 
-The winning entry id (argmax cosine), or undefined if no candidate.
+Winning entry id (highest `score`), or undefined if no candidate.
 
 ***
 
@@ -24,6 +25,17 @@ The winning entry id (argmax cosine), or undefined if no candidate.
 
 > `readonly` **ranked**: readonly [`EntryScore`](/docs/api/interfaces/EntryScore)[]
 
-Defined in: [src/lib/injection-engine/skillGraph.ts:110](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/injection-engine/skillGraph.ts#L110)
+Defined in: src/lib/injection-engine/entryScorer.ts:43
 
 Every scored candidate, in declaration order.
+
+***
+
+### scorer
+
+> `readonly` **scorer**: `string`
+
+Defined in: src/lib/injection-engine/entryScorer.ts:39
+
+The scorer's `name` (e.g. `'keyword'`, `'embedding'`) — surfaced so a lens /
+ the "Why this skill?" panel can say HOW the entry was chosen.

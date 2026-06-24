@@ -118,15 +118,20 @@ export interface InjectionContext {
    */
   readonly currentSkillId?: string;
   /**
-   * The relevance ranking of entry candidates from `entryByRelevance()` — written
-   * by the PickEntry stage at turn start. `defineRelevanceHint()` reads it to detect
-   * a near-tie at the entry. Absent unless the graph used `.entryByRelevance()`.
+   * The relevance ranking of entry candidates from an entry scorer (`.entryBy()` /
+   * `.entryByRelevance()`) — written by the PickEntry stage at turn start.
+   * `defineRelevanceHint()` reads it to detect a near-tie. Absent unless the graph
+   * used an entry scorer. `score` is the raw strategy score (cosine / word-overlap);
+   * `relevance` is the softmax share (the surfaced %).
    */
   readonly entryScores?: ReadonlyArray<{
     readonly id: string;
-    readonly cosine: number;
+    readonly score: number;
     readonly relevance: number;
   }>;
+  /** Name of the entry scorer that produced `entryScores` (e.g. `'keyword'`,
+   *  `'embedding'`). Absent unless an entry scorer ran. */
+  readonly entryScorer?: string;
 }
 
 // ─── The primitive ─────────────────────────────────────────────────

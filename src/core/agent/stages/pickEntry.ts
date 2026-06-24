@@ -50,7 +50,9 @@ export function makePickEntryStage(
     if (scoring.chosen !== undefined) {
       scope.currentSkillId = scoring.chosen;
     }
-    // The relevance ranking — read by the lens / Why-panel off the snapshot.
+    // The relevance ranking + which scorer produced it — read by the lens / Why-panel
+    // off the snapshot (so it can say HOW the entry was chosen, not just which).
     scope.entryScores = scoring.ranked;
+    scope.entryScorer = scoring.scorer;
   };
 }

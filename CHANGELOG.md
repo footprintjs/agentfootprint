@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [6.45.0] - 2026-06-24
+
+### Added — Pluggable entry scorer (keyword router + strategy interface)
+
+Picking the starting skill in a skill graph is now a **pluggable scorer strategy**.
+`.entryBy(scorer)` takes any `EntryScorer`; two built-ins ship:
+
+- **`keywordScorer()`** — rank entries by word overlap between the user's message and
+  each skill's `description`. **No embedder, no model call, deterministic** — routing
+  "on" with zero setup. The new zero-config alternative to wiring an embedder.
+- **`embeddingScorer(embedder)`** — semantic (cosine similarity). `.entryByRelevance(embedder)`
+  is now **sugar for `.entryBy(embeddingScorer(embedder))`**. Batches via `embedder.embedBatch`
+  when available (was N+1 serial).
+- Bring your own by implementing `EntryScorer`. New exports: `keywordScorer`,
+  `embeddingScorer`, `rankEntries`, `EntryScorer`, `EntryScorerInput`, `EntryCandidate`.
+- The chosen scorer's **name + ranking** now land on the snapshot (`entryScores` + the new
+  `entryScorer`), so a lens / "Why this skill?" panel can show HOW the entry was chosen.
+- `start.scoredBy` added to the `skillGraph({...})` config-object form.
+
+### Changed
+
+- **`EntryScore.cosine` → `EntryScore.score`** — a strategy-agnostic raw score (cosine for
+  the embedding scorer, word-overlap for keyword). `EntryScoring` gains a `scorer` field (the
+  strategy name). This is a recently-added, niche field; the only internal reader was updated.
+  ⚠️ If you read `entryScores[].cosine`, rename it to `.score`.
+- The surfaced relevance % and the chosen entry can **no longer disagree** — non-finite scores
+  from a custom scorer are sanitized so they can never silently win the pick.
+
+### Fixed
+
+- **`.tree().entryBy()` / `.tree().entryByRelevance()` now throw** instead of silently ignoring
+  the scorer (symmetric with the existing `.tree().entryByRead()` guard).
+
 ### Added — Context-bug localizer documented (Beta)
 
 The contextual-bug **localizer** (`localizeContextBug`, "git bisect for context") is now

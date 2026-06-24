@@ -4,7 +4,7 @@ title: DecisionNode
 
 # Interface: DecisionNode
 
-Defined in: [src/lib/injection-engine/skillGraph.ts:168](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/injection-engine/skillGraph.ts#L168)
+Defined in: [src/lib/injection-engine/skillGraph.ts:158](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/injection-engine/skillGraph.ts#L158)
 
 A decision-tree node (v3): a predicate that branches to a subtree (or a skill
 LEAF) on each side. The tree compiles to per-skill triggers — each leaf's
@@ -18,7 +18,7 @@ earlier-sibling negation for if/else exclusivity), evaluated per iteration. So
 
 > `readonly` **kind**: `"decision"`
 
-Defined in: [src/lib/injection-engine/skillGraph.ts:169](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/injection-engine/skillGraph.ts#L169)
+Defined in: [src/lib/injection-engine/skillGraph.ts:159](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/injection-engine/skillGraph.ts#L159)
 
 ***
 
@@ -26,7 +26,7 @@ Defined in: [src/lib/injection-engine/skillGraph.ts:169](https://github.com/foot
 
 > `readonly` `optional` **label?**: `string`
 
-Defined in: [src/lib/injection-engine/skillGraph.ts:174](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/injection-engine/skillGraph.ts#L174)
+Defined in: [src/lib/injection-engine/skillGraph.ts:164](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/injection-engine/skillGraph.ts#L164)
 
 Caption for the predicate node when drawn (e.g. "io intent?").
 
@@ -36,7 +36,7 @@ Caption for the predicate node when drawn (e.g. "io intent?").
 
 > `readonly` **predicate**: (`ctx`) => `boolean`
 
-Defined in: [src/lib/injection-engine/skillGraph.ts:170](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/injection-engine/skillGraph.ts#L170)
+Defined in: [src/lib/injection-engine/skillGraph.ts:160](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/injection-engine/skillGraph.ts#L160)
 
 #### Parameters
 
@@ -54,7 +54,7 @@ Defined in: [src/lib/injection-engine/skillGraph.ts:170](https://github.com/foot
 
 > `readonly` **whenFalse**: [`Injection`](/docs/api/interfaces/Injection) \| `DecisionNode`
 
-Defined in: [src/lib/injection-engine/skillGraph.ts:172](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/injection-engine/skillGraph.ts#L172)
+Defined in: [src/lib/injection-engine/skillGraph.ts:162](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/injection-engine/skillGraph.ts#L162)
 
 ***
 
@@ -62,4 +62,4 @@ Defined in: [src/lib/injection-engine/skillGraph.ts:172](https://github.com/foot
 
 > `readonly` **whenTrue**: [`Injection`](/docs/api/interfaces/Injection) \| `DecisionNode`
 
-Defined in: [src/lib/injection-engine/skillGraph.ts:171](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/injection-engine/skillGraph.ts#L171)
+Defined in: [src/lib/injection-engine/skillGraph.ts:161](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/injection-engine/skillGraph.ts#L161)

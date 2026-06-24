@@ -4,27 +4,17 @@ title: EntryScore
 
 # Interface: EntryScore
 
-Defined in: [src/lib/injection-engine/skillGraph.ts:96](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/injection-engine/skillGraph.ts#L96)
+Defined in: src/lib/injection-engine/entryScorer.ts:24
 
 One entry candidate's relevance to the user's message.
 
 ## Properties
 
-### cosine
-
-> `readonly` **cosine**: `number`
-
-Defined in: [src/lib/injection-engine/skillGraph.ts:100](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/injection-engine/skillGraph.ts#L100)
-
-Raw cosine similarity (message ↔ the skill's description), -1..1.
-
-***
-
 ### id
 
 > `readonly` **id**: `string`
 
-Defined in: [src/lib/injection-engine/skillGraph.ts:98](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/injection-engine/skillGraph.ts#L98)
+Defined in: src/lib/injection-engine/entryScorer.ts:26
 
 The entry skill id.
 
@@ -34,6 +24,17 @@ The entry skill id.
 
 > `readonly` **relevance**: `number`
 
-Defined in: [src/lib/injection-engine/skillGraph.ts:102](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/injection-engine/skillGraph.ts#L102)
+Defined in: src/lib/injection-engine/entryScorer.ts:31
 
-Softmax share across the candidates, 0..1 — the surfaced relevance %.
+Softmax share across candidates, 0..1 — the surfaced "Why this skill?" %.
+
+***
+
+### score
+
+> `readonly` **score**: `number`
+
+Defined in: src/lib/injection-engine/entryScorer.ts:29
+
+Raw, strategy-specific score — cosine for `embedding`, word-overlap for
+ `keyword`. Higher = more relevant. Not normalized across strategies.

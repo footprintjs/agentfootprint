@@ -32,8 +32,8 @@ import { isDevMode } from 'footprintjs';
 
 import type { Injection, InjectionContext, InjectionTrigger } from './types.js';
 import type { Embedder } from '../../memory/embedding/types.js';
-import { cosineSimilarity } from '../../memory/embedding/cosine.js';
-import { softmax } from './softmax.js';
+import type { EntryScore, EntryScoring, EntryScorer } from './entryScorer.js';
+import { embeddingScorer } from './entryScorer.js';
 import { checkupGraph, formatCheckup, type GraphCheckup } from './skillGraphCheckup.js';
 import { checkSkillContracts } from './skillContract.js';
 export type { GraphCheckup, GraphProblem, GraphProblemCode } from './skillGraphCheckup.js';
@@ -75,8 +75,11 @@ export interface SkillGraphConfig {
       }
     | {
         readonly entries: readonly string[];
-        /** Rank the entries with an embedder (cosine/softmax). Omit → the LLM reads
-         *  the menu and picks (`.entryByRead()`) — no embedder, no extra model call. */
+        /** Rank the entries with a scorer strategy (`keywordScorer()`,
+         *  `embeddingScorer(e)`, or your own). Takes precedence over `byRelevance`. */
+        readonly scoredBy?: EntryScorer;
+        /** Sugar: rank the entries with an embedder (cosine/softmax). Omit both → the
+         *  LLM reads the menu and picks (`.entryByRead()`) — no model call. */
         readonly byRelevance?: Embedder;
       };
   /** Tool-result transitions; `from`/`to` are skill ids resolved against `skills`. */
@@ -92,23 +95,10 @@ export interface SkillGraphConfig {
   readonly check?: GraphCheckMode;
 }
 
-/** One entry candidate's relevance to the user's message. */
-export interface EntryScore {
-  /** The entry skill id. */
-  readonly id: string;
-  /** Raw cosine similarity (message ↔ the skill's description), -1..1. */
-  readonly cosine: number;
-  /** Softmax share across the candidates, 0..1 — the surfaced relevance %. */
-  readonly relevance: number;
-}
-
-/** Result of `graph.scoreEntries(ctx)` — the picked entry + the full ranking. */
-export interface EntryScoring {
-  /** The winning entry id (argmax cosine), or undefined if no candidate. */
-  readonly chosen: string | undefined;
-  /** Every scored candidate, in declaration order. */
-  readonly ranked: readonly EntryScore[];
-}
+// `EntryScore` / `EntryScoring` are owned by ./entryScorer.ts now (the scorer
+// strategy produces them). Re-exported here so existing `from './skillGraph.js'`
+// imports keep working.
+export type { EntryScore, EntryScoring };
 
 /** Deterministic routing into a skill, keyed on the last tool result. */
 export interface SkillRouteOptions {
@@ -296,12 +286,20 @@ export interface SkillGraphBuilder {
    *  skill's tools reach the LLM — opt out with `{ scopeTools: false }`. */
   tree(root: DecisionNode | Injection, opts?: TreeOptions): SkillGraphBuilder;
   /**
-   * Pick the STARTING entry by relevance to the user's message — embed the message
-   * + each entry skill's `description`, cosine-score, softmax → start at the best
-   * match. LLM-free (an embedder, no extra model call), reproducible given the
-   * embedder. The surfaced `relevance` % powers the "Why this skill?" panel.
-   * Use INSTEAD of regex `.entry(skill, { when })` for natural-language routing.
-   * Flat graphs only (a decision `tree()` already routes by predicate).
+   * Pick the STARTING entry with a pluggable scorer STRATEGY — `keywordScorer()`
+   * (no dependency, word overlap), `embeddingScorer(embedder)` (semantic), or your
+   * own `EntryScorer`. The agent's PickEntry stage runs it ONCE per turn off the
+   * hot loop and starts the cursor at the winner. Like `.entryByRead()`, this makes
+   * the entries EXCLUSIVE (only the chosen one loads, token-efficient). The surfaced
+   * `relevance` % powers the "Why this skill?" panel. Flat graphs only (a decision
+   * `tree()` already routes by predicate). Mutually exclusive with `.entryByRead()`.
+   */
+  entryBy(scorer: EntryScorer): SkillGraphBuilder;
+  /**
+   * Sugar for `.entryBy(embeddingScorer(embedder))` — pick the starting entry by
+   * SEMANTIC relevance (embed the message + each entry's `description`, cosine-score,
+   * softmax → best match). LLM-free (an embedder, no extra model call), reproducible.
+   * For a no-embedder router, use `.entryBy(keywordScorer())`.
    */
   entryByRelevance(embedder: Embedder): SkillGraphBuilder;
   /**
@@ -353,7 +351,7 @@ export function skillGraph(config?: SkillGraphConfig): SkillGraphBuilder | Skill
   const routes: RouteDecl[] = [];
   let treeRoot: DecisionNode | Injection | undefined;
   let treeScopeTools = true;
-  let entryEmbedder: Embedder | undefined;
+  let entryScorer: EntryScorer | undefined;
   let entryByReadFlag = false;
 
   const remember = (skill: Injection): string => {
@@ -392,8 +390,12 @@ export function skillGraph(config?: SkillGraphConfig): SkillGraphBuilder | Skill
       if (opts?.scopeTools === false) treeScopeTools = false;
       return builder;
     },
+    entryBy(scorer) {
+      entryScorer = scorer;
+      return builder;
+    },
     entryByRelevance(embedder) {
-      entryEmbedder = embedder;
+      entryScorer = embeddingScorer(embedder);
       return builder;
     },
     entryByRead() {
@@ -401,16 +403,22 @@ export function skillGraph(config?: SkillGraphConfig): SkillGraphBuilder | Skill
       return builder;
     },
     build(opts: BuildOptions = {}) {
-      if (entryByReadFlag && entryEmbedder) {
+      if (entryByReadFlag && entryScorer) {
         throw new Error(
-          'skillGraph: pick one of .entryByRead() or .entryByRelevance() — not both ' +
-            '(the LLM reads the menu, OR an embedder ranks it).',
+          'skillGraph: pick one of .entryByRead() or .entryBy()/.entryByRelevance() — not ' +
+            'both (the LLM reads the menu, OR a scorer ranks it).',
         );
       }
       if (entryByReadFlag && treeRoot) {
         throw new Error(
           'skillGraph: .entryByRead() is for flat entry/route graphs; a .tree() already ' +
             'routes by predicate (no entry menu).',
+        );
+      }
+      if (entryScorer && treeRoot) {
+        throw new Error(
+          'skillGraph: .entryBy()/.entryByRelevance() is for flat entry/route graphs; a ' +
+            '.tree() already routes by predicate (the scorer would be ignored).',
         );
       }
       const skills: Injection[] = [];
@@ -472,7 +480,7 @@ export function skillGraph(config?: SkillGraphConfig): SkillGraphBuilder | Skill
         const llmReadEntry = entryByReadFlag;
         nextSkill = makeNextSkill(entries, routes, llmReadEntry);
         reachableSkills = makeReachableSkills(entries, routes);
-        if (entryEmbedder) scoreEntries = makeScoreEntries(entries, skillsById, entryEmbedder);
+        if (entryScorer) scoreEntries = makeScoreEntries(entries, skillsById, entryScorer);
         for (const [id, skill] of skillsById) {
           const trigger = deriveTrigger(
             id,
@@ -480,7 +488,7 @@ export function skillGraph(config?: SkillGraphConfig): SkillGraphBuilder | Skill
             entries,
             routes,
             nextSkill,
-            entryEmbedder !== undefined || llmReadEntry,
+            entryScorer !== undefined || llmReadEntry,
           );
           const routing = routingFor(id, entries, routes);
           skills.push({
@@ -552,8 +560,9 @@ export function skillGraph(config?: SkillGraphConfig): SkillGraphBuilder | Skill
         for (const r of start.rules) builder.entry(resolve(r.use), { when: r.when });
       else {
         for (const id of start.entries) builder.entry(resolve(id));
-        // byRelevance present → embedder ranks the menu; omitted → the LLM reads it.
-        if (start.byRelevance) builder.entryByRelevance(start.byRelevance);
+        // scoredBy (any scorer) > byRelevance (embedder sugar) > entryByRead (LLM picks).
+        if (start.scoredBy) builder.entryBy(start.scoredBy);
+        else if (start.byRelevance) builder.entryByRelevance(start.byRelevance);
         else builder.entryByRead();
       }
     }
@@ -600,47 +609,33 @@ function dedupe(ids: readonly string[]): string[] {
 }
 
 /**
- * The relevance entry scorer (`graph.scoreEntries`). Embeds the user's message +
- * each `when`-passing entry's `description`, cosine-scores them, and softmaxes
- * into a `relevance` share; `chosen` is the argmax (declaration order breaks ties).
- * Async (the embedder is async) — runs once per turn in the OFF-LOOP PickEntry
- * stage, never in the sync route triggers, so `nextSkill` stays synchronous. An
- * empty candidate set yields `{ chosen: undefined, ranked: [] }` so the agent
- * falls back to the normal cold-start entry. A throwing embedder is caught by the
- * PickEntry stage (same fallback).
+ * Bind the chosen `EntryScorer` strategy into `graph.scoreEntries`. The engine owns
+ * the `when`-filtering (it needs `ctx` + the entry predicates); the scorer owns the
+ * ranking. Filters the entries to the `when`-passing candidates, hands the scorer
+ * `{ userMessage, candidates: { id, description } }`, and returns its `EntryScoring`.
+ * Async wrapper so a sync scorer (`keywordScorer`) and an async one (`embeddingScorer`)
+ * present identically; runs once per turn in the OFF-LOOP PickEntry stage, never in
+ * the sync route triggers, so `nextSkill` stays synchronous. An empty candidate set
+ * (or a throwing scorer, caught by PickEntry) falls back to the normal cold-start entry.
  */
 function makeScoreEntries(
   entries: readonly EntryDecl[],
   skillsById: ReadonlyMap<string, Injection>,
-  embedder: Embedder,
+  scorer: EntryScorer,
 ): (ctx: InjectionContext, signal?: AbortSignal) => Promise<EntryScoring> {
   return async (ctx, signal) => {
-    const candidates = entries.filter((e) => {
-      if (!e.when) return true;
-      try {
-        return e.when(ctx);
-      } catch (err) {
-        warnMatcherThrew(`entry "${e.id}"`, err);
-        return false;
-      }
-    });
-    if (candidates.length === 0) return { chosen: undefined, ranked: [] };
-    const qVec = await embedder.embed({ text: ctx.userMessage, ...(signal && { signal }) });
-    const cosines: number[] = [];
-    for (const e of candidates) {
-      const description = skillsById.get(e.id)?.description ?? e.id;
-      const dVec = await embedder.embed({ text: description, ...(signal && { signal }) });
-      cosines.push(cosineSimilarity(qVec, dVec));
-    }
-    const relevances = softmax(cosines);
-    const ranked: EntryScore[] = candidates.map((e, i) => ({
-      id: e.id,
-      cosine: cosines[i]!,
-      relevance: relevances[i]!,
-    }));
-    // argmax by cosine; reduce keeps the FIRST on ties (declaration order).
-    const chosen = ranked.reduce((best, r) => (r.cosine > best.cosine ? r : best)).id;
-    return { chosen, ranked };
+    const candidates = entries
+      .filter((e) => {
+        if (!e.when) return true;
+        try {
+          return e.when(ctx);
+        } catch (err) {
+          warnMatcherThrew(`entry "${e.id}"`, err);
+          return false;
+        }
+      })
+      .map((e) => ({ id: e.id, description: skillsById.get(e.id)?.description ?? e.id }));
+    return scorer.score({ userMessage: ctx.userMessage, candidates }, signal);
   };
 }
 

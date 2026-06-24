@@ -4,7 +4,7 @@ title: SkillGraphBuilder
 
 # Interface: SkillGraphBuilder
 
-Defined in: [src/lib/injection-engine/skillGraph.ts:288](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/injection-engine/skillGraph.ts#L288)
+Defined in: [src/lib/injection-engine/skillGraph.ts:278](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/injection-engine/skillGraph.ts#L278)
 
 ## Methods
 
@@ -12,7 +12,7 @@ Defined in: [src/lib/injection-engine/skillGraph.ts:288](https://github.com/foot
 
 > **build**(`opts?`): [`SkillGraph`](/docs/api/interfaces/SkillGraph)
 
-Defined in: [src/lib/injection-engine/skillGraph.ts:323](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/injection-engine/skillGraph.ts#L323)
+Defined in: [src/lib/injection-engine/skillGraph.ts:321](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/injection-engine/skillGraph.ts#L321)
 
 #### Parameters
 
@@ -30,7 +30,7 @@ Defined in: [src/lib/injection-engine/skillGraph.ts:323](https://github.com/foot
 
 > **entry**(`skill`, `opts?`): `SkillGraphBuilder`
 
-Defined in: [src/lib/injection-engine/skillGraph.ts:290](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/injection-engine/skillGraph.ts#L290)
+Defined in: [src/lib/injection-engine/skillGraph.ts:280](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/injection-engine/skillGraph.ts#L280)
 
 Mark a skill as reachable at turn start (optionally intent-conditional).
 
@@ -50,11 +50,37 @@ Mark a skill as reachable at turn start (optionally intent-conditional).
 
 ***
 
+### entryBy()
+
+> **entryBy**(`scorer`): `SkillGraphBuilder`
+
+Defined in: [src/lib/injection-engine/skillGraph.ts:297](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/injection-engine/skillGraph.ts#L297)
+
+Pick the STARTING entry with a pluggable scorer STRATEGY — `keywordScorer()`
+(no dependency, word overlap), `embeddingScorer(embedder)` (semantic), or your
+own `EntryScorer`. The agent's PickEntry stage runs it ONCE per turn off the
+hot loop and starts the cursor at the winner. Like `.entryByRead()`, this makes
+the entries EXCLUSIVE (only the chosen one loads, token-efficient). The surfaced
+`relevance` % powers the "Why this skill?" panel. Flat graphs only (a decision
+`tree()` already routes by predicate). Mutually exclusive with `.entryByRead()`.
+
+#### Parameters
+
+##### scorer
+
+[`EntryScorer`](/docs/api/interfaces/EntryScorer)
+
+#### Returns
+
+`SkillGraphBuilder`
+
+***
+
 ### entryByRead()
 
 > **entryByRead**(): `SkillGraphBuilder`
 
-Defined in: [src/lib/injection-engine/skillGraph.ts:322](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/injection-engine/skillGraph.ts#L322)
+Defined in: [src/lib/injection-engine/skillGraph.ts:320](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/injection-engine/skillGraph.ts#L320)
 
 Let the LLM pick the STARTING entry by reading the menu — no embedder, no extra
 model call. Like `.entryByRelevance()`, the entries become EXCLUSIVE (only the
@@ -80,14 +106,12 @@ an iteration with no skill. For intent-gating, use `.entryByRelevance()` or plai
 
 > **entryByRelevance**(`embedder`): `SkillGraphBuilder`
 
-Defined in: [src/lib/injection-engine/skillGraph.ts:306](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/injection-engine/skillGraph.ts#L306)
+Defined in: [src/lib/injection-engine/skillGraph.ts:304](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/injection-engine/skillGraph.ts#L304)
 
-Pick the STARTING entry by relevance to the user's message — embed the message
-+ each entry skill's `description`, cosine-score, softmax → start at the best
-match. LLM-free (an embedder, no extra model call), reproducible given the
-embedder. The surfaced `relevance` % powers the "Why this skill?" panel.
-Use INSTEAD of regex `.entry(skill, { when })` for natural-language routing.
-Flat graphs only (a decision `tree()` already routes by predicate).
+Sugar for `.entryBy(embeddingScorer(embedder))` — pick the starting entry by
+SEMANTIC relevance (embed the message + each entry's `description`, cosine-score,
+softmax → best match). LLM-free (an embedder, no extra model call), reproducible.
+For a no-embedder router, use `.entryBy(keywordScorer())`.
 
 #### Parameters
 
@@ -105,7 +129,7 @@ Flat graphs only (a decision `tree()` already routes by predicate).
 
 > **route**(`from`, `to`, `opts?`): `SkillGraphBuilder`
 
-Defined in: [src/lib/injection-engine/skillGraph.ts:292](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/injection-engine/skillGraph.ts#L292)
+Defined in: [src/lib/injection-engine/skillGraph.ts:282](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/injection-engine/skillGraph.ts#L282)
 
 Declare an edge: after `from`'s work, `to` activates when the edge fires.
 
@@ -133,7 +157,7 @@ Declare an edge: after `from`'s work, `to` activates when the edge fires.
 
 > **tree**(`root`, `opts?`): `SkillGraphBuilder`
 
-Defined in: [src/lib/injection-engine/skillGraph.ts:297](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/injection-engine/skillGraph.ts#L297)
+Defined in: [src/lib/injection-engine/skillGraph.ts:287](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/injection-engine/skillGraph.ts#L287)
 
 Declare a decision TREE (v3): predicate nodes → skill leaves. Compiles each
  leaf to a path-conjunction trigger; renders as diamonds → boxes. By default

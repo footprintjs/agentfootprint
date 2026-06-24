@@ -229,6 +229,7 @@ _Run `npm run examples:readme` after adding/editing examples._
 | 28 | [`28-skill-graph-entry-read.ts`](features/28-skill-graph-entry-read.ts) | Skill graph — LLM-read entry routing (entryByRead, no embedder) | With multiple entry skills and no embedder, .entryByRead() lets the agent’s own LLM read the entry menu and pick the start skill via read_skill. Entries stay exclusive (only the pick loads); the first turn injects no entry body. |
 | 29 | [`29-skill-contract-check.ts`](features/29-skill-contract-check.ts) | Skill graph — body ↔ tool-contract check (catch  | graph.checkup() runs a deterministic body↔tool consistency pass: body-foreign-tool (body names a tool from another skill) and body-unknown-tool (a tool_name( reference to a tool that exists nowhere). Both are warnings; checkSkillContract checks a skill standalone. |
 | 30 | [`30-tool-contract-checkup.ts`](features/30-tool-contract-checkup.ts) | Tool contract — diff agent schemas vs a server /tools catalog | toolContractCheckup(agentTools, serverCatalog) is a pure diff of an agent’s tool inputSchemas against a tool-server catalog (e.g. GET /tools): required-divergence (error), optional-drift / arg-divergence / dead-endpoint / missing-on-server. Catch the  |
+| 31 | [`31-skill-graph-keyword-scorer.ts`](features/31-skill-graph-keyword-scorer.ts) | Skill graph — pluggable entry scorer (+ no-embedder keyword router) | Route the starting skill with a pluggable scorer strategy: keywordScorer() (word overlap, no embedder), embeddingScorer(e) (semantic), or your own EntryScorer. The chosen scorer name + ranking land on the snapshot for the Why-panel. |
 
 ### [`canonical/`](canonical/) — end-to-end patterns
 
@@ -270,5 +271,6 @@ _Run `npm run examples:readme` after adding/editing examples._
 | 14 | [`14-loop-recall-shortlist.ts`](observability/14-loop-recall-shortlist.ts) | per-loop recall shortlist — rescue early culprits before ablation | shortlistEarlyCulprits aggregates per-loop influence with a recency weight so a culprit that  |
 | 15 | [`15-walk-to-root.ts`](observability/15-walk-to-root.ts) | walk to root — narrow → hop → convict, symptom to root | walkToRoot walks a decision bug backward (per-loop narrow → writerId provenance hop → run-wide  |
 | 16 | [`16-pluggable-scorer.ts`](observability/16-pluggable-scorer.ts) | Pluggable influence scorer — swap the RANK stage, never causality | localizeContextBug({ scorer }) makes the suspect-ranking scorer a swappable slot. The default  |
+| 17 | [`17-localize-quickstart.ts`](observability/17-localize-quickstart.ts) | Localize a context bug — quickstart (BETA) | The smallest end-to-end localizeContextBug run: a planted misleading fact makes a refunds  |
 
 <!-- AUTO-GENERATED:examples:end -->

@@ -978,19 +978,24 @@ describe('skillGraph — entryByRelevance / scoreEntries (LLM-free relevance ent
       .entryByRelevance(emb)
       .build();
     expect(await g.scoreEntries!(ctx({ userMessage: 'x' }))).toEqual({
+      scorer: 'embedding',
       chosen: undefined,
       ranked: [],
     });
   });
 
-  it('scoreEntries is absent without .entryByRelevance(), and on tree-mode graphs', () => {
+  it('scoreEntries is absent without a scorer', () => {
     const a = defineSkill({ id: 'a', description: 'alpha', body: 'b' });
     expect(skillGraph().entry(a).build().scoreEntries).toBeUndefined();
-    const t = skillGraph()
-      .tree(decide((c) => /x/.test(c.userMessage), skill('p'), skill('q')))
-      .entryByRelevance(emb)
-      .build();
-    expect(t.scoreEntries).toBeUndefined();
+  });
+
+  it('a scorer on a tree-mode graph throws (the scorer would be silently ignored)', () => {
+    expect(() =>
+      skillGraph()
+        .tree(decide((c) => /x/.test(c.userMessage), skill('p'), skill('q')))
+        .entryByRelevance(emb)
+        .build(),
+    ).toThrow(/is for flat entry\/route graphs/);
   });
 });
 
@@ -1115,7 +1120,7 @@ describe('skillGraph — entryByRead (LLM picks the entry, no embedder)', () => 
     const a = skill('a');
     expect(() =>
       skillGraph().entry(a).entryByRead().entryByRelevance(mockEmbedder()).build(),
-    ).toThrow(/pick one of \.entryByRead\(\) or \.entryByRelevance\(\)/);
+    ).toThrow(/pick one of \.entryByRead\(\) or \.entryBy\(\)\/\.entryByRelevance\(\)/);
     expect(() =>
       skillGraph()
         .tree(decide((c) => /x/.test(c.userMessage), skill('p'), skill('q')))
@@ -1377,15 +1382,15 @@ describe('defineRelevanceHint — advisory note on an ambiguous entry', () => {
   it('fires only on turn start (iteration 1) when the top entries are a near-tie', () => {
     const hint = defineRelevanceHint({ threshold: 0.15 });
     const nearTie = [
-      { id: 'a', cosine: 0.5, relevance: 0.34 },
-      { id: 'b', cosine: 0.49, relevance: 0.33 },
-      { id: 'c', cosine: 0.4, relevance: 0.33 },
+      { id: 'a', score: 0.5, relevance: 0.34 },
+      { id: 'b', score: 0.49, relevance: 0.33 },
+      { id: 'c', score: 0.4, relevance: 0.33 },
     ];
     expect(fire(hint, { iteration: 1, entryScores: nearTie })).toBe(true);
     expect(fire(hint, { iteration: 2, entryScores: nearTie })).toBe(false); // only turn start
     const clear = [
-      { id: 'a', cosine: 0.9, relevance: 0.8 },
-      { id: 'b', cosine: 0.2, relevance: 0.2 },
+      { id: 'a', score: 0.9, relevance: 0.8 },
+      { id: 'b', score: 0.2, relevance: 0.2 },
     ];
     expect(fire(hint, { iteration: 1, entryScores: clear })).toBe(false); // not a tie
     expect(fire(hint, { iteration: 1 })).toBe(false); // no scores (no entryByRelevance)

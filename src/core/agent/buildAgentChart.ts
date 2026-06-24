@@ -261,10 +261,11 @@ export function buildAgentChart(deps: AgentChartDeps): FlowChart {
           // Skill-graph cursor as of the previous iteration — the `from`-gate the
           // route triggers compare against. Undefined on cold start / no graph.
           currentSkillId: parent.currentSkillId as string | undefined,
-          // Relevance entry ranking (entryByRelevance) — read by defineRelevanceHint.
+          // Relevance entry ranking (from an entry scorer) — read by defineRelevanceHint.
           entryScores: parent.entryScores as
-            | ReadonlyArray<{ id: string; cosine: number; relevance: number }>
+            | ReadonlyArray<{ id: string; score: number; relevance: number }>
             | undefined,
+          entryScorer: parent.entryScorer as string | undefined,
         }),
         // Carry activeByslot back to parent so next turn's inputMapper can
         // feed it as priorActiveByslot (the Delta round-trip). currentSkillId is

@@ -269,6 +269,8 @@ continuations still outstanding at the deadline — never silent loss.
 
 #### Example
 
+**Lambda-style handler**
+
 ```ts
 export const handler = async (event) => {
   const reply = await agent.run({ message: event.message });

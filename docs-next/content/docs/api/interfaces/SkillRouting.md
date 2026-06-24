@@ -4,7 +4,7 @@ title: SkillRouting
 
 # Interface: SkillRouting
 
-Defined in: [src/lib/injection-engine/skillGraph.ts:214](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/injection-engine/skillGraph.ts#L214)
+Defined in: [src/lib/injection-engine/skillGraph.ts:204](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/injection-engine/skillGraph.ts#L204)
 
 The routing PROVENANCE stamped onto a compiled skill's `metadata.skillGraph`
 — *why* this skill is reachable. It rides through to the `context.evaluated`
@@ -18,7 +18,7 @@ is unchanged.
 
 > `readonly` `optional` **from?**: `string`
 
-Defined in: [src/lib/injection-engine/skillGraph.ts:229](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/injection-engine/skillGraph.ts#L229)
+Defined in: [src/lib/injection-engine/skillGraph.ts:219](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/injection-engine/skillGraph.ts#L219)
 
 Source skill id (route only).
 
@@ -28,7 +28,7 @@ Source skill id (route only).
 
 > `readonly` `optional` **label?**: `string`
 
-Defined in: [src/lib/injection-engine/skillGraph.ts:227](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/injection-engine/skillGraph.ts#L227)
+Defined in: [src/lib/injection-engine/skillGraph.ts:217](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/injection-engine/skillGraph.ts#L217)
 
 Entry/route edge caption.
 
@@ -38,7 +38,7 @@ Entry/route edge caption.
 
 > `readonly` `optional` **path?**: readonly [`SkillRoutingStep`](/docs/api/interfaces/SkillRoutingStep)[]
 
-Defined in: [src/lib/injection-engine/skillGraph.ts:221](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/injection-engine/skillGraph.ts#L221)
+Defined in: [src/lib/injection-engine/skillGraph.ts:211](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/injection-engine/skillGraph.ts#L211)
 
 Decision path (tree only): the predicates from root→leaf + branch taken.
  For a skill used as MULTIPLE tree leaves this is the FIRST path; all
@@ -50,7 +50,7 @@ Decision path (tree only): the predicates from root→leaf + branch taken.
 
 > `readonly` `optional` **paths?**: readonly readonly [`SkillRoutingStep`](/docs/api/interfaces/SkillRoutingStep)[][]
 
-Defined in: [src/lib/injection-engine/skillGraph.ts:225](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/injection-engine/skillGraph.ts#L225)
+Defined in: [src/lib/injection-engine/skillGraph.ts:215](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/injection-engine/skillGraph.ts#L215)
 
 All decision paths reaching this skill (tree only; present when the same
  skill is the leaf of more than one branch — the compiler merges repeated
@@ -62,7 +62,7 @@ All decision paths reaching this skill (tree only; present when the same
 
 > `readonly` `optional` **triggerKind?**: `string`
 
-Defined in: [src/lib/injection-engine/skillGraph.ts:231](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/injection-engine/skillGraph.ts#L231)
+Defined in: [src/lib/injection-engine/skillGraph.ts:221](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/injection-engine/skillGraph.ts#L221)
 
 The compiled trigger kind for a route (`rule` / `on-tool-return`).
 
@@ -72,7 +72,7 @@ The compiled trigger kind for a route (`rule` / `on-tool-return`).
 
 > `readonly` **via**: `"entry"` \| `"model"` \| `"tree"` \| `"route"`
 
-Defined in: [src/lib/injection-engine/skillGraph.ts:217](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/injection-engine/skillGraph.ts#L217)
+Defined in: [src/lib/injection-engine/skillGraph.ts:207](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/injection-engine/skillGraph.ts#L207)
 
 How the skill is reached: a decision `tree` leaf, a flat `entry`, a
  deterministic `route` edge, or `model` (read_skill-reachable).

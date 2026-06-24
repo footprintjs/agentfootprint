@@ -4,7 +4,7 @@ title: SkillNode
 
 # Interface: SkillNode
 
-Defined in: [src/lib/injection-engine/skillGraph.ts:193](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/injection-engine/skillGraph.ts#L193)
+Defined in: [src/lib/injection-engine/skillGraph.ts:183](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/injection-engine/skillGraph.ts#L183)
 
 A node in the drawn graph — a `predicate` diamond or a `skill` box.
 
@@ -14,7 +14,7 @@ A node in the drawn graph — a `predicate` diamond or a `skill` box.
 
 > `readonly` **id**: `string`
 
-Defined in: [src/lib/injection-engine/skillGraph.ts:194](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/injection-engine/skillGraph.ts#L194)
+Defined in: [src/lib/injection-engine/skillGraph.ts:184](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/injection-engine/skillGraph.ts#L184)
 
 ***
 
@@ -22,7 +22,7 @@ Defined in: [src/lib/injection-engine/skillGraph.ts:194](https://github.com/foot
 
 > `readonly` **kind**: `"skill"` \| `"predicate"`
 
-Defined in: [src/lib/injection-engine/skillGraph.ts:195](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/injection-engine/skillGraph.ts#L195)
+Defined in: [src/lib/injection-engine/skillGraph.ts:185](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/injection-engine/skillGraph.ts#L185)
 
 ***
 
@@ -30,4 +30,4 @@ Defined in: [src/lib/injection-engine/skillGraph.ts:195](https://github.com/foot
 
 > `readonly` `optional` **label?**: `string`
 
-Defined in: [src/lib/injection-engine/skillGraph.ts:196](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/injection-engine/skillGraph.ts#L196)
+Defined in: [src/lib/injection-engine/skillGraph.ts:186](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/injection-engine/skillGraph.ts#L186)

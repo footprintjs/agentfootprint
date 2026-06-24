@@ -41,15 +41,28 @@ iteration; absent for agents that don't use `skillGraph()`. Plain
 
 ***
 
+### entryScorer?
+
+> `readonly` `optional` **entryScorer?**: `string`
+
+Defined in: [src/lib/injection-engine/types.ts:134](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/injection-engine/types.ts#L134)
+
+Name of the entry scorer that produced `entryScores` (e.g. `'keyword'`,
+ `'embedding'`). Absent unless an entry scorer ran.
+
+***
+
 ### entryScores?
 
 > `readonly` `optional` **entryScores?**: readonly `object`[]
 
-Defined in: [src/lib/injection-engine/types.ts:125](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/injection-engine/types.ts#L125)
+Defined in: [src/lib/injection-engine/types.ts:127](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/injection-engine/types.ts#L127)
 
-The relevance ranking of entry candidates from `entryByRelevance()` — written
-by the PickEntry stage at turn start. `defineRelevanceHint()` reads it to detect
-a near-tie at the entry. Absent unless the graph used `.entryByRelevance()`.
+The relevance ranking of entry candidates from an entry scorer (`.entryBy()` /
+`.entryByRelevance()`) — written by the PickEntry stage at turn start.
+`defineRelevanceHint()` reads it to detect a near-tie. Absent unless the graph
+used an entry scorer. `score` is the raw strategy score (cosine / word-overlap);
+`relevance` is the softmax share (the surfaced %).
 
 ***
 

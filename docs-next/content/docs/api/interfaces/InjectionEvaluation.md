@@ -4,7 +4,7 @@ title: InjectionEvaluation
 
 # Interface: InjectionEvaluation
 
-Defined in: [src/lib/injection-engine/types.ts:185](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/injection-engine/types.ts#L185)
+Defined in: [src/lib/injection-engine/types.ts:190](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/injection-engine/types.ts#L190)
 
 Returned by `evaluateInjections()`. Slot subflows consume `active`;
 `skipped` is observability metadata (predicate errors).
@@ -15,7 +15,7 @@ Returned by `evaluateInjections()`. Slot subflows consume `active`;
 
 > `readonly` **active**: readonly [`Injection`](/docs/api/interfaces/Injection)[]
 
-Defined in: [src/lib/injection-engine/types.ts:186](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/injection-engine/types.ts#L186)
+Defined in: [src/lib/injection-engine/types.ts:191](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/injection-engine/types.ts#L191)
 
 ***
 
@@ -23,4 +23,4 @@ Defined in: [src/lib/injection-engine/types.ts:186](https://github.com/footprint
 
 > `readonly` **skipped**: readonly `object`[]
 
-Defined in: [src/lib/injection-engine/types.ts:187](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/injection-engine/types.ts#L187)
+Defined in: [src/lib/injection-engine/types.ts:192](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/injection-engine/types.ts#L192)

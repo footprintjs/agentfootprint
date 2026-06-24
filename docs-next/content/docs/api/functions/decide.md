@@ -6,7 +6,7 @@ title: decide
 
 > **decide**(`predicate`, `whenTrue`, `whenFalse`, `label?`): [`DecisionNode`](/docs/api/interfaces/DecisionNode)
 
-Defined in: [src/lib/injection-engine/skillGraph.ts:179](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/injection-engine/skillGraph.ts#L179)
+Defined in: [src/lib/injection-engine/skillGraph.ts:169](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/injection-engine/skillGraph.ts#L169)
 
 Build a decision node. Leaves are skills (an `Injection`); internal nodes are
  other `decide(...)` results.

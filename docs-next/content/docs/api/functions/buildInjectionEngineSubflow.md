@@ -6,7 +6,7 @@ title: buildInjectionEngineSubflow
 
 > **buildInjectionEngineSubflow**(`config`): `FlowChart`
 
-Defined in: [src/lib/injection-engine/buildInjectionEngineSubflow.ts:147](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/injection-engine/buildInjectionEngineSubflow.ts#L147)
+Defined in: [src/lib/injection-engine/buildInjectionEngineSubflow.ts:149](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/injection-engine/buildInjectionEngineSubflow.ts#L149)
 
 Build the Injection Engine subflow — Gather → Evaluate → Route → Delta.
 

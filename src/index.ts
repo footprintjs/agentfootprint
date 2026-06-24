@@ -440,6 +440,13 @@ export {
   type GraphCheckup,
   type GraphProblem,
   type GraphProblemCode,
+  // Pluggable entry-relevance scorer strategy + built-ins (keyword / embedding)
+  keywordScorer,
+  embeddingScorer,
+  rankEntries,
+  type EntryScorer,
+  type EntryScorerInput,
+  type EntryCandidate,
   // Proposal 009 Tier 1 — skill-body ↔ tool-contract consistency check
   checkSkillContract,
   checkSkillContracts,

@@ -86,4 +86,12 @@ export {
   type GraphProblem,
   type GraphProblemCode,
 } from './skillGraph.js';
+export {
+  keywordScorer,
+  embeddingScorer,
+  rankEntries,
+  type EntryScorer,
+  type EntryScorerInput,
+  type EntryCandidate,
+} from './entryScorer.js';
 export { checkSkillContract, checkSkillContracts, skillToolNames } from './skillContract.js';
