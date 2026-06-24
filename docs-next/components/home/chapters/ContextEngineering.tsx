@@ -172,7 +172,7 @@ const TRIG_BEATS: TrigBeat[] = [
     hl: 'var(--teal)',
     tagNode: 'sys',
     litNodes: ['sys'],
-    litEdges: ['ctx-sys', 'loop'],
+    litEdges: ['ctx-sys'],
     aside: (
       <>
         <b>always</b> — re-injected into <b>system</b> on <i>every</i> iteration: the invariants
@@ -201,7 +201,7 @@ const TRIG_BEATS: TrigBeat[] = [
     hl: 'var(--amber)',
     tagNode: 'tc',
     litNodes: ['tc', 'sys'],
-    litEdges: ['loop', 'ctx-sys'],
+    litEdges: ['ctx-sys'],
     weakNodes: ['msg'],
     weakEdges: ['ctx-msg'],
     aside: (
@@ -218,7 +218,7 @@ const TRIG_BEATS: TrigBeat[] = [
     hl: 'var(--coral)',
     tagNode: 'llm',
     litNodes: ['llm', 'sys', 'tool'],
-    litEdges: ['ctx-sys', 'ctx-tool', 'loop'],
+    litEdges: ['ctx-sys', 'ctx-tool'],
     weakNodes: ['msg'],
     weakEdges: ['ctx-msg'],
     aside: (
@@ -546,6 +546,15 @@ function TriggersBlock() {
   const weakN = new Set(beat?.weakNodes ?? []);
   const weakE = new Set(beat?.weakEdges ?? []);
 
+  // click a trigger pill → scroll to that beat's band
+  const goToBeat = (k: number) => {
+    const track = trackRef.current;
+    if (!track) return;
+    const total = track.offsetHeight - window.innerHeight;
+    const trackTop = track.getBoundingClientRect().top + window.scrollY;
+    window.scrollTo({ top: trackTop + ((k + 0.5) / (LAST + 1)) * total, behavior: 'smooth' });
+  };
+
   return (
     <section className="af-ctx-block">
       <p className="af-ctx-kicker">When each one fires</p>
@@ -562,6 +571,20 @@ function TriggersBlock() {
         <div className="af-pin-stage af-flowwrap">
           <div className="af-bt-row">
             <div className="af-bt-left">
+              <div className="af-trig-pills">
+                {TRIG_BEATS.map((b, i) => (
+                  <button
+                    key={b.trigger}
+                    type="button"
+                    className={`af-trig-pill${i + 1 === phase ? ' active' : i + 1 < phase ? ' done' : ''}`}
+                    style={{ '--tp-hl': b.hl } as CSSProperties}
+                    onClick={() => goToBeat(i + 1)}
+                  >
+                    <span className="dot" />
+                    {b.trigger}
+                  </button>
+                ))}
+              </div>
               <div
                 className="af-flow"
                 style={{ '--trig-hl': beat?.hl ?? 'var(--coral)' } as CSSProperties}
@@ -575,6 +598,9 @@ function TriggersBlock() {
                       className={`fe${ed.loop ? ' loop' : ''}${litE.has(ed.e) ? ' lit' : ''}${weakE.has(ed.e) ? ' weak-lit' : ''}`}
                     />
                   ))}
+                  {/* the loop is a light-grey divider; a small grey arrowhead on its visible top
+                      segment (just right of Context) points back into Context */}
+                  <path className="af-trig-loop-arrow" d="M-1.5,-1.3 L1.5,0 L-1.5,1.3 Z" transform="translate(64 5) rotate(180)" />
                 </svg>
                 {TRIG_NODES.map((nd) => {
                   const cls = [
@@ -668,7 +694,7 @@ function CodeBlock() {
           <span className="m">defineFact</span>
           <span className="p">({'({'}</span>
           {'           '}
-          <span className="c cm-purple">{'// data — always on → messages'}</span>
+          <span className="c cm-purple">{'// data — always on → system'}</span>
           {'\n'}
           {'    '}
           <span className="m">id</span>
@@ -691,7 +717,7 @@ function CodeBlock() {
           <span className="m">defineSteering</span>
           <span className="p">({'({'}</span>
           {'   '}
-          <span className="c cm-teal">{'// rule — always on → system'}</span>
+          <span className="c cm-teal">{'// steering — always on → system'}</span>
           {'\n'}
           {'    '}
           <span className="m">id</span>
@@ -714,7 +740,7 @@ function CodeBlock() {
           <span className="m">defineSkill</span>
           <span className="p">({'({'}</span>
           {'         '}
-          <span className="c cm-coral">{'// unlocks when the LLM asks'}</span>
+          <span className="c cm-coral">{'// unlocks via read_skill → system + tools'}</span>
           {'\n'}
           {'    '}
           <span className="m">id</span>

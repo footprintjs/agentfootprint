@@ -1113,6 +1113,17 @@
   animation: af-trig-tag-pop 0.4s ease both;
 }
 @keyframes af-trig-tag-pop { from { opacity: 0; transform: translateX(-50%) translateY(5px); } }
+/* the loop is a light-grey divider here; its arrowhead is grey too (never the trigger color) */
+.af-trig-track .af-flow .af-trig-loop-arrow { fill: var(--border-strong); opacity: 0.7; }
+/* trigger pills row — shows all four; the scroll position's pill highlights (click to jump) */
+.af-trig-pills { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+.af-trig-pill { display: inline-flex; align-items: center; gap: 6px; font-family: var(--fd-font-mono, monospace); font-size: 11px; font-weight: 600; padding: 5px 12px; border-radius: 999px; border: 1px solid var(--border); background: var(--bg-elev); color: var(--fg-faint); opacity: 0.55; cursor: pointer; transition: opacity 0.3s, color 0.3s, border-color 0.3s, box-shadow 0.3s, background 0.3s; }
+.af-trig-pill .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--tp-hl, var(--coral)); flex: none; opacity: 0.5; transition: opacity 0.3s; }
+.af-trig-pill:hover { opacity: 0.9; }
+.af-trig-pill.done { opacity: 0.85; color: var(--fg-muted); }
+.af-trig-pill.done .dot { opacity: 0.8; }
+.af-trig-pill.active { opacity: 1; color: var(--tp-hl, var(--coral)); border-color: var(--tp-hl, var(--coral)); background: color-mix(in oklab, var(--tp-hl, var(--coral)) 12%, var(--bg-elev)); box-shadow: 0 0 0 3px color-mix(in oklab, var(--tp-hl, var(--coral)) 16%, transparent); }
+.af-trig-pill.active .dot { opacity: 1; }
 @media (prefers-reduced-motion: reduce) {
   .af-trig-track .af-flow .fe.lit, .af-trig-track .af-flow .fe.loop.lit, .af-trig-track .af-flow .fe.weak-lit, .af-flow .fnode .af-trig-tag { animation: none; }
 }
