@@ -169,6 +169,10 @@ const LIGHT_THEME: React.CSSProperties = {
   ['--fp-text-muted' as string]: '#94a3b8',
   ['--fp-border' as string]: '#e2e8f0',
   ['--fp-color-primary' as string]: '#6366f1',
+  // Three semantic node-state colors (light variants).
+  ['--fp-node-cursor' as string]: '#f59e0b', // current / scrubbed-to step
+  ['--fp-node-visited' as string]: '#16a34a', // executed
+  ['--fp-node-main' as string]: '#6366f1', // group's lead node
 };
 const DARK_THEME: React.CSSProperties = {
   ['--fp-bg-primary' as string]: '#0b0b0f',
@@ -180,6 +184,10 @@ const DARK_THEME: React.CSSProperties = {
   ['--fp-text-muted' as string]: '#8c887e',
   ['--fp-border' as string]: '#2a2a32',
   ['--fp-color-primary' as string]: '#818cf8',
+  // Three semantic node-state colors (dark variants — slightly brighter).
+  ['--fp-node-cursor' as string]: '#fbbf24',
+  ['--fp-node-visited' as string]: '#22c55e',
+  ['--fp-node-main' as string]: '#818cf8',
 };
 
 /** Follow the docs theme (Fumadocs / next-themes toggles a `dark` class on <html>). */
