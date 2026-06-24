@@ -20,33 +20,111 @@ import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 
 
 // ---------- (a) Abstraction diagram ----------
 type FlavorColor = 'teal' | 'purple' | 'amber' | 'coral' | 'slate';
-const FLAVORS: { color: FlavorColor; name: string; slot: number }[] = [
-  { color: 'teal', name: 'Steering', slot: 0 },
-  { color: 'coral', name: 'Skill', slot: 0 },
-  { color: 'amber', name: 'Guardrail', slot: 0 },
-  { color: 'purple', name: 'Memory', slot: 1 },
-  { color: 'purple', name: 'RAG', slot: 1 },
-  { color: 'slate', name: 'Fact', slot: 1 },
-  { color: 'coral', name: 'Tool API', slot: 2 },
-];
-// per-slot pills, in stream order (matches the design's slotPills)
-const SLOT_PILLS: { color: FlavorColor; label: string }[][] = [
-  [
-    { color: 'teal', label: 'Steering' },
-    { color: 'coral', label: 'Skill' },
-    { color: 'amber', label: 'Guardrail' },
-  ],
-  [
-    { color: 'purple', label: 'Memory' },
-    { color: 'purple', label: 'RAG' },
-    { color: 'slate', label: 'Fact' },
-  ],
-  [{ color: 'coral', label: 'Tool API' }],
+type SlotRef = { slot: number; strong: boolean };
+type FlavorMapEntry = { name: string; color: FlavorColor; slots: SlotRef[]; blurb: ReactNode };
+// GROUND-TRUTH flavor→slot mapping, read from the injection-engine factories (NOT guessed):
+//   defineSteering  → { systemPrompt }                          → system
+//   defineSkill     → { systemPrompt: body, tools }             → system + tools
+//   defineGuardrail → { systemPrompt } (rule trigger)           → system
+//   memory recall   → system-role → system, else → messages     → messages (+ system)
+//   RAG             → SystemPrompt reference block / re-inject   → system (+ messages)
+//   defineFact      → slot default 'system-prompt' | 'messages' → system (+ messages)
+//   tools registry  → tools                                     → tools
+const FLAVOR_MAP: FlavorMapEntry[] = [
+  {
+    name: 'Steering',
+    color: 'teal',
+    slots: [{ slot: 0, strong: true }],
+    blurb: (
+      <>
+        Always-on instructions that shape behavior — lands in <b>system</b>, every iteration.
+        <span className="src">defineSteering → systemPrompt</span>
+      </>
+    ),
+  },
+  {
+    name: 'Skill',
+    color: 'coral',
+    slots: [
+      { slot: 0, strong: true },
+      { slot: 2, strong: true },
+    ],
+    blurb: (
+      <>
+        Two parts: its <b>body → system</b>, its <b>tools → tools</b>. The model unlocks it by calling{' '}
+        <code>read_skill</code>.<span className="src">defineSkill → {'{ systemPrompt: body, tools }'}</span>
+      </>
+    ),
+  },
+  {
+    name: 'Guardrail',
+    color: 'amber',
+    slots: [{ slot: 0, strong: true }],
+    blurb: (
+      <>
+        A rule that fires when its checker trips, adding a note to <b>system</b>.
+        <span className="src">defineGuardrail → systemPrompt (rule)</span>
+      </>
+    ),
+  },
+  {
+    name: 'Memory',
+    color: 'purple',
+    slots: [
+      { slot: 1, strong: true },
+      { slot: 0, strong: false },
+    ],
+    blurb: (
+      <>
+        Recalled state: most rides in <b>messages</b>; system-role items go to <b>system</b>.
+        <span className="src">memory recall → by role</span>
+      </>
+    ),
+  },
+  {
+    name: 'RAG',
+    color: 'purple',
+    slots: [
+      { slot: 0, strong: true },
+      { slot: 1, strong: false },
+    ],
+    blurb: (
+      <>
+        Retrieved context: usually a <b>system</b> reference block, can re-inject as <b>messages</b>.
+        <span className="src">source: &apos;rag&apos;</span>
+      </>
+    ),
+  },
+  {
+    name: 'Fact',
+    color: 'slate',
+    slots: [
+      { slot: 0, strong: true },
+      { slot: 1, strong: false },
+    ],
+    blurb: (
+      <>
+        Known data. Defaults to <b>system</b>; opt into <b>messages</b> for inline facts.
+        <span className="src">defineFact → systemPrompt | messages</span>
+      </>
+    ),
+  },
+  {
+    name: 'Tool API',
+    color: 'coral',
+    slots: [{ slot: 2, strong: true }],
+    blurb: (
+      <>
+        External functions the model can call — always the <b>tools</b> slot.
+        <span className="src">.tool() → tools</span>
+      </>
+    ),
+  },
 ];
 const SLOT_NAMES = ['system', 'messages', 'tools'];
-// flat stream order: slot 0 pills, then slot 1, then slot 2
-const STREAM: { slot: number; pill: number }[] = [];
-SLOT_PILLS.forEach((list, si) => list.forEach((_, pi) => STREAM.push({ slot: si, pill: pi })));
+// fixed x-fractions (0–100) so the SVG wires line up with the equal-width flex pills/slots
+const FLAVOR_X = FLAVOR_MAP.map((_, i) => ((i + 0.5) / FLAVOR_MAP.length) * 100);
+const SLOT_X = SLOT_NAMES.map((_, j) => ((j + 0.5) / SLOT_NAMES.length) * 100);
 
 // ---------- (b) Triggers table ----------
 const TRIGGERS: {
@@ -58,8 +136,8 @@ const TRIGGERS: {
 }[] = [
   { cls: 'teal', trigger: 'always', flavor: 'Steering', when: 'every iteration', slot: 'system' },
   { cls: 'purple', trigger: 'rule', flavor: 'Instruction', when: 'your predicate returns true', slot: 'system' },
-  { cls: 'amber', trigger: 'on-tool-return', flavor: 'Instruction', when: 'after a specific tool returns', slot: 'messages' },
-  { cls: 'coral', trigger: 'llm-activated', flavor: 'Skill', when: "LLM calls read_skill('id')", slot: 'tools' },
+  { cls: 'amber', trigger: 'on-tool-return', flavor: 'Instruction', when: 'after a specific tool returns', slot: 'system' },
+  { cls: 'coral', trigger: 'llm-activated', flavor: 'Skill', when: "LLM calls read_skill('id')", slot: 'system + tools' },
 ];
 
 // ---------- (d) Dynamic ReAct stepper ----------
@@ -185,65 +263,45 @@ export function ContextEngineering() {
   );
 }
 
-// ============ (a) ABSTRACTION DIAGRAM ============
+// ============ (a) ABSTRACTION MAP — scroll-driven flavor → slot(s) ============
+// Pinned scroller: flavors in a row up top, the 3-slot LLM box below; scrolling steps through
+// each flavor, drawing wire(s) to the slot(s) it REALLY injects into (ground truth from the
+// injection-engine factories), with a right-side aside explaining it. Several flavors are
+// many-to-many (Skill → system + tools; Memory/RAG/Fact → system + messages).
 function AbstractionBlock() {
-  const wrapRef = useRef<HTMLDivElement>(null);
-  // litFlavor = name of the flavor currently highlighted; pills shown per slot, by count
-  const [lit, setLit] = useState<string | null>(null);
-  const [shown, setShown] = useState<[number, number, number]>([0, 0, 0]);
-  const [allAtOnce, setAllAtOnce] = useState(false);
+  const trackRef = useRef<HTMLDivElement>(null);
+  const [phase, setPhase] = useState(0);
+  const LAST = FLAVOR_MAP.length; // phases 0 (intro) .. LAST (each flavor = phase i for flavor i-1)
 
   useEffect(() => {
-    const reduce = prefersReducedMotion();
-    if (reduce) {
-      setAllAtOnce(true);
+    if (prefersReducedMotion()) {
+      setPhase(LAST);
       return;
     }
-
-    let started = false;
-    let timer: ReturnType<typeof setInterval> | undefined;
-    let idx = 0;
-
-    const step = () => {
-      const { slot, pill } = STREAM[idx % STREAM.length];
-      setLit(SLOT_PILLS[slot][pill].label);
-      setShown((prev) => {
-        const next: [number, number, number] = [...prev];
-        next[slot] = Math.max(next[slot], pill + 1);
-        return next;
+    let raf = 0;
+    const onScroll = () => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => {
+        const track = trackRef.current;
+        if (!track) return;
+        const rect = track.getBoundingClientRect();
+        const total = rect.height - window.innerHeight;
+        const p = total > 0 ? Math.min(1, Math.max(0, -rect.top / total)) : 0;
+        setPhase(Math.min(LAST, Math.floor(p * (LAST + 1))));
       });
-      idx++;
-      if (idx % STREAM.length === 0) {
-        const resetAt = idx;
-        setTimeout(() => {
-          // only clear if no further restart happened
-          if (idx === resetAt) {
-            setShown([0, 0, 0]);
-            setLit(null);
-          }
-        }, 1400);
-      }
     };
-
-    const io = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((e) => {
-          if (e.isIntersecting && !started) {
-            started = true;
-            step();
-            timer = setInterval(step, 900);
-          }
-        });
-      },
-      { threshold: 0.3 },
-    );
-    if (wrapRef.current) io.observe(wrapRef.current);
-
+    onScroll();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('resize', onScroll);
     return () => {
-      io.disconnect();
-      if (timer) clearInterval(timer);
+      window.removeEventListener('scroll', onScroll);
+      window.removeEventListener('resize', onScroll);
+      cancelAnimationFrame(raf);
     };
-  }, []);
+  }, [LAST]);
+
+  const active = phase - 1; // -1 during the intro beat
+  const activeFlavor = active >= 0 ? FLAVOR_MAP[active] : null;
 
   return (
     <section className="af-ctx-block">
@@ -252,43 +310,102 @@ function AbstractionBlock() {
         Many flavors. <em>Three slots.</em>
       </h2>
       <p className="af-ctx-lede">
-        The data and instructions you collect wear many names. They all land in <b>system</b>,{' '}
-        <b>messages</b>, or <b>tools</b> — the only three regions an LLM call has. Declare the flavor;
-        the framework fires the right trigger and lands it in the right slot, born tracked.
+        The data and instructions you collect wear many names. Each lands in <b>system</b>,{' '}
+        <b>messages</b>, or <b>tools</b> — and several land in <i>more than one</i>. Scroll to map each
+        flavor to the slot(s) it really injects into.
       </p>
-      <div className="af-ctx-abstract" ref={wrapRef}>
-        <div className="af-ctx-flavors">
-          {FLAVORS.map((f) => {
-            const isLit = allAtOnce || lit === f.name;
-            return (
-              <div key={`${f.name}-${f.slot}`} className={`af-ctx-flav${isLit ? ' lit' : ''}`}>
-                <span className={`af-ctx-dot ${f.color}`} />
-                {f.name}
+
+      <div className="af-ctx-map-track" ref={trackRef}>
+        <div className="af-ctx-map-stage">
+          <div className="af-ctx-map-row">
+            <div className="af-ctx-map-diagram">
+              {/* flavors, in a row across the top */}
+              <div className="af-ctx-map-flavors">
+                {FLAVOR_MAP.map((f, i) => (
+                  <span
+                    key={f.name}
+                    className={`af-ctx-mflav ${f.color}${i === active ? ' active' : i < active ? ' placed' : ''}`}
+                  >
+                    <span className={`af-ctx-dot ${f.color}`} />
+                    {f.name}
+                  </span>
+                ))}
               </div>
-            );
-          })}
-        </div>
-        <div className="af-ctx-stage">
-          <span className="af-ctx-stage-label">one LLM call</span>
-          <div className="af-ctx-slots3">
-            {SLOT_PILLS.map((pills, si) => {
-              const count = allAtOnce ? pills.length : shown[si];
-              return (
-                <div key={si} className={`af-ctx-slot${count > 0 ? ' hit' : ''}`}>
-                  <div className="af-ctx-pills">
-                    {pills.map((p, pi) => (
-                      <span
-                        key={`${p.label}-${pi}`}
-                        className={`af-ctx-pill ${p.color}${pi < count ? ' show' : ''}`}
-                      >
-                        {p.label}
-                      </span>
-                    ))}
-                  </div>
-                  <span className="af-ctx-snm">{SLOT_NAMES[si]}</span>
+
+              {/* wires: the active flavor → its slot(s) */}
+              <svg className="af-ctx-map-wires" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+                {activeFlavor?.slots.map((s) => {
+                  const xf = FLAVOR_X[active];
+                  const xs = SLOT_X[s.slot];
+                  const d = `M ${xf},2 C ${xf},52 ${xs},48 ${xs},98`;
+                  return (
+                    <path
+                      key={`${phase}-${s.slot}`}
+                      d={d}
+                      className={`af-ctx-wire ${activeFlavor.color}${s.strong ? '' : ' weak'}`}
+                    />
+                  );
+                })}
+              </svg>
+
+              {/* the LLM call box with its three slots */}
+              <div className="af-ctx-map-llm">
+                <span className="af-ctx-stage-label">one LLM call</span>
+                <div className="af-ctx-map-slots">
+                  {SLOT_NAMES.map((nm, j) => {
+                    const chips = FLAVOR_MAP.map((f, fi) => ({ f, fi })).filter(
+                      ({ f, fi }) => fi <= active && f.slots.some((s) => s.slot === j),
+                    );
+                    const activeHere = activeFlavor?.slots.some((s) => s.slot === j) ?? false;
+                    return (
+                      <div key={nm} className={`af-ctx-map-slot${activeHere ? ' hit' : ''}`}>
+                        {activeHere && <span className={`af-ctx-map-tri ${activeFlavor!.color}`} />}
+                        <div className="af-ctx-map-chips">
+                          {chips.map(({ f, fi }) => {
+                            const mem = f.slots.find((s) => s.slot === j)!;
+                            return (
+                              <span
+                                key={f.name}
+                                className={`af-ctx-pill ${f.color}${mem.strong ? '' : ' weak'}${fi === active ? ' show' : ''}`}
+                              >
+                                {f.name}
+                              </span>
+                            );
+                          })}
+                        </div>
+                        <span className="af-ctx-snm">{nm}</span>
+                      </div>
+                    );
+                  })}
                 </div>
-              );
-            })}
+              </div>
+            </div>
+
+            {/* aside: explain the active flavor + where it lands and why */}
+            <aside className="af-ctx-map-aside">
+              <span className="af-ctx-map-prog" aria-hidden="true">
+                <span className="fill" style={{ height: `${(phase / LAST) * 100}%` }} />
+              </span>
+              <p className="af-ctx-kicker2">where each flavor lands</p>
+              {activeFlavor ? (
+                <>
+                  <p className="af-ctx-map-name">
+                    <span className={`af-ctx-dot ${activeFlavor.color}`} />
+                    {activeFlavor.name}
+                  </p>
+                  <p className="af-ctx-map-blurb">{activeFlavor.blurb}</p>
+                </>
+              ) : (
+                <>
+                  <p className="af-ctx-map-name">Many flavors → three slots</p>
+                  <p className="af-ctx-map-blurb">
+                    Every flavor of context injects into <b>system</b>, <b>messages</b>, or{' '}
+                    <b>tools</b> — and several into more than one. <b>Scroll</b> to map each to where it
+                    really lands.
+                  </p>
+                </>
+              )}
+            </aside>
           </div>
         </div>
       </div>

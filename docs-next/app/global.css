@@ -1019,6 +1019,82 @@
   background: var(--bg-alt);
 }
 
+/* ---- (a2) scroll-driven flavor → slot MAP (pinned) ---- */
+.af-ctx-map-track { position: relative; height: 400vh; }
+.af-ctx-map-stage {
+  position: sticky;
+  top: calc(var(--fd-nav-height, 56px) + 60px);
+  min-height: calc(100svh - var(--fd-nav-height, 56px) - 84px);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+.af-ctx-map-row { display: flex; gap: 36px; align-items: center; }
+.af-ctx-map-diagram { flex: 1 1 auto; min-width: 0; }
+.af-ctx-map-aside { flex: none; width: 300px; position: relative; padding-left: 26px; }
+/* flavors row (equal-width so the wire x-fractions line up) */
+.af-ctx-map-flavors { display: flex; gap: 8px; }
+.af-ctx-mflav {
+  flex: 1 1 0; min-width: 0;
+  font-family: var(--fd-font-mono, monospace); font-size: 12px;
+  padding: 8px 6px; border: 1px solid var(--border); border-radius: 999px;
+  background: var(--bg-elev); color: var(--fg-faint);
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; opacity: 0.5;
+  transition: opacity 0.3s, color 0.3s, border-color 0.3s, transform 0.3s, box-shadow 0.3s;
+}
+.af-ctx-mflav.placed { opacity: 0.85; color: var(--fg-muted); }
+.af-ctx-mflav.active { opacity: 1; color: var(--fg); border-color: var(--fg-muted); transform: translateY(-2px); box-shadow: 0 2px 12px rgba(0, 0, 0, 0.07); }
+.af-ctx-mflav .af-ctx-dot { width: 7px; height: 7px; border-radius: 50%; flex: none; }
+/* wires */
+.af-ctx-map-wires { display: block; width: 100%; height: 92px; overflow: visible; }
+.af-ctx-wire { fill: none; stroke-width: 0.7; opacity: 0.95; animation: af-ctx-wire-in 0.45s ease both; }
+.af-ctx-wire.weak { stroke-dasharray: 2.5 2.2; stroke-width: 0.55; opacity: 0.7; }
+.af-ctx-wire.teal { stroke: var(--teal); }
+.af-ctx-wire.purple { stroke: var(--purple); }
+.af-ctx-wire.amber { stroke: var(--amber); }
+.af-ctx-wire.coral { stroke: var(--coral); }
+.af-ctx-wire.slate { stroke: var(--fg-faint); }
+@keyframes af-ctx-wire-in { from { opacity: 0; } }
+/* LLM box + slots */
+.af-ctx-map-llm { position: relative; border: 1px solid var(--border-strong); border-radius: 16px; background: var(--bg-elev); padding: 26px 18px 16px; }
+.af-ctx-map-slots { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+.af-ctx-map-slot {
+  position: relative; border: 1px dashed var(--border-strong); border-radius: 10px;
+  min-height: 150px; padding: 12px 10px 10px;
+  display: flex; flex-direction: column; align-items: center; justify-content: space-between; gap: 8px;
+  transition: border-color 0.3s, box-shadow 0.3s;
+}
+.af-ctx-map-slot.hit { border-style: solid; box-shadow: 0 0 0 2px color-mix(in oklab, var(--fg-muted) 14%, transparent); }
+.af-ctx-map-slot .af-ctx-snm { font-family: var(--fd-font-mono, monospace); font-size: 13px; font-weight: 600; }
+.af-ctx-map-chips { display: flex; flex-direction: column; align-items: center; gap: 5px; width: 100%; }
+.af-ctx-map-chips .af-ctx-pill { opacity: 0.9; transform: none; transition: opacity 0.3s, box-shadow 0.3s; }
+.af-ctx-map-chips .af-ctx-pill.weak { opacity: 0.5; border-style: dashed; }
+.af-ctx-map-chips .af-ctx-pill.show { opacity: 1; box-shadow: 0 0 0 2px color-mix(in oklab, currentColor 22%, transparent); }
+/* downward arrowhead at the active target slot (HTML, so the stretched SVG can't distort it) */
+.af-ctx-map-tri { position: absolute; top: -7px; left: 50%; transform: translateX(-50%); width: 0; height: 0; border-left: 6px solid transparent; border-right: 6px solid transparent; border-top: 8px solid currentColor; }
+.af-ctx-map-tri.teal { color: var(--teal); }
+.af-ctx-map-tri.purple { color: var(--purple); }
+.af-ctx-map-tri.amber { color: var(--amber); }
+.af-ctx-map-tri.coral { color: var(--coral); }
+.af-ctx-map-tri.slate { color: var(--fg-faint); }
+/* aside */
+.af-ctx-map-prog { position: absolute; left: 0; top: 4px; bottom: 4px; width: 2px; background: var(--border); border-radius: 2px; overflow: hidden; }
+.af-ctx-map-prog .fill { position: absolute; left: 0; top: 0; width: 100%; background: var(--fg-muted); border-radius: 2px; transition: height 0.4s ease; }
+.af-ctx-kicker2 { font-family: var(--fd-font-mono, monospace); font-size: 11px; color: var(--fg-faint); margin: 0 0 8px; }
+.af-ctx-map-name { font-size: 18px; font-weight: 650; display: flex; align-items: center; gap: 8px; margin: 0 0 10px; }
+.af-ctx-map-name .af-ctx-dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+.af-ctx-map-blurb { font-size: 14px; line-height: 1.62; color: var(--fg-muted); margin: 0; min-height: 132px; }
+.af-ctx-map-blurb .src { display: block; margin-top: 9px; font-family: var(--fd-font-mono, monospace); font-size: 11px; color: var(--fg-faint); }
+@media (prefers-reduced-motion: reduce) { .af-ctx-wire { animation: none; } }
+@media (max-width: 880px) {
+  .af-ctx-map-row { flex-direction: column; }
+  .af-ctx-map-aside { width: 100%; max-width: 540px; padding-left: 0; }
+  .af-ctx-map-prog { display: none; }
+  .af-ctx-mflav { font-size: 10px; padding: 6px 3px; }
+  .af-ctx-map-blurb { min-height: 0; }
+}
+
 /* ============ (b) TRIGGERS TABLE ============ */
 .af-ctx-trigtable {
   border: 1px solid var(--border);
