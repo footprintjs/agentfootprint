@@ -193,14 +193,15 @@ const CHIPS: { name: string; flavor: string }[] = [
   { name: 'onEmit', flavor: 'amber' },
 ];
 
-// scroll-driven 0..1 progress through a pinned track (the only driver — no timers)
-function usePinProgress(ref: React.RefObject<HTMLDivElement | null>, reduced: boolean) {
+// scroll-driven 0..1 progress through a pinned track (the only driver — no timers).
+// NOTE: progress always starts at 0 on both server and client first render, so there is
+// no hydration mismatch. The actual MOTION (the traveling pulse, blink, row-in keyframes)
+// is suppressed under prefers-reduced-motion via CSS @media queries, not by branching the
+// rendered output here — branching render on a client-only value (matchMedia) is exactly
+// what caused React #418 for reduced-motion users.
+function usePinProgress(ref: React.RefObject<HTMLDivElement | null>) {
   const [p, setP] = useState(0);
   useEffect(() => {
-    if (reduced) {
-      setP(1);
-      return;
-    }
     let raf = 0;
     const onScroll = () => {
       cancelAnimationFrame(raf);
@@ -221,7 +222,7 @@ function usePinProgress(ref: React.RefObject<HTMLDivElement | null>, reduced: bo
       window.removeEventListener('resize', onScroll);
       cancelAnimationFrame(raf);
     };
-  }, [reduced]);
+  }, []);
   return p;
 }
 
@@ -230,16 +231,11 @@ export function CoreEngine() {
   const pinB = useRef<HTMLDivElement>(null); // animation 2 — costs nothing
   const logScrollRef = useRef<HTMLDivElement>(null);
 
-  const reduced =
-    typeof window !== 'undefined' && window.matchMedia
-      ? window.matchMedia('(prefers-reduced-motion: reduce)').matches
-      : false;
-
-  const progA = usePinProgress(pinA, reduced);
-  const progB = usePinProgress(pinB, reduced);
+  const progA = usePinProgress(pinA);
+  const progB = usePinProgress(pinB);
 
   // ---- animation 1: scroll time-travels the recorded run ----
-  const emitted = reduced ? STEPS.length : Math.min(STEPS.length, Math.max(1, Math.ceil(progA * STEPS.length)));
+  const emitted = Math.min(STEPS.length, Math.max(1, Math.ceil(progA * STEPS.length)));
   const done1 = emitted >= STEPS.length;
 
   // keep the log scrolled to the newest revealed row as you time-travel
@@ -285,7 +281,7 @@ export function CoreEngine() {
   );
 
   // ---- animation 2: the idle-beat dispatch runtime ----
-  const dp = reduced ? 1 : progB;
+  const dp = progB;
   // queue fills over the first ~40%, then the idle beat flushes it by ~90% (leaving a
   // beat of settled "done" state at the end of the track).
   const nQueued = Math.min(CHIPS.length, Math.floor((dp / 0.4) * CHIPS.length));
