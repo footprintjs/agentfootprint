@@ -126,18 +126,110 @@ const SLOT_NAMES = ['system', 'messages', 'tools'];
 const FLAVOR_X = FLAVOR_MAP.map((_, i) => ((i + 0.5) / FLAVOR_MAP.length) * 100);
 const SLOT_X = SLOT_NAMES.map((_, j) => ((j + 0.5) / SLOT_NAMES.length) * 100);
 
-// ---------- (b) Triggers table ----------
-const TRIGGERS: {
-  cls: 'teal' | 'purple' | 'amber' | 'coral';
+// ---------- (b) Triggers scroller — reuses the backtrack ReAct flowchart ----------
+// Same chart the reader met in Chapter 1; each beat lights WHERE in the loop a trigger fires and
+// tags that node with the trigger word. Node/edge coords are lifted verbatim from BacktrackStory
+// (only the final node is relabelled to the neutral '→ answer', since this isn't the bug story).
+type TNode = { n: string; nt: string; ns?: string; x: number; y: number; cls?: string };
+const TRIG_NODES: TNode[] = [
+  { n: 'ctx', nt: 'Context', ns: 'ReAct loop', x: 50, y: 9 },
+  { n: 'sys', nt: 'System Prompt', x: 18, y: 26, cls: 'slot' },
+  { n: 'msg', nt: 'Messages', x: 50, y: 26, cls: 'slot' },
+  { n: 'tool', nt: 'Tools', x: 82, y: 26, cls: 'slot' },
+  { n: 'api', nt: 'messageAPI', ns: 'assemble', x: 50, y: 46 },
+  { n: 'llm', nt: 'CallLLM', ns: 'send request', x: 50, y: 64 },
+  { n: 'route', nt: 'Route', x: 50, y: 83, cls: 'diamond' },
+  { n: 'final', nt: '→ answer', x: 21, y: 96, cls: 'end' },
+  { n: 'tc', nt: 'ToolCalls', ns: '↻ loop again', x: 79, y: 96 },
+];
+const TRIG_EDGES: { e: string; d: string; loop?: boolean }[] = [
+  { e: 'ctx-sys', d: 'M50,9 L20.2,9 Q18,9 18,13 L18,26' },
+  { e: 'ctx-msg', d: 'M50,9 L50,26' },
+  { e: 'ctx-tool', d: 'M50,9 L79.8,9 Q82,9 82,13 L82,26' },
+  { e: 'sys-api', d: 'M18,26 L18,42 Q18,46 20.2,46 L50,46' },
+  { e: 'msg-api', d: 'M50,26 L50,46' },
+  { e: 'api-llm', d: 'M50,46 L50,64' },
+  { e: 'tool-llm', d: 'M82,26 L82,60 Q82,64 79.8,64 L50,64' },
+  { e: 'llm-route', d: 'M50,64 L50,83' },
+  { e: 'route-final', d: 'M50,90 L44,96 L21,96' },
+  { e: 'route-tc', d: 'M50,90 L56,96 L79,96' },
+  { e: 'loop', d: 'M79,96 L96,96 L96,5 L50,5 L50,9', loop: true },
+];
+type TrigBeat = {
   trigger: string;
-  flavor: string;
-  when: string;
-  slot: string;
-}[] = [
-  { cls: 'teal', trigger: 'always', flavor: 'Steering', when: 'every iteration', slot: 'system' },
-  { cls: 'purple', trigger: 'rule', flavor: 'Instruction', when: 'your predicate returns true', slot: 'system' },
-  { cls: 'amber', trigger: 'on-tool-return', flavor: 'Instruction', when: 'after a specific tool returns', slot: 'system' },
-  { cls: 'coral', trigger: 'llm-activated', flavor: 'Skill', when: "LLM calls read_skill('id')", slot: 'system + tools' },
+  hl: string; // highlight color (a var() ref) for lit nodes/edges + the tag, scoped to this chart
+  tagNode: string;
+  litNodes: string[];
+  litEdges: string[];
+  weakNodes?: string[]; // secondary slot this trigger CAN also land in (dashed)
+  weakEdges?: string[];
+  aside: ReactNode;
+};
+// slot routing verified against the engine (evaluator.ts + buildSystemPromptSlot.ts), not the README.
+const TRIG_BEATS: TrigBeat[] = [
+  {
+    trigger: 'always',
+    hl: 'var(--teal)',
+    tagNode: 'sys',
+    litNodes: ['sys'],
+    litEdges: ['ctx-sys', 'loop'],
+    aside: (
+      <>
+        <b>always</b> — re-injected into <b>system</b> on <i>every</i> iteration: the invariants
+        (persona, format, safety). <span className="src">defineSteering → systemPrompt</span>
+      </>
+    ),
+  },
+  {
+    trigger: 'rule',
+    hl: 'var(--purple)',
+    tagNode: 'sys',
+    litNodes: ['sys'],
+    litEdges: ['ctx-sys'],
+    weakNodes: ['msg'],
+    weakEdges: ['ctx-msg'],
+    aside: (
+      <>
+        <b>rule</b> — a predicate runs each iteration; true → the text lands in <b>system</b> (or{' '}
+        <b>messages</b>, your choice). The most flexible kind.{' '}
+        <span className="src">defineInstruction → systemPrompt | messages</span>
+      </>
+    ),
+  },
+  {
+    trigger: 'on-tool-return',
+    hl: 'var(--amber)',
+    tagNode: 'tc',
+    litNodes: ['tc', 'sys'],
+    litEdges: ['loop', 'ctx-sys'],
+    weakNodes: ['msg'],
+    weakEdges: ['ctx-msg'],
+    aside: (
+      <>
+        <b>on-tool-return</b> — after a specific tool returns, the <b>loop</b> carries a note into the
+        next prompt: <b>system</b> by default, or <b>messages</b> for recency/higher attention. In
+        practice a <code>rule</code> predicate on <code>ctx.lastToolResult</code>.{' '}
+        <span className="src">evaluator matches toolName; inject decides the slot</span>
+      </>
+    ),
+  },
+  {
+    trigger: 'llm-activated',
+    hl: 'var(--coral)',
+    tagNode: 'llm',
+    litNodes: ['llm', 'sys', 'tool'],
+    litEdges: ['ctx-sys', 'ctx-tool', 'loop'],
+    weakNodes: ['msg'],
+    weakEdges: ['ctx-msg'],
+    aside: (
+      <>
+        <b>llm-activated</b> — the model unlocks it by calling <code>read_skill</code> at{' '}
+        <b>CallLLM</b>: body → <b>system</b>, its tools → <b>tools</b>. With{' '}
+        <code>surfaceMode: &apos;tool-only&apos;</code> the body rides the read_skill{' '}
+        <b>tool result</b> (a message) instead. <span className="src">defineSkill → systemPrompt + tools</span>
+      </>
+    ),
+  },
 ];
 
 // ---------- (d) Dynamic ReAct stepper ----------
@@ -413,8 +505,47 @@ function AbstractionBlock() {
   );
 }
 
-// ============ (b) TRIGGERS TABLE ============
+// ============ (b) TRIGGERS SCROLLER — when each trigger fires, ON the ReAct loop ============
+// Reuses the Chapter-1 backtrack flowchart. Each beat lights where in the loop a trigger acts and
+// tags that node with the trigger word; the aside explains it (slots verified against engine code).
 function TriggersBlock() {
+  const trackRef = useRef<HTMLDivElement>(null);
+  const [phase, setPhase] = useState(0);
+  const LAST = TRIG_BEATS.length; // phases 0 (intro) .. LAST (one per trigger)
+
+  useEffect(() => {
+    if (prefersReducedMotion()) {
+      setPhase(LAST);
+      return;
+    }
+    let raf = 0;
+    const onScroll = () => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => {
+        const track = trackRef.current;
+        if (!track) return;
+        const rect = track.getBoundingClientRect();
+        const total = rect.height - window.innerHeight;
+        const p = total > 0 ? Math.min(1, Math.max(0, -rect.top / total)) : 0;
+        setPhase(Math.min(LAST, Math.floor(p * (LAST + 1))));
+      });
+    };
+    onScroll();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('resize', onScroll);
+    return () => {
+      window.removeEventListener('scroll', onScroll);
+      window.removeEventListener('resize', onScroll);
+      cancelAnimationFrame(raf);
+    };
+  }, [LAST]);
+
+  const beat = phase >= 1 ? TRIG_BEATS[phase - 1] : null;
+  const litN = new Set(beat?.litNodes ?? []);
+  const litE = new Set(beat?.litEdges ?? []);
+  const weakN = new Set(beat?.weakNodes ?? []);
+  const weakE = new Set(beat?.weakEdges ?? []);
+
   return (
     <section className="af-ctx-block">
       <p className="af-ctx-kicker">When each one fires</p>
@@ -422,25 +553,72 @@ function TriggersBlock() {
         Four triggers decide <em>when.</em>
       </h2>
       <p className="af-ctx-lede">
-        A slot says <b>where</b> content lands; a trigger says <b>when</b> it fires. Four kinds cover
-        the whole field — from always-on rules to context the model unlocks itself by calling{' '}
-        <code className="af-ctx-mono">read_skill</code>.
+        A slot says <b>where</b> content lands; a trigger says <b>when</b> it fires. Scroll to watch
+        each kind light up <i>where in the loop</i> it acts — from always-on rules to context the model
+        unlocks itself by calling <code className="af-ctx-mono">read_skill</code>.
       </p>
-      <div className="af-ctx-trigtable">
-        <div className="af-ctx-trow r-head">
-          <div>trigger</div>
-          <div>flavor</div>
-          <div className="c3">fires when</div>
-          <div className="c4">slot</div>
-        </div>
-        {TRIGGERS.map((t) => (
-          <div key={t.trigger} className={`af-ctx-trow r-${t.cls}`}>
-            <div className="tg">{t.trigger}</div>
-            <div className="fl">{t.flavor}</div>
-            <div className="c3">{t.when}</div>
-            <div className="sl c4">{t.slot}</div>
+
+      <div className="af-trig-track" ref={trackRef}>
+        <div className="af-pin-stage af-flowwrap">
+          <div className="af-bt-row">
+            <div className="af-bt-left">
+              <div
+                className="af-flow"
+                style={{ '--trig-hl': beat?.hl ?? 'var(--coral)' } as CSSProperties}
+              >
+                <svg className="edges" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+                  {TRIG_EDGES.map((ed) => (
+                    <path
+                      key={ed.e}
+                      d={ed.d}
+                      pathLength={1}
+                      className={`fe${ed.loop ? ' loop' : ''}${litE.has(ed.e) ? ' lit' : ''}${weakE.has(ed.e) ? ' weak-lit' : ''}`}
+                    />
+                  ))}
+                </svg>
+                {TRIG_NODES.map((nd) => {
+                  const cls = [
+                    'fnode',
+                    nd.cls || '',
+                    litN.has(nd.n) ? 'lit' : '',
+                    weakN.has(nd.n) ? 'weak-lit' : '',
+                  ].join(' ');
+                  return (
+                    <div key={nd.n} className={cls} style={{ left: `${nd.x}%`, top: `${nd.y}%` }}>
+                      {beat?.tagNode === nd.n && (
+                        <span key={`tag-${phase}`} className="af-trig-tag">
+                          {beat.trigger}
+                        </span>
+                      )}
+                      <span className="nt">{nd.nt}</span>
+                      {nd.ns && <span className="ns">{nd.ns}</span>}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            <aside className="af-flow-aside">
+              <span className="af-aside-prog" aria-hidden="true">
+                <span className="af-aside-fill" style={{ height: `${(phase / LAST) * 100}%` }} />
+              </span>
+              <p className="af-flow-kicker">when does it fire?</p>
+              <p className="af-flow-head">
+                Four triggers, <em>on the loop.</em>
+              </p>
+              <p className="af-tl-cap">
+                {beat ? (
+                  beat.aside
+                ) : (
+                  <>
+                    A <b>slot</b> is where content lands; a <b>trigger</b> is <i>when</i>. Four kinds —
+                    scroll to see each light up where in the ReAct loop it fires.
+                  </>
+                )}
+              </p>
+            </aside>
           </div>
-        ))}
+        </div>
       </div>
     </section>
   );

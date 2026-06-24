@@ -98,7 +98,7 @@ tone, safety policies, skill-gated capabilities.
 | Factory | Trigger | Slot(s) | What |
 |---|---|---|---|
 | `defineSteering` | always | system-prompt | "Always respond in JSON." |
-| `defineInstruction` | rule | system-prompt | "If user is upset, acknowledge feelings first." |
+| `defineInstruction` | rule | system-prompt (or messages) | "If user is upset, acknowledge feelings first." |
 | `defineSkill` | llm-activated | system-prompt + tools | "Billing help — body + tools loaded when LLM calls `read_skill('billing')`" |
 
 ### Context Engineering — *supply the facts*
@@ -109,8 +109,8 @@ recall, environment.
 | Factory | Trigger | Slot(s) | What |
 |---|---|---|---|
 | `defineFact` | always or rule | system-prompt or messages | User profile, env info, computed summary |
-| `defineRAG` | rule (retrieval score) | messages | Knowledge-base chunks |
-| `defineMemory` | rule (recency) | messages | Prior turns, extracted facts |
+| `defineRAG` | rule (retrieval score) | system or messages | Knowledge-base chunks |
+| `defineMemory` | rule (recency) | messages (+ system, by role) | Prior turns, extracted facts |
 
 **Same engine, same Injection primitive, same observability, same Lens
 chips — different intent.** That symmetry is the library's DNA.

@@ -1095,6 +1095,29 @@
   .af-ctx-map-blurb { min-height: 0; }
 }
 
+/* ---- (b2) triggers scroller — reuses the backtrack flowchart; per-beat highlight via --trig-hl ---- */
+.af-trig-track { position: relative; height: 300vh; }
+.af-trig-track .af-flow .fe.lit { stroke: var(--trig-hl, var(--coral)); animation: af-ctx-wire-in 0.4s ease both; }
+.af-trig-track .af-flow .fe.loop.lit { stroke: var(--trig-hl, var(--coral)); animation: af-march 0.9s linear infinite; }
+.af-trig-track .af-flow .fe.weak-lit { stroke: var(--trig-hl, var(--coral)); stroke-dasharray: 2 2; stroke-width: 0.55; opacity: 0.6; animation: af-ctx-wire-in 0.4s ease both; }
+.af-trig-track .af-flow .fnode.lit { border-color: var(--trig-hl, var(--coral)); box-shadow: 0 0 0 3px color-mix(in oklab, var(--trig-hl, var(--coral)) 18%, transparent); }
+.af-trig-track .af-flow .fnode.diamond.lit { background: var(--trig-hl, var(--coral)); box-shadow: none; }
+.af-trig-track .af-flow .fnode.weak-lit { border-color: var(--trig-hl, var(--coral)); border-style: dashed; box-shadow: 0 0 0 2px color-mix(in oklab, var(--trig-hl, var(--coral)) 10%, transparent); }
+/* the trigger word, tagged on the firing node */
+.af-flow .fnode .af-trig-tag {
+  position: absolute; top: -13px; left: 50%; transform: translateX(-50%);
+  font-family: var(--fd-font-mono, monospace); font-size: 9.5px; font-weight: 700; letter-spacing: 0.02em;
+  padding: 1.5px 8px; border-radius: 999px; white-space: nowrap; z-index: 2;
+  background: color-mix(in oklab, var(--trig-hl, var(--coral)) 16%, var(--bg-elev));
+  border: 1px solid var(--trig-hl, var(--coral)); color: var(--trig-hl, var(--coral));
+  animation: af-trig-tag-pop 0.4s ease both;
+}
+@keyframes af-trig-tag-pop { from { opacity: 0; transform: translateX(-50%) translateY(5px); } }
+@media (prefers-reduced-motion: reduce) {
+  .af-trig-track .af-flow .fe.lit, .af-trig-track .af-flow .fe.loop.lit, .af-trig-track .af-flow .fe.weak-lit, .af-flow .fnode .af-trig-tag { animation: none; }
+}
+@media (max-width: 760px) { .af-trig-track { height: 280vh; } }
+
 /* ============ (b) TRIGGERS TABLE ============ */
 .af-ctx-trigtable {
   border: 1px solid var(--border);
