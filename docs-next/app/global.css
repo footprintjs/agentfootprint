@@ -1788,30 +1788,46 @@
   position: relative;
   height: 240vh;
 }
-/* time-travel scrubber — scroll steps through the recorded run (animation 1) */
-.af-eng-scrub {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 8px 0 2px;
+/* shared time-travel transport — full-width bar ABOVE both containers; one scroll position
+   drives the left flowchart arrow AND the right drain log in sync (animation 1) */
+.af-eng-timetravel {
+  max-width: 940px;
+  margin: 0 auto 16px;
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  background: var(--bg-elev);
+  padding: 12px 16px 13px;
+  box-shadow: 0 1px 3px color-mix(in oklab, var(--fg) 6%, transparent);
 }
-.af-eng-scrub-lab {
+.af-eng-tt-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 10px;
   font-family: var(--fd-font-mono, monospace);
-  font-size: 11px;
+  font-size: 12px;
+}
+.af-eng-tt-head .af-eng-live {
+  color: var(--coral);
+}
+.af-eng-tt-step {
   color: var(--fg-faint);
 }
-.af-eng-scrub-lab .rw {
+.af-eng-tt-step .rw {
   color: var(--coral);
   font-weight: 700;
   margin-right: 4px;
 }
-.af-eng-scrub-lab b {
+.af-eng-tt-step b {
   color: var(--fg);
+}
+.af-eng-tt-head .af-eng-rec-tally {
+  margin-left: auto;
 }
 .af-eng-scrub-track {
   display: flex;
   gap: 3px;
-  height: 6px;
+  height: 7px;
 }
 .af-eng-scrub-seg {
   flex: 1;
@@ -1820,7 +1836,7 @@
   transition: background 0.3s ease;
 }
 .af-eng-scrub-seg.on {
-  background: color-mix(in oklab, var(--coral) 60%, var(--border));
+  background: color-mix(in oklab, var(--coral) 65%, var(--border));
 }
 .af-eng-sticky {
   position: sticky;
@@ -1917,53 +1933,71 @@
   overflow: visible;
   pointer-events: none;
 }
+/* edges use pathLength=1 (no non-scaling-stroke — it breaks pathLength dash normalization),
+   so dasharray:1 == the whole path and the lit draw-in is clean. Same mechanism as backtrack. */
 .af-eng-fe {
   fill: none;
   stroke: var(--border-strong);
-  stroke-width: 1.5;
-  vector-effect: non-scaling-stroke;
-  transition: stroke 0.35s, stroke-width 0.35s;
+  stroke-width: 0.5;
+  opacity: 0.7;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 0;
+  transition: stroke 0.3s ease, stroke-width 0.3s ease, opacity 0.3s ease;
 }
-.af-eng-fe.loop {
-  stroke-dasharray: 5 5;
-  stroke: color-mix(in oklab, var(--amber) 60%, var(--border-strong));
-}
+/* lit hops draw in FORWARD (upstream → downstream) in coral — the mirror of backtrack's rewind */
 .af-eng-fe.lit {
   stroke: var(--coral);
-  stroke-width: 1.9;
-  stroke-dasharray: 2.4 2.4;
-  opacity: 0.85;
+  stroke-width: 0.82;
+  opacity: 1;
+  animation: af-draw 0.5s ease both;
 }
-/* the CURRENT step's edge — a traveling coral arrow, like the backtrack animation.
-   pathLength=100 normalizes the dash so it sweeps the whole edge once on re-mount. */
+/* the ReAct loop edge — a light structural separator, NOT on the causal path */
+.af-eng-fe.loop {
+  stroke: color-mix(in oklab, var(--amber) 55%, var(--border-strong));
+  stroke-dasharray: 0.02 0.02;
+  stroke-width: 0.5;
+  opacity: 0.5;
+}
+/* per-hop forward arrowhead at the edge midpoint (coral); the active hop's pops in after its line draws */
+.af-eng-fe-arrow {
+  fill: var(--coral);
+  stroke: none;
+  opacity: 0.92;
+}
+.af-eng-fe-arrow.head {
+  animation: af-arrow-pop 0.5s ease both;
+}
+/* a bright dash that travels FORWARD along the hop being traced (node → next node) */
 .af-eng-fe-pulse {
   fill: none;
   stroke: var(--coral);
-  stroke-width: 3;
+  stroke-width: 1.4;
   stroke-linecap: round;
-  vector-effect: non-scaling-stroke;
-  stroke-dasharray: 14 86;
-  filter: drop-shadow(0 0 1.6px var(--coral));
+  stroke-dasharray: 0.16 0.84;
+  filter: drop-shadow(0 0 1.1px var(--coral));
   pointer-events: none;
-  animation: af-eng-flow 0.72s ease-out both;
+  animation: af-eng-pulse-fwd 0.62s ease-out both;
 }
-@keyframes af-eng-flow {
+@keyframes af-eng-pulse-fwd {
   from {
-    stroke-dashoffset: 100;
+    stroke-dashoffset: 0.84;
     opacity: 0;
   }
-  22% {
+  25% {
     opacity: 1;
   }
   to {
-    stroke-dashoffset: 0;
-    opacity: 0.25;
+    stroke-dashoffset: -0.16;
+    opacity: 0;
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .af-eng-fe-pulse {
+  .af-eng-fe.lit,
+  .af-eng-fe-arrow.head {
     animation: none;
-    opacity: 0;
+  }
+  .af-eng-fe-pulse {
+    display: none;
   }
 }
 .af-eng-fnode {
@@ -2585,32 +2619,6 @@
   margin: 0 auto 30px;
   text-align: center;
 }
-.af-eng-akick {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  font-family: var(--fd-font-mono, monospace);
-  font-size: 11px;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  color: var(--fg-faint);
-  border: 1px solid var(--border-strong);
-  border-radius: 999px;
-  padding: 4px 12px 4px 5px;
-  margin-bottom: 16px;
-}
-.af-eng-anum {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 17px;
-  height: 17px;
-  border-radius: 50%;
-  background: var(--coral);
-  color: #fff;
-  font-size: 11px;
-  font-weight: 700;
-}
 .af-eng-ahead .af-eng-h2 {
   margin: 0 0 10px;
 }
@@ -2639,7 +2647,8 @@
   display: flex;
   flex-direction: column;
 }
-.af-eng-card-label.hot {
+.af-eng-card-label.hot,
+.af-eng-card-label.rec {
   color: var(--coral);
 }
 

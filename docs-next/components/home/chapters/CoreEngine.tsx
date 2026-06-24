@@ -185,6 +185,18 @@ const EDGES: { id: EdgeId; d: string; loop?: boolean }[] = [
   { id: 'loop', d: 'M75,92 L96,92 L96,7 L52,7', loop: true },
 ];
 
+// Forward arrowhead per hop: a mid-edge point (viewBox units) + rotation pointing toward the
+// DOWNSTREAM node (the direction of flow). Same technique as BacktrackStory's HOP_ARROWS, but
+// forward (downstream) instead of backward. Triangle d points +x by default; rotate clockwise.
+const HOP_ARROWS: Record<string, { x: number; y: number; a: number }> = {
+  'ctx-sys': { x: 18, y: 22, a: 90 }, // down into System Prompt
+  'ctx-msg': { x: 50, y: 19, a: 90 }, // down into Messages
+  'ctx-tool': { x: 82, y: 22, a: 90 }, // down into Tools
+  'api-llm': { x: 50, y: 61, a: 90 }, // down into CallLLM
+  'tool-llm': { x: 66, y: 69.5, a: 180 }, // left into CallLLM (the return)
+  'route-final': { x: 37, y: 89, a: 168 }, // down-left into Final
+};
+
 // Trace-event chips (animation 2 queue).
 const CHIPS: { name: string; flavor: string }[] = [
   { name: 'onStageAdded', flavor: 'coral' },
@@ -462,9 +474,6 @@ export function CoreEngine() {
         <div className="af-eng-pin" ref={pinA}>
           <div className="af-eng-sticky">
             <header className="af-eng-ahead">
-              <span className="af-eng-akick">
-                <span className="af-eng-anum">1</span> animation · execution
-              </span>
               <h2 className="af-eng-h2">
                 The loop <em>records itself.</em>
               </h2>
@@ -475,6 +484,30 @@ export function CoreEngine() {
                 {' the footprint you’ll later walk backward.'}
               </p>
             </header>
+
+            {/* shared time-travel transport — sits ABOVE both containers and drives them in
+                sync: one scroll position → the arrow flows on the left AND the row appears right */}
+            <div className="af-eng-timetravel" aria-hidden="true">
+              <div className="af-eng-tt-head">
+                <span className="af-eng-live">
+                  <span className="af-eng-blink-dot" />
+                  recording
+                </span>
+                <span className="af-eng-tt-step">
+                  <span className="rw">{done1 ? '✓ recorded' : '▶ replaying'}</span> step{' '}
+                  <b>{Math.max(1, stepNow)}</b> / {totalSteps}
+                </span>
+                <span className="af-eng-rec-tally">
+                  <b>{tally.ms.toLocaleString()}</b> ms · <b>{tally.tok.toLocaleString()}</b> tok ·{' '}
+                  <b>{tally.steps}</b> steps
+                </span>
+              </div>
+              <div className="af-eng-scrub-track">
+                {Array.from({ length: totalSteps }, (_, i) => (
+                  <span key={i} className={`af-eng-scrub-seg${i < stepNow ? ' on' : ''}`} />
+                ))}
+              </div>
+            </div>
 
             <div className="af-eng-split af-eng-flowwrap">
               {/* LEFT — dedicated flowchart container */}
@@ -490,16 +523,30 @@ export function CoreEngine() {
                         <path
                           key={ed.id}
                           d={ed.d}
-                          className={`af-eng-fe${ed.loop ? ' loop' : ''}${litEdges.has(ed.id) ? ' lit' : ''}`}
+                          pathLength={1}
+                          className={`af-eng-fe${ed.loop ? ' loop' : ''}${
+                            litEdges.has(ed.id) && !ed.loop ? ' lit' : ''
+                          }`}
                         />
                       ))}
+                      {/* forward arrowhead at each traced hop's midpoint; the active hop's pops in
+                          after its line draws — exactly BacktrackStory's technique, forward direction */}
+                      {[...litEdges]
+                        .filter((e) => HOP_ARROWS[e])
+                        .map((e) => {
+                          const a = HOP_ARROWS[e];
+                          return (
+                            <path
+                              key={`ah-${e}`}
+                              className={`af-eng-fe-arrow${e === curStep?.edge ? ' head' : ''}`}
+                              d="M-1.7,-1.5 L1.9,0 L-1.7,1.5 Z"
+                              transform={`translate(${a.x} ${a.y}) rotate(${a.a})`}
+                            />
+                          );
+                        })}
+                      {/* traveling forward pulse on the hop being traced (node → next node) */}
                       {flowEdge && (
-                        <path
-                          key={`pulse-${emitted}`}
-                          d={flowEdge.d}
-                          pathLength={100}
-                          className="af-eng-fe-pulse"
-                        />
+                        <path key={`pulse-${emitted}`} className="af-eng-fe-pulse" d={flowEdge.d} pathLength={1} />
                       )}
                     </svg>
                     {NODES.map((nd) => {
@@ -539,27 +586,8 @@ export function CoreEngine() {
               {/* RIGHT — dedicated recording container */}
               <div className="af-eng-rec-card">
                 <div className="af-eng-rec-head">
-                  <span className="af-eng-live">
-                    <span className="af-eng-blink-dot" />
-                    recording
-                  </span>
-                  <span className="af-eng-rec-tally">
-                    <b>{tally.ms.toLocaleString()}</b> ms · <b>{tally.tok.toLocaleString()}</b> tok ·{' '}
-                    <b>{tally.steps}</b> steps
-                  </span>
-                </div>
-
-                {/* time-travel scrubber — scroll steps through the recorded run */}
-                <div className="af-eng-scrub" aria-hidden="true">
-                  <span className="af-eng-scrub-lab">
-                    <span className="rw">{done1 ? '✓ recorded' : '▶ replaying'}</span> step{' '}
-                    <b>{Math.max(1, stepNow)}</b> / {totalSteps}
-                  </span>
-                  <div className="af-eng-scrub-track">
-                    {Array.from({ length: totalSteps }, (_, i) => (
-                      <span key={i} className={`af-eng-scrub-seg${i < stepNow ? ' on' : ''}`} />
-                    ))}
-                  </div>
+                  <span className="af-eng-card-label rec">drain log</span>
+                  <span className="af-eng-card-sub">typed footprint · one row per node</span>
                 </div>
 
                 <div className="af-eng-rec-log" ref={logScrollRef}>
@@ -600,9 +628,6 @@ export function CoreEngine() {
         <div className="af-eng-pin" ref={pinB}>
           <div className="af-eng-sticky">
             <header className="af-eng-ahead">
-              <span className="af-eng-akick">
-                <span className="af-eng-anum">2</span> animation · the runtime
-              </span>
               <h2 className="af-eng-h2">
                 And it costs the run <em>nothing.</em>
               </h2>
