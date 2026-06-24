@@ -156,7 +156,10 @@
 .af-scrollcue-wrap { text-align: center; margin: 26px 0 6px; }
 .af-scrollcue-wrap .af-bridge-line { max-width: 62ch; margin: 0 auto 16px; }
 @media (max-width: 860px) {
-  .af-hero-grid { grid-template-columns: 1fr; gap: 26px; text-align: center; }
+  /* minmax(0,1fr) (not 1fr) so the column can shrink below its content — otherwise a wide
+     heading blows the grid track out past the viewport and the page scrolls sideways */
+  .af-hero-grid { grid-template-columns: minmax(0, 1fr); gap: 26px; text-align: center; }
+  .af-hero-text h1 { overflow-wrap: anywhere; }
   .af-hero-text h1, .af-hero-text .tagline { text-align: center; }
   .af-hero-text .lede { margin-left: auto; margin-right: auto; }
   .af-hero-text .af-hero-cta { justify-content: center; }
@@ -647,8 +650,9 @@
 /* phones: the agent canvas' fixed columns would force the page wider than the screen —
    compress them so the whole chapter fits, no horizontal scroll */
 @media (max-width: 460px) {
-  .af-agent-pane { grid-template-columns: 1fr 44px 108px; padding: 12px; gap: 3px; min-width: 0; }
-  .af-connect { width: 44px; }
+  /* drop the decorative connect column entirely so the pane fits — brain | tools */
+  .af-agent-pane { grid-template-columns: 1fr 132px; padding: 12px; gap: 8px; min-width: 0; }
+  .af-connect { display: none; }
   .af-tool-stack { padding: 6px; min-width: 0; }
   .af-ts-tool { font-size: 10px; padding: 5px 6px; gap: 5px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   /* the formula pill must fit the screen, not push the page wider */
