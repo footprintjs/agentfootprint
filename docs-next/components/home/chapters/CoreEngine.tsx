@@ -492,18 +492,6 @@ function EventLoopView({ prog }: { prog: number }) {
           the dispatcher
         </text>
 
-        {/* the four trace events: held in the queue while the stage runs; on the idle beat the
-            dispatcher flushes them — they fly from the queue, THROUGH idle time, into memory */}
-        {EL_EVENTS.map((ev, i) => {
-          const qx = 514 + i * 24;
-          const mx = 770 + i * 18;
-          const x = qx + (mx - qx) * flushProg;
-          const y = 362 + (470 - 362) * flushProg;
-          return (
-            <circle key={ev.name} cx={x} cy={y} r="7.5" style={{ fill: ev.v }} opacity={running && beatFrac < 0.06 ? 0 : 1} />
-          );
-        })}
-
         {/* the cursor — the loop's attention, riding the ellipse as you scroll */}
         <path
           className="af-el-cursor"
@@ -567,6 +555,29 @@ function EventLoopView({ prog }: { prog: number }) {
         <text className="af-el-cap" x="1220" y={400 + 4 * 38 + 14} textAnchor="middle">
           every listener gets every event
         </text>
+
+        {/* the four trace events — drawn LAST so they ride ON TOP of the boxes while in flight
+            (otherwise the TRACE MEMORY box paints over them as they land). Held in the queue
+            while the stage runs; on the idle beat they fly out — the QUEUE drains while memory
+            accumulates (append-only). */}
+        {EL_EVENTS.map((ev, i) => {
+          const qx = 514 + i * 24;
+          const mx = 766 + i * 18;
+          const x = qx + (mx - qx) * flushProg;
+          const y = 362 + (470 - 362) * flushProg;
+          return (
+            <circle
+              key={ev.name}
+              cx={x}
+              cy={y}
+              r="7.5"
+              style={{ fill: ev.v }}
+              stroke="var(--el-box)"
+              strokeWidth="1.5"
+              opacity={running && beatFrac < 0.06 ? 0 : flushProg > 0.92 ? 0 : 1}
+            />
+          );
+        })}
       </svg>
     </div>
   );
