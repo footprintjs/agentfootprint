@@ -173,71 +173,25 @@ export default function HomePage() {
         </div>
       </div>
 
-      {/* the interactive storyboard — 01 problem · 02 context · 03 engine */}
+      {/* the interactive storyboard — 01 problem · 02 solution · 03 benefits · 04 how · 05 payoff */}
       <Chapters />
 
-      {/* whole-system overview — the recap diagram */}
-      <section className="af-overview">
-        <p className="af-overview-kicker">the whole system</p>
-        <h2 className="af-overview-head">How it all fits together.</h2>
-        <p className="af-overview-sub">
-          Skills, RAG, memory, rules — composed into the <b>system / messages / tools</b> slots,
-          run, and recorded as a traceable footprint you can reverse.
-        </p>
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={asset('/system-overview.webp')}
-          alt="agentfootprint system overview: context sources compose through the agent into the system, messages, and tools slots, then the LLM produces a structured answer"
-          className="af-overview-img"
-        />
-      </section>
-
-      <footer className="af-endcap">
-        <div className="af-closer">
-          <span className="af-pill">
-            <span className="af-pill-dot" /> open source · MIT
+      {/* attribution footer — the recap + CTA now live in chapter 05 (SummaryChapter) */}
+      <footer className="af-endcap af-endcap-slim">
+        <a
+          className="af-builton"
+          href="https://github.com/footprintjs/footprintjs"
+          target="_blank"
+          rel="noreferrer"
+        >
+          Built on
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={asset('/footprintjs-icon.png')} alt="" className="af-fpjs-icon" />
+          <span className="af-fpjs-word">
+            footprint<em>js</em>
           </span>
-          <h2 className="af-closer-head">
-            Stop guessing why your agent <em>answered wrong.</em>
-          </h2>
-          <p className="af-closer-lede">
-            Record every run. Reverse it to the exact cause. Plug in your own scorer.
-          </p>
-          <div className="af-closer-flow" aria-hidden="true">
-            <span>record</span>
-            <i>→</i>
-            <span>reverse</span>
-            <i>→</i>
-            <span>prove</span>
-            <i>→</i>
-            <span>plug your own</span>
-          </div>
-          <div className="af-hero-cta">
-            <Link className="af-cta" href="/docs">
-              Get started →
-            </Link>
-            <Link className="af-cta-ghost" href="https://github.com/footprintjs/agentfootprint">
-              <GitHubMark /> Star on GitHub
-            </Link>
-          </div>
-          <div className="af-install">
-            <span className="pr">$</span> npm i agentfootprint
-          </div>
-          <a
-            className="af-builton"
-            href="https://github.com/footprintjs/footprintjs"
-            target="_blank"
-            rel="noreferrer"
-          >
-            Built on
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={asset('/footprintjs-icon.png')} alt="" className="af-fpjs-icon" />
-            <span className="af-fpjs-word">
-              footprint<em>js</em>
-            </span>
-          </a>
-          <div className="af-legal">open source · MIT · © 2026 footprintjs</div>
-        </div>
+        </a>
+        <div className="af-legal">open source · MIT · © 2026 footprintjs</div>
       </footer>
     </main>
   );

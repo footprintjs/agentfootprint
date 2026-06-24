@@ -352,6 +352,19 @@
   border-top: 1px solid var(--border);
   background: var(--bg-elev);
 }
+/* slim attribution footer — the recap + CTA now live in chapter 05, so the page foot is
+   just "Built on footprintjs" + the legal line */
+.af-endcap-slim {
+  margin-top: 0;
+  padding: 28px 22px 36px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+.af-endcap-slim .af-legal {
+  margin-top: 0;
+}
 /* the signature yellow button */
 .af-cta {
   display: inline-flex;

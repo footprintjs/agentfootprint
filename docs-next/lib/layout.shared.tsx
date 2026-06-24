@@ -18,8 +18,11 @@ function Wordmark() {
     <span className="af-wordmark">
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src={asset('/footprint-logo.png')} alt="" className="af-wordmark-icon" aria-hidden="true" />
-      <span className="lo">agent</span>
-      <span className="hi">footprint</span>
+      {/* one word: "agent" + "footprint" sit flush (no gap) so it reads "agentfootprint" */}
+      <span className="af-wordmark-text">
+        <span className="lo">agent</span>
+        <span className="hi">footprint</span>
+      </span>
     </span>
   );
 }
@@ -36,6 +39,14 @@ export function baseOptions(): BaseLayoutProps {
       title: <Wordmark />,
     },
     links: [
+      {
+        // explicit Home link so the homepage is reachable from the shared header on
+        // BOTH layouts (the wordmark links home too, but a labeled link is discoverable).
+        text: 'Home',
+        url: '/',
+        active: 'url',
+        secondary: true,
+      },
       {
         text: 'Docs',
         url: '/docs',

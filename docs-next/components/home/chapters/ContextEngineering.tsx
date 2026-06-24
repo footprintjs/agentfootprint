@@ -332,14 +332,15 @@ export function ContextEngineering() {
     <section className="af-ctx">
       {/* ---------- HERO ---------- */}
       <div className="af-ctx-hero">
-        <p className="af-ctx-eyebrow">02 · how we abstract</p>
+        <p className="af-ctx-eyebrow">02 · the solution</p>
         <h1>
           Context engineering, <em>abstracted.</em>
         </h1>
         <p className="af-ctx-lede-hero">
-          Skills, steering, RAG, facts, memory, guardrails — every name for context does the same
-          move: it injects into one of three LLM slots, under one of four triggers — and the
-          framework caches it for you. So we abstracted the injection itself.
+          That wrong document reached the System Prompt because <b>something injected it</b>. So here is
+          how every piece of context gets in — making the cause a place you can rewind to. Skills,
+          steering, RAG, facts, memory, guardrails: every name for context does one thing — it injects
+          into one of three LLM slots, under one of four triggers, and the framework caches it for you.
         </p>
         <div className="af-ctx-formula">
           <span>Injection</span>

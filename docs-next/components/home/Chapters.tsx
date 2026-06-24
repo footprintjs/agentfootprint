@@ -5,22 +5,13 @@ import { BacktrackStory } from './chapters/BacktrackStory';
 import { WhyThisTool } from './chapters/WhyThisTool';
 import { ContextEngineering } from './chapters/ContextEngineering';
 import { CoreEngine } from './chapters/CoreEngine';
-
-// Chapter 2 = context engineering (slots × triggers) + "Why this tool?" — forward tool
-// selection by description lives here, where building the context is the subject.
-function ContextChapter() {
-  return (
-    <>
-      <ContextEngineering />
-      <WhyThisTool />
-    </>
-  );
-}
+import { SummaryChapter } from './chapters/SummaryChapter';
 
 /**
- * The three homepage chapters = the interactive storyboard (what → how → how-it's-
- * implemented). Each is a full-bleed section with a yellow "category" pill, an
- * alternating background, and a sticky bar that highlights in brand yellow when active.
+ * The homepage storyboard, told as a five-chapter arc: PROBLEM → SOLUTION → BENEFITS →
+ * HOW → SUMMARY. Each is a full-bleed section with a category pill, an alternating
+ * background, and a sticky bar that highlights in brand yellow when active. Read the
+ * subtitles straight down and they form one sentence.
  */
 type Chapter = {
   id: string;
@@ -33,9 +24,11 @@ type Chapter = {
 };
 
 const CHAPTERS: Chapter[] = [
-  { id: 'af-ch-problem', ix: '01', cat: 'What we solve', ti: 'The problem', sub: 'It approved a refund it should have denied — why?', Body: BacktrackStory },
-  { id: 'af-ch-context', ix: '02', cat: 'How you build context', ti: 'Context engineering', sub: 'slots × triggers', Body: ContextChapter },
-  { id: 'af-ch-core', ix: '03', cat: "How it's implemented", ti: 'The engine', sub: 'Records every step, so you can walk it back', Body: CoreEngine },
+  { id: 'af-ch-problem', ix: '01', cat: 'The problem', ti: 'It answered wrong', sub: 'Asking the model why only gets you a confident guess.', Body: BacktrackStory },
+  { id: 'af-ch-solution', ix: '02', cat: 'The solution', ti: 'Rewind to the cause', sub: 'Every piece of context lands in one place, so you can trace back to it.', Body: ContextEngineering },
+  { id: 'af-ch-benefits', ix: '03', cat: 'What you get', ti: 'Catch it before it answers', sub: 'The same trace runs forward — see why it picked that, and fix it.', Body: WhyThisTool },
+  { id: 'af-ch-how', ix: '04', cat: 'How it works', ti: 'The run records itself', sub: 'Every step is captured as it happens, so you can rewind to any moment.', Body: CoreEngine },
+  { id: 'af-ch-payoff', ix: '05', cat: 'The payoff', ti: 'Proven, not guessed', sub: 'Record the run, rewind to the cause, prove the fix by replaying it.', Body: SummaryChapter },
 ];
 
 export function Chapters() {
