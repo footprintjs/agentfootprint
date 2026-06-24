@@ -642,8 +642,20 @@
   padding-top: 8px;
 }
 .af-why-grid { display: grid; grid-template-columns: 1.25fr 1fr; gap: 22px; align-items: start; }
-.af-why-left { display: flex; flex-direction: column; gap: 16px; }
-@media (max-width: 860px) { .af-why-grid { grid-template-columns: 1fr; } }
+.af-why-left { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+@media (max-width: 860px) { .af-why-grid { grid-template-columns: 1fr; } .af-why-left, .af-score-pane { min-width: 0; } }
+/* phones: the agent canvas' fixed columns would force the page wider than the screen —
+   compress them so the whole chapter fits, no horizontal scroll */
+@media (max-width: 460px) {
+  .af-agent-pane { grid-template-columns: 1fr 44px 108px; padding: 12px; gap: 3px; min-width: 0; }
+  .af-connect { width: 44px; }
+  .af-tool-stack { padding: 6px; min-width: 0; }
+  .af-ts-tool { font-size: 10px; padding: 5px 6px; gap: 5px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  /* the formula pill must fit the screen, not push the page wider */
+  .af-ctx-formula { font-size: 13px; max-width: 100%; }
+  .af-ctx-formula span { padding: 9px 8px; }
+  .af-ctx-formula .op { padding: 9px 2px; }
+}
 .af-why-cap { text-align: center; max-width: 64ch; margin: 16px auto 0; font-size: 14.5px; line-height: 1.55; color: var(--fg-muted); min-height: 40px; }
 .af-why-cap b { color: var(--fg); font-weight: 600; }
 .af-why-rail { display: flex; gap: 7px; justify-content: center; margin-top: 14px; }
@@ -1100,7 +1112,10 @@
 .af-ctx-map-blurb .src { display: block; margin-top: 9px; font-family: var(--fd-font-mono, monospace); font-size: 11px; color: var(--fg-faint); }
 @media (prefers-reduced-motion: reduce) { .af-ctx-wire { animation: none; } }
 @media (max-width: 880px) {
-  .af-ctx-map-row { flex-direction: column; }
+  /* stacked: stretch (not center) so the diagram fills the width and its content shrinks
+     to fit — otherwise align-items:center keeps it at content width and overflows the page */
+  .af-ctx-map-row { flex-direction: column; align-items: stretch; }
+  .af-ctx-map-diagram { width: 100%; }
   .af-ctx-map-aside { width: 100%; max-width: 540px; padding-left: 0; }
   .af-ctx-map-prog { display: none; }
   .af-ctx-mflav { font-size: 10px; padding: 6px 3px; }
@@ -2897,5 +2912,72 @@
     opacity: 1;
     pointer-events: auto;
     margin-top: 18px;
+  }
+
+  /* animation 2: the flowchart + event-loop stop sitting side-by-side — they stack */
+  .af-eng-elwrap {
+    grid-template-columns: 1fr;
+    gap: 14px;
+    max-width: 100%;
+  }
+  .af-eng-el-right,
+  .af-eng-timetravel-wide {
+    max-width: 100%;
+  }
+  .af-eng-split {
+    max-width: 100%;
+  }
+
+  /* scale the flowchart DOWN to fit the width — smaller fonts, nodes, arrows, no h-scroll */
+  .af-eng-fnode {
+    min-width: 0;
+    padding: 5px 8px;
+  }
+  .af-eng-fnode b {
+    font-size: 10px;
+  }
+  .af-eng-fnode span {
+    font-size: 8px;
+  }
+  .af-eng-fnode.pill {
+    padding: 4px 8px;
+    font-size: 9.5px;
+    gap: 5px;
+  }
+  .af-eng-fnode.diamond {
+    width: 80px;
+    height: 40px;
+  }
+  .af-eng-fcount {
+    min-width: 13px;
+    height: 13px;
+    font-size: 8px;
+    top: -6px;
+    right: -6px;
+  }
+}
+
+/* phones: shrink the flowchart further so it always fits, never scrolls sideways */
+@media (max-width: 460px) {
+  .af-eng-flow {
+    height: 260px;
+  }
+  .af-eng-fnode b {
+    font-size: 9px;
+  }
+  .af-eng-fnode span {
+    font-size: 7px;
+  }
+  .af-eng-fnode.pill {
+    font-size: 8px;
+    padding: 3px 6px;
+    gap: 4px;
+  }
+  .af-eng-fnode {
+    padding: 4px 6px;
+  }
+  .af-eng-fnode.diamond {
+    width: 66px;
+    height: 34px;
   }
 }
