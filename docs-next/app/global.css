@@ -1786,70 +1786,41 @@
 /* scroll-pinned cross-fade stage */
 .af-eng-pin {
   position: relative;
-  height: 300vh;
+  height: 240vh;
 }
-/* per-beat headline (replaces the 2-state cross-fade); min-height steadies the swap */
-.af-eng-headline2 {
-  margin-bottom: 30px;
-  min-height: 104px;
-}
-/* beat 0 — the one-line attach */
-.af-eng-attach-code {
-  font-family: var(--fd-font-mono, monospace);
-  font-size: 12.5px;
-  line-height: 1.65;
-  white-space: pre-wrap;
-  background: #1b1b1f;
-  color: #e8e8e4;
-  border-radius: 10px;
-  padding: 14px 16px;
-  margin: 14px 0 0;
-  overflow-x: auto;
-}
-/* beat 1 — what tracking buys you (the four Q&A) */
-.af-eng-buys {
+/* time-travel scrubber — scroll steps through the recorded run (animation 1) */
+.af-eng-scrub {
   display: flex;
   flex-direction: column;
-  gap: 9px;
-  margin-top: 12px;
+  gap: 6px;
+  padding: 8px 0 2px;
 }
-.af-eng-qa {
-  border: 1px solid var(--border);
-  border-left: 3px solid var(--border-strong);
-  border-radius: 10px;
-  background: var(--bg);
-  padding: 9px 12px;
+.af-eng-scrub-lab {
+  font-family: var(--fd-font-mono, monospace);
+  font-size: 11px;
+  color: var(--fg-faint);
 }
-.af-eng-buys .af-eng-qa:nth-child(1) {
-  border-left-color: var(--coral);
+.af-eng-scrub-lab .rw {
+  color: var(--coral);
+  font-weight: 700;
+  margin-right: 4px;
 }
-.af-eng-buys .af-eng-qa:nth-child(2) {
-  border-left-color: var(--purple);
-}
-.af-eng-buys .af-eng-qa:nth-child(3) {
-  border-left-color: var(--teal);
-}
-.af-eng-buys .af-eng-qa:nth-child(4) {
-  border-left-color: var(--amber);
-}
-.af-eng-qa-q {
-  margin: 0 0 3px;
-  font-size: 13px;
-  font-weight: 650;
+.af-eng-scrub-lab b {
   color: var(--fg);
 }
-.af-eng-qa-a {
-  margin: 0;
-  font-size: 12px;
-  line-height: 1.5;
-  color: var(--fg-muted);
+.af-eng-scrub-track {
+  display: flex;
+  gap: 3px;
+  height: 6px;
 }
-.af-eng-qa-src {
-  display: inline-block;
-  margin-top: 5px;
-  font-family: var(--fd-font-mono, monospace);
-  font-size: 10px;
-  color: var(--fg-faint);
+.af-eng-scrub-seg {
+  flex: 1;
+  border-radius: 3px;
+  background: var(--border);
+  transition: background 0.3s ease;
+}
+.af-eng-scrub-seg.on {
+  background: color-mix(in oklab, var(--coral) 60%, var(--border));
 }
 .af-eng-sticky {
   position: sticky;
@@ -1959,7 +1930,41 @@
 }
 .af-eng-fe.lit {
   stroke: var(--coral);
-  stroke-width: 2.5;
+  stroke-width: 1.9;
+  stroke-dasharray: 2.4 2.4;
+  opacity: 0.85;
+}
+/* the CURRENT step's edge — a traveling coral arrow, like the backtrack animation.
+   pathLength=100 normalizes the dash so it sweeps the whole edge once on re-mount. */
+.af-eng-fe-pulse {
+  fill: none;
+  stroke: var(--coral);
+  stroke-width: 3;
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+  stroke-dasharray: 14 86;
+  filter: drop-shadow(0 0 1.6px var(--coral));
+  pointer-events: none;
+  animation: af-eng-flow 0.72s ease-out both;
+}
+@keyframes af-eng-flow {
+  from {
+    stroke-dashoffset: 100;
+    opacity: 0;
+  }
+  22% {
+    opacity: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+    opacity: 0.25;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .af-eng-fe-pulse {
+    animation: none;
+    opacity: 0;
+  }
 }
 .af-eng-fnode {
   position: absolute;
@@ -2100,19 +2105,18 @@
   min-height: 452px;
 }
 .af-eng-rec-log {
-  position: absolute;
-  inset: 0;
+  position: relative;
+  flex: 1;
   font-family: var(--fd-font-mono, monospace);
   font-size: 13px;
   line-height: 1.5;
   padding: 14px 16px;
-  height: 452px;
-  max-height: 452px;
+  height: 352px;
+  max-height: 352px;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: 7px;
-  transition: opacity 0.45s ease;
 }
 .af-eng-rec-log::before {
   content: '';
@@ -2225,19 +2229,11 @@
 
 /* ---- dispatch panel (layer B) — vertical event-loop runtime ---- */
 .af-eng-dispatch {
-  position: absolute;
-  inset: 0;
+  position: relative;
   display: flex;
   flex-direction: column;
-  padding: 18px 18px 14px;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.45s ease;
+  padding: 20px 18px 16px;
   overflow: hidden;
-}
-.af-eng-rec-right.to-evt .af-eng-dispatch {
-  opacity: 1;
-  pointer-events: auto;
 }
 .af-eng-dsp-cap {
   font-family: var(--fd-font-mono, monospace);
@@ -2581,6 +2577,87 @@
 .af-eng-rec-phase .a {
   opacity: 1;
   transition: opacity 0.4s ease;
+}
+
+/* ---- each animation is its own DEDICATED container, with its own header ---- */
+.af-eng-ahead {
+  max-width: 720px;
+  margin: 0 auto 30px;
+  text-align: center;
+}
+.af-eng-akick {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-family: var(--fd-font-mono, monospace);
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--fg-faint);
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  padding: 4px 12px 4px 5px;
+  margin-bottom: 16px;
+}
+.af-eng-anum {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 17px;
+  height: 17px;
+  border-radius: 50%;
+  background: var(--coral);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+}
+.af-eng-ahead .af-eng-h2 {
+  margin: 0 0 10px;
+}
+.af-eng-ahead .af-eng-block-lede {
+  margin: 0 auto;
+  max-width: 650px;
+}
+
+/* the dedicated containers read as separate floating panels */
+.af-eng-exec-card,
+.af-eng-rec-card,
+.af-eng-loop-card {
+  box-shadow:
+    0 1px 3px color-mix(in oklab, var(--fg) 7%, transparent),
+    0 10px 26px color-mix(in oklab, var(--fg) 5%, transparent);
+}
+
+/* dedicated event-loop container (animation 2) */
+.af-eng-loop-card {
+  border: 1px solid var(--border-strong);
+  border-radius: 14px;
+  background: var(--bg-elev);
+  overflow: hidden;
+  max-width: 660px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+}
+.af-eng-card-label.hot {
+  color: var(--coral);
+}
+
+/* current-step accent — the node + log row the traveling arrow just reached */
+.af-eng-fnode.cur.lit {
+  box-shadow:
+    0 0 0 3px color-mix(in oklab, var(--coral) 32%, transparent),
+    0 0 14px color-mix(in oklab, var(--coral) 45%, transparent);
+}
+.af-eng-ln.cur .af-eng-ln-node {
+  border-color: var(--coral);
+  color: var(--coral);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--coral) 22%, transparent);
+}
+
+/* a little breathing room between the two animation containers */
+.af-eng-block.alt2 {
+  margin-top: 8px;
 }
 
 /* ---------- responsive ---------- */
