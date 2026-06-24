@@ -67,6 +67,11 @@ jobs:
       - name: Install root deps (docs-next resolves agentfootprint via a local dep)
         run: npm install
 
+      # docs-next's prebuild generators (gen-agent-flowchart / gen-replay-trace) import
+      # agentfootprint at runtime → need dist/esm. Build the library first, like docs.yml.
+      - name: Build library (dist for the docs generators)
+        run: npm run build
+
       - name: Install docs-next deps
         working-directory: docs-next
         run: npm install
