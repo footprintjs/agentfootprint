@@ -1,13 +1,19 @@
 import { source } from '@/lib/source';
 // Notebook layout = full-width top nav (matching the homepage) + sidebar below it.
-// It spreads the SAME baseOptions as the homepage, so the header is identical and
-// the layout manages its own sticky offsets — no custom header or CSS overrides.
+// It spreads the SAME baseOptions as the homepage so the header reads as one bar across
+// the site. The notebook's default nav.mode 'auto' hides the wordmark and balloons the
+// search into a big centered box; HomeLayout has no such mode and always renders a compact
+// right-aligned search. We converge on the HOME look (the correct product-header standard,
+// per the UX panel) by setting nav.mode 'top' here — it shrinks + right-shifts the docs
+// search and shows the wordmark full-width. We MERGE onto baseOptions().nav (rather than
+// passing a bare nav) so the Wordmark title is preserved. No custom header / CSS overrides.
 import { DocsLayout } from 'fumadocs-ui/layouts/notebook';
 import { baseOptions } from '@/lib/layout.shared';
 import type { ReactNode } from 'react';
 import { BookText, Braces } from 'lucide-react';
 
 export default function Layout({ children }: { children: ReactNode }) {
+  const base = baseOptions();
   return (
     <DocsLayout
       tree={source.getPageTree()}
@@ -28,7 +34,8 @@ export default function Layout({ children }: { children: ReactNode }) {
           },
         ],
       }}
-      {...baseOptions()}
+      {...base}
+      nav={{ ...base.nav, mode: 'top' }}
     >
       {children}
     </DocsLayout>
