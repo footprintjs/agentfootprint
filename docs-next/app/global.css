@@ -2007,6 +2007,18 @@
     display: none;
   }
 }
+/* the answer / second-iteration beat is TEAL — so the Route fork reads two-colored:
+   coral → ToolCalls (tool call, 1st pass) vs teal → Final (the answer, 2nd pass) */
+.af-eng-fe.lit.answer {
+  stroke: var(--teal);
+}
+.af-eng-fe-arrow.answer {
+  fill: var(--teal);
+}
+.af-eng-fe-pulse.answer {
+  stroke: var(--teal);
+  filter: drop-shadow(0 0 1.1px var(--teal));
+}
 .af-eng-fnode {
   position: absolute;
   transform: translate(-50%, -50%);
@@ -2036,6 +2048,16 @@
 .af-eng-fnode.lit {
   border-color: var(--coral);
   box-shadow: 0 0 0 3px color-mix(in oklab, var(--coral) 30%, transparent);
+}
+/* the answer node (Final, 2nd pass) lights teal, apart from the coral first-pass nodes */
+.af-eng-fnode.lit.answer {
+  border-color: var(--teal);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--teal) 30%, transparent);
+}
+.af-eng-fnode.lit.answer.cur {
+  box-shadow:
+    0 0 0 3px color-mix(in oklab, var(--teal) 34%, transparent),
+    0 0 14px color-mix(in oklab, var(--teal) 45%, transparent);
 }
 .af-eng-fnode.diamond {
   clip-path: polygon(50% -4%, 104% 50%, 50% 104%, -4% 50%);
@@ -2243,7 +2265,7 @@
   color: var(--teal);
 }
 .af-eng-ln.answer .af-eng-ln-kind {
-  color: var(--coral);
+  color: var(--teal);
 }
 .af-eng-ln.inject .af-eng-ln-kind {
   color: var(--yellow-dark);

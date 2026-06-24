@@ -43,6 +43,7 @@ type Step = {
   node: NodeId;
   edge?: EdgeId; // the primary hop (gets the head pulse); also the one the arrowhead pops on
   edges?: EdgeId[]; // a step may traverse several edges at once (e.g. assemble pulls all 3 slots)
+  tone?: 'teal'; // a second-iteration / answer beat — rendered teal so it reads apart from the coral first pass
 };
 
 // One ReAct iteration + the answer, as recorded steps. The request is ASSEMBLED, never skipped:
@@ -164,14 +165,14 @@ const STEPS: Step[] = [
     label: 'answer',
     text: (
       <>
-        Route &rarr; <b>Final</b> &mdash; &ldquo;6 options in Lisbon.&rdquo;
+        2nd pass · Route &rarr; <b>Final</b> &mdash; &ldquo;6 options in Lisbon.&rdquo;
       </>
     ),
     ms: 50,
     tok: 0,
     node: 'final',
     edge: 'route-final',
-    edges: ['llm-route', 'route-final'],
+    tone: 'teal',
   },
 ];
 
@@ -289,12 +290,21 @@ export function CoreEngine() {
   const litNodes = new Set<NodeId>();
   const litEdges = new Set<EdgeId>();
   const counts: Partial<Record<NodeId, number>> = {};
+  // second-iteration / answer beats render teal so the answer pass reads apart from the coral
+  // first (tool-calling) pass — the two-color Route fork: coral → ToolCalls, teal → Final.
+  const tealEdges = new Set<EdgeId>();
+  const tealNodes = new Set<NodeId>();
   for (let k = 0; k < emitted; k++) {
     const s = STEPS[k];
     litNodes.add(s.node);
     counts[s.node] = (counts[s.node] ?? 0) + 1;
     if (s.edge) litEdges.add(s.edge);
     s.edges?.forEach((e) => litEdges.add(e));
+    if (s.tone === 'teal') {
+      tealNodes.add(s.node);
+      if (s.edge) tealEdges.add(s.edge);
+      s.edges?.forEach((e) => tealEdges.add(e));
+    }
   }
   // the CURRENT step's edge gets the traveling coral arrow (like the backtrack arrows);
   // the keyed re-mount restarts the draw animation each time you step forward.
@@ -547,7 +557,9 @@ export function CoreEngine() {
                           key={ed.id}
                           d={ed.d}
                           pathLength={1}
-                          className={`af-eng-fe${ed.loop ? ' loop' : ''}${litEdges.has(ed.id) ? ' lit' : ''}`}
+                          className={`af-eng-fe${ed.loop ? ' loop' : ''}${litEdges.has(ed.id) ? ' lit' : ''}${
+                            tealEdges.has(ed.id) ? ' answer' : ''
+                          }`}
                         />
                       ))}
                       {/* forward arrowhead at each traced hop's midpoint; the active hop's pops in
@@ -559,22 +571,35 @@ export function CoreEngine() {
                           return (
                             <path
                               key={`ah-${e}`}
-                              className={`af-eng-fe-arrow${e === curStep?.edge ? ' head' : ''}`}
+                              className={`af-eng-fe-arrow${e === curStep?.edge ? ' head' : ''}${
+                                tealEdges.has(e) ? ' answer' : ''
+                              }`}
                               d="M-1.7,-1.5 L1.9,0 L-1.7,1.5 Z"
                               transform={`translate(${a.x} ${a.y}) rotate(${a.a})`}
                             />
                           );
                         })}
-                      {/* traveling forward pulse on the hop being traced (node → next node) */}
+                      {/* traveling pulse on the hop being traced (node → next node); teal on the answer */}
                       {flowEdge && (
-                        <path key={`pulse-${emitted}`} className="af-eng-fe-pulse" d={flowEdge.d} pathLength={1} />
+                        <path
+                          key={`pulse-${emitted}`}
+                          className={`af-eng-fe-pulse${curStep?.tone === 'teal' ? ' answer' : ''}`}
+                          d={flowEdge.d}
+                          pathLength={1}
+                        />
                       )}
                     </svg>
                     {NODES.map((nd) => {
                       const lit = litNodes.has(nd.id);
                       const c = counts[nd.id];
                       const isCur = curStep?.node === nd.id;
-                      const cls = ['af-eng-fnode', nd.cls || '', lit ? 'lit' : '', isCur ? 'cur' : '']
+                      const cls = [
+                        'af-eng-fnode',
+                        nd.cls || '',
+                        lit ? 'lit' : '',
+                        isCur ? 'cur' : '',
+                        tealNodes.has(nd.id) ? 'answer' : '',
+                      ]
                         .join(' ')
                         .trim();
                       return (
