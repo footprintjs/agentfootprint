@@ -6,30 +6,28 @@ import { WhyThisTool } from './chapters/WhyThisTool';
 import { ContextEngineering } from './chapters/ContextEngineering';
 import { CoreEngine } from './chapters/CoreEngine';
 import { SummaryChapter } from './chapters/SummaryChapter';
+import { CHAPTERS_META, type ChapterMeta } from '@/lib/chapters';
 
 /**
  * The homepage storyboard, told as a five-chapter arc: PROBLEM → SOLUTION → BENEFITS →
  * HOW → SUMMARY. Each is a full-bleed section with a category pill, an alternating
  * background, and a sticky bar that highlights in brand yellow when active. Read the
  * subtitles straight down and they form one sentence.
+ *
+ * The chapter DATA (ids/titles/subs) lives in lib/chapters.ts so the rail and the search
+ * index share it; here we just bind each chapter to its animated Body component.
  */
-type Chapter = {
-  id: string;
-  ix: string;
-  cat: string;
-  ti: string;
-  sub: string;
-  Body?: ComponentType;
-  stub?: string;
+type Chapter = ChapterMeta & { Body?: ComponentType; stub?: string };
+
+const BODIES: Record<string, ComponentType> = {
+  'af-ch-problem': BacktrackStory,
+  'af-ch-solution': ContextEngineering,
+  'af-ch-benefits': WhyThisTool,
+  'af-ch-how': CoreEngine,
+  'af-ch-payoff': SummaryChapter,
 };
 
-const CHAPTERS: Chapter[] = [
-  { id: 'af-ch-problem', ix: '01', cat: 'The problem', ti: 'It answered wrong', sub: 'Asking the model why only gets you a confident guess.', Body: BacktrackStory },
-  { id: 'af-ch-solution', ix: '02', cat: 'The solution', ti: 'Rewind to the cause', sub: 'Every piece of context lands in one place, so you can trace back to it.', Body: ContextEngineering },
-  { id: 'af-ch-benefits', ix: '03', cat: 'What you get', ti: 'Catch it before it answers', sub: 'The same trace runs forward — see why it picked that, and fix it.', Body: WhyThisTool },
-  { id: 'af-ch-how', ix: '04', cat: 'How it works', ti: 'The run records itself', sub: 'Every step is captured as it happens, so you can rewind to any moment.', Body: CoreEngine },
-  { id: 'af-ch-payoff', ix: '05', cat: 'The payoff', ti: 'Proven, not guessed', sub: 'Record the run, rewind to the cause, prove the fix by replaying it.', Body: SummaryChapter },
-];
+export const CHAPTERS: Chapter[] = CHAPTERS_META.map((c) => ({ ...c, Body: BODIES[c.id] }));
 
 export function Chapters() {
   const ref = useRef<HTMLDivElement>(null);

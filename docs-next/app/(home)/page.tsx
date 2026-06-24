@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
 import { Chapters } from '@/components/home/Chapters';
+import { ChapterRail } from '@/components/home/ChapterRail';
 import { HeroTrace } from '@/components/home/HeroTrace';
 import { SITE, asset } from '@/lib/site';
 
@@ -173,7 +174,8 @@ export default function HomePage() {
         </div>
       </div>
 
-      {/* the interactive storyboard — 01 problem · 02 solution · 03 benefits · 04 how · 05 payoff */}
+      {/* home-only sticky jump-nav, then the storyboard — 01 problem · 02 solution · 03 benefits · 04 how · 05 payoff */}
+      <ChapterRail />
       <Chapters />
 
       {/* attribution footer — the recap + CTA now live in chapter 05 (SummaryChapter) */}

@@ -104,6 +104,18 @@
 :root {
   --af-content-max: 1200px;
   --af-gutter: clamp(20px, 5vw, 48px);
+  /* height of the home-only chapter rail (the sticky jump-nav under the top bar). Threaded
+     through every sticky offset + the anchor scroll-padding so #chapter jumps land cleanly. */
+  --af-rail-h: 40px;
+}
+/* stable gutter kills the ~15px width jump between the tall (scrollbar) home page and short
+   docs pages — both surfaces reserve the scrollbar track. scroll-padding-top keeps #chapter
+   anchors from landing under the sticky nav + rail. */
+html {
+  scrollbar-gutter: stable;
+  scroll-padding-top: calc(var(--fd-nav-height, 56px) + var(--af-rail-h));
+  /* NOT smooth: the chapters are 30+ screens tall, so a smooth jump would animate THROUGH
+     every pinned animation — the opposite of "jump straight to the chapter". Instant jump. */
 }
 
 /* hero — mascot centered on top, then a two-column claim/trace row below */
@@ -257,9 +269,65 @@
   margin: 0 auto;
   padding: 0 var(--af-gutter);
 }
-.af-chapter-bar {
+/* home-only chapter rail — sticky jump-nav under the top bar (height = --af-rail-h) */
+.af-chaprail {
   position: sticky;
   top: var(--fd-nav-height, 56px);
+  z-index: 25;
+  height: var(--af-rail-h);
+  background: color-mix(in oklab, var(--bg) 88%, transparent);
+  backdrop-filter: saturate(140%) blur(8px);
+  -webkit-backdrop-filter: saturate(140%) blur(8px);
+  border-bottom: 1px solid var(--border);
+}
+.af-chaprail-inner {
+  max-width: var(--af-content-max);
+  margin: 0 auto;
+  height: 100%;
+  padding: 0 var(--af-gutter);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.af-chaprail-inner::-webkit-scrollbar {
+  display: none;
+}
+.af-chaprail a {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  padding: 5px 11px;
+  border-radius: 999px;
+  font-size: 12.5px;
+  color: var(--fg-muted);
+  text-decoration: none;
+  transition:
+    background 0.18s ease,
+    color 0.18s ease;
+}
+.af-chaprail a b {
+  font-family: var(--fd-font-mono, monospace);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--fg-faint);
+}
+.af-chaprail a:hover {
+  background: var(--bg-alt);
+  color: var(--fg);
+}
+.af-chaprail a.on {
+  background: color-mix(in oklab, var(--yellow) 18%, transparent);
+  color: var(--fg);
+}
+.af-chaprail a.on b {
+  color: var(--yellow-dark);
+}
+.af-chapter-bar {
+  position: sticky;
+  top: calc(var(--fd-nav-height, 56px) + var(--af-rail-h));
   z-index: 20;
   display: flex;
   align-items: baseline;
@@ -581,8 +649,8 @@
 .af-pin-track { position: relative; height: 480vh; }
 .af-pin-stage {
   position: sticky;
-  top: calc(var(--fd-nav-height, 56px) + 52px);
-  min-height: calc(100svh - var(--fd-nav-height, 56px) - 64px);
+  top: calc(var(--fd-nav-height, 56px) + var(--af-rail-h) + 52px);
+  min-height: calc(100svh - var(--fd-nav-height, 56px) - var(--af-rail-h) - 64px);
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -650,8 +718,8 @@
 .af-why-track { position: relative; height: 430vh; }
 .af-why-stage {
   position: sticky;
-  top: calc(var(--fd-nav-height, 56px) + 52px);
-  min-height: calc(100svh - var(--fd-nav-height, 56px) - 64px);
+  top: calc(var(--fd-nav-height, 56px) + var(--af-rail-h) + 52px);
+  min-height: calc(100svh - var(--fd-nav-height, 56px) - var(--af-rail-h) - 64px);
   display: flex;
   flex-direction: column;
   justify-content: flex-start;
@@ -1064,8 +1132,8 @@
 .af-ctx-map-track { position: relative; height: 400vh; }
 .af-ctx-map-stage {
   position: sticky;
-  top: calc(var(--fd-nav-height, 56px) + 60px);
-  min-height: calc(100svh - var(--fd-nav-height, 56px) - 84px);
+  top: calc(var(--fd-nav-height, 56px) + var(--af-rail-h) + 60px);
+  min-height: calc(100svh - var(--fd-nav-height, 56px) - var(--af-rail-h) - 84px);
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -1872,7 +1940,7 @@
 }
 .af-eng-sticky {
   position: sticky;
-  top: calc(var(--fd-nav-height, 56px) + 52px);
+  top: calc(var(--fd-nav-height, 56px) + var(--af-rail-h) + 52px);
 }
 
 /* sticky headline cross-fade — heading + lede swap in place with the right side */
