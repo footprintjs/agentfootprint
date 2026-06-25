@@ -32,9 +32,9 @@ export function siteJsonLd() {
         '@type': 'Person',
         '@id': `${SITE.url}/#author`,
         name: SITE.authorName,
-        // the real person — personal profile + every place that corroborates the same identity
+        // the real person — primary profile + every profile that corroborates the same identity
         url: SITE.authorUrl,
-        sameAs: [SITE.authorUrl],
+        sameAs: [...SITE.authorSameAs],
       },
       {
         '@type': ['SoftwareApplication', 'SoftwareSourceCode'],

@@ -15,7 +15,15 @@ export const SITE = {
     'agentfootprint is the explainable agent framework for TypeScript. Every run records its own causal trace, so when your AI agent answers wrong you backtrack to the exact context that caused it — and prove the fix by re-running without it. Built on footprintjs.',
   author: 'Sanjay', // display byline ("Created by Sanjay")
   authorName: 'Sanjay Krishna Anbalagan', // full legal name — copyright line + schema (matches LICENSE + npm author)
-  authorUrl: 'https://github.com/sanjay1909', // the real person — footer rel=author link + JSON-LD Person.url/sameAs
+  authorUrl: 'https://github.com/sanjay1909', // primary profile — footer rel=author link + JSON-LD Person.url
+  // every profile that is verifiably the SAME person — JSON-LD Person.sameAs. This is the signal
+  // search engines use to reconcile "Sanjay Krishna Anbalagan" into one entity = creator.
+  authorSameAs: [
+    'https://github.com/sanjay1909',
+    'https://www.linkedin.com/in/sanjay-krishna-anbalagan/',
+    'https://x.com/1909sanjay',
+    'https://sanjay1909.github.io/',
+  ],
   publisher: 'footprintjs',
   repo: 'https://github.com/footprintjs/agentfootprint',
   license: 'https://github.com/footprintjs/agentfootprint/blob/main/LICENSE',
