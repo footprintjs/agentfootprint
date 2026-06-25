@@ -373,9 +373,11 @@ html {
      it reserves when nav.mode='top'. On the home layout (not a grid) this is simply ignored. */
   grid-area: header;
   height: var(--fd-nav-height, 56px);
-  background: color-mix(in oklab, var(--bg) 82%, transparent);
-  backdrop-filter: saturate(140%) blur(10px);
-  -webkit-backdrop-filter: saturate(140%) blur(10px);
+  /* SOLID, not frosted: a see-through header let the OUTGOING chapter's sticky bar/content slide
+     up behind it and "ghost" through — reading as a faint duplicate of the previous chapter's
+     heading during the hand-off. Solid occludes it cleanly (and matches the now-solid rail + bar,
+     and drops the last per-frame backdrop-blur). */
+  background: var(--bg);
   border-bottom: 1px solid var(--border);
 }
 .af-sh-inner {
