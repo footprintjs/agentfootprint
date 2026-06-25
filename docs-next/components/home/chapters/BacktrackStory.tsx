@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useRef } from 'react';
+import { useScrollProgress } from '@/lib/home/useScrollProgress';
 
 /**
  * Chapter 1 — "The problem". An agent approved a refund it shouldn't; asking a model
@@ -97,32 +98,11 @@ const LAST = 7;
 const headStep = (p: number) => (p <= 2 ? 14 : p <= 4 ? 9 : 4);
 
 export function BacktrackStory() {
-  const [phase, setPhase] = useState(0);
   const trackRef = useRef<HTMLDivElement>(null);
 
-  // scroll-driven scrubbing: the pinned stage advances phase by scroll progress
-  useEffect(() => {
-    let raf = 0;
-    const onScroll = () => {
-      cancelAnimationFrame(raf);
-      raf = requestAnimationFrame(() => {
-        const track = trackRef.current;
-        if (!track) return;
-        const rect = track.getBoundingClientRect();
-        const total = rect.height - window.innerHeight;
-        const p = total > 0 ? Math.min(1, Math.max(0, -rect.top / total)) : 0;
-        setPhase(Math.min(LAST, Math.floor(p * (LAST + 1))));
-      });
-    };
-    onScroll();
-    window.addEventListener('scroll', onScroll, { passive: true });
-    window.addEventListener('resize', onScroll);
-    return () => {
-      window.removeEventListener('scroll', onScroll);
-      window.removeEventListener('resize', onScroll);
-      cancelAnimationFrame(raf);
-    };
-  }, []);
+  // scroll-driven scrubbing via the shared scroll engine: phase advances by scroll progress,
+  // re-rendering only when the integer phase changes (one listener for the whole page).
+  const phase = useScrollProgress(trackRef, (p) => Math.min(LAST, Math.floor(p * (LAST + 1))), 0);
 
   // prev/next replay controls: scroll the window to the target phase's scroll offset
   const goToPhase = (k: number) => {

@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { useRef, type CSSProperties, type ReactNode } from 'react';
+import { useScrollProgress } from '@/lib/home/useScrollProgress';
 
 /**
  * Chapter 2 — "Context engineering, abstracted." (ported from the context-engineering design).
@@ -325,9 +326,6 @@ const STEPS: Step[] = [
   },
 ];
 
-const prefersReducedMotion = () =>
-  typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion:reduce)').matches;
-
 export function ContextEngineering() {
   return (
     <section className="af-ctx">
@@ -369,35 +367,9 @@ export function ContextEngineering() {
 // many-to-many (Skill → system + tools; Memory/RAG/Fact → system + messages).
 function AbstractionBlock() {
   const trackRef = useRef<HTMLDivElement>(null);
-  const [phase, setPhase] = useState(0);
   const LAST = FLAVOR_MAP.length; // phases 0 (intro) .. LAST (each flavor = phase i for flavor i-1)
-
-  useEffect(() => {
-    if (prefersReducedMotion()) {
-      setPhase(LAST);
-      return;
-    }
-    let raf = 0;
-    const onScroll = () => {
-      cancelAnimationFrame(raf);
-      raf = requestAnimationFrame(() => {
-        const track = trackRef.current;
-        if (!track) return;
-        const rect = track.getBoundingClientRect();
-        const total = rect.height - window.innerHeight;
-        const p = total > 0 ? Math.min(1, Math.max(0, -rect.top / total)) : 0;
-        setPhase(Math.min(LAST, Math.floor(p * (LAST + 1))));
-      });
-    };
-    onScroll();
-    window.addEventListener('scroll', onScroll, { passive: true });
-    window.addEventListener('resize', onScroll);
-    return () => {
-      window.removeEventListener('scroll', onScroll);
-      window.removeEventListener('resize', onScroll);
-      cancelAnimationFrame(raf);
-    };
-  }, [LAST]);
+  // shared scroll engine — re-renders only on phase change; reduced-motion → final phase, no scroll.
+  const phase = useScrollProgress(trackRef, (p) => Math.min(LAST, Math.floor(p * (LAST + 1))), 0);
 
   const active = phase - 1; // -1 during the intro beat
   const activeFlavor = active >= 0 ? FLAVOR_MAP[active] : null;
@@ -517,35 +489,9 @@ function AbstractionBlock() {
 // tags that node with the trigger word; the aside explains it (slots verified against engine code).
 function TriggersBlock() {
   const trackRef = useRef<HTMLDivElement>(null);
-  const [phase, setPhase] = useState(0);
   const LAST = TRIG_BEATS.length; // phases 0 (intro) .. LAST (one per trigger)
-
-  useEffect(() => {
-    if (prefersReducedMotion()) {
-      setPhase(LAST);
-      return;
-    }
-    let raf = 0;
-    const onScroll = () => {
-      cancelAnimationFrame(raf);
-      raf = requestAnimationFrame(() => {
-        const track = trackRef.current;
-        if (!track) return;
-        const rect = track.getBoundingClientRect();
-        const total = rect.height - window.innerHeight;
-        const p = total > 0 ? Math.min(1, Math.max(0, -rect.top / total)) : 0;
-        setPhase(Math.min(LAST, Math.floor(p * (LAST + 1))));
-      });
-    };
-    onScroll();
-    window.addEventListener('scroll', onScroll, { passive: true });
-    window.addEventListener('resize', onScroll);
-    return () => {
-      window.removeEventListener('scroll', onScroll);
-      window.removeEventListener('resize', onScroll);
-      cancelAnimationFrame(raf);
-    };
-  }, [LAST]);
+  // shared scroll engine — re-renders only on phase change; reduced-motion → final phase, no scroll.
+  const phase = useScrollProgress(trackRef, (p) => Math.min(LAST, Math.floor(p * (LAST + 1))), 0);
 
   const beat = phase >= 1 ? TRIG_BEATS[phase - 1] : null;
   const litN = new Set(beat?.litNodes ?? []);
@@ -816,35 +762,9 @@ const STEP_FLOW: StepFlow[] = [
 
 function DynamicReactBlock() {
   const trackRef = useRef<HTMLDivElement>(null);
-  const [i, setI] = useState(0);
   const LAST = STEPS.length - 1; // iterations 0..2
-
-  useEffect(() => {
-    if (prefersReducedMotion()) {
-      setI(LAST);
-      return;
-    }
-    let raf = 0;
-    const onScroll = () => {
-      cancelAnimationFrame(raf);
-      raf = requestAnimationFrame(() => {
-        const track = trackRef.current;
-        if (!track) return;
-        const rect = track.getBoundingClientRect();
-        const total = rect.height - window.innerHeight;
-        const p = total > 0 ? Math.min(1, Math.max(0, -rect.top / total)) : 0;
-        setI(Math.min(LAST, Math.floor(p * (LAST + 1))));
-      });
-    };
-    onScroll();
-    window.addEventListener('scroll', onScroll, { passive: true });
-    window.addEventListener('resize', onScroll);
-    return () => {
-      window.removeEventListener('scroll', onScroll);
-      window.removeEventListener('resize', onScroll);
-      cancelAnimationFrame(raf);
-    };
-  }, [LAST]);
+  // shared scroll engine — re-renders only on iteration change; reduced-motion → final, no scroll.
+  const i = useScrollProgress(trackRef, (p) => Math.min(LAST, Math.floor(p * (LAST + 1))), 0);
 
   const goToIter = (k: number) => {
     const track = trackRef.current;

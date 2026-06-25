@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
+import { useScrollProgress } from '@/lib/home/useScrollProgress';
 
 /**
  * Chapter 3 — "The engine". The deep "how it's implemented" beat, told as TWO
@@ -614,44 +615,25 @@ function EventLoopView({ prog }: { prog: number }) {
 // is suppressed under prefers-reduced-motion via CSS @media queries, not by branching the
 // rendered output here — branching render on a client-only value (matchMedia) is exactly
 // what caused React #418 for reduced-motion users.
-function usePinProgress(ref: React.RefObject<HTMLDivElement | null>) {
-  const [p, setP] = useState(0);
-  useEffect(() => {
-    let raf = 0;
-    const onScroll = () => {
-      cancelAnimationFrame(raf);
-      raf = requestAnimationFrame(() => {
-        const pin = ref.current;
-        if (!pin) return;
-        const rect = pin.getBoundingClientRect();
-        const total = pin.offsetHeight - window.innerHeight;
-        const v = total > 0 ? Math.min(1, Math.max(0, -rect.top / total)) : 0;
-        setP(v);
-      });
-    };
-    onScroll();
-    window.addEventListener('scroll', onScroll, { passive: true });
-    window.addEventListener('resize', onScroll);
-    return () => {
-      window.removeEventListener('scroll', onScroll);
-      window.removeEventListener('resize', onScroll);
-      cancelAnimationFrame(raf);
-    };
-  }, []);
-  return p;
-}
+// (Scroll progress now comes from the shared engine via useScrollProgress — see lib/home/.)
 
 export function CoreEngine() {
   const pinA = useRef<HTMLDivElement>(null); // animation 1 — records itself
   const pinB = useRef<HTMLDivElement>(null); // animation 2 — costs nothing
   const logScrollRef = useRef<HTMLDivElement>(null);
 
-  const progA = usePinProgress(pinA);
-  const progB = usePinProgress(pinB);
-
   // ---- animation 1: scroll time-travels the recorded run ----
-  const emitted = Math.min(STEPS.length, Math.max(1, Math.ceil(progA * STEPS.length)));
+  // progA only ever feeds `emitted` (an integer step), so map straight to it: the component
+  // re-renders only when the step changes (~12x across the track) instead of every scroll pixel.
+  const emitted = useScrollProgress(
+    pinA,
+    (p) => Math.min(STEPS.length, Math.max(1, Math.ceil(p * STEPS.length))),
+    1,
+  );
   const done1 = emitted >= STEPS.length;
+  // progB drives continuous motion (beat fraction + EventLoopView), so keep it a float — but
+  // rounded to an imperceptible granularity so it re-renders ~240x across the track, not per pixel.
+  const progB = useScrollProgress(pinB, (p) => Math.round(p * 240) / 240, 0);
 
   // keep the log scrolled to the newest revealed row as you time-travel
   useEffect(() => {

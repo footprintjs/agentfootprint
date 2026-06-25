@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useRef, type ReactNode } from 'react';
+import { useScrollProgress } from '@/lib/home/useScrollProgress';
 
 /**
  * Chapter 1, beat 3 — "Why this tool?" (ported from the shared backtrack-story design).
@@ -74,32 +75,10 @@ const CAPS: ReactNode[] = [
 const LAST = CAPS.length - 1;
 
 export function WhyThisTool() {
-  const [phase, setPhase] = useState(0);
   const trackRef = useRef<HTMLDivElement>(null);
 
-  // scroll-driven scrubbing
-  useEffect(() => {
-    let raf = 0;
-    const onScroll = () => {
-      cancelAnimationFrame(raf);
-      raf = requestAnimationFrame(() => {
-        const track = trackRef.current;
-        if (!track) return;
-        const rect = track.getBoundingClientRect();
-        const total = rect.height - window.innerHeight;
-        const p = total > 0 ? Math.min(1, Math.max(0, -rect.top / total)) : 0;
-        setPhase(Math.min(LAST, Math.floor(p * (LAST + 1))));
-      });
-    };
-    onScroll();
-    window.addEventListener('scroll', onScroll, { passive: true });
-    window.addEventListener('resize', onScroll);
-    return () => {
-      window.removeEventListener('scroll', onScroll);
-      window.removeEventListener('resize', onScroll);
-      cancelAnimationFrame(raf);
-    };
-  }, []);
+  // scroll-driven scrubbing via the shared scroll engine — re-renders only on phase change.
+  const phase = useScrollProgress(trackRef, (p) => Math.min(LAST, Math.floor(p * (LAST + 1))), 0);
 
   const goToPhase = (k: number) => {
     const track = trackRef.current;
