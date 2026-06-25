@@ -65,9 +65,11 @@ export type MemoryType = (typeof MEMORY_TYPES)[keyof typeof MEMORY_TYPES];
 /**
  * How content is selected / compressed for the next LLM call.
  *
- * Universal across types. A `WINDOW` strategy on an Episodic store keeps
- * the last N messages; on a Causal store it keeps the last N snapshots.
- * Mix and match.
+ * A `WINDOW` strategy on an Episodic store keeps the last N messages; on
+ * Semantic / Narrative it keeps the last N facts / beats. NOT universal: the
+ * `CAUSAL` type accepts ONLY `TOP_K` — its snapshots are matched semantically
+ * against the new query, never by recency, so `buildCausalPipeline` throws on
+ * any other strategy kind. Mix and match the non-Causal types.
  */
 export const MEMORY_STRATEGIES = {
   WINDOW: 'window',
