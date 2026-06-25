@@ -55,6 +55,8 @@ The simplest memory: last N turns, no LLM, no embeddings, near-zero cost. Good d
 
 The `CAUSAL` type stores footprintjs decision-evidence snapshots tagged with the user's original query. On follow-up runs, the read subflow embeds the new query, cosine-searches the snapshot store, and (when above threshold) injects the matching past snapshot's decision evidence into the next LLM call. The LLM answers about past behavior from the actual recorded reasoning, not by hallucinating consistency.
 
+> ⚠️ **Causal *similarity* recall needs a store that implements `search()`.** The cosine-search above is provided **only by `InMemoryStore`** today — both production adapters (`RedisStore`, `AgentCoreStore`) implement every `MemoryStore` method **except** `search()` (vector search is future work). So in production you can **persist** causal snapshots and recall them with a `WINDOW` strategy (last-N snapshots, no search needed), but **cosine-similarity recall across sessions is not production-ready yet**. Until a vector-search adapter ships, scope durable causal memory to recent-window recall, or run similarity recall in-process via `InMemoryStore`. For in-conversation "why?" that doesn't need any store at all, see [`.selfExplain()`](doc:self-explain).
+
 <CodeFile path="examples/memory/06-causal-snapshot.ts" region="define-causal" title="examples/memory/06-causal-snapshot.ts (region: define-causal)" />
 
 `projection: SNAPSHOT_PROJECTIONS.DECISIONS` says "when injecting, include only the `decide()` and `select()` evidence — not the full snapshot." Other projections: `COMMITS` (commit-log only), `NARRATIVE` (rendered narrative entries), `FULL` (everything).

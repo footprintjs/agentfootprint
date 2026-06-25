@@ -211,6 +211,17 @@ const causal = defineMemory({
 
 agent.memory(shortTerm).memory(facts).memory(causal);
 
+// `.selfExplain()` — the IN-CONVERSATION cousin of Causal: the agent answers a
+// follow-up "why did you do that?" about its OWN previous completed run, no store
+// needed. One builder call mounts a skill; the 5 trace tools (run_overview/
+// trace_node/who_wrote/get_value/trace_slice) appear ONLY on the iteration the user
+// asks "why", bound to the last completed run (never in-flight; a failed run still
+// explains). delegate:{provider,model} runs the trace-walk on a cheaper model.
+// Needs reactMode 'dynamic' (default). Causal = ANY past run, persisted, by similarity;
+// selfExplain = THIS conversation's last run, in-memory. (Causal similarity recall
+// needs a search()-capable store — only InMemoryStore today.) Docs: debug/self-explain.
+Agent.create({ provider, model }).system('...').tool(lookupOrder).selfExplain().build();
+
 // Multi-tenant identity — plumbs through agent.run:
 await agent.run({
   message: '...',

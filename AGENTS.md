@@ -484,6 +484,10 @@ live deep-Proxy) into `typedEmit`; use the plain local value (`typedEmit`
 dev-warns on unclonable payloads). Bench:
 `examples/features/21-deferred-observers.ts`.
 
+### Self-explain — `.selfExplain()` (the agent answers "why?" about its own last run)
+
+One builder call mounts ONE skill that, when the user asks a why-question, unlocks the 5 trace tools (`run_overview` / `trace_node` / `who_wrote` / `get_value` / `trace_slice`) for that iteration ONLY — bound LATE to the agent's PREVIOUS COMPLETED run (captured at `onRunEnd`/`onRunFailed`, so it can never serve an in-flight run; a failed run still explains "why did you fail?"). `delegate: { provider, model }` runs the trace-walk on a cheaper model via one `explain_run` tool. Requires `reactMode: 'dynamic'`/`'dynamic-grouped'` (classic caches the tools slot → throws at build); reserved tool-name clash also throws. Differs from **Causal memory**: `.selfExplain()` = THIS conversation's last run, in-memory, drill-by-id; Causal = any past run, persisted, recalled by similarity — reach for selfExplain on same-conversation follow-ups, Causal for cross-session. Note: Causal *similarity* recall needs a store with `search()` (only `InMemoryStore` today; Redis/AgentCore lack it). Full guide: docs `debug/self-explain`.
+
 ## Anti-Patterns — Don't
 
 - ❌ **Don't ship a `ReflexionAgent` class.** Compose `Sequence(Agent, critique-LLM, Agent)`.

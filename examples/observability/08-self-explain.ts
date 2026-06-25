@@ -101,11 +101,13 @@ export async function run(_input?: string | null): Promise<SelfExplainResult> {
     },
   });
 
+  // #region inline
   const agent = Agent.create({ provider, model: 'mock-1', maxIterations: 6 })
     .system('You are a refunds assistant. Policy: refunds within 30 days of purchase.')
     .tool(lookupOrder)
     .selfExplain({ instruction: 'Mention the order id in your explanation.' })
     .build();
+  // #endregion inline
 
   out.push('═══ PART 1 — inline mode ═══', '');
   const turn1 = await agent.run({ message: 'Should order A-1001 be refunded?' });
@@ -168,6 +170,7 @@ export async function run(_input?: string | null): Promise<SelfExplainResult> {
     },
   });
 
+  // #region delegate
   const delegatingAgent = Agent.create({
     provider: mainProvider,
     model: 'mock-big',
@@ -175,8 +178,11 @@ export async function run(_input?: string | null): Promise<SelfExplainResult> {
   })
     .system('You are a refunds assistant.')
     .tool(lookupOrder)
+    // Answer why-questions on a separate, cheaper model (swap the mocks for
+    // anthropic() + a Haiku-class model in production).
     .selfExplain({ delegate: { provider: delegateProvider, model: 'mock-cheap' } })
     .build();
+  // #endregion delegate
 
   out.push('═══ PART 2 — delegate mode (the cheap-model switch) ═══', '');
   await delegatingAgent.run({ message: 'Should order A-1001 be refunded?' });

@@ -1,0 +1,69 @@
+---
+title: Ask your agent "why?"
+description: .selfExplain() lets the agent answer follow-up why-questions about its OWN previous turn from the recorded trace — one builder call, the trace tools gated until asked, evidence bound to the completed run (never the in-flight one), and a cheaper-model delegate mode.
+---
+
+> A user asks your refunds agent to approve order A-1001. It does. The next message is **"why did you approve it?"** Without an API, your only move is to paste the whole trace into another LLM and pay full price for it — every turn. `.selfExplain()` makes it one builder call: the agent answers the follow-up **from its own recorded run**, not from "memory of memory."
+
+## One call
+
+<CodeFile path="examples/observability/08-self-explain.ts" region="inline" title="examples/observability/08-self-explain.ts (region: inline)" />
+
+That's it. Day to day nothing changes — the agent runs with its production tools. When a user asks a why-question, the agent answers from the trace of its **previous completed turn**, citing the exact evidence (the order was 12 days old, inside the 30-day window) instead of reconstructing a plausible-sounding reason.
+
+## It stays out of the way until asked
+
+`.selfExplain()` mounts **one skill**. Day to day the tool catalog carries only that skill's activation row — your production tools are untouched, and the model never sees the trace tools. When the user asks "why…", the LLM activates the skill (`read_skill`), and **that iteration alone** gains the trace tools, late-bound to the previous run:
+
+- `run_overview` — the catalog of what ran (steps, stages, loops, errors, honesty markers)
+- `trace_node` — inspect one step by id (its reads / writes / data + control parents / errors)
+- `who_wrote` — which step last wrote a value (backtrack a key to its source)
+- `get_value` — fetch **one** value by id + key, lazily — only the piece it needs, never the whole trace
+- `trace_slice` — the backward causal slice around a node
+
+So the cost model is honest: the production catalog stays clean, and the trace tools appear **exactly once**, on the iteration where the question was asked. The example prints the per-call catalog to prove it.
+
+## Delegate mode — answer on a cheaper model
+
+The why-question doesn't need your big model to *walk* the trace — only to *relay* the answer. Delegate mode unlocks a single `explain_run(question)` tool whose work runs on a separate, cheaper provider via a nested trace debugger:
+
+<CodeFile path="examples/observability/08-self-explain.ts" region="delegate" title="examples/observability/08-self-explain.ts (region: delegate)" />
+
+The main conversation pays for **one** tool call; the trace-walking loop runs at the delegate's price. Swap the mocks for `anthropic()` + a Haiku-class model and that's the real split.
+
+`SelfExplainOptions`: `instruction?` (appended to the skill body — yours adds, ours stays), `delegate?: { provider, model, maxIterations? }`, `id?` (the skill activation key, default `'self-explain'`), `toolpack?` (bounding dials forwarded to the trace tools).
+
+## How we know it's faithful (the guarantee)
+
+The point of self-explanation is to *not* inherit the unfaithfulness it's meant to diagnose. Two invariants make that real:
+
+1. **It can never answer about an in-flight run.** `Agent.run()` reassigns its executor at the *start* of a run, so reading the "current" snapshot mid-run would expose the unfinished turn. The binding sidesteps this by capturing the snapshot **only at terminal flush** — `onRunEnd` / `onRunFailed`. There is no code path that hands the model an in-progress trace; it physically can only see a *completed* run.
+2. **A failed run is still explainable.** Capture fires on `onRunFailed` too, so **"why did you fail?"** works — the error and the trace up to it are recorded evidence.
+
+Two more details that keep it correct: a **fresh control-dependence recorder per run** (so "which decision allowed this step?" survives the per-run id reset and stays valid for the whole follow-up turn), and — before the first completed run — a plain "no completed run yet" message instead of an error. Every answer cites step ids you can re-open with the same tools, so the explanation is checkable, not asserted.
+
+## `.selfExplain()` vs. Causal memory — which "read its own trace"?
+
+Both let the agent answer "why?" from the trace, but they pull at different ranges — use them together:
+
+| | **`.selfExplain()`** | **[Causal memory](doc:causal-deep-dive)** |
+|---|---|---|
+| Answers about | the agent's **previous run** (this conversation) | **any past run**, retrieved across sessions |
+| Selected by | the user asking, *now* | semantic similarity to the new question |
+| Persisted? | no — in-memory, the last completed run | yes — to the configured store (survives restarts) |
+| Granularity | drills to one piece, by id, on demand | recalls a whole past run's snapshot |
+| Reach for it when | a follow-up in the *same* conversation | "why did you decide X *last week / in session Y*?" |
+
+Mental model: **Causal memory pulls the right *run*; `.selfExplain()` drills the right *piece* of it.** Both are lazy — only what's needed, only when asked. (Stacking them — recall a stored run, then drill it with the trace tools — is the in-progress "evidence bridge"; see [Causal memory deep-dive](doc:causal-deep-dive).)
+
+## Gotchas
+
+- **Needs `reactMode: 'dynamic'`** (the default) or `'dynamic-grouped'`. `'classic'` caches the tools slot on turn 1, so a mid-turn skill activation could never surface the trace tools — `.selfExplain()` **fails loud at build** rather than silently never answering. (Need it on a classic-mode agent? Run `traceDebugAgent()` as a separate session instead.)
+- **Reserved tool names.** Inline mode reserves `run_overview` / `trace_node` / `trace_slice` / `who_wrote` / `get_value`; delegate mode reserves `explain_run`. The tools slot dedupes by name (first wins), so a consumer tool with one of those names would silently shadow the trace tool — `.build()` throws to stop it.
+
+## See also
+
+- [Causal memory deep-dive](doc:causal-deep-dive) — persist runs and answer "why?" across sessions
+- [Memory guide](doc:memory) — the full type × strategy matrix (Causal is one type)
+- [Observability guide](doc:observability) — the three workflows the same trace also enables
+- [Localize a context bug](doc:localize-context-bug) — when "why?" needs counterfactual proof, not just a cited reason
