@@ -326,43 +326,137 @@ html {
   color: var(--yellow-dark);
 }
 
-/* ── Docs header parity with the home header ───────────────────────────────────────────
-   Fumadocs ships two different header components: HomeLayout packs a COMPACT, right-aligned
-   search (rounded-full, max-w-240) inside its right cluster, while the notebook DocsLayout in
-   nav.mode 'top' renders the search as a middle flex item sandwiched between two equal flex-1
-   groups (wordmark left, links/theme right) — so it ends up wider (max-w-sm) and centered. No
-   prop reconciles this, so we nudge ONLY the docs header to match home:
-     1. pin the row padding to 16px (Fumadocs uses md:px-6=24 here vs home's px-4=16) so the
-        wordmark sits at the SAME x on both pages — no jump on navigation,
-     2. shrink + round the search to home's 240px rounded-full,
-     3. drop the right cluster's flex-grow so the wordmark's flex-1 pushes the search to the
-        right, matching home's "wordmark left … search + controls right" layout.
-   The sidebar-collapse toggle that used to clutter this row is gone — we set
-   sidebar.collapsible:false on the DocsLayout (ExpoStarter's clean-header recipe), so there is
-   no toggle to position. Scoped strictly to #nd-subnav (the notebook subnav id) so it can NEVER
-   touch the home header (#nd-nav). UPGRADE-SENSITIVE: keyed to the Fumadocs v16 notebook header
-   DOM ([data-header-body] row); re-verify after a fumadocs-ui major bump. Unlayered rules here
-   outrank Tailwind's @layer utilities. */
-#nd-subnav [data-header-body] {
-  padding-left: 16px;
-  padding-right: 16px;
+/* ── Site header — the ONE shared header (components/SiteHeader.tsx) ────────────────────
+   Rendered on BOTH home and docs via each layout's nav.component hook, so the two pages show
+   the exact same bar from one component — identical by construction, no per-page matching CSS.
+   Sticky and 56px tall to match --fd-nav-height, so the chapter rail / docs sidebar / content
+   sit correctly beneath it. Layout: wordmark pinned left · flex-1 gap · search · links ·
+   GitHub · theme pinned right — both edges anchored, the gap absorbs any width difference, so
+   it cannot shift on load or between pages. */
+.af-sh {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  /* In the notebook (docs) layout the container is a CSS grid; claim the full-width header row
+     it reserves when nav.mode='top'. On the home layout (not a grid) this is simply ignored. */
+  grid-area: header;
+  height: var(--fd-nav-height, 56px);
+  background: color-mix(in oklab, var(--bg) 82%, transparent);
+  backdrop-filter: saturate(140%) blur(10px);
+  -webkit-backdrop-filter: saturate(140%) blur(10px);
+  border-bottom: 1px solid var(--border);
 }
-#nd-subnav [data-header-body] > *:nth-child(2) {
-  max-width: 240px;
-  border-radius: 9999px;
+.af-sh-inner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: var(--fd-nav-height, 56px);
+  padding: 0 16px;
 }
-#nd-subnav [data-header-body] > *:last-child {
+.af-sh-brand {
   flex: 0 0 auto;
+  text-decoration: none;
 }
-/* …and the last divergence: HomeLayout renders the theme toggle BEFORE its link group, while
-   the notebook docs header renders it at the trailing edge (after the GitHub icon). Push the
-   home toggle to the end so both read "… links · GitHub · theme". The toggle carries a stable
-   data-theme-toggle hook (fumadocs theme-switch slot). Scoped to #nd-nav (home only) and to
-   lg+ where the desktop nav cluster is shown — the mobile menu (lg:hidden) keeps its own order. */
-@media (min-width: 1024px) {
-  #nd-nav [data-theme-toggle] {
-    order: 10;
+.af-sh-gap {
+  flex: 1 1 auto;
+} /* spacer — pins everything after it to the right */
+
+.af-sh-search {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 36px;
+  width: 240px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 9999px;
+  background: color-mix(in oklab, var(--fg) 4%, transparent);
+  color: color-mix(in oklab, var(--fg) 55%, transparent);
+  font-size: 14px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.af-sh-search:hover {
+  background: color-mix(in oklab, var(--fg) 8%, transparent);
+}
+.af-sh-search-text {
+  flex: 1 1 auto;
+  text-align: left;
+}
+.af-sh-kbd {
+  display: inline-flex;
+  gap: 2px;
+}
+.af-sh-kbd kbd {
+  font: inherit;
+  font-size: 11px;
+  line-height: 1.4;
+  background: color-mix(in oklab, var(--fg) 8%, transparent);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 0 5px;
+  color: inherit;
+}
+.af-sh-nav {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+.af-sh-link {
+  font-size: 14px;
+  text-decoration: none;
+  color: color-mix(in oklab, var(--fg) 65%, transparent);
+  transition: color 0.15s;
+}
+.af-sh-link:hover {
+  color: var(--fg);
+}
+.af-sh-link.on {
+  color: var(--yellow-dark);
+}
+.af-sh-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  color: color-mix(in oklab, var(--fg) 60%, transparent);
+  transition: background 0.15s, color 0.15s;
+}
+.af-sh-icon:hover {
+  background: color-mix(in oklab, var(--fg) 8%, transparent);
+  color: var(--fg);
+}
+.af-sh-sidebar {
+  display: none;
+} /* desktop docs sidebar is always open — opener is mobile-only */
+
+/* mobile: search collapses to an icon, GitHub hides (it's in the footer), sidebar opener shows */
+@media (max-width: 640px) {
+  .af-sh-search {
+    width: 36px;
+    padding: 0;
+    justify-content: center;
   }
+  .af-sh-search-text,
+  .af-sh-kbd {
+    display: none;
+  }
+  .af-sh-gh {
+    display: none;
+  }
+  .af-sh-nav {
+    gap: 12px;
+  }
+  .af-sh-sidebar {
+    display: inline-flex;
+  }
+}
+@media (max-width: 380px) {
+  .af-sh .af-wordmark-text {
+    display: none;
+  } /* logo only on the smallest screens */
 }
 
 .af-chapter-bar {

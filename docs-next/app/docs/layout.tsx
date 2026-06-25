@@ -1,14 +1,12 @@
 import { source } from '@/lib/source';
-// Notebook layout = full-width top nav (matching the homepage) + sidebar below it.
-// It spreads the SAME baseOptions as the homepage so the header reads as one bar across
-// the site. The notebook's default nav.mode 'auto' hides the wordmark and balloons the
-// search into a big centered box; HomeLayout has no such mode and always renders a compact
-// right-aligned search. We converge on the HOME look (the correct product-header standard,
-// per the UX panel) by setting nav.mode 'top' here — it shrinks + right-shifts the docs
-// search and shows the wordmark full-width. We MERGE onto baseOptions().nav (rather than
-// passing a bare nav) so the Wordmark title is preserved. No custom header / CSS overrides.
+// Notebook layout = full-width top nav + sidebar below it. The header is OURS: SiteHeader,
+// the same component the homepage renders, plugged in via nav.component. That makes the docs
+// header identical to home by construction (one implementation, no scoped matching CSS).
+// sidebar.collapsible:false keeps the sidebar always open on desktop (no collapse button in
+// the bar); SiteHeader renders the mobile sidebar opener itself via <SidebarTrigger/>.
 import { DocsLayout } from 'fumadocs-ui/layouts/notebook';
 import { baseOptions } from '@/lib/layout.shared';
+import { SiteHeader } from '@/components/SiteHeader';
 import type { ReactNode } from 'react';
 import { BookText, Braces } from 'lucide-react';
 
@@ -18,10 +16,11 @@ export default function Layout({ children }: { children: ReactNode }) {
     <DocsLayout
       tree={source.getPageTree()}
       sidebar={{
-        // Keep the sidebar always open (ExpoStarter's clean-header recipe): no collapse button
-        // cluttering the top bar, and nothing to position. The mobile drawer trigger is separate
-        // and unaffected. This is what lets the docs header read as the same clean bar as home.
-        collapsible: false,
+        // collapsible:true keeps the MOBILE drawer working (our SiteHeader opens it via
+        // <SidebarTrigger/>). On desktop the sidebar stays open because SiteHeader renders no
+        // desktop collapse button — so it still reads as the clean always-open ExpoStarter look,
+        // without the toggle clutter, while mobile navigation keeps working.
+        collapsible: true,
         // The Docs | API Reference switcher at the top of the sidebar.
         tabs: [
           {
@@ -39,7 +38,10 @@ export default function Layout({ children }: { children: ReactNode }) {
         ],
       }}
       {...base}
-      nav={{ ...base.nav, mode: 'top' }}
+      // mode:'top' makes the notebook grid reserve a FULL-WIDTH header row (". header header
+      // header ."); without it the header is placed in the columns right of the sidebar. Our
+      // SiteHeader claims that row via `grid-area: header` (set in global.css).
+      nav={{ component: <SiteHeader />, mode: 'top' }}
     >
       {children}
     </DocsLayout>
