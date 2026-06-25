@@ -286,6 +286,10 @@ html {
   background: var(--bg);
   padding: 6px 0 40px;
   transition: background 0.3s ease;
+  /* NOTE: content-visibility:auto was tried here and REVERTED — it collapses off-screen chapters
+     to their intrinsic size, which corrupts the scroll math the pinned (sticky) stages depend on
+     (the stage stops pinning and progress reads wrong). The off-screen runtime cost is handled
+     instead by pausing animations off-screen (.is-inview gating, see the perf block up top). */
 }
 .af-chapter.alt {
   background: var(--bg-alt);
