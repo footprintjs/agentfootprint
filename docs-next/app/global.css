@@ -340,12 +340,37 @@ html {
    (#nd-nav). UPGRADE-SENSITIVE: keyed to the Fumadocs v16 notebook header DOM
    ([data-header-body] row = [wordmark flex-1][search][right-cluster flex-1]); re-verify after a
    fumadocs-ui major bump. The unlayered rules here outrank Tailwind's @layer utilities. */
+#nd-subnav [data-header-body] {
+  position: relative; /* anchor for the relocated sidebar toggle below */
+  /* Fumadocs gives this row md:px-6 (24px) while the home nav uses px-4 (16px), so the wordmark
+     hopped 8px to the right when you navigated home → docs. Pin it to 16px both sides so the
+     logo sits at the SAME x on both pages — no jump. */
+  padding-left: 16px;
+  padding-right: 16px;
+}
 #nd-subnav [data-header-body] > *:nth-child(2) {
   max-width: 240px;
   border-radius: 9999px;
 }
 #nd-subnav [data-header-body] > *:last-child {
   flex: 0 0 auto;
+}
+/* Sidebar toggle: 'top' mode parks the collapse/expand button at the trailing (right) edge,
+   but a docs sidebar toggle belongs on the LEFT. Pull it out of the right cluster and place it
+   just past the wordmark. Absolute (so it leaves the flex flow); the rem offset clears the
+   fixed-width "agentfootprint" wordmark and scales with the root font. aria-label selectors are
+   safe here because the site is English-only. Scoped to md+ ONLY: below md the desktop button is
+   hidden and a SEPARATE mobile sidebar trigger (same aria-label) shows on the right — leave that
+   one alone. UPGRADE-SENSITIVE with the rest of this block. */
+@media (min-width: 768px) {
+  #nd-subnav [data-header-body] [aria-label='Collapse Sidebar'],
+  #nd-subnav [data-header-body] [aria-label='Open Sidebar'] {
+    position: absolute;
+    left: 10.25rem;
+    top: 50%;
+    transform: translateY(-50%);
+    margin: 0;
+  }
 }
 /* …and the last divergence: HomeLayout renders the theme toggle BEFORE its link group, while
    the notebook docs header renders it at the trailing edge (after the GitHub icon). Push the
