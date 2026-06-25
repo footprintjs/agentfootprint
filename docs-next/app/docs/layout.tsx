@@ -18,6 +18,10 @@ export default function Layout({ children }: { children: ReactNode }) {
     <DocsLayout
       tree={source.getPageTree()}
       sidebar={{
+        // Keep the sidebar always open (ExpoStarter's clean-header recipe): no collapse button
+        // cluttering the top bar, and nothing to position. The mobile drawer trigger is separate
+        // and unaffected. This is what lets the docs header read as the same clean bar as home.
+        collapsible: false,
         // The Docs | API Reference switcher at the top of the sidebar.
         tabs: [
           {
