@@ -118,6 +118,32 @@ html {
      every pinned animation — the opposite of "jump straight to the chapter". Instant jump. */
 }
 
+/* ── Performance: pause off-screen animation work ─────────────────────────────────────────
+   The 5 chapters are 240–480vh tall and carry ~18 looping animations; without gating they keep
+   painting forever even when far off-screen at the bottom of a 30-screen page. Chapters.tsx adds
+   `.is-inview` to a chapter when it nears the viewport — until then EVERY animation inside it is
+   paused, so the browser does zero animation work for chapters you can't see. Scroll-driven
+   (inline-style) animations are unaffected; this only pauses decorative @keyframes loops. */
+.af-chapter:not(.is-inview) *,
+.af-chapter:not(.is-inview) *::before,
+.af-chapter:not(.is-inview) *::after {
+  animation-play-state: paused !important;
+}
+
+/* Accessibility safety net: a blanket reduced-motion reset. The 17 per-component blocks miss a
+   few infinite loops (e.g. the engine's marching edge); this guarantees no motion for users who
+   ask for it, regardless of which component added the animation. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
 /* hero — mascot centered on top, then a two-column claim/trace row below */
 .af-hero {
   max-width: var(--af-content-max);
@@ -275,9 +301,11 @@ html {
   top: var(--fd-nav-height, 56px);
   z-index: 25;
   height: var(--af-rail-h);
-  background: color-mix(in oklab, var(--bg) 88%, transparent);
-  backdrop-filter: saturate(140%) blur(8px);
-  -webkit-backdrop-filter: saturate(140%) blur(8px);
+  /* solid fill instead of backdrop-blur: three stacked frosted sticky bars (header+rail+bar)
+     re-blur the page behind them on every scroll frame — among the most expensive scroll-time
+     paints on integrated GPUs. The header keeps its blur; rail + bar go solid (they sit on the
+     page bg anyway, so it reads identically without the per-frame cost). */
+  background: var(--bg);
   border-bottom: 1px solid var(--border);
 }
 .af-chaprail-inner {
@@ -467,15 +495,13 @@ html {
   align-items: baseline;
   gap: 12px;
   padding: 14px 0;
-  background: color-mix(in oklab, var(--bg) 96%, transparent);
-  backdrop-filter: saturate(140%) blur(8px);
-  -webkit-backdrop-filter: saturate(140%) blur(8px);
+  background: var(--bg); /* solid (was frosted blur) — see .af-chaprail note */
   border-top: 1px solid var(--border);
   box-shadow: inset 0 -2px 0 transparent;
   transition: box-shadow 0.2s ease;
 }
 .af-chapter.alt .af-chapter-bar {
-  background: color-mix(in oklab, var(--bg-alt) 96%, transparent);
+  background: var(--bg-alt); /* solid, matches alt section bg */
 }
 .af-chapter.is-active .af-chapter-bar {
   box-shadow: inset 0 -2px 0 var(--yellow);

@@ -49,6 +49,19 @@ export function Chapters() {
     );
     sections.forEach((s) => io.observe(s));
 
+    // `.is-inview` gates the decorative @keyframes loops (CSS pauses them otherwise): start a
+    // chapter's animations ~one screen before it scrolls in, stop them once it's well past, so
+    // off-screen chapters cost zero animation work. Generous margin avoids any visible "pop".
+    const inViewIo = new IntersectionObserver(
+      (entries) => {
+        for (const e of entries) {
+          e.target.classList.toggle('is-inview', e.isIntersecting);
+        }
+      },
+      { rootMargin: '100% 0px 100% 0px', threshold: 0 },
+    );
+    sections.forEach((s) => inViewIo.observe(s));
+
     // per-section narrative — center-of-viewport test (robust for the tall pinned tracks)
     const narrEls = Array.from(root.querySelectorAll<HTMLElement>('[data-narrative]'));
     let raf = 0;
@@ -84,6 +97,7 @@ export function Chapters() {
 
     return () => {
       io.disconnect();
+      inViewIo.disconnect();
       window.removeEventListener('scroll', onScroll);
       window.removeEventListener('resize', onScroll);
       cancelAnimationFrame(raf);
