@@ -7,13 +7,23 @@ import { source } from '@/lib/source';
 import { DocsLayout } from 'fumadocs-ui/layouts/notebook';
 import { baseOptions } from '@/lib/layout.shared';
 import { SiteHeader } from '@/components/SiteHeader';
+import { SiteFooter } from '@/components/SiteFooter';
+import { siteJsonLd } from '@/lib/jsonld';
 import type { ReactNode } from 'react';
 import { BookText, Braces } from 'lucide-react';
 
 export default function Layout({ children }: { children: ReactNode }) {
   const base = baseOptions();
   return (
-    <DocsLayout
+    <>
+      {/* author/org/software graph on EVERY docs page (not just home) so "Sanjay = creator" is
+          asserted on every indexed URL. eslint-disable-next-line react/no-danger — static data. */}
+      <script
+        type="application/ld+json"
+        // eslint-disable-next-line react/no-danger
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(siteJsonLd()) }}
+      />
+      <DocsLayout
       tree={source.getPageTree()}
       sidebar={{
         // collapsible:true keeps the MOBILE drawer working (our SiteHeader opens it via
@@ -45,5 +55,8 @@ export default function Layout({ children }: { children: ReactNode }) {
     >
       {children}
     </DocsLayout>
+      {/* shared site footer (same component as home) — docs had none. Full-width below the grid. */}
+      <SiteFooter />
+    </>
   );
 }

@@ -13,8 +13,10 @@ export const metadata: Metadata = {
   description: SITE.description,
   applicationName: SITE.name,
   keywords: [...SITE.keywords],
-  authors: [{ name: SITE.author, url: SITE.org }],
-  creator: SITE.author,
+  // the author points at the real person (personal GitHub), not the org — so the page-level
+  // author signal corroborates the JSON-LD Person/sameAs for entity reconciliation.
+  authors: [{ name: SITE.authorName, url: SITE.authorUrl }],
+  creator: SITE.authorName,
   publisher: SITE.publisher,
   category: 'technology',
   alternates: { canonical: `${SITE.url}/` },
@@ -33,12 +35,9 @@ export const metadata: Metadata = {
     description: SITE.description,
     images: [`${SITE.url}/opengraph-image`],
   },
-  icons: {
-    // asset() adds the deploy basePath — Next does NOT prefix metadata icon URLs.
-    icon: asset('/footprint-logo.png'),
-    shortcut: asset('/footprint-logo.png'),
-    apple: asset('/mascot.png'),
-  },
+  // Favicon / apple-icon come from the file convention (app/icon.png, app/apple-icon.png) —
+  // small, optimized versions of the yellow footprint mark. Next emits the <link> with the
+  // correct basePath automatically, so no asset() wrangling and no 726KB tab icon.
   robots: {
     index: true,
     follow: true,

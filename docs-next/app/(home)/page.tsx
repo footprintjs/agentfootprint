@@ -3,6 +3,8 @@ import type { Metadata } from 'next';
 import { Chapters } from '@/components/home/Chapters';
 import { ChapterRail } from '@/components/home/ChapterRail';
 import { HeroTrace } from '@/components/home/HeroTrace';
+import { SiteFooter } from '@/components/SiteFooter';
+import { siteJsonLd } from '@/lib/jsonld';
 import { SITE, asset } from '@/lib/site';
 
 const HOME_TITLE = 'agentfootprint — Find the context that made your agent answer wrong';
@@ -31,51 +33,8 @@ export const metadata: Metadata = {
   },
 };
 
-// Structured data — helps search engines associate the "agentfootprint" entity with the
-// footprintjs org, the author, the GitHub repos and the npm package (the user's queries:
-// "agentfootprint github / sanjay / footprintjs"). Rendered as JSON-LD in <head>.
-const jsonLd = {
-  '@context': 'https://schema.org',
-  '@graph': [
-    {
-      '@type': 'WebSite',
-      '@id': `${SITE.url}/#website`,
-      url: `${SITE.url}/`,
-      name: SITE.name,
-      description: SITE.description,
-      publisher: { '@id': `${SITE.url}/#org` },
-    },
-    {
-      '@type': 'Organization',
-      '@id': `${SITE.url}/#org`,
-      name: SITE.publisher,
-      url: SITE.org,
-      sameAs: [SITE.org, SITE.repo, SITE.core, SITE.npm],
-    },
-    {
-      '@type': 'Person',
-      '@id': `${SITE.url}/#author`,
-      name: SITE.author,
-      url: SITE.org,
-    },
-    {
-      '@type': ['SoftwareApplication', 'SoftwareSourceCode'],
-      '@id': `${SITE.url}/#software`,
-      name: SITE.name,
-      applicationCategory: 'DeveloperApplication',
-      operatingSystem: 'Node.js, browser',
-      programmingLanguage: 'TypeScript',
-      description: SITE.description,
-      url: `${SITE.url}/`,
-      codeRepository: SITE.repo,
-      author: { '@id': `${SITE.url}/#author` },
-      publisher: { '@id': `${SITE.url}/#org` },
-      sameAs: [SITE.repo, SITE.npm],
-      offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
-      license: 'https://opensource.org/licenses/MIT',
-    },
-  ],
-};
+// Structured data lives in lib/jsonld.ts (siteJsonLd) so the SAME author/org/software graph
+// renders on the home page AND every docs page — one source of truth.
 
 function GitHubMark() {
   return (
@@ -89,7 +48,7 @@ export default function HomePage() {
   return (
     <main className="af-home">
       {/* eslint-disable-next-line react/no-danger */}
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(siteJsonLd()) }} />
       {/* hero — mascot centered on top, then two columns: the claim (left) + live trace (right) */}
       <section className="af-hero">
         {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -178,23 +137,8 @@ export default function HomePage() {
       <ChapterRail />
       <Chapters />
 
-      {/* attribution footer — the recap + CTA now live in chapter 05 (SummaryChapter) */}
-      <footer className="af-endcap af-endcap-slim">
-        <a
-          className="af-builton"
-          href="https://github.com/footprintjs/footprintjs"
-          target="_blank"
-          rel="noreferrer"
-        >
-          Built on
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={asset('/footprintjs-icon.png')} alt="" className="af-fpjs-icon" />
-          <span className="af-fpjs-word">
-            footprint<em>js</em>
-          </span>
-        </a>
-        <div className="af-legal">open source · MIT · © 2026 footprintjs</div>
-      </footer>
+      {/* attribution footer — shared with docs (components/SiteFooter); recap + CTA live in ch05 */}
+      <SiteFooter />
     </main>
   );
 }

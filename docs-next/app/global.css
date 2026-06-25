@@ -604,6 +604,28 @@ html {
   font-size: 11.5px;
   color: var(--fg-faint);
 }
+/* the legal line now carries inline links (MIT, "Created by Sanjay") + dot separators —
+   lay it out as a centered wrapping row and give the links a quiet underline. */
+.af-endcap-slim .af-legal {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 4px 7px;
+}
+.af-legal a {
+  color: var(--fg-muted);
+  text-decoration: none;
+  border-bottom: 1px solid color-mix(in oklab, var(--fg-muted) 35%, transparent);
+  transition: color 0.15s, border-color 0.15s;
+}
+.af-legal a:hover {
+  color: var(--fg);
+  border-color: var(--fg);
+}
+.af-legal .af-dot {
+  opacity: 0.5;
+}
 
 /* ============================================================
    Hero extras — status pill, CTA row, value strip, highlighter
