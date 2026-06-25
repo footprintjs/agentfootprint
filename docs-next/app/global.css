@@ -325,6 +325,39 @@ html {
 .af-chaprail a.on b {
   color: var(--yellow-dark);
 }
+
+/* ── Docs header parity with the home header ───────────────────────────────────────────
+   Fumadocs ships two different header components: HomeLayout packs a COMPACT, right-aligned
+   search (rounded-full, max-w-240) inside its right cluster, while the notebook DocsLayout in
+   nav.mode 'top' renders the search as a middle flex item sandwiched between two equal flex-1
+   groups (wordmark left, links/theme right) — so it ends up wider (max-w-sm) and centered. No
+   prop reconciles this, and the layout context hooks needed to fully rebuild the header are
+   not publicly exported. So we nudge ONLY the docs header to match home:
+     1. shrink + round the search to home's 240px rounded-full,
+     2. drop the right cluster's flex-grow so the wordmark's flex-1 pushes the search over to
+        the right, matching home's "wordmark left … search + controls right" layout.
+   Scoped strictly to #nd-subnav (the notebook subnav id) so it can NEVER touch the home header
+   (#nd-nav). UPGRADE-SENSITIVE: keyed to the Fumadocs v16 notebook header DOM
+   ([data-header-body] row = [wordmark flex-1][search][right-cluster flex-1]); re-verify after a
+   fumadocs-ui major bump. The unlayered rules here outrank Tailwind's @layer utilities. */
+#nd-subnav [data-header-body] > *:nth-child(2) {
+  max-width: 240px;
+  border-radius: 9999px;
+}
+#nd-subnav [data-header-body] > *:last-child {
+  flex: 0 0 auto;
+}
+/* …and the last divergence: HomeLayout renders the theme toggle BEFORE its link group, while
+   the notebook docs header renders it at the trailing edge (after the GitHub icon). Push the
+   home toggle to the end so both read "… links · GitHub · theme". The toggle carries a stable
+   data-theme-toggle hook (fumadocs theme-switch slot). Scoped to #nd-nav (home only) and to
+   lg+ where the desktop nav cluster is shown — the mobile menu (lg:hidden) keeps its own order. */
+@media (min-width: 1024px) {
+  #nd-nav [data-theme-toggle] {
+    order: 10;
+  }
+}
+
 .af-chapter-bar {
   position: sticky;
   top: calc(var(--fd-nav-height, 56px) + var(--af-rail-h));
