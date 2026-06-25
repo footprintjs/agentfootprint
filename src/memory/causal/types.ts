@@ -22,10 +22,14 @@ import type { LLMMessage } from '../../adapters/types.js';
 /**
  * One stored agent run — the unit of causal memory.
  *
- * Field set is INTENTIONALLY MINIMAL for now: enough to demonstrate
- * cross-run replay + cover RL/SFT export paths later. Richer fields
- * (full commitLog, narrative entries with depth/path) get added when
- * an out-of-band recorder integrates `executor.getSnapshot()` directly.
+ * Decisions, tool calls, iterations, and token usage are harvested DURING the run
+ * by `causalEvidenceRecorder` (the evidence bridge) and persisted here — the Agent
+ * attaches it automatically whenever a CAUSAL memory is mounted. Still deferred: the
+ * FULL `commitLog` + narrative entries with depth/path, which land only when an
+ * out-of-band recorder integrates `executor.getSnapshot()` directly. Consequence: a
+ * persisted snapshot answers "why?" from the recorded DOMAIN evidence (decisions /
+ * tool calls), but cannot yet rehydrate the trace-toolpack tools for cross-restart
+ * step-by-step navigation — use `.selfExplain()` for in-conversation deep traces.
  */
 export interface SnapshotEntry {
   /**
@@ -49,11 +53,11 @@ export interface SnapshotEntry {
   readonly iterations: number;
 
   /**
-   * Decision records collected via `decide()`/`select()` during the
-   * run. Empty when the agent's flowchart didn't use any decision
-   * primitives. THE killer field (by design): each entry carries the rule
-   * that matched + the evidence values that satisfied it. STATUS: persisted
-   * EMPTY today — the evidence bridge (backlog #5) wires it.
+   * Decision records collected via `decide()`/`select()` (and skill-graph routing)
+   * during the run — harvested live by `causalEvidenceRecorder` (the evidence
+   * bridge) and persisted here. Empty only when the run used no decision primitives.
+   * THE killer field (by design): each entry carries the rule that matched + the
+   * evidence values that satisfied it.
    */
   readonly decisions: ReadonlyArray<DecisionRecord>;
 
