@@ -13,7 +13,10 @@
    clean white site with near-black ink — NOT low-contrast yellow text.
    ============================================================ */
 :root {
-  --bg: #ffffff;
+  /* Page bg is a soft WARM off-white, not pure #fff: pure white glares/halates on bright screens
+     and makes white cards invisible. This calmer surface is easier on the eyes AND lets elevated
+     content (cards/code/trace/images on --bg-elev #fff) read as highlighted above it. */
+  --bg: #fbfaf8;
   --bg-elev: #ffffff;
   --fg: #18181b;
   --fg-muted: #737373;
@@ -291,9 +294,10 @@ html {
      (the stage stops pinning and progress reads wrong). The off-screen runtime cost is handled
      instead by pausing animations off-screen (.is-inview gating, see the perf block up top). */
 }
-.af-chapter.alt {
-  background: var(--bg-alt);
-}
+/* Chapters share ONE uniform page background (no alternating bands) — separation comes from each
+   chapter's heading bar (its top border + index/title), and content "pops" by ELEVATION instead:
+   cards / code / the trace panel / images sit on --bg-elev above the calm --bg with a subtle
+   border + shadow. (The .alt class is still emitted but no longer paints a different background.) */
 .af-chapter-inner {
   max-width: var(--af-content-max);
   margin: 0 auto;
@@ -514,9 +518,6 @@ html {
   border-top: 1px solid var(--border);
   box-shadow: inset 0 -2px 0 transparent;
   transition: box-shadow 0.2s ease;
-}
-.af-chapter.alt .af-chapter-bar {
-  background: var(--bg-alt); /* solid, matches alt section bg */
 }
 .af-chapter.is-active .af-chapter-bar {
   box-shadow: inset 0 -2px 0 var(--yellow);
