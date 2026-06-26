@@ -2140,6 +2140,27 @@ html {
   top: calc(var(--fd-nav-height, 56px) + var(--af-rail-h) + 52px);
 }
 
+/* ── Mobile (≤760px): reclaim the sticky real estate ─────────────────────────────────────────
+   On a phone, header + chapter rail + the per-chapter heading bar stacked to ~20% of the screen
+   before any content. The rail is now a table-of-contents that highlights the active chapter, so
+   it ALONE is enough as the persistent "where am I" indicator — the per-chapter bar stops pinning
+   here: it shows the chapter title as a normal heading when you arrive, then scrolls away. Only
+   header + rail stay fixed (~96px, ~11%). Because the bar no longer reserves sticky space below
+   the rail, the four pinned animation stages — which reserved its height via the +52/+60 in their
+   sticky `top` — pull up to sit just under the rail; otherwise an empty band would show where the
+   bar used to be. Placed AFTER all four stage definitions so the override wins by source order. */
+@media (max-width: 760px) {
+  .af-chapter-bar {
+    position: static;
+  }
+  .af-pin-stage,
+  .af-why-stage,
+  .af-ctx-map-stage,
+  .af-eng-sticky {
+    top: calc(var(--fd-nav-height, 56px) + var(--af-rail-h) + 8px);
+  }
+}
+
 /* sticky headline cross-fade — heading + lede swap in place with the right side */
 .af-eng-headline {
   position: relative;

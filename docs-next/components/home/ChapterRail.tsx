@@ -69,7 +69,11 @@ export function ChapterRail() {
             aria-current={active === c.id ? 'true' : undefined}
           >
             <b>{c.ix}</b>
-            <span>{c.ti}</span>
+            {/* rail shows the CATEGORY as a table-of-contents label (The problem, The solution, …);
+                the per-chapter heading bar owns the full title. Splitting them this way means the
+                chapter title never appears twice on screen at once (rail = where you are, bar = the
+                headline). Keep in sync with the bar in Chapters.tsx. */}
+            <span>{c.cat}</span>
           </a>
         ))}
       </div>

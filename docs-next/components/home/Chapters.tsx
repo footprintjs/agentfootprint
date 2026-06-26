@@ -113,7 +113,9 @@ export function Chapters() {
             <div className="af-chapter-inner">
               <div className="af-chapter-bar">
                 <span className="ix">{c.ix}</span>
-                <span className="af-cat">{c.cat}</span>
+                {/* The category (The solution, …) now lives in the rail as the table-of-contents
+                    label; the bar owns the full title. Dropping the category pill here is what kills
+                    the title/category echo between the rail and this bar. See ChapterRail.tsx. */}
                 <span className="ti">{c.ti}</span>
                 <span className="sub" key={sub}>
                   {sub}
