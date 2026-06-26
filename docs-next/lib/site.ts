@@ -28,7 +28,7 @@ export const SITE = {
   repo: 'https://github.com/footprintjs/agentfootprint',
   license: 'https://github.com/footprintjs/agentfootprint/blob/main/LICENSE',
   org: 'https://github.com/footprintjs',
-  core: 'https://github.com/footprintjs/footprintjs',
+  core: 'https://github.com/footprintjs/footPrint', // the footprintjs library repo (note the capital P — footprintjs/footprintjs 404s)
   npm: 'https://www.npmjs.com/package/agentfootprint',
   keywords: [
     'agentfootprint',

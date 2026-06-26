@@ -714,7 +714,9 @@ html {
 @media (prefers-reduced-motion: reduce) { .af-trace-dot { animation: none; } .af-trace-ln { opacity: 1; transform: none; } }
 
 /* animated closer */
-.af-closer { max-width: 720px; margin: 0 auto; display: flex; flex-direction: column; align-items: center; }
+/* text-align:center so the heading + lede CENTER THEIR TEXT (align-items only centers the boxes —
+   a 2-line heading/lede still wrapped left-aligned inside its centered box, reading off-centre). */
+.af-closer { max-width: 720px; margin: 0 auto; display: flex; flex-direction: column; align-items: center; text-align: center; }
 .af-closer-head { font-size: clamp(26px, 4vw, 40px); font-weight: 600; letter-spacing: -0.025em; line-height: 1.1; margin: 14px 0; text-wrap: balance; }
 .af-closer-head em { font-style: normal; color: var(--fg); background: linear-gradient(transparent 58%, color-mix(in oklab, var(--yellow) 85%, transparent) 58%); }
 .af-closer-lede { font-size: 17px; color: var(--fg-muted); margin: 0 0 22px; max-width: 52ch; }
