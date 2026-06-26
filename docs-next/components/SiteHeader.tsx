@@ -55,7 +55,7 @@ export function SiteHeader() {
   const onDocs = pathname?.startsWith('/docs') ?? false;
 
   return (
-    <header id="af-header" className="af-sh">
+    <header id="af-header" className={`af-sh${onDocs ? ' af-sh--docs' : ' af-sh--home'}`}>
       <div className="af-sh-inner">
         <Link href="/" className="af-wordmark af-sh-brand" aria-label="agentfootprint — home">
           {/* eslint-disable-next-line @next/next/no-img-element */}
