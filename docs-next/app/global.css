@@ -387,16 +387,13 @@ html {
   height: var(--fd-nav-height, 56px);
   padding: 0 16px;
 }
-/* Home: put the header content in the SAME centered content column as the hero / chapter rail /
-   chapters (max --af-content-max, --af-gutter side padding). So the wordmark lands directly above
-   the rail pills and the search/links/theme align with the content's right edge — at EVERY width.
-   Without this the header is full-bleed while the content is capped at 1200px, so on a wide screen
-   the wordmark floats ~300px left of where content begins (and ~300px left of the rail beneath it).
-   Docs is left full-bleed: the notebook layout already centers its own header over the sidebar. */
+/* Home header is FULL-WIDTH on purpose (NOT pulled into the centered --af-content-max content
+   column). The centered column is a CONTENT treatment only — hero / chapter rail / chapters; the
+   header bar spans the whole viewport so the wordmark hugs the left and search/links/theme hug the
+   right, like a normal app header. We only widen the side padding to --af-gutter (vs the base 16px)
+   so the controls share the same comfortable edge inset as the content gutter — full width, not
+   edge-jammed. Docs keeps the base 16px: the notebook layout positions its own header. */
 .af-sh--home .af-sh-inner {
-  max-width: var(--af-content-max);
-  width: 100%;
-  margin: 0 auto;
   padding: 0 var(--af-gutter);
 }
 .af-sh-brand {
