@@ -12,6 +12,11 @@
 </p>
 
 <p align="center">
+  <strong>Build</strong> agents — skills, steering, RAG, memory, control flow — and <strong>debug</strong> them like nothing else.<br/>
+  <em>Why</em> is a query, not a guess.
+</p>
+
+<p align="center">
   <a href="https://footprintjs.github.io/agentThinkingUI/">
     <img src="docs/assets/hero-atui.png" alt="An agent run replayed in AgentThinkingUI — the LLM 'brain' calls the Flight-search tool, the step inspector shows the tool's raw output and the brain's reasoning about it, and the timeline scrubs every step of the run." width="100%">
   </a>
@@ -64,159 +69,6 @@ If contextual errors live in what the model was given, then the run itself must 
 structured so context is **evidence** — every injection, read, write, decision, and
 tool call recorded *connected*, the moment it happens. Not logs you grep. Evidence
 you ask.
-
-## How — we abstract context engineering
-
-Every piece of context enters the LLM through one of **3 slots** (`system` ·
-`messages` · `tools`), under one of **4 triggers** — skills, steering, RAG, facts,
-memory, guardrails are all the same move: `Injection = slot × trigger × cache`.
-
-**Because the framework owns that injection point, every piece of context is born
-tracked.** Tracking isn't an add-on you wire up — it's a consequence of the
-abstraction. [The full model ↓](#the-model--what-we-abstract)
-
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/hero-dark.svg">
-    <source media="(prefers-color-scheme: light)" srcset="docs/assets/hero-light.svg">
-    <img alt="agentfootprint mascot composing context flavors (Skills, Steering, Guardrails, RAG, Tool APIs, Memory) into three structured LLM slots (system, messages, tools) — the central abstraction, visualized." src="docs/assets/hero-light.svg" width="100%"/>
-  </picture>
-</p>
-
-## What tracking buys you
-
-**See it in 30 seconds** — four questions logs can't answer, each answered by code in this repo from a real run:
-
-```text
-Q: Why did the model pick refund_full instead of refund_partial?
-A: margin 0.02 — ⚠ NARROW: the two tool descriptions read nearly identical
-   (toolChoiceRecorder — and the catalog lint flags the pair before you ever run)
-
-Q: Why was this loan declined?
-A: decision ← [control: "DTI above the 0.43 affordability ceiling"] ← dti 0.52 ← monthlyDebt / income
-   (decide() evidence + the causal slice — every hop is a real recorded edge)
-
-Q: Which piece of context made the answer wrong?
-A: CAUSAL: ablating fact 'vip-override' flipped the outcome in 3/3 seeded reruns
-   (localizeContextBug — ranked proxies, counterfactual proof)
-
-Q: Prove nobody edited this run's record.
-A: verifyAuditBundle → valid: false, brokenAt: #16 — the tampered record, named
-   (hash-chained audit export, offline verification)
-```
-
-And you don't have to read the trace yourself — **we provide the tools for an LLM to track it for you**: the trace toolpack let a debugger model find a planted bug while reading **9.5% of the trace** ([guide](docs/guides/trace-debugging.md)).
-
-**And all this watching costs the run nothing.** Your agent *is* the event loop: a stage runs on the call stack and feeds its trace events into a queue; in the idle beat the dispatcher delivers them to your listeners and files them in trace memory — **one beat behind**, never blocking the hot path:
-
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/event-loop-dark.svg">
-    <source media="(prefers-color-scheme: light)" srcset="docs/assets/event-loop-light.svg">
-    <img alt="Your agent is the event loop — animated. Left: your agent code (Context, Call LLM, Tool Calls) looping turn after turn. Right: the JS event loop drawn as two bold curved arrows with a traveling cursor and two stops — the call stack, where each stage runs as a frame and feeds four trace events (structure, data, control, emit) into the trace queue at the loop's center; and idle time, where the dispatcher flies the queued events into TRACE MEMORY and every listener (onStageAdded, onCommit, onDecision, onEmit) receives every event, one beat behind. Grey is JavaScript's own machinery, green is footprintjs, colors are your code and its trace." src="docs/assets/event-loop-light.svg" width="100%"/>
-  </picture>
-</p>
-
-## One contextual error, walked end to end
-
-The third question above, in full — every value below is the captured output of
-[`examples/observability/05-context-bisect.ts`](examples/observability/05-context-bisect.ts)
-and [`06-backtrack-trace.ts`](examples/observability/06-backtrack-trace.ts), runnable offline.
-
-**The bug.** A refunds agent carries a poisoned customer-profile fact. It answers:
-
-> *"Refund APPROVED: Dana Reyes holds VIP tier override status, so the 47-day-old
-> order qualifies for a refund beyond the 30-day window."*
-
-The policy says 30 days. The logs look fine — the model was *given* bad context,
-and classical logging has no row for that.
-
-**The walk.** Because context here is state, the decision backtracks like a
-variable: who read it, who wrote it, who let it in, where it was born —
-
-```text
-ANSWER   "Refund APPROVED…"                                   ← the bug
-READ     call-llm#40 assembled the system prompt              ← exactly what the model saw
-LANDED   context#6 wrote systemPromptInjections               ← who mutated state
-ALLOWED  trigger { kind: 'always' } — active every iteration  ← why it was let in
-BORN     defineFact('vip-override-fact')                      ← who wrote it
-```
-
-That chain gives the **complete, provable candidate set** — every piece of
-context that demonstrably reached the call, and nothing else. Influence scoring
-then *ranks* inside it (the two facts sit 0.01 apart — proxies can't separate
-them), and counterfactual **ablation proves**: removing `vip-override-fact`
-flips APPROVED → DECLINED in **3/3 seeded reruns**; the benign style fact and
-the lookup tool come back not-confirmed, 0/3. Scores are proxies; only the
-ablation verdict makes a causal claim — the report says so itself.
-
-**And when the proxy *can't* rank — it says so.** Output-similarity scoring is
-structurally blind to **absence/crowding** bugs (a key instruction truncated out
-of the window, context diluted by filler): the culprit doesn't resemble the
-answer, so it ranks low under an innocent. `rankingConfidence` is the honesty
-marker for that — when no source clearly wins, it returns a **shortlist to
-confirm by ablation** instead of a confident, wrong #1:
-
-```typescript
-import { rankingConfidence, ratioStrategy } from 'agentfootprint/observe';
-
-const c = rankingConfidence(scores); // over a scoreInfluence() result
-if (!c.clearWinner) ablate(c.shortlist); // too flat to trust → escalate to truth
-// decisiveness rule is pluggable: marginStrategy (default) · ratioStrategy
-// (scale-invariant) · bring-your-own. See docs/guides/ranking-confidence.md
-```
-
-**Three interfaces, one for each shape of the bug** — ship-a-default, bring-your-own:
-
-| interface | finds the culprit when it is… | confirm by |
-|---|---|---|
-| **influence ranking** (`scoreInfluence` + `rankingConfidence`) | **present** — orders suspects, says when it can't | — |
-| **ablation** (`localizeContextBug`) | **present** — *remove* it, see the outcome flip | removal |
-| **missing-context finder** (`findDroppedContext`) | **absent** — available but never reached the model (`available − sent`) | restoration |
-
-The third closes the gap the first two are blind to — a key instruction truncated
-out of the window has nothing to ablate. `findDroppedContext` is a cheap, exact id
-diff (no embeddings, no LLM); confirm by *restoration* — add the dropped unit back,
-see if the outcome flips. [Guide](docs/guides/missing-context.md) ·
-[example](examples/observability/10-missing-context.ts).
-
-**The same walk, visual.** One call serializes the report for
-[AgentThinkingUI](https://github.com/footprintjs/agentThinkingUI)'s
-`<BacktrackView>` — the "why?" board, triggerable from **any** decision point
-(final answer, a mid-loop tool choice, a deterministic `decide()` rule):
-
-```typescript
-import { localizeContextBug, toBacktrackTrace } from 'agentfootprint/observe';
-
-const report = await localizeContextBug({ artifacts, embedder, atStep, rerun });
-const trace = toBacktrackTrace(report, {
-  claim: 'The agent approved a refund 47 days past the 30-day window — why?',
-  answer: { text: buggyAnswer, label: 'the wrong answer' },
-});
-// <BacktrackView trace={trace}/> — or <BacktrackOverlay/> from any decision point
-```
-
-<img alt="The BacktrackView board: the wrong answer, the suspects with influence meters, the CAUSAL 3/3 ablation stamp on the planted fact, and the chain-of-custody rewind showing the exact system prompt the model saw with the culprit sentence highlighted." src="docs/assets/backtrack-board.png" width="100%"/>
-<p align="center">
-  <sub><a href="https://footprintjs.github.io/agentThinkingUI/demo/backtrack.html"><b>▶ Try the why-board live</b></a> — or run <a href="examples/observability/06-backtrack-trace.ts"><code>examples/observability/06-backtrack-trace.ts</code></a> offline.</sub>
-</p>
-
-The rewind pane at the bottom is the killer view: **the exact system prompt the
-model saw**, with the culprit sentence highlighted — recorded state, not a
-reconstruction. And the same chain feeds the machine door: every id on the
-board is a `runtimeStageId` a debugger LLM can drill with the
-[trace toolpack](docs/guides/trace-debugging.md), token-cheaply.
-
----
-
-## Pick your door
-
-| 🔧 Building an agent? | 🐛 Agent misbehaving? | 🏛️ Need audit / compliance? |
-|---|---|---|
-| Typed agents with skills, steering, RAG, memory, guardrails — and the trace for free. | Lint your tool catalog in 5 minutes — works on **any** framework's tool list (plain JSON / MCP / OpenAI / Anthropic shapes). Then causal slices, context bisection, and the debugger-LLM toolpack. | Hash-chained, tamper-evident run records with an offline verifier — record-keeping in the EU-AI-Act shape. |
-| [→ Quick start](#quick-start--runs-offline-no-api-key) · [→ Build ↓](#-build--design-your-agent-or-system-of-agents) | [→ Debug ↓](#-debug--see-what-your-agent-did) · [→ Tool-catalog lint](docs/guides/tool-catalog-lint.md) · [→ Trace debugging](docs/guides/trace-debugging.md) | [→ Audit ↓](#-audit--prove-what-happened) · [→ Security guide](docs/guides/security.md) |
-
----
 
 ## Quick start — runs offline, no API key
 
@@ -306,6 +158,159 @@ await pipeline.run({ message: 'URGENT: refund dispute on order #4411' });
 ```
 
 The fourth primitive is `Loop` — `Loop.repeat(agent).until(guard).times(5)`, with a mandatory budget guard. And the named patterns from the research literature ship pre-composed from the same four: `selfConsistency` · `reflection` · `debate` · `mapReduce` · `tot` · `swarm`. Because every composition is a flowchart, the structure you wrote is the structure you see in the UI — and the trace spans the whole pipeline, not one agent at a time. [Designing systems of agents ↓](#-build--design-your-agent-or-system-of-agents)
+
+---
+
+## How — we abstract context engineering
+
+Every piece of context enters the LLM through one of **3 slots** (`system` ·
+`messages` · `tools`), under one of **4 triggers** — skills, steering, RAG, facts,
+memory, guardrails are all the same move: `Injection = slot × trigger × cache`.
+
+**Because the framework owns that injection point, every piece of context is born
+tracked.** Tracking isn't an add-on you wire up — it's a consequence of the
+abstraction. [The full model ↓](#the-model--what-we-abstract)
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/hero-dark.svg">
+    <source media="(prefers-color-scheme: light)" srcset="docs/assets/hero-light.svg">
+    <img alt="agentfootprint mascot composing context flavors (Skills, Steering, Guardrails, RAG, Tool APIs, Memory) into three structured LLM slots (system, messages, tools) — the central abstraction, visualized." src="docs/assets/hero-light.svg" width="100%"/>
+  </picture>
+</p>
+
+## What tracking buys you
+
+**See it in 30 seconds** — four questions logs can't answer, each answered by code in this repo from a real run:
+
+```text
+Q: Why did the model pick refund_full instead of refund_partial?
+A: margin 0.02 — ⚠ NARROW: the two tool descriptions read nearly identical
+   (toolChoiceRecorder — and the catalog lint flags the pair before you ever run)
+
+Q: Why was this loan declined?
+A: decision ← [control: "DTI above the 0.43 affordability ceiling"] ← dti 0.52 ← monthlyDebt / income
+   (decide() evidence + the causal slice — every hop is a real recorded edge)
+
+Q: Which piece of context made the answer wrong?
+A: CAUSAL: ablating fact 'vip-override' flipped the outcome in 3/3 seeded reruns
+   (localizeContextBug — ranked proxies, counterfactual proof)
+
+Q: Prove nobody edited this run's record.
+A: verifyAuditBundle → valid: false, brokenAt: #16 — the tampered record, named
+   (hash-chained audit export, offline verification)
+```
+
+And you don't have to read the trace yourself — the trace toolpack lets a debugger model do it: in one run it found a planted bug while reading **9.5% of the trace** ([guide](docs/guides/trace-debugging.md)).
+
+And the watching costs the run nothing. Your agent *is* the event loop: a stage runs on the call stack and feeds its trace events into a queue; in the idle beat the dispatcher delivers them to your listeners and files them in trace memory — one beat behind, never blocking the hot path:
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/event-loop-dark.svg">
+    <source media="(prefers-color-scheme: light)" srcset="docs/assets/event-loop-light.svg">
+    <img alt="Your agent is the event loop — animated. Left: your agent code (Context, Call LLM, Tool Calls) looping turn after turn. Right: the JS event loop drawn as two bold curved arrows with a traveling cursor and two stops — the call stack, where each stage runs as a frame and feeds four trace events (structure, data, control, emit) into the trace queue at the loop's center; and idle time, where the dispatcher flies the queued events into TRACE MEMORY and every listener (onStageAdded, onCommit, onDecision, onEmit) receives every event, one beat behind. Grey is JavaScript's own machinery, green is footprintjs, colors are your code and its trace." src="docs/assets/event-loop-light.svg" width="100%"/>
+  </picture>
+</p>
+
+## One contextual error, walked end to end
+
+The third question above, in full — every value below is the captured output of
+[`examples/observability/05-context-bisect.ts`](examples/observability/05-context-bisect.ts)
+and [`06-backtrack-trace.ts`](examples/observability/06-backtrack-trace.ts), runnable offline.
+
+**The bug.** A refunds agent carries a poisoned customer-profile fact. It answers:
+
+> *"Refund APPROVED: Dana Reyes holds VIP tier override status, so the 47-day-old
+> order qualifies for a refund beyond the 30-day window."*
+
+The policy says 30 days. The logs look fine — the model was *given* bad context,
+and classical logging has no row for that.
+
+**The walk.** Because context here is state, the decision backtracks like a
+variable: who read it, who wrote it, who let it in, where it was born —
+
+```text
+ANSWER   "Refund APPROVED…"                                   ← the bug
+READ     call-llm#40 assembled the system prompt              ← exactly what the model saw
+LANDED   context#6 wrote systemPromptInjections               ← who mutated state
+ALLOWED  trigger { kind: 'always' } — active every iteration  ← why it was let in
+BORN     defineFact('vip-override-fact')                      ← who wrote it
+```
+
+That chain gives the complete, provable candidate set — every piece of
+context that demonstrably reached the call, and nothing else. Influence scoring
+then ranks inside it (the two facts sit 0.01 apart — proxies can't separate
+them), and counterfactual ablation proves it: removing `vip-override-fact`
+flips APPROVED → DECLINED in **3/3 seeded reruns**; the benign style fact and
+the lookup tool come back not-confirmed, 0/3. Scores are proxies; only the
+ablation verdict makes a causal claim — the report says so itself.
+
+And when the proxy can't rank, it says so. Output-similarity scoring is
+structurally blind to absence/crowding bugs (a key instruction truncated out
+of the window, context diluted by filler): the culprit doesn't resemble the
+answer, so it ranks low under an innocent. `rankingConfidence` is the honesty
+marker for that — when no source clearly wins, it returns a shortlist to
+confirm by ablation instead of a confident, wrong #1:
+
+```typescript
+import { rankingConfidence, ratioStrategy } from 'agentfootprint/observe';
+
+const c = rankingConfidence(scores); // over a scoreInfluence() result
+if (!c.clearWinner) ablate(c.shortlist); // too flat to trust → escalate to truth
+// decisiveness rule is pluggable: marginStrategy (default) · ratioStrategy
+// (scale-invariant) · bring-your-own. See docs/guides/ranking-confidence.md
+```
+
+**Three interfaces, one for each shape of the bug** — ship-a-default, bring-your-own:
+
+| interface | finds the culprit when it is… | confirm by |
+|---|---|---|
+| **influence ranking** (`scoreInfluence` + `rankingConfidence`) | **present** — orders suspects, says when it can't | — |
+| **ablation** (`localizeContextBug`) | **present** — *remove* it, see the outcome flip | removal |
+| **missing-context finder** (`findDroppedContext`) | **absent** — available but never reached the model (`available − sent`) | restoration |
+
+The third closes the gap the first two are blind to — a key instruction truncated
+out of the window has nothing to ablate. `findDroppedContext` is a cheap, exact id
+diff (no embeddings, no LLM); confirm by *restoration* — add the dropped unit back,
+see if the outcome flips. [Guide](docs/guides/missing-context.md) ·
+[example](examples/observability/10-missing-context.ts).
+
+**The same walk, visual.** One call serializes the report for
+[AgentThinkingUI](https://github.com/footprintjs/agentThinkingUI)'s
+`<BacktrackView>` — the "why?" board, triggerable from **any** decision point
+(final answer, a mid-loop tool choice, a deterministic `decide()` rule):
+
+```typescript
+import { localizeContextBug, toBacktrackTrace } from 'agentfootprint/observe';
+
+const report = await localizeContextBug({ artifacts, embedder, atStep, rerun });
+const trace = toBacktrackTrace(report, {
+  claim: 'The agent approved a refund 47 days past the 30-day window — why?',
+  answer: { text: buggyAnswer, label: 'the wrong answer' },
+});
+// <BacktrackView trace={trace}/> — or <BacktrackOverlay/> from any decision point
+```
+
+<img alt="The BacktrackView board: the wrong answer, the suspects with influence meters, the CAUSAL 3/3 ablation stamp on the planted fact, and the chain-of-custody rewind showing the exact system prompt the model saw with the culprit sentence highlighted." src="docs/assets/backtrack-board.png" width="100%"/>
+<p align="center">
+  <sub><a href="https://footprintjs.github.io/agentThinkingUI/demo/backtrack.html"><b>▶ Try the why-board live</b></a> — or run <a href="examples/observability/06-backtrack-trace.ts"><code>examples/observability/06-backtrack-trace.ts</code></a> offline.</sub>
+</p>
+
+The rewind pane at the bottom is the killer view: **the exact system prompt the
+model saw**, with the culprit sentence highlighted — recorded state, not a
+reconstruction. And the same chain feeds the machine door: every id on the
+board is a `runtimeStageId` a debugger LLM can drill with the
+[trace toolpack](docs/guides/trace-debugging.md), token-cheaply.
+
+---
+
+## Pick your door
+
+| 🔧 Building an agent? | 🐛 Agent misbehaving? | 🏛️ Need audit / compliance? |
+|---|---|---|
+| Typed agents with skills, steering, RAG, memory, guardrails — and the trace for free. | Lint your tool catalog in 5 minutes — works on **any** framework's tool list (plain JSON / MCP / OpenAI / Anthropic shapes). Then causal slices, context bisection, and the debugger-LLM toolpack. | Hash-chained, tamper-evident run records with an offline verifier — record-keeping in the EU-AI-Act shape. |
+| [→ Quick start](#quick-start--runs-offline-no-api-key) · [→ Build ↓](#-build--design-your-agent-or-system-of-agents) | [→ Debug ↓](#-debug--see-what-your-agent-did) · [→ Tool-catalog lint](docs/guides/tool-catalog-lint.md) · [→ Trace debugging](docs/guides/trace-debugging.md) | [→ Audit ↓](#-audit--prove-what-happened) · [→ Security guide](docs/guides/security.md) |
 
 ---
 
@@ -649,6 +654,10 @@ undocumented optional params). The runtime counterpart, `toolChoiceRecorder`
 (`agentfootprint/observe`), scores each live LLM call's tool choice against
 the same geometry and flags narrow margins and proxy disagreements — lazily,
 off the hot path.
+
+agentfootprint owns the *detection* — the scores, the ties, the recorded
+margins; you own the *policy* — the threshold, the embedder, the rewrite. We
+map; you decide.
 
 > 📖 **[Tool-catalog lint guide](docs/guides/tool-catalog-lint.md)** — 5 minutes
 > from a tools.json to a gated CI check ·
