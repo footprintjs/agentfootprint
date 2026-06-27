@@ -7,7 +7,7 @@
 </p>
 
 <p align="center">
-  The explainable agent framework: every read, write, decision, and tool call becomes
+  The explainable AI agent framework for TypeScript: every read, write, decision, and tool call becomes
   <strong>connected evidence</strong> as your agent runs. When something goes wrong, you don't grep logs — you ask.
 </p>
 

@@ -42,7 +42,12 @@
     "human-in-the-loop",
     "grounding",
     "hallucination-detection",
-    "audit-trail"
+    "audit-trail",
+    "ai-agent-framework",
+    "context-engineering",
+    "agent-observability",
+    "agent-debugging",
+    "llm-tracing"
   ],
   "engines": {
     "node": ">=20"
