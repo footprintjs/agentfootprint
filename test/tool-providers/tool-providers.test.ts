@@ -9,7 +9,8 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { staticTools, gatedTools, type ToolDispatchContext } from '../../src/index.js';
+import { type ToolDispatchContext } from '../../src/tool-providers/index.js'
+import { staticTools, gatedTools } from '../../src/tool-providers/index.js';
 import type { Tool } from '../../src/index.js';
 
 // ─── Fixtures ─────────────────────────────────────────────────────

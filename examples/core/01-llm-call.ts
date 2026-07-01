@@ -6,11 +6,8 @@
  * `agentfootprint.stream.llm_start` / `llm_end` events an Agent does.
  */
 
-import {
-  LLMCall,
-  MockProvider,
-  type LLMProvider,
-} from '../../src/index.js';
+import { LLMCall, type LLMProvider } from '../../src/index.js'
+import { MockProvider } from '../../src/llm-providers.js';
 import { isCliEntry, printResult, type ExampleMeta } from '../helpers/cli.js';
 import { exampleProvider } from '../helpers/provider.js';
 

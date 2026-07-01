@@ -26,7 +26,8 @@ summarize the middle section.
 ## Anatomy
 
 ```ts
-import { Agent, defineMemory, MEMORY_TYPES, MEMORY_STRATEGIES, InMemoryStore, anthropic } from 'agentfootprint';
+import { Agent, anthropic } from 'agentfootprint'
+import { defineMemory, MEMORY_TYPES, MEMORY_STRATEGIES, InMemoryStore } from 'agentfootprint/memory';
 
 const memory = defineMemory({
   id: 'long-chat',

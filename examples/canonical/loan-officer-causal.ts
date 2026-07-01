@@ -31,18 +31,10 @@
  *   npm run example examples/canonical/loan-officer-causal.ts
  */
 
-import {
-  Agent,
-  defineSkill,
-  defineTool,
-  defineMemory,
-  MEMORY_TYPES,
-  MEMORY_STRATEGIES,
-  SNAPSHOT_PROJECTIONS,
-  InMemoryStore,
-  mockEmbedder,
-  mock,
-} from '../../src/index.js';
+import { Agent, defineTool } from '../../src/index.js'
+import { defineSkill } from '../../src/injection-engine.js'
+import { defineMemory, MEMORY_TYPES, MEMORY_STRATEGIES, SNAPSHOT_PROJECTIONS, InMemoryStore, mockEmbedder } from '../../src/memory/index.js'
+import { mock } from '../../src/llm-providers.js';
 import { isCliEntry, printResult, type ExampleMeta } from '../helpers/cli.js';
 
 export const meta: ExampleMeta = {

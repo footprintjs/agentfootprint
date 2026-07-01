@@ -13,7 +13,7 @@ What `providerFromEnv()` resolved: the provider + the `model` to pass to
 
 ### kind
 
-> `readonly` **kind**: `"anthropic"` \| `"openai"` \| `"mock"` \| `"azure-openai"`
+> `readonly` **kind**: `"mock"` \| `"anthropic"` \| `"openai"` \| `"azure-openai"`
 
 Defined in: [src/adapters/llm/createProvider.ts:93](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/llm/createProvider.ts#L93)
 

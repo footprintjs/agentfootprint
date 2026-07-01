@@ -44,6 +44,6 @@ Defined in: [src/recorders/core/types.ts:95](https://github.com/footprintjs/agen
 
 ### slot
 
-> `readonly` **slot**: [`ContextSlot`](/docs/api/type-aliases/ContextSlot)
+> `readonly` **slot**: `ContextSlot`
 
 Defined in: [src/recorders/core/types.ts:93](https://github.com/footprintjs/agentfootprint/blob/main/src/recorders/core/types.ts#L93)

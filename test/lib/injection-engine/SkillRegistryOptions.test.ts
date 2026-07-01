@@ -12,12 +12,8 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import {
-  SkillRegistry,
-  defineSkill,
-  defineInstruction,
-  type SurfaceMode,
-} from '../../../src/index.js';
+import { type SurfaceMode } from '../../../src/injection-engine.js'
+import { SkillRegistry, defineSkill, defineInstruction } from '../../../src/injection-engine.js';
 
 // ─── Fixtures ─────────────────────────────────────────────────────
 

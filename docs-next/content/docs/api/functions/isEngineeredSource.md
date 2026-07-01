@@ -17,7 +17,7 @@ subscription when you don't need the wrapper helper.
 
 ### source
 
-[`ContextSource`](/docs/api/type-aliases/ContextSource)
+`ContextSource`
 
 ## Returns
 

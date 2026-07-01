@@ -30,13 +30,8 @@ the **90% case** (chatbot, short-to-medium conversations).
 ## Anatomy of one call
 
 ```ts
-import {
-  Agent,
-  defineMemory,
-  MEMORY_TYPES,
-  MEMORY_STRATEGIES,
-  InMemoryStore,
-} from 'agentfootprint';
+import { Agent } from 'agentfootprint'
+import { defineMemory, MEMORY_TYPES, MEMORY_STRATEGIES, InMemoryStore } from 'agentfootprint/memory';
 
 const memory = defineMemory({
   id: 'last-10',

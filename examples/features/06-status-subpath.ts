@@ -20,13 +20,10 @@
  * Run:  npx tsx examples/features/06-status-subpath.ts
  */
 
-import { Agent, type AgentfootprintEvent } from '../../src/index.js';
-import {
-  selectStatus,
-  renderStatusLine,
-  defaultStatusTemplates,
-  type StatusTemplates,
-} from '../../src/status.js';
+import { Agent } from '../../src/index.js'
+import { type AgentfootprintEvent } from '../../src/events.js';
+import { selectStatus, renderStatusLine, type StatusTemplates } from '../../src/status.js'
+import { defaultStatusTemplates } from '../../src/locales/index.js';
 import { isCliEntry, printResult, type ExampleMeta } from '../helpers/cli.js';
 import { exampleProvider } from '../helpers/provider.js';
 

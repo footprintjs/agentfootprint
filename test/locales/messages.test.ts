@@ -13,16 +13,10 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import {
-  composeMessages,
-  defaultCommentaryMessages,
-  defaultThinkingMessages,
-  validateMessages,
-  defaultCommentaryTemplates,
-  defaultStatusTemplates,
-  Agent,
-  mock,
-} from '../../src/index.js';
+import { defaultCommentaryTemplates, Agent } from '../../src/index.js'
+import { composeMessages, defaultCommentaryMessages, defaultThinkingMessages, validateMessages } from '../../src/locales/index.js'
+import { defaultStatusTemplates } from '../../src/locales/index.js'
+import { mock } from '../../src/llm-providers.js';
 
 // ─── 1. UNIT — defaults alias the v2.4 templates ─────────────────
 

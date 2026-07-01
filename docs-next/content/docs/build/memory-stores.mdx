@@ -22,7 +22,7 @@ All three implement the same `MemoryStore` interface — `defineMemory({ store }
 The default for dev / tests. O(n) linear scan for `search()`; fine for thousands of entries; bounded by process memory:
 
 ```ts
-import { InMemoryStore } from 'agentfootprint';
+import { InMemoryStore } from 'agentfootprint/memory';
 const store = new InMemoryStore();
 ```
 
@@ -91,7 +91,7 @@ real read/write store** — `BedrockAgentMemory` exists mainly for teams migrati
 In hybrid memory setups (multiple `.memory(...)` calls on one agent), each layer can use a different store optimized for its access pattern:
 
 ```ts
-import { defineMemory, MEMORY_TYPES, MEMORY_STRATEGIES } from 'agentfootprint';
+import { defineMemory, MEMORY_TYPES, MEMORY_STRATEGIES } from 'agentfootprint/memory';
 import { RedisStore, AgentCoreStore } from 'agentfootprint/memory-providers';
 
 const recent = defineMemory({

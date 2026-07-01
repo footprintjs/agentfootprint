@@ -37,15 +37,9 @@
  * Run:  npx tsx examples/features/10-discovery-provider.ts
  */
 
-import {
-  Agent,
-  defineTool,
-  mock,
-  type LLMToolSchema,
-  type Tool,
-  type ToolDispatchContext,
-  type ToolProvider,
-} from '../../src/index.js';
+import { Agent, defineTool, type LLMToolSchema, type Tool } from '../../src/index.js'
+import { type ToolDispatchContext, type ToolProvider } from '../../src/tool-providers/index.js'
+import { mock } from '../../src/llm-providers.js';
 import { isCliEntry, type ExampleMeta } from '../helpers/cli.js';
 
 export const meta: ExampleMeta = {

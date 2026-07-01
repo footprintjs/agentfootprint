@@ -6,14 +6,9 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import {
-  Agent,
-  mock,
-  defineTool,
-  defineSkill,
-  defineSteering,
-  defineFact,
-} from '../../../src/index.js';
+import { Agent, defineTool } from '../../../src/index.js'
+import { mock } from '../../../src/llm-providers.js'
+import { defineSkill, defineSteering, defineFact } from '../../../src/injection-engine.js';
 import { clampIterations } from '../../../src/core/agent/validators.js';
 
 describe('#16 — maxIterations unlocked (footprintjs 9 trampoline)', () => {

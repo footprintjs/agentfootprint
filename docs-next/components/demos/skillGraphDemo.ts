@@ -13,7 +13,8 @@
  */
 
 // #region demo
-import { defineSkill, defineTool, skillGraph } from 'agentfootprint';
+import { defineTool } from 'agentfootprint'
+import { defineSkill, skillGraph } from 'agentfootprint/injection-engine';
 
 // Three skills the support agent can be "in". Each carries its own playbook
 // (body) and unlocks its own tools only while it's the active skill.

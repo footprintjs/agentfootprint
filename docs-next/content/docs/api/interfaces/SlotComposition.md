@@ -66,7 +66,7 @@ Defined in: [src/recorders/core/types.ts:74](https://github.com/footprintjs/agen
 
 ### slot
 
-> `readonly` **slot**: [`ContextSlot`](/docs/api/type-aliases/ContextSlot)
+> `readonly` **slot**: `ContextSlot`
 
 Defined in: [src/recorders/core/types.ts:64](https://github.com/footprintjs/agentfootprint/blob/main/src/recorders/core/types.ts#L64)
 
@@ -74,6 +74,6 @@ Defined in: [src/recorders/core/types.ts:64](https://github.com/footprintjs/agen
 
 ### sourceBreakdown
 
-> `readonly` **sourceBreakdown**: `Readonly`\<`Partial`\<`Record`\<[`ContextSource`](/docs/api/type-aliases/ContextSource), \{ `chars`: `number`; `count`: `number`; \}\>\>\>
+> `readonly` **sourceBreakdown**: `Readonly`\<`Partial`\<`Record`\<`ContextSource`, \{ `chars`: `number`; `count`: `number`; \}\>\>\>
 
 Defined in: [src/recorders/core/types.ts:71](https://github.com/footprintjs/agentfootprint/blob/main/src/recorders/core/types.ts#L71)

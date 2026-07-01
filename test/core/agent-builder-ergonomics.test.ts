@@ -8,7 +8,10 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { Agent, defineInstruction, mock, type AgentfootprintEvent } from '../../src/index.js';
+import { Agent } from '../../src/index.js'
+import { type AgentfootprintEvent } from '../../src/events.js'
+import { defineInstruction } from '../../src/injection-engine.js'
+import { mock } from '../../src/llm-providers.js';
 
 // ─── 1. .maxIterations() ──────────────────────────────────────────
 

@@ -11,17 +11,11 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import {
-  keywordScorer,
-  embeddingScorer,
-  rankEntries,
-  skillGraph,
-  defineSkill,
-  mockEmbedder,
-  Agent,
-  mock,
-} from '../../../src/index.js';
-import type { EntryScorer, InjectionContext } from '../../../src/index.js';
+import { Agent } from '../../../src/index.js'
+import { keywordScorer, embeddingScorer, rankEntries, skillGraph, defineSkill } from '../../../src/injection-engine.js'
+import { mockEmbedder } from '../../../src/memory/index.js'
+import { mock } from '../../../src/llm-providers.js';
+import type { EntryScorer, InjectionContext } from '../../../src/injection-engine.js';
 
 const ctx = (over: Partial<InjectionContext>): InjectionContext => ({
   iteration: 1,

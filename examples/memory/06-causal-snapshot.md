@@ -54,13 +54,7 @@ memory persists that.
 ## Anatomy
 
 ```ts
-import {
-  defineMemory,
-  MEMORY_TYPES,
-  MEMORY_STRATEGIES,
-  SNAPSHOT_PROJECTIONS,
-  InMemoryStore,
-} from 'agentfootprint';
+import { defineMemory, MEMORY_TYPES, MEMORY_STRATEGIES, SNAPSHOT_PROJECTIONS, InMemoryStore } from 'agentfootprint/memory';
 import { openaiEmbedder } from '@some-embedder-pkg';
 
 const causal = defineMemory({

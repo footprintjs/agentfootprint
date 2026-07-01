@@ -30,7 +30,8 @@
  *
  * Run:  npx tsx examples/observability/13-per-loop-trajectory.ts
  */
-import { Agent, defineTool, mock } from '../../src/index.js';
+import { Agent, defineTool } from '../../src/index.js'
+import { mock } from '../../src/llm-providers.js';
 import { assembleTrajectory, type ContextBugArtifacts } from '../../src/observe';
 
 export const meta = {

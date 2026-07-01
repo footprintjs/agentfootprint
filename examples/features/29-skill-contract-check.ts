@@ -18,13 +18,8 @@
  * Run:  npx tsx examples/features/29-skill-contract-check.ts
  */
 
-import {
-  defineSkill,
-  defineTool,
-  skillGraph,
-  checkSkillContract,
-  type LLMProvider,
-} from '../../src/index.js';
+import { defineTool, type LLMProvider } from '../../src/index.js'
+import { defineSkill, skillGraph, checkSkillContract } from '../../src/injection-engine.js';
 import { isCliEntry, printResult, type ExampleMeta } from '../helpers/cli.js';
 
 export const meta: ExampleMeta = {

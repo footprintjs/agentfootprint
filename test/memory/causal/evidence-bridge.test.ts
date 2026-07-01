@@ -5,17 +5,9 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import {
-  Agent,
-  defineMemory,
-  defineTool,
-  MEMORY_TYPES,
-  MEMORY_STRATEGIES,
-  SNAPSHOT_PROJECTIONS,
-  InMemoryStore,
-  mockEmbedder,
-  mock,
-} from '../../../src/index.js';
+import { Agent, defineTool } from '../../../src/index.js'
+import { defineMemory, MEMORY_TYPES, MEMORY_STRATEGIES, SNAPSHOT_PROJECTIONS, InMemoryStore, mockEmbedder } from '../../../src/memory/index.js'
+import { mock } from '../../../src/llm-providers.js';
 import { causalEvidenceRecorder } from '../../../src/memory/causal/evidenceRecorder.js';
 import type { SnapshotEntry } from '../../../src/memory/causal/types.js';
 import type { MemoryEntry } from '../../../src/memory/entry/types.js';

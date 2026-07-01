@@ -15,19 +15,11 @@
  * Run:  npx tsx examples/features/31-skill-graph-keyword-scorer.ts
  */
 
-import {
-  Agent,
-  defineSkill,
-  mock,
-  mockEmbedder,
-  skillGraph,
-  keywordScorer,
-  embeddingScorer,
-  rankEntries,
-  type EntryScorer,
-  type InjectionContext,
-  type LLMProvider,
-} from '../../src/index.js';
+import { Agent, type LLMProvider } from '../../src/index.js'
+import { type EntryScorer, type InjectionContext } from '../../src/injection-engine.js'
+import { defineSkill, skillGraph, keywordScorer, embeddingScorer, rankEntries } from '../../src/injection-engine.js'
+import { mock } from '../../src/llm-providers.js'
+import { mockEmbedder } from '../../src/memory/index.js';
 import { isCliEntry, printResult, type ExampleMeta } from '../helpers/cli.js';
 
 export const meta: ExampleMeta = {

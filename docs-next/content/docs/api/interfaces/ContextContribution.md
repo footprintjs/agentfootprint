@@ -10,7 +10,7 @@ Defined in: [src/adapters/types.ts:246](https://github.com/footprintjs/agentfoot
 
 ### asRole?
 
-> `readonly` `optional` **asRole?**: [`ContextRole`](/docs/api/type-aliases/ContextRole)
+> `readonly` `optional` **asRole?**: `ContextRole`
 
 Defined in: [src/adapters/types.ts:251](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L251)
 

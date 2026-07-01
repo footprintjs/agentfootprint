@@ -242,7 +242,8 @@ export class MockProvider implements LLMProvider {
  * `new MockProvider(options)`.
  *
  * @example
- *   import { Agent, mock, defineTool } from 'agentfootprint';
+ *   import { Agent, defineTool } from 'agentfootprint'
+import { mock } from 'agentfootprint/llm-providers';
  *
  *   const agent = Agent.create({ provider: mock({ reply: 'hello' }) })
  *     .tool(defineTool({ name: 'echo', ... }))

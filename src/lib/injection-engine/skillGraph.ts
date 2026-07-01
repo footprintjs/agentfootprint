@@ -165,8 +165,9 @@ export interface DecisionNode {
 }
 
 /** Build a decision node. Leaves are skills (an `Injection`); internal nodes are
- *  other `decide(...)` results. */
-export function decide(
+ *  other `decideSkill(...)` results. (Renamed from `decide` in v7 to avoid
+ *  colliding with footprintjs's `decide()`.) */
+export function decideSkill(
   predicate: (ctx: InjectionContext) => boolean,
   whenTrue: DecisionNode | Injection,
   whenFalse: DecisionNode | Injection,

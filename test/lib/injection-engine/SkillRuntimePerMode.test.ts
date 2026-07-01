@@ -12,13 +12,9 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import {
-  Agent,
-  defineSkill,
-  buildReadSkillTool,
-  mock,
-  projectActiveInjection,
-} from '../../../src/index.js';
+import { Agent } from '../../../src/index.js'
+import { defineSkill, buildReadSkillTool, projectActiveInjection } from '../../../src/injection-engine.js'
+import { mock } from '../../../src/llm-providers.js';
 
 // ─── Fixtures ─────────────────────────────────────────────────────
 

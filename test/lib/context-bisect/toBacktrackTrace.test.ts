@@ -8,7 +8,7 @@
  */
 import { describe, expect, it } from 'vitest';
 
-import { mockEmbedder } from '../../../src/index';
+import { mockEmbedder } from '../../../src/memory/index.js';
 import {
   embeddingCache,
   llmCallIdsFromEvents,

@@ -13,11 +13,9 @@
  *      messages before the LLM call.
  */
 
-import {
-  Agent, defineRAG, indexDocuments,
-  InMemoryStore, mockEmbedder, mock,
-  type LLMProvider,
-} from '../../src/index.js';
+import { Agent, defineRAG, indexDocuments, type LLMProvider } from '../../src/index.js'
+import { InMemoryStore, mockEmbedder } from '../../src/memory/index.js'
+import { mock } from '../../src/llm-providers.js';
 import { isCliEntry, printResult, type ExampleMeta } from '../helpers/cli.js';
 
 export const meta: ExampleMeta = {

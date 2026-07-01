@@ -25,7 +25,8 @@
  * Run:  npx tsx examples/observability/08-self-explain.ts
  */
 
-import { Agent, defineTool, mock } from '../../src/index.js';
+import { Agent, defineTool } from '../../src/index.js'
+import { mock } from '../../src/llm-providers.js';
 import { isCliEntry, type ExampleMeta } from '../helpers/cli.js';
 
 export const meta: ExampleMeta = {

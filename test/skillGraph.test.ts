@@ -7,18 +7,11 @@
 
 import { describe, it, expect, vi } from 'vitest';
 import { enableDevMode, disableDevMode } from 'footprintjs';
-import {
-  skillGraph,
-  decide,
-  defineSkill,
-  defineInstruction,
-  defineRelevanceHint,
-  defineTool,
-  Agent,
-  mock,
-  mockEmbedder,
-} from '../src/index.js';
-import type { Injection } from '../src/index.js';
+import { defineTool, Agent } from '../src/index.js'
+import { skillGraph, decideSkill, defineSkill, defineInstruction, defineRelevanceHint } from '../src/injection-engine.js'
+import { mock } from '../src/llm-providers.js'
+import { mockEmbedder } from '../src/memory/index.js';
+import type { Injection } from '../src/injection-engine.js';
 import { softmax } from '../src/lib/injection-engine/softmax.js';
 import { evaluateInjections } from '../src/lib/injection-engine/index.js';
 import type { InjectionContext } from '../src/lib/injection-engine/types.js';
@@ -248,7 +241,7 @@ describe('skillGraph — nextSkill cursor resolver (the keystone, pin-table)', (
     const io = skill('io');
     const tri = skill('tri');
     const g = skillGraph()
-      .tree(decide((c) => c.userMessage.includes('io'), io, tri))
+      .tree(decideSkill((c) => c.userMessage.includes('io'), io, tri))
       .build();
     expect(g.nextSkill(ctx({ currentSkillId: undefined }))).toBeUndefined();
     expect(g.nextSkill(ctx({ currentSkillId: 'io' }))).toBe('io');
@@ -440,10 +433,10 @@ describe('skillGraph — decision tree (v3): predicate nodes route', () => {
     const triage = skill('triage', 'TRIAGE');
     const g = skillGraph()
       .tree(
-        decide(
+        decideSkill(
           has(/io|iops/),
           io,
-          decide(has(/sfp|optic/), sfp, triage, 'sfp intent?'),
+          decideSkill(has(/sfp|optic/), sfp, triage, 'sfp intent?'),
           'io intent?',
         ),
       )
@@ -501,7 +494,7 @@ describe('skillGraph — decision tree (v3): predicate nodes route', () => {
     const ok = skill('ok');
     expect(() =>
       skillGraph()
-        .tree(decide(() => true, ok, instr as never))
+        .tree(decideSkill(() => true, ok, instr as never))
         .build(),
     ).toThrow(/not a skill/);
   });
@@ -516,7 +509,7 @@ describe('skillGraph — tree tool-scoping (on-demand tools)', () => {
     const sfp = skill('sfp');
     const triage = skill('triage');
     const g = skillGraph()
-      .tree(decide(has(/io/), io, decide(has(/sfp/), sfp, triage, 'sfp?'), 'io?'))
+      .tree(decideSkill(has(/io/), io, decideSkill(has(/sfp/), sfp, triage, 'sfp?'), 'io?'))
       .build();
     expect(g.skills.map(autoOf)).toEqual(['currentSkill', 'currentSkill', 'currentSkill']);
   });
@@ -525,7 +518,7 @@ describe('skillGraph — tree tool-scoping (on-demand tools)', () => {
     const io = skill('io');
     const triage = skill('triage');
     const g = skillGraph()
-      .tree(decide(has(/io/), io, triage, 'io?'), { scopeTools: false })
+      .tree(decideSkill(has(/io/), io, triage, 'io?'), { scopeTools: false })
       .build();
     expect(g.skills.map(autoOf)).toEqual([undefined, undefined]);
   });
@@ -539,7 +532,7 @@ describe('skillGraph — tree tool-scoping (on-demand tools)', () => {
     });
     const triage = skill('triage');
     const g = skillGraph()
-      .tree(decide(has(/io/), io, triage, 'io?'), { scopeTools: false })
+      .tree(decideSkill(has(/io/), io, triage, 'io?'), { scopeTools: false })
       .build();
     const byId = Object.fromEntries(g.skills.map((s) => [s.id, autoOf(s)]));
     expect(byId.io).toBe('currentSkill'); // explicit choice preserved
@@ -571,7 +564,7 @@ describe('skillGraph — routing provenance (metadata.skillGraph)', () => {
     const sfp = skill('sfp-audit');
     const triage = skill('triage');
     const g = skillGraph()
-      .tree(decide(has(/io/), io, decide(has(/sfp/), sfp, triage, 'sfp intent?'), 'io intent?'))
+      .tree(decideSkill(has(/io/), io, decideSkill(has(/sfp/), sfp, triage, 'sfp intent?'), 'io intent?'))
       .build();
 
     expect(routingOf(g.skills.find((s) => s.id === 'io-profile')!)).toEqual({
@@ -656,10 +649,10 @@ describe('tree() — the same skill as MULTIPLE leaves (shared-leaf merge)', () 
     body: 'profile the io',
   });
   const other = defineSkill({ id: 'triage', description: 'default', body: 'triage it' });
-  const tree = decide(
+  const tree = decideSkill(
     (ctx) => /esxi/.test(ctx.userMessage),
     shared,
-    decide((ctx) => /\bio\b/.test(ctx.userMessage), shared, other, 'io?'),
+    decideSkill((ctx) => /\bio\b/.test(ctx.userMessage), shared, other, 'io?'),
     'esxi?',
   );
 
@@ -696,12 +689,12 @@ describe('tree() — the same skill as MULTIPLE leaves (shared-leaf merge)', () 
 
 describe('tree() — dev-mode "exactly one leaf fires" monitor (B11)', () => {
   // The tree is exhaustive by construction; the invariant only breaks when a
-  // decide() predicate is impure (answers differently across the per-leaf
+  // decideSkill() predicate is impure (answers differently across the per-leaf
   // re-evaluations). The monitor tallies fires per evaluator pass in dev mode.
   const a = skill('leaf-a');
   const b = skill('leaf-b');
 
-  /** decide() predicate that returns a scripted sequence of answers. */
+  /** decideSkill() predicate that returns a scripted sequence of answers. */
   const scripted = (answers: boolean[]) => {
     let i = 0;
     return () => answers[i++ % answers.length]!;
@@ -721,7 +714,7 @@ describe('tree() — dev-mode "exactly one leaf fires" monitor (B11)', () => {
   it('warns when an impure predicate fires BOTH leaves (overlap)', async () => {
     // leaf-a evaluates p()=true, leaf-b evaluates ¬p() with p()=false → both fire
     const g = skillGraph()
-      .tree(decide(scripted([true, false]), a, b, 'flaky?'))
+      .tree(decideSkill(scripted([true, false]), a, b, 'flaky?'))
       .build();
     await withDevWarnSpy((warn) => {
       const { active } = evaluateInjections(g.skills, ctx({}));
@@ -736,7 +729,7 @@ describe('tree() — dev-mode "exactly one leaf fires" monitor (B11)', () => {
   it('warns when an impure predicate fires NO leaf (gap)', async () => {
     // leaf-a evaluates p()=false, leaf-b evaluates ¬p() with p()=true → neither fires
     const g = skillGraph()
-      .tree(decide(scripted([false, true]), a, b, 'flaky?'))
+      .tree(decideSkill(scripted([false, true]), a, b, 'flaky?'))
       .build();
     await withDevWarnSpy((warn) => {
       const { active } = evaluateInjections(g.skills, ctx({}));
@@ -748,7 +741,7 @@ describe('tree() — dev-mode "exactly one leaf fires" monitor (B11)', () => {
 
   it('stays silent for pure predicates (exactly one leaf fires)', async () => {
     const g = skillGraph()
-      .tree(decide((c) => c.userMessage.includes('io'), a, b, 'io?'))
+      .tree(decideSkill((c) => c.userMessage.includes('io'), a, b, 'io?'))
       .build();
     await withDevWarnSpy((warn) => {
       evaluateInjections(g.skills, ctx({ userMessage: 'io trend' }));
@@ -759,7 +752,7 @@ describe('tree() — dev-mode "exactly one leaf fires" monitor (B11)', () => {
 
   it('stays silent (and costs nothing) in production mode, even for impure predicates', () => {
     const g = skillGraph()
-      .tree(decide(scripted([true, false]), a, b))
+      .tree(decideSkill(scripted([true, false]), a, b))
       .build();
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     try {
@@ -774,7 +767,7 @@ describe('tree() — dev-mode "exactly one leaf fires" monitor (B11)', () => {
   it('does not double-report a THROWING predicate (the evaluator already reports it)', async () => {
     const g = skillGraph()
       .tree(
-        decide(
+        decideSkill(
           () => {
             throw new Error('boom');
           },
@@ -796,10 +789,10 @@ describe('tree() — dev-mode "exactly one leaf fires" monitor (B11)', () => {
     const other = skill('other');
     const g = skillGraph()
       .tree(
-        decide(
+        decideSkill(
           (c) => c.userMessage.includes('esxi'),
           sharedLeaf,
-          decide((c) => c.userMessage.includes('io'), sharedLeaf, other, 'io?'),
+          decideSkill((c) => c.userMessage.includes('io'), sharedLeaf, other, 'io?'),
           'esxi?',
         ),
       )
@@ -817,7 +810,7 @@ describe('tree() — dev-mode "exactly one leaf fires" monitor (B11)', () => {
 
   it('a reused ctx object starts a fresh pass (warns per pass, not once)', async () => {
     const g = skillGraph()
-      .tree(decide(scripted([true, false]), a, b))
+      .tree(decideSkill(scripted([true, false]), a, b))
       .build();
     await withDevWarnSpy((warn) => {
       const sameCtx = ctx({});
@@ -885,10 +878,10 @@ describe('skillGraph — reachableSkills (the read_skill gate allowed set)', () 
     const tri = skill('tri');
     const g = skillGraph()
       .tree(
-        decide(
+        decideSkill(
           (c) => /io/.test(c.userMessage),
           io,
-          decide((c) => /sfp/.test(c.userMessage), sfp, tri, 's?'),
+          decideSkill((c) => /sfp/.test(c.userMessage), sfp, tri, 's?'),
           'i?',
         ),
       )
@@ -992,7 +985,7 @@ describe('skillGraph — entryByRelevance / scoreEntries (LLM-free relevance ent
   it('a scorer on a tree-mode graph throws (the scorer would be silently ignored)', () => {
     expect(() =>
       skillGraph()
-        .tree(decide((c) => /x/.test(c.userMessage), skill('p'), skill('q')))
+        .tree(decideSkill((c) => /x/.test(c.userMessage), skill('p'), skill('q')))
         .entryByRelevance(emb)
         .build(),
     ).toThrow(/is for flat entry\/route graphs/);
@@ -1123,7 +1116,7 @@ describe('skillGraph — entryByRead (LLM picks the entry, no embedder)', () => 
     ).toThrow(/pick one of \.entryByRead\(\) or \.entryBy\(\)\/\.entryByRelevance\(\)/);
     expect(() =>
       skillGraph()
-        .tree(decide((c) => /x/.test(c.userMessage), skill('p'), skill('q')))
+        .tree(decideSkill((c) => /x/.test(c.userMessage), skill('p'), skill('q')))
         .entryByRead()
         .build(),
     ).toThrow(/entryByRead\(\) is for flat entry\/route graphs/);
@@ -1294,7 +1287,7 @@ describe('skillGraph — checkup (build-time validation)', () => {
     const io = skill('io');
     const tri = skill('tri');
     const g = skillGraph()
-      .tree(decide((c) => /io/.test(c.userMessage), io, tri))
+      .tree(decideSkill((c) => /io/.test(c.userMessage), io, tri))
       .build();
     expect(g.checkup().ok).toBe(true);
   });
@@ -1368,7 +1361,7 @@ describe('skillGraph — object-literal config form', () => {
     const tri = skill('tri');
     const g = skillGraph({
       skills: [io, tri],
-      tree: decide((c) => /io/.test(c.userMessage), io, tri),
+      tree: decideSkill((c) => /io/.test(c.userMessage), io, tri),
     });
     expect(g.skills.map((s) => s.id).sort()).toEqual(['io', 'tri']);
     expect(g.checkup().ok).toBe(true);

@@ -30,7 +30,9 @@
  * Run:  npx tsx examples/observability/04-tool-choice-margins.ts
  */
 
-import { Agent, defineTool, mock, mockEmbedder, type LLMProvider } from '../../src/index.js';
+import { Agent, defineTool, type LLMProvider } from '../../src/index.js'
+import { mock } from '../../src/llm-providers.js'
+import { mockEmbedder } from '../../src/memory/index.js';
 import type { Embedder } from '../../src/lib/influence-core/index.js';
 import {
   toolChoiceRecorder,

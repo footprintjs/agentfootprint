@@ -65,7 +65,7 @@ instead of N `.on()` subscriptions.
 
 ### attach()
 
-> **attach**(`recorder`): [`Unsubscribe`](/docs/api/type-aliases/Unsubscribe)
+> **attach**(`recorder`): `Unsubscribe`
 
 Defined in: [src/core/RunnerBase.ts:474](https://github.com/footprintjs/agentfootprint/blob/main/src/core/RunnerBase.ts#L474)
 
@@ -97,7 +97,7 @@ server leak; attach once, or detach per-run.
 
 #### Returns
 
-[`Unsubscribe`](/docs/api/type-aliases/Unsubscribe)
+`Unsubscribe`
 
 #### Implementation of
 
@@ -298,7 +298,7 @@ with a subscription key = that bucket only. Delegates to
 
 ##### type?
 
-keyof AgentfootprintEventMap \| [`WildcardSubscription`](/docs/api/type-aliases/WildcardSubscription)
+keyof AgentfootprintEventMap \| `WildcardSubscription`
 
 #### Returns
 
@@ -324,7 +324,7 @@ Unsubscribe a previously-registered listener.
 
 ###### K
 
-`K` *extends* keyof [`AgentfootprintEventMap`](/docs/api/interfaces/AgentfootprintEventMap)
+`K` *extends* keyof `AgentfootprintEventMap`
 
 ##### Parameters
 
@@ -334,7 +334,7 @@ Unsubscribe a previously-registered listener.
 
 ###### listener
 
-[`EventListener`](/docs/api/type-aliases/EventListener)\<`K`\>
+`EventListener`\<`K`\>
 
 ##### Returns
 
@@ -354,11 +354,11 @@ Defined in: [src/core/RunnerBase.ts:391](https://github.com/footprintjs/agentfoo
 
 ###### type
 
-[`WildcardSubscription`](/docs/api/type-aliases/WildcardSubscription)
+`WildcardSubscription`
 
 ###### listener
 
-[`WildcardListener`](/docs/api/type-aliases/WildcardListener)
+`WildcardListener`
 
 ##### Returns
 
@@ -374,7 +374,7 @@ Defined in: [src/core/RunnerBase.ts:391](https://github.com/footprintjs/agentfoo
 
 #### Call Signature
 
-> **on**\<`K`\>(`type`, `listener`, `options?`): [`Unsubscribe`](/docs/api/type-aliases/Unsubscribe)
+> **on**\<`K`\>(`type`, `listener`, `options?`): `Unsubscribe`
 
 Defined in: [src/core/RunnerBase.ts:367](https://github.com/footprintjs/agentfootprint/blob/main/src/core/RunnerBase.ts#L367)
 
@@ -390,7 +390,7 @@ runners (servers).
 
 ###### K
 
-`K` *extends* keyof [`AgentfootprintEventMap`](/docs/api/interfaces/AgentfootprintEventMap)
+`K` *extends* keyof `AgentfootprintEventMap`
 
 ##### Parameters
 
@@ -400,15 +400,15 @@ runners (servers).
 
 ###### listener
 
-[`EventListener`](/docs/api/type-aliases/EventListener)\<`K`\>
+`EventListener`\<`K`\>
 
 ###### options?
 
-[`ListenOptions`](/docs/api/interfaces/ListenOptions)
+`ListenOptions`
 
 ##### Returns
 
-[`Unsubscribe`](/docs/api/type-aliases/Unsubscribe)
+`Unsubscribe`
 
 ##### Implementation of
 
@@ -416,7 +416,7 @@ runners (servers).
 
 #### Call Signature
 
-> **on**(`type`, `listener`, `options?`): [`Unsubscribe`](/docs/api/type-aliases/Unsubscribe)
+> **on**(`type`, `listener`, `options?`): `Unsubscribe`
 
 Defined in: [src/core/RunnerBase.ts:372](https://github.com/footprintjs/agentfootprint/blob/main/src/core/RunnerBase.ts#L372)
 
@@ -426,19 +426,19 @@ Subscribe to a domain wildcard (e.g. 'agentfootprint.context.*') or '*'.
 
 ###### type
 
-[`WildcardSubscription`](/docs/api/type-aliases/WildcardSubscription)
+`WildcardSubscription`
 
 ###### listener
 
-[`WildcardListener`](/docs/api/type-aliases/WildcardListener)
+`WildcardListener`
 
 ###### options?
 
-[`ListenOptions`](/docs/api/interfaces/ListenOptions)
+`ListenOptions`
 
 ##### Returns
 
-[`Unsubscribe`](/docs/api/type-aliases/Unsubscribe)
+`Unsubscribe`
 
 ##### Implementation of
 
@@ -450,7 +450,7 @@ Subscribe to a domain wildcard (e.g. 'agentfootprint.context.*') or '*'.
 
 #### Call Signature
 
-> **once**\<`K`\>(`type`, `listener`, `options?`): [`Unsubscribe`](/docs/api/type-aliases/Unsubscribe)
+> **once**\<`K`\>(`type`, `listener`, `options?`): `Unsubscribe`
 
 Defined in: [src/core/RunnerBase.ts:401](https://github.com/footprintjs/agentfootprint/blob/main/src/core/RunnerBase.ts#L401)
 
@@ -460,7 +460,7 @@ Subscribe a one-shot listener (fires once then auto-removes). Accepts `{ signal 
 
 ###### K
 
-`K` *extends* keyof [`AgentfootprintEventMap`](/docs/api/interfaces/AgentfootprintEventMap)
+`K` *extends* keyof `AgentfootprintEventMap`
 
 ##### Parameters
 
@@ -470,15 +470,15 @@ Subscribe a one-shot listener (fires once then auto-removes). Accepts `{ signal 
 
 ###### listener
 
-[`EventListener`](/docs/api/type-aliases/EventListener)\<`K`\>
+`EventListener`\<`K`\>
 
 ###### options?
 
-`Omit`\<[`ListenOptions`](/docs/api/interfaces/ListenOptions), `"once"`\>
+`Omit`\<`ListenOptions`, `"once"`\>
 
 ##### Returns
 
-[`Unsubscribe`](/docs/api/type-aliases/Unsubscribe)
+`Unsubscribe`
 
 ##### Implementation of
 
@@ -486,7 +486,7 @@ Subscribe a one-shot listener (fires once then auto-removes). Accepts `{ signal 
 
 #### Call Signature
 
-> **once**(`type`, `listener`, `options?`): [`Unsubscribe`](/docs/api/type-aliases/Unsubscribe)
+> **once**(`type`, `listener`, `options?`): `Unsubscribe`
 
 Defined in: [src/core/RunnerBase.ts:406](https://github.com/footprintjs/agentfootprint/blob/main/src/core/RunnerBase.ts#L406)
 
@@ -494,19 +494,19 @@ Defined in: [src/core/RunnerBase.ts:406](https://github.com/footprintjs/agentfoo
 
 ###### type
 
-[`WildcardSubscription`](/docs/api/type-aliases/WildcardSubscription)
+`WildcardSubscription`
 
 ###### listener
 
-[`WildcardListener`](/docs/api/type-aliases/WildcardListener)
+`WildcardListener`
 
 ###### options?
 
-`Omit`\<[`ListenOptions`](/docs/api/interfaces/ListenOptions), `"once"`\>
+`Omit`\<`ListenOptions`, `"once"`\>
 
 ##### Returns
 
-[`Unsubscribe`](/docs/api/type-aliases/Unsubscribe)
+`Unsubscribe`
 
 ##### Implementation of
 

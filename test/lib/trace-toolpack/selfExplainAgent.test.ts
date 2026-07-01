@@ -8,7 +8,8 @@
  */
 import { describe, expect, it } from 'vitest';
 
-import { Agent, defineTool, mock } from '../../../src/index';
+import { Agent, defineTool } from '../../../src/index'
+import { mock } from '../../../src/llm-providers.js';
 import {
   callTraceTool,
   lazyTraceToolpack,

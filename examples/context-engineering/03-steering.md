@@ -33,7 +33,8 @@ append in registration order.
 ## Key API
 
 ```ts
-import { Agent, defineSteering } from 'agentfootprint';
+import { Agent } from 'agentfootprint'
+import { defineSteering } from 'agentfootprint/injection-engine';
 
 const jsonOnly = defineSteering({
   id: 'json-only',

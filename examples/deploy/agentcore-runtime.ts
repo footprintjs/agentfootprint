@@ -20,7 +20,8 @@
  */
 
 import { createServer, type IncomingMessage, type ServerResponse, type Server } from 'node:http';
-import { Agent, mock, type LLMProvider } from '../../src/index.js';
+import { Agent, type LLMProvider } from '../../src/index.js'
+import { mock } from '../../src/llm-providers.js';
 import { isCliEntry, printResult, type ExampleMeta } from '../helpers/cli.js';
 
 export const meta: ExampleMeta = {

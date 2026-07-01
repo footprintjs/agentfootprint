@@ -67,7 +67,8 @@ Same code path. The `reason` field's namespace prefix carries the framing for te
 ## Wiring it up
 
 ```ts
-import { Agent, PolicyHaltError } from 'agentfootprint';
+import { Agent } from 'agentfootprint'
+import { PolicyHaltError } from 'agentfootprint/security';
 
 const policy = sequencePolicy({
   forbidden: [

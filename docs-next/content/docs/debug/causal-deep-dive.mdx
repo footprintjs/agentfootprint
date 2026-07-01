@@ -110,7 +110,8 @@ Most apps use `DECISIONS` — it's the default, the smallest projection that ans
 ## A worked replay
 
 ```ts
-import { Agent, defineMemory, MEMORY_TYPES, MEMORY_STRATEGIES, SNAPSHOT_PROJECTIONS } from 'agentfootprint';
+import { Agent } from 'agentfootprint'
+import { defineMemory, MEMORY_TYPES, MEMORY_STRATEGIES, SNAPSHOT_PROJECTIONS } from 'agentfootprint/memory';
 import { anthropic } from 'agentfootprint/llm-providers'; // vendor-SDK providers live on this subpath
 
 // Monday — production decision

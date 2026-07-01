@@ -10,7 +10,7 @@ Defined in: [src/core/agent/types.ts:252](https://github.com/footprintjs/agentfo
 
 ### identity?
 
-> `readonly` `optional` **identity?**: [`MemoryIdentity`](/docs/api/interfaces/MemoryIdentity)
+> `readonly` `optional` **identity?**: `MemoryIdentity`
 
 Defined in: [src/core/agent/types.ts:263](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L263)
 

@@ -1,6 +1,6 @@
 {
   "name": "agentfootprint",
-  "version": "6.45.0",
+  "version": "7.0.0",
   "description": "The explainable agent framework — backtrack a wrong answer to the exact context that caused it (evidence, not guesses). Built on footprintjs.",
   "license": "MIT",
   "author": "Sanjay Krishna Anbalagan",
@@ -102,6 +102,26 @@
         "default": "./dist/index.js"
       }
     },
+    "./cache": {
+      "import": {
+        "types": "./dist/esm/cache/index.d.ts",
+        "default": "./dist/esm/cache/index.js"
+      },
+      "require": {
+        "types": "./dist/types/cache/index.d.ts",
+        "default": "./dist/cache/index.js"
+      }
+    },
+    "./events": {
+      "import": {
+        "types": "./dist/esm/events.d.ts",
+        "default": "./dist/esm/events.js"
+      },
+      "require": {
+        "types": "./dist/types/events.d.ts",
+        "default": "./dist/events.js"
+      }
+    },
     "./memory": {
       "import": {
         "types": "./dist/esm/memory/index.d.ts",
@@ -160,6 +180,26 @@
       "require": {
         "types": "./dist/types/observe.d.ts",
         "default": "./dist/observe.js"
+      }
+    },
+    "./debug": {
+      "import": {
+        "types": "./dist/esm/debug.d.ts",
+        "default": "./dist/esm/debug.js"
+      },
+      "require": {
+        "types": "./dist/types/debug.d.ts",
+        "default": "./dist/debug.js"
+      }
+    },
+    "./debug/finders": {
+      "import": {
+        "types": "./dist/esm/debug/finders.d.ts",
+        "default": "./dist/esm/debug/finders.js"
+      },
+      "require": {
+        "types": "./dist/types/debug/finders.d.ts",
+        "default": "./dist/debug/finders.js"
       }
     },
     "./observability/contextError/finders": {

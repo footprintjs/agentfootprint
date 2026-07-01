@@ -16,15 +16,10 @@
  * Run:  npx tsx examples/features/24-skill-graph-entry-relevance.ts
  */
 
-import {
-  Agent,
-  defineSkill,
-  mock,
-  mockEmbedder,
-  skillGraph,
-  type CombinedRecorder,
-  type LLMProvider,
-} from '../../src/index.js';
+import { Agent, type CombinedRecorder, type LLMProvider } from '../../src/index.js'
+import { defineSkill, skillGraph } from '../../src/injection-engine.js'
+import { mock } from '../../src/llm-providers.js'
+import { mockEmbedder } from '../../src/memory/index.js';
 import { isCliEntry, printResult, type ExampleMeta } from '../helpers/cli.js';
 
 export const meta: ExampleMeta = {

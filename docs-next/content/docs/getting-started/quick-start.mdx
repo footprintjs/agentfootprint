@@ -37,7 +37,8 @@ User question → LLM thinks → calls a tool → reads result → thinks again 
 ## Your first agent
 
 ```ts
-import { Agent, defineTool, mock } from 'agentfootprint';
+import { Agent, defineTool } from 'agentfootprint'
+import { mock } from 'agentfootprint/llm-providers';
 
 const weather = defineTool({
   name: 'weather',
@@ -82,9 +83,9 @@ factory. Pick a TYPE (what shape you keep), a STRATEGY (how you fit it
 in), and a STORE.
 
 ```ts
-import {
-  Agent, defineMemory, MEMORY_TYPES, MEMORY_STRATEGIES, InMemoryStore, mock,
-} from 'agentfootprint';
+import { Agent } from 'agentfootprint'
+import { defineMemory, MEMORY_TYPES, MEMORY_STRATEGIES, InMemoryStore } from 'agentfootprint/memory'
+import { mock } from 'agentfootprint/llm-providers';
 
 const memory = defineMemory({
   id: 'short-term',

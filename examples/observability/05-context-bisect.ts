@@ -44,15 +44,11 @@
 import { decide, flowChart, FlowChartExecutor } from 'footprintjs';
 import { controlDepRecorder } from 'footprintjs/trace';
 
-import {
-  Agent,
-  defineFact,
-  defineTool,
-  mock,
-  mockEmbedder,
-  type Injection,
-  type Tool,
-} from '../../src/index.js';
+import { Agent, defineTool, type Tool } from '../../src/index.js'
+import { type Injection } from '../../src/injection-engine.js'
+import { defineFact } from '../../src/injection-engine.js'
+import { mock } from '../../src/llm-providers.js'
+import { mockEmbedder } from '../../src/memory/index.js';
 import {
   applyAblations,
   embeddingCache,

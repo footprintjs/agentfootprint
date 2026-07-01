@@ -4,7 +4,7 @@ title: CreateProviderOptions
 
 # Type Alias: CreateProviderOptions
 
-> **CreateProviderOptions** = `object` & [`MockProviderOptions`](/docs/api/interfaces/MockProviderOptions) \| `object` & `AnthropicProviderOptions` \| `object` & `OpenAIProviderOptions` \| `object` & `OpenAIProviderOptions` & `object` \| `object` & `BedrockProviderOptions` \| `object` & [`BrowserAnthropicProviderOptions`](/docs/api/interfaces/BrowserAnthropicProviderOptions) \| `object` & [`BrowserOpenAIProviderOptions`](/docs/api/interfaces/BrowserOpenAIProviderOptions)
+> **CreateProviderOptions** = `object` & `MockProviderOptions` \| `object` & `AnthropicProviderOptions` \| `object` & `OpenAIProviderOptions` \| `object` & `OpenAIProviderOptions` & `object` \| `object` & `BedrockProviderOptions` \| `object` & `BrowserAnthropicProviderOptions` \| `object` & `BrowserOpenAIProviderOptions`
 
 Defined in: [src/adapters/llm/createProvider.ts:50](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/llm/createProvider.ts#L50)
 

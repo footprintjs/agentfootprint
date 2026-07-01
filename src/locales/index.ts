@@ -84,6 +84,15 @@ export const defaultCommentaryMessages = defaultCommentaryTemplates;
 export const defaultThinkingMessages = defaultStatusTemplates;
 
 /**
+ * Canonical English status bundle — the chat-bubble prose. `/locales` is the
+ * single i18n home for ALL prose catalogs; `agentfootprint/status` keeps the
+ * status LOGIC (`selectStatus` / `renderStatusLine`) and renders with these
+ * words. Same object as `defaultThinkingMessages`.
+ */
+export { defaultStatusTemplates };
+export type { StatusTemplates } from '../recorders/observability/status/statusTemplates.js';
+
+/**
  * Spread `overrides` on top of `defaults` so every key in `defaults`
  * has a value (the override or the original). The result is a fresh
  * object — neither input is mutated.

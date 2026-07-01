@@ -10,12 +10,9 @@
  * of activated Skills.
  */
 
-import {
-  Agent,
-  defineInstruction,
-  mock,
-  type LLMProvider,
-} from '../../src/index.js';
+import { Agent, type LLMProvider } from '../../src/index.js'
+import { defineInstruction } from '../../src/injection-engine.js'
+import { mock } from '../../src/llm-providers.js';
 import { isCliEntry, printResult, type ExampleMeta } from '../helpers/cli.js';
 
 export const meta: ExampleMeta = {

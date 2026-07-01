@@ -24,14 +24,9 @@
  * Run:  npx tsx examples/features/28-skill-graph-entry-read.ts
  */
 
-import {
-  Agent,
-  defineSkill,
-  mock,
-  skillGraph,
-  type CombinedRecorder,
-  type LLMProvider,
-} from '../../src/index.js';
+import { Agent, type CombinedRecorder, type LLMProvider } from '../../src/index.js'
+import { defineSkill, skillGraph } from '../../src/injection-engine.js'
+import { mock } from '../../src/llm-providers.js';
 import { isCliEntry, printResult, type ExampleMeta } from '../helpers/cli.js';
 
 export const meta: ExampleMeta = {

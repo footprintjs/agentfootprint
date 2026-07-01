@@ -38,7 +38,7 @@ import {
   MOCK_EMBEDDER_CALIBRATION,
   type ToolCatalogReport,
 } from '../../src/observe.js';
-import { mockEmbedder } from '../../src/index.js';
+import { mockEmbedder } from '../../src/memory/index.js';
 import { neoToolCatalog } from '../helpers/neoToolCatalog.js';
 import { isCliEntry, type ExampleMeta } from '../helpers/cli.js';
 

@@ -16,18 +16,10 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import {
-  Agent,
-  contextEngineering,
-  defineInstruction,
-  isEngineeredSource,
-  isBaselineSource,
-  ENGINEERED_SOURCES,
-  BASELINE_SOURCES,
-  mock,
-  type ContextInjectedEvent,
-  type ContextSource,
-} from '../../src/index.js';
+import { Agent, contextEngineering, isEngineeredSource, isBaselineSource, ENGINEERED_SOURCES, BASELINE_SOURCES, type ContextInjectedEvent } from '../../src/index.js'
+import { type ContextSource } from '../../src/events.js'
+import { defineInstruction } from '../../src/injection-engine.js'
+import { mock } from '../../src/llm-providers.js';
 
 // ─── 1. UNIT — pure classifiers ───────────────────────────────────
 

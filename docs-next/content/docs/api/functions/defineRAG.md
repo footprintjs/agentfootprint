@@ -4,7 +4,7 @@ title: defineRAG
 
 # Function: defineRAG()
 
-> **defineRAG**(`opts`): [`MemoryDefinition`](/docs/api/interfaces/MemoryDefinition)
+> **defineRAG**(`opts`): `MemoryDefinition`
 
 Defined in: [src/lib/rag/defineRAG.ts:151](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/rag/defineRAG.ts#L151)
 
@@ -20,7 +20,7 @@ Build a RAG context-engineering definition. The returned
 
 ## Returns
 
-[`MemoryDefinition`](/docs/api/interfaces/MemoryDefinition)
+`MemoryDefinition`
 
 ## Throws
 

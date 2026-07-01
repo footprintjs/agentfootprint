@@ -6,7 +6,7 @@
  */
 import { describe, expect, it } from 'vitest';
 
-import type { Payloads } from '../../src/index.js';
+import type { Payloads } from '../../src/events.js';
 import * as af from '../../src/index.js';
 
 describe('Payloads namespace', () => {

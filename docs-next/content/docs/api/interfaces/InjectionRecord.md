@@ -16,7 +16,7 @@ injections.
 
 ### asRecency?
 
-> `readonly` `optional` **asRecency?**: [`ContextRecency`](/docs/api/type-aliases/ContextRecency)
+> `readonly` `optional` **asRecency?**: `ContextRecency`
 
 Defined in: [src/recorders/core/types.ts:44](https://github.com/footprintjs/agentfootprint/blob/main/src/recorders/core/types.ts#L44)
 
@@ -26,7 +26,7 @@ Recency, when injecting into messages slot.
 
 ### asRole?
 
-> `readonly` `optional` **asRole?**: [`ContextRole`](/docs/api/type-aliases/ContextRole)
+> `readonly` `optional` **asRole?**: `ContextRole`
 
 Defined in: [src/recorders/core/types.ts:42](https://github.com/footprintjs/agentfootprint/blob/main/src/recorders/core/types.ts#L42)
 
@@ -72,7 +72,7 @@ Short human-readable content summary.
 
 ### expiresAfter?
 
-> `readonly` `optional` **expiresAfter?**: [`ContextLifetime`](/docs/api/type-aliases/ContextLifetime)
+> `readonly` `optional` **expiresAfter?**: `ContextLifetime`
 
 Defined in: [src/recorders/core/types.ts:55](https://github.com/footprintjs/agentfootprint/blob/main/src/recorders/core/types.ts#L55)
 
@@ -140,7 +140,7 @@ Section tag for structured system prompts (e.g. "<skill>", "<retrieved>").
 
 ### slot
 
-> `readonly` **slot**: [`ContextSlot`](/docs/api/type-aliases/ContextSlot)
+> `readonly` **slot**: `ContextSlot`
 
 Defined in: [src/recorders/core/types.ts:32](https://github.com/footprintjs/agentfootprint/blob/main/src/recorders/core/types.ts#L32)
 
@@ -150,7 +150,7 @@ The 3-slot target (sanity-checked against the subflow ID).
 
 ### source
 
-> `readonly` **source**: [`ContextSource`](/docs/api/type-aliases/ContextSource)
+> `readonly` **source**: `ContextSource`
 
 Defined in: [src/recorders/core/types.ts:34](https://github.com/footprintjs/agentfootprint/blob/main/src/recorders/core/types.ts#L34)
 

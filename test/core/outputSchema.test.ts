@@ -13,15 +13,10 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import {
-  Agent,
-  OutputSchemaError,
-  applyOutputSchema,
-  buildDefaultInstruction,
-  defineInstruction,
-  mock,
-  type OutputSchemaParser,
-} from '../../src/index.js';
+import { Agent, OutputSchemaError, applyOutputSchema, type OutputSchemaParser } from '../../src/index.js'
+import { buildDefaultInstruction } from '../../src/core/outputSchema.js'
+import { defineInstruction } from '../../src/injection-engine.js'
+import { mock } from '../../src/llm-providers.js';
 
 // ─── Fixtures ─────────────────────────────────────────────────────
 

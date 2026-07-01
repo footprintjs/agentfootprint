@@ -8,7 +8,8 @@
 
 import { describe, it, expect } from 'vitest';
 import type { EmitEvent, LLMProvider } from 'footprintjs';
-import { Agent, defineTool, mock } from '../../src/index.js';
+import { Agent, defineTool } from '../../src/index.js'
+import { mock } from '../../src/llm-providers.js';
 import { toolLineageRecorder } from '../../src/observe.js';
 
 const ITER = 'agentfootprint.agent.iteration_start';

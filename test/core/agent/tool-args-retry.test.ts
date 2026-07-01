@@ -19,7 +19,8 @@
  */
 import { describe, expect, it } from 'vitest';
 
-import { Agent, defineTool, mock } from '../../../src/index.js';
+import { Agent, defineTool } from '../../../src/index.js'
+import { mock } from '../../../src/llm-providers.js';
 import { staticTokens } from '../../../src/identity.js';
 
 const echoSchema = {

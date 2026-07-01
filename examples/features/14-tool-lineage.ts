@@ -11,7 +11,8 @@
  * Run:  npx tsx examples/features/14-tool-lineage.ts
  */
 
-import { Agent, defineTool, mock, type LLMProvider } from '../../src/index.js';
+import { Agent, defineTool, type LLMProvider } from '../../src/index.js'
+import { mock } from '../../src/llm-providers.js';
 import { toolLineageRecorder } from '../../src/observe.js';
 import { isCliEntry, printResult, type ExampleMeta } from '../helpers/cli.js';
 

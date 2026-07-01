@@ -42,9 +42,9 @@ So a report **without** a re-runner stops at a ranked list of suspects, honestly
 Point the localizer at the answer-producing call and give it a re-runner so it can confirm suspects by ablation:
 
 ```ts twoslash
-import { localizeContextBug, embeddingCache, formatContextBugReport } from 'agentfootprint/observe';
-import { mockEmbedder } from 'agentfootprint';
-import type { ContextBugArtifacts, AblationSpec } from 'agentfootprint/observe';
+import { localizeContextBug, embeddingCache, formatContextBugReport } from 'agentfootprint/debug';
+import { mockEmbedder } from 'agentfootprint/memory';
+import type { ContextBugArtifacts, AblationSpec } from 'agentfootprint/debug';
 
 // From a recorded run: the artifacts bag, the step that produced the bad
 // answer, that buggy output, and a way to re-run with a suspect removed.

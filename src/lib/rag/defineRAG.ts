@@ -34,9 +34,9 @@
  *
  * @example  Basic usage
  * ```ts
- * import {
- *   Agent, defineRAG, indexDocuments, InMemoryStore, mockEmbedder, mock,
- * } from 'agentfootprint';
+ * import { *   Agent, defineRAG, indexDocuments, * } from 'agentfootprint'
+import { InMemoryStore, mockEmbedder } from 'agentfootprint/memory'
+import { mock } from 'agentfootprint/llm-providers';
  *
  * const embedder = mockEmbedder();
  * const store = new InMemoryStore();

@@ -17,14 +17,8 @@
  * full tool list to the LLM each iteration.
  */
 
-import {
-  Agent,
-  defineTool,
-  mock,
-  type LLMProvider,
-  type LLMRequest,
-  type LLMResponse,
-} from '../../src/index.js';
+import { Agent, defineTool, type LLMProvider, type LLMRequest, type LLMResponse } from '../../src/index.js'
+import { mock } from '../../src/llm-providers.js';
 import { isCliEntry, printResult, type ExampleMeta } from '../helpers/cli.js';
 
 export const meta: ExampleMeta = {

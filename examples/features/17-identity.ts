@@ -21,7 +21,8 @@
  * Run:  npx tsx examples/features/17-identity.ts
  */
 
-import { Agent, mock, defineTool, type LLMProvider } from '../../src/index.js';
+import { Agent, defineTool, type LLMProvider } from '../../src/index.js'
+import { mock } from '../../src/llm-providers.js';
 import { staticTokens, withCredentialRetry, type CredentialProvider } from '../../src/identity.js';
 import { isCliEntry, printResult, type ExampleMeta } from '../helpers/cli.js';
 

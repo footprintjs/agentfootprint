@@ -10,23 +10,16 @@
  * Here: `triage` is the entry; `sfp-diagnostics` activates ONLY after
  * `get_interface_counters` returns CRC > 0 — a deterministic, drawable edge.
  *
- * v3 also shows a `tree(...)` of `decide(...)` PREDICATE nodes that route by
+ * v3 also shows a `tree(...)` of `decideSkill(...)` PREDICATE nodes that route by
  * intent to skill leaves — compiled to per-leaf path-conjunction triggers (still
  * zero engine change) and drawn as diamonds → boxes.
  *
  * Run:  npx tsx examples/features/15-skill-graph.ts
  */
 
-import {
-  Agent,
-  defineTool,
-  defineSkill,
-  decide,
-  mock,
-  skillGraph,
-  type CombinedRecorder,
-  type LLMProvider,
-} from '../../src/index.js';
+import { Agent, defineTool, type CombinedRecorder, type LLMProvider } from '../../src/index.js'
+import { defineSkill, decideSkill, skillGraph } from '../../src/injection-engine.js'
+import { mock } from '../../src/llm-providers.js';
 import { evaluateInjections } from '../../src/lib/injection-engine/index.js';
 import { isCliEntry, printResult, type ExampleMeta } from '../helpers/cli.js';
 
@@ -147,10 +140,10 @@ export async function run(input: string, provider?: LLMProvider): Promise<unknow
   });
   const intentTree = skillGraph()
     .tree(
-      decide(
+      decideSkill(
         (c) => /io|iops/.test(c.userMessage),
         ioProfile,
-        decide((c) => /sfp|optic/.test(c.userMessage), sfp, triage, 'sfp intent?'),
+        decideSkill((c) => /sfp|optic/.test(c.userMessage), sfp, triage, 'sfp intent?'),
         'io intent?',
       ),
     )

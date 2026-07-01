@@ -31,7 +31,7 @@ Wraps a `decide()`-based stage so the narrative records WHY memory was
 ## Anatomy
 
 ```ts
-import { defineMemory, MEMORY_TYPES, MEMORY_STRATEGIES, InMemoryStore } from 'agentfootprint';
+import { defineMemory, MEMORY_TYPES, MEMORY_STRATEGIES, InMemoryStore } from 'agentfootprint/memory';
 
 const memory = defineMemory({
   id: 'budgeted',

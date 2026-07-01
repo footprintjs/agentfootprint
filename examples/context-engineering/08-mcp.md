@@ -18,7 +18,8 @@ agentfootprint's `mcpClient` is the client side. The server side (exposing your 
 ## Anatomy
 
 ```typescript
-import { Agent, mcpClient } from 'agentfootprint';
+import { Agent } from 'agentfootprint'
+import { mcpClient } from 'agentfootprint/tool-providers';
 
 // Connect once at startup
 const slack = await mcpClient({

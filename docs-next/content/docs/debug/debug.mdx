@@ -67,7 +67,7 @@ agent.on('agentfootprint.cost.tick', (e) => {
 For "why did the agent make that decision two weeks ago?":
 
 ```ts
-import { defineMemory, MEMORY_TYPES, MEMORY_STRATEGIES, SNAPSHOT_PROJECTIONS } from 'agentfootprint';
+import { defineMemory, MEMORY_TYPES, MEMORY_STRATEGIES, SNAPSHOT_PROJECTIONS } from 'agentfootprint/memory';
 
 const causal = defineMemory({
   id: 'causal',

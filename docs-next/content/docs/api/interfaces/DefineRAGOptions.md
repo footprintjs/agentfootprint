@@ -10,7 +10,7 @@ Defined in: [src/lib/rag/defineRAG.ts:72](https://github.com/footprintjs/agentfo
 
 ### asRole?
 
-> `readonly` `optional` **asRole?**: [`ContextRole`](/docs/api/type-aliases/ContextRole)
+> `readonly` `optional` **asRole?**: `ContextRole`
 
 Defined in: [src/lib/rag/defineRAG.ts:140](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/rag/defineRAG.ts#L140)
 
@@ -43,7 +43,7 @@ chunks indexed weekly from docs.example.com").
 
 ### embedder
 
-> `readonly` **embedder**: [`Embedder`](/docs/api/interfaces/Embedder)
+> `readonly` **embedder**: `Embedder`
 
 Defined in: [src/lib/rag/defineRAG.ts:96](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/rag/defineRAG.ts#L96)
 

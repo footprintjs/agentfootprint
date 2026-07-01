@@ -13,16 +13,10 @@
  * Run:  npx tsx examples/features/27-skill-graph-relevance-hint.ts
  */
 
-import {
-  Agent,
-  defineSkill,
-  defineRelevanceHint,
-  mock,
-  mockEmbedder,
-  skillGraph,
-  type CombinedRecorder,
-  type LLMProvider,
-} from '../../src/index.js';
+import { Agent, type CombinedRecorder, type LLMProvider } from '../../src/index.js'
+import { defineSkill, defineRelevanceHint, skillGraph } from '../../src/injection-engine.js'
+import { mock } from '../../src/llm-providers.js'
+import { mockEmbedder } from '../../src/memory/index.js';
 import { isCliEntry, printResult, type ExampleMeta } from '../helpers/cli.js';
 
 export const meta: ExampleMeta = {

@@ -45,7 +45,7 @@ The skill stays active until the agent run ends. The next `agent.run()` starts f
 ## Per-provider surface selection (`surfaceMode`)
 
 ```ts
-import { defineSkill, resolveSurfaceMode } from 'agentfootprint';
+import { defineSkill, resolveSurfaceMode } from 'agentfootprint/injection-engine';
 
 const billingSkill = defineSkill({
   id: 'billing',
@@ -96,7 +96,8 @@ Re-injects the body via tool result past a token threshold. The field is reserve
 For shared skill catalogs across multiple agents:
 
 ```ts
-import { Agent, SkillRegistry } from 'agentfootprint';
+import { Agent } from 'agentfootprint'
+import { SkillRegistry } from 'agentfootprint/injection-engine';
 
 const registry = new SkillRegistry();
 registry.register(billingSkill).register(refundSkill).register(complianceSkill);
@@ -117,7 +118,7 @@ registry.register(newSkill);
 When every skill in a registry should share the same `surfaceMode`, set it once on the constructor instead of repeating it on every `defineSkill`:
 
 ```ts
-import { SkillRegistry } from 'agentfootprint';
+import { SkillRegistry } from 'agentfootprint/injection-engine';
 
 // All skills here default to 'tool-only' (overrides defineSkill's 'auto')
 const registry = new SkillRegistry({ surfaceMode: 'tool-only' });
@@ -149,7 +150,7 @@ Per-mode routing is live at runtime — `'tool-only'` suppresses the body from t
 When you want to wire skill discovery into a custom tool chain (e.g., a `gatedTools` layer that filters by role) instead of the Agent's auto-attached `read_skill`, use `toTools()`:
 
 ```ts
-import { SkillRegistry } from 'agentfootprint';
+import { SkillRegistry } from 'agentfootprint/injection-engine';
 import { gatedTools, staticTools } from 'agentfootprint/tool-providers';
 import { PermissionPolicy } from 'agentfootprint/security';
 
@@ -179,7 +180,8 @@ By default, a Skill's `tools` array is ADDED to the agent's tool registry on act
 `autoActivate: 'currentSkill'` narrows the choice space: when you set it, the skill's tools are EXCLUDED from the static tool list and surface to the LLM ONLY on iterations after the skill is activated by `read_skill('id')`. Skills WITHOUT `autoActivate` keep the additive behavior (their tools are always visible).
 
 ```ts
-import { Agent, defineSkill } from 'agentfootprint';
+import { Agent } from 'agentfootprint'
+import { defineSkill } from 'agentfootprint/injection-engine';
 
 const billingSkill = defineSkill({
   id: 'billing',

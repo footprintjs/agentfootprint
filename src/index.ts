@@ -52,33 +52,6 @@ export type {
   RedactionReport,
 } from 'footprintjs';
 
-// Events — registry, types, payloads
-export * from './events/types.js';
-// The ~60 typed event payload shapes are grouped under the `Payloads`
-// namespace instead of flooding the top-level barrel. Access by event:
-// `event.payload` is already typed via `AgentfootprintEventMap`; reach a
-// shape by name as `Payloads.AgentRouteDecidedPayload` when you need it.
-export type * as Payloads from './events/payloads.js';
-export {
-  EVENT_NAMES,
-  ALL_EVENT_TYPES,
-  type AgentfootprintEvent,
-  type AgentfootprintEventMap,
-  type AgentfootprintEventType,
-} from './events/registry.js';
-
-// Dispatcher
-export {
-  EventDispatcher,
-  type EventListener,
-  type WildcardListener,
-  type ListenOptions,
-  type Unsubscribe,
-  type DomainWildcard,
-  type AllWildcard,
-  type WildcardSubscription,
-} from './events/dispatcher.js';
-
 // Adapter interfaces (ports)
 export * from './adapters/types.js';
 
@@ -118,7 +91,9 @@ export {
 } from './recorders/core/types.js';
 
 // Bridge helper
-export { buildEventMeta, parseSubflowPath, type RunContext } from './bridge/eventMeta.js';
+export {
+  type RunContext,
+} from './bridge/eventMeta.js';
 
 // Context-engineering + emit primitives.
 //
@@ -140,8 +115,6 @@ export {
   type ContextInjectedEvent,
   type ContextInjectedListener,
 } from './recorders/core/contextEngineering.js';
-export { EmitBridge, type EmitBridgeOptions } from './recorders/core/EmitBridge.js';
-export { typedEmit } from './recorders/core/typedEmit.js';
 
 // Runner interface + base
 export type { EmittedEvent, EnableNamespace, Runner } from './core/runner.js';
@@ -180,6 +153,9 @@ export type {
 // shape; viewers (Lens, CLI tail, log file) consume this surface.
 export {
   defaultCommentaryTemplates,
+  // Commentary engine helpers — advanced surface consumed by viewer
+  // libraries (agentfootprint-lens) to render run narration. Not the
+  // everyday API, but de-facto public: keep exported.
   extractAgentName,
   extractCommentaryVars,
   renderCommentary,
@@ -196,15 +172,6 @@ export {
 // supported, missing keys ignored) but a different vocabulary —
 // first-person status, mid-call only. Per-tool keys (`tool.<toolName>`)
 // win over the generic `tool` key.
-export {
-  defaultStatusTemplates,
-  selectStatus,
-  renderStatusLine,
-  type StatusContext,
-  type StatusState,
-  type StatusKind,
-  type StatusTemplates,
-} from './recorders/observability/status/statusTemplates.js';
 
 // Primitives (core/)
 export {
@@ -219,7 +186,6 @@ export {
 // subflows → messageAPI assembly stage → Call-LLM. The locked shape that
 // will later serve both Static and Dynamic agents. See buildMessageApiChart.
 export {
-  buildMessageApiChart,
   type MessageApiChartDeps,
 } from './core/agent/buildMessageApiChart.js';
 
@@ -259,7 +225,6 @@ export type { ReadSummaryMarker, ReadTrackingMode } from 'footprintjs';
 export {
   OutputSchemaError,
   applyOutputSchema,
-  buildDefaultInstruction,
   type OutputSchemaParser,
   type OutputSchemaOptions,
 } from './core/outputSchema.js';
@@ -348,27 +313,8 @@ export {
 //
 //   import { AnthropicProvider } from 'agentfootprint';                  // ❌ not exported
 //   import { AnthropicProvider } from 'agentfootprint/llm-providers';    // ✓ canonical
+
 export {
-  MockProvider,
-  mock,
-  type MockProviderOptions,
-  type MockReply,
-} from './adapters/llm/MockProvider.js';
-export {
-  browserAnthropic,
-  BrowserAnthropicProvider,
-  type BrowserAnthropicProviderOptions,
-} from './adapters/llm/BrowserAnthropicProvider.js';
-export {
-  browserOpenai,
-  BrowserOpenAIProvider,
-  type BrowserOpenAIProviderOptions,
-  browserAzureOpenai,
-  BrowserAzureOpenAIProvider,
-  type BrowserAzureOpenAIProviderOptions,
-} from './adapters/llm/BrowserOpenAIProvider.js';
-export {
-  createProvider,
   providerFromEnv,
   type ProviderKind,
   type CreateProviderOptions,
@@ -376,82 +322,9 @@ export {
 } from './adapters/llm/createProvider.js';
 
 // Streaming helpers — agent events → SSE for browser delivery.
-export { toSSE, SSEFormatter, encodeSSE, type ToSSEOptions } from './stream.js';
 
 // Injection Engine — the unifying primitive of context engineering.
 // One Injection type, four sugar factories, one engine subflow.
-export {
-  // Primitive types
-  type Injection,
-  type InjectionTrigger,
-  type InjectionContent,
-  type InjectionContext,
-  type InjectionEvaluation,
-  // Engine
-  evaluateInjections,
-  buildInjectionEngineSubflow,
-  projectActiveInjection,
-  type InjectionEngineConfig,
-  type ActiveInjection,
-  // Sugar factories — one per injection flavor
-  defineInstruction,
-  type DefineInstructionOptions,
-  defineRelevanceHint,
-  type RelevanceHintOptions,
-  defineSkill,
-  resolveSurfaceMode,
-  SkillRegistry,
-  type SkillRegistryOptions,
-  buildListSkillsTool,
-  buildReadSkillTool,
-  type SkillToolPair,
-  type DefineSkillOptions,
-  type SurfaceMode,
-  type RefreshPolicy,
-  type AutoActivateMode,
-  defineSteering,
-  type DefineSteeringOptions,
-  defineFact,
-  type DefineFactOptions,
-  // Unified factory (type-discriminant over the four named factories above)
-  defineInjection,
-  type DefineInjectionOptions,
-  type InjectionFlavor,
-  // Declarative skill graph (proposal 002)
-  skillGraph,
-  decide,
-  SKILL_GRAPH_METADATA_KEY,
-  type SkillGraph,
-  type SkillGraphBuilder,
-  type SkillRouteOptions,
-  type SkillEntryOptions,
-  type TreeOptions,
-  type SkillEdge,
-  type SkillEdgeKind,
-  type SkillNode,
-  type DecisionNode,
-  type SkillRouting,
-  type SkillRoutingStep,
-  type EntryScore,
-  type EntryScoring,
-  type SkillGraphConfig,
-  type BuildOptions,
-  type GraphCheckMode,
-  type GraphCheckup,
-  type GraphProblem,
-  type GraphProblemCode,
-  // Pluggable entry-relevance scorer strategy + built-ins (keyword / embedding)
-  keywordScorer,
-  embeddingScorer,
-  rankEntries,
-  type EntryScorer,
-  type EntryScorerInput,
-  type EntryCandidate,
-  // Proposal 009 Tier 1 — skill-body ↔ tool-contract consistency check
-  checkSkillContract,
-  checkSkillContracts,
-  skillToolNames,
-} from './lib/injection-engine/index.js';
 
 // Patterns — factory functions composing primitives + core-flow into
 // well-known agent patterns from the research literature.
@@ -462,48 +335,6 @@ export * from './patterns/index.js';
 // the most-used factories; the full subsystem (including types that
 // would collide with adapter types like MemoryStore) is reachable via
 // the `agentfootprint/memory` subpath import.
-export {
-  // Pipelines
-  defaultPipeline,
-  ephemeralPipeline,
-  factPipeline,
-  narrativePipeline,
-  semanticPipeline,
-  autoPipeline,
-} from './memory/pipeline/index.js';
-export {
-  // Beat extractors
-  heuristicExtractor,
-  llmExtractor,
-} from './memory/beats/index.js';
-export {
-  // Fact extractors
-  patternFactExtractor,
-  llmFactExtractor,
-} from './memory/facts/index.js';
-export {
-  // Layered memory API — consumer-facing factory + const-objects
-  defineMemory,
-  MEMORY_TYPES,
-  MEMORY_STRATEGIES,
-  MEMORY_TIMING,
-  SNAPSHOT_PROJECTIONS,
-  type MemoryType,
-  type MemoryStrategyKind,
-  type MemoryTiming,
-  type SnapshotProjection,
-  type Strategy,
-  type MemoryDefinition,
-  type DefineMemoryOptions,
-  // Reference implementations + helpers consumers reach for daily.
-  // Real-backend adapters (Redis, Postgres, Pinecone, ...) ship as
-  // separate subpath exports.
-  InMemoryStore,
-  mockEmbedder,
-  identityNamespace,
-  type MemoryIdentity,
-  type Embedder,
-} from './memory/index.js';
 
 // RAG — retrieval-augmented generation as a context-engineering flavor.
 // Thin sugar over `defineMemory({ type: SEMANTIC, strategy: TOP_K })`
@@ -520,51 +351,18 @@ export {
 // expose their tools as agentfootprint Tool[] for `agent.tools(...)`.
 // `@modelcontextprotocol/sdk` is a lazy-required peer-dep (no runtime
 // cost when MCP isn't used).
-export {
-  mcpClient,
-  mockMcpClient,
-  type McpClient,
-  type McpClientOptions,
-  type McpHttpTransport,
-  type McpStdioTransport,
-  type McpTransport,
-  type McpSdkClient,
-  type MockMcpClientOptions,
-  type MockMcpTool,
-} from './lib/mcp/index.js';
 
 // Tool dispatch primitives (v2.5+). New `agentfootprint/tool-providers`
 // subpath bundles tool sources (mcpClient / mockMcpClient) with tool
 // dispatch primitives (staticTools / gatedTools) so consumers find
 // "everything tool-related" in one place. Top-level barrel re-exports
 // the dispatch primitives too — `mcpClient` already re-exports above.
-export {
-  staticTools,
-  gatedTools,
-  skillScopedTools,
-  type ToolProvider,
-  type ToolDispatchContext,
-  type ToolGatePredicate,
-} from './tool-providers/index.js';
 
 // Cross-cutting authorization (v2.5+). `agentfootprint/security` is the
 // dedicated subpath; the root barrel also re-exports `PermissionPolicy`
 // so existing v2.4 consumers find it at the top level.
-export {
-  PermissionPolicy,
-  PolicyHaltError,
-  type PolicyHaltContext,
-  type RoleAllowlist,
-  type PermissionPolicyOptions,
-} from './security/index.js';
 
 // Message Catalog Pattern (v2.5+). `agentfootprint/locales` is the
 // dedicated subpath; the root barrel also re-exports the helpers so
 // existing v2.4 consumers find them at the top level.
-export {
-  defaultCommentaryMessages,
-  defaultThinkingMessages,
-  composeMessages,
-  validateMessages,
-  type MessageCatalog,
-} from './locales/index.js';
+

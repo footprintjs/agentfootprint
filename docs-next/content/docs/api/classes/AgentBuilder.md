@@ -106,7 +106,7 @@ Distinct from Skills (LLM-activated guidance) and Steering
 
 ##### injection
 
-[`Injection`](/docs/api/interfaces/Injection)
+`Injection`
 
 #### Returns
 
@@ -128,7 +128,7 @@ for built-in flavors use the typed sugar (`.skill`, `.steering`,
 
 ##### injection
 
-[`Injection`](/docs/api/interfaces/Injection)
+`Injection`
 
 #### Returns
 
@@ -150,7 +150,7 @@ including the "Dynamic ReAct" `on-tool-return` pattern.
 
 ##### injection
 
-[`Injection`](/docs/api/interfaces/Injection)
+`Injection`
 
 #### Returns
 
@@ -174,7 +174,7 @@ fire per-entry.
 
 ##### injections
 
-readonly [`Injection`](/docs/api/interfaces/Injection)[]
+readonly `Injection`[]
 
 #### Returns
 
@@ -239,7 +239,7 @@ The READ subflow runs at the configured `timing` (default
 
 ##### definition
 
-[`MemoryDefinition`](/docs/api/interfaces/MemoryDefinition)
+`MemoryDefinition`
 
 #### Returns
 
@@ -393,7 +393,7 @@ intent, ids, and Lens chips.
 
 ##### definition
 
-[`MemoryDefinition`](/docs/api/interfaces/MemoryDefinition)
+`MemoryDefinition`
 
 #### Returns
 
@@ -557,7 +557,7 @@ Skill stays active for the rest of the turn once activated.
 
 ##### injection
 
-[`Injection`](/docs/api/interfaces/Injection)
+`Injection`
 
 #### Returns
 
@@ -591,11 +591,11 @@ topology.
 
 ###### scoreEntries?
 
-(`ctx`, `signal?`) => `Promise`\<[`EntryScoring`](/docs/api/interfaces/EntryScoring)\>
+(`ctx`, `signal?`) => `Promise`\<`EntryScoring`\>
 
 ###### skills
 
-readonly [`Injection`](/docs/api/interfaces/Injection)[]
+readonly `Injection`[]
 
 #### Returns
 
@@ -657,7 +657,7 @@ Use for invariant guidance: output format, persona, safety policies.
 
 ##### injection
 
-[`Injection`](/docs/api/interfaces/Injection)
+`Injection`
 
 #### Returns
 
@@ -897,7 +897,7 @@ silent override surprises).
 
 ##### provider
 
-[`ToolProvider`](/docs/api/interfaces/ToolProvider)
+`ToolProvider`
 
 #### Returns
 

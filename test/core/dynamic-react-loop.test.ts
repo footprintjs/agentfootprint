@@ -15,7 +15,9 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { Agent, defineInstruction, defineTool, mock } from '../../src/index.js';
+import { Agent, defineTool } from '../../src/index.js'
+import { defineInstruction } from '../../src/injection-engine.js'
+import { mock } from '../../src/llm-providers.js';
 
 // ─── Fixtures ─────────────────────────────────────────────────────
 

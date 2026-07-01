@@ -23,7 +23,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import type { AgentfootprintEvent } from '../../../src/index.js';
+import type { AgentfootprintEvent } from '../../../src/events.js';
 import {
   defaultStatusTemplates,
   renderStatusLine,

@@ -13,7 +13,8 @@
  *
  * @example
  * ```ts
- * import { Agent, InMemoryStore, mockEmbedder, indexDocuments, defineRAG } from 'agentfootprint';
+ * import { Agent, indexDocuments, defineRAG } from 'agentfootprint'
+import { InMemoryStore, mockEmbedder } from 'agentfootprint/memory';
  *
  * const store = new InMemoryStore();
  * const embedder = mockEmbedder();

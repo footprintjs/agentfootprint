@@ -28,6 +28,7 @@ export {
   MockProvider,
   mock,
   type MockProviderOptions,
+  type MockReply,
   type LatencyMs,
 } from './adapters/llm/MockProvider.js';
 
@@ -62,6 +63,9 @@ export {
   browserOpenai,
   BrowserOpenAIProvider,
   type BrowserOpenAIProviderOptions,
+  browserAzureOpenai,
+  BrowserAzureOpenAIProvider,
+  type BrowserAzureOpenAIProviderOptions,
 } from './adapters/llm/BrowserOpenAIProvider.js';
 
 export {

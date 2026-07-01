@@ -17,12 +17,9 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import {
-  Agent,
-  MockProvider,
-  defaultCommentaryTemplates,
-  defaultStatusTemplates,
-} from '../../../src/index.js';
+import { Agent, defaultCommentaryTemplates } from '../../../src/index.js'
+import { MockProvider } from '../../../src/llm-providers.js'
+import { defaultStatusTemplates } from '../../../src/locales/index.js';
 
 function mock() {
   return MockProvider.realistic({ thinkingMs: 0, chunkDelayMs: 0, reply: 'ok' });

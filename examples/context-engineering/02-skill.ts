@@ -12,13 +12,9 @@
  * the catalog and decide what to activate.
  */
 
-import {
-  Agent,
-  defineSkill,
-  defineTool,
-  mock,
-  type LLMProvider,
-} from '../../src/index.js';
+import { Agent, defineTool, type LLMProvider } from '../../src/index.js'
+import { defineSkill } from '../../src/injection-engine.js'
+import { mock } from '../../src/llm-providers.js';
 import { isCliEntry, printResult, type ExampleMeta } from '../helpers/cli.js';
 
 export const meta: ExampleMeta = {

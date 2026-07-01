@@ -36,7 +36,7 @@ import {
   type CatalogTool,
   type ToolCatalogReport,
 } from '../../src/observe.js';
-import { mockEmbedder } from '../../src/index.js';
+import { mockEmbedder } from '../../src/memory/index.js';
 import { isCliEntry, type ExampleMeta } from '../helpers/cli.js';
 
 export const meta: ExampleMeta = {

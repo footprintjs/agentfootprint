@@ -48,7 +48,7 @@ audit-invisible prompts.
 
 ### role
 
-> `readonly` **role**: [`ContextRole`](/docs/api/type-aliases/ContextRole)
+> `readonly` **role**: `ContextRole`
 
 Defined in: [src/adapters/types.ts:22](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L22)
 

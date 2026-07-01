@@ -12,7 +12,9 @@
  * Run:  npx tsx examples/features/26-skill-graph-route-recorder.ts
  */
 
-import { Agent, defineTool, defineSkill, mock, skillGraph, type LLMProvider } from '../../src/index.js';
+import { Agent, defineTool, type LLMProvider } from '../../src/index.js'
+import { defineSkill, skillGraph } from '../../src/injection-engine.js'
+import { mock } from '../../src/llm-providers.js';
 import { routeRecorder } from '../../src/observe.js';
 import { isCliEntry, printResult, type ExampleMeta } from '../helpers/cli.js';
 

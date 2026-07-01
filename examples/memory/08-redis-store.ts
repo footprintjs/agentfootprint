@@ -14,14 +14,9 @@
  * surface is identical — code that uses one works with the other.
  */
 
-import {
-  Agent,
-  defineMemory,
-  MEMORY_TYPES,
-  MEMORY_STRATEGIES,
-  mock,
-  type LLMProvider,
-} from '../../src/index.js';
+import { Agent, type LLMProvider } from '../../src/index.js'
+import { defineMemory, MEMORY_TYPES, MEMORY_STRATEGIES } from '../../src/memory/index.js'
+import { mock } from '../../src/llm-providers.js';
 import {
   RedisStore,
   type RedisLikeClient,

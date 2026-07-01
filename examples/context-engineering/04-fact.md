@@ -35,7 +35,8 @@ Instructions tell the LLM *what to do* (behavior), Facts tell the LLM
 ## Key API
 
 ```ts
-import { Agent, defineFact } from 'agentfootprint';
+import { Agent } from 'agentfootprint'
+import { defineFact } from 'agentfootprint/injection-engine';
 
 // Always-on, system-prompt slot (default)
 const userProfile = defineFact({

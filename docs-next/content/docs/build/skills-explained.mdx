@@ -166,7 +166,7 @@ Given the above, our Skills implementation makes four choices. All of them fit i
 ### 1. `surfaceMode: 'auto'` — the library picks per provider
 
 ```ts
-import { resolveSurfaceMode } from 'agentfootprint';
+import { resolveSurfaceMode } from 'agentfootprint/injection-engine';
 
 // Pure function — no side effects. Inspect what 'auto' will resolve to.
 resolveSurfaceMode('anthropic', 'claude-sonnet-4-5-20250929'); // → 'both'
@@ -209,7 +209,7 @@ Belt-and-suspenders: even if system-prompt anchoring was honored at turn 1, by t
 For shared skill catalogs across multiple agents, `SkillRegistry` is the centralized-governance answer:
 
 ```ts
-import { SkillRegistry } from 'agentfootprint';
+import { SkillRegistry } from 'agentfootprint/injection-engine';
 
 const registry = new SkillRegistry();
 registry.register(billingSkill).register(refundSkill).register(complianceSkill);

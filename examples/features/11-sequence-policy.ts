@@ -30,16 +30,9 @@
  * Run:  npx tsx examples/features/11-sequence-policy.ts
  */
 
-import {
-  Agent,
-  defineTool,
-  mock,
-  PolicyHaltError,
-  type LLMToolSchema,
-  type PermissionChecker,
-  type Tool,
-  type ToolCallEntry,
-} from '../../src/index.js';
+import { Agent, defineTool, type LLMToolSchema, type PermissionChecker, type Tool, type ToolCallEntry } from '../../src/index.js'
+import { mock } from '../../src/llm-providers.js'
+import { PolicyHaltError } from '../../src/security/index.js';
 import { isCliEntry, type ExampleMeta } from '../helpers/cli.js';
 
 export const meta: ExampleMeta = {

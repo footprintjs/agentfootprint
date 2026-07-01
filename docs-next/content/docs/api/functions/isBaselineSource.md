@@ -14,7 +14,7 @@ Pure classifier: given a `ContextSource`, is it baseline?
 
 ### source
 
-[`ContextSource`](/docs/api/type-aliases/ContextSource)
+`ContextSource`
 
 ## Returns
 

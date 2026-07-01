@@ -11,15 +11,10 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import {
-  skillScopedTools,
-  staticTools,
-  defineSkill,
-  defineTool,
-  type ToolDispatchContext,
-  type ToolProvider,
-  type Tool,
-} from '../../src/index.js';
+import { defineTool, type Tool } from '../../src/index.js'
+import { type ToolDispatchContext, type ToolProvider } from '../../src/tool-providers/index.js'
+import { skillScopedTools, staticTools } from '../../src/tool-providers/index.js'
+import { defineSkill } from '../../src/injection-engine.js';
 
 // ─── Fixtures ─────────────────────────────────────────────────────
 

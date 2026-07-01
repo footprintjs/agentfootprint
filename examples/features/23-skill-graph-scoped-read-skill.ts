@@ -20,15 +20,9 @@
  * Run:  npx tsx examples/features/16-skill-graph-scoped-read-skill.ts
  */
 
-import {
-  Agent,
-  defineTool,
-  defineSkill,
-  mock,
-  skillGraph,
-  type CombinedRecorder,
-  type LLMProvider,
-} from '../../src/index.js';
+import { Agent, defineTool, type CombinedRecorder, type LLMProvider } from '../../src/index.js'
+import { defineSkill, skillGraph } from '../../src/injection-engine.js'
+import { mock } from '../../src/llm-providers.js';
 import { isCliEntry, printResult, type ExampleMeta } from '../helpers/cli.js';
 
 export const meta: ExampleMeta = {

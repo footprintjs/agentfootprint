@@ -13,7 +13,8 @@
  *   - Demoing agent flows where the LLM behavior must be exact
  */
 
-import { Agent, defineTool, mock, type LLMProvider } from '../../src/index.js';
+import { Agent, defineTool, type LLMProvider } from '../../src/index.js'
+import { mock } from '../../src/llm-providers.js';
 import { isCliEntry, printResult, type ExampleMeta } from '../helpers/cli.js';
 
 export const meta: ExampleMeta = {

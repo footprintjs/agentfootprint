@@ -14,7 +14,8 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { Agent, mock, defineTool } from '../../../src/index.js';
+import { Agent, defineTool } from '../../../src/index.js'
+import { mock } from '../../../src/llm-providers.js';
 import type { ReadTrackingMode, ReadSummaryMarker } from '../../../src/index.js';
 
 /** Build a deterministic 2-iteration agent (one tool call, then final). */

@@ -15,7 +15,9 @@
  * identical to the production path.
  */
 
-import { Agent, mcpClient, mock, type LLMProvider } from '../../src/index.js';
+import { Agent, type LLMProvider } from '../../src/index.js'
+import { mcpClient } from '../../src/tool-providers/index.js'
+import { mock } from '../../src/llm-providers.js';
 import type { McpSdkClient } from '../../src/lib/mcp/types.js';
 import { isCliEntry, printResult, type ExampleMeta } from '../helpers/cli.js';
 

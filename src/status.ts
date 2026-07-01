@@ -21,9 +21,15 @@
  *     is non-breaking; consumers already importing from
  *     `agentfootprint/status` get the new state surface for free.
  *
- * Back-compat: every export here is also re-exported from the main
- * `agentfootprint` entry. Migrating consumers is mechanical (rewrite
- * the import path); both paths work.
+ * Prose lives elsewhere: the `defaultStatusTemplates` catalog's canonical
+ * home is `agentfootprint/locales` (the single i18n home for all prose —
+ * commentary, thinking, status). It is re-exported here for convenience, but
+ * new code should import the words from `/locales` and the LOGIC
+ * (`selectStatus` / `renderStatusLine`) from here.
+ *
+ * As of v7 these are NOT on the main `agentfootprint` barrel — status is a
+ * named subpath like every other observability surface. Import the logic
+ * from `agentfootprint/status`, the words from `agentfootprint/locales`.
  *
  * State machine (4 states + null):
  *
@@ -46,8 +52,10 @@
  *      (null)        run done / between calls   → bubble hidden
  */
 
+// Logic only — the status state machine + renderer. The prose catalog
+// (`defaultStatusTemplates`) lives on `agentfootprint/locales`, the single
+// home for all user-facing text; `renderStatusLine` consumes it.
 export {
-  defaultStatusTemplates,
   selectStatus,
   renderStatusLine,
   type StatusState,

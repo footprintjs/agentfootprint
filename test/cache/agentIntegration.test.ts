@@ -8,7 +8,9 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { Agent, defineSteering, mock } from '../../src/index.js';
+import { Agent } from '../../src/index.js'
+import { defineSteering } from '../../src/injection-engine.js'
+import { mock } from '../../src/llm-providers.js';
 
 // ─── Fixtures ─────────────────────────────────────────────────────
 

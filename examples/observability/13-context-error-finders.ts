@@ -25,7 +25,7 @@
  * Run:  npx tsx examples/observability/13-context-error-finders.ts
  */
 
-import { mockEmbedder } from '../../src/index.js';
+import { mockEmbedder } from '../../src/memory/index.js';
 import {
   compareFinders,
   rankSuspects,

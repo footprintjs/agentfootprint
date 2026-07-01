@@ -6,7 +6,8 @@
 import { describe, expect, it } from 'vitest';
 import { commitValueAt } from 'footprintjs/trace';
 
-import { Agent, defineTool, mock } from '../../../src/index.js';
+import { Agent, defineTool } from '../../../src/index.js'
+import { mock } from '../../../src/llm-providers.js';
 
 function tickingProvider(turns: number) {
   let calls = 0;

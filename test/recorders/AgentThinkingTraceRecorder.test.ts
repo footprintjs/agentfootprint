@@ -8,7 +8,9 @@
 
 import { describe, it, expect } from 'vitest';
 import type { LLMProvider } from 'footprintjs';
-import { Agent, defineTool, defineSkill, mock, skillGraph, decide } from '../../src/index.js';
+import { Agent, defineTool } from '../../src/index.js'
+import { defineSkill, skillGraph, decideSkill } from '../../src/injection-engine.js'
+import { mock } from '../../src/llm-providers.js';
 import { agentThinkingTrace } from '../../src/observe.js';
 
 describe('agentThinkingTrace — functional (real agent run)', () => {
@@ -305,7 +307,7 @@ describe('agentThinkingTrace — skill-graph routing leads the iteration', () =>
     const probe = defineSkill({ id: 'probe-skill', description: 'd', body: 'b' });
     const fallback = defineSkill({ id: 'fallback-skill', description: 'd', body: 'b' });
     const graph = skillGraph()
-      .tree(decide((c) => /probe/.test(c.userMessage), probe, fallback, 'probe intent?'))
+      .tree(decideSkill((c) => /probe/.test(c.userMessage), probe, fallback, 'probe intent?'))
       .build();
     const provider: LLMProvider = mock({ reply: 'All good.' });
     const att = agentThinkingTrace({ agent: 'Neo' });
@@ -347,7 +349,7 @@ describe('agentThinkingTrace — skill-graph routing leads the iteration', () =>
     const probe = defineSkill({ id: 'probe-skill', description: 'd', body: 'b', tools: [peek] });
     const fallback = defineSkill({ id: 'fallback-skill', description: 'd', body: 'b' });
     const graph = skillGraph()
-      .tree(decide((c) => /probe/.test(c.userMessage), probe, fallback, 'probe intent?'))
+      .tree(decideSkill((c) => /probe/.test(c.userMessage), probe, fallback, 'probe intent?'))
       .build();
     let i = 0;
     const provider: LLMProvider = mock({

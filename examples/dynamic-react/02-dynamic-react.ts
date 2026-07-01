@@ -21,15 +21,9 @@
  *      iter 1 and iter 3 in this example.
  */
 
-import {
-  Agent,
-  defineSkill,
-  defineTool,
-  mock,
-  type LLMProvider,
-  type LLMRequest,
-  type LLMResponse,
-} from '../../src/index.js';
+import { Agent, defineTool, type LLMProvider, type LLMRequest, type LLMResponse } from '../../src/index.js'
+import { defineSkill } from '../../src/injection-engine.js'
+import { mock } from '../../src/llm-providers.js';
 import { isCliEntry, printResult, type ExampleMeta } from '../helpers/cli.js';
 
 export const meta: ExampleMeta = {

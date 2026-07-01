@@ -9,16 +9,9 @@
  * Garbage past context is worse than no context.
  */
 
-import {
-  Agent,
-  defineMemory,
-  MEMORY_TYPES,
-  MEMORY_STRATEGIES,
-  InMemoryStore,
-  mockEmbedder,
-  mock,
-  type LLMProvider,
-} from '../../src/index.js';
+import { Agent, type LLMProvider } from '../../src/index.js'
+import { defineMemory, MEMORY_TYPES, MEMORY_STRATEGIES, InMemoryStore, mockEmbedder } from '../../src/memory/index.js'
+import { mock } from '../../src/llm-providers.js';
 import { isCliEntry, printResult, type ExampleMeta } from '../helpers/cli.js';
 
 export const meta: ExampleMeta = {

@@ -23,10 +23,8 @@ Under the hood, `defineRAG` returns the same `MemoryDefinition` that `defineMemo
 ## Anatomy
 
 ```ts
-import {
-  Agent, defineRAG, indexDocuments,
-  InMemoryStore, mockEmbedder,
-} from 'agentfootprint';
+import { Agent, defineRAG, indexDocuments } from 'agentfootprint'
+import { InMemoryStore, mockEmbedder } from 'agentfootprint/memory';
 
 const embedder = mockEmbedder();         // swap for openaiEmbedder() in prod
 const store = new InMemoryStore();       // swap for pgvector / Pinecone / Qdrant

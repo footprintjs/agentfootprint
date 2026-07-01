@@ -41,18 +41,9 @@ import { join } from 'node:path';
 
 import { FlowChartExecutor, decide, flowChart, type FlowDecisionEvent } from 'footprintjs';
 
-import {
-  Agent,
-  defineMemory,
-  defineTool,
-  InMemoryStore,
-  MEMORY_STRATEGIES,
-  MEMORY_TYPES,
-  mock,
-  mockEmbedder,
-  SNAPSHOT_PROJECTIONS,
-  type PermissionChecker,
-} from '../../src/index.js';
+import { Agent, defineTool, type PermissionChecker } from '../../src/index.js'
+import { defineMemory, InMemoryStore, MEMORY_STRATEGIES, MEMORY_TYPES, mockEmbedder, SNAPSHOT_PROJECTIONS } from '../../src/memory/index.js'
+import { mock } from '../../src/llm-providers.js';
 import {
   auditExport,
   otelObservability,

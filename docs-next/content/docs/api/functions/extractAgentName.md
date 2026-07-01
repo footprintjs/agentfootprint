@@ -20,7 +20,7 @@ Sequence prefix stripped. For events with no meaningful path
 
 ### event
 
-[`AgentfootprintEvent`](/docs/api/type-aliases/AgentfootprintEvent)
+`AgentfootprintEvent`
 
 ### ctx
 

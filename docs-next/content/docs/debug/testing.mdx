@@ -32,7 +32,9 @@ Iteration 1 calls the tool with the scripted args; iteration 2 returns the final
 For agents that use MCP, `mockMcpClient({ tools })` is a drop-in replacement for `mcpClient(opts)` — same `McpClient` interface, in-memory implementation. No subprocess, no network, no `@modelcontextprotocol/sdk` install needed:
 
 ```ts
-import { Agent, mock, mockMcpClient } from 'agentfootprint';
+import { Agent } from 'agentfootprint'
+import { mock } from 'agentfootprint/llm-providers'
+import { mockMcpClient } from 'agentfootprint/tool-providers';
 
 const mockServer = mockMcpClient({
   tools: [
@@ -57,7 +59,7 @@ When you ship to production, swap `mockMcpClient` for `mcpClient` — the rest o
 `InMemoryStore` is the default memory adapter for tests. Ephemeral, isolated per-test, no infrastructure:
 
 ```ts
-import { defineMemory, MEMORY_TYPES, MEMORY_STRATEGIES, InMemoryStore } from 'agentfootprint';
+import { defineMemory, MEMORY_TYPES, MEMORY_STRATEGIES, InMemoryStore } from 'agentfootprint/memory';
 
 const memory = defineMemory({
   id: 'test-window',

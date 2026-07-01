@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [7.0.0] - 2026-06-26
+
+**Major: API surface cleanup — main barrel is now just the core agent API, everything specialized lives in a named subpath.** A coordinated breaking release (agentfootprint + agentfootprint-lens) so consumers land on the clean surface once. Nothing is removed — every capability is still exported, just from its canonical home.
+
+### Changed (BREAKING — import paths)
+
+- **New `agentfootprint/events`** — the typed event system (`EventDispatcher`, `EVENT_NAMES`, `AgentfootprintEvent`/`AgentfootprintEventMap`, the `Payloads` namespace, context/composition types) moved off the main barrel to its own subpath.
+- **`/locales` is the single i18n home** for all prose catalogs (commentary + thinking + status templates); **`/status`** keeps only the status *logic* (`selectStatus` / `renderStatusLine`).
+- **Main barrel trimmed 129 → 53 values** — provider/memory/injection/tool-provider/stream/security/status/locale factories plus `typedEmit` now import from their named subpath (they were convenience mirrors). **Types follow their values**: ~95 type duplicates (including the event types) moved off main to their feature subpath, so each feature's whole surface (values + types) lives in one place.
+- **`decideSkill`** — the skill-graph decider, formerly exported as `decide` (now on `agentfootprint/injection-engine`), was renamed to avoid colliding with footprintjs's `decide()`.
+- A handful of internal mechanism symbols (`buildMessageApiChart`, `buildDefaultInstruction`, `buildEventMeta`, `parseSubflowPath`, `EmitBridge` / `EmitBridgeOptions`) are no longer public.
+
+### Added (non-breaking)
+
+- **`agentfootprint/debug`** — a debug-focused subpath that re-exports the diagnosis tools (context-bug localizer, influence scoring, trace toolpack / `.selfExplain` machinery, tool-catalog lint). These **also remain available from `/observe`** for one transition version (`/observe` now reads as recorders-first; the debug re-exports are deprecated there). The deep `observability/contextError/finders` path gains a shorter alias, **`agentfootprint/debug/finders`** — the old path still works.
+- **`agentfootprint/cache`** — the prompt-cache recorder (`cacheRecorder`) and custom cache-strategy registration are now importable (they were previously unreachable from any path).
+
+### Migration
+
+Re-point imports to the named subpath (e.g. `import { defineMemory } from 'agentfootprint/memory'`, `import { localizeContextBug } from 'agentfootprint/debug'`, `import { EventDispatcher } from 'agentfootprint/events'`). Rename `decide` → `decideSkill` for skill-graph trees. The commentary engine helpers used by viewers (`renderCommentary`, `extractAgentName`, `extractCommentaryVars`, `selectCommentaryKey`) remain on the main barrel. Most old paths that were *aliased* (`/observe` debug tools, the long finders path) still resolve this major and warn; they're removed next major.
+
 ## [6.45.0] - 2026-06-24
 
 ### Added — Pluggable entry scorer (keyword router + strategy interface)

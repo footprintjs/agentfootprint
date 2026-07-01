@@ -4,7 +4,7 @@ title: EmittedEvent
 
 # Type Alias: EmittedEvent
 
-> **EmittedEvent** = [`AgentfootprintEvent`](/docs/api/type-aliases/AgentfootprintEvent)
+> **EmittedEvent** = `AgentfootprintEvent`
 
 Defined in: [src/core/runner.ts:252](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runner.ts#L252)
 

@@ -4,7 +4,7 @@ title: BASELINE_SOURCES
 
 # Variable: BASELINE\_SOURCES
 
-> `const` **BASELINE\_SOURCES**: `ReadonlySet`\<[`ContextSource`](/docs/api/type-aliases/ContextSource)\>
+> `const` **BASELINE\_SOURCES**: `ReadonlySet`\<`ContextSource`\>
 
 Defined in: [src/recorders/core/contextEngineering.ts:83](https://github.com/footprintjs/agentfootprint/blob/main/src/recorders/core/contextEngineering.ts#L83)
 

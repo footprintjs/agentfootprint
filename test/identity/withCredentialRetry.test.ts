@@ -17,7 +17,8 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { Agent, mock, defineTool } from '../../src/index.js';
+import { Agent, defineTool } from '../../src/index.js'
+import { mock } from '../../src/llm-providers.js';
 import {
   withCredentialRetry,
   staticTokens,

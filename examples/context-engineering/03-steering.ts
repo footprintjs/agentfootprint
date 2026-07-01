@@ -7,7 +7,9 @@
  * (tagged `source: 'steering'`).
  */
 
-import { Agent, defineSteering, mock, type LLMProvider } from '../../src/index.js';
+import { Agent, type LLMProvider } from '../../src/index.js'
+import { defineSteering } from '../../src/injection-engine.js'
+import { mock } from '../../src/llm-providers.js';
 import { isCliEntry, printResult, type ExampleMeta } from '../helpers/cli.js';
 
 export const meta: ExampleMeta = {

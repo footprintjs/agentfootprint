@@ -16,7 +16,8 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { Agent, defineFact } from '../../../src/index.js';
+import { Agent } from '../../../src/index.js'
+import { defineFact } from '../../../src/injection-engine.js';
 import { MockProvider } from '../../../src/adapters/llm/MockProvider.js';
 
 describe('buildMessagesSlot — messages-slot active injection without a description', () => {

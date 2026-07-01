@@ -20,7 +20,7 @@ the outer template stays a single non-recursive substitution pass.
 
 ### event
 
-[`AgentfootprintEvent`](/docs/api/type-aliases/AgentfootprintEvent)
+`AgentfootprintEvent`
 
 ### ctx
 

@@ -9,7 +9,8 @@
 import { describe, it, expect } from 'vitest';
 import { EventDispatcher } from '../../../src/events/dispatcher.js';
 import type { AgentfootprintEvent } from '../../../src/events/registry.js';
-import { Agent, mock } from '../../../src/index.js';
+import { Agent } from '../../../src/index.js'
+import { mock } from '../../../src/llm-providers.js';
 
 function meta() {
   return {

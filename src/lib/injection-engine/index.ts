@@ -64,7 +64,7 @@ export {
 // graph-derived triggers + a drawable topology. Sugar over the trigger model.
 export {
   skillGraph,
-  decide,
+  decideSkill,
   SKILL_GRAPH_METADATA_KEY,
   type SkillGraph,
   type SkillGraphBuilder,

@@ -39,7 +39,9 @@ Prove the whole agent with **dev adapters** before touching AWS. This is the exa
 you ship — only the adapters change later.
 
 ```ts
-import { Agent, mock, defineTool, defineMemory, MEMORY_TYPES, MEMORY_STRATEGIES, InMemoryStore } from 'agentfootprint';
+import { Agent, defineTool } from 'agentfootprint'
+import { mock } from 'agentfootprint/llm-providers'
+import { defineMemory, MEMORY_TYPES, MEMORY_STRATEGIES, InMemoryStore } from 'agentfootprint/memory';
 
 const weather = defineTool({
   name: 'weather',

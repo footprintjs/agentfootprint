@@ -19,7 +19,7 @@ suffix (no conditional logic in the templates themselves).
 
 ### event
 
-[`AgentfootprintEvent`](/docs/api/type-aliases/AgentfootprintEvent)
+`AgentfootprintEvent`
 
 ## Returns
 

@@ -11,17 +11,9 @@
  * Every successful production run becomes a labeled trajectory.
  */
 
-import {
-  Agent,
-  defineMemory,
-  MEMORY_TYPES,
-  MEMORY_STRATEGIES,
-  SNAPSHOT_PROJECTIONS,
-  InMemoryStore,
-  mockEmbedder,
-  mock,
-  type LLMProvider,
-} from '../../src/index.js';
+import { Agent, type LLMProvider } from '../../src/index.js'
+import { defineMemory, MEMORY_TYPES, MEMORY_STRATEGIES, SNAPSHOT_PROJECTIONS, InMemoryStore, mockEmbedder } from '../../src/memory/index.js'
+import { mock } from '../../src/llm-providers.js';
 import { isCliEntry, printResult, type ExampleMeta } from '../helpers/cli.js';
 
 export const meta: ExampleMeta = {

@@ -20,7 +20,8 @@
 import { describe, expect, it } from 'vitest';
 import { decide, flowChart } from 'footprintjs';
 import type { CombinedRecorder, FlowDecisionEvent, PausableHandler } from 'footprintjs';
-import { Agent, flowchartAsTool, mock, type FlowchartToolSnapshot } from '../../src/index.js';
+import { Agent, flowchartAsTool, type FlowchartToolSnapshot } from '../../src/index.js'
+import { mock } from '../../src/llm-providers.js';
 import { unconfiguredCredentialProvider } from '../../src/identity.js';
 import { causalEvidenceRecorder } from '../../src/memory/causal/evidenceRecorder.js';
 

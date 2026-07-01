@@ -47,12 +47,8 @@ Priority resolution: pause > tool > LLM. Whichever is active when you call `sele
 `renderStatusLine(state, ctx, templates?)` resolves the template + substitutes vars:
 
 ```ts
-import {
-  selectStatus,
-  renderStatusLine,
-  defaultStatusTemplates,
-  type StatusTemplates,
-} from 'agentfootprint/status';
+import { selectStatus, renderStatusLine, type StatusTemplates } from 'agentfootprint/status'
+import { defaultStatusTemplates } from 'agentfootprint/locales';
 
 const myTemplates: StatusTemplates = {
   ...defaultStatusTemplates,

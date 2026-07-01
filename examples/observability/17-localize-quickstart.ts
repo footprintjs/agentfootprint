@@ -25,7 +25,11 @@
  * Run:  npx tsx examples/observability/17-localize-quickstart.ts
  */
 
-import { Agent, defineFact, mock, mockEmbedder, type Injection } from '../../src/index.js';
+import { Agent } from '../../src/index.js'
+import { type Injection } from '../../src/injection-engine.js'
+import { defineFact } from '../../src/injection-engine.js'
+import { mock } from '../../src/llm-providers.js'
+import { mockEmbedder } from '../../src/memory/index.js';
 import {
   applyAblations,
   embeddingCache,

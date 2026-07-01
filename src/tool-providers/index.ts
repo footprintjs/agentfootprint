@@ -46,6 +46,7 @@ export { mcpClient, mockMcpClient } from '../lib/mcp/index.js';
 export type {
   McpClient,
   McpClientOptions,
+  McpSdkClient,
   McpTransport,
   McpStdioTransport,
   McpHttpTransport,

@@ -26,7 +26,7 @@
 import { decide, flowChart, FlowChartExecutor } from 'footprintjs';
 import { controlDepRecorder } from 'footprintjs/trace';
 
-import { mock } from '../../src/index.js';
+import { mock } from '../../src/llm-providers.js';
 import { traceDebugAgent } from '../../src/observe.js';
 import { isCliEntry, type ExampleMeta } from '../helpers/cli.js';
 

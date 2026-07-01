@@ -14,7 +14,7 @@ Phase 5 (lens, tracing, cost, guardrails, ...).
 
 ### cost()
 
-> **cost**(`opts?`): [`Unsubscribe`](/docs/api/type-aliases/Unsubscribe)
+> **cost**(`opts?`): `Unsubscribe`
 
 Defined in: [src/core/runner.ts:79](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runner.ts#L79)
 
@@ -30,7 +30,7 @@ read-back / test inspection.
 
 #### Returns
 
-[`Unsubscribe`](/docs/api/type-aliases/Unsubscribe)
+`Unsubscribe`
 
 ***
 
@@ -61,7 +61,7 @@ at any time (not just via onUpdate).
 
 ### liveStatus()
 
-> **liveStatus**(`opts`): [`Unsubscribe`](/docs/api/type-aliases/Unsubscribe)
+> **liveStatus**(`opts`): `Unsubscribe`
 
 Defined in: [src/core/runner.ts:86](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runner.ts#L86)
 
@@ -78,7 +78,7 @@ Strategy is required (consumer must wire UI).
 
 #### Returns
 
-[`Unsubscribe`](/docs/api/type-aliases/Unsubscribe)
+`Unsubscribe`
 
 ***
 
@@ -111,7 +111,7 @@ model so you can look at it — locally, with full content. The serialized
 
 ### observability()
 
-> **observability**(`opts?`): [`Unsubscribe`](/docs/api/type-aliases/Unsubscribe)
+> **observability**(`opts?`): `Unsubscribe`
 
 Defined in: [src/core/runner.ts:73](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runner.ts#L73)
 
@@ -128,4 +128,4 @@ CloudWatch, …) or the default `consoleObservability()`. See
 
 #### Returns
 
-[`Unsubscribe`](/docs/api/type-aliases/Unsubscribe)
+`Unsubscribe`

@@ -21,7 +21,7 @@
  * ablation (RFC-003 Part B) is where causal claims live.
  */
 
-import { mockEmbedder } from '../../src/index.js';
+import { mockEmbedder } from '../../src/memory/index.js';
 import {
   embeddingCache,
   pairwiseSimilarity,

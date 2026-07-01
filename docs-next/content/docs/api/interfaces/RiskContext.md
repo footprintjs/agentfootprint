@@ -18,7 +18,7 @@ Defined in: [src/adapters/types.ts:277](https://github.com/footprintjs/agentfoot
 
 ### slot?
 
-> `readonly` `optional` **slot?**: [`ContextSlot`](/docs/api/type-aliases/ContextSlot)
+> `readonly` `optional` **slot?**: `ContextSlot`
 
 Defined in: [src/adapters/types.ts:274](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L274)
 
@@ -26,7 +26,7 @@ Defined in: [src/adapters/types.ts:274](https://github.com/footprintjs/agentfoot
 
 ### source?
 
-> `readonly` `optional` **source?**: [`ContextSource`](/docs/api/type-aliases/ContextSource)
+> `readonly` `optional` **source?**: `ContextSource`
 
 Defined in: [src/adapters/types.ts:275](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L275)
 

@@ -4,7 +4,7 @@ title: ContextInjectedEvent
 
 # Type Alias: ContextInjectedEvent
 
-> **ContextInjectedEvent** = [`AgentfootprintEventMap`](/docs/api/interfaces/AgentfootprintEventMap)\[`"agentfootprint.context.injected"`\]
+> **ContextInjectedEvent** = `AgentfootprintEventMap`\[`"agentfootprint.context.injected"`\]
 
 Defined in: [src/recorders/core/contextEngineering.ts:113](https://github.com/footprintjs/agentfootprint/blob/main/src/recorders/core/contextEngineering.ts#L113)
 

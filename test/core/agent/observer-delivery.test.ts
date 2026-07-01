@@ -16,17 +16,9 @@
 
 import { describe, it, expect, vi } from 'vitest';
 import { disableDevMode, enableDevMode } from 'footprintjs';
-import {
-  Agent,
-  defineMemory,
-  defineTool,
-  InMemoryStore,
-  MEMORY_STRATEGIES,
-  MEMORY_TYPES,
-  SNAPSHOT_PROJECTIONS,
-  mock,
-  mockEmbedder,
-} from '../../../src/index.js';
+import { Agent, defineTool } from '../../../src/index.js'
+import { defineMemory, InMemoryStore, MEMORY_STRATEGIES, MEMORY_TYPES, SNAPSHOT_PROJECTIONS, mockEmbedder } from '../../../src/memory/index.js'
+import { mock } from '../../../src/llm-providers.js';
 import { isPaused, pauseHere } from '../../../src/core/pause.js';
 import { RunCheckpointError } from '../../../src/core/runCheckpoint.js';
 import type { LLMProvider, LLMResponse } from '../../../src/adapters/types.js';
