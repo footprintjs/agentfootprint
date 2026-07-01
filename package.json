@@ -334,6 +334,18 @@
       "observe": [
         "./dist/types/observe.d.ts"
       ],
+      "debug": [
+        "./dist/types/debug.d.ts"
+      ],
+      "debug/finders": [
+        "./dist/types/debug/finders.d.ts"
+      ],
+      "cache": [
+        "./dist/types/cache/index.d.ts"
+      ],
+      "events": [
+        "./dist/types/events.d.ts"
+      ],
       "observability/contextError/finders": [
         "./dist/types/observability/contextError/finders/index.d.ts"
       ],
