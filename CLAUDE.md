@@ -1,626 +1,87 @@
-# agentfootprint — AI Coding Instructions
+<!-- analyzed-at: 3fbcef8 @ 2026-07-02 | model: fable-5 -->
+# agentfootprint — feature-work map
 
-This is the **agentfootprint** library — a framework for building Generative AI applications where context engineering is buildable at the control-flow level. Built on [footprintjs](https://github.com/footprintjs/footPrint) (the flowchart pattern for backend code).
+Agent framework layered on footprintjs: every runner (Agent, LLMCall, compositions, patterns) is a footprintjs chart built ONCE at construction and executed on a fresh `FlowChartExecutor` per run. Engine seams (stage kinds, $-methods, engine handlers) live UPSTREAM in footprintjs and are closed here. This file maps this repo's seams and blast radius — **trust the code** where any doc disagrees.
 
-## Core Thesis
+## Module map
+Entry points (package.json exports): `.` core API · `/observe` ALL observability recorder factories (deliberately off the main barrel) · `/debug` + `/debug/finders` run-autopsy kit · `/events` typed event system · `/llm-providers` vendor adapters (mock, anthropic, openai, browser*) · `/memory` (defineMemory, MEMORY_TYPES, InMemoryStore, mockEmbedder) · `/memory-providers` (redis, agentcore, bedrockAgentMemory stores) · `/injection-engine` (defineSkill/Fact/Instruction/Steering, skillGraph, decideSkill) · `/tool-providers` (staticTools, gatedTools, skillScopedTools, mcpClient) · `/strategies` `/observability-providers` `/security` `/identity` `/reliability` `/resilience` `/stream` `/thinking` `/cache` `/status` `/locales`. **Main barrel does NOT export** mock/browser*/defineMemory/defineSkill/skillGraph/mcpClient/InMemoryStore — import from the subpaths above (older docs showed these on the main barrel; wrong).
 
-**Building Generative AI applications is mostly *context engineering*** — deciding what content lands in which slot of the LLM call, when, and why. agentfootprint exposes this discipline through:
-
-- **2 primitives** — `LLMCall`, `Agent` (= ReAct loop)
-- **3 compositions + Loop** — `Sequence` · `Parallel` · `Conditional` · `Loop`
-- **1 unifying injection primitive** — `Injection` with 4 typed sugar factories
-- **1 memory factory** — `defineMemory({ type, strategy, store })`
-
-Every named pattern (Reflexion, ToT, Swarm, ...) is a recipe over these. **Don't ship new classes per paper.**
-
-## The Mental Model — Three Slots, Six Flavors
-
-Every LLM call has three slots. Every "agent feature" is content flowing into one of them:
-
-| LLM API field | What goes here |
+| src/ | one job |
 |---|---|
-| `system` prompt | Steering · Instruction text · Skill body · Fact data · formatted memory |
-| `messages` array | Conversation history · RAG chunks · memory replay · injected instructions |
-| `tools` array | Tool schemas (registered + Skill-attached) |
-
-The flavors are how you *mark intent* — but they all reduce to one `Injection` primitive:
-
-| Flavor | Trigger | Slots |
-|---|---|---|
-| **Skill** | LLM-activated (`read_skill`) | system-prompt + tools |
-| **Steering** | Always-on | system-prompt |
-| **Instruction** | Predicate (`activeWhen` / `on-tool-return`) | system-prompt or messages |
-| **Fact** | Always-on (data) | system-prompt or messages |
-
-## Mock-first development (RECOMMENDED workflow)
-
-Build the entire app — agent, context engineering, tools, memory, RAG, MCP — against in-memory mocks first. Validate logic and patterns end-to-end with $0 API cost. Swap real infrastructure in, one boundary at a time, only after the flow is right.
-
-```typescript
-import { Agent, mock, InMemoryStore, mockEmbedder, defineTool } from 'agentfootprint';
-
-// Mock LLM provider — no API key, deterministic reply.
-const provider = mock({ reply: 'Refunds take 3 business days.' });
-
-// Inline-mocked tool — no real backend yet.
-const lookup = defineTool({
-  schema: { name: 'lookup', description: '...', inputSchema: {} },
-  execute: async () => 'mock data',
-});
-
-const agent = Agent.create({ provider, model: 'mock' }).tool(lookup).build();
-await agent.run({ message: 'How long does a refund take?' });
-```
-
-| Boundary | Mock for development | Production swap |
-|---|---|---|
-| LLM provider | `mock({ reply })` · `mock({ replies })` for scripted ReAct | `anthropic()` · `openai()` · `bedrock()` · `ollama()` (from `agentfootprint/llm-providers`) |
-| Embedder | `mockEmbedder()` | OpenAI / Cohere / Bedrock embedder factory |
-| Memory store | `InMemoryStore` | `RedisStore` (`agentfootprint/memory-redis`) · `AgentCoreStore` (`agentfootprint/memory-agentcore`) · DynamoDB / Postgres / Pinecone (planned) |
-| MCP server | `mockMcpClient({ tools })` — in-memory, no SDK | `mcpClient({ transport })` to a real server |
-| Tool execute | inline `async () => '...'` closure | real implementation |
-
-When generating starter code for users, **default to the mock surface** unless they explicitly say they have a key / endpoint / store ready. Show real-provider code as the "swap" step, not the first step.
-
-**Subpath imports** for memory adapters keep the main barrel small + tree-shaking clean:
-
-```typescript
-import { RedisStore } from 'agentfootprint/memory-redis';
-import { AgentCoreStore } from 'agentfootprint/memory-agentcore';
-```
-
-Both lazy-require their SDK (`ioredis` / `@aws-sdk/client-bedrock-agent-runtime`) and accept `_client` for test injection.
-
-**Multi-turn mock for tool-using ReAct:**
-
-```typescript
-const provider = mock({
-  replies: [
-    { toolCalls: [{ id: '1', name: 'lookup', args: { topic: 'refunds' } }] },
-    { content: 'Refunds take 3 business days.' },
-  ],
-});
-```
-
-Each `complete()` consumes one reply in order. Exhaustion throws loud — misnumbered scripts fail tests instead of silently looping.
-
-## Public API
-
-### MCP — `mcpClient` (connect to MCP servers, register their tools)
-
-```typescript
-import { Agent, mcpClient } from 'agentfootprint';
-
-const slack = await mcpClient({
-  name: 'slack',
-  transport: { transport: 'stdio', command: 'npx', args: ['@example/slack-mcp'] },
-});
-
-const agent = Agent.create({ provider })
-  .tools(await slack.tools())  // pull ALL tools from the server in one call
-  .build();
-
-await agent.run({ message: '...' });
-await slack.close();
-```
-
-Transports: `stdio` (local subprocess), `http` (Streamable HTTP). The
-`@modelcontextprotocol/sdk` peer-dep is lazy-required — zero runtime
-cost when MCP isn't used. Friendly install hint if missing.
-
-`agent.tools(arr)` is the bulk-register companion to `agent.tool(t)`.
-Pair with `await client.tools()` to register everything an MCP server
-exposes in one builder call. Tool-name uniqueness is still validated
-at `.build()` across MCP servers + manual `.tool()` calls.
-
-### RAG — `defineRAG` (one factory, one helper)
-
-```typescript
-import {
-  defineRAG, indexDocuments,
-  InMemoryStore, mockEmbedder,
-} from 'agentfootprint';
-
-const embedder = mockEmbedder();
-const store = new InMemoryStore();
-
-// Seed the corpus once at startup
-await indexDocuments(store, embedder, [
-  { id: 'doc1', content: 'Refunds are processed within 3 business days.' },
-  { id: 'doc2', content: 'Pro plan costs $20/month.' },
-]);
-
-// Define the retriever
-const docs = defineRAG({
-  id: 'product-docs',
-  store, embedder,
-  topK: 3,
-  threshold: 0.7,        // STRICT — no fallback when nothing matches
-  asRole: 'user',        // chunks land as user-role context (RAG default)
-});
-
-// Wire to agent — `.rag()` is an alias for `.memory()`, same plumbing
-agent.rag(docs);
-```
-
-`defineRAG` is sugar over `defineMemory({ type: SEMANTIC, strategy: TOP_K })`. Same plumbing, different intent: RAG = document corpus retrieval; `defineMemory` = conversation/run-state memory.
-
-### Agent (ReAct primitive)
-
-```typescript
-import { Agent, defineTool } from 'agentfootprint';
-import { anthropic } from 'agentfootprint/llm-providers';
-
-const agent = Agent.create({
-  provider: anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! }),
-  model: 'claude-sonnet-4-5-20250929',
-  maxIterations: 10,
-})
-  .system('You are a helpful assistant.')
-  .tool(weatherTool)
-  .build();
-
-const result = await agent.run({ message: 'Weather in SF?' });
-```
-
-Builder methods:
-- `.system(prompt)` — base system prompt
-- `.tool(definedTool)` — register a tool
-- `.steering(injection)` · `.instruction(injection)` · `.skill(injection)` · `.fact(injection)` — context-engineering injections
-- `.memory(definition)` — register a memory (returned by `defineMemory()`)
-- `.build()` → `Agent` — runner with `.run({ message, identity? })`
-
-### LLMCall (one-shot primitive)
-
-```typescript
-import { LLMCall } from 'agentfootprint';
-import { anthropic } from 'agentfootprint/llm-providers';
-
-const call = LLMCall.create({ provider: anthropic(...), model: 'claude-sonnet-4-5-20250929' })
-  .system('You are a terse assistant.')
-  .build();
-
-const answer = await call.run({ message: 'Summarize: ...' });
-```
-
-### Tools
-
-```typescript
-import { defineTool } from 'agentfootprint';
-
-const weather = defineTool({
-  schema: {
-    name: 'weather',
-    description: 'Current weather for a city.',
-    inputSchema: {
-      type: 'object',
-      properties: { city: { type: 'string' } },
-      required: ['city'],
-    },
-  },
-  execute: async (args) => `${(args as { city: string }).city}: 72°F`,
-});
-```
-
-Tool-name uniqueness is validated at `agent.build()` time across `.tool()` registrations AND every Skill's `inject.tools[]`.
-
-### Context Engineering — 4 typed factories
-
-All four return an `Injection` evaluated by the same engine; all emit the same `agentfootprint.context.injected` event with `source` discriminating the flavor.
-
-```typescript
-import {
-  defineSkill, defineSteering, defineInstruction, defineFact,
-} from 'agentfootprint';
-
-// Always-on rule (system-prompt)
-const tone = defineSteering({
-  id: 'tone',
-  prompt: 'Be friendly and concise.',
-});
-
-// Predicate-gated
-const urgent = defineInstruction({
-  id: 'urgent',
-  activeWhen: (ctx) => /urgent|asap/i.test(ctx.userMessage),
-  prompt: 'Prioritize the fastest path to resolution.',
-});
-
-// Dynamic ReAct — fires AFTER a specific tool returned (recency-weighted slot)
-const afterRedact = defineInstruction({
-  id: 'after-redact',
-  activeWhen: (ctx) => ctx.lastToolResult?.toolName === 'redact_pii',
-  prompt: 'Use the redacted text only. Do not paraphrase the original.',
-  slot: 'messages',  // higher LLM attention than system-prompt
-});
-
-// LLM-activated body + tools (auto-attaches `read_skill` activation tool)
-const billing = defineSkill({
-  id: 'billing',
-  description: 'Use for refunds, subscriptions, invoices.',
-  body: 'Confirm identity before processing refunds.',
-  tools: [refundTool],
-});
-
-// Developer-supplied data (not behavior)
-const userProfile = defineFact({
-  id: 'user',
-  data: 'User: Alice (alice@example.com), Plan: Pro.',
-});
-
-agent
-  .steering(tone)
-  .instruction(urgent)
-  .instruction(afterRedact)
-  .skill(billing)
-  .fact(userProfile);
-```
-
-### Skill graph — declarative, drawable skill routing (`skillGraph`)
-
-`skillGraph()` is NOT a flavor — it's a builder that sets the **trigger** on a set
-of **skills** (and draws the routing). It throws on a non-skill. Sugar over the
-trigger model; zero engine change.
-
-```typescript
-import { skillGraph, decide, type CombinedRecorder } from 'agentfootprint';
-
-// Flat: entry skills + routing edges
-const graph = skillGraph()
-  .entry(triage)                                            // trigger: always / rule
-  .route(triage, sfp, { when: (r) => JSON.parse(r.result).crc > 0, label: 'CRC>0' })
-  .route(triage, lookup, { onToolReturn: 'get_fcns' })     // trigger: on-tool-return
-  .build();
-
-// Decision tree: predicate nodes route to skill leaves (exactly one fires)
-const tree = skillGraph()
-  .tree(decide(isIo, ioSkill, decide(isSfp, sfpSkill, triage, 'sfp?'), 'io intent?'))
-  .build();
-
-agent.skillGraph(graph);                 // mount (sugar over .injection per skill)
-graph.toMermaid();                       // draws itself (predicate diamonds → skill boxes)
-graph.nodes; graph.edges;                // the drawn shape (for a custom renderer)
-```
-
-- `.entry(skill, { when? })` → `always` / `rule`; `.route(a, b, { when | onToolReturn })`
-  → `rule` / `on-tool-return`; a bare `.route` keeps the skill's default `llm-activated`
-  (model-reachable via `read_skill`, drawn dashed). `.tree(decide(...))` compiles each
-  leaf to the conjunction of its root→leaf predicates (with sibling negation → exactly
-  one leaf).
-- **On-demand tools (the headline win):** because a `.tree()` routes to exactly ONE leaf
-  per turn, each leaf is stamped `autoActivate: 'currentSkill'` **by default** — so a
-  skill's `inject.tools` reach the LLM ONLY when the tree routes there, instead of every
-  skill's tools landing in the always-on static registry on every call. (`read_skill`
-  stays as the escape hatch.) Opt out with `.tree(root, { scopeTools: false })`; a leaf
-  that sets its own `autoActivate` in `defineSkill(...)` is always respected. Flat
-  `.entry()`/`.route()` graphs are **not** auto-scoped (multiple may be active) — set
-  `autoActivate: 'currentSkill'` on those skills yourself if you want per-skill gating.
-- **Routing provenance:** each compiled skill carries `metadata.skillGraph` (a
-  `SkillRouting` — `via` + decision `path`). At run time it rides out on
-  `context.evaluated.routing` (per active skill: id, path, edge label, unlocked tools),
-  narrated by the `context.routed` commentary line. The lens `<SkillGraphFlow>` shows the
-  same path ("REACHED WHEN").
-- Lens viewer: `import { SkillGraphFlow } from 'agentfootprint-lens'` — interactive
-  two-panel (graph │ click-to-inspect skill detail + decision path).
-
-### Memory — `defineMemory({ type, strategy, store })`
-
-ONE factory dispatches `type × strategy.kind` onto the right pipeline. Multiple memories layer cleanly via per-id scope keys (`memoryInjection_${id}`).
-
-```typescript
-import {
-  defineMemory,
-  MEMORY_TYPES, MEMORY_STRATEGIES, SNAPSHOT_PROJECTIONS,
-  InMemoryStore, mockEmbedder,
-} from 'agentfootprint';
-
-// Short-term sliding window — the 90% case
-const shortTerm = defineMemory({
-  id: 'short-term',
-  type: MEMORY_TYPES.EPISODIC,
-  strategy: { kind: MEMORY_STRATEGIES.WINDOW, size: 10 },
-  store: new InMemoryStore(),
-});
-
-// Semantic recall — vector retrieval with strict threshold
-const facts = defineMemory({
-  id: 'facts',
-  type: MEMORY_TYPES.SEMANTIC,
-  strategy: {
-    kind: MEMORY_STRATEGIES.TOP_K,
-    topK: 3,
-    threshold: 0.7,                 // STRICT — empty when no match
-    embedder: mockEmbedder(),       // swap for openaiEmbedder() in prod
-  },
-  store: new InMemoryStore(),
-});
-
-// Causal — UNIQUE TO AGENTFOOTPRINT. Persists run snapshots so cross-run
-// "why was X rejected?" follow-ups answer from the STORED run: decisions
-// (footprintjs decide()/select() evidence + route/skill-graph provenance),
-// tool calls (args + result previews), iterations, duration, token usage —
-// harvested automatically by causalEvidenceRecorder when a CAUSAL memory is
-// mounted. (commitLog/narrative capture: not yet — see SnapshotEntry.)
-const causal = defineMemory({
-  id: 'causal',
-  type: MEMORY_TYPES.CAUSAL,
-  strategy: {
-    kind: MEMORY_STRATEGIES.TOP_K,
-    topK: 1,
-    threshold: 0.7,
-    embedder: mockEmbedder(),
-  },
-  store: new InMemoryStore(),
-  projection: SNAPSHOT_PROJECTIONS.DECISIONS,
-});
-
-agent.memory(shortTerm).memory(facts).memory(causal);
-
-// Multi-tenant identity is plumbed through agent.run:
-await agent.run({
-  message: '...',
-  identity: { tenant: 'acme', principal: 'alice', conversationId: 'thread-42' },
-});
-```
-
-The 4 memory **types**:
-- `EPISODIC` — raw conversation messages
-- `SEMANTIC` — extracted structured facts
-- `NARRATIVE` — beats / summaries of prior runs
-- `CAUSAL` — footprintjs decision-evidence snapshots ⭐
-
-The 7 **strategies**:
-- `WINDOW` (rule, last N) · `BUDGET` (decider, fit-to-tokens) · `SUMMARIZE` (LLM compresses older)
-- `TOP_K` (score-threshold) · `EXTRACT` (LLM distills on write)
-- `DECAY` (recency-weighted, planned) · `HYBRID` (compose multiple)
-
-### Compositions — Multi-Agent via Control Flow
-
-There is **no** `MultiAgentSystem` class. Multi-agent = compositions of single Agents through the same control flow that connects any flowchart stages:
-
-```typescript
-import { Sequence, Parallel, Conditional, Loop } from 'agentfootprint';
-
-// Output flows downstream — each step takes an id + a runner (Agent / LLMCall / runner)
-const pipeline = Sequence.create()
-  .step('research', researcher)
-  .step('write', writer)
-  .step('edit', editor)
-  .build();
-
-// Multi-perspective with LLM merge — each branch takes an id + a runner
-const tot = Parallel.create()
-  .branch('t1', thoughtAgent)
-  .branch('t2', thoughtAgent)
-  .branch('t3', thoughtAgent)
-  .mergeWithLLM({ provider, model: 'claude-sonnet-4-5-20250929', prompt: 'Rank and synthesize.' })
-  .build();
-
-// Predicate-based routing — .when(id, predicate, runner); exactly one .otherwise(id, runner).
-// predicate receives ConditionalInput { message }.
-const triage = Conditional.create()
-  .when('billing', (input) => /refund|invoice/i.test(input.message), billingAgent)
-  .when('tech', (input) => /error|bug/i.test(input.message), techAgent)
-  .otherwise('general', generalAgent)
-  .build();
-
-// Iterate with budget — .repeat(runner) sets the body, .times(n) caps iterations.
-// until() guard receives { iteration, latestOutput, startMs }.
-const refine = Loop.create()
-  .repeat(critiqueAgent)
-  .until((ctx) => /done/i.test(ctx.latestOutput))
-  .times(5)
-  .build();
-```
-
-### Named patterns — recipes ship as runnable examples
-
-```
-ReAct            = Agent (default loop)
-Reflexion        = Sequence(Agent, critique-LLM, Agent)
-Tree-of-Thoughts = Parallel(Agent × N) + rank
-Self-Consistency = Parallel(Agent × N) + majority-vote
-Debate           = Loop(Agent × 2 + judge)
-Map-Reduce       = Parallel(Agent × N) + merge
-Swarm            = Agent whose tools are other Agents
-```
-
-Browse [`examples/patterns/`](examples/patterns/) — every pattern is a runnable end-to-end test.
-
-### Providers
-
-```typescript
-import { mock } from 'agentfootprint';                          // zero-peer-dep, on the main barrel
-import { anthropic, openai, azureOpenai, bedrock, ollama } from 'agentfootprint/llm-providers';  // vendor-SDK-backed
-
-// Adapter-swap testing: same agent, different provider, $0 in CI
-const provider = process.env.NODE_ENV === 'production'
-  ? anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
-  : mock({ reply: 'test response' });
-
-// Company endpoints (3 buckets):
-//  1. OpenAI-compatible (Together/Groq/OpenRouter/vLLM/LiteLLM): openai({ baseURL, apiKey })
-//  2. Azure OpenAI (*.openai.azure.com — deployment-as-model, api-key, api-version):
-const azure = azureOpenai({
-  endpoint: process.env.OPENAI_BASE_URL,            // *.openai.azure.com
-  apiKey: process.env.AZURE_OPENAI_API_KEY,
-  apiVersion: process.env.AZURE_OPENAI_API_VERSION, // 2024-12-01-preview
-  deployment: process.env.MODEL_NAME,               // gpt-4o-128k (the deployment)
-});  // Agent.create({ provider: azure, model: 'azure' })
-//  3. Anything else: implement the LLMProvider interface (~30 lines).
-
-// Env-driven (no branching): reads .env, detects the provider, returns it.
-import { providerFromEnv } from 'agentfootprint';
-const { provider: p, model } = providerFromEnv({ fallbackToMock: true });
-// Azure (AZURE_OPENAI_API_KEY + endpoint) → anthropic (ANTHROPIC_API_KEY) → openai (OPENAI_API_KEY) → mock
-```
-
-Every provider implements the same `LLMProvider` interface. The vendor-SDK providers (`anthropic`, `openai`, `azureOpenai`, `bedrock`, `ollama`, plus their `*Provider` classes) live ONLY at `agentfootprint/llm-providers` (legacy alias `agentfootprint/providers`) — kept off the main barrel so bundlers never walk the lazy peer-dep requires. The main barrel exports the zero-peer-dep providers: `mock`, `browserAnthropic`, `browserOpenai`, `browserAzureOpenai`, plus the resolvers `createProvider` (by `kind`) and `providerFromEnv` (env auto-detect, Node-only). **Azure is NOT OpenAI-compatible** — use `azureOpenai()` (Node) / `browserAzureOpenai()` (browser, `api-key` header, deployment-scoped URL), not `openai({ baseURL })`. Full list + the "connect a company endpoint" buckets + `providerFromEnv()` table: [docs/guides/adapters.md](docs/guides/adapters.md).
-
-### Pause / Resume (Human-in-the-Loop)
-
-```typescript
-import { askHuman, pauseHere, isPaused } from 'agentfootprint';
-
-const approveTool = defineTool({
-  schema: { name: 'approve', description: 'Ask a human.', inputSchema: { ... } },
-  // askHuman()/pauseHere() THROW a PauseRequest — call them INSIDE execute,
-  // do not assign them as the execute function.
-  execute: async (args) => {
-    askHuman({ question: `Approve this action?`, risk: 'high' });
-    return ''; // unreachable — askHuman always throws
-  },
-});
-
-const result = await agent.run({ message: 'Refund $500?' });
-if (isPaused(result)) {
-  const checkpoint = result.checkpoint;          // JSON-serializable
-  // Persist to Redis/DB; later, on possibly different server:
-  const final = await agent.resume(checkpoint, { approved: true });
-}
-```
-
-### Resilience
-
-```typescript
-import { withRetry, withFallback, fallbackProvider } from 'agentfootprint/resilience';
-import { anthropic, openai, ollama } from 'agentfootprint/llm-providers';
-
-const reliable = withRetry(provider, { maxAttempts: 3 });
-const resilient = withFallback(primary, fallback);
-const chain = fallbackProvider(anthropic({...}), openai({...}), ollama({...}));
-```
-
-Also available: `withCircuitBreaker(provider, opts?)`. The resilience decorators live ONLY at `agentfootprint/resilience` (not the main barrel).
-
-### Observability — 65 typed events × 18 domains
-
-```typescript
-agent.on('agentfootprint.context.injected', (e) =>
-  console.log(`[${e.payload.source}] landed in ${e.payload.slot}`));
-agent.on('agentfootprint.stream.tool_start', (e) =>
-  console.log(`→ ${e.payload.toolName}(${JSON.stringify(e.payload.args)})`));
-agent.on('agentfootprint.agent.turn_end', (e) =>
-  console.log(`[${e.payload.iterationCount} iter, ${e.payload.totalInputTokens}+${e.payload.totalOutputTokens} tokens]`));
-```
-
-Wildcards: `.on('*', ...)` for every event, or `.on('agentfootprint.<domain>.*', ...)` per-domain (`agent`, `stream`, `context`, `tools`, `memory`, `cost`, `error`, …). `'agentfootprint.*'` is NOT a valid pattern — the dispatcher accepts `'*'` or `'agentfootprint.<DOMAIN>.*'` only. All events typed via `AgentfootprintEventMap`.
-
-**Listener lifecycle (long-lived runners / servers):** subscriptions and attached recorders live for the RUNNER's lifetime — NOTHING auto-expires per-run; the caller owns cleanup. Three release paths for listeners:
-
-```typescript
-const unsub = agent.on('agentfootprint.agent.turn_end', fn);  // 1. keep + call the Unsubscribe
-agent.on('*', fn, { signal: requestController.signal });       // 2. AbortSignal — auto-unsubscribes on abort (also on .once())
-agent.removeAllListeners();                                    // 3. bulk escape hatch (listeners ONLY — attach()ed recorders untouched)
-```
-
-`agent.listenerCount()` is the leak diagnostic — no-arg = total retained; `listenerCount(key)` = that exact subscription bucket (wildcards not folded in; "would anything fire" is the dispatcher's `hasListenersFor`). Bounded-leak guarantee: every removal path (unsubscribe, `off()`, signal abort, once-fire, `removeAllListeners()`) prunes emptied buckets AND detaches the abort handler from the consumer's signal, so dispatcher storage is bounded by LIVE subscriptions — never subscription history. Per-run pattern on a reused server agent: subscribe with a per-request `AbortSignal`, abort after the run. Recorders via `attach()` follow rule 1 only — keep the returned Unsubscribe (`removeAllListeners()` does not detach them; `enable.*` strategy listeners DO get dropped by it, so re-enable afterwards if needed).
-
-**"What the model saw" (debugging tool/skill selection):**
-- `stream.llm_start.tools` — the tool CATALOG (`{ name, description }[]`) the model saw
-  for the call (its menu); `toolsCount` reflects the dynamic set actually sent.
-- `context.evaluated.skillCatalog` — the skill menu offered; `.routing` — which
-  skill-graph injection activated + why (decision path / edge + unlocked tools).
-- `agentThinkingTrace` surfaces both: `toolsSeen` on the ask/answer beat (AgentThinkingUI
-  ≥0.10 renders "Tools the model saw (N)") + the `context.routed` lead-in.
-
-Recorders (auto-attached when relevant builder method is called):
-- `ContextRecorder` — `context.evaluated` / `context.injected` / `context.slot_composed`
-- `streamRecorder` — `stream.llm_start` / `stream.llm_end` / `stream.token` / `stream.tool_start` / `stream.tool_end`
-- `agentRecorder` — `agent.turn_start` / `agent.turn_end` / `agent.iteration_start` / `agent.iteration_end` / `agent.route_decided`
-- `costRecorder` — `cost.tick` / `cost.limit_hit` (when `pricingTable` supplied)
-- `permissionRecorder` — `permission.check` (when `permissionChecker` supplied)
-- `evalRecorder` · `memoryRecorder` · `skillRecorder`
-
-**Observer delivery tier (RFC-001 Block 10):** `Agent.create({ observerDelivery:
-'deferred' })` routes the bridge recorders above + consumer `.recorder()` /
-`agent.attach()` recorders through footprintjs's bounded capture queue —
-capture inline (≈ µs), deliver one beat behind, drain synchronously at run
-resolve / reject / pause. Default `'inline'` = byte-identical attach path, no
-queue allocated. `agent.on()` listeners receive deep-equal typed events either
-way (parity-tested). EXCEPTION kept inline: the causal-evidence recorder — the
-memory write stage reads `collect()` MID-run. A recorder's own `delivery`
-field beats the agent default (per-recorder override). Dials via
-`observerDeliveryOptions` (throws without `'deferred'`); shutdown via
-`agent.drainObservers({ timeoutMs })`; stats on
-`getLastSnapshot()?.observerStats`. CONTRACT: typed event payloads must be
-detached plain data — never pass a TypedScope read (e.g. `scope.history`, a
-live deep-Proxy) into `typedEmit`; use the plain local value (`typedEmit`
-dev-warns on unclonable payloads). Bench:
-`examples/features/21-deferred-observers.ts`.
-
-### Self-explain — `.selfExplain()` (the agent answers "why?" about its own last run)
-
-One builder call mounts ONE skill that, when the user asks a why-question, unlocks the 5 trace tools (`run_overview` / `trace_node` / `who_wrote` / `get_value` / `trace_slice`) for that iteration ONLY — bound LATE to the agent's PREVIOUS COMPLETED run (captured at `onRunEnd`/`onRunFailed`, so it can never serve an in-flight run; a failed run still explains "why did you fail?"). `delegate: { provider, model }` runs the trace-walk on a cheaper model via one `explain_run` tool. Requires `reactMode: 'dynamic'`/`'dynamic-grouped'` (classic caches the tools slot → throws at build); reserved tool-name clash also throws. Differs from **Causal memory**: `.selfExplain()` = THIS conversation's last run, in-memory, drill-by-id; Causal = any past run, persisted, recalled by similarity — reach for selfExplain on same-conversation follow-ups, Causal for cross-session. Note: Causal *similarity* recall needs a store with `search()` (only `InMemoryStore` today; Redis/AgentCore lack it). Full guide: docs `debug/self-explain`.
-
-## Anti-Patterns — Don't
-
-- ❌ **Don't ship a `ReflexionAgent` class.** Compose `Sequence(Agent, critique-LLM, Agent)`.
-- ❌ **Don't use `agent.run('string')`** — use `agent.run({ message: '...', identity? })`.
-- ❌ **Don't import from removed subpaths** like `'agentfootprint/instructions'` — the injection factories are on the main barrel (or `'agentfootprint/injection-engine'`). NOTE: `'agentfootprint/observe'`, `'agentfootprint/security'`, `'agentfootprint/resilience'`, `'agentfootprint/llm-providers'` ARE real, current subpaths — some symbols (e.g. `buildStepGraph`, `extractSequence`, the resilience decorators, the vendor-SDK providers) are intentionally subpath-only, NOT on the main barrel.
-- ❌ **Don't use `.memoryPipeline(pipeline)`** — that's the v1 API. Use `.memory(defineMemory({...}))`.
-- ❌ **Don't fall back when TopK threshold returns nothing.** Strict semantics: garbage past context > none is wrong.
-- ❌ **Don't store closures or class instances in scope** — TransactionBuffer can't clone functions. Memory-store entries serialize to JSON.
-- ❌ **Don't add new event types per feature.** Route through `agentfootprint.context.injected` with a new `source` value.
-- ❌ **Don't reach into `getArgs()` / `getEnv()` from injection content.** Predicates run with the engine's `InjectionContext` only.
-
-## Decision Tree — Pick the Right Tool
-
-| Goal | Use |
-|---|---|
-| One-shot LLM call (summarization, classification) | `LLMCall` |
-| Loop with tools (research, code, anything iterative) | `Agent` |
-| Two LLM calls in series with output flowing | `Sequence` |
-| Multiple critics, merge with LLM | `Parallel` |
-| Route to specialist by intent | `Conditional` |
-| Iterate until quality bar | `Loop` |
-| Output format / persona / safety policy | `defineSteering` |
-| Rule that fires when predicate matches | `defineInstruction` |
-| LLM activates a body of expertise + its tools | `defineSkill` |
-| Inject user profile / current time / env data | `defineFact` |
-| Remember last N turns of conversation | `defineMemory({ type: EPISODIC, strategy: WINDOW })` |
-| Semantic recall via embeddings | `defineMemory({ type: SEMANTIC, strategy: TOP_K })` |
-| Cross-run "why?" replay (decisions + tool evidence auto-harvested) | `defineMemory({ type: CAUSAL, strategy: TOP_K })` ⭐ |
-| Long conversation overflows context | `defineMemory({ type: EPISODIC, strategy: SUMMARIZE })` |
-| Retrieve from a document corpus | `defineRAG({ store, embedder, topK, threshold })` |
-| Use tools from an external MCP server | `mcpClient({ transport, ... })` + `agent.tools(await c.tools())` |
-
-## Build & Test
-
-```bash
-npm install agentfootprint footprintjs
-npm test                           # vitest run — 2000+ tests
-npm run example examples/...       # run a single example end-to-end
-npm run test:examples              # typecheck + run every example end-to-end
-```
-
-## Package layout
-
-```
-src/
-├── core/         — Agent, LLMCall, builder methods, pause/resume
-├── core-flow/    — Sequence, Parallel, Conditional, Loop
-├── patterns/     — Reflexion, SelfConsistency, ToT, Debate, MapReduce, Swarm
-├── lib/
-│   └── injection-engine/  — Injection primitive + 4 factories + engine subflow
-├── memory/       — defineMemory + 4 types × 7 strategies + InMemoryStore + Causal
-├── adapters/llm/ — Anthropic, OpenAI, Bedrock, Ollama, Browser variants, Mock
-├── recorders/    — context, stream, agent, cost, skill, permission, eval, memory
-├── resilience/   — withRetry, withFallback, fallbackProvider, withCircuitBreaker
-└── stream.ts     — SSE formatter
-
-examples/        — 47 runnable end-to-end tests organized by DNA layer
-  ├── core/                — primitives
-  ├── core-flow/           — compositions
-  ├── patterns/            — canonical recipes
-  ├── context-engineering/ — InjectionEngine flavors
-  ├── memory/              — 7 strategies
-  └── features/            — pause/cost/permissions/observability/events
-```
-
-## Roadmap (informs what to defer)
-
-- **Shipped (v3.x current)** — primitives + compositions + InjectionEngine + Memory (incl. Causal) + providers (vendor-SDK + browser + mock) + RAG (`defineRAG`) + MCP (`mcpClient`) + Redis/AgentCore memory adapters + resilience (`withRetry` / `withFallback` / `fallbackProvider` / `withCircuitBreaker`) + reliability subsystem + governance (`PermissionPolicy`) + observability subpaths (`/observe`, `/thinking`, `/locales`, `/status`)
-- **Planned** — BudgetTracker · DynamoDB / Postgres / Pinecone memory adapters · Causal training-data exports (SFT / DPO / process-RL) · Deep Agents · A2A protocol · Lens UI integration
-
-When in doubt — read [`examples/`](examples/), every file is a runnable spec.
+| core/ | primitives: Agent.ts (ReAct runner), LLMCall.ts, RunnerBase.ts (dispatcher + attach + enable.*), tools.ts (defineTool), pause.ts, runCheckpoint.ts |
+| core/agent/ | chart assembly: buildAgentChart / buildDynamicAgentChart (picked by reactMode, Agent.ts:1145-1147), buildToolRegistry, stages/ (seed, callLLM, route, toolCalls, prepareFinal, breakFinal, reliabilityExecution) |
+| core/slots/ | the 3 context-slot subflow builders + thinking subflow — intentionally NOT exported |
+| core-flow/ | Sequence/Parallel/Conditional/Loop — RunnerBase subclasses with own charts |
+| patterns/ | Debate/MapReduce/Reflection/SelfConsistency/Swarm/ToT — pure composition of runners, no new control flow |
+| adapters/ | hexagonal ports (types.ts = ALL port interfaces) + vendor impls (llm/, memory/, identity/, observability/) |
+| recorders/core/ | bridges footprintjs events → typed EventDispatcher (ContextRecorder, EmitBridge, typedEmit) — auto-attached by Agent.createExecutor; most factories also exported via `/observe` for manual wiring (EmitBridge itself stays internal) |
+| recorders/observability/ | consumer recorders over the typed stream (RunStepRecorder, FlowchartRecorder, Status, Trace replay) |
+| lib/ | first-party sub-libraries: injection-engine/, context-bisect/ (localizeContextBug), influence-core/, trace-toolpack/ (selfExplain), mcp/, rag/, tool-lint/ |
+| memory/ | store/ (MemoryStore port) + pipeline presets + stages + beats/facts + causal/ (dev-only, TOP_K+search()-only) + wire/mountMemoryPipeline |
+| events/ | EventDispatcher (wildcard subs), registry (EVENT_NAMES, AgentfootprintEventMap), payloads |
+| conventions.ts | THE builder↔recorder protocol: SUBFLOW_IDS/STAGE_IDS (internal), INJECTION_KEYS/stageRole/milestoneFor (exported, Lens-facing) |
+
+Traps: `src/observability/` holds the finder IMPLEMENTATIONS (canonical home; `debug/finders.ts` re-exports them — only the old subpath is deprecated), while real recorders live in `recorders/observability/`; `identity` appears twice (src/identity.ts = tool credentials; memory/identity/ = tenant scoping — unrelated); `resilience` (provider decorators) ≠ `reliability` (in-loop rules gate).
+
+## Core state & flow
+- `AgentState` (core/agent/types.ts:287) — THE chart state; every stage gets `TypedScope<AgentState>`. Mutability conventions documented ON the type (:276-286). Everything in scope must survive structuredClone → functions stay in closures, errors stringified, injections projected to POJOs.
+- **Two runId namespaces**: typed-event `meta.runId` (Agent's makeRunId, RunnerBase.ts:55) vs footprintjs `traversalContext.runId` — never correlate across them.
+- **Event path**: stage `typedEmit` → `scope.$emit` → footprintjs emit channel → `EmitBridge.onEmit` (drops if no dispatcher listener! EmitBridge.ts:44) → `buildEventMeta` → dispatcher → `agent.on()` listeners. Fires MID-STAGE, **before that stage's commit** — correlate events↔commits by runtimeStageId, never arrival order.
+- Executor defaults DIVERGE from footprintjs: `readTracking:'summary'`, `commitValues:'delta'` (Agent.ts:779-782) — read commit values via `commitValueAt`, never `bundle.overwrite[key]`.
+- Recorders never read AgentState directly; slot subflows write `INJECTION_KEYS` convention keys, `ContextRecorder.onWrite` resolves the slot from the write's own runtimeStageId (parallel-safe).
+- $break is the only clean-stop channel; structured fail context rides scope fields (`policyHalt*`, `reliabilityFail*`), decoded post-run by `Agent.finalizeResult` (Agent.ts:884) into typed errors.
+
+## Extension points
+- **Tool**: `defineTool` (core/tools.ts:155); shape `Tool = {schema, needs?, execute(args, ctx)}` (:23). Register `AgentBuilder.tool()` (AgentBuilder.ts:184); merged with auto `read_skill` in buildToolRegistry (:65; same-reference skill tools dedupe, any other name collision THROWS at build). Chart-as-tool: `flowchartAsTool` (core/flowchartAsTool.ts:203). MCP: `mcpClient(...).tools()`.
+- **ToolProvider** (per-iteration visibility): `list(ctx): Tool[]` (tool-providers/types.ts:121); max ONE per agent (AgentBuilder.ts:238 throws on second); combinators staticTools/gatedTools/skillScopedTools chain decorator-style.
+- **LLM provider**: `LLMProvider = {name, complete, stream?}` (adapters/types.ts:230) passed as `AgentOptions.provider`. `provider.name` keys THREE auto-resolutions: cache strategy (cache/strategyRegistry.ts:40), thinking handler (thinking/registry.ts:43), Lens labels.
+- **Recorder, 3 layers**: (1) raw footprintjs CombinedRecorder via `agent.attach()` (RunnerBase.ts:474 — NOT idempotent); (2) typed stream `agent.on(type|'*')`; (3) new built-in = factory taking `{dispatcher, getRunContext}`, registered in the attach block inside `Agent.run()` (Agent.ts:807-845), barreled in src/observe.ts.
+- **New typed event (3-step)**: payload interface in events/payloads.ts + entry in `AgentfootprintEventMap` (registry.ts:198) + append to `ALL_EVENT_TYPES` (registry.ts:488, count-asserted by tests). New DOMAIN also needs a bridge attach in Agent.createExecutor or emits never reach the dispatcher — AND a hand-edit to `DomainWildcard` (dispatcher.ts:67-82; already missing validation/credential/reliability).
+- **Strategy (vendor sink)**: shapes in strategies/types.ts (Observability :130, Cost :169, LiveStatus :201, Lens :234); attach via `agent.enable.*` or `registerObservabilityStrategy` (strategies/registry.ts). New vendor = export from observability-providers.ts, NOT a new subpath.
+- **Memory store**: implement `MemoryStore` (memory/store/types.ts:113; `search?` REQUIRED for causal memory); pass to `defineMemory({store})`. Memory TYPE/STRATEGY unions are CLOSED (define.types.ts:57/74 — new one edits defineMemory dispatch + a pipeline builder).
+- **Injection/skill**: `Injection = {id, flavor, trigger, inject}` (lib/injection-engine/types.ts:161); trigger is a closed 4-variant union (:30 — new kind edits evaluator.ts:40-74 switch). Factories defineSkill etc.; skill graph via `skillGraph()` (skillGraph.ts:347) with pluggable `EntryScorer` (entryScorer.ts:64).
+- **Ports table** (wired via AgentOptions): PermissionChecker (adapters/types.ts:403), PricingTable (:412), CredentialProvider (identity/types.ts:89), CacheStrategy (cache/types.ts:151, registerCacheStrategy), ThinkingHandler (thinking/types.ts:114 — auto-wire scans HARDCODED SHIPPED_THINKING_HANDLERS, registry.ts:26), ReliabilityConfig (reliability/types.ts:183), OutputSchemaParser (core/outputSchema.ts:62, duck-typed).
+- **Finder** (context-error localization): conform to `Finder` (observability/contextError/finders/types.ts:92); NO registry by design — one file + barrel line. Pluggable `InfluenceScorer` via `localizeContextBug({scorer})` (lib/context-bisect/localize.ts:340).
+- **New composition/pattern**: extend RunnerBase, expose `getSpec(): FlowChart`, compose others' specs — no engine change.
+- **Closed seams**: Agent chart internals (AgentChartDeps not exported — extend via injections/tools/memory/thinking, never by adding a ReAct stage); ContextSlot (3 slots fixed); ProviderKind factory; dormant ports with no consumer (ContextSourceAdapter, EmbeddingProvider, RiskDetector — adapters/types.ts only); reserved tool names under selfExplain (AgentBuilder.ts:827-838).
+
+## Change-impact map
+- **conventions.ts** (STAGE_IDS/SUBFLOW_IDS/INJECTION_KEYS) → chart builders that mount by id, ContextRecorder slot attribution, localizer loop-head detection (lib/context-bisect/trajectory.ts:17-33), `stageRole`/`milestoneFor` (Lens contract), BoundaryRecorder. Renaming an id is the whole blast radius.
+- **AgentState** → all 8 stages/ files, both builders' mappers, memory-wire STRING-TYPED keys ('runIdentity'/'turnNumber'/… buildAgentChart.ts:177-180 — not refactor-safe), finalizeResult's `reliabilityFail*`/`policyHalt*` reads (rename silently kills the typed errors).
+- **events/** → ALL_EVENT_TYPES exhaustiveness tests, DomainWildcard hand-list, ~42 importers (recorders, strategies, stream, commentary).
+- **adapters/types.ts LLMMessage/LLMRequest** → 62 importers: tool_use round-trip (toolCalls.ts:115-135), wire assembly (callLLM.ts:150-160), providers, cache strategies, security/extractSequence, reliability loop.
+- **Cache** → strategy registration is a MODULE SIDE EFFECT (src/index.ts:15-17); an entry point skipping that import silently falls back to NoOp. Resolved once per Agent at construction (Agent.ts:347).
+- **Injection engine eval semantics** → Evaluate stage cursor keystone (buildInjectionEngineSubflow.ts:216-218), Route stage MIRRORS slot filters (:297-307 — keep in sync with buildSystemPromptSlot), read_skill gate (toolCalls.ts:380-400).
+- **Chart shape** (stage order/loop target) → trajectory.ts loop-head bucketing, selfExplain, FlowchartRecorder/RunStepRecorder step synthesis, milestoneFor, the `maxIterations * 2 + 10` engine headroom (Agent.ts:634).
+- **RunnerBase** → all six runners + enable.* strategies + Agent's crash-checkpoint tracker (subscribes to its own dispatcher, Agent.ts:729-752).
+
+## End-to-end trace (agent.run; 1 tool call then final answer; default reactMode 'dynamic')
+build (once): Agent.create → AgentBuilder.build → Agent ctor → initChart(buildChart) (Agent.ts:429; RunnerBase throws on re-init :256) → buildAgentChart assembles: seed → sf-injection-engine → Context selector (`failFast: true`, selects the 3 slot subflows in parallel) → sf-cache → call-llm → route decider → branches tool-calls (pausable, `{loopTo}`) / final (PrepareFinal → memory writes → BreakFinal `$break`, `propagateBreak: true`).
+run: createExecutor (Agent.ts:769): fresh runId + FlowChartExecutor(readTracking 'summary', commitValues 'delta') + enableNarrative + ~12 bridge recorders (causal-evidence ALWAYS inline even under deferred, Agent.ts:814) → installCheckpointTracker (listens iteration_start/end) → executor.run({input, maxIterations: N*2+10}).
+seed#0 (stages/seed.ts:58): history from $getArgs OR consumePendingResumeHistory (:67-72); every emit flows typedEmit → $emit → EmitBridge (drops if no listener) → dispatcher, MID-STAGE pre-commit.
+loop body: sf-injection-engine (Gather→Evaluate→Route→Delta; outputMapper `ArrayMergeMode.Replace` — load-bearing) → Context selector fans out sf-system-prompt ‖ sf-messages ‖ sf-tools (each writes its INJECTION_KEYS key; ContextRecorder resolves slot from runtimeStageId) → sf-cache gate → call-llm#N (cacheStrategy.prepareRequest; stream tokens; writes llmLatest*/token counters; reliability retry loop INSIDE this one stage if configured) → route (toolCalls.length && iteration < max ? 'tool-calls' : 'final', stages/route.ts:22-26).
+tool-calls#N (pausable): per call — permission gate → arg validation → credential resolve → tool.execute; PauseRequest → commit partial + RETURN payload = footprintjs pause; result appended role:'tool'; iteration++; `{loopTo: sf-injection-engine}` re-enters the loop (buildAgentChart.ts:473).
+final: prepareFinal sets finalContent + emits turn_end → breakFinal `$break()` returns finalContent → outputMapper bubbles it up → executor resolves → finalizeResult (Agent.ts:884): detectPause → reliabilityFail scan → policyHalt scan → return string. Errors: recoverable + history captured → wrapped in RunCheckpointError (Agent.ts:649-661).
+
+## Backtracking
+Six mechanisms layered on footprintjs (whose transaction/checkpoint machinery lives upstream): **M1** pause/resume — `pauseHere/askHuman` throw PauseRequest inside tool.execute; toolCalls commits history + pausedTool* to scope BEFORE returning the pause payload; scope is the ONLY carrier across the checkpoint. **M2** `resumeOnError` — history-only `AgentRunCheckpoint` (a DIFFERENT type from FlowchartCheckpoint) built from iteration_end events; resume REPLAYS from restored history via the `pendingResumeHistory` side channel. **M3** inline reliability retry — up to 50 attempts inside ONE stage; retry state closure-local, never scope. **M4** chart-level reliability gate — built but UNMOUNTED (buildReliabilityGateChart; editing it changes nothing at runtime). **M5** ReAct loopTo re-entry with `ArrayMergeMode.Replace` guards. **M6** counterfactual replay (context-bisect ablation probes; causal claims only from majority-flip over ≥2 seeded reruns). Deep dive: [.claude/rules/backtracking.md](.claude/rules/backtracking.md).
+
+## Invariants (assumed, not stated)
+- ONE in-flight run per Agent instance (currentRunContext/lastExecutor/pendingResumeHistory are instance fields; concurrent runs corrupt event meta).
+- Chart built once, reference-stable; closures over per-run state must be accessor lambdas (seed.ts:42-49) — direct field capture goes stale on run #2.
+- Subscribe BEFORE run() — listener-presence gating drops (not queues) events at ContextRecorder/EmitBridge/RunnerBase.emit.
+- `arrayMerge: Replace` on EVERY loop-crossed subflow mount (buildAgentChart.ts:284,345,358,382,431,455) — footprintjs default concatenates; omission = injections grow 8→16→24 per iteration.
+- Context selector must stay `failFast: true` (buildAgentChart.ts:329) — default allSettled would swallow a throwing required slot and call the LLM half-built.
+- Event payloads must be DETACHED plain data (typedEmit dev-guard) — a live TypedScope proxy breaks deferred-delivery capture and checkpoint serialization.
+- Causal-evidence recorder stays inline even under `observerDelivery:'deferred'` (Agent.ts:808-814) — the memory write stage reads its accumulator mid-run.
+- Tool names + memory ids unique at construction; LLM dispatches by name — a rename is a behavioral change.
+
+## Landmines
+1. Stale comment at Agent.ts:1053-1054 says the chart is rebuilt per run — it is NOT (eager initChart at :429); providerToolCache IS shared across runs; safety comes only from the Discover stage overwriting `current` each iteration.
+2. `'classic'` reactMode "caching" is the ABSENCE of re-selection (Context stops picking static slots after turn 1) — "fixing" the selector converts classic into dynamic; classic + skills is broken by design (mid-run activation never reaches cached slots).
+3. Branch stage ids are BARE (`'final'`, `'tool-calls'`), not the SUBFLOW_IDS prefixed forms — matchers written against SUBFLOW_IDS alone miss real runs (stageRole/milestoneFor deliberately match both).
+
+## Pointers
+- [.claude/rules/backtracking.md](.claude/rules/backtracking.md) — 6 mechanisms with step tables + pseudocode
+- [examples/](examples/) — canonical imports (the authority on which subpath exports what) · [src/conventions.ts](src/conventions.ts) — the builder↔recorder protocol
+- Build/test: `npm run build`, `npm test`
