@@ -1,7 +1,7 @@
 {
   "name": "agentfootprint",
   "version": "7.0.0",
-  "description": "The explainable agent framework — backtrack a wrong answer to the exact context that caused it (evidence, not guesses). Built on footprintjs.",
+  "description": "The explainable agent framework \u2014 backtrack a wrong answer to the exact context that caused it (evidence, not guesses). Built on footprintjs.",
   "license": "MIT",
   "author": "Sanjay Krishna Anbalagan",
   "repository": {
@@ -387,14 +387,14 @@
   ],
   "peerDependencies": {
     "@anthropic-ai/sdk": "*",
-    "@aws-sdk/client-bedrock-agentcore": "*",
     "@aws-sdk/client-bedrock-agent-runtime": "*",
+    "@aws-sdk/client-bedrock-agentcore": "*",
     "@aws-sdk/client-bedrock-runtime": "*",
     "@aws-sdk/client-cloudwatch-logs": "*",
     "@aws-sdk/client-xray": "*",
     "@modelcontextprotocol/sdk": "*",
     "@opentelemetry/api": "*",
-    "footprintjs": "^9.9.0",
+    "footprintjs": "^9.10.0",
     "ioredis": "*",
     "openai": "*",
     "zod": "*"
@@ -443,7 +443,7 @@
     "esbuild": "^0.28.0",
     "eslint": "^8.44.0",
     "eslint-config-prettier": "^6.15.0",
-    "footprintjs": "^9.9.0",
+    "footprintjs": "^9.10.0",
     "prettier": "^2.8.1",
     "publint": "^0.3.0",
     "typedoc": "^0.28.19",

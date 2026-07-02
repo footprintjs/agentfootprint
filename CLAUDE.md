@@ -48,7 +48,7 @@ Traps: `src/observability/` holds the finder IMPLEMENTATIONS (canonical home; `d
 ## Change-impact map
 - **conventions.ts** (STAGE_IDS/SUBFLOW_IDS/INJECTION_KEYS) → chart builders that mount by id, ContextRecorder slot attribution, localizer loop-head detection (lib/context-bisect/trajectory.ts:17-33), `stageRole`/`milestoneFor` (Lens contract), BoundaryRecorder. Renaming an id is the whole blast radius.
 - **AgentState** → all 8 stages/ files, both builders' mappers, memory-wire STRING-TYPED keys ('runIdentity'/'turnNumber'/… buildAgentChart.ts:177-180 — not refactor-safe), finalizeResult's `reliabilityFail*`/`policyHalt*` reads (rename silently kills the typed errors).
-- **events/** → ALL_EVENT_TYPES exhaustiveness tests, DomainWildcard hand-list, ~42 importers (recorders, strategies, stream, commentary).
+- **events/** → 65 typed events across 18 domains (counts anti-drift-tested against this file — update BOTH when adding events): ALL_EVENT_TYPES exhaustiveness tests, DomainWildcard hand-list, ~42 importers (recorders, strategies, stream, commentary).
 - **adapters/types.ts LLMMessage/LLMRequest** → 62 importers: tool_use round-trip (toolCalls.ts:115-135), wire assembly (callLLM.ts:150-160), providers, cache strategies, security/extractSequence, reliability loop.
 - **Cache** → strategy registration is a MODULE SIDE EFFECT (src/index.ts:15-17); an entry point skipping that import silently falls back to NoOp. Resolved once per Agent at construction (Agent.ts:347).
 - **Injection engine eval semantics** → Evaluate stage cursor keystone (buildInjectionEngineSubflow.ts:216-218), Route stage MIRRORS slot filters (:297-307 — keep in sync with buildSystemPromptSlot), read_skill gate (toolCalls.ts:380-400).
