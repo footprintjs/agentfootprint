@@ -201,3 +201,16 @@ export {
   type RouteTrip,
   type RouteTripKind,
 } from './recorders/observability/RouteRecorder.js';
+
+// context-ledger — which context pieces EARNED their tokens? Post-run
+// bookkeeping (offers/uses/outcomes from the commit log) feeding the gating
+// seams. See src/lib/context-ledger/README.md.
+export { contextLedger } from './lib/context-ledger/index.js';
+export type {
+  ContextLedger,
+  LedgerJSON,
+  LedgerRow,
+  PieceKind,
+  RecordedRun,
+  UsedSignal,
+} from './lib/context-ledger/index.js';

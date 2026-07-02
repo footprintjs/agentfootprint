@@ -16,7 +16,7 @@ Entry points (package.json exports): `.` core API · `/observe` ALL observabilit
 | adapters/ | hexagonal ports (types.ts = ALL port interfaces) + vendor impls (llm/, memory/, identity/, observability/) |
 | recorders/core/ | bridges footprintjs events → typed EventDispatcher (ContextRecorder, EmitBridge, typedEmit) — auto-attached by Agent.createExecutor; most factories also exported via `/observe` for manual wiring (EmitBridge itself stays internal) |
 | recorders/observability/ | consumer recorders over the typed stream (RunStepRecorder, FlowchartRecorder, Status, Trace replay) |
-| lib/ | first-party sub-libraries: injection-engine/, context-bisect/ (localizeContextBug, toBacktrackTrace + sliceToBacktrackTrace — the atui board serializers), influence-core/, trace-toolpack/ (selfExplain; 6 tools incl. variable-first `backtrack(variable, element?)`), mcp/, rag/, tool-lint/ |
+| lib/ | first-party sub-libraries: injection-engine/, context-bisect/ (localizeContextBug, toBacktrackTrace + sliceToBacktrackTrace — the atui board serializers), influence-core/, trace-toolpack/ (selfExplain; 6 tools incl. variable-first `backtrack(variable, element?)`), context-ledger/ (which pieces EARNED their tokens — post-run offers/uses/outcomes bookkeeping feeding the gates; /observe), mcp/, rag/, tool-lint/ |
 | memory/ | store/ (MemoryStore port) + pipeline presets + stages + beats/facts + causal/ (dev-only, TOP_K+search()-only) + wire/mountMemoryPipeline |
 | events/ | EventDispatcher (wildcard subs), registry (EVENT_NAMES, AgentfootprintEventMap), payloads |
 | conventions.ts | THE builder↔recorder protocol: SUBFLOW_IDS/STAGE_IDS (internal), INJECTION_KEYS/stageRole/milestoneFor (exported, Lens-facing) |

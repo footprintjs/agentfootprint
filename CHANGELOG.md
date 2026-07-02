@@ -34,6 +34,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`contextLedger()`** (`agentfootprint/observe`) — which context pieces
+  EARNED their tokens? Post-run bookkeeping over the run's own commit log:
+  offers = the context in effect at each LLM call (net-change-filter-exact
+  folding), uses = structural signals per kind (tool-called /
+  skill-activated / answer-slice(slot)), outcomes = consumer labels credited
+  to offered pieces. `earnRate` (used ÷ offered) is the headline number;
+  export/import merges additively for cross-session accumulation. All
+  counters are recorded facts — no causal claims (ablation can upgrade
+  individual rows). Feeds the upcoming gates (tools → skills → injections).
+
+
 ## [7.0.0] - 2026-06-26
 
 **Major: API surface cleanup — main barrel is now just the core agent API, everything specialized lives in a named subpath.** A coordinated breaking release (agentfootprint + agentfootprint-lens) so consumers land on the clean surface once. Nothing is removed — every capability is still exported, just from its canonical home.
