@@ -205,10 +205,11 @@ export {
 // context-ledger — which context pieces EARNED their tokens? Post-run
 // bookkeeping (offers/uses/outcomes from the commit log) feeding the gating
 // seams. See src/lib/context-ledger/README.md.
-export { contextLedger } from './lib/context-ledger/index.js';
+export { contextLedger, ledgerToolGate, ledgerEntryScorer, ledgerGated } from './lib/context-ledger/index.js';
 export type {
   ContextLedger,
   LedgerJSON,
+  LedgerPolicy,
   LedgerRow,
   PieceKind,
   RecordedRun,

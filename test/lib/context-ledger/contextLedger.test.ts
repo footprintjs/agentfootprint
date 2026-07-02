@@ -13,7 +13,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { Agent } from '../../../src/index.js';
+import { Agent, LLMCall } from '../../../src/index.js';
 import { MockProvider } from '../../../src/llm-providers.js';
 import { defineTool } from '../../../src/index.js';
 import { defineInstruction } from '../../../src/injection-engine.js';
@@ -143,6 +143,49 @@ describe('contextLedger — accumulation + persistence (UNIT)', () => {
     const ledger = contextLedger();
     ledger.importJSON({ version: 99, rows: [], runsRecorded: 5 } as never);
     expect(ledger.exportJSON().runsRecorded).toBe(0);
+  });
+});
+
+describe('contextLedger — runner shapes (REVIEW PINS)', () => {
+  it('LLMCall runs are honestly unmeterable (no call markers) → undefined, no phantom rows', async () => {
+    const call = LLMCall.create({ provider: new MockProvider({ replies: ['hi'] }), model: 'mock' })
+      .system('x')
+      .build();
+    await call.run({ message: 'go' });
+    const ledger = contextLedger();
+    expect(ledger.recordRun(call)).toBeUndefined(); // shape the ledger cannot meter
+    expect(ledger.rows()).toHaveLength(0);
+    expect(ledger.exportJSON().runsRecorded).toBe(0); // the aborted run is not counted
+  });
+
+  it("grouped reactMode: offers fold over the per-iteration sf-llm-call inner logs", async () => {
+    const lookup = defineTool<{ id: number }, string>({
+      name: 'lookup', description: 'Look up', inputSchema: { type: 'object', properties: { id: { type: 'number' } }, required: ['id'] },
+      execute: ({ id }) => `record-${id}`,
+    });
+    const agent = Agent.create({
+      provider: new MockProvider({ replies: [
+        { toolCalls: [{ id: '1', name: 'lookup', args: { id: 7 } }] },
+        'done.',
+      ]}),
+      model: 'mock',
+      name: 'grouped-fixture',
+      reactMode: 'dynamic-grouped',
+    })
+      .system('terse')
+      .tool(lookup)
+      .instruction(defineInstruction({ id: 'grouped-legalese', prompt: 'clause 42b' }))
+      .build();
+    await agent.run({ message: 'go' });
+
+    const ledger = contextLedger();
+    const recorded = ledger.recordRun(agent);
+    expect(recorded).toBeDefined();
+    // The injection lives in the INNER sf-llm-call logs — before the grouped
+    // projection it was offered:0 (the review's "worst possible false signal").
+    const legalese = ledger.row('injection', 'grouped-legalese')!;
+    expect(legalese.offered).toBeGreaterThanOrEqual(2); // one per iteration
+    expect(ledger.row('tool', 'lookup')!.usedVia['tool-called']).toBe(1); // root history still meters uses
   });
 });
 

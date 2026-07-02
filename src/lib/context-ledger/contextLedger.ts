@@ -41,7 +41,8 @@ import {
 } from 'footprintjs/trace';
 import type { CommitBundle, StageSnapshot } from 'footprintjs/advanced';
 
-import { INJECTION_KEYS } from '../../conventions.js';
+import { parseRuntimeStageId, splitStageId } from 'footprintjs/trace';
+import { INJECTION_KEYS, SUBFLOW_IDS } from '../../conventions.js';
 import type {
   ContextLedger,
   LedgerRow,
@@ -74,6 +75,17 @@ interface MutableRow {
 interface SnapshotLike {
   commitLog?: CommitBundle[];
   executionTree?: unknown;
+  subflowResults?: Record<string, { treeContext?: { history?: CommitBundle[] } }>;
+}
+
+/** sf-llm-call mount keys in loop order — grouped-mode iterations live in
+ *  their own retained inner logs (the same projection context-bisect's
+ *  assembleGroupedTrajectory uses). */
+function llmCallMountKeys(subflowResults: Record<string, unknown> | undefined): string[] {
+  if (!subflowResults) return [];
+  return Object.keys(subflowResults)
+    .filter((k) => k.includes('#') && splitStageId(k.split('#')[0]).localStageId === SUBFLOW_IDS.LLM_CALL)
+    .sort((a, b) => parseRuntimeStageId(a).executionIndex - parseRuntimeStageId(b).executionIndex);
 }
 
 function snapshotOf(source: RunnerLike | unknown): SnapshotLike | undefined {
@@ -151,37 +163,71 @@ export function contextLedger(): ContextLedger {
     // ── OFFERS: the context IN EFFECT at each LLM call ───────────────────
     // Call marker: wrote totalInputTokens (monotonic — survives the
     // net-change filter) and NOT userMessage (the seed's unique write).
-    // Folding AT each call's index is what makes this exact even though
-    // identical context re-commits are dropped from the log.
+    // A SINGLE forward pass per log tracks the latest context values as
+    // writes appear (one commitValueAt per actual write — O(N), review
+    // finding #3), so each marker reads the context in effect exactly even
+    // though identical re-commits are dropped from the log.
+    //
+    // GROUPED reactMode (review finding #1): call-llm + the slots live
+    // INSIDE per-iteration `sf-llm-call#k` subflow logs (their context keys
+    // never bubble to the root), so offers fold over each retained inner
+    // log — the same projection context-bisect's grouped trajectory uses.
     const staticTools = staticToolNamesOf(source);
-    for (let i = 0; i < log.length; i++) {
-      const paths = new Set(log[i].trace.map((t) => t.path));
-      if (!paths.has('totalInputTokens') || paths.has('userMessage')) continue;
+    let callMarkers = 0;
 
-      const injections = commitValueAt(log, i, 'activeInjections');
-      if (Array.isArray(injections)) {
-        for (const inj of injections as ActiveInjectionLike[]) {
+    const foldOffersFrom = (bundles: CommitBundle[]): void => {
+      let injections: ActiveInjectionLike[] = [];
+      let schemas: ToolSchemaLike[] = [];
+      for (let i = 0; i < bundles.length; i++) {
+        const paths = new Set(bundles[i].trace.map((t) => t.path));
+        if (paths.has('activeInjections')) {
+          const v = commitValueAt(bundles, i, 'activeInjections');
+          if (Array.isArray(v)) injections = v as ActiveInjectionLike[];
+        }
+        if (paths.has('dynamicToolSchemas')) {
+          const v = commitValueAt(bundles, i, 'dynamicToolSchemas');
+          if (Array.isArray(v)) schemas = v as ToolSchemaLike[];
+        }
+        if (!paths.has('totalInputTokens') || paths.has('userMessage')) continue;
+        callMarkers += 1;
+
+        for (const inj of injections) {
           if (!inj?.id) continue;
           const kind: PieceKind = inj.flavor === 'skill' ? 'skill' : 'injection';
           offer(kind, inj.id, approxTokens(inj));
         }
-      }
-      // Tools: dynamic schemas (real sizes) + the static registry (offer
-      // counted, size unknowable from the log in L1 — earnRate unaffected).
-      const offeredToolsThisCall = new Set<string>();
-      const schemas = commitValueAt(log, i, 'dynamicToolSchemas');
-      if (Array.isArray(schemas)) {
-        for (const schema of schemas as ToolSchemaLike[]) {
+        // Tools: dynamic schemas (real sizes) + the static registry (offer
+        // counted, size unknowable from the log in L1 — earnRate unaffected).
+        const offeredToolsThisCall = new Set<string>();
+        for (const schema of schemas) {
           if (!schema?.name || offeredToolsThisCall.has(schema.name)) continue;
           offeredToolsThisCall.add(schema.name);
           offer('tool', schema.name, approxTokens(schema));
         }
+        for (const name of staticTools) {
+          if (offeredToolsThisCall.has(name)) continue;
+          offeredToolsThisCall.add(name);
+          offer('tool', name, 0);
+        }
       }
-      for (const name of staticTools) {
-        if (offeredToolsThisCall.has(name)) continue;
-        offeredToolsThisCall.add(name);
-        offer('tool', name, 0);
+    };
+
+    const mountKeys = llmCallMountKeys(snapshot?.subflowResults);
+    if (mountKeys.length > 0) {
+      for (const key of mountKeys) {
+        const inner = snapshot?.subflowResults?.[key]?.treeContext?.history;
+        if (Array.isArray(inner)) foldOffersFrom(inner);
       }
+    } else {
+      foldOffersFrom(log);
+    }
+
+    // A run with NO call markers anywhere is a shape this ledger cannot
+    // meter (e.g. the LLMCall runner, which never writes totalInputTokens)
+    // — report honestly instead of confidently recording zero offers.
+    if (callMarkers === 0) {
+      runsRecorded -= 1;
+      return undefined;
     }
 
     // ── USES: tool calls (assistant messages in the final history) ───────

@@ -32,7 +32,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - footprintjs peer/dev `^9.10.0` (the slice layer + `writeProvenance` dial).
 
-## [Unreleased]
+## [7.2.0] - 2026-07-02
 
 ### Added
 
@@ -44,7 +44,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   to offered pieces. `earnRate` (used ÷ offered) is the headline number;
   export/import merges additively for cross-session accumulation. All
   counters are recorded facts — no causal claims (ablation can upgrade
-  individual rows). Feeds the upcoming gates (tools → skills → injections).
+  individual rows).
+- **Ledger gates** (same subpath) — the rows feed three EXISTING seams, no
+  new framework surface: `ledgerToolGate(ledger)` → `ToolGatePredicate` for
+  `gatedTools(...)`; `ledgerEntryScorer(ledger, inner)` → wraps any
+  `EntryScorer` for `skillGraph().entryBy(...)` (demotion is ranking
+  pressure re-ranked through `rankEntries`, so the pick and the surfaced
+  relevance always agree — never exclusion); `ledgerGated(injection,
+  ledger)` → rewrites `always` to a ledger-backed rule, ANDs an existing
+  rule, passes demand-driven triggers untouched. One `LedgerPolicy`:
+  **demote, never starve** (`minOffers` 5, `earnRateFloor` 0.05, parole
+  every `refreshEvery` 10th decision so a demoted piece keeps earning data).
+- **Runner-shape honesty**: `recordRun` returns `undefined` (and counts
+  nothing) for runs with no LLM-call markers — `LLMCall` is refused, never
+  silently mis-scored. Grouped agents (`reactMode: 'dynamic-grouped'`) are
+  metered correctly: offers fold from each `sf-llm-call` subflow's inner
+  commit log (in grouped mode injections earn via `skill-activated`;
+  `answer-slice(slot)` needs root-log slot writes — `usedVia` shows which
+  signals fired).
+- **Example 32** ([examples/features/32-context-ledger.ts](examples/features/32-context-ledger.ts)) —
+  the full loop on an over-stuffed fixture: run → rows (5 zero-earners,
+  ~1,940 wasted tokens) → gates → 88% fewer input tokens per turn.
 
 
 ## [7.0.0] - 2026-06-26

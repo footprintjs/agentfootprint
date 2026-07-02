@@ -15,3 +15,4 @@ export type {
   RecordedRun,
   UsedSignal,
 } from './types.js';
+export { ledgerToolGate, ledgerEntryScorer, ledgerGated, type LedgerPolicy } from './gates.js';

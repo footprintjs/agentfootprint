@@ -44,20 +44,43 @@ that writer in the answer's `sliceForKey` DAG is the signal.
   presence-correlation. Ablation (`localizeContextBug` / context-bisect) can
   upgrade individual rows to causal verdicts when you pay for the reruns.
 
+## Which runs it can meter
+
+- `recordRun` returns the `RecordedRun` when it found at least one LLM-call
+  marker, and `undefined` when it found none — **an unmeterable run is
+  refused, never silently mis-scored.** `LLMCall` (single call, no agent
+  loop) is the common `undefined` case: it never commits the context keys
+  the ledger reads.
+- Grouped agents (`reactMode: 'dynamic-grouped'`) ARE supported: the per-
+  iteration context commits live inside each `sf-llm-call` subflow's own
+  log, and the ledger folds offers from those inner logs. One known gap:
+  `'answer-slice(slot)'` credit needs the slot writes in the ROOT commit
+  log, so in grouped mode injections earn via `'skill-activated'` only —
+  the row's `usedVia` shows exactly which signals fired, so nothing is
+  overstated.
+
 ## Persistence
 
 `exportJSON()` / `importJSON()` — plain JSON, counts merge additively.
 The consumer owns storage (a file, Redis, a MemoryStore — your call).
 
-## Evolution (L2/L3 — built on these rows)
+## The gates (L2 — built on these rows, see `gates.ts`)
 
-- **Tool gate**: a `ToolGatePredicate` for `gatedTools(inner, predicate)` —
-  demote tools below an earnRate floor after N offers.
-- **Skill gate**: an `EntryScorer` for `skillGraph().entryBy(...)` —
-  ledger-weighted entry ranking.
-- **Injection gate**: `ledgerGated(injection, policy)` — demote an `always`
-  injection to a ledger-backed rule trigger. `always` pieces are exempt
-  unless explicitly wrapped.
-- Default policy: **demote, never drop** — a demoted piece still enters when
-  nothing better competes, so it keeps generating fresh ledger data.
-- Measurement: tokens-per-turn, gated vs not, printed side by side.
+- **Tool gate**: `ledgerToolGate(ledger, policy?)` — a `ToolGatePredicate`
+  for `gatedTools(inner, predicate)`. Unused tool schemas are usually the
+  biggest silent token cost; start here.
+- **Skill gate**: `ledgerEntryScorer(ledger, inner, policy?)` — wraps any
+  `EntryScorer` for `skillGraph().entryBy(...)`; demotion is ranking
+  pressure (score × 0.25 re-ranked through `rankEntries`, so the pick and
+  the surfaced relevance always agree), never exclusion.
+- **Injection gate**: `ledgerGated(injection, ledger, policy?)` — rewrites
+  an `always` trigger to a ledger-backed rule, ANDs an existing rule, and
+  passes demand-driven triggers through untouched. `always` pieces are
+  exempt unless explicitly wrapped.
+- Policy (`LedgerPolicy`): **demote, never starve** — below `minOffers`
+  (5) everything passes; at/above `earnRateFloor` (0.05) it earns its way
+  in; a demoted piece gets parole every `refreshEvery`-th (10) decision so
+  it keeps generating fresh ledger data.
+- Measurement (L3): tokens-per-turn gated vs not, side by side — see
+  `examples/features/32-context-ledger.ts` (88% less on the over-stuffed
+  fixture).
