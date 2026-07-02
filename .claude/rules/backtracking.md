@@ -17,6 +17,7 @@ paths:
   - src/resilience/withRetry.ts
   - src/identity/withCredentialRetry.ts
   - src/lib/context-bisect/**
+  - src/lib/trace-toolpack/**
   - src/observability/contextError/finders/**
   - src/lib/influence-core/**
 ---
@@ -125,6 +126,27 @@ rerun = (removedIds) => runFreshAgent(applyAblations(specs(removedIds), ALL)).ou
 probe(specs): flips = Σ_seed outcomeChanged(original, rerun(specs, seed)); flipped = flips*2 > samples
 walkToRoot: frame = symptom; loop: narrow(frame) → beam-k writers → ablate each → hop to writerId's frame
 ```
+
+## M7 — Variable-first triage surface (consumes fp's slice layer)
+
+Files: `src/lib/trace-toolpack/traceToolpack.ts` `buildBacktrack` — the 6th
+toolpack tool, `backtrack(variable, element?, before?)`: slice mode =
+`sliceForKey` + `formatSlice` (fp 9.10.0); element mode = `elementProvenance`
+(the history mega-key answer: `history[N]` names its birth iteration —
+attribution `append-verb`/EXACT under the agent's `commitValues: 'delta'`
+default). Reserved under selfExplain (AgentBuilder.ts — inline list).
+`src/lib/context-bisect/sliceToBacktrackTrace.ts` — the STRUCTURAL sibling of
+toBacktrackTrace: `sliceToJSON` (fp) → atui BacktrackTrace. Always
+`mode: 'correlational'`; every card `upperBound: true`; score = 1/(1+depth)
+hop proximity NAMED in the honesty lines; missing slices render an empty
+board that says why. Never fabricates a verdict.
+
+Invariant: the LLM tool and the human board consume the SAME slice queries —
+their answers cannot disagree (the parity loop: agent emits the trace, a
+person confirms/overrides on the board).
+Breaks when: af's executor defaults leave `writeProvenance` off — edges are
+stage-level (honest ceiling); enabling `'reads-prefix'` tightens them with no
+consumer change (fp #P1).
 
 ## Cross-mechanism seams
 - Scope is the only durable carrier across pause (M1), fail-fast $break (M3 → ReliabilityFailFastError via scope.reliabilityFail*), and policy halt (toolCalls.ts:447-466 strict order: synthetic tool_result → halt emit → history commit → $break) — so M2's checkpoint always sees consistent state.

@@ -36,6 +36,7 @@
 
 import type { CommitBundle, StageSnapshot } from 'footprintjs/advanced';
 import { causalChain, commitValueAt, findLastWriter, formatCausalChain } from 'footprintjs/trace';
+import { arrayProvenance, elementProvenance, formatSlice, sliceForKey } from 'footprintjs/trace';
 
 import { formatToolArgIssues, validateToolArgs } from '../../core/agent/toolArgsValidation.js';
 import { defineTool, type Tool, type ToolExecutionContext } from '../../core/tools.js';
@@ -274,6 +275,7 @@ function truncateText(text: string, cap: number): string {
  * | `run_overview`   | What happened, broadly? (the entry point)                 |
  * | `trace_node`     | What did step X read/write, and where did its inputs come from? |
  * | `trace_slice`    | Which chain of steps produced the data at X? (causal slice) |
+ * | `backtrack`      | Why is VARIABLE K what it is? (+ `element`: who made K[i]?) — variable-first |
  * | `who_wrote`      | Which step last wrote key K?                              |
  * | `get_value`      | The full value of K as of step X (capped, truncation-marked) |
  * | `read_narrative` | The human-readable story, paginated (only when narrative provided) |
@@ -299,6 +301,7 @@ export function traceToolpack(
     buildRunOverview(artifacts, index),
     buildTraceNode(artifacts, index, opts),
     buildTraceSlice(artifacts, index, opts),
+    buildBacktrack(artifacts, index, opts),
     buildWhoWrote(index, opts),
     buildGetValue(index, opts),
   ];
@@ -714,6 +717,145 @@ function buildTraceSlice(
 }
 
 // ── who_wrote ──────────────────────────────────────────────────────────────
+
+// ── backtrack — variable-first triage (the follow-up question shape) ──────
+
+/**
+ * `trace_slice` is STEP-addressed ("what fed step X?"). Follow-up questions
+ * arrive VARIABLE-addressed ("why did you say the quote is 11.88?" → "why is
+ * `quote` what it is?") — and for agent history, ELEMENT-addressed ("where
+ * did message 7 come from?"). This tool is that address translation, built
+ * on footprintjs' slice layer (`sliceForKey` / `elementProvenance`): anchor
+ * at the variable's last writer, walk backwards; or name one array element's
+ * birth step. Same honesty contracts as the rest of the pack — a missing
+ * slice states WHY (initial state / frozen args / a closure), element
+ * attribution carries its basis (append-verb exact vs prefix-inference),
+ * and reads-coverage warns when read tracking was off.
+ */
+function buildBacktrack(
+  artifacts: TraceToolpackArtifacts,
+  index: ToolpackIndex,
+  opts: ResolvedToolpackOptions,
+): Tool {
+  return defineTool<
+    { variable: string; element?: number; before?: number; maxDepth?: number; maxNodes?: number },
+    string
+  >({
+    name: 'backtrack',
+    description:
+      "Why is a state VARIABLE what it is? Anchors at the variable's last writer and walks the " +
+      'backward dependency chain (variable-first — you do not need a step id). For array ' +
+      "variables (e.g. 'history'), pass 'element' to ask which step produced element N instead. " +
+      "Optional 'before' (commit index) time-travels: the value as it stood before that point. " +
+      `Bounded by maxDepth (default ${opts.sliceMaxDepth}, max ${TOOLPACK_HARD_CAPS.sliceMaxDepth}) ` +
+      `and maxNodes (default ${opts.sliceMaxNodes}, max ${TOOLPACK_HARD_CAPS.sliceMaxNodes}).`,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        variable: keyProperty(index, "The state key to explain, e.g. 'quote' or 'history'."),
+        element: {
+          type: 'integer',
+          description:
+            'Optional array index: ask which step PRODUCED this element (birth attribution) ' +
+            'instead of slicing the whole variable.',
+        },
+        before: {
+          type: 'integer',
+          description:
+            'Optional exclusive commit index — explain the value as it stood BEFORE this point ' +
+            "(chain from an element birth with: element_birth's commitIdx + 1).",
+        },
+        maxDepth: {
+          type: 'integer',
+          description: `Optional slice depth (default ${opts.sliceMaxDepth}, hard cap ${TOOLPACK_HARD_CAPS.sliceMaxDepth}).`,
+        },
+        maxNodes: {
+          type: 'integer',
+          description: `Optional node budget (default ${opts.sliceMaxNodes}, hard cap ${TOOLPACK_HARD_CAPS.sliceMaxNodes}).`,
+        },
+      },
+      required: ['variable'],
+      additionalProperties: false,
+    },
+    execute: ({ variable, element, before, maxDepth, maxNodes }) => {
+      const key = normalizeKey(variable, index.knownPaths);
+
+      // ── element mode: birth attribution ─────────────────────────────────
+      if (element !== undefined) {
+        const birth = elementProvenance(index.commitLog, key, element, {
+          ...(before !== undefined && { atIdx: before - 1 }),
+        });
+        if (!birth) {
+          const prov = arrayProvenance(index.commitLog, key, {
+            ...(before !== undefined && { atIdx: before - 1 }),
+          });
+          if (prov.missing === 'never-written') {
+            return (
+              `'${displayKey(key)}' was never written in range — it may come from run input ` +
+              '(args), env, pre-run state, or a closure; the commit log cannot see those.'
+            );
+          }
+          if (prov.missing === 'not-an-array') {
+            return (
+              `'${displayKey(key)}' is not an array at that point (scalar, deleted, or degraded) — ` +
+              `element attribution does not apply. Call backtrack without 'element' to slice it.`
+            );
+          }
+          if (prov.missing === 'empty-log') return 'the commit log is empty — nothing executed.';
+          return (
+            `element ${element} is out of range for '${displayKey(key)}' ` +
+            `(length ${prov.length}). Valid indices: 0..${(prov.length ?? 1) - 1}.`
+          );
+        }
+        return (
+          `'${displayKey(key)}'[${birth.index}] = ${renderPreview(boundedPreview(birth.value, opts.previewChars))} — ` +
+          `born at ${birth.runtimeStageId} ("${birth.stageName}", verb: ${birth.verb}, ` +
+          `attribution: ${birth.basis}${birth.basis === 'append-verb' ? ' — engine-recorded, exact' : ''}). ` +
+          `Drill the producer with trace_node('${birth.runtimeStageId}'), or ask why it wrote this ` +
+          `with backtrack({variable: '${displayKey(key)}', before: ${birth.commitIdx + 1}}).`
+        );
+      }
+
+      // ── slice mode: variable-first backward slice ────────────────────────
+      const depth = clampParam(maxDepth, opts.sliceMaxDepth, 1, TOOLPACK_HARD_CAPS.sliceMaxDepth);
+      const nodeBudget = clampParam(
+        maxNodes,
+        opts.sliceMaxNodes,
+        2,
+        TOOLPACK_HARD_CAPS.sliceMaxNodes,
+      );
+      const keysReadOf = (id: string): string[] => {
+        const node = index.nodes.get(id);
+        return node?.stageReads ? Object.keys(node.stageReads) : [];
+      };
+      const slice = sliceForKey(index.commitLog, key, keysReadOf, {
+        maxDepth: depth,
+        maxNodes: nodeBudget,
+        ...(before !== undefined && { before }),
+        ...(artifacts.controlDeps ? { controlDeps: artifacts.controlDeps } : {}),
+      });
+
+      const lines: string[] = [
+        displayText(formatSlice(slice)),
+        '',
+        'drill any (stepId) with trace_node; fetch values with get_value; array variables take ' +
+          "'element' for per-element attribution.",
+      ];
+      if (slice.root !== undefined && !artifacts.controlDeps) {
+        lines.push(
+          '⚠ control edges unavailable — artifacts carry no controlDeps lookup; decisions that ' +
+            'routed execution are not shown.',
+        );
+      }
+      if (slice.root !== undefined && !index.hasReadTracking) {
+        lines.push(
+          '⚠ artifacts carry no per-step read tracking — the slice may show only the writer step.',
+        );
+      }
+      return lines.join('\n');
+    },
+  });
+}
 
 function buildWhoWrote(index: ToolpackIndex, opts: ResolvedToolpackOptions): Tool {
   return defineTool<{ key: string; beforeStageId?: string }, string>({

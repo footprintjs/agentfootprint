@@ -110,6 +110,7 @@ describe('lazyTraceToolpack — late-bound artifacts', () => {
       'run_overview',
       'trace_node',
       'trace_slice',
+      'backtrack',
       'who_wrote',
       'get_value',
     ]);
@@ -124,6 +125,8 @@ describe('lazyTraceToolpack — late-bound artifacts', () => {
           ? { runtimeStageId: 'a#0', key: 'x' }
           : tool.schema.name === 'trace_slice'
           ? { runtimeStageId: 'a#0' }
+          : tool.schema.name === 'backtrack'
+          ? { variable: 'x' }
           : { runtimeStageId: 'a#0' };
       expect(await callTraceTool([tool], tool.schema.name, args)).toBe(NO_COMPLETED_RUN_MESSAGE);
     }

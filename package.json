@@ -1,7 +1,7 @@
 {
   "name": "agentfootprint",
-  "version": "7.0.0",
-  "description": "The explainable agent framework \u2014 backtrack a wrong answer to the exact context that caused it (evidence, not guesses). Built on footprintjs.",
+  "version": "7.1.0",
+  "description": "The explainable agent framework — backtrack a wrong answer to the exact context that caused it (evidence, not guesses). Built on footprintjs.",
   "license": "MIT",
   "author": "Sanjay Krishna Anbalagan",
   "repository": {

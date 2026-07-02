@@ -186,12 +186,14 @@ export {
 // (the "why?" board) straight off a localizer report. Pure mapping, no
 // UI dependency; the interfaces mirror agentthinkingui's contract.
 export {
+  sliceToBacktrackTrace,
   toBacktrackTrace,
   type BacktrackCustodyHop,
   type BacktrackHop,
   type BacktrackSuspectCard,
   type BacktrackTrace,
   type BacktrackTrail,
+  type SliceToBacktrackTraceOptions,
   type ToBacktrackTraceOptions,
 } from './lib/context-bisect/index.js';
 // Tool-catalog confusability lint (RFC-002 tier 1, C1–C3) — build-time,

@@ -149,19 +149,20 @@ function manyStageArtifacts(count: number): TraceToolpackArtifacts {
 // ─── traceToolpack factory ─────────────────────────────────────────────────
 
 describe('traceToolpack — factory', () => {
-  it('returns the 5 core tools, plus read_narrative only when narrative is provided', () => {
+  it('returns the 6 core tools, plus read_narrative only when narrative is provided', () => {
     const withNarrative = traceToolpack(fixture.artifacts);
     expect(withNarrative.map((t) => t.schema.name)).toEqual([
       'run_overview',
       'trace_node',
       'trace_slice',
+      'backtrack',
       'who_wrote',
       'get_value',
       'read_narrative',
     ]);
     const bare = traceToolpack(fixture.artifactsBare);
     expect(bare.map((t) => t.schema.name)).not.toContain('read_narrative');
-    expect(bare).toHaveLength(5);
+    expect(bare).toHaveLength(6);
   });
 
   it('embeds an id enum in schemas for small runs (free #9 validation)', () => {

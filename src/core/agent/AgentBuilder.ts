@@ -826,7 +826,7 @@ export class AgentBuilder {
     if (this.selfExplainConfig) {
       const reserved = this.selfExplainConfig.delegate
         ? ['explain_run']
-        : ['run_overview', 'trace_node', 'trace_slice', 'who_wrote', 'get_value'];
+        : ['run_overview', 'trace_node', 'trace_slice', 'backtrack', 'who_wrote', 'get_value'];
       const clash = this.registry.find((entry) => reserved.includes(entry.name));
       if (clash) {
         throw new Error(

@@ -5,6 +5,33 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.1.0] - 2026-07-02
+
+### Added
+
+- **`backtrack(variable, element?, before?)` — the 6th trace-toolpack tool**
+  (reserved under `.selfExplain()` inline mode). Variable-first triage: no
+  step id needed — anchors at the variable's last writer and walks the
+  dependency chain (fp 9.10.0 `sliceForKey`/`formatSlice`). Element mode is
+  the agent mega-key answer: `backtrack({variable: 'history', element: 7})`
+  names the exact iteration that produced message 7, with honest attribution
+  (`append-verb` = engine-recorded/EXACT under the agent's `commitValues:
+  'delta'` default). Honest absence (never-written → initial state / args /
+  closure), corrective out-of-range/not-an-array answers, chained-triage
+  hints with real commit indices.
+- **`sliceToBacktrackTrace(sliceJSON, opts)`** (`agentfootprint/debug`) — the
+  STRUCTURAL sibling of `toBacktrackTrace`: renders a footprintjs variable
+  slice on agentThinkingUI's BacktrackView board. Always
+  `mode: 'correlational'`, every card a path-only upper bound (hatched
+  meter), score = hop proximity with the formula named in the honesty lines,
+  slice honesty (reads-coverage, truncation, incomplete-sources, honest
+  absence) mapped verbatim. The parity artifact: the LLM's triage and the
+  human's board are the same JSON.
+
+### Changed
+
+- footprintjs peer/dev `^9.10.0` (the slice layer + `writeProvenance` dial).
+
 ## [Unreleased]
 
 ## [7.0.0] - 2026-06-26
