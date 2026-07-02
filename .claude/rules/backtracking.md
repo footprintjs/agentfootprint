@@ -21,7 +21,7 @@ paths:
   - src/observability/contextError/finders/**
   - src/lib/influence-core/**
 ---
-<!-- analyzed-at: 3fbcef8 @ 2026-07-02 | model: fable-5 -->
+<!-- analyzed-at: 5a5b7cb @ 2026-07-02 | model: fable-5 -->
 # Backtracking in agentfootprint — 6 mechanisms
 
 The per-stage transaction commit and `FlowchartCheckpoint` machinery live UPSTREAM in footprintjs. `src/memory/causal/writeSnapshot.ts`/`loadSnapshot.ts` are cross-session memory persistence, NOT backtracking. **Two disjoint checkpoint types with similar names:** `FlowchartCheckpoint` (M1, footprintjs, full scope) vs `AgentRunCheckpoint` (M2, history-only) — `agent.resume()` vs `agent.resumeOnError()`; never cross-wire them.

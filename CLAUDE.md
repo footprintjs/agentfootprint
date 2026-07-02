@@ -1,4 +1,4 @@
-<!-- analyzed-at: 3fbcef8 @ 2026-07-02 | model: fable-5 -->
+<!-- analyzed-at: 5a5b7cb @ 2026-07-02 | model: fable-5 -->
 # agentfootprint — feature-work map
 
 Agent framework layered on footprintjs: every runner (Agent, LLMCall, compositions, patterns) is a footprintjs chart built ONCE at construction and executed on a fresh `FlowChartExecutor` per run. Engine seams (stage kinds, $-methods, engine handlers) live UPSTREAM in footprintjs and are closed here. This file maps this repo's seams and blast radius — **trust the code** where any doc disagrees.
