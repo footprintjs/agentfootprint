@@ -103,6 +103,18 @@ export interface AnthropicProviderOptions {
   readonly defaultModel?: string;
   /** Default max tokens when the request doesn't set it. Default 4096. */
   readonly defaultMaxTokens?: number;
+  /**
+   * Per-request timeout in milliseconds, passed to the Anthropic client.
+   * Long non-streaming turns (slow models, long conversations, agent loops)
+   * can exceed the SDK default and surface as "Request timed out" — raise
+   * this for such workloads. Omit to use the SDK default.
+   */
+  readonly timeout?: number;
+  /**
+   * How many times the Anthropic client retries a failed request (timeouts,
+   * connection errors, 429/5xx) before giving up. Omit to use the SDK default.
+   */
+  readonly maxRetries?: number;
   /** @internal Pre-built client for testing. Skips SDK import. */
   readonly _client?: AnthropicClient;
 }
@@ -197,12 +209,13 @@ export class AnthropicProvider implements LLMProvider {
 
 function resolveClient(options: AnthropicProviderOptions): AnthropicClient {
   if (options._client) return options._client;
-  let Anthropic: new (opts: { apiKey?: string }) => AnthropicClient;
+  type AnthropicCtorOptions = { apiKey?: string; timeout?: number; maxRetries?: number };
+  let Anthropic: new (opts: AnthropicCtorOptions) => AnthropicClient;
   try {
     const mod = lazyRequire<{ default?: unknown } | unknown>('@anthropic-ai/sdk') as {
       default?: unknown;
     };
-    Anthropic = (mod.default ?? mod) as new (opts: { apiKey?: string }) => AnthropicClient;
+    Anthropic = (mod.default ?? mod) as new (opts: AnthropicCtorOptions) => AnthropicClient;
   } catch {
     throw new Error(
       'AnthropicProvider requires @anthropic-ai/sdk.\n' +
@@ -211,7 +224,11 @@ function resolveClient(options: AnthropicProviderOptions): AnthropicClient {
     );
   }
   const apiKey = options.apiKey ?? process.env.ANTHROPIC_API_KEY;
-  return new Anthropic({ apiKey });
+  return new Anthropic({
+    apiKey,
+    ...(options.timeout !== undefined ? { timeout: options.timeout } : {}),
+    ...(options.maxRetries !== undefined ? { maxRetries: options.maxRetries } : {}),
+  });
 }
 
 function buildParams(
