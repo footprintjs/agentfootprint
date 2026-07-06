@@ -312,7 +312,17 @@
         "default": "./dist/status.js"
       }
     },
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./embedders": {
+      "import": {
+        "types": "./dist/esm/embedders/index.d.ts",
+        "default": "./dist/esm/embedders/index.js"
+      },
+      "require": {
+        "types": "./dist/types/embedders/index.d.ts",
+        "default": "./dist/embedders/index.js"
+      }
+    }
   },
   "typesVersions": {
     "*": {
@@ -397,7 +407,9 @@
     "footprintjs": "^9.10.0",
     "ioredis": "*",
     "openai": "*",
-    "zod": "*"
+    "zod": "*",
+    "@huggingface/transformers": "*",
+    "@yarflam/potion-base-8m": "*"
   },
   "peerDependenciesMeta": {
     "@anthropic-ai/sdk": {
@@ -431,6 +443,12 @@
       "optional": true
     },
     "zod": {
+      "optional": true
+    },
+    "@huggingface/transformers": {
+      "optional": true
+    },
+    "@yarflam/potion-base-8m": {
       "optional": true
     }
   },
