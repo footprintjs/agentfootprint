@@ -133,41 +133,60 @@ export interface StaticEmbedderOptions {
   readonly module?: string;
 }
 
+/** A batch embed fn: text(s) → array of vectors, one per input (potion's shape). */
+type StaticEmbedFn = (texts: readonly string[]) => unknown;
+
 export function staticEmbedder(options: StaticEmbedderOptions = {}): Embedder {
   const dimensions = options.dimensions ?? 256;
   const spec = options.module ?? '@yarflam/potion-base-8m';
-  let encoder: Promise<(text: string) => number[]> | undefined;
+  let embedFn: Promise<StaticEmbedFn> | undefined;
 
-  const getEncoder = (): Promise<(text: string) => number[]> => {
-    return (encoder ??= import(spec).then((mod: unknown) => {
-      // Model2Vec JS builds vary: a default export that is a function or a class,
-      // or a named `encode`/`embed`. Adapt to a `(text) => number[]` uniformly.
+  const getEmbed = (): Promise<StaticEmbedFn> => {
+    return (embedFn ??= import(spec).then((mod: unknown) => {
+      // potion-base-8m exports `embed(texts) => Promise<Float32Array[]>` (a batch
+      // async fn, also on its default export). Accept a small set of shapes so
+      // other Model2Vec builds slot in: a named `embed`/`encode` on the module or
+      // its default, or a default export that IS the fn.
       const m = mod as Record<string, unknown> & { default?: unknown };
-      const candidate = (m.default ?? m) as unknown;
-      if (typeof candidate === 'function') {
-        // could be a factory/class or a direct encode fn
-        try {
-          const inst = new (candidate as new () => Record<string, unknown>)();
-          const fn = (inst['encode'] ?? inst['embed']) as ((t: string) => number[]) | undefined;
-          if (fn) return (t: string) => fn.call(inst, t);
-        } catch {
-          /* not a constructor — treat as an encode fn */
-        }
-        return candidate as (t: string) => number[];
+      const d = (m.default ?? {}) as Record<string, unknown>;
+      const fn =
+        (m['embed'] as StaticEmbedFn | undefined) ??
+        (d['embed'] as StaticEmbedFn | undefined) ??
+        (m['encode'] as StaticEmbedFn | undefined) ??
+        (d['encode'] as StaticEmbedFn | undefined) ??
+        (typeof m.default === 'function' ? (m.default as StaticEmbedFn) : undefined);
+      if (!fn) {
+        throw new Error(
+          `staticEmbedder: no embed()/encode() export on '${spec}'. Pass { module } or wrap it in your own Embedder.`,
+        );
       }
-      const named = (m['encode'] ?? m['embed']) as ((t: string) => number[]) | undefined;
-      if (named) return named;
-      throw new Error(
-        `staticEmbedder: could not find an encode()/embed() on '${spec}'. Pass { module } or wrap it in your own Embedder.`,
-      );
+      return fn;
     }));
+  };
+
+  // Normalize a batch result into number[][] (one row per input). Handles
+  // Float32Array[] (potion), number[][], and a single flat vector for the call.
+  const toRows = (out: unknown): number[][] => {
+    const rows = out as ArrayLike<unknown> | null;
+    if (rows == null || typeof rows.length !== 'number') {
+      throw new Error('staticEmbedder: embed() did not return an array of vectors.');
+    }
+    if (rows.length > 0 && typeof rows[0] === 'number') {
+      return [Array.from(rows as ArrayLike<number>)]; // one flat vector for the call
+    }
+    return Array.from(rows as ArrayLike<ArrayLike<number>>, (v) => Array.from(v));
   };
 
   return {
     dimensions,
     async embed({ text }) {
-      const enc = await getEncoder();
-      return Array.from(enc(text));
+      const fn = await getEmbed();
+      const rows = toRows(await fn([text]));
+      return rows[0] ?? [];
+    },
+    async embedBatch({ texts }) {
+      const fn = await getEmbed();
+      return toRows(await fn([...texts]));
     },
   };
 }
