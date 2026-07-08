@@ -37,6 +37,7 @@ export {
   EmbeddingCache,
   embeddingCache,
   finalAnswerSimilarity,
+  attributeChoice,
   marginStrategy,
   pairwiseSimilarity,
   persistence,
@@ -46,7 +47,10 @@ export {
   scoreInfluence,
   scoreMargin,
   structuralProximity,
+  type AttributeChoiceArgs,
+  type AttributionUnit,
   type CandidateScore,
+  type ChoiceAttribution,
   type ConfidenceStrategy,
   type Embedder,
   type EmbeddingCacheOptions,
@@ -67,6 +71,7 @@ export {
   type SignalScores,
   type SimilarityItem,
   type SimilarityPair,
+  type UnitScore,
 } from './lib/influence-core/index.js';
 // Introspection toolpack (RFC-003 Part C) — footprintjs trace evidence
 // exposed as TOOLS a debugging LLM calls over a COMPLETED run's artifacts.

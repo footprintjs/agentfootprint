@@ -281,3 +281,56 @@ export interface MarginResult {
     readonly proxyDisagreement: boolean;
   };
 }
+
+/**
+ * One piece of the context the chooser saw, tagged by which channel it
+ * came from. `scoreMargin` asks "which tool best fits ONE context";
+ * `attributeChoice` asks the transpose — "which context UNIT best explains
+ * ONE chosen tool" — so the unit is the thing being scored here.
+ *
+ * A channel groups units by origin so the attribution can report where the
+ * pull came from: `'system'` (a rule in the system prompt), `'task'` (the
+ * user's request), `'result'` (data a prior tool returned), `'history'`
+ * (an earlier turn). Channels are free-form strings — the caller decides
+ * the taxonomy; the engine only sums by whatever labels it is given.
+ *
+ * (Named `AttributionUnit`, not `ContextUnit`, to stay distinct from
+ * context-bisect's own `ContextUnit`, which is a different subsystem.)
+ */
+export interface AttributionUnit {
+  /** Unique id — the citation the attribution points at, e.g. `'rule-1'`. */
+  readonly id: string;
+  /** Origin group, e.g. `'system' | 'task' | 'result' | 'history'`. */
+  readonly channel: string;
+  /** The text of the unit (a rule sentence, the user task, …). */
+  readonly text: string;
+}
+
+/** One context unit's proximity to the chosen tool, ranked. */
+export interface UnitScore {
+  readonly id: string;
+  readonly channel: string;
+  /** cosine(embed(tool text), embed(unit.text)). */
+  readonly score: number;
+}
+
+/**
+ * Which context best explains one tool choice — the transpose of a
+ * `MarginResult`. Same honesty caveat: `score` is embedding geometry
+ * between the tool text and each instruction unit, a PROXY for which
+ * instruction the pick aligns with, never proof the model used that rule.
+ */
+export interface ChoiceAttribution {
+  /** The chosen tool being explained. */
+  readonly tool: string;
+  /** Every unit scored against the tool, descending (ties keep input order). */
+  readonly units: readonly UnitScore[];
+  /** The single best-attributing unit — the citation ("picked because …"). */
+  readonly top: UnitScore;
+  /**
+   * Share of total POSITIVE similarity mass per channel, summing to ~1
+   * (empty when no unit had positive similarity). A pick dominated by the
+   * `system` channel is procedural; one dominated by `task` is topical.
+   */
+  readonly byChannel: Readonly<Record<string, number>>;
+}

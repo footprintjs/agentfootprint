@@ -27,6 +27,8 @@
 
 export type {
   CandidateScore,
+  AttributionUnit,
+  ChoiceAttribution,
   ConfidenceStrategy,
   EmbedArgs,
   EmbedBatchArgs,
@@ -41,6 +43,7 @@ export type {
   SignalScores,
   SimilarityItem,
   SimilarityPair,
+  UnitScore,
 } from './types.js';
 export {
   DEFAULT_CLEAR_WINNER_MARGIN,
@@ -83,3 +86,5 @@ export {
 export { pairwiseSimilarity, type PairwiseSimilarityArgs } from './similarity.js';
 
 export { scoreMargin, type ScoreMarginArgs } from './margin.js';
+
+export { attributeChoice, type AttributeChoiceArgs } from './attribute.js';
