@@ -8,7 +8,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import type { EmitEvent, LLMProvider } from 'footprintjs';
-import { Agent, defineTool } from '../../../src/index'
+import { Agent, askHuman, defineTool, isPaused } from '../../../src/index'
 import { mock } from '../../../src/llm-providers.js';
 import { mockEmbedder } from '../../../src/memory/embedding/mockEmbedder';
 import type { Embedder } from '../../../src/lib/influence-core';
@@ -440,6 +440,42 @@ describe('toolChoiceRecorder — Convention 4 (runId reset)', () => {
     rec.clear();
     expect(await rec.getCalls()).toHaveLength(0);
   });
+
+  it('onResume stamps the new runId so the following onRunStart does NOT reset (pause/resume survives)', async () => {
+    const rec = toolChoiceRecorder({ embedder: mockEmbedder() });
+    // ── run A, up to the pause ───────────────────────────────────────
+    rec.onRunStart(runStart('run-A'));
+    rec.onEmit(ev(TURN_START, { turnIndex: 0, userPrompt: 'pre-pause work' }));
+    rec.onEmit(llmStart('call-llm#1', 1));
+    rec.onEmit(toolStart('get_fcns_database', 'a1'));
+
+    // ── resume: the executor fires onResume with the NEW runId, THEN
+    //    traverser.execute() fires onRunStart with that SAME runId. The
+    //    onResume stamp means the onRunStart is a no-op — entries survive.
+    rec.onResume(runStart('run-B'));
+    rec.onRunStart(runStart('run-B'));
+    rec.onEmit(llmStart('call-llm#7', 2));
+    rec.onEmit(toolStart('send_email', 'b1'));
+    rec.onRunEnd({});
+
+    const surviving = await rec.getCalls();
+    expect(surviving).toHaveLength(2); // pre-pause entry was NOT wiped
+    expect(surviving.map((c) => c.runtimeStageId)).toEqual(['call-llm#1', 'call-llm#7']);
+    expect(surviving.flatMap((c) => c.chosen)).toEqual(['get_fcns_database', 'send_email']);
+
+    // ── a genuinely fresh run() (an unseen runId, never stamped by
+    //    onResume) still resets exactly as Convention 4 requires. ──────
+    rec.onRunStart(runStart('run-C'));
+    rec.onEmit(ev(TURN_START, { turnIndex: 0, userPrompt: 'brand new run' }));
+    rec.onEmit(llmStart('call-llm#1', 1));
+    rec.onEmit(toolStart('influx_get_fcns_database', 'c1'));
+    rec.onRunEnd({});
+
+    const afterFresh = await rec.getCalls();
+    expect(afterFresh).toHaveLength(1);
+    expect(afterFresh[0].chosen).toEqual(['influx_get_fcns_database']);
+    expect(afterFresh[0].contextText).toContain('brand new run');
+  });
 });
 
 // ── functional/integration: a real Agent run ─────────────────────────
@@ -503,6 +539,104 @@ describe('toolChoiceRecorder — functional (real Agent, mock provider)', () => 
     expect(summary.choices).toBe(1);
     expect(summary.scored).toBe(1);
     expect(summary.skipped).toBe(calls.length - 1); // the final answer call(s)
+  });
+});
+
+// ── regression: pre-pause entries survive Agent pause/resume ─────────
+
+describe('toolChoiceRecorder — survives Agent pause/resume (regression)', () => {
+  it('retains pre-pause LLM calls across an askHuman pause + resume', async () => {
+    const lookup = defineTool({
+      name: 'get_fcns_database',
+      description: 'FC Name Server DB — registered N_Ports, live. Use for current state.',
+      inputSchema: { type: 'object', properties: {} },
+      execute: async () => ({ ports: 3 }),
+    });
+    const approve = defineTool({
+      name: 'approve_action',
+      description: 'Request human approval before a destructive action.',
+      inputSchema: { type: 'object', properties: {} },
+      execute: () => {
+        askHuman({ question: 'Approve deregistering the port?' });
+      },
+    });
+
+    // Two tool-using LLM calls, then the final answer:
+    //   iter 1 → get_fcns_database (pre-pause)
+    //   iter 2 → approve_action → askHuman → PAUSE (pre-pause)
+    //   iter 3 → final answer, tools still offered (post-resume)
+    let i = 0;
+    const provider: LLMProvider = mock({
+      respond: () => {
+        i++;
+        if (i === 1)
+          return {
+            content: 'Checking the live name server first.',
+            toolCalls: [{ id: 'c1', name: 'get_fcns_database', args: {} }],
+          };
+        if (i === 2)
+          return {
+            content: 'I need approval before deregistering.',
+            toolCalls: [{ id: 'c2', name: 'approve_action', args: {} }],
+          };
+        return { content: 'Approved and done.', toolCalls: [] };
+      },
+    });
+
+    const choices = toolChoiceRecorder({ embedder: mockEmbedder() });
+    const agent = Agent.create({ provider, model: 'mock', maxIterations: 6 })
+      .system('You are a SAN triage agent.')
+      .tool(lookup)
+      .tool(approve)
+      .recorder(choices)
+      .build();
+
+    const paused = await agent.run({ message: 'is wwpn 21:00 still registered?' });
+    expect(isPaused(paused)).toBe(true);
+    if (!isPaused(paused)) throw new Error('expected the run to pause on askHuman');
+
+    // Both pre-pause LLM calls are captured while paused (no reset yet).
+    const prePause = await choices.getCalls();
+    expect(prePause.length).toBeGreaterThanOrEqual(2);
+    expect(prePause.flatMap((c) => c.chosen)).toEqual(
+      expect.arrayContaining(['get_fcns_database', 'approve_action']),
+    );
+
+    const finalAnswer = await agent.resume(paused.checkpoint, 'yes, approved');
+    expect(isPaused(finalAnswer)).toBe(false);
+
+    // The regression, both halves pinned:
+    //   1. recorder half — `onResume` stamps the regenerated runId so
+    //      resume's `onRunStart` no longer wipes the store (before that fix
+    //      this returned ONLY the post-resume call);
+    //   2. engine half — FIXED upstream in footprintjs: the checkpoint now
+    //      carries executionCount/visitCounts and a cross-executor
+    //      `resume()` seeds the shared counter by mutation, so post-resume
+    //      stages CONTINUE the executionIndex and runtimeStageIds can no
+    //      longer collide across the pause. (An earlier footprintjs
+    //      restarted the counter at 0, letting a post-resume call reclaim a
+    //      pre-pause key and overwrite that one KeyedStore entry — e.g.
+    //      'call-llm#18 → []' clobbering '[get_fcns_database]'.)
+    const post = await choices.getCalls();
+
+    // No pre-pause entry is lost OR overwritten: every pre-pause key is
+    // still present after the resume, with its chosen array unchanged.
+    const postByKey = new Map(post.map((c) => [c.runtimeStageId, c]));
+    for (const pre of prePause) {
+      const survivor = postByKey.get(pre.runtimeStageId);
+      expect(survivor, `pre-pause entry ${pre.runtimeStageId} missing after resume`).toBeDefined();
+      expect(survivor!.chosen).toEqual(pre.chosen);
+    }
+
+    // The resume added at least one NEW call, on a key of its own.
+    expect(post.length).toBeGreaterThan(prePause.length);
+    const keys = post.map((c) => c.runtimeStageId);
+    expect(new Set(keys).size).toBe(keys.length); // all keys unique
+
+    // Both pre-pause picks are visible in the merged view.
+    const chosen = post.flatMap((c) => c.chosen);
+    expect(chosen).toContain('get_fcns_database'); // pre-pause iteration 1
+    expect(chosen).toContain('approve_action'); // pre-pause iteration 2
   });
 });
 

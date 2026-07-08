@@ -78,8 +78,13 @@ import {
 } from '../../lib/influence-core/index.js';
 import { confusabilityText } from '../../lib/tool-lint/analyze.js';
 
-/** Minimal structural slice of footprintjs's FlowRunEvent (runId is all
- *  we read — Convention 4). */
+/** Minimal structural slice of footprintjs's run-boundary events — the
+ *  `FlowRunEvent` (`onRunStart`/`onRunEnd`/`onRunFailed`) and the
+ *  control-flow `FlowResumeEvent` (`onResume`). runId is all we read
+ *  (Convention 4). The scope-channel `ResumeEvent` this recorder also
+ *  receives (it lands on the scope channel via `onEmit`) carries no
+ *  `traversalContext`, so `traversalContext?.runId` is `undefined` there
+ *  and the handler ignores it. */
 interface RunBoundaryEvent {
   readonly traversalContext?: { readonly runId?: string };
 }
@@ -163,6 +168,7 @@ export interface ToolChoiceRecorderHandle {
   // CombinedRecorder hooks (routed by method-shape detection):
   onEmit(event: EmitEvent): void;
   onRunStart(event: RunBoundaryEvent): void;
+  onResume(event: RunBoundaryEvent): void;
   onRunEnd(event: RunBoundaryEvent): void;
   onRunFailed(event: RunBoundaryEvent): void;
 }
@@ -321,18 +327,36 @@ export function toolChoiceRecorder(options: ToolChoiceRecorderOptions): ToolChoi
       }
     },
 
-    /** Convention 4 — a new runId means a new run: reset accumulation so
-     *  runtimeStageId keys (which restart per run) cannot collide. The
-     *  executor also calls `clear()` before each `run()` — this hook is
-     *  the detection that works regardless of attach surface. Same-
-     *  executor `resume()` fires `onResume` (not `onRunStart`) and skips
-     *  `clear()`, so pre-pause entries SURVIVE a resume by design. */
+    /** Convention 4 — a new runId means a new logical run: reset
+     *  accumulation so runtimeStageId keys (which restart per run) cannot
+     *  collide. The executor also calls `clear()` before each `run()` —
+     *  this hook is the detection that works regardless of attach surface.
+     *
+     *  Pause/resume is NOT a fresh run. `executor.resume()` regenerates the
+     *  runId, fires `onResume` (which stamps that new runId below WITHOUT
+     *  resetting), and only THEN runs `traverser.execute()`, which fires
+     *  this `onRunStart` at the top level with the SAME regenerated runId.
+     *  Because `onResume` already advanced `lastRunId`, the guard here sees
+     *  `runId === lastRunId` and does NOT reset — so pre-pause entries
+     *  survive across the pause. A genuine `run()` arrives with a runId that
+     *  `onResume` never stamped, so it still resets exactly as before. */
     onRunStart(event): void {
       const runId = event.traversalContext?.runId;
       if (runId !== undefined && runId !== lastRunId) {
         reset();
         lastRunId = runId;
       }
+    },
+
+    /** Resume adopts the regenerated runId WITHOUT resetting, so the
+     *  `onRunStart` footprintjs fires immediately afterward (same runId) is
+     *  a no-op and pre-pause tool-choice entries are retained. Only the
+     *  control-flow (`FlowRecorder`) resume variant carries
+     *  `traversalContext.runId`; the scope-channel `ResumeEvent` (this
+     *  recorder also lands there via `onEmit`) has none → ignored. */
+    onResume(event): void {
+      const runId = event.traversalContext?.runId;
+      if (runId !== undefined) lastRunId = runId;
     },
 
     onRunEnd(): void {
