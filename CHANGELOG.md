@@ -5,6 +5,71 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.3.0] - 2026-07-08
+
+### Added
+
+- **`agentfootprint/embedders`** — ready-made `Embedder` implementations for the
+  embedding-backed scorers (`toolChoiceRecorder`/`scoreMargin`, memory
+  retrieval). Core still ships only `mockEmbedder`; these are optional +
+  lazy — each heavy backend is an OPTIONAL PEER DEPENDENCY imported on first
+  embed, so the core stays dependency-free and you install only what you
+  use: `openaiEmbedder()` (hosted, fetch + `OPENAI_API_KEY`, no extra
+  install), `localEmbedder()` (on-device MiniLM via
+  `@huggingface/transformers`, offline), `staticEmbedder()` (pure-JS
+  Model2Vec via `@yarflam/potion-base-8m`, no network).
+- **`attributeChoice`** (influence-core / `/debug`) — the transpose of
+  `scoreMargin`. `scoreMargin` fixes the context and ranks candidate tools
+  (deliberately excluding the constant system prompt), so it is
+  structurally blind to PROCEDURAL picks. `attributeChoice` fixes the
+  CHOSEN tool and ranks the context units (system-prompt rules + task)
+  against it, so a constant-but-load-bearing rule surfaces as a citation
+  ("picked because rule-1"), with a per-channel share of positive
+  similarity mass (procedural vs topical). New `AttributionUnit` /
+  `UnitScore` / `ChoiceAttribution` types. Honest: a Tier-1 similarity
+  PROXY (Tier-3 counterfactual ablation is the ground truth) — no causal
+  claim.
+- **`explainChoice` + `snippetUnits`** (influence-core / `/debug`) — a
+  UI-ready verdict for one tool pick. `explainChoice` fixes the chosen tool
+  and reports WHICH context channel best explains it — system rules,
+  user's task, or data returned by earlier tools — as `{channels (share of
+  positive similarity mass, sorted desc, zero-share listed), top citation
+  with unit text, ranked units}`; thin composite over `attributeChoice`.
+  `snippetUnits` cuts a tool result (JSON or prose) into citable
+  `AttributionUnit`s at the natural grain — one unit per object array
+  element as `key: value` pairs — bounded (max/maxLength), total
+  (circular-safe), pure. Together they power the answer-first "What drove
+  it" verdict card in agentThinkingUI.
+- **`anthropic({ timeout, maxRetries })`** — the Anthropic provider now
+  accepts `timeout?`/`maxRetries?`, passed straight to the Anthropic SDK
+  client (omit for SDK defaults). Long non-streaming turns (slow models,
+  long conversations, agent loops) could exceed the SDK's default request
+  timeout with no escape hatch.
+
+### Fixed
+
+- **`staticEmbedder` matches potion's async batch embed API** — the
+  adapter guessed a synchronous `new Cls().encode(text)` shape; potion-base-8m
+  actually exports an async BATCH `embed(texts) => Promise<Float32Array[]>`,
+  so the old adapter silently returned `[]`. Rewritten to await the batch
+  embed and take the first row, plus `embedBatch` and a `toRows()`
+  normalizer (`Float32Array[]` / `number[][]` / a single flat vector).
+- **`toolChoiceRecorder` survives pause/resume** — it reset its store on
+  ANY runId change in `onRunStart`, but footprintjs's `resume()` fires
+  `onResume` (stamping the regenerated runId) and THEN
+  `traverser.execute()` fires `onRunStart` with that same runId, wiping
+  every pre-pause entry (downstream: a debugger's Meaning-match scores
+  vanished after an approve/resume turn). A new `onResume` handler updates
+  the tracked runId WITHOUT resetting; a genuinely fresh `run()` still
+  resets. **Requires footprintjs ≥ 9.10.1** — the no-collision half
+  (post-resume calls landing on new, non-overlapping runtimeStageIds)
+  needs 9.10.1's checkpoint `executionCount`/`visitCounts` seeding.
+
+### Changed
+
+- footprintjs peer/dev floor raised to **`^9.10.1`** (required by the
+  `toolChoiceRecorder` pause/resume fix above).
+
 ## [7.1.0] - 2026-07-02
 
 ### Added
