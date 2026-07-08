@@ -388,6 +388,9 @@
       ],
       "status": [
         "./dist/types/status.d.ts"
+      ],
+      "embedders": [
+        "./dist/types/embedders/index.d.ts"
       ]
     }
   },
