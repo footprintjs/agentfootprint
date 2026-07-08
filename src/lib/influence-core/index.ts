@@ -88,3 +88,12 @@ export { pairwiseSimilarity, type PairwiseSimilarityArgs } from './similarity.js
 export { scoreMargin, type ScoreMarginArgs } from './margin.js';
 
 export { attributeChoice, type AttributeChoiceArgs } from './attribute.js';
+
+export {
+  explainChoice,
+  type ChannelVerdict,
+  type ChoiceExplanation,
+  type ExplainChoiceArgs,
+} from './explain.js';
+
+export { snippetUnits, type SnippetUnitsOptions } from './snippets.js';
