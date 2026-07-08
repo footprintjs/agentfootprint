@@ -79,13 +79,36 @@ import {
 import { confusabilityText } from '../../lib/tool-lint/analyze.js';
 
 /** Minimal structural slice of footprintjs's run-boundary events — the
- *  `FlowRunEvent` (`onRunStart`/`onRunEnd`/`onRunFailed`) and the
- *  control-flow `FlowResumeEvent` (`onResume`). runId is all we read
- *  (Convention 4). The scope-channel `ResumeEvent` this recorder also
- *  receives (it lands on the scope channel via `onEmit`) carries no
- *  `traversalContext`, so `traversalContext?.runId` is `undefined` there
- *  and the handler ignores it. */
+ *  `FlowRunEvent` (`onRunStart`/`onRunEnd`/`onRunFailed`). runId is all we
+ *  read (Convention 4). */
 interface RunBoundaryEvent {
+  readonly traversalContext?: { readonly runId?: string };
+}
+
+/** Minimal structural slice of footprintjs's `onResume` union — on
+ *  `CombinedRecorder`, `onResume` is one of the SharedLifecycleOverlap
+ *  methods (declared on both `ScopeRecorder` and `FlowRecorder` with
+ *  DIFFERENT payloads), so its type is `ResumeEvent | FlowResumeEvent`, not
+ *  a single `FlowRunEvent`-shaped type like the three siblings above. Only
+ *  the control-flow `FlowResumeEvent` carries `traversalContext`; the
+ *  scope-channel `ResumeEvent` (this recorder also receives it, via
+ *  `onEmit`) has none — `traversalContext?.runId` is `undefined` there and
+ *  the handler ignores it.
+ *
+ *  `hasInput` is listed here too, even though the handler never reads it.
+ *  Both union members declare `hasInput: boolean`, and TypeScript's
+ *  weak-type check rejects an assignment to an object type whose
+ *  properties are ALL optional when the source has NO property name in
+ *  common with it at all. A slice with only `traversalContext` shares zero
+ *  property names with the scope-channel `ResumeEvent` (it has no
+ *  `traversalContext` field), so TypeScript flagged the whole handle as not
+ *  assignable to `CombinedRecorder` (the 7.3.0 regression: f0a87de added
+ *  `onResume` typed with exactly that too-narrow slice). Declaring
+ *  `hasInput` gives this slice at least one property name in common with
+ *  BOTH union members, which is all the weak-type check requires — the
+ *  field carries no behavior. */
+interface ResumeBoundaryEvent {
+  readonly hasInput?: boolean;
   readonly traversalContext?: { readonly runId?: string };
 }
 
@@ -168,7 +191,7 @@ export interface ToolChoiceRecorderHandle {
   // CombinedRecorder hooks (routed by method-shape detection):
   onEmit(event: EmitEvent): void;
   onRunStart(event: RunBoundaryEvent): void;
-  onResume(event: RunBoundaryEvent): void;
+  onResume(event: ResumeBoundaryEvent): void;
   onRunEnd(event: RunBoundaryEvent): void;
   onRunFailed(event: RunBoundaryEvent): void;
 }

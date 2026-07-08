@@ -26,6 +26,13 @@ jobs:
 
       - run: npm install
       - run: npx tsc --noEmit
+      # Compile-level regression tests (test/type-regressions/) — ordinary
+      # `test/**` isn't covered by the tsc run above (tsconfig.json's
+      # `include` is src/**/* only), so type-only assignability breaks (e.g.
+      # a recorder handle drifting out of CombinedRecorder's shape) can slip
+      # through even with the runtime suite green. Its own tsconfig runs the
+      # real compiler over just these files.
+      - run: npm run test:types
       # Build BEFORE test. Examples in test/examples-smoke.test.ts import
       # from the package name 'agentfootprint' (not relative paths), and
       # Node's resolver looks up the local package's main/exports which
