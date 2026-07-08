@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.3.1] - 2026-07-09
+
+### Fixed
+
+- **`ToolChoiceRecorderHandle` stays assignable to `.recorder()` again** —
+  7.3.0's pause/resume fix (`f0a87de`) gave the handle's new `onResume` a
+  minimal event slice that shared zero property names with the
+  scope-channel `ResumeEvent` branch of `CombinedRecorder`'s union, so
+  TypeScript's weak-type check ("no properties in common") rejected the
+  whole handle regardless of method-parameter bivariance —
+  `agentBuilder.recorder(toolChoiceRecorder(...))` failed to typecheck.
+  Fixed by splitting `onResume` onto its own slice that also declares an
+  optional `hasInput`, giving it a property name in common with the
+  scope-channel variant. **Type-only — no runtime behavior change.** A
+  compile-level type-regression test suite (`test/type-regressions/`, run
+  via the new `npm run test:types`) is now wired into CI, closing the gap
+  that let this slip past 22 passing `ToolChoiceRecorder` tests (the root
+  `tsc --noEmit` only covers `src/**`; vitest never typechecks).
+
 ## [7.3.0] - 2026-07-08
 
 ### Added
