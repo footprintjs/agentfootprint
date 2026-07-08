@@ -64,7 +64,9 @@ jobs:
           registry-url: https://registry.npmjs.org
 
       # Upgrade npm ITSELF (trusted publishing needs >= 11.5.1) — not the project's deps.
-      - run: npm install -g npm@latest
+      # Pinned to the 11.x line: npm 12.0.0 went `latest` on 2026-07-08 with a broken
+      # provenance path (MODULE_NOT_FOUND: sigstore) that fails `npm publish --provenance`.
+      - run: npm install -g npm@11
 
       # Publishes the pre-built artifact. No node_modules, no dependency resolution.
       # Trusted publishing: no NODE_AUTH_TOKEN — npm authenticates via the GitHub OIDC token.
