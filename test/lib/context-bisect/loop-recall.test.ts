@@ -14,9 +14,9 @@
  * Convention-3 coverage: unit · functional · property · integration · security · perf/load.
  */
 import { describe, expect, it } from 'vitest';
-import { Agent, defineTool } from '../../../src/index'
-import { type Injection } from '../../../src/injection-engine.js'
-import { mock } from '../../../src/llm-providers.js'
+import { Agent, defineTool } from '../../../src/index';
+import { type Injection } from '../../../src/injection-engine.js';
+import { mock } from '../../../src/llm-providers.js';
 import { defineFact } from '../../../src/injection-engine.js';
 import { embeddingCache, scoreInfluence, type Embedder } from '../../../src/lib/influence-core';
 import { mockEmbedder } from '../../../src/memory/embedding/mockEmbedder';

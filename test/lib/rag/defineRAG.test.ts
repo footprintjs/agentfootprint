@@ -8,8 +8,8 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { defineRAG, indexDocuments, type RagDocument, Agent } from '../../../src/index.js'
-import { mock } from '../../../src/llm-providers.js'
+import { defineRAG, indexDocuments, type RagDocument, Agent } from '../../../src/index.js';
+import { mock } from '../../../src/llm-providers.js';
 import { InMemoryStore, mockEmbedder } from '../../../src/memory/index.js';
 
 // ─── Unit — defineRAG factory shape ────────────────────────────────

@@ -21,21 +21,42 @@ import type { Tool } from '../../../src/index.js';
 
 // ── Fixture 1: the mixed pipeline (variable-first slice) ───────────────────
 
-interface QuoteState { rates: number[]; baseRate?: number; riskFactor?: number; quote?: number }
+interface QuoteState {
+  rates: number[];
+  baseRate?: number;
+  riskFactor?: number;
+  quote?: number;
+}
 
 async function quoteFixture(): Promise<Tool[]> {
-  const chart = flowChart<QuoteState>('LoadRates', async (scope) => {
-    scope.rates = [3.1, 3.4, 9.9];
-  }, 'load-rates')
-    .addFunction('PickBase', async (scope) => {
-      scope.baseRate = scope.rates[2];
-    }, 'pick-base')
-    .addFunction('AssessRisk', async (scope) => {
-      scope.riskFactor = 1.2;
-    }, 'assess-risk')
-    .addFunction('Quote', async (scope) => {
-      scope.quote = scope.baseRate! * scope.riskFactor!;
-    }, 'quote')
+  const chart = flowChart<QuoteState>(
+    'LoadRates',
+    async (scope) => {
+      scope.rates = [3.1, 3.4, 9.9];
+    },
+    'load-rates',
+  )
+    .addFunction(
+      'PickBase',
+      async (scope) => {
+        scope.baseRate = scope.rates[2];
+      },
+      'pick-base',
+    )
+    .addFunction(
+      'AssessRisk',
+      async (scope) => {
+        scope.riskFactor = 1.2;
+      },
+      'assess-risk',
+    )
+    .addFunction(
+      'Quote',
+      async (scope) => {
+        scope.quote = scope.baseRate! * scope.riskFactor!;
+      },
+      'quote',
+    )
     .build();
   const executor = new FlowChartExecutor(chart, { commitValues: 'delta' });
   await executor.run();
@@ -45,20 +66,41 @@ async function quoteFixture(): Promise<Tool[]> {
 
 // ── Fixture 2: the history-shaped loop (element mode) ──────────────────────
 
-interface LoopState { history: string[]; round?: number }
+interface LoopState {
+  history: string[];
+  round?: number;
+}
 
 async function historyFixture(): Promise<Tool[]> {
-  const chart = flowChart<LoopState>('Seed', async (scope) => {
-    scope.history = ['user-question'];
-    scope.round = 0;
-  }, 'seed')
-    .addFunction('Work', async (scope) => {
-      scope.round = scope.round! + 1;
-      scope.history.push(`tool-result-${scope.round}`);
-    }, 'work')
+  const chart = flowChart<LoopState>(
+    'Seed',
+    async (scope) => {
+      scope.history = ['user-question'];
+      scope.round = 0;
+    },
+    'seed',
+  )
+    .addFunction(
+      'Work',
+      async (scope) => {
+        scope.round = scope.round! + 1;
+        scope.history.push(`tool-result-${scope.round}`);
+      },
+      'work',
+    )
     .addDeciderFunction('Check', async (scope) => (scope.round! < 3 ? 'again' : 'done'), 'check')
-    .addFunctionBranch('again', 'Loop', async () => { /* hop */ }, undefined, { loopTo: 'work' })
-    .addFunctionBranch('done', 'Finish', async () => { /* end */ })
+    .addFunctionBranch(
+      'again',
+      'Loop',
+      async () => {
+        /* hop */
+      },
+      undefined,
+      { loopTo: 'work' },
+    )
+    .addFunctionBranch('done', 'Finish', async () => {
+      /* end */
+    })
     .setDefault('done')
     .end()
     .build();
@@ -118,7 +160,9 @@ describe('backtrack — element mode (the history mega-key story)', () => {
   it('different elements name DIFFERENT executions (per-iteration attribution)', async () => {
     const tools = await historyFixture();
     const born = async (i: number) =>
-      (await callTraceTool(tools, 'backtrack', { variable: 'history', element: i })).match(/born at (\S+?) /)![1];
+      (await callTraceTool(tools, 'backtrack', { variable: 'history', element: i })).match(
+        /born at (\S+?) /,
+      )![1];
     expect(await born(0)).toMatch(/^seed#/);
     const w1 = await born(1);
     const w3 = await born(3);

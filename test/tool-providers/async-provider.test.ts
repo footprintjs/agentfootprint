@@ -28,9 +28,9 @@
  */
 
 import { describe, expect, it, vi } from 'vitest';
-import { Agent, defineTool, type LLMToolSchema, type Tool } from '../../src/index.js'
-import { type ToolDispatchContext, type ToolProvider } from '../../src/tool-providers/index.js'
-import { gatedTools, staticTools } from '../../src/tool-providers/index.js'
+import { Agent, defineTool, type LLMToolSchema, type Tool } from '../../src/index.js';
+import { type ToolDispatchContext, type ToolProvider } from '../../src/tool-providers/index.js';
+import { gatedTools, staticTools } from '../../src/tool-providers/index.js';
 import { mock } from '../../src/llm-providers.js';
 
 // ─── Fixtures ─────────────────────────────────────────────────────

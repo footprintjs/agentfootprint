@@ -14,7 +14,11 @@
  */
 
 import { rankEntries } from '../injection-engine/entryScorer.js';
-import type { EntryScorer, EntryScorerInput, EntryScoring } from '../injection-engine/entryScorer.js';
+import type {
+  EntryScorer,
+  EntryScorerInput,
+  EntryScoring,
+} from '../injection-engine/entryScorer.js';
 import type { Injection } from '../injection-engine/types.js';
 import type { ToolGatePredicate } from '../../tool-providers/types.js';
 import type { ContextLedger, PieceKind } from './types.js';
@@ -128,7 +132,10 @@ export function ledgerGated(
   const kind: PieceKind = injection.flavor === 'skill' ? 'skill' : 'injection';
   const trigger = injection.trigger;
   if (trigger.kind === 'always') {
-    return { ...injection, trigger: { kind: 'rule', activeWhen: () => verdict(kind, injection.id) } };
+    return {
+      ...injection,
+      trigger: { kind: 'rule', activeWhen: () => verdict(kind, injection.id) },
+    };
   }
   if (trigger.kind === 'rule') {
     const original = trigger.activeWhen;

@@ -8,8 +8,8 @@
 
 import { describe, it, expect } from 'vitest';
 import type { LLMProvider } from 'footprintjs';
-import { Agent, defineTool } from '../../src/index.js'
-import { defineSkill, skillGraph, decideSkill } from '../../src/injection-engine.js'
+import { Agent, defineTool } from '../../src/index.js';
+import { defineSkill, skillGraph, decideSkill } from '../../src/injection-engine.js';
 import { mock } from '../../src/llm-providers.js';
 import { agentThinkingTrace } from '../../src/observe.js';
 

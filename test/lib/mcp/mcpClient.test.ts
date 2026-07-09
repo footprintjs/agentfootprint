@@ -10,8 +10,8 @@
 
 import { describe, expect, it, vi } from 'vitest';
 
-import { Agent } from '../../../src/index.js'
-import { mcpClient } from '../../../src/tool-providers/index.js'
+import { Agent } from '../../../src/index.js';
+import { mcpClient } from '../../../src/tool-providers/index.js';
 import { mock } from '../../../src/llm-providers.js';
 import type { McpSdkClient } from '../../../src/lib/mcp/types.js';
 

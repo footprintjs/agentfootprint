@@ -8,9 +8,9 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { Agent } from '../../../src/index.js'
-import { type MockMcpTool } from '../../../src/tool-providers/index.js'
-import { mock } from '../../../src/llm-providers.js'
+import { Agent } from '../../../src/index.js';
+import { type MockMcpTool } from '../../../src/tool-providers/index.js';
+import { mock } from '../../../src/llm-providers.js';
 import { mockMcpClient } from '../../../src/tool-providers/index.js';
 
 // ─── Unit — factory + lifecycle ──────────────────────────────────────

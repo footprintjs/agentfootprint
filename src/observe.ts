@@ -175,7 +175,7 @@ export { typedEmit } from './recorders/core/typedEmit.js';
 // import path matches the Debug docs category. They are re-exported here for
 // ONE transition version — import them from `agentfootprint/debug` instead.
 // They will be removed from `agentfootprint/observe` in the next major.
-export * from "./debug.js";
+export * from './debug.js';
 // Tool-choice margin recorder (RFC-002 tier 2, C4–C6) — per LLM call,
 // ranks the OFFERED catalog against the choice context (user message +
 // latest assistant reasoning) via influence-core scoreMargin; embeds
@@ -205,7 +205,12 @@ export {
 // context-ledger — which context pieces EARNED their tokens? Post-run
 // bookkeeping (offers/uses/outcomes from the commit log) feeding the gating
 // seams. See src/lib/context-ledger/README.md.
-export { contextLedger, ledgerToolGate, ledgerEntryScorer, ledgerGated } from './lib/context-ledger/index.js';
+export {
+  contextLedger,
+  ledgerToolGate,
+  ledgerEntryScorer,
+  ledgerGated,
+} from './lib/context-ledger/index.js';
 export type {
   ContextLedger,
   LedgerJSON,

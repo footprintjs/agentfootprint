@@ -36,7 +36,8 @@ export interface OpenAIEmbedderOptions {
 
 export function openaiEmbedder(options: OpenAIEmbedderOptions = {}): Embedder {
   const apiKey =
-    options.apiKey ?? (typeof process !== 'undefined' ? process.env?.['OPENAI_API_KEY'] : undefined);
+    options.apiKey ??
+    (typeof process !== 'undefined' ? process.env?.['OPENAI_API_KEY'] : undefined);
   if (!apiKey || !apiKey.trim()) {
     throw new Error('openaiEmbedder: no API key — set OPENAI_API_KEY or pass { apiKey }.');
   }

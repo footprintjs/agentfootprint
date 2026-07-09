@@ -63,7 +63,10 @@ export {
 } from './toBacktrackTrace.js';
 // sliceToBacktrackTrace — the STRUCTURAL sibling: a footprintjs variable
 // slice (sliceToJSON) on the same atui board, honestly weaker chips.
-export { sliceToBacktrackTrace, type SliceToBacktrackTraceOptions } from './sliceToBacktrackTrace.js';
+export {
+  sliceToBacktrackTrace,
+  type SliceToBacktrackTraceOptions,
+} from './sliceToBacktrackTrace.js';
 
 export {
   ablationForSuspect,

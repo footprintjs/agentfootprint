@@ -797,7 +797,9 @@ function buildBacktrack(
           }
           if (prov.missing === 'not-an-array') {
             return (
-              `'${displayKey(key)}' is not an array at that point (scalar, deleted, or degraded) — ` +
+              `'${displayKey(
+                key,
+              )}' is not an array at that point (scalar, deleted, or degraded) — ` +
               `element attribution does not apply. Call backtrack without 'element' to slice it.`
             );
           }
@@ -808,9 +810,13 @@ function buildBacktrack(
           );
         }
         return (
-          `'${displayKey(key)}'[${birth.index}] = ${renderPreview(boundedPreview(birth.value, opts.previewChars))} — ` +
+          `'${displayKey(key)}'[${birth.index}] = ${renderPreview(
+            boundedPreview(birth.value, opts.previewChars),
+          )} — ` +
           `born at ${birth.runtimeStageId} ("${birth.stageName}", verb: ${birth.verb}, ` +
-          `attribution: ${birth.basis}${birth.basis === 'append-verb' ? ' — engine-recorded, exact' : ''}). ` +
+          `attribution: ${birth.basis}${
+            birth.basis === 'append-verb' ? ' — engine-recorded, exact' : ''
+          }). ` +
           `Drill the producer with trace_node('${birth.runtimeStageId}'), or ask why it wrote this ` +
           `with backtrack({variable: '${displayKey(key)}', before: ${birth.commitIdx + 1}}).`
         );

@@ -6,8 +6,8 @@
 
 import { describe, it, expect } from 'vitest';
 import { routeRecorder, formatRouteHop } from '../../src/observe.js';
-import { defineTool, Agent } from '../../src/index.js'
-import { skillGraph, defineSkill } from '../../src/injection-engine.js'
+import { defineTool, Agent } from '../../src/index.js';
+import { skillGraph, defineSkill } from '../../src/injection-engine.js';
 import { mock } from '../../src/llm-providers.js';
 
 // ── synthetic event helpers ────────────────────────────────────────────────

@@ -15,9 +15,14 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { type Tool } from '../../../src/index.js'
-import { type ToolDispatchContext } from '../../../src/tool-providers/index.js'
-import { SkillRegistry, defineSkill, buildListSkillsTool, buildReadSkillTool } from '../../../src/injection-engine.js'
+import { type Tool } from '../../../src/index.js';
+import { type ToolDispatchContext } from '../../../src/tool-providers/index.js';
+import {
+  SkillRegistry,
+  defineSkill,
+  buildListSkillsTool,
+  buildReadSkillTool,
+} from '../../../src/injection-engine.js';
 import { staticTools, gatedTools } from '../../../src/tool-providers/index.js';
 
 // ─── Fixtures ─────────────────────────────────────────────────────

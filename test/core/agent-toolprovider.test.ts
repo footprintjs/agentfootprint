@@ -14,9 +14,9 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { Agent, defineTool, type LLMToolSchema, type Tool } from '../../src/index.js'
-import { defineSkill } from '../../src/injection-engine.js'
-import { gatedTools, skillScopedTools, staticTools } from '../../src/tool-providers/index.js'
+import { Agent, defineTool, type LLMToolSchema, type Tool } from '../../src/index.js';
+import { defineSkill } from '../../src/injection-engine.js';
+import { gatedTools, skillScopedTools, staticTools } from '../../src/tool-providers/index.js';
 import { mock } from '../../src/llm-providers.js';
 
 // ─── Fixtures ─────────────────────────────────────────────────────

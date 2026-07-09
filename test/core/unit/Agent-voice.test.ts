@@ -17,8 +17,8 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { Agent, defaultCommentaryTemplates } from '../../../src/index.js'
-import { MockProvider } from '../../../src/llm-providers.js'
+import { Agent, defaultCommentaryTemplates } from '../../../src/index.js';
+import { MockProvider } from '../../../src/llm-providers.js';
 import { defaultStatusTemplates } from '../../../src/locales/index.js';
 
 function mock() {

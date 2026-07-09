@@ -22,8 +22,16 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { Agent, defineTool, type LLMMessage, type LLMToolSchema, type PermissionChecker, type Tool, type ToolCallEntry } from '../../src/index.js'
-import { mock } from '../../src/llm-providers.js'
+import {
+  Agent,
+  defineTool,
+  type LLMMessage,
+  type LLMToolSchema,
+  type PermissionChecker,
+  type Tool,
+  type ToolCallEntry,
+} from '../../src/index.js';
+import { mock } from '../../src/llm-providers.js';
 import { PolicyHaltError } from '../../src/security/index.js';
 import { extractSequence, SYNTHETIC_DENY_PREFIX } from '../../src/security/extractSequence.js';
 

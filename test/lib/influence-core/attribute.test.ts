@@ -92,7 +92,11 @@ describe('attributeChoice — real dress-shop rules (potion)', () => {
       text: 'If no action or skill can serve the request, call report_gap with the user’s ask before telling them you can’t help.',
     },
   ];
-  const TASK: AttributionUnit = { id: 'task', channel: 'task', text: 'find me a red evening dress under $150' };
+  const TASK: AttributionUnit = {
+    id: 'task',
+    channel: 'task',
+    text: 'find me a red evening dress under $150',
+  };
 
   // The headline proof: each PROCEDURAL pick attributes to the exact rule
   // that names it — and to a DIFFERENT rule per tool, so this is real
@@ -100,18 +104,26 @@ describe('attributeChoice — real dress-shop rules (potion)', () => {
   // debugger shows; the margin/semantic scorer can never surface it.
   it.each([
     ['whats_here', 'whats_here: describe the current position and what is fireable now', 'rule-1'],
-    ['request_confirmation', 'request_confirmation: ask the user to approve a high-effect step', 'rule-4'],
+    [
+      'request_confirmation',
+      'request_confirmation: ask the user to approve a high-effect step',
+      'rule-4',
+    ],
     ['report_gap', 'report_gap: record that no skill can serve the request', 'rule-6'],
-  ])('attributes procedural pick %s to %s (system-dominant)', async (name, text, expectedRule) => {
-    const r = await attributeChoice({
-      tool: { name, text },
-      units: [TASK, ...RULES],
-      embedder: staticEmbedder(),
-    });
-    expect(r.top.id).toBe(expectedRule);
-    expect(r.top.channel).toBe('system');
-    expect(r.byChannel['system'] ?? 0).toBeGreaterThan(r.byChannel['task'] ?? 0);
-  }, 30_000);
+  ])(
+    'attributes procedural pick %s to %s (system-dominant)',
+    async (name, text, expectedRule) => {
+      const r = await attributeChoice({
+        tool: { name, text },
+        units: [TASK, ...RULES],
+        embedder: staticEmbedder(),
+      });
+      expect(r.top.id).toBe(expectedRule);
+      expect(r.top.channel).toBe('system');
+      expect(r.byChannel['system'] ?? 0).toBeGreaterThan(r.byChannel['task'] ?? 0);
+    },
+    30_000,
+  );
 
   // HONEST Tier-1 limitation (pinned as a characterization test): a TOPICAL
   // pick does NOT cleanly attribute to the task. skill_find-dress's own
@@ -121,7 +133,10 @@ describe('attributeChoice — real dress-shop rules (potion)', () => {
   // nails rule-named procedural picks but is noisy on topical ones.
   it('does NOT lift the task to the top for the topical pick skill_find-dress (Tier-1 limit)', async () => {
     const r = await attributeChoice({
-      tool: { name: 'skill_find-dress', text: 'skill_find-dress: search the dress catalog, filter by color, open one' },
+      tool: {
+        name: 'skill_find-dress',
+        text: 'skill_find-dress: search the dress catalog, filter by color, open one',
+      },
       units: [TASK, ...RULES],
       embedder: staticEmbedder(),
     });

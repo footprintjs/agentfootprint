@@ -28,11 +28,7 @@
 
 import type { SliceJSON } from 'footprintjs/trace';
 
-import type {
-  BacktrackHop,
-  BacktrackSuspectCard,
-  BacktrackTrace,
-} from './toBacktrackTrace.js';
+import type { BacktrackHop, BacktrackSuspectCard, BacktrackTrace } from './toBacktrackTrace.js';
 
 export interface SliceToBacktrackTraceOptions {
   /** The visible outcome being questioned (the board's answer bubble). */
@@ -108,14 +104,21 @@ export function sliceToBacktrackTrace(
   } else if (json.missing === 'empty-log') {
     honesty.push('⚠ the commit log is empty — nothing executed.');
   }
-  if (json.readsCoverage && json.readsCoverage.steps > 1 && json.readsCoverage.stepsWithReads === 0) {
+  if (
+    json.readsCoverage &&
+    json.readsCoverage.steps > 1 &&
+    json.readsCoverage.stepsWithReads === 0
+  ) {
     honesty.push(
       '⚠ reads were not recorded (readTracking off) — upstream dependencies are unknowable, NOT absent.',
     );
   }
   if (json.truncated) {
     honesty.push(
-      `⚠ slice truncated (${[json.truncated.byDepth && 'depth', json.truncated.byNodes && 'node budget']
+      `⚠ slice truncated (${[
+        json.truncated.byDepth && 'depth',
+        json.truncated.byNodes && 'node budget',
+      ]
         .filter(Boolean)
         .join(' + ')}) — older causes exist beyond this horizon.`,
     );
@@ -130,7 +133,11 @@ export function sliceToBacktrackTrace(
       agent: opts.agent,
       model: opts.model,
       answer: opts.answer,
-      decidedAt: { id: json.key, label: `'${json.key}' (no recorded writer)`, kind: opts.decidedAtKind ?? 'rule' },
+      decidedAt: {
+        id: json.key,
+        label: `'${json.key}' (no recorded writer)`,
+        kind: opts.decidedAtKind ?? 'rule',
+      },
       suspects: [],
       honesty: [...honesty, ...SLICE_CLAIMS_LINES],
     };
@@ -160,7 +167,9 @@ export function sliceToBacktrackTrace(
 
   if (incompleteCount > 0) {
     honesty.push(
-      `⚠ ${incompleteCount} step${incompleteCount === 1 ? '' : 's'} in the chain also consumed untracked inputs (args/env/silent reads) — the slice may be incomplete there.`,
+      `⚠ ${incompleteCount} step${
+        incompleteCount === 1 ? '' : 's'
+      } in the chain also consumed untracked inputs (args/env/silent reads) — the slice may be incomplete there.`,
     );
   }
 

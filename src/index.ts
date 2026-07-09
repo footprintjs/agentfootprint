@@ -91,9 +91,7 @@ export {
 } from './recorders/core/types.js';
 
 // Bridge helper
-export {
-  type RunContext,
-} from './bridge/eventMeta.js';
+export { type RunContext } from './bridge/eventMeta.js';
 
 // Context-engineering + emit primitives.
 //
@@ -185,9 +183,7 @@ export {
 // messageAPI merge-tree proof chart (LLM-only) — Context-selector → slot
 // subflows → messageAPI assembly stage → Call-LLM. The locked shape that
 // will later serve both Static and Dynamic agents. See buildMessageApiChart.
-export {
-  type MessageApiChartDeps,
-} from './core/agent/buildMessageApiChart.js';
+export { type MessageApiChartDeps } from './core/agent/buildMessageApiChart.js';
 
 // Agent (ReAct) form of the merge-tree — Context root selector → two-stage
 // convergence: [sf-message-api (system-prompt+messages → messageAPI), sf-tools]
@@ -365,4 +361,3 @@ export {
 // Message Catalog Pattern (v2.5+). `agentfootprint/locales` is the
 // dedicated subpath; the root barrel also re-exports the helpers so
 // existing v2.4 consumers find them at the top level.
-

@@ -14,7 +14,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { Agent, defineTool } from '../../../src/index.js'
+import { Agent, defineTool } from '../../../src/index.js';
 import { mock } from '../../../src/llm-providers.js';
 import type { ReadTrackingMode, ReadSummaryMarker } from '../../../src/index.js';
 

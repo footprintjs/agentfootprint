@@ -26,7 +26,9 @@ import type { EntryScorer } from '../../../src/lib/injection-engine/entryScorer.
 import type { InjectionContext } from '../../../src/lib/injection-engine/types.js';
 
 /** A ledger seeded via importJSON — rows are data, no run needed. */
-function seededLedger(rows: Array<{ id: string; kind: 'tool' | 'skill' | 'injection'; offered: number; used: number }>): ContextLedger {
+function seededLedger(
+  rows: Array<{ id: string; kind: 'tool' | 'skill' | 'injection'; offered: number; used: number }>,
+): ContextLedger {
   const ledger = contextLedger();
   const json: LedgerJSON = {
     version: 1,
@@ -74,7 +76,11 @@ describe('ledgerEntryScorer', () => {
     score: (input) => ({
       scorer: 'flat',
       chosen: input.candidates[0]?.id,
-      ranked: input.candidates.map((c) => ({ id: c.id, score: 1, relevance: 1 / input.candidates.length })),
+      ranked: input.candidates.map((c) => ({
+        id: c.id,
+        score: 1,
+        relevance: 1 / input.candidates.length,
+      })),
     }),
   };
 
@@ -131,7 +137,10 @@ describe('ledgerEntryScorer', () => {
   it('a demoted skill still wins when it is the only candidate', async () => {
     const ledger = seededLedger([{ id: 'dead-skill', kind: 'skill', offered: 20, used: 0 }]);
     const scorer = ledgerEntryScorer(ledger, inner);
-    const out = await scorer.score({ userMessage: 'x', candidates: [{ id: 'dead-skill', description: 'a' }] });
+    const out = await scorer.score({
+      userMessage: 'x',
+      candidates: [{ id: 'dead-skill', description: 'a' }],
+    });
     expect(out.chosen).toBe('dead-skill'); // pressure, not exclusion
   });
 });
@@ -141,15 +150,21 @@ describe('ledgerGated (injections)', () => {
     const ledger = seededLedger([{ id: 'useless', kind: 'injection', offered: 20, used: 0 }]);
     const gated = ledgerGated(defineInstruction({ id: 'useless', prompt: 'x' }), ledger);
     expect(gated.trigger.kind).toBe('rule');
-    const activeWhen = (gated.trigger as { activeWhen: (c: InjectionContext) => boolean }).activeWhen;
+    const activeWhen = (gated.trigger as { activeWhen: (c: InjectionContext) => boolean })
+      .activeWhen;
     expect(activeWhen(CTX)).toBe(false); // demoted
   });
 
   it("a 'rule' injection ANDs its original condition with the verdict", () => {
     const earnerLedger = seededLedger([{ id: 'ruled', kind: 'injection', offered: 20, used: 10 }]);
-    const original = defineInstruction({ id: 'ruled', prompt: 'x', activeWhen: (ctx) => ctx.iteration > 5 });
+    const original = defineInstruction({
+      id: 'ruled',
+      prompt: 'x',
+      activeWhen: (ctx) => ctx.iteration > 5,
+    });
     const gated = ledgerGated(original, earnerLedger);
-    const activeWhen = (gated.trigger as { activeWhen: (c: InjectionContext) => boolean }).activeWhen;
+    const activeWhen = (gated.trigger as { activeWhen: (c: InjectionContext) => boolean })
+      .activeWhen;
     expect(activeWhen({ iteration: 1 } as never)).toBe(false); // original rule still gates
     expect(activeWhen({ iteration: 9 } as never)).toBe(true); // rule true AND earning
   });
@@ -163,7 +178,8 @@ describe('ledgerGated (injections)', () => {
   it('unknown/under-observed injections stay active (no premature judgment)', () => {
     const ledger = seededLedger([{ id: 'fresh', kind: 'injection', offered: 1, used: 0 }]);
     const gated = ledgerGated(defineInstruction({ id: 'fresh', prompt: 'x' }), ledger);
-    const activeWhen = (gated.trigger as { activeWhen: (c: InjectionContext) => boolean }).activeWhen;
+    const activeWhen = (gated.trigger as { activeWhen: (c: InjectionContext) => boolean })
+      .activeWhen;
     expect(activeWhen(CTX)).toBe(true);
   });
 });

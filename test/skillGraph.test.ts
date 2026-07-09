@@ -7,9 +7,15 @@
 
 import { describe, it, expect, vi } from 'vitest';
 import { enableDevMode, disableDevMode } from 'footprintjs';
-import { defineTool, Agent } from '../src/index.js'
-import { skillGraph, decideSkill, defineSkill, defineInstruction, defineRelevanceHint } from '../src/injection-engine.js'
-import { mock } from '../src/llm-providers.js'
+import { defineTool, Agent } from '../src/index.js';
+import {
+  skillGraph,
+  decideSkill,
+  defineSkill,
+  defineInstruction,
+  defineRelevanceHint,
+} from '../src/injection-engine.js';
+import { mock } from '../src/llm-providers.js';
 import { mockEmbedder } from '../src/memory/index.js';
 import type { Injection } from '../src/injection-engine.js';
 import { softmax } from '../src/lib/injection-engine/softmax.js';
@@ -564,7 +570,14 @@ describe('skillGraph — routing provenance (metadata.skillGraph)', () => {
     const sfp = skill('sfp-audit');
     const triage = skill('triage');
     const g = skillGraph()
-      .tree(decideSkill(has(/io/), io, decideSkill(has(/sfp/), sfp, triage, 'sfp intent?'), 'io intent?'))
+      .tree(
+        decideSkill(
+          has(/io/),
+          io,
+          decideSkill(has(/sfp/), sfp, triage, 'sfp intent?'),
+          'io intent?',
+        ),
+      )
       .build();
 
     expect(routingOf(g.skills.find((s) => s.id === 'io-profile')!)).toEqual({

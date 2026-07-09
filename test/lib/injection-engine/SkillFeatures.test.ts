@@ -10,7 +10,12 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { defineSkill, resolveSurfaceMode, SkillRegistry, defineInstruction } from '../../../src/injection-engine.js';
+import {
+  defineSkill,
+  resolveSurfaceMode,
+  SkillRegistry,
+  defineInstruction,
+} from '../../../src/injection-engine.js';
 
 // ─── defineSkill — surfaceMode option ────────────────────────────
 

@@ -11,9 +11,15 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { Agent } from '../../../src/index.js'
-import { keywordScorer, embeddingScorer, rankEntries, skillGraph, defineSkill } from '../../../src/injection-engine.js'
-import { mockEmbedder } from '../../../src/memory/index.js'
+import { Agent } from '../../../src/index.js';
+import {
+  keywordScorer,
+  embeddingScorer,
+  rankEntries,
+  skillGraph,
+  defineSkill,
+} from '../../../src/injection-engine.js';
+import { mockEmbedder } from '../../../src/memory/index.js';
 import { mock } from '../../../src/llm-providers.js';
 import type { EntryScorer, InjectionContext } from '../../../src/injection-engine.js';
 

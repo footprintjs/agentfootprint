@@ -6,8 +6,8 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { Agent, defineTool } from '../../../src/index.js'
-import { mock } from '../../../src/llm-providers.js'
+import { Agent, defineTool } from '../../../src/index.js';
+import { mock } from '../../../src/llm-providers.js';
 import { defineSkill, defineSteering, defineFact } from '../../../src/injection-engine.js';
 import { clampIterations } from '../../../src/core/agent/validators.js';
 

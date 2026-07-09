@@ -43,7 +43,12 @@ function buildAgent() {
     .system('You are terse.')
     .tool(lookup)
     .tool(shredder)
-    .instruction(defineInstruction({ id: 'useless-legalese', prompt: 'Always remember clause 42b of the unread appendix.' }))
+    .instruction(
+      defineInstruction({
+        id: 'useless-legalese',
+        prompt: 'Always remember clause 42b of the unread appendix.',
+      }),
+    )
     .build();
 }
 
@@ -158,16 +163,17 @@ describe('contextLedger — runner shapes (REVIEW PINS)', () => {
     expect(ledger.exportJSON().runsRecorded).toBe(0); // the aborted run is not counted
   });
 
-  it("grouped reactMode: offers fold over the per-iteration sf-llm-call inner logs", async () => {
+  it('grouped reactMode: offers fold over the per-iteration sf-llm-call inner logs', async () => {
     const lookup = defineTool<{ id: number }, string>({
-      name: 'lookup', description: 'Look up', inputSchema: { type: 'object', properties: { id: { type: 'number' } }, required: ['id'] },
+      name: 'lookup',
+      description: 'Look up',
+      inputSchema: { type: 'object', properties: { id: { type: 'number' } }, required: ['id'] },
       execute: ({ id }) => `record-${id}`,
     });
     const agent = Agent.create({
-      provider: new MockProvider({ replies: [
-        { toolCalls: [{ id: '1', name: 'lookup', args: { id: 7 } }] },
-        'done.',
-      ]}),
+      provider: new MockProvider({
+        replies: [{ toolCalls: [{ id: '1', name: 'lookup', args: { id: 7 } }] }, 'done.'],
+      }),
       model: 'mock',
       name: 'grouped-fixture',
       reactMode: 'dynamic-grouped',

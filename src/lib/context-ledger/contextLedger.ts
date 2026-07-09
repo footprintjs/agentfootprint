@@ -84,7 +84,9 @@ interface SnapshotLike {
 function llmCallMountKeys(subflowResults: Record<string, unknown> | undefined): string[] {
   if (!subflowResults) return [];
   return Object.keys(subflowResults)
-    .filter((k) => k.includes('#') && splitStageId(k.split('#')[0]).localStageId === SUBFLOW_IDS.LLM_CALL)
+    .filter(
+      (k) => k.includes('#') && splitStageId(k.split('#')[0]).localStageId === SUBFLOW_IDS.LLM_CALL,
+    )
     .sort((a, b) => parseRuntimeStageId(a).executionIndex - parseRuntimeStageId(b).executionIndex);
 }
 
@@ -99,7 +101,9 @@ function snapshotOf(source: RunnerLike | unknown): SnapshotLike | undefined {
 /** Static tool registry names, duck-read from the runner's public UI-group
  *  metadata (Agent fills `extra.toolNames`). Empty for non-runner sources. */
 function staticToolNamesOf(source: RunnerLike | unknown): readonly string[] {
-  const maybeRunner = source as { getUIGroup?: () => { extra?: { toolNames?: unknown } } | undefined };
+  const maybeRunner = source as {
+    getUIGroup?: () => { extra?: { toolNames?: unknown } } | undefined;
+  };
   if (typeof maybeRunner?.getUIGroup !== 'function') return [];
   try {
     const names = maybeRunner.getUIGroup()?.extra?.toolNames;
@@ -132,7 +136,16 @@ export function contextLedger(): ContextLedger {
     const key = `${kind}:${id}`;
     let row = table.get(key);
     if (!row) {
-      row = { id, kind, offered: 0, approxTokensSpent: 0, used: 0, usedVia: {}, runsSeen: 0, outcomes: {} };
+      row = {
+        id,
+        kind,
+        offered: 0,
+        approxTokensSpent: 0,
+        used: 0,
+        usedVia: {},
+        runsSeen: 0,
+        outcomes: {},
+      };
       table.set(key, row);
     }
     return row;
@@ -270,7 +283,8 @@ export function contextLedger(): ContextLedger {
           const writer = findLastWriter(log, slotKey);
           if (!writer || !memberIds.has(writer.runtimeStageId)) continue;
           const slotRecords = commitValueAt(log, lastIdx, slotKey);
-          if (Array.isArray(slotRecords)) finalBySlotKey.set(slotKey, slotRecords as ActiveInjectionLike[]);
+          if (Array.isArray(slotRecords))
+            finalBySlotKey.set(slotKey, slotRecords as ActiveInjectionLike[]);
         }
         // Credit: injections present in a slice-member slot's final records.
         const activeById = new Map<string, ActiveInjectionLike>();

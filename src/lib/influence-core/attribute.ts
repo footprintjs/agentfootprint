@@ -58,7 +58,10 @@ export async function attributeChoice(args: AttributeChoiceArgs): Promise<Choice
   // One deduplicated embedding pass: the tool text + each distinct unit text.
   const distinct = [...new Set([tool.text, ...units.map((u) => u.text)])];
   const vectors = embedder.embedBatch
-    ? await embedder.embedBatch({ texts: distinct, ...(args.signal ? { signal: args.signal } : {}) })
+    ? await embedder.embedBatch({
+        texts: distinct,
+        ...(args.signal ? { signal: args.signal } : {}),
+      })
     : await sequentialEmbed(embedder, distinct, args.signal);
   const vectorByText = new Map<string, readonly number[]>();
   for (let i = 0; i < distinct.length; i++) vectorByText.set(distinct[i], vectors[i]);

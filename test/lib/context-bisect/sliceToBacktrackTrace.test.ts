@@ -12,33 +12,61 @@
  */
 
 import { flowChart, FlowChartExecutor } from 'footprintjs';
-import { keysReadFromExecutionTree, sliceForKey, sliceToJSON, type SliceJSON } from 'footprintjs/trace';
+import {
+  keysReadFromExecutionTree,
+  sliceForKey,
+  sliceToJSON,
+  type SliceJSON,
+} from 'footprintjs/trace';
 import { describe, expect, it } from 'vitest';
 
 import { sliceToBacktrackTrace } from '../../../src/debug.js';
 
 const ANSWER = { text: 'The quote is 11.88.' };
 
-interface QuoteState { rates: number[]; baseRate?: number; riskFactor?: number; quote?: number }
+interface QuoteState {
+  rates: number[];
+  baseRate?: number;
+  riskFactor?: number;
+  quote?: number;
+}
 
 async function realSlice(): Promise<SliceJSON> {
-  const chart = flowChart<QuoteState>('LoadRates', async (scope) => {
-    scope.rates = [3.1, 3.4, 9.9];
-  }, 'load-rates')
-    .addFunction('PickBase', async (scope) => {
-      scope.baseRate = scope.rates[2];
-    }, 'pick-base')
-    .addFunction('AssessRisk', async (scope) => {
-      scope.riskFactor = 1.2;
-    }, 'assess-risk')
-    .addFunction('Quote', async (scope) => {
-      scope.quote = scope.baseRate! * scope.riskFactor!;
-    }, 'quote')
+  const chart = flowChart<QuoteState>(
+    'LoadRates',
+    async (scope) => {
+      scope.rates = [3.1, 3.4, 9.9];
+    },
+    'load-rates',
+  )
+    .addFunction(
+      'PickBase',
+      async (scope) => {
+        scope.baseRate = scope.rates[2];
+      },
+      'pick-base',
+    )
+    .addFunction(
+      'AssessRisk',
+      async (scope) => {
+        scope.riskFactor = 1.2;
+      },
+      'assess-risk',
+    )
+    .addFunction(
+      'Quote',
+      async (scope) => {
+        scope.quote = scope.baseRate! * scope.riskFactor!;
+      },
+      'quote',
+    )
     .build();
   const executor = new FlowChartExecutor(chart, { commitValues: 'delta' });
   await executor.run();
   const snap = executor.getSnapshot();
-  return sliceToJSON(sliceForKey(snap.commitLog, 'quote', keysReadFromExecutionTree(snap.executionTree)));
+  return sliceToJSON(
+    sliceForKey(snap.commitLog, 'quote', keysReadFromExecutionTree(snap.executionTree)),
+  );
 }
 
 describe('sliceToBacktrackTrace — real run end-to-end', () => {
@@ -71,8 +99,12 @@ describe('sliceToBacktrackTrace — real run end-to-end', () => {
 
   it('claim defaults to the variable question; consumer claim wins', async () => {
     const json = await realSlice();
-    expect(sliceToBacktrackTrace(json, { answer: ANSWER }).claim).toBe("Why is 'quote' what it is?");
-    expect(sliceToBacktrackTrace(json, { answer: ANSWER, claim: 'Why 11.88?' }).claim).toBe('Why 11.88?');
+    expect(sliceToBacktrackTrace(json, { answer: ANSWER }).claim).toBe(
+      "Why is 'quote' what it is?",
+    );
+    expect(sliceToBacktrackTrace(json, { answer: ANSWER, claim: 'Why 11.88?' }).claim).toBe(
+      'Why 11.88?',
+    );
   });
 });
 
@@ -108,7 +140,13 @@ describe('sliceToBacktrackTrace — honesty units (hand-built slices)', () => {
       truncated: { byDepth: true, byNodes: false },
       nodes: {
         'w#1': { stageId: 'w', stageName: 'W', keysWritten: ['x'], depth: 0 },
-        'p#0': { stageId: 'p', stageName: 'P', keysWritten: ['y'], depth: 1, incompleteSources: ['args'] },
+        'p#0': {
+          stageId: 'p',
+          stageName: 'P',
+          keysWritten: ['y'],
+          depth: 1,
+          incompleteSources: ['args'],
+        },
       },
       edges: [{ from: 'w#1', to: 'p#0', kind: 'data', key: 'y', weight: 1 }],
     };
@@ -124,7 +162,12 @@ describe('sliceToBacktrackTrace — honesty units (hand-built slices)', () => {
     };
     const edges: NonNullable<SliceJSON['edges']> = [];
     for (let i = 0; i < 8; i++) {
-      nodes[`p${i}#${i}`] = { stageId: `p${i}`, stageName: `P${i}`, keysWritten: [`k${i}`], depth: 1 };
+      nodes[`p${i}#${i}`] = {
+        stageId: `p${i}`,
+        stageName: `P${i}`,
+        keysWritten: [`k${i}`],
+        depth: 1,
+      };
       edges.push({ from: 'w#9', to: `p${i}#${i}`, kind: 'data', key: `k${i}`, weight: 1 });
     }
     const trace = sliceToBacktrackTrace(

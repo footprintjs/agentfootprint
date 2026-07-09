@@ -13,7 +13,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import type { CommitBundle } from 'footprintjs/advanced';
-import { Agent, defineTool } from '../../../src/index'
+import { Agent, defineTool } from '../../../src/index';
 import { mock } from '../../../src/llm-providers.js';
 import {
   assembleTrajectory,

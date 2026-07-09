@@ -16,7 +16,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { Agent } from '../../../src/index.js'
+import { Agent } from '../../../src/index.js';
 import { defineFact } from '../../../src/injection-engine.js';
 import { MockProvider } from '../../../src/adapters/llm/MockProvider.js';
 

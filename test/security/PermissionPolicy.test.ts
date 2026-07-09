@@ -11,9 +11,9 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { type Tool } from '../../src/index.js'
-import { type ToolDispatchContext } from '../../src/tool-providers/index.js'
-import { PermissionPolicy } from '../../src/security/index.js'
+import { type Tool } from '../../src/index.js';
+import { type ToolDispatchContext } from '../../src/tool-providers/index.js';
+import { PermissionPolicy } from '../../src/security/index.js';
 import { staticTools, gatedTools } from '../../src/tool-providers/index.js';
 import type { PermissionChecker, PermissionRequest } from '../../src/security/index.js';
 

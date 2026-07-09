@@ -6,8 +6,13 @@
  * handoff), property (clean skills never warn under fuzz), security (no ReDoS).
  */
 import { describe, it, expect } from 'vitest';
-import { defineTool } from '../src/index.js'
-import { defineSkill, skillGraph, checkSkillContract, checkSkillContracts } from '../src/injection-engine.js';
+import { defineTool } from '../src/index.js';
+import {
+  defineSkill,
+  skillGraph,
+  checkSkillContract,
+  checkSkillContracts,
+} from '../src/injection-engine.js';
 
 const tool = (name: string) =>
   defineTool({
