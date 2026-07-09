@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.4.0] - 2026-07-09
+
+### Added
+
+- **`run({ correlationId, traceId })` → `EventMeta` on every event** —
+  `EventMeta.correlationId`/`traceId` already existed
+  (`src/events/types.ts:92/96`) and `buildEventMeta` already forwarded them
+  from `RunContext` (`src/bridge/eventMeta.ts:82-83`), but
+  `Agent.createExecutor()` built `currentRunContext` without ever reading
+  them, so event meta was permanently `undefined`. New `AgentRunOptions`
+  (extends footprintjs `RunOptions`) adds optional `correlationId`/
+  `traceId` to `run()`/`runTyped()`/`resume()`/`resumeOnError()`; both land
+  in `currentRunContext` so every emitted event on that run carries them.
+  `traceId` falls back to `options.env.traceId` (footprintjs
+  `ExecutionEnv`) when not set directly; an explicit `traceId` always wins.
+  Each `createExecutor()` call rebuilds `currentRunContext` from scratch,
+  so an untagged run never inherits a prior run's `correlationId`/`traceId`
+  (pinned by test). **Who consumes it:** vizfootprint's `why()` — joining
+  agentfootprint's event stream against an external system (an upstream
+  request id, an OTEL trace, a cross-tier causal join key) without
+  smuggling the join key through tool args (D20/P1 spike).
+
 ## [7.3.1] - 2026-07-09
 
 ### Fixed
