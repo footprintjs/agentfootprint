@@ -115,6 +115,28 @@ export { AgentBuilder };
 // Public types canonically live in `./agent/types.ts` (v2.11.1).
 export type { AgentInput, AgentOptions, AgentOutput, ObserverDeliveryOptions };
 
+/**
+ * `RunOptions` (footprintjs) + agentfootprint-domain correlation fields.
+ *
+ * `correlationId`/`traceId` are NOT footprintjs concepts — footprintjs's
+ * `RunOptions.env` is an intentionally closed infra bag (signal/timeoutMs/
+ * traceId only; see footprintjs's `ExecutionEnv`). These two ride separately
+ * into `Agent.currentRunContext` and from there into every emitted event's
+ * `EventMeta` via `buildEventMeta` (`RunContext` already declares both —
+ * `../bridge/eventMeta.ts`), so a caller can join agentfootprint's event
+ * stream against an external system (a upstream request id, an OTEL trace,
+ * a cross-tier why() join key) without threading it through tool args.
+ *
+ * `traceId` here wins over `env.traceId` when both are set; `env.traceId`
+ * remains a fallback since footprintjs already threads it to subflows.
+ */
+export interface AgentRunOptions extends RunOptions {
+  /** Domain correlation id — forwarded onto every emitted event's `EventMeta.correlationId`. */
+  correlationId?: string;
+  /** OTEL-style trace id — forwarded onto every emitted event's `EventMeta.traceId`. Falls back to `options.env?.traceId` when unset. */
+  traceId?: string;
+}
+
 // Public types (AgentOptions, AgentInput, AgentOutput) extracted to
 // ./agent/types.ts and re-exported above (v2.11.1).
 
@@ -586,7 +608,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    * Throws if the agent has no outputSchema set or if the run
    * pauses (use `run()` directly when pauses are expected).
    */
-  async runTyped<T = unknown>(input: AgentInput, options?: RunOptions): Promise<T> {
+  async runTyped<T = unknown>(input: AgentInput, options?: AgentRunOptions): Promise<T> {
     if (!this.outputSchemaParser) {
       throw new Error(
         `Agent.runTyped: this agent has no outputSchema. Use ` +
@@ -603,10 +625,13 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     return this.parseOutputAsync<T>(out);
   }
 
-  async run(input: AgentInput, options?: RunOptions): Promise<AgentOutput | RunnerPauseOutcome> {
+  async run(
+    input: AgentInput,
+    options?: AgentRunOptions,
+  ): Promise<AgentOutput | RunnerPauseOutcome> {
     // (helper used in the catch block below — module-private function
     // declared at file end via hoisting)
-    const executor = this.createExecutor();
+    const executor = this.createExecutor(options);
 
     // Auto-checkpoint at iteration boundaries — captures the latest
     // conversation history into a per-run tracker. On error, we
@@ -710,7 +735,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    */
   async resumeOnError(
     checkpoint: AgentRunCheckpoint | unknown,
-    options?: RunOptions,
+    options?: AgentRunOptions,
   ): Promise<AgentOutput | RunnerPauseOutcome> {
     const cp = validateCheckpoint(checkpoint);
     // Stash the checkpointed history on the side channel; the seed
@@ -754,23 +779,27 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
   async resume(
     checkpoint: FlowchartCheckpoint,
     input?: unknown,
-    options?: RunOptions,
+    options?: AgentRunOptions,
   ): Promise<AgentOutput | RunnerPauseOutcome> {
     this.emitPauseResume(checkpoint, input);
     // Fresh executor — footprintjs 4.17.0+ seeds the runtime from
     // `checkpoint.sharedState` (and nested subflow states) automatically
     // on a fresh executor's `resume()`. No need to retain a paused
     // executor between run/resume.
-    const executor = this.createExecutor();
+    const executor = this.createExecutor(options);
     const result = await executor.resume(checkpoint, input, options);
     return this.finalizeResult(executor, result);
   }
 
-  private createExecutor(): FlowChartExecutor {
+  private createExecutor(runOptions?: AgentRunOptions): FlowChartExecutor {
+    const correlationId = runOptions?.correlationId;
+    const traceId = runOptions?.traceId ?? runOptions?.env?.traceId;
     this.currentRunContext = {
       runStartMs: Date.now(),
       runId: makeRunId(),
       compositionPath: [`Agent:${this.id}`],
+      ...(correlationId !== undefined && { correlationId }),
+      ...(traceId !== undefined && { traceId }),
     };
 
     // Reuse the cached chart built at constructor time.
