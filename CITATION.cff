@@ -1,0 +1,17 @@
+cff-version: 1.2.0
+message: "If you use this software in your research, please cite it as below."
+type: software
+title: "agentfootprint: the explainable AI agent framework"
+authors:
+  - family-names: "Anbalagan"
+    given-names: "Sanjay Krishna"
+license: MIT
+repository-code: "https://github.com/footprintjs/agentfootprint"
+url: "https://footprintjs.github.io/agentfootprint/"
+keywords:
+  - "explainable AI agents"
+  - "context engineering"
+  - "agent observability"
+  - "causal trace"
+  - "context-bug localization"
+  - "LLM agent framework"

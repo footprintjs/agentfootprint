@@ -756,6 +756,24 @@ You don't need to learn footprintjs to use agentfootprint — but if you want to
 
 ---
 
+## Citing
+
+agentfootprint is part of a research program on making software systems explain themselves — every run records *why* it did what it did, as a causal trace. Researching agent transparency, observability, or explainable AI? The [ecosystem map](https://footprintjs.github.io/) is a good starting point.
+
+If you use agentfootprint in academic work, please cite it (or use the "Cite this repository" button on GitHub):
+
+```bibtex
+@software{anbalagan_agentfootprint,
+  author  = {Anbalagan, Sanjay Krishna},
+  title   = {agentfootprint: the explainable AI agent framework},
+  url     = {https://github.com/footprintjs/agentfootprint},
+  license = {MIT},
+  year    = {2025}
+}
+```
+
+---
+
 ## License
 
 [MIT](./LICENSE) © [Sanjay Krishna Anbalagan](https://github.com/sanjay1909)
