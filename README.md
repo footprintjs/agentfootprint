@@ -104,6 +104,20 @@ console.log(result);  // → "I checked: it is 72°F and sunny."
 
 For production, import a real provider from `agentfootprint/llm-providers` and swap it in — `anthropic(...)` / `openai(...)` / `bedrock(...)` / `ollama(...)`. Only the import line changes; the agent code stays the same. (The vendor-SDK providers live on the `agentfootprint/llm-providers` subpath so the main `agentfootprint` barrel stays free of optional peer-dep requires; `mock`, `browserAnthropic`, and `browserOpenai` are on the main barrel.)
 
+### Run against a local model (Ollama, llama.cpp, vLLM — any OpenAI-compatible endpoint)
+
+No cloud account, no API key, $0 per token. `openai({ baseURL })` targets any server that speaks the OpenAI Chat Completions API — Ollama has its own one-line shortcut:
+
+```typescript
+import { Agent } from 'agentfootprint';
+import { ollama } from 'agentfootprint/llm-providers';
+
+const agent = Agent.create({ provider: ollama({ defaultModel: 'llama3.1' }), model: 'llama3.1' }).build();
+// → talks to http://localhost:11434/v1 (run `ollama pull llama3.1` first)
+```
+
+For llama.cpp's `llama-server` or vLLM, swap in `openai({ baseURL: 'http://localhost:8080/v1', apiKey: 'not-needed', defaultModel: '…' })` — same `Agent` code either way. Local servers usually ignore `apiKey`, and most only accept the older `max_tokens` field; both are handled automatically whenever `baseURL` is set. Full recipes: [OpenAI-compatible endpoints](https://footprintjs.github.io/agentfootprint/docs/build/openai/#openai-compatible-endpoints-ollama-llamacpp-vllm-together-groq-lm-studio) · [Ollama guide](https://footprintjs.github.io/agentfootprint/docs/build/ollama/).
+
 ### Then add context
 
 A real agent carries more than one prompt and one tool: facts about the user, always-on rules, skills that unlock on demand. Declare each piece — the framework decides **when** it fires and **which slot** it lands in, and every piece is born tracked:
@@ -686,7 +700,7 @@ The flowchart, recorders, and tests don't change between dev and prod.
 | `anthropic` | Claude (Sonnet, Opus, Haiku) via `@anthropic-ai/sdk` |
 | `openai` | GPT-4o, GPT-4-turbo via `openai` SDK |
 | `bedrock` | Claude / Titan / Mistral via AWS Bedrock runtime |
-| `ollama` | Local models (OpenAI-compatible endpoint) |
+| `ollama` | Local models via Ollama · `openai({ baseURL })` also reaches llama.cpp, vLLM, and any other OpenAI-compatible endpoint |
 | `browserAnthropic` | Browser-side Claude calls (no proxy server) |
 | `browserOpenai` | Browser-side OpenAI calls (no proxy server) |
 | `mock` | Deterministic dev/test (zero API cost) |

@@ -1,6 +1,6 @@
 ---
 title: OpenAI
-description: openai() — GPT provider via the openai SDK. Also covers OpenAI-compatible endpoints (Together, Groq, vLLM, LM Studio) via baseURL.
+description: openai() — GPT provider via the openai SDK. Also covers OpenAI-compatible endpoints (Ollama, llama.cpp, vLLM, Together, Groq, LM Studio) via baseURL.
 ---
 
 > The OpenAI SDK covers GPT-4, GPT-4o, and the wider ecosystem of OpenAI-compatible endpoints. agentfootprint's `openai()` factory wraps it as an `LLMProvider` — same shape as `anthropic()` and `mock()`.
@@ -31,30 +31,55 @@ const agent = Agent.create({
 }).build();
 ```
 
-## OpenAI-compatible endpoints (Ollama, Together, Groq, vLLM, LM Studio)
+## OpenAI-compatible endpoints (Ollama, llama.cpp, vLLM, Together, Groq, LM Studio)
 
-The `baseURL` option points the SDK at any OpenAI-compatible endpoint. No separate adapter needed:
+Local models, self-hosted servers, and most inference clouds all speak the same
+Chat Completions shape OpenAI does. Point `baseURL` at any of them — no separate
+adapter, no new API to learn:
 
-```ts
-const provider = openai({
-  apiKey: 'not-needed-for-local',
-  baseURL: 'http://localhost:11434/v1',  // Ollama
+```ts twoslash
+import { openai } from 'agentfootprint/llm-providers';
+// ---cut---
+// llama.cpp's llama-server:  llama-server -m model.gguf --port 8080
+const llamaCpp = openai({
+  baseURL: 'http://localhost:8080/v1',
+  apiKey: 'not-needed-for-local',   // local servers ignore it; the SDK just requires non-empty
+  defaultModel: 'local-model',      // the model is whatever .gguf the server loaded
 });
 
-// Or:
+// vLLM:  vllm serve meta-llama/Llama-3.1-8B-Instruct --port 8000
+const vllm = openai({
+  baseURL: 'http://localhost:8000/v1',
+  apiKey: 'not-needed-for-local',
+  defaultModel: 'meta-llama/Llama-3.1-8B-Instruct',
+});
+
+// Groq (cloud, OpenAI-compatible — a real key is required)
 const groq = openai({
-  apiKey: process.env.GROQ_API_KEY!,
+  apiKey: 'YOUR_GROQ_API_KEY',
   baseURL: 'https://api.groq.com/openai/v1',
 });
 ```
 
+Any `baseURL` also switches the adapter into **legacy-endpoint mode**: it sends
+the older `max_tokens` field instead of `max_completion_tokens`, and skips
+`stream_options` (fields real OpenAI/Azure accept but many local servers and
+compatible clouds don't) — see `OpenAIProviderOptions`/`legacyEndpoint` in
+[`OpenAIProvider.ts`](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/llm/OpenAIProvider.ts).
+You don't configure this; it's automatic whenever `baseURL` is set.
+
 For Ollama specifically, the convenience factory (also from `agentfootprint/llm-providers`). It defaults `baseURL` to `http://localhost:11434/v1` and names the provider `ollama`; set the model via `defaultModel` (or pass a custom `host`):
 
-```ts
+```ts twoslash
 import { ollama } from 'agentfootprint/llm-providers';
-
+// ---cut---
 const provider = ollama({ defaultModel: 'llama3.1' });
 ```
+
+**$0 to iterate.** Local inference costs nothing and needs no key — great for
+exploring. It's usually still the wrong choice for CI: slower, and small models
+are less reliable at tool-calling. Reach for [`mock()`](doc:testing) once
+you're past manual poking and writing tests.
 
 ## Tools (function calling)
 
