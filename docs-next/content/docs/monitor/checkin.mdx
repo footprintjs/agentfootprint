@@ -58,6 +58,26 @@ Check-in rides the same JSON checkpoint machinery as [pause / resume](doc:pausab
 - Don't use `checkIn` as a policy engine. Policy is `permissionChecker` (deny/halt, no human); check-in is consent (a person decides). They compose — permission runs first.
 - Don't resume a check-in pause with a bare string — pass a `CheckInDecision` (`checkInApproved` / `checkInDeclined`). A malformed resume declines by default, so a consequential tool never runs by accident.
 
+## Run the demo
+
+The flagship demo — **the coworker with the receipts** — is a runnable "AI coworker" that drafts a weekly status doc, saves it (a `save_draft` tool with **no** check-in — real work, no interruption), then reaches for the one consequential action: posting to the team channel. That `post_to_channel` tool declares `checkIn: 'always'`, so the run pauses and renders the receipts (`willDo` / `read` / `drivers` / `trail`) in your terminal.
+
+```bash
+# non-interactive approve (the tool runs)
+npm run example examples/features/34-checkin-coworker.ts -- --approve
+
+# non-interactive decline (watch the model adapt: it keeps the draft, posts nothing)
+npm run example examples/features/34-checkin-coworker.ts -- --decline --note "not this week"
+
+# interactive — a TTY prompts you to approve or decline
+npm run example examples/features/34-checkin-coworker.ts
+
+# real Claude instead of the deterministic $0 mock (only if ANTHROPIC_API_KEY is set)
+npm run example examples/features/34-checkin-coworker.ts -- --live
+```
+
+The default provider is a deterministic mock, so it runs for anyone with zero setup; the end of the run prints the `CheckInRecorder` audit trail (asks + decisions with `by` / `note`).
+
 ## Next steps
 
 - [Pause / Resume](doc:pausable) — the checkpoint machinery check-in rides

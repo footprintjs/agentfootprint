@@ -543,7 +543,15 @@ if (isCheckInPause(out)) {                    // distinct from a plain askHuman 
 }
 ```
 
-It rides the same JSON checkpoint as pause/resume — the ask and the decision can be servers and days apart — and lands `checkin.request` / `checkin.decision` as typed events (`CheckInRecorder` captures the audit trail). A tool without `checkIn` is byte-identical. Permission (policy) still runs first — check-in is **consent**, not policy. See the [Check-in guide](https://footprintjs.github.io/agentfootprint/docs/monitor/checkin/).
+It rides the same JSON checkpoint as pause/resume — the ask and the decision can be servers and days apart — and lands `checkin.request` / `checkin.decision` as typed events (`CheckInRecorder` captures the audit trail). A tool without `checkIn` is byte-identical. Permission (policy) still runs first — check-in is **consent**, not policy.
+
+Run the flagship demo — an AI coworker that drafts a weekly status doc and checks in before posting it (deterministic $0 mock, watch it adapt on decline):
+
+```bash
+npm run example examples/features/34-checkin-coworker.ts -- --decline
+```
+
+See the [Check-in guide](https://footprintjs.github.io/agentfootprint/docs/monitor/checkin/).
 
 ---
 
