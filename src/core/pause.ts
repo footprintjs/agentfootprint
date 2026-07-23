@@ -17,6 +17,7 @@
  */
 
 import type { FlowchartCheckpoint } from 'footprintjs';
+import type { CheckInRequest } from './checkin.js';
 
 /**
  * Outcome returned by `runner.run()` / `runner.resume()` when execution
@@ -30,6 +31,14 @@ export interface RunnerPauseOutcome {
   readonly checkpoint: FlowchartCheckpoint;
   /** Data passed to `scope.$pause()` / `pauseHere()`. Consumer-typed. */
   readonly pauseData: unknown;
+  /**
+   * Present ONLY when this pause is an evidence-carrying check-in (a tool
+   * declared `checkIn`). Carries the typed ask + evidence pack. Absent for
+   * plain `askHuman` / `pauseHere` pauses — that's the clean discriminant
+   * between the two pause kinds. Resume with a `CheckInDecision`
+   * (`checkInApproved` / `checkInDeclined`).
+   */
+  readonly checkIn?: CheckInRequest;
 }
 
 /** Type guard — discriminates `RunnerPauseOutcome` from a normal `TOut`. */
@@ -37,6 +46,24 @@ export function isPaused<T>(result: T | RunnerPauseOutcome): result is RunnerPau
   return (
     typeof result === 'object' && result !== null && (result as RunnerPauseOutcome).paused === true
   );
+}
+
+/**
+ * Type guard — is this a check-in pause (evidence-carrying human consent),
+ * as opposed to a plain `askHuman` pause? Narrows `checkIn` to present.
+ *
+ * @example
+ *   const out = await agent.run({ message });
+ *   if (isCheckInPause(out)) {
+ *     showToHuman(out.checkIn.evidence);       // the receipts
+ *     const decision = checkInApproved({ by: 'alice' });
+ *     await agent.resume(out.checkpoint, decision);
+ *   }
+ */
+export function isCheckInPause(
+  result: unknown,
+): result is RunnerPauseOutcome & { readonly checkIn: CheckInRequest } {
+  return isPaused(result) && (result as RunnerPauseOutcome).checkIn !== undefined;
 }
 
 /**

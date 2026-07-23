@@ -322,6 +322,13 @@ export interface AgentState {
   pausedToolCallId: string;
   pausedToolName: string;
   pausedToolStartMs: number;
+  // Check-in checkpoint — set when a tool's `checkIn` demand trips and the
+  // run pauses BEFORE execute. `pausedCheckIn` discriminates a check-in pause
+  // from a plain `askHuman` pause on resume; `pausedCheckInArgs` carries the
+  // proposed args so an APPROVED tool can execute on resume. Both survive
+  // structuredClone (checkpoint discipline). Absent for non-check-in pauses.
+  pausedCheckIn?: boolean;
+  pausedCheckInArgs?: Readonly<Record<string, unknown>>;
   // Cost accounting (only used when pricingTable is set).
   cumTokensInput: number;
   cumTokensOutput: number;

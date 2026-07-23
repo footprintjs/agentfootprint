@@ -17,6 +17,7 @@ import type {
 } from 'footprintjs';
 import { EventDispatcher } from '../events/dispatcher.js';
 import type { RunnerPauseOutcome } from './pause.js';
+import type { CheckInRequest } from './checkin.js';
 import type {
   EventListener,
   ListenOptions,
@@ -308,7 +309,20 @@ export abstract class RunnerBase<TIn = unknown, TOut = unknown> implements Runne
 
     this.emitPauseRequest(checkpoint, pauseData);
 
-    return { paused: true, checkpoint, pauseData };
+    // A check-in pause carries its typed request under `pauseData.checkIn`
+    // (the tool-dispatch handler tags it there before pausing). Surface it as
+    // a first-class field so consumers can `isCheckInPause(outcome)` and read
+    // the evidence pack without reaching into the raw pause payload. Plain
+    // `askHuman` pauses have no `checkIn` key → the field stays absent.
+    const checkIn =
+      typeof pauseData === 'object' &&
+      pauseData !== null &&
+      typeof (pauseData as { checkIn?: unknown }).checkIn === 'object' &&
+      (pauseData as { checkIn?: unknown }).checkIn !== null
+        ? (pauseData as { checkIn?: CheckInRequest }).checkIn
+        : undefined;
+
+    return { paused: true, checkpoint, pauseData, ...(checkIn && { checkIn }) };
   }
 
   /**

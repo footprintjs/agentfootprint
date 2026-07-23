@@ -11,6 +11,7 @@ import { isDevMode } from 'footprintjs';
 
 import type { LLMToolSchema } from '../adapters/types.js';
 import type { Credential, CredentialNeed, CredentialProvider } from '../identity/types.js';
+import type { CheckInDemand } from './checkin.js';
 
 /**
  * One executable tool the Agent can call.
@@ -26,6 +27,21 @@ export interface Tool<TArgs = Record<string, unknown>, TResult = unknown> {
    *  BEFORE invoking and injects `ctx.credential`; it is NOT in `schema`, so the
    *  LLM never sees or fills it. */
   readonly needs?: CredentialNeed;
+  /**
+   * Declarative demand for a human check-in BEFORE this tool runs — consent
+   * for a consequential action, with an evidence pack riding the ask.
+   * `'always'` trips on every call; a `(args, ctx) => boolean` predicate trips
+   * selectively (e.g. only refunds over $1000). When it trips the tool-dispatch
+   * loop pauses BEFORE execute and surfaces a `CheckInRequest`; the human
+   * answers with `checkInApproved` / `checkInDeclined`. Omitted → byte-identical
+   * behavior (no gate, no events, no pause). See `.checkIn()` on the Agent
+   * builder to configure the evidence pack. Ordered AFTER the permission gate
+   * and arg-validation, BEFORE credential resolution.
+   *
+   * Non-generic here (a `Tool` widens into `Tool[]` registries); `defineTool`
+   * exposes a predicate typed to the tool's args at the CALL site.
+   */
+  readonly checkIn?: CheckInDemand;
   execute(args: TArgs, ctx: ToolExecutionContext): Promise<TResult> | TResult;
 }
 
@@ -76,6 +92,9 @@ export interface DefineToolOptions<TArgs, TResult> {
   /** Declare a credential this tool needs (declare-and-push). Resolved by the
    *  framework before `execute` and injected as `ctx.credential`. */
   readonly needs?: CredentialNeed;
+  /** Demand a human check-in before this tool runs (see {@link Tool.checkIn}).
+   *  `'always'` or a `(args, ctx) => boolean` predicate. */
+  readonly checkIn?: CheckInDemand<TArgs>;
   execute(args: TArgs, ctx: ToolExecutionContext): Promise<TResult> | TResult;
 }
 
@@ -163,6 +182,9 @@ export function defineTool<TArgs = Record<string, unknown>, TResult = unknown>(
       inputSchema: options.inputSchema ?? { type: 'object', properties: {} },
     },
     ...(options.needs && { needs: options.needs }),
+    // The call-site predicate is typed to TArgs; the stored Tool keeps the
+    // non-generic shape so it widens into `Tool[]` registries.
+    ...(options.checkIn !== undefined && { checkIn: options.checkIn as CheckInDemand }),
     execute: options.execute,
   };
 }

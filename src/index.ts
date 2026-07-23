@@ -133,8 +133,50 @@ export {
   askHuman,
   isPauseRequest,
   isPaused,
+  isCheckInPause,
   type RunnerPauseOutcome,
 } from './core/pause.js';
+
+// Check in with the receipts — evidence-carrying human consent. A tool
+// declares `checkIn` (see `defineTool`); when it trips the run pauses with a
+// `CheckInRequest` (the ask + evidence pack); a human answers with
+// `checkInApproved` / `checkInDeclined`; the `CheckInDecision` lands as a
+// typed record (`checkin.request` / `checkin.decision` events + `CheckInRecorder`).
+export {
+  checkInApproved,
+  checkInDeclined,
+  isCheckInDecision,
+  lexicalDriverScorer,
+  standardEvidenceAssembler,
+  minimalEvidenceAssembler,
+  type CheckInRequest,
+  type CheckInEvidence,
+  type CheckInContextFrame,
+  type CheckInDriver,
+  type CheckInTrail,
+  type CheckInDecision,
+  type CheckInDecisionInput,
+  type CheckInDemand,
+  type CheckInPredicateContext,
+  type CheckInScorer,
+  type CheckInScoreInput,
+  type CheckInAssembler,
+  type CheckInAssemblerInput,
+  type EvidencePreset,
+  type CheckInBuilderOptions,
+} from './core/checkin.js';
+// The context-unit shape a `CheckInScorer` ranks — also exported from
+// `agentfootprint/debug` (alongside `explainChoice`), surfaced here because it
+// is part of the `CheckInScoreInput` contract.
+export type { AttributionUnit } from './lib/influence-core/types.js';
+
+// The built-in check-in audit store — `agent.attach(new CheckInRecorder())`.
+export {
+  CheckInRecorder,
+  type CheckInRequestRecord,
+  type CheckInDecisionRecord,
+  type CheckInStats,
+} from './recorders/core/CheckInRecorder.js';
 
 // `enable.flowchart()` stays on the runner, so its public types stay reachable
 // from the main barrel. The recorder machinery it (and the other observability

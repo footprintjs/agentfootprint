@@ -26,6 +26,7 @@ import type { MemoryDefinition } from '../../memory/define.types.js';
 import type { ReliabilityConfig } from '../../reliability/types.js';
 import type { ThinkingHandler } from '../../thinking/types.js';
 import type { Tool, ToolRegistryEntry } from '../tools.js';
+import type { CheckInBuilderOptions } from '../checkin.js';
 import type { ToolProvider } from '../../tool-providers/types.js';
 import { defaultCommentaryTemplates } from '../../recorders/observability/commentary/commentaryTemplates.js';
 import { defaultStatusTemplates } from '../../recorders/observability/status/statusTemplates.js';
@@ -148,6 +149,7 @@ export class AgentBuilder {
    */
   private thinkingBudgetValue?: number;
   private selfExplainConfig?: SelfExplainOptions;
+  private checkInConfig?: CheckInBuilderOptions;
 
   constructor(opts: AgentOptions) {
     this.opts = opts;
@@ -782,6 +784,38 @@ export class AgentBuilder {
    * @example
    *   .selfExplain({ delegate: { provider: anthropic(), model: 'claude-haiku-4-5' } })
    */
+  /**
+   * Configure the evidence pack that rides a check-in ask. A tool DEMANDS a
+   * check-in by declaring `checkIn: 'always'` or a `(args, ctx) => boolean`
+   * predicate ({@link defineTool}); this method controls WHAT the human sees
+   * when it trips. Optional — a tool with `checkIn` works without it (default:
+   * `'standard'` evidence + the deterministic lexical scorer, zero LLM calls).
+   *
+   * - `evidence: 'standard'` (default) — the full pack: `willDo` (plain-words
+   *   claim), `read` (what context the run consumed), `drivers` (which context
+   *   drove the pick, ranked), `trail` (compact run-so-far summary).
+   * - `evidence: 'minimal'` — just `willDo` (zero cost).
+   * - `evidence: <assembler>` — bring your own {@link CheckInAssembler}.
+   * - `scorer` — swap the `drivers` ranker (default is zero-LLM lexical; pass
+   *   an embedding-backed one wrapping `explainChoice` for semantic ranking).
+   *
+   * @example
+   *   Agent.create({ provider, model })
+   *     .tool(defineTool({ name: 'issue_refund', description: 'Refund a charge',
+   *       inputSchema: { type: 'object', properties: { amount: { type: 'number' } } },
+   *       checkIn: (args) => (args.amount as number) > 1000,   // ask only for big refunds
+   *       execute: async ({ amount }) => `refunded ${amount}` }))
+   *     .checkIn({ evidence: 'standard' })
+   *     .build();
+   */
+  checkIn(opts: CheckInBuilderOptions = {}): this {
+    if (this.checkInConfig !== undefined) {
+      throw new Error('AgentBuilder.checkIn: already configured. Call it at most once.');
+    }
+    this.checkInConfig = opts;
+    return this;
+  }
+
   selfExplain(opts: SelfExplainOptions = {}): this {
     if (this.selfExplainConfig !== undefined) {
       throw new Error('AgentBuilder.selfExplain: already enabled.');
@@ -867,6 +901,7 @@ export class AgentBuilder {
       this.skillGraphNextSkill,
       this.skillGraphReachable,
       this.skillGraphScoreEntries,
+      this.checkInConfig,
     );
     // Attach builder-collected recorders so they receive events from
     // the very first run. Mirrors what consumers would do post-build

@@ -58,6 +58,8 @@ import { skillRecorder } from '../recorders/core/SkillRecorder.js';
 import { validationRecorder } from '../recorders/core/ValidationRecorder.js';
 import { toolsRecorder } from '../recorders/core/ToolsRecorder.js';
 import { reliabilityRecorder } from '../recorders/core/ReliabilityRecorder.js';
+import { checkInEventsBridge } from '../recorders/core/CheckInRecorder.js';
+import { resolveCheckInConfig, type CheckInBuilderOptions, type ResolvedCheckInConfig } from './checkin.js';
 import type { MemoryDefinition } from '../memory/define.types.js';
 import {
   causalEvidenceRecorder,
@@ -198,6 +200,10 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
   private readonly costBudget?: number;
   private readonly permissionChecker?: PermissionChecker;
   private readonly toolArgValidation?: ToolArgValidationMode;
+  /** Resolved check-in config (evidence-carrying human consent). Always
+   *  present — defaults to `standard` evidence + the lexical scorer, so a tool
+   *  that declares `checkIn` works even without a `.checkIn()` builder call. */
+  private readonly checkInConfig: ResolvedCheckInConfig;
   /** Snapshot read-tracking policy (#18/#14) — forwarded to the internal
    *  executor. Agent default is `'summary'` (cheap markers), NOT
    *  footprintjs's `'full'`. See AgentOptions.readTracking. */
@@ -349,6 +355,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     skillGraphNextSkill?: (ctx: InjectionContext) => string | undefined,
     skillGraphReachable?: (currentSkillId?: string) => readonly string[],
     skillGraphScoreEntries?: (ctx: InjectionContext, signal?: AbortSignal) => Promise<EntryScoring>,
+    checkInOptions?: CheckInBuilderOptions,
   ) {
     super();
     this.provider = opts.provider;
@@ -394,6 +401,10 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     if (opts.costBudget !== undefined) this.costBudget = opts.costBudget;
     if (opts.permissionChecker) this.permissionChecker = opts.permissionChecker;
     if (opts.toolArgValidation !== undefined) this.toolArgValidation = opts.toolArgValidation;
+    // Resolve check-in config once. Always present (default: standard evidence
+    // + lexical scorer) so a `checkIn`-declaring tool works even without a
+    // `.checkIn()` call; the gate only fires for tools that declared `checkIn`.
+    this.checkInConfig = resolveCheckInConfig(checkInOptions);
     // Default 'summary' — measurement-gated (#18): stageReads values have
     // zero consumers across af/lens/eui, and 'full' clones ~18MB of unread
     // data per 200 iterations. Consumers opt into 'full' explicitly.
@@ -872,6 +883,11 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // Reliability telemetry (rules-loop fail_fast / retried / recovered).
     // Always-on, but zero-cost when no .reliability() config fires events.
     attachObserver(reliabilityRecorder({ dispatcher, getRunContext: getRunCtx }));
+    // Check-in events bridge (evidence-carrying human consent). Always-on;
+    // forwards checkin.request/decision $emits to the dispatcher so
+    // `agent.on('agentfootprint.checkin.*')` fires. Zero-cost until a tool with
+    // `checkIn` trips.
+    attachObserver(checkInEventsBridge({ dispatcher, getRunContext: getRunCtx }));
     for (const r of this.attachedRecorders) {
       // A recorder's OWN `delivery` field is more specific than the
       // agent-level default — footprintjs's options bag would override the
@@ -1123,6 +1139,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       // Skill-graph read_skill gate: bound the model's read_skill jumps to the
       // reachable set from the current cursor. Undefined → gate off (back-compat).
       ...(this.skillGraphReachable && { allowedSkillIds: this.skillGraphReachable }),
+      // Check-in (evidence-carrying human consent). Always threaded (resolved
+      // default); the gate fires only for tools that declared `checkIn`.
+      checkIn: this.checkInConfig,
     });
 
     // v2.14 — Build the NormalizeThinking sub-subflow only when a
