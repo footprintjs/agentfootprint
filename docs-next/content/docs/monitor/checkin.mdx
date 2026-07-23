@@ -1,0 +1,65 @@
+---
+title: Check in with the receipts
+description: Evidence-carrying human consent for consequential tool actions. A tool declares checkIn; the ask rides an evidence pack (willDo / read / drivers / trail); the decision lands as a typed record.
+---
+
+> An agent is about to issue a $5,000 refund. You don't want a policy to silently allow or block it — you want a **person** to say yes, and you want them to see WHY the agent is asking: what it will do, what context it read, which context drove the choice. That's a check-in. **OpenWorker-class agents check in; agentfootprint checks in with the receipts.**
+
+## Check-in vs. the other gates
+
+Three independent gates run before a tool executes, in this order:
+
+| Gate | Question | This guide? |
+|---|---|---|
+| **Permission** ([Security](doc:security)) | Is this call *allowed* by policy? | no |
+| **Arg-validation** | Do the args match the schema? | no |
+| **Check-in** | Does a *human* consent to this consequential action? | **yes** |
+
+Permission is a policy engine (allow/deny/halt, no human). Check-in is **consent** — a human decides, with an evidence pack in front of them. A call the policy denies never reaches the check-in gate; a call awaiting consent never resolves credentials or executes.
+
+## Declare the demand
+
+A tool declares `checkIn` — `'always'`, or a `(args, ctx) => boolean` predicate for the "only high-effect" case. Configure the evidence pack on the builder with `.checkIn({ evidence })` (optional — `'standard'` is the default).
+
+<CodeFile path="examples/features/33-checkin.ts" region="declare" title="examples/features/33-checkin.ts (region: declare)" />
+
+A tool WITHOUT `checkIn` is byte-identical to before — no gate, no events, no pause.
+
+## The ask carries the receipts
+
+When the demand trips, `agent.run()` pauses BEFORE the tool executes and returns a `RunnerPauseOutcome` whose `checkIn` field is a typed `CheckInRequest`. `isCheckInPause(outcome)` distinguishes it from a plain `askHuman` pause.
+
+<CodeFile path="examples/features/33-checkin.ts" region="ask" title="examples/features/33-checkin.ts (region: ask)" />
+
+The `evidence` pack (`'standard'`) has four plain-named fields:
+
+- **`willDo`** — a plain-words claim: the tool description + the rendered args.
+- **`read`** — what context this run consumed, one frame per piece (`system` rules, the `task`, `result`s from earlier tools).
+- **`drivers`** — which context drove THIS choice, ranked. The default scorer is deterministic and makes **zero LLM calls**; pass your own (e.g. an embedding-backed one wrapping `explainChoice`) via `.checkIn({ scorer })`.
+- **`trail`** — a compact grouped run-so-far summary.
+
+`evidence: 'minimal'` ships only `willDo` (zero cost). The whole pack survives `structuredClone` + JSON, so it can ride the checkpoint to another process.
+
+## The decision is a record
+
+The human answers with `checkInApproved({ by, note? })` or `checkInDeclined({ by, note? })`, and you `agent.resume(checkpoint, decision)`. On **approve** the tool executes normally (same iteration semantics as any resume); on **decline** the model receives `"declined by human: <note>"` as the tool result and adapts in-loop.
+
+<CodeFile path="examples/features/33-checkin.ts" region="decide" title="examples/features/33-checkin.ts (region: decide)" />
+
+Both the ask and the decision fire typed events — `agentfootprint.checkin.request` and `agentfootprint.checkin.decision` — that any recorder can observe via the emit channel, and the built-in `CheckInRecorder` captures them as a queryable audit trail (`getRequests()` / `getDecisions()` / `getStats()`).
+
+## Process A → checkpoint → Process B
+
+Check-in rides the same JSON checkpoint machinery as [pause / resume](doc:pausable): the ask happens in one process, the human decides hours later, and a fresh agent resumes from the stored checkpoint. Build the agent fresh in Process B — only the checkpoint (and the decision) cross the boundary.
+
+## Anti-patterns
+
+- Don't reach into `outcome.pauseData` for a check-in — use `outcome.checkIn` (typed) and `isCheckInPause(outcome)`.
+- Don't use `checkIn` as a policy engine. Policy is `permissionChecker` (deny/halt, no human); check-in is consent (a person decides). They compose — permission runs first.
+- Don't resume a check-in pause with a bare string — pass a `CheckInDecision` (`checkInApproved` / `checkInDeclined`). A malformed resume declines by default, so a consequential tool never runs by accident.
+
+## Next steps
+
+- [Pause / Resume](doc:pausable) — the checkpoint machinery check-in rides
+- [Security guide](doc:security) — the permission gate that runs before check-in
+- [Observability guide](doc:observability) — the full typed-event taxonomy

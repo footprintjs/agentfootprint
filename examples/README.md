@@ -231,6 +231,7 @@ _Run `npm run examples:readme` after adding/editing examples._
 | 30 | [`30-tool-contract-checkup.ts`](features/30-tool-contract-checkup.ts) | Tool contract — diff agent schemas vs a server /tools catalog | toolContractCheckup(agentTools, serverCatalog) is a pure diff of an agent’s tool inputSchemas against a tool-server catalog (e.g. GET /tools): required-divergence (error), optional-drift / arg-divergence / dead-endpoint / missing-on-server. Catch the  |
 | 31 | [`31-skill-graph-keyword-scorer.ts`](features/31-skill-graph-keyword-scorer.ts) | Skill graph — pluggable entry scorer (+ no-embedder keyword router) | Route the starting skill with a pluggable scorer strategy: keywordScorer() (word overlap, no embedder), embeddingScorer(e) (semantic), or your own EntryScorer. The chosen scorer name + ranking land on the snapshot for the Why-panel. |
 | 32 | [`32-context-ledger.ts`](features/32-context-ledger.ts) | _no meta_ | — |
+| 33 | [`33-checkin.ts`](features/33-checkin.ts) | Check in with the receipts | A tool demands human consent for a consequential action; the ask carries an evidence pack (willDo / read / drivers / trail) and the decision lands as a typed record. |
 
 ### [`canonical/`](canonical/) — end-to-end patterns
 

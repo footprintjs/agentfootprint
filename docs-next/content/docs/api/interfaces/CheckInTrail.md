@@ -1,0 +1,39 @@
+---
+title: CheckInTrail
+---
+
+# Interface: CheckInTrail
+
+Defined in: src/core/checkin.ts:96
+
+A compact grouped summary of the run so far.
+
+## Properties
+
+### iteration
+
+> `readonly` **iteration**: `number`
+
+Defined in: src/core/checkin.ts:98
+
+Which ReAct iteration this check-in fired on.
+
+***
+
+### summary
+
+> `readonly` **summary**: `string`
+
+Defined in: src/core/checkin.ts:102
+
+One-line human summary, e.g. `"3 tools run over 2 iterations"`.
+
+***
+
+### toolCalls
+
+> `readonly` **toolCalls**: readonly `object`[]
+
+Defined in: src/core/checkin.ts:100
+
+The tool calls already completed this run, oldest first.

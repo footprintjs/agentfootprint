@@ -5,6 +5,42 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **`checkIn` — evidence-carrying human consent for consequential tool
+  actions.** "OpenWorker-class agents check in; agentfootprint checks in WITH
+  THE RECEIPTS." A tool declares `checkIn: 'always'` or a
+  `(args, ctx) => boolean` predicate (`defineTool` / `Tool.checkIn`). When it
+  trips, the tool-dispatch loop pauses BEFORE the tool executes — AFTER the
+  permission gate + arg-validation, BEFORE credential resolution — riding the
+  EXISTING pause/checkpoint machinery. `agent.run()` returns a
+  `RunnerPauseOutcome` whose new `checkIn` field is a typed `CheckInRequest`
+  (`{ tool, args, intent?, evidence }`); `isCheckInPause(outcome)` is the clean
+  discriminant from a plain `askHuman` pause. The evidence pack
+  (`CheckInEvidence`) carries plain-named receipts — `willDo` (tool
+  description + rendered args), `read` (context the run consumed, from the
+  conversation frames + system rules), `drivers` (which context drove the
+  choice, ranked — a PLUGGABLE `CheckInScorer`, default deterministic lexical,
+  **zero LLM calls**), and `trail` (compact grouped run-so-far). Two built-in
+  assemblers, configured on the builder via `.checkIn({ evidence: 'standard' |
+  'minimal' | <assembler>, scorer? })`. The human answers with
+  `checkInApproved({ by, note? })` / `checkInDeclined({ by, note? })`;
+  `agent.resume(checkpoint, decision)` executes the tool on approve, or lands a
+  model-visible `"declined by human: <note>"` result on decline (mirroring
+  permission rejections). Two new typed events — `agentfootprint.checkin.request`
+  / `.decision` (registry now 67 events / 19 domains) — ride the emit channel;
+  the built-in `CheckInRecorder` (compose-a-store, attach with
+  `agent.attach(...)`) captures the ask + decision as a queryable audit trail
+  (`getRequests()` / `getDecisions()` / `getStats()`). The whole pack survives
+  `structuredClone` + JSON (checkpoint discipline), so Process A (ask) and
+  Process B (decide) can be servers and days apart. **Backward compatible:** a
+  tool without `checkIn` is byte-identical — no gate, no events, no pause. NOT a
+  policy engine (`PermissionChecker` untouched; policy runs first) and NOT UI —
+  this is consent, with the receipts. See the
+  [Check-in guide](https://footprintjs.github.io/agentfootprint/docs/monitor/checkin/).
+
 ## [7.4.0] - 2026-07-09
 
 ### Added

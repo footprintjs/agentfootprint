@@ -11,6 +11,7 @@
     "---[Factory]Production---",
     "deployment",
     "pausable",
+    "checkin",
     "resilience",
     "reliability",
     "reliability-gate",

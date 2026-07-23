@@ -525,6 +525,26 @@ Same trick as the injection model: instead of N libraries for N patterns, we fou
 
 > 📖 Compare: [hand-rolled vs declarative](https://footprintjs.github.io/agentfootprint/docs/getting-started/why/) · [migration from LangChain / CrewAI / LangGraph](https://footprintjs.github.io/agentfootprint/docs/getting-started/vs/)
 
+### Check in with the receipts — human consent for consequential actions
+
+OpenWorker-class agents check in; agentfootprint checks in **with the receipts.** A tool declares `checkIn: 'always'` (or a `(args) => boolean` predicate). When it trips, the run pauses **before** the tool executes and hands back an evidence pack: `willDo` (plain-words claim), `read` (context the run consumed), `drivers` (which context drove the choice, ranked, zero LLM calls), and a compact `trail`. A human answers `checkInApproved({ by })` / `checkInDeclined({ by, note })`; on approve the tool runs, on decline the model sees the note and adapts.
+
+```ts
+const refund = defineTool({
+  name: 'issue_refund', description: 'Issue a refund',
+  inputSchema: { type: 'object', properties: { amount: { type: 'number' } } },
+  checkIn: (args) => args.amount > 1000,     // ask a human only for big refunds
+  execute: ({ amount }) => `refunded ${amount}`,
+});
+const out = await agent.run({ message: 'refund 5000' });
+if (isCheckInPause(out)) {                    // distinct from a plain askHuman pause
+  showToHuman(out.checkIn.evidence);          // the receipts
+  await agent.resume(out.checkpoint, checkInApproved({ by: 'alice@ops' }));
+}
+```
+
+It rides the same JSON checkpoint as pause/resume — the ask and the decision can be servers and days apart — and lands `checkin.request` / `checkin.decision` as typed events (`CheckInRecorder` captures the audit trail). A tool without `checkIn` is byte-identical. Permission (policy) still runs first — check-in is **consent**, not policy. See the [Check-in guide](https://footprintjs.github.io/agentfootprint/docs/monitor/checkin/).
+
 ---
 
 ## 🐛 Debug — see what your agent did
