@@ -328,6 +328,27 @@ export interface PauseResumePayload {
   readonly pausedDurationMs: number;
 }
 
+// ─── check-in (evidence-carrying human consent) ───────────────────────
+/** A tool declared `checkIn` and it tripped — the run paused to ask a human,
+ *  with the evidence pack riding the ask. Emitted BEFORE the tool executes. */
+export interface CheckInRequestPayload {
+  readonly toolName: string;
+  readonly toolCallId: string;
+  readonly iteration: number;
+  /** The typed ask + evidence pack (`CheckInRequest`). JSON/clone-safe. */
+  readonly request: Readonly<Record<string, unknown>>;
+}
+/** A human answered a pending check-in. Emitted on resume, BEFORE the tool
+ *  runs (approve) or the decline result lands. */
+export interface CheckInDecisionPayload {
+  readonly toolName: string;
+  readonly toolCallId: string;
+  readonly iteration: number;
+  readonly approved: boolean;
+  readonly by: string;
+  readonly note?: string;
+}
+
 // ─── Tier 3: Observability Layers (recorder-emitted, opt-in) ──────────
 
 // memory.* (4)

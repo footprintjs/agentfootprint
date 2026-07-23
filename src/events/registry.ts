@@ -59,6 +59,8 @@ import type {
   ParallelMergeEndPayload,
   PauseRequestPayload,
   PauseResumePayload,
+  CheckInRequestPayload,
+  CheckInDecisionPayload,
   PermissionCheckPayload,
   PermissionGateClosedPayload,
   PermissionHaltPayload,
@@ -186,6 +188,10 @@ export const EVENT_NAMES = {
   pause: {
     request: 'agentfootprint.pause.request',
     resume: 'agentfootprint.pause.resume',
+  },
+  checkin: {
+    request: 'agentfootprint.checkin.request',
+    decision: 'agentfootprint.checkin.decision',
   },
   embedding: {
     generated: 'agentfootprint.embedding.generated',
@@ -468,6 +474,15 @@ export interface AgentfootprintEventMap {
     'agentfootprint.pause.resume',
     PauseResumePayload
   >;
+  // check-in (evidence-carrying human consent)
+  'agentfootprint.checkin.request': AgentfootprintEventEnvelope<
+    'agentfootprint.checkin.request',
+    CheckInRequestPayload
+  >;
+  'agentfootprint.checkin.decision': AgentfootprintEventEnvelope<
+    'agentfootprint.checkin.decision',
+    CheckInDecisionPayload
+  >;
   // embedding
   'agentfootprint.embedding.generated': AgentfootprintEventEnvelope<
     'agentfootprint.embedding.generated',
@@ -550,5 +565,7 @@ export const ALL_EVENT_TYPES: readonly AgentfootprintEventType[] = [
   'agentfootprint.reliability.recovered',
   'agentfootprint.pause.request',
   'agentfootprint.pause.resume',
+  'agentfootprint.checkin.request',
+  'agentfootprint.checkin.decision',
   'agentfootprint.embedding.generated',
 ] as const;
