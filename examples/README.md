@@ -232,6 +232,7 @@ _Run `npm run examples:readme` after adding/editing examples._
 | 31 | [`31-skill-graph-keyword-scorer.ts`](features/31-skill-graph-keyword-scorer.ts) | Skill graph — pluggable entry scorer (+ no-embedder keyword router) | Route the starting skill with a pluggable scorer strategy: keywordScorer() (word overlap, no embedder), embeddingScorer(e) (semantic), or your own EntryScorer. The chosen scorer name + ranking land on the snapshot for the Why-panel. |
 | 32 | [`32-context-ledger.ts`](features/32-context-ledger.ts) | _no meta_ | — |
 | 33 | [`33-checkin.ts`](features/33-checkin.ts) | Check in with the receipts | A tool demands human consent for a consequential action; the ask carries an evidence pack (willDo / read / drivers / trail) and the decision lands as a typed record. |
+| 34 | [`34-checkin-coworker.ts`](features/34-checkin-coworker.ts) | The coworker with the receipts | A runnable AI-coworker demo: it drafts a weekly status doc, then pauses for human consent before posting to the team channel. The check-in ask rides an evidence pack (willDo / read / drivers / trail) rendered as readable receipts, and the decision lands in an audit trail. |
 
 ### [`canonical/`](canonical/) — end-to-end patterns
 
