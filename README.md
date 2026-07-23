@@ -479,7 +479,7 @@ const reflexion = Loop.create()
 | 2 | 12 tools shown | **5 tools** (skill activated) |
 | 3 | 12 tools shown | 5 tools |
 
-> 📖 [Dynamic ReAct guide](https://footprintjs.github.io/agentfootprint/guides/dynamic-react/) · [Key concepts](https://footprintjs.github.io/agentfootprint/getting-started/key-concepts/)
+> 📖 [Dynamic ReAct guide](https://footprintjs.github.io/agentfootprint/docs/build/dynamic-react/) · [Key concepts](https://footprintjs.github.io/agentfootprint/docs/getting-started/key-concepts/)
 
 ### Multi-agent — compose with the alphabet
 
@@ -523,7 +523,7 @@ The patterns the field knows reduce to the same alphabet:
 
 Same trick as the injection model: instead of N libraries for N patterns, we found the M building blocks all N patterns are made of.
 
-> 📖 Compare: [hand-rolled vs declarative](https://footprintjs.github.io/agentfootprint/getting-started/why/) · [migration from LangChain / CrewAI / LangGraph](https://footprintjs.github.io/agentfootprint/getting-started/vs/)
+> 📖 Compare: [hand-rolled vs declarative](https://footprintjs.github.io/agentfootprint/docs/getting-started/why/) · [migration from LangChain / CrewAI / LangGraph](https://footprintjs.github.io/agentfootprint/docs/getting-started/vs/)
 
 ---
 
@@ -576,7 +576,7 @@ answers at the cheap model's price inside the expensive conversation.
 [`08`](examples/observability/08-self-explain.ts) · the doors walk the
 [**same evidence the board visualizes ▶**](https://footprintjs.github.io/agentThinkingUI/demo/backtrack.html).
 
-> 📖 Powered by [footprintjs `causalChain()`](https://footprintjs.github.io/footPrint/blog/backward-causal-chain/) — backward thin-slicing on the commit log. [Causal memory deep dive](https://footprintjs.github.io/agentfootprint/causal-deep-dive/) · [Explainability & compliance](https://footprintjs.github.io/footPrint/blog/explainability-compliance/)
+> 📖 Powered by [footprintjs `causalChain()`](https://footprintjs.github.io/footPrint/blog/backward-causal-chain/) — backward thin-slicing on the commit log. [Causal memory deep dive](https://footprintjs.github.io/agentfootprint/docs/debug/causal-deep-dive/) · [Explainability & compliance](https://footprintjs.github.io/footPrint/blog/explainability-compliance/)
 
 **One recording. Two lenses. Three consumers. Zero extra instrumentation.**
 
@@ -731,7 +731,7 @@ The flowchart, recorders, and tests don't change between dev and prod.
 
 </details>
 
-> 📖 [Agent API reference](https://footprintjs.github.io/agentfootprint/api/agent/) · [CHANGELOG](./CHANGELOG.md)
+> 📖 [Agent API reference](https://footprintjs.github.io/agentfootprint/docs/api/classes/Agent/) · [CHANGELOG](./CHANGELOG.md)
 
 ---
 
@@ -739,12 +739,12 @@ The flowchart, recorders, and tests don't change between dev and prod.
 
 | If you are... | Go here |
 |---|---|
-| New to agents | [5-minute quick start](https://footprintjs.github.io/agentfootprint/getting-started/quick-start/) |
-| Coming from LangChain / CrewAI / LangGraph | [Migration guide](https://footprintjs.github.io/agentfootprint/getting-started/vs/) |
-| Architecting an enterprise rollout | [Production guide](https://footprintjs.github.io/agentfootprint/guides/deployment/) |
-| Doing due diligence | [Architecture overview](https://footprintjs.github.io/agentfootprint/architecture/dependency-graph/) |
-| Researcher / academic background | [Citations & prior art](https://footprintjs.github.io/agentfootprint/research/citations/) |
-| Curious about design | [Inspiration docs](https://footprintjs.github.io/agentfootprint/inspiration/) |
+| New to agents | [5-minute quick start](https://footprintjs.github.io/agentfootprint/docs/getting-started/quick-start/) |
+| Coming from LangChain / CrewAI / LangGraph | [Migration guide](https://footprintjs.github.io/agentfootprint/docs/getting-started/vs/) |
+| Architecting an enterprise rollout | [Production guide](https://footprintjs.github.io/agentfootprint/docs/monitor/deployment/) |
+| Doing due diligence | [Architecture overview](https://footprintjs.github.io/agentfootprint/docs/reference/dependency-graph/) |
+| Researcher / academic background | [Citations & prior art](https://footprintjs.github.io/agentfootprint/docs/reference/citations/) |
+| Curious about design | [Inspiration docs](https://footprintjs.github.io/agentfootprint/docs/reference/inspiration/) |
 
 Or jump into the [examples gallery](https://github.com/footprintjs/agentfootprint/tree/main/examples) — every example is also an end-to-end CI test.
 
