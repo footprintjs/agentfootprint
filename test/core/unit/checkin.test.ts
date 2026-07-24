@@ -66,9 +66,13 @@ describe('check-in helpers — shouldCheckIn', () => {
   });
   it('a throwing predicate fails TOWARD asking the human', () => {
     expect(
-      shouldCheckIn(() => {
-        throw new Error('buggy predicate');
-      }, {}, ctx),
+      shouldCheckIn(
+        () => {
+          throw new Error('buggy predicate');
+        },
+        {},
+        ctx,
+      ),
     ).toBe(true);
   });
 });

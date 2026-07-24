@@ -401,9 +401,9 @@ export function buildToolCallsHandler(
           // prepend a synthetic system frame so the evidence's `read` + the
           // `drivers` ranking can cite system RULES, not just the conversation.
           // Computed ONLY for a checkIn-declaring tool → zero cost otherwise.
-          const systemPrompt = ((scope.systemPromptInjections as
-            | readonly InjectionRecord[]
-            | undefined) ?? [])
+          const systemPrompt = (
+            (scope.systemPromptInjections as readonly InjectionRecord[] | undefined) ?? []
+          )
             .map((r) => r.rawContent ?? '')
             .filter((s) => s.length > 0)
             .join('\n\n');
@@ -420,41 +420,41 @@ export function buildToolCallsHandler(
             // Predicate said no — fall through to the normal credential+execute
             // path below (this `if` block is the ONLY thing the gate adds).
           } else {
-          const intent = scope.llmLatestContent ? String(scope.llmLatestContent) : undefined;
-          const evidence = await deps.checkIn.assembler({
-            tool: { name: tc.name, description: tool.schema.description },
-            args: tc.args,
-            ...(intent !== undefined && { intent }),
-            iteration,
-            history: historyForEvidence,
-            scorer: deps.checkIn.scorer,
-            ...(env.signal && { signal: env.signal }),
-          });
-          const request: CheckInRequest = {
-            tool: tc.name,
-            args: tc.args,
-            ...(intent !== undefined && { intent }),
-            evidence,
-          };
-          typedEmit(scope, 'agentfootprint.checkin.request', {
-            toolName: tc.name,
-            toolCallId: tc.id,
-            iteration,
-            request: request as unknown as Readonly<Record<string, unknown>>,
-          });
-          // Commit partial state so resume() finds history intact (mirror the
-          // pauseHere path). The proposed args ride the checkpoint so an
-          // APPROVED tool can execute on resume.
-          scope.history = newHistory;
-          scope.pausedToolCallId = tc.id;
-          scope.pausedToolName = tc.name;
-          scope.pausedToolStartMs = startMs;
-          scope.pausedCheckIn = true;
-          scope.pausedCheckInArgs = tc.args;
-          // Returning a defined value triggers the footprintjs pause; the
-          // returned object becomes the checkpoint's pauseData. detectPause
-          // surfaces `pauseData.checkIn` as `outcome.checkIn`.
-          return { toolCallId: tc.id, toolName: tc.name, checkIn: request };
+            const intent = scope.llmLatestContent ? String(scope.llmLatestContent) : undefined;
+            const evidence = await deps.checkIn.assembler({
+              tool: { name: tc.name, description: tool.schema.description },
+              args: tc.args,
+              ...(intent !== undefined && { intent }),
+              iteration,
+              history: historyForEvidence,
+              scorer: deps.checkIn.scorer,
+              ...(env.signal && { signal: env.signal }),
+            });
+            const request: CheckInRequest = {
+              tool: tc.name,
+              args: tc.args,
+              ...(intent !== undefined && { intent }),
+              evidence,
+            };
+            typedEmit(scope, 'agentfootprint.checkin.request', {
+              toolName: tc.name,
+              toolCallId: tc.id,
+              iteration,
+              request: request as unknown as Readonly<Record<string, unknown>>,
+            });
+            // Commit partial state so resume() finds history intact (mirror the
+            // pauseHere path). The proposed args ride the checkpoint so an
+            // APPROVED tool can execute on resume.
+            scope.history = newHistory;
+            scope.pausedToolCallId = tc.id;
+            scope.pausedToolName = tc.name;
+            scope.pausedToolStartMs = startMs;
+            scope.pausedCheckIn = true;
+            scope.pausedCheckInArgs = tc.args;
+            // Returning a defined value triggers the footprintjs pause; the
+            // returned object becomes the checkpoint's pauseData. detectPause
+            // surfaces `pauseData.checkIn` as `outcome.checkIn`.
+            return { toolCallId: tc.id, toolName: tc.name, checkIn: request };
           }
         }
         if (!denied && !argsRejected) {

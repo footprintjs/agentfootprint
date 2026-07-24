@@ -78,7 +78,11 @@ function refundTool(
   return defineTool<{ amount: number }, string>({
     name: 'issue_refund',
     description: 'Issue a refund to the customer',
-    inputSchema: { type: 'object', properties: { amount: { type: 'number' } }, required: ['amount'] },
+    inputSchema: {
+      type: 'object',
+      properties: { amount: { type: 'number' } },
+      required: ['amount'],
+    },
     checkIn,
     execute,
   });
@@ -90,7 +94,10 @@ describe('check-in — declarative trip', () => {
   it("'always' pauses BEFORE execute and surfaces the typed request", async () => {
     const exec = vi.fn(({ amount }: { amount: number }) => `refunded ${amount}`);
     const agent = Agent.create({
-      provider: scripted(resp('', [{ id: 't1', name: 'issue_refund', args: { amount: 500 } }]), resp('done')),
+      provider: scripted(
+        resp('', [{ id: 't1', name: 'issue_refund', args: { amount: 500 } }]),
+        resp('done'),
+      ),
       model: 'mock',
     })
       .system('You are a refunds assistant.')
@@ -100,7 +107,9 @@ describe('check-in — declarative trip', () => {
     const out = await agent.run({ message: 'refund order 123' });
     expect(isPaused(out)).toBe(true);
     expect(isCheckInPause(out)).toBe(true);
-    const paused = out as RunnerPauseOutcome & { checkIn: NonNullable<RunnerPauseOutcome['checkIn']> };
+    const paused = out as RunnerPauseOutcome & {
+      checkIn: NonNullable<RunnerPauseOutcome['checkIn']>;
+    };
     expect(paused.checkIn.tool).toBe('issue_refund');
     expect(paused.checkIn.args).toEqual({ amount: 500 });
     expect(paused.checkIn.evidence.willDo).toContain('Issue a refund');
@@ -111,7 +120,10 @@ describe('check-in — declarative trip', () => {
   it('predicate trips selectively — big refund asks, small refund runs', async () => {
     const build = (amount: number, exec: () => string) =>
       Agent.create({
-        provider: scripted(resp('', [{ id: 't1', name: 'issue_refund', args: { amount } }]), resp('done')),
+        provider: scripted(
+          resp('', [{ id: 't1', name: 'issue_refund', args: { amount } }]),
+          resp('done'),
+        ),
         model: 'mock',
       })
         .system('refunds')
@@ -161,7 +173,10 @@ describe('check-in — gate order', () => {
           : { result: 'allow' },
     };
     const agent = Agent.create({
-      provider: scripted(resp('', [{ id: 't1', name: 'issue_refund', args: { amount: 500 } }]), resp('done')),
+      provider: scripted(
+        resp('', [{ id: 't1', name: 'issue_refund', args: { amount: 500 } }]),
+        resp('done'),
+      ),
       model: 'mock',
       permissionChecker: denyRefund,
     })
@@ -229,7 +244,10 @@ describe('check-in — gate order', () => {
 describe('check-in — pause/resume round-trip', () => {
   it('the evidence pack survives structuredClone + JSON', async () => {
     const agent = Agent.create({
-      provider: scripted(resp('reasoning here', [{ id: 't1', name: 'issue_refund', args: { amount: 500 } }]), resp('done')),
+      provider: scripted(
+        resp('reasoning here', [{ id: 't1', name: 'issue_refund', args: { amount: 500 } }]),
+        resp('done'),
+      ),
       model: 'mock',
     })
       .system('Always confirm refunds with the customer.')
@@ -332,7 +350,13 @@ describe('check-in — evidence assemblers', () => {
     };
     const agent = Agent.create({ provider, model: 'mock' })
       .system('Refund only verified orders. Confirm the amount first.')
-      .tool(defineTool({ name: 'lookup', description: 'Look up the order', execute: () => 'order total: 500' }))
+      .tool(
+        defineTool({
+          name: 'lookup',
+          description: 'Look up the order',
+          execute: () => 'order total: 500',
+        }),
+      )
       .tool(refundTool('always'))
       .checkIn({ evidence: 'standard' })
       .build();
@@ -361,7 +385,10 @@ describe('check-in — evidence assemblers', () => {
 
   it("'minimal' fills ONLY willDo (zero cost)", async () => {
     const agent = Agent.create({
-      provider: scripted(resp('', [{ id: 't1', name: 'issue_refund', args: { amount: 500 } }]), resp('done')),
+      provider: scripted(
+        resp('', [{ id: 't1', name: 'issue_refund', args: { amount: 500 } }]),
+        resp('done'),
+      ),
       model: 'mock',
     })
       .system('refunds')
@@ -388,11 +415,19 @@ describe('check-in — scorer pluggability', () => {
       // Rank by a fixed rule the default lexical scorer would never produce:
       // 'task' channel always wins with score 1, everything else 0.
       units
-        .map((u) => ({ id: u.id, channel: u.channel, text: u.text, score: u.channel === 'task' ? 1 : 0 }))
+        .map((u) => ({
+          id: u.id,
+          channel: u.channel,
+          text: u.text,
+          score: u.channel === 'task' ? 1 : 0,
+        }))
         .sort((a, b) => b.score - a.score),
     );
     const agent = Agent.create({
-      provider: scripted(resp('', [{ id: 't1', name: 'issue_refund', args: { amount: 500 } }]), resp('done')),
+      provider: scripted(
+        resp('', [{ id: 't1', name: 'issue_refund', args: { amount: 500 } }]),
+        resp('done'),
+      ),
       model: 'mock',
     })
       .system('some rule')
@@ -432,7 +467,10 @@ describe('check-in — events + recorder', () => {
     const decisions: Record<string, unknown>[] = [];
     const build = () => {
       const a = Agent.create({
-        provider: scripted(resp('', [{ id: 't1', name: 'issue_refund', args: { amount: 500 } }]), resp('done')),
+        provider: scripted(
+          resp('', [{ id: 't1', name: 'issue_refund', args: { amount: 500 } }]),
+          resp('done'),
+        ),
         model: 'mock',
       })
         .system('refunds')
@@ -464,7 +502,10 @@ describe('check-in — events + recorder', () => {
     const rec = new CheckInRecorder();
     const build = () => {
       const a = Agent.create({
-        provider: scripted(resp('', [{ id: 't1', name: 'issue_refund', args: { amount: 500 } }]), resp('done')),
+        provider: scripted(
+          resp('', [{ id: 't1', name: 'issue_refund', args: { amount: 500 } }]),
+          resp('done'),
+        ),
         model: 'mock',
       })
         .system('refunds')

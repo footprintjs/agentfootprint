@@ -59,7 +59,11 @@ import { validationRecorder } from '../recorders/core/ValidationRecorder.js';
 import { toolsRecorder } from '../recorders/core/ToolsRecorder.js';
 import { reliabilityRecorder } from '../recorders/core/ReliabilityRecorder.js';
 import { checkInEventsBridge } from '../recorders/core/CheckInRecorder.js';
-import { resolveCheckInConfig, type CheckInBuilderOptions, type ResolvedCheckInConfig } from './checkin.js';
+import {
+  resolveCheckInConfig,
+  type CheckInBuilderOptions,
+  type ResolvedCheckInConfig,
+} from './checkin.js';
 import type { MemoryDefinition } from '../memory/define.types.js';
 import {
   causalEvidenceRecorder,

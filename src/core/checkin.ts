@@ -238,8 +238,29 @@ export type CheckInScorer = (
 
 const WORD_RE = /[a-z0-9]+/g;
 const STOP = new Set([
-  'the', 'a', 'an', 'and', 'or', 'to', 'of', 'in', 'on', 'for', 'with', 'is',
-  'are', 'this', 'that', 'it', 'as', 'at', 'by', 'be', 'you', 'your', 'i',
+  'the',
+  'a',
+  'an',
+  'and',
+  'or',
+  'to',
+  'of',
+  'in',
+  'on',
+  'for',
+  'with',
+  'is',
+  'are',
+  'this',
+  'that',
+  'it',
+  'as',
+  'at',
+  'by',
+  'be',
+  'you',
+  'your',
+  'i',
 ]);
 
 function tokenize(text: string): Set<string> {
@@ -388,9 +409,9 @@ function buildTrail(history: readonly LLMMessage[], iteration: number): CheckInT
   const summary =
     toolCalls.length === 0
       ? `no tools run yet (iteration ${iteration})`
-      : `${toolCalls.length} tool${toolCalls.length === 1 ? '' : 's'} run over ${
-          iteration
-        } iteration${iteration === 1 ? '' : 's'}`;
+      : `${toolCalls.length} tool${
+          toolCalls.length === 1 ? '' : 's'
+        } run over ${iteration} iteration${iteration === 1 ? '' : 's'}`;
   return { iteration, toolCalls, summary };
 }
 
@@ -408,7 +429,11 @@ export const standardEvidenceAssembler: CheckInAssembler = async (input) => {
   let drivers: readonly CheckInDriver[] = [];
   if (units.length > 0) {
     const toolText = `${tool.name} ${tool.description} ${renderArgs(args)}`.trim();
-    drivers = await scorer({ tool: { name: tool.name, text: toolText }, units, ...(signal && { signal }) });
+    drivers = await scorer({
+      tool: { name: tool.name, text: toolText },
+      units,
+      ...(signal && { signal }),
+    });
   }
   return { willDo, read, drivers, trail };
 };
