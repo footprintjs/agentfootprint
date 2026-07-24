@@ -4,7 +4,7 @@ title: CheckInDecisionRecord
 
 # Interface: CheckInDecisionRecord
 
-Defined in: src/recorders/core/CheckInRecorder.ts:55
+Defined in: [src/recorders/core/CheckInRecorder.ts:55](https://github.com/footprintjs/agentfootprint/blob/main/src/recorders/core/CheckInRecorder.ts#L55)
 
 One captured human decision.
 
@@ -14,7 +14,7 @@ One captured human decision.
 
 > `readonly` **approved**: `boolean`
 
-Defined in: src/recorders/core/CheckInRecorder.ts:59
+Defined in: [src/recorders/core/CheckInRecorder.ts:59](https://github.com/footprintjs/agentfootprint/blob/main/src/recorders/core/CheckInRecorder.ts#L59)
 
 ***
 
@@ -22,7 +22,7 @@ Defined in: src/recorders/core/CheckInRecorder.ts:59
 
 > `readonly` **by**: `string`
 
-Defined in: src/recorders/core/CheckInRecorder.ts:60
+Defined in: [src/recorders/core/CheckInRecorder.ts:60](https://github.com/footprintjs/agentfootprint/blob/main/src/recorders/core/CheckInRecorder.ts#L60)
 
 ***
 
@@ -30,7 +30,7 @@ Defined in: src/recorders/core/CheckInRecorder.ts:60
 
 > `readonly` **iteration**: `number`
 
-Defined in: src/recorders/core/CheckInRecorder.ts:58
+Defined in: [src/recorders/core/CheckInRecorder.ts:58](https://github.com/footprintjs/agentfootprint/blob/main/src/recorders/core/CheckInRecorder.ts#L58)
 
 ***
 
@@ -38,7 +38,7 @@ Defined in: src/recorders/core/CheckInRecorder.ts:58
 
 > `readonly` `optional` **note?**: `string`
 
-Defined in: src/recorders/core/CheckInRecorder.ts:61
+Defined in: [src/recorders/core/CheckInRecorder.ts:61](https://github.com/footprintjs/agentfootprint/blob/main/src/recorders/core/CheckInRecorder.ts#L61)
 
 ***
 
@@ -46,7 +46,7 @@ Defined in: src/recorders/core/CheckInRecorder.ts:61
 
 > `readonly` **toolCallId**: `string`
 
-Defined in: src/recorders/core/CheckInRecorder.ts:57
+Defined in: [src/recorders/core/CheckInRecorder.ts:57](https://github.com/footprintjs/agentfootprint/blob/main/src/recorders/core/CheckInRecorder.ts#L57)
 
 ***
 
@@ -54,4 +54,4 @@ Defined in: src/recorders/core/CheckInRecorder.ts:57
 
 > `readonly` **toolName**: `string`
 
-Defined in: src/recorders/core/CheckInRecorder.ts:56
+Defined in: [src/recorders/core/CheckInRecorder.ts:56](https://github.com/footprintjs/agentfootprint/blob/main/src/recorders/core/CheckInRecorder.ts#L56)

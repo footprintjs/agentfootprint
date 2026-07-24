@@ -6,7 +6,7 @@ title: CheckInScorer
 
 > **CheckInScorer** = (`input`) => readonly [`CheckInDriver`](/docs/api/interfaces/CheckInDriver)[] \| `Promise`\<readonly [`CheckInDriver`](/docs/api/interfaces/CheckInDriver)[]\>
 
-Defined in: src/core/checkin.ts:235
+Defined in: [src/core/checkin.ts:235](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L235)
 
 Ranks context units by how strongly each drove one tool choice. The
 DEFAULT is [lexicalDriverScorer](/docs/api/variables/lexicalDriverScorer) — deterministic, zero LLM, zero

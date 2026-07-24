@@ -29,6 +29,7 @@ title: agentfootprint
 - [AgentMessageApiChartDeps](/docs/api/interfaces/AgentMessageApiChartDeps)
 - [AgentOptions](/docs/api/interfaces/AgentOptions)
 - [AgentRunCheckpoint](/docs/api/interfaces/AgentRunCheckpoint)
+- [AttributionUnit](/docs/api/interfaces/AttributionUnit)
 - [BudgetPressureRecord](/docs/api/interfaces/BudgetPressureRecord)
 - [CheckInAssemblerInput](/docs/api/interfaces/CheckInAssemblerInput)
 - [CheckInBuilderOptions](/docs/api/interfaces/CheckInBuilderOptions)

@@ -4,7 +4,7 @@ title: CheckInDecisionInput
 
 # Interface: CheckInDecisionInput
 
-Defined in: src/core/checkin.ts:124
+Defined in: [src/core/checkin.ts:124](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L124)
 
 Options for [checkInApproved](/docs/api/functions/checkInApproved) / [checkInDeclined](/docs/api/functions/checkInDeclined).
 
@@ -14,7 +14,7 @@ Options for [checkInApproved](/docs/api/functions/checkInApproved) / [checkInDec
 
 > `readonly` **by**: `string`
 
-Defined in: src/core/checkin.ts:126
+Defined in: [src/core/checkin.ts:126](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L126)
 
 Who decided.
 
@@ -24,6 +24,6 @@ Who decided.
 
 > `readonly` `optional` **note?**: `string`
 
-Defined in: src/core/checkin.ts:128
+Defined in: [src/core/checkin.ts:128](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L128)
 
 Optional free-text note.

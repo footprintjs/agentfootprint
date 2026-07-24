@@ -6,6 +6,6 @@ title: minimalEvidenceAssembler
 
 > `const` **minimalEvidenceAssembler**: [`CheckInAssembler`](/docs/api/type-aliases/CheckInAssembler)
 
-Defined in: src/core/checkin.ts:417
+Defined in: [src/core/checkin.ts:442](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L442)
 
 The `'minimal'` assembler — only `willDo`. Zero cost; no scorer call.
