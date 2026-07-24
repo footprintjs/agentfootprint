@@ -261,3 +261,24 @@ export {
   type ToolCatalogReport,
   type ToolLintCliIO,
 } from './lib/tool-lint/index.js';
+// recorded-chat — the session-scoped turn recorder. Wraps a consumer agent
+// factory into a recorded conversation: send() freezes each turn's evidence,
+// reason(k)/rerunTurn(k)/fork(k) are the per-turn transparency loop. Absorbs
+// the three glue traps (per-turn artifact freezing, byte-exact history
+// threading, same-factory runner derivation) while COMPOSING with the loop
+// above (localizeContextBug + rerunWithoutSources returned UNMODIFIED), never
+// duplicating it. Branch, never rewrite.
+export {
+  recordedChat,
+  type ChatFormat,
+  type ChatMessage,
+  type ChatTurn,
+  type ForkOptions,
+  type ForkOrigin,
+  type MakeChatAgent,
+  type ReasonOptions,
+  type RecordedChat,
+  type RecordedChatOptions,
+  type RerunTurnOptions,
+  type SendOptions,
+} from './lib/recorded-chat/index.js';

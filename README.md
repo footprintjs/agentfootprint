@@ -299,6 +299,26 @@ again.answer;              // 'HOLD …'
 again.whatChanged.summary; // 'Removing sources [social-sentiment] changed the answer in 3/3 seeded re-runs …'
 ```
 
+### Chat sessions that can explain themselves
+
+`recordedChat` wraps your agent factory into a recorded conversation. Every `send()`
+freezes that turn's evidence. `reason(k)` shows what influenced reply K. `rerunTurn(k,
+{ ignore })` re-runs that exact turn — same recorded history, byte for byte — without a
+source, and returns the same honest result `rerunWithoutSources` gives you. `fork(k,
+{ fromRerun })` continues the conversation from the what-if as a new recorded session.
+Branch, never rewrite.
+
+```ts
+import { recordedChat } from 'agentfootprint/debug';
+
+const chat = recordedChat({ makeAgent });          // your factory, specs applied at construction
+await chat.send('Should we BUY or HOLD?');         // recorded turn (frozen evidence)
+const rerun = await chat.rerunTurn(1, {            // that turn, minus one source
+  ignore: ['social-sentiment'], embedder, checkBaseline: true,
+});
+const fork = chat.fork(1, { fromRerun: rerun });   // continue from the what-if
+```
+
 ---
 
 ## Pick your door

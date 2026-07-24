@@ -5,6 +5,35 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.6.0] - 2026-07-24
+
+### Added
+
+- **`recordedChat` — the chat session that can explain itself.** Every chat
+  host that wanted per-turn transparency re-wrote the same correctness-
+  critical glue; `recordedChat({ makeAgent })` absorbs it. `send(message)`
+  runs one recorded turn through YOUR agent factory and freezes that turn's
+  evidence immediately (snapshot, events, last LLM call) — the
+  `getLastSnapshot()`-is-last-run-only trap becomes structurally impossible.
+  History threading is owned by the library: the exact message string each
+  turn ran with is frozen on the `ChatTurn`, and `rerunTurn(k, { ignore,
+  embedder, checkBaseline? })` replays those bytes verbatim through an
+  `AblationRunner` derived from the SAME `makeAgent` — same recorded
+  conversation up to that point, minus the ignored sources — delegating to
+  `rerunWithoutSources` and returning its result UNMODIFIED (the honesty
+  tiers are untouched: a causal verdict only with `checkBaseline: true`).
+  `reason(k)` is memoized `localizeContextBug` over the turn's frozen
+  artifacts (`atStep` defaulted to that turn's last LLM call), so
+  `removableSources(report)` and the existing UI joins compose unchanged.
+  `fork(k, { fromRerun? })` branches — never rewrites — the conversation: a
+  NEW `recordedChat` seeded with the counterfactual (or original) reply,
+  carrying the removed sources into every later turn, and `fromRerun` must
+  be a result THIS session's `rerunTurn` produced for that turn (a
+  fabricated fork would be a lie). Session registries, UI joins, comparators
+  and persistence stay host-side by design. Exported from
+  `agentfootprint/debug`. See the
+  [recordedChat guide](https://footprintjs.github.io/agentfootprint/docs/debug/recorded-chat/).
+
 ## [7.5.0] - 2026-07-24
 
 ### Added

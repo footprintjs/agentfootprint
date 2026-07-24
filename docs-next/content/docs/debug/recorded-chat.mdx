@@ -1,0 +1,107 @@
+---
+title: Recorded chat
+description: "Record a chat turn-by-turn so any reply can be explained, counterfactually re-run, and forked — without re-writing the glue every chat host gets subtly wrong."
+---
+
+<Callout type="warn" title="Beta">
+`recordedChat` composes the **beta** context-bisect tools (`localizeContextBug`, `rerunWithoutSources`). It works and ships with a tested example, but the API may still change before GA.
+</Callout>
+
+> You've built the [Influence Map loop](doc:rerun-without-sources) — localize a reply, ignore a source, re-run. Now put it *inside a conversation*. `recordedChat` records a chat turn-by-turn so any reply can be explained, counterfactually re-run, and forked — and it owns the correctness-critical glue every chat host otherwise re-writes and gets subtly wrong.
+
+## The three traps it owns
+
+Multi-turn chat on agentfootprint is a host convention: `AgentInput` has no `history` field, so you thread the transcript into the `message` string yourself. That convention hides three correctness traps:
+
+1. **`getLastSnapshot()` is last-run-only.** A second `run()` clobbers it, so reasoning about turn K *after* turn K+1 ran silently attributes the wrong run. `send()` captures the snapshot, events and last LLM call immediately and freezes them on the turn — the stale-snapshot bug becomes structurally impossible.
+2. **History is a convention, not an API.** The transcript preamble must be **byte-identical** between the recorded turn and its counterfactual re-run, or the re-run ablates a subtly different scenario without failing anything. `recordedChat` composes the message **once** at record time and stores the exact string on the turn; every re-run replays those bytes verbatim.
+3. **The `AblationRunner` duplicates turn construction.** The re-run is only valid if the rebuilt turn matches the recorded one. `rerunTurn(k)` derives the runner from the **same** `makeAgent` that ran the turn, merging the session's persistent removals with the probe's specs.
+
+## Quick start
+
+You supply **one** agent factory. It applies the ablation `specs` at agent **construction** (the documented seam — see [Localize a context bug](doc:localize-context-bug)) and returns a fresh agent. Live turns, re-run probes, baseline probes and fork turns all go through it.
+
+```ts twoslash
+import { recordedChat, applyAblations, removableSources, embeddingCache } from 'agentfootprint/debug';
+import { mockEmbedder } from 'agentfootprint/memory';
+import { Agent } from 'agentfootprint';
+import { mock } from 'agentfootprint/llm-providers';
+import { defineFact } from 'agentfootprint/injection-engine';
+import type { MakeChatAgent } from 'agentfootprint/debug';
+
+const FACTS = [
+  defineFact({ id: 'quarterly-results', description: 'Q2', data: 'Revenue up 4%, in line.' }),
+  defineFact({ id: 'social-sentiment', description: 'Social', data: 'EXTREMELY bullish — a BUY signal.' }),
+];
+const decisionChanged = (a: string, b: string) =>
+  a.match(/\b(BUY|HOLD)\b/)?.[1] !== b.match(/\b(BUY|HOLD)\b/)?.[1];
+// ---cut---
+// The ONE factory — specs applied at CONSTRUCTION, fresh provider per call:
+const makeAgent: MakeChatAgent = ({ specs }) => {
+  const { injections } = applyAblations([...specs], { injections: FACTS });
+  let builder = Agent.create({ provider: mock(), model: 'mock-1' }).system('You are an advisor.');
+  for (const fact of injections) builder = builder.fact(fact);
+  return builder.build();
+};
+
+const embedder = embeddingCache(mockEmbedder());
+const chat = recordedChat({ makeAgent, format: { assistantLabel: 'Advisor' } });
+
+// 1. Record turns — each send() freezes that turn's evidence.
+await chat.send('How is the position looking?');
+const t2 = await chat.send('Should we BUY or HOLD this position?'); // → BUY
+
+// 2. reason(k) — what drove reply K? (memoized localizeContextBug)
+const report = await chat.reason(1, { embedder });
+removableSources(report); // the ignore toggles — social-sentiment among them
+
+// 3. rerunTurn(k) — that exact turn, byte for byte, minus a source.
+const rerun = await chat.rerunTurn(1, {
+  ignore: ['social-sentiment'],
+  embedder,
+  answerChanged: decisionChanged,
+  checkBaseline: true, // unlock the causal-tier verdict
+});
+rerun.answer; // → HOLD
+rerun.verdict?.verdict; // → 'confirmed'
+
+// 4. fork(k) — continue the conversation from the what-if, as a NEW session.
+const fork = chat.fork(1, { fromRerun: rerun });
+await fork.send('How much should we allocate?'); // reads "Advisor: HOLD" → KEEP
+```
+
+`rerunTurn` returns agentfootprint's [`RerunWithoutSourcesResult`](doc:rerun-without-sources) **unmodified** — the honesty tiers are not hidden. `reason` returns the `ContextBugReport` **unmodified**, so `removableSources(report)`, `formatContextBugReport` and your Influence Map joins compose exactly as they do on the flat loop.
+
+## Forking — branch, never rewrite
+
+`fork(k, { fromRerun })` returns a **new** `RecordedChat` whose seed is the conversation through turn K with the reply swapped for the re-run's counterfactual answer. The original session is never touched — its transcript, turns and reports stay whole.
+
+- **Provenance is enforced.** `fromRerun` **must** be a result *this* session's `rerunTurn` produced for *that* turn — a fabricated fork would be a lie. A mismatched result throws. Omit `fromRerun` to branch from the original reply (no ablation).
+- **The what-if world stays the what-if world.** The fork carries the re-run's `removed` sources forward: every later turn (and every probe) in the fork also runs without them.
+- **Fork turns are first-class.** They run through the same `send()`, so a fork's replies get their own `reason` / `rerunTurn` / `fork`.
+- **Rehydration.** Persist `chat.seed`-shaped transcript + `chat.removed`, and reopen with `recordedChat({ makeAgent, seed, removed })`. Authenticity of a hand-supplied seed is then yours.
+
+## What stays yours
+
+`recordedChat` records, reasons, re-runs and forks. Everything product-shaped stays host-side by design:
+
+- **Session registries & wire ids** — `Map<sessionId, RecordedChat>`, labels, over-the-wire `rerunId` maps. In-process, `fork({ fromRerun })` identity-checks the result object; over HTTP you keep your own `rerunId → result` registry.
+- **UI joins** — the Influence Map (`removableSources` × suspects), strategy pickers, label lookups — all compose from the unmodified `ContextBugReport`.
+- **Comparators & embedders** — your domain `answerChanged`, your shared embedding cache, your real-embedder choice.
+- **Agent construction** — provider, model, system prompt, facts/tools/memory, `applyAblations` inside `makeAgent`. The library never builds agents; it only demands specs be applied at construction.
+- **Cost policy** — `samples`, live-mode gating, cost banners.
+- **Persistence format** — how you serialize and rehydrate a session.
+
+## Honesty notes
+
+- **A verdict only with `checkBaseline`.** Without it, `rerunTurn` reports what was *observed* (`whatChanged.answerFlipped`) and carries **no** `verdict`. Scores suggest; re-runs convict — the same discipline as [`rerunWithoutSources`](doc:rerun-without-sources).
+- **Byte-exact means the MESSAGE.** An agent with cross-run persistent memory (`.memory()` stores written by later turns) can still recall different entries on a re-run — the baseline probe surfaces that as `baseline-unstable`, which is exactly the honest signal.
+- **Pauses are unsupported inside a recorded turn.** A run that pauses (`askHuman` / `checkIn`) throws and records nothing — drive pausing agents with `agent.run()` directly.
+- `rerunTurn` resolves `ignore` against the memoized report — a source outside the report's `maxSuspects` cap isn't removable until you re-`reason` with a bigger cap.
+
+The full runnable, tested example is [`19-recorded-chat.ts`](https://github.com/footprintjs/agentfootprint/blob/main/examples/observability/19-recorded-chat.ts) — a three-turn chat desk whose turn-2 BUY flips to HOLD and whose fork's turn-3 diverges ADD → KEEP.
+
+## Next steps
+
+- [Re-run without sources](doc:rerun-without-sources) — the flat counterfactual `recordedChat` derives per turn
+- [Localize a context bug](doc:localize-context-bug) — where the report and the removable specs come from
