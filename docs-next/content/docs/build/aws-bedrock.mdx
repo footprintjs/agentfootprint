@@ -35,14 +35,34 @@ The model id is Bedrock's, not the upstream provider's. Cross-region inference p
 
 Converse API's tool_use / tool_result blocks map cleanly to agentfootprint's `Tool[]` + `LLMMessage.toolCalls`. ReAct correctness preserved.
 
+The mapping holds on **both** paths — `complete()` and `stream()` produce the same `toolCalls` for the same logical response, and a parity test pins them together so they cannot drift apart.
+
 ## Streaming
 
-`provider.stream(req)` uses ConverseStream — chunks land as they arrive, final chunk carries authoritative `LLMResponse`.
+`provider.stream(req)` uses ConverseStream — text chunks land as they arrive, and the final chunk carries the authoritative `LLMResponse`.
+
+Streamed tool calls **are** parsed. `bedrock()` accumulates the ConverseStream tool-use events — `contentBlockStart` (id + name), `contentBlockDelta` (JSON argument fragments), `contentBlockStop` — keyed by `contentBlockIndex`, so parallel tool calls whose fragments interleave are reassembled correctly. The completed calls arrive on the terminal chunk's `response.toolCalls`. Tools that take no arguments stream as `args: {}`.
+
+Argument fragments are not yielded as chunks (`LLMChunk` has no field for them); they surface only on the terminal `response`.
+
+<Callout type="warn">
+**Honest by construction:** a response with `stopReason: 'tool_use'` and zero parsed tool calls is never returned quietly. The provider throws a `BedrockProviderError` with `code: 'BEDROCK_STREAM_TOOLUSE_LOST'` so a `reliability` rule can retry, instead of the agent confidently answering without running its tools.
+
+**Fixed in 7.6.1.** Before this, `stream()` ignored the tool-use events entirely and returned `toolCalls: []` — an agent on `bedrock()` with streaming enabled silently produced a final answer instead of calling its tools. The non-streaming path was always correct.
+</Callout>
 
 ## Production patterns
 
 - AWS SDK handles credential refresh + region routing automatically.
-- Wrap with `withRetry` (from `agentfootprint/resilience`) for transient throttling. The provider rethrows a `BedrockProviderError` whose `.status` carries the AWS HTTP status code (`err.$metadata.httpStatusCode`).
+- Wrap with `withRetry` (from `agentfootprint/resilience`) for transient throttling. The provider rethrows a `BedrockProviderError`; check `.code` to tell the failure classes apart:
+
+| `.code` | Meaning | Extra fields |
+|---|---|---|
+| *(absent)* | Generic AWS transport / service error | `.status` — the AWS HTTP status code (`err.$metadata.httpStatusCode`) |
+| `BEDROCK_STREAM_TOOLUSE_LOST` | `stopReason 'tool_use'` with zero parsed tool calls — a tripwire for future ConverseStream shape drift | — |
+| `BEDROCK_MALFORMED_TOOL_ARGS` | The model emitted tool-argument JSON that does not parse. Thrown rather than swallowed to `{}`, so a tool is never executed with its arguments dropped | `.toolName`, `.toolUseId`, `.contentBlockIndex`, `.rawLength`, `.cause` |
+
+  All three are retryable through `withRetry`. A retry usually recovers malformed tool-args JSON (the model re-emits it cleanly); `BEDROCK_STREAM_TOOLUSE_LOST` is a tripwire for persistent stream-shape drift, so if it repeats, report it rather than retrying harder.
 - Tune the default model and token budget on the factory:
 
 ```ts

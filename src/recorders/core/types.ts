@@ -88,13 +88,20 @@ export interface EvictionRecord {
 
 /**
  * Budget-pressure warning — emitted before evictions fire.
+ *
+ * `capTokens` / `projectedTokens` are historical names: slot budgets are
+ * measured in CHARS. Renaming them would be breaking, so they stay.
+ *
+ * `planAction: 'none'` means no mitigation was performed — nothing was
+ * evicted or truncated and the full content still went to the LLM. It is
+ * the honest reading of a slot that composed over its `budgetCap`.
  */
 export interface BudgetPressureRecord {
   readonly slot: ContextSlot;
   readonly capTokens: number;
   readonly projectedTokens: number;
   readonly overflowBy: number;
-  readonly planAction: 'evict' | 'summarize' | 'abort';
+  readonly planAction: 'evict' | 'summarize' | 'abort' | 'none';
 }
 
 // Convention scope keys for composition / eviction / pressure signals.

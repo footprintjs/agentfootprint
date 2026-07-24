@@ -242,12 +242,23 @@ export interface ContextSlotComposedPayload {
   readonly droppedSummaries: readonly string[];
 }
 
+/**
+ * Fired when a slot composes over its `budgetCap`.
+ *
+ * `capTokens` / `projectedTokens` are historical names: slot budgets are
+ * measured in CHARS. Renaming them would be breaking, so they stay.
+ *
+ * `planAction: 'none'` means no mitigation was performed — nothing was
+ * evicted or truncated and the full content still went to the LLM. That
+ * is what the built-in slots report: they never truncate, so the event is
+ * the signal that the budget is not being respected.
+ */
 export interface ContextBudgetPressurePayload {
   readonly slot: ContextSlot;
   readonly capTokens: number;
   readonly projectedTokens: number;
   readonly overflowBy: number;
-  readonly planAction: 'evict' | 'summarize' | 'abort';
+  readonly planAction: 'evict' | 'summarize' | 'abort' | 'none';
 }
 
 /**

@@ -5,6 +5,41 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.6.1] - 2026-07-25
+
+### Fixed
+
+- **Bedrock streaming now delivers tool calls.** `bedrock()`'s `stream()`
+  ignored ConverseStream tool-use events and returned `toolCalls: []` on the
+  terminal chunk — so an agent on Bedrock with streaming enabled saw
+  `stopReason 'tool_use'` with zero tool calls and quietly treated it as a
+  final answer. Tool calling via `bedrock()` + streaming never worked; the
+  non-streaming path was always correct. The stream loop now accumulates
+  tool-use blocks across `contentBlockStart` / `contentBlockDelta` /
+  `contentBlockStop` (keyed by `contentBlockIndex`, so parallel tool calls
+  that interleave are parsed correctly; no-arg tools yield `args: {}`), and a
+  stream/non-stream parity test pins the two paths together.
+
+### Added
+
+- **Honesty invariant on Bedrock responses (both paths):** `stopReason
+  'tool_use'` with zero parsed tool calls is never returned quietly — the
+  provider throws `BedrockProviderError` with `code:
+  'BEDROCK_STREAM_TOOLUSE_LOST'`. After this fix the contradiction cannot
+  happen on today's wire format; the throw is a tripwire for future
+  ConverseStream shape drift, and it lands in your `reliability` /
+  `withRetry` rules instead of the agent silently answering without tools.
+- **Malformed streamed tool-args JSON is a typed error**, not a silent `{}`:
+  `BedrockProviderError` with `code: 'BEDROCK_MALFORMED_TOOL_ARGS'` plus
+  `.toolName` / `.toolUseId`. A tool is never executed with dropped arguments.
+- **Slot budget overflow is loud.** When a context slot composes over its
+  `budgetCap` (e.g. tools slot: used 2447 chars of cap 2000), the slot now
+  emits the previously-documented-but-never-fired
+  `agentfootprint.context.budget_pressure` event with `planAction: 'none'`
+  (nothing is truncated — the full content still goes to the LLM) and prints
+  one structured `console.warn` per agent. `planAction` gains the `'none'`
+  member. Cap defaults are unchanged.
+
 ## [7.6.0] - 2026-07-24
 
 ### Added

@@ -141,7 +141,7 @@ agentfootprint.<domain>.<event>
 |---|---|---|
 | `agent` | `turn_start` · `turn_end` · `iteration_start` · `iteration_end` · `route_decided` · `handoff` · `output_schema_validation_failed` · `thinking_parse_failed` | ReAct loop boundaries; `output_schema_validation_failed` fires inside the reliability gate when the LLM's final answer fails the agent's `outputSchema` (v2.13+) |
 | `composition` | `enter` · `exit` · `iteration_start` · `iteration_exit` · `fork_start` · `branch_complete` · `merge_end` · `route_decided` | Sequence / Parallel / Conditional / Loop lifecycles |
-| `context` | `injected` · `evaluated` · `evicted` · `slot_composed` · `budget_pressure` | Context engineering — every injection's full lifecycle |
+| `context` | `injected` · `evaluated` · `evicted` · `slot_composed` · `budget_pressure` | Context engineering — every injection's full lifecycle. `budget_pressure` fires when a slot composes over its `budgetCap` (`planAction: 'none'` = nothing was truncated, the full content still went to the LLM — the signal is that the budget is not being respected). Emitted since 7.6.1; before that the event was documented but never fired |
 | `stream` | `llm_start` · `llm_end` · `token` · `tool_start` · `tool_end` · `thinking_delta` · `thinking_end` | Token-by-token + tool-call + thinking lifecycle |
 | `tools` | `offered` · `activated` · `deactivated` · `discovery_started` · `discovery_completed` · `discovery_failed` | ToolProvider activation per iteration (skills, gating); async-provider lifecycle (start/complete/fail with `durationMs`) |
 | `skill` | `activated` · `deactivated` | LLM-activated skill resolution |

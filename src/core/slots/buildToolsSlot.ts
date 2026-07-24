@@ -21,7 +21,7 @@ import type { ActiveInjection } from '../../lib/injection-engine/types.js';
 import { typedEmit } from '../../recorders/core/typedEmit.js';
 import type { Tool } from '../tools.js';
 import type { ToolProvider, ToolDispatchContext } from '../../tool-providers/types.js';
-import { composeSlot, fnv1a, truncate } from './helpers.js';
+import { composeSlot, fnv1a, formatOverflowWarning, slotOverflow, truncate } from './helpers.js';
 
 /**
  * Mutable cache shared between `buildToolsSlot` (writer) and
@@ -77,6 +77,11 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
   const tools = config.tools;
   const toolProvider = config.toolProvider;
   const providerToolCache = config.providerToolCache;
+  // Dedup latch for the human-facing warning, scoped to THIS built chart:
+  // a 20-iteration ReAct loop must not print 20 identical warnings. The
+  // typed `context.budget_pressure` event still fires every iteration and
+  // carries the per-iteration truth.
+  let warnedOverflow = false;
 
   // Stage 1 — Discover: consult the external ToolProvider (if any) and
   // resolve its Tool[] for this iteration. ALWAYS runs (even when no
@@ -249,16 +254,37 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
       merged.push(t);
     }
     scope.toolSchemas = merged;
-    scope.$setValue(
-      COMPOSITION_KEYS.SLOT_COMPOSED,
-      composeSlot(
-        'tools',
-        iteration,
-        injections,
-        budgetCap,
-        toolProvider ? 'registry+provider+injections' : 'registry+injections',
-      ),
+    const composition = composeSlot(
+      'tools',
+      iteration,
+      injections,
+      budgetCap,
+      toolProvider ? 'registry+provider+injections' : 'registry+injections',
     );
+    scope.$setValue(COMPOSITION_KEYS.SLOT_COMPOSED, composition);
+
+    // Overflow is LOUD. Nothing here truncates — the full tool definitions
+    // always reach the LLM — so an over-budget slot is otherwise invisible
+    // (headroomChars clamps to 0, droppedCount stays 0). Write a FRESH
+    // single-record array: ContextRecorder re-dispatches every record in
+    // the written value on every write, so appending would re-fire prior
+    // iterations.
+    const pressure = slotOverflow(composition);
+    if (pressure) {
+      scope.$setValue(COMPOSITION_KEYS.BUDGET_PRESSURE, [pressure]);
+      if (!warnedOverflow) {
+        warnedOverflow = true;
+        console.warn(
+          formatOverflowWarning({
+            pressure,
+            itemCount: injections.length,
+            itemNoun: 'tool definition',
+            contentNoun: 'definitions',
+            remedy: 'Raise budgetCap on the agent config or trim tool descriptions.',
+          }),
+        );
+      }
+    }
   };
 
   return flowChart<ToolsSubflowState>('Discover', discoverStage, 'discover', {

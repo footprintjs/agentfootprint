@@ -19,7 +19,7 @@ import type { ContextRecency, ContextRole } from '../../events/types.js';
 import type { InjectionRecord } from '../../recorders/core/types.js';
 import { COMPOSITION_KEYS } from '../../recorders/core/types.js';
 import type { ActiveInjection } from '../../lib/injection-engine/types.js';
-import { composeSlot, fnv1a, truncate } from './helpers.js';
+import { composeSlot, fnv1a, formatOverflowWarning, slotOverflow, truncate } from './helpers.js';
 
 /**
  * A single message supplied by the caller. Structurally matches the
@@ -53,6 +53,8 @@ interface MessagesSubflowState {
  */
 export function buildMessagesSlot(config: MessagesSlotConfig = {}): FlowChart {
   const budgetCap = config.budgetCap ?? 10000;
+  // Dedup latch for the human-facing overflow warning (see buildToolsSlot).
+  let warnedOverflow = false;
 
   return flowChart<MessagesSubflowState>(
     'Compose',
@@ -103,10 +105,32 @@ export function buildMessagesSlot(config: MessagesSlotConfig = {}): FlowChart {
       }
 
       scope.$setValue(INJECTION_KEYS.MESSAGES, injections);
-      scope.$setValue(
-        COMPOSITION_KEYS.SLOT_COMPOSED,
-        composeSlot('messages', iteration, injections, budgetCap, 'history-order'),
+      const composition = composeSlot(
+        'messages',
+        iteration,
+        injections,
+        budgetCap,
+        'history-order',
       );
+      scope.$setValue(COMPOSITION_KEYS.SLOT_COMPOSED, composition);
+
+      // Overflow is LOUD — nothing here truncates (see buildToolsSlot).
+      const pressure = slotOverflow(composition);
+      if (pressure) {
+        scope.$setValue(COMPOSITION_KEYS.BUDGET_PRESSURE, [pressure]);
+        if (!warnedOverflow) {
+          warnedOverflow = true;
+          console.warn(
+            formatOverflowWarning({
+              pressure,
+              itemCount: injections.length,
+              itemNoun: 'message',
+              contentNoun: 'messages',
+              remedy: 'Raise budgetCap on the slot config or trim the conversation history.',
+            }),
+          );
+        }
+      }
     },
     'compose',
     { description: 'Compose messages slot' },
