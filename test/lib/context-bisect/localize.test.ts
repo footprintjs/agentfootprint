@@ -14,6 +14,7 @@ import { controlDepRecorder } from 'footprintjs/trace';
 import { mockEmbedder } from '../../../src/memory/embedding/mockEmbedder';
 import {
   embeddingCache,
+  lexicalOverlapStrategy,
   scoreContrastiveInfluence,
   scoreInfluence,
   type Embedder,
@@ -505,5 +506,47 @@ describe('localizeContextBug — pluggable scorer (scorer?:)', () => {
     expect(report.mode).toBe('correlational');
     expect(report.suspects.length).toBeGreaterThan(0);
     expect(findSuspect(report, 'vip-override-fact')?.hasContentEvidence).toBe(true);
+  });
+});
+
+// ── Named strategies + rankedBy (non-breaking widening) ──────────────
+
+describe('localizeContextBug — scorer strategies (rankedBy)', () => {
+  it('still accepts a bare InfluenceScorer function; rankedBy === custom', async () => {
+    const scenario = plantedScenario();
+    const original = await runPlantedScenario(scenario);
+    const bare: InfluenceScorer = (args) => scoreInfluence(args);
+    const report = await localizeContextBug({
+      artifacts: { snapshot: original.snapshot, events: original.events },
+      embedder: embedder(),
+      atStep: original.lastLlmCallId,
+      scorer: bare,
+    });
+    expect(report.rankedBy).toBe('custom');
+  });
+
+  it('accepts a named InfluenceStrategy; rankedBy echoes its name', async () => {
+    const scenario = plantedScenario();
+    const original = await runPlantedScenario(scenario);
+    const report = await localizeContextBug({
+      artifacts: { snapshot: original.snapshot, events: original.events },
+      embedder: embedder(),
+      atStep: original.lastLlmCallId,
+      scorer: lexicalOverlapStrategy,
+    });
+    expect(report.rankedBy).toBe('lexical-overlap');
+    expect(report.suspects.length).toBeGreaterThan(0);
+    expect(formatContextBugReport(report)).toContain('ranked by lexical-overlap');
+  });
+
+  it('defaults rankedBy to semantic-alignment when no scorer is passed', async () => {
+    const scenario = plantedScenario();
+    const original = await runPlantedScenario(scenario);
+    const report = await localizeContextBug({
+      artifacts: { snapshot: original.snapshot, events: original.events },
+      embedder: embedder(),
+      atStep: original.lastLlmCallId,
+    });
+    expect(report.rankedBy).toBe('semantic-alignment');
   });
 });

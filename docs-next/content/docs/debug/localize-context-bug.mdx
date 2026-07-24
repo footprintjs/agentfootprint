@@ -91,6 +91,46 @@ The full runnable, tested example is [`17-localize-quickstart.ts`](https://githu
 
 Ablation re-runs your scenario N times, so it costs N runs. Skip the re-runner and you get the ranked slice for free — useful triage, honestly labeled a guess. Add the re-runner when you need proof.
 
+## Choose a scoring strategy
+
+The **rank** stage is a named, swappable strategy. Two ship: **`semantic-alignment`** (the default — embeddings, the four-signal composite; needs an embedder) and **`lexical-overlap`** (plain word overlap; free, deterministic, no dependencies). A strategy only **reorders suspects** — ablation alone convicts — so any of them is safe to swap in.
+
+`listInfluenceStrategies()` is exactly what a host UI's strategy picker needs. Each strategy carries `requirements` so the selector can grey out what the host can't run:
+
+```ts twoslash
+import { listInfluenceStrategies } from 'agentfootprint/debug';
+
+// Build a selector: grey out what the host can't run.
+const hostHasEmbedder = false;
+const options = listInfluenceStrategies().map((s) => ({
+  name: s.name, // 'semantic-alignment' | 'lexical-overlap'
+  description: s.description,
+  disabled: s.requirements.includes('embedder') && !hostHasEmbedder,
+}));
+```
+
+Pass a strategy to `localizeContextBug({ scorer })` — the report's `rankedBy` echoes which one ranked (a bare `InfluenceScorer` function still works; it reports `'custom'`):
+
+```ts twoslash
+import { localizeContextBug, embeddingCache, lexicalOverlapStrategy } from 'agentfootprint/debug';
+import { mockEmbedder } from 'agentfootprint/memory';
+import type { ContextBugArtifacts } from 'agentfootprint/debug';
+
+declare const artifacts: ContextBugArtifacts;
+declare const answerStep: string;
+// ---cut---
+const report = await localizeContextBug({
+  artifacts,
+  embedder: embeddingCache(mockEmbedder()),
+  atStep: answerStep,
+  scorer: lexicalOverlapStrategy, // free, deterministic word overlap
+});
+
+report.rankedBy; // 'lexical-overlap'
+```
+
+Once you have a ranking, [re-run without a source](doc:rerun-without-sources) to prove it.
+
 ## When you don't know which step is wrong
 
 `atStep` is the explicit door. Two others:

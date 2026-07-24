@@ -38,6 +38,7 @@ import {
   type Embedder,
   type EvidenceInput,
   type InfluenceScorer,
+  type InfluenceStrategy,
 } from '../influence-core/index.js';
 import { ablationForSuspect, runAblationProbe, verdictFor } from './ablation.js';
 import { assignCostVerdicts, classifySuspect } from './cost.js';
@@ -336,8 +337,12 @@ export interface LocalizeContextBugOptions {
    * scorer of your own — to change the ranking ORDER, never causality:
    * a scorer only changes how FAST §B2 ablation confirms a culprit;
    * ablation alone makes the causal claim.
+   *
+   * Or pass a named `InfluenceStrategy` (`semanticAlignmentStrategy` /
+   * `lexicalOverlapStrategy` / your own) — the report's `rankedBy` echoes
+   * its name.
    */
-  readonly scorer?: InfluenceScorer;
+  readonly scorer?: InfluenceScorer | InfluenceStrategy;
   /**
    * L3 narrowing (proposal 006): a per-loop recall shortlist from `shortlistEarlyCulprits`.
    * When supplied, suspects are REORDERED (never filtered) so high-recall candidates float to the
@@ -389,6 +394,23 @@ export async function localizeContextBug(
   const maxNodes = options.maxNodes ?? CONTEXT_BISECT_DEFAULTS.maxNodes;
   const maxSuspects = options.maxSuspects ?? CONTEXT_BISECT_DEFAULTS.maxSuspects;
   const index = buildArtifactIndex(artifacts);
+
+  // Normalize the pluggable scorer: a bare `InfluenceScorer` function, a named
+  // `InfluenceStrategy` (its `.scorer` runs; its `.name` echoes on `rankedBy`),
+  // or the default `scoreInfluence` (`'semantic-alignment'`).
+  const scorerOption = options.scorer;
+  const scorer: InfluenceScorer =
+    scorerOption === undefined
+      ? scoreInfluence
+      : typeof scorerOption === 'function'
+      ? scorerOption
+      : scorerOption.scorer;
+  const rankedBy =
+    scorerOption === undefined
+      ? 'semantic-alignment'
+      : typeof scorerOption === 'function'
+      ? 'custom'
+      : scorerOption.name;
 
   // ── 1. Trigger ────────────────────────────────────────────────────
   let step: string | undefined;
@@ -508,7 +530,6 @@ export async function localizeContextBug(
       evidenceDraft.push(draft);
     });
     if (evidence.length > 0) {
-      const scorer = options.scorer ?? scoreInfluence;
       const scores = await scorer({ evidence, finalAnswerText: triggerOutput, embedder });
       const byId = new Map(scores.map((s) => [s.id, s.score]));
       evidence.forEach((item, i) => {
@@ -586,6 +607,7 @@ export async function localizeContextBug(
       triggerSource,
       ...(triggerScore !== undefined ? { triggerScore } : {}),
       mode: restorationRan ? 'causal' : 'correlational',
+      rankedBy,
       suspects: ranked,
       ...(dropped ? { dropped } : {}),
       sliceStats,
@@ -640,6 +662,7 @@ export async function localizeContextBug(
     triggerSource,
     ...(triggerScore !== undefined ? { triggerScore } : {}),
     mode: 'causal',
+    rankedBy,
     suspects: withCost,
     ...(dropped ? { dropped } : {}),
     sliceStats,
@@ -822,10 +845,12 @@ export function formatContextBugReport(report: ContextBugReport): string {
         report.triggerScore !== undefined ? `, score ${report.triggerScore.toFixed(2)}` : ''
       })`,
   );
-  lines.push(
+  const modeLine =
     report.mode === 'causal'
       ? 'mode: CAUSAL — ranked proxies + counterfactual ablation verdicts (verdicts are the only causal claims)'
-      : 'mode: CORRELATIONAL — ranking only; every score is an embedding-geometry proxy, no causal claim is made',
+      : 'mode: CORRELATIONAL — ranking only; every score is an embedding-geometry proxy, no causal claim is made';
+  lines.push(
+    report.rankedBy !== undefined ? `${modeLine} — ranked by ${report.rankedBy}` : modeLine,
   );
   const s = report.sliceStats;
   lines.push(

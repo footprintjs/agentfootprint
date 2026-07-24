@@ -275,5 +275,6 @@ _Run `npm run examples:readme` after adding/editing examples._
 | 15 | [`15-walk-to-root.ts`](observability/15-walk-to-root.ts) | walk to root — narrow → hop → convict, symptom to root | walkToRoot walks a decision bug backward (per-loop narrow → writerId provenance hop → run-wide  |
 | 16 | [`16-pluggable-scorer.ts`](observability/16-pluggable-scorer.ts) | Pluggable influence scorer — swap the RANK stage, never causality | localizeContextBug({ scorer }) makes the suspect-ranking scorer a swappable slot. The default  |
 | 17 | [`17-localize-quickstart.ts`](observability/17-localize-quickstart.ts) | Localize a context bug — quickstart (BETA) | The smallest end-to-end localizeContextBug run: a planted misleading fact makes a refunds  |
+| 18 | [`18-influence-strategies-and-rerun.ts`](observability/18-influence-strategies-and-rerun.ts) | Influence strategies + rerunWithoutSources — the Influence Map loop | A stock-desk agent answers BUY driven by planted social sentiment. listInfluenceStrategies()  |
 
 <!-- AUTO-GENERATED:examples:end -->

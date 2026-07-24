@@ -282,6 +282,23 @@ choice, a deterministic `decide()` rule):
   <sub><em>The wrong answer, suspects with influence meters, the <b>CAUSAL 3/3</b> ablation stamp on the planted fact, and the rewind showing the <b>exact system prompt the model saw</b> with the culprit highlighted — recorded state, not a reconstruction. Every id is a <code>runtimeStageId</code> a debugger LLM can drill via the <a href="docs/guides/trace-debugging.md">trace toolpack</a>. <a href="https://footprintjs.github.io/agentThinkingUI/demo/backtrack.html"><b>▶ Try it live</b></a> · run <a href="examples/observability/06-backtrack-trace.ts"><code>06-backtrack-trace.ts</code></a> offline.</em></sub>
 </p>
 
+### Pick how influence is scored — then re-run without the noisy source
+
+Influence ranking is a pluggable strategy. Two ship out of the box:
+`semantic-alignment` (embeddings, the default) and `lexical-overlap` (plain word
+overlap — free and deterministic). `listInfluenceStrategies()` gives a UI everything
+it needs to offer a picker, and to grey out what it can't run.
+
+Found the source you suspect? `rerunWithoutSources` runs the same scenario again without
+it. It reports what changed — the answer, how often it flipped across seeded re-runs, and
+(with `checkBaseline`) a causal verdict. Scores suggest; re-runs convict.
+
+```ts
+const again = await rerunWithoutSources({ report, ignore: ['social-sentiment'], runner, originalAnswer, embedder });
+again.answer;              // 'HOLD …'
+again.whatChanged.summary; // 'Removing sources [social-sentiment] changed the answer in 3/3 seeded re-runs …'
+```
+
 ---
 
 ## Pick your door

@@ -83,6 +83,15 @@ export {
   type ScoreInfluenceArgs,
 } from './signals.js';
 
+export { scoreLexicalInfluence, type ScoreLexicalInfluenceArgs } from './lexical.js';
+export {
+  lexicalOverlapStrategy,
+  listInfluenceStrategies,
+  semanticAlignmentStrategy,
+  type InfluenceStrategy,
+  type InfluenceStrategyRequirement,
+} from './strategies.js';
+
 export { pairwiseSimilarity, type PairwiseSimilarityArgs } from './similarity.js';
 
 export { scoreMargin, type ScoreMarginArgs } from './margin.js';

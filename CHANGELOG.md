@@ -40,6 +40,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   policy engine (`PermissionChecker` untouched; policy runs first) and NOT UI —
   this is consent, with the receipts. See the
   [Check-in guide](https://footprintjs.github.io/agentfootprint/docs/monitor/checkin/).
+- **Named influence strategies — the ranking stage becomes a picker.** The
+  pluggable `InfluenceScorer` seam gets a plain-named descriptor: an
+  `InfluenceStrategy` is `{ name, description, requirements, scorer }`, and
+  `listInfluenceStrategies()` enumerates the built-ins so a host UI can render a
+  strategy selector and grey out what it can't run (`requirements: ['embedder']`
+  vs `[]`). Two ship: **`semantic-alignment`** — the existing FDL four-signal
+  embedding composite (`scoreInfluence`), the default, needs an embedder — and
+  **`lexical-overlap`** — new `scoreLexicalInfluence`, deterministic word-overlap
+  scoring with zero dependencies and zero model calls (same four-signal frame,
+  set-cosine over tokens instead of embedding cosine, honest `InfluenceScore`
+  output including Eq. 6 weight adaptation). `localizeContextBug({ scorer })` now
+  accepts a strategy object as well as a bare function (non-breaking), and the
+  report's new optional `rankedBy` echoes which strategy ranked. The claim ladder
+  is untouched: any strategy only reorders suspects — ablation alone convicts.
+  See the strategy section of the
+  [localizer guide](https://footprintjs.github.io/agentfootprint/docs/debug/localize-context-bug/).
+- **`rerunWithoutSources` — the counterfactual re-run as one call.** Take a
+  finished run's `ContextBugReport`, name the sources to ignore (plain ids:
+  injection id, tool name, or step id — `removableSources(report)` lists what a
+  UI can offer as toggles), pass the same `AblationRunner` the localizer's causal
+  mode uses, and get back `{ answer, answers, removed, whatChanged, runs }`:
+  the re-run's answer, every seeded re-run's answer, the ablation specs that were
+  applied, and an honest `whatChanged` (`answerFlipped` by majority over N≥2
+  seeded re-runs, similarity stats, a plain-language summary — never a single-run
+  diff). Opt into `checkBaseline: true` and the unchanged scenario is probed too,
+  unlocking the causal-tier `verdict` (same `verdictFor` claims as
+  `localizeContextBug`). Reuses `applyAblations`/`runAblationProbe` end to end —
+  no new machinery — and works identically with mock providers ($0) and real
+  ones. **Backward compatible:** additive API only; existing `scorer` functions,
+  reports, and runners are untouched. See
+  [Re-run without sources](https://footprintjs.github.io/agentfootprint/docs/debug/rerun-without-sources/).
 
 ## [7.4.0] - 2026-07-09
 

@@ -306,11 +306,18 @@ export function assertValidWeights(weights: InfluenceWeights, fnName = 'scoreInf
   }
 }
 
-function assertUniqueIds(evidence: readonly EvidenceInput[]): void {
+/**
+ * Validate that every evidence id is unique. Shared by `scoreInfluence` and
+ * `scoreLexicalInfluence` — `fnName` attributes the error to the actual caller.
+ */
+export function assertUniqueIds(
+  evidence: readonly EvidenceInput[],
+  fnName = 'scoreInfluence',
+): void {
   const seen = new Set<string>();
   for (const item of evidence) {
     if (seen.has(item.id)) {
-      throw new Error(`scoreInfluence: duplicate evidence id '${item.id}' — ids must be unique`);
+      throw new Error(`${fnName}: duplicate evidence id '${item.id}' — ids must be unique`);
     }
     seen.add(item.id);
   }

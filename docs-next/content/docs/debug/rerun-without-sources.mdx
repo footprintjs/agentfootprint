@@ -1,0 +1,84 @@
+---
+title: Re-run without sources
+description: "One call: take a finished run, ignore some of its context sources, run it again, and see honestly what changed."
+---
+
+<Callout type="warn" title="Beta">
+`rerunWithoutSources` is a **beta** feature. It works and ships with a tested example, but the API may still change before GA.
+</Callout>
+
+> You've [localized the bug](doc:localize-context-bug) — the ranking points at a source you suspect. A ranking is a guess. The only way to *know* is to remove the source and run it again. `rerunWithoutSources` is that one call.
+
+## The loop
+
+This is the product loop behind an "Influence Map" UI: the user sees an influence ranking, toggles a source off, hits **re-run**.
+
+1. **`localizeContextBug`** produces a `ContextBugReport` — ranked suspects, each with the spec that would remove it.
+2. **`removableSources(report)`** turns that into the UI's toggle list — one row per removable source (`id`, `label`, `score`, `spec`), tools and injections and memory only. That's your `ignore` vocabulary.
+3. **`rerunWithoutSources`** takes the sources to ignore, re-runs the scenario without them, and returns **`whatChanged`** — the re-run's answer, how often it flipped across seeded re-runs, and a plain-language summary.
+
+## One call
+
+You supply the **runner** — the same `AblationRunner` the localizer's causal mode uses. Its body applies the specs at agent **construction** (the documented seam — see [Localize a context bug](doc:localize-context-bug)), builds a fresh agent, and returns the answer:
+
+```ts twoslash
+import { rerunWithoutSources, applyAblations, embeddingCache } from 'agentfootprint/debug';
+import { mockEmbedder } from 'agentfootprint/memory';
+import type { ContextBugReport, AblationSpec } from 'agentfootprint/debug';
+
+// From a completed run + its localizer report:
+declare const report: ContextBugReport;
+declare const buggyAnswer: string;
+// The catalog the agent is built from (yours):
+declare const ALL_TOOLS: { schema: { name: string } }[];
+declare const ALL_FACTS: { id: string }[];
+declare function buildAndRun(
+  tools: readonly { schema: { name: string } }[],
+  facts: readonly { id: string }[],
+): Promise<string>;
+// ---cut---
+// The runner applies the specs at CONSTRUCTION (the documented seam):
+const runner = async (specs: readonly AblationSpec[]) => {
+  const { tools, injections } = applyAblations(specs, { tools: ALL_TOOLS, injections: ALL_FACTS });
+  return buildAndRun(tools, injections); // fresh agent + provider per call
+};
+
+const again = await rerunWithoutSources({
+  report,
+  ignore: ['vip-override-fact'], // a plain id from removableSources(report)
+  runner,
+  originalAnswer: buggyAnswer,
+  embedder: embeddingCache(mockEmbedder()),
+  // domain comparator, recommended with mockEmbedder:
+  answerChanged: (a, b) => a.includes('APPROVED') !== b.includes('APPROVED'),
+});
+
+again.answer; // the re-run's answer
+again.whatChanged.answerFlipped; // did a majority of seeded re-runs change?
+again.whatChanged.summary; // plain-language recap (presentation only — read the fields)
+```
+
+`ignore` takes plain ids: an injection id, a tool name, or a step id (`runtimeStageId`). An unknown id **throws** and lists what's removable — a silent no-op re-run would lie.
+
+## Honesty tiers: observed vs causal
+
+The default is honest about what it can and can't claim:
+
+- **Observed** (default) — `whatChanged.answerFlipped` is a *majority* over **N ≥ 2 seeded re-runs** (never a single-run diff), with the full similarity spread. It's an observation: *these re-runs changed the answer.* No `verdict`.
+- **Causal** — pass `checkBaseline: true`. The unchanged scenario is probed too, so an *unstable* scenario can't masquerade as a finding. Then the result carries a `verdict` — the same `verdictFor` causal-tier claim (`CAUSAL` / `INCONCLUSIVE` / `NOT CONFIRMED`) the localizer uses.
+
+State it plainly: **`answerFlipped` without a baseline check is an observation, not a conviction.** Scores suggest; re-runs convict.
+
+## Works with any provider
+
+Every seeded re-run is a real run of your runner:
+
+- **Mock** — `$0`, deterministic, instant. Pair `mockEmbedder()` with a domain `answerChanged` comparator (its cosine compresses prose into a narrow band, so absolute thresholds don't discriminate).
+- **Real** — each sample costs a real run. `samples` defaults to 3 (clamped to ≥ 2). Mind the cost when you turn on `checkBaseline` (it doubles the runs).
+
+The full runnable, tested example is [`18-influence-strategies-and-rerun.ts`](https://github.com/footprintjs/agentfootprint/blob/main/examples/observability/18-influence-strategies-and-rerun.ts) — a stock-desk agent whose BUY flips to HOLD when the planted social-sentiment source is ignored.
+
+## Next steps
+
+- [Localize a context bug](doc:localize-context-bug) — where the report and the removable specs come from
+- [Testing](doc:testing) — the mocks-first `$0` runs the re-runs are built on

@@ -422,6 +422,14 @@ export interface ContextBugReport {
    * verdicts are the only causal claims; the scores stay proxies).
    */
   readonly mode: 'correlational' | 'causal';
+  /**
+   * Name of the influence strategy that RANKED the suspects —
+   * `'semantic-alignment'` (the default), a strategy's `name` when an
+   * `InfluenceStrategy` was passed, or `'custom'` for a bare function.
+   * Ranking metadata only — the §B2 tiers are unchanged (scores stay
+   * proxies whatever ranked them; ablation alone convicts).
+   */
+  readonly rankedBy?: string;
   /** Ranked suspects, best (most aligned + upstream) first. */
   readonly suspects: readonly Suspect[];
   /**

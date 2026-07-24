@@ -84,6 +84,18 @@ export {
 // Two-score localization (proposal 004): the COST score + the 2×2 classifier.
 export { assignCostVerdicts, classifySuspect, MIN_LOOPS_SAVED } from './cost.js';
 
+// The counterfactual re-run as one call — the product loop over the ablation
+// machinery (wraps applyAblations/runAblationProbe; no new machinery).
+export {
+  removableSources,
+  rerunWithoutSources,
+  type IgnoredSource,
+  type RemovableSource,
+  type RerunWithoutSourcesOptions,
+  type RerunWithoutSourcesResult,
+  type WhatChanged,
+} from './rerun.js';
+
 // Per-loop recall shortlist (proposal 006, L3): rescue early culprits → narrow before ablation.
 export {
   shortlistEarlyCulprits,
