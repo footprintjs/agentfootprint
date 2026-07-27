@@ -1,0 +1,1368 @@
+/* ============================================================================================
+   /features — the eight-verb scroll story.
+
+   Page-scoped, plain CSS with custom properties (the convention in app/global.css — no Tailwind
+   utilities, no CSS-in-JS, no new deps). Imported by app/(home)/features/page.tsx, so Next emits
+   it as that route's own stylesheet and none of it loads on the rest of the site.
+
+   Every class here is prefixed `aff-` ("agentfootprint features"). global.css owns `af-`; the two
+   namespaces cannot collide (`grep -c aff- app/global.css` → 0).
+
+   THEMES: the site toggles `.dark` on <html> (Fumadocs RootProvider / next-themes). The tokens
+   below therefore resolve from the SITE's variables wherever one exists — --bg, --bg-elev, --fg,
+   --fg-muted, --fg-faint, --border, --border-strong, --bg-alt, --color-fd-primary — so the page
+   re-themes with the rest of the site for free and can never drift from the brand. Only the
+   values the site has no equivalent for (semantic red/green, the dark code surface, the chip fill)
+   are declared here, using the approved design's values.
+   ============================================================================================ */
+
+.aff {
+  /* ── surface + ink ───────────────────────────────────────────────────────────────────── */
+  --aff-bg: var(--bg);
+  /* the stage reads as RAISED above the page: the site's page bg is a warm off-white and
+     --bg-elev is pure white, so elevation comes from the existing token pair (dark mode is the
+     same relationship inverted). */
+  --aff-stage: var(--bg-elev);
+  --aff-ink: var(--fg);
+  --aff-muted: var(--fg-muted);
+  --aff-faint: var(--fg-faint);
+  --aff-line: var(--border-strong);
+  --aff-line2: var(--border);
+
+  /* ── accent ──────────────────────────────────────────────────────────────────────────── */
+  /* ONE accent for the whole site: --color-fd-primary is the readable brand gold (#a67c00) on
+     light and the true brand yellow on dark. The design's own pair (#a67c00 / #f2c744) is this
+     same relationship; using the site variable keeps /features and the docs identical. */
+  --aff-accent: var(--color-fd-primary);
+  --aff-accent-soft: color-mix(in srgb, var(--aff-accent) 10%, transparent);
+  --aff-accent-ghost: color-mix(in srgb, var(--aff-accent) 16%, transparent);
+
+  /* ── values with no site equivalent (from the approved design) ────────────────────────── */
+  --aff-chip-bg: var(--bg-alt);
+  --aff-chip-ink: var(--fg-muted);
+  --aff-red: #c94f4f;
+  --aff-ok: #3e9463;
+
+  /* the dark code surface — deliberately dark in BOTH themes (a terminal/editor reads as "this
+     is code" whatever the page around it does). Mirrors global.css's .af-codepeek treatment. */
+  --aff-code-bg: #15151a;
+  --aff-code-line: #2b2b33;
+  --aff-code-ink: #e9e9ef;
+  --aff-code-key: #8a8a94;
+  --aff-code-str: #a9bd88;
+  --aff-code-caret: #f2c744;
+
+  /* ── metrics ─────────────────────────────────────────────────────────────────────────── */
+  --aff-fm: var(--fd-font-mono, ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace);
+  --aff-fd: 'Helvetica Neue', Helvetica, 'Arial Nova', Arial, sans-serif;
+  /* wider than the site's 1200px content column ON PURPOSE: the beat grid is a 430px rail + 72px
+     gutter + the stage, which is 1312px at the design's 1440px width. */
+  --aff-max: 1320px;
+  --aff-gutter: clamp(20px, 5vw, 64px);
+  --aff-rail-w: clamp(290px, 30vw, 430px);
+  --aff-gap: clamp(32px, 5vw, 72px);
+  /* the sticky stage clears the 56px site header with a little air */
+  --aff-pin: calc(var(--fd-nav-height, 56px) + 26px);
+
+  background: var(--aff-bg);
+  color: var(--aff-ink);
+}
+.dark .aff {
+  --aff-chip-bg: #1e1e24;
+  --aff-chip-ink: #a8a8b0;
+  --aff-red: #e06c6c;
+  --aff-ok: #58b47f;
+  --aff-code-bg: #101014;
+}
+
+/* ── Performance: no animation work for beats you can't see ─────────────────────────────────
+   Eight stages carry looping decorative @keyframes (carets, pulses, marching dashes). FeatureBeats
+   adds `.is-inview` when a beat nears the viewport; until then every loop inside it is paused, so
+   off-screen beats cost nothing. Same gate global.css uses for the home chapters. */
+.aff-beat:not(.is-inview) *,
+.aff-beat:not(.is-inview) *::before,
+.aff-beat:not(.is-inview) *::after {
+  animation-play-state: paused !important;
+}
+
+/* ── The additive reveal ────────────────────────────────────────────────────────────────────
+   The storyboard rule is binding: every stage element ARRIVES AND STAYS — the canvas never wipes.
+   So a layer only ever goes from `.aff-in` to `.aff-in.on`, and the step index that drives it is a
+   high-water mark (lib/features/useAdditiveSteps.ts). Layers keep their box while hidden, so the
+   stage never reflows as it fills.
+
+   The lift uses the standalone `translate` property, NOT `transform`: many revealed elements carry
+   their own `transform` (a centred node, the rotated wrong-answer card, the PROVEN stamp), and
+   `translate` composes with `transform` instead of overwriting it. */
+.aff-in {
+  opacity: 0;
+  translate: 0 6px;
+  transition:
+    opacity 0.55s ease,
+    translate 0.55s ease;
+}
+.aff-in.on {
+  /* --aff-op lets a layer land at a designed partial opacity (a dimmed sibling, a pending row) */
+  opacity: var(--aff-op, 1);
+  translate: none;
+}
+/* SVG geometry is in viewBox units — a 6px CSS slide would be scaled by preserveAspectRatio and
+   read as a wobble. Paths fade only. */
+path.aff-in,
+path.aff-in.on {
+  translate: none;
+}
+
+@keyframes aff-blink {
+  50% {
+    opacity: 0;
+  }
+}
+@keyframes aff-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 var(--aff-accent-ghost);
+  }
+  70% {
+    box-shadow: 0 0 0 7px transparent;
+  }
+}
+@keyframes aff-march {
+  to {
+    stroke-dashoffset: -22;
+  }
+}
+
+/* ============================================================================================
+   HERO — the eight verbs as in-page nav, the tagline last.
+   ============================================================================================ */
+.aff-hero {
+  max-width: var(--aff-max);
+  margin-inline: auto;
+  padding: clamp(48px, 8vh, 110px) var(--aff-gutter) clamp(52px, 7vh, 92px);
+}
+.aff-eyebrow {
+  font-family: var(--aff-fm);
+  font-size: 13px;
+  letter-spacing: 0.18em;
+  color: var(--aff-muted);
+}
+.aff-verbgrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0 clamp(14px, 2vw, 28px);
+  margin-top: clamp(28px, 4vh, 48px);
+}
+.aff-verb {
+  display: block;
+  border-top: 1px solid var(--aff-line);
+  padding: 16px 0 clamp(20px, 2.6vh, 36px);
+  text-decoration: none;
+  color: inherit;
+  transition:
+    border-top-color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+/* hover thickens the hairline with an inset shadow rather than a wider border — no reflow */
+.aff-verb:hover,
+.aff-verb:focus-visible {
+  border-top-color: var(--aff-accent);
+  box-shadow: inset 0 1px 0 0 var(--aff-accent);
+  outline: none;
+}
+.aff-verb-ix {
+  font-family: var(--aff-fm);
+  font-size: 11px;
+  color: var(--aff-faint);
+}
+.aff-verb-word {
+  display: block;
+  font-family: var(--aff-fd);
+  font-weight: 700;
+  /* Sized so the LONGEST verb still fits its quarter-column. The design's 54px overflows: at the
+     1320px cap a column is 268px and "REMEMBER" sets ~5.5em wide, i.e. 298px at 54px — it collided
+     with SWAP. `min(3.45vw, 47px)` keeps the widest word inside its column at every width from the
+     760px breakpoint up, and the cap stops it growing past the container's own cap. */
+  font-size: min(3.45vw, 47px);
+  letter-spacing: -0.04em;
+  line-height: 1;
+  color: var(--aff-ink);
+  margin-top: 10px;
+  transition: color 0.2s ease;
+}
+.aff-verb:hover .aff-verb-word,
+.aff-verb:focus-visible .aff-verb-word {
+  color: var(--aff-accent);
+}
+.aff-tagline {
+  font-family: var(--aff-fd);
+  font-weight: 600;
+  font-size: clamp(20px, 2.2vw, 30px);
+  letter-spacing: -0.02em;
+  color: var(--aff-ink);
+  margin: clamp(28px, 4vh, 44px) 0 0;
+}
+
+/* ============================================================================================
+   BEAT — rail left, sticky stage right.
+   ============================================================================================ */
+.aff-beat {
+  border-top: 1px solid var(--aff-line2);
+}
+.aff-beat-inner {
+  /* THE BEAT'S SCROLL BUDGET, and it must live HERE, not on .aff-beat: a sticky element can only
+     travel inside its containing block, which is this grid — not the section. With the height on
+     the section, the grid collapsed to its content and the "pinned" stage un-stuck almost
+     immediately, leaving a screen of nothing for the rest of the beat. Per-beat value from
+     lib/features/beats.ts (`dwell`). */
+  min-height: var(--aff-dwell, 175vh);
+  max-width: var(--aff-max);
+  margin-inline: auto;
+  /* the design's 128px top inset; 13vh keeps the proportion on short viewports. It doubles as the
+     rail's lead-in, which is what the step engine measures the reveal span against. */
+  padding: clamp(56px, 13vh, 128px) var(--aff-gutter) clamp(40px, 6vh, 80px);
+  display: grid;
+  grid-template-columns: var(--aff-rail-w) minmax(0, 1fr);
+  gap: var(--aff-gap);
+  align-items: start;
+}
+#why .aff-beat-inner {
+  --aff-rail-w: clamp(300px, 33vw, 470px);
+}
+
+.aff-rail-ix {
+  font-family: var(--aff-fm);
+  font-size: 12px;
+  letter-spacing: 0.16em;
+  color: var(--aff-faint);
+}
+.aff-rail-verb {
+  font-family: var(--aff-fd);
+  font-weight: 700;
+  font-size: clamp(42px, 7.3vw, 104px);
+  line-height: 0.95;
+  letter-spacing: -0.045em;
+  margin: 14px 0 0;
+  color: var(--aff-ink);
+  transition: color 0.45s ease;
+}
+/* the in-view beat's verb turns gold — the reader's position in the story */
+.aff-beat.is-active .aff-rail-verb {
+  color: var(--aff-accent);
+}
+/* WHY is the flagship: bigger type, and gold from the start */
+#why .aff-rail-verb {
+  font-size: clamp(52px, 9.6vw, 138px);
+  color: var(--aff-accent);
+}
+.aff-rail-line {
+  font-size: clamp(17px, 1.4vw, 19px);
+  line-height: 1.5;
+  color: var(--aff-muted);
+  margin: 22px 0 0;
+  max-width: 34ch;
+  text-wrap: pretty;
+}
+#why .aff-rail-line {
+  font-size: clamp(18px, 1.55vw, 21px);
+  max-width: 32ch;
+}
+
+/* ── "what's inside" — a real <details> disclosure (keyboard + no-JS) ─────────────────────── */
+.aff-inside {
+  margin-top: clamp(26px, 4vh, 46px);
+  border-top: 1px solid var(--aff-line2);
+  padding-top: 14px;
+}
+.aff-inside > summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--aff-fm);
+  font-size: 12px;
+  color: var(--aff-muted);
+  cursor: pointer;
+  list-style: none;
+  transition: color 0.2s ease;
+}
+.aff-inside > summary::-webkit-details-marker {
+  display: none;
+}
+.aff-inside > summary:hover,
+.aff-inside[open] > summary {
+  color: var(--aff-ink);
+}
+/* the chevron points right when closed, down when open — rotated, so one glyph does both */
+.aff-inside > summary svg {
+  flex: none;
+  rotate: -90deg;
+  transition: rotate 0.24s ease;
+}
+.aff-inside[open] > summary svg {
+  rotate: none;
+}
+.aff-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+.aff-chip {
+  font-family: var(--aff-fm);
+  font-size: 11px;
+  padding: 5px 11px;
+  border-radius: 999px;
+  background: var(--aff-chip-bg);
+  color: var(--aff-chip-ink);
+  white-space: nowrap;
+}
+.aff-more {
+  display: inline-block;
+  margin-top: 20px;
+  color: var(--aff-accent);
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+}
+.aff-more:hover {
+  text-decoration: underline;
+}
+
+/* ── the stage: pinned while the rail scrolls ─────────────────────────────────────────────── */
+.aff-stagewrap {
+  position: sticky;
+  top: var(--aff-pin);
+  min-width: 0;
+}
+.aff-stage {
+  position: relative;
+  border: 1px solid var(--aff-line);
+  background: var(--aff-stage);
+  border-radius: 16px;
+  padding: clamp(20px, 2.4vw, 32px);
+  min-height: 430px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+#why .aff-stage {
+  padding: clamp(22px, 3vw, 40px) clamp(22px, 3.2vw, 44px);
+  min-height: 560px;
+}
+/* stages whose content is a single centred block */
+.aff-stage-pad {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+/* ============================================================================================
+   The dark code card (BUILD · SWAP · ASK · the closing install line)
+   ============================================================================================ */
+.aff-code {
+  background: var(--aff-code-bg);
+  border: 1px solid var(--aff-code-line);
+  border-radius: 12px;
+  padding: clamp(18px, 2vw, 24px) clamp(18px, 2.2vw, 28px);
+  font-family: var(--aff-fm);
+  font-size: clamp(12px, 1vw, 13.5px);
+  line-height: 1.85;
+  color: var(--aff-code-ink);
+  overflow-x: auto;
+  transition: box-shadow 0.6s ease;
+}
+/* .build() has landed — the panel pulses gold once and keeps a faint ring */
+.aff-code.is-built {
+  box-shadow: 0 0 0 1px var(--aff-code-caret);
+}
+.aff-ln {
+  white-space: pre-wrap;
+}
+.aff-ln.i1 {
+  padding-left: 2ch;
+}
+.aff-ln.i2 {
+  padding-left: 4ch;
+}
+.aff-ln.dim {
+  --aff-op: 0.34;
+}
+.aff-ln.hl {
+  color: var(--aff-code-caret);
+}
+.aff-code .k {
+  color: var(--aff-code-key);
+}
+.aff-code .s {
+  color: var(--aff-code-str);
+}
+.aff-caret {
+  display: inline-block;
+  width: 8px;
+  height: 1.15em;
+  background: var(--aff-code-caret);
+  vertical-align: -0.2em;
+  margin-left: 1px;
+  animation: aff-blink 1.1s steps(1) infinite;
+}
+
+/* the small gold pulsing dot — "this is happening right now" */
+.aff-pulse {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--aff-accent);
+  flex: none;
+  animation: aff-pulse 1.6s ease-out infinite;
+}
+
+/* ============================================================================================
+   01 BUILD — nothing beyond the code card.
+   02 TEACH — a request drops onto the one skill that matches.
+   ============================================================================================ */
+.aff-teach {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: clamp(0px, 1vw, 4px) clamp(0px, 1.4vw, 12px);
+}
+.aff-chip-req {
+  display: inline-block;
+  font-family: var(--aff-fm);
+  font-size: 12px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  background: var(--aff-accent-soft);
+  color: var(--aff-accent);
+}
+.aff-teach-drop {
+  width: 0;
+  height: 24px;
+  border-left: 1px dashed var(--aff-accent);
+  margin: 2px 0 2px 64px;
+}
+.aff-skill {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 15px 18px;
+  border: 1px solid var(--aff-line2);
+  border-radius: 12px;
+  font-family: var(--aff-fm);
+  font-size: 13px;
+  color: var(--aff-muted);
+}
+.aff-skill + .aff-skill {
+  margin-top: 10px;
+}
+.aff-skill.is-match {
+  padding: 16px 18px;
+  border-color: var(--aff-accent);
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--aff-ink);
+  background: var(--aff-bg);
+  transform: translateY(-2px);
+  box-shadow: 0 10px 28px color-mix(in srgb, var(--aff-accent) 16%, transparent);
+}
+.aff-skill.is-match svg {
+  color: var(--aff-accent);
+}
+.aff-skill.is-match .aff-pulse {
+  margin-left: auto;
+  width: 7px;
+  height: 7px;
+}
+.aff-skill svg {
+  flex: none;
+}
+
+/* ============================================================================================
+   03 REMEMBER — a fact lifts out of Monday and docks into Thursday.
+   ============================================================================================ */
+.aff-remember {
+  position: relative;
+  display: flex;
+  gap: clamp(40px, 7.6vw, 110px);
+  align-items: flex-start;
+  width: 100%;
+  /* centres the row inside the flex-column stage */
+  margin: auto 0;
+}
+.aff-turn {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid var(--aff-line2);
+  border-radius: 14px;
+  padding: 18px;
+  background: var(--aff-bg);
+}
+.aff-turn-day {
+  font-family: var(--aff-fm);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  color: var(--aff-faint);
+  margin-bottom: 14px;
+}
+.aff-bub-row {
+  display: flex;
+}
+.aff-bub-row.end {
+  justify-content: flex-end;
+}
+.aff-bub-row + .aff-bub-row,
+.aff-dock + .aff-bub-row {
+  margin-top: 10px;
+}
+.aff-bub {
+  padding: 10px 12px;
+  width: 78%;
+}
+.aff-bub.user {
+  background: var(--aff-chip-bg);
+  border-radius: 12px 12px 3px 12px;
+  width: 70%;
+}
+.aff-bub.bot {
+  border: 1px solid var(--aff-line2);
+  border-radius: 12px 12px 12px 3px;
+}
+.aff-bub.faded {
+  opacity: 0.55;
+}
+/* the abstract text lines — the point of the beat is the FACT moving, not the words */
+.aff-bar-line {
+  display: block;
+  height: 7px;
+  border-radius: 4px;
+  background: var(--aff-line2);
+}
+.aff-bub.user .aff-bar-line {
+  background: var(--aff-line);
+}
+.aff-bar-line + .aff-bar-line {
+  margin-top: 6px;
+}
+.aff-fact {
+  margin-top: 14px;
+  border: 1px dashed var(--aff-line);
+  border-radius: 9px;
+  padding: 8px 10px;
+  font-family: var(--aff-fm);
+  font-size: 11px;
+  color: var(--aff-faint);
+}
+.aff-flight {
+  position: absolute;
+  left: 46%;
+  top: 40px;
+  transform: translateX(-50%);
+  overflow: visible;
+  color: var(--aff-accent);
+  pointer-events: none;
+}
+.aff-flycard {
+  position: absolute;
+  left: 46%;
+  top: 8px;
+  transform: translateX(-50%) rotate(-3deg);
+  background: var(--aff-bg);
+  border: 1px solid var(--aff-accent);
+  border-radius: 10px;
+  padding: 9px 13px;
+  font-family: var(--aff-fm);
+  font-size: 11.5px;
+  color: var(--aff-ink);
+  box-shadow: 0 14px 34px rgb(0 0 0 / 0.16);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+  z-index: 2;
+}
+.aff-flycard svg {
+  color: var(--aff-accent);
+  flex: none;
+}
+/* the dock — where the recalled fact lands */
+.aff-dock {
+  margin-top: 10px;
+  border: 1px dashed var(--aff-accent);
+  border-radius: 9px;
+  height: 34px;
+  background: var(--aff-accent-soft);
+}
+
+/* ============================================================================================
+   04 SWAP — real tabs; only the provider expression is retyped.
+   ============================================================================================ */
+.aff-swap,
+.aff-watch {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.aff-tabs-row {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 24px;
+}
+.aff-tabs {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--aff-line);
+  border-radius: 10px;
+}
+.aff-tab {
+  appearance: none;
+  background: none;
+  border: 0;
+  font-family: var(--aff-fm);
+  font-size: 12px;
+  padding: 6px 14px;
+  border-radius: 7px;
+  color: var(--aff-muted);
+  cursor: pointer;
+  transition:
+    background 0.2s ease,
+    color 0.2s ease;
+}
+.aff-tab:hover {
+  color: var(--aff-ink);
+}
+.aff-tab.on {
+  background: var(--aff-accent-soft);
+  color: var(--aff-accent);
+  font-weight: 600;
+}
+.aff-tab:focus-visible {
+  outline: 2px solid var(--aff-accent);
+  outline-offset: 1px;
+}
+.aff-swap-code {
+  margin: auto 0;
+}
+/* the morph zone: highlighted, gold left rule, bleeding into the card's padding */
+.aff-morph {
+  position: relative;
+  background: color-mix(in srgb, var(--aff-code-caret) 6%, transparent);
+  margin: 18px calc(-1 * clamp(18px, 2.2vw, 28px)) 6px;
+  padding: 0 clamp(18px, 2.2vw, 28px);
+  border-left: 2px solid var(--aff-code-caret);
+}
+/* the provider we just left — struck through above the new one, fading itself out */
+.aff-ghost {
+  position: absolute;
+  left: clamp(18px, 2.2vw, 28px);
+  top: -15px;
+  font-size: 11.5px;
+  text-decoration: line-through;
+  white-space: pre;
+  pointer-events: none;
+  animation: aff-ghost-out 1.5s ease forwards;
+}
+@keyframes aff-ghost-out {
+  0% {
+    opacity: 0.28;
+  }
+  70% {
+    opacity: 0.28;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+/* the incoming provider line types in */
+.aff-swap-live {
+  animation: aff-type-in 0.5s ease both;
+}
+@keyframes aff-type-in {
+  from {
+    opacity: 0.35;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* ============================================================================================
+   05 WATCH — one run, three lenses.
+   ============================================================================================ */
+.aff-watch-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 26px;
+  flex-wrap: wrap;
+}
+.aff-live {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--aff-fm);
+  font-size: 11.5px;
+  color: var(--aff-faint);
+}
+.aff-watch-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 190px;
+}
+
+/* graph lens */
+.aff-graph {
+  position: relative;
+  height: 190px;
+  margin: 0 12px;
+}
+.aff-graph > svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+.aff-graph path {
+  fill: none;
+  stroke: var(--aff-line);
+  stroke-width: 1.5;
+}
+.aff-graph path.aff-edge-live {
+  stroke: var(--aff-accent);
+  animation: aff-march 1.1s linear infinite;
+}
+.aff-graph path.aff-edge-soft {
+  stroke: var(--aff-line2);
+}
+/* a run node — shared by WATCH's graph and SURVIVE's failover diagram */
+.aff-node {
+  position: absolute;
+  transform: translateY(-50%);
+  font-family: var(--aff-fm);
+  font-size: 12px;
+  padding: 8px 14px;
+  border-radius: 10px;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.aff-node.is-done {
+  background: var(--aff-chip-bg);
+  color: var(--aff-muted);
+}
+.aff-node.is-running {
+  border: 1px solid var(--aff-accent);
+  color: var(--aff-ink);
+  background: var(--aff-bg);
+}
+.aff-node.is-running .aff-pulse {
+  width: 6px;
+  height: 6px;
+}
+.aff-node.is-pending {
+  border: 1px dashed var(--aff-line);
+  color: var(--aff-faint);
+}
+
+/* timeline lens */
+.aff-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 0 6px;
+}
+.aff-tl-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  font-family: var(--aff-fm);
+  font-size: 12px;
+  color: var(--aff-muted);
+}
+.aff-tl-name {
+  width: 74px;
+  flex: none;
+}
+.aff-tl-track {
+  flex: 1;
+  height: 8px;
+  border-radius: 4px;
+  background: var(--aff-line2);
+  overflow: hidden;
+}
+.aff-tl-fill {
+  display: block;
+  height: 8px;
+  border-radius: 4px;
+  background: var(--aff-line);
+}
+.aff-tl-row.is-running .aff-tl-fill {
+  background: var(--aff-accent);
+}
+.aff-tl-row.is-pending .aff-tl-fill {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--aff-line);
+}
+.aff-tl-ms {
+  width: 56px;
+  flex: none;
+  text-align: right;
+  color: var(--aff-faint);
+}
+.aff-tl-row.is-running,
+.aff-tl-row.is-running .aff-tl-ms {
+  color: var(--aff-ink);
+}
+
+/* status lens */
+.aff-status {
+  font-family: var(--aff-fm);
+  font-size: 12px;
+  padding: 0 6px;
+}
+.aff-st-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) 62px 78px;
+  gap: 10px;
+  align-items: center;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--aff-line2);
+  color: var(--aff-muted);
+}
+.aff-st-row > span:nth-child(3),
+.aff-st-row > span:nth-child(4) {
+  text-align: right;
+  color: var(--aff-faint);
+}
+.aff-st-row.is-head {
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--aff-faint);
+}
+.aff-st-name {
+  color: var(--aff-ink);
+}
+.aff-st-row.is-pending .aff-st-name {
+  color: var(--aff-faint);
+}
+.aff-st-row.is-running .aff-st-state {
+  color: var(--aff-accent);
+  font-weight: 600;
+}
+.aff-st-row.is-done .aff-st-state::before {
+  content: '✓ ';
+  color: var(--aff-ok);
+}
+
+/* the raw event stream — under whichever lens is on top */
+.aff-evlog {
+  border-top: 1px solid var(--aff-line2);
+  margin-top: 26px;
+  padding-top: 16px;
+  font-family: var(--aff-fm);
+  font-size: 11.5px;
+  line-height: 2;
+  color: var(--aff-faint);
+  white-space: pre-wrap;
+}
+.aff-evlog .n {
+  color: var(--aff-muted);
+}
+.aff-evlog .is-partial {
+  opacity: 0.45;
+}
+
+/* ============================================================================================
+   06 ASK — the check-in receipt.
+   ============================================================================================ */
+.aff-ask {
+  font-size: clamp(12px, 1vw, 13px);
+  line-height: 1.6;
+}
+.aff-ask-head {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--aff-code-line);
+}
+.aff-ask-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--aff-code-caret);
+  flex: none;
+}
+.aff-ask-run {
+  margin-left: auto;
+  color: var(--aff-code-key);
+  font-size: 11.5px;
+}
+.aff-ask-row {
+  display: flex;
+  gap: 18px;
+  margin-top: 12px;
+}
+.aff-ask-row:first-of-type {
+  margin-top: 18px;
+}
+.aff-ask-row .lbl {
+  width: 130px;
+  flex: none;
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  color: var(--aff-code-key);
+  padding-top: 2px;
+}
+.aff-ask-btns {
+  display: flex;
+  gap: 10px;
+  margin-top: 24px;
+  --aff-op: 0.65;
+}
+.aff-btn-yes,
+.aff-btn-no {
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  padding: 9px 24px;
+  border-radius: 8px;
+}
+.aff-btn-yes {
+  background: var(--aff-code-caret);
+  color: #141414;
+  font-weight: 700;
+}
+.aff-btn-no {
+  border: 1px solid #3a3a44;
+  color: #cfcfd6;
+  font-weight: 600;
+}
+
+/* ============================================================================================
+   07 WHY — the flagship: a wrong answer, ranked suspects, an ablation-proven root cause.
+   ============================================================================================ */
+.aff-why {
+  flex: 1;
+  position: relative;
+}
+.aff-thread {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  color: var(--aff-red);
+  pointer-events: none;
+}
+.aff-wrong {
+  position: relative;
+  width: min(320px, 100%);
+  border: 1px solid var(--aff-line);
+  border-radius: 12px;
+  padding: 16px 18px;
+  background: var(--aff-bg);
+  transform: rotate(-1.6deg);
+  box-shadow: 0 18px 44px rgb(0 0 0 / 0.12);
+}
+.aff-wrong-val {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+}
+.aff-wrong-val .v {
+  font-family: var(--aff-fm);
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--aff-ink);
+}
+.aff-x {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 19px;
+  height: 19px;
+  border-radius: 999px;
+  border: 1.5px solid var(--aff-red);
+  color: var(--aff-red);
+  font-size: 11px;
+  font-weight: 700;
+}
+.aff-suspects {
+  position: relative;
+  margin-top: clamp(28px, 4vw, 46px);
+}
+.aff-suspects-lab {
+  font-family: var(--aff-fm);
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  color: var(--aff-faint);
+  margin-bottom: 14px;
+}
+.aff-suspect {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  border: 1px solid var(--aff-line2);
+  border-radius: 11px;
+  padding: 14px 18px;
+}
+.aff-suspect + .aff-suspect {
+  margin-top: 10px;
+}
+.aff-suspect.is-top {
+  border-color: var(--aff-accent);
+  background: var(--aff-accent-soft);
+}
+.aff-suspect .n {
+  font-family: var(--aff-fm);
+  font-size: 11px;
+  color: var(--aff-faint);
+  flex: none;
+}
+.aff-suspect .lbl {
+  font-family: var(--aff-fm);
+  font-size: 13px;
+  color: var(--aff-muted);
+  min-width: 0;
+}
+.aff-suspect.is-top .lbl {
+  color: var(--aff-ink);
+  font-weight: 600;
+}
+.aff-infl {
+  flex: 1;
+  max-width: 170px;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--aff-line2);
+  margin-left: auto;
+  overflow: hidden;
+}
+/* the bar GROWS to its influence score on its own step — "ranked by influence", visibly */
+.aff-infl-fill {
+  display: block;
+  width: 0;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--aff-line);
+  transition: width 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.aff-infl-fill.on {
+  width: var(--aff-w);
+}
+.aff-suspect.is-top .aff-infl-fill {
+  background: var(--aff-accent);
+}
+.aff-suspect .sc {
+  font-family: var(--aff-fm);
+  font-size: 11.5px;
+  color: var(--aff-faint);
+  width: 34px;
+  flex: none;
+  text-align: right;
+}
+.aff-suspect.is-top .sc {
+  color: var(--aff-muted);
+}
+/* the counterfactual verdict — it SLAMS down, and it is a stamp, not a score */
+.aff-proven {
+  position: absolute;
+  right: -16px;
+  top: -17px;
+  border: 2px solid var(--aff-accent);
+  color: var(--aff-accent);
+  background: var(--aff-bg);
+  font-family: var(--aff-fm);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  padding: 5px 12px;
+  border-radius: 6px;
+  transform: rotate(-8deg) scale(1.05);
+  box-shadow: 0 10px 26px rgb(0 0 0 / 0.14);
+  cursor: help;
+}
+.aff-proven.aff-in {
+  scale: 1.5;
+  transition:
+    opacity 0.3s ease,
+    scale 0.34s cubic-bezier(0.3, 1.5, 0.5, 1);
+}
+.aff-proven.aff-in.on {
+  scale: 1;
+}
+
+/* ============================================================================================
+   08 SURVIVE — the primary dies, the fallback carries the run, the checkpoint resumes it.
+   ============================================================================================ */
+.aff-survive {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 0 clamp(0px, 1.4vw, 12px);
+}
+.aff-failover {
+  position: relative;
+  height: 200px;
+}
+.aff-failover > svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+.aff-failover path {
+  fill: none;
+}
+/* the dead route lands at 0.7, not 1 — it is history, still visible, no longer carrying traffic.
+   Expressed as --aff-op so the reveal rules stay the single owner of `opacity`. */
+.aff-route-dead {
+  stroke: var(--aff-red);
+  stroke-width: 1.5;
+  --aff-op: 0.7;
+}
+.aff-route-ok {
+  stroke: var(--aff-ok);
+  stroke-width: 1.8;
+  animation: aff-march 1.1s linear infinite;
+}
+.aff-node.is-run {
+  background: var(--aff-chip-bg);
+  color: var(--aff-ink);
+  padding: 9px 15px;
+}
+.aff-node.is-dead {
+  border: 1px solid var(--aff-red);
+  color: var(--aff-red);
+  padding: 9px 15px;
+}
+.aff-node.is-dead .x {
+  font-size: 11px;
+  font-weight: 700;
+}
+.aff-node.is-ok {
+  border: 1px solid var(--aff-ok);
+  color: var(--aff-ok);
+  background: var(--aff-bg);
+  padding: 9px 15px;
+}
+.aff-okdot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--aff-ok);
+  flex: none;
+}
+.aff-reroute {
+  position: absolute;
+  transform: translateY(-50%);
+  font-family: var(--aff-fm);
+  font-size: 10.5px;
+  color: var(--aff-faint);
+  white-space: nowrap;
+}
+.aff-ckpt {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  border-top: 1px solid var(--aff-line2);
+  margin-top: 18px;
+  padding-top: 20px;
+}
+.aff-ckpt-chip {
+  font-family: var(--aff-fm);
+  font-size: 11px;
+  padding: 5px 11px;
+  border-radius: 999px;
+  border: 1px dashed var(--aff-ok);
+  color: var(--aff-ok);
+  flex: none;
+}
+.aff-ckpt-track {
+  flex: 1;
+  max-width: 240px;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--aff-line2);
+  overflow: hidden;
+}
+.aff-ckpt-fill {
+  display: block;
+  width: 62%;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--aff-ok);
+}
+.aff-ckpt-note {
+  font-family: var(--aff-fm);
+  font-size: 11.5px;
+  color: var(--aff-faint);
+}
+
+/* ============================================================================================
+   CLOSE
+   ============================================================================================ */
+.aff-close {
+  border-top: 1px solid var(--aff-line2);
+  padding: clamp(64px, 10vh, 150px) var(--aff-gutter) clamp(56px, 8vh, 130px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 26px;
+}
+.aff-install {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--aff-code-bg);
+  border: 1px solid var(--aff-code-line);
+  border-radius: 12px;
+  padding: 16px clamp(18px, 2.4vw, 28px);
+  font-family: var(--aff-fm);
+  font-size: clamp(12.5px, 1.1vw, 14.5px);
+  color: var(--aff-code-ink);
+  max-width: 100%;
+  overflow-x: auto;
+  white-space: nowrap;
+}
+.aff-install .pr {
+  color: var(--aff-code-key);
+}
+.aff-closelinks {
+  display: flex;
+  gap: 34px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+.aff-closelinks a {
+  color: var(--aff-accent);
+  font-size: 14.5px;
+  font-weight: 600;
+  text-decoration: none;
+}
+.aff-closelinks a:hover {
+  text-decoration: underline;
+}
+
+/* ============================================================================================
+   MOBILE (≤760px) — stacked sections, stage ABOVE the text, hero verbs in two columns.
+   Nothing is pinned: on a phone a sticky stage would eat the viewport the copy needs.
+   ============================================================================================ */
+@media (max-width: 760px) {
+  .aff-verbgrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0 20px;
+  }
+  /* two columns are twice as wide, so the verbs can grow back — still capped to keep the longest
+     one ("REMEMBER") inside a 390px phone's half-column */
+  .aff-verb-word {
+    font-size: min(7.4vw, 30px);
+  }
+  .aff-beat-inner {
+    /* content height, not a scroll budget — the steps land on entry instead of over a track
+       (lib/features/useAdditiveSteps.ts measures this and switches to its 'enter' mode) */
+    min-height: 0;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 26px;
+    padding-block: 56px 48px;
+  }
+  /* stage first, text under it */
+  .aff-stagewrap {
+    position: static;
+    order: -1;
+  }
+  .aff-stage,
+  #why .aff-stage {
+    min-height: 340px;
+    padding: 18px;
+  }
+  .aff-rail-line,
+  #why .aff-rail-line {
+    max-width: none;
+  }
+  .aff-remember {
+    gap: 22px;
+  }
+  .aff-flycard {
+    font-size: 10px;
+    padding: 6px 9px;
+  }
+  .aff-flight {
+    display: none;
+  }
+  .aff-graph,
+  .aff-failover {
+    height: 168px;
+  }
+  .aff-node,
+  .aff-tab {
+    font-size: 11px;
+    padding: 6px 10px;
+  }
+  .aff-teach-drop {
+    margin-left: 40px;
+  }
+  .aff-ask-row {
+    flex-direction: column;
+    gap: 2px;
+  }
+  .aff-ask-row .lbl {
+    width: auto;
+  }
+  .aff-proven {
+    right: -6px;
+    top: -14px;
+    font-size: 10px;
+    letter-spacing: 0.14em;
+  }
+  .aff-infl {
+    max-width: 84px;
+  }
+  .aff-st-row {
+    grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) 46px 62px;
+    gap: 6px;
+    font-size: 11px;
+  }
+}
+
+/* ============================================================================================
+   REDUCED MOTION — end states, no motion. global.css already neutralises durations globally;
+   this additionally kills the decorative loops and the entry offset outright, so the page is a
+   fully-composed still on first paint (useAdditiveSteps commits every layer immediately).
+   ============================================================================================ */
+@media (prefers-reduced-motion: reduce) {
+  .aff-in {
+    opacity: var(--aff-op, 1);
+    translate: none;
+  }
+  .aff-caret,
+  .aff-pulse,
+  .aff-route-ok,
+  .aff-edge-live,
+  .aff-ghost,
+  .aff-swap-live {
+    animation: none !important;
+  }
+  .aff-ghost {
+    opacity: 0.28;
+  }
+  .aff-proven.aff-in {
+    scale: 1;
+  }
+  .aff-infl-fill {
+    width: var(--aff-w);
+  }
+}
