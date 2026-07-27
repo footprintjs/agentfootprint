@@ -30,6 +30,7 @@ import type {
 } from '../../../adapters/types.js';
 import type { CacheMarker, CacheStrategy } from '../../../cache/types.js';
 import { typedEmit } from '../../../recorders/core/typedEmit.js';
+import { resilienceHooks } from '../../../recorders/core/resilienceHooks.js';
 import type { InjectionRecord } from '../../../recorders/core/types.js';
 import { emitCostTick } from '../../cost.js';
 import type { ReliabilityConfig } from '../../../reliability/types.js';
@@ -184,6 +185,15 @@ export function buildCallLLMStage(
     // directly when reliability is OFF; passed into `executeWithReliability`
     // when reliability is configured (the helper invokes it once per
     // retry-loop iteration).
+    //
+    // `providerHooks` is the resilience-report channel handed to the
+    // provider on every call. When `deps.provider` is decorated
+    // (withFallback / withRetry / withCircuitBreaker) its reports become
+    // in-run typed events with this stage's real runtimeStageId. Built
+    // once per stage — stateless, reused across reliability-loop
+    // iterations. Named to avoid shadowing `singleProviderCall`'s own
+    // `hooks` parameter, which is the unrelated `{ onFirstChunk }` bag.
+    const providerHooks = resilienceHooks(scope);
     const singleProviderCall = async (
       req: LLMRequest,
       hooks: { onFirstChunk?: () => void },
@@ -191,7 +201,7 @@ export function buildCallLLMStage(
       let resp: LLMResponse | undefined;
       let firstChunkFired = false;
       if (deps.provider.stream) {
-        for await (const chunk of deps.provider.stream(req)) {
+        for await (const chunk of deps.provider.stream(req, providerHooks)) {
           if (chunk.done) {
             if (chunk.response) resp = chunk.response;
             break;
@@ -213,7 +223,13 @@ export function buildCallLLMStage(
         // No `stream()` OR stream finished without a response payload.
         // Raw errors propagate so the reliability loop can classify them;
         // friendly translation happens at the terminal ErrorBridge.
-        resp = await deps.provider.complete(req);
+        //
+        // Hooks are passed to BOTH phases. A decorated provider that falls
+        // back in each reports twice — deliberately NOT deduped, because
+        // those are two genuinely billed calls and collapsing them would
+        // hide real double-billing. (That this branch can re-call at all
+        // after a stream is a pre-existing quirk; see MENTAL_MODEL §14.)
+        resp = await deps.provider.complete(req, providerHooks);
       }
       return resp;
     };

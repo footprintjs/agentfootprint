@@ -17,6 +17,7 @@ import {
   type CircuitState,
 } from '../../../src/resilience/withCircuitBreaker.js';
 import { withFallback } from '../../../src/resilience/withFallback.js';
+import { withRetry } from '../../../src/resilience/withRetry.js';
 import type { LLMProvider, LLMRequest, LLMResponse } from '../../../src/adapters/types.js';
 
 // ── Test provider helpers ────────────────────────────────────────────
@@ -316,4 +317,94 @@ describe('withCircuitBreaker — P7 ROI', () => {
 
   // vi imported for completeness (if a future test uses spies).
   void vi;
+});
+
+// ── v7.8 — the breaker FORWARDS reports but sources none of its own ──
+
+describe('withCircuitBreaker — resilience reports', () => {
+  it('forwards an inner decorator’s reports (it rebuilds the provider object)', async () => {
+    // Load-bearing: all three decorators rebuild a fresh object copying
+    // only name/complete/stream. A breaker in the middle of a stack
+    // silently swallows every inner report unless it forwards.
+    const onResilience = vi.fn();
+    let calls = 0;
+    const flaky: LLMProvider = {
+      name: 'flaky',
+      async complete(): Promise<LLMResponse> {
+        calls += 1;
+        if (calls === 1) throw new Error('transient');
+        return { content: 'ok', usage: { input: 1, output: 1 } } as LLMResponse;
+      },
+    };
+
+    const stacked = withCircuitBreaker(withRetry(flaky, { initialDelayMs: 1 }));
+    await stacked.complete(fakeRequest, { onResilience });
+
+    const kinds = onResilience.mock.calls.map((c) => c[0].kind);
+    expect(kinds).toEqual(['retried', 'recovered']);
+  });
+
+  it('forwards hooks through stream() too', async () => {
+    const seen: unknown[] = [];
+    const inner: LLMProvider = {
+      name: 'streamy',
+      complete: async () => ({ content: 'ok', usage: { input: 1, output: 1 } } as LLMResponse),
+      stream: async function* (_req, hooks) {
+        seen.push(hooks);
+        yield { tokenIndex: 0, content: '', done: true };
+      },
+    };
+    const hooks = { onResilience: vi.fn() };
+
+    for await (const _c of withCircuitBreaker(inner).stream!(fakeRequest, hooks)) {
+      // drain
+    }
+
+    expect(seen).toEqual([hooks]);
+  });
+
+  it('reports NOTHING of its own, even when driven OPEN', async () => {
+    // There is no declared event for a breaker transition, so the
+    // breaker stays honestly silent on this channel. State remains
+    // consumer-observable via onStateChange.
+    const onResilience = vi.fn();
+    const onStateChange = vi.fn();
+    const provider = withCircuitBreaker(makeProvider('always-fail'), {
+      failureThreshold: 2,
+      onStateChange,
+    });
+
+    await expect(provider.complete(fakeRequest, { onResilience })).rejects.toThrow();
+    await expect(provider.complete(fakeRequest, { onResilience })).rejects.toThrow();
+    // Third call is a fast-fail from the OPEN breaker.
+    await expect(provider.complete(fakeRequest, { onResilience })).rejects.toThrow(
+      CircuitOpenError,
+    );
+
+    expect(onResilience).not.toHaveBeenCalled();
+    expect(onStateChange).toHaveBeenCalledWith('open', expect.any(String));
+  });
+
+  it('a trip becomes visible ONLY through the enclosing fallback’s reason', async () => {
+    // The breaker's one route into a trace. Must stay pinned.
+    const onResilience = vi.fn();
+    const primary = withCircuitBreaker(makeProvider('always-fail', 'anthropic'), {
+      failureThreshold: 1,
+    });
+    const provider = withFallback(primary, {
+      name: 'openai',
+      complete: async () => ({ content: 'served', usage: { input: 1, output: 1 } } as LLMResponse),
+    });
+
+    // 1st call: primary fails for real → trips the breaker.
+    await provider.complete(fakeRequest, { onResilience });
+    // 2nd call: primary fast-fails with CircuitOpenError.
+    await provider.complete(fakeRequest, { onResilience });
+
+    expect(onResilience).toHaveBeenCalledTimes(2);
+    expect(onResilience.mock.calls[0][0].reason).toContain('vendor 503');
+    const secondReason = onResilience.mock.calls[1][0].reason;
+    expect(secondReason).toContain('circuit breaker is OPEN');
+    expect(secondReason).toContain('anthropic');
+  });
 });

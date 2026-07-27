@@ -4,7 +4,7 @@ title: ParallelInput
 
 # Interface: ParallelInput
 
-Defined in: [src/core-flow/Parallel.ts:72](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Parallel.ts#L72)
+Defined in: [src/core-flow/Parallel.ts:74](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Parallel.ts#L74)
 
 ## Properties
 
@@ -12,4 +12,4 @@ Defined in: [src/core-flow/Parallel.ts:72](https://github.com/footprintjs/agentf
 
 > `readonly` **message**: `string`
 
-Defined in: [src/core-flow/Parallel.ts:73](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Parallel.ts#L73)
+Defined in: [src/core-flow/Parallel.ts:75](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Parallel.ts#L75)

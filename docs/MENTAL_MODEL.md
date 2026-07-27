@@ -608,9 +608,10 @@ Five places where reality bends the rule (each is a backlog task):
    - Wired the loop to fire `reliability.retried` (retry + retry-other, with from/to provider) and
      `reliability.recovered` (success/fallback after ≥1 failure). Recovery tracking is closure-local
      (never scope → not in commitLog). Pure telemetry.
-   - **`error.*` + `fallback.triggered` deliberately left for the decorators** (their shapes fit
-     withRetry/withFallback exactly). Provider decorators remain standalone, consumer-wired via
-     `onRetry`/`onStateChange` — not a gap. 7 tests, tsc clean, full suite 2211 green.
+   - **`error.*` + `fallback.triggered` left for the decorators** (their shapes fit
+     withRetry/withFallback exactly). At the time this meant "consumer-wired via
+     `onRetry`/`onStateChange`". **SUPERSEDED by v7.8 — see item 4.** 7 tests, tsc clean, full suite
+     2211 green.
    - **⚠ NEW BUG FOUND (deferred): live-path `retry-other` does not actually switch providers.**
      `executeWithReliability` calls `callFn` (= `singleProviderCall` in callLLM.ts) which closes over
      the agent's DEFAULT `deps.provider`; on `retry-other` it only bumps `providerIdx` (telemetry +
@@ -636,6 +637,67 @@ Five places where reality bends the rule (each is a backlog task):
    typed-error throw (telemetry still fires separately via the `reliability.fail_fast` emit). The
    change is pure compile-time hardening — behaviour byte-identical, full suite green. Follow-up
    nicety (out of scope): narrow the `policyHalt*` read in `finalizeResult` the same way.
+6. **Provider-decorator visibility — RESOLVED (v7.8). Supersedes the last bullet of item 3.**
+   `fallback.triggered` / `error.retried` / `error.recovered` were fully DECLARED (registry + payloads
+   + `ALL_EVENT_TYPES` + domain wildcards) but **emitted by nothing** — repo-wide grep found zero
+   emitters. Root cause: `LLMProvider` is a deliberately minimal port (`{name, complete, stream?}`) with
+   no emit channel, and the decorators are constructed by the consumer *before any run exists*, so they
+   can never reach a scope. Leaving it "consumer-wired" was not equivalent: an event pushed via
+   `runner.emit()` lands with synthetic meta (`runtimeStageId: 'consumer-emit#0'`, `runId:
+   'consumer-scope'`, `runOffsetMs: 0` — `RunnerBase.minimalMeta`) and does not correlate into a record.
+   Fix, honouring *collect during traversal, never post-process*:
+   - **The seam is an optional per-call `hooks?: LLMCallHooks` on `complete()`/`stream()`** (NOT a field
+     on `LLMResponse` — an exhausted retry *throws*, so there is no response to carry it, and a
+     response-carried array would need re-stamping on every stream path plus a de-dup rule). The channel
+     rides the CALL, not the factory. Non-breaking: TS lets an arity-1 `complete(req)` satisfy it, so all
+     six shipped adapters and every consumer double still assign (pinned by
+     `test/type-regressions/LLMCallHooks.assignability.test.ts`).
+   - Decorators **report plain data** (`ResilienceReport`), whose field names are 1:1 with the declared
+     payloads so the call-site mapping is rename-free and **no field is ever synthesized**. One producer
+     per kind: `fell-back` ← `withFallback`; `retried`/`recovered` ← `withRetry`; **nothing** ←
+     `withCircuitBreaker`. `withCircuitBreaker` and the `stream()` pass-throughs **forward** hooks —
+     load-bearing, since all three decorators rebuild a fresh object copying only
+     `name`/`complete`/`stream`. Non-duplication is therefore structural, not policed.
+   - `resilienceHooks(scope)` (`recorders/core/resilienceHooks.ts`) maps report → `typedEmit` **in-run**,
+     so correlation ids come from footprintjs's traversal. Passed at all **six** in-run call sites:
+     `callLLM` (both the stream and the complete phase), `LLMCall`, `buildAgentMessageApiChart`,
+     `buildMessageApiChart`, `Parallel.mergeWithLLM`, `buildReliabilityGateChart`.
+   - New `resilienceRecorder` EmitBridge, exact-name matched on the three events, attached always-on in
+     `Agent`/`LLMCall`/`Parallel`. `EmitBridgeOptions.prefix` widened to `string | readonly string[]`
+     (internal type; all 13 existing factories untouched).
+   - **The two families legitimately interleave in one stage and stay distinct:** `reliability.*` = the
+     rules loop's *dynamic* decisions; `error.*` = the decorator's *fixed-cap/backoff* decisions. A
+     decorator reporting from inside a reliability stage is its own account of its own decision, not
+     cross-emitting. Excluding it would make a decorated provider go dark the instant a user calls
+     `.reliability()`.
+   - **Honest absences (stated, not papered over):**
+     · `ErrorRetriedPayload.reason` has no source for the *decision rationale* — `shouldRetry` returns a
+       bare boolean, so a custom predicate's reasoning is unknowable. We supply a classification **of the
+       error**, from the same `status`/`statusCode` fields `defaultShouldRetry` inspects:
+       `'http-429'` | `'http-5xx'` | `'http-4xx'` | `` `http-${code}` `` | `'no-status'`. (`'http-4xx'`
+       is only reachable via a custom predicate — itself a useful signal.)
+     · `ErrorRecoveredPayload` is `{attempt, totalDurationMs}` — no `via`, no provider name — so **a
+       fallback-sourced recovery cannot be expressed**; `withFallback` never reports `recovered`, and a
+       fallback success is described by `fallback.triggered` alone. Inventing a `via` would mean a new
+       event (and the 9-file event-count edit).
+     · `totalDurationMs` is **new instrumentation** — `withRetry` had no `t0` before v7.8.
+     · **`withCircuitBreaker` gets no event of its own** (no declared payload for a breaker transition;
+       its old comment named the unregistered `resilience.circuit_state_changed`). A trip is visible only
+       under `withFallback`, via `reason` carrying the `CircuitOpenError` message. Standalone breaker
+       state stays consumer-wired via `onStateChange`. Registering the event is its own packet.
+     · **Blind spot:** `memory/beats/llmExtractor.ts` and `memory/facts/llmFactExtractor.ts` call
+       `complete()` inside extractor ports with no scope and no dispatcher — permanently out of reach.
+     · The message-api charts have **no runner of their own**, so their emits reach the commit log
+       always but `agent.on()` only if the caller attaches `resilienceRecorder` (exported from
+       `agentfootprint/observe`).
+     · `callLLM` calls `complete()` **again** when a stream ends without a `response`. Hooks go to both
+       phases, so a fallback in each reports separately — **deliberately not deduped**, because those are
+       two genuinely billed calls and collapsing them would hide real double-billing. (The double-call
+       itself is pre-existing; not fixed here.)
+   - Outside a run nothing passes hooks, so every report site short-circuits and standalone behaviour is
+     byte-identical — the 57 pre-existing `test/resilience` tests passing untouched *is* that proof.
+   - Public surface added: 2 types (`LLMCallHooks`, `ResilienceReport`), 2 optional parameters, 1 recorder
+     factory. **No new event, no required field on any public type, no adapter edit.**
 
 ---
 

@@ -18,9 +18,17 @@
  * fixed maxAttempts + exponential backoffMs; totalDurationMs is a decorator
  * notion). The rules loop has no fixed cap and no backoff, so it gets its
  * own `reliability.*` family shaped for what it actually knows. The two
- * families are kept distinct on purpose. The provider decorators remain
- * deliberately standalone (consumer-wired via onRetry/onStateChange) and
- * are NOT bridged to this channel.
+ * families are kept distinct on purpose, and neither cross-emits the
+ * other's events.
+ *
+ * UPDATE (v7.8): the decorators are no longer consumer-wired-only. They
+ * now REPORT through an optional per-call `LLMCallHooks`, and the in-run
+ * LLM call sites translate those reports into the `error.*` /
+ * `fallback.triggered` events via their own `resilienceRecorder` bridge
+ * (see test/resilience/integration/resilience-decorator-visibility.test.ts).
+ * That is a SEPARATE channel from this file's `reliability.*` family —
+ * the two legitimately interleave in one stage but stay distinct, which
+ * is exactly what the assertions below continue to pin.
  *
  * These events are PURE telemetry — emit-only. The recovery-tracking
  * counters are closure-local (like attempt/breakerStates), never written

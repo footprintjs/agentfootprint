@@ -19,27 +19,34 @@ export interface EmitBridgeOptions {
   readonly dispatcher: EventDispatcher;
   /** Recorder id — must be unique among attached recorders. */
   readonly id: string;
-  /** Event-name prefix this bridge forwards (e.g. 'agentfootprint.stream.'). */
-  readonly prefix: string;
+  /**
+   * Event-name prefix(es) this bridge forwards (e.g.
+   * 'agentfootprint.stream.'). An array forwards any event matching ANY
+   * of them — used when one source domain spans two event families
+   * (`agentfootprint.fallback.` + `agentfootprint.error.`), or to match
+   * exact full event names rather than a whole domain.
+   */
+  readonly prefix: string | readonly string[];
   readonly getRunContext: () => RunContext;
 }
 
 export class EmitBridge implements CombinedRecorder {
   readonly id: string;
   private readonly dispatcher: EventDispatcher;
-  private readonly prefix: string;
+  private readonly prefixes: readonly string[];
   private readonly getRunContext: () => RunContext;
 
   constructor(options: EmitBridgeOptions) {
     this.dispatcher = options.dispatcher;
     this.id = options.id;
-    this.prefix = options.prefix;
+    this.prefixes = typeof options.prefix === 'string' ? [options.prefix] : options.prefix;
     this.getRunContext = options.getRunContext;
   }
 
   onEmit(event: EmitEvent): void {
     if (typeof event.name !== 'string') return;
-    if (!event.name.startsWith(this.prefix)) return;
+    const name = event.name;
+    if (!this.prefixes.some((p) => name.startsWith(p))) return;
     const type = event.name as AgentfootprintEventType;
     if (!this.dispatcher.hasListenersFor(type)) return;
 

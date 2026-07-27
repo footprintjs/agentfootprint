@@ -19,7 +19,13 @@
  *                  network errors, and unknown shapes.
  */
 
-import type { LLMChunk, LLMProvider, LLMRequest, LLMResponse } from '../adapters/types.js';
+import type {
+  LLMCallHooks,
+  LLMChunk,
+  LLMProvider,
+  LLMRequest,
+  LLMResponse,
+} from '../adapters/types.js';
 
 export interface WithRetryOptions {
   /** Total attempts including the first. Default 3. Must be >= 1. */
@@ -37,11 +43,16 @@ export interface WithRetryOptions {
    */
   readonly shouldRetry?: (error: unknown, attempt: number) => boolean;
   /**
-   * Hook invoked before each retry. Useful for logging or an
-   * `agentfootprint.error.retried` emit (the event family reserved for
-   * the standalone provider decorators — see events/payloads.ts).
-   * Receives the attempt number that's about to start (so attempt 2 =
-   * first retry).
+   * Hook invoked before each retry. Useful for logging in standalone
+   * (non-agentfootprint) use. Receives the attempt number that's about
+   * to start (so attempt 2 = first retry).
+   *
+   * You do NOT need this to get retry telemetry inside a run: since v7.8
+   * the in-run LLM call sites hand this decorator an `LLMCallHooks` and
+   * translate its reports into `agentfootprint.error.retried` /
+   * `agentfootprint.error.recovered` events, stamped with the real
+   * `runId`/`runtimeStageId`. This hook is the consumer-owned escape
+   * hatch and its contract is unchanged.
    */
   readonly onRetry?: (error: unknown, attempt: number, delayMs: number) => void;
 }
@@ -68,11 +79,26 @@ export function withRetry(provider: LLMProvider, options: WithRetryOptions = {})
 
   const wrapped: LLMProvider = {
     name: `${provider.name}+retry`,
-    async complete(req: LLMRequest): Promise<LLMResponse> {
+    async complete(req: LLMRequest, hooks?: LLMCallHooks): Promise<LLMResponse> {
       let lastError: unknown;
+      // t0 for the `recovered` report's totalDurationMs. New
+      // instrumentation (the decorator did not measure this before v7.8),
+      // not a recovered fact.
+      const startedMs = Date.now();
       for (let attempt = 1; attempt <= maxAttempts; attempt++) {
         try {
-          return await provider.complete(req);
+          const res = await provider.complete(req, hooks);
+          // Only a success that FOLLOWED a failure is a recovery — a
+          // first-try success reports nothing (mirrors the rules loop's
+          // guard in reliabilityExecution.ts).
+          if (attempt > 1) {
+            hooks?.onResilience?.({
+              kind: 'recovered',
+              attempt,
+              totalDurationMs: Date.now() - startedMs,
+            });
+          }
+          return res;
         } catch (err) {
           lastError = err;
           if (attempt >= maxAttempts || !shouldRetry(err, attempt)) {
@@ -80,6 +106,14 @@ export function withRetry(provider: LLMProvider, options: WithRetryOptions = {})
           }
           const delay = Math.min(maxDelayMs, initialDelayMs * Math.pow(backoffFactor, attempt - 1));
           onRetry?.(err, attempt + 1, delay);
+          hooks?.onResilience?.({
+            kind: 'retried',
+            attempt: attempt + 1,
+            maxAttempts,
+            lastError: err instanceof Error ? err.message : String(err),
+            backoffMs: delay,
+            reason: classifyRetryReason(err),
+          });
           await sleep(delay, req.signal);
         }
       }
@@ -90,13 +124,38 @@ export function withRetry(provider: LLMProvider, options: WithRetryOptions = {})
 
   // Pass-through `stream()` if the underlying provider supports it.
   // No retry on streams (mid-stream resumption is provider-specific).
+  // `hooks` must still be FORWARDED: a stacked inner decorator (e.g.
+  // withRetry(withFallback(...))) would otherwise go dark on the stream
+  // path.
   if (provider.stream) {
-    // Guarded by `if (provider.stream)` above; assertion safe.
-    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-    wrapped.stream = (req: LLMRequest): AsyncIterable<LLMChunk> => provider.stream!(req);
+    wrapped.stream = (req: LLMRequest, hooks?: LLMCallHooks): AsyncIterable<LLMChunk> =>
+      // Guarded by `if (provider.stream)` above; assertion safe.
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+      provider.stream!(req, hooks);
   }
 
   return wrapped;
+}
+
+/**
+ * Classify the ERROR that caused a retry, for `ResilienceReport.reason`.
+ *
+ * Reads exactly the fields `defaultShouldRetry` inspects, so the label
+ * always describes the same signal the default policy acted on. Note this
+ * is a classification of the error, NOT of the predicate's reasoning —
+ * `shouldRetry` returns a bare boolean, so a custom predicate's rationale
+ * is unknowable here. `'http-4xx'` is only reachable via a custom
+ * predicate (the default rejects non-429 4xx), which itself is a useful
+ * signal.
+ */
+function classifyRetryReason(err: unknown): string {
+  const status =
+    (err as { status?: number })?.status ?? (err as { statusCode?: number })?.statusCode;
+  if (typeof status !== 'number') return 'no-status';
+  if (status === 429) return 'http-429';
+  if (status >= 500) return 'http-5xx';
+  if (status >= 400) return 'http-4xx';
+  return `http-${status}`;
 }
 
 // ── Defaults ────────────────────────────────────────────────────────

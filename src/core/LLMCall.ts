@@ -61,6 +61,8 @@ import { evalRecorder } from '../recorders/core/EvalRecorder.js';
 import { memoryRecorder } from '../recorders/core/MemoryRecorder.js';
 import { skillRecorder } from '../recorders/core/SkillRecorder.js';
 import { typedEmit } from '../recorders/core/typedEmit.js';
+import { resilienceHooks } from '../recorders/core/resilienceHooks.js';
+import { resilienceRecorder } from '../recorders/core/ResilienceRecorder.js';
 import type { InjectionRecord } from '../recorders/core/types.js';
 import type { LLMProvider, PricingTable } from '../adapters/types.js';
 import { emitCostTick } from './cost.js';
@@ -296,6 +298,10 @@ export class LLMCall extends RunnerBase<LLMCallInput, LLMCallOutput> {
     executor.attachCombinedRecorder(evalRecorder({ dispatcher, getRunContext: getRunCtx }));
     executor.attachCombinedRecorder(memoryRecorder({ dispatcher, getRunContext: getRunCtx }));
     executor.attachCombinedRecorder(skillRecorder({ dispatcher, getRunContext: getRunCtx }));
+    // Provider-decorator telemetry (withFallback / withRetry reports from
+    // the call-llm stage's `resilienceHooks`). LLMCall has its own in-run
+    // provider.complete(), so it needs its own bridge.
+    executor.attachCombinedRecorder(resilienceRecorder({ dispatcher, getRunContext: getRunCtx }));
     for (const r of this.attachedRecorders) executor.attachCombinedRecorder(r);
     return executor;
   }
@@ -415,13 +421,18 @@ export class LLMCall extends RunnerBase<LLMCallInput, LLMCallOutput> {
       // layers classify on the raw message). The friendly translation
       // for non-developers happens once at the terminal boundary —
       // ErrorBridge humanizes the `error.fatal` event the monitor reads.
-      const response = await provider.complete({
-        systemPrompt: systemPrompt.length > 0 ? systemPrompt : undefined,
-        messages,
-        model,
-        ...(temperature !== undefined && { temperature }),
-        ...(maxTokens !== undefined && { maxTokens }),
-      });
+      const response = await provider.complete(
+        {
+          systemPrompt: systemPrompt.length > 0 ? systemPrompt : undefined,
+          messages,
+          model,
+          ...(temperature !== undefined && { temperature }),
+          ...(maxTokens !== undefined && { maxTokens }),
+        },
+        // Resilience-report channel: a decorated provider's fallback /
+        // retry / recovery becomes an in-run typed event here.
+        resilienceHooks(scope),
+      );
       const durationMs = Date.now() - startMs;
 
       typedEmit(scope, 'agentfootprint.stream.llm_end', {

@@ -33,6 +33,8 @@ import { streamRecorder } from '../recorders/core/StreamRecorder.js';
 import { agentRecorder } from '../recorders/core/AgentRecorder.js';
 import { compositionRecorder } from '../recorders/core/CompositionRecorder.js';
 import { typedEmit } from '../recorders/core/typedEmit.js';
+import { resilienceHooks } from '../recorders/core/resilienceHooks.js';
+import { resilienceRecorder } from '../recorders/core/ResilienceRecorder.js';
 
 export interface ParallelOptions {
   readonly name?: string;
@@ -458,6 +460,9 @@ export class Parallel extends RunnerBase<ParallelInput, ParallelOutput> {
     executor.attachCombinedRecorder(streamRecorder({ dispatcher, getRunContext: getRunCtx }));
     executor.attachCombinedRecorder(agentRecorder({ dispatcher, getRunContext: getRunCtx }));
     executor.attachCombinedRecorder(compositionRecorder({ dispatcher, getRunContext: getRunCtx }));
+    // Provider-decorator telemetry from the `mergeWithLLM` helper — the
+    // one place a Parallel calls a provider directly.
+    executor.attachCombinedRecorder(resilienceRecorder({ dispatcher, getRunContext: getRunCtx }));
     executor.attachCombinedRecorder(this.makeBranchErrorRecorder(this.runEpoch));
     for (const r of this.attachedRecorders) executor.attachCombinedRecorder(r);
     return executor;
@@ -904,12 +909,17 @@ async function mergeWithLLM(
     ...(opts.temperature !== undefined && { temperature: opts.temperature }),
   });
   const startMs = Date.now();
-  const response = await opts.provider.complete({
-    messages,
-    model: opts.model,
-    ...(opts.temperature !== undefined && { temperature: opts.temperature }),
-    ...(opts.maxTokens !== undefined && { maxTokens: opts.maxTokens }),
-  });
+  const response = await opts.provider.complete(
+    {
+      messages,
+      model: opts.model,
+      ...(opts.temperature !== undefined && { temperature: opts.temperature }),
+      ...(opts.maxTokens !== undefined && { maxTokens: opts.maxTokens }),
+    },
+    // Resilience-report channel: a decorated merge provider's fallback /
+    // retry / recovery becomes an in-run typed event here.
+    resilienceHooks(scope),
+  );
   const durationMs = Date.now() - startMs;
   typedEmit(scope, 'agentfootprint.stream.llm_end', {
     iteration: 1,

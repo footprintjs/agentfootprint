@@ -4,7 +4,7 @@ title: MessageApiChartDeps
 
 # Interface: MessageApiChartDeps
 
-Defined in: [src/core/agent/buildMessageApiChart.ts:62](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/buildMessageApiChart.ts#L62)
+Defined in: [src/core/agent/buildMessageApiChart.ts:63](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/buildMessageApiChart.ts#L63)
 
 ## Properties
 
@@ -12,7 +12,7 @@ Defined in: [src/core/agent/buildMessageApiChart.ts:62](https://github.com/footp
 
 > `readonly` **model**: `string`
 
-Defined in: [src/core/agent/buildMessageApiChart.ts:64](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/buildMessageApiChart.ts#L64)
+Defined in: [src/core/agent/buildMessageApiChart.ts:65](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/buildMessageApiChart.ts#L65)
 
 ***
 
@@ -20,7 +20,7 @@ Defined in: [src/core/agent/buildMessageApiChart.ts:64](https://github.com/footp
 
 > `readonly` **provider**: [`LLMProvider`](/docs/api/interfaces/LLMProvider)
 
-Defined in: [src/core/agent/buildMessageApiChart.ts:63](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/buildMessageApiChart.ts#L63)
+Defined in: [src/core/agent/buildMessageApiChart.ts:64](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/buildMessageApiChart.ts#L64)
 
 ***
 
@@ -28,7 +28,7 @@ Defined in: [src/core/agent/buildMessageApiChart.ts:63](https://github.com/footp
 
 > `readonly` `optional` **structureRecorders?**: readonly `StructureRecorder`[]
 
-Defined in: [src/core/agent/buildMessageApiChart.ts:66](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/buildMessageApiChart.ts#L66)
+Defined in: [src/core/agent/buildMessageApiChart.ts:67](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/buildMessageApiChart.ts#L67)
 
 ***
 
@@ -36,4 +36,4 @@ Defined in: [src/core/agent/buildMessageApiChart.ts:66](https://github.com/footp
 
 > `readonly` **systemPrompt**: `string`
 
-Defined in: [src/core/agent/buildMessageApiChart.ts:65](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/buildMessageApiChart.ts#L65)
+Defined in: [src/core/agent/buildMessageApiChart.ts:66](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/buildMessageApiChart.ts#L66)

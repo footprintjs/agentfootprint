@@ -73,6 +73,8 @@ const provider = withRetry(anthropic({ apiKey }), {
 
 The default `shouldRetry` skips `AbortError` and HTTP 4xx (client mistakes don't benefit from retry) — except `429 Too Many Requests`, which IS retried — and retries everything else (5xx, network errors, unknown shapes). Override it to implement per-error policies.
 
+`onRetry` is for standalone use. Inside a run you don't need it: the decorator's retries surface automatically as `agentfootprint.error.retried` and `agentfootprint.error.recovered`, correlated to the run. See [Resilience](/docs/monitor/resilience#observability-automatic-inside-a-run).
+
 ## Fallback decorator
 
 `withFallback(primary, fallback, options?)` swaps providers when the primary fails. Useful for cross-provider resilience — try Anthropic; if it's down, try OpenAI:
@@ -89,6 +91,8 @@ const provider = withFallback(
 ```
 
 The fallback activates when the primary throws an error meeting the fallback predicate. The default `shouldFallback` falls back on **every** error except `AbortError` — override it to gate on specific status codes. Successful streams pin to the active provider: once the primary's stream has yielded a chunk, an error after that re-throws rather than restarting on the fallback (no provider-flip mid-stream).
+
+As with `onRetry`, `onFallback` is the standalone escape hatch — inside a run every real fallback also fires `agentfootprint.fallback.triggered` carrying which provider actually served.
 
 For chaining three or more providers, use `fallbackProvider(p1, p2, p3, ...)` — sugar for nested `withFallback` that tries each in order, first success wins:
 

@@ -4,7 +4,7 @@ title: Parallel
 
 # Class: Parallel
 
-Defined in: [src/core-flow/Parallel.ts:201](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Parallel.ts#L201)
+Defined in: [src/core-flow/Parallel.ts:203](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Parallel.ts#L203)
 
 Every primitive (LLMCall, Agent), every composition (Sequence, Parallel,
 Conditional, Loop), and every pattern factory result implements Runner.
@@ -21,7 +21,7 @@ composition.
 
 > **new Parallel**(`opts`, `branches`, `merge`): `Parallel`
 
-Defined in: [src/core-flow/Parallel.ts:255](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Parallel.ts#L255)
+Defined in: [src/core-flow/Parallel.ts:257](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Parallel.ts#L257)
 
 #### Parameters
 
@@ -68,7 +68,7 @@ instead of N `.on()` subscriptions.
 
 > `readonly` **id**: `string`
 
-Defined in: [src/core-flow/Parallel.ts:203](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Parallel.ts#L203)
+Defined in: [src/core-flow/Parallel.ts:205](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Parallel.ts#L205)
 
 ***
 
@@ -76,7 +76,7 @@ Defined in: [src/core-flow/Parallel.ts:203](https://github.com/footprintjs/agent
 
 > `readonly` **name**: `string`
 
-Defined in: [src/core-flow/Parallel.ts:202](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Parallel.ts#L202)
+Defined in: [src/core-flow/Parallel.ts:204](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Parallel.ts#L204)
 
 ## Methods
 
@@ -126,7 +126,7 @@ server leak; attach once, or detach per-run.
 
 > `static` **create**(`opts?`): [`ParallelBuilder`](/docs/api/classes/ParallelBuilder)
 
-Defined in: [src/core-flow/Parallel.ts:275](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Parallel.ts#L275)
+Defined in: [src/core-flow/Parallel.ts:277](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Parallel.ts#L277)
 
 #### Parameters
 
@@ -623,7 +623,7 @@ calling if you still want them. Does NOT touch attached recorders
 
 > **resume**(`checkpoint`, `input?`, `options?`): `Promise`\<`string` \| [`RunnerPauseOutcome`](/docs/api/interfaces/RunnerPauseOutcome)\>
 
-Defined in: [src/core-flow/Parallel.ts:336](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Parallel.ts#L336)
+Defined in: [src/core-flow/Parallel.ts:338](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Parallel.ts#L338)
 
 Resume a paused run from its checkpoint. Default behavior: rebuild the
 chart, wire the same core recorders + consumer recorders, call
@@ -658,7 +658,7 @@ returning. Subclass overrides only if it needs specialized behavior.
 
 > **run**(`input`, `options?`): `Promise`\<`string` \| [`RunnerPauseOutcome`](/docs/api/interfaces/RunnerPauseOutcome)\>
 
-Defined in: [src/core-flow/Parallel.ts:318](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Parallel.ts#L318)
+Defined in: [src/core-flow/Parallel.ts:320](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Parallel.ts#L320)
 
 Execute the runner. Subclass may override for specialized input
 mapping, but default invokes getSpec() + FlowChartExecutor.

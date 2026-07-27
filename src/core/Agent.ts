@@ -58,6 +58,7 @@ import { skillRecorder } from '../recorders/core/SkillRecorder.js';
 import { validationRecorder } from '../recorders/core/ValidationRecorder.js';
 import { toolsRecorder } from '../recorders/core/ToolsRecorder.js';
 import { reliabilityRecorder } from '../recorders/core/ReliabilityRecorder.js';
+import { resilienceRecorder } from '../recorders/core/ResilienceRecorder.js';
 import { checkInEventsBridge } from '../recorders/core/CheckInRecorder.js';
 import {
   resolveCheckInConfig,
@@ -887,6 +888,11 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // Reliability telemetry (rules-loop fail_fast / retried / recovered).
     // Always-on, but zero-cost when no .reliability() config fires events.
     attachObserver(reliabilityRecorder({ dispatcher, getRunContext: getRunCtx }));
+    // Provider-decorator telemetry (withFallback / withRetry reports,
+    // translated in-run by `resilienceHooks`). Always-on, but zero-cost
+    // when the configured provider is undecorated or never fails. Also
+    // covers the reliability GATE subflow — it runs on this executor.
+    attachObserver(resilienceRecorder({ dispatcher, getRunContext: getRunCtx }));
     // Check-in events bridge (evidence-carrying human consent). Always-on;
     // forwards checkin.request/decision $emits to the dispatcher so
     // `agent.on('agentfootprint.checkin.*')` fires. Zero-cost until a tool with

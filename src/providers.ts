@@ -81,4 +81,9 @@ export type {
   LLMChunk,
   LLMMessage,
   LLMToolSchema,
+  // v7.8 — the optional per-call hooks a caller may hand `complete()` /
+  // `stream()`. Exported here so a consumer implementing a provider off
+  // this subpath can name the type in their own signature.
+  LLMCallHooks,
+  ResilienceReport,
 } from './adapters/types.js';

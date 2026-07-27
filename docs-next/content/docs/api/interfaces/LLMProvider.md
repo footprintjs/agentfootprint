@@ -4,7 +4,7 @@ title: LLMProvider
 
 # Interface: LLMProvider
 
-Defined in: [src/adapters/types.ts:230](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L230)
+Defined in: [src/adapters/types.ts:306](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L306)
 
 ## Properties
 
@@ -12,21 +12,28 @@ Defined in: [src/adapters/types.ts:230](https://github.com/footprintjs/agentfoot
 
 > `readonly` **name**: `string`
 
-Defined in: [src/adapters/types.ts:231](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L231)
+Defined in: [src/adapters/types.ts:307](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L307)
 
 ## Methods
 
 ### complete()
 
-> **complete**(`req`): `Promise`\<[`LLMResponse`](/docs/api/interfaces/LLMResponse)\>
+> **complete**(`req`, `hooks?`): `Promise`\<[`LLMResponse`](/docs/api/interfaces/LLMResponse)\>
 
-Defined in: [src/adapters/types.ts:232](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L232)
+Defined in: [src/adapters/types.ts:312](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L312)
+
+`hooks` (v7.8) is optional and additive — implementations may declare
+`complete(req)` with no second parameter and stay assignable.
 
 #### Parameters
 
 ##### req
 
 [`LLMRequest`](/docs/api/interfaces/LLMRequest)
+
+##### hooks?
+
+[`LLMCallHooks`](/docs/api/interfaces/LLMCallHooks)
 
 #### Returns
 
@@ -36,15 +43,19 @@ Defined in: [src/adapters/types.ts:232](https://github.com/footprintjs/agentfoot
 
 ### stream()?
 
-> `optional` **stream**(`req`): `AsyncIterable`\<[`LLMChunk`](/docs/api/interfaces/LLMChunk)\>
+> `optional` **stream**(`req`, `hooks?`): `AsyncIterable`\<[`LLMChunk`](/docs/api/interfaces/LLMChunk)\>
 
-Defined in: [src/adapters/types.ts:233](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L233)
+Defined in: [src/adapters/types.ts:313](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L313)
 
 #### Parameters
 
 ##### req
 
 [`LLMRequest`](/docs/api/interfaces/LLMRequest)
+
+##### hooks?
+
+[`LLMCallHooks`](/docs/api/interfaces/LLMCallHooks)
 
 #### Returns
 

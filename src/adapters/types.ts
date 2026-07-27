@@ -227,10 +227,90 @@ export interface LLMChunk {
   readonly thinkingDelta?: string;
 }
 
+/**
+ * v7.8 — what a resilience decorator DID during one provider call.
+ *
+ * Plain data only (strings + numbers), so a report drops straight into a
+ * typed event payload and survives `structuredClone`. Field names are
+ * deliberately 1:1 with the declared event payloads
+ * (`FallbackTriggeredPayload`, `ErrorRetriedPayload`,
+ * `ErrorRecoveredPayload`) so the in-run call site maps a report to an
+ * event without renaming or synthesizing anything.
+ *
+ * Produced by exactly one decorator per `kind`:
+ *   • `'fell-back'` ← `withFallback`
+ *   • `'retried'` / `'recovered'` ← `withRetry`
+ *   • nothing ← `withCircuitBreaker` (no declared event for a breaker
+ *     transition; a trip is visible via the enclosing fallback's `reason`)
+ */
+export type ResilienceReport =
+  | {
+      readonly kind: 'fell-back';
+      /** Provider tried first, which failed. */
+      readonly primary: string;
+      /** Provider called instead — the one that actually served. */
+      readonly fallback: string;
+      /** Message of the error that triggered the fallback. */
+      readonly reason: string;
+    }
+  | {
+      readonly kind: 'retried';
+      /** 1-based number of the attempt ABOUT TO START (2 = first retry). */
+      readonly attempt: number;
+      readonly maxAttempts: number;
+      /** Message of the error that caused this retry. */
+      readonly lastError: string;
+      readonly backoffMs: number;
+      /**
+       * Classification OF THE ERROR — **not** of the predicate's
+       * reasoning. `shouldRetry` returns a bare boolean, so when a custom
+       * predicate is in force the decorator cannot know *why* it said yes;
+       * this field reports what the error looked like instead, derived
+       * from the same `status`/`statusCode` fields `defaultShouldRetry`
+       * inspects. One of: `'http-429'` | `'http-5xx'` | `'http-4xx'` |
+       * `` `http-${code}` `` | `'no-status'`.
+       */
+      readonly reason: string;
+    }
+  | {
+      readonly kind: 'recovered';
+      /** 1-based attempt that finally succeeded. Always >= 2. */
+      readonly attempt: number;
+      readonly totalDurationMs: number;
+    };
+
+/**
+ * v7.8 — optional per-call hooks the CALLER hands a provider.
+ *
+ * Lets a resilience decorator report what it did to whoever invoked it,
+ * without the decorator knowing anything about runs, scopes, or events.
+ * The channel rides the CALL (not the factory) because decorators are
+ * constructed by the consumer before any run exists.
+ *
+ * Passed by agentfootprint's in-run LLM call sites, which translate each
+ * report into an already-declared typed event with real correlation ids.
+ * Outside a run nothing passes hooks, so `hooks` is `undefined` and every
+ * report site short-circuits — standalone decorator behaviour is
+ * unchanged.
+ */
+export interface LLMCallHooks {
+  /**
+   * Called once per resilience decision (a fallback, a retry, a
+   * recovery). Decorators forward this hook inward unchanged, so a
+   * stack of decorators produces one concatenated report stream with no
+   * duplication.
+   */
+  readonly onResilience?: (report: ResilienceReport) => void;
+}
+
 export interface LLMProvider {
   readonly name: string;
-  complete(req: LLMRequest): Promise<LLMResponse>;
-  stream?(req: LLMRequest): AsyncIterable<LLMChunk>;
+  /**
+   * `hooks` (v7.8) is optional and additive — implementations may declare
+   * `complete(req)` with no second parameter and stay assignable.
+   */
+  complete(req: LLMRequest, hooks?: LLMCallHooks): Promise<LLMResponse>;
+  stream?(req: LLMRequest, hooks?: LLMCallHooks): AsyncIterable<LLMChunk>;
 }
 
 // ─── Context Source ──────────────────────────────────────────────────

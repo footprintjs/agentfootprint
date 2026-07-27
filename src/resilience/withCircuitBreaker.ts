@@ -48,9 +48,12 @@
  *
  *     HALF-OPEN ──[ probe failure ]──► OPEN (cooldown restarts)
  *
- * `stream()` is decorated identically. `name`/`flush`/`stop` pass
- * through unchanged (the consumer's existing observability hooks
- * still see the underlying provider's identity).
+ * `stream()` is decorated identically. `name` passes through unchanged
+ * (the consumer's existing observability hooks still see the underlying
+ * provider's identity), and the optional per-call `LLMCallHooks` is
+ * forwarded inward so a decorator nested inside this one can still
+ * report. Nothing else is copied — `LLMProvider` has exactly `name`,
+ * `complete` and the optional `stream`.
  *
  * **Scope: per-instance, NOT distributed.** Each `withCircuitBreaker(...)`
  * call holds its own breaker state in process memory. If you run 100
@@ -79,7 +82,13 @@
  * vs process-scoped TBD) are a possible future enhancement.
  */
 
-import type { LLMChunk, LLMProvider, LLMRequest, LLMResponse } from '../adapters/types.js';
+import type {
+  LLMCallHooks,
+  LLMChunk,
+  LLMProvider,
+  LLMRequest,
+  LLMResponse,
+} from '../adapters/types.js';
 
 // ─── Public options ──────────────────────────────────────────────────
 
@@ -97,8 +106,15 @@ export interface WithCircuitBreakerOptions {
    * breaker for everyone.
    */
   readonly shouldCount?: (error: unknown) => boolean;
-  /** Hook invoked on every state transition. Useful for emitting
-   *  `agentfootprint.resilience.circuit_state_changed`. */
+  /**
+   * Hook invoked on every state transition. This is the ONLY way to
+   * observe breaker state: there is no declared event for a breaker
+   * transition, so unlike `withFallback`/`withRetry` this decorator
+   * reports nothing through the in-run `LLMCallHooks` channel. A trip
+   * becomes visible in a trace only when composed under
+   * `withFallback`, whose `agentfootprint.fallback.triggered` carries
+   * the `CircuitOpenError` message as its `reason`.
+   */
   readonly onStateChange?: (state: CircuitState, reason: string) => void;
 }
 
@@ -239,10 +255,13 @@ export function withCircuitBreaker(
 
   const wrapped: LLMProvider = {
     name: inner.name,
-    async complete(req: LLMRequest): Promise<LLMResponse> {
+    async complete(req: LLMRequest, hooks?: LLMCallHooks): Promise<LLMResponse> {
       rejectFastIfOpen();
       try {
-        const res = await inner.complete(req);
+        // Forward `hooks` — this decorator reports nothing of its own, but
+        // it rebuilds a fresh provider object, so an inner decorator's
+        // reports are silently swallowed unless they're passed through.
+        const res = await inner.complete(req, hooks);
         recordSuccess();
         return res;
       } catch (err) {
@@ -255,15 +274,16 @@ export function withCircuitBreaker(
     // it undefined so the consumer's existing capability check
     // (`if (provider.stream)`) still works correctly.
     ...(inner.stream && {
-      async *stream(req: LLMRequest): AsyncIterable<LLMChunk> {
+      async *stream(req: LLMRequest, hooks?: LLMCallHooks): AsyncIterable<LLMChunk> {
         rejectFastIfOpen();
         let yieldedAnyChunk = false;
         try {
           // This stream() method is conditionally defined only when
           // inner.stream exists (see `...(inner.stream && {` above), so
           // inner.stream is guaranteed non-null inside this body.
+          // `hooks` is forwarded for the same reason as in complete().
           // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-          for await (const chunk of inner.stream!(req)) {
+          for await (const chunk of inner.stream!(req, hooks)) {
             yieldedAnyChunk = true;
             yield chunk;
           }

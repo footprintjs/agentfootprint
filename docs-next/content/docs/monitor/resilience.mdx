@@ -81,9 +81,40 @@ withRetry(provider, {
 
 `shouldFallback(err)` works the same way for `withFallback` — its default falls back on every error except `AbortError`.
 
-## Hooks for observability
+## Observability: automatic inside a run
 
-Both decorators call optional hooks so your recorders can log retry attempts + provider switches. `onRetry` receives the upcoming attempt number and the computed backoff delay in ms:
+Inside an `Agent`, `LLMCall`, or `Parallel` run you get decorator telemetry **for free** — no wiring. The decorators report what they did, and the LLM call site turns each report into a typed event stamped with the real `runId` and `runtimeStageId`, so it correlates with everything else in the run:
+
+| Event | Fired by | Payload |
+| --- | --- | --- |
+| `agentfootprint.fallback.triggered` | `withFallback` | `{ kind: 'provider', primary, fallback, reason }` |
+| `agentfootprint.error.retried` | `withRetry` | `{ attempt, maxAttempts, lastError, backoffMs, reason }` |
+| `agentfootprint.error.recovered` | `withRetry` | `{ attempt, totalDurationMs }` |
+
+```ts
+const provider = withFallback(anthropic({ apiKey: A }), openai({ apiKey: O }));
+const agent = Agent.create({ provider, model: 'claude-sonnet-4-5' }).build();
+
+// Subscribe BEFORE run() — events are dropped when nothing is listening.
+agent.on('agentfootprint.fallback.triggered', (e) => {
+  console.warn(`${e.payload.primary} → ${e.payload.fallback}: ${e.payload.reason}`);
+});
+// Or take the whole family:
+agent.on('agentfootprint.error.*', (e) => console.log(e.type, e.payload));
+
+await agent.run({ message: 'hi' });
+```
+
+Notes on what these events do and don't say:
+
+- **`error.retried.reason` classifies the ERROR, not the decision.** `shouldRetry` returns a bare boolean, so a custom predicate's reasoning is unknowable. The value is derived from the error's `status`/`statusCode`: `'http-429'`, `'http-5xx'`, `'http-4xx'`, `` `http-${code}` ``, or `'no-status'`.
+- **`withCircuitBreaker` has no event of its own.** A trip shows up as the `reason` on the enclosing `withFallback`'s `fallback.triggered` (the `CircuitOpenError` message). Use `onStateChange` for standalone breaker state.
+- **A fallback success is reported as `fallback.triggered`, not `error.recovered`** — that payload has no field for which provider served, so claiming a recovery there would be inventing data.
+- Running one of the exported message-api charts on a bare `FlowChartExecutor`? Attach the bridge yourself: `executor.attachCombinedRecorder(resilienceRecorder({ dispatcher, getRunContext }))` from `agentfootprint/observe`.
+
+## Hooks for standalone use
+
+Outside a run the decorators emit nothing, so the optional hooks remain the way to observe them — useful in a plain script or a non-agentfootprint call path. `onRetry` receives the upcoming attempt number and the computed backoff delay in ms:
 
 ```ts
 import { withRetry, withFallback } from 'agentfootprint/resilience';
@@ -99,7 +130,7 @@ withFallback(primary, fallback, {
 });
 ```
 
-The `withCircuitBreaker` decorator exposes an `onStateChange(state, reason)` hook for the same purpose. Listen to `agentfootprint.cost.tick` on the event dispatcher to see cost accrue across both primary and fallback providers.
+The `withCircuitBreaker` decorator exposes an `onStateChange(state, reason)` hook for the same purpose — and since the breaker has no typed event, that hook is the only way to see its state directly. Listen to `agentfootprint.cost.tick` on the event dispatcher to see cost accrue across both primary and fallback providers.
 
 ## Fail fast on a downed provider: `withCircuitBreaker`
 

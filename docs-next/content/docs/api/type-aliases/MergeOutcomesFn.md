@@ -6,7 +6,7 @@ title: MergeOutcomesFn
 
 > **MergeOutcomesFn** = (`outcomes`) => `string`
 
-Defined in: [src/core-flow/Parallel.ts:95](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Parallel.ts#L95)
+Defined in: [src/core-flow/Parallel.ts:97](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Parallel.ts#L97)
 
 ## Parameters
 

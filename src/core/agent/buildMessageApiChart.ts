@@ -40,6 +40,7 @@ import type { LLMMessage, LLMProvider } from '../../adapters/types.js';
 import { SUBFLOW_IDS } from '../../conventions.js';
 import type { InjectionRecord } from '../../recorders/core/types.js';
 import { typedEmit } from '../../recorders/core/typedEmit.js';
+import { resilienceHooks } from '../../recorders/core/resilienceHooks.js';
 import { buildSystemPromptSlot } from '../slots/buildSystemPromptSlot.js';
 import { buildMessagesSlot } from '../slots/buildMessagesSlot.js';
 
@@ -134,11 +135,15 @@ export function buildMessageApiChart(deps: MessageApiChartDeps): FlowChart {
       toolsCount: 0,
     });
     const startMs = Date.now();
-    const response = await provider.complete({
-      ...(system.length > 0 && { systemPrompt: system }),
-      messages,
-      model,
-    });
+    const response = await provider.complete(
+      {
+        ...(system.length > 0 && { systemPrompt: system }),
+        messages,
+        model,
+      },
+      // Resilience-report channel — see buildAgentMessageApiChart.
+      resilienceHooks(scope),
+    );
     scope.answer = response.content;
     typedEmit(scope, 'agentfootprint.stream.llm_end', {
       iteration: scope.iteration,

@@ -17,7 +17,7 @@ import type { AgentfootprintEventMap, AgentfootprintEventType } from '../../even
  * footprintjs's `TypedScope<T>`, whose `$emit(name, payload?: unknown)` is
  * wider than this.
  */
-interface EmitableScope {
+export interface EmitableScope {
   $emit(name: string, payload?: unknown): void;
 }
 

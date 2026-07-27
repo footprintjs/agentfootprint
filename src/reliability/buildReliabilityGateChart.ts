@@ -53,6 +53,7 @@ import {
 import { classifyError } from './classifyError.js';
 import type { ReliabilityConfig, ReliabilityRule, ReliabilityScope } from './types.js';
 import { typedEmit } from '../recorders/core/typedEmit.js';
+import { resilienceHooks } from '../recorders/core/resilienceHooks.js';
 
 // ─── Stage IDs (also used for narrative/topology readability) ────────
 
@@ -245,8 +246,15 @@ export function buildReliabilityGateChart(config: ReliabilityConfig): FlowChart 
           );
         }
       }
+      // Hooks are passed here too, so a DECORATED provider does not go
+      // dark the moment `.reliability()` is enabled. This is not
+      // cross-emitting: the decorator's own account of its own fixed-cap
+      // decision merely happens to occur inside a reliability stage. The
+      // two families stay distinct — `reliability.*` = this rules loop's
+      // dynamic decisions, `error.*` = the decorator's.
       const response: LLMResponse = await providerEntry.provider.complete(
         scope.request as LLMRequest,
+        resilienceHooks(scope),
       );
       scope.response = response;
       scope.error = undefined;

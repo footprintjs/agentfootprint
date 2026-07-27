@@ -31,6 +31,7 @@ import type { LLMMessage, LLMProvider, LLMToolSchema } from '../../adapters/type
 import { SUBFLOW_IDS } from '../../conventions.js';
 import type { InjectionRecord } from '../../recorders/core/types.js';
 import { typedEmit } from '../../recorders/core/typedEmit.js';
+import { resilienceHooks } from '../../recorders/core/resilienceHooks.js';
 import { buildSystemPromptSlot } from '../slots/buildSystemPromptSlot.js';
 import { buildMessagesSlot } from '../slots/buildMessagesSlot.js';
 import { buildToolsSlot } from '../slots/buildToolsSlot.js';
@@ -130,12 +131,20 @@ export function buildAgentMessageApiChart(deps: AgentMessageApiChartDeps): FlowC
       }),
     });
     const startMs = Date.now();
-    const response = await provider.complete({
-      ...(system.length > 0 && { systemPrompt: system }),
-      messages,
-      ...(toolSchemas.length > 0 && { tools: toolSchemas }),
-      model,
-    });
+    const response = await provider.complete(
+      {
+        ...(system.length > 0 && { systemPrompt: system }),
+        messages,
+        ...(toolSchemas.length > 0 && { tools: toolSchemas }),
+        model,
+      },
+      // Resilience-report channel: a decorated provider's fallback /
+      // retry / recovery becomes an in-run typed event here. This chart
+      // has no runner of its own, so the emits reach the commit log
+      // always, and `agent.on()` only when the caller attaches
+      // `resilienceRecorder` (exported from `agentfootprint/observe`).
+      resilienceHooks(scope),
+    );
     scope.answer = response.content;
     scope.toolCalls = response.toolCalls;
     typedEmit(scope, 'agentfootprint.stream.llm_end', {

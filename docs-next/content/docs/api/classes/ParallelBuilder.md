@@ -4,7 +4,7 @@ title: ParallelBuilder
 
 # Class: ParallelBuilder
 
-Defined in: [src/core-flow/Parallel.ts:783](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Parallel.ts#L783)
+Defined in: [src/core-flow/Parallel.ts:788](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Parallel.ts#L788)
 
 Fluent builder. Requires at least 2 branches + one merge strategy.
 
@@ -14,7 +14,7 @@ Fluent builder. Requires at least 2 branches + one merge strategy.
 
 > **new ParallelBuilder**(`opts`): `ParallelBuilder`
 
-Defined in: [src/core-flow/Parallel.ts:789](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Parallel.ts#L789)
+Defined in: [src/core-flow/Parallel.ts:794](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Parallel.ts#L794)
 
 #### Parameters
 
@@ -32,7 +32,7 @@ Defined in: [src/core-flow/Parallel.ts:789](https://github.com/footprintjs/agent
 
 > **branch**(`id`, `runner`, `nameOrOpts?`): `this`
 
-Defined in: [src/core-flow/Parallel.ts:802](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Parallel.ts#L802)
+Defined in: [src/core-flow/Parallel.ts:807](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Parallel.ts#L807)
 
 Add a branch. All branches run concurrently with the same input.
 
@@ -66,7 +66,7 @@ not affect any other branch or the runner's own translator.
 
 > **build**(): [`Parallel`](/docs/api/classes/Parallel)
 
-Defined in: [src/core-flow/Parallel.ts:873](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Parallel.ts#L873)
+Defined in: [src/core-flow/Parallel.ts:878](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Parallel.ts#L878)
 
 #### Returns
 
@@ -78,7 +78,7 @@ Defined in: [src/core-flow/Parallel.ts:873](https://github.com/footprintjs/agent
 
 > **mergeOutcomesWithFn**(`fn`): `this`
 
-Defined in: [src/core-flow/Parallel.ts:865](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Parallel.ts#L865)
+Defined in: [src/core-flow/Parallel.ts:870](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Parallel.ts#L870)
 
 Tolerant merge — receives `{ [branchId]: BranchOutcome }` including
 both successes (`{ ok: true, value }`) and failures (`{ ok: false, error }`).
@@ -105,7 +105,7 @@ a single failing branch to abort the whole Parallel loudly.
 
 > **mergeWithFn**(`fn`): `this`
 
-Defined in: [src/core-flow/Parallel.ts:838](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Parallel.ts#L838)
+Defined in: [src/core-flow/Parallel.ts:843](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Parallel.ts#L843)
 
 Merge branch results via a pure function.
 `fn` receives `{ [branchId]: string }` and returns the merged string.
@@ -126,7 +126,7 @@ Merge branch results via a pure function.
 
 > **mergeWithLLM**(`opts`): `this`
 
-Defined in: [src/core-flow/Parallel.ts:847](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Parallel.ts#L847)
+Defined in: [src/core-flow/Parallel.ts:852](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Parallel.ts#L852)
 
 Merge branch results by feeding them to an LLM for synthesis.
 
