@@ -496,6 +496,16 @@ html {
   .af-sh-nav {
     gap: 12px;
   }
+  /* Three labelled links (Home · Features · Docs) plus the theme toggle overflow a 390px phone —
+     flexbox "solved" it by squashing the toggle to a 10px sliver. Drop the labelled Home link
+     instead: the wordmark immediately to its left is the same link, so nothing is lost, and pin the
+     toggle so it can never be compressed again. */
+  .af-sh-home {
+    display: none;
+  }
+  .af-sh-theme {
+    flex: none;
+  }
   .af-sh-sidebar {
     display: inline-flex;
   }
@@ -504,6 +514,15 @@ html {
   .af-sh .af-wordmark-text {
     display: none;
   } /* logo only on the smallest screens */
+}
+/* The DOCS header carries one control the others don't — the mobile sidebar opener — and that is
+   the width that no longer fits alongside the wordmark, search, two links and the theme toggle.
+   Drop the wordmark TEXT on docs only: the mark still links home, and home/features keep the full
+   wordmark at these widths because they have the room. */
+@media (max-width: 460px) {
+  .af-sh--docs .af-wordmark-text {
+    display: none;
+  }
 }
 
 .af-chapter-bar {

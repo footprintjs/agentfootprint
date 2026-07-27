@@ -8,6 +8,8 @@ export const dynamic = 'force-static';
 export default function sitemap(): MetadataRoute.Sitemap {
   const home: MetadataRoute.Sitemap = [
     { url: `${SITE.url}/`, changeFrequency: 'weekly', priority: 1 },
+    // the marketing story page — ranks just under the homepage, above any single doc
+    { url: `${SITE.url}/features/`, changeFrequency: 'monthly', priority: 0.9 },
   ];
 
   const docs: MetadataRoute.Sitemap = source.getPages().map((page) => {

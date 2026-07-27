@@ -48,6 +48,12 @@ export function baseOptions(): BaseLayoutProps {
         secondary: true,
       },
       {
+        text: 'Features',
+        url: '/features',
+        active: 'nested-url',
+        secondary: true,
+      },
+      {
         text: 'Docs',
         url: '/docs',
         active: 'nested-url',

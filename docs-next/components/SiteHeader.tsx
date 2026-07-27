@@ -53,6 +53,10 @@ export function SiteHeader() {
   const { setOpenSearch } = useSearchContext();
   const pathname = usePathname();
   const onDocs = pathname?.startsWith('/docs') ?? false;
+  const onFeatures = pathname?.startsWith('/features') ?? false;
+  // "Home" is the current page only when we are on neither of the other two — otherwise /features
+  // would light up Home as well (the whole site outside /docs used to be "home").
+  const onHome = !onDocs && !onFeatures;
 
   return (
     <header id="af-header" className={`af-sh${onDocs ? ' af-sh--docs' : ' af-sh--home'}`}>
@@ -78,8 +82,21 @@ export function SiteHeader() {
         </button>
 
         <nav className="af-sh-nav" aria-label="Primary">
-          <Link href="/" className={`af-sh-link${!onDocs ? ' on' : ''}`} aria-current={!onDocs ? 'page' : undefined}>
+          {/* af-sh-home marks the one link the phone header can afford to drop: the wordmark to
+              its left is already the home link, so nothing becomes unreachable. */}
+          <Link
+            href="/"
+            className={`af-sh-link af-sh-home${onHome ? ' on' : ''}`}
+            aria-current={onHome ? 'page' : undefined}
+          >
             Home
+          </Link>
+          <Link
+            href="/features"
+            className={`af-sh-link${onFeatures ? ' on' : ''}`}
+            aria-current={onFeatures ? 'page' : undefined}
+          >
+            Features
           </Link>
           <Link href="/docs" className={`af-sh-link${onDocs ? ' on' : ''}`} aria-current={onDocs ? 'page' : undefined}>
             Docs
