@@ -115,10 +115,20 @@ export interface ChatTurn {
   /**
    * Localize-ready evidence: pass straight to
    * `localizeContextBug({ artifacts: turn.artifacts, ... })`.
+   *
+   * It is also a full RECORDING — `{ snapshot, events, structure }`, the
+   * three fields a viewer needs — so the same frozen turn that localizes a
+   * bad answer can be handed to Lens or ExplainableShell and drawn.
    */
   readonly artifacts: {
     readonly snapshot: RuntimeSnapshot;
     readonly events: readonly CapturedEventLike[];
+    /**
+     * The turn's build-time chart (`agent.getSpec().buildTimeStructure`),
+     * captured at record time — the per-turn agent is discarded right
+     * after, and a finished run cannot produce its chart afterwards.
+     */
+    readonly structure: unknown;
   };
   /** runtimeStageId of the turn's LAST LLM call — the default `atStep`. */
   readonly lastLlmCallId: string | undefined;

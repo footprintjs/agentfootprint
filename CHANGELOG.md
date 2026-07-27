@@ -5,6 +5,218 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **`recordRun(runner)` — save a run so a viewer can show it later.** A
+  recording is exactly three things: `events` (the typed stream, in order),
+  `snapshot` (the footprintjs run snapshot — state, commit log, every
+  attached recorder's data) and `structure` (the build-time chart). Each
+  lights a different surface and a missing one darkens exactly that surface.
+  Nothing in the stack produced that bundle. It was DEFINED five times —
+  footprintjs's `RuntimeSnapshot` (no structure, no events), our `Trace` (no
+  snapshot), `ChatTurn.artifacts` (no structure), `ContextBugArtifacts` (no
+  structure), and lens's `Recording` (complete, and produced by nothing) — so
+  every integration assembled it by hand and each one omitted a different
+  field. Most often `structure`, because a finished run does not leave it
+  behind: it lives on the chart, and `getSnapshot()` deliberately never
+  carries it. `recordRun` is the producer, and it emits exactly the shape
+  lens's `observeRecording()` consumes:
+  `fs.writeFileSync('run.json', JSON.stringify(recordRun(agent).toRecording()))`
+  after the run. It also wires the boundary recorder's three connections,
+  which is the part hand-rolling gets wrong — `attach` (no boundaries at all),
+  `subscribe` (boundaries with nothing in them) and `getCommitCount` (every
+  boundary stamped at commit 0, silently). None of the three can be
+  reconstructed from a completed run, so it must be called BEFORE `run()`.
+  It attaches no other recorders: `narrative()` and `metrics()` stay the
+  consumer's choice, and each viewer says on screen when their data isn't
+  there. Options: `maxEvents` (default 10,000, with `droppedEvents` counting
+  what a long-running server shed) and `boundaryDetail: 'lean'`. Exported
+  from `agentfootprint/observe`.
+- **`runner.getCommitCount()`** — the run's time axis, forwarded from
+  footprintjs's executor. Two JSDoc blocks (`runner.ts`, `RunnerBase.ts`)
+  had described this accessor as if it existed since the observability
+  work landed; `grep` found it implemented nowhere. It is real now: `0`
+  before the first run, one commit per executed stage, cumulative across
+  `resume()` on the same executor. Sample it live — a closure over the
+  runner, never a captured number. `Runner` also now declares
+  `getLastSnapshot()`, which `RunnerBase` has always implemented and the
+  interface never mentioned; both are on the interface so a consumer
+  holding a `Runner` can record a run without casting.
+- **`Trace.snapshot`** — a Trace can now carry the run's footprintjs
+  snapshot, via `enable.localObservability({ includeSnapshot: true })` or
+  `serializeTrace(events, { snapshot })`. A Trace was the only documented
+  recording format in the ecosystem and it structurally could not feed the
+  full viewers: the commit axis, ExplainableShell's memory and provenance
+  panels, and WhereFrom all read the commit log, which is a footprintjs
+  artifact and appears nowhere in the event log. It is OPT-IN, and that is a
+  redaction decision rather than a size one: `redact` runs per domain event
+  and cannot reach inside a snapshot, whose `sharedState` is the run's raw
+  working memory — filling the field automatically would have widened what
+  a carefully redacted Trace exports without one call site changing. Redact
+  that half at run time with footprintjs's `setRedactionPolicy()`. For a
+  viewer, prefer `recordRun()`.
+- **`ContextBugArtifacts.structure`** — the localizer's evidence bag calls
+  itself "the frozen evidence of one completed run" and could not draw the
+  run it described. The field is unread by the localizer (which works
+  entirely off the commit log); it is there so the same literal that
+  localizes a bad answer is also a complete recording. `recordedChat` now
+  fills it on every turn, captured from the per-turn agent at record time —
+  that agent is discarded immediately after, and nothing can reproduce a
+  chart from a finished run. `ChatTurn.artifacts` gains the same field.
+- **`boundaryRecorder({ snapshot: 'lean' })` — ship the shape of a run
+  without shipping its content.** `toSnapshot()` is the copy that leaves the
+  process: it lands in `runtimeSnapshot.recorders` and gets written to disk,
+  posted to a viewer, or kept as a run artifact. It has always carried every
+  field of every `DomainEvent`, and the captured content — entry and exit
+  payloads, tool arguments and results, assistant text, injected-content
+  previews — is most of its bytes. Sized on the demo turn this was built
+  for — four ReAct iterations, four LLM calls, three tool calls, 25 subflow
+  boundaries, run end to end against a mock provider with the recorder
+  attached — the bundle `toSnapshot()` handed back measured 69.7 KB raw /
+  4.6 KB gzipped and its lean projection 21.7 KB / 1.9 KB: content was 69% of
+  the raw bytes and 59% after gzip, a 3.2x cut raw and 2.5x gzipped. That is
+  one run measured twice, not two runs compared. Two things bound how far it
+  generalizes, both in the conservative direction: the content on that run
+  was the entry and exit payloads, because only the recorder's boundary side
+  was attached (`agent.attach`) and not the typed-event side
+  (`subscribe(dispatcher)`) whose events carry assistant text and tool
+  results; and a live provider's longer replies ride inside those payloads,
+  so a real-traffic turn has a larger content share, not a smaller one.
+  The consumer that rebuilds a commit-range index offline reads five fields
+  per event (`type`, `runtimeStageId`, `commitIdxBefore`, `subflowPath`,
+  `depth`) and none of the content. `snapshot: 'lean'` drops exactly the five
+  content-carrying fields — `payload`, `args`, `result`, `content`,
+  `contentSummary` — and keeps every field that says where, when and of what
+  kind each boundary was, so the index rebuilds range for range from the lean
+  bundle alone. The point is not only bytes: a stored artifact stops being a
+  second, redaction-bypassing copy of everything the agent read and wrote,
+  the same reasoning `BoundaryRangeLabel` already applies to the live range
+  index. Two short capture-time annotations do survive by design —
+  `rationale` on `decision.branch` and `reason` on `context.injected` — so
+  read lean as "no captured payloads", not "no free text at all": a decider
+  whose rationale interpolates run values still puts that text in a lean
+  artifact. Join back on `runtimeStageId` against the run's own snapshot when
+  you want the content. The new `LeanDomainEvent` type (exported from
+  `agentfootprint/observe`) names the shape.
+  The suite measures a different, larger number, and it is not the one to
+  quote: it replays a captured turn, and the capture kept each subflow's
+  final state only, so the replay serializes that state twice per boundary —
+  once as the entry it has no seed for, once as the exit. That doubling is
+  87% of its 276 KB full bundle, which is why the size test asserts a loose,
+  fixture-relative bound rather than a headline ratio.
+- **`'full'` stays the default, deliberately.** This bundle has carried
+  content since it shipped in 2.x, and `buildStepGraphFromEvents()` — the
+  offline path behind `<Replay>` — restores its `entryPayload`,
+  `exitPayload`, `contentSummary`, `assistantText`, `toolArgs` and
+  `toolResult` from this bundle and nowhere else. A lean default would have
+  quietly emptied every existing replay of an already-stored run, with no
+  error to notice. Nothing changes unless you ask for `'lean'`. The live
+  stream is unaffected in both modes — `getEvents()`, `buildStepGraph()` and
+  `aggregateForBoundary()` still see full events; only the snapshot
+  projection differs. The bundle's `description` records which mode produced
+  it, so a stored artifact stays self-describing.
+
+### Changed
+
+- **The boundary snapshot bundle says which mode produced it, in a field
+  code can read.** `toSnapshot()` now returns `meta: { mode: 'full' |
+  'lean' }`. Full and lean were distinguishable only by the prose in
+  `description`, and string-matching a sentence is not a thing offline
+  readers do — they render the empty detail panel instead, because
+  `buildStepGraphFromEvents()` restores step content from this bundle and
+  nowhere else. With `meta.mode` a consumer can SAY "this recording carries
+  structure only". The field reaches `getSnapshot().recorders[i].meta` on
+  footprintjs 9.12+, which added the pass-through; on older engines the row
+  is rebuilt without it and the field is dropped in transit. It is always on
+  the value `toSnapshot()` itself returns.
+- **`boundaryRecorder().subscribe()` accepts a runner.** It took an
+  `EventDispatcher` — which a `Runner` does not hand out — so wiring the
+  recorder's typed half from a public runner meant reaching for internals.
+  It now takes anything offering a wildcard subscription (`TypedEventSource`),
+  which both a `Runner` and the internal dispatcher satisfy:
+  `boundary.subscribe(agent)`. Existing `subscribe(dispatcher)` calls are
+  unaffected.
+- **The "wire it at RECORD time" requirement now lives in the library that
+  owns the recorder.** That a `BoundaryRecorder` must be attached AND
+  subscribed AND given a commit count, all before the run, was documented
+  only in agentfootprint-lens's README and in `observeRecording`'s JSDoc —
+  in the consumer, where someone writing the recording side has no reason to
+  look. It is on `BoundaryRecorder` itself now, with each of the three
+  connections and how each one fails, and `getCommitCount`'s own JSDoc
+  states the consequence of omitting it (a recording whose step strip cannot
+  be rebuilt) instead of describing it as a legacy mode.
+- **Docs: "Offline replay" is now "Replay a saved run", written around the
+  path that works.** It was the ecosystem's only replay page and it taught
+  the weakest route — capture a `Trace`, render `<Replay>` — leaving readers
+  with an artifact that has no snapshot and a viewer that draws a static
+  shape. It now leads with the three fields and `recordRun()`, shows both
+  destinations (`observeRecording` → `<Lens>`, and `ExplainableShell` with
+  its snapshot / graph / overlay props), states the by-hand wiring
+  requirement with a table of how each missing connection fails, and keeps
+  `<Replay trace>` as what it is: the chart-only subset. Plus
+  `examples/observability/20-record-and-render.ts`, which runs a two-step
+  pipeline, writes the recording to disk, reads it back, and checks the file
+  against what each viewer reads — failing if a core surface would go dark,
+  so the path is CI-verified rather than prose.
+- **`toSnapshot()` now returns `data: DomainEvent[] | LeanDomainEvent[]`**
+  (it used to infer `DomainEvent[]`). The union is the honest type — the
+  method really does return one or the other, decided by the option you
+  passed — but it is a compile-time break for TypeScript callers that read a
+  content field straight off snapshot data: narrowing an element to
+  `'run.entry'` and then reading `.payload` no longer type-checks, because
+  the lean member of the union has no such field. Narrow on the mode you
+  configured, or cast when you know you configured `'full'`
+  (`toSnapshot().data as DomainEvent[]`). Nothing changes at runtime: the
+  default is still `'full'`, and a full bundle still carries every field it
+  carried before.
+
+### Fixed
+
+- **Every run recorded through `enable.flowchart()` or
+  `enable.localObservability()` had a flat commit axis — silently.**
+  `attachFlowchart` built its `BoundaryRecorder` with no options, so
+  `getCommitCount` was undefined and every boundary event in every such run
+  was stamped `commitIdxBefore: 0`. Both blessed observability entry points
+  go through it, so this was the default for the ecosystem. Nothing errored
+  and the events looked complete; what broke was one step removed — the
+  boundary range index stayed empty (deliberately: zero-width `[0, 0]`
+  ranges would read as real), and an offline consumer rebuilding the step
+  strip from the recording found no positions to place, so the strip stayed
+  quiet on a run that had plenty to show. Unrecoverable downstream, too: the
+  commit log records what each stage WROTE, never when a boundary was
+  CROSSED, so nothing can derive the axis after the fact. The runner now
+  passes `() => this.getCommitCount()` through to the recorder. Recordings
+  made before this carry zeros and cannot be repaired — re-record them.
+- **`localObservability`'s header told you to pass its handle to `<Lens>`.**
+  "pass the handle to `<Lens recorder={handle} />`" — a
+  `LocalObservabilityHandle` is a `FlowchartHandle` plus `getTrace()`, and
+  Lens wants a `LensRecorder`: `selectRunTree`, `selectEventLog`,
+  `selectSummary`, `liveState`, `runtime`, `boundary.boundaryIndex`. It has
+  none of them. The header now shows the path that works — record the run,
+  hand the recording to lens's `observeRecording()`, pass THAT to `<Lens>` —
+  and says plainly that this handle is not a Lens recorder.
+- **`Trace`'s docs claimed `<Replay>` overlays the events.** "`<Replay>`
+  rebuilds the flowchart from this and overlays `events`, so an offline
+  replay matches the live `<Lens>` exactly" appeared in `trace.ts` and again
+  in the offline-replay page. `Replay.tsx` never reads `trace.events`; it
+  renders the chart's shape, and its own JSDoc calls time-travel "a planned
+  refinement". A consumer following the official doc got an artifact with no
+  snapshot and a viewer that could never light the executed path. Both
+  places now say what it does: `<Replay>` draws the chart and stops there,
+  and is a strictly smaller view than the live `<Lens>`.
+
+- **The root barrel no longer claims to re-export `mcpClient`.** A comment in
+  `src/index.ts` told readers that `mcpClient` and the tool-dispatch
+  primitives were reachable from the top-level import. They have not been
+  since 6.0.0 collapsed the convenience mirrors: `mcpClient`,
+  `mockMcpClient`, `staticTools`, `gatedTools` and `skillScopedTools` live
+  only under `agentfootprint/tool-providers` — one subpath for everything
+  tool-related, which is the intended design. The comment now says so, as
+  does its mirror in `src/tool-providers/index.ts`, which made the same claim
+  from the other side. Comment-only; no export changed.
+
 ## [7.7.0] - 2026-07-27
 
 ### Added

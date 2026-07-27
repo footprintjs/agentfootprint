@@ -5,14 +5,31 @@
  * `serializeTrace()` freezes that model into a `Trace` — plain JSON you can
  * persist (file, Redis, a bug report) and later rehydrate WITHOUT re-running
  * the agent. `agentfootprint-lens`'s `<Replay trace={…} />` consumes it and
- * rebuilds the flowchart via the existing translators.
+ * draws the flowchart via the existing translators.
  *
- * A `Trace` stores ONLY the domain-event log (the single source of truth the
- * Lens already reads). The step graph is ALWAYS a derived projection of those
- * events (footprint.js's "graph is derived, never post-processed" principle) —
- * it is rebuilt at render time, never stored. Storing a derived graph would be
- * redundant AND a redaction hazard: a second content surface a per-event
- * `redact` could never reach.
+ * A `Trace` stores the domain-event log (the single source of truth the Lens
+ * already reads) plus, since 7.8, the run's footprintjs snapshot. The step
+ * graph is ALWAYS a derived projection of those events (footprint.js's "graph
+ * is derived, never post-processed" principle) — it is rebuilt at render time,
+ * never stored. Storing a derived graph would be redundant AND a redaction
+ * hazard: a second content surface a per-event `redact` could never reach.
+ *
+ * WHAT A TRACE CAN AND CANNOT DRIVE
+ * ─────────────────────────────────
+ * `<Replay trace={…} />` draws the chart from `structure`, and that is all it
+ * draws: a static shape, not a lit-up path. It does not read `trace.events` —
+ * time-travel over them is a planned refinement, and until it lands an offline
+ * `<Replay>` is a strictly smaller view than the live `<Lens>`, not a match
+ * for it.
+ *
+ * For the full viewers — `<Lens>`, ExplainableShell, WhereFrom, the commit
+ * axis — what you want is a RECORDING: `{ snapshot, events, structure }`, the
+ * shape `recordRun()` produces and lens's `observeRecording()` consumes. Note
+ * `events` there means the TYPED agentfootprint stream (`runner.on('*')`),
+ * which is not the domain-event log a Trace carries: the two are different
+ * projections of the same run, and a Trace holds only the second. So a Trace
+ * with a `snapshot` can drive the snapshot-fed surfaces, but it is not itself
+ * a recording — reach for `recordRun()` when the destination is a viewer.
  *
  * PII / trust boundary: the event log carries real content — `llm.end.content`,
  * `tool.start.args`, `tool.end.result`, `context.injected.contentSummary`,
@@ -50,7 +67,8 @@ export interface TraceSummary {
 
 /**
  * A JSON-lossless, UI-free snapshot of one run. Persist it, ship it, replay it.
- * `events` ARE the run (the graph is a derived projection, rebuilt at render).
+ * `events` ARE the timeline (the graph is a derived projection, rebuilt at
+ * render); `structure` is the chart; `snapshot` is the state the run left.
  */
 export interface Trace {
   /** Schema version. Bump on a breaking shape change. */
@@ -59,12 +77,36 @@ export interface Trace {
   readonly events: readonly DomainEvent[];
   /**
    * The serialized STATIC chart structure (footprint.js `buildTimeStructure`).
-   * Design-time data (stage ids/names/types/edges) — UI-free. `<Replay>` rebuilds
-   * the flowchart from this and overlays `events`, so an offline replay matches
-   * the live `<Lens>` exactly. NOT runtime-redacted (it carries no user data; the
+   * Design-time data (stage ids/names/types/edges) — UI-free. `<Replay>` draws
+   * the flowchart from this. NOT runtime-redacted (it carries no user data; the
    * `redact` function targets runtime events).
+   *
+   * Absent, `<Replay>` has nothing to draw and says so.
    */
   readonly structure?: unknown;
+  /**
+   * The run's footprintjs snapshot (`runner.getLastSnapshot()`) — shared
+   * state, the commit log, and every attached recorder's data.
+   *
+   * This is the piece the snapshot-fed surfaces need and the event log cannot
+   * supply: ExplainableShell's memory and provenance panels, WhereFrom, and
+   * the commit axis all read the commit log, which is a footprintjs artifact
+   * and appears nowhere in `events`. Without it a Trace draws a chart and a
+   * timeline and nothing else — which is what every Trace captured before 7.8
+   * is, and why they replay as a static picture.
+   *
+   * `unknown` on purpose: this is footprintjs's shape, not agentfootprint's,
+   * and a Trace is a transport — it should not pin a peer's type into its own
+   * schema. Cast at the consumer.
+   *
+   * NOT redacted by `redact`, which runs per domain event and cannot reach
+   * inside a snapshot. This field carries whatever the run's own footprintjs
+   * redaction policy (`setRedactionPolicy()`) let through, so a run whose
+   * state holds secrets wants that policy set at run time — which is why
+   * `enable.localObservability({ includeSnapshot: true })` is opt-in and a
+   * redacted Trace does not quietly grow a second content surface.
+   */
+  readonly snapshot?: unknown;
   /** Optional headline totals. */
   readonly summary?: TraceSummary;
   /** Self-describing redaction state — travels with the trace. */
@@ -83,8 +125,14 @@ export interface SerializeTraceOptions {
   readonly redact?: (event: DomainEvent) => DomainEvent;
   /** Override the `redaction` label. Defaults to `'pii'` when `redact` is given, else `'none'`. */
   readonly redactionLabel?: TraceRedaction;
-  /** The serialized static chart (`getSpec().buildTimeStructure`) — for `<Replay>` to rebuild the flowchart. */
+  /** The serialized static chart (`getSpec().buildTimeStructure`) — what `<Replay>` draws. */
   readonly structure?: unknown;
+  /**
+   * The run's footprintjs snapshot (`runner.getLastSnapshot()`) — the commit
+   * log and recorder data the snapshot-fed panels read. `enable.localObservability()`
+   * fills this for you; pass it explicitly when calling `serializeTrace` by hand.
+   */
+  readonly snapshot?: unknown;
   /** Optional precomputed headline rollup. */
   readonly summary?: TraceSummary;
   /** Wall-clock capture time. Pass `Date.now()` from the call site. */
@@ -129,16 +177,20 @@ export function redactContent(event: DomainEvent): DomainEvent {
  * `getEvents()` output.
  *
  *   const trace = serializeTrace(handle.boundary.getEvents(), {
- *     redact: redactContent,         // PII stripped before it enters the trace
+ *     redact: redactContent,                      // PII stripped before it enters the trace
+ *     structure: agent.getSpec().buildTimeStructure,  // the chart
+ *     snapshot: agent.getLastSnapshot(),          // state + commit log + recorders
  *     capturedAtMs: Date.now(),
  *   });
  *   fs.writeFileSync('run.trace.json', JSON.stringify(trace));
+ *
+ * `enable.localObservability().getTrace()` passes all three for you.
  */
 export function serializeTrace(
   events: readonly DomainEvent[],
   options: SerializeTraceOptions = {},
 ): Trace {
-  const { redact, redactionLabel, structure, summary, capturedAtMs } = options;
+  const { redact, redactionLabel, structure, snapshot, summary, capturedAtMs } = options;
   // A fresh array either way, so a held Trace is detached from the live store.
   const safeEvents = redact ? events.map((e) => redact(e)) : events.slice();
   const redaction: TraceRedaction = redactionLabel ?? (redact ? 'pii' : 'none');
@@ -146,6 +198,12 @@ export function serializeTrace(
     version: 1,
     events: safeEvents,
     ...(structure !== undefined && { structure }),
+    // Held by reference, not cloned. footprintjs's `sharedState` is a live
+    // view of working memory, so a Trace taken mid-run keeps moving until the
+    // run ends — which is the same caveat `getSnapshot()` carries, and the
+    // reason `onRecorded` fires at the run's exit boundary. Serializing the
+    // Trace (its whole purpose) detaches it.
+    ...(snapshot !== undefined && { snapshot }),
     ...(summary !== undefined && { summary }),
     redaction,
     ...(capturedAtMs !== undefined && { capturedAtMs }),

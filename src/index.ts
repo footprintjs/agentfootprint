@@ -385,16 +385,15 @@ export {
   type RagDocument,
 } from './lib/rag/index.js';
 
-// MCP — Model Context Protocol client. Connect to MCP servers and
-// expose their tools as agentfootprint Tool[] for `agent.tools(...)`.
-// `@modelcontextprotocol/sdk` is a lazy-required peer-dep (no runtime
-// cost when MCP isn't used).
-
-// Tool dispatch primitives (v2.5+). New `agentfootprint/tool-providers`
-// subpath bundles tool sources (mcpClient / mockMcpClient) with tool
-// dispatch primitives (staticTools / gatedTools) so consumers find
-// "everything tool-related" in one place. Top-level barrel re-exports
-// the dispatch primitives too — `mcpClient` already re-exports above.
+// MCP + tool dispatch. Tool sources — `mcpClient` / `mockMcpClient`,
+// which connect to a Model Context Protocol server and expose its tools
+// as agentfootprint `Tool[]` for `agent.tools(...)` — and the dispatch
+// primitives `staticTools` / `gatedTools` / `skillScopedTools` live
+// ONLY under `agentfootprint/tool-providers`: one subpath for
+// everything tool-related, so the main barrel stays focused on the core
+// agent API. NONE of them are re-exported here.
+// `@modelcontextprotocol/sdk` stays a lazy-required peer-dep, so an app
+// that never touches MCP pays nothing for the subpath existing.
 
 // Cross-cutting authorization (v2.5+). `agentfootprint/security` is the
 // dedicated subpath; the root barrel also re-exports `PermissionPolicy`

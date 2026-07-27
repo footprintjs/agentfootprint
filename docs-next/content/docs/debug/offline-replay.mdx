@@ -1,44 +1,176 @@
 ---
-title: Offline replay
-description: Capture a run as a JSON-lossless Trace, then replay the flowchart anywhere — no re-run, redaction at the boundary.
+title: Replay a saved run
+description: Save a run as three things — snapshot, events, structure — then show it in Lens or Explainable UI. Nothing re-runs, no model is called.
 ---
 
-Local observability has two outputs from one handle: a **live** view while the agent
-runs, and an offline **`Trace`** you can persist and replay later — in a bug report, in
-these docs, on another machine — without re-running the agent.
+You have a run. You want to look at it later — in a bug report, in a review, on
+another machine. Two steps: **record it**, then **render it**.
+
+A recording is exactly **three things**. Miss one and one surface goes dark, so
+save all three together.
+
+| | what it is | what it buys |
+|---|---|---|
+| `events` | the typed agentfootprint stream, in order | the story, the commentary, the summary |
+| `snapshot` | the footprintjs run snapshot | state, the commit axis, provenance, every attached recorder's data |
+| `structure` | the agent's build-time chart | the chart — and **only** the chart. Nothing else can draw it |
+
+## Step 1 — Record
+
+In the app that runs the agent. `recordRun` wires everything and hands back the
+three fields:
 
 ```ts
-import { redactContent } from 'agentfootprint/observe';
+import { recordRun } from 'agentfootprint/observe';
+import { narrative, metrics } from 'footprintjs/recorders';
 
-const dev = agent.enable.localObservability();   // retains the run model
-await agent.run({ message: 'Weather in San Francisco?' });
+// Optional, and each lights one panel:
+agent.attach(narrative());   // the Story panel  (without it: "X executed. Wrote: y")
+agent.attach(metrics());     // real durations   (without it: the Gantt shows ORDER, and says so)
 
-// Serialize is the trust boundary — redact here so PII never enters the Trace:
-const trace = dev.getTrace({ redact: redactContent });
-fs.writeFileSync('run.trace.json', JSON.stringify(trace));
+const recorder = recordRun(agent);          // BEFORE the run
+const reply = await agent.run({ message });
+
+fs.writeFileSync('run.json', JSON.stringify(recorder.toRecording()));
+recorder.stop();
 ```
 
-The flowchart below is the **real `<Replay>` component** rendering a `Trace` captured from
-that exact run (`scripts/gen-replay-trace.mjs`) — **offline, with no runner**. The Trace
-carries the event timeline plus the serialized chart structure, so the replay matches the
-live `<Lens>` shape.
+`toRecording()` returns `{ snapshot, events, structure }` — the exact shape the
+viewers consume. There is no assembly step and no per-viewer adapter.
 
-<ReplayEmbed />
+<Callout type="warn" title="Record time is the only time">
+A recording is collected **as the run happens**, and none of the three can be
+reconstructed afterwards: a finished run has no chart to give you, the event
+stream is dropped rather than queued when nothing is listening, and the commit
+log records what each stage *wrote* — never when a boundary was *crossed*. Call
+`recordRun()` before `run()`, or you are recording the next one.
+</Callout>
+
+### If you are wiring it by hand
+
+You rarely should, but the requirement is the one `recordRun` satisfies for
+you: the boundary recorder — the thing that puts stops on the step strip —
+needs **three** connections at record time, and each missing one fails
+differently.
+
+```ts
+import { boundaryRecorder } from 'agentfootprint/observe';
+
+const boundary = boundaryRecorder({
+  getCommitCount: () => agent.getCommitCount(),   // 3. where each boundary sits
+});
+agent.attach(boundary);        // 1. the boundaries themselves
+boundary.subscribe(agent);     // 2. what happened inside them
+```
+
+| missing | what you get |
+|---|---|
+| `attach` | no boundaries at all — loud, the strip is empty |
+| `subscribe` | boundaries with nothing in them — no LLM or tool detail behind any stop |
+| `getCommitCount` | every boundary stamped `commitIdxBefore: 0` — **silent**. The events look complete and the strip cannot be rebuilt |
+
+`enable.flowchart()` and `enable.localObservability()` wire all three for you
+(since 7.8 — before that they missed the third, and every recording made
+through them carried a flat axis).
+
+### A plain footprintjs pipeline
+
+The same fields, one layer down:
+
+```ts
+const recording = {
+  events:    [],                          // typed events are an agentfootprint thing
+  snapshot:  executor.getSnapshot(),
+  structure: chart.buildTimeStructure,    // on the BUILT chart — no snapshot carries it
+};
+```
+
+## Step 2a — Render it in Lens (the agent view)
+
+```tsx
+import { observeRecording, Lens } from 'agentfootprint-lens';
+
+const { recorder, runner, boundaryRanges } = observeRecording(
+  JSON.parse(await fs.readFile('run.json', 'utf8')),
+);
+
+return (
+  <>
+    {boundaryRanges === 0 && <p>This recording has no step boundaries.</p>}
+    <Lens recorder={recorder} runner={runner} theme={{ mode: 'light' }} />
+  </>
+);
+```
+
+Nothing re-runs, no model is called, no network is touched. `boundaryRanges === 0`
+means the run was recorded without a commit-tracking boundary recorder — the step
+strip stays quiet rather than inventing stops.
+
+## Step 2b — Render it in Explainable UI (the pipeline view)
+
+```tsx
+import { ExplainableShell, overlayFromSnapshot } from 'footprint-explainable-ui';
+import { structureGraphFromSpec } from 'agentfootprint-lens/core';
+
+const rec = JSON.parse(await fs.readFile('run.json', 'utf8'));
+
+return (
+  <ExplainableShell
+    runtimeSnapshot={rec.snapshot}
+    traceGraph={structureGraphFromSpec(rec.structure)}
+    runtimeOverlay={overlayFromSnapshot(rec.snapshot)}
+    traceTheme={{ mode: 'light' }}
+  />
+);
+```
+
+You do not pass narrative entries: the story is read out of the snapshot's own
+recorder data. `traceTheme={{ mode }}` re-themes the whole shell — for a light
+app, that one word is the entire theme wiring.
+
+Pass `runtimeOverlay` explicitly. Without it the chart renders in its unvisited
+colours with no warning — the snapshot is right there, but the shell does not
+reach into it on your behalf.
+
+## `<Replay trace>` — the chart-only subset
+
+`localObservability()` freezes a different, smaller artifact: a `Trace`, which
+is the domain-event log plus the chart. `<Replay>` renders it.
 
 ```tsx
 import { Replay } from 'agentfootprint-lens';
 
 const trace = JSON.parse(fs.readFileSync('run.trace.json', 'utf8'));
-return <Replay trace={trace} />;   // rebuilds the flowchart from trace.structure — no agent re-run
+return <Replay trace={trace} />;   // draws trace.structure
 ```
+
+The flowchart below is that component rendering a `Trace` captured from a real
+run (`scripts/gen-replay-trace.mjs`) — offline, with no runner.
+
+<ReplayEmbed />
+
+Be clear about what this is: **`<Replay>` draws the chart's shape and stops
+there.** It does not read `trace.events` — time-travel over them is a planned
+refinement — so an offline `<Replay>` is a strictly smaller view than the live
+`<Lens>`, not a match for it. And a `Trace` carries no footprintjs snapshot
+unless you ask for one, so on its own it cannot drive ExplainableShell,
+WhereFrom, or the commit axis:
+
+```ts
+const dev = agent.enable.localObservability({ includeSnapshot: true });
+const trace = dev.getTrace();   // now carries state + commit log too
+```
+
+Reach for `<Replay>` when a static picture of the run's shape is what you want.
+When you want the run, record it and use step 2a.
 
 ## Redaction travels with the Trace
 
-A live, in-process model is fine to hold raw, but **serializing is a trust-boundary
-crossing** — the Trace can travel. So redaction runs at `getTrace()`, and the result is
-**self-describing**: `trace.redaction` is `'pii'` when a `redact` ran, `'none'` when it
-didn't. When a Trace carries raw content, `<Replay>` shows a banner so a shared trace is
-never mistaken for safe.
+A live, in-process model is fine to hold raw, but **serializing is a
+trust-boundary crossing** — the artifact can travel. So redaction runs at
+`getTrace()`, and the result is **self-describing**: `trace.redaction` is
+`'pii'` when a `redact` ran, `'none'` when it didn't. When a Trace carries raw
+content, `<Replay>` shows a banner so a shared trace is never mistaken for safe.
 
 | You want… | Call |
 |---|---|
@@ -46,8 +178,24 @@ never mistaken for safe.
 | Custom scrub (write-once fn) | `getTrace({ redact: (e) => myScrub(e) })` |
 | Raw content (trusted, local) | `getTrace()` → `redaction: 'none'` (banner shown) |
 
-The graph is **always derived** from the (already-redacted) events — it is never stored —
-so redaction reaches the rendered flowchart with no second content surface to leak.
+The graph is **always derived** from the (already-redacted) events — it is never
+stored — so redaction reaches the rendered flowchart with no second content
+surface to leak.
+
+`redact` runs **per domain event**, which is exactly why `includeSnapshot` is
+opt-in: a snapshot's shared state is the run's raw working memory, and no
+per-event function can reach inside it. Redact that half at run time with
+footprintjs's `setRedactionPolicy()`, where the values are written.
+
+## What a recording honestly cannot show
+
+Each viewer states these on screen rather than faking them:
+
+- **Per-stage durations** without `metrics()` — the Gantt shows execution ORDER instead, and says so.
+- **The step strip** without a commit-tracking boundary recorder — the strip stays quiet.
+- **Error messages** — the commit log has no error channel. A failing stage's writes land; its message does not.
+- **Deep subflow internals** — footprintjs deliberately keeps them out of the run-level commit log, so a replay lights the mount stages, not their insides.
+- **Detail behind each stop, on a lean recording** — `recordRun(agent, { boundaryDetail: 'lean' })` stores boundary structure without captured content. The bundle says so in its own `meta.mode`, so a viewer can tell you rather than showing empty panels.
 
 ## Next steps
 

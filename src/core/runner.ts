@@ -14,7 +14,13 @@
  *          (LLMCall, Agent, Sequence, etc.) implement it.
  */
 
-import type { CombinedRecorder, FlowChart, FlowchartCheckpoint, RunOptions } from 'footprintjs';
+import type {
+  CombinedRecorder,
+  FlowChart,
+  FlowChartExecutor,
+  FlowchartCheckpoint,
+  RunOptions,
+} from 'footprintjs';
 import type { RunnerPauseOutcome } from './pause.js';
 import type {
   EventListener,
@@ -50,13 +56,20 @@ export interface EnableNamespace {
    * (React Flow, Cytoscape, D3) without touching footprintjs internals.
    *
    * Returns a handle with `getSnapshot()` so the UI can query the graph
-   * at any time (not just via onUpdate).
+   * at any time (not just via onUpdate). Wires the boundary recorder's
+   * three connections, commit tracking included, so the recording it
+   * leaves behind can be replayed with its step strip intact.
    */
   flowchart(opts?: FlowchartOptions): FlowchartHandle;
   /**
-   * Tier-3 / Debug — RETAIN a live run model: render it live via
-   * `<Lens recorder={handle} />` (the handle's `onUpdate` drives the UI) AND
-   * snapshot it for OFFLINE replay via `handle.getTrace()` / `onComplete`.
+   * Tier-3 / Debug — RETAIN a live run model: watch it via `onLive` (a
+   * fresh `StepGraph` per event, for your own renderer) AND freeze it for
+   * OFFLINE replay via `handle.getTrace()` / `onRecorded`.
+   *
+   * This handle is NOT a Lens recorder — `<Lens recorder={…} />` wants a
+   * `LensRecorder`, a different object with a different surface. To put a
+   * run in front of Lens, record it with `recordRun()` and hand the
+   * recording to lens's `observeRecording()`.
    *
    * Contrast `observability({ strategy })` below (Tier-4 / Monitor), which
    * ships each event to a vendor and forgets. `localObservability` keeps the
@@ -100,12 +113,42 @@ export interface Runner<TIn = unknown, TOut = unknown> {
    * `ExplainableShell.spec` + `specToReactFlow(spec, ...)` consumer
    * conventions.
    *
+   * Its `buildTimeStructure` field is the CHART — the one ingredient a
+   * finished run does not leave behind, and the only route to a drawable
+   * graph. Save it alongside the snapshot when storing a run (or let
+   * `recordRun()` do it).
+   *
    * Subflow mounting (footprintjs `addSubFlowChart*`) accepts the
    * `FlowChart` value directly:
    *
    *   parent.addSubFlowChartNext('sf-agent', child.getSpec(), 'Agent')
    */
   getSpec(): FlowChart;
+
+  /**
+   * The footprintjs snapshot of the most recent run — shared state, the
+   * commit log, the execution tree, and every attached recorder's data.
+   * `undefined` before the first run.
+   *
+   * The canonical structure: consumers read this for shape and join
+   * their own per-stage payload by `runtimeStageId`, rather than
+   * re-deriving structure from typed events.
+   */
+  getLastSnapshot(): ReturnType<FlowChartExecutor['getSnapshot']> | undefined;
+
+  /**
+   * How many commits the run has written so far — the run's TIME AXIS.
+   *
+   * One commit lands per executed stage, in order, so the count sampled
+   * at a moment is that moment's position in the run. Observers stamp it
+   * to record WHEN they fired — it is what `boundaryRecorder({
+   * getCommitCount })` puts on every boundary, and the only reason a
+   * step strip can be rebuilt from a stored recording later.
+   *
+   * `0` before the first run; cumulative across `resume()` on the same
+   * executor. Sample it live (a closure), never a captured number.
+   */
+  getCommitCount(): number;
 
   /**
    * Return the consumer-shaped UI group for this runner — produced by

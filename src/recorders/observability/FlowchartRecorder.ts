@@ -204,7 +204,9 @@ export interface FlowchartHandle {
 /**
  * Attach a live FlowchartRecorder to a runner.
  *
- *   1. Creates a `BoundaryRecorder` (the unified domain event log).
+ *   1. Creates a `BoundaryRecorder` (the unified domain event log) with
+ *      commit tracking, so every boundary records WHERE on the commit
+ *      axis it happened.
  *   2. Attaches it to the executor's FlowRecorder channel via
  *      `runnerAttach` — captures run / subflow / fork / decision / loop.
  *   3. Subscribes it to the dispatcher — captures llm.* / tool.* /
@@ -212,14 +214,24 @@ export interface FlowchartHandle {
  *   4. Wires `onUpdate` so the consumer sees a fresh derived StepGraph
  *      on every event.
  *
+ * @param getCommitCount  where each boundary sits on the run's commit
+ *   axis — the runner's `getCommitCount()`, sampled live. Optional only
+ *   because a caller may have no runner to sample; omitting it stamps
+ *   every boundary `commitIdxBefore: 0`, which reads as "all boundaries
+ *   opened at once" and leaves an offline step strip with nothing to
+ *   place. Nothing downstream can repair it — the commit log records
+ *   what stages wrote, never when a boundary was crossed — so the
+ *   runner always passes it.
+ *
  * @internal Called from `RunnerBase.enable.flowchart`.
  */
 export function attachFlowchart(
   runnerAttach: (recorder: CombinedRecorder) => () => void,
   dispatcher: EventDispatcher,
   options: FlowchartOptions = {},
+  getCommitCount?: () => number,
 ): FlowchartHandle {
-  const boundary = boundaryRecorder();
+  const boundary = boundaryRecorder(getCommitCount ? { getCommitCount } : {});
   const onUpdate = options.onUpdate;
 
   // Wrap the recorder to also re-emit StepGraph after each FlowRecorder

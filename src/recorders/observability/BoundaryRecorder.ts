@@ -53,11 +53,35 @@
  * design follows the React Fiber + OpenTelemetry pattern:
  * **producers self-describe; consumers dispatch on type**.
  *
+ * WIRING — THREE PARTS, ALL AT RECORD TIME
+ * ────────────────────────────────────────
+ * This recorder hears half a run per connection, and the half it misses
+ * cannot be reconstructed afterwards. All three go on BEFORE `run()`:
+ *
+ *   1. `runner.attach(boundary)` — the footprintjs control-flow channel:
+ *      run / subflow entry and exit, forks, decisions, loops. Without it
+ *      there are no boundaries at all.
+ *   2. `boundary.subscribe(runner)` — the agentfootprint typed stream:
+ *      `llm.*`, `tool.*`, `context.injected`. Without it the boundaries
+ *      have no content: no model calls, no tool calls, no injections.
+ *   3. `{ getCommitCount }` — where each boundary sits on the commit
+ *      axis. Without it every event is stamped `commitIdxBefore: 0` and
+ *      the step strip cannot be rebuilt from the recording later. This
+ *      one fails SILENTLY — the events all look fine.
+ *
+ * There is no after-the-fact fix for any of the three: a completed run
+ * leaves a snapshot and a commit log, and neither says where a boundary
+ * opened relative to the commits. `recordRun(runner)` does all three and
+ * hands back `{ snapshot, events, structure }` — reach for it first, and
+ * wire by hand only when you need a shape it doesn't produce.
+ *
  * @example
  * ```typescript
  * import { boundaryRecorder, EventDispatcher } from 'agentfootprint';
  *
- * const boundary = boundaryRecorder();
+ * const boundary = boundaryRecorder({
+ *   getCommitCount: () => executor.getCommitCount(),  // the commit axis
+ * });
  * const dispatcher = new EventDispatcher();
  * executor.attachCombinedRecorder(boundary);   // wires FlowRecorder side
  * boundary.subscribe(dispatcher);              // wires typed-event side
@@ -107,8 +131,8 @@ interface FlowRunFailedEvent {
   readonly structuredError: { readonly message: string };
   readonly traversalContext?: TraversalContext;
 }
-import type { AgentfootprintEvent, AgentfootprintEventType } from '../../events/registry.js';
-import type { EventDispatcher, Unsubscribe } from '../../events/dispatcher.js';
+import type { AgentfootprintEvent } from '../../events/registry.js';
+import type { Unsubscribe } from '../../events/dispatcher.js';
 import { SUBFLOW_IDS, STAGE_IDS, slotFromSubflowId } from '../../conventions.js';
 import type { ContextSlot } from '../../events/types.js';
 import { createRunIdObserver, type RunIdObserver } from './observeRunId.js';
@@ -316,6 +340,52 @@ export type DomainEvent =
   | DomainToolEndEvent
   | DomainContextInjectedEvent;
 
+// ─── Lean projection ─────────────────────────────────────────────────
+
+/**
+ * The `DomainEvent` fields that carry captured run CONTENT — what the
+ * agent read, produced, and handed across a boundary — as opposed to
+ * run STRUCTURE (where a boundary was, when, of what kind). These are
+ * the fields `snapshot: 'lean'` drops.
+ *
+ * They are also exactly the fields `buildStepGraphFromEvents` turns
+ * into StepNode content (`entryPayload` / `exitPayload` /
+ * `contentSummary` / `assistantText` / `toolArgs` / `toolResult`) —
+ * which is why dropping them is opt-in rather than the default.
+ *
+ * When you add a field to a `Domain*Event`, decide:
+ *   - Does it hold data the agent handled (unbounded, redaction-
+ *     relevant)?                                        → add it HERE
+ *   - Does it say where/when/what-kind the boundary was? → leave it out
+ *
+ * Forgetting to add one means a lean snapshot still ships that content
+ * — silently, since nothing else references the field.
+ *
+ * Two free-text fields deliberately stay OUT of this set: `rationale`
+ * on `decision.branch` and `reason` on `context.injected`. They are
+ * short capture-time annotations saying WHY a boundary happened, and a
+ * lean bundle loses most of its explanatory value without them — but a
+ * decider that interpolates run values into its rationale does put that
+ * text in a lean artifact. Lean means "no captured payloads", not "no
+ * free text at all"; say so wherever lean is offered as a redaction
+ * story.
+ */
+const CONTENT_FIELDS = ['payload', 'args', 'result', 'content', 'contentSummary'] as const;
+
+type ContentField = (typeof CONTENT_FIELDS)[number];
+
+const CONTENT_FIELD_SET: ReadonlySet<string> = new Set<string>(CONTENT_FIELDS);
+
+/**
+ * A `DomainEvent` with its content fields removed — the shape
+ * `toSnapshot()` emits under `snapshot: 'lean'`.
+ *
+ * Distributive by construction (`T extends unknown ? … : never`) so the
+ * union survives the `Omit` and `type` still narrows for consumers.
+ */
+type StripContent<T> = T extends unknown ? Omit<T, ContentField> : never;
+export type LeanDomainEvent = StripContent<DomainEvent>;
+
 // ─── BoundaryAggregate — per-boundary rollup ────────────────────────
 
 /**
@@ -413,18 +483,83 @@ function isAgentInternalId(localId: string): boolean {
   return false;
 }
 
+/**
+ * Anything that can hand out every typed event as it fires — the one
+ * capability `BoundaryRecorder.subscribe()` needs.
+ *
+ * A `Runner` satisfies this (`runner.on('*', …)`) and so does the
+ * internal `EventDispatcher`, which is the point: wiring the recorder's
+ * typed half never requires reaching past the public runner for a
+ * dispatcher it doesn't hand out.
+ */
+export interface TypedEventSource {
+  on(type: '*', listener: (event: AgentfootprintEvent) => void): Unsubscribe;
+}
+
 export interface BoundaryRecorderOptions {
   readonly id?: string;
   /**
-   * Live commit-count accessor — typically `() => executor.getCommitCount()`
-   * from footprintjs 5.1+. Inject from your runner. When provided:
+   * Live commit-count accessor — `() => runner.getCommitCount()` on an
+   * agentfootprint runner, or `() => executor.getCommitCount()` on a raw
+   * footprintjs executor (5.1+). When provided:
    *   - Every DomainEvent gains `commitIdxBefore` / `commitIdxAfter`.
    *   - `recorder.boundaryIndex` is populated with open/close ranges
    *     keyed on each subflow's entry event.
-   * When omitted (legacy / pre-5.1 footprintjs): both fields are 0 on
-   * every event; `boundaryIndex` exists but is empty. Phase 5 Layer 2.
+   *
+   * **Omitting it produces a recording whose step strip cannot be
+   * rebuilt.** Every event is stamped `commitIdxBefore: 0`, so every
+   * boundary claims to have opened at the same instant; `boundaryIndex`
+   * is deliberately left EMPTY rather than filled with zero-width
+   * `[0, 0]` ranges that would read as real. Offline, a consumer
+   * replaying this bundle sees no positions to place, so the strip stays
+   * quiet — the honest outcome, and an unrecoverable one: the commit log
+   * records what each stage WROTE, never when a boundary was crossed
+   * relative to it, so nothing downstream can derive the axis after the
+   * fact. There is no error and the events otherwise look complete,
+   * which is exactly why this is called out here.
+   *
+   * Sample it live — a closure over the runner, not a captured number.
+   * The count is meaningless before the run starts and must be read at
+   * the moment each boundary fires. Phase 5 Layer 2.
    */
   readonly getCommitCount?: () => number;
+  /**
+   * How much of each event `toSnapshot()` carries into
+   * `runtimeSnapshot.recorders`.
+   *
+   *   - `'full'` (default) — every field, content included. Required by
+   *     `buildStepGraphFromEvents()`: an offline `<Replay>` restores its
+   *     entry/exit payloads, assistant text, tool args and tool results
+   *     from this bundle and nowhere else.
+   *   - `'lean'` — boundary STRUCTURE only. Drops the five content
+   *     fields (`payload`, `args`, `result`, `content`,
+   *     `contentSummary`); keeps every field that says WHERE, WHEN and
+   *     OF WHAT KIND each boundary was, so the commit-range index
+   *     rebuilds range for range offline. Sized on one demo turn (4
+   *     ReAct iterations, 4 LLM calls, 3 tool calls, run end to end on
+   *     a mock provider): the bundle this method returned was 69.7 KB
+   *     raw / 4.6 KB gzipped, its lean projection 21.7 KB / 1.9 KB —
+   *     content was 69% of the raw bytes, and a consumer rebuilding
+   *     only the index reads none of it. Same run measured twice; that
+   *     turn's content was the entry/exit payloads, since only the
+   *     boundary side of this recorder was attached — a run that also
+   *     `subscribe()`s the typed-event side carries tool args, tool
+   *     results and assistant text in there too. (The replay fixture
+   *     the suite measures reports a much larger full bundle — it
+   *     stands in for each subflow's missing entry seed with that
+   *     subflow's final state, so it serializes the state twice per
+   *     boundary. Don't quote it.)
+   *
+   * Same reasoning as `BoundaryRangeLabel`: a stored artifact shouldn't
+   * become a second, redaction-bypassing copy of everything the agent
+   * read and wrote. Consumers that DO want content join back on
+   * `runtimeStageId` against the run's own snapshot.
+   *
+   * `'full'` stays the default because this bundle has carried content
+   * since it shipped (v2.x, 2026-04-27) and offline consumers depend on
+   * that silently — a lean default would quietly empty their replays.
+   */
+  readonly snapshot?: 'full' | 'lean';
 }
 
 /**
@@ -551,6 +686,11 @@ export class BoundaryRecorder implements CombinedRecorder {
    *  index. Multi-panel review flagged this footgun. */
   private readonly hasCommitTracking: boolean;
 
+  /** Snapshot verbosity — see `BoundaryRecorderOptions.snapshot`. Only
+   *  `toSnapshot()` reads it; the live event stream from `getEvents()`
+   *  is always full, so in-process consumers are never affected. */
+  private readonly snapshotMode: 'full' | 'lean';
+
   /**
    * Tracks whether the most recent `llm.end` had toolCalls. Used to
    * classify the NEXT `llm.start` as `'tool→llm'` (vs `'user→llm'` if
@@ -596,6 +736,7 @@ export class BoundaryRecorder implements CombinedRecorder {
 
   constructor(options: BoundaryRecorderOptions = {}) {
     this.id = options.id ?? `boundary-${++_counter}`;
+    this.snapshotMode = options.snapshot ?? 'full';
     this.hasCommitTracking = options.getCommitCount !== undefined;
     const raw = options.getCommitCount;
     this.getCommitCount = raw === undefined ? () => 0 : () => sanitizeCommitCount(raw());
@@ -795,17 +936,22 @@ export class BoundaryRecorder implements CombinedRecorder {
   // ── Typed-event subscription (agentfootprint dispatcher side) ───────
 
   /**
-   * Subscribe to the runner's typed-event dispatcher and emit a domain
-   * event for each `llm.*` / `tool.*` / `context.injected` event.
+   * Subscribe to the run's typed events and emit a domain event for each
+   * `llm.*` / `tool.*` / `context.injected` one. This is the recorder's
+   * SECOND half — `runner.attach(...)` supplies the boundaries, this
+   * supplies what happened inside them. Wire both, before the run.
+   *
+   * Takes anything that offers a wildcard subscription, which a public
+   * `Runner` does as readily as the internal `EventDispatcher` — so a
+   * consumer never has to reach past `runner.on` for a dispatcher it
+   * isn't given.
    *
    * Returns an unsubscribe function; safe to call multiple times (each
    * call adds a new subscription). Most consumers call this once at
    * recorder construction and dispose with the returned function.
    */
-  subscribe(dispatcher: EventDispatcher): Unsubscribe {
-    return dispatcher.on('*' as unknown as AgentfootprintEventType, (event: AgentfootprintEvent) =>
-      this.ingestTypedEvent(event),
-    );
+  subscribe(source: TypedEventSource): Unsubscribe {
+    return source.on('*', (event: AgentfootprintEvent) => this.ingestTypedEvent(event));
   }
 
   private ingestTypedEvent(event: AgentfootprintEvent): void {
@@ -1165,18 +1311,68 @@ export class BoundaryRecorder implements CombinedRecorder {
   }
 
   /** Snapshot bundle — included in `executor.getSnapshot()` if the
-   *  executor implements the snapshot extension protocol. */
-  toSnapshot() {
+   *  executor implements the snapshot extension protocol.
+   *
+   *  Under `snapshot: 'lean'` the bundle carries structure only, and
+   *  `meta.mode` says so. That field is the whole point: an offline
+   *  consumer holding a lean bundle can then SAY "this recording carries
+   *  structure only" instead of drawing empty detail panels, because
+   *  `buildStepGraphFromEvents()` restores step content from this bundle
+   *  and nowhere else. `description` still carries the same fact in
+   *  prose for a human reading the JSON — but prose is not something
+   *  code branches on, and the readers that had to string-match it
+   *  didn't.
+   *
+   *  `meta` reaches `getSnapshot().recorders[i].meta` on footprintjs
+   *  9.12+, which copies it through; older engines rebuild the row
+   *  without it and the field is dropped in transit. It is always on the
+   *  value THIS method returns, so a producer holding the recorder
+   *  (`recordRun`) can read it either way.
+   *
+   *  `data` is annotated rather than inferred: a lean event is a
+   *  structural SUPERtype of a full one, so inference collapses the
+   *  union to `LeanDomainEvent[]` and full-mode callers silently lose
+   *  `payload` / `content` / … from the type. Narrow on the mode you
+   *  configured. */
+  toSnapshot(): {
+    name: string;
+    description: string;
+    preferredOperation: 'translate';
+    data: DomainEvent[] | LeanDomainEvent[];
+    meta: { readonly mode: 'full' | 'lean' };
+  } {
+    const lean = this.snapshotMode === 'lean';
     return {
       name: 'BoundaryEvents',
-      description: 'Unified domain event log — run/subflow boundaries + LLM/tool/context events',
+      description: lean
+        ? 'Unified domain event log, lean — run/subflow boundaries + LLM/tool/context events, without captured content'
+        : 'Unified domain event log — run/subflow boundaries + LLM/tool/context events',
       preferredOperation: 'translate' as const,
-      data: this.getEvents(),
+      data: lean ? this.getEvents().map(stripContent) : this.getEvents(),
+      meta: { mode: this.snapshotMode },
     };
   }
 }
 
 // ── Internal helpers ─────────────────────────────────────────────────
+
+/**
+ * Copy an event without its `CONTENT_FIELDS`. Allow-list by omission
+ * rather than a per-type rewrite so a newly added STRUCTURAL field
+ * reaches lean consumers without a second edit here — the asymmetry is
+ * deliberate, and the one direction it gets wrong (a new content field
+ * silently surviving) is pinned by a test on `CONTENT_FIELDS`.
+ *
+ * Builds a new object; the stored event is never mutated, so a lean
+ * `toSnapshot()` leaves the live stream from `getEvents()` untouched.
+ */
+function stripContent(event: DomainEvent): LeanDomainEvent {
+  const lean: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(event)) {
+    if (!CONTENT_FIELD_SET.has(key)) lean[key] = value;
+  }
+  return lean as LeanDomainEvent;
+}
 
 function buildRunEvent(
   type: 'run.entry' | 'run.exit',

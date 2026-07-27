@@ -67,6 +67,13 @@ export interface QualityTriggerLookup {
  * runtimeStageId in the report drills straight into the toolpack tools.
  *
  * - `snapshot` — `executor.getSnapshot()` / `agent.getLastSnapshot()`.
+ * - `structure` — OPTIONAL `runner.getSpec().buildTimeStructure`. Not read
+ *   by the localizer, which works entirely off the commit log — it is here
+ *   so that this bag is a complete RECORDING (`{ snapshot, events,
+ *   structure }`) and the same literal that localizes a bad answer can also
+ *   DRAW the run it came from. Without it the evidence is complete for
+ *   analysis and mute for viewing: a snapshot carries no chart, and a
+ *   finished run cannot produce one afterwards.
  * - `controlDeps` — OPTIONAL `controlDepRecorder().asLookup()` from the
  *   run. With it, the slice includes `[control: <rule label>]` edges to
  *   the deciders that routed execution. Without it, the report carries the
@@ -80,6 +87,8 @@ export interface QualityTriggerLookup {
  */
 export interface ContextBugArtifacts {
   readonly snapshot: RuntimeSnapshot;
+  /** The run's build-time chart — carried so the evidence can also be drawn. */
+  readonly structure?: unknown;
   readonly controlDeps?: ControlDepLookup;
   readonly quality?: QualityTriggerLookup;
   readonly events?: readonly CapturedEventLike[];

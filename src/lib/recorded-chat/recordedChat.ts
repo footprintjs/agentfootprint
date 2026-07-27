@@ -176,7 +176,16 @@ class RecordedChatSession implements RecordedChat {
         reply: out,
         message,
         transcriptBefore,
-        artifacts: Object.freeze({ snapshot, events: Object.freeze(events) }),
+        artifacts: Object.freeze({
+          snapshot,
+          events: Object.freeze(events),
+          // The third piece of a recording: the chart. Captured from the
+          // per-turn agent HERE, because that agent is discarded on the next
+          // line and its spec goes with it — and nothing can reproduce the
+          // chart from a finished run. With it, a stored turn both localizes
+          // AND draws.
+          structure: (agent.getSpec() as { buildTimeStructure?: unknown }).buildTimeStructure,
+        }),
         lastLlmCallId,
         identity: options?.identity,
       });

@@ -125,6 +125,28 @@ export abstract class RunnerBase<TIn = unknown, TOut = unknown> implements Runne
     return this.getLastSnapshot();
   }
 
+  /**
+   * How many commits the run has written so far — footprintjs's
+   * `executor.getCommitCount()`, forwarded.
+   *
+   * This is the run's TIME AXIS. One commit lands per executed stage, in
+   * order, so the count sampled at some moment is that moment's position
+   * in the run. Observers stamp it to say WHEN they fired: it is what
+   * `boundaryRecorder({ getCommitCount })` records on every boundary, and
+   * the only reason a step strip can be rebuilt from a stored recording
+   * later. Sample it live, at the moment of the event — a number read
+   * once and captured is a number about the wrong instant.
+   *
+   * `0` before the first run, and during a run it climbs; between runs it
+   * is the last run's total. Cumulative across `resume()` on the same
+   * executor, and it counts the whole run — a subflow's own commits are
+   * kept out of the run-level log by footprintjs, so this is the parent
+   * timeline, not a sum of every nested one.
+   */
+  getCommitCount(): number {
+    return this.lastExecutor?.getCommitCount() ?? 0;
+  }
+
   // ─── Subclass hooks ────────────────────────────────────────────
 
   /**
@@ -134,7 +156,9 @@ export abstract class RunnerBase<TIn = unknown, TOut = unknown> implements Runne
    *
    * Pairs with the run-time getters (`getLastSnapshot`,
    * `getCommitCount`) and matches `ExplainableShell.spec` +
-   * `specToReactFlow(spec, ...)` consumer conventions.
+   * `specToReactFlow(spec, ...)` consumer conventions. Its
+   * `buildTimeStructure` field is what a viewer draws — save it with the
+   * snapshot when storing a run, since no snapshot carries it.
    *
    * DO NOT OVERRIDE in subclasses — the reference-identity contract
    * (Lens / OpenAPI / MCP caches memo on this returning the same
@@ -497,25 +521,31 @@ export abstract class RunnerBase<TIn = unknown, TOut = unknown> implements Runne
 
   readonly enable: EnableNamespace = {
     flowchart: (opts?: FlowchartOptions): FlowchartHandle =>
-      // Hand the recorder's attach() AND the dispatcher out as narrow
-      // capabilities — no reference to `this`, no coupling to the
-      // runner class tree. attachFlowchart wires a TopologyRecorder
-      // via the attach path AND subscribes to the event dispatcher
-      // for ReAct step transitions (stream.llm_* / stream.tool_*).
-      attachFlowchart((r) => this.attach(r), this.dispatcher, opts),
-    localObservability: (opts?: LocalObservabilityOptions): LocalObservabilityHandle =>
-      attachLocalObservability(
+      // Hand the recorder's attach(), the dispatcher AND the commit
+      // count out as narrow capabilities — no reference to `this`, no
+      // coupling to the runner class tree. attachFlowchart wires a
+      // TopologyRecorder via the attach path AND subscribes to the event
+      // dispatcher for ReAct step transitions (stream.llm_* /
+      // stream.tool_*). The commit count is the third: without it every
+      // boundary is stamped at index 0 and the recording's step strip
+      // cannot be rebuilt — silently, since the events look complete.
+      attachFlowchart(
         (r) => this.attach(r),
         this.dispatcher,
         opts,
-        Date.now,
-        () => {
+        () => this.getCommitCount(),
+      ),
+    localObservability: (opts?: LocalObservabilityOptions): LocalObservabilityHandle =>
+      attachLocalObservability((r) => this.attach(r), this.dispatcher, opts, Date.now, {
+        getStructure: () => {
           // The serialized STATIC chart — lets the offline Trace rebuild the
           // flowchart (Replay Option A). Captured lazily; spec is reference-stable.
           const spec = this.getSpec() as { buildTimeStructure?: unknown };
           return spec.buildTimeStructure;
         },
-      ),
+        getSnapshot: () => this.getLastSnapshot(),
+        getCommitCount: () => this.getCommitCount(),
+      }),
     // v2.8 grouped strategy enablers — see
     // `docs/inspiration/strategy-everywhere.md`.
     observability: (opts) => attachObservabilityStrategy(this.dispatcher, opts),

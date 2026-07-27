@@ -59,6 +59,8 @@ export {
   type DomainSubflowEvent,
   type DomainToolStartEvent,
   type DomainToolEndEvent,
+  type LeanDomainEvent,
+  type TypedEventSource,
 } from './recorders/observability/BoundaryRecorder.js';
 export {
   buildRunSteps,
@@ -85,6 +87,17 @@ export {
   type FlowchartHandle,
 } from './recorders/observability/FlowchartRecorder.js';
 
+// recordRun — save a run so a viewer can show it later. THE producer for
+// `{ snapshot, events, structure }`: the timeline, the state, and the chart,
+// which is the shape the UIs consume (lens's `observeRecording`) and the one
+// every integration used to assemble by hand, each missing a different piece.
+export {
+  recordRun,
+  type Recording,
+  type RecordRunOptions,
+  type RunRecorder,
+} from './recorders/observability/recordRun.js';
+
 // Offline replay: freeze a live run model into a UI-free, JSON-lossless Trace
 // (redaction applied at the serialize boundary). agentfootprint-lens's <Replay>
 // rehydrates it. See docs/design/local-observability-and-pii.md.
@@ -98,7 +111,9 @@ export {
   type SerializeTraceOptions,
 } from './recorders/observability/trace.js';
 
-// localObservability — Tier-3 retain: live <Lens> + offline getTrace()/onComplete.
+// localObservability — Tier-3 retain: live onLive(graph) + offline
+// getTrace()/onRecorded. NOT a Lens recorder — to render a run in Lens, use
+// `recordRun` above and lens's `observeRecording`.
 export {
   attachLocalObservability,
   type LocalObservabilityHandle,

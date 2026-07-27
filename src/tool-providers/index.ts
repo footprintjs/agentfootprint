@@ -40,8 +40,8 @@ export { skillScopedTools } from './skillScopedTools.js';
 export type { ToolProvider, ToolDispatchContext, ToolGatePredicate } from './types.js';
 
 // Re-export tool sources from the MCP module so consumers find them in
-// one place. The top-level barrel still exports `mcpClient` for v2.2
-// back-compat.
+// one place. This subpath is the ONLY place `mcpClient` is public — the
+// top-level barrel does not re-export it.
 export { mcpClient, mockMcpClient } from '../lib/mcp/index.js';
 export type {
   McpClient,
