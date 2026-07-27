@@ -83,38 +83,86 @@ withRetry(provider, {
 
 ## Observability: automatic inside a run
 
-Inside an `Agent`, `LLMCall`, or `Parallel` run you get decorator telemetry **for free** — no wiring. The decorators report what they did, and the LLM call site turns each report into a typed event stamped with the real `runId` and `runtimeStageId`, so it correlates with everything else in the run:
+*Which provider actually served this call?* — the first question anyone asks after a vendor blip. Inside an `Agent`, `LLMCall`, or `Parallel` run the answer is in the trace, with no wiring. Each decorator reports what it did through an optional per-call `LLMCallHooks`, and the LLM call site turns that report into a typed event **from inside the traversal** — so it carries the real `runId` and `runtimeStageId` footprintjs stamped before the stage ran, and correlates with every other event in the run.
 
 | Event | Fired by | Payload |
 | --- | --- | --- |
-| `agentfootprint.fallback.triggered` | `withFallback` | `{ kind: 'provider', primary, fallback, reason }` |
+| `agentfootprint.fallback.triggered` | `withFallback` — and `fallbackProvider`, once per pairwise hop | `{ kind: 'provider', primary, fallback, reason }` |
 | `agentfootprint.error.retried` | `withRetry` | `{ attempt, maxAttempts, lastError, backoffMs, reason }` |
 | `agentfootprint.error.recovered` | `withRetry` | `{ attempt, totalDurationMs }` |
 
-```ts
-const provider = withFallback(anthropic({ apiKey: A }), openai({ apiKey: O }));
-const agent = Agent.create({ provider, model: 'claude-sonnet-4-5' }).build();
+Subscribe BEFORE `run()`. The dispatcher **drops** events nobody is listening for, so a late listener looks exactly like a missing emitter:
 
-// Subscribe BEFORE run() — events are dropped when nothing is listening.
-agent.on('agentfootprint.fallback.triggered', (e) => {
-  console.warn(`${e.payload.primary} → ${e.payload.fallback}: ${e.payload.reason}`);
-});
-// Or take the whole family:
-agent.on('agentfootprint.error.*', (e) => console.log(e.type, e.payload));
+<CodeFile path="examples/features/35-resilience-visibility.ts" region="subscribe" title="examples/features/35-resilience-visibility.ts (region: subscribe)" />
 
-await agent.run({ message: 'hi' });
+`agent.on('agentfootprint.error.*', …)` takes the retry family in one subscription; `'*'` takes everything.
+
+### Which recorder surfaces them
+
+`resilienceRecorder()` — a small event bridge matched on those three exact event names. `Agent`, `LLMCall` and `Parallel` are the runners that call a provider themselves, and each attaches it for you, so `.on()` works with zero setup. Two paths need a hand:
+
+- **A bare `FlowChartExecutor`** running one of the exported message-api charts (`buildAgentMessageApiChart` / `buildMessageApiChart`). The chart emits, but nothing bridges those emits to a dispatcher. Attach it yourself: `executor.attachCombinedRecorder(resilienceRecorder({ dispatcher, getRunContext }))`, exported from `agentfootprint/observe`.
+- **A saved run.** `recordRun()` captures these like any other event, meta intact, so an offline viewer can place the failover on the same timeline as the tool calls around it. See [Offline replay](doc:offline-replay).
+
+### One producer per fact, so nothing double-counts
+
+Each event has exactly one producer — `fallback.triggered` ← `withFallback`, `error.retried` / `error.recovered` ← `withRetry`, nothing ← `withCircuitBreaker`. Decorators only *forward* the hooks inward, never aggregate or re-emit, so a stack of three produces one concatenated stream and de-duplication is structurally unnecessary. A production stack (breaker under fallback under retry) whose primary is down and whose backup blips once reads:
+
+```
+fallback.triggered → error.retried → fallback.triggered → error.recovered
 ```
 
-Notes on what these events do and don't say:
+Two fallbacks because there really were two billed primary calls — not a duplicate. `fallbackProvider(a, b, c)` reports honest pairwise hops (`a → b|c`, then `b → c`), never the composite chain name.
 
-- **`error.retried.reason` classifies the ERROR, not the decision.** `shouldRetry` returns a bare boolean, so a custom predicate's reasoning is unknowable. The value is derived from the error's `status`/`statusCode`: `'http-429'`, `'http-5xx'`, `'http-4xx'`, `` `http-${code}` ``, or `'no-status'`.
-- **`withCircuitBreaker` has no event of its own.** A trip shows up as the `reason` on the enclosing `withFallback`'s `fallback.triggered` (the `CircuitOpenError` message). Use `onStateChange` for standalone breaker state.
-- **A fallback success is reported as `fallback.triggered`, not `error.recovered`** — that payload has no field for which provider served, so claiming a recovery there would be inventing data.
-- Running one of the exported message-api charts on a bare `FlowChartExecutor`? Attach the bridge yourself: `executor.attachCombinedRecorder(resilienceRecorder({ dispatcher, getRunContext }))` from `agentfootprint/observe`.
+### The honest limits
+
+- **`error.retried.reason` classifies the ERROR, not the decision.** `shouldRetry` returns a bare boolean, so a custom predicate's reasoning is unknowable to the decorator. The value is derived from the same `status`/`statusCode` fields the default policy inspects: `'http-429'`, `'http-5xx'`, `'http-4xx'`, `` `http-${code}` ``, or `'no-status'`.
+- **`withCircuitBreaker` has no event of its own.** There is no declared payload for a breaker transition, so a trip is visible only as the `reason` on the enclosing `withFallback`'s `fallback.triggered` (the `CircuitOpenError` message). Use `onStateChange` for standalone breaker state.
+- **A fallback success is reported as `fallback.triggered`, not `error.recovered`.** That payload has no field for which provider served, so claiming a recovery there would be inventing data. `withRetry` is the only source of `recovered`, and only for an attempt ≥ 2.
+- **`error.recovered.totalDurationMs` is new instrumentation**, measured by the decorator from its own first attempt — not a fact recovered from somewhere else.
+- **Streaming reports only a pre-first-chunk failure.** Once the primary's stream has yielded a chunk the stream is pinned; a later error re-throws rather than failing over, so there is nothing to report. A primary with no `stream()` at all reports nothing either — nothing failed.
+- **The memory extractors are a blind spot.** The LLM-backed beat / fact extractors call `complete()` from inside a port with no scope, so a decorator wrapped around an extractor's provider stays invisible to the trace.
+- **Under `.reliability()` you will see two families interleave, and that is correct.** `reliability.*` is the [rules-based gate](doc:reliability-gate) reporting its own dynamic decisions; `error.*` / `fallback.*` is the decorator underneath reporting its fixed-cap, exponential-backoff decisions in the same stage. Neither cross-emits the other's family — read them as two different actors, not a duplicate.
+
+## Runnable example
+
+`examples/features/35-resilience-visibility.ts` walks all four cases offline — no API key, no network, hand-written providers that fail on purpose — and exits non-zero if any of them stops behaving as documented:
+
+```bash
+npm run example examples/features/35-resilience-visibility.ts
+```
+
+```
+1. A dead primary, a fallback that serves
+   acme-llm → backup-llm  (acme 503: gateway timeout)
+   stamped at call-llm#18 in run run-1785190943438-1
+   reply: Everything is up.
+
+2. Two 503s, then it recovers
+   retried  attempt 2/4 in 1ms  [http-5xx]  acme-llm 503: upstream unavailable (call 1)
+   retried  attempt 3/4 in 2ms  [http-5xx]  acme-llm 503: upstream unavailable (call 2)
+   recovered on attempt 3 after 6ms
+   reply: Back online.
+
+3. breaker + fallback + retry, captured by recordRun()
+   fallback.triggered → error.retried → fallback.triggered → error.recovered
+   reply: Served by the backup.
+   16 events in the recording, all with real correlation ids
+   breaker trip, visible only via the fallback's reason:
+     [acme-llm] circuit breaker is OPEN — failing fast (next probe at …). Underlying error: acme 503: gateway timeout
+
+4. Outside a run: no events at all — the hooks still fire
+   breaker → open (1 consecutive failures)
+   onFallback: acme 503: gateway timeout
+   onRetry: attempt 2 in 1ms
+   a call that passes its OWN LLMCallHooks sees: fell-back: acme-llm → backup-llm
+```
+
+`call-llm#18` is the stage id footprintjs stamped, and `run-…-1` the run — the point of emitting from inside the traversal rather than from a consumer callback, which would land the same facts under a synthetic `consumer-emit#0` / `consumer-scope` and correlate with nothing.
 
 ## Hooks for standalone use
 
-Outside a run the decorators emit nothing, so the optional hooks remain the way to observe them — useful in a plain script or a non-agentfootprint call path. `onRetry` receives the upcoming attempt number and the computed backoff delay in ms:
+Outside a run nothing hands the decorators an `LLMCallHooks`, so every report site short-circuits and no event is emitted anywhere. The optional consumer hooks are the way to observe them there — useful in a plain script or a non-agentfootprint call path. `onRetry` receives the upcoming attempt number and the computed backoff delay in ms:
 
 ```ts
 import { withRetry, withFallback } from 'agentfootprint/resilience';
@@ -131,6 +179,12 @@ withFallback(primary, fallback, {
 ```
 
 The `withCircuitBreaker` decorator exposes an `onStateChange(state, reason)` hook for the same purpose — and since the breaker has no typed event, that hook is the only way to see its state directly. Listen to `agentfootprint.cost.tick` on the event dispatcher to see cost accrue across both primary and fallback providers.
+
+A caller outside a run can also opt into the *same* reports the in-run call sites receive, by passing the hooks object itself. Nothing about it is private:
+
+<CodeFile path="examples/features/35-resilience-visibility.ts" region="standalone" title="examples/features/35-resilience-visibility.ts (region: standalone)" />
+
+Unlike the in-run sink — which the library guards, so telemetry can never break an LLM call — a hook you supply is unguarded: if it throws, the throw propagates. Same contract as `onRetry` / `onFallback` / `onStateChange`.
 
 ## Fail fast on a downed provider: `withCircuitBreaker`
 
@@ -166,8 +220,12 @@ The four provider decorators above cover the production-critical 80%. The Reliab
 - Don't retry non-transient errors. The default policy skips `AbortError` + 4xx (except 429) for a reason; if you override `shouldRetry`, keep that distinction.
 - Don't put `withRetry` BELOW `withFallback`. Wrong order: every retry on the primary delays the fallback. Right order: outer `withRetry` retries the WHOLE fallback chain.
 - Don't compose decorators inside the provider's hot path. Build the chain ONCE at app startup; pass the composed provider into every `Agent.create({ provider })`.
+- Don't reach for `onFallback` / `onRetry` to get telemetry into a trace. A consumer callback can only re-emit at consumer level, where the run ids are synthetic. Inside a run the events are already there.
 
 ## Next steps
 
+- [`examples/features/35-resilience-visibility.ts`](https://github.com/footprintjs/agentfootprint/blob/main/examples/features/35-resilience-visibility.ts) — the runnable file behind the observability section
 - [Error handling](doc:error-handling) — typed errors + tool-error contract
+- [Observability](doc:observability) — the full typed-event taxonomy these three events belong to
+- [Offline replay](doc:offline-replay) — `recordRun()` and rendering a saved run
 - [Mocks-first development](doc:quick-start) — `mock({ replies })` + decorators stack identically; test resilience policies offline

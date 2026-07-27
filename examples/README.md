@@ -233,6 +233,7 @@ _Run `npm run examples:readme` after adding/editing examples._
 | 32 | [`32-context-ledger.ts`](features/32-context-ledger.ts) | _no meta_ | — |
 | 33 | [`33-checkin.ts`](features/33-checkin.ts) | Check in with the receipts | A tool demands human consent for a consequential action; the ask carries an evidence pack (willDo / read / drivers / trail) and the decision lands as a typed record. |
 | 34 | [`34-checkin-coworker.ts`](features/34-checkin-coworker.ts) | The coworker with the receipts | A runnable AI-coworker demo: it drafts a weekly status doc, then pauses for human consent before posting to the team channel. The check-in ask rides an evidence pack (willDo / read / drivers / trail) rendered as readable receipts, and the decision lands in an audit trail. |
+| 35 | [`35-resilience-visibility.ts`](features/35-resilience-visibility.ts) | Resilience visibility — which provider actually served | The provider decorators report what they did, so the three declared events (fallback.triggered / error.retried / error.recovered) now fire from inside the run with real runId + runtimeStageId. Shows a failover, a retry-then-recover, the whole stack inside a recordRun() recording, and the honest limits (the breaker has no event of its own; outside a run nothing is emitted). |
 
 ### [`canonical/`](canonical/) — end-to-end patterns
 

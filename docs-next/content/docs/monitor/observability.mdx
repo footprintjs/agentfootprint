@@ -151,8 +151,8 @@ agentfootprint.<domain>.<event>
 | `eval` | `score` · `threshold_crossed` | Custom quality / guardrail signals |
 | `embedding` | `generated` | Embedder calls (RAG / semantic memory) |
 | `pause` | `request` · `resume` | Human-in-the-loop checkpoints |
-| `error` | `fatal` · `recovered` · `retried` | Stage-level error events |
-| `fallback` | `triggered` | Schema-validation fallback chain |
+| `error` | `fatal` · `recovered` · `retried` | `fatal` once per failed top-level run; `retried` / `recovered` come from the `withRetry` provider decorator, reported in-run — see [Resilience](doc:resilience#observability-automatic-inside-a-run) |
+| `fallback` | `triggered` | Provider failover — `withFallback` / `fallbackProvider` naming which provider actually served (`kind: 'provider'`) |
 | `reliability` | `fail_fast` · `retried` · `recovered` | Reliability-gate primitives (rules-based loop, distinct from decorator-shaped `error.*`) |
 | `risk` | `flagged` | Eval guardrails flagging suspect output |
 
