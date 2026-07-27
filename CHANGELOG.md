@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [7.8.0] - 2026-07-28
+
 ### Added
 
 - **`recordRun(runner)` — save a run so a viewer can show it later.** A
@@ -124,12 +126,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   a repo-wide grep found zero emitters. They were legal to subscribe to, typed
   end to end, and permanently silent. The reason is structural rather than an
   oversight — `LLMProvider` is a deliberately minimal port (`{ name, complete,
-  stream? }`) with no emit channel, and the resilience decorators are
-  constructed by you *before any run exists*, so a decorator can never reach a
+stream? }`) with no emit channel, and the resilience decorators are
+  constructed by you _before any run exists_, so a decorator can never reach a
   scope. Routing them through a consumer callback would not have been
   equivalent: an event pushed back in via `runner.emit()` lands with
   synthesized meta (`runtimeStageId: 'consumer-emit#0'`, `runId:
-  'consumer-scope'`, `runOffsetMs: 0`) and correlates with nothing else in the
+'consumer-scope'`, `runOffsetMs: 0`) and correlates with nothing else in the
   run, which is the entire value of having it. The seam is an optional
   per-call second argument, **`hooks?: LLMCallHooks`**, on `complete()` and
   `stream()` — the channel rides the CALL, not the factory. A decorator
@@ -141,7 +143,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and sits on the same timeline as the tool calls around it. Every payload
   field is filled from a report field of the same name — nothing is
   synthesized. Not a field on `LLMResponse`, because an exhausted retry
-  *throws*: there would be no response to carry it. One producer per fact —
+  _throws_: there would be no response to carry it. One producer per fact —
   `fell-back` ← `withFallback`, `retried` / `recovered` ← `withRetry`, nothing
   ← `withCircuitBreaker` — so a stack of three decorators produces one
   concatenated stream and de-duplication is structurally unnecessary rather
@@ -181,7 +183,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **The boundary snapshot bundle says which mode produced it, in a field
   code can read.** `toSnapshot()` now returns `meta: { mode: 'full' |
-  'lean' }`. Full and lean were distinguishable only by the prose in
+'lean' }`. Full and lean were distinguishable only by the prose in
   `description`, and string-matching a sentence is not a thing offline
   readers do — they render the empty detail panel instead, because
   `buildStepGraphFromEvents()` restores step content from this bundle and
@@ -329,7 +331,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   appear as their own influence rows and cannot be ablated individually. An
   agent that genuinely consulted three sources could show one. Passing
   `parallelToolCalls: false` sends `tool_choice: { type: 'auto',
-  disable_parallel_tool_use: true }`, which caps the model at one tool per
+disable_parallel_tool_use: true }`, which caps the model at one tool per
   reply and keeps every source separately attributable, at the cost of one
   extra round trip per tool. `auto` is deliberate: the model still chooses
   WHICH tool, and whether to call one at all — only the count is capped.
@@ -360,9 +362,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - **Honesty invariant on Bedrock responses (both paths):** `stopReason
-  'tool_use'` with zero parsed tool calls is never returned quietly — the
+'tool_use'` with zero parsed tool calls is never returned quietly — the
   provider throws `BedrockProviderError` with `code:
-  'BEDROCK_STREAM_TOOLUSE_LOST'`. After this fix the contradiction cannot
+'BEDROCK_STREAM_TOOLUSE_LOST'`. After this fix the contradiction cannot
   happen on today's wire format; the throw is a tripwire for future
   ConverseStream shape drift, and it lands in your `reliability` /
   `withRetry` rules instead of the agent silently answering without tools.
@@ -389,7 +391,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `getLastSnapshot()`-is-last-run-only trap becomes structurally impossible.
   History threading is owned by the library: the exact message string each
   turn ran with is frozen on the `ChatTurn`, and `rerunTurn(k, { ignore,
-  embedder, checkBaseline? })` replays those bytes verbatim through an
+embedder, checkBaseline? })` replays those bytes verbatim through an
   `AblationRunner` derived from the SAME `makeAgent` — same recorded
   conversation up to that point, minus the ignored sources — delegating to
   `rerunWithoutSources` and returning its result UNMODIFIED (the honesty
@@ -426,7 +428,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   choice, ranked — a PLUGGABLE `CheckInScorer`, default deterministic lexical,
   **zero LLM calls**), and `trail` (compact grouped run-so-far). Two built-in
   assemblers, configured on the builder via `.checkIn({ evidence: 'standard' |
-  'minimal' | <assembler>, scorer? })`. The human answers with
+'minimal' | <assembler>, scorer? })`. The human answers with
   `checkInApproved({ by, note? })` / `checkInDeclined({ by, note? })`;
   `agent.resume(checkpoint, decision)` executes the tool on approve, or lands a
   model-visible `"declined by human: <note>"` result on decline (mirroring
@@ -542,8 +544,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   UI-ready verdict for one tool pick. `explainChoice` fixes the chosen tool
   and reports WHICH context channel best explains it — system rules,
   user's task, or data returned by earlier tools — as `{channels (share of
-  positive similarity mass, sorted desc, zero-share listed), top citation
-  with unit text, ranked units}`; thin composite over `attributeChoice`.
+positive similarity mass, sorted desc, zero-share listed), top citation
+with unit text, ranked units}`; thin composite over `attributeChoice`.
   `snippetUnits` cuts a tool result (JSON or prose) into citable
   `AttributionUnit`s at the natural grain — one unit per object array
   element as `key: value` pairs — bounded (max/maxLength), total
@@ -590,7 +592,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the agent mega-key answer: `backtrack({variable: 'history', element: 7})`
   names the exact iteration that produced message 7, with honest attribution
   (`append-verb` = engine-recorded/EXACT under the agent's `commitValues:
-  'delta'` default). Honest absence (never-written → initial state / args /
+'delta'` default). Honest absence (never-written → initial state / args /
   closure), corrective out-of-range/not-an-array answers, chained-triage
   hints with real commit indices.
 - **`sliceToBacktrackTrace(sliceJSON, opts)`** (`agentfootprint/debug`) — the
@@ -625,7 +627,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `EntryScorer` for `skillGraph().entryBy(...)` (demotion is ranking
   pressure re-ranked through `rankEntries`, so the pick and the surfaced
   relevance always agree — never exclusion); `ledgerGated(injection,
-  ledger)` → rewrites `always` to a ledger-backed rule, ANDs an existing
+ledger)` → rewrites `always` to a ledger-backed rule, ANDs an existing
   rule, passes demand-driven triggers untouched. One `LedgerPolicy`:
   **demote, never starve** (`minOffers` 5, `earnRateFloor` 0.05, parole
   every `refreshEvery` 10th decision so a demoted piece keeps earning data).
@@ -640,7 +642,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the full loop on an over-stuffed fixture: run → rows (5 zero-earners,
   ~1,940 wasted tokens) → gates → 88% fewer input tokens per turn.
 
-
 ## [7.0.0] - 2026-06-26
 
 **Major: API surface cleanup — main barrel is now just the core agent API, everything specialized lives in a named subpath.** A coordinated breaking release (agentfootprint + agentfootprint-lens) so consumers land on the clean surface once. Nothing is removed — every capability is still exported, just from its canonical home.
@@ -648,7 +649,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed (BREAKING — import paths)
 
 - **New `agentfootprint/events`** — the typed event system (`EventDispatcher`, `EVENT_NAMES`, `AgentfootprintEvent`/`AgentfootprintEventMap`, the `Payloads` namespace, context/composition types) moved off the main barrel to its own subpath.
-- **`/locales` is the single i18n home** for all prose catalogs (commentary + thinking + status templates); **`/status`** keeps only the status *logic* (`selectStatus` / `renderStatusLine`).
+- **`/locales` is the single i18n home** for all prose catalogs (commentary + thinking + status templates); **`/status`** keeps only the status _logic_ (`selectStatus` / `renderStatusLine`).
 - **Main barrel trimmed 129 → 53 values** — provider/memory/injection/tool-provider/stream/security/status/locale factories plus `typedEmit` now import from their named subpath (they were convenience mirrors). **Types follow their values**: ~95 type duplicates (including the event types) moved off main to their feature subpath, so each feature's whole surface (values + types) lives in one place.
 - **`decideSkill`** — the skill-graph decider, formerly exported as `decide` (now on `agentfootprint/injection-engine`), was renamed to avoid colliding with footprintjs's `decide()`.
 - A handful of internal mechanism symbols (`buildMessageApiChart`, `buildDefaultInstruction`, `buildEventMeta`, `parseSubflowPath`, `EmitBridge` / `EmitBridgeOptions`) are no longer public.
@@ -660,7 +661,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Migration
 
-Re-point imports to the named subpath (e.g. `import { defineMemory } from 'agentfootprint/memory'`, `import { localizeContextBug } from 'agentfootprint/debug'`, `import { EventDispatcher } from 'agentfootprint/events'`). Rename `decide` → `decideSkill` for skill-graph trees. The commentary engine helpers used by viewers (`renderCommentary`, `extractAgentName`, `extractCommentaryVars`, `selectCommentaryKey`) remain on the main barrel. Most old paths that were *aliased* (`/observe` debug tools, the long finders path) still resolve this major and warn; they're removed next major.
+Re-point imports to the named subpath (e.g. `import { defineMemory } from 'agentfootprint/memory'`, `import { localizeContextBug } from 'agentfootprint/debug'`, `import { EventDispatcher } from 'agentfootprint/events'`). Rename `decide` → `decideSkill` for skill-graph trees. The commentary engine helpers used by viewers (`renderCommentary`, `extractAgentName`, `extractCommentaryVars`, `selectCommentaryKey`) remain on the main barrel. Most old paths that were _aliased_ (`/observe` debug tools, the long finders path) still resolve this major and warn; they're removed next major.
 
 ## [6.45.0] - 2026-06-24
 
@@ -766,7 +767,8 @@ only read `activeInjections`, with nothing bridging the two. So turn N never saw
 facts (and the uninformed reply then self-polluted the store). `memoryRecallInjections` now
 turns each recall into a `'memory'`-flavored `ActiveInjection` (system-role content → system
 slot, the rest → messages slot), folded in by the slot-fork inputMappers in `buildAgentChart`
-+ `buildDynamicAgentChart`. No new stage, no structure change, a no-op without memories.
+
+- `buildDynamicAgentChart`. No new stage, no structure change, a no-op without memories.
 
 This **changes runtime behavior** (an Agent with `.memory()` now sends prior-turn context to
 the model) — hence a minor. Regression test asserts recall reaches turn-2's prompt across
@@ -867,7 +869,7 @@ New exports (main barrel): `checkSkillContract(skill, knownToolNames?)` (check O
 standalone), `checkSkillContracts(skills)`, `skillToolNames(skill)`. New example
 `29-skill-contract-check.ts`; guide section 8.
 
-Honest scope: Tier 1 is deterministic and catches the *adjacent* class. The **semantic**
+Honest scope: Tier 1 is deterministic and catches the _adjacent_ class. The **semantic**
 contradiction it can't see — a body calling an OPTIONAL tool arg "required" (the exact
 shape of the originating bug) — is **Tier 2 (LLM-advisory)**, designed in proposal 009 but
 not yet built.
@@ -929,16 +931,16 @@ section 4 (now five entry strategies).
 
 ### Fixed — a `decide()` rule no longer trips the `no-llm-call-ids` warning
 
-`toBacktrackTrace` emitted the `no-llm-call-ids` honesty flag — *"pass llmCallIds or captured
-events … the ranking is structure-only"* — whenever a slice had zero LLM-call ids. For a
+`toBacktrackTrace` emitted the `no-llm-call-ids` honesty flag — _"pass llmCallIds or captured
+events … the ranking is structure-only"_ — whenever a slice had zero LLM-call ids. For a
 deterministic `decide()` rule that wording is misleading: a rule makes **no** LLM calls, so
-structure-only ranking is the *correct, expected* mode, not a missing input. The localizer can't
+structure-only ranking is the _correct, expected_ mode, not a missing input. The localizer can't
 tell that case from "an LLM chart whose `llmCallIds` weren't passed" (both have
 `llmCallIdCount === 0`) — only the consumer's `decidedAtKind` disambiguates. So when
 `decidedAtKind: 'rule'`, that one flag is reframed into a neutral, non-`⚠` note:
 
-> *"this decision is a deterministic rule — it makes no LLM calls, so scores rank recorded operands
-> by structure (no influence weighting applies)."*
+> _"this decision is a deterministic rule — it makes no LLM calls, so scores rank recorded operands
+> by structure (no influence weighting applies)."_
 
 LLM decisions are unchanged — a genuine "forgot to pass `llmCallIds`" still surfaces as a `⚠`
 warning. Visible on the backtrack-board demo's `decide()` rule pill, where the warning previously
@@ -955,8 +957,8 @@ composite (`scoreInfluence`). Bring your own to change the ranking ORDER: `score
 (wrap it to remap `answerText` ← `finalAnswerText` and supply a `referenceText`), or a scorer of your
 own. New `InfluenceScorer` type exported from `agentfootprint/observe`.
 
-**Claim-ladder guarantee.** A scorer only reorders suspects (how *fast* ablation reaches a culprit),
-never *whether* a claim is causal — ablation alone convicts. Its output flows into `semanticScore` /
+**Claim-ladder guarantee.** A scorer only reorders suspects (how _fast_ ablation reaches a culprit),
+never _whether_ a claim is causal — ablation alone convicts. Its output flows into `semanticScore` /
 ranking only, never into any verdict path. So any scorer is safe to swap; the worst a bad one does is
 make confirmation slower, never wrong.
 
@@ -976,7 +978,7 @@ make confirmation slower, never wrong.
 
 **Build-time check-up.** `graph.checkup()` → `{ ok, problems }` inspects the declared graph
 for wiring mistakes — an unreachable skill, an edge/entry to an unknown id, two un-prioritized
-edges from one skill, no entry, a self-loop — *before* you run. `.build({ check: 'throw' | 'warn'
+edges from one skill, no entry, a self-loop — _before_ you run. `.build({ check: 'throw' | 'warn'
 | 'off' })` runs it at build (default `'warn'`: dev-mode console, silent in prod). Pure, no engine
 change. New `skillGraphCheckup.ts`.
 
@@ -1027,7 +1029,7 @@ reachable from the current cursor — closing the hole where the model could sil
   `agentfootprint.skill.rejected` event fires. **Plain `read_skill` agents (no skillGraph) are
   byte-for-byte unaffected** (the gate is off when no graph is mounted).
 
-**`entryByRelevance(embedder)` — pick the starting skill by meaning.** Route the *entry* by
+**`entryByRelevance(embedder)` — pick the starting skill by meaning.** Route the _entry_ by
 embedding-similarity to the user's message instead of regex.
 
 - Embeds the message + each `when`-passing entry's `description`, cosine-scores, softmaxes into a
@@ -1036,7 +1038,7 @@ embedding-similarity to the user's message instead of regex.
 - The ranking lands on `scope.entryScores` (snapshot / commit-log — the "Why this skill?" relevance %).
   New public types `EntryScore` / `EntryScoring`.
 - Under `entryByRelevance` the entries are **exclusive** — only the picked one loads (token-efficient).
-- The async embedder runs in a once-per-turn **`PickEntry`** stage mounted *off* the ReAct loop (before
+- The async embedder runs in a once-per-turn **`PickEntry`** stage mounted _off_ the ReAct loop (before
   the Injection Engine), so `nextSkill` and the route triggers stay synchronous (no async leak into the
   hot loop). Wired in both the flat and grouped charts.
 
@@ -1164,6 +1166,7 @@ Focused review + fix; full suite 2997 green.
 ## [6.30.0] - 2026-06-11
 
 ### Added — restoration: the causal tier for the missing-context finder (interface #3)
+
 - **`localizeContextBug({ missingContext })`** — pass what was `available` for the
   turn and what was `sent`; the report's new `dropped` lists units that never
   reached the model. Add a restoration `rerun` and each candidate gets a
@@ -1186,6 +1189,7 @@ suite 2985 green.
 ## [6.29.0] - 2026-06-11
 
 ### Added — three interfaces for identifying a context error (`agentfootprint/observe`)
+
 - **`rankingConfidence`** — honesty marker for an influence ranking. When no
   source clearly dominates (the signature of an absence/crowding bug
   output-similarity is blind to), it returns `clearWinner: false` with a
@@ -1209,16 +1213,18 @@ Each interface is ship-a-default + bring-your-own. New guides:
 ## [6.28.1] - 2026-06-11
 
 ### Docs
+
 - README: the BacktrackView board and the conversational-doors section now
   link to the dedicated live playground page
   (`agentThinkingUI/demo/backtrack.html`) instead of the generic homepage,
   which only redirected to the runtime player. The doors are code-only (no
-  UI page); their link is labeled as the *same evidence the board
-  visualizes*, alongside the runnable `06`/`07`/`08` examples.
+  UI page); their link is labeled as the _same evidence the board
+  visualizes_, alongside the runnable `06`/`07`/`08` examples.
 
 ## [6.28.0] - 2026-06-11
 
 ### Added
+
 - **The conversational doors over the trace toolpack** — ask the trace
   instead of reading it (`agentfootprint/observe` + the Agent builder):
   - **`traceDebugAgent({ artifacts, provider, model })`** — one call returns
@@ -1254,6 +1260,7 @@ Each interface is ship-a-default + bring-your-own. New guides:
 ## [6.27.0] - 2026-06-11
 
 ### Added
+
 - **`toBacktrackTrace(report, opts)`** (`agentfootprint/observe`,
   `src/lib/context-bisect/toBacktrackTrace.ts`) — serialize a
   `localizeContextBug` report into the `BacktrackTrace` contract that
@@ -1275,9 +1282,10 @@ Each interface is ship-a-default + bring-your-own. New guides:
 ## [6.26.1] - 2026-06-11
 
 ### Fixed
+
 - **`agentfootprint/observe` was browser-broken since 6.25.0.** The tool-lint
   CLI (`src/lib/tool-lint/cli.ts`) had a top-level `import { readFile } from
-  'node:fs/promises'` and is re-exported by the `/observe` barrel, so any
+'node:fs/promises'` and is re-exported by the `/observe` barrel, so any
   browser bundle importing `agentfootprint/observe` crashed at load. The
   import is now a lazy `await import('node:fs/promises')` at the one use
   site (file-reading only happens in the Node CLI path) — same pattern the
@@ -1309,7 +1317,7 @@ ablation. No new typed events; no engine changes.
   ranks verbatim-reuse first, digit noise last, identically across fresh
   handles.
 - **D8 — `localizeContextBug({ artifacts, embedder, atStep?, trigger?,
-  rerun? })`.** The five-stage pipeline: (1) TRIGGER — explicit `atStep`,
+rerun? })`.** The five-stage pipeline: (1) TRIGGER — explicit `atStep`,
   a custom strategy, or the `QualityRecorder`'s lowest-scoring step;
   (2) SLICE — `causalChain` with `controlDepRecorder` lookups (labeled
   `[control: rule]` hops) + A2/A4 honesty markers; (3) WEIGH — D7;
@@ -1324,7 +1332,7 @@ ablation. No new typed events; no engine changes.
   baseline probe. **WITHOUT `rerun` the report stops at the ranking,
   marked `mode: 'correlational'`** — no causal claim anywhere (§B2).
   Report shape: `{ step, suspects: [{ source, kind, score, edgePath,
-  ablation?, verdict?, runs? }], sliceStats, honestyFlags, baseline? }` —
+ablation?, verdict?, runs? }], sliceStats, honestyFlags, baseline? }` —
   every id is a plain runtimeStageId, drillable with the Part C
   trace-toolpack over the same artifacts bag. Honesty flags surface ⚠
   truncated slices, untracked sources, missing control-deps/read-tracking/
@@ -1457,7 +1465,7 @@ specified-only.
   (margin < `marginThreshold`, default 0.05) OR `proxyDisagreement`
   (top-scored candidate not among the chosen — ALWAYS flagged).
   `getSummary()` → `{ llmCallsWithTools, choices, scored, flagged,
-  narrow, proxyDisagreement, skipped }`.
+narrow, proxyDisagreement, skipped }`.
 - **Examples (Convention 2)** — all offline/deterministic, pinned by
   `test/lib/tool-lint/examples.test.ts`:
   `examples/observability/02-lint-confusable-catalog.ts` (the real
@@ -1498,8 +1506,7 @@ footprintjs floor raised to ^9.8.0 (the toolpack consumes RFC-003 Part A: contro
     redistribution (no-ancestor items → α′=0.80/δ′=0.20). `scoreInfluence`
     orchestrates embed → score → rank in one deduplicated pass.
   - **`EmbeddingCache`** — content-hash-keyed (`contentHash`, FNV-1a)
-    transparent `Embedder` decorator: bounded LRU (`maxEntries`, default
-    1024) with VISIBLE eviction/hit/miss counts via `stats()` (the
+    transparent `Embedder` decorator: bounded LRU (`maxEntries`, default 1024) with VISIBLE eviction/hit/miss counts via `stats()` (the
     bounded-honesty convention), single-flight coalescing for concurrent
     embeds, batch-aware partial misses; rejections never cached. One cache
     instance threads through lint + margins + influence weights (RFC-002
@@ -1562,7 +1569,7 @@ footprintjs floor raised to ^9.8.0 (the toolpack consumes RFC-003 Part A: contro
 ## [6.23.0] - 2026-06-11
 
 - **Deferred observer delivery — `AgentOptions.observerDelivery: 'inline' |
-  'deferred'` (RFC-001 Block 10; closes RFC-001).** Opting in routes the
+'deferred'` (RFC-001 Block 10; closes RFC-001).** Opting in routes the
   Agent's internal bridge recorders (Context, stream, agent, error, cost,
   permission, eval/memory/skill/tools, validation, reliability) AND consumer
   `.recorder()` / `agent.attach()` recorders through footprintjs 9.6.0's
@@ -1678,7 +1685,7 @@ footprintjs floor raised to ^9.8.0 (the toolpack consumes RFC-003 Part A: contro
 - **B13 — prompt-injection security guide**
   ([docs/guides/prompt-injection.md](docs/guides/prompt-injection.md)):
   documents the honest posture — core does NOT detect prompt injection;
-  `PermissionPolicy` gates *which* tools, not *why* the model called them.
+  `PermissionPolicy` gates _which_ tools, not _why_ the model called them.
   Maps the untrusted-text entry points (user message, tool results,
   persisted causal-memory replay, `on-tool-return` trigger predicates,
   `read_skill`), the containment layers that exist in source (visibility
@@ -1750,12 +1757,12 @@ footprintjs 9.3.0's #13b staging-release).
   steering + fact + skill + tool, mock provider `chunkDelayMs: 0`,
   heapUsed after `global.gc()`, 2GB heap cap, footprintjs 9.3.0):
 
-  | Config | N=200 | N=500 | N=1000 |
-  |---|---|---|---|
-  | #18 baseline (fp 9.0.0-era, `'full'`) | 563.8MB | OOM @2GB | — |
-  | fp 9.3.0 + `'full'` | 159.7MB | 917.7MB | — |
-  | fp 9.3.0 + `'summary'` (new default) | 132.2MB | 747.6MB | OOM @2GB |
-  | fp 9.3.0 + `'off'` | 131.9MB | 747.1MB | — |
+  | Config                                | N=200   | N=500    | N=1000   |
+  | ------------------------------------- | ------- | -------- | -------- |
+  | #18 baseline (fp 9.0.0-era, `'full'`) | 563.8MB | OOM @2GB | —        |
+  | fp 9.3.0 + `'full'`                   | 159.7MB | 917.7MB  | —        |
+  | fp 9.3.0 + `'summary'` (new default)  | 132.2MB | 747.6MB  | OOM @2GB |
+  | fp 9.3.0 + `'off'`                    | 131.9MB | 747.1MB  | —        |
 
   The #13b staging-release is the dominant win (563.8 → 159.7MB @200,
   3.5×; N=500 now completes instead of OOM). `readTracking: 'summary'`
@@ -1764,6 +1771,7 @@ footprintjs 9.3.0's #13b staging-release).
   commitLog + `_stageWrites` clones) — N=1000 still exceeds a 2GB heap
   (~3GB projected), and per-iteration latency still climbs (≈4ms
   first-10 → ≈110ms last-10 @500). Wall @200 ≈ 4.8s.
+
 - **`iterations-unlocked` RSS budget tightened 1500 → 350MB** — worst
   observed RSS delta over 5 local runs post-#13b + `'summary'` default
   is 210MB; budget = 1.6× worst ≈ 335MB, rounded up for CI variance.
@@ -1832,8 +1840,8 @@ footprintjs 9.3.0's #13b staging-release).
 Example-only; no library code changes.
 
 - **`examples/features/20-regulated-decisioning.ts` (+ paired `.md`)** —
-  a regulated loan-decisioning agent that answers *"why was applicant
-  A-1043 declined three weeks ago?"* from stored evidence, offline. One
+  a regulated loan-decisioning agent that answers _"why was applicant
+  A-1043 declined three weeks ago?"_ from stored evidence, offline. One
   run, three compliance artifacts from the same typed event stream:
   - the agent declines an application under **labeled footprintjs
     `decide()` rules** (the lending policy is a flowchart mounted inside
