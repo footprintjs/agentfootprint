@@ -230,6 +230,11 @@ path.aff-in.on {
   --aff-rail-w: clamp(300px, 33vw, 470px);
 }
 
+/* the query container the giant verb is sized against — the rail column, not the viewport */
+.aff-rail {
+  container-type: inline-size;
+}
+
 .aff-rail-ix {
   font-family: var(--aff-fm);
   font-size: 12px;
@@ -239,7 +244,14 @@ path.aff-in.on {
 .aff-rail-verb {
   font-family: var(--aff-fd);
   font-weight: 700;
-  font-size: clamp(42px, 7.3vw, 104px);
+  /* The verb must fit the RAIL, and the rail is not a fraction of the viewport: --aff-rail-w clamps
+     between a 290px floor and a 430px cap while a vw-sized word keeps growing past both, so any
+     viewport-relative size overflows the column — the longest verb spills into the sticky stage.
+     `cqw` removes the coupling: 1cqw is 1% of this rail, whatever --aff-rail-w resolves to. The
+     longest verb, "REMEMBER", sets 5.55em at this weight and tracking, so 17.5cqw holds it at 97%
+     of the rail at every width, floor and cap included — narrower than the widest word the design
+     already carried (SURVIVE, 98% of the rail in the Arial fallback). */
+  font-size: 17.5cqw;
   line-height: 0.95;
   letter-spacing: -0.045em;
   margin: 14px 0 0;
@@ -250,7 +262,8 @@ path.aff-in.on {
 .aff-beat.is-active .aff-rail-verb {
   color: var(--aff-accent);
 }
-/* WHY is the flagship: bigger type, and gold from the start */
+/* WHY is the flagship: bigger type, and gold from the start. It keeps a viewport pair rather than
+   the rail-relative size above because three letters set 2.2em — a third of its own wider rail. */
 #why .aff-rail-verb {
   font-size: clamp(52px, 9.6vw, 138px);
   color: var(--aff-accent);
@@ -1270,6 +1283,11 @@ path.aff-in.on {
      one ("REMEMBER") inside a 390px phone's half-column */
   .aff-verb-word {
     font-size: min(7.4vw, 30px);
+  }
+  /* the rail is the whole column here, so a rail-relative verb would be sized to the page width —
+     the stacked layout keeps the viewport pair it was designed with */
+  .aff-rail-verb {
+    font-size: clamp(42px, 7.3vw, 104px);
   }
   .aff-beat-inner {
     /* content height, not a scroll budget — the steps land on entry instead of over a track
