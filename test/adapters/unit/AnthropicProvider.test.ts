@@ -378,3 +378,128 @@ describe('AnthropicProvider — ROI (realistic agent flow)', () => {
     expect(r2.stopReason).toBe('stop');
   });
 });
+
+// ─── parallelToolCalls — one tool per reply, enforced by the API ────
+
+describe('AnthropicProvider — parallelToolCalls', () => {
+  const toolReq: LLMRequest = {
+    ...baseRequest,
+    tools: [
+      { name: 'a', description: 'A', inputSchema: { type: 'object', properties: {} } },
+      { name: 'b', description: 'B', inputSchema: { type: 'object', properties: {} } },
+    ],
+  };
+  const toolChoiceOf = (recorder: { params: unknown[] }, i = 0) =>
+    (recorder.params[i] as { tool_choice?: unknown }).tool_choice;
+
+  it('omits tool_choice by default (Anthropic keeps its own default)', async () => {
+    const recorder = { params: [] as unknown[] };
+    const p = anthropic({ _client: makeFakeClient([baseResponse], recorder) });
+    await p.complete(toolReq);
+    expect(toolChoiceOf(recorder)).toBeUndefined();
+  });
+
+  it('parallelToolCalls: true sends nothing — it IS the API default', async () => {
+    const recorder = { params: [] as unknown[] };
+    const p = anthropic({
+      parallelToolCalls: true,
+      _client: makeFakeClient([baseResponse], recorder),
+    });
+    await p.complete(toolReq);
+    expect(toolChoiceOf(recorder)).toBeUndefined();
+  });
+
+  it('parallelToolCalls: false emits tool_choice auto + disable_parallel_tool_use', async () => {
+    const recorder = { params: [] as unknown[] };
+    const p = anthropic({
+      parallelToolCalls: false,
+      _client: makeFakeClient([baseResponse], recorder),
+    });
+    await p.complete(toolReq);
+    expect(toolChoiceOf(recorder)).toEqual({ type: 'auto', disable_parallel_tool_use: true });
+  });
+
+  it('never emits tool_choice on a request with no tools (Anthropic rejects it)', async () => {
+    const recorder = { params: [] as unknown[] };
+    const p = anthropic({
+      parallelToolCalls: false,
+      _client: makeFakeClient([baseResponse], recorder),
+    });
+    await p.complete(baseRequest); // no tools — e.g. an agent's final answer call
+    expect(toolChoiceOf(recorder)).toBeUndefined();
+    await p.complete({ ...baseRequest, tools: [] });
+    expect(toolChoiceOf(recorder, 1)).toBeUndefined();
+  });
+
+  it('applies on the streaming path too (stream/complete parity)', async () => {
+    const recorder = { params: [] as unknown[] };
+    const p = anthropic({
+      parallelToolCalls: false,
+      _client: makeFakeClient([baseResponse], recorder),
+    });
+    for await (const _ of p.stream!(toolReq)) void _;
+    expect(toolChoiceOf(recorder)).toEqual({ type: 'auto', disable_parallel_tool_use: true });
+  });
+
+  it('leaves the CHOICE of tool with the model — type stays "auto", never forced', async () => {
+    const recorder = { params: [] as unknown[] };
+    const p = anthropic({
+      parallelToolCalls: false,
+      _client: makeFakeClient([baseResponse], recorder),
+    });
+    await p.complete(toolReq);
+    // `any`/`tool` would force a call; `auto` only caps the count.
+    expect((toolChoiceOf(recorder) as { type: string }).type).toBe('auto');
+  });
+
+  it('composes with thinking + temperature without disturbing them', async () => {
+    const recorder = { params: [] as unknown[] };
+    const p = anthropic({
+      parallelToolCalls: false,
+      _client: makeFakeClient([baseResponse], recorder),
+    });
+    // maxTokens 1000 < budget 2000, so the thinking auto-bump must still fire.
+    await p.complete({
+      ...toolReq,
+      temperature: 0.2,
+      maxTokens: 1000,
+      thinking: { budget: 2000 },
+    });
+    const params = recorder.params[0] as {
+      tool_choice?: unknown;
+      thinking?: unknown;
+      temperature?: number;
+      max_tokens: number;
+    };
+    expect(params.tool_choice).toEqual({ type: 'auto', disable_parallel_tool_use: true });
+    expect(params.thinking).toEqual({ type: 'enabled', budget_tokens: 2000 });
+    expect(params.temperature).toBe(0.2);
+    expect(params.max_tokens).toBe(2000 + 1024); // the thinking auto-bump still applies
+  });
+
+  it('class form honors the option', async () => {
+    const recorder = { params: [] as unknown[] };
+    const provider = new AnthropicProvider({
+      parallelToolCalls: false,
+      _client: makeFakeClient([baseResponse], recorder),
+    });
+    await provider.complete(toolReq);
+    expect(toolChoiceOf(recorder)).toEqual({ type: 'auto', disable_parallel_tool_use: true });
+  });
+
+  it('is stable across many calls — the flag is per-provider, not per-call state', async () => {
+    const recorder = { params: [] as unknown[] };
+    const p = anthropic({
+      parallelToolCalls: false,
+      _client: makeFakeClient([baseResponse], recorder),
+    });
+    for (let i = 0; i < 25; i++) await p.complete(toolReq);
+    expect(recorder.params).toHaveLength(25);
+    for (const params of recorder.params) {
+      expect((params as { tool_choice?: unknown }).tool_choice).toEqual({
+        type: 'auto',
+        disable_parallel_tool_use: true,
+      });
+    }
+  });
+});

@@ -142,6 +142,81 @@ describe('BrowserAnthropicProvider — performance', () => {
   });
 });
 
+describe('BrowserAnthropicProvider — parallelToolCalls', () => {
+  const toolRequest: LLMRequest = {
+    ...baseRequest,
+    tools: [
+      { name: 'a', description: 'A', inputSchema: { type: 'object', properties: {} } },
+      { name: 'b', description: 'B', inputSchema: { type: 'object', properties: {} } },
+    ],
+  };
+  const sentBody = (recorder: { calls: RequestInit[] }, i = 0) =>
+    JSON.parse(String(recorder.calls[i]!.body)) as { tool_choice?: unknown; tools?: unknown[] };
+
+  it('omits tool_choice by default', async () => {
+    const recorder = { calls: [] as RequestInit[] };
+    const p = browserAnthropic({
+      apiKey: 'sk-test',
+      _fetch: fakeFetch(baseAnthropicResponse, 200, recorder),
+    });
+    await p.complete(toolRequest);
+    expect(sentBody(recorder).tool_choice).toBeUndefined();
+  });
+
+  it('parallelToolCalls: true sends nothing — it IS the API default', async () => {
+    const recorder = { calls: [] as RequestInit[] };
+    const p = browserAnthropic({
+      apiKey: 'sk-test',
+      parallelToolCalls: true,
+      _fetch: fakeFetch(baseAnthropicResponse, 200, recorder),
+    });
+    await p.complete(toolRequest);
+    expect(sentBody(recorder).tool_choice).toBeUndefined();
+  });
+
+  it('parallelToolCalls: false emits tool_choice auto + disable_parallel_tool_use', async () => {
+    const recorder = { calls: [] as RequestInit[] };
+    const p = browserAnthropic({
+      apiKey: 'sk-test',
+      parallelToolCalls: false,
+      _fetch: fakeFetch(baseAnthropicResponse, 200, recorder),
+    });
+    await p.complete(toolRequest);
+    expect(sentBody(recorder).tool_choice).toEqual({
+      type: 'auto',
+      disable_parallel_tool_use: true,
+    });
+  });
+
+  it('never emits tool_choice on a request with no tools', async () => {
+    const recorder = { calls: [] as RequestInit[] };
+    const p = browserAnthropic({
+      apiKey: 'sk-test',
+      parallelToolCalls: false,
+      _fetch: fakeFetch(baseAnthropicResponse, 200, recorder),
+    });
+    await p.complete(baseRequest);
+    expect(sentBody(recorder).tool_choice).toBeUndefined();
+    await p.complete({ ...baseRequest, tools: [] });
+    expect(sentBody(recorder, 1).tool_choice).toBeUndefined();
+  });
+
+  it('matches the Node provider byte-for-byte on the wire field', async () => {
+    const recorder = { calls: [] as RequestInit[] };
+    const p = browserAnthropic({
+      apiKey: 'sk-test',
+      parallelToolCalls: false,
+      _fetch: fakeFetch(baseAnthropicResponse, 200, recorder),
+    });
+    await p.complete(toolRequest);
+    // Same literal the Node AnthropicProvider builds — the two adapters must
+    // not drift, or a BYOK page and its server behave differently.
+    expect(JSON.stringify(sentBody(recorder).tool_choice)).toBe(
+      JSON.stringify({ type: 'auto', disable_parallel_tool_use: true }),
+    );
+  });
+});
+
 // ════════════════════════════════════════════════════════════════════
 // BrowserOpenAIProvider
 // ════════════════════════════════════════════════════════════════════

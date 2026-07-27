@@ -46,6 +46,9 @@ interface AnthropicRequestBody {
   // tells Anthropic to emit reasoning blocks. Mirror of the Node
   // AnthropicProvider's same field.
   thinking?: { type: 'enabled'; budget_tokens: number };
+  // Emitted only when `parallelToolCalls: false`. Mirror of the Node
+  // AnthropicProvider's same field.
+  tool_choice?: { type: 'auto'; disable_parallel_tool_use: true };
 }
 
 interface AnthropicMessageParam {
@@ -89,6 +92,19 @@ export interface BrowserAnthropicProviderOptions {
   readonly defaultMaxTokens?: number;
   /** Override the API URL (proxies, edge deployments, mocks). */
   readonly apiUrl?: string;
+  /**
+   * May the model ask for several tools at once in a single reply?
+   * Mirror of `AnthropicProviderOptions.parallelToolCalls` — see there
+   * for the full rationale.
+   *
+   * Anthropic's default is `true` (batching allowed). `false` caps the
+   * model at one tool per reply, which keeps every tool result on its
+   * own agent iteration so per-iteration analysis can attribute and
+   * ablate each source separately. `true`/omitted sends nothing.
+   *
+   * @default undefined (Anthropic's default — batching allowed)
+   */
+  readonly parallelToolCalls?: boolean;
   /** @internal Custom fetch implementation for tests / workers. */
   readonly _fetch?: typeof fetch;
 }
@@ -103,6 +119,7 @@ export function browserAnthropic(options: BrowserAnthropicProviderOptions): LLMP
   const apiUrl = options.apiUrl ?? ANTHROPIC_API_URL;
   const defaultModel = options.defaultModel ?? 'claude-sonnet-4-5-20250929';
   const defaultMaxTokens = options.defaultMaxTokens ?? 4096;
+  const parallelToolCalls = options.parallelToolCalls;
   const fetchImpl = options._fetch ?? fetch;
 
   const headers: Record<string, string> = {
@@ -116,7 +133,7 @@ export function browserAnthropic(options: BrowserAnthropicProviderOptions): LLMP
     name: 'browser-anthropic',
     async complete(req: LLMRequest): Promise<LLMResponse> {
       const body: AnthropicRequestBody = {
-        ...buildBody(req, defaultModel, defaultMaxTokens),
+        ...buildBody(req, defaultModel, defaultMaxTokens, parallelToolCalls),
       };
       let response: Response;
       try {
@@ -135,7 +152,7 @@ export function browserAnthropic(options: BrowserAnthropicProviderOptions): LLMP
     },
     async *stream(req: LLMRequest): AsyncIterable<LLMChunk> {
       const body: AnthropicRequestBody = {
-        ...buildBody(req, defaultModel, defaultMaxTokens),
+        ...buildBody(req, defaultModel, defaultMaxTokens, parallelToolCalls),
         stream: true,
       };
       let response: Response;
@@ -365,6 +382,7 @@ function buildBody(
   req: LLMRequest,
   defaultModel: string,
   defaultMaxTokens: number,
+  parallelToolCalls?: boolean,
 ): AnthropicRequestBody {
   // v2.14 — auto-bump max_tokens when thinking would violate Anthropic's
   // `max_tokens > thinking.budget_tokens` invariant. See the matching
@@ -386,6 +404,11 @@ function buildBody(
   // v2.14 — extended-thinking activation, mirrors Node AnthropicProvider.
   if (req.thinking) {
     body.thinking = { type: 'enabled', budget_tokens: req.thinking.budget };
+  }
+  // One tool per reply — same guard as the Node provider: Anthropic rejects
+  // `tool_choice` on a request that carries no tools.
+  if (parallelToolCalls === false && body.tools !== undefined && body.tools.length > 0) {
+    body.tool_choice = { type: 'auto', disable_parallel_tool_use: true };
   }
   // v2.6+ cache markers — applied AFTER body construction so we have
   // the materialized fields (system / tools / messages) to mark.

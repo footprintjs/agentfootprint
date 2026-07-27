@@ -49,6 +49,11 @@ interface AnthropicCreateParams {
   // claude-sonnet-4-5 / opus-4-5 (and newer) support this; older
   // models reject with HTTP 400.
   thinking?: { type: 'enabled'; budget_tokens: number };
+  // Emitted only when `parallelToolCalls: false`. Anthropic accepts
+  // `disable_parallel_tool_use` on any `tool_choice` variant; `auto`
+  // is the variant that leaves the CHOICE of tool (and of whether to
+  // call one at all) with the model — we only cap the COUNT.
+  tool_choice?: { type: 'auto'; disable_parallel_tool_use: true };
 }
 
 interface AnthropicMessageParam {
@@ -115,6 +120,35 @@ export interface AnthropicProviderOptions {
    * connection errors, 429/5xx) before giving up. Omit to use the SDK default.
    */
   readonly maxRetries?: number;
+  /**
+   * May the model ask for several tools at once in a single reply?
+   *
+   * Anthropic's default is `true`: one assistant message can carry many
+   * `tool_use` blocks, and the agent runs them all inside ONE loop
+   * iteration. Set `false` to cap it at one tool per reply — the model
+   * still chooses which tool (or none), it just cannot batch.
+   *
+   * Set `false` when the SHAPE of the loop is part of what you are
+   * measuring, not only its answer. A batched reply collapses several
+   * tool results into one iteration, so per-iteration analysis
+   * (`localizeContextBug` seeds one `'tool'` suspect per iteration from
+   * `lastToolResult`, and `removableSources` de-duplicates by tool name)
+   * attributes that iteration to the LAST tool of the batch — the others
+   * never appear as separate influence rows and cannot be ablated
+   * individually. One tool per iteration keeps every source separately
+   * attributable, at the cost of one extra round trip per tool.
+   *
+   * Prompting for it is not equivalent: "call one tool at a time" in the
+   * system prompt is a request the model may ignore, whereas this is a
+   * request parameter the API enforces.
+   *
+   * `true` (and omitting the option) sends nothing — Anthropic's own
+   * default already allows batching. Only `false` puts `tool_choice` on
+   * the wire, and only on requests that actually carry tools.
+   *
+   * @default undefined (Anthropic's default — batching allowed)
+   */
+  readonly parallelToolCalls?: boolean;
   /** @internal Pre-built client for testing. Skips SDK import. */
   readonly _client?: AnthropicClient;
 }
@@ -137,11 +171,12 @@ export function anthropic(options: AnthropicProviderOptions = {}): LLMProvider {
   const client = resolveClient(options);
   const defaultModel = options.defaultModel ?? 'claude-sonnet-4-5-20250929';
   const defaultMaxTokens = options.defaultMaxTokens ?? 4096;
+  const parallelToolCalls = options.parallelToolCalls;
 
   const provider: LLMProvider = {
     name: 'anthropic',
     async complete(req: LLMRequest): Promise<LLMResponse> {
-      const params = buildParams(req, defaultModel, defaultMaxTokens);
+      const params = buildParams(req, defaultModel, defaultMaxTokens, parallelToolCalls);
       try {
         const message = await client.messages.create(params);
         return fromAnthropicResponse(message);
@@ -150,7 +185,7 @@ export function anthropic(options: AnthropicProviderOptions = {}): LLMProvider {
       }
     },
     async *stream(req: LLMRequest): AsyncIterable<LLMChunk> {
-      const params = buildParams(req, defaultModel, defaultMaxTokens);
+      const params = buildParams(req, defaultModel, defaultMaxTokens, parallelToolCalls);
       let stream: AnthropicStream;
       try {
         stream = client.messages.stream(params);
@@ -235,6 +270,7 @@ function buildParams(
   req: LLMRequest,
   defaultModel: string,
   defaultMaxTokens: number,
+  parallelToolCalls?: boolean,
 ): AnthropicCreateParams {
   // v2.14 — Anthropic requires `max_tokens > thinking.budget_tokens`.
   // When thinking is enabled and the resolved max_tokens would violate
@@ -263,6 +299,12 @@ function buildParams(
   // SDK error path surfaces violations through wrapError().
   if (req.thinking) {
     params.thinking = { type: 'enabled', budget_tokens: req.thinking.budget };
+  }
+  // One tool per reply, enforced by the API rather than asked for in prose.
+  // Guarded on `params.tools`: Anthropic rejects `tool_choice` on a request
+  // that carries no tools, and an agent's final answer call often has none.
+  if (parallelToolCalls === false && params.tools !== undefined && params.tools.length > 0) {
+    params.tool_choice = { type: 'auto', disable_parallel_tool_use: true };
   }
   return params;
 }

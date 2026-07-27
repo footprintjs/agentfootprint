@@ -5,6 +5,35 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.7.0] - 2026-07-27
+
+### Added
+
+- **`parallelToolCalls` on `anthropic()` and `browserAnthropic()` — one tool
+  per reply, enforced by the API.** Claude may ask for several tools at once:
+  one assistant message carrying many `tool_use` blocks, all executed inside a
+  single agent iteration. That is the right default for speed, and the wrong
+  one when the SHAPE of the loop is part of what you are measuring. Per-
+  iteration analysis reads one tool source per iteration —
+  `localizeContextBug` seeds one `'tool'` suspect from that iteration's
+  `lastToolResult`, and `removableSources` de-duplicates by tool name — so a
+  batched reply is attributed to the LAST tool of the batch; the others never
+  appear as their own influence rows and cannot be ablated individually. An
+  agent that genuinely consulted three sources could show one. Passing
+  `parallelToolCalls: false` sends `tool_choice: { type: 'auto',
+  disable_parallel_tool_use: true }`, which caps the model at one tool per
+  reply and keeps every source separately attributable, at the cost of one
+  extra round trip per tool. `auto` is deliberate: the model still chooses
+  WHICH tool, and whether to call one at all — only the count is capped.
+  Nothing goes on the wire when the option is omitted or `true` (batching is
+  already Anthropic's default), and nothing goes on a request that carries no
+  tools (Anthropic rejects `tool_choice` there — an agent's final answer call
+  often has none). Both the `complete()` and `stream()` paths honor it, and
+  the Node and browser adapters emit a byte-identical field so a BYOK page and
+  its server behave the same. Prompting is not a substitute: "call one tool at
+  a time" in the system prompt is a request the model may ignore; this is a
+  request parameter the API enforces.
+
 ## [7.6.1] - 2026-07-25
 
 ### Fixed

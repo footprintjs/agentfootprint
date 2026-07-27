@@ -38,6 +38,27 @@ Model strings need date suffixes (`claude-sonnet-4-5-20250929`, `claude-haiku-4-
 
 Anthropic's Messages API has native tool_use blocks. The provider translates the agent's `Tool[]` into the API's tool format and round-trips assistant tool_calls via `LLMMessage.toolCalls`. ReAct correctness preserved across multi-iteration runs.
 
+### One tool per reply — `parallelToolCalls: false`
+
+By default Claude may ask for several tools **at once**: one assistant message carries many `tool_use` blocks, and the agent runs them all inside a single loop iteration. That is usually what you want — it is faster and cheaper.
+
+It is not what you want when the **shape** of the loop is part of what you are measuring. Per-iteration analysis reads one tool source per iteration: `localizeContextBug` seeds one `'tool'` suspect from that iteration's `lastToolResult`, and `removableSources` de-duplicates by tool name. So a reply that batched three tools is attributed to the **last** tool of the batch — the other two never appear as their own influence rows, and you cannot ablate them individually.
+
+Set `parallelToolCalls: false` to cap the model at one tool per reply:
+
+```ts
+const provider = anthropic({
+  apiKey: process.env.ANTHROPIC_API_KEY!,
+  parallelToolCalls: false, // one tool per reply → one tool per iteration
+});
+```
+
+On the wire this sends `tool_choice: { type: 'auto', disable_parallel_tool_use: true }`. `auto` is deliberate: the model still decides **which** tool to call, and whether to call one at all — only the *count* is capped. Nothing is sent on requests that carry no tools (Anthropic rejects `tool_choice` there), and `parallelToolCalls: true` sends nothing either, because allowing batches is already Anthropic's default.
+
+Asking for this in the system prompt ("call one tool at a time") is **not** equivalent — that is a request the model may ignore, this is a request parameter the API enforces. Cost: one extra round trip per tool.
+
+The same option exists on `browserAnthropic()`, and both adapters put the identical field on the wire.
+
 ## Streaming
 
 `provider.stream(req)` uses the SDK's native iterator; chunks land as they arrive. Final chunk carries the full `LLMResponse` (toolCalls + usage + stopReason) — single round-trip serves UI tokens AND ReAct decisioning.
