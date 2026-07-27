@@ -33,9 +33,13 @@
  *                          ├──── [memory WRITE subflows]
  *                          └──── BreakFinal ($break)
  *
- * (When v2.11.x reliability is configured, the reliability gate chart
- * mounts as a subflow before CallLLM with a TranslateFailFast stage
- * after it. Lands in the next commit.)
+ * (This chart has no reliability subflow, and never grew one. The plan
+ * described here — "the reliability gate chart mounts as a subflow before
+ * CallLLM with a TranslateFailFast stage after it. Lands in the next
+ * commit." — did not land: `.reliability()` is implemented INLINE in the
+ * CallLLM stage by `executeWithReliability`, and
+ * `buildReliabilityGateChart` is reachable from no shipped path. Verified
+ * 2026-07-28.)
  */
 
 import { ArrayMergeMode } from 'footprintjs/advanced';

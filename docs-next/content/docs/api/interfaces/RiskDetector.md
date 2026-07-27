@@ -4,7 +4,7 @@ title: RiskDetector
 
 # Interface: RiskDetector
 
-Defined in: [src/adapters/types.ts:373](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L373)
+Defined in: [src/adapters/types.ts:391](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L391)
 
 ## Properties
 
@@ -12,7 +12,7 @@ Defined in: [src/adapters/types.ts:373](https://github.com/footprintjs/agentfoot
 
 > `readonly` **name**: `string`
 
-Defined in: [src/adapters/types.ts:374](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L374)
+Defined in: [src/adapters/types.ts:392](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L392)
 
 ## Methods
 
@@ -20,7 +20,7 @@ Defined in: [src/adapters/types.ts:374](https://github.com/footprintjs/agentfoot
 
 > **check**(`content`, `context`): `Promise`\<[`RiskResult`](/docs/api/interfaces/RiskResult)\>
 
-Defined in: [src/adapters/types.ts:375](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L375)
+Defined in: [src/adapters/types.ts:393](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L393)
 
 #### Parameters
 

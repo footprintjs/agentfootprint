@@ -139,10 +139,20 @@ export function buildAgentMessageApiChart(deps: AgentMessageApiChartDeps): FlowC
         model,
       },
       // Resilience-report channel: a decorated provider's fallback /
-      // retry / recovery becomes an in-run typed event here. This chart
-      // has no runner of its own, so the emits reach the commit log
-      // always, and `agent.on()` only when the caller attaches
-      // `resilienceRecorder` (exported from `agentfootprint/observe`).
+      // retry / recovery becomes an in-run typed event here.
+      //
+      // Where that event GOES is entirely up to the recorders attached to
+      // the executor, and on a bare one the answer is NOWHERE.
+      // footprintjs's `ScopeFacade.emitEvent` dispatches only to
+      // recorders' `onEmit` — it never touches the transaction buffer, and
+      // it fast-returns outright when zero recorders are attached — so an
+      // emit can never become a `CommitBundle`. This chart has no runner
+      // of its own, so the caller must attach a recorder that implements
+      // `onEmit` for the report to be observable at all, and
+      // `resilienceRecorder` (exported from `agentfootprint/observe`)
+      // specifically for `agent.on(...)`. Pinned by the two bare-executor
+      // cases in
+      // test/resilience/integration/resilience-decorator-visibility.test.ts.
       resilienceHooks(scope),
     );
     scope.answer = response.content;

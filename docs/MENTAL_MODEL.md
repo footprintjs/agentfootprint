@@ -659,9 +659,13 @@ Five places where reality bends the rule (each is a backlog task):
      load-bearing, since all three decorators rebuild a fresh object copying only
      `name`/`complete`/`stream`. Non-duplication is therefore structural, not policed.
    - `resilienceHooks(scope)` (`recorders/core/resilienceHooks.ts`) maps report → `typedEmit` **in-run**,
-     so correlation ids come from footprintjs's traversal. Passed at all **six** in-run call sites:
-     `callLLM` (both the stream and the complete phase), `LLMCall`, `buildAgentMessageApiChart`,
-     `buildMessageApiChart`, `Parallel.mergeWithLLM`, `buildReliabilityGateChart`.
+     so correlation ids come from footprintjs's traversal. Passed at every in-run call site — **five
+     live, one dead:** `callLLM` (both the stream and the complete phase — this is also the live
+     `.reliability()` path, via `executeWithReliability` driving `singleProviderCall`), `LLMCall`,
+     `buildAgentMessageApiChart`, `buildMessageApiChart`, `Parallel.mergeWithLLM`; plus
+     `buildReliabilityGateChart`, which **no shipped path runs** — it is exported from no barrel and its
+     only repo consumer is its own test (`test/reliability/gate-chart-7pattern.test.ts`). Hooked anyway
+     so the dead chart cannot become a silent hole if it is ever revived.
    - New `resilienceRecorder` EmitBridge, exact-name matched on the three events, attached always-on in
      `Agent`/`LLMCall`/`Parallel`. `EmitBridgeOptions.prefix` widened to `string | readonly string[]`
      (internal type; all 13 existing factories untouched).
@@ -687,9 +691,35 @@ Five places where reality bends the rule (each is a backlog task):
        state stays consumer-wired via `onStateChange`. Registering the event is its own packet.
      · **Blind spot:** `memory/beats/llmExtractor.ts` and `memory/facts/llmFactExtractor.ts` call
        `complete()` inside extractor ports with no scope and no dispatcher — permanently out of reach.
-     · The message-api charts have **no runner of their own**, so their emits reach the commit log
-       always but `agent.on()` only if the caller attaches `resilienceRecorder` (exported from
-       `agentfootprint/observe`).
+     · **Non-duplication is structural; non-*drop* is only a convention.** Forwarding cannot be
+       enforced by the type system: `hooks` is optional, and TS never rejects an implementation for
+       declaring FEWER parameters than its signature, so a wrapper doing
+       `complete(req) { return inner.complete(req) }` type-checks, runs, and silently swallows every
+       report from anything beneath it — no compile error, no runtime error, no failing test. All
+       eight in-repo adapter wrappers were doing exactly that (they wrap a leaf vendor provider that
+       reports nothing, so nothing was lost — but the shape was the trap): `OpenAIProvider`,
+       `AnthropicProvider`, `BedrockProvider`, `BrowserOpenAIProvider`, `BrowserAnthropicProvider`,
+       `BrowserAzureOpenAIProvider`, and the two `azure`/`browser-azure` factories. **All eight now
+       forward** (2026-07-28), so every wrapper the library ships is transparent and the trap can only
+       be sprung by a consumer-authored wrapper (`myWrapper(withRetry(p))`). Documented at the seam
+       (`LLMCallHooks` JSDoc in `adapters/types.ts`) and in the resilience guide's honest limits.
+     · The arity change is runtime-observable in **untyped JS only**: a consumer whose
+       `complete(req, options)` genuinely takes a second parameter of its own now receives our hooks
+       object there. Impossible in TS (excess arguments were never assignable).
+     · The message-api charts have **no runner of their own, so their reports reach NOTHING unless a
+       recorder implementing `onEmit` is attached.** (**Corrected 2026-07-28.** The first draft of this
+       bullet claimed the emits "reach the commit log always". They do not, and structurally cannot:
+       `ScopeFacade.emitEvent` dispatches only to recorders' `onEmit`, never touches the transaction
+       buffer, and fast-returns outright when zero recorders are attached — so an emit can never become
+       a `CommitBundle`. Verified on a bare `FlowChartExecutor` running `buildAgentMessageApiChart`
+       with `withFallback(dead, good)`: a real fallback happened — `onFallback` fired once — yet the
+       report appeared in *none* of the run return, the 14-bundle commit log, `sharedState`, the
+       execution tree, or the recorder snapshot. Attaching one `onEmit` recorder to the same chart
+       surfaced it immediately (`agentfootprint.fallback.triggered @ call-llm#9` — a real
+       `runtimeStageId`), and the commit log still had no trace of it. Both arms are pinned by
+       the `bare FlowChartExecutor` cases in
+       `test/resilience/integration/resilience-decorator-visibility.test.ts`.) For `agent.on(...)`
+       the recorder to attach is `resilienceRecorder`, exported from `agentfootprint/observe`.
      · `callLLM` calls `complete()` **again** when a stream ends without a `response`. Hooks go to both
        phases, so a fallback in each reports separately — **deliberately not deduped**, because those are
        two genuinely billed calls and collapsing them would hide real double-billing. (The double-call

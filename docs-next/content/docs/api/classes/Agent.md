@@ -248,7 +248,7 @@ Defined in: [src/core/Agent.ts:470](https://github.com/footprintjs/agentfootprin
 
 > **drainObservers**(`opts?`): `Promise`\<`DrainResult`\>
 
-Defined in: [src/core/Agent.ts:934](https://github.com/footprintjs/agentfootprint/blob/main/src/core/Agent.ts#L934)
+Defined in: [src/core/Agent.ts:938](https://github.com/footprintjs/agentfootprint/blob/main/src/core/Agent.ts#L938)
 
 Flush the deferred-observer backlog of the most recent run's executor,
 then await async listener completions under a deadline (RFC-001 §11 —

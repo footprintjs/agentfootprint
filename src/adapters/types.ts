@@ -292,6 +292,21 @@ export type ResilienceReport =
  * Outside a run nothing passes hooks, so `hooks` is `undefined` and every
  * report site short-circuits — standalone decorator behaviour is
  * unchanged.
+ *
+ * ⚠ **IF YOU WRITE A PROVIDER WRAPPER, FORWARD THIS PARAMETER.** It is the
+ * one silent-failure trap in the design. A wrapper that declares
+ * `complete(req)` and calls `inner.complete(req)` still type-checks
+ * perfectly — `hooks` is optional, and TypeScript has never rejected an
+ * implementation for taking FEWER parameters than its signature — so
+ * dropping it produces no compile error, no runtime error, and no test
+ * failure. What it produces is a decorated provider that goes DARK the
+ * moment it is placed underneath: the reports still happen, and nothing
+ * receives them. Every wrapper shipped in this library forwards (the three
+ * `src/resilience/` decorators, and all eight class-form / Azure wrappers
+ * in `src/adapters/llm/`), so the trap can only be sprung by a
+ * consumer-authored wrapper — `myWrapper(withRetry(p))`. There is no way to
+ * police it from here; the only defence is this note and the one in the
+ * resilience guide's "honest limits".
  */
 export interface LLMCallHooks {
   /**
@@ -307,7 +322,10 @@ export interface LLMProvider {
   readonly name: string;
   /**
    * `hooks` (v7.8) is optional and additive — implementations may declare
-   * `complete(req)` with no second parameter and stay assignable.
+   * `complete(req)` with no second parameter and stay assignable. A LEAF
+   * provider (one that talks to a vendor) may ignore it. A WRAPPER must
+   * forward it, or everything it wraps goes silently dark — see the
+   * `LLMCallHooks` docs above.
    */
   complete(req: LLMRequest, hooks?: LLMCallHooks): Promise<LLMResponse>;
   stream?(req: LLMRequest, hooks?: LLMCallHooks): AsyncIterable<LLMChunk>;

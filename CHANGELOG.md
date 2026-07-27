@@ -117,6 +117,65 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `aggregateForBoundary()` still see full events; only the snapshot
   projection differs. The bundle's `description` records which mode produced
   it, so a stored artifact stays self-describing.
+- **`agentfootprint.fallback.triggered`, `agentfootprint.error.retried` and
+  `agentfootprint.error.recovered` now actually fire — you can finally ask
+  which provider served this call.** All three were fully declared (registry,
+  payload types, `ALL_EVENT_TYPES`, domain wildcards) and emitted by nothing:
+  a repo-wide grep found zero emitters. They were legal to subscribe to, typed
+  end to end, and permanently silent. The reason is structural rather than an
+  oversight — `LLMProvider` is a deliberately minimal port (`{ name, complete,
+  stream? }`) with no emit channel, and the resilience decorators are
+  constructed by you *before any run exists*, so a decorator can never reach a
+  scope. Routing them through a consumer callback would not have been
+  equivalent: an event pushed back in via `runner.emit()` lands with
+  synthesized meta (`runtimeStageId: 'consumer-emit#0'`, `runId:
+  'consumer-scope'`, `runOffsetMs: 0`) and correlates with nothing else in the
+  run, which is the entire value of having it. The seam is an optional
+  per-call second argument, **`hooks?: LLMCallHooks`**, on `complete()` and
+  `stream()` — the channel rides the CALL, not the factory. A decorator
+  reports plain data (**`ResilienceReport`**, a three-arm union: `'fell-back'`
+  | `'retried'` | `'recovered'`) and knows nothing about runs, scopes or
+  events; the in-run LLM call sites translate each report into the
+  already-declared typed event from INSIDE the traversal, so it carries the
+  real `runId` and `runtimeStageId` footprintjs stamped before the stage ran
+  and sits on the same timeline as the tool calls around it. Every payload
+  field is filled from a report field of the same name — nothing is
+  synthesized. Not a field on `LLMResponse`, because an exhausted retry
+  *throws*: there would be no response to carry it. One producer per fact —
+  `fell-back` ← `withFallback`, `retried` / `recovered` ← `withRetry`, nothing
+  ← `withCircuitBreaker` — so a stack of three decorators produces one
+  concatenated stream and de-duplication is structurally unnecessary rather
+  than policed. `Agent`, `LLMCall` and `Parallel` attach the new
+  **`resilienceRecorder()`** bridge for you, so
+  `agent.on('agentfootprint.error.*', …)` works with no setup; a bare
+  `FlowChartExecutor` running the exported message-api charts must attach it
+  (or any `onEmit` recorder) itself, because these events travel footprintjs's
+  emit channel and reach recorders only — never the commit log. Non-breaking:
+  TypeScript lets an arity-1 `complete(req)` satisfy the widened signature, so
+  every shipped adapter and every consumer test double still assigns unchanged (pinned by
+  `test/type-regressions/LLMCallHooks.assignability.test.ts`), and outside a
+  run nothing passes hooks so every report site short-circuits and standalone
+  decorator behaviour is byte-identical. No new event type was added; the
+  67-event count guard is untouched. `LLMCallHooks` and `ResilienceReport` are
+  exported from `agentfootprint/llm-providers`, `resilienceRecorder` from
+  `agentfootprint/observe`. The honest limits are stated on the [resilience
+  page](https://footprintjs.github.io/agentfootprint/docs/monitor/resilience)
+  rather than papered over — chiefly that `error.retried.reason` classifies
+  the ERROR and not the retry predicate's reasoning (a bare boolean cannot
+  expose that), that `withCircuitBreaker` has no event of its own and a trip
+  is visible only as the enclosing fallback's `reason`, that a
+  fallback-sourced recovery is not expressible in `ErrorRecoveredPayload` so
+  `withFallback` never claims `recovered`, and that the LLM-backed memory
+  extractors call `complete()` from a port with no scope and stay a blind
+  spot. Runnable proof:
+  `examples/features/35-resilience-visibility.ts` — four scenes, offline, no
+  API key, exits non-zero if any claim stops holding. **If you write your own
+  provider wrapper, forward the second argument.** `complete(req, hooks?)` is
+  optional in its second parameter and TypeScript never rejects an
+  implementation for declaring fewer parameters than its signature, so a
+  wrapper that calls `inner.complete(req)` type-checks, runs, passes its
+  tests — and silently swallows every report from anything beneath it. Every
+  wrapper this library ships forwards.
 
 ### Changed
 
@@ -174,6 +233,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **The eight adapter wrappers dropped the `hooks` argument, so anything
+  decorated underneath one would have gone dark.** `OpenAIProvider`,
+  `AnthropicProvider`, `BedrockProvider`, `BrowserOpenAIProvider`,
+  `BrowserAnthropicProvider` and `BrowserAzureOpenAIProvider` (plus the two
+  `azure` / `browser-azure` factories) each declared `complete(req)` and called
+  `this.inner.complete(req)`. Nothing was lost in practice — each of them wraps
+  a leaf vendor provider that reports nothing — but the SHAPE was the trap, and
+  it is the one failure in this design that produces no compile error, no
+  runtime error and no failing test: `hooks` is optional, and TypeScript never
+  rejects an implementation for declaring fewer parameters than its signature.
+  All eight forward now, so every wrapper the library ships is transparent and
+  the trap can only be introduced by a consumer-authored wrapper. Documented at
+  the seam (`LLMCallHooks`'s JSDoc) and in the resilience guide's honest limits,
+  since it cannot be enforced by types.
+- **A false observability claim inside the honest-absence ledger: the
+  message-api charts' resilience emits do NOT "reach the commit log always".**
+  Both `buildAgentMessageApiChart`'s call-site comment and MENTAL_MODEL §14
+  item 6 said they did. They cannot: footprintjs's `ScopeFacade.emitEvent`
+  dispatches only to recorders' `onEmit`, never touches the stage's transaction
+  buffer, and fast-returns outright when zero recorders are attached — so an
+  emit can never become a `CommitBundle`. The truth is worse than the wrong
+  version admitted: on a bare `FlowChartExecutor` with no `onEmit` recorder the
+  report is **discarded entirely**, not stored somewhere quieter. Verified end
+  to end — a real fallback on a bare executor left no trace in the run return,
+  the 14-bundle commit log, `sharedState`, the execution tree or the recorder
+  snapshot, while the same chart with one `onEmit` recorder surfaced it
+  immediately with a real `runtimeStageId`. Corrected in both places and in the
+  resilience guide, and both arms are now pinned by tests rather than prose.
+- **Two dead-code claims corrected.** `buildReliabilityGateChart`'s header said
+  the chart "is mounted as a subflow in the agent's chart at `Agent.build()`
+  time"; `buildAgentChart`'s header said the same mount "lands in the next
+  commit". Neither happened: the builder is exported from no barrel and its only
+  consumer in the repository is its own test, `.reliability()` is implemented
+  inline in the CallLLM stage by `executeWithReliability`, and the
+  `TranslateFailFast` stage both headers reference was never written. Comments
+  only; no behaviour change. The file is kept rather than deleted because it is
+  the only implementation that honours the `providers` failover list.
 - **Every run recorded through `enable.flowchart()` or
   `enable.localObservability()` had a flat commit axis — silently.**
   `attachFlowchart` built its `BoundaryRecorder` with no options, so

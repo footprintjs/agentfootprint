@@ -4,7 +4,7 @@ title: ToolCallEntry
 
 # Interface: ToolCallEntry
 
-Defined in: [src/adapters/types.ts:389](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L389)
+Defined in: [src/adapters/types.ts:407](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L407)
 
 One entry in the in-flight tool-call sequence delivered to
 `PermissionChecker.check()` since v2.12. Lets sequence-aware
@@ -20,7 +20,7 @@ survives `agent.resumeOnError(checkpoint)` correctly.
 
 > `readonly` **args**: `Readonly`\<`Record`\<`string`, `unknown`\>\> \| `undefined`
 
-Defined in: [src/adapters/types.ts:393](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L393)
+Defined in: [src/adapters/types.ts:411](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L411)
 
 Tool args passed to `tool.execute(args, ctx)`.
 
@@ -30,7 +30,7 @@ Tool args passed to `tool.execute(args, ctx)`.
 
 > `readonly` **iteration**: `number`
 
-Defined in: [src/adapters/types.ts:395](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L395)
+Defined in: [src/adapters/types.ts:413](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L413)
 
 ReAct iteration the call was dispatched on.
 
@@ -40,7 +40,7 @@ ReAct iteration the call was dispatched on.
 
 > `readonly` **name**: `string`
 
-Defined in: [src/adapters/types.ts:391](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L391)
+Defined in: [src/adapters/types.ts:409](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L409)
 
 Tool name dispatched.
 
@@ -50,7 +50,7 @@ Tool name dispatched.
 
 > `readonly` `optional` **providerId?**: `string`
 
-Defined in: [src/adapters/types.ts:402](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L402)
+Defined in: [src/adapters/types.ts:420](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L420)
 
 Optional source identifier — `'local'` for tools registered via
 `.tool(...)` / `staticTools(...)`, or the `ToolProvider.id` for

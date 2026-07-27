@@ -51,7 +51,9 @@
  */
 
 import { describe, expect, it, vi } from 'vitest';
+import { FlowChartExecutor } from 'footprintjs';
 import { Agent } from '../../../src/core/Agent.js';
+import { buildAgentMessageApiChart } from '../../../src/core/agent/buildAgentMessageApiChart.js';
 import { LLMCall } from '../../../src/core/LLMCall.js';
 import { recordRun } from '../../../src/recorders/observability/recordRun.js';
 import { withFallback } from '../../../src/resilience/withFallback.js';
@@ -64,7 +66,12 @@ import type {
   FallbackTriggeredPayload,
 } from '../../../src/events/payloads.js';
 import type { EventMeta } from '../../../src/events/types.js';
-import type { LLMProvider, LLMResponse, ResilienceReport } from '../../../src/adapters/types.js';
+import type {
+  LLMCallHooks,
+  LLMProvider,
+  LLMResponse,
+  ResilienceReport,
+} from '../../../src/adapters/types.js';
 
 // ── Providers ────────────────────────────────────────────────────────
 
@@ -500,24 +507,150 @@ describe('resilience reports — hostile sinks', () => {
 // ── Backward compatibility — standalone behaviour is unchanged ────────
 
 describe('resilience decorators — outside a run, nothing is emitted', () => {
-  it('a full stack with NO hooks argument resolves identically and emits nothing', async () => {
+  /**
+   * Wrap a provider so it records the hooks object each call hands it.
+   * This is the ONLY observable for "nothing was reported" when the caller
+   * passes no hooks at all: there is no sink to spy, so the question
+   * becomes whether any decorator in the stack *synthesized* one.
+   */
+  function recordingHooksArg(inner: LLMProvider, seen: (LLMCallHooks | undefined)[]): LLMProvider {
+    return {
+      name: inner.name,
+      complete: (req, hooks) => {
+        seen.push(hooks);
+        return inner.complete(req, hooks);
+      },
+    };
+  }
+
+  const stdReq = { messages: [{ role: 'user' as const, content: 'hi' }], model: 'm' };
+
+  it('a full stack with NO hooks argument resolves identically and reports nothing', async () => {
     // The primary proof is that all pre-existing test/resilience tests
-    // pass untouched. This pins the composite case explicitly.
-    const emitted: unknown[] = [];
-    const p = flakyProvider({ name: 'p', failTimes: 1 });
-    const stack = withRetry(withFallback(withCircuitBreaker(p), goodProvider('f')), {
-      maxAttempts: 3,
-      initialDelayMs: 1,
-    });
+    // pass untouched. This pins the composite case explicitly — and does
+    // so with a falsifiable assertion: an earlier version of this test
+    // declared an `emitted` array, never wrote to it, and asserted it was
+    // empty, which could not fail.
+    const handed: (LLMCallHooks | undefined)[] = [];
+    const stack = withRetry(
+      withFallback(
+        withCircuitBreaker(recordingHooksArg(flakyProvider({ name: 'p', failTimes: 1 }), handed)),
+        recordingHooksArg(goodProvider('f'), handed),
+      ),
+      { maxAttempts: 3, initialDelayMs: 1 },
+    );
 
     // No second argument at all — every report site must short-circuit.
-    const res = await stack.complete({
-      messages: [{ role: 'user', content: 'hi' }],
-      model: 'm',
-    });
+    const res = await stack.complete(stdReq);
 
     expect(res.content).toBe('served');
-    expect(emitted).toHaveLength(0);
+    // The stack really did run — otherwise the assertion below is vacuous.
+    expect(handed.length).toBeGreaterThan(0);
+    // …and no decorator invented a sink on the way down. `undefined` all
+    // the way to the leaf is what makes `hooks?.onResilience?.(…)`
+    // short-circuit at every report site.
+    expect(handed.every((h) => h === undefined)).toBe(true);
+  });
+
+  it('POSITIVE CONTROL: the identical stack WITH hooks does report — so the empty case is real', async () => {
+    // Without this, "no hooks reached the leaf" could pass for the wrong
+    // reason (a capture that never sees anything). Same stack, same
+    // failure pattern, one argument added.
+    const handed: (LLMCallHooks | undefined)[] = [];
+    const reports: ResilienceReport[] = [];
+    const stack = withRetry(
+      withFallback(
+        withCircuitBreaker(recordingHooksArg(flakyProvider({ name: 'p', failTimes: 1 }), handed)),
+        recordingHooksArg(goodProvider('f'), handed),
+      ),
+      { maxAttempts: 3, initialDelayMs: 1 },
+    );
+
+    const res = await stack.complete(stdReq, { onResilience: (r) => reports.push(r) });
+
+    expect(res.content).toBe('served');
+    // The capture sees the sink when there IS one…
+    expect(handed.every((h) => h !== undefined)).toBe(true);
+    // …and the reports really flow through this exact stack.
+    expect(reports.map((r) => r.kind)).toEqual(['fell-back']);
+  });
+
+  it('a run on a bare FlowChartExecutor reaches NOTHING without an onEmit recorder', async () => {
+    // Pins the corrected honest-absence claim (MENTAL_MODEL §14 item 6 and
+    // the comment at buildAgentMessageApiChart's provider.complete call).
+    // Both used to say these emits "reach the commit log always". They
+    // cannot: footprintjs's ScopeFacade.emitEvent dispatches only to
+    // recorders' onEmit — it never touches the transaction buffer, and it
+    // fast-returns when zero recorders are attached — so an emit can never
+    // become a CommitBundle.
+    let realFallbacks = 0;
+    const chart = buildAgentMessageApiChart({
+      provider: withFallback(deadProvider('dead-primary'), goodProvider('live-backup', 'ok'), {
+        onFallback: () => void (realFallbacks += 1),
+      }),
+      model: 'm',
+      systemPrompt: 'sys',
+      tools: [],
+      maxIterations: 2,
+    } as never);
+
+    const executor = new FlowChartExecutor(chart);
+    const returned = await executor.run({ input: { message: 'hi' } });
+    const snapshot = executor.getSnapshot();
+
+    // A REAL fallback happened — otherwise there is nothing to be absent.
+    expect(realFallbacks).toBe(1);
+
+    // …and it left no trace anywhere the run hands back.
+    const mentions = (v: unknown): boolean =>
+      (JSON.stringify(v, (_k, x) => (x instanceof Error ? String(x) : x)) ?? '').includes(
+        'fallback.triggered',
+      );
+    expect(mentions(returned)).toBe(false);
+    expect(mentions(snapshot?.commitLog)).toBe(false);
+    expect(mentions(snapshot?.sharedState)).toBe(false);
+    expect(mentions(snapshot?.executionTree)).toBe(false);
+    expect(mentions(snapshot?.recorders)).toBe(false);
+    // The commit log is populated — the absence is of this event, not of
+    // commits (which would make the assertions above vacuous).
+    expect(snapshot?.commitLog?.length ?? 0).toBeGreaterThan(0);
+  });
+
+  it('POSITIVE CONTROL: the same bare chart + one onEmit recorder DOES see it', async () => {
+    // Proves the arm above is a genuine absence rather than a broken
+    // fixture — and pins the other half of the corrected claim: even with
+    // a recorder listening, the report still never lands in the commit log.
+    let realFallbacks = 0;
+    const chart = buildAgentMessageApiChart({
+      provider: withFallback(deadProvider('dead-primary'), goodProvider('live-backup', 'ok'), {
+        onFallback: () => void (realFallbacks += 1),
+      }),
+      model: 'm',
+      systemPrompt: 'sys',
+      tools: [],
+      maxIterations: 2,
+    } as never);
+
+    const heard: { name: string; runtimeStageId: string }[] = [];
+    const executor = new FlowChartExecutor(chart);
+    executor.attachCombinedRecorder({
+      id: 'test.resilience-emit-tap',
+      onEmit(e: { name: string; runtimeStageId: string }): void {
+        if (e.name === 'agentfootprint.fallback.triggered') {
+          heard.push({ name: e.name, runtimeStageId: e.runtimeStageId });
+        }
+      },
+    } as never);
+
+    await executor.run({ input: { message: 'hi' } });
+    const snapshot = executor.getSnapshot();
+
+    expect(realFallbacks).toBe(1);
+    expect(heard).toHaveLength(1);
+    // Real in-run correlation, same as every other case in this file.
+    expect(heard[0]!.runtimeStageId).toMatch(/#\d+$/);
+    // …and STILL not in the commit log.
+    expect(JSON.stringify(snapshot?.commitLog ?? [])).not.toContain('fallback.triggered');
   });
 
   it('an undecorated provider in a run emits none of the three events', async () => {

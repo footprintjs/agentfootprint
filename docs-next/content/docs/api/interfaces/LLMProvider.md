@@ -4,7 +4,7 @@ title: LLMProvider
 
 # Interface: LLMProvider
 
-Defined in: [src/adapters/types.ts:306](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L306)
+Defined in: [src/adapters/types.ts:321](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L321)
 
 ## Properties
 
@@ -12,7 +12,7 @@ Defined in: [src/adapters/types.ts:306](https://github.com/footprintjs/agentfoot
 
 > `readonly` **name**: `string`
 
-Defined in: [src/adapters/types.ts:307](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L307)
+Defined in: [src/adapters/types.ts:322](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L322)
 
 ## Methods
 
@@ -20,10 +20,13 @@ Defined in: [src/adapters/types.ts:307](https://github.com/footprintjs/agentfoot
 
 > **complete**(`req`, `hooks?`): `Promise`\<[`LLMResponse`](/docs/api/interfaces/LLMResponse)\>
 
-Defined in: [src/adapters/types.ts:312](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L312)
+Defined in: [src/adapters/types.ts:330](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L330)
 
 `hooks` (v7.8) is optional and additive — implementations may declare
-`complete(req)` with no second parameter and stay assignable.
+`complete(req)` with no second parameter and stay assignable. A LEAF
+provider (one that talks to a vendor) may ignore it. A WRAPPER must
+forward it, or everything it wraps goes silently dark — see the
+`LLMCallHooks` docs above.
 
 #### Parameters
 
@@ -45,7 +48,7 @@ Defined in: [src/adapters/types.ts:312](https://github.com/footprintjs/agentfoot
 
 > `optional` **stream**(`req`, `hooks?`): `AsyncIterable`\<[`LLMChunk`](/docs/api/interfaces/LLMChunk)\>
 
-Defined in: [src/adapters/types.ts:313](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L313)
+Defined in: [src/adapters/types.ts:331](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L331)
 
 #### Parameters
 

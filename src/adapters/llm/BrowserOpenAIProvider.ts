@@ -18,6 +18,7 @@
  */
 
 import type {
+  LLMCallHooks,
   LLMChunk,
   LLMMessage,
   LLMProvider,
@@ -243,13 +244,14 @@ export class BrowserOpenAIProvider implements LLMProvider {
     this.inner = browserOpenai(options);
   }
 
-  complete(req: LLMRequest): Promise<LLMResponse> {
-    return this.inner.complete(req);
+  // `hooks` is FORWARDED, not dropped — see LLMCallHooks in adapters/types.ts.
+  complete(req: LLMRequest, hooks?: LLMCallHooks): Promise<LLMResponse> {
+    return this.inner.complete(req, hooks);
   }
 
-  stream(req: LLMRequest): AsyncIterable<LLMChunk> {
+  stream(req: LLMRequest, hooks?: LLMCallHooks): AsyncIterable<LLMChunk> {
     if (!this.inner.stream) throw new Error('stream() unavailable');
-    return this.inner.stream(req);
+    return this.inner.stream(req, hooks);
   }
 }
 
@@ -334,9 +336,10 @@ export function browserAzureOpenai(options: BrowserAzureOpenAIProviderOptions): 
 
   return {
     name: 'browser-azure-openai',
-    complete: (req) => inner.complete(withDeployment(req)),
+    // `hooks` is FORWARDED, not dropped — see LLMCallHooks in adapters/types.ts.
+    complete: (req, hooks) => inner.complete(withDeployment(req), hooks),
     ...(inner.stream && {
-      stream: (req: LLMRequest) => inner.stream!(withDeployment(req)),
+      stream: (req: LLMRequest, hooks?: LLMCallHooks) => inner.stream!(withDeployment(req), hooks),
     }),
   };
 }
@@ -349,13 +352,14 @@ export class BrowserAzureOpenAIProvider implements LLMProvider {
     this.inner = browserAzureOpenai(options);
   }
 
-  complete(req: LLMRequest): Promise<LLMResponse> {
-    return this.inner.complete(req);
+  // `hooks` is FORWARDED, not dropped — see LLMCallHooks in adapters/types.ts.
+  complete(req: LLMRequest, hooks?: LLMCallHooks): Promise<LLMResponse> {
+    return this.inner.complete(req, hooks);
   }
 
-  stream(req: LLMRequest): AsyncIterable<LLMChunk> {
+  stream(req: LLMRequest, hooks?: LLMCallHooks): AsyncIterable<LLMChunk> {
     if (!this.inner.stream) throw new Error('stream() unavailable');
-    return this.inner.stream(req);
+    return this.inner.stream(req, hooks);
   }
 }
 

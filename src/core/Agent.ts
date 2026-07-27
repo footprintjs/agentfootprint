@@ -891,7 +891,11 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // Provider-decorator telemetry (withFallback / withRetry reports,
     // translated in-run by `resilienceHooks`). Always-on, but zero-cost
     // when the configured provider is undecorated or never fails. Also
-    // covers the reliability GATE subflow — it runs on this executor.
+    // covers a `.reliability()` run: that path is `executeWithReliability`
+    // driving `singleProviderCall` inside the SAME call-llm stage
+    // (callLLM.ts), so the decorator's reports ride this bridge too. (It
+    // is NOT the `buildReliabilityGateChart` subflow — the Agent never
+    // mounts that chart; nothing shipped does.)
     attachObserver(resilienceRecorder({ dispatcher, getRunContext: getRunCtx }));
     // Check-in events bridge (evidence-carrying human consent). Always-on;
     // forwards checkin.request/decision $emits to the dispatcher so

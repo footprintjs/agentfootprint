@@ -3,9 +3,20 @@
  * an LLM call with rules-based reliability semantics, using the native
  * `decide()` DSL via `addDeciderFunction` decider stages.
  *
- * The returned chart is mounted as a subflow in the agent's chart at
- * Agent.build() time (only when reliability is configured). Inside the
- * subflow:
+ * ⚠ NOT REACHABLE FROM ANY SHIPPED PATH (verified 2026-07-28). This header
+ * used to say the chart "is mounted as a subflow in the agent's chart at
+ * Agent.build() time (only when reliability is configured)". It is not:
+ * `buildReliabilityGateChart` is exported from no barrel, and its only
+ * consumer in the repository is its own test
+ * (`test/reliability/gate-chart-7pattern.test.ts`). The live
+ * `.reliability()` path is `executeWithReliability`
+ * (`core/agent/stages/reliabilityExecution.ts`) driving
+ * `singleProviderCall` inline in `core/agent/stages/callLLM.ts` — which
+ * trades this chart's subflow visibility for streaming support. Keep this
+ * file honest rather than deleting it: it is the only implementation that
+ * honours the `providers` failover list (see MENTAL_MODEL §14 item 3).
+ *
+ * Inside the subflow, when something does mount it:
  *
  *   PreCheck (decider) → CallProvider (function) → PostDecide (decider)
  *                                                       │
@@ -26,15 +37,18 @@
  *     'fallback'    → call config.fallback(); $break() on success
  *     'fail-fast'   → set failKind, $emit, $break(reason)
  *
- * The subflow is mounted WITHOUT `propagateBreak: true`. Subflow $break is
- * local — agent.ts adds a `TranslateFailFast` agent-level stage AFTER the
- * subflow that reads scope.reliabilityFailKind and converts it into an
- * agent-level `$break(reason)`. This split lets normal subflow exits
- * (`ok`/`fallback`) leave the agent running while fail-fast stops it.
+ * The design intends the subflow to be mounted WITHOUT `propagateBreak:
+ * true`, so subflow `$break` stays local and an agent-level
+ * `TranslateFailFast` stage reads `scope.reliabilityFailKind` and converts
+ * it into an agent-level `$break(reason)` — letting normal subflow exits
+ * (`ok`/`fallback`) leave the agent running while fail-fast stops it. That
+ * stage was never built (`grep TranslateFailFast` finds only comments), which
+ * is part of why nothing mounts this chart; the live path throws
+ * `ReliabilityFailFastError` from `Agent.run` instead.
  *
  * Three-channel discipline preserved:
  *   • SCOPE STATE  — failKind/failPayload/failReason mapped to parent via
- *                    outputMapper; consumed by agent's TranslateFailFast.
+ *                    outputMapper; for the intended TranslateFailFast.
  *   • $emit        — passive observability for external consumers.
  *   • $break(reason)— control flow + human reason for narrative.
  */
@@ -247,11 +261,17 @@ export function buildReliabilityGateChart(config: ReliabilityConfig): FlowChart 
         }
       }
       // Hooks are passed here too, so a DECORATED provider does not go
-      // dark the moment `.reliability()` is enabled. This is not
-      // cross-emitting: the decorator's own account of its own fixed-cap
-      // decision merely happens to occur inside a reliability stage. The
-      // two families stay distinct — `reliability.*` = this rules loop's
-      // dynamic decisions, `error.*` = the decorator's.
+      // dark. This is not cross-emitting: the decorator's own account of
+      // its own fixed-cap decision merely happens to occur inside a
+      // reliability stage. The two families stay distinct —
+      // `reliability.*` = this rules loop's dynamic decisions, `error.*` =
+      // the decorator's.
+      //
+      // NOTE: this chart is currently DEAD — see the file header. The
+      // live `.reliability()` path is `executeWithReliability` driving
+      // `singleProviderCall` in `core/agent/stages/callLLM.ts`, which
+      // passes the same hooks. Wiring the dead site anyway keeps it from
+      // being a silent hole if the chart is ever revived.
       const response: LLMResponse = await providerEntry.provider.complete(
         scope.request as LLMRequest,
         resilienceHooks(scope),

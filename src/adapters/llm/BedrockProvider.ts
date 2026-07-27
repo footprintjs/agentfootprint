@@ -28,6 +28,7 @@
  */
 
 import type {
+  LLMCallHooks,
   LLMChunk,
   LLMMessage,
   LLMProvider,
@@ -284,13 +285,14 @@ export class BedrockProvider implements LLMProvider {
     this.inner = bedrock(options);
   }
 
-  complete(req: LLMRequest): Promise<LLMResponse> {
-    return this.inner.complete(req);
+  // `hooks` is FORWARDED, not dropped — see LLMCallHooks in adapters/types.ts.
+  complete(req: LLMRequest, hooks?: LLMCallHooks): Promise<LLMResponse> {
+    return this.inner.complete(req, hooks);
   }
 
-  stream(req: LLMRequest): AsyncIterable<LLMChunk> {
+  stream(req: LLMRequest, hooks?: LLMCallHooks): AsyncIterable<LLMChunk> {
     if (!this.inner.stream) throw new Error('stream() unavailable');
-    return this.inner.stream(req);
+    return this.inner.stream(req, hooks);
   }
 }
 
