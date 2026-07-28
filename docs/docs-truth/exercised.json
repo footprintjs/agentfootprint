@@ -1,0 +1,835 @@
+{
+  "$schema": "docs-truth exercised-evidence v1",
+  "note": "Recorded by `npm run docs:truth:exercise`. Ran every examples/*/*.ts with zero credentials. eventsObserved is RUNTIME evidence (event bus, listener gates forced open). symbolsReferenced is STATIC: named imports of examples that exited 0 — it over-counts, so treat it as a floor for doc gaps and read \"never exercised\" with care.",
+  "recordedAt": "2026-07-28",
+  "node": "v22.16.0",
+  "credentialsUsed": false,
+  "envVarsStrippedByName": 3,
+  "totals": {
+    "total": 95,
+    "passed": 95,
+    "failed": 0,
+    "eventTapFailures": 0
+  },
+  "failedExamples": [],
+  "eventsObserved": [
+    "agentfootprint.agent.iteration_end",
+    "agentfootprint.agent.iteration_start",
+    "agentfootprint.agent.output_schema_validation_failed",
+    "agentfootprint.agent.route_decided",
+    "agentfootprint.agent.turn_end",
+    "agentfootprint.agent.turn_start",
+    "agentfootprint.checkin.decision",
+    "agentfootprint.checkin.request",
+    "agentfootprint.composition.enter",
+    "agentfootprint.composition.exit",
+    "agentfootprint.composition.fork_start",
+    "agentfootprint.composition.iteration_exit",
+    "agentfootprint.composition.iteration_start",
+    "agentfootprint.composition.merge_end",
+    "agentfootprint.composition.route_decided",
+    "agentfootprint.context.budget_pressure",
+    "agentfootprint.context.evaluated",
+    "agentfootprint.context.injected",
+    "agentfootprint.context.slot_composed",
+    "agentfootprint.cost.limit_hit",
+    "agentfootprint.cost.tick",
+    "agentfootprint.error.fatal",
+    "agentfootprint.error.recovered",
+    "agentfootprint.error.retried",
+    "agentfootprint.eval.score",
+    "agentfootprint.fallback.triggered",
+    "agentfootprint.pause.request",
+    "agentfootprint.pause.resume",
+    "agentfootprint.permission.check",
+    "agentfootprint.permission.halt",
+    "agentfootprint.reliability.fail_fast",
+    "agentfootprint.reliability.recovered",
+    "agentfootprint.reliability.retried",
+    "agentfootprint.resilience.output_canned_used",
+    "agentfootprint.resilience.output_fallback_triggered",
+    "agentfootprint.skill.rejected",
+    "agentfootprint.stream.llm_end",
+    "agentfootprint.stream.llm_start",
+    "agentfootprint.stream.token",
+    "agentfootprint.stream.tool_end",
+    "agentfootprint.stream.tool_start",
+    "agentfootprint.tools.discovery_completed",
+    "agentfootprint.tools.discovery_failed",
+    "agentfootprint.tools.discovery_started",
+    "agentfootprint.validation.args_invalid"
+  ],
+  "subpathsReferenced": [
+    ".",
+    "./debug",
+    "./events",
+    "./identity",
+    "./injection-engine",
+    "./llm-providers",
+    "./locales",
+    "./memory",
+    "./memory-providers",
+    "./observability-providers",
+    "./observability/contextError/finders",
+    "./observe",
+    "./reliability",
+    "./resilience",
+    "./security",
+    "./status",
+    "./strategies",
+    "./tool-providers"
+  ],
+  "symbolsReferenced": [
+    "AblationRerun",
+    "AblationRunStats",
+    "AblationSpec",
+    "Agent",
+    "AgentCoreLikeClient",
+    "AgentCoreStore",
+    "AgentRunCheckpoint",
+    "AgentfootprintEvent",
+    "AuditBundle",
+    "BacktrackTrace",
+    "CapturedEventLike",
+    "CatalogTool",
+    "CheckInDecision",
+    "CheckInRecorder",
+    "CheckInRequest",
+    "CircuitOpenError",
+    "CombinedRecorder",
+    "Conditional",
+    "ContextBugArtifacts",
+    "ContextBugReport",
+    "ContextUnit",
+    "CredentialProvider",
+    "Embedder",
+    "EntryScorer",
+    "FindInput",
+    "InMemoryStore",
+    "InfluenceScore",
+    "InfluenceScorer",
+    "InfluenceStrategy",
+    "Injection",
+    "InjectionContext",
+    "LLMCall",
+    "LLMCallHooks",
+    "LLMProvider",
+    "LLMRequest",
+    "LLMResponse",
+    "LLMToolSchema",
+    "Loop",
+    "MEMORY_STRATEGIES",
+    "MEMORY_TYPES",
+    "MOCK_EMBEDDER_CALIBRATION",
+    "MakeChatAgent",
+    "McpSdkClient",
+    "MemoryEntry",
+    "MockProvider",
+    "MockProviderOptions",
+    "ObservabilityStrategy",
+    "OtelSpanLike",
+    "OtelSpanOptions",
+    "OtelTracerLike",
+    "Parallel",
+    "PermissionChecker",
+    "PolicyHaltError",
+    "PricingTable",
+    "RedisLikeClient",
+    "RedisLikePipeline",
+    "RedisStore",
+    "ReliabilityFailFastError",
+    "ReliabilityRule",
+    "ReliabilityScope",
+    "RestorationRunner",
+    "RunCheckpointError",
+    "SNAPSHOT_PROJECTIONS",
+    "Sequence",
+    "ServerToolEntry",
+    "StatusTemplates",
+    "Suspect",
+    "Tool",
+    "ToolCallEntry",
+    "ToolCatalogReport",
+    "ToolChoiceCall",
+    "ToolChoiceSummary",
+    "ToolDispatchContext",
+    "ToolProvider",
+    "WhatChanged",
+    "analyzeToolCatalog",
+    "applyAblations",
+    "assembleTrajectory",
+    "assignCostVerdicts",
+    "auditExport",
+    "callTraceTool",
+    "chatBubbleLiveStatus",
+    "checkInApproved",
+    "checkInDeclined",
+    "checkSkillContract",
+    "classifySuspect",
+    "compareFinders",
+    "consoleObservability",
+    "contextLedger",
+    "debate",
+    "decideSkill",
+    "defaultStatusTemplates",
+    "defaultStuckLoopRule",
+    "defineFact",
+    "defineInstruction",
+    "defineMemory",
+    "defineRAG",
+    "defineRelevanceHint",
+    "defineSkill",
+    "defineSteering",
+    "defineTool",
+    "embeddingCache",
+    "embeddingScorer",
+    "evaluateInjections",
+    "findDroppedContext",
+    "formatContextBugReport",
+    "formatToolCatalogReport",
+    "gatedTools",
+    "indexDocuments",
+    "isCheckInPause",
+    "isPaused",
+    "keywordScorer",
+    "ledgerGated",
+    "ledgerToolGate",
+    "lexicalOverlapStrategy",
+    "listInfluenceStrategies",
+    "liveStateRecorder",
+    "llmCallIdsFromEvents",
+    "localizeContextBug",
+    "mapReduce",
+    "mcpClient",
+    "mock",
+    "mockEmbedder",
+    "otelObservability",
+    "pairwiseSimilarity",
+    "pauseHere",
+    "providerFromEnv",
+    "rankEntries",
+    "rankSuspects",
+    "rankingConfidence",
+    "ratioStrategy",
+    "recordRun",
+    "recordedChat",
+    "reflection",
+    "removableSources",
+    "removeAndRetry",
+    "renderStatusLine",
+    "rerunWithoutSources",
+    "routeRecorder",
+    "scoreContrastiveInfluence",
+    "scoreInfluence",
+    "scoreMargin",
+    "selectStatus",
+    "selfConsistency",
+    "semanticAlignmentStrategy",
+    "shortlistEarlyCulprits",
+    "shrinkToCause",
+    "skillGraph",
+    "staticTokens",
+    "staticTools",
+    "swarm",
+    "testManyCombos",
+    "toBacktrackTrace",
+    "toolChoiceRecorder",
+    "toolContractCheckup",
+    "toolLineageRecorder",
+    "tot",
+    "traceDebugAgent",
+    "traceToolpack",
+    "verifyAuditBundle",
+    "walkTrajectory",
+    "withCircuitBreaker",
+    "withCredentialRetry",
+    "withFallback",
+    "withRetry"
+  ],
+  "examplesImportingSrcInternals": [
+    "src/adapters/llm/MockProvider",
+    "src/adapters/memory/agentcore",
+    "src/adapters/memory/redis",
+    "src/adapters/types",
+    "src/events/registry",
+    "src/lib/influence-core",
+    "src/lib/influence-core/index",
+    "src/lib/injection-engine/index",
+    "src/lib/mcp/types",
+    "src/memory/embedding/mockEmbedder",
+    "src/memory/entry/index",
+    "src/reliability/types"
+  ],
+  "perExample": [
+    {
+      "file": "examples/canonical/loan-officer-causal.ts",
+      "ok": true,
+      "durationMs": 4875,
+      "eventCount": 13
+    },
+    {
+      "file": "examples/context-engineering/01-instruction.ts",
+      "ok": true,
+      "durationMs": 2937,
+      "eventCount": 11
+    },
+    {
+      "file": "examples/context-engineering/02-skill.ts",
+      "ok": true,
+      "durationMs": 3290,
+      "eventCount": 13
+    },
+    {
+      "file": "examples/context-engineering/03-steering.ts",
+      "ok": true,
+      "durationMs": 2778,
+      "eventCount": 11
+    },
+    {
+      "file": "examples/context-engineering/04-fact.ts",
+      "ok": true,
+      "durationMs": 2898,
+      "eventCount": 11
+    },
+    {
+      "file": "examples/context-engineering/05-dynamic-react.ts",
+      "ok": true,
+      "durationMs": 3504,
+      "eventCount": 13
+    },
+    {
+      "file": "examples/context-engineering/06-mixed-flavors.ts",
+      "ok": true,
+      "durationMs": 1427,
+      "eventCount": 11
+    },
+    {
+      "file": "examples/context-engineering/07-rag.ts",
+      "ok": true,
+      "durationMs": 1445,
+      "eventCount": 11
+    },
+    {
+      "file": "examples/context-engineering/08-mcp.ts",
+      "ok": true,
+      "durationMs": 1441,
+      "eventCount": 11
+    },
+    {
+      "file": "examples/core-flow/01-sequence.ts",
+      "ok": true,
+      "durationMs": 15506,
+      "eventCount": 6
+    },
+    {
+      "file": "examples/core-flow/02-parallel.ts",
+      "ok": true,
+      "durationMs": 7047,
+      "eventCount": 8
+    },
+    {
+      "file": "examples/core-flow/03-conditional.ts",
+      "ok": true,
+      "durationMs": 10733,
+      "eventCount": 7
+    },
+    {
+      "file": "examples/core-flow/04-loop.ts",
+      "ok": true,
+      "durationMs": 17396,
+      "eventCount": 8
+    },
+    {
+      "file": "examples/core/01-llm-call.ts",
+      "ok": true,
+      "durationMs": 4938,
+      "eventCount": 4
+    },
+    {
+      "file": "examples/core/02-agent-with-tools.ts",
+      "ok": true,
+      "durationMs": 10348,
+      "eventCount": 13
+    },
+    {
+      "file": "examples/deploy/agentcore-runtime.ts",
+      "ok": true,
+      "durationMs": 1237,
+      "eventCount": 11
+    },
+    {
+      "file": "examples/dynamic-react/01-classic-react.ts",
+      "ok": true,
+      "durationMs": 2229,
+      "eventCount": 13
+    },
+    {
+      "file": "examples/dynamic-react/02-dynamic-react.ts",
+      "ok": true,
+      "durationMs": 2373,
+      "eventCount": 13
+    },
+    {
+      "file": "examples/features/01-pause-resume.ts",
+      "ok": true,
+      "durationMs": 15394,
+      "eventCount": 15
+    },
+    {
+      "file": "examples/features/02-cost-tracking.ts",
+      "ok": true,
+      "durationMs": 12341,
+      "eventCount": 15
+    },
+    {
+      "file": "examples/features/03-permissions.ts",
+      "ok": true,
+      "durationMs": 11408,
+      "eventCount": 14
+    },
+    {
+      "file": "examples/features/04-observability.ts",
+      "ok": true,
+      "durationMs": 13626,
+      "eventCount": 13
+    },
+    {
+      "file": "examples/features/05-events.ts",
+      "ok": true,
+      "durationMs": 12120,
+      "eventCount": 14
+    },
+    {
+      "file": "examples/features/06-detached-observability.ts",
+      "ok": true,
+      "durationMs": 5068,
+      "eventCount": 11
+    },
+    {
+      "file": "examples/features/06-flowchart-boundary-payloads.ts",
+      "ok": true,
+      "durationMs": 12506,
+      "eventCount": 13
+    },
+    {
+      "file": "examples/features/06-status-subpath.ts",
+      "ok": true,
+      "durationMs": 13506,
+      "eventCount": 14
+    },
+    {
+      "file": "examples/features/06-tool-args-validation.ts",
+      "ok": true,
+      "durationMs": 17911,
+      "eventCount": 14
+    },
+    {
+      "file": "examples/features/07-mock-multi-turn-replies.ts",
+      "ok": true,
+      "durationMs": 1145,
+      "eventCount": 13
+    },
+    {
+      "file": "examples/features/08-reliability.ts",
+      "ok": true,
+      "durationMs": 1251,
+      "eventCount": 17
+    },
+    {
+      "file": "examples/features/09-reliability-gate.ts",
+      "ok": true,
+      "durationMs": 1002,
+      "eventCount": 13
+    },
+    {
+      "file": "examples/features/10-discovery-provider.ts",
+      "ok": true,
+      "durationMs": 1399,
+      "eventCount": 17
+    },
+    {
+      "file": "examples/features/11-sequence-policy.ts",
+      "ok": true,
+      "durationMs": 1430,
+      "eventCount": 15
+    },
+    {
+      "file": "examples/features/12-strict-output.ts",
+      "ok": true,
+      "durationMs": 1146,
+      "eventCount": 14
+    },
+    {
+      "file": "examples/features/13-live-state.ts",
+      "ok": true,
+      "durationMs": 10605,
+      "eventCount": 13
+    },
+    {
+      "file": "examples/features/14-tool-lineage.ts",
+      "ok": true,
+      "durationMs": 1540,
+      "eventCount": 13
+    },
+    {
+      "file": "examples/features/15-skill-graph.ts",
+      "ok": true,
+      "durationMs": 1493,
+      "eventCount": 13
+    },
+    {
+      "file": "examples/features/16-providers.ts",
+      "ok": true,
+      "durationMs": 1309,
+      "eventCount": 11
+    },
+    {
+      "file": "examples/features/17-identity.ts",
+      "ok": true,
+      "durationMs": 1318,
+      "eventCount": 13
+    },
+    {
+      "file": "examples/features/18-otel-genai.ts",
+      "ok": true,
+      "durationMs": 10581,
+      "eventCount": 13
+    },
+    {
+      "file": "examples/features/19-audit-export.ts",
+      "ok": true,
+      "durationMs": 23957,
+      "eventCount": 14
+    },
+    {
+      "file": "examples/features/20-regulated-decisioning.ts",
+      "ok": true,
+      "durationMs": 3208,
+      "eventCount": 15
+    },
+    {
+      "file": "examples/features/21-deferred-observers.ts",
+      "ok": true,
+      "durationMs": 57842,
+      "eventCount": 14
+    },
+    {
+      "file": "examples/features/22-influence-core.ts",
+      "ok": true,
+      "durationMs": 1015,
+      "eventCount": 0
+    },
+    {
+      "file": "examples/features/23-skill-graph-scoped-read-skill.ts",
+      "ok": true,
+      "durationMs": 1553,
+      "eventCount": 14
+    },
+    {
+      "file": "examples/features/24-skill-graph-entry-relevance.ts",
+      "ok": true,
+      "durationMs": 1122,
+      "eventCount": 11
+    },
+    {
+      "file": "examples/features/25-skill-graph-checkup.ts",
+      "ok": true,
+      "durationMs": 928,
+      "eventCount": 0
+    },
+    {
+      "file": "examples/features/26-skill-graph-route-recorder.ts",
+      "ok": true,
+      "durationMs": 1278,
+      "eventCount": 13
+    },
+    {
+      "file": "examples/features/27-skill-graph-relevance-hint.ts",
+      "ok": true,
+      "durationMs": 1170,
+      "eventCount": 11
+    },
+    {
+      "file": "examples/features/28-skill-graph-entry-read.ts",
+      "ok": true,
+      "durationMs": 2053,
+      "eventCount": 13
+    },
+    {
+      "file": "examples/features/29-skill-contract-check.ts",
+      "ok": true,
+      "durationMs": 1698,
+      "eventCount": 0
+    },
+    {
+      "file": "examples/features/30-tool-contract-checkup.ts",
+      "ok": true,
+      "durationMs": 1588,
+      "eventCount": 0
+    },
+    {
+      "file": "examples/features/31-skill-graph-keyword-scorer.ts",
+      "ok": true,
+      "durationMs": 1589,
+      "eventCount": 11
+    },
+    {
+      "file": "examples/features/32-context-ledger.ts",
+      "ok": true,
+      "durationMs": 1851,
+      "eventCount": 0
+    },
+    {
+      "file": "examples/features/33-checkin.ts",
+      "ok": true,
+      "durationMs": 1523,
+      "eventCount": 16
+    },
+    {
+      "file": "examples/features/34-checkin-coworker.ts",
+      "ok": true,
+      "durationMs": 1523,
+      "eventCount": 16
+    },
+    {
+      "file": "examples/features/35-resilience-visibility.ts",
+      "ok": true,
+      "durationMs": 1487,
+      "eventCount": 13
+    },
+    {
+      "file": "examples/helpers/cli.ts",
+      "ok": true,
+      "durationMs": 1236,
+      "eventCount": 0
+    },
+    {
+      "file": "examples/helpers/neoToolCatalog.ts",
+      "ok": true,
+      "durationMs": 1256,
+      "eventCount": 0
+    },
+    {
+      "file": "examples/helpers/provider.ts",
+      "ok": true,
+      "durationMs": 1156,
+      "eventCount": 0
+    },
+    {
+      "file": "examples/memory/01-window-strategy.ts",
+      "ok": true,
+      "durationMs": 1705,
+      "eventCount": 11
+    },
+    {
+      "file": "examples/memory/02-budget-strategy.ts",
+      "ok": true,
+      "durationMs": 3119,
+      "eventCount": 11
+    },
+    {
+      "file": "examples/memory/03-summarize-strategy.ts",
+      "ok": true,
+      "durationMs": 3573,
+      "eventCount": 11
+    },
+    {
+      "file": "examples/memory/04-topK-strategy.ts",
+      "ok": true,
+      "durationMs": 3612,
+      "eventCount": 11
+    },
+    {
+      "file": "examples/memory/05-extract-strategy.ts",
+      "ok": true,
+      "durationMs": 3948,
+      "eventCount": 11
+    },
+    {
+      "file": "examples/memory/06-causal-snapshot.ts",
+      "ok": true,
+      "durationMs": 1982,
+      "eventCount": 11
+    },
+    {
+      "file": "examples/memory/07-hybrid-auto.ts",
+      "ok": true,
+      "durationMs": 2178,
+      "eventCount": 11
+    },
+    {
+      "file": "examples/memory/08-redis-store.ts",
+      "ok": true,
+      "durationMs": 1906,
+      "eventCount": 11
+    },
+    {
+      "file": "examples/memory/09-agentcore-store.ts",
+      "ok": true,
+      "durationMs": 1760,
+      "eventCount": 11
+    },
+    {
+      "file": "examples/observability/01-trace-debug-session.ts",
+      "ok": true,
+      "durationMs": 1075,
+      "eventCount": 0
+    },
+    {
+      "file": "examples/observability/02-lint-confusable-catalog.ts",
+      "ok": true,
+      "durationMs": 1158,
+      "eventCount": 0
+    },
+    {
+      "file": "examples/observability/03-lint-fix-and-pass.ts",
+      "ok": true,
+      "durationMs": 1166,
+      "eventCount": 0
+    },
+    {
+      "file": "examples/observability/04-tool-choice-margins.ts",
+      "ok": true,
+      "durationMs": 2370,
+      "eventCount": 13
+    },
+    {
+      "file": "examples/observability/05-context-bisect.ts",
+      "ok": true,
+      "durationMs": 9385,
+      "eventCount": 13
+    },
+    {
+      "file": "examples/observability/06-backtrack-trace.ts",
+      "ok": true,
+      "durationMs": 9299,
+      "eventCount": 13
+    },
+    {
+      "file": "examples/observability/07-trace-debug-agent.ts",
+      "ok": true,
+      "durationMs": 2364,
+      "eventCount": 15
+    },
+    {
+      "file": "examples/observability/08-self-explain.ts",
+      "ok": true,
+      "durationMs": 4753,
+      "eventCount": 16
+    },
+    {
+      "file": "examples/observability/09-attributability-marker.ts",
+      "ok": true,
+      "durationMs": 1217,
+      "eventCount": 0
+    },
+    {
+      "file": "examples/observability/10-missing-context.ts",
+      "ok": true,
+      "durationMs": 1224,
+      "eventCount": 0
+    },
+    {
+      "file": "examples/observability/11-contrastive-influence.ts",
+      "ok": true,
+      "durationMs": 1357,
+      "eventCount": 0
+    },
+    {
+      "file": "examples/observability/12-two-score-localization.ts",
+      "ok": true,
+      "durationMs": 1326,
+      "eventCount": 0
+    },
+    {
+      "file": "examples/observability/13-context-error-finders.ts",
+      "ok": true,
+      "durationMs": 1070,
+      "eventCount": 0
+    },
+    {
+      "file": "examples/observability/13-per-loop-trajectory.ts",
+      "ok": true,
+      "durationMs": 1187,
+      "eventCount": 13
+    },
+    {
+      "file": "examples/observability/14-loop-recall-shortlist.ts",
+      "ok": true,
+      "durationMs": 1103,
+      "eventCount": 0
+    },
+    {
+      "file": "examples/observability/15-walk-to-root.ts",
+      "ok": true,
+      "durationMs": 1101,
+      "eventCount": 0
+    },
+    {
+      "file": "examples/observability/16-pluggable-scorer.ts",
+      "ok": true,
+      "durationMs": 1745,
+      "eventCount": 13
+    },
+    {
+      "file": "examples/observability/17-localize-quickstart.ts",
+      "ok": true,
+      "durationMs": 4872,
+      "eventCount": 11
+    },
+    {
+      "file": "examples/observability/18-influence-strategies-and-rerun.ts",
+      "ok": true,
+      "durationMs": 6308,
+      "eventCount": 11
+    },
+    {
+      "file": "examples/observability/19-recorded-chat.ts",
+      "ok": true,
+      "durationMs": 6753,
+      "eventCount": 11
+    },
+    {
+      "file": "examples/observability/20-record-and-render.ts",
+      "ok": true,
+      "durationMs": 12136,
+      "eventCount": 6
+    },
+    {
+      "file": "examples/patterns/01-self-consistency.ts",
+      "ok": true,
+      "durationMs": 8794,
+      "eventCount": 8
+    },
+    {
+      "file": "examples/patterns/02-reflection.ts",
+      "ok": true,
+      "durationMs": 23305,
+      "eventCount": 8
+    },
+    {
+      "file": "examples/patterns/03-debate.ts",
+      "ok": true,
+      "durationMs": 27172,
+      "eventCount": 8
+    },
+    {
+      "file": "examples/patterns/04-map-reduce.ts",
+      "ok": true,
+      "durationMs": 5074,
+      "eventCount": 8
+    },
+    {
+      "file": "examples/patterns/05-tot.ts",
+      "ok": true,
+      "durationMs": 14431,
+      "eventCount": 10
+    },
+    {
+      "file": "examples/patterns/06-swarm.ts",
+      "ok": true,
+      "durationMs": 13105,
+      "eventCount": 9
+    }
+  ]
+}

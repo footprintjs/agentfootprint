@@ -121,7 +121,7 @@ Multi-vendor fan-out comes free:
 
 ```typescript
 import { otelObservability } from 'agentfootprint/observability-providers';
-import { composeObservability, consoleObservability } from 'agentfootprint/observability-providers';
+import { composeObservability, consoleObservability } from 'agentfootprint/strategies';
 
 agent.enable.observability({
   strategy: composeObservability([
@@ -178,7 +178,7 @@ Production observability is rarely single-vendor. Teams pipe to Datadog AND OTel
 Because a strategy is just an object implementing the typed interface, CI can plug in a capture-only strategy and assert on what was exported — no vendor account or network needed:
 
 ```typescript
-import type { ObservabilityStrategy } from 'agentfootprint';
+import type { ObservabilityStrategy } from 'agentfootprint/strategies';
 
 const captured: AgentfootprintEvent[] = [];
 const captureStrategy: ObservabilityStrategy = {

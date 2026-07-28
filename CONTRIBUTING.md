@@ -22,6 +22,29 @@ npm run format     # prettier check
 npm run test:watch # watch mode
 ```
 
+### Docs-truth check
+
+`npm run docs:truth` answers "do the docs describe what the code actually does?"
+for every symbol in the real export map and every event in `ALL_EVENT_TYPES`, and
+runs in CI.
+
+It is a **ratchet, not a gate**. Hundreds of pre-existing doc gaps are recorded
+in `docs/docs-truth/baseline.json` and pass happily; it fails only when the gap
+gets bigger, or when the published docs point a reader at something that does not
+exist (that class is never baselined). If it fails on your PR, either describe
+the new export in prose on a page under `docs-next/content/docs`, or accept the
+debt consciously:
+
+```bash
+npm run docs:truth:baseline   # re-record + regenerate docs/DOCS_TRUTH_REPORT.md
+```
+
+The re-baseline lands as a reviewable diff, so new debt is visible rather than
+silent. `npm run docs:truth:exercise` refreshes the reference-run evidence behind
+the "exercised" column by running every `examples/` script — no credentials
+needed, and it never reads any. The human-readable findings live in
+[docs/DOCS_TRUTH_REPORT.md](docs/DOCS_TRUTH_REPORT.md).
+
 ## Project Structure
 
 ```

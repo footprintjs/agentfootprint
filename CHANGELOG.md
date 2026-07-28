@@ -7,6 +7,76 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Docs-truth check — an ongoing, honest answer to "do the docs describe what
+  the code actually does?"** `npm run docs:truth` (new CI job `docs-truth`)
+  answers three *separate* questions for every capability the package exposes,
+  because their combinations are different bugs: DECLARED (in the published
+  surface), DOCUMENTED (described in prose on the site), EXERCISED (a real run
+  produces it). Declared/documented/never-exercised is the shape a dead or
+  unimplemented feature has — exactly the state the resilience events sat in
+  for months. Declared/exercised/undocumented is the classic doc gap.
+  Documented-but-not-declared is the worst case for a reader, and has zero
+  tolerance.
+  - The DECLARED column is built from the real export map (`package.json`
+    `"exports"` → shipped `.d.ts`, enumerated with the TypeScript checker), not
+    from TypeDoc: TypeDoc runs from the single `src/index.ts` entry point and
+    therefore cannot see a single `agentfootprint/<subpath>` symbol. The
+    surface is reported per subpath, since root-barrel-vs-subpath is itself a
+    known source of user confusion. Events come from `ALL_EVENT_TYPES`.
+  - The DOCUMENTED column counts *only* prose on the 63 hand-written pages
+    under `docs-next/content/docs`. Both TypeDoc trees
+    (`docs-next/content/docs/api/`, `docs/api-reference/`) are excluded — they
+    are generated from source, so every symbol appears in them by construction
+    and counting either would mark 234 undocumented symbols "documented" and
+    report a clean bill of health that means nothing. Code-sample-only and
+    written-in-the-repo-but-not-published are reported as their own states
+    rather than silently counted either way.
+  - The EXERCISED column comes from real credential-free runs:
+    `npm run docs:truth:exercise` runs all 95 `examples/` scripts (95/95 green)
+    with credential-shaped env vars stripped by name, and taps the event bus
+    with the listener gates forced open. Anything it cannot observe is UNKNOWN,
+    never "absent".
+  - **Ratchet, not gate.** Pre-existing gaps are recorded in
+    `docs/docs-truth/baseline.json` and pass; CI fails only when the gap grows.
+    `npm run docs:truth:baseline` re-records and regenerates the report, so new
+    debt lands as a reviewable diff. The docs-promise-nothing class is never
+    baselined.
+  - Human-readable findings: [docs/DOCS_TRUTH_REPORT.md](docs/DOCS_TRUTH_REPORT.md).
+
+### Fixed
+
+- **Three broken imports in the published docs.**
+  `docs-next/content/docs/reference/strategy-everywhere.mdx` told readers to
+  import `composeObservability` / `consoleObservability` from
+  `agentfootprint/observability-providers` and `ObservabilityStrategy` from the
+  root barrel; all three are exported from `agentfootprint/strategies`, so
+  every copy-paste failed. They lived in plain `typescript`-tagged fences,
+  which the docs build's twoslash gate does not compile — only 7 of the 183
+  TS/JS blocks on the site are twoslash-marked, and 137 package imports sit in
+  blocks the compiler never sees. Found by the new docs-truth check.
+
+### Known issues (surfaced, deliberately not changed)
+
+- **Two events are emitted but absent from the typed registry.**
+  `src/core/outputFallback.ts:169` and `:203` emit
+  `agentfootprint.resilience.output_fallback_triggered` and
+  `agentfootprint.resilience.output_canned_used` through a loosely typed
+  `emit: (eventType: string, …)` parameter, bypassing the typed registry. There
+  is no `resilience` domain in `EVENT_NAMES`, no payload interface, no
+  `ALL_EVENT_TYPES` entry and no `agentfootprint.resilience.*` wildcard — so
+  `runner.on(...)` cannot accept either name, even though
+  `docs-next/content/docs/monitor/reliability.mdx` calls them "two typed events
+  for observability". Registering them changes the public event contract and
+  the pinned event count, so it is left as an owner decision; the docs-truth
+  check ratchets the class so no new one can appear unnoticed.
+- **Nine import paths named in prose do not exist in the export map** — see
+  section 8 of the report. Notably `docs/…/dependency-graph.mdx` documents
+  `agentfootprint/providers`, `agentfootprint/memory-redis` and
+  `agentfootprint/memory-agentcore` as legacy aliases "still exported in v3.x",
+  but `package.json` `"exports"` has no such keys, so they do not resolve.
+
 ## [7.8.0] - 2026-07-28
 
 ### Added
