@@ -1,0 +1,238 @@
+---
+title: Embedders
+description: openaiEmbedder, localEmbedder and staticEmbedder — ready-made Embedder implementations. What each one needs, which ones run in a browser, and what they cost.
+---
+
+> Every semantic feature in agentfootprint — [semantic retrieval](doc:semantic-retrieval), [RAG](doc:rag), `toolChoiceRecorder`'s relevance scoring — needs one thing from you: an **embedder**, something that turns text into a vector. The core ships only `mockEmbedder()` so it stays dependency-free. `agentfootprint/embedders` is where the three real ones live.
+
+## The three
+
+All three satisfy the same `Embedder` contract, so they are interchangeable at
+the call site. What differs is what they need from you, where they can run, and
+what they cost.
+
+| | needs | extra install | runs in a browser | cost |
+|---|---|---|---|---|
+| `openaiEmbedder()` | an OpenAI API key | none (plain `fetch`) | **yes** | per token, billed by OpenAI; every text you embed leaves your machine |
+| `localEmbedder()` | nothing | `@huggingface/transformers` | **yes**, with `backend` (see below) | free; ~27 MiB downloaded on first use, then cached |
+| `staticEmbedder()` | nothing | `@yarflam/potion-base-8m` | **no** — Node only | free; ~30 MB on disk after install, no network at all |
+
+Both peer deps are **optional**: installing agentfootprint does not install
+either one, and neither is loaded unless you actually call the factory that
+needs it.
+
+The type they all return is exported from the same subpath:
+
+```ts twoslash
+import { staticEmbedder, type Embedder } from 'agentfootprint/embedders';
+
+const embedder: Embedder = staticEmbedder();
+```
+
+## `openaiEmbedder()` — hosted
+
+No install: it is a `fetch` call. It needs a key, from `OPENAI_API_KEY` or
+passed directly.
+
+```ts twoslash
+import { openaiEmbedder } from 'agentfootprint/embedders';
+// ---cut---
+// apiKey defaults to OPENAI_API_KEY from the environment
+const embedder = openaiEmbedder({
+  model: 'text-embedding-3-small', // the default — 1536 dimensions
+});
+```
+
+### Shortening the vectors
+
+`text-embedding-3-*` models can return shorter vectors than their native size —
+cheaper to store, still usable. Pass `dimensions` and agentfootprint sends it to
+the API **and** reports it:
+
+```ts twoslash
+import { openaiEmbedder } from 'agentfootprint/embedders';
+// ---cut---
+const small = openaiEmbedder({ model: 'text-embedding-3-large', dimensions: 256 });
+// small.dimensions === 256, and the vectors really are 256 long
+```
+
+Two things worth knowing:
+
+- **Nothing is sent unless you ask.** OpenAI documents `dimensions` as ["Only
+  supported in `text-embedding-3` and later
+  models"](https://developers.openai.com/api/docs/api-reference/embeddings/create),
+  and older models reject the parameter. Leave it unset and the request body is
+  exactly what it was before this option existed.
+- **`.dimensions` never guesses.** Unset, it reports the model's documented
+  native size — 1536 for `text-embedding-3-small` and `text-embedding-ada-002`,
+  3072 for `text-embedding-3-large`. For a model agentfootprint doesn't know
+  (an Azure deployment name, a gateway behind `baseURL`, a model released after
+  this version), there is no size it can know, so it asks rather than guesses:
+
+```ts twoslash
+import { openaiEmbedder } from 'agentfootprint/embedders';
+// ---cut---
+// Throws: unknown model 'nomic-embed-text' — pass { dimensions }
+// openaiEmbedder({ baseURL: 'http://localhost:11434/v1', model: 'nomic-embed-text' });
+
+const local = openaiEmbedder({
+  baseURL: 'http://localhost:11434/v1',
+  apiKey: 'not-needed-for-local',
+  model: 'nomic-embed-text',
+  dimensions: 768, // ← stating it is what makes .dimensions true
+});
+```
+
+A vector store that trusts `.dimensions` and gets a different length back
+corrupts silently, which is why this is an error and not a warning.
+
+## `localEmbedder()` — on your device
+
+A sentence-transformer (`Xenova/all-MiniLM-L6-v2`, 384 dimensions) run through
+`@huggingface/transformers`. No key, no per-call cost, and after the first run
+the model is cached and it works offline.
+
+```bash
+npm install @huggingface/transformers
+```
+
+```ts
+import { localEmbedder } from 'agentfootprint/embedders';
+
+const embedder = localEmbedder(); // 384 dimensions
+```
+
+**What the first call costs.** The model is not in the npm package — it is
+fetched on first use, and it is not small. Measured for the default model and
+`dtype: 'q8'`:
+
+| from | what | bytes |
+|---|---|---|
+| `huggingface.co` | `onnx/model_quantized.onnx` | 21.9 MiB (not compressed) |
+| `huggingface.co` | `tokenizer.json` + configs | 0.7 MiB |
+| `cdn.jsdelivr.net` | the ONNX Runtime WebAssembly binary | 22.5 MiB, ~4.5 MiB over the wire (brotli) |
+
+That is **~27 MiB over the wire, ~45 MiB decompressed, from two third-party
+origins** — and `cdn.jsdelivr.net` surprises people, because nothing in the
+package names it. In Node the model lands in a local cache directory
+(`cacheDir`); in a browser it goes into the Cache API. Either way it is a
+first-use cost, not a per-call one.
+
+If "nothing leaves the machine" is the point, note that the *first* call
+contradicts it. Both origins can be pointed at your own host via
+transformers.js's `env` settings (`env.remoteHost`, `env.localModelPath`,
+`env.backends.onnx.wasm.wasmPaths`), which is worth doing before you claim it.
+
+## `staticEmbedder()` — no network, Node only
+
+Model2Vec static vectors (potion-base-8M, 256 dimensions). There is no model to
+run: it is a lookup table plus pooling, so it is fast and needs no network at
+any point. The weights ship inside the npm package.
+
+```bash
+npm install @yarflam/potion-base-8m   # ~30 MB, weights included
+```
+
+```ts
+import { staticEmbedder } from 'agentfootprint/embedders';
+
+const embedder = staticEmbedder(); // 256 dimensions
+```
+
+**This one is Node-only today.** `@yarflam/potion-base-8m` reads its weights
+from disk with `fs` and `__dirname`, so there is nothing a bundler can do with
+it — passing `backend` will not save it. If you need static embeddings in a
+browser, the working route today is transformers.js against the
+[`minishlab/potion-base-8M` ONNX
+export](https://huggingface.co/minishlab/potion-base-8M) wired up as your own
+`Embedder`; agentfootprint does not ship that yet.
+
+Static vectors are weaker than a real transformer on paraphrases. Use them where
+"cheap, offline, good enough" beats "best" — dev, tests, first-pass filtering.
+
+## Running an embedder in a browser
+
+`openaiEmbedder()` works in a browser as-is: it is a `fetch`, nothing to bundle.
+(Your key would be in the page, so this belongs in a prototype, not production.)
+
+`localEmbedder()` needs one extra step. To keep `@huggingface/transformers`
+optional, agentfootprint imports it through a **variable specifier** — and a
+bundler cannot see through that. The bare name survives into the bundle and the
+browser refuses it:
+
+```text
+TypeError: Failed to resolve module specifier '@huggingface/transformers'
+```
+
+The fix is to let *your* bundler resolve it. Import the module yourself and hand
+it in as `backend`:
+
+```ts
+import { localEmbedder } from 'agentfootprint/embedders';
+import * as transformers from '@huggingface/transformers';
+
+const embedder = localEmbedder({ backend: transformers });
+
+const vector = await embedder.embed({ text: 'how do I cancel my subscription?' });
+// vector.length === 384
+```
+
+That static import is one your bundler understands, so the module is really in
+the bundle and no specifier is left for the browser to resolve. The option is
+the same idea as the `client` option on the store adapters: the library states
+the surface it needs, the host owns the construction. Passing `backend` skips
+the dynamic import entirely — in Node too, if you prefer an explicit import.
+
+`staticEmbedder()` takes a `backend` as well, for a different Model2Vec build
+that *is* browser-capable. The default one is not.
+
+The two option types are exported so you can name what you are passing:
+`TransformersBackend` (a `pipeline` function, plus the optional `env` object
+`cacheDir` is written to) and `Model2VecBackend` (a batch `embed` or `encode`,
+on the module or on its default export). Both are structural, so the real
+modules satisfy them without agentfootprint taking a hard type dependency on
+either optional peer — and so does a stub of your own in a test:
+
+```ts twoslash
+import { staticEmbedder, type Model2VecBackend } from 'agentfootprint/embedders';
+
+const fake: Model2VecBackend = { embed: (texts) => texts.map(() => [0.1, 0.2]) };
+const embedder = staticEmbedder({ backend: fake, dimensions: 2 });
+```
+
+## Never mix two embedders in one store
+
+Vectors from different models live in incompatible spaces, and cosine similarity
+between them is noise that looks like a number. Dimensions differ too (1536 vs
+384 vs 256), so a store sized for one will not take the other. See [embedder
+identity](doc:semantic-retrieval) for how to migrate when you do want to switch.
+
+## Bring your own
+
+`Embedder` is a two-method interface — implement it against any provider
+(Voyage, Cohere, a self-hosted model, a browser Model2Vec build) and everything
+downstream accepts it:
+
+```ts twoslash
+import type { Embedder } from 'agentfootprint/embedders';
+
+const myEmbedder: Embedder = {
+  dimensions: 1024,
+  async embed({ text, signal }) {
+    const res = await fetch('https://api.voyageai.com/v1/embeddings', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', authorization: 'Bearer …' },
+      body: JSON.stringify({ model: 'voyage-3', input: [text] }),
+      ...(signal ? { signal } : {}),
+    });
+    const json = (await res.json()) as { data: { embedding: number[] }[] };
+    return json.data[0]!.embedding;
+  },
+};
+```
+
+## Next steps
+
+- [Semantic retrieval](doc:semantic-retrieval) — where the embedder is actually used
+- [RAG](doc:rag) — document-corpus retrieval built on it
+- [Memory stores](doc:memory-stores) — which stores can hold vectors

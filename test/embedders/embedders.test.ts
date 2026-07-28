@@ -1,7 +1,26 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { openaiEmbedder, localEmbedder, staticEmbedder } from '../../src/embedders/index.js';
+import {
+  openaiEmbedder,
+  localEmbedder,
+  staticEmbedder,
+  type Model2VecBackend,
+  type TransformersBackend,
+} from '../../src/embedders/index.js';
 
 afterEach(() => vi.unstubAllGlobals());
+
+/** Capture the request body openaiEmbedder actually puts on the wire. */
+function stubFetch(embedding: number[] = [0.1, 0.2, 0.3]) {
+  const fetchMock = vi.fn().mockResolvedValue({
+    ok: true,
+    json: async () => ({ data: [{ embedding }] }),
+  });
+  vi.stubGlobal('fetch', fetchMock);
+  return () => {
+    const [, init] = fetchMock.mock.calls[0] as [string, { body: string }];
+    return JSON.parse(init.body) as Record<string, unknown>;
+  };
+}
 
 describe('openaiEmbedder', () => {
   it('throws without an api key', () => {
@@ -47,6 +66,71 @@ describe('openaiEmbedder', () => {
   });
 });
 
+// ─────────────────────────────────────────────────────────────────────────
+// 7.9 — `.dimensions` used to be a claim the request never backed up: the
+// option was read, reported, and then dropped on the floor (the body was
+// `{ model, input }`). Ask for 256 → get 1536 from an embedder claiming 256,
+// and any store trusting `.dimensions` corrupts silently.
+//
+// `dimensions` is "Only supported in `text-embedding-3` and later models"
+// (https://developers.openai.com/api/docs/api-reference/embeddings/create),
+// so it is sent ONLY when explicitly asked for — never as a side effect of a
+// default, which would break ada-002 for callers who asked for nothing.
+// ─────────────────────────────────────────────────────────────────────────
+describe('openaiEmbedder — dimensions is honoured, not just reported', () => {
+  it('sends an explicit dimensions AND reports the same number', async () => {
+    const body = stubFetch(new Array(256).fill(0.01));
+    const e = openaiEmbedder({ apiKey: 'sk-test', dimensions: 256 });
+    const v = await e.embed({ text: 'hello' });
+    expect(body()['dimensions']).toBe(256); // ← was absent from the body
+    expect(e.dimensions).toBe(256);
+    expect(v).toHaveLength(e.dimensions); // ← the claim the old code broke
+  });
+
+  it('sends dimensions on the batch path too', async () => {
+    const body = stubFetch();
+    await openaiEmbedder({ apiKey: 'sk-test', dimensions: 3 }).embedBatch!({ texts: ['a'] });
+    expect(body()['dimensions']).toBe(3);
+  });
+
+  it('omits dimensions entirely when the caller did not ask (ada-002 rejects it)', async () => {
+    const body = stubFetch();
+    await openaiEmbedder({ apiKey: 'sk-test', model: 'text-embedding-ada-002' }).embed({
+      text: 'hello',
+    });
+    const sent = body();
+    expect(Object.keys(sent).sort()).toEqual(['input', 'model']); // byte-identical to 7.8
+    expect('dimensions' in sent).toBe(false);
+  });
+
+  it('reports each known model’s documented native size, not one hard-coded guess', () => {
+    const dims = (model: string) => openaiEmbedder({ apiKey: 'sk-test', model }).dimensions;
+    expect(dims('text-embedding-3-small')).toBe(1536);
+    expect(dims('text-embedding-3-large')).toBe(3072); // ← used to say 1536
+    expect(dims('text-embedding-ada-002')).toBe(1536);
+    expect(openaiEmbedder({ apiKey: 'sk-test' }).dimensions).toBe(1536); // default model
+  });
+
+  it('refuses to guess for an unknown model rather than report a number that may lie', () => {
+    expect(() => openaiEmbedder({ apiKey: 'sk-test', model: 'nomic-embed-text' })).toThrow(
+      /unknown model 'nomic-embed-text'/,
+    );
+  });
+
+  it('an unknown model is usable the moment its length is stated', async () => {
+    const body = stubFetch(new Array(768).fill(0.5));
+    const e = openaiEmbedder({
+      apiKey: 'sk-test',
+      baseURL: 'http://localhost:11434/v1',
+      model: 'nomic-embed-text',
+      dimensions: 768,
+    });
+    expect(e.dimensions).toBe(768);
+    expect(await e.embed({ text: 'x' })).toHaveLength(768);
+    expect(body()['dimensions']).toBe(768);
+  });
+});
+
 describe('local / static embedders (optional peer deps, lazy)', () => {
   it('localEmbedder has the MiniLM dimensions + the Embedder shape (no import yet)', () => {
     const e = localEmbedder();
@@ -67,6 +151,99 @@ describe('local / static embedders (optional peer deps, lazy)', () => {
     // lazy dynamic import rejects rather than being a build/import-time failure.
     await expect(localEmbedder().embed({ text: 'x' })).rejects.toBeTruthy();
   });
+});
+
+// ─────────────────────────────────────────────────────────────────────────
+// 7.9 — `{ backend }`: the lazy `import(spec)` keeps the peer deps optional
+// but is invisible to every bundler, so the bare specifier reached the browser
+// unresolved ("Failed to resolve module specifier '@huggingface/transformers'").
+// Passing an already-imported module lets the CONSUMER's bundler resolve it
+// statically. Same shape as the `client` option on the store adapters.
+// ─────────────────────────────────────────────────────────────────────────
+describe('localEmbedder({ backend }) — an already-imported transformers module', () => {
+  function fakeTransformers() {
+    const calls: unknown[][] = [];
+    const backend: TransformersBackend = {
+      env: {},
+      async pipeline(task, model, opts) {
+        calls.push([task, model, opts]);
+        return async (input: unknown) =>
+          Array.isArray(input)
+            ? { data: [], tolist: () => (input as string[]).map((_, i) => [i, i + 1]) }
+            : { data: [0.5, 0.25], tolist: () => [] };
+      },
+    };
+    return { backend, calls };
+  }
+
+  it('embeds through the injected module — no dynamic import at all', async () => {
+    // Without the fix this rejects: the option is ignored and the bare
+    // specifier is looked up (and @huggingface/transformers is not installed).
+    const { backend, calls } = fakeTransformers();
+    const e = localEmbedder({ backend });
+    expect(await e.embed({ text: 'hello' })).toEqual([0.5, 0.25]);
+    expect(calls).toEqual([['feature-extraction', 'Xenova/all-MiniLM-L6-v2', { dtype: 'q8' }]]);
+  });
+
+  it('batches through the injected module and builds the pipeline only once', async () => {
+    const { backend, calls } = fakeTransformers();
+    const e = localEmbedder({ backend, model: 'Xenova/bge-small-en-v1.5', dtype: 'fp32' });
+    expect(await e.embedBatch!({ texts: ['a', 'b'] })).toEqual([
+      [0, 1],
+      [1, 2],
+    ]);
+    await e.embed({ text: 'again' });
+    expect(calls).toEqual([['feature-extraction', 'Xenova/bge-small-en-v1.5', { dtype: 'fp32' }]]);
+  });
+
+  it('still applies cacheDir to the injected module’s env', async () => {
+    const { backend } = fakeTransformers();
+    await localEmbedder({ backend, cacheDir: '/tmp/models' }).embed({ text: 'x' });
+    expect(backend.env).toEqual({ cacheDir: '/tmp/models' });
+  });
+});
+
+describe('staticEmbedder({ backend }) — an already-imported Model2Vec module', () => {
+  it('embeds through the injected module — no dynamic import at all', async () => {
+    // Without the fix this ignores `backend` and imports '@yarflam/potion-base-8m'.
+    const backend: Model2VecBackend = {
+      embed: (texts) => texts.map((t) => [t.length, 1, 2]),
+    };
+    const e = staticEmbedder({ backend, dimensions: 3 });
+    expect(await e.embed({ text: 'abcd' })).toEqual([4, 1, 2]);
+    expect(await e.embedBatch!({ texts: ['a', 'bc'] })).toEqual([
+      [1, 1, 2],
+      [2, 1, 2],
+    ]);
+  });
+
+  it('accepts encode() and a default export, and never touches { module }', async () => {
+    const viaEncode = staticEmbedder({
+      module: 'this-package-does-not-exist',
+      backend: { encode: (texts) => texts.map(() => [9]) },
+      dimensions: 1,
+    });
+    expect(await viaEncode.embed({ text: 'x' })).toEqual([9]);
+
+    const viaDefault = staticEmbedder({
+      backend: { default: { embed: (texts: readonly string[]) => texts.map(() => [7]) } },
+      dimensions: 1,
+    });
+    expect(await viaDefault.embed({ text: 'x' })).toEqual([7]);
+  });
+
+  it('names the injected module in the error when it has no embed()/encode()', async () => {
+    const e = staticEmbedder({ backend: { default: 42 } as Model2VecBackend });
+    await expect(e.embed({ text: 'x' })).rejects.toThrow(/module passed as \{ backend \}/);
+  });
+
+  it('injected potion === lazily-imported potion (real weights, both paths agree)', async () => {
+    const potion = (await import('@yarflam/potion-base-8m')) as unknown as Model2VecBackend;
+    const injected = await staticEmbedder({ backend: potion }).embed({ text: 'a red dress' });
+    const lazy = await staticEmbedder().embed({ text: 'a red dress' });
+    expect(injected).toHaveLength(256);
+    expect(injected).toEqual(lazy);
+  }, 30_000);
 });
 
 function cosine(a: number[], b: number[]): number {

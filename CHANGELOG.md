@@ -7,7 +7,78 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### ⚠️ Behaviour change — `openaiEmbedder({ dimensions })` now actually shortens the vectors
+
+**If you pass `dimensions` today, your vectors change length.** They were the
+model's native length all along; now they are the length you asked for. Anything
+you have already embedded and stored was written at the *old* length, so a store
+built with `openaiEmbedder({ dimensions: 256 })` on 7.8 holds 1536-long vectors
+and will not match new 256-long queries. **Re-embed, or drop `dimensions` to
+keep the old lengths.**
+
+Why: `src/embedders/index.ts` read the option, reported it as `.dimensions`, and
+then built the request body as `{ model, input }` — the parameter was never
+sent. Asking for 256 returned 1536 numbers from an embedder claiming 256, so any
+vector store trusting `.dimensions` was corrupted silently and consistently.
+
+Also changed, in the same spirit of "`.dimensions` must not lie":
+
+- `.dimensions` now reports each known model's **documented native size** when
+  you pass nothing — 1536 for `text-embedding-3-small` and
+  `text-embedding-ada-002`, 3072 for `text-embedding-3-large`. It used to report
+  1536 for everything, so `text-embedding-3-large` under-reported by half.
+- An **unknown model with no `dimensions` is now a construction-time error**
+  instead of a silent 1536. This is the breaking edge: `openaiEmbedder({
+  baseURL, model: 'nomic-embed-text' })` against a gateway, an Ollama server or
+  an Azure deployment name now throws until you state the length. That
+  population is exactly the one that was being lied to. One option fixes it:
+  `{ dimensions: 768 }`.
+- `dimensions` is sent **only when you explicitly pass it**. It is ["Only
+  supported in `text-embedding-3` and later
+  models"](https://developers.openai.com/api/docs/api-reference/embeddings/create),
+  so sending a default would have broken every `text-embedding-ada-002` caller
+  who asked for nothing. With the option unset the request body is byte-identical
+  to 7.8.
+
 ### Added
+
+- **`localEmbedder({ backend })` / `staticEmbedder({ backend })` — pass an
+  already-imported module, and the on-device embedders work in a browser.** To
+  keep the heavy peer deps optional, both factories import them through a
+  *variable* specifier — which no bundler can see through. The bare name
+  survived a production build and reached the browser unresolved:
+  `TypeError: Failed to resolve module specifier '@huggingface/transformers'`.
+  The capability was there all along; only the packaging blocked it. Now the
+  host can do the static import its own bundler resolves and hand the module in:
+
+  ```ts
+  import * as transformers from '@huggingface/transformers';
+  const embedder = localEmbedder({ backend: transformers });
+  ```
+
+  Verified in a real production bundle with no import map: 384-dimension
+  vectors, L2 norm 1.0, near-text cosine 0.55 vs far-text −0.03. Same shape as
+  the `client` option on the store adapters — the library states the surface it
+  needs (`TransformersBackend`, `Model2VecBackend`, both exported), the host
+  owns the construction. The string-specifier path is unchanged, and both peers
+  stay optional. (`@yarflam/potion-base-8m` itself reads its weights from disk
+  with `fs`/`__dirname`, so `staticEmbedder` remains Node-only in practice; the
+  option is there for a browser-capable Model2Vec build.)
+
+- **`agentfootprint/embedders` exports the `Embedder` type it returns.** The
+  subpath declared it locally and never re-exported it, so naming the return
+  type of its own factories meant importing from `agentfootprint/memory`
+  (`TS2459: declares 'Embedder' locally, but it is not exported`).
+
+- **An embedders guide.** [docs-next/content/docs/build/embedders.mdx](docs-next/content/docs/build/embedders.mdx)
+  — the module had zero documentation coverage and had never been used by
+  anyone, which is why all three defects survived. Covers what each embedder
+  needs, which ones run in a browser, and what they cost: `localEmbedder`'s
+  first browser call pulls ~27 MiB over the wire (~45 MiB decompressed) from
+  **two** third-party origins — `huggingface.co` for the model and
+  `cdn.jsdelivr.net` for the ONNX Runtime WebAssembly binary, which nothing
+  previously mentioned — and `@yarflam/potion-base-8m` puts ~30 MB of weights on
+  disk at install.
 
 - **Docs-truth check — an ongoing, honest answer to "do the docs describe what
   the code actually does?"** `npm run docs:truth` (new CI job `docs-truth`)

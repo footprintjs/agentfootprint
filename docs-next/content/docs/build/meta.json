@@ -24,6 +24,7 @@
     "fact-extraction",
     "narrative-memory",
     "semantic-retrieval",
+    "embedders",
     "rag",
     "---[Plug]Providers---",
     "anthropic",
