@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [7.9.0] - 2026-07-29
+
 ### ⚠️ Behaviour change — `openaiEmbedder({ dimensions })` now actually shortens the vectors
 
 **If you pass `dimensions` today, your vectors change length.** They were the
