@@ -6,6 +6,10 @@ title: SwarmAgent
 
 Defined in: [src/patterns/Swarm.ts:26](https://github.com/footprintjs/agentfootprint/blob/main/src/patterns/Swarm.ts#L26)
 
+## Extended by
+
+- [`LlmSwarmAgent`](/docs/api/interfaces/LlmSwarmAgent)
+
 ## Properties
 
 ### id

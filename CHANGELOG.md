@@ -7,6 +7,77 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [7.11.0] - 2026-08-02
+
+A pipeline whose steps form a *shape* rather than a line — one step feeding two
+independent lookups, a third waiting for both — had no home here. You could nest
+a `Parallel` inside a `Sequence`, but then you were scheduling it by hand, and
+the values did not survive the trip.
+
+### Added
+
+- **`graph()` — a fixed DAG of runners, with the concurrency worked out for
+  you.** Declare `nodes` and `edges`; Kahn levelization at BUILD time groups the
+  nodes that do not depend on each other, and every node in a level runs at the
+  same time. The result is every node's output keyed by node id. Roots (nodes
+  with no parents) receive the graph's own input, and an edge carries the
+  producer's OUTPUT to the consumer unchanged — there is no shared mutable scope
+  between nodes.
+
+  A broken shape never runs. A cycle, an edge pointing at a node that was never
+  declared, and a duplicate node id each throw at construction, naming the
+  offender (`graph: cycle detected — edge 'c' -> 'a' closes a loop.`). So does a
+  node with two or more parents and no `join`: a silent merge is a wrong merge,
+  so `join` is REQUIRED at fan-in, and it receives `upstream` keyed by parent
+  node id.
+
+  A failed node is reported with its name and its real reason
+  (`graph 'support': node 'billing' failed: upstream is down`) — one sentence
+  regardless of which of the two internal mounts the level used.
+
+  `graph()` is a `Runner` like everything else, so it nests: a graph can be a
+  node in another graph or a step in a `workflow()`, and every node's events
+  land under ONE run so the causal log composes.
+
+  Docs: [Graph](https://footprintjs.github.io/agentfootprint/docs/build/graph) ·
+  Example: `examples/core-flow/06-graph.ts`.
+
+### The trap this was built around
+
+The obvious design — `graph = Sequence(Parallel(level0), Parallel(level1), …)` —
+does not work on this codebase, and the second half of that was **not** already
+known. v7.10.0 shipped `workflow()` because `Sequence`'s step contract is
+`{ message: string } -> string` and its step `outputMapper` coerces a structured
+step output to `''`. Verifying `Parallel` the same way turned up the identical
+limit one layer down: its branch type is literally
+`Runner<{ message: string }, string>`, and its branch `outputMapper` coerces a
+non-string branch output to `''`. A `Parallel` level cannot carry a structured
+value either. So `graph()` is built on the pass-through model `workflow()`
+established — its own composition, its own mappers, the same recorder wiring and
+the same `composition.enter` / `exit` events — rather than on top of
+`Sequence`/`Parallel`.
+
+Two further engine behaviours were verified rather than assumed, and are pinned
+in tests:
+
+- Values merged into parent state by a subflow's `outputMapper` are present in
+  shared state but do **not** read back through TypedScope's nested property
+  proxy — `scope.results` returns `{}` while `scope.$getValue('results')`
+  returns the real record. `graph()` reads through `$getValue`. (`Parallel`
+  never met this because it coerces every branch output to a string.)
+- A level with ONE node is mounted sequentially rather than as a fork of one.
+  Resuming into a fork child completes that child and stops, whereas a
+  sequential mount resumes and carries on — so a pausing node that is alone in
+  its level resumes through the rest of the graph. A pause inside a genuinely
+  concurrent level still resumes only that node; that limit is documented and
+  pinned rather than papered over.
+
+### Note
+
+`graph()` reports itself as composition kind `'Sequence'` — a graph's levels ARE
+a sequence, and `CompositionKind` stays a closed union so consumers' exhaustive
+switches keep compiling. Same reasoning as `workflow()` in 7.10.0.
+
 ## [7.10.0] - 2026-08-02
 
 Two routing-shaped gaps closed. Both were things the docs told you to hand-roll,

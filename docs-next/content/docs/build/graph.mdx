@@ -1,0 +1,166 @@
+---
+title: Graph
+description: graph() runs a fixed DAG of runners. Independent nodes run concurrently, an edge carries the producer's output unchanged, and a broken shape — a cycle, an unknown edge, an un-joined fan-in — is refused at build time.
+---
+
+> Your pipeline classifies a ticket, then looks up the order AND the customer's billing, then writes a reply. The two lookups have nothing to do with each other, so they should run at the same time — but expressing that means nesting a `Parallel` inside a `Sequence`, and then hand-threading values between them. `graph()` lets you state the shape once, as nodes and edges. It works out what can run together, and hands each node exactly what its parents produced.
+
+## Why this exists
+
+The compositions you already have each run one shape: `Sequence` and [`workflow()`](/docs/build/workflow) run steps in a line, `Parallel` fans out once and merges back. A dependency graph is neither, and building one by nesting them has two problems on this codebase:
+
+- **The values do not survive.** `Sequence` coerces a non-string step output to `''`, and `Parallel` does the same to a non-string branch output — its branch type is literally `Runner<{ message: string }, string>`. A lookup that returns `{ orderId, status }` arrives as an empty string.
+- **You schedule it by hand.** Which steps can share a level is a fact about your edges. Working it out yourself, and re-working it every time an edge changes, is exactly the bookkeeping a library should do.
+
+`graph()` takes nodes and edges and does the rest:
+
+- **Concurrency you did not schedule.** Kahn levelization at BUILD time groups nodes that do not depend on each other; every node in a level runs at the same time.
+- **A shape checked before it runs.** A cycle, an edge pointing at a node that does not exist, or a duplicate id throws at build time, naming the offender.
+- **No silent merges.** A node with two or more parents MUST declare a `join`. A silent merge is a wrong merge.
+- **Values, not text.** An edge carries the producer's OUTPUT to the consumer, unchanged. There is no shared mutable scope between nodes.
+
+## A diamond
+
+<CodeFile path="examples/core-flow/06-graph.ts" region="graph-dag" title="examples/core-flow/06-graph.ts (region: graph-dag)" />
+
+`orders` and `billing` are independent, so they land in one level and run together; `reply` waits for both. Run it: `npx tsx examples/core-flow/06-graph.ts` — it prints the levels it computed and shows the two lookups overlapping.
+
+The result is every node's output, keyed by node id:
+
+```ts
+const out = await pipeline.run({ message: 'where is my refund?' });
+// { classify: '…', orders: { orderId: 'A-42', … }, billing: { refundUsd: 42 }, reply: '…' }
+```
+
+## Levels
+
+`getLevels()` shows the plan — the concurrency contract, decided at build time and stable for the life of the graph:
+
+```ts
+pipeline.getLevels();
+// [['classify'], ['orders', 'billing'], ['reply']]
+```
+
+Level 0 is every node with no parents — the **roots**, which each receive the graph's own input. A graph can have several roots, and they all run concurrently.
+
+## Joins: what a node receives
+
+| The node has | It receives |
+|---|---|
+| no parents (a root) | the graph's own input |
+| one parent, no `join` | that parent's output, passed through — a `string` arrives as `{ message }`, the house convention |
+| one parent, with a `join` | whatever the `join` returns |
+| two or more parents | **`join` is required** — it gets `upstream`, keyed by parent node id |
+
+```ts
+{
+  id: 'reply',
+  runner: writeReply,
+  join: (upstream) => ({
+    message: `order ${(upstream.orders as OrderInfo).orderId}, refund $${(upstream.billing as BillingInfo).refundUsd}`,
+  }),
+}
+```
+
+Leave the `join` off a node with two parents and the build refuses, naming it:
+
+```
+graph: node 'reply' has 2 parents (orders, billing) but no join — a silent merge is
+a wrong merge. Give the node a join(upstream) that returns its input; upstream is
+keyed by parent node id.
+```
+
+## A broken shape never runs
+
+Every structural mistake is caught at construction, naming the offender:
+
+```ts
+graph({ nodes: [a, b, c], edges: [{ from: 'a', to: 'b' }, { from: 'b', to: 'c' }, { from: 'c', to: 'a' }] });
+// graph: cycle detected — edge 'c' -> 'a' closes a loop. A graph must be acyclic.
+
+graph({ nodes: [a], edges: [{ from: 'a', to: 'ghost' }] });
+// graph: edge 'a' -> 'ghost' references unknown node 'ghost'.
+
+graph({ nodes: [a, a2], edges: [] });
+// graph: duplicate node id 'a' — every node id must be unique (it is the results key).
+```
+
+## When a node fails
+
+A failed node is reported at its level, naming the node and the real reason:
+
+```
+graph 'support': node 'billing' failed: upstream is down
+```
+
+If several nodes in one level fail, all of them are listed. This is one sentence regardless of how the level was mounted — worth knowing, because underneath there are two mounts: a level with several nodes becomes a concurrent fork, and a level with one node is mounted sequentially. footprintjs surfaces failures differently through each (a fork child's error is swallowed into absence; a sequential child's rejects the run), and `graph()` normalizes both so you never have to know which you got.
+
+## Pause and resume
+
+A node that pauses — an [Agent](/docs/build/agent) calling `pauseHere()` / `askHuman()`, say — surfaces as a pause, and `resume()` carries on through the rest of the graph:
+
+```ts
+const out = await pipeline.run({ message: 'refund $8,000' });
+if (isPaused(out)) {
+  const done = await pipeline.resume(out.checkpoint, { approved: true });
+}
+```
+
+<Callout type="warn">
+**One honest limit.** This works cleanly when the pausing node is **alone in its level**. A pause inside a level with several nodes — a real fork — resumes only the paused node: footprintjs completes that child and stops, so the remaining levels do not run. If a node in your graph asks a human, give it a level of its own (an edge from the node before it is enough).
+</Callout>
+
+## Limits worth knowing
+
+1. **Only plain data crosses an edge.** A value with a prototype (`Date`, `Map`, a class instance) arrives as `{}`, and `undefined` fields are dropped — the same limit [`workflow()`](/docs/build/workflow) documents. Send a timestamp as an ISO string.
+2. **A node must return its output.** The value handed to its children is the node chart's traversal result; a node whose last stage returns nothing hands its whole scope forward instead.
+3. **A pause inside a concurrent level does not resume the rest of the graph.** See the callout above.
+
+## The types
+
+Everything below is exported from the package root.
+
+| Type | What it is |
+|---|---|
+| `graph(opts)` | The factory. Returns a `Graph`. Validates the shape and throws at construction if it is broken. |
+| `Graph` | The composition itself — a `Runner`, so it nests anywhere a runner goes. Adds `getLevels()`. |
+| `GraphOptions` | What `graph()` takes: `nodes`, `edges`, and optional `name`, `id` and `structureRecorders`. |
+| `GraphNode<I, O>` | One node: its `id`, the `runner` that does the work, an optional `join` that merges upstream outputs into the node's input, and an optional `name`. |
+| `GraphEdge` | One dependency — `{ from, to }`. `from` must finish before `to` starts. |
+| `GraphInput` | The graph's own input (`Record<string, unknown>`), handed to every root node. |
+| `GraphOutput` | The result — every node's output keyed by node id (`Record<string, unknown>`). |
+
+```ts
+import {
+  graph,
+  Graph,
+  type GraphEdge,
+  type GraphInput,
+  type GraphNode,
+  type GraphOptions,
+  type GraphOutput,
+} from 'agentfootprint';
+```
+
+## Composing
+
+A `Graph` is a `Runner`, so it nests anywhere a runner goes — as a step in a `workflow()`, as a node in another graph:
+
+```ts
+const outer = graph({
+  nodes: [
+    { id: 'lead', runner: lead },
+    { id: 'sub', runner: innerGraph }, // its output is the inner graph's record
+  ],
+  edges: [{ from: 'lead', to: 'sub' }],
+});
+```
+
+Every node's events land under ONE run, so a recorder attached to the graph sees the whole thing and the causal log composes:
+
+```ts
+pipeline.enable.flowchart();
+pipeline.on('agentfootprint.composition.enter', (e) => console.log(e.payload.name));
+```
+
+Graphs report themselves as composition kind `'Sequence'` — a graph's levels ARE a sequence, and `CompositionKind` is a closed public union that would break consumers' exhaustive switches if widened. The fan-out within a level is visible in the chart itself.

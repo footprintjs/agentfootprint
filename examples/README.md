@@ -154,6 +154,7 @@ _Run `npm run examples:readme` after adding/editing examples._
 | 03 | [`03-conditional.ts`](core-flow/03-conditional.ts) | Conditional — predicate routing | Pick one runner via first-match predicate. .otherwise() is mandatory. |
 | 04 | [`04-loop.ts`](core-flow/04-loop.ts) | Loop — iteration with mandatory budget | Iterate a body runner with a required budget: .times(n), .forAtMost(ms), or .until(guard). |
 | 05 | [`05-workflow.ts`](core-flow/05-workflow.ts) | workflow — typed steps, compile-checked hand-offs | Chain 1–8 runners where step N’s output type must be step N+1’s input type. Structured values survive the hand-off; a broken chain is a compile error. |
+| 06 | [`06-graph.ts`](core-flow/06-graph.ts) | graph — a fixed DAG, with the concurrency worked out for you | Declare nodes and edges; independent nodes run concurrently. Cycles, unknown edge endpoints and un-joined fan-in are refused at build time. |
 
 ### [`patterns/`](patterns/) — canonical patterns
 

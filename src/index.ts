@@ -341,6 +341,15 @@ export {
   type NextStepInput,
   type WorkflowOptions,
 } from './core-flow/Workflow.js';
+export {
+  graph,
+  Graph,
+  type GraphEdge,
+  type GraphInput,
+  type GraphNode,
+  type GraphOptions,
+  type GraphOutput,
+} from './core-flow/Graph.js';
 
 // Adapters — LLM providers
 // `mock(...)` is the lowercase factory equivalent to `new MockProvider(...)`.

@@ -16,7 +16,7 @@ npm test
 
 ```bash
 npm run build      # CJS + ESM
-npm test           # vitest (3614 tests)
+npm test           # vitest (3636 tests)
 npm run lint       # eslint
 npm run format     # prettier check
 npm run test:watch # watch mode
@@ -50,7 +50,7 @@ needed, and it never reads any. The human-readable findings live in
 ```
 src/
 ├── core/            → LLMCall, Agent, RunnerBase, defineTool, flowchartAsTool, outputSchema, pause
-├── core-flow/       → Sequence, Parallel, Conditional, Loop compositions
+├── core-flow/       → Sequence, Parallel, Conditional, Loop, workflow, graph compositions
 ├── patterns/        → selfConsistency, reflection, debate, mapReduce, tot, swarm
 ├── lib/             → injection-engine, mcp, rag, lazyRequire
 ├── adapters/        → LLM providers (Anthropic, OpenAI, Bedrock, Mock, Browser*) + memory + observability + port types
@@ -73,7 +73,7 @@ src/
 ## Pull Request Checklist
 
 - [ ] `npm run build` passes
-- [ ] `npm test` passes (all 3614+ tests)
+- [ ] `npm test` passes (all 3636+ tests)
 - [ ] `npm run lint` passes
 - [ ] No `any` casts unless unavoidable (document why)
 - [ ] New features have tests (5+ patterns)

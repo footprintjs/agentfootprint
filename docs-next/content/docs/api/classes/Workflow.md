@@ -1,50 +1,53 @@
 ---
-title: "Abstract Class: RunnerBase<TIn, TOut>"
+title: Workflow<TIn, TOut>
 ---
 
-# Abstract Class: RunnerBase\<TIn, TOut\>
+# Class: Workflow\<TIn, TOut\>
 
-Defined in: [src/core/RunnerBase.ts:60](https://github.com/footprintjs/agentfootprint/blob/main/src/core/RunnerBase.ts#L60)
+Defined in: [src/core-flow/Workflow.ts:143](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Workflow.ts#L143)
 
-Every primitive (LLMCall, Agent), every composition (Sequence, Parallel,
-Conditional, Loop), and every pattern factory result implements Runner.
-That makes them freely nestable: any runner can be a child of any
-composition.
+A sequential composition that passes values through untouched. Build one
+with [workflow](/docs/api/functions/workflow) — that factory carries the type-level chain proof.
 
-## Extended by
+## Extends
 
-- [`LLMCall`](/docs/api/classes/LLMCall)
-- [`Agent`](/docs/api/classes/Agent)
-- [`Sequence`](/docs/api/classes/Sequence)
-- [`Parallel`](/docs/api/classes/Parallel)
-- [`Conditional`](/docs/api/classes/Conditional)
-- [`Loop`](/docs/api/classes/Loop)
-- [`Workflow`](/docs/api/classes/Workflow)
-- [`Graph`](/docs/api/classes/Graph)
+- [`RunnerBase`](/docs/api/classes/RunnerBase)\<`TIn`, `TOut`\>
 
 ## Type Parameters
 
 ### TIn
 
-`TIn` = `unknown`
+`TIn` *extends* `object` = `object`
 
 ### TOut
 
 `TOut` = `unknown`
 
-## Implements
-
-- [`Runner`](/docs/api/interfaces/Runner)\<`TIn`, `TOut`\>
-
 ## Constructors
 
 ### Constructor
 
-> **new RunnerBase**\<`TIn`, `TOut`\>(): `RunnerBase`\<`TIn`, `TOut`\>
+> **new Workflow**\<`TIn`, `TOut`\>(`steps`, `opts?`): `Workflow`\<`TIn`, `TOut`\>
+
+Defined in: [src/core-flow/Workflow.ts:155](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Workflow.ts#L155)
+
+#### Parameters
+
+##### steps
+
+readonly `AnyStep`[]
+
+##### opts?
+
+[`WorkflowOptions`](/docs/api/interfaces/WorkflowOptions) = `{}`
 
 #### Returns
 
-`RunnerBase`\<`TIn`, `TOut`\>
+`Workflow`\<`TIn`, `TOut`\>
+
+#### Overrides
+
+[`RunnerBase`](/docs/api/classes/RunnerBase).[`constructor`](/docs/api/classes/RunnerBase#constructor)
 
 ## Properties
 
@@ -59,9 +62,25 @@ attaches a pre-built CombinedRecorder and returns an unsubscribe
 function. Consumers write ONE line to enable rich observability,
 instead of N `.on()` subscriptions.
 
-#### Implementation of
+#### Inherited from
 
-[`Runner`](/docs/api/interfaces/Runner).[`enable`](/docs/api/interfaces/Runner#enable)
+[`RunnerBase`](/docs/api/classes/RunnerBase).[`enable`](/docs/api/classes/RunnerBase#enable)
+
+***
+
+### id
+
+> `readonly` **id**: `string`
+
+Defined in: [src/core-flow/Workflow.ts:145](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Workflow.ts#L145)
+
+***
+
+### name
+
+> `readonly` **name**: `string`
+
+Defined in: [src/core-flow/Workflow.ts:144](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Workflow.ts#L144)
 
 ## Methods
 
@@ -101,9 +120,9 @@ server leak; attach once, or detach per-run.
 
 `Unsubscribe`
 
-#### Implementation of
+#### Inherited from
 
-[`Runner`](/docs/api/interfaces/Runner).[`attach`](/docs/api/interfaces/Runner#attach)
+[`RunnerBase`](/docs/api/classes/RunnerBase).[`attach`](/docs/api/classes/RunnerBase#attach)
 
 ***
 
@@ -134,9 +153,9 @@ minimal meta. Library events remain reserved under `agentfootprint.*`.
 
 `void`
 
-#### Implementation of
+#### Inherited from
 
-[`Runner`](/docs/api/interfaces/Runner).[`emit`](/docs/api/interfaces/Runner#emit)
+[`RunnerBase`](/docs/api/classes/RunnerBase).[`emit`](/docs/api/classes/RunnerBase#emit)
 
 ***
 
@@ -167,9 +186,9 @@ timeline, not a sum of every nested one.
 
 `number`
 
-#### Implementation of
+#### Inherited from
 
-[`Runner`](/docs/api/interfaces/Runner).[`getCommitCount`](/docs/api/interfaces/Runner#getcommitcount)
+[`RunnerBase`](/docs/api/classes/RunnerBase).[`getCommitCount`](/docs/api/classes/RunnerBase#getcommitcount)
 
 ***
 
@@ -196,9 +215,9 @@ across multi-turn reuse of the same runner instance).
 
 `RuntimeSnapshot` \| `undefined`
 
-#### Implementation of
+#### Inherited from
 
-[`Runner`](/docs/api/interfaces/Runner).[`getLastSnapshot`](/docs/api/interfaces/Runner#getlastsnapshot)
+[`RunnerBase`](/docs/api/classes/RunnerBase).[`getLastSnapshot`](/docs/api/classes/RunnerBase#getlastsnapshot)
 
 ***
 
@@ -221,6 +240,10 @@ last completed run's snapshot. Undefined before any run has started.
 #### Returns
 
 `RuntimeSnapshot` \| `undefined`
+
+#### Inherited from
+
+[`RunnerBase`](/docs/api/classes/RunnerBase).[`getSnapshot`](/docs/api/classes/RunnerBase#getsnapshot)
 
 ***
 
@@ -250,9 +273,9 @@ instead; this getter must remain a thin cache-read.
 
 `FlowChart`
 
-#### Implementation of
+#### Inherited from
 
-[`Runner`](/docs/api/interfaces/Runner).[`getSpec`](/docs/api/interfaces/Runner#getspec)
+[`RunnerBase`](/docs/api/classes/RunnerBase).[`getSpec`](/docs/api/classes/RunnerBase#getspec)
 
 ***
 
@@ -285,9 +308,9 @@ supply the `GroupMetadata` for their composition kind. This method
 
 `T` \| `undefined`
 
-#### Implementation of
+#### Inherited from
 
-[`Runner`](/docs/api/interfaces/Runner).[`getUIGroup`](/docs/api/interfaces/Runner#getuigroup)
+[`RunnerBase`](/docs/api/classes/RunnerBase).[`getUIGroup`](/docs/api/classes/RunnerBase#getuigroup)
 
 ***
 
@@ -318,9 +341,9 @@ See the `Runner.getUIGroupWith` JSDoc for the contract.
 
 `T` \| `undefined`
 
-#### Implementation of
+#### Inherited from
 
-[`Runner`](/docs/api/interfaces/Runner).[`getUIGroupWith`](/docs/api/interfaces/Runner#getuigroupwith)
+[`RunnerBase`](/docs/api/classes/RunnerBase).[`getUIGroupWith`](/docs/api/classes/RunnerBase#getuigroupwith)
 
 ***
 
@@ -345,9 +368,9 @@ keyof AgentfootprintEventMap \| `WildcardSubscription`
 
 `number`
 
-#### Implementation of
+#### Inherited from
 
-[`Runner`](/docs/api/interfaces/Runner).[`listenerCount`](/docs/api/interfaces/Runner#listenercount)
+[`RunnerBase`](/docs/api/classes/RunnerBase).[`listenerCount`](/docs/api/classes/RunnerBase#listenercount)
 
 ***
 
@@ -381,9 +404,9 @@ Unsubscribe a previously-registered listener.
 
 `void`
 
-##### Implementation of
+##### Inherited from
 
-[`Runner`](/docs/api/interfaces/Runner).[`off`](/docs/api/interfaces/Runner#off)
+[`RunnerBase`](/docs/api/classes/RunnerBase).[`off`](/docs/api/classes/RunnerBase#off)
 
 #### Call Signature
 
@@ -405,9 +428,9 @@ Defined in: [src/core/RunnerBase.ts:429](https://github.com/footprintjs/agentfoo
 
 `void`
 
-##### Implementation of
+##### Inherited from
 
-[`Runner`](/docs/api/interfaces/Runner).[`off`](/docs/api/interfaces/Runner#off)
+[`RunnerBase`](/docs/api/classes/RunnerBase).[`off`](/docs/api/classes/RunnerBase#off)
 
 ***
 
@@ -451,9 +474,9 @@ runners (servers).
 
 `Unsubscribe`
 
-##### Implementation of
+##### Inherited from
 
-[`Runner`](/docs/api/interfaces/Runner).[`on`](/docs/api/interfaces/Runner#on)
+[`RunnerBase`](/docs/api/classes/RunnerBase).[`on`](/docs/api/classes/RunnerBase#on)
 
 #### Call Signature
 
@@ -481,9 +504,9 @@ Subscribe to a domain wildcard (e.g. 'agentfootprint.context.*') or '*'.
 
 `Unsubscribe`
 
-##### Implementation of
+##### Inherited from
 
-[`Runner`](/docs/api/interfaces/Runner).[`on`](/docs/api/interfaces/Runner#on)
+[`RunnerBase`](/docs/api/classes/RunnerBase).[`on`](/docs/api/classes/RunnerBase#on)
 
 ***
 
@@ -521,9 +544,9 @@ Subscribe a one-shot listener (fires once then auto-removes). Accepts `{ signal 
 
 `Unsubscribe`
 
-##### Implementation of
+##### Inherited from
 
-[`Runner`](/docs/api/interfaces/Runner).[`once`](/docs/api/interfaces/Runner#once)
+[`RunnerBase`](/docs/api/classes/RunnerBase).[`once`](/docs/api/classes/RunnerBase#once)
 
 #### Call Signature
 
@@ -549,9 +572,9 @@ Defined in: [src/core/RunnerBase.ts:444](https://github.com/footprintjs/agentfoo
 
 `Unsubscribe`
 
-##### Implementation of
+##### Inherited from
 
-[`Runner`](/docs/api/interfaces/Runner).[`once`](/docs/api/interfaces/Runner#once)
+[`RunnerBase`](/docs/api/classes/RunnerBase).[`once`](/docs/api/classes/RunnerBase#once)
 
 ***
 
@@ -576,17 +599,17 @@ calling if you still want them. Does NOT touch attached recorders
 
 `void`
 
-#### Implementation of
+#### Inherited from
 
-[`Runner`](/docs/api/interfaces/Runner).[`removeAllListeners`](/docs/api/interfaces/Runner#removealllisteners)
+[`RunnerBase`](/docs/api/classes/RunnerBase).[`removeAllListeners`](/docs/api/classes/RunnerBase#removealllisteners)
 
 ***
 
 ### resume()
 
-> `abstract` **resume**(`checkpoint`, `input?`, `options?`): `Promise`\<[`RunnerPauseOutcome`](/docs/api/interfaces/RunnerPauseOutcome) \| `TOut`\>
+> **resume**(`checkpoint`, `input?`, `options?`): `Promise`\<[`RunnerPauseOutcome`](/docs/api/interfaces/RunnerPauseOutcome) \| `TOut`\>
 
-Defined in: [src/core/RunnerBase.ts:302](https://github.com/footprintjs/agentfootprint/blob/main/src/core/RunnerBase.ts#L302)
+Defined in: [src/core-flow/Workflow.ts:175](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Workflow.ts#L175)
 
 Resume a paused run from its checkpoint. Default behavior: rebuild the
 chart, wire the same core recorders + consumer recorders, call
@@ -611,17 +634,17 @@ returning. Subclass overrides only if it needs specialized behavior.
 
 `Promise`\<[`RunnerPauseOutcome`](/docs/api/interfaces/RunnerPauseOutcome) \| `TOut`\>
 
-#### Implementation of
+#### Overrides
 
-[`Runner`](/docs/api/interfaces/Runner).[`resume`](/docs/api/interfaces/Runner#resume)
+[`RunnerBase`](/docs/api/classes/RunnerBase).[`resume`](/docs/api/classes/RunnerBase#resume)
 
 ***
 
 ### run()
 
-> `abstract` **run**(`input`, `options?`): `Promise`\<[`RunnerPauseOutcome`](/docs/api/interfaces/RunnerPauseOutcome) \| `TOut`\>
+> **run**(`input`, `options?`): `Promise`\<[`RunnerPauseOutcome`](/docs/api/interfaces/RunnerPauseOutcome) \| `TOut`\>
 
-Defined in: [src/core/RunnerBase.ts:294](https://github.com/footprintjs/agentfootprint/blob/main/src/core/RunnerBase.ts#L294)
+Defined in: [src/core-flow/Workflow.ts:168](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Workflow.ts#L168)
 
 Execute the runner. Subclass may override for specialized input
 mapping, but default invokes getSpec() + FlowChartExecutor.
@@ -640,6 +663,6 @@ mapping, but default invokes getSpec() + FlowChartExecutor.
 
 `Promise`\<[`RunnerPauseOutcome`](/docs/api/interfaces/RunnerPauseOutcome) \| `TOut`\>
 
-#### Implementation of
+#### Overrides
 
-[`Runner`](/docs/api/interfaces/Runner).[`run`](/docs/api/interfaces/Runner#run)
+[`RunnerBase`](/docs/api/classes/RunnerBase).[`run`](/docs/api/classes/RunnerBase#run)

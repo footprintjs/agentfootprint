@@ -8,6 +8,7 @@
     "swarm",
     "llm-router",
     "workflow",
+    "graph",
     "---[Target]Context engineering---",
     "instructions",
     "skills",
