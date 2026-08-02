@@ -335,6 +335,12 @@ export {
   type LoopOutput,
   type UntilGuard,
 } from './core-flow/Loop.js';
+export {
+  workflow,
+  Workflow,
+  type NextStepInput,
+  type WorkflowOptions,
+} from './core-flow/Workflow.js';
 
 // Adapters — LLM providers
 // `mock(...)` is the lowercase factory equivalent to `new MockProvider(...)`.

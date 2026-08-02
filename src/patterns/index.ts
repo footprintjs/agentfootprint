@@ -21,3 +21,12 @@ export { debate, type DebateOptions } from './Debate.js';
 export { mapReduce, type MapReduceOptions } from './MapReduce.js';
 export { tot, type ToTOptions } from './ToT.js';
 export { swarm, type SwarmOptions, type SwarmAgent } from './Swarm.js';
+export {
+  llmRouter,
+  RoutingDecisionError,
+  type LlmRouter,
+  type LlmRouterOptions,
+  type RouterAgent,
+  type RoutingDecision,
+} from './LlmRouter.js';
+export { llmSwarm, type LlmSwarmAgent, type LlmSwarmOptions } from './LlmSwarm.js';

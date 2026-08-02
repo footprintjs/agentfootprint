@@ -30,9 +30,11 @@ The `route` function is the orchestrator's brain. It inspects the current input 
 
 ## Why route is sync, not LLM-driven
 
-You CAN make `route` call an LLM internally — it's just a function. But the standard pattern is a **deterministic** route based on the previous specialist's output (often via convention markers like `[BILLING]` or `[ESCALATE]` in the message). That keeps the routing layer cheap, fast, and debuggable. The intelligence lives in the specialists; the routing is mechanical dispatch.
+`route` is evaluated once per branch predicate AND again in the loop's exit guard, so it cannot `await` — and an LLM call in there would fire several times per hand-off. Keep it as cheap as text inspection.
 
-If you need LLM-driven routing, use [Conditional](doc:key-concepts#3-conditional--branch-on-a-decider) with an LLM-based predicate — different shape, same outcome.
+The standard pattern is therefore a **deterministic** route based on the previous specialist's output (often via convention markers like `[BILLING]` or `[ESCALATE]` in the message). The intelligence lives in the specialists; the routing is mechanical dispatch.
+
+When you do want the model to choose, don't hand-roll the prompt: [`llmSwarm`](/docs/build/llm-router) is this same swarm with an `llmRouter` wired into the right places — the roster compiles into the router's prompt from each agent's own description, the answer is validated JSON, and `route` stays a sync lookup of a decision already made.
 
 ## Multi-tenant identity
 

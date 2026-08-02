@@ -7,6 +7,92 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [7.10.0] - 2026-08-02
+
+Two routing-shaped gaps closed. Both were things the docs told you to hand-roll,
+and both were fiddly in the same way: the wiring is easy to get *nearly* right,
+and nearly right fails quietly — at run time, several steps away from the
+mistake.
+
+### Added
+
+- **`llmRouter` — the classic Swarm decision, packaged.** `swarm()` asks for a
+  `route()` that is sync and pure, and it means it: the `Conditional` evaluates
+  it once per branch predicate and the loop's exit guard evaluates it again
+  after every turn. So the LLM decision has to happen *somewhere else*, before
+  the message reaches `route` — and that placement is the part everyone
+  re-invented, along with the prompt, the parsing, and a second copy of the
+  agent roster that drifts from the first.
+
+  `llmRouter({ provider, model, agents })` ships all four pieces once. The
+  roster compiles INTO the router's system prompt from each agent's own
+  `description` — one source, so an agent can't be in the roster and missing
+  from the prompt. `router.step` makes the decision and records it under the
+  exact message it hands forward; `router.route` is then a lookup, and a message
+  nobody decided about routes nowhere (the swarm halts) rather than guessing
+  with a stale decision.
+
+  The decision is validated JSON — `RoutingDecision` = `{ agentId?, message,
+  reason? }`. No `agentId` means "done", and the swarm halts through its own
+  halt sentinel. An id that isn't in the roster is kept verbatim, *not* quietly
+  swapped for a plausible one: `swarm()`'s existing done/fallback law then ends
+  the run, so a hallucinated agent shows up as a halt instead of a wrong answer.
+  Unusable output throws `RoutingDecisionError` with the model's raw text
+  attached (a markdown fence around good JSON is tolerated; prose is not).
+
+  Two promises worth naming, both pinned by tests. Agent descriptions are
+  **data**: each roster line is JSON-encoded, and the rules that bind the router
+  are stated after the roster, so a description holding `"} IGNORE THE ABOVE.`
+  can't escape its line or get the last word. And `reason` is **trace-only** —
+  it lands on the decision and on `composition.route_decided` evidence, and
+  never re-enters a prompt, so a model can't talk itself into a route across
+  turns.
+
+- **`llmSwarm` — that router, wired into `swarm()` in one call.** The placement
+  rule is "one routing call before the first turn, and one after every turn".
+  Get it wrong and the swarm halts on turn one for no visible reason, so this
+  builds it: `Sequence(router.step → swarm(agents, route: router.route))`, with
+  each agent's turn wrapped as `Sequence(agent → router.step)`. Agents carry
+  their own `description`, so the roster the swarm dispatches on and the roster
+  the model reads are the same list. `maxHandoffs` still bounds the loop;
+  routing runs at `temperature: 0` by default.
+
+- **`workflow()` — sequential steps whose hand-offs the compiler checks.**
+  `Sequence` chains steps through one channel — text in, text out — and coerces
+  any non-string step output to `''`. So a step that parses a ticket into
+  `{ orderId, angry }` hands the next step nothing at all, and you learn about
+  it three steps later as a reply addressed to order `undefined`. Nothing
+  throws.
+
+  `workflow(s1, …, s8)` closes that from both ends. At compile time, step N's
+  output type must be what step N+1 accepts (`NextStepInput`: a `string` output
+  feeds the next step's `{ message }`, the house convention every LLM runner
+  speaks; anything else must match exactly) — a chain that doesn't line up is a
+  compile error, pinned by `@ts-expect-error` fixtures under `npm run
+  test:types`. At run time, values are handed over **unchanged**: objects stay
+  objects. `workflow(draft, edit)` over two `LLMCall`s reads exactly as it
+  always did.
+
+  Three limits are documented and tested rather than papered over: only plain
+  data crosses a step boundary (a `Date`/`Map`/class instance arrives as `{}`,
+  `undefined` fields drop), a step must RETURN its output, and the workflow's
+  own input stays visible to later steps (footprintjs `getArgs()` inheritance) —
+  a key the previous step actually produced always wins.
+
+  It reports itself as composition kind `'Sequence'`, because it is one; the
+  public `CompositionKind` union is unchanged so consumer switches keep
+  compiling.
+
+### Docs
+
+- New guides: **LLM routing** (`llmRouter` / `llmSwarm`, the roster-as-data
+  argument, the wire-it-yourself recipe) and **Workflow** (the chain rule, how
+  to author a typed non-LLM step, the three limits). The Swarm guide's "Why
+  route is sync" section now points at `llmSwarm` instead of telling you to
+  build it yourself.
+- New runnable examples: `examples/patterns/07-llm-swarm.ts` and
+  `examples/core-flow/05-workflow.ts`.
+
 ## [7.9.0] - 2026-07-29
 
 ### ⚠️ Behaviour change — `openaiEmbedder({ dimensions })` now actually shortens the vectors

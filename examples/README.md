@@ -153,6 +153,7 @@ _Run `npm run examples:readme` after adding/editing examples._
 | 02 | [`02-parallel.ts`](core-flow/02-parallel.ts) | Parallel — fan-out + merge (strict / tolerant) | Fan out to N branches and merge. Fail-loud by default; opt into tolerant mode with .mergeOutcomesWithFn(). |
 | 03 | [`03-conditional.ts`](core-flow/03-conditional.ts) | Conditional — predicate routing | Pick one runner via first-match predicate. .otherwise() is mandatory. |
 | 04 | [`04-loop.ts`](core-flow/04-loop.ts) | Loop — iteration with mandatory budget | Iterate a body runner with a required budget: .times(n), .forAtMost(ms), or .until(guard). |
+| 05 | [`05-workflow.ts`](core-flow/05-workflow.ts) | workflow — typed steps, compile-checked hand-offs | Chain 1–8 runners where step N’s output type must be step N+1’s input type. Structured values survive the hand-off; a broken chain is a compile error. |
 
 ### [`patterns/`](patterns/) — canonical patterns
 
@@ -164,6 +165,7 @@ _Run `npm run examples:readme` after adding/editing examples._
 | 04 | [`04-map-reduce.ts`](patterns/04-map-reduce.ts) | MapReduce — split → summarize shards → combine | Fixed shard count; each branch runs one LLMCall; a reducer fn or merge-LLM combines. Classic long-document summarization pattern. |
 | 05 | [`05-tot.ts`](patterns/05-tot.ts) | Tree of Thoughts (Yao et al., 2023) | BFS reasoning: Loop(Parallel(K thoughts)) with scoring + beam-width pruning each level. Paper: https://arxiv.org/abs/2305.10601 |
 | 06 | [`06-swarm.ts`](patterns/06-swarm.ts) | Swarm — multi-agent handoff (OpenAI Swarm) | Fixed agent roster + route() function; Loop(Conditional(agent-select)) until route returns undefined. |
+| 07 | [`07-llm-swarm.ts`](patterns/07-llm-swarm.ts) | llmSwarm — LLM-decided hand-offs | Roster with descriptions → router prompt; the LLM answers {agentId?, message, reason?} and the swarm dispatches on it. No agentId = final answer. |
 
 ### [`context-engineering/`](context-engineering/) — InjectionEngine flavors
 

@@ -1,0 +1,138 @@
+---
+title: Workflow
+description: workflow() chains 1–8 runners where step N's output type must be step N+1's input type. Structured values survive the hand-off, and a chain that does not line up is a compile error.
+---
+
+> A pipeline parses a support ticket into `{ orderId, angry }`, looks up the refund, then writes the reply. You build it with `Sequence`, and the reply comes out addressed to order `undefined`. Nothing threw. The parse step worked; its object was flattened to an empty string on the way to the next step, and you find out three steps later, in production. `workflow()` is `Sequence` with that gap closed at both ends: the value survives, and a chain that does not line up never compiles.
+
+## Why this exists
+
+`Sequence` chains steps through one channel: text in, text out. That is exactly right for chaining LLM calls, and it is what `Sequence.step()`'s type says — every step is a `Runner<{ message: string }, string>`. When a step returns something else, `Sequence` coerces it to `''`.
+
+`workflow()` keeps the same shape and changes two things:
+
+- **At compile time** — step N's OUTPUT type must be what step N+1 accepts. A `Runner<{ message }, Ticket>` followed by a `Runner<{ orderId }, string>` does not compile.
+- **At run time** — a step's value is handed to the next step **unchanged**. Objects stay objects. The one convenience is the house convention: a step that returns a `string` feeds the next step's `{ message }`, because that is what every LLM runner here wants.
+
+## A typed chain
+
+<CodeFile path="examples/core-flow/05-workflow.ts" region="workflow-chain" title="examples/core-flow/05-workflow.ts (region: workflow-chain)" />
+
+Four steps, two kinds of hand-off — text between the LLM steps, a `Ticket` object between the typed ones. Run it: `npx tsx examples/core-flow/05-workflow.ts`.
+
+LLM-only chains need nothing new:
+
+```ts
+import { workflow, LLMCall } from 'agentfootprint';
+
+const draft = LLMCall.create({ provider, model }).system('Draft it.').build();
+const edit = LLMCall.create({ provider, model }).system('Tighten it.').build();
+
+const text = await workflow(draft, edit).run({ message: 'a note about refunds' });
+//    ^? string
+```
+
+## The chain rule
+
+Between any two steps, one rule decides what compiles — `NextStepInput<TPreviousOutput>`:
+
+| Step N returns | Step N+1 must accept |
+|---|---|
+| `string` | `{ message: string }` — the house convention every LLM runner speaks |
+| an object (`Ticket`, `Refund`, …) | that same type |
+
+Which makes the failure modes compile errors:
+
+```ts
+workflow(parse, reply);      // ✗ parse hands over a Ticket; reply wants a Refund
+workflow(classify, price);   // ✗ classify hands over text; price wants a Ticket
+workflow(talk, parse, price, alsoTalk); // ✗ fine until step 4, still caught
+```
+
+The chain is checked for 1 to 8 steps. Need more? Nest — a `Workflow` is a `Runner`, so it is also a step: `workflow(workflow(a, b), c)`.
+
+Those failures are pinned as a compile-level regression test (`test/type-regressions/WorkflowChain.assignability.test.ts`, run by `npm run test:types`): each bad chain sits under a `@ts-expect-error`, so if the rule ever loosens, the build fails on an unused directive.
+
+## Writing a non-LLM step
+
+Any `Runner` is a step, and a typed step is a small class over `RunnerBase` — one stage, and the stage's **return value** is what the next step receives:
+
+```ts
+import { flowChart, FlowChartExecutor, type FlowChart, type TypedScope } from 'footprintjs';
+import { RunnerBase } from 'agentfootprint';
+
+class Step<TIn extends object, TOut> extends RunnerBase<TIn, TOut> {
+  readonly id: string;
+  readonly name: string;
+  private readonly fn: (input: TIn) => TOut;
+
+  constructor(id: string, fn: (input: TIn) => TOut) {
+    super();
+    this.id = id;
+    this.name = id;
+    this.fn = fn;
+    this.initChart(() => this.buildChart());
+  }
+
+  private buildChart(): FlowChart {
+    const fn = this.fn;
+    return flowChart<TOut, TypedScope<Record<string, unknown>>>(
+      this.name,
+      (scope) => fn(scope.$getArgs<TIn>()),
+      `${this.id}-run`,
+    ).build();
+  }
+
+  async run(input: TIn): Promise<TOut> {
+    const executor = new FlowChartExecutor(this.getSpec());
+    this.lastExecutor = executor;
+    return (await executor.run({ input: { ...input } })) as TOut;
+  }
+
+  async resume(): Promise<TOut> {
+    throw new Error(`${this.id}: nothing to pause on`);
+  }
+}
+```
+
+The full version is in the example above, used twice.
+
+## Three honest limits
+
+Every one of these is inherited from the engine, and every one is pinned by a test in `test/core-flow/scenario/Workflow.test.ts`:
+
+1. **Only plain data crosses a boundary.** A value with a prototype — `Date`, `Map`, `Set`, a class instance — arrives as `{}`, and `undefined` fields are dropped. Send strings, numbers, arrays and plain objects; send a timestamp as an ISO string, not a `Date`.
+2. **A step must return its output.** The value handed forward is the step chart's traversal result. A step whose last stage returns nothing hands its whole scope forward instead.
+3. **The workflow's own input stays visible to later steps.** footprintjs's `getArgs()` inherits the run's arguments, so a key the previous step did *not* produce can still be read from the original input rather than coming back `undefined`. A key the previous step *did* produce always wins.
+
+## Where it sits
+
+`workflow()` is a composition, next to `Sequence`, `Parallel`, `Conditional` and `Loop` — no new machinery, no LLM dependency. It reports itself in `agentfootprint.composition.enter` / `exit` as kind `'Sequence'`, because it *is* a sequential composition and widening that public union would break exhaustive switches in consumer code for nothing.
+
+For ids and names in those events, build the class directly with `WorkflowOptions`:
+
+```ts
+import { Workflow } from 'agentfootprint';
+
+const intake = new Workflow<{ message: string }, string>([classify, extract, brief, reply], {
+  id: 'intake',
+  name: 'Ticket intake',
+});
+```
+
+The `workflow()` factory is the typed door; the `Workflow` class is the same thing with an options bag and no chain proof.
+
+## Workflow vs Sequence
+
+| Situation | Use |
+|---|---|
+| Chaining LLM calls; every hand-off is text | either — `Sequence` if you want `.pipeVia()` between two steps |
+| A step hands the next one a structured value | `workflow()` — `Sequence` will flatten it |
+| You want the chain checked before it runs | `workflow()` |
+| You need branching, fan-out, or iteration | `Conditional`, `Parallel`, `Loop` |
+
+## Next steps
+
+- [Sequence and the other compositions](/docs/build/agent) — the substrate `workflow()` sits on
+- [LLM routing](/docs/build/llm-router) — when the *order* is the decision, not a fixed chain
+- [Output schema](/docs/build/output-schema) — typed structure at the agent's terminal boundary

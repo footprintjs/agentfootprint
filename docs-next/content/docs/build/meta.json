@@ -6,6 +6,8 @@
     "agent",
     "dynamic-react",
     "swarm",
+    "llm-router",
+    "workflow",
     "---[Target]Context engineering---",
     "instructions",
     "skills",

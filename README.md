@@ -171,7 +171,7 @@ const pipeline = Sequence.create()
 await pipeline.run({ message: 'URGENT: refund dispute on order #4411' });
 ```
 
-The fourth primitive is `Loop` — `Loop.repeat(agent).until(guard).times(5)`, with a mandatory budget guard. And the named patterns from the research literature ship pre-composed from the same four: `selfConsistency` · `reflection` · `debate` · `mapReduce` · `tot` · `swarm`. Because every composition is a flowchart, the structure you wrote is the structure you see in the UI — and the trace spans the whole pipeline, not one agent at a time. [Designing systems of agents ↓](#-build--design-your-agent-or-system-of-agents)
+The fourth primitive is `Loop` — `Loop.repeat(agent).until(guard).times(5)`, with a mandatory budget guard. And the named patterns from the research literature ship pre-composed from the same four: `selfConsistency` · `reflection` · `debate` · `mapReduce` · `tot` · `swarm` · `llmSwarm` (a swarm whose hand-offs an LLM decides). Because every composition is a flowchart, the structure you wrote is the structure you see in the UI — and the trace spans the whole pipeline, not one agent at a time. [Designing systems of agents ↓](#-build--design-your-agent-or-system-of-agents)
 
 ---
 
@@ -753,7 +753,7 @@ The flowchart, recorders, and tests don't change between dev and prod.
 
 **Core**
 - 2 primitives — `LLMCall`, `Agent` (the ReAct loop)
-- 4 control flows — `Sequence`, `Parallel`, `Conditional`, `Loop`
+- 4 control flows — `Sequence`, `Parallel`, `Conditional`, `Loop` (plus `workflow()`, the same sequence with every hand-off type-checked by the compiler)
 - 1 Injection primitive — `defineSkill` / `defineSteering` / `defineInstruction` / `defineFact`
 - 1 reliability gate — `.reliability({ preCheck, postDecide, providers, circuitBreaker, fallback })`
 - 1 tool dispatch primitive — `ToolProvider` (sync OR async) — `staticTools` · `gatedTools` · `skillScopedTools` · or a custom `ToolProvider` that discovers over hubs / MCP / per-tenant catalogs
