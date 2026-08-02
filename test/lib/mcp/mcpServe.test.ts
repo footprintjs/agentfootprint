@@ -170,9 +170,7 @@ describe('mcpServe — unit', () => {
 
 describe('mcpServe — scenario (refusals)', () => {
   it('refuses an empty tool list', async () => {
-    await expect(mcpServe([], { _server: makeMockServer() })).rejects.toThrow(
-      /no tools to serve/,
-    );
+    await expect(mcpServe([], { _server: makeMockServer() })).rejects.toThrow(/no tools to serve/);
   });
 
   it('refuses duplicate tool names, naming the name', async () => {

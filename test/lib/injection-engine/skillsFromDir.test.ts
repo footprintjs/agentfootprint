@@ -64,7 +64,11 @@ describe('skillsFromDir — unit', () => {
     writeSkill(
       dir,
       'billing',
-      skillFile('billing', 'Use for refunds, charges, billing questions.', 'Confirm identity first.'),
+      skillFile(
+        'billing',
+        'Use for refunds, charges, billing questions.',
+        'Confirm identity first.',
+      ),
     );
 
     const [billing] = await skillsFromDir(dir);
@@ -167,12 +171,12 @@ describe('skillsFromDir — scenario (refusals)', () => {
     ['a missing name', '---\ndescription: x\n---\nBody.\n', /missing 'name'/],
     ['a missing description', '---\nname: billing\n---\nBody.\n', /missing 'description'/],
     ['an empty body', '---\nname: billing\ndescription: x\n---\n\n', /has no body/],
-    ['a non key: value line', '---\nname: billing\njust prose\n---\nBody.\n', /is not 'key: value'/],
     [
-      'an unusable name',
-      '---\nname: billing skills!\ndescription: x\n---\nBody.\n',
-      /must match/,
+      'a non key: value line',
+      '---\nname: billing\njust prose\n---\nBody.\n',
+      /is not 'key: value'/,
     ],
+    ['an unusable name', '---\nname: billing skills!\ndescription: x\n---\nBody.\n', /must match/],
   ])('refuses %s, naming the file', async (_label, contents, expected) => {
     const dir = makeDir();
     const file = writeSkill(dir, 'broken', contents);
