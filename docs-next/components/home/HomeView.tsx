@@ -19,19 +19,6 @@ type HomeViewContextValue = {
 
 const HomeViewContext = createContext<HomeViewContextValue | null>(null);
 
-const VIEW_METADATA: Record<HomeView, { title: string; description: string }> = {
-  product: {
-    title: 'agentfootprint — Find the context that made your agent answer wrong',
-    description:
-      'Debug why your AI agent gave the wrong answer, trace it to the context that caused it, and prove the fix by replaying the run.',
-  },
-  technical: {
-    title: 'agentfootprint — Context provenance and causal replay for AI agents',
-    description:
-      'Record context injections, model calls, tool decisions, state, and cost as typed evidence for backward slicing, ablation, and counterfactual replay.',
-  },
-};
-
 function viewFromUrl(): HomeView {
   const requested = new URLSearchParams(window.location.search).get('view');
   return requested === 'technical' ? 'technical' : 'product';
@@ -43,10 +30,6 @@ export function HomeViewProvider({ children }: { children: ReactNode }) {
   const applyView = useCallback((nextView: HomeView, updateUrl: boolean) => {
     setCurrentView(nextView);
     document.documentElement.dataset.homeView = nextView;
-    document.title = VIEW_METADATA[nextView].title;
-    document
-      .querySelector<HTMLMetaElement>('meta[name="description"]')
-      ?.setAttribute('content', VIEW_METADATA[nextView].description);
 
     if (updateUrl) {
       const url = new URL(window.location.href);
@@ -61,16 +44,6 @@ export function HomeViewProvider({ children }: { children: ReactNode }) {
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
   }, [applyView]);
-
-  useEffect(() => {
-    const timer = window.setTimeout(() => {
-      document.title = VIEW_METADATA[view].title;
-      document
-        .querySelector<HTMLMetaElement>('meta[name="description"]')
-        ?.setAttribute('content', VIEW_METADATA[view].description);
-    }, 0);
-    return () => window.clearTimeout(timer);
-  }, [view]);
 
   const setView = useCallback(
     (nextView: HomeView) => applyView(nextView, true),
