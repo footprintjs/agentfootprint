@@ -101,6 +101,9 @@ import type {
   AgentOutput,
   AgentState,
   ObserverDeliveryOptions,
+  RunConfig,
+  RunConfigContext,
+  RunConfigFn,
   WriteProvenanceMode,
 } from './agent/types.js';
 import { routeDeciderStage } from './agent/stages/route.js';
@@ -121,7 +124,16 @@ export { AgentBuilder };
 // (e.g., `import { type AgentInput } from '../core/Agent.js'`) keep
 // working while implementation gradually moves into `./agent/*`.
 // Public types canonically live in `./agent/types.ts` (v2.11.1).
-export type { AgentInput, AgentOptions, AgentOutput, ObserverDeliveryOptions, WriteProvenanceMode };
+export type {
+  AgentInput,
+  AgentOptions,
+  AgentOutput,
+  ObserverDeliveryOptions,
+  RunConfig,
+  RunConfigContext,
+  RunConfigFn,
+  WriteProvenanceMode,
+};
 
 /**
  * `RunOptions` (footprintjs) + agentfootprint-domain correlation fields.
@@ -210,6 +222,10 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    *  present — defaults to `standard` evidence + the lexical scorer, so a tool
    *  that declares `checkIn` works even without a `.checkIn()` builder call. */
   private readonly checkInConfig: ResolvedCheckInConfig;
+  /** Per-run config resolver from `.configure()`. Undefined for every agent
+   *  that never called it — and the chart is then built exactly as before,
+   *  with no scope writes and no scope reads added. */
+  private readonly runConfigFn?: RunConfigFn;
   /** Snapshot read-tracking policy (#18/#14) — forwarded to the internal
    *  executor. Agent default is `'summary'` (cheap markers), NOT
    *  footprintjs's `'full'`. See AgentOptions.readTracking. */
@@ -366,6 +382,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     skillGraphReachable?: (currentSkillId?: string) => readonly string[],
     skillGraphScoreEntries?: (ctx: InjectionContext, signal?: AbortSignal) => Promise<EntryScoring>,
     checkInOptions?: CheckInBuilderOptions,
+    runConfigFn?: RunConfigFn,
   ) {
     super();
     this.provider = opts.provider;
@@ -415,6 +432,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // + lexical scorer) so a `checkIn`-declaring tool works even without a
     // `.checkIn()` call; the gate only fires for tools that declared `checkIn`.
     this.checkInConfig = resolveCheckInConfig(checkInOptions);
+    if (runConfigFn !== undefined) this.runConfigFn = runConfigFn;
     // Default 'summary' — measurement-gated (#18): stageReads values have
     // zero consumers across af/lens/eui, and 'full' clones ~18MB of unread
     // data per 200 iterations. Consumers opt into 'full' explicitly.
@@ -1091,6 +1109,22 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
         return h;
       },
       getCurrentRunId: () => this.currentRunContext?.runId,
+      // `.configure()` — seed is where run-level facts are decided and
+      // committed, so the resolver rides that commit. The closure supplies
+      // the build-time defaults so a resolver can decide RELATIVE to them
+      // ("upgrade the model when the message is long") instead of having to
+      // restate them.
+      ...(this.runConfigFn && {
+        resolveRunConfig: (input: AgentInput): RunConfig | undefined => {
+          const ctx: RunConfigContext = {
+            message: input.message,
+            ...(input.identity !== undefined && { identity: input.identity }),
+            runId: this.currentRunContext?.runId ?? 'unknown',
+            defaults: { model, instructions: systemPromptValue },
+          };
+          return this.runConfigFn?.(ctx);
+        },
+      }),
     });
 
     // Tool registry composition extracted to ./agent/buildToolRegistry.ts.
@@ -1112,10 +1146,22 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     const pickEntryStage = this.skillGraphScoreEntries
       ? makePickEntryStage(this.skillGraphScoreEntries)
       : undefined;
-    const systemPromptSubflow = buildSystemPromptSlot({
-      prompt: systemPromptValue,
-      reason: 'Agent.system()',
-    });
+    // With `.configure()` the base prompt becomes a function of the run: the
+    // slot reads the instructions seed committed, falling back to `.system()`
+    // when the resolver left it alone. `reason` follows the same fork so the
+    // context record names whichever one actually supplied the text.
+    const systemPromptSubflow = buildSystemPromptSlot(
+      this.runConfigFn
+        ? {
+            prompt: (args) => args.instructions ?? systemPromptValue,
+            reason: (args) =>
+              args.instructions !== undefined ? 'Agent.configure()' : 'Agent.system()',
+          }
+        : {
+            prompt: systemPromptValue,
+            reason: 'Agent.system()',
+          },
+    );
     const messagesSubflow = buildMessagesSlot();
     // Per-run cache shared between buildToolsSlot (writer, each
     // iteration) and buildToolCallsHandler (reader, same iteration).
@@ -1149,6 +1195,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
         outputSchemaParser: this.outputSchemaParser,
       }),
       ...(this.thinkingBudget !== undefined && { thinkingBudget: this.thinkingBudget }),
+      // Only a configured agent reads `scope.resolvedModel` — see the dep's
+      // JSDoc for why this is a build-time flag and not a runtime fallback.
+      ...(this.runConfigFn && { runConfigured: true }),
     });
 
     // routeDecider extracted to ./agent/stages/route.ts (v2.11.2).

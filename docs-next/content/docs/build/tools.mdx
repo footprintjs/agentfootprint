@@ -57,6 +57,8 @@ Pull a whole MCP server's tool surface into the agent in one call:
 
 For mock-first development of MCP integrations without spawning a subprocess, use `mockMcpClient({ tools })` — same `McpClient` interface, in-memory implementation. See [Tool discovery](doc:tool-discovery) for the full MCP surface.
 
+The other direction is [`mcpServe(tools)`](doc:mcp-serve) — expose the tools you already wrote AS an MCP server, so another team's agent or a desktop MCP host can call them.
+
 ## Tool errors
 
 When `execute` throws, the framework catches it, reports it to the LLM as a tool error, and continues the loop. The LLM sees the error message and can decide to retry with different args, try a different tool, or surface to the user. See [Error handling](doc:error-handling) for the typed error contract + retry decorators.
@@ -70,6 +72,7 @@ When `execute` throws, the framework catches it, reports it to the LLM as a tool
 ## Next steps
 
 - [Tool discovery](doc:tool-discovery) — connect to any MCP server with `mcpClient({ transport })`
+- [Serve your tools over MCP](doc:mcp-serve) — `mcpServe(tools)`, the other direction
 - [Tool providers](doc:tool-providers) — dynamic per-iteration tool catalogs (`staticTools`, `gatedTools`, `skillScopedTools`)
 - [Skills, explained](doc:skills-explained) — LLM-activated tool bundles
 - [Permission gating](doc:security) — restrict which tools an agent can call

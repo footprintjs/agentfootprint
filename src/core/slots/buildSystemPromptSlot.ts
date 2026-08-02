@@ -25,18 +25,34 @@ import { composeSlot, fnv1a, formatOverflowWarning, slotOverflow, truncate } fro
  * Function that produces the system prompt string given runtime scope
  * context. Receives the subflow's $getArgs() payload.
  */
-export type SystemPromptFn = (args: {
+export type SystemPromptFn = (args: SystemPromptSlotArgs) => string | Promise<string>;
+
+/**
+ * What the slot's `$getArgs()` carries. `instructions` is present only when
+ * the Agent's `.configure()` resolved a per-run system prompt — the mount's
+ * inputMapper omits the key entirely otherwise, so an unconfigured agent
+ * seeds this subflow with exactly the state it always did.
+ */
+export interface SystemPromptSlotArgs {
   readonly userMessage?: string;
   readonly iteration?: number;
-}) => string | Promise<string>;
+  readonly instructions?: string;
+}
 
 export interface SystemPromptSlotConfig {
   /** Static string OR a function. Empty string → no injection, empty slot. */
   readonly prompt: string | SystemPromptFn;
   /** Budget cap (chars). Default: 4000. */
   readonly budgetCap?: number;
-  /** Optional description — where this prompt originated (e.g. "agent.system()"). */
-  readonly reason?: string;
+  /**
+   * Where this prompt originated, recorded on the base InjectionRecord
+   * (e.g. `"agent.system()"`). A function when the origin depends on the
+   * run — an Agent with `.configure()` reports `Agent.configure()` on the
+   * runs that actually overrode the prompt and `Agent.system()` on the rest,
+   * so the context record names the real author rather than a build-time
+   * guess.
+   */
+  readonly reason?: string | ((args: SystemPromptSlotArgs) => string);
 }
 
 /**
@@ -59,7 +75,7 @@ interface SystemPromptSubflowState {
  */
 export function buildSystemPromptSlot(config: SystemPromptSlotConfig): FlowChart {
   const budgetCap = config.budgetCap ?? 4000;
-  const reason = config.reason ?? 'static system prompt';
+  const reasonSource = config.reason ?? 'static system prompt';
   const promptSource = config.prompt;
   // Dedup latch for the human-facing overflow warning (see buildToolsSlot).
   let warnedOverflow = false;
@@ -67,8 +83,9 @@ export function buildSystemPromptSlot(config: SystemPromptSlotConfig): FlowChart
   return flowChart<SystemPromptSubflowState>(
     'Compose',
     async (scope: TypedScope<SystemPromptSubflowState>) => {
-      const args = scope.$getArgs<{ userMessage?: string; iteration?: number }>();
+      const args = scope.$getArgs<SystemPromptSlotArgs>();
       const resolved = typeof promptSource === 'function' ? await promptSource(args) : promptSource;
+      const reason = typeof reasonSource === 'function' ? reasonSource(args) : reasonSource;
 
       const injections: InjectionRecord[] = [];
 

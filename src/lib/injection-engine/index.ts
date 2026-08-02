@@ -41,6 +41,11 @@ export {
 
 export { SkillRegistry, type SkillRegistryOptions } from './SkillRegistry.js';
 
+// File-authored skills — a loader over `defineSkill`, not a second mechanism.
+// Node-only (reads the filesystem); node:fs is imported lazily inside the call
+// so this barrel stays safe to import from a browser bundle.
+export { skillsFromDir, type SkillsFromDirOptions } from './skillsFromDir.js';
+
 // Skill-tool builders — used by SkillRegistry.toTools() and the Agent's
 // auto-attach path. Exported so consumers building custom tool wiring
 // (e.g., gatedTools chains) can compose the same `list_skills` /

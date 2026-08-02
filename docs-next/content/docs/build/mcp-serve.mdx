@@ -1,0 +1,134 @@
+---
+title: Serve your tools over MCP
+description: mcpServe(tools, opts) exposes agentfootprint Tool[] AS an MCP server — stdio or Streamable HTTP. Schemas map 1:1, the served tool is the same object you passed in, so the governance you wrapped around it still runs.
+---
+
+> **Someone else wants to call your tools.** Another team's agent, a desktop MCP
+> host, an IDE. You already wrote the tool, tested it and put a permission check
+> around it — and the only thing standing between them and it is a protocol.
+
+`mcpClient` pulls someone else's tools *in*. `mcpServe` pushes yours *out*.
+
+## The one call
+
+```ts
+import { mcpServe } from 'agentfootprint/tool-providers';
+
+const handle = await mcpServe([lookupOrder, refundOrder], {
+  name: 'support-desk',
+  version: '1.0.0',
+});
+
+process.on('SIGINT', () => void handle.close());
+```
+
+That is a live MCP server. `handle.toolNames` lists what it advertises;
+`handle.close()` stops it, and is idempotent, so a shutdown hook and an explicit
+close can coexist.
+
+<CodeFile path="examples/context-engineering/10-mcp-serve.ts" region="serve" title="examples/context-engineering/10-mcp-serve.ts (region: serve)" />
+
+## Serving is the same door, not a second one
+
+This is the promise the whole feature rests on: **a served tool is the object you
+passed in.** `mcpServe` holds your `Tool` by reference and calls
+`tool.execute(args, ctx)`. It never copies the schema and re-implements the body,
+never unwraps a decorator, never reaches past a wrapper to an inner tool.
+
+So whatever governance you composed around that tool — a permission check inside
+`execute`, a redaction step, an audit hook — is still what runs when a remote
+client calls it:
+
+```ts
+const guarded = (inner: Tool): Tool => ({
+  ...inner,
+  execute: (args, ctx) =>
+    policy.isAllowed(inner.schema.name)
+      ? inner.execute(args, ctx)
+      : `denied: '${inner.schema.name}' is not permitted for this role`,
+});
+
+await mcpServe([guarded(lookupOrder), guarded(refundOrder)], { name: 'support-desk' });
+// tools/call refund_order → "denied: 'refund_order' is not permitted for this role"
+```
+
+Serving is not a back door into your tool. It is the same door with a longer
+corridor.
+
+## What it refuses, and why
+
+Two `Tool` capabilities cannot be honoured over a request/response protocol.
+Both are refused at construction rather than silently dropped, because a
+governance gate that quietly stopped gating is the worst possible outcome:
+
+| Declared | Refused because |
+|---|---|
+| `checkIn` | It asks a human to approve the call *before* it runs. MCP has no pause to carry that ask. Serve a variant without it, or keep the tool inside an agent that can pause. |
+| `needs` without `credentials` | The tool would run with `ctx.credential` undefined. Pass `mcpServe(tools, { credentials })` and the credential is resolved before `execute`, exactly as the Agent resolves it — fail-closed, so a tool that asked for a credential never runs without one. |
+
+Duplicate tool names and an empty tool list are refused too: MCP clients dispatch
+by name, so one of two same-named tools could never be reached, and a server
+advertising nothing is indistinguishable from a broken one.
+
+## A hostile client is the tool's problem, never the server's
+
+The request came from someone you do not control. So every `tools/call` is
+answered, including the bad ones:
+
+- an unknown tool name → a tool error naming what *is* served;
+- arguments that are `null`, a number, an array, or nonsense → forwarded to the
+  tool **verbatim**, because a second, weaker copy of the tool's own contract is
+  not validation;
+- a tool that throws or rejects → its message comes back as `isError: true`.
+
+None of these is an exception escaping the dispatch loop, and the server answers
+the next call normally. Validating args here would only duplicate what the tool
+already does, and worse, do it less well.
+
+## Schemas map 1:1
+
+Tools already carry JSON Schema in `schema.inputSchema`, and MCP's `tools/list`
+wants JSON Schema, so the mapping is the identity function — the same object,
+passed straight through.
+
+That is also why this builds on the SDK's low-level `Server` rather than its
+`McpServer` convenience wrapper: `McpServer.registerTool` takes zod schemas,
+which would mean converting a JSON Schema you already have *into* zod (a new
+dependency) to convert it straight back.
+
+## Transports
+
+```ts
+// stdio (default) — how a desktop MCP host launches a server: it spawns your
+// process and talks down the pipe. stdout belongs to the protocol, so log to stderr.
+await mcpServe(tools, { transport: { transport: 'stdio' } });
+
+// Streamable HTTP — stateless, so several replicas can serve the same tools.
+await mcpServe(tools, { transport: { transport: 'http', port: 8931, path: '/mcp' } });
+```
+
+`McpServeTransport` is the union of `McpStdioServeTransport` and
+`McpHttpServeTransport`; `McpServeOptions` carries `name`, `version`,
+`transport`, and `credentials`; `McpServeHandle` is what you get back.
+`McpSdkServer` is the narrow structural type of the SDK server we touch —
+exported for the same reason `McpSdkClient` is, so a test can inject one.
+
+`@modelcontextprotocol/sdk` is a **lazy peer dependency**, exactly as it is for
+`mcpClient`: the `require()` only fires when you actually call `mcpServe`, so
+apps that never serve pay nothing. Missing, you get an install hint rather than a
+stack trace.
+
+## When to serve, and when not to
+
+| Serve over MCP when… | Keep it in the agent when… |
+|---|---|
+| Another process needs to call your tool | Only your agent calls it |
+| A desktop MCP host should see your capabilities | The tool needs a human check-in |
+| You want one definition consumed two ways | The tool depends on ReAct loop state |
+
+## Next steps
+
+- [Tool discovery](doc:tool-discovery) — the other direction: `mcpClient({ transport })`
+- [Tools](doc:tools) — `defineTool`, the primitive being served
+- [Security](doc:security) — `PermissionPolicy`, the gate the example wraps around its tools
+- [`examples/context-engineering/10-mcp-serve.ts`](https://github.com/footprintjs/agentfootprint/blob/main/examples/context-engineering/10-mcp-serve.ts) — the runnable file behind this page

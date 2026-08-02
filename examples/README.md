@@ -180,6 +180,8 @@ _Run `npm run examples:readme` after adding/editing examples._
 | 06 | [`06-mixed-flavors.ts`](context-engineering/06-mixed-flavors.ts) | Mixed flavors — all 4 in one agent | One agent with steering + instruction + skill + fact registered side-by-side.  |
 | 07 | [`07-rag.ts`](context-engineering/07-rag.ts) | RAG — retrieval-augmented generation | Embed user query, retrieve top-K documents, inject as user-role  |
 | 08 | [`08-mcp.ts`](context-engineering/08-mcp.ts) | MCP — Model Context Protocol client | Connect to an MCP server, expose its tools as agentfootprint Tool[].  |
+| 09 | [`09-skills-from-dir.ts`](context-engineering/09-skills-from-dir.ts) | Skills from a directory of SKILL.md files | Load Skills from SKILL.md files — frontmatter is the disclosure stub, the  |
+| 10 | [`10-mcp-serve.ts`](context-engineering/10-mcp-serve.ts) | MCP — serve your tools to other clients | Expose agentfootprint Tool[] AS an MCP server. Schemas map 1:1, the served  |
 
 ### [`memory/`](memory/) — defineMemory + 4 types × 7 strategies
 
@@ -237,6 +239,7 @@ _Run `npm run examples:readme` after adding/editing examples._
 | 33 | [`33-checkin.ts`](features/33-checkin.ts) | Check in with the receipts | A tool demands human consent for a consequential action; the ask carries an evidence pack (willDo / read / drivers / trail) and the decision lands as a typed record. |
 | 34 | [`34-checkin-coworker.ts`](features/34-checkin-coworker.ts) | The coworker with the receipts | A runnable AI-coworker demo: it drafts a weekly status doc, then pauses for human consent before posting to the team channel. The check-in ask rides an evidence pack (willDo / read / drivers / trail) rendered as readable receipts, and the decision lands in an audit trail. |
 | 35 | [`35-resilience-visibility.ts`](features/35-resilience-visibility.ts) | Resilience visibility — which provider actually served | The provider decorators report what they did, so the three declared events (fallback.triggered / error.retried / error.recovered) now fire from inside the run with real runId + runtimeStageId. Shows a failover, a retry-then-recover, the whole stack inside a recordRun() recording, and the honest limits (the breaker has no event of its own; outside a run nothing is emitted). |
+| 36 | [`36-per-run-config.ts`](features/36-per-run-config.ts) | Per-run config — .configure() | Resolve this run model and system prompt at run start, and commit what was  |
 
 ### [`canonical/`](canonical/) — end-to-end patterns
 

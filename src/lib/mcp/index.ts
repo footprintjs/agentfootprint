@@ -1,10 +1,11 @@
 /**
- * MCP — Model Context Protocol client integration. Connect to an MCP
- * server, register its tools on your Agent. Server-side support is
- * separate (consumer exposes their agent as an MCP tool — different
- * use case, not yet shipped).
+ * MCP — Model Context Protocol, both directions. `mcpClient` connects to
+ * someone else's MCP server and registers its tools on your Agent;
+ * `mcpServe` exposes your own tools AS an MCP server so any MCP client
+ * can call them.
  */
 export { mcpClient } from './mcpClient.js';
+export { mcpServe } from './mcpServe.js';
 export { mockMcpClient, type MockMcpClientOptions, type MockMcpTool } from './mockMcpClient.js';
 export type {
   McpClient,
@@ -13,4 +14,10 @@ export type {
   McpStdioTransport,
   McpTransport,
   McpSdkClient,
+  McpServeOptions,
+  McpServeHandle,
+  McpServeTransport,
+  McpHttpServeTransport,
+  McpStdioServeTransport,
+  McpSdkServer,
 } from './types.js';

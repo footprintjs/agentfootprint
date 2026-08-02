@@ -13,7 +13,7 @@ Connect to an [MCP](https://modelcontextprotocol.io) server, register its tools 
 
 MCP is Anthropic's open standard for connecting LLMs to external tools, data sources, and applications. An MCP server **exposes** tools over a transport (stdio for local subprocesses, Streamable HTTP for remote). An MCP client **consumes** those tools and translates them into the host's native tool format.
 
-agentfootprint's `mcpClient` is the client side. The server side (exposing your agent as an MCP tool to OTHER LLMs) is a separate concern, not yet shipped.
+agentfootprint's `mcpClient` is the client side. The server side — exposing YOUR tools so other MCP clients can call them — is [`mcpServe`](./10-mcp-serve.md).
 
 ## Anatomy
 

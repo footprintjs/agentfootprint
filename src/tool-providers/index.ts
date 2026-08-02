@@ -13,6 +13,12 @@
  *    - `mcpClient(opts)` — connect to an MCP server (real)
  *    - `mockMcpClient({ tools })` — in-memory MCP source for dev / tests
  *
+ * 3. Tool sink — the other direction
+ *    - `mcpServe(tools, opts)` — expose your own `Tool[]` AS an MCP
+ *      server, so any MCP client can call them. The served tool is the
+ *      SAME object you pass in, so whatever governance you composed
+ *      around it still runs.
+ *
  * Compose freely. The dispatch layer is decorator-shaped (mirroring
  * `withRetry` / `withFallback` over LLMProvider). Tool sources produce
  * `Tool[]` that flow into a `staticTools(arr)` provider, which can
@@ -42,7 +48,7 @@ export type { ToolProvider, ToolDispatchContext, ToolGatePredicate } from './typ
 // Re-export tool sources from the MCP module so consumers find them in
 // one place. This subpath is the ONLY place `mcpClient` is public — the
 // top-level barrel does not re-export it.
-export { mcpClient, mockMcpClient } from '../lib/mcp/index.js';
+export { mcpClient, mcpServe, mockMcpClient } from '../lib/mcp/index.js';
 export type {
   McpClient,
   McpClientOptions,
@@ -52,4 +58,10 @@ export type {
   McpHttpTransport,
   MockMcpClientOptions,
   MockMcpTool,
+  McpServeOptions,
+  McpServeHandle,
+  McpServeTransport,
+  McpStdioServeTransport,
+  McpHttpServeTransport,
+  McpSdkServer,
 } from '../lib/mcp/index.js';

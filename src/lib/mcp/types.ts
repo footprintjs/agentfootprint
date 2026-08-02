@@ -1,11 +1,14 @@
 /**
- * MCP — Model Context Protocol client integration.
+ * MCP — Model Context Protocol, in both directions.
  *
  * MCP (https://modelcontextprotocol.io) is an open standard for
- * connecting LLMs to external tools and data sources. agentfootprint's
- * MCP adapter is **client-only** — it consumes MCP servers and exposes
- * their tools as agentfootprint `Tool[]` so consumers can plug them
- * straight into `agent.tool(...)`.
+ * connecting LLMs to external tools and data sources. This module
+ * bridges it both ways:
+ *
+ *   - `mcpClient(opts)`  — consume an MCP server; its tools become
+ *     agentfootprint `Tool[]` you can hand to `agent.tools(...)`.
+ *   - `mcpServe(tools, opts)` — the other direction: expose your own
+ *     `Tool[]` AS an MCP server, so any MCP client can call them.
  *
  * Pattern: Adapter (GoF) — translates MCP wire format ↔ agentfootprint
  *          `Tool` interface. The MCP SDK does the protocol work; we
@@ -14,11 +17,8 @@
  *          inline alternative for non-MCP tools).
  * Emits:   N/A directly — wrapped tools emit the standard
  *          `agentfootprint.stream.tool_start` / `tool_end` events
- *          when the agent calls them.
- *
- * Server-side support (exposing an agent or LLMCall as an MCP tool)
- * is a separate concern not yet shipped. This module covers the
- * 80% case: pulling an existing MCP server's tools INTO an agent.
+ *          when the agent calls them. `mcpServe` runs OUTSIDE any
+ *          agent run, so it emits nothing at all.
  */
 
 import type { Tool } from '../../core/tools.js';
@@ -149,4 +149,107 @@ export interface McpSdkClient {
     readonly isError?: boolean;
   }>;
   close(): Promise<void>;
+}
+
+// ─── Serving: the other direction ──────────────────────────────────
+
+/**
+ * `stdio` transport — the server speaks MCP over its own stdin/stdout.
+ * This is how a desktop MCP host launches a server: it spawns your
+ * process and talks down the pipe. The default.
+ *
+ * One consequence worth stating out loud: stdout belongs to the
+ * protocol. Anything else your process prints there corrupts the
+ * stream, so log to stderr.
+ */
+export interface McpStdioServeTransport {
+  readonly transport: 'stdio';
+}
+
+/**
+ * `http` transport — the server listens on a port and speaks MCP over
+ * Streamable HTTP. Stateless (no session ids): every request is
+ * self-contained, which is what makes it safe to run several replicas
+ * behind a load balancer.
+ */
+export interface McpHttpServeTransport {
+  readonly transport: 'http';
+  /** TCP port to listen on. */
+  readonly port: number;
+  /** Interface to bind. Defaults to Node's own default (all interfaces). */
+  readonly host?: string;
+  /** URL path the MCP endpoint answers on. Default `'/mcp'`. */
+  readonly path?: string;
+}
+
+export type McpServeTransport = McpStdioServeTransport | McpHttpServeTransport;
+
+export interface McpServeOptions {
+  /**
+   * Server name reported to clients on connect. Surfaces in the
+   * client's server list. Default `'agentfootprint'`.
+   */
+  readonly name?: string;
+  /** Server version reported to clients. Default `'0.0.0'`. */
+  readonly version?: string;
+  /** Transport configuration. Default `{ transport: 'stdio' }`. */
+  readonly transport?: McpServeTransport;
+  /**
+   * Credential provider for served tools that declare `needs`. The
+   * credential is resolved BEFORE `execute` and injected as
+   * `ctx.credential`, exactly as the Agent's tool-call stage does it.
+   *
+   * Serving a `needs`-declaring tool without this is refused at
+   * construction: the tool would run with `ctx.credential` undefined
+   * and fail somewhere further in, or worse, not fail at all.
+   */
+  readonly credentials?: import('../../identity/types.js').CredentialProvider;
+  /**
+   * @internal Pre-built SDK server for tests. Skips SDK import +
+   * transport construction. Mirrors `McpClientOptions._client`.
+   */
+  readonly _server?: McpSdkServer;
+}
+
+/**
+ * What `mcpServe(...)` returns. The server is already listening by the
+ * time you hold this; `close()` is the only thing left to do.
+ */
+export interface McpServeHandle {
+  /** Server name from options (or the default). */
+  readonly name: string;
+  /** Names of the tools being served, in the order clients will list them. */
+  readonly toolNames: readonly string[];
+  /**
+   * Stop serving: closes the transport (and, for `http`, the listening
+   * socket) and then the MCP server. Idempotent — calling it twice is
+   * not an error, so a shutdown hook and an explicit close can coexist.
+   */
+  close(): Promise<void>;
+}
+
+/**
+ * Minimal structural type for the parts of the MCP SDK's low-level
+ * `Server` we touch. Defined locally for the same two reasons as
+ * {@link McpSdkClient}: test injection via `McpServeOptions._server`,
+ * and no hard import on the lazy peer-dep.
+ */
+export interface McpSdkServer {
+  setRequestHandler(
+    schema: unknown,
+    handler: (request: McpCallToolRequest, extra: { readonly signal?: AbortSignal }) => unknown,
+  ): void;
+  connect(transport: unknown): Promise<void>;
+  close(): Promise<void>;
+}
+
+/**
+ * The shape `tools/call` requests arrive in. `tools/list` requests carry
+ * no params we read, so one request type covers both handlers.
+ */
+export interface McpCallToolRequest {
+  readonly params?: {
+    readonly name?: string;
+    readonly arguments?: unknown;
+  };
 }

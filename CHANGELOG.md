@@ -7,7 +7,116 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [7.12.0] - 2026-08-02
+## [7.13.0] - 2026-08-02
+
+Three small things that were each one step short of usable. Skills could be
+declared but only in TypeScript, so the prose a support lead should own lived in
+a template literal three imports deep. MCP worked in one direction only: you
+could consume anyone's tools and expose none of your own. And an agent was built
+once with one model, so serving two tenants meant either rebuilding it per
+request or mutating it — and a mutated agent makes its own trace wrong.
+
+None of them needed a new mechanism. Each is a loader, an adapter pointed the
+other way, and a value committed where run-level values already commit.
+
+### Added
+
+- **`skillsFromDir(dir)` — Skills authored as files.** A directory of `SKILL.md`
+  files, frontmatter `name` + `description` as the disclosure stub, everything
+  after the closing fence as the body. The same convention Claude Code made
+  familiar, so a skill folder is portable between the two.
+
+  It is a **loader, not a second mechanism**: each file goes to `defineSkill`, so
+  the description is still all the model sees until it calls `read_skill(<id>)`,
+  and the body still arrives only after it does. What changes is who can edit a
+  playbook, and whether changing the refund policy shows up as a reviewable diff.
+
+  A skill body is *instructions to a model*, so where it came from is a security
+  property rather than a convenience — content fetched at run time is content
+  someone else can change after you reviewed it. The loader therefore accepts a
+  local directory and nothing else: a URL is **refused by name**, not fetched.
+  Malformed frontmatter is refused naming **the file**, and two files claiming
+  one skill name are refused naming **both** — a loader that says "malformed
+  frontmatter" over forty files has told you nothing. A directory with no
+  `SKILL.md` is an error too, not an empty array.
+
+  Node-only, but `node:fs` is imported lazily inside the call, so importing
+  `agentfootprint/injection-engine` in a browser bundle is still safe.
+
+  Docs: [Skills](https://footprintjs.github.io/agentfootprint/docs/build/skills) ·
+  Example: `examples/context-engineering/09-skills-from-dir.ts`.
+
+- **`mcpServe(tools, opts)` — MCP, the other direction.** `mcpClient` pulls
+  someone else's tools in; this pushes yours out, over stdio (default) or
+  stateless Streamable HTTP. `close()` on the returned handle stops it, and is
+  idempotent.
+
+  The promise the feature rests on: **a served tool is the object you passed
+  in.** `mcpServe` holds your `Tool` by reference and calls
+  `tool.execute(args, ctx)` — it never copies the schema and re-implements the
+  body, never unwraps a decorator, never reaches past a wrapper to an inner tool.
+  So a permission check inside `execute` is still what runs when a remote client
+  calls it (pinned by a test that serves a `PermissionPolicy`-guarded tool and
+  watches the denial come back over the protocol). Serving is not a back door
+  into your tool; it is the same door with a longer corridor.
+
+  A hostile client is the tool's problem, never the server's: unknown tool names,
+  `null`/numeric/array arguments and tools that throw all return `isError: true`
+  and the loop answers the next call. Arguments are forwarded **verbatim** —
+  re-validating them here would be a second, weaker copy of the contract the tool
+  already enforces.
+
+  Docs: [Serve your tools over MCP](https://footprintjs.github.io/agentfootprint/docs/build/mcp-serve) ·
+  Example: `examples/context-engineering/10-mcp-serve.ts`.
+
+- **`.configure((ctx) => ({ model?, instructions? }))` — per-run config that the
+  trace can be trusted about.** Resolved ONCE per run at the start of the run,
+  with the run's message, identity, runId and the agent's build-time `defaults`
+  in hand.
+
+  What it resolves is **committed**: `resolvedModel` and `resolvedInstructions`
+  ride the same commit that already carries the run's other run-level facts
+  (identity, iteration budget, turn number), landing in the commit log before the
+  first LLM call — and the LLM call reads them from there, so what was called,
+  what `stream.llm_start` reports and what cost is priced against are one value.
+  A run that switched models without recording it would produce a recording that
+  says the built-in model answered, which is a lie about the run's most expensive
+  fact.
+
+  Omit it and everything is byte-identical: no extra scope writes, no extra scope
+  reads, same request bytes (pinned three ways). This is the RUN axis only —
+  tools are the iteration axis and `.toolProvider()` already owns it.
+
+  Docs: [Agent](https://footprintjs.github.io/agentfootprint/docs/build/agent) ·
+  Example: `examples/features/36-per-run-config.ts`.
+
+### The judgements these rest on
+
+**`mcpServe` refuses rather than degrades.** Two `Tool` capabilities cannot
+survive a request/response protocol, and both fail at construction naming the
+tool. `checkIn` asks a human to approve a call before it runs, and MCP has no
+pause to carry that ask — serving it anyway would drop a consent gate silently,
+which is worse than not serving at all. `needs` without a credential provider
+would run the tool with `ctx.credential` undefined; passing `credentials`
+resolves it before `execute`, fail-closed, exactly as the Agent does.
+
+**`mcpServe` builds on the SDK's low-level `Server`, not `McpServer`.** Tools
+already carry JSON Schema and MCP wants JSON Schema, so the mapping is the
+identity function. `McpServer.registerTool` takes zod schemas, which would mean
+adding a dependency to convert a JSON Schema into zod in order to convert it
+straight back.
+
+**`.configure()` writes only what the resolver actually returned.** Always
+stamping `resolvedModel` would make every agent's commit log change shape, and
+"absent option = byte-identical" has to mean the recording too, for a library
+whose product is the recording. For the same reason, reading `scope.resolvedModel`
+in the LLM stage is gated on a build-time flag rather than done unconditionally
+with a fallback — an unconfigured run records the same reads it always did.
+
+**`.configure()` is synchronous.** The seed stage where run-level facts commit is
+synchronous, and making it async to accommodate a resolver would shift every
+agent's timing for a feature most agents do not use. A resolver that needs I/O
+can do it before `run()` and close over the result.
 
 Every debugging session starts at a *variable* — "where did that instruction come
 from?", "which loop wrote the history it answered from?" — and both halves of the

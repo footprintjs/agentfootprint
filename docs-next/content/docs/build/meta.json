@@ -16,6 +16,7 @@
     "tools",
     "tool-providers",
     "tool-discovery",
+    "mcp-serve",
     "sequence-governance",
     "flowchart-as-tool",
     "output-schema",

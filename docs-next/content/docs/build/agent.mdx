@@ -57,6 +57,67 @@ await agent.run({
 
 Without an identity, memory falls back to a global namespace — fine for single-user prototypes, dangerous in production multi-tenant apps. See [Memory guide](doc:memory).
 
+## Per-run config — `.configure()`
+
+An agent is built once and run many times, but not every run wants the same model
+or the same house rules. A long message may deserve the bigger model; a tenant may
+have its own policy text; a canary may want last week's prompt.
+
+Rebuilding the whole agent per request works and is wasteful. Reaching in and
+mutating one is worse — the trace then describes an agent that no longer exists.
+
+`.configure((ctx) => ({ model?, instructions? }))` resolves **once per run**, at
+the start of the run:
+
+<CodeFile path="examples/features/36-per-run-config.ts" region="configure" title="examples/features/36-per-run-config.ts (region: configure)" />
+
+`ctx` is a `RunConfigContext`: the run's `message`, its `identity` (when
+`run({ identity })` supplied one), its `runId`, and `defaults` — what the agent
+was **built** with, so a resolver can decide relative to it rather than restating
+it. The return value is a `RunConfig`; the resolver's own type is `RunConfigFn`.
+
+### What gets resolved gets committed
+
+This is the part that matters. A run that changed its own model without recording
+it would be a trace that lies about its most expensive fact — you would read the
+recording, see the model the agent was constructed with, and be wrong about which
+one answered.
+
+So the resolved values ride the same commit that already carries the run's other
+run-level facts (identity, iteration budget, turn number): `resolvedModel` and
+`resolvedInstructions` land in the commit log **before the first LLM call**, and
+the LLM call reads them from there. One value, used and recorded:
+
+```ts
+await agent.run({ message, identity: { tenant: 'globex', conversationId: 'c2' } });
+
+const state = agent.getLastSnapshot()?.sharedState;
+state.resolvedModel;        // 'big-model'  — what actually answered
+state.resolvedInstructions; // the rules that run actually ran under
+```
+
+The `agentfootprint.stream.llm_start` event reports the resolved model too, and
+cost is priced against it — there is no second copy to drift.
+
+### Absent means unchanged
+
+Omit `.configure()` and every run behaves, and records, exactly as it did before:
+no extra scope writes, no extra scope reads, and the request bytes are identical.
+The same is true of a resolver that returns `{}` or nothing — only what it
+actually returned is committed, so "I looked and decided not to change anything"
+costs nothing in the log.
+
+### This is the run axis only
+
+Tools are the *iteration* axis and already have an owner: `.toolProvider()`,
+consulted every iteration so gates can react to what just happened. `.configure()`
+deliberately does not duplicate it, and does not reach past `model` and
+`instructions` into the rest of the run — `temperature`, `maxTokens` and the tool
+set stay where they were set.
+
+Calling `.configure()` twice throws. A silently-overridden resolver is a config
+that lies.
+
 ## Composition with other Agents
 
 An Agent is a runner, just like LLMCall, Sequence, Parallel, Conditional. Use them as steps in larger graphs:

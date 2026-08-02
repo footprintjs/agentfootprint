@@ -339,6 +339,12 @@ export function buildAgentChart(deps: AgentChartDeps): FlowChart {
       inputMapper: (parent) => ({
         userMessage: parent.userMessage as string | undefined,
         iteration: parent.iteration as number | undefined,
+        // `.configure()`'s per-run system prompt, as seed committed it. The
+        // key is spread in ONLY when a resolver actually produced one, so an
+        // unconfigured agent seeds this subflow with the same keys as ever.
+        ...(parent.resolvedInstructions !== undefined && {
+          instructions: parent.resolvedInstructions as string,
+        }),
         activeInjections: withMemoryRecall(
           parent.activeInjections as readonly ActiveInjection[] | undefined,
           parent,

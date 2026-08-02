@@ -37,7 +37,7 @@ import {
   type SelfExplainOptions,
 } from '../../lib/trace-toolpack/selfExplain.js';
 import { Agent } from '../Agent.js';
-import type { AgentOptions } from './types.js';
+import type { AgentOptions, RunConfigFn } from './types.js';
 
 /**
  * Fluent builder. `tool()` accepts any Tool<TArgs, TResult> and registers
@@ -150,6 +150,9 @@ export class AgentBuilder {
   private thinkingBudgetValue?: number;
   private selfExplainConfig?: SelfExplainOptions;
   private checkInConfig?: CheckInBuilderOptions;
+  /** Per-run config resolver set via `.configure()`. Undefined = the agent
+   *  runs on its build-time model + system prompt, unchanged. */
+  private runConfigFn?: RunConfigFn;
 
   constructor(opts: AgentOptions) {
     this.opts = opts;
@@ -244,6 +247,66 @@ export class AgentBuilder {
       );
     }
     this.toolProviderRef = provider;
+    return this;
+  }
+
+  /**
+   * Decide this run's model and/or system prompt when the run starts.
+   *
+   * An agent is built once and run many times, but not every run wants the
+   * same model or the same instructions: a long message may deserve the
+   * bigger model, a tenant may have its own house rules, a canary may want
+   * last week's prompt. Rebuilding the whole agent per request works and is
+   * wasteful; reaching in and mutating one is worse, because the trace then
+   * describes an agent that no longer exists.
+   *
+   * The resolver runs ONCE per `run()`, at the start of the run, and what it
+   * returns is **committed to the trace** — `resolvedModel` and
+   * `resolvedInstructions` land in the run's commit log before the first LLM
+   * call, and the LLM call reads them from there. So the recording says which
+   * model actually answered instead of which model the agent was built with.
+   *
+   * Return `{}` (or nothing) to keep the defaults; `ctx.defaults` carries
+   * them, so a resolver can decide relative to what was built rather than
+   * restating it. Omit `.configure()` entirely and every run behaves — and
+   * records — exactly as it did before.
+   *
+   * This is the RUN axis only. Tools are the iteration axis and already have
+   * an owner: `.toolProvider()`, consulted every iteration.
+   *
+   * Throws if called more than once (same rule as `.toolProvider()` — a
+   * silently-overridden resolver is a config that lies).
+   *
+   * @example  Bigger model for a bigger question
+   *   const agent = Agent.create({ provider, model: 'small-model' })
+   *     .system('You answer support questions.')
+   *     .configure(({ message, defaults }) =>
+   *       message.length > 500 ? { model: 'big-model' } : {},
+   *     )
+   *     .build();
+   *
+   * @example  Per-tenant house rules
+   *   const agent = Agent.create({ provider, model })
+   *     .system('You answer support questions.')
+   *     .configure(({ identity, defaults }) => ({
+   *       instructions: `${defaults.instructions}\n\n${rulesFor(identity?.tenant)}`,
+   *     }))
+   *     .build();
+   */
+  configure(fn: RunConfigFn): this {
+    if (this.runConfigFn) {
+      throw new Error(
+        'AgentBuilder.configure: already set. One resolver per agent — a second one would ' +
+          'silently override the first.',
+      );
+    }
+    if (typeof fn !== 'function') {
+      throw new Error(
+        `AgentBuilder.configure: expected a function (ctx) => ({ model?, instructions? }), got ` +
+          `${typeof fn}.`,
+      );
+    }
+    this.runConfigFn = fn;
     return this;
   }
 
@@ -902,6 +965,7 @@ export class AgentBuilder {
       this.skillGraphReachable,
       this.skillGraphScoreEntries,
       this.checkInConfig,
+      this.runConfigFn,
     );
     // Attach builder-collected recorders so they receive events from
     // the very first run. Mirrors what consumers would do post-build

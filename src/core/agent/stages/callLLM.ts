@@ -83,6 +83,15 @@ export interface CallLLMStageDeps {
    *  carries `thinking: { budget }` so the provider activates extended
    *  thinking. Undefined = no activation (default). */
   readonly thinkingBudget?: number;
+  /**
+   * True when the agent was built with `.configure()`. Only then does this
+   * stage read `scope.resolvedModel` — the per-run model seed committed.
+   * Gating on a build-time flag (rather than always reading and falling
+   * back) keeps an unconfigured agent's recorded reads unchanged, which is
+   * what "absent option = byte-identical" has to mean for a library whose
+   * product is the recording.
+   */
+  readonly runConfigured?: boolean;
 }
 
 /**
@@ -99,6 +108,14 @@ export function buildCallLLMStage(
     // `scope.messagesInjections` is read by ContextRecorder for
     // observability; the LLM-wire path now reads scope.history directly.
     const iteration = scope.iteration;
+
+    // The model for this run. `.configure()` resolved it at seed and
+    // COMMITTED it to scope, so what gets called, what the `llm_start`
+    // event reports and what cost is priced against are all one value —
+    // the one the trace records. Without `.configure()` this is the
+    // build-time model and scope is never touched.
+    const model =
+      (deps.runConfigured ? (scope.resolvedModel as string | undefined) : undefined) ?? deps.model;
 
     // Per-iteration boundary marker (was a dedicated `IterationStart` stage —
     // folded here since emitting is passive observability, not work that needs
@@ -134,7 +151,7 @@ export function buildCallLLMStage(
     typedEmit(scope, 'agentfootprint.stream.llm_start', {
       iteration,
       provider: deps.provider.name,
-      model: deps.model,
+      model,
       systemPromptChars: systemPrompt.length,
       messagesCount: messages.length,
       toolsCount: activeToolSchemas.length,
@@ -152,7 +169,7 @@ export function buildCallLLMStage(
       ...(systemPrompt.length > 0 && { systemPrompt }),
       messages,
       ...(activeToolSchemas.length > 0 && { tools: activeToolSchemas }),
-      model: deps.model,
+      model,
       ...(deps.temperature !== undefined && { temperature: deps.temperature }),
       ...(deps.maxTokens !== undefined && { maxTokens: deps.maxTokens }),
       ...(deps.thinkingBudget !== undefined && {
@@ -288,7 +305,7 @@ export function buildCallLLMStage(
         deps.reliability,
         deps.provider,
         deps.provider.name,
-        deps.model,
+        model,
         singleProviderCall,
         postValidate,
       );
@@ -325,6 +342,6 @@ export function buildCallLLMStage(
       durationMs,
     });
 
-    emitCostTick(scope, deps.pricingTable, deps.costBudget, deps.model, response.usage);
+    emitCostTick(scope, deps.pricingTable, deps.costBudget, model, response.usage);
   };
 }

@@ -238,6 +238,11 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
       inputMapper: (parent) => ({
         userMessage: parent.userMessage as string | undefined,
         iteration: parent.iteration as number | undefined,
+        // `.configure()`'s per-run system prompt, carried into sf-llm-call by
+        // the boundary mapper below. Spread in only when one was resolved.
+        ...(parent.resolvedInstructions !== undefined && {
+          instructions: parent.resolvedInstructions as string,
+        }),
         activeInjections: withMemoryRecall(
           parent.activeInjections as readonly ActiveInjection[] | undefined,
           parent,
@@ -403,6 +408,15 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
           // Relevance entry ranking — carried in so defineRelevanceHint can read it.
           entryScores: p.entryScores,
           entryScorer: p.entryScorer,
+          // `.configure()` results, resolved + committed by seed on the OUTER
+          // chart. callLLM and the System Prompt slot both live in here, so
+          // the values have to cross the boundary. Read-only inside (nothing
+          // in the turn re-decides them), and the keys are omitted entirely
+          // for an agent without `.configure()`.
+          ...(p.resolvedModel !== undefined && { resolvedModel: p.resolvedModel }),
+          ...(p.resolvedInstructions !== undefined && {
+            resolvedInstructions: p.resolvedInstructions,
+          }),
           ...memoryKeys,
           // Cross-iteration accumulators under prior* aliases — frozen
           // here, copied to writable working keys by dynamicTurnSeed.

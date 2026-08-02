@@ -20,7 +20,7 @@
 import type { TypedScope } from 'footprintjs';
 import type { LLMMessage, LLMToolSchema } from '../../../adapters/types.js';
 import { typedEmit } from '../../../recorders/core/typedEmit.js';
-import type { AgentInput, AgentState } from '../types.js';
+import type { AgentInput, AgentState, RunConfig } from '../types.js';
 
 export interface SeedStageDeps {
   /** Resolved `clampIterations(opts.maxIterations ?? 10)`. Frozen at
@@ -47,6 +47,15 @@ export interface SeedStageDeps {
    * Returns `undefined` only in degenerate (test) cases.
    */
   readonly getCurrentRunId: () => string | undefined;
+  /**
+   * Per-run config resolver from `.configure()`. Seed is where run-level
+   * facts are decided AND committed (identity, iteration budget, turn
+   * number all land here), so this rides the same commit rather than
+   * inventing a second place a run can change itself. Undefined when the
+   * consumer never called `.configure()` — and then nothing extra is
+   * written, so the commit log is byte-identical to earlier releases.
+   */
+  readonly resolveRunConfig?: (input: AgentInput) => RunConfig | undefined;
 }
 
 /**
@@ -123,6 +132,21 @@ export function buildSeedStage(deps: SeedStageDeps): (scope: TypedScope<AgentSta
     // graph through the entry router (cold start). The Injection Engine advances
     // it each iteration; undefined for agents without a skillGraph().
     scope.currentSkillId = undefined;
+
+    // `.configure()` — resolved ONCE here (seed runs exactly once per run)
+    // and written to scope, which means the run's commit log records the
+    // model and instructions the run actually used. A run that changed its
+    // own model without committing that fact would produce a trace that
+    // reads as if the built-in default answered.
+    //
+    // Only what the resolver actually returned is written: an agent with no
+    // `.configure()`, or one whose resolver returned `{}`, commits nothing
+    // extra and behaves exactly as before.
+    if (deps.resolveRunConfig) {
+      const resolved = deps.resolveRunConfig(args);
+      if (resolved?.model !== undefined) scope.resolvedModel = resolved.model;
+      if (resolved?.instructions !== undefined) scope.resolvedInstructions = resolved.instructions;
+    }
 
     typedEmit(scope, 'agentfootprint.agent.turn_start', {
       turnIndex: 0,
