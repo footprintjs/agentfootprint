@@ -1,6 +1,6 @@
 {
   "name": "agentfootprint",
-  "version": "7.11.0",
+  "version": "7.12.0",
   "description": "The explainable agent framework — backtrack a wrong answer to the exact context that caused it (evidence, not guesses). Built on footprintjs.",
   "license": "MIT",
   "author": "Sanjay Krishna Anbalagan",
@@ -413,7 +413,7 @@
     "@modelcontextprotocol/sdk": "*",
     "@opentelemetry/api": "*",
     "@yarflam/potion-base-8m": "*",
-    "footprintjs": "^9.10.1",
+    "footprintjs": "^9.13.0",
     "ioredis": "*",
     "openai": "*",
     "zod": "*"
@@ -469,7 +469,7 @@
     "esbuild": "^0.28.0",
     "eslint": "^8.44.0",
     "eslint-config-prettier": "^6.15.0",
-    "footprintjs": "^9.10.1",
+    "footprintjs": "^9.13.0",
     "prettier": "^2.8.1",
     "publint": "^0.3.0",
     "typedoc": "^0.28.19",

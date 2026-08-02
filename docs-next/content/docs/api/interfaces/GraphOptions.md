@@ -4,7 +4,7 @@ title: GraphOptions
 
 # Interface: GraphOptions
 
-Defined in: src/core-flow/Graph.ts:164
+Defined in: [src/core-flow/Graph.ts:171](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Graph.ts#L171)
 
 ## Properties
 
@@ -12,7 +12,7 @@ Defined in: src/core-flow/Graph.ts:164
 
 > `readonly` **edges**: readonly [`GraphEdge`](/docs/api/interfaces/GraphEdge)[]
 
-Defined in: src/core-flow/Graph.ts:172
+Defined in: [src/core-flow/Graph.ts:179](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Graph.ts#L179)
 
 The dependencies. Every endpoint must name a declared node.
 
@@ -22,7 +22,7 @@ The dependencies. Every endpoint must name a declared node.
 
 > `readonly` `optional` **id?**: `string`
 
-Defined in: src/core-flow/Graph.ts:176
+Defined in: [src/core-flow/Graph.ts:183](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Graph.ts#L183)
 
 Stable id used for topology + events. Default `'graph'`.
 
@@ -32,7 +32,7 @@ Stable id used for topology + events. Default `'graph'`.
 
 > `readonly` `optional` **name?**: `string`
 
-Defined in: src/core-flow/Graph.ts:174
+Defined in: [src/core-flow/Graph.ts:181](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Graph.ts#L181)
 
 Human-friendly name for events + topology. Default `'Graph'`.
 
@@ -42,7 +42,7 @@ Human-friendly name for events + topology. Default `'Graph'`.
 
 > `readonly` **nodes**: readonly [`GraphNode`](/docs/api/interfaces/GraphNode)\<`any`, `any`\>[]
 
-Defined in: src/core-flow/Graph.ts:170
+Defined in: [src/core-flow/Graph.ts:177](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Graph.ts#L177)
 
 The nodes. Ids must be unique; at least one is required.
 
@@ -52,7 +52,7 @@ The nodes. Ids must be unique; at least one is required.
 
 > `readonly` `optional` **structureRecorders?**: readonly `StructureRecorder`[]
 
-Defined in: src/core-flow/Graph.ts:184
+Defined in: [src/core-flow/Graph.ts:191](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Graph.ts#L191)
 
 Optional build-time recorders passed through to footprintjs's
 `flowChart()` factory — they observe this graph's OWN nodes (Seed +

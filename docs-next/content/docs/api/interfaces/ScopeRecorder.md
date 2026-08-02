@@ -218,8 +218,6 @@ Expose collected data for inclusion in executor.getSnapshot().recorders.
 
 #### Returns
 
-`object`
-
 ##### data
 
 > **data**: `unknown`
@@ -227,6 +225,13 @@ Expose collected data for inclusion in executor.getSnapshot().recorders.
 ##### description?
 
 > `optional` **description?**: `string`
+
+##### meta?
+
+> `optional` **meta?**: `Readonly`\<`Record`\<`string`, `unknown`\>\>
+
+Machine-readable facts about the bundle itself — see
+ import('../runner/ExecutionRuntime.js').RecorderSnapshot.meta.
 
 ##### name
 

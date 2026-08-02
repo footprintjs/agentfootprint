@@ -20,6 +20,11 @@
  * - FLAT charts only for the cross-loop hop — grouped loop frames are scope-isolated (degraded + flagged).
  * - Three first-class honest stops (never silent): `unseparated-siblings`, `overdetermined-or-incomplete`,
  *   `untracked-origin`.
+ * - THE PROXY IS NOT ALWAYS NEEDED (`variables`, 7.12): where the recording carries per-write
+ *   provenance, a suspect's state key has an EXACT recorded life — the value this loop read and the
+ *   write that produced it — so the descent is a commit-log fact, not a similarity guess, and the hop
+ *   says `narrowedBy: 'dataflow'`. The proxy still picks WHO; dataflow picks WHERE. Anything less than
+ *   exact (dial off, stage-level edges, no dataflow, scope-isolated frames) falls back to the beam.
  *
  * VALIDATION (the descent edge is now populated on real agents — proposal 008): `assembleTrajectory`
  * surfaces each loop's proximate `lastToolResult` on the WALK-ONLY `LoopFrame.proximateToolSource`
@@ -48,12 +53,29 @@ import type {
   Suspect,
   SuspectKind,
 } from './types.js';
+// Type-only (erased at build): variable-recall imports `buildWriterFrameIndex`
+// from here at runtime, so the value direction stays one-way.
+import type { AgentKeyMoment, AgentVariableSlice, DataflowCoverage } from './variable-recall.js';
 
 /** One honest stop reason when the walk cannot cleanly descend/convict. */
 export type RootCauseNote =
   | 'unseparated-siblings'
   | 'overdetermined-or-incomplete'
   | 'untracked-origin';
+
+/**
+ * How this hop's DESCENT TARGET was chosen:
+ *
+ * - `'text-similarity'` — the embedding beam picked the suspect and the hop
+ *   followed that suspect's scraped provenance writer. A PROXY (the default,
+ *   and the only value when no `variables` are supplied).
+ * - `'dataflow'` — the descent came from the RECORDED life of the suspect's
+ *   state key: the value this loop read, and the write that produced it. No
+ *   embedding took part in choosing where to go. Only ever stamped when that
+ *   key's dataflow is per-write EXACT (see `DataflowCoverage`) — a conservative
+ *   stage-level edge always falls back to the beam.
+ */
+export type HopNarrowedBy = 'text-similarity' | 'dataflow';
 
 /** One hop of the symptom→root walk. */
 export interface RootCauseHop {
@@ -62,8 +84,8 @@ export interface RootCauseHop {
   /** The narrowed culprit at this hop (joins a localizer Suspect 1:1). */
   readonly suspectId: string;
   readonly kind: SuspectKind;
-  /** The narrow is text-similarity — a PROXY, never causal. */
-  readonly narrowedBy: 'text-similarity';
+  /** How the descent target was chosen — see {@link HopNarrowedBy}. */
+  readonly narrowedBy: HopNarrowedBy;
   /** The causal convict — present only when a `rerun` ablated this hop's suspect. */
   readonly verdict?: AblationVerdict;
   /** The provenance writer this hop's culprit came from (runtimeStageId). */
@@ -98,6 +120,22 @@ export interface WalkToRootOptions {
   readonly maxAblations?: number;
   readonly classifier?: SuspectClassifier;
   readonly signal?: AbortSignal;
+  /**
+   * Joined variable lives (`traceVariable` / `joinVariableSlice`), one per state
+   * key you want the walk to be able to descend DETERMINISTICALLY along.
+   *
+   * When the narrowed suspect carries a state key whose {@link DataflowCoverage}
+   * is `'exact'`, the hop's descent target is taken from that key's RECORDED
+   * ancestry — the write that produced the value this loop read — instead of
+   * from the proxy's provenance scrape, and the hop is stamped
+   * `narrowedBy: 'dataflow'`. Anything less than exact (dial off, stage-level
+   * edges, no dataflow at all, a grouped/scope-isolated frame) falls back to the
+   * beam, unchanged.
+   *
+   * OMIT IT and the walk behaves EXACTLY as before — same hops, same order, same
+   * verdicts, every hop stamped `'text-similarity'`.
+   */
+  readonly variables?: readonly AgentVariableSlice[];
 }
 
 /** Margin under which the top-2 narrowed candidates are "unseparated" (mirrors the toBacktrackTrace pattern). */
@@ -116,16 +154,25 @@ export function buildWriterFrameIndex(trajectory: Trajectory): Map<string, numbe
   return map;
 }
 
-/** Map each suspectId present in a frame to the runtimeStageId that WROTE its slot (cross-loop provenance). */
-function writtenByOf(frame: LoopFrame): Map<string, string | undefined> {
-  const map = new Map<string, string | undefined>();
+/** Where one suspect in a frame came from: the writer of its slot, and the state key it rode in on. */
+interface SuspectOrigin {
+  /** runtimeStageId that WROTE the slot (cross-loop provenance). */
+  readonly writerId: string | undefined;
+  /** The state key carrying the suspect — the join into a variable's recorded life. */
+  readonly stateKey: string;
+}
+
+/** Map each suspectId present in a frame to its {@link SuspectOrigin}. */
+function writtenByOf(frame: LoopFrame): Map<string, SuspectOrigin> {
+  const map = new Map<string, SuspectOrigin>();
   for (const src of frame.contextSources) {
     const v = src.value;
     if (Array.isArray(v)) {
       // injection slots: an array of records keyed by sourceId
       for (const rec of v as Array<Record<string, unknown>>) {
         const id = typeof rec.sourceId === 'string' ? rec.sourceId : undefined;
-        if (id !== undefined && !map.has(id)) map.set(id, src.writerId);
+        if (id !== undefined && !map.has(id))
+          map.set(id, { writerId: src.writerId, stateKey: src.key });
       }
     } else if (
       v !== null &&
@@ -134,7 +181,7 @@ function writtenByOf(frame: LoopFrame): Map<string, string | undefined> {
     ) {
       // lastToolResult: a { toolName, result } object → the tool suspect
       const tool = (v as { toolName: string }).toolName;
-      if (!map.has(tool)) map.set(tool, src.writerId);
+      if (!map.has(tool)) map.set(tool, { writerId: src.writerId, stateKey: src.key });
     }
   }
   // The WALK-ONLY proximate tool source (proposal 008) — the cross-loop descent edge. NOT in
@@ -142,9 +189,48 @@ function writtenByOf(frame: LoopFrame): Map<string, string | undefined> {
   const tool = frame.proximateToolSource;
   if (tool && typeof (tool.value as { toolName?: unknown })?.toolName === 'string') {
     const name = (tool.value as { toolName: string }).toolName;
-    if (!map.has(name)) map.set(name, tool.writerId);
+    if (!map.has(name)) map.set(name, { writerId: tool.writerId, stateKey: tool.stateKey });
   }
   return map;
+}
+
+/**
+ * The DETERMINISTIC descent: the write that produced the value this loop's
+ * `call-llm` read of `stateKey` — straight off the recorded moments, no
+ * embedding involved.
+ *
+ * Preference order, both commit-log facts:
+ *   1. the read moment BY this loop's call-llm → its `fromWriteIdx` → that
+ *      write (exact value identity — footprintjs pins the same rule its forward
+ *      walk uses);
+ *   2. otherwise the last write strictly before the call-llm's commit (the key
+ *      the call-llm did not read directly — e.g. an inferred proximate).
+ *
+ * Returns `undefined` unless coverage is EXACT: a conservative (stage-level)
+ * edge must never be presented as an exact hop.
+ */
+function dataflowWriter(
+  slice: AgentVariableSlice | undefined,
+  frame: LoopFrame,
+): AgentKeyMoment | undefined {
+  const coverage: DataflowCoverage | undefined = slice?.coverage;
+  if (slice === undefined || coverage !== 'exact') return undefined;
+  // Grouped frames index a subflow's OWN inner log; a run-log slice cannot be
+  // joined to them (see LoopFrame.subflowScope).
+  if (frame.subflowScope !== undefined) return undefined;
+
+  const writes = slice.moments.filter((m) => m.kind === 'write');
+  const read =
+    frame.llmCallId !== undefined
+      ? slice.moments.find((m) => m.kind === 'read' && m.runtimeStageId === frame.llmCallId)
+      : undefined;
+  if (read?.fromWriteIdx !== undefined) {
+    return writes.find((w) => w.commitIdx === read.fromWriteIdx);
+  }
+  const llmIdx = frame.llmCallArrayIdx;
+  if (llmIdx === undefined) return undefined;
+  const before = writes.filter((w) => w.commitIdx < llmIdx);
+  return before.length > 0 ? before[before.length - 1] : undefined;
 }
 
 /** A minimal Suspect for ablationForSuspect (only kind + detail identity are read). */
@@ -196,6 +282,8 @@ export async function walkTrajectory(
   }
 
   const writerFrame = buildWriterFrameIndex(trajectory);
+  const variables = new Map((opts.variables ?? []).map((v) => [v.key, v]));
+  const variableOf = (key: string): AgentVariableSlice | undefined => variables.get(key);
 
   // Baseline stability (the un-ablated scenario must reproduce for any ablation verdict to be trusted).
   let baselineStable = true;
@@ -261,18 +349,39 @@ export async function walkTrajectory(
       }
     }
 
+    // NARROW → HOP. The beam picked WHO; this picks WHERE. When the narrowed
+    // suspect rode in on a state key whose dataflow is per-write EXACT, WHERE is
+    // a commit-log fact — the write that produced the value THIS loop read —
+    // instead of a provenance scrape or an inferred proximate. Absent
+    // `variables`, `exactWriter` is always undefined and nothing below changes.
+    const beamOrigin = writtenBy.get(chosen.suspectId);
+    const exactWrite =
+      beamOrigin?.stateKey !== undefined
+        ? dataflowWriter(variableOf(beamOrigin.stateKey), frame)
+        : undefined;
+    const exactFrameIdx =
+      exactWrite !== undefined ? writerFrame.get(exactWrite.runtimeStageId) : undefined;
+    const exactWriter =
+      exactWrite !== undefined && exactFrameIdx !== undefined && exactFrameIdx < frameIdx
+        ? exactWrite.runtimeStageId
+        : undefined; // strictly backward, or it is no descent at all
+
     // The proximate tool source (walk-only, proposal 008) is the cross-loop DESCENT edge. When this
     // loop did NOT convict, follow it back to the loop that PRODUCED the tool output the decision was
     // conditioned on — that's where a buried root (e.g. the misdirecting instruction) scores + convicts.
+    // It is an INFERRED proximate (`call-llm` read `history`, not this key), so a RECORDED exact edge
+    // for the narrowed suspect outranks it: better evidence wins, and the hop says which it used.
     const toolName =
       !convicted &&
+      exactWriter === undefined &&
       frame.proximateToolSource &&
       typeof (frame.proximateToolSource.value as { toolName?: unknown })?.toolName === 'string'
         ? (frame.proximateToolSource.value as { toolName: string }).toolName
         : undefined;
     if (toolName !== undefined) chosen = { suspectId: toolName, kind: 'tool' };
 
-    const writer = writtenBy.get(chosen.suspectId);
+    const narrowedBy: HopNarrowedBy = exactWriter !== undefined ? 'dataflow' : 'text-similarity';
+    const writer = exactWriter ?? writtenBy.get(chosen.suspectId)?.writerId;
     const nextFrameIdx = writer !== undefined ? writerFrame.get(writer) : undefined;
     const descendIdx =
       nextFrameIdx !== undefined && nextFrameIdx < frameIdx ? nextFrameIdx : undefined; // strictly backward
@@ -290,7 +399,7 @@ export async function walkTrajectory(
       loopIndex: frame.loopIndex,
       suspectId: chosen.suspectId,
       kind: chosen.kind,
-      narrowedBy: 'text-similarity',
+      narrowedBy,
       ...(chosenVerdict ? { verdict: chosenVerdict } : {}),
       ...(writer !== undefined ? { writtenBy: writer } : {}),
       ...(descendIdx !== undefined ? { cameFrom: trajectory.frames[descendIdx].loopIndex } : {}),

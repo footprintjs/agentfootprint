@@ -197,6 +197,7 @@ title: agentfootprint
 - [ToolContractCode](/docs/api/type-aliases/ToolContractCode)
 - [ToolResultContent](/docs/api/type-aliases/ToolResultContent)
 - [UntilGuard](/docs/api/type-aliases/UntilGuard)
+- [WriteProvenanceMode](/docs/api/type-aliases/WriteProvenanceMode)
 
 ## Variables
 

@@ -7,6 +7,86 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [7.12.0] - 2026-08-02
+
+Every debugging session starts at a *variable* — "where did that instruction come
+from?", "which loop wrote the history it answered from?" — and both halves of the
+answer already existed, in vocabularies that did not meet. footprintjs 9.13 records
+a variable's whole life in commit indices and runtimeStageIds; the localizer thinks
+in loops, injected sources and counterfactuals. Translating between them was left to
+whoever was debugging, and each of them did it differently.
+
+Joining them turned out to buy something bigger than a nicer read-out. The backward
+walk narrows each loop with embedding similarity — a proxy that points at a
+neighbourhood and cannot separate a planted instruction from an innocent same-topic
+sibling. But where the recording carries per-write provenance, one part of that guess
+is unnecessary: the commit log *says* which write produced the value this loop read.
+So the walk stops guessing exactly there — and keeps saying so everywhere else.
+
+### Added
+
+- **`traceVariable(artifacts, key)` — a variable's recorded life, in agent
+  vocabulary.** One call over footprintjs's `keyTimeline` + `forwardSliceForKey`:
+  every write and read in commit order, each labeled with the **loop** it happened
+  in, each recognizable write labeled with the injected fact or tool result it
+  introduced, and a `VariableAblationHook` per classifiable writer carrying the
+  `AblationSpec` that would remove it. `joinVariableSlice(slice, trajectory, opts)`
+  is the same join for a timeline you already hold.
+
+  Pure assembly — no new capture, no scorer, no embedder, no LLM. Every field is a
+  re-label of something the run already recorded, and footprintjs's honesty notes
+  ride out verbatim rather than re-worded.
+
+  Docs: [Variable recall](https://footprintjs.github.io/agentfootprint/docs/debug/variable-recall) ·
+  Example: `examples/observability/21-variable-recall.ts`.
+
+- **`walkToRoot({ variables })` — the hop the log can prove.** When a narrowed
+  suspect rode in on a state key whose dataflow coverage is `'exact'`, the descent
+  target is taken from that key's recorded ancestry instead of the proxy's
+  provenance scrape, and the hop is stamped `narrowedBy: 'dataflow'`. Everything
+  else stamps `'text-similarity'`. **Omit the option and the walk is unchanged** —
+  same hops, same order, same verdicts (pinned by a deep-equal test).
+
+  The proxy still picks WHO; dataflow picks WHERE. A stage-level edge never becomes
+  an exact hop, and a recorded edge outranks the *inferred* proximate-tool hop —
+  better evidence wins, and the hop record says which kind it used.
+
+- **`AgentOptions.writeProvenance`** (`'off'` default, `'reads-prefix'` to enable) —
+  the fourth executor dial, alongside `readTracking` and `commitValues`. On, every
+  write also records the keys read before it, which is what upgrades a variable to
+  `coverage: 'exact'`. Off, every recording is byte-identical to 7.11.
+
+- **`variableToBacktrackTrace`** — a variable's life on the same `BacktrackTrace`
+  board the localizer report uses (one card per write, custody hops for the rewind
+  player). `mode` is always `'correlational'`: nothing here was ablated.
+
+### The judgement this rests on
+
+`coverage: 'exact'` requires **positive** evidence — at least one recorded per-write
+edge — not merely the absence of a conservative one. A key nothing ever reads back
+(the agent's `lastToolResult`: written by tool-calls, never read by `call-llm`) has
+an empty edge set, so "no conservative edges" is *vacuously* true; scoring that as
+exact would hand the walk its most confident hop on its least-evidenced key. Absence
+of dataflow is `'unknown'`, never exactness.
+
+The gate is also deliberately stricter than the hop strictly needs: the read→value
+attribution the hop rests on is recorded independently of the write dial. Requiring
+per-write fed-edge exactness on top is a conservative choice, so the deterministic
+narrow ships behind the strongest available evidence — and a later release can relax
+it with measurements instead of re-deriving why it was strict.
+
+### Changed
+
+- `RootCauseHop.narrowedBy` widens from the literal `'text-similarity'` to
+  `HopNarrowedBy` (`'text-similarity' | 'dataflow'`). Additive: without `variables`
+  every hop still stamps `'text-similarity'`.
+- `ProximateToolSource` gains `stateKey` — the key its value was materialized from,
+  so the walk joins on recorded data instead of a hard-coded string. Walk-only, as
+  the rest of that record already was: L3's narrow and its measured recall are
+  untouched (pinned).
+- footprintjs peer dependency: `^9.13.0` (was `^9.10.1`) — `forwardSliceForKey` and
+  `keyTimeline` are what this release consumes.
+
 ## [7.11.0] - 2026-08-02
 
 A pipeline whose steps form a *shape* rather than a line — one step feeding two

@@ -260,6 +260,10 @@ export type { ToolArgValidationMode } from './core/agent/toolArgsValidation.js';
 // (re-exported from footprintjs so Agent consumers don't need a direct
 // footprintjs import to type the option).
 export type { ReadSummaryMarker, ReadTrackingMode } from 'footprintjs';
+// #P1 — per-write read provenance: the mode for AgentOptions.writeProvenance
+// (structurally derived from footprintjs's executor options — the engine owns
+// the vocabulary but does not export the alias).
+export type { WriteProvenanceMode } from './core/agent/types.js';
 export {
   OutputSchemaError,
   applyOutputSchema,

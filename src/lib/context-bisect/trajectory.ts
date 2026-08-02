@@ -95,6 +95,14 @@ export interface ProximateToolSource {
   readonly value: unknown;
   /** The producing loop's tool-calls stage runtimeStageId — resolves to an EARLIER frame. */
   readonly writerId: string | undefined;
+  /**
+   * The state key this value was materialized from (`'lastToolResult'`). Every
+   * OTHER source the walk can hop along carries its key on `ContextSource.key`;
+   * this one is not a contextSource, so the key is stamped here rather than
+   * hard-coded at the consumer (variable-recall joins on it). WALK-ONLY, like
+   * the rest of this record.
+   */
+  readonly stateKey: string;
   /** Honesty: the call-llm read `history`, NOT this key — an INFERRED proximate, not a direct read. */
   readonly proximate: true;
 }
@@ -119,6 +127,9 @@ export interface Trajectory {
   /** Set only when maxFrames cut the run. */
   readonly truncated?: { readonly byFrames: boolean };
 }
+
+/** The state key the proximate tool result is committed under (agent chart convention). */
+const PROXIMATE_TOOL_KEY = 'lastToolResult';
 
 // ─── bucketByAnchors — the pure HEAD-range partition (domain-agnostic) ─
 
@@ -301,11 +312,16 @@ function projectFrame(
   // read `history` (the aggregate), NOT this key — so it's an INFERRED proximate (`proximate: true`).
   let proximateToolSource: ProximateToolSource | undefined;
   if (subflowScope === undefined && llmCallArrayIdx !== undefined) {
-    const w = findLastWriter(log, 'lastToolResult', llmCallArrayIdx);
+    const w = findLastWriter(log, PROXIMATE_TOOL_KEY, llmCallArrayIdx);
     const wIdx = w !== undefined ? lastIdxOf.get(w.runtimeStageId) : undefined;
-    const v = wIdx !== undefined ? commitValueAt(log, wIdx, 'lastToolResult') : undefined;
+    const v = wIdx !== undefined ? commitValueAt(log, wIdx, PROXIMATE_TOOL_KEY) : undefined;
     if (w !== undefined && v !== undefined) {
-      proximateToolSource = { value: v, writerId: w.runtimeStageId, proximate: true };
+      proximateToolSource = {
+        value: v,
+        writerId: w.runtimeStageId,
+        stateKey: PROXIMATE_TOOL_KEY,
+        proximate: true,
+      };
     }
   }
 

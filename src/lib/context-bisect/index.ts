@@ -110,11 +110,30 @@ export {
   walkToRoot,
   walkTrajectory,
   buildWriterFrameIndex,
+  type HopNarrowedBy,
   type RootCauseHop,
   type RootCauseNote,
   type RootCausePath,
   type WalkToRootOptions,
 } from './walk-to-root.js';
+
+// variable-recall (7.12): footprintjs's variable slices joined to agent
+// vocabulary — loops, suspect identities, ablation hooks. Pure assembly; it is
+// what lets the walk narrow by RECORDED dataflow instead of text similarity.
+export {
+  joinVariableSlice,
+  traceVariable,
+  type AgentKeyMoment,
+  type AgentVariableSlice,
+  type DataflowCoverage,
+  type JoinVariableSliceOptions,
+  type TraceVariableOptions,
+  type VariableAblationHook,
+} from './variable-recall.js';
+export {
+  variableToBacktrackTrace,
+  type VariableToBacktrackTraceOptions,
+} from './variableToBacktrackTrace.js';
 
 // Per-loop trajectory assembler (proposal 005): segmentation core (phase 1)
 // + the agent-flavored projection (phase 2).

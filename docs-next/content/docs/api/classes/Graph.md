@@ -4,7 +4,7 @@ title: Graph
 
 # Class: Graph
 
-Defined in: src/core-flow/Graph.ts:390
+Defined in: [src/core-flow/Graph.ts:402](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Graph.ts#L402)
 
 A fixed DAG of runners. Build one with [graph](/docs/api/functions/graph).
 
@@ -18,7 +18,7 @@ A fixed DAG of runners. Build one with [graph](/docs/api/functions/graph).
 
 > **new Graph**(`opts`): `Graph`
 
-Defined in: src/core-flow/Graph.ts:417
+Defined in: [src/core-flow/Graph.ts:429](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Graph.ts#L429)
 
 #### Parameters
 
@@ -57,7 +57,7 @@ instead of N `.on()` subscriptions.
 
 > `readonly` **id**: `string`
 
-Defined in: src/core-flow/Graph.ts:392
+Defined in: [src/core-flow/Graph.ts:404](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Graph.ts#L404)
 
 ***
 
@@ -65,7 +65,7 @@ Defined in: src/core-flow/Graph.ts:392
 
 > `readonly` **name**: `string`
 
-Defined in: src/core-flow/Graph.ts:391
+Defined in: [src/core-flow/Graph.ts:403](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Graph.ts#L403)
 
 ## Methods
 
@@ -210,7 +210,7 @@ across multi-turn reuse of the same runner instance).
 
 > **getLevels**(): readonly readonly `string`[][]
 
-Defined in: src/core-flow/Graph.ts:436
+Defined in: [src/core-flow/Graph.ts:448](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Graph.ts#L448)
 
 How the graph was levelized — level 0 first. Stable post-construction.
 
@@ -608,7 +608,7 @@ calling if you still want them. Does NOT touch attached recorders
 
 > **resume**(`checkpoint`, `input?`, `options?`): `Promise`\<[`RunnerPauseOutcome`](/docs/api/interfaces/RunnerPauseOutcome) \| [`GraphOutput`](/docs/api/type-aliases/GraphOutput)\>
 
-Defined in: src/core-flow/Graph.ts:452
+Defined in: [src/core-flow/Graph.ts:464](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Graph.ts#L464)
 
 Resume a paused run from its checkpoint. Default behavior: rebuild the
 chart, wire the same core recorders + consumer recorders, call
@@ -643,7 +643,7 @@ returning. Subclass overrides only if it needs specialized behavior.
 
 > **run**(`input`, `options?`): `Promise`\<[`RunnerPauseOutcome`](/docs/api/interfaces/RunnerPauseOutcome) \| [`GraphOutput`](/docs/api/type-aliases/GraphOutput)\>
 
-Defined in: src/core-flow/Graph.ts:440
+Defined in: [src/core-flow/Graph.ts:452](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Graph.ts#L452)
 
 Execute the runner. Subclass may override for specialized input
 mapping, but default invokes getSpec() + FlowChartExecutor.

@@ -10,6 +10,7 @@
 
 import type {
   AttachRecorderOptions,
+  FlowChartExecutorOptions,
   ReadTrackingMode,
   StructureRecorder,
   CommitValuesMode,
@@ -43,6 +44,13 @@ import type { ReliabilityScope } from '../../reliability/types.js';
  * `'drop-oldest'`), `sampleEvery`, `flushBudgetMs` (default 2).
  */
 export type ObserverDeliveryOptions = Omit<AttachRecorderOptions, 'delivery'>;
+
+/**
+ * Per-write read-provenance policy — `AgentOptions.writeProvenance`. Derived
+ * structurally from footprintjs's executor options (the engine owns the
+ * vocabulary; it does not export the alias), so the two can never drift.
+ */
+export type WriteProvenanceMode = NonNullable<FlowChartExecutorOptions['writeProvenance']>;
 
 export interface AgentOptions {
   readonly provider: LLMProvider;
@@ -127,6 +135,24 @@ export interface AgentOptions {
    * `bundle.overwrite[key]` as the complete value.
    */
   readonly commitValues?: CommitValuesMode;
+  /**
+   * Per-write read provenance — forwarded to the internal executor as
+   * `{ writeProvenance }`. Default **`'off'`** (footprintjs's own default):
+   * every recording is byte-identical to earlier releases.
+   *
+   * With `'reads-prefix'`, each recorded write also stores the keys that were
+   * tracked-read BEFORE it, which upgrades what the trace layer can claim about
+   * a value: a downstream write is linked to this value because that write's
+   * own read-prefix names the key — and a write whose prefix omits it is
+   * excluded exactly. That is the difference between "this stage read A and
+   * wrote B, in some order the log cannot see" and a recorded dependency.
+   *
+   * Turn it on when you intend to DEBUG the run: `traceVariable` reports
+   * `coverage: 'exact'` only under this dial, and only then will `walkToRoot`
+   * take a deterministic `narrowedBy: 'dataflow'` hop instead of an embedding
+   * guess. Cost is one small array copy per write.
+   */
+  readonly writeProvenance?: WriteProvenanceMode;
   /**
    * Credential provider for downstream OAuth (declare-and-push). When set, a
    * tool that declares `needs: { credential }` has it resolved BEFORE `execute`

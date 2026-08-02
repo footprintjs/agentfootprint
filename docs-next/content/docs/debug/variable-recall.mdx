@@ -1,0 +1,125 @@
+---
+title: Variable recall
+description: "Ask about a VARIABLE, not a step — its whole recorded life, in agent vocabulary. And where the dataflow is exact, the backward walk stops guessing."
+---
+
+<Callout type="warn" title="Beta">
+`traceVariable` and the walk's `variables` option are **beta** (RFC-003 Part B). They work and ship with a tested example, but the API may still change before GA.
+</Callout>
+
+> Every debugging session starts at a variable. *Where did that instruction come from?* *Which loop wrote the history the model answered from?* The localizer answers in steps; footprintjs answers in commit indices. This turns both into the sentence you actually asked for — and, where the recording can prove it, replaces the walk's similarity guess with a recorded fact.
+
+## Why this exists
+
+footprintjs already records a variable's whole life. `keyTimeline` gives every write and every read of one key in commit order; `forwardSliceForKey` says what each value went on to feed, and **how exactly it knows**. What it cannot say is anything about *your agent*: that commit 4 was **loop 0**, that the write introduced the injected fact `vip-override`, or that removing it is a one-line counterfactual.
+
+That translation used to happen in each consumer's head, differently every time. `traceVariable` is the join, and it is deliberately nothing more — **no new capture, no new scorer, no embedder, no LLM call.** Every field is a re-label of something the run already recorded.
+
+## One call
+
+```ts twoslash
+import { traceVariable } from 'agentfootprint/debug';
+import type { ContextBugArtifacts } from 'agentfootprint/debug';
+
+declare const artifacts: ContextBugArtifacts; // { snapshot } from a finished run
+// ---cut---
+const life = traceVariable(artifacts, 'systemPromptInjections');
+
+life.coverage; // 'exact' | 'conservative' | 'unknown' — how well the log records what it fed
+life.moments; // every write and read, in commit order, each with its loopIndex
+life.ablations; // one counterfactual hook per classifiable writer
+life.notes; // footprintjs's honesty notes, verbatim
+```
+
+A `moments` entry is an `AgentKeyMoment`: footprintjs's `KeyMoment` fields (`kind`, `commitIdx`, `runtimeStageId`, `verb`, `fromWriteIdx`) **unchanged**, plus the two the agent cares about — `loopIndex` (absent when the step is run setup rather than a loop) and, for writes the classifier recognizes, `suspectKind` / `suspectId`. The whole result (`AgentVariableSlice`) is flat and JSON-safe, so the human board and an LLM tool read the same artifact.
+
+From the tested example, printed off a real run:
+
+```text
+write   0  Initialize     run setup
+write   4  Context        loop 0 → introduced injection 'vip-override'
+read   15  CallLLM        loop 0 (saw the value from commit 4)
+read   34  CallLLM        loop 1 (saw the value from commit 4)
+read   53  CallLLM        loop 2 (saw the value from commit 4)
+ablation hook: context#6 → remove injection 'vip-override'
+```
+
+Read the last two lines together: the answer at **loop 2** was conditioned on a value written back in **loop 0**, and the way to test that is already spelled out. Each hook is a `VariableAblationHook` — `writerId`, the suspect identity, and the `AblationSpec` your `AblationRunner` applies. Hooks exist for **classifiable writers only**; a writer the classifier cannot name gets none, which is an honest absence rather than a fabricated suspect.
+
+If you already hold a timeline and a trajectory (or want a custom classifier), call the join directly with `joinVariableSlice(slice, trajectory, opts)` — `JoinVariableSliceOptions` takes the `forward` slice and a `classify` override, and `TraceVariableOptions` adds `trajectory` / `before` for the one-call door.
+
+## Coverage: what the recording can prove
+
+`DataflowCoverage` is the one judgement this layer makes, and it gates everything below.
+
+| value | meaning |
+|---|---|
+| `'exact'` | Every recorded `fed` edge for this key carries **per-write** provenance: a downstream write links to this value *because that write's own read-prefix names the key* — and a write whose prefix omits it is excluded exactly. |
+| `'conservative'` | At least one edge is stage-level co-occurrence ("this stage read A and wrote B, in some order the log cannot see"). Sound over-approximation, never presented as exact. |
+| `'unknown'` | No forward slice was supplied, **or the key has no recorded dataflow at all**. |
+
+That last clause is the point. A key nothing ever reads back has *zero* edges — so "no conservative edges" would be **vacuously** true, and the key nothing depends on would score as the most exact key in your run. Exactness requires positive evidence, so the vacuous case is demoted.
+
+Exact coverage needs the dial:
+
+```ts twoslash
+import { Agent } from 'agentfootprint';
+declare const provider: never;
+// ---cut---
+const agent = Agent.create({
+  provider,
+  model: 'claude-sonnet-4-5',
+  writeProvenance: 'reads-prefix', // WriteProvenanceMode — default 'off'
+});
+```
+
+The option takes a `WriteProvenanceMode` — `'off'` (the default) or `'reads-prefix'`. Off, every recording stays byte-identical to earlier releases. Turn it on when you intend to *debug* the run: each write then also records the keys read before it, at the cost of one small array copy per write.
+
+## The walk stops guessing
+
+`walkToRoot` narrows each loop with per-loop influence — a **proxy** that points at a neighbourhood. Hand it the variables and one thing changes: where a narrowed suspect rode in on a key whose coverage is `'exact'`, the descent target comes from that key's recorded life instead.
+
+```ts twoslash
+import { walkToRoot, traceVariable, embeddingCache } from 'agentfootprint/debug';
+import { mockEmbedder } from 'agentfootprint/memory';
+import type { ContextBugArtifacts } from 'agentfootprint/debug';
+declare const artifacts: ContextBugArtifacts;
+// ---cut---
+const path = await walkToRoot(artifacts, {
+  embedder: embeddingCache(mockEmbedder()),
+  variables: [traceVariable(artifacts, 'systemPromptInjections')],
+});
+
+path.hops[0].narrowedBy; // HopNarrowedBy: 'dataflow' | 'text-similarity'
+```
+
+Every hop records how its target was chosen: `narrowedBy` is a `HopNarrowedBy`, either `'dataflow'` (a recorded edge) or `'text-similarity'` (the proxy). Same run, same walk, one dial apart — from the example's output:
+
+```text
+writeProvenance: 'off'           walk hop 0: loop 2 · lookup_order  · narrowedBy 'text-similarity'
+writeProvenance: 'reads-prefix'  walk hop 0: loop 2 · vip-override  · narrowedBy 'dataflow'  → descends to loop 0
+```
+
+The rules, stated so you can rely on them:
+
+- **The proxy picks WHO; dataflow picks WHERE.** The beam still narrows the suspect; only the descent target changes.
+- **A conservative edge never becomes an exact hop.** Dial off, stage-level edges, a key with no dataflow, or a scope-isolated (grouped-chart) frame — each falls back to the beam, stamped `'text-similarity'`.
+- **Recorded beats inferred.** An exact edge outranks the inferred proximate-tool hop, because the tool edge is a heuristic (`call-llm` reads `history`, not the tool key) and the exact edge is a commit-log fact.
+- **Omit `variables` and nothing changes** — same hops, same order, same verdicts.
+- **`narrowedBy` is not a verdict.** A dataflow hop is exact about *where the value came from*, never about what caused the answer. Only ablation convicts.
+
+It is deliberately stricter than the single hop needs: the read→value attribution the hop rests on is recorded independently of the write dial, so requiring per-write fed-edge exactness on top is a conservative *choice* — the deterministic narrow ships behind the strongest available evidence, and a later release can relax it with measurements.
+
+## On the board
+
+`variableToBacktrackTrace` puts a variable's life on the same `BacktrackTrace` board the localizer report uses — one card per write, newest first, custody hops for the rewind player. `VariableToBacktrackTraceOptions` takes the same `answer` / `claim` / `maxSuspects` shape as its siblings.
+
+Honestly weakest chips of the three boards: `mode` is **always** `'correlational'` (nothing here was ablated — the join measures nothing), every card is an upper bound, and the claims strip says plainly that these rows are **structural facts — recorded reads and writes, not similarity guesses**, so nobody mistakes it for an influence ranking. footprintjs's notes ride along verbatim, and a variable with no recorded writer renders an empty board that says why.
+
+The full runnable, tested example is [`21-variable-recall.ts`](https://github.com/footprintjs/agentfootprint/blob/main/examples/observability/21-variable-recall.ts) — the same refunds agent recorded twice, one dial apart.
+
+## Next steps
+
+- [Localize a context bug](doc:localize-context-bug) — where suspects, ablation specs and the walk come from
+- [Re-run without sources](doc:rerun-without-sources) — turn an ablation hook into a real counterfactual
+- [Causal deep dive](doc:causal-deep-dive) — the footprintjs primitives underneath (`keyTimeline`, `forwardSliceForKey`, `causalChain`)

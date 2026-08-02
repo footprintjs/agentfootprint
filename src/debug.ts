@@ -127,6 +127,8 @@ export {
   walkToRoot,
   walkTrajectory,
   buildWriterFrameIndex,
+  joinVariableSlice,
+  traceVariable,
   DEFAULT_RECENCY_DECAY,
   classifySuspect,
   findLoopHeads,
@@ -206,6 +208,13 @@ export {
   type SyntheticQuestionNode,
   type Trajectory,
   type WhatChanged,
+  type AgentKeyMoment,
+  type AgentVariableSlice,
+  type DataflowCoverage,
+  type HopNarrowedBy,
+  type JoinVariableSliceOptions,
+  type TraceVariableOptions,
+  type VariableAblationHook,
 } from './lib/context-bisect/index.js';
 // BacktrackTrace serializer — feeds agentThinkingUI's <BacktrackView>
 // (the "why?" board) straight off a localizer report. Pure mapping, no
@@ -213,6 +222,7 @@ export {
 export {
   sliceToBacktrackTrace,
   toBacktrackTrace,
+  variableToBacktrackTrace,
   type BacktrackCustodyHop,
   type BacktrackHop,
   type BacktrackSuspectCard,
@@ -220,6 +230,7 @@ export {
   type BacktrackTrail,
   type SliceToBacktrackTraceOptions,
   type ToBacktrackTraceOptions,
+  type VariableToBacktrackTraceOptions,
 } from './lib/context-bisect/index.js';
 // Tool-catalog confusability lint (RFC-002 tier 1, C1–C3) — build-time,
 // CI-gateable, framework-agnostic: plain { name, description?, inputSchema? }

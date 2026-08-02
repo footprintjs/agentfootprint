@@ -101,6 +101,7 @@ import type {
   AgentOutput,
   AgentState,
   ObserverDeliveryOptions,
+  WriteProvenanceMode,
 } from './agent/types.js';
 import { routeDeciderStage } from './agent/stages/route.js';
 import { buildSeedStage } from './agent/stages/seed.js';
@@ -120,7 +121,7 @@ export { AgentBuilder };
 // (e.g., `import { type AgentInput } from '../core/Agent.js'`) keep
 // working while implementation gradually moves into `./agent/*`.
 // Public types canonically live in `./agent/types.ts` (v2.11.1).
-export type { AgentInput, AgentOptions, AgentOutput, ObserverDeliveryOptions };
+export type { AgentInput, AgentOptions, AgentOutput, ObserverDeliveryOptions, WriteProvenanceMode };
 
 /**
  * `RunOptions` (footprintjs) + agentfootprint-domain correlation fields.
@@ -219,6 +220,10 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    *  retained memory), NOT footprintjs's `'full'`. See
    *  AgentOptions.commitValues. */
   private readonly commitValues: CommitValuesMode;
+  /** Per-write read provenance (#P1) — forwarded to the internal executor.
+   *  Default `'off'` (footprintjs's own): recordings stay byte-identical
+   *  unless a consumer opts in. See AgentOptions.writeProvenance. */
+  private readonly writeProvenance: WriteProvenanceMode;
   private readonly credentialProvider?: CredentialProvider;
   /** Evidence bridge (#5) — present iff a CAUSAL memory is mounted. */
   private readonly causalEvidence?: CausalEvidenceRecorderHandle;
@@ -418,6 +423,11 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // immediately (the agent's history-append workload is exactly the case
     // the verb exists for; reconstruction stays lossless via commitValueAt).
     this.commitValues = opts.commitValues ?? 'delta';
+    // Default 'off' — the debugging dial is opt-in: on, every write also
+    // records the keys read before it, which is what upgrades `traceVariable`
+    // to `coverage: 'exact'` and lets `walkToRoot` hop by recorded dataflow
+    // instead of embedding similarity.
+    this.writeProvenance = opts.writeProvenance ?? 'off';
     // RFC-001 Block 10 — observer delivery tier. Fail fast on the dials
     // without the switch (no silently-ignored combinations; same policy
     // that merged reactMode/reactStructure in 6.0.0).
@@ -819,11 +829,13 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     };
 
     // Reuse the cached chart built at constructor time.
-    // The Agent's executor dials: readTracking (#18/#14, snapshot stageReads)
-    // and commitValues (#13c-B, commit-log value encoding).
+    // The Agent's executor dials: readTracking (#18/#14, snapshot stageReads),
+    // commitValues (#13c-B, commit-log value encoding) and writeProvenance
+    // (#P1, per-write read provenance — the exact-dataflow debugging dial).
     const executor = new FlowChartExecutor(this.getSpec(), {
       readTracking: this.readTracking,
       commitValues: this.commitValues,
+      writeProvenance: this.writeProvenance,
     });
     // Enable structured narrative so `getLastNarrativeEntries()` can
     // hand a populated array to consumer Trace views (ExplainableShell).

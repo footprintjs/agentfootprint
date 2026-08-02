@@ -360,8 +360,6 @@ Optional: expose collected data for inclusion in snapshots.
 
 #### Returns
 
-`object`
-
 ##### data
 
 > **data**: `unknown`
@@ -369,6 +367,13 @@ Optional: expose collected data for inclusion in snapshots.
 ##### description?
 
 > `optional` **description?**: `string`
+
+##### meta?
+
+> `optional` **meta?**: `Readonly`\<`Record`\<`string`, `unknown`\>\>
+
+Machine-readable facts about the bundle itself — see
+ import('../../runner/ExecutionRuntime.js').RecorderSnapshot.meta.
 
 ##### name
 
