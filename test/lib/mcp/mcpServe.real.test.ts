@@ -339,9 +339,22 @@ describe('mcpServe over a real streamable-HTTP transport', () => {
       expect(second.toolNames).toEqual(['echo', 'delete_account']);
       const reconnected = await connectHttp(port);
       try {
-        expect(textOf(await reconnected.callTool({ name: 'echo', arguments: { text: 'b' } }))).toBe(
-          'echo: b',
-        );
+        // The first client's keep-alive socket lives in undici's GLOBAL pool,
+        // keyed by origin — the second client can be handed that dead socket
+        // and fail once with UND_ERR_SOCKET ("other side closed"). The law
+        // this test pins is that the PORT is reusable (the serveOnHttp above
+        // would EADDRINUSE otherwise); connection-pool hygiene is undici's
+        // surface, not ours, so one bounded retry on exactly that error keeps
+        // the pin honest without a flake.
+        const callOnceRetryingDeadSocket = async () => {
+          try {
+            return await reconnected.callTool({ name: 'echo', arguments: { text: 'b' } });
+          } catch (e) {
+            if (!String(e).includes('fetch failed')) throw e;
+            return await reconnected.callTool({ name: 'echo', arguments: { text: 'b' } });
+          }
+        };
+        expect(textOf(await callOnceRetryingDeadSocket())).toBe('echo: b');
       } finally {
         await reconnected.close();
       }
