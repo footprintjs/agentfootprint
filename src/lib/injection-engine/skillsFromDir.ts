@@ -199,9 +199,7 @@ export async function skillsFromDir(
  */
 function assertLocalDirectoryArgument(dir: unknown): asserts dir is string {
   if (typeof dir !== 'string' || dir.trim().length === 0) {
-    throw new Error(
-      `skillsFromDir: expected a local directory path, got ${JSON.stringify(dir)}.`,
-    );
+    throw new Error(`skillsFromDir: expected a local directory path, got ${JSON.stringify(dir)}.`);
   }
   const scheme = URL_LIKE_RE.exec(dir);
   if (scheme) {
@@ -276,7 +274,10 @@ function parseSkillFile(raw: string, file: string): ParsedSkillFile {
 
   const name = fields.get('name') ?? '';
   const description = fields.get('description') ?? '';
-  const body = lines.slice(closingIndex + 1).join('\n').trim();
+  const body = lines
+    .slice(closingIndex + 1)
+    .join('\n')
+    .trim();
 
   if (name.length === 0) {
     throw new Error(

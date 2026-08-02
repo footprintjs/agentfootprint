@@ -36,7 +36,13 @@ export interface McpStdioTransport {
   readonly command: string;
   /** CLI args passed to the executable. */
   readonly args?: readonly string[];
-  /** Optional env vars set on the subprocess. */
+  /**
+   * Environment for the subprocess. Passed to the SDK as-is, and the SDK
+   * treats it as the WHOLE environment: set this and the child no longer
+   * inherits the safe default set (`PATH`, `HOME`, …). Omit it unless you
+   * mean to replace the environment; to merely add a variable, include the
+   * ones the child still needs.
+   */
   readonly env?: Readonly<Record<string, string>>;
   /** Working directory for the subprocess. */
   readonly cwd?: string;
@@ -126,22 +132,35 @@ export interface McpClient {
  *      a lazy peer-dep)
  *
  * The real SDK exports a richer surface; we narrow to what's needed.
+ *
+ * Argument POSITION matters here and is easy to get wrong: the SDK keeps
+ * per-request options (`signal`, `timeout`) in a SEPARATE trailing
+ * argument, never inside the JSON-RPC params. A `signal` smuggled into
+ * the params object is serialized onto the wire as `{}` and silently
+ * fails to cancel anything, so these signatures mirror the SDK's own
+ * shape rather than a flattened convenience version of it.
  */
 export interface McpSdkClient {
-  connect(transport: unknown): Promise<void>;
-  listTools(): Promise<{
+  connect(transport: unknown, options?: McpRequestOptions): Promise<void>;
+  listTools(
+    params?: undefined,
+    options?: McpRequestOptions,
+  ): Promise<{
     readonly tools: ReadonlyArray<{
       readonly name: string;
       readonly description?: string;
       readonly inputSchema: Readonly<Record<string, unknown>>;
     }>;
   }>;
-  callTool(args: {
-    readonly name: string;
-    readonly arguments?: Readonly<Record<string, unknown>>;
-    /** Forwarded from `McpClientOptions.signal` so consumers can cancel hung tool calls. */
-    readonly signal?: AbortSignal;
-  }): Promise<{
+  callTool(
+    params: {
+      readonly name: string;
+      readonly arguments?: Readonly<Record<string, unknown>>;
+    },
+    /** The SDK's result schema. We always want its default, so we pass `undefined`. */
+    resultSchema?: undefined,
+    options?: McpRequestOptions,
+  ): Promise<{
     readonly content: ReadonlyArray<{
       readonly type: string;
       readonly text?: string;
@@ -149,6 +168,14 @@ export interface McpSdkClient {
     readonly isError?: boolean;
   }>;
   close(): Promise<void>;
+}
+
+/**
+ * The SDK's trailing per-request options argument, narrowed to the one
+ * field we forward from {@link McpClientOptions.signal}.
+ */
+export interface McpRequestOptions {
+  readonly signal?: AbortSignal;
 }
 
 // ─── Serving: the other direction ──────────────────────────────────

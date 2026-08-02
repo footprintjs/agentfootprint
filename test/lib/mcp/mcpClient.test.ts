@@ -169,8 +169,14 @@ describe('mcpClient — signal + arg-coercion fixes', () => {
     });
     const tools = await client.tools();
     await tools[0]!.execute({ q: 'x' });
-    const callArgs = callSpy.mock.calls[0]![0];
-    expect(callArgs.signal).toBe(ac.signal);
+    // POSITION IS THE POINT: the SDK reads `signal` from its THIRD
+    // argument (RequestOptions). Inside the params object — where this
+    // used to go — it is JSON-serialized to `{}` on the wire and cancels
+    // nothing. See mcpClient.real.test.ts for the same law over a socket.
+    const [params, resultSchema, options] = callSpy.mock.calls[0]!;
+    expect(params.signal).toBeUndefined();
+    expect(resultSchema).toBeUndefined();
+    expect(options.signal).toBe(ac.signal);
   });
 
   it('non-object args coerce to {} (defensive — LLM may hallucinate scalar)', async () => {

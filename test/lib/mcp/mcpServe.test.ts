@@ -148,11 +148,27 @@ describe('mcpServe — unit', () => {
   });
 
   it('without @modelcontextprotocol/sdk installed, it says how to install it', async () => {
-    // No `_server`, and the SDK is an optional peer this repo does not
-    // install — so this exercises the real lazy-require path.
-    await expect(mcpServe([echo], { name: 'support-desk' })).rejects.toThrow(
-      /mcpServe requires @modelcontextprotocol\/sdk[\s\S]*npm install @modelcontextprotocol\/sdk/,
-    );
+    // The SDK is now a devDependency (the real transports are exercised in
+    // mcpServe.stdio.real.test.ts / mcpServe.http.real.test.ts), so absence
+    // has to be staged rather than borrowed from the environment: the
+    // lazy-require is mocked to fail exactly as a missing module does.
+    // Staging it is also what makes this deterministic — it used to pass
+    // for the incidental reason that nobody had installed the peer.
+    vi.doMock('../../../src/lib/lazyRequire.js', () => ({
+      lazyRequire: () => {
+        throw new Error("Cannot find module '@modelcontextprotocol/sdk/server/index.js'");
+      },
+    }));
+    vi.resetModules();
+    try {
+      const { mcpServe: withoutSdk } = await import('../../../src/lib/mcp/mcpServe.js');
+      await expect(withoutSdk([echo], { name: 'support-desk' })).rejects.toThrow(
+        /mcpServe requires @modelcontextprotocol\/sdk[\s\S]*npm install @modelcontextprotocol\/sdk/,
+      );
+    } finally {
+      vi.doUnmock('../../../src/lib/lazyRequire.js');
+      vi.resetModules();
+    }
   });
 
   it('LAW: close() shuts the server down, and is idempotent', async () => {

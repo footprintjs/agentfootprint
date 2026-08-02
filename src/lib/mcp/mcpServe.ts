@@ -44,6 +44,10 @@
  * already have into zod (a new dependency) to convert it straight back.
  */
 
+// Type-only: erased at compile time, so this does not pull node:http into
+// a bundle. The listener itself is still built from a dynamic import.
+import type { ServerResponse } from 'node:http';
+
 import type { Tool, ToolExecutionContext } from '../../core/tools.js';
 import type { Credential, CredentialProvider } from '../../identity/types.js';
 import { unconfiguredCredentialProvider } from '../../identity/types.js';
@@ -86,13 +90,17 @@ export async function mcpServe(
     inputSchema: t.schema.inputSchema ?? { type: 'object', properties: {} },
   }));
 
-  const sdk = opts._server ?? (await resolveServer(name, version));
+  // Order matters: the server is resolved FIRST so that a missing SDK is
+  // reported by the message that tells you how to install it, rather than
+  // by the narrower one about a single submodule.
+  const rootServer = opts._server ?? (await resolveServer(name, version));
   const { listSchema, callSchema } = await resolveRequestSchemas(opts._server !== undefined);
 
-  sdk.setRequestHandler(listSchema, () => ({ tools: listing }));
-
   let callCounter = 0;
-  sdk.setRequestHandler(callSchema, async (request: McpCallToolRequest, extra) => {
+  const handleCall = async (
+    request: McpCallToolRequest,
+    extra: { readonly signal?: AbortSignal },
+  ): Promise<unknown> => {
     // Everything below this line is inside one try/catch on purpose. A
     // client we do not control chose this request; a bad choice is a tool
     // error reported back over the protocol, never an exception that
@@ -124,9 +132,31 @@ export async function mcpServe(
     } catch (error) {
       return toolError(error instanceof Error ? error.message : String(error));
     }
-  });
+  };
 
-  const connection = await connectTransport(sdk, opts.transport ?? { transport: 'stdio' }, opts);
+  /**
+   * Put our two handlers on one SDK server. Factored out of the body
+   * because the streamable-HTTP path cannot reuse a single server: the
+   * SDK's stateless transport refuses a second request ("Stateless
+   * transport cannot be reused across requests"), so that path builds a
+   * fresh server + transport per request and needs to install the same
+   * two handlers on each one. `listing` and `byName` are captured, so
+   * every server instance serves the same tools — the same objects.
+   */
+  const install = (server: McpSdkServer): McpSdkServer => {
+    server.setRequestHandler(listSchema, () => ({ tools: listing }));
+    server.setRequestHandler(callSchema, handleCall);
+    return server;
+  };
+
+  const sdk = install(rootServer);
+
+  const connection = await connectTransport(
+    sdk,
+    opts.transport ?? { transport: 'stdio' },
+    opts,
+    async () => install(await resolveServer(name, version)),
+  );
 
   let closed = false;
   return {
@@ -221,8 +251,7 @@ async function buildExecutionContext(
     // asked for a credential never runs without one.
     if (resolved.status !== 'issued') {
       return {
-        blocked:
-          `authorization required for '${need.credential}': ${resolved.authorizationUrl}`,
+        blocked: `authorization required for '${need.credential}': ${resolved.authorizationUrl}`,
       };
     }
     credential = resolved.credential;
@@ -330,6 +359,7 @@ async function connectTransport(
   sdk: McpSdkServer,
   transport: McpServeTransport,
   opts: McpServeOptions,
+  newServer: () => Promise<McpSdkServer>,
 ): Promise<Connection> {
   // An injected server is a test double: there is no real transport to
   // build, and building one would spawn a listener or seize stdio.
@@ -350,7 +380,10 @@ async function connectTransport(
     await sdk.connect(new stdioMod.StdioServerTransport());
     return NOTHING_TO_UNWIND;
   }
-  return connectHttp(sdk, transport);
+  // HTTP deliberately does not use `sdk`: it mints a server per request
+  // (see connectHttp). The root server stays unconnected, which makes the
+  // handle's `sdk.close()` a harmless no-op on this path.
+  return connectHttp(transport, newServer);
 }
 
 /**
@@ -360,10 +393,18 @@ async function connectTransport(
  *
  * Stateless (`sessionIdGenerator: undefined`): no session table to keep,
  * nothing to expire, and several replicas can serve the same tools.
+ *
+ * Statelessness is not just a config flag here — it decides the shape of
+ * this function. The SDK's stateless transport is single-use by design
+ * (reusing one would let two clients collide on JSON-RPC message ids), so
+ * it throws on its second request. Each request therefore gets its own
+ * transport, and — because one SDK server can only be attached to one
+ * transport — its own server. Both are thrown away when the response
+ * closes. The tools they serve are the same objects either way.
  */
 async function connectHttp(
-  sdk: McpSdkServer,
   transport: McpHttpServeTransport,
+  newServer: () => Promise<McpSdkServer>,
 ): Promise<Connection> {
   let httpMod: McpHttpServerExports;
   try {
@@ -378,10 +419,19 @@ async function connectHttp(
   }
   const { createServer } = await import('node:http');
 
-  const mcpTransport = new httpMod.StreamableHTTPServerTransport({
-    sessionIdGenerator: undefined,
-  });
-  await sdk.connect(mcpTransport);
+  const serveOne = async (req: unknown, res: ServerResponse): Promise<void> => {
+    const server = await newServer();
+    const mcpTransport = new httpMod.StreamableHTTPServerTransport({
+      sessionIdGenerator: undefined,
+    });
+    // The pair lives exactly as long as the response does.
+    res.on('close', () => {
+      void mcpTransport.close();
+      void server.close();
+    });
+    await server.connect(mcpTransport);
+    await mcpTransport.handleRequest(req, res);
+  };
 
   const path = transport.path ?? DEFAULT_HTTP_PATH;
   const listener = createServer((req, res) => {
@@ -393,7 +443,15 @@ async function connectHttp(
       res.end();
       return;
     }
-    void mcpTransport.handleRequest(req, res);
+    // One failed request must not take the listener down. The client is
+    // told (500 is a protocol-level error it surfaces); the next request
+    // is served normally.
+    void serveOne(req, res).catch(() => {
+      if (!res.headersSent) {
+        res.statusCode = 500;
+        res.end();
+      }
+    });
   });
 
   await new Promise<void>((resolve, reject) => {
@@ -429,9 +487,8 @@ interface McpStdioServerExports {
 }
 
 interface McpHttpServerExports {
-  readonly StreamableHTTPServerTransport: new (options: {
-    sessionIdGenerator: undefined;
-  }) => {
+  readonly StreamableHTTPServerTransport: new (options: { sessionIdGenerator: undefined }) => {
     handleRequest(req: unknown, res: unknown): Promise<void>;
+    close(): Promise<void>;
   };
 }

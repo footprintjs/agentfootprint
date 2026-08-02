@@ -374,7 +374,7 @@ describe('.configure() — security', () => {
             temperature: 0.99,
             maxTokens: 1,
             tools: [],
-          }) as never,
+          } as never),
       )
       .build();
 

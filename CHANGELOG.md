@@ -66,6 +66,14 @@ other way, and a value committed where run-level values already commit.
   re-validating them here would be a second, weaker copy of the contract the tool
   already enforces.
 
+  Both transports are exercised for real in the test suite — a spawned child
+  process for stdio, a bound socket for Streamable HTTP, and the MCP SDK's own
+  `Client` on the other end — rather than only through an injected server. That
+  is how the HTTP path's shape got settled: the SDK's stateless transport is
+  single-use by design, so the listener mints a server and a transport per
+  request. One shared pair initializes fine and then answers `500` to everything
+  after it, which no amount of injected testing would have shown.
+
   Docs: [Serve your tools over MCP](https://footprintjs.github.io/agentfootprint/docs/build/mcp-serve) ·
   Example: `examples/context-engineering/10-mcp-serve.ts`.
 
@@ -89,6 +97,21 @@ other way, and a value committed where run-level values already commit.
 
   Docs: [Agent](https://footprintjs.github.io/agentfootprint/docs/build/agent) ·
   Example: `examples/features/36-per-run-config.ts`.
+
+### Fixed
+
+- **`McpClientOptions.signal` cancels a hung MCP tool call again — it never
+  did.** The signal was being sent as part of the `tools/call` request
+  *params*, where an `AbortSignal` JSON-serializes to `{}`: the server received
+  a meaningless field and the caller received no cancellation. The SDK takes
+  per-request options in a separate trailing argument, which is where the signal
+  now goes; it is threaded to `connect()` and `listTools()` for the same reason,
+  so the option covers the connect / list / call paths it always claimed to.
+
+  This one is worth naming as a class rather than a typo. The mock the tests
+  injected accepted the signal wherever it was put, so every test passed while
+  the shipped behaviour was a silent no-op. It surfaced the moment a socket was
+  on the other end.
 
 ### The judgements these rest on
 

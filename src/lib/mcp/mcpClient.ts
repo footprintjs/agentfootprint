@@ -57,7 +57,7 @@ const DEFAULT_CLIENT_INFO = {
  */
 export async function mcpClient(opts: McpClientOptions): Promise<McpClient> {
   const name = opts.name ?? 'mcp';
-  const sdk = opts._client ?? (await resolveClient(opts.transport, opts.clientInfo));
+  const sdk = opts._client ?? (await resolveClient(opts.transport, opts.clientInfo, opts.signal));
 
   // Tool cache so consumers calling `.tools()` more than once don't
   // hammer the server. `.refresh()` invalidates it.
@@ -73,7 +73,11 @@ export async function mcpClient(opts: McpClientOptions): Promise<McpClient> {
   };
 
   const buildTools = async (): Promise<readonly Tool[]> => {
-    const listed = await sdk.listTools();
+    // `signal` rides in the SDK's THIRD argument (RequestOptions), not in
+    // the request params — see `wrapMcpTool`.
+    const listed = opts.signal
+      ? await sdk.listTools(undefined, { signal: opts.signal })
+      : await sdk.listTools();
     return listed.tools.map((t) => wrapMcpTool(name, sdk, t, opts.signal));
   };
 
@@ -103,6 +107,7 @@ export async function mcpClient(opts: McpClientOptions): Promise<McpClient> {
 async function resolveClient(
   transport: McpTransport,
   clientInfo?: { name: string; version: string },
+  signal?: AbortSignal,
 ): Promise<McpSdkClient> {
   let mod: McpSdkExports;
   try {
@@ -120,7 +125,9 @@ async function resolveClient(
   });
 
   const transportImpl = await buildTransport(transport);
-  await client.connect(transportImpl);
+  // Same rule as callTool: options ride beside the transport, never inside it.
+  if (signal) await client.connect(transportImpl, { signal });
+  else await client.connect(transportImpl);
   return client;
 }
 
@@ -184,11 +191,15 @@ function wrapMcpTool(
         args !== null && typeof args === 'object' && !Array.isArray(args)
           ? (args as Record<string, unknown>)
           : {};
-      const result = await sdk.callTool({
-        name: mcp.name,
-        arguments: argsObj,
-        ...(signal && { signal }),
-      });
+      // The abort signal is NOT a request param — it belongs to the SDK's
+      // third argument (`RequestOptions`). Put it in the params object and
+      // it gets serialized onto the wire as an empty `{}` and the call is
+      // uncancellable: a silent no-op that only a real transport reveals.
+      // `resultSchema` (2nd arg) is left to the SDK's own default.
+      const params = { name: mcp.name, arguments: argsObj };
+      const result = signal
+        ? await sdk.callTool(params, undefined, { signal })
+        : await sdk.callTool(params);
       // MCP returns content blocks. We concatenate text blocks into
       // a single string for the agent's tool-result event payload.
       // Non-text blocks (images, resources) are summarized with their

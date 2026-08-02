@@ -461,6 +461,7 @@
   },
   "devDependencies": {
     "@arethetypeswrong/cli": "^0.18.1",
+    "@modelcontextprotocol/sdk": "^1.30.0",
     "@types/node": "^25.5.2",
     "@typescript-eslint/eslint-plugin": "^5.61.0",
     "@typescript-eslint/parser": "^5.61.0",
