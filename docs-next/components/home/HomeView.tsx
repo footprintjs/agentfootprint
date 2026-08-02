@@ -62,6 +62,16 @@ export function HomeViewProvider({ children }: { children: ReactNode }) {
     return () => window.removeEventListener('popstate', handlePopState);
   }, [applyView]);
 
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      document.title = VIEW_METADATA[view].title;
+      document
+        .querySelector<HTMLMetaElement>('meta[name="description"]')
+        ?.setAttribute('content', VIEW_METADATA[view].description);
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [view]);
+
   const setView = useCallback(
     (nextView: HomeView) => applyView(nextView, true),
     [applyView],
@@ -102,4 +112,3 @@ export function HomeViewSwitcher() {
     </div>
   );
 }
-
