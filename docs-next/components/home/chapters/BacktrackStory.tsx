@@ -2,6 +2,7 @@
 
 import { useRef } from 'react';
 import { useScrollProgress } from '@/lib/home/useScrollProgress';
+import { useHomeView } from '../HomeView';
 
 /**
  * Chapter 1 — "The problem". An agent approved a refund it shouldn't; asking a model
@@ -98,6 +99,8 @@ const LAST = 7;
 const headStep = (p: number) => (p <= 2 ? 14 : p <= 4 ? 9 : 4);
 
 export function BacktrackStory() {
+  const { view } = useHomeView();
+  const technical = view === 'technical';
   const trackRef = useRef<HTMLDivElement>(null);
 
   // scroll-driven scrubbing via the shared scroll engine: phase advances by scroll progress,
@@ -124,9 +127,15 @@ export function BacktrackStory() {
 
   return (
     <div className="af-bt">
-      <p className="af-bt-head">It approved a refund it should have denied.</p>
+      <p className="af-bt-head">
+        {technical
+          ? 'The output is wrong. The causal input is hidden.'
+          : 'It approved a refund it should have denied.'}
+      </p>
       <p className="af-bt-sub">
-        Somewhere in the context you fed it, one piece flipped the decision. Which one?
+        {technical
+          ? 'A sequential log can replay the order. A causal footprint can identify which context contribution changed the decision.'
+          : 'Somewhere in the context you fed it, one piece flipped the decision. Which one?'}
       </p>
 
       <div className="af-bt-grid">
@@ -275,12 +284,14 @@ export function BacktrackStory() {
               <span className="af-aside-prog" aria-hidden="true">
                 <span className="af-aside-fill" style={{ height: `${(phase / LAST) * 100}%` }} />
               </span>
-              <p className="af-flow-kicker">So how do you actually know?</p>
+              <p className="af-flow-kicker">
+                {technical ? 'Backward slice over the recorded run' : 'So how do you actually know?'}
+              </p>
               <p className="af-flow-head">
                 {forward ? (
-                  <>Replay the fix — <em>forward.</em></>
+                  technical ? <><em>Counterfactual</em> replay.</> : <>Replay the fix — <em>forward.</em></>
                 ) : (
-                  <>Rewind the run — <em>backward.</em></>
+                  technical ? <>Traverse influence — <em>backward.</em></> : <>Rewind the run — <em>backward.</em></>
                 )}
               </p>
               <p className="af-tl-cap">{CAPS[phase]}</p>

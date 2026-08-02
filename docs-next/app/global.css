@@ -102,6 +102,77 @@
   background: var(--bg);
   color: var(--fg);
 }
+.af-view-switcher {
+  position: fixed;
+  top: 9px;
+  left: 50%;
+  z-index: 60;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 3px;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  background: var(--bg);
+  box-shadow: 0 8px 24px -18px rgb(0 0 0 / 0.5);
+  transform: translateX(-50%);
+}
+.af-view-switcher .af-view-label {
+  padding: 0 6px 0 9px;
+  color: var(--fg-muted);
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.af-view-switcher button {
+  min-width: 86px;
+  padding: 7px 13px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--fg-muted);
+  font-size: 12.5px;
+  font-weight: 650;
+  line-height: 1;
+  cursor: pointer;
+}
+.af-view-switcher button:hover {
+  color: var(--fg);
+}
+.af-view-switcher button.active {
+  background: var(--yellow);
+  color: #18181b;
+}
+.af-view-switcher button:focus-visible {
+  outline: 2px solid var(--yellow-dark);
+  outline-offset: 2px;
+}
+@media (max-width: 1080px) {
+  .af-view-switcher {
+    top: auto;
+    bottom: max(14px, env(safe-area-inset-bottom));
+  }
+}
+@media (min-width: 1081px) and (max-width: 1439px) {
+  .af-sh--home .af-sh-search {
+    width: 36px;
+    padding: 0;
+    justify-content: center;
+  }
+  .af-sh--home .af-sh-search-text,
+  .af-sh--home .af-sh-kbd {
+    display: none;
+  }
+}
+@media (max-width: 420px) {
+  .af-view-switcher .af-view-label {
+    display: none;
+  }
+  .af-view-switcher button {
+    min-width: 78px;
+  }
+}
 /* Professional responsive container: capped content width + fluid gutters that scale
    with the viewport (small on phones, generous on wide screens). Defined once. */
 :root {

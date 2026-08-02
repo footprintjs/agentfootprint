@@ -6,7 +6,8 @@ import { WhyThisTool } from './chapters/WhyThisTool';
 import { ContextEngineering } from './chapters/ContextEngineering';
 import { CoreEngine } from './chapters/CoreEngine';
 import { SummaryChapter } from './chapters/SummaryChapter';
-import { CHAPTERS_META, type ChapterMeta } from '@/lib/chapters';
+import { HOME_VIEW_CHAPTERS, type ChapterMeta } from '@/lib/chapters';
+import { useHomeView } from './HomeView';
 
 /**
  * The homepage storyboard, told as a five-chapter arc: PROBLEM → SOLUTION → BENEFITS →
@@ -27,9 +28,12 @@ const BODIES: Record<string, ComponentType> = {
   'af-ch-payoff': SummaryChapter,
 };
 
-export const CHAPTERS: Chapter[] = CHAPTERS_META.map((c) => ({ ...c, Body: BODIES[c.id] }));
-
 export function Chapters() {
+  const { view } = useHomeView();
+  const chapters: Chapter[] = HOME_VIEW_CHAPTERS[view].map((chapter) => ({
+    ...chapter,
+    Body: BODIES[chapter.id],
+  }));
   const ref = useRef<HTMLDivElement>(null);
   // the sticky bar's sub-line follows the section you're scrolling: any [data-narrative]
   // sub-section whose box holds the viewport center sets its chapter's sub (falls back to c.sub).
@@ -106,7 +110,7 @@ export function Chapters() {
 
   return (
     <div ref={ref}>
-      {CHAPTERS.map((c, i) => {
+      {chapters.map((c, i) => {
         const sub = activeSubs[c.id] ?? c.sub;
         return (
           <section className={`af-chapter${i % 2 === 1 ? ' alt' : ''}`} id={c.id} key={c.id}>

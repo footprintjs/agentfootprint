@@ -1,5 +1,8 @@
+'use client';
+
 import Link from 'next/link';
 import { asset } from '@/lib/site';
+import { useHomeView } from '../HomeView';
 
 // Inline GitHub mark (lucide dropped brand icons) — kept local so the summary chapter
 // is self-contained.
@@ -17,15 +20,24 @@ function GitHubMark() {
  * the page's former overview + closer band so the summary is a real numbered chapter.
  */
 export function SummaryChapter() {
+  const { view } = useHomeView();
+  const technical = view === 'technical';
+
   return (
     <div className="af-summary">
       {/* whole-system overview — the recap diagram */}
       <section className="af-overview">
         <p className="af-overview-kicker">the whole system</p>
-        <h2 className="af-overview-head">How it all fits together.</h2>
+        <h2 className="af-overview-head">
+          {technical ? 'The provenance architecture.' : 'How it all fits together.'}
+        </h2>
         <p className="af-overview-sub">
-          Skills, RAG, memory, rules — composed into the <b>system / messages / tools</b> slots,
-          run, and recorded as a traceable footprint you can reverse.
+          {technical ? (
+            <>Typed sources compose into <b>system / messages / tools</b>, execute through the runtime, and emit a causal graph for slicing, ablation, and replay.</>
+          ) : (
+            <>Skills, RAG, memory, rules — composed into the <b>system / messages / tools</b> slots,
+            run, and recorded as a traceable footprint you can reverse.</>
+          )}
         </p>
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
@@ -41,10 +53,12 @@ export function SummaryChapter() {
           <span className="af-pill-dot" /> open source · MIT
         </span>
         <h2 className="af-closer-head">
-          Stop guessing why your agent <em>answered wrong.</em>
+          {technical ? <>Make every agent run <em>causally queryable.</em></> : <>Stop guessing why your agent <em>answered wrong.</em></>}
         </h2>
         <p className="af-closer-lede">
-          Record every run. Reverse it to the exact cause. Prove the fix by replaying it.
+          {technical
+            ? 'Record inline. Slice backward. Ablate the suspect. Replay the counterfactual.'
+            : 'Record every run. Reverse it to the exact cause. Prove the fix by replaying it.'}
         </p>
         <div className="af-closer-flow" aria-hidden="true">
           <span>record</span>

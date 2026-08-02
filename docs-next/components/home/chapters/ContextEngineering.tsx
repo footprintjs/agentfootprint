@@ -2,6 +2,7 @@
 
 import { useRef, type CSSProperties, type ReactNode } from 'react';
 import { useScrollProgress } from '@/lib/home/useScrollProgress';
+import { useHomeView } from '../HomeView';
 
 /**
  * Chapter 2 — "Context engineering, abstracted." (ported from the context-engineering design).
@@ -327,19 +328,26 @@ const STEPS: Step[] = [
 ];
 
 export function ContextEngineering() {
+  const { view } = useHomeView();
+  const technical = view === 'technical';
+
   return (
     <section className="af-ctx">
       {/* ---------- HERO ---------- */}
       <div className="af-ctx-hero">
         <p className="af-ctx-eyebrow">02 · the solution</p>
         <h1>
-          Context engineering, <em>abstracted.</em>
+          {technical ? <>Context engineering, <em>abstracted.</em></> : <>Give every piece of context <em>an address.</em></>}
         </h1>
         <p className="af-ctx-lede-hero">
-          That wrong document reached the System Prompt because <b>something injected it</b>. So here is
-          how every piece of context gets in — making the cause a place you can rewind to. Skills,
-          steering, RAG, facts, memory, guardrails: every name for context does one thing — it injects
-          into one of three LLM slots, under one of four triggers, and the framework caches it for you.
+          {technical ? (
+            <>That wrong document reached the System Prompt because <b>something injected it</b>. So here is
+            how every piece of context gets in — making the cause a place you can rewind to. Skills,
+            steering, RAG, facts, memory, guardrails: every name for context does one thing — it injects
+            into one of three LLM slots, under one of four triggers, and the framework caches it for you.</>
+          ) : (
+            <>Rules, skills, memory, and retrieved facts stop being one invisible prompt. Each piece has a named destination and a clear moment when it enters the run, so you can find it again when something goes wrong.</>
+          )}
         </p>
         <div className="af-ctx-formula">
           <span>Injection</span>

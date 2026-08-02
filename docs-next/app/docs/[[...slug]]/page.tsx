@@ -62,6 +62,8 @@ export async function generateMetadata(props: {
     },
     twitter: {
       card: 'summary_large_image',
+      site: SITE.twitter,
+      creator: SITE.twitter,
       title: page.data.title,
       description,
       images: [`${SITE.url}/opengraph-image`],

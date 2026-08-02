@@ -2,6 +2,7 @@
 
 import { useRef, type ReactNode } from 'react';
 import { useScrollProgress } from '@/lib/home/useScrollProgress';
+import { useHomeView } from '../HomeView';
 
 /**
  * Chapter 1, beat 3 — "Why this tool?" (ported from the shared backtrack-story design).
@@ -75,6 +76,8 @@ const CAPS: ReactNode[] = [
 const LAST = CAPS.length - 1;
 
 export function WhyThisTool() {
+  const { view } = useHomeView();
+  const technical = view === 'technical';
   const trackRef = useRef<HTMLDivElement>(null);
 
   // scroll-driven scrubbing via the shared scroll engine — re-renders only on phase change.
@@ -113,12 +116,18 @@ export function WhyThisTool() {
 
   return (
     <section data-narrative="why this tool?" className={`af-why af-flowwrap${revealed ? ' is-revealed' : ''}`}>
-      <p className="af-why-kicker">Same machinery, a different agent</p>
-      <h2 className="af-why-head">Why this tool?</h2>
+      <p className="af-why-kicker">
+        {technical ? 'Forward influence over the same evidence graph' : 'Same machinery, a different agent'}
+      </p>
+      <h2 className="af-why-head">{technical ? 'Inspect the decision boundary.' : 'Why this tool?'}</h2>
       <p className="af-why-lede">
-        Backtracking proved <i>why a past run broke.</i> The same recorded panel works <b>forward</b>{' '}
-        too — a travel agent picks one of <b>4 tools</b> by their <b>descriptions.</b>{' '}
-        <b>Scroll to reveal the scores, sharpen the tie, then swap scorers.</b>
+        {technical ? (
+          <>The same footprint supports forward analysis: score candidate tools, surface an ambiguous boundary, revise the description, and rerun the scorer over the unchanged graph.</>
+        ) : (
+          <>Backtracking proved <i>why a past run broke.</i> The same recorded panel works <b>forward</b>{' '}
+          too — a travel agent picks one of <b>4 tools</b> by their <b>descriptions.</b>{' '}
+          <b>Scroll to reveal the scores, sharpen the tie, then swap scorers.</b></>
+        )}
       </p>
 
       <div className="af-why-track" ref={trackRef}>
@@ -271,8 +280,12 @@ export function WhyThisTool() {
       </div>
 
       <p className="af-why-foot">
-        agentfootprint owns the <b>detection</b> — the scores, the ties, the recorded graph. You own
-        the <b>policy</b> — the scorer, the rewriter. We map; you decide.
+        {technical ? (
+          <>The runtime records the candidate graph and exposes the scoring seam. Detection stays in agentfootprint; scorer and rewrite policy remain substitutable.</>
+        ) : (
+          <>agentfootprint owns the <b>detection</b> — the scores, the ties, the recorded graph. You own
+          the <b>policy</b> — the scorer, the rewriter. We map; you decide.</>
+        )}
       </p>
     </section>
   );

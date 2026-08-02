@@ -3,6 +3,11 @@ import type { Metadata } from 'next';
 import { Chapters } from '@/components/home/Chapters';
 import { ChapterRail } from '@/components/home/ChapterRail';
 import { HeroTrace } from '@/components/home/HeroTrace';
+import {
+  HomeViewProvider,
+  HomeViewSwitcher,
+  HomeViewText,
+} from '@/components/home/HomeView';
 import { SiteFooter } from '@/components/SiteFooter';
 import { siteJsonLd } from '@/lib/jsonld';
 import { SITE, asset } from '@/lib/site';
@@ -27,6 +32,8 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
+    site: SITE.twitter,
+    creator: SITE.twitter,
     title: HOME_TITLE,
     description: HOME_DESC,
     images: [`${SITE.url}/opengraph-image`],
@@ -46,9 +53,11 @@ function GitHubMark() {
 
 export default function HomePage() {
   return (
-    <main className="af-home">
-      {/* eslint-disable-next-line react/no-danger */}
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(siteJsonLd()) }} />
+    <HomeViewProvider>
+      <main className="af-home">
+        {/* eslint-disable-next-line react/no-danger */}
+        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(siteJsonLd()) }} />
+        <HomeViewSwitcher />
       {/* hero — mascot centered on top, then two columns: the claim (left) + live trace (right) */}
       <section className="af-hero">
         {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -63,14 +72,22 @@ export default function HomePage() {
               <span className="af-pill-dot" /> open source · MIT · mock-first
             </span>
             <h1>
-              Find the context that made your agent <em>answer wrong.</em>
+              <HomeViewText
+                product={<>Find the context that made your agent <em>answer wrong.</em></>}
+                technical={<>Context provenance for every <em>agent decision.</em></>}
+              />
             </h1>
             <p className="lede">
-              Debug why your AI agent gave the wrong answer — and prove the fix by re-running
-              without the cause.
+              <HomeViewText
+                product={<>Debug why your AI agent gave the wrong answer — and prove the fix by re-running without the cause.</>}
+                technical={<>Record context injections, model calls, tool decisions, state, and cost as typed evidence you can slice, ablate, and replay.</>}
+              />
             </p>
             <p className="tagline">
-              <em>Why</em> is a query, not a guess.
+              <HomeViewText
+                product={<><em>Why</em> is a query, not a guess.</>}
+                technical={<>Inline recording is truth. <em>Post-processing is reconstruction.</em></>}
+              />
             </p>
             <div className="af-hero-cta">
               <Link className="af-cta" href="/docs">
@@ -101,29 +118,39 @@ export default function HomePage() {
       {/* value band — the outcome props, full-width below the hero */}
       <section className="af-valueband">
         <p className="af-value-tag">
-          Inject less. <em>Trace more.</em>
+          <HomeViewText
+            product={<>Inject less. <em>Trace more.</em></>}
+            technical={<>Record inline. <em>Debug causally.</em></>}
+          />
         </p>
         <div className="af-valuestrip">
           <div className="af-vs">
-            <b>Faster debugging</b>
-            <span>trace any answer to its exact cause</span>
+            <HomeViewText
+              product={<><b>Faster debugging</b><span>trace any answer to its exact cause</span></>}
+              technical={<><b>Typed provenance</b><span>keep each context source attached to the call it shaped</span></>}
+            />
           </div>
           <div className="af-vs">
-            <b>Provable cause</b>
-            <span>proven by replay, not guessed</span>
+            <HomeViewText
+              product={<><b>Provable cause</b><span>proven by replay, not guessed</span></>}
+              technical={<><b>Backward slicing</b><span>trace an output through decisions to influencing context</span></>}
+            />
           </div>
           <div className="af-vs">
-            <b>Lower token cost</b>
-            <span>context shrinks to what the step needs</span>
+            <HomeViewText
+              product={<><b>Lower token cost</b><span>context shrinks to what the step needs</span></>}
+              technical={<><b>Counterfactual replay</b><span>remove a source, rerun, and measure what changed</span></>}
+            />
           </div>
         </div>
       </section>
 
       <div className="af-scrollcue-wrap">
         <p className="af-bridge-line">
-          Don&apos;t take the claim on faith. Scroll the story — a wrong answer{' '}
-          <b>traced to its cause</b>, <b>the context</b> that built it, and{' '}
-          <b>the engine</b> that recorded it all.
+          <HomeViewText
+            product={<>Don&apos;t take the claim on faith. Scroll the story — a wrong answer <b>traced to its cause</b>, <b>the context</b> that built it, and <b>the engine</b> that recorded it all.</>}
+            technical={<>Follow the full provenance path: <b>backward slice</b> a wrong output, inspect the <b>slot × trigger × cache</b> model, then see how the <b>runtime records evidence inline</b>.</>}
+          />
         </p>
         <div className="af-scrollcue" aria-hidden="true">
           scroll the story
@@ -139,6 +166,7 @@ export default function HomePage() {
 
       {/* attribution footer — shared with docs (components/SiteFooter); recap + CTA live in ch05 */}
       <SiteFooter />
-    </main>
+      </main>
+    </HomeViewProvider>
   );
 }

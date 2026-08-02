@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from 'react';
 import { useScrollProgress } from '@/lib/home/useScrollProgress';
+import { useHomeView } from '../HomeView';
 
 /**
  * Chapter 3 — "The engine". The deep "how it's implemented" beat, told as TWO
@@ -618,6 +619,8 @@ function EventLoopView({ prog }: { prog: number }) {
 // (Scroll progress now comes from the shared engine via useScrollProgress — see lib/home/.)
 
 export function CoreEngine() {
+  const { view } = useHomeView();
+  const technical = view === 'technical';
   const pinA = useRef<HTMLDivElement>(null); // animation 1 — records itself
   const pinB = useRef<HTMLDivElement>(null); // animation 2 — costs nothing
   const logScrollRef = useRef<HTMLDivElement>(null);
@@ -690,11 +693,12 @@ export function CoreEngine() {
       <section className="af-eng-hero">
         <p className="af-eng-eyebrow">04 · how it works</p>
         <h1 className="af-eng-h1">
-          The brain thinks, asks a tool, <em>loops to the answer.</em>
+          {technical ? <>Traversal and provenance <em>share one runtime.</em></> : <>The brain thinks, asks a tool, <em>loops to the answer.</em></>}
         </h1>
         <p className="af-eng-lede">
-          Every step is emitted as it happens &mdash; no instrumentation, no backtracking yet.
-          agentfootprint just records the real flow as the loop runs.
+          {technical
+            ? 'Each stage emits typed evidence at the same boundary where execution advances. The causal record is created inline, never reconstructed from logs afterward.'
+            : 'Every step is emitted as it happens — no extra tracing work and no story reconstructed later. agentfootprint remembers the real path while the agent runs.'}
         </p>
 
         <div className="af-eng-mental">
@@ -831,13 +835,16 @@ export function CoreEngine() {
             already the sticky header; pinning the section header too is redundant) */}
         <header className="af-eng-ahead">
           <h2 className="af-eng-h2">
-            The loop <em>records itself.</em>
+            {technical ? <>Inline emission creates the <em>typed footprint.</em></> : <>The loop <em>records itself.</em></>}
           </h2>
           <p className="af-eng-block-lede">
-            As the agent runs, every event drains into a typed log &mdash;{' '}
-            <b>prompt · ask · return · answer</b> &mdash; with its own cost. Scroll to{' '}
-            <b>time-travel</b>
-            {' the footprint you’ll later walk backward.'}
+            {technical ? (
+              <>Each traversal event becomes a typed row with node identity, timing, tokens, state, and causal links. The resulting footprint is directly sliceable and replayable.</>
+            ) : (
+              <>As the agent runs, every event drains into a typed log &mdash;{' '}
+              <b>prompt · ask · return · answer</b> &mdash; with its own cost. Scroll to{' '}
+              <b>time-travel</b>{' the footprint you’ll later walk backward.'}</>
+            )}
           </p>
         </header>
         <div className="af-eng-pin" ref={pinA}>
@@ -923,12 +930,16 @@ export function CoreEngine() {
         {/* header scrolls past; only the animation pins below */}
         <header className="af-eng-ahead">
           <h2 className="af-eng-h2">
-            Your agent <em>is</em> the event loop.
+            {technical ? <>Deferred delivery stays <em>off the hot path.</em></> : <>Your agent <em>is</em> the event loop.</>}
           </h2>
           <p className="af-eng-block-lede">
-            Same recorded run, viewed from the runtime side. A stage runs on the <b>call stack</b> and
-            feeds its trace events into a queue. Opt into <b>deferred delivery</b> and the engine drains them
-            at the next <b>microtask</b> &mdash; at each stage boundary, <b>one beat behind</b>, off the hot path.
+            {technical ? (
+              <>A stage emits on the call stack; observers drain from the queue at the next microtask boundary. Execution remains authoritative while recorder delivery stays one beat behind.</>
+            ) : (
+              <>Same recorded run, viewed from the runtime side. A stage runs on the <b>call stack</b> and
+              feeds its trace events into a queue. Opt into <b>deferred delivery</b> and the engine drains them
+              at the next <b>microtask</b> &mdash; at each stage boundary, <b>one beat behind</b>, off the hot path.</>
+            )}
           </p>
         </header>
         <div className="af-eng-pin af-eng-pin-wide" ref={pinB}>

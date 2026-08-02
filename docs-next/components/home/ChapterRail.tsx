@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { CHAPTERS_META as CHAPTERS } from '@/lib/chapters';
+import { HOME_VIEW_CHAPTERS } from '@/lib/chapters';
+import { useHomeView } from './HomeView';
 
 /**
  * Home-only sticky chapter rail — a jump-nav under the shared top bar so readers can go
@@ -18,12 +19,14 @@ import { CHAPTERS_META as CHAPTERS } from '@/lib/chapters';
  * and the animation plays as you scroll, the way the rest of the page already works.
  */
 export function ChapterRail() {
-  const [active, setActive] = useState(CHAPTERS[0]?.id ?? '');
+  const { view } = useHomeView();
+  const chapters = HOME_VIEW_CHAPTERS[view];
+  const [active, setActive] = useState(chapters[0]?.id ?? '');
   const railRef = useRef<HTMLElement>(null);
 
   // scroll-spy: the active chapter is the last section whose top has passed the rail's bottom edge.
   useEffect(() => {
-    const sections = CHAPTERS.map((c) => document.getElementById(c.id)).filter(Boolean) as HTMLElement[];
+    const sections = chapters.map((chapter) => document.getElementById(chapter.id)).filter(Boolean) as HTMLElement[];
     if (sections.length === 0) return;
     let raf = 0;
     const onScroll = () => {
@@ -45,7 +48,7 @@ export function ChapterRail() {
       window.removeEventListener('resize', onScroll);
       cancelAnimationFrame(raf);
     };
-  }, []);
+  }, [chapters]);
 
   // keep the active pill centered when the rail overflows (mobile) — scrolls ONLY the rail,
   // never the page.
@@ -60,7 +63,7 @@ export function ChapterRail() {
   return (
     <nav className="af-chaprail" aria-label="Chapters" ref={railRef}>
       <div className="af-chaprail-inner">
-        {CHAPTERS.map((c) => (
+        {chapters.map((c) => (
           <a
             key={c.id}
             href={`#${c.id}`}

@@ -55,3 +55,46 @@ export const CHAPTERS_META: ChapterMeta[] = [
     sub: 'Record the run, rewind to the cause, prove the fix by replaying it.',
   },
 ];
+
+export const TECHNICAL_CHAPTERS_META: ChapterMeta[] = [
+  {
+    id: 'af-ch-problem',
+    ix: '01',
+    cat: 'Failure surface',
+    ti: 'Wrong output, hidden cause',
+    sub: 'Logs preserve sequence; provenance preserves which context influenced the result.',
+  },
+  {
+    id: 'af-ch-solution',
+    ix: '02',
+    cat: 'Context model',
+    ti: 'Slots, sources, and triggers',
+    sub: 'Typed injections make every context contribution addressable and traceable.',
+  },
+  {
+    id: 'af-ch-benefits',
+    ix: '03',
+    cat: 'Causal analysis',
+    ti: 'Slice, score, and ablate',
+    sub: 'Rank influence, remove a suspect source, and measure the counterfactual result.',
+  },
+  {
+    id: 'af-ch-how',
+    ix: '04',
+    cat: 'Runtime model',
+    ti: 'Record inline, not afterward',
+    sub: 'Execution and provenance are captured together at each traversal boundary.',
+  },
+  {
+    id: 'af-ch-payoff',
+    ix: '05',
+    cat: 'Technical payoff',
+    ti: 'A queryable causal record',
+    sub: 'Backward slicing and replay operate on typed evidence instead of reconstructed logs.',
+  },
+];
+
+export const HOME_VIEW_CHAPTERS = {
+  product: CHAPTERS_META,
+  technical: TECHNICAL_CHAPTERS_META,
+} as const;

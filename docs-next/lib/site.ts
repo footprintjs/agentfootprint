@@ -1,3 +1,5 @@
+import { ECOSYSTEM_PROJECTS } from './ecosystem';
+
 /**
  * Single source of truth for site-wide SEO constants — consumed by the root metadata,
  * sitemap, robots, OG image, JSON-LD, and per-page canonical tags.
@@ -30,9 +32,9 @@ export const SITE = {
   org: 'https://github.com/footprintjs',
   core: 'https://github.com/footprintjs/footPrint', // the footprintjs library repo (note the capital P — footprintjs/footprintjs 404s)
   npm: 'https://www.npmjs.com/package/agentfootprint',
+  twitter: '@1909sanjay',
   keywords: [
-    'agentfootprint',
-    'footprintjs',
+    ...new Set(ECOSYSTEM_PROJECTS.flatMap((project) => [project.name, ...project.aliases])),
     'AI agent framework',
     'LLM agent framework',
     'TypeScript agent framework',
@@ -43,6 +45,11 @@ export const SITE = {
     'ReAct agent',
     'LLM tracing',
     'causal trace',
+    'context provenance',
+    'execution provenance',
+    'agent-operable apps',
+    'visual analysis provenance',
+    'causal replay',
     'agent context bug',
     'why did my agent answer wrong',
     'Sanjay agentfootprint',
