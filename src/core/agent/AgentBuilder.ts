@@ -38,6 +38,7 @@ import {
 } from '../../lib/trace-toolpack/selfExplain.js';
 import { Agent } from '../Agent.js';
 import type { AgentOptions, RunConfigFn } from './types.js';
+import type { CompactionOptions, ResolvedCompaction } from './compaction/types.js';
 
 /**
  * Fluent builder. `tool()` accepts any Tool<TArgs, TResult> and registers
@@ -153,6 +154,9 @@ export class AgentBuilder {
   /** Per-run config resolver set via `.configure()`. Undefined = the agent
    *  runs on its build-time model + system prompt, unchanged. */
   private runConfigFn?: RunConfigFn;
+  /** Resolved `.compaction()` config. Undefined = no compaction stage exists,
+   *  the ReAct loop target is unchanged, and the run is byte-identical. */
+  private compactionConfig?: ResolvedCompaction;
 
   constructor(opts: AgentOptions) {
     this.opts = opts;
@@ -307,6 +311,105 @@ export class AgentBuilder {
       );
     }
     this.runConfigFn = fn;
+    return this;
+  }
+
+  /**
+   * Keep the live context window inside a token budget — without ever losing
+   * the record.
+   *
+   * At each ReAct iteration boundary, compaction compares the LAST call's
+   * **adapter-reported** input tokens against `thresholdTokens`. Over budget,
+   * it folds the oldest foldable span of the conversation into one summary
+   * message and sends that instead. Counted, never guessed: a provider that
+   * reports no usage gets a named refusal
+   * (`CompactionUnmeasurableError`) rather than an invented number.
+   *
+   * **The fold edits the window, not the record.** The turns it folds stay in
+   * the run's commit log byte-identical — footprintjs's log is append-only,
+   * so a fold cannot erase them even in principle. The summary enters as its
+   * own recorded step naming every `runtimeStageId` it folded, plus what was
+   * measured and what refused to fold. A compacted run is still a provable
+   * run: the lens draws a fold seam, not a hole.
+   *
+   * Never folded: the system envelope, the last `keepRecentTurns` turns, and
+   * any turn holding something unresolved — an unanswered tool call, a paused
+   * tool, a pending check-in. Folding an unanswered question would destroy
+   * the referent of the answer that has not arrived yet, so those refuse by
+   * name and the fold takes the next oldest instead.
+   *
+   * Omit `.compaction()` and nothing changes: no stage, no extra keys, the
+   * same request bytes as before.
+   *
+   * @example
+   * ```ts
+   * const agent = Agent.create({ provider: anthropic(), model: 'claude-sonnet-4-5' })
+   *   .compaction({
+   *     thresholdTokens: 120_000,
+   *     summarizer: anthropic(),
+   *     model: 'claude-haiku-4-5',   // the cheap one writes the summary
+   *   })
+   *   .build();
+   * ```
+   */
+  compaction(options: CompactionOptions): this {
+    if (this.compactionConfig) {
+      throw new Error(
+        'AgentBuilder.compaction: already set. One compaction policy per agent — a second ' +
+          'one would silently override the first, and a budget that quietly changed is a ' +
+          'budget you cannot audit.',
+      );
+    }
+    if (options === null || typeof options !== 'object') {
+      throw new Error(
+        `AgentBuilder.compaction: expected an options object ` +
+          `({ thresholdTokens, summarizer, ... }), got ${typeof options}.`,
+      );
+    }
+    const { thresholdTokens, summarizer, keepRecentTurns, model } = options;
+    if (
+      typeof thresholdTokens !== 'number' ||
+      !Number.isFinite(thresholdTokens) ||
+      thresholdTokens <= 0
+    ) {
+      throw new Error(
+        `AgentBuilder.compaction: thresholdTokens must be a positive number of tokens, got ` +
+          `${String(thresholdTokens)}. There is no default: the right budget depends on your ` +
+          `model and your bill, and a number this library invented would be inherited silently ` +
+          `by every run.`,
+      );
+    }
+    if (
+      summarizer === null ||
+      typeof summarizer !== 'object' ||
+      typeof summarizer.complete !== 'function'
+    ) {
+      throw new Error(
+        'AgentBuilder.compaction: summarizer must be an LLMProvider (an object with a ' +
+          'complete() method). It is explicit on purpose — the library will not quietly bill ' +
+          'your main model for compaction. Pass a cheap provider/model here.',
+      );
+    }
+    if (keepRecentTurns !== undefined) {
+      if (!Number.isInteger(keepRecentTurns) || keepRecentTurns < 1) {
+        throw new Error(
+          `AgentBuilder.compaction: keepRecentTurns must be an integer >= 1, got ` +
+            `${String(keepRecentTurns)}. Keeping zero recent turns would fold the turn the ` +
+            `model is reasoning over right now.`,
+        );
+      }
+    }
+    if (model !== undefined && (typeof model !== 'string' || model.length === 0)) {
+      throw new Error(
+        `AgentBuilder.compaction: model must be a non-empty model id, got ${String(model)}.`,
+      );
+    }
+    this.compactionConfig = {
+      thresholdTokens,
+      keepRecentTurns: keepRecentTurns ?? 6,
+      summarizer,
+      model,
+    };
     return this;
   }
 
@@ -966,6 +1069,7 @@ export class AgentBuilder {
       this.skillGraphScoreEntries,
       this.checkInConfig,
       this.runConfigFn,
+      this.compactionConfig,
     );
     // Attach builder-collected recorders so they receive events from
     // the very first run. Mirrors what consumers would do post-build

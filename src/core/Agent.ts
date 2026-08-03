@@ -60,6 +60,11 @@ import { toolsRecorder } from '../recorders/core/ToolsRecorder.js';
 import { reliabilityRecorder } from '../recorders/core/ReliabilityRecorder.js';
 import { resilienceRecorder } from '../recorders/core/ResilienceRecorder.js';
 import { checkInEventsBridge } from '../recorders/core/CheckInRecorder.js';
+import { compactionMeter, type CompactionMeterHandle } from '../recorders/core/CompactionMeter.js';
+import { EmitBridge } from '../recorders/core/EmitBridge.js';
+import { buildCompactStage } from './agent/stages/compact.js';
+import { CompactionUnmeasurableError } from './agent/compaction/errors.js';
+import type { ResolvedCompaction } from './agent/compaction/types.js';
 import {
   resolveCheckInConfig,
   type CheckInBuilderOptions,
@@ -226,6 +231,12 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    *  that never called it — and the chart is then built exactly as before,
    *  with no scope writes and no scope reads added. */
   private readonly runConfigFn?: RunConfigFn;
+  /** Resolved `.compaction()` config. Undefined = no compaction stage, loop
+   *  target unchanged, run byte-identical to an agent without it. */
+  private readonly compaction?: ResolvedCompaction;
+  /** The instrument the compaction stage reads mid-run (adapter-reported
+   *  usage + per-message provenance). Only ever created alongside `compaction`. */
+  private readonly compactionMeterHandle?: CompactionMeterHandle;
   /** Snapshot read-tracking policy (#18/#14) — forwarded to the internal
    *  executor. Agent default is `'summary'` (cheap markers), NOT
    *  footprintjs's `'full'`. See AgentOptions.readTracking. */
@@ -388,6 +399,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     skillGraphScoreEntries?: (ctx: InjectionContext, signal?: AbortSignal) => Promise<EntryScoring>,
     checkInOptions?: CheckInBuilderOptions,
     runConfigFn?: RunConfigFn,
+    compaction?: ResolvedCompaction,
   ) {
     super();
     this.provider = opts.provider;
@@ -438,6 +450,13 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // `.checkIn()` call; the gate only fires for tools that declared `checkIn`.
     this.checkInConfig = resolveCheckInConfig(checkInOptions);
     if (runConfigFn !== undefined) this.runConfigFn = runConfigFn;
+    // `.compaction()`: the meter is created ONCE per agent (attached per run,
+    // cleared between runs like every other recorder) because the compaction
+    // stage closes over it at chart-build time — and the chart is built once.
+    if (compaction !== undefined) {
+      this.compaction = compaction;
+      this.compactionMeterHandle = compactionMeter();
+    }
     // Default 'summary' — measurement-gated (#18): stageReads values have
     // zero consumers across af/lens/eui, and 'full' clones ~18MB of unread
     // data per 200 iterations. Consumers opt into 'full' explicitly.
@@ -731,7 +750,11 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
         cause instanceof Error &&
         (cause.name === 'PauseSignal' ||
           cause instanceof PolicyHaltError ||
-          cause instanceof ReliabilityFailFastError);
+          cause instanceof ReliabilityFailFastError ||
+          // A provider that reports no usage will report none on resume
+          // either — wrapping this in a checkpoint would invite the caller to
+          // retry into the same wall.
+          cause instanceof CompactionUnmeasurableError);
       if (cause instanceof Error && !isTerminalTypedError && tracker.history.length > 0) {
         const checkpoint = buildCheckpoint(tracker, {
           iteration: tracker.inFlightIteration ?? tracker.lastCompletedIteration + 1,
@@ -963,6 +986,26 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // `collect()` before the queue flushed the turn's tool/token/decision
     // events, persisting an incomplete causal snapshot.
     if (this.causalEvidence) executor.attachCombinedRecorder(this.causalEvidence);
+    // Compaction's instrument. ALWAYS INLINE, for the same reason the evidence
+    // bridge is: the compaction stage reads it MID-run, at the loop head, to
+    // decide whether this iteration's window is over budget. A measurement
+    // delivered one beat behind would be a measurement of the wrong window.
+    if (this.compactionMeterHandle) {
+      executor.attachCombinedRecorder(this.compactionMeterHandle);
+      // Folds speak the context vocabulary consumers already subscribe to
+      // (`context.evicted` / `context.budget_pressure`) — no new event types.
+      // ContextRecorder only dispatches those from writes INSIDE a slot
+      // subflow, and the compaction stage is not one, so it emits them and
+      // this bridge forwards them (the `contextEvaluatedRecorder` pattern).
+      attachObserver(
+        new EmitBridge({
+          dispatcher,
+          id: 'af-compaction-events',
+          prefix: ['agentfootprint.context.evicted', 'agentfootprint.context.budget_pressure'],
+          getRunContext: getRunCtx,
+        }),
+      );
+    }
     // The InjectionEngine typedEmits context.evaluated; this bridge forwards it
     // to the dispatcher (ContextRecorder handles the write-derived context.*).
     attachObserver(contextEvaluatedRecorder({ dispatcher, getRunContext: getRunCtx }));
@@ -1276,6 +1319,22 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       ...(this.runConfigFn && { runConfigured: true }),
     });
 
+    // Compaction stage (7.16) — built ONLY when `.compaction()` was called.
+    // When present it becomes the ReAct loop target (see the chart builders),
+    // so it runs once per iteration boundary with the previous call's
+    // adapter-reported usage already measured by the meter.
+    const compactStage =
+      this.compaction && this.compactionMeterHandle
+        ? buildCompactStage({
+            config: this.compaction,
+            meter: this.compactionMeterHandle,
+            defaultModel: model,
+            providerName: provider.name,
+            ...(pricingTable !== undefined && { pricingTable }),
+            ...(costBudget !== undefined && { costBudget }),
+          })
+        : undefined;
+
     // routeDecider extracted to ./agent/stages/route.ts (v2.11.2).
     const routeDecider = routeDeciderStage;
 
@@ -1324,6 +1383,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       toolsSubflow,
       ...(thinkingSubflow !== undefined && { thinkingSubflow }),
       updateSkillHistoryStage,
+      ...(compactStage !== undefined && { compactStage }),
       // Gate the UpdateSkillHistory stage on skills being registered —
       // same idiom buildToolRegistry uses to auto-attach `read_skill`.
       hasSkills: this.injections.some((i) => i.flavor === 'skill'),

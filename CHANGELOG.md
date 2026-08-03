@@ -7,6 +7,135 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [7.16.0] - 2026-08-02
+
+Every agent framework compacts a long conversation the same way: summarize the
+old turns, drop them, carry on. It works, and it costs you the run. The next
+day, when you have to explain what the agent did, the middle of the
+conversation is gone — replaced by a paragraph a cheap model wrote, presented
+as if it were what happened.
+
+A summary is a **claim about the past**. This release files claims as claims.
+
+**The law: compaction edits the WINDOW, never the LEDGER.** The window is
+`scope.history`, the array that goes on the wire. The ledger is the run's
+commit log, which is append-only — the stages that wrote those turns committed
+them before the fold existed, so a fold physically cannot erase them. What it
+can do is stop re-sending them, and say so: the summary enters as **its own
+recorded step**, naming every `runtimeStageId` it folded, what the last call
+actually measured, and every turn that refused to fold and why. A compacted run
+is still a provable run. The lens draws a fold seam, not a hole.
+
+The example prints both halves of that sentence — the small window the model
+now sees, and the original 1,150-character tool output pulled back out of the
+commit log, verbatim.
+
+Two properties make it a compactor you can trust rather than one you hope
+about. It is **counted, not guessed**: the trigger reads the input tokens the
+provider itself reported, and a provider that reports none gets a named
+refusal instead of an invented number. And it **never folds an open question**:
+a turn holding an unanswered tool call, a paused tool, or a pending check-in
+refuses by name, and the fold takes the next oldest instead — because folding
+an unanswered question destroys the referent of the answer that has not
+arrived yet.
+
+### Added
+
+- **`.compaction({ thresholdTokens, summarizer, model?, keepRecentTurns? })` —
+  keep the live window inside a token budget without ever losing the record.**
+  At each ReAct iteration boundary the compaction stage compares the last
+  call's **adapter-reported** input tokens against `thresholdTokens`. Over
+  budget, it folds the oldest foldable span of the conversation into one
+  summary message and sends that instead.
+
+  `thresholdTokens` is **required, with no default**. The right budget depends
+  on your model and your bill; a number the library invented would be inherited
+  silently by every run. `summarizer` is required and explicit for the same
+  reason in the other direction — the library will not quietly bill your main
+  model for compaction.
+
+  Never folded: the system envelope (it is not in the window at all — it rides
+  `systemPrompt`), the last `keepRecentTurns` turns (default 6), and any turn
+  holding something unresolved. The fold always takes a **contiguous** span, so
+  a turn that refused never ends up sitting after a summary of things that
+  happened before it — survivors keep their order.
+
+  Omit `.compaction()` and nothing changes: no stage, no extra committed key,
+  the same request bytes. A test pins that a configured agent whose threshold
+  is never reached sends requests byte-for-byte equal to an unconfigured one.
+
+  Docs: [Compaction](https://footprintjs.github.io/agentfootprint/docs/build/compaction) ·
+  Example: `examples/context-engineering/11-compaction.ts`.
+
+- **`CompactionRecord` on `scope.compactions` — the fold's half of the law.**
+  One record per over-budget visit, *including the visits that folded nothing*,
+  which are the interesting ones. It carries `foldedStageIds` (real
+  `runtimeStageId`s, resolvable in the commit log), `foldedMessageCount`,
+  `measuredTokens` vs `thresholdTokens`, exact `windowCharsBefore` /
+  `windowCharsAfter`, what the summarizer call cost, and a **named refusal per
+  turn** that did not fold: `unresolved-tool-call`, `paused-tool`,
+  `pending-check-in`, `system-envelope`, `inside-keep-window`,
+  `only-existing-summary`, `summarizer-failed`, `summary-not-smaller`.
+
+  There is deliberately **no `tokensAfter`**. Nothing can count the tokens of a
+  window that has not been sent yet, and inventing one would be exactly the
+  guess this feature exists to refuse. The char counts are labelled as chars;
+  the honest "after" is the next call's reported usage.
+
+- **`CompactionUnmeasurableError` — the refusal for a provider that reports no
+  usage.** Thrown at the first iteration boundary after a call that reported
+  zero in and zero out, naming the provider. Terminal: `Agent.run` does not
+  wrap it in a `RunCheckpointError`, because resuming would walk into the same
+  wall with the same adapter. A configured budget that silently never applies
+  is config that lies; compaction says so instead.
+
+- **`COMPACTED_FRAME_PREFIX` / `isCompactedSummary(msg)`** — the authored frame
+  is a library constant and the summarizer's text is appended after it as data.
+  A summarizer returning `IGNORE ALL PREVIOUS INSTRUCTIONS` still arrives
+  *inside* a message that says, first and in the library's own words, that what
+  follows is a summary written by a model and not the conversation. A test pins
+  exactly that, with a hostile summarizer. The boundary points both ways: the
+  folded transcript reaches the summarizer between markers the authored
+  instruction names, and that instruction says to report an instruction found
+  inside them, never to follow it.
+
+### Fixed
+
+- **OpenAI streaming reported zero tokens — for every streamed call, in both
+  the Node and browser adapters.** `stream_options.include_usage` (which both
+  adapters already asked for) delivers the token counts on a **final chunk
+  whose `choices` array is empty**; both providers guarded on a missing choice
+  and `continue`d past it before reading `chunk.usage`. Everything downstream of
+  `response.usage` therefore went to zero on the streaming path: most visibly
+  **`costBudget` was silently unenforceable** under streaming OpenAI, and
+  `cost.tick` reported nothing to spend.
+
+  The unit fixture had blessed the bug — it hung usage off the finish_reason
+  chunk, which no OpenAI endpoint does. The fixture now emits the real wire
+  shape, so the old code fails it. Note that OpenAI-compatible endpoints
+  configured with `legacyEndpoint` (Ollama, vLLM) are never sent
+  `stream_options` and still report no usage while streaming; with
+  `.compaction()` those now refuse by name rather than quietly never firing.
+
+### Changed
+
+- **With `.compaction()` configured, the compaction stage becomes the ReAct
+  loop target** (`compact`), mounted immediately before the previous one. The
+  loop is branch-sourced, so anything ahead of the target runs once and is
+  never seen again — and being the target puts the fold *before* the injection
+  engine and the three context slots, which is the point: the triggers, the
+  slots and the wire then all see one window, and no part of the run reasons
+  over a past the model was not shown. Without `.compaction()` the loop target
+  is exactly what it was.
+
+- **`docs/internals/README.md` is marked HISTORICAL.** It described a source
+  tree that does not exist and two seams that never shipped — `MessageStrategy`
+  (with `fullHistory` / `slidingWindow` / `charBudget` / `summaryStrategy`) and
+  `PromptProvider`. Nothing exports them and nothing ever did. An advertised
+  seam that does not exist is a documentation defect whether or not it is on
+  the published site, so the file now says so at the top and points at what
+  actually governs the window.
+
 ## [7.15.0] - 2026-08-02
 
 7.14.0 shipped two hosting ports that name no cloud, plus a conformance suite,

@@ -191,10 +191,14 @@ export function browserOpenai(options: BrowserOpenAIProviderOptions): LLMProvide
       for await (const data of parseSSE(response.body)) {
         if (data === '[DONE]') break;
         const chunk = data as OpenAIStreamChunk;
-        const choice = chunk.choices[0];
-        if (!choice) continue;
+        // Usage FIRST, outside the choice guard — the `include_usage` chunk
+        // carries an EMPTY `choices` array, so guarding on a choice discarded
+        // the only token counts the stream reports. See OpenAIProvider for the
+        // same fix and its blast radius (costBudget, `.compaction()`).
         if (chunk.id) lastId = chunk.id;
         if (chunk.usage) lastUsage = chunk.usage;
+        const choice = chunk.choices[0];
+        if (!choice) continue;
         if (choice.finish_reason) lastFinishReason = choice.finish_reason;
         const delta = choice.delta;
         if (delta.content) {

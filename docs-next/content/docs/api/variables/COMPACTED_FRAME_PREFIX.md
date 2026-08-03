@@ -1,0 +1,11 @@
+---
+title: COMPACTED_FRAME_PREFIX
+---
+
+# Variable: COMPACTED\_FRAME\_PREFIX
+
+> `const` **COMPACTED\_FRAME\_PREFIX**: `"[compacted history"` = `'[compacted history'`
+
+Defined in: src/core/agent/compaction/summarize.ts:26
+
+Opening of the authored label. Stable — tests and readers match on it.

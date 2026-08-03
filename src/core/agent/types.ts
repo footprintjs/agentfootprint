@@ -31,6 +31,7 @@ import type { CredentialProvider } from '../../identity/types.js';
 import type { ToolArgValidationMode } from './toolArgsValidation.js';
 import type { ThinkingBlock } from '../../thinking/types.js';
 import type { ReliabilityScope } from '../../reliability/types.js';
+import type { CompactionRecord } from './compaction/types.js';
 
 // ─── PUBLIC types (consumer-facing) ────────────────────────────────
 
@@ -454,6 +455,18 @@ export interface AgentState {
   /** The base system prompt `.configure()` resolved for THIS run, replacing
    *  `.system(...)`. Same rule: absent unless a resolver returned one. */
   resolvedInstructions?: string;
+
+  // ── Compaction (`.compaction()`, 7.16) ─────────────────────────
+  /** One record per OVER-BUDGET visit to the compaction stage — including the
+   *  visits that folded nothing, which are the interesting ones. Written only
+   *  by an agent built with `.compaction()`; absent otherwise, so an agent
+   *  without it commits exactly the keys it always did.
+   *
+   *  This array is the fold's half of the law: the window shrank, and the
+   *  ledger says which stages' messages left it, how many, and what the last
+   *  call actually measured. The messages themselves are untouched in the
+   *  commit bundles that wrote them. */
+  compactions?: readonly CompactionRecord[];
 
   // ── Policy halt state (v2.12) ───────────────────────────────
   /** Set when a `PermissionChecker` returns `{ result: 'halt', ... }`.

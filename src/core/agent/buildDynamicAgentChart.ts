@@ -381,6 +381,21 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
     );
   }
 
+  // Compaction (7.16) — the OUTER chart, immediately before sf-llm-call, and
+  // it becomes the loop target below. It cannot live inside sf-llm-call: the
+  // window crosses that boundary as a read-only inputMapper arg and is not in
+  // the outputMapper, so a fold written in there would be discarded every
+  // iteration. Out here it edits the window the next turn is seeded from.
+  if (deps.compactStage) {
+    builder = builder.addFunction(
+      'Compact',
+      deps.compactStage as never,
+      STAGE_IDS.COMPACT,
+      'Fold the oldest foldable turns when the measured window exceeds budget',
+    );
+  }
+  const loopTarget: string = deps.compactStage ? STAGE_IDS.COMPACT : SUBFLOW_IDS.LLM_CALL;
+
   builder = builder
     .addSubFlowChartNext(SUBFLOW_IDS.LLM_CALL, llmCallSubflow, 'LLM', {
       inputMapper: (parent) => {
@@ -470,7 +485,7 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
       // Survives pause/resume (human-in-the-loop tool approval): the engine
       // resolves the subflow loop target on resume — footprintjs
       // FlowChartExecutor.resume + test/lib/pause/resume-branch-loop-subflow.
-      { loopTo: SUBFLOW_IDS.LLM_CALL },
+      { loopTo: loopTarget },
     )
     .addSubFlowChartBranch(SUBFLOW_IDS.FINAL, finalBranchChart, 'Final', {
       inputMapper: (parent) => {

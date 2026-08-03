@@ -49,7 +49,7 @@ describe('SUBFLOW_IDS — single source of truth', () => {
 });
 
 describe('STAGE_IDS — single source of truth', () => {
-  it('has the 15 known stage IDs', () => {
+  it('has the 16 known stage IDs', () => {
     const actual = Object.values(STAGE_IDS).sort();
     expect(actual).toEqual(
       [
@@ -66,6 +66,9 @@ describe('STAGE_IDS — single source of truth', () => {
         'format-merge',
         'merge-llm',
         'extract-merge',
+        // Context compaction (7.16) — mounted only with `.compaction()`, and
+        // when mounted it is the ReAct loop target:
+        'compact',
         // Cache layer (v2.6+):
         'update-skill-history',
         'cache-gate',

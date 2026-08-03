@@ -182,6 +182,7 @@ _Run `npm run examples:readme` after adding/editing examples._
 | 08 | [`08-mcp.ts`](context-engineering/08-mcp.ts) | MCP — Model Context Protocol client | Connect to an MCP server, expose its tools as agentfootprint Tool[].  |
 | 09 | [`09-skills-from-dir.ts`](context-engineering/09-skills-from-dir.ts) | Skills from a directory of SKILL.md files | Load Skills from SKILL.md files — frontmatter is the disclosure stub, the  |
 | 10 | [`10-mcp-serve.ts`](context-engineering/10-mcp-serve.ts) | MCP — serve your tools to other clients | Expose agentfootprint Tool[] AS an MCP server. Schemas map 1:1, the served  |
+| 11 | [`11-compaction.ts`](context-engineering/11-compaction.ts) | Compaction — a smaller window, the same record | Folds the oldest turns into one summary when the measured window  |
 
 ### [`memory/`](memory/) — defineMemory + 4 types × 7 strategies
 

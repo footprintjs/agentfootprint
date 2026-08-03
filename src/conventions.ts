@@ -93,6 +93,13 @@ export const STAGE_IDS = {
   FORMAT_MERGE: 'format-merge',
   MERGE_LLM: 'merge-llm',
   EXTRACT_MERGE: 'extract-merge',
+  /** Context-compaction stage (7.16). Mounted ONLY when `.compaction()` is
+   *  configured, and when it is, it BECOMES the ReAct loop target — so it
+   *  runs once per iteration boundary and everything downstream in the turn
+   *  (injection triggers, all 3 slots, the wire) sees one window. Without
+   *  `.compaction()` the stage does not exist and the loop target is
+   *  unchanged. */
+  COMPACT: 'compact',
   /** Updates the rolling skill-history window before CacheGate
    *  evaluates skill-churn (v2.6). */
   UPDATE_SKILL_HISTORY: 'update-skill-history',

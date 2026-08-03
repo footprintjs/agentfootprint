@@ -101,8 +101,21 @@ function makeFakeClient(
               id: finalRes.id,
               model: finalRes.model,
               choices: [{ index: 0, delta: {}, finish_reason: finalRes.choices[0]!.finish_reason }],
-              ...(finalRes.usage && { usage: finalRes.usage }),
             });
+            // Usage arrives on its OWN trailing chunk with an EMPTY `choices`
+            // array — that is what `stream_options.include_usage` actually puts
+            // on the wire. The earlier fixture hung usage off the finish_reason
+            // chunk, which no OpenAI endpoint does; it made a provider that
+            // dropped usage entirely look correct. A fake that blesses the bug
+            // is worse than no fake.
+            if (finalRes.usage) {
+              events.push({
+                id: finalRes.id,
+                model: finalRes.model,
+                choices: [],
+                usage: finalRes.usage,
+              });
+            }
             return (async function* () {
               for (const e of events) yield e;
             })();
@@ -346,6 +359,20 @@ describe('OpenAIProvider — integration (stream)', () => {
     expect(chunks.length).toBe('hello'.length + 1);
     expect(chunks[chunks.length - 1]).toEqual({ content: '', done: true });
     expect(final).toEqual({ content: 'hello', usage: { input: 10, output: 2 } });
+  });
+
+  it('reads the usage-only chunk whose choices array is empty (7.16.0 regression)', async () => {
+    // The ONLY usage `stream_options.include_usage` reports arrives on a chunk
+    // with no choices. Before 7.16.0 the loop `continue`d past it, so every
+    // streamed OpenAI call reported zero tokens — silently disabling costBudget
+    // and any budget counted from adapter-reported usage.
+    const p = openai({ _client: makeFakeClient(baseResponse) });
+    let final: { input: number; output: number } | undefined;
+    for await (const c of p.stream!(baseRequest)) {
+      if (c.done && c.response) final = c.response.usage;
+    }
+    expect(final).not.toEqual({ input: 0, output: 0 });
+    expect(final).toEqual({ input: 10, output: 2 });
   });
 
   it('streams tool_call deltas and assembles final args', async () => {

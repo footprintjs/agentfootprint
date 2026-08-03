@@ -208,10 +208,18 @@ export function openai(options: OpenAIProviderOptions = {}): LLMProvider {
 
       try {
         for await (const chunk of stream) {
-          const choice = chunk.choices[0];
-          if (!choice) continue;
+          // Usage FIRST, and outside the choice guard. With
+          // `stream_options.include_usage` (set in buildParams) OpenAI sends the
+          // token counts on a final chunk whose `choices` array is EMPTY — so a
+          // `continue` on a missing choice threw away the only usage the stream
+          // ever reports. Every consumer of `response.usage` went to zero:
+          // `costBudget` silently stopped being enforceable, and any budget
+          // counted from adapter-reported tokens (7.16 `.compaction()`) could
+          // never trip. Read it before deciding whether the chunk has content.
           if (chunk.id) lastId = chunk.id;
           if (chunk.usage) lastUsage = chunk.usage;
+          const choice = chunk.choices[0];
+          if (!choice) continue;
           if (choice.finish_reason) lastFinishReason = choice.finish_reason;
           const delta = choice.delta;
           if (delta.content) {

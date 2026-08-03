@@ -16,7 +16,7 @@ npm test
 
 ```bash
 npm run build      # CJS + ESM
-npm test           # vitest (4032 tests)
+npm test           # vitest (4090 tests)
 npm run lint       # eslint
 npm run format     # prettier check
 npm run test:watch # watch mode
@@ -74,7 +74,7 @@ src/
 ## Pull Request Checklist
 
 - [ ] `npm run build` passes
-- [ ] `npm test` passes (all 4032+ tests)
+- [ ] `npm test` passes (all 4090+ tests)
 - [ ] `npm run lint` passes
 - [ ] No `any` casts unless unavoidable (document why)
 - [ ] New features have tests (5+ patterns)

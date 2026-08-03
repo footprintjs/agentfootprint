@@ -98,6 +98,19 @@ export interface AgentChartDeps {
    *  mounted before the InjectionEngine (off the ReAct loop). Present only when the
    *  skill graph was built with a relevance scorer. */
   readonly pickEntryStage?: (scope: never) => Promise<void>;
+  /**
+   * Context-compaction stage (`.compaction()`, 7.16). Present ONLY when the
+   * consumer configured compaction — and when present it BECOMES the ReAct
+   * loop target, mounted immediately before the current one.
+   *
+   * It has to be the loop target rather than merely sit in the loop body:
+   * the loop is branch-sourced (`tool-calls → { loopTo }`), so anything ahead
+   * of the target runs once and is never seen again. Being the target also
+   * puts the fold BEFORE the injection engine and the slots, which is the
+   * point — the triggers, the three slots and the wire then all see the same
+   * window, and no component gets a different past than the model does.
+   */
+  readonly compactStage?: (scope: never) => Promise<void>;
   readonly systemPromptSubflow: FlowChart;
   readonly messagesSubflow: FlowChart;
   readonly toolsSubflow: FlowChart;
@@ -238,6 +251,23 @@ export function buildAgentChart(deps: AgentChartDeps): FlowChart {
       'Pick the starting skill by relevance to the message (entryByRelevance)',
     );
   }
+
+  // Compaction (7.16) — mounted immediately before the current loop target,
+  // and it BECOMES the loop target below. That placement is the whole design:
+  // the fold happens once per iteration boundary, before the injection engine
+  // re-evaluates triggers and before the slots compose, so nothing downstream
+  // reasons over a window the model will not be sent.
+  if (deps.compactStage) {
+    builder = builder.addFunction(
+      'Compact',
+      deps.compactStage as never,
+      STAGE_IDS.COMPACT,
+      'Fold the oldest foldable turns when the measured window exceeds budget',
+    );
+  }
+  // Where `tool-calls` loops back to. With compaction the head moves one stage
+  // earlier; without it, this is the same id it has always been.
+  const loopTarget: string = deps.compactStage ? STAGE_IDS.COMPACT : SUBFLOW_IDS.INJECTION_ENGINE;
 
   builder = builder
     // Injection Engine — evaluates every Injection's trigger once
@@ -480,7 +510,7 @@ export function buildAgentChart(deps: AgentChartDeps): FlowChart {
       // terminates. Survives pause/resume (human-in-the-loop tool approval): the
       // engine resolves the subflow loop target on resume — footprintjs
       // FlowChartExecutor.resume + test/lib/pause/resume-branch-loop-subflow.
-      { loopTo: SUBFLOW_IDS.INJECTION_ENGINE },
+      { loopTo: loopTarget },
     )
     .addSubFlowChartBranch(SUBFLOW_IDS.FINAL, finalBranchChart, 'Final', {
       // Pass through the read-only state the sub-chart needs;

@@ -1,5 +1,19 @@
 # Internals
 
+> **HISTORICAL — this file describes a design-era architecture that was never
+> the shipped one.** The source tree below (`types/`, `models/`, `scope/`,
+> `stages/`, `concepts/`, `executor/`, `compositions/`, `streaming/`) does not
+> exist; the real module map is [CLAUDE.md](../../CLAUDE.md) and
+> [CONTRIBUTING.md](../../CONTRIBUTING.md). Two seams named here in particular
+> **never shipped**: `MessageStrategy` and its family (`fullHistory`,
+> `slidingWindow`, `charBudget`, `summaryStrategy`, `compositeMessages`,
+> `persistentHistory`), and `PromptProvider`. Nothing exports them.
+>
+> What actually governs the wire window is `scope.history`, read directly by the
+> `call-llm` stage — and, since 7.16.0, edited at the loop head by
+> [`.compaction()`](../../docs-next/content/docs/build/compaction.mdx). Kept for
+> provenance only; do not implement against it.
+
 agentfootprint is a library of libraries, following the same architecture as [footprintjs](https://github.com/footprintjs/footPrint). Each module has a single responsibility, clean boundaries, and explicit dependencies.
 
 ```

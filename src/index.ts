@@ -243,6 +243,19 @@ export {
   type AgentOutput,
   type ObserverDeliveryOptions,
 } from './core/Agent.js';
+// `.compaction()` — keep the live window inside a token budget without ever
+// losing the record. The fold edits the WINDOW; the LEDGER keeps every folded
+// turn byte-identical, and the summary enters as its own recorded step naming
+// every runtimeStageId it folded.
+export {
+  CompactionUnmeasurableError,
+  COMPACTED_FRAME_PREFIX,
+  isCompactedSummary,
+  type CompactionOptions,
+  type CompactionRecord,
+  type FoldRefusal,
+  type FoldRefusalReason,
+} from './core/agent/compaction/index.js';
 // `.selfExplain()` — the in-conversation door over the agent's own trace.
 // The options type lives with the other builder-method option types; the
 // machinery (traceDebugAgent, toolpack) is on `agentfootprint/observe`.

@@ -321,6 +321,49 @@ describe('BrowserOpenAIProvider — security', () => {
   });
 });
 
+describe('BrowserOpenAIProvider — streaming usage (7.16.0 regression)', () => {
+  /** SSE body in the shape `stream_options.include_usage` actually produces:
+   *  content deltas, a finish_reason chunk, then a usage-only chunk whose
+   *  `choices` array is EMPTY, then [DONE]. */
+  function sseFetch(): typeof fetch {
+    const lines = [
+      `data: ${JSON.stringify({
+        id: 'chatcmpl_s',
+        model: 'gpt-4o-mini',
+        choices: [{ index: 0, delta: { content: 'hi' }, finish_reason: null }],
+      })}`,
+      `data: ${JSON.stringify({
+        id: 'chatcmpl_s',
+        model: 'gpt-4o-mini',
+        choices: [{ index: 0, delta: {}, finish_reason: 'stop' }],
+      })}`,
+      `data: ${JSON.stringify({
+        id: 'chatcmpl_s',
+        model: 'gpt-4o-mini',
+        choices: [],
+        usage: { prompt_tokens: 41, completion_tokens: 7 },
+      })}`,
+      'data: [DONE]',
+    ];
+    const body = lines.join('\n\n') + '\n\n';
+    return (() =>
+      Promise.resolve(
+        new Response(body, { status: 200, headers: { 'content-type': 'text/event-stream' } }),
+      )) as typeof fetch;
+  }
+
+  it('reads the usage-only chunk whose choices array is empty', async () => {
+    const p = browserOpenai({ apiKey: 'sk-test', _fetch: sseFetch() });
+    let final: { input: number; output: number } | undefined;
+    for await (const chunk of p.stream!(openaiRequest)) {
+      if (chunk.done && chunk.response) final = chunk.response.usage;
+    }
+    // Before 7.16.0 this was {input: 0, output: 0}: the usage chunk was skipped
+    // by a `continue` on the missing choice, so costBudget could never trip.
+    expect(final).toEqual({ input: 41, output: 7 });
+  });
+});
+
 describe('BrowserOpenAIProvider — performance', () => {
   it('1000 complete() calls under 500ms with fake fetch', async () => {
     const p = browserOpenai({ apiKey: 'sk-test', _fetch: fakeFetch(baseOpenAIResponse) });
