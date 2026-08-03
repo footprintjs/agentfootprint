@@ -4,7 +4,7 @@ title: WindowRecord
 
 # Interface: WindowRecord
 
-Defined in: src/core/agent/window/types.ts:118
+Defined in: [src/core/agent/window/types.ts:118](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/window/types.ts#L118)
 
 What one visit to the window stage put in the ledger.
 
@@ -36,7 +36,7 @@ guess this family exists to refuse. The honest "after" is the NEXT call's
 
 > `readonly` **iteration**: `number`
 
-Defined in: src/core/agent/window/types.ts:125
+Defined in: [src/core/agent/window/types.ts:125](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/window/types.ts#L125)
 
 ReAct iteration this visit belongs to.
 
@@ -46,7 +46,7 @@ ReAct iteration this visit belongs to.
 
 > `readonly` **refusals**: readonly [`WindowRefusal`](/docs/api/interfaces/WindowRefusal)[]
 
-Defined in: src/core/agent/window/types.ts:134
+Defined in: [src/core/agent/window/types.ts:134](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/window/types.ts#L134)
 
 Every turn that refused to leave, named.
 
@@ -56,7 +56,7 @@ Every turn that refused to leave, named.
 
 > `readonly` **removedMessageCount**: `number`
 
-Defined in: src/core/agent/window/types.ts:129
+Defined in: [src/core/agent/window/types.ts:129](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/window/types.ts#L129)
 
 How many messages left the window.
 
@@ -66,7 +66,7 @@ How many messages left the window.
 
 > `readonly` **removedStageIds**: readonly `string`[]
 
-Defined in: src/core/agent/window/types.ts:127
+Defined in: [src/core/agent/window/types.ts:127](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/window/types.ts#L127)
 
 `runtimeStageId`s of the stages that appended the messages that left.
 
@@ -76,7 +76,7 @@ Defined in: src/core/agent/window/types.ts:127
 
 > `readonly` **strategy**: `string`
 
-Defined in: src/core/agent/window/types.ts:123
+Defined in: [src/core/agent/window/types.ts:123](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/window/types.ts#L123)
 
 `WindowStrategy.name` of the strategy that decided — `'summarize-oldest'`,
 `'sliding-window'`, `'token-budget'`, or your own. Narrow on it.
@@ -87,7 +87,7 @@ Defined in: src/core/agent/window/types.ts:123
 
 > `readonly` **windowCharsAfter**: `number`
 
-Defined in: src/core/agent/window/types.ts:132
+Defined in: [src/core/agent/window/types.ts:132](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/window/types.ts#L132)
 
 ***
 
@@ -95,6 +95,6 @@ Defined in: src/core/agent/window/types.ts:132
 
 > `readonly` **windowCharsBefore**: `number`
 
-Defined in: src/core/agent/window/types.ts:131
+Defined in: [src/core/agent/window/types.ts:131](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/window/types.ts#L131)
 
 Window size in chars before / after this visit. Exact, and not tokens.

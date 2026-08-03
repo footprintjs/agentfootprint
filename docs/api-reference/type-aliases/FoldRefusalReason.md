@@ -8,7 +8,7 @@
 
 > **FoldRefusalReason** = [`WindowRefusalReason`](/agentfootprint/api/generated/type-aliases/WindowRefusalReason.md)
 
-Defined in: src/core/agent/window/types.ts:93
+Defined in: [src/core/agent/window/types.ts:93](https://github.com/footprintjs/agentfootprint/blob/6d7498c2fc112b3787418f14708897a47e933fd6/src/core/agent/window/types.ts#L93)
 
 ## Deprecated
 

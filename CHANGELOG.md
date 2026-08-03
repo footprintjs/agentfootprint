@@ -7,6 +7,163 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [7.18.0] - 2026-08-03
+
+Every agent framework lets you wrap a tool call. Most of them let the wrapper
+*answer* — return a canned string, a cached value, a "simulated" result — and
+the moment one does, the trace is fiction. The model was told a tool ran.
+Nothing ran.
+
+This release ships a typed chain around every tool dispatch and around the
+message boundary, and the wrapper **cannot answer**. The outcome union has
+three arms — `allow`, `deny`, `ask` — and no arm for a result. There is no
+spelling of "here is what the tool would have returned". So whatever a chain
+decides, what the model finally reads is the real tool's output or a refusal.
+That is not a convention a reviewer enforces; it is the absence of a field, and
+a type-regression test fails the build the day someone adds one.
+
+The same law decides what an `ask` resumes with. A middleware suspends the run
+to put a question to a person — on the pause machinery `askHuman` and `checkIn`
+already ride, not a second one — and the answer that comes back is a
+**decision, not a result**. Approve and the chain continues from the next link
+and the REAL tool runs. Decline and it becomes a denial the model reads and
+adapts to. Nobody, not the middleware and not the person who approved it, gets
+to write the tool's answer.
+
+And a transform says so. `allow(value, why)` **requires** the `why`, and the
+run commits both the value it received and the value it produced. A prompt
+scrubbed by a middleware that hid its own scrubbing would poison every slice
+taken afterwards: the trace would show text nobody ever sent.
+
+### Added
+
+- **`.toolMiddleware(...middleware)` — a chain around every tool dispatch.**
+  Each link answers `allow()`, `allow(args, why)`, `deny(reason)` or
+  `ask({ question })`. Order is call order and each link sees the previous
+  one's output; the first non-`allow` answer wins and the rest of the chain
+  does not run, because a refusal a later rule could overturn is not a refusal.
+
+  A `deny` reason **reaches the model verbatim**, as the tool result, on the
+  same synthetic-tool-result path every other refusal in the dispatch loop has
+  always used — so the loop continues and the agent adapts in flight. A denial
+  is data, not a crash.
+
+  The chain sits **after the permission gate** (an existing `PermissionChecker`
+  still decides first, and a call it denies never reaches a middleware) and
+  **before arg validation** (so validation judges the args that will actually
+  be sent, not the ones the model proposed).
+
+- **`.messageMiddleware(...middleware)` — a chain around the message
+  boundary.** The `'input'` half runs at the very top of the run, BEFORE the
+  message is committed; the `'output'` half at the moment the run knows this
+  turn is the final answer.
+
+  The input placement is the whole point. Everything downstream reads the
+  committed history — the window strategies, the injection engine, all three
+  slots, the bytes on the wire, and every slice taken afterwards — so the
+  transformed text is what the entire run agrees was said. Transform any later
+  and the trace shows one message while the model answered another.
+
+- **`allow` / `deny` / `ask`, flat on the package root.** They are the verbs of
+  this domain, written several times inside every middleware body.
+
+- **`ask` suspends on the SHIPPED pause machinery.** `isAskPause(outcome)`
+  narrows a paused run and `outcome.ask` carries `{ question, detail?,
+  middleware }`. Resume with `checkInApproved` / `checkInDeclined` — the same
+  human-answer vocabulary check-ins use, deliberately, because a person
+  approving is a person approving and one word for one thing beats a synonym.
+  A malformed resume DECLINES, so a governed call can never execute because a
+  message was mis-shaped.
+
+  Because it is the shipped wire and not a new one, hosting needed no change at
+  all: over a `standingAgent` an outstanding middleware question is refused as
+  unfinished work with `PauseNotCarriedError`, naming the tool, session
+  untouched — byte for byte what `askHuman` already did. A test pins it.
+
+- **`scope.middlewareDecisions` — the ledger.** One row per decision, in order,
+  carrying the middleware's name, the outcome, whether the value changed, the
+  `why`, and — for a transform — both the `before` and the `after`.
+
+  Every decision files a row, **including the pass-throughs**: "the rule looked
+  and was fine with it" and "the rule never ran" are different facts about a
+  run. Written only by an agent that configured a chain; absent otherwise.
+
+- **`MessageDeniedError`** — raised when a message chain refuses, at either
+  phase, carrying `reason` / `phase` / `middleware` and never the refused
+  content.
+
+- **`mcpServe(tools, { toolMiddleware })`** — the governance law extended to
+  the served boundary. It runs before `execute` and before credentials resolve,
+  exactly as inside an agent. An `ask` there answers the client with a tool
+  error **naming the middleware** rather than executing ungoverned, in the same
+  wording the `checkIn` refusal uses.
+
+- **One typed event, `agentfootprint.middleware.decision`** (68 events, 20
+  domains). It carries the fact — who, where, which outcome, whether the value
+  changed — and deliberately **not** the values.
+
+### The judgements these rest on
+
+**A middleware cannot fabricate a result, and that is a type, not a rule.**
+Every framework that lets a wrapper return a value eventually has a run whose
+trace says a tool answered when nothing did. Removing the arm removes the
+class. It is also why `ask` resumes with a decision: had the human's answer
+become the tool result, a middleware would have found the fabrication door
+again, through a person.
+
+**`ask` exists only where a pause exists.** `ToolOutcome` has it because tool
+dispatch runs inside a footprintjs pausable stage. `MessageOutcome` does not,
+because the message boundary is a plain stage — and inventing a second pause to
+give it one would be a worse answer than not offering it. The type says so, so
+nobody discovers this at run time.
+
+**footprintjs 9.14's `interrupt()` was considered and declined.** It re-enters
+the stage from its TOP on resume, and tool dispatch runs N tools in one stage
+body — so resuming would re-execute every tool already dispatched that
+iteration, which is precisely the class of side effect a middleware exists to
+govern. (It would also have forced a peer bump inside a minor.) The pausable
+handler's execute/resume split does not re-run the loop, so `ask` rides that.
+
+**At most one human question per resume.** A resumed dispatch has no second
+checkpoint to offer. If a later link also asks — or the tool itself declares
+`checkIn` — the call is **not executed** and a named refusal reaches the model,
+matching the rule already applied to a tool that tries to pause during an
+approved check-in resume. Executing a call whose consent gate was silently
+skipped would be the worse failure by a wide margin.
+
+**The output chain runs in the Route decider, not in PrepareFinal.**
+PrepareFinal is where `finalContent` is set, which makes it look like the seam.
+It is not: it lives inside the Final BRANCH subflow, whose state does not merge
+back into the run, so ledger rows filed there would sit in an isolated commit
+log and split one ledger across two places. The decider is one stage earlier,
+in the main chart, and it is the first moment the run knows this turn is the
+answer.
+
+**`allow` / `deny` / `ask` are flat exports, and that was a deliberate call.**
+They are generic words on a package root and the collision surface is real.
+They are also the verbs of this domain, written constantly inside middleware
+bodies, and the ergonomic value of `deny('writes to prod need a ticket')` over
+a namespaced ceremony is worth more than the theoretical clash. The names were
+unclaimed.
+
+**The ledger keeps the original, and for the `'input'` phase that row is the
+only copy.** The seed stage commits the transformed message and nothing else
+holds what arrived. That is the honest trade: the transform is legible
+precisely because the run kept what it replaced. If the original must not
+survive in the commit log, that is a redaction question and footprintjs already
+answers it — configure redaction over `middlewareDecisions` and `before` /
+`after` scrub at write time while the decision row survives. A security test
+pins both halves, because honesty and protection are both laws and that is
+where they meet.
+
+**Absent middleware is byte-identical.** No chain walk, no committed key, no
+bridge attached, the same request bytes, and seed stays the synchronous stage
+it always was. A test pins the wire and the committed key set against an agent
+built without one.
+
+Docs: [Middleware](https://footprintjs.github.io/agentfootprint/docs/build/middleware) ·
+Example: `examples/features/37-middleware.ts`.
+
 ## [7.17.0] - 2026-08-02
 
 7.16.0 shipped compaction. It shipped it on a seam — an internal

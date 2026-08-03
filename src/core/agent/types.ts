@@ -32,6 +32,7 @@ import type { ToolArgValidationMode } from './toolArgsValidation.js';
 import type { ThinkingBlock } from '../../thinking/types.js';
 import type { ReliabilityScope } from '../../reliability/types.js';
 import type { WindowRecord } from './window/types.js';
+import type { MiddlewareDecision } from './middleware/types.js';
 
 // ─── PUBLIC types (consumer-facing) ────────────────────────────────
 
@@ -392,6 +393,33 @@ export interface AgentState {
   // structuredClone (checkpoint discipline). Absent for non-check-in pauses.
   pausedCheckIn?: boolean;
   pausedCheckInArgs?: Readonly<Record<string, unknown>>;
+  // Middleware-ask checkpoint — set when a `toolMiddleware` answers `ask` and
+  // the run pauses BEFORE the tool executes. Same wire as the check-in pause,
+  // discriminated the same way: `pausedAsk` tells resume which kind of question
+  // is outstanding. `pausedAskArgs` carries the args AS TRANSFORMED SO FAR (the
+  // human approved those, not the model's originals) and `pausedAskIndex` says
+  // which link asked, so resume continues the chain from the NEXT one instead
+  // of re-running decisions the checkpoint already recorded. All survive
+  // structuredClone. Absent for every other pause.
+  pausedAsk?: boolean;
+  pausedAskArgs?: Readonly<Record<string, unknown>>;
+  pausedAskIndex?: number;
+  pausedAskMiddleware?: string;
+
+  // ── The middleware ledger (`.toolMiddleware()` / `.messageMiddleware()`) ──
+  /** One row per middleware decision, in the order they were decided —
+   *  including the pass-throughs, because "the rule looked and was fine with
+   *  it" and "the rule never ran" are different facts about a run. A transform
+   *  files both the value it received and the value it produced, so a slice
+   *  taken later can find the moment the text changed and who changed it.
+   *  Written only by an agent that configured a chain; absent otherwise. */
+  middlewareDecisions?: readonly MiddlewareDecision[];
+  /** Set by the seed / prepare-final stage when a `messageMiddleware` returned
+   *  `deny`. Read at the API boundary, where it becomes a `MessageDeniedError`.
+   *  Never carries the refused content — see MessageDeniedError. */
+  messageDeniedReason?: string;
+  messageDeniedPhase?: 'input' | 'output';
+  messageDeniedBy?: string;
   // Cost accounting (only used when pricingTable is set).
   cumTokensInput: number;
   cumTokensOutput: number;

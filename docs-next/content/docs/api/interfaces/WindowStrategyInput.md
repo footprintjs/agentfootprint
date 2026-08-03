@@ -4,7 +4,7 @@ title: WindowStrategyInput
 
 # Interface: WindowStrategyInput
 
-Defined in: src/core/agent/window/strategy.ts:62
+Defined in: [src/core/agent/window/strategy.ts:62](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/window/strategy.ts#L62)
 
 Everything a strategy is allowed to look at.
 
@@ -14,7 +14,7 @@ Everything a strategy is allowed to look at.
 
 > `readonly` **agentModel**: `string`
 
-Defined in: src/core/agent/window/strategy.ts:81
+Defined in: [src/core/agent/window/strategy.ts:81](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/window/strategy.ts#L81)
 
 The agent's own model — the sensible default for a strategy that bills.
 
@@ -24,7 +24,7 @@ The agent's own model — the sensible default for a strategy that bills.
 
 > `readonly` **history**: readonly [`LLMMessage`](/docs/api/interfaces/LLMMessage)[]
 
-Defined in: src/core/agent/window/strategy.ts:64
+Defined in: [src/core/agent/window/strategy.ts:64](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/window/strategy.ts#L64)
 
 The window as it stands, detached.
 
@@ -34,7 +34,7 @@ The window as it stands, detached.
 
 > `readonly` **iteration**: `number`
 
-Defined in: src/core/agent/window/strategy.ts:79
+Defined in: [src/core/agent/window/strategy.ts:79](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/window/strategy.ts#L79)
 
 The ReAct iteration this decision belongs to.
 
@@ -44,7 +44,7 @@ The ReAct iteration this decision belongs to.
 
 > `readonly` **measured**: \{ `input`: `number`; `output`: `number`; \} \| `undefined`
 
-Defined in: src/core/agent/window/strategy.ts:77
+Defined in: [src/core/agent/window/strategy.ts:77](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/window/strategy.ts#L77)
 
 What the provider REPORTED for the last completed call. Counted, never
 guessed. `undefined` before the first call of the run — a strategy that
@@ -61,7 +61,7 @@ that cost nothing. A token-triggered strategy should throw
 
 > `readonly` **now**: () => `number`
 
-Defined in: src/core/agent/window/strategy.ts:87
+Defined in: [src/core/agent/window/strategy.ts:87](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/window/strategy.ts#L87)
 
 Wall clock, injectable so a caller can pin `survivalMs`.
 
@@ -75,7 +75,7 @@ Wall clock, injectable so a caller can pin `survivalMs`.
 
 > `readonly` **planRemoval**: (`keepRecentTurns`, `isExistingSummary?`) => [`RemovalPlan`](/docs/api/interfaces/RemovalPlan)
 
-Defined in: src/core/agent/window/strategy.ts:102
+Defined in: [src/core/agent/window/strategy.ts:102](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/window/strategy.ts#L102)
 
 THE shared refusal engine, bound to this iteration.
 
@@ -111,7 +111,7 @@ optional predicate marking a turn that is a
 
 > `readonly` **providerName**: `string`
 
-Defined in: src/core/agent/window/strategy.ts:83
+Defined in: [src/core/agent/window/strategy.ts:83](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/window/strategy.ts#L83)
 
 `provider.name` of the MAIN provider, for a refusal that names it.
 
@@ -121,7 +121,7 @@ Defined in: src/core/agent/window/strategy.ts:83
 
 > `readonly` **removalFacts**: (`indices`, `atMs`) => [`RemovalFacts`](/docs/api/interfaces/RemovalFacts)
 
-Defined in: src/core/agent/window/strategy.ts:113
+Defined in: [src/core/agent/window/strategy.ts:113](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/window/strategy.ts#L113)
 
 Turn removed message indices into the facts the ledger needs: which
 stages wrote them, and how long each lived in the window.
@@ -150,7 +150,7 @@ the moment they leave (usually `input.now()`)
 
 > `readonly` **signal**: `AbortSignal` \| `undefined`
 
-Defined in: src/core/agent/window/strategy.ts:85
+Defined in: [src/core/agent/window/strategy.ts:85](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/window/strategy.ts#L85)
 
 The run's cancellation signal, when there is one.
 
@@ -160,6 +160,6 @@ The run's cancellation signal, when there is one.
 
 > `readonly` **turns**: readonly [`Turn`](/docs/api/interfaces/Turn)[]
 
-Defined in: src/core/agent/window/strategy.ts:66
+Defined in: [src/core/agent/window/strategy.ts:66](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/window/strategy.ts#L66)
 
 The same window, segmented into turns.

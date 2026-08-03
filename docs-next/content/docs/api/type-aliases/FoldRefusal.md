@@ -6,7 +6,7 @@ title: "~~Type Alias: FoldRefusal~~"
 
 > **FoldRefusal** = [`WindowRefusal`](/docs/api/interfaces/WindowRefusal)
 
-Defined in: src/core/agent/window/types.ts:87
+Defined in: [src/core/agent/window/types.ts:87](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/window/types.ts#L87)
 
 ## Deprecated
 

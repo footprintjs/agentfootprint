@@ -21,6 +21,9 @@ import type { TypedScope } from 'footprintjs';
 import type { LLMMessage, LLMToolSchema } from '../../../adapters/types.js';
 import { typedEmit } from '../../../recorders/core/typedEmit.js';
 import type { AgentInput, AgentState, RunConfig } from '../types.js';
+import type { MessageMiddleware } from '../middleware/types.js';
+import { runMessageChain } from '../middleware/runChain.js';
+import { recordDecisions } from '../middleware/ledger.js';
 
 export interface SeedStageDeps {
   /** Resolved `clampIterations(opts.maxIterations ?? 10)`. Frozen at
@@ -56,6 +59,20 @@ export interface SeedStageDeps {
    * written, so the commit log is byte-identical to earlier releases.
    */
   readonly resolveRunConfig?: (input: AgentInput) => RunConfig | undefined;
+  /**
+   * The message chain (`.messageMiddleware(...)`), walked here at the
+   * `'input'` phase — BEFORE `userMessage` and `history` are written.
+   *
+   * This is the only placement that keeps the run honest. Everything
+   * downstream reads `scope.history`: the window strategies, the injection
+   * engine, all three slots, the request that goes on the wire, and every
+   * slice taken afterwards. Transform later than this and those components
+   * disagree about what the user actually said — the trace would show one
+   * message and the model would have answered another.
+   *
+   * Empty / undefined → seed stays the synchronous stage it always was.
+   */
+  readonly messageMiddleware?: readonly MessageMiddleware[];
 }
 
 /**
@@ -63,94 +80,140 @@ export interface SeedStageDeps {
  * the chart-build-time constants and the per-run mutable accessors
  * via the deps object.
  */
-export function buildSeedStage(deps: SeedStageDeps): (scope: TypedScope<AgentState>) => void {
-  return (scope) => {
-    const args = scope.$getArgs<AgentInput>();
-    scope.userMessage = args.message;
-
-    // If `resumeOnError(...)` set the side channel, restore the
-    // checkpointed conversation history. The next iteration sees
-    // the prior messages and continues from the failure point.
-    // Always clear the field after reading so subsequent runs
-    // (without resumeOnError) start fresh.
-    const resumeHistory = deps.consumePendingResumeHistory();
-    if (resumeHistory && resumeHistory.length > 0) {
-      scope.history = [...resumeHistory];
-    } else {
-      scope.history = [{ role: 'user', content: args.message }];
-    }
-
-    // Default identity uses the runId so multi-run isolation works
-    // without consumer changes; explicit identity (multi-tenant)
-    // overrides via `agent.run({ identity })`.
-    scope.runIdentity = args.identity ?? {
-      conversationId: deps.getCurrentRunId() ?? 'default',
+export function buildSeedStage(
+  deps: SeedStageDeps,
+): (scope: TypedScope<AgentState>) => void | Promise<void> {
+  const chain = deps.messageMiddleware ?? [];
+  // No chain → the same synchronous function this stage has always been.
+  // Not an optimisation: an agent without middleware must produce the same
+  // stage shape, the same committed keys and the same request bytes as before.
+  if (chain.length === 0) {
+    return (scope) => {
+      seedFrom(scope, scope.$getArgs<AgentInput>().message, deps);
     };
-    scope.newMessages = [];
-    scope.turnNumber = 1;
-    // Permissive default — explicit cap will land when PricingTable
-    // gets a context-window field. Memory pickByBudget treats anything
-    // ≥ minimumTokens as "fits", so this just enables the budget path.
-    scope.contextTokensRemaining = 32_000;
-    scope.iteration = 1;
-    scope.maxIterations = deps.maxIterations;
-    scope.finalContent = '';
-    scope.totalInputTokens = 0;
-    scope.totalOutputTokens = 0;
-    scope.turnStartMs = Date.now();
-    scope.systemPromptInjections = [];
-    scope.messagesInjections = [];
-    scope.toolsInjections = [];
-    scope.llmLatestContent = '';
-    scope.llmLatestToolCalls = [];
-    // v2.14 — initialize thinking blocks. Empty array means "no thinking
-    // this iteration"; the NormalizeThinking sub-subflow overwrites
-    // this AFTER each CallLLM when a ThinkingHandler is configured.
-    scope.thinkingBlocks = [];
-    scope.pausedToolCallId = '';
-    scope.pausedToolName = '';
-    scope.pausedToolStartMs = 0;
-    scope.cumTokensInput = 0;
-    scope.cumTokensOutput = 0;
-    scope.cumEstimatedUsd = 0;
-    scope.costBudgetHit = false;
-    scope.activeInjections = [];
-    scope.activatedInjectionIds = [];
-    scope.dynamicToolSchemas = deps.toolSchemas;
-    // Cache layer state (v2.6) — initialized to inert defaults.
-    // CacheDecision subflow populates `cacheMarkers` per iteration;
-    // UpdateSkillHistory + CacheGate consume `cachingDisabled`,
-    // `recentHitRate`, `skillHistory`. Empty defaults mean the
-    // CacheGate falls through to 'apply-markers' on iter 1 (no
-    // history yet → no churn detected; recentHitRate undefined →
-    // hit-rate floor doesn't fire).
-    scope.cacheMarkers = [];
-    scope.cachingDisabled = deps.cachingDisabled;
-    scope.recentHitRate = undefined;
-    scope.skillHistory = [];
-    // Skill-graph cursor — reset per turn so each new user message re-enters the
-    // graph through the entry router (cold start). The Injection Engine advances
-    // it each iteration; undefined for agents without a skillGraph().
-    scope.currentSkillId = undefined;
-
-    // `.configure()` — resolved ONCE here (seed runs exactly once per run)
-    // and written to scope, which means the run's commit log records the
-    // model and instructions the run actually used. A run that changed its
-    // own model without committing that fact would produce a trace that
-    // reads as if the built-in default answered.
-    //
-    // Only what the resolver actually returned is written: an agent with no
-    // `.configure()`, or one whose resolver returned `{}`, commits nothing
-    // extra and behaves exactly as before.
-    if (deps.resolveRunConfig) {
-      const resolved = deps.resolveRunConfig(args);
-      if (resolved?.model !== undefined) scope.resolvedModel = resolved.model;
-      if (resolved?.instructions !== undefined) scope.resolvedInstructions = resolved.instructions;
-    }
-
-    typedEmit(scope, 'agentfootprint.agent.turn_start', {
-      turnIndex: 0,
-      userPrompt: args.message,
+  }
+  return async (scope) => {
+    const args = scope.$getArgs<AgentInput>();
+    const verdict = await runMessageChain(chain, {
+      phase: 'input',
+      content: args.message,
+      history: [],
+      // The input boundary runs before iteration 1 exists.
+      iteration: 0,
+      ...(args.identity && { identity: args.identity }),
     });
+    recordDecisions(scope, verdict.decisions);
+    if (verdict.kind === 'deny') {
+      // Seed the run anyway, with the content as it stood when it was
+      // refused, then stop. Committing it costs nothing (a refusal is a fact
+      // about a run, and hiding what was refused would make the record
+      // useless), and a fully-seeded state means `resumeOnError` and every
+      // recorder see the shape they expect rather than a half-built one.
+      seedFrom(scope, verdict.content, deps);
+      scope.messageDeniedReason = verdict.reason;
+      scope.messageDeniedPhase = 'input';
+      scope.messageDeniedBy = verdict.middleware;
+      // Stops the chart here: no injections, no slots, no LLM call. The
+      // boundary turns these flags into a MessageDeniedError.
+      scope.$break(`message denied at input: ${verdict.reason}`);
+      return;
+    }
+    seedFrom(scope, verdict.content, deps);
   };
+}
+
+/**
+ * Initialise every mutable field of `AgentState` from `message` + the run
+ * args. Split out so the message the run proceeds with can come either
+ * straight from the caller or from the `'input'` middleware chain — one
+ * initialiser, so the two paths cannot drift.
+ */
+function seedFrom(scope: TypedScope<AgentState>, message: string, deps: SeedStageDeps): void {
+  const args = scope.$getArgs<AgentInput>();
+  scope.userMessage = message;
+
+  // If `resumeOnError(...)` set the side channel, restore the
+  // checkpointed conversation history. The next iteration sees
+  // the prior messages and continues from the failure point.
+  // Always clear the field after reading so subsequent runs
+  // (without resumeOnError) start fresh.
+  const resumeHistory = deps.consumePendingResumeHistory();
+  if (resumeHistory && resumeHistory.length > 0) {
+    scope.history = [...resumeHistory];
+  } else {
+    scope.history = [{ role: 'user', content: message }];
+  }
+
+  // Default identity uses the runId so multi-run isolation works
+  // without consumer changes; explicit identity (multi-tenant)
+  // overrides via `agent.run({ identity })`.
+  scope.runIdentity = args.identity ?? {
+    conversationId: deps.getCurrentRunId() ?? 'default',
+  };
+  scope.newMessages = [];
+  scope.turnNumber = 1;
+  // Permissive default — explicit cap will land when PricingTable
+  // gets a context-window field. Memory pickByBudget treats anything
+  // ≥ minimumTokens as "fits", so this just enables the budget path.
+  scope.contextTokensRemaining = 32_000;
+  scope.iteration = 1;
+  scope.maxIterations = deps.maxIterations;
+  scope.finalContent = '';
+  scope.totalInputTokens = 0;
+  scope.totalOutputTokens = 0;
+  scope.turnStartMs = Date.now();
+  scope.systemPromptInjections = [];
+  scope.messagesInjections = [];
+  scope.toolsInjections = [];
+  scope.llmLatestContent = '';
+  scope.llmLatestToolCalls = [];
+  // v2.14 — initialize thinking blocks. Empty array means "no thinking
+  // this iteration"; the NormalizeThinking sub-subflow overwrites
+  // this AFTER each CallLLM when a ThinkingHandler is configured.
+  scope.thinkingBlocks = [];
+  scope.pausedToolCallId = '';
+  scope.pausedToolName = '';
+  scope.pausedToolStartMs = 0;
+  scope.cumTokensInput = 0;
+  scope.cumTokensOutput = 0;
+  scope.cumEstimatedUsd = 0;
+  scope.costBudgetHit = false;
+  scope.activeInjections = [];
+  scope.activatedInjectionIds = [];
+  scope.dynamicToolSchemas = deps.toolSchemas;
+  // Cache layer state (v2.6) — initialized to inert defaults.
+  // CacheDecision subflow populates `cacheMarkers` per iteration;
+  // UpdateSkillHistory + CacheGate consume `cachingDisabled`,
+  // `recentHitRate`, `skillHistory`. Empty defaults mean the
+  // CacheGate falls through to 'apply-markers' on iter 1 (no
+  // history yet → no churn detected; recentHitRate undefined →
+  // hit-rate floor doesn't fire).
+  scope.cacheMarkers = [];
+  scope.cachingDisabled = deps.cachingDisabled;
+  scope.recentHitRate = undefined;
+  scope.skillHistory = [];
+  // Skill-graph cursor — reset per turn so each new user message re-enters the
+  // graph through the entry router (cold start). The Injection Engine advances
+  // it each iteration; undefined for agents without a skillGraph().
+  scope.currentSkillId = undefined;
+
+  // `.configure()` — resolved ONCE here (seed runs exactly once per run)
+  // and written to scope, which means the run's commit log records the
+  // model and instructions the run actually used. A run that changed its
+  // own model without committing that fact would produce a trace that
+  // reads as if the built-in default answered.
+  //
+  // Only what the resolver actually returned is written: an agent with no
+  // `.configure()`, or one whose resolver returned `{}`, commits nothing
+  // extra and behaves exactly as before.
+  if (deps.resolveRunConfig) {
+    const resolved = deps.resolveRunConfig(args);
+    if (resolved?.model !== undefined) scope.resolvedModel = resolved.model;
+    if (resolved?.instructions !== undefined) scope.resolvedInstructions = resolved.instructions;
+  }
+
+  typedEmit(scope, 'agentfootprint.agent.turn_start', {
+    turnIndex: 0,
+    userPrompt: message,
+  });
 }

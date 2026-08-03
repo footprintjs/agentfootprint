@@ -20,6 +20,7 @@
     "tool-discovery",
     "mcp-serve",
     "sequence-governance",
+    "middleware",
     "flowchart-as-tool",
     "output-schema",
     "strict-output",

@@ -6,7 +6,7 @@
 
 # Interface: ToolExecutionContext
 
-Defined in: [src/core/tools.ts:49](https://github.com/footprintjs/agentfootprint/blob/5e50b8a4c2f3ab01f1019c813d5c48641d801965/src/core/tools.ts#L49)
+Defined in: [src/core/tools.ts:49](https://github.com/footprintjs/agentfootprint/blob/6d7498c2fc112b3787418f14708897a47e933fd6/src/core/tools.ts#L49)
 
 Runtime context passed to tool.execute().
 
@@ -16,7 +16,7 @@ Runtime context passed to tool.execute().
 
 > `readonly` `optional` **credential?**: `Credential`
 
-Defined in: [src/core/tools.ts:68](https://github.com/footprintjs/agentfootprint/blob/5e50b8a4c2f3ab01f1019c813d5c48641d801965/src/core/tools.ts#L68)
+Defined in: [src/core/tools.ts:68](https://github.com/footprintjs/agentfootprint/blob/6d7498c2fc112b3787418f14708897a47e933fd6/src/core/tools.ts#L68)
 
 The credential resolved for this tool's declared `needs` (declare-and-push).
  Present only when the tool declared a need and it resolved successfully.
@@ -27,7 +27,7 @@ The credential resolved for this tool's declared `needs` (declare-and-push).
 
 > `readonly` **credentials**: `CredentialProvider`
 
-Defined in: [src/core/tools.ts:62](https://github.com/footprintjs/agentfootprint/blob/5e50b8a4c2f3ab01f1019c813d5c48641d801965/src/core/tools.ts#L62)
+Defined in: [src/core/tools.ts:62](https://github.com/footprintjs/agentfootprint/blob/6d7498c2fc112b3787418f14708897a47e933fd6/src/core/tools.ts#L62)
 
 The bound credential provider — the PULL escape hatch for dynamic needs.
 Always present: when none is attached it's a fail-closed provider that
@@ -40,7 +40,7 @@ declarative `needs` + `ctx.credential` for the common case.
 
 > `readonly` **hasCredentials**: `boolean`
 
-Defined in: [src/core/tools.ts:65](https://github.com/footprintjs/agentfootprint/blob/5e50b8a4c2f3ab01f1019c813d5c48641d801965/src/core/tools.ts#L65)
+Defined in: [src/core/tools.ts:65](https://github.com/footprintjs/agentfootprint/blob/6d7498c2fc112b3787418f14708897a47e933fd6/src/core/tools.ts#L65)
 
 True when a real provider is attached. Branch on this for intentional
  degraded (no-credential) mode instead of relying on `undefined`.
@@ -51,7 +51,7 @@ True when a real provider is attached. Branch on this for intentional
 
 > `readonly` **iteration**: `number`
 
-Defined in: [src/core/tools.ts:53](https://github.com/footprintjs/agentfootprint/blob/5e50b8a4c2f3ab01f1019c813d5c48641d801965/src/core/tools.ts#L53)
+Defined in: [src/core/tools.ts:53](https://github.com/footprintjs/agentfootprint/blob/6d7498c2fc112b3787418f14708897a47e933fd6/src/core/tools.ts#L53)
 
 Current iteration number of the ReAct loop.
 
@@ -61,7 +61,7 @@ Current iteration number of the ReAct loop.
 
 > `readonly` `optional` **signal?**: `AbortSignal`
 
-Defined in: [src/core/tools.ts:55](https://github.com/footprintjs/agentfootprint/blob/5e50b8a4c2f3ab01f1019c813d5c48641d801965/src/core/tools.ts#L55)
+Defined in: [src/core/tools.ts:55](https://github.com/footprintjs/agentfootprint/blob/6d7498c2fc112b3787418f14708897a47e933fd6/src/core/tools.ts#L55)
 
 Abort signal propagated from run({ env: { signal } }).
 
@@ -71,6 +71,6 @@ Abort signal propagated from run({ env: { signal } }).
 
 > `readonly` **toolCallId**: `string`
 
-Defined in: [src/core/tools.ts:51](https://github.com/footprintjs/agentfootprint/blob/5e50b8a4c2f3ab01f1019c813d5c48641d801965/src/core/tools.ts#L51)
+Defined in: [src/core/tools.ts:51](https://github.com/footprintjs/agentfootprint/blob/6d7498c2fc112b3787418f14708897a47e933fd6/src/core/tools.ts#L51)
 
 Unique id of THIS tool invocation (matches stream.tool_start.toolCallId).

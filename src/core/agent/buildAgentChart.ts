@@ -87,9 +87,9 @@ export interface AgentChartDeps {
   readonly maxIterations: number;
 
   // ─ Stage handlers ───────────────────────────────────────────────
-  readonly seed: (scope: never) => void;
+  readonly seed: (scope: never) => void | Promise<void>;
   readonly callLLM: (scope: never) => Promise<void>;
-  readonly routeDecider: (scope: never) => 'tool-calls' | 'final';
+  readonly routeDecider: (scope: never) => 'tool-calls' | 'final' | Promise<'tool-calls' | 'final'>;
   readonly toolCallsHandler: import('footprintjs').PausableHandler<never>;
 
   // ─ Slot subflows ───────────────────────────────────────────────

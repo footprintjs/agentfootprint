@@ -4,7 +4,7 @@ title: WindowStrategy
 
 # Interface: WindowStrategy
 
-Defined in: src/core/agent/window/strategy.ts:165
+Defined in: [src/core/agent/window/strategy.ts:165](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/window/strategy.ts#L165)
 
 A window strategy: what the live window should become at this iteration
 boundary, and what the record must say about the change.
@@ -18,7 +18,7 @@ Pass one to `AgentBuilder.window(...)`. Exactly one per agent —
 
 > `readonly` **name**: `string`
 
-Defined in: src/core/agent/window/strategy.ts:171
+Defined in: [src/core/agent/window/strategy.ts:171](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/window/strategy.ts#L171)
 
 Stable name — it is written onto every record this strategy files
 (`WindowRecord.strategy`), so a reader can tell which policy produced a
@@ -30,7 +30,7 @@ window, and it names the strategy on the chart's `compact` stage.
 
 > **plan**(`input`): `Promise`\<[`WindowStrategyResult`](/docs/api/interfaces/WindowStrategyResult) \| `undefined`\>
 
-Defined in: src/core/agent/window/strategy.ts:183
+Defined in: [src/core/agent/window/strategy.ts:183](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/window/strategy.ts#L183)
 
 Decide. Called at EVERY ReAct iteration boundary.
 

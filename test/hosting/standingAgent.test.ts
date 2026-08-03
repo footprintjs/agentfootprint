@@ -23,7 +23,7 @@ import { describe, expect, it } from 'vitest';
 
 import { Agent } from '../../src/index.js';
 import { mock } from '../../src/llm-providers.js';
-import { defineTool } from '../../src/index.js';
+import { ask, defineTool } from '../../src/index.js';
 import { askHuman } from '../../src/core/pause.js';
 import { memorySessions, nodeHost, standingAgent, toEnvelope } from '../../src/hosting/index.js';
 import type { CheckpointEnvelope, SessionLifecycle } from '../../src/hosting/index.js';
@@ -384,6 +384,51 @@ describe('standingAgent — a run that paused', () => {
       expect(reply.error).toContain("session 'pausing'");
       // Nothing written — the session keeps exactly what it had (nothing).
       expect(await sessions.hydrate('pausing')).toBeUndefined();
+    } finally {
+      await handle.close();
+    }
+  });
+
+  it('a middleware ask is the SAME pause path — refused by tool name, nothing written', async () => {
+    // LAW 4's hosting half. `ask` was built on the shipped pause wire rather
+    // than on a second mechanism of its own, and this is what that buys: the
+    // hosting layer needed no change at all. A middleware question over a
+    // standing agent behaves exactly like `askHuman` does — refused as
+    // unfinished work, naming the tool, with the session untouched.
+    const act = defineTool<{ amount: number }, string>({
+      name: 'approve_refund',
+      description: 'approve a refund',
+      parameters: {
+        type: 'object',
+        properties: { amount: { type: 'number' } },
+        required: ['amount'],
+      },
+      execute: () => 'refunded',
+    });
+    const agent = Agent.create({
+      provider: mock({
+        replies: [{ toolCalls: [{ id: 't1', name: 'approve_refund', args: { amount: 10 } }] }],
+      }),
+      model: 'test-model',
+      maxIterations: 3,
+    })
+      .system('terse')
+      .tool(act)
+      .toolMiddleware({
+        name: 'four-eyes',
+        onToolCall: () => ask({ question: 'second pair of eyes?' }),
+      })
+      .build();
+
+    const sessions = memorySessions();
+    const host = inProcessHost();
+    const handle = await standingAgent({ agent, sessions, host });
+    try {
+      const reply = await host.deliver({ input: 'refund me', sessionId: 'asking' });
+      expect(reply.code).toBe('ERR_PAUSE_NOT_CARRIED');
+      expect(reply.error).toContain('approve_refund');
+      expect(reply.error).toContain("session 'asking'");
+      expect(await sessions.hydrate('asking')).toBeUndefined();
     } finally {
       await handle.close();
     }

@@ -6,7 +6,7 @@
 
 # Class: AgentBuilder
 
-Defined in: [src/core/agent/AgentBuilder.ts:50](https://github.com/footprintjs/agentfootprint/blob/5e50b8a4c2f3ab01f1019c813d5c48641d801965/src/core/agent/AgentBuilder.ts#L50)
+Defined in: [src/core/agent/AgentBuilder.ts:51](https://github.com/footprintjs/agentfootprint/blob/6d7498c2fc112b3787418f14708897a47e933fd6/src/core/agent/AgentBuilder.ts#L51)
 
 Fluent builder. `tool()` accepts any Tool<TArgs, TResult> and registers
 it by its schema.name. Duplicate names throw at build time.
@@ -17,7 +17,7 @@ it by its schema.name. Duplicate names throw at build time.
 
 > **new AgentBuilder**(`opts`): `AgentBuilder`
 
-Defined in: [src/core/agent/AgentBuilder.ts:165](https://github.com/footprintjs/agentfootprint/blob/5e50b8a4c2f3ab01f1019c813d5c48641d801965/src/core/agent/AgentBuilder.ts#L165)
+Defined in: [src/core/agent/AgentBuilder.ts:170](https://github.com/footprintjs/agentfootprint/blob/6d7498c2fc112b3787418f14708897a47e933fd6/src/core/agent/AgentBuilder.ts#L170)
 
 #### Parameters
 
@@ -35,7 +35,7 @@ Defined in: [src/core/agent/AgentBuilder.ts:165](https://github.com/footprintjs/
 
 > **appName**(`name`): `this`
 
-Defined in: [src/core/agent/AgentBuilder.ts:497](https://github.com/footprintjs/agentfootprint/blob/5e50b8a4c2f3ab01f1019c813d5c48641d801965/src/core/agent/AgentBuilder.ts#L497)
+Defined in: [src/core/agent/AgentBuilder.ts:502](https://github.com/footprintjs/agentfootprint/blob/6d7498c2fc112b3787418f14708897a47e933fd6/src/core/agent/AgentBuilder.ts#L502)
 
 Set the agent's display name — substituted as `{{appName}}` in
 commentary + thinking templates. Same place to brand a tenant
@@ -58,7 +58,7 @@ commentary + thinking templates. Same place to brand a tenant
 
 > **build**(): [`Agent`](/agentfootprint/api/generated/classes/Agent.md)
 
-Defined in: [src/core/agent/AgentBuilder.ts:1048](https://github.com/footprintjs/agentfootprint/blob/5e50b8a4c2f3ab01f1019c813d5c48641d801965/src/core/agent/AgentBuilder.ts#L1048)
+Defined in: [src/core/agent/AgentBuilder.ts:1170](https://github.com/footprintjs/agentfootprint/blob/6d7498c2fc112b3787418f14708897a47e933fd6/src/core/agent/AgentBuilder.ts#L1170)
 
 #### Returns
 
@@ -70,21 +70,7 @@ Defined in: [src/core/agent/AgentBuilder.ts:1048](https://github.com/footprintjs
 
 > **checkIn**(`opts?`): `this`
 
-Defined in: [src/core/agent/AgentBuilder.ts:1021](https://github.com/footprintjs/agentfootprint/blob/5e50b8a4c2f3ab01f1019c813d5c48641d801965/src/core/agent/AgentBuilder.ts#L1021)
-
-Configure the evidence pack that rides a check-in ask. A tool DEMANDS a
-check-in by declaring `checkIn: 'always'` or a `(args, ctx) => boolean`
-predicate ([defineTool](/agentfootprint/api/generated/functions/defineTool.md)); this method controls WHAT the human sees
-when it trips. Optional — a tool with `checkIn` works without it (default:
-`'standard'` evidence + the deterministic lexical scorer, zero LLM calls).
-
-- `evidence: 'standard'` (default) — the full pack: `willDo` (plain-words
-  claim), `read` (what context the run consumed), `drivers` (which context
-  drove the pick, ranked), `trail` (compact run-so-far summary).
-- `evidence: 'minimal'` — just `willDo` (zero cost).
-- `evidence: <assembler>` — bring your own [CheckInAssembler](/agentfootprint/api/generated/type-aliases/CheckInAssembler.md).
-- `scorer` — swap the `drivers` ranker (default is zero-LLM lexical; pass
-  an embedding-backed one wrapping `explainChoice` for semantic ranking).
+Defined in: [src/core/agent/AgentBuilder.ts:1143](https://github.com/footprintjs/agentfootprint/blob/6d7498c2fc112b3787418f14708897a47e933fd6/src/core/agent/AgentBuilder.ts#L1143)
 
 #### Parameters
 
@@ -96,25 +82,13 @@ when it trips. Optional — a tool with `checkIn` works without it (default:
 
 `this`
 
-#### Example
-
-```ts
-Agent.create({ provider, model })
-    .tool(defineTool({ name: 'issue_refund', description: 'Refund a charge',
-      inputSchema: { type: 'object', properties: { amount: { type: 'number' } } },
-      checkIn: (args) => (args.amount as number) > 1000,   // ask only for big refunds
-      execute: async ({ amount }) => `refunded ${amount}` }))
-    .checkIn({ evidence: 'standard' })
-    .build();
-```
-
 ***
 
 ### commentaryTemplates()
 
 > **commentaryTemplates**(`templates`): `this`
 
-Defined in: [src/core/agent/AgentBuilder.ts:512](https://github.com/footprintjs/agentfootprint/blob/5e50b8a4c2f3ab01f1019c813d5c48641d801965/src/core/agent/AgentBuilder.ts#L512)
+Defined in: [src/core/agent/AgentBuilder.ts:517](https://github.com/footprintjs/agentfootprint/blob/6d7498c2fc112b3787418f14708897a47e933fd6/src/core/agent/AgentBuilder.ts#L517)
 
 Override agentfootprint's bundled commentary templates. Spread on
 top of `defaultCommentaryTemplates`; missing keys fall back. Same
@@ -141,7 +115,7 @@ voice ("You: {{userPrompt}}"), per-tenant customization.
 
 > **compaction**(`options`): `this`
 
-Defined in: [src/core/agent/AgentBuilder.ts:426](https://github.com/footprintjs/agentfootprint/blob/5e50b8a4c2f3ab01f1019c813d5c48641d801965/src/core/agent/AgentBuilder.ts#L426)
+Defined in: [src/core/agent/AgentBuilder.ts:431](https://github.com/footprintjs/agentfootprint/blob/6d7498c2fc112b3787418f14708897a47e933fd6/src/core/agent/AgentBuilder.ts#L431)
 
 Keep the live context window inside a token budget — without ever losing
 the record.
@@ -201,7 +175,7 @@ const agent = Agent.create({ provider: anthropic(), model: 'claude-sonnet-4-5' }
 
 > **configure**(`fn`): `this`
 
-Defined in: [src/core/agent/AgentBuilder.ts:304](https://github.com/footprintjs/agentfootprint/blob/5e50b8a4c2f3ab01f1019c813d5c48641d801965/src/core/agent/AgentBuilder.ts#L304)
+Defined in: [src/core/agent/AgentBuilder.ts:309](https://github.com/footprintjs/agentfootprint/blob/6d7498c2fc112b3787418f14708897a47e933fd6/src/core/agent/AgentBuilder.ts#L309)
 
 Decide this run's model and/or system prompt when the run starts.
 
@@ -267,7 +241,7 @@ Per-tenant house rules
 
 > **fact**(`injection`): `this`
 
-Defined in: [src/core/agent/AgentBuilder.ts:644](https://github.com/footprintjs/agentfootprint/blob/5e50b8a4c2f3ab01f1019c813d5c48641d801965/src/core/agent/AgentBuilder.ts#L644)
+Defined in: [src/core/agent/AgentBuilder.ts:649](https://github.com/footprintjs/agentfootprint/blob/6d7498c2fc112b3787418f14708897a47e933fd6/src/core/agent/AgentBuilder.ts#L649)
 
 Register a Fact — developer-supplied data the LLM should see.
 User profile, env info, computed summary, current time, …
@@ -290,7 +264,7 @@ Distinct from Skills (LLM-activated guidance) and Steering
 
 > **injection**(`injection`): `this`
 
-Defined in: [src/core/agent/AgentBuilder.ts:540](https://github.com/footprintjs/agentfootprint/blob/5e50b8a4c2f3ab01f1019c813d5c48641d801965/src/core/agent/AgentBuilder.ts#L540)
+Defined in: [src/core/agent/AgentBuilder.ts:545](https://github.com/footprintjs/agentfootprint/blob/6d7498c2fc112b3787418f14708897a47e933fd6/src/core/agent/AgentBuilder.ts#L545)
 
 Register any `Injection`. Use this for power-user / custom flavors;
 for built-in flavors use the typed sugar (`.skill`, `.steering`,
@@ -312,7 +286,7 @@ for built-in flavors use the typed sugar (`.skill`, `.steering`,
 
 > **instruction**(`injection`): `this`
 
-Defined in: [src/core/agent/AgentBuilder.ts:622](https://github.com/footprintjs/agentfootprint/blob/5e50b8a4c2f3ab01f1019c813d5c48641d801965/src/core/agent/AgentBuilder.ts#L622)
+Defined in: [src/core/agent/AgentBuilder.ts:627](https://github.com/footprintjs/agentfootprint/blob/6d7498c2fc112b3787418f14708897a47e933fd6/src/core/agent/AgentBuilder.ts#L627)
 
 Register an Instruction — rule-based system-prompt guidance.
 Predicate runs each iteration. Use for context-dependent rules
@@ -334,7 +308,7 @@ including the "Dynamic ReAct" `on-tool-return` pattern.
 
 > **instructions**(`injections`): `this`
 
-Defined in: [src/core/agent/AgentBuilder.ts:633](https://github.com/footprintjs/agentfootprint/blob/5e50b8a4c2f3ab01f1019c813d5c48641d801965/src/core/agent/AgentBuilder.ts#L633)
+Defined in: [src/core/agent/AgentBuilder.ts:638](https://github.com/footprintjs/agentfootprint/blob/6d7498c2fc112b3787418f14708897a47e933fd6/src/core/agent/AgentBuilder.ts#L638)
 
 Bulk-register many instructions at once. Convenience for consumer
 code that organizes its instruction set in a flat array (`const
@@ -358,7 +332,7 @@ readonly `Injection`[]
 
 > **maxIterations**(`n`): `this`
 
-Defined in: [src/core/agent/AgentBuilder.ts:468](https://github.com/footprintjs/agentfootprint/blob/5e50b8a4c2f3ab01f1019c813d5c48641d801965/src/core/agent/AgentBuilder.ts#L468)
+Defined in: [src/core/agent/AgentBuilder.ts:473](https://github.com/footprintjs/agentfootprint/blob/6d7498c2fc112b3787418f14708897a47e933fd6/src/core/agent/AgentBuilder.ts#L473)
 
 Override the ReAct iteration cap set via `Agent.create({
 maxIterations })`. Convenience for builder-style code that prefers
@@ -383,7 +357,7 @@ Throws if `n` is not a positive integer or exceeds the hard cap
 
 > **memory**(`definition`): `this`
 
-Defined in: [src/core/agent/AgentBuilder.ts:671](https://github.com/footprintjs/agentfootprint/blob/5e50b8a4c2f3ab01f1019c813d5c48641d801965/src/core/agent/AgentBuilder.ts#L671)
+Defined in: [src/core/agent/AgentBuilder.ts:676](https://github.com/footprintjs/agentfootprint/blob/6d7498c2fc112b3787418f14708897a47e933fd6/src/core/agent/AgentBuilder.ts#L676)
 
 Register a Memory subsystem — load/persist conversation context,
 facts, narrative beats, or causal snapshots across runs.
@@ -419,11 +393,69 @@ The READ subflow runs at the configured `timing` (default
 
 ***
 
+### messageMiddleware()
+
+> **messageMiddleware**(...`middleware`): `this`
+
+Defined in: [src/core/agent/AgentBuilder.ts:1119](https://github.com/footprintjs/agentfootprint/blob/6d7498c2fc112b3787418f14708897a47e933fd6/src/core/agent/AgentBuilder.ts#L1119)
+
+Wrap the message boundary in a governance chain — the input before the
+model sees it, the output before the caller receives it.
+
+Same verbs as [toolMiddleware](/agentfootprint/api/generated/classes/AgentBuilder.md#toolmiddleware) minus one: there is no `ask` here,
+and the type says so. Tool dispatch runs inside a pausable stage, so it
+has a checkpoint to suspend on; the message boundary is a plain stage, and
+inventing a second pause to give it one would be a worse answer than not
+offering it.
+
+The `'input'` half runs at the very top of the run, BEFORE the message is
+committed. That placement is the point: everything downstream reads
+`scope.history` — the window strategies, the injections, all three slots,
+the bytes on the wire and every slice taken afterwards — so the
+transformed text is what the whole run agrees was said. The `'output'`
+half runs where the final answer is captured, so the record and the caller
+receive the same string.
+
+`deny(reason)` at either phase raises a `MessageDeniedError` rather than
+returning. At `'input'` there is no model to tell; at `'output'` the
+middleware has just refused to release an answer, and handing the caller a
+string in its place is the one substitution they must never make without
+noticing. The error carries the reason, the phase and the middleware's
+name — never the refused content.
+
+#### Parameters
+
+##### middleware
+
+...readonly [`MessageMiddleware`](/agentfootprint/api/generated/interfaces/MessageMiddleware.md)[]
+
+#### Returns
+
+`this`
+
+#### Example
+
+```ts
+import { Agent, allow } from 'agentfootprint';
+
+const agent = Agent.create({ provider, model })
+  .messageMiddleware({
+    name: 'mask-card-numbers',
+    onMessage: (msg) => {
+      const clean = msg.content.replace(/\b(?:\d[ -]?){13,16}\b/g, '[card]');
+      return clean === msg.content ? allow() : allow(clean, 'masked a card number');
+    },
+  })
+  .build();
+```
+
+***
+
 ### outputFallback()
 
 > **outputFallback**\<`T`\>(`options`): `this`
 
-Defined in: [src/core/agent/AgentBuilder.ts:789](https://github.com/footprintjs/agentfootprint/blob/5e50b8a4c2f3ab01f1019c813d5c48641d801965/src/core/agent/AgentBuilder.ts#L789)
+Defined in: [src/core/agent/AgentBuilder.ts:794](https://github.com/footprintjs/agentfootprint/blob/6d7498c2fc112b3787418f14708897a47e933fd6/src/core/agent/AgentBuilder.ts#L794)
 
 3-tier degradation for output-schema validation failures. Pairs
 with `.outputSchema()` — calling `.outputFallback()` without an
@@ -481,7 +513,7 @@ const agent = Agent.create({...})
 
 > **outputSchema**\<`T`\>(`parser`, `opts?`): `this`
 
-Defined in: [src/core/agent/AgentBuilder.ts:734](https://github.com/footprintjs/agentfootprint/blob/5e50b8a4c2f3ab01f1019c813d5c48641d801965/src/core/agent/AgentBuilder.ts#L734)
+Defined in: [src/core/agent/AgentBuilder.ts:739](https://github.com/footprintjs/agentfootprint/blob/6d7498c2fc112b3787418f14708897a47e933fd6/src/core/agent/AgentBuilder.ts#L739)
 
 Declarative terminal contract. The agent's final answer must be
 JSON matching `parser`. Auto-injects a system-prompt instruction
@@ -543,7 +575,7 @@ import { z } from 'zod';
 
 > **rag**(`definition`): `this`
 
-Defined in: [src/core/agent/AgentBuilder.ts:699](https://github.com/footprintjs/agentfootprint/blob/5e50b8a4c2f3ab01f1019c813d5c48641d801965/src/core/agent/AgentBuilder.ts#L699)
+Defined in: [src/core/agent/AgentBuilder.ts:704](https://github.com/footprintjs/agentfootprint/blob/6d7498c2fc112b3787418f14708897a47e933fd6/src/core/agent/AgentBuilder.ts#L704)
 
 Register a RAG retriever — semantic search over a vector-indexed
 corpus. Identical plumbing to `.memory()` (RAG resolves to a
@@ -577,7 +609,7 @@ intent, ids, and Lens chips.
 
 > **recorder**(`rec`): `this`
 
-Defined in: [src/core/agent/AgentBuilder.ts:486](https://github.com/footprintjs/agentfootprint/blob/5e50b8a4c2f3ab01f1019c813d5c48641d801965/src/core/agent/AgentBuilder.ts#L486)
+Defined in: [src/core/agent/AgentBuilder.ts:491](https://github.com/footprintjs/agentfootprint/blob/6d7498c2fc112b3787418f14708897a47e933fd6/src/core/agent/AgentBuilder.ts#L491)
 
 Attach a footprintjs `CombinedRecorder` to the built Agent. Wired
 via `agent.attach(rec)` immediately after construction, so the
@@ -604,7 +636,7 @@ own `attach()` call).
 
 > **reliability**(`config`): `this`
 
-Defined in: [src/core/agent/AgentBuilder.ts:865](https://github.com/footprintjs/agentfootprint/blob/5e50b8a4c2f3ab01f1019c813d5c48641d801965/src/core/agent/AgentBuilder.ts#L865)
+Defined in: [src/core/agent/AgentBuilder.ts:870](https://github.com/footprintjs/agentfootprint/blob/6d7498c2fc112b3787418f14708897a47e933fd6/src/core/agent/AgentBuilder.ts#L870)
 
 Wire rules-based reliability around every `CallLLM` execution.
 The framework wraps the LLM call in a retry/fallback/fail-fast
@@ -676,7 +708,7 @@ import { Agent } from 'agentfootprint';
 
 > **selfExplain**(`opts?`): `this`
 
-Defined in: [src/core/agent/AgentBuilder.ts:1029](https://github.com/footprintjs/agentfootprint/blob/5e50b8a4c2f3ab01f1019c813d5c48641d801965/src/core/agent/AgentBuilder.ts#L1029)
+Defined in: [src/core/agent/AgentBuilder.ts:1151](https://github.com/footprintjs/agentfootprint/blob/6d7498c2fc112b3787418f14708897a47e933fd6/src/core/agent/AgentBuilder.ts#L1151)
 
 #### Parameters
 
@@ -694,7 +726,7 @@ Defined in: [src/core/agent/AgentBuilder.ts:1029](https://github.com/footprintjs
 
 > **skill**(`injection`): `this`
 
-Defined in: [src/core/agent/AgentBuilder.ts:553](https://github.com/footprintjs/agentfootprint/blob/5e50b8a4c2f3ab01f1019c813d5c48641d801965/src/core/agent/AgentBuilder.ts#L553)
+Defined in: [src/core/agent/AgentBuilder.ts:558](https://github.com/footprintjs/agentfootprint/blob/6d7498c2fc112b3787418f14708897a47e933fd6/src/core/agent/AgentBuilder.ts#L558)
 
 Register a Skill — LLM-activated, system-prompt + tools.
 Auto-attaches the `read_skill` activation tool to the agent.
@@ -716,7 +748,7 @@ Skill stays active for the rest of the turn once activated.
 
 > **skillGraph**(`graph`): `this`
 
-Defined in: [src/core/agent/AgentBuilder.ts:587](https://github.com/footprintjs/agentfootprint/blob/5e50b8a4c2f3ab01f1019c813d5c48641d801965/src/core/agent/AgentBuilder.ts#L587)
+Defined in: [src/core/agent/AgentBuilder.ts:592](https://github.com/footprintjs/agentfootprint/blob/6d7498c2fc112b3787418f14708897a47e933fd6/src/core/agent/AgentBuilder.ts#L592)
 
 Mount a declarative **skill graph** (proposal 002) — each skill carries a
 graph-derived trigger (entry → always/rule, deterministic route → rule /
@@ -764,7 +796,7 @@ const graph = skillGraph()
 
 > **skills**(`registry`): `this`
 
-Defined in: [src/core/agent/AgentBuilder.ts:568](https://github.com/footprintjs/agentfootprint/blob/5e50b8a4c2f3ab01f1019c813d5c48641d801965/src/core/agent/AgentBuilder.ts#L568)
+Defined in: [src/core/agent/AgentBuilder.ts:573](https://github.com/footprintjs/agentfootprint/blob/6d7498c2fc112b3787418f14708897a47e933fd6/src/core/agent/AgentBuilder.ts#L573)
 
 Bulk-register every Skill in a `SkillRegistry`. Use for shared
 skill catalogs across multiple Agents — register skills once on
@@ -795,7 +827,7 @@ const registry = new SkillRegistry();
 
 > **steering**(`injection`): `this`
 
-Defined in: [src/core/agent/AgentBuilder.ts:613](https://github.com/footprintjs/agentfootprint/blob/5e50b8a4c2f3ab01f1019c813d5c48641d801965/src/core/agent/AgentBuilder.ts#L613)
+Defined in: [src/core/agent/AgentBuilder.ts:618](https://github.com/footprintjs/agentfootprint/blob/6d7498c2fc112b3787418f14708897a47e933fd6/src/core/agent/AgentBuilder.ts#L618)
 
 Register a Steering doc — always-on system-prompt rule.
 Use for invariant guidance: output format, persona, safety policies.
@@ -816,7 +848,7 @@ Use for invariant guidance: output format, persona, safety policies.
 
 > **system**(`prompt`, `options?`): `this`
 
-Defined in: [src/core/agent/AgentBuilder.ts:189](https://github.com/footprintjs/agentfootprint/blob/5e50b8a4c2f3ab01f1019c813d5c48641d801965/src/core/agent/AgentBuilder.ts#L189)
+Defined in: [src/core/agent/AgentBuilder.ts:194](https://github.com/footprintjs/agentfootprint/blob/6d7498c2fc112b3787418f14708897a47e933fd6/src/core/agent/AgentBuilder.ts#L194)
 
 Set the base system prompt.
 
@@ -855,7 +887,7 @@ Optional config. `cache` controls how the
 
 > **thinking**(`opts`): `this`
 
-Defined in: [src/core/agent/AgentBuilder.ts:958](https://github.com/footprintjs/agentfootprint/blob/5e50b8a4c2f3ab01f1019c813d5c48641d801965/src/core/agent/AgentBuilder.ts#L958)
+Defined in: [src/core/agent/AgentBuilder.ts:963](https://github.com/footprintjs/agentfootprint/blob/6d7498c2fc112b3787418f14708897a47e933fd6/src/core/agent/AgentBuilder.ts#L963)
 
 v2.14+ — REQUEST-side thinking activation. Tells the provider to
 emit reasoning blocks alongside its response.
@@ -916,7 +948,7 @@ Agent.create({ provider: anthropic({...}), model: 'claude-sonnet-4-5' })
 
 > **thinkingHandler**(`handler`): `this`
 
-Defined in: [src/core/agent/AgentBuilder.ts:909](https://github.com/footprintjs/agentfootprint/blob/5e50b8a4c2f3ab01f1019c813d5c48641d801965/src/core/agent/AgentBuilder.ts#L909)
+Defined in: [src/core/agent/AgentBuilder.ts:914](https://github.com/footprintjs/agentfootprint/blob/6d7498c2fc112b3787418f14708897a47e933fd6/src/core/agent/AgentBuilder.ts#L914)
 
 Wire a thinking handler (v2.14+). Three usage patterns:
 
@@ -972,7 +1004,7 @@ Calling twice throws — same shape as `.reliability()` /
 
 > **thinkingTemplates**(`templates`): `this`
 
-Defined in: [src/core/agent/AgentBuilder.ts:524](https://github.com/footprintjs/agentfootprint/blob/5e50b8a4c2f3ab01f1019c813d5c48641d801965/src/core/agent/AgentBuilder.ts#L524)
+Defined in: [src/core/agent/AgentBuilder.ts:529](https://github.com/footprintjs/agentfootprint/blob/6d7498c2fc112b3787418f14708897a47e933fd6/src/core/agent/AgentBuilder.ts#L529)
 
 Override agentfootprint's bundled thinking templates. Same
 contract shape as commentary; different vocabulary — first-person
@@ -996,7 +1028,7 @@ weather…'`). See `defaultStatusTemplates` for the full key list.
 
 > **tool**\<`TArgs`, `TResult`\>(`tool`): `this`
 
-Defined in: [src/core/agent/AgentBuilder.ts:197](https://github.com/footprintjs/agentfootprint/blob/5e50b8a4c2f3ab01f1019c813d5c48641d801965/src/core/agent/AgentBuilder.ts#L197)
+Defined in: [src/core/agent/AgentBuilder.ts:202](https://github.com/footprintjs/agentfootprint/blob/6d7498c2fc112b3787418f14708897a47e933fd6/src/core/agent/AgentBuilder.ts#L202)
 
 #### Type Parameters
 
@@ -1020,11 +1052,76 @@ Defined in: [src/core/agent/AgentBuilder.ts:197](https://github.com/footprintjs/
 
 ***
 
+### toolMiddleware()
+
+> **toolMiddleware**(...`middleware`): `this`
+
+Defined in: [src/core/agent/AgentBuilder.ts:1073](https://github.com/footprintjs/agentfootprint/blob/6d7498c2fc112b3787418f14708897a47e933fd6/src/core/agent/AgentBuilder.ts#L1073)
+
+Wrap every tool dispatch in a governance chain.
+
+Each middleware answers with one of three verbs — `allow()`, `deny(reason)`
+or `ask({ question })` — and there is deliberately no fourth. In
+particular there is no way to return a result: whatever the chain decides,
+the answer the model finally reads is the real tool's output or a refusal.
+A rule cannot quietly become the tool.
+
+- **`allow()`** passes the call through. **`allow(args, why)`** replaces
+  the args and the run commits BOTH versions with your `why` beside them,
+  so a slice taken later can find the moment they changed and who changed
+  them.
+- **`deny(reason)`** refuses. The reason reaches the model verbatim, as
+  the tool result, and the loop continues — the agent adapts in-flight. A
+  denial is data, not a crash.
+- **`ask({ question })`** suspends the run for a person, on the same
+  checkpoint machinery `checkIn` and `askHuman` use. The answer is a
+  DECISION, not a result: approve and the chain resumes and the real tool
+  runs; decline and it becomes a denial the model reads.
+
+Order is call order, and each middleware sees the previous one's output.
+The first non-allow answer wins and the rest of the chain does not run. A
+middleware that throws is a denial carrying the error as its reason —
+never a silent pass.
+
+An existing `PermissionChecker` still decides FIRST: it is not part of
+this chain, it runs ahead of it, so a call it denies never reaches a
+middleware. `gatedTools` is a different layer again — it decides which
+tools the model can SEE; this decides what happens when one is called.
+
+Omit this and nothing changes: no chain walk, no committed ledger key, the
+same request bytes.
+
+#### Parameters
+
+##### middleware
+
+...readonly [`ToolMiddleware`](/agentfootprint/api/generated/interfaces/ToolMiddleware.md)[]
+
+#### Returns
+
+`this`
+
+#### Example
+
+```ts
+import { Agent, allow, deny } from 'agentfootprint';
+
+const agent = Agent.create({ provider, model })
+  .toolMiddleware({
+    name: 'no-prod-writes',
+    onToolCall: (call) =>
+      call.args.env === 'prod' ? deny('writes to prod need a change ticket') : allow(),
+  })
+  .build();
+```
+
+***
+
 ### toolProvider()
 
 > **toolProvider**(`provider`): `this`
 
-Defined in: [src/core/agent/AgentBuilder.ts:251](https://github.com/footprintjs/agentfootprint/blob/5e50b8a4c2f3ab01f1019c813d5c48641d801965/src/core/agent/AgentBuilder.ts#L251)
+Defined in: [src/core/agent/AgentBuilder.ts:256](https://github.com/footprintjs/agentfootprint/blob/6d7498c2fc112b3787418f14708897a47e933fd6/src/core/agent/AgentBuilder.ts#L256)
 
 Wire a chainable `ToolProvider` (from `agentfootprint/tool-providers`)
 as the agent's per-iteration tool source.
@@ -1079,7 +1176,7 @@ Permission-gated baseline
 
 > **tools**(`tools`): `this`
 
-Defined in: [src/core/agent/AgentBuilder.ts:212](https://github.com/footprintjs/agentfootprint/blob/5e50b8a4c2f3ab01f1019c813d5c48641d801965/src/core/agent/AgentBuilder.ts#L212)
+Defined in: [src/core/agent/AgentBuilder.ts:217](https://github.com/footprintjs/agentfootprint/blob/6d7498c2fc112b3787418f14708897a47e933fd6/src/core/agent/AgentBuilder.ts#L217)
 
 Register many tools at once. Convenience for tool sources that
 return a list (e.g., `await mcpClient(...).tools()`). Each tool
@@ -1102,7 +1199,7 @@ readonly [`Tool`](/agentfootprint/api/generated/interfaces/Tool.md)\<`Record`\<`
 
 > **window**(`strategy`): `this`
 
-Defined in: [src/core/agent/AgentBuilder.ts:364](https://github.com/footprintjs/agentfootprint/blob/5e50b8a4c2f3ab01f1019c813d5c48641d801965/src/core/agent/AgentBuilder.ts#L364)
+Defined in: [src/core/agent/AgentBuilder.ts:369](https://github.com/footprintjs/agentfootprint/blob/6d7498c2fc112b3787418f14708897a47e933fd6/src/core/agent/AgentBuilder.ts#L369)
 
 Choose how the live context window is kept inside its budget.
 

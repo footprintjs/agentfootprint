@@ -6,7 +6,7 @@ title: isCompactedSummary
 
 > **isCompactedSummary**(`msg`): `boolean`
 
-Defined in: src/core/agent/window/summarize.ts:95
+Defined in: [src/core/agent/window/summarize.ts:95](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/window/summarize.ts#L95)
 
 True when this message is a frame a previous fold wrote.
 

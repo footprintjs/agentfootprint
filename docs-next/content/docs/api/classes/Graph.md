@@ -40,7 +40,7 @@ Defined in: [src/core-flow/Graph.ts:429](https://github.com/footprintjs/agentfoo
 
 > `readonly` **enable**: [`EnableNamespace`](/docs/api/interfaces/EnableNamespace)
 
-Defined in: [src/core/RunnerBase.ts:522](https://github.com/footprintjs/agentfootprint/blob/main/src/core/RunnerBase.ts#L522)
+Defined in: [src/core/RunnerBase.ts:539](https://github.com/footprintjs/agentfootprint/blob/main/src/core/RunnerBase.ts#L539)
 
 Enable-namespace for high-level observability features. Each method
 attaches a pre-built CombinedRecorder and returns an unsubscribe
@@ -73,7 +73,7 @@ Defined in: [src/core-flow/Graph.ts:403](https://github.com/footprintjs/agentfoo
 
 > **attach**(`recorder`): `Unsubscribe`
 
-Defined in: [src/core/RunnerBase.ts:512](https://github.com/footprintjs/agentfootprint/blob/main/src/core/RunnerBase.ts#L512)
+Defined in: [src/core/RunnerBase.ts:529](https://github.com/footprintjs/agentfootprint/blob/main/src/core/RunnerBase.ts#L529)
 
 Attach a footprintjs CombinedRecorder to observe every subsequent run.
 
@@ -115,7 +115,7 @@ server leak; attach once, or detach per-run.
 
 > **emit**(`name`, `payload`): `void`
 
-Defined in: [src/core/RunnerBase.ts:566](https://github.com/footprintjs/agentfootprint/blob/main/src/core/RunnerBase.ts#L566)
+Defined in: [src/core/RunnerBase.ts:583](https://github.com/footprintjs/agentfootprint/blob/main/src/core/RunnerBase.ts#L583)
 
 Emit a consumer-defined custom event.
 
@@ -350,7 +350,7 @@ See the `Runner.getUIGroupWith` JSDoc for the contract.
 
 > **listenerCount**(`type?`): `number`
 
-Defined in: [src/core/RunnerBase.ts:485](https://github.com/footprintjs/agentfootprint/blob/main/src/core/RunnerBase.ts#L485)
+Defined in: [src/core/RunnerBase.ts:502](https://github.com/footprintjs/agentfootprint/blob/main/src/core/RunnerBase.ts#L502)
 
 Diagnostic — how many event listeners this runner currently retains.
 No argument = total across all buckets (the leak-detection number);
@@ -379,7 +379,7 @@ keyof AgentfootprintEventMap \| `WildcardSubscription`
 
 > **off**\<`K`\>(`type`, `listener`): `void`
 
-Defined in: [src/core/RunnerBase.ts:428](https://github.com/footprintjs/agentfootprint/blob/main/src/core/RunnerBase.ts#L428)
+Defined in: [src/core/RunnerBase.ts:445](https://github.com/footprintjs/agentfootprint/blob/main/src/core/RunnerBase.ts#L445)
 
 Unsubscribe a previously-registered listener.
 
@@ -411,7 +411,7 @@ Unsubscribe a previously-registered listener.
 
 > **off**(`type`, `listener`): `void`
 
-Defined in: [src/core/RunnerBase.ts:429](https://github.com/footprintjs/agentfootprint/blob/main/src/core/RunnerBase.ts#L429)
+Defined in: [src/core/RunnerBase.ts:446](https://github.com/footprintjs/agentfootprint/blob/main/src/core/RunnerBase.ts#L446)
 
 ##### Parameters
 
@@ -439,7 +439,7 @@ Defined in: [src/core/RunnerBase.ts:429](https://github.com/footprintjs/agentfoo
 
 > **on**\<`K`\>(`type`, `listener`, `options?`): `Unsubscribe`
 
-Defined in: [src/core/RunnerBase.ts:405](https://github.com/footprintjs/agentfootprint/blob/main/src/core/RunnerBase.ts#L405)
+Defined in: [src/core/RunnerBase.ts:422](https://github.com/footprintjs/agentfootprint/blob/main/src/core/RunnerBase.ts#L422)
 
 Subscribe a typed listener. Returns unsubscribe.
 
@@ -481,7 +481,7 @@ runners (servers).
 
 > **on**(`type`, `listener`, `options?`): `Unsubscribe`
 
-Defined in: [src/core/RunnerBase.ts:410](https://github.com/footprintjs/agentfootprint/blob/main/src/core/RunnerBase.ts#L410)
+Defined in: [src/core/RunnerBase.ts:427](https://github.com/footprintjs/agentfootprint/blob/main/src/core/RunnerBase.ts#L427)
 
 Subscribe to a domain wildcard (e.g. 'agentfootprint.context.*') or '*'.
 
@@ -515,7 +515,7 @@ Subscribe to a domain wildcard (e.g. 'agentfootprint.context.*') or '*'.
 
 > **once**\<`K`\>(`type`, `listener`, `options?`): `Unsubscribe`
 
-Defined in: [src/core/RunnerBase.ts:439](https://github.com/footprintjs/agentfootprint/blob/main/src/core/RunnerBase.ts#L439)
+Defined in: [src/core/RunnerBase.ts:456](https://github.com/footprintjs/agentfootprint/blob/main/src/core/RunnerBase.ts#L456)
 
 Subscribe a one-shot listener (fires once then auto-removes). Accepts `{ signal }`.
 
@@ -551,7 +551,7 @@ Subscribe a one-shot listener (fires once then auto-removes). Accepts `{ signal 
 
 > **once**(`type`, `listener`, `options?`): `Unsubscribe`
 
-Defined in: [src/core/RunnerBase.ts:444](https://github.com/footprintjs/agentfootprint/blob/main/src/core/RunnerBase.ts#L444)
+Defined in: [src/core/RunnerBase.ts:461](https://github.com/footprintjs/agentfootprint/blob/main/src/core/RunnerBase.ts#L461)
 
 ##### Parameters
 
@@ -581,7 +581,7 @@ Defined in: [src/core/RunnerBase.ts:444](https://github.com/footprintjs/agentfoo
 
 > **removeAllListeners**(): `void`
 
-Defined in: [src/core/RunnerBase.ts:475](https://github.com/footprintjs/agentfootprint/blob/main/src/core/RunnerBase.ts#L475)
+Defined in: [src/core/RunnerBase.ts:492](https://github.com/footprintjs/agentfootprint/blob/main/src/core/RunnerBase.ts#L492)
 
 Lifecycle escape hatch — drop EVERY event listener on this runner in
 one call (typed, domain-wildcard, and `'*'`). Delegates to

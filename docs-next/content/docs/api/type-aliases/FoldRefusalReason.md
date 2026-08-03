@@ -6,7 +6,7 @@ title: "~~Type Alias: FoldRefusalReason~~"
 
 > **FoldRefusalReason** = [`WindowRefusalReason`](/docs/api/type-aliases/WindowRefusalReason)
 
-Defined in: src/core/agent/window/types.ts:93
+Defined in: [src/core/agent/window/types.ts:93](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/window/types.ts#L93)
 
 ## Deprecated
 

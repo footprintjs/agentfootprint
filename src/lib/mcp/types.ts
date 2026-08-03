@@ -277,6 +277,22 @@ export interface McpServeOptions {
    */
   readonly credentials?: import('../../identity/types.js').CredentialProvider;
   /**
+   * A `toolMiddleware` chain for the served boundary — the same chain type
+   * `.toolMiddleware()` takes on an Agent, walked here before `execute`.
+   *
+   * It has to be passed explicitly because middleware belongs to an AGENT,
+   * not to a `Tool`: serving a tool object serves the tool, and the governance
+   * an agent wrapped around it does not travel inside it. Rather than let that
+   * dead-end the rule, this option lets the served surface carry a chain of its
+   * own — the 7.13 promise ("what you serve is what you passed in") extended
+   * to "and what you asked to govern it".
+   *
+   * `ask` cannot survive this boundary: MCP is request/response and there is
+   * no pause to carry the question. A middleware that asks here answers the
+   * client with a tool error naming it, rather than executing ungoverned.
+   */
+  readonly toolMiddleware?: readonly import('../../core/agent/middleware/types.js').ToolMiddleware[];
+  /**
    * @internal Pre-built SDK server for tests. Skips SDK import +
    * transport construction. Mirrors `McpClientOptions._client`.
    */

@@ -60,6 +60,7 @@ import type {
   McpServeTransport,
 } from './types.js';
 import { lazyRequire } from '../lazyRequire.js';
+import { runToolChain } from '../../core/agent/middleware/runChain.js';
 
 const DEFAULT_SERVER_NAME = 'agentfootprint';
 const DEFAULT_SERVER_VERSION = '0.0.0';
@@ -116,18 +117,51 @@ export async function mcpServe(
         );
       }
 
-      const ctx = await buildExecutionContext(tool, `mcp-${name}-${++callCounter}`, {
+      const toolCallId = `mcp-${name}-${++callCounter}`;
+
+      // Args are forwarded EXACTLY as the client sent them. Validating
+      // them here would mean a second, weaker copy of the tool's own
+      // contract — and a tool that already rejects bad input is the one
+      // place that rejection belongs.
+      let args = request?.params?.arguments as unknown;
+
+      // The governance chain, when one was passed. Same walker the Agent's
+      // dispatch loop uses, so the ordering rule, the transform rule and the
+      // throw-is-a-denial rule mean here exactly what they mean there — and,
+      // as there, it runs BEFORE credentials are resolved: a call the chain is
+      // about to refuse should never have acquired a secret first.
+      //
+      // There is no history and no iteration at this boundary — a served call
+      // is one call, not a turn in a conversation — so a middleware that needs
+      // either belongs on an agent, not here.
+      if (opts.toolMiddleware && opts.toolMiddleware.length > 0) {
+        const proposed = (args ?? {}) as Readonly<Record<string, unknown>>;
+        const verdict = await runToolChain(opts.toolMiddleware, {
+          toolName: tool.schema.name,
+          toolCallId,
+          iteration: 0,
+          args: proposed,
+          history: [],
+          ...(extra?.signal && { signal: extra.signal }),
+          // No pause exists here. An `ask` becomes a named refusal rather than
+          // an ungoverned execution.
+          askPolicy: 'refuse',
+        });
+        if (verdict.kind === 'deny') return toolError(verdict.reason);
+        // Replace only when the chain actually produced something different.
+        // A served call nobody transformed reaches `execute` as the exact value
+        // the client sent — including `undefined`, which is not `{}`.
+        if (verdict.args !== proposed) args = verdict.args;
+      }
+
+      const ctx = await buildExecutionContext(tool, toolCallId, {
         credentials,
         hasCredentials: opts.credentials !== undefined,
         ...(extra?.signal && { signal: extra.signal }),
       });
       if ('blocked' in ctx) return toolError(ctx.blocked);
 
-      // Args are forwarded EXACTLY as the client sent them. Validating
-      // them here would mean a second, weaker copy of the tool's own
-      // contract — and a tool that already rejects bad input is the one
-      // place that rejection belongs.
-      const result = await tool.execute(request?.params?.arguments as never, ctx.context);
+      const result = await tool.execute(args as never, ctx.context);
       return { content: [{ type: 'text', text: stringifyResult(result) }] };
     } catch (error) {
       return toolError(error instanceof Error ? error.message : String(error));

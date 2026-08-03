@@ -39,6 +39,32 @@ export interface RunnerPauseOutcome {
    * (`checkInApproved` / `checkInDeclined`).
    */
   readonly checkIn?: CheckInRequest;
+  /**
+   * Present ONLY when a `toolMiddleware` answered `ask` — the question it put
+   * to a person, plus the middleware that asked. Absent for every other pause,
+   * which is the discriminant.
+   *
+   * Resume with a `CheckInDecision` (`checkInApproved` / `checkInDeclined`).
+   * That is deliberate rather than a second decision type: a person approving
+   * is a person approving, whether the gate was a tool's `checkIn` or a
+   * middleware's `ask`, and one word for one thing beats a synonym.
+   *
+   * The answer is a DECISION, not a result. Approve and the chain resumes from
+   * the next middleware and the REAL tool runs; decline and the model receives
+   * a denial it can adapt to. Nobody — not the middleware, not the person —
+   * gets to write the tool's answer.
+   */
+  readonly ask?: MiddlewareAsk;
+}
+
+/** The question a `toolMiddleware` put to a person, as it rides the checkpoint. */
+export interface MiddlewareAsk {
+  /** The question, in the middleware author's own words. */
+  readonly question: string;
+  /** Anything else the answering UI should render. Never interpreted here. */
+  readonly detail?: unknown;
+  /** `name` of the middleware that asked. */
+  readonly middleware: string;
 }
 
 /** Type guard — discriminates `RunnerPauseOutcome` from a normal `TOut`. */
@@ -64,6 +90,26 @@ export function isCheckInPause(
   result: unknown,
 ): result is RunnerPauseOutcome & { readonly checkIn: CheckInRequest } {
   return isPaused(result) && (result as RunnerPauseOutcome).checkIn !== undefined;
+}
+
+/**
+ * Type guard — is this a middleware-ask pause (a `toolMiddleware` answered
+ * `ask`), as opposed to a check-in or a plain `askHuman` pause? Narrows `ask`
+ * to present.
+ *
+ * @example
+ *   const out = await agent.run({ message });
+ *   if (isAskPause(out)) {
+ *     const yes = await showToHuman(out.ask.question);      // asked by out.ask.middleware
+ *     await agent.resume(out.checkpoint, yes
+ *       ? checkInApproved({ by: 'alice' })
+ *       : checkInDeclined({ by: 'alice', note: 'not this one' }));
+ *   }
+ */
+export function isAskPause(
+  result: unknown,
+): result is RunnerPauseOutcome & { readonly ask: MiddlewareAsk } {
+  return isPaused(result) && (result as RunnerPauseOutcome).ask !== undefined;
 }
 
 /**

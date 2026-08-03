@@ -13,6 +13,16 @@
  *
  * Pure function — no closure over Agent class state. Imported and
  * passed directly to `flowChart(...)` in buildAgentChart.
+ *
+ * NOT the seam for `messageMiddleware`'s `'output'` half, deliberately.
+ * This stage runs inside the Final BRANCH subflow, whose state does not
+ * merge back into the run (a branch mount hands its outputMapper the
+ * branch's RESULT, not its scope). Rows filed here would land in an
+ * isolated commit log and never reach `snapshot.sharedState`, splitting
+ * one ledger across two places. The chain runs one stage earlier instead
+ * — in the Route decider, in the main chart — and rewrites
+ * `llmLatestContent`, which is the value this stage copies. See
+ * `stages/route.ts`.
  */
 
 import type { TypedScope } from 'footprintjs';

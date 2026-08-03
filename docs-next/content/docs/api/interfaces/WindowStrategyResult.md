@@ -4,7 +4,7 @@ title: WindowStrategyResult
 
 # Interface: WindowStrategyResult
 
-Defined in: src/core/agent/window/strategy.ts:117
+Defined in: [src/core/agent/window/strategy.ts:117](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/window/strategy.ts#L117)
 
 What the stage should do next.
 
@@ -14,7 +14,7 @@ What the stage should do next.
 
 > `readonly` `optional` **budgetPressure?**: `object`
 
-Defined in: src/core/agent/window/strategy.ts:144
+Defined in: [src/core/agent/window/strategy.ts:144](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/window/strategy.ts#L144)
 
 The budget reading to report on `agentfootprint.context.budget_pressure`.
 
@@ -41,7 +41,7 @@ no budget_pressure event.
 
 > `readonly` **evictions**: readonly [`WindowEviction`](/docs/api/interfaces/WindowEviction)[]
 
-Defined in: src/core/agent/window/strategy.ts:135
+Defined in: [src/core/agent/window/strategy.ts:135](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/window/strategy.ts#L135)
 
 Messages that left the window, for `context.evicted`.
 
@@ -51,7 +51,7 @@ Messages that left the window, for `context.evicted`.
 
 > `readonly` `optional` **rebase?**: `object`
 
-Defined in: src/core/agent/window/strategy.ts:127
+Defined in: [src/core/agent/window/strategy.ts:127](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/window/strategy.ts#L127)
 
 How the meter must re-align its provenance to the new window, which is
 `[...head, (one new message)?, ...tail]`. Present exactly when `window`
@@ -77,7 +77,7 @@ nothing.
 
 > `readonly` **record**: [`WindowRecord`](/docs/api/interfaces/WindowRecord)
 
-Defined in: src/core/agent/window/strategy.ts:133
+Defined in: [src/core/agent/window/strategy.ts:133](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/window/strategy.ts#L133)
 
 What the ledger is told. Always present — an engaged visit explains itself.
 
@@ -87,7 +87,7 @@ What the ledger is told. Always present — an engaged visit explains itself.
 
 > `readonly` `optional` **spend?**: `object`
 
-Defined in: src/core/agent/window/strategy.ts:150
+Defined in: [src/core/agent/window/strategy.ts:150](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/window/strategy.ts#L150)
 
 A billed call the strategy made, for the cost channel.
 
@@ -113,7 +113,7 @@ A billed call the strategy made, for the cost channel.
 
 > `readonly` `optional` **warning?**: `string`
 
-Defined in: src/core/agent/window/strategy.ts:155
+Defined in: [src/core/agent/window/strategy.ts:155](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/window/strategy.ts#L155)
 
 A one-per-run dev warning the stage should print.
 
@@ -123,6 +123,6 @@ A one-per-run dev warning the stage should print.
 
 > `readonly` `optional` **window?**: readonly [`LLMMessage`](/docs/api/interfaces/LLMMessage)[]
 
-Defined in: src/core/agent/window/strategy.ts:119
+Defined in: [src/core/agent/window/strategy.ts:119](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/window/strategy.ts#L119)
 
 The new window. Absent = leave the window alone.

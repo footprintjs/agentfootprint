@@ -360,6 +360,34 @@ export interface CheckInDecisionPayload {
   readonly note?: string;
 }
 
+// ─── middleware (the governance chains) ───────────────────────────────
+/**
+ * One link of a `toolMiddleware` / `messageMiddleware` chain answered.
+ *
+ * Its own domain rather than a `permission.check` with a different label:
+ * a middleware decision is not a permission check, and reporting it as one
+ * would make every consumer reading that channel believe a checker they
+ * never configured had fired.
+ *
+ * Deliberately carries no `before` / `after` — the values live in the
+ * committed `middlewareDecisions` ledger, under whatever redaction the run
+ * configured. An event stream is a fan-out to sinks we do not control, and
+ * a scrubbed value should not leave the run through it.
+ */
+export interface MiddlewareDecisionPayload {
+  readonly middleware: string;
+  readonly at: 'tool' | 'message';
+  readonly phase?: 'input' | 'output';
+  readonly toolName?: string;
+  readonly toolCallId?: string;
+  readonly iteration: number;
+  readonly outcome: 'allow' | 'deny' | 'ask';
+  /** True when this link changed the value the chain carries forward. */
+  readonly changed: boolean;
+  /** The transform's `why`, the denial's `reason`, or the ask's `question`. */
+  readonly why?: string;
+}
+
 // ─── Tier 3: Observability Layers (recorder-emitted, opt-in) ──────────
 
 // memory.* (4)

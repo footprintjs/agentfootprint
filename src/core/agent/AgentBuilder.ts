@@ -40,6 +40,7 @@ import { Agent } from '../Agent.js';
 import type { AgentOptions, RunConfigFn } from './types.js';
 import type { CompactionOptions } from './window/types.js';
 import type { WindowStrategy } from './window/strategy.js';
+import type { MessageMiddleware, ToolMiddleware } from './middleware/types.js';
 import { resolveCompactionOptions } from './window/options.js';
 import { summarizeOldest } from './window/strategies/summarizeOldest.js';
 
@@ -161,6 +162,10 @@ export class AgentBuilder {
    *  Undefined = no window stage exists, the ReAct loop target is unchanged,
    *  and the run is byte-identical to an agent that never heard of them. */
   private windowStrategyValue?: WindowStrategy;
+  /** The tool-dispatch chain, in call order. Empty = no chain, no ledger. */
+  private toolMiddlewareList: readonly ToolMiddleware[] = [];
+  /** The message chain, in call order. Empty = no chain, no ledger. */
+  private messageMiddlewareList: readonly MessageMiddleware[] = [];
 
   constructor(opts: AgentOptions) {
     this.opts = opts;
@@ -1018,6 +1023,123 @@ export class AgentBuilder {
    *     .checkIn({ evidence: 'standard' })
    *     .build();
    */
+  /**
+   * Wrap every tool dispatch in a governance chain.
+   *
+   * Each middleware answers with one of three verbs — `allow()`, `deny(reason)`
+   * or `ask({ question })` — and there is deliberately no fourth. In
+   * particular there is no way to return a result: whatever the chain decides,
+   * the answer the model finally reads is the real tool's output or a refusal.
+   * A rule cannot quietly become the tool.
+   *
+   * - **`allow()`** passes the call through. **`allow(args, why)`** replaces
+   *   the args and the run commits BOTH versions with your `why` beside them,
+   *   so a slice taken later can find the moment they changed and who changed
+   *   them.
+   * - **`deny(reason)`** refuses. The reason reaches the model verbatim, as
+   *   the tool result, and the loop continues — the agent adapts in-flight. A
+   *   denial is data, not a crash.
+   * - **`ask({ question })`** suspends the run for a person, on the same
+   *   checkpoint machinery `checkIn` and `askHuman` use. The answer is a
+   *   DECISION, not a result: approve and the chain resumes and the real tool
+   *   runs; decline and it becomes a denial the model reads.
+   *
+   * Order is call order, and each middleware sees the previous one's output.
+   * The first non-allow answer wins and the rest of the chain does not run. A
+   * middleware that throws is a denial carrying the error as its reason —
+   * never a silent pass.
+   *
+   * An existing `PermissionChecker` still decides FIRST: it is not part of
+   * this chain, it runs ahead of it, so a call it denies never reaches a
+   * middleware. `gatedTools` is a different layer again — it decides which
+   * tools the model can SEE; this decides what happens when one is called.
+   *
+   * Omit this and nothing changes: no chain walk, no committed ledger key, the
+   * same request bytes.
+   *
+   * @example
+   * ```ts
+   * import { Agent, allow, deny } from 'agentfootprint';
+   *
+   * const agent = Agent.create({ provider, model })
+   *   .toolMiddleware({
+   *     name: 'no-prod-writes',
+   *     onToolCall: (call) =>
+   *       call.args.env === 'prod' ? deny('writes to prod need a change ticket') : allow(),
+   *   })
+   *   .build();
+   * ```
+   */
+  toolMiddleware(...middleware: readonly ToolMiddleware[]): this {
+    for (const mw of middleware) this.assertMiddleware(mw, 'toolMiddleware', 'onToolCall');
+    this.toolMiddlewareList = [...this.toolMiddlewareList, ...middleware];
+    return this;
+  }
+
+  /**
+   * Wrap the message boundary in a governance chain — the input before the
+   * model sees it, the output before the caller receives it.
+   *
+   * Same verbs as {@link toolMiddleware} minus one: there is no `ask` here,
+   * and the type says so. Tool dispatch runs inside a pausable stage, so it
+   * has a checkpoint to suspend on; the message boundary is a plain stage, and
+   * inventing a second pause to give it one would be a worse answer than not
+   * offering it.
+   *
+   * The `'input'` half runs at the very top of the run, BEFORE the message is
+   * committed. That placement is the point: everything downstream reads
+   * `scope.history` — the window strategies, the injections, all three slots,
+   * the bytes on the wire and every slice taken afterwards — so the
+   * transformed text is what the whole run agrees was said. The `'output'`
+   * half runs where the final answer is captured, so the record and the caller
+   * receive the same string.
+   *
+   * `deny(reason)` at either phase raises a `MessageDeniedError` rather than
+   * returning. At `'input'` there is no model to tell; at `'output'` the
+   * middleware has just refused to release an answer, and handing the caller a
+   * string in its place is the one substitution they must never make without
+   * noticing. The error carries the reason, the phase and the middleware's
+   * name — never the refused content.
+   *
+   * @example
+   * ```ts
+   * import { Agent, allow } from 'agentfootprint';
+   *
+   * const agent = Agent.create({ provider, model })
+   *   .messageMiddleware({
+   *     name: 'mask-card-numbers',
+   *     onMessage: (msg) => {
+   *       const clean = msg.content.replace(/\b(?:\d[ -]?){13,16}\b/g, '[card]');
+   *       return clean === msg.content ? allow() : allow(clean, 'masked a card number');
+   *     },
+   *   })
+   *   .build();
+   * ```
+   */
+  messageMiddleware(...middleware: readonly MessageMiddleware[]): this {
+    for (const mw of middleware) this.assertMiddleware(mw, 'messageMiddleware', 'onMessage');
+    this.messageMiddlewareList = [...this.messageMiddlewareList, ...middleware];
+    return this;
+  }
+
+  /** Shared shape check — a chain built from a typo fails at build time, not
+   *  as a silent no-op on the one call that needed governing. */
+  private assertMiddleware(mw: unknown, method: string, hook: string): void {
+    if (
+      mw === null ||
+      typeof mw !== 'object' ||
+      typeof (mw as { name?: unknown }).name !== 'string' ||
+      (mw as { name: string }).name.length === 0 ||
+      typeof (mw as Record<string, unknown>)[hook] !== 'function'
+    ) {
+      throw new Error(
+        `AgentBuilder.${method}: expected an object with a non-empty \`name\` and a ` +
+          `\`${hook}(...)\` method, got ${typeof mw}. The name is what every ledger row and ` +
+          `event says decided the call, so it cannot be blank.`,
+      );
+    }
+  }
+
   checkIn(opts: CheckInBuilderOptions = {}): this {
     if (this.checkInConfig !== undefined) {
       throw new Error('AgentBuilder.checkIn: already configured. Call it at most once.');
@@ -1114,6 +1236,8 @@ export class AgentBuilder {
       this.checkInConfig,
       this.runConfigFn,
       this.windowStrategyValue,
+      this.toolMiddlewareList,
+      this.messageMiddlewareList,
     );
     // Attach builder-collected recorders so they receive events from
     // the very first run. Mirrors what consumers would do post-build

@@ -6,7 +6,7 @@
 
 # Interface: CompactionOptions
 
-Defined in: src/core/agent/window/types.ts:206
+Defined in: [src/core/agent/window/types.ts:206](https://github.com/footprintjs/agentfootprint/blob/6d7498c2fc112b3787418f14708897a47e933fd6/src/core/agent/window/types.ts#L206)
 
 What `.compaction({...})` — and `summarizeOldest({...})` — accepts.
 
@@ -29,7 +29,7 @@ const agent = Agent.create({ provider: anthropic(), model: 'claude-sonnet-4-5' }
 
 > `readonly` `optional` **keepRecentTurns?**: `number`
 
-Defined in: src/core/agent/window/types.ts:221
+Defined in: [src/core/agent/window/types.ts:221](https://github.com/footprintjs/agentfootprint/blob/6d7498c2fc112b3787418f14708897a47e933fd6/src/core/agent/window/types.ts#L221)
 
 How many of the most recent turns are never folded. Default 6.
 
@@ -42,7 +42,7 @@ them is how a compacting agent loses the thread.
 
 > `readonly` `optional` **model?**: `string`
 
-Defined in: src/core/agent/window/types.ts:231
+Defined in: [src/core/agent/window/types.ts:231](https://github.com/footprintjs/agentfootprint/blob/6d7498c2fc112b3787418f14708897a47e933fd6/src/core/agent/window/types.ts#L231)
 
 Model id for the summarizer call. Defaults to the agent's own model, so
 `summarizer: anthropic()` alone works; name a cheap model to spend less.
@@ -53,7 +53,7 @@ Model id for the summarizer call. Defaults to the agent's own model, so
 
 > `readonly` **summarizer**: [`LLMProvider`](/agentfootprint/api/generated/interfaces/LLMProvider.md)
 
-Defined in: src/core/agent/window/types.ts:226
+Defined in: [src/core/agent/window/types.ts:226](https://github.com/footprintjs/agentfootprint/blob/6d7498c2fc112b3787418f14708897a47e933fd6/src/core/agent/window/types.ts#L226)
 
 The provider that writes the summary. Explicitly chosen — the library
 never quietly bills your main model for compaction.
@@ -64,7 +64,7 @@ never quietly bills your main model for compaction.
 
 > `readonly` **thresholdTokens**: `number`
 
-Defined in: src/core/agent/window/types.ts:214
+Defined in: [src/core/agent/window/types.ts:214](https://github.com/footprintjs/agentfootprint/blob/6d7498c2fc112b3787418f14708897a47e933fd6/src/core/agent/window/types.ts#L214)
 
 Fold when the LAST call's adapter-reported input tokens exceed this.
 

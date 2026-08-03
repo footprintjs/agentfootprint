@@ -134,8 +134,40 @@ export {
   isPauseRequest,
   isPaused,
   isCheckInPause,
+  isAskPause,
+  type MiddlewareAsk,
   type RunnerPauseOutcome,
 } from './core/pause.js';
+
+// The middleware family — a typed chain around every tool dispatch
+// (`.toolMiddleware()`) and around the message boundary
+// (`.messageMiddleware()`): the input before the model sees it, the output
+// before the caller receives it.
+//
+// Three verbs, and no fourth: `allow()` / `allow(value, why)`, `deny(reason)`,
+// `ask({ question })`. There is no way to return a RESULT — the union has no
+// arm for one — so whatever a chain decides, the answer the model finally
+// reads is the real tool's output or a refusal. A transform commits both the
+// original and the replacement, so a scrub is legible in the trace instead of
+// silently rewriting history.
+export {
+  allow,
+  ask,
+  deny,
+  MessageDeniedError,
+  type AllowOutcome,
+  type AskOutcome,
+  type AskPayload,
+  type DenyOutcome,
+  type MessageDeniedContext,
+  type MessageMiddleware,
+  type MessageMiddlewareContext,
+  type MessageOutcome,
+  type MiddlewareDecision,
+  type ToolMiddleware,
+  type ToolMiddlewareContext,
+  type ToolOutcome,
+} from './core/agent/middleware/index.js';
 
 // Check in with the receipts — evidence-carrying human consent. A tool
 // declares `checkIn` (see `defineTool`); when it trips the run pauses with a

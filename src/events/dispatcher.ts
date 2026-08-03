@@ -80,6 +80,7 @@ export type DomainWildcard =
   | 'agentfootprint.error.*'
   | 'agentfootprint.pause.*'
   | 'agentfootprint.checkin.*'
+  | 'agentfootprint.middleware.*'
   | 'agentfootprint.embedding.*';
 
 export type AllWildcard = '*';

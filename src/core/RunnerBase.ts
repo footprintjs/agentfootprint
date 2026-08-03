@@ -16,7 +16,7 @@ import type {
   RunOptions,
 } from 'footprintjs';
 import { EventDispatcher } from '../events/dispatcher.js';
-import type { RunnerPauseOutcome } from './pause.js';
+import type { MiddlewareAsk, RunnerPauseOutcome } from './pause.js';
 import type { CheckInRequest } from './checkin.js';
 import type {
   EventListener,
@@ -346,7 +346,24 @@ export abstract class RunnerBase<TIn = unknown, TOut = unknown> implements Runne
         ? (pauseData as { checkIn?: CheckInRequest }).checkIn
         : undefined;
 
-    return { paused: true, checkpoint, pauseData, ...(checkIn && { checkIn }) };
+    // Same unwrap for a middleware `ask` — the dispatch handler tags it under
+    // `pauseData.ask` before pausing, so `isAskPause(outcome)` can read the
+    // question and the middleware that asked without digging into the payload.
+    const ask =
+      typeof pauseData === 'object' &&
+      pauseData !== null &&
+      typeof (pauseData as { ask?: unknown }).ask === 'object' &&
+      (pauseData as { ask?: unknown }).ask !== null
+        ? (pauseData as { ask?: MiddlewareAsk }).ask
+        : undefined;
+
+    return {
+      paused: true,
+      checkpoint,
+      pauseData,
+      ...(checkIn && { checkIn }),
+      ...(ask && { ask }),
+    };
   }
 
   /**

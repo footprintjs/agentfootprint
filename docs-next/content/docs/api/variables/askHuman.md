@@ -6,7 +6,7 @@ title: askHuman
 
 > `const` **askHuman**: (`data`) => `never` = `pauseHere`
 
-Defined in: [src/core/pause.ts:127](https://github.com/footprintjs/agentfootprint/blob/main/src/core/pause.ts#L127)
+Defined in: [src/core/pause.ts:173](https://github.com/footprintjs/agentfootprint/blob/main/src/core/pause.ts#L173)
 
 Ergonomic alias for `pauseHere(data)` — the human-in-the-loop name.
 

@@ -85,6 +85,7 @@ import type {
   ToolsOfferedPayload,
   ToolStartPayload,
   ValidationArgsInvalidPayload,
+  MiddlewareDecisionPayload,
 } from './payloads.js';
 
 // ─── Event type constants ─────────────────────────────────────────────
@@ -192,6 +193,9 @@ export const EVENT_NAMES = {
   checkin: {
     request: 'agentfootprint.checkin.request',
     decision: 'agentfootprint.checkin.decision',
+  },
+  middleware: {
+    decision: 'agentfootprint.middleware.decision',
   },
   embedding: {
     generated: 'agentfootprint.embedding.generated',
@@ -483,6 +487,11 @@ export interface AgentfootprintEventMap {
     'agentfootprint.checkin.decision',
     CheckInDecisionPayload
   >;
+  // middleware (the governance chains)
+  'agentfootprint.middleware.decision': AgentfootprintEventEnvelope<
+    'agentfootprint.middleware.decision',
+    MiddlewareDecisionPayload
+  >;
   // embedding
   'agentfootprint.embedding.generated': AgentfootprintEventEnvelope<
     'agentfootprint.embedding.generated',
@@ -567,5 +576,6 @@ export const ALL_EVENT_TYPES: readonly AgentfootprintEventType[] = [
   'agentfootprint.pause.resume',
   'agentfootprint.checkin.request',
   'agentfootprint.checkin.decision',
+  'agentfootprint.middleware.decision',
   'agentfootprint.embedding.generated',
 ] as const;

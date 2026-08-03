@@ -6,7 +6,7 @@
 
 # Interface: CheckInDecisionRecord
 
-Defined in: [src/recorders/core/CheckInRecorder.ts:55](https://github.com/footprintjs/agentfootprint/blob/5e50b8a4c2f3ab01f1019c813d5c48641d801965/src/recorders/core/CheckInRecorder.ts#L55)
+Defined in: [src/recorders/core/CheckInRecorder.ts:55](https://github.com/footprintjs/agentfootprint/blob/6d7498c2fc112b3787418f14708897a47e933fd6/src/recorders/core/CheckInRecorder.ts#L55)
 
 One captured human decision.
 
@@ -16,7 +16,7 @@ One captured human decision.
 
 > `readonly` **approved**: `boolean`
 
-Defined in: [src/recorders/core/CheckInRecorder.ts:59](https://github.com/footprintjs/agentfootprint/blob/5e50b8a4c2f3ab01f1019c813d5c48641d801965/src/recorders/core/CheckInRecorder.ts#L59)
+Defined in: [src/recorders/core/CheckInRecorder.ts:59](https://github.com/footprintjs/agentfootprint/blob/6d7498c2fc112b3787418f14708897a47e933fd6/src/recorders/core/CheckInRecorder.ts#L59)
 
 ***
 
@@ -24,7 +24,7 @@ Defined in: [src/recorders/core/CheckInRecorder.ts:59](https://github.com/footpr
 
 > `readonly` **by**: `string`
 
-Defined in: [src/recorders/core/CheckInRecorder.ts:60](https://github.com/footprintjs/agentfootprint/blob/5e50b8a4c2f3ab01f1019c813d5c48641d801965/src/recorders/core/CheckInRecorder.ts#L60)
+Defined in: [src/recorders/core/CheckInRecorder.ts:60](https://github.com/footprintjs/agentfootprint/blob/6d7498c2fc112b3787418f14708897a47e933fd6/src/recorders/core/CheckInRecorder.ts#L60)
 
 ***
 
@@ -32,7 +32,7 @@ Defined in: [src/recorders/core/CheckInRecorder.ts:60](https://github.com/footpr
 
 > `readonly` **iteration**: `number`
 
-Defined in: [src/recorders/core/CheckInRecorder.ts:58](https://github.com/footprintjs/agentfootprint/blob/5e50b8a4c2f3ab01f1019c813d5c48641d801965/src/recorders/core/CheckInRecorder.ts#L58)
+Defined in: [src/recorders/core/CheckInRecorder.ts:58](https://github.com/footprintjs/agentfootprint/blob/6d7498c2fc112b3787418f14708897a47e933fd6/src/recorders/core/CheckInRecorder.ts#L58)
 
 ***
 
@@ -40,7 +40,7 @@ Defined in: [src/recorders/core/CheckInRecorder.ts:58](https://github.com/footpr
 
 > `readonly` `optional` **note?**: `string`
 
-Defined in: [src/recorders/core/CheckInRecorder.ts:61](https://github.com/footprintjs/agentfootprint/blob/5e50b8a4c2f3ab01f1019c813d5c48641d801965/src/recorders/core/CheckInRecorder.ts#L61)
+Defined in: [src/recorders/core/CheckInRecorder.ts:61](https://github.com/footprintjs/agentfootprint/blob/6d7498c2fc112b3787418f14708897a47e933fd6/src/recorders/core/CheckInRecorder.ts#L61)
 
 ***
 
@@ -48,7 +48,7 @@ Defined in: [src/recorders/core/CheckInRecorder.ts:61](https://github.com/footpr
 
 > `readonly` **toolCallId**: `string`
 
-Defined in: [src/recorders/core/CheckInRecorder.ts:57](https://github.com/footprintjs/agentfootprint/blob/5e50b8a4c2f3ab01f1019c813d5c48641d801965/src/recorders/core/CheckInRecorder.ts#L57)
+Defined in: [src/recorders/core/CheckInRecorder.ts:57](https://github.com/footprintjs/agentfootprint/blob/6d7498c2fc112b3787418f14708897a47e933fd6/src/recorders/core/CheckInRecorder.ts#L57)
 
 ***
 
@@ -56,4 +56,4 @@ Defined in: [src/recorders/core/CheckInRecorder.ts:57](https://github.com/footpr
 
 > `readonly` **toolName**: `string`
 
-Defined in: [src/recorders/core/CheckInRecorder.ts:56](https://github.com/footprintjs/agentfootprint/blob/5e50b8a4c2f3ab01f1019c813d5c48641d801965/src/recorders/core/CheckInRecorder.ts#L56)
+Defined in: [src/recorders/core/CheckInRecorder.ts:56](https://github.com/footprintjs/agentfootprint/blob/6d7498c2fc112b3787418f14708897a47e933fd6/src/recorders/core/CheckInRecorder.ts#L56)

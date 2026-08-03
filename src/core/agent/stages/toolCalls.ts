@@ -20,6 +20,19 @@
  * `tool.execute`. Deny → tool not executed; result is a synthetic
  * denial string. Allow / gate_open → execution proceeds.
  *
+ * Gate order for one call, and why it is this order:
+ *
+ *   permission → MIDDLEWARE CHAIN → arg validation → check-in →
+ *   credentials → execute
+ *
+ * The chain sits after the permission gate so an existing checker still
+ * decides first (a denial there means no middleware runs), and before arg
+ * validation so validation judges the args that will actually be sent —
+ * a middleware that transformed args into something the tool's schema
+ * rejects must be caught, not forwarded. A middleware answering `ask`
+ * pauses on the SAME wire `checkIn` uses; the human's answer is a
+ * decision, not a result, so the chain resumes and the REAL tool runs.
+ *
  * `read_skill` is the auto-attached activation tool — when the LLM
  * calls it with a valid Skill id, the next InjectionEngine pass
  * activates that Skill (lifetime: turn).
@@ -45,6 +58,9 @@ import {
 import type { ProviderToolCache } from '../../slots/buildToolsSlot.js';
 import type { Tool } from '../../tools.js';
 import type { InjectionRecord } from '../../../recorders/core/types.js';
+import type { ToolMiddleware } from '../middleware/types.js';
+import { runToolChain, type ToolArgs } from '../middleware/runChain.js';
+import { recordDecisions } from '../middleware/ledger.js';
 import {
   formatToolArgIssues,
   validateToolArgs,
@@ -98,6 +114,15 @@ export interface ToolCallsHandlerDeps {
    * Agent (no check-in). The gate fires ONLY for tools that declared `checkIn`.
    */
   readonly checkIn?: ResolvedCheckInConfig;
+  /**
+   * The tool-dispatch governance chain (`.toolMiddleware(...)`), in
+   * declaration order. Walked AFTER the permission gate — so an existing
+   * `PermissionChecker` still decides first and a denial there means no
+   * middleware runs at all — and BEFORE arg validation, so validation judges
+   * the args that will actually be sent rather than the ones the model
+   * proposed. Empty / undefined → not walked, no ledger key, no events.
+   */
+  readonly toolMiddleware?: readonly ToolMiddleware[];
 }
 
 /**
@@ -288,6 +313,12 @@ export function buildToolCallsHandler(
         // identity, and abort signal — enough surface to build sequence-
         // aware policies (forbidden chains, idempotency limits, cost
         // guards) without maintaining parallel state.
+        // Args as they will actually be used. The middleware chain below may
+        // replace this; everything downstream (validation, the check-in
+        // evidence a human approves, credentials, execute, the read_skill
+        // gate) reads `callArgs`, never `tc.args`, so there is exactly one
+        // answer to "what did this call really run with".
+        let callArgs: ToolArgs = tc.args;
         let denied = false;
         let haltContext:
           | {
@@ -360,6 +391,51 @@ export function buildToolCallsHandler(
             result = `[permission denied: checker error: ${msg}]`;
           }
         }
+        // ── The middleware chain ─────────────────────────────────────────
+        // Walked only for a call the permission gate let through, so an
+        // existing checker keeps deciding first and a denial there costs
+        // nothing. A denial from the chain lands as the tool result, exactly
+        // like every other refusal in this loop — the model reads it and
+        // adapts. An `ask` commits partial state and pauses, on the same wire
+        // the check-in gate uses.
+        if (!denied && deps.toolMiddleware && deps.toolMiddleware.length > 0) {
+          const chain = await runToolChain(deps.toolMiddleware, {
+            toolName: tc.name,
+            toolCallId: tc.id,
+            iteration,
+            args: callArgs,
+            history: newHistory,
+            ...(runIdentity && { identity: runIdentity }),
+            ...(env.signal && { signal: env.signal }),
+          });
+          recordDecisions(scope, chain.decisions);
+          callArgs = chain.args;
+          if (chain.kind === 'deny') {
+            denied = true;
+            result = chain.reason;
+          } else if (chain.kind === 'ask') {
+            // Commit partial state so resume() finds history intact (the
+            // pauseHere / check-in path does the same). The TRANSFORMED args
+            // ride the checkpoint: a person approves what the chain produced,
+            // not what the model originally proposed.
+            scope.history = newHistory;
+            scope.pausedToolCallId = tc.id;
+            scope.pausedToolName = tc.name;
+            scope.pausedToolStartMs = startMs;
+            scope.pausedAsk = true;
+            scope.pausedAskArgs = chain.args;
+            scope.pausedAskIndex = chain.index;
+            scope.pausedAskMiddleware = chain.middleware;
+            // A defined return value triggers the footprintjs pause; this
+            // object becomes the checkpoint's pauseData, and detectPause
+            // surfaces `pauseData.ask` as `outcome.ask`.
+            return {
+              toolCallId: tc.id,
+              toolName: tc.name,
+              ask: { ...chain.payload, middleware: chain.middleware },
+            };
+          }
+        }
         // Tool-args validation (#9) — AFTER the permission gate (policy must
         // see every attempted call, valid or not) and BEFORE credential
         // resolution (never acquire credentials for a call that won't run).
@@ -370,7 +446,7 @@ export function buildToolCallsHandler(
         // tools (their inputSchema is the contract the LLM was shown).
         let argsRejected = false;
         if (!denied && tool && toolArgValidation !== 'off') {
-          const verdict = validateToolArgs(tc.args, tool.schema.inputSchema);
+          const verdict = validateToolArgs(callArgs, tool.schema.inputSchema);
           if (!verdict.ok) {
             typedEmit(scope, 'agentfootprint.validation.args_invalid', {
               toolName: tc.name,
@@ -411,7 +487,7 @@ export function buildToolCallsHandler(
             ? [{ role: 'system', content: systemPrompt }, ...newHistory]
             : newHistory;
           if (
-            !shouldCheckIn(tool.checkIn, tc.args, {
+            !shouldCheckIn(tool.checkIn, callArgs, {
               iteration,
               toolCallId: tc.id,
               history: historyForEvidence,
@@ -423,7 +499,7 @@ export function buildToolCallsHandler(
             const intent = scope.llmLatestContent ? String(scope.llmLatestContent) : undefined;
             const evidence = await deps.checkIn.assembler({
               tool: { name: tc.name, description: tool.schema.description },
-              args: tc.args,
+              args: callArgs,
               ...(intent !== undefined && { intent }),
               iteration,
               history: historyForEvidence,
@@ -432,7 +508,7 @@ export function buildToolCallsHandler(
             });
             const request: CheckInRequest = {
               tool: tc.name,
-              args: tc.args,
+              args: callArgs,
               ...(intent !== undefined && { intent }),
               evidence,
             };
@@ -450,7 +526,7 @@ export function buildToolCallsHandler(
             scope.pausedToolName = tc.name;
             scope.pausedToolStartMs = startMs;
             scope.pausedCheckIn = true;
-            scope.pausedCheckInArgs = tc.args;
+            scope.pausedCheckInArgs = callArgs;
             // Returning a defined value triggers the footprintjs pause; the
             // returned object becomes the checkpoint's pauseData. detectPause
             // surfaces `pauseData.checkIn` as `outcome.checkIn`.
@@ -512,7 +588,7 @@ export function buildToolCallsHandler(
           if (!credentialBlocked) {
             try {
               if (!tool) throw new Error(`Unknown tool: ${tc.name}`);
-              result = await tool.execute(tc.args, {
+              result = await tool.execute(callArgs, {
                 toolCallId: tc.id,
                 iteration,
                 ...(env.signal && { signal: env.signal }),
@@ -550,7 +626,7 @@ export function buildToolCallsHandler(
         // so plain read_skill agents are byte-for-byte unaffected.
         let skillRejected = false;
         if (deps.allowedSkillIds && tc.name === 'read_skill' && !error && !denied) {
-          const reqId = (tc.args as { id?: unknown }).id;
+          const reqId = (callArgs as { id?: unknown }).id;
           if (typeof reqId === 'string' && reqId.length > 0) {
             const currentSkillId = scope.currentSkillId as string | undefined;
             const allowed = deps.allowedSkillIds(currentSkillId);
@@ -599,7 +675,7 @@ export function buildToolCallsHandler(
         //     NEXT pass activates that Skill (lifetime: turn — stays
         //     active until the turn ends).
         if (tc.name === 'read_skill' && !error && !denied && !skillRejected) {
-          const requestedId = (tc.args as { id?: unknown }).id;
+          const requestedId = (callArgs as { id?: unknown }).id;
           if (typeof requestedId === 'string' && requestedId.length > 0) {
             const current = scope.activatedInjectionIds as readonly string[];
             if (!current.includes(requestedId)) {
@@ -663,6 +739,134 @@ export function buildToolCallsHandler(
       const toolCallId = scope.pausedToolCallId as string;
       const toolName = scope.pausedToolName as string;
       const startMs = scope.pausedToolStartMs as number;
+
+      // ── Middleware-ask decision path ─────────────────────────────────
+      // Discriminated by `scope.pausedAsk`, restored from the checkpoint.
+      //
+      // The answer is a DECISION, not a result. That is the whole reason the
+      // outcome union has no `result` arm: a middleware asks a person whether
+      // this call may proceed, and on approval the REAL tool runs — the person
+      // never writes the tool's answer, and neither does the middleware.
+      //
+      // A malformed resume DECLINES, for the same reason the check-in path
+      // does: a governed call must never execute because a message was
+      // mis-shaped.
+      if (scope.pausedAsk === true) {
+        const iteration = scope.iteration as number;
+        const args = (scope.pausedAskArgs ?? {}) as Readonly<Record<string, unknown>>;
+        const askIndex = (scope.pausedAskIndex ?? 0) as number;
+        const askedBy = (scope.pausedAskMiddleware ?? 'middleware') as string;
+        const decision: CheckInDecision = isCheckInDecision(input)
+          ? input
+          : checkInDeclined({ by: 'unknown', note: 'resume input was not a CheckInDecision' });
+
+        let result: unknown;
+        let error: boolean | undefined;
+        if (!decision.approved) {
+          result = decision.note ? `declined by human: ${decision.note}` : 'declined by human';
+          recordDecisions(scope, [
+            {
+              middleware: askedBy,
+              at: 'tool',
+              toolName,
+              toolCallId,
+              iteration,
+              outcome: 'deny',
+              changed: false,
+              why: `declined by ${decision.by}${decision.note ? `: ${decision.note}` : ''}`,
+            },
+          ]);
+        } else {
+          recordDecisions(scope, [
+            {
+              middleware: askedBy,
+              at: 'tool',
+              toolName,
+              toolCallId,
+              iteration,
+              outcome: 'allow',
+              changed: false,
+              why: `approved by ${decision.by}${decision.note ? `: ${decision.note}` : ''}`,
+            },
+          ]);
+          // Continue the chain from the link AFTER the one that asked. Its
+          // decision is already on the checkpoint; re-running it would ask the
+          // same question twice and file a duplicate row.
+          //
+          // `askPolicy: 'refuse'` because footprintjs's `PausableHandler.resume`
+          // returns void — a resumed dispatch has no second checkpoint to give.
+          // A link further down the chain that also wants a person gets a named,
+          // model-visible refusal and the tool does NOT run. That is the same
+          // rule already applied to a tool that tries to pause during an
+          // approved check-in resume: at most one human question per resume.
+          const rest = await runToolChain(deps.toolMiddleware ?? [], {
+            toolName,
+            toolCallId,
+            iteration,
+            args,
+            history: [...(scope.history as readonly LLMMessage[])],
+            startIndex: askIndex + 1,
+            askPolicy: 'refuse',
+          });
+          recordDecisions(scope, rest.decisions);
+          const tool = lookupTool(toolName);
+          if (rest.kind === 'deny') {
+            result = rest.reason;
+          } else if (tool?.checkIn !== undefined) {
+            // Same one-question rule, from the other direction: this tool also
+            // demands consent, and there is no checkpoint left to ask with.
+            // Refusing loudly beats executing a tool whose consent gate we
+            // silently skipped.
+            error = true;
+            result =
+              `tool '${toolName}' also declares checkIn, and a resumed dispatch cannot pause ` +
+              `again to ask a second time. The call was not executed — approve it through one ` +
+              `gate, not both.`;
+          } else {
+            const env = scope.$getEnv();
+            const dispatched = await resolveCredentialAndExecute(
+              scope,
+              tool,
+              toolName,
+              rest.args,
+              toolCallId,
+              iteration,
+              env,
+            );
+            result = dispatched.result;
+            error = dispatched.error;
+          }
+        }
+
+        const askResultStr = typeof result === 'string' ? result : safeStringify(result);
+        const askHistory: LLMMessage[] = [
+          ...(scope.history as readonly LLMMessage[]),
+          { role: 'tool', content: askResultStr, toolCallId, toolName },
+        ];
+        scope.history = askHistory;
+        scope.lastToolResult = { toolName, result: askResultStr };
+        typedEmit(scope, 'agentfootprint.stream.tool_end', {
+          toolCallId,
+          result,
+          durationMs: Date.now() - startMs,
+          ...(error === true && { error: true }),
+        });
+        typedEmit(scope, 'agentfootprint.agent.iteration_end', {
+          turnIndex: 0,
+          iterIndex: iteration,
+          toolCallCount: 1,
+          history: askHistory,
+        });
+        scope.iteration = iteration + 1;
+        scope.pausedToolCallId = '';
+        scope.pausedToolName = '';
+        scope.pausedToolStartMs = 0;
+        scope.pausedAsk = false;
+        scope.pausedAskArgs = undefined;
+        scope.pausedAskIndex = undefined;
+        scope.pausedAskMiddleware = undefined;
+        return;
+      }
 
       // ── Check-in decision path ───────────────────────────────────────
       // A check-in pause is discriminated by `scope.pausedCheckIn` (restored

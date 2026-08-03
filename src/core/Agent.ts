@@ -111,8 +111,10 @@ import type {
   RunConfigFn,
   WriteProvenanceMode,
 } from './agent/types.js';
-import { routeDeciderStage } from './agent/stages/route.js';
+import { buildRouteDeciderStage } from './agent/stages/route.js';
 import { buildSeedStage } from './agent/stages/seed.js';
+import type { MessageMiddleware, ToolMiddleware } from './agent/middleware/types.js';
+import { MessageDeniedError } from './agent/middleware/errors.js';
 import { buildCallLLMStage } from './agent/stages/callLLM.js';
 import { buildToolCallsHandler } from './agent/stages/toolCalls.js';
 import type { ToolArgValidationMode } from './agent/toolArgsValidation.js';
@@ -234,6 +236,13 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
   /** The agent's one window strategy. Undefined = no window stage, loop
    *  target unchanged, run byte-identical to an agent without it. */
   private readonly windowStrategy?: WindowStrategy;
+  /** The tool-dispatch chain (`.toolMiddleware()`), in declaration order.
+   *  Empty for every agent that never called it — and then the dispatch loop
+   *  never walks a chain, never writes the ledger key, and never emits. */
+  private readonly toolMiddleware: readonly ToolMiddleware[];
+  /** The message chain (`.messageMiddleware()`), in declaration order. Empty
+   *  keeps seed synchronous and prepare-final untouched. */
+  private readonly messageMiddleware: readonly MessageMiddleware[];
   /** The instrument the window stage reads mid-run (adapter-reported usage +
    *  per-message provenance). Only ever created alongside a strategy. */
   private readonly compactionMeterHandle?: CompactionMeterHandle;
@@ -400,6 +409,8 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     checkInOptions?: CheckInBuilderOptions,
     runConfigFn?: RunConfigFn,
     windowStrategy?: WindowStrategy,
+    toolMiddleware?: readonly ToolMiddleware[],
+    messageMiddleware?: readonly MessageMiddleware[],
   ) {
     super();
     this.provider = opts.provider;
@@ -458,6 +469,10 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       this.windowStrategy = windowStrategy;
       this.compactionMeterHandle = compactionMeter();
     }
+    // The two governance chains. Empty arrays (not undefined) so every read
+    // site is a plain `.length > 0` test rather than an optional dance.
+    this.toolMiddleware = toolMiddleware ?? [];
+    this.messageMiddleware = messageMiddleware ?? [];
     // Default 'summary' — measurement-gated (#18): stageReads values have
     // zero consumers across af/lens/eui, and 'full' clones ~18MB of unread
     // data per 200 iterations. Consumers opt into 'full' explicitly.
@@ -1052,6 +1067,19 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // `agent.on('agentfootprint.checkin.*')` fires. Zero-cost until a tool with
     // `checkIn` trips.
     attachObserver(checkInEventsBridge({ dispatcher, getRunContext: getRunCtx }));
+    // Same wiring for `agentfootprint.middleware.*` — the governance chains'
+    // one event. Attached only when a chain exists: an agent without middleware
+    // gains no bridge, no listener and no per-event work.
+    if (this.toolMiddleware.length > 0 || this.messageMiddleware.length > 0) {
+      attachObserver(
+        new EmitBridge({
+          id: 'agentfootprint.middleware-bridge',
+          prefix: 'agentfootprint.middleware.',
+          dispatcher,
+          getRunContext: getRunCtx,
+        }),
+      );
+    }
     for (const r of this.attachedRecorders) {
       // A recorder's OWN `delivery` field is more specific than the
       // agent-level default — footprintjs's options bag would override the
@@ -1177,6 +1205,25 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
         });
       }
     }
+    // Message-boundary refusal (7.18+) — a `messageMiddleware` returned
+    // `deny`. The stage wrote the flags and (at 'input') broke the chart. We
+    // surface the typed error here, the same way a policy halt is surfaced,
+    // because a refusal must never be mistaken for an answer: at 'input' no
+    // model was ever asked, and at 'output' the middleware has just declined
+    // to release what the model said.
+    if (this.messageMiddleware.length > 0) {
+      const state = executor.getSnapshot().sharedState as Pick<
+        AgentState,
+        'messageDeniedReason' | 'messageDeniedPhase' | 'messageDeniedBy'
+      >;
+      if (state.messageDeniedReason !== undefined) {
+        throw new MessageDeniedError({
+          reason: state.messageDeniedReason,
+          phase: state.messageDeniedPhase ?? 'output',
+          middleware: state.messageDeniedBy ?? 'middleware',
+        });
+      }
+    }
     if (result instanceof Error) throw result;
     if (typeof result === 'string') return result;
     throw new Error('Agent: unexpected result shape — expected final-answer string');
@@ -1229,6 +1276,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
         return h;
       },
       getCurrentRunId: () => this.currentRunContext?.runId,
+      // The `'input'` half of the message chain, run BEFORE `userMessage` and
+      // `history` are committed — see SeedStageDeps.messageMiddleware.
+      ...(this.messageMiddleware.length > 0 && { messageMiddleware: this.messageMiddleware }),
       // `.configure()` — seed is where run-level facts are decided and
       // committed, so the resolver rides that commit. The closure supplies
       // the build-time defaults so a resolver can decide RELATIVE to them
@@ -1341,7 +1391,11 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
         : undefined;
 
     // routeDecider extracted to ./agent/stages/route.ts (v2.11.2).
-    const routeDecider = routeDeciderStage;
+    // The Route decider carries the `'output'` half of the message chain when
+    // one is configured — see buildRouteDeciderStage for why that seam and not
+    // PrepareFinal. Without a chain this is the same function reference the
+    // chart has always been handed.
+    const routeDecider = buildRouteDeciderStage(this.messageMiddleware);
 
     // toolCallsHandler extracted to ./agent/stages/toolCalls.ts (v2.11.2).
     const toolCallsHandler = buildToolCallsHandler({
@@ -1357,6 +1411,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       // Check-in (evidence-carrying human consent). Always threaded (resolved
       // default); the gate fires only for tools that declared `checkIn`.
       checkIn: this.checkInConfig,
+      // The governance chain. Threaded only when non-empty so an agent without
+      // one produces the same handler behaviour it always did.
+      ...(this.toolMiddleware.length > 0 && { toolMiddleware: this.toolMiddleware }),
     });
 
     // v2.14 — Build the NormalizeThinking sub-subflow only when a

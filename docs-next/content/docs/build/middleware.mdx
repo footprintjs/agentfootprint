@@ -1,0 +1,182 @@
+---
+title: Middleware
+description: A typed chain around every tool dispatch and around the message boundary. Three verbs — allow, deny, ask — and no way to return a result, so the answer the model reads is always the real tool's or a refusal.
+---
+
+> Every agent framework lets you wrap a tool call. Most of them let the wrapper *answer* — return a canned string, a cached value, a "simulated" result — and the moment one does, the trace is fiction. The model was told a tool ran. Nothing ran.
+>
+> Here the wrapper cannot answer. **The outcome union has no arm for a result**, so whatever a chain decides, what the model finally reads is the real tool's output or a refusal.
+
+## Two chains, one vocabulary
+
+```ts
+import { Agent, allow, deny, ask } from 'agentfootprint';
+
+Agent.create({ provider, model })
+  .toolMiddleware(refundCeiling, fourEyes)   // wraps every tool dispatch
+  .messageMiddleware(scrubSSNs)              // wraps the message boundary
+  .build();
+```
+
+| verb | what it means | where the answer goes |
+| --- | --- | --- |
+| `allow()` | pass it through | the tool runs |
+| `allow(value, why)` | pass it through, changed | the tool runs on `value`; the ledger records **both** versions and your `why` |
+| `deny(reason)` | refuse | the reason reaches the model verbatim as the tool result, and the loop continues |
+| `ask({ question })` | suspend for a person | the run pauses; the answer is a **decision**, and then the real tool runs |
+
+Order is call order. Each link sees the previous one's output. The first non-`allow` answer wins and the rest of the chain does not run — a refusal a later rule could overturn is not a refusal.
+
+Configure neither and nothing changes: no chain walk, no extra committed key, the same request bytes as an agent that never heard of any of this.
+
+## The law: a middleware cannot answer for the tool
+
+This is enforced by absence, not by review. There is no `result` arm to return:
+
+```ts
+// Does not compile. There is no spelling of this.
+const fabricated: ToolOutcome = { kind: 'result', value: 'I already did it' };
+```
+
+It is also what decides what `ask` resumes with. The human's answer is a **decision, not a result**: approve and the chain continues from the next link and the REAL tool runs; decline and it becomes a denial the model reads and adapts to. Nobody — not the middleware, not the person who approved it — gets to write the tool's answer.
+
+A person approving is a person approving, so the answer uses the vocabulary check-ins already use. That sharing is deliberate: one word for one thing beats a synonym.
+
+```ts
+import { checkInApproved, checkInDeclined, isAskPause } from 'agentfootprint';
+
+const out = await agent.run({ message });
+if (isAskPause(out)) {
+  console.log(out.ask.middleware, out.ask.question);
+  await agent.resume(out.checkpoint, checkInApproved({ by: 'dana@ops' }));
+}
+```
+
+The checkpoint is JSON. It is the same pause machinery `askHuman` and `checkIn` ride — not a second one — which is why it already works everywhere they do, including [hosting](doc:hosting), where an outstanding question is refused as unfinished work rather than silently dropped.
+
+**One human question per resume.** footprintjs's resumed dispatch has no second checkpoint to offer, so if a later link also asks — or the tool itself declares `checkIn` — the call is **not executed** and a named refusal reaches the model instead. Ask through one gate, not two.
+
+## A PII scrub, in eleven lines
+
+<CodeFile path="examples/features/37-middleware.ts" region="pii-scrub" title="examples/features/37-middleware.ts (region: pii-scrub)" />
+
+The regex is a plain regex on purpose. **The seam is the product; the classifier is yours.** Put a commercial content filter behind the same `onMessage` — a managed guardrails service, an in-house model, a DLP endpoint — and nothing else about the wiring changes.
+
+### Where `'input'` runs, and why it has to be there
+
+At the very top of the run, **before the message is committed**. Everything downstream reads the committed history: the [window strategies](doc:window-strategies), the injection engine, all three slots, the bytes on the wire, and every slice taken afterwards. Transform any later than this and those components disagree about what the user said — the trace would show one message while the model answered another.
+
+`'output'` runs at the moment the run knows this turn is the final answer, so the caller and the record receive the same string.
+
+## The ledger: a scrub that hides its scrubbing poisons every slice
+
+A transform makes the trace and the wire disagree. Committing the pair — with the middleware's name and its `why` beside it — is what turns that disagreement from a lie into a record:
+
+```ts
+const rows = agent.getLastSnapshot()?.sharedState.middlewareDecisions;
+// [{ middleware: 'scrub-ssns', at: 'message', phase: 'input', outcome: 'allow',
+//    changed: true, why: 'masked a US SSN',
+//    before: 'my ssn is 123-45-6789', after: 'my ssn is [ssn]' }]
+```
+
+`allow(value, why)` **requires** the `why`. A transform that does not say why is exactly the thing this key exists to prevent.
+
+Every decision files a row, including the pass-throughs — "the rule looked and was fine with it" and "the rule never ran" are different facts about a run.
+
+### Read this before you scrub secrets
+
+**For the `'input'` phase, the ledger row is the only copy of the pre-scrub text anywhere in the run.** The seed stage commits the transformed message and nothing else holds the original. That is the honest trade this design makes: the transform is legible precisely because the run kept what it replaced.
+
+If your threat model says the original must not survive in the commit log, that is a **redaction** question, not a middleware one — and footprintjs already answers it. Configure redaction over the `middlewareDecisions` key and `before` / `after` are scrubbed at write time while the decision row itself survives: the run still says a scrub happened, who did it, and why, without holding what was scrubbed. Honesty and protection are both laws here, and that is where they meet.
+
+For tool args and the output phase the point is moot — the pre-transform value is already in the committed history and in `llmLatestContent`, so the ledger adds no exposure. It just makes the change findable.
+
+## Tool rules
+
+<CodeFile path="examples/features/37-middleware.ts" region="tool-rules" title="examples/features/37-middleware.ts (region: tool-rules)" />
+
+Write a `deny` reason **for the model**, not for a log line — it is literally what the model reads next, and a good one gets you a corrected second attempt instead of a stuck loop.
+
+<CodeFile path="examples/features/37-middleware.ts" region="wire" title="examples/features/37-middleware.ts (region: wire)" />
+
+### Where the chain sits, and what it is not
+
+```
+permission gate → MIDDLEWARE CHAIN → arg validation → check-in → credentials → execute
+```
+
+**After the permission gate**, so an existing [`PermissionChecker`](doc:security) still decides first — a call it denies never reaches a middleware, and every checker written before 7.18 behaves identically with or without a chain attached.
+
+**Before arg validation**, so validation judges the args that will actually be sent. A middleware that transformed args into something the tool's schema rejects must be caught, not forwarded.
+
+Three layers, three jobs, and they do not overlap:
+
+| | decides |
+| --- | --- |
+| `gatedTools` | which tools the model can **see** |
+| `PermissionChecker` | whether a call is **permitted** |
+| `toolMiddleware` | what **happens** when a permitted call is made |
+
+### A middleware that throws is a denial
+
+The thrown message becomes the reason and the tool does not run. This is the same deny-by-default the permission gate has always applied to a checker that throws: a governance layer whose failure mode is "allow" is not a governance layer.
+
+## Refusing a message
+
+`deny(reason)` at either phase raises a `MessageDeniedError` rather than returning:
+
+```ts
+try {
+  await agent.run({ message });
+} catch (e) {
+  if (e instanceof MessageDeniedError) {
+    console.log(`${e.middleware} refused this ${e.phase}: ${e.reason}`);
+  } else throw e;
+}
+```
+
+At `'input'` there is no model to tell — the message never reached one. At `'output'` the middleware has just declined to release what the model said, and handing the caller a string in its place is the one substitution they must never make without noticing. The error carries the reason, the phase and the middleware's name — **never the refused content**, since an error object that carried the answer out would undo the refusal.
+
+## Serving a governed tool over MCP
+
+Middleware belongs to an **agent**, not to a `Tool`. [`mcpServe`](doc:mcp-serve) hands out the tool object you passed in, so an agent's chain does not travel inside it — there is nothing on the tool to detect, and nothing to strip. Rather than let the rule dead-end at that boundary, pass a chain to the served surface directly:
+
+```ts
+await mcpServe([refundTool], {
+  name: 'support-desk',
+  toolMiddleware: [refundCeiling],
+});
+```
+
+It runs before `execute` and before credentials resolve, exactly as it does inside an agent. `ask` cannot survive that boundary — MCP is request/response and there is no pause to carry the question — so a link that asks answers the client with a tool error **naming it**, rather than executing ungoverned. Same refusal wording `checkIn` gets, for the same reason.
+
+## What the package exports
+
+Everything below comes from the package root, `agentfootprint`:
+
+| export | what it is |
+| --- | --- |
+| `allow()` / `allow(value, why)` | Pass through, optionally transformed. The `why` is required when the value changes. |
+| `deny(reason)` | Refuse. For a tool, `reason` is what the model reads. |
+| `ask(payload)` | Suspend for a person. `{ question, detail? }`. Tool chains only. |
+| `ToolMiddleware` | `{ name, onToolCall(call) }`. |
+| `MessageMiddleware` | `{ name, onMessage(msg) }`. |
+| `ToolMiddlewareContext` | What a tool link is handed: `toolName`, `toolCallId`, `iteration`, `args`, `history`, `identity?`, `signal?`. |
+| `MessageMiddlewareContext` | What a message link is handed: `phase`, `content`, `history`, `identity?`, `signal?`. |
+| `ToolOutcome` | `allow \| deny \| ask`. No result arm. |
+| `MessageOutcome` | `allow \| deny`. No `ask` — the message boundary has no pause to carry one. |
+| `MiddlewareDecision` | One ledger row. |
+| `MessageDeniedError` | Raised when a message chain refuses. Carries `reason`, `phase`, `middleware`. |
+| `isAskPause(result)` | Narrows a paused run to one carrying `ask`. |
+
+The three arms are exported individually too, for code that needs to name one: `AllowOutcome` is the pass-through-or-transform arm, `DenyOutcome` the refusal, and `AskOutcome` the suspension — whose `payload` is an `AskPayload` (`{ question, detail? }`). On a paused run that question surfaces as a `MiddlewareAsk`, which is the `AskPayload` plus the `middleware` name that asked. `MessageDeniedContext` is what `MessageDeniedError` is constructed from.
+
+One typed event, `agentfootprint.middleware.decision`, fires per row. It carries the fact — who, where, which outcome, whether the value changed — and deliberately **not** the values themselves: an event stream fans out to sinks the library does not control, and a scrubbed value should not leave the run through it.
+
+## Related
+
+- [Security](doc:security) — `PermissionChecker`, which still decides first
+- [Check in](doc:checkin) — evidence-carrying consent declared by a tool
+- [Pause / resume](doc:pausable) — the machinery `ask` rides
+- [Serving over MCP](doc:mcp-serve) — the governance law at the served boundary
+- [Window strategies](doc:window-strategies) — the other family that records what it changed

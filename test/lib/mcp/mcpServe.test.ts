@@ -11,7 +11,7 @@
 
 import { describe, expect, it, vi } from 'vitest';
 
-import { defineTool } from '../../../src/index.js';
+import { allow, ask, defineTool, deny } from '../../../src/index.js';
 import { mcpServe } from '../../../src/tool-providers/index.js';
 import { PermissionPolicy } from '../../../src/security/index.js';
 import { staticTokens } from '../../../src/identity.js';
@@ -371,6 +371,144 @@ describe('mcpServe — property', () => {
 });
 
 // ─── Security — a hostile client cannot take the loop down ────────
+
+describe('mcpServe — the governance chain (7.18)', () => {
+  // The 7.13 promise is "what you serve is the object you passed in". Middleware
+  // is the case that promise did not cover: it belongs to an AGENT, not to a
+  // `Tool`, so serving a tool object carries none of it and there is nothing on
+  // the tool to detect or refuse. Rather than let the rule dead-end at this
+  // boundary, the served surface takes a chain of its own — and it means here
+  // exactly what it means inside an agent.
+
+  it('walks the chain before execute, and a transform is what the tool receives', async () => {
+    const seen: unknown[] = [];
+    const sink = defineTool<{ text: string }, string>({
+      name: 'sink',
+      description: 'records',
+      inputSchema: { type: 'object', properties: { text: { type: 'string' } } },
+      execute: (args) => {
+        seen.push(args);
+        return 'ok';
+      },
+    });
+    const server = makeMockServer();
+    await mcpServe([sink], {
+      _server: server,
+      toolMiddleware: [
+        {
+          name: 'mask',
+          onToolCall: (call) =>
+            allow({ ...call.args, text: String(call.args.text).replace(/\d/g, '#') }, 'masked'),
+        },
+      ],
+    });
+
+    await server.call('sink', { text: 'code 4242' });
+    expect(seen).toEqual([{ text: 'code ####' }]);
+  });
+
+  it('a deny is a tool error carrying the reason — the tool never runs', async () => {
+    const seen: unknown[] = [];
+    const sink = defineTool<Record<string, unknown>, string>({
+      name: 'sink',
+      description: 'records',
+      inputSchema: { type: 'object', properties: {} },
+      execute: (args) => {
+        seen.push(args);
+        return 'ok';
+      },
+    });
+    const server = makeMockServer();
+    await mcpServe([sink], {
+      _server: server,
+      toolMiddleware: [{ name: 'closed', onToolCall: () => deny('this server is read-only') }],
+    });
+
+    const result = await server.call('sink', {});
+    expect(result.isError).toBe(true);
+    expect(result.content[0]?.text).toContain('this server is read-only');
+    expect(seen).toEqual([]);
+  });
+
+  it('an ask is REFUSED BY NAME rather than executed ungoverned', async () => {
+    // MCP is request/response; there is no pause to carry the question. The
+    // wrong answer here would be to run the tool anyway, having silently
+    // dropped the gate — the exact failure the `checkIn` refusal exists to
+    // prevent, so it gets the same wording.
+    const seen: unknown[] = [];
+    const sink = defineTool<Record<string, unknown>, string>({
+      name: 'sink',
+      description: 'records',
+      inputSchema: { type: 'object', properties: {} },
+      execute: (args) => {
+        seen.push(args);
+        return 'ok';
+      },
+    });
+    const server = makeMockServer();
+    await mcpServe([sink], {
+      _server: server,
+      toolMiddleware: [{ name: 'four-eyes', onToolCall: () => ask({ question: 'approve?' }) }],
+    });
+
+    const result = await server.call('sink', {});
+    expect(result.isError).toBe(true);
+    expect(result.content[0]?.text).toContain("middleware 'four-eyes'");
+    expect(result.content[0]?.text).toContain('no pause here to carry that ask');
+    expect(seen).toEqual([]);
+  });
+
+  it('a throwing middleware is a denial, never a silent pass', async () => {
+    const seen: unknown[] = [];
+    const sink = defineTool<Record<string, unknown>, string>({
+      name: 'sink',
+      description: 'records',
+      inputSchema: { type: 'object', properties: {} },
+      execute: (args) => {
+        seen.push(args);
+        return 'ok';
+      },
+    });
+    const server = makeMockServer();
+    await mcpServe([sink], {
+      _server: server,
+      toolMiddleware: [
+        {
+          name: 'broken',
+          onToolCall: () => {
+            throw new Error('policy service down');
+          },
+        },
+      ],
+    });
+
+    const result = await server.call('sink', {});
+    expect(result.isError).toBe(true);
+    expect(result.content[0]?.text).toContain('policy service down');
+    expect(seen).toEqual([]);
+  });
+
+  it('without a chain the served call is byte-identical to before', async () => {
+    const seen: unknown[] = [];
+    const sink = defineTool<Record<string, unknown>, string>({
+      name: 'sink',
+      description: 'records',
+      inputSchema: { type: 'object', properties: {} },
+      execute: (args) => {
+        seen.push(args);
+        return 'ok';
+      },
+    });
+    const server = makeMockServer();
+    await mcpServe([sink], { _server: server });
+
+    await server.call('sink', { a: 1 });
+    await server.call('sink');
+    // Including `undefined`, which is not `{}` — a chain nobody configured
+    // must not quietly normalise the client's payload.
+    expect(seen).toEqual([{ a: 1 }, undefined]);
+  });
+});
 
 describe('mcpServe — security', () => {
   it('LAW: an unknown tool name is a tool error, not a crash', async () => {
