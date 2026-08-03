@@ -7,6 +7,145 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [7.14.0] - 2026-08-02
+
+An agent in a script answers once and forgets. A deployed one has to do two more
+things — be reachable, and continue a conversation it started before the last
+restart — and those two things are usually where a framework quietly becomes one
+vendor's framework. The request shape arrives from whoever you deployed on, the
+session store is theirs too, and by the time a second runtime matters the
+"portable" agent has a container contract baked into its type signatures.
+
+So this release adds the two things as **ports that name no cloud**, and proves
+they are ports rather than asserting it: a conformance suite runs one handler
+against the shipped HTTP adapter and against a second, minimal host written in
+the test file, and compares the answers. Both adapters here are local. The
+cloud ones come later and have to pass the same suite — that is the whole design,
+and if writing one ever needs a change to a port, the port was wrong.
+
+### Added
+
+- **`agentfootprint/hosting` — `AgentHost` + `SessionLifecycle`, the two ports
+  between an agent and the place it runs.** `HostRequest` carries an `input`, an
+  optional `sessionId`, `headers` and a `signal`; `HostReply` has `complete`,
+  `emit` and `fail`; `HostHandler` maps one to the other and `HostHandle` has
+  one method. That is the entire surface, and it is the vocabulary every
+  transport already has and nothing else.
+
+  Capabilities are **feature-detected, never assumed**: `AgentHost.capabilities`
+  is a list of `HostCapability`, today exactly one name — `'streaming'` —
+  because that is what a shipped adapter can actually honour. No names were
+  pre-minted for transports that do not exist yet; a capability nobody
+  implements is a promise the library cannot keep, and inventing one in
+  anticipation of a particular runtime would bake that runtime in before it
+  arrived. `requireCapability(host, cap)` throws a corrective error naming the
+  adapter you are actually holding.
+
+  A handler emits freely and completes once. A host that streams delivers each
+  piece as it arrives; a host that cannot buffers them and lets the
+  authoritative `complete(output)` settle the buffer — the pieces were a preview
+  of the same text, never an addition to it. **The handler cannot tell the
+  difference and does not need to.**
+
+  Docs: [Host it](https://footprintjs.github.io/agentfootprint/docs/build/infra/hosting) ·
+  Example: `examples/deploy/standing-agent.ts`.
+
+- **`nodeHost({ port?, hostname?, invokePath?, healthPath? })` — plain
+  `node:http`, zero dependencies.** `POST /invoke` takes `{ input, sessionId? }`
+  and answers `{ output }`; `GET /health` answers `{ status: 'ok' }`. Send
+  `Accept: text/event-stream` and the same handler produces Server-Sent Events
+  instead — the caller chooses, not the server.
+
+  Both paths are options, and the defaults were chosen rather than inherited.
+  `POST /invocations` is one cloud runtime's container contract and it very
+  nearly became the default here by momentum; a default that silently matches
+  one vendor is that vendor leaking into a library that promises not to know
+  about it. A test greps the hosting sources for cloud vendor names **and for
+  that path literal** — crude on purpose, because the failure it guards against
+  is somebody in a hurry adding `region` to a port "just for now".
+
+  `serve()` resolves to a `NodeHostHandle` reporting the `url` and `port` it
+  actually bound, which is the only way to find out when you asked for port `0`.
+  `close()` drains: in-flight work finishes, later arrivals get a
+  `HostClosedError` (`503`).
+
+- **`standingAgent({ agent, sessions, host, onConcurrentInvoke? })` — the
+  composer.** Per request: wake and hydrate the session, resume that
+  conversation or start a fresh one, persist what the run left behind, reply.
+  Persist happens *before* the answer goes out, so a queued next turn can never
+  read state older than the answer already given.
+
+  It restates the `resumeOnError` tool re-execution caveat **verbatim** in its
+  own docs. A composition that hides the caveat of the thing it composes is
+  worse than no composition.
+
+  **Runs are serialized globally, and that is a correctness requirement rather
+  than a tuning choice.** An `Agent` holds per-run state on itself and this
+  composer shares one instance across every session; two overlapping runs do not
+  crash, which is exactly the danger — they both finish, and the state read
+  afterwards belongs to whichever started last, so one session's envelope can end
+  up holding another session's conversation with nothing in the recording to say
+  so. `ConcurrentInvokePolicy` is the separate question of a second turn of the
+  *same* conversation: `'reject'` (default) refuses with a `ConcurrentRunError`
+  naming the active run (`409`), `'enqueue'` queues it FIFO behind the run whose
+  state it will then read. A request for a **different** session is never
+  refused — it waits its turn.
+
+- **`CheckpointEnvelope` + `toEnvelope` / `readEnvelope` / `memorySessions()`.**
+  What crosses a restart is `{ format: 'conversation-v1', data, savedAt }`, and
+  an unknown `format` is **refused by name**: a store outlives the code that
+  wrote to it, someone will deploy a newer runtime, and an older instance still
+  running will meet its output. Restoring what it can and hoping means an agent
+  answering from a conversation with pieces missing. Formats are added, never
+  redefined.
+
+  `SessionLifecycle` is `hydrate` + `persist` + an optional
+  `onWake(sessionId, reason)`; `WakeReason` has one member, `'invoke'`, because
+  that is the only thing in this release that can fire it.
+
+- **`agent.checkpoint()` — the conversation the last completed run leaves
+  behind**, as the same `AgentRunCheckpoint` that `resumeOnError` accepts. Read
+  from the run's own recording, cloned on the way out, with the final assistant
+  turn appended from the answer `run()` returned.
+
+  That last clause is the load-bearing one. Nothing writes the final assistant
+  turn back into the agent's history — the loop appends assistant turns only when
+  they carry tool calls, and the turn that ends a run carries none. An agent that
+  stored the conversation without it would drop its own reply **every turn** and
+  answer the next one having forgotten what it just said: still fluent, still
+  wrong, invisible until someone reads a transcript. It is pinned by a test that
+  asserts on the provider's actual wire that turn 2's request contains turn 1's
+  assistant reply verbatim, and deleting the append turns six tests red.
+
+  Adds no events, no scope writes and no capture — recordings are byte-identical
+  to an agent that never calls it.
+
+### The judgements these rest on
+
+**A pause is unfinished work, never a failed run.** If a run pauses to ask a
+person something, `standingAgent` answers with a `PauseNotCarriedError` and
+writes **nothing** — the session keeps exactly the conversation it had before the
+request. Over HTTP that is a `409`, not a `500`, because the agent did not break
+and every dashboard that sees a 500 will conclude otherwise. `'conversation-v1'`
+stores a conversation; a paused run is a conversation *plus* an engine
+checkpoint, and storing half of it would be worse than storing none. Carrying a
+pause would be a NEW format name in the same envelope — which is precisely what
+the version in the format is for.
+
+**A failed run writes nothing either.** The session keeps its last good state
+rather than inheriting the shape of whatever went wrong.
+
+**A request with no `sessionId` is answered and not stored.** There is nothing to
+hydrate and nowhere to persist it that the caller could ask for again. And
+`sessionId` is documented as caller data, not identity: anyone who can reach the
+host can send any string there, including someone else's.
+
+**The conformance suite is the deliverable, not the tests for it.** One handler
+constant, served by `nodeHost` and by a minimal in-process host that declares
+*no* capabilities so the buffering path is exercised rather than assumed, with a
+final pair of cases invoking both and comparing directly. A future adapter —
+including a cloud one — is measured against that file.
+
 ## [7.13.0] - 2026-08-02
 
 Three small things that were each one step short of usable. Skills could be

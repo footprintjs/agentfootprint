@@ -310,6 +310,11 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    *  fresh. Cleared on first read so subsequent runs start clean. */
   private pendingResumeHistory?: readonly LLMMessage[];
 
+  /** The last completed run's final answer — see `checkpoint()` for why it is
+   *  kept here rather than read back from the recording. Undefined after a run
+   *  that failed or paused. */
+  private lastRunAnswer?: string;
+
   /**
    * Optional `ToolProvider` set via the builder's `.toolProvider()`.
    * When present, the Tools slot subflow consults it per iteration
@@ -689,6 +694,11 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       lastCompletedIteration: 0,
     };
     const stopTracking = this.installCheckpointTracker(tracker);
+    // The answer this run produces is the only place the final assistant turn
+    // exists (nothing writes it back into `scope.history`), so `checkpoint()`
+    // keeps it. Cleared here so a failed or paused run cannot hand back the
+    // previous run's answer.
+    this.lastRunAnswer = undefined;
 
     try {
       const result = await executor.run({
@@ -703,7 +713,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
         maxIterations: this.maxIterations * 2 + 10,
         ...(options ?? {}),
       });
-      return this.finalizeResult(executor, result);
+      const finalized = this.finalizeResult(executor, result);
+      if (typeof finalized === 'string') this.lastRunAnswer = finalized;
+      return finalized;
     } catch (cause) {
       // Wrap recoverable errors with the last-known-good checkpoint.
       // Don't wrap intentional terminal signals — let them propagate as
@@ -831,8 +843,72 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // on a fresh executor's `resume()`. No need to retain a paused
     // executor between run/resume.
     const executor = this.createExecutor(options);
+    this.lastRunAnswer = undefined;
     const result = await executor.resume(checkpoint, input, options);
-    return this.finalizeResult(executor, result);
+    const finalized = this.finalizeResult(executor, result);
+    if (typeof finalized === 'string') this.lastRunAnswer = finalized;
+    return finalized;
+  }
+
+  /**
+   * The conversation this agent's LAST completed run leaves behind, packed as
+   * the same `AgentRunCheckpoint` that `resumeOnError(...)` accepts. Store it,
+   * hand it back next turn, and the agent continues where it left off — across
+   * a restart, a deploy, or a different machine.
+   *
+   * Returns `undefined` before any run has completed.
+   *
+   * **Read from the run's own recording, not from a second copy.** The history
+   * comes from `getLastSnapshot().sharedState.history` — the state the run
+   * actually committed — cloned on the way out so a persistence layer can never
+   * mutate the live heap. The final assistant turn is appended from the answer
+   * `run()` returned, because nothing ever writes it back into `history`: the
+   * loop appends assistant turns only when they carry tool calls, and the turn
+   * that ends the run carries none. An agent that stored this conversation
+   * without that append would drop its own reply every turn and answer the next
+   * one having forgotten what it just said.
+   *
+   * Adds no events, no scope writes and no capture: every recording is
+   * byte-identical to an agent that never calls this.
+   *
+   * After a run that **paused**, this is the conversation as of the pause, with
+   * no answer appended — a pause is unfinished work, and pause/resume has its
+   * own carrier (`FlowchartCheckpoint`) that holds engine state this shape
+   * cannot.
+   *
+   * The conversation grows every turn and nothing here trims it. Bounding what
+   * the model is shown is the memory subsystem's job (`.memory(...)`), not a
+   * silent cap applied on the way to storage.
+   *
+   * @example
+   * ```ts
+   * await agent.run({ message: 'Book me a table for two.' });
+   * const conversation = agent.checkpoint();          // persist anywhere
+   * // …a restart later, on a fresh Agent:
+   * await agent.resumeOnError({
+   *   ...conversation,
+   *   history: [...conversation.history, { role: 'user', content: 'Make it three.' }],
+   *   originalInput: { message: 'Make it three.' },
+   * });
+   * ```
+   */
+  checkpoint(): AgentRunCheckpoint | undefined {
+    const snapshot = this.getLastSnapshot();
+    if (!snapshot) return undefined;
+    const state = snapshot.sharedState as Partial<AgentState> | undefined;
+    const recorded = (state?.history ?? []) as readonly LLMMessage[];
+    const history = structuredClone(recorded) as LLMMessage[];
+    if (this.lastRunAnswer !== undefined && this.lastRunAnswer.length > 0) {
+      history.push({ role: 'assistant', content: this.lastRunAnswer });
+    }
+    return {
+      version: 1,
+      runId: this.currentRunContext.runId,
+      history,
+      lastCompletedIteration: typeof state?.iteration === 'number' ? state.iteration : 0,
+      originalInput: { message: typeof state?.userMessage === 'string' ? state.userMessage : '' },
+      checkpointedAt: Date.now(),
+    };
   }
 
   private createExecutor(runOptions?: AgentRunOptions): FlowChartExecutor {

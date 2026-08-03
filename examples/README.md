@@ -252,6 +252,7 @@ _Run `npm run examples:readme` after adding/editing examples._
 | # | File | Title | Description |
 |---|---|---|---|
 | — | [`agentcore-runtime.ts`](deploy/agentcore-runtime.ts) | Deploy on AWS Bedrock AgentCore Runtime (/invocations + /ping) | Run an agentfootprint agent inside AgentCore Runtime: the ARM64 container HTTP contract (POST /invocations, GET /ping on :8080). Self-tests the handler, then exits; set AGENTCORE_SERVE=1 to listen forever. |
+| — | [`standing-agent.ts`](deploy/standing-agent.ts) | A standing agent — hosted, and remembering between requests | Serve one agent over HTTP with per-session conversation memory: standingAgent + nodeHost + memorySessions. Has a two-turn conversation against itself, proves turn 2 remembered turn 1, then exits. SERVE=1 listens forever. |
 
 ### [`dynamic-react/`](dynamic-react/) — examples
 

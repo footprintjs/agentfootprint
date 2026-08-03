@@ -1,0 +1,278 @@
+---
+title: Host it — an agent that stays up and remembers
+description: standingAgent + nodeHost + memorySessions. Two ports (AgentHost, SessionLifecycle) that name no cloud, a plain node:http adapter, and a conformance suite every future adapter has to pass.
+---
+
+> **An agent in a script answers once and forgets.** A deployed one has to do
+> two more things: be reachable, and continue a conversation it started before
+> the last restart. Those two things are usually where a framework quietly
+> becomes one vendor's framework.
+
+Everything on this page exists so that does not happen here.
+
+## The two ports
+
+```ts
+import { standingAgent, nodeHost, memorySessions } from 'agentfootprint/hosting';
+
+const handle = await standingAgent({
+  agent,
+  sessions: memorySessions(),
+  host: nodeHost({ port: 8080 }),
+});
+
+process.on('SIGTERM', () => void handle.close());
+```
+
+That is a live agent on port 8080 that remembers each caller's conversation.
+Three pieces, and only the middle one is new thinking:
+
+| | |
+|---|---|
+| `AgentHost` | something can call me |
+| `SessionLifecycle` | the conversation outlives the request |
+| `standingAgent` | hydrate → resume-or-fresh → persist → reply |
+
+<CodeFile path="examples/deploy/standing-agent.ts" region="standing" title="examples/deploy/standing-agent.ts (region: standing)" />
+
+## Why the ports look like nothing in particular
+
+Deliberately. Not one field, name or assumption in `AgentHost` or
+`SessionLifecycle` comes from any hosting product, cloud or protocol.
+
+A port shaped around one provider's request envelope stops being a port and
+becomes that provider's SDK with extra steps — and every adapter after the
+first pays for the shortcut. So the ports speak only the vocabulary every
+transport already has. A `HostRequest` carries an `input`, an optional
+`sessionId`, `headers` and a `signal`. A `HostReply` has `complete`, `emit` and
+`fail`. A `HostHandler` is a function from one to the other, and `HostHandle`
+has exactly one method, `close()`. That is the whole surface.
+
+Everything specific to *where* you deploy lives in the adapter for that place.
+`nodeHost` gets no special treatment either: its paths, its JSON body shape, its
+status codes and its SSE framing are all in its own file, and the port types do
+not know they exist. A test greps the hosting sources for cloud vendor names,
+crudely and on purpose — including for one particular runtime's `/invocations`
+path literal, which very nearly became this adapter's default by inheritance
+rather than by decision.
+
+<Callout type="info" title="This is what makes a cloud adapter cheap later">
+A hosting adapter for someone's container runtime is close to `nodeHost` with
+that runtime's paths and a header mapping. If writing it needs a change to a
+port, the port was wrong.
+</Callout>
+
+## Capabilities are read, never assumed
+
+`AgentHost.capabilities` is a list of `HostCapability` — today exactly one name,
+`'streaming'`, because that is what a shipped adapter can actually honour.
+Names are not pre-minted for transports that do not exist yet; a capability
+nobody implements is a promise the library cannot keep.
+
+Branch on it, or insist on it with `requireCapability(host, 'streaming')`, which
+throws a corrective error naming the adapter you are actually holding:
+
+```ts
+import { requireCapability } from 'agentfootprint/hosting';
+
+if (host.capabilities.includes('streaming')) { /* … */ }  // detect
+requireCapability(host, 'streaming');                     // or insist
+```
+
+The handler itself does not need to care. `reply.emit(chunk)` is a preview of
+the answer; a host that streams delivers each piece as it arrives, and a host
+that cannot buffers them and lets the authoritative `complete(output)` settle
+the buffer. The pieces are never *added* to the answer — they were the same
+text. **Handler code is identical either way: emit freely, complete once.**
+
+`nodeHost` streams when the caller asks for it with
+`Accept: text/event-stream`, and sends one JSON body otherwise. Same handler,
+same answer.
+
+## `nodeHost` — the plain HTTP adapter
+
+Zero dependencies, `node:http` and nothing else.
+
+```ts
+nodeHost({ port: 8080 })                       // POST /invoke, GET /health
+nodeHost({ port: 0, hostname: '127.0.0.1' })   // pick a free port
+nodeHost({ invokePath: '/v1/messages', healthPath: '/healthz' })
+```
+
+`NodeHostOptions` takes `port`, `hostname`, `invokePath` and `healthPath`. Both
+paths are options because a path is a deployment detail — usually dictated by
+whatever sits in front of your process — and a default that silently matched one
+vendor's container contract would be that vendor leaking in through the back
+door.
+
+`serve()` resolves to a `NodeHostHandle`: a `HostHandle` that also reports the
+`url` and `port` it actually bound, which is the only way to find out when you
+asked for port `0`. (`NodeHost` is the host type itself, narrowed to that
+handle. `standingAgent` passes it straight through, so composing costs you
+nothing the adapter told you.)
+
+`close()` drains: work already in flight finishes, and anything arriving after
+is refused with a `HostClosedError` — over HTTP, a `503`.
+
+## Sessions: what crosses the restart
+
+`SessionLifecycle` has two methods, `hydrate(sessionId)` and
+`persist(sessionId, envelope)`, plus an optional `onWake(sessionId, reason)`
+for stores that need to spin up before they can answer. `WakeReason` has one
+member, `'invoke'` — a request arrived — because that is the only thing in this
+release that can wake a session, and naming reasons nothing can produce would
+describe a system that does not exist.
+
+`memorySessions()` is a Map. It is exactly as durable as the process, which is
+the point: swap it for Redis and nothing above it changes.
+
+What gets stored is a `CheckpointEnvelope`:
+
+```ts
+{ format: 'conversation-v1', data: /* AgentRunCheckpoint */, savedAt: 1723… }
+```
+
+`toEnvelope(checkpoint)` packs one; `readEnvelope(value)` unpacks one and
+**refuses an unknown format by name**:
+
+```
+[hosting] unknown checkpoint format 'conversation-v2'. This runtime reads:
+conversation-v1. Refusing rather than restoring a conversation it cannot read…
+```
+
+A store outlives the code that wrote to it. Someone will deploy a newer runtime,
+it will write a newer format, and an older instance still running will read it.
+Restoring what it can and hoping means an agent answering from a conversation
+with pieces missing — so formats are **added, never redefined**, and a reader
+that does not know one says so and stops.
+
+## `standingAgent` — the composer
+
+`StandingAgentOptions` is `{ agent, sessions, host, onConcurrentInvoke? }`. Per
+request it does four things and invents nothing:
+
+1. wake and hydrate the session,
+2. resume that conversation or start a fresh one,
+3. persist what the run left behind — *before* answering, so a queued next turn
+   can never read state older than the answer already given,
+4. reply.
+
+A request with no `sessionId` is answered and **not** stored: there is nothing
+to hydrate and nowhere to persist it that the caller could ask for again.
+
+<Callout type="warn" title="sessionId is caller data, not identity">
+It is whatever the transport declared — a JSON field, a header. Anyone who can
+reach the host can send any string there, including someone else's.
+Authenticate the caller by your own means and check they are allowed that
+session before you serve it.
+</Callout>
+
+### Resuming is a REPLAY, and that has a cost
+
+A stored conversation is restored through `agent.resumeOnError(...)`, and this
+is its caveat, restated here in the Agent's own words, because a composition
+that hides the caveat of the thing it composes is worse than no composition:
+
+> **Tool re-execution / idempotency**: tool side effects from the FAILED
+> iteration are not in the checkpoint. The model re-decides from the restored
+> history and may re-issue those tool calls — they WILL execute again (there is
+> no built-in toolCallId dedup). Mutating tools (payments, emails, DB writes)
+> must be idempotent — key on stable call content, not `ctx.toolCallId` (a
+> re-issued call gets a new id).
+
+### One run at a time, and why it is not a tuning knob
+
+An `Agent` instance holds per-run state on itself, and this composer shares one
+instance across every session. Two runs overlapping on it do not crash — which
+is precisely the danger. They both finish, and the state read afterwards belongs
+to whichever started last, so one session's envelope can end up holding another
+session's conversation, with nothing in the recording to say so.
+
+Runs are therefore serialized globally. That is a correctness requirement.
+
+`ConcurrentInvokePolicy` is the separate question of what to do when a second
+turn of the *same* conversation arrives while the first is still running:
+
+- `'reject'` (default) — refuse it with a `ConcurrentRunError` naming the
+  session and the run already going (`409` over HTTP). A user who
+  double-submits gets one answer and one refusal, not two runs racing to write
+  one conversation.
+- `'enqueue'` — queue it, FIFO. It starts after the active run has persisted, so
+  the second turn sees the first turn's stored state.
+
+**A request for a different session is never refused — it waits its turn.**
+There is nothing wrong with it; it just cannot start yet.
+
+### A pause is unfinished work, not a failure
+
+If a run pauses to ask a person something, `standingAgent` answers with a
+`PauseNotCarriedError` and **writes nothing** — the session keeps exactly the
+conversation it had before the request. Over HTTP that is a `409`, never a
+`500`, because the agent did not break.
+
+`'conversation-v1'` stores a conversation; a paused run is a conversation *plus*
+an engine checkpoint, and storing half of it would be worse than storing none.
+Carrying a pause would be a **new format name** in the same envelope, read by
+runtimes that know it and refused by name everywhere else — which is what the
+version in the format is for. Until then, carry the pause yourself with
+`agent.run()` / `agent.resume()`.
+
+## `agent.checkpoint()`
+
+New on `Agent`: the conversation the last completed run leaves behind, as the
+same `AgentRunCheckpoint` that `resumeOnError` accepts.
+
+```ts
+await agent.run({ message: 'Book me a table for two.' });
+const conversation = agent.checkpoint();   // persist anywhere
+```
+
+It is read from the run's **own recording** — the committed history — cloned on
+the way out so a persistence layer can never mutate live state, with the final
+assistant turn appended from the answer `run()` returned.
+
+That last part is not a detail. Nothing writes the final assistant turn back
+into the agent's history: the loop appends assistant turns only when they carry
+tool calls, and the turn that ends a run carries none. An agent that stored the
+conversation without it would drop its own reply every single turn and answer
+the next one having forgotten what it just said — still fluent, still wrong,
+and invisible until somebody reads a transcript. A test asserts on the
+provider's actual wire that turn 2's request contains turn 1's assistant reply
+verbatim.
+
+Calling it adds no events, no scope writes and no capture: recordings are
+byte-identical to an agent that never calls it. After a paused run it returns
+the conversation as of the pause with no answer appended. And it does not trim:
+bounding what the model is shown is the memory subsystem's job, not a silent cap
+applied on the way to storage.
+
+## The conformance suite
+
+The claim this whole subpath rests on is that **one handler serves any host
+unchanged**. That is not an assertion in prose, it is a test: a shared
+conformance suite runs against `nodeHost` and against a minimal in-process host
+written in the test file, which declares *no* capabilities so the buffering path
+is exercised rather than assumed. Both serve the same handler constant, and a
+final pair of cases invokes both and compares the answers directly.
+
+It pins: same handler and same output on every host; `sessionId` and `headers`
+arriving as the transport declared them; `fail()` reaching the caller; a handler
+that throws reported as a failure rather than a hang; a handler that answers
+nothing failed rather than left open; chunks observed if and only if the host
+declares streaming; `requireCapability` naming the adapter; `close()` draining
+in-flight work and refusing what comes after; and `close()` being idempotent.
+
+That suite is the artifact a future adapter — including one for a cloud runtime
+— has to pass.
+
+## Try it
+
+<CodeFile path="examples/deploy/standing-agent.ts" region="turn" title="examples/deploy/standing-agent.ts (region: turn)" />
+
+```bash
+npm run example examples/deploy/standing-agent.ts
+```
+
+It binds an ephemeral port, has a two-turn conversation with itself over HTTP,
+proves turn 2 remembered turn 1 and that a different `sessionId` saw none of it,
+then shuts down. `SERVE=1` keeps it listening instead.

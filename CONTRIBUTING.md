@@ -16,7 +16,7 @@ npm test
 
 ```bash
 npm run build      # CJS + ESM
-npm test           # vitest (3765 tests)
+npm test           # vitest (3866 tests)
 npm run lint       # eslint
 npm run format     # prettier check
 npm run test:watch # watch mode
@@ -64,6 +64,7 @@ src/
 ├── reliability/     → reliability rules, circuit breaker, validation
 ├── security/        → PermissionPolicy, permission checking, redaction
 ├── tool-providers/  → staticTools, gatedTools, skillScopedTools
+├── hosting/         → AgentHost + SessionLifecycle ports, nodeHost, memorySessions, standingAgent
 ├── thinking/        → provider thinking-block handlers
 ├── locales/         → message catalogs (commentary + thinking)
 ├── conventions.ts   → renderer-facing keys (stageRole, milestoneFor, injection keys)
@@ -73,7 +74,7 @@ src/
 ## Pull Request Checklist
 
 - [ ] `npm run build` passes
-- [ ] `npm test` passes (all 3765+ tests)
+- [ ] `npm test` passes (all 3866+ tests)
 - [ ] `npm run lint` passes
 - [ ] No `any` casts unless unavoidable (document why)
 - [ ] New features have tests (5+ patterns)
