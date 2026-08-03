@@ -13,6 +13,9 @@
  * of the wire, not a mapping asserted in prose.
  */
 
+import { createServer, type Server } from 'node:http';
+import { connect, type Socket } from 'node:net';
+
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { agentCoreRuntimeHost, agentCoreRuntimeWire } from '../../src/hosting-providers.js';
@@ -23,8 +26,21 @@ import type { NodeHostHandle } from '../../src/hosting/nodeHost.js';
 const SESSION_HEADER = 'X-Amzn-Bedrock-AgentCore-Runtime-Session-Id';
 
 const open: HostHandle[] = [];
+/** Servers and sockets the TEST owns, for the attached-host scenario below. */
+const servers: Server[] = [];
+const sockets: Socket[] = [];
 afterEach(async () => {
   await Promise.all(open.splice(0).map((h) => h.close()));
+  for (const socket of sockets.splice(0)) socket.destroy();
+  await Promise.all(
+    servers.splice(0).map(
+      (server) =>
+        new Promise<void>((resolve) => {
+          server.closeAllConnections();
+          server.close(() => resolve());
+        }),
+    ),
+  );
 });
 
 /** Echo everything the port delivered, so a body/header mapping bug is visible. */
@@ -266,6 +282,87 @@ describe('agentCoreRuntimeHost — failures', () => {
       expect(res.status).toBe(503);
       expect(await res.json()).toMatchObject({ code: 'ERR_HOST_CLOSED', status: 'error' });
     }
+  });
+});
+
+// ── scenario: one container, one port, two protocols ────────────────
+
+describe('agentCoreRuntimeHost — attached to a server the caller owns', () => {
+  /** A listening server the test owns, with an upgrade listener beside the agent. */
+  async function containerServer(): Promise<{ server: Server; base: string; port: number }> {
+    const server = createServer();
+    server.on('upgrade', (_req, socket) => {
+      // Upgraded sockets detach from the server, so the teardown must know
+      // about them — server.close() would otherwise wait forever.
+      sockets.push(socket as Socket);
+      socket.on('error', () => undefined);
+      socket.write(
+        'HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n\r\n',
+      );
+      socket.on('data', (chunk: Buffer) => socket.write(chunk));
+    });
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', () => resolve()));
+    servers.push(server);
+    const address = server.address();
+    const port = typeof address === 'object' && address ? address.port : 0;
+    return { server, base: `http://127.0.0.1:${port}`, port };
+  }
+
+  it('LAW: the container contract answers on the caller’s socket, beside a live upgrade', async () => {
+    // The field shape this exists for: a runtime hands the container ONE port,
+    // and the container has to serve /invocations, /ping AND a WebSocket
+    // upgrade on it. Nothing about the adapter changes except who listens.
+    const { server, base, port } = await containerServer();
+    const handle = (await agentCoreRuntimeHost({ server }).serve(echo)) as NodeHostHandle;
+    open.push(handle);
+
+    expect(handle.port).toBe(port);
+    expect(handle.url).toBe(base);
+
+    const invoked = await post(base, { prompt: 'hi' }, { [SESSION_HEADER]: 'sess-9' });
+    expect(await invoked.json()).toEqual({
+      response: 'in=hi|session=sess-9',
+      status: 'success',
+    });
+    expect(((await (await fetch(`${base}/ping`)).json()) as { status: string }).status).toBe(
+      'Healthy',
+    );
+
+    // The upgrade — the thing a privately-owned socket made impossible.
+    const socket = connect(port, '127.0.0.1');
+    sockets.push(socket);
+    let transcript = '';
+    socket.on('data', (chunk: Buffer) => {
+      transcript += chunk.toString('utf8');
+    });
+    await new Promise<void>((resolve) => socket.once('connect', () => resolve()));
+    socket.write(
+      `GET /ws HTTP/1.1\r\nHost: 127.0.0.1:${port}\r\nConnection: Upgrade\r\n` +
+        `Upgrade: websocket\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n` +
+        `Sec-WebSocket-Version: 13\r\n\r\n`,
+    );
+    for (let waited = 0; waited < 300 && !transcript.includes('101'); waited += 10) {
+      await new Promise((r) => setTimeout(r, 10));
+    }
+    expect(transcript).toContain('101 Switching Protocols');
+
+    // close() gives the routes back and leaves the socket — and the upgrade —
+    // exactly where the caller left them.
+    await handle.close();
+    expect(server.listening).toBe(true);
+    socket.write('still-connected');
+    for (let waited = 0; waited < 300 && !transcript.includes('still-connected'); waited += 10) {
+      await new Promise((r) => setTimeout(r, 10));
+    }
+    expect(transcript).toContain('still-connected');
+  });
+
+  it('refuses a port next to a caller-owned server rather than bind a second one', async () => {
+    const { server } = await containerServer();
+    // The contract's own default port is NOT smuggled in either: with a server
+    // the adapter binds nothing, so it names nothing.
+    expect(() => agentCoreRuntimeHost({ server, port: 8080 })).toThrow(/both a caller-owned/);
+    expect(() => agentCoreRuntimeHost({ server })).not.toThrow();
   });
 });
 

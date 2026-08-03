@@ -7,6 +7,84 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [7.22.0] - 2026-08-03
+
+Give the socket back.
+
+A production integration hit a wall that had nothing to do with agents: its
+runtime gives a container exactly one port, and that container has to answer a
+WebSocket upgrade as well as the agent. Every HTTP host here privately created
+its own server and listened on it, so "the agent" and "everything else this
+process serves" were competing for the one port the platform allowed. The agent
+framework was, in effect, demanding a port of its own — a demand no library has
+standing to make about a process it does not own.
+
+So `httpHost({ server })` takes a `node:http` server **you** created and
+**attaches** to it rather than binding one. That works because `node:http` calls
+every `'request'` listener for every request, which makes sharing a port a
+matter of taking turns rather than of routing. Every adapter built on `httpHost`
+inherits it in the same breath: `nodeHost({ server })` and
+`agentCoreRuntimeHost({ server })` are the same option, and the field case — the
+runtime adapter next to a `/ws` upgrade — is one line.
+
+The interesting part is what a host may do on a socket it does not own, and the
+answer is: **less**. It never writes a 404, because a path it does not own is
+the caller's, and a refusal from the agent host on somebody else's route is the
+library answering for the application. It never writes to a response an earlier
+listener already answered. `close()` detaches and drains and then stops — it
+does not close a socket it never opened, does not touch the caller's
+connections, and leaves the upgrade beside it connected. That restraint has one
+consequence worth stating out loud rather than discovering: node does not 404 an
+unhandled request, it leaves it hanging, so on a shared server an unrouted path
+hangs unless the caller routes it. Documented on the option, in the guide, and
+in the example, because a quiet hang is the worst thing to learn at 3am.
+
+Two things are refused rather than guessed. A `port` or `hostname` beside
+`server` throws at construction: a server you own already has an address, and a
+port that names a socket this host does not bind leaves a caller believing
+something untrue about where their agent answers. And a server that is not
+listening yet is refused by `serve()`, because the handle promises the `url` and
+`port` it is answering on — reporting an address that does not exist yet, or
+inventing `0`, would break the one thing that handle is for. Listen first, then
+attach; attaching after `listen()` is safe and is the intended order.
+
+Also in this release: **the MCP-on-a-runtime question, settled by a test rather
+than by an opinion.** See below.
+
+### Added
+
+- **`HttpHostOptions.server`** — a caller-owned `node:http` server to attach to.
+  The caller keeps `listen()` and keeps the shutdown; the host answers its two
+  routes, writes nothing on anyone else's path, and `close()` detaches + drains
+  while the socket stays up. With no `server`, behaviour is byte-identical to
+  7.21: the host binds, and `close()` closes.
+
+- **`NodeHostOptions.server` and `AgentCoreRuntimeHostOptions.server`** — the
+  same option on both shipped adapters, passed straight through rather than
+  re-implemented. The runtime adapter does not smuggle its contract's `:8080`
+  default in either: with a caller-owned server it binds nothing, so it names
+  nothing.
+
+- **[`examples/deploy/one-port.ts`](examples/deploy/one-port.ts)** — an agent, a
+  WebSocket echo and a `/metrics` route on ONE port, run end-to-end as its own
+  integration test: the upgrade handshakes beside the agent, and after
+  `handle.close()` the socket is still listening with the caller's routes and
+  the upgrade intact.
+
+- **A conformance test for MCP-on-a-runtime**, in
+  `test/lib/mcp/mcpServe.real.test.ts`, judged by the SDK's own client over a
+  real socket. **The verdict: `mcpServe`'s streamable-HTTP transport does not
+  satisfy the container contract this repo documents for a managed agent
+  runtime, and is not trying to.** It serves MCP — statelessly (it neither
+  issues nor demands a session id, so replicas are interchangeable), on the path
+  and port you choose — and it answers *neither* of the contract's two routes:
+  `GET /ping` and `POST /invocations` are 404s from it. Two protocols, two
+  paths, two adapters: serve the container contract with
+  `agentCoreRuntimeHost` and MCP with `mcpServe`. The one thing that is NOT
+  reachable in this release is both on a single port — `mcpServe`'s HTTP
+  transport always owns its listener and has no `{ server }` option, which is
+  now stated in the MCP guide rather than left to be discovered.
+
 ## [7.21.0] - 2026-08-03
 
 The refusal becomes acceptance.

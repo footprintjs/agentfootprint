@@ -68,6 +68,35 @@ let inFlight = 0;
 agentCoreRuntimeHost({ busy: () => inFlight > 0 });   // → 'HealthyBusy' while working
 ```
 
+### The container gets one port — `{ server }`
+
+A container that must serve a WebSocket upgrade *and* the runtime's two routes
+has one port to do it on, so the host can attach to a `node:http` server you own
+instead of binding its own:
+
+```ts
+import { createServer } from 'node:http';
+
+const server = createServer();
+server.on('upgrade', handleWebSocket);                 // yours
+await new Promise<void>((r) => server.listen(8080, '0.0.0.0', r));
+
+const handle = await standingAgent({
+  agent,
+  host: agentCoreRuntimeHost({ server }),              // ← binds nothing
+  sessions: agentCoreSessions({ store: 'session-storage' }),
+});
+```
+
+`/invocations` and `/ping` answer on your socket; every other path is yours, and
+this adapter will not write a 404 on it. `close()` detaches and drains, leaving
+your server listening. `port` and `hostname` are refused beside `server` — the
+contract's own `:8080` default included, because with your server this adapter
+binds nothing and so names nothing. The laws (and the one consequence worth
+knowing: an unmatched path *hangs* rather than 404s if nobody routes it) are the
+same for every adapter built on `httpHost` — see
+[One port, two protocols](doc:hosting).
+
 ## Where the conversation lives
 
 `agentCoreSessions` makes you choose the checkpoint's home **at construction**,

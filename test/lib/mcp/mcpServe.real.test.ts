@@ -418,3 +418,105 @@ describe('mcpServe over a real streamable-HTTP transport', () => {
     REAL_TRANSPORT_TIMEOUT,
   );
 });
+
+// ─── (c) the runtime container contract, settled ──────────────────
+
+/**
+ * Does the streamable-HTTP transport satisfy the container contract this repo
+ * documents for a managed agent runtime?
+ *
+ * The contract, as written down HERE (`examples/deploy/README.md`,
+ * `docs/guides/agentcore.md`, and the adapter's own header in
+ * `src/adapters/hosting/agentcore.ts`): `POST /invocations` taking
+ * `{ "prompt" }` and answering `{ "response", "status" }`, `GET /ping`
+ * answering a health body, both on `0.0.0.0:8080`, with the conversation id in
+ * a request header. Those documents describe ONE protocol — that HTTP one —
+ * and say nothing anywhere about serving MCP as a runtime's own protocol.
+ *
+ * **Verdict, pinned below: it does not, and it is not trying to.** `mcpServe`
+ * serves the MCP endpoint (a path it owns, a port you choose, stateless so a
+ * replica set is safe) and NEITHER of the contract's two routes: `/ping` and
+ * `/invocations` are 404s from it. The two are different protocols on
+ * different paths, so a deployment that must answer both needs both — which is
+ * what `httpHost({ server })` is for since 7.22.0: the runtime host attaches to
+ * a server you own, and anything else you serve on that port stays yours.
+ * `mcpServe` has no such option today; its HTTP transport always owns its
+ * listener, so "MCP and the runtime contract on ONE port" is not reachable in
+ * this release.
+ */
+describe('mcpServe vs the runtime container contract', () => {
+  const open: McpServeHandle[] = [];
+  afterEach(async () => {
+    while (open.length) await open.pop()!.close();
+  });
+
+  it(
+    'CONFORMANCE: serves MCP statelessly on the path and port you choose — and answers neither /ping nor /invocations',
+    async () => {
+      const handle = await mcpServe(servedTools(), {
+        name: 'support-desk',
+        version: '1.2.3',
+        // The contract's own port and interface are expressible; the test binds
+        // an ephemeral one so it never collides with whatever is on :8080.
+        transport: { transport: 'http', port: 0, host: '127.0.0.1', path: '/mcp' },
+      });
+      open.push(handle);
+      const base = `http://127.0.0.1:${handle.port!}`;
+
+      // (1) The MCP endpoint is real, judged by the SDK's own client.
+      const client = newClient();
+      await client.connect(new StreamableHTTPClientTransport(new URL(`${base}/mcp`)));
+      try {
+        expect((await client.listTools()).tools.map((t) => t.name)).toEqual([
+          'echo',
+          'delete_account',
+        ]);
+        expect(textOf(await client.callTool({ name: 'echo', arguments: { text: 'hi' } }))).toBe(
+          'echo: hi',
+        );
+      } finally {
+        await client.close();
+      }
+
+      // (2) Stateless: the transport neither issues nor demands a session id,
+      // so any replica can answer any request — the property a managed runtime
+      // in front of N containers needs.
+      const initialize = await fetch(`${base}/mcp`, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          accept: 'application/json, text/event-stream',
+        },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          id: 1,
+          method: 'initialize',
+          params: {
+            protocolVersion: '2025-06-18',
+            capabilities: {},
+            clientInfo: { name: 'conformance-probe', version: '1.0.0' },
+          },
+        }),
+      });
+      expect(initialize.status).toBe(200);
+      expect(initialize.headers.get('mcp-session-id')).toBeNull();
+      await initialize.arrayBuffer();
+
+      // (3) And it is NOT the documented container contract. Both of that
+      // contract's routes are 404 here, which is the honest answer: they belong
+      // to the hosting adapter, on its own paths, in its own body dialect.
+      const ping = await fetch(`${base}/ping`);
+      expect(ping.status).toBe(404);
+      await ping.arrayBuffer();
+
+      const invocations = await fetch(`${base}/invocations`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ prompt: 'hello' }),
+      });
+      expect(invocations.status).toBe(404);
+      await invocations.arrayBuffer();
+    },
+    REAL_TRANSPORT_TIMEOUT,
+  );
+});

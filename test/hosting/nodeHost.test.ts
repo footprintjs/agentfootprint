@@ -13,6 +13,8 @@
  * runtime leaking into a library that promises not to know about it.
  */
 
+import { createServer } from 'node:http';
+
 import { describe, expect, it } from 'vitest';
 
 import { nodeHost } from '../../src/hosting/index.js';
@@ -96,6 +98,49 @@ describe('nodeHost — the routes it serves', () => {
       expect(handle.url).toContain(`:${handle.port}`);
     } finally {
       await handle.close();
+    }
+  });
+});
+
+describe('nodeHost — a socket the caller owns', () => {
+  // The machinery and its laws live in httpHost.test.ts; what is asserted here
+  // is that THIS adapter passes the option through rather than quietly binding
+  // a second socket — the mistake that would make the whole option a no-op.
+  it('attaches its two routes to a server you already listened on', async () => {
+    const server = createServer();
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', () => resolve()));
+    const address = server.address();
+    const port = typeof address === 'object' && address ? address.port : 0;
+    const base = `http://127.0.0.1:${port}`;
+    const handle = await nodeHost({ server }).serve(echo);
+    try {
+      expect(handle.port).toBe(port);
+      expect(handle.url).toBe(base);
+      expect((await fetch(`${base}/health`)).status).toBe(200);
+      const invoked = await fetch(`${base}/invoke`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ input: 'shared' }),
+      });
+      expect(await invoked.json()).toEqual({ output: 'echo:shared' });
+    } finally {
+      await handle.close();
+      // close() left the socket alone, which is the caller's to release.
+      expect(server.listening).toBe(true);
+      await new Promise<void>((resolve) => {
+        server.closeAllConnections();
+        server.close(() => resolve());
+      });
+    }
+  });
+
+  it('refuses a port beside it rather than pick which one it meant', async () => {
+    const server = createServer();
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', () => resolve()));
+    try {
+      expect(() => nodeHost({ server, port: 8080 })).toThrow(/both a caller-owned/);
+    } finally {
+      await new Promise<void>((resolve) => server.close(() => resolve()));
     }
   });
 });

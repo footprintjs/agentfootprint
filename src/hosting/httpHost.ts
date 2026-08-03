@@ -25,6 +25,15 @@
  * `HostRequest` and `HostReply` say exactly what they said before. The gap was
  * in the first adapter, which had no seam, not in the port, which needed none.
  *
+ * ── The second thing a deployment gets to re-decide: who owns the socket ─────
+ * By default this file creates a server and listens on it. Pass `server` and it
+ * attaches to yours instead — because a container is sometimes given exactly
+ * one port, and an agent that privately owns the socket cannot share it with a
+ * WebSocket upgrade or with routes that were there first. Attached, the host
+ * answers its two paths, writes nothing on anyone else's, and `close()`
+ * detaches and drains without closing a socket it never opened. That is the
+ * whole difference; every other law on this page is the same either way.
+ *
  * Pattern: Template method via configuration (Strategy on the wire format).
  * Everything HTTP lives here and in the wires; `types.ts` knows none of it.
  */
@@ -116,17 +125,65 @@ export interface HttpHostOptions {
   readonly invokePath: string;
   /** Path that answers a health probe. Required, for the same reason. */
   readonly healthPath: string;
-  /** Port to bind. Default `8080`. Pass `0` for an ephemeral port. */
+  /**
+   * Port to bind. Default `8080`. Pass `0` for an ephemeral port.
+   *
+   * Refused together with {@link HttpHostOptions.server}: a server you own
+   * already has an address, and a port here would name a socket this host does
+   * not bind.
+   */
   readonly port?: number;
-  /** Interface to bind. Default `'0.0.0.0'`. */
+  /** Interface to bind. Default `'0.0.0.0'`. Refused together with `server`, for the same reason. */
   readonly hostname?: string;
   /** What this adapter claims beyond the baseline. Default `['streaming']`. */
   readonly capabilities?: readonly HostCapability[];
+  /**
+   * A `node:http` server **you** own. Given one, this host ATTACHES its two
+   * routes to it instead of creating and listening on a server of its own.
+   *
+   * ── Why ──────────────────────────────────────────────────────────────────
+   * Some runtimes hand a container exactly one port, and a container that must
+   * also answer a WebSocket upgrade — or anything else — on that port cannot
+   * use a host that privately owns the socket. Attaching costs nothing anyone
+   * else was using: `node:http` calls EVERY `'request'` listener for every
+   * request, so this host and your own routes share the port by taking turns.
+   *
+   * ── What changes, exactly ────────────────────────────────────────────────
+   *  - **You own the socket.** `listen()` is yours, and so is closing it. The
+   *    server must ALREADY be listening when `serve()` is called — a handle
+   *    that promises `url` and `port` cannot honestly report an address that
+   *    does not exist yet, so `serve()` refuses rather than guess one.
+   *  - **The host never writes a 404.** A path it does not own is yours to
+   *    answer, and answering it with a refusal from this host would be this
+   *    host answering for your application. Note the consequence: a request no
+   *    listener answers is not a 404, it HANGS — if this server has no other
+   *    `'request'` listener, unmatched paths go unanswered until the socket
+   *    times out. With no `server`, the 404 behaviour is unchanged.
+   *  - **`close()` detaches and drains, and leaves your server listening.** It
+   *    removes this host's listener, waits for the requests it is already
+   *    serving, and touches nothing else — not your connections, not your
+   *    socket.
+   *  - It never writes to a response an earlier listener already answered.
+   *
+   * @example  One port, an agent and a WebSocket upgrade
+   *   const server = createServer();
+   *   server.on('upgrade', (req, socket, head) => acceptWebSocket(req, socket, head));
+   *   await new Promise<void>((r) => server.listen(8080, '0.0.0.0', r));
+   *   const handle = await httpHost({ ...wireOptions, server }).serve(handler);
+   *   // …later: the host goes away, the socket and the upgrade stay.
+   *   await handle.close();
+   */
+  readonly server?: Server;
 }
 
 /** A {@link HostHandle} that also says where it landed. */
 export interface HttpHostHandle extends HostHandle {
-  /** Where it is actually listening, e.g. `http://127.0.0.1:53211`. */
+  /**
+   * Where it is actually listening, e.g. `http://127.0.0.1:53211`. With a
+   * caller-owned {@link HttpHostOptions.server} this is that server's real
+   * address — the host reports where it is answering, never where it bound,
+   * because with your server it bound nothing.
+   */
   readonly url: string;
   /** The port it actually bound — the real one, when you asked for `0`. */
   readonly port: number;
@@ -174,6 +231,19 @@ const DEFAULT_CAPABILITIES: readonly HostCapability[] = ['streaming'];
  */
 export function httpHost(options: HttpHostOptions): HttpHost {
   const { name, wire, invokePath, healthPath } = options;
+  const ownServer = options.server;
+  // Refused at construction, not ignored at serve time: a `port` next to a
+  // server this host does not bind is a caller who believes something untrue
+  // about where their agent will answer, and silently dropping it is how they
+  // stay believing it.
+  if (ownServer && (options.port !== undefined || options.hostname !== undefined)) {
+    throw new Error(
+      `[hosting] httpHost('${name}') was given both a caller-owned 'server' and a ` +
+        `'${options.port !== undefined ? 'port' : 'hostname'}'. A server you own already has ` +
+        `an address, and this host binds nothing when you pass one. Drop the port/hostname, ` +
+        `or drop the server and let this host bind its own socket.`,
+    );
+  }
   const port = options.port ?? 8080;
   const hostname = options.hostname ?? '0.0.0.0';
   const capabilities = options.capabilities ?? DEFAULT_CAPABILITIES;
@@ -182,13 +252,15 @@ export function httpHost(options: HttpHostOptions): HttpHost {
     name,
     capabilities,
     async serve(handler: HostHandler): Promise<HttpHostHandle> {
-      const { createServer } = await import('node:http');
       const startedAt = Date.now();
       const inFlight = new Set<Promise<void>>();
       let accepting = true;
       let closing: Promise<void> | undefined;
 
-      const server: Server = createServer((req, res) => {
+      const onRequest = (req: IncomingMessage, res: ServerResponse): void => {
+        // On a shared server an earlier listener may already have answered.
+        // Writing again would corrupt its reply; there is nothing to add.
+        if (res.headersSent) return;
         const path = (req.url ?? '').split('?')[0];
 
         if (req.method === 'GET' && path === healthPath) {
@@ -196,6 +268,10 @@ export function httpHost(options: HttpHostOptions): HttpHost {
           return;
         }
         if (req.method !== 'POST' || path !== invokePath) {
+          // On a server we own, an unmatched path is nobody else's, so saying
+          // so is the honest answer. On a server the CALLER owns it is theirs,
+          // and a 404 from us would answer for their application.
+          if (ownServer) return;
           sendJson(res, 404, wire.failure(`no route for ${req.method ?? '?'} ${path}`));
           return;
         }
@@ -212,16 +288,45 @@ export function httpHost(options: HttpHostOptions): HttpHost {
         const served = serveOne(req, res, handler, wire);
         inFlight.add(served);
         void served.finally(() => inFlight.delete(served));
-      });
+      };
 
-      await new Promise<void>((resolve, reject) => {
-        server.once('error', reject);
-        server.listen(port, hostname, resolve);
-      });
+      let server: Server;
+      if (ownServer) {
+        server = ownServer;
+        if (!server.listening) {
+          throw new Error(
+            `[hosting] httpHost('${name}') was handed a server that is not listening yet. ` +
+              `This handle promises the url and port it is answering on, and a server with ` +
+              `no address has neither. Call server.listen(...) first, then serve() — ` +
+              `attaching after listen() is safe and is the intended order.`,
+          );
+        }
+        server.on('request', onRequest);
+      } else {
+        const { createServer } = await import('node:http');
+        server = createServer(onRequest);
+        await new Promise<void>((resolve, reject) => {
+          server.once('error', reject);
+          server.listen(port, hostname, resolve);
+        });
+      }
 
       const address = server.address();
-      const boundPort = typeof address === 'object' && address ? address.port : port;
-      const displayHost = hostname === '0.0.0.0' || hostname === '::' ? '127.0.0.1' : hostname;
+      const tcp = typeof address === 'object' && address !== null ? address : undefined;
+      if (ownServer && !tcp) {
+        server.off('request', onRequest);
+        throw new Error(
+          `[hosting] httpHost('${name}') was handed a server bound to ${JSON.stringify(address)}` +
+            ` — a pipe or socket path, which has no port. This handle promises a url and a ` +
+            `port, and inventing one would be worse than refusing. Serve on a TCP server, or ` +
+            `drive the handler yourself.`,
+        );
+      }
+      const boundPort = tcp ? tcp.port : port;
+      // With our own socket the requested hostname IS the answer; with the
+      // caller's we ask the socket, because we never chose it.
+      const boundHost = ownServer ? tcp?.address ?? '127.0.0.1' : hostname;
+      const displayHost = boundHost === '0.0.0.0' || boundHost === '::' ? '127.0.0.1' : boundHost;
 
       return {
         url: `http://${displayHost}:${boundPort}`,
@@ -230,6 +335,16 @@ export function httpHost(options: HttpHostOptions): HttpHost {
           // Idempotent: the first call owns the shutdown, later ones await it.
           closing ??= (async () => {
             accepting = false;
+            if (ownServer) {
+              // Detach FIRST. The paths stop being ours the moment close() is
+              // called, so a request arriving now falls through to the caller
+              // rather than collecting a refusal from a host that is leaving.
+              server.off('request', onRequest);
+              // Then drain what we are already serving — and stop there. The
+              // socket, the idle connections and the shutdown are the caller's.
+              await Promise.allSettled([...inFlight]);
+              return;
+            }
             // Drain BEFORE touching sockets — an in-flight request is work the
             // caller is still waiting on, and dropping it would be the exact
             // thing close() promises not to do.

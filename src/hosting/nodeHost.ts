@@ -16,6 +16,11 @@
  * a colleague's convention. A path is a deployment detail, so it is a knob
  * here and absent from the port entirely.
  *
+ * **The socket can be yours.** Pass `server` — a `node:http` server you
+ * created and listened on — and this adapter attaches its two routes to it
+ * instead of binding one, so a WebSocket upgrade or your own routes can share
+ * the port. `close()` then detaches and drains, and your socket stays up.
+ *
  * **Streaming is the caller's choice, not the server's.** Send
  * `Accept: text/event-stream` and the reply is Server-Sent Events, one `chunk`
  * event per `reply.emit(...)` then a final `complete`. Send anything else and
@@ -34,14 +39,27 @@ import { httpHost, type HttpHost, type HttpHostHandle, type HttpWire } from './h
 
 /** Options for {@link nodeHost}. */
 export interface NodeHostOptions {
-  /** Port to bind. Default `8080`. Pass `0` for an ephemeral port. */
+  /** Port to bind. Default `8080`. Pass `0` for an ephemeral port. Refused alongside `server`. */
   readonly port?: number;
-  /** Interface to bind. Default `'0.0.0.0'`. */
+  /** Interface to bind. Default `'0.0.0.0'`. Refused alongside `server`. */
   readonly hostname?: string;
   /** Path that takes a request. Default `'/invoke'`. */
   readonly invokePath?: string;
   /** Path that answers a health probe. Default `'/health'`. */
   readonly healthPath?: string;
+  /**
+   * A `node:http` server **you** own, already listening. Given one, this
+   * adapter attaches its two routes to it instead of binding a socket of its
+   * own — the only way to serve something else (a WebSocket upgrade, routes
+   * that were there first) on the same port, which matters when the thing
+   * running your process gives it exactly one.
+   *
+   * You keep `listen()` and you keep the shutdown; `close()` detaches this
+   * host and drains what it was already serving. On a server you own the host
+   * never writes a 404 either: a path it does not own is yours to answer. The
+   * full set of laws is on `httpHost`'s own `server` option, which this is.
+   */
+  readonly server?: import('node:http').Server;
 }
 
 /**
@@ -108,7 +126,12 @@ export function nodeHost(options: NodeHostOptions = {}): NodeHost {
     // particular runtime's container-contract path literal.
     invokePath: options.invokePath ?? '/invoke',
     healthPath: options.healthPath ?? '/health',
+    // Passed through as given, never defaulted: with a caller-owned server
+    // there is no port to default, and a port passed WITH one is a caller who
+    // believes something untrue about where their agent answers — `httpHost`
+    // refuses that pair by name rather than picking a winner.
     ...(options.port !== undefined && { port: options.port }),
     ...(options.hostname !== undefined && { hostname: options.hostname }),
+    ...(options.server !== undefined && { server: options.server }),
   });
 }

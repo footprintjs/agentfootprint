@@ -31,7 +31,9 @@
  *     itself, parameterised by the JSON dialect it speaks. `nodeHost` is one
  *     configuration of it; an adapter for someone's container runtime is
  *     another. Two paths and five body shapes are all a second HTTP adapter
- *     re-decides.
+ *     re-decides. Pass `server` and it attaches to a `node:http` server YOU
+ *     own instead of binding one — for the container that gets a single port
+ *     and must serve a WebSocket upgrade (or anything else) beside the agent.
  *   • `memorySessions()` — conversations in a Map, for tests and local dev.
  *   • `standingAgent({ agent, sessions, host, durability? })` — the composer.
  *   • `toEnvelope` / `readEnvelope` — pack a conversation, and refuse by name to

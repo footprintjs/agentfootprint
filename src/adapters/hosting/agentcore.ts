@@ -88,6 +88,32 @@ export interface AgentCoreRuntimeHostOptions {
    * honest answer for an agent that answers synchronously.
    */
   readonly busy?: () => boolean;
+  /**
+   * A `node:http` server **you** own, already listening. Given one, this
+   * adapter attaches `/invocations` and `/ping` to it instead of binding a
+   * socket of its own — which is the only way to serve something else on the
+   * same port, and a container gets one port.
+   *
+   * The case this exists for: a container that must also answer a WebSocket
+   * upgrade beside the runtime's two routes. Add your `'upgrade'` listener to
+   * the server, listen on 8080 yourself, and attach the agent to it.
+   *
+   * Every law is `httpHost`'s: unmatched paths are YOURS (this adapter writes
+   * no 404 on a server it does not own), and `close()` detaches and drains
+   * without closing your socket. `port` and `hostname` are refused alongside
+   * it — a server you own already has an address.
+   *
+   * @example
+   *   const server = createServer();
+   *   server.on('upgrade', handleWebSocket);
+   *   await new Promise<void>((r) => server.listen(8080, '0.0.0.0', r));
+   *   const handle = await standingAgent({
+   *     agent,
+   *     host: agentCoreRuntimeHost({ server }),
+   *     sessions: agentCoreSessions({ store: 'session-storage' }),
+   *   });
+   */
+  readonly server?: import('node:http').Server;
 }
 
 /**
@@ -163,8 +189,18 @@ export function agentCoreRuntimeHost(options: AgentCoreRuntimeHostOptions = {}):
     wire: agentCoreRuntimeWire(options.busy),
     invokePath: INVOKE_PATH,
     healthPath: HEALTH_PATH,
-    port: options.port ?? RUNTIME_PORT,
-    hostname: options.hostname ?? '0.0.0.0',
+    // With a caller-owned server this adapter binds nothing, so it must not
+    // invent the contract's port either — the port is whatever the caller
+    // listened on, and passing one anyway is refused by `httpHost` rather than
+    // quietly ignored. An explicitly passed port still travels, so that refusal
+    // reaches a caller who asked for both.
+    ...(options.server !== undefined
+      ? {
+          server: options.server,
+          ...(options.port !== undefined && { port: options.port }),
+          ...(options.hostname !== undefined && { hostname: options.hostname }),
+        }
+      : { port: options.port ?? RUNTIME_PORT, hostname: options.hostname ?? '0.0.0.0' }),
   });
 }
 

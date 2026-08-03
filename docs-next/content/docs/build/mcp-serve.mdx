@@ -118,6 +118,18 @@ exported for the same reason `McpSdkClient` is, so a test can inject one.
 apps that never serve pay nothing. Missing, you get an install hint rather than a
 stack trace.
 
+<Callout type="info" title="The MCP endpoint is not a container contract — settled by a test">
+The streamable-HTTP transport serves MCP, statelessly, on the path and port you
+choose, and **nothing else**: it answers neither of the routes the managed
+runtime contract documented in [AgentCore adapters](doc:agentcore-adapters)
+uses, so `GET /ping` and `POST /invocations` are 404s from it. That is pinned in
+`test/lib/mcp/mcpServe.real.test.ts` against the SDK's own client rather than
+left to prose. The two are different protocols: serve the runtime contract with
+`agentCoreRuntimeHost` and MCP with `mcpServe`. They cannot share a port today —
+`mcpServe`'s HTTP transport always owns its listener, and it has no
+`{ server }` option the way [the hosting adapters do](doc:hosting).
+</Callout>
+
 ## When to serve, and when not to
 
 | Serve over MCP when… | Keep it in the agent when… |

@@ -68,6 +68,27 @@ The runnable version + Dockerfile + deploy steps are in
 integration test (`npx tsx examples/deploy/agentcore-runtime.ts`). Swap the
 sample `mock()` for `providerFromEnv()` and the model runs on Bedrock.
 
+**One port, two protocols.** A container gets one port, so if yours must also
+answer a WebSocket upgrade, hand the host a `node:http` server you own instead
+of letting it bind one:
+
+```ts
+const server = createServer();
+server.on('upgrade', handleWebSocket);                  // yours
+await new Promise<void>((r) => server.listen(8080, '0.0.0.0', r));
+
+const handle = await standingAgent({
+  agent,
+  host: agentCoreRuntimeHost({ server }),               // ← attaches, binds nothing
+  sessions: agentCoreSessions({ store: 'session-storage' }),
+});
+```
+
+`/invocations` and `/ping` answer on your socket, every other path stays yours
+(the host never writes a 404 on a server it does not own — so an unmatched path
+*hangs* unless you route it), and `close()` detaches and drains without closing
+your socket. Runnable: [`examples/deploy/one-port.ts`](../../examples/deploy/one-port.ts).
+
 ---
 
 ## Memory — `AgentCoreStore`

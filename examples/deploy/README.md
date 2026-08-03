@@ -57,6 +57,26 @@ see `test/hosting/host-contract.test.ts`.
    ```
 5. Invoke: `aws bedrock-agentcore invoke-agent-runtime --agent-runtime-arn <arn> --payload '{"prompt":"..."}'`.
 
+## When the container has one port
+
+A runtime that gives your container a single port makes "serve the agent" and
+"serve a WebSocket upgrade" compete for it. Since 7.22.0 they don't have to:
+create the `node:http` server yourself, add your `'upgrade'` listener, listen,
+and hand the server to the host — `agentCoreRuntimeHost({ server })` (or
+`nodeHost({ server })`) attaches its routes instead of binding a socket.
+
+```bash
+npx tsx examples/deploy/one-port.ts
+```
+
+[`one-port.ts`](./one-port.ts) proves all of it in one run: the agent answers,
+your own `/metrics` route answers, a raw upgrade handshake echoes beside them,
+and after `handle.close()` the socket is still listening with your routes and
+your upgrade intact. Two rules to carry into a real deployment: a path the host
+does not own is **yours** — it will never write a 404 on your server, so an
+unrouted path hangs rather than 404s — and `port` / `hostname` are refused
+beside `server`, because a server you own already has an address.
+
 ## What plugs into the rest of AgentCore
 
 Once your agent runs in the container, the other AgentCore primitives attach

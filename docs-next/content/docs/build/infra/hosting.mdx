@@ -110,11 +110,11 @@ nodeHost({ port: 0, hostname: '127.0.0.1' })   // pick a free port
 nodeHost({ invokePath: '/v1/messages', healthPath: '/healthz' })
 ```
 
-`NodeHostOptions` takes `port`, `hostname`, `invokePath` and `healthPath`. Both
-paths are options because a path is a deployment detail — usually dictated by
-whatever sits in front of your process — and a default that silently matched one
-vendor's container contract would be that vendor leaking in through the back
-door.
+`NodeHostOptions` takes `port`, `hostname`, `invokePath`, `healthPath` — and
+`server`, for when the socket has to be yours (below). Both paths are options
+because a path is a deployment detail — usually dictated by whatever sits in
+front of your process — and a default that silently matched one vendor's
+container contract would be that vendor leaking in through the back door.
 
 `serve()` resolves to a `NodeHostHandle`: a `HostHandle` that also reports the
 `url` and `port` it actually bound, which is the only way to find out when you
@@ -168,6 +168,78 @@ a library that promises not to know about one.
 `jsonWire` — `nodeHost`'s own dialect — is exported by name, so a deployment
 that needs those exact bodies with something else changed reuses it rather than
 retyping it and getting one field subtly wrong.
+
+`HttpHostOptions` also takes `server` — a `node:http` server *you* own, for when
+the port cannot be the host's alone. That is the next section, and every adapter
+built on `httpHost` inherits it.
+
+## One port, two protocols — `{ server }`
+
+> **Some runtimes hand a container exactly one port.** If the agent host owns
+> that socket privately, a container that must also answer a WebSocket upgrade
+> — or serve routes that were there first — simply cannot use it.
+
+So don't give it the socket. Create the `node:http` server yourself, listen on
+it yourself, and hand it over: the host **attaches** its two routes instead of
+binding anything.
+
+```ts
+import { createServer } from 'node:http';
+import { nodeHost, standingAgent, memorySessions } from 'agentfootprint/hosting';
+
+const server = createServer();
+server.on('upgrade', handleWebSocket);              // your protocol
+server.on('request', yourOwnRoutes);                // your routes
+await new Promise<void>((r) => server.listen(8080, '0.0.0.0', r));
+
+const handle = await standingAgent({
+  agent,
+  sessions: memorySessions(),
+  host: nodeHost({ server }),                       // ← binds nothing
+});
+```
+
+This works because `node:http` calls **every** `'request'` listener for every
+request. The host is one of them, and it takes only what it owns.
+
+Four laws come with it, and each one is pinned by a test:
+
+| | |
+|---|---|
+| **The host never writes a 404 on your server** | A path it does not own is yours. Answering it with a refusal from the agent host would be the library answering for your application. |
+| **Your upgrade keeps working** | Upgrades are a different event; attaching a request listener cannot touch them. This is the case the option exists for. |
+| **`close()` detaches and drains** | It removes its listener, waits out the requests it was already serving, and stops. Your socket stays listening, your connections stay up, your routes keep answering. |
+| **It never overwrites an answer** | If a listener registered before it already answered, the host writes nothing. |
+
+<Callout type="warn" title="The consequence of never writing a 404">
+A request **no** listener answers does not get a 404 from node — it *hangs*
+until the socket times out. On a shared server, unmatched paths are yours to
+answer, so give your server a fallback route if you want a 404 on them. This is
+the price of not answering for your application, and it is stated here rather
+than discovered at 3am.
+</Callout>
+
+Two things are refused rather than guessed:
+
+- **`port` or `hostname` beside `server`** throws at construction. A server you
+  own already has an address; a port here would name a socket this host does not
+  bind, and silently dropping it leaves you believing something untrue about
+  where your agent answers.
+- **A server that is not listening yet** is refused by `serve()`. The handle
+  promises the `url` and `port` it is answering on, and a server with no address
+  has neither. Call `listen()` first, then `serve()` — attaching after `listen()`
+  is safe and is the intended order. (With a caller-owned server, `handle.url`
+  and `handle.port` report *your* server's real address.)
+
+`httpHost({ server })` is where this lives, so every adapter built on it inherits
+it: `nodeHost({ server })` and `agentCoreRuntimeHost({ server })` are the same
+option.
+
+<CodeFile path="examples/deploy/one-port.ts" region="shared-server" title="examples/deploy/one-port.ts (region: shared-server)" />
+
+The full runnable version — an agent, a WebSocket echo and a `/metrics` route on
+one port, with the socket outliving the host's `close()` — is
+[`examples/deploy/one-port.ts`](https://github.com/footprintjs/agentfootprint/blob/main/examples/deploy/one-port.ts).
 
 ## Sessions: what crosses the restart
 

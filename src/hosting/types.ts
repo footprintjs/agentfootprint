@@ -149,6 +149,12 @@ export interface HostHandle {
    * transport. Idempotent, so a shutdown hook and an explicit close can
    * coexist. Requests arriving after it are refused with a
    * {@link HostClosedError} naming the adapter.
+   *
+   * "Release the transport" is as strong as the port can be, because an
+   * adapter may be serving on a transport the CALLER owns rather than one it
+   * created. Releasing one of those means handing the routes back — never
+   * closing it — and a request arriving afterwards is the caller's to answer,
+   * not this host's to refuse.
    */
   close(): Promise<void>;
 }
