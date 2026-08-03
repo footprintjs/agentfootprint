@@ -18,7 +18,11 @@
  * Pattern: Ports & adapters (hexagonal). Role: the port side, exclusively.
  */
 
+import type { FlowchartCheckpoint } from 'footprintjs';
+
 import type { Agent } from '../core/Agent.js';
+import type { CheckInRequest } from '../core/checkin.js';
+import type { MiddlewareAsk } from '../core/pause.js';
 import type { AgentRunCheckpoint } from '../core/runCheckpoint.js';
 
 // ─── The host port ───────────────────────────────────────────────────
@@ -43,6 +47,24 @@ export interface HostRequest {
   /** What the caller is asking. */
   readonly input: string;
   /**
+   * A person's answer to an outstanding {@link PendingAsk} — and **the one
+   * thing that distinguishes a resume from a new message.**
+   *
+   * Present ⇒ this request answers the run that paused on this session. Absent
+   * ⇒ this request is a new message. That is the whole contract, and it is a
+   * FIELD rather than an inference on purpose: reading approval out of prose
+   * ("yes, go ahead") is a guess, and a guess is not something a consent gate
+   * may be built on.
+   *
+   * The port never interprets it. It is handed to `agent.resume(checkpoint,
+   * decision)` exactly as it arrived — a {@link CheckInRequest} or a middleware
+   * `ask` is answered with the shipped `checkInApproved()` / `checkInDeclined()`
+   * vocabulary; a plain `askHuman` pause is answered with whatever that tool's
+   * author documented. Typed `unknown` because the library does not get to
+   * decide what a tool asked for.
+   */
+  readonly decision?: unknown;
+  /**
    * The conversation this request CLAIMS to belong to — caller data, exactly as
    * the transport declared it (a JSON field, a header, a path segment).
    *
@@ -63,13 +85,37 @@ export interface HostRequest {
 }
 
 /**
- * The one reply a request gets. Exactly one of {@link HostReply.complete} or
- * {@link HostReply.fail} ends it; a second call is ignored rather than allowed
- * to corrupt the wire.
+ * The one reply a request gets. Exactly one of {@link HostReply.complete},
+ * {@link HostReply.awaiting} or {@link HostReply.fail} ends it; a second call is
+ * ignored rather than allowed to corrupt the wire.
+ *
+ * Three terminals, because a run has three ends and only three: it answered, it
+ * stopped to ask a person something, or it failed. Before `'flowchart-v1'` there
+ * was nowhere to keep a paused run, so the middle one was delivered through
+ * `fail` — an error standing in for unfinished work. It is a terminal of its own
+ * now, and a pause is never reported as a failure again.
  */
 export interface HostReply {
   /** Deliver the final answer and end the reply. */
   complete(output: string): void;
+  /**
+   * End the reply with **unfinished work**: the run stopped to ask a person
+   * something, the paused run is stored, and a later request carrying
+   * {@link HostRequest.decision} continues it.
+   *
+   * This is not a failure and must not be reported as one. The agent did not
+   * break, no work was lost, and there is nothing to retry — there is a question
+   * outstanding. An adapter that maps this onto a 5xx, an error counter or a
+   * dead-letter queue is telling every dashboard it feeds something that is not
+   * true.
+   *
+   * Optional on the TYPE for the same reason {@link HostReply.emit} is: a
+   * minimal adapter need not implement it. Every shipped adapter does. When it
+   * is absent the composer still STORES the paused run — the store is not the
+   * transport's business — and ends the reply with a named refusal instead, so
+   * the pause is never lost merely because the wire could not describe it.
+   */
+  awaiting?(pending: PendingAsk): void;
   /**
    * A piece of the answer, as it is produced.
    *
@@ -126,38 +172,162 @@ export interface AgentHost {
 // ─── The session port ────────────────────────────────────────────────
 
 /**
- * A conversation packed for storage.
+ * A session packed for storage.
  *
  * `format` names WHAT is inside, so a reader that does not know the shape
- * refuses BY NAME instead of restoring a conversation it cannot actually read.
+ * refuses BY NAME instead of restoring a session it cannot actually read.
  * Formats are ADDED, never redefined: an old runtime meeting a new format says
  * so and stops, which is the only safe thing it can do with a payload it cannot
- * interpret.
+ * interpret. Two exist:
  *
- * `'conversation-v1'` stores a conversation and only a conversation. A run that
- * paused mid-flow is a conversation PLUS an engine checkpoint, and this format
- * has nowhere to put the second half — which is why `standingAgent` refuses to
- * store a paused run rather than storing half of it. Carrying a pause would be
- * a NEW format name in this same envelope, read by a runtime that knows it and
- * refused by name everywhere else. That is what the version field is for.
+ *   • `'conversation-v1'` — a conversation and only a conversation. Every turn
+ *     that ran to an answer stores this.
+ *   • `'flowchart-v1'` — a run that stopped mid-flow to ask a person something:
+ *     the engine's own checkpoint, the conversation as of the pause, and the
+ *     outstanding ask. 7.14 shipped the version field for exactly this day, and
+ *     said so; this is that day.
+ *
+ * The union is discriminated on `format`, so a reader that switches on it is
+ * exhaustive by construction and a third format tomorrow breaks the switch at
+ * compile time rather than at 3am.
  */
-export interface CheckpointEnvelope {
+export type CheckpointEnvelope = ConversationEnvelope | PausedRunEnvelope;
+
+/** A conversation packed for storage — what a turn that ANSWERED leaves behind. */
+export interface ConversationEnvelope {
   /** Names the shape of `data`. Unknown values are refused, never guessed at. */
   readonly format: 'conversation-v1';
-  /** The conversation itself — an `AgentRunCheckpoint` for `'conversation-v1'`. */
+  /** The conversation itself. */
   readonly data: AgentRunCheckpoint;
   /** Wall-clock when it was packed. Diagnostic. */
   readonly savedAt: number;
 }
 
+/** A paused run packed for storage — what a turn that ASKED leaves behind. */
+export interface PausedRunEnvelope {
+  /** Names the shape of `data`. Unknown values are refused, never guessed at. */
+  readonly format: 'flowchart-v1';
+  /** The paused run. */
+  readonly data: PausedRun;
+  /** Wall-clock when it was packed. Diagnostic. */
+  readonly savedAt: number;
+}
+
+/**
+ * A run that stopped to ask a person something, in the three pieces a session
+ * actually needs: what continues it, what it has said so far, and what it is
+ * waiting on.
+ *
+ * ── JSON, honestly ───────────────────────────────────────────────────────────
+ * A `FlowchartCheckpoint` is **JSON-safe to resume from, and not byte-identical
+ * through JSON.** `JSON.stringify` drops any property whose value is
+ * `undefined`, and a real paused agent run has a dozen of them. Every one
+ * measured sits in `executionTree` / `subflowResults` — the diagnostic halves
+ * the engine keeps for narrative and BTS. `sharedState`, which is the half
+ * `agent.resume()` actually reads, round-trips unchanged, because footprintjs's
+ * TypedScope already JSON-round-trips every object write on its way into
+ * committed state.
+ *
+ * So: store it anywhere that speaks JSON and resume works. Do not assert that
+ * what came back deep-equals what went in — `key: undefined` comes back as no
+ * key at all, and a test written to expect otherwise is testing `JSON`, not
+ * this library.
+ */
+export interface PausedRun {
+  /** The engine checkpoint — everything `agent.resume(checkpoint, decision)` needs. */
+  readonly checkpoint: FlowchartCheckpoint;
+  /**
+   * The conversation as of the pause, in the same shape every other turn stores.
+   *
+   * Kept alongside the checkpoint so a session that is waiting on a person is
+   * still a readable conversation: a support view can show what was said, and a
+   * runtime that cannot resume this run can still see the turn that led to the
+   * question.
+   */
+  readonly conversation: AgentRunCheckpoint;
+  /** What the run is waiting on, as data. */
+  readonly pending: PendingAsk;
+}
+
+/**
+ * The question a paused run is waiting on — the part of a pause that is safe to
+ * hand to whoever asked.
+ *
+ * **It deliberately carries no checkpoint.** The engine checkpoint holds the
+ * entire shared state of the run: the system prompt, the whole conversation,
+ * every tool result. That belongs in the store, which the operator chose and
+ * controls, and not in a reply to whoever posted the request. The caller gets
+ * the question; the store gets the state.
+ */
+export interface PendingAsk {
+  /** The session holding the paused run — where the decision has to be sent back. */
+  readonly sessionId?: string;
+  /** The tool that asked, when the run recorded which one it was. */
+  readonly tool?: string;
+  /** The question in plain words, when the pause carried one. */
+  readonly question?: string;
+  /**
+   * Present ONLY when a tool declared `checkIn` — the typed ask plus its
+   * evidence pack (what the tool will do, what context the run read, which
+   * context drove the choice, the run so far). Answer with `checkInApproved()`
+   * / `checkInDeclined()`.
+   */
+  readonly checkIn?: CheckInRequest;
+  /**
+   * Present ONLY when a `toolMiddleware` answered `ask` — the question and the
+   * middleware that put it. Answered with the same decision vocabulary a
+   * check-in uses, deliberately: a person approving is a person approving.
+   */
+  readonly ask?: MiddlewareAsk;
+  /**
+   * Exactly what the tool passed to `askHuman()` / `pauseHere()`, uninterpreted.
+   * For a plain pause this is the whole of what the tool's author chose to say,
+   * and the library is not entitled to summarise it.
+   */
+  readonly pauseData: unknown;
+}
+
+/**
+ * How often a run's progress is written to the session store — the trade
+ * between latency and how much a crash can cost you.
+ *
+ *  - `'exit'` (default) — one write, when the run finishes. The behaviour every
+ *    release before 7.19 had, spelled out rather than implied. A crash mid-run
+ *    loses the whole turn.
+ *  - `'async'` — a write is STARTED whenever the conversation changes and never
+ *    waited on. The run never slows down; the store is behind by however much
+ *    the newest un-landed write carried. At most one write is in flight and the
+ *    newest snapshot supersedes any queued one, so what a crash leaves is always
+ *    a PREFIX of the run, never a mixture.
+ *  - `'sync'` — persist-then-proceed. The same trigger, but **iteration N's
+ *    tools do not execute until iteration N-1's write has landed**, and the
+ *    answer is not delivered until the last write has landed. You pay the
+ *    store's latency once per iteration, knowingly, and in exchange the amount
+ *    of work a crash can re-run has a number: **the current iteration, and
+ *    nothing before it.**
+ *
+ * ── The bound, stated exactly ────────────────────────────────────────────────
+ * A commit boundary is a whole stage, and the agent dispatches ALL of one
+ * iteration's tool calls inside one stage body. So under `'sync'` a crash
+ * re-executes the tools of the iteration that was in flight — never an earlier
+ * one. That is the same idempotency requirement `resumeOnError` has always
+ * carried, now with a boundary instead of a warning: mutating tools must be
+ * idempotent, keyed on stable call content rather than `ctx.toolCallId`.
+ */
+export type DurabilityMode = 'exit' | 'async' | 'sync';
+
 /**
  * Why a session is being woken.
  *
- * One member, because one thing in this release can actually fire it: a request
- * arrived for that session. Naming reasons nothing can produce would be an
- * interface describing a system that does not exist.
+ *  - `'invoke'` — a request arrived for that session.
+ *  - `'resume'` — that request carries a person's decision for a run which
+ *    paused earlier.
+ *
+ * `'resume'` was absent until 7.19 because nothing could produce it: naming
+ * reasons nothing fires would be an interface describing a system that does not
+ * exist. Something produces it now.
  */
-export type WakeReason = 'invoke';
+export type WakeReason = 'invoke' | 'resume';
 
 /**
  * The port: where a conversation lives between requests.
@@ -219,4 +389,14 @@ export interface StandingAgentOptions<TH extends HostHandle = HostHandle> {
   readonly host: AgentHost & { serve(handler: HostHandler): Promise<TH> };
   /** Default `'reject'`. See {@link ConcurrentInvokePolicy}. */
   readonly onConcurrentInvoke?: ConcurrentInvokePolicy;
+  /**
+   * How often a run's progress becomes crash-survivable. Default `'exit'` —
+   * one write when the run finishes, which is what every release before this
+   * one did. See {@link DurabilityMode} for what the other two buy and cost.
+   *
+   * Under `'exit'` nothing is attached to the agent at all: no observer, no
+   * per-commit work, no barrier. An agent served this way behaves and performs
+   * exactly as it did in 7.18.
+   */
+  readonly durability?: DurabilityMode;
 }

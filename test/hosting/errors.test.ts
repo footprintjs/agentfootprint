@@ -69,8 +69,26 @@ describe('PauseNotCarriedError', () => {
     expect(err.toolName).toBeUndefined();
     expect(err.sessionId).toBeUndefined();
     expect(err.message).toContain('a tool');
-    expect(err.message).toContain('the session');
+    expect(err.message).toContain('no session id');
     expect(err.message).not.toContain('undefined');
+  });
+
+  it('says the pause was STORED when it was, and where to answer it', () => {
+    const err = new PauseNotCarriedError('approve_refund', 'c-1', true);
+    expect(err.stored).toBe(true);
+    expect(err.message).toContain('did not fail');
+    expect(err.message).toContain('IS stored');
+    expect(err.message).toContain("session 'c-1'");
+    expect(err.message).toContain('decision');
+    // The old reason is gone: the envelope CAN carry a pause now.
+    expect(err.message).not.toContain('conversation-v1');
+  });
+
+  it('says nothing was written when nothing was, without blaming the envelope', () => {
+    const err = new PauseNotCarriedError('approve_refund', undefined, false);
+    expect(err.stored).toBe(false);
+    expect(err.message).toContain('Nothing was written');
+    expect(err.message).toContain('no session id');
   });
 });
 

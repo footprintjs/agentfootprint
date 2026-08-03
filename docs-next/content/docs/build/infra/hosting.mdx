@@ -173,26 +173,37 @@ retyping it and getting one field subtly wrong.
 
 `SessionLifecycle` has two methods, `hydrate(sessionId)` and
 `persist(sessionId, envelope)`, plus an optional `onWake(sessionId, reason)`
-for stores that need to spin up before they can answer. `WakeReason` has one
-member, `'invoke'` — a request arrived — because that is the only thing in this
-release that can wake a session, and naming reasons nothing can produce would
-describe a system that does not exist.
+for stores that need to spin up before they can answer. `WakeReason` has two
+members: `'invoke'` — a request arrived — and `'resume'`, when that request
+carries a person's decision for a run that paused earlier. `'resume'` was absent
+until 7.19 because nothing could produce it, and naming reasons nothing fires
+would describe a system that does not exist.
 
 `memorySessions()` is a Map. It is exactly as durable as the process, which is
 the point: swap it for Redis and nothing above it changes.
 
-What gets stored is a `CheckpointEnvelope`:
+What gets stored is a `CheckpointEnvelope` — a union of two shapes,
+discriminated on `format`:
 
 ```ts
 { format: 'conversation-v1', data: /* AgentRunCheckpoint */, savedAt: 1723… }
+{ format: 'flowchart-v1',    data: /* PausedRun */,          savedAt: 1723… }
 ```
 
-`toEnvelope(checkpoint)` packs one; `readEnvelope(value)` unpacks one and
-**refuses an unknown format by name**:
+`'conversation-v1'` — a `ConversationEnvelope` — is a turn that answered.
+`'flowchart-v1'` — a `PausedRunEnvelope` — is a run that stopped to ask a person
+something: it carries a `PausedRun`, which is the engine's own checkpoint, the
+conversation as of the pause, and the `PendingAsk` it is waiting on. 7.14
+shipped the version field for exactly this, and said so.
+
+`toEnvelope(conversation)` and `toPausedEnvelope(run)` pack them.
+`readEnvelope(value)` and `readPausedRun(value)` unpack them, and both
+**refuse an unknown format by name**:
 
 ```
 [hosting] unknown checkpoint format 'conversation-v2'. This runtime reads:
-conversation-v1. Refusing rather than restoring a conversation it cannot read…
+conversation-v1, flowchart-v1. Refusing rather than restoring a session it
+cannot read…
 ```
 
 A store outlives the code that wrote to it. Someone will deploy a newer runtime,
@@ -201,16 +212,36 @@ Restoring what it can and hoping means an agent answering from a conversation
 with pieces missing — so formats are **added, never redefined**, and a reader
 that does not know one says so and stops.
 
+The two readers also refuse **each other's** format, and each points at its
+sibling. That looks fussy until you see the alternative: a reader that quietly
+returned the conversation inside a paused run hands back a session that looks
+finished while somebody is still waiting to be asked. `checkEnvelope(value)` is
+the third door, for **stores**: it validates either format and hands the
+envelope straight back, because a store's job is to notice unreadable bytes, not
+to care which half of a session is inside them.
+
+<Callout title="A FlowchartCheckpoint through JSON">
+It is safe to resume from, and it is **not** byte-identical. `JSON.stringify`
+drops any property whose value is `undefined`, and a real paused run has a dozen
+of them — every one in the engine's diagnostic halves (`executionTree`,
+`subflowResults`). `sharedState`, the half `agent.resume()` actually reads,
+round-trips unchanged, because footprintjs already JSON-round-trips every object
+write on its way into committed state. So: store it anywhere that speaks JSON.
+Just do not assert that what came back deep-equals what went in.
+</Callout>
+
 ## `standingAgent` — the composer
 
-`StandingAgentOptions` is `{ agent, sessions, host, onConcurrentInvoke? }`. Per
-request it does four things and invents nothing:
+`StandingAgentOptions` is
+`{ agent, sessions, host, onConcurrentInvoke?, durability? }`. Per request it
+does four things and invents nothing:
 
 1. wake and hydrate the session,
-2. resume that conversation or start a fresh one,
+2. continue that session — a conversation, or a run that is waiting on a
+   person — or start a fresh one,
 3. persist what the run left behind — *before* answering, so a queued next turn
    can never read state older than the answer already given,
-4. reply.
+4. reply, with whichever of the three terminals the run earned.
 
 A request with no `sessionId` is answered and **not** stored: there is nothing
 to hydrate and nowhere to persist it that the caller could ask for again.
@@ -258,19 +289,147 @@ turn of the *same* conversation arrives while the first is still running:
 **A request for a different session is never refused — it waits its turn.**
 There is nothing wrong with it; it just cannot start yet.
 
-### A pause is unfinished work, not a failure
+### A pause is unfinished work, and now it is kept
 
-If a run pauses to ask a person something, `standingAgent` answers with a
-`PauseNotCarriedError` and **writes nothing** — the session keeps exactly the
-conversation it had before the request. Over HTTP that is a `409`, never a
-`500`, because the agent did not break.
+A run has three ends: it answered, it asked a person something, or it failed.
+`HostReply` has a terminal for each — `complete`, `awaiting`, `fail` — and a
+pause leaves through `awaiting`, never through `fail`. Before `'flowchart-v1'`
+there was nowhere to keep a paused run, so the middle one was delivered as an
+error standing in for unfinished work. It is a terminal of its own now.
 
-`'conversation-v1'` stores a conversation; a paused run is a conversation *plus*
-an engine checkpoint, and storing half of it would be worse than storing none.
-Carrying a pause would be a **new format name** in the same envelope, read by
-runtimes that know it and refused by name everywhere else — which is what the
-version in the format is for. Until then, carry the pause yourself with
-`agent.run()` / `agent.resume()`.
+When a run pauses, `standingAgent`:
+
+1. stores it as `'flowchart-v1'` under that session, and
+2. calls `reply.awaiting(pending)` with a **`PendingAsk`** — the tool that
+   asked, the question in plain words, the typed `checkIn` with its evidence
+   pack, or the middleware `ask`, plus the raw `pauseData` uninterpreted.
+
+Over HTTP that is a **`202 Accepted`**: understood, acted on, not finished.
+Not a `200` — there is no answer. Not a `4xx` or `5xx` — nothing was refused
+and nothing broke.
+
+<Callout type="warn" title="A PendingAsk never carries the checkpoint">
+The engine checkpoint holds the whole shared state of the run: the system
+prompt, the entire conversation, every tool result. That belongs in the store
+the operator chose, not in a reply to whoever posted the request. The caller
+gets the question; the store gets the state. A type-regression test fails the
+build the day the field appears.
+</Callout>
+
+### Answering it: the resume-invoke contract
+
+**A request carrying `decision` is a resume; a request without one is a new
+message.** That is the whole contract, and it is a field rather than an
+inference on purpose — reading approval out of prose ("yes, go ahead") is a
+guess, and a consent gate may not be built on a guess.
+
+```ts
+// The run stopped and asked. Answer it on the same session:
+await fetch(`${url}/invoke`, {
+  method: 'POST',
+  headers: { 'content-type': 'application/json' },
+  body: JSON.stringify({
+    input: '',
+    sessionId: 'c-1',
+    decision: checkInApproved({ by: 'alice@ops' }),
+  }),
+});
+```
+
+The port never interprets `decision`. It is handed to
+`agent.resume(checkpoint, decision)` exactly as it arrived — the shipped
+`checkInApproved()` / `checkInDeclined()` vocabulary answers a `checkIn` or a
+middleware `ask`; a plain `askHuman` pause is answered with whatever that tool's
+author documented.
+
+Two mismatches are refused by name rather than guessed at:
+
+- **a new message while a question is outstanding** → `AwaitingDecisionError`
+  (`ERR_AWAITING_DECISION`, `409`), naming the pending ask. The message is not
+  run and the pause is not discarded — answering the message would step over an
+  outstanding consent gate, and dropping the question to answer the message
+  would throw away work somebody was asked to approve.
+- **a decision when nothing is pending** → `NoPendingAskError`
+  (`ERR_NO_PENDING_ASK`, `409`). Usually a duplicate delivery; running it as an
+  ordinary message would put a raw approval into the conversation as if a
+  person had typed it.
+
+`PauseNotCarriedError` still exists, for the one case where a pause genuinely
+cannot be carried: a request with **no session id**. There is nowhere to store
+it and no later request that could ever answer it.
+
+**Resuming a pause is not a replay.** The conversation-replay caveat above
+applies to `resumeOnError`; a paused run continues from the engine's own
+checkpoint, so no earlier tool call runs twice.
+
+<Callout type="warn" title="Upgrading from 7.18: a paused turn now answers 202, not 409">
+This is a behaviour change a deployer has to read. A run that paused used to
+fail the reply and store nothing; it now stores a `'flowchart-v1'` envelope and
+answers `202`. During a rolling deploy an instance still on 7.18 that hydrates
+one of those sessions **refuses it by name** — which is the unknown-format law
+working exactly as designed, loudly rather than silently. Drain or roll forward
+rather than running both versions against one store.
+</Callout>
+
+## `durability` — how often progress becomes crash-survivable
+
+An agent that only writes when a turn ends is one restart away from losing
+everything that turn had done. `durability` decides how much survives, and what
+it costs. `DurabilityMode` is three words and no more:
+
+| mode | what it does | a crash costs you |
+| --- | --- | --- |
+| `'exit'` *(default)* | one write, when the run finishes | the whole turn |
+| `'async'` | a write is started whenever the conversation changes, and never waited on | whatever the newest un-landed write carried |
+| `'sync'` | persist-then-proceed | **the current iteration, and nothing before it** |
+
+`'exit'` installs **nothing** — no observer on the agent, no barrier, no
+per-commit work. An agent served that way behaves and performs exactly as it did
+in 7.18.
+
+```ts
+await standingAgent({ agent, sessions, host, durability: 'sync' });
+```
+
+### What `'sync'` actually guarantees
+
+**Iteration N's tools do not execute until iteration N−1's write has landed**,
+and the answer is not delivered until the last write has landed. You pay the
+store's latency once per iteration, knowingly, and in exchange the amount of
+work a crash can re-run has a number.
+
+That bound is the whole point. Without it, iteration N's tools run while
+iteration N−1's write is still on the wire — so a crash replays *more than one*
+iteration of side effects, and "how much can re-execute?" has no answer. A
+`'sync'` that did not bound it would be documented-but-misleading, which is the
+polite cousin of a setting that lies.
+
+The bound is stated per **iteration**, not per tool, and that is exact: the agent
+dispatches all of one iteration's tool calls inside one stage body, and a commit
+is a whole stage. So a crash part-way through re-runs that iteration's tools —
+the same idempotency requirement `resumeOnError` has always carried, now with a
+boundary instead of a warning.
+
+A store that **refuses** a write fails the request, and under `'sync'` the next
+tool never runs. Fail-closed: a store that would not take the run's progress has
+not made it durable, and proceeding as if it had is the dishonesty this dial
+exists to remove.
+
+### Where the writes happen
+
+At the **commit boundary**, which is the only mid-run moment where "what the run
+has agreed on so far" is a real, complete thing — footprintjs commits a stage's
+writes after the stage returns, and committed state is immutable after the swap.
+
+A write happens where the conversation actually **moves**, not on every commit.
+A two-iteration turn commits about forty times; two of those change the
+conversation (the user's message landing, and each tool-call stage). The other
+thirty-eight would store bytes identical to the last write.
+
+There is no mid-run engine checkpoint to store — footprintjs builds a
+`FlowchartCheckpoint` only at a pause — so what a mid-run write carries is a
+conversation, the same `AgentRunCheckpoint` a finished turn stores. That is
+exactly enough, because it is what the next turn resumes from.
 
 ## `agent.checkpoint()`
 
@@ -334,3 +493,17 @@ npm run example examples/deploy/standing-agent.ts
 It binds an ephemeral port, has a two-turn conversation with itself over HTTP,
 proves turn 2 remembered turn 1 and that a different `sessionId` saw none of it,
 then shuts down. `SERVE=1` keeps it listening instead.
+
+And the durable half — a crash whose work survives, and a question answered a
+request later:
+
+<CodeFile path="examples/deploy/durable-sessions.ts" region="hitl" title="examples/deploy/durable-sessions.ts (region: hitl)" />
+
+```bash
+npm run example examples/deploy/durable-sessions.ts
+```
+
+It crashes a run on purpose under `durability: 'sync'` and shows that both tool
+results survived in the store, then holds a human-in-the-loop turn over HTTP end
+to end: `202` with the ask and its receipts, a nudge refused with
+`ERR_AWAITING_DECISION`, and `200` once a decision arrives.

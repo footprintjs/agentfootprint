@@ -61,6 +61,7 @@ import { reliabilityRecorder } from '../recorders/core/ReliabilityRecorder.js';
 import { resilienceRecorder } from '../recorders/core/ResilienceRecorder.js';
 import { checkInEventsBridge } from '../recorders/core/CheckInRecorder.js';
 import { compactionMeter, type CompactionMeterHandle } from '../recorders/core/CompactionMeter.js';
+import { pendingDurableWrite } from './durabilityBarrier.js';
 import { EmitBridge } from '../recorders/core/EmitBridge.js';
 import { buildWindowStage } from './agent/stages/window.js';
 import { CompactionUnmeasurableError } from './agent/window/errors.js';
@@ -1414,6 +1415,11 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       // The governance chain. Threaded only when non-empty so an agent without
       // one produces the same handler behaviour it always did.
       ...(this.toolMiddleware.length > 0 && { toolMiddleware: this.toolMiddleware }),
+      // Durable-write barrier. An ACCESSOR, never a captured value: the chart is
+      // built once at construction and a session composer installs its barrier
+      // later, so a direct field read here would be stale forever. Answers
+      // `undefined` — no await, no microtask — until one is installed.
+      awaitDurable: () => pendingDurableWrite(this),
     });
 
     // v2.14 — Build the NormalizeThinking sub-subflow only when a

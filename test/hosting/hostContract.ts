@@ -21,7 +21,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { requireCapability } from '../../src/hosting/index.js';
-import type { AgentHost, HostHandle, HostHandler } from '../../src/hosting/index.js';
+import type { AgentHost, HostHandle, HostHandler, PendingAsk } from '../../src/hosting/index.js';
 
 // ─── What a subject has to tell the suite ────────────────────────────
 
@@ -33,6 +33,8 @@ export interface HostObservation {
   readonly error?: string;
   /** The failure's stable code, when the transport carries one. */
   readonly code?: string;
+  /** The question the run stopped on, for a host that can describe one. */
+  readonly awaiting?: PendingAsk;
   /** Pieces the caller actually saw arrive before the answer. */
   readonly chunks: readonly string[];
 }
@@ -61,6 +63,15 @@ const SLOW = 'SLOW';
 const FAIL = 'FAIL';
 const THROW = 'THROW';
 const SILENT = 'SILENT';
+const AWAIT = 'AWAIT';
+
+/** The question the shared handler asks when told to. */
+export const CONTRACT_ASK: PendingAsk = {
+  sessionId: 'contract',
+  tool: 'approve',
+  question: 'may I?',
+  pauseData: { question: 'may I?' },
+};
 
 let release: (() => void) | undefined;
 
@@ -95,6 +106,14 @@ export const contractHandler: HostHandler = async (request, reply) => {
     return;
   }
   if (request.input === SILENT) return; // answers nothing, deliberately
+  if (request.input === AWAIT) {
+    // The third terminal, written the way a handler is meant to write it: use
+    // it when the adapter has it, and end the reply some other way when it does
+    // not. Never fall through — an unfinished run must not look answered.
+    if (reply.awaiting) reply.awaiting(CONTRACT_ASK);
+    else reply.fail(new Error('this host cannot carry a question'));
+    return;
+  }
   if (request.input === SLOW) {
     await new Promise<void>((resolve) => {
       release = resolve;
@@ -155,6 +174,28 @@ export function describeHostContract(subject: HostUnderTest): void {
         expect(observed.output).toBe(expectedOutput(request));
         expect(observed.output).toContain('session:conversation-7');
         expect(observed.output).toContain('probe:present');
+      } finally {
+        await handle.close();
+      }
+    });
+
+    // ── scenario: unfinished work is not an answer, on every host ──
+    it('reply.awaiting(ask) never reaches the caller as an ANSWER', async () => {
+      const handle = await serving();
+      try {
+        const observed = await subject.invoke(handle, { input: AWAIT });
+        // Whatever the adapter can do, one thing it may never do is report a
+        // completed answer for a run that is still waiting on a person.
+        expect(observed.output).toBeUndefined();
+        if (observed.awaiting !== undefined) {
+          // A host that can describe the question describes it exactly.
+          expect(observed.awaiting.tool).toBe(CONTRACT_ASK.tool);
+          expect(observed.awaiting.question).toBe(CONTRACT_ASK.question);
+          expect(observed.error).toBeUndefined();
+        } else {
+          // One that cannot says so, rather than going quiet.
+          expect(observed.error).toBeDefined();
+        }
       } finally {
         await handle.close();
       }

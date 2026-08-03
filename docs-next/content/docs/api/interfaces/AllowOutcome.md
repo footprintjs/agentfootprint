@@ -4,7 +4,7 @@ title: AllowOutcome<T>
 
 # Interface: AllowOutcome\<T\>
 
-Defined in: src/core/agent/middleware/types.ts:54
+Defined in: [src/core/agent/middleware/types.ts:54](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/types.ts#L54)
 
 Let the call through — optionally with a replacement for what the chain
 carries forward.
@@ -26,7 +26,7 @@ before?".
 
 > `readonly` **kind**: `"allow"`
 
-Defined in: src/core/agent/middleware/types.ts:55
+Defined in: [src/core/agent/middleware/types.ts:55](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/types.ts#L55)
 
 ***
 
@@ -34,7 +34,7 @@ Defined in: src/core/agent/middleware/types.ts:55
 
 > `readonly` `optional` **value?**: `T`
 
-Defined in: src/core/agent/middleware/types.ts:57
+Defined in: [src/core/agent/middleware/types.ts:57](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/types.ts#L57)
 
 The replacement value. Absent = pass through unchanged.
 
@@ -44,6 +44,6 @@ The replacement value. Absent = pass through unchanged.
 
 > `readonly` `optional` **why?**: `string`
 
-Defined in: src/core/agent/middleware/types.ts:59
+Defined in: [src/core/agent/middleware/types.ts:59](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/types.ts#L59)
 
 Why the value changed. Present whenever `value` is.

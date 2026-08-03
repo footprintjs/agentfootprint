@@ -7,8 +7,10 @@
  *     reply.complete(await answer(request.input));
  *   });
  *
- * Two routes: `POST /invoke` takes `{ input, sessionId? }` and answers
- * `{ output }`; `GET /health` answers `{ status: 'ok' }`. Both paths are
+ * Two routes: `POST /invoke` takes `{ input, sessionId?, decision? }` and
+ * answers `{ output }` — or `{ awaiting }` with a **202** when the run stopped
+ * to ask a person something, which a later `POST` carrying `decision` continues;
+ * `GET /health` answers `{ status: 'ok' }`. Both paths are
  * options, because the paths are the part most likely to be dictated to you by
  * whatever is in front of the process — a load balancer, a container contract,
  * a colleague's convention. A path is a deployment detail, so it is a knob
@@ -69,12 +71,21 @@ export const jsonWire: HttpWire = {
     // caller that sets both is not surprised by which one the server preferred.
     const fromBody = typeof facts.body.sessionId === 'string' ? facts.body.sessionId : undefined;
     const sessionId = fromBody ?? facts.headers['x-session-id'];
-    return sessionId !== undefined ? { input, sessionId } : { input };
+    // Read as-is and never coerced: `decision` is a person's answer to whatever
+    // a tool asked, and this dialect does not get to decide what that looks
+    // like. Its PRESENCE is the whole signal.
+    const decision = facts.body.decision;
+    return {
+      input,
+      ...(sessionId !== undefined && { sessionId }),
+      ...(decision !== undefined && { decision }),
+    };
   },
   health: (uptimeMs) => ({ status: 'ok', uptimeMs }),
   output: (output) => ({ output }),
   failure: (error, code) => ({ error, ...(code !== undefined && { code }) }),
   chunk: (text) => ({ text }),
+  awaiting: (pending) => ({ awaiting: pending }),
 };
 
 /**

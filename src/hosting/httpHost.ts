@@ -33,7 +33,14 @@ import type { IncomingMessage, Server, ServerResponse } from 'node:http';
 
 import { encodeSSE } from '../stream.js';
 import { HostClosedError } from './errors.js';
-import type { AgentHost, HostCapability, HostHandle, HostHandler, HostReply } from './types.js';
+import type {
+  AgentHost,
+  HostCapability,
+  HostHandle,
+  HostHandler,
+  HostReply,
+  PendingAsk,
+} from './types.js';
 
 /** Everything a {@link HttpWire} may read when pulling a request apart. */
 export interface HttpRequestFacts {
@@ -61,7 +68,16 @@ export interface HttpWire {
    * on the shape of its body is a policy decision that belongs above the
    * transport.
    */
-  readRequest(facts: HttpRequestFacts): { readonly input: string; readonly sessionId?: string };
+  readRequest(facts: HttpRequestFacts): {
+    readonly input: string;
+    readonly sessionId?: string;
+    /**
+     * A person's answer to an outstanding question, when this request carries
+     * one. Its presence is what makes a request a RESUME rather than a new
+     * message, so a wire that never returns it can only ever start new turns.
+     */
+    readonly decision?: unknown;
+  };
   /** Body for a health probe. `uptimeMs` is how long this host has been serving. */
   health(uptimeMs: number): unknown;
   /** Body for a reply that completed. */
@@ -70,6 +86,16 @@ export interface HttpWire {
   failure(message: string, code?: string): unknown;
   /** Body for one streamed piece, when the caller asked for Server-Sent Events. */
   chunk(text: string): unknown;
+  /**
+   * Body for a reply that is WAITING on a person — the run paused, it is stored,
+   * and a later request carrying a decision continues it.
+   *
+   * Optional so a wire written before this terminal existed keeps compiling and
+   * keeps working. A host whose wire has no `awaiting` cannot describe the
+   * question, so it reports the named refusal instead — the run is still stored
+   * either way.
+   */
+  awaiting?(pending: PendingAsk): unknown;
 }
 
 /** Options for {@link httpHost}. */
@@ -114,17 +140,28 @@ export interface HttpHost extends AgentHost {
 /**
  * Status codes mapped by refusal code. Anything else is a 500.
  *
- * None of the three is a 5xx: none of them is the agent breaking. A closed host
- * is shutting down (503), a concurrent turn conflicts with the run already
- * going (409), and a paused run conflicts with the state this reply can carry
- * (409) — the run is unfinished, not failed, and a 500 would say otherwise to
- * every dashboard that ever sees it.
+ * Not one of them is a 5xx: none of them is the agent breaking. A closed host is
+ * shutting down (503); the other four are conflicts with the state the session
+ * is already in (409) — a run already going, a question already outstanding, a
+ * decision with nothing to decide, a pause this reply cannot describe. A 500
+ * would tell every dashboard that ever sees it something untrue.
  */
 const STATUS_BY_CODE: Readonly<Record<string, number>> = {
   ERR_HOST_CLOSED: 503,
   ERR_CONCURRENT_RUN: 409,
   ERR_PAUSE_NOT_CARRIED: 409,
+  ERR_AWAITING_DECISION: 409,
+  ERR_NO_PENDING_ASK: 409,
 };
+
+/**
+ * What a run that stopped to ask a person answers with: **202 Accepted.**
+ *
+ * The request was understood and acted on, and the work is not finished — which
+ * is what 202 means and what nothing else in the 2xx range means. Not 200: there
+ * is no answer. Not 4xx or 5xx: nothing was refused and nothing broke.
+ */
+const AWAITING_STATUS = 202;
 
 const DEFAULT_CAPABILITIES: readonly HostCapability[] = ['streaming'];
 
@@ -227,7 +264,7 @@ async function serveOne(
 
   const headers = lowerCased(req.headers);
   const query = new URLSearchParams((req.url ?? '').split('?')[1] ?? '');
-  const { input, sessionId } = wire.readRequest({ body, headers, query });
+  const { input, sessionId, decision } = wire.readRequest({ body, headers, query });
 
   if (wantsStream) {
     res.writeHead(200, {
@@ -261,6 +298,31 @@ async function serveOne(
         sendJson(res, 200, wire.output(output));
       }
     },
+    awaiting(pending): void {
+      if (settled) return;
+      // A wire that cannot describe a question must not answer 202 with an
+      // empty body — that would look like a completed request. Fall through to
+      // the named refusal, which at least says what happened and where the
+      // paused run is.
+      if (!wire.awaiting) {
+        const refusal = new Error(
+          `[hosting] the run is waiting on a person and this host's wire has no ` +
+            `awaiting() body shape, so the question cannot be described on the wire. ` +
+            `The paused run is stored; read the pending ask from the session store.`,
+        );
+        (refusal as { code?: string }).code = 'ERR_PAUSE_NOT_CARRIED';
+        reply.fail(refusal);
+        return;
+      }
+      settled = true;
+      const payload = wire.awaiting(pending);
+      if (wantsStream) {
+        res.write(encodeSSE('awaiting', payload));
+        res.end();
+      } else {
+        sendJson(res, AWAITING_STATUS, payload);
+      }
+    },
     fail(error: Error): void {
       if (settled) return;
       settled = true;
@@ -280,6 +342,7 @@ async function serveOne(
       {
         input,
         ...(sessionId !== undefined && { sessionId }),
+        ...(decision !== undefined && { decision }),
         headers,
         signal: controller.signal,
       },

@@ -4,7 +4,7 @@ title: AskPayload
 
 # Interface: AskPayload
 
-Defined in: src/core/agent/middleware/types.ts:80
+Defined in: [src/core/agent/middleware/types.ts:80](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/types.ts#L80)
 
 What a person is being asked. Carried verbatim to the checkpoint.
 
@@ -14,7 +14,7 @@ What a person is being asked. Carried verbatim to the checkpoint.
 
 > `readonly` `optional` **detail?**: `unknown`
 
-Defined in: src/core/agent/middleware/types.ts:84
+Defined in: [src/core/agent/middleware/types.ts:84](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/types.ts#L84)
 
 Anything else the answering UI should render. Never interpreted here.
 
@@ -24,6 +24,6 @@ Anything else the answering UI should render. Never interpreted here.
 
 > `readonly` **question**: `string`
 
-Defined in: src/core/agent/middleware/types.ts:82
+Defined in: [src/core/agent/middleware/types.ts:82](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/types.ts#L82)
 
 The question, in your own words. Shown to whoever answers.

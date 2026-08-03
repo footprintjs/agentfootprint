@@ -7,6 +7,174 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [7.19.0] - 2026-08-03
+
+Two things separate an agent you demo from an agent that is up: what a crash
+costs you, and what happens when it needs to ask a person something.
+
+7.18 and everything before it answered both the same way — badly. A standing
+agent wrote once, at the end of a turn, so a restart lost every tool call the
+turn had made. And a run that stopped to ask a person **failed the reply and
+stored nothing**, because `'conversation-v1'` held a conversation and a paused
+run is a conversation plus an engine checkpoint. That was the honest thing to do
+with no format to put it in. There is one now.
+
+**`durability: 'sync'` gives the replay bound a number.** Iteration N's tools do
+not execute until iteration N−1's write has landed. Not "we write often" — a
+bound: the work a crash can re-run is the current iteration, and nothing before
+it.
+
+**A paused run is stored as `'flowchart-v1'` and the reply says so as data.**
+`HostReply` grew its third terminal — `complete`, `awaiting`, `fail` — and a
+pause leaves through `awaiting`, 202 over HTTP, never through `fail` again. A
+later request carrying a `decision` continues the run from exactly where it
+stopped, and the tool that asked does not run twice.
+
+### Added
+
+- **`durability: 'exit' | 'async' | 'sync'` on `standingAgent`.** Default
+  `'exit'` — one write when the run finishes, which is what every release before
+  this one did, now spelled out rather than implied. Under `'exit'` **nothing is
+  installed**: no observer on the agent, no barrier, no per-commit work.
+
+  `'async'` starts a write whenever the conversation changes and never waits on
+  it; the run does not slow down. At most one write is in flight and the newest
+  snapshot supersedes any queued one, so what a crash leaves is always a PREFIX
+  of the run, never a mixture.
+
+  `'sync'` is persist-then-proceed, and it holds the tool dispatch — see the
+  judgement below for why it had to.
+
+- **`'flowchart-v1'` — the format the version field was kept for.**
+  `CheckpointEnvelope` is now a union discriminated on `format`, so a reader
+  that switches on it is exhaustive by construction. `toPausedEnvelope(run)` /
+  `readPausedRun(value)` pack and unpack a **`PausedRun`**: the engine
+  checkpoint, the conversation as of the pause, and the outstanding ask.
+
+  The two readers refuse **each other's** format and each points at its sibling.
+  A reader that quietly returned the conversation inside a paused run would hand
+  back a session that looks finished while somebody is still waiting to be asked.
+  `checkEnvelope(value)` is the third door, for STORES: it validates either
+  format and hands the envelope back, because a store's job is to notice
+  unreadable bytes, not to care which half of a session is inside them.
+
+- **`HostReply.awaiting(pending)` — the third terminal.** Optional on the type,
+  exactly as `emit` is, so a minimal adapter still satisfies the port; every
+  shipped adapter implements it. `nodeHost` answers **202 Accepted** with
+  `{ awaiting }`, the AgentCore runtime wire answers its own dialect, and both
+  stream an `awaiting` frame under SSE. A host without it still gets the paused
+  run STORED and a named refusal on the wire — the store is not the transport's
+  business.
+
+- **`PendingAsk` — the part of a pause that is safe to hand back.** The tool
+  that asked, the question in plain words, the typed `checkIn` with its evidence
+  pack, the middleware `ask`, and the raw `pauseData` uninterpreted. It carries
+  **no checkpoint and no conversation**, and a type-regression test fails the
+  build the day either appears.
+
+- **`HostRequest.decision` — the resume discriminant.** A request carrying it
+  answers the outstanding question; a request without it is a new message. The
+  port never interprets it: it goes to `agent.resume(checkpoint, decision)`
+  exactly as it arrived, answered with the shipped `checkInApproved()` /
+  `checkInDeclined()` vocabulary for a check-in or a middleware ask, and with
+  whatever the tool's author documented for a plain `askHuman`.
+
+- **`AwaitingDecisionError` / `NoPendingAskError`** (`ERR_AWAITING_DECISION`,
+  `ERR_NO_PENDING_ASK`, both 409). A new message while a question is outstanding
+  is refused NAMING the pending ask — the message is not run and the pause is
+  not discarded. A decision when nothing is pending is refused too, rather than
+  run as if a person had typed an approval into the conversation.
+
+- **`WakeReason` gained `'resume'`**, now that something can produce it.
+
+### The judgements these rest on
+
+**`'sync'` had to hold the tools, not just the reply.** The cheap reading —
+"await every write before answering" — is honest and bounds nothing that
+matters. Under it, iteration N's tools execute while iteration N−1's write is
+still in flight, so a crash re-issues MORE than one iteration of side effects
+and "how much can re-execute?" has no answer. The market meaning of durable
+execution, and the expectation the word `'sync'` imports, is precisely that
+bound. A `'sync'` that did not deliver it would be documented-but-misleading,
+which is the polite cousin of config that lies.
+
+**So the barrier is real, and it is private.** footprintjs never awaits an
+observer — the inline recorder path discards the hook's return value, and only
+the deferred tier tracks a promise, one beat behind. There is no way to apply
+back-pressure to a traversal from outside it. The barrier therefore lives INSIDE
+the agent's tool dispatch, asked once per iteration, and is installed through a
+module-private WeakMap keyed on the runner: `standingAgent`'s session writer is
+the only thing that can install one, and it appears on no barrel and no subpath.
+A general "run something between my stages" hook would have been a new public
+extension point on seams that are deliberately closed — it would let any
+consumer inject latency, ordering and failure into a traversal, and every later
+feature would have to reason about it. When nobody has installed a barrier the
+accessor returns `undefined`, so the dispatch loop does not await, does not
+schedule a microtask, and is byte-identical in timing.
+
+**The bound is per ITERATION, and that is exact rather than convenient.** The
+agent dispatches all of one iteration's tool calls inside one stage body, and a
+commit is a whole stage. So a crash part-way through re-runs that iteration's
+tools — the same idempotency requirement `resumeOnError` has always carried, now
+with a boundary instead of a warning. A test pins that an iteration which ran two
+tools stores both results or neither, never one.
+
+**It writes where the conversation MOVES, not on every commit.** A
+two-iteration turn commits about forty times; exactly two of those change the
+conversation — the user's message landing, and each tool-call stage. The other
+thirty-eight would store bytes identical to the last write. So the trigger is
+"this commit wrote `history`", which is not an optimisation but the honest
+reading of the question: the conversation moved iff `history` moved.
+
+**A mid-run write can only be a conversation, and that is enough.** footprintjs
+builds a `FlowchartCheckpoint` only at a pause, so there is no engine snapshot to
+store mid-run. What the commit boundary can hand over is the same
+`AgentRunCheckpoint` a finished turn stores — which is exactly what the next turn
+resumes from.
+
+**A store that refuses fails the request.** Fail-closed: under `'sync'` the next
+tool does not run, and the reply reports the store's error rather than an answer.
+A store that would not take the run's progress has not made it durable, and
+proceeding as if it had is the dishonesty this dial exists to remove.
+
+**Mid-run writes settle BEFORE the terminal envelope.** Ordering, not tidiness:
+an `'async'` conversation write still in flight would otherwise land after the
+pause envelope and overwrite it — a stored question quietly demoted back to a
+plain conversation, and the person who was asked never answered. A test pins it.
+
+**A `FlowchartCheckpoint` is JSON-safe to resume from and NOT byte-identical
+through JSON.** `JSON.stringify` drops every property whose value is `undefined`,
+and a real paused run has about a dozen — all of them in the engine's diagnostic
+halves (`executionTree`, `subflowResults`). `sharedState`, the half `resume()`
+actually reads, round-trips unchanged, because footprintjs already
+JSON-round-trips every object write on its way into committed state. Three tests
+pin it: the resume-relevant fields survive byte for byte, every difference at all
+is a dropped `undefined`, and a run resumes from a checkpoint that came back off
+a string-keyed store.
+
+**A pause is never delivered through `fail` again.** It was, for one release,
+because there was nowhere to put it. An error standing in for unfinished work
+tells every dashboard downstream something untrue: nothing broke, nothing needs
+retrying, and there is a person to ask. `PauseNotCarriedError` survives with its
+code intact for the one case where a pause genuinely cannot be carried — a
+request with no session id, so there is nowhere to store it and no later request
+that could ever answer it.
+
+### Changed
+
+- **A paused hosted turn now answers `202` and stores a `'flowchart-v1'`
+  envelope, where 7.18 answered `409` and stored nothing.** This is a behaviour
+  change a deployer has to read. During a rolling deploy, an instance still on
+  7.18 that hydrates one of those sessions **refuses it by name** — the
+  unknown-format law working exactly as designed, loudly rather than silently.
+  Drain or roll forward rather than running both versions against one store.
+- `agentCoreSessions` validates through `checkEnvelope`, so an AgentCore-backed
+  store keeps paused sessions as readily as conversations; the AgentCore runtime
+  wire reads `decision` and answers `awaiting` in its own dialect.
+
+Docs: [Hosting](https://footprintjs.github.io/agentfootprint/docs/build/infra/hosting) ·
+Example: `examples/deploy/durable-sessions.ts`.
+
 ## [7.18.0] - 2026-08-03
 
 Every agent framework lets you wrap a tool call. Most of them let the wrapper

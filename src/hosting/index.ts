@@ -33,9 +33,12 @@
  *     another. Two paths and five body shapes are all a second HTTP adapter
  *     re-decides.
  *   • `memorySessions()` — conversations in a Map, for tests and local dev.
- *   • `standingAgent({ agent, sessions, host })` — the composer.
+ *   • `standingAgent({ agent, sessions, host, durability? })` — the composer.
  *   • `toEnvelope` / `readEnvelope` — pack a conversation, and refuse by name to
  *     unpack a format this runtime does not know.
+ *   • `toPausedEnvelope` / `readPausedRun` — the same for a run that stopped to
+ *     ask a person something (`'flowchart-v1'`). `checkEnvelope` validates
+ *     either without committing to which half you wanted — what a STORE wants.
  *   • `requireCapability` — feature-detection with teeth.
  *
  * @example  An agent that stays up and remembers
@@ -63,7 +66,13 @@ export type {
 } from './httpHost.js';
 
 export { memorySessions } from './memorySessions.js';
-export { toEnvelope, readEnvelope } from './envelope.js';
+export {
+  toEnvelope,
+  toPausedEnvelope,
+  readEnvelope,
+  readPausedRun,
+  checkEnvelope,
+} from './envelope.js';
 export { standingAgent } from './standingAgent.js';
 
 export {
@@ -71,17 +80,24 @@ export {
   HostClosedError,
   ConcurrentRunError,
   PauseNotCarriedError,
+  AwaitingDecisionError,
+  NoPendingAskError,
 } from './errors.js';
 
 export type {
   AgentHost,
   CheckpointEnvelope,
   ConcurrentInvokePolicy,
+  ConversationEnvelope,
+  DurabilityMode,
   HostCapability,
   HostHandle,
   HostHandler,
   HostReply,
   HostRequest,
+  PausedRun,
+  PausedRunEnvelope,
+  PendingAsk,
   SessionLifecycle,
   StandingAgentOptions,
   WakeReason,

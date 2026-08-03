@@ -123,6 +123,28 @@ export interface ToolCallsHandlerDeps {
    * proposed. Empty / undefined → not walked, no ledger key, no events.
    */
   readonly toolMiddleware?: readonly ToolMiddleware[];
+
+  /**
+   * The durable-write barrier (`core/durabilityBarrier.ts`). Asked ONCE per
+   * iteration, before any of this iteration's tools are dispatched: if the last
+   * iteration's state is still being written to a session store, wait for it.
+   *
+   * This is what bounds side-effect replay. Without it, iteration N's tools run
+   * while iteration N-1's write is in flight, so a crash can re-issue more than
+   * one iteration's worth of tool calls on replay and "how much re-executes?"
+   * has no answer. With it the answer is exactly one: the current iteration.
+   *
+   * Returns `undefined` when nobody installed a barrier — the ordinary case —
+   * and the dispatch loop then does not await at all, so an agent without a
+   * durable session composer is byte-identical in behaviour AND in timing.
+   *
+   * NOT a general extension point: the only installer is
+   * `agentfootprint/hosting`'s session writer, through a module-private
+   * WeakMap that appears on no barrel. See `core/durabilityBarrier.ts`.
+   *
+   * @internal
+   */
+  readonly awaitDurable?: () => Promise<void> | undefined;
 }
 
 /**
@@ -236,6 +258,13 @@ export function buildToolCallsHandler(
 
   return {
     execute: async (scope) => {
+      // Durable-write barrier — the LAST iteration's state must have landed in
+      // the session store before THIS iteration's tools are allowed to run.
+      // `undefined` (no composer, or nothing outstanding) means no await, no
+      // microtask, no behaviour change whatsoever.
+      const durable = deps.awaitDurable?.();
+      if (durable) await durable;
+
       // Materialize ONCE — `scope.llmLatestToolCalls` is a live TypedScope
       // deep-Proxy view; spreading yields the raw (plain, structured-clone-
       // safe) elements. This array is embedded into the assistant history
@@ -731,6 +760,12 @@ export function buildToolCallsHandler(
       return undefined; // explicit: no pause, flow continues to loopTo
     },
     resume: async (scope, input) => {
+      // Same barrier as `execute`, for the same reason: an approved check-in
+      // runs the REAL tool here, and that side effect must not go out ahead of
+      // the state the last write is still carrying.
+      const durable = deps.awaitDurable?.();
+      if (durable) await durable;
+
       // Consumer-supplied resume input becomes the paused tool's result.
       // The subflow's pre-pause scope is restored automatically by
       // footprintjs 4.17.0 via `checkpoint.subflowStates`, so

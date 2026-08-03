@@ -24,6 +24,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { nodeHost } from '../../src/hosting/index.js';
+import type { PendingAsk } from '../../src/hosting/index.js';
 import type { NodeHostHandle } from '../../src/hosting/nodeHost.js';
 import { agentCoreRuntimeHost } from '../../src/hosting-providers.js';
 import { inProcessHost, type InProcessHost } from './testHost.js';
@@ -69,11 +70,17 @@ const nodeSubject: HostUnderTest = {
 };
 
 function parseJson(body: string): HostObservation {
-  const parsed = JSON.parse(body) as { output?: string; error?: string; code?: string };
+  const parsed = JSON.parse(body) as {
+    output?: string;
+    error?: string;
+    code?: string;
+    awaiting?: PendingAsk;
+  };
   return {
     ...(parsed.output !== undefined && { output: parsed.output }),
     ...(parsed.error !== undefined && { error: parsed.error }),
     ...(parsed.code !== undefined && { code: parsed.code }),
+    ...(parsed.awaiting !== undefined && { awaiting: parsed.awaiting }),
     chunks: [],
   };
 }
@@ -83,13 +90,20 @@ function parseSSE(body: string): HostObservation {
   let output: string | undefined;
   let error: string | undefined;
   let code: string | undefined;
+  let awaiting: PendingAsk | undefined;
   for (const frame of body.split('\n\n')) {
     const name = /^event: (.+)$/m.exec(frame)?.[1];
     const data = /^data: (.+)$/m.exec(frame)?.[1];
     if (!name || !data) continue;
-    const payload = JSON.parse(data) as { text?: string; output?: string; message?: string };
+    const payload = JSON.parse(data) as {
+      text?: string;
+      output?: string;
+      message?: string;
+      awaiting?: PendingAsk;
+    };
     if (name === 'chunk' && typeof payload.text === 'string') chunks.push(payload.text);
     if (name === 'complete') output = payload.output;
+    if (name === 'awaiting') awaiting = payload.awaiting;
     if (name === 'error') {
       const asError = JSON.parse(data) as { error?: string; code?: string };
       error = asError.error;
@@ -100,6 +114,7 @@ function parseSSE(body: string): HostObservation {
     ...(output !== undefined && { output }),
     ...(error !== undefined && { error }),
     ...(code !== undefined && { code }),
+    ...(awaiting !== undefined && { awaiting }),
     chunks,
   };
 }
@@ -142,11 +157,17 @@ const agentCoreSubject: HostUnderTest = {
 
 /** `{ response, status }` / `{ error, status, code? }` back into port vocabulary. */
 function parseAgentCoreJson(body: string): HostObservation {
-  const parsed = JSON.parse(body) as { response?: string; error?: string; code?: string };
+  const parsed = JSON.parse(body) as {
+    response?: string;
+    error?: string;
+    code?: string;
+    awaiting?: PendingAsk;
+  };
   return {
     ...(parsed.response !== undefined && { output: parsed.response }),
     ...(parsed.error !== undefined && { error: parsed.error }),
     ...(parsed.code !== undefined && { code: parsed.code }),
+    ...(parsed.awaiting !== undefined && { awaiting: parsed.awaiting }),
     chunks: [],
   };
 }
@@ -156,6 +177,7 @@ function parseAgentCoreSSE(body: string): HostObservation {
   let output: string | undefined;
   let error: string | undefined;
   let code: string | undefined;
+  let awaiting: PendingAsk | undefined;
   for (const frame of body.split('\n\n')) {
     const name = /^event: (.+)$/m.exec(frame)?.[1];
     const data = /^data: (.+)$/m.exec(frame)?.[1];
@@ -165,9 +187,11 @@ function parseAgentCoreSSE(body: string): HostObservation {
       response?: string;
       error?: string;
       code?: string;
+      awaiting?: PendingAsk;
     };
     if (name === 'chunk' && typeof payload.chunk === 'string') chunks.push(payload.chunk);
     if (name === 'complete') output = payload.response;
+    if (name === 'awaiting') awaiting = payload.awaiting;
     if (name === 'error') {
       error = payload.error;
       code = payload.code;
@@ -177,6 +201,7 @@ function parseAgentCoreSSE(body: string): HostObservation {
     ...(output !== undefined && { output }),
     ...(error !== undefined && { error }),
     ...(code !== undefined && { code }),
+    ...(awaiting !== undefined && { awaiting }),
     chunks,
   };
 }

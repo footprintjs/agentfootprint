@@ -18,6 +18,7 @@ import type {
   HostHandle,
   HostHandler,
   HostReply,
+  PendingAsk,
 } from '../../src/hosting/index.js';
 
 /** Everything a caller can observe about one delivered request. */
@@ -25,6 +26,8 @@ export interface DeliveredReply {
   readonly output?: string;
   readonly error?: string;
   readonly code?: string;
+  /** The question the run stopped on, when it stopped on one. */
+  readonly awaiting?: PendingAsk;
   readonly chunks: readonly string[];
 }
 
@@ -33,6 +36,8 @@ export interface InProcessHost extends AgentHost {
   deliver(request: {
     readonly input: string;
     readonly sessionId?: string;
+    /** A person's answer to an outstanding ask — makes this a resume. */
+    readonly decision?: unknown;
     readonly headers?: Readonly<Record<string, string>>;
   }): Promise<DeliveredReply>;
 }
@@ -66,6 +71,7 @@ export function inProcessHost(options: { readonly streaming?: boolean } = {}): I
       let output: string | undefined;
       let error: string | undefined;
       let code: string | undefined;
+      let awaiting: PendingAsk | undefined;
       let settled = false;
       const reply: HostReply = {
         emit: (chunk) => {
@@ -75,6 +81,14 @@ export function inProcessHost(options: { readonly streaming?: boolean } = {}): I
           if (settled) return;
           settled = true;
           output = value;
+        },
+        // The third terminal. A pause leaves through here, never through
+        // fail() — this host implements it so the tests can watch the
+        // difference between "unfinished" and "failed".
+        awaiting: (pending) => {
+          if (settled) return;
+          settled = true;
+          awaiting = pending;
         },
         fail: (err) => {
           if (settled) return;
@@ -89,6 +103,7 @@ export function inProcessHost(options: { readonly streaming?: boolean } = {}): I
             {
               input: request.input,
               ...(request.sessionId !== undefined && { sessionId: request.sessionId }),
+              ...(request.decision !== undefined && { decision: request.decision }),
               ...(request.headers !== undefined && { headers: request.headers }),
             },
             reply,
@@ -112,6 +127,7 @@ export function inProcessHost(options: { readonly streaming?: boolean } = {}): I
         ...(output !== undefined && { output }),
         ...(error !== undefined && { error }),
         ...(code !== undefined && { code }),
+        ...(awaiting !== undefined && { awaiting }),
         // Chunks reach the caller only on a host that declares streaming; on
         // the default one the buffer is settled by the completion.
         chunks: streams ? seen : [],

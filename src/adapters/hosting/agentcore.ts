@@ -45,7 +45,7 @@
  * importing this module costs zero peer-dep load.
  */
 
-import { readEnvelope } from '../../hosting/envelope.js';
+import { checkEnvelope } from '../../hosting/envelope.js';
 import { headerValue, httpHost } from '../../hosting/httpHost.js';
 import type { HttpHost, HttpRequestFacts, HttpWire } from '../../hosting/httpHost.js';
 import type { CheckpointEnvelope, SessionLifecycle } from '../../hosting/types.js';
@@ -111,7 +111,16 @@ export function agentCoreRuntimeWire(busy?: () => boolean): HttpWire {
       // caller-adjacent data, not identity — the port says so and it is just as
       // true here.
       const sessionId = headerValue(facts, SESSION_HEADER);
-      return sessionId !== undefined ? { input, sessionId } : { input };
+      // A person's answer to a run that stopped to ask. Read as-is: what a
+      // decision looks like is the tool author's business, not this dialect's.
+      // Without it a deployment here could start turns but never finish one
+      // that asked a question.
+      const decision = facts.body.decision;
+      return {
+        input,
+        ...(sessionId !== undefined && { sessionId }),
+        ...(decision !== undefined && { decision }),
+      };
     },
     // The runtime polls this to decide whether the container is ready and
     // whether to send it more work. `time_of_last_update` is unix SECONDS.
@@ -127,6 +136,10 @@ export function agentCoreRuntimeWire(busy?: () => boolean): HttpWire {
     // stream frames must not be able to double-count the final answer by
     // reading the same key twice.
     chunk: (chunk) => ({ chunk }),
+    // Unfinished work, in this dialect's own vocabulary. `status` is neither
+    // 'success' nor 'error' because it is neither: the run stopped to ask a
+    // person, it is stored, and a later call carrying `decision` finishes it.
+    awaiting: (pending) => ({ awaiting: pending, status: 'awaiting' }),
   };
 }
 
@@ -247,10 +260,10 @@ export type AgentCoreSessionsOptions =
  * A `SessionLifecycle` backed by AgentCore, with the checkpoint's home chosen
  * at construction.
  *
- * Both modes store the SAME `CheckpointEnvelope` the port defines, and both
- * refuse an unknown `format` by name through the shared `readEnvelope` — a
- * conversation written by a newer runtime is refused, never half-restored.
- * That law is inherited, not re-implemented.
+ * Both modes store the SAME `CheckpointEnvelope` the port defines — a
+ * conversation or a paused run — and both refuse an unknown `format` by name
+ * through the shared `checkEnvelope`: a session written by a newer runtime is
+ * refused, never half-restored. That law is inherited, not re-implemented.
  *
  * @example  Survive a stop/resume, no AWS SDK required
  *   agentCoreSessions({ store: 'session-storage' });
@@ -304,8 +317,10 @@ function fileSessions(options: AgentCoreFileSessionsOptions): SessionLifecycle {
       if (stored === undefined) return undefined;
       // Validate HERE as well as in the composer, so a refusal points at the
       // store that produced the bytes rather than at whoever read them next.
-      readEnvelope(stored);
-      return stored;
+      // `checkEnvelope` accepts either format: a store keeps sessions, and
+      // whether a session is mid-conversation or mid-question is not its
+      // business — only whether it can be read at all.
+      return checkEnvelope(stored);
     },
     async persist(sessionId: string, envelope: CheckpointEnvelope): Promise<void> {
       const { writeFile, rename, mkdir } = await import('node:fs/promises');
@@ -351,8 +366,7 @@ function memoryEventSessions(options: AgentCoreMemorySessionsOptions): SessionLi
       });
       const newest = page.events[0];
       if (!newest || newest.envelope === null || newest.envelope === undefined) return undefined;
-      readEnvelope(newest.envelope);
-      return newest.envelope as CheckpointEnvelope;
+      return checkEnvelope(newest.envelope);
     },
     async persist(sessionId: string, envelope: CheckpointEnvelope): Promise<void> {
       await client.createEvent({

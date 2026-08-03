@@ -25,7 +25,14 @@ import { Agent } from '../../src/index.js';
 import { mock } from '../../src/llm-providers.js';
 import { ask, defineTool } from '../../src/index.js';
 import { askHuman } from '../../src/core/pause.js';
-import { memorySessions, nodeHost, standingAgent, toEnvelope } from '../../src/hosting/index.js';
+import { checkInApproved } from '../../src/core/checkin.js';
+import {
+  memorySessions,
+  nodeHost,
+  readPausedRun,
+  standingAgent,
+  toEnvelope,
+} from '../../src/hosting/index.js';
 import type { CheckpointEnvelope, SessionLifecycle } from '../../src/hosting/index.js';
 import type { LLMProvider, LLMRequest, LLMResponse } from '../../src/adapters/types.js';
 import { inProcessHost } from './testHost.js';
@@ -348,10 +355,10 @@ describe('standingAgent — two turns of one conversation', () => {
   });
 });
 
-// ─── scenario: a pause is unfinished work, not a failure ─────────────
+// ─── scenario: a pause is unfinished work, and now it is KEPT ────────
 
 describe('standingAgent — a run that paused', () => {
-  it('refuses by name, says the session is untouched, and writes nothing', async () => {
+  it('stores it as flowchart-v1 and reports the ask as DATA, not as a failure', async () => {
     const approve = defineTool<{ amount: number }, string>({
       name: 'approve_refund',
       description: 'approve a refund',
@@ -378,23 +385,63 @@ describe('standingAgent — a run that paused', () => {
     const handle = await standingAgent({ agent, sessions, host });
     try {
       const reply = await host.deliver({ input: 'refund me', sessionId: 'pausing' });
-      expect(reply.code).toBe('ERR_PAUSE_NOT_CARRIED');
-      expect(reply.error).toContain('approve_refund');
-      expect(reply.error).toContain('did not fail');
-      expect(reply.error).toContain("session 'pausing'");
-      // Nothing written — the session keeps exactly what it had (nothing).
-      expect(await sessions.hydrate('pausing')).toBeUndefined();
+      // THE LAW. Not an error. Not a failure code. A third terminal.
+      expect(reply.error).toBeUndefined();
+      expect(reply.code).toBeUndefined();
+      expect(reply.output).toBeUndefined();
+      expect(reply.awaiting).toBeDefined();
+      expect(reply.awaiting?.tool).toBe('approve_refund');
+      expect(reply.awaiting?.question).toBe('ok?');
+      expect(reply.awaiting?.sessionId).toBe('pausing');
+      expect(reply.awaiting?.pauseData).toMatchObject({ toolName: 'approve_refund' });
+
+      const stored = await sessions.hydrate('pausing');
+      expect(stored?.format).toBe('flowchart-v1');
+      const paused = readPausedRun(stored);
+      expect(paused.checkpoint.pausedStageId).toBe('tool-calls');
+      expect(paused.conversation.history[0]).toEqual({ role: 'user', content: 'refund me' });
     } finally {
       await handle.close();
     }
   });
 
-  it('a middleware ask is the SAME pause path — refused by tool name, nothing written', async () => {
-    // LAW 4's hosting half. `ask` was built on the shipped pause wire rather
-    // than on a second mechanism of its own, and this is what that buys: the
-    // hosting layer needed no change at all. A middleware question over a
-    // standing agent behaves exactly like `askHuman` does — refused as
-    // unfinished work, naming the tool, with the session untouched.
+  it('NEVER hands the caller the engine checkpoint — the store gets state, the caller gets the question', async () => {
+    // The checkpoint holds the entire shared state of the run: the system
+    // prompt, the whole conversation, every tool result. It belongs in the
+    // store the operator chose, not in a reply to whoever posted the request.
+    const approve = defineTool<Record<string, never>, string>({
+      name: 'ask_first',
+      description: 'ask a person',
+      parameters: { type: 'object', properties: {} },
+      execute: () => askHuman({ question: 'ok?' }),
+    });
+    const agent = Agent.create({
+      provider: mock({ replies: [{ toolCalls: [{ id: 't1', name: 'ask_first', args: {} }] }] }),
+      model: 'test-model',
+      maxIterations: 3,
+    })
+      .system('SECRET-SYSTEM-RULE')
+      .tool(approve)
+      .build();
+
+    const host = inProcessHost();
+    const handle = await standingAgent({ agent, sessions: memorySessions(), host });
+    try {
+      const reply = await host.deliver({ input: 'go', sessionId: 'leaky' });
+      const asJson = JSON.stringify(reply.awaiting);
+      expect(asJson).not.toContain('SECRET-SYSTEM-RULE');
+      expect(asJson).not.toContain('sharedState');
+      expect(reply.awaiting).not.toHaveProperty('checkpoint');
+    } finally {
+      await handle.close();
+    }
+  });
+
+  it('a middleware ask is the SAME pause path — carried, with the middleware named', async () => {
+    // `ask` was built on the shipped pause wire rather than on a second
+    // mechanism of its own, and this is what that keeps buying: the hosting
+    // layer needed no second code path. A middleware question over a standing
+    // agent is stored and reported exactly as `askHuman` is.
     const act = defineTool<{ amount: number }, string>({
       name: 'approve_refund',
       description: 'approve a refund',
@@ -407,7 +454,10 @@ describe('standingAgent — a run that paused', () => {
     });
     const agent = Agent.create({
       provider: mock({
-        replies: [{ toolCalls: [{ id: 't1', name: 'approve_refund', args: { amount: 10 } }] }],
+        replies: [
+          { toolCalls: [{ id: 't1', name: 'approve_refund', args: { amount: 10 } }] },
+          { content: 'refunded $10' },
+        ],
       }),
       model: 'test-model',
       maxIterations: 3,
@@ -425,16 +475,30 @@ describe('standingAgent — a run that paused', () => {
     const handle = await standingAgent({ agent, sessions, host });
     try {
       const reply = await host.deliver({ input: 'refund me', sessionId: 'asking' });
-      expect(reply.code).toBe('ERR_PAUSE_NOT_CARRIED');
-      expect(reply.error).toContain('approve_refund');
-      expect(reply.error).toContain("session 'asking'");
-      expect(await sessions.hydrate('asking')).toBeUndefined();
+      expect(reply.error).toBeUndefined();
+      expect(reply.awaiting?.ask).toEqual({
+        question: 'second pair of eyes?',
+        middleware: 'four-eyes',
+      });
+      expect(reply.awaiting?.tool).toBe('approve_refund');
+      expect((await sessions.hydrate('asking'))?.format).toBe('flowchart-v1');
+
+      // …and the shipped decision vocabulary continues it.
+      const done = await host.deliver({
+        input: '',
+        sessionId: 'asking',
+        decision: checkInApproved({ by: 'alice' }),
+      });
+      expect(done.output).toBe('refunded $10');
     } finally {
       await handle.close();
     }
   });
 
-  it('leaves an EXISTING conversation exactly as it was', async () => {
+  it('carries an EXISTING conversation forward inside the paused run', async () => {
+    // The stored conversation is not clobbered by a pause and not left behind
+    // either: it rides along inside the paused run, so the session is still a
+    // readable conversation while it waits on a person.
     const sessions = memorySessions();
     const before = toEnvelope({
       version: 1,
@@ -468,8 +532,38 @@ describe('standingAgent — a run that paused', () => {
     const handle = await standingAgent({ agent, sessions, host });
     try {
       const reply = await host.deliver({ input: 'go on', sessionId: 'kept' });
+      expect(reply.awaiting?.tool).toBe('ask_first');
+      const paused = readPausedRun(await sessions.hydrate('kept'));
+      const said = paused.conversation.history.map((m) => m.content);
+      expect(said.slice(0, 3)).toEqual(['hello', 'hi', 'go on']);
+    } finally {
+      await handle.close();
+    }
+  });
+
+  it('a pause with NO session has nowhere to live, and says so', async () => {
+    const pausing = defineTool<Record<string, never>, string>({
+      name: 'ask_first',
+      description: 'ask a person',
+      parameters: { type: 'object', properties: {} },
+      execute: () => askHuman({ question: 'ok?' }),
+    });
+    const agent = Agent.create({
+      provider: mock({ replies: [{ toolCalls: [{ id: 't1', name: 'ask_first', args: {} }] }] }),
+      model: 'test-model',
+      maxIterations: 3,
+    })
+      .system('terse')
+      .tool(pausing)
+      .build();
+
+    const host = inProcessHost();
+    const handle = await standingAgent({ agent, sessions: memorySessions(), host });
+    try {
+      const reply = await host.deliver({ input: 'go on' });
       expect(reply.code).toBe('ERR_PAUSE_NOT_CARRIED');
-      expect(await sessions.hydrate('kept')).toEqual(before);
+      expect(reply.error).toContain('no session id');
+      expect(reply.error).toContain('did not fail');
     } finally {
       await handle.close();
     }

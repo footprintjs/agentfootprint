@@ -4,7 +4,7 @@ title: MessageDeniedContext
 
 # Interface: MessageDeniedContext
 
-Defined in: src/core/agent/middleware/errors.ts:38
+Defined in: [src/core/agent/middleware/errors.ts:38](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/errors.ts#L38)
 
 MessageDeniedError — typed error thrown by `Agent.run()` when a
 `messageMiddleware` returns `deny(reason)`.
@@ -50,7 +50,7 @@ try {
 
 > `readonly` **middleware**: `string`
 
-Defined in: src/core/agent/middleware/errors.ts:44
+Defined in: [src/core/agent/middleware/errors.ts:44](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/errors.ts#L44)
 
 `name` of the middleware that returned `deny`.
 
@@ -60,7 +60,7 @@ Defined in: src/core/agent/middleware/errors.ts:44
 
 > `readonly` **phase**: `"input"` \| `"output"`
 
-Defined in: src/core/agent/middleware/errors.ts:42
+Defined in: [src/core/agent/middleware/errors.ts:42](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/errors.ts#L42)
 
 Which boundary refused.
 
@@ -70,6 +70,6 @@ Which boundary refused.
 
 > `readonly` **reason**: `string`
 
-Defined in: src/core/agent/middleware/errors.ts:40
+Defined in: [src/core/agent/middleware/errors.ts:40](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/errors.ts#L40)
 
 The refusal text the middleware returned.
