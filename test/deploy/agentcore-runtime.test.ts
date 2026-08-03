@@ -1,91 +1,62 @@
 /**
- * AgentCore Runtime handler — contract + robustness tests for the deploy template
- * (examples/deploy/agentcore-runtime.ts). Covers the AgentCore HTTP contract
- * (/ping, /invocations), routing, and the error paths the happy-path example
- * doesn't: malformed JSON, a throwing agent, and the no-stack-leak guarantee.
+ * The AgentCore Runtime deploy template, run for real.
+ *
+ * `examples/deploy/agentcore-runtime.ts` used to carry its own hand-written
+ * `node:http` handler, and this file tested that handler. Since 7.15.0 the
+ * template composes `agentCoreRuntimeHost` + `agentCoreSessions` +
+ * `standingAgent` instead, so the adapter's own contract tests live in
+ * `test/hosting/agentcore-runtime-host.test.ts` and this file asserts the thing
+ * only the example can prove: **the documented deploy template still works, end
+ * to end, exactly as its README says.**
+ *
+ * That matters because the README's contract table is the thing a reader
+ * copies. If the example drifts from it, the table becomes a lie that no unit
+ * test would ever notice.
  */
 
-import { describe, it, expect, afterEach } from 'vitest';
-import { createServer, type Server } from 'node:http';
-import { agentCoreHandler } from '../../examples/deploy/agentcore-runtime.js';
+import { describe, expect, it } from 'vitest';
 
-// Minimal agent stub — the handler only needs `.run({ message })`.
-const agentStub = (run: (i: { message: string }) => Promise<string>) =>
-  ({ run } as unknown as Parameters<typeof agentCoreHandler>[0]);
+import { run } from '../../examples/deploy/agentcore-runtime.js';
 
-let server: Server | undefined;
-afterEach(() => new Promise<void>((r) => (server ? server.close(() => r()) : r())));
-
-async function listen(agent: Parameters<typeof agentCoreHandler>[0]): Promise<string> {
-  server = createServer(agentCoreHandler(agent));
-  await new Promise<void>((r) => server!.listen(0, '127.0.0.1', r));
-  const addr = server.address();
-  return `http://127.0.0.1:${typeof addr === 'object' && addr ? addr.port : 0}`;
+interface TemplateResult {
+  readonly ping: { readonly status: string; readonly time_of_last_update: number };
+  readonly turn1: { readonly response?: string; readonly status?: string };
+  readonly turn2: { readonly response?: string; readonly status?: string };
+  readonly rememberedAcrossRequests: boolean;
+  readonly notFoundStatus: number;
 }
 
-describe('agentCoreHandler — AgentCore Runtime HTTP contract', () => {
-  it('GET /ping → 200 Healthy with a unix timestamp', async () => {
-    const base = await listen(agentStub(async () => 'x'));
-    const res = await fetch(`${base}/ping`);
-    const body = await res.json();
-    expect(res.status).toBe(200);
-    expect(body.status).toBe('Healthy');
-    expect(typeof body.time_of_last_update).toBe('number');
+describe('deploy/agentcore-runtime — the template, executed', () => {
+  it('serves the whole documented contract in one run', async () => {
+    const result = (await run("what's the status of fc1/3?")) as TemplateResult;
+
+    // GET /ping → { status: 'Healthy', time_of_last_update: <unix SECONDS> }
+    expect(result.ping.status).toBe('Healthy');
+    expect(result.ping.time_of_last_update).toBeLessThan(Date.now() / 1000 + 60);
+
+    // POST /invocations → { response, status: 'success' }
+    expect(result.turn1.status).toBe('success');
+    expect(result.turn1.response).toContain('fc1/3');
+
+    // Anything else → 404
+    expect(result.notFoundStatus).toBe(404);
   });
 
-  it('POST /invocations → 200 with the agent answer and prompt passed through', async () => {
-    const base = await listen(agentStub(async ({ message }) => `echo:${message}`));
-    const res = await fetch(`${base}/invocations`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ prompt: 'hello' }),
-    });
-    const body = await res.json();
-    expect(res.status).toBe(200);
-    expect(body).toEqual({ response: 'echo:hello', status: 'success' });
+  it('remembers a conversation across requests, through the session header alone', async () => {
+    // The session id never touches the body in this contract. If the header
+    // mapping regressed, turn 2 would answer as a stranger and this goes red.
+    const result = (await run('my switch is fc1/3')) as TemplateResult;
+    expect(result.turn2.status).toBe('success');
+    expect(result.rememberedAcrossRequests).toBe(true);
   });
 
-  it('unknown route → 404', async () => {
-    const base = await listen(agentStub(async () => 'x'));
-    expect((await fetch(`${base}/nope`)).status).toBe(404);
-  });
-
-  it('malformed JSON body → 500 (not a crash)', async () => {
-    const base = await listen(agentStub(async () => 'x'));
-    const res = await fetch(`${base}/invocations`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: '{not json',
-    });
-    expect(res.status).toBe(500);
-  });
-
-  it('a throwing agent → 500 and does NOT leak a stack trace', async () => {
-    const base = await listen(
-      agentStub(async () => {
-        const e = new Error('boom');
-        e.stack = 'Error: boom\n    at secret/internal/path.ts:42';
-        throw e;
-      }),
-    );
-    const res = await fetch(`${base}/invocations`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ prompt: 'x' }),
-    });
-    const body = await res.json();
-    expect(res.status).toBe(500);
-    expect(body.error).toBe('boom'); // message only
-    expect(JSON.stringify(body)).not.toContain('secret/internal/path.ts'); // no stack
-  });
-
-  it('missing prompt → treated as empty message (no crash)', async () => {
-    const base = await listen(agentStub(async ({ message }) => `len:${message.length}`));
-    const res = await fetch(`${base}/invocations`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ notPrompt: 1 }),
-    });
-    expect((await res.json()).response).toBe('len:0');
+  it('cleans up after itself — the example leaves no session file behind', async () => {
+    const { access } = await import('node:fs/promises');
+    const { tmpdir } = await import('node:os');
+    const { join } = await import('node:path');
+    await run('anything');
+    await expect(
+      access(join(tmpdir(), `agentcore-session-example-${process.pid}`)),
+    ).rejects.toThrow();
   });
 });

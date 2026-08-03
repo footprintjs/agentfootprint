@@ -15,15 +15,20 @@ onto AgentCore.
 
 | AgentCore service | agentfootprint | How |
 |---|---|---|
-| **Runtime** (deploy/scale) | ✅ template | ARM64 container serving `/invocations` + `/ping` — [`examples/deploy/`](../../examples/deploy/) |
-| **Memory** | ✅ adapter | `AgentCoreStore` — `agentfootprint/memory-providers` |
+| **Runtime** (deploy/scale) | ✅ adapter | `agentCoreRuntimeHost()` + `agentCoreSessions()` — `agentfootprint/hosting-providers` |
+| **Memory** | ✅ adapter | `AgentCoreStore` (incl. `search()` over `RetrieveMemoryRecords`) — `agentfootprint/memory-providers` |
 | **Observability** | ✅ adapter | `agentcoreObservability` (CloudWatch) / `otelObservability` (OTLP) — `agentfootprint/observability-providers` |
-| **Gateway** (tools) | ✅ via MCP | Gateway exposes tools as MCP; consume them via `agentfootprint/tool-providers` |
+| **Gateway** (tools) | ✅ via MCP | `gatewayTransport()` + `mcpClient()` — per-request vended auth — `agentfootprint/tool-providers` |
 | **Runtime models** | ✅ provider | `bedrock()` (Nova/Claude) + `BedrockCacheStrategy` — `agentfootprint/llm-providers` |
 | **Identity** (downstream OAuth) | ✅ adapter | `agentCoreIdentity()` / `staticTokens()` (the `CredentialProvider` port) — `agentfootprint/identity` |
 | **Code Interpreter / Browser** | 📋 example | wrap as a `defineTool` calling the AgentCore SDK (snippets below) |
-| **Policy** | ✅ overlaps | use `gatedTools` (`agentfootprint/security`) for action control |
+| **Policy** | ✅ adapter | `agentCorePolicy()` (the `PermissionChecker` port), or local `gatedTools` — `agentfootprint/security` |
 | **Evaluations** | ✅ overlaps | emit `$eval` + `QualityRecorder`; export via the observability adapter |
+
+**How much of this is verified:** the Runtime host is plain HTTP with no AWS SDK on its path
+and passes the host conformance suite over a real socket. Every adapter that calls an AWS SDK
+is **contract-mapped and injection-tested** — exercised through its `_client` / `_sdk` seam,
+never against AWS. Real-cloud verification lands with a field deployment.
 
 The framing that matters: **agentfootprint owns *authoring + self-explaining
 observability*; AgentCore owns *managed deploy + infra*.** Nothing below replaces
@@ -34,16 +39,32 @@ built.
 
 ## Runtime — deploy your agent
 
-AgentCore Runtime is a **container contract**, not an adapter. Package your agent
-as an ARM64 image serving the runtime HTTP protocol on `0.0.0.0:8080`:
+AgentCore Runtime is a **container contract**: an ARM64 image serving the runtime
+HTTP protocol on `0.0.0.0:8080`.
 
 | Endpoint | Contract |
 |---|---|
 | `POST /invocations` | JSON `{ "prompt": "..." }` → JSON `{ "response", "status" }` (or SSE) |
 | `GET /ping` | `{ "status": "Healthy" \| "HealthyBusy", "time_of_last_update": <unix> }` |
+| Session | `X-Amzn-Bedrock-AgentCore-Runtime-Session-Id` header |
 
-The reference handler + Dockerfile + deploy steps are in
-[`examples/deploy/`](../../examples/deploy/) — it's the handler *and* its own
+That contract is now an adapter on the `AgentHost` port, so the container's whole
+entry point is:
+
+```ts
+import { standingAgent } from 'agentfootprint/hosting';
+import { agentCoreRuntimeHost, agentCoreSessions } from 'agentfootprint/hosting-providers';
+
+const handle = await standingAgent({
+  agent,
+  host: agentCoreRuntimeHost(),                              // 0.0.0.0:8080
+  sessions: agentCoreSessions({ store: 'session-storage' }), // survives a stop/resume
+});
+process.on('SIGTERM', () => void handle.close());
+```
+
+The runnable version + Dockerfile + deploy steps are in
+[`examples/deploy/`](../../examples/deploy/) — it's the entry point *and* its own
 integration test (`npx tsx examples/deploy/agentcore-runtime.ts`). Swap the
 sample `mock()` for `providerFromEnv()` and the model runs on Bedrock.
 
@@ -65,8 +86,20 @@ const agent = Agent.create({ provider, model }).memory(memory).build();
 
 Maps the `MemoryStore` interface onto AgentCore's session/event model. Example:
 [`examples/memory/09-agentcore-store.ts`](../../examples/memory/09-agentcore-store.ts).
-**Gap:** AgentCore's server-side `retrieve` (semantic search) isn't surfaced yet —
-`get`/`put`/`list` work today; `agentcoreRetrieve()` is planned.
+
+`store.search()` wraps AgentCore's server-side `RetrieveMemoryRecords`. It ranks on
+AWS's side and takes a **text** query, so pass one alongside the vector — omit it
+and the store says so by name rather than returning an empty result that reads as
+"no matches":
+
+```ts
+await store.search(identity, queryVector, { text: 'where does Ada like to sit?', k: 5 });
+```
+
+Stores that rank locally ignore `text`, so passing both is always safe.
+**Note:** `search` returns AgentCore's derived memory *records*, not the events this
+store wrote — their ids belong to AgentCore, and results carry
+`metadata.source: 'agentcore-memory-record'` so this is never a surprise.
 
 ---
 
@@ -97,13 +130,27 @@ specific code:
 
 ```ts
 import { Agent } from 'agentfootprint';
-import { mcpClient } from 'agentfootprint/tool-providers';
+import { agentCoreIdentity } from 'agentfootprint/identity';
+import { gatewayTransport, mcpClient, staticTools } from 'agentfootprint/tool-providers';
 
-// AgentCore Gateway speaks MCP — connect to its MCP endpoint with mcpClient.
-// (See adapters.md for the exact transport options.)
-const gateway = await mcpClient({ transport: { /* MCP transport → your Gateway /mcp URL */ } });
-const agent = Agent.create({ provider, model }).toolProvider(gateway).build();
+const gateway = await mcpClient({
+  name: 'gateway',
+  transport: gatewayTransport({
+    url: process.env.GATEWAY_MCP_URL!,
+    credentials: agentCoreIdentity({ region: 'us-west-2' }),
+    service: 'gateway',
+  }),
+});
+const agent = Agent.create({ provider, model })
+  .toolProvider(staticTools(await gateway.tools()))
+  .build();
 ```
+
+`gatewayTransport` vends the auth headers **per request** rather than fixing them
+at connect time — a Gateway token expires, and a standing agent outlives it. The
+token is used once and dropped: never cached, never stored on the transport,
+never logged, and never in an error message. The plain `http` transport is still
+there for a static API key.
 
 ---
 
@@ -206,8 +253,23 @@ second backend has real pull.
 
 ## Policy & Evaluations
 
-- **Policy** (control agent actions) → agentfootprint's `gatedTools` /
-  `PermissionPolicy` (`agentfootprint/security`) is your allow/deny layer.
+- **Policy** (control agent actions) → `agentCorePolicy({ policyStoreId })`
+  (`agentfootprint/security`) puts an AgentCore policy store behind the
+  `PermissionChecker` port: every attempted tool call is one evaluation, it fails
+  closed, and a denial reaches the model as data so it can re-decide instead of
+  the run dying.
+
+  ```ts
+  import { agentCorePolicy } from 'agentfootprint/security';
+
+  Agent.create({ provider, model, permissionChecker: agentCorePolicy({ policyStoreId }) }).build();
+  ```
+
+  It composes with `gatedTools` unchanged and neither knows the other exists: the
+  gate decides what the model is *shown*, the checker decides what actually
+  *runs*. For a purely local allowlist, `PermissionPolicy` still doubles as a
+  sync `gatedTools` predicate — a remote engine cannot, because that predicate is
+  synchronous.
 - **Evaluations** (quality monitoring) → emit `$eval(name, score)` and use
   `QualityRecorder`; export the scores through the observability adapter.
 
@@ -215,7 +277,10 @@ second backend has real pull.
 
 ## What's a gap (honest)
 
-- AgentCore Memory **semantic `retrieve`** isn't surfaced (`get`/`put`/`list` are).
 - Code Interpreter / Browser ship as **examples**, not first-class adapters.
-- Policy / Evaluations map to agentfootprint primitives rather than a dedicated
-  AgentCore Policy/Evaluations API binding.
+- **Evaluations** map to agentfootprint primitives rather than a dedicated
+  AgentCore Evaluations API binding.
+- The **control plane** (every `Create*`) is yours — AWS SDK or CDK.
+- Everything that calls an AWS SDK is **contract-mapped and injection-tested**,
+  not verified against AWS. Confirm command and field names against your
+  installed `@aws-sdk/client-bedrock-agentcore`.

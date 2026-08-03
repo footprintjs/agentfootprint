@@ -47,6 +47,8 @@ export {
   AgentCoreStore,
   type AgentCoreStoreOptions,
   type AgentCoreLikeClient,
+  type AgentCoreEvent,
+  type AgentCoreMemoryRecord,
 } from './adapters/memory/agentcore.js';
 
 // Read-only reader for the legacy Bedrock Agents auto session-summary memory.

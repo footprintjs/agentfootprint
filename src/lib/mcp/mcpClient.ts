@@ -36,6 +36,7 @@
 
 import type { Tool } from '../../core/tools.js';
 import type { McpClient, McpClientOptions, McpSdkClient, McpTransport } from './types.js';
+import { createVendingFetch, type FetchLike } from './gatewayTransport.js';
 import { lazyRequire } from '../lazyRequire.js';
 
 // Version-less identity. The MCP `clientInfo` field is informational
@@ -150,15 +151,22 @@ async function buildTransport(t: McpTransport): Promise<unknown> {
     });
   }
 
-  // http transport
+  // http + gateway transports both ride Streamable HTTP. They differ only in
+  // WHEN the auth headers are decided: `http` fixes them at construction,
+  // `gateway` vends them inside every request (see gatewayTransport.ts).
   let httpMod: McpHttpExports;
   try {
     httpMod = lazyRequire<McpHttpExports>('@modelcontextprotocol/sdk/client/streamableHttp.js');
   } catch {
     throw new Error(
-      'mcpClient(http) requires @modelcontextprotocol/sdk/client/streamableHttp.js — ' +
+      `mcpClient(${t.transport}) requires @modelcontextprotocol/sdk/client/streamableHttp.js — ` +
         'check that @modelcontextprotocol/sdk is installed at the latest version.',
     );
+  }
+  if (t.transport === 'gateway') {
+    return new httpMod.StreamableHTTPClientTransport(new URL(t.url), {
+      fetch: createVendingFetch(t),
+    });
   }
   return new httpMod.StreamableHTTPClientTransport(new URL(t.url), {
     ...(t.headers && { requestInit: { headers: { ...t.headers } } }),
@@ -239,6 +247,10 @@ interface McpStdioExports {
 interface McpHttpExports {
   readonly StreamableHTTPClientTransport: new (
     url: URL,
-    options?: { requestInit?: { headers: Record<string, string> } },
+    options?: {
+      requestInit?: { headers: Record<string, string> };
+      /** The SDK's hook for a custom fetch — how per-request vending gets in. */
+      fetch?: FetchLike;
+    },
   ) => unknown;
 }

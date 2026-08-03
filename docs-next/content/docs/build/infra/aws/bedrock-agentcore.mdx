@@ -27,15 +27,25 @@ agentfootprint's adapters wrap.
 | Capability | AgentCore API (plane → op) | agentfootprint | Status |
 |---|---|---|---|
 | **Memory — events** | data → `CreateEvent` / `GetEvent` / `ListEvents` / `DeleteEvent` | `AgentCoreStore` (`agentfootprint/memory-providers`) + `defineMemory({ store })` | ✅ shipped |
-| **Memory — semantic retrieve** | data → `RetrieveMemoryRecords` | *not wrapped yet (`agentcoreRetrieve()` planned)* | 🔴 bridge |
+| **Memory — semantic retrieve** | data → `RetrieveMemoryRecords` | `AgentCoreStore.search(identity, vector, { text })` — see [AgentCore adapters](doc:agentcore-adapters) | ✅ shipped |
 | **Identity — workload token** | data → `GetWorkloadAccessToken[ForUserId]` | `agentCoreIdentity({ workloadName, userIdFor })` (`agentfootprint/identity`) | ✅ shipped |
 | **Identity — OAuth2 / API key** | data → `GetResourceOauth2Token` / `GetResourceApiKey` | `agentCoreIdentity()` | ✅ shipped |
-| **Gateway — consume tools** | Gateway exposes an **MCP** endpoint | `mcpClient(url).tools()` (`agentfootprint/tool-providers`) → `.toolProvider()` | ✅ shipped |
+| **Gateway — consume tools** | Gateway exposes an **MCP** endpoint | `mcpClient({ transport: gatewayTransport({ url, credentials }) })` (`agentfootprint/tool-providers`) | ✅ shipped |
+| **Policy — authorize a tool call** | data → policy evaluation | `agentCorePolicy({ policyStoreId })` (`agentfootprint/security`) | ✅ shipped |
 | **Observability** | CloudWatch GenAI Observability + X-Ray (OTEL spans) | `agentcoreObservability()` (`agentfootprint/observability-providers`) | ✅ shipped |
 | **LLM** | Bedrock **Converse** | `bedrock()` (`agentfootprint/llm-providers`) | ✅ shipped |
+| **Runtime harness** | Runtime HTTP contract (`/ping`, `/invocations`, session header) | `agentCoreRuntimeHost()` + `agentCoreSessions()` (`agentfootprint/hosting-providers`) | ✅ shipped |
 | **Control plane** (all `Create*`) | control → `Create*` | *use AWS SDK / CDK* | 🔴 bridge |
-| **Runtime harness** | Runtime HTTP contract (`/ping`, `/invocations`) | *no TS harness — host the agent yourself* | 🔴 bridge |
 | **Code Interpreter / Browser** | data → `Start*Session` | *wrap as a `defineTool` or MCP tool* | 🔴 bridge |
+
+<Callout type="warn" title="What 'shipped' means for each row">
+The **Runtime harness** row is plain HTTP with no AWS SDK on its path and passes
+the same host conformance suite as `nodeHost` over a real socket — really
+verified. Every row that calls an AWS SDK is **contract-mapped and
+injection-tested**: exercised through the adapters' `_client` / `_sdk` seams,
+never against AWS. Confirm command and field names against your installed SDK;
+real-cloud verification lands with a field deployment.
+</Callout>
 
 ## Memory — `AgentCoreStore`
 
@@ -65,8 +75,9 @@ Agent.create({ provider }).memory(memory).build();
   `forget → DeleteSession`. The memory `identity` (`conversationId`) maps to the AgentCore
   **sessionId**.
 - The full memory deep-dive lives in **[Memory store adapters](doc:agentcore)**.
-- `search()` (server-side semantic retrieval over `RetrieveMemoryRecords`) isn't wrapped
-  yet — use the `WINDOW` / `TOP_K` strategies until `agentcoreRetrieve()` lands.
+- `search()` wraps `RetrieveMemoryRecords`. AgentCore ranks server-side and takes a **text**
+  query, so pass `options.text` alongside the vector — details and the reason in
+  **[AgentCore adapters](doc:agentcore-adapters)**.
 
 ## Identity — `agentCoreIdentity`
 
@@ -94,16 +105,41 @@ endpoint with Identity-brokered egress auth. agentfootprint *consumes* it throug
 Tools/Gateway port:
 
 ```ts
-import { mcpClient, staticTools, gatedTools } from 'agentfootprint/tool-providers';
+import { agentCoreIdentity } from 'agentfootprint/identity';
+import { gatewayTransport, mcpClient, staticTools, gatedTools } from 'agentfootprint/tool-providers';
 
-const gateway = mcpClient(process.env.GATEWAY_MCP_URL!);
-const tools = gatedTools(gateway, (name) => allowed.has(name)); // optional RBAC
+const gateway = await mcpClient({
+  name: 'gateway',
+  // Auth headers vended PER REQUEST, so a standing agent never outlives its token.
+  transport: gatewayTransport({
+    url: process.env.GATEWAY_MCP_URL!,
+    credentials: agentCoreIdentity({ region: 'us-west-2' }),
+    service: 'gateway',
+  }),
+});
+const tools = gatedTools(staticTools(await gateway.tools()), (name) => allowed.has(name));
 
 Agent.create({ provider }).toolProvider(tools).build();
 ```
 
 agentfootprint does **not** create Gateways (no control-plane client) — `CreateGateway` /
 `CreateGatewayTarget` are SDK / CDK.
+
+## Policy — `agentCorePolicy`
+
+```ts
+import { agentCorePolicy } from 'agentfootprint/security';
+
+Agent.create({
+  provider,
+  model,
+  permissionChecker: agentCorePolicy({ policyStoreId: process.env.POLICY_STORE_ID!, region: 'us-west-2' }),
+}).build();
+```
+
+Every attempted tool call becomes one policy evaluation. It **fails closed** — an engine that
+did not answer did not say yes — and a denial reaches the model as data so it can re-decide
+instead of the run dying. See **[AgentCore adapters](doc:agentcore-adapters)**.
 
 ## Observability — `agentcoreObservability`
 
@@ -134,17 +170,20 @@ through `complete()` for tool-using agents, or use `complete()` directly.
 
 ## What you bridge yourself
 
-agentfootprint is runtime-only, so these are yours (the AgentCore toolkit is Python; there is
-no JS harness):
+agentfootprint is runtime-only, so these are yours:
 
-- **Control plane** — every `Create*` (Runtime, Memory, Gateway, WorkloadIdentity) via SDK / CDK.
-- **Runtime host** — the `:8080` `/ping` + `/invocations` HTTP contract around `agent.run()`
-  (e.g. a small Fastify/Express service or container).
-- **`RetrieveMemoryRecords`**, **Code Interpreter**, **Browser** — wrap as tools (`defineTool`
-  or an MCP server) for now.
+- **Control plane** — every `Create*` (Runtime, Memory, Gateway, WorkloadIdentity, policy
+  store) via SDK / CDK.
+- **Code Interpreter**, **Browser** — wrap as tools (`defineTool` or an MCP server) for now.
+
+The **Runtime host** used to be on this list. It is not any more —
+`agentCoreRuntimeHost()` + `agentCoreSessions()` are the `:8080` `/ping` +
+`/invocations` contract, including the session header. See
+**[AgentCore adapters](doc:agentcore-adapters)**.
 
 ## Next steps
 
+- **[AgentCore adapters](doc:agentcore-adapters)** — runtime, sessions, policy, gateway.
 - **[Ports & adapters](doc:adapters)** — the pattern this page is one instance of.
 - **[Memory store adapters](doc:agentcore)** — the AgentCore memory deep-dive.
 - **[Tool providers](doc:tool-providers)** · **[Observability](doc:observability)** · **[AWS Bedrock](doc:aws-bedrock)** (the LLM provider).

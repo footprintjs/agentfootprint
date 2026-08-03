@@ -7,6 +7,173 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [7.15.0] - 2026-08-02
+
+7.14.0 shipped two hosting ports that name no cloud, plus a conformance suite,
+and made a promise: *a cloud adapter is vendor paths and a header mapping on a
+port that already worked; if writing one needs a change to a port, the port was
+wrong.* A promise like that is worth nothing until somebody writes the adapter.
+
+This release writes it. `agentCoreRuntimeHost` is a real cloud runtime's
+container contract — different paths, different body fields, the conversation id
+in a header instead of the body — and it **passes the same conformance suite as
+`nodeHost`, over a real socket, with no change to any port type**. It is now the
+third subject in that suite, so if a future adapter changes an answer, the file
+goes red.
+
+The rest of the car is the same shape: an AgentCore session store, an AgentCore
+policy store behind the existing permission port, per-request credential vending
+for Gateway tools, and the memory adapter's `search()` finally wired.
+
+Three seams did have to move, and none of them was a port. They are listed under
+"Changed" rather than buried, because *where an adapter needs more than paths
+and headers* is the interesting result of an exercise like this — and two of the
+three turned out not to be about this vendor at all.
+
+### Added
+
+- **`agentfootprint/hosting-providers` — `agentCoreRuntimeHost()` and
+  `agentCoreSessions()`.** The AgentCore Runtime container contract as adapters
+  on the 7.14.0 ports: `POST /invocations`, `GET /ping`, port 8080, `0.0.0.0`,
+  `{ prompt }` in / `{ response, status }` out, and the conversation read from
+  the `X-Amzn-Bedrock-AgentCore-Runtime-Session-Id` header (matched
+  case-insensitively — a proxy in front of the container is free to re-case it).
+
+  `busy` is a function rather than a flag, because the runtime polls `/ping` to
+  decide whether to send you more work: "am I busy" is a live fact about the
+  process, not a setting.
+
+  `agentCoreSessions({ store })` picks the checkpoint's home at construction and
+  never per call. `'session-storage'` is a JSON file in the runtime's own
+  storage — no AWS SDK at all, survives a container stop/resume, written
+  then renamed so a kill mid-write leaves the previous conversation rather than
+  rubble. `'memory'` is one AgentCore Memory event per persist, outliving the
+  session entirely. Both refuse an unknown envelope `format` **by name** through
+  the same `readEnvelope` the composer uses — that law is inherited, not copied.
+
+  Its own subpath rather than `agentfootprint/hosting`, on purpose: a test greps
+  the hosting sources for vendor names to keep "these ports name no cloud"
+  literally true, and the barrel is a hosting source.
+
+  Docs: [AgentCore adapters](https://footprintjs.github.io/agentfootprint/docs/build/infra/aws/agentcore-adapters) ·
+  Example: `examples/deploy/agentcore-runtime.ts`.
+
+- **`httpHost({ name, wire, invokePath, healthPath, port?, hostname?,
+  capabilities? })` — the HTTP work, parameterised by the JSON dialect it
+  speaks.** Draining on close, aborting when the caller hangs up, failing a
+  handler that throws, failing a handler that answers nothing, mapping refusal
+  codes to status codes, and choosing between one JSON body and Server-Sent
+  Events — all of it happens once. An `HttpWire` re-decides five body shapes and
+  nothing else: `readRequest`, `health`, `output`, `failure`, `chunk`.
+
+  `invokePath` and `healthPath` are **required, with no defaults**. A default
+  here would be inherited by every adapter ever built on this file.
+
+  `jsonWire` (nodeHost's own dialect) and `headerValue(facts, name, ...alts)`
+  are exported too — the latter so no adapter re-derives case-insensitive header
+  matching and gets it subtly wrong in exactly one deployment.
+
+- **`agentCorePolicy({ policyStoreId, region?, onUnavailable?, onWarning?,
+  principalFor?, name?, cacheSize? })` — an AgentCore policy store behind the
+  existing `PermissionChecker` port** (`agentfootprint/security`). Every
+  attempted tool call becomes one evaluation.
+
+  It **fails closed**: an engine you cannot reach has not said yes, so an
+  evaluation that throws is a `deny`. So is a verdict the adapter does not
+  recognise — an unfamiliar future value is not a permission. The denial reaches
+  the model **as data** (`tellLLM`), so it re-decides with the refusal in front
+  of it rather than the run dying; telemetry stays out of it, because a model
+  should not be taught the shape of your rule space. Decisions are cached per
+  (tool, principal, conversation, **iteration**), so a policy that changes
+  mid-conversation lands on the next turn instead of after the run, and the
+  cache is bounded.
+
+  `onUnavailable: 'allow-with-warning'` exists for a gradual rollout and is
+  deliberately awkward to type. It applies only to a failure to CHECK — an
+  explicit denial is always a denial.
+
+  It composes with `gatedTools` unchanged, and neither knows the other exists:
+  the gate decides what the model is shown, the checker decides what runs. A
+  test pins that. Note that only a local policy can double as a `gatedTools`
+  predicate — that predicate is synchronous and a remote engine is not.
+
+- **`gatewayTransport({ url, credentials, service?, scopes?, mode?, headers? })`
+  — an MCP transport whose auth headers are vended per request**
+  (`agentfootprint/tool-providers`). A third member of `McpTransport`; `stdio`
+  and `http` are untouched.
+
+  **The token is used once and dropped.** Not cached between requests, not
+  stored on the transport object, not in an event, a log, or any error this
+  module throws — including the errors thrown while it is holding one. A test
+  asserts exactly that, with a hostile logger capturing every console channel,
+  the serialized transport, and every thrown error. Static `headers` are applied
+  first so a vended auth header always wins.
+
+  When consent is needed it throws `GatewayAuthorizationRequiredError` carrying
+  the authorization URL: a transport cannot run a consent flow mid-request, so
+  it says so instead of hanging.
+
+- **`AgentCoreStore.search()` — server-side semantic retrieval over
+  `RetrieveMemoryRecords`.** `searchStrategyId` and the namespace reach
+  AgentCore's side as filters; `k`, `minScore` and `tiers` are applied to what
+  comes back. A `tiers` filter excludes everything, because records carry no
+  tier and silently ignoring a filter you asked for is worse than returning
+  nothing.
+
+  Results are marked `metadata.source: 'agentcore-memory-record'`, because
+  `search` reads a genuinely different population than `list`: the records
+  AgentCore's extraction strategies *derived from* your events, whose ids belong
+  to AgentCore, so `store.get(result.entry.id)` will not find them.
+
+  There is **no `stream()`**. AgentCore Memory has no streaming data-plane
+  operation and `MemoryStore` has no streaming method — inventing one for a
+  single backend is how a port stops being a port.
+
+### Changed
+
+- **`nodeHost` is now a configuration of `httpHost`.** Same name, same options,
+  same wire, same behaviour; the HTTP implementation is shared rather than
+  duplicated, so two adapters can never quietly drift apart on what `close()`
+  drains. This is the one seam this exercise found in the hosting layer, and it
+  was in the FIRST ADAPTER, not the port: `nodeHost` had hard-coded its own JSON
+  dialect, which was fine while it was the only HTTP adapter and wrong the
+  moment there was a second. No public type changed.
+
+- **`SearchOptions.text?: string` — one new optional field on the memory port.**
+  `search()` takes a vector because the reference backends rank locally by
+  cosine; several managed stores embed and rank server-side and their retrieval
+  API takes text, so a vector is the one thing they cannot use.
+
+  Stores that rank locally **ignore** it and their results are unchanged, so
+  passing both is always safe. `AgentCoreStore.search()` requires it and throws
+  a corrective error naming what is missing — not an empty array, which reads as
+  "no matches" when it means "wrong query form", and nobody investigates a
+  plausible empty result.
+
+- **MCP headers were connection-lifetime only.** That is a real gap and it is
+  not AgentCore's — any endpoint behind an expiring token hits it — so the fix
+  landed on the generic transport layer and the vendor adapter for it is zero
+  lines.
+
+- **`examples/deploy/agentcore-runtime.ts` now USES the adapters** instead of
+  carrying its own hand-written `node:http` handler. One source of truth for the
+  contract. It still self-tests and exits, still serves forever under
+  `AGENTCORE_SERVE=1`, and now also proves a two-turn conversation continuing
+  through the session header alone.
+
+### Verification, stated plainly
+
+`agentCoreRuntimeHost` is plain HTTP with no AWS SDK on its path, so its
+conformance-suite result is **real verification** of the wire.
+
+Everything that talks to AWS — `agentCoreSessions({ store: 'memory' })`,
+`agentCorePolicy`, `AgentCoreStore.search()` — is **contract-mapped and
+injection-tested**: every SDK interaction is exercised through the adapters'
+`_client` / `_sdk` seams, and no test in this repo reaches AWS or pretends to.
+Confirm command and field names against your installed
+`@aws-sdk/client-bedrock-agentcore`. Real-cloud verification lands with a field
+deployment.
+
 ## [7.14.0] - 2026-08-02
 
 An agent in a script answers once and forgets. A deployed one has to do two more

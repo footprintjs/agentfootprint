@@ -2,16 +2,26 @@
  * deploy/agentcore-runtime — run an agentfootprint agent inside AWS Bedrock
  * AgentCore Runtime.
  *
- * AgentCore Runtime is a CONTAINER contract, not an adapter: your agent must be
- * an ARM64 container that serves the runtime's HTTP protocol on `0.0.0.0:8080`:
+ * AgentCore Runtime is a CONTAINER contract: your agent must be an ARM64
+ * container serving the runtime's HTTP protocol on `0.0.0.0:8080` —
  *
  *   POST /invocations   JSON `{ "prompt": "..." }`  →  JSON `{ "response", "status" }`
  *   GET  /ping          →  `{ "status": "Healthy", "time_of_last_update": <unix> }`
  *
- * This file is BOTH the reference handler AND its own integration test:
+ * and the caller's conversation arrives in the
+ * `X-Amzn-Bedrock-AgentCore-Runtime-Session-Id` header.
+ *
+ * Since 7.15.0 you do not write that yourself. `agentCoreRuntimeHost()` IS that
+ * contract, as an adapter on the `AgentHost` port; `agentCoreSessions()` is
+ * where the conversation lives between requests; `standingAgent()` is the same
+ * composer you would use anywhere else. The container's whole entry point is
+ * the `serve()` function below, and not one line of it is HTTP.
+ *
+ * This file is BOTH the reference entry point AND its own integration test:
  *   • `AGENTCORE_SERVE=1`  → listen forever on :8080 (what the container runs)
- *   • otherwise            → bind an ephemeral port, self-test /ping + /invocations,
- *                            print the result, exit (what the example gate runs)
+ *   • otherwise            → bind an ephemeral port, drive the real contract
+ *                            (/ping, /invocations, the session header, and a
+ *                            second turn that remembers the first), then exit
  *
  * Deploy: see ./Dockerfile + ./README.md. Swap `buildAgent()`'s `mock()` for
  * `providerFromEnv()` (Bedrock/Anthropic/Azure) — nothing else changes.
@@ -19,9 +29,14 @@
  * Run:  npx tsx examples/deploy/agentcore-runtime.ts
  */
 
-import { createServer, type IncomingMessage, type ServerResponse, type Server } from 'node:http';
-import { Agent, type LLMProvider } from '../../src/index.js'
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { rm } from 'node:fs/promises';
+
+import { Agent, type LLMProvider } from '../../src/index.js';
 import { mock } from '../../src/llm-providers.js';
+import { standingAgent } from '../../src/hosting/index.js';
+import { agentCoreRuntimeHost, agentCoreSessions } from '../../src/hosting-providers.js';
 import { isCliEntry, printResult, type ExampleMeta } from '../helpers/cli.js';
 
 export const meta: ExampleMeta = {
@@ -29,19 +44,26 @@ export const meta: ExampleMeta = {
   title: 'Deploy on AWS Bedrock AgentCore Runtime (/invocations + /ping)',
   group: 'deploy',
   description:
-    'Run an agentfootprint agent inside AgentCore Runtime: the ARM64 container HTTP contract (POST /invocations, GET /ping on :8080). Self-tests the handler, then exits; set AGENTCORE_SERVE=1 to listen forever.',
+    'Run an agentfootprint agent inside AgentCore Runtime with agentCoreRuntimeHost + agentCoreSessions: the container HTTP contract (POST /invocations, GET /ping on :8080) and the session header, as adapters on the hosting ports. Self-tests the contract, then exits; AGENTCORE_SERVE=1 listens forever.',
   defaultInput: "what's the status of fc1/3?",
   providerSlots: ['default'],
-  tags: ['deploy', 'agentcore', 'aws', 'runtime', 'bedrock'],
+  tags: ['deploy', 'agentcore', 'aws', 'runtime', 'bedrock', 'hosting', 'sessions'],
 };
 
-const HOST = '0.0.0.0';
-const PORT = 8080;
+/** The header AgentCore Runtime puts the caller's conversation in. */
+const SESSION_HEADER = 'X-Amzn-Bedrock-AgentCore-Runtime-Session-Id';
 
 /** A consumer swaps `mock()` for `providerFromEnv()` (Bedrock/Anthropic/Azure). */
-function buildAgent(provider?: LLMProvider) {
+function buildAgent(provider?: LLMProvider): Agent {
   return Agent.create({
-    provider: provider ?? mock({ reply: 'fc1/3 is down — degraded SFP suspected.' }),
+    provider:
+      provider ??
+      mock({
+        replies: [
+          'fc1/3 is down — degraded SFP suspected.',
+          'You asked about fc1/3, which is down with a suspected degraded SFP.',
+        ],
+      }),
     model: 'mock',
     maxIterations: 2,
   })
@@ -49,98 +71,96 @@ function buildAgent(provider?: LLMProvider) {
     .build();
 }
 
-/** Read + JSON-parse a request body (AgentCore caps payloads at 100 MB). */
-function readJson(req: IncomingMessage): Promise<unknown> {
-  return new Promise((resolve, reject) => {
-    const chunks: Buffer[] = [];
-    req.on('data', (c: Buffer) => chunks.push(c));
-    req.on('end', () => {
-      const raw = Buffer.concat(chunks).toString('utf8');
-      if (!raw) return resolve({});
-      try {
-        resolve(JSON.parse(raw));
-      } catch (e) {
-        reject(e);
-      }
-    });
-    req.on('error', reject);
-  });
-}
-
-const sendJson = (res: ServerResponse, status: number, body: unknown): void => {
-  res.writeHead(status, { 'content-type': 'application/json' });
-  res.end(JSON.stringify(body));
-};
-
+// #region entrypoint
 /**
- * The AgentCore Runtime HTTP handler. Pure w.r.t. transport — pass any built
- * agent; returns a `node:http` request listener. Exported so it's unit-testable
- * without binding a socket.
+ * The container's entry point. `agentCoreRuntimeHost()` already knows the two
+ * paths, the port, the session header and the body shapes, so nothing here is
+ * HTTP.
+ *
+ * `{ store: 'session-storage' }` keeps each conversation in a JSON file in the
+ * runtime's own session storage, which survives a stop/resume of the container.
+ * Swap it for `{ store: 'memory', memoryId }` to outlive the session entirely —
+ * the agent above does not change either way.
  */
-export function agentCoreHandler(agent: ReturnType<typeof buildAgent>) {
-  return (req: IncomingMessage, res: ServerResponse): void => {
-    void (async () => {
-      try {
-        if (req.method === 'GET' && req.url === '/ping') {
-          // HealthyBusy is the signal for "processing async work"; this sample is sync.
-          return sendJson(res, 200, {
-            status: 'Healthy',
-            time_of_last_update: Math.floor(Date.now() / 1000),
-          });
-        }
-        if (req.method === 'POST' && req.url === '/invocations') {
-          const body = (await readJson(req)) as { prompt?: unknown };
-          const message = typeof body.prompt === 'string' ? body.prompt : '';
-          const answer = await agent.run({ message });
-          // answer is the agent's final text (AgentOutput = string). A pausing
-          // agent would return a RunnerPauseOutcome — handle that if you use pause/resume.
-          return sendJson(res, 200, { response: answer, status: 'success' });
-        }
-        return sendJson(res, 404, { error: `no route for ${req.method} ${req.url}` });
-      } catch (err) {
-        // Never leak a stack trace to the caller; AgentCore surfaces the status code.
-        return sendJson(res, 500, { error: err instanceof Error ? err.message : String(err) });
-      }
-    })();
-  };
-}
-
-/** Production entry: listen forever (the container's job). */
-function serve(port = PORT): Server {
-  const server = createServer(agentCoreHandler(buildAgent()));
-  server.listen(port, HOST, () => {
-    // eslint-disable-next-line no-console
-    console.log(`[agentcore-runtime] listening on http://${HOST}:${port} (/invocations, /ping)`);
+async function serve(agent: Agent, port: number, sessionPath?: string) {
+  return standingAgent({
+    agent,
+    host: agentCoreRuntimeHost({ port, hostname: '127.0.0.1' }),
+    sessions: agentCoreSessions({
+      store: 'session-storage',
+      ...(sessionPath !== undefined && { path: sessionPath }),
+    }),
   });
-  return server;
+}
+// #endregion entrypoint
+
+// #region invoke
+/** One call, exactly as the runtime makes it: prompt in the body, conversation in a header. */
+async function invoke(base: string, prompt: string, sessionId?: string): Promise<AgentCoreReply> {
+  const response = await fetch(`${base}/invocations`, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      ...(sessionId !== undefined && { [SESSION_HEADER]: sessionId }),
+    },
+    body: JSON.stringify({ prompt }),
+  });
+  return (await response.json()) as AgentCoreReply;
 }
 
-/** Example/gate entry: bind an ephemeral port, self-test the contract, exit. */
+/** `{ response, status: 'success' }` on the way out, `{ error, status: 'error' }` when it fails. */
+interface AgentCoreReply {
+  readonly response?: string;
+  readonly status?: string;
+  readonly error?: string;
+}
+// #endregion invoke
+
+/** Production entry: listen forever on the contract's own port (the container's job). */
+async function listenForever(): Promise<void> {
+  const handle = await standingAgent({
+    agent: buildAgent(),
+    host: agentCoreRuntimeHost(), // 0.0.0.0:8080, POST /invocations, GET /ping
+    sessions: agentCoreSessions({ store: 'session-storage' }),
+  });
+  // eslint-disable-next-line no-console
+  console.log('[agentcore-runtime] listening on http://0.0.0.0:8080 (/invocations, /ping)');
+  process.on('SIGTERM', () => void handle.close());
+}
+
+/** Example/gate entry: bind an ephemeral port, drive the real contract, exit. */
 export async function run(input: string, provider?: LLMProvider): Promise<unknown> {
-  const server = createServer(agentCoreHandler(buildAgent(provider)));
-  await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
-  const addr = server.address();
-  const port = typeof addr === 'object' && addr ? addr.port : PORT;
-  const base = `http://127.0.0.1:${port}`;
+  // A per-run file, so the example never touches a real deployment's storage.
+  const sessionPath = join(tmpdir(), `agentcore-session-example-${process.pid}`);
+  const handle = await serve(buildAgent(provider), 0, sessionPath);
+  const base = handle.url;
+
   try {
     const ping = await (await fetch(`${base}/ping`)).json();
-    const invoke = await (
-      await fetch(`${base}/invocations`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ prompt: input }),
-      })
-    ).json();
+
+    // One conversation, two turns. The session id rides in the header and never
+    // in the body, and turn 2 was never told the answer a second time.
+    const turn1 = await invoke(base, input, 'san-triage-1');
+    const turn2 = await invoke(base, 'what did I just ask about?', 'san-triage-1');
+
     const notFound = (await fetch(`${base}/nope`)).status;
-    return { ping, invoke, notFoundStatus: notFound };
+
+    return {
+      ping,
+      turn1,
+      turn2,
+      rememberedAcrossRequests: (turn2.response ?? '').includes('fc1/3'),
+      notFoundStatus: notFound,
+    };
   } finally {
-    await new Promise<void>((r) => server.close(() => r()));
+    await handle.close();
+    await rm(sessionPath, { force: true });
   }
 }
 
 if (isCliEntry(import.meta.url)) {
   if (process.env.AGENTCORE_SERVE === '1') {
-    serve();
+    void listenForever();
   } else {
     void run(meta.defaultInput!).then(printResult);
   }

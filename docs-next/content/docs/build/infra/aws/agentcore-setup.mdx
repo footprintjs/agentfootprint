@@ -9,9 +9,9 @@ agent **locally with mock adapters**, then swap to AgentCore **one line at a tim
 agent logic in between never changes.
 
 <Callout type="info" title="What's agentfootprint vs. what's you">
-agentfootprint owns the **agent + the data-plane adapters** (steps 1–7). AWS provisioning
-(**control plane**) and the **Runtime host** are yours (steps 8–9) — there is no JS harness,
-so those steps are wiring, not library calls.
+agentfootprint owns the **agent + the data-plane adapters** (steps 1–8), including the
+Runtime container contract since 7.15.0. AWS provisioning (**control plane** — every
+`Create*`) is yours (step 9).
 </Callout>
 
 ## Prerequisites
@@ -112,8 +112,16 @@ AgentCore Memory is an **append-only event log**: `put` appends a `CreateEvent`,
 `ListEvents`, and `get`/`delete` by id are list-then-find (there's no `DeleteSession`, so
 `forget` lists + deletes each event). The identity maps to AgentCore's `actorId`
 (tenant/principal) + `sessionId` (conversationId). **`WINDOW` / episodic memory is the natural
-fit** (append + list recent); server-side semantic retrieve (`RetrieveMemoryRecords`) isn't
-wrapped yet. Deep dive: [Memory store adapters](doc:agentcore).
+fit** (append + list recent).
+
+For server-side semantic retrieval, `store.search()` wraps `RetrieveMemoryRecords` — pass the
+query as **text** as well as a vector, because AgentCore ranks on its own side:
+
+```ts
+await store.search(identity, queryVector, { text: 'where does Ada like to sit?', k: 5 });
+```
+
+Deep dive: [Memory store adapters](doc:agentcore) · [AgentCore adapters](doc:agentcore-adapters).
 
 ## Step 5 — Identity
 
@@ -137,10 +145,35 @@ If your tools live behind an AgentCore **Gateway** (Lambda / OpenAPI / MCP targe
 its MCP endpoint through the Tools port:
 
 ```ts
-import { mcpClient, gatedTools } from 'agentfootprint/tool-providers';
+import { agentCoreIdentity } from 'agentfootprint/identity';
+import { gatewayTransport, mcpClient, gatedTools, staticTools } from 'agentfootprint/tool-providers';
 
-const gateway = mcpClient(process.env.GATEWAY_MCP_URL!);
-Agent.create({ provider }).toolProvider(gatedTools(gateway, (n) => allowed.has(n))).build();
+const gateway = await mcpClient({
+  name: 'gateway',
+  transport: gatewayTransport({
+    url: process.env.GATEWAY_MCP_URL!,
+    credentials: agentCoreIdentity({ region: 'us-west-2' }),
+    service: 'gateway',
+  }),
+});
+const tools = gatedTools(staticTools(await gateway.tools()), (n) => allowed.has(n));
+Agent.create({ provider }).toolProvider(tools).build();
+```
+
+`gatewayTransport` vends the auth headers **per request**, so a long-running agent never
+outlives its bearer token. The token is used once and never stored.
+
+Optionally add a **policy store** as the tool-call gate — it fails closed, and a denial reaches
+the model as data rather than as an exception:
+
+```ts
+import { agentCorePolicy } from 'agentfootprint/security';
+
+Agent.create({
+  provider,
+  model,
+  permissionChecker: agentCorePolicy({ policyStoreId: process.env.POLICY_STORE_ID!, region: 'us-west-2' }),
+}).build();
 ```
 
 ## Step 7 — Observability
@@ -158,35 +191,33 @@ agent.enable.observability({
 The full breakdown — AgentCore Observability **and** OTEL, multi-exporter, the OTLP tracer
 wiring — is in Monitoring: **[Exporters: AgentCore & OTEL](doc:exporters)**.
 
-## Step 8 — Host the Runtime contract (the bridge)
+## Step 8 — Host the Runtime contract
 
-AgentCore Runtime calls a container over a fixed HTTP contract: `GET /ping` (health) and
-`POST /invocations` (run) on port `8080`. There's **no JS harness**, so you write a tiny host
-around `agent.run()`:
+AgentCore Runtime calls a container over a fixed HTTP contract: `GET /ping` (health),
+`POST /invocations` (run) on port `8080`, and the caller's conversation in the
+`X-Amzn-Bedrock-AgentCore-Runtime-Session-Id` header. That contract is
+`agentCoreRuntimeHost()`, so this step is no longer yours to write:
 
 ```ts
-import { createServer } from 'node:http';
+import { standingAgent } from 'agentfootprint/hosting';
+import { agentCoreRuntimeHost, agentCoreSessions } from 'agentfootprint/hosting-providers';
 
-const agent = buildAgent(provider);
+const handle = await standingAgent({
+  agent: buildAgent(provider),
+  host: agentCoreRuntimeHost(),                          // 0.0.0.0:8080, /invocations, /ping
+  sessions: agentCoreSessions({ store: 'session-storage' }), // survives a stop/resume
+});
 
-createServer(async (req, res) => {
-  if (req.method === 'GET' && req.url === '/ping') {
-    res.writeHead(200).end('OK');
-    return;
-  }
-  if (req.method === 'POST' && req.url === '/invocations') {
-    let body = '';
-    for await (const chunk of req) body += chunk;
-    const { message, sessionId } = JSON.parse(body || '{}');
-    const result = await agent.run({ message, identity: { conversationId: sessionId ?? 'default' } });
-    res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ result }));
-    return;
-  }
-  res.writeHead(404).end();
-}).listen(8080);
+process.on('SIGTERM', () => void handle.close());
 ```
 
-(Use Fastify/Express if you prefer — the contract is just those two routes.)
+`standingAgent` hydrates the session, resumes that conversation or starts a fresh one,
+persists what the run left behind, then replies — so a second call with the same session id
+continues the conversation. Swap the store for
+`agentCoreSessions({ store: 'memory', memoryId })` to outlive the session entirely.
+
+The runnable version of this file is `examples/deploy/agentcore-runtime.ts`; the adapter
+reference is [AgentCore adapters](doc:agentcore-adapters).
 
 ## Step 9 — Provision & deploy (control plane — your CDK/SDK)
 
@@ -216,9 +247,10 @@ console.log(await a.run({ message: 'What was my order id?', identity: id })); //
 | 3 | LLM → `bedrock()` | 1 |
 | 4 | store → `AgentCoreStore` | 1 |
 | 5 | creds → `agentCoreIdentity()` | 1 |
-| 6 | tools → `mcpClient()` gateway | 1 |
+| 6 | tools → `mcpClient({ transport: gatewayTransport() })` | 1 |
 | 7 | observability → `agentcoreObservability()` | 1 |
-| 8–9 | **host + deploy** (the bridge) | yours |
+| 8 | host → `agentCoreRuntimeHost()` + `agentCoreSessions()` | ~6 |
+| 9 | **provision + deploy** (control plane) | yours |
 
 The agent's logic — system prompt, tools, memory strategy, ReAct loop — **never changed**.
 That's the [adapter pattern](doc:adapters) paying off: the same agent runs on `mock` +

@@ -1,5 +1,5 @@
 /**
- * The portability proof: one handler, two hosts, identical outputs.
+ * The portability proof: one handler, three hosts, identical outputs.
  *
  * `nodeHost` binds a real socket and is driven with `fetch`. The second host is
  * written right here, in ~60 lines, delivers requests by calling the handler in
@@ -7,16 +7,25 @@
  * ("this host cannot stream; the completion is authoritative") is exercised for
  * real rather than assumed.
  *
- * Both run the same conformance suite, and then a final pair of tests invokes
- * both hosts with the same requests and compares the observations directly.
- * That comparison is the claim in one line: if a future adapter changes an
- * answer, this file goes red.
+ * The third is `agentCoreRuntimeHost` — a CLOUD runtime's container contract,
+ * and the reason the suite was written before any cloud adapter existed. It
+ * binds a real socket too, speaks different paths and different JSON, reads its
+ * conversation id out of a header instead of a body, and every assertion below
+ * holds for it unchanged. That is the whole thesis, executable: **a cloud
+ * adapter is vendor paths plus a header mapping on a port that already worked.**
+ * Nothing in `src/hosting/types.ts` changed to let it pass.
+ *
+ * All three run the same conformance suite, and then a final pair of tests
+ * invokes all of them with the same requests and compares the observations
+ * directly. That comparison is the claim in one line: if a future adapter
+ * changes an answer, this file goes red.
  */
 
 import { describe, expect, it } from 'vitest';
 
 import { nodeHost } from '../../src/hosting/index.js';
 import type { NodeHostHandle } from '../../src/hosting/nodeHost.js';
+import { agentCoreRuntimeHost } from '../../src/hosting-providers.js';
 import { inProcessHost, type InProcessHost } from './testHost.js';
 import {
   contractHandler,
@@ -95,6 +104,83 @@ function parseSSE(body: string): HostObservation {
   };
 }
 
+// ─── Subject 3: a real cloud runtime's container contract ────────────
+//
+// Different paths (`/invocations`, `/ping`), different body fields (`prompt` in,
+// `response` out), and the conversation id in a header rather than the body.
+// Same handler, same suite, same answers.
+
+const SESSION_HEADER = 'X-Amzn-Bedrock-AgentCore-Runtime-Session-Id';
+
+const agentCoreSubject: HostUnderTest = {
+  label: 'agentCoreRuntimeHost (container contract)',
+  create: () => agentCoreRuntimeHost({ port: 0, hostname: '127.0.0.1' }),
+  invoke: async (handle, request) => {
+    const { url } = handle as NodeHostHandle;
+    let response: Response;
+    try {
+      response = await fetch(`${url}/invocations`, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          ...(request.stream ? { accept: 'text/event-stream' } : {}),
+          ...(request.headers ?? {}),
+          // The one mapping this adapter adds: the session id is a header here.
+          ...(request.sessionId !== undefined ? { [SESSION_HEADER]: request.sessionId } : {}),
+        },
+        body: JSON.stringify({ prompt: request.input }),
+      });
+    } catch (err) {
+      return { error: `is closed (${(err as Error).message})`, chunks: [] };
+    }
+    const body = await response.text();
+    return response.headers.get('content-type')?.includes('text/event-stream')
+      ? parseAgentCoreSSE(body)
+      : parseAgentCoreJson(body);
+  },
+};
+
+/** `{ response, status }` / `{ error, status, code? }` back into port vocabulary. */
+function parseAgentCoreJson(body: string): HostObservation {
+  const parsed = JSON.parse(body) as { response?: string; error?: string; code?: string };
+  return {
+    ...(parsed.response !== undefined && { output: parsed.response }),
+    ...(parsed.error !== undefined && { error: parsed.error }),
+    ...(parsed.code !== undefined && { code: parsed.code }),
+    chunks: [],
+  };
+}
+
+function parseAgentCoreSSE(body: string): HostObservation {
+  const chunks: string[] = [];
+  let output: string | undefined;
+  let error: string | undefined;
+  let code: string | undefined;
+  for (const frame of body.split('\n\n')) {
+    const name = /^event: (.+)$/m.exec(frame)?.[1];
+    const data = /^data: (.+)$/m.exec(frame)?.[1];
+    if (!name || !data) continue;
+    const payload = JSON.parse(data) as {
+      chunk?: string;
+      response?: string;
+      error?: string;
+      code?: string;
+    };
+    if (name === 'chunk' && typeof payload.chunk === 'string') chunks.push(payload.chunk);
+    if (name === 'complete') output = payload.response;
+    if (name === 'error') {
+      error = payload.error;
+      code = payload.code;
+    }
+  }
+  return {
+    ...(output !== undefined && { output }),
+    ...(error !== undefined && { error }),
+    ...(code !== undefined && { code }),
+    chunks,
+  };
+}
+
 // ─── Subject 2: the minimal in-process host (see ./testHost.ts) ──────
 
 let latest: InProcessHost | undefined;
@@ -107,35 +193,48 @@ const inProcessSubject: HostUnderTest = {
   invoke: (_handle, request) => latest!.deliver(request),
 };
 
-// ─── Both hosts, the same contract ───────────────────────────────────
+// ─── Every host, the same contract ───────────────────────────────────
 
 describeHostContract(nodeSubject);
 describeHostContract(inProcessSubject);
+describeHostContract(agentCoreSubject);
 
 // ─── And directly against each other ─────────────────────────────────
 
-describe('one handler, two hosts', () => {
+describe('one handler, three hosts', () => {
   const cases: ContractRequest[] = [
     { input: 'hello' },
     { input: 'with a session', sessionId: 's-1' },
     { input: 'with a header', headers: { 'x-probe': 'yes' } },
   ];
+  const subjects = [nodeSubject, inProcessSubject, agentCoreSubject];
 
-  it('produces byte-identical answers on both hosts', async () => {
+  it('produces byte-identical answers on every host', async () => {
     for (const request of cases) {
-      const overHttp = await withHost(nodeSubject, request);
-      const inProcess = await withHost(inProcessSubject, request);
-      expect(overHttp.output).toBe(inProcess.output);
-      expect(overHttp.output).toBe(expectedOutput(request));
+      const observed = await Promise.all(subjects.map((s) => withHost(s, request)));
+      for (const one of observed) expect(one.output).toBe(expectedOutput(request));
+      // Asserted pairwise as well as against the expectation, so "all three
+      // agreed with the same wrong answer" cannot pass either.
+      expect(new Set(observed.map((o) => o.output)).size).toBe(1);
     }
   });
 
-  it('reports the same failure on both hosts', async () => {
-    const overHttp = await withHost(nodeSubject, { input: 'FAIL' });
-    const inProcess = await withHost(inProcessSubject, { input: 'FAIL' });
-    expect(overHttp.error).toBe(inProcess.error);
-    expect(overHttp.output).toBeUndefined();
-    expect(inProcess.output).toBeUndefined();
+  it('reports the same failure on every host', async () => {
+    const observed = await Promise.all(subjects.map((s) => withHost(s, { input: 'FAIL' })));
+    for (const one of observed) {
+      expect(one.output).toBeUndefined();
+      expect(one.error).toBe(observed[0].error);
+    }
+  });
+
+  it('the cloud adapter needed no port change to pass — it differs only in wire shape', async () => {
+    // Same request, expressed in each adapter's own dialect by its own
+    // `invoke`; the ANSWER is identical, which is what a port buys you.
+    const request: ContractRequest = { input: 'portable', sessionId: 'c-9' };
+    const overNode = await withHost(nodeSubject, request);
+    const overCloud = await withHost(agentCoreSubject, request);
+    expect(overCloud.output).toBe(overNode.output);
+    expect(overCloud.output).toContain('session:c-9');
   });
 
   async function withHost(

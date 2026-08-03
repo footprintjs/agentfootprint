@@ -93,6 +93,22 @@ export interface SearchOptions {
    * they're doing.
    */
   readonly embedderId?: string;
+
+  /**
+   * The natural-language form of the same query, when the caller has it.
+   *
+   * `search()` takes a VECTOR because the reference backends rank locally
+   * by cosine. Several managed stores do not work that way: they embed
+   * and rank **server-side** and their retrieval API takes text, so a
+   * vector is the one thing they cannot use. Those adapters read this
+   * field, and say so by name when it is missing rather than quietly
+   * ranking nothing.
+   *
+   * Stores that rank locally IGNORE it — the vector stays authoritative
+   * and results are unchanged whether you pass it or not. Supply both
+   * whenever you have both, and any store can serve the query.
+   */
+  readonly text?: string;
 }
 
 /**
@@ -243,6 +259,13 @@ export interface MemoryStore {
    *     Fine for dev / tests. Production needs a real vector DB.
    *   - **pgvector**: `ORDER BY embedding <=> query LIMIT k`.
    *   - **Pinecone / Qdrant / Weaviate**: native vector query API.
+   *
+   * **Server-side stores.** Some backends embed and rank on their own
+   * side and their retrieval API takes TEXT, not a vector. Those
+   * adapters read `options.text` (see {@link SearchOptions.text}) and
+   * refuse by name when it is absent — a vector is genuinely unusable
+   * to them, and returning an empty result would look like "no matches"
+   * instead of "wrong query form".
    */
   search?<T = unknown>(
     identity: MemoryIdentity,

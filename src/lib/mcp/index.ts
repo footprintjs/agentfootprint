@@ -7,9 +7,15 @@
 export { mcpClient } from './mcpClient.js';
 export { mcpServe } from './mcpServe.js';
 export { mockMcpClient, type MockMcpClientOptions, type MockMcpTool } from './mockMcpClient.js';
+export {
+  gatewayTransport,
+  GatewayAuthorizationRequiredError,
+  type GatewayTransportOptions,
+} from './gatewayTransport.js';
 export type {
   McpClient,
   McpClientOptions,
+  McpGatewayTransport,
   McpHttpTransport,
   McpStdioTransport,
   McpTransport,

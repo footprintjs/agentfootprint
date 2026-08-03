@@ -55,7 +55,10 @@ describe('the hosting ports name no vendor', () => {
     // If this ever shrinks to nothing the test would pass vacuously.
     expect(files).toContain('types.ts');
     expect(files).toContain('nodeHost.ts');
-    expect(files.length).toBeGreaterThanOrEqual(6);
+    // The shared HTTP machinery is the file a vendor is MOST likely to leak
+    // into, because every cloud adapter is a configuration of it.
+    expect(files).toContain('httpHost.ts');
+    expect(files.length).toBeGreaterThanOrEqual(7);
   });
 
   it.each(FORBIDDEN.map((pattern) => [pattern.source, pattern] as const))(

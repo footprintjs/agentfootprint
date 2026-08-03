@@ -27,6 +27,11 @@
  *   • `nodeHost({ port?, hostname?, invokePath?, healthPath? })` — plain
  *     `node:http`, zero dependencies. `POST /invoke`, `GET /health`, and
  *     Server-Sent Events when the caller asks for them.
+ *   • `httpHost({ name, wire, invokePath, healthPath, ... })` — the HTTP work
+ *     itself, parameterised by the JSON dialect it speaks. `nodeHost` is one
+ *     configuration of it; an adapter for someone's container runtime is
+ *     another. Two paths and five body shapes are all a second HTTP adapter
+ *     re-decides.
  *   • `memorySessions()` — conversations in a Map, for tests and local dev.
  *   • `standingAgent({ agent, sessions, host })` — the composer.
  *   • `toEnvelope` / `readEnvelope` — pack a conversation, and refuse by name to
@@ -45,8 +50,17 @@
  *   process.on('SIGTERM', () => void handle.close());
  */
 
-export { nodeHost } from './nodeHost.js';
+export { nodeHost, jsonWire } from './nodeHost.js';
 export type { NodeHost, NodeHostHandle, NodeHostOptions } from './nodeHost.js';
+
+export { httpHost, headerValue } from './httpHost.js';
+export type {
+  HttpHost,
+  HttpHostHandle,
+  HttpHostOptions,
+  HttpRequestFacts,
+  HttpWire,
+} from './httpHost.js';
 
 export { memorySessions } from './memorySessions.js';
 export { toEnvelope, readEnvelope } from './envelope.js';

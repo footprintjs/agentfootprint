@@ -56,10 +56,21 @@ crudely and on purpose — including for one particular runtime's `/invocations`
 path literal, which very nearly became this adapter's default by inheritance
 rather than by decision.
 
-<Callout type="info" title="This is what makes a cloud adapter cheap later">
+<Callout type="info" title="This is what makes a cloud adapter cheap later — and here is the receipt">
 A hosting adapter for someone's container runtime is close to `nodeHost` with
 that runtime's paths and a header mapping. If writing it needs a change to a
 port, the port was wrong.
+
+That claim now has a receipt. `agentCoreRuntimeHost` (7.15.0,
+`agentfootprint/hosting-providers`) is a real cloud runtime's container
+contract — different paths, different body fields, the conversation id in a
+header — and it passes the conformance suite below **with no change to any port
+type**. See [AgentCore adapters](doc:agentcore-adapters).
+
+One thing did have to move, and it is worth naming: `nodeHost` had hard-coded
+its own JSON dialect, which was fine while it was the only HTTP adapter and
+wrong the moment there was a second. The HTTP work now lives in `httpHost`, and
+both adapters are configurations of it.
 </Callout>
 
 ## Capabilities are read, never assumed
@@ -113,6 +124,50 @@ nothing the adapter told you.)
 
 `close()` drains: work already in flight finishes, and anything arriving after
 is refused with a `HostClosedError` — over HTTP, a `503`.
+
+## `httpHost` — writing your own HTTP adapter
+
+`nodeHost` is `httpHost` plus two paths and a JSON dialect. If you have to
+serve somebody else's container contract, that is all you re-decide:
+
+```ts
+import { httpHost, headerValue } from 'agentfootprint/hosting';
+import type { HttpWire } from 'agentfootprint/hosting';
+
+const wire: HttpWire = {
+  readRequest: (facts) => ({
+    input: typeof facts.body.query === 'string' ? facts.body.query : '',
+    sessionId: headerValue(facts, 'X-Conversation-Id'),   // case-insensitive
+  }),
+  health: (uptimeMs) => ({ up: true, uptimeMs }),
+  output: (answer) => ({ answer }),
+  failure: (message, code) => ({ message, code }),
+  chunk: (piece) => ({ piece }),
+};
+
+const host = httpHost({ name: 'myRuntime', wire, invokePath: '/v1/run', healthPath: '/up' });
+```
+
+An `HttpWire` is pure: it reads `HttpRequestFacts` (`body`, lower-cased
+`headers`, parsed `query`) and returns values. It never touches the socket,
+never picks a status code, and never learns whether the reply is going out as
+one body or as SSE frames — those are identical for every wire, which is
+exactly why they are not its job. `headerValue(facts, name, ...alternatives)`
+is the case-insensitive header reader wires share.
+
+`HttpHostOptions` is what `httpHost` takes; it returns an `HttpHost`, whose
+`serve()` resolves to an `HttpHostHandle` — a `HostHandle` that also reports the
+`url` and `port` it bound. (`NodeHost` and `NodeHostHandle` are aliases of those
+two, kept so existing code reads the same.)
+
+`invokePath` and `healthPath` are **required**, with no defaults. A default here
+would be inherited by every adapter built on this file, and a default that
+silently matched one vendor's container contract is how that vendor leaks into
+a library that promises not to know about one.
+
+`jsonWire` — `nodeHost`'s own dialect — is exported by name, so a deployment
+that needs those exact bodies with something else changed reuses it rather than
+retyping it and getting one field subtly wrong.
 
 ## Sessions: what crosses the restart
 
@@ -250,10 +305,12 @@ applied on the way to storage.
 
 The claim this whole subpath rests on is that **one handler serves any host
 unchanged**. That is not an assertion in prose, it is a test: a shared
-conformance suite runs against `nodeHost` and against a minimal in-process host
-written in the test file, which declares *no* capabilities so the buffering path
-is exercised rather than assumed. Both serve the same handler constant, and a
-final pair of cases invokes both and compares the answers directly.
+conformance suite runs against three subjects — `nodeHost`, a minimal
+in-process host written in the test file which declares *no* capabilities so the
+buffering path is exercised rather than assumed, and `agentCoreRuntimeHost`, a
+real cloud runtime's container contract. All three serve the same handler
+constant, and a final set of cases invokes all of them and compares the answers
+directly.
 
 It pins: same handler and same output on every host; `sessionId` and `headers`
 arriving as the transport declared them; `fail()` reaching the caller; a handler
@@ -262,8 +319,9 @@ nothing failed rather than left open; chunks observed if and only if the host
 declares streaming; `requireCapability` naming the adapter; `close()` draining
 in-flight work and refusing what comes after; and `close()` being idempotent.
 
-That suite is the artifact a future adapter — including one for a cloud runtime
-— has to pass.
+That suite is the artifact a future adapter has to pass. The first cloud one
+already did, without a port changing — which is the only evidence that means
+anything about a claim like this.
 
 ## Try it
 

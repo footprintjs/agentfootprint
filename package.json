@@ -1,6 +1,6 @@
 {
   "name": "agentfootprint",
-  "version": "7.14.0",
+  "version": "7.15.0",
   "description": "The explainable agent framework — backtrack a wrong answer to the exact context that caused it (evidence, not guesses). Built on footprintjs.",
   "license": "MIT",
   "author": "Sanjay Krishna Anbalagan",
@@ -286,6 +286,16 @@
         "default": "./dist/hosting/index.js"
       }
     },
+    "./hosting-providers": {
+      "import": {
+        "types": "./dist/esm/hosting-providers.d.ts",
+        "default": "./dist/esm/hosting-providers.js"
+      },
+      "require": {
+        "types": "./dist/types/hosting-providers.d.ts",
+        "default": "./dist/hosting-providers.js"
+      }
+    },
     "./reliability": {
       "import": {
         "types": "./dist/esm/reliability/index.d.ts",
@@ -393,6 +403,9 @@
       ],
       "hosting": [
         "./dist/types/hosting/index.d.ts"
+      ],
+      "hosting-providers": [
+        "./dist/types/hosting-providers.d.ts"
       ],
       "reliability": [
         "./dist/types/reliability/index.d.ts"

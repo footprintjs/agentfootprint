@@ -27,9 +27,15 @@
  *     AgentCore's ids are server-assigned.  **O(events in session)** — fine for typical
  *     window sizes; if you need O(1) keyed access at scale, use RedisStore.
  *   • `forget` → `ListEvents` + `DeleteEvent` per event (no `DeleteSession` on AgentCore).
- *   • `search` → still unwired (AgentCore's `RetrieveMemoryRecords` lands as a later helper).
+ *   • `search` → `RetrieveMemoryRecords`, **text-in**. AgentCore embeds and ranks on its
+ *     own side, so it takes a natural-language query; the port's `search()` takes a
+ *     vector. Pass `options.text` and this store serves the query; omit it and it refuses
+ *     by name rather than ranking an empty set. See `search()` below for the whole story.
  *   • `putIfVersion` / `seen` / `feedback` → in-process emulation (AgentCore has no native
  *     CAS / dedup / feedback primitive; these don't survive process restart).
+ *   • no `stream()` — AgentCore Memory has no streaming data-plane operation, and the
+ *     `MemoryStore` port has no streaming method to implement. Inventing one for a single
+ *     backend is how a port stops being a port.
  *
  * Role:    Outer ring. Lazy-requires the AWS SDK; zero runtime cost when another adapter is
  *          in use.  Emits: N/A (storage adapters don't emit).
@@ -40,6 +46,8 @@ import type {
   ListResult,
   MemoryStore,
   PutIfVersionResult,
+  ScoredEntry,
+  SearchOptions,
 } from '../../memory/store/types.js';
 import type { MemoryEntry } from '../../memory/entry/index.js';
 import type { MemoryIdentity } from '../../memory/identity/index.js';
@@ -81,6 +89,34 @@ export interface AgentCoreLikeClient {
     sessionId: string;
     eventId: string;
   }): Promise<void>;
+  /**
+   * Server-side semantic retrieval (`RetrieveMemoryRecords`). Optional: a client
+   * built before this existed still satisfies the interface, and `search()`
+   * feature-detects it rather than assuming.
+   */
+  retrieveRecords?(input: {
+    memoryId: string;
+    namespace: string;
+    searchQuery: string;
+    maxResults?: number;
+    memoryStrategyId?: string;
+  }): Promise<{ records: readonly AgentCoreMemoryRecord[] }>;
+}
+
+/** One record as `RetrieveMemoryRecords` returns it. */
+export interface AgentCoreMemoryRecord {
+  /** AgentCore's own record id. */
+  readonly memoryRecordId: string;
+  /** The record's text content. */
+  readonly content: string;
+  /** Relevance as AgentCore scored it, when it reports one. */
+  readonly score?: number;
+  /** Which strategy produced the record (semantic, summary, user-preference, …). */
+  readonly memoryStrategyId?: string;
+  /** The namespace it was found in. */
+  readonly namespace?: string;
+  /** When AgentCore created it (unix ms), when reported. */
+  readonly createdAt?: number;
 }
 
 export interface AgentCoreStoreOptions {
@@ -92,6 +128,27 @@ export interface AgentCoreStoreOptions {
   readonly client?: AgentCoreLikeClient;
   /** Page size for `listEvents`. Default 100. */
   readonly pageSize?: number;
+  /**
+   * Where `search()` looks. AgentCore organises extracted memory records into
+   * namespaces configured on the Memory resource's strategies (commonly
+   * something like `/strategies/{strategyId}/actors/{actorId}`).
+   *
+   * A function, because the namespace usually contains the actor: it is handed
+   * the resolved AgentCore ids for the identity being searched. Default:
+   * `/actors/{actorId}/sessions/{sessionId}` — the session's own records.
+   */
+  readonly searchNamespace?: (scope: {
+    readonly actorId: string;
+    readonly sessionId: string;
+  }) => string;
+  /**
+   * Restrict `search()` to one extraction strategy (semantic, summary,
+   * user-preference…). Omit to search across all of them.
+   *
+   * This is the metadata filter that reaches AgentCore's own side; `tiers` /
+   * `minScore` / `k` from {@link SearchOptions} are applied to what comes back.
+   */
+  readonly searchStrategyId?: string;
   /** @internal Test injection — skips the SDK require entirely. */
   readonly _client?: AgentCoreLikeClient;
   /** @internal Test injection — the AWS SDK module (to exercise the real shim with a mock SDK). */
@@ -119,6 +176,8 @@ export class AgentCoreStore implements MemoryStore {
   private readonly client: AgentCoreLikeClient;
   private readonly memoryId: string;
   private readonly pageSize: number;
+  private readonly searchNamespace: (scope: { actorId: string; sessionId: string }) => string;
+  private readonly searchStrategyId: string | undefined;
   private closed = false;
 
   // In-process shadow state for things AgentCore doesn't surface natively.
@@ -129,6 +188,10 @@ export class AgentCoreStore implements MemoryStore {
     if (!options.memoryId) throw new Error('AgentCoreStore requires `memoryId`.');
     this.memoryId = options.memoryId;
     this.pageSize = options.pageSize ?? 100;
+    this.searchNamespace =
+      options.searchNamespace ??
+      (({ actorId, sessionId }) => `/actors/${actorId}/sessions/${sessionId}`);
+    this.searchStrategyId = options.searchStrategyId;
 
     if (options._client) this.client = options._client;
     else if (options.client) this.client = options.client;
@@ -299,6 +362,101 @@ export class AgentCoreStore implements MemoryStore {
     }
   }
 
+  /**
+   * Server-side semantic retrieval over AgentCore's extracted memory records
+   * (`RetrieveMemoryRecords`).
+   *
+   * ── Read this before you call it ─────────────────────────────────────────
+   * **It takes TEXT, not the vector.** AgentCore embeds and ranks on its own
+   * side, so `query` — the port's vector — is unusable here, and the query it
+   * actually needs travels in `options.text`. Omit that and this method throws
+   * a corrective error naming what is missing, because the alternative is
+   * ranking nothing and handing back `[]`, which reads as "no matches" when it
+   * really means "wrong query form". Pass both and every store can serve you:
+   * local-ranking backends use the vector and ignore the text.
+   *
+   * **It searches a DIFFERENT population than `list()`.** `list` returns the
+   * events this store wrote. This returns the records AgentCore's extraction
+   * strategies derived FROM those events — summaries, semantic facts, user
+   * preferences. The ids therefore belong to AgentCore, not to entries you
+   * `put()`, and `store.get(entry.id)` will not find them. They arrive as
+   * entries so ranking code needs no special case, with `metadata.source`
+   * saying plainly where they came from.
+   *
+   * Filters: `searchStrategyId` and the namespace reach AgentCore's own side;
+   * `k`, `minScore` and `tiers` are applied to what comes back.
+   *
+   * @throws when `options.text` is absent, or when the client cannot retrieve.
+   */
+  async search<T = unknown>(
+    identity: MemoryIdentity,
+    query: readonly number[],
+    options: SearchOptions = {},
+  ): Promise<readonly ScoredEntry<T>[]> {
+    this.ensureOpen('search');
+    const text = options.text?.trim();
+    if (!text) {
+      throw new Error(
+        'AgentCoreStore.search() needs the query as TEXT, in `options.text`.\n' +
+          `  AgentCore embeds and ranks server-side (RetrieveMemoryRecords), so the ${query.length}-dimension\n` +
+          '  vector this method was handed cannot be sent anywhere — and returning [] would look\n' +
+          '  like "no matches" rather than "wrong query form".\n' +
+          '  Fix:  store.search(identity, vector, { text: theUserQuestion })\n' +
+          '  Backends that rank locally ignore `text`, so passing both is always safe.',
+      );
+    }
+    if (!this.client.retrieveRecords) {
+      throw new Error(
+        'AgentCoreStore.search() requires a client that implements `retrieveRecords`.\n' +
+          '  The built-in client does; a custom or older injected `client` / `_client` may not.',
+      );
+    }
+
+    const scope = this.scope(identity);
+    const k = options.k ?? 10;
+    const page = await this.client.retrieveRecords({
+      memoryId: this.memoryId,
+      namespace: this.searchNamespace({ actorId: scope.actorId, sessionId: scope.sessionId }),
+      searchQuery: text,
+      maxResults: k,
+      ...(this.searchStrategyId !== undefined && { memoryStrategyId: this.searchStrategyId }),
+    });
+
+    const scored: ScoredEntry<T>[] = [];
+    for (const record of page.records) {
+      const score = record.score ?? 0;
+      if (options.minScore !== undefined && score < options.minScore) continue;
+      // AgentCore records carry no tier. A tier filter therefore excludes them
+      // all rather than silently ignoring the filter the caller asked for.
+      if (options.tiers && options.tiers.length > 0) continue;
+      const createdAt = record.createdAt ?? Date.now();
+      const entry: MemoryEntry<T> = {
+        id: record.memoryRecordId,
+        value: record.content as T,
+        version: 1,
+        createdAt,
+        updatedAt: createdAt,
+        lastAccessedAt: Date.now(),
+        accessCount: 0,
+        metadata: {
+          // Says plainly that this did not come from an event this store wrote.
+          source: 'agentcore-memory-record',
+          ...(record.memoryStrategyId !== undefined && {
+            memoryStrategyId: record.memoryStrategyId,
+          }),
+          ...(record.namespace !== undefined && { namespace: record.namespace }),
+        },
+      };
+      scored.push({ entry, score });
+    }
+    // AgentCore returns its own ranking; re-sort anyway so the port's
+    // "descending by score" holds even if a future API version reorders.
+    scored.sort((a, b) =>
+      b.score !== a.score ? b.score - a.score : a.entry.id < b.entry.id ? -1 : 1,
+    );
+    return scored.slice(0, k);
+  }
+
   async close(): Promise<void> {
     if (this.closed) return;
     this.closed = true;
@@ -328,6 +486,7 @@ export interface BedrockAgentCoreSdkModule {
   readonly CreateEventCommand?: new (input: unknown) => unknown;
   readonly ListEventsCommand?: new (input: unknown) => unknown;
   readonly DeleteEventCommand?: new (input: unknown) => unknown;
+  readonly RetrieveMemoryRecordsCommand?: new (input: unknown) => unknown;
 }
 
 /** Pull the MemoryEntry out of an AgentCore event's `payload` (a single `blob` document). */
@@ -419,6 +578,44 @@ function createAgentCoreClient(
         sessionId,
         eventId,
       });
+    },
+    async retrieveRecords({ memoryId, namespace, searchQuery, maxResults, memoryStrategyId }) {
+      // AgentCore nests the query under `searchCriteria`; the strategy id is the
+      // metadata filter that reaches its side rather than being applied after.
+      const r = (await send(mod.RetrieveMemoryRecordsCommand, 'RetrieveMemoryRecordsCommand', {
+        memoryId,
+        namespace,
+        searchCriteria: {
+          searchQuery,
+          ...(maxResults !== undefined && { topK: maxResults }),
+          ...(memoryStrategyId !== undefined && { memoryStrategyId }),
+        },
+        ...(maxResults !== undefined && { maxResults }),
+      })) as {
+        memoryRecordSummaries?: ReadonlyArray<{
+          memoryRecordId?: string;
+          content?: { text?: string } | string;
+          score?: number;
+          memoryStrategyId?: string;
+          namespace?: string | readonly string[];
+          createdAt?: string | number | Date;
+        }>;
+      } | null;
+      const records: AgentCoreMemoryRecord[] = (r?.memoryRecordSummaries ?? []).map((s) => {
+        const content = typeof s.content === 'string' ? s.content : s.content?.text ?? '';
+        const namespaceValue = Array.isArray(s.namespace) ? s.namespace[0] : s.namespace;
+        const createdAt =
+          s.createdAt === undefined ? undefined : new Date(s.createdAt as string).getTime();
+        return {
+          memoryRecordId: s.memoryRecordId ?? '',
+          content,
+          ...(typeof s.score === 'number' && { score: s.score }),
+          ...(s.memoryStrategyId !== undefined && { memoryStrategyId: s.memoryStrategyId }),
+          ...(typeof namespaceValue === 'string' && { namespace: namespaceValue }),
+          ...(createdAt !== undefined && Number.isFinite(createdAt) && { createdAt }),
+        };
+      });
+      return { records };
     },
   };
 }

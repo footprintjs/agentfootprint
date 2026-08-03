@@ -12,6 +12,10 @@
  * 2. Tool sources (re-exported from existing modules)
  *    - `mcpClient(opts)` — connect to an MCP server (real)
  *    - `mockMcpClient({ tools })` — in-memory MCP source for dev / tests
+ *    - `gatewayTransport({ url, credentials, service })` — an MCP
+ *      transport whose auth headers are vended PER REQUEST by a
+ *      `CredentialProvider`, for endpoints behind a token with an
+ *      expiry. The token is used once and never stored.
  *
  * 3. Tool sink — the other direction
  *    - `mcpServe(tools, opts)` — expose your own `Tool[]` AS an MCP
@@ -48,14 +52,22 @@ export type { ToolProvider, ToolDispatchContext, ToolGatePredicate } from './typ
 // Re-export tool sources from the MCP module so consumers find them in
 // one place. This subpath is the ONLY place `mcpClient` is public — the
 // top-level barrel does not re-export it.
-export { mcpClient, mcpServe, mockMcpClient } from '../lib/mcp/index.js';
+export {
+  mcpClient,
+  mcpServe,
+  mockMcpClient,
+  gatewayTransport,
+  GatewayAuthorizationRequiredError,
+} from '../lib/mcp/index.js';
 export type {
+  GatewayTransportOptions,
   McpClient,
   McpClientOptions,
   McpSdkClient,
   McpTransport,
   McpStdioTransport,
   McpHttpTransport,
+  McpGatewayTransport,
   MockMcpClientOptions,
   MockMcpTool,
   McpServeOptions,

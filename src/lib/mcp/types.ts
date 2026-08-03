@@ -22,6 +22,7 @@
  */
 
 import type { Tool } from '../../core/tools.js';
+import type { CredentialProvider } from '../../identity/types.js';
 
 // ─── Transport options ─────────────────────────────────────────────
 
@@ -60,7 +61,51 @@ export interface McpHttpTransport {
   readonly headers?: Readonly<Record<string, string>>;
 }
 
-export type McpTransport = McpStdioTransport | McpHttpTransport;
+/**
+ * `gateway` transport — MCP over Streamable HTTP, with the auth headers vended
+ * **per request** by a {@link CredentialProvider} instead of fixed at connect
+ * time.
+ *
+ * The difference from `http` is entirely about time. `http` takes the headers
+ * you hand it once and reuses them for the life of the connection, which is
+ * exactly right for a static API key and exactly wrong for a token with an
+ * expiry: a long-lived agent outlives its bearer token, and the failure is a
+ * burst of 401s an hour into a session that worked fine when you tested it.
+ * This transport asks the provider on every request, so a rotated, refreshed
+ * or newly-consented token is simply the one used next.
+ *
+ * **The token is never stored by this transport.** It is vended, applied to one
+ * outgoing request, and dropped — it is not cached between requests, not held
+ * on the transport object, and not written to any event, error message or log.
+ * Build it with `gatewayTransport(...)` rather than by hand.
+ */
+export interface McpGatewayTransport {
+  readonly transport: 'gateway';
+  /** The MCP endpoint URL. */
+  readonly url: string;
+  /**
+   * Who vends the token. Anything satisfying the `CredentialProvider` port —
+   * `agentCoreIdentity()` for a managed token vault, `staticTokens()` in dev.
+   */
+  readonly credentials: CredentialProvider;
+  /** The downstream service id the provider understands, e.g. `'gateway'`. */
+  readonly service: string;
+  /** OAuth scopes to request, when the provider uses them. */
+  readonly scopes?: readonly string[];
+  /** `machine` (2-legged, the default) or `user` (3-legged, on behalf of a user). */
+  readonly mode?: 'machine' | 'user';
+  /**
+   * Extra headers sent alongside the vended ones (a tenant id, a correlation
+   * id). Applied FIRST, so a vended auth header always wins — a static header
+   * can never quietly shadow the credential.
+   *
+   * Put no secrets here: these are held for the life of the transport, which is
+   * the property the vended ones exist to avoid.
+   */
+  readonly headers?: Readonly<Record<string, string>>;
+}
+
+export type McpTransport = McpStdioTransport | McpHttpTransport | McpGatewayTransport;
 
 // ─── Client options ────────────────────────────────────────────────
 
