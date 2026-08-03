@@ -181,6 +181,10 @@ function seedFrom(scope: TypedScope<AgentState>, message: string, deps: SeedStag
   scope.activeInjections = [];
   scope.activatedInjectionIds = [];
   scope.dynamicToolSchemas = deps.toolSchemas;
+  // Messages-slot delivery ledger (7.21) — empty at the start of every run.
+  // A resumed run rebuilds it from the markers in the restored window rather
+  // than trusting this, so an empty ledger never means "deliver it again".
+  scope.deliveredMessageKeys = [];
   // Cache layer state (v2.6) — initialized to inert defaults.
   // CacheDecision subflow populates `cacheMarkers` per iteration;
   // UpdateSkillHistory + CacheGate consume `cachingDisabled`,

@@ -21,7 +21,7 @@
  * common 3–8 s thinking + 30–80 ms per word streaming preset.
  */
 
-import type { LLMChunk, LLMProvider, LLMRequest, LLMResponse } from '../types.js';
+import type { LLMChunk, LLMProvider, LLMRequest, LLMResponse, WireRole } from '../types.js';
 
 /** Either a fixed value (in ms) or a random `[min, max]` range (inclusive). */
 export type LatencyMs = number | readonly [number, number];
@@ -100,8 +100,19 @@ export interface MockProviderOptions {
   }>;
 }
 
+/**
+ * Which roles this wire carries inside `messages`.
+ *
+ * The mock never filters by role — every message it is handed counts toward
+ * the reply and the token estimate — so it carries all three. Tests that
+ * exercise messages-slot delivery on every role can use it as the permissive
+ * end of the range, with a capability-less provider as the floor.
+ */
+const CARRIES_IN_MESSAGES: readonly WireRole[] = Object.freeze(['system', 'user', 'assistant']);
+
 export class MockProvider implements LLMProvider {
   readonly name: string;
+  readonly carriesInMessages = CARRIES_IN_MESSAGES;
   private readonly reply?: string;
   private readonly replies?: readonly MockReply[];
   private repliesCursor = 0;

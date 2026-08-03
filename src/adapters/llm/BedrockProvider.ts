@@ -35,6 +35,7 @@ import type {
   LLMRequest,
   LLMResponse,
   LLMToolSchema,
+  WireRole,
 } from '../types.js';
 import { lazyRequire } from '../../lib/lazyRequire.js';
 
@@ -151,6 +152,17 @@ export interface BedrockProviderOptions {
   };
 }
 
+/**
+ * Which roles this wire carries inside `messages`.
+ *
+ * `'system'` is ABSENT and that is the wire's own rule, not a policy choice:
+ * `toAnthropicMessages` drops a `role: 'system'` message because Anthropic
+ * takes the system prompt as a separate top-level field. Declaring the truth
+ * here is what lets a `slot: 'messages'` injection be refused at run start
+ * rather than silently vanish between the recording and the request.
+ */
+const CARRIES_IN_MESSAGES: readonly WireRole[] = Object.freeze(['user', 'assistant']);
+
 export function bedrock(options: BedrockProviderOptions = {}): LLMProvider {
   const { client, Commands } = resolveClient(options);
   const defaultModel = options.defaultModel ?? 'anthropic.claude-sonnet-4-5-20250929-v1:0';
@@ -158,6 +170,7 @@ export function bedrock(options: BedrockProviderOptions = {}): LLMProvider {
 
   const provider: LLMProvider = {
     name: 'bedrock',
+    carriesInMessages: CARRIES_IN_MESSAGES,
     async complete(req: LLMRequest): Promise<LLMResponse> {
       const input = buildInput(req, defaultModel, defaultMaxTokens);
       try {
@@ -279,6 +292,7 @@ export function bedrock(options: BedrockProviderOptions = {}): LLMProvider {
 
 export class BedrockProvider implements LLMProvider {
   readonly name = 'bedrock';
+  readonly carriesInMessages = CARRIES_IN_MESSAGES;
   private readonly inner: LLMProvider;
 
   constructor(options: BedrockProviderOptions = {}) {

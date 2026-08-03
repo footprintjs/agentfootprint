@@ -255,6 +255,12 @@ export function withCircuitBreaker(
 
   const wrapped: LLMProvider = {
     name: inner.name,
+    // Same wire, same roles — a breaker only decides WHETHER to call. See the
+    // note in withRetry: this rebuilds the provider object, so the capability
+    // has to be carried across explicitly or it degrades to the floor.
+    ...(inner.carriesInMessages !== undefined && {
+      carriesInMessages: inner.carriesInMessages,
+    }),
     async complete(req: LLMRequest, hooks?: LLMCallHooks): Promise<LLMResponse> {
       rejectFastIfOpen();
       try {

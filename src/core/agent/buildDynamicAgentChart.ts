@@ -89,6 +89,8 @@ function dynamicTurnSeed(scope: TypedScope<AgentState>): void {
     priorCumEstimatedUsd?: number;
     priorCostBudgetHit?: boolean;
     priorSkillHistory?: readonly (string | undefined)[];
+    priorHistory?: readonly LLMMessage[];
+    priorDeliveredMessageKeys?: readonly string[];
   }>();
 
   // Cross-iteration accumulators — seed working keys from prior totals
@@ -100,6 +102,16 @@ function dynamicTurnSeed(scope: TypedScope<AgentState>): void {
   scope.cumEstimatedUsd = args.priorCumEstimatedUsd ?? 0;
   scope.costBudgetHit = args.priorCostBudgetHit ?? false;
   scope.skillHistory = args.priorSkillHistory ?? [];
+
+  // The WINDOW, as a writable working key (7.21). It used to arrive as the
+  // read-only `history` input, which was fine while nothing inside the
+  // subflow changed it — the Deliver stage does. Seeding it here from
+  // `priorHistory` (and bubbling it out at the boundary) is what makes the
+  // one-past law hold in the grouped shape too: what this iteration sends is
+  // what the next iteration's window stage sees. The delivery ledger takes
+  // the same trip so a delivered message is not re-delivered next turn.
+  scope.history = args.priorHistory ?? [];
+  scope.deliveredMessageKeys = args.priorDeliveredMessageKeys ?? [];
 
   // Per-iteration working keys — fresh each turn (slots + cache + callLLM
   // populate these inside the subflow; nothing outside reads the
@@ -175,45 +187,69 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
     // chart's `Agent: ReAct loop` description — so this does NOT mislabel
     // the agent boundary (confirmed in the proposal's 7-person review).
     description: 'LLMCall: invocation internals',
-  })
-    .addSubFlowChartNext(
-      SUBFLOW_IDS.INJECTION_ENGINE,
-      deps.injectionEngineSubflow,
-      'Injection Engine',
-      {
-        inputMapper: (parent) => ({
-          iteration: parent.iteration as number | undefined,
-          userMessage: parent.userMessage as string | undefined,
-          history: parent.history as readonly LLMMessage[] | undefined,
-          lastToolResult: parent.lastToolResult as { toolName: string; result: string } | undefined,
-          activatedInjectionIds:
-            (parent.activatedInjectionIds as readonly string[] | undefined) ?? [],
-          // Last turn's per-slot active set for the engine's Delta stage. In the
-          // grouped chart the sf-llm-call scope re-seeds each turn, so this is
-          // not yet carried across turns — Delta degrades to "all added" here
-          // (the flat/default chart carries it via the persistent parent scope).
-          priorActiveByslot:
-            (parent.activeByslot as ActiveBySlot | undefined) ?? EMPTY_ACTIVE_BY_SLOT,
-          // Skill-graph cursor from the previous iteration (carried into sf-llm-call
-          // by its outer boundary below). The `from`-gate for the route triggers.
-          currentSkillId: parent.currentSkillId as string | undefined,
-          // Relevance entry ranking (from an entry scorer) — read by defineRelevanceHint.
-          entryScores: parent.entryScores as
-            | ReadonlyArray<{ id: string; score: number; relevance: number }>
-            | undefined,
-          entryScorer: parent.entryScorer as string | undefined,
-        }),
-        outputMapper: (sf) => ({
-          activeInjections: sf.activeInjections,
-          activeByslot: sf.activeByslot,
-          // Advanced cursor — bubbled up under its own key (sf-llm-call's
-          // `currentSkillId` is a readonly input here), then mapped onto the
-          // ReAct parent's mutable currentSkillId by the outer outputMapper.
-          nextSkillCursor: sf.nextSkillCursor,
-        }),
-        arrayMerge: ArrayMergeMode.Replace,
-      },
-    )
+  }).addSubFlowChartNext(
+    SUBFLOW_IDS.INJECTION_ENGINE,
+    deps.injectionEngineSubflow,
+    'Injection Engine',
+    {
+      // NOTE: `history` here is the writable working key `dynamicTurnSeed`
+      // sets from `priorHistory` — not the frozen boundary input. See the
+      // Deliver mount below for why that indirection exists.
+      inputMapper: (parent) => ({
+        iteration: parent.iteration as number | undefined,
+        userMessage: parent.userMessage as string | undefined,
+        history: parent.history as readonly LLMMessage[] | undefined,
+        lastToolResult: parent.lastToolResult as { toolName: string; result: string } | undefined,
+        activatedInjectionIds:
+          (parent.activatedInjectionIds as readonly string[] | undefined) ?? [],
+        // Last turn's per-slot active set for the engine's Delta stage. In the
+        // grouped chart the sf-llm-call scope re-seeds each turn, so this is
+        // not yet carried across turns — Delta degrades to "all added" here
+        // (the flat/default chart carries it via the persistent parent scope).
+        priorActiveByslot:
+          (parent.activeByslot as ActiveBySlot | undefined) ?? EMPTY_ACTIVE_BY_SLOT,
+        // Skill-graph cursor from the previous iteration (carried into sf-llm-call
+        // by its outer boundary below). The `from`-gate for the route triggers.
+        currentSkillId: parent.currentSkillId as string | undefined,
+        // Relevance entry ranking (from an entry scorer) — read by defineRelevanceHint.
+        entryScores: parent.entryScores as
+          | ReadonlyArray<{ id: string; score: number; relevance: number }>
+          | undefined,
+        entryScorer: parent.entryScorer as string | undefined,
+      }),
+      outputMapper: (sf) => ({
+        activeInjections: sf.activeInjections,
+        activeByslot: sf.activeByslot,
+        // Advanced cursor — bubbled up under its own key (sf-llm-call's
+        // `currentSkillId` is a readonly input here), then mapped onto the
+        // ReAct parent's mutable currentSkillId by the outer outputMapper.
+        nextSkillCursor: sf.nextSkillCursor,
+      }),
+      arrayMerge: ArrayMergeMode.Replace,
+    },
+  );
+
+  // ── Messages-slot delivery — conditional mount (7.21) ───────────
+  // Same placement as the flat chart (after the engine, before anything reads
+  // the window) but it forced a structural change here: until now `history`
+  // crossed the sf-llm-call boundary as a READ-ONLY input, and a stage inside
+  // could not write it (`ScopeFacade.setValue` throws on an inputMapper key).
+  // Delivery has to write it — a delivered message that lived only inside the
+  // subflow would be discarded at the boundary and the next iteration would
+  // send a window the recording never described. So `history` now takes the
+  // same `prior*` round-trip the token accumulators take: in as
+  // `priorHistory`, copied to a writable `history` by `dynamicTurnSeed`,
+  // bubbled back out below.
+  if (deps.deliverStage) {
+    inner = inner.addFunction(
+      'Deliver',
+      deps.deliverStage as never,
+      STAGE_IDS.DELIVER,
+      'Deliver messages-slot injections into the window (role-checked, sequence-checked)',
+    );
+  }
+
+  inner = inner
     // ── Context assembly: the 3 slots run in PARALLEL (selector fan-out) ──
     // Identical to buildAgentChart's fork, just nested inside the sf-llm-call
     // inner chart. The slots are independent (each reads only InjectionEngine's
@@ -313,6 +349,9 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
         cumulativeInputTokens: (parent.totalInputTokens as number | undefined) ?? 0,
         systemPromptCachePolicy: deps.systemPromptCachePolicy,
         cachingDisabled: (parent.cachingDisabled as boolean | undefined) ?? false,
+        // The window as it will be sent — a messages marker's index is a
+        // position in THAT array. See buildAgentChart's mount for the why.
+        history: (parent.history as readonly LLMMessage[] | undefined) ?? [],
         recentHitRate: parent.recentHitRate as number | undefined,
         skillHistory: (parent.skillHistory as readonly (string | undefined)[] | undefined) ?? [],
       }),
@@ -410,7 +449,6 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
           // Read-only working inputs (stages read, never write these).
           userMessage: p.userMessage,
           iteration: p.iteration,
-          history: p.history,
           maxIterations: p.maxIterations,
           runIdentity: p.runIdentity,
           cachingDisabled: p.cachingDisabled,
@@ -435,6 +473,10 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
           ...memoryKeys,
           // Cross-iteration accumulators under prior* aliases — frozen
           // here, copied to writable working keys by dynamicTurnSeed.
+          // `history` joined them in 7.21: the Deliver stage writes the
+          // window, so it can no longer arrive under its own name.
+          priorHistory: p.history,
+          priorDeliveredMessageKeys: p.deliveredMessageKeys,
           priorTotalInputTokens: p.totalInputTokens,
           priorTotalOutputTokens: p.totalOutputTokens,
           priorCumTokensInput: p.cumTokensInput,
@@ -451,6 +493,19 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
           llmLatestContent: s.llmLatestContent,
           llmLatestToolCalls: s.llmLatestToolCalls,
           thinkingBlocks: s.thinkingBlocks,
+          // The window this turn actually sent, back to the outer scope — so
+          // the next iteration's window stage and the ToolCalls stage extend
+          // the SAME past the model was given, not the one before delivery.
+          // `arrayMerge: Replace` below is what makes this an overwrite
+          // instead of a doubling concat.
+          history: s.history,
+          deliveredMessageKeys: s.deliveredMessageKeys,
+          // The delivery record travels with them. It is the committed answer
+          // to "why is my declaration not on the wire?", and its own docs send
+          // the reader to `snapshot.sharedState` — which is the OUTER scope. A
+          // record that only exists inside the subflow would answer the
+          // question everywhere except where it tells you to look.
+          messagesDelivery: s.messagesDelivery,
           // NOTE: dynamicToolSchemas is intentionally NOT bubbled out — it
           // is written by the Tools slot and read ONLY by callLLM, both
           // inside sf-llm-call. The outer Route reads llmLatestToolCalls

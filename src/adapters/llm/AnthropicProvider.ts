@@ -25,6 +25,7 @@ import type {
   LLMRequest,
   LLMResponse,
   LLMToolSchema,
+  WireRole,
 } from '../types.js';
 import { lazyRequire } from '../../lib/lazyRequire.js';
 
@@ -155,6 +156,17 @@ export interface AnthropicProviderOptions {
 }
 
 /**
+ * Which roles this wire carries inside `messages`.
+ *
+ * `'system'` is ABSENT and that is the wire's own rule, not a policy choice:
+ * `toAnthropicMessages` drops a `role: 'system'` message because Anthropic
+ * takes the system prompt as a separate top-level field. Declaring the truth
+ * here is what lets a `slot: 'messages'` injection be refused at run start
+ * rather than silently vanish between the recording and the request.
+ */
+const CARRIES_IN_MESSAGES: readonly WireRole[] = Object.freeze(['user', 'assistant']);
+
+/**
  * Build an `LLMProvider` backed by Anthropic's Messages API.
  *
  * @example
@@ -176,6 +188,7 @@ export function anthropic(options: AnthropicProviderOptions = {}): LLMProvider {
 
   const provider: LLMProvider = {
     name: 'anthropic',
+    carriesInMessages: CARRIES_IN_MESSAGES,
     async complete(req: LLMRequest): Promise<LLMResponse> {
       const params = buildParams(req, defaultModel, defaultMaxTokens, parallelToolCalls);
       try {
@@ -223,6 +236,7 @@ export function anthropic(options: AnthropicProviderOptions = {}): LLMProvider {
  */
 export class AnthropicProvider implements LLMProvider {
   readonly name = 'anthropic';
+  readonly carriesInMessages = CARRIES_IN_MESSAGES;
   private readonly inner: LLMProvider;
 
   constructor(options: AnthropicProviderOptions = {}) {

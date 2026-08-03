@@ -11,7 +11,8 @@
  * Produces an `Injection` with:
  *   - flavor: `'instructions'`
  *   - trigger: `{ kind: 'rule', activeWhen }` (or `'always'` if omitted)
- *   - inject: `{ systemPrompt: prompt }`
+ *   - inject: `{ systemPrompt: prompt }`, or `{ messages: [{ role, content }] }`
+ *     when `slot: 'messages'` names the role it speaks as
  *
  * @example
  *   const calmTone = defineInstruction({
@@ -28,12 +29,13 @@
  *   });
  */
 
+import type { WireRole } from '../../../adapters/types.js';
 import type { Injection, InjectionContext, InjectionContent } from '../types.js';
-import { messagesSlotRefusal } from '../messagesSlotRefusal.js';
+import { messagesToolRoleRefusal } from '../messagesSlotRefusal.js';
 import { resolveCachePolicy } from '../../../cache/applyCachePolicy.js';
 import type { CachePolicy } from '../../../cache/types.js';
 
-export interface DefineInstructionOptions {
+interface DefineInstructionBase {
   readonly id: string;
   readonly description?: string;
   /**
@@ -45,20 +47,8 @@ export interface DefineInstructionOptions {
    * `agentfootprint.context.evaluated`.
    */
   readonly activeWhen?: (ctx: InjectionContext) => boolean;
-  /** Instruction text. Lands in the system-prompt slot. */
+  /** Instruction text. */
   readonly prompt: string;
-  /**
-   * Where the instruction lands. `'system-prompt'` (the default) is the
-   * only slot an instruction can land in: it is the one every provider
-   * delivers.
-   *
-   * `'messages'` is REFUSED — see {@link messagesSlotRefusal}. It was
-   * accepted before 7.19.1 and documented as the recency-first
-   * placement; it was recorded as injected and never sent. To make a
-   * rule salient at the moment it matters, return it from the tool whose
-   * result it is about — a tool result IS a recent message.
-   */
-  readonly slot?: 'system-prompt';
   /**
    * Cache policy for this instruction. Defaults to `'never'` —
    * instructions are typically rule-based (volatile per-iter
@@ -71,6 +61,47 @@ export interface DefineInstructionOptions {
   readonly cache?: CachePolicy;
 }
 
+/**
+ * `slot` and `role` are ONE decision, so the type makes them one choice —
+ * see {@link DefineFactOptions} for the full reasoning. In short:
+ * `slot: 'messages'` requires a `role` with no default (who appears to speak
+ * is the app's meaning to set), and `slot: 'system-prompt'` forbids one.
+ */
+export type DefineInstructionOptions = DefineInstructionBase &
+  (
+    | {
+        /**
+         * The default. Appended to the system prompt — the one placement
+         * every provider delivers. An `on-tool-return` instruction already
+         * lands on exactly the turn it matters; this is a system prompt that
+         * says it on that one turn, rather than on every turn.
+         */
+        readonly slot?: 'system-prompt';
+        readonly role?: never;
+      }
+    | {
+        /**
+         * Deliver the instruction into the conversation itself — it enters
+         * `scope.history` at the injection-engine boundary, at the END of the
+         * window, so the model reads it at the recency this option is
+         * reaching for. If its role would collide with the turn already at
+         * the end, delivery defers to the next boundary and says so on
+         * `messagesDelivery.deferred` rather than reordering anything.
+         *
+         * In a tool-using loop the window ends on the user's turn or on tool
+         * results, so a `'user'` role typically never gets a slot. Use
+         * `'assistant'`, use `'system'` on a provider that carries it, or
+         * return the words from the tool whose result they are about.
+         */
+        readonly slot: 'messages';
+        /**
+         * Who appears to say it. Required — no default. Refused at run start
+         * when the attached provider does not carry it inside `messages`.
+         */
+        readonly role: WireRole;
+      }
+  );
+
 export function defineInstruction(opts: DefineInstructionOptions): Injection {
   if (!opts.id || opts.id.trim().length === 0) {
     throw new Error('defineInstruction: `id` is required and must be non-empty.');
@@ -78,14 +109,26 @@ export function defineInstruction(opts: DefineInstructionOptions): Injection {
   if (!opts.prompt || opts.prompt.length === 0) {
     throw new Error(`defineInstruction(${opts.id}): \`prompt\` is required.`);
   }
-  // Refused at run time as well as in the type — see defineFact for why.
-  if ((opts.slot as string | undefined) === 'messages') {
-    throw new Error(messagesSlotRefusal(`defineInstruction('${opts.id}')`));
+  // Refused at run time as well as in the type, read through a widened view —
+  // see defineFact for why the widening is deliberate.
+  const raw = opts as { slot?: string; role?: string };
+  const toMessages = raw.slot === 'messages';
+  if (toMessages && !raw.role) {
+    throw new Error(
+      `defineInstruction('${opts.id}'): \`slot: 'messages'\` requires a \`role\` — ` +
+        `'user', 'assistant', or 'system' on a provider that carries it. There is no ` +
+        `default: who appears to speak is a meaning your app owns, not one the library picks.`,
+    );
+  }
+  if (toMessages && raw.role === 'tool') {
+    throw new Error(messagesToolRoleRefusal(`defineInstruction('${opts.id}')`));
   }
   const trigger = opts.activeWhen
     ? { kind: 'rule' as const, activeWhen: opts.activeWhen }
     : { kind: 'always' as const };
-  const inject: InjectionContent = { systemPrompt: opts.prompt };
+  const inject: InjectionContent = toMessages
+    ? { messages: [{ role: raw.role as WireRole, content: opts.prompt }] }
+    : { systemPrompt: opts.prompt };
   const cache = resolveCachePolicy('instruction', opts.cache);
   return Object.freeze({
     id: opts.id,

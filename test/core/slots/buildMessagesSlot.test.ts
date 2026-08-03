@@ -1,21 +1,20 @@
 /**
- * Regression — a messages-slot ACTIVE injection without a `description` must
- * not crash buildMessagesSlot.
+ * The messages slot projects the WINDOW, and credits whoever put each
+ * message in it.
  *
- * The bug: `activeInjections` holds `ActiveInjection` POJOs (projected — NO
- * `trigger` field), but the reason fallback read `inj.trigger.kind`:
- *     reason: inj.description ?? `… (trigger: ${inj.trigger.kind})`
- * When a messages-targeted injection had no `description`, the `??` fallback
- * evaluated `inj.trigger.kind` → `TypeError: Cannot read properties of
- * undefined (reading 'kind')` inside the sf-messages slot.
+ * ── What moved, and what the old bug was ─────────────────────────────
+ * The slot used to walk `activeInjections` looking for `inject.messages` and
+ * append a record per entry — a record for content the request never carried
+ * (the 7.19.1 gap), and a record whose reason fallback read `inj.trigger.kind`
+ * on a POJO projection that has no `trigger`, so a description-less injection
+ * crashed the slot outright.
  *
- * It used to be reachable as `.fact(defineFact({ slot: 'messages' }))`. Since
- * 7.19.1 that declaration is refused (see messagesSlotRefusal.test.ts) — the
- * slot never delivered it — so the surviving producer is the internal
- * memory-recall bridge, which hands the slot exactly this shape: an
- * ActiveInjection with `inject.messages` and no `description`. The slot is
- * therefore driven directly here with that POJO, rather than through an agent
- * that can no longer be built this way.
+ * Since 7.21.0 there is no such walk. A delivered injection is IN the window
+ * by the time this slot runs, carrying the `injectedBy` marker the delivery
+ * stage stamped, so it is projected like any other message and attributed
+ * from that marker. This test pins the attribution — including the
+ * description-less case the old crash came from, which is exactly the shape
+ * the memory-recall bridge produces.
  *
  * Test types (Convention 3): unit (the slot in isolation) / regression.
  */
@@ -26,7 +25,7 @@ import type { TypedScope } from 'footprintjs';
 
 import { buildMessagesSlot } from '../../../src/core/slots/buildMessagesSlot.js';
 import { SUBFLOW_IDS } from '../../../src/conventions.js';
-import type { ActiveInjection } from '../../../src/lib/injection-engine/types.js';
+import type { LLMMessage } from '../../../src/adapters/types.js';
 import type { InjectionRecord } from '../../../src/recorders/core/types.js';
 
 interface HarnessState {
@@ -34,13 +33,12 @@ interface HarnessState {
 }
 
 /** Mount the real slot as `sf-messages`, seeded the way the Agent seeds it. */
-function harness(activeInjections: readonly ActiveInjection[]) {
+function harness(history: readonly LLMMessage[]) {
   return flowChart<HarnessState>(
     'Seed',
     (scope: TypedScope<HarnessState>) => {
       scope.iteration = 1;
-      scope.history = [{ role: 'user', content: 'hi' }];
-      scope.activeInjections = activeInjections;
+      scope.history = history;
     },
     'seed',
   )
@@ -48,34 +46,80 @@ function harness(activeInjections: readonly ActiveInjection[]) {
       inputMapper: (parent: HarnessState) => ({
         messages: parent.history,
         iteration: parent.iteration,
-        activeInjections: parent.activeInjections,
       }),
       outputMapper: (sf: HarnessState) => ({ messagesInjections: sf.messagesInjections }),
     })
     .build();
 }
 
-describe('buildMessagesSlot — messages-slot active injection without a description', () => {
-  it('does not throw; the record falls back to a generated reason', async () => {
-    // The exact POJO the memory-recall bridge produces: no `trigger` (the
-    // projection drops it) and no `description`.
-    const recall: ActiveInjection = {
-      id: 'memory:recent',
-      flavor: 'memory',
-      inject: { messages: [{ role: 'user', content: 'last time you asked about refunds' }] },
-    };
+async function project(history: readonly LLMMessage[]): Promise<readonly InjectionRecord[]> {
+  const executor = new FlowChartExecutor(harness(history));
+  await executor.run({});
+  const records = executor.getSnapshot().sharedState.messagesInjections as
+    | readonly InjectionRecord[]
+    | undefined;
+  expect(records).toBeDefined();
+  return records!;
+}
 
-    const executor = new FlowChartExecutor(harness([recall]));
-    // Previously rejected with "Cannot read properties of undefined (reading
-    // 'kind')" raised inside sf-messages. Must resolve normally.
-    await executor.run({});
+describe('buildMessagesSlot — one record per message, credited to whoever put it there', () => {
+  it('attributes a delivered message to its injection, not to its role', async () => {
+    const records = await project([
+      { role: 'user', content: 'hi' },
+      {
+        role: 'assistant',
+        content: 'last time you asked about refunds',
+        injectedBy: {
+          injectionId: 'memory:recent',
+          flavor: 'memory',
+          reason: "recall from memory 'recent'",
+          iteration: 1,
+        },
+      },
+    ]);
 
-    const records = executor.getSnapshot().sharedState.messagesInjections as
-      | readonly InjectionRecord[]
-      | undefined;
-    expect(records).toBeDefined();
-    // The conversation message, then the injection-derived one.
-    expect(records!.map((r) => r.source)).toEqual(['user', 'memory']);
-    expect(records![1]!.reason).toBe("memory 'memory:recent' active");
+    // The conversation message by role; the delivered one by its injection.
+    expect(records.map((r) => r.source)).toEqual(['user', 'memory']);
+    expect(records[1]!.sourceId).toBe('memory:recent');
+    expect(records[1]!.reason).toBe("recall from memory 'recent'");
+    // Still one record per message — the delivered one is not counted twice.
+    expect(records).toHaveLength(2);
+  });
+
+  it('falls back to a generated reason when the injection had no description', async () => {
+    // The exact shape the memory-recall bridge produces: no `description`, so
+    // no `reason` on the marker. The old code reached for `inj.trigger.kind`
+    // here and threw `Cannot read properties of undefined (reading 'kind')`.
+    const records = await project([
+      { role: 'user', content: 'hi' },
+      {
+        role: 'assistant',
+        content: 'last time you asked about refunds',
+        injectedBy: { injectionId: 'memory:recent', flavor: 'memory', iteration: 3 },
+      },
+    ]);
+
+    expect(records[1]!.source).toBe('memory');
+    expect(records[1]!.reason).toBe("memory 'memory:recent' delivered at iteration 3");
+  });
+
+  it('hashes a delivered message the same way an eviction will name it', async () => {
+    // The window stage reports `context.evicted` under
+    // `${role}:${index}:${content}`. A delivered message has to use the same
+    // formula or "injected X" and "evicted X" would name different things.
+    const history: readonly LLMMessage[] = [
+      { role: 'user', content: 'hi' },
+      {
+        role: 'assistant',
+        content: 'a delivered note',
+        injectedBy: { injectionId: 'note', flavor: 'fact', iteration: 1 },
+      },
+    ];
+    const records = await project(history);
+    const plain = await project([
+      { role: 'user', content: 'hi' },
+      { role: 'assistant', content: 'a delivered note' },
+    ]);
+    expect(records[1]!.contentHash).toBe(plain[1]!.contentHash);
   });
 });

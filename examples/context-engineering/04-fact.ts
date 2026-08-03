@@ -5,9 +5,10 @@
  * should know, not behavior rules. Use for user profile, env info,
  * computed summaries, current time, cached config.
  *
- * Targets the system-prompt slot — the one every provider delivers.
- * (`slot: 'messages'` was accepted until 7.19.1 and never sent; it is
- * refused now, with a message naming the placements that work.)
+ * Targets the system-prompt slot by default — the one every provider
+ * delivers. Since 7.21.0 `slot: 'messages'` delivers too, with a `role`
+ * you name: it appends to the conversation window itself, refused at run
+ * start if the provider cannot carry that role inside `messages`.
  */
 
 import { Agent, type LLMProvider } from '../../src/index.js'

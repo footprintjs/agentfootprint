@@ -79,6 +79,14 @@ export function withRetry(provider: LLMProvider, options: WithRetryOptions = {})
 
   const wrapped: LLMProvider = {
     name: `${provider.name}+retry`,
+    // A retry calls the SAME wire, so it carries exactly what that wire
+    // carries. Forwarded rather than inherited: this object is rebuilt from
+    // scratch, and a dropped capability silently narrows to the
+    // user/assistant floor — a wrapped OpenAI provider would start refusing
+    // system-role delivery it can perfectly well do.
+    ...(provider.carriesInMessages !== undefined && {
+      carriesInMessages: provider.carriesInMessages,
+    }),
     async complete(req: LLMRequest, hooks?: LLMCallHooks): Promise<LLMResponse> {
       let lastError: unknown;
       // t0 for the `recovered` report's totalDurationMs. New

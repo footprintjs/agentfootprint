@@ -118,6 +118,20 @@ export interface AgentChartDeps {
     readonly strategyName: string;
     readonly run: (scope: never) => Promise<void>;
   };
+  /**
+   * The messages-slot DELIVERY stage (7.21). Present ONLY when the agent has
+   * something that could target the messages slot — a registered injection
+   * declaring `inject.messages`, or any `.memory()` whose recall might format
+   * as a non-system role. When absent the chart is the one it always was, so
+   * an agent with nothing to deliver is byte-identical to 7.20.
+   *
+   * Mounted between the InjectionEngine and the Context fan-out: after the
+   * engine has decided what is active, before anything reads the window. The
+   * placement is the design — a delivered message has to be part of the past
+   * that the slots project, the cache decision indexes, and the wire sends,
+   * or the recording and the request would disagree about the conversation.
+   */
+  readonly deliverStage?: (scope: never) => void;
   readonly systemPromptSubflow: FlowChart;
   readonly messagesSubflow: FlowChart;
   readonly toolsSubflow: FlowChart;
@@ -324,7 +338,24 @@ export function buildAgentChart(deps: AgentChartDeps): FlowChart {
         // 8 → 16 → 24 → 32 cumulative injections per turn.
         arrayMerge: ArrayMergeMode.Replace,
       },
-    )
+    );
+
+  // ── Messages-slot delivery — conditional mount (7.21) ───────────
+  // The one stage that lets declared content INTO the window. It has to sit
+  // here: after the engine knows what is active, and before any reader of
+  // `history` runs, so the projection, the cache indices and the request all
+  // describe one conversation. Omitted entirely when nothing could target the
+  // slot (no dead box, no write nobody makes).
+  if (deps.deliverStage) {
+    builder = builder.addFunction(
+      'Deliver',
+      deps.deliverStage as never,
+      STAGE_IDS.DELIVER,
+      'Deliver messages-slot injections into the window (role-checked, sequence-checked)',
+    );
+  }
+
+  builder = builder
     // ── Context assembly: the 3 slots run in PARALLEL (selector fan-out) ──
     // The slots are genuinely INDEPENDENT — each reads ONLY InjectionEngine's
     // activeInjections + seed state, and each writes a DISJOINT output key
@@ -469,6 +500,12 @@ export function buildAgentChart(deps: AgentChartDeps): FlowChart {
         cumulativeInputTokens: (parent.totalInputTokens as number | undefined) ?? 0,
         systemPromptCachePolicy: deps.systemPromptCachePolicy,
         cachingDisabled: (parent.cachingDisabled as boolean | undefined) ?? false,
+        // The window AS IT WILL BE SENT (7.21). A `CacheMarker{field:'messages'}`
+        // names a position in the request's message array, so it has to be
+        // computed against that array — post-window, post-delivery — and not
+        // against a count of injections, which is what it used to be and why
+        // the marker pointed at the wrong message.
+        history: (parent.history as readonly LLMMessage[] | undefined) ?? [],
         // CacheGate inputs (read-only: skillHistory is updated in the main
         // loop above, so it is NOT mapped back out)
         recentHitRate: parent.recentHitRate as number | undefined,

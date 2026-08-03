@@ -17,22 +17,28 @@
  * the LLM-protocol shape a provider needs — an assistant turn's
  * `toolCalls[]`, a tool turn's `toolCallId`.
  *
- * Windowing and summarizing are not pending here either: they arrived in
- * 7.16–7.17 as the window-strategy family, and they govern the window by
- * editing `scope.history` at the loop-head window stage (`stages/window.ts`)
- * — BEFORE this slot runs, so the projection and the wire describe the same
- * past. Content declared for this slot is refused at the declaration site
- * (`lib/injection-engine/messagesSlotRefusal.ts`) precisely because this
- * slot cannot deliver it.
+ * Nothing enters the conversation HERE, and that is the point. Two stages
+ * upstream edit `scope.history` before this one reads it: the window
+ * strategy takes messages out (`stages/window.ts`, 7.16–7.17) and the
+ * delivery stage lets declared ones in (`stages/deliver.ts`, 7.21). Both run
+ * at the loop head, before the slots, so the projection and the wire always
+ * describe the same past.
+ *
+ * That is why this file no longer walks `activeInjections` looking for
+ * `inject.messages`. Until 7.19.1 it did, and it produced a record — an
+ * emitted `context.injected` — for content the request never carried, which
+ * is the exact bug the wire-truth test now guards. A delivered injection is
+ * IN the window by the time this runs, so it is projected like any other
+ * message and attributed to its injection by the `injectedBy` marker the
+ * delivery stage stamped. One wire message, one record, one name.
  */
 
 import { flowChart } from 'footprintjs';
 import type { FlowChart, TypedScope } from 'footprintjs';
 import { INJECTION_KEYS } from '../../conventions.js';
-import type { ContextRecency, ContextRole } from '../../events/types.js';
+import type { ContextRecency, ContextRole, ContextSource } from '../../events/types.js';
 import type { InjectionRecord } from '../../recorders/core/types.js';
 import { COMPOSITION_KEYS } from '../../recorders/core/types.js';
-import type { ActiveInjection } from '../../lib/injection-engine/types.js';
 import { composeSlot, fnv1a, formatOverflowWarning, slotOverflow, truncate } from './helpers.js';
 
 /**
@@ -45,6 +51,14 @@ export interface InputMessage {
   readonly content: string;
   readonly toolCallId?: string;
   readonly toolName?: string;
+  /** Set by the delivery stage on a message an Injection put here — the
+   *  marker this slot attributes by. Mirrors `LLMMessage.injectedBy`. */
+  readonly injectedBy?: {
+    readonly injectionId: string;
+    readonly flavor: ContextSource;
+    readonly reason?: string;
+    readonly iteration: number;
+  };
 }
 
 export interface MessagesSlotConfig {
@@ -80,48 +94,35 @@ export function buildMessagesSlot(config: MessagesSlotConfig = {}): FlowChart {
       const messages = args.messages ?? [];
       const iteration = args.iteration ?? 1;
 
-      const injections: InjectionRecord[] = messages.map((m, i) => ({
-        contentSummary: truncate(m.content, 80),
-        contentHash: fnv1a(`${m.role}:${i}:${m.content}`),
-        slot: 'messages',
-        source: inferSource(m.role),
-        reason: `conversation history [${i}]`,
-        rawContent: m.content,
-        asRole: m.role,
-        asRecency: (i === messages.length - 1 ? 'latest' : 'earlier') as ContextRecency,
-        position: i,
-        ...(m.toolCallId !== undefined && { sourceId: m.toolCallId }),
-      }));
-
-      // Active Injections targeting the messages slot. Nothing a consumer
-      // declares can arrive here — `defineFact` / `defineInstruction` /
-      // `Agent.injection()` all refuse `inject.messages` — so the only
-      // producer today is the internal memory-recall bridge for a
-      // non-system role (memoryRecallInjections.ts). Kept because that
-      // bridge composes through it, and because it is where the delivery
-      // feature will attach.
-      const activeInjections =
-        (scope.$getValue('activeInjections') as readonly ActiveInjection[] | undefined) ?? [];
-      let position = injections.length;
-      for (const inj of activeInjections) {
-        const injMessages = inj.inject.messages;
-        if (!injMessages || injMessages.length === 0) continue;
-        for (const msg of injMessages) {
-          injections.push({
-            contentSummary: truncate(msg.content, 80),
-            contentHash: fnv1a(`msg:${inj.flavor}:${inj.id}:${position}:${msg.content}`),
-            slot: 'messages',
-            source: inj.flavor,
-            sourceId: inj.id,
-            reason: inj.description ?? `${inj.flavor} '${inj.id}' active`,
-            rawContent: msg.content,
-            asRole: msg.role,
-            asRecency: 'latest',
-            position,
-          });
-          position++;
-        }
-      }
+      // ONE record per message on the wire. Every message in the window gets
+      // exactly one, and the only question is who to credit: a message the
+      // Deliver stage let in carries `injectedBy`, so it is attributed to its
+      // injection (flavor / id / description); everything else is baseline
+      // conversation flow, attributed by role.
+      //
+      // The content hash is the SAME formula for both, deliberately. The
+      // window stage reports an eviction under `${role}:${index}:${content}`,
+      // so an injected message and the eviction that later removes it name
+      // one piece of context by one name — which they would not if a
+      // delivered message got its own hash scheme.
+      const injections: InjectionRecord[] = messages.map((m, i) => {
+        const by = m.injectedBy;
+        return {
+          contentSummary: truncate(m.content, 80),
+          contentHash: fnv1a(`${m.role}:${i}:${m.content}`),
+          slot: 'messages',
+          source: by ? by.flavor : inferSource(m.role),
+          reason: by
+            ? by.reason ?? `${by.flavor} '${by.injectionId}' delivered at iteration ${by.iteration}`
+            : `conversation history [${i}]`,
+          rawContent: m.content,
+          asRole: m.role,
+          asRecency: (i === messages.length - 1 ? 'latest' : 'earlier') as ContextRecency,
+          position: i,
+          ...(by !== undefined && { sourceId: by.injectionId }),
+          ...(by === undefined && m.toolCallId !== undefined && { sourceId: m.toolCallId }),
+        };
+      });
 
       scope.$setValue(INJECTION_KEYS.MESSAGES, injections);
       const composition = composeSlot(

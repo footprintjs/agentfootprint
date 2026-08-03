@@ -27,7 +27,8 @@
 
 import type { TypedScope } from 'footprintjs';
 import type { CacheMarker, CachePolicy, CachePolicyContext } from './types.js';
-import type { Injection } from '../lib/injection-engine/types.js';
+import type { LLMMessage } from '../adapters/types.js';
+import type { ActiveInjection, Injection } from '../lib/injection-engine/types.js';
 
 /**
  * Subflow scope state. Set via inputMapper from the agent's parent
@@ -56,6 +57,16 @@ export interface CacheDecisionState {
   readonly systemPromptCachePolicy: CachePolicy;
   /** Global kill switch. When `true`, subflow emits zero markers. */
   readonly cachingDisabled: boolean;
+  /**
+   * The window as the request will carry it (7.21) — post-window-strategy,
+   * post-delivery. Only the `messages` marker needs it, and it needs it for
+   * one reason: that marker's `boundaryIndex` is read by providers as an
+   * index INTO THIS ARRAY, so it has to be computed here from the array
+   * itself. Optional so the standalone/unit uses of `computeCacheMarkers`
+   * that predate delivery keep working; absent means no messages marker,
+   * which is exactly what a run with nothing delivered should produce.
+   */
+  readonly history?: readonly LLMMessage[];
   // ── Output ────────────────────────────────────────────────────
   cacheMarkers: readonly CacheMarker[];
 }
@@ -134,11 +145,12 @@ export function computeCacheMarkers(
 
   // Per-slot list of {cacheable, reason}
   type SlotEntry = { readonly cacheable: boolean; readonly reason: string };
-  const perSlot: Record<'system' | 'tools' | 'messages', SlotEntry[]> = {
+  const perSlot: Record<'system' | 'tools', SlotEntry[]> = {
     system: [],
     tools: [],
-    messages: [],
   };
+  /** Cacheability by injection id — what the messages pass indexes with. */
+  const cacheableById = new Map<string, boolean>();
 
   // Index 0 of system slot is the base system prompt
   perSlot.system.push({
@@ -148,10 +160,20 @@ export function computeCacheMarkers(
 
   // Walk each active injection
   for (const inj of state.activeInjections) {
-    const policy = (inj.metadata?.cache as CachePolicy | undefined) ?? 'never';
+    // The policy the consumer declared. `metadata.cache` is where a full
+    // `Injection` carries it; `cache` is where the scope-safe
+    // `ActiveInjection` projection carries it (the projection drops
+    // `metadata`, so reading only the former made every real run resolve to
+    // 'never' — see ActiveInjection.cache).
+    const policy =
+      (inj.metadata?.cache as CachePolicy | undefined) ??
+      ((inj as unknown as ActiveInjection).cache as CachePolicy | undefined) ??
+      'never';
     const cacheable = evaluateCachePolicy(policy, ctx);
     const reason = `${inj.flavor}:${inj.id}`;
+    cacheableById.set(inj.id, cacheable);
     for (const slot of injectionTargetSlots(inj)) {
+      if (slot === 'messages') continue; // indexed against the wire, below
       perSlot[slot].push({ cacheable, reason });
     }
   }
@@ -159,7 +181,7 @@ export function computeCacheMarkers(
   // Find per-slot last-contiguous-cacheable boundary; emit a marker per
   // slot that has at least one cacheable entry from index 0.
   const markers: CacheMarker[] = [];
-  for (const slot of ['system', 'tools', 'messages'] as const) {
+  for (const slot of ['system', 'tools'] as const) {
     const entries = perSlot[slot];
     let boundary = -1;
     let lastReason = '';
@@ -178,7 +200,61 @@ export function computeCacheMarkers(
     }
   }
 
+  const messagesMarker = messagesMarkerFor(state.history ?? [], cacheableById);
+  if (messagesMarker) markers.push(messagesMarker);
+
   return markers;
+}
+
+/**
+ * The `messages` marker, computed against the ACTUAL wire array (7.21).
+ *
+ * The old version counted entries in a per-slot list of injections and handed
+ * that count to providers who read it as a position in `request.messages` —
+ * two different index spaces wearing one name. It could not be caught because
+ * it could not fire: nothing had been able to target the messages slot since
+ * 7.19.1. Delivery makes it reachable, so it is computed the only way that
+ * can be true — from the array the marker points into.
+ *
+ * The prefix rule is unchanged in spirit, just re-anchored: walk the DELIVERED
+ * messages in wire order from the first one, stop at the first that is not
+ * cacheable this iteration, and name the last one that was. An injection that
+ * delivered on an earlier iteration and is no longer active has no policy now,
+ * so it counts as not cacheable — fail-closed, like every other unknown in
+ * this file. No delivered message, or the first one not cacheable, means no
+ * marker at all: the conversation itself declares no cache policy, and this
+ * decision does not invent one for it.
+ */
+function messagesMarkerFor(
+  history: readonly LLMMessage[],
+  cacheableById: ReadonlyMap<string, boolean>,
+): CacheMarker | undefined {
+  let boundary = -1;
+  let lastReason = '';
+  let count = 0;
+  for (let i = 0; i < history.length; i++) {
+    const by = history[i]!.injectedBy;
+    if (by === undefined) continue;
+    if (cacheableById.get(by.injectionId) !== true) break;
+    boundary = i;
+    lastReason = `${by.flavor}:${by.injectionId}`;
+    count++;
+  }
+  if (boundary < 0) return undefined;
+  // The reason says what was actually CHECKED. The prefix physically includes
+  // the conversation messages sitting between the delivered ones, and those are
+  // safe to cache for a reason this function never evaluated — a committed turn
+  // does not change — not because a policy said so. Claiming otherwise would
+  // describe a stability nobody measured.
+  return {
+    field: 'messages',
+    boundaryIndex: boundary,
+    ttl: 'short',
+    reason:
+      `messages prefix through wire index ${boundary} ` +
+      `(${count} cacheable delivered message${count === 1 ? '' : 's'}, ending at ${lastReason}; ` +
+      `the conversation turns inside the prefix carry no policy of their own)`,
+  };
 }
 
 /**
@@ -198,6 +274,7 @@ export function decideCacheMarkers(scope: TypedScope<CacheDecisionState>): void 
     cumulativeInputTokens: scope.cumulativeInputTokens,
     systemPromptCachePolicy: scope.systemPromptCachePolicy,
     cachingDisabled: scope.cachingDisabled,
+    ...(scope.history !== undefined && { history: scope.history }),
   });
 }
 

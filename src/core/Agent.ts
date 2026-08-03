@@ -64,6 +64,8 @@ import { compactionMeter, type CompactionMeterHandle } from '../recorders/core/C
 import { pendingDurableWrite } from './durabilityBarrier.js';
 import { EmitBridge } from '../recorders/core/EmitBridge.js';
 import { buildWindowStage } from './agent/stages/window.js';
+import { buildDeliverStage, carriedRoles } from './agent/stages/deliver.js';
+import { messagesRoleRefusal } from '../lib/injection-engine/messagesSlotRefusal.js';
 import { CompactionUnmeasurableError } from './agent/window/errors.js';
 import type { WindowStrategy } from './agent/window/strategy.js';
 import {
@@ -951,7 +953,42 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     };
   }
 
+  /**
+   * Refuse, at run start, any declared messages-slot role this provider
+   * cannot carry inside its message list (7.21, D2).
+   *
+   * Run start rather than build time because the answer depends on the
+   * provider — and a decorated provider (`withFallback`, `withRetry`) is only
+   * the thing it is once composed. Run start rather than delivery time
+   * because a declaration that can never work should fail on the first call,
+   * not three iterations into a paid run. The delivery stage re-checks each
+   * message anyway, which is what catches roles that only exist at run time
+   * (a hand-built memory-recall subflow's formatted output).
+   *
+   * Called from the ONE place `run()` and `resume()` share, so no entry point
+   * can slip past it.
+   */
+  private assertDeliverableRoles(): void {
+    const carries = carriedRoles(this.provider);
+    const carried = new Set(carries);
+    for (const inj of this.injections) {
+      for (const msg of inj.inject?.messages ?? []) {
+        if (!carried.has(msg.role as (typeof carries)[number])) {
+          throw new Error(
+            messagesRoleRefusal({
+              site: `Agent injection '${inj.id}'`,
+              role: msg.role,
+              providerName: this.provider.name,
+              carries,
+            }),
+          );
+        }
+      }
+    }
+  }
+
   private createExecutor(runOptions?: AgentRunOptions): FlowChartExecutor {
+    this.assertDeliverableRoles();
     const correlationId = runOptions?.correlationId;
     const traceId = runOptions?.traceId ?? runOptions?.env?.traceId;
     this.currentRunContext = {
@@ -1446,6 +1483,19 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       toolCallsHandler,
       injectionEngineSubflow,
       ...(pickEntryStage && { pickEntryStage }),
+      // Messages-slot delivery (7.21) — mounted ONLY when something could
+      // target the slot. A registered injection declaring `inject.messages`
+      // is the obvious case; a `.memory()` is the other, because a hand-built
+      // read subflow may format its recall as a non-system role and that
+      // recall only exists at run time. An agent with neither gets no stage
+      // and no write, so its chart and its commit log are what they were.
+      ...((this.injections.some((i) => (i.inject?.messages?.length ?? 0) > 0) ||
+        this.memories.length > 0) && {
+        deliverStage: buildDeliverStage({
+          provider: this.provider,
+          memoryIds: this.memories.map((m) => m.id),
+        }) as (scope: never) => void,
+      }),
       systemPromptSubflow,
       messagesSubflow,
       toolsSubflow,

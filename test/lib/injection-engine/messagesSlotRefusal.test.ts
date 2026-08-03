@@ -1,21 +1,28 @@
 /**
- * The messages-slot refusal (7.19.1).
+ * The messages-slot refusals — what is still refused now that the slot
+ * delivers (7.21.0), and where each refusal lives.
  *
- * Before this, `slot: 'messages'` was accepted by two factories and by a
- * hand-built Injection, recorded as injected by the slot, routed by the
- * engine, and never sent: the request's message list is assembled from the
- * conversation. The declaration is now refused where it is written, and the
- * refusal names what to use instead — a refusal that does not teach just
- * moves the puzzle.
+ * ── The arc ──────────────────────────────────────────────────────────
+ * 7.19.1 refused `slot: 'messages'` outright, because the declaration was
+ * recorded as injected and never sent. 7.21.0 delivers it, so a blanket
+ * refusal would now be the false statement. What survives are the refusals
+ * the WIRE imposes, and they live at different sites on purpose:
  *
- * What is pinned here is BOTH halves: the refusal fires everywhere the
- * declaration can be made, and it fires NOWHERE else (a system-prompt
- * injection, the default, is untouched).
+ *   • `role: 'tool'` — refused at DECLARATION, on every provider. A tool
+ *     message answers a specific call and an injection has no call to
+ *     answer; no capability could make it valid.
+ *   • a role THIS provider does not carry — refused at RUN START, because
+ *     the answer depends on a provider the factory has never seen.
+ *   • a role with nowhere to sit this iteration — DEFERRED, not refused,
+ *     and recorded (see delivery-sequence.test.ts).
+ *
+ * Pinned here: each refusal fires at its own site, fires nowhere else, and
+ * says something a reader can act on.
  *
  * Test types (Convention 3): unit (each factory) / functional (the builder
- * funnel) / regression (the accepted-then-dropped declaration) / security
- * (an Injection cannot smuggle content past the funnel by being
- * hand-built).
+ * funnel + a real run) / regression (the accepted-then-dropped declaration)
+ * / security (an Injection cannot smuggle an undeliverable role past the
+ * funnel by being hand-built).
  */
 
 import { describe, it, expect } from 'vitest';
@@ -28,71 +35,110 @@ import {
   defineSteering,
 } from '../../../src/injection-engine.js';
 import type { Injection } from '../../../src/injection-engine.js';
-import { messagesSlotRefusal } from '../../../src/lib/injection-engine/messagesSlotRefusal.js';
+import {
+  messagesRoleRefusal,
+  messagesToolRoleRefusal,
+} from '../../../src/lib/injection-engine/messagesSlotRefusal.js';
 import { MockProvider } from '../../../src/adapters/llm/MockProvider.js';
+import type { LLMProvider, LLMRequest, LLMResponse } from '../../../src/adapters/types.js';
 
-/** `slot: 'messages'` no longer type-checks; a JS caller can still pass it. */
-const MESSAGES = 'messages' as never;
+/** A minimal provider with no declared capability → the user/assistant floor. */
+function floorProvider(name = 'third-party'): LLMProvider {
+  return {
+    name,
+    complete: (_req: LLMRequest): Promise<LLMResponse> =>
+      Promise.resolve({
+        content: 'ok',
+        toolCalls: [],
+        usage: { input: 1, output: 1 },
+        stopReason: 'stop',
+      } as LLMResponse),
+  };
+}
 
-describe('messagesSlotRefusal — the sentence', () => {
-  it('names the site, the limitation, and the three placements that work', () => {
-    const text = messagesSlotRefusal("defineFact('turn-time')");
+describe('the refusal sentences', () => {
+  it('the role refusal names the site, the role, the provider and what it carries', () => {
+    const text = messagesRoleRefusal({
+      site: "defineFact('turn-time')",
+      role: 'system',
+      providerName: 'anthropic',
+      carries: ['user', 'assistant'],
+    });
     expect(text).toContain("defineFact('turn-time')");
-    expect(text).toContain('does not reach the model');
+    expect(text).toContain("`role: 'system'`");
+    expect(text).toContain("'anthropic'");
+    expect(text).toContain('`user` and `assistant`');
+    // And it teaches the ways out.
     expect(text).toContain("slot: 'system-prompt'");
-    expect(text).toContain("tool's return value");
-    expect(text).toContain('agent.run({ message })');
+    expect(text).toContain('tool result');
+    expect(text).toContain('who appears to speak is your decision');
+  });
+
+  it('the tool-role refusal explains why no provider could take it', () => {
+    const text = messagesToolRoleRefusal("defineInstruction('x')");
+    expect(text).toContain("defineInstruction('x')");
+    expect(text).toContain('answer to a specific tool call');
+    expect(text).toContain("Use `'user'` or `'assistant'`");
   });
 });
 
-describe('messages-slot declarations are refused', () => {
-  it('defineFact refuses it by name', () => {
-    expect(() => defineFact({ id: 'turn-time', data: 'noon', slot: MESSAGES })).toThrow(
-      /defineFact\('turn-time'\): the messages slot does not reach the model/,
+describe('refused at DECLARATION — the pairs no wire can take', () => {
+  it('defineFact requires a role for the messages slot, with no default', () => {
+    expect(() => defineFact({ id: 'turn-time', data: 'noon', slot: 'messages' } as never)).toThrow(
+      /defineFact\('turn-time'\): `slot: 'messages'` requires a `role`/,
     );
   });
 
-  it('defineInstruction refuses it by name', () => {
+  it('defineInstruction requires a role for the messages slot, with no default', () => {
     expect(() =>
-      defineInstruction({ id: 'be-brief', prompt: 'Be brief.', slot: MESSAGES }),
-    ).toThrow(/defineInstruction\('be-brief'\): the messages slot does not reach the model/);
+      defineInstruction({ id: 'be-brief', prompt: 'Be brief.', slot: 'messages' } as never),
+    ).toThrow(/defineInstruction\('be-brief'\): `slot: 'messages'` requires a `role`/);
   });
 
-  it('defineInjection refuses it through either flavor it routes to', () => {
-    expect(() => defineInjection({ type: 'fact', id: 'f', data: 'x', slot: MESSAGES })).toThrow(
-      /does not reach the model/,
-    );
+  it("refuses role: 'tool' in both factories and through defineInjection", () => {
     expect(() =>
-      defineInjection({ type: 'instruction', id: 'i', prompt: 'x', slot: MESSAGES }),
-    ).toThrow(/does not reach the model/);
+      defineFact({ id: 'f', data: 'x', slot: 'messages', role: 'tool' } as never),
+    ).toThrow(/`role: 'tool'` cannot be injected/);
+    expect(() =>
+      defineInstruction({ id: 'i', prompt: 'x', slot: 'messages', role: 'tool' } as never),
+    ).toThrow(/`role: 'tool'` cannot be injected/);
+    expect(() =>
+      defineInjection({
+        type: 'fact',
+        id: 'f2',
+        data: 'x',
+        slot: 'messages',
+        role: 'tool',
+      } as never),
+    ).toThrow(/`role: 'tool'` cannot be injected/);
   });
 
-  it('Agent.injection() refuses a hand-built Injection that goes around the factories', () => {
+  it('Agent.injection() catches a hand-built tool-role Injection going around the factories', () => {
     const smuggled: Injection = {
       id: 'hand-built',
       flavor: 'custom',
       trigger: { kind: 'always' },
-      inject: { messages: [{ role: 'user', content: 'read this first' }] },
+      inject: { messages: [{ role: 'tool', content: 'read this first' }] },
     };
     expect(() =>
       Agent.create({ provider: new MockProvider({ reply: 'ok' }) as never, model: 'm' }).injection(
         smuggled,
       ),
-    ).toThrow(/Agent\.injection\('hand-built'\): the messages slot does not reach the model/);
+    ).toThrow(/Agent\.injection\('hand-built'\): `role: 'tool'` cannot be injected/);
   });
 
-  it('the sugar aliases funnel into the same refusal', () => {
+  it('the sugar aliases funnel into the same declaration refusal', () => {
     const build = () => Agent.create({ provider: new MockProvider() as never, model: 'm' });
-    const withMessages = (id: string): Injection => ({
+    const withToolRole = (id: string): Injection => ({
       id,
       flavor: 'custom',
       trigger: { kind: 'always' },
-      inject: { messages: [{ role: 'system', content: 'x' }] },
+      inject: { messages: [{ role: 'tool', content: 'x' }] },
     });
-    expect(() => build().instruction(withMessages('a'))).toThrow(/does not reach the model/);
-    expect(() => build().fact(withMessages('b'))).toThrow(/does not reach the model/);
-    expect(() => build().steering(withMessages('c'))).toThrow(/does not reach the model/);
-    expect(() => build().skill(withMessages('d'))).toThrow(/does not reach the model/);
+    expect(() => build().instruction(withToolRole('a'))).toThrow(/cannot be injected/);
+    expect(() => build().fact(withToolRole('b'))).toThrow(/cannot be injected/);
+    expect(() => build().steering(withToolRole('c'))).toThrow(/cannot be injected/);
+    expect(() => build().skill(withToolRole('d'))).toThrow(/cannot be injected/);
   });
 
   it('an EMPTY messages array is not a declaration, and is not refused', () => {
@@ -105,6 +151,27 @@ describe('messages-slot declarations are refused', () => {
     expect(() =>
       Agent.create({ provider: new MockProvider() as never, model: 'm' }).injection(empty),
     ).not.toThrow();
+  });
+});
+
+describe('refused at RUN START — the role this provider cannot carry', () => {
+  it('builds fine, then names the provider and its roles when the run begins', async () => {
+    const agent = Agent.create({ provider: floorProvider('third-party'), model: 'm' })
+      .system('bot')
+      .fact(defineFact({ id: 'note', data: 'noon', slot: 'messages', role: 'system' }))
+      .build();
+
+    await expect(agent.run({ message: 'hi' })).rejects.toThrow(
+      /Agent injection 'note'.*'third-party' provider, which carries `user` and `assistant`/s,
+    );
+  });
+
+  it("does not refuse a role the provider DOES carry — MockProvider carries 'system'", async () => {
+    const agent = Agent.create({ provider: new MockProvider({ reply: 'ok' }) as never, model: 'm' })
+      .system('bot')
+      .fact(defineFact({ id: 'note', data: 'noon', slot: 'messages', role: 'system' }))
+      .build();
+    expect(await agent.run({ message: 'hi' })).toBe('ok');
   });
 });
 

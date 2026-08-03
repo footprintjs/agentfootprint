@@ -7,6 +7,183 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [7.21.0] - 2026-08-03
+
+The refusal becomes acceptance.
+
+Three releases ago the messages slot was a lie: content declared for it was
+recorded as injected, counted in the slot composition, routed by the engine, and
+never sent. 7.19.1 refused the declaration by name rather than deliver it badly,
+and said why in the same breath — the wire has no system role *inside* the
+message list on the Anthropic family (system is a separate top-level field)
+while the OpenAI family carries it, so wiring the slot straight through would
+have replaced one uniform gap with a **provider-dependent** one that nothing in
+the recording could distinguish. Worse than uniformly false, because at least a
+uniform gap can be found.
+
+This release is the acceptance that refusal held the door for. A declared
+message now reaches the model, and it reaches it the only way that keeps the
+recording true: **it becomes part of the conversation.** A new `Deliver` stage
+appends it to `scope.history` at the injection-engine boundary — the same window
+the window strategies govern, the same window the request is built from. There
+is no second list spliced in at send time, so the trace, the slot projection,
+the token count, the eviction ledger and the wire are all describing one past.
+Everything that was already true of a message is now true of a delivered one for
+free: a window strategy can fold it, `traceVariable` can slice it, the commit log
+names the stage that let it in.
+
+What survives from the refusal is the part that was always about the wire, and
+it survives split in two, each decided against something real. **Role**: every
+provider now declares `carriesInMessages`, and a role it does not carry is
+refused when the run starts, naming the provider and the roles it does. The role
+is never rewritten to one that fits — changing who appears to speak is a meaning
+change the app must make, not the library. **Position**: a delivered message goes
+at the end of the window, and if its role would repeat the turn already there, it
+is *deferred* to the next boundary with a sentence on
+`messagesDelivery.deferred`, never dropped and never reordered, and never
+inserted between a tool call and its result.
+
+One consequence of that rule is worth saying out loud rather than discovering:
+sequencing is judged on the strictest wire, where a tool result counts as a user
+turn. Inside a tool-using loop the window ends on the user's turn (first
+iteration) or on tool results (every one after) — so **a `role: 'user'`
+injection will typically never deliver.** Use `'assistant'`, use `'system'` on a
+provider that carries it, or return the words from the tool. Judging collision
+per-provider would deliver on one wire and defer on another with nothing in the
+recording to tell them apart, which is the same falsehood this feature exists to
+end. An honest limitation stated loudly beats a clever one hidden.
+
+### Added
+
+- **`slot: 'messages'` delivers, with a role you name.** `defineFact` and
+  `defineInstruction` accept it again, and `Agent.injection()` routes it instead
+  of refusing. `role` is **required and has no default** — before 7.19.1 it
+  defaulted to `'system'`, the value that reached the model on OpenAI-family
+  providers and vanished on Anthropic-family ones, so the default was the bug.
+  `slot` and `role` are one decision and the type makes them one choice: a
+  discriminated pair, so `slot: 'messages'` without a role does not compile,
+  `role` without it does not compile, and `role: 'tool'` never compiles (a tool
+  message answers a specific call; an injection has none).
+
+- **`LLMProvider.carriesInMessages`** — an optional
+  `readonly ('system' | 'user' | 'assistant')[]` declaring what a wire carries
+  inside its message array. All first-party adapters declare it; the three
+  resilience decorators forward it, and `withFallback` publishes the
+  **intersection** of its pair, because a role only one side carries is a role
+  the call might drop. **Absence is not permission**: a provider that omits the
+  field is treated as `['user', 'assistant']`, the floor every known wire
+  supports. Stated in the custom-provider guide, alongside the wrapper trap.
+
+- **The `Deliver` stage**, mounted only when something could target the slot (a
+  registered injection declaring `inject.messages`, or any `.memory()` whose
+  recall might). An agent with nothing to deliver has no stage, no write, and no
+  delivery record — the chart and the commit log it had in 7.20.
+
+- **`messagesDelivery` on the run's state** — per iteration, what was delivered
+  (with the wire index and content hash) and what was deferred (with the reason
+  in a sentence). It rides visible stage state rather than a new event contract,
+  the way the injection engine's route and delta already do, so it is in the
+  commit log and in `snapshot.sharedState` with nothing new to subscribe to. It
+  is the committed answer to "why is my declaration not on the wire?".
+
+- **`LLMMessage.injectedBy`** — the marker naming who let a message into the
+  window, so the slot attributes it to its injection instead of inferring a
+  source from its role. It is stripped in `callLLM` before the request exists,
+  so it can never reach a provider — not "ignored by our adapters", removed. A
+  consumer-authored adapter that serializes a message wholesale cannot leak it.
+
+### Fixed
+
+- **The cache marker for `field: 'messages'` pointed at the wrong message.** It
+  counted entries in a per-slot list of *injections* and handed that count to
+  providers who read it as a position in `request.messages` — two index spaces
+  under one name. It was unreachable while nothing could target the slot, and
+  delivery makes it reachable, so it is recomputed against the actual wire array
+  after windowing and delivery, and pinned: a marker's index names the message it
+  claims to name.
+
+  The same mismatch existed one step further out, and is fixed with it: the
+  Anthropic body is not `request.messages` either — system messages are dropped
+  and consecutive tool results are coalesced into one user turn — so the browser
+  adapter was placing `cache_control` by raw ordinal into a shorter, differently
+  ordered array. It drifted one position per tool round-trip, which put the cache
+  breakpoint on the turn that changes every iteration: the one place a prefix
+  cache can never be reused. The transform now yields an index map and the marker
+  is translated through it. A marker naming a message that does not survive the
+  transform marks nothing, rather than marking its neighbour.
+
+- **A declared `cache` policy never reached the cache decision.** The
+  `ActiveInjection` projection drops `metadata` (it is the scope-safe POJO), and
+  `computeCacheMarkers` read the policy from exactly there — so in every real run
+  every injection resolved to `'never'` and only the base system prompt could ever
+  be marked cacheable. The projection now carries the one key the decision reads.
+  Without this the marker fix above would have been true and still unreachable:
+  the same falsehood, one layer down.
+
+### Changed
+
+- **`dynamic-grouped` recordings gain one commit per iteration.** Delivery made
+  `history` writable inside the grouped chart's turn subflow for the first time,
+  and the turn seed now writes it unconditionally — so a `dynamic-grouped` agent
+  records one additional (often empty-delta) commit per iteration whether or not
+  anything is delivered. No wire bytes and no committed values change; only the
+  commit count. The flat chart is byte-identical to 7.20.0 when nothing declares
+  the messages slot. A reader diffing recordings across versions deserves this
+  sentence, so here it is.
+- **The messages slot stops recording what it does not deliver.** It no longer
+  walks `activeInjections` looking for `inject.messages`; a delivered injection
+  is already in the window when the slot runs, so it is projected like any other
+  message and credited to its injection by the marker. One wire message, one
+  `context.injected` record, one name — and the content hash is the same formula
+  the window stage uses for `context.evicted`, so injected and evicted refer to
+  the same piece of context by the same id.
+
+- **`history` is writable inside `sf-llm-call`** (`reactMode: 'dynamic-grouped'`).
+  It used to cross that boundary as a read-only input, which was fine while
+  nothing inside changed it; delivery does. It now takes the same `prior*`
+  round-trip the token accumulators take, and a test pins the law it protects:
+  the window an iteration sent is the window the next iteration continues.
+
+- **The two docs 7.19.1 missed become correct rather than corrected.**
+  `docs/INSTRUCTION_ARCHITECTURE.md` and `docs/guides/instructions.md` were still
+  teaching the old promise — "the messages slot is the recency window, highest
+  attention" — three releases after it was withdrawn. They now describe what
+  actually happens, limitation included.
+
+### Notes
+
+- **Delivered once.** An always-on injection enters the window on the boundary
+  it activates and is not re-appended every iteration. Dedupe reads the run's
+  ledger **and** the markers already in the window, which is what makes replay
+  safe: `resumeOnError` restores a conversation into a fresh scope, so a
+  ledger-only check would deliver a second copy of a message already sitting
+  there.
+
+- **Not resurrected.** A window strategy that drops a delivered message has made
+  a decision; re-delivering it at the next boundary would be the library
+  overruling that decision forever.
+
+- **`defineMemory({ asRole })` stays refused — for a different reason.** 7.20.0
+  refused it as never-read and blamed a limitation: honouring it meant routing
+  recall through a messages slot that could not deliver. That limitation is gone
+  now, so the sentence would have been resting on a retired fact — the same class
+  of stale claim the refusal exists to remove. It now says the true reason: the
+  machinery exists, a recall formatter emitting a non-system role becomes a
+  `slot: 'messages'` injection like any other, and **nobody has asked for it.**
+  Building it because the mechanism arrived is how a library grows options nobody
+  reads. Field evidence decides.
+
+- **A typed `agentfootprint.context.deferred` event is the named next step**, if
+  field evidence asks for it. The deferral is committed and queryable today; an
+  event is an additive change that costs a permanent contract, and the evidence
+  rule decides that, not the convenience of having one.
+
+- **Filed, not fixed:** `CacheMarker{field: 'tools'}` has the identical index
+  mismatch — it counts injections that contribute tools and is stamped onto the
+  request's tool array. It is out of this release's scope, and it is now the only
+  one of the pair left.
+
+
 ## [7.20.0] - 2026-08-03
 
 Three small honesty fixes. No new machinery, no delivery change, no wire bytes

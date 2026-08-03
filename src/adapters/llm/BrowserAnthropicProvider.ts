@@ -27,6 +27,7 @@ import type {
   LLMRequest,
   LLMResponse,
   LLMToolSchema,
+  WireRole,
 } from '../types.js';
 
 const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages';
@@ -110,6 +111,17 @@ export interface BrowserAnthropicProviderOptions {
   readonly _fetch?: typeof fetch;
 }
 
+/**
+ * Which roles this wire carries inside `messages`.
+ *
+ * `'system'` is ABSENT and that is the wire's own rule, not a policy choice:
+ * `toAnthropicMessages` drops a `role: 'system'` message because Anthropic
+ * takes the system prompt as a separate top-level field. Declaring the truth
+ * here is what lets a `slot: 'messages'` injection be refused at run start
+ * rather than silently vanish between the recording and the request.
+ */
+const CARRIES_IN_MESSAGES: readonly WireRole[] = Object.freeze(['user', 'assistant']);
+
 export function browserAnthropic(options: BrowserAnthropicProviderOptions): LLMProvider {
   const apiKey = options.apiKey;
   if (!apiKey) {
@@ -132,6 +144,7 @@ export function browserAnthropic(options: BrowserAnthropicProviderOptions): LLMP
 
   const provider: LLMProvider = {
     name: 'browser-anthropic',
+    carriesInMessages: CARRIES_IN_MESSAGES,
     async complete(req: LLMRequest): Promise<LLMResponse> {
       const body: AnthropicRequestBody = {
         ...buildBody(req, defaultModel, defaultMaxTokens, parallelToolCalls),
@@ -361,6 +374,7 @@ export function browserAnthropic(options: BrowserAnthropicProviderOptions): LLMP
 
 export class BrowserAnthropicProvider implements LLMProvider {
   readonly name = 'browser-anthropic';
+  readonly carriesInMessages = CARRIES_IN_MESSAGES;
   private readonly inner: LLMProvider;
 
   constructor(options: BrowserAnthropicProviderOptions) {
@@ -393,11 +407,14 @@ function buildBody(
   if (req.thinking && maxTokens <= req.thinking.budget) {
     maxTokens = req.thinking.budget + 1024;
   }
+  // The map is only needed when a messages marker has to be placed; building
+  // it always keeps the transform single-pass and costs one number per message.
+  const messageIndexMap: number[] = [];
   const body: AnthropicRequestBody = {
     model:
       req.model === 'anthropic' || req.model === 'browser-anthropic' ? defaultModel : req.model,
     max_tokens: maxTokens,
-    messages: toAnthropicMessages(req.messages),
+    messages: toAnthropicMessages(req.messages, messageIndexMap),
   };
   if (req.systemPrompt) body.system = req.systemPrompt;
   if (req.tools && req.tools.length > 0) body.tools = req.tools.map(toAnthropicTool);
@@ -418,7 +435,7 @@ function buildBody(
   // AnthropicCacheStrategy before we get here, so the loop below
   // doesn't need to enforce.
   if (req.cacheMarkers && req.cacheMarkers.length > 0) {
-    applyCacheMarkers(body, req.cacheMarkers);
+    applyCacheMarkers(body, req.cacheMarkers, messageIndexMap);
   }
   return body;
 }
@@ -436,10 +453,20 @@ function buildBody(
  *   - `messages`: mark the LAST content block of the LAST message in
  *     the cacheable prefix. Anthropic only honors cache_control on
  *     the final content block of the final cached message.
+ *
+ * `messageIndexMap` translates the marker's index — which is a position in
+ * `LLMRequest.messages` — into a position in `body.messages`. The two arrays
+ * differ: system messages are dropped and consecutive tool results are
+ * coalesced into one user turn. Applying the marker by raw ordinal was correct
+ * only while the cached prefix happened to end at the very last message, and
+ * drifted by one position per tool round-trip after that — putting the cache
+ * breakpoint on a turn that changes every iteration, which is the one place it
+ * can never be reused.
  */
 function applyCacheMarkers(
   body: AnthropicRequestBody,
   markers: readonly { field: string; boundaryIndex: number; ttl: 'short' | 'long' }[],
+  messageIndexMap?: MessageIndexMap,
 ): void {
   for (const m of markers) {
     const cacheControl =
@@ -468,7 +495,13 @@ function applyCacheMarkers(
     } else if (m.field === 'messages' && body.messages.length > 0) {
       // Mark the LAST content block of the LAST message in the
       // cacheable prefix. Anthropic ONLY honors cache_control there.
-      const msgIdx = Math.min(m.boundaryIndex, body.messages.length - 1);
+      // Translate first: the marker names a request-message position, and a
+      // message that did not survive the transform (`-1`, a system message)
+      // cannot be marked at all — silently marking its neighbour would claim a
+      // boundary nobody asked for.
+      const mapped = messageIndexMap?.[m.boundaryIndex];
+      if (messageIndexMap !== undefined && (mapped === undefined || mapped < 0)) continue;
+      const msgIdx = Math.min(mapped ?? m.boundaryIndex, body.messages.length - 1);
       const msg = body.messages[msgIdx];
       // String content → wrap in array so we can attach cache_control
       if (typeof msg.content === 'string') {
@@ -489,11 +522,32 @@ function applyCacheMarkers(
   }
 }
 
-function toAnthropicMessages(messages: readonly LLMMessage[]): AnthropicMessageParam[] {
+/**
+ * Where each request message ended up in the body — `-1` for one that did not
+ * survive the transform.
+ *
+ * This exists because the two arrays are NOT the same length or the same order:
+ * a `role: 'system'` message is dropped (system is a separate top-level field)
+ * and consecutive `role: 'tool'` messages are coalesced into ONE user turn. A
+ * `CacheMarker{field:'messages'}` names a position in `LLMRequest.messages`, so
+ * without this map it would be applied by ordinal into a differently-indexed
+ * array and land on the wrong turn — silently, and further off the more tool
+ * round-trips the conversation has had.
+ */
+type MessageIndexMap = readonly number[];
+
+function toAnthropicMessages(
+  messages: readonly LLMMessage[],
+  indexMap?: number[],
+): AnthropicMessageParam[] {
   const result: AnthropicMessageParam[] = [];
   for (const m of messages) {
-    if (m.role === 'system') continue;
+    if (m.role === 'system') {
+      indexMap?.push(-1);
+      continue;
+    }
     if (m.role === 'user') {
+      indexMap?.push(result.length);
       result.push({ role: 'user', content: m.content });
       continue;
     }
@@ -525,6 +579,7 @@ function toAnthropicMessages(messages: readonly LLMMessage[]): AnthropicMessageP
         }
       }
       const hasThinking = m.thinkingBlocks !== undefined && m.thinkingBlocks.length > 0;
+      indexMap?.push(result.length);
       result.push({
         role: 'assistant',
         content: blocks.length > 0 ? blocks : hasThinking ? blocks : m.content || '',
@@ -539,8 +594,12 @@ function toAnthropicMessages(messages: readonly LLMMessage[]): AnthropicMessageP
       };
       const last = result[result.length - 1];
       if (last && last.role === 'user' && Array.isArray(last.content)) {
+        // Coalesced into the user turn already open — several request messages
+        // share one body index.
+        indexMap?.push(result.length - 1);
         last.content.push(block);
       } else {
+        indexMap?.push(result.length);
         result.push({ role: 'user', content: [block] });
       }
       continue;

@@ -66,6 +66,14 @@ That's it. Five fields. Four trigger kinds. Three slot targets. **One
 Injection can target multiple slots** — Skills inject `body` into
 system-prompt AND `tools` into the tools slot, atomically.
 
+`inject.messages` is DELIVERY (7.21.0): the agent's `Deliver` stage appends those
+messages to `scope.history` itself, so the window strategies, the slot projection
+and the wire all see one conversation. Two wire rules govern it — a role the
+attached provider does not carry inside `messages` is refused when the run starts
+(`LLMProvider.carriesInMessages`), and a role that would repeat the turn at the
+end of the window is deferred to the next boundary and recorded on
+`messagesDelivery.deferred`. `role` is required and has no default.
+
 ---
 
 ## The five axes
@@ -75,7 +83,7 @@ Every Injection answers five questions:
 | Axis | Field | Examples |
 |---|---|---|
 | **Slot** | `inject.{systemPrompt,messages,tools}` | system-prompt / messages / tools |
-| **Role** (for messages) | `inject.messages[i].role` | system / user / assistant / tool |
+| **Role** (for messages) | `inject.messages[i].role` | system / user / assistant — required, and checked against what the provider carries |
 | **Flavor** | `flavor` | instructions / skill / steering / fact / rag / memory / … |
 | **Timing** | `trigger.kind` | always / rule / on-tool-return / llm-activated |
 | **Decision** | `trigger` shape | rule-based or LLM-guided |
@@ -98,7 +106,7 @@ tone, safety policies, skill-gated capabilities.
 | Factory | Trigger | Slot(s) | What |
 |---|---|---|---|
 | `defineSteering` | always | system-prompt | "Always respond in JSON." |
-| `defineInstruction` | rule | system-prompt (or messages) | "If user is upset, acknowledge feelings first." |
+| `defineInstruction` | rule | system-prompt, or messages with a role | "If user is upset, acknowledge feelings first." |
 | `defineSkill` | llm-activated | system-prompt + tools | "Billing help — body + tools loaded when LLM calls `read_skill('billing')`" |
 
 ### Context Engineering — *supply the facts*
@@ -108,9 +116,9 @@ recall, environment.
 
 | Factory | Trigger | Slot(s) | What |
 |---|---|---|---|
-| `defineFact` | always or rule | system-prompt or messages | User profile, env info, computed summary |
-| `defineRAG` | rule (retrieval score) | system or messages | Knowledge-base chunks |
-| `defineMemory` | rule (recency) | messages (+ system, by role) | Prior turns, extracted facts |
+| `defineFact` | always or rule | system-prompt, or messages with a role | User profile, env info, computed summary |
+| `defineRAG` | rule (retrieval score) | system-prompt | Knowledge-base chunks |
+| `defineMemory` | rule (recency) | system-prompt | Prior turns, extracted facts |
 
 **Same engine, same Injection primitive, same observability, same Lens
 chips — different intent.** That symmetry is the library's DNA.

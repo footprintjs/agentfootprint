@@ -32,6 +32,7 @@ import type { ToolArgValidationMode } from './toolArgsValidation.js';
 import type { ThinkingBlock } from '../../thinking/types.js';
 import type { ReliabilityScope } from '../../reliability/types.js';
 import type { WindowRecord } from './window/types.js';
+import type { MessagesDelivery } from './delivery/types.js';
 import type { MiddlewareDecision } from './middleware/types.js';
 
 // ─── PUBLIC types (consumer-facing) ────────────────────────────────
@@ -434,6 +435,19 @@ export interface AgentState {
   activatedInjectionIds: readonly string[];
   /** Most recent tool result — drives `on-tool-return` triggers. */
   lastToolResult?: { toolName: string; result: string };
+  /** The `Deliver` stage's record for THIS iteration: which messages-slot
+   *  injections entered the window, and which were held back with the
+   *  sentence saying why. Overwritten per iteration (the commit log keeps
+   *  the sequence). This is the committed answer to "why is my declaration
+   *  not on the wire?" — read it from `snapshot.sharedState`. Absent for an
+   *  agent that has no messages-slot delivery mounted. */
+  messagesDelivery?: MessagesDelivery;
+  /** The run's delivery ledger — every `deliveryKey` already let in, so an
+   *  always-on injection is delivered ONCE rather than re-appended every
+   *  iteration. Unioned with the markers found in the window itself, which
+   *  is what keeps a replayed run (`resumeOnError` restores history into a
+   *  fresh scope) from delivering the same message twice. */
+  deliveredMessageKeys: readonly string[];
   /** Tool schemas resolved by the tools slot subflow each iteration
    *  (registry + injection-supplied). Used by callLLM. */
   dynamicToolSchemas: readonly LLMToolSchema[];

@@ -46,6 +46,56 @@ audit-invisible prompts.
 
 ***
 
+### injectedBy?
+
+> `readonly` `optional` **injectedBy?**: `object`
+
+Defined in: [src/adapters/types.ts:104](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L104)
+
+v7.21 — WHO let this message into the window.
+
+Stamped by the agent's `Deliver` stage on a message that came from a
+`slot: 'messages'` Injection rather than from the conversation. It is the
+stable marker the messages slot reads to attribute the message to its
+injection (source / sourceId / reason) instead of inferring a baseline
+source from the role — so one wire message produces exactly one
+`context.injected` record, naming whoever put it there.
+
+**Never reaches a provider.** `callLLM` strips this field from every
+message before the request is handed to `provider.complete()` / `stream()`,
+so no adapter — first-party or consumer-authored — can leak framework
+metadata onto a wire, even one that serializes a message wholesale.
+Stripping removes a field, never a message, so wire indices are unchanged
+(which is what lets a `CacheMarker{field:'messages'}` name a real position).
+
+Absent on every message that came from the conversation itself.
+
+#### flavor
+
+> `readonly` **flavor**: `ContextSource`
+
+The injection's flavor — the `source` the slot records.
+
+#### injectionId
+
+> `readonly` **injectionId**: `string`
+
+The `Injection.id` that produced this message.
+
+#### iteration
+
+> `readonly` **iteration**: `number`
+
+The ReAct iteration whose boundary delivered it.
+
+#### reason?
+
+> `readonly` `optional` **reason?**: `string`
+
+The injection's description, when it had one.
+
+***
+
 ### role
 
 > `readonly` **role**: `ContextRole`

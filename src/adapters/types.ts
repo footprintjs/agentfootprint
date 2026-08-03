@@ -82,7 +82,55 @@ export interface LLMMessage {
    * audit-invisible prompts.
    */
   readonly ephemeral?: boolean;
+  /**
+   * v7.21 — WHO let this message into the window.
+   *
+   * Stamped by the agent's `Deliver` stage on a message that came from a
+   * `slot: 'messages'` Injection rather than from the conversation. It is the
+   * stable marker the messages slot reads to attribute the message to its
+   * injection (source / sourceId / reason) instead of inferring a baseline
+   * source from the role — so one wire message produces exactly one
+   * `context.injected` record, naming whoever put it there.
+   *
+   * **Never reaches a provider.** `callLLM` strips this field from every
+   * message before the request is handed to `provider.complete()` / `stream()`,
+   * so no adapter — first-party or consumer-authored — can leak framework
+   * metadata onto a wire, even one that serializes a message wholesale.
+   * Stripping removes a field, never a message, so wire indices are unchanged
+   * (which is what lets a `CacheMarker{field:'messages'}` name a real position).
+   *
+   * Absent on every message that came from the conversation itself.
+   */
+  readonly injectedBy?: {
+    /** The `Injection.id` that produced this message. */
+    readonly injectionId: string;
+    /** The injection's flavor — the `source` the slot records. */
+    readonly flavor: ContextSource;
+    /** The injection's description, when it had one. */
+    readonly reason?: string;
+    /** The ReAct iteration whose boundary delivered it. */
+    readonly iteration: number;
+  };
 }
+
+/**
+ * The roles a provider can carry INSIDE the `messages` array.
+ *
+ * `'tool'` is deliberately absent: a tool message is an answer to a specific
+ * `tool_use` id, so it cannot be authored by an injection — there is no call
+ * for it to answer. See `LLMProvider.carriesInMessages`.
+ */
+export type WireRole = 'system' | 'user' | 'assistant';
+
+/**
+ * The floor every known wire supports. Used for any provider that does not
+ * declare `carriesInMessages` — a third-party adapter is assumed to carry
+ * only what all of them do, never more.
+ */
+export const DEFAULT_CARRIES_IN_MESSAGES: readonly WireRole[] = Object.freeze([
+  'user',
+  'assistant',
+]);
 
 export interface LLMToolSchema {
   readonly name: string;
@@ -320,6 +368,32 @@ export interface LLMCallHooks {
 
 export interface LLMProvider {
   readonly name: string;
+  /**
+   * v7.21 — which roles this provider carries INSIDE the `messages` array.
+   *
+   * The wires disagree, and the disagreement is invisible from the outside:
+   * the Anthropic-family adapters (Anthropic, Bedrock, Browser Anthropic) DROP
+   * a `role: 'system'` message inside `messages` because system rides a
+   * separate top-level field, while the OpenAI-family adapters carry it. So a
+   * `slot: 'messages'` injection with `role: 'system'` would arrive on one
+   * provider and vanish on another — and nothing in the recording would tell
+   * the two apart. Declaring the capability is what lets the engine refuse at
+   * run start instead, naming the provider and the roles it does carry.
+   *
+   * Consulted at DELIVERY time by the agent's `Deliver` stage. A role that is
+   * not listed is REFUSED, never silently re-roled: changing who appears to
+   * speak is a meaning change the app must make, not the library.
+   *
+   * **Optional, and absence is not "carries everything"** — a provider that
+   * omits it is treated as `['user', 'assistant']`
+   * ({@link DEFAULT_CARRIES_IN_MESSAGES}), the floor every known wire
+   * supports. Declare it if your adapter carries more.
+   *
+   * A WRAPPER must forward it (the three `src/resilience/` decorators do);
+   * `withFallback` publishes the INTERSECTION of the two providers it holds,
+   * because a role only one of them carries is a role the call might drop.
+   */
+  readonly carriesInMessages?: readonly WireRole[];
   /**
    * `hooks` (v7.8) is optional and additive — implementations may declare
    * `complete(req)` with no second parameter and stay assignable. A LEAF

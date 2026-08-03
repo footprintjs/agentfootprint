@@ -49,7 +49,7 @@ describe('SUBFLOW_IDS — single source of truth', () => {
 });
 
 describe('STAGE_IDS — single source of truth', () => {
-  it('has the 16 known stage IDs', () => {
+  it('has the 17 known stage IDs', () => {
     const actual = Object.values(STAGE_IDS).sort();
     expect(actual).toEqual(
       [
@@ -69,6 +69,9 @@ describe('STAGE_IDS — single source of truth', () => {
         // Context compaction (7.16) — mounted only with `.compaction()`, and
         // when mounted it is the ReAct loop target:
         'compact',
+        // Messages-slot delivery (7.21) — mounted only when something could
+        // target the slot:
+        'deliver',
         // Cache layer (v2.6+):
         'update-skill-history',
         'cache-gate',

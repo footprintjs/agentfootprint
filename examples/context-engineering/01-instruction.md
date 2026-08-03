@@ -32,15 +32,22 @@ defineInstruction({
 });
 ```
 
-`slot: 'system-prompt'` is the only placement an Instruction has. `slot: 'messages'`
-was accepted until 7.19.1 and never delivered — the request's message list is built
-from the conversation, so an instruction placed there was recorded as injected and
-never sent. Declaring it now throws, and names what to use instead.
+`slot: 'system-prompt'` is the default. Since 7.21.0 `slot: 'messages'` is the
+other placement: with a `role` you name, the instruction is delivered into the
+conversation window itself. Two wire rules govern it — a role the attached
+provider cannot carry inside `messages` is refused when the run starts (naming
+the provider), and a role that would repeat the turn at the end of the window is
+deferred to the next boundary with a reason on `messagesDelivery.deferred`.
 
-**Want the rule read at maximum recency?** Return it from the tool it is about.
-A tool result IS a recent message, so `return 'Done. Use the redacted text only.'`
-puts the words exactly where a messages-slot injection was aiming — and this one
-actually reaches the model.
+**One consequence worth knowing before you reach for it:** inside a tool-using
+loop the window ends on the user's turn or on tool results, and tool results
+count as a user turn on the strictest wire — so `role: 'user'` typically never
+gets a slot. Use `'assistant'`, or `'system'` on a provider that carries it.
+
+**Want the rule read at maximum recency, with no role to negotiate?** Return it
+from the tool it is about. A tool result IS a recent message, so
+`return 'Done. Use the redacted text only.'` puts the words exactly where a
+messages-slot injection was aiming, on every provider, every time.
 
 ## When to use
 

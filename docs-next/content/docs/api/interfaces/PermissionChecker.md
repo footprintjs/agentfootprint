@@ -4,7 +4,7 @@ title: PermissionChecker
 
 # Interface: PermissionChecker
 
-Defined in: [src/adapters/types.ts:501](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L501)
+Defined in: [src/adapters/types.ts:575](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L575)
 
 ## Properties
 
@@ -12,7 +12,7 @@ Defined in: [src/adapters/types.ts:501](https://github.com/footprintjs/agentfoot
 
 > `readonly` **name**: `string`
 
-Defined in: [src/adapters/types.ts:502](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L502)
+Defined in: [src/adapters/types.ts:576](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L576)
 
 ## Methods
 
@@ -20,7 +20,7 @@ Defined in: [src/adapters/types.ts:502](https://github.com/footprintjs/agentfoot
 
 > **check**(`request`): [`PermissionDecision`](/docs/api/interfaces/PermissionDecision) \| `Promise`\<[`PermissionDecision`](/docs/api/interfaces/PermissionDecision)\>
 
-Defined in: [src/adapters/types.ts:503](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L503)
+Defined in: [src/adapters/types.ts:577](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L577)
 
 #### Parameters
 

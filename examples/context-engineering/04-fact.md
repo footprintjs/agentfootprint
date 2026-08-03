@@ -59,9 +59,12 @@ const liveMetric = defineFact({
 });
 ```
 
-A fact lands in the system-prompt slot — the one every provider delivers.
-`slot: 'messages'` was accepted until 7.19.1 and never sent; it is refused now,
-with a message naming the placements that work.
+A fact lands in the system-prompt slot by default — the one every provider
+delivers. Since 7.21.0 `slot: 'messages'` delivers too, with a `role` you name:
+the fact is appended to the conversation window itself. Both wire rules apply —
+a role the attached provider does not carry inside `messages` is refused when
+the run starts, and a role that would repeat the turn already at the end of the
+window is deferred to the next boundary rather than reordered.
 
 ## What it emits
 

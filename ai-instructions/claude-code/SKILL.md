@@ -139,9 +139,16 @@ const afterRedact = defineInstruction({
   activeWhen: (ctx) => ctx.lastToolResult?.toolName === 'redact_pii',
   prompt: 'Use the redacted text only. Do not paraphrase the original.',
 });
-// `slot: 'messages'` is REFUSED (7.19.1): it was recorded as injected and never
-// sent. For maximum recency, return the words from the tool itself — a tool
-// result is a real message on the wire.
+// `slot: 'messages'` DELIVERS since 7.21.0 — it appends to `scope.history`, so the
+// window strategies, the trace and the wire all see it. It requires a `role` (no
+// default), and both wire rules can refuse: a role the provider does not carry
+// inside `messages` throws at RUN START naming the provider (Anthropic-family
+// drops 'system' there, OpenAI-family carries it), and a role that would repeat
+// the turn at the end of the window is DEFERRED to the next boundary with a
+// reason on `messagesDelivery.deferred`. Practical consequence: inside a
+// tool-using loop `role: 'user'` typically never delivers (the window ends on
+// the user's turn, or on tool results, which count as one) — use 'assistant', or
+// return the words from the tool itself.
 
 // LLM-activated body + tools (auto-attaches `read_skill` activation tool)
 const billing = defineSkill({

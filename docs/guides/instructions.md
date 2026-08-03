@@ -2,7 +2,7 @@
 
 > **The hook:** some rules should only apply *sometimes*. An instruction lets you say "when X is true, tell the LLM Y." Plain prompts can't do that — they're always on. Instructions are the conditional layer.
 
-An instruction is a rule-based **Injection**: a predicate (`activeWhen`) runs once per ReAct iteration, and when it matches, the instruction's `prompt` text is added to that iteration's context. By default it lands in the **system prompt**; set `slot: 'messages'` to land it in the recent-messages window instead (higher attention weight). Instructions are one flavor of the unified Injection primitive — siblings include `defineSteering` (always-on), `defineSkill` (LLM-activated, can unlock tools), and `defineFact` (developer-supplied data).
+An instruction is a rule-based **Injection**: a predicate (`activeWhen`) runs once per ReAct iteration, and when it matches, the instruction's `prompt` text is added to that iteration's context. By default it lands in the **system prompt**; set `slot: 'messages'` (plus a `role` — there is no default) to deliver it into the conversation window itself. Instructions are one flavor of the unified Injection primitive — siblings include `defineSteering` (always-on), `defineSkill` (LLM-activated, can unlock tools), and `defineFact` (developer-supplied data).
 
 **Background:** the activate-when-condition-holds pattern is essentially **production rules** (forward-chaining rule systems — Newell 1973, OPS5, Rete networks) applied to LLM context. The predicate reads an **`InjectionContext`** — a bounded, read-only snapshot of the iteration state (`iteration`, `userMessage`, `history`, `lastToolResult`, `activatedInjectionIds`) — which is the **belief state** the dialog-state-tracking literature (Williams et al. 2016) uses the same idea for.
 
@@ -23,10 +23,14 @@ const refundInstruction = defineInstruction({
   // The text appended when the predicate matches.
   prompt: 'Handle denied orders with empathy. Follow refund policy. Do NOT promise reversal.',
 
-  // Default slot is 'system-prompt'. Use 'messages' for higher-attention,
-  // turn-salient reminders (post-tool-result corrections, urgent nudges).
+  // Default slot is 'system-prompt'. Use 'messages' to deliver the words into
+  // the conversation window itself, at the end of what the turn assembled.
   slot: 'messages',
-  role: 'system', // role used only when slot === 'messages' (default 'system')
+  // REQUIRED with slot: 'messages' — who appears to say it. No default: that
+  // is a meaning your app owns. Refused at run start if the attached provider
+  // cannot carry the role inside `messages` (Anthropic-family drops 'system'
+  // there; OpenAI-family carries it).
+  role: 'assistant',
 });
 ```
 
@@ -81,7 +85,7 @@ Seed
 
 Each iteration in `reactMode: 'dynamic'`:
 1. The **InjectionEngine** subflow evaluates every Injection's trigger against the current `InjectionContext`
-2. Matched instructions append their `prompt` text to the system-prompt slot (or messages slot, per `slot`)
+2. Matched instructions append their `prompt` text to the system-prompt slot — or, with `slot: 'messages'`, the **Deliver** stage appends it to `scope.history` itself, role-checked against the provider and sequence-checked against the end of the window
 3. The three API slots consume the active injections (Skills also contribute tools)
 4. Tool results land in `ctx.lastToolResult`, which the next iteration's predicates can read
 
@@ -141,7 +145,9 @@ Keeping one predicate name means the signature is always `(ctx: InjectionContext
 
 ## Key Design Decisions
 
-- **Text injection, two slots** — an instruction lands in the system-prompt slot (default) or the messages slot (`slot: 'messages'`); use `defineSkill` to unlock tools
+- **Text injection, two slots** — an instruction lands in the system-prompt slot (default) or is delivered into the window (`slot: 'messages'` + `role`); use `defineSkill` to unlock tools
+- **Delivery is part of the window, or it is a lie** — a delivered message enters `scope.history`, so the window strategies see it, the trace records who let it in, and the request carries it. It is never a parallel list spliced in at send time
+- **One honest limitation, said out loud** — a delivered message sits at the END of the window and providers reject two same-role turns in a row, so inside a tool-using loop a `role: 'user'` injection will typically never deliver (the window ends on the user's turn, or on tool results, which count as one). Use `'assistant'`, use `'system'` where it is carried, or return the words from the tool. A message that cannot be placed is DEFERRED with a reason on `messagesDelivery.deferred`, never dropped and never reordered
 - **InjectionContext, not full scope** — bounded read-only iteration state for clarity, debug, and eval
 - **Visible in narrative** — the InjectionEngine is a footprintjs subflow, so it appears in the trace
 - **Sugar over one primitive** — `defineInstruction` / `defineSteering` / `defineSkill` / `defineFact` all produce the same `Injection` shape

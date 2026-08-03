@@ -102,6 +102,14 @@ export const STAGE_IDS = {
    *  every strategy: it is the protocol name every lens and matcher already
    *  binds to, and which strategy ran is on the record. */
   COMPACT: 'compact',
+  /** Messages-slot delivery stage (7.21). Mounted ONLY when the agent has
+   *  something that could target the messages slot (a registered injection
+   *  that declares `inject.messages`, or any `.memory()` whose recall might).
+   *  Runs right after the InjectionEngine and before the slots, so the
+   *  delivered message is part of the window every downstream reader sees.
+   *  Absent otherwise — an agent with nothing to deliver runs the chart it
+   *  always ran. */
+  DELIVER: 'deliver',
   /** Updates the rolling skill-history window before CacheGate
    *  evaluates skill-churn (v2.6). */
   UPDATE_SKILL_HISTORY: 'update-skill-history',

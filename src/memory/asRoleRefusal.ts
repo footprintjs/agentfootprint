@@ -12,18 +12,22 @@
  * the lie legible: a reader could pick a role, read it back off the
  * definition, and be told a role the run would never use.
  *
- * Delivering it instead is not a one-line change. Role-differentiated
- * recall means putting non-system content into the message list, and the
- * messages slot does not reach the model today (see
- * `lib/injection-engine/messagesSlotRefusal.ts`): it is the observability
- * projection of the conversation, not a wire. Honouring `asRole: 'user'`
- * would have to route through that slot, which would trade a dead option
- * for a recorded-and-dropped one — strictly worse, because the recording
- * would then claim delivery.
+ * When this was written the messages slot did not reach the model at all,
+ * so honouring `asRole` would have traded a dead option for a
+ * recorded-and-dropped one. Since 7.21.0 it DOES reach the model: a
+ * `slot: 'messages'` injection is delivered into `scope.history`, subject to
+ * what the provider carries and to the sequence rule
+ * (`lib/injection-engine/messagesSlotRefusal.ts`). The mechanism a
+ * role-differentiated recall would ride now exists.
  *
- * So the option is refused where it is written, and the refusal points at
- * the feature that would make it real: role-differentiated recall arrives
- * with messages delivery, if field evidence asks for it.
+ * The refusal still stands, and the reason it stands is now the only reason
+ * it ever really had: **nobody has asked for it.** A recall formatter that
+ * emits a non-system role can be written today — it becomes a messages-slot
+ * injection with a declared role, checked like any other. What is missing is
+ * evidence that role-differentiated recall answers a real question better
+ * than the system prompt does. Building it because the machinery exists is
+ * how a library grows options nobody reads — which is exactly the thing this
+ * refusal is here to undo. Field evidence decides, not availability.
  *
  * A throw where there was a silent lie is a fix, not a break: nothing that
  * worked stops working, and something that never worked stops pretending.
@@ -39,10 +43,12 @@ export function asRoleRefusal(site: string): string {
     `${site}: \`asRole\` has never been read. Every formatter this library ships ` +
     `writes \`role: 'system'\`, so recall is always injected as system — the option ` +
     `was stored on the definition and ignored by the run. It is removed rather than ` +
-    `honoured, because honouring it means putting recall into the messages slot, ` +
-    `which does not reach the model. Role-differentiated recall arrives with the ` +
-    `messages-delivery feature, if field evidence asks for it. Drop the option: ` +
-    `the behaviour you already had does not change.`
+    `honoured: it was refused before the messages slot could deliver anything, and ` +
+    `it stays refused now that it can, because no field evidence asks for ` +
+    `role-differentiated recall. The machinery is there — a recall formatter that ` +
+    `emits a non-system role becomes a \`slot: 'messages'\` injection with a declared ` +
+    `role — so this is a decision, not a limitation. Drop the option: the behaviour ` +
+    `you already had does not change.`
   );
 }
 

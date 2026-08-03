@@ -30,13 +30,24 @@ import { mockEmbedder } from '../../src/memory/embedding/index.js';
 import { asRoleRefusal } from '../../src/memory/asRoleRefusal.js';
 
 describe('asRoleRefusal — the sentence', () => {
-  it('names the site, the truth, and the feature that would change it', () => {
+  it('names the site, the truth, and why the refusal still stands', () => {
     const text = asRoleRefusal("defineRAG('product-docs')");
     expect(text).toContain("defineRAG('product-docs')");
     expect(text).toContain('has never been read');
     expect(text).toContain("role: 'system'");
-    expect(text).toContain('messages-delivery feature');
     expect(text).toContain('does not change');
+  });
+
+  it('stopped blaming a limitation that no longer exists (7.21.0)', () => {
+    // 7.20.0 refused this because the messages slot could not deliver at all.
+    // 7.21.0 delivers, so that reason expired — and a refusal resting on a
+    // retired fact is the same class of stale claim the refusal was written to
+    // remove. The sentence now says the true reason: the machinery exists and
+    // no field evidence asks for the feature.
+    const text = asRoleRefusal("defineMemory('chat')");
+    expect(text).not.toContain('which does not reach the model');
+    expect(text).toContain('no field evidence');
+    expect(text).toContain('a decision, not a limitation');
   });
 });
 

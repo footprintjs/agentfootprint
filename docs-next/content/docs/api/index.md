@@ -230,6 +230,7 @@ title: agentfootprint
 - [ToolResultContent](/docs/api/type-aliases/ToolResultContent)
 - [UntilGuard](/docs/api/type-aliases/UntilGuard)
 - [WindowRefusalReason](/docs/api/type-aliases/WindowRefusalReason)
+- [WireRole](/docs/api/type-aliases/WireRole)
 - [WriteProvenanceMode](/docs/api/type-aliases/WriteProvenanceMode)
 
 ## Variables
@@ -238,6 +239,7 @@ title: agentfootprint
 - [BASELINE\_SOURCES](/docs/api/variables/BASELINE_SOURCES)
 - [COMPACTED\_FRAME\_PREFIX](/docs/api/variables/COMPACTED_FRAME_PREFIX)
 - [COMPOSITION\_KEYS](/docs/api/variables/COMPOSITION_KEYS)
+- [DEFAULT\_CARRIES\_IN\_MESSAGES](/docs/api/variables/DEFAULT_CARRIES_IN_MESSAGES)
 - [defaultCommentaryTemplates](/docs/api/variables/defaultCommentaryTemplates)
 - [DROP\_NOTICE\_PREFIX](/docs/api/variables/DROP_NOTICE_PREFIX)
 - [ENGINEERED\_SOURCES](/docs/api/variables/ENGINEERED_SOURCES)

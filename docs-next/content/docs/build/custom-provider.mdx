@@ -13,13 +13,55 @@ import type { LLMProvider, LLMRequest, LLMResponse, LLMChunk } from 'agentfootpr
 interface LLMProvider {
   readonly name: string;
 
+  /** Which roles your wire carries INSIDE the messages array. Optional. */
+  readonly carriesInMessages?: readonly ('system' | 'user' | 'assistant')[];
+
   complete(req: LLMRequest): Promise<LLMResponse>;
 
   stream?(req: LLMRequest): AsyncIterable<LLMChunk>;
 }
 ```
 
-That's the whole interface. `complete` is required; `stream` is optional (the library falls back to `complete` if absent).
+That's the whole interface. `complete` is required; `stream` and `carriesInMessages` are
+optional (the library falls back to `complete` if `stream` is absent).
+
+### `carriesInMessages` — declare what your wire can carry
+
+Wires disagree about one thing in a way nothing else can detect: whether a
+`role: 'system'` message *inside* the messages array survives. The Anthropic-family
+adapters drop it (system rides a separate top-level field); the OpenAI-family adapters
+carry it. A `slot: 'messages'` injection with that role would therefore arrive on one
+provider and vanish on another, and nothing in the recording would tell the two apart.
+
+So each adapter states what it carries, and the engine refuses at run start what a
+provider cannot deliver — naming your provider and its roles — rather than recording a
+message as injected and dropping it.
+
+The element type is exported as `WireRole` (`'system' | 'user' | 'assistant'`) if you
+want to name it in your own signatures.
+
+**If you omit the field, you are treated as carrying `DEFAULT_CARRIES_IN_MESSAGES`** —
+`['user', 'assistant']`, the floor every known wire supports, exported so you can assert
+against it in your own tests. That is deliberately the conservative reading: a missing
+declaration is not permission. Declare the field if your wire carries more:
+
+```ts
+class MyCustomProvider implements LLMProvider {
+  readonly name = 'my-custom';
+  // My API takes system messages inline, like OpenAI's does.
+  readonly carriesInMessages = ['system', 'user', 'assistant'] as const;
+  // …
+}
+```
+
+`'tool'` is not a member of the list and never will be: a tool message answers a
+specific tool call, so it is never something an injection can author.
+
+**If you write a wrapper, forward the field.** A wrapper that rebuilds the provider
+object and drops it silently narrows everything underneath to the floor — a wrapped
+OpenAI provider would start refusing system-role delivery it can perfectly well do.
+The three shipped decorators forward it; `withFallback` publishes the *intersection* of
+its two providers, because a role only one of them carries is a role the call might drop.
 
 ## A minimal custom provider
 

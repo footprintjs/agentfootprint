@@ -9,7 +9,7 @@ description: Rule-gated context injection. The Instruction primitive activates a
 
 An **Instruction** is one flavor of the [Injection primitive](doc:key-concepts) — content that lands in a slot when a trigger matches. For Instructions specifically:
 
-- **Slot:** `system-prompt` — the placement every provider delivers
+- **Slot:** `system-prompt` (the default — delivered by every provider), or `messages` with a role you name
 - **Trigger:** `rule` — a predicate `(ctx) => boolean` you write
 - **Fires:** every iteration of the agent loop, against fresh context
 
@@ -41,28 +41,69 @@ The reminder lands ONLY on the iteration where the LLM is about to read the reda
 
 This is the **Dynamic ReAct** pattern from Shinn 2023's reflection paper — context that adapts mid-loop based on what the agent just observed.
 
-## Where the Instruction lands — one slot, and why
+## Where the Instruction lands — the slot, and who speaks
 
-An Instruction's prompt joins the `system` slot. That is the only placement it has.
+An Instruction's prompt joins the `system` slot by default. Since 7.21.0 it can also
+be **delivered into the conversation itself** — but only with a role you name, and only
+where the wire can actually take it.
 
-Until 7.19.1 there was a second option, `slot: 'messages'`, documented here as the
-recency-first choice. It never worked. The request's message list is assembled from
-the conversation itself — the messages slot is the *observability projection* of that
-conversation, not a wire — so an instruction placed there was recorded as injected,
-counted in the slot composition, routed by the engine, and never sent to the model.
-The trace said one thing and the wire said another.
+```ts
+defineInstruction({
+  id: 'premium-note',
+  activeWhen: (ctx) => ctx.userMessage.includes('refund'),
+  prompt: 'This customer is on the premium plan; refunds are pre-approved under $200.',
+  slot: 'messages',
+  role: 'assistant', // required — no default
+});
+```
 
-It is now refused at the declaration, with a message naming the placements that do
-reach the model. Delivering it properly is a designed feature rather than a flag flip:
-the wire has no system role *inside* the message list (Anthropic and Bedrock drop such
-a message — system is a separate top-level field — while OpenAI carries it), and
-`'system'` was this option's default role. Wiring it up without a per-provider notion
-of what each provider can carry would have replaced one uniform gap with a
-provider-dependent one, and nothing in the recording would tell them apart.
+Delivered means delivered: the message enters `scope.history`, the same window the
+window strategies govern and the request is built from. There is no second list spliced
+in at send time, so the trace, the slot composition, the token count and the wire are
+all describing one conversation.
 
-**If you wanted recency, use the tool result.** An Instruction whose predicate watches
-`ctx.lastToolResult` still fires on exactly the right turn — and when the words
-themselves must sit at the end of the conversation, return them from the tool:
+### `role` is required, on purpose
+
+There is no default. Who appears to speak is a meaning your app owns — before 7.19.1
+this option defaulted to `'system'`, which reached the model on OpenAI-family providers
+and silently vanished on Anthropic-family ones, because the Anthropic wire has no system
+role *inside* the message list (system is a separate top-level field). Each provider now
+declares what it carries, and a role it cannot carry is **refused when the run starts**,
+naming the provider and its roles. The library never quietly re-roles your message to
+one that fits.
+
+| provider | carries inside `messages` |
+| --- | --- |
+| `openai`, `azure-openai`, `ollama`, `browser-openai` | `system`, `user`, `assistant` |
+| `anthropic`, `bedrock`, `browser-anthropic` | `user`, `assistant` |
+| a third-party adapter that declares nothing | `user`, `assistant` (the floor) |
+
+### One honest limitation, stated plainly
+
+A delivered message goes at the END of the window, and providers reject two turns of the
+same role in a row. In a tool-using loop the window ends on the user's turn (first
+iteration) or on tool results (every iteration after), and tool results count as a user
+turn on the strictest wire — so **a `role: 'user'` injection will typically never
+deliver inside an agent loop.** Use `'assistant'`, use `'system'` on a provider that
+carries it, or return the words from the tool.
+
+When a message cannot be placed, it is **deferred**, not dropped: it waits for the next
+iteration boundary, nothing is reordered to make room, and nothing is ever inserted
+between a tool call and its result. The reason is committed to
+`snapshot.sharedState.messagesDelivery.deferred` as a sentence — that record is the
+answer to "why is my declaration not on the wire?".
+
+```ts
+const delivery = agent.getSnapshot()?.sharedState.messagesDelivery;
+delivery.delivered; // [{ injectionId, role, wireIndex, contentHash }]
+delivery.deferred;  // [{ injectionId, reason: 'role-collision', note: '…' }]
+```
+
+### The tool result is still the sharpest tool
+
+An Instruction whose predicate watches `ctx.lastToolResult` fires on exactly the right
+turn — and when the words themselves must sit at the very end of the conversation,
+return them from the tool:
 
 ```ts
 defineTool({
@@ -74,9 +115,8 @@ defineTool({
 });
 ```
 
-A tool result IS a recent message. It lands after the assistant's turn, at the exact
-position a messages-slot injection was aiming for, and it is on the wire — visible in
-the request, in the trace, and in the token count.
+A tool result IS a recent message, it needs no role negotiation, and it lands after the
+assistant's turn every time.
 
 ## Anti-patterns
 

@@ -42,6 +42,24 @@ import {
 } from './reliabilityExecution.js';
 import type { AgentState } from '../types.js';
 
+/**
+ * Drop the fields that exist for the library and never for the model.
+ *
+ * Today that is exactly one: `injectedBy`, the delivery marker (7.21).
+ * Messages without it pass through by reference, so an agent that delivers
+ * nothing allocates nothing — and the array's length and order are untouched
+ * either way, which is what keeps `CacheMarker{field:'messages'}` honest.
+ */
+function stripFrameworkFields(messages: readonly LLMMessage[]): readonly LLMMessage[] {
+  if (!messages.some((m) => m.injectedBy !== undefined)) return messages;
+  return messages.map((m) => {
+    if (m.injectedBy === undefined) return m;
+    const { injectedBy: _marker, ...wire } = m;
+    void _marker;
+    return wire;
+  });
+}
+
 export interface CallLLMStageDeps {
   /** The LLM provider to invoke. */
   readonly provider: LLMProvider;
@@ -138,7 +156,16 @@ export function buildCallLLMStage(
     // the full LLM-protocol shape (assistant `toolCalls[]`, etc.). For
     // Anthropic's API contract we need the original LLMMessage with
     // `toolCalls` intact so tool_use → tool_result correlation survives.
-    const messages = (scope.history as readonly LLMMessage[] | undefined) ?? [];
+    // `stripFrameworkFields` takes off `injectedBy` — the marker the delivery
+    // stage stamps so the messages slot can say WHO put a message here. It is
+    // framework bookkeeping, not conversation, and it is removed BEFORE the
+    // request exists rather than trusted to be ignored: a consumer-authored
+    // adapter that serializes a message wholesale would otherwise put library
+    // internals on someone's wire. Stripping removes a FIELD, never a message,
+    // so `messages[i]` is still the message the cache marker's index names.
+    const messages = stripFrameworkFields(
+      (scope.history as readonly LLMMessage[] | undefined) ?? [],
+    );
 
     // Dynamic schemas — registry tools + injection-supplied tools (Skills'
     // `inject.tools` when their Injection is active). Falls back to the static

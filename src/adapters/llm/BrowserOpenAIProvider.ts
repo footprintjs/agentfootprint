@@ -25,6 +25,7 @@ import type {
   LLMRequest,
   LLMResponse,
   LLMToolSchema,
+  WireRole,
 } from '../types.js';
 
 const OPENAI_API_URL = 'https://api.openai.com/v1/chat/completions';
@@ -122,6 +123,16 @@ export interface BrowserOpenAIProviderOptions {
   readonly _fetch?: typeof fetch;
 }
 
+/**
+ * Which roles this wire carries inside `messages`.
+ *
+ * The OpenAI chat-completions shape takes the system prompt as a message like
+ * any other (as `developer` on reasoning models), so all three roles survive
+ * — the one place where a `slot: 'messages'` injection with `role: 'system'`
+ * genuinely reaches the model.
+ */
+const CARRIES_IN_MESSAGES: readonly WireRole[] = Object.freeze(['system', 'user', 'assistant']);
+
 export function browserOpenai(options: BrowserOpenAIProviderOptions): LLMProvider {
   if (!options.apiKey) {
     throw new Error(
@@ -148,6 +159,7 @@ export function browserOpenai(options: BrowserOpenAIProviderOptions): LLMProvide
 
   const provider: LLMProvider = {
     name: 'browser-openai',
+    carriesInMessages: CARRIES_IN_MESSAGES,
     async complete(req: LLMRequest): Promise<LLMResponse> {
       const body: OpenAIRequestBody = buildBody(req, { ...cfg, stream: false });
       let response: Response;
@@ -242,6 +254,7 @@ export function browserOpenai(options: BrowserOpenAIProviderOptions): LLMProvide
 
 export class BrowserOpenAIProvider implements LLMProvider {
   readonly name = 'browser-openai';
+  readonly carriesInMessages = CARRIES_IN_MESSAGES;
   private readonly inner: LLMProvider;
 
   constructor(options: BrowserOpenAIProviderOptions) {
@@ -340,6 +353,7 @@ export function browserAzureOpenai(options: BrowserAzureOpenAIProviderOptions): 
 
   return {
     name: 'browser-azure-openai',
+    carriesInMessages: CARRIES_IN_MESSAGES,
     // `hooks` is FORWARDED, not dropped — see LLMCallHooks in adapters/types.ts.
     complete: (req, hooks) => inner.complete(withDeployment(req), hooks),
     ...(inner.stream && {
@@ -350,6 +364,7 @@ export function browserAzureOpenai(options: BrowserAzureOpenAIProviderOptions): 
 
 export class BrowserAzureOpenAIProvider implements LLMProvider {
   readonly name = 'browser-azure-openai';
+  readonly carriesInMessages = CARRIES_IN_MESSAGES;
   private readonly inner: LLMProvider;
 
   constructor(options: BrowserAzureOpenAIProviderOptions) {

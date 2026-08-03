@@ -62,16 +62,26 @@ export interface InjectionContent {
   /** Text appended to the system-prompt slot when active. */
   readonly systemPrompt?: string;
   /**
-   * Messages appended to the messages slot when active.
+   * Messages DELIVERED into the conversation when active (7.21.0).
    *
-   * **Not delivered to the model, and refused where it can be declared**
-   * (`defineFact` / `defineInstruction` / `Agent.injection()`) since
-   * 7.19.1: the request's message list is assembled from the
-   * conversation, so content placed here was recorded as injected and
-   * never sent. The field stays on the type for the engine's internal
-   * memory-recall bridge and for the delivery feature that will make it
-   * true; nothing a consumer can declare reaches it. See
-   * `messagesSlotRefusal.ts` for the full reasoning.
+   * Delivery means what it says: the agent's `Deliver` stage appends these
+   * to `scope.history` itself at the injection-engine boundary — never a
+   * parallel array spliced in at send time — so the window strategies, the
+   * three slots, the commit log and the wire all see one past. Two rules
+   * govern it, and both can say no:
+   *
+   *   • a role the attached provider does not carry inside `messages` is
+   *     REFUSED at run start, naming the provider (the Anthropic family
+   *     drops `role: 'system'` there; the OpenAI family carries it);
+   *   • a message whose role would collide with the turn at the end of the
+   *     window, or that would split a `tool_use`/`tool_result` pair, is
+   *     DEFERRED to the next boundary and recorded on
+   *     `messagesDelivery.deferred`.
+   *
+   * Between 7.19.1 and 7.21.0 this field was unreachable by declaration:
+   * content placed here was recorded as injected and never sent, so the
+   * declaration was refused rather than believed. See
+   * `messagesSlotRefusal.ts` for the whole arc.
    */
   readonly messages?: ReadonlyArray<{
     readonly role: ContextRole;
@@ -238,6 +248,22 @@ export interface ActiveInjection {
    * consumers wire this manually via `agentfootprint/tool-providers`.
    */
   readonly autoActivate?: 'currentSkill';
+  /**
+   * The injection's cache directive, carried across the projection.
+   *
+   * It has to be here explicitly. `Injection.metadata` is a free-form bag
+   * that this projection deliberately does NOT copy wholesale, and the cache
+   * decision (`computeCacheMarkers`) reads exactly one key out of it — so
+   * before 7.21.0 every injection arrived at that decision with no policy
+   * and resolved to `'never'`, which meant no `tools` or `messages` cache
+   * marker could ever fire in a real run no matter what the consumer
+   * declared. Projecting the one key the decision reads makes the declared
+   * policy the policy that is applied.
+   *
+   * Absent when the injection declared none (hand-built Injections); the
+   * decision's own `?? 'never'` default then applies, as it always did.
+   */
+  readonly cache?: import('../../cache/types.js').CachePolicy;
   readonly inject: {
     readonly systemPrompt?: string;
     readonly messages?: ReadonlyArray<{
@@ -257,7 +283,9 @@ export function projectActiveInjection(inj: Injection): ActiveInjection {
   // Project per-skill metadata that slot subflows need to dispatch on.
   // `surfaceMode` drives the system-prompt-suppression decision (Block C).
   // `autoActivate` is reserved for runtime tool gating (forward-compat).
-  const meta = inj.metadata as { surfaceMode?: string; autoActivate?: string } | undefined;
+  const meta = inj.metadata as
+    | { surfaceMode?: string; autoActivate?: string; cache?: unknown }
+    | undefined;
   const out: ActiveInjection = {
     id: inj.id,
     flavor: inj.flavor,
@@ -265,6 +293,12 @@ export function projectActiveInjection(inj: Injection): ActiveInjection {
     ...(meta?.surfaceMode && { surfaceMode: meta.surfaceMode as ActiveInjection['surfaceMode'] }),
     ...(meta?.autoActivate && {
       autoActivate: meta.autoActivate as ActiveInjection['autoActivate'],
+    }),
+    // The cache directive rides across too — see the field's note. Without it
+    // the cache decision reads `undefined` for every injection and defaults to
+    // "never cacheable", which silently discards what the consumer declared.
+    ...(meta?.cache !== undefined && {
+      cache: meta.cache as ActiveInjection['cache'],
     }),
     inject: {
       ...(inj.inject.systemPrompt && { systemPrompt: inj.inject.systemPrompt }),

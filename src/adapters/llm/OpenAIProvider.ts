@@ -27,6 +27,7 @@ import type {
   LLMRequest,
   LLMResponse,
   LLMToolSchema,
+  WireRole,
 } from '../types.js';
 import { lazyRequire } from '../../lib/lazyRequire.js';
 
@@ -151,6 +152,16 @@ export interface OpenAIProviderOptions {
 }
 
 /**
+ * Which roles this wire carries inside `messages`.
+ *
+ * The OpenAI chat-completions shape takes the system prompt as a message like
+ * any other (as `developer` on reasoning models), so all three roles survive
+ * — the one place where a `slot: 'messages'` injection with `role: 'system'`
+ * genuinely reaches the model.
+ */
+const CARRIES_IN_MESSAGES: readonly WireRole[] = Object.freeze(['system', 'user', 'assistant']);
+
+/**
  * Build an `LLMProvider` backed by OpenAI's Chat Completions API.
  *
  * @example
@@ -178,6 +189,7 @@ export function openai(options: OpenAIProviderOptions = {}): LLMProvider {
 
   const provider: LLMProvider = {
     name: 'openai',
+    carriesInMessages: CARRIES_IN_MESSAGES,
     async complete(req: LLMRequest): Promise<LLMResponse> {
       const params = buildParams(req, { ...cfg, stream: false });
       try {
@@ -269,6 +281,7 @@ export function openai(options: OpenAIProviderOptions = {}): LLMProvider {
  */
 export class OpenAIProvider implements LLMProvider {
   readonly name = 'openai';
+  readonly carriesInMessages = CARRIES_IN_MESSAGES;
   private readonly inner: LLMProvider;
 
   constructor(options: OpenAIProviderOptions = {}) {
@@ -365,6 +378,10 @@ export function azureOpenai(options: AzureOpenAIProviderOptions = {}): LLMProvid
 
   return {
     name: 'azure-openai',
+    // The wire is `inner`'s, so the capability is `inner`'s. Re-stating it
+    // rather than inheriting by accident: this factory builds a fresh object,
+    // and a dropped capability silently becomes the user/assistant floor.
+    carriesInMessages: CARRIES_IN_MESSAGES,
     // `hooks` is FORWARDED, not dropped — see LLMCallHooks in adapters/types.ts.
     complete: (req, hooks) => inner.complete(withDeployment(req), hooks),
     ...(inner.stream && {

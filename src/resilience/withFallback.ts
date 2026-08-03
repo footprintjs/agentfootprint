@@ -24,7 +24,20 @@ import type {
   LLMProvider,
   LLMRequest,
   LLMResponse,
+  WireRole,
 } from '../adapters/types.js';
+import { DEFAULT_CARRIES_IN_MESSAGES } from '../adapters/types.js';
+
+/**
+ * The message roles BOTH providers carry — the only honest capability for a
+ * pair where either one may serve the call. An undeclared provider counts as
+ * the user/assistant floor, so pairing with one clamps the result to it.
+ */
+function carriedByBoth(a: LLMProvider, b: LLMProvider): readonly WireRole[] {
+  const left = a.carriesInMessages ?? DEFAULT_CARRIES_IN_MESSAGES;
+  const right = new Set(b.carriesInMessages ?? DEFAULT_CARRIES_IN_MESSAGES);
+  return Object.freeze(left.filter((role) => right.has(role)));
+}
 
 export interface WithFallbackOptions {
   /**
@@ -83,6 +96,13 @@ export function withFallback(
 
   const wrapped: LLMProvider = {
     name: `${primary.name}|${fallback.name}`,
+    // The INTERSECTION, and only the intersection. Either provider may serve
+    // the call, so a role only ONE of them carries is a role the call might
+    // drop — and a delivery that lands or vanishes depending on which side
+    // answered is precisely the provider-dependent recording this capability
+    // exists to prevent. Undeclared means the user/assistant floor on that
+    // side, so an undeclared partner clamps the pair to the floor.
+    carriesInMessages: carriedByBoth(primary, fallback),
     async complete(req: LLMRequest, hooks?: LLMCallHooks): Promise<LLMResponse> {
       try {
         return await primary.complete(req, hooks);

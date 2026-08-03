@@ -35,8 +35,9 @@ import {
 ### Rule-based Instructions — `defineInstruction`
 
 A predicate (`activeWhen`) decides activation each iteration. The `prompt` text lands
-in the system-prompt slot by default, or the messages slot (higher attention) via
-`slot: 'messages'`. Omit `activeWhen` and the instruction is always active.
+in the system-prompt slot by default, or is delivered into the conversation itself via
+`slot: 'messages'` — which requires a `role` (there is no default; see "Who speaks"
+below). Omit `activeWhen` and the instruction is always active.
 
 ```typescript
 const empathy = defineInstruction({
@@ -50,8 +51,9 @@ const postRedact = defineInstruction({
   id: 'pii-after-redact',
   activeWhen: (ctx) => ctx.lastToolResult?.toolName === 'redact_pii',
   prompt: 'PII has been redacted. Do not repeat emails or phone numbers.',
-  slot: 'messages',   // recency window — highest attention
-  role: 'system',
+  slot: 'messages',     // delivered into the window itself
+  role: 'assistant',    // required — and 'assistant' is the role that fits
+                        // after tool results on every provider
 });
 ```
 
@@ -82,6 +84,7 @@ const profile = defineFact({
   id: 'user-profile',
   data: 'User is a Gold-tier customer since 2021.',
   slot: 'messages',
+  role: 'assistant',
 });
 ```
 
@@ -127,8 +130,9 @@ const agent = Agent.create({ provider })
 
 Each active injection lands content into the LLM request according to its `inject`
 shape. An always-on steering doc and a `slot: 'system-prompt'` instruction append to
-`system`; a Skill's `tools` extend `tools`; a `slot: 'messages'` instruction or fact
-appends to `messages` in the recency window.
+`system`; a Skill's `tools` extend `tools`; a `slot: 'messages'` instruction or fact is
+delivered into `scope.history` — the same window the strategies govern and the request
+is built from, so there is no second list to reconcile.
 
 ```
 LLM API call:
@@ -140,14 +144,31 @@ LLM API call:
     user: "Check order 123",
     assistant: [tool_use: lookup_order(123)],
     user: [tool_result: '{"orderId":"123","status":"denied"}'],
-    user: "PII has been redacted. Do not repeat emails." ← Position 3 (slot: 'messages')
+    assistant: "PII has been redacted. Do not repeat emails." ← Position 3 (slot: 'messages', role: 'assistant')
   ]
 }
 ```
 
-The messages slot is the recency window — the position with the highest attention.
-Use `slot: 'messages'` for guidance that MUST be salient on this turn (post-tool-result
-reminders, urgent corrections).
+#### Who speaks, and where it can sit
+
+`slot: 'messages'` requires a `role`, and both of the wire's own rules can say no:
+
+- **Role.** Anthropic-family providers drop a `role: 'system'` message inside
+  `messages` (system is a separate top-level field); OpenAI-family providers carry it.
+  Each adapter declares `carriesInMessages`, and a role it cannot carry is refused when
+  the run starts, naming the provider. An adapter that declares nothing is treated as
+  carrying `['user', 'assistant']`. The role is never rewritten for you: who appears to
+  speak is a meaning the app owns.
+- **Position.** A delivered message goes at the END of the window, and providers reject
+  two turns of the same role in a row. In a tool-using loop the window ends on the
+  user's turn or on tool results — and tool results count as a user turn on the
+  strictest wire — so a `role: 'user'` injection will typically never deliver inside an
+  agent loop. Use `'assistant'`, use `'system'` where it is carried, or return the
+  words from the tool. When a message cannot be placed it is DEFERRED to the next
+  boundary, never dropped and never reordered, and the reason is committed to
+  `messagesDelivery.deferred`.
+
+Nothing is ever inserted between a tool call and its result.
 
 ### Reacting to a tool result
 

@@ -22,7 +22,7 @@ import type { CachePolicy, CacheStrategy } from '../../cache/types.js';
 import type { Injection, InjectionContext } from '../../lib/injection-engine/types.js';
 import type { EntryScoring } from '../../lib/injection-engine/skillGraph.js';
 import { defineInstruction } from '../../lib/injection-engine/factories/defineInstruction.js';
-import { messagesSlotRefusal } from '../../lib/injection-engine/messagesSlotRefusal.js';
+import { messagesToolRoleRefusal } from '../../lib/injection-engine/messagesSlotRefusal.js';
 import type { MemoryDefinition } from '../../memory/define.types.js';
 import type { ReliabilityConfig } from '../../reliability/types.js';
 import type { ThinkingHandler } from '../../thinking/types.js';
@@ -543,17 +543,24 @@ export class AgentBuilder {
    * for built-in flavors use the typed sugar (`.skill`, `.steering`,
    * `.instruction`, `.fact`).
    *
-   * An Injection carrying `inject.messages` is refused here — the named
-   * factories refuse the same thing at declaration, and this is the one
-   * funnel every flavor passes through, so a hand-built Injection cannot
-   * reach the run by going around them. See {@link messagesSlotRefusal}.
+   * An Injection carrying `inject.messages` is ROUTED here, not refused
+   * (7.19.1 refused it; 7.21.0 delivers it). What still gets refused is the
+   * pair the wire cannot take: a `role: 'tool'` message has no tool call to
+   * answer, so it is rejected here, at the declaration, on every provider.
+   * A role the ATTACHED provider cannot carry is a different question — it
+   * depends on the provider, which this builder does not have — so it is
+   * refused at run start instead, by name. This is the one funnel every
+   * flavor passes through, so a hand-built Injection cannot go around the
+   * checks the named factories make.
    */
   injection(injection: Injection): this {
     if (this.injectionList.some((i) => i.id === injection.id)) {
       throw new Error(`Agent.injection(): duplicate id '${injection.id}'`);
     }
-    if (injection.inject?.messages && injection.inject.messages.length > 0) {
-      throw new Error(messagesSlotRefusal(`Agent.injection('${injection.id}')`));
+    for (const msg of injection.inject?.messages ?? []) {
+      if (msg.role === 'tool') {
+        throw new Error(messagesToolRoleRefusal(`Agent.injection('${injection.id}')`));
+      }
     }
     this.injectionList.push(injection);
     return this;
