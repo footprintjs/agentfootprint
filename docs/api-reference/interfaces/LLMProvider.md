@@ -6,7 +6,7 @@
 
 # Interface: LLMProvider
 
-Defined in: [src/adapters/types.ts:230](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/adapters/types.ts#L230)
+Defined in: [src/adapters/types.ts:321](https://github.com/footprintjs/agentfootprint/blob/5e50b8a4c2f3ab01f1019c813d5c48641d801965/src/adapters/types.ts#L321)
 
 ## Properties
 
@@ -14,21 +14,31 @@ Defined in: [src/adapters/types.ts:230](https://github.com/footprintjs/agentfoot
 
 > `readonly` **name**: `string`
 
-Defined in: [src/adapters/types.ts:231](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/adapters/types.ts#L231)
+Defined in: [src/adapters/types.ts:322](https://github.com/footprintjs/agentfootprint/blob/5e50b8a4c2f3ab01f1019c813d5c48641d801965/src/adapters/types.ts#L322)
 
 ## Methods
 
 ### complete()
 
-> **complete**(`req`): `Promise`\<[`LLMResponse`](/agentfootprint/api/generated/interfaces/LLMResponse.md)\>
+> **complete**(`req`, `hooks?`): `Promise`\<[`LLMResponse`](/agentfootprint/api/generated/interfaces/LLMResponse.md)\>
 
-Defined in: [src/adapters/types.ts:232](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/adapters/types.ts#L232)
+Defined in: [src/adapters/types.ts:330](https://github.com/footprintjs/agentfootprint/blob/5e50b8a4c2f3ab01f1019c813d5c48641d801965/src/adapters/types.ts#L330)
+
+`hooks` (v7.8) is optional and additive — implementations may declare
+`complete(req)` with no second parameter and stay assignable. A LEAF
+provider (one that talks to a vendor) may ignore it. A WRAPPER must
+forward it, or everything it wraps goes silently dark — see the
+`LLMCallHooks` docs above.
 
 #### Parameters
 
 ##### req
 
 [`LLMRequest`](/agentfootprint/api/generated/interfaces/LLMRequest.md)
+
+##### hooks?
+
+[`LLMCallHooks`](/agentfootprint/api/generated/interfaces/LLMCallHooks.md)
 
 #### Returns
 
@@ -38,15 +48,19 @@ Defined in: [src/adapters/types.ts:232](https://github.com/footprintjs/agentfoot
 
 ### stream()?
 
-> `optional` **stream**(`req`): `AsyncIterable`\<[`LLMChunk`](/agentfootprint/api/generated/interfaces/LLMChunk.md)\>
+> `optional` **stream**(`req`, `hooks?`): `AsyncIterable`\<[`LLMChunk`](/agentfootprint/api/generated/interfaces/LLMChunk.md)\>
 
-Defined in: [src/adapters/types.ts:233](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/adapters/types.ts#L233)
+Defined in: [src/adapters/types.ts:331](https://github.com/footprintjs/agentfootprint/blob/5e50b8a4c2f3ab01f1019c813d5c48641d801965/src/adapters/types.ts#L331)
 
 #### Parameters
 
 ##### req
 
 [`LLMRequest`](/agentfootprint/api/generated/interfaces/LLMRequest.md)
+
+##### hooks?
+
+[`LLMCallHooks`](/agentfootprint/api/generated/interfaces/LLMCallHooks.md)
 
 #### Returns
 

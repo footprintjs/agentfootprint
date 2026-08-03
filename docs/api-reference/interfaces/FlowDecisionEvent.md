@@ -6,7 +6,7 @@
 
 # Interface: FlowDecisionEvent
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:165
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:182
 
 Event passed to FlowRecorder.onDecision.
 
@@ -16,7 +16,7 @@ Event passed to FlowRecorder.onDecision.
 
 > **chosen**: `string`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:167
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:184
 
 ***
 
@@ -24,7 +24,7 @@ Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts
 
 > **decider**: `string`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:166
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:183
 
 ***
 
@@ -32,7 +32,7 @@ Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts
 
 > `optional` **description?**: `string`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:169
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:186
 
 ***
 
@@ -40,7 +40,7 @@ Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts
 
 > `optional` **evidence?**: `DecisionEvidence`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:172
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:189
 
 Structured decision evidence from decide() helper.
 
@@ -50,7 +50,7 @@ Structured decision evidence from decide() helper.
 
 > `optional` **rationale?**: `string`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:168
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:185
 
 ***
 
@@ -58,4 +58,4 @@ Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts
 
 > `optional` **traversalContext?**: [`TraversalContext`](/agentfootprint/api/generated/interfaces/TraversalContext.md)
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:170
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:187

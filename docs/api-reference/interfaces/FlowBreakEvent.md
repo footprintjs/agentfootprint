@@ -6,7 +6,7 @@
 
 # Interface: FlowBreakEvent
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:222
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:239
 
 Event passed to FlowRecorder.onBreak.
 
@@ -16,7 +16,7 @@ Event passed to FlowRecorder.onBreak.
 
 > `optional` **propagatedFromSubflow?**: `string`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:238
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:255
 
 When true, this break event was raised on the PARENT because an inner
 subflow's break propagated up (via `SubflowMountOptions.propagateBreak`).
@@ -29,7 +29,7 @@ The originating inner break fires its own `onBreak` event separately
 
 > `optional` **reason?**: `string`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:231
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:248
 
 Optional free-form reason supplied by `scope.$break(reason)`. Absent
 when the stage invoked `$break()` without an argument. Propagates when
@@ -42,7 +42,7 @@ event carries the inner break's reason too.
 
 > **stageName**: `string`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:223
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:240
 
 ***
 
@@ -50,4 +50,4 @@ Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts
 
 > `optional` **traversalContext?**: [`TraversalContext`](/agentfootprint/api/generated/interfaces/TraversalContext.md)
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:224
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:241

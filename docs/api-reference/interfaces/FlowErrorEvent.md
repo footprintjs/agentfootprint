@@ -6,17 +6,30 @@
 
 # Interface: FlowErrorEvent
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:241
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:258
 
 Event passed to FlowRecorder.onError.
 
 ## Properties
 
+### channel?
+
+> `optional` **channel?**: `"flow"`
+
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:270
+
+Explicit channel discriminant — `'flow'` on every engine-dispatched
+event. `isFlowEvent()` checks it first (backlog B3); optional so
+consumer-fabricated events (tests, replays) remain type-valid and fall
+back to the legacy pipelineId-absence heuristic.
+
+***
+
 ### message
 
 > **message**: `string`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:243
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:260
 
 ***
 
@@ -24,7 +37,7 @@ Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts
 
 > **stageName**: `string`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:242
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:259
 
 ***
 
@@ -32,7 +45,7 @@ Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts
 
 > **structuredError**: `StructuredErrorInfo`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:245
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:262
 
 Structured error details — preserves field-level issues, error codes, etc.
 
@@ -42,4 +55,4 @@ Structured error details — preserves field-level issues, error codes, etc.
 
 > `optional` **traversalContext?**: [`TraversalContext`](/agentfootprint/api/generated/interfaces/TraversalContext.md)
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:246
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:263

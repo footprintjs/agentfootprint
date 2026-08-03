@@ -6,7 +6,7 @@
 
 # Interface: FlowSubflowEvent
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:190
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:207
 
 Event passed to FlowRecorder.onSubflow.
 
@@ -16,7 +16,7 @@ Event passed to FlowRecorder.onSubflow.
 
 > `optional` **description?**: `string`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:195
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:212
 
 Build-time description of what this subflow does.
 
@@ -26,7 +26,7 @@ Build-time description of what this subflow does.
 
 > `optional` **mappedInput?**: `Record`\<`string`, `unknown`\>
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:198
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:215
 
 Mapped input values sent INTO the subflow (from inputMapper/inputKeys). Present on entry events.
 
@@ -36,7 +36,7 @@ Mapped input values sent INTO the subflow (from inputMapper/inputKeys). Present 
 
 > **name**: `string`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:191
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:208
 
 ***
 
@@ -44,7 +44,7 @@ Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts
 
 > `optional` **outputState?**: `Record`\<`string`, `unknown`\>
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:200
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:217
 
 Subflow shared state at exit. Present on exit events.
 
@@ -54,7 +54,7 @@ Subflow shared state at exit. Present on exit events.
 
 > `optional` **subflowId?**: `string`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:193
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:210
 
 Subflow identifier — use this to look up the full spec via the manifest.
 
@@ -64,4 +64,4 @@ Subflow identifier — use this to look up the full spec via the manifest.
 
 > `optional` **traversalContext?**: [`TraversalContext`](/agentfootprint/api/generated/interfaces/TraversalContext.md)
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:196
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:213

@@ -62,9 +62,9 @@ import { resilienceRecorder } from '../recorders/core/ResilienceRecorder.js';
 import { checkInEventsBridge } from '../recorders/core/CheckInRecorder.js';
 import { compactionMeter, type CompactionMeterHandle } from '../recorders/core/CompactionMeter.js';
 import { EmitBridge } from '../recorders/core/EmitBridge.js';
-import { buildCompactStage } from './agent/stages/compact.js';
-import { CompactionUnmeasurableError } from './agent/compaction/errors.js';
-import type { ResolvedCompaction } from './agent/compaction/types.js';
+import { buildWindowStage } from './agent/stages/window.js';
+import { CompactionUnmeasurableError } from './agent/window/errors.js';
+import type { WindowStrategy } from './agent/window/strategy.js';
 import {
   resolveCheckInConfig,
   type CheckInBuilderOptions,
@@ -231,11 +231,11 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    *  that never called it — and the chart is then built exactly as before,
    *  with no scope writes and no scope reads added. */
   private readonly runConfigFn?: RunConfigFn;
-  /** Resolved `.compaction()` config. Undefined = no compaction stage, loop
+  /** The agent's one window strategy. Undefined = no window stage, loop
    *  target unchanged, run byte-identical to an agent without it. */
-  private readonly compaction?: ResolvedCompaction;
-  /** The instrument the compaction stage reads mid-run (adapter-reported
-   *  usage + per-message provenance). Only ever created alongside `compaction`. */
+  private readonly windowStrategy?: WindowStrategy;
+  /** The instrument the window stage reads mid-run (adapter-reported usage +
+   *  per-message provenance). Only ever created alongside a strategy. */
   private readonly compactionMeterHandle?: CompactionMeterHandle;
   /** Snapshot read-tracking policy (#18/#14) — forwarded to the internal
    *  executor. Agent default is `'summary'` (cheap markers), NOT
@@ -399,7 +399,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     skillGraphScoreEntries?: (ctx: InjectionContext, signal?: AbortSignal) => Promise<EntryScoring>,
     checkInOptions?: CheckInBuilderOptions,
     runConfigFn?: RunConfigFn,
-    compaction?: ResolvedCompaction,
+    windowStrategy?: WindowStrategy,
   ) {
     super();
     this.provider = opts.provider;
@@ -450,11 +450,12 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // `.checkIn()` call; the gate only fires for tools that declared `checkIn`.
     this.checkInConfig = resolveCheckInConfig(checkInOptions);
     if (runConfigFn !== undefined) this.runConfigFn = runConfigFn;
-    // `.compaction()`: the meter is created ONCE per agent (attached per run,
-    // cleared between runs like every other recorder) because the compaction
-    // stage closes over it at chart-build time — and the chart is built once.
-    if (compaction !== undefined) {
-      this.compaction = compaction;
+    // `.window()` / `.compaction()`: the meter is created ONCE per agent
+    // (attached per run, cleared between runs like every other recorder)
+    // because the window stage closes over it at chart-build time — and the
+    // chart is built once.
+    if (windowStrategy !== undefined) {
+      this.windowStrategy = windowStrategy;
       this.compactionMeterHandle = compactionMeter();
     }
     // Default 'summary' — measurement-gated (#18): stageReads values have
@@ -1319,20 +1320,24 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       ...(this.runConfigFn && { runConfigured: true }),
     });
 
-    // Compaction stage (7.16) — built ONLY when `.compaction()` was called.
-    // When present it becomes the ReAct loop target (see the chart builders),
-    // so it runs once per iteration boundary with the previous call's
-    // adapter-reported usage already measured by the meter.
-    const compactStage =
-      this.compaction && this.compactionMeterHandle
-        ? buildCompactStage({
-            config: this.compaction,
-            meter: this.compactionMeterHandle,
-            defaultModel: model,
-            providerName: provider.name,
-            ...(pricingTable !== undefined && { pricingTable }),
-            ...(costBudget !== undefined && { costBudget }),
-          })
+    // Window stage (7.16 as compaction; the strategy family since 7.17) —
+    // built ONLY when `.window()` / `.compaction()` was called. When present
+    // it becomes the ReAct loop target (see the chart builders), so it runs
+    // once per iteration boundary with the previous call's adapter-reported
+    // usage already measured by the meter.
+    const windowStage =
+      this.windowStrategy && this.compactionMeterHandle
+        ? {
+            strategyName: this.windowStrategy.name,
+            run: buildWindowStage({
+              strategy: this.windowStrategy,
+              meter: this.compactionMeterHandle,
+              agentModel: model,
+              providerName: provider.name,
+              ...(pricingTable !== undefined && { pricingTable }),
+              ...(costBudget !== undefined && { costBudget }),
+            }),
+          }
         : undefined;
 
     // routeDecider extracted to ./agent/stages/route.ts (v2.11.2).
@@ -1383,7 +1388,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       toolsSubflow,
       ...(thinkingSubflow !== undefined && { thinkingSubflow }),
       updateSkillHistoryStage,
-      ...(compactStage !== undefined && { compactStage }),
+      ...(windowStage !== undefined && { windowStage }),
       // Gate the UpdateSkillHistory stage on skills being registered —
       // same idiom buildToolRegistry uses to auto-attach `read_skill`.
       hasSkills: this.injections.some((i) => i.flavor === 'skill'),

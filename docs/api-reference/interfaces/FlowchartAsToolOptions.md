@@ -6,7 +6,7 @@
 
 # Interface: FlowchartAsToolOptions
 
-Defined in: [src/core/flowchartAsTool.ts:124](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/core/flowchartAsTool.ts#L124)
+Defined in: [src/core/flowchartAsTool.ts:134](https://github.com/footprintjs/agentfootprint/blob/5e50b8a4c2f3ab01f1019c813d5c48641d801965/src/core/flowchartAsTool.ts#L134)
 
 Options for `flowchartAsTool`.
 
@@ -16,7 +16,7 @@ Options for `flowchartAsTool`.
 
 > `readonly` **description**: `string`
 
-Defined in: [src/core/flowchartAsTool.ts:128](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/core/flowchartAsTool.ts#L128)
+Defined in: [src/core/flowchartAsTool.ts:138](https://github.com/footprintjs/agentfootprint/blob/5e50b8a4c2f3ab01f1019c813d5c48641d801965/src/core/flowchartAsTool.ts#L138)
 
 Tool description shown to the LLM.
 
@@ -26,7 +26,7 @@ Tool description shown to the LLM.
 
 > `readonly` **flowchart**: `FlowChart`
 
-Defined in: [src/core/flowchartAsTool.ts:138](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/core/flowchartAsTool.ts#L138)
+Defined in: [src/core/flowchartAsTool.ts:148](https://github.com/footprintjs/agentfootprint/blob/5e50b8a4c2f3ab01f1019c813d5c48641d801965/src/core/flowchartAsTool.ts#L148)
 
 The footprintjs flowchart to mount as the tool's body.
 The chart's stages receive args via `scope.$getArgs()`.
@@ -37,7 +37,7 @@ The chart's stages receive args via `scope.$getArgs()`.
 
 > `readonly` `optional` **inputSchema?**: `Readonly`\<`Record`\<`string`, `unknown`\>\>
 
-Defined in: [src/core/flowchartAsTool.ts:133](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/core/flowchartAsTool.ts#L133)
+Defined in: [src/core/flowchartAsTool.ts:143](https://github.com/footprintjs/agentfootprint/blob/5e50b8a4c2f3ab01f1019c813d5c48641d801965/src/core/flowchartAsTool.ts#L143)
 
 JSON Schema describing the input args the LLM must produce.
 Becomes `flowchart.run({ input: args })`. Default: `{ type: 'object', properties: {} }`.
@@ -48,9 +48,41 @@ Becomes `flowchart.run({ input: args })`. Default: `{ type: 'object', properties
 
 > `readonly` **name**: `string`
 
-Defined in: [src/core/flowchartAsTool.ts:126](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/core/flowchartAsTool.ts#L126)
+Defined in: [src/core/flowchartAsTool.ts:136](https://github.com/footprintjs/agentfootprint/blob/5e50b8a4c2f3ab01f1019c813d5c48641d801965/src/core/flowchartAsTool.ts#L136)
 
 Tool name the LLM dispatches by. Must be unique across the agent's tools.
+
+***
+
+### recorders?
+
+> `readonly` `optional` **recorders?**: readonly [`CombinedRecorder`](/agentfootprint/api/generated/type-aliases/CombinedRecorder.md)[]
+
+Defined in: [src/core/flowchartAsTool.ts:179](https://github.com/footprintjs/agentfootprint/blob/5e50b8a4c2f3ab01f1019c813d5c48641d801965/src/core/flowchartAsTool.ts#L179)
+
+Observers to attach to the tool's INTERNAL `FlowChartExecutor`
+before each run. This is the hook that lets decide()/select()
+evidence (and every other footprintjs event) inside a tool-mounted
+flowchart reach agent-layer evidence consumers — e.g. the causal
+`causalEvidenceRecorder()` bridge or `otel.decisionEvidenceRecorder()`.
+Without it, the internal executor is unobservable from outside.
+
+Each entry is a footprintjs `CombinedRecorder`, attached via
+`executor.attachCombinedRecorder` and routed by runtime
+method-shape detection — so ONE array covers all three observer
+channels (scope data-flow `onRead`/`onWrite`/`onCommit`/…,
+control-flow `onDecision`/`onSelected`/`onLoop`/…, and emit
+`onEmit`). Implement only the hooks you care about.
+
+**Per-invocation semantics:** the tool builds a FRESH executor per
+call (flowchart state never leaks between invocations) and attaches
+every recorder in this array to EACH invocation's executor before
+`run()`. The recorder INSTANCES are yours and are shared across
+invocations — a stateful recorder therefore accumulates events from
+EVERY invocation of the tool. Each invocation is a distinct run
+with a fresh `runId`; recorders needing per-invocation bookkeeping
+detect the boundary via `event.traversalContext.runId !== lastRunId`
+(Convention 4) rather than assuming one run per recorder lifetime.
 
 ***
 
@@ -58,7 +90,7 @@ Tool name the LLM dispatches by. Must be unique across the agent's tools.
 
 > `readonly` `optional` **resultMapper?**: [`FlowchartResultMapper`](/agentfootprint/api/generated/type-aliases/FlowchartResultMapper.md)
 
-Defined in: [src/core/flowchartAsTool.ts:143](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/core/flowchartAsTool.ts#L143)
+Defined in: [src/core/flowchartAsTool.ts:153](https://github.com/footprintjs/agentfootprint/blob/5e50b8a4c2f3ab01f1019c813d5c48641d801965/src/core/flowchartAsTool.ts#L153)
 
 Optional shaping function. Default: `JSON.stringify(snapshot.values)`.
 Errors throw into the tool's `[mapper-error: ...]` envelope.

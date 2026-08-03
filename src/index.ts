@@ -243,19 +243,43 @@ export {
   type AgentOutput,
   type ObserverDeliveryOptions,
 } from './core/Agent.js';
-// `.compaction()` — keep the live window inside a token budget without ever
-// losing the record. The fold edits the WINDOW; the LEDGER keeps every folded
-// turn byte-identical, and the summary enters as its own recorded step naming
-// every runtimeStageId it folded.
+// `.window(strategy)` / `.compaction()` — keep the live context window inside
+// its budget without ever losing the record. A strategy edits the WINDOW; the
+// LEDGER keeps every removed turn byte-identical, and every strategy files its
+// own recorded step naming the runtimeStageIds whose messages left.
+//
+// Three ship, over one turn segmentation and one refusal engine:
+//   summarizeOldest  fold the oldest span into a summary  (what `.compaction()` is)
+//   slidingWindow    keep the last N turns, drop older ones
+//   tokenBudget      counted-token trigger, drop instead of summarize
 export {
   CompactionUnmeasurableError,
   COMPACTED_FRAME_PREFIX,
+  DROP_NOTICE_PREFIX,
   isCompactedSummary,
+  isDropNotice,
+  slidingWindow,
+  summarizeOldest,
+  tokenBudget,
   type CompactionOptions,
   type CompactionRecord,
   type FoldRefusal,
   type FoldRefusalReason,
-} from './core/agent/compaction/index.js';
+  type RemovalFacts,
+  type RemovalPlan,
+  type SlidingWindowOptions,
+  type SlidingWindowRecord,
+  type TokenBudgetOptions,
+  type TokenBudgetRecord,
+  type Turn,
+  type WindowEviction,
+  type WindowRecord,
+  type WindowRefusal,
+  type WindowRefusalReason,
+  type WindowStrategy,
+  type WindowStrategyInput,
+  type WindowStrategyResult,
+} from './core/agent/window/index.js';
 // `.selfExplain()` — the in-conversation door over the agent's own trace.
 // The options type lives with the other builder-method option types; the
 // machinery (traceDebugAgent, toolpack) is on `agentfootprint/observe`.

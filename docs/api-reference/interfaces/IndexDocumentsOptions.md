@@ -6,7 +6,7 @@
 
 # Interface: IndexDocumentsOptions
 
-Defined in: [src/lib/rag/indexDocuments.ts:44](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/lib/rag/indexDocuments.ts#L44)
+Defined in: [src/lib/rag/indexDocuments.ts:45](https://github.com/footprintjs/agentfootprint/blob/5e50b8a4c2f3ab01f1019c813d5c48641d801965/src/lib/rag/indexDocuments.ts#L45)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [src/lib/rag/indexDocuments.ts:44](https://github.com/footprintjs/ag
 
 > `readonly` `optional` **embedderId?**: `string`
 
-Defined in: [src/lib/rag/indexDocuments.ts:71](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/lib/rag/indexDocuments.ts#L71)
+Defined in: [src/lib/rag/indexDocuments.ts:72](https://github.com/footprintjs/agentfootprint/blob/5e50b8a4c2f3ab01f1019c813d5c48641d801965/src/lib/rag/indexDocuments.ts#L72)
 
 Stable id of the embedder. Stored on each entry so a future
 embedder swap doesn't silently mix similarity scores. Default:
@@ -25,9 +25,9 @@ embedders.
 
 ### identity?
 
-> `readonly` `optional` **identity?**: [`MemoryIdentity`](/agentfootprint/api/generated/interfaces/MemoryIdentity.md)
+> `readonly` `optional` **identity?**: `MemoryIdentity`
 
-Defined in: [src/lib/rag/indexDocuments.ts:63](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/lib/rag/indexDocuments.ts#L63)
+Defined in: [src/lib/rag/indexDocuments.ts:64](https://github.com/footprintjs/agentfootprint/blob/5e50b8a4c2f3ab01f1019c813d5c48641d801965/src/lib/rag/indexDocuments.ts#L64)
 
 Identity scope to write under. Default: a single shared
 `{ conversationId: '_global' }` namespace, suitable for app-wide
@@ -52,7 +52,7 @@ If you index here under `_global` but query under
 
 > `readonly` `optional` **maxConcurrency?**: `number`
 
-Defined in: [src/lib/rag/indexDocuments.ts:99](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/lib/rag/indexDocuments.ts#L99)
+Defined in: [src/lib/rag/indexDocuments.ts:100](https://github.com/footprintjs/agentfootprint/blob/5e50b8a4c2f3ab01f1019c813d5c48641d801965/src/lib/rag/indexDocuments.ts#L100)
 
 Max number of concurrent embed calls when the embedder doesn't
 implement `embedBatch`. Default `8`. Without this cap, a 10K-doc
@@ -66,7 +66,7 @@ its own batching).
 
 > `readonly` `optional` **signal?**: `AbortSignal`
 
-Defined in: [src/lib/rag/indexDocuments.ts:90](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/lib/rag/indexDocuments.ts#L90)
+Defined in: [src/lib/rag/indexDocuments.ts:91](https://github.com/footprintjs/agentfootprint/blob/5e50b8a4c2f3ab01f1019c813d5c48641d801965/src/lib/rag/indexDocuments.ts#L91)
 
 Optional abort signal — embedders making network calls thread
 this through to abort batch indexing on shutdown / timeout.
@@ -77,7 +77,7 @@ this through to abort batch indexing on shutdown / timeout.
 
 > `readonly` `optional` **tier?**: `"hot"` \| `"warm"` \| `"cold"`
 
-Defined in: [src/lib/rag/indexDocuments.ts:78](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/lib/rag/indexDocuments.ts#L78)
+Defined in: [src/lib/rag/indexDocuments.ts:79](https://github.com/footprintjs/agentfootprint/blob/5e50b8a4c2f3ab01f1019c813d5c48641d801965/src/lib/rag/indexDocuments.ts#L79)
 
 Optional tier tag to attach to indexed entries (`'hot'` /
 `'warm'` / `'cold'`). Useful when read-side `defineRAG` should
@@ -89,7 +89,7 @@ filter to a subset of the corpus.
 
 > `readonly` `optional` **ttlMs?**: `number`
 
-Defined in: [src/lib/rag/indexDocuments.ts:84](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/lib/rag/indexDocuments.ts#L84)
+Defined in: [src/lib/rag/indexDocuments.ts:85](https://github.com/footprintjs/agentfootprint/blob/5e50b8a4c2f3ab01f1019c813d5c48641d801965/src/lib/rag/indexDocuments.ts#L85)
 
 Optional TTL in milliseconds from indexing time. Useful for
 compliance retention windows (e.g., re-index quarterly).

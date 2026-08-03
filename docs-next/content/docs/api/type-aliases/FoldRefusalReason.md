@@ -1,13 +1,14 @@
 ---
-title: FoldRefusalReason
+title: "~~Type Alias: FoldRefusalReason~~"
 ---
 
-# Type Alias: FoldRefusalReason
+# ~~Type Alias: FoldRefusalReason~~
 
-> **FoldRefusalReason** = `"system-envelope"` \| `"unresolved-tool-call"` \| `"paused-tool"` \| `"pending-check-in"` \| `"inside-keep-window"` \| `"only-existing-summary"` \| `"summarizer-failed"` \| `"summary-not-smaller"`
+> **FoldRefusalReason** = [`WindowRefusalReason`](/docs/api/type-aliases/WindowRefusalReason)
 
-Defined in: src/core/agent/compaction/types.ts:78
+Defined in: src/core/agent/window/types.ts:93
 
-Why a turn refused to fold. Every one of these is NAMED in the commit —
-a fold that took less than it could have has to say why, or the next
-person debugging an over-budget window has to guess.
+## Deprecated
+
+Renamed to [WindowRefusalReason](/docs/api/type-aliases/WindowRefusalReason) in 7.17. Same values,
+same meanings; kept as an alias for code written against 7.16.

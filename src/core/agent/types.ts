@@ -31,7 +31,7 @@ import type { CredentialProvider } from '../../identity/types.js';
 import type { ToolArgValidationMode } from './toolArgsValidation.js';
 import type { ThinkingBlock } from '../../thinking/types.js';
 import type { ReliabilityScope } from '../../reliability/types.js';
-import type { CompactionRecord } from './compaction/types.js';
+import type { WindowRecord } from './window/types.js';
 
 // ─── PUBLIC types (consumer-facing) ────────────────────────────────
 
@@ -456,17 +456,24 @@ export interface AgentState {
    *  `.system(...)`. Same rule: absent unless a resolver returned one. */
   resolvedInstructions?: string;
 
-  // ── Compaction (`.compaction()`, 7.16) ─────────────────────────
-  /** One record per OVER-BUDGET visit to the compaction stage — including the
-   *  visits that folded nothing, which are the interesting ones. Written only
-   *  by an agent built with `.compaction()`; absent otherwise, so an agent
-   *  without it commits exactly the keys it always did.
+  // ── The window ledger (`.window()` / `.compaction()`) ──────────
+  /** One record per visit to the window stage that ENGAGED — including the
+   *  visits that removed nothing, which are the interesting ones. Written
+   *  only by an agent built with `.window()` or `.compaction()`; absent
+   *  otherwise, so an agent without one commits exactly the keys it always
+   *  did.
    *
-   *  This array is the fold's half of the law: the window shrank, and the
+   *  This array is the strategy's half of the law: the window shrank, and the
    *  ledger says which stages' messages left it, how many, and what the last
    *  call actually measured. The messages themselves are untouched in the
-   *  commit bundles that wrote them. */
-  compactions?: readonly CompactionRecord[];
+   *  commit bundles that wrote them.
+   *
+   *  The key is `compactions` because that is what it shipped as in 7.16,
+   *  when compaction was the family's only member. It is committed state —
+   *  public surface for anyone reading a run — so it keeps its name rather
+   *  than break every reader for a better word. Narrow a record by its
+   *  `strategy` field, not by the key it lives under. */
+  compactions?: readonly WindowRecord[];
 
   // ── Policy halt state (v2.12) ───────────────────────────────
   /** Set when a `PermissionChecker` returns `{ result: 'halt', ... }`.

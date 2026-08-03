@@ -21,7 +21,7 @@ import { defineTool } from '../../src/core/tools.js';
 import { askHuman, isPaused } from '../../src/core/pause.js';
 import { mock } from '../../src/llm-providers.js';
 import type { LLMProvider, LLMRequest, LLMResponse } from '../../src/adapters/types.js';
-import type { CompactionRecord } from '../../src/core/agent/compaction/types.js';
+import type { CompactionRecord } from '../../src/core/agent/window/types.js';
 
 // ─── Helpers ──────────────────────────────────────────────────────
 
@@ -581,7 +581,7 @@ describe('.compaction() — summarizer failure', () => {
       expect(lastRequest.messages[0]!.content.startsWith(COMPACTED_FRAME_PREFIX)).toBe(false);
       // One warning, not one per iteration.
       const compactionWarnings = warn.mock.calls.filter((c) =>
-        String(c[0]).includes('[agentfootprint compaction]'),
+        String(c[0]).includes('[agentfootprint window:summarize-oldest]'),
       );
       expect(compactionWarnings).toHaveLength(1);
     } finally {
@@ -776,8 +776,8 @@ describe('.compaction() — performance', () => {
   });
 
   it('a 200-message window plans a fold in well under 50ms', async () => {
-    const { segmentTurns, planFold, answeredCallIds } = await import(
-      '../../src/core/agent/compaction/turns.js'
+    const { segmentTurns, planRemoval, answeredCallIds } = await import(
+      '../../src/core/agent/window/turns.js'
     );
     const history = [{ role: 'user' as const, content: 'go' }];
     for (let i = 0; i < 100; i++) {
@@ -793,7 +793,7 @@ describe('.compaction() — performance', () => {
     const start = performance.now();
     for (let i = 0; i < 50; i++) {
       const turns = segmentTurns(history);
-      planFold(turns, 6, { answeredCallIds: answeredCallIds(history) }, () => false);
+      planRemoval(turns, 6, { answeredCallIds: answeredCallIds(history) }, () => false);
     }
     expect(performance.now() - start).toBeLessThan(50);
   });

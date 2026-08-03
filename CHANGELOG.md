@@ -7,6 +7,129 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [7.17.0] - 2026-08-02
+
+7.16.0 shipped compaction. It shipped it on a seam — an internal
+`WindowStrategy` interface with exactly one implementation behind it, pinned
+private, because a seam nobody has used twice is a guess.
+
+It has been used three times now, so it is public, and its two market siblings
+ship with it.
+
+**`slidingWindow({ keepRecentTurns })`** keeps the last N turns and drops the
+rest. **`tokenBudget({ thresholdTokens })`** keeps compaction's trigger
+discipline — counted from the provider's own reported usage, never estimated —
+and drops instead of summarizing. Neither makes an LLM call. Both go through
+the SAME turn segmentation and the SAME refusal engine as compaction, which is
+the whole point: a message-counting trimmer splits an assistant's `tool_use`
+from its `tool_result` and the vendor rejects the request. Here that turn
+refuses **by name**, and the strategy takes the next oldest instead.
+
+The one-sentence differentiator, true of all three: **every strategy here
+records what it removed, by id.** The removed turns stay in the commit log
+byte-identical — footprintjs's log is append-only, so nothing can edit them —
+and each strategy files its own recorded step naming every `runtimeStageId`
+whose messages left, plus one `context.evicted` event per message with its
+measured lifetime. Removing is not forgetting.
+
+### Added
+
+- **`.window(strategy)` — the general door.** Pass any `WindowStrategy`.
+  `.compaction({ ... })` stays exactly as it shipped and is now sugar for
+  `.window(summarizeOldest({ ... }))`; a test pins that the two spellings send
+  byte-identical requests and file identical records. Exactly one strategy per
+  agent — a second through either door throws at build time, because a window
+  policy that quietly changed is a policy you cannot audit.
+
+- **`slidingWindow({ keepRecentTurns })` — keep the last N turns.** No
+  summarizer, no LLM call, and **no usage requirement**: it triggers on turn
+  COUNT, so it runs on any provider, including the OpenAI-compatible endpoints
+  that send no usage while streaming. Nothing about it is unmeasurable, so it
+  never throws. It also emits **no** `context.budget_pressure` — it has no
+  token budget, and reporting a `capTokens` nobody configured would be exactly
+  the invented number this family refuses.
+
+  `keepRecentTurns` is required and has no default. It *is* the policy.
+
+- **`tokenBudget({ thresholdTokens, keepRecentTurns? })` — counted, then
+  dropped.** Reads the input tokens the adapter reported for the last call and
+  drops the oldest contiguous removable span when they exceed the threshold.
+  A provider that reports no usage gets the same named refusal compaction
+  makes: **`CompactionUnmeasurableError` is now thrown by both token-triggered
+  strategies** and kept its 7.16 name rather than gain a synonym for the same
+  refusal.
+
+- **The strategy seam is public**: `WindowStrategy`, `WindowStrategyInput`,
+  `WindowStrategyResult`, `WindowEviction`, `RemovalFacts`, `RemovalPlan`,
+  `Turn`. Two things are deliberately not left to an implementer. The refusal
+  rules arrive **pre-bound** as `input.planRemoval(...)` — a strategy never
+  receives the guards, only the answer, so it cannot forget that an unanswered
+  tool call must not leave the window. And `input.removalFacts(...)` resolves
+  provenance, so a strategy cannot file a removal it is unable to name. The
+  TRIGGER, by contrast, is entirely the strategy's own: `plan()` is called at
+  every iteration boundary and returns `undefined` when it did not engage.
+
+  Each factory is its own module and registers nothing at import — a bundle
+  that never mentions `summarizeOldest` never carries the summarizer
+  machinery. A test pins that importing them mutates no registry, and that
+  none of them needs an entry in the `sideEffects` allowlist.
+
+- **`WindowRecord` — one record shape for the family**, carrying `strategy`,
+  `removedStageIds`, `removedMessageCount`, exact `windowCharsBefore/After`
+  and the named `refusals`. `CompactionRecord` now extends it, and
+  `SlidingWindowRecord` / `TokenBudgetRecord` add each strategy's own facts.
+  All three land on the same `scope.compactions` array; narrow by `strategy`.
+
+  The key stays `compactions` — the name the family's first member gave it.
+  It is committed state, which is public surface for everyone reading a run,
+  and renaming a committed key one release later would break those readers for
+  a better word.
+
+- **`DROP_NOTICE_PREFIX` / `isDropNotice(msg)` — what a drop leaves behind.**
+  When a drop removes the window's HEAD, one authored `user` message takes
+  that position. The first reason is the wire, not the prose: an agent window
+  is `user, assistant+tool, assistant+tool, …`, so dropping the oldest turns
+  leaves an assistant message at the head, and the providers that care require
+  the window to open on a user turn. Something must occupy that position —
+  and a message we are forced to author should say what happened. Unlike the
+  compaction frame, **no model wrote a word of it**.
+
+  It appears only at the head (a removal in the middle leaves the opening turn
+  in place, so there is nothing to fix and a spliced `user` message is its own
+  risk); it never accumulates (the next drop absorbs it); and if it would not
+  be *smaller* than the span it replaces, the whole drop is abandoned under
+  `summary-not-smaller`, whose meaning generalizes to "the replacement came
+  back no smaller than the span" rather than growing the closed reason union.
+
+### Changed
+
+- **`WindowRefusal` / `WindowRefusalReason` are the canonical names** for what
+  7.16 called `FoldRefusal` / `FoldRefusalReason`. Refusals are shared by all
+  three strategies and only one of them folds. The old names remain exported
+  as deprecated **aliases of the same types** — code written against 7.16
+  compiles unchanged, and they are not going away in 7.x. Same for
+  `CompactionRecord.foldedStageIds` / `foldedMessageCount`, which are still
+  written and now sit alongside `removedStageIds` / `removedMessageCount`.
+
+- **Compaction records now carry `strategy: 'summarize-oldest'`** and the two
+  family field names described above. Everything 7.16 wrote is still written.
+
+- **The window stage now asks its strategy at every iteration boundary**,
+  because the strategy owns its own trigger. For a compaction agent that means
+  the reads channel records a read of `history` on iterations that change
+  nothing — a read which genuinely happens. Request bytes, committed values
+  and the commit-log structure are unchanged; only the recorded reads differ,
+  and anyone diffing recorded reads across 7.16 → 7.17 will see it.
+
+- The one-per-run dev warning from a broken summarizer is now prefixed
+  `[agentfootprint window:summarize-oldest]` rather than
+  `[agentfootprint compaction]`, so the log line names the strategy that
+  produced it. The chart's `compact` stage keeps its id (every lens and
+  matcher binds to it) and now describes which strategy is mounted.
+
+Docs: [Window strategies](https://footprintjs.github.io/agentfootprint/docs/build/window-strategies) ·
+Example: `examples/context-engineering/12-window-strategies.ts`.
+
 ## [7.16.0] - 2026-08-02
 
 Every agent framework compacts a long conversation the same way: summarize the

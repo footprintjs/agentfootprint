@@ -14,6 +14,19 @@ Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:37
 
 ## Properties
 
+### channel?
+
+> `optional` **channel?**: `"scope"`
+
+Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:47
+
+Explicit channel discriminant — `'scope'` on every engine-dispatched
+event. `isFlowEvent()` checks it first (backlog B3); optional so
+consumer-fabricated events (tests, replays) remain type-valid and fall
+back to the legacy pipelineId-presence heuristic.
+
+***
+
 ### error
 
 > **error**: `Error`

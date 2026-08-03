@@ -4,9 +4,9 @@ title: CompactionOptions
 
 # Interface: CompactionOptions
 
-Defined in: src/core/agent/compaction/types.ts:37
+Defined in: src/core/agent/window/types.ts:206
 
-What `.compaction({...})` accepts.
+What `.compaction({...})` — and `summarizeOldest({...})` — accepts.
 
 ## Example
 
@@ -27,7 +27,7 @@ const agent = Agent.create({ provider: anthropic(), model: 'claude-sonnet-4-5' }
 
 > `readonly` `optional` **keepRecentTurns?**: `number`
 
-Defined in: src/core/agent/compaction/types.ts:52
+Defined in: src/core/agent/window/types.ts:221
 
 How many of the most recent turns are never folded. Default 6.
 
@@ -40,7 +40,7 @@ them is how a compacting agent loses the thread.
 
 > `readonly` `optional` **model?**: `string`
 
-Defined in: src/core/agent/compaction/types.ts:62
+Defined in: src/core/agent/window/types.ts:231
 
 Model id for the summarizer call. Defaults to the agent's own model, so
 `summarizer: anthropic()` alone works; name a cheap model to spend less.
@@ -51,7 +51,7 @@ Model id for the summarizer call. Defaults to the agent's own model, so
 
 > `readonly` **summarizer**: [`LLMProvider`](/docs/api/interfaces/LLMProvider)
 
-Defined in: src/core/agent/compaction/types.ts:57
+Defined in: src/core/agent/window/types.ts:226
 
 The provider that writes the summary. Explicitly chosen — the library
 never quietly bills your main model for compaction.
@@ -62,7 +62,7 @@ never quietly bills your main model for compaction.
 
 > `readonly` **thresholdTokens**: `number`
 
-Defined in: src/core/agent/compaction/types.ts:45
+Defined in: src/core/agent/window/types.ts:214
 
 Fold when the LAST call's adapter-reported input tokens exceed this.
 

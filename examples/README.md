@@ -183,6 +183,7 @@ _Run `npm run examples:readme` after adding/editing examples._
 | 09 | [`09-skills-from-dir.ts`](context-engineering/09-skills-from-dir.ts) | Skills from a directory of SKILL.md files | Load Skills from SKILL.md files — frontmatter is the disclosure stub, the  |
 | 10 | [`10-mcp-serve.ts`](context-engineering/10-mcp-serve.ts) | MCP — serve your tools to other clients | Expose agentfootprint Tool[] AS an MCP server. Schemas map 1:1, the served  |
 | 11 | [`11-compaction.ts`](context-engineering/11-compaction.ts) | Compaction — a smaller window, the same record | Folds the oldest turns into one summary when the measured window  |
+| 12 | [`12-window-strategies.ts`](context-engineering/12-window-strategies.ts) | Window strategies — slidingWindow and tokenBudget | Runs one conversation under slidingWindow and tokenBudget, showing that  |
 
 ### [`memory/`](memory/) — defineMemory + 4 types × 7 strategies
 

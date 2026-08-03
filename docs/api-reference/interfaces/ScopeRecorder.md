@@ -6,7 +6,7 @@
 
 # Interface: ScopeRecorder
 
-Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:103
+Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:114
 
 Pluggable observer for scope operations.
 
@@ -21,7 +21,7 @@ hooks of other recorders; the scope operation continues normally.
 
 > `readonly` **id**: `string`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:104
+Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:115
 
 ## Methods
 
@@ -29,7 +29,7 @@ Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:104
 
 > `optional` **clear**(): `void`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:123
+Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:134
 
 Reset state before each executor.run() — prevents cross-run accumulation.
 
@@ -43,7 +43,7 @@ Reset state before each executor.run() — prevents cross-run accumulation.
 
 > `optional` **onCommit**(`event`): `void`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:107
+Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:118
 
 #### Parameters
 
@@ -61,7 +61,7 @@ Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:107
 
 > `optional` **onEmit**(`event`): `void`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:121
+Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:132
 
 Fires for every `scope.$emit(name, payload)` call during a stage.
 Optional — implement only if you want to observe consumer-emitted
@@ -88,7 +88,7 @@ EmitRecorder in `src/lib/recorder/EmitRecorder.ts`
 
 > `optional` **onError**(`event`): `void`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:108
+Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:119
 
 #### Parameters
 
@@ -106,7 +106,7 @@ Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:108
 
 > `optional` **onPause**(`event`): `void`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:111
+Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:122
 
 #### Parameters
 
@@ -124,7 +124,7 @@ Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:111
 
 > `optional` **onRead**(`event`): `void`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:105
+Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:116
 
 #### Parameters
 
@@ -142,7 +142,7 @@ Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:105
 
 > `optional` **onResume**(`event`): `void`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:112
+Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:123
 
 #### Parameters
 
@@ -160,7 +160,7 @@ Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:112
 
 > `optional` **onStageEnd**(`event`): `void`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:110
+Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:121
 
 #### Parameters
 
@@ -178,7 +178,7 @@ Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:110
 
 > `optional` **onStageStart**(`event`): `void`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:109
+Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:120
 
 #### Parameters
 
@@ -196,7 +196,7 @@ Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:109
 
 > `optional` **onWrite**(`event`): `void`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:106
+Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:117
 
 #### Parameters
 
@@ -214,13 +214,11 @@ Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:106
 
 > `optional` **toSnapshot**(): `object`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:125
+Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:136
 
 Expose collected data for inclusion in executor.getSnapshot().recorders.
 
 #### Returns
-
-`object`
 
 ##### data
 
@@ -229,6 +227,13 @@ Expose collected data for inclusion in executor.getSnapshot().recorders.
 ##### description?
 
 > `optional` **description?**: `string`
+
+##### meta?
+
+> `optional` **meta?**: `Readonly`\<`Record`\<`string`, `unknown`\>\>
+
+Machine-readable facts about the bundle itself — see
+ import('../runner/ExecutionRuntime.js').RecorderSnapshot.meta.
 
 ##### name
 

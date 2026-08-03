@@ -6,7 +6,7 @@
 
 # Interface: RiskContext
 
-Defined in: [src/adapters/types.ts:273](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/adapters/types.ts#L273)
+Defined in: [src/adapters/types.ts:371](https://github.com/footprintjs/agentfootprint/blob/5e50b8a4c2f3ab01f1019c813d5c48641d801965/src/adapters/types.ts#L371)
 
 ## Properties
 
@@ -14,23 +14,23 @@ Defined in: [src/adapters/types.ts:273](https://github.com/footprintjs/agentfoot
 
 > `readonly` `optional` **iterIndex?**: `number`
 
-Defined in: [src/adapters/types.ts:277](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/adapters/types.ts#L277)
+Defined in: [src/adapters/types.ts:375](https://github.com/footprintjs/agentfootprint/blob/5e50b8a4c2f3ab01f1019c813d5c48641d801965/src/adapters/types.ts#L375)
 
 ***
 
 ### slot?
 
-> `readonly` `optional` **slot?**: [`ContextSlot`](/agentfootprint/api/generated/type-aliases/ContextSlot.md)
+> `readonly` `optional` **slot?**: `ContextSlot`
 
-Defined in: [src/adapters/types.ts:274](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/adapters/types.ts#L274)
+Defined in: [src/adapters/types.ts:372](https://github.com/footprintjs/agentfootprint/blob/5e50b8a4c2f3ab01f1019c813d5c48641d801965/src/adapters/types.ts#L372)
 
 ***
 
 ### source?
 
-> `readonly` `optional` **source?**: [`ContextSource`](/agentfootprint/api/generated/type-aliases/ContextSource.md)
+> `readonly` `optional` **source?**: `ContextSource`
 
-Defined in: [src/adapters/types.ts:275](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/adapters/types.ts#L275)
+Defined in: [src/adapters/types.ts:373](https://github.com/footprintjs/agentfootprint/blob/5e50b8a4c2f3ab01f1019c813d5c48641d801965/src/adapters/types.ts#L373)
 
 ***
 
@@ -38,4 +38,4 @@ Defined in: [src/adapters/types.ts:275](https://github.com/footprintjs/agentfoot
 
 > `readonly` `optional` **turnIndex?**: `number`
 
-Defined in: [src/adapters/types.ts:276](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/adapters/types.ts#L276)
+Defined in: [src/adapters/types.ts:374](https://github.com/footprintjs/agentfootprint/blob/5e50b8a4c2f3ab01f1019c813d5c48641d801965/src/adapters/types.ts#L374)

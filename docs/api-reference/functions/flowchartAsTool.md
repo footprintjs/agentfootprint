@@ -8,21 +8,25 @@
 
 > **flowchartAsTool**(`opts`): [`Tool`](/agentfootprint/api/generated/interfaces/Tool.md)
 
-Defined in: [src/core/flowchartAsTool.ts:163](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/core/flowchartAsTool.ts#L163)
+Defined in: [src/core/flowchartAsTool.ts:203](https://github.com/footprintjs/agentfootprint/blob/5e50b8a4c2f3ab01f1019c813d5c48641d801965/src/core/flowchartAsTool.ts#L203)
 
 Wrap a footprintjs `FlowChart` as a `Tool` the Agent's LLM can call.
 
 On execute:
   1. Constructs a fresh `FlowChartExecutor(flowchart)` per call (so
      consecutive invocations don't share state).
-  2. Calls `executor.run({ input: args, env: { signal } })` with the
+  2. Attaches each `opts.recorders` entry via
+     `executor.attachCombinedRecorder` — the SAME recorder instances
+     attach to every invocation's fresh executor (see the option's
+     JSDoc for the shared-state / runId implications).
+  3. Calls `executor.run({ input: args, env: { signal } })` with the
      LLM-supplied args + the agent's abort signal.
-  3. If the run paused, throws an Error with the checkpoint attached
+  4. If the run paused, throws an Error with the checkpoint attached
      (`error.checkpoint`) so the agent loop can surface it. Polished
      agent-side pause integration is v2.6 work.
-  4. If the run completed, calls `resultMapper(snapshot)` (or the
+  5. If the run completed, calls `resultMapper(snapshot)` (or the
      default JSON.stringify) and returns the string.
-  5. If the run threw, the error propagates — the Agent's
+  6. If the run threw, the error propagates — the Agent's
      tool-call handler converts it to a synthetic error string for
      the LLM to see + recover from.
 

@@ -38,7 +38,10 @@ import {
 } from '../../lib/trace-toolpack/selfExplain.js';
 import { Agent } from '../Agent.js';
 import type { AgentOptions, RunConfigFn } from './types.js';
-import type { CompactionOptions, ResolvedCompaction } from './compaction/types.js';
+import type { CompactionOptions } from './window/types.js';
+import type { WindowStrategy } from './window/strategy.js';
+import { resolveCompactionOptions } from './window/options.js';
+import { summarizeOldest } from './window/strategies/summarizeOldest.js';
 
 /**
  * Fluent builder. `tool()` accepts any Tool<TArgs, TResult> and registers
@@ -154,9 +157,10 @@ export class AgentBuilder {
   /** Per-run config resolver set via `.configure()`. Undefined = the agent
    *  runs on its build-time model + system prompt, unchanged. */
   private runConfigFn?: RunConfigFn;
-  /** Resolved `.compaction()` config. Undefined = no compaction stage exists,
-   *  the ReAct loop target is unchanged, and the run is byte-identical. */
-  private compactionConfig?: ResolvedCompaction;
+  /** The agent's one window strategy, from `.window()` or `.compaction()`.
+   *  Undefined = no window stage exists, the ReAct loop target is unchanged,
+   *  and the run is byte-identical to an agent that never heard of them. */
+  private windowStrategyValue?: WindowStrategy;
 
   constructor(opts: AgentOptions) {
     this.opts = opts;
@@ -315,8 +319,75 @@ export class AgentBuilder {
   }
 
   /**
+   * Choose how the live context window is kept inside its budget.
+   *
+   * This is the general door; the strategy decides everything about WHEN it
+   * acts and WHAT leaves. Three ship, and they share one turn segmentation
+   * and one refusal engine, so a refusal reason means the same thing under
+   * all of them:
+   *
+   *   `summarizeOldest({ thresholdTokens, summarizer, ... })`
+   *      fold the oldest span into one summary message. `.compaction()` is
+   *      this, spelled shorter.
+   *   `slidingWindow({ keepRecentTurns })`
+   *      keep the last N turns and drop older ones. No summarizer, no LLM
+   *      call, no usage requirement — it runs on any provider.
+   *   `tokenBudget({ thresholdTokens })`
+   *      the counted-token trigger, dropping instead of summarizing.
+   *
+   * Never removed by any of them: the system envelope, the recent turns, and
+   * any turn holding something unresolved — an unanswered tool call, a paused
+   * tool, a pending check-in. Those refuse BY NAME in the record and the
+   * strategy takes the next oldest instead. Removing an unanswered question
+   * would destroy the referent of the answer that has not arrived yet, and
+   * splitting a `tool_use` from its `tool_result` produces a request the
+   * vendor rejects.
+   *
+   * **Whatever leaves the window stays in the ledger.** footprintjs's commit
+   * log is append-only, so the turns were committed before the strategy ran
+   * and remain byte-identical; every strategy files its own recorded step
+   * naming the `runtimeStageId`s whose messages left, and emits one
+   * `context.evicted` per message. Removing is not forgetting.
+   *
+   * Exactly one strategy per agent. Omit this (and `.compaction()`) and
+   * nothing changes: no stage, no extra committed key, the same request bytes.
+   *
+   * @example
+   * ```ts
+   * import { Agent, slidingWindow } from 'agentfootprint';
+   *
+   * const agent = Agent.create({ provider, model })
+   *   .window(slidingWindow({ keepRecentTurns: 12 }))
+   *   .build();
+   * ```
+   */
+  window(strategy: WindowStrategy): this {
+    this.assertNoWindowStrategy('window');
+    if (
+      strategy === null ||
+      typeof strategy !== 'object' ||
+      typeof strategy.plan !== 'function' ||
+      typeof strategy.name !== 'string' ||
+      strategy.name.length === 0
+    ) {
+      throw new Error(
+        `AgentBuilder.window: expected a WindowStrategy — an object with a non-empty \`name\` ` +
+          `and a \`plan(input)\` method — got ${typeof strategy}. The shipped ones are ` +
+          `summarizeOldest({ ... }), slidingWindow({ ... }) and tokenBudget({ ... }); call the ` +
+          `factory, do not pass it.`,
+      );
+    }
+    this.windowStrategyValue = strategy;
+    return this;
+  }
+
+  /**
    * Keep the live context window inside a token budget — without ever losing
    * the record.
+   *
+   * Sugar for `.window(summarizeOldest(options))`, and byte-for-byte the same
+   * agent. It keeps its own name because compaction is what the market calls
+   * this and it is the strategy most people want first.
    *
    * At each ReAct iteration boundary, compaction compares the LAST call's
    * **adapter-reported** input tokens against `thresholdTokens`. Over budget,
@@ -353,64 +424,37 @@ export class AgentBuilder {
    * ```
    */
   compaction(options: CompactionOptions): this {
-    if (this.compactionConfig) {
+    this.assertNoWindowStrategy('compaction');
+    // Validated here so the error names the door the caller actually used;
+    // `summarizeOldest` re-runs the SAME validator under its own label, so the
+    // two doors can never drift into accepting different things.
+    resolveCompactionOptions(options, 'AgentBuilder.compaction');
+    this.windowStrategyValue = summarizeOldest(options);
+    return this;
+  }
+
+  /**
+   * One window strategy per agent, whichever door set it — a second would
+   * silently override the first, and a window policy that quietly changed is
+   * a policy you cannot audit.
+   */
+  private assertNoWindowStrategy(door: 'window' | 'compaction'): void {
+    const existing = this.windowStrategyValue;
+    if (existing === undefined) return;
+    if (door === 'compaction') {
       throw new Error(
         'AgentBuilder.compaction: already set. One compaction policy per agent — a second ' +
           'one would silently override the first, and a budget that quietly changed is a ' +
-          'budget you cannot audit.',
+          `budget you cannot audit. (This agent's window strategy is '${existing.name}'; ` +
+          '`.compaction()` and `.window()` are the same door.)',
       );
     }
-    if (options === null || typeof options !== 'object') {
-      throw new Error(
-        `AgentBuilder.compaction: expected an options object ` +
-          `({ thresholdTokens, summarizer, ... }), got ${typeof options}.`,
-      );
-    }
-    const { thresholdTokens, summarizer, keepRecentTurns, model } = options;
-    if (
-      typeof thresholdTokens !== 'number' ||
-      !Number.isFinite(thresholdTokens) ||
-      thresholdTokens <= 0
-    ) {
-      throw new Error(
-        `AgentBuilder.compaction: thresholdTokens must be a positive number of tokens, got ` +
-          `${String(thresholdTokens)}. There is no default: the right budget depends on your ` +
-          `model and your bill, and a number this library invented would be inherited silently ` +
-          `by every run.`,
-      );
-    }
-    if (
-      summarizer === null ||
-      typeof summarizer !== 'object' ||
-      typeof summarizer.complete !== 'function'
-    ) {
-      throw new Error(
-        'AgentBuilder.compaction: summarizer must be an LLMProvider (an object with a ' +
-          'complete() method). It is explicit on purpose — the library will not quietly bill ' +
-          'your main model for compaction. Pass a cheap provider/model here.',
-      );
-    }
-    if (keepRecentTurns !== undefined) {
-      if (!Number.isInteger(keepRecentTurns) || keepRecentTurns < 1) {
-        throw new Error(
-          `AgentBuilder.compaction: keepRecentTurns must be an integer >= 1, got ` +
-            `${String(keepRecentTurns)}. Keeping zero recent turns would fold the turn the ` +
-            `model is reasoning over right now.`,
-        );
-      }
-    }
-    if (model !== undefined && (typeof model !== 'string' || model.length === 0)) {
-      throw new Error(
-        `AgentBuilder.compaction: model must be a non-empty model id, got ${String(model)}.`,
-      );
-    }
-    this.compactionConfig = {
-      thresholdTokens,
-      keepRecentTurns: keepRecentTurns ?? 6,
-      summarizer,
-      model,
-    };
-    return this;
+    throw new Error(
+      `AgentBuilder.window: already set ('${existing.name}'). One window strategy per agent — ` +
+        'a second one would silently override the first, and a window policy that quietly ' +
+        'changed is a policy you cannot audit. `.compaction()` is the same door with ' +
+        'summarizeOldest already in it.',
+    );
   }
 
   /**
@@ -1069,7 +1113,7 @@ export class AgentBuilder {
       this.skillGraphScoreEntries,
       this.checkInConfig,
       this.runConfigFn,
-      this.compactionConfig,
+      this.windowStrategyValue,
     );
     // Attach builder-collected recorders so they receive events from
     // the very first run. Mirrors what consumers would do post-build

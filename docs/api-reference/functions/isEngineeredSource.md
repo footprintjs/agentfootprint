@@ -8,7 +8,7 @@
 
 > **isEngineeredSource**(`source`): `boolean`
 
-Defined in: [src/recorders/core/contextEngineering.ts:97](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/recorders/core/contextEngineering.ts#L97)
+Defined in: [src/recorders/core/contextEngineering.ts:97](https://github.com/footprintjs/agentfootprint/blob/5e50b8a4c2f3ab01f1019c813d5c48641d801965/src/recorders/core/contextEngineering.ts#L97)
 
 Pure classifier: given a `ContextSource`, is it engineered?
 
@@ -19,7 +19,7 @@ subscription when you don't need the wrapper helper.
 
 ### source
 
-[`ContextSource`](/agentfootprint/api/generated/type-aliases/ContextSource.md)
+`ContextSource`
 
 ## Returns
 

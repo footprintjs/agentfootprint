@@ -1,0 +1,234 @@
+---
+title: Window strategies
+description: Three ways to keep the live context window inside its budget — summarize, slide, or drop on a token budget — sharing one refusal engine and one ledger, so every strategy records what it removed, by id.
+---
+
+> Every agent framework ships a way to shrink a context window. They shrink it. Then you spend the next morning trying to explain a run whose middle is missing, and the framework has nothing to tell you about what left.
+>
+> This library ships three, and **every one of them records what it removed, by id.**
+
+## The three
+
+| | trigger | what it does | costs |
+| --- | --- | --- | --- |
+| [`summarizeOldest`](doc:compaction) | counted tokens | folds the oldest span into one summary message | one summarizer call per fold |
+| [`slidingWindow`](#slidingwindow) | turn count | keeps the last N turns, drops older ones | nothing |
+| [`tokenBudget`](#tokenbudget) | counted tokens | drops the oldest span, writes no summary | nothing |
+
+```ts
+import { Agent, slidingWindow, tokenBudget, summarizeOldest } from 'agentfootprint';
+
+Agent.create({ provider, model }).window(slidingWindow({ keepRecentTurns: 12 }));
+Agent.create({ provider, model }).window(tokenBudget({ thresholdTokens: 120_000 }));
+Agent.create({ provider, model }).window(summarizeOldest({ thresholdTokens: 120_000, summarizer }));
+```
+
+`.window(strategy)` is the general door. [`.compaction({...})`](doc:compaction) is `.window(summarizeOldest({...}))` spelled shorter — the same agent, byte for byte, and it keeps its own name because compaction is what the market calls that move and it is the one most people want first.
+
+**Exactly one strategy per agent.** A second through either door throws at build time: a window policy that quietly changed is a policy you cannot audit.
+
+Configure none and nothing changes — no stage, no extra committed key, the same request bytes as an agent that never heard of any of this.
+
+## Coming from another framework
+
+Factual mapping, not a scorecard. These are all reasonable designs; they answer a different question than this one does.
+
+| you know | here | the difference |
+| --- | --- | --- |
+| LangChain `trim_messages` | `slidingWindow({ keepRecentTurns })` | ours segments into *turns* and refuses to split a `tool_use` from its `tool_result`, and it writes down what it dropped |
+| Mastra `TokenLimiter` | `tokenBudget({ thresholdTokens })` | ours counts tokens the provider *reported*, and refuses by name when the provider reports none |
+| Claude Agent SDK compaction | `summarizeOldest({ ... })` | ours files the summary as a *claim*, keeping the folded turns in the commit log verbatim |
+
+The one-sentence differentiator: **every strategy here records what it removed, by id.**
+
+## The law, for all three
+
+**A window strategy edits the WINDOW, never the LEDGER.**
+
+- the **window** is `scope.history` — what `call-llm` hands the provider. It is what the model sees, and what costs money.
+- the **ledger** is the run's commit log. It is append-only. The stages that wrote those turns (`seed#0`, `tool-calls#7`, …) committed them before any strategy ran.
+
+So no strategy can destroy history. It can only stop re-sending it — and say so, in its own recorded step, naming every `runtimeStageId` whose messages left.
+
+<CodeFile path="examples/context-engineering/12-window-strategies.ts" region="recover" title="examples/context-engineering/12-window-strategies.ts (region: recover)" />
+
+```text
+── the dropped turn, from the ledger ──────────────
+in the live window?  false
+in the commit log?   true
+recovered 1150 characters, verbatim
+nothing was summarized, and nothing was lost — only un-sent.
+```
+
+## One refusal engine
+
+All three resolve what may leave through the same code, so a refusal reason means the same thing everywhere. Never removed, by any of them:
+
+- **the system envelope** — it never enters the window at all (it rides `systemPrompt`);
+- **the last `keepRecentTurns` turns** — what the model is reasoning over right now;
+- **any turn holding an unresolved tool call** — an assistant `tool_use` with no matching `tool_result`. Removing an unanswered question destroys the referent of an answer that has not arrived yet;
+- **the turn a paused run is waiting on** — reported as `paused-tool` / `pending-check-in`, separately from `unresolved-tool-call`, because "we are waiting on a human" is the fact you need in the trace.
+
+This is why a message-counting trimmer is not the same thing as this: dropping half a `tool_use` / `tool_result` pair produces a request the vendor rejects. Here the turn refuses, by name, and the strategy takes the next oldest instead.
+
+Every removal takes a **contiguous** span, so a turn that refused never ends up sitting after a summary of things that happened before it. A turn that ends the span this iteration is retried the next one — by which point the tool result it was waiting on has usually arrived.
+
+If nothing can be removed, nothing is. The window stays big and the record says why, with a reason per turn. It is never silently truncated.
+
+## What each visit records
+
+Every strategy appends a `WindowRecord` to `scope.compactions` — including the visits that removed **nothing**, which are the interesting ones:
+
+```ts
+{
+  strategy: 'sliding-window',      // narrow on this
+  iteration: 5,
+  removedStageIds: ['seed#0', 'tool-calls#23'],  // real ids, resolvable in the log
+  removedMessageCount: 3,
+  windowCharsBefore: 4656,
+  windowCharsAfter: 3693,          // EXACT, and chars — not tokens
+  refusals: [{ reason: 'inside-keep-window', turnIndex: 3, messageIndex: 5 }],
+  // …plus the strategy's own facts: keepRecentTurns/turnsBefore/turnsAfter for
+  // slidingWindow; measuredTokens/thresholdTokens/overBudget for the two
+  // token-triggered ones; summaryChars/summarizerTokens for summarizeOldest.
+}
+```
+
+There is deliberately **no `tokensAfter`**. Nothing can count the tokens of a window that has not been sent yet, and inventing one would be the exact guess this family exists to refuse. The honest "after" is the next call's reported usage.
+
+<Callout type="info">
+  The key is `compactions` because that is what it shipped as in 7.16, when compaction was the family's only member. It is committed state — public surface for anyone reading a run — so it keeps its name rather than break every reader for a better word. Narrow a record by its `strategy` field, not by the key it lives under.
+</Callout>
+
+### On the event stream
+
+No new event types were added for any of this:
+
+- `agentfootprint.context.evicted` — one per message that left, with a real `survivalMs` and the **same `contentHash`** the messages slot used when it reported that piece as injected;
+- `agentfootprint.context.budget_pressure` — one per over-budget visit, from the strategies that **have** a budget. `slidingWindow` never emits it: it triggers on turn count, and reporting a `capTokens` nobody configured would be an invented number.
+
+## slidingWindow
+
+```ts
+.window(slidingWindow({ keepRecentTurns: 12 }))
+```
+
+Keeps the most recent `keepRecentTurns` turns and drops what is older. No summarizer, no LLM call, no usage requirement — so it runs on **any** provider, including the OpenAI-compatible endpoints (Ollama, vLLM) that send no usage while streaming. Nothing here is unmeasurable, so nothing here throws.
+
+`keepRecentTurns` is required and has no default. It *is* the policy: how much past your agent needs is a fact about your agent, not about this library.
+
+<CodeFile path="examples/context-engineering/12-window-strategies.ts" region="strategies" title="examples/context-engineering/12-window-strategies.ts (region: strategies)" />
+
+## tokenBudget
+
+```ts
+.window(tokenBudget({ thresholdTokens: 120_000, keepRecentTurns: 6 }))
+```
+
+Compaction's trigger, without the summarizer. The number is **counted, never guessed**: it reads the input tokens the provider itself reported for the last call, off the `stream.llm_end` event the adapter already emits.
+
+Which means it has the same honest failure mode, and makes the same refusal by the same name:
+
+```text
+CompactionUnmeasurableError: Compaction is counted, not guessed: provider 'acme'
+reported 0 input and 0 output tokens for the last call, so the window cannot be
+measured against thresholdTokens. …
+```
+
+`CompactionUnmeasurableError` is thrown by **both** token-triggered strategies — `summarizeOldest` and `tokenBudget`. It kept its 7.16 name rather than gain a synonym. It is terminal: resuming would walk into the same wall with the same adapter. `anthropic()`, `openai()`, `bedrock()` and the mock provider all report usage.
+
+Use `tokenBudget` over `summarizeOldest` when you would rather lose the old turns than pay a model to paraphrase them, and over `slidingWindow` when the thing you are defending is a token bill rather than a turn depth.
+
+## What a drop leaves behind
+
+When a drop removes the window's **head**, the library inserts one authored notice in its place:
+
+```text
+[dropped history — 3 earlier message(s) were dropped from this window at iteration 5
+by the 'sliding-window' window strategy. Nothing was summarized: those turns are
+simply not being re-sent. They are retained verbatim in this run's commit log.]
+```
+
+The first reason for it is the **wire**, not the prose. An agent window looks like `user, assistant+tool, assistant+tool, …`, so dropping the oldest turns leaves an *assistant* message at the head — and the providers that care require the window to open on a user turn. Something has to occupy that position. Given that we must author a message there anyway, it should say what happened rather than be filler.
+
+Unlike the [compaction frame](doc:compaction), **no model wrote a word of it**: every character is a library constant plus a count. A drop makes no LLM call, so there is no summarizer output to quarantine.
+
+It appears only when the removal reaches the head. A removal in the middle leaves the original opening turn in place, so there is no wire problem to solve — and splicing a lone `user` message between two assistant turns is its own risk. The record names that removal either way.
+
+It never accumulates: next iteration the notice is an ordinary oldest turn, so the following drop absorbs it and files a fresh one. And if the notice would not be *smaller* than the span it replaces — a real case, when the only removable turn is a short one — the whole drop is abandoned under `summary-not-smaller`, because dropping two tiny turns to insert a longer notice is pure loss.
+
+Recognise it without matching on prose:
+
+```ts
+import { DROP_NOTICE_PREFIX, isDropNotice } from 'agentfootprint';
+
+const rendered = history.map((m) => (isDropNotice(m) ? '⟨dropped⟩' : m.content));
+```
+
+## Writing your own
+
+`.window(...)` takes any object satisfying `WindowStrategy`:
+
+```ts
+import type { WindowStrategy, WindowStrategyInput, WindowStrategyResult } from 'agentfootprint';
+
+const myStrategy: WindowStrategy = {
+  name: 'my-strategy',
+  async plan(input: WindowStrategyInput): Promise<WindowStrategyResult | undefined> {
+    if (/* not my moment */ false) return undefined;      // did not engage
+    const plan = input.planRemoval(6);                     // THE refusal engine
+    // …decide, then file a record naming what left.
+  },
+};
+```
+
+Two things are deliberately not left to you:
+
+1. **The refusal rules.** `planRemoval` arrives already bound to this iteration's turns and guards. Your strategy never receives the guards, only the answer — so it *cannot* forget that an unanswered tool call must not leave. That is safety by construction, not by documentation.
+2. **Provenance.** `removalFacts(indices, atMs)` turns "these indices left" into the stage ids that wrote them and how long each lived. You cannot file a removal you are unable to name.
+
+The **trigger** is entirely yours: `plan` is called at every ReAct iteration boundary and returns `undefined` when your strategy did not engage. That is exactly how `slidingWindow` runs on a provider that reports nothing while the token-triggered ones refuse by name.
+
+Each shipped factory is its own module and registers nothing at import, so a bundle that never mentions `summarizeOldest` never carries the summarizer machinery.
+
+## Where it runs
+
+The window stage is the **ReAct loop target** when configured — the first thing each iteration, before the injection engine re-evaluates triggers and before the three context slots compose. So the triggers, the slots and the wire all see one window, and no part of the run reasons over a past the model was not shown.
+
+Both chart shapes support it (`reactMode: 'dynamic'`, `'classic'` and `'dynamic-grouped'`); in the grouped shape it sits in the outer chart, because the window crosses the `sf-llm-call` boundary as a read-only input.
+
+`agent.checkpoint()` carries a trimmed window, `resumeOnError(checkpoint)` restores it, and a standing agent across a restart just keeps talking — a drop notice and a compaction summary are both ordinary messages in the history it was handed.
+
+## What the package exports
+
+Everything below comes from the package root, `agentfootprint`:
+
+| export | what it is |
+| --- | --- |
+| `slidingWindow(options)` | The factory for the keep-the-last-N-turns strategy. |
+| `tokenBudget(options)` | The factory for the counted-token drop strategy. |
+| `summarizeOldest(options)` | The factory `.compaction(...)` uses, exposed so you can pass it to `.window(...)` yourself. |
+| `SlidingWindowOptions` | What `slidingWindow` accepts: `keepRecentTurns` (required — it is the policy). |
+| `TokenBudgetOptions` | What `tokenBudget` accepts: `thresholdTokens` (required) and `keepRecentTurns` (default 6). |
+| `CompactionOptions` | What `summarizeOldest` and `.compaction()` accept. |
+| `WindowStrategy` | The seam: `{ name, plan(input) }`. Implement it to write your own. |
+| `WindowStrategyInput` | Everything a strategy may look at, including the bound `planRemoval` and `removalFacts`. |
+| `WindowStrategyResult` | What a strategy answers with — the new window, the record, the evictions, an optional budget reading, an optional spend. Return `undefined` instead to say "I did not engage". |
+| `WindowRecord` | The record every strategy files, shown above. |
+| `SlidingWindowRecord` | A `WindowRecord` plus `keepRecentTurns`, `turnsBefore`, `turnsAfter`. |
+| `TokenBudgetRecord` | A `WindowRecord` plus `measuredTokens`, `thresholdTokens`, `overBudget`, `keepRecentTurns`. |
+| `CompactionRecord` | A `WindowRecord` plus the summarizer's facts — see [Compaction](doc:compaction). |
+| `WindowRefusal` / `WindowRefusalReason` | One named refusal, and the closed set of reasons. (`FoldRefusal` / `FoldRefusalReason` are the 7.16 names, kept as deprecated aliases.) |
+| `WindowEviction` | One message leaving the window: its `index` in the pre-change window and its measured `survivalMs`. |
+| `RemovalPlan` | What `planRemoval` answers: the span `{ from, to }` in turn indices, plus every refusal. `from` is `-1` when nothing may be removed. |
+| `RemovalFacts` | What `removalFacts` answers: `removedStageIds` and one `WindowEviction` per message. |
+| `Turn` | One turn of the segmentation: a `user` / `assistant` / `system` message plus every `tool` message answering it. |
+| `DROP_NOTICE_PREFIX` | The opening of the authored drop notice, exported so your code can recognise one without matching on prose. |
+| `isDropNotice(msg)` | The same recognition as a predicate, for filtering a history you are rendering or persisting. |
+| `CompactionUnmeasurableError` | Thrown by both token-triggered strategies when the provider reports no usage, carrying `.provider`. Terminal. |
+
+## Related
+
+- [Compaction](doc:compaction) — `summarizeOldest` in depth: the authored frame, the summarizer boundary, and why a summary is filed as a claim
+- [Agent](doc:agent) — the loop a strategy plugs into
+- [Debugging a run](doc:debug) — reading the ledger a removal left intact

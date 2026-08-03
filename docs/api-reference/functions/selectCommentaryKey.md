@@ -8,7 +8,7 @@
 
 > **selectCommentaryKey**(`event`): `string` \| `null` \| `undefined`
 
-Defined in: [src/recorders/observability/commentary/commentaryTemplates.ts:159](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/recorders/observability/commentary/commentaryTemplates.ts#L159)
+Defined in: [src/recorders/observability/commentary/commentaryTemplates.ts:168](https://github.com/footprintjs/agentfootprint/blob/5e50b8a4c2f3ab01f1019c813d5c48641d801965/src/recorders/observability/commentary/commentaryTemplates.ts#L168)
 
 Pick the template key for an event. Branches encoded in the key
 suffix (no conditional logic in the templates themselves).
@@ -21,7 +21,7 @@ suffix (no conditional logic in the templates themselves).
 
 ### event
 
-[`AgentfootprintEvent`](/agentfootprint/api/generated/type-aliases/AgentfootprintEvent.md)
+`AgentfootprintEvent`
 
 ## Returns
 

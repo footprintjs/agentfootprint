@@ -6,7 +6,7 @@
 
 # Interface: StageEvent
 
-Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:42
+Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:49
 
 ## Extends
 
@@ -18,7 +18,7 @@ Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:42
 
 > `optional` **duration?**: `number`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:43
+Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:50
 
 ***
 

@@ -6,4 +6,4 @@ title: InjectionKey
 
 > **InjectionKey** = *typeof* [`INJECTION_KEYS`](/docs/api/variables/INJECTION_KEYS)\[keyof *typeof* [`INJECTION_KEYS`](/docs/api/variables/INJECTION_KEYS)\]
 
-Defined in: [src/conventions.ts:335](https://github.com/footprintjs/agentfootprint/blob/main/src/conventions.ts#L335)
+Defined in: [src/conventions.ts:337](https://github.com/footprintjs/agentfootprint/blob/main/src/conventions.ts#L337)

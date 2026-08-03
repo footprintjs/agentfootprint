@@ -6,7 +6,7 @@
 
 # Interface: LLMCallInput
 
-Defined in: [src/core/LLMCall.ts:119](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/core/LLMCall.ts#L119)
+Defined in: [src/core/LLMCall.ts:121](https://github.com/footprintjs/agentfootprint/blob/5e50b8a4c2f3ab01f1019c813d5c48641d801965/src/core/LLMCall.ts#L121)
 
 ## Properties
 
@@ -14,4 +14,4 @@ Defined in: [src/core/LLMCall.ts:119](https://github.com/footprintjs/agentfootpr
 
 > `readonly` **message**: `string`
 
-Defined in: [src/core/LLMCall.ts:120](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/core/LLMCall.ts#L120)
+Defined in: [src/core/LLMCall.ts:122](https://github.com/footprintjs/agentfootprint/blob/5e50b8a4c2f3ab01f1019c813d5c48641d801965/src/core/LLMCall.ts#L122)

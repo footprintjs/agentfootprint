@@ -20,6 +20,10 @@ So a fold physically cannot destroy history. What it can do is stop re-sending i
 
 A compacted run is still a provable run. The lens draws a fold seam, not a hole.
 
+<Callout type="info">
+  Compaction is one of **three** window strategies. `.compaction({...})` is `.window(summarizeOldest({...}))` spelled shorter — see [Window strategies](doc:window-strategies) for its two siblings, `slidingWindow` (keep the last N turns) and `tokenBudget` (the same counted-token trigger, dropping instead of summarizing). All three share this page's turn segmentation and refusal rules.
+</Callout>
+
 ## Turning it on
 
 <CodeFile path="examples/context-engineering/11-compaction.ts" region="configure" title="examples/context-engineering/11-compaction.ts (region: configure)" />
@@ -47,7 +51,9 @@ measured against thresholdTokens. …
 
 It throws at the first iteration boundary after such a call, names the provider, and is **terminal** — it is not wrapped in a `RunCheckpointError`, because resuming would walk into the same wall with the same adapter.
 
-`anthropic()`, `openai()`, `bedrock()` and the mock provider all report usage. Some OpenAI-compatible endpoints (Ollama, vLLM) do not send usage while streaming; those agents should either not stream or not configure compaction.
+`anthropic()`, `openai()`, `bedrock()` and the mock provider all report usage. Some OpenAI-compatible endpoints (Ollama, vLLM) do not send usage while streaming; those agents should either not stream, not configure a token-triggered strategy, or use [`slidingWindow`](doc:window-strategies#slidingwindow) — which triggers on turn count and needs no usage at all.
+
+The same error is thrown by `tokenBudget`, which shares this trigger. It kept its 7.16 name rather than gain a synonym for the same refusal.
 
 <Callout type="info">
   The first iteration never folds. Nothing has been sent, so nothing has been counted, and a compactor that acted there would be guessing.
@@ -68,16 +74,17 @@ If nothing can fold, nothing folds. The window stays over budget and the record 
 
 ## What the fold records
 
-Each over-budget visit appends a `CompactionRecord` to `scope.compactions` — including the visits that folded nothing, which are the interesting ones:
+Each over-budget visit appends a `CompactionRecord` to `scope.compactions` — including the visits that folded nothing, which are the interesting ones. It is a [`WindowRecord`](doc:window-strategies#what-each-visit-records) with compaction's own facts added:
 
 ```ts
 {
+  strategy: 'summarize-oldest',
   iteration: 4,
   measuredTokens: 2400,          // what the adapter counted
   thresholdTokens: 1500,
   overBudget: true,
-  foldedStageIds: ['seed#0', 'tool-calls#23'],   // real ids, resolvable in the log
-  foldedMessageCount: 3,
+  removedStageIds: ['seed#0', 'tool-calls#23'],  // real ids, resolvable in the log
+  removedMessageCount: 3,
   windowCharsBefore: 3506,
   windowCharsAfter: 2752,        // EXACT, and chars — not tokens
   summarizerTokens: { input: 640, output: 44 },
@@ -86,6 +93,10 @@ Each over-budget visit appends a `CompactionRecord` to `scope.compactions` — i
 ```
 
 There is deliberately **no `tokensAfter`**. Nothing can count the tokens of a window that has not been sent yet; inventing one would be the exact guess this feature exists to refuse. The honest "after" is the next call's reported usage — which is why the char counts are labelled as chars and the token count is labelled as measured.
+
+<Callout type="warn">
+  `foldedStageIds` / `foldedMessageCount` are still written and still mean exactly what they did, but they are **deprecated** since 7.17 in favour of the family names `removedStageIds` / `removedMessageCount`. Only one of the three strategies folds; all three remove. Both pairs are on every compaction record and neither is going away in 7.x.
+</Callout>
 
 ### On the event stream
 
@@ -165,8 +176,8 @@ Everything below comes from the package root, `agentfootprint`:
 | --- | --- |
 | `CompactionOptions` | The option bag `.compaction(...)` takes: `thresholdTokens`, `summarizer`, `model`, `keepRecentTurns`. |
 | `CompactionRecord` | One over-budget visit, as written to `scope.compactions` — the shape shown above. |
-| `FoldRefusal` | One named refusal: `{ reason, turnIndex, messageIndex }`. Positioned so a reader can find the turn it is talking about. |
-| `FoldRefusalReason` | The closed set of reasons a turn did not fold: `system-envelope`, `unresolved-tool-call`, `paused-tool`, `pending-check-in`, `inside-keep-window`, `only-existing-summary`, `summarizer-failed`, `summary-not-smaller`. Branch on it; it will not grow silently. |
+| `WindowRefusal` | One named refusal: `{ reason, turnIndex, messageIndex }`. Positioned so a reader can find the turn it is talking about. (`FoldRefusal` is the 7.16 name, kept as a deprecated alias.) |
+| `WindowRefusalReason` | The closed set of reasons a turn did not fold: `system-envelope`, `unresolved-tool-call`, `paused-tool`, `pending-check-in`, `inside-keep-window`, `only-existing-summary`, `summarizer-failed`, `summary-not-smaller`. Branch on it; it will not grow silently. (`FoldRefusalReason` is the 7.16 name, kept as a deprecated alias.) |
 | `CompactionUnmeasurableError` | Thrown when the provider reports no usage, carrying `.provider`. Terminal. |
 | `COMPACTED_FRAME_PREFIX` | The opening of the authored label, exported so your own code can recognise a compacted message without matching on prose. |
 | `isCompactedSummary(msg)` | The same recognition as a predicate, for filtering a history you are rendering or persisting. |
@@ -184,6 +195,7 @@ const rendered = history.map((m) => (isCompactedSummary(m) ? '⟨compacted⟩' :
 
 ## Related
 
+- [Window strategies](doc:window-strategies) — compaction's two siblings, the shared refusal engine, and writing your own
 - [Agent](doc:agent) — the loop compaction plugs into
 - [Skills](doc:skills) — injections are re-composed every iteration and are never in the window, so a fold cannot drop one
 - [Debugging a run](doc:debug) — reading the ledger a fold left intact

@@ -6,7 +6,7 @@
 
 # Interface: Tool\<TArgs, TResult\>
 
-Defined in: [src/core/tools.ts:20](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/core/tools.ts#L20)
+Defined in: [src/core/tools.ts:24](https://github.com/footprintjs/agentfootprint/blob/5e50b8a4c2f3ab01f1019c813d5c48641d801965/src/core/tools.ts#L24)
 
 One executable tool the Agent can call.
 
@@ -27,11 +27,44 @@ One executable tool the Agent can call.
 
 ## Properties
 
+### checkIn?
+
+> `readonly` `optional` **checkIn?**: [`CheckInDemand`](/agentfootprint/api/generated/type-aliases/CheckInDemand.md)
+
+Defined in: [src/core/tools.ts:44](https://github.com/footprintjs/agentfootprint/blob/5e50b8a4c2f3ab01f1019c813d5c48641d801965/src/core/tools.ts#L44)
+
+Declarative demand for a human check-in BEFORE this tool runs — consent
+for a consequential action, with an evidence pack riding the ask.
+`'always'` trips on every call; a `(args, ctx) => boolean` predicate trips
+selectively (e.g. only refunds over $1000). When it trips the tool-dispatch
+loop pauses BEFORE execute and surfaces a `CheckInRequest`; the human
+answers with `checkInApproved` / `checkInDeclined`. Omitted → byte-identical
+behavior (no gate, no events, no pause). See `.checkIn()` on the Agent
+builder to configure the evidence pack. Ordered AFTER the permission gate
+and arg-validation, BEFORE credential resolution.
+
+Non-generic here (a `Tool` widens into `Tool[]` registries); `defineTool`
+exposes a predicate typed to the tool's args at the CALL site.
+
+***
+
+### needs?
+
+> `readonly` `optional` **needs?**: `CredentialNeed`
+
+Defined in: [src/core/tools.ts:29](https://github.com/footprintjs/agentfootprint/blob/5e50b8a4c2f3ab01f1019c813d5c48641d801965/src/core/tools.ts#L29)
+
+Declare-and-push: a credential this tool needs. The framework resolves it
+ BEFORE invoking and injects `ctx.credential`; it is NOT in `schema`, so the
+ LLM never sees or fills it.
+
+***
+
 ### schema
 
 > `readonly` **schema**: [`LLMToolSchema`](/agentfootprint/api/generated/interfaces/LLMToolSchema.md)
 
-Defined in: [src/core/tools.ts:21](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/core/tools.ts#L21)
+Defined in: [src/core/tools.ts:25](https://github.com/footprintjs/agentfootprint/blob/5e50b8a4c2f3ab01f1019c813d5c48641d801965/src/core/tools.ts#L25)
 
 ## Methods
 
@@ -39,7 +72,7 @@ Defined in: [src/core/tools.ts:21](https://github.com/footprintjs/agentfootprint
 
 > **execute**(`args`, `ctx`): `TResult` \| `Promise`\<`TResult`\>
 
-Defined in: [src/core/tools.ts:22](https://github.com/footprintjs/agentfootprint/blob/d1cb45510740421f2b84b6de9f852a72e94bb106/src/core/tools.ts#L22)
+Defined in: [src/core/tools.ts:45](https://github.com/footprintjs/agentfootprint/blob/5e50b8a4c2f3ab01f1019c813d5c48641d801965/src/core/tools.ts#L45)
 
 #### Parameters
 

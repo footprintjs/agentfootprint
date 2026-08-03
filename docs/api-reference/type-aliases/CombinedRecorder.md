@@ -8,7 +8,7 @@
 
 > **CombinedRecorder** = `Partial`\<`Omit`\<[`ScopeRecorder`](/agentfootprint/api/generated/interfaces/ScopeRecorder.md), `SharedLifecycleOverlap` \| `SharedLifecycle`\>\> & `Partial`\<`Omit`\<[`FlowRecorder`](/agentfootprint/api/generated/interfaces/FlowRecorder.md), `SharedLifecycleOverlap` \| `SharedLifecycle`\>\> & `Partial`\<`Omit`\<[`EmitRecorder`](/agentfootprint/api/generated/interfaces/EmitRecorder.md), `SharedLifecycle`\>\> & `object`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/recorder/CombinedRecorder.d.ts:93
+Defined in: node\_modules/footprintjs/dist/types/lib/recorder/CombinedRecorder.d.ts:94
 
 A recorder that MAY observe any combination of supported event streams.
 
@@ -24,8 +24,8 @@ All event handlers are optional — implement only what you care about.
 Both `ScopeRecorder` and `FlowRecorder` declare these with DIFFERENT payload
 shapes. In a combined recorder, each such handler is called by BOTH
 channels with its own variant. The parameter type is a union — consumers
-can either handle both variants uniformly, or discriminate (control-flow
-variants carry a `traversalContext` field that data-flow variants lack).
+can either handle both variants uniformly, or discriminate with
+`isFlowEvent()` (explicit `channel` discriminant stamped by the engine).
 
 ## Forward compatibility
 
@@ -42,6 +42,20 @@ existing `CombinedRecorder` implementations remain type-valid.
 #### Returns
 
 `void`
+
+### delivery?
+
+> `readonly` `optional` **delivery?**: `"inline"` \| `"deferred"`
+
+Delivery tier for this recorder (RFC-001) — the FIELD form of the
+`attachCombinedRecorder(r, { delivery })` options bag, so a recorder
+can DECLARE its tier (`{ id, delivery: 'deferred', ...hooks }`) and
+every attach site honors it. `'deferred'` routes the recorder's
+events through the executor's bounded capture queue ("one beat
+behind"); absent / `'inline'` keeps the historical synchronous call.
+NOT an event method — channel routing detection counts event-METHOD
+properties only, so this string field never affects which channels
+the recorder lands on.
 
 ### id
 
@@ -95,8 +109,6 @@ existing `CombinedRecorder` implementations remain type-valid.
 
 #### Returns
 
-`object`
-
 ##### data
 
 > **data**: `unknown`
@@ -104,6 +116,13 @@ existing `CombinedRecorder` implementations remain type-valid.
 ##### description?
 
 > `optional` **description?**: `string`
+
+##### meta?
+
+> `optional` **meta?**: `Readonly`\<`Record`\<`string`, `unknown`\>\>
+
+Machine-readable facts about the bundle itself — see
+ import('../runner/ExecutionRuntime.js').RecorderSnapshot.meta.
 
 ##### name
 

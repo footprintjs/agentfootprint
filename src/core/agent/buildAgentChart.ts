@@ -99,18 +99,25 @@ export interface AgentChartDeps {
    *  skill graph was built with a relevance scorer. */
   readonly pickEntryStage?: (scope: never) => Promise<void>;
   /**
-   * Context-compaction stage (`.compaction()`, 7.16). Present ONLY when the
-   * consumer configured compaction — and when present it BECOMES the ReAct
-   * loop target, mounted immediately before the current one.
+   * The window-strategy stage (`.window()` / `.compaction()`). Present ONLY
+   * when the consumer configured a strategy — and when present it BECOMES the
+   * ReAct loop target, mounted immediately before the current one.
    *
    * It has to be the loop target rather than merely sit in the loop body:
    * the loop is branch-sourced (`tool-calls → { loopTo }`), so anything ahead
    * of the target runs once and is never seen again. Being the target also
-   * puts the fold BEFORE the injection engine and the slots, which is the
-   * point — the triggers, the three slots and the wire then all see the same
-   * window, and no component gets a different past than the model does.
+   * puts the window change BEFORE the injection engine and the slots, which
+   * is the point — the triggers, the three slots and the wire then all see
+   * the same window, and no component gets a different past than the model
+   * does.
+   *
+   * `strategyName` rides along so the chart itself says which policy is
+   * mounted; a reader of the graph should not have to guess.
    */
-  readonly compactStage?: (scope: never) => Promise<void>;
+  readonly windowStage?: {
+    readonly strategyName: string;
+    readonly run: (scope: never) => Promise<void>;
+  };
   readonly systemPromptSubflow: FlowChart;
   readonly messagesSubflow: FlowChart;
   readonly toolsSubflow: FlowChart;
@@ -252,22 +259,22 @@ export function buildAgentChart(deps: AgentChartDeps): FlowChart {
     );
   }
 
-  // Compaction (7.16) — mounted immediately before the current loop target,
-  // and it BECOMES the loop target below. That placement is the whole design:
-  // the fold happens once per iteration boundary, before the injection engine
+  // Window strategy — mounted immediately before the current loop target, and
+  // it BECOMES the loop target below. That placement is the whole design: the
+  // window changes once per iteration boundary, before the injection engine
   // re-evaluates triggers and before the slots compose, so nothing downstream
   // reasons over a window the model will not be sent.
-  if (deps.compactStage) {
+  if (deps.windowStage) {
     builder = builder.addFunction(
       'Compact',
-      deps.compactStage as never,
+      deps.windowStage.run as never,
       STAGE_IDS.COMPACT,
-      'Fold the oldest foldable turns when the measured window exceeds budget',
+      `Apply the '${deps.windowStage.strategyName}' window strategy to the live window`,
     );
   }
-  // Where `tool-calls` loops back to. With compaction the head moves one stage
-  // earlier; without it, this is the same id it has always been.
-  const loopTarget: string = deps.compactStage ? STAGE_IDS.COMPACT : SUBFLOW_IDS.INJECTION_ENGINE;
+  // Where `tool-calls` loops back to. With a window strategy the head moves
+  // one stage earlier; without it, this is the id it has always been.
+  const loopTarget: string = deps.windowStage ? STAGE_IDS.COMPACT : SUBFLOW_IDS.INJECTION_ENGINE;
 
   builder = builder
     // Injection Engine — evaluates every Injection's trigger once

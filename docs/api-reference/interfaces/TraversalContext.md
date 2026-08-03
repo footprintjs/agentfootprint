@@ -21,7 +21,7 @@ Like OpenTelemetry's span context: stageId + parentStageId form a tree.
 
 > `readonly` **depth**: `number`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:138
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:148
 
 Nesting depth (0 = root, 1 = inside first subflow, etc.).
 
@@ -31,7 +31,7 @@ Nesting depth (0 = root, 1 = inside first subflow, etc.).
 
 > `readonly` `optional` **forkBranch?**: `string`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:142
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:159
 
 Fork branch ID when inside a parallel or decider branch.
 
@@ -41,9 +41,30 @@ Fork branch ID when inside a parallel or decider branch.
 
 > `readonly` `optional` **loopIteration?**: `number`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:140
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:157
 
-Loop iteration number when revisiting a node via loopTo.
+How many times this stage has executed BEFORE in this run — the loop
+iteration count when a node is revisited (e.g. via `loopTo`). Absent on the
+first execution; `1` on the first loop-back, `2` on the next, … (i.e.
+`visitCount - 1`). Run-scoped (resets each `run()`/`resume()`) and monotonic
+across subflow re-mounts. Populated for every stage kind. Mirrors the
+narrative recorder's "pass N" count.
+
+***
+
+### parentRuntimeStageId?
+
+> `readonly` `optional` **parentRuntimeStageId?**: `string`
+
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:142
+
+The parent EXECUTION step's runtimeStageId — the runtime twin of
+`parentStageId` (RFC-003 D1). Walk up to reconstruct the runtime
+ancestor chain; loop re-entries stay unambiguous because runtime ids
+(`stageId#executionIndex`) differ per iteration even when stage ids
+repeat. Crosses subflow boundaries: the first stage inside a subflow
+points at the MOUNT stage's runtimeStageId in the parent traverser.
+Undefined only at the first stage of the top-level chart.
 
 ***
 
@@ -114,7 +135,7 @@ Human-readable stage name.
 
 > `readonly` `optional` **subflowId?**: `string`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:134
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:144
 
 Subflow ID when inside a subflow. Undefined at root level.
 
@@ -124,6 +145,6 @@ Subflow ID when inside a subflow. Undefined at root level.
 
 > `readonly` `optional` **subflowPath?**: `string`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:136
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:146
 
 Full subflow path for nested subflows (e.g., "sf-outer/sf-inner").

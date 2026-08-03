@@ -6,7 +6,7 @@ title: isCompactedSummary
 
 > **isCompactedSummary**(`msg`): `boolean`
 
-Defined in: src/core/agent/compaction/summarize.ts:95
+Defined in: src/core/agent/window/summarize.ts:95
 
 True when this message is a frame a previous fold wrote.
 

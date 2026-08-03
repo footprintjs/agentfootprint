@@ -6,7 +6,7 @@
 
 # Interface: RedactionReport
 
-Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:87
+Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:98
 
 Compliance-friendly report of what was redacted. Never includes values.
 
@@ -16,7 +16,7 @@ Compliance-friendly report of what was redacted. Never includes values.
 
 > **fieldRedactions**: `Record`\<`string`, `string`[]\>
 
-Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:91
+Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:102
 
 Keys with field-level redaction → which fields were scrubbed.
 
@@ -26,7 +26,7 @@ Keys with field-level redaction → which fields were scrubbed.
 
 > **patterns**: `string`[]
 
-Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:93
+Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:104
 
 Source strings of registered patterns.
 
@@ -36,6 +36,6 @@ Source strings of registered patterns.
 
 > **redactedKeys**: `string`[]
 
-Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:89
+Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:100
 
 Keys fully redacted (exact match or pattern match).
