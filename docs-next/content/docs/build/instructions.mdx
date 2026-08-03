@@ -9,7 +9,7 @@ description: Rule-gated context injection. The Instruction primitive activates a
 
 An **Instruction** is one flavor of the [Injection primitive](doc:key-concepts) — content that lands in a slot when a trigger matches. For Instructions specifically:
 
-- **Slot:** `system-prompt` (default) or `messages`
+- **Slot:** `system-prompt` — the placement every provider delivers
 - **Trigger:** `rule` — a predicate `(ctx) => boolean` you write
 - **Fires:** every iteration of the agent loop, against fresh context
 
@@ -37,26 +37,46 @@ An Instruction whose predicate inspects `ctx.lastToolResult` is naturally one-sh
 
 <CodeFile path="examples/context-engineering/05-dynamic-react.ts" region="on-tool-return" title="examples/context-engineering/05-dynamic-react.ts (region: on-tool-return)" />
 
-The reminder lands ONLY on the iteration where the LLM is about to read the redacted output. Without this, the LLM sometimes paraphrases the original (defeating the redaction). With it, the LLM is told *"use the redacted text"* at the exact moment it needs to hear it. Modern LLMs attend more strongly to recent messages than to the system prompt, so injecting at this position is structurally better than baking the same advice into the always-on system prompt.
+The reminder lands ONLY on the iteration where the LLM is about to read the redacted output. Without this, the LLM sometimes paraphrases the original (defeating the redaction). With it, the LLM is told *"use the redacted text"* at the exact moment it needs to hear it — a system prompt that says it on the one turn it matters, rather than on every turn. (Modern LLMs attend more strongly to recent messages than to the system prompt; when that difference matters for a rule, put the words in the tool's own return value — see the next section.)
 
 This is the **Dynamic ReAct** pattern from Shinn 2023's reflection paper — context that adapts mid-loop based on what the agent just observed.
 
-## Where the Instruction lands — `slot` choice
+## Where the Instruction lands — one slot, and why
 
-By default the Instruction's prompt joins the `system` slot. For instructions that should land with **higher attention recency** (the "use redacted text" example above), set `slot: 'messages'` so the content appears alongside fresh tool results in the message history rather than buried in the long system prompt:
+An Instruction's prompt joins the `system` slot. That is the only placement it has.
+
+Until 7.19.1 there was a second option, `slot: 'messages'`, documented here as the
+recency-first choice. It never worked. The request's message list is assembled from
+the conversation itself — the messages slot is the *observability projection* of that
+conversation, not a wire — so an instruction placed there was recorded as injected,
+counted in the slot composition, routed by the engine, and never sent to the model.
+The trace said one thing and the wire said another.
+
+It is now refused at the declaration, with a message naming the placements that do
+reach the model. Delivering it properly is a designed feature rather than a flag flip:
+the wire has no system role *inside* the message list (Anthropic and Bedrock drop such
+a message — system is a separate top-level field — while OpenAI carries it), and
+`'system'` was this option's default role. Wiring it up without a per-provider notion
+of what each provider can carry would have replaced one uniform gap with a
+provider-dependent one, and nothing in the recording would tell them apart.
+
+**If you wanted recency, use the tool result.** An Instruction whose predicate watches
+`ctx.lastToolResult` still fires on exactly the right turn — and when the words
+themselves must sit at the end of the conversation, return them from the tool:
 
 ```ts
-defineInstruction({
-  id: 'critical-after-tool',
-  activeWhen: (ctx) => ctx.lastToolResult?.toolName === 'critical_op',
-  prompt: '...',
-  slot: 'messages',  // override default; lands as a synthetic system message in messages array
+defineTool({
+  name: 'redact_pii',
+  // …
+  async execute({ text }) {
+    return `${redact(text)}\n\nUse the redacted text only. Do not paraphrase the original.`;
+  },
 });
 ```
 
-When to use which:
-- `slot: 'system-prompt'` (default) — baseline behavior shaping (tone, format, persona). Provider attention to system prompts varies but is reliable on Claude/GPT-4.
-- `slot: 'messages'` — recency-first. Use when the rule MUST be honored and you suspect long-context attention decay would weaken a system-prompt placement. The injected text lands as a synthetic message with `role: 'system'` by default; pass `role: 'user'` (the other commonly-useful `ContextRole`) to land it as a user-turn message instead.
+A tool result IS a recent message. It lands after the assistant's turn, at the exact
+position a messages-slot injection was aiming for, and it is on the wire — visible in
+the request, in the trace, and in the token count.
 
 ## Anti-patterns
 

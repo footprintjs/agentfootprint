@@ -84,6 +84,16 @@ describe('mcpServe — unit', () => {
     expect(handle.name).toBe('agentfootprint');
   });
 
+  it('a handle with no socket reports no port and no address — the KEYS are absent', async () => {
+    // `port`/`address` answer "where is the listener?". stdio has none, and
+    // a key holding undefined would answer "somewhere unknown" instead of
+    // "there is no socket". mcpServe.real.test.ts pins the http side, where
+    // a real socket exists to report.
+    const handle = await mcpServe([echo], { _server: makeMockServer() });
+    expect('port' in handle).toBe(false);
+    expect('address' in handle).toBe(false);
+  });
+
   it('LAW: tools/list maps schemas 1:1 — the JSON Schema is passed through unchanged', async () => {
     const server = makeMockServer();
     await mcpServe([echo], { _server: server });

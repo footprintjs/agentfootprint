@@ -5,9 +5,9 @@
  * should know, not behavior rules. Use for user profile, env info,
  * computed summaries, current time, cached config.
  *
- * Targets system-prompt by default (most common — facts the model
- * should always have in mind). Pass `slot: 'messages'` for facts that
- * should appear inline with conversation history.
+ * Targets the system-prompt slot — the one every provider delivers.
+ * (`slot: 'messages'` was accepted until 7.19.1 and never sent; it is
+ * refused now, with a message naming the placements that work.)
  */
 
 import { Agent, type LLMProvider } from '../../src/index.js'

@@ -22,6 +22,7 @@ import type { CachePolicy, CacheStrategy } from '../../cache/types.js';
 import type { Injection, InjectionContext } from '../../lib/injection-engine/types.js';
 import type { EntryScoring } from '../../lib/injection-engine/skillGraph.js';
 import { defineInstruction } from '../../lib/injection-engine/factories/defineInstruction.js';
+import { messagesSlotRefusal } from '../../lib/injection-engine/messagesSlotRefusal.js';
 import type { MemoryDefinition } from '../../memory/define.types.js';
 import type { ReliabilityConfig } from '../../reliability/types.js';
 import type { ThinkingHandler } from '../../thinking/types.js';
@@ -541,10 +542,18 @@ export class AgentBuilder {
    * Register any `Injection`. Use this for power-user / custom flavors;
    * for built-in flavors use the typed sugar (`.skill`, `.steering`,
    * `.instruction`, `.fact`).
+   *
+   * An Injection carrying `inject.messages` is refused here — the named
+   * factories refuse the same thing at declaration, and this is the one
+   * funnel every flavor passes through, so a hand-built Injection cannot
+   * reach the run by going around them. See {@link messagesSlotRefusal}.
    */
   injection(injection: Injection): this {
     if (this.injectionList.some((i) => i.id === injection.id)) {
       throw new Error(`Agent.injection(): duplicate id '${injection.id}'`);
+    }
+    if (injection.inject?.messages && injection.inject.messages.length > 0) {
+      throw new Error(messagesSlotRefusal(`Agent.injection('${injection.id}')`));
     }
     this.injectionList.push(injection);
     return this;

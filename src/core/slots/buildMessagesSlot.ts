@@ -8,8 +8,22 @@
  *          messages accumulated over iterations.
  * Emits:   None directly; ContextRecorder sees the writes.
  *
- * Minimal scope for Phase 3e: pass-through of an input message history
- * array. Full MessageStrategy (windowing, summarizing) arrives in Phase 5.
+ * ── What this slot is, and is not ───────────────────────────────────
+ * It is the OBSERVABILITY PROJECTION of the conversation: one
+ * InjectionRecord per message, with the source, reason, role and
+ * recency a consumer needs to see what the turn was made of. It is not
+ * the wire. The request's message list comes from `scope.history`
+ * directly (`stages/callLLM.ts`), because the projection flattens away
+ * the LLM-protocol shape a provider needs — an assistant turn's
+ * `toolCalls[]`, a tool turn's `toolCallId`.
+ *
+ * Windowing and summarizing are not pending here either: they arrived in
+ * 7.16–7.17 as the window-strategy family, and they govern the window by
+ * editing `scope.history` at the loop-head window stage (`stages/window.ts`)
+ * — BEFORE this slot runs, so the projection and the wire describe the same
+ * past. Content declared for this slot is refused at the declaration site
+ * (`lib/injection-engine/messagesSlotRefusal.ts`) precisely because this
+ * slot cannot deliver it.
  */
 
 import { flowChart } from 'footprintjs';
@@ -79,8 +93,13 @@ export function buildMessagesSlot(config: MessagesSlotConfig = {}): FlowChart {
         ...(m.toolCallId !== undefined && { sourceId: m.toolCallId }),
       }));
 
-      // Active Injections targeting the messages slot. Used by `defineFact`
-      // with `slot: 'messages'`, future RAG / Memory factories, etc.
+      // Active Injections targeting the messages slot. Nothing a consumer
+      // declares can arrive here — `defineFact` / `defineInstruction` /
+      // `Agent.injection()` all refuse `inject.messages` — so the only
+      // producer today is the internal memory-recall bridge for a
+      // non-system role (memoryRecallInjections.ts). Kept because that
+      // bridge composes through it, and because it is where the delivery
+      // feature will attach.
       const activeInjections =
         (scope.$getValue('activeInjections') as readonly ActiveInjection[] | undefined) ?? [];
       let position = injections.length;

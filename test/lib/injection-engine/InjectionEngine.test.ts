@@ -84,14 +84,15 @@ describe('Injection primitive — unit', () => {
     expect(inj.trigger.kind).toBe('always');
   });
 
-  it('defineFact targets system-prompt by default; messages when requested', () => {
+  it('defineFact targets system-prompt — the slot that reaches the model', () => {
     const a = defineFact({ id: 'f1', data: 'x' });
     expect(a.inject.systemPrompt).toBe('x');
     expect(a.inject.messages).toBeUndefined();
 
-    const b = defineFact({ id: 'f2', data: 'y', slot: 'messages' });
-    expect(b.inject.systemPrompt).toBeUndefined();
-    expect(b.inject.messages?.[0]?.content).toBe('y');
+    // Explicit is the same as default; there is one slot to ask for.
+    const b = defineFact({ id: 'f2', data: 'y', slot: 'system-prompt' });
+    expect(b.inject.systemPrompt).toBe('y');
+    expect(b.inject.messages).toBeUndefined();
   });
 
   it('defineFact with activeWhen uses rule trigger', () => {

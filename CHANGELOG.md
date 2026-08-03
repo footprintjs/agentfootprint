@@ -7,7 +7,78 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [7.19.0] - 2026-08-03
+## [7.19.1] - 2026-08-03
+
+A recording that overstates what the model saw is worse than no recording, and
+one of ours did. An Injection declared for the **messages slot** was recorded as
+injected — `context.injected` fired with its content, the slot composition
+counted it, the engine routed it — and never sent: the request's message list is
+assembled from the conversation, and the messages slot is the observability
+projection of that conversation, not a wire. The docs promised the delivery in
+detail ("higher attention weight", "appears alongside fresh tool results"). The
+promise was never kept.
+
+It is refused now, at the declaration, in a sentence that names the three
+placements that do reach the model. **A throw where there was a silent lie is a
+fix, not a break: nothing that worked stops working, and something that never
+worked stops pretending.**
+
+Delivering it instead was the other option, and it was rejected on evidence.
+The wire has no system role INSIDE the message list — the Anthropic and Bedrock
+adapters drop such a message, because system is a separate top-level field,
+while the OpenAI adapters carry it — and `'system'` was this option's default
+role. Wiring the slot up without a per-provider notion of what each provider can
+carry would have replaced one uniform gap with a **provider-dependent** one, and
+nothing in the recording could have told the two apart. Honest delivery needs a
+wire-carrying key out of the slot, that provider capability, and a
+message-sequence rule; it is queued as a feature, with this gap as its evidence.
+
+### Fixed
+
+- **`slot: 'messages'` injections were recorded and never sent.** `defineFact`,
+  `defineInstruction` (and `defineInjection` routing to either) now refuse the
+  declaration, and `Agent.injection()` — the one funnel `.skill` / `.steering`
+  / `.instruction` / `.fact` all pass through — refuses a hand-built `Injection`
+  carrying `inject.messages`, so the refusal cannot be walked around. The
+  message names the limitation and the working alternatives: `slot:
+  'system-prompt'` (the default, delivered by every provider), a tool's return
+  value (a tool result IS a recent message, at the recency the option was
+  reaching for), and the text passed to `agent.run({ message })`.
+
+  `slot` narrows to `'system-prompt'` on both factories and the dead `role`
+  option is gone, so TypeScript reports it at the declaration; the run-time
+  refusal still fires for JavaScript callers and casts. A declaration that used
+  to build, run and silently do nothing now fails where it is written.
+
+  **No wire bytes change for anyone**, and a permanent test now pins the law
+  this violated: every `context.injected` the messages slot emits must appear in
+  the request the provider was handed.
+
+- **`mcpServe({ transport: 'http', port: 0 })` bound a port the caller could not
+  discover.** "Any free port" was unusable from the outside: the number the OS
+  chose lived inside a listener nobody could see, so every caller had to name a
+  port up front and race whoever else wanted it. The handle now reports
+  `port` and `address` for the HTTP transport — absent (the KEYS absent, not
+  undefined) for stdio, which has no socket. An explicitly chosen port is
+  reported back unchanged, so code can read it without branching on how the
+  port was set. No URL is assembled: a wildcard bind is not an address a client
+  can dial, and a handle that handed one out would be inventing reachability.
+
+### Changed
+
+- **The messages slot's own comment now says what it is** — the observability
+  projection of the conversation, with the window governed upstream by
+  `scope.history` and the loop-head window stage (7.16–7.17), which is where the
+  windowing and summarizing that a stale "arrives in Phase 5" note still
+  promised actually landed.
+
+- **Docs stop promising messages-slot delivery**: the Instructions guide, the
+  Instruction and Fact examples, the trigger table in the README, the Injection
+  row of the skills comparison, and the slot tables in `AGENTS.md` +
+  `ai-instructions/` — the last two matter most, because an assistant reading
+  them was being taught to write the one declaration that now throws. Where the
+  guide recommended the messages slot for recency, it now recommends the tool
+  result — the placement that reaches the model at the same position.
 
 Two things separate an agent you demo from an agent that is up: what a crash
 costs you, and what happens when it needs to ask a person something.

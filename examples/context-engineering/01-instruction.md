@@ -5,18 +5,15 @@ guide: ../../src/lib/injection-engine/README.md
 defaultInput: I'm really frustrated about my refund
 ---
 
-# Instruction — rule-based, lands in the slot YOU choose
+# Instruction — rule-based guidance, on the turns it applies
 
 `defineInstruction` is the most flexible **Instruction-style** flavor:
 a predicate runs once per iteration. When it matches, the instruction's
-`prompt` text lands in the slot you specified (`system-prompt` by default,
-or `messages` for recency-weighted attention) — tagged with
-`source: 'instructions'` so observability surfaces (Lens, recorders)
+`prompt` text joins the system-prompt slot for that iteration — tagged
+with `source: 'instructions'` so observability surfaces (Lens, recorders)
 show one chip per active instruction.
 
-## Where it lands — recency vs system-prompt
-
-Two choices, same primitive:
+## Where it lands — one slot, narrowed by the predicate
 
 ```ts
 // Default: system-prompt slot — always available, lower attention
@@ -26,27 +23,24 @@ defineInstruction({
   prompt: 'Acknowledge feelings before facts.',
 });
 
-// Recency-weighted: messages slot, role='system' — higher attention
-// because LLMs read recent messages more carefully than system-prompt text
+// Predicate-scoped: still the system-prompt slot, but only on the turn
+// right after the tool ran — the trigger does the narrowing, not the slot
 defineInstruction({
   id: 'urgent-redact',
-  slot: 'messages',                    // ← lands in messages slot
-  role: 'system',                       // ← optional; default 'system'
   activeWhen: (ctx) => ctx.lastToolResult?.toolName === 'redact_pii',
   prompt: 'CRITICAL: use the redacted text only. Do not paraphrase the original.',
 });
 ```
 
-**Choose `slot: 'messages'` when**:
-- The instruction MUST be salient on this turn (post-tool-result reminder,
-  urgent correction, safety nudge after a sensitive operation)
-- System-prompt is already crowded and you want recency weight
-- The instruction is short-lived (only relevant for 1-2 iterations)
+`slot: 'system-prompt'` is the only placement an Instruction has. `slot: 'messages'`
+was accepted until 7.19.1 and never delivered — the request's message list is built
+from the conversation, so an instruction placed there was recorded as injected and
+never sent. Declaring it now throws, and names what to use instead.
 
-**Choose `slot: 'system-prompt'` (default) when**:
-- The instruction is invariant for the turn ("be calm if user is upset")
-- You want it always available without consuming message tokens
-- Multiple instructions can layer cleanly without bloating messages
+**Want the rule read at maximum recency?** Return it from the tool it is about.
+A tool result IS a recent message, so `return 'Done. Use the redacted text only.'`
+puts the words exactly where a messages-slot injection was aiming — and this one
+actually reaches the model.
 
 ## When to use
 
@@ -83,8 +77,7 @@ defineInstruction({
   id: string;
   activeWhen?: (ctx) => boolean;        // predicate; omit for always-on
   prompt: string;                        // the instruction text
-  slot?: 'system-prompt' | 'messages';   // default 'system-prompt'
-  role?: 'system' | 'user' | 'assistant' | 'tool';  // for slot='messages'; default 'system'
+  slot?: 'system-prompt';                // the only placement; default
   description?: string;                  // for observability
 });
 ```

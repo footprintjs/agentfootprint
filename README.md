@@ -360,11 +360,11 @@ That's the whole model: `Injection = slot × trigger × cache`.
 |---|---|---|---|---|
 | `always` | static | Every iteration | `.steering(defineSteering({ id, prompt: 'You are a triage agent…' }))` | `system` |
 | `rule` | runtime — predicate | Your rule returns true | `.instruction(defineInstruction({ id, activeWhen: s => /price\|refund/.test(s.userQuery), prompt }))` | `system` |
-| `on-tool-return` | runtime — lifecycle | After a specific tool returns | `.instruction(defineInstruction({ id, slot: 'messages', activeWhen, prompt: 'Cite source IDs.' }))` | `messages` |
-| `llm-activated` | runtime — agent-driven | LLM calls `read_skill('id')` | `.skill(defineSkill({ id: 'refund-policy', description, body, viaToolName: 'read_skill' }))` | `messages` (body) |
+| `on-tool-return` | runtime — lifecycle | After a specific tool returns | `.instruction(defineInstruction({ id, activeWhen: s => s.lastToolResult?.toolName === 'search', prompt: 'Cite source IDs.' }))` | `system` |
+| `llm-activated` | runtime — agent-driven | LLM calls `read_skill('id')` | `.skill(defineSkill({ id: 'refund-policy', description, body, viaToolName: 'read_skill' }))` | `system` (body) + `tools` |
 
 > [!NOTE]
-> The "Illustration" column shows the shape of each flavor — the typed builder methods (`.steering` / `.instruction` / `.skill` / `.fact` / `.rag`) take an `Injection` (or `MemoryDefinition` for `.rag`) produced by the matching `defineSteering` / `defineInstruction` / `defineSkill` / `defineFact` / `defineRAG` factory. Slot is a default, not a coupling — the same `Skill` can live in `tools` (schema only, discovered via `read_skill`), `messages` (body injected on activation), or `system` (baked into the prompt as steering).
+> The "Illustration" column shows the shape of each flavor — the typed builder methods (`.steering` / `.instruction` / `.skill` / `.fact` / `.rag`) take an `Injection` (or `MemoryDefinition` for `.rag`) produced by the matching `defineSteering` / `defineInstruction` / `defineSkill` / `defineFact` / `defineRAG` factory. A `Skill` targets more than one slot at once: `tools` (the schemas it unlocks) and `system` (its body — or, with `surfaceMode: 'tool-only'`, the `read_skill` result instead). The `messages` slot is the observability projection of the conversation, not a target you can inject into — declaring content for it is refused, and the message says what to use instead.
 
 **3 slots × 4 triggers × N flavors = the entire context-engineering surface.**
 

@@ -309,6 +309,32 @@ export interface McpServeHandle {
   /** Names of the tools being served, in the order clients will list them. */
   readonly toolNames: readonly string[];
   /**
+   * The port the listener actually bound, for the `http` transport only —
+   * absent for `stdio`, which has no socket.
+   *
+   * It is here because `port: 0` means "any free port", and the caller who
+   * asked for one had no way to learn which one they got: the number the OS
+   * chose lived inside a listener nobody could see. Serving on `0` and
+   * reading this back is the supported way to run a server on an
+   * unpredictable port — a test suite, a dev tool, several replicas on one
+   * machine.
+   *
+   * With an explicit port this reports the same number back, so code can
+   * read it unconditionally rather than branching on how the port was set.
+   */
+  readonly port?: number;
+  /**
+   * The address the listener bound, for the `http` transport only — as the
+   * OS reports it, so `'127.0.0.1'` when a host was given and `'::'` (or
+   * `'0.0.0.0'`) when one was not.
+   *
+   * Reported rather than assembled into a URL on purpose: a wildcard bind is
+   * not an address a client can dial, and a handle that handed one out would
+   * be inventing reachability it cannot promise. Pair it with `port` and the
+   * host you know your callers can reach.
+   */
+  readonly address?: string;
+  /**
    * Stop serving: closes the transport (and, for `http`, the listening
    * socket) and then the MCP server. Idempotent — calling it twice is
    * not an error, so a shutdown hook and an explicit close can coexist.

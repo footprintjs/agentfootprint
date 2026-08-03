@@ -49,7 +49,7 @@ const agent = Agent.create({ provider, model: 'mock' })
 | Steering | Always-on policy | `always` | system-prompt |
 | Instruction | Conditional rule | `rule` | system-prompt |
 | Skill | LLM-discoverable knowledge | `llm-activated` (`read_skill`) | system-prompt + tools |
-| Fact | Static data | `always` (or `rule`) | system-prompt OR messages |
+| Fact | Static data | `always` (or `rule`) | system-prompt |
 
 All four produce the same `Injection` underneath. Same engine. Same
 observability. Same Lens chips. Different intent, captured in the

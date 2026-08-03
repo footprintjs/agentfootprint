@@ -9,6 +9,14 @@
  * `'memory'`-flavored `ActiveInjection`s so the existing composers inject them:
  * system-role content → the system slot (`inject.systemPrompt`), everything else →
  * the messages slot (`inject.messages`).
+ *
+ * Only the system-role half reaches the model. The messages slot is an
+ * observability projection, not a wire (see `messagesSlotRefusal.ts`), so a
+ * non-system recall is composed and recorded but not sent. Every formatter this
+ * library ships writes `role: 'system'`, so the branch is unreachable through
+ * `defineMemory()`; it can only be entered by a hand-built read subflow mounted
+ * with `mountMemoryRead`. It is left as-is rather than silently re-homed into
+ * the system slot, which would change what the model sees.
  */
 import { memoryInjectionKey } from '../../memory/define.types.js';
 import type { ContextRole } from '../../events/types.js';

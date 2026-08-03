@@ -220,6 +220,47 @@ describe('mcpServe over a real streamable-HTTP transport', () => {
   });
 
   it(
+    'LAW: port 0 is usable from the outside — the handle reports the socket it bound',
+    async () => {
+      // "Any free port" was unusable before 7.19.1: the OS picked a number
+      // that lived inside a listener nobody could see, so every caller had
+      // to guess a port up front and race whoever else wanted it. The handle
+      // now says where it landed, and that answer has to be good enough to
+      // dial — which is what connecting to it proves.
+      const handle = await mcpServe(servedTools(), {
+        name: 'support-desk',
+        version: '1.2.3',
+        transport: { transport: 'http', port: 0, host: '127.0.0.1' },
+      });
+      open.push(handle);
+
+      expect(handle.port).toBeGreaterThan(0);
+      expect(handle.address).toBe('127.0.0.1');
+
+      const client = await connectHttp(handle.port!);
+      try {
+        expect(textOf(await client.callTool({ name: 'echo', arguments: { text: 'zero' } }))).toBe(
+          'echo: zero',
+        );
+      } finally {
+        await client.close();
+      }
+    },
+    REAL_TRANSPORT_TIMEOUT,
+  );
+
+  it(
+    'an explicitly chosen port is reported back unchanged, so callers need not branch',
+    async () => {
+      const port = await freePort();
+      const handle = await serveOnHttp(port);
+      expect(handle.port).toBe(port);
+      expect(handle.address).toBe('127.0.0.1');
+    },
+    REAL_TRANSPORT_TIMEOUT,
+  );
+
+  it(
     'REGRESSION: the listener answers MANY requests, not just the first',
     async () => {
       // The SDK's stateless transport refuses to handle a second request,

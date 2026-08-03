@@ -62,7 +62,7 @@ Before the anatomy, clear up a frequent conflation:
 |---|---|---|---|
 | **Skills** (Claude Agent SDK) | Anthropic | A folder convention — `SKILL.md` + YAML frontmatter (`name`, `description`) loaded progressively on demand. | Descriptions advertised upfront; body fetched via tool call, returned as tool result. |
 | **Steering Docs** (AWS Strands) | AWS | Always-on behavioral priors attached to the agent. | Static injection into the system prompt. |
-| **`Injection`** (agentfootprint) | agentfootprint | The one primitive every flavor reduces to: `{ trigger, inject, flavor }`. A per-iteration `trigger` decides inclusion; `inject` carries content to one or more slots. | `inject` can target all three slots — `systemPrompt`, `tools`, `messages`. |
+| **`Injection`** (agentfootprint) | agentfootprint | The one primitive every flavor reduces to: `{ trigger, inject, flavor }`. A per-iteration `trigger` decides inclusion; `inject` carries content to one or more slots. | `inject` targets the two slots an Injection can reach — `systemPrompt` and `tools`. (The third slot, `messages`, is the observability projection of the conversation; declaring content for it is refused.) |
 
 These are not equivalent primitives. Skills is a discovery-and-dispatch pattern. Steering Docs are always-on context. An `Injection` (via `defineInstruction`) is a predicate-gated rule.
 

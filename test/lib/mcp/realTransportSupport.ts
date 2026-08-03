@@ -55,9 +55,12 @@ export async function bundleEntry(entryRelative: string, outName: string): Promi
 }
 
 /**
- * Ask the OS for a port nobody is using, then give it back. `mcpServe`'s
- * handle does not report the port it bound, so port 0 ("pick one for me")
- * is not usable from the outside — the test has to name a number.
+ * Ask the OS for a port nobody is using, then give it back.
+ *
+ * Since 7.19.1 `mcpServe`'s handle reports the port it bound, so a test that
+ * only needs *a* port should serve on 0 and read `handle.port` — no probe, no
+ * race. This stays for the tests that need the number BEFORE serving: proving
+ * `close()` frees a port means binding the same one twice on purpose.
  */
 export async function freePort(): Promise<number> {
   const probe = createServer();

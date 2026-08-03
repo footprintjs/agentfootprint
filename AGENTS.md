@@ -20,7 +20,7 @@ Every LLM call has three slots. Every "agent feature" is content flowing into on
 | LLM API field | What goes here |
 |---|---|
 | `system` prompt | Steering · Instruction text · Skill body · Fact data · formatted memory |
-| `messages` array | Conversation history · RAG chunks · memory replay · injected instructions |
+| `messages` array | The conversation — user turns, assistant turns, tool results. Assembled from the conversation itself, never injected into |
 | `tools` array | Tool schemas (registered + Skill-attached) |
 
 The flavors are how you *mark intent* — but they all reduce to one `Injection` primitive:
@@ -29,8 +29,8 @@ The flavors are how you *mark intent* — but they all reduce to one `Injection`
 |---|---|---|
 | **Skill** | LLM-activated (`read_skill`) | system-prompt + tools |
 | **Steering** | Always-on | system-prompt |
-| **Instruction** | Predicate (`activeWhen` / `on-tool-return`) | system-prompt or messages |
-| **Fact** | Always-on (data) | system-prompt or messages |
+| **Instruction** | Predicate (`activeWhen` / `on-tool-return`) | system-prompt |
+| **Fact** | Always-on (data) | system-prompt |
 
 ## Mock-first development (RECOMMENDED workflow)
 
@@ -226,13 +226,15 @@ const urgent = defineInstruction({
   prompt: 'Prioritize the fastest path to resolution.',
 });
 
-// Dynamic ReAct — fires AFTER a specific tool returned (recency-weighted slot)
+// Dynamic ReAct — fires AFTER a specific tool returned (system slot, that turn only)
 const afterRedact = defineInstruction({
   id: 'after-redact',
   activeWhen: (ctx) => ctx.lastToolResult?.toolName === 'redact_pii',
   prompt: 'Use the redacted text only. Do not paraphrase the original.',
-  slot: 'messages',  // higher LLM attention than system-prompt
 });
+// `slot: 'messages'` is REFUSED (7.19.1): it was recorded as injected and never
+// sent. For maximum recency, return the words from the tool itself — a tool
+// result is a real message on the wire.
 
 // LLM-activated body + tools (auto-attaches `read_skill` activation tool)
 const billing = defineSkill({

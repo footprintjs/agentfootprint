@@ -61,7 +61,18 @@ export type InjectionTrigger =
 export interface InjectionContent {
   /** Text appended to the system-prompt slot when active. */
   readonly systemPrompt?: string;
-  /** Messages prepended to the messages slot when active. */
+  /**
+   * Messages appended to the messages slot when active.
+   *
+   * **Not delivered to the model, and refused where it can be declared**
+   * (`defineFact` / `defineInstruction` / `Agent.injection()`) since
+   * 7.19.1: the request's message list is assembled from the
+   * conversation, so content placed here was recorded as injected and
+   * never sent. The field stays on the type for the engine's internal
+   * memory-recall bridge and for the delivery feature that will make it
+   * true; nothing a consumer can declare reaches it. See
+   * `messagesSlotRefusal.ts` for the full reasoning.
+   */
   readonly messages?: ReadonlyArray<{
     readonly role: ContextRole;
     readonly content: string;

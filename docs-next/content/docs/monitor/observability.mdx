@@ -168,6 +168,9 @@ let totalOutputTokens = 0;
 
 const stopA = runner.on('agentfootprint.context.injected', (e) => {
   // e.payload — { slot, source, contentSummary, asRole?, ... }
+  // `asRole` is a `ContextRole` — 'system' | 'user' | 'assistant' | 'tool',
+  // the role the piece carries in the conversation. Present on messages-slot
+  // records (which report the conversation itself), absent on system-prompt ones.
   injections++;
 });
 
@@ -182,6 +185,8 @@ const stopC = runner.on('agentfootprint.context.*', (e) => { /* every context.* 
 // On shutdown:
 stopA(); stopB(); stopC();
 ```
+
+On `context.injected`, `asRole` is a **`ContextRole`** — `'system' | 'user' | 'assistant' | 'tool'`, the role the piece carries in the conversation. It is present on messages-slot records, which report the conversation itself, and absent on system-prompt records, which have no message role to carry. The same union types `LLMMessage.role`, so a consumer grouping injections by role and a consumer reading the request are speaking about the same four values.
 
 `runner.attach(recorder)` is the lower-level path: it accepts a footprintjs `CombinedRecorder` that observes the **raw** footprintjs stream (`onWrite`, `onSubflowEntry`, `onDecision`, …) — not the grouped `agentfootprint.*` events. For agentfootprint's typed event taxonomy, prefer `runner.on(...)`. A `CombinedRecorder` discovers its handler methods via runtime method-shape detection — implement only the hooks you care about; ignore the rest.
 

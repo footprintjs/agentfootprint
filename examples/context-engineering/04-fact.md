@@ -51,20 +51,23 @@ const sessionContext = defineFact({
   activeWhen: (ctx) => ctx.iteration >= 1,
 });
 
-// Land in messages slot instead of system-prompt
+// Volatile data — same slot, but tell the cache not to freeze it
 const liveMetric = defineFact({
   id: 'live-status',
   data: 'Server load: 42%. All systems nominal.',
-  slot: 'messages',
-  role: 'system',
+  cache: 'never',
 });
 ```
+
+A fact lands in the system-prompt slot — the one every provider delivers.
+`slot: 'messages'` was accepted until 7.19.1 and never sent; it is refused now,
+with a message naming the placements that work.
 
 ## What it emits
 
 - `agentfootprint.context.evaluated` — engine reports active facts
 - `agentfootprint.context.injected` — `source: 'fact'`, `sourceId: 'user-profile'`,
-  `slot: 'system-prompt' | 'messages'` per the fact's targeting
+  `slot: 'system-prompt'`
 
 ## Related
 

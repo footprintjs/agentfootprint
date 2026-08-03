@@ -28,8 +28,8 @@
  *   });
  */
 
-import type { ContextRole } from '../../../events/types.js';
 import type { Injection, InjectionContext, InjectionContent } from '../types.js';
+import { messagesSlotRefusal } from '../messagesSlotRefusal.js';
 import { resolveCachePolicy } from '../../../cache/applyCachePolicy.js';
 import type { CachePolicy } from '../../../cache/types.js';
 
@@ -45,28 +45,20 @@ export interface DefineInstructionOptions {
    * `agentfootprint.context.evaluated`.
    */
   readonly activeWhen?: (ctx: InjectionContext) => boolean;
-  /** Instruction text. Lands in the slot specified by `slot` (default system-prompt). */
+  /** Instruction text. Lands in the system-prompt slot. */
   readonly prompt: string;
   /**
-   * Where the instruction lands.
+   * Where the instruction lands. `'system-prompt'` (the default) is the
+   * only slot an instruction can land in: it is the one every provider
+   * delivers.
    *
-   * - `'system-prompt'` (default) — appended to the system prompt.
-   *   Lower attention than recent messages but always available.
-   * - `'messages'` — appended as a recent message. **Higher attention
-   *   weight** — the LLM reads recent messages more carefully than
-   *   system-prompt text. Use this for guidance that MUST be salient
-   *   on this turn (post-tool-result reminders, urgent corrections).
-   *
-   * Same instruction object can target both slots in different agents
-   * — the trigger semantics don't change.
+   * `'messages'` is REFUSED — see {@link messagesSlotRefusal}. It was
+   * accepted before 7.19.1 and documented as the recency-first
+   * placement; it was recorded as injected and never sent. To make a
+   * rule salient at the moment it matters, return it from the tool whose
+   * result it is about — a tool result IS a recent message.
    */
-  readonly slot?: 'system-prompt' | 'messages';
-  /**
-   * When `slot: 'messages'`, the role to use. Default `'system'`.
-   * `'user'` is also valid; `'assistant'` and `'tool'` work in
-   * principle but rarely make pedagogical sense.
-   */
-  readonly role?: ContextRole;
+  readonly slot?: 'system-prompt';
   /**
    * Cache policy for this instruction. Defaults to `'never'` —
    * instructions are typically rule-based (volatile per-iter
@@ -86,14 +78,14 @@ export function defineInstruction(opts: DefineInstructionOptions): Injection {
   if (!opts.prompt || opts.prompt.length === 0) {
     throw new Error(`defineInstruction(${opts.id}): \`prompt\` is required.`);
   }
+  // Refused at run time as well as in the type — see defineFact for why.
+  if ((opts.slot as string | undefined) === 'messages') {
+    throw new Error(messagesSlotRefusal(`defineInstruction('${opts.id}')`));
+  }
   const trigger = opts.activeWhen
     ? { kind: 'rule' as const, activeWhen: opts.activeWhen }
     : { kind: 'always' as const };
-  const slot = opts.slot ?? 'system-prompt';
-  const inject: InjectionContent =
-    slot === 'messages'
-      ? { messages: [{ role: opts.role ?? 'system', content: opts.prompt }] }
-      : { systemPrompt: opts.prompt };
+  const inject: InjectionContent = { systemPrompt: opts.prompt };
   const cache = resolveCachePolicy('instruction', opts.cache);
   return Object.freeze({
     id: opts.id,

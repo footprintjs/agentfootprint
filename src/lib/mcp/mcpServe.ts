@@ -9,6 +9,14 @@
  *   // …later
  *   await handle.close();
  *
+ * Over HTTP the handle also reports the socket it bound, so `port: 0`
+ * ("any free port") is usable from the outside:
+ *
+ *   const handle = await mcpServe(tools, {
+ *     transport: { transport: 'http', port: 0, host: '127.0.0.1' },
+ *   });
+ *   connect(`http://127.0.0.1:${handle.port}/mcp`);
+ *
  * `mcpClient` pulls someone else's tools in. This pushes yours out, so
  * the tool you already wrote, tested and governed can be called by any
  * MCP client — a desktop host, another team's agent, an IDE — without
@@ -196,6 +204,14 @@ export async function mcpServe(
   return {
     name,
     toolNames: listing.map((t) => t.name),
+    // Present only when a socket was bound (the http transport). Spread so
+    // a stdio handle has no `port` key at all, rather than one holding
+    // undefined — "there is no socket" and "the socket is unknown" are
+    // different claims.
+    ...(connection.bound !== undefined && {
+      port: connection.bound.port,
+      address: connection.bound.address,
+    }),
     async close(): Promise<void> {
       if (closed) return;
       closed = true;
@@ -380,6 +396,13 @@ export const CALL_TOOL_SENTINEL = Object.freeze({ method: 'tools/call' });
 /** What `close()` has to tear down, over and above the server itself. */
 interface Connection {
   close(): Promise<void>;
+  /**
+   * Where the listener actually landed — only the HTTP path owns a socket,
+   * so only it reports one. This is how `port: 0` becomes discoverable: the
+   * OS picks, the listener knows, and the handle can only say so if the
+   * transport hands it up.
+   */
+  readonly bound?: { readonly port: number; readonly address: string };
 }
 
 /**
@@ -494,7 +517,17 @@ async function connectHttp(
     else listener.listen(transport.port, resolve);
   });
 
+  // Read the socket AFTER listen resolves — before that, `port: 0` is still
+  // 0 and the address is null. A pipe/socket-path bind reports a string
+  // instead of an AddressInfo; there is no port to report then, so we report
+  // none rather than a made-up one.
+  const bound = listener.address();
+
   return {
+    ...(bound !== null &&
+      typeof bound === 'object' && {
+        bound: { port: bound.port, address: bound.address },
+      }),
     close: () =>
       new Promise<void>((resolve, reject) => {
         listener.close((err) => (err ? reject(err) : resolve()));
