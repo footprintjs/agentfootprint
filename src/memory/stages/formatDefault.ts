@@ -110,17 +110,27 @@ export function formatDefault(config: FormatDefaultConfig = {}) {
 
     scope.formatted = [{ role: 'system', content }];
 
-    // Context-engineering emit: memory formatted N entries into a
-    // system message that lands in the Agent's Messages slot via the
-    // memory-pipeline's outputMapper. Lens tags the iteration with
-    // "memory · N msg(s)" so the student sees WHERE the re-injected
-    // prior turns came from.
+    // Context-engineering emit: memory formatted N entries into one
+    // system-role message.
+    //
+    // LAW: this event must name the slot the content actually lands in.
+    // It says `'system-prompt'` because that is where it goes, and it is
+    // checkable end to end — `memoryRecallInjections` routes system-role
+    // recall to `inject.systemPrompt`, `buildSystemPromptSlot` records it
+    // as a `slot: 'system-prompt'` injection, and the request carries it
+    // in `systemPrompt`. Two events describing one piece of content must
+    // not disagree: `context.memory.injected` and `context.injected` name
+    // the same slot for the same bytes.
+    //
+    // Until 7.20.0 this said `'messages'`, which was never true of this
+    // stage — `scope.formatted` above is unconditionally role `'system'`.
+    // A consumer branching on the old value was branching on a lie.
     if (typeof (scope as unknown as { $emit?: unknown }).$emit === 'function') {
       scope.$emit('agentfootprint.context.memory.injected', {
-        slot: 'messages',
+        slot: 'system-prompt',
         // Memory injects ONE system-role message containing every selected
         // entry as a citation block (see DEFAULT_HEADER + renderEntry).
-        // The downstream count delta is therefore +1 system, regardless
+        // The downstream delta is therefore +1 system fragment, regardless
         // of how many memory entries it carries.
         role: 'system' as const,
         deltaCount: { system: 1 },

@@ -15,7 +15,7 @@ The `defineMemory` factory returns ONE memory definition. Real production agents
 | Extracted facts | SEMANTIC × EXTRACT | All known facts about this user | One LLM call per write |
 | Causal snapshots | CAUSAL × TOP_K | Decision evidence from past runs | Embedding call per query |
 
-Stack them via multiple `.memory(...)` calls on the same agent. Each layer's read subflow runs independently and contributes to the messages slot:
+Stack them via multiple `.memory(...)` calls on the same agent. Each layer's read subflow runs independently and contributes to the system-prompt slot:
 
 <CodeFile path="examples/memory/07-hybrid-auto.ts" region="hybrid-stack" title="examples/memory/07-hybrid-auto.ts (region: hybrid-stack)" />
 

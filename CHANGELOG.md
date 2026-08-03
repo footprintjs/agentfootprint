@@ -7,6 +7,81 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [7.20.0] - 2026-08-03
+
+Three small honesty fixes. No new machinery, no delivery change, no wire bytes
+different for anyone.
+
+7.19.1 fixed a recording that disagreed with the wire. This one fixes a
+recording that disagreed with **itself**. Two events describe a memory or RAG
+recall — the memory stage's own `agentfootprint.context.memory.injected` and
+the slot composer's `agentfootprint.context.injected` — and they named
+different slots for the same bytes. One of them was wrong, and it stayed wrong
+in every guide that repeated it. A trace whose own events contradict each other
+cannot be reasoned about at all: there is no way, from inside the recording, to
+tell which half to believe.
+
+The second fix is the same shape one layer up. `defineMemory({ asRole })` and
+`defineRAG({ asRole })` took a role, stored it on the definition, and were read
+by nobody — every formatter this library ships writes `role: 'system'`, so
+recall has always been injected as system whatever the option said. `defineRAG`
+defaulted it to `'user'` and documented the reasoning at length, which made the
+lie legible: you could pick a role, read it back off the definition, and be told
+a role the run would never use. **A throw where there was a silent lie is a fix,
+not a break: nothing that worked stops working, and something that never worked
+stops pretending.**
+
+### Fixed
+
+- **`context.memory.injected` reported the wrong slot.** The event now says
+  `slot: 'system-prompt'`, which is where recall actually lands, and it is
+  checkable end to end: `formatDefault` writes one `role: 'system'` message,
+  `memoryRecallInjections` routes system-role recall to `inject.systemPrompt`,
+  `buildSystemPromptSlot` records it as a `slot: 'system-prompt'` injection, and
+  the request carries it in `systemPrompt` — never in the message list.
+
+  This is a **consumer-visible payload change**: anyone branching on
+  `slot === 'messages'` from this event will stop matching. They were branching
+  on a lie — the value was never true of this stage, which has always formatted
+  recall as system — and the fix is to branch on `'system-prompt'`, or on the
+  `context.injected` event that has been saying so all along. Nothing about
+  where the content goes changed; only the claim did.
+
+  A permanent test pins the law: the slot named by `context.memory.injected`,
+  the slot named by `context.injected`, and the request field the bytes are
+  actually in must all agree. It is written as an equality between the three
+  surfaces rather than a hard-coded `'system-prompt'`, so if recall ever lands
+  somewhere else the test fails on **disagreement**, not on change.
+
+- **`asRole` was stored and never read.** `defineMemory({ asRole })` and
+  `defineRAG({ asRole })` now refuse the declaration by name. The option is gone
+  from both public option types, so TypeScript reports it at the keystroke, and
+  both factories throw for JavaScript callers and casts. The refusal states the
+  truth (never read; recall is always injected as system), and points at what
+  would change it: role-differentiated recall means putting recall into the
+  messages slot, which does not reach the model (7.19.1), so it arrives with the
+  messages-delivery feature if field evidence asks for it.
+
+  The refusal fires on **presence, not value** — an explicit `asRole: 'system'`
+  named the role the run happens to use, but it was just as unread, and letting
+  it through would teach that the option is honoured.
+
+  The dead `asRole` field is also gone from `MemoryDefinition`. A definition
+  field that no run consults is a claim the recording cannot back. `defineRAG`'s
+  documented `'user'` default goes with it; every other default (`topK: 3`,
+  `threshold: 0.7`) is unchanged, and so is every run.
+
+### Changed
+
+- **Docs stop saying recall lands in the messages slot.** The RAG, grounding,
+  memory, semantic-retrieval, fact-extraction, auto-memory and narrative-memory
+  guides, the RAG example (`examples/context-engineering/07-rag`), and the RAG
+  snippets in `AGENTS.md` + `ai-instructions/` all said "the messages slot" for
+  content that has always gone to the system prompt. The last two matter most,
+  because an assistant reading them was being taught to write the placement
+  claim the event has just stopped making — and, in the same snippet, the
+  `asRole` line that now throws.
+
 ## [7.19.1] - 2026-08-03
 
 A recording that overstates what the model saw is worse than no recording, and

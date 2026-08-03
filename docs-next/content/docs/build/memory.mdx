@@ -7,7 +7,7 @@ description: One factory, four types, seven strategies. Persistent context acros
 
 ## What memory is
 
-A **Memory** is one flavor of the [Injection primitive](doc:key-concepts) that operates *across runs*: a paired read+write subflow that loads relevant past content into the messages slot before the LLM call, then persists the new turn back to a store after the turn finalizes.
+A **Memory** is one flavor of the [Injection primitive](doc:key-concepts) that operates *across runs*: a paired read+write subflow that loads relevant past content into the system-prompt slot before the LLM call, then persists the new turn back to a store after the turn finalizes.
 
 The discipline is captured in two orthogonal axes:
 

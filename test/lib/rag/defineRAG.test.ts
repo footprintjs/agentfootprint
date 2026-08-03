@@ -29,23 +29,20 @@ describe('defineRAG — unit', () => {
     expect(Object.isFrozen(def)).toBe(true);
   });
 
-  it('default asRole is "user" (RAG convention — chunks are user-supplied context)', () => {
-    const def = defineRAG({
-      id: 'docs',
-      store: new InMemoryStore(),
-      embedder: mockEmbedder(),
-    });
-    expect(def.asRole).toBe('user');
-  });
-
-  it('asRole is configurable for authoritative-reference use', () => {
-    const def = defineRAG({
-      id: 'reference',
-      store: new InMemoryStore(),
-      embedder: mockEmbedder(),
-      asRole: 'system',
-    });
-    expect(def.asRole).toBe('system');
+  // Two tests used to live here: "default asRole is 'user'" and "asRole is
+  // configurable". Both asserted a field on the definition that no run ever
+  // read — `formatDefault` writes `role: 'system'` unconditionally — so the
+  // documented 'user' default described a behaviour that never happened.
+  // The option is refused now, and this is what is left worth pinning.
+  it('asRole is refused by name — it was never read (7.20.0)', () => {
+    expect(() =>
+      defineRAG({
+        id: 'reference',
+        store: new InMemoryStore(),
+        embedder: mockEmbedder(),
+        asRole: 'system',
+      } as never),
+    ).toThrow(/defineRAG\('reference'\): `asRole` has never been read/);
   });
 
   it('default topK=3, threshold=0.7', () => {
@@ -266,7 +263,7 @@ describe('RAG — properties', () => {
       { id: 'a', store: new InMemoryStore(), embedder: mockEmbedder() },
       { id: 'b', store: new InMemoryStore(), embedder: mockEmbedder(), topK: 5 },
       { id: 'c', store: new InMemoryStore(), embedder: mockEmbedder(), threshold: 0.85 },
-      { id: 'd', store: new InMemoryStore(), embedder: mockEmbedder(), asRole: 'system' as const },
+      { id: 'd', store: new InMemoryStore(), embedder: mockEmbedder(), embedderId: 'e1' },
     ];
     for (const c of cases) {
       const def = defineRAG(c);

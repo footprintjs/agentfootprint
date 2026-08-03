@@ -7,7 +7,7 @@ defaultInput: How long do refunds take?
 
 # RAG — retrieval-augmented generation
 
-The fifth context-engineering flavor (after Skill / Steering / Instruction / Fact). Embeds the user's question, retrieves top-K semantically similar chunks from a vector store, injects them into the messages slot of the next LLM call.
+The fifth context-engineering flavor (after Skill / Steering / Instruction / Fact). Embeds the user's question, retrieves top-K semantically similar chunks from a vector store, injects them into the system-prompt slot of the next LLM call.
 
 The pitch from the v2.0 README:
 
@@ -15,10 +15,10 @@ The pitch from the v2.0 README:
 
 `defineRAG` proves that. The whole RAG public surface is two functions:
 
-- `defineRAG({ id, store, embedder, topK?, threshold?, asRole? })` &mdash; the read-side factory
+- `defineRAG({ id, store, embedder, topK?, threshold? })` &mdash; the read-side factory
 - `indexDocuments(store, embedder, docs)` &mdash; the seeding helper
 
-Under the hood, `defineRAG` returns the same `MemoryDefinition` that `defineMemory({ type: SEMANTIC, strategy: TOP_K })` produces &mdash; just with RAG-friendly defaults (`asRole: 'user'`, `topK: 3`, `threshold: 0.7`) and a clearer name.
+Under the hood, `defineRAG` returns the same `MemoryDefinition` that `defineMemory({ type: SEMANTIC, strategy: TOP_K })` produces &mdash; just with RAG-friendly defaults (`topK: 3`, `threshold: 0.7`) and a clearer name.
 
 ## Anatomy
 
@@ -42,8 +42,8 @@ const docs = defineRAG({
   store, embedder,
   topK: 3,
   threshold: 0.7,                        // STRICT — no fallback
-  asRole: 'user',                        // RAG default
 });
+// Matches land in the SYSTEM-PROMPT slot, as one system message.
 
 // 3. Wire to agent
 const agent = Agent.create({ provider })

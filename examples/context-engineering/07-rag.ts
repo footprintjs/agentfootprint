@@ -62,8 +62,10 @@ export async function run(input: string, provider?: LLMProvider): Promise<string
     embedder,
     topK: 2,           // up to 2 most-relevant docs per query
     threshold: 0.5,    // strict — drop weak matches
-    asRole: 'user',    // chunks land as user-role context (RAG default)
   });
+  // Matches land in the SYSTEM-PROMPT slot, as one system message carrying
+  // every chunk as a citation block. (`asRole` was removed in 7.20.0 — it
+  // was never read, so it described a placement that never happened.)
 
   const agent = Agent.create({
     provider: provider ?? mock({ reply: 'Refunds are processed within 3 business days.' }),

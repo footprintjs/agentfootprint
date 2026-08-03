@@ -21,13 +21,14 @@
  *
  * Emits:   Indirectly — the compiled subflows emit
  *          `agentfootprint.context.injected` with `source: 'memory'`
- *          when their formatter writes to the messages slot.
+ *          when their formatter writes to the system-prompt slot.
  *
  * @see ./define.types.ts        for the const-objects + types
+ * @see ./asRoleRefusal.ts       for why `asRole` is refused, not honoured
  * @see ./pipeline/*.ts          for the existing pipeline factories this dispatches to
  */
 
-import type { ContextRole } from '../events/types.js';
+import { refuseAsRole } from './asRoleRefusal.js';
 
 import { defaultPipeline, type DefaultPipelineConfig } from './pipeline/default.js';
 import { ephemeralPipeline } from './pipeline/ephemeral.js';
@@ -96,7 +97,6 @@ export function defineMemory(options: DefineMemoryOptions): MemoryDefinition {
     read: brandPipeline(pipeline.read),
     ...(pipeline.write !== undefined && { write: brandPipeline(pipeline.write) }),
     timing: options.timing ?? MEMORY_TIMING.TURN_START,
-    asRole: options.asRole ?? defaultRoleFor(options),
     ...(options.redact !== undefined && { redact: options.redact }),
     ...(options.type === MEMORY_TYPES.CAUSAL &&
       (options as DefineCausalOptions).projection !== undefined && {
@@ -113,6 +113,10 @@ function validate(options: DefineMemoryOptions): void {
   if (!options.id || options.id.trim() === '') {
     throw new Error('defineMemory: `id` is required and must be non-empty.');
   }
+  // `asRole` no longer type-checks; this catches JavaScript callers and
+  // casts. Refused before anything else is validated so the message is
+  // about the option the caller actually wrote.
+  refuseAsRole(options, `defineMemory('${options.id}')`);
   if (!options.store) {
     throw new Error(
       `defineMemory[id=${options.id}]: \`store\` is required. ` +
@@ -361,25 +365,6 @@ function buildCausalPipeline(options: DefineCausalOptions): MemoryPipeline {
 }
 
 // ─── Helpers ───────────────────────────────────────────────────────
-
-/**
- * Default `asRole` per type — system for behavior-shaping memory,
- * user for retrieved facts (so the LLM treats them as context, not
- * instruction).
- */
-function defaultRoleFor(options: DefineMemoryOptions): ContextRole {
-  switch (options.type) {
-    case MEMORY_TYPES.EPISODIC:
-    case MEMORY_TYPES.NARRATIVE:
-      return 'system';
-    case MEMORY_TYPES.SEMANTIC:
-      return 'system';
-    case MEMORY_TYPES.CAUSAL:
-      return 'system';
-    default:
-      return 'system';
-  }
-}
 
 /**
  * The factory hands back an opaque `ReadonlyMemoryFlowChart<T>` brand

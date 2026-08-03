@@ -294,8 +294,9 @@ const docs = defineRAG({
   store, embedder,
   topK: 3,
   threshold: 0.7,        // STRICT — no fallback when nothing matches
-  asRole: 'user',        // chunks land as user-role context
 });
+// Retrieved chunks land in the SYSTEM-PROMPT slot, as one system message.
+// `asRole` was removed in 7.20.0 — it was never read, and passing it throws.
 
 // Wire — `.rag()` is alias for `.memory()`, same plumbing
 agent.rag(docs);

@@ -30,7 +30,9 @@
  *
  * Emits:   Indirectly — every memory pipeline emits the unified
  *          `agentfootprint.context.injected` event with `source: 'memory'`
- *          when its read subflow places content into the messages slot.
+ *          when its read subflow places content into the system-prompt
+ *          slot (every shipped formatter writes `role: 'system'`, and
+ *          system-role recall composes into `inject.systemPrompt`).
  *
  * @see ./define.ts          for the `defineMemory()` factory itself
  * @see ../../docs-next      for guides + the 7 strategy examples
@@ -38,7 +40,6 @@
  */
 
 import type { LLMProvider } from '../adapters/types.js';
-import type { ContextRole } from '../events/types.js';
 import type { Embedder } from './embedding/index.js';
 import type { MemoryStore } from './store/index.js';
 
@@ -253,8 +254,11 @@ export interface MemoryDefinition<T = unknown> {
   /** When `read` runs. Default `TURN_START`. */
   readonly timing: MemoryTiming;
 
-  /** Role to use when injecting formatted content into the messages slot. */
-  readonly asRole: ContextRole;
+  // NOTE (7.20.0): there was an `asRole: ContextRole` field here. It was
+  // set by the factory and read by nobody — recall is always injected as
+  // system. A definition field that no run consults is a claim the
+  // recording cannot back, so it is gone along with the option that fed
+  // it. See `./asRoleRefusal.ts`.
 
   /** Reserved for a future release — patterns to redact before write. */
   readonly redact?: MemoryRedactionPolicy;
@@ -287,7 +291,10 @@ export interface DefineMemoryOptionsBase {
   readonly store: MemoryStore;
   readonly strategy: Strategy;
   readonly timing?: MemoryTiming;
-  readonly asRole?: ContextRole;
+  // NOTE (7.20.0): `asRole?: ContextRole` used to sit here. Removing it
+  // is what makes TypeScript report the declaration at the keystroke;
+  // `defineMemory` throws for JavaScript callers and casts. See
+  // `./asRoleRefusal.ts` for why it is refused rather than honoured.
   readonly redact?: MemoryRedactionPolicy;
 }
 

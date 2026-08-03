@@ -171,7 +171,7 @@ const docs = defineRAG({ id: 'docs', store, embedder, topK: 3, threshold: 0.7 })
 agent.rag(docs);  // alias for .memory(), same plumbing
 ```
 
-`defineRAG` is sugar over `defineMemory({ type: SEMANTIC, strategy: TOP_K })` with RAG-friendly defaults (asRole='user', topK=3, threshold=0.7). Same engine, clearer intent.
+`defineRAG` is sugar over `defineMemory({ type: SEMANTIC, strategy: TOP_K })` with RAG-friendly defaults (topK=3, threshold=0.7). Same engine, clearer intent.
 
 ### Multi-agent via control flow (no `MultiAgentSystem` class)
 

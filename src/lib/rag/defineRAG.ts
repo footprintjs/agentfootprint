@@ -3,7 +3,7 @@
  *
  * RAG is a context-engineering flavor: embed the user's question,
  * retrieve top-K semantically similar chunks from a vector store,
- * inject those chunks into the messages slot of the next LLM call.
+ * inject those chunks into the system-prompt slot of the next LLM call.
  * It's the same plumbing as `defineMemory({ type: SEMANTIC,
  * strategy: TOP_K })` — the rename is for intent + ergonomics.
  *
@@ -13,7 +13,7 @@
  *                 └─► CAUSAL     (footprintjs decision snapshots)
  *
  *   defineRAG    ─►  SEMANTIC + TOP_K with RAG-specific defaults
- *                    (asRole='user', threshold=0.7, no LLM-extract)
+ *                    (topK=3, threshold=0.7, no LLM-extract)
  *
  * Pattern: Composition over duplication — defineRAG returns a
  *          MemoryDefinition produced by defineMemory. No new engine
@@ -27,10 +27,11 @@
  *
  * Emits:   Indirectly — the underlying memory pipeline emits
  *          `agentfootprint.context.injected` when retrieved chunks
- *          land in the messages slot.
+ *          land in the system-prompt slot.
  *
  * @see ./indexDocuments.ts  for the seeding helper
  * @see ../../memory/define.ts  for the underlying factory
+ * @see ../../memory/asRoleRefusal.ts  for why `asRole` is refused, not honoured
  *
  * @example  Basic usage
  * ```ts
@@ -62,12 +63,12 @@ import { mock } from 'agentfootprint/llm-providers';
  * ```
  */
 
-import type { ContextRole } from '../../events/types.js';
 import type { Embedder } from '../../memory/embedding/index.js';
 import type { MemoryStore } from '../../memory/store/index.js';
 import type { MemoryDefinition } from '../../memory/define.types.js';
 import { MEMORY_TYPES, MEMORY_STRATEGIES } from '../../memory/define.types.js';
 import { defineMemory } from '../../memory/define.js';
+import { refuseAsRole } from '../../memory/asRoleRefusal.js';
 
 export interface DefineRAGOptions {
   /** Stable id. Becomes the scope-key suffix and the Lens label. */
@@ -123,21 +124,14 @@ export interface DefineRAGOptions {
    */
   readonly threshold?: number;
 
-  /**
-   * Role to use when injecting retrieved chunks into the messages
-   * slot. Default `'user'`.
-   *
-   * Why `'user'`: in tool-using ReAct loops, retrieved chunks
-   * conceptually "augment what the user asked." Anthropic's tool-use
-   * cookbook and OpenAI's RAG cookbook both show retrieved context
-   * inside user-turn messages.
-   *
-   * Use `'system'` for authoritative reference docs that should
-   * outweigh user instruction (policy / compliance / brand-voice
-   * corpora). Use `'assistant'` only if you've persisted prior agent
-   * turns as context — rare.
-   */
-  readonly asRole?: ContextRole;
+  // NOTE (7.20.0): `asRole?: ContextRole` used to sit here, documented as
+  // defaulting to `'user'` with a paragraph of reasoning about tool-using
+  // ReAct loops. Nothing ever read it — retrieved chunks are formatted by
+  // `formatDefault`, which writes `role: 'system'` unconditionally — so
+  // the documented default described a behaviour that never happened.
+  // Removing it is what makes TypeScript report the declaration at the
+  // keystroke; `defineRAG` throws for JavaScript callers and casts. See
+  // `../../memory/asRoleRefusal.ts`.
 }
 
 /**
@@ -152,6 +146,10 @@ export function defineRAG(opts: DefineRAGOptions): MemoryDefinition {
   if (!opts.id || opts.id.trim() === '') {
     throw new Error('defineRAG: `id` is required and must be non-empty.');
   }
+  // `asRole` no longer type-checks; this catches JavaScript callers and
+  // casts. Refused here rather than only inside `defineMemory` so the
+  // message names the factory the caller actually wrote.
+  refuseAsRole(opts, `defineRAG('${opts.id}')`);
   if (!opts.store) {
     throw new Error(`defineRAG[${opts.id}]: \`store\` is required.`);
   }
@@ -176,6 +174,5 @@ export function defineRAG(opts: DefineRAGOptions): MemoryDefinition {
       embedder: opts.embedder,
     },
     store: opts.store,
-    asRole: opts.asRole ?? 'user',
   });
 }

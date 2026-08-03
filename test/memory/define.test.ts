@@ -38,7 +38,6 @@ describe('defineMemory — unit', () => {
     expect(def.read).toBeDefined();
     expect(def.write).toBeDefined();
     expect(def.timing).toBe(MEMORY_TIMING.TURN_START);
-    expect(def.asRole).toBe('system');
     expect(Object.isFrozen(def)).toBe(true);
   });
 
@@ -157,15 +156,20 @@ describe('defineMemory — consumer scenarios', () => {
     expect(def.timing).toBe(MEMORY_TIMING.EVERY_ITERATION);
   });
 
-  it('explicit asRole override — inject as user message instead of system', () => {
-    const def = defineMemory({
-      id: 'as-user',
-      type: MEMORY_TYPES.EPISODIC,
-      strategy: { kind: MEMORY_STRATEGIES.WINDOW, size: 5 },
-      store: new InMemoryStore(),
-      asRole: 'user',
-    });
-    expect(def.asRole).toBe('user');
+  it('asRole is refused by name — it was never read (7.20.0)', () => {
+    // Used to assert `def.asRole === 'user'`, which was true of the
+    // definition and false of the run: recall is always injected as
+    // system. The option is gone; passing it now fails where it is
+    // written instead of quietly doing nothing.
+    expect(() =>
+      defineMemory({
+        id: 'as-user',
+        type: MEMORY_TYPES.EPISODIC,
+        strategy: { kind: MEMORY_STRATEGIES.WINDOW, size: 5 },
+        store: new InMemoryStore(),
+        asRole: 'user',
+      } as never),
+    ).toThrow(/defineMemory\('as-user'\): `asRole` has never been read/);
   });
 
   it('redact policy passes through (impl deferred to v2.x)', () => {

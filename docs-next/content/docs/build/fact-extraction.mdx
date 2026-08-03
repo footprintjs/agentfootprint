@@ -7,7 +7,7 @@ description: Distill structured facts from raw conversation. Pattern-based (free
 
 ## What fact extraction is
 
-`defineMemory({ type: SEMANTIC, strategy: { kind: EXTRACT, ... } })` — every turn, an extractor scans the latest messages and writes structured facts to a SEMANTIC store. On future runs, the read subflow loads relevant facts (not raw messages) into the messages slot.
+`defineMemory({ type: SEMANTIC, strategy: { kind: EXTRACT, ... } })` — every turn, an extractor scans the latest messages and writes structured facts to a SEMANTIC store. On future runs, the read subflow loads relevant facts (not raw messages) into the system-prompt slot.
 
 Two extractor modes:
 

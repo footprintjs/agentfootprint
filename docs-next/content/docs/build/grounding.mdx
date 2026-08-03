@@ -9,7 +9,7 @@ description: Reduce hallucination by giving the LLM the source material — and 
 
 **Grounding** = constraining the LLM to answer from supplied source material, not from training-data memory. Two complementary mechanisms:
 
-1. **Source injection** — the source material (docs, policy text, retrieved chunks, prior decisions) lands in the messages slot via [RAG](doc:rag), [Memory](doc:memory), or `defineFact`. The LLM sees it as fresh context.
+1. **Source injection** — the source material (docs, policy text, retrieved chunks, prior decisions) lands in the system-prompt slot via [RAG](doc:rag), [Memory](doc:memory), or `defineFact`. The LLM sees it as supplied context, above the conversation.
 2. **Source observation** — the framework records what was injected (event: `agentfootprint.context.injected`) and what the LLM produced (event: `agentfootprint.stream.llm_end`). Side-by-side comparison is the grounding audit.
 
 Together they form a *verifiable answer*: not "the LLM said X", but "the LLM said X having been given Y as the source material."
@@ -27,7 +27,7 @@ const docs = defineRAG({
 agent.rag(docs);
 ```
 
-When chunks DO match, they land in the messages slot tagged with `source: 'rag'`. Observability surfaces show exactly which chunks were retrieved per turn.
+When chunks DO match, they land in the system-prompt slot — one system message carrying every match as a citation block. Observability surfaces show exactly which chunks were retrieved per turn.
 
 ## Causal memory as grounding for follow-ups
 

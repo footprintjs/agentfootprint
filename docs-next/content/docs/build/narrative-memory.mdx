@@ -7,7 +7,7 @@ description: Compress long conversations into beats. Older turns are LLM-summari
 
 ## What summarization memory is
 
-`defineMemory({ type: EPISODIC, strategy: { kind: SUMMARIZE, recent, llm } })` — the long-conversation strategy. The `recent` parameter sets the boundary: the goal is to keep the last N turns raw and compress older turns into one cheap-LLM summary, so the messages slot gets `[summary of older turns] + [last N raw turns]`.
+`defineMemory({ type: EPISODIC, strategy: { kind: SUMMARIZE, recent, llm } })` — the long-conversation strategy. The `recent` parameter sets the boundary: the goal is to keep the last N turns raw and compress older turns into one cheap-LLM summary, so the recall injected into the system-prompt slot is `[summary of older turns] + [last N raw turns]`.
 
 Cheaper than infinite raw retention. More semantic than truncation.
 
@@ -31,7 +31,7 @@ The `summarize` stage runs on the READ side, inside the load pipeline (`loadRece
 4. Replaces that older range with ONE synthetic summary entry — `id: summary-{earliestTurn}-to-{latestTurn}`, a `{ role: 'system', content }` message, `tier: 'cold'`
 5. Keeps the `preserveRecent` most-recent turns verbatim
 
-The synthetic summary is in-memory for that read only — it shapes what gets injected into the messages slot, not what is persisted. The conversation BEATS get progressively coarser the further back you look — exactly like human episodic memory.
+The synthetic summary is in-memory for that read only — it shapes what gets injected into the system-prompt slot, not what is persisted. The conversation BEATS get progressively coarser the further back you look — exactly like human episodic memory.
 
 ## Compose it manually (today)
 

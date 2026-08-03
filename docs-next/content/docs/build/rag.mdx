@@ -1,9 +1,9 @@
 ---
 title: RAG
-description: defineRAG — sugar over defineMemory(SEMANTIC + TOP_K) with retrieval-friendly defaults. Chunks land in the messages slot when cosine similarity clears the threshold.
+description: defineRAG — sugar over defineMemory(SEMANTIC + TOP_K) with retrieval-friendly defaults. Chunks land in the system-prompt slot when cosine similarity clears the threshold.
 ---
 
-> Your support agent confidently tells a customer the refund window is 30 days. The actual policy says 14. The LLM is hallucinating from training data because **you never gave it the source**. RAG is how you stop the hallucination at its root — embed the user's question, retrieve the actual policy chunks, inject them into the messages slot, and the LLM answers from the SOURCE instead of memory.
+> Your support agent confidently tells a customer the refund window is 30 days. The actual policy says 14. The LLM is hallucinating from training data because **you never gave it the source**. RAG is how you stop the hallucination at its root — embed the user's question, retrieve the actual policy chunks, inject them into the system-prompt slot, and the LLM answers from the SOURCE instead of memory.
 
 ## What RAG is
 
@@ -11,14 +11,14 @@ description: defineRAG — sugar over defineMemory(SEMANTIC + TOP_K) with retrie
 
 1. Embed the user's query into a vector
 2. Search a vector store for top-K most-similar document chunks
-3. Inject those chunks into the next LLM call's messages slot
+3. Inject those chunks into the next LLM call's system-prompt slot, as one system message
 4. The LLM answers using the retrieved chunks as context
 
-In agentfootprint, RAG is **the same plumbing as `defineMemory({ type: SEMANTIC, strategy: TOP_K })`** — the same engine, the same observability event (`agentfootprint.context.injected` with `source: 'rag'`), the same multi-tenant identity. `defineRAG` is just a friendlier factory with retrieval-tuned defaults (`asRole: 'user'`, `topK: 3`, `threshold: 0.7`).
+In agentfootprint, RAG is **the same plumbing as `defineMemory({ type: SEMANTIC, strategy: TOP_K })`** — the same engine, the same observability event (`agentfootprint.context.injected` with `source: 'rag'`), the same multi-tenant identity. `defineRAG` is just a friendlier factory with retrieval-tuned defaults (`topK: 3`, `threshold: 0.7`).
 
 ## Define a retriever, attach to an agent
 
-`defineRAG({ id, store, embedder, description?, embedderId?, topK?, threshold?, asRole? })` returns a `MemoryDefinition`. `agent.rag(definition)` attaches it (alias for `.memory(definition)` — same plumbing, clearer intent). It throws at construction time if `store` lacks `search()`. Pair `embedderId` here with the same value passed to `indexDocuments` so a later embedder swap is filtered out of results:
+`defineRAG({ id, store, embedder, description?, embedderId?, topK?, threshold? })` returns a `MemoryDefinition`. `agent.rag(definition)` attaches it (alias for `.memory(definition)` — same plumbing, clearer intent). It throws at construction time if `store` lacks `search()`. Pair `embedderId` here with the same value passed to `indexDocuments` so a later embedder swap is filtered out of results:
 
 <CodeFile path="examples/context-engineering/07-rag.ts" region="define-and-attach" title="examples/context-engineering/07-rag.ts (region: define-and-attach)" />
 

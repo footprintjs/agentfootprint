@@ -13,9 +13,9 @@ The read subflow:
 1. Embed the current `userMessage` into a vector
 2. Call `store.search(identity, queryVector, { k: topK, minScore: threshold })`
 3. Format matches as a system message
-4. Inject into the messages slot for this turn
+4. Inject into the system-prompt slot for this turn
 
-This is the engine behind [`defineRAG`](doc:rag). RAG is just SEMANTIC × TOP_K with retrieval-tuned defaults (`asRole: 'user'`, `topK: 3`, `threshold: 0.7`).
+This is the engine behind [`defineRAG`](doc:rag). RAG is just SEMANTIC × TOP_K with retrieval-tuned defaults (`topK: 3`, `threshold: 0.7`).
 
 ## Define a TOP_K memory
 
