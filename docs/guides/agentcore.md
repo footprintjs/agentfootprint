@@ -28,7 +28,11 @@ onto AgentCore.
 **How much of this is verified:** the Runtime host is plain HTTP with no AWS SDK on its path
 and passes the host conformance suite over a real socket. Every adapter that calls an AWS SDK
 is **contract-mapped and injection-tested** — exercised through its `_client` / `_sdk` seam,
-never against AWS. Real-cloud verification lands with a field deployment.
+never against AWS. Both `agentCoreSessions` modes have since been run against the real service
+by a production integration: `'session-storage'` behaved as documented, and `'memory'` had a
+real defect that no injected fake could have shown (fixed in 7.22.1 — see
+[Sessions](#sessions--where-a-conversation-lives)). The remaining SDK adapters are still
+contract-mapped only.
 
 The framing that matters: **agentfootprint owns *authoring + self-explaining
 observability*; AgentCore owns *managed deploy + infra*.** Nothing below replaces
@@ -89,6 +93,39 @@ const handle = await standingAgent({
 *hangs* unless you route it), and `close()` detaches and drains without closing
 your socket. Runnable: [`examples/deploy/one-port.ts`](../../examples/deploy/one-port.ts).
 
+**Field facts worth knowing before you deploy** (both reported from a real deployment):
+
+- **`runtimeSessionId` must be ≥ 33 characters.** The service validates the length and
+  rejects shorter ids, so a tidy `"c-1"` fails. Send a UUID (or your own id with a stable
+  prefix). It arrives as the `X-Amzn-Bedrock-AgentCore-Runtime-Session-Id` header and
+  becomes `HostRequest.sessionId`.
+- **A direct-code (zip / `NODE_22`) deployment serves `/ws` fine.** The vendor docs describe
+  WebSocket support for *container* deployments only, which reads as a restriction — it
+  isn't one in practice.
+
+---
+
+## Sessions — where a conversation lives
+
+`agentCoreSessions({ store })` picks the checkpoint's home at construction:
+
+```ts
+agentCoreSessions({ store: 'session-storage' });                       // a JSON file, no SDK
+agentCoreSessions({ store: 'memory', memoryId: process.env.MEMORY_ID! }); // one Memory event per turn
+```
+
+The `'memory'` mode stores the envelope as **JSON text** and parses it back (7.22.1). That is
+not a style choice: handed an object as an event blob, the service stores its own host
+language's `toString()` of it and returns `{format=conversation-v1, data={...}}` — not JSON,
+and **lossy**. Envelopes written by 7.15.0–7.22.0 are unrecoverable; there is nothing to
+migrate. Start those conversations again.
+
+Both modes refuse rather than guess. An unknown envelope `format` is refused by name, and a
+stored session that is present but **unreadable** raises `UnreadableEnvelopeError` naming the
+session — because an unreadable stored conversation and an absent one are different facts, and
+only one of them is safe to answer with a fresh start. Only a session that was never written
+hydrates as "no conversation".
+
 ---
 
 ## Memory — `AgentCoreStore`
@@ -107,6 +144,14 @@ const agent = Agent.create({ provider, model }).memory(memory).build();
 
 Maps the `MemoryStore` interface onto AgentCore's session/event model. Example:
 [`examples/memory/09-agentcore-store.ts`](../../examples/memory/09-agentcore-store.ts).
+
+**7.22.1:** entries are stored as **JSON text**, for the same reason session envelopes are —
+handed an object, the service stores its own `toString()` of it and returns bytes nothing can
+decode. Entries written before 7.22.1 are **unrecoverable**; delete them or point the store at
+a fresh memory resource. A blob that is present and cannot be decoded now raises
+`UnreadableMemoryEntryError` naming the event and session, rather than being skipped — a
+`list()` one entry short reads as "never remembered", which is an agent that has forgotten
+something it was told and cannot say so.
 
 `store.search()` wraps AgentCore's server-side `RetrieveMemoryRecords`. It ranks on
 AWS's side and takes a **text** query, so pass one alongside the vector — omit it
@@ -303,5 +348,6 @@ second backend has real pull.
   AgentCore Evaluations API binding.
 - The **control plane** (every `Create*`) is yours — AWS SDK or CDK.
 - Everything that calls an AWS SDK is **contract-mapped and injection-tested**,
-  not verified against AWS. Confirm command and field names against your
-  installed `@aws-sdk/client-bedrock-agentcore`.
+  not verified against AWS — except the two `agentCoreSessions` modes, which a
+  production integration has now run against the real service. Confirm command
+  and field names against your installed `@aws-sdk/client-bedrock-agentcore`.

@@ -7,6 +7,176 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [7.22.1] - 2026-08-03
+
+A store that kept every conversation and could read none of them — and, one
+grep later, a second store doing the same thing to memories.
+
+`agentCoreSessions({ store: 'memory' })` wrote the checkpoint envelope into an
+event payload as a **raw object**. The service stores its own host language's
+`toString()` rendering of an object it is handed, and returns that string —
+`{format=conversation-v1, data={...}}`. Not JSON. The reader accepted only
+objects, so that string decoded to nothing, and `hydrate` answered the only way
+it could: **"no session"**. Every turn wrote a conversation nobody could read,
+and every next turn started fresh on top of it. Nothing failed. Nothing logged.
+The store filled up with perfectly-preserved, permanently-unreadable
+conversations, and the first person to find out was a user whose chat vanished
+at a deployment boundary.
+
+Two things had to change, and only one of them is about a cloud.
+
+**The encoding.** The shim now writes `JSON.stringify(envelope)` and parses a
+string blob back on read, still accepting an object blob because a
+caller-supplied `client` may legitimately return one. An envelope is defined as
+something a store can hold as text — `toEnvelope` round-trips through
+`JSON.stringify` by construction — so the encoding was always ours to pick, and
+the honest pick is the one whose bytes come back unchanged.
+
+**The law, which is the part that outlives this vendor.** In the words of the
+field report that bought it:
+
+> *An unreadable stored conversation and an absent one are different facts, and
+> only one of them is safe to answer with a fresh start.*
+
+A session nobody has used is absent, and answering it fresh is right. A session
+whose bytes are present and unreadable is not, and answering THAT fresh is
+invisible from every angle that matters — the reply looks perfect, the run looks
+clean, the store looks full. So the reading path now refuses it by name:
+`UnreadableEnvelopeError`, carrying `ERR_UNREADABLE_ENVELOPE`, the session id,
+and a short prefix of what came back (a prefix only — the rest of those bytes is
+somebody's conversation). It sits at `readFormat`, the one place a stored value
+is inspected, so every reader and **every store adapter, including ones nobody
+has written yet**, inherits it rather than re-deciding it. `standingAgent`
+surfaces it as the request's failure, naming the session, and never falls
+through to the fresh-start path.
+
+**Then the same pattern, in the other organ.** Diagnosing the session store
+meant reading how this repo writes an event blob, and `AgentCoreStore` — the
+`MemoryStore` adapter — wrote them identically: `payload: [{ blob: entry }]`,
+read back as objects only. Same service, same mangling, same silence, different
+loss: an entry that decodes to nothing was *skipped*, so `list()` came back one
+memory short and `get()` came back `null`. Memory that silently stays empty is
+indistinguishable from memory that works, until somebody notices the assistant
+has forgotten a customer's address. Shipping the cure for one organ while the
+same disease sat documented in the other would have been the polite cousin of
+the silent failure we had just made loud, so both are fixed here.
+
+The memory half gets the same two changes — JSON text on write, `JSON.parse` on
+read, objects still accepted — and the same law in the shape this port allows.
+`MemoryStore` has no envelope and no shared reading path: there is no
+`readFormat` here to inherit from. So the refusal lives at the adapter's own
+decode step, the one place raw bytes become an entry, and says so in a comment;
+if a `MemoryStore` reading path ever grows a choke point, the law moves there.
+
+**Say this part plainly, so nobody spends a day on archaeology: everything
+written by 7.15.0–7.22.0 into AgentCore event blobs is UNRECOVERABLE** — session
+envelopes under `{ store: 'memory' }` and every `AgentCoreStore` entry alike.
+The mangling is lossy; the returned string is not JSON and cannot be turned back
+into a conversation or an entry by any parser, ours or yours. There is no
+migration, and this release does not pretend to offer one. What it does offer is
+that those sessions and entries now announce themselves loudly instead of
+quietly becoming a stranger's blank slate. Delete them, point the store at a
+fresh memory resource, or start those conversations again.
+
+Thank you to **a production integration** for finding this on real
+infrastructure, reproducing it precisely, and verifying the fix through the
+public client seam. Their deployment also closes the outstanding real-cloud item
+from 7.15.0 for `{ store: 'session-storage' }` — which behaved exactly as
+documented — and, with this release, for `{ store: 'memory' }` as well. Both
+session modes have now met the service they were written for; `agentCorePolicy`
+and `AgentCoreStore.search()` remain contract-mapped and injection-tested only,
+and are still described that way.
+
+### Fixed
+
+- **`agentCoreSessions({ store: 'memory' })` wrote an envelope the service could
+  not give back.** The SDK shim now sends `payload: [{ blob: JSON.stringify(envelope) }]`
+  and decodes a string blob with `JSON.parse` on the way in. Object blobs are
+  still accepted on both the `_sdk` and `client` seams. A blob that is present
+  and undecodable — a pre-7.22.1 envelope, or anything mangled in future — is
+  refused loudly rather than decoded to `undefined`.
+
+- **`hydrate` no longer answers "no session" for a session that HAS one.** The
+  adapter's decode step now distinguishes *no blob at all* (an absence, which
+  hydrates as `undefined`) from *a blob it cannot read* (which travels on to the
+  shared reading law and is refused by name). Both file and event modes pass the
+  session id into `checkEnvelope`, so a refusal names the conversation.
+
+- **`AgentCoreStore` (`agentfootprint/memory-providers`) wrote memory entries
+  the same way, and lost them the same way.** Same fix: entries go in as
+  `JSON.stringify(entry)`, a string blob is parsed back, objects are still
+  accepted. And the same distinction, in this port's own shape — an event
+  carrying **no blob** is an absence and is skipped (AgentCore writes events of
+  its own into the same log), while a blob that is present and undecodable now
+  raises `UnreadableMemoryEntryError` instead of being dropped from the page.
+  Dropping it was the bug: `list()` came back one memory short, `get()` came
+  back `null`, and an agent answered as if it had never been told.
+
+  The refusal reaches every read path that walks events — `get`, `list`,
+  `delete`, `forget` — because a read that cannot see a memory must not report
+  "not there" on any of them. `search()` is untouched: it reads AgentCore's
+  derived records, not the blobs this store writes.
+
+### Added
+
+- **`UnreadableEnvelopeError`** (`agentfootprint/hosting`) — the refusal every
+  reader and store adapter inherits when a stored session is present but cannot
+  be read. Carries `code: 'ERR_UNREADABLE_ENVELOPE'`, `sessionId` when the
+  refuser knows it, and `storedPreview`: at most 64 characters of what the store
+  handed back, which is enough to recognise a mangled encoding and not enough to
+  leak what was being said. `withSession(id)` returns a copy naming the session,
+  for a reader that knew the bytes were bad but not whose they were.
+
+  It extends `TypeError`, which is what this refusal already threw — the error
+  gained a name, a code and a session; it did not change kind, so an existing
+  `catch` keeps working.
+
+- **`UnreadableMemoryEntryError`** (`agentfootprint/memory-providers`) — the
+  same law where `MemoryStore` can carry it. This port has no envelope and no
+  shared reading path to inherit from, so the refusal lives at the adapter's own
+  decode step and says so in a comment; if a `MemoryStore` reading path ever
+  grows a choke point, the law moves there. Carries
+  `code: 'ERR_UNREADABLE_MEMORY_ENTRY'`, the `eventId` and the `sessionId`, and
+  `storedShape`.
+
+  **`storedShape`, not a preview, and that difference is the point.** Both
+  refusals obey one rule — never the stored content — through one shared helper,
+  and they answer it differently because the two shapes differ in where content
+  begins. A `CheckpointEnvelope` opens `{ format, data, savedAt }`, so a capped
+  prefix is metadata. A `MemoryEntry` opens `{ id, value, … }`, so its second
+  field is the thing somebody asked the agent to remember, and even a short
+  prefix prints it — a test caught exactly that. So the memory refusal quotes
+  nothing at all: type, length, JSON-ness and the opening character, which is
+  still enough to recognise "an object stringified by something that was not
+  JSON".
+
+- **`checkEnvelope(value, sessionId?)`** — an optional second argument so a
+  store's refusal names the conversation. Omit it and nothing changes.
+
+### Changed
+
+- **`standingAgent` fails the request on an unreadable stored session**, naming
+  it, instead of hydrating `undefined` and starting a fresh conversation over
+  the top. If your store has ever handed back bytes this runtime cannot read,
+  you will now see it — that is the point. A store that never has is unaffected.
+  Over HTTP it is a **500**, and deliberately: every other hosting refusal is a
+  conflict or a shutdown, while this one really is something broken on the
+  server's side.
+
+- **[`examples/deploy/durable-sessions.ts`](examples/deploy/durable-sessions.ts)
+  gained a third part**, run end-to-end like the rest: a store holding an
+  unreadable session, the refusal arriving over real HTTP, the model never
+  called, nothing written over what is there, and a brand-new session still
+  answered fresh.
+
+- **Documented, where an integrator actually looks:** `runtimeSessionId` must be
+  **at least 33 characters** (the service validates it, so a short tidy id is
+  rejected before your container sees anything), and a **direct-code (zip /
+  `NODE_22`) deployment serves `/ws` fine** — the vendor documentation describes
+  WebSocket support for container deployments only, which reads as a restriction
+  and is not one. Both are field facts, on the AgentCore adapters page, the
+  step-by-step page and the repo guide.
+
 ## [7.22.0] - 2026-08-03
 
 Give the socket back.

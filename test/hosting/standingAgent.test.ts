@@ -12,6 +12,9 @@
  *     corruption class this whole feature has to be immune to.
  *   • A crashed process resumes: new agent, new composer, same store.
  *   • Unknown envelope format is refused BY NAME and nothing is mis-restored.
+ *   • A stored conversation that cannot be READ fails the request naming the
+ *     session — it is never answered with a fresh start, which is the one
+ *     failure nobody downstream can see.
  *   • 'reject' refuses a same-session collision naming the active run;
  *     'enqueue' is FIFO and the second turn sees the first turn's stored state.
  *   • A different session is never refused — it waits.
@@ -32,6 +35,7 @@ import {
   readPausedRun,
   standingAgent,
   toEnvelope,
+  UnreadableEnvelopeError,
 } from '../../src/hosting/index.js';
 import type { CheckpointEnvelope, SessionLifecycle } from '../../src/hosting/index.js';
 import type { LLMProvider, LLMRequest, LLMResponse } from '../../src/adapters/types.js';
@@ -249,6 +253,87 @@ describe('standingAgent — an envelope it cannot read', () => {
       expect(reply.error).toContain('conversation-v1');
       // The agent never ran on a conversation it could not read.
       expect(requests).toHaveLength(0);
+    } finally {
+      await handle.close();
+    }
+  });
+});
+
+// ─── security / honesty: unreadable is not a fresh start ─────────────
+//
+// The failure this pins is invisible from the outside, which is why it is
+// pinned at the composer rather than only at the store: a stored conversation
+// that cannot be read, answered with a fresh start, produces a perfectly
+// ordinary-looking reply while a user's conversation stops existing. An
+// unreadable stored conversation and an absent one are different facts, and
+// only one of them is safe to answer with a fresh start.
+
+describe('standingAgent — a stored conversation it cannot read', () => {
+  /** What a store hands back when its service mangled the encoding. */
+  const MANGLED = '{format=conversation-v1, data={version=1, history=[]}, savedAt=1754000000000}';
+
+  it('fails THE REQUEST naming the session, and never starts fresh over it', async () => {
+    const { provider, requests } = spyProvider(['should never run']);
+    const written: CheckpointEnvelope[] = [];
+    const sessions: SessionLifecycle = {
+      // A store that did not check its own bytes — the composer must still not
+      // treat this as "no session".
+      hydrate: () => Promise.resolve(MANGLED as unknown as CheckpointEnvelope),
+      persist: (_id, envelope) => {
+        written.push(envelope);
+        return Promise.resolve();
+      },
+    };
+    const host = inProcessHost();
+    const handle = await standingAgent({ agent: buildAgent(provider), sessions, host });
+    try {
+      const reply = await host.deliver({ input: 'hello again', sessionId: 'c-1' });
+      expect(reply.output).toBeUndefined();
+      expect(reply.code).toBe('ERR_UNREADABLE_ENVELOPE');
+      expect(reply.error).toContain("session 'c-1'");
+      expect(reply.error).toContain('different facts');
+      // The two things a silent fresh start would have done, and neither
+      // happened: no run…
+      expect(requests).toHaveLength(0);
+      // …and nothing written on top of whatever is still stored there.
+      expect(written).toHaveLength(0);
+    } finally {
+      await handle.close();
+    }
+  });
+
+  it('names the session even when the store did not know which one it was', async () => {
+    const { provider, requests } = spyProvider(['should never run']);
+    const sessions: SessionLifecycle = {
+      // A store that refuses correctly but anonymously — a shared decoder, say.
+      hydrate: () => Promise.reject(new UnreadableEnvelopeError(MANGLED)),
+      persist: () => Promise.resolve(),
+    };
+    const host = inProcessHost();
+    const handle = await standingAgent({ agent: buildAgent(provider), sessions, host });
+    try {
+      const reply = await host.deliver({ input: 'hello again', sessionId: 'c-7' });
+      expect(reply.code).toBe('ERR_UNREADABLE_ENVELOPE');
+      // The guarantee does not depend on which store you chose.
+      expect(reply.error).toContain("session 'c-7'");
+      expect(requests).toHaveLength(0);
+    } finally {
+      await handle.close();
+    }
+  });
+
+  it('a session with NOTHING stored is still answered fresh — the other fact', async () => {
+    const { provider, requests } = spyProvider(['hello, new person']);
+    const host = inProcessHost();
+    const handle = await standingAgent({
+      agent: buildAgent(provider),
+      sessions: memorySessions(),
+      host,
+    });
+    try {
+      const reply = await host.deliver({ input: 'hello', sessionId: 'brand-new' });
+      expect(reply.output).toBe('hello, new person');
+      expect(requests).toHaveLength(1);
     } finally {
       await handle.close();
     }

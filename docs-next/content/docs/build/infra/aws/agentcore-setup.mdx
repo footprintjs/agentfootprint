@@ -231,7 +231,18 @@ WorkloadIdentity, and Gateway resources you referenced above). Use the AWS SDK
 
 Invoke the deployed runtime (`InvokeAgentRuntime`, SigV4) — or hit your host directly while
 testing — and confirm a two-turn conversation **recalls** across turns (memory) and that the
-tool fires. Locally:
+tool fires.
+
+<Callout type="warn" title="runtimeSessionId must be at least 33 characters">
+The service validates the length, so a tidy `"c-1"` is rejected before your container sees
+anything. Send a UUID (or your own id with a stable prefix) — it arrives as the
+`X-Amzn-Bedrock-AgentCore-Runtime-Session-Id` header and becomes `HostRequest.sessionId`.
+A second, unrelated fact from the same deployment: a **direct-code (zip / `NODE_22`)**
+runtime serves `/ws` fine, even though the vendor docs describe WebSocket support for
+container deployments only.
+</Callout>
+
+Locally:
 
 ```ts
 const a = buildAgent(provider);

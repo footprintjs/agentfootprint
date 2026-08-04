@@ -2,10 +2,17 @@
  * envelope — 7-pattern tests
  * (unit · scenario · integration · property · security · performance · ROI).
  *
- * One rule under test: a format this runtime does not know is refused BY NAME,
- * never guessed at. A store outlives the code that wrote to it, so an older
- * reader WILL meet a newer payload one day; the only honest thing it can do is
- * say which format it found, which ones it knows, and stop.
+ * Two rules under test, and they are the same rule at two depths.
+ *
+ * A format this runtime does not know is refused BY NAME, never guessed at. A
+ * store outlives the code that wrote to it, so an older reader WILL meet a newer
+ * payload one day; the only honest thing it can do is say which format it found,
+ * which ones it knows, and stop.
+ *
+ * And one step earlier: bytes that are not an envelope AT ALL are refused by
+ * name too, rather than reported as "no session". An unreadable stored
+ * conversation and an absent one are different facts, and only one of them is
+ * safe to answer with a fresh start.
  */
 
 import { describe, expect, it } from 'vitest';
@@ -16,6 +23,7 @@ import {
   readPausedRun,
   toEnvelope,
   toPausedEnvelope,
+  UnreadableEnvelopeError,
 } from '../../src/hosting/index.js';
 import type { PausedRun } from '../../src/hosting/index.js';
 import type { AgentRunCheckpoint } from '../../src/index.js';
@@ -202,5 +210,103 @@ describe('checkEnvelope', () => {
     expect(() => checkEnvelope({ format: 'flowchart-v1', data: {}, savedAt: 1 })).toThrow(
       /missing required field: checkpoint/,
     );
+  });
+
+  it('names the session when the store passes one', () => {
+    try {
+      checkEnvelope('{format=conversation-v1, data={}}', 'c-1');
+      expect.unreachable('checkEnvelope accepted bytes that are not an envelope');
+    } catch (err) {
+      expect(err).toBeInstanceOf(UnreadableEnvelopeError);
+      expect((err as UnreadableEnvelopeError).sessionId).toBe('c-1');
+      expect((err as Error).message).toContain("session 'c-1'");
+    }
+  });
+});
+
+// ─── the law: PRESENT-but-unreadable is not ABSENT ───────────────────
+//
+// This is the half of the envelope law that a store gets wrong silently. An
+// unknown FORMAT is at least an envelope, and refusing it was never in doubt.
+// Bytes that are not an envelope at all — a store that kept its own encoding
+// and handed back its host language's `toString()` of the object — used to be
+// something a store could shrug at and answer `undefined` to, which reads as
+// "new conversation" all the way out to the user.
+//
+// The law lives at `readFormat`, the one place a stored value is inspected, so
+// every reader here and every store adapter that calls one inherits it —
+// including adapters nobody has written yet. These tests are written against
+// the READERS rather than against any adapter for exactly that reason.
+
+describe('the reading path — unreadable is refused, never treated as absent', () => {
+  /** The exact shape a field deployment got back: a Java-style toString, not JSON. */
+  const MANGLED =
+    '{format=conversation-v1, data={version=1, runId=run-7, history=[{role=user, ' +
+    'content=hello}]}, savedAt=1754000000000}';
+
+  it.each([
+    ['checkEnvelope', (v: unknown) => checkEnvelope(v)],
+    ['readEnvelope', (v: unknown) => readEnvelope(v)],
+    ['readPausedRun', (v: unknown) => readPausedRun(v)],
+  ])('%s refuses a mangled stored value BY NAME', (_label, read) => {
+    expect(() => read(MANGLED)).toThrow(UnreadableEnvelopeError);
+    expect(() => read(MANGLED)).toThrow(/present but unreadable/);
+    expect(() => read(MANGLED)).toThrow(/different facts/);
+    // The diagnosis a reader needs: this LOOKS like our envelope, stringified
+    // by something that was not JSON.
+    expect(() => read(MANGLED)).toThrow(/format=conversation-v1/);
+  });
+
+  it('carries the code a caller can branch on without matching prose', () => {
+    try {
+      checkEnvelope(MANGLED, 'c-1');
+      expect.unreachable('a mangled envelope was accepted');
+    } catch (err) {
+      expect((err as UnreadableEnvelopeError).code).toBe('ERR_UNREADABLE_ENVELOPE');
+    }
+  });
+
+  it('quotes a prefix only — the rest of those bytes is the conversation', () => {
+    const secret = 'x'.repeat(400);
+    const long = `{format=conversation-v1, data={history=[{role=user, content=${secret}}]}}`;
+    try {
+      checkEnvelope(long, 'c-1');
+      expect.unreachable('a mangled envelope was accepted');
+    } catch (err) {
+      const message = (err as Error).message;
+      expect(message).toContain('format=conversation-v1');
+      expect(message).not.toContain(secret);
+      expect((err as UnreadableEnvelopeError).storedPreview.length).toBeLessThan(long.length / 4);
+    }
+  });
+
+  it.each([
+    ['a number', 7],
+    ['a boolean', true],
+    ['an array', [{ blob: 'x' }]],
+    ['null', null],
+  ])('refuses %s the same way — nothing here is a fresh start', (_label, value) => {
+    expect(() => checkEnvelope(value)).toThrow(UnreadableEnvelopeError);
+  });
+
+  it('holds for a store adapter nobody has written yet', async () => {
+    // The criterion for where the law lives: a NEW adapter gets it for free,
+    // without knowing this rule exists, as long as it reads through the shared
+    // path. This one keeps its sessions as text and forgets to decode.
+    const someFutureStore = {
+      raw: new Map<string, string>([['c-1', MANGLED]]),
+      async hydrate(sessionId: string) {
+        const stored = this.raw.get(sessionId);
+        return stored === undefined ? undefined : checkEnvelope(stored, sessionId);
+      },
+    };
+    await expect(someFutureStore.hydrate('c-1')).rejects.toThrow(UnreadableEnvelopeError);
+    await expect(someFutureStore.hydrate('c-1')).rejects.toThrow(/session 'c-1'/);
+    // …and a session it never wrote is still an ordinary absence.
+    await expect(someFutureStore.hydrate('never-seen')).resolves.toBeUndefined();
+  });
+
+  it('is still a TypeError, so nothing that caught one before stops catching', () => {
+    expect(() => readEnvelope(MANGLED)).toThrow(TypeError);
   });
 });

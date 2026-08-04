@@ -9,11 +9,21 @@
  *     dispatches the REAL AgentCore commands with the right inputs, so the
  *     wrong-service bug (it used to target `bedrock-agent-runtime` with
  *     non-existent `PutMemoryEventCommand`s) can never recur silently.
+ *
+ * Since 7.22.1 the shim also carries the twin of a field-reproduced session
+ * defect: an entry written as an OBJECT comes back as this service's own
+ * `toString()` rendering and decodes to nothing, so entries are written as JSON
+ * TEXT and a blob that is present but unreadable is refused BY NAME rather than
+ * skipped. The mangled shape is pinned as a fixture, and the old reader's silent
+ * skip is pinned beside it as the contrast.
  */
 
 import { describe, expect, it } from 'vitest';
 
-import { AgentCoreStore } from '../../../src/adapters/memory/agentcore.js';
+import {
+  AgentCoreStore,
+  UnreadableMemoryEntryError,
+} from '../../../src/adapters/memory/agentcore.js';
 import type {
   AgentCoreEvent,
   AgentCoreLikeClient,
@@ -177,7 +187,7 @@ describe('AgentCoreStore — SDK shim (regression guard: REAL AgentCore commands
     return { sdk, sent };
   }
 
-  it('put → CreateEventCommand with memoryId/actorId/sessionId/eventTimestamp + entry as a blob payload', async () => {
+  it('put → CreateEventCommand with memoryId/actorId/sessionId/eventTimestamp + the entry as JSON TEXT', async () => {
     const { sdk, sent } = spySdk();
     const store = new AgentCoreStore({
       memoryId: 'mem-1',
@@ -194,8 +204,14 @@ describe('AgentCoreStore — SDK shim (regression guard: REAL AgentCore commands
     expect(String(create!.input.actorId)).toMatch(/^afp-/);
     expect(String(create!.input.sessionId)).toMatch(/^afp-/);
     expect(create!.input.eventTimestamp).toBeInstanceOf(Date);
-    const payload = create!.input.payload as { blob?: MemoryEntry }[];
-    expect(payload[0].blob?.id).toBe('a');
+
+    // THE FIX (7.22.1). A raw object here is what the session store lost
+    // conversations to: the service stores its own host language's toString()
+    // of an object it is handed and returns a string nothing can decode. Text
+    // goes out, the same text comes back.
+    const payload = create!.input.payload as { blob?: unknown }[];
+    expect(typeof payload[0].blob).toBe('string');
+    expect((JSON.parse(payload[0].blob as string) as MemoryEntry).id).toBe('a');
   });
 
   it('list → ListEventsCommand with includePayloads', async () => {
@@ -211,6 +227,278 @@ describe('AgentCoreStore — SDK shim (regression guard: REAL AgentCore commands
     expect(() => new AgentCoreStore({ memoryId: 'm', _sdk: {} as never })).toThrow(
       /BedrockAgentCoreClient/,
     );
+  });
+});
+
+// ── the twin of the session defect: a mangled blob ──────────────────
+//
+// The session store shipped this same pattern — an OBJECT written as an event
+// blob — and a field deployment proved what the service does with it: it stores
+// its own host language's `toString()` rendering and returns `{id=m-1,
+// value={...}}`, which is not JSON and is lossy. The reader accepted objects
+// only, so every entry decoded to null and was SKIPPED: `list()` came back
+// short, `get()` came back null, and an agent answered as if it had never been
+// told. Memory that silently stays empty is indistinguishable from memory that
+// works, until somebody notices the assistant forgot a customer's address.
+//
+// `MemoryStore` has no envelope and no shared reading path — there is no
+// `readFormat` on this port to inherit a law from — so the refusal lives at this
+// adapter's decode step, with the same capped preview the session refusal uses.
+
+describe('AgentCoreStore — an unreadable entry', () => {
+  /** What the service returns for an entry that was written as an object. */
+  const MANGLED_BLOB =
+    '{id=a, value={text=her home address is 14 Rowan Street}, version=1, ' +
+    'createdAt=1754000000000, tier=hot}';
+
+  /**
+   * A stateful SDK stand-in: `CreateEvent` keeps the blob it was handed and
+   * `ListEvents` gives it back, which is the only way a round trip is a round
+   * trip. `listBlobs` replaces the stored blobs wholesale, for bytes this
+   * adapter never wrote.
+   */
+  function statefulSdk(listBlobs?: readonly unknown[]) {
+    const written: unknown[] = [];
+    const cmd = (name: string) =>
+      class {
+        static cmdName = name;
+        input: Record<string, unknown>;
+        constructor(input: Record<string, unknown>) {
+          this.input = input;
+        }
+      };
+    const sdk = {
+      BedrockAgentCoreClient: class {
+        constructor(public config: { region?: string }) {}
+        async send(c: { constructor: { cmdName: string }; input: Record<string, unknown> }) {
+          const name = c.constructor.cmdName;
+          if (name === 'CreateEvent') {
+            written.push((c.input.payload as { blob: unknown }[])[0].blob);
+            return {};
+          }
+          if (name === 'ListEvents') {
+            const blobs = listBlobs ?? written;
+            return {
+              events: blobs.map((blob, index) => ({
+                eventId: `ev-${index}`,
+                payload: [{ blob }],
+              })),
+            };
+          }
+          if (name === 'RetrieveMemoryRecords') {
+            return {
+              memoryRecordSummaries: [
+                { memoryRecordId: 'rec-1', content: 'Ada prefers window seats.', score: 0.9 },
+              ],
+            };
+          }
+          return {};
+        }
+      },
+      CreateEventCommand: cmd('CreateEvent'),
+      ListEventsCommand: cmd('ListEvents'),
+      DeleteEventCommand: cmd('DeleteEvent'),
+      RetrieveMemoryRecordsCommand: cmd('RetrieveMemoryRecords'),
+    };
+    return { sdk, written };
+  }
+
+  it('is what the OLD reader silently skipped — pinned as the contrast', () => {
+    // The pre-7.22.1 decode step, quoted so the regression has a shape a reader
+    // can recognise rather than a description. Objects only…
+    const oldEntryFromPayload = (payload: unknown): MemoryEntry | null => {
+      if (!Array.isArray(payload)) return null;
+      for (const p of payload) {
+        const blob = (p as { blob?: unknown })?.blob;
+        if (blob && typeof blob === 'object') return blob as MemoryEntry;
+      }
+      return null;
+    };
+    // …so the mangled string decoded to null…
+    expect(oldEntryFromPayload([{ blob: MANGLED_BLOB }])).toBeNull();
+    // …and null was dropped from the list by `list()`'s own `if (!entry) continue`,
+    // which is a memory that exists reported as a memory that does not.
+  });
+
+  it('refuses LOUDLY now, naming the event and the session', async () => {
+    const { sdk } = statefulSdk([MANGLED_BLOB]);
+    const store = new AgentCoreStore({ memoryId: 'mem-1', _sdk: sdk as never });
+    await expect(store.list(id)).rejects.toBeInstanceOf(UnreadableMemoryEntryError);
+    await expect(store.list(id)).rejects.toThrow(/event 'ev-0'/);
+    await expect(store.list(id)).rejects.toThrow(/session 'afp-/);
+    await expect(store.list(id)).rejects.toThrow(/different facts/);
+  });
+
+  it('carries the code and the blob SHAPE, and quotes none of the memory', async () => {
+    const { sdk } = statefulSdk([MANGLED_BLOB]);
+    const store = new AgentCoreStore({ memoryId: 'mem-1', _sdk: sdk as never });
+    const err = await store.list(id).then(
+      () => undefined,
+      (e: unknown) => e as UnreadableMemoryEntryError,
+    );
+    expect(err?.code).toBe('ERR_UNREADABLE_MEMORY_ENTRY');
+    expect(err?.eventId).toBe('ev-0');
+    expect(err?.sessionId).toMatch(/^afp-/);
+    // Enough to recognise the mangling: it is a long string, it is not JSON,
+    // and it opens like something that stringified an object.
+    expect(err?.storedShape).toBe(
+      `a ${MANGLED_BLOB.length}-character string that is not JSON, starting "{"`,
+    );
+    // NOT a prefix. A MemoryEntry's second field is `value`, so even a capped
+    // quote would print what somebody asked the agent to remember.
+    expect(err?.message).not.toContain('14 Rowan Street');
+    expect(err?.message).not.toContain('Rowan');
+    expect(err?.message).not.toContain('id=a');
+    // It says plainly that pre-fix entries are not recoverable, so nobody goes
+    // looking for a migration that cannot exist.
+    expect(err?.message).toMatch(/before 7\.22\.1/);
+  });
+
+  it('refuses on every read path, not just list', async () => {
+    const { sdk } = statefulSdk([MANGLED_BLOB]);
+    const store = new AgentCoreStore({ memoryId: 'mem-1', _sdk: sdk as never });
+    // `get`, `delete` and `forget` all walk the same events. A read that cannot
+    // see a memory must not report "not there" on any of them.
+    await expect(store.get(id, 'a')).rejects.toBeInstanceOf(UnreadableMemoryEntryError);
+    await expect(store.delete(id, 'a')).rejects.toBeInstanceOf(UnreadableMemoryEntryError);
+    await expect(store.forget(id)).rejects.toBeInstanceOf(UnreadableMemoryEntryError);
+  });
+
+  it.each([
+    ['JSON that is not an object', '"just a string"'],
+    ['JSON null', 'null'],
+    ['a number', 7],
+    ['truncated JSON', '{"id":"a","value":{'],
+  ])('refuses %s the same way — present is not absent', async (_label, blob) => {
+    const { sdk } = statefulSdk([blob]);
+    const store = new AgentCoreStore({ memoryId: 'mem-1', _sdk: sdk as never });
+    await expect(store.list(id)).rejects.toBeInstanceOf(UnreadableMemoryEntryError);
+  });
+
+  it.each([
+    ['a payload with no blob key at all', [{ conversational: { text: 'hi' } }]],
+    ['a blob key holding nothing', [{ blob: null }]],
+    ['a payload that is not a list', 'not-a-list'],
+  ])('%s is an ABSENCE — this store never wrote it', async (_label, payload) => {
+    // AgentCore writes events of its own into the same log. Nothing in these
+    // ever claimed to be one of our entries, so they are skipped rather than
+    // refused — which is the distinction the whole fix rests on.
+    const cmd = (name: string) =>
+      class {
+        static cmdName = name;
+        input: Record<string, unknown>;
+        constructor(input: Record<string, unknown>) {
+          this.input = input;
+        }
+      };
+    const sdk = {
+      BedrockAgentCoreClient: class {
+        constructor(public config: { region?: string }) {}
+        async send(c: { constructor: { cmdName: string } }) {
+          return c.constructor.cmdName === 'ListEvents'
+            ? { events: [{ eventId: 'ev-0', payload }] }
+            : {};
+        }
+      },
+      CreateEventCommand: cmd('CreateEvent'),
+      ListEventsCommand: cmd('ListEvents'),
+      DeleteEventCommand: cmd('DeleteEvent'),
+    };
+    const store = new AgentCoreStore({ memoryId: 'mem-1', _sdk: sdk as never });
+    expect((await store.list(id)).entries).toEqual([]);
+    expect(await store.get(id, 'a')).toBeNull();
+  });
+});
+
+describe('AgentCoreStore — string blobs on every read path', () => {
+  function statefulSdk() {
+    const written: unknown[] = [];
+    const cmd = (name: string) =>
+      class {
+        static cmdName = name;
+        input: Record<string, unknown>;
+        constructor(input: Record<string, unknown>) {
+          this.input = input;
+        }
+      };
+    const deleted: string[] = [];
+    const sdk = {
+      BedrockAgentCoreClient: class {
+        constructor(public config: { region?: string }) {}
+        async send(c: { constructor: { cmdName: string }; input: Record<string, unknown> }) {
+          const name = c.constructor.cmdName;
+          if (name === 'CreateEvent') {
+            written.push((c.input.payload as { blob: unknown }[])[0].blob);
+            return {};
+          }
+          if (name === 'ListEvents') {
+            return {
+              events: written.map((blob, index) => ({
+                eventId: `ev-${index}`,
+                payload: [{ blob }],
+              })),
+            };
+          }
+          if (name === 'DeleteEvent') {
+            deleted.push(String(c.input.eventId));
+            return {};
+          }
+          if (name === 'RetrieveMemoryRecords') {
+            return {
+              memoryRecordSummaries: [
+                { memoryRecordId: 'rec-1', content: 'Ada prefers window seats.', score: 0.9 },
+              ],
+            };
+          }
+          return {};
+        }
+      },
+      CreateEventCommand: cmd('CreateEvent'),
+      ListEventsCommand: cmd('ListEvents'),
+      DeleteEventCommand: cmd('DeleteEvent'),
+      RetrieveMemoryRecordsCommand: cmd('RetrieveMemoryRecords'),
+    };
+    return { sdk, written, deleted };
+  }
+
+  it('put → list round-trips through JSON text, with every field intact', async () => {
+    const { sdk, written } = statefulSdk();
+    const store = new AgentCoreStore({ memoryId: 'mem-1', _sdk: sdk as never });
+    await store.put(
+      id,
+      makeEntry('p', {
+        tier: 'cold',
+        embedding: [0.1, 0.2, 0.3],
+        metadata: { author: 'system', urgency: 5 },
+        source: { turn: 7, runtimeStageId: 'stage#3' },
+      }),
+    );
+    expect(typeof written[0]).toBe('string');
+    const [entry] = (await store.list(id)).entries;
+    expect(entry?.id).toBe('p');
+    expect(entry?.tier).toBe('cold');
+    expect(entry?.embedding).toEqual([0.1, 0.2, 0.3]);
+    expect(entry?.metadata?.urgency).toBe(5);
+    expect(entry?.source?.runtimeStageId).toBe('stage#3');
+  });
+
+  it('get and delete find an entry stored as text', async () => {
+    const { sdk, deleted } = statefulSdk();
+    const store = new AgentCoreStore({ memoryId: 'mem-1', _sdk: sdk as never });
+    await store.put(id, makeEntry('a'));
+    expect((await store.get<{ text: string }>(id, 'a'))?.value.text).toBe('value-a');
+    await store.delete(id, 'a');
+    expect(deleted).toEqual(['ev-0']);
+  });
+
+  it('search is unaffected — it reads records, not the blobs this store writes', async () => {
+    const { sdk } = statefulSdk();
+    const store = new AgentCoreStore({ memoryId: 'mem-1', _sdk: sdk as never });
+    await store.put(id, makeEntry('a'));
+    const hits = await store.search(id, [0.1, 0.2], { text: 'where does Ada sit?' });
+    expect(hits.map((h) => h.entry.value)).toEqual(['Ada prefers window seats.']);
+    // …and the event-backed half still reads back beside it.
+    expect((await store.list(id)).entries.map((e) => e.id)).toEqual(['a']);
   });
 });
 

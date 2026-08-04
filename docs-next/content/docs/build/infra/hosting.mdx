@@ -287,10 +287,50 @@ that does not know one says so and stops.
 The two readers also refuse **each other's** format, and each points at its
 sibling. That looks fussy until you see the alternative: a reader that quietly
 returned the conversation inside a paused run hands back a session that looks
-finished while somebody is still waiting to be asked. `checkEnvelope(value)` is
-the third door, for **stores**: it validates either format and hands the
-envelope straight back, because a store's job is to notice unreadable bytes, not
-to care which half of a session is inside them.
+finished while somebody is still waiting to be asked. `checkEnvelope(value,
+sessionId?)` is the third door, for **stores**: it validates either format and
+hands the envelope straight back, because a store's job is to notice unreadable
+bytes, not to care which half of a session is inside them. Pass the session id
+and every refusal names the conversation it is about.
+
+### Unreadable is not the same as absent
+
+> **An unreadable stored conversation and an absent one are different facts, and
+> only one of them is safe to answer with a fresh start.**
+
+A session with nothing stored hydrates as `undefined` and is answered fresh —
+correct, and the ordinary case. A session whose stored bytes are **present and
+cannot be read** is a different fact: a conversation exists, somebody is in the
+middle of it, and answering fresh over the top of it looks *exactly* like the
+happy path from the outside. Nobody notices until a deployment boundary hands a
+user a blank slate where their chat was.
+
+So the reading path refuses it by name instead, with
+`UnreadableEnvelopeError` — code `ERR_UNREADABLE_ENVELOPE`, the `sessionId`, and
+a short `storedPreview` prefix of what came back (a prefix only: the rest of
+those bytes is somebody's conversation):
+
+```
+[hosting] session 'c-1' has a STORED conversation this runtime cannot read. An
+unreadable stored conversation and an absent one are different facts, and only
+one of them is safe to answer with a fresh start… What the store handed back
+looks like: "{format=conversation-v1, data={version=1, runId=run-7, h…" (284 chars)
+```
+
+The law lives at the one place a stored value is inspected, so **every** reader
+and every store adapter inherits it — including adapters nobody has written yet.
+It is a `TypeError` by ancestry, so code that already caught one keeps working.
+`standingAgent` surfaces it as the request's failure, naming the session, and
+never falls through to the fresh-start path. Over HTTP that is a **500**, and
+deliberately: every other hosting refusal is a conflict or a shutdown, while
+this one really is something broken on the server's side. Writing a store?
+Return `undefined` **only** for a session you have nothing for, and let
+`checkEnvelope` speak for everything else.
+
+Runnable: [`examples/deploy/durable-sessions.ts`](https://github.com/footprintjs/agentfootprint/blob/main/examples/deploy/durable-sessions.ts)
+serves a store holding an unreadable session and shows the refusal arriving over
+real HTTP — model never called, nothing written over it, and a brand-new session
+still answered fresh.
 
 <Callout title="A FlowchartCheckpoint through JSON">
 It is safe to resume from, and it is **not** byte-identical. `JSON.stringify`

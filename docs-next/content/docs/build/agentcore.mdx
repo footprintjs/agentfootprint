@@ -60,6 +60,8 @@ These are documented in the JSDoc; promoted here for visibility:
 
 5. **AWS rate limits apply** — production deployments should wrap with `withRetry` and budget calls per session. AWS SDK has built-in retry; tune via the SDK's `maxAttempts` config.
 
+6. **Entries written before 7.22.1 are unreadable, and now say so** — the adapter used to hand each `MemoryEntry` to the service as an object, and the service stores its own `toString()` rendering of an object it is given and returns that string, which is not JSON and is lossy. Those entries decoded to nothing and were silently skipped: `list()` came back short and the agent answered as if it had never been told. Since 7.22.1 entries go in as **JSON text** and a blob that is present but undecodable raises `UnreadableMemoryEntryError` — naming the event and session — rather than being dropped. Old entries cannot be recovered; delete them or point the store at a fresh memory resource. Details: [AgentCore adapters](doc:agentcore-adapters).
+
 ## Test injection
 
 `AgentCoreStore({ _client: ... })` accepts a mock-injected client for tests — no live AWS account needed for CI:

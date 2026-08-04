@@ -23,9 +23,15 @@
  * continues it. The presence of that field is what makes a request a resume;
  * reading approval out of prose would be a guess.
  *
+ * ── unreadable ≠ absent ─────────────────────────────────────────────────────
+ * A session with nothing stored is answered fresh. A session whose stored bytes
+ * cannot be READ is refused by name instead, because those are different facts
+ * and only one of them is safe to answer with a fresh start.
+ *
  * This file is its own integration test: it binds an ephemeral port, crashes a
- * run on purpose and shows what survived, then holds a human-in-the-loop turn
- * over HTTP end to end, and exits. No credentials, no network.
+ * run on purpose and shows what survived, holds a human-in-the-loop turn over
+ * HTTP end to end, proves an unreadable session is refused rather than restarted,
+ * and exits. No credentials, no network.
  *
  * Run:  npm run example examples/deploy/durable-sessions.ts
  */
@@ -37,6 +43,7 @@ import {
   nodeHost,
   readEnvelope,
   standingAgent,
+  toEnvelope,
   type SessionLifecycle,
 } from '../../src/hosting/index.js';
 import { isCliEntry, printResult, type ExampleMeta } from '../helpers/cli.js';
@@ -239,10 +246,91 @@ async function aPauseThatPersists(input: string): Promise<Record<string, unknown
   }
 }
 
+// ─── Part 3: unreadable is not absent ────────────────────────────────
+//
+// The third thing a standing agent needs once it is real: a store that hands
+// back bytes this runtime cannot read must NOT be answered with a fresh
+// conversation. An unreadable stored conversation and an absent one are
+// different facts, and only one of them is safe to answer with a fresh start.
+
+// #region unreadable
+/**
+ * A store holding a session it can no longer read — what you get from a backend
+ * that stringified the envelope in its own format on the way in.
+ */
+function aStoreThatMangledIt(): SessionLifecycle & { writes: () => number } {
+  let writes = 0;
+  return {
+    writes: () => writes,
+    hydrate: (sessionId) =>
+      Promise.resolve(
+        sessionId === 'mangled'
+          ? // Present, and not an envelope. NOT `undefined` — that would be a
+            // claim this session has never been used.
+            ('{format=conversation-v1, data={version=1, history=[]}}' as unknown as ReturnType<
+              typeof toEnvelope
+            >)
+          : undefined,
+      ),
+    persist: () => {
+      writes++;
+      return Promise.resolve();
+    },
+  };
+}
+
+async function unreadableIsNotAbsent(): Promise<Record<string, unknown>> {
+  let modelCalls = 0;
+  const inner = mock({ reply: 'this must never be produced' });
+  const provider: LLMProvider = {
+    name: inner.name,
+    complete: (request) => {
+      modelCalls++;
+      return inner.complete(request);
+    },
+  };
+  const sessions = aStoreThatMangledIt();
+  const handle = await standingAgent({
+    agent: Agent.create({ provider, model: 'mock' }).system('You are terse.').build(),
+    sessions,
+    host: nodeHost({ port: 0, hostname: '127.0.0.1' }),
+  });
+
+  try {
+    const refused = await invoke(handle.url, 'mangled', { input: 'where were we?' });
+    // Read the counters HERE: the fresh turn below legitimately calls the model
+    // and writes, and folding the two together would prove nothing.
+    const calledTheModel = modelCalls > 0;
+    const wroteAnything = sessions.writes() > 0;
+
+    // A session this store has nothing for is still answered fresh — that is
+    // the other fact, and it has to keep working.
+    const fresh = await invoke(handle.url, 'brand-new', { input: 'hello' });
+
+    return {
+      // 500, and deliberately: unlike every other hosting refusal this one is
+      // something broken on the server's side, not a conflict the caller can
+      // resolve by sending something else.
+      refusedWithStatus: refused.status,
+      refusedWithCode: refused.json.code, // ERR_UNREADABLE_ENVELOPE
+      refusalNamesTheSession: String(refused.json.error).includes("session 'mangled'"),
+      // The two things a silent fresh start would have done, and neither did.
+      modelWasNeverCalled: !calledTheModel,
+      nothingWasWrittenOverIt: !wroteAnything,
+      // …while a session with nothing stored is ordinary.
+      aBrandNewSessionStillAnswers: fresh.status === 200 && typeof fresh.json.output === 'string',
+    };
+  } finally {
+    await handle.close();
+  }
+}
+// #endregion unreadable
+
 export async function run(input: string, _provider?: LLMProvider): Promise<unknown> {
   return {
     crashSurvival: await whatSurvivedTheCrash(),
     humanInTheLoop: await aPauseThatPersists(input),
+    unreadableIsNotAbsent: await unreadableIsNotAbsent(),
   };
 }
 

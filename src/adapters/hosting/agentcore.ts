@@ -38,7 +38,16 @@
  * injection-tested**: its AgentCore Memory calls are exercised through the
  * `_client` seam, never against AWS. Confirm the command and field names
  * against your installed `@aws-sdk/client-bedrock-agentcore` before you rely
- * on it; real-cloud verification lands with a field deployment.
+ * on it.
+ *
+ * Both modes have now been exercised against the real service by a production
+ * integration, and the `'memory'` mode came back with a defect no injected fake
+ * could have shown: given an OBJECT as an event's blob, the service stores its
+ * own host language's `toString()` of it and returns a string that is not JSON
+ * and cannot be decoded. This shim writes JSON text for exactly that reason.
+ * Envelopes written by any build before 7.22.1 are unrecoverable — the mangling
+ * is lossy, so there is nothing to migrate, and the honest response is a loud
+ * refusal rather than a silent fresh start.
  *
  * Pattern: Adapter (GoF). Role: outer ring. The file-backed session store uses
  * `node:fs` and nothing else; the event-backed one lazy-loads the AWS SDK, so
@@ -241,7 +250,18 @@ export interface AgentCoreFileSessionsOptions {
 export interface AgentCoreSessionEvent {
   /** Server-assigned event id. */
   readonly eventId: string;
-  /** The envelope decoded from the event's blob payload, or `null` when unreadable. */
+  /**
+   * The envelope decoded from the event's blob payload.
+   *
+   * `null` means the event carried **no blob at all** — nothing here ever
+   * claimed to be a session, which is an absence and hydrates as "no
+   * conversation".
+   *
+   * A blob that IS present but could not be decoded travels here **as-is**, so
+   * the shared reading law refuses it by name rather than this adapter quietly
+   * calling a conversation that exists an absent one. Those are different facts
+   * and only one of them is safe to answer with a fresh start.
+   */
   readonly envelope: unknown;
 }
 
@@ -251,7 +271,14 @@ export interface AgentCoreSessionEvent {
  * `_client` and never touch AWS.
  */
 export interface AgentCoreSessionClientLike {
-  /** Append one envelope as an event (the server assigns the event id). */
+  /**
+   * Append one envelope as an event (the server assigns the event id).
+   *
+   * The envelope arrives as an OBJECT; how it reaches the wire is the
+   * implementation's business. The shipped shim writes it as JSON text, because
+   * this service returns an object blob back as its own host language's
+   * `toString()` of it — see `createSessionClient`.
+   */
   createEvent(input: {
     memoryId: string;
     actorId: string;
@@ -299,7 +326,10 @@ export type AgentCoreSessionsOptions =
  * Both modes store the SAME `CheckpointEnvelope` the port defines — a
  * conversation or a paused run — and both refuse an unknown `format` by name
  * through the shared `checkEnvelope`: a session written by a newer runtime is
- * refused, never half-restored. That law is inherited, not re-implemented.
+ * refused, never half-restored. That law is inherited, not re-implemented, and
+ * so is its other half: a stored session that is present but **unreadable** is
+ * refused by name too (`UnreadableEnvelopeError`), never answered with a fresh
+ * start. Only a session that was never written hydrates as `undefined`.
  *
  * @example  Survive a stop/resume, no AWS SDK required
  *   agentCoreSessions({ store: 'session-storage' });
@@ -356,7 +386,7 @@ function fileSessions(options: AgentCoreFileSessionsOptions): SessionLifecycle {
       // `checkEnvelope` accepts either format: a store keeps sessions, and
       // whether a session is mid-conversation or mid-question is not its
       // business — only whether it can be read at all.
-      return checkEnvelope(stored);
+      return checkEnvelope(stored, sessionId);
     },
     async persist(sessionId: string, envelope: CheckpointEnvelope): Promise<void> {
       const { writeFile, rename, mkdir } = await import('node:fs/promises');
@@ -401,8 +431,17 @@ function memoryEventSessions(options: AgentCoreMemorySessionsOptions): SessionLi
         maxResults: 1,
       });
       const newest = page.events[0];
+      // No event, or an event carrying no blob: nothing here ever claimed to be
+      // a session, so this really is a fresh start. Anything else — including a
+      // blob that came back mangled — goes to `checkEnvelope`, which refuses a
+      // conversation it cannot read BY NAME instead of returning `undefined`
+      // and letting the agent answer as if the session were new.
       if (!newest || newest.envelope === null || newest.envelope === undefined) return undefined;
-      return checkEnvelope(newest.envelope);
+      // `decodeBlob` again rather than only inside the shim: a caller-supplied
+      // `client` is free to hand back the stored text as it found it, and text
+      // this adapter can plainly read is not something to refuse on a
+      // technicality. Anything it cannot read still reaches `checkEnvelope`.
+      return checkEnvelope(decodeBlob(newest.envelope), sessionId);
     },
     async persist(sessionId: string, envelope: CheckpointEnvelope): Promise<void> {
       await client.createEvent({
@@ -443,12 +482,41 @@ export interface BedrockAgentCoreSessionSdkModule {
   readonly ListEventsCommand?: new (input: unknown) => unknown;
 }
 
+/**
+ * Turn one stored blob back into an envelope — the adapter's ONE decode step.
+ *
+ * ── Why a string is the normal case, not the exotic one ──────────────────────
+ * This adapter writes the envelope as **JSON text** (see `createEvent` below),
+ * so the blob that comes back is a string and is parsed here. Objects are still
+ * accepted: a caller who supplies their own `client` can hand back a real
+ * object, and refusing it would break a seam that never had this problem.
+ *
+ * A blob it cannot decode is handed back **AS-IS**, never as `null`. `null`
+ * means "no blob", which is an absence, and an absence is answered with a fresh
+ * start; a conversation that exists and cannot be read must not be. Passing the
+ * raw value on puts it in front of `checkEnvelope`, which refuses by name.
+ */
+function decodeBlob(blob: unknown): unknown {
+  if (typeof blob !== 'string') return blob;
+  try {
+    const parsed: unknown = JSON.parse(blob);
+    // JSON.parse('"x"') is a string, not an envelope. Hand back the ORIGINAL
+    // bytes so the refusal quotes what the store actually holds.
+    return parsed !== null && typeof parsed === 'object' ? parsed : blob;
+  } catch {
+    return blob;
+  }
+}
+
 /** Pull the envelope out of an event's `payload` (a single `blob` document). */
 function envelopeFromPayload(payload: unknown): unknown {
   if (!Array.isArray(payload)) return null;
   for (const part of payload) {
-    const blob = (part as { blob?: unknown })?.blob;
-    if (blob && typeof blob === 'object') return blob;
+    if (!part || typeof part !== 'object' || !('blob' in part)) continue;
+    const blob = (part as { blob?: unknown }).blob;
+    // A part with no blob VALUE is not a session either — keep looking.
+    if (blob === null || blob === undefined) continue;
+    return decodeBlob(blob);
   }
   return null;
 }
@@ -505,7 +573,15 @@ function createSessionClient(
         actorId,
         sessionId,
         eventTimestamp: new Date(),
-        payload: [{ blob: envelope }],
+        // JSON TEXT, not the object. Field-learned, and the whole reason for
+        // this release: given an object, the service stores its own host
+        // language's `toString()` rendering of it and returns THAT string —
+        // `{format=conversation-v1, data={...}}`, which is not JSON and which
+        // nothing can turn back into a conversation. The envelope is defined as
+        // something a store can hold as text (`toEnvelope` round-trips through
+        // `JSON.stringify` by construction), so the encoding is ours to pick and
+        // the honest pick is the one whose bytes come back unchanged.
+        payload: [{ blob: JSON.stringify(envelope) }],
       });
     },
     async listEvents({ memoryId, actorId, sessionId, maxResults }) {

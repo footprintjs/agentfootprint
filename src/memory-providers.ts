@@ -45,6 +45,7 @@ export {
 
 export {
   AgentCoreStore,
+  UnreadableMemoryEntryError,
   type AgentCoreStoreOptions,
   type AgentCoreLikeClient,
   type AgentCoreEvent,

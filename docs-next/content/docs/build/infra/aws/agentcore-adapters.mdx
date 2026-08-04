@@ -30,7 +30,12 @@ Everything that talks to AWS — `agentCoreSessions({ store: 'memory' })`,
 injection-tested**: the SDK calls are exercised through the `_client` / `_sdk`
 seams, and no test in this repo reaches AWS or pretends to. Confirm the command
 and field names against your installed `@aws-sdk/client-bedrock-agentcore`.
-Real-cloud verification lands with a field deployment.
+
+**Both session modes have now run against the real service.** A production
+integration deployed them and reported back: `{ store: 'session-storage' }`
+works as documented, and `{ store: 'memory' }` had a real defect that no
+injected fake could have shown — fixed in 7.22.1, below. `agentCorePolicy` and
+`AgentCoreStore.search()` are still contract-mapped only.
 </Callout>
 
 ## Run it: the whole container entry point
@@ -117,9 +122,73 @@ agentCoreSessions({ store: 'memory', memoryId: process.env.MEMORY_ID!, region: '
 Both store the same `CheckpointEnvelope`, and both **refuse an unknown `format`
 by name** rather than restoring half a conversation — that law comes from
 `readEnvelope`, the one implementation of it, not from a copy in each adapter.
+The same is true of its other half: a stored session that is present but
+**unreadable** raises `UnreadableEnvelopeError` naming the session, rather than
+hydrating as "no conversation". See
+[Unreadable is not the same as absent](doc:hosting).
 
 The file mode writes then renames, so a container killed mid-write leaves the
 previous conversation intact rather than a truncated file nothing can parse.
+
+### The `'memory'` mode stores the envelope as JSON **text** (7.22.1)
+
+<Callout type="warn" title="Blobs written by 7.15.0–7.22.0 are unrecoverable — sessions AND memory entries">
+Field-reproduced on the real service. Given an OBJECT as an event's blob, the
+service stores its own host language's `toString()` rendering of it and returns
+that string — `{format=conversation-v1, data={...}}`. It is not JSON, and the
+mangling is **lossy**: there is nothing to migrate and no archaeology worth
+doing. Worse, the reader accepted objects only, so the string decoded to nothing
+and `hydrate` answered "no session" — every conversation the store kept was
+unreadable, and invisible until a deployment boundary lost somebody's chat.
+`AgentCoreStore` wrote its memory entries the same way and lost them the same
+way; both are fixed here.
+
+**7.22.1 writes `JSON.stringify(envelope)`** and reads a string blob back
+through `JSON.parse` (object blobs still work, for a caller-supplied `client`).
+Anything it still cannot decode is refused **loudly**, naming the session, so a
+pre-7.22.1 envelope announces itself instead of quietly becoming a fresh start.
+Sessions written before upgrading are gone; new ones round-trip.
+</Callout>
+
+### `AgentCoreStore` had the same defect, fixed in the same release
+
+The session store and the memory store wrote event blobs the same way, so they
+had the same bug. `AgentCoreStore` now writes each `MemoryEntry` as **JSON
+text** too, parses a string blob back (objects still accepted), and refuses a
+blob it cannot decode with `UnreadableMemoryEntryError` — naming the event and
+the session — instead of skipping it.
+
+Skipping was the whole problem: a `list()` one entry short reads as "that was
+never remembered", and an agent answering without a memory it *has* looks
+exactly like an agent that was never told. **Entries written before 7.22.1 are
+unrecoverable for the same reason session envelopes are** — delete them, or
+point the store at a fresh memory resource.
+
+The refusal quotes **nothing** of the entry, where the session refusal quotes a
+capped prefix. Same discipline, different shape: a `CheckpointEnvelope` opens
+with `format` / `data` / `savedAt`, so a prefix is metadata; a `MemoryEntry`
+opens with `id` and then `value`, so its second field is the thing somebody
+asked the agent to remember. `storedShape` reports type, length, JSON-ness and
+the opening character — enough to recognise a mangled encoding, and no part of
+the memory.
+
+### Two things the service checks that its docs do not say loudly
+
+Both are field facts, recorded here because this is where an integrator looks:
+
+- **`runtimeSessionId` must be at least 33 characters.** The service validates
+  the length and rejects shorter ids. A tidy `"c-1"` or a bare user id will not
+  do — pass something long (a UUID, or your own id with a stable prefix). The
+  same value arrives as the
+  `X-Amzn-Bedrock-AgentCore-Runtime-Session-Id` header and becomes
+  `HostRequest.sessionId`; `agentCoreSessions` then slugs and length-bounds it
+  for AgentCore Memory's own id rules, which is a *separate* constraint from
+  this one.
+- **A direct-code (zip / `NODE_22`) deployment serves `/ws` fine.** The vendor
+  documentation describes WebSocket support for container deployments only,
+  which reads as a restriction; it is not one in practice. The
+  [`{ server }` option](doc:hosting) is what lets the upgrade and the agent share
+  the container's single port.
 
 ## Policy: a remote engine behind the same gate
 

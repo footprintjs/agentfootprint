@@ -15,6 +15,7 @@ import {
   ConcurrentRunError,
   HostClosedError,
   PauseNotCarriedError,
+  UnreadableEnvelopeError,
   requireCapability,
 } from '../../src/hosting/index.js';
 import type { AgentHost } from '../../src/hosting/index.js';
@@ -89,6 +90,85 @@ describe('PauseNotCarriedError', () => {
     expect(err.stored).toBe(false);
     expect(err.message).toContain('Nothing was written');
     expect(err.message).toContain('no session id');
+  });
+});
+
+describe('UnreadableEnvelopeError', () => {
+  /**
+   * The shape the field hit: a store handed an OBJECT to a service that stored
+   * its own host language's `toString()` of it. Not JSON, not recoverable.
+   */
+  const MANGLED =
+    '{format=conversation-v1, data={version=1, runId=run-7, history=[{role=user, ' +
+    'content=my card number is 4111 1111 1111 1111}]}, savedAt=1754000000000}';
+
+  it('states the law it exists to enforce, and names the session', () => {
+    const err = new UnreadableEnvelopeError(MANGLED, 'c-1');
+    expect(err.name).toBe('UnreadableEnvelopeError');
+    expect(err.code).toBe('ERR_UNREADABLE_ENVELOPE');
+    expect(err.sessionId).toBe('c-1');
+    expect(err.message).toContain("session 'c-1'");
+    expect(err.message).toContain('different facts');
+    expect(err.message).toContain('fresh start');
+    expect(err.message).toContain('{ format, data, savedAt }');
+  });
+
+  it('quotes a PREFIX for diagnosis and never the conversation', () => {
+    const err = new UnreadableEnvelopeError(MANGLED, 'c-1');
+    // Enough to recognise the mangling at a glance…
+    expect(err.storedPreview).toContain('format=conversation-v1');
+    // …and not enough to leak what was being said.
+    expect(err.storedPreview).not.toContain('4111 1111 1111 1111');
+    expect(err.message).not.toContain('4111 1111 1111 1111');
+    expect(err.storedPreview.length).toBeLessThan(MANGLED.length);
+    // The reader is told bytes were withheld rather than left to assume the
+    // store held exactly this much.
+    expect(err.storedPreview).toContain(`${MANGLED.length} chars`);
+  });
+
+  it('describes a non-string without dumping it either', () => {
+    const err = new UnreadableEnvelopeError([{ blob: 'secret' }]);
+    expect(err.storedPreview).toBe('an array of 1 item(s)');
+    expect(err.message).not.toContain('secret');
+    expect(new UnreadableEnvelopeError(null).storedPreview).toBe('null');
+    expect(new UnreadableEnvelopeError(7).storedPreview).toBe('number 7');
+    expect(new UnreadableEnvelopeError({ a: 1, b: 2 }).storedPreview).toBe(
+      'an object with keys: a, b',
+    );
+    expect(new UnreadableEnvelopeError({}).storedPreview).toBe('an object with no keys');
+  });
+
+  it('reads correctly when the refuser does not know whose session it was', () => {
+    const err = new UnreadableEnvelopeError(MANGLED);
+    expect(err.sessionId).toBeUndefined();
+    expect(err.message).toContain('present but unreadable');
+    expect(err.message).not.toContain('undefined');
+  });
+
+  it('withSession names the session without editing the error already thrown', () => {
+    const anonymous = new UnreadableEnvelopeError(MANGLED);
+    const named = anonymous.withSession('c-9');
+    expect(named).not.toBe(anonymous);
+    expect(named.sessionId).toBe('c-9');
+    expect(named.message).toContain("session 'c-9'");
+    expect(named.cause).toBe(anonymous);
+    // The copy quotes the same prefix — and no more of the blob than the
+    // original was allowed to.
+    expect(named.storedPreview).toBe(anonymous.storedPreview);
+    // The original is untouched: an error already handed to somebody is a fact
+    // about a moment.
+    expect(anonymous.sessionId).toBeUndefined();
+  });
+
+  it('leaves an already-named refusal alone', () => {
+    const named = new UnreadableEnvelopeError(MANGLED, 'c-1');
+    expect(named.withSession('c-2')).toBe(named);
+  });
+
+  it('is still a TypeError, so an existing catch keeps working', () => {
+    const err = new UnreadableEnvelopeError(MANGLED, 'c-1');
+    expect(err).toBeInstanceOf(TypeError);
+    expect(err).toBeInstanceOf(Error);
   });
 });
 

@@ -3,7 +3,7 @@
  * same words.
  *
  * A refusal that varies by adapter is a refusal nobody can write a test or a
- * runbook against. These five carry a stable `code`, name WHO refused, and say
+ * runbook against. These six carry a stable `code`, name WHO refused, and say
  * what the caller should do instead. Adapters map the codes onto whatever their
  * transport uses to say "no" — that mapping is the adapter's business and lives
  * in the adapter, never here.
@@ -18,6 +18,7 @@
  * say so loudly and name the adapter it is talking about.
  */
 
+import { previewStored } from '../lib/storedPreview.js';
 import type { AgentHost, HostCapability, PendingAsk } from './types.js';
 
 /**
@@ -185,6 +186,86 @@ export class NoPendingAskError extends Error {
     );
     this.name = 'NoPendingAskError';
     this.sessionId = sessionId;
+  }
+}
+
+/**
+ * An already-computed preview, so {@link UnreadableEnvelopeError.withSession}
+ * can copy a refusal without being handed the stored bytes a second time. Not
+ * exported: nothing outside this file should be able to hand-write a preview.
+ */
+class StoredPreview {
+  constructor(readonly text: string) {}
+}
+
+/**
+ * Thrown when a store hands back something that is **present but unreadable**
+ * where a `CheckpointEnvelope` should be.
+ *
+ * The law, in the words of the field report that bought it:
+ *
+ * > *An unreadable stored conversation and an absent one are different facts,
+ * > and only one of them is safe to answer with a fresh start.*
+ *
+ * Absent is ordinary — a new session has no conversation, and answering it
+ * fresh is exactly right. Unreadable is not ordinary: a conversation EXISTS,
+ * somebody is in the middle of it, and starting fresh over the top of it looks
+ * identical to the happy path from the outside. Nobody finds that until a
+ * deployment boundary hands a user a stranger's blank slate. So this refuses,
+ * loudly, naming the session — the one thing a silent `undefined` could never
+ * do.
+ *
+ * It extends `TypeError` because that is what it always was: the refusal gained
+ * a name, a `code` and the session it is about, but a caller who was already
+ * catching a `TypeError` from a reader keeps working.
+ *
+ * `storedPreview` quotes at most 64 characters (`STORED_PREVIEW_LIMIT`, in
+ * `lib/storedPreview` — one cap, shared by every adapter that has to describe
+ * bytes it could not read) — enough to recognise a mangled encoding at a
+ * glance, never the conversation itself.
+ */
+export class UnreadableEnvelopeError extends TypeError {
+  readonly code = 'ERR_UNREADABLE_ENVELOPE' as const;
+  /** The session those bytes were stored under, when the refuser knows it. */
+  readonly sessionId?: string;
+  /** A short, deliberately truncated rendering of what the store handed back. */
+  readonly storedPreview: string;
+
+  constructor(stored: unknown, sessionId?: string) {
+    const preview = stored instanceof StoredPreview ? stored.text : previewStored(stored);
+    super(
+      `[hosting] ` +
+        (sessionId === undefined
+          ? `a stored session is present but unreadable`
+          : `session '${sessionId}' has a STORED conversation this runtime cannot read`) +
+        `. An unreadable stored conversation and an absent one are different facts, and ` +
+        `only one of them is safe to answer with a fresh start — so this refuses instead ` +
+        `of starting over on top of a conversation that exists. ` +
+        `What the store handed back looks like: ${preview}. ` +
+        `Only a short prefix is ever quoted here — the rest of those bytes is the ` +
+        `conversation. ` +
+        `Expected { format, data, savedAt } as written by toEnvelope() / toPausedEnvelope(). ` +
+        `A store that keeps its own encoding must decode back to that object before ` +
+        `handing it over.`,
+    );
+    this.name = 'UnreadableEnvelopeError';
+    if (sessionId !== undefined) this.sessionId = sessionId;
+    this.storedPreview = preview;
+  }
+
+  /**
+   * The same refusal, naming the session — for a reader that knew the bytes
+   * were unreadable but not whose conversation they were.
+   *
+   * Returns a copy rather than mutating: an error already thrown past somebody
+   * is a fact about a moment, and editing it under them is how two stack traces
+   * end up disagreeing about what happened.
+   */
+  withSession(sessionId: string): UnreadableEnvelopeError {
+    if (this.sessionId !== undefined) return this;
+    const named = new UnreadableEnvelopeError(new StoredPreview(this.storedPreview), sessionId);
+    named.cause = this;
+    return named;
   }
 }
 

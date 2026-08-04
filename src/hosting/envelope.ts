@@ -19,8 +19,27 @@
  * while a person is still waiting on a question nobody mentioned. That is a
  * half-restore wearing a happy path, which is the exact failure the format field
  * exists to prevent.
+ *
+ * ── The same rule one step earlier: unreadable ≠ absent ──────────────────────
+ * A format nobody knows is one way a store can hand back something unusable.
+ * The other is bytes that are not an envelope at all — a store that kept its own
+ * encoding and gave back its host language's `toString()` of the object rather
+ * than the object, say. **An unreadable stored conversation and an absent one
+ * are different facts, and only one of them is safe to answer with a fresh
+ * start.** Absent is ordinary. Unreadable means a conversation EXISTS and this
+ * runtime cannot see it, and answering that with a fresh start is invisible from
+ * the outside — it looks exactly like a new user — until a deployment boundary
+ * hands somebody a blank slate where their conversation was.
+ *
+ * So {@link readFormat} — the ONE place a stored value is inspected, and
+ * therefore the place every reader and every store adapter inherits from —
+ * raises {@link UnreadableEnvelopeError} by name, with the session and a short
+ * prefix of what it found. Decoding is an adapter's business (only the adapter
+ * knows its transport's encoding); "these bytes are nobody's readable session"
+ * is everybody's, so it is refused here, once.
  */
 
+import { UnreadableEnvelopeError } from './errors.js';
 import { validateCheckpoint, type AgentRunCheckpoint } from '../core/runCheckpoint.js';
 import type {
   CheckpointEnvelope,
@@ -74,6 +93,10 @@ export function toPausedEnvelope(paused: PausedRun): PausedRunEnvelope {
  * else wrote, in a format this runtime may not know, and typing the parameter
  * as the happy shape would be assuming the very thing that needs checking.
  *
+ * @throws UnreadableEnvelopeError when what came back is present but is not an
+ *   envelope at all — bytes a store kept in its own encoding, say. Never
+ *   `undefined`: a conversation that exists and cannot be read is not the same
+ *   fact as one that was never there.
  * @throws TypeError naming the format when it is one this runtime cannot read;
  *   naming the missing field when the conversation inside is malformed; and
  *   pointing at {@link readPausedRun} when the envelope holds a paused run,
@@ -118,17 +141,24 @@ export function readPausedRun(envelope: unknown): PausedRun {
  * produced them rather than whoever read them next; it has no business caring
  * whether the session inside is mid-conversation or mid-question.
  *
+ * Pass `sessionId` and the refusal names the conversation, which is what turns
+ * a log line into an incident somebody can act on. Pass it whenever you have it
+ * — a store always does.
+ *
+ * @throws UnreadableEnvelopeError when the stored value is present but is not an
+ *   envelope at all. That is the case a store must NOT answer with `undefined`:
+ *   see the module header.
  * @throws TypeError naming the format when this runtime cannot read it, or the
  *   missing field when the payload is malformed.
  *
  * @example
  *   async hydrate(sessionId) {
  *     const stored = await myStore.get(sessionId);
- *     return stored === undefined ? undefined : checkEnvelope(stored);
+ *     return stored === undefined ? undefined : checkEnvelope(stored, sessionId);
  *   }
  */
-export function checkEnvelope(envelope: unknown): CheckpointEnvelope {
-  if (readFormat(envelope) === 'flowchart-v1') {
+export function checkEnvelope(envelope: unknown, sessionId?: string): CheckpointEnvelope {
+  if (readFormat(envelope, sessionId) === 'flowchart-v1') {
     validatePausedRun((envelope as PausedRunEnvelope).data);
   } else {
     validateCheckpoint((envelope as ConversationEnvelope).data);
@@ -137,16 +167,17 @@ export function checkEnvelope(envelope: unknown): CheckpointEnvelope {
 }
 
 /**
- * The one place a `format` is checked, so every refusal in this file says the
- * same thing in the same words.
+ * The one place a stored value is inspected, so every refusal in this file says
+ * the same thing in the same words — and so the "unreadable is not absent" law
+ * holds for every reader here and every store adapter that calls one, including
+ * ones nobody has written yet.
  */
-function readFormat(envelope: unknown): 'conversation-v1' | 'flowchart-v1' {
+function readFormat(envelope: unknown, sessionId?: string): 'conversation-v1' | 'flowchart-v1' {
   if (!envelope || typeof envelope !== 'object' || Array.isArray(envelope)) {
-    throw new TypeError(
-      `[hosting] stored session is not an envelope (got ${
-        envelope === null ? 'null' : Array.isArray(envelope) ? 'an array' : typeof envelope
-      }). Expected { format, data, savedAt } as written by toEnvelope() / toPausedEnvelope().`,
-    );
+    // Present but not an envelope. NOT `undefined`, NOT a fresh start: see the
+    // module header. Still a `TypeError` by ancestry, so an existing catch is
+    // unaffected — it just has a name and a session now.
+    throw new UnreadableEnvelopeError(envelope, sessionId);
   }
   const found = (envelope as Partial<CheckpointEnvelope>).format;
   if (typeof found !== 'string' || !KNOWN_FORMATS.includes(found)) {

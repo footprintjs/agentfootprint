@@ -41,6 +41,10 @@
  *   • `toPausedEnvelope` / `readPausedRun` — the same for a run that stopped to
  *     ask a person something (`'flowchart-v1'`). `checkEnvelope` validates
  *     either without committing to which half you wanted — what a STORE wants.
+ *   • `UnreadableEnvelopeError` — the refusal every reader and every store
+ *     adapter inherits when a stored session is PRESENT but cannot be read. An
+ *     unreadable stored conversation and an absent one are different facts, and
+ *     only one of them is safe to answer with a fresh start.
  *   • `requireCapability` — feature-detection with teeth.
  *
  * @example  An agent that stays up and remembers
@@ -84,6 +88,7 @@ export {
   PauseNotCarriedError,
   AwaitingDecisionError,
   NoPendingAskError,
+  UnreadableEnvelopeError,
 } from './errors.js';
 
 export type {

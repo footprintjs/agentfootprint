@@ -1,9 +1,10 @@
 /**
  * agentCoreSessions — where a conversation lives between requests.
  *
- * Two modes, one port, and one law inherited rather than re-implemented: an
- * envelope whose `format` this runtime does not know is refused BY NAME, never
- * half-restored. Both modes are asserted against that.
+ * Two modes, one port, and two laws inherited rather than re-implemented: an
+ * envelope whose `format` this runtime does not know is refused BY NAME, and a
+ * stored session that is PRESENT but unreadable is refused by name too — never
+ * answered with a fresh start. Both modes are asserted against both.
  *
  * `{ store: 'session-storage' }` is real: it writes a real file to a real temp
  * directory and reads it back, including across a fresh adapter instance, which
@@ -12,7 +13,10 @@
  * `{ store: 'memory' }` is **contract-mapped and injection-tested**: every AWS
  * interaction goes through the `_client` seam, and the SDK shim itself is
  * exercised with a fake `_sdk` module. No test here reaches AWS, and none
- * pretends to — real-cloud verification lands with a field deployment.
+ * pretends to. What one field deployment DID reach is pinned as a fixture: the
+ * mangled-blob shape the real service returned for an envelope written as an
+ * object, which the old reader silently called "no session". See the
+ * "an unreadable blob" block.
  */
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -26,7 +30,7 @@ import {
   type AgentCoreSessionClientLike,
   type BedrockAgentCoreSessionSdkModule,
 } from '../../src/hosting-providers.js';
-import { toEnvelope } from '../../src/hosting/index.js';
+import { toEnvelope, UnreadableEnvelopeError } from '../../src/hosting/index.js';
 import type { CheckpointEnvelope } from '../../src/hosting/index.js';
 import type { AgentRunCheckpoint } from '../../src/core/runCheckpoint.js';
 
@@ -56,6 +60,60 @@ async function tempPath(name = 'session'): Promise<string> {
   const dir = await mkdtemp(join(tmpdir(), 'afp-sessions-'));
   temps.push(dir);
   return join(dir, name);
+}
+
+/**
+ * A fake `@aws-sdk/client-bedrock-agentcore` that records what it was sent.
+ *
+ * `listBlob` overrides what a `ListEvents` reply carries, which is how the
+ * field's mangled-blob shape gets in front of the reader. Left out, the fake
+ * echoes back the newest blob it was given — the service's actual job, and the
+ * only way a round-trip test is a round trip rather than two assertions.
+ * `listPayload` replaces the payload wholesale, for events shaped unlike ours.
+ */
+function fakeSdk(
+  listBlob?: unknown,
+  listPayload?: unknown,
+): {
+  module: BedrockAgentCoreSessionSdkModule;
+  sent: { command: string; input: Record<string, unknown> }[];
+  written: unknown[];
+} {
+  const sent: { command: string; input: Record<string, unknown> }[] = [];
+  const written: unknown[] = [];
+  const command = (name: string) =>
+    class {
+      readonly __name = name;
+      constructor(readonly input: Record<string, unknown>) {}
+    };
+  const module: BedrockAgentCoreSessionSdkModule = {
+    BedrockAgentCoreClient: class {
+      constructor(readonly config: { region?: string }) {}
+      async send(cmd: unknown): Promise<unknown> {
+        const typed = cmd as { __name: string; input: Record<string, unknown> };
+        sent.push({ command: typed.__name, input: typed.input });
+        if (typed.__name === 'CreateEvent') {
+          written.push((typed.input.payload as { blob: unknown }[])[0].blob);
+          return {};
+        }
+        if (typed.__name === 'ListEvents') {
+          if (listPayload !== undefined) {
+            return { events: [{ eventId: 'e-1', payload: listPayload }] };
+          }
+          const blob =
+            listBlob !== undefined
+              ? listBlob
+              : written[written.length - 1] ??
+                JSON.stringify(toEnvelope(conversation('from the cloud')));
+          return { events: [{ eventId: 'e-1', payload: [{ blob }] }] };
+        }
+        return {};
+      }
+    } as unknown as BedrockAgentCoreSessionSdkModule['BedrockAgentCoreClient'],
+    CreateEventCommand: command('CreateEvent') as never,
+    ListEventsCommand: command('ListEvents') as never,
+  };
+  return { module, sent, written };
 }
 
 /** An in-memory stand-in for AgentCore Memory's append-only event log. */
@@ -289,40 +347,7 @@ describe("agentCoreSessions({ store: 'memory' }) — injection-tested", () => {
 // ── the SDK shim, exercised with a fake SDK module ──────────────────
 
 describe("agentCoreSessions({ store: 'memory' }) — the SDK mapping", () => {
-  /** A fake `@aws-sdk/client-bedrock-agentcore` that records what it was sent. */
-  function fakeSdk() {
-    const sent: { command: string; input: Record<string, unknown> }[] = [];
-    const command = (name: string) =>
-      class {
-        readonly __name = name;
-        constructor(readonly input: Record<string, unknown>) {}
-      };
-    const module: BedrockAgentCoreSessionSdkModule = {
-      BedrockAgentCoreClient: class {
-        constructor(readonly config: { region?: string }) {}
-        async send(cmd: unknown): Promise<unknown> {
-          const typed = cmd as { __name: string; input: Record<string, unknown> };
-          sent.push({ command: typed.__name, input: typed.input });
-          if (typed.__name === 'ListEvents') {
-            return {
-              events: [
-                {
-                  eventId: 'e-1',
-                  payload: [{ blob: toEnvelope(conversation('from the cloud')) }],
-                },
-              ],
-            };
-          }
-          return {};
-        }
-      } as unknown as BedrockAgentCoreSessionSdkModule['BedrockAgentCoreClient'],
-      CreateEventCommand: command('CreateEvent') as never,
-      ListEventsCommand: command('ListEvents') as never,
-    };
-    return { module, sent };
-  }
-
-  it('maps persist onto CreateEvent with the envelope as the blob payload', async () => {
+  it('maps persist onto CreateEvent with the envelope as JSON TEXT', async () => {
     const { module, sent } = fakeSdk();
     const sessions = agentCoreSessions({
       store: 'memory',
@@ -333,9 +358,30 @@ describe("agentCoreSessions({ store: 'memory' }) — the SDK mapping", () => {
     await sessions.persist('c-1', toEnvelope(conversation('hello')));
     expect(sent[0].command).toBe('CreateEvent');
     expect(sent[0].input).toMatchObject({ memoryId: 'm-1', sessionId: 'c-1' });
-    expect((sent[0].input.payload as { blob: CheckpointEnvelope }[])[0].blob.format).toBe(
-      'conversation-v1',
-    );
+
+    // THE FIX. A raw object here is what a field deployment lost conversations
+    // to: the service stores its own host language's toString() of it and
+    // returns a string nothing can decode. Text goes out, the same text comes
+    // back.
+    const blob = (sent[0].input.payload as { blob: unknown }[])[0].blob;
+    expect(typeof blob).toBe('string');
+    expect((JSON.parse(blob as string) as CheckpointEnvelope).format).toBe('conversation-v1');
+  });
+
+  it('round-trips a conversation through the shim, text out and text back', async () => {
+    const { module } = fakeSdk();
+    const sessions = agentCoreSessions({ store: 'memory', memoryId: 'm-1', _sdk: module });
+    await sessions.persist('c-1', toEnvelope(conversation('remember this')));
+    const revived = await sessions.hydrate('c-1');
+    expect(revived?.data.history[0]).toMatchObject({ content: 'remember this' });
+  });
+
+  it('still accepts an object blob — a caller-supplied client may return one', async () => {
+    const { module } = fakeSdk(toEnvelope(conversation('a real object')));
+    const sessions = agentCoreSessions({ store: 'memory', memoryId: 'm-1', _sdk: module });
+    expect((await sessions.hydrate('c-1'))?.data.history[0]).toMatchObject({
+      content: 'a real object',
+    });
   });
 
   it('maps hydrate onto ListEvents with payloads included and reads the blob back', async () => {
@@ -366,12 +412,142 @@ describe("agentCoreSessions({ store: 'memory' }) — the SDK mapping", () => {
     );
   });
 
-  it('an unreadable payload is "no conversation", never a corrupted one', async () => {
+  it('an event carrying NO blob is an absence — and only that is a fresh start', async () => {
     const client: AgentCoreSessionClientLike = {
       createEvent: async () => undefined,
       listEvents: async () => ({ events: [{ eventId: 'e-1', envelope: null }] }),
     };
     const sessions = agentCoreSessions({ store: 'memory', memoryId: 'm-1', _client: client });
+    // Nothing in that event ever claimed to be a session. Compare with the
+    // describe below, where something did and could not be read.
     expect(await sessions.hydrate('c-1')).toBeUndefined();
+  });
+});
+
+// ── the defect this release exists for: a mangled blob ──────────────
+//
+// Field-reproduced. Handed an OBJECT as an event's blob, the service stores its
+// own host language's `toString()` rendering of it and returns THAT — not JSON,
+// not decodable, and lossy, so there is nothing to migrate. The reader accepted
+// only objects, so the string decoded to nothing and every stored conversation
+// became invisible: `hydrate` answered "no session" and the agent started fresh
+// over the top of a conversation that existed. Nobody sees that until a
+// deployment boundary loses somebody's chat.
+//
+// Two halves are pinned here: the shim now writes JSON text (above), and a blob
+// that is unreadable ANYWAY — a pre-7.22.1 envelope, or a service that mangles
+// something else tomorrow — refuses LOUDLY instead of hydrating as undefined.
+
+describe("agentCoreSessions({ store: 'memory' }) — an unreadable blob", () => {
+  /** What the service actually returned for an envelope written as an object. */
+  const MANGLED_BLOB =
+    '{format=conversation-v1, data={version=1, runId=run-turn-one, history=[' +
+    '{role=user, content=turn one}, {role=assistant, content=re: turn one}], ' +
+    'lastCompletedIteration=1}, savedAt=1754000000000}';
+
+  /** A client whose newest event carries exactly that. */
+  function clientReturning(blob: unknown): AgentCoreSessionClientLike {
+    return {
+      createEvent: async () => undefined,
+      listEvents: async () => ({ events: [{ eventId: 'e-1', envelope: blob }] }),
+    };
+  }
+
+  it('is what the OLD reader silently called "no session" — pinned as the contrast', () => {
+    // The pre-7.22.1 decode step, quoted so the regression has a shape a reader
+    // can recognise rather than a description. It accepted objects only…
+    const oldEnvelopeFromPayload = (payload: unknown): unknown => {
+      if (!Array.isArray(payload)) return null;
+      for (const part of payload) {
+        const blob = (part as { blob?: unknown })?.blob;
+        if (blob && typeof blob === 'object') return blob;
+      }
+      return null;
+    };
+    // …so the mangled string decoded to null…
+    expect(oldEnvelopeFromPayload([{ blob: MANGLED_BLOB }])).toBeNull();
+    // …and null was the same answer as "this session has never been used".
+    // Two different facts, one answer, and the wrong one is a silent fresh
+    // start on top of a live conversation.
+  });
+
+  it('refuses LOUDLY now, naming the session', async () => {
+    const sessions = agentCoreSessions({
+      store: 'memory',
+      memoryId: 'm-1',
+      _client: clientReturning(MANGLED_BLOB),
+    });
+    await expect(sessions.hydrate('c-1')).rejects.toBeInstanceOf(UnreadableEnvelopeError);
+    await expect(sessions.hydrate('c-1')).rejects.toThrow(/session 'c-1'/);
+    await expect(sessions.hydrate('c-1')).rejects.toThrow(/different facts/);
+  });
+
+  it('carries the code and a PREFIX of the blob, never the conversation', async () => {
+    const sessions = agentCoreSessions({
+      store: 'memory',
+      memoryId: 'm-1',
+      _client: clientReturning(MANGLED_BLOB),
+    });
+    const err = await sessions.hydrate('c-1').then(
+      () => undefined,
+      (e: unknown) => e as UnreadableEnvelopeError,
+    );
+    expect(err?.code).toBe('ERR_UNREADABLE_ENVELOPE');
+    expect(err?.sessionId).toBe('c-1');
+    // Enough to diagnose the mangling…
+    expect(err?.storedPreview).toContain('format=conversation-v1');
+    // …and not the conversation inside it.
+    expect(err?.message).not.toContain('re: turn one');
+  });
+
+  it('names the session id the CALLER used, not the slug sent to the service', async () => {
+    const sessions = agentCoreSessions({
+      store: 'memory',
+      memoryId: 'm-1',
+      _client: clientReturning(MANGLED_BLOB),
+    });
+    // An incident is looked up by the id the application knows.
+    await expect(sessions.hydrate('user@example.com/thread #1')).rejects.toThrow(
+      /session 'user@example\.com\/thread #1'/,
+    );
+  });
+
+  it('refuses through the real SDK shim too — the whole path, not just the seam', async () => {
+    const { module } = fakeSdk(MANGLED_BLOB);
+    const sessions = agentCoreSessions({ store: 'memory', memoryId: 'm-1', _sdk: module });
+    await expect(sessions.hydrate('c-1')).rejects.toBeInstanceOf(UnreadableEnvelopeError);
+  });
+
+  it.each([
+    ['JSON that is not an object', '"just a string"'],
+    ['JSON null', 'null'],
+    ['a number', 7],
+    ['truncated JSON', '{"format":"conversation-v1","data":{'],
+  ])('refuses %s the same way — present is not absent', async (_label, blob) => {
+    const sessions = agentCoreSessions({
+      store: 'memory',
+      memoryId: 'm-1',
+      _client: clientReturning(blob),
+    });
+    await expect(sessions.hydrate('c-1')).rejects.toBeInstanceOf(UnreadableEnvelopeError);
+  });
+
+  it.each([
+    ['a payload with no blob key at all', [{ conversational: { text: 'hi' } }]],
+    ['a blob key holding nothing', [{ blob: null }]],
+    ['a payload that is not a list', 'not-a-list'],
+  ])('%s is an ABSENCE — nothing there claimed to be a session', async (_label, payload) => {
+    const { module } = fakeSdk(undefined, payload);
+    const sessions = agentCoreSessions({ store: 'memory', memoryId: 'm-1', _sdk: module });
+    expect(await sessions.hydrate('c-1')).toBeUndefined();
+  });
+
+  it('a JSON-text blob written by this release reads back with no refusal at all', async () => {
+    const sessions = agentCoreSessions({
+      store: 'memory',
+      memoryId: 'm-1',
+      _client: clientReturning(JSON.stringify(toEnvelope(conversation('healthy')))),
+    });
+    expect((await sessions.hydrate('c-1'))?.data.history[0]).toMatchObject({ content: 'healthy' });
   });
 });

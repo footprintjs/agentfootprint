@@ -34,6 +34,7 @@ import type {
   PendingAsk,
   StandingAgentOptions,
 } from '../../src/hosting/index.js';
+import { UnreadableEnvelopeError } from '../../src/hosting/index.js';
 import { checkInApproved } from '../../src/index.js';
 
 describe('PendingAsk — the question travels, the state does not', () => {
@@ -157,6 +158,34 @@ describe('the ports 7.19 widened', () => {
     // @ts-expect-error — `unknown` is not assignable to a concrete shape.
     const assumed: { approved: boolean } = request.decision;
     void assumed;
+  });
+
+  it('UnreadableEnvelopeError is branchable without matching prose', () => {
+    const err = new UnreadableEnvelopeError('{format=conversation-v1, data={}}', 'c-1');
+    // The code is a LITERAL type, so a consumer can switch on it and have the
+    // compiler check the arms. Widening it to `string` would silently make
+    // every such switch inexhaustive.
+    const code: 'ERR_UNREADABLE_ENVELOPE' = err.code;
+    expect(code).toBe('ERR_UNREADABLE_ENVELOPE');
+
+    // The session is OPTIONAL: a reader can know the bytes are bad without
+    // knowing whose they were, and pretending otherwise would push every
+    // refuser into inventing an id.
+    const named: string | undefined = err.sessionId;
+    expect(named).toBe('c-1');
+    // @ts-expect-error — it may be absent, so it is not a `string`.
+    const assumed: string = err.sessionId;
+    void assumed;
+
+    // A TypeError by ancestry: an existing `catch (e) { if (e instanceof
+    // TypeError) … }` keeps compiling and keeps matching.
+    const asTypeError: TypeError = err;
+    expect(asTypeError).toBeInstanceOf(TypeError);
+
+    // `withSession` returns the same class, so a caller can keep reading the
+    // code and the preview off it.
+    const copy: UnreadableEnvelopeError = err.withSession('c-2');
+    expect(copy.storedPreview).toBe(err.storedPreview);
   });
 
   it('durability is the three modes and nothing else', () => {

@@ -21,6 +21,15 @@
  * tells every dashboard downstream something untrue. A later request for that
  * session carrying `decision` continues the run from exactly where it stopped.
  *
+ * ── "Start a fresh one" is an answer it must EARN ───────────────────────────
+ * A session with nothing stored is answered fresh, and that is right. A session
+ * whose stored conversation cannot be READ is not: an unreadable stored
+ * conversation and an absent one are different facts, and only one of them is
+ * safe to answer with a fresh start. So an `UnreadableEnvelopeError` out of the
+ * store fails THIS REQUEST, naming the session, and the fresh-start path is
+ * never reached. The alternative is a reply that looks perfect to everyone
+ * involved while a user's conversation quietly stops existing.
+ *
  * ── Resuming a CONVERSATION is a REPLAY, and that has a cost ─────────────────
  * A stored conversation is restored through `agent.resumeOnError(...)`, and this
  * is its caveat, stated here in the words the Agent states it in, because a
@@ -65,6 +74,7 @@ import {
   ConcurrentRunError,
   NoPendingAskError,
   PauseNotCarriedError,
+  UnreadableEnvelopeError,
 } from './errors.js';
 import type {
   HostHandle,
@@ -194,12 +204,23 @@ export async function standingAgent<TH extends HostHandle>(
         // A request carrying a decision is waking this session to CONTINUE a
         // run, which is a different thing to ask a store to be ready for.
         await store.onWake?.(sessionId, request.decision !== undefined ? 'resume' : 'invoke');
-        const stored = await store.hydrate(sessionId);
-        if (stored !== undefined) {
-          // Both readers throw by name on a format this runtime cannot read —
-          // better a loud refusal than an agent answering from half a session.
-          if (stored.format === 'flowchart-v1') paused = readPausedRun(stored);
-          else prior = readEnvelope(stored);
+        try {
+          const stored = await store.hydrate(sessionId);
+          if (stored !== undefined) {
+            // Both readers throw by name on a format this runtime cannot read —
+            // better a loud refusal than an agent answering from half a session.
+            if (stored.format === 'flowchart-v1') paused = readPausedRun(stored);
+            else prior = readEnvelope(stored);
+          }
+        } catch (err) {
+          // A stored conversation this runtime cannot read fails THIS REQUEST,
+          // naming the session. It must never fall through to the fresh-start
+          // path below: the conversation exists, and answering it as if the
+          // caller were new is the one failure nobody can see from the outside.
+          // A store that knows the session already named it; one that does not
+          // gets the name added here, so the guarantee does not depend on which
+          // store you chose.
+          throw err instanceof UnreadableEnvelopeError ? err.withSession(sessionId) : err;
         }
       }
 
