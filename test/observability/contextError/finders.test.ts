@@ -18,6 +18,7 @@ import {
   type FindInput,
   type Finder,
 } from '../../../src/observability/contextError/finders';
+import { expectScalesLinearly } from '../../helpers/perf.js';
 
 // ── shared planted fixture ───────────────────────────────────────────
 // The wrong answer and a culprit whose text shares its character distribution (so the
@@ -322,15 +323,29 @@ describe('finders — security/robustness', () => {
 
 // ── PERFORMANCE — within a budget on a non-trivial case ──────────────
 describe('finders — performance', () => {
-  it('rankSuspects scores 50 pieces under budget', async () => {
-    const suspects = Array.from({ length: 50 }, (_, i) => ({
-      id: `p${i}`,
-      text: `policy clause ${i} about credit and risk`,
-    }));
-    const t0 = performance.now();
-    const r = await rankSuspects.find({ suspects, wrongOutput: WRONG, embedder: mockEmbedder() });
-    expect(r.suspects).toHaveLength(50);
-    expect(performance.now() - t0).toBeLessThan(2000);
+  it('rankSuspects is linear in suspect count', { timeout: 30_000, retry: 2 }, async () => {
+    // Each suspect is embedded once and compared against the wrong output.
+    // Ten times the suspects, ten times the work — no pairwise pass.
+    const suspectsOf = (n: number) =>
+      Array.from({ length: n }, (_, i) => ({
+        id: `p${i}`,
+        text: `policy clause ${i} about credit and risk`,
+      }));
+    const few = suspectsOf(50);
+    const many = suspectsOf(500);
+    const rank = (suspects: ReturnType<typeof suspectsOf>) =>
+      rankSuspects.find({ suspects, wrongOutput: WRONG, embedder: mockEmbedder() });
+    expect((await rank(few)).suspects).toHaveLength(50);
+    await expectScalesLinearly({
+      small: async () => {
+        await rank(few);
+      },
+      large: async () => {
+        await rank(many);
+      },
+      scale: 10,
+      why: 'suspect ranking must score each piece once',
+    });
   });
 
   it('removeAndRetry does exactly N re-runs (cost is linear + reported)', async () => {

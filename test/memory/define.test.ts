@@ -22,6 +22,7 @@ import {
 } from '../../src/memory/index.js';
 import { InMemoryStore } from '../../src/memory/store/index.js';
 import { mockEmbedder } from '../../src/memory/embedding/index.js';
+import { expectScalesLinearly } from '../helpers/perf.js';
 
 // ─── Unit — factory accepts each supported combo ───────────────────
 
@@ -367,20 +368,31 @@ describe('defineMemory — performance', () => {
     expect(a.id).not.toBe(b.id);
   });
 
-  it('factory dispatch under 10ms for typical config', () => {
-    const start = performance.now();
-    for (let i = 0; i < 50; i++) {
-      defineMemory({
-        id: `m${i}`,
-        type: MEMORY_TYPES.EPISODIC,
-        strategy: { kind: MEMORY_STRATEGIES.WINDOW, size: 5 },
-        store: new InMemoryStore(),
+  it(
+    'factory dispatch cost stays flat as definitions are built',
+    { timeout: 30_000, retry: 2 },
+    async () => {
+      // Each defineMemory call compiles its own pair of subflows and shares
+      // nothing with the last. Ten times the builds, ten times the work.
+      const build = (count: number): void => {
+        for (let i = 0; i < count; i++) {
+          defineMemory({
+            id: `m${i}`,
+            type: MEMORY_TYPES.EPISODIC,
+            strategy: { kind: MEMORY_STRATEGIES.WINDOW, size: 5 },
+            store: new InMemoryStore(),
+          });
+        }
+      };
+      build(10); // warm the compile path
+      await expectScalesLinearly({
+        small: () => build(50),
+        large: () => build(500),
+        scale: 10,
+        why: 'defineMemory must not share growing state between definitions',
       });
-    }
-    const elapsed = performance.now() - start;
-    // 50 builds; cap is generous to handle CI cold paths.
-    expect(elapsed).toBeLessThan(2000);
-  });
+    },
+  );
 });
 
 // ─── ROI — what supports v2.0 release ──────────────────────────────

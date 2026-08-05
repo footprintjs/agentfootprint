@@ -22,6 +22,7 @@ import {
 } from '../../src/strategies/defaults/index.js';
 import type { CostTick, StatusUpdate, LensUpdate } from '../../src/strategies/types.js';
 import type { AgentfootprintEvent } from '../../src/events/registry.js';
+import { expectScalesLinearly, expectWithinReferenceUnits, measure } from '../helpers/perf.js';
 
 // ─── Fixtures ────────────────────────────────────────────────────────
 
@@ -137,15 +138,20 @@ describe('consoleObservability', () => {
     expect(JSON.stringify(log.mock.calls)).not.toContain('secret-xyz');
   });
 
-  // P6 performance — 1000 events ≤ 50ms (50µs each, generous bound)
-  it('P6 amortized per-event overhead is bounded', () => {
+  // P6 performance — cost per event does not drift as events pile up
+  it('P6 amortized per-event overhead is bounded', { timeout: 30_000, retry: 2 }, async () => {
     const log = vi.fn();
     const strat = consoleObservability({ logger: { log } });
     const ev = makeEvent();
-    const start = performance.now();
-    for (let i = 0; i < 1000; i++) strat.exportEvent(ev);
-    const elapsed = performance.now() - start;
-    expect(elapsed).toBeLessThan(50);
+    const emit = (events: number): void => {
+      for (let i = 0; i < events; i++) strat.exportEvent(ev);
+    };
+    await expectScalesLinearly({
+      small: () => emit(1_000),
+      large: () => emit(10_000),
+      scale: 10,
+      why: 'console export must format and forget, never accumulate',
+    });
   });
 
   // P7 ROI — declares correct capabilities so dispatcher knows to forward
@@ -229,14 +235,26 @@ describe('inMemorySinkCost', () => {
     expect(passed.model).toBe('claude-haiku');
   });
 
-  // P6 performance — 10k records under maxTicks=100 stays O(1) amortized
-  it('P6 FIFO eviction stays bounded under heavy load', () => {
-    const sink = inMemorySinkCost({ maxTicks: 100 });
-    const start = performance.now();
-    for (let i = 0; i < 10_000; i++) sink.recordCost(makeTick());
-    const elapsed = performance.now() - start;
-    expect(elapsed).toBeLessThan(200); // 20µs/tick generous bound
-    expect(sink.getTicksCount()).toBe(100);
+  // P6 performance — FIFO eviction is O(1) amortized, and the cap holds
+  it('P6 FIFO eviction stays bounded under heavy load', { timeout: 30_000, retry: 2 }, async () => {
+    // The load-proof half is the cap itself: however many ticks arrive, the
+    // sink retains exactly maxTicks. The ratio then says eviction is O(1) —
+    // ten times the ticks, ten times the work, not a re-copy of the buffer
+    // per eviction.
+    // One tick object, reused: allocating a hundred thousand of them inside
+    // the measured closure would measure the allocator, not the eviction.
+    const tick = makeTick();
+    const record = (ticks: number): void => {
+      const sink = inMemorySinkCost({ maxTicks: 100 });
+      for (let i = 0; i < ticks; i++) sink.recordCost(tick);
+      expect(sink.getTicksCount()).toBe(100);
+    };
+    await expectScalesLinearly({
+      small: () => record(10_000),
+      large: () => record(100_000),
+      scale: 10,
+      why: 'FIFO eviction must not re-copy the buffer per tick',
+    });
   });
 
   // P7 ROI — getTicks returns a defensive copy (mutations don't leak in)
@@ -296,14 +314,19 @@ describe('chatBubbleLiveStatus', () => {
     expect(() => strat.validate?.()).toThrow(/required `onLine` callback/);
   });
 
-  // P6 performance — 10k status updates under 30ms
-  it('P6 per-update overhead is negligible', () => {
+  // P6 performance — per-update cost does not drift
+  it('P6 per-update overhead is negligible', { timeout: 30_000, retry: 2 }, async () => {
     const strat = chatBubbleLiveStatus({ onLine: () => {} });
     const update = makeStatus();
-    const start = performance.now();
-    for (let i = 0; i < 10_000; i++) strat.renderStatus(update);
-    const elapsed = performance.now() - start;
-    expect(elapsed).toBeLessThan(30);
+    const render = (updates: number): void => {
+      for (let i = 0; i < updates; i++) strat.renderStatus(update);
+    };
+    await expectScalesLinearly({
+      small: () => render(10_000),
+      large: () => render(100_000),
+      scale: 10,
+      why: 'rendering a status line must hold nothing between updates',
+    });
   });
 
   // P7 ROI — does NOT expose internal state shape (intentionally)
@@ -357,13 +380,20 @@ describe('noopLens', () => {
   });
 
   // P6 performance — zero-arg noop is essentially free
-  it('P6 zero-callback noop is free at hot path', () => {
+  it('P6 zero-callback noop is free at hot path', { timeout: 30_000, retry: 2 }, async () => {
+    // 50 reference units of CPU for 100k calls — half a microsecond each on a
+    // quiet machine, and proportionally more room on a loaded one. There is
+    // no sibling to compare a no-op against, so the yardstick IS the
+    // comparison: this must cost a rounding error next to real work.
     const strat = noopLens();
     const update = makeLensUpdate();
-    const start = performance.now();
-    for (let i = 0; i < 100_000; i++) strat.renderGraph(update);
-    const elapsed = performance.now() - start;
-    expect(elapsed).toBeLessThan(50); // 0.5µs per call
+    await expectWithinReferenceUnits(
+      () => {
+        for (let i = 0; i < 100_000; i++) strat.renderGraph(update);
+      },
+      50,
+      'a no-op lens must cost next to nothing',
+    );
   });
 
   // P7 ROI — declares non-interactive + non-serializable so dispatcher

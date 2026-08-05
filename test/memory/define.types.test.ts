@@ -32,10 +32,11 @@ import {
   type MemoryTiming,
   type SnapshotProjection,
   type Strategy,
-  type WindowStrategy,
+  type MemoryWindowStrategy,
   type SummarizeStrategy,
   type TopKStrategy,
 } from '../../src/memory/define.types.js';
+import { expectWithinReferenceUnits } from '../helpers/perf.js';
 
 // ─── Unit — const-object identity + cardinality ────────────────────
 
@@ -141,7 +142,7 @@ describe('memory const-objects — consumer scenarios', () => {
   });
 
   it('typed config — Hybrid composes a list of non-Hybrid strategies', () => {
-    const inner: WindowStrategy = { kind: MEMORY_STRATEGIES.WINDOW, size: 5 };
+    const inner: MemoryWindowStrategy = { kind: MEMORY_STRATEGIES.WINDOW, size: 5 };
     const s: Strategy = {
       kind: MEMORY_STRATEGIES.HYBRID,
       strategies: [inner],
@@ -249,21 +250,41 @@ describe('memory injection key — security', () => {
 // ─── Performance — const-objects erase at compile time ─────────────
 
 describe('memory const-objects — performance', () => {
-  it('hot-path lookups (1M iterations) under 100ms — tree-shake-friendly', () => {
-    const start = performance.now();
-    let acc = 0;
-    for (let i = 0; i < 1_000_000; i++) {
-      // Realistic hot-path: switch on a const value
-      switch (MEMORY_TYPES.EPISODIC) {
-        case 'episodic':
-          acc++;
-          break;
-      }
-    }
-    const elapsed = performance.now() - start;
-    expect(acc).toBe(1_000_000);
-    expect(elapsed).toBeLessThan(100);
-  });
+  it(
+    'the const-objects are plain string maps, and reading them in a hot loop is cheap',
+    { timeout: 30_000, retry: 2 },
+    async () => {
+      // The load-proof half FIRST, because it is the real claim: a TS enum
+      // would emit a runtime object with a reverse mapping (MEMORY_TYPES
+      // ['episodic'] === 'EPISODIC'). A const-as-const object does not — its
+      // members are plain strings and nothing survives into the bundle beyond
+      // what is used. No clock can make this wrong.
+      expect(typeof MEMORY_TYPES.EPISODIC).toBe('string');
+      expect((MEMORY_TYPES as Record<string, unknown>).episodic).toBeUndefined();
+
+      // And the timed half, kept as a regression guard but expressed in
+      // reference units of CPU rather than milliseconds, so a busy runner
+      // stretches the ceiling instead of failing.
+      let acc = 0;
+      const readAMillion = (): void => {
+        acc = 0;
+        for (let i = 0; i < 1_000_000; i++) {
+          // Realistic hot-path: switch on a const value
+          switch (MEMORY_TYPES.EPISODIC) {
+            case 'episodic':
+              acc++;
+              break;
+          }
+        }
+      };
+      await expectWithinReferenceUnits(
+        readAMillion,
+        100,
+        'a million const reads must stay trivial',
+      );
+      expect(acc).toBe(1_000_000);
+    },
+  );
 });
 
 // ─── ROI — what this contract unblocks ─────────────────────────────

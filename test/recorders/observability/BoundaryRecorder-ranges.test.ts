@@ -21,6 +21,7 @@ import { LLMCall } from '../../../src/core/LLMCall.js';
 import { Parallel } from '../../../src/core-flow/Parallel.js';
 import { MockProvider } from '../../../src/adapters/llm/MockProvider.js';
 import type { TraversalContext, FlowSubflowEvent, FlowForkEvent } from 'footprintjs';
+import { expectScalesLinearly, expectWithinReferenceUnits, measure } from '../../helpers/perf.js';
 
 function ctx(opts: { rid: string; runId?: string; subflowPath?: string }): TraversalContext {
   return {
@@ -330,21 +331,34 @@ describe('BoundaryRecorder ranges — runId reset (composition-safe contract)', 
 // ─── 6. PERFORMANCE ────────────────────────────────────────────────
 
 describe('BoundaryRecorder ranges — performance', () => {
-  it('1000 entry/exit pairs added in under 100ms (incremental, no post-walk)', () => {
-    let count = 0;
-    const rec = boundaryRecorder({ getCommitCount: () => count });
-    const start = performance.now();
-    for (let i = 0; i < 1000; i++) {
-      count = i * 10;
-      rec.onSubflowEntry(subflowEvent(`s#${i}`, `s${i}`, 'LLMCall: x'));
-      count = i * 10 + 5;
-      rec.onSubflowExit(subflowEvent(`s#${i}`, `s${i}`, 'LLMCall: x'));
-    }
-    const ms = performance.now() - start;
-    expect(rec.boundaryIndex.size).toBe(1000);
-    // Per-event budget: 100ms / 2000 events = 50µs per event. Generous.
-    expect(ms).toBeLessThan(300); // CI headroom
-  });
+  it(
+    'entry/exit pairs are added incrementally — ten times the pairs, ten times the work',
+    { timeout: 30_000, retry: 2 },
+    async () => {
+      // "Incremental, no post-walk" is a claim about the curve: closing a range
+      // must not re-walk the ranges already closed. Fresh recorder per run.
+      const addPairs = (pairs: number): void => {
+        let count = 0;
+        const rec = boundaryRecorder({ getCommitCount: () => count });
+        for (let i = 0; i < pairs; i++) {
+          count = i * 10;
+          rec.onSubflowEntry(subflowEvent(`s#${i}`, `s${i}`, 'LLMCall: x'));
+          count = i * 10 + 5;
+          rec.onSubflowExit(subflowEvent(`s#${i}`, `s${i}`, 'LLMCall: x'));
+        }
+        expect(rec.boundaryIndex.size).toBe(pairs);
+      };
+      // Sized by the rule in perf.ts: one run of the SMALL side already fills
+      // a sample, so neither side is repeated-and-amortised while the other
+      // takes each stolen time slice whole.
+      await expectScalesLinearly({
+        small: () => addPairs(10_000),
+        large: () => addPairs(100_000),
+        scale: 10,
+        why: 'boundary ranges must be indexed as they close, never post-walked',
+      });
+    },
+  );
 });
 
 // ─── REGRESSION: loop re-entry (panel YELLOW #1) ────────────────────
@@ -378,20 +392,38 @@ describe('BoundaryRecorder ranges — loop re-entry token collision', () => {
 // ─── 7. LOAD ────────────────────────────────────────────────────────
 
 describe('BoundaryRecorder ranges — load', () => {
-  it('1000 boundaries + 1000 queries < 500ms total', () => {
-    let count = 0;
-    const rec = boundaryRecorder({ getCommitCount: () => count });
-    for (let i = 0; i < 1000; i++) {
-      count = i * 10;
-      rec.onSubflowEntry(subflowEvent(`s#${i}`, `s${i}`, 'LLMCall: x'));
-      count = i * 10 + 5;
-      rec.onSubflowExit(subflowEvent(`s#${i}`, `s${i}`, 'LLMCall: x'));
-    }
-    const start = performance.now();
-    for (let i = 0; i < 1000; i++) {
-      rec.boundaryIndex.enclosing(i * 10);
-    }
-    const ms = performance.now() - start;
-    expect(ms).toBeLessThan(500);
-  });
+  it(
+    '1000 boundaries + 1000 queries stay inside a bounded CPU budget',
+    { timeout: 30_000, retry: 2 },
+    async () => {
+      // NOT a linearity claim, and the reason is worth writing down.
+      // `enclosing()` belongs to footprintjs's `CommitRangeIndex`, which is an
+      // ordered ARRAY, not a tree: every query walks every range and sorts the
+      // matches. So the cost is O(boundaries) per call BY DESIGN, and a
+      // ten-times-bigger index really does cost ten times more per query —
+      // there is no ratio here that would mean what it looks like it means.
+      //
+      // What is still worth guarding is the size this recorder actually sees,
+      // so the budget is a bounded-size one: 500 reference units of CPU (≈500ms
+      // on a quiet machine, proportionally more on a loaded one) for a thousand
+      // boundaries and a thousand queries. Stating it in units rather than
+      // milliseconds is the whole point — a busy runner raises the ceiling with
+      // the load instead of failing a test about somebody else's array walk.
+      let count = 0;
+      const rec = boundaryRecorder({ getCommitCount: () => count });
+      for (let i = 0; i < 1000; i++) {
+        count = i * 10;
+        rec.onSubflowEntry(subflowEvent(`s#${i}`, `s${i}`, 'LLMCall: x'));
+        count = i * 10 + 5;
+        rec.onSubflowExit(subflowEvent(`s#${i}`, `s${i}`, 'LLMCall: x'));
+      }
+      await expectWithinReferenceUnits(
+        () => {
+          for (let i = 0; i < 1000; i++) rec.boundaryIndex.enclosing(i * 10);
+        },
+        500,
+        'a thousand boundary queries must stay prompt',
+      );
+    },
+  );
 });

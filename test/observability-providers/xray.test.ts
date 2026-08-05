@@ -24,6 +24,7 @@ import {
 import type { AgentfootprintEvent } from '../../src/events/registry.js';
 import { Agent } from '../../src/index.js';
 import { MockProvider } from '../../src/adapters/llm/MockProvider.js';
+import { expectScalesLinearly } from '../helpers/perf.js';
 
 // ── Test client ──────────────────────────────────────────────────────
 
@@ -233,7 +234,8 @@ describe('xrayObservability — P5 security', () => {
 // ─── P6 Performance ──────────────────────────────────────────────────
 
 describe('xrayObservability — P6 performance', () => {
-  it('P6 10k mixed events processed under 200ms', () => {
+  /** Ten events per simulated turn, against a strategy that batches everything. */
+  function exportTurns(turns: number): void {
     const { client } = makeMockClient();
     const strat = xrayObservability({
       serviceName: 'svc',
@@ -241,10 +243,7 @@ describe('xrayObservability — P6 performance', () => {
       flushIntervalMs: 0,
       _client: client,
     });
-    const N = 10_000;
-    const t0 = performance.now();
-    // Simulate 1000 turns × 10 events each = 10k events.
-    for (let turn = 0; turn < 1000; turn++) {
+    for (let turn = 0; turn < turns; turn++) {
       const runId = `r-${turn}`;
       const evt = (type: string, extra: Record<string, unknown> = {}): AgentfootprintEvent =>
         ({
@@ -263,10 +262,25 @@ describe('xrayObservability — P6 performance', () => {
       strat.exportEvent(evt('agentfootprint.cost.tick', { cumulativeCostUsd: 0.001 }));
       strat.exportEvent(evt('agentfootprint.context.injected'));
     }
-    const elapsed = performance.now() - t0;
-    expect(elapsed).toBeLessThan(200);
-    void N; // keep the constant for future doc clarity
-  });
+  }
+
+  it(
+    'P6 10k mixed events cost ten times what 1k cost — no per-event rescan',
+    { timeout: 30_000, retry: 2 },
+    async () => {
+      // The claim is algorithmic, not a stopwatch reading: exportEvent must be
+      // O(1) in the number of events already batched (open-segment lookup by id,
+      // append to the batch), so ten times the events costs ~ten times the work.
+      // A quadratic rescan of the batch would cost 100× and blow past the
+      // ceiling by a mile. Ten thousand events with a fresh strategy each run.
+      await expectScalesLinearly({
+        small: () => exportTurns(100),
+        large: () => exportTurns(1000),
+        scale: 10,
+        why: 'xray exportEvent must not rescan the open batch per event',
+      });
+    },
+  );
 });
 
 // ─── P7 ROI — X-Ray segment shape contract ───────────────────────────

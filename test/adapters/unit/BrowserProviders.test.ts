@@ -14,6 +14,7 @@ import {
   BrowserOpenAIProvider,
 } from '../../../src/adapters/llm/BrowserOpenAIProvider.js';
 import type { LLMRequest } from '../../../src/adapters/types.js';
+import { expectScalesLinearly } from '../../helpers/perf.js';
 
 // ─── Fake fetch helpers ────────────────────────────────────────────
 
@@ -130,16 +131,25 @@ describe('BrowserAnthropicProvider — security', () => {
 });
 
 describe('BrowserAnthropicProvider — performance', () => {
-  it('1000 complete() calls under 500ms with fake fetch', async () => {
-    const p = browserAnthropic({
-      apiKey: 'sk-test',
-      _fetch: fakeFetch(baseAnthropicResponse),
-    });
-    const start = performance.now();
-    for (let i = 0; i < 1000; i++) await p.complete(baseRequest);
-    const elapsed = performance.now() - start;
-    expect(elapsed).toBeLessThan(500);
-  });
+  it(
+    'per-call overhead stays flat as the call count grows (fake fetch)',
+    { timeout: 30_000, retry: 2 },
+    async () => {
+      const p = browserAnthropic({
+        apiKey: 'sk-test',
+        _fetch: fakeFetch(baseAnthropicResponse),
+      });
+      const callTimes = async (n: number): Promise<void> => {
+        for (let i = 0; i < n; i++) await p.complete(baseRequest);
+      };
+      await expectScalesLinearly({
+        small: () => callTimes(100),
+        large: () => callTimes(1000),
+        scale: 10,
+        why: 'the browser Anthropic adapter must not accumulate per-call state',
+      });
+    },
+  );
 });
 
 describe('BrowserAnthropicProvider — parallelToolCalls', () => {
@@ -365,13 +375,22 @@ describe('BrowserOpenAIProvider — streaming usage (7.16.0 regression)', () => 
 });
 
 describe('BrowserOpenAIProvider — performance', () => {
-  it('1000 complete() calls under 500ms with fake fetch', async () => {
-    const p = browserOpenai({ apiKey: 'sk-test', _fetch: fakeFetch(baseOpenAIResponse) });
-    const start = performance.now();
-    for (let i = 0; i < 1000; i++) await p.complete(openaiRequest);
-    const elapsed = performance.now() - start;
-    expect(elapsed).toBeLessThan(500);
-  });
+  it(
+    'per-call overhead stays flat as the call count grows (fake fetch)',
+    { timeout: 30_000, retry: 2 },
+    async () => {
+      const p = browserOpenai({ apiKey: 'sk-test', _fetch: fakeFetch(baseOpenAIResponse) });
+      const callTimes = async (n: number): Promise<void> => {
+        for (let i = 0; i < n; i++) await p.complete(openaiRequest);
+      };
+      await expectScalesLinearly({
+        small: () => callTimes(100),
+        large: () => callTimes(1000),
+        scale: 10,
+        why: 'the browser OpenAI adapter must not accumulate per-call state',
+      });
+    },
+  );
 });
 
 // ─── Property — both browser providers share invariants ───────────

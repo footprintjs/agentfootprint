@@ -32,6 +32,7 @@ import { isPaused, pauseHere } from '../../../src/core/pause.js';
 import { LLMCall } from '../../../src/core/LLMCall.js';
 import { MockProvider } from '../../../src/adapters/llm/MockProvider.js';
 import type { LLMProvider, LLMResponse } from '../../../src/adapters/types.js';
+import { expectWithinReferenceUnits, measureAsync } from '../../helpers/perf.js';
 
 function ok(reply: string) {
   return LLMCall.create({ provider: new MockProvider({ reply }), model: 'mock' })
@@ -191,17 +192,22 @@ describe('Parallel required — scenario: required failure rejects the run', () 
   });
 
   it('all-required: rejects EARLY — before a slow required sibling finishes', async () => {
+    // The ceiling here is not a performance budget and does not measure the
+    // machine: it is the SLOW BRANCH'S OWN DELAY. Best-effort mode would wait
+    // the full delay for `slow` to settle before the Merge join throws;
+    // fail-fast returns long before. Finishing under two thirds of that delay
+    // is the evidence, and a loaded runner would have to add a full second to
+    // an already-rejected promise to break it.
+    const SLOW_BRANCH_MS = 1500;
     const par = Parallel.create()
-      .branch('slow', slowOk('S', 1500), { required: true })
+      .branch('slow', slowOk('S', SLOW_BRANCH_MS), { required: true })
       .branch('bad', failing('instant failure'), { required: true })
       .mergeWithFn((r) => Object.values(r).join(','))
       .build();
 
     const t0 = performance.now();
     await expect(par.run({ message: 'go' })).rejects.toThrow(/instant failure/);
-    // Best-effort mode would wait the full 1500ms for `slow` to settle
-    // before the Merge join throws. Fail-fast must not.
-    expect(performance.now() - t0).toBeLessThan(1000);
+    expect(performance.now() - t0).toBeLessThan(SLOW_BRANCH_MS * (2 / 3));
   });
 
   it('all-required abort still emits composition.exit with status=err (enter/exit pairing)', async () => {
@@ -736,17 +742,27 @@ describe('Parallel required — security', () => {
 // ── 8. Performance — fail-fast wiring adds no happy-path cost ───────
 
 describe('Parallel required — performance', () => {
-  it('4-branch all-required all-success completes in under 500ms', async () => {
-    const par = Parallel.create()
-      .branch('a', ok('A'), { required: true })
-      .branch('b', ok('B'), { required: true })
-      .branch('c', ok('C'), { required: true })
-      .branch('d', ok('D'), { required: true })
-      .mergeWithFn((r) => Object.values(r).sort().join(','))
-      .build();
+  it(
+    '4-branch all-required all-success completes in under 500ms',
+    { timeout: 30_000, retry: 2 },
+    async () => {
+      const par = Parallel.create()
+        .branch('a', ok('A'), { required: true })
+        .branch('b', ok('B'), { required: true })
+        .branch('c', ok('C'), { required: true })
+        .branch('d', ok('D'), { required: true })
+        .mergeWithFn((r) => Object.values(r).sort().join(','))
+        .build();
 
-    const t0 = performance.now();
-    await par.run({ message: 'go' });
-    expect(performance.now() - t0).toBeLessThan(500);
-  });
+      // 500 reference units of CPU — see Parallel-failure-modes for the same
+      // claim: required-branch wiring must cost nothing when nothing fails.
+      await expectWithinReferenceUnits(
+        async () => {
+          await par.run({ message: 'go' });
+        },
+        500,
+        'fail-fast wiring must be free on the happy path',
+      );
+    },
+  );
 });

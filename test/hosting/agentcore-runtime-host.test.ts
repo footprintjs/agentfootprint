@@ -28,6 +28,22 @@ import type { ConversationHandler, HostHandle, HostHandler } from '../../src/hos
 import type { NodeHostHandle } from '../../src/hosting/nodeHost.js';
 import { connectConversation } from './wsClient.js';
 
+/**
+ * AWS's own browser example, copied literally.
+ *
+ * From "Get started with bidirectional streaming using WebSocket" → "Browser
+ * JavaScript client with OAuth": the token is `your_oauth_token_here`, and the
+ * page's snippet base64url-encodes it with
+ * `btoa(bearerToken).replace(/\+/g,'-').replace(/\//g,'_').replace(/=/g,'')`,
+ * then offers `[`base64UrlBearerAuthorization.${base64url}`,
+ * 'base64UrlBearerAuthorization']`.
+ *
+ * Written out rather than computed on purpose: the tests below must fail if
+ * the VENDOR's spelling moves, not merely if our encoder agrees with itself.
+ */
+const VENDOR_TOKEN = 'your_oauth_token_here';
+const VENDOR_BASE64URL = 'eW91cl9vYXV0aF90b2tlbl9oZXJl';
+
 const SESSION_HEADER = 'X-Amzn-Bedrock-AgentCore-Runtime-Session-Id';
 
 const open: HostHandle[] = [];
@@ -537,26 +553,33 @@ describe('agentCoreRuntimeHost — the /ws conversation door', () => {
     client.destroy();
   });
 
-  it('maps a Sec-WebSocket-Protocol bearer INTO headers, and never into a port field', async () => {
+  it("maps AWS's OWN documented browser handshake into headers, and echoes only the sentinel", async () => {
+    // The strings below are lifted verbatim from AWS's browser example in
+    // "Get started with bidirectional streaming using WebSocket" → "Browser
+    // JavaScript client with OAuth": their token, their btoa-then-base64url
+    // transform, their two subprotocol entries in their order. Pinning the
+    // VENDOR's literals is the point — if their spelling ever moves, this test
+    // fails and tells us, rather than passing against our own paraphrase.
     const handle = await servingConversations();
-    for (const protocols of [
-      ['bearer', 'tok-123'], // two offers: the shape a browser writes
-      ['bearer.tok-123'], // one offer, dotted: the other shape it can write
-    ]) {
-      const client = connectConversation(handle.port, { path: '/ws', protocols });
-      const opened = await client.opened;
-      // Echoed so the client's handshake completes — the WORD, never the token.
-      expect(opened.protocol).toBe('bearer');
-      expect(opened.protocol).not.toContain('tok-123');
+    const client = connectConversation(handle.port, {
+      path: '/ws',
+      protocols: [
+        `base64UrlBearerAuthorization.${VENDOR_BASE64URL}`,
+        'base64UrlBearerAuthorization',
+      ],
+    });
+    const opened = await client.opened;
+    // The SENTINEL comes back — RFC 6455 lets a server select only something
+    // the client offered — and never the dotted value carrying the token.
+    expect(opened.protocol).toBe('base64UrlBearerAuthorization');
+    expect(opened.protocol).not.toContain(VENDOR_BASE64URL);
 
-      client.send('who am i');
-      const [reply] = await client.waitForFrames(1);
-      // It arrives as an ordinary header, in the vocabulary every other
-      // transport already uses. Nothing on HostConversation is spelled the way
-      // one vendor spells it.
-      expect(reply).toContain('auth:Bearer tok-123');
-      client.destroy();
-    }
+    client.send('who am i');
+    const [reply] = await client.waitForFrames(1);
+    // Decoded, and in the vocabulary every other transport already uses.
+    // Nothing on HostConversation is spelled the way one vendor spells it.
+    expect(reply).toContain(`auth:Bearer ${VENDOR_TOKEN}`);
+    client.destroy();
   });
 
   it('the raw subprotocol header survives the mapping, so an app can read the offer itself', async () => {
@@ -567,12 +590,17 @@ describe('agentCoreRuntimeHost — the /ws conversation door', () => {
     });
     const client = connectConversation(handle.port, {
       path: '/ws',
-      protocols: ['bearer', 'tok-9'],
+      protocols: [
+        `base64UrlBearerAuthorization.${VENDOR_BASE64URL}`,
+        'base64UrlBearerAuthorization',
+      ],
     });
     await client.opened;
     client.send('x');
     await client.waitForFrames(1);
-    expect(seen[0]).toBe('bearer, tok-9');
+    expect(seen[0]).toBe(
+      `base64UrlBearerAuthorization.${VENDOR_BASE64URL}, base64UrlBearerAuthorization`,
+    );
     client.destroy();
   });
 
@@ -580,16 +608,98 @@ describe('agentCoreRuntimeHost — the /ws conversation door', () => {
     // Exported for the same reason the body shapes are: a mapping you can only
     // observe by running a server is a mapping nobody reviews.
     const facts = {
-      headers: { 'sec-websocket-protocol': 'bearer, tok-7' },
+      headers: {
+        'sec-websocket-protocol': `base64UrlBearerAuthorization.${VENDOR_BASE64URL}, base64UrlBearerAuthorization`,
+      },
       query: new URLSearchParams('sessionId=c-1'),
     };
     expect(readAgentCoreConversation(facts)).toEqual({
       sessionId: 'c-1',
-      headers: { authorization: 'Bearer tok-7' },
-      protocol: 'bearer',
+      headers: { authorization: `Bearer ${VENDOR_TOKEN}` },
+      protocol: 'base64UrlBearerAuthorization',
     });
     // No bearer offered: nothing invented, and no subprotocol echoed.
     expect(readAgentCoreConversation({ headers: {}, query: new URLSearchParams() })).toEqual({});
+  });
+
+  it('REGRESSION: the pre-7.27.1 spellings were ours, not the vendor’s — and are gone', () => {
+    // What this used to do: look for `bearer` / `bearer.<token>`. Neither word
+    // appears in AWS's contract, and their front door "does not yet support"
+    // any subprotocol but `base64UrlBearerAuthorization` — so a REAL browser
+    // handshake matched nothing and this mapping returned `{}`: the credential
+    // silently dropped, the same failure shape as a session blob that reads
+    // back as nothing. The documented handshake now maps (above); the invented
+    // spellings map to nothing, because a door nobody can walk through should
+    // not be advertised as one.
+    for (const offer of ['bearer, tok-123', 'bearer.tok-123']) {
+      expect(
+        readAgentCoreConversation({
+          headers: { 'sec-websocket-protocol': offer },
+          query: new URLSearchParams(),
+        }),
+      ).toEqual({});
+    }
+  });
+
+  it('echoes the sentinel in the spelling the client offered it in, never lower-cased', () => {
+    // Matched case-insensitively — HTTP tokens travel through proxies that
+    // re-case things — but echoed VERBATIM, because RFC 6455 has the client
+    // check the selected value against what it sent.
+    const read = readAgentCoreConversation({
+      headers: {
+        'sec-websocket-protocol': `BASE64URLBEARERAUTHORIZATION.${VENDOR_BASE64URL}, BASE64URLBEARERAUTHORIZATION`,
+      },
+      query: new URLSearchParams(),
+    });
+    expect(read.protocol).toBe('BASE64URLBEARERAUTHORIZATION');
+    expect(read.headers).toEqual({ authorization: `Bearer ${VENDOR_TOKEN}` });
+  });
+
+  it('SECURITY: a dotted value that is not base64url refuses the upgrade, by name', () => {
+    // A token that does not decode is not a credential. Mapping it into
+    // `authorization` anyway would produce a request that looks authenticated
+    // and is not — so this throws, and the door answers the refusal.
+    for (const bad of [
+      'not+base64url/at=all', // outside the base64url alphabet
+      'eW91cl9vYXV0aF90b2tlbl9oZXJl!', // one character past the alphabet
+      'e', // a lone character is not a whole base64url value
+    ]) {
+      expect(() =>
+        readAgentCoreConversation({
+          headers: {
+            'sec-websocket-protocol': `base64UrlBearerAuthorization.${bad}, base64UrlBearerAuthorization`,
+          },
+          query: new URLSearchParams(),
+        }),
+      ).toThrow(/base64url-encoded bearer token/);
+    }
+  });
+
+  it('SECURITY: the dotted token without the sentinel refuses, rather than echoing the token', () => {
+    // AWS documents the PAIR — "prefixed with `base64UrlBearerAuthorization.`,
+    // followed by the sentinel subprotocol `base64UrlBearerAuthorization`".
+    // Without the sentinel there is nothing safe to echo: echoing the dotted
+    // value would put the credential in a response header, and echoing nothing
+    // fails the browser's handshake anyway. Say so instead.
+    expect(() =>
+      readAgentCoreConversation({
+        headers: {
+          'sec-websocket-protocol': `base64UrlBearerAuthorization.${VENDOR_BASE64URL}`,
+        },
+        query: new URLSearchParams(),
+      }),
+    ).toThrow(/without the 'base64UrlBearerAuthorization' sentinel/);
+  });
+
+  it('the sentinel alone carries no credential — an absence, not a failure', () => {
+    // Nothing dotted was offered, so nothing was claimed. No header invented,
+    // no subprotocol selected.
+    expect(
+      readAgentCoreConversation({
+        headers: { 'sec-websocket-protocol': 'base64UrlBearerAuthorization' },
+        query: new URLSearchParams(),
+      }),
+    ).toEqual({});
   });
 
   it('SECURITY: a frame past this runtime’s 32KB ceiling ends the conversation, naming it', async () => {

@@ -22,6 +22,7 @@ import {
   type RunCheckpointTracker,
 } from '../../src/core/runCheckpoint.js';
 import type { LLMMessage } from '../../src/adapters/types.js';
+import { expectWithinReferenceUnits, measureAsync } from '../helpers/perf.js';
 
 // ── Test helpers ─────────────────────────────────────────────────────
 
@@ -221,21 +222,30 @@ describe('runCheckpoint — P5 security', () => {
 // ─── P6 Performance — happy path zero-overhead ───────────────────────
 
 describe('runCheckpoint — P6 performance', () => {
-  it('P6 happy path with checkpoint tracker installed completes promptly', async () => {
-    const agent = Agent.create({
-      provider: mock({ replies: [{ content: 'fast' }] }),
-      model: 'mock',
-    })
-      .system('s')
-      .build();
-    const t0 = performance.now();
-    const result = await agent.run({ message: 'hi' });
-    const elapsed = performance.now() - t0;
-    expect(result).toBe('fast');
-    // No assertion on absolute timing — pace varies. We're just
-    // verifying tracker installation doesn't deadlock or timeout.
-    expect(elapsed).toBeLessThan(5000);
-  });
+  it(
+    'P6 happy path with checkpoint tracker installed completes promptly',
+    { timeout: 30_000, retry: 2 },
+    async () => {
+      const agent = Agent.create({
+        provider: mock({ replies: [{ content: 'fast' }] }),
+        model: 'mock',
+      })
+        .system('s')
+        .build();
+      const elapsed = await measureAsync(async () => {
+        expect(await agent.run({ message: 'hi' })).toBe('fast');
+      });
+      // Not a speed claim: the point is that installing the checkpoint tracker
+      // does not deadlock or hang. 5000 reference units of CPU is a liveness
+      // ceiling, and stating it in units rather than milliseconds means a
+      // loaded runner raises the ceiling with the load instead of failing.
+      await expectWithinReferenceUnits(
+        elapsed,
+        5000,
+        'the checkpoint tracker must not stall a run',
+      );
+    },
+  );
 });
 
 // ─── P7 ROI — failure-phase classifier ───────────────────────────────

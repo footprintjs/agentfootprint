@@ -7,6 +7,221 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [7.27.1] - 2026-08-05
+
+A test that fails when the machine is busy is not a guard. It is a coin flip
+with a stack trace, and this suite had a hundred and thirteen of them.
+
+**The story is the root cause, and it is not "CI is slow."** Every one of these
+assertions had the same shape — `expect(elapsed).toBeLessThan(200)` — and that
+shape cannot express the thing it was written to defend. It measures how long
+the machine took, and the machine is shared: the suite runs beside a build, a
+coverage pass, and two other vitest workers. Identical code takes three to five
+times longer under that load with nothing about the code having changed. So the
+assertion cannot tell "we got slower" from "the box was busy", and it fires
+*exactly* when CI is busiest. Five of them had already been logged as flakes —
+`xray` P6, `withCircuitBreaker` P6, `locales/messages` Block D,
+`consumer-domain-events`, `SkillRegistryOptions` — always under concurrent
+build load, always passing in isolation. The failure mode of a guard nobody
+trusts is not a red build. It is that everyone re-runs it without reading it,
+and the day it means something, nobody notices.
+
+**Every wall-clock budget in the suite is now stated in a form that machine load
+cannot move.** Not the five that had been caught — all of them, found by
+sweeping for `performance.now()` / `Date.now()` differences and millisecond
+ceilings rather than by waiting for the next one to fire. `test/helpers/perf.ts`
+holds the three honest forms, in order of preference:
+
+- **A ratio between two runs of the same operation** (`expectScalesLinearly`) —
+  the operation at ten times the input must cost about ten times as much. This
+  is the strongest form because it states the actual claim ("no quadratic
+  rescan"), and it is immune to machine speed entirely: whatever slows the large
+  run slows the small one it is measured against. Seventy-eight of the
+  assertions became this.
+- **A ratio against a sibling** (`expectWithinTimes`) — the same run without the
+  recorder, without the pricing table, without the permission checker, timed
+  moments earlier on this machine. Used wherever the claim was already the word
+  "negligible", which is a comparison that most of these tests never actually
+  made.
+- **A CPU yardstick** (`expectWithinReferenceUnits`) — where there is no natural
+  sibling, the budget is N units of a fixed slab of CPU work timed in the same
+  process, moments before the assertion. A runner that is four times slower
+  today gets a four-times-larger ceiling; a real regression still trips it.
+  Twenty-four assertions; eleven more are sibling ratios.
+
+Seven sites kept a millisecond ceiling on purpose and say so where they stand,
+because their number is a CONFIGURED VALUE rather than a guess about the machine
+— a mock's own thinking band, a slow branch's own delay, a retry's own backoff
+budget, `realistic()`'s own default floor. And a handful lost the clock
+altogether in favour of the count that was the real claim: the skill loader now
+proves it reads every file exactly once instead of proving the disk was fast
+that morning.
+
+**A ratio alone was not enough, and finding that out is half the work in this
+release.** The first cut of the helper compared two single measurements, and it
+still flaked when actually run under the reproduction condition. Three things
+had to be added, each because the proof run said so:
+
+- **Repeat until the sample is worth timing.** Below a scheduler quantum, one
+  preemption *is* the measurement: a 0.2ms operation that gets descheduled
+  reads as a hundred times its real cost, while the 100ms operation beside it
+  absorbs the same theft as a rounding error — and load stops cancelling. Each
+  operation is now repeated inside one sample until the sample clears 20ms, and
+  what is compared is cost per repetition.
+- **Take the fastest of several samples, alternating.** The fastest sample is
+  the one the scheduler interrupted least. Alternating between the two sides
+  means a slow patch of machine time lands on both, not on whichever ran
+  second — and it disarms the classic false pass where the small run is served
+  from a cache the large run had to fill.
+- **Say when the machine itself moved.** The yardstick is timed on both sides
+  of every measurement. If the machine's own speed drifted 4× mid-comparison,
+  the ceiling is widened by exactly that much and the failure message says
+  "contention, not code". On a quiet machine the factor is 1 and nothing
+  changes, which is where a real regression gets caught. A guard that knows
+  when it cannot measure beats one that guesses.
+
+Sampling costs time, so it buys the loop counts back: measurements that used to
+brute-force 50 agent runs now run 8 and sample instead, and a per-side time
+budget stops an expensive operation from being run five more times just to
+satisfy the sampler. Total suite time moved from ~42s to ~48s.
+
+Where the honest answer was a **count**, the clock is gone entirely: a cached
+translator is invoked exactly once however many times you read it; an open
+circuit breaker calls its provider exactly once across eleven thousand
+rejections; a sync provider never returns a Promise; a no-op structure recorder
+hears each stage exactly once. Those facts are true on any machine under any
+load, which is what makes them worth asserting.
+
+**No perf claim was deleted. The form changed; the meaning stayed** — and in
+four places the meaning got sharper, because writing the claim down properly
+exposed what it had actually been asserting. Three sites keep a millisecond
+ceiling on purpose and say so at the site: they are stated against a *configured
+delay* (a mock's own thinking band, a slow branch's own timeout, a strategy's
+own per-event block) rather than against a guess about the machine, because
+"did not sleep longer than it was told to" has no cheaper form.
+
+**Two of the conversions found real things**, which is the argument for the form
+better than any prose could make it:
+
+- `assignCostVerdicts` is quadratic in suspect count. Not a defect — the
+  leave-one-out placebo band re-derives itself per suspect, which is what
+  "leave one out" means — but it is bounded only by
+  `CONTEXT_BISECT_DEFAULTS.maxSuspects` (12), and nothing said so. The test now
+  guards a bounded size at twenty-five times the shipped cap and explains why
+  there is no ratio to assert.
+- `CommitRangeIndex.enclosing()` is a full array walk with a sort, by design, in
+  footprintjs. A ratio there would have looked like a lookup claim and meant
+  nothing. That test is a bounded-size CPU budget now, and says which library
+  owns the cost shape.
+
+A third was a claim of ours that was simply false: `gatedTools.list()` was being
+compared against `staticTools.list()`, which hands back a stored array. "One
+extra pass" is infinitely more than zero, so that ratio could never mean what it
+said. It is a linearity claim now.
+
+A fourth is written down rather than fixed, because it is a real measurement and
+not a test problem: **`Parallel`'s per-branch cost stops being flat somewhere
+past a hundred branches.** On a quiet machine, per branch: 10 → 0.59ms, 30 →
+0.57ms, 100 → 0.87ms, 300 → 2.57ms. A three-hundred-branch fan-out costs about
+thirty times a thirty-branch one, not ten. Whether that is the engine's fan-out,
+the merge, or simply three hundred promises in flight is a separate question;
+the scaling test now guards the range where the claim holds and records the
+curve at the site, instead of hiding it inside a slack multiplier that would
+have made a bigger test pass while meaning nothing.
+
+**The composition tests lead with a count, not a clock.** A Sequence of forty
+steps runs forty completions; a Loop of forty iterations runs forty; a
+thirty-two-branch Parallel runs thirty-two. A quadratic walk that re-enters
+children shows up in that number on any machine at any load — the ratio beside
+it is there for the quadratic that costs without re-executing.
+
+Proven the only way it can be proven: the full suite three times
+**concurrently**, with `npm run build` looping beside it — the reproduction
+condition, which oversubscribes the machine several times over. Every
+conversion was measured under it and revised until it held there, which is how
+each of the three refinements above got found in the first place.
+
+Two admissions, both at the site. The converted tests state their own
+**timeout**, because sampling costs time and the runner's five-second default is
+itself a wall-clock budget with the same defect. And they carry **`retry`**,
+which is the last mile: everything above removes the systematic distortions, but
+not the chance that one run drew three unlucky samples. Retrying costs no
+strength — a real regression is deterministic and fails every attempt, while
+contention has to win three times in a row — and it was added only after the
+conversions already held on their own.
+
+### Also in this release
+
+**`WindowStrategy` meant two different things, and the release gate was right to
+refuse it.** The package root exports the conversation-window seam
+(`{ name, plan(input) }`, public and frozen since 7.17.0). `agentfootprint/memory`
+exported a memory config record under the same name (`{ kind: 'window', size }`).
+Same word, incompatible shapes, two entry points — a trap for anyone importing
+from the wrong one. The memory one is now **`MemoryWindowStrategy`**, and
+`agentfootprint/memory` still exports `WindowStrategy` as a deprecated alias, so
+no import breaks. The rename went to the memory side because that name was never
+meaningfully public there: it appears in no guide, no example, no release note,
+and not in the generated API reference at all (typedoc covers the root barrel
+only). A compile-level regression test pins all three facts — the new name, the
+old alias, and that the two types were never assignable to each other.
+
+**AgentCore's browser bearer handshake was reading a spelling nobody
+documented.** The `/ws` door looked for `bearer` and `bearer.<token>` —
+words this library invented. AWS documents one scheme and one only: the token
+base64url-encoded and prefixed with `base64UrlBearerAuthorization.`, followed by
+the sentinel subprotocol `base64UrlBearerAuthorization`, with "subprotocols
+other than `base64UrlBearerAuthorization` … not yet supported". So a real
+browser handshake matched neither spelling and the mapping returned `{}` — the
+credential silently dropped, which is the same failure shape as a stored session
+that reads back as nothing. Now: the documented pair is read, the base64url
+wrapper is undone before the token becomes `Bearer <jwt>`, and the **sentinel**
+is echoed in the client's own spelling because RFC 6455 lets a server select
+only what the client offered — never the dotted value, which would put the
+credential in a response header. Two shapes refuse the upgrade by name rather
+than degrade: a dotted value that is not valid base64url (a token that does not
+decode is not a credential), and a dotted value offered without the sentinel
+(there is then nothing safe to echo). The tests pin AWS's own literal example
+strings, so the day their spelling moves, the suite says so. The invented
+spellings are gone rather than kept beside the real one — a door nobody can walk
+through should not be advertised as one.
+
+**The AgentCore Memory docs described an API that has not existed since 7.15.**
+The mapping table named `PutMemoryEvent` / `GetMemoryEvent` /
+`DeleteMemorySession` — none of which the adapter calls — and said `search()`
+was "not exposed", which stopped being true in 7.15. Rewritten against the
+shipped adapter: `CreateEvent` / `ListEvents` / `DeleteEvent`, the identity split
+across `actorId` and `sessionId`, the two operations that cost O(events in
+session) because AgentCore assigns its own event ids, `putIfVersion` emulated,
+no `stream()`, and `search()` documented for what it actually is — server-side
+retrieval that takes the query as **text** in `options.text`, throws rather than
+returning an empty list when it is missing, and returns AgentCore's own extracted
+records rather than the entries you `put()`. Three sibling pages carried the same
+stale "AgentCore has no `search()`" claim and are corrected too, including one
+that promised a build-time throw that no longer happens — causal memory on an
+AgentCore store now passes the build check and fails at the call instead.
+
+### Fixed
+
+- **`/ws` browser OAuth on AgentCore Runtime.** The bearer subprotocol mapping
+  now reads the vendor's documented scheme; the previous spellings could not be
+  produced by any browser through that front door.
+- Duplicate exported type name `WindowStrategy`, which blocked the release
+  gate's duplicate-type check.
+
+### Changed
+
+- **Tests only:** every wall-clock performance budget is now a ratio, a count,
+  or a CPU-yardstick budget. No public behaviour changes.
+- **Tests only:** a handful of long-running tests state their own timeout
+  instead of inheriting the runner's 5-second default. That default is a
+  wall-clock budget like any other, with exactly the defect this release is
+  about: a property sweep over real agent runs, a 44,850-pair lint, a
+  200-iteration loop and a barrel import all do seconds of honest work, and on a
+  contended runner the default was failing them for being on a busy machine.
+  The assertions in those tests were already counts.
+- `agentfootprint/memory` exports `MemoryWindowStrategy`; `WindowStrategy`
+  remains as a deprecated alias.
+
 ## [7.27.0] - 2026-08-05
 
 A production integration ran an agent on a shared socket, with a co-listener of

@@ -23,6 +23,7 @@ import {
   mockThinkingHandler,
   type ThinkingBlock,
 } from '../../src/thinking/index.js';
+import { expectScalesLinearly } from '../helpers/perf.js';
 
 // ─── 1. UNIT — normalize() + parseChunk() ────────────────────────
 
@@ -218,30 +219,44 @@ describe('MockThinkingHandler — security: zero sensitive defaults', () => {
 
 // ─── 6. PERFORMANCE — normalize() overhead bound ─────────────────
 
-describe('MockThinkingHandler — performance: normalize() x1000 under 100ms', () => {
-  it('normalize() x1000 of 5-block Anthropic input under 100ms', () => {
-    const raw = mockAnthropicRaw(
-      Array.from({ length: 5 }, (_, i) => ({ content: `block-${i}`, signature: `sig-${i}` })),
-    );
-    const t0 = performance.now();
-    for (let i = 0; i < 1000; i++) {
-      const blocks = mockThinkingHandler.normalize(raw);
-      if (blocks.length !== 5) throw new Error('shape regression');
-    }
-    const elapsed = performance.now() - t0;
-    // Documented target: ~100µs per call. 100ms for 1000.
-    // 300ms slack for CI cold start.
-    expect(elapsed).toBeLessThan(300);
-  });
+describe('MockThinkingHandler — performance: normalize() cost stays flat', () => {
+  it(
+    'normalize() of 5-block Anthropic input stays flat as calls pile up',
+    { timeout: 30_000, retry: 2 },
+    async () => {
+      const raw = mockAnthropicRaw(
+        Array.from({ length: 5 }, (_, i) => ({ content: `block-${i}`, signature: `sig-${i}` })),
+      );
+      const normalize = (times: number): void => {
+        for (let i = 0; i < times; i++) {
+          const blocks = mockThinkingHandler.normalize(raw);
+          if (blocks.length !== 5) throw new Error('shape regression');
+        }
+      };
+      await expectScalesLinearly({
+        small: () => normalize(1_000),
+        large: () => normalize(10_000),
+        scale: 10,
+        why: 'normalize() must be pure and constant-cost',
+      });
+    },
+  );
 
-  it('normalize() x1000 of empty input under 50ms (early-return path)', () => {
-    const t0 = performance.now();
-    for (let i = 0; i < 1000; i++) {
-      mockThinkingHandler.normalize(undefined);
-    }
-    const elapsed = performance.now() - t0;
-    expect(elapsed).toBeLessThan(150);
-  });
+  it(
+    'normalize() of empty input takes the early-return path, at flat cost',
+    { timeout: 30_000, retry: 2 },
+    async () => {
+      const normalize = (times: number): void => {
+        for (let i = 0; i < times; i++) mockThinkingHandler.normalize(undefined);
+      };
+      await expectScalesLinearly({
+        small: () => normalize(1_000),
+        large: () => normalize(10_000),
+        scale: 10,
+        why: 'the empty-input early return must stay an early return',
+      });
+    },
+  );
 });
 
 // ─── 7. ROI — signature round-trip ───────────────────────────────

@@ -115,8 +115,20 @@ export type SnapshotProjection = (typeof SNAPSHOT_PROJECTIONS)[keyof typeof SNAP
 
 // ─── Strategy discriminated-union ───────────────────────────────────
 
-/** Window — keep the last `size` entries. Pure rule, no LLM, no embedder. */
-export interface WindowStrategy {
+/**
+ * Window — keep the last `size` entries. Pure rule, no LLM, no embedder.
+ *
+ * NAMING (7.27.1): its siblings below are `BudgetStrategy`, `TopKStrategy`
+ * and so on, unprefixed. This one carries the `Memory` prefix because
+ * `WindowStrategy` is already taken, at the package root, by something else
+ * entirely: the conversation-window seam (`{ name, plan(input) }`,
+ * core/agent/window/strategy.ts, public since 7.17.0). Two exported types of
+ * the same name and incompatible shapes, reachable from two entry points, is
+ * a trap for anyone importing from the wrong one — so the memory config
+ * record took the prefix. `agentfootprint/memory` still exports the old name
+ * as a deprecated alias, so no import breaks.
+ */
+export interface MemoryWindowStrategy {
   readonly kind: typeof MEMORY_STRATEGIES.WINDOW;
   readonly size: number;
 }
@@ -201,7 +213,7 @@ export interface HybridStrategy {
 
 /** The full strategy union — discriminated by `kind`. */
 export type Strategy =
-  | WindowStrategy
+  | MemoryWindowStrategy
   | BudgetStrategy
   | SummarizeStrategy
   | TopKStrategy

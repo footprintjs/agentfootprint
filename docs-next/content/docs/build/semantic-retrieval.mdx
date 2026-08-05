@@ -48,7 +48,9 @@ If you swap embedders (model upgrade, provider switch), either:
 - ✅ `InMemoryStore` (dev / tests) — O(n) linear scan, fine for thousands of entries
 - ⏳ pgvector / Pinecone / Qdrant / Weaviate (planned) — true vector indexing
 
-The production adapters (`RedisStore`, `AgentCoreStore`, exported from `agentfootprint/memory-providers`) ship without `search()` for now — Redis needs the RedisSearch module for vector indexing; AgentCore's retrieval API is server-side and doesn't fit the cosine-similarity contract. Use `InMemoryStore` until vector-capable production adapters land.
+`RedisStore` (exported from `agentfootprint/memory-providers`) ships without `search()` — RedisSearch is a separate Redis module with its own API.
+
+`AgentCoreStore` **does** implement `search()` (since 7.15), but it does not satisfy this contract: AgentCore embeds and ranks server-side, so it needs the query as **text** in `options.text` and ignores the vector the strategy computes. A `SEMANTIC × TOP_K` pipeline hands it a vector alone, so the call throws at runtime, by design — better than ranking nothing and answering `[]`. See [AgentCore Memory](doc:agentcore). Use `InMemoryStore` until vector-capable production adapters land.
 
 ## When to use this vs RAG vs other strategies
 

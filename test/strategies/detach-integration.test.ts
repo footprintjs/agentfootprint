@@ -172,9 +172,12 @@ describe('attach × detach — P4 property', () => {
     for (let i = 0; i < 10; i++) dispatcher.dispatch(fakeAgentEvent);
     const elapsed = performance.now() - t0;
 
-    // 10 emits at 50ms sync each = 500ms inline. With detach, emit
-    // returns immediately — total wall should be well under 50ms.
-    expect(elapsed).toBeLessThan(50);
+    // The ceiling is the STRATEGY'S OWN configured delay, not a machine-speed
+    // guess: ten emits would cost ten of those delays inline, and detaching
+    // must return before even one has elapsed. The count below is the
+    // load-proof half — the work is queued, not executed.
+    const PER_EVENT_BLOCK_MS = 50;
+    expect(elapsed).toBeLessThan(PER_EVENT_BLOCK_MS);
     // Strategy hasn't even run yet (work is queued, not executed).
     expect(slowStrategy.exported).toHaveLength(0);
   });

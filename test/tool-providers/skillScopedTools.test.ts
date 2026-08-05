@@ -15,6 +15,7 @@ import { defineTool, type Tool } from '../../src/index.js';
 import { type ToolDispatchContext, type ToolProvider } from '../../src/tool-providers/index.js';
 import { skillScopedTools, staticTools } from '../../src/tool-providers/index.js';
 import { defineSkill } from '../../src/injection-engine.js';
+import { expectScalesLinearly } from '../helpers/perf.js';
 
 // ─── Fixtures ─────────────────────────────────────────────────────
 
@@ -204,19 +205,24 @@ describe('skillScopedTools — security: closed-fail', () => {
 // ─── 6. PERFORMANCE — bounded ────────────────────────────────────
 
 describe('skillScopedTools — performance', () => {
-  it('10k list() calls under 50ms', () => {
+  it('list() cost stays flat as calls pile up', { timeout: 30_000, retry: 2 }, async () => {
     const provider = skillScopedTools('billing', [
       fakeTool('refund'),
       fakeTool('charge'),
       fakeTool('lookup'),
     ]);
-    const t0 = Date.now();
-    for (let i = 0; i < 10_000; i++) {
-      provider.list(ctxBilling);
-      provider.list(ctxRefund);
-    }
-    const elapsed = Date.now() - t0;
-    expect(elapsed).toBeLessThan(50);
+    const list = (times: number): void => {
+      for (let i = 0; i < times; i++) {
+        provider.list(ctxBilling);
+        provider.list(ctxRefund);
+      }
+    };
+    await expectScalesLinearly({
+      small: () => list(10_000),
+      large: () => list(100_000),
+      scale: 10,
+      why: 'skill scoping must be decided per call, not accumulated',
+    });
   });
 });
 

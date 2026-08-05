@@ -19,6 +19,7 @@ import { BedrockCacheStrategy } from '../../src/cache/strategies/BedrockCacheStr
 import { getDefaultCacheStrategy } from '../../src/cache/strategyRegistry';
 import type { CacheMarker, CacheStrategyContext } from '../../src/cache/types';
 import type { LLMRequest } from '../../src/adapters/types';
+import { expectScalesLinearly } from '../helpers/perf.js';
 
 const ctx = (overrides: Partial<CacheStrategyContext> = {}): CacheStrategyContext => ({
   iteration: 1,
@@ -171,16 +172,28 @@ describe('Phase 8 strategies — security: extractMetrics defensive', () => {
 // ─── 6. Performance ───────────────────────────────────────────────
 
 describe('Phase 8 strategies — performance', () => {
-  it('100 prepareRequest calls in <10ms across both strategies', async () => {
-    const oa = new OpenAICacheStrategy();
-    const bc = new BedrockCacheStrategy();
-    const start = Date.now();
-    for (let i = 0; i < 100; i++) {
-      await oa.prepareRequest(openaiReq, [], ctx());
-      await bc.prepareRequest(claudeOnBedrock, [m('system', 0)], ctx());
-    }
-    expect(Date.now() - start).toBeLessThan(20);
-  });
+  it(
+    'prepareRequest cost stays flat as calls pile up (both strategies)',
+    { timeout: 30_000, retry: 2 },
+    async () => {
+      // Both strategies are pure request transforms — they hold no per-call
+      // state — so ten times the calls must cost ten times the work.
+      const oa = new OpenAICacheStrategy();
+      const bc = new BedrockCacheStrategy();
+      const prepare = async (calls: number): Promise<void> => {
+        for (let i = 0; i < calls; i++) {
+          await oa.prepareRequest(openaiReq, [], ctx());
+          await bc.prepareRequest(claudeOnBedrock, [m('system', 0)], ctx());
+        }
+      };
+      await expectScalesLinearly({
+        small: () => prepare(100),
+        large: () => prepare(1000),
+        scale: 10,
+        why: 'cache strategies must stay stateless per call',
+      });
+    },
+  );
 });
 
 // ─── 7. ROI ───────────────────────────────────────────────────────

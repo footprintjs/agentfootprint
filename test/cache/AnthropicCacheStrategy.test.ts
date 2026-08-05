@@ -16,6 +16,7 @@ import { AnthropicCacheStrategy } from '../../src/cache/strategies/AnthropicCach
 import { getDefaultCacheStrategy } from '../../src/cache/strategyRegistry';
 import type { CacheMarker, CacheStrategyContext } from '../../src/cache/types';
 import type { LLMRequest } from '../../src/adapters/types';
+import { expectScalesLinearly } from '../helpers/perf.js';
 
 const ctx = (overrides: Partial<CacheStrategyContext> = {}): CacheStrategyContext => ({
   iteration: 1,
@@ -163,13 +164,25 @@ describe('AnthropicCacheStrategy — security: extractMetrics defensive', () => 
 // ─── 6. Performance ───────────────────────────────────────────────
 
 describe('AnthropicCacheStrategy — performance', () => {
-  it('1000 markers clamp to 4 in <5ms', async () => {
-    const s = new AnthropicCacheStrategy();
-    const markers = Array.from({ length: 1000 }, () => m('system', 0));
-    const start = Date.now();
-    await s.prepareRequest(baseReq, markers, ctx());
-    expect(Date.now() - start).toBeLessThan(5);
-  });
+  it(
+    'clamping 1000 markers to 4 costs ten times what clamping 100 does',
+    { timeout: 30_000, retry: 2 },
+    async () => {
+      // The claim: the clamp is a single pass over the markers, not a re-sort
+      // or a re-walk per marker kept. Ten times the markers, ten times the work.
+      const s = new AnthropicCacheStrategy();
+      const clamp = async (count: number): Promise<void> => {
+        const markers = Array.from({ length: count }, () => m('system', 0));
+        await s.prepareRequest(baseReq, markers, ctx());
+      };
+      await expectScalesLinearly({
+        small: () => clamp(100),
+        large: () => clamp(1000),
+        scale: 10,
+        why: 'marker clamping must be one pass, not a rescan per marker',
+      });
+    },
+  );
 });
 
 // ─── 7. ROI ───────────────────────────────────────────────────────

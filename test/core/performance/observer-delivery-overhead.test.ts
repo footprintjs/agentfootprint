@@ -1,7 +1,9 @@
 /**
  * Performance — observer delivery tier (RFC-001 Block 10).
  *
- * Budgets (CI-safe ceilings, same convention as run-latency.test.ts):
+ * Budgets in REFERENCE UNITS (same convention as run-latency.test.ts — a unit
+ * of fixed CPU work timed in this process at this moment, so a busy runner
+ * stretches the ceiling instead of failing the test):
  *   - DEFAULT ('inline', nobody opted in): byte-identical attach path, no
  *     deferred tier allocated — a 5-iteration run stays inside the same
  *     budget the pre-Block-10 suite enforced.
@@ -12,6 +14,7 @@
 import { describe, it, expect } from 'vitest';
 import { Agent } from '../../../src/core/Agent.js';
 import type { LLMProvider, LLMResponse } from '../../../src/adapters/types.js';
+import { expectWithinReferenceUnits, measureAsync } from '../../helpers/perf.js';
 
 function scripted(...responses: readonly LLMResponse[]): LLMProvider {
   let i = 0;
@@ -33,7 +36,7 @@ function resp(
   };
 }
 
-const BUDGET_MS = 1000; // 5-iteration ceiling from run-latency.test.ts
+const BUDGET_UNITS = 1000; // 5-iteration ceiling from run-latency.test.ts
 
 function fiveIterationAgent(observerDelivery?: 'deferred') {
   const responses: LLMResponse[] = [];
@@ -56,26 +59,42 @@ function fiveIterationAgent(observerDelivery?: 'deferred') {
 }
 
 describe('performance — observer delivery (RFC-001 Block 10)', () => {
-  it('default (inline, no opt-in): 5-iteration run stays within the historical budget', async () => {
-    const agent = fiveIterationAgent();
-    const t0 = performance.now();
-    await agent.run({ message: 'go' });
-    const ms = performance.now() - t0;
-    expect(ms).toBeLessThan(BUDGET_MS);
-    // No deferred tier allocated — the zero-cost discipline.
-    expect(agent.getLastSnapshot()?.observerStats).toBeUndefined();
-  });
+  it(
+    'default (inline, no opt-in): 5-iteration run stays within the historical budget',
+    { timeout: 30_000, retry: 2 },
+    async () => {
+      const agent = fiveIterationAgent();
+      const ms = await measureAsync(async () => {
+        await agent.run({ message: 'go' });
+      });
+      await expectWithinReferenceUnits(
+        ms,
+        BUDGET_UNITS,
+        'the default inline path must not cost more than the historical 5-iteration budget',
+      );
+      // No deferred tier allocated — the zero-cost discipline.
+      expect(agent.getLastSnapshot()?.observerStats).toBeUndefined();
+    },
+  );
 
-  it("observerDelivery: 'deferred' (no listeners): capture overhead stays within the same budget", async () => {
-    const agent = fiveIterationAgent('deferred');
-    const t0 = performance.now();
-    await agent.run({ message: 'go' });
-    const ms = performance.now() - t0;
-    expect(ms).toBeLessThan(BUDGET_MS);
-    // Tier allocated, nothing lost, nothing left behind.
-    const stats = agent.getLastSnapshot()?.observerStats;
-    expect(stats?.drops).toBe(0);
-    expect(stats?.depth).toBe(0);
-    expect(stats?.terminalStranded).toBe(0);
-  });
+  it(
+    "observerDelivery: 'deferred' (no listeners): capture overhead stays within the same budget",
+    { timeout: 30_000, retry: 2 },
+    async () => {
+      const agent = fiveIterationAgent('deferred');
+      const ms = await measureAsync(async () => {
+        await agent.run({ message: 'go' });
+      });
+      await expectWithinReferenceUnits(
+        ms,
+        BUDGET_UNITS,
+        'deferred capture with no listeners must stay inside the same budget',
+      );
+      // Tier allocated, nothing lost, nothing left behind.
+      const stats = agent.getLastSnapshot()?.observerStats;
+      expect(stats?.drops).toBe(0);
+      expect(stats?.depth).toBe(0);
+      expect(stats?.terminalStranded).toBe(0);
+    },
+  );
 });

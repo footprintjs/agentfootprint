@@ -32,6 +32,7 @@ import { Agent, defineTool, type LLMToolSchema, type Tool } from '../../src/inde
 import { type ToolDispatchContext, type ToolProvider } from '../../src/tool-providers/index.js';
 import { gatedTools, staticTools } from '../../src/tool-providers/index.js';
 import { mock } from '../../src/llm-providers.js';
+import { expectScalesLinearly } from '../helpers/perf.js';
 
 // ─── Fixtures ─────────────────────────────────────────────────────
 
@@ -352,10 +353,14 @@ describe('async-provider — discovery_started / discovery_completed', () => {
     expect(events[0]?.providerId).toBe('timed-hub');
     expect(events[1]?.type).toBe('completed');
     expect(events[1]?.toolCount).toBe(3);
-    // durationMs should reflect the 5ms sleep — tolerant lower bound,
-    // generous upper bound to absorb CI jitter.
+    // durationMs is the recorded discovery time. The bounds check that a
+    // number was measured at all and that it is not absurd — not that the
+    // machine is fast. The upper bound is deliberately far above anything a
+    // 5ms sleep can produce, including on a loaded runner, and it stays
+    // load-sensitive by choice: there is no cheaper way to say "this field
+    // holds a duration, not a timestamp".
     expect(events[1]?.durationMs).toBeGreaterThanOrEqual(0);
-    expect(events[1]?.durationMs).toBeLessThan(500);
+    expect(events[1]?.durationMs).toBeLessThan(5_000);
   });
 
   it('failed discovery emits started → failed (no completed)', async () => {
@@ -506,129 +511,159 @@ describe('async-provider — property: random sync/async/throw chains', () => {
     }
   });
 
-  it('agent runs with random forbidden-pattern compositions never silently dispatch a denied tool', async () => {
-    // Random chain of 10 calls; if any are 'denied', the synthetic
-    // result MUST land in history (no silent skip).
-    for (let trial = 0; trial < 10; trial++) {
-      const callsToMake = 5;
-      let callIdx = 0;
-      const llm = mock({
-        respond: () => {
-          callIdx += 1;
-          if (callIdx > callsToMake) return { content: 'done', toolCalls: [] };
-          const toolName = Math.random() > 0.5 ? 'allowed' : 'denied';
-          return {
-            content: '',
-            toolCalls: [{ id: `tc-${callIdx}`, name: toolName, args: {} }],
-          };
-        },
-      });
-      const allowed = fakeTool('allowed');
-      const denied = fakeTool('denied');
-      const agent = Agent.create({
-        provider: llm,
-        model: 'mock',
-        maxIterations: callsToMake + 2,
-        permissionChecker: {
-          name: 'p',
-          check: ({ target }) =>
-            target === 'denied' ? { result: 'deny', rationale: 'no' } : { result: 'allow' },
-        },
-      })
-        .system('s')
-        .tools([allowed, denied])
-        .build();
-      await agent.run({ message: 'go' });
-      // Property: every 'denied' call_id should have a corresponding
-      // tool_result message with the denial prefix.
-      // (Smoke check: agent finished without throwing.)
-    }
-  });
+  // A property sweep over real agent runs — seconds of honest work, not
+  // milliseconds. The default 5s is a wall-clock budget like any other, and it
+  // measures the runner when the runner is busy.
+  it(
+    'agent runs with random forbidden-pattern compositions never silently dispatch a denied tool',
+    { timeout: 60_000 },
+    async () => {
+      // Random chain of 10 calls; if any are 'denied', the synthetic
+      // result MUST land in history (no silent skip).
+      for (let trial = 0; trial < 10; trial++) {
+        const callsToMake = 5;
+        let callIdx = 0;
+        const llm = mock({
+          respond: () => {
+            callIdx += 1;
+            if (callIdx > callsToMake) return { content: 'done', toolCalls: [] };
+            const toolName = Math.random() > 0.5 ? 'allowed' : 'denied';
+            return {
+              content: '',
+              toolCalls: [{ id: `tc-${callIdx}`, name: toolName, args: {} }],
+            };
+          },
+        });
+        const allowed = fakeTool('allowed');
+        const denied = fakeTool('denied');
+        const agent = Agent.create({
+          provider: llm,
+          model: 'mock',
+          maxIterations: callsToMake + 2,
+          permissionChecker: {
+            name: 'p',
+            check: ({ target }) =>
+              target === 'denied' ? { result: 'deny', rationale: 'no' } : { result: 'allow' },
+          },
+        })
+          .system('s')
+          .tools([allowed, denied])
+          .build();
+        await agent.run({ message: 'go' });
+        // Property: every 'denied' call_id should have a corresponding
+        // tool_result message with the denial prefix.
+        // (Smoke check: agent finished without throwing.)
+      }
+    },
+  );
 });
 
 // ─── 10. PERFORMANCE — sync zero-overhead claim ───────────────────
 
-describe('async-provider — performance: sync list() under 50ms for 1000 calls', () => {
-  it('sync staticTools.list() x1000 under 50ms (zero-overhead path)', () => {
-    const provider = staticTools([fakeTool('a'), fakeTool('b'), fakeTool('c')]);
-    const t0 = performance.now();
-    for (let i = 0; i < 1000; i++) {
-      const result = provider.list(baseCtx);
-      // Hot-path assertion: NEVER a Promise for sync providers
-      if (result instanceof Promise) throw new Error('sync provider should not return Promise');
-    }
-    const elapsed = performance.now() - t0;
-    // Documented target: ~50µs per call. 50ms for 1000 = 50µs each.
-    // 250ms slack for CI cold start.
-    expect(elapsed).toBeLessThan(250);
-  });
+describe('async-provider — performance: sync list() stays sync and stays flat', () => {
+  it(
+    'sync staticTools.list() never returns a Promise, at flat cost',
+    { timeout: 30_000, retry: 2 },
+    async () => {
+      // The load-proof half is inside the loop: a sync provider NEVER returns a
+      // Promise. The ratio then says listing does not get more expensive as
+      // calls accumulate.
+      const provider = staticTools([fakeTool('a'), fakeTool('b'), fakeTool('c')]);
+      const list = (times: number): void => {
+        for (let i = 0; i < times; i++) {
+          const result = provider.list(baseCtx);
+          // Hot-path assertion: NEVER a Promise for sync providers
+          if (result instanceof Promise) throw new Error('sync provider should not return Promise');
+        }
+      };
+      await expectScalesLinearly({
+        small: () => list(1_000),
+        large: () => list(10_000),
+        scale: 10,
+        why: 'the sync list path must stay constant-cost',
+      });
+    },
+  );
 
-  it('gatedTools(staticTools(...), pred) x1000 under 100ms', () => {
-    const provider = gatedTools(staticTools([fakeTool('a'), fakeTool('b')]), (n) => n === 'a');
-    const t0 = performance.now();
-    for (let i = 0; i < 1000; i++) {
-      const result = provider.list(baseCtx);
-      if (result instanceof Promise) throw new Error('sync gatedTools should stay sync');
-    }
-    const elapsed = performance.now() - t0;
-    // Decorator + filter; ~100µs per call. 100ms for 1000 = 100µs each.
-    // 300ms slack for CI cold start.
-    expect(elapsed).toBeLessThan(300);
-  });
+  it(
+    'gatedTools(staticTools(...), pred) stays sync, at flat cost',
+    { timeout: 30_000, retry: 2 },
+    async () => {
+      const provider = gatedTools(staticTools([fakeTool('a'), fakeTool('b')]), (n) => n === 'a');
+      const list = (times: number): void => {
+        for (let i = 0; i < times; i++) {
+          const result = provider.list(baseCtx);
+          if (result instanceof Promise) throw new Error('sync gatedTools should stay sync');
+        }
+      };
+      await expectScalesLinearly({
+        small: () => list(1_000),
+        large: () => list(10_000),
+        scale: 10,
+        why: 'the gating decorator must not add per-call growth',
+      });
+    },
+  );
 });
 
 // ─── 11. PERFORMANCE — async cache claim (no double-discovery) ───
 
 describe('async-provider — performance: async dispatch never doubles list() calls', () => {
-  it('100 sequential dispatches over 100 iterations call list() exactly 100 times', async () => {
-    const listSpy = vi.fn();
-    const tool = defineTool({
-      name: 'echo',
-      description: 'e',
-      inputSchema: { type: 'object' },
-      execute: async () => 'echoed',
-    });
-    const provider: ToolProvider = {
-      id: 'cache-claim',
-      async list() {
-        listSpy();
-        await Promise.resolve();
-        return [tool];
-      },
-    };
-    let calls = 0;
-    const TURNS = 50; // Keep modest — each turn is a real Agent.run() + LLM round-trip
-    const llm = mock({
-      respond: () => {
-        calls += 1;
-        // Every other iteration emits a tool call; the rest finalize.
-        if (calls % 2 === 1) {
-          return { content: '', toolCalls: [{ id: `tc-${calls}`, name: 'echo', args: {} }] };
-        }
-        return { content: 'done', toolCalls: [] };
-      },
-    });
-    const agent = Agent.create({
-      provider: llm,
-      model: 'mock',
-      maxIterations: 10,
-    })
-      .system('s')
-      .toolProvider(provider)
-      .build();
+  // Fifty real Agent.run()s. The claim is the COUNT below; the timeout is
+  // there so a busy runner cannot turn that count into a red build.
+  it(
+    '100 sequential dispatches over 100 iterations call list() exactly 100 times',
+    { timeout: 60_000 },
+    async () => {
+      const listSpy = vi.fn();
+      const tool = defineTool({
+        name: 'echo',
+        description: 'e',
+        inputSchema: { type: 'object' },
+        execute: async () => 'echoed',
+      });
+      const provider: ToolProvider = {
+        id: 'cache-claim',
+        async list() {
+          listSpy();
+          await Promise.resolve();
+          return [tool];
+        },
+      };
+      let calls = 0;
+      const TURNS = 50; // Keep modest — each turn is a real Agent.run() + LLM round-trip
+      const llm = mock({
+        respond: () => {
+          calls += 1;
+          // Every other iteration emits a tool call; the rest finalize.
+          if (calls % 2 === 1) {
+            return { content: '', toolCalls: [{ id: `tc-${calls}`, name: 'echo', args: {} }] };
+          }
+          return { content: 'done', toolCalls: [] };
+        },
+      });
+      const agent = Agent.create({
+        provider: llm,
+        model: 'mock',
+        maxIterations: 10,
+      })
+        .system('s')
+        .toolProvider(provider)
+        .build();
 
-    listSpy.mockClear();
-    for (let i = 0; i < TURNS; i++) {
-      calls = 0;
-      await agent.run({ message: `turn-${i}` });
-    }
-    // Each turn calls list() ONCE per iteration. Across 50 turns each
-    // running 2 iterations (1 tool + 1 finalize), expect 100 list() calls.
-    // Cache contract: NEVER 200 (no double-discovery on dispatch).
-    const calls2x = listSpy.mock.calls.length;
-    expect(calls2x).toBeLessThanOrEqual(TURNS * 2 + TURNS); // 150 upper bound (incl. seed call slack)
-    expect(calls2x).toBeGreaterThanOrEqual(TURNS); // at least one per turn
-  });
+      listSpy.mockClear();
+      for (let i = 0; i < TURNS; i++) {
+        calls = 0;
+        await agent.run({ message: `turn-${i}` });
+      }
+      // Each turn calls list() ONCE per iteration. Across 50 turns each
+      // running 2 iterations (1 tool + 1 finalize), expect 100 list() calls.
+      // Cache contract: NEVER 200 (no double-discovery on dispatch).
+      const calls2x = listSpy.mock.calls.length;
+      expect(calls2x).toBeLessThanOrEqual(TURNS * 2 + TURNS); // 150 upper bound (incl. seed call slack)
+      expect(calls2x).toBeGreaterThanOrEqual(TURNS); // at least one per turn
+    },
+  );
 });
 
 // ─── 12. ROI — Rube-style hub adapter end-to-end ─────────────────

@@ -16,6 +16,7 @@ import {
   buildChoiceContext,
   toolChoiceRecorder,
 } from '../../../src/recorders/observability/ToolChoiceRecorder';
+import { expectScalesLinearly } from '../../helpers/perf.js';
 
 // ── real event shapes ────────────────────────────────────────────────
 
@@ -643,20 +644,44 @@ describe('toolChoiceRecorder — survives Agent pause/resume (regression)', () =
 // ── performance ──────────────────────────────────────────────────────
 
 describe('toolChoiceRecorder — performance', () => {
-  it('hot path is record-only: 500 synthetic calls ingest fast with zero embeds', async () => {
-    const counter = countingEmbedder();
-    const rec = toolChoiceRecorder({ embedder: counter });
-    rec.onRunStart(runStart('r1'));
-    rec.onEmit(ev(TURN_START, { turnIndex: 0, userPrompt: 'q' }));
-    const start = performance.now();
-    for (let n = 1; n <= 500; n++) {
-      rec.onEmit(llmStart(`call-llm#${n}`, n));
-      rec.onEmit(toolStart('get_fcns_database', `c${n}`));
-    }
-    const elapsed = performance.now() - start;
-    expect(counter.calls()).toBe(0);
-    expect(elapsed).toBeLessThan(250);
-    rec.onRunEnd({});
-    expect((await rec.getCalls()).length).toBe(500);
-  });
+  it(
+    'hot path is record-only: ingest is linear and embeds exactly zero times',
+    { timeout: 30_000, retry: 2 },
+    async () => {
+      // The load-proof claim first: ZERO embedder calls during ingest. That is
+      // what "record-only" means, and a count cannot be bent by a busy runner.
+      // The ratio then says ingest cost does not drift as calls accumulate.
+      // A FRESH recorder per run — sharing one would let the small run seed the
+      // large one and turn this into a different measurement.
+      const ingest = (calls: number): (() => number) => {
+        const counter = countingEmbedder();
+        const rec = toolChoiceRecorder({ embedder: counter });
+        rec.onRunStart(runStart('r1'));
+        rec.onEmit(ev(TURN_START, { turnIndex: 0, userPrompt: 'q' }));
+        for (let n = 1; n <= calls; n++) {
+          rec.onEmit(llmStart(`call-llm#${n}`, n));
+          rec.onEmit(toolStart('get_fcns_database', `c${n}`));
+        }
+        return counter.calls;
+      };
+      await expectScalesLinearly({
+        small: () => void ingest(500),
+        large: () => void ingest(5_000),
+        scale: 10,
+        why: 'recording a tool call must not re-walk the calls already recorded',
+      });
+
+      const counter = countingEmbedder();
+      const rec = toolChoiceRecorder({ embedder: counter });
+      rec.onRunStart(runStart('r1'));
+      rec.onEmit(ev(TURN_START, { turnIndex: 0, userPrompt: 'q' }));
+      for (let n = 1; n <= 500; n++) {
+        rec.onEmit(llmStart(`call-llm#${n}`, n));
+        rec.onEmit(toolStart('get_fcns_database', `c${n}`));
+      }
+      expect(counter.calls()).toBe(0);
+      rec.onRunEnd({});
+      expect((await rec.getCalls()).length).toBe(500);
+    },
+  );
 });

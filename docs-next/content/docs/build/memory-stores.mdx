@@ -62,7 +62,7 @@ Maps `MemoryStore` onto AgentCore's **append-only event log** (`CreateEvent` / `
 
 - `put` appends; `list` is `ListEvents` (**window / episodic memory is the natural fit**); `get`/`delete` by id are list-then-find (server-assigned event ids); `forget` lists + deletes each event (no `DeleteSession`).
 - `putIfVersion` is emulated client-side; `seen` / `feedback` are in-process shadow state — don't survive process restart. Use Redis for durable recognition.
-- `search()` not wired today — AgentCore's `RetrieveMemoryRecords` lands as a separate helper.
+- `search()` **is** wired (since 7.15) onto `RetrieveMemoryRecords` — but it takes the query as **text** in `options.text`, not the vector, because AgentCore embeds and ranks server-side. Omit the text and it throws rather than returning an empty list that reads like "no matches". What comes back is AgentCore's own extracted records, not the entries you `put()`. Full story: [AgentCore Memory](doc:agentcore).
 
 ## BedrockAgentMemory (legacy Bedrock Agents — read-only)
 

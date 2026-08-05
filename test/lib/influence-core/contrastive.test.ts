@@ -16,6 +16,7 @@ import {
   type InfluenceScore,
 } from '../../../src/lib/influence-core';
 import { scoreContrastiveInfluence as viaObserve } from '../../../src/observe';
+import { expectScalesLinearly } from '../../helpers/perf.js';
 
 /**
  * A controllable fake embedder: each text maps to a fixed 3-d vector via a
@@ -188,20 +189,39 @@ describe('scoreContrastiveInfluence — security & robustness', () => {
 
 // ─── 6. PERFORMANCE + 7. LOAD ────────────────────────────────────────
 describe('scoreContrastiveInfluence — performance & load', () => {
-  it('200 evidence items score promptly (fake embedder isolates the math)', async () => {
-    const big = Array.from({ length: 200 }, (_, i) =>
-      ev(`s${i}`, i % 2 ? 'culprit (caused the deny)' : 'policy (innocent, topical)'),
-    );
-    const t0 = performance.now();
-    const r = await scoreContrastiveInfluence({
-      evidence: big,
-      answerText: 'ANSWER_DENY',
-      referenceText: 'REFERENCE_APPROVE',
-      embedder,
-    });
-    expect(r.length).toBe(200);
-    expect(performance.now() - t0).toBeLessThan(1000);
-  });
+  it(
+    'scores in a single pass over the evidence (fake embedder isolates the math)',
+    { timeout: 30_000, retry: 2 },
+    async () => {
+      // Each evidence item is embedded once and compared against two fixed
+      // texts. Ten times the evidence, ten times the work — a pairwise
+      // comparison between evidence items would be quadratic and caught here.
+      const evidenceOf = (n: number) =>
+        Array.from({ length: n }, (_, i) =>
+          ev(`s${i}`, i % 2 ? 'culprit (caused the deny)' : 'policy (innocent, topical)'),
+        );
+      const few = evidenceOf(20);
+      const many = evidenceOf(200);
+      const score = (evidence: ReturnType<typeof evidenceOf>) =>
+        scoreContrastiveInfluence({
+          evidence,
+          answerText: 'ANSWER_DENY',
+          referenceText: 'REFERENCE_APPROVE',
+          embedder,
+        });
+      expect((await score(many)).length).toBe(200);
+      await expectScalesLinearly({
+        small: async () => {
+          await score(few);
+        },
+        large: async () => {
+          await score(many);
+        },
+        scale: 10,
+        why: 'contrastive scoring must be one pass over the evidence',
+      });
+    },
+  );
 
   it('sustains many calls without throwing', async () => {
     for (let i = 0; i < 300; i++) {

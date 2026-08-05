@@ -19,6 +19,7 @@ import {
 import { withFallback } from '../../../src/resilience/withFallback.js';
 import { withRetry } from '../../../src/resilience/withRetry.js';
 import type { LLMProvider, LLMRequest, LLMResponse } from '../../../src/adapters/types.js';
+import { expectScalesLinearly } from '../../helpers/perf.js';
 
 // ── Test provider helpers ────────────────────────────────────────────
 
@@ -249,28 +250,46 @@ describe('withCircuitBreaker — P5 security', () => {
 // ─── P6 Performance — fast-fail in OPEN ──────────────────────────────
 
 describe('withCircuitBreaker — P6 performance', () => {
-  it('P6 10k OPEN-state rejections under 200ms (CI-tolerant slack)', async () => {
-    const inner = makeProvider('always-fail');
-    const wrapped = withCircuitBreaker(inner, { failureThreshold: 1, cooldownMs: 60_000 });
-    // Trip the breaker.
-    await expect(wrapped.complete(fakeRequest)).rejects.toThrow();
+  it(
+    'P6 10k OPEN-state rejections cost ten times what 1k cost, and never reach the provider',
+    { timeout: 30_000, retry: 2 },
+    async () => {
+      // Two claims, neither of them a stopwatch reading.
+      //
+      // The real one is a COUNT: while the circuit is open, the provider is not
+      // called at all. That is what "fast-fail" means, and a count cannot be
+      // made to lie by a busy machine.
+      //
+      // The second is that rejecting is O(1) per call — no scan of the failure
+      // history, no re-derivation of state — so ten times the rejections costs
+      // ~ten times the work rather than a hundred times.
+      const inner = makeProvider('always-fail');
+      const wrapped = withCircuitBreaker(inner, { failureThreshold: 1, cooldownMs: 60_000 });
+      // Trip the breaker.
+      await expect(wrapped.complete(fakeRequest)).rejects.toThrow();
 
-    const N = 10_000;
-    const t0 = performance.now();
-    for (let i = 0; i < N; i++) {
-      try {
-        await wrapped.complete(fakeRequest);
-      } catch {
-        /* expected — circuit open */
-      }
-    }
-    const elapsed = performance.now() - t0;
-    // Documented target on a hot core: ~5µs/op = 50ms for 10k.
-    // 200ms slack absorbs CI/release-pipeline JIT cooldown.
-    expect(elapsed).toBeLessThan(200);
-    // Provider should have been called ONLY once (the initial trip).
-    expect(inner.calls).toBe(1);
-  });
+      const reject = async (times: number): Promise<void> => {
+        for (let i = 0; i < times; i++) {
+          try {
+            await wrapped.complete(fakeRequest);
+          } catch {
+            /* expected — circuit open */
+          }
+        }
+      };
+
+      await expectScalesLinearly({
+        small: () => reject(1_000),
+        large: () => reject(10_000),
+        scale: 10,
+        why: 'rejecting in OPEN must be constant-time per call',
+      });
+
+      // Provider should have been called ONLY once (the initial trip) across
+      // all 11k rejections — the load-proof half of the P6 claim.
+      expect(inner.calls).toBe(1);
+    },
+  );
 });
 
 // ─── P7 ROI — composes with withFallback ─────────────────────────────

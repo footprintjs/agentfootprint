@@ -34,6 +34,7 @@ import {
   type ReliabilityRule,
   type ReliabilityScope,
 } from '../../src/reliability/index.js';
+import { expectWithinTimes, measureAsync } from '../helpers/perf.js';
 
 // ─── Fixtures ─────────────────────────────────────────────────────
 
@@ -307,21 +308,34 @@ describe('strict-output — security: ephemeral messages never leak to scope.his
 // ─── 6. PERFORMANCE — happy-path overhead bound ──────────────────
 
 describe('strict-output — performance: 50 successful runs without validation fail under 5s', () => {
-  it('happy-path retry-config adds negligible overhead when validation always passes', async () => {
-    const t0 = performance.now();
-    for (let i = 0; i < 50; i++) {
-      const llm = scriptedLLM([{ content: '{"ok":true}' }]);
-      const parser = { parse: () => ({ ok: true }) };
-      const agent = Agent.create({ provider: llm, model: 'mock' })
-        .system('s')
-        .outputSchema(parser)
-        .reliability({ postDecide: baseRules(3) })
-        .build();
-      await agent.run({ message: 'go' });
-    }
-    const elapsed = performance.now() - t0;
-    expect(elapsed).toBeLessThan(5000);
-  });
+  it(
+    'happy-path retry-config adds negligible overhead when validation always passes',
+    { timeout: 30_000, retry: 2 },
+    async () => {
+      // "Negligible" measured against the thing it is negligible next to: the
+      // same fifty runs with no reliability rules configured, timed on this
+      // machine moments earlier. When nothing ever fails validation, the retry
+      // config should cost almost nothing — 3× is generous headroom, and a
+      // loaded runner slows both halves equally.
+      const runs = async (withRules: boolean): Promise<void> => {
+        for (let i = 0; i < 8; i++) {
+          const llm = scriptedLLM([{ content: '{"ok":true}' }]);
+          const parser = { parse: () => ({ ok: true }) };
+          const builder = Agent.create({ provider: llm, model: 'mock' })
+            .system('s')
+            .outputSchema(parser);
+          if (withRules) builder.reliability({ postDecide: baseRules(3) });
+          await builder.build().run({ message: 'go' });
+        }
+      };
+      await expectWithinTimes({
+        baseline: () => runs(false),
+        subject: () => runs(true),
+        times: 3,
+        why: 'retry rules must be free when validation always passes',
+      });
+    },
+  );
 });
 
 // ─── 7. ROI — RefundBot Instructor-shape end-to-end ──────────────

@@ -117,12 +117,46 @@ const CONVERSATION_LIMITS = { maxFrameBytes: 32_768, idleMs: 900_000 } as const;
  * The subprotocol a browser offers to carry its bearer credential, because the
  * WebSocket API gives it no way to send an `Authorization` header.
  *
- * Two spellings are recognised and both are ordinary browser-expressible ones:
- * `['bearer', '<token>']` (two offers) and `['bearer.<token>']` (one). What is
- * echoed back in the 101 is the word `bearer` and never the token — a
- * credential belongs in a request, not in a response header a proxy may log.
+ * **The vendor spells it, so the vendor's spelling is the contract.** From
+ * *Get started with bidirectional streaming using WebSocket* → "Browser
+ * JavaScript client with OAuth": "The token must be base64url-encoded and
+ * prefixed with `base64UrlBearerAuthorization.`, followed by the sentinel
+ * subprotocol `base64UrlBearerAuthorization`." Its example offers the pair, in
+ * this order:
+ *
+ *     new WebSocket(url, [`base64UrlBearerAuthorization.${base64url}`,
+ *                          'base64UrlBearerAuthorization'])
+ *
+ * and the same page notes: "Subprotocols other than
+ * `base64UrlBearerAuthorization` are not yet supported."
+ *
+ * Three things follow, and all three are the difference between a mapping and
+ * a mapping that works:
+ *
+ *   • **Only this word.** Until 7.27.1 this adapter looked for `bearer` and
+ *     `bearer.<token>` — spellings nobody documented and no browser can send
+ *     through this front door, which forwards no other subprotocol. A real
+ *     documented handshake matched neither and yielded `{}`: the credential
+ *     silently dropped. Invented spellings are gone rather than kept beside
+ *     the real one, because a door nobody can walk through should not be
+ *     advertised. A generic bearer-subprotocol mapping, if one is ever wanted
+ *     off this runtime, belongs to the generic wire and its own evidence.
+ *
+ *   • **The value is encoded.** It is base64url (unpadded), so it is decoded
+ *     before it becomes `Bearer <jwt>`. A value that is not valid base64url
+ *     refuses the upgrade by name: a token that does not decode is not a
+ *     credential, and "authenticated with garbage" is the failure this library
+ *     exists to refuse.
+ *
+ *   • **The echo is the sentinel.** RFC 6455 lets a server select only a
+ *     subprotocol the client OFFERED, so what comes back in the 101 is the
+ *     sentinel, in the client's exact spelling — never lower-cased, and never
+ *     the dotted value, because a credential in a response header is a
+ *     credential in every proxy log on the way home. Offer the dotted token
+ *     without the sentinel and the upgrade is refused: there is then nothing
+ *     safe to echo, and the browser's handshake fails either way.
  */
-const BEARER_SUBPROTOCOL = 'bearer';
+const BEARER_SUBPROTOCOL = 'base64UrlBearerAuthorization';
 
 /** Options for {@link agentCoreRuntimeHost}. */
 export interface AgentCoreRuntimeHostOptions {
@@ -278,11 +312,20 @@ export function agentCoreRuntimeWire(busy?: () => boolean): HttpWire {
  * A bearer token offered as a subprotocol is this runtime's spelling of
  * `Authorization`, and a port field spelled the way one vendor spells it is how
  * a port stops being one. So it lands in `headers.authorization` as
- * `Bearer <token>` — the vocabulary every other transport already uses — and
- * the raw `sec-websocket-protocol` header is left in place, so an application
- * that reads the offer itself still can. **Nothing here authenticates
- * anything**: the port never proves who is calling, and a token that arrived is
- * a claim, exactly like the session id beside it.
+ * `Bearer <token>` — the vocabulary every other transport already uses, with
+ * the vendor's base64url wrapper already undone — and the raw
+ * `sec-websocket-protocol` header is left in place, so an application that
+ * reads the offer itself still can. **Nothing here authenticates anything**:
+ * the port never proves who is calling, and a token that arrived is a claim,
+ * exactly like the session id beside it.
+ *
+ * ── When it refuses ──────────────────────────────────────────────────────────
+ * Two shapes throw rather than degrade, and both throws end this one upgrade
+ * with a message naming the reason: a dotted value that is not valid base64url
+ * (see {@link BEARER_SUBPROTOCOL}), and a dotted value offered without the
+ * sentinel beside it. The alternative — mapping a credential nobody can read,
+ * or echoing the token back to the client — is the failure shape this adapter
+ * is built to refuse.
  *
  * Exported by name so the mapping is inspectable and testable without binding a
  * socket, the same way the body shapes are.
@@ -290,15 +333,17 @@ export function agentCoreRuntimeWire(busy?: () => boolean): HttpWire {
 export function readAgentCoreConversation(facts: HandshakeFacts): ConversationHandshake {
   const sessionId =
     headerValue(facts, SESSION_HEADER) ?? queryValue(facts, SESSION_HEADER, 'sessionId');
-  const token = bearerFromSubprotocols(facts.headers['sec-websocket-protocol']);
+  const offered = bearerFromSubprotocols(facts.headers['sec-websocket-protocol']);
   return {
     ...(sessionId !== undefined && { sessionId }),
-    ...(token !== undefined && {
-      headers: { authorization: `Bearer ${token}` },
-      // Echoed so a client that offered a subprotocol gets one back — the word
-      // only. Putting the token in a response header would hand the credential
-      // to every proxy on the way home.
-      protocol: BEARER_SUBPROTOCOL,
+    ...(offered !== undefined && {
+      headers: { authorization: `Bearer ${offered.token}` },
+      // Echoed so the client's handshake completes: the SENTINEL, in the exact
+      // spelling the client offered it in — RFC 6455 lets a server select only
+      // something the client offered. Never the dotted value: putting the
+      // token in a response header would hand the credential to every proxy on
+      // the way home.
+      protocol: offered.echo,
     }),
   };
 }
@@ -312,18 +357,83 @@ function queryValue(facts: HandshakeFacts, ...names: string[]): string | undefin
   return undefined;
 }
 
-/** The token out of a `Sec-WebSocket-Protocol` offer, in either browser spelling. */
-function bearerFromSubprotocols(offered: string | undefined): string | undefined {
+/**
+ * The decoded token, and the sentinel to echo, out of a `Sec-WebSocket-Protocol`
+ * offer written in the vendor's documented scheme. See {@link BEARER_SUBPROTOCOL}
+ * for the scheme and the quotes it comes from.
+ *
+ * `undefined` means no credential was offered — an absence, not a failure.
+ * A credential that was offered and cannot be honoured throws instead.
+ */
+function bearerFromSubprotocols(
+  offered: string | undefined,
+): { token: string; echo: string } | undefined {
   if (!offered) return undefined;
   const parts = offered
     .split(',')
     .map((part) => part.trim())
     .filter((part) => part.length > 0);
-  const marker = parts.findIndex((part) => part.toLowerCase() === BEARER_SUBPROTOCOL);
-  if (marker >= 0 && parts[marker + 1] !== undefined) return parts[marker + 1];
-  const prefix = `${BEARER_SUBPROTOCOL}.`;
+
+  const marker = BEARER_SUBPROTOCOL.toLowerCase();
+  const prefix = `${marker}.`;
   const dotted = parts.find((part) => part.toLowerCase().startsWith(prefix));
-  return dotted?.slice(prefix.length) || undefined;
+  if (dotted === undefined) return undefined;
+
+  // The sentinel is what may be echoed, so without it there is nothing this
+  // door can answer with: echoing the dotted value would put the credential in
+  // a response header, and echoing nothing fails the browser's handshake.
+  // The vendor documents the pair — "prefixed with `base64UrlBearerAuthorization.`,
+  // followed by the sentinel subprotocol `base64UrlBearerAuthorization`" — so a
+  // lone dotted offer is a client that has not met the contract, and saying so
+  // beats a connection that silently carries no credential.
+  const sentinel = parts.find((part) => part.toLowerCase() === marker);
+  if (sentinel === undefined) {
+    throw new Error(
+      `a '${BEARER_SUBPROTOCOL}.<token>' subprotocol was offered without the ` +
+        `'${BEARER_SUBPROTOCOL}' sentinel beside it. AgentCore documents the pair, and the ` +
+        'sentinel is the only value this door can echo — the token must never travel back ' +
+        `in a response header. Offer both: ['${BEARER_SUBPROTOCOL}.<base64url-token>', ` +
+        `'${BEARER_SUBPROTOCOL}']`,
+    );
+  }
+
+  const encoded = dotted.slice(prefix.length);
+  return { token: decodeBase64UrlToken(encoded), echo: sentinel };
+}
+
+/**
+ * The bearer token out of its base64url wrapper — or a refusal.
+ *
+ * Node decodes `'base64url'` leniently: invalid characters are skipped and a
+ * truncated group yields whatever bytes it can, so decoding alone cannot tell a
+ * token from a typo. The alphabet check and the re-encode round trip can, and
+ * the failure they catch matters: a value that is not a token, mapped to
+ * `authorization` anyway, is a request that looks authenticated and is not.
+ */
+function decodeBase64UrlToken(encoded: string): string {
+  const refuse = (why: string): never => {
+    throw new Error(
+      `the '${BEARER_SUBPROTOCOL}.<token>' subprotocol carried a value that is not a ` +
+        `base64url-encoded bearer token: ${why}. AgentCore's browser scheme base64url-encodes ` +
+        'the token (unpadded), and a value that does not decode is not a credential.',
+    );
+  };
+
+  if (encoded.length === 0) refuse('it is empty');
+  if (!/^[A-Za-z0-9_-]+$/.test(encoded)) refuse('it is not in the base64url alphabet');
+
+  const bytes = Buffer.from(encoded, 'base64url');
+  if (bytes.toString('base64url') !== encoded) refuse('it is not a whole base64url value');
+
+  const token = bytes.toString('utf8');
+  if (token.length === 0) refuse('it decodes to nothing');
+  // A bearer token is printable ASCII (RFC 6750 `b64token`). Anything else
+  // decoded — a control character, a newline — is not a credential, and would
+  // be going into a header value.
+  // eslint-disable-next-line no-control-regex
+  if (/[\x00-\x20\x7f]/.test(token)) refuse('it decodes to bytes that are not a bearer token');
+
+  return token;
 }
 
 /**

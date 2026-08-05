@@ -18,6 +18,7 @@ import {
   type OtelTracerLike,
 } from '../../src/adapters/observability/otel.js';
 import type { AgentfootprintEvent } from '../../src/events/registry.js';
+import { expectScalesLinearly } from '../helpers/perf.js';
 
 // ── Mock OTel tracer + span (minimal subset we depend on) ────────────
 
@@ -227,32 +228,45 @@ describe('otelObservability — P5 security', () => {
 // ─── P6 Performance ──────────────────────────────────────────────────
 
 describe('otelObservability — P6 performance', () => {
-  it('P6 10k mixed events processed under 200ms', () => {
-    const { tracer } = makeMockTracer();
-    const strat = otelObservability({ serviceName: 'svc', tracer });
-    const t0 = performance.now();
-    for (let turn = 0; turn < 1000; turn++) {
-      const runId = `r-${turn}`;
-      const evt = (type: string, extra: Record<string, unknown> = {}): AgentfootprintEvent =>
-        ({
-          type: type as never,
-          payload: { runId, ...extra },
-          timestamp: Date.now(),
-        } as unknown as AgentfootprintEvent);
-      strat.exportEvent(evt('agentfootprint.agent.turn_start'));
-      strat.exportEvent(evt('agentfootprint.agent.iteration_start', { iteration: 1 }));
-      strat.exportEvent(evt('agentfootprint.stream.llm_start', { model: 'm' }));
-      strat.exportEvent(evt('agentfootprint.stream.llm_end'));
-      strat.exportEvent(evt('agentfootprint.stream.tool_start', { toolName: 't' }));
-      strat.exportEvent(evt('agentfootprint.stream.tool_end', { toolName: 't' }));
-      strat.exportEvent(evt('agentfootprint.agent.iteration_end'));
-      strat.exportEvent(evt('agentfootprint.agent.turn_end'));
-      strat.exportEvent(evt('agentfootprint.cost.tick', { cumulativeCostUsd: 0.001 }));
-      strat.exportEvent(evt('agentfootprint.context.injected'));
-    }
-    const elapsed = performance.now() - t0;
-    expect(elapsed).toBeLessThan(200);
-  });
+  it(
+    'P6 10k mixed events cost ten times what 1k cost — no per-event rescan',
+    { timeout: 30_000, retry: 2 },
+    async () => {
+      // Ten events per simulated turn against a fresh tracer each run. The
+      // claim is that resolving a span by run id and closing it is O(1) in the
+      // number of spans already opened — a scan of open spans per event would
+      // be quadratic and miss this ceiling by a mile.
+      const exportTurns = (turns: number): void => {
+        const { tracer } = makeMockTracer();
+        const strat = otelObservability({ serviceName: 'svc', tracer });
+        for (let turn = 0; turn < turns; turn++) {
+          const runId = `r-${turn}`;
+          const evt = (type: string, extra: Record<string, unknown> = {}): AgentfootprintEvent =>
+            ({
+              type: type as never,
+              payload: { runId, ...extra },
+              timestamp: Date.now(),
+            } as unknown as AgentfootprintEvent);
+          strat.exportEvent(evt('agentfootprint.agent.turn_start'));
+          strat.exportEvent(evt('agentfootprint.agent.iteration_start', { iteration: 1 }));
+          strat.exportEvent(evt('agentfootprint.stream.llm_start', { model: 'm' }));
+          strat.exportEvent(evt('agentfootprint.stream.llm_end'));
+          strat.exportEvent(evt('agentfootprint.stream.tool_start', { toolName: 't' }));
+          strat.exportEvent(evt('agentfootprint.stream.tool_end', { toolName: 't' }));
+          strat.exportEvent(evt('agentfootprint.agent.iteration_end'));
+          strat.exportEvent(evt('agentfootprint.agent.turn_end'));
+          strat.exportEvent(evt('agentfootprint.cost.tick', { cumulativeCostUsd: 0.001 }));
+          strat.exportEvent(evt('agentfootprint.context.injected'));
+        }
+      };
+      await expectScalesLinearly({
+        small: () => exportTurns(100),
+        large: () => exportTurns(1000),
+        scale: 10,
+        why: 'otel span bookkeeping must not scan open spans per event',
+      });
+    },
+  );
 });
 
 // ─── P7 ROI — semconv compliance + cost annotation + stop() ──────────

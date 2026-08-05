@@ -17,6 +17,7 @@ import { PermissionPolicy } from '../../../src/security/index.js';
 import { staticTokens } from '../../../src/identity.js';
 import type { McpCallToolRequest, McpSdkServer } from '../../../src/lib/mcp/types.js';
 import type { Tool } from '../../../src/core/tools.js';
+import { expectScalesLinearly } from '../../helpers/perf.js';
 
 // ─── Mock SDK server ──────────────────────────────────────────────
 
@@ -781,15 +782,27 @@ describe('mcpServe — security', () => {
 // ─── Performance ──────────────────────────────────────────────────
 
 describe('mcpServe — performance', () => {
-  it('serving adds no per-call listing work: 500 calls stay well under a second', async () => {
-    const server = makeMockServer();
-    await mcpServe([echo], { _server: server });
+  it(
+    'serving adds no per-call listing work: call cost stays flat',
+    { timeout: 30_000, retry: 2 },
+    async () => {
+      // If each call rebuilt the tool listing, cost would drift upward with the
+      // number of calls. Ten times the calls, ten times the total — and the
+      // test right below counts the listing builds directly.
+      const server = makeMockServer();
+      await mcpServe([echo], { _server: server });
 
-    const start = Date.now();
-    for (let i = 0; i < 500; i++) await server.call('echo', { text: String(i) });
-
-    expect(Date.now() - start).toBeLessThan(1000);
-  });
+      const call = async (times: number): Promise<void> => {
+        for (let i = 0; i < times; i++) await server.call('echo', { text: String(i) });
+      };
+      await expectScalesLinearly({
+        small: () => call(500),
+        large: () => call(5_000),
+        scale: 10,
+        why: 'a tool call must not rebuild the listing',
+      });
+    },
+  );
 
   it('the tools/list payload is built once, not per request', async () => {
     const server = makeMockServer();

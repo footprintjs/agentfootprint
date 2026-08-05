@@ -31,6 +31,7 @@ import {
   type LLMRequest,
 } from '../../src/index.js';
 import { AnthropicProvider } from '../../src/adapters/llm/AnthropicProvider.js';
+import { expectWithinTimes, measureAsync } from '../helpers/perf.js';
 
 // ─── Fake Anthropic SDK ───────────────────────────────────────────
 
@@ -358,37 +359,44 @@ describe('Phase 6.5 — security: thinking config does not pollute other request
 // ─── 6. PERFORMANCE — no overhead when omitted ───────────────────
 
 describe('Phase 6.5 — performance: setting .thinking() has minimal overhead', () => {
-  it('agent with vs without .thinking() — comparable build+run perf', async () => {
-    const provider: LLMProvider = {
-      name: 'mock',
-      complete: async () => ({
-        content: 'ok',
-        toolCalls: [],
-        usage: { input: 1, output: 1 },
-        stopReason: 'end_turn',
-      }),
-    };
+  it(
+    'agent with vs without .thinking() — comparable build+run perf',
+    { timeout: 30_000, retry: 2 },
+    async () => {
+      const provider: LLMProvider = {
+        name: 'mock',
+        complete: async () => ({
+          content: 'ok',
+          toolCalls: [],
+          usage: { input: 1, output: 1 },
+          stopReason: 'end_turn',
+        }),
+      };
 
-    const t1 = performance.now();
-    for (let i = 0; i < 20; i++) {
-      const a = Agent.create({ provider, model: 'mock' }).system('s').build();
-      await a.run({ message: 'x' });
-    }
-    const dur1 = performance.now() - t1;
-
-    const t2 = performance.now();
-    for (let i = 0; i < 20; i++) {
-      const a = Agent.create({ provider, model: 'mock' })
-        .system('s')
-        .thinking({ budget: 1000 })
-        .build();
-      await a.run({ message: 'x' });
-    }
-    const dur2 = performance.now() - t2;
-
-    // Generous slack — assert .thinking() doesn't 2x the run cost.
-    expect(dur2).toBeLessThan(dur1 * 2 + 200);
-  });
+      // Comparative against the same twenty runs without .thinking(), sampled
+      // alternately here. The old `+ 200ms` cushion is replaced by a load-scaled
+      // floor inside the helper, so the claim reads the same on any machine.
+      await expectWithinTimes({
+        baseline: async () => {
+          for (let i = 0; i < 5; i++) {
+            const a = Agent.create({ provider, model: 'mock' }).system('s').build();
+            await a.run({ message: 'x' });
+          }
+        },
+        subject: async () => {
+          for (let i = 0; i < 5; i++) {
+            const a = Agent.create({ provider, model: 'mock' })
+              .system('s')
+              .thinking({ budget: 1000 })
+              .build();
+            await a.run({ message: 'x' });
+          }
+        },
+        times: 2,
+        why: '.thinking() must not double the run cost',
+      });
+    },
+  );
 });
 
 // ─── 7. ROI — realistic agent with thinking ──────────────────────

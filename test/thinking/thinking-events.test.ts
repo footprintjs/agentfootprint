@@ -28,6 +28,7 @@ import {
   type AgentfootprintEvent,
   type AgentfootprintEventMap,
 } from '../../src/events/registry.js';
+import { expectWithinReferenceUnits } from '../helpers/perf.js';
 
 // ─── 1. UNIT — payload shapes compile + match ────────────────────
 
@@ -196,44 +197,67 @@ describe('thinking-events — security: error field shape', () => {
 
 // ─── 6. PERFORMANCE — 1000 dispatches under bound ────────────────
 
-describe('thinking-events — performance: payload allocation x1000 under 100ms', () => {
-  it('thinking_delta payload allocation x1000 under 100ms', () => {
-    const t0 = performance.now();
-    const sink: StreamThinkingDeltaPayload[] = [];
-    for (let i = 0; i < 1000; i++) {
-      sink.push({
-        iteration: 1,
-        tokenIndex: i,
-        content: 'token',
-      });
-    }
-    const elapsed = performance.now() - t0;
-    expect(sink.length).toBe(1000);
-    // Plain object allocation; should be well under bound.
-    expect(elapsed).toBeLessThan(100);
-  });
+describe('thinking-events — performance: payloads stay plain allocations', () => {
+  it(
+    'thinking_delta payloads are plain objects — a thousand of them cost a rounding error',
+    { timeout: 30_000, retry: 2 },
+    async () => {
+      // These payload types carry no constructor, no getters, no validation —
+      // they are object literals. 100 reference units of CPU for a thousand of
+      // them says exactly that: if a payload ever grew a runtime cost (a
+      // schema parse, a deep clone) this would notice, and a busy runner would
+      // raise the ceiling rather than cry wolf.
+      let sink: StreamThinkingDeltaPayload[] = [];
+      const buildAThousand = (): void => {
+        sink = [];
+        for (let i = 0; i < 1000; i++) {
+          sink.push({
+            iteration: 1,
+            tokenIndex: i,
+            content: 'token',
+          });
+        }
+      };
+      await expectWithinReferenceUnits(
+        buildAThousand,
+        100,
+        'a thinking_delta payload must stay an object literal',
+      );
+      expect(sink.length).toBe(1000);
+    },
+  );
 
-  it('thinking_end + parse_failed mixed x1000 under 100ms', () => {
-    const t0 = performance.now();
-    const ends: StreamThinkingEndPayload[] = [];
-    const fails: AgentThinkingParseFailedPayload[] = [];
-    for (let i = 0; i < 1000; i++) {
-      if (i % 2 === 0) {
-        ends.push({ iteration: i, blockCount: 1, totalChars: 100 });
-      } else {
-        fails.push({
-          providerName: 'mock',
-          subflowId: 'mock',
-          error: 'x',
-          errorName: 'Error',
-          iteration: i,
-        });
-      }
-    }
-    const elapsed = performance.now() - t0;
-    expect(ends.length + fails.length).toBe(1000);
-    expect(elapsed).toBeLessThan(100);
-  });
+  it(
+    'thinking_end + parse_failed payloads are plain objects too',
+    { timeout: 30_000, retry: 2 },
+    async () => {
+      let ends: StreamThinkingEndPayload[] = [];
+      let fails: AgentThinkingParseFailedPayload[] = [];
+      const buildAThousand = (): void => {
+        ends = [];
+        fails = [];
+        for (let i = 0; i < 1000; i++) {
+          if (i % 2 === 0) {
+            ends.push({ iteration: i, blockCount: 1, totalChars: 100 });
+          } else {
+            fails.push({
+              providerName: 'mock',
+              subflowId: 'mock',
+              error: 'x',
+              errorName: 'Error',
+              iteration: i,
+            });
+          }
+        }
+      };
+      await expectWithinReferenceUnits(
+        buildAThousand,
+        100,
+        'end/failed payloads must stay object literals',
+      );
+      expect(ends.length + fails.length).toBe(1000);
+    },
+  );
 });
 
 // ─── 7. ROI — realistic event sequence (delta...end OR delta...failed) ─

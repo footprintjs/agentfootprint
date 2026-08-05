@@ -37,6 +37,7 @@ import {
 } from '../../src/thinking/index.js';
 import { redactThinkingBlocks, REDACTED_PLACEHOLDER } from '../../src/security/index.js';
 import { buildThinkingSubflow } from '../../src/core/slots/buildThinkingSubflow.js';
+import { expectWithinTimes, measureAsync } from '../helpers/perf.js';
 
 // ─── Fixtures ─────────────────────────────────────────────────────
 
@@ -361,28 +362,37 @@ describe('framework-wiring — security: opt-out skips handler entirely', () => 
 // ─── 6. PERFORMANCE — non-thinking agents have same perf ─────────
 
 describe('framework-wiring — performance: no overhead when no handler resolves', () => {
-  it('explicit opt-out (thinkingHandler(null)) — no overhead per turn', async () => {
-    // Tight loop comparing baseline (no handler) to explicit opt-out.
-    // Both should be roughly equivalent. Sanity check that
-    // thinkingHandler(null) doesn't add hidden cost.
-    const provider1 = mockProvider({ name: 'unknown-provider' }); // no auto-match
-    const agent1 = Agent.create({ provider: provider1, model: 'mock' }).system('s').build();
-    const t1 = performance.now();
-    for (let i = 0; i < 10; i++) await agent1.run({ message: 'x' });
-    const dur1 = performance.now() - t1;
+  it(
+    'explicit opt-out (thinkingHandler(null)) — no overhead per turn',
+    { timeout: 30_000, retry: 2 },
+    async () => {
+      // Tight loop comparing baseline (no handler) to explicit opt-out.
+      // Both should be roughly equivalent. Sanity check that
+      // thinkingHandler(null) doesn't add hidden cost.
+      const provider1 = mockProvider({ name: 'unknown-provider' }); // no auto-match
+      const agent1 = Agent.create({ provider: provider1, model: 'mock' }).system('s').build();
 
-    const provider2 = mockProvider({ name: 'mock' });
-    const agent2 = Agent.create({ provider: provider2, model: 'mock' })
-      .system('s')
-      .thinkingHandler(null)
-      .build();
-    const t2 = performance.now();
-    for (let i = 0; i < 10; i++) await agent2.run({ message: 'x' });
-    const dur2 = performance.now() - t2;
-
-    // Allow generous slack for CI variance — assert opt-out isn't 2x slower
-    expect(dur2).toBeLessThan(dur1 * 2 + 200);
-  });
+      const provider2 = mockProvider({ name: 'mock' });
+      const agent2 = Agent.create({ provider: provider2, model: 'mock' })
+        .system('s')
+        .thinkingHandler(null)
+        .build();
+      // Purely comparative: opt-out must not be 2× the no-handler baseline,
+      // sampled alternately on this machine. The old `+ 200ms` cushion is
+      // gone — the helper floors the denominator with a load-scaled reference
+      // unit instead, so the guard means the same thing on any runner.
+      await expectWithinTimes({
+        baseline: async () => {
+          for (let i = 0; i < 4; i++) await agent1.run({ message: 'x' });
+        },
+        subject: async () => {
+          for (let i = 0; i < 4; i++) await agent2.run({ message: 'x' });
+        },
+        times: 2,
+        why: 'thinkingHandler(null) must add no hidden cost',
+      });
+    },
+  );
 });
 
 // ─── 7. ROI — end-to-end with custom handler override ────────────

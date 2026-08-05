@@ -1,10 +1,12 @@
 /**
  * Performance tests — primitive run latency.
  *
- * Budget: a single no-op run should complete in under ~50ms (CI-safe ceiling
- * is 250ms; we assert 500ms to tolerate shared CI noise). Catches massive
- * regressions like accidental O(n²) scope walks, unbounded recorder fan-out,
- * or synchronous blocking in the hot path.
+ * The budget is expressed in REFERENCE UNITS, not milliseconds: a unit of
+ * fixed CPU work timed in this same process moments before the assertion (see
+ * test/helpers/perf.ts). A busy runner makes the unit bigger and the ceiling
+ * bigger with it, so what is left is the thing we actually care about —
+ * accidental O(n²) scope walks, unbounded recorder fan-out, synchronous
+ * blocking in the hot path. Those cost orders of magnitude, not jitter.
  */
 
 import { describe, it, expect } from 'vitest';
@@ -12,6 +14,7 @@ import { Agent } from '../../../src/core/Agent.js';
 import { LLMCall } from '../../../src/core/LLMCall.js';
 import { MockProvider } from '../../../src/adapters/llm/MockProvider.js';
 import type { LLMProvider, LLMResponse } from '../../../src/adapters/types.js';
+import { expectWithinReferenceUnits, expectWithinTimes, measureAsync } from '../../helpers/perf.js';
 
 function scripted(...responses: readonly LLMResponse[]): LLMProvider {
   let i = 0;
@@ -33,92 +36,122 @@ function resp(
   };
 }
 
-// Shared CI-safe ceiling. Regressions hit ≫500ms — noise stays <100ms.
-const BUDGET_MS = 500;
+// Shared ceiling, in reference units (≈1ms each on a quiet machine, more on
+// a busy one). A regression of the kind this guards against costs hundreds of
+// units; ordinary noise costs a handful.
+const BUDGET_UNITS = 500;
 
 describe('performance — single LLMCall run', () => {
-  it('completes in under 500ms for a no-op mock provider', async () => {
-    const llm = LLMCall.create({ provider: new MockProvider({ reply: 'ok' }), model: 'mock' })
-      .system('')
-      .build();
+  it(
+    'costs no more than the shared budget for a no-op mock provider',
+    { timeout: 30_000, retry: 2 },
+    async () => {
+      const llm = LLMCall.create({ provider: new MockProvider({ reply: 'ok' }), model: 'mock' })
+        .system('')
+        .build();
 
-    const t0 = performance.now();
-    await llm.run({ message: 'hi' });
-    const ms = performance.now() - t0;
-
-    expect(ms).toBeLessThan(BUDGET_MS);
-  });
+      await expectWithinReferenceUnits(
+        async () => {
+          await llm.run({ message: 'hi' });
+        },
+        BUDGET_UNITS,
+        'a no-op LLMCall run must stay cheap',
+      );
+    },
+  );
 });
 
 describe('performance — single Agent run (no tools)', () => {
-  it('completes in under 500ms with one LLM turn', async () => {
-    const agent = Agent.create({
-      provider: new MockProvider({ reply: 'done' }),
-      model: 'mock',
-    })
-      .system('')
-      .build();
+  it(
+    'costs no more than the shared budget with one LLM turn',
+    { timeout: 30_000, retry: 2 },
+    async () => {
+      const agent = Agent.create({
+        provider: new MockProvider({ reply: 'done' }),
+        model: 'mock',
+      })
+        .system('')
+        .build();
 
-    const t0 = performance.now();
-    await agent.run({ message: 'hi' });
-    const ms = performance.now() - t0;
-
-    expect(ms).toBeLessThan(BUDGET_MS);
-  });
+      await expectWithinReferenceUnits(
+        async () => {
+          await agent.run({ message: 'hi' });
+        },
+        BUDGET_UNITS,
+        'a one-turn Agent run must stay cheap',
+      );
+    },
+  );
 });
 
 describe('performance — Agent with ReAct iterations', () => {
-  it('5-iteration run completes in under 1000ms (5x per-iter budget)', async () => {
-    const responses: LLMResponse[] = [];
-    for (let i = 0; i < 4; i++) {
-      responses.push(resp('', [{ id: `t${i}`, name: 'noop', args: {} }]));
-    }
-    responses.push(resp('final'));
+  it(
+    '5-iteration run costs no more than twice the single-run budget',
+    { timeout: 30_000, retry: 2 },
+    async () => {
+      const responses: LLMResponse[] = [];
+      for (let i = 0; i < 4; i++) {
+        responses.push(resp('', [{ id: `t${i}`, name: 'noop', args: {} }]));
+      }
+      responses.push(resp('final'));
 
-    const agent = Agent.create({
-      provider: scripted(...responses),
-      model: 'mock',
-      maxIterations: 10,
-    })
-      .system('')
-      .tool({
-        schema: { name: 'noop', description: '', inputSchema: { type: 'object' } },
-        execute: () => 'ok',
+      const agent = Agent.create({
+        provider: scripted(...responses),
+        model: 'mock',
+        maxIterations: 10,
       })
-      .build();
+        .system('')
+        .tool({
+          schema: { name: 'noop', description: '', inputSchema: { type: 'object' } },
+          execute: () => 'ok',
+        })
+        .build();
 
-    const t0 = performance.now();
-    await agent.run({ message: 'go' });
-    const ms = performance.now() - t0;
+      const ms = await measureAsync(async () => {
+        await agent.run({ message: 'go' });
+      });
 
-    expect(ms).toBeLessThan(BUDGET_MS * 2);
-  });
+      await expectWithinReferenceUnits(
+        ms,
+        BUDGET_UNITS * 2,
+        'five ReAct iterations must not cost more than twice a single run',
+      );
+    },
+  );
 });
 
 describe('performance — event dispatch overhead is bounded', () => {
-  it('attaching 10 listeners does not slow a single run by >2x baseline', async () => {
-    // Baseline: no listeners.
-    const baseLlm = LLMCall.create({ provider: new MockProvider({ reply: 'ok' }), model: 'mock' })
-      .system('')
-      .build();
-    const t0 = performance.now();
-    for (let i = 0; i < 20; i++) await baseLlm.run({ message: 'x' });
-    const baseMs = performance.now() - t0;
+  it(
+    'attaching 10 listeners does not slow a single run by >2x baseline',
+    { timeout: 30_000, retry: 2 },
+    async () => {
+      // Baseline: no listeners.
+      const baseLlm = LLMCall.create({ provider: new MockProvider({ reply: 'ok' }), model: 'mock' })
+        .system('')
+        .build();
 
-    // With 10 listeners.
-    const inst = LLMCall.create({ provider: new MockProvider({ reply: 'ok' }), model: 'mock' })
-      .system('')
-      .build();
-    for (let i = 0; i < 10; i++) {
-      inst.on('agentfootprint.stream.llm_start', () => {});
-      inst.on('agentfootprint.stream.llm_end', () => {});
-    }
-    const t1 = performance.now();
-    for (let i = 0; i < 20; i++) await inst.run({ message: 'x' });
-    const withMs = performance.now() - t1;
-
-    // Dispatch shouldn't blow up with linear fanout. Keep ceiling generous
-    // for CI jitter but catch O(n²) regressions.
-    expect(withMs).toBeLessThan(Math.max(baseMs * 4, 200));
-  });
+      // With 10 listeners.
+      const inst = LLMCall.create({ provider: new MockProvider({ reply: 'ok' }), model: 'mock' })
+        .system('')
+        .build();
+      for (let i = 0; i < 10; i++) {
+        inst.on('agentfootprint.stream.llm_start', () => {});
+        inst.on('agentfootprint.stream.llm_end', () => {});
+      }
+      // Comparative on purpose: the SAME twenty runs with and without
+      // listeners, sampled alternately on this machine, so load cancels. 4× is
+      // the headroom for dispatch bookkeeping; an O(n²) fan-out over listeners
+      // would land far beyond it.
+      await expectWithinTimes({
+        baseline: async () => {
+          for (let i = 0; i < 8; i++) await baseLlm.run({ message: 'x' });
+        },
+        subject: async () => {
+          for (let i = 0; i < 8; i++) await inst.run({ message: 'x' });
+        },
+        times: 4,
+        why: '10 listeners must not multiply run cost',
+      });
+    },
+  );
 });

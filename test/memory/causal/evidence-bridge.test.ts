@@ -18,6 +18,7 @@ import { mock } from '../../../src/llm-providers.js';
 import { causalEvidenceRecorder } from '../../../src/memory/causal/evidenceRecorder.js';
 import type { SnapshotEntry } from '../../../src/memory/causal/types.js';
 import type { MemoryEntry } from '../../../src/memory/entry/types.js';
+import { expectScalesLinearly } from '../../helpers/perf.js';
 
 const IDENTITY = { tenant: 'acme', conversationId: 'conv-1' };
 
@@ -304,22 +305,34 @@ describe('evidence bridge — security', () => {
 
 // ─── Performance + Load ──────────────────────────────────────────────
 describe('evidence bridge — performance/load', () => {
-  it('handles 5,000 events well under budget and collect() stays O(run-size)', () => {
-    const rec = causalEvidenceRecorder();
-    rec.onEmit({ name: 'agentfootprint.agent.turn_start', payload: {} });
-    const start = Date.now();
-    for (let i = 0; i < 2500; i++) {
-      rec.onEmit({
-        name: 'agentfootprint.stream.tool_start',
-        payload: { toolCallId: `t${i}`, toolName: 'x', args: {} },
+  it(
+    'handles 50,000 events at ten times the cost of 5,000 — collect() stays O(run-size)',
+    { timeout: 30_000, retry: 2 },
+    async () => {
+      // Pairing a tool_end with its tool_start must be a keyed lookup, not a
+      // scan of everything recorded so far. At ten times the events a scan
+      // costs a hundred times the work, which this ratio refuses.
+      const record = (pairs: number): void => {
+        const rec = causalEvidenceRecorder();
+        rec.onEmit({ name: 'agentfootprint.agent.turn_start', payload: {} });
+        for (let i = 0; i < pairs; i++) {
+          rec.onEmit({
+            name: 'agentfootprint.stream.tool_start',
+            payload: { toolCallId: `t${i}`, toolName: 'x', args: {} },
+          });
+          rec.onEmit({
+            name: 'agentfootprint.stream.tool_end',
+            payload: { toolCallId: `t${i}`, result: 'r' },
+          });
+        }
+        expect(rec.collect().toolCalls.length).toBe(pairs);
+      };
+      await expectScalesLinearly({
+        small: () => record(2_500),
+        large: () => record(25_000),
+        scale: 10,
+        why: 'tool-call pairing must be a keyed lookup, not a scan',
       });
-      rec.onEmit({
-        name: 'agentfootprint.stream.tool_end',
-        payload: { toolCallId: `t${i}`, result: 'r' },
-      });
-    }
-    const evidence = rec.collect();
-    expect(evidence.toolCalls.length).toBe(2500);
-    expect(Date.now() - start).toBeLessThan(1000);
-  });
+    },
+  );
 });

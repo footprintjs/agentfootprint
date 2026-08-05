@@ -29,34 +29,52 @@ Subpath keeps the main barrel small + lets bundlers tree-shake when AgentCore is
 
 <CodeFile path="examples/memory/09-agentcore-store.ts" region="define" title="examples/memory/09-agentcore-store.ts (excerpt — see full example)" />
 
-The store implements every `MemoryStore` method except `search()`. Pair with `defineMemory({ store, ... })` like any other adapter.
+The store implements every `MemoryStore` method. Pair with `defineMemory({ store, ... })` like any other adapter.
 
 ## Mapping to AgentCore primitives
 
-| `MemoryStore` call | AgentCore mapping |
-|---|---|
-| `MemoryIdentity` tuple | AgentCore `sessionId` (derived deterministically from identity) |
-| `MemoryEntry` | AgentCore `event` payload (JSON envelope keyed by entry id) |
-| `put` / `putMany` | `PutMemoryEvent` (sequentialized — no batch API) |
-| `get` | `GetMemoryEvent` |
-| `list` | `ListMemoryEvents` (cursor via `nextToken`) |
-| `delete` | `DeleteMemoryEvent` |
-| `forget` | `DeleteMemorySession` |
-| `seen` / `recordSignature` | In-process shadow Map (NOT durable — see caveats) |
-| `feedback` / `getFeedback` | In-process shadow Map (NOT durable) |
-| `search` | NOT exposed — see caveats |
+AgentCore Memory is an **append-only event log**, not a key-value store: the server assigns each event's `eventId` on write (you cannot choose it), and there is no "delete the whole session" call. That single fact shapes every row below — including the two that cost O(events in session).
+
+| `MemoryStore` call | AgentCore mapping | Cost |
+|---|---|---|
+| `MemoryIdentity.{tenant, principal}` | `actorId` | — |
+| `MemoryIdentity.conversationId` | `sessionId` | — |
+| `MemoryEntry` | one event whose `payload` is a single `blob` document holding the entry, written as **JSON text** | — |
+| `put` | `CreateEvent` (append; `actorId` + `eventTimestamp` required) | O(1) |
+| `putMany` | `CreateEvent` per entry, sequentialized — AgentCore has no batch write | O(n) |
+| `list` | `ListEvents` (paginated, `includePayloads`; cursor via `nextToken`) — the window / episodic read path | O(page) |
+| `get(id)` | `ListEvents`, then find by the entry id **inside the blob** — AgentCore ids are server-assigned, so there is nothing to `GetEvent` by. Highest `version` wins (an update appends another event) | O(events in session) |
+| `delete(id)` | `ListEvents`, then `DeleteEvent` for every event carrying that entry id | O(events in session) |
+| `forget` | `ListEvents` + `DeleteEvent` per event — there is no `DeleteSession` on AgentCore | O(events in session) |
+| `search` | `RetrieveMemoryRecords` — **text-in**, server-side ranking. Pass the question in `options.text` | O(k) |
+| `putIfVersion` | Emulated: read-then-write in a JS critical section (no native CAS) | O(events in session) |
+| `seen` / `recordSignature` | In-process shadow Map (NOT durable — see caveats) | O(1) |
+| `feedback` / `getFeedback` | In-process shadow Map (NOT durable) | O(1) |
+| `stream` | Not implemented — AgentCore Memory has no streaming data-plane operation, and the `MemoryStore` port has no streaming method to implement | — |
+
+If you need O(1) keyed access at scale, use `RedisStore`. The list-then-find rows are fine for typical window sizes.
 
 ## Caveats (call out before adopting)
 
 These are documented in the JSDoc; promoted here for visibility:
 
-1. **`putIfVersion` is emulated** — AgentCore's `PutMemoryEvent` overwrites unconditionally. The adapter does read-then-write inside a JS critical section. Adequate for single-writer-per-session deploys; weaker for multi-writer.
+1. **`putIfVersion` is emulated** — AgentCore appends unconditionally; there is no compare-and-set. The adapter does read-then-write inside a JS critical section. Adequate for single-writer-per-session deploys; weaker for multi-writer.
 
 2. **Built-in summarization may double-compress** — AgentCore has its own server-side summarization. Mixing `defineMemory({ strategy: SUMMARIZE })` on top will double-compress. Pick one summarizer.
 
 3. **`seen` / `feedback` are in-process** — they don't survive process restart. For durable recognition, use `RedisStore` instead (or layer Redis on top of AgentCore).
 
-4. **`search()` not exposed** — AgentCore's retrieval API is opaque (server-side retrieval pipeline). Mapping it to `MemoryStore.search` (cosine + threshold) would be a leaky abstraction. A separate read-side retrieve helper may land in a future release; until then, use a vector-capable store (e.g. `InMemoryStore` with an embedder, or Redis) when you need `search()`.
+4. **`search()` takes TEXT, and searches a different population** — since 7.15 the store implements `search()` on top of `RetrieveMemoryRecords`. Two things follow from AgentCore embedding and ranking on its own side.
+
+   **It needs the question as text.** The port's `query` argument is a vector, which AgentCore cannot use, so the query it actually needs travels in `options.text`:
+
+   ```ts
+   await store.search(identity, vector, { text: theUserQuestion });
+   ```
+
+   Omit `options.text` and the call **throws**, naming what is missing, rather than ranking nothing and handing back `[]` — an empty array reads as "no matches" when it really means "wrong query form". Backends that rank locally ignore `text`, so passing both is always safe.
+
+   **What comes back is not what you `put()`.** `list()` returns the events this store wrote; `search()` returns the records AgentCore's own extraction strategies derived *from* those events — summaries, semantic facts, preferences. Their ids belong to AgentCore, so `store.get(result.id)` will not find them. They arrive as entries so ranking code needs no special case, and each carries `metadata.source: 'agentcore-memory-record'` saying plainly where it came from. `searchStrategyId` and the namespace reach AgentCore's side; `k` and `minScore` are applied to what comes back. A `tiers` filter excludes everything, because AgentCore records carry no tier and silently ignoring a filter somebody asked for is worse than returning nothing.
 
 5. **AWS rate limits apply** — production deployments should wrap with `withRetry` and budget calls per session. AWS SDK has built-in retry; tune via the SDK's `maxAttempts` config.
 

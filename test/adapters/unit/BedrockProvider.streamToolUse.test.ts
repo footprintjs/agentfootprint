@@ -19,6 +19,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { bedrock, type BedrockStreamEvent } from '../../../src/adapters/llm/BedrockProvider.js';
 import type { LLMChunk, LLMProvider, LLMRequest } from '../../../src/adapters/types.js';
+import { expectScalesLinearly } from '../../helpers/perf.js';
 
 // ─── Fixtures ──────────────────────────────────────────────────────
 
@@ -187,33 +188,37 @@ describe('BedrockProvider stream() — unit (no-arg tools)', () => {
 // ─── Security — malformed tool-args JSON is typed, never swallowed ──
 
 describe('BedrockProvider stream() — security (malformed tool-args JSON)', () => {
-  it('throws BEDROCK_MALFORMED_TOOL_ARGS instead of running the tool with dropped arguments', async () => {
-    const p = provider([
-      blockStart(3, 'tool-use-99', 'transfer'),
-      toolDelta(3, '{"a":'),
-      blockStop(3),
-      messageStop('tool_use'),
-    ]);
+  it(
+    'throws BEDROCK_MALFORMED_TOOL_ARGS instead of running the tool with dropped arguments',
+    { timeout: 30_000, retry: 2 },
+    async () => {
+      const p = provider([
+        blockStart(3, 'tool-use-99', 'transfer'),
+        toolDelta(3, '{"a":'),
+        blockStop(3),
+        messageStop('tool_use'),
+      ]);
 
-    const seen: LLMChunk[] = [];
-    let caught: (Error & { code?: string; toolName?: string; toolUseId?: string }) | undefined;
-    try {
-      for await (const c of p.stream!(baseRequest)) seen.push(c);
-    } catch (e) {
-      caught = e as Error & { code?: string };
-    }
+      const seen: LLMChunk[] = [];
+      let caught: (Error & { code?: string; toolName?: string; toolUseId?: string }) | undefined;
+      try {
+        for await (const c of p.stream!(baseRequest)) seen.push(c);
+      } catch (e) {
+        caught = e as Error & { code?: string };
+      }
 
-    expect(caught?.name).toBe('BedrockProviderError');
-    expect(caught?.code).toBe('BEDROCK_MALFORMED_TOOL_ARGS');
-    expect(caught?.toolName).toBe('transfer');
-    expect(caught?.toolUseId).toBe('tool-use-99');
-    // Tool arguments can carry user data and provider error messages land
-    // in audit logs unredacted — the raw fragment must not be echoed.
-    expect(caught?.message).not.toContain('{"a":');
-    // Anti-regression: no terminal chunk with a fabricated `args: {}` was
-    // yielded before the throw.
-    expect(seen.some((c) => c.done)).toBe(false);
-  });
+      expect(caught?.name).toBe('BedrockProviderError');
+      expect(caught?.code).toBe('BEDROCK_MALFORMED_TOOL_ARGS');
+      expect(caught?.toolName).toBe('transfer');
+      expect(caught?.toolUseId).toBe('tool-use-99');
+      // Tool arguments can carry user data and provider error messages land
+      // in audit logs unredacted — the raw fragment must not be echoed.
+      expect(caught?.message).not.toContain('{"a":');
+      // Anti-regression: no terminal chunk with a fabricated `args: {}` was
+      // yielded before the throw.
+      expect(seen.some((c) => c.done)).toBe(false);
+    },
+  );
 
   it('is not re-wrapped by wrapError — the code and tool fields survive', async () => {
     const p = provider([
@@ -378,22 +383,44 @@ describe('BedrockProvider stream() — unit (unclosed tool block)', () => {
 // ─── Performance ───────────────────────────────────────────────────
 
 describe('BedrockProvider stream() — performance', () => {
-  it('accumulates 500 fragments across 50 parallel blocks in under 250ms', async () => {
+  /** `blocks` interleaved tool blocks, ten fragments each. */
+  function fragmentStream(blocks: number): BedrockStreamEvent[] {
     const events: BedrockStreamEvent[] = [];
-    for (let i = 0; i < 50; i++) events.push(blockStart(i, `t${i}`, `tool${i}`));
+    for (let i = 0; i < blocks; i++) events.push(blockStart(i, `t${i}`, `tool${i}`));
     for (let f = 0; f < 9; f++) {
-      for (let i = 0; i < 50; i++) events.push(toolDelta(i, ''));
+      for (let i = 0; i < blocks; i++) events.push(toolDelta(i, ''));
     }
-    for (let i = 0; i < 50; i++) events.push(toolDelta(i, `{"i":${i}}`));
-    for (let i = 0; i < 50; i++) events.push(blockStop(i));
+    for (let i = 0; i < blocks; i++) events.push(toolDelta(i, `{"i":${i}}`));
+    for (let i = 0; i < blocks; i++) events.push(blockStop(i));
     events.push(messageStop('tool_use'));
+    return events;
+  }
 
-    const start = performance.now();
-    const response = await terminal(events);
-    expect(performance.now() - start).toBeLessThan(250);
-    expect(response.toolCalls).toHaveLength(50);
-    expect(response.toolCalls[49]).toEqual({ id: 't49', name: 'tool49', args: { i: 49 } });
-  });
+  it(
+    'accumulating 500 fragments costs ten times what 50 cost — no per-fragment rescan',
+    { timeout: 30_000, retry: 2 },
+    async () => {
+      // Interleaved tool blocks are accumulated into per-index buffers. The
+      // claim is that appending a fragment is O(1) in the number of fragments
+      // already seen — a re-concat of the whole buffer per fragment would be
+      // quadratic and would show up immediately at ten times the size.
+      await expectScalesLinearly({
+        small: async () => {
+          await terminal(fragmentStream(5));
+        },
+        large: async () => {
+          await terminal(fragmentStream(50));
+        },
+        scale: 10,
+        why: 'interleaved fragment accumulation must not rescan per fragment',
+      });
+
+      // The correctness half, which no amount of machine load can move.
+      const response = await terminal(fragmentStream(50));
+      expect(response.toolCalls).toHaveLength(50);
+      expect(response.toolCalls[49]).toEqual({ id: 't49', name: 'tool49', args: { i: 49 } });
+    },
+  );
 });
 
 // ─── ROI — works for any Bedrock-hosted model ──────────────────────

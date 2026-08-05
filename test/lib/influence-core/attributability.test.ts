@@ -25,6 +25,7 @@ import {
 } from '../../../src/lib/influence-core';
 // Public-surface re-export — proves the observe barrel wiring (not a dead export).
 import { rankingConfidence as rankingConfidenceViaObserve } from '../../../src/observe';
+import { expectScalesLinearly } from '../../helpers/perf.js';
 
 /** Build a minimal valid InfluenceScore — the function only reads id + score. */
 const mk = (id: string, score: number): InfluenceScore => ({
@@ -342,19 +343,27 @@ describe('rankingConfidence — pluggable strategy', () => {
 
 // ─── 6. PERFORMANCE ──────────────────────────────────────────────────
 describe('rankingConfidence — performance', () => {
-  it('scales ~n log n, not quadratic (relative guard, machine-independent)', () => {
-    const rng = lcg(7);
-    const time = (n: number) => {
-      const scores = Array.from({ length: n }, (_, i) => mk(`s${i}`, rng()));
-      const t0 = performance.now();
-      rankingConfidence(scores);
-      return performance.now() - t0;
-    };
-    time(1000); // warm
-    const small = Math.max(time(1000), 0.01);
-    const big = time(10_000);
-    expect(big).toBeLessThan(small * 50); // 10x size, well under quadratic blowup
-  });
+  it(
+    'scales ~n log n, not quadratic (relative guard, machine-independent)',
+    { timeout: 30_000, retry: 2 },
+    async () => {
+      // Already a ratio; now the noise floor under the small run is a
+      // load-scaled reference unit rather than a hard 0.01ms, and both inputs
+      // are built before either measurement.
+      const rng = lcg(7);
+      const scoresOf = (n: number) => Array.from({ length: n }, (_, i) => mk(`s${i}`, rng()));
+      const small = scoresOf(1_000);
+      const big = scoresOf(10_000);
+      rankingConfidence(small); // warm
+      await expectScalesLinearly({
+        small: () => void rankingConfidence(small),
+        large: () => void rankingConfidence(big),
+        scale: 10,
+        slack: 5, // n log n costs a little more than n; quadratic costs 100×
+        why: 'rankingConfidence must sort, not compare every pair',
+      });
+    },
+  );
 });
 
 // ─── 7. LOAD ─────────────────────────────────────────────────────────

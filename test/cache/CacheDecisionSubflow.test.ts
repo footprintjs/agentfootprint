@@ -28,6 +28,7 @@ import {
 } from '../../src/cache/CacheDecisionSubflow';
 import type { CacheMarker, CachePolicy, CachePolicyContext } from '../../src/cache/types';
 import type { Injection } from '../../src/lib/injection-engine/types';
+import { expectScalesLinearly } from '../helpers/perf.js';
 
 // ─── Fixtures ─────────────────────────────────────────────────────
 
@@ -330,30 +331,40 @@ describe('CacheDecision subflow — security', () => {
 // ─── 6. Performance — bounded execution time ──────────────────────
 
 describe('CacheDecision subflow — performance', () => {
-  it('100 injections with mixed policies finish in <50ms', async () => {
-    const injections = Array.from({ length: 100 }, (_, i) =>
-      makeInjection({
-        id: `i-${i}`,
-        cache: i % 3 === 0 ? 'always' : i % 3 === 1 ? 'never' : 'while-active',
-        systemPrompt: `entry ${i}`,
-      }),
-    );
-    const start = Date.now();
-    await runSubflow({
-      activeInjections: injections,
-      iteration: 1,
-      maxIterations: 5,
-      userMessage: 'go',
-      cumulativeInputTokens: 0,
-      systemPromptCachePolicy: 'always',
-      cachingDisabled: false,
-    });
-    const elapsed = Date.now() - start;
-    // Generous bound (50ms) to absorb CI variance; subflow body is
-    // ~O(n) over injections + O(slots * n) for boundary walk. Real
-    // wall-clock per call is sub-ms.
-    expect(elapsed).toBeLessThan(50);
-  });
+  it(
+    'cost grows with injection count in a straight line, not a curve',
+    { timeout: 30_000, retry: 2 },
+    async () => {
+      // The subflow body is O(n) over injections plus a bounded boundary walk.
+      // Ten times the injections must therefore cost about ten times the work —
+      // the shape of the curve is the claim, and it survives a busy machine
+      // because both runs are timed here, moments apart.
+      const decide = async (count: number): Promise<void> => {
+        const injections = Array.from({ length: count }, (_, i) =>
+          makeInjection({
+            id: `i-${i}`,
+            cache: i % 3 === 0 ? 'always' : i % 3 === 1 ? 'never' : 'while-active',
+            systemPrompt: `entry ${i}`,
+          }),
+        );
+        await runSubflow({
+          activeInjections: injections,
+          iteration: 1,
+          maxIterations: 5,
+          userMessage: 'go',
+          cumulativeInputTokens: 0,
+          systemPromptCachePolicy: 'always',
+          cachingDisabled: false,
+        });
+      };
+      await expectScalesLinearly({
+        small: () => decide(100),
+        large: () => decide(1000),
+        scale: 10,
+        why: 'the cache decision subflow must stay linear in injection count',
+      });
+    },
+  );
 });
 
 // ─── 7. ROI — end-to-end happy path ──────────────────────────────

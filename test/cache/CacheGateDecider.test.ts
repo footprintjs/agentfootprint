@@ -25,6 +25,7 @@ import {
   SKILL_CHURN_WINDOW,
   type CacheGateState,
 } from '../../src/cache/CacheGateDecider';
+import { expectScalesLinearly } from '../helpers/perf.js';
 
 // ─── Fixtures ─────────────────────────────────────────────────────
 
@@ -176,13 +177,30 @@ describe('cacheGateDecide — security', () => {
 // ─── 6. Performance — detectSkillChurn bounded ────────────────────
 
 describe('detectSkillChurn — performance', () => {
-  it('runs in <5ms with 10K history entries (only window inspected)', () => {
-    const huge = Array.from({ length: 10_000 }, (_, i) => `skill-${i % 7}`);
-    const start = Date.now();
-    detectSkillChurn(huge);
-    const elapsed = Date.now() - start;
-    expect(elapsed).toBeLessThan(5);
-  });
+  it(
+    'costs the SAME on 100K history entries as on 10K — only the window is inspected',
+    { timeout: 30_000, retry: 2 },
+    async () => {
+      // This is the sharpest form the claim can take. detectSkillChurn looks at
+      // a fixed-size trailing window, so history length must not matter at all:
+      // ten times the history, the same work. `scale: 1` says exactly that, and
+      // the 3× slack is for allocating the bigger array, not for scanning it.
+      // Both histories are built BEFORE either measurement — allocating the
+      // arrays is linear in their length and would drown out the thing being
+      // claimed.
+      const short = Array.from({ length: 10_000 }, (_, i) => `skill-${i % 7}`);
+      const long = Array.from({ length: 100_000 }, (_, i) => `skill-${i % 7}`);
+      const churn = (history: readonly string[]): void => {
+        for (let i = 0; i < 1_000; i++) detectSkillChurn(history);
+      };
+      await expectScalesLinearly({
+        small: () => churn(short),
+        large: () => churn(long),
+        scale: 1,
+        why: 'detectSkillChurn must read a fixed window, never the whole history',
+      });
+    },
+  );
 });
 
 // ─── 7. ROI — evidence captured for cacheRecorder ─────────────────

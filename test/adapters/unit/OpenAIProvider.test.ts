@@ -9,6 +9,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { openai, OpenAIProvider, ollama } from '../../../src/adapters/llm/OpenAIProvider.js';
 import type { LLMRequest, LLMMessage } from '../../../src/adapters/types.js';
+import { expectScalesLinearly } from '../../helpers/perf.js';
 
 // ─── Fake OpenAI SDK ───────────────────────────────────────────────
 
@@ -492,13 +493,22 @@ describe('OpenAIProvider — security', () => {
 // ─── Performance ───────────────────────────────────────────────────
 
 describe('OpenAIProvider — performance', () => {
-  it('1000 complete() calls overhead well under 500ms with fake client', async () => {
-    const p = openai({ _client: makeFakeClient(baseResponse) });
-    const start = performance.now();
-    for (let i = 0; i < 1000; i++) await p.complete(baseRequest);
-    const elapsed = performance.now() - start;
-    expect(elapsed).toBeLessThan(500);
-  });
+  it(
+    'per-call overhead stays flat as the call count grows (fake client)',
+    { timeout: 30_000, retry: 2 },
+    async () => {
+      const p = openai({ _client: makeFakeClient(baseResponse) });
+      const callTimes = async (n: number): Promise<void> => {
+        for (let i = 0; i < n; i++) await p.complete(baseRequest);
+      };
+      await expectScalesLinearly({
+        small: () => callTimes(100),
+        large: () => callTimes(1000),
+        scale: 10,
+        why: 'the OpenAI adapter must not accumulate per-call state',
+      });
+    },
+  );
 });
 
 // ─── ROI — Ollama compatibility ────────────────────────────────────

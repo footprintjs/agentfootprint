@@ -24,6 +24,7 @@ import { Agent, flowchartAsTool, type FlowchartToolSnapshot } from '../../src/in
 import { mock } from '../../src/llm-providers.js';
 import { unconfiguredCredentialProvider } from '../../src/identity.js';
 import { causalEvidenceRecorder } from '../../src/memory/causal/evidenceRecorder.js';
+import { expectScalesLinearly } from '../helpers/perf.js';
 
 // ─── Fixtures ─────────────────────────────────────────────────────
 
@@ -284,24 +285,37 @@ describe('flowchartAsTool — security: pause + error propagation', () => {
 // ─── 6. PERFORMANCE — bounded ────────────────────────────────────
 
 describe('flowchartAsTool — performance', () => {
-  it('100 sequential invocations of a trivial flowchart under 500ms', async () => {
-    const chart = flowChart<{ value: number }>(
-      'Simple',
-      (scope) => {
-        scope.value = 42;
-      },
-      'simple',
-    ).build();
-    const tool = flowchartAsTool({
-      name: 'simple_op',
-      description: 'simple',
-      flowchart: chart,
-    });
-    const t0 = Date.now();
-    for (let i = 0; i < 100; i++) await tool.execute({}, baseToolCtx);
-    const elapsed = Date.now() - t0;
-    expect(elapsed).toBeLessThan(500);
-  });
+  it(
+    'invocation cost stays flat as invocations pile up',
+    { timeout: 30_000, retry: 2 },
+    async () => {
+      // Each invocation gets its own executor and its own snapshot. If the
+      // bridge retained anything across calls — a growing commit log, an
+      // executor never released — the tenth hundred would cost more than the
+      // first, and this ratio would catch it.
+      const chart = flowChart<{ value: number }>(
+        'Simple',
+        (scope) => {
+          scope.value = 42;
+        },
+        'simple',
+      ).build();
+      const tool = flowchartAsTool({
+        name: 'simple_op',
+        description: 'simple',
+        flowchart: chart,
+      });
+      const invoke = async (times: number): Promise<void> => {
+        for (let i = 0; i < times; i++) await tool.execute({}, baseToolCtx);
+      };
+      await expectScalesLinearly({
+        small: () => invoke(100),
+        large: () => invoke(1000),
+        scale: 10,
+        why: 'flowchartAsTool must not retain state between invocations',
+      });
+    },
+  );
 });
 
 // ─── 7. ROI — what the bridge unlocks ─────────────────────────────

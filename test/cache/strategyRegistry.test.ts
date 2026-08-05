@@ -15,6 +15,7 @@ import {
 } from '../../src/cache/strategyRegistry';
 import { NoOpCacheStrategy } from '../../src/cache/strategies/NoOpCacheStrategy';
 import type { CacheStrategy } from '../../src/cache/types';
+import { expectScalesLinearly } from '../helpers/perf.js';
 
 // Reset between tests to avoid test-order coupling
 afterEach(() => _resetRegistryForTests());
@@ -118,16 +119,23 @@ describe('strategyRegistry — security', () => {
 // ─── 6. Performance ───────────────────────────────────────────────
 
 describe('strategyRegistry — performance', () => {
-  it('lookup completes in <1ms for 100 lookups (Map is O(1))', () => {
-    const strat = { providerName: 'foo' } as CacheStrategy;
-    registerCacheStrategy(strat);
-    const start = Date.now();
-    for (let i = 0; i < 100; i++) {
-      getDefaultCacheStrategy('foo');
-    }
-    const elapsed = Date.now() - start;
-    expect(elapsed).toBeLessThan(5); // generous; sub-ms in practice
-  });
+  it(
+    'lookup cost stays flat as lookups pile up (Map is O(1))',
+    { timeout: 30_000, retry: 2 },
+    async () => {
+      const strat = { providerName: 'foo' } as CacheStrategy;
+      registerCacheStrategy(strat);
+      const look = (times: number): void => {
+        for (let i = 0; i < times; i++) getDefaultCacheStrategy('foo');
+      };
+      await expectScalesLinearly({
+        small: () => look(1_000),
+        large: () => look(10_000),
+        scale: 10,
+        why: 'registry lookup must stay a Map probe',
+      });
+    },
+  );
 });
 
 // ─── 7. ROI ───────────────────────────────────────────────────────

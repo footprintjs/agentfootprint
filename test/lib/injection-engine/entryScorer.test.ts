@@ -22,6 +22,7 @@ import {
 import { mockEmbedder } from '../../../src/memory/index.js';
 import { mock } from '../../../src/llm-providers.js';
 import type { EntryScorer, InjectionContext } from '../../../src/injection-engine.js';
+import { expectScalesLinearly } from '../../helpers/perf.js';
 
 const ctx = (over: Partial<InjectionContext>): InjectionContext => ({
   iteration: 1,
@@ -379,34 +380,51 @@ describe('entryScorer — security: hostile input is contained', () => {
 // ─── Performance ───────────────────────────────────────────────────────
 
 describe('entryScorer — performance', () => {
-  it('keywordScorer ranks 50 candidates in well under budget', () => {
+  it('keywordScorer is linear in candidate count', { timeout: 30_000, retry: 2 }, async () => {
+    // Each candidate's description is scanned once against the message's
+    // keywords. Ten times the candidates, ten times the work.
     const scorer = keywordScorer();
-    const candidates = Array.from({ length: 50 }, (_, i) => ({
-      id: `s${i}`,
-      description: `skill number ${i} handling refunds payments outages crashes orders invoices`,
-    }));
-    const start = performance.now();
-    const out = scorer.score({ userMessage: 'refund payment outage crash', candidates });
-    const ms = performance.now() - start;
-    expect(out.ranked).toHaveLength(50);
-    expect(ms).toBeLessThan(50);
+    const candidatesOf = (n: number) =>
+      Array.from({ length: n }, (_, i) => ({
+        id: `s${i}`,
+        description: `skill number ${i} handling refunds payments outages crashes orders invoices`,
+      }));
+    const few = candidatesOf(50);
+    const many = candidatesOf(500);
+    const message = 'refund payment outage crash';
+    expect(scorer.score({ userMessage: message, candidates: few }).ranked).toHaveLength(50);
+    await expectScalesLinearly({
+      small: () => void scorer.score({ userMessage: message, candidates: few }),
+      large: () => void scorer.score({ userMessage: message, candidates: many }),
+      scale: 10,
+      why: 'keyword scoring must touch each candidate once',
+    });
   });
 });
 
 // ─── Load ──────────────────────────────────────────────────────────────
 
 describe('entryScorer — load', () => {
-  it('sustains 1000 scoring calls without degradation', () => {
+  it('sustains scoring calls without degradation', { timeout: 30_000, retry: 2 }, async () => {
+    // "Without degradation" is the ratio, exactly: the ten-thousandth call
+    // must cost what the first did, so ten times the calls costs ten times
+    // the total. A scorer that memoised into an unbounded map would drift.
     const scorer = keywordScorer();
     const candidates = [
       { id: 'billing', description: billing.description! },
       { id: 'incident', description: incident.description! },
     ];
-    const start = performance.now();
-    for (let i = 0; i < 1000; i++) {
-      const out = scorer.score({ userMessage: 'refund payment', candidates });
-      expect(out.chosen).toBe('billing');
-    }
-    expect(performance.now() - start).toBeLessThan(500);
+    const scoreMany = (times: number): void => {
+      for (let i = 0; i < times; i++) {
+        const out = scorer.score({ userMessage: 'refund payment', candidates });
+        expect(out.chosen).toBe('billing');
+      }
+    };
+    await expectScalesLinearly({
+      small: () => scoreMany(1_000),
+      large: () => scoreMany(10_000),
+      scale: 10,
+      why: 'repeated scoring must not get more expensive',
+    });
   });
 });

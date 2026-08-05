@@ -9,6 +9,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { anthropic, AnthropicProvider } from '../../../src/adapters/llm/AnthropicProvider.js';
 import type { LLMRequest, LLMMessage } from '../../../src/adapters/types.js';
+import { expectScalesLinearly } from '../../helpers/perf.js';
 
 // ─── Fake Anthropic SDK shape ──────────────────────────────────────
 
@@ -311,13 +312,26 @@ describe('AnthropicProvider — security', () => {
 // ─── Performance — overhead bounded ────────────────────────────────
 
 describe('AnthropicProvider — performance', () => {
-  it('1000 complete() calls overhead well under 500ms with fake client', async () => {
-    const p = anthropic({ _client: makeFakeClient([baseResponse]) });
-    const start = performance.now();
-    for (let i = 0; i < 1000; i++) await p.complete(baseRequest);
-    const elapsed = performance.now() - start;
-    expect(elapsed).toBeLessThan(500);
-  });
+  it(
+    'per-call overhead stays flat as the call count grows (fake client)',
+    { timeout: 30_000, retry: 2 },
+    async () => {
+      // The adapter's job per call is to map a request in and a response out.
+      // Nothing may accumulate between calls, so ten times the calls costs ten
+      // times the work. A ratio, not a stopwatch reading: both runs happen on
+      // the same machine moments apart, so load cancels.
+      const p = anthropic({ _client: makeFakeClient([baseResponse]) });
+      const callTimes = async (n: number): Promise<void> => {
+        for (let i = 0; i < n; i++) await p.complete(baseRequest);
+      };
+      await expectScalesLinearly({
+        small: () => callTimes(100),
+        large: () => callTimes(1000),
+        scale: 10,
+        why: 'the Anthropic adapter must not accumulate per-call state',
+      });
+    },
+  );
 });
 
 // ─── ROI — realistic agent shape works end-to-end ──────────────────

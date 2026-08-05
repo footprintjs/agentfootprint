@@ -49,7 +49,7 @@ import {
   type DefineNarrativeOptions,
   type DefineSemanticOptions,
   type Strategy,
-  type WindowStrategy,
+  type MemoryWindowStrategy,
   type BudgetStrategy,
   type SummarizeStrategy,
   type TopKStrategy,
@@ -152,7 +152,7 @@ function buildEpisodicPipeline(options: DefineEpisodicOptions): MemoryPipeline {
 
   switch (s.kind) {
     case MEMORY_STRATEGIES.WINDOW: {
-      const w = s as WindowStrategy;
+      const w = s as MemoryWindowStrategy;
       const config: DefaultPipelineConfig = { store: options.store, loadCount: w.size };
       return defaultPipeline(config);
     }
@@ -252,7 +252,7 @@ function buildSemanticPipeline(options: DefineSemanticOptions): MemoryPipeline {
       // SEMANTIC × WINDOW: load top-N recent facts (no embedding query).
       // factPipeline already loads by recency by default; size is interpreted
       // as the load limit.
-      const w = s as WindowStrategy;
+      const w = s as MemoryWindowStrategy;
       const config: FactPipelineConfig = { store: options.store, loadLimit: w.size };
       return factPipeline(config);
     }
@@ -300,7 +300,7 @@ function buildNarrativePipeline(options: DefineNarrativeOptions): MemoryPipeline
     }
 
     case MEMORY_STRATEGIES.WINDOW: {
-      const w = s as WindowStrategy;
+      const w = s as MemoryWindowStrategy;
       const config: NarrativePipelineConfig = { store: options.store, loadCount: w.size };
       return narrativePipeline(config);
     }

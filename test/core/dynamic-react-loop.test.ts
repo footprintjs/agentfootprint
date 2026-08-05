@@ -18,6 +18,7 @@ import { describe, expect, it } from 'vitest';
 import { Agent, defineTool } from '../../src/index.js';
 import { defineInstruction } from '../../src/injection-engine.js';
 import { mock } from '../../src/llm-providers.js';
+import { expectWithinReferenceUnits, measureAsync } from '../helpers/perf.js';
 
 // ─── Fixtures ─────────────────────────────────────────────────────
 
@@ -298,37 +299,50 @@ describe('Dynamic ReAct loop — security', () => {
 // ─── 6. PERFORMANCE ───────────────────────────────────────────────
 
 describe('Dynamic ReAct loop — performance', () => {
-  it('per-iteration InjectionEngine evaluation cost is bounded', async () => {
-    // 10-iteration agent with 5 instructions; should complete in <1s
-    const provider = mock({
-      respond: ((iter) => () => {
-        iter.n++;
-        if (iter.n < 10) {
-          return { content: '', toolCalls: [{ id: `c${iter.n}`, name: 'noop', args: {} }] };
-        }
-        return { content: 'done', toolCalls: [] };
-      })({ n: 0 }),
-    });
-    const noopTool = defineTool({
-      name: 'noop',
-      description: 'noop',
-      inputSchema: { type: 'object' },
-      execute: async () => 'ok',
-    });
-    const builder = Agent.create({ provider, model: 'mock', maxIterations: 12 })
-      .system('s')
-      .tool(noopTool);
-    for (let i = 0; i < 5; i++) {
-      builder.instruction(
-        defineInstruction({ id: `inst-${i}`, activeWhen: () => true, prompt: 'r' }),
+  it(
+    'per-iteration InjectionEngine evaluation cost is bounded',
+    { timeout: 30_000, retry: 2 },
+    async () => {
+      // 10 iterations × 5 instructions, held to 1000 reference units of CPU
+      // (≈1s on a quiet machine, proportionally more on a loaded one). The
+      // ceiling is stated in units rather than milliseconds so that a busy
+      // runner stretches it instead of failing it; a real regression — an
+      // engine that re-evaluates every instruction for every prior iteration —
+      // costs orders of magnitude, not jitter.
+      const provider = mock({
+        respond: ((iter) => () => {
+          iter.n++;
+          if (iter.n < 10) {
+            return { content: '', toolCalls: [{ id: `c${iter.n}`, name: 'noop', args: {} }] };
+          }
+          return { content: 'done', toolCalls: [] };
+        })({ n: 0 }),
+      });
+      const noopTool = defineTool({
+        name: 'noop',
+        description: 'noop',
+        inputSchema: { type: 'object' },
+        execute: async () => 'ok',
+      });
+      const builder = Agent.create({ provider, model: 'mock', maxIterations: 12 })
+        .system('s')
+        .tool(noopTool);
+      for (let i = 0; i < 5; i++) {
+        builder.instruction(
+          defineInstruction({ id: `inst-${i}`, activeWhen: () => true, prompt: 'r' }),
+        );
+      }
+      const agent = builder.build();
+      const elapsed = await measureAsync(async () => {
+        await agent.run({ message: 'go' });
+      });
+      await expectWithinReferenceUnits(
+        elapsed,
+        1000,
+        'ten iterations with five instructions must not run away',
       );
-    }
-    const agent = builder.build();
-    const t0 = Date.now();
-    await agent.run({ message: 'go' });
-    const elapsed = Date.now() - t0;
-    expect(elapsed).toBeLessThan(1000);
-  });
+    },
+  );
 });
 
 // ─── 7. ROI — what the fix unlocks ────────────────────────────────

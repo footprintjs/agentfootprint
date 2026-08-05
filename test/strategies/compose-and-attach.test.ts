@@ -32,6 +32,7 @@ import {
 } from '../../src/strategies/index.js';
 import { EventDispatcher } from '../../src/events/dispatcher.js';
 import type { AgentfootprintEvent } from '../../src/events/registry.js';
+import { expectScalesLinearly, expectWithinTimes, measure } from '../helpers/perf.js';
 
 const makeEvent = (overrides: Partial<AgentfootprintEvent> = {}): AgentfootprintEvent =>
   ({
@@ -147,29 +148,35 @@ describe('composeObservability', () => {
   });
 
   // P6 performance: compose([5 children]) ≤ 5% overhead vs single
-  it('P6 5-child compose ≤ 5x overhead of a single child (loose bound)', () => {
-    const single: ObservabilityStrategy = {
-      name: 'a',
-      capabilities: { events: true },
-      exportEvent: () => {},
-    };
-    const composed = composeObservability([single, single, single, single, single]);
-    const ev = makeEvent();
-    const N = 100_000;
+  it(
+    'P6 5-child compose ≤ 5x overhead of a single child (loose bound)',
+    { timeout: 30_000, retry: 2 },
+    async () => {
+      const single: ObservabilityStrategy = {
+        name: 'a',
+        capabilities: { events: true },
+        exportEvent: () => {},
+      };
+      const composed = composeObservability([single, single, single, single, single]);
+      const ev = makeEvent();
+      const N = 100_000;
 
-    const startSingle = performance.now();
-    for (let i = 0; i < N; i++) single.exportEvent(ev);
-    const elapsedSingle = performance.now() - startSingle;
-
-    const startCompose = performance.now();
-    for (let i = 0; i < N; i++) composed.exportEvent(ev);
-    const elapsedCompose = performance.now() - startCompose;
-
-    // 5 children + isolation try/catch should be < 10x single. Loose
-    // bound — exact ratio fluctuates with JIT. Tightening this is a
-    // separate perf-baseline task (Gate 5).
-    expect(elapsedCompose).toBeLessThan(elapsedSingle * 10 + 50);
-  });
+      // Five children plus an isolation try/catch: under 10× a single child.
+      // Purely comparative, sampled alternately on this machine — so the old
+      // absolute `+ 50ms` cushion is gone; the helper floors the denominator
+      // with a load-scaled reference unit instead.
+      await expectWithinTimes({
+        baseline: () => {
+          for (let i = 0; i < N; i++) single.exportEvent(ev);
+        },
+        subject: () => {
+          for (let i = 0; i < N; i++) composed.exportEvent(ev);
+        },
+        times: 10,
+        why: 'composing five children must not cost more than ten single children',
+      });
+    },
+  );
 
   // P7 ROI: OR-merged capabilities advertise the union
   it('P7 capabilities OR-merge across children', () => {
@@ -297,19 +304,28 @@ describe('attachObservabilityStrategy', () => {
   });
 
   // P6 performance: 10k events at sampleRate=1 ≤ 100ms
-  it('P6 10k-event throughput under sampleRate=1', () => {
-    const dispatcher = new EventDispatcher();
-    const off = attachObservabilityStrategy(dispatcher, {
-      strategy: { name: 'spy', capabilities: {}, exportEvent: () => {} },
-    });
-    const start = performance.now();
-    for (let i = 0; i < 10_000; i++) {
-      dispatcher.dispatch({ type: 'agentfootprint.agent.turn_start', payload: {} } as never);
-    }
-    const elapsed = performance.now() - start;
-    expect(elapsed).toBeLessThan(100);
-    off();
-  });
+  it(
+    'P6 throughput under sampleRate=1 stays linear in event count',
+    { timeout: 30_000, retry: 2 },
+    async () => {
+      const dispatcher = new EventDispatcher();
+      const off = attachObservabilityStrategy(dispatcher, {
+        strategy: { name: 'spy', capabilities: {}, exportEvent: () => {} },
+      });
+      const dispatch = (events: number): void => {
+        for (let i = 0; i < events; i++) {
+          dispatcher.dispatch({ type: 'agentfootprint.agent.turn_start', payload: {} } as never);
+        }
+      };
+      await expectScalesLinearly({
+        small: () => dispatch(10_000),
+        large: () => dispatch(100_000),
+        scale: 10,
+        why: 'attached dispatch must not accumulate per-event cost',
+      });
+      off();
+    },
+  );
 
   // P7 ROI: relevantEventTypes hot-skips irrelevant events
   it('P7 relevantEventTypes filters before dispatch', () => {

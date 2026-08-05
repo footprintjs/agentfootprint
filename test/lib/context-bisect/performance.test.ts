@@ -12,6 +12,7 @@ import { flowChart, FlowChartExecutor } from 'footprintjs';
 import { mockEmbedder } from '../../../src/memory/embedding/mockEmbedder';
 import { embeddingCache, type Embedder } from '../../../src/lib/influence-core';
 import { localizeContextBug } from '../../../src/lib/context-bisect';
+import { expectWithinReferenceUnits } from '../../helpers/perf.js';
 
 /** A loop-shaped run: `iterations` × (gather → think → act) executions. */
 async function runLoopChart(iterations: number) {
@@ -85,8 +86,16 @@ describe('context-bisect — performance', () => {
     const elapsedMs = Date.now() - startedAt;
 
     expect(report.suspects.length).toBeGreaterThan(0);
-    // Slowest-runner ceiling — this is a smoke budget, not a benchmark.
-    expect(elapsedMs).toBeLessThan(15000);
+    // A smoke budget, not a benchmark: 15000 reference units of CPU (≈15s on
+    // a quiet machine, proportionally more on a loaded one). Stated in units
+    // rather than milliseconds so a busy runner cannot fail it — the real
+    // boundedness claims (slice budget, suspect cap) are counted, not timed,
+    // by the load test below.
+    await expectWithinReferenceUnits(
+      elapsedMs,
+      15000,
+      'localizing a ~300-commit run must not run away',
+    );
   });
 });
 

@@ -13,6 +13,7 @@ import {
 } from '../../../src/lib/context-bisect/missingContext';
 // Public-surface re-export — proves the observe barrel wiring.
 import { findDroppedContext as findViaObserve } from '../../../src/observe';
+import { expectScalesLinearly } from '../../helpers/perf.js';
 
 const u = (id: string, content?: string): ContextUnit =>
   content === undefined ? { id } : { id, content };
@@ -167,15 +168,29 @@ describe('findDroppedContext — security & robustness', () => {
 
 // ─── 6. PERFORMANCE ──────────────────────────────────────────────────
 describe('findDroppedContext — performance', () => {
-  it('O(n): 10k available × 10k sent well under budget', () => {
-    const avail = Array.from({ length: 10_000 }, (_, i) => u(`a${i}`));
-    const sent = Array.from({ length: 10_000 }, (_, i) => u(`a${i * 2}`));
-    const t0 = performance.now();
-    const r = findDroppedContext(avail, sent);
-    const ms = performance.now() - t0;
-    expect(r.dropped.length).toBeGreaterThan(0);
-    expect(ms).toBeLessThan(50);
-  });
+  it(
+    'is O(n): ten times the ids costs ten times the work, not a hundred',
+    { timeout: 30_000, retry: 2 },
+    async () => {
+      // The whole point of findDroppedContext is a set difference, not a nested
+      // scan. At 10k × 10k a nested scan is a hundred million comparisons — the
+      // difference is unmissable in the ratio, and needs no stopwatch.
+      const pair = (n: number) =>
+        [
+          Array.from({ length: n }, (_, i) => u(`a${i}`)),
+          Array.from({ length: n }, (_, i) => u(`a${i * 2}`)),
+        ] as const;
+      const [smallAvail, smallSent] = pair(10_000);
+      const [bigAvail, bigSent] = pair(100_000);
+      expect(findDroppedContext(smallAvail, smallSent).dropped.length).toBeGreaterThan(0);
+      await expectScalesLinearly({
+        small: () => void findDroppedContext(smallAvail, smallSent),
+        large: () => void findDroppedContext(bigAvail, bigSent),
+        scale: 10,
+        why: 'findDroppedContext must be a set difference, not a nested scan',
+      });
+    },
+  );
 });
 
 // ─── 7. LOAD ─────────────────────────────────────────────────────────

@@ -18,6 +18,7 @@ import {
 } from '../../src/adapters/observability/cloudwatch.js';
 import { agentcoreObservability } from '../../src/adapters/observability/agentcore.js';
 import type { AgentfootprintEvent } from '../../src/events/registry.js';
+import { expectScalesLinearly } from '../helpers/perf.js';
 
 // ── Test client ──────────────────────────────────────────────────────
 
@@ -165,23 +166,33 @@ describe('cloudwatchObservability — P5 security', () => {
 // ─── P6 Performance ──────────────────────────────────────────────────
 
 describe('cloudwatchObservability — P6 performance', () => {
-  it('P6 10k exportEvent calls under 200ms (buffering cost only)', () => {
-    const { client } = makeMockClient();
-    const strat = cloudwatchObservability({
-      logGroupName: '/g',
-      maxBatchEvents: 100_000, // never trigger size-flush
-      flushIntervalMs: 0,
-      _client: client,
-    });
-    const N = 10_000;
-    const t0 = performance.now();
-    for (let i = 0; i < N; i++) strat.exportEvent(fakeEvent);
-    const elapsed = performance.now() - t0;
-    // 200ms budget — release pipeline runs back-to-back suites that
-    // cool the JIT. Documented target on a hot core is ~5µs/op = 50ms
-    // for 10k. 4x slack for CI / release variance.
-    expect(elapsed).toBeLessThan(200);
-  });
+  it(
+    'P6 10k exportEvent calls cost ten times what 1k cost — buffering only',
+    { timeout: 30_000, retry: 2 },
+    async () => {
+      // Buffering must be an append: O(1) per event regardless of how many are
+      // already in the batch. Ten times the events, ten times the work. A
+      // re-serialisation of the whole batch per event would be quadratic and
+      // land nowhere near this ceiling. Fresh strategy per run so neither
+      // measurement inherits the other's batch.
+      const exportEvents = (count: number): void => {
+        const { client } = makeMockClient();
+        const strat = cloudwatchObservability({
+          logGroupName: '/g',
+          maxBatchEvents: 1_000_000, // never trigger size-flush
+          flushIntervalMs: 0,
+          _client: client,
+        });
+        for (let i = 0; i < count; i++) strat.exportEvent(fakeEvent);
+      };
+      await expectScalesLinearly({
+        small: () => exportEvents(1_000),
+        large: () => exportEvents(10_000),
+        scale: 10,
+        why: 'exportEvent must append to the batch, not rebuild it',
+      });
+    },
+  );
 });
 
 // ─── P7 ROI — parity with agentcore ──────────────────────────────────

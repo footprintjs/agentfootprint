@@ -20,6 +20,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { LLMCall } from '../../../src/core/LLMCall.js';
 import { Agent } from '../../../src/core/Agent.js';
 import { MockProvider } from '../../../src/adapters/llm/MockProvider.js';
+import { expectScalesLinearly } from '../../helpers/perf.js';
 
 // ── 1. Unit — runner.emit routes typed events to typed listeners ────
 
@@ -204,16 +205,30 @@ describe('consumer-domain events — security', () => {
 // ── 6. Performance — N emits with no listener complete in bounded time ──
 
 describe('consumer-domain events — performance', () => {
-  it('1000 emits with no listener complete in under 100ms (zero-alloc path)', () => {
-    const llm = LLMCall.create({ provider: new MockProvider({ reply: 'ok' }), model: 'mock' })
-      .system('')
-      .build();
-    const t0 = performance.now();
-    for (let i = 0; i < 1000; i++) {
-      llm.emit('agentfootprint.memory.written', { storeId: 's', key: `k${i}`, tokens: 1 });
-    }
-    expect(performance.now() - t0).toBeLessThan(100);
-  });
+  it(
+    'emitting with no listener stays linear in emit count (zero-alloc path)',
+    { timeout: 30_000, retry: 2 },
+    async () => {
+      // The claim: with nobody listening, an emit is a map lookup that misses.
+      // It does not build a payload, does not walk a registry that grows, and
+      // does not retain anything — so ten times the emits costs ten times the
+      // work and no more.
+      const llm = LLMCall.create({ provider: new MockProvider({ reply: 'ok' }), model: 'mock' })
+        .system('')
+        .build();
+      const emit = (n: number): void => {
+        for (let i = 0; i < n; i++) {
+          llm.emit('agentfootprint.memory.written', { storeId: 's', key: `k${i}`, tokens: 1 });
+        }
+      };
+      await expectScalesLinearly({
+        small: () => emit(100),
+        large: () => emit(1000),
+        scale: 10,
+        why: 'listener-less emit must not accumulate cost per emit',
+      });
+    },
+  );
 });
 
 // ── 7. ROI — single runner hosts listeners for all domains ──────────

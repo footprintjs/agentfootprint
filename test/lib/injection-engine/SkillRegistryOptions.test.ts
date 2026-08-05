@@ -14,6 +14,7 @@
 import { describe, expect, it } from 'vitest';
 import { type SurfaceMode } from '../../../src/injection-engine.js';
 import { SkillRegistry, defineSkill, defineInstruction } from '../../../src/injection-engine.js';
+import { expectScalesLinearly } from '../../helpers/perf.js';
 
 // ─── Fixtures ─────────────────────────────────────────────────────
 
@@ -179,17 +180,29 @@ describe('SkillRegistry.resolveForSkill — security/fail-fast', () => {
 // ─── 6. PERFORMANCE — bounded ────────────────────────────────────
 
 describe('SkillRegistry.resolveForSkill — performance', () => {
-  it('10k cascade calls under 50ms (no cache, fresh resolve every time)', () => {
-    const r = new SkillRegistry({ providerHint: 'anthropic' });
-    r.register(makeSkill('billing'));
+  it(
+    'cascade resolution stays linear in call count (no cache, fresh resolve every time)',
+    { timeout: 30_000, retry: 2 },
+    async () => {
+      // The claim: each resolve walks the fixed cascade (call → skill → registry
+      // → provider hint) and nothing else. There is no cache, so cost per call
+      // must be flat — ten times the calls, ten times the work.
+      const r = new SkillRegistry({ providerHint: 'anthropic' });
+      r.register(makeSkill('billing'));
 
-    const t0 = Date.now();
-    for (let i = 0; i < 10_000; i++) {
-      r.resolveForSkill('billing', undefined, 'claude-sonnet-4-5');
-    }
-    const elapsed = Date.now() - t0;
-    expect(elapsed).toBeLessThan(50);
-  });
+      const resolve = (n: number): void => {
+        for (let i = 0; i < n; i++) {
+          r.resolveForSkill('billing', undefined, 'claude-sonnet-4-5');
+        }
+      };
+      await expectScalesLinearly({
+        small: () => resolve(1_000),
+        large: () => resolve(10_000),
+        scale: 10,
+        why: 'resolveForSkill must stay constant-cost per call',
+      });
+    },
+  );
 });
 
 // ─── 7. ROI — what the API unlocks ────────────────────────────────

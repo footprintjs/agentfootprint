@@ -29,6 +29,7 @@ import {
 } from '../../../src/lib/context-bisect/index';
 import { shortlistEarlyCulprits as viaObserve } from '../../../src/observe';
 import type { LoopFrame, Trajectory } from '../../../src/lib/context-bisect/trajectory';
+import { expectScalesLinearly } from '../../helpers/perf.js';
 
 /** Controllable embedder: each text → a fixed vector, so FA = cosine is engineered exactly. */
 function fakeEmbedder(table: Record<string, number[]>): Embedder {
@@ -235,18 +236,32 @@ describe('security & robustness', () => {
 
 // ─── 5. PERFORMANCE / LOAD ───────────────────────────────────────────
 describe('performance & load', () => {
-  it('a 50-loop trajectory with 3 suspects/loop shortlists promptly', async () => {
-    const frames = Array.from({ length: 50 }, (_, i) =>
-      frame(i, 'MID', [
-        { id: 'a', content: 'matchMid' },
-        { id: 'b', content: 'matchLate' },
-        { id: 'c', content: 'nothing' },
-      ]),
-    );
-    const t0 = performance.now();
-    const out = await shortlistEarlyCulprits(traj(frames), { embedder, k: 5 });
+  it('shortlisting is linear in loop count', { timeout: 30_000, retry: 2 }, async () => {
+    // Ten times the loops, ten times the work: the shortlist walks each frame
+    // once and scores its suspects. Re-scoring earlier frames per new frame
+    // would be quadratic and would blow past this ratio.
+    const frames = (loops: number) =>
+      Array.from({ length: loops }, (_, i) =>
+        frame(i, 'MID', [
+          { id: 'a', content: 'matchMid' },
+          { id: 'b', content: 'matchLate' },
+          { id: 'c', content: 'nothing' },
+        ]),
+      );
+    const few = traj(frames(5));
+    const many = traj(frames(50));
+    const out = await shortlistEarlyCulprits(many, { embedder, k: 5 });
     expect(out.candidates.length).toBe(3);
-    expect(performance.now() - t0).toBeLessThan(2000);
+    await expectScalesLinearly({
+      small: async () => {
+        await shortlistEarlyCulprits(few, { embedder, k: 5 });
+      },
+      large: async () => {
+        await shortlistEarlyCulprits(many, { embedder, k: 5 });
+      },
+      scale: 10,
+      why: 'shortlistEarlyCulprits must not re-score earlier loops',
+    });
   });
 });
 

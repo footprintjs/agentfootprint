@@ -22,6 +22,7 @@ import {
 } from '../../src/locales/index.js';
 import { defaultStatusTemplates } from '../../src/locales/index.js';
 import { mock } from '../../src/llm-providers.js';
+import { expectScalesLinearly } from '../helpers/perf.js';
 
 // ─── 1. UNIT — defaults alias the v2.4 templates ─────────────────
 
@@ -168,15 +169,27 @@ describe('Block D — security', () => {
 // ─── 6. PERFORMANCE — bounded ────────────────────────────────────
 
 describe('Block D — performance', () => {
-  it('compose + validate over the full default catalogs runs under 50ms (1000 cycles)', () => {
-    const t0 = Date.now();
-    for (let i = 0; i < 1000; i++) {
-      const merged = composeMessages(defaultCommentaryMessages, { extra: 'x' });
-      validateMessages(merged, Object.keys(defaultCommentaryMessages));
-    }
-    const elapsed = Date.now() - t0;
-    expect(elapsed).toBeLessThan(50);
-  });
+  it(
+    'compose + validate cost ten times as much for ten times the cycles',
+    { timeout: 30_000, retry: 2 },
+    async () => {
+      // The claim is that composing and validating a catalog is linear in the
+      // number of cycles — each cycle merges a fixed catalog and walks it once.
+      // Nothing accumulates between cycles, so 10× the cycles is 10× the work.
+      const cycles = (n: number): void => {
+        for (let i = 0; i < n; i++) {
+          const merged = composeMessages(defaultCommentaryMessages, { extra: 'x' });
+          validateMessages(merged, Object.keys(defaultCommentaryMessages));
+        }
+      };
+      await expectScalesLinearly({
+        small: () => cycles(100),
+        large: () => cycles(1000),
+        scale: 10,
+        why: 'composeMessages + validateMessages must stay linear in cycle count',
+      });
+    },
+  );
 });
 
 // ─── 7. ROI — Agent end-to-end ───────────────────────────────────

@@ -11,6 +11,7 @@ import { describe, expect, it } from 'vitest';
 import { Agent } from '../../src/index.js';
 import { defineSteering } from '../../src/injection-engine.js';
 import { mock } from '../../src/llm-providers.js';
+import { expectWithinTimes, measureAsync } from '../helpers/perf.js';
 
 // ─── Fixtures ─────────────────────────────────────────────────────
 
@@ -143,15 +144,29 @@ describe('agent-chart cache integration — security', () => {
 // ─── 6. Performance ───────────────────────────────────────────────
 
 describe('agent-chart cache integration — performance', () => {
-  it('Cache-layer stages add <100ms wall-clock overhead per run (mocked LLM)', async () => {
-    const agent = buildAgent();
-    const start = Date.now();
-    await agent.run({ message: 'go' });
-    const elapsed = Date.now() - start;
-    // Generous bound — cache stages are pure-transform; main cost is
-    // mock LLM overhead. Sub-second total expected.
-    expect(elapsed).toBeLessThan(2000);
-  });
+  it(
+    'Cache-layer stages do not multiply the cost of a run (mocked LLM)',
+    { timeout: 30_000, retry: 2 },
+    async () => {
+      // The comparison the test name always meant: the SAME agent with caching
+      // off is the baseline, measured on this machine moments before. Cache
+      // stages are pure transforms, so the run with them may cost a little more
+      // — 4× is the headroom — but never an order more. A busy runner slows
+      // both halves and cancels out.
+      const off = buildAgent({ caching: 'off' });
+      const on = buildAgent();
+      await expectWithinTimes({
+        baseline: async () => {
+          await off.run({ message: 'go' });
+        },
+        subject: async () => {
+          await on.run({ message: 'go' });
+        },
+        times: 4,
+        why: 'the cache layer must not multiply run cost',
+      });
+    },
+  );
 });
 
 // ─── 7. ROI — full integration ────────────────────────────────────

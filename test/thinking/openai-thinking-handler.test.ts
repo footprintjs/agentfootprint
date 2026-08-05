@@ -25,6 +25,7 @@ import {
   SHIPPED_THINKING_HANDLERS,
   type ThinkingBlock,
 } from '../../src/thinking/index.js';
+import { expectScalesLinearly } from '../helpers/perf.js';
 
 // ─── Fixtures ─────────────────────────────────────────────────────
 
@@ -192,40 +193,64 @@ describe('OpenAIThinkingHandler — security: content + no-signature', () => {
 
 // ─── 6. PERFORMANCE — normalize() x1000 ─────────────────────────
 
-describe('OpenAIThinkingHandler — performance: normalize() x1000', () => {
-  it('5-step structured summary x1000 under 250ms', () => {
-    const raw = structuredSummary([
-      'identify request',
-      'look up data',
-      'apply logic',
-      'verify result',
-      'format response',
-    ]);
-    const t0 = performance.now();
-    for (let i = 0; i < 1000; i++) {
-      const blocks = openAIThinkingHandler.normalize(raw);
-      if (blocks.length !== 5) throw new Error('shape regression');
-    }
-    const elapsed = performance.now() - t0;
-    expect(elapsed).toBeLessThan(250);
-  });
+describe('OpenAIThinkingHandler — performance: normalize() cost stays flat', () => {
+  it(
+    '5-step structured summary stays flat as calls pile up',
+    { timeout: 30_000, retry: 2 },
+    async () => {
+      const raw = structuredSummary([
+        'identify request',
+        'look up data',
+        'apply logic',
+        'verify result',
+        'format response',
+      ]);
+      const normalize = (times: number): void => {
+        for (let i = 0; i < times; i++) {
+          const blocks = openAIThinkingHandler.normalize(raw);
+          if (blocks.length !== 5) throw new Error('shape regression');
+        }
+      };
+      await expectScalesLinearly({
+        small: () => normalize(1_000),
+        large: () => normalize(10_000),
+        scale: 10,
+        why: 'normalize() must be pure and constant-cost',
+      });
+    },
+  );
 
-  it('undefined input x1000 under 50ms (early-return)', () => {
-    const t0 = performance.now();
-    for (let i = 0; i < 1000; i++) openAIThinkingHandler.normalize(undefined);
-    const elapsed = performance.now() - t0;
-    expect(elapsed).toBeLessThan(150);
-  });
+  it(
+    'undefined input takes the early return, at flat cost',
+    { timeout: 30_000, retry: 2 },
+    async () => {
+      const normalize = (times: number): void => {
+        for (let i = 0; i < times; i++) openAIThinkingHandler.normalize(undefined);
+      };
+      await expectScalesLinearly({
+        small: () => normalize(1_000),
+        large: () => normalize(10_000),
+        scale: 10,
+        why: 'the undefined-input early return must stay an early return',
+      });
+    },
+  );
 
-  it('large 50-step summary normalize under 50ms', () => {
-    const raw = structuredSummary(
-      Array.from({ length: 50 }, (_, i) => `Step ${i}: detailed reasoning content here`),
-    );
-    const t0 = performance.now();
-    const blocks = openAIThinkingHandler.normalize(raw);
-    const elapsed = performance.now() - t0;
-    expect(blocks).toHaveLength(50);
-    expect(elapsed).toBeLessThan(50);
+  it('normalizing a summary is linear in step count', { timeout: 30_000, retry: 2 }, async () => {
+    // Ten times the steps, ten times the work: each step is mapped once.
+    const summaryOf = (steps: number) =>
+      structuredSummary(
+        Array.from({ length: steps }, (_, i) => `Step ${i}: detailed reasoning content here`),
+      );
+    const small = summaryOf(50);
+    const large = summaryOf(500);
+    expect(openAIThinkingHandler.normalize(small)).toHaveLength(50);
+    await expectScalesLinearly({
+      small: () => void openAIThinkingHandler.normalize(small),
+      large: () => void openAIThinkingHandler.normalize(large),
+      scale: 10,
+      why: 'summary normalization must map each step once',
+    });
   });
 });
 

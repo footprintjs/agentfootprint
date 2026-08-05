@@ -22,6 +22,7 @@ import {
 import { buildDefaultInstruction } from '../../src/core/outputSchema.js';
 import { defineInstruction } from '../../src/injection-engine.js';
 import { mock } from '../../src/llm-providers.js';
+import { expectScalesLinearly } from '../helpers/perf.js';
 
 // ─── Fixtures ─────────────────────────────────────────────────────
 
@@ -254,13 +255,18 @@ describe('outputSchema — security', () => {
 // ─── 6. PERFORMANCE — bounded ────────────────────────────────────
 
 describe('outputSchema — performance', () => {
-  it('applyOutputSchema for 1000 small payloads runs under 100ms', () => {
+  it('parsing cost stays flat as payloads pile up', { timeout: 30_000, retry: 2 }, async () => {
     const parser = makeTicketParser();
     const raw = '{"status":"ok","items":["a","b","c"]}';
-    const t0 = Date.now();
-    for (let i = 0; i < 1000; i++) applyOutputSchema(raw, parser);
-    const elapsed = Date.now() - t0;
-    expect(elapsed).toBeLessThan(100);
+    const parse = (times: number): void => {
+      for (let i = 0; i < times; i++) applyOutputSchema(raw, parser);
+    };
+    await expectScalesLinearly({
+      small: () => parse(1_000),
+      large: () => parse(10_000),
+      scale: 10,
+      why: 'applyOutputSchema must hold nothing between payloads',
+    });
   });
 });
 

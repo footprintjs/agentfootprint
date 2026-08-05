@@ -18,6 +18,7 @@ import { Parallel } from '../../../src/core-flow/Parallel.js';
 import { LLMCall } from '../../../src/core/LLMCall.js';
 import { MockProvider } from '../../../src/adapters/llm/MockProvider.js';
 import type { LLMProvider } from '../../../src/adapters/types.js';
+import { expectWithinReferenceUnits, measureAsync } from '../../helpers/perf.js';
 
 function ok(reply: string) {
   return LLMCall.create({ provider: new MockProvider({ reply }), model: 'mock' })
@@ -244,7 +245,7 @@ describe('Parallel failure — security', () => {
 // ── 6. Performance — no regression on happy path ────────────────────
 
 describe('Parallel failure — performance', () => {
-  it('4-branch all-success completes in under 500ms', async () => {
+  it('4-branch all-success completes in under 500ms', { timeout: 30_000, retry: 2 }, async () => {
     const par = Parallel.create()
       .branch('a', ok('A'))
       .branch('b', ok('B'))
@@ -253,9 +254,17 @@ describe('Parallel failure — performance', () => {
       .mergeWithFn((r) => Object.values(r).sort().join(','))
       .build();
 
-    const t0 = performance.now();
-    await par.run({ message: 'go' });
-    expect(performance.now() - t0).toBeLessThan(500);
+    // 500 reference units of CPU (≈500ms on a quiet machine, more on a busy
+    // one). The claim is that failure wiring costs nothing when nothing
+    // fails — a regression there means waiting on something, which costs
+    // orders of magnitude, not jitter.
+    await expectWithinReferenceUnits(
+      async () => {
+        await par.run({ message: 'go' });
+      },
+      500,
+      'failure wiring must be free on the happy path',
+    );
   });
 });
 

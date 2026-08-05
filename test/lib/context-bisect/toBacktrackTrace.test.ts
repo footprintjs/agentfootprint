@@ -19,6 +19,7 @@ import {
   type Suspect,
 } from '../../../src/observe';
 import { plantedScenario, runPlantedScenario, decisionChanged } from './plantedFactFixture';
+import { expectScalesLinearly } from '../../helpers/perf.js';
 
 /* ── builders ─────────────────────────────────────────────────────────── */
 
@@ -454,25 +455,45 @@ describe('toBacktrackTrace — security: no field invention, redaction preserved
 /* ── performance / load — pure-mapper budgets ─────────────────────────── */
 
 describe('toBacktrackTrace — performance/load', () => {
-  it('serializes a 5k-suspect report well under 200ms and survives 1k repeated calls', () => {
-    const big = report({
-      suspects: Array.from({ length: 5000 }, (_, i) =>
-        suspect({
-          kind: 'stage',
-          source: `s#${i}`,
-          score: 1 - i / 5000,
-          hasContentEvidence: i % 3 === 0,
-        }),
-      ),
-    });
-    const t0 = performance.now();
-    const t = toBacktrackTrace(big, { answer: ANSWER, maxSuspects: 6 });
-    expect(performance.now() - t0).toBeLessThan(200);
-    expect(t.suspects.length).toBe(6);
+  it(
+    'serialization is linear in suspect count and flat across repeated calls',
+    { timeout: 30_000, retry: 2 },
+    async () => {
+      // Two claims, two ratios, no stopwatch. (1) Mapping a report is one pass
+      // over its suspects — ten times the suspects, ten times the work, even
+      // though only six survive the cap. (2) The mapper is pure, so repeated
+      // calls on the same small report cost the same each time.
+      const reportOf = (n: number) =>
+        report({
+          suspects: Array.from({ length: n }, (_, i) =>
+            suspect({
+              kind: 'stage',
+              source: `s#${i}`,
+              score: 1 - i / n,
+              hasContentEvidence: i % 3 === 0,
+            }),
+          ),
+        });
+      const small = reportOf(500);
+      const big = reportOf(5000);
+      expect(toBacktrackTrace(big, { answer: ANSWER, maxSuspects: 6 }).suspects.length).toBe(6);
+      await expectScalesLinearly({
+        small: () => void toBacktrackTrace(small, { answer: ANSWER, maxSuspects: 6 }),
+        large: () => void toBacktrackTrace(big, { answer: ANSWER, maxSuspects: 6 }),
+        scale: 10,
+        why: 'report mapping must be one pass over the suspects',
+      });
 
-    const small = report({ suspects: [suspect({ kind: 'stage' })] });
-    const t1 = performance.now();
-    for (let i = 0; i < 1000; i++) toBacktrackTrace(small, { answer: ANSWER });
-    expect(performance.now() - t1).toBeLessThan(500);
-  });
+      const one = report({ suspects: [suspect({ kind: 'stage' })] });
+      const repeat = (times: number): void => {
+        for (let i = 0; i < times; i++) toBacktrackTrace(one, { answer: ANSWER });
+      };
+      await expectScalesLinearly({
+        small: () => repeat(1_000),
+        large: () => repeat(10_000),
+        scale: 10,
+        why: 'the mapper is pure — repeated calls must not get more expensive',
+      });
+    },
+  );
 });

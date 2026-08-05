@@ -25,6 +25,7 @@ import {
   SHIPPED_THINKING_HANDLERS,
   type ThinkingBlock,
 } from '../../src/thinking/index.js';
+import { expectScalesLinearly } from '../helpers/perf.js';
 
 // ─── Fixtures ─────────────────────────────────────────────────────
 
@@ -278,30 +279,50 @@ describe('AnthropicThinkingHandler — security: signature byte-exact', () => {
 
 // ─── 6. PERFORMANCE — normalize() under bound ───────────────────
 
-describe('AnthropicThinkingHandler — performance: normalize() x1000', () => {
-  it('5-block content x1000 under 250ms', () => {
-    const raw = anthropicContent([
-      { type: 'thinking', thinking: 'block 1', signature: 'sig-1' },
-      { type: 'thinking', thinking: 'block 2', signature: 'sig-2' },
-      { type: 'redacted_thinking', signature: 'sig-3' },
-      { type: 'text', text: 'visible' },
-      { type: 'tool_use', id: 'tu-1', name: 'x', input: {} },
-    ]);
-    const t0 = performance.now();
-    for (let i = 0; i < 1000; i++) {
-      const blocks = anthropicThinkingHandler.normalize(raw);
-      if (blocks.length !== 3) throw new Error('shape regression');
-    }
-    const elapsed = performance.now() - t0;
-    expect(elapsed).toBeLessThan(250);
-  });
+describe('AnthropicThinkingHandler — performance: normalize() cost stays flat', () => {
+  it(
+    'normalizing 5-block content costs the same on call 10,000 as on call 1',
+    { timeout: 30_000, retry: 2 },
+    async () => {
+      // normalize() is pure: same input, same output, nothing retained. Ten
+      // times the calls must therefore cost ten times the total.
+      const raw = anthropicContent([
+        { type: 'thinking', thinking: 'block 1', signature: 'sig-1' },
+        { type: 'thinking', thinking: 'block 2', signature: 'sig-2' },
+        { type: 'redacted_thinking', signature: 'sig-3' },
+        { type: 'text', text: 'visible' },
+        { type: 'tool_use', id: 'tu-1', name: 'x', input: {} },
+      ]);
+      const normalize = (times: number): void => {
+        for (let i = 0; i < times; i++) {
+          const blocks = anthropicThinkingHandler.normalize(raw);
+          if (blocks.length !== 3) throw new Error('shape regression');
+        }
+      };
+      await expectScalesLinearly({
+        small: () => normalize(1_000),
+        large: () => normalize(10_000),
+        scale: 10,
+        why: 'normalize() must be pure and constant-cost',
+      });
+    },
+  );
 
-  it('empty content x1000 under 50ms (defensive early-return)', () => {
-    const t0 = performance.now();
-    for (let i = 0; i < 1000; i++) anthropicThinkingHandler.normalize([]);
-    const elapsed = performance.now() - t0;
-    expect(elapsed).toBeLessThan(150);
-  });
+  it(
+    'empty content takes the early return, at flat cost (defensive path)',
+    { timeout: 30_000, retry: 2 },
+    async () => {
+      const normalize = (times: number): void => {
+        for (let i = 0; i < times; i++) anthropicThinkingHandler.normalize([]);
+      };
+      await expectScalesLinearly({
+        small: () => normalize(1_000),
+        large: () => normalize(10_000),
+        scale: 10,
+        why: 'the empty-content early return must stay an early return',
+      });
+    },
+  );
 });
 
 // ─── 7. ROI — realistic Sonnet response ─────────────────────────

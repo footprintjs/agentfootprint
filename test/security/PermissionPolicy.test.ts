@@ -16,6 +16,7 @@ import { type ToolDispatchContext } from '../../src/tool-providers/index.js';
 import { PermissionPolicy } from '../../src/security/index.js';
 import { staticTools, gatedTools } from '../../src/tool-providers/index.js';
 import type { PermissionChecker, PermissionRequest } from '../../src/security/index.js';
+import { expectScalesLinearly } from '../helpers/perf.js';
 
 // ─── Fixtures ─────────────────────────────────────────────────────
 
@@ -250,16 +251,28 @@ describe('PermissionPolicy — security: closed-fail', () => {
 // ─── 6. PERFORMANCE — bounded cost ────────────────────────────────
 
 describe('PermissionPolicy — performance', () => {
-  it('isAllowed is fast enough for per-iteration tool dispatch (10k checks <50ms)', () => {
-    const policy = PermissionPolicy.fromRoles(ROLES, 'admin');
-    const t0 = Date.now();
-    for (let i = 0; i < 10_000; i++) {
-      policy.isAllowed('process_refund');
-      policy.isAllowed('totally_unknown_tool');
-    }
-    const elapsed = Date.now() - t0;
-    expect(elapsed).toBeLessThan(50);
-  });
+  it(
+    'isAllowed cost stays flat as checks pile up — fit for per-iteration dispatch',
+    { timeout: 30_000, retry: 2 },
+    async () => {
+      // A permission check is a set membership test. Ten times the checks, ten
+      // times the work: no rule list is rebuilt, nothing is memoised into a
+      // structure that grows.
+      const policy = PermissionPolicy.fromRoles(ROLES, 'admin');
+      const check = (times: number): void => {
+        for (let i = 0; i < times; i++) {
+          policy.isAllowed('process_refund');
+          policy.isAllowed('totally_unknown_tool');
+        }
+      };
+      await expectScalesLinearly({
+        small: () => check(10_000),
+        large: () => check(100_000),
+        scale: 10,
+        why: 'isAllowed must stay a membership test',
+      });
+    },
+  );
 });
 
 // ─── 7. ROI — what the primitive unlocks ──────────────────────────

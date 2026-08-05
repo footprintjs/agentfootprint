@@ -33,6 +33,7 @@ import {
   projectActiveInjection,
   type ActiveInjection,
 } from '../../../src/lib/injection-engine/types.js';
+import { expectScalesLinearly } from '../../helpers/perf.js';
 
 // ── helpers ──────────────────────────────────────────────────────────────
 
@@ -365,16 +366,32 @@ describe('injection-engine subflow — security', () => {
 // ─── Performance — route + diff over a large active set under budget ───────
 
 describe('injection-engine subflow — performance', () => {
-  it('routes + diffs 1000 active injections under budget', () => {
-    const big: ActiveInjection[] = Array.from({ length: 1000 }, (_, i) =>
-      active({ id: `i${i}`, flavor: 'instructions', inject: { systemPrompt: `r${i}` } }),
-    );
-    const start = performance.now();
-    const byslot = routeActiveInjections(big);
-    const delta = diffActiveBySlot(EMPTY_ACTIVE_BY_SLOT, byslot);
-    const elapsed = performance.now() - start;
-    expect(byslot.systemPrompt.length).toBe(1000);
-    expect(delta.systemPrompt.added.length).toBe(1000);
-    expect(elapsed).toBeLessThan(250); // generous regression guard
-  });
+  it(
+    'routing + diffing is linear in active-injection count',
+    { timeout: 30_000, retry: 2 },
+    async () => {
+      // The diff is a set difference by id, not a nested comparison. Ten times
+      // the injections must cost ten times the work; a nested compare would
+      // cost a hundred and be caught here.
+      const activeOf = (n: number): ActiveInjection[] =>
+        Array.from({ length: n }, (_, i) =>
+          active({ id: `i${i}`, flavor: 'instructions', inject: { systemPrompt: `r${i}` } }),
+        );
+      const few = activeOf(1_000);
+      const many = activeOf(10_000);
+      const routeAndDiff = (list: ActiveInjection[]): void => {
+        const byslot = routeActiveInjections(list);
+        diffActiveBySlot(EMPTY_ACTIVE_BY_SLOT, byslot);
+      };
+      const byslot = routeActiveInjections(few);
+      expect(byslot.systemPrompt.length).toBe(1000);
+      expect(diffActiveBySlot(EMPTY_ACTIVE_BY_SLOT, byslot).systemPrompt.added.length).toBe(1000);
+      await expectScalesLinearly({
+        small: () => routeAndDiff(few),
+        large: () => routeAndDiff(many),
+        scale: 10,
+        why: 'the slot diff must be a set difference, not a nested compare',
+      });
+    },
+  );
 });

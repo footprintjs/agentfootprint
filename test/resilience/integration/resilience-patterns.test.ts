@@ -14,6 +14,7 @@ import { defineTool } from '../../../src/core/tools.js';
 import { mock } from '../../../src/adapters/llm/MockProvider.js';
 import { withRetry, withFallback, fallbackProvider } from '../../../src/resilience/index.js';
 import type { LLMProvider, LLMRequest, LLMResponse } from '../../../src/adapters/types.js';
+import { expectScalesLinearly, expectWithinTimes, measureAsync } from '../../helpers/perf.js';
 
 const ok = (tag: string): LLMResponse => ({
   content: tag,
@@ -263,33 +264,54 @@ describe('resilience — security (hostile inputs)', () => {
 // ─── Performance — overhead is bounded ─────────────────────────────
 
 describe('resilience — performance', () => {
-  it('withRetry overhead on success path is under 10ms for 1000 calls', async () => {
-    const provider: LLMProvider = {
-      name: 'fast',
-      complete: async () => ok('fast'),
-    };
-    const wrapped = withRetry(provider, { initialDelayMs: 0 });
+  it(
+    'withRetry adds almost nothing on the success path',
+    { timeout: 30_000, retry: 2 },
+    async () => {
+      // The bare provider is the baseline, timed here on this machine. When the
+      // first attempt succeeds the wrapper is a try/catch and nothing else, so
+      // 3× is generous headroom — and load slows both halves alike.
+      const provider: LLMProvider = {
+        name: 'fast',
+        complete: async () => ok('fast'),
+      };
+      const wrapped = withRetry(provider, { initialDelayMs: 0 });
 
-    const start = performance.now();
-    for (let i = 0; i < 1000; i++) await wrapped.complete(req);
-    const elapsed = performance.now() - start;
+      const call = async (target: LLMProvider, times: number): Promise<void> => {
+        for (let i = 0; i < times; i++) await target.complete(req);
+      };
+      await expectWithinTimes({
+        baseline: () => call(provider, 1000),
+        subject: () => call(wrapped, 1000),
+        times: 3,
+        why: 'withRetry must be nearly free when nothing retries',
+      });
+    },
+  );
 
-    expect(elapsed).toBeLessThan(500); // generous CI ceiling; typical < 50ms
-  });
-
-  it('fallbackProvider chain construction is O(n) — 100 providers compose in <50ms', () => {
-    const providers: LLMProvider[] = Array.from({ length: 100 }, (_, i) => ({
-      name: `p${i}`,
-      complete: async () => ok(`${i}`),
-    }));
-
-    const start = performance.now();
-    const chained = fallbackProvider(...providers);
-    const elapsed = performance.now() - start;
-
-    expect(chained.complete).toBeInstanceOf(Function);
-    expect(elapsed).toBeLessThan(50);
-  });
+  it(
+    'fallbackProvider chain construction is O(n) — ten times the providers, ten times the work',
+    { timeout: 30_000, retry: 2 },
+    async () => {
+      // O(n) is a claim about the curve, so the test measures the curve. Both
+      // provider lists are built before either measurement so that constructing
+      // them cannot stand in for composing them.
+      const providersOf = (n: number): LLMProvider[] =>
+        Array.from({ length: n }, (_, i) => ({
+          name: `p${i}`,
+          complete: async () => ok(`${i}`),
+        }));
+      const few = providersOf(100);
+      const many = providersOf(1000);
+      expect(fallbackProvider(...few).complete).toBeInstanceOf(Function);
+      await expectScalesLinearly({
+        small: () => void fallbackProvider(...few),
+        large: () => void fallbackProvider(...many),
+        scale: 10,
+        why: 'composing a fallback chain must be one pass over the providers',
+      });
+    },
+  );
 });
 
 // ─── ROI — realistic SLO targets meet in production envelope ─────
@@ -315,8 +337,14 @@ describe('resilience — ROI (realistic SLO budgets)', () => {
     const result = await wrapped.complete(req);
     const elapsed = Date.now() - start;
 
+    // The ceiling is the CONFIGURED BACKOFF BUDGET (100ms + 200ms = 300ms)
+    // with room to spare, not a machine-speed guess: the claim is that
+    // recovery waits the backoff it was told to wait and no more. Five times
+    // that budget is far outside anything ordinary load can add to two
+    // timers, and the work between attempts is trivial.
+    const CONFIGURED_BACKOFF_MS = 300;
     expect(result.content).toBe('recovered');
-    expect(elapsed).toBeLessThan(1500);
+    expect(elapsed).toBeLessThan(CONFIGURED_BACKOFF_MS * 5);
   });
 
   it('fallback chain shortcuts on first success — no wasted calls', async () => {

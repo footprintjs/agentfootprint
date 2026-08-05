@@ -7,6 +7,7 @@ import { describe, expect, it } from 'vitest';
 import { Agent } from '../../../src/core/Agent.js';
 import { mock } from '../../../src/adapters/llm/MockProvider.js';
 import { toSSE, SSEFormatter, encodeSSE } from '../../../src/stream.js';
+import { expectScalesLinearly } from '../../helpers/perf.js';
 
 function buildAgent() {
   return Agent.create({
@@ -150,13 +151,18 @@ describe('toSSE — security', () => {
 // ─── Performance — encodeSSE overhead ──────────────────────────────
 
 describe('toSSE — performance', () => {
-  it('encodeSSE() handles 10k events in under 100ms', () => {
-    const start = performance.now();
-    for (let i = 0; i < 10_000; i++) {
-      encodeSSE('e', { i, payload: 'x' });
-    }
-    const elapsed = performance.now() - start;
-    expect(elapsed).toBeLessThan(100);
+  it('encodeSSE() cost stays flat as events pile up', { timeout: 30_000, retry: 2 }, async () => {
+    // Encoding is a pure string build per event. Ten times the events, ten
+    // times the work — nothing is retained between calls.
+    const encode = (events: number): void => {
+      for (let i = 0; i < events; i++) encodeSSE('e', { i, payload: 'x' });
+    };
+    await expectScalesLinearly({
+      small: () => encode(10_000),
+      large: () => encode(100_000),
+      scale: 10,
+      why: 'encodeSSE must be a pure per-event string build',
+    });
   });
 });
 

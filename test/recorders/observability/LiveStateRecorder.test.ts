@@ -20,6 +20,7 @@ import {
   liveStateRecorder,
 } from '../../../src/recorders/observability/LiveStateRecorder.js';
 import type { AgentfootprintEvent } from '../../../src/events/registry.js';
+import { expectScalesLinearly } from '../../helpers/perf.js';
 
 // ── Test helpers ────────────────────────────────────────────────────
 
@@ -448,40 +449,60 @@ describe('LiveStateRecorder — Tier 4: Property', () => {
 // ─── Tier 5 — Performance ──────────────────────────────────────────
 
 describe('LiveStateRecorder — Tier 5: Performance', () => {
-  it('1000 LLM calls × 5 token chunks each completes under 200ms', () => {
-    const tr = new LiveLLMTracker();
-    const runner = makeRunner();
-    tr.subscribe(runner);
-
-    const t0 = performance.now();
-    for (let i = 0; i < 1000; i++) {
-      const rid = `r${i}`;
-      runner.dispatcher.dispatch(llmStart(rid));
-      for (let j = 0; j < 5; j++) {
-        runner.dispatcher.dispatch(token(rid, 'x', j));
+  it('LLM call tracking is linear in call count', { timeout: 30_000, retry: 2 }, async () => {
+    // Start, five tokens, end — all keyed by run id. Ten times the calls,
+    // ten times the work, and nothing left active at the end.
+    const track = (calls: number): void => {
+      const tr = new LiveLLMTracker();
+      const runner = makeRunner();
+      tr.subscribe(runner);
+      for (let i = 0; i < calls; i++) {
+        const rid = `r${i}`;
+        runner.dispatcher.dispatch(llmStart(rid));
+        for (let j = 0; j < 5; j++) {
+          runner.dispatcher.dispatch(token(rid, 'x', j));
+        }
+        runner.dispatcher.dispatch(llmEnd(rid));
       }
-      runner.dispatcher.dispatch(llmEnd(rid));
-    }
-    const elapsed = performance.now() - t0;
-    expect(tr.activeCount).toBe(0);
-    expect(elapsed).toBeLessThan(200);
+      expect(tr.activeCount).toBe(0);
+    };
+    await expectScalesLinearly({
+      small: () => track(1_000),
+      large: () => track(10_000),
+      scale: 10,
+      why: 'live tracking must be keyed, never scanned',
+    });
   });
 
-  it('100 concurrent active LLM calls — getActive remains O(1)', () => {
-    const tr = new LiveLLMTracker();
-    const runner = makeRunner();
-    tr.subscribe(runner);
-
-    for (let i = 0; i < 100; i++) {
-      runner.dispatcher.dispatch(llmStart(`r${i}`));
-    }
-    expect(tr.activeCount).toBe(100);
-
-    const t0 = performance.now();
-    for (let i = 0; i < 100; i++) tr.getActive(`r${i}`);
-    const elapsed = performance.now() - t0;
-    expect(elapsed).toBeLessThan(5);
-  });
+  it(
+    'getActive remains O(1) — ten times the active calls, the same cost per lookup',
+    { timeout: 30_000, retry: 2 },
+    async () => {
+      // O(1) means the number of ACTIVE calls does not matter. Both trackers
+      // are filled before either measurement, and each does the same 10k
+      // lookups, so `scale: 1` states the claim exactly: same work either way.
+      const fill = (active: number) => {
+        const tr = new LiveLLMTracker();
+        const runner = makeRunner();
+        tr.subscribe(runner);
+        for (let i = 0; i < active; i++) runner.dispatcher.dispatch(llmStart(`r${i}`));
+        expect(tr.activeCount).toBe(active);
+        return tr;
+      };
+      const few = fill(100);
+      const many = fill(1_000);
+      await expectScalesLinearly({
+        small: () => {
+          for (let i = 0; i < 10_000; i++) few.getActive(`r${i % 100}`);
+        },
+        large: () => {
+          for (let i = 0; i < 10_000; i++) many.getActive(`r${i % 1_000}`);
+        },
+        scale: 1,
+        why: 'getActive must not depend on how many calls are in flight',
+      });
+    },
+  );
 });
 
 // ─── Tier 6 — Security / Error ─────────────────────────────────────
@@ -542,12 +563,18 @@ describe('LiveStateRecorder — Tier 6: Security & Error', () => {
 // ─── Tier 7 — ROI ──────────────────────────────────────────────────
 
 describe('LiveStateRecorder — Tier 7: ROI', () => {
-  it('NOT on the main barrel — recorders moved to /observe in 5.0.0', async () => {
-    const af = await import('../../../src/index.js');
-    expect((af as Record<string, unknown>).LiveStateRecorder).toBeUndefined();
-    expect((af as Record<string, unknown>).liveStateRecorder).toBeUndefined();
-    expect((af as Record<string, unknown>).LiveLLMTracker).toBeUndefined();
-  });
+  // A dynamic import of the whole package barrel — cheap when the machine is
+  // idle, seconds when it is not, and the assertion is about EXPORTS.
+  it(
+    'NOT on the main barrel — recorders moved to /observe in 5.0.0',
+    { timeout: 60_000 },
+    async () => {
+      const af = await import('../../../src/index.js');
+      expect((af as Record<string, unknown>).LiveStateRecorder).toBeUndefined();
+      expect((af as Record<string, unknown>).liveStateRecorder).toBeUndefined();
+      expect((af as Record<string, unknown>).LiveLLMTracker).toBeUndefined();
+    },
+  );
 
   it('exported from /observe subpath', async () => {
     const obs = await import('../../../src/observe.js');

@@ -25,6 +25,7 @@ import {
   bucketByAnchors as viaObserve,
   assembleTrajectory as assembleViaObserve,
 } from '../../../src/observe';
+import { expectScalesLinearly } from '../../helpers/perf.js';
 
 /** Minimal CommitBundle for partition tests (only stageId + runtimeStageId matter here). */
 function mk(stageId: string, runtimeStageId: string): CommitBundle {
@@ -180,14 +181,27 @@ describe('security & robustness', () => {
 
 // ─── 5. PERFORMANCE + 6. LOAD ────────────────────────────────────────
 describe('performance & load', () => {
-  it('a 50-loop log assembles in a single linear pass, promptly', () => {
-    const log = flatAgentLog(50);
-    const t0 = performance.now();
-    const heads = findLoopHeads(log);
-    const { frames } = bucketByAnchors(log, heads);
-    expect(frames.length).toBe(50);
-    expect(performance.now() - t0).toBeLessThan(200);
-  });
+  it(
+    'assembles in a single linear pass — ten times the loops, ten times the work',
+    { timeout: 30_000, retry: 2 },
+    async () => {
+      // "A single linear pass" is exactly what a ratio can prove and a
+      // stopwatch cannot. Both logs are built before either measurement.
+      const smallLog = flatAgentLog(5);
+      const bigLog = flatAgentLog(50);
+      const assemble = (log: ReturnType<typeof flatAgentLog>): void => {
+        const heads = findLoopHeads(log);
+        bucketByAnchors(log, heads);
+      };
+      expect(bucketByAnchors(bigLog, findLoopHeads(bigLog)).frames.length).toBe(50);
+      await expectScalesLinearly({
+        small: () => assemble(smallLog),
+        large: () => assemble(bigLog),
+        scale: 10,
+        why: 'loop-head bucketing must be a single pass over the log',
+      });
+    },
+  );
 });
 
 // ═══════════════════════════════════════════════════════════════════════

@@ -22,6 +22,7 @@ import { askHuman, isPaused } from '../../src/core/pause.js';
 import { mock } from '../../src/llm-providers.js';
 import type { LLMProvider, LLMRequest, LLMResponse } from '../../src/adapters/types.js';
 import type { CompactionRecord } from '../../src/core/agent/window/types.js';
+import { expectScalesLinearly } from '../helpers/perf.js';
 
 // ─── Helpers ──────────────────────────────────────────────────────
 
@@ -775,28 +776,51 @@ describe('.compaction() — performance', () => {
     expect(sum.calls.length).toBeLessThanOrEqual(main.requests.length);
   });
 
-  it('a 200-message window plans a fold in well under 50ms', async () => {
-    const { segmentTurns, planRemoval, answeredCallIds } = await import(
-      '../../src/core/agent/window/turns.js'
-    );
-    const history = [{ role: 'user' as const, content: 'go' }];
-    for (let i = 0; i < 100; i++) {
-      history.push(
-        {
-          role: 'assistant',
-          content: '',
-          toolCalls: [{ id: `c${i}`, name: 'look', args: {} }],
-        } as never,
-        { role: 'tool', content: 'x'.repeat(200), toolCallId: `c${i}`, toolName: 'look' } as never,
+  it(
+    'planning a fold over a 400-message window costs twice what 200 costs',
+    { timeout: 30_000, retry: 2 },
+    async () => {
+      // Segmenting turns and planning a fold are single passes over the
+      // history. Double the history, double the work — anything quadratic (a
+      // re-scan for each turn's answered call ids, say) would show up as ~4×.
+      const { segmentTurns, planRemoval, answeredCallIds } = await import(
+        '../../src/core/agent/window/turns.js'
       );
-    }
-    const start = performance.now();
-    for (let i = 0; i < 50; i++) {
-      const turns = segmentTurns(history);
-      planRemoval(turns, 6, { answeredCallIds: answeredCallIds(history) }, () => false);
-    }
-    expect(performance.now() - start).toBeLessThan(50);
-  });
+      const historyOf = (pairs: number) => {
+        const history = [{ role: 'user' as const, content: 'go' }];
+        for (let i = 0; i < pairs; i++) {
+          history.push(
+            {
+              role: 'assistant',
+              content: '',
+              toolCalls: [{ id: `c${i}`, name: 'look', args: {} }],
+            } as never,
+            {
+              role: 'tool',
+              content: 'x'.repeat(200),
+              toolCallId: `c${i}`,
+              toolName: 'look',
+            } as never,
+          );
+        }
+        return history;
+      };
+      const short = historyOf(100);
+      const long = historyOf(200);
+      const plan = (history: ReturnType<typeof historyOf>): void => {
+        for (let i = 0; i < 50; i++) {
+          const turns = segmentTurns(history);
+          planRemoval(turns, 6, { answeredCallIds: answeredCallIds(history) }, () => false);
+        }
+      };
+      await expectScalesLinearly({
+        small: () => plan(short),
+        large: () => plan(long),
+        scale: 2,
+        why: 'fold planning must stay linear in history length',
+      });
+    },
+  );
 });
 
 // ─── ROI — what the feature is FOR ────────────────────────────────

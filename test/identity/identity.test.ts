@@ -20,6 +20,7 @@ import {
   headers,
 } from '../../src/identity.js';
 import type { AgentCoreIdentityClientLike, AgentCoreOauthResponse } from '../../src/identity.js';
+import { expectScalesLinearly } from '../helpers/perf.js';
 
 function fakeClient(resp: AgentCoreOauthResponse): {
   client: AgentCoreIdentityClientLike;
@@ -414,12 +415,25 @@ describe('identity — Security', () => {
 
 // ─── Performance ─────────────────────────────────────────────────────
 describe('identity — Performance', () => {
-  it('staticTokens.getCredential is O(1) — 2000 calls finish well under budget', async () => {
-    const p = staticTokens({ s: 'tok' });
-    const start = Date.now();
-    for (let i = 0; i < 2000; i++) await p.getCredential({ service: 's' });
-    expect(Date.now() - start).toBeLessThan(1000);
-  });
+  it(
+    'staticTokens.getCredential is O(1) — ten times the calls, ten times the work',
+    { timeout: 30_000, retry: 2 },
+    async () => {
+      // O(1) per call is a claim about the SHAPE of the cost curve, so the test
+      // measures the curve: the same lookup at 2k and at 20k calls, back to back
+      // on this machine. Load slows both and cancels out.
+      const p = staticTokens({ s: 'tok' });
+      const fetch = async (times: number): Promise<void> => {
+        for (let i = 0; i < times; i++) await p.getCredential({ service: 's' });
+      };
+      await expectScalesLinearly({
+        small: () => fetch(2_000),
+        large: () => fetch(20_000),
+        scale: 10,
+        why: 'staticTokens must stay a constant-time lookup',
+      });
+    },
+  );
 });
 
 // ─── Load ────────────────────────────────────────────────────────────

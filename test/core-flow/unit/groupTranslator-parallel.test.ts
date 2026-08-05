@@ -215,18 +215,20 @@ describe('Parallel — translator error containment', () => {
 // ── 6. Performance — translator invocation is amortised ─────────────
 
 describe('Parallel — getUIGroup() perf', () => {
-  it('1000 reads after first call complete under 50ms (cache-only)', () => {
-    const t: GroupTranslator = (g) => ({ count: g.members.length });
+  it('1000 reads invoke the translator exactly once (cache-only)', () => {
+    // Counted, not timed. "Amortised" means the translator runs once and
+    // every later read is served from the cache — and a call count says that
+    // exactly, on any machine, under any load. A stopwatch could only say
+    // "fast enough today".
+    const t = vi.fn<GroupTranslator>((g) => ({ count: g.members.length }));
     const par = Parallel.create({ groupTranslator: t })
       .branch('a', ok('A'))
       .branch('b', ok('B'))
       .mergeWithFn((r) => Object.values(r).join(','))
       .build();
     par.getUIGroup(); // warm
-    const start = performance.now();
     for (let i = 0; i < 1000; i++) par.getUIGroup();
-    const ms = performance.now() - start;
-    expect(ms).toBeLessThan(50);
+    expect(t).toHaveBeenCalledTimes(1);
   });
 });
 

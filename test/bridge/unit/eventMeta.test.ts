@@ -87,10 +87,16 @@ describe('buildEventMeta — run-level fields', () => {
   });
 
   it('computes runOffsetMs as wallClockMs - runStartMs', () => {
-    const start = Date.now() - 500;
+    // The subtraction is the claim, so the bounds are stated against the
+    // synthetic 500ms offset we planted: at least that (time only moves
+    // forward) and not wildly more. Building one meta object cannot take
+    // seconds, so the upper bound says "this is an offset, not a timestamp"
+    // rather than "this machine is fast".
+    const OFFSET_MS = 500;
+    const start = Date.now() - OFFSET_MS;
     const meta = buildEventMeta(undefined, run({ runStartMs: start }));
-    expect(meta.runOffsetMs).toBeGreaterThanOrEqual(500);
-    expect(meta.runOffsetMs).toBeLessThan(1000); // generous
+    expect(meta.runOffsetMs).toBeGreaterThanOrEqual(OFFSET_MS);
+    expect(meta.runOffsetMs).toBeLessThan(OFFSET_MS * 10);
   });
 });
 

@@ -6,6 +6,7 @@ import { describe, it, expect } from 'vitest';
 import { Agent } from '../../../src/core/Agent.js';
 import { isPaused, pauseHere } from '../../../src/core/pause.js';
 import type { LLMProvider, LLMResponse } from '../../../src/adapters/types.js';
+import { expectWithinReferenceUnits } from '../../helpers/perf.js';
 
 function scripted(...responses: readonly LLMResponse[]): LLMProvider {
   let i = 0;
@@ -44,14 +45,22 @@ function freshAgent() {
 }
 
 describe('performance — pause round trip is fast', () => {
-  it('pause + resume completes in under 500ms (CI-safe)', async () => {
+  it('pause + resume costs no more than a plain run', { timeout: 30_000, retry: 2 }, async () => {
+    // 500 reference units — the same ceiling run-latency.test.ts puts on ONE
+    // ordinary run. The claim is that checkpointing and resuming adds no new
+    // order of magnitude: it clones a small checkpoint and re-enters, it does
+    // not replay the world.
     const agent = freshAgent();
     const t0 = performance.now();
     const paused = await agent.run({ message: 'hi' });
     if (!isPaused(paused)) return expect.fail();
     await agent.resume(paused.checkpoint, 'ok');
     const ms = performance.now() - t0;
-    expect(ms).toBeLessThan(500);
+    await expectWithinReferenceUnits(
+      ms,
+      500,
+      'a pause + resume round trip must stay in run-latency territory',
+    );
   });
 });
 

@@ -306,23 +306,29 @@ export function describeHostContract(subject: HostUnderTest): void {
     });
 
     // ── performance / lifecycle: close() drains rather than drops ──
-    it('close() lets in-flight work finish and refuses what arrives after', async () => {
-      const handle = await serving();
-      const slowRequest: ContractRequest = { input: SLOW };
-      const inFlight = subject.invoke(handle, slowRequest);
-      // Give the request time to reach the handler and park there.
-      await new Promise((resolve) => setTimeout(resolve, 20));
+    // Real sockets and real timers: the assertion is about ORDER (in-flight
+    // work finishes, later arrivals are refused), never about speed.
+    it(
+      'close() lets in-flight work finish and refuses what arrives after',
+      { timeout: 60_000 },
+      async () => {
+        const handle = await serving();
+        const slowRequest: ContractRequest = { input: SLOW };
+        const inFlight = subject.invoke(handle, slowRequest);
+        // Give the request time to reach the handler and park there.
+        await new Promise((resolve) => setTimeout(resolve, 20));
 
-      const closing = handle.close();
-      const afterClose = await subject.invoke(handle, { input: 'too late' });
-      expect(afterClose.output).toBeUndefined();
-      expect(afterClose.error).toMatch(/is closed/);
+        const closing = handle.close();
+        const afterClose = await subject.invoke(handle, { input: 'too late' });
+        expect(afterClose.output).toBeUndefined();
+        expect(afterClose.error).toMatch(/is closed/);
 
-      releaseSlowRequest();
-      await closing;
-      const drained = await inFlight;
-      expect(drained.output).toBe(expectedOutput(slowRequest));
-    });
+        releaseSlowRequest();
+        await closing;
+        const drained = await inFlight;
+        expect(drained.output).toBe(expectedOutput(slowRequest));
+      },
+    );
 
     it('close() is idempotent', async () => {
       const handle = await serving();

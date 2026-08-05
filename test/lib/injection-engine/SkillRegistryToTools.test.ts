@@ -24,6 +24,7 @@ import {
   buildReadSkillTool,
 } from '../../../src/injection-engine.js';
 import { staticTools, gatedTools } from '../../../src/tool-providers/index.js';
+import { expectScalesLinearly } from '../../helpers/perf.js';
 
 // ─── Fixtures ─────────────────────────────────────────────────────
 
@@ -225,14 +226,26 @@ describe('SkillRegistry.toTools — security: id whitelist', () => {
 // ─── 6. PERFORMANCE — bounded ────────────────────────────────────
 
 describe('SkillRegistry.toTools — performance', () => {
-  it('toTools over a 100-skill registry runs under 50ms', () => {
-    const registry = new SkillRegistry();
-    for (let i = 0; i < 100; i++) registry.register(makeSkill(`skill_${i}`, `Skill ${i}`));
-
-    const t0 = Date.now();
-    for (let i = 0; i < 50; i++) registry.toTools(); // 5000 builds total
-    const elapsed = Date.now() - t0;
-    expect(elapsed).toBeLessThan(50);
+  it('toTools is linear in registry size', { timeout: 30_000, retry: 2 }, async () => {
+    // Building the tool surface walks each skill once. Ten times the skills,
+    // ten times the work — both registries are populated before either
+    // measurement so registration cost stays out of the comparison.
+    const registryOf = (skills: number) => {
+      const registry = new SkillRegistry();
+      for (let i = 0; i < skills; i++) registry.register(makeSkill(`skill_${i}`, `Skill ${i}`));
+      return registry;
+    };
+    const small = registryOf(100);
+    const large = registryOf(1000);
+    const build = (registry: SkillRegistry): void => {
+      for (let i = 0; i < 50; i++) registry.toTools();
+    };
+    await expectScalesLinearly({
+      small: () => build(small),
+      large: () => build(large),
+      scale: 10,
+      why: 'toTools must walk each skill once per build',
+    });
   });
 });
 

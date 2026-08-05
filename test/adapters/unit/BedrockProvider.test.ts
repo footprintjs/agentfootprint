@@ -7,6 +7,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { bedrock, BedrockProvider } from '../../../src/adapters/llm/BedrockProvider.js';
 import type { LLMRequest, LLMMessage } from '../../../src/adapters/types.js';
+import { expectScalesLinearly } from '../../helpers/perf.js';
 
 interface FakeResponse {
   output?: {
@@ -253,14 +254,25 @@ describe('BedrockProvider — security', () => {
 // ─── Performance ───────────────────────────────────────────────────
 
 describe('BedrockProvider — performance', () => {
-  it('1000 complete() calls under 500ms with fake client', async () => {
-    const fx = makeFakeFixtures(baseResponse);
-    const p = bedrock({ _client: fx.client, _commands: fx.Commands });
-    const start = performance.now();
-    for (let i = 0; i < 1000; i++) await p.complete(baseRequest);
-    const elapsed = performance.now() - start;
-    expect(elapsed).toBeLessThan(500);
-  });
+  it(
+    'per-call overhead stays flat as the call count grows (fake client)',
+    { timeout: 30_000, retry: 2 },
+    async () => {
+      // Same claim as the other adapters: per-call cost is flat, so ten times
+      // the calls costs ten times the work and nothing accumulates.
+      const fx = makeFakeFixtures(baseResponse);
+      const p = bedrock({ _client: fx.client, _commands: fx.Commands });
+      const callTimes = async (n: number): Promise<void> => {
+        for (let i = 0; i < n; i++) await p.complete(baseRequest);
+      };
+      await expectScalesLinearly({
+        small: () => callTimes(100),
+        large: () => callTimes(1000),
+        scale: 10,
+        why: 'the Bedrock adapter must not accumulate per-call state',
+      });
+    },
+  );
 });
 
 // ─── ROI — multi-vendor model ids ──────────────────────────────────

@@ -19,6 +19,7 @@ import { defineTool } from '../../../src/index.js';
 import { defineInstruction } from '../../../src/injection-engine.js';
 
 import { contextLedger } from '../../../src/lib/context-ledger/index.js';
+import { expectScalesLinearly } from '../../helpers/perf.js';
 
 function buildAgent() {
   const lookup = defineTool<{ id: number }, string>({
@@ -196,13 +197,22 @@ describe('contextLedger — runner shapes (REVIEW PINS)', () => {
 });
 
 describe('contextLedger — performance (PERF/LOAD)', () => {
-  it('recording a run and reading rows stays fast', async () => {
+  it('ingest cost stays flat as runs are recorded', { timeout: 30_000, retry: 2 }, async () => {
+    // Ten times the ingests, ten times the work. If recordRun re-walked
+    // everything already recorded, the twentieth ingest would cost more than
+    // the second and this ratio would blow out.
     const agent = buildAgent();
     await agent.run({ message: 'go' });
-    const ledger = contextLedger();
-    const t0 = performance.now();
-    for (let i = 0; i < 20; i++) ledger.recordRun(agent); // same snapshot, 20 ingests
-    ledger.rows();
-    expect(performance.now() - t0).toBeLessThan(2000);
+    const ingest = (times: number): void => {
+      const ledger = contextLedger();
+      for (let i = 0; i < times; i++) ledger.recordRun(agent); // same snapshot
+      ledger.rows();
+    };
+    await expectScalesLinearly({
+      small: () => ingest(50),
+      large: () => ingest(500),
+      scale: 10,
+      why: 'contextLedger must fold each run in, not re-walk the ledger',
+    });
   });
 });

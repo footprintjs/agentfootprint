@@ -16,6 +16,7 @@ import { LLMCall } from '../../../src/core/LLMCall.js';
 import { Agent } from '../../../src/core/Agent.js';
 import { MockProvider } from '../../../src/adapters/llm/MockProvider.js';
 import type { LLMProvider, LLMResponse, PricingTable } from '../../../src/adapters/types.js';
+import { expectWithinTimes, measureAsync } from '../../helpers/perf.js';
 
 function scripted(...r: LLMResponse[]): LLMProvider {
   let i = 0;
@@ -337,31 +338,40 @@ describe('cost — security', () => {
 // ── 6. Performance — negligible overhead ────────────────────────────
 
 describe('cost — performance', () => {
-  it('adding a pricingTable adds negligible overhead to a single run', async () => {
-    const baseLlm = LLMCall.create({
-      provider: new MockProvider({ reply: 'ok' }),
-      model: 'mock',
-    })
-      .system('')
-      .build();
-    const t0 = performance.now();
-    for (let i = 0; i < 30; i++) await baseLlm.run({ message: 'x' });
-    const baseMs = performance.now() - t0;
+  it(
+    'adding a pricingTable adds negligible overhead to a single run',
+    { timeout: 30_000, retry: 2 },
+    async () => {
+      const baseLlm = LLMCall.create({
+        provider: new MockProvider({ reply: 'ok' }),
+        model: 'mock',
+      })
+        .system('')
+        .build();
 
-    const pricedLlm = LLMCall.create({
-      provider: new MockProvider({ reply: 'ok' }),
-      model: 'mock',
-      pricingTable: flatPricing(0.00001, 0.00003),
-    })
-      .system('')
-      .build();
-    const t1 = performance.now();
-    for (let i = 0; i < 30; i++) await pricedLlm.run({ message: 'x' });
-    const withMs = performance.now() - t1;
-
-    // Loose ceiling — cost accounting is ~constant-time per call
-    expect(withMs).toBeLessThan(Math.max(baseMs * 3, 200));
-  });
+      const pricedLlm = LLMCall.create({
+        provider: new MockProvider({ reply: 'ok' }),
+        model: 'mock',
+        pricingTable: flatPricing(0.00001, 0.00003),
+      })
+        .system('')
+        .build();
+      // Purely comparative, and sampled alternately: the same thirty runs with
+      // and without pricing, interleaved on this machine. Cost accounting is
+      // constant-time per call, so 3× is generous headroom — and a busy runner
+      // slows both halves equally.
+      await expectWithinTimes({
+        baseline: async () => {
+          for (let i = 0; i < 8; i++) await baseLlm.run({ message: 'x' });
+        },
+        subject: async () => {
+          for (let i = 0; i < 8; i++) await pricedLlm.run({ message: 'x' });
+        },
+        times: 3,
+        why: 'a pricing table must not multiply run cost',
+      });
+    },
+  );
 });
 
 // ── 7. ROI — reused across many runs ────────────────────────────────

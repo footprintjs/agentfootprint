@@ -12,6 +12,7 @@ import { describe, expect, it } from 'vitest';
 import { type ToolDispatchContext } from '../../src/tool-providers/index.js';
 import { staticTools, gatedTools } from '../../src/tool-providers/index.js';
 import type { Tool } from '../../src/index.js';
+import { expectScalesLinearly } from '../helpers/perf.js';
 
 // ─── Fixtures ─────────────────────────────────────────────────────
 
@@ -215,23 +216,53 @@ describe('tool-providers — security', () => {
 // ─── 7. PERFORMANCE ───────────────────────────────────────────────
 
 describe('tool-providers — performance', () => {
-  it('staticTools.list() is O(n) — 1k tools handled trivially', () => {
-    const tools = Array.from({ length: 1000 }, (_, i) => fakeTool(`t${i}`));
-    const provider = staticTools(tools);
-    const t0 = Date.now();
-    for (let i = 0; i < 100; i++) provider.list(baseCtx);
-    const elapsed = Date.now() - t0;
-    expect(elapsed).toBeLessThan(200); // 100 invocations × 1k tools each
+  it('staticTools.list() is O(n) in the tool count', { timeout: 30_000, retry: 2 }, async () => {
+    // O(n) is a claim about the curve. Ten times the tools, ten times the
+    // work; both providers are built before either measurement.
+    const providerFor = (count: number) =>
+      staticTools(Array.from({ length: count }, (_, i) => fakeTool(`t${i}`)));
+    const small = providerFor(1_000);
+    const large = providerFor(10_000);
+    await expectScalesLinearly({
+      small: () => {
+        for (let i = 0; i < 100; i++) small.list(baseCtx);
+      },
+      large: () => {
+        for (let i = 0; i < 100; i++) large.list(baseCtx);
+      },
+      scale: 10,
+      why: 'staticTools.list must be linear in tool count',
+    });
   });
 
-  it('gatedTools.list() per-iteration cost is bounded by inner.list cost + 1 filter pass', () => {
-    const tools = Array.from({ length: 1000 }, (_, i) => fakeTool(`t${i}`));
-    const provider = gatedTools(staticTools(tools), (n) => n.startsWith('t1'));
-    const t0 = Date.now();
-    for (let i = 0; i < 100; i++) provider.list(baseCtx);
-    const elapsed = Date.now() - t0;
-    expect(elapsed).toBeLessThan(400);
-  });
+  it(
+    'gatedTools.list() costs ONE filter pass — linear in tool count',
+    { timeout: 30_000, retry: 2 },
+    async () => {
+      // Not measured against `staticTools.list()`, and the reason is worth
+      // stating: that one hands back a stored array, so it is O(1) and gating is
+      // O(n) — "one extra pass" is infinitely more than zero, and any ratio
+      // against it would be measuring the wrong thing. The real claim is the
+      // shape of the extra pass: ONE walk of the tools, so ten times the tools
+      // costs ten times the work, not a hundred.
+      const gatedFor = (count: number) =>
+        gatedTools(staticTools(Array.from({ length: count }, (_, i) => fakeTool(`t${i}`))), (n) =>
+          n.startsWith('t1'),
+        );
+      const small = gatedFor(1_000);
+      const large = gatedFor(10_000);
+      await expectScalesLinearly({
+        small: () => {
+          for (let i = 0; i < 100; i++) small.list(baseCtx);
+        },
+        large: () => {
+          for (let i = 0; i < 100; i++) large.list(baseCtx);
+        },
+        scale: 10,
+        why: 'gating must be one filter pass over the tools',
+      });
+    },
+  );
 });
 
 // ─── 8. ROI — what the abstraction unlocks ────────────────────────

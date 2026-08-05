@@ -20,6 +20,7 @@ import type {
   PermissionDecision,
   PermissionRequest,
 } from '../../../src/adapters/types.js';
+import { expectWithinTimes, measureAsync } from '../../helpers/perf.js';
 
 function scripted(...r: LLMResponse[]): LLMProvider {
   let i = 0;
@@ -299,20 +300,39 @@ describe('permission — security', () => {
 // ── 6. Performance — happy path negligible overhead ─────────────────
 
 describe('permission — performance', () => {
-  it('adding permissionChecker adds negligible overhead to a single run', async () => {
-    const agent = Agent.create({
-      provider: scripted(resp('done')),
-      model: 'mock',
-      permissionChecker: allowAll(),
-    })
-      .system('')
-      .build();
+  it(
+    'adding permissionChecker adds negligible overhead to a single run',
+    { timeout: 30_000, retry: 2 },
+    async () => {
+      // "Negligible" is a comparison, so the test now makes one: the same ten
+      // runs WITHOUT a checker, timed on this machine moments earlier. Load
+      // slows both and cancels; only a real per-call cost moves the ratio.
+      const plain = Agent.create({
+        provider: scripted(resp('done')),
+        model: 'mock',
+      })
+        .system('')
+        .build();
 
-    const t0 = performance.now();
-    for (let i = 0; i < 10; i++) await agent.run({ message: `r${i}` });
-    const ms = performance.now() - t0;
-    expect(ms).toBeLessThan(500);
-  });
+      const guarded = Agent.create({
+        provider: scripted(resp('done')),
+        model: 'mock',
+        permissionChecker: allowAll(),
+      })
+        .system('')
+        .build();
+      await expectWithinTimes({
+        baseline: async () => {
+          for (let i = 0; i < 4; i++) await plain.run({ message: `r${i}` });
+        },
+        subject: async () => {
+          for (let i = 0; i < 4; i++) await guarded.run({ message: `r${i}` });
+        },
+        times: 3,
+        why: 'an allow-all checker must not multiply run cost',
+      });
+    },
+  );
 });
 
 // ── 7. ROI — reuse across many runs without state leak ──────────────

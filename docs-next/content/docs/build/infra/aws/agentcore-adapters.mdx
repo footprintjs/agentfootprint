@@ -137,7 +137,21 @@ port knows none of them:
 |---|---|
 | `{ maxFrameBytes: 32768, idleMs: 900000 }` | `host.conversationLimits`, **declared**. Chunk and heartbeat on your own protocol; the port does neither. `maxFrameBytes` is enforced both ways here, `idleMs` is reported — the timeout belongs to what sits in front of the container. |
 | Session affinity | the `X-Amzn-Bedrock-AgentCore-Runtime-Session-Id` header, **or** the query string (`?…Session-Id=` or `?sessionId=`) — because a browser's WebSocket API cannot set a header. The header wins when both arrive. Arrives as `conversation.sessionId`. |
-| `Sec-WebSocket-Protocol` bearer | mapped into `conversation.headers.authorization` as `Bearer <token>`. Both browser-expressible spellings are read (`['bearer','<token>']` and `['bearer.<token>']`), the echoed subprotocol is the *word* `bearer` and never the token, and the raw `sec-websocket-protocol` header survives so you can read the offer yourself. |
+| `Sec-WebSocket-Protocol` bearer | the vendor's documented browser scheme, mapped into `conversation.headers.authorization` as `Bearer <token>` with the base64url wrapper undone. The echoed subprotocol is the **sentinel**, in the client's own spelling — never the token. The raw `sec-websocket-protocol` header survives so you can read the offer yourself. |
+
+The browser scheme, in AWS's words: *"The token must be base64url-encoded and prefixed with `base64UrlBearerAuthorization.`, followed by the sentinel subprotocol `base64UrlBearerAuthorization`"* — and, on the same page, *"Subprotocols other than `base64UrlBearerAuthorization` are not yet supported."* So a browser offers the pair:
+
+```js
+new WebSocket(url, [`base64UrlBearerAuthorization.${base64url}`, 'base64UrlBearerAuthorization']);
+```
+
+Two shapes are **refused by name** rather than degraded, because both would produce a connection that looks authenticated and is not: a dotted value that is not valid base64url (a token that does not decode is not a credential), and a dotted value offered without the sentinel beside it (there is then nothing safe to echo — the token must never travel back in a response header).
+
+<Callout type="warn" title="Before 7.27.1 this mapping read spellings nobody documented">
+It looked for `bearer` and `bearer.<token>` — words this library invented. AgentCore's front door forwards no subprotocol but `base64UrlBearerAuthorization`, so a real documented browser handshake matched neither and the mapping returned `{}`: the credential silently dropped. The invented spellings are gone rather than kept beside the real one — a door nobody can walk through should not be advertised as one. If you want a generic bearer-subprotocol mapping off this runtime, that belongs to the generic wire, with its own evidence.
+
+**What is still unverified:** whether the service forwards the `Sec-WebSocket-Protocol` offer through to your container at all. Confirming it needs a `CUSTOM_JWT` runtime, and nobody has run one. If it forwards, this fix is what makes browser OAuth work; if it does not, this mapping implements the documented contract correctly for the day it does. Either way the shape above is what the vendor documents — no guesses of ours remain in it.
+</Callout>
 
 That last row is the rule the whole port rests on: **a credential a transport
 spells its own way becomes an ordinary header, never a port field.** Nothing on

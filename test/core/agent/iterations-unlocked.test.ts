@@ -19,6 +19,10 @@ describe('#16 — maxIterations unlocked (footprintjs 9 trampoline)', () => {
     expect(clampIterations(2.5)).toBe(1);
   });
 
+  // 200 real agent iterations. On a runner shared with a build and other
+  // suites this is minutes of wall time, not seconds, so the timeout below
+  // states what the work needs — a default timeout is a wall-clock budget too,
+  // with the same defect as the assertions this release converted.
   it('a 200-iteration agent run completes (was: clamp@50 + engine wall ≈71)', async () => {
     let toolRuns = 0;
     const tick = defineTool({
@@ -87,5 +91,5 @@ describe('#16 — maxIterations unlocked (footprintjs 9 trampoline)', () => {
     // #13c quadratic (commitLog + _stageWrites clones) — if this trips
     // after a footprintjs bump, re-measure before raising.
     expect(rssDeltaMb).toBeLessThan(1000);
-  }, 60_000);
+  }, 180_000);
 });

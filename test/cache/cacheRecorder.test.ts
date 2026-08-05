@@ -19,6 +19,7 @@ import { AnthropicCacheStrategy } from '../../src/cache/strategies/AnthropicCach
 import type { PricingTable, TokenKind } from '../../src/adapters/types';
 import type { FlowDecisionEvent } from 'footprintjs';
 import type { AgentfootprintEvent } from '../../src/events/registry';
+import { expectScalesLinearly } from '../helpers/perf.js';
 
 // Sonnet 4.5 simplified pricing — $3/M input, $0.30/M cache read, $3.75/M cache write
 const sonnetPricing: PricingTable = {
@@ -273,23 +274,32 @@ describe('cacheRecorder — security: defensive parsing', () => {
 // ─── 6. Performance ───────────────────────────────────────────────
 
 describe('cacheRecorder — performance', () => {
-  it('100 iterations in <50ms', () => {
-    const rec = cacheRecorder({
-      strategy: new AnthropicCacheStrategy(),
-      pricing: sonnetPricing,
+  it('recording cost stays flat as iterations pile up', { timeout: 30_000, retry: 2 }, async () => {
+    // The recorder folds each event into running totals. If it kept and
+    // re-summed a growing list instead, ten times the iterations would cost a
+    // hundred times the work — which is what this ratio refuses.
+    const record = (iterations: number): void => {
+      const rec = cacheRecorder({
+        strategy: new AnthropicCacheStrategy(),
+        pricing: sonnetPricing,
+      });
+      for (let i = 0; i < iterations; i++) {
+        rec.onDecision(decisionEvent('apply-markers'));
+        rec.onEmit(
+          llmEndEvent({
+            input_tokens: 100,
+            cache_read_input_tokens: 1000,
+          }),
+        );
+      }
+      rec.report();
+    };
+    await expectScalesLinearly({
+      small: () => record(100),
+      large: () => record(1000),
+      scale: 10,
+      why: 'cacheRecorder must fold events, not accumulate and re-sum them',
     });
-    const start = Date.now();
-    for (let i = 0; i < 100; i++) {
-      rec.onDecision(decisionEvent('apply-markers'));
-      rec.onEmit(
-        llmEndEvent({
-          input_tokens: 100,
-          cache_read_input_tokens: 1000,
-        }),
-      );
-    }
-    rec.report();
-    expect(Date.now() - start).toBeLessThan(50);
   });
 });
 

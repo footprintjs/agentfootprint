@@ -29,6 +29,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { AnthropicProvider } from '../../../src/adapters/llm/AnthropicProvider.js';
 import type { LLMMessage, LLMRequest } from '../../../src/adapters/types.js';
 import type { ThinkingBlock } from '../../../src/thinking/types.js';
+import { expectScalesLinearly } from '../../helpers/perf.js';
 
 // ─── Fake Anthropic SDK shape ──────────────────────────────────────
 
@@ -328,28 +329,39 @@ describe('AnthropicProvider — security: signature byte-exact serialization', (
 // ─── 6. PERFORMANCE — 10-message conversation × 100 ──────────────
 
 describe('AnthropicProvider — performance: bulk serialization', () => {
-  it('100 calls with 10-message conversations under 1s', async () => {
-    const recorder = { params: [] as unknown[] };
-    const client = makeFakeClient(baseResponse, recorder);
-    const provider = new AnthropicProvider({ apiKey: 'x', _client: client as never });
+  it(
+    '100 calls with 10-message conversations under 1s',
+    { timeout: 30_000, retry: 2 },
+    async () => {
+      const recorder = { params: [] as unknown[] };
+      const client = makeFakeClient(baseResponse, recorder);
+      const provider = new AnthropicProvider({ apiKey: 'x', _client: client as never });
 
-    // Build a 10-message conversation alternating user/assistant with thinking
-    const messages: LLMMessage[] = [];
-    for (let i = 0; i < 5; i++) {
-      messages.push({ role: 'user', content: `msg-${i}` });
-      messages.push({
-        role: 'assistant',
-        content: `reply-${i}`,
-        thinkingBlocks: [{ type: 'thinking', content: `r-${i}`, signature: `sig-${i}` }],
+      // Build a 10-message conversation alternating user/assistant with thinking
+      const messages: LLMMessage[] = [];
+      for (let i = 0; i < 5; i++) {
+        messages.push({ role: 'user', content: `msg-${i}` });
+        messages.push({
+          role: 'assistant',
+          content: `reply-${i}`,
+          thinkingBlocks: [{ type: 'thinking', content: `r-${i}`, signature: `sig-${i}` }],
+        });
+      }
+      const req: LLMRequest = { model: 'claude-sonnet-4-5-20250929', messages };
+
+      // Ten times the calls, ten times the work: replaying thinking blocks
+      // through the wire mapper must cost the same on call 100 as on call 10.
+      const callTimes = async (n: number): Promise<void> => {
+        for (let i = 0; i < n; i++) await provider.complete(req);
+      };
+      await expectScalesLinearly({
+        small: () => callTimes(10),
+        large: () => callTimes(100),
+        scale: 10,
+        why: 'thinking-block round-tripping must not grow per call',
       });
-    }
-    const req: LLMRequest = { model: 'claude-sonnet-4-5-20250929', messages };
-
-    const t0 = performance.now();
-    for (let i = 0; i < 100; i++) await provider.complete(req);
-    const elapsed = performance.now() - t0;
-    expect(elapsed).toBeLessThan(1000);
-  });
+    },
+  );
 });
 
 // ─── 7. ROI — end-to-end two-turn round-trip ────────────────────

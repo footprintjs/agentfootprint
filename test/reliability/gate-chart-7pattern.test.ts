@@ -28,6 +28,7 @@ import type {
   ReliabilityScope,
 } from '../../src/reliability/types.js';
 import type { LLMProvider, LLMResponse } from '../../src/adapters/types.js';
+import { expectWithinReferenceUnits, measureAsync } from '../helpers/perf.js';
 
 // ─── Test helpers ────────────────────────────────────────────────────
 
@@ -537,23 +538,31 @@ describe('reliability gate chart — P5 security', () => {
 // ────────────────────────────────────────────────────────────────────
 
 describe('reliability gate chart — P6 performance', () => {
-  it('P6 happy path completes in <100ms (engine + chart overhead)', async () => {
-    const config: ReliabilityConfig = {
-      providers: [{ name: 'p1', provider: okProvider('p1'), model: 'm' }],
-    };
+  it(
+    'P6 happy path completes in <100ms (engine + chart overhead)',
+    { timeout: 30_000, retry: 2 },
+    async () => {
+      const config: ReliabilityConfig = {
+        providers: [{ name: 'p1', provider: okProvider('p1'), model: 'm' }],
+      };
 
-    // Warm up
-    for (let i = 0; i < 3; i++) await runGate({ config });
+      // Warm up
+      for (let i = 0; i < 3; i++) await runGate({ config });
 
-    const t0 = performance.now();
-    await runGate({ config });
-    const elapsed = performance.now() - t0;
-
-    // Generous budget — engine + subflow + decider + branch overhead.
-    // Real per-call overhead is ~5-15ms; we test against 100 to catch
-    // 10x regressions, not micro-perf shifts.
-    expect(elapsed).toBeLessThan(100);
-  });
+      // 100 reference units of CPU (≈100ms on a quiet machine, proportionally
+      // more on a loaded one) for engine + subflow + decider + branch overhead.
+      // Real per-call overhead is ~5-15 units; the ceiling is there to catch a
+      // 10× regression, not a micro-perf shift, and stating it in units means a
+      // busy runner raises it rather than failing.
+      await expectWithinReferenceUnits(
+        async () => {
+          await runGate({ config });
+        },
+        100,
+        'the gate chart must not add an order of overhead',
+      );
+    },
+  );
 });
 
 // ────────────────────────────────────────────────────────────────────

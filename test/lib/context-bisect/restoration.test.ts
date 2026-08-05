@@ -14,6 +14,7 @@ import {
 } from '../../../src/lib/context-bisect/restoration';
 import { runRestorationProbe as runViaObserve } from '../../../src/observe';
 import type { ContextUnit } from '../../../src/lib/context-bisect/missingContext';
+import { expectScalesLinearly } from '../../helpers/perf.js';
 
 const embedder = mockEmbedder();
 const u = (id: string): ContextUnit => ({ id });
@@ -332,14 +333,27 @@ describe('runRestorationProbe — robustness', () => {
 
 // ─── 6. PERFORMANCE + 7. LOAD ────────────────────────────────────────
 describe('runRestorationProbe — performance & load', () => {
-  it('many probes complete promptly (mock runner + mock embedder)', async () => {
-    const t0 = performance.now();
-    for (let i = 0; i < 200; i++) {
-      await runRestorationProbe(
-        { rerun: { runner: async () => 'x', originalOutput: 'x', samples: 2 }, embedder },
-        [u('a')],
-      );
-    }
-    expect(performance.now() - t0).toBeLessThan(2000);
-  });
+  it(
+    'probe cost stays flat as probes pile up (mock runner + mock embedder)',
+    { timeout: 30_000, retry: 2 },
+    async () => {
+      // Each probe is independent. If anything were retained between them —
+      // an embedding cache that grows unbounded, an accumulating stats array —
+      // the tenth twenty would cost more than the first, and this would catch it.
+      const probe = async (times: number): Promise<void> => {
+        for (let i = 0; i < times; i++) {
+          await runRestorationProbe(
+            { rerun: { runner: async () => 'x', originalOutput: 'x', samples: 2 }, embedder },
+            [u('a')],
+          );
+        }
+      };
+      await expectScalesLinearly({
+        small: () => probe(20),
+        large: () => probe(200),
+        scale: 10,
+        why: 'restoration probes must not retain state between runs',
+      });
+    },
+  );
 });

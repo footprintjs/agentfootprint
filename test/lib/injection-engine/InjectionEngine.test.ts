@@ -21,6 +21,7 @@ import {
   type InjectionContext,
 } from '../../../src/lib/injection-engine/index.js';
 import type { ContextEvaluatedPayload } from '../../../src/events/payloads.js';
+import { expectScalesLinearly } from '../../helpers/perf.js';
 
 const baseCtx: InjectionContext = {
   iteration: 1,
@@ -447,19 +448,27 @@ describe('Injection Engine — security', () => {
 // ─── Performance — bounded overhead ────────────────────────────────
 
 describe('Injection Engine — performance', () => {
-  it('evaluating 1000 injections completes in under 50ms', () => {
-    const list = Array.from({ length: 1000 }, (_, i) =>
-      defineInstruction({
-        id: `i${i}`,
-        activeWhen: () => i % 2 === 0,
-        prompt: 'p',
-      }),
-    );
-    const start = performance.now();
-    const r = evaluateInjections(list, baseCtx);
-    const elapsed = performance.now() - start;
-    expect(elapsed).toBeLessThan(50);
-    expect(r.active.length).toBe(500);
+  it('evaluation is linear in injection count', { timeout: 30_000, retry: 2 }, async () => {
+    // One predicate call per injection, nothing else. Ten times the
+    // injections, ten times the work. Both lists are built before either
+    // measurement so that construction cannot stand in for evaluation.
+    const listOf = (n: number) =>
+      Array.from({ length: n }, (_, i) =>
+        defineInstruction({
+          id: `i${i}`,
+          activeWhen: () => i % 2 === 0,
+          prompt: 'p',
+        }),
+      );
+    const few = listOf(1_000);
+    const many = listOf(10_000);
+    expect(evaluateInjections(few, baseCtx).active.length).toBe(500);
+    await expectScalesLinearly({
+      small: () => void evaluateInjections(few, baseCtx),
+      large: () => void evaluateInjections(many, baseCtx),
+      scale: 10,
+      why: 'evaluateInjections must call each predicate once and no more',
+    });
   });
 });
 

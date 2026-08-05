@@ -19,6 +19,7 @@ import {
   projectActiveInjection,
 } from '../../../src/injection-engine.js';
 import { mock } from '../../../src/llm-providers.js';
+import { expectScalesLinearly } from '../../helpers/perf.js';
 
 // ─── Fixtures ─────────────────────────────────────────────────────
 
@@ -218,18 +219,29 @@ describe('Block C — security', () => {
 // ─── 6. PERFORMANCE — bounded ────────────────────────────────────
 
 describe('Block C — performance', () => {
-  it('1000 read_skill executions over a 50-skill registry under 50ms', async () => {
-    const skills = Array.from({ length: 50 }, (_, i) =>
-      makeSkill(`s${i}`, i % 4 === 0 ? 'tool-only' : 'system-prompt', `body-${i}`),
-    );
-    const tool = buildReadSkillTool(skills)!;
-    const t0 = Date.now();
-    for (let i = 0; i < 1000; i++) {
-      await tool.execute({ id: `s${i % 50}` }, { toolCallId: 't', iteration: 1 });
-    }
-    const elapsed = Date.now() - t0;
-    expect(elapsed).toBeLessThan(50);
-  });
+  it(
+    'read_skill execution cost stays flat as executions pile up',
+    { timeout: 30_000, retry: 2 },
+    async () => {
+      // Reading a skill is a lookup by id. Ten times the reads, ten times the
+      // work — nothing may be accumulated across executions.
+      const skills = Array.from({ length: 50 }, (_, i) =>
+        makeSkill(`s${i}`, i % 4 === 0 ? 'tool-only' : 'system-prompt', `body-${i}`),
+      );
+      const tool = buildReadSkillTool(skills)!;
+      const read = async (times: number): Promise<void> => {
+        for (let i = 0; i < times; i++) {
+          await tool.execute({ id: `s${i % 50}` }, { toolCallId: 't', iteration: 1 });
+        }
+      };
+      await expectScalesLinearly({
+        small: () => read(1_000),
+        large: () => read(10_000),
+        scale: 10,
+        why: 'read_skill must stay a lookup, not a scan',
+      });
+    },
+  );
 });
 
 // ─── 7. ROI — per-mode is observable end-to-end with an Agent ─────

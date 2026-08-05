@@ -26,6 +26,7 @@ import {
   type CredentialProvider,
   type CredentialResult,
 } from '../../src/identity.js';
+import { expectWithinTimes, measureAsync } from '../helpers/perf.js';
 
 // ─── Helpers ─────────────────────────────────────────────────────────
 
@@ -362,12 +363,30 @@ describe('withCredentialRetry — Security', () => {
 
 // ─── Performance ─────────────────────────────────────────────────────
 describe('withCredentialRetry — Performance', () => {
-  it('zero-retry happy path adds negligible overhead — 2000 calls well under budget', async () => {
-    const wrapped = withCredentialRetry(staticTokens({ s: 'tok' }));
-    const start = Date.now();
-    for (let i = 0; i < 2000; i++) await wrapped.getCredential({ service: 's' });
-    expect(Date.now() - start).toBeLessThan(1000);
-  });
+  it(
+    'zero-retry happy path adds negligible overhead — measured against the bare provider',
+    { timeout: 30_000, retry: 2 },
+    async () => {
+      // "Negligible" needs something to be negligible NEXT TO. The bare
+      // provider, timed on this machine moments earlier, is that something.
+      // When nothing retries, the wrapper is one try/catch, so 3× is generous
+      // headroom and a busy runner cannot manufacture a failure.
+      const bare = staticTokens({ s: 'tok' });
+      const wrapped = withCredentialRetry(staticTokens({ s: 'tok' }));
+      const fetch = async (
+        provider: { getCredential: (r: { service: string }) => Promise<unknown> },
+        times: number,
+      ): Promise<void> => {
+        for (let i = 0; i < times; i++) await provider.getCredential({ service: 's' });
+      };
+      await expectWithinTimes({
+        baseline: () => fetch(bare, 2000),
+        subject: () => fetch(wrapped, 2000),
+        times: 3,
+        why: 'the retry wrapper must be free when nothing retries',
+      });
+    },
+  );
 });
 
 // ─── Load ────────────────────────────────────────────────────────────

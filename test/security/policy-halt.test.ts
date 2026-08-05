@@ -34,6 +34,7 @@ import {
 import { mock } from '../../src/llm-providers.js';
 import { PolicyHaltError } from '../../src/security/index.js';
 import { extractSequence, SYNTHETIC_DENY_PREFIX } from '../../src/security/extractSequence.js';
+import { expectScalesLinearly } from '../helpers/perf.js';
 
 // ─── Fixtures ─────────────────────────────────────────────────────
 
@@ -639,85 +640,119 @@ describe('PermissionChecker — property: random sequences vs random forbidden p
 
 // ─── 10. PERFORMANCE — extractSequence on large histories ────────
 
-describe('extractSequence — performance: 1000-message history under 50ms', () => {
-  it('extracts sequence from a 1000-message history in under 50ms', () => {
-    // Build a synthetic history with 500 successful tool dispatches.
-    const history: LLMMessage[] = [];
-    history.push({ role: 'user', content: 'start' });
-    for (let i = 0; i < 500; i++) {
-      history.push({
-        role: 'assistant',
-        content: '',
-        toolCalls: [{ id: `tc-${i}`, name: `tool-${i % 10}`, args: {} }],
+describe('extractSequence — performance: linear in history length', () => {
+  it(
+    'extracts a sequence in one pass — ten times the history, ten times the work',
+    { timeout: 30_000, retry: 2 },
+    async () => {
+      // Pairing each tool result with its call must be a keyed lookup, not a
+      // search back through the history. Both histories are built before either
+      // measurement so that construction stays out of the comparison.
+      const historyOf = (dispatches: number): LLMMessage[] => {
+        const history: LLMMessage[] = [];
+        history.push({ role: 'user', content: 'start' });
+        for (let i = 0; i < dispatches; i++) {
+          history.push({
+            role: 'assistant',
+            content: '',
+            toolCalls: [{ id: `tc-${i}`, name: `tool-${i % 10}`, args: {} }],
+          });
+          history.push({
+            role: 'tool',
+            toolCallId: `tc-${i}`,
+            toolName: `tool-${i % 10}`,
+            content: `result-${i}`,
+          });
+        }
+        return history;
+      };
+      const short = historyOf(500);
+      const long = historyOf(5000);
+      expect(extractSequence(short, 500).length).toBe(500);
+      await expectScalesLinearly({
+        small: () => void extractSequence(short, 500),
+        large: () => void extractSequence(long, 5000),
+        scale: 10,
+        why: 'extractSequence must pair calls by key, not by searching back',
       });
-      history.push({
-        role: 'tool',
-        toolCallId: `tc-${i}`,
-        toolName: `tool-${i % 10}`,
-        content: `result-${i}`,
-      });
-    }
-    const t0 = performance.now();
-    const seq = extractSequence(history, 500);
-    const elapsed = performance.now() - t0;
-    expect(seq.length).toBe(500);
-    expect(elapsed).toBeLessThan(50);
-  });
+    },
+  );
 
-  it('extractSequence skips synthetic denies in 1000-message history under 50ms', () => {
-    const history: LLMMessage[] = [{ role: 'user', content: 'start' }];
-    for (let i = 0; i < 500; i++) {
-      history.push({
-        role: 'assistant',
-        content: '',
-        toolCalls: [{ id: `tc-${i}`, name: 'lookup', args: {} }],
+  it(
+    'skipping synthetic denies stays linear in history length',
+    { timeout: 30_000, retry: 2 },
+    async () => {
+      const historyOf = (dispatches: number): LLMMessage[] => {
+        const history: LLMMessage[] = [{ role: 'user', content: 'start' }];
+        for (let i = 0; i < dispatches; i++) {
+          history.push({
+            role: 'assistant',
+            content: '',
+            toolCalls: [{ id: `tc-${i}`, name: 'lookup', args: {} }],
+          });
+          const denied = i % 3 === 0;
+          history.push({
+            role: 'tool',
+            toolCallId: `tc-${i}`,
+            toolName: 'lookup',
+            content: denied ? `${SYNTHETIC_DENY_PREFIX} test]` : 'ok',
+          });
+        }
+        return history;
+      };
+      const short = historyOf(500);
+      const long = historyOf(5000);
+      // 1/3 denied, so ~334 dispatched
+      const seq = extractSequence(short, 500);
+      expect(seq.length).toBeGreaterThan(300);
+      expect(seq.length).toBeLessThan(400);
+      await expectScalesLinearly({
+        small: () => void extractSequence(short, 500),
+        large: () => void extractSequence(long, 5000),
+        scale: 10,
+        why: 'deny-filtering must ride the same single pass',
       });
-      const denied = i % 3 === 0;
-      history.push({
-        role: 'tool',
-        toolCallId: `tc-${i}`,
-        toolName: 'lookup',
-        content: denied ? `${SYNTHETIC_DENY_PREFIX} test]` : 'ok',
-      });
-    }
-    const t0 = performance.now();
-    const seq = extractSequence(history, 500);
-    const elapsed = performance.now() - t0;
-    // 1/3 denied, so ~334 dispatched
-    expect(seq.length).toBeGreaterThan(300);
-    expect(seq.length).toBeLessThan(400);
-    expect(elapsed).toBeLessThan(50);
-  });
+    },
+  );
 });
 
 // ─── 11. PERFORMANCE — sync checker overhead ─────────────────────
 
-describe('PermissionChecker — performance: sync check() x1000 under 100ms', () => {
-  it('sync allow-all checker calls 1000 times under 100ms', () => {
-    const checker: PermissionChecker = {
-      name: 'perf-test',
-      check: () => ({ result: 'allow' }),
-    };
-    const baseInput = {
-      capability: 'tool_call' as const,
-      actor: 'agent',
-      target: 'lookup',
-      context: {},
-      sequence: [] as readonly ToolCallEntry[],
-      history: [] as readonly LLMMessage[],
-      iteration: 1,
-    };
-    const t0 = performance.now();
-    for (let i = 0; i < 1000; i++) {
-      const decision = checker.check(baseInput);
-      // Hot-path assertion: sync checkers don't return Promises
-      if (decision instanceof Promise) {
-        throw new Error('sync checker should not return Promise');
-      }
-    }
-    const elapsed = performance.now() - t0;
-    // Documented target: ~100µs per call. 100ms for 1000 = 100µs each.
-    // 300ms slack for CI cold start.
-    expect(elapsed).toBeLessThan(300);
-  });
+describe('PermissionChecker — performance: sync check() stays sync and stays flat', () => {
+  it(
+    'sync allow-all checker cost stays flat as calls pile up',
+    { timeout: 30_000, retry: 2 },
+    async () => {
+      const checker: PermissionChecker = {
+        name: 'perf-test',
+        check: () => ({ result: 'allow' }),
+      };
+      const baseInput = {
+        capability: 'tool_call' as const,
+        actor: 'agent',
+        target: 'lookup',
+        context: {},
+        sequence: [] as readonly ToolCallEntry[],
+        history: [] as readonly LLMMessage[],
+        iteration: 1,
+      };
+      // The load-proof half: a sync checker never returns a Promise, on any
+      // machine. The ratio then says the call cost does not drift.
+      const check = (times: number): void => {
+        for (let i = 0; i < times; i++) {
+          const decision = checker.check(baseInput);
+          // Hot-path assertion: sync checkers don't return Promises
+          if (decision instanceof Promise) {
+            throw new Error('sync checker should not return Promise');
+          }
+        }
+      };
+      await expectScalesLinearly({
+        small: () => check(1_000),
+        large: () => check(10_000),
+        scale: 10,
+        why: 'a sync permission check must stay constant-cost',
+      });
+    },
+  );
 });

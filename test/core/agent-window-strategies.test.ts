@@ -45,6 +45,7 @@ import type {
   TokenBudgetRecord,
   WindowRecord,
 } from '../../src/core/agent/window/types.js';
+import { expectScalesLinearly } from '../helpers/perf.js';
 
 // ─── Helpers ──────────────────────────────────────────────────────
 
@@ -751,26 +752,44 @@ describe('window strategies — security', () => {
 // ─── Performance ──────────────────────────────────────────────────
 
 describe('window strategies — performance', () => {
-  it('a 200-message window plans a drop in well under 50ms', async () => {
-    const { segmentTurns, planRemoval, answeredCallIds } = await import(
-      '../../src/core/agent/window/turns.js'
-    );
-    const history = [{ role: 'user' as const, content: OPENING }];
-    for (let i = 0; i < 100; i++) {
-      history.push({
-        role: 'assistant',
-        content: '',
-        toolCalls: [{ id: `c${i}`, name: 'l', args: {} }],
-      } as never);
-      history.push({ role: 'tool', content: 'x'.repeat(200), toolCallId: `c${i}` } as never);
-    }
-    const turns = segmentTurns(history);
-    const guards = { answeredCallIds: answeredCallIds(history) };
-
-    const started = performance.now();
-    for (let i = 0; i < 20; i++) planRemoval(turns, 6, guards);
-    expect((performance.now() - started) / 20).toBeLessThan(50);
-  });
+  it(
+    'planning a drop over a 400-message window costs twice what 200 costs',
+    { timeout: 30_000, retry: 2 },
+    async () => {
+      // planRemoval walks the segmented turns once and keeps the last N. The
+      // claim is the shape of that walk, not its speed on this laptop: double
+      // the window, double the work.
+      const { segmentTurns, planRemoval, answeredCallIds } = await import(
+        '../../src/core/agent/window/turns.js'
+      );
+      const prepare = (pairs: number) => {
+        const history = [{ role: 'user' as const, content: OPENING }];
+        for (let i = 0; i < pairs; i++) {
+          history.push({
+            role: 'assistant',
+            content: '',
+            toolCalls: [{ id: `c${i}`, name: 'l', args: {} }],
+          } as never);
+          history.push({ role: 'tool', content: 'x'.repeat(200), toolCallId: `c${i}` } as never);
+        }
+        return {
+          turns: segmentTurns(history),
+          guards: { answeredCallIds: answeredCallIds(history) },
+        };
+      };
+      const short = prepare(100);
+      const long = prepare(200);
+      const plan = (prepared: ReturnType<typeof prepare>): void => {
+        for (let i = 0; i < 20; i++) planRemoval(prepared.turns, 6, prepared.guards);
+      };
+      await expectScalesLinearly({
+        small: () => plan(short),
+        large: () => plan(long),
+        scale: 2,
+        why: 'drop planning must stay linear in window length',
+      });
+    },
+  );
 
   it('costs at most one window visit per iteration boundary', async () => {
     const { agent } = slidingAgent(2);

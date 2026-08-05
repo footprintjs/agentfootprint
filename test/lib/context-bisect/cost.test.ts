@@ -22,6 +22,7 @@ import {
   type Suspect,
 } from '../../../src/lib/context-bisect/index';
 import { classifySuspect as viaObserve } from '../../../src/observe';
+import { expectWithinReferenceUnits } from '../../helpers/perf.js';
 
 // Deterministic toy embedder ('A…' / 'B…' orthogonal) — matches ablation.test.ts.
 const toyEmbedder: Embedder = {
@@ -276,15 +277,31 @@ describe('security & robustness', () => {
 
 // ─── 6. PERFORMANCE + 7. LOAD ────────────────────────────────────────
 describe('performance & load', () => {
-  it('assignCostVerdicts over 300 suspects is prompt', () => {
-    const many = Array.from({ length: 300 }, (_, i) =>
-      mkSuspect(`s${i}`, { flipped: i % 7 === 0, loopsMedian: i % 3, loopsMax: i % 3 }),
-    );
-    const t0 = performance.now();
-    const out = assignCostVerdicts(many, baseline(4));
-    expect(out.length).toBe(300);
-    expect(performance.now() - t0).toBeLessThan(500);
-  });
+  it(
+    'assignCostVerdicts stays prompt far beyond the shipped suspect cap',
+    { timeout: 30_000, retry: 2 },
+    async () => {
+      // NOT a linearity claim, and deliberately so. The leave-one-out placebo
+      // band re-derives itself for every suspect, which is quadratic in suspect
+      // count BY DESIGN — that is what "leave one out" means. What keeps it
+      // cheap is the cap: `CONTEXT_BISECT_DEFAULTS.maxSuspects` is 12, and the
+      // ranked slice is applied before verdicts are assigned.
+      //
+      // So the guard is a bounded-size one, at 300 suspects — twenty-five times
+      // the shipped cap — and it is stated in reference units of CPU rather
+      // than milliseconds, so a busy runner raises the ceiling with the load
+      // instead of failing.
+      const many = Array.from({ length: 300 }, (_, i) =>
+        mkSuspect(`s${i}`, { flipped: i % 7 === 0, loopsMedian: i % 3, loopsMax: i % 3 }),
+      );
+      expect(assignCostVerdicts(many, baseline(4)).length).toBe(300);
+      await expectWithinReferenceUnits(
+        () => void assignCostVerdicts(many, baseline(4)),
+        500,
+        '25× the shipped suspect cap must still be prompt',
+      );
+    },
+  );
 
   it('sustains many classify calls', () => {
     const s = {
