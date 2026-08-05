@@ -225,6 +225,20 @@ describe('mockMcpClient — properties', () => {
     }
   });
 
+  it('LAW: every mock tool carries the server name as `source`, exactly as the real client does', async () => {
+    // Parity is the point: a policy written against `toolSource` has to be
+    // testable against the mock, or swapping the mock for a real server
+    // silently changes what the policy sees.
+    const client = mockMcpClient({
+      name: 'aws-dev',
+      tools: [{ name: 'call_aws', inputSchema: {} }],
+    });
+    expect((await client.tools())[0]!.source).toBe('aws-dev');
+
+    const unnamed = mockMcpClient({ tools: [{ name: 'call_aws', inputSchema: {} }] });
+    expect((await unnamed.tools())[0]!.source).toBe('mock-mcp');
+  });
+
   it('tool count from .tools() equals tools[].length', async () => {
     const tools = Array.from({ length: 50 }, (_, i) => ({
       name: `t${i}`,

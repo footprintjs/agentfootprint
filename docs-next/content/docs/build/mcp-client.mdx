@@ -1,0 +1,174 @@
+---
+title: Connect to an MCP server
+description: mcpClient({ transport }) turns any MCP server's tools into agentfootprint Tool[]. Sign every request with your own fetch, read servers old enough to answer the 2024-10-07 shape, and govern by the server a tool came from.
+---
+
+> Someone else's tools, on your agent, in one call. The interesting part is not
+> the connection — the SDK does that. It is the three things that happen at the
+> edges: **how you authenticate**, **what an old server answers with**, and
+> **how a policy tells two servers apart.**
+
+```ts
+import { Agent } from 'agentfootprint';
+import { mcpClient } from 'agentfootprint/tool-providers';
+
+const aws = await mcpClient({
+  name: 'aws-prod',
+  transport: { transport: 'http', url: process.env.AWS_MCP_URL! },
+});
+
+const agent = Agent.create({ provider, model }).tools(await aws.tools()).build();
+// ...
+await aws.close();
+```
+
+`name` is not decoration. It is the label on every tool this client produces —
+see [governing by server](#which-server-served-this-tool) below.
+
+## Three transports
+
+| transport | when |
+| --- | --- |
+| `stdio` | a local server you spawn — development, desktop hosts, single user |
+| `http` | a remote server over Streamable HTTP — the common production case |
+| `gateway` | Streamable HTTP where the auth header is **vended per request** by a `CredentialProvider`, for tokens with an expiry |
+
+`mockMcpClient({ tools })` is a fourth option with no protocol at all: the same
+`McpClient` shape, driven by an in-memory tool table, for tests and for building
+before the server exists.
+
+## Sign every request yourself
+
+Some endpoints do not want a header. They want a **signature**: SigV4, DPoP, an
+HMAC over the body, a digest of the bytes about to be sent. None of those can be
+decided when the connection is built, because they are computed *from* the
+request — its method, its URL, its body. A header fixed at construction cannot
+express them, and every one of them is a different vendor's scheme.
+
+So `McpHttpTransport` takes a `fetch`. This library implements none of the
+schemes and imports none of the SDKs; it hands you the hook the MCP SDK already
+has, and your signer runs on every request — `initialize`, `tools/list`,
+`tools/call` and the event stream alike.
+
+```ts
+import { createHmac } from 'node:crypto';
+
+const client = await mcpClient({
+  name: 'ledger',
+  transport: {
+    transport: 'http',
+    url: process.env.LEDGER_MCP_URL!,
+    fetch: async (url, init) => {
+      const headers = new Headers(init?.headers);
+      const body = typeof init?.body === 'string' ? init.body : '';
+      const signature = createHmac('sha256', process.env.SIGNING_KEY!)
+        .update(`${init?.method ?? 'GET'}\n${String(url)}\n${body}`)
+        .digest('hex');
+      headers.set('authorization', `HMAC ${signature}`);
+      return fetch(url, { ...init, headers });
+    },
+  },
+});
+```
+
+That is a complete per-request signer, and nothing in it is specific to a cloud
+vendor. Swap the HMAC for a SigV4 signer from your provider's own SDK and the
+shape does not change — the import lives in **your** code, not in this library.
+
+**It composes with `headers`, and you win.** Static headers are folded into the
+`init.headers` your function receives, so you can read them, keep them, or
+replace them; whatever your function puts on the `Headers` object is what
+reaches the wire. A tenant id set in `headers` travels untouched; an
+`authorization` set in both is yours, because you write last.
+
+**Secrecy is yours to keep, and this library helps by doing nothing.** It never
+reads, stores, logs or records the headers your function produces — the value
+exists inside your closure for the duration of one request. The test suite pins
+that: a signing client's `Authorization` never appears in a console channel, in
+a serialized transport descriptor, in a tool result, or in an error thrown
+downstream of the signature.
+
+Omit `fetch` and behaviour is byte-identical to a client that never had the
+option.
+
+## Servers old enough to answer differently
+
+The `tools/call` result has two shapes, and both are still in the wild. Today's
+carries `content` blocks. The 2024-10-07 shape carries a bare `toolResult` and
+no `content` at all. `McpCallToolResult` — the shim type this client speaks —
+models both arms, so handling them is a compile-time obligation rather than
+something a reader has to remember.
+
+What you get:
+
+| the server answered with | you receive |
+| --- | --- |
+| `content` blocks | text blocks concatenated; non-text blocks summarised as `[image]`, `[resource]` |
+| `isError: true` | a thrown tool error naming the tool and the server, carrying the text |
+| a legacy `toolResult` | **the value as the tool's text** — a string verbatim, anything else JSON-stringified |
+| neither | a corrective tool error naming the *shape* that arrived (its type, or its keys) — never the payload |
+
+The legacy conversion is stated rather than inferred, because the alternative
+was worse than a crash: the SDK's own result schema defaults `content` to `[]`,
+so a legacy answer used to arrive wearing an empty `content` it never sent, and
+reading that first answered a real result with an empty string. A `toolResult`
+beside an **empty** `content` is now read as the legacy answer it is. A
+**non-empty** `content` always wins: a server that sent blocks meant the blocks.
+
+## Which server served this tool
+
+A tool NAME is not an identity. Two MCP servers can each serve a `call_aws`, and
+a policy matching the bare name governs whichever one answers — including the
+one it was never written about. That is a governance hole with no error message.
+
+So every tool `mcpClient` produces carries `source`: the client's `name`. It
+reaches the decision point as `toolSource` on the
+[middleware](doc:middleware) context.
+
+```ts
+import { allow, deny } from 'agentfootprint';
+
+const prodNeedsATicket = {
+  name: 'prod-needs-a-ticket',
+  onToolCall: (call) =>
+    call.toolSource === 'aws-prod' ? deny('production AWS calls need a change ticket') : allow(),
+};
+```
+
+**Absence is the other fact.** A tool you wrote with `defineTool` carries no
+`source`, and its middleware context carries no `toolSource` — not `undefined`,
+absent. "This agent's own" and "served by a server I chose not to name" are
+different situations, and only one of them should match a rule about somebody
+else's server.
+
+`mockMcpClient` stamps its own name the same way, so a policy written against
+`toolSource` is testable before the real server exists. `defineTool` never sets
+`source`, so it cannot be spoofed by accident; a hand-written `Tool` may set it
+deliberately when it is genuinely relaying another source's tool — and
+[`mcpServe`](doc:mcp-serve)'s serving-side chain reads the same field, so a
+re-served tool keeps its provenance across the boundary.
+
+## What the package exports
+
+From `agentfootprint/tool-providers`:
+
+| export | what it is |
+| --- | --- |
+| `mcpClient(opts)` | Connect. Returns an `McpClient` — `.tools()`, `.refresh()`, `.close()`. |
+| `mockMcpClient({ tools })` | The same shape, in memory. |
+| `gatewayTransport({ url, credentials, service })` | A transport whose auth header is vended per request. |
+| `McpHttpTransport` | `{ transport: 'http', url, headers?, fetch? }`. |
+| `McpCallToolResult` | The `tools/call` union: today's `content` arm, or the legacy `toolResult` arm. |
+| `McpSdkClient` | The minimal SDK surface this client speaks — what `_client` takes in tests. |
+
+`_client` is a test hook and is documented as one: it skips the SDK import and
+the transport entirely, which also means it skips the `fetch` you configured.
+Nothing about signing can be proven through it, which is why the signing tests
+run against a real socket.
+
+## Related
+
+- [Serve your tools over MCP](doc:mcp-serve) — `mcpServe(tools)`, the other direction
+- [Middleware](doc:middleware) — where `toolSource` is read
+- [Tool providers](doc:tool-providers) — `staticTools` / `gatedTools` over the tools you just connected
+- [Tool discovery](doc:tool-discovery) — MCP as an async tool source

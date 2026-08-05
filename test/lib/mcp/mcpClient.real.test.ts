@@ -45,6 +45,8 @@ interface RealServer {
   readonly url: string;
   /** How many times the server answered tools/list — proves client caching. */
   listCalls(): number;
+  /** Every request's headers, as the socket received them. */
+  headersSeen(): ReadonlyArray<Readonly<Record<string, string | string[] | undefined>>>;
   close(): Promise<void>;
 }
 
@@ -78,6 +80,11 @@ async function startRealServer(): Promise<RealServer> {
             description: 'Returns the args it received',
             inputSchema: { type: 'object' },
           },
+          {
+            name: 'legacy',
+            description: 'Answers in the 2024-10-07 shape',
+            inputSchema: { type: 'object' },
+          },
         ],
       };
     });
@@ -103,6 +110,10 @@ async function startRealServer(): Promise<RealServer> {
           };
         case 'broken':
           return { content: [{ type: 'text', text: DENIAL_MESSAGE }], isError: true };
+        case 'legacy':
+          // The 2024-10-07 answer: a bare `toolResult`, no `content` at all.
+          // Servers this old are still running, and the SDK still accepts them.
+          return { toolResult: 'ledger balance 41.20' } as never;
         case 'slow':
           // Never resolves during the test. The timer is unref'd so a
           // cancelled call cannot keep the worker alive.
@@ -116,7 +127,9 @@ async function startRealServer(): Promise<RealServer> {
     return server;
   };
 
+  const headersSeen: Record<string, string | string[] | undefined>[] = [];
   const listener: HttpServer = createServer((req, res) => {
+    headersSeen.push({ ...req.headers });
     void (async () => {
       const server = build();
       const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
@@ -143,6 +156,7 @@ async function startRealServer(): Promise<RealServer> {
   return {
     url: `http://127.0.0.1:${port}/mcp`,
     listCalls: () => listCalls,
+    headersSeen: () => headersSeen,
     close: () =>
       new Promise<void>((done, fail) => {
         listener.closeAllConnections();
@@ -184,6 +198,7 @@ describe('mcpClient against a real SDK server (streamable HTTP)', () => {
           'broken',
           'slow',
           'echoArgs',
+          'legacy',
         ]);
         expect(tools[0]!.schema.description).toBe('Search the web');
         expect(tools[0]!.schema.inputSchema).toEqual(SEARCH_INPUT_SCHEMA);
@@ -346,6 +361,280 @@ describe('mcpClient against a real SDK server (streamable HTTP)', () => {
         /mcpClient\[test\]\.refresh\(\) called after close/,
       );
       await client.close(); // idempotent
+    },
+    REAL_TRANSPORT_TIMEOUT,
+  );
+});
+
+// ─── A caller-supplied fetch, over the real wire (7.23.0) ─────────
+
+/**
+ * The seam the SDK already had and this library did not pass through. Some
+ * endpoints do not want a header, they want a SIGNATURE over the request —
+ * which cannot be decided when the connection is built, because it is computed
+ * from the bytes about to be sent.
+ *
+ * Everything below runs against a real socket, because the whole question is
+ * what actually reaches the wire.
+ */
+describe('mcpClient — a caller-supplied fetch (real HTTP)', () => {
+  const servers: RealServer[] = [];
+  const start = async (): Promise<RealServer> => {
+    const server = await startRealServer();
+    servers.push(server);
+    return server;
+  };
+
+  afterAll(async () => {
+    while (servers.length) await servers.pop()!.close();
+  });
+
+  interface SeenRequest {
+    readonly method: string;
+    readonly url: string;
+    readonly headers: Record<string, string>;
+    readonly body: string;
+  }
+
+  /** A fetch that records everything it was handed, then does the real thing. */
+  function capturingFetch(sign?: (seen: SeenRequest) => string): {
+    seen: SeenRequest[];
+    fetch: (input: string | URL, init?: RequestInit) => Promise<Response>;
+  } {
+    const seen: SeenRequest[] = [];
+    return {
+      seen,
+      fetch: async (input, init) => {
+        const headers = new Headers(init?.headers);
+        const record: SeenRequest = {
+          method: init?.method ?? 'GET',
+          url: String(input),
+          headers: Object.fromEntries(headers.entries()),
+          body: typeof init?.body === 'string' ? init.body : '',
+        };
+        seen.push(record);
+        if (sign) headers.set('authorization', sign(record));
+        return fetch(input, { ...init, headers });
+      },
+    };
+  }
+
+  const rpcMethods = (seen: readonly SeenRequest[]): string[] =>
+    seen
+      .filter((r) => r.body !== '')
+      .map((r) => (JSON.parse(r.body) as { method?: string }).method ?? '(none)');
+
+  it(
+    'LAW: the supplied fetch sees EVERY request — initialize, tools/list and tools/call',
+    async () => {
+      const server = await start();
+      const cap = capturingFetch();
+      const client = await mcpClient({
+        transport: { transport: 'http', url: server.url, fetch: cap.fetch },
+      });
+      try {
+        const tools = await client.tools();
+        const search = tools.find((t) => t.schema.name === 'search')!;
+        expect(await search.execute({ query: 'ACME' })).toBe('results for ACME');
+
+        // Every hop went through the caller's function, and each one carried
+        // the method, the url, the headers and the body it was sending.
+        expect(rpcMethods(cap.seen)).toEqual(
+          expect.arrayContaining(['initialize', 'tools/list', 'tools/call']),
+        );
+        for (const r of cap.seen.filter((x) => x.body !== '')) {
+          expect(r.method).toBe('POST');
+          expect(r.url).toBe(server.url);
+          expect(r.headers['content-type']).toContain('application/json');
+        }
+        const call = cap.seen.find((r) => r.body.includes('tools/call'))!;
+        expect(JSON.parse(call.body)).toMatchObject({
+          method: 'tools/call',
+          params: { name: 'search', arguments: { query: 'ACME' } },
+        });
+      } finally {
+        await client.close();
+      }
+    },
+    REAL_TRANSPORT_TIMEOUT,
+  );
+
+  it(
+    'LAW: with no fetch, byte-identical — a passthrough changes nothing observable',
+    async () => {
+      const server = await start();
+      const plain = await mcpClient({ transport: { transport: 'http', url: server.url } });
+      const passthrough = await mcpClient({
+        transport: {
+          transport: 'http',
+          url: server.url,
+          fetch: (input, init) => fetch(input, init),
+        },
+      });
+      try {
+        const a = await plain.tools();
+        const b = await passthrough.tools();
+        expect(b.map((t) => t.schema)).toEqual(a.map((t) => t.schema));
+        expect(await b.find((t) => t.schema.name === 'search')!.execute({ query: 'ACME' })).toBe(
+          await a.find((t) => t.schema.name === 'search')!.execute({ query: 'ACME' }),
+        );
+      } finally {
+        await plain.close();
+        await passthrough.close();
+      }
+    },
+    REAL_TRANSPORT_TIMEOUT,
+  );
+
+  it(
+    'LAW: headers and fetch COMPOSE — the signer sees the static headers and has the last word',
+    async () => {
+      // The precedence answer, pinned rather than assumed: the SDK folds
+      // `requestInit.headers` into the init it hands the custom fetch, so a
+      // signer reads them and, writing last, decides what goes on the wire.
+      const server = await start();
+      const cap = capturingFetch(() => 'Signed per-request');
+      const client = await mcpClient({
+        transport: {
+          transport: 'http',
+          url: server.url,
+          headers: { 'x-tenant': 'acme', authorization: 'Static should-not-win' },
+          fetch: cap.fetch,
+        },
+      });
+      try {
+        await client.tools();
+
+        // The signer SAW both static headers…
+        expect(cap.seen[0]!.headers['x-tenant']).toBe('acme');
+        expect(cap.seen[0]!.headers['authorization']).toBe('Static should-not-win');
+
+        // …and the socket received the tenant header untouched plus the
+        // signature, never the static credential it collided with.
+        const onWire = server.headersSeen();
+        expect(onWire.length).toBeGreaterThan(0);
+        for (const h of onWire) {
+          expect(h['x-tenant']).toBe('acme');
+          expect(h['authorization']).toBe('Signed per-request');
+        }
+      } finally {
+        await client.close();
+      }
+    },
+    REAL_TRANSPORT_TIMEOUT,
+  );
+
+  it(
+    'a generic per-request signer needs no vendor SDK — and signs each request separately',
+    async () => {
+      const server = await start();
+      // Signs over the method, the url and the body — the three things a
+      // connect-time header cannot know. Node's own crypto, nothing else.
+      const { createHmac } = await import('node:crypto');
+      const sign = (r: SeenRequest): string =>
+        `HMAC ${createHmac('sha256', 'shared-secret')
+          .update(`${r.method}\n${r.url}\n${r.body}`)
+          .digest('hex')}`;
+      const cap = capturingFetch(sign);
+      const client = await mcpClient({
+        transport: { transport: 'http', url: server.url, fetch: cap.fetch },
+      });
+      try {
+        const tools = await client.tools();
+        await tools.find((t) => t.schema.name === 'search')!.execute({ query: 'ACME' });
+
+        const signatures = server
+          .headersSeen()
+          .map((h) => h['authorization'])
+          .filter((v): v is string => typeof v === 'string');
+        expect(signatures.length).toBeGreaterThanOrEqual(3);
+        // Different bodies ⇒ different signatures. A signature computed once
+        // at connect time could not have done this.
+        expect(new Set(signatures).size).toBeGreaterThan(1);
+        // And each one verifies against what that request actually carried.
+        for (const r of cap.seen.filter((x) => x.body !== '')) {
+          expect(signatures).toContain(sign(r));
+        }
+      } finally {
+        await client.close();
+      }
+    },
+    REAL_TRANSPORT_TIMEOUT,
+  );
+
+  it(
+    "SECURITY: a signing fetch's Authorization never reaches a log, a result or an error",
+    async () => {
+      // The four pins gatewayTransport already holds, applied to the seam that
+      // now also carries credentials.
+      const SECRET = 'sig-2f6a-never-log-me';
+      const server = await start();
+      const said: string[] = [];
+      const channels = ['log', 'info', 'warn', 'error', 'debug', 'trace'] as const;
+      const original = channels.map((c) => [c, console[c]] as const);
+      for (const c of channels) {
+        // eslint-disable-next-line no-console
+        console[c] = (...parts: unknown[]) => said.push(parts.map(String).join(' '));
+      }
+
+      const descriptor = {
+        transport: 'http' as const,
+        url: server.url,
+        fetch: async (input: string | URL, init?: RequestInit) => {
+          const headers = new Headers(init?.headers);
+          headers.set('authorization', `Bearer ${SECRET}`);
+          return fetch(input, { ...init, headers });
+        },
+      };
+
+      try {
+        const client = await mcpClient({ name: 'signed', transport: descriptor });
+        try {
+          const tools = await client.tools();
+          const search = tools.find((t) => t.schema.name === 'search')!;
+          const result = await search.execute({ query: 'ACME' });
+          const failure = await tools
+            .find((t) => t.schema.name === 'broken')!
+            .execute({})
+            .catch((e: Error) => e);
+
+          // 1. a hostile logger watching every console channel saw nothing;
+          expect(said.join('\n')).not.toContain(SECRET);
+          // 2. the descriptor holds no token — the value lives inside a
+          //    closure that runs per request, so serializing it reveals nothing;
+          expect(JSON.stringify(descriptor)).not.toContain(SECRET);
+          // 3. the tool result carries none of it;
+          expect(result).not.toContain(SECRET);
+          // 4. and neither does an error thrown downstream of the signature.
+          expect((failure as Error).message).not.toContain(SECRET);
+          expect((failure as Error).message).toMatch(/'broken'.*server 'signed'/);
+        } finally {
+          await client.close();
+        }
+      } finally {
+        for (const [c, fn] of original) (console[c] as unknown) = fn;
+      }
+    },
+    REAL_TRANSPORT_TIMEOUT,
+  );
+
+  it(
+    'LAW: a real server answering the 2024-10-07 shape is READ, not lost',
+    async () => {
+      // The union bug, end to end. The server sends `{ toolResult }` and no
+      // content; the SDK's default schema hands us an empty `content` beside
+      // it; reading that first would have answered a real result with ''.
+      const server = await start();
+      const client = await mcpClient({
+        name: 'old-server',
+        transport: { transport: 'http', url: server.url },
+      });
+      try {
+        const legacy = (await client.tools()).find((t) => t.schema.name === 'legacy')!;
+        expect(await legacy.execute({})).toBe('ledger balance 41.20');
+      } finally {
+        await client.close();
+      }
     },
     REAL_TRANSPORT_TIMEOUT,
   );

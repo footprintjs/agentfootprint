@@ -42,6 +42,24 @@ export interface Tool<TArgs = Record<string, unknown>, TResult = unknown> {
    * exposes a predicate typed to the tool's args at the CALL site.
    */
   readonly checkIn?: CheckInDemand;
+  /**
+   * Where this tool came from — the name of the MCP server that served it.
+   *
+   * **Absent means "this agent's own".** A tool you wrote with `defineTool`
+   * carries nothing here, and that absence is the fact: nobody else supplied
+   * it. A tool that arrived over MCP carries the client's `name`
+   * (`mcpClient({ name: 'aws-mcp' })`), because the same tool NAME can come
+   * from two servers and a policy that cannot tell them apart governs both.
+   *
+   * It travels to the decision point as `ToolMiddlewareContext.toolSource` —
+   * the tool-dispatch chain and `mcpServe`'s serving-side chain read the same
+   * field.
+   *
+   * Set by `mcpClient` / `mockMcpClient`. `defineTool` never sets it, so it
+   * cannot be spoofed by accident; a hand-built `Tool` may set it deliberately
+   * when it is genuinely relaying another source's tool.
+   */
+  readonly source?: string;
   execute(args: TArgs, ctx: ToolExecutionContext): Promise<TResult> | TResult;
 }
 

@@ -117,6 +117,22 @@ Three layers, three jobs, and they do not overlap:
 | `PermissionChecker` | whether a call is **permitted** |
 | `toolMiddleware` | what **happens** when a permitted call is made |
 
+### Which server did this tool come from?
+
+A tool NAME is not an identity. Two [MCP servers](doc:mcp-client) can each serve a `call_aws`, and a rule matching the bare name governs whichever one answers — including the one it was never written about. So the context carries `toolSource`: the name of the server the tool came from.
+
+```ts
+const prodNeedsATicket: ToolMiddleware = {
+  name: 'prod-needs-a-ticket',
+  onToolCall: (call) =>
+    call.toolSource === 'aws-prod' ? deny('production AWS calls need a change ticket') : allow(),
+};
+```
+
+**Absence is the other half of the fact.** A tool you wrote with `defineTool` carries no `toolSource` — not `undefined`, absent — because "this agent's own" and "served by somebody I chose not to name" are different situations, and only one of them should match a rule about somebody else's server. It is filled from `Tool.source`, which `mcpClient` and `mockMcpClient` stamp with their client `name`, so a rule written against it is testable before the real server exists.
+
+The same field appears on `mcpServe`'s serving-side chain, carrying the **served** tool's provenance (present when you are re-serving another server's tool, absent when the tool is yours) — never the calling client's, since a client does not get to declare where a tool came from.
+
 ### A middleware that throws is a denial
 
 The thrown message becomes the reason and the tool does not run. This is the same deny-by-default the permission gate has always applied to a checker that throws: a governance layer whose failure mode is "allow" is not a governance layer.
@@ -161,7 +177,7 @@ Everything below comes from the package root, `agentfootprint`:
 | `ask(payload)` | Suspend for a person. `{ question, detail? }`. Tool chains only. |
 | `ToolMiddleware` | `{ name, onToolCall(call) }`. |
 | `MessageMiddleware` | `{ name, onMessage(msg) }`. |
-| `ToolMiddlewareContext` | What a tool link is handed: `toolName`, `toolCallId`, `iteration`, `args`, `history`, `identity?`, `signal?`. |
+| `ToolMiddlewareContext` | What a tool link is handed: `toolName`, `toolSource?`, `toolCallId`, `iteration`, `args`, `history`, `identity?`, `signal?`. |
 | `MessageMiddlewareContext` | What a message link is handed: `phase`, `content`, `history`, `identity?`, `signal?`. |
 | `ToolOutcome` | `allow \| deny \| ask`. No result arm. |
 | `MessageOutcome` | `allow \| deny`. No `ask` — the message boundary has no pause to carry one. |
@@ -179,4 +195,5 @@ One typed event, `agentfootprint.middleware.decision`, fires per row. It carries
 - [Check in](doc:checkin) — evidence-carrying consent declared by a tool
 - [Pause / resume](doc:pausable) — the machinery `ask` rides
 - [Serving over MCP](doc:mcp-serve) — the governance law at the served boundary
+- [Connecting to an MCP server](doc:mcp-client) — where `toolSource` comes from
 - [Window strategies](doc:window-strategies) — the other family that records what it changed

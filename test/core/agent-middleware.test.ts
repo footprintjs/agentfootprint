@@ -35,6 +35,7 @@ import {
   type ToolMiddleware,
 } from '../../src/index.js';
 import { mock } from '../../src/llm-providers.js';
+import { mockMcpClient } from '../../src/tool-providers/index.js';
 import type { LLMRequest, LLMResponse, PermissionChecker } from '../../src/adapters/types.js';
 
 // ─── Helpers ──────────────────────────────────────────────────────
@@ -850,5 +851,144 @@ describe('middleware — ROI', () => {
     expect(changes).toHaveLength(1);
     expect(changes[0]?.middleware).toBe('pii-scrub');
     expect(changes[0]?.why).toBe('masked a US SSN');
+  });
+});
+
+// ─── toolSource — provenance reaches the decision point (7.23.0) ──
+
+/**
+ * A tool NAME is not an identity. Two MCP servers can each serve a
+ * `call_aws`, and a policy matching the bare name governs whichever one
+ * answers — including the one nobody wrote it about. `toolSource` is the fact
+ * that makes a rule mean what it says; its ABSENCE is the fact that a tool is
+ * this agent's own.
+ */
+describe('middleware — toolSource', () => {
+  /** One MCP-sourced tool from a named server, via the in-memory client. */
+  const fromServer = async (server: string, name = 'call_aws') => {
+    const client = mockMcpClient({
+      name: server,
+      tools: [
+        {
+          name,
+          description: 'calls AWS',
+          inputSchema: { type: 'object', properties: {} },
+          handler: async () => `${server} answered`,
+        },
+      ],
+    });
+    return (await client.tools())[0]!;
+  };
+
+  /** A middleware that just records what it was told about provenance. */
+  const watcher = () => {
+    const seen: Array<{ toolName: string; toolSource?: string; declared: boolean }> = [];
+    const mw: ToolMiddleware = {
+      name: 'watcher',
+      onToolCall: (call) => {
+        seen.push({
+          toolName: call.toolName,
+          ...(call.toolSource !== undefined && { toolSource: call.toolSource }),
+          declared: 'toolSource' in call,
+        });
+        return allow();
+      },
+    };
+    return { seen, mw };
+  };
+
+  it("LAW: an MCP tool's middleware context carries its server's name", async () => {
+    const { seen, mw } = watcher();
+    const agent = Agent.create({ provider: mock({ replies: callThen('call_aws') }), model: 'm' })
+      .tools([await fromServer('aws-prod')])
+      .toolMiddleware(mw)
+      .build();
+
+    await agent.run({ message: 'go' });
+
+    expect(seen).toEqual([{ toolName: 'call_aws', toolSource: 'aws-prod', declared: true }]);
+  });
+
+  it('LAW: a locally-defined tool carries none — the key is ABSENT, not undefined', async () => {
+    const { seen, mw } = watcher();
+    const { tool } = recordingTool();
+    const agent = Agent.create({ provider: mock({ replies: callThen('act') }), model: 'm' })
+      .tools([tool])
+      .toolMiddleware(mw)
+      .build();
+
+    await agent.run({ message: 'go' });
+
+    expect(seen).toEqual([{ toolName: 'act', declared: false }]);
+  });
+
+  it('LAW: two servers serving the SAME tool name are distinguishable in ONE middleware', async () => {
+    // The field report's exact scenario. One agent cannot hold both (the tool
+    // registry refuses a duplicate name at build), so the two servers meet in
+    // the middleware — the same object, governing both agents.
+    const decisions: string[] = [];
+    const scopedToProd: ToolMiddleware = {
+      name: 'prod-only',
+      onToolCall: (call) => {
+        if (call.toolName !== 'call_aws') return allow();
+        if (call.toolSource === 'aws-prod') {
+          decisions.push('denied prod');
+          return deny('production AWS calls need a change ticket');
+        }
+        decisions.push(`allowed ${String(call.toolSource)}`);
+        return allow();
+      },
+    };
+
+    const build = async (server: string) =>
+      Agent.create({ provider: mock({ replies: callThen('call_aws') }), model: 'm' })
+        .tools([await fromServer(server)])
+        .toolMiddleware(scopedToProd)
+        .build();
+
+    const prod = await build('aws-prod');
+    const sandbox = await build('aws-sandbox');
+
+    const prodSpy = spyProvider(callThen('call_aws'));
+    const prodAgent = Agent.create({ provider: prodSpy.provider, model: 'm' })
+      .tools([await fromServer('aws-prod')])
+      .toolMiddleware(scopedToProd)
+      .build();
+
+    await prod.run({ message: 'go' });
+    await sandbox.run({ message: 'go' });
+    await prodAgent.run({ message: 'go' });
+
+    expect(decisions).toEqual(['denied prod', 'allowed aws-sandbox', 'denied prod']);
+    // And the denial is what the model read for the prod call, verbatim.
+    const toolMsg = prodSpy.requests[1]?.messages.find((m) => m.role === 'tool');
+    expect(toolMsg?.content).toBe('production AWS calls need a change ticket');
+  });
+
+  it('the resumed half of a chain sees the SAME source the asking half saw', async () => {
+    // A dispatch that pauses continues from the link after the one that asked.
+    // A chain that changed its mind about where the tool came from halfway
+    // through one dispatch would be worse than not knowing at all.
+    const { seen, mw } = watcher();
+    const agent = Agent.create({ provider: mock({ replies: callThen('call_aws') }), model: 'm' })
+      .tools([await fromServer('aws-prod')])
+      .toolMiddleware({ name: 'gate', onToolCall: () => ask({ question: 'approve?' }) }, mw)
+      .build();
+
+    const paused = await agent.run({ message: 'go' });
+    if (!isAskPause(paused)) throw new Error('expected a pause');
+    expect(seen).toEqual([]); // the watcher sits AFTER the asking link
+
+    await agent.resume(paused.checkpoint, checkInApproved({ by: 'alice' }));
+
+    expect(seen).toEqual([{ toolName: 'call_aws', toolSource: 'aws-prod', declared: true }]);
+  });
+
+  it('absent middleware is byte-identical — provenance changes nothing about the run', async () => {
+    const agent = Agent.create({ provider: mock({ replies: callThen('call_aws') }), model: 'm' })
+      .tools([await fromServer('aws-prod')])
+      .build();
+
+    expect(await agent.run({ message: 'go' })).toBe('done');
   });
 });

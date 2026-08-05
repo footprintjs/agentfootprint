@@ -71,7 +71,8 @@ When `execute` throws, the framework catches it, reports it to the LLM as a tool
 
 ## Next steps
 
-- [Tool discovery](doc:tool-discovery) — connect to any MCP server with `mcpClient({ transport })`
+- [Connect to an MCP server](doc:mcp-client) — `mcpClient({ transport })`, per-request signing, and governing by server
+- [Tool discovery](doc:tool-discovery) — dynamic catalogs and MCP as an async tool source
 - [Serve your tools over MCP](doc:mcp-serve) — `mcpServe(tools)`, the other direction
 - [Tool providers](doc:tool-providers) — dynamic per-iteration tool catalogs (`staticTools`, `gatedTools`, `skillScopedTools`)
 - [Skills, explained](doc:skills-explained) — LLM-activated tool bundles

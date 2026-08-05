@@ -146,6 +146,12 @@ export async function mcpServe(
         const proposed = (args ?? {}) as Readonly<Record<string, unknown>>;
         const verdict = await runToolChain(opts.toolMiddleware, {
           toolName: tool.schema.name,
+          // Same context type as the Agent's chain, so the same field means the
+          // same thing here: present when the tool we are serving came from
+          // somewhere else (re-serving another MCP server's tool), absent when
+          // it is ours. It is the SERVED tool's provenance, never the calling
+          // client's — a client does not get to say where a tool came from.
+          ...(tool.source !== undefined && { toolSource: tool.source }),
           toolCallId,
           iteration: 0,
           args: proposed,

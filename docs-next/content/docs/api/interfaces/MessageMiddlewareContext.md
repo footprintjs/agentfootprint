@@ -4,7 +4,7 @@ title: MessageMiddlewareContext
 
 # Interface: MessageMiddlewareContext
 
-Defined in: [src/core/agent/middleware/types.ts:125](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/types.ts#L125)
+Defined in: [src/core/agent/middleware/types.ts:137](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/types.ts#L137)
 
 The message a message middleware is deciding about.
 
@@ -14,7 +14,7 @@ The message a message middleware is deciding about.
 
 > `readonly` **content**: `string`
 
-Defined in: [src/core/agent/middleware/types.ts:135](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/types.ts#L135)
+Defined in: [src/core/agent/middleware/types.ts:147](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/types.ts#L147)
 
 The content as THIS middleware sees it — earlier transforms applied.
 
@@ -24,7 +24,7 @@ The content as THIS middleware sees it — earlier transforms applied.
 
 > `readonly` **history**: readonly [`LLMMessage`](/docs/api/interfaces/LLMMessage)[]
 
-Defined in: [src/core/agent/middleware/types.ts:137](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/types.ts#L137)
+Defined in: [src/core/agent/middleware/types.ts:149](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/types.ts#L149)
 
 Conversation so far. Empty at `'input'`.
 
@@ -34,7 +34,7 @@ Conversation so far. Empty at `'input'`.
 
 > `readonly` `optional` **identity?**: `MemoryIdentity`
 
-Defined in: [src/core/agent/middleware/types.ts:138](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/types.ts#L138)
+Defined in: [src/core/agent/middleware/types.ts:150](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/types.ts#L150)
 
 ***
 
@@ -42,7 +42,7 @@ Defined in: [src/core/agent/middleware/types.ts:138](https://github.com/footprin
 
 > `readonly` **phase**: `"input"` \| `"output"`
 
-Defined in: [src/core/agent/middleware/types.ts:133](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/types.ts#L133)
+Defined in: [src/core/agent/middleware/types.ts:145](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/types.ts#L145)
 
 `'input'` runs at the very top of the run, BEFORE the user's message is
 committed — so the window strategies, the injections, the slots, the
@@ -56,4 +56,4 @@ captured, so the record and the caller receive the same string.
 
 > `readonly` `optional` **signal?**: `AbortSignal`
 
-Defined in: [src/core/agent/middleware/types.ts:139](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/types.ts#L139)
+Defined in: [src/core/agent/middleware/types.ts:151](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/types.ts#L151)

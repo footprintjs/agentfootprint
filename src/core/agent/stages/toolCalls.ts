@@ -430,6 +430,9 @@ export function buildToolCallsHandler(
         if (!denied && deps.toolMiddleware && deps.toolMiddleware.length > 0) {
           const chain = await runToolChain(deps.toolMiddleware, {
             toolName: tc.name,
+            // Provenance from the tool that is about to run, so a policy can
+            // scope to the server that served it. Absent for our own tools.
+            ...(tool?.source !== undefined && { toolSource: tool.source }),
             toolCallId: tc.id,
             iteration,
             args: callArgs,
@@ -834,8 +837,14 @@ export function buildToolCallsHandler(
           // model-visible refusal and the tool does NOT run. That is the same
           // rule already applied to a tool that tries to pause during an
           // approved check-in resume: at most one human question per resume.
+          // Resolved BEFORE the chain runs, not after, because the links that
+          // continue here must see the same `toolSource` the links before the
+          // ask saw. A chain that changed its mind about where a tool came from
+          // halfway through one dispatch would be worse than not knowing.
+          const tool = lookupTool(toolName);
           const rest = await runToolChain(deps.toolMiddleware ?? [], {
             toolName,
+            ...(tool?.source !== undefined && { toolSource: tool.source }),
             toolCallId,
             iteration,
             args,
@@ -844,7 +853,6 @@ export function buildToolCallsHandler(
             askPolicy: 'refuse',
           });
           recordDecisions(scope, rest.decisions);
-          const tool = lookupTool(toolName);
           if (rest.kind === 'deny') {
             result = rest.reason;
           } else if (tool?.checkIn !== undefined) {

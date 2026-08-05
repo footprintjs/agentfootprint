@@ -4,7 +4,7 @@ title: ToolMiddleware
 
 # Interface: ToolMiddleware
 
-Defined in: [src/core/agent/middleware/types.ts:156](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/types.ts#L156)
+Defined in: [src/core/agent/middleware/types.ts:168](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/types.ts#L168)
 
 One link in the tool-dispatch chain.
 
@@ -24,7 +24,7 @@ const noProdWrites: ToolMiddleware = {
 
 > `readonly` **name**: `string`
 
-Defined in: [src/core/agent/middleware/types.ts:158](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/types.ts#L158)
+Defined in: [src/core/agent/middleware/types.ts:170](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/types.ts#L170)
 
 Identifies this middleware in every ledger row and event it produces.
 
@@ -34,7 +34,7 @@ Identifies this middleware in every ledger row and event it produces.
 
 > **onToolCall**(`call`): [`ToolOutcome`](/docs/api/type-aliases/ToolOutcome) \| `Promise`\<[`ToolOutcome`](/docs/api/type-aliases/ToolOutcome)\>
 
-Defined in: [src/core/agent/middleware/types.ts:159](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/types.ts#L159)
+Defined in: [src/core/agent/middleware/types.ts:171](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/types.ts#L171)
 
 #### Parameters
 

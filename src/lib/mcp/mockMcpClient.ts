@@ -116,6 +116,10 @@ function wrapMockTool(
       description: mcp.description ?? `Mock MCP tool: ${mcp.name}`,
       inputSchema: mcp.inputSchema,
     },
+    // Same provenance a real `mcpClient` stamps, for the same reason: code that
+    // governs by server name has to be testable against the mock, or the swap
+    // from mock to real server changes what the policy sees.
+    source: serverName,
     execute: async (args) => {
       const argsObj =
         args !== null && typeof args === 'object' && !Array.isArray(args)

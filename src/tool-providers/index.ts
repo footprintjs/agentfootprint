@@ -61,6 +61,7 @@ export {
 } from '../lib/mcp/index.js';
 export type {
   GatewayTransportOptions,
+  McpCallToolResult,
   McpClient,
   McpClientOptions,
   McpSdkClient,

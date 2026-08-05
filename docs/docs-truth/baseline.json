@@ -2,26 +2,26 @@
   "$schema": "docs-truth baseline v1",
   "note": "Recorded state of the docs-vs-code gap. CI fails only when this gets WORSE. Fixed a gap? Run `npm run docs:truth:baseline` to re-record and regenerate docs/DOCS_TRUTH_REPORT.md. The \"docs-promise-nothing\" class is NEVER baselined — it must always be zero.",
   "documentedMeans": "the symbol name appears in prose (outside any fenced code block) on a hand-written page under docs-next/content/docs. The two generated TypeDoc trees (docs-next/content/docs/api, docs/api-reference) are excluded — they are generated from source, so counting them would mark everything documented.",
-  "recordedAt": "2026-08-03",
+  "recordedAt": "2026-08-05",
   "surface": {
     "subpaths": 25,
-    "declaredSymbols": 1151,
-    "declaredEvents": 67,
-    "eventSource": "src/events/registry.ts:503"
+    "declaredSymbols": 1184,
+    "declaredEvents": 68,
+    "eventSource": "src/events/registry.ts:512"
   },
   "counts": {
     "symbols": {
       "docs-promise-nothing": 0,
-      "documented-never-exercised": 257,
+      "documented-never-exercised": 291,
       "exercised-undocumented": 37,
-      "undocumented-unexercised": 607,
+      "undocumented-unexercised": 606,
       "site-code-sample-only": 18,
       "written-but-not-published": 139,
       "ok": 93
     },
     "events": {
       "docs-promise-nothing": 0,
-      "documented-never-exercised": 2,
+      "documented-never-exercised": 3,
       "exercised-undocumented": 9,
       "undocumented-unexercised": 19,
       "site-code-sample-only": 5,
@@ -391,7 +391,6 @@
     "MarginCandidate",
     "MarginResult",
     "McpClientOptions",
-    "McpHttpTransport",
     "McpStdioTransport",
     "MemoryCursor",
     "MemoryPipeline",

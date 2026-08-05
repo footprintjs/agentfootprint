@@ -13,6 +13,7 @@ export {
   type GatewayTransportOptions,
 } from './gatewayTransport.js';
 export type {
+  McpCallToolResult,
   McpClient,
   McpClientOptions,
   McpGatewayTransport,

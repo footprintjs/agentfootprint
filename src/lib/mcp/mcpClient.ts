@@ -35,8 +35,14 @@
  */
 
 import type { Tool } from '../../core/tools.js';
-import type { McpClient, McpClientOptions, McpSdkClient, McpTransport } from './types.js';
-import { createVendingFetch, type FetchLike } from './gatewayTransport.js';
+import type {
+  McpCallToolResult,
+  McpClient,
+  McpClientOptions,
+  McpSdkClient,
+  McpTransport,
+} from './types.js';
+import { createVendingFetch } from './gatewayTransport.js';
 import { lazyRequire } from '../lazyRequire.js';
 
 // Version-less identity. The MCP `clientInfo` field is informational
@@ -168,8 +174,13 @@ async function buildTransport(t: McpTransport): Promise<unknown> {
       fetch: createVendingFetch(t),
     });
   }
+  // Both options ride the SAME SDK transport, and both are forwarded when both
+  // are given. The SDK folds `requestInit.headers` into the `init.headers` it
+  // hands the custom fetch, so a signer sees the static headers and has the
+  // final word over the bytes — see `McpHttpTransport.fetch`.
   return new httpMod.StreamableHTTPClientTransport(new URL(t.url), {
     ...(t.headers && { requestInit: { headers: { ...t.headers } } }),
+    ...(t.fetch && { fetch: t.fetch }),
   });
 }
 
@@ -191,6 +202,10 @@ function wrapMcpTool(
       description: mcp.description ?? `MCP tool: ${mcp.name}`,
       inputSchema: mcp.inputSchema,
     },
+    // Provenance, carried to the decision point. Governance that matches on a
+    // bare tool name cannot tell two servers' identically-named tools apart;
+    // this is the fact that lets it. See `Tool.source`.
+    source: serverName,
     execute: async (args) => {
       // The agent passes args as `unknown` per Tool contract. MCP
       // expects a JSON object — non-object inputs become `{}` rather
@@ -208,22 +223,108 @@ function wrapMcpTool(
       const result = signal
         ? await sdk.callTool(params, undefined, { signal })
         : await sdk.callTool(params);
-      // MCP returns content blocks. We concatenate text blocks into
-      // a single string for the agent's tool-result event payload.
-      // Non-text blocks (images, resources) are summarized with their
-      // type — full multi-modal mapping is a future-release follow-up.
-      const text = result.content
-        .map((c) => (c.type === 'text' && c.text ? c.text : `[${c.type}]`))
-        .join('\n');
-      if (result.isError) {
-        throw new Error(
-          `MCP tool '${mcp.name}' (server '${serverName}') returned an error: ${text}`,
-        );
-      }
-      return text;
+      return readToolResult(result, mcp.name, serverName);
     },
   };
   return tool;
+}
+
+// ─── Reading a tools/call answer (both arms of the protocol) ───────
+
+/**
+ * Turn a `tools/call` answer into the text the agent hands the model.
+ *
+ * Three cases, because the protocol has three and pretending otherwise is what
+ * broke on a server that answered the old way:
+ *
+ *   1. **content blocks** — today's shape. Text blocks are concatenated;
+ *      non-text blocks (images, resources) are summarized with their type.
+ *      `isError: true` becomes a thrown tool error, exactly as before.
+ *   2. **`toolResult`** — the 2024-10-07 shape, which carries no `content` and
+ *      no `isError`. The value BECOMES the tool text: a string verbatim,
+ *      anything else JSON-stringified. That conversion is stated here and in
+ *      the docs rather than left to be inferred from a mangled answer.
+ *   3. **neither** — a corrective error naming the SHAPE that arrived (its
+ *      type, or its keys) and never the payload: an unrecognised answer is
+ *      still somebody's data, and a tool error is read by the model.
+ *
+ * **Order matters, and here is why the legacy check runs first.** The SDK's
+ * default result schema declares `content` with a default of `[]`, so a legacy
+ * `{ toolResult }` payload arrives here wearing an empty `content` it never
+ * sent. Reading that array first would answer a real result with an empty
+ * string — the same silence in a friendlier coat. So a `toolResult` beside an
+ * EMPTY `content` is read as the legacy answer it is. A NON-empty `content`
+ * always wins: a server that sent blocks meant the blocks.
+ */
+function readToolResult(result: McpCallToolResult, toolName: string, serverName: string): string {
+  if (isLegacyResult(result) && !hasNonEmptyContent(result)) {
+    return stringifyLegacyResult(result.toolResult);
+  }
+  if (hasContentBlocks(result)) {
+    const text = result.content
+      .map((c) => (c.type === 'text' && c.text ? c.text : `[${c.type}]`))
+      .join('\n');
+    if (result.isError) {
+      throw new Error(`MCP tool '${toolName}' (server '${serverName}') returned an error: ${text}`);
+    }
+    return text;
+  }
+  throw new Error(
+    `MCP tool '${toolName}' (server '${serverName}') answered with a shape this client does ` +
+      `not understand: ${describeShape(result)}. A tools/call result carries either 'content' ` +
+      `blocks or a legacy 'toolResult'; this had neither.`,
+  );
+}
+
+/**
+ * The current arm. Checked on the wire value, not on the declared type — and
+ * defensively, because a `null` or a scalar is exactly the kind of answer that
+ * has to reach the corrective error rather than crash on the way to it.
+ */
+function hasContentBlocks(
+  result: McpCallToolResult,
+): result is Extract<McpCallToolResult, { content: unknown }> {
+  return Array.isArray(contentOf(result));
+}
+
+/** Blocks the server actually sent, as opposed to the schema's default `[]`. */
+function hasNonEmptyContent(result: McpCallToolResult): boolean {
+  const content = contentOf(result);
+  return Array.isArray(content) && content.length > 0;
+}
+
+function contentOf(result: McpCallToolResult): unknown {
+  if (typeof result !== 'object' || result === null) return undefined;
+  return (result as { content?: unknown }).content;
+}
+
+/** The 2024-10-07 arm — the key's PRESENCE is the signal; its value may be anything. */
+function isLegacyResult(result: McpCallToolResult): result is { toolResult: unknown } {
+  return typeof result === 'object' && result !== null && 'toolResult' in result;
+}
+
+/** A legacy `toolResult` as tool text: a string verbatim, anything else as JSON. */
+function stringifyLegacyResult(value: unknown): string {
+  if (typeof value === 'string') return value;
+  if (value === undefined) return '';
+  try {
+    return JSON.stringify(value) ?? String(value);
+  } catch {
+    // Circular or otherwise unserializable — say what we can rather than
+    // throwing from a path whose whole job is to report an answer.
+    return String(value);
+  }
+}
+
+/** Name a value's SHAPE for an error message. Never its contents. */
+function describeShape(value: unknown): string {
+  if (value === null) return 'null';
+  if (Array.isArray(value)) return `an array of ${value.length} item(s)`;
+  if (typeof value !== 'object') return `a ${typeof value}`;
+  const keys = Object.keys(value as Record<string, unknown>);
+  if (keys.length === 0) return 'an object with no keys';
+  const shown = keys.slice(0, 8);
+  return `an object with keys [${shown.join(', ')}${keys.length > shown.length ? ', …' : ''}]`;
 }
 
 // ─── Module shim types (for the lazy-required SDK) ─────────────────
@@ -249,8 +350,13 @@ interface McpHttpExports {
     url: URL,
     options?: {
       requestInit?: { headers: Record<string, string> };
-      /** The SDK's hook for a custom fetch — how per-request vending gets in. */
-      fetch?: FetchLike;
+      /**
+       * The SDK's hook for a custom fetch — how per-request vending AND
+       * caller-supplied signing both get in. Typed exactly as the SDK types it
+       * (`(url: string | URL, init?) => Promise<Response>`), so a function this
+       * shim accepts is a function the real transport accepts.
+       */
+      fetch?: (url: string | URL, init?: RequestInit) => Promise<Response>;
     },
   ) => unknown;
 }

@@ -7,7 +7,104 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [7.22.1] - 2026-08-03
+## [7.23.0] - 2026-08-04
+
+Three seams that each stopped one layer short of the person who needed them.
+
+That is the whole shape of this release, and it is worth naming because it is a
+failure mode rather than a feature gap. In all three cases the hard part was
+already built and already correct. The transport already had a fetch hook — for
+our gateway, one line above the branch that did not pass yours. The protocol
+already had two result shapes, and the SDK's own type already said so — our shim
+narrowed one of them away. The tool wrapper already knew which server it was
+wrapping — and spent that knowledge on an error string. Everything worked right
+up to the last hop, and the last hop is where the consumer stands.
+
+**Sign your own requests.** `McpHttpTransport` now takes a `fetch`. Some
+endpoints do not want a header, they want a signature — SigV4, DPoP, an HMAC
+over the body, a digest of the bytes about to be sent — and none of those can be
+decided when the connection is built, because they are computed FROM the request.
+A header fixed at construction cannot express them. So this release implements
+none of them: it forwards the hook the MCP SDK already has, and **zero vendor
+code lives in this library**. Your signer runs on every request the transport
+makes — `initialize`, `tools/list`, `tools/call`, the event stream — and a
+scheme this repo has never heard of works on the day you write it.
+
+**Read the servers that answer the old way.** `tools/call` has two result
+shapes. Today's carries `content` blocks; the 2024-10-07 shape carries a bare
+`toolResult` and no `content` at all. Our shim promised only the first, so
+`result.content.map(...)` compiled against a value that can arrive without one —
+and then failed two different ways, neither visible to the compiler and neither
+reproducible against a modern mock. Where the raw legacy object reaches the
+reader (a caller-supplied `_client`) it **crashed**. Where the SDK's own result
+schema normalises it — defaulting `content` to `[]` beside the `toolResult` it
+could not express — it returned **an empty string**, which is worse: a real
+answer, silently replaced with nothing. Both are fixed, and the shim now mirrors
+the real union, so the next person to write this bug is stopped by the compiler
+rather than by a support ticket. That is the 7.13.0 lesson applied to a second
+shim: a shim's fidelity is not cosmetic, it is what makes an error class
+impossible.
+
+**Say which server a tool came from.** `wrapMcpTool` knew the server's name and
+used it once, in the text of an error. Governance could not reach it, so a
+policy matching a bare `call_aws` silently governed a second server's
+identically-named tool — a hole with no error message, in the layer whose entire
+job is to have no holes. Tools from an MCP server now carry `Tool.source`, and
+it reaches the decision point as `ToolMiddlewareContext.toolSource`. **Absence
+is the other half of the fact**: a tool you wrote yourself carries none, because
+"this agent's own" and "served by somebody I chose not to name" are different
+situations and only one of them should match a rule about somebody else's
+server.
+
+Thank you to a production integration for all three, found the way these things
+are always found: on real infrastructure, against real servers, at the last hop.
+
+### Added
+
+- **`McpHttpTransport.fetch`** — your own `fetch` for every request the HTTP
+  transport makes. It composes with `headers`: the SDK folds static headers into
+  the `init.headers` your function receives, so **you see them and you have the
+  last word** — set the same header name and yours is what reaches the wire.
+  Omit it and behaviour is byte-identical to 7.22. The library never reads,
+  stores, logs or records what your signer produces; the token-secrecy suite
+  extends to this seam with the four pins `gatewayTransport` already holds (a
+  hostile logger sees nothing, the transport descriptor holds nothing,
+  a downstream error carries nothing, and each request is signed separately).
+  Pinned against a real socket, because signing is a question about bytes.
+
+- **`McpCallToolResult`** (`agentfootprint/tool-providers`) — the `tools/call`
+  union, modelled rather than narrowed away: today's `content` arm, or the
+  2024-10-07 `toolResult` arm. `McpSdkClient.callTool` now returns it, which
+  makes narrowing a compile-time obligation.
+
+- **`Tool.source`** — where a tool came from. Set by `mcpClient` and
+  `mockMcpClient` to the client's `name`; never set by `defineTool`, so it
+  cannot be spoofed by accident. A hand-written `Tool` may set it deliberately
+  when it is genuinely relaying another source's tool.
+
+- **`ToolMiddlewareContext.toolSource`** — that provenance at the decision
+  point, on the same context type both chains use, so `mcpServe`'s serving-side
+  middleware gets it too (carrying the **served** tool's provenance, never the
+  calling client's — a client does not get to declare where a tool came from).
+  Present only when the tool has a source, so `'toolSource' in call` is a
+  question with a real answer.
+
+- **[Connect to an MCP server](https://footprintjs.github.io/agentfootprint/docs/build/mcp-client)**
+  — a new docs page for the consuming side: the three transports, a complete
+  per-request signer written with `node:crypto` and no vendor SDK, what each
+  result shape converts to, and governing by server.
+
+### Fixed
+
+- **A legacy `tools/call` answer is no longer lost or fatal.** A `toolResult`
+  becomes the tool's text — a string verbatim, anything else JSON-stringified,
+  a conversion now stated in the docs rather than inferred from a mangled
+  answer. A `toolResult` beside an EMPTY `content` is read as the legacy answer
+  it is (the empty array is the SDK's default, not the server's answer); a
+  NON-empty `content` always wins, because a server that sent blocks meant the
+  blocks. An answer with neither arm is a corrective tool error naming the
+  SHAPE that arrived — its type, or its keys — and never the payload, which is
+  still somebody's data.
 
 A store that kept every conversation and could read none of them — and, one
 grep later, a second store doing the same thing to memories.

@@ -498,6 +498,45 @@ describe('mcpServe — the governance chain (7.18)', () => {
     expect(seen).toEqual([]);
   });
 
+  it("LAW: the serving-side context carries `toolSource` — the SERVED tool's, or none", async () => {
+    // Same `ToolMiddlewareContext` the Agent's chain uses, so the field means
+    // the same thing on both sides: present when the tool we are serving came
+    // from somewhere else (re-serving another server's tool), absent when it is
+    // ours. Never the calling client's — a client does not get to declare where
+    // a tool came from.
+    const seen: Array<{ toolName: string; toolSource?: string; declared: boolean }> = [];
+    const relayed: Tool = {
+      schema: { name: 'call_aws', description: 'relayed', inputSchema: { type: 'object' } },
+      source: 'aws-prod',
+      execute: () => 'relayed ok',
+    };
+    const server = makeMockServer();
+    await mcpServe([echo, relayed], {
+      _server: server,
+      toolMiddleware: [
+        {
+          name: 'watcher',
+          onToolCall: (call) => {
+            seen.push({
+              toolName: call.toolName,
+              ...(call.toolSource !== undefined && { toolSource: call.toolSource }),
+              declared: 'toolSource' in call,
+            });
+            return allow();
+          },
+        },
+      ],
+    });
+
+    await server.call('call_aws', {});
+    await server.call('echo', { text: 'hi' });
+
+    expect(seen).toEqual([
+      { toolName: 'call_aws', toolSource: 'aws-prod', declared: true },
+      { toolName: 'echo', declared: false },
+    ]);
+  });
+
   it('without a chain the served call is byte-identical to before', async () => {
     const seen: unknown[] = [];
     const sink = defineTool<Record<string, unknown>, string>({

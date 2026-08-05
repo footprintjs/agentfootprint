@@ -59,6 +59,42 @@ export interface McpHttpTransport {
   readonly url: string;
   /** Optional auth headers (e.g., `Authorization: Bearer ...`). */
   readonly headers?: Readonly<Record<string, string>>;
+  /**
+   * Your own `fetch`, used for every request this transport makes —
+   * `initialize`, `tools/list`, `tools/call` and the SSE stream alike.
+   *
+   * It exists because some endpoints do not want a header, they want a
+   * **signature**: SigV4, DPoP, an HMAC over the body, a digest of the bytes
+   * about to be sent. None of those can be decided when the connection is
+   * built, because they are computed FROM the request — its method, its URL,
+   * its body. A header fixed at construction cannot express them.
+   *
+   * So this library does not implement any of them. It hands you the one hook
+   * the MCP SDK already has, and you sign in your own code: **zero vendor code
+   * lives here**, and a signing scheme this repo has never heard of works on
+   * the day you write it.
+   *
+   * ```ts
+   * transport: {
+   *   transport: 'http',
+   *   url: process.env.MCP_URL!,
+   *   fetch: async (url, init) => {
+   *     const headers = new Headers(init?.headers);
+   *     headers.set('authorization', await sign(init?.method ?? 'GET', url, init?.body));
+   *     return fetch(url, { ...init, headers });
+   *   },
+   * }
+   * ```
+   *
+   * Composes with {@link headers}: both are applied. The SDK merges the static
+   * headers into the `init.headers` your function receives, so you see them and
+   * have the last word — set the same header name and yours is what goes on the
+   * wire. Omit this and behaviour is byte-identical to before it existed.
+   *
+   * Whatever you set here is between you and the server: this library never
+   * reads, stores, logs or records the headers your function produces.
+   */
+  readonly fetch?: (input: string | URL, init?: RequestInit) => Promise<Response>;
 }
 
 /**
@@ -133,6 +169,11 @@ export interface McpClientOptions {
   /**
    * @internal Pre-built SDK client for tests. Skips SDK import +
    * transport construction. Same convention as `AnthropicProvider._client`.
+   *
+   * Because it skips transport construction it also skips everything the
+   * transport carries — `headers`, `fetch`, a gateway's vending. Nothing about
+   * authentication can be proven through this seam, which is why the signing
+   * tests run against a real socket.
    */
   readonly _client?: McpSdkClient;
 }
@@ -205,15 +246,38 @@ export interface McpSdkClient {
     /** The SDK's result schema. We always want its default, so we pass `undefined`. */
     resultSchema?: undefined,
     options?: McpRequestOptions,
-  ): Promise<{
-    readonly content: ReadonlyArray<{
-      readonly type: string;
-      readonly text?: string;
-    }>;
-    readonly isError?: boolean;
-  }>;
+  ): Promise<McpCallToolResult>;
   close(): Promise<void>;
 }
+
+/**
+ * What `tools/call` can answer with — **a union, because the protocol is one.**
+ *
+ * The current shape carries `content` blocks. The 2024-10-07 shape carries a
+ * bare `toolResult` and no `content` at all, and the SDK still accepts it: its
+ * own declared return type for `callTool` is exactly this union, and servers
+ * that predate the change are still running.
+ *
+ * It is spelled out here rather than narrowed away because a shim that promised
+ * only the `content` arm made `result.content.map(...)` compile against a value
+ * that can legitimately arrive without one. That failed two different ways,
+ * both invisible to a compiler reading the old shim: **a crash** where the raw
+ * legacy object reaches the reader (a caller-supplied `_client`, an SDK build
+ * that does not normalise), and **a silently empty answer** where the SDK's own
+ * result schema defaults `content` to `[]` beside the `toolResult` it could not
+ * express. The union is what makes handling both arms a compile-time obligation
+ * instead of a thing someone remembers.
+ */
+export type McpCallToolResult =
+  | {
+      readonly content: ReadonlyArray<{
+        readonly type: string;
+        readonly text?: string;
+      }>;
+      readonly isError?: boolean;
+    }
+  /** The 2024-10-07 arm. No `content`, and no `isError` — the shape predates it. */
+  | { readonly toolResult: unknown };
 
 /**
  * The SDK's trailing per-request options argument, narrowed to the one

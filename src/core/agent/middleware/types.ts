@@ -103,6 +103,18 @@ export type MessageOutcome = AllowOutcome<string> | DenyOutcome;
 /** The call a tool middleware is deciding about. */
 export interface ToolMiddlewareContext {
   readonly toolName: string;
+  /**
+   * Where the tool being called came from — `Tool.source`, which `mcpClient`
+   * fills with the server's name.
+   *
+   * **Absent means the agent's own tool.** A name alone is not an identity: two
+   * MCP servers may both serve a `call_aws`, and a policy matching the bare
+   * name governs whichever one answers — including the one it was never written
+   * about. With this, `call.toolSource === 'aws-prod'` is a rule that means what
+   * it says, and `call.toolSource === undefined` is the honest way to spell
+   * "something we wrote ourselves".
+   */
+  readonly toolSource?: string;
   /** Matches `stream.tool_start.toolCallId` for this dispatch. */
   readonly toolCallId: string;
   /** ReAct iteration this call belongs to. */

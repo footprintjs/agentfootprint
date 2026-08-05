@@ -74,6 +74,8 @@ export type ToolChainResult =
 
 export interface ToolChainInput {
   readonly toolName: string;
+  /** `Tool.source` for the tool being dispatched, when it has one. */
+  readonly toolSource?: string;
   readonly toolCallId: string;
   readonly iteration: number;
   readonly args: ToolArgs;
@@ -115,6 +117,10 @@ export async function runToolChain(
     try {
       outcome = await mw.onToolCall({
         toolName: input.toolName,
+        // Present only when the tool HAS a source. An `undefined` key is not
+        // the same fact as an absent one to a middleware that spells its rule
+        // `'toolSource' in call`, and "the agent's own" is an absence.
+        ...(input.toolSource !== undefined && { toolSource: input.toolSource }),
         toolCallId: input.toolCallId,
         iteration: input.iteration,
         args,

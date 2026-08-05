@@ -252,7 +252,8 @@ The 7 **strategies**:
 ## MCP — `mcpClient` (connect to external MCP servers)
 
 ```typescript
-import { Agent, mcpClient } from 'agentfootprint';
+import { Agent } from 'agentfootprint';
+import { mcpClient } from 'agentfootprint/tool-providers';
 
 const slack = await mcpClient({
   name: 'slack',

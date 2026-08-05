@@ -4,7 +4,7 @@ title: DefineToolOptions<TArgs, TResult>
 
 # Interface: DefineToolOptions\<TArgs, TResult\>
 
-Defined in: [src/core/tools.ts:88](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L88)
+Defined in: [src/core/tools.ts:106](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L106)
 
 Convenience input for `defineTool` — flatter than `Tool` itself.
 Consumers describe the tool inline; the helper assembles `schema`.
@@ -29,7 +29,7 @@ properties: {} }` or omit and we'll default to that.
 
 > `readonly` `optional` **checkIn?**: [`CheckInDemand`](/docs/api/type-aliases/CheckInDemand)\<`TArgs`\>
 
-Defined in: [src/core/tools.ts:97](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L97)
+Defined in: [src/core/tools.ts:115](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L115)
 
 Demand a human check-in before this tool runs (see [Tool.checkIn](/docs/api/interfaces/Tool#checkin)).
  `'always'` or a `(args, ctx) => boolean` predicate.
@@ -40,7 +40,7 @@ Demand a human check-in before this tool runs (see [Tool.checkIn](/docs/api/inte
 
 > `readonly` **description**: `string`
 
-Defined in: [src/core/tools.ts:90](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L90)
+Defined in: [src/core/tools.ts:108](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L108)
 
 ***
 
@@ -48,7 +48,7 @@ Defined in: [src/core/tools.ts:90](https://github.com/footprintjs/agentfootprint
 
 > `readonly` `optional` **inputSchema?**: `Readonly`\<`Record`\<`string`, `unknown`\>\>
 
-Defined in: [src/core/tools.ts:91](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L91)
+Defined in: [src/core/tools.ts:109](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L109)
 
 ***
 
@@ -56,7 +56,7 @@ Defined in: [src/core/tools.ts:91](https://github.com/footprintjs/agentfootprint
 
 > `readonly` **name**: `string`
 
-Defined in: [src/core/tools.ts:89](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L89)
+Defined in: [src/core/tools.ts:107](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L107)
 
 ***
 
@@ -64,7 +64,7 @@ Defined in: [src/core/tools.ts:89](https://github.com/footprintjs/agentfootprint
 
 > `readonly` `optional` **needs?**: `CredentialNeed`
 
-Defined in: [src/core/tools.ts:94](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L94)
+Defined in: [src/core/tools.ts:112](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L112)
 
 Declare a credential this tool needs (declare-and-push). Resolved by the
  framework before `execute` and injected as `ctx.credential`.
@@ -75,7 +75,7 @@ Declare a credential this tool needs (declare-and-push). Resolved by the
 
 > **execute**(`args`, `ctx`): `TResult` \| `Promise`\<`TResult`\>
 
-Defined in: [src/core/tools.ts:98](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L98)
+Defined in: [src/core/tools.ts:116](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L116)
 
 #### Parameters
 

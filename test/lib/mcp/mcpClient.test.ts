@@ -267,6 +267,139 @@ describe('mcpClient — execute wraps callTool', () => {
   });
 });
 
+// ─── The callTool union — both arms of the protocol (7.23.0) ──────
+
+/**
+ * The SDK's declared `callTool` return is a UNION: today's `content` blocks,
+ * or the 2024-10-07 `{ toolResult }` with no `content` at all. Reading
+ * `result.content` unconditionally was a crash waiting for a server old enough
+ * to trigger it — and the shim that promised only one arm is what hid it from
+ * the compiler.
+ */
+describe('mcpClient — a legacy result shape', () => {
+  /** An SDK client that answers with whatever result object the test names. */
+  const sdkAnswering = (result: unknown): McpSdkClient =>
+    ({
+      connect: vi.fn(async () => {}),
+      listTools: vi.fn(async () => ({ tools: [{ name: 'legacy', inputSchema: {} }] })),
+      callTool: vi.fn(async () => result),
+      close: vi.fn(async () => {}),
+    } as unknown as McpSdkClient);
+
+  const legacyTool = async (result: unknown) => {
+    const client = await mcpClient({
+      name: 'old-server',
+      transport: { transport: 'stdio', command: 'echo' },
+      _client: sdkAnswering(result),
+    });
+    return (await client.tools())[0]!;
+  };
+
+  it('LAW: a { toolResult } answer does not throw — the value becomes the tool text', async () => {
+    const tool = await legacyTool({ toolResult: 'the answer' });
+    expect(await tool.execute({})).toBe('the answer');
+  });
+
+  it('LAW: a non-string toolResult is JSON — the documented conversion', async () => {
+    const tool = await legacyTool({ toolResult: { rows: 2, ok: true } });
+    expect(await tool.execute({})).toBe('{"rows":2,"ok":true}');
+  });
+
+  it('LAW: an EMPTY content beside a toolResult is the SDK default, not the answer', async () => {
+    // The SDK's own result schema defaults `content` to `[]`, so a legacy
+    // payload reaches us wearing a content it never sent. Reading that first
+    // would answer a real result with an empty string.
+    const tool = await legacyTool({ content: [], toolResult: 'legacy answer' });
+    expect(await tool.execute({})).toBe('legacy answer');
+  });
+
+  it('LAW: a NON-empty content always wins — a server that sent blocks meant them', async () => {
+    const tool = await legacyTool({
+      content: [{ type: 'text', text: 'block text' }],
+      toolResult: 'ignored',
+    });
+    expect(await tool.execute({})).toBe('block text');
+  });
+
+  it('a legacy answer carries no isError, so it is a result — not a refusal', async () => {
+    const tool = await legacyTool({ toolResult: '' });
+    await expect(tool.execute({})).resolves.toBe('');
+  });
+
+  it('LAW: neither arm is a corrective error naming the tool, the server and the SHAPE', async () => {
+    const tool = await legacyTool({ status: 'ok', rows: [1, 2, 3] });
+    await expect(tool.execute({})).rejects.toThrow(
+      /'legacy'.*server 'old-server'.*an object with keys \[status, rows\]/,
+    );
+  });
+
+  it('SECURITY: the corrective error names the shape and never the payload', async () => {
+    const tool = await legacyTool({ ssn: '123-45-6789', note: 'transfer to acct 9910' });
+    const err = await tool.execute({}).catch((e: Error) => e);
+    const message = (err as Error).message;
+    expect(message).toContain('an object with keys [ssn, note]');
+    expect(message).not.toContain('123-45-6789');
+    expect(message).not.toContain('9910');
+  });
+
+  it('a non-object answer is described by type, not printed', async () => {
+    const tool = await legacyTool('a bare string nobody expected');
+    const err = await tool.execute({}).catch((e: Error) => e);
+    expect((err as Error).message).toContain('a string');
+    expect((err as Error).message).not.toContain('nobody expected');
+  });
+
+  it('PROPERTY: every unreadable answer produces a description and never a crash', async () => {
+    // The corrective path has to survive the answers that are least like a
+    // result — a null, a scalar, an array, an empty object — because those are
+    // exactly what a misconfigured or hostile server sends.
+    const shapes: Array<[unknown, RegExp]> = [
+      [null, /: null\./],
+      [42, /a number/],
+      [[{ a: 1 }, { b: 2 }], /an array of 2 item\(s\)/],
+      [{}, /an object with no keys/],
+      [
+        { a: 1, b: 2, c: 3, d: 4, e: 5, f: 6, g: 7, h: 8, i: 9 },
+        /an object with keys \[a, b, c, d, e, f, g, h, …\]/,
+      ],
+    ];
+    for (const [answer, shape] of shapes) {
+      const tool = await legacyTool(answer);
+      await expect(tool.execute({})).rejects.toThrow(shape);
+    }
+  });
+
+  it('an undefined toolResult is an empty answer, and a circular one still reports', async () => {
+    expect(await (await legacyTool({ toolResult: undefined })).execute({})).toBe('');
+
+    const circular: Record<string, unknown> = { name: 'loop' };
+    circular.self = circular;
+    expect(await (await legacyTool({ toolResult: circular })).execute({})).toBe('[object Object]');
+  });
+});
+
+// ─── Provenance — Tool.source (7.23.0) ────────────────────────────
+
+describe('mcpClient — tools carry their server', () => {
+  it('LAW: every wrapped tool carries the client name as `source`', async () => {
+    const client = await mcpClient({
+      name: 'aws-prod',
+      transport: { transport: 'stdio', command: 'echo' },
+      _client: makeMockSdk({ tools: [{ name: 'call_aws', inputSchema: {} }] }),
+    });
+    const tools = await client.tools();
+    expect(tools[0]!.source).toBe('aws-prod');
+  });
+
+  it('the default name is what an unnamed client stamps', async () => {
+    const client = await mcpClient({
+      transport: { transport: 'stdio', command: 'echo' },
+      _client: makeMockSdk(),
+    });
+    expect((await client.tools())[0]!.source).toBe('mcp');
+  });
+});
+
 // ─── Integration — Agent.tools(await client.tools()) ──────────────
 
 describe('mcpClient — Agent integration', () => {
