@@ -562,7 +562,7 @@ Same trick as the injection model: instead of N libraries for N patterns, we fou
 
 > 📖 Compare: [hand-rolled vs declarative](https://footprintjs.github.io/agentfootprint/docs/getting-started/why/) · [migration from LangChain / CrewAI / LangGraph](https://footprintjs.github.io/agentfootprint/docs/getting-started/vs/)
 
-### Check in with the receipts — human consent for consequential actions
+### Check in with the receipts — human-in-the-loop consent for consequential actions
 
 OpenWorker-class agents check in; agentfootprint checks in **with the receipts.** A tool declares `checkIn: 'always'` (or a `(args) => boolean` predicate). When it trips, the run pauses **before** the tool executes and hands back an evidence pack: `willDo` (plain-words claim), `read` (context the run consumed), `drivers` (which context drove the choice, ranked, zero LLM calls), and a compact `trail`. A human answers `checkInApproved({ by })` / `checkInDeclined({ by, note })`; on approve the tool runs, on decline the model sees the note and adapts.
 
@@ -811,7 +811,7 @@ The flowchart, recorders, and tests don't change between dev and prod.
 
 **Operability**
 - Provider-agnostic prompt caching — declarative per-injection, per-iteration marker recomputation
-- Pause / resume — JSON-serializable checkpoints; resume hours later on a different server
+- Human-in-the-loop pause / resume — a tool calls `pauseHere(...)` (or `askHuman(...)`); `isPaused(result)` hands you a JSON-serializable checkpoint, and `agent.resume(checkpoint, input)` continues hours later on a different server
 - Resilience primitives — `withRetry`, `withFallback`, `withCircuitBreaker`, `.outputFallback`, `agent.resumeOnError`
 - 60+ typed observability events — `agent` · `composition` · `context` · `stream` · `tools` · `skill` · `memory` · `cache` · `cost` · `permission` · `eval` · `embedding` · `pause` · `error` · `fallback` · `resilience` · `reliability` · `risk`
 
