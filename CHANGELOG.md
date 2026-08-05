@@ -7,6 +7,174 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [7.25.0] - 2026-08-04
+
+A production integration deployed an agent that operates the user's browser. The
+browser cannot host an inbound endpoint, so it dials out and parks a connection
+that the agent pushes tool calls down — and they said the thing that became the
+whole design brief: **"`HostRequest → HostReply` is one exchange, and this door
+is a conversation."**
+
+They were right, and the honest answer was not to widen the request port until
+it could pretend. A request has one reply and then it is over. A conversation
+has neither side taking turns by rule, no reply count, and an end that either
+side can call. So this release ships a second port beside the first.
+
+```ts
+const host = nodeHost({ port: 8080 });
+
+await standingAgent({ agent, sessions, host });        // POST /invoke
+await host.serveConversations((conversation) => {      // WS   /conversation
+  conversation.onFrame((frame) => conversation.send(answer(frame)));
+  conversation.onClose(({ by, reason }) => log(by, reason));
+});
+```
+
+**The anti-bias law, applied harder than last time.** The request port stayed
+honest because it was designed against local adapters first and the cloud
+adapter arrived as wire config. This one was designed against **three** consumers
+at once — a browser-parked tool channel, a standardized agent↔UI protocol, and
+agent-to-agent task serving — with the rule that a decision which only makes
+sense for one of the three is wrong. That rule is why frames are **strings**
+(what they mean is the consumer's contract, not the port's), why
+`ConversationClose` says `{ by: 'far-side' | 'host' | 'transport' }` and carries
+no transport's numeric code, and why a credential that one runtime spells as a
+WebSocket subprotocol arrives in your handler as an ordinary `authorization`
+header rather than as a field on the port.
+
+**Declared ceilings, not hidden ones.** `host.conversationLimits` says what a
+door caps — `maxFrameBytes`, `idleMs`, `maxPendingBytes` — and the port neither
+chunks nor heartbeats. Hiding a 32KB cap inside auto-chunking would have the
+adapter deciding, for every consumer at once, how a message is split, how the
+pieces are numbered and how the far side knows the last one landed. Those
+answers differ per consumer, so the ceiling is made VISIBLE and the layer above
+acts: chunk above the port, heartbeat above the port. A frame past the ceiling
+refuses by name (`FrameTooLargeError`, carrying the number), and a fragmented
+message counts in total, so fragmentation cannot walk around it.
+
+**A real WebSocket server, with nothing to install — and here is why that was
+worth writing.** The obvious shortcut was an optional peer dependency. It was
+rejected on a property of this library rather than on lines of code:
+`capabilities` is declared at construction and static thereafter, so a host
+whose door only works when an optional package happens to be installed can
+either claim `'conversation'` and then refuse to do it — the library declaring a
+promise it cannot keep, which is the one thing the capability union forbids — or
+probe `node_modules` and make feature detection depend on install state. Neither
+is a thing this library gets to do. So the codec is ours, its scope is closed
+(handshake, text, continuation, ping/pong, close; no extensions, no compression,
+no binary, no client role), and it is verified against **the byte sequences RFC
+6455 §5.7 publishes** — the encoder against bytes the specification wrote, the
+decoder against bytes a real client sends, rather than against a client we also
+wrote. It is **not** run against the Autobahn suite, and the docs say so in the
+same breath.
+
+**One socket, two doors** — which is the release's one change to existing
+behaviour, and the finding that made it necessary. `serve()` and
+`serveConversations()` on the same host now share a refcounted socket: first door
+in creates and listens, last door out drains and closes. Before this, a second
+`serve()` bound a second socket, so "an agent and a conversation on one port" —
+the deployment this entire feature exists for — was `EADDRINUSE`. The doors are
+independent in both directions and only the last close releases the port; three
+tests pin exactly that.
+
+### Added
+
+- **The conversation port** — `HostConversation` (`sessionId?`, `headers?`,
+  `send`, `onFrame`, `onClose`, `close`), `ConversationHandler`,
+  `ConversationHost`, `ConversationClose`, `ConversationLimits`, and
+  `'conversation'` in `HostCapability`. The capability joined the union because
+  two shipped adapters honour it, not because it was imagined — the same law
+  7.14 wrote down.
+
+- **`host.serveConversations(handler)`** on every adapter built on `httpHost`
+  that was given a `conversationPath`. `nodeHost` serves `/conversation` (its
+  own word, chosen the way its other two paths were) and declares
+  `{ maxFrameBytes: 1048576, maxPendingBytes: 1048576 }`. A host built without a
+  `conversationPath` does not declare the capability and refuses by name — no
+  default path here, for the same reason `invokePath` has none.
+
+- **`agentCoreRuntimeHost` serves the runtime's `/ws` door**, on the same socket
+  as `/invocations`, with that runtime's facts declared in that runtime's
+  adapter: ceilings `{ maxFrameBytes: 32768, idleMs: 900000 }`, session affinity
+  from the shipped header **or** the query string (a browser's WebSocket API
+  cannot set a header; the header wins when both arrive), and a
+  `Sec-WebSocket-Protocol` bearer mapped into `headers.authorization`. Both
+  browser-expressible spellings are read, and the echoed subprotocol is the word
+  `bearer` and never the token. `readAgentCoreConversation` is exported so the
+  mapping is reviewable without binding a socket.
+
+- **`ConversationClosedError`** (`ERR_CONVERSATION_CLOSED`) and
+  **`FrameTooLargeError`** (`ERR_FRAME_TOO_LARGE`, carrying `bytes` and
+  `maxFrameBytes`). A send that is accepted and dropped looks identical to one
+  that worked, from the only side that could have noticed.
+
+- **`HttpWire.readConversation(facts)`** — the handshake half of a deployment's
+  dialect, returning `{ sessionId?, headers?, protocol? }`. There is no body in
+  a handshake, so a dialect that wants a session id has to name where it looks.
+
+- **The conversation conformance suite**, run against three subjects: `nodeHost`'s
+  upgrade door, an in-process conversation host with different declared
+  ceilings, and `agentCoreRuntimeHost`'s `/ws`. One handler constant, three
+  hosts, byte-identical answers. `/ws` is plain WebSocket with no SDK on its
+  path, so **that result is real verification** — the same sense 7.15 used the
+  phrase for `/invocations`.
+
+- **[The conversation door](https://footprintjs.github.io/agentfootprint/docs/build/infra/hosting)**
+  in the hosting guide, and the `/ws` wire on the AgentCore adapters page. Plus
+  `examples/deploy/echo-conversation.ts`: two turns over one open channel, an
+  ordinary `POST /invoke` on the same socket, both refusals, and `onClose`
+  reporting who ended it.
+
+### Fixed
+
+- **An upgraded socket that the far side abandons is reported, and released.**
+  Node delivers `'end'` on a half-open upgraded socket and then waits for this
+  side to end too — no `'error'`, and no `'close'` until something acts. A door
+  listening only for `'close'` would never fire `onClose` for a caller that
+  walked away, and would hold a socket that keeps every shutdown sharing that
+  port waiting. Found by the test that asserts a dropped connection is reported
+  as `by: 'transport'`.
+
+- **`examples/deploy/one-port.ts` said something untrue about upgraded sockets.**
+  `server.close()` does not end one for you — that part was right — but it does
+  **wait** for it, and `closeIdleConnections()` does not count it as idle. The
+  comment now says both halves, because a graceful shutdown has to destroy its
+  own upgraded sockets.
+
+### The judgements these rest on
+
+**`standingAgent` is NOT conversation-aware, deliberately.** The three consumers
+push different things down a channel — tool calls out, UI events in, task
+updates both ways — so baking one loop into the composer would be exactly the
+bias the port was designed to avoid. This release is a port plus two adapters;
+the browser-tool loop, the agent↔UI framing and agent-to-agent serving are each
+their own release, each consuming this same door. Three proofs, three cars, one
+door. The absence is pinned twice: a type-regression test fails the build the
+day a conversation key appears on the composer's options, and a runtime test
+serves a standing agent on a host whose conversation door throws if it is ever
+touched.
+
+**The pre-subscribe buffer is a ceiling too, so it got a number.** Frames that
+arrive before the handler's first `onFrame` subscriber are held and delivered —
+otherwise an `async` handler that looks something up before it starts listening
+loses the far side's opening frame, which on a channel whose first frame is a
+greeting is every conversation. But a queue somebody else fills and this process
+pays for is a way to kill the process. So it is bounded by `maxPendingBytes`,
+declared beside the other ceilings, and overflow ends the conversation naming
+the bound. Bounded in **bytes** rather than frames: a frame count would still
+admit `count × maxFrameBytes`, which is the same unbounded queue with an extra
+step.
+
+**A binary frame is refused by name rather than stringified.** The port carries
+text; binary is a capability that gets minted when a consumer produces evidence
+for it, not guessed at now. A binary frame ends the conversation with a reason
+that says exactly that.
+
+**`{ server }` was not made redundant.** A conversation door means you no longer
+need a caller-owned server merely to get a WebSocket beside the agent. It
+remains what it always was: the way to serve anything the ports do not express.
+A port is a paved road, not a wall.
+
 ## [7.24.0] - 2026-08-04
 
 This library keeps measuring the same disease and shipping cures for it one

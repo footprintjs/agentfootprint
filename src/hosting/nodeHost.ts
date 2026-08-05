@@ -21,6 +21,13 @@
  * instead of binding one, so a WebSocket upgrade or your own routes can share
  * the port. `close()` then detaches and drains, and your socket stays up.
  *
+ * **There is a third door.** `serveConversations(handler)` takes WebSocket
+ * upgrades on `/conversation` and hands each one to your handler as a
+ * `HostConversation` — a channel that stays open, for the callers that cannot
+ * host an inbound endpoint and dial out instead. It shares this host's socket
+ * with `/invoke` and `/health`, needs nothing installed, and declares what it
+ * caps.
+ *
  * **Streaming is the caller's choice, not the server's.** Send
  * `Accept: text/event-stream` and the reply is Server-Sent Events, one `chunk`
  * event per `reply.emit(...)` then a final `complete`. Send anything else and
@@ -35,7 +42,14 @@
  * throws does. `types.ts` knows none of it either way.
  */
 
-import { httpHost, type HttpHost, type HttpHostHandle, type HttpWire } from './httpHost.js';
+import {
+  headerValue,
+  httpHost,
+  type HttpHost,
+  type HttpHostHandle,
+  type HttpWire,
+} from './httpHost.js';
+import type { ConversationLimits } from './types.js';
 
 /** Options for {@link nodeHost}. */
 export interface NodeHostOptions {
@@ -47,6 +61,21 @@ export interface NodeHostOptions {
   readonly invokePath?: string;
   /** Path that answers a health probe. Default `'/health'`. */
   readonly healthPath?: string;
+  /**
+   * Path that takes a conversation upgrade. Default `'/conversation'` — this
+   * adapter's own word, chosen the way its other two paths were, and named for
+   * what it carries rather than for what any runtime calls it.
+   */
+  readonly conversationPath?: string;
+  /**
+   * What the conversation door caps. Defaults to one mebibyte per frame and one
+   * mebibyte held before a handler subscribes — declared, so
+   * `host.conversationLimits` always reports what is really enforced. This
+   * adapter declares no `idleMs`: it does not idle a conversation out, and
+   * reporting a ceiling it neither imposes nor sits behind would be inventing
+   * a fact.
+   */
+  readonly conversationLimits?: ConversationLimits;
   /**
    * A `node:http` server **you** own, already listening. Given one, this
    * adapter attaches its two routes to it instead of binding a socket of its
@@ -104,6 +133,16 @@ export const jsonWire: HttpWire = {
   failure: (error, code) => ({ error, ...(code !== undefined && { code }) }),
   chunk: (text) => ({ text }),
   awaiting: (pending) => ({ awaiting: pending }),
+  readConversation(facts) {
+    // A handshake has no body, so this dialect names the two places a session
+    // id can be: the header a server-side caller sets, and the query a BROWSER
+    // has to use because the WebSocket API gives it no way to set a header.
+    // Header wins, so a caller that sets both is not surprised by which one the
+    // server preferred — the same rule the request dialect uses for body-vs-header.
+    const sessionId =
+      headerValue(facts, 'x-session-id') ?? facts.query.get('sessionId') ?? undefined;
+    return { ...(sessionId !== undefined && sessionId.length > 0 && { sessionId }) };
+  },
 };
 
 /**
@@ -126,6 +165,10 @@ export function nodeHost(options: NodeHostOptions = {}): NodeHost {
     // particular runtime's container-contract path literal.
     invokePath: options.invokePath ?? '/invoke',
     healthPath: options.healthPath ?? '/health',
+    conversationPath: options.conversationPath ?? '/conversation',
+    ...(options.conversationLimits !== undefined && {
+      conversationLimits: options.conversationLimits,
+    }),
     // Passed through as given, never defaulted: with a caller-owned server
     // there is no port to default, and a port passed WITH one is a caller who
     // believes something untrue about where their agent answers — `httpHost`

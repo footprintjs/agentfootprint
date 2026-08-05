@@ -329,8 +329,11 @@ describe('nodeHost — streaming is the caller’s choice', () => {
     reply.complete(`final:${request.input}`);
   };
 
-  it('declares the capability it actually has', () => {
-    expect(nodeHost().capabilities).toEqual(['streaming']);
+  it('declares the capabilities it actually has', () => {
+    // Both, and both honoured: SSE when the caller asks for it, and a
+    // conversation door on a path this adapter chose. A name is in this list
+    // only when the shipped adapter can keep the promise with nothing installed.
+    expect(nodeHost().capabilities).toEqual(['streaming', 'conversation']);
   });
 
   it('sends Server-Sent Events when the caller asks for them', async () => {

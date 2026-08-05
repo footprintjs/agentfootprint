@@ -5,18 +5,18 @@
   "recordedAt": "2026-08-05",
   "surface": {
     "subpaths": 25,
-    "declaredSymbols": 1184,
+    "declaredSymbols": 1204,
     "declaredEvents": 68,
     "eventSource": "src/events/registry.ts:512"
   },
   "counts": {
     "symbols": {
       "docs-promise-nothing": 0,
-      "documented-never-exercised": 291,
+      "documented-never-exercised": 312,
       "exercised-undocumented": 37,
       "undocumented-unexercised": 606,
       "site-code-sample-only": 18,
-      "written-but-not-published": 139,
+      "written-but-not-published": 138,
       "ok": 93
     },
     "events": {
@@ -633,7 +633,6 @@
     "TreeOptions",
     "TypedEventSource",
     "UnitScore",
-    "Unsubscribe",
     "UntilGuard",
     "UsedSignal",
     "ValidateMessagesOptions",

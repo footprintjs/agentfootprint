@@ -26,6 +26,7 @@ import { rm } from 'node:fs/promises';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { headerValue, httpHost, jsonWire } from '../../src/hosting/index.js';
+import { lowerCasedHeaders } from '../../src/hosting/headers.js';
 import type { HostHandle, HttpHostHandle, HttpWire } from '../../src/hosting/index.js';
 
 const open: HostHandle[] = [];
@@ -460,5 +461,27 @@ describe('headerValue', () => {
 
   it('returns undefined when nothing matches', () => {
     expect(headerValue(facts, 'x-nope')).toBeUndefined();
+  });
+});
+
+describe('lowerCasedHeaders — one lower-casing, shared by both doors', () => {
+  it('lower-cases names so no wire ever has to guess at casing', () => {
+    expect(lowerCasedHeaders({ 'X-Session-Id': 'c-1', ACCEPT: 'application/json' })).toEqual({
+      'x-session-id': 'c-1',
+      accept: 'application/json',
+    });
+  });
+
+  it('joins a header the client sent more than once, rather than keeping one and dropping the rest', () => {
+    // node hands repeated headers over as an array. Keeping only the first
+    // would silently lose whichever one the caller meant — and the two doors
+    // share this function precisely so they cannot disagree about it.
+    expect(lowerCasedHeaders({ 'Sec-WebSocket-Protocol': ['bearer', 'tok-1'] })).toEqual({
+      'sec-websocket-protocol': 'bearer, tok-1',
+    });
+  });
+
+  it('drops what is not a string or an array — there is nothing honest to render it as', () => {
+    expect(lowerCasedHeaders({ 'x-odd': undefined, 'x-fine': 'yes' })).toEqual({ 'x-fine': 'yes' });
   });
 });

@@ -34,22 +34,48 @@
  * detaches and drains without closing a socket it never opened. That is the
  * whole difference; every other law on this page is the same either way.
  *
+ * ── The third door: a conversation ───────────────────────────────────────────
+ * `serveConversations(handler)` sits beside `serve(handler)` and takes upgrades
+ * on `conversationPath`, because `HostRequest → HostReply` is one exchange and
+ * some doors are not. Give a host a `conversationPath` and it declares
+ * `'conversation'`; leave it out and `serveConversations` refuses by name.
+ *
+ * **Both doors share ONE socket.** That is not an optimisation, it is the
+ * premise: the runtimes that need a conversation are the ones that hand a
+ * container exactly one port, so a host whose two doors each bound their own
+ * would fail with `EADDRINUSE` on the deployment it exists for. On a private
+ * socket the server is created by whichever door opens first and closed by
+ * whichever closes last; on a caller-owned one each door attaches and detaches
+ * its own listener and neither touches the socket.
+ *
  * Pattern: Template method via configuration (Strategy on the wire format).
  * Everything HTTP lives here and in the wires; `types.ts` knows none of it.
  */
 
 import type { IncomingMessage, Server, ServerResponse } from 'node:http';
+import type { Duplex } from 'node:stream';
 
 import { encodeSSE } from '../stream.js';
 import { HostClosedError } from './errors.js';
+import { lowerCasedHeaders } from './headers.js';
 import type {
   AgentHost,
+  ConversationHandler,
+  ConversationHost,
+  ConversationLimits,
   HostCapability,
   HostHandle,
   HostHandler,
   HostReply,
   PendingAsk,
 } from './types.js';
+import {
+  conversationDoor,
+  type ConversationHandshake,
+  type HandshakeFacts,
+} from './webSocketConversation.js';
+
+export type { ConversationHandshake, HandshakeFacts };
 
 /** Everything a {@link HttpWire} may read when pulling a request apart. */
 export interface HttpRequestFacts {
@@ -105,6 +131,17 @@ export interface HttpWire {
    * either way.
    */
   awaiting?(pending: PendingAsk): unknown;
+  /**
+   * Pull the port's vocabulary out of one conversation handshake — the session
+   * this conversation claims, any header mapping this dialect performs, and the
+   * subprotocol to echo.
+   *
+   * Optional, and absent means "raw headers, no session": there is no body in a
+   * handshake, so a dialect that wants a session id has to name where it looks,
+   * and guessing on its behalf would invent an affinity rule the deployment
+   * never agreed to.
+   */
+  readConversation?(facts: HandshakeFacts): ConversationHandshake;
 }
 
 /** Options for {@link httpHost}. */
@@ -174,6 +211,31 @@ export interface HttpHostOptions {
    *   await handle.close();
    */
   readonly server?: Server;
+  /**
+   * Path that takes a conversation upgrade.
+   *
+   * **No default, for exactly the reason `invokePath` has none** — a default
+   * here is inherited by every adapter built on this file, and one that
+   * silently matched somebody's runtime contract is that runtime leaking into a
+   * library that promises not to know about one.
+   *
+   * ABSENT is meaningful: the host does not declare `'conversation'` and
+   * {@link HttpHost.serveConversations} refuses by name. Present, and the host
+   * can carry conversations whether or not anybody serves them.
+   */
+  readonly conversationPath?: string;
+  /**
+   * What the conversation door caps. Whatever is left out is filled with this
+   * file's defaults and then DECLARED, so `conversationLimits` on the host is
+   * always what is actually enforced rather than what was passed in.
+   *
+   * An unset `maxFrameBytes` would mean an unbounded buffer somebody else
+   * fills, which is a way to kill this process; an unset `maxPendingBytes` the
+   * same, one layer up. `idleMs` has no default because this door does not idle
+   * anything out — it reports the ceiling of whatever sits in front of it, and
+   * inventing one would be reporting a fact nobody established.
+   */
+  readonly conversationLimits?: ConversationLimits;
 }
 
 /** A {@link HostHandle} that also says where it landed. */
@@ -189,9 +251,18 @@ export interface HttpHostHandle extends HostHandle {
   readonly port: number;
 }
 
-/** {@link AgentHost} narrowed to an HTTP handle. */
-export interface HttpHost extends AgentHost {
+/**
+ * {@link AgentHost} and {@link ConversationHost} narrowed to an HTTP handle.
+ *
+ * One object with two doors, because they share one socket. Whether the
+ * conversation door is USABLE is `capabilities`' answer, not this type's: a
+ * host built without a `conversationPath` still has the method and refuses by
+ * name, which is a better error than a method that is missing at runtime on
+ * some adapters and present on others.
+ */
+export interface HttpHost extends AgentHost, ConversationHost {
   serve(handler: HostHandler): Promise<HttpHostHandle>;
+  serveConversations(handler: ConversationHandler): Promise<HttpHostHandle>;
 }
 
 /**
@@ -223,6 +294,21 @@ const AWAITING_STATUS = 202;
 const DEFAULT_CAPABILITIES: readonly HostCapability[] = ['streaming'];
 
 /**
+ * What a conversation door caps when the deployment did not say.
+ *
+ * Both are memory this process pays for while somebody else fills it, so
+ * "unlimited" is not one of the options — and since what is enforced must be
+ * what is declared, the resolved numbers are what the host reports.
+ * One mebibyte is chosen as a number large enough that no ordinary protocol
+ * frame meets it and small enough that a hostile one cannot spend the heap;
+ * a deployment with a real ceiling passes its own.
+ */
+const DEFAULT_CONVERSATION_LIMITS = {
+  maxFrameBytes: 1_048_576,
+  maxPendingBytes: 1_048_576,
+} as const;
+
+/**
  * An HTTP host for one handler, speaking the dialect you hand it.
  *
  * @example  The same machinery, two dialects
@@ -230,7 +316,7 @@ const DEFAULT_CAPABILITIES: readonly HostCapability[] = ['streaming'];
  *   httpHost({ name: 'myRuntime', wire: myWire, invokePath: '/v1/run', healthPath: '/up' });
  */
 export function httpHost(options: HttpHostOptions): HttpHost {
-  const { name, wire, invokePath, healthPath } = options;
+  const { name, wire, invokePath, healthPath, conversationPath } = options;
   const ownServer = options.server;
   // Refused at construction, not ignored at serve time: a `port` next to a
   // server this host does not bind is a caller who believes something untrue
@@ -246,11 +332,183 @@ export function httpHost(options: HttpHostOptions): HttpHost {
   }
   const port = options.port ?? 8080;
   const hostname = options.hostname ?? '0.0.0.0';
-  const capabilities = options.capabilities ?? DEFAULT_CAPABILITIES;
+  // A door that exists is a capability that can be honoured; one built without
+  // a path is not, and says so rather than being discovered at runtime.
+  const capabilities =
+    options.capabilities ??
+    (conversationPath !== undefined
+      ? ([...DEFAULT_CAPABILITIES, 'conversation'] as const)
+      : DEFAULT_CAPABILITIES);
+  // Resolved once, declared as resolved: `host.conversationLimits` is what is
+  // actually enforced, never what was passed in and quietly topped up.
+  const conversationLimits: ConversationLimits = {
+    ...DEFAULT_CONVERSATION_LIMITS,
+    ...options.conversationLimits,
+  };
+
+  // ── The socket both doors stand on ─────────────────────────────────
+  //
+  // Refcounted, because the deployment this exists for hands a container ONE
+  // port: two doors that each bound their own would be `EADDRINUSE` on exactly
+  // the machine that needed both. First door in creates and listens; last door
+  // out drains and closes. On a caller-owned server there is nothing to count —
+  // the socket was never ours to open or to close.
+  let socket: Promise<Server> | undefined;
+  let holders = 0;
+
+  async function acquireSocket(): Promise<Server> {
+    if (ownServer) {
+      if (!ownServer.listening) {
+        throw new Error(
+          `[hosting] httpHost('${name}') was handed a server that is not listening yet. ` +
+            `This handle promises the url and port it is answering on, and a server with ` +
+            `no address has neither. Call server.listen(...) first, then serve() — ` +
+            `attaching after listen() is safe and is the intended order.`,
+        );
+      }
+      return ownServer;
+    }
+    holders += 1;
+    socket ??= (async () => {
+      const { createServer } = await import('node:http');
+      const created = createServer();
+      await new Promise<void>((resolve, reject) => {
+        created.once('error', reject);
+        created.listen(port, hostname, resolve);
+      });
+      return created;
+    })();
+    try {
+      return await socket;
+    } catch (err) {
+      // A socket that never came up is not one anybody is holding.
+      holders -= 1;
+      socket = undefined;
+      throw err;
+    }
+  }
+
+  async function releaseSocket(): Promise<void> {
+    if (ownServer) return;
+    holders -= 1;
+    if (holders > 0) return;
+    const held = socket;
+    socket = undefined;
+    if (!held) return;
+    const server = await held.catch(() => undefined);
+    if (!server) return;
+    server.closeIdleConnections();
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+  }
+
+  /** Where this host is answering — the caller's address, or the one we bound. */
+  function addressOf(server: Server): { url: string; port: number } {
+    const address = server.address();
+    const tcp = typeof address === 'object' && address !== null ? address : undefined;
+    if (ownServer && !tcp) {
+      throw new Error(
+        `[hosting] httpHost('${name}') was handed a server bound to ${JSON.stringify(address)}` +
+          ` — a pipe or socket path, which has no port. This handle promises a url and a ` +
+          `port, and inventing one would be worse than refusing. Serve on a TCP server, or ` +
+          `drive the handler yourself.`,
+      );
+    }
+    const boundPort = tcp ? tcp.port : port;
+    // With our own socket the requested hostname IS the answer; with the
+    // caller's we ask the socket, because we never chose it.
+    const boundHost = ownServer ? tcp?.address ?? '127.0.0.1' : hostname;
+    const displayHost = boundHost === '0.0.0.0' || boundHost === '::' ? '127.0.0.1' : boundHost;
+    return { url: `http://${displayHost}:${boundPort}`, port: boundPort };
+  }
+
+  let conversationsServing = false;
 
   return {
     name,
     capabilities,
+    conversationLimits,
+
+    async serveConversations(handler: ConversationHandler): Promise<HttpHostHandle> {
+      if (conversationPath === undefined) {
+        throw new Error(
+          `[hosting] the '${name}' host was built without a 'conversationPath', so it has no ` +
+            `door to take conversations on and does not declare 'conversation' in its ` +
+            `capabilities. Build it with a conversationPath, or feature-detect with ` +
+            `host.capabilities.includes('conversation') and use serve() instead.`,
+        );
+      }
+      if (conversationsServing) {
+        throw new Error(
+          `[hosting] the '${name}' host is already serving conversations on ` +
+            `'${conversationPath}'. One door, one handler — two would make which handler ` +
+            `receives a conversation depend on registration order. Close the first handle ` +
+            `before serving again.`,
+        );
+      }
+      conversationsServing = true;
+
+      let accepting = true;
+      let closing: Promise<void> | undefined;
+      const door = conversationDoor({
+        hostName: name,
+        path: conversationPath,
+        limits: conversationLimits,
+        ...(wire.readConversation && { readConversation: wire.readConversation.bind(wire) }),
+        handler,
+        accepting: () => accepting,
+      });
+
+      const onUpgrade = (request: IncomingMessage, socketOfConversation: Duplex): void => {
+        if (door.handleUpgrade(request, socketOfConversation)) return;
+        // Not our path. On the caller's server that is theirs to answer or to
+        // ignore, exactly as an unmatched request path is; on ours nobody else
+        // can, so leaving the socket hanging would be the one dishonest option.
+        if (ownServer) return;
+        socketOfConversation.end(
+          'HTTP/1.1 400 Bad Request\r\nconnection: close\r\n\r\n' +
+            `[hosting] the '${name}' host takes conversations on ${conversationPath}.`,
+        );
+      };
+
+      let server: Server;
+      try {
+        server = await acquireSocket();
+      } catch (err) {
+        conversationsServing = false;
+        throw err;
+      }
+      server.on('upgrade', onUpgrade);
+      let where: { url: string; port: number };
+      try {
+        where = addressOf(server);
+      } catch (err) {
+        server.off('upgrade', onUpgrade);
+        conversationsServing = false;
+        await releaseSocket();
+        throw err;
+      }
+
+      return {
+        url: where.url,
+        port: where.port,
+        close(): Promise<void> {
+          closing ??= (async () => {
+            accepting = false;
+            if (ownServer) server.off('upgrade', onUpgrade);
+            // End the live conversations BEFORE letting go of the socket. An
+            // upgraded socket keeps `server.close()` waiting forever — measured,
+            // not assumed — so a door that walked away from its conversations
+            // would hang every shutdown that shares this socket.
+            await door.closeAll(`the '${name}' host is shutting down`);
+            if (!ownServer) server.off('upgrade', onUpgrade);
+            conversationsServing = false;
+            await releaseSocket();
+          })();
+          return closing;
+        },
+      };
+    },
+
     async serve(handler: HostHandler): Promise<HttpHostHandle> {
       const startedAt = Date.now();
       const inFlight = new Set<Promise<void>>();
@@ -290,47 +548,20 @@ export function httpHost(options: HttpHostOptions): HttpHost {
         void served.finally(() => inFlight.delete(served));
       };
 
-      let server: Server;
-      if (ownServer) {
-        server = ownServer;
-        if (!server.listening) {
-          throw new Error(
-            `[hosting] httpHost('${name}') was handed a server that is not listening yet. ` +
-              `This handle promises the url and port it is answering on, and a server with ` +
-              `no address has neither. Call server.listen(...) first, then serve() — ` +
-              `attaching after listen() is safe and is the intended order.`,
-          );
-        }
-        server.on('request', onRequest);
-      } else {
-        const { createServer } = await import('node:http');
-        server = createServer(onRequest);
-        await new Promise<void>((resolve, reject) => {
-          server.once('error', reject);
-          server.listen(port, hostname, resolve);
-        });
-      }
-
-      const address = server.address();
-      const tcp = typeof address === 'object' && address !== null ? address : undefined;
-      if (ownServer && !tcp) {
+      const server = await acquireSocket();
+      server.on('request', onRequest);
+      let where: { url: string; port: number };
+      try {
+        where = addressOf(server);
+      } catch (err) {
         server.off('request', onRequest);
-        throw new Error(
-          `[hosting] httpHost('${name}') was handed a server bound to ${JSON.stringify(address)}` +
-            ` — a pipe or socket path, which has no port. This handle promises a url and a ` +
-            `port, and inventing one would be worse than refusing. Serve on a TCP server, or ` +
-            `drive the handler yourself.`,
-        );
+        await releaseSocket();
+        throw err;
       }
-      const boundPort = tcp ? tcp.port : port;
-      // With our own socket the requested hostname IS the answer; with the
-      // caller's we ask the socket, because we never chose it.
-      const boundHost = ownServer ? tcp?.address ?? '127.0.0.1' : hostname;
-      const displayHost = boundHost === '0.0.0.0' || boundHost === '::' ? '127.0.0.1' : boundHost;
 
       return {
-        url: `http://${displayHost}:${boundPort}`,
-        port: boundPort,
+        url: where.url,
+        port: where.port,
         close(): Promise<void> {
           // Idempotent: the first call owns the shutdown, later ones await it.
           closing ??= (async () => {
@@ -349,8 +580,10 @@ export function httpHost(options: HttpHostOptions): HttpHost {
             // caller is still waiting on, and dropping it would be the exact
             // thing close() promises not to do.
             await Promise.allSettled([...inFlight]);
-            server.closeIdleConnections();
-            await new Promise<void>((resolve) => server.close(() => resolve()));
+            server.off('request', onRequest);
+            // The socket goes only when the LAST door lets go of it. A
+            // conversation still open on this port is not this door's to end.
+            await releaseSocket();
           })();
           return closing;
         },
@@ -377,7 +610,7 @@ async function serveOne(
     return;
   }
 
-  const headers = lowerCased(req.headers);
+  const headers = lowerCasedHeaders(req.headers);
   const query = new URLSearchParams((req.url ?? '').split('?')[1] ?? '');
   const { input, sessionId, decision } = wire.readRequest({ body, headers, query });
 
@@ -497,15 +730,6 @@ function sendJson(res: ServerResponse, status: number, body: unknown): void {
   res.end(JSON.stringify(body));
 }
 
-function lowerCased(headers: IncomingMessage['headers']): Record<string, string> {
-  const out: Record<string, string> = {};
-  for (const [name, value] of Object.entries(headers)) {
-    if (typeof value === 'string') out[name.toLowerCase()] = value;
-    else if (Array.isArray(value)) out[name.toLowerCase()] = value.join(', ');
-  }
-  return out;
-}
-
 function asError(err: unknown): Error {
   return err instanceof Error ? err : new Error(String(err));
 }
@@ -516,9 +740,12 @@ function asError(err: unknown): Error {
  * Exported because every wire that maps a header needs it and re-deriving it
  * per adapter is how one of them ends up matching only the exact casing the
  * author happened to test with.
+ *
+ * Takes anything carrying lower-cased headers, so a request wire and a
+ * handshake wire read a header the same way rather than each growing their own.
  */
 export function headerValue(
-  facts: HttpRequestFacts,
+  facts: { readonly headers: Readonly<Record<string, string>> },
   name: string,
   ...fallbacks: string[]
 ): string | undefined {

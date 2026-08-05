@@ -1,13 +1,17 @@
 /**
- * agentfootprint/hosting — the two ports between an agent and the place it runs.
+ * agentfootprint/hosting — the ports between an agent and the place it runs.
  *
  * An agent that answers one call in a script and an agent that has been up for
- * a month differ in two things, and only two: something has to carry requests
- * to it, and the conversation has to outlive the request. This subpath is those
- * two things as **ports**, plus local adapters that prove the ports work, plus
- * the composer that wires them together.
+ * a month differ in a few things: something has to carry requests to it,
+ * something sometimes has to hold a channel OPEN to it, and the conversation
+ * has to outlive the request. This subpath is those things as **ports**, plus
+ * local adapters that prove the ports work, plus the composer that wires the
+ * request half together.
  *
  *   `AgentHost`         — something can call me.
+ *   `ConversationHost`  — something can talk to me, both ways, until one of us
+ *                         ends it. `HostRequest → HostReply` is one exchange;
+ *                         some doors are not.
  *   `SessionLifecycle`  — the conversation outlives the request.
  *   `standingAgent`     — hydrate → resume-or-fresh → persist → reply.
  *
@@ -34,6 +38,17 @@
  *     re-decides. Pass `server` and it attaches to a `node:http` server YOU
  *     own instead of binding one — for the container that gets a single port
  *     and must serve a WebSocket upgrade (or anything else) beside the agent.
+ *   • `host.serveConversations(handler)` — the conversation door, on every
+ *     adapter built on `httpHost` that was given a `conversationPath`.
+ *     `nodeHost` serves it on `/conversation` with a real WebSocket
+ *     implementation and **no dependency to install**, sharing the socket with
+ *     `/invoke`. Frames are STRINGS at the port; what they mean is your
+ *     protocol's business, not this port's.
+ *   • `ConversationLimits` — the ceilings a door DECLARES
+ *     (`maxFrameBytes`, `idleMs`, `maxPendingBytes`) so the layer above can
+ *     chunk or heartbeat on its own protocol. The port does neither, on
+ *     purpose: hiding a cap inside auto-chunking decides a protocol question
+ *     for every consumer at once.
  *   • `memorySessions()` — conversations in a Map, for tests and local dev.
  *   • `standingAgent({ agent, sessions, host, durability? })` — the composer.
  *   • `toEnvelope` / `readEnvelope` — pack a conversation, and refuse by name to
@@ -64,6 +79,8 @@ export type { NodeHost, NodeHostHandle, NodeHostOptions } from './nodeHost.js';
 
 export { httpHost, headerValue } from './httpHost.js';
 export type {
+  ConversationHandshake,
+  HandshakeFacts,
   HttpHost,
   HttpHostHandle,
   HttpHostOptions,
@@ -89,15 +106,22 @@ export {
   AwaitingDecisionError,
   NoPendingAskError,
   UnreadableEnvelopeError,
+  ConversationClosedError,
+  FrameTooLargeError,
 } from './errors.js';
 
 export type {
   AgentHost,
   CheckpointEnvelope,
   ConcurrentInvokePolicy,
+  ConversationClose,
   ConversationEnvelope,
+  ConversationHandler,
+  ConversationHost,
+  ConversationLimits,
   DurabilityMode,
   HostCapability,
+  HostConversation,
   HostHandle,
   HostHandler,
   HostReply,
@@ -107,5 +131,6 @@ export type {
   PendingAsk,
   SessionLifecycle,
   StandingAgentOptions,
+  Unsubscribe,
   WakeReason,
 } from './types.js';

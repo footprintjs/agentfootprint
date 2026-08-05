@@ -77,6 +77,43 @@ does not own is **yours** — it will never write a 404 on your server, so an
 unrouted path hangs rather than 404s — and `port` / `hostname` are refused
 beside `server`, because a server you own already has an address.
 
+## When the caller cannot be called — the conversation door
+
+Some callers cannot host an inbound endpoint at all. A browser dials out and
+parks a connection that the agent pushes work down; `HostRequest → HostReply`
+has no way to say that, because it is one exchange and this is a conversation.
+
+Since 7.25.0 a host that can carry one says so (`'conversation'` in
+`capabilities`) and opens it beside `serve()`:
+
+```ts
+const host = nodeHost({ port: 8080 });                   // or agentCoreRuntimeHost()
+await standingAgent({ agent, sessions, host });          // /invoke
+await host.serveConversations((conversation) => {        // /conversation (or /ws)
+  conversation.onFrame((frame) => conversation.send(answer(frame)));
+  conversation.onClose((why) => log(why.by, why.reason));
+});
+```
+
+**Both doors share one socket** — which is the point, since the runtimes that
+need a conversation are the ones that hand a container exactly one port. On
+`agentCoreRuntimeHost` the door is `/ws`, the session id is readable from the
+runtime's header *or* the query string (a browser cannot set a header on a
+WebSocket), and a `Sec-WebSocket-Protocol` bearer arrives in your handler as an
+ordinary `authorization` header. Its ceilings are **declared**:
+`{ maxFrameBytes: 32768, idleMs: 900000 }` — read them and chunk or heartbeat on
+your own protocol, because the port does neither for you.
+
+```bash
+npx tsx examples/deploy/echo-conversation.ts
+```
+
+[`echo-conversation.ts`](./echo-conversation.ts) holds a real WebSocket
+conversation with itself on the same socket that answers `/invoke`, and shows
+the two refusals you will meet: a frame past the declared ceiling
+(`FrameTooLargeError`) and a send down a channel that has ended
+(`ConversationClosedError`). Neither is silent, on purpose.
+
 ## What plugs into the rest of AgentCore
 
 Once your agent runs in the container, the other AgentCore primitives attach

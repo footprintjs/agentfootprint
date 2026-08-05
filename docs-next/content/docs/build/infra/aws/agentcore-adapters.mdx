@@ -14,16 +14,17 @@ first cloud adapter was written against them.
 
 | Adapter | Port it fills | Subpath |
 |---|---|---|
-| `agentCoreRuntimeHost()` | `AgentHost` — AgentCore Runtime's container contract | `agentfootprint/hosting-providers` |
+| `agentCoreRuntimeHost()` | `AgentHost` **and** `ConversationHost` — the container contract's two doors, `/invocations` and `/ws`, on one socket | `agentfootprint/hosting-providers` |
 | `agentCoreSessions({ store })` | `SessionLifecycle` — where a conversation lives between requests | `agentfootprint/hosting-providers` |
 | `agentCorePolicy({ policyStoreId })` | `PermissionChecker` — a remote policy store decides tool calls | `agentfootprint/security` |
 | `gatewayTransport({ url, credentials })` | `McpTransport` — MCP auth headers vended **per request** | `agentfootprint/tool-providers` |
 | `AgentCoreStore.search()` | `MemoryStore.search` — server-side semantic retrieval | `agentfootprint/memory-providers` |
 
 <Callout type="warn" title="How much of this is verified — the honest version">
-`agentCoreRuntimeHost` is **plain HTTP with no AWS SDK on its path**, and it
-passes the same host conformance suite as `nodeHost`, over a real socket. That
-is real verification.
+`agentCoreRuntimeHost` is **plain HTTP and plain WebSocket with no AWS SDK on
+its path**, and it passes the same host conformance suite as `nodeHost` AND the
+same conversation conformance suite, both over real sockets. That is real
+verification.
 
 Everything that talks to AWS — `agentCoreSessions({ store: 'memory' })`,
 `agentCorePolicy`, `AgentCoreStore.search()` — is **contract-mapped and
@@ -101,6 +102,54 @@ binds nothing and so names nothing. The laws (and the one consequence worth
 knowing: an unmatched path *hangs* rather than 404s if nobody routes it) are the
 same for every adapter built on `httpHost` — see
 [One port, two protocols](doc:hosting).
+
+### The runtime's second door — `/ws`
+
+The runtime exposes exactly two doors into a container: request/response, and a
+bidirectional WebSocket **on the same port**. `agentCoreRuntimeHost` now serves
+both, on one socket, with nothing to install:
+
+```ts
+const host = agentCoreRuntimeHost();                        // 0.0.0.0:8080
+
+await standingAgent({ agent, host, sessions });             // POST /invocations
+await host.serveConversations((conversation) => {           // WS   /ws
+  conversation.onFrame((frame) => conversation.send(handle(frame)));
+  conversation.onClose(({ by, reason }) => log(by, reason));
+});
+```
+
+You do not need `{ server }` for this: the two doors share the socket by
+construction, which is what the single-port container required.
+
+Three things here are this runtime's spelling and live only in its adapter — the
+port knows none of them:
+
+| Runtime fact | How it reaches your handler |
+|---|---|
+| `{ maxFrameBytes: 32768, idleMs: 900000 }` | `host.conversationLimits`, **declared**. Chunk and heartbeat on your own protocol; the port does neither. `maxFrameBytes` is enforced both ways here, `idleMs` is reported — the timeout belongs to what sits in front of the container. |
+| Session affinity | the `X-Amzn-Bedrock-AgentCore-Runtime-Session-Id` header, **or** the query string (`?…Session-Id=` or `?sessionId=`) — because a browser's WebSocket API cannot set a header. The header wins when both arrive. Arrives as `conversation.sessionId`. |
+| `Sec-WebSocket-Protocol` bearer | mapped into `conversation.headers.authorization` as `Bearer <token>`. Both browser-expressible spellings are read (`['bearer','<token>']` and `['bearer.<token>']`), the echoed subprotocol is the *word* `bearer` and never the token, and the raw `sec-websocket-protocol` header survives so you can read the offer yourself. |
+
+That last row is the rule the whole port rests on: **a credential a transport
+spells its own way becomes an ordinary header, never a port field.** Nothing on
+`HostConversation` is spelled the way one vendor spells it — and nothing here
+authenticates anything: a token that arrived is a claim, exactly like the
+session id beside it.
+
+`readAgentCoreConversation(facts)` is exported so the mapping is reviewable
+without binding a socket, the same way the body shapes are.
+
+<Callout type="info" title="This door is really verified, in the same sense the request door is">
+`/ws` is plain WebSocket with no AWS SDK on its path, and it passes the same
+conversation conformance suite as `nodeHost`'s door — over a real socket, with a
+plain client, driven by the same handler constant. That is real verification.
+
+The frame codec underneath is checked against the byte sequences RFC 6455 §5.7
+publishes. It is not run against the Autobahn suite, no extension is negotiated,
+and there are no binary frames — see [Hosting](doc:hosting) for the boundary
+stated in full.
+</Callout>
 
 ## Where the conversation lives
 
@@ -186,9 +235,10 @@ Both are field facts, recorded here because this is where an integrator looks:
   this one.
 - **A direct-code (zip / `NODE_22`) deployment serves `/ws` fine.** The vendor
   documentation describes WebSocket support for container deployments only,
-  which reads as a restriction; it is not one in practice. The
-  [`{ server }` option](doc:hosting) is what lets the upgrade and the agent share
-  the container's single port.
+  which reads as a restriction; it is not one in practice. Since 7.25.0
+  `serveConversations()` serves that door for you on the same socket as
+  `/invocations`; `{ server }` remains the escape hatch for anything the ports
+  do not express.
 
 ## Policy: a remote engine behind the same gate
 

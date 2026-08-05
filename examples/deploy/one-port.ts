@@ -64,8 +64,11 @@ function buildAgent(provider?: LLMProvider): Agent {
 /** The container's own server: an upgrade, a route of your own, one port. */
 function buildServer(): { server: Server; upgraded: Set<Duplex> } {
   const server = createServer();
-  // An upgraded socket DETACHES from the server, so `server.close()` neither
-  // waits for it nor ends it. Graceful shutdown of your protocol is yours.
+  // An upgraded socket is yours to end, and `server.close()` will WAIT for it:
+  // it never ends one for you, and it does not finish while one is still open
+  // (`closeIdleConnections()` does not count it as idle either). So a graceful
+  // shutdown has to destroy your upgraded sockets itself — measured behaviour,
+  // and the reason the teardown below keeps this set.
   const upgraded = new Set<Duplex>();
 
   // Your protocol, on your port. A real deployment hands this to `ws`; the

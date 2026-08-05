@@ -19,7 +19,7 @@
  */
 
 import { previewStored } from '../lib/storedPreview.js';
-import type { AgentHost, HostCapability, PendingAsk } from './types.js';
+import type { AgentHost, ConversationHost, HostCapability, PendingAsk } from './types.js';
 
 /**
  * Thrown when a request arrives at a host that is shutting down or shut down.
@@ -190,6 +190,72 @@ export class NoPendingAskError extends Error {
 }
 
 /**
+ * Thrown when something is sent down a conversation that has already ended.
+ *
+ * A closed channel that accepts frames and drops them is the worst of the three
+ * options: the sender believes the far side got it, the far side never did, and
+ * nothing anywhere says so. Refusing by name is the only version of this that
+ * leaves a trace.
+ *
+ * `onClose` is how you avoid meeting this — subscribe, and stop sending.
+ */
+export class ConversationClosedError extends Error {
+  readonly code = 'ERR_CONVERSATION_CLOSED' as const;
+  /** Which adapter's door this was. */
+  readonly hostName: string;
+  /** The session the conversation claimed, when it claimed one. */
+  readonly sessionId?: string;
+
+  constructor(hostName: string, sessionId?: string) {
+    super(
+      `[hosting] this conversation on the '${hostName}' host has ended` +
+        (sessionId !== undefined ? ` (session '${sessionId}')` : '') +
+        `, so there is nowhere for that frame to go. Refusing rather than accepting it ` +
+        `and dropping it — a send that silently goes nowhere looks identical to a send ` +
+        `that worked. Subscribe with onClose(...) and stop sending when it fires, or open ` +
+        `a new conversation.`,
+    );
+    this.name = 'ConversationClosedError';
+    this.hostName = hostName;
+    if (sessionId !== undefined) this.sessionId = sessionId;
+  }
+}
+
+/**
+ * Thrown when a frame is bigger than the ceiling the adapter DECLARED.
+ *
+ * This is the other half of {@link ConversationLimits} — a declared ceiling
+ * nothing enforces is a number in a doc comment. The port neither chunks nor
+ * truncates, on purpose: how a message is split, numbered and reassembled is
+ * the consumer's protocol question, and answering it inside the adapter would
+ * answer it for every consumer at once. So the ceiling is visible, the refusal
+ * names it, and the splitting happens above the port where the protocol lives.
+ */
+export class FrameTooLargeError extends Error {
+  readonly code = 'ERR_FRAME_TOO_LARGE' as const;
+  /** Which adapter's door refused. */
+  readonly hostName: string;
+  /** How big the frame was, in bytes of UTF-8. */
+  readonly bytes: number;
+  /** The declared ceiling it crossed. */
+  readonly maxFrameBytes: number;
+
+  constructor(hostName: string, bytes: number, maxFrameBytes: number) {
+    super(
+      `[hosting] this frame is ${bytes} bytes and the '${hostName}' host declares a ` +
+        `maxFrameBytes of ${maxFrameBytes}. Refusing rather than truncating it or splitting ` +
+        `it for you: how a message is chunked, numbered and put back together is your ` +
+        `protocol's question, and an adapter that answered it would answer it for every ` +
+        `consumer at once. Read host.conversationLimits and chunk above the port.`,
+    );
+    this.name = 'FrameTooLargeError';
+    this.hostName = hostName;
+    this.bytes = bytes;
+    this.maxFrameBytes = maxFrameBytes;
+  }
+}
+
+/**
  * An already-computed preview, so {@link UnreadableEnvelopeError.withSession}
  * can copy a refusal without being handed the stored bytes a second time. Not
  * exported: nothing outside this file should be able to hand-write a preview.
@@ -277,13 +343,20 @@ export class UnreadableEnvelopeError extends TypeError {
  * assumed, and asking for one that is absent tells you which adapter you are
  * actually holding rather than failing quietly somewhere downstream.
  *
+ * Takes either port, because both declare the same two facts — who they are and
+ * what they can do — and a caller holding a conversation-only host is entitled
+ * to the same answer as one holding a request host.
+ *
  * @example
  *   requireCapability(host, 'streaming'); // throws unless this host streams
  *
  *   // or branch instead of insisting:
  *   if (host.capabilities.includes('streaming')) { ... }
  */
-export function requireCapability(host: AgentHost, capability: HostCapability): void {
+export function requireCapability(
+  host: AgentHost | ConversationHost,
+  capability: HostCapability,
+): void {
   if (host.capabilities.includes(capability)) return;
   const has = host.capabilities.length > 0 ? host.capabilities.join(', ') : 'none';
   throw new Error(

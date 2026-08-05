@@ -1,6 +1,6 @@
 ---
 title: Host it — an agent that stays up and remembers
-description: standingAgent + nodeHost + memorySessions. Two ports (AgentHost, SessionLifecycle) that name no cloud, a plain node:http adapter, and a conformance suite every future adapter has to pass.
+description: standingAgent + nodeHost + memorySessions. Three ports (AgentHost, ConversationHost, SessionLifecycle) that name no cloud, a plain node:http adapter with a real WebSocket door and no dependency, and two conformance suites every future adapter has to pass.
 ---
 
 > **An agent in a script answers once and forgets.** A deployed one has to do
@@ -30,8 +30,12 @@ Three pieces, and only the middle one is new thinking:
 | | |
 |---|---|
 | `AgentHost` | something can call me |
+| `ConversationHost` | something can *talk* to me, both ways, until one of us ends it |
 | `SessionLifecycle` | the conversation outlives the request |
 | `standingAgent` | hydrate → resume-or-fresh → persist → reply |
+
+(`ConversationHost` is the newest and has [its own section](#a-door-that-stays-open--serveconversations)
+— skip to it if the caller you have to serve cannot be *called*.)
 
 <CodeFile path="examples/deploy/standing-agent.ts" region="standing" title="examples/deploy/standing-agent.ts (region: standing)" />
 
@@ -75,10 +79,10 @@ both adapters are configurations of it.
 
 ## Capabilities are read, never assumed
 
-`AgentHost.capabilities` is a list of `HostCapability` — today exactly one name,
-`'streaming'`, because that is what a shipped adapter can actually honour.
-Names are not pre-minted for transports that do not exist yet; a capability
-nobody implements is a promise the library cannot keep.
+`AgentHost.capabilities` is a list of `HostCapability` — today two names,
+`'streaming'` and `'conversation'`, because those are what a shipped adapter can
+actually honour. Names are not pre-minted for transports that do not exist yet;
+a capability nobody implements is a promise the library cannot keep.
 
 Branch on it, or insist on it with `requireCapability(host, 'streaming')`, which
 throws a corrective error naming the adapter you are actually holding:
@@ -87,8 +91,19 @@ throws a corrective error naming the adapter you are actually holding:
 import { requireCapability } from 'agentfootprint/hosting';
 
 if (host.capabilities.includes('streaming')) { /* … */ }  // detect
-requireCapability(host, 'streaming');                     // or insist
+requireCapability(host, 'conversation');                  // or insist
 ```
+
+<Callout type="info" title="Why a capability is decided at construction, and what that ruled out">
+`capabilities` is a fixed array on the host object, read before anything is
+served. That has a consequence worth stating: a host that could only *sometimes*
+keep a promise cannot honestly declare it. When the conversation door was
+designed, the obvious shortcut was an optional peer dependency carrying a
+WebSocket implementation — and it was rejected on exactly this ground. The host
+would have had to either claim `'conversation'` and then refuse to do it, or
+probe `node_modules` and make feature detection depend on install state. The
+shipped adapters honour what they declare, always, with nothing to install.
+</Callout>
 
 The handler itself does not need to care. `reply.emit(chunk)` is a preview of
 the answer; a host that streams delivers each piece as it arrives, and a host
@@ -235,11 +250,231 @@ Two things are refused rather than guessed:
 it: `nodeHost({ server })` and `agentCoreRuntimeHost({ server })` are the same
 option.
 
+<Callout type="info" title="Still the escape hatch, and still needed">
+A conversation door ([below](#a-door-that-stays-open--serveconversations)) means
+you no longer need `{ server }` merely to get a WebSocket beside the agent — the
+two doors share a socket on their own. `{ server }` remains what it always was:
+the way to serve anything the ports do not express, on a socket you control. A
+port is a paved road, not a wall.
+</Callout>
+
 <CodeFile path="examples/deploy/one-port.ts" region="shared-server" title="examples/deploy/one-port.ts (region: shared-server)" />
 
 The full runnable version — an agent, a WebSocket echo and a `/metrics` route on
 one port, with the socket outliving the host's `close()` — is
 [`examples/deploy/one-port.ts`](https://github.com/footprintjs/agentfootprint/blob/main/examples/deploy/one-port.ts).
+
+## A door that stays open — `serveConversations()`
+
+> **`HostRequest → HostReply` is one exchange, and some doors are a
+> conversation.** Those are the words of the production integration that bought
+> this: their agent operates the user's browser, the browser cannot host an
+> inbound endpoint, so it dials out and parks a connection the agent pushes tool
+> calls down. A request/reply port has no way to express that.
+
+So there is a second port, beside the first:
+
+```ts
+const host = nodeHost({ port: 8080 });
+
+await standingAgent({ agent, sessions, host });        // POST /invoke
+await host.serveConversations((conversation) => {      // WS   /conversation
+  conversation.onFrame((frame) => conversation.send(answer(frame)));
+  conversation.onClose((why) => log(why.by, why.reason));
+});
+```
+
+`HostConversation` is six members and that is all of it:
+
+| | |
+|---|---|
+| `sessionId?` | the conversation this channel *claims* — caller data, never identity |
+| `headers?` | transport headers, lower-cased, as delivered |
+| `send(frame)` | host → far side |
+| `onFrame(cb)` | far side → host; returns an `Unsubscribe` |
+| `onClose(cb)` | fires **exactly once**, with who ended it |
+| `close(reason?)` | end it politely: flush, tell the far side, stop |
+
+A `ConversationHandler` is called once per conversation, with that
+conversation. Throwing ends *that* conversation and never the host.
+
+### Frames are strings, and that is a decision
+
+What a frame *means* is your protocol's business. The port was designed against
+three consumers at once — a browser-parked tool channel, the standardized
+agent↔UI protocol, and agent-to-agent task serving — and they agree on almost
+nothing beyond "text". A port shaped to fit whichever one arrived first stops
+being a port. Binary frames are a capability nobody has minted evidence for
+yet; a binary frame today ends the conversation with a reason that says so,
+rather than being quietly stringified.
+
+### The ceilings are declared, not discovered
+
+A transport that caps frame size or idles out has to **say so**, on the host —
+that is what `ConversationLimits` is, and it lives on the host rather than on the
+conversation because a ceiling you needed *before* you opened the channel is no
+use once you are holding it:
+
+```ts
+nodeHost().conversationLimits
+// { maxFrameBytes: 1048576, maxPendingBytes: 1048576 }
+
+agentCoreRuntimeHost().conversationLimits
+// { maxFrameBytes: 32768, idleMs: 900000, maxPendingBytes: 1048576 }
+```
+
+**The port neither chunks nor keep-alives, and that is the point.** Hiding a
+32KB cap inside auto-chunking would have the adapter deciding, for every
+consumer at once, how a message is split, how the pieces are numbered and how
+the far side knows the last one landed — and those answers differ per consumer.
+Same for liveness: a heartbeat is frames on somebody's protocol, and inventing
+them puts bytes on the wire that their parser never agreed to. So the ceiling is
+visible and the layer above acts: **chunk above the port, heartbeat above the
+port.**
+
+Three ceilings, and the doc on each says whether it is enforced or reported:
+
+| | |
+|---|---|
+| `maxFrameBytes` | **Enforced, both ways.** An inbound frame past it ends the conversation with a stated reason; `send()` past it throws `FrameTooLargeError`. A message the transport delivered in fragments counts in *total* — the port's frame is the whole message, so fragmentation cannot walk around the ceiling. |
+| `idleMs` | **Reported, not imposed.** The thing that idles you out is usually in front of the container, not inside it. Send your own heartbeat frames on your own protocol. |
+| `maxPendingBytes` | **Enforced.** How much is held for you before your first `onFrame` subscriber exists. |
+
+That last one deserves its own paragraph, because it is a ceiling that only
+exists because of a convenience. Frames arriving before the handler subscribes
+are **held and delivered**, so an `async` handler that looks something up before
+it starts listening does not lose the far side's opening frame. But a queue
+somebody else fills and this process pays for is a way to kill the process — so
+it is bounded, in **bytes** rather than in frames (a frame count would still
+admit `count × maxFrameBytes`), and going past it ends the conversation naming
+the bound. An undeclared ceiling is exactly what the declared-ceilings rule
+exists to forbid, including this one.
+
+### `onClose` says *who*, not which number
+
+```ts
+conversation.onClose(({ by, reason }) => { /* 'far-side' | 'host' | 'transport' */ });
+```
+
+That argument is a `ConversationClose`, and it has exactly two fields.
+`'far-side'` they hung up · `'host'` we closed it · `'transport'` it broke or
+timed out. There is deliberately **no numeric close code** on it: what all three
+consumers need to know is which of those three happened, and a transport's own
+numbers answer that only if you already know that transport. An adapter renders
+its vocabulary into `reason`.
+
+`onClose` fires exactly once *per subscriber* — including one that subscribes
+after the conversation already ended, which is answered immediately rather than
+never.
+
+### Two refusals you will meet, and neither is silent
+
+```
+ConversationClosedError  ERR_CONVERSATION_CLOSED   send() after the channel ended
+FrameTooLargeError       ERR_FRAME_TOO_LARGE       send() past the declared ceiling
+```
+
+Both carry the adapter's name; `FrameTooLargeError` also carries `bytes` and
+`maxFrameBytes`, so the code that has to chunk learns the number from the thing
+that refused it. `ConversationClosedError` carries the session, when the
+conversation claimed one. The alternative to refusing — accepting the frame and
+dropping it — looks identical to a send that worked, from the only side that
+could have noticed.
+
+### One socket, two doors
+
+`serve()` and `serveConversations()` on the same host **share one socket**. That
+is not an optimisation; it is the premise. The runtimes that need a conversation
+are the ones that hand a container exactly one port, so two doors that each
+bound their own would fail on precisely the deployment this exists for. On a
+private socket the server is created by whichever door opens first and closed by
+whichever closes last; on a caller-owned `{ server }` each door attaches and
+detaches its own listener and neither touches your socket.
+
+The doors are independent: closing the request handle leaves live conversations
+alone, and closing the conversation handle leaves `/invoke` answering.
+
+<Callout type="warn" title="Closing a conversation door ENDS its conversations first — it has to">
+An upgraded socket keeps `server.close()` waiting forever, and
+`closeIdleConnections()` does not count it as idle. So `close()` ends every live
+conversation politely (a close frame, then the socket) *before* letting go of
+the port. If you run your own `'upgrade'` listener beside this one, the same is
+true of yours: `server.close()` will wait for sockets you upgraded and never end
+them for you. Keep them and destroy them in your shutdown.
+
+One more consequence of attaching a listener at all: node destroys an upgrade
+nobody listened for, but once *any* listener exists it stops doing that. An
+upgrade on a path neither of you claims therefore **hangs** rather than being
+dropped — the same shape as [the 404 law above](#one-port-two-protocols---server-),
+and for the same reason: a path this host does not own is yours to answer.
+</Callout>
+
+### `nodeHost`'s door, and no dependency
+
+`nodeHost` serves conversations on `/conversation` (its own word, chosen the way
+its other two paths were) with a real RFC 6455 server implementation — the
+handshake, text frames, continuation frames, ping/pong and close — and **nothing
+to install**. `conversationPath` and `conversationLimits` are options.
+`httpHost` is where it lives, so every adapter built on it inherits the door;
+a host built *without* a `conversationPath` does not declare `'conversation'`
+and `serveConversations()` refuses by name.
+
+<Callout type="info" title="How far the verification goes — the honest version">
+The codec is checked against the byte sequences **RFC 6455 §5.7 publishes**, so
+the encoder is verified against bytes the specification wrote and the decoder
+against bytes a real client sends — not against a client we also wrote. On top
+of that: the conversation conformance suite runs over real sockets, and where
+the runtime has a built-in `WebSocket` the same door is driven by that
+implementation too.
+
+It is **not** run against the Autobahn test suite. No extension is implemented
+or negotiated (`permessage-deflate` included), there are no binary frames, and
+there is no client role. That is the boundary; nothing here claims past it.
+</Callout>
+
+A wire can read the handshake, which is how an adapter maps its own spelling:
+`HttpWire.readConversation(facts)` gets a `HandshakeFacts` — `{ headers, query }`,
+with no body, because a handshake has none — and returns a
+`ConversationHandshake`: `{ sessionId?, headers?, protocol? }`, where `headers`
+is merged *over* the raw ones so nothing a mapping did not understand is lost,
+and `protocol` is the subprotocol to echo (only the wire read the offer, so only
+the wire can select one). `nodeHost`'s dialect reads `x-session-id` or
+`?sessionId=`, header first.
+
+### The agent inside a conversation is governed the same way
+
+A door decides how something reaches your agent; it decides nothing about what
+the agent then does. Whatever you set with [`.act()`](doc:loop-moments) — the
+input rules, the before-tool and after-tool rules, the window, the output rules
+— applies identically to a turn that arrived as a frame and a turn that arrived
+as a `POST`. The ledger rows say which moment they came from, not which door.
+
+One thing does NOT carry over, and it is worth knowing before you write the
+handler: an `Agent` runs one turn at a time, and `standingAgent` can only
+serialize the turns *it* drives. If both doors share one `Agent` instance, a
+frame and a request can overlap on it. Give each door its own instance, or your
+own lock — the runnable example does the former, and says so where it does it.
+
+### What this release deliberately did NOT do
+
+`standingAgent` is **not** conversation-aware. The three consumers push
+different things down a channel — tool calls out, UI events in, task updates
+both ways — so baking one loop into the composer would be exactly the consumer
+bias the port was designed to avoid. It ships as a port plus two adapters; the
+browser-tool loop, the agent↔UI framing and agent-to-agent serving are each
+their own release, each consuming this same door. A type-regression test fails
+the build the day a conversation key appears on the composer's options.
+
+<CodeFile path="examples/deploy/echo-conversation.ts" region="conversation" title="examples/deploy/echo-conversation.ts (region: conversation)" />
+
+```bash
+npm run example examples/deploy/echo-conversation.ts
+```
+
+It binds an ephemeral port, holds a two-turn WebSocket conversation with itself,
+answers an ordinary `POST /invoke` on the *same socket*, meets both refusals,
+and shows `onClose` reporting who ended it. `SERVE=1` keeps it listening so you
+can point a browser's `new WebSocket(...)` at it.
 
 ## Sessions: what crosses the restart
 
@@ -572,11 +807,13 @@ the conversation as of the pause with no answer appended. And it does not trim:
 bounding what the model is shown is the memory subsystem's job, not a silent cap
 applied on the way to storage.
 
-## The conformance suite
+## The conformance suites
 
 The claim this whole subpath rests on is that **one handler serves any host
-unchanged**. That is not an assertion in prose, it is a test: a shared
-conformance suite runs against three subjects — `nodeHost`, a minimal
+unchanged**. That is not an assertion in prose, it is a test — now two of them,
+one per port.
+
+**The host contract** runs against three subjects: `nodeHost`, a minimal
 in-process host written in the test file which declares *no* capabilities so the
 buffering path is exercised rather than assumed, and `agentCoreRuntimeHost`, a
 real cloud runtime's container contract. All three serve the same handler
@@ -590,9 +827,20 @@ nothing failed rather than left open; chunks observed if and only if the host
 declares streaming; `requireCapability` naming the adapter; `close()` draining
 in-flight work and refusing what comes after; and `close()` being idempotent.
 
-That suite is the artifact a future adapter has to pass. The first cloud one
-already did, without a port changing — which is the only evidence that means
-anything about a claim like this.
+**The conversation contract** does the same for the second port, against
+`nodeHost`'s WebSocket door, an in-process conversation host with *different*
+declared ceilings, and `agentCoreRuntimeHost`'s `/ws`. It pins: frames carried
+whole and in order both ways; `sessionId` and headers arriving; a frame that
+lands before the handler subscribed still being delivered; the ceiling living on
+the host and never on the conversation; `send()` refusing by name past the
+ceiling and after the close; `onClose` firing exactly once and saying who ended
+it; `close()` draining what was already sent; a subscriber that throws ending
+that conversation and leaving the host serving; and `close()` being idempotent.
+
+Both suites are the artifact a future adapter has to pass, and both are run by a
+cloud adapter that needed **no port change** to pass them — which is the only
+evidence that means anything about a claim like this. A third test greps the
+hosting sources for vendor names, file by file, including every new port file.
 
 ## Try it
 

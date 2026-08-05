@@ -21,7 +21,22 @@
 import { describe, expect, it } from 'vitest';
 
 import { requireCapability } from '../../src/hosting/index.js';
-import type { AgentHost, HostHandle, HostHandler, PendingAsk } from '../../src/hosting/index.js';
+import type {
+  AgentHost,
+  HostCapability,
+  HostHandle,
+  HostHandler,
+  PendingAsk,
+} from '../../src/hosting/index.js';
+
+/**
+ * Every name the union carries. Written out here rather than imported as a
+ * value because `HostCapability` is a type: this list is the SUITE's copy, and
+ * a name added to the library without being added here fails the adapter that
+ * declares it — which is the direction that catches a capability nobody
+ * described.
+ */
+const KNOWN_CAPABILITIES: readonly HostCapability[] = ['streaming', 'conversation'];
 
 // ─── What a subject has to tell the suite ────────────────────────────
 
@@ -145,7 +160,17 @@ export function describeHostContract(subject: HostUnderTest): void {
       expect(typeof host.name).toBe('string');
       expect(host.name.length).toBeGreaterThan(0);
       expect(Array.isArray(host.capabilities)).toBe(true);
-      for (const capability of host.capabilities) expect(capability).toBe('streaming');
+      for (const capability of host.capabilities) {
+        expect(KNOWN_CAPABILITIES).toContain(capability);
+      }
+      // A declared capability has to be one this adapter can actually honour —
+      // the whole point of the union. `'conversation'` is the one with a
+      // method behind it, so it is the one that can be checked from out here.
+      if (host.capabilities.includes('conversation')) {
+        expect(typeof (host as { serveConversations?: unknown }).serveConversations).toBe(
+          'function',
+        );
+      }
     });
 
     // ── integration: the handler's answer reaches the caller ──

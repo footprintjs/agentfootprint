@@ -58,7 +58,14 @@ describe('the hosting ports name no vendor', () => {
     // The shared HTTP machinery is the file a vendor is MOST likely to leak
     // into, because every cloud adapter is a configuration of it.
     expect(files).toContain('httpHost.ts');
-    expect(files.length).toBeGreaterThanOrEqual(7);
+    // The conversation port and its transport, named one by one rather than
+    // trusted to the directory listing: a new port file is exactly the moment
+    // somebody is most tempted to write a vendor's spelling into it, and a pin
+    // that only counts files would not notice the one that was never added.
+    expect(files).toContain('webSocketConversation.ts');
+    expect(files).toContain('webSocketFrames.ts');
+    expect(files).toContain('headers.ts');
+    expect(files.length).toBeGreaterThanOrEqual(10);
   });
 
   it.each(FORBIDDEN.map((pattern) => [pattern.source, pattern] as const))(
@@ -75,5 +82,10 @@ describe('the hosting ports name no vendor', () => {
     const source = hostingSources().find((s) => s.file === 'nodeHost.ts')!.text;
     expect(source).toContain("'/invoke'");
     expect(source).toContain("'/health'");
+    // The conversation door's path is this adapter's own word too, named for
+    // what it carries. `/ws` is one runtime's spelling and lives in that
+    // runtime's adapter file, the same way `/invocations` does.
+    expect(source).toContain("'/conversation'");
+    expect(source).not.toContain("'/ws'");
   });
 });

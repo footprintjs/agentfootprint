@@ -23,11 +23,25 @@
  *
  *   POST /invocations   JSON `{ "prompt": "..." }` → JSON `{ "response", "status" }`
  *   GET  /ping          → `{ "status": "Healthy", "time_of_last_update": <unix seconds> }`
+ *   GET  /ws            a bidirectional WebSocket, on the SAME port
  *
  * and the caller's conversation arrives in the
  * `X-Amzn-Bedrock-AgentCore-Runtime-Session-Id` header rather than in the body,
  * which is the one thing paths-and-bodies configuration alone could not
  * express before this release.
+ *
+ * ── The second door ──────────────────────────────────────────────────────────
+ * `/ws` is this runtime's answer for a caller that cannot host an inbound
+ * endpoint — a browser, most obviously — and so dials out and parks a channel
+ * instead. It is the same container and the same port, which is exactly why the
+ * two doors here share one socket.
+ *
+ * Its wire facts are ADAPTER facts and live nowhere but this file: 32KB frames,
+ * a 15-minute idle ceiling, the bearer credential carried as a
+ * `Sec-WebSocket-Protocol` offer because a browser's WebSocket API cannot set a
+ * header, and session affinity that has to be readable from the query string
+ * for the same reason. The port knows none of it — it is handed a session id
+ * and a header bag, the same two things every other transport hands it.
  *
  * ── Verification status, stated plainly ──────────────────────────────────────
  * `agentCoreRuntimeHost` is **plain HTTP and is really verified**: it runs the
@@ -56,7 +70,13 @@
 
 import { checkEnvelope } from '../../hosting/envelope.js';
 import { headerValue, httpHost } from '../../hosting/httpHost.js';
-import type { HttpHost, HttpRequestFacts, HttpWire } from '../../hosting/httpHost.js';
+import type {
+  ConversationHandshake,
+  HandshakeFacts,
+  HttpHost,
+  HttpRequestFacts,
+  HttpWire,
+} from '../../hosting/httpHost.js';
 import type { CheckpointEnvelope, SessionLifecycle } from '../../hosting/types.js';
 import { lazyRequire } from '../../lib/lazyRequire.js';
 
@@ -67,6 +87,7 @@ const HOST_NAME = 'agentCoreRuntimeHost';
 /** The runtime's container contract, as constants rather than as scattered literals. */
 const INVOKE_PATH = '/invocations';
 const HEALTH_PATH = '/ping';
+const CONVERSATION_PATH = '/ws';
 const RUNTIME_PORT = 8080;
 /**
  * The header the runtime puts the caller's conversation in. Matched
@@ -74,6 +95,34 @@ const RUNTIME_PORT = 8080;
  * front of the container is free to re-case them.
  */
 const SESSION_HEADER = 'X-Amzn-Bedrock-AgentCore-Runtime-Session-Id';
+/**
+ * What the `/ws` door caps, as the runtime imposes it — **32KB per frame and a
+ * 15-minute idle timeout.**
+ *
+ * Declared rather than worked around. A 32KB cap hidden inside auto-chunking
+ * would have this adapter deciding, for every consumer at once, how a message
+ * is split and how the far side knows the last piece landed; a 15-minute idle
+ * answered with an invented heartbeat would put bytes on the wire that the
+ * consumer's parser never agreed to. Both belong to the protocol above this
+ * door, and both are actionable only if the number is visible.
+ *
+ * `maxFrameBytes` is enforced here, in both directions, because a frame past it
+ * would be cut by the front door anyway and a refusal that names the ceiling
+ * beats a truncation that does not. `idleMs` is REPORTED: the timeout belongs
+ * to what sits in front of this container, and the honest thing is to say so
+ * rather than to close a channel the runtime might have kept.
+ */
+const CONVERSATION_LIMITS = { maxFrameBytes: 32_768, idleMs: 900_000 } as const;
+/**
+ * The subprotocol a browser offers to carry its bearer credential, because the
+ * WebSocket API gives it no way to send an `Authorization` header.
+ *
+ * Two spellings are recognised and both are ordinary browser-expressible ones:
+ * `['bearer', '<token>']` (two offers) and `['bearer.<token>']` (one). What is
+ * echoed back in the 101 is the word `bearer` and never the token — a
+ * credential belongs in a request, not in a response header a proxy may log.
+ */
+const BEARER_SUBPROTOCOL = 'bearer';
 
 /** Options for {@link agentCoreRuntimeHost}. */
 export interface AgentCoreRuntimeHostOptions {
@@ -123,6 +172,14 @@ export interface AgentCoreRuntimeHostOptions {
    *   });
    */
   readonly server?: import('node:http').Server;
+  /**
+   * Path that takes a conversation upgrade. Default `'/ws'` — the runtime's
+   * own second door, beside `/invocations` on the same port.
+   *
+   * You do not need `server` for this: both doors share one socket by
+   * construction, which is what the single-port container required.
+   */
+  readonly conversationPath?: string;
 }
 
 /**
@@ -175,7 +232,73 @@ export function agentCoreRuntimeWire(busy?: () => boolean): HttpWire {
     // 'success' nor 'error' because it is neither: the run stopped to ask a
     // person, it is stored, and a later call carrying `decision` finishes it.
     awaiting: (pending) => ({ awaiting: pending, status: 'awaiting' }),
+    readConversation: readAgentCoreConversation,
   };
+}
+
+/**
+ * The `/ws` handshake, in this runtime's spelling: **header-or-query session
+ * affinity, and the bearer subprotocol mapped into headers.**
+ *
+ * ── Why the query string is read at all ──────────────────────────────────────
+ * The same header carries the session on `/invocations`, and it is preferred
+ * here too. But the caller this door exists for is a browser, and the browser
+ * WebSocket API cannot set a header — so a session id has nowhere to travel
+ * except the URL. Both the runtime's header name and the plain `sessionId` are
+ * accepted as query parameters, case-insensitively; **the header wins** when
+ * both arrive, so a caller that sets both is never surprised by which one the
+ * server preferred. That is the same precedence rule the request dialect uses.
+ *
+ * ── Why the credential becomes a header ──────────────────────────────────────
+ * A bearer token offered as a subprotocol is this runtime's spelling of
+ * `Authorization`, and a port field spelled the way one vendor spells it is how
+ * a port stops being one. So it lands in `headers.authorization` as
+ * `Bearer <token>` — the vocabulary every other transport already uses — and
+ * the raw `sec-websocket-protocol` header is left in place, so an application
+ * that reads the offer itself still can. **Nothing here authenticates
+ * anything**: the port never proves who is calling, and a token that arrived is
+ * a claim, exactly like the session id beside it.
+ *
+ * Exported by name so the mapping is inspectable and testable without binding a
+ * socket, the same way the body shapes are.
+ */
+export function readAgentCoreConversation(facts: HandshakeFacts): ConversationHandshake {
+  const sessionId =
+    headerValue(facts, SESSION_HEADER) ?? queryValue(facts, SESSION_HEADER, 'sessionId');
+  const token = bearerFromSubprotocols(facts.headers['sec-websocket-protocol']);
+  return {
+    ...(sessionId !== undefined && { sessionId }),
+    ...(token !== undefined && {
+      headers: { authorization: `Bearer ${token}` },
+      // Echoed so a client that offered a subprotocol gets one back — the word
+      // only. Putting the token in a response header would hand the credential
+      // to every proxy on the way home.
+      protocol: BEARER_SUBPROTOCOL,
+    }),
+  };
+}
+
+/** A query parameter by any of several names, matched case-insensitively. */
+function queryValue(facts: HandshakeFacts, ...names: string[]): string | undefined {
+  const wanted = names.map((name) => name.toLowerCase());
+  for (const [key, value] of facts.query.entries()) {
+    if (wanted.includes(key.toLowerCase()) && value.length > 0) return value;
+  }
+  return undefined;
+}
+
+/** The token out of a `Sec-WebSocket-Protocol` offer, in either browser spelling. */
+function bearerFromSubprotocols(offered: string | undefined): string | undefined {
+  if (!offered) return undefined;
+  const parts = offered
+    .split(',')
+    .map((part) => part.trim())
+    .filter((part) => part.length > 0);
+  const marker = parts.findIndex((part) => part.toLowerCase() === BEARER_SUBPROTOCOL);
+  if (marker >= 0 && parts[marker + 1] !== undefined) return parts[marker + 1];
+  const prefix = `${BEARER_SUBPROTOCOL}.`;
+  const dotted = parts.find((part) => part.toLowerCase().startsWith(prefix));
+  return dotted?.slice(prefix.length) || undefined;
 }
 
 /**
@@ -198,6 +321,8 @@ export function agentCoreRuntimeHost(options: AgentCoreRuntimeHostOptions = {}):
     wire: agentCoreRuntimeWire(options.busy),
     invokePath: INVOKE_PATH,
     healthPath: HEALTH_PATH,
+    conversationPath: options.conversationPath ?? CONVERSATION_PATH,
+    conversationLimits: CONVERSATION_LIMITS,
     // With a caller-owned server this adapter binds nothing, so it must not
     // invent the contract's port either — the port is whatever the caller
     // listened on, and passing one anyway is refused by `httpHost` rather than

@@ -18,10 +18,15 @@ import { connect, type Socket } from 'node:net';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { agentCoreRuntimeHost, agentCoreRuntimeWire } from '../../src/hosting-providers.js';
+import {
+  agentCoreRuntimeHost,
+  agentCoreRuntimeWire,
+  readAgentCoreConversation,
+} from '../../src/hosting-providers.js';
 import { nodeHost } from '../../src/hosting/index.js';
-import type { HostHandle, HostHandler } from '../../src/hosting/index.js';
+import type { ConversationHandler, HostHandle, HostHandler } from '../../src/hosting/index.js';
 import type { NodeHostHandle } from '../../src/hosting/nodeHost.js';
+import { connectConversation } from './wsClient.js';
 
 const SESSION_HEADER = 'X-Amzn-Bedrock-AgentCore-Runtime-Session-Id';
 
@@ -73,8 +78,10 @@ describe('agentCoreRuntimeHost — unit', () => {
     expect(agentCoreRuntimeHost().name).toBe('agentCoreRuntimeHost');
   });
 
-  it('declares streaming, and only from the known capability set', () => {
-    expect(agentCoreRuntimeHost().capabilities).toEqual(['streaming']);
+  it('declares streaming and conversation, and only from the known capability set', () => {
+    // Two doors, both honoured by the shipped adapter with nothing installed:
+    // SSE on /invocations and the runtime's /ws channel on the same socket.
+    expect(agentCoreRuntimeHost().capabilities).toEqual(['streaming', 'conversation']);
   });
 
   it('defaults to the port and interface the container contract requires', async () => {
@@ -391,5 +398,168 @@ describe('agentCoreRuntimeHost — the thesis', () => {
 
     expect(cloud.error).toBe(plain.error);
     expect(cloud.error).toMatch(/complete\(\) or fail\(\)/);
+  });
+});
+
+// ── the /ws door: this runtime's second contract ─────────────────────
+
+describe('agentCoreRuntimeHost — the /ws conversation door', () => {
+  /** Serve conversations on an ephemeral port and hand back what a caller needs. */
+  async function servingConversations(
+    handler: ConversationHandler = (conversation) =>
+      conversation.onFrame((frame) =>
+        conversation.send(
+          `echo:${frame}|session:${conversation.sessionId ?? 'none'}` +
+            `|auth:${conversation.headers?.authorization ?? 'none'}`,
+        ),
+      ),
+  ): Promise<NodeHostHandle> {
+    const handle = (await agentCoreRuntimeHost({
+      port: 0,
+      hostname: '127.0.0.1',
+    }).serveConversations(handler)) as NodeHostHandle;
+    open.push(handle);
+    return handle;
+  }
+
+  it('declares this runtime’s ceilings — 32KB frames, a 15-minute idle — rather than hiding them', () => {
+    // Declared, not worked around. Auto-chunking a 32KB cap would decide, for
+    // every consumer at once, how a message is split and how the far side
+    // knows the last piece landed.
+    expect(agentCoreRuntimeHost().conversationLimits).toMatchObject({
+      maxFrameBytes: 32_768,
+      idleMs: 900_000,
+    });
+  });
+
+  it('serves /ws and /invocations on ONE socket — the container gets one port', async () => {
+    const host = agentCoreRuntimeHost({ port: 0, hostname: '127.0.0.1' });
+    const requests = (await host.serve(echo)) as NodeHostHandle;
+    open.push(requests);
+    const conversations = (await host.serveConversations((conversation) =>
+      conversation.onFrame((frame) => conversation.send(`ws:${frame}`)),
+    )) as NodeHostHandle;
+    open.push(conversations);
+
+    expect(conversations.port).toBe(requests.port);
+    const invoked = await post(requests.url, { prompt: 'over http' });
+    expect(await invoked.json()).toMatchObject({ status: 'success' });
+
+    const client = connectConversation(requests.port, { path: '/ws' });
+    expect((await client.opened).status).toBe(101);
+    client.send('over the socket');
+    expect(await client.waitForFrames(1)).toEqual(['ws:over the socket']);
+    client.destroy();
+  });
+
+  it('reads session affinity from the runtime’s header, and from the query a browser must use', async () => {
+    const handle = await servingConversations();
+
+    const viaHeader = connectConversation(handle.port, {
+      path: '/ws',
+      headers: { [SESSION_HEADER]: 'sess-header' },
+    });
+    await viaHeader.opened;
+    viaHeader.send('who am i');
+    expect((await viaHeader.waitForFrames(1))[0]).toContain('session:sess-header');
+    viaHeader.destroy();
+
+    // A browser's WebSocket API cannot set a header, so the runtime's own
+    // header name is accepted as a query parameter too — case-insensitively.
+    const viaQuery = connectConversation(handle.port, {
+      path: `/ws?${SESSION_HEADER.toLowerCase()}=sess-query`,
+    });
+    await viaQuery.opened;
+    viaQuery.send('who am i');
+    expect((await viaQuery.waitForFrames(1))[0]).toContain('session:sess-query');
+    viaQuery.destroy();
+
+    // …and the port's own plain spelling, for a caller who never learned the
+    // runtime's header name.
+    const viaPlain = connectConversation(handle.port, { path: '/ws?sessionId=sess-plain' });
+    await viaPlain.opened;
+    viaPlain.send('who am i');
+    expect((await viaPlain.waitForFrames(1))[0]).toContain('session:sess-plain');
+    viaPlain.destroy();
+  });
+
+  it('the header wins when a caller sends both', async () => {
+    const handle = await servingConversations();
+    const client = connectConversation(handle.port, {
+      path: '/ws?sessionId=from-query',
+      headers: { [SESSION_HEADER]: 'from-header' },
+    });
+    await client.opened;
+    client.send('who am i');
+    // The same precedence the request dialect uses, so a caller that sets both
+    // is never surprised by which one the server preferred.
+    expect((await client.waitForFrames(1))[0]).toContain('session:from-header');
+    client.destroy();
+  });
+
+  it('maps a Sec-WebSocket-Protocol bearer INTO headers, and never into a port field', async () => {
+    const handle = await servingConversations();
+    for (const protocols of [
+      ['bearer', 'tok-123'], // two offers: the shape a browser writes
+      ['bearer.tok-123'], // one offer, dotted: the other shape it can write
+    ]) {
+      const client = connectConversation(handle.port, { path: '/ws', protocols });
+      const opened = await client.opened;
+      // Echoed so the client's handshake completes — the WORD, never the token.
+      expect(opened.protocol).toBe('bearer');
+      expect(opened.protocol).not.toContain('tok-123');
+
+      client.send('who am i');
+      const [reply] = await client.waitForFrames(1);
+      // It arrives as an ordinary header, in the vocabulary every other
+      // transport already uses. Nothing on HostConversation is spelled the way
+      // one vendor spells it.
+      expect(reply).toContain('auth:Bearer tok-123');
+      client.destroy();
+    }
+  });
+
+  it('the raw subprotocol header survives the mapping, so an app can read the offer itself', async () => {
+    const seen: (string | undefined)[] = [];
+    const handle = await servingConversations((conversation) => {
+      seen.push(conversation.headers?.['sec-websocket-protocol']);
+      conversation.onFrame(() => conversation.send('ok'));
+    });
+    const client = connectConversation(handle.port, {
+      path: '/ws',
+      protocols: ['bearer', 'tok-9'],
+    });
+    await client.opened;
+    client.send('x');
+    await client.waitForFrames(1);
+    expect(seen[0]).toBe('bearer, tok-9');
+    client.destroy();
+  });
+
+  it('readAgentCoreConversation is inspectable without binding a socket', () => {
+    // Exported for the same reason the body shapes are: a mapping you can only
+    // observe by running a server is a mapping nobody reviews.
+    const facts = {
+      headers: { 'sec-websocket-protocol': 'bearer, tok-7' },
+      query: new URLSearchParams('sessionId=c-1'),
+    };
+    expect(readAgentCoreConversation(facts)).toEqual({
+      sessionId: 'c-1',
+      headers: { authorization: 'Bearer tok-7' },
+      protocol: 'bearer',
+    });
+    // No bearer offered: nothing invented, and no subprotocol echoed.
+    expect(readAgentCoreConversation({ headers: {}, query: new URLSearchParams() })).toEqual({});
+  });
+
+  it('SECURITY: a frame past this runtime’s 32KB ceiling ends the conversation, naming it', async () => {
+    const handle = await servingConversations();
+    const client = connectConversation(handle.port, { path: '/ws' });
+    await client.opened;
+    client.send('x'.repeat(32_769));
+
+    const closed = await client.closed;
+    expect(closed.code).toBe(1009);
+    expect(closed.reason).toContain('32768');
   });
 });

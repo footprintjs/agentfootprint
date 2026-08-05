@@ -1,10 +1,12 @@
 /**
- * hosting/types — the two ports an agent needs to stand up and stay up.
+ * hosting/types — the ports an agent needs to stand up and stay up.
  *
- * `AgentHost` is "something can call me". `SessionLifecycle` is "the
- * conversation outlives the request". Both are deliberately written in the
- * vocabulary every transport and every store already has — an input, a reply,
- * a session id, a stored blob — and in nothing else.
+ * `AgentHost` is "something can call me". `ConversationHost` is "something can
+ * TALK to me" — a door that stays open, because `HostRequest → HostReply` is
+ * one exchange and some doors are not. `SessionLifecycle` is "the conversation
+ * outlives the request". All three are deliberately written in the vocabulary
+ * every transport and every store already has — an input, a reply, a frame, a
+ * session id, a stored blob — and in nothing else.
  *
  * **The rule these types are written under:** no runtime, product or protocol
  * gets a field, a name or an assumption here. A port shaped around one
@@ -24,6 +26,9 @@ import type { Agent } from '../core/Agent.js';
 import type { CheckInRequest } from '../core/checkin.js';
 import type { MiddlewareAsk } from '../core/pause.js';
 import type { AgentRunCheckpoint } from '../core/runCheckpoint.js';
+import type { Unsubscribe } from '../events/dispatcher.js';
+
+export type { Unsubscribe };
 
 // ─── The host port ───────────────────────────────────────────────────
 
@@ -37,8 +42,18 @@ import type { AgentRunCheckpoint } from '../core/runCheckpoint.js';
  * of a transport that does not exist yet: a capability nobody implements is a
  * promise the library cannot keep, and pre-minting one for an imagined future
  * transport would bake that transport's assumptions in before it arrives.
+ *
+ *  - `'streaming'` — the caller SEES `reply.emit(...)` pieces as they arrive.
+ *  - `'conversation'` — this host can also carry a two-way channel that stays
+ *    open ({@link ConversationHost.serveConversations}). It joined the union
+ *    when two shipped adapters honoured it, not when it was imagined.
+ *
+ * Declared at CONSTRUCTION and static thereafter, which is a constraint worth
+ * knowing about: a capability whose truth depended on what happened to be
+ * installed at call time could not be declared here honestly, so an adapter
+ * that can only sometimes keep a promise does not make it.
  */
-export type HostCapability = 'streaming';
+export type HostCapability = 'streaming' | 'conversation';
 
 /**
  * One inbound request, as the transport described it.
@@ -173,6 +188,205 @@ export interface AgentHost {
   readonly capabilities: readonly HostCapability[];
   /** Start serving. Resolves once the host is actually live. */
   serve(handler: HostHandler): Promise<HostHandle>;
+}
+
+// ─── The conversation port ───────────────────────────────────────────
+
+/**
+ * A door that stays open: one session-scoped, two-way channel.
+ *
+ * The distinction this type exists for, in the words of the field report that
+ * bought it: **`HostRequest → HostReply` is one exchange, and this door is a
+ * conversation.** A request has one reply and then it is over. A conversation
+ * has neither side taking turns by rule, no reply count, and an end that either
+ * side can call.
+ *
+ * ── Frames are STRINGS here, deliberately ───────────────────────────────────
+ * What the frames MEAN is the consumer's contract, not this port's: one
+ * consumer pushes tool calls down the channel, another speaks a standardized
+ * agent↔UI protocol, a third exchanges long-running task updates. JSON is what
+ * all three happen to use and none of them agree on beyond that, so the port
+ * carries text and stays out of it. Binary is a capability question, deferred
+ * until a consumer needs it rather than guessed at now.
+ *
+ * ── What is NOT here ────────────────────────────────────────────────────────
+ * No authentication, no chunking, no heartbeat, no protocol framing. See
+ * {@link ConversationLimits} for why the last two are absences with a reason
+ * rather than gaps.
+ */
+export interface HostConversation {
+  /**
+   * The conversation this channel CLAIMS to belong to — caller data, exactly as
+   * the transport declared it, and **not identity**. The whole of
+   * {@link HostRequest.sessionId}'s warning applies here word for word: anyone
+   * who can reach the host can put any string here, including someone else's.
+   *
+   * A conversation and a request carrying the same string are the same
+   * session's, as far as this port is concerned. What that entitles either of
+   * them to is yours to decide, above the port.
+   */
+  readonly sessionId?: string;
+  /**
+   * Transport headers with lower-cased names, as delivered — so a handler can
+   * map its own conventions without the port guessing which ones matter.
+   *
+   * This is also where an adapter puts credentials that its transport spells
+   * some other way: a bearer token a browser could only send as a subprotocol
+   * arrives here as an ordinary `authorization` header, because a port field
+   * spelled the way one vendor spells it is how a port stops being one.
+   */
+  readonly headers?: Readonly<Record<string, string>>;
+  /**
+   * Host → far side. One frame, delivered whole.
+   *
+   * Refuses BY NAME rather than dropping quietly in two cases: a conversation
+   * that has ended (`ConversationClosedError`), and a frame past the ceiling the
+   * adapter declared (`FrameTooLargeError`). A dropped frame on a channel that
+   * looks open is the failure mode this port exists to make impossible.
+   */
+  send(frame: string): void;
+  /**
+   * Far side → host. Returns an unsubscribe.
+   *
+   * Frames that arrive BEFORE the first subscriber are held and delivered to
+   * it, up to the bound the adapter declares
+   * ({@link ConversationLimits.maxPendingBytes}) — an `async` handler that
+   * awaits anything before subscribing would otherwise silently lose the far
+   * side's opening frame, which on a channel whose first frame is a greeting is
+   * every conversation.
+   */
+  onFrame(cb: (frame: string) => void): Unsubscribe;
+  /**
+   * The end, delivered exactly once per subscriber — including to a subscriber
+   * that arrives after it already happened, which is answered immediately
+   * rather than never.
+   */
+  onClose(cb: (reason: ConversationClose) => void): Unsubscribe;
+  /**
+   * End it politely: flush what is queued, tell the far side, then stop.
+   * Idempotent — the first call owns the ending and later ones do nothing.
+   */
+  close(reason?: string): void;
+}
+
+/**
+ * How a conversation ended, in terms every transport can answer.
+ *
+ * `by` is the fact a consumer branches on and the reason there is no numeric
+ * code here: what all three of "a browser-parked channel", "a UI protocol" and
+ * "a long-running task exchange" need to know is whether the far side said
+ * goodbye, whether we did, or whether it broke — and a transport's own numbers
+ * answer that only if you already know that transport. Adapters render their
+ * own vocabulary (a close code, a timeout, a ceiling) into {@link reason}.
+ */
+export interface ConversationClose {
+  /**
+   *  - `'far-side'` — they ended it.
+   *  - `'host'` — we did, through {@link HostConversation.close}.
+   *  - `'transport'` — nobody ended it; it broke or timed out.
+   */
+  readonly by: 'far-side' | 'host' | 'transport';
+  /** What was said about it, when anything was. */
+  readonly reason?: string;
+}
+
+/**
+ * What you hand {@link ConversationHost.serveConversations} — called once per
+ * conversation, with that conversation.
+ *
+ * Throwing ends THAT conversation with a stated reason and never the host: one
+ * caller's bad frame is not an outage.
+ */
+export type ConversationHandler = (conversation: HostConversation) => void | Promise<void>;
+
+/**
+ * The ceilings a door imposes, **declared rather than discovered**.
+ *
+ * ── Why the port does not just handle them ──────────────────────────────────
+ * A transport that caps frame size or idles out must SAY so, and then get out
+ * of the way. Hiding a 32KB cap inside auto-chunking would be the adapter
+ * deciding a protocol question for every consumer at once — how a message is
+ * split, how the pieces are numbered, how the far side knows the last one has
+ * landed — and those answers differ per consumer. Same for liveness: a
+ * heartbeat is frames on somebody's protocol, and inventing them puts bytes on
+ * the wire that the consumer's parser never agreed to.
+ *
+ * So the port's job is to make the ceiling VISIBLE and let the layer above act:
+ * chunk above the port, heartbeat above the port.
+ *
+ * ── Enforced vs reported ────────────────────────────────────────────────────
+ * A door enforces what it IS and reports what it SITS BEHIND, and the doc on
+ * each field says which. Absent means "no ceiling this adapter knows of", never
+ * "no ceiling" — the runtime in front of you may have one it never told us
+ * about.
+ */
+export interface ConversationLimits {
+  /**
+   * Largest single frame this door carries, in bytes of UTF-8.
+   *
+   * **Enforced, both directions**, by the door that declares it: an inbound
+   * frame past it ends the conversation with a stated reason, and
+   * {@link HostConversation.send} past it refuses by name instead of
+   * truncating or silently splitting.
+   *
+   * A frame the transport delivered in pieces counts in TOTAL — the port's
+   * frame is the whole message, not the transport's packet, so fragmentation
+   * cannot be used to walk around the ceiling.
+   */
+  readonly maxFrameBytes?: number;
+  /**
+   * How long the transport tolerates silence before it closes the channel.
+   *
+   * **Reported, not imposed.** The door declaring it usually is not the thing
+   * enforcing it — a runtime's front door idles a socket out long before the
+   * process inside notices — and a consumer that needs the channel to stay up
+   * sends its own heartbeat frames on its own protocol. Making that possible is
+   * the whole reason this number is written down.
+   */
+  readonly idleMs?: number;
+  /**
+   * How much the door holds for you before the first
+   * {@link HostConversation.onFrame} subscriber exists, in bytes.
+   *
+   * **Enforced**, and a ceiling on the DOOR rather than on the transport: the
+   * pre-subscribe buffer that stops an `async` handler from losing the opening
+   * frame is a queue somebody else fills and this process pays for, so it gets
+   * a number and a stated overflow instead of growing until the host dies. Past
+   * it, the conversation ends with a reason naming this bound.
+   *
+   * Bounded in BYTES rather than in frames on purpose: a frame count would
+   * still admit `count × maxFrameBytes` of memory, which is the same unbounded
+   * queue with an extra step.
+   */
+  readonly maxPendingBytes?: number;
+}
+
+/**
+ * The port: something that can carry conversations to one handler.
+ *
+ * It sits BESIDE {@link AgentHost} rather than inside it, because a transport
+ * that can carry a request cannot necessarily carry a conversation, and one
+ * that carries conversations need not answer requests at all. A host that does
+ * both implements both and declares `'conversation'` in
+ * {@link AgentHost.capabilities}.
+ */
+export interface ConversationHost {
+  /** Which adapter this is. Every refusal names it. */
+  readonly name: string;
+  /** What this adapter can do beyond the baseline. Feature-detect; never assume. */
+  readonly capabilities: readonly HostCapability[];
+  /**
+   * What this door caps, as declared facts. Absent means this adapter knows of
+   * no ceiling — never that there is none.
+   */
+  readonly conversationLimits?: ConversationLimits;
+  /**
+   * Start taking conversations. Resolves once the door is actually open.
+   *
+   * The handle's `close()` ends every live conversation politely and then
+   * releases the door.
+   */
+  serveConversations(handler: ConversationHandler): Promise<HostHandle>;
 }
 
 // ─── The session port ────────────────────────────────────────────────

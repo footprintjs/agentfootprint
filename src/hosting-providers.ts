@@ -19,7 +19,12 @@
  *   • `agentCoreRuntimeHost({ port?, hostname?, busy? })` — an `AgentHost` for
  *     AWS Bedrock AgentCore Runtime's container contract: `POST /invocations`,
  *     `GET /ping`, port 8080, and the conversation id read from the
- *     `X-Amzn-Bedrock-AgentCore-Runtime-Session-Id` header.
+ *     `X-Amzn-Bedrock-AgentCore-Runtime-Session-Id` header. It is a
+ *     `ConversationHost` too: `serveConversations(handler)` takes the runtime's
+ *     `/ws` door on the SAME socket, with `{ maxFrameBytes: 32768,
+ *     idleMs: 900000 }` declared, session affinity readable from header or
+ *     query, and a `Sec-WebSocket-Protocol` bearer mapped into
+ *     `headers.authorization`.
  *   • `agentCoreSessions({ store })` — a `SessionLifecycle` whose checkpoint
  *     home you choose at construction: a JSON file in the runtime's own session
  *     storage (survives a stop/resume, needs no SDK), or one AgentCore Memory
@@ -50,6 +55,7 @@
 export {
   agentCoreRuntimeHost,
   agentCoreRuntimeWire,
+  readAgentCoreConversation,
   agentCoreSessions,
   DEFAULT_SESSION_STORAGE_PATH,
 } from './adapters/hosting/agentcore.js';
